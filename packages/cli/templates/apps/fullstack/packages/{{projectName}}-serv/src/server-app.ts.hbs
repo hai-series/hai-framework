@@ -1,0 +1,42 @@
+import { serv } from '@h-ai/serv'
+import { APP_HTTP_ROUTES, ENABLED_FRONTENDS, {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
+import { createServerProcedures } from './server/procedures/index.js'
+
+const STARTED_AT = new Date().toISOString()
+
+/** 应用侧最小 HTTP App 抽象；不把底层 Hono 类型暴露给项目代码。 */
+export interface ServerApp {
+  readonly fetch: (request: Request) => Response | Promise<Response>
+  readonly request: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>
+}
+
+/** 创建后端 HTTP App；与 @h-ai/serv 的 ServHttpApp 语义保持一致。 */
+export function createServerApp(): ServerApp {
+  return serv.createApp({
+    contract: {{fullstack.contractExportName}},
+    procedures: createServerProcedures({
+      app: {
+        name: '{{fullstack.servPackageName}}',
+        version: '0.1.0',
+        startedAt: STARTED_AT,
+        frontends: [...ENABLED_FRONTENDS],
+      },
+    }),
+    http: {
+      apiPrefix: APP_HTTP_ROUTES.apiPrefix,
+      health: {
+        path: APP_HTTP_ROUTES.health,
+        readyPath: APP_HTTP_ROUTES.ready,
+      },
+      openapi: { path: APP_HTTP_ROUTES.openapi },
+      docs: { path: APP_HTTP_ROUTES.docs },
+      rpc: false,
+    },
+    middlewares: [{
+      middleware: serv.cors({
+        origin: '*',
+        allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+      }),
+    }],
+  })
+}

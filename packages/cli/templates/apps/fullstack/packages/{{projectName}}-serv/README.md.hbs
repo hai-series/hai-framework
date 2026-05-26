@@ -1,0 +1,14 @@
+# {{fullstack.servPackageName}}
+
+后端 API Service，基于 `@h-ai/serv` 将共享 contract 装配为最小 HTTP App 抽象，不在应用代码中直接暴露 Hono。
+
+## 骨架说明
+
+- `src/server-app.ts`：服务装配入口，挂载健康检查、OpenAPI、docs 与 procedures。
+- `src/server/procedures/app-procedures.ts`：app 领域 procedures，对应 contract 中的 `app.info` / `app.echo` 路由。
+- `tests/server-app.test.ts`：通过 `ServerApp.request()` 验证健康检查与业务路由。
+
+## 开发
+
+- `pnpm --filter {{fullstack.servPackageName}} dev`
+- `pnpm --filter {{fullstack.servPackageName}} test`

@@ -15,6 +15,12 @@ export default antfu({
     '**/project.inlang/**',
     '**/paraglide/**',
     '**/.agents/**',
+    '**/.github/**',
+    '**/AGENTS.md',
+    '**/CLAUDE.md',
+    '**/README.md',
+    '**/opencode.json',
+    '**/package.json',
   ],
   svelte: true,
 }, {

@@ -31,8 +31,12 @@ templates/
 │   ├── h5/                  # H5 移动端
 │   │   ├── messages/
 │   │   └── src/routes/
-│   └── api/                 # 纯 API 服务（无 UI / 无 i18n）
-│       └── src/routes/
+│   ├── api/                 # 纯 API 服务（无 UI / 无 i18n）
+│   │   └── src/routes/
+│   └── fullstack/           # 前后端分离多包工程（contract / serv / web / app / desktop / miniapp 占位）
+│       ├── packages/        # 共享 contract 与后端 serv 包
+│       ├── apps/            # 多前端目标，按用户选择条件生成
+│       └── e2e/             # 服务端 + 页面级 Playwright 流程
 │
 ├── features/                # 可选 feature 路由（叠加到 src/routes/）
 │   ├── iam/
@@ -81,12 +85,15 @@ templates/
 | `{{hasI18n}}`          | `boolean` | 是否启用 i18n（非 `api` 类型为 `true`）      |
 | `{{defaultLocale}}`    | `string`  | 默认语言，如 `zh-CN`                         |
 | `{{packageManager}}`   | `string`  | 包管理器：`pnpm` / `npm` / `yarn`            |
+| `{{fullstack.*}}`      | `object`  | fullstack 类型专用上下文                     |
 | `{{features.iam}}`     | `boolean` | 是否选中 iam feature                         |
 | `{{features.db}}`      | `boolean` | 是否选中 db feature                          |
 | `{{features.cache}}`   | `boolean` | 是否选中 cache feature                       |
 | `{{features.crypto}}`  | `boolean` | 是否选中 crypto feature                      |
 | `{{features.storage}}` | `boolean` | 是否选中 storage feature                     |
 | `{{features.ai}}`      | `boolean` | 是否选中 ai feature                          |
+
+`fullstack.*` 包含包名、前端选择、依赖版本和 `contractExportName`，用于渲染 contract / serv / 多端 UI 的模板。
 
 ### 常用条件写法
 
@@ -123,4 +130,4 @@ import { iam } from '@h-ai/iam'
 
 ### 新增 feature 路由
 
-在 `features/{featureId}/routes-shared/`（API 路由）或 `features/{featureId}/routes-{appType}/`（UI 页面）下创建文件，然后在 `template-engine.ts` 的 `FEATURE_ROUTE_DIRS` / `FEATURE_APP_ROUTE_DIRS` 中注册该目录。
+在 `features/{featureId}/routes-shared/`（API 路由）或 `features/{featureId}/routes-{appType}/`（UI 页面）下创建文件，然后在 `cli-template-engine.ts` 的 `FEATURE_ROUTE_DIRS` / `FEATURE_APP_ROUTE_DIRS` 中注册该目录。

@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest'
+import {
+  APP_API_ROUTES,
+  appContract,
+  AppEchoInputSchema,
+  AppInfoOutputDataSchema,
+  AppInfoOutputSchema,
+  ENABLED_FRONTENDS,
+  {{fullstack.contractExportName}},
+} from '../src/index.js'
+
+describe('{{fullstack.contractPackageName}}', () => {
+  it('defines app contract routes', () => {
+    expect({{fullstack.contractExportName}}.app).toBeDefined()
+    expect(appContract.info).toBeDefined()
+    expect(APP_API_ROUTES.info).toBe('/api/v1/app/info')
+  })
+
+  it('validates app info payload', () => {
+    const result = AppInfoOutputDataSchema.safeParse({
+      name: '{{fullstack.servPackageName}}',
+      version: '0.1.0',
+      startedAt: '2026-01-01T00:00:00.000Z',
+      frontends: [...ENABLED_FRONTENDS],
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('validates echo input boundaries', () => {
+    expect(AppEchoInputSchema.safeParse({ message: 'hello' }).success).toBe(true)
+    expect(AppEchoInputSchema.safeParse({ message: '' }).success).toBe(false)
+  })
+
+  it('validates HaiResult app info response', () => {
+    const result = AppInfoOutputSchema.safeParse({
+      success: true,
+      data: {
+        name: '{{fullstack.servPackageName}}',
+        version: '0.1.0',
+        startedAt: '2026-01-01T00:00:00.000Z',
+        frontends: [...ENABLED_FRONTENDS],
+      },
+    })
+
+    expect(result.success).toBe(true)
+  })
+})

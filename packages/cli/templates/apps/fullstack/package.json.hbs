@@ -1,0 +1,39 @@
+{
+  "name": "{{projectName}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "description": "Full-stack hai workspace with separated contract, service and frontends.",
+  "scripts": {
+    "dev": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm --parallel --filter {{fullstack.servPackageName}}{{#each fullstack.frontendApps}} --filter {{packageName}}{{/each}} dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm -r --if-present typecheck",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm -r --if-present test",
+    "test:e2e": "pnpm build && playwright test",
+    "clean": "pnpm -r --if-present clean && rimraf node_modules .turbo"
+  },
+  "dependencies": {
+    "{{fullstack.contractPackageName}}": "workspace:*"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "{{fullstack.versions.antfuEslintConfig}}",
+    "@playwright/test": "{{fullstack.versions.playwright}}",
+    "@sveltejs/adapter-auto": "{{fullstack.versions.adapterAuto}}",
+    "@sveltejs/kit": "{{fullstack.versions.svelteKit}}",
+    "@sveltejs/vite-plugin-svelte": "{{fullstack.versions.sveltePlugin}}",
+    "@types/node": "{{fullstack.versions.nodeTypes}}",
+    "eslint": "{{fullstack.versions.eslint}}",
+    "eslint-plugin-format": "{{fullstack.versions.eslintPluginFormat}}",
+    "eslint-plugin-svelte": "{{fullstack.versions.eslintPluginSvelte}}",
+    "rimraf": "{{fullstack.versions.rimraf}}",
+    "svelte": "{{fullstack.versions.svelte}}",
+    "svelte-check": "{{fullstack.versions.svelteCheck}}",
+    "svelte-eslint-parser": "{{fullstack.versions.svelteEslintParser}}",
+    "tsup": "{{fullstack.versions.tsup}}",
+    "typescript": "{{fullstack.versions.typescript}}",
+    "vite": "{{fullstack.versions.vite}}",
+    "vitest": "{{fullstack.versions.vitest}}"
+  }
+}

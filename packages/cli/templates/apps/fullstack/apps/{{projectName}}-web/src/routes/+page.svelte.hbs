@@ -1,0 +1,89 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.web}}
+<script lang='ts'>
+  import type { AppInfo } from '$lib/api'
+  import { fetchAppInfo } from '$lib/api'
+  import { m } from '$lib/messages'
+  import { Alert, Badge, Button, Card, PageHeader, Skeleton } from '@h-ai/ui'
+  import { onMount } from 'svelte'
+
+  let info = $state<AppInfo | null>(null)
+  let loading = $state(true)
+  let errorMessage = $state('')
+
+  async function refreshStatus() {
+    loading = true
+    errorMessage = ''
+    try {
+      info = await fetchAppInfo()
+    }
+    catch {
+      info = null
+      errorMessage = m.statusError()
+    }
+    finally {
+      loading = false
+    }
+  }
+
+  onMount(() => {
+    void refreshStatus()
+  })
+</script>
+
+<svelte:head>
+  <title>{m.appTitle()}</title>
+</svelte:head>
+
+<main class='min-h-screen bg-base-200 px-4 py-8 text-base-content sm:px-8'>
+  <section class='mx-auto max-w-5xl'>
+    <PageHeader title={m.appTitle()} description={m.subtitle()}>
+      {#snippet actions()}
+        <Badge variant='primary' outline>{m.frontendLabel()}</Badge>
+      {/snippet}
+    </PageHeader>
+
+    <div class='grid gap-4 lg:grid-cols-[1.3fr_0.7fr]'>
+      <Card title={m.serviceTitle()} bordered shadow='lg' class='bg-base-100'>
+        {#if loading}
+          <Skeleton variant='title' class='mb-3' />
+          <Skeleton count={2} />
+          <p class='sr-only' data-testid='service-status'>{m.loading()}</p>
+        {:else if info}
+          <Alert variant='success' title={m.statusReady(info.name)}>
+            <p data-testid='service-status'>{m.statusReady(info.name)}</p>
+          </Alert>
+          <dl class='mt-4 grid gap-3 sm:grid-cols-2'>
+            <div class='rounded-box bg-base-200 p-3'>
+              <dt class='text-xs text-base-content/55'>{m.versionLabel()}</dt>
+              <dd class='font-semibold'>{info.version}</dd>
+            </div>
+            <div class='rounded-box bg-base-200 p-3'>
+              <dt class='text-xs text-base-content/55'>{m.frontendsLabel()}</dt>
+              <dd class='font-semibold'>{info.frontends.join(' / ')}</dd>
+            </div>
+          </dl>
+        {:else}
+          <Alert variant='error' title={m.statusError()}>
+            <p data-testid='service-status'>{errorMessage}</p>
+          </Alert>
+        {/if}
+
+        <div class='mt-5'>
+          <Button type='button' variant='primary' loading={loading} onclick={refreshStatus}>
+            {m.refresh()}
+          </Button>
+        </div>
+      </Card>
+
+      <Card title={m.contractTitle()} bordered shadow='md' class='bg-base-100'>
+        <div class='space-y-3 text-sm'>
+          <p class='flex gap-2'><Badge variant='info'>{m.contractBadge()}</Badge><span>{m.contractRoute()}</span></p>
+          <p class='flex gap-2'><Badge variant='secondary'>{m.clientBadge()}</Badge><span>{m.typedClient()}</span></p>
+          <p class='flex gap-2'><Badge variant='success'>{m.uiBadge()}</Badge><span>{m.uiPowered()}</span></p>
+        </div>
+      </Card>
+    </div>
+  </section>
+</main>
+{{/if}}

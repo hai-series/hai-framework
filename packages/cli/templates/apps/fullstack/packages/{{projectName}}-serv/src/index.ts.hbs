@@ -1,0 +1,15 @@
+import process from 'node:process'
+import { core } from '@h-ai/core'
+import { serv } from '@h-ai/serv'
+import { createServerApp } from './server-app.js'
+
+const app = createServerApp()
+const port = process.env.PORT ? Number(process.env.PORT) : 3000
+const host = process.env.HOST ?? '127.0.0.1'
+const listenApp = app as Parameters<typeof serv.listen>[0]
+
+serv.listen(listenApp, {
+  port,
+  host,
+  onListening: info => core.logger.info('{{fullstack.servPackageName}} listening', { host, port: info.port }),
+})

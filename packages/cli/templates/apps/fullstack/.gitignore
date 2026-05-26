@@ -1,0 +1,10 @@
+node_modules
+.turbo
+dist
+build
+.svelte-kit
+playwright-report
+test-results
+.env
+.env.*
+!.env.example

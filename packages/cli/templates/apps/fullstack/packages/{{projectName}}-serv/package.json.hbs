@@ -1,0 +1,29 @@
+{
+  "name": "{{fullstack.servPackageName}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo",
+    "dev": "pnpm build && node dist/index.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@h-ai/core": "{{fullstack.versions.core}}",
+    "@h-ai/serv": "{{fullstack.versions.serv}}",
+    "{{fullstack.contractPackageName}}": "workspace:*"
+  }
+}

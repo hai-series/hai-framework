@@ -1,0 +1,17 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.app}}
+{
+  "extends": "./.svelte-kit/tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*", "src/**/*.svelte", "tests/**/*"],
+  "exclude": ["node_modules", ".svelte-kit", "build"]
+}
+{{/if}}

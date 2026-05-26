@@ -1,0 +1,22 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.app}}
+export const m = {
+  appTitle: () => 'App Frontend',
+  frontendLabel: () => 'App',
+  subtitle: () => 'Separated frontend powered by shared contract schemas.',
+  loading: () => 'Loading service status...',
+  serviceTitle: () => 'Service status',
+  statusReady: (service: string) => `Service ${service} is ready.`,
+  statusError: () => 'Service status is unavailable.',
+  refresh: () => 'Refresh status',
+  versionLabel: () => 'Version',
+  frontendsLabel: () => 'Frontends',
+  contractTitle: () => 'Contract flow',
+  contractBadge: () => 'contract',
+  clientBadge: () => 'client',
+  uiBadge: () => 'ui',
+  contractRoute: () => 'Routes are declared in the shared contract package.',
+  typedClient: () => '@h-ai/api-client calls the shared contract.',
+  uiPowered: () => '@h-ai/ui renders this page.',
+}
+{{/if}}

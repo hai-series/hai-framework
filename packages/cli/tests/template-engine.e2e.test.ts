@@ -14,11 +14,11 @@
  *   5. 生成产物的结构完整性
  */
 
-import type { AppType, FeatureId } from '../src/types.js'
+import type { AppType, FeatureId } from '../src/cli-types.js'
 import path from 'node:path'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildTemplateContext, generateFromTemplates } from '../src/commands/template-engine.js'
+import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
 // =============================================================================
 // 测试工具
@@ -596,10 +596,8 @@ describe('api 应用类型生成', () => {
       expect(pkg.devDependencies.daisyui).toBeUndefined()
     })
 
-    it('app.css 不应包含 tailwindcss 导入', async () => {
-      const content = await readGenerated(projectPath, 'src/app.css')
-      expect(content).not.toContain('tailwindcss')
-      expect(content).not.toContain('daisyui')
+    it('不应生成空 UI 样式文件', async () => {
+      expect(await fileExists(projectPath, 'src/app.css')).toBe(false)
     })
   })
 
@@ -777,6 +775,11 @@ describe('生成产物结构完整性', () => {
         `缺少 app.css (${appType})`,
       ).toBe(true)
     }
+  })
+
+  it('api 不应生成空 app.css', async () => {
+    const projectPath = path.join(tmpRoot, 'smoke-api')
+    expect(await fileExists(projectPath, 'src/app.css')).toBe(false)
   })
 
   it('非 api 应有 i18n 脚手架', async () => {

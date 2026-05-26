@@ -1,0 +1,9 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.web}}
+/// <reference types="@sveltejs/kit" />
+/// <reference types="vite/client" />
+
+import '@h-ai/ui/auto-import'
+
+declare module '*.css'
+{{/if}}

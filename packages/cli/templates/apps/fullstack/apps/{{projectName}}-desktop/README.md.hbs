@@ -1,0 +1,11 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+# {{projectName}}-desktop
+
+桌面端前端工程，使用 `@h-ai/api-client` 绑定共享 contract 调用后端 API，并通过 `@h-ai/ui` 组件搭建页面；后续可按需接入 Tauri。
+
+## 开发
+
+- `pnpm --filter {{projectName}}-desktop dev`，默认端口 4175
+- `pnpm --filter {{projectName}}-desktop test`
+{{/if}}

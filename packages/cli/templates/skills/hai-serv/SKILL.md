@@ -1,11 +1,11 @@
 ---
 name: hai-serv
-description: 使用 @h-ai/serv 将 oRPC contract 挂载为 Hono HTTP API Service；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、添加认证/权限 pipeline 包装器或切换 Node/Fetch 运行时适配器时使用。
+description: 使用 @h-ai/serv 将 oRPC contract 挂载为 ServHttpApp；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、添加认证/权限 pipeline 包装器或切换 Node/Fetch 运行时适配器时使用。
 ---
 
 # hai-serv
 
-> `@h-ai/serv` 是 hai-framework 的 API Service 运行时，基于 Hono + oRPC 将 `@h-ai/api-contract` 的领域 contract 挂载成跨端可访问的 HTTP API。
+> `@h-ai/serv` 是 hai-framework 的 API Service 运行时，对外暴露 `ServHttpApp` 抽象，将 `@h-ai/api-contract` 的领域 contract 挂载成跨端可访问的 HTTP API；Hono 是内部实现细节，应用代码不要直接 import 或暴露 Hono。
 
 ---
 
@@ -17,7 +17,7 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为 Hono HTTP API Service
 
 ## 适用场景
 
-- 将 `@h-ai/api-contract` contract 装配成 Hono HTTP app
+- 将 `@h-ai/api-contract` contract 装配成 `ServHttpApp`
 - 配置 `/health`、`/ready`、`/openapi.json`、`/docs` 等系统端点
 - 在 procedure 中添加认证（`requireAuth`）或权限（`requirePermission`）检查
 - 切换 Node.js (`@hono/node-server`) 或 Fetch Runtime（Cloudflare Workers / Deno）部署
@@ -59,7 +59,7 @@ const procedures = {
   ai: createAiProcedures({ ai }),
 }
 
-// 创建 Hono app
+// 创建 ServHttpApp；不要在应用导出类型里暴露 Hono
 const app = serv.createApp({
   contract,
   procedures,
@@ -217,22 +217,24 @@ transport:
 
 ## 核心 API
 
-### `serv.createApp(options)` — 创建 Hono app
+### `serv.createApp(options)` — 创建 ServHttpApp
 
 ```typescript
-import type { CreateServAppOptions } from '@h-ai/serv'
+import type { CreateServAppOptions, ServHttpApp } from '@h-ai/serv'
 
-const app = serv.createApp({
+export function createServerApp(): ServHttpApp {
+  return serv.createApp({
   contract,       // AnyContractRouter — 通过 apiContract.create() 组合的 contract
   procedures,     // Router<AnyContractRouter, ServContext> — procedure 实现
   http?,          // ServHttpConfigInput — HTTP 端点配置（见下方配置节）
-  middlewares?,   // readonly ServMiddlewareMount[] — 自定义 Hono middleware（日志/CORS/限流/租户头校验）
+  middlewares?,   // readonly ServMiddlewareMount[] — 自定义 HTTP middleware（日志/CORS/限流/租户头校验）
   iam?,           // ServIam — 顶层 IAM 句柄，同时驱动 access token 校验与 refresh cookie【推荐】
   refreshCookie?, // RefreshCookieConfig — httpOnly refresh cookie 刷新路径（见下方 cookie 节）
   transport?,     // { crypto, keyExchangePath?, excludePaths?, maxClients? } — 统一传输加密
   verifyToken?,   // (token) => Promise<HaiResult<ServSession>> — 逃脱口：不使用 iam 时提供自定义校验
   createContext?, // CreateServContext — 高级：完全接管上下文构造（设置后 serv 不再自动填充 session）
-})
+  })
+}
 ```
 
 ### `apiContract.route` / `serv.implement` — contract 与运行时分层
@@ -337,7 +339,7 @@ const adminOnly = serv.requireAuth(
 
 `@h-ai/serv` 的 pipeline 分三层：
 
-1. **HTTP middleware 层**：通过 `serv.createApp({ middlewares })` 注入 Hono middleware
+1. **HTTP middleware 层**：通过 `serv.createApp({ middlewares })` 注入 HTTP middleware
 2. **context 层**：通过 `verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 自定义请求上下文
 3. **procedure wrapper 层**：通过 `ServProcedureWrapper` / `ServGuardedProcedureWrapper` 自定义业务包装器
 

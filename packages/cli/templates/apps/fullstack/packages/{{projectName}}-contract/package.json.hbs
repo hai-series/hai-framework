@@ -1,0 +1,27 @@
+{
+  "name": "{{fullstack.contractPackageName}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@h-ai/api-contract": "{{fullstack.versions.apiContract}}",
+    "@h-ai/core": "{{fullstack.versions.core}}",
+    "zod": "{{fullstack.versions.zod}}"
+  }
+}

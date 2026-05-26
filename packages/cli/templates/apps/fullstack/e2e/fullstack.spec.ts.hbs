@@ -1,0 +1,30 @@
+import { expect, test } from '@playwright/test'
+import { APP_API_ROUTES } from '{{fullstack.contractPackageName}}'
+
+const apiBaseUrl = 'http://127.0.0.1:3000'
+
+test('service health endpoint is ready', async ({ request }) => {
+  const response = await request.get(apiBaseUrl + APP_API_ROUTES.health)
+  expect(response.ok()).toBe(true)
+  await expect(response).toBeOK()
+})
+
+test('service echo endpoint returns HaiResult', async ({ request }) => {
+  const response = await request.post(apiBaseUrl + APP_API_ROUTES.echo, {
+    data: { message: 'hello e2e' },
+  })
+  expect(response.ok()).toBe(true)
+
+  const body = await response.json()
+  expect(body.success).toBe(true)
+  expect(body.data.message).toBe('hello e2e')
+  expect(body.data.requestId).toBeTruthy()
+})
+{{#if fullstack.e2eFrontend}}
+
+test('frontend loads service status from page', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: /{{fullstack.e2eFrontend.label}}/ })).toBeVisible()
+  await expect(page.getByTestId('service-status')).toContainText('{{fullstack.servPackageName}}')
+})
+{{/if}}

@@ -1,0 +1,15 @@
+# {{fullstack.contractPackageName}}
+
+共享 API 契约包，包含前后端共用的路径常量、Zod Schema、`apiContract.route()` 路由定义与工程级 contract。
+
+## 骨架说明
+
+- `src/app-routes.ts`：HTTP 路径常量，供 service、frontend 与 E2E 复用。
+- `src/app-schemas.ts`：输入输出 Schema 与类型。
+- `src/app-contract.ts`：app 领域 contract 路由定义。
+- `src/{{projectName}}-contract.ts`：工程级 contract，供 `@h-ai/serv` 与 `@h-ai/api-client` 共用。
+
+## 开发
+
+- `pnpm --filter {{fullstack.contractPackageName}} typecheck`
+- `pnpm --filter {{fullstack.contractPackageName}} test`
