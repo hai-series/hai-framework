@@ -75,6 +75,46 @@ describe('serv.createApp({ transport })', () => {
     expect(typeof exchanged.clientId).toBe('string')
   })
 
+  it('runs custom preflight middleware before transport', async () => {
+    const origin = 'http://localhost:5176'
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      middlewares: [
+        {
+          middleware: (c, next) => {
+            if (c.req.method !== 'OPTIONS')
+              return next()
+
+            return new Response(null, {
+              status: 204,
+              headers: {
+                'Access-Control-Allow-Origin': origin,
+                'Access-Control-Allow-Methods': 'POST',
+                'Access-Control-Allow-Headers': 'content-type, x-client-id, x-encrypted',
+              },
+            })
+          },
+        },
+      ],
+      transport: { crypto },
+    })
+
+    const response = await app.request('/api/v1/_hai/key-exchange', {
+      method: 'OPTIONS',
+      headers: {
+        origin,
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type, x-client-id, x-encrypted',
+      },
+    })
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-origin')).toBe(origin)
+    expect(response.headers.get('access-control-allow-headers')).toContain('x-client-id')
+  })
+
   it('end-to-end roundtrip via crypto.transport.createClient', async () => {
     const app = serv.createApp({
       contract,

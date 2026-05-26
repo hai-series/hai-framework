@@ -343,10 +343,11 @@ const adminOnly = serv.requireAuth(
 
 #### HTTP middleware
 
-适用于请求日志、trace、限流、CORS、租户头校验等 **HTTP 层** 横切逻辑：
+适用于请求日志、trace、限流、CORS、租户头校验等 **HTTP 层** 横切逻辑。常见 CORS 场景可直接复用 `serv.cors(...)`：
 
 ```typescript
 import type { ServMiddleware } from '@h-ai/serv'
+import { serv } from '@h-ai/serv'
 
 const requestMetrics: ServMiddleware = async (c, next) => {
   const startedAt = Date.now()
@@ -359,6 +360,13 @@ const app = serv.createApp({
   procedures,
   http: { apiPrefix: '/api/v1' },
   middlewares: [
+    {
+      middleware: serv.cors({
+        origin: origin => origin === 'https://app.example.com',
+        credentials: true,
+        exposedHeaders: ['X-Encrypted', 'X-Request-Id'],
+      }),
+    },
     { middleware: requestMetrics },
     {
       path: '/api/v1/*',
@@ -372,7 +380,10 @@ const app = serv.createApp({
 })
 ```
 
-执行顺序固定为：`securityHeaders` → `transport`（若启用）→ `middlewares` → health/refresh-cookie/OpenAPI/RPC/docs/oRPC routes。
+执行顺序固定为：`securityHeaders` → `middlewares` → `transport`（若启用）→ health/refresh-cookie/OpenAPI/RPC/docs/oRPC routes。
+
+- `middlewares` 先于 `transport` 执行，因此 CORS 这类 preflight middleware 可以直接短路返回；若需要读取解密后的业务 body，请改用 context / procedure 层扩展。
+- 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），记得通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露。
 
 #### Context pipeline
 
