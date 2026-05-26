@@ -8,6 +8,7 @@
 
 import type { CryptoFunctions, TransportClient } from '@h-ai/crypto'
 import type { BrowserTokenStore } from '../kit-auth.js'
+import type { KitConfig } from '../kit-config.js'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { createTokenStore } from '../kit-auth.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, resolveTransportPath, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
@@ -181,6 +182,50 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
   globalThis.fetch = wrappedFetch
   window.fetch = wrappedFetch
   fetchState.__haiKitTransportFetchInstalled = true
+}
+
+/**
+ * 用 `config/_kit.yml` 解析后的 {@link KitConfig} 一次性安装浏览器端传输加密。
+ *
+ * 行为：
+ * - `config.transport === false` 时直接返回（不启用传输加密）；
+ * - 否则启动 {@link installBrowserTransportFetch}，并预热 {@link CryptoFunctions} 模块。
+ *
+ * 应用层（SvelteKit `+layout.svelte` 或浏览器入口）只需调用此函数一次，
+ * 之后所有同源 `/api/*` 与 `__data.json` 请求都会自动走传输加密。
+ *
+ * @param config 已解析的 kit 顶层配置
+ * @param deps  外部依赖
+ * @param deps.crypto `@h-ai/crypto` 模块实例
+ *
+ * @example
+ * ```ts
+ * import { browser } from '$app/environment'
+ * import { crypto } from '@h-ai/crypto'
+ * import { kit } from '@h-ai/kit'
+ * import { adminConsoleKitConfig } from '$lib/config/kit-config.js'
+ *
+ * if (browser) {
+ *   kit.client.installBrowserTransport(adminConsoleKitConfig, { crypto })
+ * }
+ * ```
+ */
+export function installBrowserTransport(
+  config: KitConfig,
+  deps: { crypto: CryptoFunctions },
+): void {
+  if (typeof window === 'undefined' || config.transport === false)
+    return
+
+  // crypto.init() 当前为同步副作用（signature 是 async 仅为接口一致性），
+  // 此处不 await，以便 `+layout.svelte` 顶层模块加载阶段就完成初始化。
+  void deps.crypto.init()
+
+  installBrowserTransportFetch({
+    crypto: deps.crypto,
+    keyExchangeUrl: config.transport.keyExchangePath,
+    excludePaths: [...config.transport.excludePaths],
+  })
 }
 
 // ─── 主函数 ───

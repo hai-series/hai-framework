@@ -1,6 +1,6 @@
 ---
 name: hai-kit
-description: 使用 @h-ai/kit 构建 SvelteKit 请求管道、认证守卫、统一响应、Zod 校验、浏览器端 apiFetch、A2A 与双构建适配；当需求涉及 hooks.server.ts、hooks.client.ts、权限守卫、CORS、限流或 SvelteKit API endpoint 时使用。
+description: 使用 @h-ai/kit 构建 SvelteKit 请求管道、认证守卫、统一响应、Zod 校验、浏览器端 apiFetch、A2A 与双构建适配；当需求涉及 hooks.server.ts、权限守卫、CORS、限流、同源 transport 或 SvelteKit API endpoint 时使用。
 ---
 
 # hai-kit
@@ -77,14 +77,23 @@ export const handle = kit.createHandle({
 ```
 
 ```ts
-// lib/utils/api.ts
-import { crypto } from '@h-ai/crypto'
-import { kit } from '@h-ai/kit'
+// routes/+layout.svelte
+<script lang='ts'>
+  import { browser } from '$app/environment'
+  import { crypto } from '@h-ai/crypto'
+  import { kit } from '@h-ai/kit'
+  import { appKitConfig } from '$lib/config/kit-config'
 
-if (typeof window !== 'undefined') {
-  void crypto.init()
-  kit.client.installBrowserTransportFetch({ crypto })
-}
+  // 一次性安装：内部按 appKitConfig.transport 是否启用决定行为，并预热 crypto
+  if (browser) {
+    kit.client.installBrowserTransport(appKitConfig, { crypto })
+  }
+</script>
+```
+
+```ts
+// lib/utils/api.ts —— 业务层只看到 apiFetch
+import { kit } from '@h-ai/kit'
 
 export const { apiFetch } = kit.client.create({ auth: true })
 ```
@@ -98,7 +107,7 @@ transport 默认保护同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页�
 ### 5. 使用 `_kit.yml` 统一 transport 配置
 
 `@h-ai/kit` 现在提供 `KitConfigSchema` / `resolveKitConfig()`，适合同一份 `_kit.yml`
-同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransportFetch()`：
+同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransport()`：
 
 ```yml
 transport:
@@ -134,13 +143,14 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 | `kit.validate.*` | Zod 请求校验 |
 | `kit.auth.*` | Cookie / Token 辅助 |
 | `kit.client.create()` | 浏览器端同源 apiFetch |
-| `kit.client.installBrowserTransportFetch()` | 浏览器端同源 `/api/*` 与 `__data.json` transport 包装 |
+| `kit.client.installBrowserTransport(config, { crypto })` | 推荐入口：按解析后的 `_kit.yml` 一键安装浏览器端传输加密 |
+| `kit.client.installBrowserTransportFetch()` | 底层入口：直接传 transport 配置安装浏览器全局 fetch 包装 |
 | `kit.crud.define()` | 声明式 CRUD 资源 |
 
 ## 常见模式
 
 - SvelteKit 应用内同源请求用 `kit.client.create().apiFetch`。
-- SvelteKit 应用启用 transport 时，在浏览器启动处调用一次 `kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl, excludePaths })`，不要在 app 侧重复实现路径匹配。
+- SvelteKit 应用启用 transport 时，在 `+layout.svelte` 的 `if (browser)` 分支调用一次 `kit.client.installBrowserTransport(appKitConfig, { crypto })`，无需重复连线 `keyExchangeUrl` / `excludePaths`。
 - Web/App/小程序跨域访问公共 API 用 `@h-ai/api-client` typed client。
 - 传输加密只通过 `crypto.transport` 间接装配，不在 kit 中新增本地加密工厂或鸭子类型。
 - 服务端业务模块直接调用模块 API，不通过 HTTP 自环。

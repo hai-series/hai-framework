@@ -7,7 +7,6 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ApiKeyCredentials, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
-import type { HandleFetch } from '@sveltejs/kit'
 import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
 import process from 'node:process'
 import { err } from '@h-ai/core'
@@ -65,12 +64,6 @@ export interface BrowserTokenStore {
   get: () => string | null
   set: (token: string) => void
   clear: () => void
-}
-
-/** 浏览器端 handleFetch 配置。 */
-export interface CreateHandleFetchConfig {
-  /** 自定义浏览器 token 存储；不提供时默认读取 `hai_access_token` localStorage。 */
-  tokenStore?: BrowserTokenStore
 }
 
 const defaultBrowserTokenStore = createTokenStore()
@@ -154,13 +147,22 @@ function authNotConfiguredError(): HaiResult<never> {
 }
 
 /**
- * 内部工具：执行认证操作并在成功时写入 Token Cookie。
+ * 执行已配置的认证登录操作，并在成功时写入 Token Cookie。
+ *
+ * @param cookies - SvelteKit cookies 对象
+ * @param credentials - 认证凭证
+ * @param run - 具体 IAM 认证操作
  */
-async function executeLogin(
+async function runAuthLogin<TCredentials>(
   cookies: CookieWriter,
-  authPromise: Promise<HaiResult<AuthResult>>,
+  credentials: TCredentials,
+  run: (ops: AuthOperations, credentials: TCredentials) => Promise<HaiResult<AuthResult>>,
 ): Promise<HaiResult<AuthResult>> {
-  const result = await authPromise
+  const ops = getAuthOperations()
+  if (!ops)
+    return authNotConfiguredError()
+
+  const result = await run(ops, credentials)
   if (result.success) {
     setToken(cookies, result.data.tokens.accessToken, result.data.tokens.expiresIn)
   }
@@ -185,10 +187,7 @@ export async function login(
   cookies: CookieWriter,
   credentials: PasswordCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  const ops = getAuthOperations()
-  if (!ops)
-    return authNotConfiguredError()
-  return executeLogin(cookies, ops.login(credentials))
+  return runAuthLogin(cookies, credentials, (ops, input) => ops.login(input))
 }
 
 /**
@@ -207,10 +206,7 @@ export async function loginWithOtp(
   cookies: CookieWriter,
   credentials: OtpCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  const ops = getAuthOperations()
-  if (!ops)
-    return authNotConfiguredError()
-  return executeLogin(cookies, ops.loginWithOtp(credentials))
+  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithOtp(input))
 }
 
 /**
@@ -229,10 +225,7 @@ export async function loginWithLdap(
   cookies: CookieWriter,
   credentials: LdapCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  const ops = getAuthOperations()
-  if (!ops)
-    return authNotConfiguredError()
-  return executeLogin(cookies, ops.loginWithLdap(credentials))
+  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithLdap(input))
 }
 
 /**
@@ -252,10 +245,7 @@ export async function loginWithApiKey(
   cookies: CookieWriter,
   credentials: ApiKeyCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  const ops = getAuthOperations()
-  if (!ops)
-    return authNotConfiguredError()
-  return executeLogin(cookies, ops.loginWithApiKey(credentials))
+  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithApiKey(input))
 }
 
 /**
@@ -274,10 +264,7 @@ export async function registerAndLogin(
   cookies: CookieWriter,
   options: RegisterOptions,
 ): Promise<HaiResult<AuthResult>> {
-  const ops = getAuthOperations()
-  if (!ops)
-    return authNotConfiguredError()
-  return executeLogin(cookies, ops.registerAndLogin(options))
+  return runAuthLogin(cookies, options, (ops, input) => ops.registerAndLogin(input))
 }
 
 /**
@@ -346,51 +333,4 @@ export function setBrowserToken(token: string): void {
  */
 export function clearBrowserToken(): void {
   defaultBrowserTokenStore.clear()
-}
-
-// ─── HandleFetch 工厂（通过 kit.auth 暴露） ───
-
-function isBrowserTokenStore(value: BrowserTokenStore | CreateHandleFetchConfig | undefined): value is BrowserTokenStore {
-  return Boolean(value)
-    && typeof value === 'object'
-    && 'get' in value
-    && typeof value.get === 'function'
-    && 'set' in value
-    && typeof value.set === 'function'
-    && 'clear' in value
-    && typeof value.clear === 'function'
-}
-
-/**
- * 创建浏览器端同源请求 HandleFetch。
- *
- * 默认行为：自动附加 Authorization（若 localStorage 中存在 token）。
- * 传输加密应通过 `kit.client.installBrowserTransportFetch()` 在浏览器启动时统一安装，
- * 避免在 SvelteKit handleFetch 与全局 fetch 之间重复加密。
- */
-export function createHandleFetch(config?: CreateHandleFetchConfig): HandleFetch
-export function createHandleFetch(tokenStore?: BrowserTokenStore): HandleFetch
-export function createHandleFetch(
-  tokenStoreOrConfig: BrowserTokenStore | CreateHandleFetchConfig = createTokenStore(),
-): HandleFetch {
-  const normalizedConfig = isBrowserTokenStore(tokenStoreOrConfig)
-    ? { tokenStore: tokenStoreOrConfig }
-    : tokenStoreOrConfig
-
-  const tokenStore = normalizedConfig.tokenStore ?? createTokenStore()
-
-  return async ({ event, request, fetch }) => {
-    const requestUrl = new URL(request.url)
-    if (requestUrl.origin !== event.url.origin)
-      return fetch(request)
-
-    const headers = new Headers(request.headers)
-    const token = tokenStore.get()
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`)
-    }
-
-    const nextRequest = new Request(request, { headers })
-    return fetch(nextRequest)
-  }
 }

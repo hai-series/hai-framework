@@ -5,13 +5,12 @@
  * @module kit-main
  */
 
-import { createKitClient, installBrowserTransportFetch } from './client/kit-client.js'
+import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
 import { hasPermission, requirePermission } from './guards/kit-permission.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
 import {
   clearBrowserToken,
-  createHandleFetch,
   createTokenStore,
   login,
   loginWithApiKey,
@@ -107,7 +106,12 @@ export const kit = {
   client: {
     /** 创建统一客户端（CSRF + 传输加密透明合并） */
     create: createKitClient,
-    /** 安装浏览器全局 fetch transport 包装（覆盖 /api/* 与 SvelteKit __data.json） */
+    /**
+     * 用解析后的 {@link KitConfig} 一键安装浏览器端传输加密
+     * （应用层推荐入口；内部预热 crypto 并调用 installBrowserTransportFetch）
+     */
+    installBrowserTransport,
+    /** 底层入口：直接传 transport 配置安装浏览器全局 fetch 包装 */
     installBrowserTransportFetch,
   },
 
@@ -132,8 +136,6 @@ export const kit = {
     clearBrowserToken,
     /** 创建浏览器端 Token 存储器（自定义 key 时使用） */
     createTokenStore,
-    /** 创建浏览器端同源请求自动附加 Authorization 的 HandleFetch */
-    createHandleFetch,
   },
 
   // ─── CRUD ───
