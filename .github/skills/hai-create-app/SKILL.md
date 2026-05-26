@@ -53,7 +53,6 @@ apps/{app-name}/
 │   ├── app.d.ts               # 全局类型声明（App.Locals 等）
 │   ├── app.html               # HTML 模板
 │   ├── hooks.server.ts        # 服务端钩子（初始化、会话、i18n）
-│   ├── hooks.client.ts        # 客户端钩子（handleFetch）
 │   ├── lib/
 │   │   ├── paraglide/         # ⚠️ 自动生成，禁止手动修改
 │   │   ├── server/
@@ -341,23 +340,25 @@ core → reldb → cache → storage → reach → iam → ai → 业务表
 
 ### 客户端集成
 
+```svelte
+<!-- routes/+layout.svelte — 浏览器端一次性安装同源 transport -->
+<script lang="ts">
+  import { browser } from '$app/environment'
+  import { appKitConfig } from '$lib/config/kit-config'
+  import { crypto } from '@h-ai/crypto'
+  import { kit } from '@h-ai/kit'
+
+  if (browser) {
+    kit.client.installBrowserTransport(appKitConfig, { crypto })
+  }
+</script>
+```
+
 ```ts
-// hooks.client.ts
-import { kit } from '@h-ai/kit'
-export const handleFetch = kit.auth.createHandleFetch()
-
-// lib/utils/api.ts — 统一 API 客户端
-import { crypto } from '@h-ai/crypto'
+// lib/utils/api.ts — 统一 API 客户端，业务层只看到 apiFetch
 import { kit } from '@h-ai/kit'
 
-if (typeof window !== 'undefined') {
-  crypto.init()
-}
-
-const client = kit.client.create({
-  transport: { crypto },
-  auth: true,
-})
+const client = kit.client.create({ auth: true })
 export const { apiFetch } = client
 ```
 

@@ -5,8 +5,8 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
+import { deleteAdminPermission, getAdminPermission } from '$lib/server/iam-admin.js'
 import { IdParamSchema } from '$lib/server/schemas/index.js'
-import { permissionService } from '$lib/server/services/index.js'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -20,7 +20,7 @@ export const DELETE = kit.handler(async ({ params, locals }) => {
   const { id: permId } = kit.validate.params(params, IdParamSchema)
 
   // 检查权限是否存在
-  const existing = await permissionService.getById(permId)
+  const existing = await getAdminPermission(permId)
   if (!existing) {
     return kit.response.notFound(m.api_iam_permissions_not_found())
   }
@@ -31,7 +31,10 @@ export const DELETE = kit.handler(async ({ params, locals }) => {
   }
 
   // 删除权限（IAM authz 内部已记录审计日志）
-  await permissionService.delete(permId)
+  const deleteResult = await deleteAdminPermission(permId)
+  if (!deleteResult.success) {
+    return kit.response.badRequest(deleteResult.error.message)
+  }
 
   return kit.response.ok(null)
 })

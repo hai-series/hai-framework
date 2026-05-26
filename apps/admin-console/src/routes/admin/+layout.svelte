@@ -150,13 +150,13 @@
   <!-- 侧边栏 -->
   <aside
     class="fixed lg:static top-0 left-0 z-50 h-full flex flex-col
-      bg-base-100 border-r border-base-content/[0.06]
-      transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
-      {sidebarCollapsed ? 'w-[4.25rem]' : 'w-60'}
+      bg-base-100 border-r border-base-content/6
+      transition-all duration-300 ease-out-expo
+      {sidebarCollapsed ? 'w-17' : 'w-60'}
       {mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
   >
     <!-- Logo -->
-    <div class='h-14 flex items-center gap-2.5 px-4 shrink-0 border-b border-base-content/[0.06]'>
+    <div class='h-14 flex items-center gap-2.5 px-4 shrink-0 border-b border-base-content/6'>
       <div class='w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0'>
         <span class='text-primary-content font-bold text-sm'>h</span>
       </div>
@@ -178,11 +178,11 @@
                 type='button'
                 class="flex items-center w-full rounded-lg px-2.5 py-2 text-left transition-colors duration-150
                   {isActive(item.path)
-                    ? 'text-primary bg-primary/[0.06]'
-                    : 'text-base-content/60 hover:bg-base-content/[0.04] hover:text-base-content/80'}"
+                    ? 'text-primary bg-primary/6'
+                    : 'text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80'}"
                 onclick={(e: MouseEvent) => toggleSubmenu(e, item.path)}
               >
-                <span class='{item.icon} size-[18px] shrink-0'></span>
+                <span class='{item.icon} size-4.5 shrink-0'></span>
                 {#if !sidebarCollapsed}
                   <span class='ml-2.5 flex-1 text-[13px] font-medium'>{item.title}</span>
                   <span class="icon-[tabler--chevron-down] size-3.5 transition-transform duration-200 opacity-40
@@ -191,15 +191,15 @@
               </BareButton>
 
               {#if !sidebarCollapsed && expandedMenus.has(item.path)}
-                <ul class='mt-0.5 space-y-0.5 ml-[18px] pl-3 border-l border-base-content/[0.08]'>
+                <ul class='mt-0.5 space-y-0.5 ml-4.5 pl-3 border-l border-base-content/8'>
                   {#each item.children as child}
                     <li>
                       <a
                         href={child.path}
                         class="block rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-150
                           {currentPath === child.path
-                            ? 'text-primary font-medium bg-primary/[0.06]'
-                            : 'text-base-content/50 hover:text-base-content/70 hover:bg-base-content/[0.04]'}"
+                            ? 'text-primary font-medium bg-primary/6'
+                            : 'text-base-content/50 hover:text-base-content/70 hover:bg-base-content/4'}"
                         onclick={closeMobileMenu}
                       >
                         {child.title}
@@ -213,11 +213,11 @@
                 href={item.path}
                 class="flex items-center rounded-lg px-2.5 py-2 transition-colors duration-150
                   {isActive(item.path)
-                    ? 'text-primary bg-primary/[0.06] font-medium'
-                    : 'text-base-content/60 hover:bg-base-content/[0.04] hover:text-base-content/80'}"
+                    ? 'text-primary bg-primary/6 font-medium'
+                    : 'text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80'}"
                 onclick={closeMobileMenu}
               >
-                <span class='{item.icon} size-[18px] shrink-0'></span>
+                <span class='{item.icon} size-4.5 shrink-0'></span>
                 {#if !sidebarCollapsed}
                   <span class='ml-2.5 text-[13px] font-medium'>{item.title}</span>
                 {/if}
@@ -229,13 +229,13 @@
     </nav>
 
     <!-- 侧边栏底部 -->
-    <div class='p-2 shrink-0 border-t border-base-content/[0.06]'>
+    <div class='p-2 shrink-0 border-t border-base-content/6'>
       <BareButton
         type='button'
-        class='flex items-center w-full rounded-lg px-2.5 py-2 text-base-content/40 hover:bg-base-content/[0.04] hover:text-base-content/60 transition-colors duration-150'
+        class='flex items-center w-full rounded-lg px-2.5 py-2 text-base-content/40 hover:bg-base-content/4 hover:text-base-content/60 transition-colors duration-150'
         onclick={toggleSidebar}
       >
-        <span class="icon-[tabler--layout-sidebar-left-collapse] size-[18px] shrink-0 transition-transform duration-300
+        <span class="icon-[tabler--layout-sidebar-left-collapse] size-4.5 shrink-0 transition-transform duration-300
           {sidebarCollapsed ? 'rotate-180' : ''}"></span>
         {#if !sidebarCollapsed}
           <span class='ml-2.5 text-[13px] font-medium'>{m.nav_collapse()}</span>
@@ -247,12 +247,12 @@
   <!-- 主内容区 -->
   <div class='flex-1 flex flex-col min-w-0 overflow-hidden'>
     <!-- 顶栏 -->
-    <header class='h-14 bg-base-100 border-b border-base-content/[0.06] shrink-0'>
+    <header class='h-14 bg-base-100 border-b border-base-content/6 shrink-0'>
       <div class='h-full flex items-center justify-between px-4 lg:px-5'>
         <div class='flex items-center gap-3'>
           <BareButton
             type='button'
-            class='p-1.5 rounded-lg text-base-content/50 hover:bg-base-content/[0.04] lg:hidden'
+            class='p-1.5 rounded-lg text-base-content/50 hover:bg-base-content/4 lg:hidden'
             onclick={() => mobileMenuOpen = !mobileMenuOpen}
             ariaLabel={m.action_open()}
           >
@@ -279,7 +279,7 @@
           <div class='relative user-menu-container'>
             <BareButton
               type='button'
-              class='flex items-center gap-2 px-2 py-1.5 -mr-2 rounded-lg hover:bg-base-content/[0.04] transition-colors duration-150'
+              class='flex items-center gap-2 px-2 py-1.5 -mr-2 rounded-lg hover:bg-base-content/4 transition-colors duration-150'
               onclick={toggleUserMenu}
             >
               <Avatar
@@ -294,8 +294,8 @@
             </BareButton>
 
             {#if userMenuOpen}
-              <div class='absolute right-0 top-full mt-1.5 w-52 bg-base-100 rounded-xl border border-base-content/[0.08] shadow-[var(--shadow-float)] py-1 z-50 hai-scale-in origin-top-right'>
-                <div class='px-3.5 py-2.5 border-b border-base-content/[0.06]'>
+              <div class='absolute right-0 top-full mt-1.5 w-52 bg-base-100 rounded-xl border border-base-content/8 shadow-(--shadow-float) py-1 z-50 hai-scale-in origin-top-right'>
+                <div class='px-3.5 py-2.5 border-b border-base-content/6'>
                   <p class='text-sm font-medium text-base-content leading-tight'>{data.user?.displayName || data.user?.username || 'Guest'}</p>
                   <p class='text-2xs text-base-content/40 mt-0.5'>@{data.user?.username ?? 'guest'}</p>
                   <p class='text-2xs text-base-content/40 mt-0.5'>{data.user?.roles?.join(', ') ?? m.common_guest()}</p>
@@ -303,7 +303,7 @@
                 <div class='py-0.5'>
                   <a
                     href='/admin/profile'
-                    class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/[0.04] hover:text-base-content/80 transition-colors'
+                    class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
                     onclick={() => { userMenuOpen = false }}
                   >
                     <span class='icon-[tabler--user] size-4'></span>
@@ -311,17 +311,17 @@
                   </a>
                   <a
                     href='/admin/settings'
-                    class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/[0.04] hover:text-base-content/80 transition-colors'
+                    class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
                     onclick={() => { userMenuOpen = false }}
                   >
                     <span class='icon-[tabler--settings] size-4'></span>
                     {m.nav_settings()}
                   </a>
                 </div>
-                <div class='border-t border-base-content/[0.06] py-0.5'>
+                <div class='border-t border-base-content/6 py-0.5'>
                   <Button
                     variant='ghost'
-                    class='flex items-center gap-2.5 w-full justify-start text-error/70 hover:bg-error/[0.06] hover:text-error text-[13px] px-3.5'
+                    class='flex items-center gap-2.5 w-full justify-start text-error/70 hover:bg-error/6 hover:text-error text-[13px] px-3.5'
                     onclick={handleLogout}
                   >
                     <span class='icon-[tabler--logout] size-4'></span>
@@ -343,7 +343,7 @@
     </main>
 
     <!-- 页脚 -->
-    <footer class='h-10 border-t border-base-content/[0.06] flex items-center justify-center px-6 shrink-0'>
+    <footer class='h-10 border-t border-base-content/6 flex items-center justify-center px-6 shrink-0'>
       <p class='text-2xs text-base-content/30 tracking-wide'>
         {appName} v{appVersion}
       </p>

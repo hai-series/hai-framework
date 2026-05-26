@@ -4,8 +4,8 @@
  * =============================================================================
  */
 
+import { createAdminRole, createRoleCode, listAdminRoles, resolvePermissionIds } from '$lib/server/iam-admin.js'
 import { CreateRoleSchema } from '$lib/server/schemas/index.js'
-import { permissionService, roleService } from '$lib/server/services/index.js'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -16,7 +16,7 @@ import { kit } from '@h-ai/kit'
 export const GET = kit.handler(async ({ locals }) => {
   kit.guard.require(locals.session, 'role:list')
 
-  const roles = await roleService.list()
+  const roles = await listAdminRoles()
   return kit.response.ok(roles)
 })
 
@@ -30,19 +30,11 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
   const { name, description, permissions } = await kit.validate.body(request, CreateRoleSchema)
 
-  // 生成角色 code：仅保留字母、数字、下划线，防止特殊字符注入
-  const code = `role_${name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}`
-
-  // 批量转换权限名称为 ID
-  const permissionIds = permissions?.length
-    ? (await Promise.all(permissions.map(code => permissionService.getByCode(code))))
-        .filter((p): p is NonNullable<typeof p> => p !== null)
-        .map(p => p.id)
-    : []
+  const permissionIds = await resolvePermissionIds(permissions) ?? []
 
   // 创建角色（IAM authz 内部已记录审计日志）
-  const createResult = await roleService.create({
-    code,
+  const createResult = await createAdminRole({
+    code: createRoleCode(name),
     name,
     description,
     permissions: permissionIds,

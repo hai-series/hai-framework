@@ -5,7 +5,7 @@
  */
 
 import type { PageServerLoad } from './$types'
-import { roleService } from '$lib/server/services/index.js'
+import { listAdminRoles } from '$lib/server/iam-admin.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
@@ -57,7 +57,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
   // 角色列表 + 用户列表（含角色）并行获取
   const [roles, usersResult] = await Promise.all([
-    roleService.list(),
+    listAdminRoles(),
     iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'] }),
   ])
   const iamUsers = usersResult.success ? usersResult.data.items : []

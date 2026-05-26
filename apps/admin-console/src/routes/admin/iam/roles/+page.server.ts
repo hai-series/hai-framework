@@ -5,7 +5,7 @@
  */
 
 import type { PageServerLoad } from './$types'
-import { permissionService, roleService } from '$lib/server/services/index.js'
+import { getAdminRoleUserCount, listAdminRoles, listPermissionsGroupedByResource } from '$lib/server/iam-admin.js'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
 
@@ -20,17 +20,15 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const search = url.searchParams.get('search') || undefined
 
   const [roles, permissions] = await Promise.all([
-    roleService.list(),
-    permissionService.listGroupedByResource(),
+    listAdminRoles(),
+    listPermissionsGroupedByResource(),
   ])
 
   // 为每个角色获取用户数
-  let rolesWithUserCount = await Promise.all(
-    roles.map(async role => ({
-      ...role,
-      userCount: await roleService.getUserCount(role.id),
-    })),
-  )
+  let rolesWithUserCount = roles.map(role => ({
+    ...role,
+    userCount: getAdminRoleUserCount(role.id),
+  }))
 
   // 搜索过滤
   if (search) {

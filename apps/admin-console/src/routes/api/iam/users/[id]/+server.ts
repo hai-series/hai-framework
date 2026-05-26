@@ -5,7 +5,7 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
-import { normalizeUniqueConstraintError, toIamUserResponse } from '$lib/server/iam-helpers.js'
+import { normalizeUniqueConstraintError, toIamUserResponse } from '$lib/server/iam-admin.js'
 import { createUpdateUserSchema, IdParamSchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'

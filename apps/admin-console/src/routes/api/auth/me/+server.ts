@@ -8,7 +8,7 @@
  * =============================================================================
  */
 
-import { toIamUserResponse } from '$lib/server/iam-helpers.js'
+import { toIamUserResponse } from '$lib/server/iam-admin.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 

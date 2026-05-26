@@ -36,6 +36,8 @@ import type { CacheConfigInput } from '@h-ai/cache'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import type { ReachConfigInput } from '@h-ai/reach'
 import type { StorageConfigInput } from '@h-ai/storage'
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import * as m from '$lib/paraglide/messages.js'
 import { audit } from '@h-ai/audit'
@@ -53,6 +55,7 @@ type DbConfigInput = Parameters<typeof reldb.init>[0]
 // =============================================================================
 
 let initialized = false
+let initPromise: Promise<void> | null = null
 
 // =============================================================================
 // 业务表 Schema
@@ -74,6 +77,17 @@ let initialized = false
  * 7. 创建业务表
  */
 export async function initApp(): Promise<void> {
+  if (initialized)
+    return
+
+  initPromise ??= runInitApp().finally(() => {
+    initPromise = null
+  })
+
+  return initPromise
+}
+
+async function runInitApp(): Promise<void> {
   if (initialized)
     return
 
@@ -103,12 +117,8 @@ export async function initApp(): Promise<void> {
     : iamConfig
 
   // 3. 确保数据目录存在
-  const path = await import('node:path')
-  const fs = await import('node:fs')
   const dbDir = path.dirname(dbConfig.database)
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true })
-  }
+  await mkdir(dbDir, { recursive: true })
 
   // 4. 初始化数据库连接
   const dbResult = await reldb.init(dbConfig)
