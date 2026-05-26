@@ -70,6 +70,14 @@ describe('@h-ai/api-contract', () => {
     })
   })
 
+  it('apiContract.route 可定义自定义 contract 路由', () => {
+    const custom = apiContract
+      .route({ method: 'POST', path: '/custom/ping', operationId: 'custom.ping', tags: ['custom'] })
+      .output(apiContract.haiResultSchema(z.object({ pong: z.boolean() })))
+
+    expect(routeOf(custom)).toEqual({ method: 'POST', path: '/custom/ping' })
+  })
+
   it('payment 创建订单输入 Schema 可校验', () => {
     expect(PaymentCreateOrderInputSchema.safeParse({
       provider: 'wechat',

@@ -84,9 +84,8 @@ serv.listen(app, {
 客户端通过 `client.<key>.<procedure>(...)` 调用，类型完全推导自同一份 contract。
 
 ```typescript
-// src/server/contract/app-contract.ts
+// packages/api-service-contract/src/app-contract.ts
 import { apiContract } from '@h-ai/api-contract'
-import { serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 const InfoOutput = apiContract.haiResultSchema(z.object({ name: z.string(), version: z.string() }))
@@ -94,9 +93,9 @@ const EchoInput = z.object({ message: z.string().min(1).max(2000) })
 const EchoOutput = apiContract.haiResultSchema(z.object({ message: z.string(), userId: z.string() }))
 
 export const appContract = {
-  info: serv.contract.route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
+  info: apiContract.route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
     .output(InfoOutput),
-  echo: serv.contract.route({ method: 'POST', path: '/app/echo', operationId: 'app.echo', tags: ['app'] })
+  echo: apiContract.route({ method: 'POST', path: '/app/echo', operationId: 'app.echo', tags: ['app'] })
     .input(EchoInput).output(EchoOutput),
 }
 ```
@@ -104,9 +103,9 @@ export const appContract = {
 ```typescript
 // src/server/procedures/app-procedures.ts
 import type { ServContext } from '@h-ai/serv'
+import { appContract } from '@h-ai/api-service-contract'
 import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
-import { appContract } from '../contract/app-contract.js'
 
 export function createAppProcedures(deps: { name: string; version: string }) {
   const p = serv.implement(appContract).$context<ServContext>()
@@ -146,7 +145,7 @@ const app = serv.createApp({ contract, procedures, http, iam })
 
 - **无 input 的 POST 过程**：默认不发送 body；transport 加密层会自动跳过空 body 请求，客户端可直接 `client.app.info()`。
 - **`serv.requireAuth` 仅可在过程内调用**：必须在 `context` 中有 `session`；公开过程不要包装它。
-- **客户端导入相同 contract**：在 monorepo 中把 `apiServiceContract` 从应用 `src/app.ts` 导出供 web/cli 直接 import；跨仓库时建议把 contract 拆成独立包发布。
+- **客户端导入相同 contract**：把服务端与客户端共享的 contract 独立成 package（如 `@h-ai/api-service-contract`），禁止从 app 源码目录跨应用 import。
 
 ### 5. Fetch Runtime（Cloudflare Workers / Deno / Bun）
 
@@ -236,16 +235,17 @@ const app = serv.createApp({
 })
 ```
 
-### `serv.contract` / `serv.implement` — oRPC 包装
+### `apiContract.route` / `serv.implement` — contract 与运行时分层
 
 应用代码不要直接 `import { oc } from '@orpc/contract'` 或 `import { implement } from '@orpc/server'`。
-serv 重新导出二者，确保使用方只感知 `@h-ai/serv`：
+contract 路由统一用 `@h-ai/api-contract` 定义，procedure 运行时统一用 `@h-ai/serv` 实现：
 
 ```typescript
+import { apiContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
 
-// 等价于 oc.route(...)
-const route = serv.contract.route({ method: 'POST', path: '/x', operationId: 'x', tags: ['x'] })
+// 等价于 oc.route(...)，但不让应用感知 @orpc/contract
+const route = apiContract.route({ method: 'POST', path: '/x', operationId: 'x', tags: ['x'] })
 
 // 等价于 implement(contract)
 const p = serv.implement(appContract).$context<ServContext>()

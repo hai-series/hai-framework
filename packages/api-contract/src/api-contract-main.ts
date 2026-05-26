@@ -22,6 +22,7 @@
 import { aiContract } from './ai/ai-contract.js'
 import { paginatedSchema } from './common/pagination-schemas.js'
 import { haiResultSchema, HaiVoidResultSchema } from './common/result-schemas.js'
+import { route } from './common/route.js'
 import { createApiContract } from './composition/create-api-contract.js'
 import { iamContract } from './iam/iam-contract.js'
 import { paymentContract } from './payment/payment-contract.js'
@@ -38,6 +39,8 @@ export const apiContract = {
   voidResultSchema: HaiVoidResultSchema,
   /** 分页响应 schema 工厂。 */
   paginatedSchema,
+  /** 创建 oRPC contract 路由节点，供自定义 contract 定义 HTTP 元数据。 */
+  route,
 
   // 领域 contract（框架内置）
   /** IAM 领域 contract（认证 / 用户 / 角色 / 权限）。 */
