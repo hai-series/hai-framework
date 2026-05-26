@@ -5,8 +5,8 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
+import { createAdminPermission, getAdminPermissionByCode, listAdminPermissionsPage } from '$lib/server/iam-admin.js'
 import { CreatePermissionSchema, ListPermissionsQuerySchema } from '$lib/server/schemas/index.js'
-import { permissionService } from '$lib/server/services/index.js'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -19,7 +19,7 @@ export const GET = kit.handler(async ({ url, locals }) => {
 
   const { page, pageSize, search, type } = kit.validate.query(url, ListPermissionsQuerySchema)
 
-  const result = await permissionService.listPaginated({ page, pageSize, search, type })
+  const result = await listAdminPermissionsPage({ page, pageSize, search, type })
   return kit.response.ok(result)
 })
 
@@ -37,13 +37,13 @@ export const POST = kit.handler(async ({ request, locals }) => {
   const code = `${resource}:${action}`
 
   // 检查权限名称是否已存在
-  const existing = await permissionService.getByCode(code)
+  const existing = await getAdminPermissionByCode(code)
   if (existing) {
     return kit.response.conflict(m.api_iam_permissions_name_exists())
   }
 
   // 创建权限（IAM authz 内部已记录审计日志）
-  const createResult = await permissionService.create({
+  const createResult = await createAdminPermission({
     code,
     name,
     description,

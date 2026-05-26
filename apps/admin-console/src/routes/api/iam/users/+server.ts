@@ -5,7 +5,7 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
-import { toIamUserResponse } from '$lib/server/iam-helpers.js'
+import { toIamUserResponse } from '$lib/server/iam-admin.js'
 import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
 import { HaiIamError, iam } from '@h-ai/iam'

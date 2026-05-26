@@ -4,7 +4,7 @@
 <script lang='ts'>
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
-  import { createPermissionCrud } from '$lib/crud/permission-crud'
+  import { createPermissionCrud } from '$lib/crud/admin-crud'
   import * as m from '$lib/paraglide/messages'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { CrudPage, usePermission } from '@h-ai/ui'

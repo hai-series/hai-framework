@@ -6,7 +6,7 @@
 
 import type { PermissionType } from '@h-ai/iam'
 import type { PageServerLoad } from './$types'
-import { permissionService, roleService } from '$lib/server/services/index.js'
+import { listAdminPermissionsPage, listAdminRoles } from '$lib/server/iam-admin.js'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
 
@@ -23,8 +23,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const type = (['menu', 'api', 'button'].includes(typeParam ?? '') ? typeParam : undefined) as PermissionType | undefined
 
   const [permResult, roles] = await Promise.all([
-    permissionService.listPaginated({ page, pageSize, search, type }),
-    roleService.list(),
+    listAdminPermissionsPage({ page, pageSize, search, type }),
+    listAdminRoles(),
   ])
 
   // 构建权限 → 角色的映射（permissionCode → [roleName, ...]）

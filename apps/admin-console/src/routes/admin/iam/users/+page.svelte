@@ -5,7 +5,7 @@
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
   import { invalidateAll } from '$app/navigation'
-  import { createUserCrud } from '$lib/crud/user-crud'
+  import { createUserCrud } from '$lib/crud/admin-crud'
   import * as m from '$lib/paraglide/messages'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { CrudPage, usePermission } from '@h-ai/ui'

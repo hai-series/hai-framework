@@ -4,7 +4,7 @@
  * =============================================================================
  * 使用 kit.client.create 创建统一客户端：
  * - 自动附加 CSRF Token
- * - 同源 fetch transport 由 browser-transport.ts 统一安装
+ * - 同源 fetch transport 由根 +layout.svelte 调用 kit.client.installBrowserTransport 统一安装
  * =============================================================================
  */
 
