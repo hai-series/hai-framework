@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ai } from '@h-ai/ai'
 import { apiClient } from '@h-ai/api-client'
+import { apiServiceContract } from '@h-ai/api-service-contract'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
@@ -26,7 +27,7 @@ import { serv } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
 import { vecdb } from '@h-ai/vecdb'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { apiServiceContract, createApiServiceApp } from '../src/app.js'
+import { createApiServiceApp } from '../src/app.js'
 
 // ─── 测试全局状态 ────────────────────────────────────────────────────────────
 
@@ -121,7 +122,7 @@ beforeAll(async () => {
     throw new Error(`ai: ${aiResult.error.message}`)
 
   encryptedApp = createApiServiceApp()
-  plainApp = createApiServiceApp({ transport: 'disabled', refreshCookie: 'disabled' })
+  plainApp = createApiServiceApp({ transport: 'disabled' })
 
   // 启动两个真实 HTTP 服务器（host=127.0.0.1, port=0 随机取可用端口）。
   // 通过 onListening 回调获取实际绑定的端口。
@@ -268,43 +269,13 @@ describe('api-service 加密链路（api-client + transport）', () => {
       expect(result.data.tokens.accessToken).toBeTruthy()
   })
 
-  it('默认使用 httpOnly Cookie 承载 refreshToken，不在响应体暴露', async () => {
-    const transportClient = crypto.transport.createClient({
-      keyExchangeUrl: `${encryptedBase}${keyExchangePath}`,
-      fetch,
-    })
-    const user = uniqueUser('cookie_reg')
-
-    const res = await transportClient.encryptedFetch(`${encryptedBase}${apiPath('/auth/register')}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: user.username,
-        password: user.password,
-        email: user.email,
-      }),
-    })
-
-    expect(res.status).toBe(200)
-    const setCookie = res.headers.get('set-cookie')
-    expect(setCookie).toContain('hai_refresh_token=')
-    expect(setCookie).toContain('HttpOnly')
-    expect(setCookie).toContain(`Path=${apiPath('/auth/refresh')}`)
-
-    const body = await res.json() as { success: boolean, data?: { tokens?: { accessToken?: string, refreshToken?: string } } }
-    expect(body.success).toBe(true)
-    expect(body.data?.tokens?.accessToken).toBeTruthy()
-    expect(body.data?.tokens?.refreshToken).toBeUndefined()
-    transportClient.destroy()
-  })
-
   it('login 缺少必填字段时由 schema 校验失败', async () => {
     // @ts-expect-error 故意传入不完整 payload 触发 schema 校验
     const result = await encryptedClient.iam.auth.login({ identifier: '' })
     expect(result.success).toBe(false)
   })
 
-  it('login 正确凭据返回 tokens；错误密码返回 success:false', async () => {
+  it('login 正确凭据返回 access token；错误密码返回 success:false', async () => {
     const user = uniqueUser('enc_login')
     const reg = await encryptedClient.iam.auth.register({
       username: user.username,
@@ -370,7 +341,7 @@ describe('api-service 明文链路（api-client + transport 关闭）', () => {
       expect(result.data.tokens.accessToken).toBeTruthy()
   })
 
-  it('login 正确凭据返回 tokens', async () => {
+  it('login 正确凭据返回 access token', async () => {
     const user = uniqueUser('plain_login')
     const reg = await plainClient.iam.auth.register({
       username: user.username,
@@ -386,7 +357,7 @@ describe('api-service 明文链路（api-client + transport 关闭）', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.tokens.accessToken).toBeTruthy()
-      expect(result.data.tokens.refreshToken).toBeTruthy()
+      expect(result.data.tokens.refreshToken).toBeUndefined()
     }
   })
 })
@@ -407,8 +378,6 @@ describe('api-service 受保护资源（认证守卫）', () => {
     await encryptedClient.auth.setTokens({
       accessToken: 'totally-fake-token-xyz',
       refreshToken: 'totally-fake-refresh-xyz',
-      expiresIn: 3600,
-      tokenType: 'Bearer',
     })
     const result = await encryptedClient.storage.presignedUrls.createUpload({
       key: 'uploads/test.png',

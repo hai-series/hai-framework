@@ -1,11 +1,11 @@
 /**
  * api-service — App 领域 Schema
  *
- * 本服务自身的 API（与 @h-ai/api-contract 中通用契约并列）。
+ * 本包只定义 api-service 自有 HTTP API 的输入/输出结构。
  * - `app.info`：公开服务元信息（无需认证）。
- * - `app.echo`：认证后回显输入，返回调用者上下文（演示自定义鉴权端点）。
+ * - `app.echo`：认证后回显输入，返回调用者上下文。
  *
- * 所有 Output 用 `haiResultSchema()` 封装，与全局 HaiResult 一致。
+ * 所有 Output 用 `apiContract.haiResultSchema()` 封装，与全局 HaiResult 一致。
  */
 
 import { apiContract } from '@h-ai/api-contract'
@@ -21,6 +21,7 @@ export const AppInfoOutputDataSchema = z.object({
   transportEnabled: z.boolean(),
 })
 
+/** app.info 标准 HaiResult 输出。 */
 export const AppInfoOutputSchema = apiContract.haiResultSchema(AppInfoOutputDataSchema)
 
 // ─── app.echo ────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ export const AppEchoOutputDataSchema = z.object({
   timestamp: z.string(),
 })
 
+/** app.echo 标准 HaiResult 输出。 */
 export const AppEchoOutputSchema = apiContract.haiResultSchema(AppEchoOutputDataSchema)
 
 export type AppInfoOutputData = z.infer<typeof AppInfoOutputDataSchema>

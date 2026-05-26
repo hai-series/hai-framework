@@ -27,39 +27,28 @@ pnpm --filter api-service preview
 
 ## API 契约
 
-本应用在 `src/app.ts` 中组合应用级 contract，把通用领域契约（iam/storage/ai）与服务自有契约（`app`）合并后导出：
+本服务与桌面端共用的应用级 contract 已独立为 `@h-ai/api-service-contract`，禁止从 `apps/api-service/src` 跨应用导入。
+该包组合了框架通用领域契约（iam/storage/ai）与服务自有契约（`app.info` / `app.echo`）：
 
 ```ts
-import { apiContract } from '@h-ai/api-contract'
-import { appContract } from './server/contract/index.js' // 本服务自有 contract
+import { apiServiceContract } from '@h-ai/api-service-contract'
 
-export const apiServiceContract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: apiContract.ai,
-  app: appContract,
-})
-export type ApiServiceContract = typeof apiServiceContract
+apiServiceContract.iam.auth.login
+apiServiceContract.storage.presignedUrls.createUpload
+apiServiceContract.ai.chats.createCompletion
+apiServiceContract.app.info
+apiServiceContract.app.echo
 ```
 
-`appContract` 在 `src/server/contract/app-contract.ts` 中按 oRPC 规范定义：
+自定义路由通过 `apiContract.route(...)` 定义在契约包中，`@h-ai/serv` 只负责运行时挂载与 procedure 实现：
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
-import { serv } from '@h-ai/serv'
-import { z } from 'zod'
-
-const AppInfoOutputSchema = apiContract.haiResultSchema(z.object({
-  name: z.string(),
-  version: z.string(),
-  uptimeMs: z.number().int().nonnegative(),
-  transportEnabled: z.boolean(),
-}))
 
 export const appContract = {
-  info: serv.contract.route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
+  info: apiContract
+    .route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
     .output(AppInfoOutputSchema),
-  // ...echo 同理，带 .input(...)
 }
 ```
 
@@ -67,9 +56,9 @@ export const appContract = {
 需要登录的过程包一层 `serv.requireAuth`：
 
 ```ts
+import { appContract } from '@h-ai/api-service-contract'
 import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
-import { appContract } from '../contract/index.js'
 
 const p = serv.implement(appContract).$context<ServContext>()
 export const router = p.router({
@@ -86,8 +75,8 @@ export const router = p.router({
 客户端用同一个 `apiServiceContract` 构造类型安全 client：
 
 ```ts
-import { apiServiceContract } from '@app/api-service' // 或从源代码 path 导入
 import { apiClient } from '@h-ai/api-client'
+import { apiServiceContract } from '@h-ai/api-service-contract'
 import { crypto } from '@h-ai/crypto'
 
 await crypto.init()
@@ -100,14 +89,13 @@ await client.init({
 
 // 公开端点
 const info = await client.app.info()
-if (info.success)
-  console.warn(info.data.version, info.data.uptimeMs)
 
 // 鉴权端点：需先登录
 await client.iam.auth.register({ username: 'alice', password: 'Secret123!' })
 const echoed = await client.app.echo({ message: 'hi' })
-if (echoed.success)
-  console.warn(echoed.data.userId, echoed.data.requestId)
+
+void info
+void echoed
 
 await client.close()
 await crypto.close()

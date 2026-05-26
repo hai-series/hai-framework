@@ -10,11 +10,15 @@
  */
 
 import { apiClient } from '@h-ai/api-client'
+import { apiServiceContract } from '@h-ai/api-service-contract'
 import { crypto } from '@h-ai/crypto'
 import { desktopCryptoConfig } from './crypto-config.js'
 import { navigate } from './router.svelte.js'
 
 const DEFAULT_API_BASE = 'http://localhost:3000/api/v1'
+
+/** 桌面端统一 API client：绑定 api-service 的应用级 contract（含 `app.*` 自定义端点）。 */
+export const desktopApiClient = apiClient.create(apiServiceContract)
 
 let initialized = false
 let cryptoTransportEnabled = false
@@ -44,7 +48,7 @@ export async function initApi(): Promise<void> {
   }
 
   try {
-    await apiClient.init({
+    await desktopApiClient.init({
       baseUrl,
       auth: {
         storage: apiClient.tokenStorage.localStorage(),
@@ -72,7 +76,7 @@ export async function closeApi(): Promise<void> {
   if (!initialized)
     return
 
-  await apiClient.close()
+  await desktopApiClient.close()
   if (cryptoTransportEnabled)
     await crypto.close()
 

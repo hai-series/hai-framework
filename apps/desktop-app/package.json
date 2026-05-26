@@ -30,6 +30,7 @@
   "dependencies": {
     "@h-ai/api-client": "workspace:*",
     "@h-ai/api-contract": "workspace:*",
+    "@h-ai/api-service-contract": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "@tauri-apps/api": "catalog:",

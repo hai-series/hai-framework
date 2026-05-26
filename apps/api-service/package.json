@@ -23,6 +23,7 @@
   "dependencies": {
     "@h-ai/ai": "workspace:*",
     "@h-ai/api-contract": "workspace:*",
+    "@h-ai/api-service-contract": "workspace:*",
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",

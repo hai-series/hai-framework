@@ -84,7 +84,7 @@ serv.listen(app, {
 客户端通过 `client.<key>.<procedure>(...)` 调用，类型完全推导自同一份 contract。
 
 ```typescript
-// packages/api-service-contract/src/app-contract.ts
+// apps/api-service-contract/src/app-contract.ts
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
