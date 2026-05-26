@@ -46,6 +46,7 @@ interface TaskRow {
   taskName: string
   description: string | null
   cron: string
+  timezone: string | null
   enabled: boolean
   deleteAfterRun: boolean
   retry: unknown
@@ -66,6 +67,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         { fieldName: 'taskName', columnName: 'task_name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
         { fieldName: 'description', columnName: 'description', def: { type: 'TEXT' }, select: true, create: true, update: true },
         { fieldName: 'cron', columnName: 'cron', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
+        { fieldName: 'timezone', columnName: 'timezone', def: { type: 'TEXT' }, select: true, create: true, update: true },
         { fieldName: 'enabled', columnName: 'enabled', def: { type: 'BOOLEAN', notNull: true, defaultValue: true }, select: true, create: true, update: true },
         { fieldName: 'deleteAfterRun', columnName: 'delete_after_run', def: { type: 'BOOLEAN', notNull: true, defaultValue: false }, select: true, create: true, update: true },
         { fieldName: 'retry', columnName: 'retry', def: { type: 'JSON' }, select: true, create: true, update: true },
@@ -84,6 +86,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         taskName: task.name,
         description: task.description ?? null,
         cron: task.cron,
+        timezone: task.timezone ?? null,
         enabled: task.enabled !== false,
         deleteAfterRun: task.deleteAfterRun === true,
         retry: task.retry ?? null,
@@ -136,6 +139,8 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         data.description = updates.description ?? null
       if (updates.cron !== undefined)
         data.cron = updates.cron
+      if (updates.timezone !== undefined)
+        data.timezone = updates.timezone ?? null
       if (updates.enabled !== undefined)
         data.enabled = updates.enabled
       if (updates.deleteAfterRun !== undefined)
@@ -256,6 +261,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
           name: row.taskName,
           ...(row.description ? { description: row.description } : {}),
           cron: row.cron,
+          ...(row.timezone ? { timezone: row.timezone } : {}),
           enabled: row.enabled,
           deleteAfterRun: row.deleteAfterRun,
           ...(retryResult.data ? { retry: retryResult.data } : {}),
