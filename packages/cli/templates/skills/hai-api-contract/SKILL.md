@@ -62,7 +62,6 @@ export const myContract = apiContract.create({
 
 ```typescript
 import { apiContract } from '@h-ai/api-contract'
-import { serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 // 输入 Schema
@@ -81,7 +80,7 @@ const WidgetOutputSchema = apiContract.haiResultSchema(z.object({
 // 领域 contract
 export const widgetContract = {
   widget: {
-    create: serv.contract
+    create: apiContract
       .route({
         method: 'POST',
         path: '/widgets',
@@ -92,7 +91,7 @@ export const widgetContract = {
       .input(WidgetCreateInputSchema)
       .output(WidgetOutputSchema),
 
-    getById: serv.contract
+    getById: apiContract
       .route({
         method: 'GET',
         path: '/widgets/{id}',
@@ -234,12 +233,11 @@ const OutputSchema = apiContract.haiResultSchema(z.object({
 
 ```typescript
 import { apiContract, PaginationInputSchema } from '@h-ai/api-contract'
-import { serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 const WidgetSchema = z.object({ id: z.string(), name: z.string() })
 
-const listWidgets = serv.contract
+const listWidgets = apiContract
   .route({ method: 'GET', path: '/widgets', operationId: 'widget.list', tags: ['widget'] })
   .input(PaginationInputSchema.extend({ keyword: z.string().optional() }))
   .output(apiContract.haiResultSchema(apiContract.paginatedSchema(WidgetSchema)))
@@ -249,7 +247,7 @@ const listWidgets = serv.contract
 
 ```typescript
 // 路径中的 {id} 对应 input 中的 id 字段
-const getWidget = serv.contract
+const getWidget = apiContract
   .route({ method: 'GET', path: '/widgets/{id}', operationId: 'widget.getById', tags: ['widget'] })
   .input(z.object({ id: z.string() }))
   .output(apiContract.haiResultSchema(WidgetSchema))
@@ -258,7 +256,7 @@ const getWidget = serv.contract
 ### 无输入的端点
 
 ```typescript
-const healthContract = serv.contract
+const healthContract = apiContract
   .route({ method: 'GET', path: '/health', operationId: 'health.check', tags: ['system'] })
   .output(apiContract.haiResultSchema(z.object({ status: z.string() })))
 ```

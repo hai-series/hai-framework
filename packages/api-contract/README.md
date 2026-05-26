@@ -6,6 +6,7 @@
 
 - `apiContract.iam`、`apiContract.storage`、`apiContract.ai`、`apiContract.payment`：领域级 contract。
 - `apiContract.create()`：按应用场景组合启用的领域 contract。
+- `apiContract.route()`：定义自定义 HTTP 路由元数据，供应用级 contract 复用。
 - `apiContract.haiResultSchema()` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema()`：公共 DTO Schema 工厂。
 - 公共 DTO Schema：所有 HTTP 输出统一包装为 `HaiResult<T>`。
 - IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
@@ -20,6 +21,21 @@ export const contract = apiContract.create({
   storage: apiContract.storage,
   ai: false,
 })
+```
+
+自定义应用 contract 也从本包定义路由，不依赖 `@h-ai/serv`：
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { z } from 'zod'
+
+const PingOutput = apiContract.haiResultSchema(z.object({ pong: z.boolean() }))
+
+export const appContract = {
+  ping: apiContract
+    .route({ method: 'POST', path: '/app/ping', operationId: 'app.ping', tags: ['app'] })
+    .output(PingOutput),
+}
 ```
 
 ## API 契约
@@ -62,6 +78,7 @@ const app = serv.createApp({
 ## API 概览
 
 - `apiContract.create(options)`：过滤 `false` / `undefined` 领域并组合应用级 contract。
+- `apiContract.route(routeConfig)`：定义自定义 endpoint 的 method/path/operationId/tags 等路由元数据。
 - `apiContract.haiResultSchema(dataSchema)` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema(itemSchema)`：公共 DTO Schema 工厂。
 - `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：领域输入 / 输出 DTO Schema。
 

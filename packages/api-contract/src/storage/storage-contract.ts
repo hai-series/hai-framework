@@ -6,7 +6,7 @@
  * @module storage-contract
  */
 
-import { oc } from '@orpc/contract'
+import { route } from '../common/route.js'
 import {
   StorageDeleteFilesInputSchema,
   StorageFileKeyInputSchema,
@@ -22,30 +22,24 @@ import {
 /** Storage 领域 oRPC contract。 */
 export const storageContract = {
   presignedUrls: {
-    createDownload: oc
-      .route({ method: 'POST', path: '/storage/presigned-urls/download', operationId: 'storage.presignedUrls.createDownload', summary: 'Create presigned download URL', tags: ['storage'] })
+    createDownload: route({ method: 'POST', path: '/storage/presigned-urls/download', operationId: 'storage.presignedUrls.createDownload', summary: 'Create presigned download URL', tags: ['storage'] })
       .input(StoragePresignDownloadInputSchema)
       .output(StoragePresignedUrlOutputSchema),
-    createUpload: oc
-      .route({ method: 'POST', path: '/storage/presigned-urls/upload', operationId: 'storage.presignedUrls.createUpload', summary: 'Create presigned upload URL', tags: ['storage'] })
+    createUpload: route({ method: 'POST', path: '/storage/presigned-urls/upload', operationId: 'storage.presignedUrls.createUpload', summary: 'Create presigned upload URL', tags: ['storage'] })
       .input(StoragePresignUploadInputSchema)
       .output(StoragePresignedUrlOutputSchema),
   },
   files: {
-    list: oc
-      .route({ method: 'GET', path: '/storage/files', operationId: 'storage.files.list', summary: 'List files', tags: ['storage'] })
+    list: route({ method: 'GET', path: '/storage/files', operationId: 'storage.files.list', summary: 'List files', tags: ['storage'] })
       .input(StorageListFilesInputSchema)
       .output(StorageListFilesOutputSchema),
-    getMetadata: oc
-      .route({ method: 'POST', path: '/storage/files/metadata', operationId: 'storage.files.getMetadata', summary: 'Get file metadata', tags: ['storage'] })
+    getMetadata: route({ method: 'POST', path: '/storage/files/metadata', operationId: 'storage.files.getMetadata', summary: 'Get file metadata', tags: ['storage'] })
       .input(StorageFileKeyInputSchema)
       .output(StorageFileMetadataOutputSchema),
-    delete: oc
-      .route({ method: 'DELETE', path: '/storage/files', operationId: 'storage.files.delete', summary: 'Delete file', tags: ['storage'] })
+    delete: route({ method: 'DELETE', path: '/storage/files', operationId: 'storage.files.delete', summary: 'Delete file', tags: ['storage'] })
       .input(StorageFileKeyInputSchema)
       .output(StorageVoidOutputSchema),
-    deleteMany: oc
-      .route({ method: 'POST', path: '/storage/files/delete-many', operationId: 'storage.files.deleteMany', summary: 'Delete files', tags: ['storage'] })
+    deleteMany: route({ method: 'POST', path: '/storage/files/delete-many', operationId: 'storage.files.deleteMany', summary: 'Delete files', tags: ['storage'] })
       .input(StorageDeleteFilesInputSchema)
       .output(StorageVoidOutputSchema),
   },
