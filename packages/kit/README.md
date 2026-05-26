@@ -94,14 +94,6 @@ const haiHandle = kit.createHandle({
 export const handle: Handle = haiHandle
 ```
 
-**src/hooks.client.ts**：
-
-```typescript
-import { kit } from '@h-ai/kit'
-
-export const handleFetch = kit.auth.createHandleFetch()
-```
-
 ### API 端点
 
 ```typescript
@@ -143,7 +135,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 ### 同源传输加密
 
-kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer()` 创建管理器，浏览器端通过 `kit.client.installBrowserTransportFetch()` 安装一次同源 fetch 包装。应用层只配置顶层 `crypto` 句柄。
+kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer()` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。应用层只配置顶层 `crypto` 句柄。
 
 **src/hooks.server.ts**：
 
@@ -166,27 +158,31 @@ export const handle = kit.createHandle({
 })
 ```
 
-**src/lib/utils/api.ts**：
+**src/routes/+layout.svelte**（推荐入口：浏览器端只需一行）：
+
+```svelte
+<script lang='ts'>
+  import { browser } from '$app/environment'
+  import { appKitConfig } from '$lib/config/kit-config'
+  import { crypto } from '@h-ai/crypto'
+  import { kit } from '@h-ai/kit'
+
+  // 一次性安装：内部按 _kit.yml 决定是否启用 transport，并预热 crypto
+  if (browser) {
+    kit.client.installBrowserTransport(appKitConfig, { crypto })
+  }
+</script>
+```
+
+**src/lib/utils/api.ts**（业务层只看到 `apiFetch`）：
 
 ```ts
-import { crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
-
-if (typeof window !== 'undefined') {
-  void crypto.init()
-  kit.client.installBrowserTransportFetch({ crypto })
-}
 
 export const { apiFetch } = kit.client.create()
 ```
 
-**src/hooks.client.ts**（浏览器端同源 fetch 增强）：
-
-```ts
-import { kit } from '@h-ai/kit'
-
-export const handleFetch = kit.auth.createHandleFetch()
-```
+> 不再需要 `src/hooks.client.ts`：默认 `handleFetch` 行为已经够用，SvelteKit 内部 `__data.json` 请求会自动走上面安装的全局 fetch 包装。同源 Authorization 注入统一通过 `kit.client.create({ auth: true })` 完成，避免浏览器端 hooks 与全局 fetch 包装形成两条链路。
 
 默认密钥协商路径为 `/api/_hai/key-exchange`。如服务端自定义 `transport.keyExchangePath`，客户端需同步配置 `transport.keyExchangeUrl`。
 
@@ -197,7 +193,7 @@ transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` �
 ### 使用 `_kit.yml` 统一 transport 配置
 
 `@h-ai/kit` 提供 `KitConfigSchema` / `resolveKitConfig()`，方便应用用同一份 `_kit.yml`
-同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransportFetch()`：
+同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransport()`：
 
 ```yml
 transport:

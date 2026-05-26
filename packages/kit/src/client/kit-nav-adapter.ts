@@ -3,7 +3,7 @@
  *
  * 此前位于 `@h-ai/ui/sveltekit`，为避免 `@h-ai/ui` 耦合 SvelteKit，迁移至本模块。
  *
- * 为 `@h-ai/ui` 的 `CrudPage` 等需要"宿主路由"的场景组件提供 SvelteKit 实现。
+ * 为 `@h-ai/ui` 的 `CrudPage` 等需要“宿主路由”的场景组件提供 SvelteKit 实现。
  * 返回值结构与 `@h-ai/ui` 的 `NavAdapter` 完全一致；TS 通过结构类型自动匹配，
  * 无需在 `@h-ai/kit` 中显式依赖 `@h-ai/ui`。
  *
@@ -19,7 +19,7 @@
  * <CrudPage {crud} {data} {nav} />
  * ```
  *
- * @module sveltekit-nav-adapter
+ * @module kit-nav-adapter
  */
 
 import { goto, invalidateAll } from '$app/navigation'

@@ -73,6 +73,7 @@ describe('kit 统一出口', () => {
   describe('kit.client', () => {
     it('包含 create 统一客户端工厂', () => {
       expect(typeof kit.client.create).toBe('function')
+      expect(typeof kit.client.installBrowserTransport).toBe('function')
       expect(typeof kit.client.installBrowserTransportFetch).toBe('function')
     })
   })
@@ -90,7 +91,6 @@ describe('kit 统一出口', () => {
       expect(typeof kit.auth.setBrowserToken).toBe('function')
       expect(typeof kit.auth.clearBrowserToken).toBe('function')
       expect(typeof kit.auth.createTokenStore).toBe('function')
-      expect(typeof kit.auth.createHandleFetch).toBe('function')
     })
 
     it('不暴露内部实现方法', () => {
@@ -103,6 +103,7 @@ describe('kit 统一出口', () => {
       expect(auth.clearToken).toBeUndefined()
       expect(auth.withCookie).toBeUndefined()
       expect(auth.createSessionValidator).toBeUndefined()
+      expect(auth.createHandleFetch).toBeUndefined()
     })
   })
 

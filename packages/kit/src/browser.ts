@@ -5,9 +5,9 @@
  * @module browser
  */
 
-import { createKitClient, installBrowserTransportFetch } from './client/kit-client.js'
+import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
-import { clearBrowserToken, createHandleFetch, createTokenStore, setBrowserToken } from './kit-auth.js'
+import { clearBrowserToken, createTokenStore, setBrowserToken } from './kit-auth.js'
 import { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig } from './kit-config.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 
@@ -17,6 +17,7 @@ import { setAllModulesLocale } from './kit-i18n.js'
 export const kit = {
   client: {
     create: createKitClient,
+    installBrowserTransport,
     installBrowserTransportFetch,
   },
   crud: {
@@ -26,7 +27,6 @@ export const kit = {
     setBrowserToken,
     clearBrowserToken,
     createTokenStore,
-    createHandleFetch,
   },
   i18n: {
     setLocale: setAllModulesLocale,

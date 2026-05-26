@@ -8,4 +8,4 @@
  */
 
 export * from './kit-client.js'
-export * from './sveltekit-nav-adapter.js'
+export * from './kit-nav-adapter.js'
