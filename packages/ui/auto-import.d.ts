@@ -69,6 +69,7 @@ declare global {
   const FeedbackModal: typeof import('@h-ai/ui')['FeedbackModal']
   const LanguageSwitch: typeof import('@h-ai/ui')['LanguageSwitch']
   const SettingsModal: typeof import('@h-ai/ui')['SettingsModal']
+  const ThemeColorPicker: typeof import('@h-ai/ui')['ThemeColorPicker']
   const ThemeSelector: typeof import('@h-ai/ui')['ThemeSelector']
   const ThemeToggle: typeof import('@h-ai/ui')['ThemeToggle']
 

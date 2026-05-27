@@ -67,6 +67,7 @@ const UI_COMPONENTS = new Set([
   'FeedbackModal',
   'LanguageSwitch',
   'SettingsModal',
+  'ThemeColorPicker',
   'ThemeSelector',
   'ThemeToggle',
   // scenes - iam

@@ -96,6 +96,7 @@ describe('组件注册表', () => {
       'FeedbackModal',
       'LanguageSwitch',
       'SettingsModal',
+      'ThemeColorPicker',
       'ThemeSelector',
       'ThemeToggle',
       // iam
