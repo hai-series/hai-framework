@@ -33,7 +33,7 @@ const DEFAULT_CORS_ALLOWED_HEADERS = [
 ]
 
 /**
- * 创建 Hono API Service 应用。
+ * 创建 API Service HTTP 应用。
  *
  * 调用方负责在调用前完成 `initApp()`。由于返回值持有各业务模块的闭包技术引用，
  * 需避免在模块顶层提前实例化 app（那会在 `initApp()` 之前触发 procedure 创建路径）。

@@ -10,7 +10,7 @@ export interface ServerApp {
   readonly request: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>
 }
 
-/** 创建后端 HTTP App；与 @h-ai/serv 的 ServHttpApp 语义保持一致。 */
+/** 创建后端 HTTP App；与 @h-ai/serv 的 createApp 返回语义保持一致。 */
 export function createServerApp(): ServerApp {
   return serv.createApp({
     contract: {{fullstack.contractExportName}},

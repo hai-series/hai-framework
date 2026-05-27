@@ -1,11 +1,11 @@
 ---
 name: hai-serv
-description: 使用 @h-ai/serv 将 oRPC contract 挂载为 ServHttpApp；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、添加认证/权限 pipeline 包装器或切换 Node/Fetch 运行时适配器时使用。
+description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、添加认证/权限 pipeline 包装器或切换 Node/Fetch 运行时适配器时使用。
 ---
 
 # hai-serv
 
-> `@h-ai/serv` 是 hai-framework 的 API Service 运行时，对外暴露 `ServHttpApp` 抽象，将 `@h-ai/api-contract` 的领域 contract 挂载成跨端可访问的 HTTP API；Hono 是内部实现细节，应用代码不要直接 import 或暴露 Hono。
+> `@h-ai/serv` 是 hai-framework 的 API Service 运行时，对外暴露最小 HTTP App 抽象，将 `@h-ai/api-contract` 的领域 contract 挂载成跨端可访问的 HTTP API；Hono 是内部实现细节，应用代码不要直接 import 或暴露 Hono。
 
 ---
 
@@ -17,7 +17,7 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为 ServHttpApp；当需�
 
 ## 适用场景
 
-- 将 `@h-ai/api-contract` contract 装配成 `ServHttpApp`
+- 将 `@h-ai/api-contract` contract 装配成最小 HTTP App 抽象
 - 配置 `/health`、`/ready`、`/openapi.json`、`/docs` 等系统端点
 - 在 procedure 中添加认证（`requireAuth`）或权限（`requirePermission`）检查
 - 切换 Node.js (`@hono/node-server`) 或 Fetch Runtime（Cloudflare Workers / Deno）部署
@@ -59,7 +59,7 @@ const procedures = {
   ai: createAiProcedures({ ai }),
 }
 
-// 创建 ServHttpApp；不要在应用导出类型里暴露 Hono
+// 创建 HTTP App 抽象；不要在应用导出类型里暴露 Hono
 const app = serv.createApp({
   contract,
   procedures,
@@ -217,12 +217,12 @@ transport:
 
 ## 核心 API
 
-### `serv.createApp(options)` — 创建 ServHttpApp
+### `serv.createApp(options)` — 创建 HTTP App 抽象
 
 ```typescript
-import type { CreateServAppOptions, ServHttpApp } from '@h-ai/serv'
+import type { CreateServAppOptions } from '@h-ai/serv'
 
-export function createServerApp(): ServHttpApp {
+export function createServerApp() {
   return serv.createApp({
   contract,       // AnyContractRouter — 通过 apiContract.create() 组合的 contract
   procedures,     // Router<AnyContractRouter, ServContext> — procedure 实现

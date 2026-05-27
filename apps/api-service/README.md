@@ -1,6 +1,6 @@
 # hai API Service
 
-> 基于 Hono + oRPC + `@h-ai/serv` 的 API Service 组合根，负责初始化模块并装配 iam/storage/ai 领域的 procedures。
+> 基于 oRPC + `@h-ai/serv` 的 API Service 组合根，负责初始化模块并装配 iam/storage/ai 领域的 procedures（底层运行时由 serv 内部实现）。
 
 ## 能力概览
 
@@ -11,7 +11,7 @@
 - transport 响应默认通过 `Access-Control-Expose-Headers` 暴露 `X-Encrypted` / `X-Request-Id`，保证浏览器端 client 可以读取并解密响应。
 - 默认启用 httpOnly refresh-token Cookie：登录/注册响应只在 JSON 中返回 access token，refresh token 通过 `Set-Cookie` 管理。
 - `/health`、`/ready`、`/openapi.json`、`/docs` 保持明文可访问，便于探针与联调。
-- Node 部署入口为 `src/index.ts`，Hono app 工厂为 `src/app.ts`。
+- Node 部署入口为 `src/index.ts`，HTTP App 工厂为 `src/app.ts`。
 
 ## 快速开始
 
@@ -257,7 +257,7 @@ await crypto.close()
 
 常用环境变量：
 
-- `PORT`：默认 `3000`，Hono 服务端口。
+- `PORT`：默认 `3000`，HTTP 服务端口。
 - `HAI_RELDB_DATABASE`：默认 `./data/api-service.db`，SQLite 数据库路径。
 - `HAI_CACHE_TYPE`：默认 `memory`，缓存类型。
 - `HAI_STORAGE_ROOT`：默认 `./data/storage`，本地存储目录。

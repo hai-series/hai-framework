@@ -1,6 +1,6 @@
 # @h-ai/serv
 
-> hai-framework 的 API 服务运行时：对外暴露稳定的 `ServHttpApp` 抽象，把 `@h-ai/api-contract` 契约挂载为跨端可访问的 HTTP API；Hono 仅作为内部运行时实现。
+> hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，把 `@h-ai/api-contract` 契约挂载为跨端可访问的 HTTP API；Hono 仅作为内部运行时实现。
 
 ## 能力概览
 
@@ -30,7 +30,7 @@ const procedures = {
   ai: createAiProcedures({ ai }),
 }
 
-// 3) 创建 ServHttpApp
+// 3) 创建 HTTP App
 const app = serv.createApp({
   contract,
   procedures,
@@ -385,7 +385,7 @@ await apiClient.init({
 
 ## API 概览
 
-- `serv.createApp(options)`：创建 `ServHttpApp`，挂载自定义 `middlewares`、健康检查、OpenAPI handler、可选文档与 RPC
+- `serv.createApp(options)`：创建 HTTP App 抽象，挂载自定义 `middlewares`、健康检查、OpenAPI handler、可选文档与 RPC
 - `serv.parseRequestContext({ request })`：默认上下文解析（提取 Bearer token + requestId，不填充 session）
 - `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
@@ -401,7 +401,7 @@ await apiClient.init({
 另有根级类型 / 命名导出：
 
 - `ServConfigSchema`：用于 `core.config.validate('serv', ServConfigSchema)` 校验 `config/_serv.yml`
-- `ServHttpApp`：`serv.createApp()` 返回的公开 HTTP app 抽象；内部是否使用 Hono 不影响应用代码
+- HTTP App 抽象：`serv.createApp()` 返回具备 `fetch/request` 能力的公开应用对象；内部是否使用 Hono 不影响应用代码
 - `ServMiddlewareMount`：`createApp({ middlewares })` 的挂载项类型（`{ path?, middleware }`）
 - `ServMiddleware` / `ServProcedureWrapper` / `ServGuardedProcedureWrapper`：自定义 pipeline 时复用的共享类型
 
