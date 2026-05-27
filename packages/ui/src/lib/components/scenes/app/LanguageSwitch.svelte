@@ -45,6 +45,8 @@
     languages?: Language[]
     /** 语言变更回调 */
     onchange?: (lang: string) => void
+    /** 下拉菜单水平对齐方式 */
+    align?: 'start' | 'end'
     /** 紧凑模式：仅显示图标，适用于移动端头部 */
     compact?: boolean
     /** 自定义类名 */
@@ -58,6 +60,7 @@
       { value: 'en-US', label: 'English', flag: 'US' },
     ],
     onchange,
+    align = 'end',
     compact = false,
     class: className = '',
   }: Props = $props()
@@ -91,7 +94,7 @@
   })
 </script>
 
-<div bind:this={containerRef} class='dropdown dropdown-end {open ? 'dropdown-open' : ''} {className}'>
+<div bind:this={containerRef} class='dropdown {align === 'end' ? 'dropdown-end' : ''} {open ? 'dropdown-open' : ''} {className}'>
   <BareButton
     type='button'
     class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'btn-sm gap-2 min-w-fit'}'

@@ -442,6 +442,8 @@ export interface ModalProps {
   width?: string
   /** 自定义高度（任意合法 CSS 高度值） */
   height?: string
+  /** 主体区域溢出策略。默认 auto，适合长内容；visible 适合内部浮层需要越界显示的场景。 */
+  bodyOverflow?: 'auto' | 'visible' | 'hidden'
   /** 主体区域自定义类名 */
   bodyClass?: string
   /** 自定义类名 */

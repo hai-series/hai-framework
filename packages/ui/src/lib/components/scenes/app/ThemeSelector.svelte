@@ -28,6 +28,8 @@
     selectLabel?: string
     onchange?: (theme: string) => void
     showPreview?: boolean
+    /** 下拉菜单水平对齐方式 */
+    align?: 'start' | 'end'
     /** 紧凑模式：仅显示预览色块，适用于移动端头部 */
     compact?: boolean
     grouped?: boolean
@@ -39,6 +41,7 @@
     selectLabel,
     onchange,
     showPreview = true,
+    align = 'end',
     compact = false,
     grouped = true,
     class: className = '',
@@ -80,7 +83,7 @@
   })
 </script>
 
-<div bind:this={containerRef} class='dropdown dropdown-end {open ? 'dropdown-open' : ''} {className}'>
+<div bind:this={containerRef} class={cn('dropdown', align === 'end' ? 'dropdown-end' : '', open ? 'dropdown-open' : '', className)}>
   <BareButton
     type='button'
     class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'gap-2'}'

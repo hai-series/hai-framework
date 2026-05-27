@@ -16,6 +16,7 @@
     showClose = true,
     width,
     height,
+    bodyOverflow = 'auto',
     bodyClass = '',
     class: className = '',
     onclose,
@@ -59,11 +60,19 @@
 
   const modalBoxClass = $derived(
     cn(
-      'hai-modal__panel flex min-h-0 flex-col overflow-hidden',
+      'hai-modal__panel flex min-h-0 flex-col',
       'bg-base-100 p-0',
       sizeMap[size],
       className,
     ),
+  )
+
+  const bodyOverflowClass = $derived(
+    bodyOverflow === 'visible'
+      ? 'overflow-visible'
+      : bodyOverflow === 'hidden'
+      ? 'overflow-hidden'
+      : 'overflow-y-auto',
   )
 
   function handleClose() {
@@ -148,7 +157,7 @@
     {/if}
 
     <!-- 主体区域独立滚动，避免长内容把头部和底部一起顶走。 -->
-    <div class={cn('min-h-0 flex-1 overflow-y-auto px-6 py-5 sm:px-7', bodyClass)}>
+    <div class={cn('min-h-0 flex-1 px-6 py-5 sm:px-7', bodyOverflowClass, bodyClass)}>
       {#if children}
         {@render children()}
       {/if}
