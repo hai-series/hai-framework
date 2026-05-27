@@ -196,15 +196,16 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-### 场景组件 Scenes（19 个）
+### 场景组件 Scenes（20 个）
 
-#### App 应用级（5 个）
+#### App 应用级（6 个）
 
 | 组件             | 描述             | 主要属性           |
 | ---------------- | ---------------- | ------------------ |
 | `FeedbackModal`  | 反馈模态框       | `open`, `onsubmit` |
 | `SettingsModal`  | 设置模态框       | `open`, `onclose`  |
 | `LanguageSwitch` | 语言切换         | 无需 Props         |
+| `ThemeColorPicker` | 主题色选择器   | `value`, `presets`, `onchange` |
 | `ThemeSelector`  | 完整主题选择面板 | 无需 Props         |
 | `ThemeToggle`    | 明/暗主题切换    | 无需 Props         |
 

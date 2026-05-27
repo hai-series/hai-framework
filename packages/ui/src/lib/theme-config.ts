@@ -24,6 +24,16 @@ export interface ThemeInfo {
 }
 
 /**
+ * 主题色预设定义
+ */
+export interface ThemeColorPreset {
+  /** 颜色值（Hex） */
+  value: string
+  /** 预设标签 i18n key */
+  labelKey: UIMessageKey
+}
+
+/**
  * 主题分组
  */
 export interface ThemeGroup {
@@ -78,6 +88,25 @@ export const THEME_GROUPS: ThemeGroup[] = [
  * 暗色主题列表
  */
 export const DARK_THEMES = THEMES.filter(t => t.dark).map(t => t.id)
+
+/**
+ * 默认主题色
+ */
+export const DEFAULT_THEME_COLOR = '#5765f0'
+
+/**
+ * 主题色 CSS 变量名
+ */
+export const DEFAULT_THEME_COLOR_CSS_VAR = '--hai-theme-color-default'
+
+/**
+ * 内置主题色预设
+ */
+export const THEME_COLOR_PRESETS: ThemeColorPreset[] = [
+  { value: DEFAULT_THEME_COLOR, labelKey: 'theme_color_tech_purple' },
+  { value: '#13b981', labelKey: 'theme_color_grid_green' },
+  { value: '#1f5eff', labelKey: 'theme_color_ocean' },
+]
 
 /**
  * 获取主题信息

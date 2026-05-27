@@ -11,11 +11,14 @@ import {
   DAISYUI_THEMES_CONFIG,
   DARK_THEMES,
   DEFAULT_THEME,
+  DEFAULT_THEME_COLOR,
+  DEFAULT_THEME_COLOR_CSS_VAR,
   getCurrentTheme,
   getSavedTheme,
   getThemeInfo,
   getThemeInitScript,
   isDarkTheme,
+  THEME_COLOR_PRESETS,
   THEME_GROUPS,
   THEME_STORAGE_KEY,
   THEMES,
@@ -197,6 +200,22 @@ describe('常量定义', () => {
 
   it('存储键名应该是 theme', () => {
     expect(THEME_STORAGE_KEY).toBe('theme')
+  })
+
+  it('默认主题色应该是 tech purple', () => {
+    expect(DEFAULT_THEME_COLOR).toBe('#5765f0')
+    expect(DEFAULT_THEME_COLOR_CSS_VAR).toBe('--hai-theme-color-default')
+  })
+
+  it('主题色预设应包含默认色且值合法', () => {
+    expect(THEME_COLOR_PRESETS.length).toBeGreaterThanOrEqual(3)
+    expect(THEME_COLOR_PRESETS[0]?.value).toBe(DEFAULT_THEME_COLOR)
+
+    for (const preset of THEME_COLOR_PRESETS) {
+      expect(preset.value).toMatch(/^#[0-9a-f]{6}$/i)
+      expect(typeof preset.labelKey).toBe('string')
+      expect(preset.labelKey.length).toBeGreaterThan(0)
+    }
   })
 })
 
