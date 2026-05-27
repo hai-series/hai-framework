@@ -26,40 +26,55 @@ const HAI_VERSION = '^0.1.0-alpha.16'
 const TEMPLATE_SKIP_IF_EMPTY_MARKER = '@skipIfEmpty'
 const NORMALIZED_RENDER_EXTENSIONS = new Set(['.ts', '.js', '.svelte', '.json', '.css'])
 
+// 以下版本号与根 pnpm-workspace.yaml catalog 保持一致，
+// 调整 catalog 时同步更新（脚手架交付的项目不使用 catalog:，因此需要具体版本号）。
 const VERSIONS = {
-  antfuEslintConfig: '^8.1.1',
+  antfuEslintConfig: '^9.0.0',
   apiContract: HAI_VERSION,
   apiClient: HAI_VERSION,
   core: HAI_VERSION,
   serv: HAI_VERSION,
   ui: HAI_VERSION,
-  iconifyJsonTabler: '^1.2.15',
-  iconifyTailwind: '^1.0.7',
-  playwright: '^1.59.1',
-  svelte: '^5.55.3',
-  svelteKit: '^2.57.1',
-  svelteCheck: '^4.4.6',
-  sveltePlugin: '^7.0.0',
-  tailwindcss: '^4.0.0',
-  tailwindcssVite: '^4.2.2',
+  // UI / Icon
+  bitsUi: '^2.18.1',
+  iconifyJsonTabler: '^1.2.35',
+  iconifyTailwind: '^1.2.3',
+  // Tailwind / DaisyUI
+  daisyui: '^5.5.20',
+  tailwindcss: '^4.3.0',
+  tailwindcssVite: '^4.3.0',
+  // i18n
+  inlangParaglide: '^2.18.1',
+  inlangMessageFormat: '^4.4.0',
+  // Svelte / Kit
+  svelte: '^5.55.9',
+  svelteKit: '^2.61.1',
+  svelteCheck: '^4.4.8',
+  sveltePlugin: '^7.1.2',
   adapterAuto: '^7.0.1',
-  daisyui: '^5.0.0',
-  eslint: '^10.0.3',
-  eslintPluginFormat: '^2.0.1',
-  eslintPluginSvelte: '^3.15.2',
-  svelteEslintParser: '^1.0.0',
-  nodeTypes: '^25.6.0',
+  adapterStatic: '^3.0.10',
+  // Build / Test
+  vite: '^8.0.14',
+  vitest: '^4.1.7',
+  tsup: '^8.5.1',
   rimraf: '^6.1.3',
-  tsup: '^8.3.5',
-  typescript: '^6.0.2',
-  vite: '^8.0.8',
-  vitest: '^4.1.4',
-  zod: '^4.3.6',
+  // ESLint
+  eslint: '^10.4.0',
+  eslintPluginFormat: '^2.0.1',
+  eslintPluginSvelte: '^3.17.1',
+  svelteEslintParser: '^1.6.1',
+  // Node / TS
+  nodeTypes: '^25.9.1',
+  typescript: '^6.0.3',
+  // E2E
+  playwright: '^1.60.0',
+  // Validation
+  zod: '^4.4.3',
 } as const
 
 type ImplementedFrontendTarget = Exclude<FrontendTarget, 'miniapp'>
 
-const FRONTEND_PORTS: Record<ImplementedFrontendTarget, number> = {
+const FRONTEND_PORTS_DEFAULT: Record<ImplementedFrontendTarget, number> = {
   web: 4173,
   app: 4174,
   desktop: 4175,
@@ -74,6 +89,8 @@ const FRONTEND_LABELS: Record<FrontendTarget, string> = {
 
 const IMPLEMENTED_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop']
 const DEFAULT_FULLSTACK_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop']
+const DEFAULT_THEMES = ['light', 'dark'] as const
+const DEFAULT_THEME_NAME = 'light'
 
 // =============================================================================
 // 类型
@@ -114,6 +131,22 @@ export interface FullstackFrontendApp {
   port: number
 }
 
+/**
+ * 国际化配置（已解析后的最终值）
+ */
+export interface FullstackI18nContext {
+  baseLocale: string
+  locales: readonly string[]
+}
+
+/**
+ * 主题配置（已解析后的最终值）
+ */
+export interface FullstackThemeContext {
+  defaultTheme: string
+  themes: readonly string[]
+}
+
 export interface FullstackTemplateContext {
   /** 依赖版本集合 */
   versions: typeof VERSIONS
@@ -123,6 +156,8 @@ export interface FullstackTemplateContext {
   contractExportName: string
   /** 后端 service 包名 */
   servPackageName: string
+  /** 前端共享代码包名 */
+  sharedPackageName: string
   /** 所有已选择前端 */
   selectedFrontends: readonly FrontendTarget[]
   /** 已选择前端 JSON 字面量 */
@@ -133,8 +168,14 @@ export interface FullstackTemplateContext {
   e2eFrontend?: FullstackFrontendApp
   /** 前端选择布尔表，用于模板条件创建 */
   frontends: Record<FrontendTarget, boolean>
+  /** 各前端端口（key 为 target） */
+  ports: Record<ImplementedFrontendTarget, number>
   /** 是否选择小程序预留 */
   hasMiniapp: boolean
+  /** i18n 配置 */
+  i18n: FullstackI18nContext
+  /** 主题配置 */
+  theme: FullstackThemeContext
 }
 
 /**
@@ -300,7 +341,11 @@ export function buildTemplateContext(options: {
     defaultLocale: options.moduleConfigs?.core?.defaultLocale ?? 'zh-CN',
     packageManager: options.packageManager,
     fullstack: isFullstack
-      ? buildFullstackTemplateContext(options.name, options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS)
+      ? buildFullstackTemplateContext(
+          options.name,
+          options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS,
+          options.moduleConfigs,
+        )
       : undefined,
   }
 }
@@ -308,15 +353,21 @@ export function buildTemplateContext(options: {
 function buildFullstackTemplateContext(
   projectName: string,
   frontendsInput: readonly FrontendTarget[],
+  moduleConfigs?: ModuleConfigs,
 ): FullstackTemplateContext {
   const selectedFrontends = [...new Set(frontendsInput.length > 0 ? frontendsInput : DEFAULT_FULLSTACK_FRONTENDS)]
+
+  const portsConfig = moduleConfigs?.fullstack?.ports ?? {}
+  const portFor = (target: ImplementedFrontendTarget): number =>
+    portsConfig[target] ?? FRONTEND_PORTS_DEFAULT[target]
+
   const frontendApps = selectedFrontends
     .filter(isImplementedFrontend)
     .map(target => ({
       target,
       packageName: `${projectName}-${target}`,
       label: FRONTEND_LABELS[target],
-      port: FRONTEND_PORTS[target],
+      port: portFor(target),
     }))
 
   return {
@@ -324,6 +375,7 @@ function buildFullstackTemplateContext(
     contractPackageName: `${projectName}-contract`,
     contractExportName: `${toIdentifier(projectName)}Contract`,
     servPackageName: `${projectName}-serv`,
+    sharedPackageName: `${projectName}-shared`,
     selectedFrontends,
     selectedFrontendsJson: `[${selectedFrontends.map(f => `'${f}'`).join(', ')}]`,
     frontendApps,
@@ -334,8 +386,41 @@ function buildFullstackTemplateContext(
       miniapp: selectedFrontends.includes('miniapp'),
       desktop: selectedFrontends.includes('desktop'),
     },
+    ports: {
+      web: portFor('web'),
+      app: portFor('app'),
+      desktop: portFor('desktop'),
+    },
     hasMiniapp: selectedFrontends.includes('miniapp'),
+    i18n: resolveI18nContext(moduleConfigs),
+    theme: resolveThemeContext(moduleConfigs),
   }
+}
+
+function resolveI18nContext(moduleConfigs?: ModuleConfigs): FullstackI18nContext {
+  const coreLocale = moduleConfigs?.core?.defaultLocale ?? 'zh-CN'
+  const baseLocale = moduleConfigs?.fullstack?.i18n?.baseLocale ?? coreLocale
+  const fallbackLocale = baseLocale === 'en-US' ? 'zh-CN' : 'en-US'
+  const requested = moduleConfigs?.fullstack?.i18n?.locales
+  const locales = requested && requested.length > 0
+    ? [...new Set(requested)]
+    : [baseLocale, fallbackLocale]
+  if (!locales.includes(baseLocale)) {
+    locales.unshift(baseLocale)
+  }
+  return { baseLocale, locales }
+}
+
+function resolveThemeContext(moduleConfigs?: ModuleConfigs): FullstackThemeContext {
+  const defaultTheme = moduleConfigs?.fullstack?.theme?.defaultTheme ?? DEFAULT_THEME_NAME
+  const requested = moduleConfigs?.fullstack?.theme?.themes
+  const themes = requested && requested.length > 0
+    ? [...new Set(requested)]
+    : [...DEFAULT_THEMES]
+  if (!themes.includes(defaultTheme)) {
+    themes.unshift(defaultTheme)
+  }
+  return { defaultTheme, themes }
 }
 
 function isImplementedFrontend(target: FrontendTarget): target is ImplementedFrontendTarget {

@@ -6,16 +6,19 @@
   "packageManager": "pnpm@9.15.0",
   "description": "Full-stack hai workspace with separated contract, service and frontends.",
   "scripts": {
-    "dev": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm --parallel --filter {{fullstack.servPackageName}}{{#each fullstack.frontendApps}} --filter {{packageName}}{{/each}} dev",
-    "build": "pnpm -r --if-present build",
-    "typecheck": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm -r --if-present typecheck",
+    "i18n:compile": "pnpm --filter {{fullstack.sharedPackageName}} paraglide:compile{{#each fullstack.frontendApps}} && pnpm --filter {{packageName}} paraglide:compile{{/each}}",
+    "postinstall": "pnpm i18n:compile",
+    "dev": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm --parallel --filter {{fullstack.servPackageName}}{{#each fullstack.frontendApps}} --filter {{packageName}}{{/each}} dev",
+    "build": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present build",
+    "typecheck": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint",
-    "test": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm -r --if-present test",
+    "test": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present test",
     "test:e2e": "pnpm build && playwright test",
     "clean": "pnpm -r --if-present clean && rimraf node_modules .turbo"
   },
   "dependencies": {
-    "{{fullstack.contractPackageName}}": "workspace:*"
+    "{{fullstack.contractPackageName}}": "workspace:*",
+    "{{fullstack.sharedPackageName}}": "workspace:*"
   },
   "devDependencies": {
     "@antfu/eslint-config": "{{fullstack.versions.antfuEslintConfig}}",

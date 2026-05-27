@@ -2,7 +2,12 @@
 {{#if fullstack.hasMiniapp}}
 # {{projectName}}-miniapp
 
-小程序端当前为预留占位，不参与 workspace 构建、单元测试或 E2E。
+小程序端当前为预留占位，不参与 workspace 构建、单元测试或 E2E，但已预置 inlang 标准目录：
+
+- `project.inlang/settings.json`：小程序端 locale 配置
+- `messages/zh-CN.json`、`messages/en-US.json`：小程序端自有文案
 
 后续实现时建议复用 `packages/{{fullstack.contractPackageName}}` 中的 Schema 与路径常量，保持接口真相源一致。
+
+协同边界：跨端通用文案/组件放 `packages/{{fullstack.sharedPackageName}}`，小程序独有页面文案放本目录 `messages/`。
 {{/if}}

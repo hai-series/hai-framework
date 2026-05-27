@@ -6,6 +6,8 @@ export default antfu({
     '**/.svelte-kit/**',
     '**/build/**',
     '**/dist/**',
+    '**/src/lib/paraglide/**',
+    '**/project.inlang/**',
     '**/*.d.ts',
     '**/.agents/**',
     '**/.github/**',
@@ -21,5 +23,22 @@ export default antfu({
   rules: {
     'no-console': 'error',
     'ts/no-explicit-any': 'error',
+  },
+}, {
+  files: ['**/*.svelte'],
+  rules: {
+    'svelte/html-quotes': 'off',
+    'svelte/indent': 'off',
+    'perfectionist/sort-imports': 'off',
+  },
+}, {
+  files: ['**/tsconfig.json', '**/tsconfig.*.json'],
+  rules: {
+    'jsonc/sort-keys': 'off',
+  },
+}, {
+  files: ['**/index.ts'],
+  rules: {
+    'perfectionist/sort-exports': 'off',
   },
 })

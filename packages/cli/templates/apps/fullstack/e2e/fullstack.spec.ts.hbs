@@ -24,7 +24,7 @@ test('service echo endpoint returns HaiResult', async ({ request }) => {
 
 test('frontend loads service status from page', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: /{{fullstack.e2eFrontend.label}}/ })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expect(page.getByTestId('service-status')).toContainText('{{fullstack.servPackageName}}')
 })
 {{/if}}

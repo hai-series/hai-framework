@@ -1,0 +1,18 @@
+<script lang="ts">
+  import * as m from '../paraglide/messages.js'
+  import { AVAILABLE_THEMES, themeStore } from '../stores/theme.svelte.js'
+
+  function handleChange(event: Event) {
+    const target = event.target as HTMLSelectElement
+    themeStore.set(target.value)
+  }
+</script>
+
+<label class="form-control w-32 sm:w-40">
+  <span class="label-text text-xs">{m.settings_theme()}</span>
+  <select class="select select-bordered select-sm bg-base-100/80" value={themeStore.current} onchange={handleChange}>
+    {#each AVAILABLE_THEMES as theme (theme)}
+      <option value={theme}>{theme}</option>
+    {/each}
+  </select>
+</label>

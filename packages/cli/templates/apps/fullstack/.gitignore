@@ -3,6 +3,7 @@ node_modules
 dist
 build
 .svelte-kit
+**/src/lib/paraglide
 playwright-report
 test-results
 .env

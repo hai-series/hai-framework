@@ -1,0 +1,17 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.hasMiniapp}}
+{
+  "$schema": "https://inlang.com/schema/project-settings",
+  "baseLocale": "{{fullstack.i18n.baseLocale}}",
+  "locales": [
+    {{#each fullstack.i18n.locales}}"{{this}}"{{#unless @last}},{{/unless}}
+    {{/each}}
+  ],
+  "modules": [
+    "https://cdn.jsdelivr.net/npm/@inlang/plugin-message-format@latest/dist/index.js"
+  ],
+  "plugin.inlang.messageFormat": {
+    "pathPattern": "./messages/{locale}.json"
+  }
+}
+{{/if}}

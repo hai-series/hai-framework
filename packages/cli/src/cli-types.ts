@@ -77,6 +77,34 @@ export interface ModuleConfigs {
   storage?: StorageModuleConfig
   /** ai 模块配置 */
   ai?: AiModuleConfig
+  /** fullstack 工程级配置（仅 fullstack 类型生效） */
+  fullstack?: FullstackModuleConfig
+}
+
+/**
+ * fullstack 工程级配置（i18n / theme / 端口）
+ */
+export interface FullstackModuleConfig {
+  /** i18n 配置 */
+  i18n?: {
+    /** 基础语言（默认取 core.defaultLocale） */
+    baseLocale?: string
+    /** 支持的语言列表（≥ 1，必须包含 baseLocale） */
+    locales?: string[]
+  }
+  /** 主题配置（daisyUI 主题名） */
+  theme?: {
+    /** 默认主题 */
+    defaultTheme?: string
+    /** 可切换主题列表（≥ 1，必须包含 defaultTheme） */
+    themes?: string[]
+  }
+  /** 各前端开发端口 */
+  ports?: {
+    web?: number
+    app?: number
+    desktop?: number
+  }
 }
 
 /**

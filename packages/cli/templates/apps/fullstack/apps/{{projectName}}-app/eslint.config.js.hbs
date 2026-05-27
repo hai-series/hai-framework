@@ -1,0 +1,23 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.app}}
+import antfu from '@antfu/eslint-config'
+
+export default antfu({
+  formatters: true,
+  ignores: ['**/.svelte-kit/**', '**/build/**', '**/dist/**', '**/*.d.ts', '**/project.inlang/**', '**/src/lib/paraglide/**'],
+  svelte: true,
+}, {
+  files: ['**/*.ts', '**/*.svelte'],
+  rules: {
+    'no-console': 'error',
+    'ts/no-explicit-any': 'error',
+  },
+}, {
+  files: ['**/*.svelte'],
+  rules: {
+    'svelte/html-quotes': 'off',
+    'svelte/indent': 'off',
+    'perfectionist/sort-imports': 'off',
+  },
+})
+{{/if}}

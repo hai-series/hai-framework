@@ -1,0 +1,27 @@
+<script lang="ts">
+  import * as m from '../paraglide/messages.js'
+  import { getLocale, locales, setLocale } from '../paraglide/runtime.js'
+
+  interface Props {
+    /** 同步宿主应用自己的 Paraglide runtime */
+    onLocaleChange?: (locale: string) => void
+  }
+
+  const { onLocaleChange }: Props = $props()
+
+  function handleChange(event: Event) {
+    const target = event.target as HTMLSelectElement
+    const locale = target.value as (typeof locales)[number]
+    setLocale(locale)
+    onLocaleChange?.(locale)
+  }
+</script>
+
+<label class="form-control w-32 sm:w-40">
+  <span class="label-text text-xs">{m.settings_language()}</span>
+  <select class="select select-bordered select-sm bg-base-100/80" value={getLocale()} onchange={handleChange}>
+    {#each locales as locale (locale)}
+      <option value={locale}>{locale}</option>
+    {/each}
+  </select>
+</label>

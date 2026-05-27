@@ -1,5 +1,3 @@
-{{! @skipIfEmpty }}
-{{#if fullstack.frontends.app}}
 import type { AppInfoOutputData } from '{{fullstack.contractPackageName}}'
 import { apiClient } from '@h-ai/api-client'
 import { APP_HTTP_ROUTES, {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
@@ -8,35 +6,35 @@ export type AppInfo = AppInfoOutputData
 
 const DEFAULT_API_ORIGIN = 'http://127.0.0.1:3000'
 
-export async function fetchAppInfo(
-  fetchFn: typeof fetch = fetch,
-  baseUrl = resolveApiBaseUrl(),
-): Promise<AppInfo> {
+export interface FetchAppInfoOptions {
+  fetchFn?: typeof fetch
+  baseUrl?: string
+  clientName?: string
+}
+
+export async function fetchAppInfo(options: FetchAppInfoOptions = {}): Promise<AppInfo> {
+  const fetchFn = options.fetchFn ?? fetch
+  const baseUrl = options.baseUrl ?? DEFAULT_API_ORIGIN
+  const clientName = options.clientName ?? '{{projectName}}-shared'
+
   const client = apiClient.create({{fullstack.contractExportName}})
   const init = await client.init({
     baseUrl: normalizeApiBaseUrl(baseUrl),
-    clientName: '{{projectName}}-app',
+    clientName,
     fetch: fetchFn,
   })
-  if (!init.success) {
+  if (!init.success)
     throw new Error(init.error?.message ?? 'Failed to initialize API client')
-  }
 
   try {
     const result = await client.app.info()
-    if (!result.success) {
+    if (!result.success)
       throw new Error(result.error?.message ?? 'Failed to fetch app info')
-    }
     return result.data
   }
   finally {
     await client.close()
   }
-}
-
-export function resolveApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_API_BASE_URL as string | undefined
-  return normalizeApiBaseUrl(configured || DEFAULT_API_ORIGIN)
 }
 
 function normalizeApiBaseUrl(value: string): string {
@@ -49,4 +47,3 @@ function normalizeApiBaseUrl(value: string): string {
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '')
 }
-{{/if}}

@@ -1,0 +1,60 @@
+<script lang="ts">
+  import type { Snippet } from 'svelte'
+  import * as m from '../paraglide/messages.js'
+  import LanguageSwitcher from './LanguageSwitcher.svelte'
+  import ThemeSwitcher from './ThemeSwitcher.svelte'
+
+  interface Props {
+    /** 当前运行的前端平台 */
+    platform: 'web' | 'app' | 'desktop' | 'miniapp'
+    /** 宿主应用本地 Paraglide runtime 的同步回调 */
+    onLocaleChange?: (locale: string) => void
+    /** 主内容 */
+    children: Snippet
+  }
+
+  const { platform, onLocaleChange, children }: Props = $props()
+
+  function getPlatformLabel(value: Props['platform']): string {
+    if (value === 'web')
+      return m.platform_web()
+    if (value === 'app')
+      return m.platform_app()
+    if (value === 'desktop')
+      return m.platform_desktop()
+    return m.platform_miniapp()
+  }
+
+  const platformLabel = $derived(getPlatformLabel(platform))
+</script>
+
+<div class="min-h-screen flex flex-col overflow-hidden bg-base-100 text-base-content">
+  <div class="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,var(--color-primary)_0,transparent_34%),radial-gradient(circle_at_bottom_right,var(--color-secondary)_0,transparent_30%)] opacity-10"></div>
+
+  <header class="navbar sticky top-0 z-20 border-b border-base-300/70 bg-base-100/80 px-4 shadow-sm backdrop-blur-xl lg:px-8">
+    <div class="flex-1 flex items-center gap-3">
+      <div class="grid size-10 place-items-center rounded-2xl bg-primary text-primary-content shadow-lg shadow-primary/20">
+        <span class="icon-[tabler--sparkles] size-5"></span>
+      </div>
+      <div>
+        <span class="block text-lg font-semibold leading-tight">{m.app_name()}</span>
+        <span class="text-xs text-base-content/55">{m.shell_tagline()}</span>
+      </div>
+      <span class="badge badge-primary badge-outline ml-1 hidden sm:inline-flex">{platformLabel}</span>
+    </div>
+    <div class="flex-none flex items-end gap-2">
+      <ThemeSwitcher />
+      <LanguageSwitcher {onLocaleChange} />
+    </div>
+  </header>
+
+  <main class="flex-1 px-4 py-8 lg:px-8 lg:py-10">
+    <div class="mx-auto w-full max-w-6xl">
+      {@render children()}
+    </div>
+  </main>
+
+  <footer class="footer footer-center border-t border-base-300/70 bg-base-100/70 p-4 text-sm text-base-content/60 backdrop-blur-xl">
+    <span>{m.shell_footer({ platform: platformLabel })}</span>
+  </footer>
+</div>

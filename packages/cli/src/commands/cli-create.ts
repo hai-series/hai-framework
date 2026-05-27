@@ -958,6 +958,7 @@ ${pm} dev
 
 \`\`\`bash
 ${pm} build
+${pm} i18n:compile
 ${pm} preview
 \`\`\`
 
@@ -979,10 +980,11 @@ function generateFullstackReadme(name: string, pm: string, frontends: FrontendTa
 
 - \`packages/${name}-contract\`：前后端共享 API 契约、Zod Schema 与类型
 - \`packages/${name}-serv\`：后端 API Service（通过 \`@h-ai/serv\` 暴露最小 HTTP App 抽象，不直接暴露 Hono）
+- \`packages/${name}-shared\`：跨端共享 Shell、主题、语言切换、API client 与共享 messages
 - \`apps/${name}-web\`：Web 前端${frontends.includes('web') ? '' : '（未启用）'}
 - \`apps/${name}-app\`：移动端 App/H5 前端${frontends.includes('app') ? '' : '（未启用）'}
 - \`apps/${name}-desktop\`：桌面端前端${frontends.includes('desktop') ? '' : '（未启用）'}
-- \`apps/${name}-miniapp\`：小程序预留说明${frontends.includes('miniapp') ? '（占位，不参与构建）' : '（未启用）'}
+- \`apps/${name}-miniapp\`：小程序预留说明与本端 inlang messages${frontends.includes('miniapp') ? '（占位，不参与构建）' : '（未启用）'}
 
 已启用前端：${enabledFrontends || 'Web / App / Desktop'}
 
@@ -992,6 +994,20 @@ function generateFullstackReadme(name: string, pm: string, frontends: FrontendTa
 ${pm} install
 ${pm} dev
 \`\`\`
+
+## i18n 与 shared 协同
+
+- shared：\`packages/${name}-shared/project.inlang\` + \`messages/\`，只放跨端共享组件文案。
+- web/app/desktop：每个应用都有自己的 \`project.inlang\` + \`messages/\`，用于本端页面与产品文案。
+- miniapp：当前是占位，但也有自己的 \`project.inlang\` + \`messages/\`，便于后续接入真实小程序框架。
+- 新增 locale 时，shared 与所有启用前端的 \`locales\` 必须同步；语言切换器会同时更新 shared runtime 与宿主应用 runtime。
+- \`${pm} i18n:compile\` 会统一编译 shared 与每个启用前端的 Paraglide 输出；各前端也可单独运行 \`${pm} --filter ${name}-web paraglide:compile\` 等命令。
+
+## 自定义建议
+
+- 改全局 Shell/主题/语言切换：编辑 \`packages/${name}-shared\`。
+- 改某个前端页面和文案：编辑对应 \`apps/${name}-*/src/routes\` 与 \`apps/${name}-*/messages\`。
+- 改主题列表：调整脚手架配置中的 \`fullstack.theme.themes\`，或直接编辑各端 \`src/app.css\` 的 daisyUI \`themes\`。
 
 ## 质量门禁
 

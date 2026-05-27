@@ -5,16 +5,12 @@
 @import '@h-ai/ui/styles/theme.css';
 @source "../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
 @source "../../../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
+@source "../../../packages/{{fullstack.sharedPackageName}}/src/**/*.{svelte,js,ts}";
 
 @plugin "daisyui" {
   themes:
-    light --default,
-    dark --prefersdark,
-    corporate,
-    nord,
-    winter,
-    night,
-    business;
+    {{#each fullstack.theme.themes}}{{this}}{{#if_eq this ../fullstack.theme.defaultTheme}} --default{{/if_eq}}{{#unless @last}},
+    {{/unless}}{{/each}};
 }
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;

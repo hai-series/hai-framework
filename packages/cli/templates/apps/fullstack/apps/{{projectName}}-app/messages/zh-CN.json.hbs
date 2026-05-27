@@ -1,0 +1,34 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.app}}
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "page_title": "{name} · App",
+  "platform_name": "App/H5",
+  "hero_badge": "移动端工作台",
+  "hero_title": "{name} App 体验",
+  "hero_subtitle": "面向移动端与 H5 场景的轻量入口，保留本端 messages 以便独立调整文案、引导语和运营内容。",
+  "hero_primary_action": "查看服务状态",
+  "hero_secondary_action": "了解如何自定义",
+  "preview_title": "移动优先界面",
+  "preview_body": "适合 H5、Capacitor 或内嵌 WebView",
+  "preview_metric_shared": "共享 Shell 与接口",
+  "preview_metric_local": "App 自有 messages",
+  "preview_metric_theme": "主题跟随配置",
+  "status_title": "服务联通状态",
+  "status_description": "移动端页面会调用同一套后端 API，验证跨端 contract 与 shared API client 正常工作。",
+  "status_online": "{name} 已连接",
+  "status_version": "服务版本",
+  "status_started": "启动时间：{time}",
+  "status_frontends": "服务声明的前端：{list}",
+  "status_frontends_count": "{count} 个前端目标",
+  "custom_shared_title": "共享层放通用能力",
+  "custom_shared_body": "跨端一致的布局、语言、主题和 API 访问都放在 packages/{{projectName}}-shared。",
+  "custom_local_title": "App 层放移动文案",
+  "custom_local_body": "App 独有文案写在 apps/{{projectName}}-app/messages，便于移动端独立迭代。",
+  "flow_title": "协同边界",
+  "flow_contract": "Contract 约束请求响应",
+  "flow_service": "Service 提供统一 API",
+  "flow_shared": "Shared 复用跨端能力",
+  "flow_frontend": "App 组织移动端体验"
+}
+{{/if}}

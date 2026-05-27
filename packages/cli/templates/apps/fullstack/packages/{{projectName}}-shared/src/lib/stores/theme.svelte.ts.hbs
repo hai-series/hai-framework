@@ -1,0 +1,55 @@
+{{!-- Shared theme store for {{projectName}} fullstack apps. --}}
+const STORAGE_KEY = 'hai-theme'
+const DEFAULT_THEME = '{{fullstack.theme.defaultTheme}}'
+export const AVAILABLE_THEMES: readonly string[] = [{{#each fullstack.theme.themes}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}]
+
+function isBrowser(): boolean {
+  return typeof window !== 'undefined' && typeof document !== 'undefined'
+}
+
+function readInitialTheme(): string {
+  if (!isBrowser())
+    return DEFAULT_THEME
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY)
+    if (stored && AVAILABLE_THEMES.includes(stored))
+      return stored
+  }
+  catch {
+    // localStorage 不可用时（隐私模式 / SSR），回退到默认主题
+  }
+  return DEFAULT_THEME
+}
+
+class ThemeState {
+  current = $state<string>(DEFAULT_THEME)
+
+  constructor() {
+    this.current = readInitialTheme()
+    if (isBrowser())
+      this.apply(this.current)
+  }
+
+  set(value: string): void {
+    if (!AVAILABLE_THEMES.includes(value))
+      return
+    this.current = value
+    this.apply(value)
+    if (isBrowser()) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, value)
+      }
+      catch {
+        // 忽略 localStorage 写入失败
+      }
+    }
+  }
+
+  private apply(value: string): void {
+    if (!isBrowser())
+      return
+    document.documentElement.dataset.theme = value
+  }
+}
+
+export const themeStore = new ThemeState()

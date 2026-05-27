@@ -1,0 +1,44 @@
+{
+  "name": "{{fullstack.sharedPackageName}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared frontend code (AppShell / theme / i18n / API) for {{projectName}} web/app/desktop/mini.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./components/*": "./src/lib/components/*",
+    "./stores/*": "./src/lib/stores/*",
+    "./api": "./src/lib/api/api-client.ts",
+    "./project.inlang/settings.json": "./project.inlang/settings.json",
+    "./messages/*": "./messages/*",
+    "./paraglide/messages": "./src/lib/paraglide/messages.js",
+    "./paraglide/runtime": "./src/lib/paraglide/runtime.js"
+  },
+  "files": [
+    "src",
+    "project.inlang",
+    "messages"
+  ],
+  "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+    "paraglide:watch": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --watch",
+    "prepare": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+    "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf .turbo src/lib/paraglide"
+  },
+  "dependencies": {
+    "@h-ai/api-client": "{{fullstack.versions.apiClient}}",
+    "@h-ai/ui": "{{fullstack.versions.ui}}",
+    "{{fullstack.contractPackageName}}": "workspace:*"
+  },
+  "devDependencies": {
+    "@inlang/paraglide-js": "{{fullstack.versions.inlangParaglide}}",
+    "@inlang/plugin-message-format": "{{fullstack.versions.inlangMessageFormat}}",
+    "svelte": "{{fullstack.versions.svelte}}",
+    "svelte-check": "{{fullstack.versions.svelteCheck}}",
+    "typescript": "{{fullstack.versions.typescript}}",
+    "vitest": "{{fullstack.versions.vitest}}"
+  }
+}

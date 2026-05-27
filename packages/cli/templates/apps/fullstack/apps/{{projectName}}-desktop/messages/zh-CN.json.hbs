@@ -1,0 +1,34 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "page_title": "{name} · Desktop",
+  "platform_name": "Desktop",
+  "hero_badge": "桌面端工作台",
+  "hero_title": "{name} Desktop 控制中心",
+  "hero_subtitle": "面向桌面端的大屏工作台样板，可后续接入 Tauri，同时复用 shared 的 Shell、主题、语言与 API 客户端。",
+  "hero_primary_action": "查看服务状态",
+  "hero_secondary_action": "了解如何自定义",
+  "preview_title": "桌面端生产力界面",
+  "preview_body": "适合控制中心、工具台与本地增强应用",
+  "preview_metric_shared": "共享 UI/API 能力",
+  "preview_metric_local": "Desktop 自有 messages",
+  "preview_metric_theme": "主题可配置",
+  "status_title": "服务联通状态",
+  "status_description": "桌面端页面会调用后端服务，确认 API contract、service 与 shared client 链路正常。",
+  "status_online": "{name} 已连接",
+  "status_version": "服务版本",
+  "status_started": "启动时间：{time}",
+  "status_frontends": "服务声明的前端：{list}",
+  "status_frontends_count": "{count} 个前端目标",
+  "custom_shared_title": "共享层放通用能力",
+  "custom_shared_body": "通用 Shell、主题、语言切换和 API client 放在 packages/{{projectName}}-shared，桌面端直接复用。",
+  "custom_local_title": "Desktop 层放桌面文案",
+  "custom_local_body": "桌面端特有菜单、状态与功能说明写在 apps/{{projectName}}-desktop/messages。",
+  "flow_title": "协同边界",
+  "flow_contract": "Contract 固化接口契约",
+  "flow_service": "Service 提供运行时能力",
+  "flow_shared": "Shared 复用跨端基础 UI/API",
+  "flow_frontend": "Desktop 组合桌面产品体验"
+}
+{{/if}}

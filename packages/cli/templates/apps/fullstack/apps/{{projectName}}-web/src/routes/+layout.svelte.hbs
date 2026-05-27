@@ -1,8 +1,18 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.web}}
-<script lang='ts'>
+<script lang="ts">
+  import { setLocale } from '$lib/paraglide/runtime.js'
+  import { AppShell } from '{{fullstack.sharedPackageName}}'
   import '../app.css'
+
+  const { children } = $props()
+
+  function syncLocale(locale: string) {
+    setLocale(locale as Parameters<typeof setLocale>[0])
+  }
 </script>
 
-<slot />
+<AppShell platform="web" onLocaleChange={syncLocale}>
+  {@render children()}
+</AppShell>
 {{/if}}

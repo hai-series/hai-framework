@@ -1,0 +1,34 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.app}}
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "page_title": "{name} · App",
+  "platform_name": "App/H5",
+  "hero_badge": "Mobile workspace",
+  "hero_title": "{name} App Experience",
+  "hero_subtitle": "A mobile and H5 oriented entry point. This app keeps its own messages so onboarding and campaign copy can evolve independently.",
+  "hero_primary_action": "View service status",
+  "hero_secondary_action": "Customize the starter",
+  "preview_title": "Mobile-first interface",
+  "preview_body": "Ready for H5, Capacitor or embedded WebViews",
+  "preview_metric_shared": "Shared shell and API",
+  "preview_metric_local": "App-owned messages",
+  "preview_metric_theme": "Theme from config",
+  "status_title": "Service connectivity",
+  "status_description": "The mobile page calls the same backend API to verify cross-platform contract and shared API client wiring.",
+  "status_online": "{name} is connected",
+  "status_version": "Service version",
+  "status_started": "Started at: {time}",
+  "status_frontends": "Service frontends: {list}",
+  "status_frontends_count": "{count} frontend targets",
+  "custom_shared_title": "Shared owns common capabilities",
+  "custom_shared_body": "Keep cross-platform layout, locale, theme and API access in packages/{{projectName}}-shared.",
+  "custom_local_title": "App owns mobile copy",
+  "custom_local_body": "Write App-specific copy in apps/{{projectName}}-app/messages so mobile UX can iterate independently.",
+  "flow_title": "Collaboration boundary",
+  "flow_contract": "Contract constrains requests/responses",
+  "flow_service": "Service exposes unified APIs",
+  "flow_shared": "Shared reuses cross-platform capabilities",
+  "flow_frontend": "App composes the mobile experience"
+}
+{{/if}}

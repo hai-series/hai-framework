@@ -1,16 +1,25 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.desktop}}
+import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  plugins: [sveltekit(), tailwindcss()],
+  plugins: [
+    paraglideVitePlugin({
+      project: './project.inlang',
+      outdir: './src/lib/paraglide',
+      strategy: ['cookie', 'baseLocale'],
+    }),
+    sveltekit(),
+    tailwindcss(),
+  ],
   optimizeDeps: {
     exclude: ['bits-ui'],
   },
   ssr: {
-    noExternal: [/@h-ai\//],
+    noExternal: [/@h-ai\//, /{{fullstack.sharedPackageName}}/],
   },
   test: {
     environment: 'node',

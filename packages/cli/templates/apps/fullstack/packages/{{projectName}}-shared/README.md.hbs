@@ -1,0 +1,39 @@
+# {{fullstack.sharedPackageName}}
+
+Frontend shared package for **{{projectName}}**. Provides:
+
+- `AppShell` — common layout (header / footer / theme + language switchers)
+- `ThemeSwitcher`, `LanguageSwitcher`
+- `themeStore` — daisyUI theme persistence
+- `fetchAppInfo` — typed API client wrapping `@h-ai/api-client`
+- Shared Inlang Paraglide messages compiled from this package's `project.inlang/` + `messages/`
+
+Consumed by `{{projectName}}-web`, `{{projectName}}-app`, `{{projectName}}-desktop`, and the reserved `{{projectName}}-miniapp` guidance.
+
+## i18n collaboration
+
+- `packages/{{fullstack.sharedPackageName}}/messages/` stores **shared UI copy** used by reusable components such as `AppShell`, `ThemeSwitcher`, and `LanguageSwitcher`.
+- `apps/{{projectName}}-web/messages/`, `apps/{{projectName}}-app/messages/`, and `apps/{{projectName}}-desktop/messages/` store **frontend-specific product copy**.
+- `apps/{{projectName}}-miniapp/messages/` is prepared for mini-app-specific copy even though the mini target is currently a placeholder.
+- Keep `baseLocale` and `locales` aligned across shared and every frontend `project.inlang/settings.json`. The language switcher updates shared and the host app runtime together.
+
+Rule of thumb: if a string appears inside reusable shared components, put it here; if it belongs to one product surface, put it in that frontend's `messages/` directory.
+
+## Scripts
+
+- `pnpm paraglide:compile` — compile messages → `src/lib/paraglide/`
+- `pnpm paraglide:watch` — watch + recompile on message edits
+- `pnpm typecheck`, `pnpm lint`, `pnpm test`
+
+## Adding a locale
+
+1. Add the locale to `project.inlang/settings.json` `locales` array.
+2. Add the same locale to every enabled frontend `project.inlang/settings.json`.
+3. Create `messages/{locale}.json` in shared and each enabled frontend.
+4. Run root `pnpm i18n:compile` to compile shared and every enabled frontend Paraglide output. You can also run `pnpm paraglide:compile` inside one package when editing that package only.
+
+## Customizing theme and shell
+
+- Theme names come from the scaffold `fullstack.theme` config and are rendered into each frontend `src/app.css` daisyUI plugin block.
+- `themeStore` persists the selected theme in local storage under `{{projectName}}:theme`.
+- To customize the global chrome, edit `src/lib/components/AppShell.svelte`; to customize a single frontend page, edit that frontend's route and messages.

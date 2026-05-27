@@ -1,0 +1,34 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "page_title": "{name} · Desktop",
+  "platform_name": "Desktop",
+  "hero_badge": "Desktop workspace",
+  "hero_title": "{name} Desktop Command Center",
+  "hero_subtitle": "A wide-screen desktop starter that can later integrate Tauri while reusing shared shell, theme, locale and API client capabilities.",
+  "hero_primary_action": "View service status",
+  "hero_secondary_action": "Customize the starter",
+  "preview_title": "Desktop productivity UI",
+  "preview_body": "Ready for command centers, tool workspaces and native-enhanced apps",
+  "preview_metric_shared": "Shared UI/API capabilities",
+  "preview_metric_local": "Desktop-owned messages",
+  "preview_metric_theme": "Configurable themes",
+  "status_title": "Service connectivity",
+  "status_description": "The desktop page calls the backend service to verify API contract, service and shared client wiring.",
+  "status_online": "{name} is connected",
+  "status_version": "Service version",
+  "status_started": "Started at: {time}",
+  "status_frontends": "Service frontends: {list}",
+  "status_frontends_count": "{count} frontend targets",
+  "custom_shared_title": "Shared owns common capabilities",
+  "custom_shared_body": "Common shell, theme, locale switching and API client live in packages/{{projectName}}-shared and are reused by Desktop.",
+  "custom_local_title": "Desktop owns desktop copy",
+  "custom_local_body": "Desktop-specific menus, states and feature descriptions live in apps/{{projectName}}-desktop/messages.",
+  "flow_title": "Collaboration boundary",
+  "flow_contract": "Contract locks API contracts",
+  "flow_service": "Service provides runtime capabilities",
+  "flow_shared": "Shared reuses cross-platform UI/API",
+  "flow_frontend": "Desktop composes the product experience"
+}
+{{/if}}

@@ -4,8 +4,18 @@
 
 App/H5 前端工程，使用 `@h-ai/api-client` 绑定共享 contract 调用后端 API，并通过 `@h-ai/ui` 组件搭建页面。
 
+## i18n 与 shared 协同
+
+- 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`
+- 共享 Shell/主题/语言/API：`packages/{{fullstack.sharedPackageName}}`
+- 语言切换由 shared 的 `LanguageSwitcher` 触发，并同步本端 `$lib/paraglide/runtime.js`
+
+自定义建议：移动端独有引导、运营位、按钮文案放在本目录 `messages/`；跨端通用组件放到 shared。
+
 ## 开发
 
+- `pnpm i18n:compile`：在工作区根目录统一编译 shared + 各前端 Paraglide 输出
 - `pnpm --filter {{projectName}}-app dev`，默认端口 4174
+- `pnpm --filter {{projectName}}-app paraglide:compile`：只编译本端 messages
 - `pnpm --filter {{projectName}}-app test`
 {{/if}}
