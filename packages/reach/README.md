@@ -127,13 +127,18 @@ const config = { name: 'dev', type: 'console' }
 
 所有操作返回 `HaiResult<T>`，错误码定义在 `HaiReachError`：
 
-| 错误码                             | code            | 说明            |
-| ---------------------------------- | --------------- | --------------- |
-| `HaiReachError.SEND_FAILED`        | `hai:reach:001` | 发送失败        |
-| `HaiReachError.PROVIDER_NOT_FOUND` | `hai:reach:002` | Provider 未注册 |
-| `HaiReachError.TEMPLATE_NOT_FOUND` | `hai:reach:003` | 模板不存在      |
-| `HaiReachError.CONFIG_ERROR`       | `hai:reach:007` | 配置错误        |
-| `HaiReachError.NOT_INITIALIZED`    | `hai:reach:010` | 未初始化        |
+| 错误码                                 | code            | 说明            |
+| -------------------------------------- | --------------- | --------------- |
+| `HaiReachError.SEND_FAILED`            | `hai:reach:001` | 发送失败        |
+| `HaiReachError.TEMPLATE_NOT_FOUND`     | `hai:reach:002` | 模板不存在      |
+| `HaiReachError.TEMPLATE_RENDER_FAILED` | `hai:reach:003` | 模板渲染失败    |
+| `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | 无效接收方      |
+| `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider 未注册 |
+| `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | 免打扰丢弃      |
+| `HaiReachError.DND_DEFERRED`           | `hai:reach:007` | 免打扰延时暂存  |
+| `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | 未初始化        |
+| `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | 不支持的类型    |
+| `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | 配置错误        |
 
 ```ts
 const result = await reach.send({ provider: 'email', to: 'user@example.com', body: 'hello' })
@@ -146,7 +151,8 @@ if (!result.success) {
 
 多节点部署时，DND（delay 策略）的 pending 消息 flush 操作通过 `@h-ai/cache` 分布式锁保护，确保同一时刻只有一个节点执行 flush。
 
-- 锁基于 `cache.lock.acquire('reach:flush-pending')`，TTL 60 秒
+- 锁基于 `cache.lock.acquire('reach:flush-pending')`，TTL 300 秒
+- flush 会按批 claim pending 记录；处理中的记录带有过期时间，节点异常退出后可由后续节点接管，降低重复发送风险
 - 若 `@h-ai/cache` 未初始化，分布式锁自动禁用，不影响单节点运行
 - 使用稳定的进程级 owner 标识，防止误释放他人锁
 

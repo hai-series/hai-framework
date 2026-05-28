@@ -20,6 +20,10 @@ import {
 } from './reach-types.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'send' })
+const FLUSH_LOCK_KEY = 'hai:reach:flush-pending'
+const FLUSH_LOCK_TTL = 300
+const FLUSH_BATCH_SIZE = 100
+const FLUSH_CLAIM_LOCK_MS = 10 * 60 * 1000
 
 /** 稳定的节点标识，用于分布式锁 owner（进程级别唯一） */
 const reachNodeId = `reach:${crypto.randomUUID()}`
@@ -160,7 +164,7 @@ let schedulerContext: { dndConfig: DndConfig, providers: Map<string, ReachProvid
 /**
  * 启动 DND 恢复定时器
  *
- * 在 DND 结束时自动获取所有 pending 状态记录并逐条发送，
+ * 在 DND 结束时自动分批 claim pending 状态记录并逐条发送，
  * 并在 flush 完成后重新调度下一个 DND 周期。
  */
 export function startDndScheduler(
@@ -254,7 +258,7 @@ export function resetSendState(): void {
 }
 
 /**
- * 从数据库获取所有 pending 记录并逐条发送
+ * 从数据库分批 claim pending 记录并逐条发送
  *
  * 多节点部署时通过分布式锁确保同一时刻只有一个节点执行 flush。
  * 分布式锁基于 @h-ai/cache 模块实现，运行时通过 cache.isInitialized 动态检测可用性。
@@ -268,61 +272,110 @@ async function flushPendingMessages(
   }
 
   // 分布式锁：防止多节点同时 flush
-  const FLUSH_LOCK_KEY = 'hai:reach:flush-pending'
-  const FLUSH_LOCK_TTL = 60
+  // 注意：这里的锁主要用于减少惊群和重复扫描；真正的行级正确性由 repo.claimPendingBatch 的 claim 事务保证。
   let lockAcquired = false
+  // flushOwner 是本轮 flush 的短期 lease owner。
+  // 同一进程后续再次 flush 会生成新的 owner，避免旧批次在 lease 失效后误释放/误提交新批次的记录。
+  const flushOwner = `${reachNodeId}:${Date.now()}`
   if (cache.isInitialized) {
     const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL, owner: reachNodeId })
-    if (lockResult.success && !lockResult.data) {
+    if (!lockResult.success) {
+      logger.warn('Failed to acquire flush lock, continuing with row claims only', { error: lockResult.error.message })
+    }
+    else if (!lockResult.data) {
       logger.info('Skipping flush, another node holds the lock')
       return
     }
-    lockAcquired = lockResult.success && lockResult.data
+    else {
+      lockAcquired = true
+    }
   }
 
   try {
-    const result = await repo.findPending()
-    if (!result.success || !result.data.length) {
-      return
-    }
-
-    logger.info('Flushing pending messages', { count: result.data.length })
-
-    for (const row of result.data) {
-      const provider = providers.get(row.provider)
-      if (!provider) {
-        logger.warn('Provider not found for pending message, skipping', { provider: row.provider, id: row.id })
-        continue
+    while (true) {
+      // 每轮只 claim 一小批：
+      // 1) 控制单次 flush 持有的数据量
+      // 2) 让其它节点能尽快接手未处理的记录
+      // 3) 避免一次性拉全表 pending 造成长事务和大扫描
+      const claimResult = await repo.claimPendingBatch(flushOwner, {
+        limit: FLUSH_BATCH_SIZE,
+        lockMs: FLUSH_CLAIM_LOCK_MS,
+      })
+      if (!claimResult.success) {
+        logger.warn('Failed to claim pending messages', { error: claimResult.error.message })
+        return
       }
 
-      let vars: Record<string, string> | undefined
-      let extra: Record<string, unknown> | undefined
-      try {
-        vars = row.varsJson ? JSON.parse(row.varsJson) as Record<string, string> : undefined
-        extra = row.extraJson ? JSON.parse(row.extraJson) as Record<string, unknown> : undefined
-      }
-      catch {
-        logger.warn('Failed to parse pending message JSON, skipping', { id: row.id })
-        continue
+      if (claimResult.data.length === 0) {
+        return
       }
 
-      const message: ReachMessage = {
-        provider: row.provider,
-        to: row.toAddr,
-        subject: row.subject ?? undefined,
-        body: row.body ?? undefined,
-        template: row.template ?? undefined,
-        vars,
-        extra,
-      }
+      logger.debug('Flushing pending messages', { count: claimResult.data.length })
 
-      const sendResult = await provider.send(message)
-      if (sendResult.success) {
-        await repo.markSent(row.id, sendResult.data.messageId)
-        logger.info('Pending message sent', { id: row.id, to: row.toAddr, provider: row.provider })
-      }
-      else {
+      for (const row of claimResult.data) {
+        // Provider 缺失属于可恢复问题：释放 claim，让后续配置修复后还能继续重试。
+        const provider = providers.get(row.provider)
+        if (!provider) {
+          logger.warn('Provider not found for pending message, releasing claim', { provider: row.provider, id: row.id })
+          const releaseResult = await repo.releaseClaim(row.id, flushOwner)
+          if (!releaseResult.success) {
+            logger.warn('Failed to release pending message claim', { id: row.id, error: releaseResult.error.message })
+          }
+          continue
+        }
+
+        let vars: Record<string, string> | undefined
+        let extra: Record<string, unknown> | undefined
+        try {
+          // JSON 解析失败时同样不吞掉记录，而是把它重新放回 pending，交给后续人工修复/补偿。
+          vars = row.varsJson ? JSON.parse(row.varsJson) as Record<string, string> : undefined
+          extra = row.extraJson ? JSON.parse(row.extraJson) as Record<string, unknown> : undefined
+        }
+        catch {
+          logger.warn('Failed to parse pending message JSON, releasing claim', { id: row.id })
+          const releaseResult = await repo.releaseClaim(row.id, flushOwner)
+          if (!releaseResult.success) {
+            logger.warn('Failed to release pending message claim', { id: row.id, error: releaseResult.error.message })
+          }
+          continue
+        }
+
+        const message: ReachMessage = {
+          provider: row.provider,
+          to: row.toAddr,
+          subject: row.subject ?? undefined,
+          body: row.body ?? undefined,
+          template: row.template ?? undefined,
+          vars,
+          extra,
+        }
+
+        // 外部 provider.send 不能放进数据库事务里：
+        // - 否则会把行锁/事务持有到网络调用结束，影响吞吐和故障恢复
+        // - 因此这里使用“先 claim lease，再按 owner 提交结果”的模式
+        // - 若 lease 已失效，markSent/releaseClaim 会因 owner 不匹配而失败，避免旧节点覆盖新节点状态
+        const sendResult = await provider.send(message)
+        if (sendResult.success) {
+          // markSent 带 owner 条件：只有当前 lease owner 才能把记录提交为 sent。
+          const markResult = await repo.markSent(row.id, sendResult.data.messageId, undefined, flushOwner)
+          if (!markResult.success) {
+            logger.warn('Failed to mark pending message as sent', { id: row.id, error: markResult.error.message })
+            continue
+          }
+          logger.debug('Pending message sent', { id: row.id, to: row.toAddr, provider: row.provider })
+          continue
+        }
+
+        // 发送失败时只释放当前 owner 的 claim；如果 lease 已被别的节点接管，这里会显式失败并打日志。
+        const releaseResult = await repo.releaseClaim(row.id, flushOwner)
+        if (!releaseResult.success) {
+          logger.warn('Failed to release pending message claim after send failure', { id: row.id, error: releaseResult.error.message })
+        }
         logger.warn('Pending message send failed', { id: row.id, to: row.toAddr, error: sendResult.error.code })
+      }
+
+      if (claimResult.data.length < FLUSH_BATCH_SIZE) {
+        return
       }
     }
   }
