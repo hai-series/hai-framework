@@ -117,7 +117,7 @@
       «
     </BareButton>
 
-    {#each pages() as p}
+    {#each pages() as p, index (typeof p === 'number' ? p : `ellipsis-${index}`)}
       {#if typeof p === 'number'}
         <BareButton
           class={cn(btnClass, page === p && 'btn-active')}

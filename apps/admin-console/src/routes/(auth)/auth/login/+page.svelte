@@ -8,12 +8,15 @@
 <script lang='ts'>
   import type { LoginFormData } from '@h-ai/ui'
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
+  const forgotPasswordPath = resolve('/auth/forgot-password', {})
+  const registerPath = resolve('/auth/register', {})
 
   const iamPublicConfig = $derived(page.data.iamPublicConfig)
   const showRegisterLink = $derived(iamPublicConfig?.register?.enabled ?? true)
@@ -64,7 +67,8 @@
       const result = await response.json()
 
       if (result.success) {
-        goto(resolveRedirectTarget(returnUrl))
+        const redirectTarget = resolve(resolveRedirectTarget(returnUrl), {})
+        await goto(redirectTarget)
       }
       else {
         errors = { general: result.error?.message || m.common_error() }
@@ -88,8 +92,8 @@
   {errors}
   showTitle
   showRegisterLink={showRegisterLink}
-  forgotPasswordUrl='/auth/forgot-password'
-  registerUrl='/auth/register'
+  forgotPasswordUrl={forgotPasswordPath}
+  registerUrl={registerPath}
   agreements={loginAgreements}
   onsubmit={handleLogin}
 />

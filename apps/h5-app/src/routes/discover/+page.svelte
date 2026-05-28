@@ -173,7 +173,7 @@
           <p class='font-medium text-sm'>{result.summary}</p>
           {#if result.details.length > 0}
             <ul class='mt-2 space-y-1 list-disc list-inside text-sm text-base-content/80'>
-              {#each result.details as detail}
+              {#each result.details as detail, detailIndex (`${detailIndex}:${detail}`)}
                 <li>{detail}</li>
               {/each}
             </ul>
@@ -182,7 +182,7 @@
 
         <div class='flex flex-wrap gap-2 items-center'>
           <span class='text-sm text-base-content/70'>{m.discover_tags()}:</span>
-          {#each result.tags as tag}
+          {#each result.tags as tag, tagIndex (`${tagIndex}:${tag}`)}
             <Tag text={tag} variant='primary' outline size='sm' />
           {/each}
         </div>
@@ -204,7 +204,7 @@
         <Empty title={m.discover_empty()} icon='search' size='sm' />
       </Card>
     {:else}
-      {#each history as item}
+      {#each history as item (item.id)}
         <Card shadow='sm' padding='sm'>
           <div class='flex items-start justify-between gap-3'>
             <div>
@@ -215,7 +215,7 @@
           </div>
           {#if item.tags.length > 0}
             <div class='flex flex-wrap gap-1 mt-2'>
-              {#each item.tags as tag}
+              {#each item.tags as tag, tagIndex (`${item.id}:${tagIndex}:${tag}`)}
                 <Tag text={tag} size='sm' outline />
               {/each}
             </div>

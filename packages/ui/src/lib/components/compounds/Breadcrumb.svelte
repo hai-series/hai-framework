@@ -26,7 +26,7 @@
 
 <div class={breadcrumbClass}>
   <ul>
-    {#each items as item, index}
+    {#each items as item, index (item.href ?? `${item.label}:${index}`)}
       <li>
         {#if item.href && index < items.length - 1}
           <a href={item.href}>

@@ -2561,7 +2561,7 @@ ${safeCode}
 
           {#if outlineHasContent}
             <nav class='hai-ai-doc-outline-list'>
-              {#each outline as item}
+              {#each outline as item (item.id)}
                 <button
                   type='button'
                   class:active={activeHeadingId === item.id}
@@ -2917,7 +2917,7 @@ ${safeCode}
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
                     onmousedown={handleSelectionPanelMouseDown}
                   >
-                    {#each resolvedRewriteActions as action}
+                    {#each resolvedRewriteActions as action (action.id)}
                       <button
                         type='button'
                         class='hai-ai-doc-rewrite-menu-btn'
@@ -2937,7 +2937,7 @@ ${safeCode}
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
                     onmousedown={handleSelectionPanelMouseDown}
                   >
-                    {#each BLOCK_FORMAT_OPTIONS as option}
+                    {#each BLOCK_FORMAT_OPTIONS as option (option.value)}
                       <button
                         type='button'
                         class={cn(
@@ -2969,7 +2969,7 @@ ${safeCode}
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
                     onmousedown={handleSelectionPanelMouseDown}
                   >
-                    {#each ALIGN_OPTIONS as option}
+                    {#each ALIGN_OPTIONS as option (option.value)}
                       <button
                         type='button'
                         class={cn(
@@ -3043,7 +3043,7 @@ ${safeCode}
                         {uiM('markdown_text_color')}
                       </div>
                       <div class='hai-ai-doc-color-grid'>
-                        {#each TEXT_COLOR_PRESETS as color}
+                        {#each TEXT_COLOR_PRESETS as color, index (`${color}-${index}`)}
                           <button
                             type='button'
                             class={cn(
@@ -3066,7 +3066,7 @@ ${safeCode}
                         {uiM('markdown_background_color')}
                       </div>
                       <div class='hai-ai-doc-color-grid'>
-                        {#each BACKGROUND_COLOR_OPTIONS as colorOption}
+                        {#each BACKGROUND_COLOR_OPTIONS as colorOption, index (resolveColorOptionValue(colorOption) ?? `empty-${index}`)}
                           <button
                             type='button'
                             class={cn(

@@ -69,7 +69,7 @@
 
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <ul tabindex='0' class='dropdown-content menu bg-base-100 rounded-xl z-[1] w-52 p-1.5 shadow-lg border border-base-content/6 animate-[hai-scale-in_0.15s_cubic-bezier(0.16,1,0.3,1)]'>
-    {#each items as item}
+    {#each items as item, index (item.key || `divider-${index}`)}
       {#if item.divider}
         <li class='divider'></li>
       {:else}

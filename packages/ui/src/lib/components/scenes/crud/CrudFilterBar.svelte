@@ -73,7 +73,7 @@
       </div>
     {/if}
 
-    {#each filterFields as field}
+    {#each filterFields as field (field.id)}
       {@const opts = resolveOptions(field.options)}
       {#if opts.length > 0}
         <Select
@@ -82,7 +82,7 @@
           onchange={value => handleFilterChange(field.id, value)}
         >
           <option value="">{uiM('crud_filter_all')}</option>
-          {#each opts as opt}
+          {#each opts as opt (String(opt.value))}
             <option value={String(opt.value)}>{opt.label}</option>
           {/each}
         </Select>

@@ -7,12 +7,14 @@
 -->
 <script lang='ts'>
   import type { ForgotPasswordFormData } from '@h-ai/ui'
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
   let success = $state(false)
+  const loginPath = resolve('/auth/login', {})
 
   async function handleForgotPassword(data: ForgotPasswordFormData) {
     errors = {}
@@ -54,7 +56,7 @@
     description={m.auth_forgot_email_sent_desc()}
   >
     {#snippet actions()}
-      <a href='/auth/login' class='btn btn-primary'>{m.auth_back_to_login()}</a>
+      <a href={loginPath} class='btn btn-primary'>{m.auth_back_to_login()}</a>
     {/snippet}
   </Result>
 {:else}
@@ -65,7 +67,7 @@
     showDescription
     showBackLink
     mode='email'
-    loginUrl='/auth/login'
+    loginUrl={loginPath}
     onsubmit={handleForgotPassword}
   />
 {/if}

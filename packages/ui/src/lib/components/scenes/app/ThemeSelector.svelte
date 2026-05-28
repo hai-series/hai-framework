@@ -111,7 +111,7 @@
     <div class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 p-4 max-h-[80vh] overflow-y-auto {compact ? 'w-56 right-0' : ''}'>
       {#if grouped}
         <!-- 分组显示 -->
-        {#each THEME_GROUPS as group}
+        {#each THEME_GROUPS as group (group.nameKey)}
           <div class='mb-4 last:mb-0'>
             <div class='text-xs font-semibold text-base-content/50 uppercase tracking-wider px-2 mb-2'>
               {uiM(group.nameKey)}

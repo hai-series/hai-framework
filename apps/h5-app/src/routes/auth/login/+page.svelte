@@ -4,6 +4,7 @@
    * 登录页 — 使用 @h-ai/ui LoginForm + @h-ai/iam
    */
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
 
   let loading = $state(false)
@@ -25,7 +26,7 @@
       const result = await res.json()
 
       if (result.success) {
-        goto('/profile')
+        await goto(resolve('/profile', {}))
       }
       else {
         errors = { general: result.error?.message ?? m.auth_login_error_generic() }
@@ -51,7 +52,7 @@
       size='sm'
       variant='ghost'
       ariaLabel={m.auth_login_back()}
-      onclick={() => goto('/')}
+      onclick={() => goto(resolve('/', {}))}
     >
       <span class='icon-[tabler--arrow-left] text-lg'></span>
     </IconButton>
@@ -66,7 +67,7 @@
       showRememberMe={false}
       showForgotPassword={false}
       showRegisterLink={true}
-      registerUrl='/auth/register'
+      registerUrl={resolve('/auth/register', {})}
       {errors}
       onsubmit={handleLogin}
     />

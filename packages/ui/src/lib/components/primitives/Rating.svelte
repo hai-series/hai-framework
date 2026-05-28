@@ -111,7 +111,7 @@
 {#if readonly}
   <!-- 只读模式 - 使用 div 而非 input -->
   <div class={cn('rating', sizeClass, className)}>
-    {#each Array.from({ length: max }) as _, i}
+    {#each Array.from({ length: max }) as _, i (i)}
       <div
         class={cn(
           'mask mask-star-2',
@@ -128,7 +128,7 @@
 {:else}
   <!-- 交互模式 - 使用 radio input -->
   <div class={ratingClass}>
-    {#each items as item}
+    {#each items as item (item.value)}
       <input
         type='radio'
         {name}

@@ -118,7 +118,7 @@
       </div>
     {/if}
 
-    {#each sortedFields as field}
+    {#each sortedFields as field (field.id)}
       {@const isReadonly = field.readonly && mode === 'edit'}
       {@const isRequired = field.validation?.required}
       {@const fieldValue = formData[field.id]}
@@ -146,7 +146,7 @@
             onchange={value => updateField(field.id, value)}
           >
             <option value="">{placeholder || uiM('crud_filter_all')}</option>
-            {#each opts as opt}
+            {#each opts as opt (String(opt.value))}
               <option value={String(opt.value)}>{opt.label}</option>
             {/each}
           </Select>
@@ -157,7 +157,7 @@
         {@const selectedValues = ((fieldValue ?? []) as Array<string | number | boolean>).map(String)}
         <FormField label={resolveText(field.label)} required={isRequired}>
           <div class='flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg max-h-48 overflow-y-auto'>
-            {#each opts as opt}
+            {#each opts as opt (String(opt.value))}
               <label class='inline-flex items-center gap-2 cursor-pointer'>
                 <Checkbox
                   size='sm'

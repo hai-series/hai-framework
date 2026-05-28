@@ -7,8 +7,13 @@
   Crypto: EncryptedInput / HashDisplay / SignatureDisplay
 -->
 <script lang='ts'>
+  import { resolve } from '$app/paths'
   // FileList 与 DOM 全局类型同名，必须显式导入
   import { AiDocumentEditor, AiTableEditor, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
+
+  const adminUsersPath = resolve('/admin/iam/users', {})
+  const adminRolesPath = resolve('/admin/iam/roles', {})
+  const adminPermissionsPath = resolve('/admin/iam/permissions', {})
 
   // === 状态 ===
   let pwdVal = $state('')
@@ -348,9 +353,9 @@ server.listen(3000, () => {
           CRUD 场景组件已经在 IAM 用户、角色、权限页面中真实接入，使用 @h-ai/kit/client 的 SvelteKit 导航适配器完成 URL 同步与 invalidateAll 刷新。
         </Alert>
         <div class='flex flex-col gap-2'>
-          <a class='btn btn-primary no-animation font-medium' href='/admin/iam/users'>查看用户 CRUD</a>
-          <a class='btn btn-secondary btn-outline no-animation font-medium' href='/admin/iam/roles'>查看角色 CRUD</a>
-          <a class='btn btn-info btn-outline no-animation font-medium' href='/admin/iam/permissions'>查看权限 CRUD</a>
+          <a class='btn btn-primary no-animation font-medium' href={adminUsersPath}>查看用户 CRUD</a>
+          <a class='btn btn-secondary btn-outline no-animation font-medium' href={adminRolesPath}>查看角色 CRUD</a>
+          <a class='btn btn-info btn-outline no-animation font-medium' href={adminPermissionsPath}>查看权限 CRUD</a>
         </div>
       </div>
     </Card>

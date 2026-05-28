@@ -8,6 +8,7 @@
 <script lang='ts'>
   import type { ResetPasswordFormData } from '@h-ai/ui'
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
@@ -15,6 +16,8 @@
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
   let success = $state(false)
+  const loginPath = resolve('/auth/login', {})
+  const forgotPasswordPath = resolve('/auth/forgot-password', {})
 
   // 从 URL 获取 token
   const token = $derived(page.url.searchParams.get('token') ?? '')
@@ -48,7 +51,9 @@
       if (result.success) {
         success = true
         // 3秒后跳转到登录页
-        setTimeout(goto, 3000, '/auth/login')
+        setTimeout(() => {
+          void goto(loginPath)
+        }, 3000)
       }
       else {
         errors = { general: result.error?.message || m.auth_reset_failed() }
@@ -74,7 +79,7 @@
     description={m.auth_reset_success_desc()}
   >
     {#snippet actions()}
-      <a href='/auth/login' class='btn btn-primary'>{m.auth_reset_login_now()}</a>
+      <a href={loginPath} class='btn btn-primary'>{m.auth_reset_login_now()}</a>
     {/snippet}
   </Result>
 {:else if !token}
@@ -84,7 +89,7 @@
     description={m.auth_reset_invalid_link_desc()}
   >
     {#snippet actions()}
-      <a href='/auth/forgot-password' class='btn btn-primary'>{m.auth_reset_request_again()}</a>
+      <a href={forgotPasswordPath} class='btn btn-primary'>{m.auth_reset_request_again()}</a>
     {/snippet}
   </Result>
 {:else}
@@ -97,7 +102,7 @@
     showCode={false}
     showPasswordStrength={true}
     minPasswordLength={passwordMinLength}
-    loginUrl='/auth/login'
+    loginUrl={loginPath}
     onsubmit={handleResetPassword}
   />
 {/if}

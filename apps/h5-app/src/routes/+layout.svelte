@@ -4,6 +4,7 @@
    */
   import { browser } from '$app/environment'
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import { page } from '$app/stores'
   import * as m from '$lib/paraglide/messages.js'
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
@@ -26,6 +27,9 @@
 
   let currentTheme = $state('light')
   let currentLanguage = $state('zh-CN')
+
+  type TabId = 'home' | 'discover' | 'cart' | 'profile'
+  type TabRoute = '/' | '/discover' | '/cart' | '/profile'
 
   function handleThemeChange(theme: string) {
     applyTheme(theme)
@@ -50,7 +54,7 @@
   })
 
   /** 底部导航路由映射 */
-  const tabRoutes: Record<string, string> = {
+  const tabRoutes: Record<TabId, TabRoute> = {
     home: '/',
     discover: '/discover',
     cart: '/cart',
@@ -65,9 +69,12 @@
   )
 
   function handleTabChange(id: string) {
-    const route = tabRoutes[id]
-    if (route)
-      goto(route)
+    if (!(id in tabRoutes)) {
+      return
+    }
+
+    const route = tabRoutes[id as TabId]
+    void goto(resolve(route, {}))
   }
 
   /** 认证页面不显示导航 */

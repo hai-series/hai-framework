@@ -82,7 +82,7 @@
   <table class='table w-full text-[13px]' class:table-zebra={striped}>
     <thead>
       <tr class='text-xs text-base-content/50 border-b border-base-content/6'>
-        {#each columns as col}
+        {#each columns as col (String(col.key))}
           <th
             style={col.width ? `width: ${col.width}` : ''}
             class='{getAlignClass(col.align)} font-medium'
@@ -115,7 +115,7 @@
       {:else}
         {#each data as item (item[keyField])}
           <tr class={hoverable ? 'hover:bg-base-content/3 transition-colors' : ''}>
-            {#each columns as col}
+            {#each columns as col (String(col.key))}
               <td class={getAlignClass(col.align)}>{getValue(item, col)}</td>
             {/each}
             {#if actions}

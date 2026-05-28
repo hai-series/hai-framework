@@ -6,10 +6,12 @@
   import type { Snippet } from 'svelte'
   import type { LayoutData } from './$types'
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
   import { setPermissionContext, usePermission } from '@h-ai/ui'
+  import { SvelteSet } from 'svelte/reactivity'
 
   interface Props {
     data: LayoutData
@@ -30,12 +32,22 @@
   let mobileMenuOpen = $state(false)
   let userMenuOpen = $state(false)
 
+  type AdminResolvedPath = '/admin' | '/admin/iam/users' | '/admin/iam/roles' | '/admin/iam/permissions' | '/admin/ui-gallery' | '/admin/modules' | '/admin/logs' | '/admin/settings' | '/admin/profile'
+
+  type AdminNavPath = AdminResolvedPath | '/admin/iam'
+
+  const emptyRouteParams = {}
+  const authLoginPath = resolve('/auth/login', {})
+  const adminHomePath = resolve('/admin', emptyRouteParams)
+  const adminProfilePath = resolve('/admin/profile', emptyRouteParams)
+  const adminSettingsPath = resolve('/admin/settings', emptyRouteParams)
+
   interface MenuItem {
     icon: string
     title: string
-    path: string
+    path: AdminNavPath
     requiredPermissions?: string[]
-    children?: { title: string, path: string, requiredPermissions?: string[] }[]
+    children?: { title: string, path: AdminResolvedPath, requiredPermissions?: string[] }[]
   }
 
   const allMenuItems: MenuItem[] = $derived([
@@ -76,7 +88,7 @@
       .filter((item): item is MenuItem => item !== null),
   )
 
-  let expandedMenus = $state<Set<string>>(new Set(['/admin/iam']))
+  const expandedMenus = new SvelteSet<string>(['/admin/iam'])
   const currentPath = $derived(page.url.pathname)
 
   function isActive(path: string): boolean {
@@ -88,11 +100,9 @@
   function toggleSubmenu(event: MouseEvent, path: string) {
     event.preventDefault()
     event.stopPropagation()
-    const newSet = new Set(expandedMenus)
-    if (newSet.has(path))
-      newSet.delete(path)
-    else newSet.add(path)
-    expandedMenus = newSet
+    if (expandedMenus.has(path))
+      expandedMenus.delete(path)
+    else expandedMenus.add(path)
   }
 
   function toggleSidebar(event: MouseEvent) {
@@ -119,7 +129,7 @@
     catch {
     // 忽略
     }
-    goto('/auth/login')
+    void goto(authLoginPath)
   }
 
   function handleDocumentClick(event: MouseEvent) {
@@ -171,7 +181,7 @@
     <!-- 导航 -->
     <nav class='flex-1 py-3 overflow-y-auto overflow-x-hidden'>
       <ul class='space-y-0.5 px-2'>
-        {#each menuItems as item}
+        {#each menuItems as item (item.path)}
           <li>
             {#if item.children}
               <BareButton
@@ -192,10 +202,10 @@
 
               {#if !sidebarCollapsed && expandedMenus.has(item.path)}
                 <ul class='mt-0.5 space-y-0.5 ml-4.5 pl-3 border-l border-base-content/8'>
-                  {#each item.children as child}
+                  {#each item.children as child (child.path)}
                     <li>
                       <a
-                        href={child.path}
+                        href={resolve(child.path, emptyRouteParams)}
                         class="block rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-150
                           {currentPath === child.path
                             ? 'text-primary font-medium bg-primary/6'
@@ -210,7 +220,7 @@
               {/if}
             {:else}
               <a
-                href={item.path}
+                href={resolve(item.path as AdminResolvedPath, emptyRouteParams)}
                 class="flex items-center rounded-lg px-2.5 py-2 transition-colors duration-150
                   {isActive(item.path)
                     ? 'text-primary bg-primary/6 font-medium'
@@ -260,7 +270,7 @@
           </BareButton>
 
           <nav class='hidden sm:flex items-center gap-1 text-sm'>
-            <a href='/admin' class='text-base-content/40 hover:text-base-content/60 transition-colors'>{m.nav_home()}</a>
+            <a href={adminHomePath} class='text-base-content/40 hover:text-base-content/60 transition-colors'>{m.nav_home()}</a>
             <span class='text-base-content/20 mx-0.5'>/</span>
             <span class='text-base-content/80 font-medium'>
               {menuItems.find(item => isActive(item.path))?.title ?? m.nav_page()}
@@ -302,7 +312,7 @@
                 </div>
                 <div class='py-0.5'>
                   <a
-                    href='/admin/profile'
+                    href={adminProfilePath}
                     class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
                     onclick={() => { userMenuOpen = false }}
                   >
@@ -310,7 +320,7 @@
                     {m.nav_profile()}
                   </a>
                   <a
-                    href='/admin/settings'
+                    href={adminSettingsPath}
                     class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
                     onclick={() => { userMenuOpen = false }}
                   >

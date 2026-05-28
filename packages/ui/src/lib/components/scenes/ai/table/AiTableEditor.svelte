@@ -21,6 +21,7 @@
     AiTableEditorChangePayload,
     AiTableEditorProps,
   } from './table-types.js'
+  import { SvelteSet } from 'svelte/reactivity'
   import { uiM } from '../../../../messages.js'
   import { cn } from '../../../../utils.js'
   import AiDocumentDownloadMenu from '../AiDocumentDownloadMenu.svelte'
@@ -215,7 +216,7 @@
    * - 基于 `key` 去重，避免流式增量里重复列导致渲染抖动
    */
   function normalizeTableColumns(items: unknown[]): AiTableColumn[] {
-    const usedKeys = new Set<string>()
+    const usedKeys = new SvelteSet<string>()
     const columns: AiTableColumn[] = []
 
     for (const item of items) {
@@ -1095,7 +1096,7 @@
     <table class='hai-ai-table-grid'>
       <thead>
         <tr>
-          {#each tableColumns as column}
+          {#each tableColumns as column (column.key)}
             <th>{column.label}</th>
           {/each}
           {#if editable}
@@ -1120,7 +1121,7 @@
               ondragover={event => handleRowDragOver(row.row_id, event)}
               ondrop={event => handleRowDrop(row.row_id, event)}
             >
-              {#each tableColumns as column}
+              {#each tableColumns as column (column.key)}
                 <td>
                   <input
                     class={resolveCellInputClass(column.type)}

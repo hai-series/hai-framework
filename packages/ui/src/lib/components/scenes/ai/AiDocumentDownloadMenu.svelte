@@ -174,7 +174,7 @@
       onclick={event => event.stopPropagation()}
       onkeydown={event => event.stopPropagation()}
     >
-      {#each resolvedActions as action}
+      {#each resolvedActions as action (action.id)}
         <button
           type='button'
           class={cn('hai-ai-download-menu__item', itemClass)}

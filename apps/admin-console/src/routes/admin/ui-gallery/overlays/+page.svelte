@@ -45,7 +45,7 @@
         <div>
           <p class='text-sm font-medium mb-2'>不同尺寸</p>
           <div class='flex flex-wrap gap-2'>
-            {#each ['sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', 'full'] as size}
+            {#each ['sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', 'full'] as size (size)}
               <Button
                 variant='secondary'
                 outline
@@ -127,7 +127,7 @@
 
       <Drawer open={drawerLeftOpen} position='left' title='左侧导航' onclose={() => drawerLeftOpen = false}>
         <nav class='space-y-2'>
-          {#each ['仪表盘', '用户管理', '内容管理', '系统设置', '操作日志'] as item}
+          {#each ['仪表盘', '用户管理', '内容管理', '系统设置', '操作日志'] as item (item)}
             <button
               class='w-full text-left px-4 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm'
               onclick={() => {

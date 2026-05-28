@@ -6,30 +6,30 @@
   import { Badge, Card, InfiniteScroll, Input, PullRefresh } from '@h-ai/ui'
 
   const banners = [
-    { title: m.home_banner_new_title, subtitle: m.home_banner_new_subtitle, color: 'from-primary to-primary/70' },
-    { title: m.home_banner_sale_title, subtitle: m.home_banner_sale_subtitle, color: 'from-secondary to-secondary/70' },
-    { title: m.home_banner_member_title, subtitle: m.home_banner_member_subtitle, color: 'from-accent to-accent/70' },
+    { id: 'new', title: m.home_banner_new_title, subtitle: m.home_banner_new_subtitle, color: 'from-primary to-primary/70' },
+    { id: 'sale', title: m.home_banner_sale_title, subtitle: m.home_banner_sale_subtitle, color: 'from-secondary to-secondary/70' },
+    { id: 'member', title: m.home_banner_member_title, subtitle: m.home_banner_member_subtitle, color: 'from-accent to-accent/70' },
   ]
 
   const quickEntries = [
-    { icon: 'icon-[tabler--bolt]', label: m.home_quick_flash_sale, color: 'text-error' },
-    { icon: 'icon-[tabler--ticket]', label: m.home_quick_coupon, color: 'text-warning' },
-    { icon: 'icon-[tabler--package]', label: m.home_quick_orders, color: 'text-primary' },
-    { icon: 'icon-[tabler--star]', label: m.home_quick_favorites, color: 'text-accent' },
-    { icon: 'icon-[tabler--flame]', label: m.home_quick_hot, color: 'text-error' },
-    { icon: 'icon-[tabler--category]', label: m.home_quick_categories, color: 'text-info' },
-    { icon: 'icon-[tabler--message-circle]', label: m.home_quick_support, color: 'text-success' },
-    { icon: 'icon-[tabler--speakerphone]', label: m.home_quick_notice, color: 'text-secondary' },
+    { id: 'flash-sale', icon: 'icon-[tabler--bolt]', label: m.home_quick_flash_sale, color: 'text-error' },
+    { id: 'coupon', icon: 'icon-[tabler--ticket]', label: m.home_quick_coupon, color: 'text-warning' },
+    { id: 'orders', icon: 'icon-[tabler--package]', label: m.home_quick_orders, color: 'text-primary' },
+    { id: 'favorites', icon: 'icon-[tabler--star]', label: m.home_quick_favorites, color: 'text-accent' },
+    { id: 'hot', icon: 'icon-[tabler--flame]', label: m.home_quick_hot, color: 'text-error' },
+    { id: 'categories', icon: 'icon-[tabler--category]', label: m.home_quick_categories, color: 'text-info' },
+    { id: 'support', icon: 'icon-[tabler--message-circle]', label: m.home_quick_support, color: 'text-success' },
+    { id: 'notice', icon: 'icon-[tabler--speakerphone]', label: m.home_quick_notice, color: 'text-secondary' },
   ]
 
   /** 模拟推荐列表（支持分页加载更多） */
   const allItems = [
-    { title: m.home_rec_watch(), price: '¥299', image: '⌚', tag: m.home_tag_new() },
-    { title: m.home_rec_earbuds(), price: '¥129', image: '🎧', tag: m.home_tag_hot() },
-    { title: m.home_rec_powerbank(), price: '¥89', image: '🔋', tag: m.home_tag_special() },
-    { title: m.home_rec_bottle(), price: '¥49', image: '🥤', tag: '' },
-    { title: m.home_rec_watch(), price: '¥259', image: '⌚', tag: m.home_tag_hot() },
-    { title: m.home_rec_earbuds(), price: '¥99', image: '🎧', tag: m.home_tag_special() },
+    { id: 1, title: m.home_rec_watch(), price: '¥299', image: '⌚', tag: m.home_tag_new() },
+    { id: 2, title: m.home_rec_earbuds(), price: '¥129', image: '🎧', tag: m.home_tag_hot() },
+    { id: 3, title: m.home_rec_powerbank(), price: '¥89', image: '🔋', tag: m.home_tag_special() },
+    { id: 4, title: m.home_rec_bottle(), price: '¥49', image: '🥤', tag: '' },
+    { id: 5, title: m.home_rec_watch(), price: '¥259', image: '⌚', tag: m.home_tag_hot() },
+    { id: 6, title: m.home_rec_earbuds(), price: '¥99', image: '🎧', tag: m.home_tag_special() },
   ]
 
   const PAGE_SIZE = 4
@@ -69,7 +69,7 @@
 <PullRefresh onrefresh={handleRefresh}>
   <!-- 轮播区 -->
   <div class='carousel w-full h-40 px-3 pt-2 gap-3'>
-    {#each banners as banner, i}
+    {#each banners as banner, i (banner.id)}
       <div id='slide{i}' class='carousel-item w-[90%] first:ml-0'>
         <div class='bg-linear-to-br {banner.color} w-full flex flex-col items-start justify-center text-white rounded-2xl px-6 shadow-md'>
           <h2 class='text-xl font-bold'>{banner.title()}</h2>
@@ -81,7 +81,7 @@
 
   <!-- 功能入口 -->
   <div class='grid grid-cols-4 gap-1 px-4 py-3'>
-    {#each quickEntries as entry}
+    {#each quickEntries as entry (entry.id)}
       <button class='flex flex-col items-center gap-1.5 py-2.5 rounded-xl active:bg-base-200/60 transition-colors'>
         <span class='w-10 h-10 rounded-full bg-base-200/70 flex items-center justify-center'>
           <span class='{entry.icon} text-xl {entry.color}'></span>
@@ -104,7 +104,7 @@
       noMoreText={m.load_no_more()}
     >
       <div class='grid grid-cols-2 gap-3'>
-        {#each recommendations as item}
+        {#each recommendations as item (item.id)}
           <Card padding='none' shadow='sm' class='overflow-hidden'>
             <div class='flex items-center justify-center h-28 bg-base-200/50 text-4xl'>
               {item.image}

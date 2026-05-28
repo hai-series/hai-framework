@@ -58,9 +58,7 @@
 
     {#if dismissible}
       <IconButton size='sm' variant='ghost' label={uiM('common_close')} onclick={handleClose}>
-        {#snippet children()}
-          <span class='icon-[tabler--x] size-4'></span>
-        {/snippet}
+        <span class='icon-[tabler--x] size-4'></span>
       </IconButton>
     {/if}
   </div>

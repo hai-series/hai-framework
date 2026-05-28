@@ -38,7 +38,7 @@
   })
 </script>
 
-{#each Object.entries(groupedItems()) as [position, items]}
+{#each Object.entries(groupedItems()) as [position, items] (position)}
   <div class={cn('toast z-50', positionMap[position as keyof typeof positionMap])}>
     {#each items as item (item.id)}
       <div class={cn('alert', getAlertVariantClass(item.variant ?? 'info'))}>

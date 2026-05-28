@@ -78,7 +78,7 @@
     {#if children}
       {@render children()}
     {:else if options}
-      {#each options as option}
+      {#each options as option (String(option.value))}
         <option
           value={option.value as string}
           disabled={option.disabled}

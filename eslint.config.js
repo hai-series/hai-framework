@@ -43,4 +43,10 @@ export default antfu({
     // 禁止 any 类型
     'ts/no-explicit-any': 'error',
   },
+}, {
+  // 通用 UI 组件库不应耦合 SvelteKit 路由 API
+  files: ['packages/ui/**/*.svelte'],
+  rules: {
+    'svelte/no-navigation-without-resolve': 'off',
+  },
 })

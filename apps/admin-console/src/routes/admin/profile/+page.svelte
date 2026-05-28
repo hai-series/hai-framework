@@ -60,14 +60,7 @@
     return mapped
   }
 
-  let profileUser = $state({
-    id: '',
-    username: '',
-    email: '',
-    displayName: '',
-    phone: '',
-    avatarUrl: '',
-  })
+  let profileUser = $derived(toProfileUser(data.profile))
 
   let profileErrors = $state<Record<string, string>>({})
   let passwordErrors = $state<Record<string, string>>({})
@@ -77,10 +70,6 @@
 
   let profileSuccess = $state('')
   let passwordSuccess = $state('')
-
-  $effect(() => {
-    profileUser = toProfileUser(data.profile)
-  })
 
   /**
    * 通过资料接口持久化保存个人信息。

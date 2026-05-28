@@ -87,9 +87,7 @@
           onclick={handleClose}
           class='hover:bg-base-content/10'
         >
-          {#snippet children()}
-            <span class='icon-[tabler--x] size-5'></span>
-          {/snippet}
+          <span class='icon-[tabler--x] size-5'></span>
         </IconButton>
       </div>
 

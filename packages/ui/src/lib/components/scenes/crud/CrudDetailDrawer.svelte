@@ -110,7 +110,7 @@
 <Drawer bind:open {title} position='right' {size} onclose={handleClose}>
   {#if item}
     <div class='space-y-4 pb-20'>
-      {#each detailFields as field}
+      {#each detailFields as field (field.id)}
         {@const value = item[field.id]}
         <div>
           <div class='text-xs font-medium text-base-content/50 mb-1'>
@@ -119,7 +119,7 @@
           <div class='text-sm text-base-content'>
             {#if field.type === 'multi-select' && Array.isArray(value) && value.length > 0}
               <div class='flex flex-wrap gap-1'>
-                {#each value as v}
+                {#each value as v, index (`${String(v)}:${index}`)}
                   {@const opts = resolveOptions(field.options)}
                   {@const found = opts.find(o => String(o.value) === String(v))}
                   <Badge variant='ghost' size='sm'>{found?.label ?? String(v)}</Badge>

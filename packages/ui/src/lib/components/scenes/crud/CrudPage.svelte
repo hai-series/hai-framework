@@ -14,6 +14,7 @@
   import type { Snippet } from 'svelte'
   import type { Size } from '../../../types.js'
   import type { NavAdapter } from './nav-adapter.js'
+  import { SvelteURLSearchParams } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
   import Card from '../../compounds/Card.svelte'
   import DataTable from '../../compounds/DataTable.svelte'
@@ -177,7 +178,7 @@
   // ─── 导航 ───
 
   function navigateWithParams(overrides: Record<string, string | number>) {
-    const params = new URLSearchParams()
+    const params = new SvelteURLSearchParams()
     const merged: Record<string, string | number> = {
       search: searchValue,
       page: data.page,

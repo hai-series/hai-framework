@@ -3,6 +3,7 @@
 -->
 <script lang='ts'>
   import type { PageData } from './$types'
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime'
   import { Badge } from '@h-ai/ui'
@@ -12,6 +13,11 @@
   }
 
   const { data }: Props = $props()
+  const emptyRouteParams = {}
+
+  type QuickLinkHref = '/admin/iam/users' | '/admin/iam/roles' | '/admin/iam/permissions' | '/admin/logs' | '/admin/ui-gallery' | '/admin/settings'
+
+  const logsPath = resolve('/admin/logs', emptyRouteParams)
 
   function formatTime(isoString: string | Date): string {
     const date = new Date(isoString)
@@ -121,7 +127,7 @@
 
   <!-- 统计卡片 -->
   <div class='grid gap-3 grid-cols-2 lg:grid-cols-4'>
-    {#each statCards as card}
+    {#each statCards as card (card.icon)}
       <div class='relative bg-base-100 rounded-xl border border-base-content/6 p-4 overflow-hidden group hover:-translate-y-0.5 hover:shadow-(--shadow-soft) transition-all duration-200'>
         <!-- 左侧色条 -->
         <div class='absolute left-0 top-3 bottom-3 w-0.75 rounded-full {card.bar} opacity-60'></div>
@@ -148,8 +154,8 @@
         <h2 class='text-sm font-semibold text-base-content'>{m.dashboard_quick_actions()}</h2>
       </div>
       <div class='grid grid-cols-2 gap-1'>
-        {#each quickLinks as link}
-          <a href={link.href} class='flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-base-content/4 transition-colors duration-150 group'>
+        {#each quickLinks as link (link.href)}
+          <a href={resolve(link.href as QuickLinkHref, emptyRouteParams)} class='flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-base-content/4 transition-colors duration-150 group'>
             <span class='{link.icon} size-4 {link.color} opacity-70 group-hover:opacity-100 transition-opacity'></span>
             <span class='text-[13px] text-base-content/70 group-hover:text-base-content/90 transition-colors'>{link.label}</span>
           </a>
@@ -165,14 +171,14 @@
             <span class='icon-[tabler--activity] size-4 text-base-content/40'></span>
             <h2 class='text-sm font-semibold text-base-content'>{m.dashboard_recent_activity()}</h2>
           </div>
-          <a href='/admin/logs' class='text-xs text-primary/70 hover:text-primary font-medium flex items-center gap-0.5 transition-colors'>
+          <a href={logsPath} class='text-xs text-primary/70 hover:text-primary font-medium flex items-center gap-0.5 transition-colors'>
             {m.action_view_all()}
             <span class='icon-[tabler--arrow-right] size-3.5'></span>
           </a>
         </div>
 
         <div class='divide-y divide-base-content/5'>
-          {#each data.recentActivity as activity}
+          {#each data.recentActivity as activity (`${activity.createdAt}:${activity.action}:${activity.username ?? ''}`)}
             <div class='flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0'>
               <div class='shrink-0 w-7 h-7 rounded-full bg-base-content/5 flex items-center justify-center mt-0.5'>
                 <span class='icon-[tabler--user] size-3.5 text-base-content/40'></span>
@@ -211,7 +217,7 @@
         <h2 class='text-sm font-semibold text-base-content'>{m.dashboard_activity_stats()}</h2>
       </div>
       <div class='flex flex-wrap gap-2'>
-        {#each data.auditStats as stat}
+        {#each data.auditStats as stat (stat.action)}
           <div class='flex items-center gap-2 px-3 py-1.5 bg-base-content/3 rounded-lg border border-base-content/6'>
             <Badge variant={getActivityBadgeVariant(stat.action)} size='sm'>
               {translateAction(stat.action)}

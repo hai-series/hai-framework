@@ -57,7 +57,7 @@
 </script>
 
 <div role='tablist' class={tabsClass}>
-  {#each items as item}
+  {#each items as item (item.key)}
     <BareButton
       role='tab'
       class={cn('tab', active === item.key && 'tab-active')}

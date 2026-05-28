@@ -121,7 +121,7 @@
   <PageHeader title={m.modules_title()} description={m.modules_desc()} />
 
   <div role='tablist' class='tabs tabs-box'>
-    {#each tabs as tab}
+    {#each tabs as tab (tab.key)}
       <button
         type='button'
         role='tab'
@@ -146,7 +146,7 @@
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_core_features_title()}</h3>
         <div class='grid grid-cols-1 md:grid-cols-2 gap-4'>
-          {#each coreFeatures as feature}
+          {#each coreFeatures as feature (feature.api)}
             <div class='p-4 rounded-lg bg-base-200'>
               <div class='flex items-center gap-2 mb-2'>
                 <Badge variant='primary'>{feature.name}</Badge>
@@ -199,7 +199,7 @@ await core.close()`}</code></pre>
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_db_sql_title()}</h3>
         <div class='space-y-4'>
-          {#each dbExamples as example}
+          {#each dbExamples as example (example.op)}
             <div class='bg-base-200/50 rounded-lg overflow-hidden'>
               <div class='flex items-center gap-2 px-4 py-2 bg-base-200'>
                 <Badge size='sm'>{example.op}</Badge>
@@ -259,7 +259,7 @@ const page = await reldb.sql.queryPage({
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_cache_ops_title()}</h3>
         <div class='space-y-3'>
-          {#each cacheOps as op}
+          {#each cacheOps as op (op.op)}
             <div class='flex items-start gap-4 p-4 bg-base-200 rounded-lg'>
               <Badge variant='primary' size='sm' class='shrink-0 mt-0.5'>{op.op}</Badge>
               <div class='flex-1 min-w-0'>
@@ -320,7 +320,7 @@ await cache.close()`}</code></pre>
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_storage_ops_title()}</h3>
         <div class='space-y-3'>
-          {#each storageOps as op}
+          {#each storageOps as op (op.op)}
             <div class='flex items-start gap-4 p-4 bg-base-200 rounded-lg'>
               <Badge variant='secondary' size='sm' class='shrink-0 mt-0.5'>{op.op}</Badge>
               <div class='flex-1 min-w-0'>
@@ -376,7 +376,7 @@ if (meta.success) {
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_ai_capabilities_title()}</h3>
         <div class='grid grid-cols-1 md:grid-cols-2 gap-4'>
-          {#each aiFeatures as feature}
+          {#each aiFeatures as feature (feature.api)}
             <div class='p-4 rounded-lg bg-base-200/50'>
               <h4 class='font-medium text-base-content mb-1'>{feature.name}</h4>
               <p class='text-sm text-base-content/60 mb-2'>{feature.desc}</p>
@@ -437,7 +437,7 @@ const embedding = await ai.embedding.embedText('搜索查询文本')`}</code></p
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_vecdb_capabilities_title()}</h3>
         <div class='grid grid-cols-1 md:grid-cols-2 gap-4'>
-          {#each vecdbFeatures as feature}
+          {#each vecdbFeatures as feature (feature.api)}
             <div class='p-4 rounded-lg bg-base-200/50'>
               <h4 class='font-medium text-base-content mb-1'>{feature.name}</h4>
               <p class='text-sm text-base-content/60 mb-2'>{feature.desc}</p>
@@ -449,7 +449,7 @@ const embedding = await ai.embedding.embedText('搜索查询文本')`}</code></p
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_vecdb_ops_title()}</h3>
         <div class='space-y-3'>
-          {#each vecdbOps as op}
+          {#each vecdbOps as op (op.op)}
             <div class='flex items-start gap-4 p-4 bg-base-200 rounded-lg'>
               <Badge variant='primary' size='sm' class='shrink-0 mt-0.5'>{op.op}</Badge>
               <div class='flex-1 min-w-0'>
@@ -519,7 +519,7 @@ await vecdb.close()`}</code></pre>
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_datapipe_capabilities_title()}</h3>
         <div class='grid grid-cols-1 md:grid-cols-2 gap-4'>
-          {#each datapipeFeatures as feature}
+          {#each datapipeFeatures as feature (feature.api)}
             <div class='p-4 rounded-lg bg-base-200/50'>
               <h4 class='font-medium text-base-content mb-1'>{feature.name}</h4>
               <p class='text-sm text-base-content/60 mb-2'>{feature.desc}</p>
@@ -531,7 +531,7 @@ await vecdb.close()`}</code></pre>
       <Card>
         <h3 class='text-lg font-semibold mb-4'>{m.modules_datapipe_ops_title()}</h3>
         <div class='space-y-3'>
-          {#each datapipeOps as op}
+          {#each datapipeOps as op (op.op)}
             <div class='flex items-start gap-4 p-4 bg-base-200 rounded-lg'>
               <Badge variant='secondary' size='sm' class='shrink-0 mt-0.5'>{op.op}</Badge>
               <div class='flex-1 min-w-0'>

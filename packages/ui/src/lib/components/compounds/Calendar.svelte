@@ -84,11 +84,11 @@
         </BitsCalendar.NextButton>
       </BitsCalendar.Header>
 
-      {#each months as month}
+      {#each months as month (month.value.toString())}
         <BitsCalendar.Grid class='w-full border-collapse'>
           <BitsCalendar.GridHead>
             <BitsCalendar.GridRow class='flex w-full'>
-              {#each weekdays as day}
+              {#each weekdays as day (day)}
                 <BitsCalendar.HeadCell class='w-9 text-center text-xs font-medium text-base-content/50'>
                   {day}
                 </BitsCalendar.HeadCell>
@@ -97,9 +97,9 @@
           </BitsCalendar.GridHead>
 
           <BitsCalendar.GridBody>
-            {#each month.weeks as weekDates}
+            {#each month.weeks as weekDates, weekIndex (weekIndex)}
               <BitsCalendar.GridRow class='flex w-full'>
-                {#each weekDates as date}
+                {#each weekDates as date (date.toString())}
                   <BitsCalendar.Cell {date} month={month.value} class='p-0'>
                     <BitsCalendar.Day class='inline-flex size-9 items-center justify-center rounded-lg text-sm transition-colors hover:bg-base-200 data-[selected]:bg-primary data-[selected]:text-primary-content data-[disabled]:opacity-30 data-[unavailable]:line-through data-[unavailable]:opacity-30 data-[outside-month]:text-base-content/30'>
                       {date.day}

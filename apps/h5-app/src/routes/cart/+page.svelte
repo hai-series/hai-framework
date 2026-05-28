@@ -2,6 +2,7 @@
   /**
    * 购物车页 — 使用 SwipeCell 滑动删除
    */
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
   import { Button, Card, Empty, IconButton, SwipeCell } from '@h-ai/ui'
 
@@ -36,7 +37,7 @@
   {#if items.length === 0}
     <Empty title={m.cart_empty()} icon='inbox'>
       {#snippet action()}
-        <a href='/'>
+        <a href={resolve('/', {})}>
           <Button variant='primary' size='sm'>
             <span class='icon-[tabler--arrow-left] text-base'></span>
             {m.cart_go_shopping()}

@@ -3,9 +3,12 @@
 -->
 <script lang='ts'>
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import { onMount } from 'svelte'
 
+  const uiGalleryPrimitivesPath = resolve('/admin/ui-gallery/primitives', {})
+
   onMount(() => {
-    goto('/admin/ui-gallery/primitives', { replaceState: true })
+    void goto(uiGalleryPrimitivesPath, { replaceState: true })
   })
 </script>

@@ -4,6 +4,7 @@
    * 注册页 — 使用 @h-ai/ui RegisterForm + @h-ai/iam
    */
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
 
   let loading = $state(false)
@@ -26,7 +27,7 @@
       const result = await res.json()
 
       if (result.success) {
-        goto('/profile')
+        await goto(resolve('/profile', {}))
       }
       else {
         errors = { general: result.error?.message ?? m.auth_register_error_generic() }
@@ -52,7 +53,7 @@
       size='sm'
       variant='ghost'
       ariaLabel={m.auth_register_back()}
-      onclick={() => goto('/')}
+      onclick={() => goto(resolve('/', {}))}
     >
       <span class='icon-[tabler--arrow-left] text-lg'></span>
     </IconButton>
@@ -69,7 +70,7 @@
       requireConfirmPassword={false}
       minPasswordLength={6}
       showLoginLink={true}
-      loginUrl='/auth/login'
+      loginUrl={resolve('/auth/login', {})}
       {errors}
       onsubmit={handleRegister}
     />

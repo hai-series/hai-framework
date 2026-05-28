@@ -70,7 +70,7 @@
   >
     <BitsDatePicker.Input class="input flex items-center gap-0.5 pr-2 {error ? 'input-error' : ''}">
       {#snippet children({ segments })}
-        {#each segments as { part, value: segValue }}
+        {#each segments as { part, value: segValue }, index (`${part}-${index}`)}
           <BitsDatePicker.Segment
             {part}
             class='rounded px-0.5 py-0.5 text-sm tabular-nums focus:bg-primary focus:text-primary-content focus:outline-none data-[type=literal]:px-0 data-[type=literal]:text-base-content/50'
@@ -97,11 +97,11 @@
             </BitsDatePicker.NextButton>
           </BitsDatePicker.Header>
 
-          {#each months as month}
+          {#each months as month (month.value.toString())}
             <BitsDatePicker.Grid class='w-full border-collapse'>
               <BitsDatePicker.GridHead>
                 <BitsDatePicker.GridRow class='flex w-full'>
-                  {#each weekdays as day}
+                  {#each weekdays as day (day)}
                     <BitsDatePicker.HeadCell class='w-9 text-center text-xs font-medium text-base-content/50'>
                       {day}
                     </BitsDatePicker.HeadCell>
@@ -110,9 +110,9 @@
               </BitsDatePicker.GridHead>
 
               <BitsDatePicker.GridBody>
-                {#each month.weeks as weekDates}
+                {#each month.weeks as weekDates, weekIndex (weekIndex)}
                   <BitsDatePicker.GridRow class='flex w-full'>
-                    {#each weekDates as date}
+                    {#each weekDates as date (date.toString())}
                       <BitsDatePicker.Cell {date} month={month.value} class='p-0'>
                         <BitsDatePicker.Day class='inline-flex size-9 items-center justify-center rounded-lg text-sm transition-colors hover:bg-base-200 data-[selected]:bg-primary data-[selected]:text-primary-content data-[disabled]:opacity-30 data-[unavailable]:line-through data-[unavailable]:opacity-30 data-[outside-month]:text-base-content/30'>
                           {date.day}

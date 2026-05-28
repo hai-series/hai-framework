@@ -2,6 +2,7 @@
   /**
    * 个人中心页 — 集成 @h-ai/iam 用户认证、@h-ai/storage 头像上传、ActionSheet 操作菜单
    */
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
   import { ActionSheet, Avatar, Badge, Button, Card, Skeleton, Spinner } from '@h-ai/ui'
 
@@ -11,12 +12,12 @@
   let showActions = $state(false)
 
   const menuItems = [
-    { icon: 'icon-[tabler--package]', label: m.profile_menu_orders, badge: '3' },
-    { icon: 'icon-[tabler--wallet]', label: m.profile_menu_wallet, badge: '' },
-    { icon: 'icon-[tabler--map-pin]', label: m.profile_menu_address, badge: '' },
-    { icon: 'icon-[tabler--star]', label: m.profile_menu_favorites, badge: '12' },
-    { icon: 'icon-[tabler--ticket]', label: m.profile_menu_coupon, badge: '5' },
-    { icon: 'icon-[tabler--settings]', label: m.profile_menu_settings, badge: '' },
+    { id: 'orders', icon: 'icon-[tabler--package]', label: m.profile_menu_orders, badge: '3' },
+    { id: 'wallet', icon: 'icon-[tabler--wallet]', label: m.profile_menu_wallet, badge: '' },
+    { id: 'address', icon: 'icon-[tabler--map-pin]', label: m.profile_menu_address, badge: '' },
+    { id: 'favorites', icon: 'icon-[tabler--star]', label: m.profile_menu_favorites, badge: '12' },
+    { id: 'coupon', icon: 'icon-[tabler--ticket]', label: m.profile_menu_coupon, badge: '5' },
+    { id: 'settings', icon: 'icon-[tabler--settings]', label: m.profile_menu_settings, badge: '' },
   ]
 
   $effect(() => {
@@ -125,7 +126,7 @@
         <Avatar name='?' size='xl' class='opacity-60' />
         <div>
           <h2 class='text-lg font-bold'>{m.profile_guest_title()}</h2>
-          <a href='/auth/login' class='text-sm opacity-80 underline'>{m.profile_guest_login_hint()}</a>
+          <a href={resolve('/auth/login', {})} class='text-sm opacity-80 underline'>{m.profile_guest_login_hint()}</a>
         </div>
       </div>
     {/if}
@@ -157,7 +158,7 @@
     <!-- 菜单列表 -->
     <div class='mt-4'>
       <Card padding='none' shadow='sm'>
-        {#each menuItems as item, i}
+        {#each menuItems as item, i (item.id)}
           <button class='flex items-center w-full px-4 py-3 active:bg-base-200/60 transition-colors'>
             <span class='{item.icon} text-xl text-primary/70 mr-3'></span>
             <span class='flex-1 text-left text-sm'>{item.label()}</span>
