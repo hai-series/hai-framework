@@ -33,7 +33,7 @@ import { HaiReldbError } from './reldb-types.js'
 const logger = core.logger.child({ module: 'reldb', scope: 'main' })
 
 function sanitizeReldbConfig(config: ReldbConfig): ReldbConfig {
-  return core.object.sanitizeSensitiveFields(config)
+  return core.sanitize.sanitizeSensitiveFields(config)
 }
 
 // ─── 内部状态 ───

@@ -228,7 +228,7 @@ const SEND_LOG_FIELDS: ReldbCrudFieldDefinition[] = [
 
 /** 发送日志存储单例缓存 */
 let sendLogRepoInstance: SendLogRepository | null = null
-let sendLogRepoDbConfig: unknown = null
+let sendLogRepoSqlOps: unknown = null
 
 /**
  * 重置发送日志存储单例
@@ -237,7 +237,7 @@ let sendLogRepoDbConfig: unknown = null
  */
 export function resetSendLogRepoSingleton(): void {
   sendLogRepoInstance = null
-  sendLogRepoDbConfig = null
+  sendLogRepoSqlOps = null
 }
 
 /**
@@ -250,7 +250,7 @@ export function resetSendLogRepoSingleton(): void {
  * @returns 成功返回发送日志存储接口实现；失败返回含错误信息的 HaiResult
  */
 export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiResult<SendLogRepository>> {
-  if (sendLogRepoInstance && sendLogRepoDbConfig === db.config)
+  if (sendLogRepoInstance && sendLogRepoSqlOps === db.sql)
     return ok(sendLogRepoInstance)
 
   const repo = new DbSendLogRepository(db)
@@ -264,7 +264,7 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
     )
   }
   sendLogRepoInstance = repo
-  sendLogRepoDbConfig = db.config
+  sendLogRepoSqlOps = db.sql
   return ok(repo)
 }
 

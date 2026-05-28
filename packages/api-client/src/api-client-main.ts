@@ -67,7 +67,7 @@ const DEFAULT_REFRESH_PATH = IAM_AUTH_ROUTES.refresh
 const TRAILING_SLASHES_REGEX = /\/+$/
 
 function sanitizeApiClientConfig(config: ApiClientConfig): ApiClientConfig {
-  return core.object.sanitizeSensitiveFields(config)
+  return core.sanitize.sanitizeSensitiveFields(config)
 }
 
 /** Token 存储方案集合：内存 / 浏览器 localStorage / httpOnly Cookie。 */

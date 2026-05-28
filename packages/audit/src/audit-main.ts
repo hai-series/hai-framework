@@ -66,8 +66,8 @@ function sanitizeAuditDetails(details?: Record<string, unknown> | null): Record<
     return details ?? null
   }
 
-  return core.object.sanitizeSensitiveFields(details, {
-    matcher: core.object.defaultSensitiveKeyRegex,
+  return core.sanitize.sanitizeSensitiveFields(details, {
+    matcher: core.sanitize.defaultSensitiveKeyRegex,
     replacement: REDACTED_AUDIT_DETAIL_VALUE,
   }) as Record<string, unknown>
 }

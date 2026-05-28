@@ -24,7 +24,7 @@ import { createRedisProvider } from './providers/cache-provider-redis.js'
 const logger = core.logger.child({ module: 'cache', scope: 'main' })
 
 function sanitizeCacheConfig(config: CacheConfig): CacheConfig {
-  return core.object.sanitizeSensitiveFields(config)
+  return core.sanitize.sanitizeSensitiveFields(config)
 }
 
 // ─── 内部状态 ───

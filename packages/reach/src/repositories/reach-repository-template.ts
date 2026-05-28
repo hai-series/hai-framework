@@ -132,7 +132,7 @@ const TEMPLATE_FIELDS: ReldbCrudFieldDefinition[] = [
 
 /** 模板存储单例缓存 */
 let templateRepoInstance: TemplateRepository | null = null
-let templateRepoDbConfig: unknown = null
+let templateRepoSqlOps: unknown = null
 
 /**
  * 重置模板存储单例
@@ -141,7 +141,7 @@ let templateRepoDbConfig: unknown = null
  */
 export function resetTemplateRepoSingleton(): void {
   templateRepoInstance = null
-  templateRepoDbConfig = null
+  templateRepoSqlOps = null
 }
 
 /**
@@ -154,7 +154,7 @@ export function resetTemplateRepoSingleton(): void {
  * @returns 成功返回模板存储接口实现；失败返回含错误信息的 HaiResult
  */
 export async function createTemplateRepository(db: ReldbFunctions): Promise<HaiResult<TemplateRepository>> {
-  if (templateRepoInstance && templateRepoDbConfig === db.config)
+  if (templateRepoInstance && templateRepoSqlOps === db.sql)
     return ok(templateRepoInstance)
 
   const repo = new DbTemplateRepository(db)
@@ -168,7 +168,7 @@ export async function createTemplateRepository(db: ReldbFunctions): Promise<HaiR
     )
   }
   templateRepoInstance = repo
-  templateRepoDbConfig = db.config
+  templateRepoSqlOps = db.sql
   return ok(repo)
 }
 

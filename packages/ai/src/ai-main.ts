@@ -41,7 +41,7 @@ import { createDbStoreProviderFromModules, getUnavailableDbDeps, isDbStoreAvaila
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
 function sanitizeAiConfig(config: AIConfig): AIConfig {
-  return core.object.sanitizeSensitiveFields(config)
+  return core.sanitize.sanitizeSensitiveFields(config)
 }
 
 // ─── 内部状态 ───

@@ -108,5 +108,5 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
  * @returns 屏蔽后的副本
  */
 function redactObject(obj: unknown, fields: string[]): unknown {
-  return core.object.sanitizeSensitiveFields(obj, { matcher: fields })
+  return core.sanitize.sanitizeSensitiveFields(obj, { matcher: fields })
 }

@@ -32,7 +32,7 @@ import { createTemplateRepository, resetTemplateRepoSingleton } from './reposito
 const logger = core.logger.child({ module: 'reach', scope: 'main' })
 
 function sanitizeReachConfig(config: ReachConfig): ReachConfig {
-  return core.object.sanitizeSensitiveFields(config)
+  return core.sanitize.sanitizeSensitiveFields(config)
 }
 
 // ─── 内部状态 ───
