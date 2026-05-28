@@ -8,7 +8,7 @@
 import type { LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import log from 'loglevel'
-import { object as objectUtils } from '../utils/core-util-object.js'
+import { sanitize as sanitizeUtils } from '../utils/core-util-sanitize.js'
 
 // ─── 全局配置 ───
 
@@ -89,7 +89,7 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
     return ctx
   }
 
-  return objectUtils.sanitizeSensitiveFields(ctx) as LogContext
+  return sanitizeUtils.sanitizeSensitiveFields(ctx) as LogContext
 }
 
 // ─── Logger 实现 ───

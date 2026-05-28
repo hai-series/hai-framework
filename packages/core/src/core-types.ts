@@ -13,6 +13,7 @@ import type { ArrayFn } from './utils/core-util-array.js'
 import type { AsyncFn } from './utils/core-util-async.js'
 import type { ModuleFn } from './utils/core-util-module.js'
 import type { ObjectFn } from './utils/core-util-object.js'
+import type { SanitizeFn } from './utils/core-util-sanitize.js'
 import type { StringFn } from './utils/core-util-string.js'
 import type { TimeFn } from './utils/core-util-time.js'
 import type { TypeUtilFn } from './utils/core-util-type.js'
@@ -487,6 +488,8 @@ export interface CoreFunctions {
   readonly typeUtils: TypeUtilFn
   /** 对象操作工具 */
   readonly object: ObjectFn
+  /** 脱敏工具 */
+  readonly sanitize: SanitizeFn
   /** 字符串操作工具 */
   readonly string: StringFn
   /** 数组操作工具 */

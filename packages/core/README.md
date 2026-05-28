@@ -58,7 +58,7 @@ const prefixed = core.id.withPrefix('order_')
 
 // 工具函数
 core.object.deepMerge(objA, objB)
-core.object.sanitizeSensitiveFields({ password: 'secret', email: 'user@example.com' })
+core.sanitize.sanitizeSensitiveFields({ password: 'secret', email: 'user@example.com' })
 core.string.capitalize('hello')
 core.array.unique([1, 1, 2, 3])
 core.array.chunk([1, 2, 3, 4, 5], 2) // [[1,2], [3,4], [5]]
@@ -183,12 +183,12 @@ core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 
 core.i18n.DEFAULT_LOCALE // 'zh-CN'
 ```
 
-### 对象脱敏工具
+### 脱敏工具
 
-`core.object.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理密码、token、secret、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证。模块也可自定义 matcher。
+`core.sanitize.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理密码、token、secret、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证。模块也可自定义 matcher。
 
 ```typescript
-core.object.sanitizeSensitiveFields({
+core.sanitize.sanitizeSensitiveFields({
   email: 'user@example.com',
   password: 'secret',
   baseUrl: 'https://user:pass@example.com/api/v1',
@@ -196,7 +196,7 @@ core.object.sanitizeSensitiveFields({
 })
 // => { email: 'user@example.com', password: '[REDACTED]', baseUrl: 'https://[REDACTED]:[REDACTED]@example.com/api/v1', profile: { token: '[REDACTED]' } }
 
-core.object.sanitizeSensitiveFields({ email: 'user@example.com' }, {
+core.sanitize.sanitizeSensitiveFields({ email: 'user@example.com' }, {
   matcher: /email/i,
   replacement: '***',
 })

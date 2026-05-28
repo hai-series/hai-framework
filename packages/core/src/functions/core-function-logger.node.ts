@@ -11,7 +11,7 @@ import { execSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import process from 'node:process'
 import pino from 'pino'
-import { object as objectUtils } from '../utils/core-util-object.js'
+import { sanitize as sanitizeUtils } from '../utils/core-util-sanitize.js'
 
 // ESM 场景下通过 createRequire 复用 CommonJS 的 resolve 能力，用来探测可选依赖是否存在。
 const nodeRequire = createRequire(import.meta.url)
@@ -111,7 +111,7 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
     return ctx
   }
 
-  return objectUtils.sanitizeSensitiveFields(ctx) as LogContext
+  return sanitizeUtils.sanitizeSensitiveFields(ctx) as LogContext
 }
 
 // ─── Logger 实现 ───

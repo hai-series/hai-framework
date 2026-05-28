@@ -14,6 +14,7 @@ import { array as arrayUtils } from './utils/core-util-array.js'
 import { async as asyncUtils } from './utils/core-util-async.js'
 import { createNotInitializedKit } from './utils/core-util-module.js'
 import { object as objectUtils } from './utils/core-util-object.js'
+import { sanitize as sanitizeUtils } from './utils/core-util-sanitize.js'
 
 import { string as stringUtils } from './utils/core-util-string.js'
 import { time as timeUtils } from './utils/core-util-time.js'
@@ -155,6 +156,16 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
      * ```
      */
     object: objectUtils,
+
+    /**
+     * 脱敏工具。
+     *
+     * @example
+     * ```ts
+     * core.sanitize.sanitizeSensitiveFields({ password: 'secret' })
+     * ```
+     */
+    sanitize: sanitizeUtils,
 
     /**
      * 字符串操作工具。
