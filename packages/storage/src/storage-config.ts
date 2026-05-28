@@ -163,7 +163,6 @@ export type PresignOptions = z.infer<typeof PresignOptionsSchema>
  * ```ts
  * const url = await storage.presign.putUrl('uploads/avatar.png', {
  *   contentType: 'image/png',
- *   maxSize: 5 * 1024 * 1024,   // 5MB 限制
  *   expiresIn: 300,
  * })
  * ```
@@ -171,9 +170,6 @@ export type PresignOptions = z.infer<typeof PresignOptionsSchema>
 export const PresignUploadOptionsSchema = PresignOptionsSchema.extend({
   /** 上传内容类型（必须与实际上传匹配） */
   contentType: z.string().default('application/octet-stream'),
-
-  /** 最大文件大小限制（bytes） */
-  maxSize: z.number().optional(),
 })
 
 /** 上传签名 URL 配置类型（parse 后） */

@@ -34,7 +34,10 @@ const file = await storage.file.get('uploads/image.png')
 const url = await storage.presign.getUrl('uploads/image.png', { expiresIn: 3600 })
 
 // 关闭连接
-await storage.close()
+const closeResult = await storage.close()
+if (!closeResult.success) {
+  throw new Error(closeResult.error.message)
+}
 ```
 
 ### 浏览器客户端
@@ -72,6 +75,8 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 
 > 注意：`publicUrl` 仅在 S3 配置了 `publicUrl` 时返回字符串；否则返回 `null`。
 
+> 注意：`storage.config` 返回的是**脱敏配置快照**；S3 密钥类字段会被替换为 `[REDACTED]`，不能用于重新初始化。
+
 ## 客户端辅助函数
 
 `@h-ai/storage/client` 还提供以下浏览器侧工具：
@@ -87,6 +92,10 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 
 - **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `endpoint / forcePathStyle / prefix / publicUrl`
 - **Local**：`root` 必填，可选 `directoryMode / fileMode`
+
+`storage.presign.putUrl()` 当前仅支持 `contentType` 与 `expiresIn` 等签名参数，不提供 `maxSize` 约束。
+
+本地存储的 `storage.dir.list()` 会递归扫描匹配前缀下的文件，仅支持 `maxKeys` 截断，不支持 `continuationToken` 真分页；大目录场景建议优先使用更窄的 `prefix`，或改用 S3 Provider 获取原生分页能力。
 
 ## 错误处理
 

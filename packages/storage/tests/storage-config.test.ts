@@ -228,11 +228,6 @@ describe('presignUploadOptionsSchema', () => {
     expect(result.contentType).toBe('image/png')
   })
 
-  it('可选 maxSize 应正确传递', () => {
-    const result = PresignUploadOptionsSchema.parse({ maxSize: 10 * 1024 * 1024 })
-    expect(result.maxSize).toBe(10 * 1024 * 1024)
-  })
-
   it('继承 PresignOptions 的 expiresIn 默认值', () => {
     const result = PresignUploadOptionsSchema.parse({})
     expect(result.expiresIn).toBe(3600)

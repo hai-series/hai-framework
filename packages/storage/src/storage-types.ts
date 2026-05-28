@@ -342,7 +342,7 @@ export interface PresignOperations {
  * - `storage.file` — 文件操作（上传/下载/删除/复制等）
  * - `storage.dir` — 目录操作（列表/删除）
  * - `storage.presign` — 签名 URL 操作
- * - `storage.config` — 当前连接配置（未初始化时为 null）
+ * - `storage.config` — 当前脱敏配置快照（未初始化时为 null）
  * - `storage.isInitialized` — 初始化状态
  */
 export interface StorageFunctions {
@@ -361,9 +361,9 @@ export interface StorageFunctions {
    *
    * 重复调用不会报错。
    */
-  close: () => Promise<void>
+  close: () => Promise<HaiResult<void>>
 
-  /** 当前解析后的存储配置；未初始化或已关闭时为 null */
+  /** 当前脱敏后的存储配置快照；未初始化或已关闭时为 null */
   readonly config: StorageConfig | null
 
   /** 是否已完成初始化 */
@@ -385,7 +385,6 @@ export interface StorageFunctions {
  * 存储 Provider 接口
  *
  * 由各具体存储实现（S3、Local）实现此接口。
- * Provider 仅在 storage-main 内部使用，不直接对外暴露实例。
  */
 export interface StorageProvider {
   /** Provider 名称标识（如 's3'、'local'） */

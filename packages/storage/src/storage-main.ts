@@ -23,6 +23,15 @@ import {
 
 const logger = core.logger.child({ module: 'storage', scope: 'main' })
 
+/**
+ * 返回对外可见的脱敏配置快照
+ *
+ * @param config - 当前解析后的内部配置
+ */
+function sanitizeStorageConfig(config: StorageConfig): StorageConfig {
+  return core.sanitize.sanitizeSensitiveFields(config)
+}
+
 // ─── 内部状态 ───
 
 /** 当前使用的存储 Provider 实例（init 后非空，close 后置空） */
@@ -130,7 +139,10 @@ export const storage: StorageFunctions = {
     try {
       if (currentProvider) {
         logger.warn('Storage module is already initialized, reinitializing')
-        await storage.close()
+        const closeResult = await storage.close()
+        if (!closeResult.success) {
+          return closeResult
+        }
       }
 
       logger.info('Initializing storage module')
@@ -184,8 +196,10 @@ export const storage: StorageFunctions = {
   /** 签名 URL 操作接口。未初始化时 publicUrl 返回 null，其余返回错误 */
   get presign(): PresignOperations { return currentProvider?.presign ?? notInitializedPresign },
 
-  /** 当前解析后的存储配置；未初始化或已关闭时为 null */
-  get config() { return currentConfig },
+  /** 当前脱敏后的存储配置快照；未初始化或已关闭时为 null */
+  get config() {
+    return currentConfig ? sanitizeStorageConfig(currentConfig) : null
+  },
 
   /** 是否已完成初始化 */
   get isInitialized() { return currentProvider !== null },
@@ -196,11 +210,11 @@ export const storage: StorageFunctions = {
    * 关闭后 file/dir/presign 操作将返回 NOT_INITIALIZED 错误。
    * 重复调用不会报错。
    */
-  async close() {
+  async close(): Promise<HaiResult<void>> {
     if (!currentProvider) {
       currentConfig = null
       logger.info('Storage module already closed, skipping')
-      return
+      return ok(undefined)
     }
 
     logger.info('Closing storage module')
@@ -208,9 +222,17 @@ export const storage: StorageFunctions = {
     try {
       await currentProvider.close()
       logger.info('Storage module closed')
+      return ok(undefined)
     }
     catch (error) {
       logger.error('Storage module close failed', { error })
+      return err(
+        HaiStorageError.CONNECTION_FAILED,
+        storageM('storage_operationFailed', {
+          params: { error: error instanceof Error ? error.message : String(error) },
+        }),
+        error,
+      )
     }
     finally {
       currentProvider = null

@@ -27,13 +27,15 @@ describe('storage.init', () => {
     })
 
     it(`${label}: close 后应恢复未初始化状态`, async () => {
-      await storage.close()
+      const result = await storage.close()
+      expect(result.success).toBe(true)
       expect(storage.isInitialized).toBe(false)
       expect(storage.config).toBeNull()
     })
 
     it(`${label}: close 后文件操作应返回 NOT_INITIALIZED`, async () => {
-      await storage.close()
+      const closeResult = await storage.close()
+      expect(closeResult.success).toBe(true)
       const result = await storage.file.put('test.txt', 'hello')
       expect(result.success).toBe(false)
       if (!result.success) {
@@ -41,18 +43,23 @@ describe('storage.init', () => {
       }
     })
 
-    it(`${label}: 重复 init 应先关闭旧连接再初始化`, async () => {
-      expect(storage.isInitialized).toBe(true)
-      const oldConfig = storage.config
+    if (label === 'local') {
+      it('local: 重复 init 应先关闭旧连接再初始化', async () => {
+        expect(storage.isInitialized).toBe(true)
+        const oldConfig = storage.config
+        expect(oldConfig?.type).toBe('local')
 
-      const result = await storage.init(oldConfig!)
-      expect(result.success).toBe(true)
-      expect(storage.isInitialized).toBe(true)
-    })
+        const result = await storage.init(oldConfig!)
+        expect(result.success).toBe(true)
+        expect(storage.isInitialized).toBe(true)
+      })
+    }
 
     it(`${label}: 重复 close 不应报错`, async () => {
-      await storage.close()
-      await storage.close()
+      const result1 = await storage.close()
+      const result2 = await storage.close()
+      expect(result1.success).toBe(true)
+      expect(result2.success).toBe(true)
       expect(storage.isInitialized).toBe(false)
     })
   }
@@ -152,4 +159,26 @@ describe('storage.init 配置校验', () => {
       expect(storage.config.fileMode).toBe(0o644)
     }
   })
+
+  it('s3 config getter 应返回脱敏快照', async () => {
+    const env = await s3Env()
+
+    try {
+      await storage.close()
+      const result = await storage.init(env.config)
+      expect(result.success).toBe(true)
+      expect(storage.config?.type).toBe('s3')
+
+      if (storage.config?.type === 's3' && env.config.type === 's3') {
+        expect(storage.config.accessKeyId).toBe('[REDACTED]')
+        expect(storage.config.secretAccessKey).toBe('[REDACTED]')
+        expect(storage.config.accessKeyId).not.toBe(env.config.accessKeyId)
+        expect(storage.config.secretAccessKey).not.toBe(env.config.secretAccessKey)
+      }
+    }
+    finally {
+      await storage.close()
+      await env.cleanup?.()
+    }
+  }, 300000)
 })
