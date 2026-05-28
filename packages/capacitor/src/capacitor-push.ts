@@ -8,9 +8,11 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { PushNotificationCallbacks, PushRegistration } from './capacitor-types.js'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { capacitorM } from './capacitor-i18n.js'
 import { HaiCapacitorError } from './capacitor-types.js'
+
+const logger = core.logger.child({ module: 'capacitor', scope: 'push' })
 
 /**
  * 注册推送通知
@@ -44,31 +46,53 @@ export async function registerPush(): Promise<HaiResult<PushRegistration>> {
     // 注册并等待 Token（带超时防护）
     const REGISTER_TIMEOUT_MS = 30_000
     const token = await new Promise<string>((resolve, reject) => {
-      let regListener: { remove: () => Promise<void> } | undefined
-      let errListener: { remove: () => Promise<void> } | undefined
+      let settled = false
+      let listeners: Array<{ remove: () => Promise<void> }> = []
+      let timer: ReturnType<typeof setTimeout> | undefined
 
-      const timer = setTimeout(() => {
-        cleanup()
-        reject(new Error('Push registration timed out'))
-      }, REGISTER_TIMEOUT_MS)
-
-      function cleanup() {
-        clearTimeout(timer)
-        regListener?.remove()
-        errListener?.remove()
+      async function cleanup(): Promise<void> {
+        if (timer) {
+          clearTimeout(timer)
+        }
+        const removeResults = await Promise.allSettled(listeners.map(listener => listener.remove()))
+        const rejectedCount = removeResults.filter(result => result.status === 'rejected').length
+        if (rejectedCount > 0) {
+          logger.warn('Failed to remove push registration listeners', { rejectedCount })
+        }
       }
 
-      PushNotifications.addListener('registration', (t) => {
-        cleanup()
-        resolve(t.value)
-      }).then((l) => { regListener = l })
+      function settleWith(handler: (value: string | Error) => void, value: string | Error): void {
+        if (settled)
+          return
 
-      PushNotifications.addListener('registrationError', (error) => {
-        cleanup()
-        reject(error)
-      }).then((l) => { errListener = l })
+        settled = true
+        void cleanup().finally(() => {
+          handler(value)
+        })
+      }
 
-      PushNotifications.register()
+      timer = setTimeout(() => {
+        settleWith(reject as (value: string | Error) => void, new Error('Push registration timed out'))
+      }, REGISTER_TIMEOUT_MS)
+
+      void Promise.all([
+        PushNotifications.addListener('registration', (t) => {
+          settleWith(resolve as (value: string | Error) => void, t.value)
+        }),
+        PushNotifications.addListener('registrationError', (error) => {
+          settleWith(reject as (value: string | Error) => void, error instanceof Error ? error : new Error(String(error)))
+        }),
+      ])
+        .then(async (attachedListeners) => {
+          listeners = attachedListeners
+          if (settled)
+            return
+
+          await PushNotifications.register()
+        })
+        .catch((error) => {
+          settleWith(reject as (value: string | Error) => void, error instanceof Error ? error : new Error(String(error)))
+        })
     })
 
     return ok({ token })
@@ -136,7 +160,11 @@ export async function listenPush(callbacks: PushNotificationCallbacks): Promise<
     }
 
     const cleanup = async () => {
-      await Promise.all(listeners.map(l => l.remove()))
+      const removeResults = await Promise.allSettled(listeners.map(listener => listener.remove()))
+      const rejectedCount = removeResults.filter(result => result.status === 'rejected').length
+      if (rejectedCount > 0) {
+        logger.warn('Failed to remove push listeners', { rejectedCount })
+      }
     }
     return ok(cleanup)
   }

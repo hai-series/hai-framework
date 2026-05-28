@@ -1,17 +1,16 @@
 # @h-ai/capacitor
 
-Capacitor 原生桥接模块，为 hai Framework 移动应用提供安全 Token 存储、设备信息、推送通知、相机与状态栏等原生能力的统一封装。
+Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 Token 存储、设备信息、推送通知、相机与状态栏等能力的统一封装。
 
 ## 支持的能力
 
-| 能力       | 依赖插件                                | 说明                                                          |
-| ---------- | --------------------------------------- | ------------------------------------------------------------- |
-| Token 存储 | `@capacitor/preferences`（必需）        | 基于 SharedPreferences / UserDefaults，比 localStorage 更安全 |
-| 设备信息   | `@capacitor/device`（可选）             | 平台、版本、型号检测                                          |
-| 应用版本   | `@capacitor/app`（可选）                | 读取 appVersion / appBuild                                    |
-| 推送通知   | `@capacitor/push-notifications`（可选） | 注册 FCM/APNs Token、监听推送事件                             |
-| 相机/相册  | `@capacitor/camera`（可选）             | 拍照、选取相册图片                                            |
-| 状态栏     | `@capacitor/status-bar`（可选）         | 沉浸式、背景色、样式配置                                      |
+- **Token 存储**：`@aparajita/capacitor-secure-storage`（原生必需）。Android 使用 KeyStore + 加密 SharedPreferences，iOS 使用 Keychain；Web 不回退。
+- **Preferences**：`@capacitor/preferences`（必需）。通用偏好数据存储，适合非敏感配置，不用于认证 Token。
+- **设备信息**：`@capacitor/device`（可选）。平台、版本、型号检测。
+- **应用版本**：`@capacitor/app`（可选）。读取 appVersion / appBuild。
+- **推送通知**：`@capacitor/push-notifications`（可选）。注册 FCM/APNs Token、监听推送事件。
+- **相机/相册**：`@capacitor/camera`（可选）。拍照、选取相册图片。
+- **状态栏**：`@capacitor/status-bar`（可选）。沉浸式、背景色、样式配置。
 
 ## 快速开始
 
@@ -39,6 +38,8 @@ await apiClient.init({
   },
 })
 ```
+
+`createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。纯 Web 环境下不会退化到 `localStorage`；`get*()` 返回 `null`，`set*()` / `clear()` 为 no-op。
 
 ### 设备信息与推送
 
@@ -86,6 +87,8 @@ const result = await capacitor.preferences.get('my_key')
 await capacitor.preferences.remove('my_key')
 ```
 
+`capacitor.preferences` 适合保存语言、主题、草稿等普通偏好数据；认证 Token 请使用 `createCapacitorTokenStorage()`。
+
 ## 配置
 
 本模块无配置文件。`capacitor.init()` 仅检测 Capacitor 运行环境是否可用。
@@ -125,6 +128,7 @@ if (!result.success) {
 | `HaiCapacitorError.PREFERENCES_SET_FAILED`    | `hai:capacitor:012` | Preferences 写入失败 |
 | `HaiCapacitorError.PREFERENCES_REMOVE_FAILED` | `hai:capacitor:013` | Preferences 删除失败 |
 | `HaiCapacitorError.DEVICE_INFO_FAILED`        | `hai:capacitor:020` | 设备信息获取失败     |
+| `HaiCapacitorError.APP_VERSION_FAILED`        | `hai:capacitor:021` | 应用版本获取失败     |
 | `HaiCapacitorError.PUSH_REGISTER_FAILED`      | `hai:capacitor:030` | 推送注册失败         |
 | `HaiCapacitorError.PUSH_LISTEN_FAILED`        | `hai:capacitor:031` | 推送监听失败         |
 | `HaiCapacitorError.CAMERA_FAILED`             | `hai:capacitor:040` | 相机操作失败         |

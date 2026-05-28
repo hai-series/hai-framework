@@ -11,16 +11,39 @@ import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotify
 import type { AlipayNotifyParams } from './alipay-types.js'
 import { err, ok } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
-import {
-
-  HaiPaymentError,
-
-} from '../../payment-types.js'
+import { HaiPaymentError } from '../../payment-types.js'
+import { fetchWithTimeout } from '../payment-provider-http.js'
 import { signAlipayParams, verifyAlipayNotify } from './alipay-sign.js'
+import { AlipayNotifyParamsSchema } from './alipay-types.js'
 
 /** 支付宝网关地址 */
 const ALIPAY_GATEWAY = 'https://openapi.alipay.com/gateway.do'
 const ALIPAY_SANDBOX_GATEWAY = 'https://openapi-sandbox.dl.alipaydev.com/gateway.do'
+
+function formatFenAmount(amount: number): string {
+  const yuan = Math.floor(amount / 100)
+  const cents = String(amount % 100).padStart(2, '0')
+  return `${yuan}.${cents}`
+}
+
+function parseAlipayAmount(value: string): number {
+  const trimmedValue = value.trim()
+  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmedValue)) {
+    throw new Error(`Invalid Alipay amount: ${value}`)
+  }
+
+  const [yuanPart, centsPart = ''] = trimmedValue.split('.')
+  return Number.parseInt(yuanPart, 10) * 100 + Number.parseInt(centsPart.padEnd(2, '0'), 10)
+}
+
+function parseAlipayNotifyParams(body: string): AlipayNotifyParams {
+  const parseResult = AlipayNotifyParamsSchema.safeParse(Object.fromEntries(new URLSearchParams(body).entries()))
+  if (!parseResult.success) {
+    throw parseResult.error
+  }
+
+  return parseResult.data
+}
 
 /**
  * 创建支付宝 Provider
@@ -65,16 +88,16 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&')
 
-    const response = await fetch(`${gateway}?${queryString}`, {
+    const timedResponse = await fetchWithTimeout(`${gateway}?${queryString}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
 
-    if (!response.ok) {
-      throw new Error(`Alipay API failed: ${response.status}`)
+    if (!timedResponse.ok) {
+      throw new Error(`Alipay API failed: ${timedResponse.status}`)
     }
 
-    return response.json() as T
+    return timedResponse.json() as T
   }
 
   return {
@@ -86,7 +109,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
 
         const bizContent = JSON.stringify({
           out_trade_no: input.orderNo,
-          total_amount: (input.amount / 100).toFixed(2), // 分 → 元
+          total_amount: formatFenAmount(input.amount),
           subject: input.description,
           product_code: productCode,
           passback_params: input.metadata ? JSON.stringify(input.metadata) : undefined,
@@ -119,13 +142,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
 
     async handleNotify(request: PaymentNotifyRequest): Promise<HaiResult<PaymentNotifyResult>> {
       try {
-        // 解析 form-urlencoded body
-        const params: AlipayNotifyParams = {} as AlipayNotifyParams
-        const pairs = request.body.split('&')
-        for (const pair of pairs) {
-          const [key, ...rest] = pair.split('=')
-          params[decodeURIComponent(key)] = decodeURIComponent(rest.join('='))
-        }
+        const params = parseAlipayNotifyParams(request.body)
 
         // 验签
         const valid = verifyAlipayNotify(params as Record<string, string>, config.alipayPublicKey)
@@ -146,7 +163,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         return ok({
           orderNo: params.out_trade_no,
           transactionId: params.trade_no,
-          amount: Math.round(Number.parseFloat(params.total_amount) * 100), // 元 → 分
+          amount: parseAlipayAmount(params.total_amount),
           status: statusMap[params.trade_status] ?? 'pending',
           paidAt: params.gmt_payment ? new Date(params.gmt_payment) : undefined,
           // 支付宝回调原始 params 的强类型为 AlipayNotifyParams，此处统一以 Record 暴露给上层做调试/审计
@@ -184,7 +201,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           orderNo,
           transactionId: data?.trade_no as string | undefined,
           status: statusMap[data?.trade_status as string] ?? 'pending',
-          amount: Math.round(Number.parseFloat(data?.total_amount as string ?? '0') * 100),
+          amount: parseAlipayAmount(data?.total_amount as string ?? '0'),
           paidAt: data?.send_pay_date ? new Date(data.send_pay_date as string) : undefined,
         })
       }
@@ -205,7 +222,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           biz_content: JSON.stringify({
             out_trade_no: input.orderNo,
             out_request_no: input.refundNo,
-            refund_amount: (input.amount / 100).toFixed(2),
+            refund_amount: formatFenAmount(input.amount),
             refund_reason: input.reason,
           }),
         }

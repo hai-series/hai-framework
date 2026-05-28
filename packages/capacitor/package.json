@@ -29,10 +29,14 @@
     "clean": "rimraf dist .turbo"
   },
   "peerDependencies": {
+    "@aparajita/capacitor-secure-storage": "catalog:",
     "@capacitor/core": "catalog:",
     "@capacitor/preferences": "catalog:"
   },
   "peerDependenciesMeta": {
+    "@aparajita/capacitor-secure-storage": {
+      "optional": true
+    },
     "@capacitor/app": {
       "optional": true
     },
@@ -54,6 +58,7 @@
     "@h-ai/core": "workspace:*"
   },
   "devDependencies": {
+    "@aparajita/capacitor-secure-storage": "catalog:",
     "@capacitor/app": "catalog:",
     "@capacitor/camera": "catalog:",
     "@capacitor/device": "catalog:",

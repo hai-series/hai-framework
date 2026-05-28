@@ -55,8 +55,13 @@ import { vecdb } from '@h-ai/vecdb'
 
 await vecdb.init(core.config.get('vecdb'))
 // ... 使用向量数据库
-await vecdb.close()
+const closeResult = await vecdb.close()
+if (!closeResult.success) {
+  throw new Error(closeResult.error.message)
+}
 ```
+
+> `vecdb.config` 返回的是**脱敏配置快照**；连接字符串中的用户名/密码、独立 `password` 字段和 `apiKey` 会被替换为 `[REDACTED]`。
 
 ### 3. 选择操作接口
 
@@ -143,6 +148,8 @@ await vecdb.vector.upsert('docs', [
 // 删除
 await vecdb.vector.delete('docs', ['doc-1', 'doc-2'])
 ```
+
+> 空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`。Qdrant `collection.exists()` 仅在 404 时返回 `false`，网络异常会返回查询错误而不是误判不存在。
 
 **VectorDocument**：
 

@@ -69,6 +69,7 @@ describe('stripe-provider', () => {
       expect(options.headers.Authorization).toBe(`Bearer ${testConfig.secretKey}`)
       expect(options.body).toContain('mode=payment')
       expect(options.body).toContain('metadata%5BorderNo%5D=ORD001')
+      expect(options.signal).toBeDefined()
     })
 
     it('默认币种为 USD', async () => {
@@ -324,6 +325,36 @@ describe('stripe-provider', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(HaiPaymentError.NOTIFY_PARSE_FAILED.code)
+      }
+    })
+
+    it('可通过 webhookToleranceSeconds 放宽验签时间窗口', async () => {
+      const event = {
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            id: 'cs_old_sig',
+            metadata: { orderNo: 'ORD-TOLERANCE' },
+            amount_total: 500,
+          },
+        },
+      }
+      const payload = JSON.stringify(event)
+      const oldTimestamp = (Math.floor(Date.now() / 1000) - 500).toString()
+      const signature = generateStripeSignature(payload, testConfig.webhookSecret, oldTimestamp)
+
+      const provider = createStripeProvider({
+        ...testConfig,
+        webhookToleranceSeconds: 600,
+      })
+      const result = await provider.handleNotify({
+        body: payload,
+        headers: { 'stripe-signature': signature },
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.orderNo).toBe('ORD-TOLERANCE')
       }
     })
   })

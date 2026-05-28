@@ -75,8 +75,8 @@ export async function getAppVersion(): Promise<HaiResult<{ version: string, buil
   }
   catch (cause) {
     return err(
-      HaiCapacitorError.DEVICE_INFO_FAILED,
-      capacitorM('capacitor_deviceInfoFailed'),
+      HaiCapacitorError.APP_VERSION_FAILED,
+      capacitorM('capacitor_appVersionFailed'),
       cause,
     )
   }

@@ -170,6 +170,21 @@ describe('stripeConfigSchema', () => {
       webhookSecret: 'whsec_abc123',
     })
     expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.webhookToleranceSeconds).toBe(300)
+    }
+  })
+
+  it('可自定义 webhookToleranceSeconds', () => {
+    const result = StripeConfigSchema.safeParse({
+      secretKey: 'sk_test_abc123',
+      webhookSecret: 'whsec_abc123',
+      webhookToleranceSeconds: 600,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.webhookToleranceSeconds).toBe(600)
+    }
   })
 
   it('缺少 secretKey 校验失败', () => {
@@ -190,6 +205,15 @@ describe('stripeConfigSchema', () => {
     const result = StripeConfigSchema.safeParse({
       secretKey: '',
       webhookSecret: 'whsec',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('webhookToleranceSeconds 非正整数时校验失败', () => {
+    const result = StripeConfigSchema.safeParse({
+      secretKey: 'sk_test',
+      webhookSecret: 'whsec',
+      webhookToleranceSeconds: 0,
     })
     expect(result.success).toBe(false)
   })

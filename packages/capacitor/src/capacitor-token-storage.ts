@@ -1,8 +1,8 @@
 /**
  * @h-ai/capacitor — Token 存储
  *
- * 基于 Capacitor Preferences 的 TokenStorage 实现，
- * 比浏览器 localStorage 更安全，适用于原生 App 场景。
+ * 基于原生安全存储插件的 TokenStorage 实现。
+ * 仅在 Capacitor 原生环境启用，拒绝回退到不安全的 Web 存储。
  *
  * @module capacitor-token-storage
  */
@@ -16,16 +16,58 @@ import { HaiCapacitorError } from './capacitor-types.js'
 
 const logger = core.logger.child({ module: 'capacitor', scope: 'token-storage' })
 
+interface SecureStoragePluginLike {
+  getItem: (key: string) => Promise<string | null>
+  setItem: (key: string, value: string) => Promise<void>
+  removeItem: (key: string) => Promise<void>
+}
+
 /** Preferences 存储 Key */
 const PREF_ACCESS_TOKEN = 'hai_access_token'
 const PREF_REFRESH_TOKEN = 'hai_refresh_token'
 
+let secureStoragePromise: Promise<SecureStoragePluginLike | null> | null = null
+let secureStorageWarningLogged = false
+
+function logSecureStorageUnavailable(reason: string, error?: unknown): void {
+  if (secureStorageWarningLogged)
+    return
+
+  secureStorageWarningLogged = true
+  logger.warn('Capacitor secure token storage unavailable; token persistence is disabled', {
+    reason,
+    error,
+  })
+}
+
+async function loadSecureStoragePlugin(): Promise<SecureStoragePluginLike | null> {
+  if (!secureStoragePromise) {
+    secureStoragePromise = (async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core')
+        if (!Capacitor.isNativePlatform()) {
+          logSecureStorageUnavailable('non-native-platform')
+          return null
+        }
+
+        const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
+        return SecureStorage
+      }
+      catch (error) {
+        logSecureStorageUnavailable('plugin-load-failed', error)
+        return null
+      }
+    })()
+  }
+
+  return secureStoragePromise
+}
+
 /**
- * 创建基于 Capacitor Preferences 的 TokenStorage
+ * 创建基于原生安全存储的 TokenStorage
  *
- * 使用 `@capacitor/preferences` 插件进行持久化存储，
- * 在 Android 使用 SharedPreferences，iOS 使用 UserDefaults，
- * 比 localStorage 有更好的安全性。
+ * 在原生 Android/iOS 环境下使用 `@aparajita/capacitor-secure-storage`
+ * 保存 access token / refresh token；Web 环境不做不安全回退。
  *
  * @returns TokenStorage 实例
  *
@@ -47,53 +89,71 @@ export function createCapacitorTokenStorage(): TokenStorage {
   return {
     async getAccessToken(): Promise<string | null> {
       try {
-        const { value } = await Preferences.get({ key: PREF_ACCESS_TOKEN })
-        return value
+        const storage = await loadSecureStoragePlugin()
+        if (!storage)
+          return null
+
+        return await storage.getItem(PREF_ACCESS_TOKEN)
       }
       catch (error) {
-        logger.error('Failed to get access token from Preferences', { error })
+        logger.error('Failed to get access token from secure storage', { error })
         return null
       }
     },
 
     async getRefreshToken(): Promise<string | null> {
       try {
-        const { value } = await Preferences.get({ key: PREF_REFRESH_TOKEN })
-        return value
+        const storage = await loadSecureStoragePlugin()
+        if (!storage)
+          return null
+
+        return await storage.getItem(PREF_REFRESH_TOKEN)
       }
       catch (error) {
-        logger.error('Failed to get refresh token from Preferences', { error })
+        logger.error('Failed to get refresh token from secure storage', { error })
         return null
       }
     },
 
     async setAccessToken(token: string): Promise<void> {
       try {
-        await Preferences.set({ key: PREF_ACCESS_TOKEN, value: token })
+        const storage = await loadSecureStoragePlugin()
+        if (!storage)
+          return
+
+        await storage.setItem(PREF_ACCESS_TOKEN, token)
       }
       catch (error) {
-        logger.error('Failed to set access token in Preferences', { error })
+        logger.error('Failed to set access token in secure storage', { error })
       }
     },
 
     async setRefreshToken(token: string): Promise<void> {
       try {
-        await Preferences.set({ key: PREF_REFRESH_TOKEN, value: token })
+        const storage = await loadSecureStoragePlugin()
+        if (!storage)
+          return
+
+        await storage.setItem(PREF_REFRESH_TOKEN, token)
       }
       catch (error) {
-        logger.error('Failed to set refresh token in Preferences', { error })
+        logger.error('Failed to set refresh token in secure storage', { error })
       }
     },
 
     async clear(): Promise<void> {
       try {
+        const storage = await loadSecureStoragePlugin()
+        if (!storage)
+          return
+
         await Promise.all([
-          Preferences.remove({ key: PREF_ACCESS_TOKEN }),
-          Preferences.remove({ key: PREF_REFRESH_TOKEN }),
+          storage.removeItem(PREF_ACCESS_TOKEN),
+          storage.removeItem(PREF_REFRESH_TOKEN),
         ])
       }
       catch (error) {
-        logger.error('Failed to clear tokens from Preferences', { error })
+        logger.error('Failed to clear tokens from secure storage', { error })
       }
     },
   }

@@ -51,6 +51,8 @@ await cache.init(core.config.get('cache'))
 await cache.close()
 ```
 
+`cache.config` 返回的是脱敏后的配置快照；Redis `password` / `url` 等敏感值不会原样暴露给日志或调试输出。
+
 ---
 
 ## 核心 API

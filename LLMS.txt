@@ -784,6 +784,8 @@ await apiClient.init({
   auth: { storage: createCapacitorTokenStorage(), refreshPath: '/auth/refresh' },
 })
 
+// 仅原生 Android/iOS + secure-storage 插件会持久化 token；Web 不回退到 localStorage
+
 // 设备信息、推送通知、相机、状态栏等原生能力
 ```
 

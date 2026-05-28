@@ -93,6 +93,7 @@ describe('wechat-pay-provider', () => {
       expect(url).toContain('/v3/pay/transactions/jsapi')
       expect(options.method).toBe('POST')
       expect(options.headers.Authorization).toContain('WECHATPAY2-SHA256-RSA2048')
+      expect(options.signal).toBeDefined()
       const body = JSON.parse(options.body)
       expect(body.out_trade_no).toBe('ORD001')
       expect(body.amount.total).toBe(100)

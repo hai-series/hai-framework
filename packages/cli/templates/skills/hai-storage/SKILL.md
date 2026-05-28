@@ -52,8 +52,13 @@ import { storage } from '@h-ai/storage'
 
 await storage.init(core.config.get('storage'))
 // 使用后关闭
-await storage.close()
+const closeResult = await storage.close()
+if (!closeResult.success) {
+  throw new Error(closeResult.error.message)
+}
 ```
+
+> `storage.config` 返回的是**脱敏配置快照**；S3 的 `accessKeyId` / `secretAccessKey` 等敏感字段会被替换为 `[REDACTED]`。
 
 ---
 
@@ -105,6 +110,8 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
   expiresIn: 300, // 5 分钟有效
 })
 ```
+
+> `storage.presign.putUrl()` 当前不支持 `maxSize` 约束参数；如需大小限制，请在应用层上传前校验，或在服务端落库/回调处二次校验。
 
 ---
 
@@ -173,6 +180,8 @@ export const POST = kit.handler(async ({ request, locals }) => {
 ```
 
 > 说明：`@h-ai/storage` 只提供存储能力，不强制要求 `/api/storage` 路由命名。应用可按业务语义自定义 API 路径。
+
+> Local Provider 的 `storage.dir.list()` 会递归扫描匹配前缀下的文件，仅支持 `maxKeys` 截断，不支持 `continuationToken` 真分页；大目录建议缩小 `prefix` 或改用 S3 Provider。
 
 ### 头像上传
 

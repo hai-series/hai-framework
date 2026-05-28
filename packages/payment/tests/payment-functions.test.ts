@@ -307,6 +307,45 @@ describe('payment-functions — Provider 返回错误的透传', () => {
       expect(result.error.code).toBe(HaiPaymentError.INVALID_AMOUNT.code)
     }
   })
+
+  it('createOrder 在 provider 调用前校验正整数金额', async () => {
+    const provider = createMockProvider('validated')
+    const createSpy = vi.spyOn(provider, 'createOrder')
+    registerProvider(provider)
+
+    const result = await createOrder('validated', {
+      orderNo: 'ORD-FLOAT',
+      amount: 10.5,
+      description: '非法金额',
+      tradeType: 'jsapi',
+      notifyUrl: 'https://x.com/n',
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiPaymentError.INVALID_AMOUNT.code)
+    }
+    expect(createSpy).not.toHaveBeenCalled()
+  })
+
+  it('refund 在 provider 调用前校验退款金额和 totalAmount 关系', async () => {
+    const provider = createMockProvider('refund-validated')
+    const refundSpy = vi.spyOn(provider, 'refund')
+    registerProvider(provider)
+
+    const result = await refund('refund-validated', {
+      orderNo: 'ORD-REFUND',
+      refundNo: 'RF-REFUND',
+      amount: 200,
+      totalAmount: 100,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiPaymentError.INVALID_AMOUNT.code)
+    }
+    expect(refundSpy).not.toHaveBeenCalled()
+  })
 })
 
 // ─── 审计日志集成测试（通过 vi.mock 拦截 @h-ai/audit） ───

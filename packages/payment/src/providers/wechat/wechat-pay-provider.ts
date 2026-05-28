@@ -11,11 +11,8 @@ import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotify
 import type { WechatNotifyResource, WechatOrderRequest } from './wechat-pay-types.js'
 import { err, ok } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
-import {
-
-  HaiPaymentError,
-
-} from '../../payment-types.js'
+import { HaiPaymentError } from '../../payment-types.js'
+import { fetchWithTimeout } from '../payment-provider-http.js'
 import {
   decryptResource,
   generateNonce,
@@ -67,7 +64,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
     const authorization = `WECHATPAY2-SHA256-RSA2048 mchid="${config.mchId}",nonce_str="${nonce}",timestamp="${timestamp}",serial_no="${config.serialNo}",signature="${signature}"`
 
-    const response = await fetch(`${WECHAT_API_BASE}${path}`, {
+    const response = await fetchWithTimeout(`${WECHAT_API_BASE}${path}`, {
       method,
       headers: {
         'Content-Type': 'application/json',

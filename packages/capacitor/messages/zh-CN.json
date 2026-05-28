@@ -6,6 +6,7 @@
   "capacitor_preferencesSetFailed": "写入 Capacitor Preferences 失败",
   "capacitor_preferencesRemoveFailed": "删除 Capacitor Preferences 失败",
   "capacitor_deviceInfoFailed": "获取设备信息失败",
+  "capacitor_appVersionFailed": "获取应用版本失败",
   "capacitor_pushRegisterFailed": "注册推送通知失败",
   "capacitor_pushListenFailed": "监听推送通知失败",
   "capacitor_cameraFailed": "访问相机失败",

@@ -33,6 +33,7 @@ export const AlipayConfigSchema = z.object({
 export const StripeConfigSchema = z.object({
   secretKey: z.string().min(1, paymentM('payment_configFieldRequired')),
   webhookSecret: z.string().min(1, paymentM('payment_configFieldRequired')),
+  webhookToleranceSeconds: z.number().int().positive().default(300),
 })
 
 /** 支付模块配置 Schema */

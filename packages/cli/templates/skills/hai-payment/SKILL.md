@@ -58,6 +58,7 @@ alipay:
 stripe:
   secretKey: ${HAI_PAYMENT_STRIPE_SECRET_KEY}
   webhookSecret: ${HAI_PAYMENT_STRIPE_WEBHOOK_SECRET}
+  webhookToleranceSeconds: 300  # 可选，默认 300 秒
 ```
 
 ### 2. 初始化（服务端）
@@ -101,6 +102,8 @@ if (result.success) {
   // result.data: PaymentOrder { provider, tradeType, clientParams, prepayId? }
   // clientParams 包含调起支付所需参数
 }
+
+// amount / totalAmount 必须是正整数（单位：分）
 ```
 
 ### 4. 处理支付回调
@@ -261,6 +264,8 @@ export const POST = kit.handler(async ({ request, locals }) => {
 ## 审计日志
 
 关键支付操作（创建订单、回调、退款、关闭订单）成功后自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。`queryOrder` 为只读操作，不写审计日志。
+
+内置 Provider 的 HTTP 请求默认带 15 秒超时；Stripe 可通过 `webhookToleranceSeconds` 调整 webhook 时间戳容忍窗口。
 
 ---
 

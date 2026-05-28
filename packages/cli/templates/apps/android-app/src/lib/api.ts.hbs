@@ -15,7 +15,7 @@ const API_BASE = (import.meta.env.PUBLIC_API_BASE as string | undefined) ?? 'htt
  * 初始化 API 客户端
  *
  * 应在应用启动时调用一次。
- * - Token 存储使用 Capacitor Preferences（原生安全存储）
+ * - Token 存储使用 Capacitor 原生安全存储插件（仅原生环境启用）
  * - 自动附加 Bearer Token、401 自动刷新重试
  */
 export async function initApi() {

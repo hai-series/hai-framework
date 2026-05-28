@@ -5,6 +5,8 @@
  * @module alipay-types
  */
 
+import { z } from 'zod'
+
 /** 支付宝统一下单公共参数 */
 export interface AlipayCommonParams {
   app_id: string
@@ -29,11 +31,12 @@ export interface AlipayOrderBizContent {
 }
 
 /** 支付宝回调参数 */
-export interface AlipayNotifyParams {
-  out_trade_no: string
-  trade_no: string
-  trade_status: string
-  total_amount: string
-  gmt_payment?: string
-  [key: string]: string | undefined
-}
+export const AlipayNotifyParamsSchema = z.object({
+  out_trade_no: z.string().min(1),
+  trade_no: z.string().min(1),
+  trade_status: z.string().min(1),
+  total_amount: z.string().min(1),
+  gmt_payment: z.string().optional(),
+}).catchall(z.string())
+
+export type AlipayNotifyParams = z.infer<typeof AlipayNotifyParamsSchema>

@@ -83,9 +83,10 @@ describe('alipay-provider', () => {
       }
 
       // 验证 fetch 调用正确的网关（非沙箱）
-      const [url] = fetchSpy.mock.calls[0]
+      const [url, options] = fetchSpy.mock.calls[0]
       expect(url).toContain('openapi.alipay.com')
       expect(url).toContain('sign=')
+      expect(options.signal).toBeDefined()
     })
 
     it('jSAPI 下单使用 alipay.trade.create 方法', async () => {
@@ -342,6 +343,26 @@ describe('alipay-provider', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(HaiPaymentError.NOTIFY_VERIFY_FAILED.code)
+      }
+    })
+
+    it('非法 total_amount 返回 NOTIFY_PARSE_FAILED', async () => {
+      const params: Record<string, string> = {
+        out_trade_no: 'ORD-AMOUNT-BAD',
+        trade_no: 'T-AMOUNT-BAD',
+        trade_status: 'TRADE_SUCCESS',
+        total_amount: '10.bad',
+        sign_type: 'RSA2',
+      }
+      params.sign = signNotifyParams(params)
+      const body = buildNotifyBody(params)
+
+      const provider = createAlipayProvider(testConfig)
+      const result = await provider.handleNotify({ body, headers: {} })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_PARSE_FAILED.code)
       }
     })
   })

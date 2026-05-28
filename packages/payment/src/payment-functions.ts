@@ -11,11 +11,7 @@ import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotify
 import { audit } from '@h-ai/audit'
 import { core, err, ok } from '@h-ai/core'
 import { paymentM } from './payment-i18n.js'
-import {
-
-  HaiPaymentError,
-
-} from './payment-types.js'
+import { HaiPaymentError } from './payment-types.js'
 
 const logger = core.logger.child({ module: 'payment', scope: 'functions' })
 
@@ -30,6 +26,41 @@ async function auditLog(input: CreateAuditLogInput): Promise<void> {
   if (!result.success) {
     logger.warn('Failed to write payment audit log', { action: input.action, error: result.error.message })
   }
+}
+
+function isValidAmount(amount: number): boolean {
+  return Number.isSafeInteger(amount) && amount > 0
+}
+
+function validateCreateOrderInput(input: CreateOrderInput): HaiResult<void> {
+  if (!isValidAmount(input.amount)) {
+    return err(
+      HaiPaymentError.INVALID_AMOUNT,
+      paymentM('payment_invalidAmount'),
+    )
+  }
+
+  return ok(undefined)
+}
+
+function validateRefundInput(input: RefundInput): HaiResult<void> {
+  if (!isValidAmount(input.amount)) {
+    return err(
+      HaiPaymentError.INVALID_AMOUNT,
+      paymentM('payment_invalidAmount'),
+    )
+  }
+
+  if (input.totalAmount !== undefined) {
+    if (!isValidAmount(input.totalAmount) || input.totalAmount < input.amount) {
+      return err(
+        HaiPaymentError.INVALID_AMOUNT,
+        paymentM('payment_invalidAmount'),
+      )
+    }
+  }
+
+  return ok(undefined)
 }
 
 /**
@@ -78,6 +109,11 @@ export async function createOrder(
   const result = requireProvider(providerName)
   if (!result.success)
     return result
+
+  const validateResult = validateCreateOrderInput(input)
+  if (!validateResult.success)
+    return validateResult as HaiResult<PaymentOrder>
+
   const orderResult = await result.data.createOrder(input)
   if (orderResult.success) {
     await auditLog({
@@ -144,6 +180,11 @@ export async function refund(
   const result = requireProvider(providerName)
   if (!result.success)
     return result
+
+  const validateResult = validateRefundInput(input)
+  if (!validateResult.success)
+    return validateResult as HaiResult<RefundResult>
+
   const refundResult = await result.data.refund(input)
   if (refundResult.success) {
     await auditLog({

@@ -21,8 +21,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
     headers[key] = value
   })
 
-  const result = await payment.handleNotify({
-    provider,
+  const result = await payment.handleNotify(provider, {
     headers,
     body,
   })

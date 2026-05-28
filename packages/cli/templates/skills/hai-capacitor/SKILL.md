@@ -5,20 +5,20 @@ description: 使用 @h-ai/capacitor 桥接 Capacitor 原生能力（Token 安全
 
 # hai-capacitor
 
-> `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块，封装常用原生能力为统一 API，返回 `HaiResult<T>`。与 `@h-ai/api-client` 配合实现 App 端 Token 安全存储。
+> `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块，封装常用原生能力为统一 API，返回 `HaiResult<T>`。与 `@h-ai/api-client` 配合时，Token 仅存于原生安全存储，不回退到 Web `localStorage`。
 
 ---
 
 ## 运行环境
 
-> **浏览器端 / 原生 App 专用。** 在 Capacitor 原生环境（Android/iOS）中提供完整能力，纯 Web 环境下部分功能退化（如 Preferences 退化为 localStorage）。
+> **浏览器端 / 原生 App 专用。** 在 Capacitor 原生环境（Android/iOS）中提供完整能力；`createCapacitorTokenStorage()` 仅在原生环境持久化 token，纯 Web 不做不安全回退。`capacitor.preferences` 仍可用于普通偏好数据。
 
 ---
 
 ## 适用场景
 
 - Android/iOS 原生应用开发（SvelteKit + Capacitor）
-- Token 安全存储（Capacitor Preferences → SharedPreferences / UserDefaults）
+- Token 安全存储（`@aparajita/capacitor-secure-storage`）
 - 设备信息获取（平台、型号、版本）
 - 推送通知注册与监听（FCM / APNs）
 - 原生相机拍照 / 相册选取
@@ -64,13 +64,13 @@ await apiClient.init({
 })
 ```
 
-`createCapacitorTokenStorage()` 返回 `TokenStorage` 实例（兼容 `@h-ai/api-client`），底层使用 `@capacitor/preferences`：
+`createCapacitorTokenStorage()` 返回 `TokenStorage` 实例（兼容 `@h-ai/api-client`），底层使用 `@aparajita/capacitor-secure-storage`：
 
-- Android → SharedPreferences（应用沙盒）
-- iOS → UserDefaults
-- Web → localStorage（退化，建议仅原生端使用）
+- Android → Android KeyStore + 加密 SharedPreferences
+- iOS → Keychain
+- Web → **不回退到 localStorage**；`get*()` 返回 `null`，`set*()` / `clear()` 为 no-op
 
-所有方法内置 try-catch，Preferences 异常时 get 返回 `null`、set/clear 静默失败并记录日志。
+所有方法内置 try-catch；原生安全存储异常时 get 返回 `null`、set/clear 静默失败并记录日志。
 
 #### Preferences 子操作
 
@@ -208,6 +208,7 @@ await capacitor.statusBar.show()
 | `HaiCapacitorError.PREFERENCES_SET_FAILED`   | `hai:capacitor:012`    | Preferences 写入失败 |
 | `HaiCapacitorError.PREFERENCES_REMOVE_FAILED`| `hai:capacitor:013`    | Preferences 删除失败 |
 | `HaiCapacitorError.DEVICE_INFO_FAILED`       | `hai:capacitor:020`    | 获取设备信息失败     |
+| `HaiCapacitorError.APP_VERSION_FAILED`       | `hai:capacitor:021`    | 获取应用版本失败     |
 | `HaiCapacitorError.PUSH_REGISTER_FAILED`     | `hai:capacitor:030`    | 推送注册失败         |
 | `HaiCapacitorError.PUSH_LISTEN_FAILED`       | `hai:capacitor:031`    | 推送监听失败         |
 | `HaiCapacitorError.CAMERA_FAILED`            | `hai:capacitor:040`    | 拍照/相册失败        |
@@ -359,7 +360,8 @@ async function captureAndUpload() {
 | 插件 | 类型 | 用于 |
 | --- | --- | --- |
 | `@capacitor/core` | peerDependency（必需） | 核心运行时 |
-| `@capacitor/preferences` | peerDependency（必需） | Token 存储 |
+| `@aparajita/capacitor-secure-storage` | 可选 peerDependency（原生 token 存储必需） | `createCapacitorTokenStorage()` |
+| `@capacitor/preferences` | peerDependency（必需） | `capacitor.preferences.*` 普通偏好数据 |
 | `@capacitor/device` | 可选 | `getDeviceInfo()` |
 | `@capacitor/app` | 可选 | `getAppVersion()` |
 | `@capacitor/push-notifications` | 可选 | `registerPush()` / `listenPush()` |

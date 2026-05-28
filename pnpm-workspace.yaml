@@ -33,14 +33,15 @@ catalog:
 
   '@a2a-js/sdk': ^0.3.12
   '@antfu/eslint-config': ^9.0.0
+  '@aparajita/capacitor-secure-storage': ^8.0.0
   '@aws-sdk/client-s3': ^3.723.0
   '@aws-sdk/s3-request-presigner': ^3.723.0
 
-  '@capacitor/android': ^8.2.0
+  '@capacitor/android': ^8.3.4
   '@capacitor/app': ^8.0.1
   '@capacitor/camera': ^8.0.2
-  '@capacitor/cli': ^8.2.0
-  '@capacitor/core': ^8.2.0
+  '@capacitor/cli': ^8.3.4
+  '@capacitor/core': ^8.3.4
   '@capacitor/device': ^8.0.1
   '@capacitor/preferences': ^8.0.1
   '@capacitor/push-notifications': ^8.0.2

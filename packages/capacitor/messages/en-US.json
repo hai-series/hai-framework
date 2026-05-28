@@ -6,6 +6,7 @@
   "capacitor_preferencesSetFailed": "Failed to write to Capacitor Preferences",
   "capacitor_preferencesRemoveFailed": "Failed to remove from Capacitor Preferences",
   "capacitor_deviceInfoFailed": "Failed to get device info",
+  "capacitor_appVersionFailed": "Failed to get app version",
   "capacitor_pushRegisterFailed": "Failed to register push notifications",
   "capacitor_pushListenFailed": "Failed to listen for push notifications",
   "capacitor_cameraFailed": "Failed to access camera",

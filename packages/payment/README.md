@@ -86,11 +86,16 @@ await payment.init({
   stripe: {
     secretKey: 'sk_xxx',
     webhookSecret: 'whsec_xxx',
+    webhookToleranceSeconds: 300, // 可选，默认 300 秒
   },
 })
 ```
 
 只配置需要的 Provider 即可，未配置的 Provider 不会注册。
+
+金额字段统一使用“分”为单位，且必须为正整数。模块会在调用具体 Provider 之前先校验 `amount` / `totalAmount`，避免把非法金额继续传给下游支付平台。
+
+所有内置 Provider 的 HTTP 请求默认附带 15 秒超时，避免网络异常时长时间挂起。
 
 ## 审计日志
 
@@ -111,6 +116,9 @@ await payment.init({
 const result = await payment.createOrder('wechat', orderInput)
 if (!result.success) {
   switch (result.error.code) {
+    case HaiPaymentError.INVALID_AMOUNT:
+      // 金额不是正整数，或 refund.totalAmount < amount
+      break
     case HaiPaymentError.PROVIDER_NOT_FOUND:
       // Provider 未注册
       break
@@ -128,7 +136,9 @@ if (!result.success) {
 | `HaiPaymentError.CREATE_ORDER_FAILED`  | `hai:payment:001` | 创建订单失败    |
 | `HaiPaymentError.NOT_INITIALIZED`      | `hai:payment:010` | 模块未初始化    |
 | `HaiPaymentError.PROVIDER_NOT_FOUND`   | `hai:payment:030` | Provider 未注册 |
+| `HaiPaymentError.INVALID_AMOUNT`       | `hai:payment:040` | 金额无效        |
 | `HaiPaymentError.NOTIFY_VERIFY_FAILED` | `hai:payment:050` | 回调验签失败    |
+| `HaiPaymentError.NOTIFY_PARSE_FAILED`  | `hai:payment:051` | 回调解析失败    |
 | `HaiPaymentError.CONFIG_ERROR`         | `hai:payment:070` | 配置无效        |
 
 ## 测试

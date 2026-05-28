@@ -12,11 +12,8 @@ import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotify
 import { createHmac } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
-import {
-
-  HaiPaymentError,
-
-} from '../../payment-types.js'
+import { HaiPaymentError } from '../../payment-types.js'
+import { fetchWithTimeout } from '../payment-provider-http.js'
 
 /** Stripe API 基地址 */
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
@@ -30,7 +27,7 @@ const STRIPE_API_BASE = 'https://api.stripe.com/v1'
 export function createStripeProvider(config: StripeConfig): PaymentProvider {
   /** Stripe API 请求 */
   async function stripeRequest<T>(method: string, path: string, body?: Record<string, string>): Promise<T> {
-    const response = await fetch(`${STRIPE_API_BASE}${path}`, {
+    const response = await fetchWithTimeout(`${STRIPE_API_BASE}${path}`, {
       method,
       headers: {
         'Authorization': `Bearer ${config.secretKey}`,
@@ -50,7 +47,7 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
   }
 
   /** Stripe Webhook 签名容忍时间窗口（秒） */
-  const TIMESTAMP_TOLERANCE = 300
+  const TIMESTAMP_TOLERANCE = config.webhookToleranceSeconds ?? 300
 
   /** 验证 Stripe Webhook 签名 */
   function verifyWebhookSignature(payload: string, signature: string): boolean {
