@@ -18,7 +18,8 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 2,
+  // 共用单个 preview 服务与同一份 SQLite / storage 测试数据目录时，文件级并发会放大状态串扰与锁竞争。
+  workers: 1,
   reporter: 'list',
   timeout: 30_000,
 

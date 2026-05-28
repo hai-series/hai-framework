@@ -39,14 +39,14 @@ test.describe('Corporate pages and partner flow', () => {
     await expect(page.getByRole('link', { name: 'About' }).first()).toBeVisible()
   })
 
-  test('partner register and admin records flow works', async ({ page, request }) => {
+  test('partner register and admin records flow works', async ({ page }) => {
     await page.goto('/partners')
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/合作登记|Partner Registration/)
 
     const companyName = `E2E Corp ${Date.now()}`
 
-    const registerRes = await request.post('/api/partners/register', {
-      form: {
+    const registerRes = await page.request.post('/api/partners/register', {
+      data: {
         companyName,
         contactName: 'E2E Tester',
         email: 'e2e@example.com',
@@ -62,36 +62,26 @@ test.describe('Corporate pages and partner flow', () => {
     expect(registerBody.success).toBe(true)
     expect(registerBody.data?.id).toBeTruthy()
 
-    const unauthorized = await request.get('/api/partners/admin/records')
+    const unauthorized = await page.request.get('/api/partners/admin/records')
     expect([401, 403]).toContain(unauthorized.status())
 
-    const loginRes = await request.post('/api/partners/admin/login', {
+    const loginRes = await page.request.post('/api/partners/admin/login', {
       form: {
         username: 'partner-admin',
         password: 'CHANGE_ME_STRONG_PASSWORD',
       },
     })
     expect(loginRes.ok()).toBeTruthy()
-    const loginBody = await loginRes.json() as ApiResponse<{ accessToken?: string }>
+    const loginBody = await loginRes.json() as ApiResponse<{ username: string, loggedIn: boolean, expiresIn: number }>
     expect(loginBody.success).toBe(true)
-    const accessToken = loginBody.data?.accessToken
-    expect(accessToken).toBeTruthy()
-
-    await page.goto('/partners/admin/login')
-    await page.evaluate((token) => {
-      localStorage.setItem('corporate_access_token', token)
-    }, accessToken!)
+    expect(loginBody.data?.loggedIn).toBe(true)
 
     await page.goto('/partners/admin')
     await expect(page).toHaveURL(/\/partners\/admin/)
     await expect(page.locator('table')).toBeVisible()
     await expect(page.locator('table')).toContainText(companyName)
 
-    const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
+    const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20')
     expect(recordsRes.ok()).toBeTruthy()
     const body = await recordsRes.json() as ApiResponse<{ items: Array<{ company_name: string }> }>
     expect(body.success).toBe(true)

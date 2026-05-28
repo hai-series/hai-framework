@@ -1,7 +1,13 @@
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 import { defineConfig } from '@playwright/test'
 
 const baseURL = process.env.BASE_URL || 'http://localhost:4175'
+const e2eDataRoot = path.join(tmpdir(), 'hai-framework-corporate-website-e2e')
+const testDataDir = path.join(e2eDataRoot, `data-e2e-${Date.now()}`)
+
+process.env.HAI_E2E_DATA_ROOT = e2eDataRoot
 
 /**
  * hai Corporate Website - Playwright E2E 测试配置
@@ -19,6 +25,9 @@ export default defineConfig({
   use: {
     baseURL,
     channel: 'chrome',
+    extraHTTPHeaders: {
+      Origin: baseURL,
+    },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -29,6 +38,8 @@ export default defineConfig({
       HAI_E2E: '1',
       HAI_PARTNER_ADMIN_USERNAME: 'partner-admin',
       HAI_PARTNER_ADMIN_PASSWORD: 'CHANGE_ME_STRONG_PASSWORD',
+      HAI_RELDB_DATABASE: `${testDataDir}/corporate-website.db`,
+      HAI_STORAGE_PATH: `${testDataDir}/uploads`,
     },
     url: baseURL,
     reuseExistingServer: false,

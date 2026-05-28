@@ -20,6 +20,9 @@ export default defineConfig({
   use: {
     baseURL,
     channel: 'chrome',
+    extraHTTPHeaders: {
+      Origin: baseURL,
+    },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
