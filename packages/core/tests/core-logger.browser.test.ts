@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import log from 'loglevel'
 import { describe, expect, it } from 'vitest'
 import { core } from '../src/core-index.browser.js'
 
@@ -60,6 +61,34 @@ describe('core.logger (browser)', () => {
 
     // 恢复
     core.logger.setLevel('info')
+  })
+
+  it('浏览器 logger 默认应脱敏敏感字段与 URL 凭证', () => {
+    const logger = core.logger.create({ name: 'browser-redact-test' })
+    const rawLogger = log.getLogger('browser-redact-test')
+    const messages: string[] = []
+    const originalInfo = rawLogger.info.bind(rawLogger)
+    rawLogger.info = (...args: unknown[]) => {
+      messages.push(args.map(arg => String(arg)).join(' '))
+    }
+
+    try {
+      logger.info('browser sensitive payload', {
+        authorization: 'Bearer secret-token',
+        baseUrl: 'https://user:pass@example.com/api/v1',
+        nested: { privateKey: 'private-value' },
+        email: 'test@example.com',
+      })
+    }
+    finally {
+      rawLogger.info = originalInfo
+    }
+
+    const message = messages[0] ?? ''
+    expect(message).toContain('"authorization":"[REDACTED]"')
+    expect(message).toContain('"baseUrl":"https://[REDACTED]:[REDACTED]@example.com/api/v1"')
+    expect(message).toContain('"privateKey":"[REDACTED]"')
+    expect(message).toContain('"email":"test@example.com"')
   })
 
   it('setLogLevel/getLogLevel 应该生效', () => {

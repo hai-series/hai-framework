@@ -11,6 +11,7 @@ import { execSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import process from 'node:process'
 import pino from 'pino'
+import { object as objectUtils } from '../utils/core-util-object.js'
 
 // ESM 场景下通过 createRequire 复用 CommonJS 的 resolve 能力，用来探测可选依赖是否存在。
 const nodeRequire = createRequire(import.meta.url)
@@ -105,6 +106,14 @@ function getLogLevel(): LogLevel {
   return globalLevel
 }
 
+function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
+  if (!ctx || Object.keys(ctx).length === 0) {
+    return ctx
+  }
+
+  return objectUtils.sanitizeSensitiveFields(ctx) as LogContext
+}
+
 // ─── Logger 实现 ───
 
 /**
@@ -119,25 +128,26 @@ function getLogLevel(): LogLevel {
 function wrapPino(pinoLogger: pino.Logger, context: Record<string, unknown>): Logger {
   return {
     trace(message: string, ctx?: LogContext) {
-      pinoLogger.trace({ ...context, ...ctx }, message)
+      pinoLogger.trace(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
     },
     debug(message: string, ctx?: LogContext) {
-      pinoLogger.debug({ ...context, ...ctx }, message)
+      pinoLogger.debug(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
     },
     info(message: string, ctx?: LogContext) {
-      pinoLogger.info({ ...context, ...ctx }, message)
+      pinoLogger.info(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
     },
     warn(message: string, ctx?: LogContext) {
-      pinoLogger.warn({ ...context, ...ctx }, message)
+      pinoLogger.warn(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
     },
     error(message: string, ctx?: LogContext) {
-      pinoLogger.error({ ...context, ...ctx }, message)
+      pinoLogger.error(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
     },
     fatal(message: string, ctx?: LogContext) {
-      pinoLogger.fatal({ ...context, ...ctx }, message)
+      pinoLogger.fatal(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
     },
     child(childContext: Record<string, unknown>): Logger {
-      return wrapPino(pinoLogger.child(childContext), { ...context, ...childContext })
+      const sanitizedChildContext = sanitizeLogContext(childContext) ?? {}
+      return wrapPino(pinoLogger.child(sanitizedChildContext), { ...context, ...sanitizedChildContext })
     },
   }
 }

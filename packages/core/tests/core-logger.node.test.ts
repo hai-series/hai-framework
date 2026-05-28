@@ -4,7 +4,8 @@
  * =============================================================================
  */
 
-import { describe, expect, it } from 'vitest'
+import process from 'node:process'
+import { describe, expect, it, vi } from 'vitest'
 import { core } from '../src/index.js'
 
 describe('core.logger (node)', () => {
@@ -80,6 +81,43 @@ describe('core.logger (node)', () => {
 
     // 恢复
     core.logger.configure({ redact: [] })
+  })
+
+  it('logger 默认应脱敏敏感字段与 URL 凭证', async () => {
+    const writes: string[] = []
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      writes.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
+      return true
+    }) as typeof process.stdout.write)
+
+    try {
+      const logger = core.logger
+        .create({ name: 'default-redact-test', format: 'json' })
+        .child({
+          authorization: 'Bearer secret-token',
+          baseUrl: 'https://user:pass@example.com/api/v1',
+        })
+
+      logger.info('sensitive payload', {
+        nested: {
+          apiV3Key: 'wechat-secret',
+          privateKey: 'private-value',
+        },
+        email: 'test@example.com',
+      })
+
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    finally {
+      writeSpy.mockRestore()
+    }
+
+    const output = writes.join('')
+    expect(output).toContain('"authorization":"[REDACTED]"')
+    expect(output).toContain('"baseUrl":"https://[REDACTED]:[REDACTED]@example.com/api/v1"')
+    expect(output).toContain('"apiV3Key":"[REDACTED]"')
+    expect(output).toContain('"privateKey":"[REDACTED]"')
+    expect(output).toContain('"email":"test@example.com"')
   })
 
   it('configureLogger 后 createLogger 应该使用新配置', () => {

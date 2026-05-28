@@ -8,6 +8,7 @@
 import type { LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import log from 'loglevel'
+import { object as objectUtils } from '../utils/core-util-object.js'
 
 // ─── 全局配置 ───
 
@@ -83,6 +84,14 @@ function getLogLevel(): LogLevel {
   return globalLevel
 }
 
+function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
+  if (!ctx || Object.keys(ctx).length === 0) {
+    return ctx
+  }
+
+  return objectUtils.sanitizeSensitiveFields(ctx) as LogContext
+}
+
 // ─── Logger 实现 ───
 
 /**
@@ -95,10 +104,12 @@ function getLogLevel(): LogLevel {
  * @returns 格式化后的字符串
  */
 function formatMessage(message: string, context?: LogContext): string {
-  if (!context || Object.keys(context).length === 0) {
+  const sanitizedContext = sanitizeLogContext(context)
+
+  if (!sanitizedContext || Object.keys(sanitizedContext).length === 0) {
     return message
   }
-  return `${message} ${JSON.stringify(context)}`
+  return `${message} ${JSON.stringify(sanitizedContext)}`
 }
 
 /**

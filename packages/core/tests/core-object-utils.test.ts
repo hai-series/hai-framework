@@ -87,6 +87,87 @@ describe('core.object', () => {
     expect(core.object.fromEntries(entries)).toEqual({ a: 1, b: 2 })
   })
 
+  it('sanitizeSensitiveFields 默认仅脱敏凭证类字段', () => {
+    const input = {
+      email: 'test@example.com',
+      phone: '13800000000',
+      password: 'secret-pass',
+      profile: {
+        token: 'jwt-token',
+        nickname: 'Alice',
+      },
+    }
+
+    expect(core.object.sanitizeSensitiveFields(input)).toEqual({
+      email: 'test@example.com',
+      phone: '13800000000',
+      password: '[REDACTED]',
+      profile: {
+        token: '[REDACTED]',
+        nickname: 'Alice',
+      },
+    })
+  })
+
+  it('sanitizeSensitiveFields 应处理 URL 字段内嵌凭证与扩展敏感键名', () => {
+    const input = {
+      baseUrl: 'https://user:pass@example.com/api/v1',
+      ldap: {
+        url: 'ldap://admin:secret@ldap.example.com:389',
+        bindPassword: 'bind-secret',
+      },
+      smtp: {
+        pass: 'smtp-secret',
+      },
+      payment: {
+        apiV3Key: 'wechat-secret',
+        privateKey: 'private-value',
+      },
+    }
+
+    expect(core.object.sanitizeSensitiveFields(input)).toEqual({
+      baseUrl: 'https://[REDACTED]:[REDACTED]@example.com/api/v1',
+      ldap: {
+        url: 'ldap://[REDACTED]:[REDACTED]@ldap.example.com:389',
+        bindPassword: '[REDACTED]',
+      },
+      smtp: {
+        pass: '[REDACTED]',
+      },
+      payment: {
+        apiV3Key: '[REDACTED]',
+        privateKey: '[REDACTED]',
+      },
+    })
+  })
+
+  it('sanitizeSensitiveFields 应支持模块自定义 matcher', () => {
+    const input = {
+      email: 'test@example.com',
+      phone: '13800000000',
+      profile: {
+        nickname: 'Alice',
+      },
+    }
+
+    expect(core.object.sanitizeSensitiveFields(input, {
+      matcher: /email|phone/i,
+      replacement: '***',
+    })).toEqual({
+      email: '***',
+      phone: '***',
+      profile: {
+        nickname: 'Alice',
+      },
+    })
+  })
+
+  it('sanitizeSensitiveFields 的数组 matcher 应兼容 camelCase 与 snake_case', () => {
+    expect(core.object.sanitizeSensitiveFields({ apiKey: 'test-key' }, {
+      matcher: ['api_key'],
+    })).toEqual({ apiKey: '[REDACTED]' })
+  })
+
   it('空对象操作应正常工作', () => {
     expect(core.object.deepClone({})).toEqual({})
     expect(core.object.deepMerge({}, {})).toEqual({})
@@ -95,5 +176,6 @@ describe('core.object', () => {
     expect(core.object.keys({})).toEqual([])
     expect(core.object.values({})).toEqual([])
     expect(core.object.entries({})).toEqual([])
+    expect(core.object.sanitizeSensitiveFields({})).toEqual({})
   })
 })

@@ -58,6 +58,7 @@ const prefixed = core.id.withPrefix('order_')
 
 // 工具函数
 core.object.deepMerge(objA, objB)
+core.object.sanitizeSensitiveFields({ password: 'secret', email: 'user@example.com' })
 core.string.capitalize('hello')
 core.array.unique([1, 1, 2, 3])
 core.array.chunk([1, 2, 3, 4, 5], 2) // [[1,2], [3,4], [5]]
@@ -145,6 +146,8 @@ core.logger.setLevel('debug')
 const level = core.logger.getLevel() // 'debug'
 ```
 
+`core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段只会掩码 URL 中内嵌的用户名和密码；邮箱、手机号默认不会被遮盖。
+
 #### 日志级别规范
 
 | 级别    | 适用场景                           |
@@ -178,6 +181,26 @@ getMessage('welcome', { locale: 'zh-CN', params: { name: 'Alice' } }) // '欢迎
 // 常量
 core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }]
 core.i18n.DEFAULT_LOCALE // 'zh-CN'
+```
+
+### 对象脱敏工具
+
+`core.object.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理密码、token、secret、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证。模块也可自定义 matcher。
+
+```typescript
+core.object.sanitizeSensitiveFields({
+  email: 'user@example.com',
+  password: 'secret',
+  baseUrl: 'https://user:pass@example.com/api/v1',
+  profile: { token: 'jwt-token' },
+})
+// => { email: 'user@example.com', password: '[REDACTED]', baseUrl: 'https://[REDACTED]:[REDACTED]@example.com/api/v1', profile: { token: '[REDACTED]' } }
+
+core.object.sanitizeSensitiveFields({ email: 'user@example.com' }, {
+  matcher: /email/i,
+  replacement: '***',
+})
+// => { email: '***' }
 ```
 
 ### Zod 校验错误 i18n 映射
