@@ -34,6 +34,9 @@ const logger = core.logger.child({ module: 'audit', scope: 'main' })
 /** 字符串字段最大长度（防止异常大输入） */
 const MAX_TEXT_LENGTH = 256
 
+/** 审计详情中的敏感字段统一脱敏为此占位值 */
+const REDACTED_AUDIT_DETAIL_VALUE = '[REDACTED]'
+
 /**
  * 判断值是否为非空字符串
  *
@@ -51,6 +54,22 @@ function isNonEmptyString(value: unknown): value is string {
  */
 function isValidTextLength(value: string, maxLength = MAX_TEXT_LENGTH): boolean {
   return value.length <= maxLength
+}
+
+/**
+ * 对审计详情执行统一脱敏
+ *
+ * @param details - 原始详情对象
+ */
+function sanitizeAuditDetails(details?: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!details) {
+    return details ?? null
+  }
+
+  return core.object.sanitizeSensitiveFields(details, {
+    matcher: core.object.defaultSensitiveKeyRegex,
+    replacement: REDACTED_AUDIT_DETAIL_VALUE,
+  }) as Record<string, unknown>
 }
 
 // ─── 内部状态 ───
@@ -147,7 +166,10 @@ export const audit: AuditFunctions = {
     try {
       if (currentRepo) {
         logger.warn('Audit module is already initialized, reinitializing')
-        await audit.close()
+        const closeResult = await audit.close()
+        if (!closeResult.success) {
+          return closeResult
+        }
       }
 
       logger.info('Initializing audit module')
@@ -178,7 +200,7 @@ export const audit: AuditFunctions = {
         userIdColumn: parsed.userIdColumn,
         userNameColumn: parsed.userNameColumn,
       })
-      currentHelper = createHelper(input => currentRepo!.log(input))
+      currentHelper = createHelper(input => audit.log(input))
 
       logger.info('Audit module initialized')
       return ok(undefined)
@@ -212,21 +234,26 @@ export const audit: AuditFunctions = {
       return Promise.resolve(notInitialized.result())
     }
 
-    if (!isNonEmptyString(input.action) || !isNonEmptyString(input.resource)) {
+    const sanitizedInput: CreateAuditLogInput = {
+      ...input,
+      details: sanitizeAuditDetails(input.details),
+    }
+
+    if (!isNonEmptyString(sanitizedInput.action) || !isNonEmptyString(sanitizedInput.resource)) {
       return Promise.resolve(err(
         HaiAuditError.LOG_FAILED,
         auditM('audit_invalidInput', { params: { field: 'action/resource', reason: 'must be non-empty string' } }),
       ))
     }
 
-    if (!isValidTextLength(input.action) || !isValidTextLength(input.resource)) {
+    if (!isValidTextLength(sanitizedInput.action) || !isValidTextLength(sanitizedInput.resource)) {
       return Promise.resolve(err(
         HaiAuditError.LOG_FAILED,
         auditM('audit_invalidInput', { params: { field: 'action/resource', reason: 'exceeds max length' } }),
       ))
     }
 
-    return currentRepo.log(input)
+    return currentRepo.log(sanitizedInput)
   },
 
   /**
@@ -336,15 +363,16 @@ export const audit: AuditFunctions = {
   /**
    * 关闭审计模块，释放内部状态
    */
-  async close(): Promise<void> {
+  async close(): Promise<HaiResult<void>> {
     if (!currentRepo) {
       logger.info('Audit module already closed, skipping')
-      return
+      return ok(undefined)
     }
 
     logger.info('Closing audit module')
     currentRepo = null
     currentHelper = null
     logger.info('Audit module closed')
+    return ok(undefined)
   },
 }

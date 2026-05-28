@@ -76,7 +76,7 @@ export interface CreateAuditLogInput {
   resource: string
   /** 资源 ID；不涉及特定资源时可省略 */
   resourceId?: string | null
-  /** 操作详情对象，会被 JSON 序列化存储 */
+  /** 操作详情对象；密码、token、secret 等凭证类字段会先自动脱敏，再 JSON 序列化存储 */
   details?: Record<string, unknown> | null
   /** 客户端 IP 地址 */
   ipAddress?: string | null
@@ -243,7 +243,7 @@ export interface AuditFunctions {
   /**
    * 关闭审计模块，释放内部状态
    */
-  close: () => Promise<void>
+  close: () => Promise<HaiResult<void>>
   /** 当前是否已初始化 */
   readonly isInitialized: boolean
   /**

@@ -78,6 +78,30 @@ describe('audit.log', () => {
     }
   })
 
+  it('应仅脱敏凭证类字段，保留邮箱和手机号', async () => {
+    const result = await audit.log({
+      action: 'password_reset_request',
+      resource: 'auth',
+      details: {
+        email: 'test@example.com',
+        password: 'plain-text-password',
+        profile: {
+          phone: '13800000000',
+          nickname: 'Alice',
+        },
+      },
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      const parsed = JSON.parse(result.data.details!)
+      expect(parsed.email).toBe('test@example.com')
+      expect(parsed.password).toBe('[REDACTED]')
+      expect(parsed.profile.phone).toBe('13800000000')
+      expect(parsed.profile.nickname).toBe('Alice')
+    }
+  })
+
   // ─── 可选字段 ───
 
   it('应处理仅必填字段的日志（userId 和其他可选字段为 null）', async () => {

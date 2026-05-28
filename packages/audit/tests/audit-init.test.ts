@@ -40,7 +40,8 @@ describe('audit.init / audit.close', () => {
   })
 
   it('close 在未初始化时应安全调用', async () => {
-    await audit.close()
+    const result = await audit.close()
+    expect(result.success).toBe(true)
     expect(audit.isInitialized).toBe(false)
   })
 
@@ -71,7 +72,8 @@ describe('audit.init / audit.close', () => {
   it('close 应将 isInitialized 设为 false', async () => {
     await audit.init()
     expect(audit.isInitialized).toBe(true)
-    await audit.close()
+    const result = await audit.close()
+    expect(result.success).toBe(true)
     expect(audit.isInitialized).toBe(false)
   })
 

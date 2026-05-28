@@ -50,7 +50,10 @@ const stats = await audit.getStats(7) // 最近 7 天
 await audit.cleanup(90) // 清理 90 天前的日志
 
 // 8. 关闭
-await audit.close()
+const closeResult = await audit.close()
+if (!closeResult.success) {
+  throw new Error(closeResult.error.message)
+}
 ```
 
 ## 初始化配置
@@ -83,6 +86,7 @@ await audit.init({
 ### 输入约束
 
 - `audit.log(input)`：`action` / `resource` 必须为非空字符串，且长度不超过 256。
+- `audit.log(input)`：`details` 中的凭证类敏感字段（如 `password` / `token` / `secret`）会在持久化前自动脱敏；邮箱、手机号默认保留原值。
 - `audit.list(options)`：若同时传 `startDate` 与 `endDate`，必须满足 `startDate <= endDate`。
 - `audit.getUserRecent(userId, limit)`：`userId` 必须为非空字符串；`limit`（如传入）必须为正整数。
 - `audit.cleanup(days)`：`days`（如传入）必须为非负整数。
@@ -101,6 +105,8 @@ await audit.init({
 | `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005` | 初始化进行中 |
 | `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010` | 模块未初始化 |
 | `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012` | 配置错误     |
+
+> 说明：`audit.close()` 也返回 `HaiResult<void>`；`audit.helper.passwordResetRequest()` 会记录原始邮箱，默认不会额外掩码。
 
 ## 测试
 

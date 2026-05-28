@@ -6,7 +6,7 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { audit } from '../src/index.js'
+import { audit, HaiAuditError } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
@@ -97,7 +97,7 @@ describe('audit.helper', () => {
 
   // ─── passwordResetRequest ───
 
-  it('passwordResetRequest 应记录密码重置请求（details 含 email）', async () => {
+  it('passwordResetRequest 应记录密码重置请求（邮箱保留原值）', async () => {
     const result = await audit.helper.passwordResetRequest('test@example.com', '127.0.0.1')
     expect(result.success).toBe(true)
 
@@ -108,6 +108,20 @@ describe('audit.helper', () => {
       expect(logs.data.items[0].userId).toBeNull()
       const details = JSON.parse(logs.data.items[0].details!)
       expect(details.email).toBe('test@example.com')
+      expect(details.emailMasked).toBeUndefined()
+    }
+  })
+
+  it('缓存的 helper 在 close 后也应返回 NOT_INITIALIZED', async () => {
+    const helper = audit.helper
+
+    const closeResult = await audit.close()
+    expect(closeResult.success).toBe(true)
+
+    const result = await helper.login('user_1')
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 

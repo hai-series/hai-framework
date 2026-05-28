@@ -52,7 +52,10 @@ await audit.init({
 ### 3. 关闭
 
 ```ts
-await audit.close()
+const closeResult = await audit.close()
+if (!closeResult.success) {
+  throw new Error(closeResult.error.message)
+}
 ```
 
 ## 核心 API
@@ -62,7 +65,7 @@ await audit.close()
 | 方法                  | 签名                                                             | 说明       |
 | --------------------- | ---------------------------------------------------------------- | ---------- |
 | `audit.init`          | `(config: AuditInitConfig) => Promise<HaiResult<void>>` | 初始化模块 |
-| `audit.close`         | `() => Promise<void>`                                            | 关闭模块   |
+| `audit.close`         | `() => Promise<HaiResult<void>>`                                 | 关闭模块   |
 | `audit.isInitialized` | `boolean`                                                        | 初始化状态 |
 
 ### 日志操作
@@ -85,6 +88,8 @@ await audit.close()
 | `audit.helper.passwordResetRequest(email, ip?, ua?)`                           | 密码重置请求 |
 | `audit.helper.passwordResetComplete(userId, ip?, ua?)`                         | 密码重置完成 |
 | `audit.helper.crud(input)` | CRUD 操作    |
+
+> `audit.log()` / `audit.helper.*()` 中的 `details` 仅会自动脱敏凭证类字段（如 `password` / `token` / `secret`）；邮箱、手机号默认保留原值。
 
 ## 错误码
 

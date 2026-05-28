@@ -55,7 +55,13 @@ export function createHelper(logFn: (input: CreateAuditLogInput) => Promise<HaiR
     },
 
     async passwordResetRequest(email: string, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ action: 'password_reset_request', resource: 'auth', details: { email }, ipAddress: ip, userAgent: ua })
+      const result = await logFn({
+        action: 'password_reset_request',
+        resource: 'auth',
+        details: { email },
+        ipAddress: ip,
+        userAgent: ua,
+      })
       return toVoid(result)
     },
 
