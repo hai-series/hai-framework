@@ -182,7 +182,7 @@ export interface ApiClientLifecycle {
   readonly init: (config: ApiClientConfig) => Promise<HaiResult<void>>
   /** 释放资源并允许重新 `init`。 */
   readonly close: () => Promise<void>
-  /** 当前运行配置；未初始化时为 `null`。 */
+  /** 当前脱敏后的运行配置快照；未初始化时为 `null`。 */
   readonly config: ApiClientConfig | null
   /** 是否已完成初始化。 */
   readonly isInitialized: boolean

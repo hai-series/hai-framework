@@ -605,7 +605,7 @@ export interface ReldbFunctions {
   /** 事务管理器 */
   readonly tx: TxManager
 
-  /** 当前数据库配置（未初始化时为 null） */
+  /** 当前数据库脱敏配置快照（未初始化时为 null） */
   readonly config: ReldbConfig | null
 
   /** 是否已初始化 */

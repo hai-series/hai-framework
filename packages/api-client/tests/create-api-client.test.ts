@@ -119,6 +119,24 @@ describe('apiClient.create', () => {
     expect(typeof apiClient.tokenStorage.memory).toBe('function')
   })
 
+  it('config getter 应返回脱敏后的 baseUrl 与 headers 快照', async () => {
+    const client = apiClient.create(testContract)
+    const initResult = await client.init({
+      baseUrl: 'https://user:pass@api.test.com/api/v1',
+      headers: {
+        authorization: 'Bearer secret-token',
+      },
+    })
+
+    expect(initResult.success).toBe(true)
+    expect(client.config?.baseUrl).toBe('https://[REDACTED]:[REDACTED]@api.test.com/api/v1')
+    if (client.config?.headers && typeof client.config.headers !== 'function') {
+      expect(client.config.headers.authorization).toBe('[REDACTED]')
+    }
+
+    await client.close()
+  })
+
   it('请求超时返回 TIMEOUT 错误', async () => {
     const fetch = vi.fn().mockImplementation((request: Request) => {
       return new Promise<Response>((_resolve, reject) => {

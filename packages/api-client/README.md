@@ -92,6 +92,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 - `fetch`：自定义 fetch 实现。
 - `transport.crypto`：启用透明请求/响应加解密，必须传入已初始化的 `@h-ai/crypto` 实例。
 - `transport.keyExchangePath`：密钥协商子路径，默认 `/_hai/key-exchange`；会自动拼接到 `baseUrl` 后。
+- `apiClient.config`：返回**脱敏后的运行配置快照**；`baseUrl` 的内嵌凭证、`headers.authorization` 等敏感值会自动隐藏。
 
 ## 错误处理
 

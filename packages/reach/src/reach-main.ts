@@ -31,6 +31,10 @@ import { createTemplateRepository, resetTemplateRepoSingleton } from './reposito
 
 const logger = core.logger.child({ module: 'reach', scope: 'main' })
 
+function sanitizeReachConfig(config: ReachConfig): ReachConfig {
+  return core.object.sanitizeSensitiveFields(config)
+}
+
 // ─── 内部状态 ───
 
 /** 已注册的 Provider 实例（name → Provider） */
@@ -309,7 +313,7 @@ export const reach: ReachFunctions = {
   },
 
   get config(): ReachConfig | null {
-    return currentConfig
+    return currentConfig ? sanitizeReachConfig(currentConfig) : null
   },
 
   get isInitialized(): boolean {

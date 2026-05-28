@@ -71,6 +71,8 @@ await reach.send({
 await reach.close()
 ```
 
+`reach.config` 返回的是**脱敏后的配置快照**：`api.url` / `endpoint` 的内嵌凭证，以及 `headers.Authorization`、SMTP `pass`、短信密钥等敏感值会自动隐藏。
+
 ## 配置
 
 ### Console（开发/测试）

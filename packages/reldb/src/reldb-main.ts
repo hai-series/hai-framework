@@ -32,6 +32,10 @@ import { HaiReldbError } from './reldb-types.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'main' })
 
+function sanitizeReldbConfig(config: ReldbConfig): ReldbConfig {
+  return core.object.sanitizeSensitiveFields(config)
+}
+
 // ─── 内部状态 ───
 
 /** 当前活跃的数据库 Provider（未初始化时为 null） */
@@ -222,9 +226,9 @@ export const reldb: ReldbFunctions = {
     return currentProvider?.tx ?? notInitializedTx
   },
 
-  /** 获取当前配置（未初始化时为 null） */
+  /** 获取当前脱敏后的配置快照（未初始化时为 null） */
   get config(): ReldbConfig | null {
-    return currentConfig
+    return currentConfig ? sanitizeReldbConfig(currentConfig) : null
   },
 
   /** 检查是否已初始化 */

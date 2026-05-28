@@ -49,7 +49,7 @@ import type {
   ApiClientLifecycle,
 } from './api-client-types.js'
 import { apiContract, IAM_AUTH_ROUTES } from '@h-ai/api-contract'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { createORPCClient, ORPCError } from '@orpc/client'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
 import {
@@ -65,6 +65,10 @@ const DEFAULT_TIMEOUT = 30_000
 const DEFAULT_CLIENT_NAME = 'hai-api-client'
 const DEFAULT_REFRESH_PATH = IAM_AUTH_ROUTES.refresh
 const TRAILING_SLASHES_REGEX = /\/+$/
+
+function sanitizeApiClientConfig(config: ApiClientConfig): ApiClientConfig {
+  return core.object.sanitizeSensitiveFields(config)
+}
 
 /** Token 存储方案集合：内存 / 浏览器 localStorage / httpOnly Cookie。 */
 const tokenStorage = {
@@ -172,7 +176,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       state.tokenManager = undefined
       state.transport = undefined
     },
-    get config() { return state.config },
+    get config() { return state.config ? sanitizeApiClientConfig(state.config) : null },
     get isInitialized() { return state.rawClient !== null },
     auth,
   }

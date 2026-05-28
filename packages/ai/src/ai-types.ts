@@ -194,7 +194,7 @@ export interface AIFunctions {
    * 重复关闭不会报错。
    */
   close: () => void
-  /** 当前配置（未初始化时为 `null`） */
+  /** 当前脱敏后的配置快照（未初始化时为 `null`） */
   readonly config: AIConfig | null
   /** 是否已初始化（`init()` 成功后为 `true`，`close()` 后为 `false`） */
   readonly isInitialized: boolean

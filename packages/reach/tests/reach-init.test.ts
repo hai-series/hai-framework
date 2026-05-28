@@ -30,6 +30,28 @@ describe.sequential('reach.init', () => {
     expect(reach.isInitialized).toBe(true)
   })
 
+  it('api provider 配置快照应脱敏 URL 凭证与授权头', async () => {
+    const result = await reach.init({
+      providers: [
+        {
+          name: 'webhook',
+          type: 'api',
+          url: 'https://user:pass@example.com/notify',
+          headers: { Authorization: 'Bearer secret-token' },
+        },
+      ],
+    })
+
+    expect(result.success).toBe(true)
+    expect(reach.config).not.toBeNull()
+    const provider = reach.config?.providers[0]
+    expect(provider?.type).toBe('api')
+    if (provider?.type === 'api') {
+      expect(provider.url).toBe('https://[REDACTED]:[REDACTED]@example.com/notify')
+      expect(provider.headers?.Authorization).toBe('[REDACTED]')
+    }
+  })
+
   it('close 后应恢复未初始化状态', async () => {
     await reach.init({ providers: [{ name: 'dev', type: 'console' }] })
     await reach.close()

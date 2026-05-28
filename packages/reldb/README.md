@@ -49,6 +49,8 @@ const user = await userCrud.findById(1)
 await reldb.close()
 ```
 
+`reldb.config` 返回的是**脱敏后的配置快照**：数据库 `password` 与 URL 内嵌凭证会自动隐藏，便于排查状态但不应用于回放原始连接信息。
+
 ## 配置
 
 支持连接字符串（`url`）或分字段（`host/port/database/user/password`）。

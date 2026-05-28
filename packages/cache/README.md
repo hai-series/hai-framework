@@ -45,6 +45,8 @@ if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
 await cache.close()
 ```
 
+`cache.config` 返回的是**脱敏后的配置快照**：如后续接入 Redis `password` / `url` 等凭证字段，会自动做安全处理，不应用作回写原始密钥。
+
 ## 初始化配置
 
 ```ts

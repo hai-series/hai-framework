@@ -211,7 +211,7 @@ export interface ReachTemplateRegistry {
 export interface ReachFunctions extends SendOperations {
   /** 初始化触达模块（注册多个 Provider） */
   init: (config: ReachConfigInput) => Promise<HaiResult<void>>
-  /** 当前配置（未初始化时为 null） */
+  /** 当前脱敏后的配置快照（未初始化时为 null） */
   readonly config: ReachConfig | null
   /** 是否已初始化 */
   readonly isInitialized: boolean

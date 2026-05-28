@@ -19,6 +19,7 @@ describe('ai.init', () => {
       llm: {
         model: 'gpt-4o',
         apiKey: 'sk-test-key',
+        baseUrl: 'https://user:pass@api.openai.com/v1',
         temperature: 0.5,
         maxTokens: 2048,
         timeout: 30000,
@@ -27,6 +28,8 @@ describe('ai.init', () => {
     expect(result.success).toBe(true)
     expect(ai.config).not.toBeNull()
     expect(ai.config!.llm?.model).toBe('gpt-4o')
+    expect(ai.config!.llm?.apiKey).toBe('[REDACTED]')
+    expect(ai.config!.llm?.baseUrl).toBe('https://[REDACTED]:[REDACTED]@api.openai.com/v1')
     expect(ai.config!.llm?.temperature).toBe(0.5)
     expect(ai.config!.llm?.maxTokens).toBe(2048)
     ai.close()

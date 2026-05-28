@@ -203,8 +203,10 @@ await core.close()
 
 ```ts
 ai.isInitialized // boolean
-ai.config // 当前配置对象，未初始化时为 null
+ai.config // 当前脱敏配置快照，未初始化时为 null
 ```
+
+`ai.config` 中的 `apiKey`、`privateKey`、`baseUrl` 等敏感字段会自动脱敏；其中 URL 类字段会保留地址结构，仅掩码内嵌凭证。
 
 ---
 

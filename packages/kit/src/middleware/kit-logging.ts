@@ -108,32 +108,5 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
  * @returns 屏蔽后的副本
  */
 function redactObject(obj: unknown, fields: string[]): unknown {
-  if (typeof obj !== 'object' || obj === null) {
-    return obj
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map(item => redactObject(item, fields))
-  }
-
-  // 保留 Date、RegExp 等原生对象类型
-  if (obj instanceof Date || obj instanceof RegExp) {
-    return obj
-  }
-
-  const result: Record<string, unknown> = {}
-
-  for (const [key, value] of Object.entries(obj)) {
-    if (fields.includes(key.toLowerCase())) {
-      result[key] = '[REDACTED]'
-    }
-    else if (typeof value === 'object' && value !== null) {
-      result[key] = redactObject(value, fields)
-    }
-    else {
-      result[key] = value
-    }
-  }
-
-  return result
+  return core.object.sanitizeSensitiveFields(obj, { matcher: fields })
 }

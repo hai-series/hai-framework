@@ -96,6 +96,8 @@ await reach.init(core.config.get('reach'))
 await reach.close()
 ```
 
+`reach.config` 返回的是脱敏后的配置快照；`api.url` / `endpoint`、授权头、SMTP `pass`、短信密钥等敏感值会自动隐藏。
+
 ### 3. 保存模板（模板绑定 Provider）
 
 ```typescript
@@ -159,7 +161,7 @@ await reach.send({
 | `reach.init`          | `(config: ReachConfigInput) => Promise<HaiResult<void>>`    | 初始化（注册多个 Provider）        |
 | `reach.send`          | `(message: ReachMessage) => Promise<HaiResult<SendResult>>` | 发送消息（通过 provider 字段路由） |
 | `reach.template`      | `ReachTemplateRegistry`                                  | 模板注册表                         |
-| `reach.config`        | `ReachConfig \| null`                                    | 当前配置                           |
+| `reach.config`        | `ReachConfig \| null`                                    | 当前脱敏配置快照                   |
 | `reach.isInitialized` | `boolean`                                                | 是否已初始化                       |
 | `reach.close`         | `() => Promise<void>`                                    | 关闭所有连接                       |
 

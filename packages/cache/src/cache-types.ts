@@ -380,7 +380,7 @@ export interface CacheCompositeOperations {
 export interface CacheFunctions extends CacheCompositeOperations {
   /** 初始化缓存连接；会先关闭已有连接再以新配置重新初始化 */
   init: (config: CacheConfigInput) => Promise<HaiResult<void>>
-  /** 当前配置（parse 后）；未初始化时为 null */
+  /** 当前脱敏后的配置快照；未初始化时为 null */
   readonly config: CacheConfig | null
   /** 是否已初始化并连接 */
   readonly isInitialized: boolean

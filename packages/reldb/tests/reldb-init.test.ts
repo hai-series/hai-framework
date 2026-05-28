@@ -16,6 +16,9 @@ describe('reldb.init', () => {
       if (options?.database) {
         expect(reldb.config?.database).toBe(options.database)
       }
+      if (label !== 'sqlite') {
+        expect(reldb.config?.password).toBe('[REDACTED]')
+      }
     })
 
     it(`${label}: close 后应恢复未初始化状态`, async () => {

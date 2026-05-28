@@ -48,6 +48,8 @@ await apiClient.init({
 })
 ```
 
+> `createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境 + `@aparajita/capacitor-secure-storage` 已安装时持久化 token；纯 Web 不会回退到 `localStorage`。
+
 SSR / Node.js 测试场景请显式传入内存存储：
 
 ```ts
@@ -83,6 +85,8 @@ const contract = apiContract.create({ iam: apiContract.iam })
 const client = apiClient.create(contract)
 await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 ```
+
+`client.config` / `apiClient.config` 返回的是脱敏后的运行配置快照；`baseUrl` 的内嵌凭证与 `headers.authorization` 等敏感值会自动隐藏。
 
 ### 4. 关闭
 

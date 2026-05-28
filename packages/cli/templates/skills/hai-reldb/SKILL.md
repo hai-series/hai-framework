@@ -51,6 +51,8 @@ await reldb.init(core.config.get('db'))
 await reldb.close()
 ```
 
+`reldb.config` 返回的是脱敏后的配置快照；数据库密码与 URL 内嵌凭证会自动隐藏。
+
 ### 3. 选择操作接口
 
 | 接口 | 用途               | 入口                         |

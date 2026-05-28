@@ -122,6 +122,8 @@ ai.init(core.config.get('ai'))
 ai.close()
 ```
 
+`ai.config` 返回的是脱敏后的配置快照；`apiKey`、`privateKey`、`baseUrl` 等敏感字段会自动隐藏，URL 类字段只掩码内嵌凭证。
+
 **特殊说明**：`ai.tools` 和 `ai.stream` 无需 init 即可使用；`ai.llm` 和 `ai.mcp` 操作需要先 init。
 
 ---
