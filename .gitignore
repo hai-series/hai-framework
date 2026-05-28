@@ -45,6 +45,7 @@ data/
 tmp/
 temp/
 .cache/
+.leak-words.json
 .tmp-*/
 
 test-results/
