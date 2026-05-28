@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/ai",
   "type": "module",
-  "version": "0.1.0-alpha.16",
+  "version": "0.1.0-alpha.18",
   "description": "Hai Framework AI module (LLM, MCP, tools, and clients).",
   "license": "Apache-2.0",
   "exports": {
