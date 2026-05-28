@@ -86,6 +86,22 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 | 部署       | Vercel + Neon (PG) + Upstash (Redis) + Cloudflare R2 (S3)      |
 | 移动端     | Capacitor（Android / iOS）                                     |
 
+## 本地 Leak Hooks
+
+仓库根目录支持通过 Git hooks 在 `git commit` / `git push` 前检查 leak 关键词。
+
+本地可创建 `.leak-words.json`：
+
+```json
+[
+  "your-leak-word"
+]
+```
+
+- 数组中的每一项都会参与暂存内容和 commit message 检查
+- `.leak-words.json` 已加入 `.gitignore`，只在本地生效，不会进入版本控制
+- 实际入口是 `.husky/pre-commit`、`.husky/commit-msg`、`.husky/pre-push` 和 `scripts/check-leak-words.mjs`
+
 ## AI-First 基础设施
 
 使用 `hai create` 创建项目时，CLI 会自动生成一套完整的 AI 上下文体系，原生覆盖 GitHub Copilot、Cursor、Codex、OpenCode，并为 Claude Code 生成可复用共享规范的项目指引：

@@ -13,6 +13,7 @@
   },
   "scripts": {
     "build": "pnpm lint && turbo run build",
+    "check:leak-words": "node scripts/check-leak-words.mjs --staged",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
