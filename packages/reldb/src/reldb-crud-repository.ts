@@ -327,17 +327,18 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * 将查询行映射为业务模型
    */
   private mapRow(row: QueryRow): TItem {
-    const result: Record<string, unknown> = {}
+    const result = {} as TItem
+    const resultRecord = result as Record<string, unknown>
     for (const field of this.fields) {
       if (!field.select) {
         // 不可查询字段直接跳过
         continue
       }
       const value = this.fromDbValue(row[field.columnName], field.def)
-      result[field.fieldName] = value
+      resultRecord[field.fieldName] = value
     }
-    // 行映射结果为动态构建的对象，无法通过 TS 静态推导，需强转为 TItem
-    return result as unknown as TItem
+    // 行映射结果为动态构建的对象，无法通过 TS 静态推导，需在最终返回时做单次对象断言
+    return result
   }
 
   /**
