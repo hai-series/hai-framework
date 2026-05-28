@@ -9,6 +9,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { PgvectorConfig } from '../vecdb-config.js'
 import type {
+  VectorDocument,
   VectorSearchResult,
 } from '../vecdb-types.js'
 import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
@@ -25,6 +26,20 @@ const logger = core.logger.child({ module: 'vecdb', scope: 'pgvector' })
 interface PgPool {
   query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
   end: () => Promise<void>
+}
+
+/** pg 模块的最小接口定义（避免强依赖可选包） */
+interface PgModule {
+  Pool: new (config: unknown) => PgPool
+}
+
+function isPgModule(value: unknown): value is PgModule {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const maybeModule = value as { Pool?: unknown }
+  return typeof maybeModule.Pool === 'function'
 }
 
 /**
@@ -74,6 +89,79 @@ export function createPgvectorProvider(): VecdbProvider {
       default:
         return 1 / (1 + distance)
     }
+  }
+
+  /** 判断动态 import 是否因缺少驱动失败 */
+  function isMissingModuleError(error: unknown, packageName: string): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    return message.includes(`'${packageName}'`) || message.includes(`\"${packageName}\"`) || message.includes(packageName)
+  }
+
+  /** 动态加载 pg 驱动 */
+  async function loadPg(): Promise<HaiResult<PgModule>> {
+    try {
+      const mod = await import('pg')
+      if (!isPgModule(mod)) {
+        const error = new Error('pg driver module does not export Pool')
+        logger.error('Failed to load pg driver', { error: error.message })
+        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: 'pg' } }), error)
+      }
+
+      return ok(mod)
+    }
+    catch (error) {
+      if (isMissingModuleError(error, 'pg')) {
+        logger.error('Failed to load pg driver', { error: error instanceof Error ? error.message : String(error) })
+        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: 'pg' } }), error)
+      }
+      throw error
+    }
+  }
+
+  /** 获取集合维度；集合不存在时返回 COLLECTION_NOT_FOUND */
+  async function getCollectionDimension(name: string): Promise<HaiResult<number>> {
+    const table = tableName(name)
+
+    const existsResult = await pool!.query(
+      `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
+      [table],
+    )
+    if (!existsResult.rows[0].exists) {
+      return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+    }
+
+    const dimResult = await pool!.query(`
+      SELECT atttypmod FROM pg_attribute
+      WHERE attrelid = $1::regclass AND attname = 'vector'
+    `, [quoteIdent(table)])
+
+    return ok(dimResult.rows.length > 0 ? Number(dimResult.rows[0].atttypmod) : 0)
+  }
+
+  /** 校验查询向量维度 */
+  function validateVectorDimension<T>(expected: number, actual: number): HaiResult<T> | null {
+    if (expected === actual) {
+      return null
+    }
+
+    return err(
+      HaiVecdbError.DIMENSION_MISMATCH,
+      vecdbM('vecdb_dimensionMismatch', {
+        params: { expected: String(expected), actual: String(actual) },
+      }),
+    )
+  }
+
+  /** 校验批量文档维度 */
+  function validateDocumentsDimension(expected: number, documents: VectorDocument[]): HaiResult<void> | null {
+    for (const document of documents) {
+      const validation = validateVectorDimension<void>(expected, document.vector.length)
+      if (validation) {
+        return validation
+      }
+    }
+
+    return null
   }
 
   // ─── 操作上下文 ───
@@ -169,33 +257,21 @@ export function createPgvectorProvider(): VecdbProvider {
     },
 
     async info(name) {
-      const table = tableName(name)
-
       logger.debug('Getting collection info', { name })
 
-      // 检查表是否存在
-      const existsResult = await pool!.query(
-        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-        [table],
-      )
-      if (!existsResult.rows[0].exists) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+      const table = tableName(name)
+      const dimensionResult = await getCollectionDimension(name)
+      if (!dimensionResult.success) {
+        return dimensionResult
       }
 
       // 获取文档数量
       const countResult = await pool!.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
       const count = Number.parseInt(String(countResult.rows[0].count), 10)
 
-      // 获取向量维度（从列定义中提取）
-      const dimResult = await pool!.query(`
-        SELECT atttypmod FROM pg_attribute
-        WHERE attrelid = $1::regclass AND attname = 'vector'
-      `, [quoteIdent(table)])
-      const dimension = dimResult.rows.length > 0 ? Number(dimResult.rows[0].atttypmod) : 0
-
       return ok({
         name,
-        dimension,
+        dimension: dimensionResult.data,
         metric: config?.metric ?? 'cosine',
         count,
       })
@@ -225,6 +301,16 @@ export function createPgvectorProvider(): VecdbProvider {
 
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
+      const dimensionResult = await getCollectionDimension(collection)
+      if (!dimensionResult.success) {
+        return dimensionResult
+      }
+
+      const dimensionValidation = validateDocumentsDimension(dimensionResult.data, documents)
+      if (dimensionValidation) {
+        return dimensionValidation
+      }
+
       // 构建多值 INSERT（单条 SQL，避免 await-in-loop N+1 问题）
       // 注意：PostgreSQL 参数上限为 65535，每条文档占 4 个参数，单批最多 ~16383 条
       const qi = quoteIdent(table)
@@ -250,6 +336,16 @@ export function createPgvectorProvider(): VecdbProvider {
       const table = tableName(collection)
 
       logger.debug('Upserting vectors', { collection, count: documents.length })
+
+      const dimensionResult = await getCollectionDimension(collection)
+      if (!dimensionResult.success) {
+        return dimensionResult
+      }
+
+      const dimensionValidation = validateDocumentsDimension(dimensionResult.data, documents)
+      if (dimensionValidation) {
+        return dimensionValidation
+      }
 
       const qi = quoteIdent(table)
       // 构建多值 INSERT ON CONFLICT（单条 SQL，避免 await-in-loop N+1 问题）
@@ -294,6 +390,16 @@ export function createPgvectorProvider(): VecdbProvider {
       const op = distanceOp()
 
       logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
+
+      const dimensionResult = await getCollectionDimension(collection)
+      if (!dimensionResult.success) {
+        return dimensionResult
+      }
+
+      const dimensionValidation = validateVectorDimension<VectorSearchResult[]>(dimensionResult.data, vector.length)
+      if (dimensionValidation) {
+        return dimensionValidation
+      }
 
       const vectorStr = `[${vector.join(',')}]`
 
@@ -361,8 +467,12 @@ export function createPgvectorProvider(): VecdbProvider {
       const pgConfig = cfg as PgvectorConfig
 
       try {
-        // 动态加载 pg
-        const { Pool } = await import('pg')
+        const loadResult = await loadPg()
+        if (!loadResult.success) {
+          return loadResult
+        }
+
+        const { Pool } = loadResult.data
 
         const poolConfig = pgConfig.url
           ? { connectionString: pgConfig.url }

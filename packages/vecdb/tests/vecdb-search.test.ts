@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { vecdb } from '../src/index.js'
+import { HaiVecdbError, vecdb } from '../src/index.js'
 import { defineVecdbSuite, lancedbEnv, pgvectorEnv, qdrantEnv } from './helpers/vecdb-test-suite.js'
 
 /** 创建一个可预测的向量（给每个位置填充 base + 偏移量，然后归一化） */
@@ -132,6 +132,16 @@ describe('vecdb.vector.search', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toHaveLength(0)
+      }
+    })
+
+    it('搜索向量维度不匹配应返回 DIMENSION_MISMATCH', async () => {
+      await vecdb.collection.create(COLLECTION, { dimension: DIM })
+
+      const result = await vecdb.vector.search(COLLECTION, makeVector(DIM - 1, 1.0), { topK: 5 })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiVecdbError.DIMENSION_MISMATCH.code)
       }
     })
   }

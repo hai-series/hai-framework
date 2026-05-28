@@ -90,6 +90,10 @@ describe.sequential('vecdb init — pgvector', () => {
     expect(result.success).toBe(true)
     expect(vecdb.isInitialized).toBe(true)
     expect(vecdb.config?.type).toBe('pgvector')
+    if (vecdb.config?.type === 'pgvector') {
+      expect(vecdb.config.password).toBe('[REDACTED]')
+      expect(vecdb.config.password).not.toBe(lease.password)
+    }
   })
 
   it('关闭后 isInitialized 为 false', async () => {

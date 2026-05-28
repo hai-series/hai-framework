@@ -318,7 +318,7 @@ export interface VecdbFunctions {
   init: (config: VecdbConfigInput) => Promise<HaiResult<void>>
   /** 关闭连接 */
   close: () => Promise<HaiResult<void>>
-  /** 当前配置（未初始化时为 null） */
+  /** 当前脱敏配置快照（未初始化时为 null） */
   readonly config: VecdbConfig | null
   /** 是否已初始化 */
   readonly isInitialized: boolean

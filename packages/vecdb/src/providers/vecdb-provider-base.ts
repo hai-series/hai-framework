@@ -20,7 +20,7 @@ import type {
   VectorSearchResult,
 } from '../vecdb-types.js'
 
-import { err } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
@@ -201,21 +201,21 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
   return {
     insert: (collection, documents) => wrapOp(
       ctx,
-      () => driver.insert(collection, documents),
+      () => documents.length === 0 ? Promise.resolve(ok(undefined)) : driver.insert(collection, documents),
       HaiVecdbError.INSERT_FAILED,
       'Failed to insert vectors',
       { collection },
     ),
     upsert: (collection, documents) => wrapOp(
       ctx,
-      () => driver.upsert(collection, documents),
+      () => documents.length === 0 ? Promise.resolve(ok(undefined)) : driver.upsert(collection, documents),
       HaiVecdbError.UPDATE_FAILED,
       'Failed to upsert vectors',
       { collection },
     ),
     delete: (collection, ids) => wrapOp(
       ctx,
-      () => driver.delete(collection, ids),
+      () => ids.length === 0 ? Promise.resolve(ok(undefined)) : driver.delete(collection, ids),
       HaiVecdbError.DELETE_FAILED,
       'Failed to delete vectors',
       { collection },

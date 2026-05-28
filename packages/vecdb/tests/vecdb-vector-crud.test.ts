@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { vecdb } from '../src/index.js'
+import { HaiVecdbError, vecdb } from '../src/index.js'
 import { defineVecdbSuite, lancedbEnv, pgvectorEnv, qdrantEnv } from './helpers/vecdb-test-suite.js'
 
 /** 创建 N 维归一化随机向量（用于 cosine 测试） */
@@ -107,6 +107,74 @@ describe('vecdb.vector CRUD', () => {
       const count = await vecdb.vector.count(COLLECTION)
       if (count.success) {
         expect(count.data).toBe(20)
+      }
+    })
+
+    it('空批量 insert 应视为 no-op', async () => {
+      await vecdb.collection.create(COLLECTION, { dimension: DIM })
+
+      const result = await vecdb.vector.insert(COLLECTION, [])
+      expect(result.success).toBe(true)
+
+      const count = await vecdb.vector.count(COLLECTION)
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(count.data).toBe(0)
+      }
+    })
+
+    it('空批量 upsert 应视为 no-op', async () => {
+      await vecdb.collection.create(COLLECTION, { dimension: DIM })
+
+      const result = await vecdb.vector.upsert(COLLECTION, [])
+      expect(result.success).toBe(true)
+
+      const count = await vecdb.vector.count(COLLECTION)
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(count.data).toBe(0)
+      }
+    })
+
+    it('空批量 delete 应视为 no-op', async () => {
+      await vecdb.collection.create(COLLECTION, { dimension: DIM })
+      await vecdb.vector.insert(COLLECTION, [
+        { id: 'keep-me', vector: randomVector(DIM), content: 'Keep me' },
+      ])
+
+      const result = await vecdb.vector.delete(COLLECTION, [])
+      expect(result.success).toBe(true)
+
+      const count = await vecdb.vector.count(COLLECTION)
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(count.data).toBe(1)
+      }
+    })
+
+    it('insert 维度不匹配应返回 DIMENSION_MISMATCH', async () => {
+      await vecdb.collection.create(COLLECTION, { dimension: DIM })
+
+      const result = await vecdb.vector.insert(COLLECTION, [
+        { id: 'bad-doc', vector: randomVector(DIM - 1), content: 'Bad dimension' },
+      ])
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiVecdbError.DIMENSION_MISMATCH.code)
+      }
+    })
+
+    it('upsert 维度不匹配应返回 DIMENSION_MISMATCH', async () => {
+      await vecdb.collection.create(COLLECTION, { dimension: DIM })
+
+      const result = await vecdb.vector.upsert(COLLECTION, [
+        { id: 'bad-upsert', vector: randomVector(DIM + 1), content: 'Bad dimension' },
+      ])
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiVecdbError.DIMENSION_MISMATCH.code)
       }
     })
   }

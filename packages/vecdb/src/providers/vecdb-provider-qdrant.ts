@@ -40,12 +40,43 @@ const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
 /** Qdrant Client 的最小接口定义（避免强依赖可选包） */
 interface QdrantClient {
   getCollections: () => Promise<{ collections: { name: string }[] }>
-  getCollection: (name: string) => Promise<{ config?: { params?: { vectors?: { size?: number, distance?: string } } }, points_count?: number }>
+  getCollection: QdrantGetCollectionMethod
   createCollection: (name: string, params: Record<string, unknown>) => Promise<unknown>
   deleteCollection: (name: string) => Promise<unknown>
   upsert: (collection: string, params: Record<string, unknown>) => Promise<unknown>
   delete: (collection: string, params: Record<string, unknown>) => Promise<unknown>
   search: (collection: string, params: Record<string, unknown>) => Promise<Record<string, unknown>[]>
+}
+
+/** Qdrant getCollection 的返回类型 */
+interface QdrantCollectionInfo {
+  config?: { params?: { vectors?: { size?: number, distance?: string } } }
+  points_count?: number
+}
+
+/** Qdrant getCollection 特定错误对象的最小接口 */
+interface QdrantGetCollectionError {
+  getActualType?: () => { status?: number }
+}
+
+/** Qdrant getCollection 方法的最小接口（含 typed error 构造器） */
+interface QdrantGetCollectionMethod {
+  (name: string): Promise<QdrantCollectionInfo>
+  Error?: new (...args: never[]) => QdrantGetCollectionError
+}
+
+/** Qdrant 模块的最小接口 */
+interface QdrantModule {
+  QdrantClient: new (config: { url: string, apiKey?: string }) => QdrantClient
+}
+
+function isQdrantModule(value: unknown): value is QdrantModule {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const maybeModule = value as { QdrantClient?: unknown }
+  return typeof maybeModule.QdrantClient === 'function'
 }
 
 /**
@@ -80,6 +111,90 @@ export function createQdrantProvider(): VecdbProvider {
   let client: QdrantClient | null = null
   let config: QdrantConfig | null = null
 
+  // ─── 辅助函数 ───
+
+  /** 判断动态 import 是否因缺少驱动失败 */
+  function isMissingModuleError(error: unknown, packageName: string): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    return message.includes(`'${packageName}'`) || message.includes(`\"${packageName}\"`) || message.includes(packageName)
+  }
+
+  /** 动态加载 Qdrant JS 客户端 */
+  async function loadQdrantClient(): Promise<HaiResult<QdrantModule>> {
+    try {
+      const mod = await import('@qdrant/js-client-rest')
+      if (!isQdrantModule(mod)) {
+        const error = new Error('@qdrant/js-client-rest driver module does not export QdrantClient')
+        logger.error('Failed to load Qdrant driver', { error: error.message })
+        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: '@qdrant/js-client-rest' } }), error)
+      }
+
+      return ok(mod)
+    }
+    catch (error) {
+      if (isMissingModuleError(error, '@qdrant/js-client-rest')) {
+        logger.error('Failed to load Qdrant driver', { error: error instanceof Error ? error.message : String(error) })
+        return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: '@qdrant/js-client-rest' } }), error)
+      }
+      throw error
+    }
+  }
+
+  /** 判断 Qdrant 错误是否为 404（集合不存在） */
+  function isQdrantNotFoundError(error: unknown): boolean {
+    const getCollectionErrorCtor = client?.getCollection.Error
+    if (getCollectionErrorCtor && error instanceof getCollectionErrorCtor) {
+      return error.getActualType?.().status === 404
+    }
+
+    const maybeError = error as {
+      status?: number
+      response?: { status?: number }
+      $metadata?: { httpStatusCode?: number }
+    }
+
+    return maybeError.status === 404
+      || maybeError.response?.status === 404
+      || maybeError.$metadata?.httpStatusCode === 404
+  }
+
+  /** 获取集合信息；集合不存在时返回 COLLECTION_NOT_FOUND，其余异常继续抛出 */
+  async function getCollectionInfo(name: string): Promise<HaiResult<QdrantCollectionInfo>> {
+    try {
+      return ok(await client!.getCollection(name))
+    }
+    catch (error) {
+      if (isQdrantNotFoundError(error)) {
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+      }
+      throw error
+    }
+  }
+
+  /** 获取集合维度 */
+  async function getCollectionDimension(name: string): Promise<HaiResult<number>> {
+    const infoResult = await getCollectionInfo(name)
+    if (!infoResult.success) {
+      return infoResult
+    }
+
+    return ok(infoResult.data.config?.params?.vectors?.size ?? 0)
+  }
+
+  /** 校验查询向量维度 */
+  function validateVectorDimension<T>(expected: number, actual: number): HaiResult<T> | null {
+    if (expected === actual) {
+      return null
+    }
+
+    return err(
+      HaiVecdbError.DIMENSION_MISMATCH,
+      vecdbM('vecdb_dimensionMismatch', {
+        params: { expected: String(expected), actual: String(actual) },
+      }),
+    )
+  }
+
   // ─── 操作上下文 ───
 
   const ctx = { isConnected: () => client !== null, logger }
@@ -113,12 +228,9 @@ export function createQdrantProvider(): VecdbProvider {
     async drop(name) {
       logger.debug('Dropping collection', { name })
 
-      // 先用 getCollection 确认存在，不存在时会抛出异常
-      try {
-        await client!.getCollection(name)
-      }
-      catch {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+      const infoResult = await getCollectionInfo(name)
+      if (!infoResult.success) {
+        return infoResult
       }
 
       await client!.deleteCollection(name)
@@ -134,24 +246,23 @@ export function createQdrantProvider(): VecdbProvider {
         await client!.getCollection(name)
         return ok(true)
       }
-      catch {
-        // 限制：Qdrant SDK getCollection 在集合不存在时抛出 404 异常，
-        // 但网络错误也会抛异常，当前无法区分两者。
-        // 网络不可用时可能误判为“不存在”。
-        return ok(false)
+      catch (error) {
+        if (isQdrantNotFoundError(error)) {
+          return ok(false)
+        }
+        throw error
       }
     },
 
     async info(name) {
       logger.debug('Getting collection info', { name })
 
-      let collectionInfo: Awaited<ReturnType<QdrantClient['getCollection']>>
-      try {
-        collectionInfo = await client!.getCollection(name)
+      const infoResult = await getCollectionInfo(name)
+      if (!infoResult.success) {
+        return infoResult
       }
-      catch {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
-      }
+
+      const collectionInfo = infoResult.data
 
       const vectorsConfig = collectionInfo.config?.params?.vectors
       const dimension = vectorsConfig?.size ?? 0
@@ -185,6 +296,18 @@ export function createQdrantProvider(): VecdbProvider {
     async insert(collection, documents) {
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
+      const dimensionResult = await getCollectionDimension(collection)
+      if (!dimensionResult.success) {
+        return dimensionResult
+      }
+
+      for (const document of documents) {
+        const validation = validateVectorDimension<void>(dimensionResult.data, document.vector.length)
+        if (validation) {
+          return validation
+        }
+      }
+
       // 内部保留字段 _id / _content 放在展开之后，防止被 metadata 同名字段覆盖
       const points = documents.map(doc => ({
         id: hashToUuid(doc.id),
@@ -206,6 +329,18 @@ export function createQdrantProvider(): VecdbProvider {
 
     async upsert(collection, documents) {
       logger.debug('Upserting vectors', { collection, count: documents.length })
+
+      const dimensionResult = await getCollectionDimension(collection)
+      if (!dimensionResult.success) {
+        return dimensionResult
+      }
+
+      for (const document of documents) {
+        const validation = validateVectorDimension<void>(dimensionResult.data, document.vector.length)
+        if (validation) {
+          return validation
+        }
+      }
 
       // 内部保留字段 _id / _content 放在展开之后，防止被 metadata 同名字段覆盖
       const points = documents.map(doc => ({
@@ -239,6 +374,16 @@ export function createQdrantProvider(): VecdbProvider {
       const minScore = options?.minScore ?? 0
 
       logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
+
+      const dimensionResult = await getCollectionDimension(collection)
+      if (!dimensionResult.success) {
+        return dimensionResult
+      }
+
+      const dimensionValidation = validateVectorDimension<VectorSearchResult[]>(dimensionResult.data, vector.length)
+      if (dimensionValidation) {
+        return dimensionValidation
+      }
 
       // 构建过滤条件
       let filter: Record<string, unknown> | undefined
@@ -275,8 +420,12 @@ export function createQdrantProvider(): VecdbProvider {
     async count(collection) {
       logger.debug('Counting vectors', { collection })
 
-      const info = await client!.getCollection(collection)
-      return ok(info.points_count ?? 0)
+      const infoResult = await getCollectionInfo(collection)
+      if (!infoResult.success) {
+        return infoResult
+      }
+
+      return ok(infoResult.data.points_count ?? 0)
     },
   }
 
@@ -293,7 +442,12 @@ export function createQdrantProvider(): VecdbProvider {
       const qdrantConfig = cfg as QdrantConfig
 
       try {
-        const { QdrantClient: QdrantClientClass } = await import('@qdrant/js-client-rest')
+        const loadResult = await loadQdrantClient()
+        if (!loadResult.success) {
+          return loadResult
+        }
+
+        const { QdrantClient: QdrantClientClass } = loadResult.data
 
         // @qdrant/js-client-rest 为 optionalDependencies，动态 import 后类型与本地最小接口不兼容，需强转
         const qdrantClient = new QdrantClientClass({

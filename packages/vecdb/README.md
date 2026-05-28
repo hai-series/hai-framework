@@ -33,7 +33,10 @@ if (searchResult.success) {
 }
 
 // 关闭
-await vecdb.close()
+const closeResult = await vecdb.close()
+if (!closeResult.success) {
+  throw new Error(closeResult.error.message)
+}
 ```
 
 ## 配置
@@ -60,6 +63,10 @@ await vecdb.init({
 // Qdrant
 await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333', apiKey: 'optional-key' })
 ```
+
+> 注意：`vecdb.config` 返回的是**脱敏配置快照**；连接字符串中的用户名/密码、独立 `password` 字段和 `apiKey` 会被替换为 `[REDACTED]`。
+
+> 行为说明：空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`；缺少可选驱动时返回 `HaiVecdbError.DRIVER_NOT_FOUND`。
 
 ## 错误处理
 

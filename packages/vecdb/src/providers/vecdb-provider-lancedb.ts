@@ -10,6 +10,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { LancedbConfig } from '../vecdb-config.js'
 import type {
   CollectionInfo,
+  VectorDocument,
   VectorSearchResult,
 } from '../vecdb-types.js'
 import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
@@ -37,7 +38,15 @@ interface LanceTable {
   add: (data: Record<string, unknown>[]) => Promise<void>
   delete: (filter: string) => Promise<void>
   countRows: () => Promise<number>
+  mergeInsert?: (on: string | string[]) => LanceMergeInsertBuilder
   search: (...args: unknown[]) => LanceSearchQuery
+}
+
+/** LanceDB merge insert builder 的最小接口 */
+interface LanceMergeInsertBuilder {
+  whenMatchedUpdateAll: () => LanceMergeInsertBuilder
+  whenNotMatchedInsertAll: () => LanceMergeInsertBuilder
+  execute: (data: Record<string, unknown>[]) => Promise<unknown>
 }
 
 /** LanceDB 查询构建器的最小接口 */
@@ -110,6 +119,47 @@ export function createLancedbProvider(): VecdbProvider {
     catch {
       return null
     }
+  }
+
+  /** 获取集合维度（若未知则返回 null） */
+  function getCollectionDimension(name: string): number | null {
+    return collectionMetas.get(name)?.dimension ?? null
+  }
+
+  /** 创建统一的维度不匹配错误结果 */
+  function createDimensionMismatchResult<T>(expected: number, actual: number): HaiResult<T> {
+    return err(
+      HaiVecdbError.DIMENSION_MISMATCH,
+      vecdbM('vecdb_dimensionMismatch', {
+        params: { expected: String(expected), actual: String(actual) },
+      }),
+    )
+  }
+
+  /** 校验查询向量维度 */
+  function validateVectorDimension<T>(collection: string, vector: number[]): HaiResult<T> | null {
+    const expected = getCollectionDimension(collection)
+    if (expected === null || vector.length === expected) {
+      return null
+    }
+
+    return createDimensionMismatchResult<T>(expected, vector.length)
+  }
+
+  /** 校验批量文档维度 */
+  function validateDocumentsDimension(collection: string, documents: VectorDocument[]): HaiResult<void> | null {
+    const expected = getCollectionDimension(collection)
+    if (expected === null) {
+      return null
+    }
+
+    for (const document of documents) {
+      if (document.vector.length !== expected) {
+        return createDimensionMismatchResult<void>(expected, document.vector.length)
+      }
+    }
+
+    return null
   }
 
   // ─── 操作上下文 ───
@@ -207,6 +257,11 @@ export function createLancedbProvider(): VecdbProvider {
         return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
       }
 
+      const dimensionValidation = validateDocumentsDimension(collection, documents)
+      if (dimensionValidation) {
+        return dimensionValidation
+      }
+
       const records = documents.map(doc => ({
         id: doc.id,
         vector: doc.vector,
@@ -228,9 +283,11 @@ export function createLancedbProvider(): VecdbProvider {
         return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
       }
 
-      // LanceDB 不支持原子 upsert，当前实现为 delete + add 两步操作。
-      // 若在 delete 之后、add 之前发生错误，已删除的记录将丢失。
-      // TODO: LanceDB 未来支持 mergeInsert 后可替换为原子操作
+      const dimensionValidation = validateDocumentsDimension(collection, documents)
+      if (dimensionValidation) {
+        return dimensionValidation
+      }
+
       const records = documents.map(doc => ({
         id: doc.id,
         vector: doc.vector,
@@ -238,10 +295,19 @@ export function createLancedbProvider(): VecdbProvider {
         metadata: JSON.stringify(doc.metadata ?? {}),
       }))
 
-      // 先删除已存在的记录，再插入
-      const ids = documents.map(d => `"${escapeLanceFilterValue(d.id)}"`).join(', ')
-      await table.delete(`id IN (${ids})`)
-      await table.add(records)
+      if (typeof table.mergeInsert === 'function') {
+        await table
+          .mergeInsert('id')
+          .whenMatchedUpdateAll()
+          .whenNotMatchedInsertAll()
+          .execute(records)
+      }
+      else {
+        logger.warn('LanceDB mergeInsert is unavailable, falling back to delete/add upsert')
+        const ids = documents.map(d => `"${escapeLanceFilterValue(d.id)}"`).join(', ')
+        await table.delete(`id IN (${ids})`)
+        await table.add(records)
+      }
 
       logger.info('Vectors upserted', { collection, count: documents.length })
       return ok(undefined)
@@ -268,6 +334,11 @@ export function createLancedbProvider(): VecdbProvider {
       const table = await openTable(collection)
       if (!table) {
         return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
+      }
+
+      const dimensionValidation = validateVectorDimension<VectorSearchResult[]>(collection, vector)
+      if (dimensionValidation) {
+        return dimensionValidation
       }
 
       const topK = options?.topK ?? 10
