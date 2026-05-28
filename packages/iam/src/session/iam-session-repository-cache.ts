@@ -60,6 +60,14 @@ function restoreSessionDates(session: Session): Session {
   }
 }
 
+function buildRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string, cause?: unknown): HaiResult<never> {
+  return err(
+    HaiIamError.REPOSITORY_ERROR,
+    iamM(messageKey, { params: { message } }),
+    cause,
+  )
+}
+
 // ─── 会话存储接口 ───
 
 /**
@@ -242,41 +250,100 @@ export function createCacheSessionRepository(
     },
 
     async removeByAccessToken(accessToken): Promise<HaiResult<void>> {
+      const tokenKey = buildTokenKey(accessToken)
+
       // 读取 session 以获取 userId 和 _tokenPair.refreshToken
-      const sessionResult = await cache.kv.get<Session>(buildTokenKey(accessToken))
-      if (sessionResult.success && sessionResult.data) {
+      const sessionResult = await cache.kv.get<Session>(tokenKey)
+      if (!sessionResult.success) {
+        return buildRepositoryError(
+          'iam_querySessionMappingCacheFailed',
+          sessionResult.error.message,
+          sessionResult.error,
+        ) as HaiResult<void>
+      }
+
+      if (sessionResult.data) {
         const session = sessionResult.data as Session & { data?: { _tokenPair?: TokenPair } }
 
         // 从用户令牌集合中移除
-        await cache.set_.srem(buildUserTokensKey(session.userId), accessToken)
+        const removeUserTokenResult = await cache.set_.srem(buildUserTokensKey(session.userId), accessToken)
+        if (!removeUserTokenResult.success) {
+          return buildRepositoryError(
+            'iam_deleteUserSessionCacheFailed',
+            removeUserTokenResult.error.message,
+            removeUserTokenResult.error,
+          ) as HaiResult<void>
+        }
 
         // 删除 refreshToken 映射
         const tokenPair = session.data?._tokenPair
         if (tokenPair?.refreshToken) {
-          await cache.kv.del(buildRefreshKey(tokenPair.refreshToken))
+          const removeRefreshTokenResult = await cache.kv.del(buildRefreshKey(tokenPair.refreshToken))
+          if (!removeRefreshTokenResult.success) {
+            return buildRepositoryError(
+              'iam_deleteSessionMappingCacheFailed',
+              removeRefreshTokenResult.error.message,
+              removeRefreshTokenResult.error,
+            ) as HaiResult<void>
+          }
         }
       }
 
       // 删除 session 本身
-      await cache.kv.del(buildTokenKey(accessToken))
+      const removeSessionResult = await cache.kv.del(tokenKey)
+      if (!removeSessionResult.success) {
+        return buildRepositoryError(
+          'iam_deleteSessionMappingCacheFailed',
+          removeSessionResult.error.message,
+          removeSessionResult.error,
+        ) as HaiResult<void>
+      }
+
       return ok(undefined)
     },
 
     async removeByUserId(userId): Promise<HaiResult<number>> {
       const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
+      if (!tokensResult.success) {
+        return buildRepositoryError(
+          'iam_queryUserSessionCacheFailed',
+          tokensResult.error.message,
+          tokensResult.error,
+        ) as HaiResult<number>
+      }
+
       let removed = 0
-      if (tokensResult.success && tokensResult.data.length > 0) {
+      if (tokensResult.data.length > 0) {
         // 并行删除所有 accessToken 关联的缓存条目，避免 N+1
         const results = await Promise.allSettled(
           tokensResult.data.map(token => repo.removeByAccessToken(token)),
         )
         for (const r of results) {
-          if (r.status === 'fulfilled' && r.value.success)
-            removed += 1
+          if (r.status === 'rejected') {
+            return buildRepositoryError(
+              'iam_deleteSessionFailed',
+              String(r.reason),
+              r.reason,
+            ) as HaiResult<number>
+          }
+
+          if (!r.value.success)
+            return r.value as HaiResult<number>
+
+          removed += 1
         }
       }
+
       // 清理用户令牌集合本身
-      await cache.kv.del(buildUserTokensKey(userId))
+      const removeUserTokensKeyResult = await cache.kv.del(buildUserTokensKey(userId))
+      if (!removeUserTokensKeyResult.success) {
+        return buildRepositoryError(
+          'iam_deleteUserSessionCacheFailed',
+          removeUserTokensKeyResult.error.message,
+          removeUserTokensKeyResult.error,
+        ) as HaiResult<number>
+      }
+
       return ok(removed)
     },
 
@@ -335,8 +402,13 @@ export function createCacheSessionRepository(
       const writeOps: Array<Promise<HaiResult<void>>> = []
 
       for (const entry of readResults) {
-        if (entry.status === 'rejected')
-          continue
+        if (entry.status === 'rejected') {
+          return buildRepositoryError(
+            'iam_queryUserSessionCacheFailed',
+            String(entry.reason),
+            entry.reason,
+          ) as HaiResult<void>
+        }
         const { token, sessionKey, sessionResult, ttlResult } = entry.value
 
         if (!sessionResult.success || !sessionResult.data || !ttlResult.success || ttlResult.data <= 0) {
@@ -350,19 +422,34 @@ export function createCacheSessionRepository(
 
       // 并行写入所有更新
       const writeResults = await Promise.allSettled(writeOps)
-      const failedWrite = writeResults.find(r => r.status === 'fulfilled' && !r.value.success) as
-        PromiseFulfilledResult<HaiResult<void>> | undefined
-      if (failedWrite) {
-        const failedResult = failedWrite.value as { success: false, error: { message: string } }
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_saveUserSessionCacheFailed', { params: { message: failedResult.error.message } }),
-        )
+      for (const writeResult of writeResults) {
+        if (writeResult.status === 'rejected') {
+          return buildRepositoryError(
+            'iam_saveUserSessionCacheFailed',
+            String(writeResult.reason),
+            writeResult.reason,
+          ) as HaiResult<void>
+        }
+
+        if (!writeResult.value.success) {
+          return buildRepositoryError(
+            'iam_saveUserSessionCacheFailed',
+            writeResult.value.error.message,
+            writeResult.value.error,
+          ) as HaiResult<void>
+        }
       }
 
       // 清理已失效的令牌
       if (staleTokens.length > 0) {
-        await cache.set_.srem(buildUserTokensKey(userId), ...staleTokens)
+        const staleCleanupResult = await cache.set_.srem(buildUserTokensKey(userId), ...staleTokens)
+        if (!staleCleanupResult.success) {
+          return buildRepositoryError(
+            'iam_deleteUserSessionCacheFailed',
+            staleCleanupResult.error.message,
+            staleCleanupResult.error,
+          ) as HaiResult<void>
+        }
       }
 
       return ok(undefined)

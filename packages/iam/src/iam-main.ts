@@ -36,6 +36,10 @@ import { resetUserRepoSingleton } from './user/iam-user-repository-user.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'main' })
 
+function sanitizeIamConfig(config: IamConfig): IamConfig {
+  return core.object.sanitizeSensitiveFields(config)
+}
+
 // ─── 内部状态 ───
 
 /** init() 是否正在执行（并发防护） */
@@ -218,7 +222,7 @@ export const iam: IamFunctions = {
   get authz(): AuthzOperations { return currentAuthz ?? notInitializedAuthz },
   get session(): SessionOperations { return currentSession ?? notInitializedSession },
   get apiKey(): ApiKeyOperations { return currentApiKey ?? notInitializedApiKey },
-  get config() { return currentConfig },
+  get config() { return currentConfig ? sanitizeIamConfig(currentConfig) : null },
   get isInitialized() { return currentConfig !== null },
   get isRegisterEnabled() { return currentConfig?.register?.enabled !== false },
 

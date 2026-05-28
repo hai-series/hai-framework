@@ -86,6 +86,8 @@ const hasPermission = await iam.authz.checkPermission(
 await iam.close()
 ```
 
+`iam.config` 返回的是**脱敏后的配置快照**：LDAP `url` / `bindPassword` 等敏感配置会自动隐藏，便于状态检查但不能代替原始配置源。
+
 ## 设计说明
 
 ### 架构概览

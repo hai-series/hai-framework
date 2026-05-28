@@ -751,6 +751,41 @@ describe('iam.user', () => {
         // 还原默认配置
         await initIam()
       })
+
+      it('再次请求密码重置应使旧令牌失效', async () => {
+        const capturedTokens: string[] = []
+        const resetIam = await initIam({
+          onPasswordResetRequest: async (_user, token) => {
+            capturedTokens.push(token)
+          },
+        })
+
+        const regResult = await resetIam.user.register({
+          username: 'reset_latest_only_user',
+          email: 'resetlatest@test.com',
+          password: 'OldPass123',
+        })
+        expect(regResult.success).toBe(true)
+        if (!regResult.success)
+          return
+
+        const firstRequest = await resetIam.user.requestPasswordReset('resetlatest@test.com')
+        const secondRequest = await resetIam.user.requestPasswordReset('resetlatest@test.com')
+        expect(firstRequest.success).toBe(true)
+        expect(secondRequest.success).toBe(true)
+        expect(capturedTokens).toHaveLength(2)
+
+        const oldTokenResult = await resetIam.user.confirmPasswordReset(capturedTokens[0], 'NewestPass456!')
+        expect(oldTokenResult.success).toBe(false)
+        if (!oldTokenResult.success) {
+          expect(oldTokenResult.error.code).toBe(HaiIamError.RESET_TOKEN_INVALID.code)
+        }
+
+        const latestTokenResult = await resetIam.user.confirmPasswordReset(capturedTokens[1], 'NewestPass456!')
+        expect(latestTokenResult.success).toBe(true)
+
+        await initIam()
+      })
     })
   }
 

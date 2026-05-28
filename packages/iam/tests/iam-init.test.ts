@@ -156,6 +156,23 @@ describe('iam.init', () => {
       expect(iam.config?.session.sliding).toBe(true)
       await iam.close()
     })
+
+    it('ldap 配置快照应脱敏 URL 凭证与 bindPassword', async () => {
+      await iam.close()
+      const result = await iam.init({
+        ldap: {
+          url: 'ldap://admin:secret@ldap.example.com:389',
+          bindDn: 'cn=admin,dc=example,dc=com',
+          bindPassword: 'bind-secret',
+          searchBase: 'ou=users,dc=example,dc=com',
+        },
+      })
+
+      expect(result.success).toBe(true)
+      expect(iam.config?.ldap?.url).toBe('ldap://[REDACTED]:[REDACTED]@ldap.example.com:389')
+      expect(iam.config?.ldap?.bindPassword).toBe('[REDACTED]')
+      await iam.close()
+    })
   }
 
   defineIamEnvSuite('sqlite+memory', sqliteMemoryEnv(), () => defineCommon())

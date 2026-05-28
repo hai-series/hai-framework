@@ -155,16 +155,22 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       }
 
       if (new Date() > session.expiresAt) {
-        await repo.removeByAccessToken(accessToken)
+        const removeResult = await repo.removeByAccessToken(accessToken)
+        if (!removeResult.success) {
+          return removeResult as HaiResult<Session | null>
+        }
         return ok(null)
       }
 
       if (sliding) {
         const now = new Date()
-        await repo.updateByAccessToken(accessToken, {
+        const updateResult = await repo.updateByAccessToken(accessToken, {
           lastActiveAt: now,
           expiresAt: new Date(now.getTime() + maxAge * 1000),
         })
+        if (!updateResult.success) {
+          return updateResult as HaiResult<Session | null>
+        }
       }
 
       // 对外不暴露内部保留的 _tokenPair（含 refreshToken），
@@ -223,7 +229,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         }
 
         // Rotation 策略：删除旧会话（removeByAccessToken 内部同时清理 refreshToken 映射）
-        await repo.removeByAccessToken(oldSession.accessToken)
+        const removeOldSessionResult = await repo.removeByAccessToken(oldSession.accessToken)
+        if (!removeOldSessionResult.success) {
+          return removeOldSessionResult as HaiResult<TokenPair>
+        }
 
         // 创建新会话（复用旧会话的用户数据）
         const newSessionResult = await this.create({

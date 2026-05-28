@@ -83,6 +83,8 @@ await iam.init({
 })
 ```
 
+`iam.config` 返回的是脱敏后的配置快照；LDAP `url` / `bindPassword` 等敏感值会自动隐藏。
+
 初始化时自动创建数据库表（5 张）：`hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`。
 
 Token 和 OTP 存储在 cache 中（不落库）。refreshToken 使用独立的 cache key 存储。

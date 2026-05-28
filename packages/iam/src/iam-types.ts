@@ -164,7 +164,7 @@ export interface IamFunctions {
    */
   close: () => Promise<void>
 
-  /** 当前配置（未初始化时为 null） */
+  /** 当前脱敏后的配置快照（未初始化时为 null） */
   readonly config: IamConfig | null
   /** 是否已初始化 */
   readonly isInitialized: boolean
