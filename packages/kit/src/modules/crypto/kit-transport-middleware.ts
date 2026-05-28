@@ -44,7 +44,10 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
   const requireEncryption = config.requireEncryption ?? true
 
   // 初始化传输加密管理器
-  const result = config.crypto.transport.createServer({ maxClients: config.maxClients })
+  const result = config.crypto.transport.createServer({
+    keyStore: config.keyStore,
+    maxClients: config.maxClients,
+  })
   if (!result.success) {
     // 安全策略：transport 已启用但服务端管理器不可用时，受保护路由必须 fail-closed，禁止明文透传。
     return createUnavailableTransportMiddleware(keyExchangePath, excludePaths)

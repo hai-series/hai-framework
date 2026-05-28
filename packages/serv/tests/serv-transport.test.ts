@@ -2,8 +2,8 @@ import type { CryptoFunctions, TransportEncryptionManager } from '@h-ai/crypto'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { err } from '@h-ai/core'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
 const contract = apiContract.create({})
@@ -73,6 +73,22 @@ describe('serv.createApp({ transport })', () => {
     const exchanged = await exchangeResp.json() as { serverPublicKey: string, clientId: string }
     expect(typeof exchanged.serverPublicKey).toBe('string')
     expect(typeof exchanged.clientId).toBe('string')
+  })
+
+  it('透传 transport.keyStore 到 crypto.transport.createServer', () => {
+    const keyStore = createInMemoryKeyStore(12)
+    const createServer = vi.fn<CryptoFunctions['transport']['createServer']>(options => crypto.transport.createServer(options))
+    const forwardingCrypto = createCryptoWithTransportServer(createServer)
+
+    serv.createApp({
+      contract,
+      procedures,
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      transport: { crypto: forwardingCrypto, keyStore, maxClients: 12 },
+    })
+
+    expect(createServer).toHaveBeenCalledOnce()
+    expect(createServer).toHaveBeenCalledWith(expect.objectContaining({ keyStore, maxClients: 12 }))
   })
 
   it('runs custom preflight middleware before transport', async () => {

@@ -70,10 +70,12 @@ export default { fetch: handler }
 serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。使用方只需传入顶层 `crypto` 句柄：
 
 ```ts
-import { crypto } from '@h-ai/crypto'
+import { cache } from '@h-ai/cache'
+import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
 
 await crypto.init()
+await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const app = serv.createApp({
   contract,
@@ -84,6 +86,7 @@ const app = serv.createApp({
     // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
     // excludePaths: ['/health'],
     // maxClients: 10000,
+    keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
 ```
@@ -135,13 +138,13 @@ const app = serv.createApp({
 })
 ```
 
-> **多节点部署提示**：传输加密的会话密钥保存在 **服务端进程内**，多副本部署时必须满足下列条件之一才能正常工作：
+> **多节点部署提示**：传输加密的会话密钥默认保存在 **服务端进程内**，多副本部署时必须满足下列条件之一才能正常工作：
 >
 > - 在负载均衡层启用**会话粘性（sticky session）**，确保同一客户端命中同一节点；
 > - 或为每个客户端在每个节点首次访问时分别完成一次密钥协商；
-> - 或后续提供分布式密钥存储（roadmap）。
+> - 或注入共享 `keyStore`（如 `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`）。
 >
-> 单节点部署无需额外配置。
+> `keyStore` 属于运行时对象依赖，不应写入 `config/_serv.yml`；配置文件仍只保存路径、白名单和容量等静态项。
 
 > **安全策略**：启用 `transport` 后，除 `excludePaths` 与密钥协商端点外，业务请求必须携带有效 `X-Client-Id`。缺失或未知 clientId 会返回 400；响应体无法加密、非 JSON 业务响应或超过单次加密上限时返回错误，不会明文透传业务数据。
 

@@ -5,7 +5,7 @@
  * @module kit-types
  */
 
-import type { CryptoFunctions } from '@h-ai/crypto'
+import type { CryptoFunctions, TransportKeyStore } from '@h-ai/crypto'
 import type { AuthnOperations } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { RateLimitStore } from './middleware/kit-ratelimit.js'
@@ -369,6 +369,8 @@ export interface TransportEncryptionOptions {
   encryptResponse?: boolean
   /** 服务端可缓存的客户端公钥数量上限（默认 `10000`） */
   maxClients?: number
+  /** 共享客户端公钥存储；适用于多节点部署。 */
+  keyStore?: TransportKeyStore
 }
 
 /**

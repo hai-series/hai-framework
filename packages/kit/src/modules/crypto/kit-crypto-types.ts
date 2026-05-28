@@ -5,7 +5,7 @@
  * @module kit-crypto-types
  */
 
-import type { CryptoFunctions } from '@h-ai/crypto'
+import type { CryptoFunctions, TransportKeyStore } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 
 /**
@@ -168,6 +168,8 @@ export interface TransportEncryptionConfig {
   encryptResponse?: boolean
   /** 服务端可缓存的客户端公钥数量上限（默认 10000） */
   maxClients?: number
+  /** 共享客户端公钥存储（如 Redis / reldb）；未传时默认使用进程内内存实现。 */
+  keyStore?: TransportKeyStore
   /**
    * 是否强制要求传输加密（默认 true）
    *

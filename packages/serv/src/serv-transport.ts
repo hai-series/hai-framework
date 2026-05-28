@@ -16,7 +16,7 @@
  * @module serv-transport
  */
 
-import type { CryptoFunctions, EncryptedPayload, TransportEncryptionManager } from '@h-ai/crypto'
+import type { CryptoFunctions, EncryptedPayload, TransportEncryptionManager, TransportKeyStore } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core } from '@h-ai/core'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
@@ -44,6 +44,8 @@ export interface ServTransportConfig {
    * 健康检查、文档页等公共路由通常无需加密。
    */
   readonly excludePaths?: readonly string[]
+  /** 共享客户端公钥存储；适用于多节点部署。 */
+  readonly keyStore?: TransportKeyStore
   /** 服务端可缓存的客户端公钥数量上限。默认 10000。 */
   readonly maxClients?: number
 }

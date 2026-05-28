@@ -203,7 +203,10 @@ export function createApp<
   // - 它需在 oRPC 读取 body 前完成解密
   // - 在下游响应返回后加密
   if (options.transport) {
-    const mgr = options.transport.crypto.transport.createServer({ maxClients: options.transport.maxClients })
+    const mgr = options.transport.crypto.transport.createServer({
+      keyStore: options.transport.keyStore,
+      maxClients: options.transport.maxClients,
+    })
     if (!mgr.success) {
       // 直接抛已存在的 HaiError 实例，保留 code/system/module/cause，便于上层定位到
       // "transport 初始化失败" 这一类配置错误，而非被 `new Error(message)` 抹平为字符串。

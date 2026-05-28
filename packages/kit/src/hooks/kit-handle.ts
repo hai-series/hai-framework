@@ -373,6 +373,7 @@ function buildTransportMiddleware(
     keyExchangePath: transportOpts.keyExchangePath,
     excludePaths: transportOpts.excludePaths,
     encryptResponse: transportOpts.encryptResponse,
+    keyStore: transportOpts.keyStore,
     maxClients: transportOpts.maxClients,
     requireEncryption: transportOpts.requireEncryption,
   })

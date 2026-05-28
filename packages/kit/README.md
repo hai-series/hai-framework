@@ -140,10 +140,12 @@ kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.tran
 **src/hooks.server.ts**：
 
 ```ts
-import { crypto } from '@h-ai/crypto'
+import { cache } from '@h-ai/cache'
+import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 await crypto.init()
+await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 export const handle = kit.createHandle({
   auth: {
@@ -153,7 +155,10 @@ export const handle = kit.createHandle({
   },
   crypto: {
     crypto,
-    transport: { requireEncryption: true },
+    transport: {
+      requireEncryption: true,
+      keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+    },
   },
 })
 ```
@@ -185,6 +190,8 @@ export const { apiFetch } = kit.client.create()
 > 不再需要 `src/hooks.client.ts`：默认 `handleFetch` 行为已经够用，SvelteKit 内部 `__data.json` 请求会自动走上面安装的全局 fetch 包装。同源 Authorization 注入统一通过 `kit.client.create({ auth: true })` 完成，避免浏览器端 hooks 与全局 fetch 包装形成两条链路。
 
 默认密钥协商路径为 `/api/_hai/key-exchange`。如服务端自定义 `transport.keyExchangePath`，客户端需同步配置 `transport.keyExchangeUrl`。
+
+如需多节点共享客户端公钥，可在运行时为 `kit.createHandle({ crypto: { transport: { keyStore } } })` 注入 `createRedisTransportKeyStore()` 或 `createReldbTransportKeyStore()`；这类对象型依赖**不应**写入 `_kit.yml`，配置文件仍只保存公开路径与开关。
 
 transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求（以及密钥协商端点本身）；页面文档与静态资源仍保持明文，不要求携带 `X-Client-Id`。文件上传等 `multipart/form-data` 请求会保持原样发送，需在服务端 `excludePaths` 中显式放行对应上传路径。
 

@@ -1,7 +1,7 @@
 import type { CryptoFunctions, TransportEncryptionManager } from '@h-ai/crypto'
 import type { Handle, RequestEvent } from '@sveltejs/kit'
 import { err } from '@h-ai/core'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
 
@@ -128,6 +128,22 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
     expect(response.status).toBe(500)
     expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('透传 transport.keyStore 到 crypto.transport.createServer', () => {
+    const keyStore = createInMemoryKeyStore(8)
+    const createServer = vi.fn<CryptoFunctions['transport']['createServer']>(options => crypto.transport.createServer(options))
+    const forwardingCrypto = createCryptoWithTransportServer(createServer)
+
+    kit.createHandle({
+      crypto: {
+        crypto: forwardingCrypto,
+        transport: { keyStore, maxClients: 8 },
+      },
+    })
+
+    expect(createServer).toHaveBeenCalledOnce()
+    expect(createServer).toHaveBeenCalledWith(expect.objectContaining({ keyStore, maxClients: 8 }))
   })
 
   it('页面文档请求仍然透传，不会要求 X-Client-Id', async () => {
