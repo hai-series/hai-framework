@@ -57,7 +57,7 @@
     </div>
 
     <div class='space-y-4'>
-      {#each articles as article}
+      {#each articles as article (`${article.date}:${article.tagKey}`)}
         <Card shadow='sm' class='hover:-translate-y-0.5 hover:shadow-(--shadow-soft) transition-all duration-200'>
           <div class='flex items-start gap-3 mb-2'>
             <Badge variant={tagVariantMap[article.tagKey] ?? 'primary'} size='sm'>{article.tag}</Badge>

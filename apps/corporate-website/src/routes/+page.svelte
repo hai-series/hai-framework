@@ -1,12 +1,30 @@
 <script lang='ts'>
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
   /**
    * 企业官网首页 — SEO 友好的着陆页
    */
   import { Button, Input, Spinner } from '@h-ai/ui'
 
-  let chatMessages = $state<Array<{ role: 'user' | 'assistant', content: string }>>([
-    { role: 'assistant', content: m.home_ai_greeting() },
+  interface ChatMessage {
+    id: number
+    role: 'user' | 'assistant'
+    content: string
+  }
+
+  let nextChatMessageId = 0
+
+  function createChatMessage(role: ChatMessage['role'], content: string): ChatMessage {
+    nextChatMessageId += 1
+    return {
+      id: nextChatMessageId,
+      role,
+      content,
+    }
+  }
+
+  let chatMessages = $state<ChatMessage[]>([
+    createChatMessage('assistant', m.home_ai_greeting()),
   ])
   let chatInput = $state('')
   let chatLoading = $state(false)
@@ -17,7 +35,7 @@
     if (!msg)
       return
 
-    chatMessages = [...chatMessages, { role: 'user', content: msg }]
+    chatMessages = [...chatMessages, createChatMessage('user', msg)]
     chatInput = ''
     chatLoading = true
 
@@ -29,10 +47,10 @@
       })
       const data = await res.json()
       const reply = data.data?.reply ?? m.home_ai_fallback()
-      chatMessages = [...chatMessages, { role: 'assistant', content: reply }]
+      chatMessages = [...chatMessages, createChatMessage('assistant', reply)]
     }
     catch {
-      chatMessages = [...chatMessages, { role: 'assistant', content: m.home_ai_error() }]
+      chatMessages = [...chatMessages, createChatMessage('assistant', m.home_ai_error())]
     }
     finally {
       chatLoading = false
@@ -84,10 +102,10 @@
       {m.home_subtitle()}
     </p>
     <div class='flex flex-wrap gap-4 justify-center'>
-      <a href='/partners'>
+      <a href={resolve('/partners', {})}>
         <Button variant='primary' size='lg'>{m.home_partner_cta()}</Button>
       </a>
-      <a href='/services'>
+      <a href={resolve('/services', {})}>
         <Button variant='default' size='lg' outline>{m.home_service_cta()}</Button>
       </a>
     </div>
@@ -102,7 +120,7 @@
       <p class='text-base-content/50 mt-2 max-w-2xl mx-auto'>{m.home_why_subtitle()}</p>
     </div>
     <div class='grid grid-cols-1 md:grid-cols-3 gap-6'>
-      {#each advantages as item}
+      {#each advantages as item (item.icon)}
         <Card shadow='sm' class='hover:-translate-y-1 hover:shadow-(--shadow-lifted) transition-all duration-200'>
           <div class='flex flex-col items-center text-center'>
             <div class='w-14 h-14 rounded-2xl {item.accent} flex items-center justify-center mb-4'>
@@ -152,7 +170,7 @@
     <Card shadow='md' padding='lg'>
       <!-- 聊天消息区域 -->
       <div class='min-h-50 max-h-75 overflow-y-auto space-y-3 mb-4'>
-        {#each chatMessages as msg}
+        {#each chatMessages as msg (msg.id)}
           <div class="chat {msg.role === 'user' ? 'chat-end' : 'chat-start'}">
             <div class="chat-bubble {msg.role === 'user' ? 'chat-bubble-primary' : ''}">
               {msg.content}
@@ -188,7 +206,7 @@
   <div class='max-w-3xl mx-auto text-center'>
     <h2 class='text-3xl font-bold tracking-tight text-base-content mb-4'>{m.home_cta_title()}</h2>
     <p class='text-base-content/60 mb-8'>{m.home_cta_subtitle()}</p>
-    <a href='/contact'>
+    <a href={resolve('/contact', {})}>
       <Button variant='primary' size='lg'>{m.home_cta_button()}</Button>
     </a>
   </div>

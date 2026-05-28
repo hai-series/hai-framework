@@ -75,7 +75,7 @@
     <div>
       <h2 class='text-2xl font-bold tracking-tight text-base-content mb-6'>{m.about_team_title()}</h2>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-6'>
-        {#each teamMembers as member}
+        {#each teamMembers as member (member.abbr)}
           <Card shadow='sm' class='hover:-translate-y-1 hover:shadow-(--shadow-lifted) transition-all duration-200'>
             <div class='flex flex-col items-center text-center'>
               <div class='w-16 h-16 rounded-2xl {member.accent} flex items-center justify-center mb-3'>

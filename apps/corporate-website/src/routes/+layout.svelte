@@ -4,6 +4,7 @@
    * 企业官网根布局
    */
   import { browser } from '$app/environment'
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
   import {
@@ -68,15 +69,15 @@
   <header class='sticky top-0 z-50 border-b border-base-200/80 bg-base-100/90 backdrop-blur'>
     <div class='navbar mx-auto max-w-7xl px-4 lg:px-8'>
       <div class='flex-1'>
-        <a href='/' class='text-lg lg:text-xl font-semibold tracking-wide'>
+        <a href={resolve('/', {})} class='text-lg lg:text-xl font-semibold tracking-wide'>
           {m.brand()}
         </a>
       </div>
 
       <nav class='hidden lg:flex'>
         <ul class='menu menu-horizontal px-1'>
-          {#each navItems as item}
-            <li><a href={item.href}>{item.label}</a></li>
+          {#each navItems as item (item.href)}
+            <li><a href={resolve(item.href, {})}>{item.label}</a></li>
           {/each}
         </ul>
       </nav>
@@ -96,7 +97,7 @@
           class='hidden sm:block'
         />
 
-        <a href='/partners/admin/login' class='btn btn-sm btn-outline hidden md:inline-flex'>
+        <a href={resolve('/partners/admin/login', {})} class='btn btn-sm btn-outline hidden md:inline-flex'>
           {m.nav_partner_admin()}
         </a>
 
@@ -105,10 +106,10 @@
             <svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' class='inline-block w-5 h-5 stroke-current'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 6h16M4 12h16M4 18h16'></path></svg>
           </button>
           <ul class='menu menu-sm dropdown-content bg-base-100 rounded-box z-10 mt-3 w-64 p-2 shadow border border-base-200'>
-            {#each navItems as item}
-              <li><a href={item.href}>{item.label}</a></li>
+            {#each navItems as item (item.href)}
+              <li><a href={resolve(item.href, {})}>{item.label}</a></li>
             {/each}
-            <li><a href='/partners/admin/login'>{m.nav_partner_admin()}</a></li>
+            <li><a href={resolve('/partners/admin/login', {})}>{m.nav_partner_admin()}</a></li>
             <li class='mt-1 px-3 py-2 text-xs text-base-content/50'>{m.layout_theme()}</li>
             <li class='px-3'><ThemeSelector currentTheme={currentTheme} onchange={handleThemeChange} showPreview={false} grouped /></li>
             <li class='mt-1 px-3 py-2 text-xs text-base-content/50'>{m.layout_language()}</li>
@@ -127,18 +128,18 @@
     <div class='footer md:footer-horizontal mx-auto max-w-7xl p-10 md:justify-between gap-8'>
       <nav class='gap-2'>
         <h6 class='footer-title'>{m.footer_about()}</h6>
-        <a href='/about' class='link link-hover'>{m.nav_about()}</a>
-        <a href='/news' class='link link-hover'>{m.nav_news()}</a>
+        <a href={resolve('/about', {})} class='link link-hover'>{m.nav_about()}</a>
+        <a href={resolve('/news', {})} class='link link-hover'>{m.nav_news()}</a>
       </nav>
       <nav class='gap-2'>
         <h6 class='footer-title'>{m.footer_services()}</h6>
-        <a href='/services' class='link link-hover'>{m.nav_services()}</a>
-        <a href='/partners' class='link link-hover'>{m.nav_partner()}</a>
+        <a href={resolve('/services', {})} class='link link-hover'>{m.nav_services()}</a>
+        <a href={resolve('/partners', {})} class='link link-hover'>{m.nav_partner()}</a>
       </nav>
       <nav class='gap-2'>
         <h6 class='footer-title'>{m.footer_contact()}</h6>
-        <a href='/contact' class='link link-hover'>{m.nav_contact()}</a>
-        <a href='/partners/admin/login' class='link link-hover'>{m.nav_partner_admin()}</a>
+        <a href={resolve('/contact', {})} class='link link-hover'>{m.nav_contact()}</a>
+        <a href={resolve('/partners/admin/login', {})} class='link link-hover'>{m.nav_partner_admin()}</a>
       </nav>
     </div>
     <div class='footer footer-center border-t border-neutral-content/10 p-4 bg-neutral-focus text-neutral-content'>

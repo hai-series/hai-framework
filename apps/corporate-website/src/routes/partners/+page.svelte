@@ -1,4 +1,5 @@
 <script lang='ts'>
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
   import { Alert, Button, Input, Select, Textarea } from '@h-ai/ui'
 
@@ -196,7 +197,7 @@
             <div>
               <h2 class='font-semibold text-base-content mb-2'>{m.partner_admin_entry_title()}</h2>
               <p class='text-sm text-base-content/60 mb-3'>{m.partner_admin_entry_desc()}</p>
-              <a href='/partners/admin/login'>
+              <a href={resolve('/partners/admin/login', {})}>
                 <Button variant='default' size='sm' outline>{m.partner_admin_entry_cta()}</Button>
               </a>
             </div>

@@ -1,5 +1,6 @@
 <script lang='ts'>
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
   import { Alert, Button, Card, FormField, Input, PasswordInput } from '@h-ai/ui'
 
@@ -29,7 +30,8 @@
         return
       }
 
-      await goto('/partners/admin')
+      const adminHref = resolve('/partners/admin', {})
+      await goto(adminHref)
     }
     catch {
       error = m.admin_network_error()

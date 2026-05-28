@@ -53,7 +53,7 @@
     </div>
 
     <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
-      {#each services as service}
+      {#each services as service (service.title)}
         <Card shadow='sm' class='hover:-translate-y-1 hover:shadow-(--shadow-lifted) transition-all duration-200'>
           <div class='flex items-start gap-4'>
             <div class='w-12 h-12 rounded-xl {service.accent} flex items-center justify-center shrink-0'>
@@ -63,7 +63,7 @@
               <h2 class='text-lg font-semibold text-base-content mb-1'>{service.title}</h2>
               <p class='text-sm text-base-content/60 mb-3'>{service.desc}</p>
               <ul class='space-y-1.5'>
-                {#each service.points as point}
+                {#each service.points as point (point)}
                   <li class='flex items-center gap-2 text-sm text-base-content/50'>
                     <span class='icon-[tabler--check] size-4 text-success shrink-0'></span>
                     {point}

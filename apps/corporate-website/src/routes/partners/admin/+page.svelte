@@ -1,7 +1,9 @@
 <script lang='ts'>
   import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
   import { Alert, Badge, Button, Card, Empty, Input, PageHeader, Select } from '@h-ai/ui'
+  import { SvelteURLSearchParams } from 'svelte/reactivity'
 
   interface Props {
     data: {
@@ -34,6 +36,12 @@
     archived: 'default',
   }
 
+  const emptyRouteParams = {}
+
+  function getRecordKey(item: Record<string, unknown>, index: number): string {
+    return String(item.id ?? item.created_at ?? item.email ?? item.company_name ?? index)
+  }
+
   $effect(() => {
     search = data.search
     status = data.status
@@ -41,13 +49,14 @@
 
   $effect(() => {
     if (data.loadError === 'Unauthorized') {
-      void goto('/partners/admin/login')
+      const loginHref = resolve('/partners/admin/login', emptyRouteParams)
+      void goto(loginHref)
     }
   })
 
   async function handleFilter(event: Event) {
     event.preventDefault()
-    const params = new URLSearchParams()
+    const params = new SvelteURLSearchParams()
     params.set('page', '1')
     params.set('pageSize', String(data.pageSize))
     if (search.trim())
@@ -55,23 +64,27 @@
     if (status)
       params.set('status', status)
 
-    await goto(`/partners/admin?${params.toString()}`)
+    const adminHref = resolve(`/partners/admin?${params.toString()}`, emptyRouteParams)
+    await goto(adminHref)
   }
 
   async function handleLogout() {
     await fetch('/api/partners/admin/logout', { method: 'POST' })
-    await goto('/partners/admin/login')
+    const loginHref = resolve('/partners/admin/login', emptyRouteParams)
+    await goto(loginHref)
   }
 
   function navigatePage(nextPage: number) {
-    const params = new URLSearchParams()
+    const params = new SvelteURLSearchParams()
     params.set('page', String(nextPage))
     params.set('pageSize', String(data.pageSize))
     if (search.trim())
       params.set('search', search.trim())
     if (status)
       params.set('status', status)
-    void goto(`/partners/admin?${params.toString()}`)
+
+    const adminHref = resolve(`/partners/admin?${params.toString()}`, emptyRouteParams)
+    void goto(adminHref)
   }
 </script>
 
@@ -122,7 +135,7 @@
               </td>
             </tr>
           {:else}
-            {#each data.records as item}
+            {#each data.records as item, index (getRecordKey(item, index))}
               <tr class='hover:bg-base-200/50 transition-colors'>
                 <td class='whitespace-nowrap tabular-nums'>{String(item.created_at ?? '')}</td>
                 <td class='font-medium'>{String(item.company_name ?? '')}</td>
