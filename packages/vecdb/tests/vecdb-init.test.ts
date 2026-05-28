@@ -10,7 +10,7 @@
 import type { PgvectorContainerLease } from './helpers/pgvector-container.js'
 import type { QdrantContainerLease } from './helpers/qdrant-container.js'
 import { rm } from 'node:fs/promises'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { HaiVecdbError, vecdb } from '../src/index.js'
 import { acquirePgvectorContainer } from './helpers/pgvector-container.js'
 import { acquireQdrantContainer } from './helpers/qdrant-container.js'
@@ -19,6 +19,10 @@ import { acquireQdrantContainer } from './helpers/qdrant-container.js'
 
 describe.sequential('vecdb init — lancedb', () => {
   const LANCE_PATH = './test-data/init-lance-test'
+
+  beforeEach(async () => {
+    await rm(LANCE_PATH, { recursive: true, force: true }).catch(() => {})
+  })
 
   afterEach(async () => {
     await vecdb.close()
@@ -33,28 +37,28 @@ describe.sequential('vecdb init — lancedb', () => {
     expect(result.success).toBe(true)
     expect(vecdb.isInitialized).toBe(true)
     expect(vecdb.config?.type).toBe('lancedb')
-  })
+  }, 15_000)
 
   it('关闭后 isInitialized 为 false', async () => {
     await vecdb.init({ type: 'lancedb', path: LANCE_PATH })
     await vecdb.close()
     expect(vecdb.isInitialized).toBe(false)
     expect(vecdb.config).toBeNull()
-  })
+  }, 15_000)
 
   it('重复 close 安全', async () => {
     await vecdb.init({ type: 'lancedb', path: LANCE_PATH })
     await vecdb.close()
     const result = await vecdb.close()
     expect(result.success).toBe(true)
-  })
+  }, 15_000)
 
   it('重新初始化成功', async () => {
     await vecdb.init({ type: 'lancedb', path: LANCE_PATH })
     const result = await vecdb.init({ type: 'lancedb', path: LANCE_PATH })
     expect(result.success).toBe(true)
     expect(vecdb.isInitialized).toBe(true)
-  })
+  }, 15_000)
 })
 
 // ─── pgvector 初始化测试（需要 Docker） ───

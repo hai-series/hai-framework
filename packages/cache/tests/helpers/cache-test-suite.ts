@@ -28,7 +28,22 @@ export function defineCacheSuite(
 
     beforeEach(async () => {
       await cache.close()
-      await cache.init(env!.config)
+      const initResult = await cache.init(env!.config)
+      if (!initResult.success) {
+        throw new Error(`cache init failed: ${initResult.error.code} ${initResult.error.message}`)
+      }
+
+      const keysResult = await cache.kv.keys('*')
+      if (!keysResult.success) {
+        throw new Error(`cache cleanup list failed: ${keysResult.error.code} ${keysResult.error.message}`)
+      }
+
+      if (keysResult.data.length > 0) {
+        const deleteResult = await cache.kv.del(...keysResult.data)
+        if (!deleteResult.success) {
+          throw new Error(`cache cleanup delete failed: ${deleteResult.error.code} ${deleteResult.error.message}`)
+        }
+      }
     }, 60000)
 
     afterEach(async () => {

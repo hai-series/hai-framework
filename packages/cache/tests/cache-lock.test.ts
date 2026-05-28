@@ -8,6 +8,22 @@ import { describe, expect, it } from 'vitest'
 import { cache } from '../src/index.js'
 import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suite.js'
 
+async function waitUntilLockCanBeAcquired(
+  key: string,
+  timeoutMs = 4000,
+  intervalMs = 100,
+) {
+  const deadline = Date.now() + timeoutMs
+  let result = await cache.lock.acquire(key)
+
+  while (result.success && !result.data && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
+    result = await cache.lock.acquire(key)
+  }
+
+  return result
+}
+
 describe('cache lock operations', () => {
   const defineCommon = () => {
     // ─── acquire ───
@@ -163,9 +179,9 @@ describe('cache lock operations', () => {
 
     it('锁过期后应自动释放（可重新获取）', async () => {
       await cache.lock.acquire('expire-lock', { ttl: 1 })
-      // 等待锁过期
-      await new Promise(resolve => setTimeout(resolve, 1100))
-      const result = await cache.lock.acquire('expire-lock')
+      // Redis 的 EX 以秒为单位，整仓测试负载较高时 1100ms 边界值容易抖动；
+      // 这里改为在合理时间窗口内轮询，直到锁真正过期并可重新获取。
+      const result = await waitUntilLockCanBeAcquired('expire-lock')
       expect(result.success).toBe(true)
       if (result.success)
         expect(result.data).toBe(true)
