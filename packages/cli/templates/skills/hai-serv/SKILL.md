@@ -271,6 +271,7 @@ const app = serv.createApp({
     crypto,
     // keyExchangePath 默认 '/_hai/key-exchange'
     // maxClients: 10000,
+    // keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
 ```
@@ -297,6 +298,8 @@ await apiClient.init({
 ```
 
 > 不要导入或暴露子目录内部 transport 工厂；公共装配点只有 `serv.createApp({ transport: { crypto } })`。
+
+多节点部署时，直接在 `serv.createApp({ transport })` 的运行时对象里注入 `keyStore` 即可；推荐从 `@h-ai/crypto` 根入口导入 `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`。`keyStore` 不属于 `_serv.yml` 配置项，配置文件仍只保留静态路径和白名单。
 
 **上下文工厂优先级**（`context.session` 填充来源）：
 

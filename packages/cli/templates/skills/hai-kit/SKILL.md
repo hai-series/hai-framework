@@ -58,10 +58,12 @@ kit 不再维护本地传输加密实现；服务端和客户端都统一委托 
 
 ```ts
 // hooks.server.ts
-import { crypto } from '@h-ai/crypto'
+import { cache } from '@h-ai/cache'
+import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 await crypto.init()
+await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 export const handle = kit.createHandle({
   auth: {
@@ -71,7 +73,10 @@ export const handle = kit.createHandle({
   },
   crypto: {
     crypto,
-    transport: { requireEncryption: true },
+    transport: {
+      requireEncryption: true,
+      keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+    },
   },
 })
 ```
@@ -99,6 +104,8 @@ export const { apiFetch } = kit.client.create({ auth: true })
 ```
 
 默认协商端点：`/api/_hai/key-exchange`。如 `keyExchangePath` 自定义，浏览器端同步设置 `keyExchangeUrl`。
+
+多节点部署时，可在 `kit.createHandle({ crypto: { transport } })` 的运行时对象里直接传 `keyStore`；推荐使用 `@h-ai/crypto` 根入口导出的 `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`。这类对象依赖不要写进 `_kit.yml`。
 
 transport 默认保护同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求；页面文档、静态资源与 `multipart/form-data` 上传请求保持明文透传。
 
