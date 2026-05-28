@@ -37,7 +37,7 @@ import { resetUserRepoSingleton } from './user/iam-user-repository-user.js'
 const logger = core.logger.child({ module: 'iam', scope: 'main' })
 
 function sanitizeIamConfig(config: IamConfig): IamConfig {
-  return core.object.sanitizeSensitiveFields(config)
+  return core.sanitize.sanitizeSensitiveFields(config)
 }
 
 // ─── 内部状态 ───

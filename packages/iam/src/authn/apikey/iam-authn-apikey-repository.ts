@@ -125,14 +125,14 @@ const API_KEY_FIELDS: ReldbCrudFieldDefinition[] = [
 // ─── 单例管理 ───
 
 let apiKeyRepoInstance: ApiKeyRepository | null = null
-let apiKeyRepoDbConfig: unknown = null
+let apiKeyRepoSqlOps: unknown = null
 
 /**
  * 重置 API Key 存储单例
  */
 export function resetApiKeyRepoSingleton(): void {
   apiKeyRepoInstance = null
-  apiKeyRepoDbConfig = null
+  apiKeyRepoSqlOps = null
 }
 
 /**
@@ -141,13 +141,13 @@ export function resetApiKeyRepoSingleton(): void {
  * @returns API Key 存储接口实现
  */
 export async function createDbApiKeyRepository(): Promise<ApiKeyRepository> {
-  if (apiKeyRepoInstance && apiKeyRepoDbConfig === reldb.config)
+  if (apiKeyRepoInstance && apiKeyRepoSqlOps === reldb.sql)
     return apiKeyRepoInstance
 
   const repo = new DbApiKeyRepository()
   await repo.count()
   apiKeyRepoInstance = repo
-  apiKeyRepoDbConfig = reldb.config
+  apiKeyRepoSqlOps = reldb.sql
   return repo
 }
 

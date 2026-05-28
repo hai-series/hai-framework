@@ -91,9 +91,9 @@ const ROLE_FIELDS: ReldbCrudFieldDefinition[] = [
   },
 ]
 
-/** 角色存储单例缓存（通过 reldb.config 引用比较检测 db 重新初始化） */
+/** 角色存储单例缓存（通过 reldb.sql 引用比较检测 db 生命周期切换） */
 let roleRepoInstance: RoleRepository | null = null
-let roleRepoDbConfig: unknown = null
+let roleRepoSqlOps: unknown = null
 
 /**
  * 重置角色存储单例
@@ -102,7 +102,7 @@ let roleRepoDbConfig: unknown = null
  */
 export function resetRoleRepoSingleton(): void {
   roleRepoInstance = null
-  roleRepoDbConfig = null
+  roleRepoSqlOps = null
 }
 
 /**
@@ -114,13 +114,13 @@ export function resetRoleRepoSingleton(): void {
  * @returns 角色存储接口实现
  */
 export async function createDbRoleRepository(): Promise<RoleRepository> {
-  if (roleRepoInstance && roleRepoDbConfig === reldb.config)
+  if (roleRepoInstance && roleRepoSqlOps === reldb.sql)
     return roleRepoInstance
 
   const repo = new DbRoleRepository()
   await repo.count()
   roleRepoInstance = repo
-  roleRepoDbConfig = reldb.config
+  roleRepoSqlOps = reldb.sql
   return repo
 }
 

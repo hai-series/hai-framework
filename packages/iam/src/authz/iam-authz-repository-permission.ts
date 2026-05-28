@@ -107,9 +107,9 @@ const PERMISSION_FIELDS: ReldbCrudFieldDefinition[] = [
   },
 ]
 
-/** 权限存储单例缓存（通过 reldb.config 引用比较检测 db 重新初始化） */
+/** 权限存储单例缓存（通过 reldb.sql 引用比较检测 db 生命周期切换） */
 let permRepoInstance: PermissionRepository | null = null
-let permRepoDbConfig: unknown = null
+let permRepoSqlOps: unknown = null
 
 /**
  * 重置权限存储单例
@@ -118,7 +118,7 @@ let permRepoDbConfig: unknown = null
  */
 export function resetPermissionRepoSingleton(): void {
   permRepoInstance = null
-  permRepoDbConfig = null
+  permRepoSqlOps = null
 }
 
 /**
@@ -130,13 +130,13 @@ export function resetPermissionRepoSingleton(): void {
  * @returns 权限存储接口实现
  */
 export async function createDbPermissionRepository(): Promise<PermissionRepository> {
-  if (permRepoInstance && permRepoDbConfig === reldb.config)
+  if (permRepoInstance && permRepoSqlOps === reldb.sql)
     return permRepoInstance
 
   const repo = new DbPermissionRepository()
   await repo.count()
   permRepoInstance = repo
-  permRepoDbConfig = reldb.config
+  permRepoSqlOps = reldb.sql
   return repo
 }
 

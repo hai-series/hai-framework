@@ -200,9 +200,9 @@ const USER_FIELDS: ReldbCrudFieldDefinition[] = [
   },
 ]
 
-/** 用户存储单例缓存（通过 reldb.config 引用比较检测 db 重新初始化） */
+/** 用户存储单例缓存（通过 reldb.sql 引用比较检测 db 生命周期切换） */
 let userRepoInstance: UserRepository | null = null
-let userRepoDbConfig: unknown = null
+let userRepoSqlOps: unknown = null
 
 /**
  * 重置用户存储单例
@@ -211,7 +211,7 @@ let userRepoDbConfig: unknown = null
  */
 export function resetUserRepoSingleton(): void {
   userRepoInstance = null
-  userRepoDbConfig = null
+  userRepoSqlOps = null
 }
 
 /**
@@ -223,14 +223,14 @@ export function resetUserRepoSingleton(): void {
  * @returns 用户存储接口实现
  */
 export async function createDbUserRepository(): Promise<UserRepository> {
-  if (userRepoInstance && userRepoDbConfig === reldb.config)
+  if (userRepoInstance && userRepoSqlOps === reldb.sql)
     return userRepoInstance
 
   const repo = new DbUserRepository()
   // 确保底层表创建完成（BaseReldbCrudRepository 的表创建是异步的）
   await repo.count()
   userRepoInstance = repo
-  userRepoDbConfig = reldb.config
+  userRepoSqlOps = reldb.sql
   return repo
 }
 
