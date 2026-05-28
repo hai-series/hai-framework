@@ -48,5 +48,6 @@
   "core_configFileNotExist": "配置文件不存在: {filePath}",
   "core_configParseFailed": "配置文件解析失败: {filePath}",
   "core_configValidationFailed": "配置验证失败",
-  "core_configNotLoaded": "配置 '{name}' 未加载"
+  "core_configNotLoaded": "配置 '{name}' 未加载",
+  "core_configUnsupportedInBrowser": "浏览器环境不支持文件配置，请在服务端使用 core.config 或通过 core.init({ logging }) 传入浏览器端选项"
 }

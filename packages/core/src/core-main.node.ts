@@ -10,7 +10,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { CoreConfigSchema } from './core-config.js'
 import { createCore } from './core-main.js'
-import { config } from './functions/core-function-config.js'
+import { config } from './functions/core-function-config.node.js'
 import { logger } from './functions/core-function-logger.node.js'
 
 const YAML_EXTENSION_REGEX = /\.ya?ml$/

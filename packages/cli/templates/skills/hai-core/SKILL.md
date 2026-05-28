@@ -16,7 +16,7 @@ description: 使用 @h-ai/core 进行配置加载、日志记录、i18n 国际�
 | 能力 | Node.js | 浏览器 |
 |------|---------|--------|
 | `core.logger` | ✅ pino（结构化 JSON / pretty） | ✅ loglevel（DevTools console） |
-| `core.config` | ✅ 完整（YAML 加载、watch、validate） | ⚠️ 仅支持 `core.init({ ... })` 传入配置 |
+| `core.config` | ✅ 完整（YAML 加载、watch、validate） | ⚠️ 占位 API；文件配置方法返回 `SERVICE_UNAVAILABLE` |
 | `core.i18n` | ✅ | ✅ |
 | `core.zodValidation` | ✅ | ✅ |
 | `core.id` | ✅ | ✅ |
@@ -78,6 +78,8 @@ const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessa
 > 注意：core 没有 `close()` 方法，初始化后持续可用。
 
 ### 配置管理 — `core.config`
+
+> 浏览器端保留 `core.config` 对象用于类型/runtime 对齐，但没有文件系统：`get()` 返回 `undefined`，`has()` 返回 `false`，`keys()` 返回 `[]`；`load()` / `validate()` / `reload()` 返回 `HaiCommonError.SERVICE_UNAVAILABLE`；`watch()` 会立即回调该错误并返回 no-op 取消函数。
 
 | 方法         | 签名                                                           | 说明                           |
 | ------------ | -------------------------------------------------------------- | ------------------------------ |
@@ -541,6 +543,7 @@ logger.debug('Data fetched', { count: items.length })
 
 | 功能 | 行为 |
 |------|------|
+| `core.config` 文件配置 | 不支持；文件相关方法返回 `SERVICE_UNAVAILABLE`，配置应由服务端读取后下发 |
 | `format: 'json' \| 'pretty'` | 被忽略（始终输出到 DevTools console） |
 | `redact` 字段脱敏 | 不生效（需手动脱敏） |
 | `fatal` 级别 | 映射为 `console.error`（带 `[FATAL]` 前缀） |

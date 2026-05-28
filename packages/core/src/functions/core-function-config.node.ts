@@ -2,7 +2,7 @@
  * @h-ai/core — 配置管理（Node.js 专用）
  *
  * 提供 YAML 配置文件加载、环境变量插值、缓存管理。
- * @module core-function-config
+ * @module core-function-config.node
  */
 
 import type { ZodType } from 'zod'

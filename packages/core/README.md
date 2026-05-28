@@ -83,6 +83,13 @@ core.string.capitalize('hello')
 core.array.unique([1, 1, 2])
 ```
 
+浏览器端会保留 `core.config` API 形态以匹配类型定义，但不支持文件配置：
+
+- `core.config.get()` 返回 `undefined`，`has()` 返回 `false`，`keys()` 返回 `[]`
+- `load()` / `validate()` / `reload()` 返回 `HaiCommonError.SERVICE_UNAVAILABLE`
+- `watch()` 会立即用同一错误调用回调，并返回安全的 no-op 取消函数
+- 需要配置时请由服务端读取后通过接口下发，或只在浏览器端用 `core.init({ logging })` 配置日志
+
 ## 详细 API
 
 ### 日志（Logger）
@@ -235,6 +242,8 @@ if (!result.success) {
 ```
 
 ### 配置管理（Node.js 专用）
+
+> 浏览器端没有文件系统，`core.config` 仅提供占位 API：文件相关方法返回 `SERVICE_UNAVAILABLE`，不会加载 YAML。
 
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
