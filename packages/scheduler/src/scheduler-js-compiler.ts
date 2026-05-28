@@ -2,6 +2,7 @@
  * @h-ai/scheduler — JS 任务编译器
  *
  * 将 JS 函数字符串编译为可执行函数，并基于源码缓存编译结果。
+ * ⚠️ 仅用于受信任的服务端代码字符串；当前实现不是安全沙箱。
  * @module scheduler-js-compiler
  */
 

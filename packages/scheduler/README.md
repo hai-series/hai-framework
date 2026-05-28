@@ -110,6 +110,8 @@ interface JsTaskConfig {
 - JS 任务会在运行时编译，并基于源码做缓存，避免每次触发都重新编译
 - `handler` 可为空；此时可通过全局 `hooks.onTaskExecute` 统一执行
 
+> ⚠️ **安全警示**：`kind: 'js'` 仅适用于受信任的服务端代码。当前实现基于 Node.js `vm` 做便捷执行，**不是安全沙箱**；禁止直接接收用户、租户或后台任意输入的 JS 字符串。可配置任务优先使用 `kind: 'api'` 或 `hooks.onTaskExecute`。
+
 ## 任务生命周期回调
 
 初始化时传入或运行时通过 `setHooks()` 设置：

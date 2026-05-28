@@ -80,6 +80,8 @@ await scheduler.register({
 })
 ```
 
+> ⚠️ **安全警示**：`kind: 'js'` 仅允许受信任的服务端代码。当前实现使用 Node.js `vm` 便捷执行，不是安全沙箱；禁止把用户、租户或运营后台自由输入的 JS 字符串直接注册为任务。需要可配置执行逻辑时，优先改用 `kind: 'api'` 或 `hooks.onTaskExecute`。
+
 ### 3. 使用全局 execute hook 处理无 handler 任务
 
 ```ts

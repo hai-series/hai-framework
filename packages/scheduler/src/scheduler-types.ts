@@ -74,13 +74,17 @@ export interface ApiTaskConfig {
 /**
  * JS 任务配置
  *
+ * ⚠️ 安全警示：`code` 仅允许受信任的服务端代码（例如仓库内常量或受控部署配置）。
+ * 当前实现通过 Node.js `vm` 便捷执行，不构成安全沙箱；禁止直接接收用户、租户或后台自由输入的 JS 字符串。
+ * 多租户或可配置任务优先使用 `kind: 'api'` 或 `hooks.onTaskExecute`。
+ *
  * `code` 为 JS 函数字符串，例如：
  * `(context) => ({ taskId: context.task.id, params: context.params })`
  */
 export interface JsTaskConfig {
   /** 处理器类型 */
   kind: 'js'
-  /** JS 函数字符串 */
+  /** JS 函数字符串（仅允许受信任的服务端代码，不是安全沙箱） */
   code: string
   /** 软超时时间，单位毫秒 */
   timeout?: number
