@@ -13,17 +13,14 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
 test.describe('IAM Permissions UI', () => {
-  const createPanelHeading = /创建权限管理|新建权限管理/
-
   async function openCreatePanel(page: import('@playwright/test').Page) {
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
 
-    const heading = page.getByRole('heading', { name: createPanelHeading }).last()
-    await expect(heading).toBeVisible()
+    const resourceInput = page.locator('#resource:visible').last()
+    await expect(resourceInput).toBeVisible()
 
-    const panel = page.locator('.drawer-side .menu').filter({ has: heading }).last()
-    await expect(panel.locator('#resource')).toBeVisible()
+    const panel = resourceInput.locator('xpath=ancestor::*[contains(@class, "menu")]').first()
     return panel
   }
 
@@ -89,7 +86,7 @@ test.describe('IAM Permissions UI', () => {
     const cancelBtn = panel.getByRole('button', { name: /取消|Cancel/ })
     await cancelBtn.click({ force: true })
 
-    await expect(page.getByRole('heading', { name: createPanelHeading })).toHaveCount(0, { timeout: 5000 })
+    await expect(panel.locator('#resource')).not.toBeVisible({ timeout: 5000 })
   })
 
   // ---------------------------------------------------------------------------
@@ -119,7 +116,7 @@ test.describe('IAM Permissions UI', () => {
     await submitBtn.click()
 
     // 抽屉应关闭
-    await expect(page.getByRole('heading', { name: createPanelHeading })).toHaveCount(0, { timeout: 10_000 })
+    await expect(panel.locator('#resource')).not.toBeVisible({ timeout: 10_000 })
 
     // 新权限应出现在页面中（列表展示 name/code，不展示 resource 单列）
     const permRow = page.locator('tbody tr').filter({ hasText: permissionName })

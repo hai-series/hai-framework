@@ -32,12 +32,7 @@ const transportPublicPaths = kitTransportConfig === false
   ? []
   : [kitTransportConfig.keyExchangePath]
 
-// `_kit.yml` 启用 transport 时，kit.createHandle 会在模块加载阶段同步构建
-// 传输加密中间件，需要 crypto 模块先准备好密钥能力。
-// crypto.init() 虽然签名为 async，但函数体无 await，副作用同步生效。
-if (handleTransportConfig !== false) {
-  void crypto.init()
-}
+let haiHandlePromise: Promise<Handle> | null = null
 
 async function ensureAppInitialized() {
   if (!appInitPromise) {
@@ -145,36 +140,64 @@ async function validateSession(token: string) {
 }
 
 /**
- * hai handle hook
+ * 延迟创建 hai handle。
+ *
+ * transport 中间件会在 `kit.createHandle()` 阶段同步创建服务端管理器，
+ * 因此必须先等待 `crypto.init()` 完成，再构建 handle。
  */
-const haiHandle = kit.createHandle({
-  auth: {
-    verifyToken: validateSession,
-    loginUrl: '/auth/login',
-    protectedPaths: ['/admin/*', '/api/*'],
-    publicPaths: [
-      '/admin/public/*',
-      '/api/auth/login',
-      '/api/auth/register',
-      '/api/auth/logout',
-      '/api/auth/forgot-password',
-      '/api/auth/reset-password',
-      '/api/storage/*',
-      '/api/public/*',
-      ...transportPublicPaths,
-    ],
-    operations: () => iam.auth,
-  },
-  rateLimit: {
-    windowMs: 60000,
-    maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100,
-  },
-  crypto: handleTransportConfig === false
-    ? undefined
-    : {
-        crypto,
-        transport: handleTransportConfig,
-      },
-})
+async function createHaiHandle(): Promise<Handle> {
+  if (handleTransportConfig !== false) {
+    const initResult = await crypto.init()
+    if (!initResult.success) {
+      throw new Error(initResult.error.message)
+    }
+  }
+
+  return kit.createHandle({
+    auth: {
+      verifyToken: validateSession,
+      loginUrl: '/auth/login',
+      protectedPaths: ['/admin/*', '/api/*'],
+      publicPaths: [
+        '/admin/public/*',
+        '/api/auth/login',
+        '/api/auth/register',
+        '/api/auth/logout',
+        '/api/auth/forgot-password',
+        '/api/auth/reset-password',
+        '/api/storage/*',
+        '/api/public/*',
+        ...transportPublicPaths,
+      ],
+      operations: () => iam.auth,
+    },
+    rateLimit: {
+      windowMs: 60000,
+      maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100,
+    },
+    crypto: handleTransportConfig === false
+      ? undefined
+      : {
+          crypto,
+          transport: handleTransportConfig,
+        },
+  })
+}
+
+async function getHaiHandle(): Promise<Handle> {
+  if (!haiHandlePromise) {
+    haiHandlePromise = createHaiHandle().catch((error) => {
+      haiHandlePromise = null
+      throw error
+    })
+  }
+
+  return haiHandlePromise
+}
+
+const haiHandle: Handle = async (input) => {
+  const handle = await getHaiHandle()
+  return handle(input)
+}
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)

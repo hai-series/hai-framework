@@ -101,6 +101,13 @@
       : ''),
   )
 
+  function getSubmittedValue(formData: FormData, key: string, fallback = ''): string | undefined {
+    const submitted = formData.get(key)
+    const value = typeof submitted === 'string' ? submitted : fallback
+    const trimmed = value.trim()
+    return trimmed || undefined
+  }
+
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
     if (loading || disabled)
@@ -108,13 +115,15 @@
     if (!passwordsMatch)
       return
 
+    const submittedFormData = new FormData(e.currentTarget as HTMLFormElement)
+
     const data: RegisterFormData = {
-      username,
-      email,
-      phone,
+      username: getSubmittedValue(submittedFormData, 'username', username),
+      email: getSubmittedValue(submittedFormData, 'email', email),
+      phone: getSubmittedValue(submittedFormData, 'phone', phone),
       password,
       confirmPassword: requireConfirmPassword ? confirmPassword : undefined,
-      nickname,
+      nickname: getSubmittedValue(submittedFormData, 'nickname', nickname),
     }
 
     await onsubmit?.(data)

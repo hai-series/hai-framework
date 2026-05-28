@@ -33,17 +33,21 @@ test.describe('Page Navigation', () => {
     const tabs = page.locator('[role="tab"]')
     await expect(tabs).toHaveCount(8)
 
+    const aiTab = page.getByRole('tab', { name: /ai/i })
+    const vecdbTab = page.getByRole('tab', { name: /vecdb/i })
+    const datapipeTab = page.getByRole('tab', { name: /datapipe/i })
+
     // AI
-    await tabs.nth(4).click()
-    await expect(page.getByRole('heading', { name: /@h-ai\/ai/ })).toBeVisible()
+    await aiTab.click()
+    await expect(page.locator('h3:visible').filter({ hasText: /@h-ai\/ai/ }).first()).toBeVisible()
 
     // VecDB
-    await tabs.nth(5).click()
-    await expect(page.getByRole('heading', { name: /@h-ai\/vecdb/ })).toBeVisible()
+    await vecdbTab.click()
+    await expect(page.locator('h3:visible').filter({ hasText: /@h-ai\/vecdb/ }).first()).toBeVisible()
 
     // DataPipe
-    await tabs.nth(6).click()
-    await expect(page.getByRole('heading', { name: /@h-ai\/datapipe/ })).toBeVisible()
+    await datapipeTab.click()
+    await expect(page.locator('h3:visible').filter({ hasText: /@h-ai\/datapipe/ }).first()).toBeVisible()
   })
 
   test('UI Gallery 页面可访问', async ({ page, request }) => {

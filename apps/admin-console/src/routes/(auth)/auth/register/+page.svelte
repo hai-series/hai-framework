@@ -34,13 +34,16 @@
     errors = {}
     loading = true
 
+    const username = data.username?.trim() ?? ''
+    const email = data.email?.trim() ?? ''
+
     try {
       const response = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: data.username,
-          email: data.email,
+          username,
+          email,
           password: data.password,
           confirmPassword: data.confirmPassword ?? data.password,
         }),

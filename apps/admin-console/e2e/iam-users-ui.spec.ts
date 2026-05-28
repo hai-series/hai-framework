@@ -13,18 +13,16 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin, uniqueUser } from './helpers'
 
 test.describe('IAM Users UI', () => {
-  const createDrawerHeading = /创建用户管理|新建用户管理/
   const editDrawerHeading = /编辑用户管理|编辑用户/
 
   async function openCreateDrawer(page: import('@playwright/test').Page) {
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
 
-    const heading = page.getByRole('heading', { name: createDrawerHeading }).last()
-    await expect(heading).toBeVisible()
+    const usernameInput = page.locator('#username:visible').last()
+    await expect(usernameInput).toBeVisible()
 
-    const drawer = page.locator('.drawer-side .menu').filter({ has: heading }).last()
-    await expect(drawer.locator('#username')).toBeVisible()
+    const drawer = usernameInput.locator('xpath=ancestor::*[contains(@class, "menu")]').first()
     return drawer
   }
 
@@ -180,7 +178,7 @@ test.describe('IAM Users UI', () => {
     await submitBtn.click()
 
     // 空表单提交后，新建面板应仍然保持打开
-    await expect(page.getByRole('heading', { name: createDrawerHeading }).last()).toBeVisible()
+    await expect(drawer.locator('#username')).toBeVisible()
   })
 
   // ---------------------------------------------------------------------------

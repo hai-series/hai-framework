@@ -42,14 +42,23 @@
     ),
   )
 
+  function getSubmittedValue(formData: FormData, key: string, fallback = ''): string | undefined {
+    const submitted = formData.get(key)
+    const value = typeof submitted === 'string' ? submitted : fallback
+    const trimmed = value.trim()
+    return trimmed || undefined
+  }
+
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
     if (loading || disabled)
       return
 
+    const submittedFormData = new FormData(e.currentTarget as HTMLFormElement)
+
     const data: ForgotPasswordFormData = {
-      email: mode === 'email' ? email : undefined,
-      phone: mode === 'phone' ? phone : undefined,
+      email: mode === 'email' ? getSubmittedValue(submittedFormData, 'email', email) : undefined,
+      phone: mode === 'phone' ? getSubmittedValue(submittedFormData, 'phone', phone) : undefined,
     }
 
     await onsubmit?.(data)

@@ -37,6 +37,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@aparajita/capacitor-secure-storage": "catalog:",
     "@capacitor/android": "catalog:",
     "@capacitor/cli": "catalog:",
     "@capacitor/core": "catalog:",

@@ -1,7 +1,7 @@
 /**
  * android-app — API 客户端初始化
  *
- * 使用 Capacitor Preferences 作为 Token 存储，
+ * 使用 Capacitor 原生安全存储插件保存 Token，
  * 通过 api-client 单例调用模式访问后端 API。
  *
  * @example

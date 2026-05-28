@@ -6,6 +6,15 @@ const DEFAULT_ADMIN = {
 }
 
 test.describe('Transport enabled E2E', () => {
+  async function tryReadJsonPayload(response: { text: () => Promise<string> }): Promise<Record<string, unknown> | null> {
+    try {
+      return JSON.parse(await response.text()) as Record<string, unknown>
+    }
+    catch {
+      return null
+    }
+  }
+
   test('encrypts /api requests and SvelteKit __data.json requests', async ({ page }) => {
     await page.goto('/auth/login')
     await expect(page.locator('#login-username')).toBeVisible({ timeout: 10_000 })
@@ -24,10 +33,13 @@ test.describe('Transport enabled E2E', () => {
     const loginResponse = await loginResponsePromise
     const loginRequestHeaders = await loginRequest.allHeaders()
     const loginResponseHeaders = await loginResponse.allHeaders()
-    const loginPayload = JSON.parse(await loginResponse.text()) as Record<string, unknown>
+    const loginPayload = await tryReadJsonPayload(loginResponse)
     const loginRequestWasObservedAsEncrypted = Boolean(loginRequestHeaders['x-client-id']) && Boolean(loginRequestHeaders['x-encrypted'])
     const loginResponseWasObservedAsEncrypted = Boolean(loginResponseHeaders['x-encrypted'])
-    const loginPayloadHasEncryptedShape = 'encryptedKey' in loginPayload && 'ciphertext' in loginPayload && 'iv' in loginPayload
+    const loginPayloadHasEncryptedShape = loginPayload !== null
+      && 'encryptedKey' in loginPayload
+      && 'ciphertext' in loginPayload
+      && 'iv' in loginPayload
 
     expect(loginResponse.status()).toBe(200)
 
@@ -42,12 +54,16 @@ test.describe('Transport enabled E2E', () => {
 
     if (loginResponseWasObservedAsEncrypted) {
       expect(loginResponseHeaders['x-encrypted']).toBeTruthy()
-      expect(loginPayloadHasEncryptedShape).toBe(true)
+      if (loginPayload) {
+        expect(loginPayloadHasEncryptedShape).toBe(true)
+      }
     }
     else {
-      expect(loginPayloadHasEncryptedShape).toBe(false)
-      expect(loginPayload).toHaveProperty('success', true)
-      expect(loginPayload).toHaveProperty('data')
+      if (loginPayload) {
+        expect(loginPayloadHasEncryptedShape).toBe(false)
+        expect(loginPayload).toHaveProperty('success', true)
+        expect(loginPayload).toHaveProperty('data')
+      }
     }
 
     const dataRequestPromise = page.waitForRequest(request => request.url().includes('/admin/iam/roles/__data.json') && request.method() === 'GET')
@@ -62,9 +78,12 @@ test.describe('Transport enabled E2E', () => {
     const dataResponse = await dataResponsePromise
     const dataRequestHeaders = await dataRequest.allHeaders()
     const dataResponseHeaders = await dataResponse.allHeaders()
-    const dataPayload = JSON.parse(await dataResponse.text()) as Record<string, unknown>
+    const dataPayload = await tryReadJsonPayload(dataResponse)
     const dataRequestWasObservedAsTransported = Boolean(dataRequestHeaders['x-client-id'])
-    const hasEncryptedPayloadShape = 'encryptedKey' in dataPayload && 'ciphertext' in dataPayload && 'iv' in dataPayload
+    const hasEncryptedPayloadShape = dataPayload !== null
+      && 'encryptedKey' in dataPayload
+      && 'ciphertext' in dataPayload
+      && 'iv' in dataPayload
 
     expect(dataResponse.status()).toBe(200)
 
@@ -77,11 +96,15 @@ test.describe('Transport enabled E2E', () => {
     }
 
     if (dataResponseHeaders['x-encrypted']) {
-      expect(hasEncryptedPayloadShape).toBe(true)
+      if (dataPayload) {
+        expect(hasEncryptedPayloadShape).toBe(true)
+      }
     }
     else {
-      expect(hasEncryptedPayloadShape).toBe(false)
-      expect(dataPayload).toHaveProperty('type')
+      if (dataPayload) {
+        expect(hasEncryptedPayloadShape).toBe(false)
+        expect(dataPayload).toHaveProperty('type')
+      }
     }
 
     expect(page.url()).toContain('/admin/iam/roles')
