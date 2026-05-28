@@ -22,7 +22,7 @@ Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unkno
   return a === b ? options.fn(this) : options.inverse(this)
 })
 
-const HAI_VERSION = '^0.1.0-alpha.16'
+const HAI_VERSION = `^${fse.readJsonSync(fileURLToPath(new URL('../../package.json', import.meta.url))).version}`
 const TEMPLATE_SKIP_IF_EMPTY_MARKER = '@skipIfEmpty'
 const NORMALIZED_RENDER_EXTENSIONS = new Set(['.ts', '.js', '.svelte', '.json', '.css'])
 

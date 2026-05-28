@@ -16,6 +16,7 @@
 
 import { execSync } from 'node:child_process'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { addModule } from '../src/commands/cli-add.js'
@@ -28,7 +29,7 @@ import { initProject } from '../src/commands/cli-init.js'
 // =============================================================================
 
 const tmpRoot = path.join(process.cwd(), '.tmp-commands-e2e')
-const HAI_DEP_VERSION = '^0.1.0-alpha.16'
+const HAI_DEP_VERSION = `^${fse.readJsonSync(fileURLToPath(new URL('../package.json', import.meta.url))).version}`
 
 async function readJson(dir: string, rel: string) {
   return fse.readJson(path.join(dir, rel))
