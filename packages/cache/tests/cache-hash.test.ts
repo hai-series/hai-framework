@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { cache } from '../src/index.js'
+import { cache, HaiCacheError } from '../src/index.js'
 import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suite.js'
 
 describe('cache hash operations', () => {
@@ -164,6 +164,18 @@ describe('cache hash operations', () => {
       if (val.success) {
         expect(val.data).toBe('v2')
       }
+    })
+
+    it('hset 缺少字段值应返回 OPERATION_FAILED', async () => {
+      const result = await cache.hash.hset('h-invalid', 'f1', undefined as never)
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiCacheError.OPERATION_FAILED.code)
+
+      const all = await cache.hash.hgetall('h-invalid')
+      expect(all.success).toBe(true)
+      if (all.success)
+        expect(all.data).toEqual({})
     })
   }
 

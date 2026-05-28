@@ -93,6 +93,7 @@ await cache.init({
 - `cache.set_`: 集合结构（`sadd/smembers/sismember/...`）
 - `cache.zset`: 有序集合（`zadd/zrange/zrevrange/...`）
 - `cache.lock`: 分布式锁（`acquire/release/isLocked/extend`）
+- `CacheProvider`: 公开的 Provider 契约，供高级集成或自定义后端实现复用
 
 ## 分布式锁
 

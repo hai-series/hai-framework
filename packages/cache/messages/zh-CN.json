@@ -8,5 +8,6 @@
   "cache_valueNotNumber": "值不是数字",
   "cache_keyNotFound": "键不存在",
   "cache_indexOutOfRange": "索引越界",
-  "cache_configError": "缓存配置校验失败：{error}"
+  "cache_configError": "缓存配置校验失败：{error}",
+  "cache_invalidHashSetInput": "Hash hset 参数无效：请传入字段和值，或传入字段对象"
 }

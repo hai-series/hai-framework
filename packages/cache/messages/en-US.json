@@ -8,5 +8,6 @@
   "cache_valueNotNumber": "Value is not a number",
   "cache_keyNotFound": "Key not found",
   "cache_indexOutOfRange": "Index out of range",
-  "cache_configError": "Cache config validation failed: {error}"
+  "cache_configError": "Cache config validation failed: {error}",
+  "cache_invalidHashSetInput": "Invalid hash hset input: pass a field and value, or a field object"
 }

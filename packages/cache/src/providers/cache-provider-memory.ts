@@ -45,6 +45,10 @@ function deserializeValue(str: string): CacheValue {
   return JSON.parse(str)
 }
 
+function isCacheValue(value: CacheValue | undefined): value is CacheValue {
+  return value !== undefined
+}
+
 /**
  * 将 glob 通配符模式转为安全的正则表达式
  *
@@ -328,14 +332,21 @@ export function createMemoryProvider(): CacheProvider {
     },
 
     hset: (async (key: string, fieldOrData: string | Record<string, CacheValue>, value?: CacheValue): Promise<HaiResult<number>> => {
+      if (typeof fieldOrData !== 'string' && (fieldOrData === null || Array.isArray(fieldOrData))) {
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidHashSetInput'))
+      }
+
       let map = hashStore.get(key)
       if (!map) {
         map = new Map()
         hashStore.set(key, map)
       }
       if (typeof fieldOrData === 'string') {
+        if (!isCacheValue(value)) {
+          return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidHashSetInput'))
+        }
         const existed = map.has(fieldOrData)
-        map.set(fieldOrData, serializeValue(value!))
+        map.set(fieldOrData, serializeValue(value))
         return ok(existed ? 0 : 1)
       }
       let count = 0

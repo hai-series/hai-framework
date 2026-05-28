@@ -63,6 +63,19 @@ describe('cache.init', () => {
       expect(cache.config?.type).toBe('memory')
     })
 
+    it('memory: 并发 init 应拒绝其中一个调用', async () => {
+      await cache.close()
+      const first = cache.init({ type: 'memory' })
+      const second = cache.init({ type: 'memory' })
+      const results = await Promise.all([first, second])
+
+      expect(results.some(result => result.success)).toBe(true)
+      const failed = results.find(result => !result.success)
+      expect(failed?.success).toBe(false)
+      if (failed?.success === false)
+        expect(failed.error.code).toBe(HaiCacheError.OPERATION_FAILED.code)
+    })
+
     it('memory: ping 在初始化后应返回 PONG', async () => {
       const result = await cache.ping()
       expect(result.success).toBe(true)

@@ -93,6 +93,9 @@ export function createRedisProvider(): CacheProvider {
    * @param value - Redis 返回的字符串值或 null
    * @returns 解析后的值，或 null
    */
+  function deserialize<T>(value: string): T
+  function deserialize(value: null): null
+  function deserialize<T>(value: string | null): T | null
   function deserialize<T>(value: string | null): T | null {
     if (value === null)
       return null
@@ -132,6 +135,10 @@ export function createRedisProvider(): CacheProvider {
         error,
       )
     }
+  }
+
+  function isRedisOne(result: unknown): boolean {
+    return result === 1 || result === '1'
   }
 
   // ─── KV 操作 ───
@@ -276,6 +283,13 @@ export function createRedisProvider(): CacheProvider {
       fieldOrData: string | Record<string, CacheValue>,
       value?: CacheValue,
     ): Promise<HaiResult<number>> {
+      if (typeof fieldOrData === 'string' && value === undefined) {
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidHashSetInput'))
+      }
+      if (typeof fieldOrData !== 'string' && (fieldOrData === null || Array.isArray(fieldOrData))) {
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_invalidHashSetInput'))
+      }
+
       return wrapOperation(async () => {
         if (typeof fieldOrData === 'string' && value !== undefined) {
           return client!.hset(key, fieldOrData, serialize(value))
@@ -320,7 +334,7 @@ export function createRedisProvider(): CacheProvider {
     async hvals<T = CacheValue>(key: string): Promise<HaiResult<T[]>> {
       return wrapOperation(async () => {
         const values = await client!.hvals(key)
-        return values.map(v => deserialize<T>(v)!)
+        return values.map(v => deserialize<T>(v))
       })
     },
 
@@ -372,7 +386,7 @@ export function createRedisProvider(): CacheProvider {
     async lrange<T = CacheValue>(key: string, start: number, stop: number): Promise<HaiResult<T[]>> {
       return wrapOperation(async () => {
         const values = await client!.lrange(key, start, stop)
-        return values.map(v => deserialize<T>(v)!)
+        return values.map(v => deserialize<T>(v))
       })
     },
 
@@ -400,7 +414,7 @@ export function createRedisProvider(): CacheProvider {
         const result = await client!.blpop(...keys, timeout)
         if (!result)
           return null
-        return [result[0], deserialize<T>(result[1])!]
+        return [result[0], deserialize<T>(result[1])]
       })
     },
 
@@ -409,7 +423,7 @@ export function createRedisProvider(): CacheProvider {
         const result = await client!.brpop(...keys, timeout)
         if (!result)
           return null
-        return [result[0], deserialize<T>(result[1])!]
+        return [result[0], deserialize<T>(result[1])]
       })
     },
   }
@@ -428,7 +442,7 @@ export function createRedisProvider(): CacheProvider {
     async smembers<T = CacheValue>(key: string): Promise<HaiResult<T[]>> {
       return wrapOperation(async () => {
         const members = await client!.smembers(key)
-        return members.map(m => deserialize<T>(m)!)
+        return members.map(m => deserialize<T>(m))
       })
     },
 
@@ -447,7 +461,7 @@ export function createRedisProvider(): CacheProvider {
       return wrapOperation(async () => {
         if (count !== undefined) {
           const members = await client!.srandmember(key, count)
-          return (members as string[]).map(m => deserialize<T>(m)!)
+          return (members as string[]).map(m => deserialize<T>(m))
         }
         const member = await client!.srandmember(key)
         return deserialize<T>(member)
@@ -458,7 +472,7 @@ export function createRedisProvider(): CacheProvider {
       return wrapOperation(async () => {
         if (count !== undefined) {
           const members = await client!.spop(key, count)
-          return (members as string[]).map(m => deserialize<T>(m)!)
+          return (members as string[]).map(m => deserialize<T>(m))
         }
         const member = await client!.spop(key)
         return deserialize<T>(member)
@@ -468,21 +482,21 @@ export function createRedisProvider(): CacheProvider {
     async sinter<T = CacheValue>(...keys: string[]): Promise<HaiResult<T[]>> {
       return wrapOperation(async () => {
         const members = await client!.sinter(...keys)
-        return members.map(m => deserialize<T>(m)!)
+        return members.map(m => deserialize<T>(m))
       })
     },
 
     async sunion<T = CacheValue>(...keys: string[]): Promise<HaiResult<T[]>> {
       return wrapOperation(async () => {
         const members = await client!.sunion(...keys)
-        return members.map(m => deserialize<T>(m)!)
+        return members.map(m => deserialize<T>(m))
       })
     },
 
     async sdiff<T = CacheValue>(...keys: string[]): Promise<HaiResult<T[]>> {
       return wrapOperation(async () => {
         const members = await client!.sdiff(...keys)
-        return members.map(m => deserialize<T>(m)!)
+        return members.map(m => deserialize<T>(m))
       })
     },
   }
@@ -618,8 +632,8 @@ export function createRedisProvider(): CacheProvider {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
         if (owner !== undefined) {
-          const result = await client!.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, owner) as number
-          return result === 1
+          const result = await client!.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, owner)
+          return isRedisOne(result)
         }
         const deleted = await client!.del(lockKey)
         return deleted === 1
@@ -638,8 +652,8 @@ export function createRedisProvider(): CacheProvider {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
         if (owner !== undefined) {
-          const result = await client!.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, owner, ttl) as number
-          return result === 1
+          const result = await client!.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, owner, ttl)
+          return isRedisOne(result)
         }
         const result = await client!.expire(lockKey, ttl)
         return result === 1

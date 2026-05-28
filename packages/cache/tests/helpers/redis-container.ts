@@ -25,7 +25,16 @@ export async function acquireRedisContainer(): Promise<RedisContainerLease> {
       .start()
   }
 
-  const container = await containerPromise
+  let container: StartedTestContainer
+  try {
+    container = await containerPromise
+  }
+  catch (error) {
+    refCount = Math.max(0, refCount - 1)
+    if (refCount === 0)
+      containerPromise = null
+    throw error
+  }
   const host = container.getHost()
   const port = container.getMappedPort(6379)
 

@@ -39,16 +39,18 @@ let initInProgress = false
  *
  * @param config - 已经过 Zod Schema 校验的配置对象
  * @returns 未连接的 Provider 实例，需后续调用 connect()
- * @throws 理论上仅当出现未覆盖的 type 分支时抛出异常（正常情况下由 CacheConfigSchema 保证不会发生）
  */
-function createProvider(config: CacheConfig): CacheProvider {
+function createProvider(config: CacheConfig): HaiResult<CacheProvider> {
   switch (config.type) {
     case 'memory':
-      return createMemoryProvider()
+      return ok(createMemoryProvider())
     case 'redis':
-      return createRedisProvider()
+      return ok(createRedisProvider())
     default:
-      throw new Error(cacheM('cache_unsupportedType', { params: { type: (config as { type: string }).type } }))
+      return err(
+        HaiCacheError.UNSUPPORTED_TYPE,
+        cacheM('cache_unsupportedType', { params: { type: (config as { type: string }).type } }),
+      )
   }
 }
 
@@ -136,7 +138,11 @@ export const cache: CacheFunctions = {
       const parsed = parseResult.data
 
       try {
-        const provider = createProvider(parsed)
+        const providerResult = createProvider(parsed)
+        if (!providerResult.success)
+          return err(providerResult.error)
+
+        const provider = providerResult.data
         const connectResult = await provider.connect(parsed)
         if (!connectResult.success) {
           logger.error('Cache module initialization failed', {
