@@ -27,5 +27,19 @@
   "crypto_passwordHashEmpty": "Password and hash cannot be empty",
   "crypto_passwordHashFailed": "Password hashing failed",
   "crypto_hashFormatInvalid": "Invalid hash format",
-  "crypto_passwordVerifyFailed": "Password verification failed"
+  "crypto_passwordVerifyFailed": "Password verification failed",
+  "crypto_transportClientKeyGenerateFailed": "Failed to generate transport client key pair",
+  "crypto_transportServerKeyGenerateFailed": "Failed to generate transport server key pair",
+  "crypto_transportKeyExchangeRequestFailed": "Transport key exchange request failed",
+  "crypto_transportKeyExchangeHttpFailed": "Transport key exchange returned HTTP {status}",
+  "crypto_transportKeyExchangeInvalidJson": "Transport key exchange response is not valid JSON",
+  "crypto_transportKeyExchangeMissingFields": "Transport key exchange response is missing required fields",
+  "crypto_transportClientNotInitialized": "Transport client has not completed key exchange",
+  "crypto_transportClientNotRegistered": "Transport client is not registered or has expired",
+  "crypto_transportRequestEncryptFailed": "Failed to encrypt transport request body",
+  "crypto_transportRequestDecryptFailed": "Failed to decrypt transport request body",
+  "crypto_transportResponseEncryptFailed": "Failed to encrypt transport response body",
+  "crypto_transportResponseDecryptFailed": "Failed to decrypt transport response body",
+  "crypto_transportSessionKeyEncryptFailed": "Failed to encrypt transport session key",
+  "crypto_transportSessionKeyDecryptFailed": "Failed to decrypt transport session key"
 }

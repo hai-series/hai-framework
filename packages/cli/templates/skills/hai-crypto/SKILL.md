@@ -106,8 +106,8 @@ const valid = crypto.hash.verify('hello', hash.data!)
 | --------------- | ----------------------------------------------- | --------------------------- |
 | `generateKey`   | `() => string`                                  | 生成 128-bit 密钥（32 hex） |
 | `generateIV`    | `() => string`                                  | 生成随机 IV（32 hex）       |
-| `encrypt`       | `(data, key, options?) => HaiResult<string>`       | 加密                        |
-| `decrypt`       | `(ciphertext, key, options?) => HaiResult<string>` | 解密                        |
+| `encrypt`       | `(data, key, options?) => HaiResult<SymmetricEncryptedPayload>` | 加密（返回结构化密文）      |
+| `decrypt`       | `(payload, key) => HaiResult<string>`          | 解密结构化密文              |
 | `encryptWithIV` | `(data, key) => HaiResult<EncryptWithIVResult>`    | CBC 模式加密（自动生成 IV） |
 | `decryptWithIV` | `(ciphertext, key, iv) => HaiResult<string>`       | CBC 模式解密                |
 | `deriveKey`     | `(password, salt) => string`                    | 从密码和盐值派生密钥        |
@@ -116,13 +116,24 @@ const valid = crypto.hash.verify('hello', hash.data!)
 
 ```typescript
 const key = crypto.symmetric.generateKey()
-const result = crypto.symmetric.encryptWithIV('明文数据', key)
-if (result.success) {
-  const decrypted = crypto.symmetric.decryptWithIV(result.data.ciphertext, key, result.data.iv)
+
+// 默认安全用法：CBC + 自动 IV，返回 { mode, ciphertext, iv, encoding }
+const encrypted = crypto.symmetric.encrypt('明文数据', key)
+if (encrypted.success) {
+  const decrypted = crypto.symmetric.decrypt(encrypted.data, key)
+}
+
+// 需要单独存储 IV 时使用结构化结果
+const withIV = crypto.symmetric.encryptWithIV('明文数据', key)
+if (withIV.success) {
+  const decrypted = crypto.symmetric.decryptWithIV(withIV.data.ciphertext, key, withIV.data.iv)
 }
 ```
 
-**SymmetricOptions**：`{ mode?: 'ecb' | 'cbc', iv?: string, inputEncoding?: 'utf8' | 'hex', outputFormat?: 'hex' | 'base64' }`
+**SymmetricEncryptOptions**：`{ mode?: 'ecb' | 'cbc', iv?: string, outputFormat?: 'hex' | 'base64' }`
+**SymmetricEncryptedPayload**：`{ mode: 'ecb' | 'cbc', ciphertext: string, iv?: string, encoding: 'hex' | 'base64' }`
+
+> `encrypt()` 默认使用 CBC 并自动生成 IV。ECB 会泄漏明文结构，只有底层协议明确要求时才显式 `{ mode: 'ecb' }`。
 
 ### 密码哈希 — `crypto.password`
 
@@ -143,13 +154,21 @@ if (hashed.success) {
 
 ### 传输加密 — `crypto.transport`
 
-所有传输加密工厂必须从 `crypto.transport` 访问，不从子目录导入内部工厂。
+传输加密主工厂必须从 `crypto.transport` 访问；共享 `keyStore` provider 请从 `@h-ai/crypto` 根入口导入，不从子目录内部路径导入。
 
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
 | `createServer` | `(options?) => HaiResult<TransportEncryptionManager>` | 创建服务端传输加密管理器 |
 | `createClient` | `({ keyExchangeUrl, fetch? }) => TransportClient` | 创建客户端 encryptedFetch 会话 |
 | `protocol` | `TRANSPORT_PROTOCOL` | 协议常量：`X-Client-Id`、`X-Encrypted`、默认协商路径 |
+
+共享 `keyStore` provider（从 `@h-ai/crypto` 根入口导入）：
+
+| 工厂 | 签名 | 说明 |
+| --- | --- | --- |
+| `createInMemoryKeyStore` | `(maxClients?) => TransportKeyStore` | 默认 FIFO 内存实现 |
+| `createRedisTransportKeyStore` | `({ cache, ttlSeconds? }) => TransportKeyStore` | 基于 `@h-ai/cache` 的共享实现，通常配 Redis |
+| `createReldbTransportKeyStore` | `({ reldb, ttlSeconds? }) => TransportKeyStore` | 基于 `@h-ai/reldb` 的共享实现，自动建表 |
 
 ```typescript
 const server = crypto.transport.createServer({ maxClients: 10000 })
@@ -166,6 +185,17 @@ const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', 
 })
 ```
 
+```typescript
+import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { cache } from '@h-ai/cache'
+
+await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
+
+const sharedServer = crypto.transport.createServer({
+  keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+})
+```
+
 使用流程：
 1. 先 `await crypto.init()`。
 2. 服务端 `createServer()` 后暴露一个 POST 密钥协商端点：接收 `clientPublicKey`，返回 `serverPublicKey + clientId`。
@@ -173,6 +203,8 @@ const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', 
 4. 协商完成后，请求附带 `X-Client-Id`；若请求有 body，则自动包装成 `{ encryptedKey, ciphertext, iv }`。
 5. 服务端先 `decryptRequest()`，业务处理后再 `encryptResponse(clientId, data)`。
 6. 客户端收到 `X-Encrypted: true` 的响应后自动解密；`destroy()` 可清空当前会话。
+
+`encryptedFetch()` 与原生 fetch 一样会 reject：网络错误、密钥协商失败、请求加密失败或响应解密失败都应在调用方按 fetch 错误处理策略捕获。
 
 常规应用优先使用上层封装：
 - serv：`serv.createApp({ transport: { crypto } })`
@@ -210,8 +242,10 @@ const encrypted = crypto.symmetric.encrypt(sensitiveData, key)
 // 存入数据库
 
 // 读取时解密
-const decrypted = crypto.symmetric.decrypt(storedData, key)
+const decrypted = crypto.symmetric.decrypt(storedPayload, key)
 ```
+
+> 默认密文是结构化对象，必须完整存储 `mode` / `ciphertext` / `iv` / `encoding` 字段；如果数据库字段已拆分 IV 与密文，请改用 `encryptWithIV()` / `decryptWithIV()`。
 
 ### 密码存储与验证
 

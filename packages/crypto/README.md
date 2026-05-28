@@ -13,9 +13,9 @@
 
 ## 安全声明
 
-- **SM4 ECB 模式（当前默认值）不安全**：相同明文块产生相同密文块，会泄漏结构模式。**生产环境请勿使用** `crypto.symmetric.encrypt(data, key)` 默认模式，改用 `crypto.symmetric.encryptWithIV(data, key)`（自动生成随机 IV 的 CBC 模式）或显式传入 `{ mode: 'cbc', iv }`。
+- **SM4 默认加密返回结构化密文**：`crypto.symmetric.encrypt(data, key)` 默认使用 CBC + 随机 IV，返回 `{ mode, ciphertext, iv, encoding }`；解密时把该对象传给 `crypto.symmetric.decrypt(payload, key)`。
 - **SM4 `deriveKey(password, salt)` 不是 KDF**：仅为单次 SM3 哈希，不具备密码爆破抗性，**禁止用于密码存储**。如需密码哈希，使用 `crypto.password.hash(password)`；如需从密码派生密钥，请采用 PBKDF2 / scrypt / Argon2。
-- **IV 必须唯一**：相同密钥下禁止复用 IV；推荐使用 `encryptWithIV()` 每次自动生成。密文与 IV 需一同传输与存储（IV 可公开，不必保密）。
+- **IV 必须唯一**：相同密钥下禁止复用 IV；推荐使用默认 CBC 或 `encryptWithIV()` 每次自动生成。密文与 IV 需一同传输与存储（IV 可公开，不必保密）。
 
 ## 快速开始
 
@@ -81,33 +81,40 @@ if (hash.success) {
 }
 ```
 
-### 对称加密（ECB / CBC）
+### 对称加密（CBC 默认 / 结构化密文）
 
 ```ts
 // 生成随机密钥和 IV
 const key = crypto.symmetric.generateKey()
 const iv = crypto.symmetric.generateIV()
 
-// ECB 模式（默认，❌ 不安全，仅保留兼容性，请勿在生产使用）
-const ecbEnc = crypto.symmetric.encrypt('data', key)
-if (ecbEnc.success) {
-  const ecbDec = crypto.symmetric.decrypt(ecbEnc.data, key)
-  // ecbDec.data === 'data'
+// 默认：CBC + 自动随机 IV，返回结构化密文
+const safeEnc = crypto.symmetric.encrypt('data', key)
+if (safeEnc.success) {
+  // safeEnc.data: { mode: 'cbc', ciphertext, iv, encoding: 'hex' }
+  const safeDec = crypto.symmetric.decrypt(safeEnc.data, key)
+  // safeDec.data === 'data'
 }
 
-// CBC 模式（需指定 IV）
+// CBC 指定 IV（仍然返回结构化密文）
 const cbcEnc = crypto.symmetric.encrypt('data', key, { mode: 'cbc', iv })
 if (cbcEnc.success) {
-  const cbcDec = crypto.symmetric.decrypt(cbcEnc.data, key, { mode: 'cbc', iv })
+  const cbcDec = crypto.symmetric.decrypt(cbcEnc.data, key)
 }
 
-// 快捷方式：自动生成 IV 的 CBC 加解密
+// 结构化结果：自动生成 IV 的 CBC 加解密
 const withIV = crypto.symmetric.encryptWithIV('data', key)
 if (withIV.success) {
   const dec = crypto.symmetric.decryptWithIV(withIV.data.ciphertext, key, withIV.data.iv)
 }
 
-// 输出 base64 格式
+// ECB 模式（❌ 不安全；只有底层协议明确要求时才显式指定）
+const ecbEnc = crypto.symmetric.encrypt('data', key, { mode: 'ecb' })
+if (ecbEnc.success) {
+  const ecbDec = crypto.symmetric.decrypt(ecbEnc.data, key)
+}
+
+// 输出 base64 格式（ciphertext 字段为 base64，encoding 字段会标明）
 const b64Enc = crypto.symmetric.encrypt('data', key, { outputFormat: 'base64' })
 
 // ⚠️ 已弃用：从密码派生密钥（仅为单次 SM3 哈希，不是 KDF，禁止用于密码存储场景）
@@ -155,7 +162,7 @@ if (hashed.success) {
 #### 使用流程
 
 1. 先 `await crypto.init()`，确保 `crypto.asymmetric` 与 `crypto.symmetric` 已初始化。
-2. 服务端调用 `crypto.transport.createServer()` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。
+2. 服务端调用 `crypto.transport.createServer()` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。多节点部署时可注入共享 `keyStore`。
 3. 服务端提供一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端，再返回 `{ serverPublicKey: manager.getServerPublicKey(), clientId }`。
 4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成这次协商。
 5. 协商完成后，客户端请求会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ encryptedKey, ciphertext, iv }`，并带上 `X-Encrypted: true`。无 body 的请求只附带 `X-Client-Id`，不会额外生成密文 body。
@@ -163,7 +170,13 @@ if (hashed.success) {
 7. 服务端返回 JSON 响应前，用 `manager.encryptResponse(clientId, data)` 重新加密，并设置 `X-Encrypted: true`；客户端收到后会自动解密。
 8. 客户端调用 `client.destroy()` 可清空当前会话；服务端调用 `manager.close()`，或在模块级调用 `await crypto.close()`，用于释放资源。
 
-> 默认 `keyStore` 是进程内内存实现。多节点部署时，需要会话粘性（sticky session），或改用共享的 `TransportKeyStore` 实现来保存客户端公钥。
+> 默认 `keyStore` 是进程内 FIFO 内存实现，超过 `maxClients` 会淘汰最早注册的客户端。多节点部署时，需要会话粘性（sticky session），或改用共享的 `TransportKeyStore` 实现来保存客户端公钥。
+
+共享存储可直接复用 `@h-ai/crypto` 根入口导出的 provider 工厂：
+
+- `createInMemoryKeyStore(maxClients)`：显式创建默认内存实现，常用于测试或自定义容量
+- `createRedisTransportKeyStore({ cache, ttlSeconds? })`：复用 `@h-ai/cache`，通常配合 Redis provider 获取跨节点共享
+- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`：复用 `@h-ai/reldb`，自动建表 `hai_crypto_transport_client_keys`
 
 ```ts
 // 服务端：通常由 serv.createApp({ transport: { crypto } }) 或 kit.createHandle({ crypto }) 内部调用
@@ -181,6 +194,22 @@ const response = await client.encryptedFetch('https://api.example.com/api/v1/ech
   body: JSON.stringify({ hello: 'world' }),
 })
 ```
+
+```ts
+import { cache } from '@h-ai/cache'
+import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+
+await crypto.init()
+await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
+
+const server = crypto.transport.createServer({
+  keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+})
+if (!server.success)
+  throw new Error(server.error.message)
+```
+
+`encryptedFetch()` 的语义与原生 `fetch` 一致：网络失败、密钥协商失败、请求加密失败或响应解密失败时会 reject；业务层应在调用处按 fetch 错误处理策略统一捕获。
 
 协议常量通过 `crypto.transport.protocol`（或 `TRANSPORT_PROTOCOL`）访问：`X-Client-Id`、`X-Encrypted`、默认 `/_hai/key-exchange`。
 

@@ -20,6 +20,7 @@ import type {
   TransportKeyPair,
 } from './crypto-transport-types.js'
 import { err, HaiCommonError, ok } from '@h-ai/core'
+import { cryptoM } from '../crypto-i18n.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /** {@link createTransportClient} 的配置项。 */
@@ -63,7 +64,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   async function doInit(): Promise<HaiResult<void>> {
     const kpResult = options.crypto.asymmetric.generateKeyPair()
     if (!kpResult.success)
-      return err(HaiCommonError.INTERNAL_ERROR, 'Failed to generate client key pair', kpResult.error)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'), kpResult.error)
     const localKeyPair = kpResult.data
 
     let response: Response
@@ -75,21 +76,21 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       })
     }
     catch (cause) {
-      return err(HaiCommonError.INTERNAL_ERROR, 'Key exchange request failed', cause)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeRequestFailed'), cause)
     }
 
     if (!response.ok)
-      return err(HaiCommonError.INTERNAL_ERROR, `Key exchange returned HTTP ${response.status}`)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeHttpFailed', { params: { status: response.status } }))
 
     let body: KeyExchangeResponse
     try {
       body = await response.json() as KeyExchangeResponse
     }
     catch (cause) {
-      return err(HaiCommonError.INTERNAL_ERROR, 'Key exchange response is not valid JSON', cause)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeInvalidJson'), cause)
     }
     if (!body.serverPublicKey || !body.clientId)
-      return err(HaiCommonError.INTERNAL_ERROR, 'Key exchange response missing fields')
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeMissingFields'))
 
     keyPair = localKeyPair
     serverPublicKey = body.serverPublicKey
@@ -113,14 +114,14 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
   function encryptBody(plaintext: string): HaiResult<EncryptedPayload> {
     if (!serverPublicKey)
-      return err(HaiCommonError.INTERNAL_ERROR, 'Transport client not initialized')
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
     const symKey = options.crypto.symmetric.generateKey()
     const encResult = options.crypto.symmetric.encryptWithIV(plaintext, symKey)
     if (!encResult.success)
-      return err(HaiCommonError.INTERNAL_ERROR, 'Failed to encrypt request body', encResult.error)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportRequestEncryptFailed'), encResult.error)
     const keyEncResult = options.crypto.asymmetric.encrypt(symKey, serverPublicKey)
     if (!keyEncResult.success)
-      return err(HaiCommonError.INTERNAL_ERROR, 'Failed to encrypt session key', keyEncResult.error)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyEncryptFailed'), keyEncResult.error)
     return ok({
       encryptedKey: keyEncResult.data,
       ciphertext: encResult.data.ciphertext,
@@ -130,13 +131,13 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
   function decryptPayload(payload: EncryptedPayload): HaiResult<string> {
     if (!keyPair)
-      return err(HaiCommonError.INTERNAL_ERROR, 'Transport client not initialized')
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
     const keyDec = options.crypto.asymmetric.decrypt(payload.encryptedKey, keyPair.privateKey)
     if (!keyDec.success)
-      return err(HaiCommonError.INTERNAL_ERROR, 'Failed to decrypt session key', keyDec.error)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyDecryptFailed'), keyDec.error)
     const dec = options.crypto.symmetric.decryptWithIV(payload.ciphertext, keyDec.data, payload.iv)
     if (!dec.success)
-      return err(HaiCommonError.INTERNAL_ERROR, 'Failed to decrypt response body', dec.error)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseDecryptFailed'), dec.error)
     return ok(dec.data)
   }
 

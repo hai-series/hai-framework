@@ -27,5 +27,19 @@
   "crypto_passwordHashEmpty": "密码和哈希值不能为空",
   "crypto_passwordHashFailed": "密码哈希失败",
   "crypto_hashFormatInvalid": "无效的哈希格式",
-  "crypto_passwordVerifyFailed": "密码验证失败"
+  "crypto_passwordVerifyFailed": "密码验证失败",
+  "crypto_transportClientKeyGenerateFailed": "传输加密客户端密钥生成失败",
+  "crypto_transportServerKeyGenerateFailed": "传输加密服务端密钥生成失败",
+  "crypto_transportKeyExchangeRequestFailed": "传输加密密钥协商请求失败",
+  "crypto_transportKeyExchangeHttpFailed": "传输加密密钥协商返回 HTTP {status}",
+  "crypto_transportKeyExchangeInvalidJson": "传输加密密钥协商响应不是有效 JSON",
+  "crypto_transportKeyExchangeMissingFields": "传输加密密钥协商响应缺少必要字段",
+  "crypto_transportClientNotInitialized": "传输加密客户端尚未完成密钥协商",
+  "crypto_transportClientNotRegistered": "传输加密客户端未注册或已过期",
+  "crypto_transportRequestEncryptFailed": "传输加密请求体加密失败",
+  "crypto_transportRequestDecryptFailed": "传输加密请求体解密失败",
+  "crypto_transportResponseEncryptFailed": "传输加密响应体加密失败",
+  "crypto_transportResponseDecryptFailed": "传输加密响应体解密失败",
+  "crypto_transportSessionKeyEncryptFailed": "传输加密会话密钥加密失败",
+  "crypto_transportSessionKeyDecryptFailed": "传输加密会话密钥解密失败"
 }

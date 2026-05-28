@@ -16,6 +16,18 @@ describe('crypto.init', () => {
     expect(crypto.isInitialized).toBe(true)
   })
 
+  it('should reject concurrent initialization', async () => {
+    const first = crypto.init()
+    const second = crypto.init()
+    const results = await Promise.all([first, second])
+
+    expect(results.some(result => result.success)).toBe(true)
+    const failed = results.find(result => !result.success)
+    expect(failed?.success).toBe(false)
+    if (failed?.success === false)
+      expect(failed.error.code).toBe(HaiCryptoError.INIT_FAILED.code)
+  })
+
   it('should close and reset state', async () => {
     await crypto.init()
     expect(crypto.isInitialized).toBe(true)

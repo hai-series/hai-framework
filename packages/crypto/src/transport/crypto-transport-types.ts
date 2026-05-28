@@ -46,8 +46,8 @@ export interface KeyExchangeResponse {
 
 /** 非对称密钥对。 */
 export interface TransportKeyPair {
-  publicKey: string
-  privateKey: string
+  readonly publicKey: string
+  readonly privateKey: string
 }
 
 /**
@@ -105,6 +105,19 @@ export interface TransportKeyStore {
   close?: () => Promise<void>
 }
 
+/**
+ * 创建服务端传输加密管理器的配置。
+ *
+ * `keyStore` 未传时，默认使用 {@link createInMemoryKeyStore}；此时可通过 `maxClients`
+ * 控制进程内 FIFO 容量。若传入共享 `keyStore`，则 `maxClients` 不再生效。
+ */
+export interface TransportCreateServerOptions {
+  /** 客户端公钥存储；多节点部署时建议注入共享实现。 */
+  readonly keyStore?: TransportKeyStore
+  /** 默认内存 keyStore 的最大容量（仅当 `keyStore` 未提供时生效）。 */
+  readonly maxClients?: number
+}
+
 // ─── 管理器与客户端公开接口 ───
 
 /**
@@ -153,7 +166,11 @@ export interface TransportClient {
    * 通常无需手动调用：`encryptedFetch` 在首次请求前会自动 `init()`。
    */
   init: () => Promise<HaiResult<void>>
-  /** 包装后的 fetch；签名与全局 `fetch` 一致，请求/响应自动加解密。 */
+  /**
+   * 包装后的 fetch；签名与全局 `fetch` 一致，请求/响应自动加解密。
+   *
+   * @throws 与原生 fetch 一样，网络错误、密钥协商失败、加密失败或解密失败会 reject。
+   */
   encryptedFetch: typeof fetch
   /** 是否已完成密钥协商。 */
   ready: () => boolean

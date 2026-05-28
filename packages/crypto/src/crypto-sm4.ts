@@ -6,7 +6,14 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { EncryptWithIVResult, SymmetricOperations, SymmetricOptions } from './crypto-types.js'
+import type {
+  EncryptWithIVResult,
+  SymmetricCiphertextEncoding,
+  SymmetricDecryptInput,
+  SymmetricEncryptedPayload,
+  SymmetricEncryptOptions,
+  SymmetricOperations,
+} from './crypto-types.js'
 
 import { err, ok } from '@h-ai/core'
 // @ts-expect-error sm-crypto 无类型定义
@@ -18,7 +25,7 @@ import {
   HaiCryptoError,
 
 } from './crypto-types.js'
-import { base64ToHex, hexToBase64, isBase64 } from './crypto-utils.js'
+import { base64ToHex, hexToBase64 } from './crypto-utils.js'
 
 const { sm3, sm4 } = smCrypto
 const SM4_HEX_32_REGEX = /^[0-9a-f]{32}$/i
@@ -29,8 +36,8 @@ const SM4_HEX_32_REGEX = /^[0-9a-f]{32}$/i
  * 创建 SM4 算法操作实例
  *
  * 基于 sm-crypto 库实现 SM4 对称加密/解密。
- * 支持 ECB（默认）和 CBC 两种模式，使用 PKCS#7 填充。
- * 密文支持 hex/base64 两种格式（解密时自动检测）。
+ * 支持 CBC（默认）和 ECB 两种模式，使用 PKCS#7 填充。
+ * 密文以结构化字段返回，解密时不猜测字符串格式。
  *
  * @returns SymmetricOperations 接口实现
  */
@@ -49,28 +56,27 @@ export function createSM4(): SymmetricOperations {
     /**
      * SM4 对称加密
      *
-     * 支持 ECB（默认）和 CBC 两种模式，使用 PKCS#7 填充。
-     * CBC 模式需提供合法 IV。
+     * 默认使用 CBC 并自动生成随机 IV，返回结构化字段。
      *
-     * ⚠️ 安全警告：**ECB 默认模式不安全**—相同明文块产生相同密文块，泄漏结构信息。
-     * 生产场景请优先使用 `encryptWithIV()`（自动随机 IV 的 CBC）或显式传入
-     * `{ mode: 'cbc', iv }`。ECB 模式仅保留兼容性，未来版本可能移除默认值。
+     * ⚠️ 安全警告：ECB 模式会让相同明文块产生相同密文块，泄漏结构信息。
+     * 生产场景请使用默认 CBC，或显式传入 `{ mode: 'cbc', iv }`。
      *
      * @param data - 待加密明文
      * @param key - 密钥（32 字符十六进制）
      * @param options - 加密模式/IV/输出格式
-     * @returns 成功时返回密文；失败时返回 INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
+     * @returns 成功时返回结构化密文；失败时返回 INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
      */
     encrypt(
       data: string,
       key: string,
-      options: SymmetricOptions = {},
-    ): HaiResult<string> {
+      options: SymmetricEncryptOptions = {},
+    ): HaiResult<SymmetricEncryptedPayload> {
       const {
-        mode = 'ecb',
+        mode = 'cbc',
         iv,
         outputFormat = 'hex',
       } = options
+      const actualIv = mode === 'cbc' ? iv ?? this.generateIV() : undefined
 
       if (!this.isValidKey(key)) {
         return err(
@@ -79,18 +85,13 @@ export function createSM4(): SymmetricOperations {
         )
       }
 
-      if (mode === 'cbc' && !iv) {
-        return err(
-          HaiCryptoError.INVALID_IV,
-          cryptoM('crypto_sm4CbcNeedIv'),
-        )
-      }
-
-      if (mode === 'cbc' && iv && !this.isValidIV(iv)) {
-        return err(
-          HaiCryptoError.INVALID_IV,
-          cryptoM('crypto_sm4IvInvalid'),
-        )
+      if (mode === 'cbc') {
+        if (!actualIv || !this.isValidIV(actualIv)) {
+          return err(
+            HaiCryptoError.INVALID_IV,
+            cryptoM('crypto_sm4IvInvalid'),
+          )
+        }
       }
 
       try {
@@ -99,8 +100,8 @@ export function createSM4(): SymmetricOperations {
           padding: 'pkcs#7',
         }
 
-        if (mode === 'cbc' && iv) {
-          sm4Options.iv = iv
+        if (mode === 'cbc' && actualIv) {
+          sm4Options.iv = actualIv
         }
 
         const encrypted = sm4.encrypt(data, key, sm4Options)
@@ -112,11 +113,12 @@ export function createSM4(): SymmetricOperations {
           )
         }
 
-        if (outputFormat === 'base64') {
-          return ok(hexToBase64(encrypted))
-        }
-
-        return ok(encrypted)
+        return ok({
+          mode,
+          ciphertext: encodeCiphertext(encrypted, outputFormat),
+          ...(actualIv ? { iv: actualIv } : {}),
+          encoding: outputFormat,
+        })
       }
       catch (error) {
         return err(
@@ -130,20 +132,17 @@ export function createSM4(): SymmetricOperations {
     /**
      * SM4 对称解密
      *
-     * 自动检测 base64 格式输入并转换为 hex。
-     * 解密模式和 IV 需与加密时一致。
+     * 使用结构化字段解密；解密模式、IV 与密文编码均来自 payload。
      *
-     * @param ciphertext - 密文（hex 或 base64）
+     * @param payload - 结构化密文
      * @param key - 密钥（32 字符十六进制）
-     * @param options - 解密模式/IV
      * @returns 成功时返回明文；失败时返回 INVALID_KEY/INVALID_IV/DECRYPTION_FAILED
      */
     decrypt(
-      ciphertext: string,
+      payload: SymmetricDecryptInput,
       key: string,
-      options: SymmetricOptions = {},
     ): HaiResult<string> {
-      const { mode = 'ecb', iv } = options
+      const { mode, iv } = payload
 
       if (!this.isValidKey(key)) {
         return err(
@@ -152,19 +151,15 @@ export function createSM4(): SymmetricOperations {
         )
       }
 
-      if (mode === 'cbc' && !iv) {
+      if (mode === 'cbc' && (!iv || !this.isValidIV(iv))) {
         return err(
           HaiCryptoError.INVALID_IV,
-          cryptoM('crypto_sm4CbcNeedIv'),
+          cryptoM('crypto_sm4IvInvalid'),
         )
       }
 
       try {
-        // 自动检测并转换 base64 格式
-        let input = ciphertext
-        if (isBase64(ciphertext)) {
-          input = base64ToHex(ciphertext)
-        }
+        const input = decodeCiphertext(payload)
 
         const sm4Options: Record<string, unknown> = {
           mode,
@@ -213,7 +208,12 @@ export function createSM4(): SymmetricOperations {
         return result
       }
 
-      return ok({ ciphertext: result.data, iv })
+      return ok({
+        mode: 'cbc',
+        ciphertext: result.data.ciphertext,
+        iv,
+        encoding: result.data.encoding,
+      })
     },
 
     /**
@@ -229,7 +229,7 @@ export function createSM4(): SymmetricOperations {
       key: string,
       iv: string,
     ): HaiResult<string> {
-      return this.decrypt(ciphertext, key, { mode: 'cbc', iv })
+      return this.decrypt({ mode: 'cbc', ciphertext, iv, encoding: 'hex' }, key)
     },
 
     /**
@@ -283,4 +283,14 @@ function generateRandomHex(byteLength: number): string {
   return Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
+}
+
+/** 按输出编码转换 SM4 hex 密文。 */
+function encodeCiphertext(ciphertext: string, encoding: SymmetricCiphertextEncoding): string {
+  return encoding === 'base64' ? hexToBase64(ciphertext) : ciphertext
+}
+
+/** 将结构化密文转换为 sm-crypto 需要的 hex 输入。 */
+function decodeCiphertext(payload: SymmetricDecryptInput): string {
+  return payload.encoding === 'base64' ? base64ToHex(payload.ciphertext) : payload.ciphertext
 }

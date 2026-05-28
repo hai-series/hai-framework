@@ -33,6 +33,10 @@
     "@h-ai/core": "workspace:*",
     "sm-crypto": "catalog:"
   },
+  "optionalDependencies": {
+    "@h-ai/cache": "workspace:*",
+    "@h-ai/reldb": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "catalog:",
     "rimraf": "catalog:",

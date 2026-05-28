@@ -1,9 +1,7 @@
 /**
  * @h-ai/crypto — 传输加密服务端实现
  *
- * 提供：
- * - {@link createInMemoryKeyStore}：默认内存版 {@link TransportKeyStore}（含 LRU 淘汰）。
- * - {@link createTransportEncryption}：服务端管理器工厂。
+ * 提供服务端传输加密管理器工厂。
  *
  * @module crypto-transport-server
  */
@@ -11,60 +9,14 @@
 import type { HaiResult } from '@h-ai/core'
 import type {
   EncryptedPayload,
+  TransportCreateServerOptions,
   TransportCryptoServiceLike,
   TransportEncryptionManager,
   TransportKeyPair,
-  TransportKeyStore,
 } from './crypto-transport-types.js'
 import { err, HaiCommonError, ok } from '@h-ai/core'
-
-/**
- * 创建进程内 LRU 客户端密钥存储。
- *
- * ⚠️ 进程内实现：多节点部署时需让客户端首次请求后保持「会话粘性」（sticky session），
- * 否则后续请求路由到其他节点会因找不到客户端公钥而失败。需要跨节点请改用
- * Redis / 数据库实现 {@link TransportKeyStore}。
- *
- * @param maxClients - 最大客户端数（默认 10000），超过后按注册顺序淘汰最早条目。
- */
-export function createInMemoryKeyStore(maxClients = 10000): TransportKeyStore {
-  const clientKeys = new Map<string, string>()
-  let counter = 0
-  return {
-    async register(publicKey) {
-      counter++
-      const clientId = `c_${counter}_${Date.now()}`
-      if (clientKeys.size >= maxClients) {
-        const oldest = clientKeys.keys().next().value
-        if (oldest !== undefined)
-          clientKeys.delete(oldest)
-      }
-      clientKeys.set(clientId, publicKey)
-      return clientId
-    },
-    async get(clientId) {
-      return clientKeys.get(clientId)
-    },
-    async delete(clientId) {
-      clientKeys.delete(clientId)
-    },
-    async close() {
-      clientKeys.clear()
-    },
-  }
-}
-
-/** {@link createTransportEncryption} 的配置项。 */
-export interface CreateTransportEncryptionOptions {
-  /**
-   * 客户端公钥存储；默认使用 {@link createInMemoryKeyStore}。
-   *
-   * 多节点部署时通过此项注入 Redis 等共享存储以保证跨节点一致。
-   */
-  keyStore?: TransportKeyStore
-  /** 默认内存 keyStore 的最大容量（仅当 `keyStore` 未提供时生效）。 */
-  maxClients?: number
-}
+import { cryptoM } from '../crypto-i18n.js'
+import { createInMemoryKeyStore } from './store-provider/crypto-transport-store-memory.js'
 
 /**
  * 创建传输加密管理器。
@@ -88,11 +40,11 @@ export interface CreateTransportEncryptionOptions {
  */
 export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,
-  options: CreateTransportEncryptionOptions = {},
+  options: TransportCreateServerOptions = {},
 ): HaiResult<TransportEncryptionManager> {
   const keyPairResult = cryptoService.asymmetric.generateKeyPair()
   if (!keyPairResult.success)
-    return err(HaiCommonError.INTERNAL_ERROR, 'Failed to generate transport key pair', keyPairResult.error)
+    return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportServerKeyGenerateFailed'), keyPairResult.error)
   const serverKeyPair: TransportKeyPair = keyPairResult.data
   const keyStore = options.keyStore ?? createInMemoryKeyStore(options.maxClients)
 
@@ -112,16 +64,16 @@ export function createTransportEncryption(
     async encryptResponse(clientId, data) {
       const clientPublicKey = await keyStore.get(clientId)
       if (!clientPublicKey)
-        return err(HaiCommonError.NOT_FOUND, `Unknown transport client: ${clientId}`)
+        return err(HaiCommonError.NOT_FOUND, cryptoM('crypto_transportClientNotRegistered'))
 
       // 1. 生成随机会话密钥；2. 用会话密钥加密内容；3. 用客户端公钥加密会话密钥。
       const symmetricKey = cryptoService.symmetric.generateKey()
       const encResult = cryptoService.symmetric.encryptWithIV(data, symmetricKey)
       if (!encResult.success)
-        return err(HaiCommonError.INTERNAL_ERROR, 'Failed to encrypt response payload', encResult.error)
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseEncryptFailed'), encResult.error)
       const keyEncResult = cryptoService.asymmetric.encrypt(symmetricKey, clientPublicKey)
       if (!keyEncResult.success)
-        return err(HaiCommonError.INTERNAL_ERROR, 'Failed to encrypt session key', keyEncResult.error)
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyEncryptFailed'), keyEncResult.error)
 
       const payload: EncryptedPayload = {
         encryptedKey: keyEncResult.data,
@@ -135,10 +87,10 @@ export function createTransportEncryption(
       // 1. 用服务端私钥解出会话密钥；2. 用会话密钥解出明文。
       const keyDecResult = cryptoService.asymmetric.decrypt(payload.encryptedKey, serverKeyPair.privateKey)
       if (!keyDecResult.success)
-        return err(HaiCommonError.INTERNAL_ERROR, 'Failed to decrypt session key', keyDecResult.error)
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyDecryptFailed'), keyDecResult.error)
       const decResult = cryptoService.symmetric.decryptWithIV(payload.ciphertext, keyDecResult.data, payload.iv)
       if (!decResult.success)
-        return err(HaiCommonError.INTERNAL_ERROR, 'Failed to decrypt request payload', decResult.error)
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportRequestDecryptFailed'), decResult.error)
       return ok(decResult.data)
     },
 

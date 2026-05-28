@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { crypto } from '../../src/index.js'
+import { createInMemoryKeyStore, crypto } from '../../src/index.js'
 
 const KEY_EXCHANGE_URL = 'https://api.test/_hai/key-exchange'
 
@@ -99,6 +99,37 @@ describe('crypto.transport', () => {
     })
     const b2 = await r2.json() as { echo: { n: number } }
     expect(b2.echo.n).toBe(42)
+  })
+
+  it('round-trips through an injected keyStore', async () => {
+    const serverResult = crypto.transport.createServer({
+      keyStore: createInMemoryKeyStore(32),
+    })
+    expect(serverResult.success).toBe(true)
+    if (!serverResult.success)
+      return
+
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: KEY_EXCHANGE_URL,
+      fetch: makeRoundTripFetch(serverResult.data, plaintext => plaintext),
+    })
+
+    const response = await client.encryptedFetch('https://api.test/echo', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'shared-store-ready' }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json() as { message: string }
+    expect(body.message).toBe('shared-store-ready')
+  })
+
+  it('encryptedFetch rejects when key exchange fails', async () => {
+    const failingFetch = (async () => new Response('unavailable', { status: 503 })) as typeof fetch
+    const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch: failingFetch })
+
+    await expect(client.encryptedFetch('https://api.test/echo')).rejects.toThrow()
+    expect(client.ready()).toBe(false)
   })
 
   it('reads body from Request when init.body is absent (oRPC compat)', async () => {

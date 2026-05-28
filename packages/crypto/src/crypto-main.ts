@@ -108,6 +108,9 @@ export const crypto: CryptoFunctions = {
     initInProgress = true
 
     try {
+      // 让并发调用有机会观察到 initInProgress，确保防护逻辑真实生效。
+      await Promise.resolve()
+
       if (initialized) {
         logger.warn('Crypto module is already initialized, reinitializing')
         await crypto.close()

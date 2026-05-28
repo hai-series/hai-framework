@@ -43,14 +43,37 @@ describe('crypto.symmetric', () => {
     expect(crypto.symmetric.isValidIV('')).toBe(false)
   })
 
-  // ─── ECB 模式 ───
+  // ─── 结构化 CBC 默认与 ECB 显式模式 ───
 
-  it('should encrypt and decrypt in ecb mode (default)', () => {
+  it('should encrypt and decrypt with default structured cbc payload', () => {
     const key = crypto.symmetric.generateKey()
     const encrypted = crypto.symmetric.encrypt('hello', key)
     expect(encrypted.success).toBe(true)
     if (!encrypted.success)
       return
+    expect(encrypted.data.mode).toBe('cbc')
+    expect(encrypted.data.iv).toMatch(/^[0-9a-f]{32}$/i)
+    expect(encrypted.data.ciphertext).toMatch(/^[0-9a-f]+$/i)
+    expect(encrypted.data.encoding).toBe('hex')
+
+    const decrypted = crypto.symmetric.decrypt(encrypted.data, key)
+    expect(decrypted.success).toBe(true)
+    if (!decrypted.success)
+      return
+
+    expect(decrypted.data).toBe('hello')
+  })
+
+  it('should encrypt and decrypt in explicit ecb mode', () => {
+    const key = crypto.symmetric.generateKey()
+    const encrypted = crypto.symmetric.encrypt('hello', key, { mode: 'ecb' })
+    expect(encrypted.success).toBe(true)
+    if (!encrypted.success)
+      return
+    expect(encrypted.data.mode).toBe('ecb')
+    expect(encrypted.data.iv).toBeUndefined()
+    expect(encrypted.data.ciphertext).toMatch(/^[0-9a-f]+$/i)
+    expect(encrypted.data.encoding).toBe('hex')
 
     const decrypted = crypto.symmetric.decrypt(encrypted.data, key)
     expect(decrypted.success).toBe(true)
@@ -66,8 +89,10 @@ describe('crypto.symmetric', () => {
     expect(encrypted.success).toBe(true)
     if (!encrypted.success)
       return
+    expect(encrypted.data.mode).toBe('cbc')
+    expect(encrypted.data.iv).toMatch(/^[0-9a-f]{32}$/i)
+    expect(encrypted.data.encoding).toBe('base64')
 
-    // base64 密文应能被自动检测并解密
     const decrypted = crypto.symmetric.decrypt(encrypted.data, key)
     expect(decrypted.success).toBe(true)
     if (!decrypted.success)
@@ -84,7 +109,7 @@ describe('crypto.symmetric', () => {
     if (!enc1.success || !enc2.success)
       return
 
-    expect(enc1.data).not.toBe(enc2.data)
+    expect(enc1.data.ciphertext).not.toBe(enc2.data.ciphertext)
   })
 
   it('should encrypt and decrypt Chinese text', () => {
@@ -128,8 +153,10 @@ describe('crypto.symmetric', () => {
     expect(encrypted.success).toBe(true)
     if (!encrypted.success)
       return
+    expect(encrypted.data.mode).toBe('cbc')
+    expect(encrypted.data.iv).toBe(iv)
 
-    const decrypted = crypto.symmetric.decrypt(encrypted.data, key, { mode: 'cbc', iv })
+    const decrypted = crypto.symmetric.decrypt(encrypted.data, key)
     expect(decrypted.success).toBe(true)
     if (!decrypted.success)
       return
@@ -144,9 +171,11 @@ describe('crypto.symmetric', () => {
     if (!encrypted.success)
       return
 
-    // 返回结构中应包含密文与 IV
+    // 返回结构中应包含密文、IV、模式与编码
+    expect(encrypted.data.mode).toBe('cbc')
     expect(encrypted.data.ciphertext).toBeDefined()
     expect(encrypted.data.iv).toMatch(/^[0-9a-f]{32}$/i)
+    expect(encrypted.data.encoding).toBe('hex')
 
     const decrypted = crypto.symmetric.decryptWithIV(encrypted.data.ciphertext, key, encrypted.data.iv)
     expect(decrypted.success).toBe(true)
@@ -156,19 +185,20 @@ describe('crypto.symmetric', () => {
     expect(decrypted.data).toBe('hello')
   })
 
-  it('should return INVALID_IV when missing iv in cbc encrypt', () => {
+  it('should auto-generate iv when cbc encrypt omits iv', () => {
     const key = crypto.symmetric.generateKey()
     const result = crypto.symmetric.encrypt('data', key, { mode: 'cbc' })
-    expect(result.success).toBe(false)
-    if (result.success)
+    expect(result.success).toBe(true)
+    if (!result.success)
       return
 
-    expect(result.error.code).toBe(HaiCryptoError.INVALID_IV.code)
+    expect(result.data.mode).toBe('cbc')
+    expect(result.data.iv).toMatch(/^[0-9a-f]{32}$/i)
   })
 
   it('should return INVALID_IV when missing iv in cbc decrypt', () => {
     const key = crypto.symmetric.generateKey()
-    const result = crypto.symmetric.decrypt('abcd', key, { mode: 'cbc' })
+    const result = crypto.symmetric.decrypt({ mode: 'cbc', ciphertext: 'abcd', encoding: 'hex' }, key)
     expect(result.success).toBe(false)
     if (result.success)
       return
@@ -223,7 +253,7 @@ describe('crypto.symmetric', () => {
   })
 
   it('should return INVALID_KEY for invalid key on decrypt', () => {
-    const result = crypto.symmetric.decrypt('data', 'invalid-key')
+    const result = crypto.symmetric.decrypt({ mode: 'ecb', ciphertext: 'data', encoding: 'hex' }, 'invalid-key')
     expect(result.success).toBe(false)
     if (result.success)
       return

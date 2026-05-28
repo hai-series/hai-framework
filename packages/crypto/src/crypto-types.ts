@@ -9,6 +9,7 @@ import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type {
   TRANSPORT_PROTOCOL as TRANSPORT_PROTOCOL_T,
   TransportClient,
+  TransportCreateServerOptions,
   TransportEncryptionManager,
 } from './transport/crypto-transport-types.js'
 import { core } from '@h-ai/core'
@@ -72,25 +73,42 @@ export interface HashOptions {
 /** 对称加密模式 */
 export type SymmetricMode = 'ecb' | 'cbc'
 
-/** 对称加密选项 */
-export interface SymmetricOptions {
-  /** 加密模式 */
+/** 对称密文编码 */
+export type SymmetricCiphertextEncoding = 'hex' | 'base64'
+
+/** 对称加密选项。默认 CBC，并自动生成随机 IV。 */
+export interface SymmetricEncryptOptions {
+  /** 加密模式；默认 cbc */
   mode?: SymmetricMode
-  /** IV 向量（CBC 模式必需，32 个十六进制字符） */
+  /** IV 向量（CBC 模式可选；未传时自动生成，32 个十六进制字符） */
   iv?: string
-  /** 输入编码 */
-  inputEncoding?: 'utf8' | 'hex'
-  /** 输出格式 */
-  outputFormat?: 'hex' | 'base64'
+  /** 密文输出编码；默认 hex */
+  outputFormat?: SymmetricCiphertextEncoding
 }
 
-/** 带 IV 加密结果 */
-export interface EncryptWithIVResult {
-  /** 密文 */
-  ciphertext: string
-  /** IV 向量 */
-  iv: string
+/** 对称加密结构化结果。 */
+export interface SymmetricEncryptedPayload {
+  /** 加密模式 */
+  readonly mode: SymmetricMode
+  /** 密文内容，编码由 encoding 字段说明 */
+  readonly ciphertext: string
+  /** CBC 模式的 IV 向量；ECB 模式无该字段 */
+  readonly iv?: string
+  /** ciphertext 字段的编码 */
+  readonly encoding: SymmetricCiphertextEncoding
 }
+
+/** CBC 模式结构化结果。 */
+export interface SymmetricCbcEncryptedPayload extends SymmetricEncryptedPayload {
+  readonly mode: 'cbc'
+  readonly iv: string
+}
+
+/** 对称解密输入。 */
+export type SymmetricDecryptInput = SymmetricEncryptedPayload
+
+/** 带 IV 加密结果。 */
+export type EncryptWithIVResult = SymmetricCbcEncryptedPayload
 
 // ─── 密码类型 ───
 
@@ -210,7 +228,7 @@ export interface HashOperations {
  * 对称加密操作接口
  *
  * 通过 `crypto.symmetric` 访问，需先调用 `crypto.init()`。
- * 支持 ECB/CBC 两种模式，CBC 模式需要提供 IV。
+ * 默认使用 CBC 并自动生成 IV；密文以结构化字段返回。
  */
 export interface SymmetricOperations {
   /** 生成随机密钥（16 字节 = 32 个十六进制字符） */
@@ -220,23 +238,25 @@ export interface SymmetricOperations {
   /**
    * 对称加密
    *
+   * 默认 CBC + 自动随机 IV，返回 `{ mode, ciphertext, iv, encoding }`。
+   * 显式 `{ mode: 'ecb' }` 可使用 ECB，但不推荐用于新数据。
+   *
    * @param data - 待加密明文
    * @param key - 密钥（32 字符十六进制）
    * @param options - 加密模式/IV/输出格式
-   * @returns 成功时返回密文；失败时返回 INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
+   * @returns 成功时返回结构化密文；失败时返回 INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
    */
-  encrypt: (data: string, key: string, options?: SymmetricOptions) => HaiResult<string>
+  encrypt: (data: string, key: string, options?: SymmetricEncryptOptions) => HaiResult<SymmetricEncryptedPayload>
   /**
    * 对称解密
    *
-   * 自动检测 base64 格式输入并转换为 hex。
+   * 解密 `encrypt()` 返回的结构化密文；不猜测字符串格式。
    *
-   * @param ciphertext - 密文（hex 或 base64）
+   * @param payload - 结构化密文（包含 mode/ciphertext/iv/encoding）
    * @param key - 密钥（32 字符十六进制）
-   * @param options - 解密模式/IV（需与加密时一致）
    * @returns 成功时返回明文；失败时返回 INVALID_KEY/INVALID_IV/DECRYPTION_FAILED
    */
-  decrypt: (ciphertext: string, key: string, options?: SymmetricOptions) => HaiResult<string>
+  decrypt: (payload: SymmetricDecryptInput, key: string) => HaiResult<string>
   /**
    * 带 IV 加密（CBC 模式，自动生成随机 IV）
    *
@@ -315,7 +335,7 @@ export interface PasswordOperations {
  * 使用流程（直接使用底层 transport 工厂时）：
  *
  * 1. 先 `await crypto.init()`，确保 `crypto.asymmetric` / `crypto.symmetric` 已就绪。
- * 2. 服务端调用 `crypto.transport.createServer()` 创建 `TransportEncryptionManager`；该管理器负责持有服务端密钥对，并管理客户端公钥。
+ * 2. 服务端调用 `crypto.transport.createServer()` 创建 `TransportEncryptionManager`；该管理器负责持有服务端密钥对，并管理客户端公钥。多节点部署时可通过 `options.keyStore` 注入共享存储。
  * 3. 服务端暴露一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端公钥，再返回 `{ serverPublicKey: manager.getServerPublicKey(), clientId }`。
  * 4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成密钥协商。
  * 5. 协商完成后，客户端每次请求都会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ encryptedKey, ciphertext, iv }`，并设置 `X-Encrypted: true`。
@@ -329,7 +349,9 @@ export interface PasswordOperations {
  *
  * @example 服务端
  * ```ts
- * const result = crypto.transport.createServer()
+ * const result = crypto.transport.createServer({
+ *   keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+ * })
  * if (!result.success) throw result.error
  * const manager = result.data
  * ```
@@ -348,13 +370,14 @@ export interface TransportOperations {
   /**
    * 创建服务端传输加密管理器。
    *
-   * options.maxClients：默认内存 keyStore 的最大客户端数（默认 10000）。
+   * options.keyStore：注入共享客户端公钥存储。
+   * options.maxClients：默认内存 keyStore 的最大客户端数（默认 10000，仅在未传 keyStore 时生效）。
    * 成功返回 manager；密钥生成失败返回 `HaiCommonError.INTERNAL_ERROR`。
    *
    * @remarks
    * 通常在服务启动阶段创建一次，并交给 HTTP 中间件 / 路由处理器复用。
    */
-  createServer: (options?: { maxClients?: number }) => HaiResult<TransportEncryptionManager>
+  createServer: (options?: TransportCreateServerOptions) => HaiResult<TransportEncryptionManager>
   /**
    * 创建客户端传输加密会话。
    *
