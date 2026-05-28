@@ -7,6 +7,10 @@ description: "Use when: using @h-ai/reldb, database operations, SQL queries, DDL
 
 > `@h-ai/reldb` 提供统一的数据库操作接口，支持 SQLite、PostgreSQL、MySQL，包含 DDL、SQL、CRUD 抽象、事务与分页。
 
+## §0 如何使用本文档
+
+> ~360 行，**按任务主题只读对应小节**（初始化 / SQL / DDL / CRUD / 事务 / 分页），不需整文加载。
+
 ---
 
 ## §1 配置与初始化
@@ -315,11 +319,11 @@ await reldb.sql.execute(`UPDATE hai_demo_users SET profile = ${sql} WHERE id = ?
 | `HaiReldbError.DUPLICATE_ENTRY` | `hai:reldb:007` | 重复条目 |
 | `HaiReldbError.DEADLOCK` | `hai:reldb:008` | 死锁 |
 | `HaiReldbError.TIMEOUT` | `hai:reldb:009` | 超时 |
-| `HaiReldbError.POOL_EXHAUSTED` | `hai:reldb:010` | 连接池耗尽 |
-| `HaiReldbError.NOT_INITIALIZED` | `hai:reldb:011` | 未初始化 |
-| `HaiReldbError.DDL_FAILED` | `hai:reldb:012` | DDL 失败 |
-| `HaiReldbError.UNSUPPORTED_TYPE` | `hai:reldb:013` | 不支持的类型 |
-| `HaiReldbError.CONFIG_ERROR` | `hai:reldb:014` | 配置错误 |
+| `HaiReldbError.NOT_INITIALIZED` | `hai:reldb:010` | 未初始化 |
+| `HaiReldbError.POOL_EXHAUSTED` | `hai:reldb:011` | 连接池耗尽 |
+| `HaiReldbError.UNSUPPORTED_TYPE` | `hai:reldb:012` | 不支持的类型 |
+| `HaiReldbError.CONFIG_ERROR` | `hai:reldb:013` | 配置错误 |
+| `HaiReldbError.DDL_FAILED` | `hai:reldb:020` | DDL 失败 |
 
 ---
 

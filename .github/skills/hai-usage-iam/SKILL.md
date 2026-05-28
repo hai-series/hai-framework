@@ -5,7 +5,11 @@ description: "Use when: using @h-ai/iam, authentication, login, register, sessio
 
 # hai-usage-iam — 身份与访问管理指南
 
-> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（Token + 权限缓存）、`@h-ai/crypto`（密码哈希）。
+> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（服务端会话 token / OTP / 权限缓存）、`@h-ai/crypto`（密码哈希）。
+
+## §0 如何使用本文档
+
+> ~400 行，**按任务主题只读对应小节**（初始化 / 登录 / Token / RBAC / 会话 / API 契约），不需整文加载。
 
 ---
 
@@ -58,7 +62,7 @@ await iam.init({
 
 初始化自动创建 6 张表：`hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys`。
 
-Token 和 OTP 存储在 cache 中（不落库）。
+服务端会话 token、refresh token 和 OTP 存储在 cache 中（不落库）；浏览器侧认证 token 存储遵循 app-conventions：Web 优先 httpOnly cookie，移动/桌面使用安全 TokenStore，禁止 localStorage。
 
 ---
 
@@ -245,7 +249,7 @@ export const GET = kit.handler(async ({ locals }) => {
 ### 客户端认证
 
 ```typescript
-// 登录 → 保存 Token
+// 登录 → 保存 Token（仅适用于移动/桌面/服务端脚本等非 httpOnly-cookie 客户端）
 const login = await apiClient.iam.auth.login({ identifier: username, password })
 if (login.success) {
   await apiClient.auth.setTokens(login.data.tokens)
@@ -254,6 +258,8 @@ if (login.success) {
 // Token 过期自动刷新
 // 刷新失败清除 Token 并跳转登录页
 ```
+
+Web 管理后台优先由登录 API 写入 httpOnly cookie，不向页面代码暴露 accessToken。
 
 ---
 

@@ -7,6 +7,24 @@ description: "Use when: using @h-ai/ai, LLM calls, chat completion, tool calling
 
 > `@h-ai/ai` 提供统一的 AI 能力：LLM 调用（OpenAI 兼容）、MCP 服务器、工具定义与注册、流式处理、记忆管理、上下文压缩与会话持久化。支持 Node.js 与浏览器双端。
 
+## §0 如何使用本文档
+
+> 本文档全面但较长（~700 行）。**不要整文加载**，按任务主题只读对应小节：
+>
+> - 初始化/配置 → §1
+> - LLM 调用 / Chat Completion → §2
+> - 工具定义 / Tool Calling → §3
+> - 流式处理 → §4
+> - MCP 服务器 → §5
+> - 记忆管理 → §6
+> - 向量嵌入 → §7
+> - Token 估算 / 摘要 → §8
+> - 上下文压缩 → §9
+> - 检索 / RAG → §10
+> - 知识库 → §11
+> - 推理 → §12
+> - Rerank / File → §13
+
 ---
 
 ## §1 配置与初始化

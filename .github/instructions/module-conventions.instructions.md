@@ -24,18 +24,15 @@ applyTo: "packages/**"
 
 - 公共 API 禁止 throw，必须返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`
 - 调用方不应使用 `try/catch` 来处理模块返回的错误
-- 错误码：每模块独占千位段（注册表见 hai-create-module §4），NOT_INITIALIZED 固定为 X010
+- 错误码：每模块独占命名空间（注册表见 hai-create-module §4）；新模块 `NOT_INITIALIZED` 使用 X010，历史模块若不一致需在审查中标出并同步实现/文档
 - 错误创建：错误码 + `xxM('key')`，禁止硬编码消息
 
-### 合规 throw 场景
+### Throw / HaiResult 判定
 
-| 场景                                    | 说明                                         |
-| --------------------------------------- | -------------------------------------------- |
-| 内部 throw + 外层 try-catch → HaiResult | 标准 catch-and-wrap 模式                     |
-| `getOrThrow()` 等显式命名               | 函数名已表达 throw 语义                      |
-| async generator（如 `chatStream()`）    | 无法返回 HaiResult，须 JSDoc 注明            |
-| 浏览器端 Client 代码                    | `client/xx-client.ts` 等，不属于模块公共 API |
-| CLI 命令                                | `packages/cli/` 中的命令行工具，非模块 API   |
+- 使用方直接 import 的公共 API：必须返回 HaiResult，禁止 throw。
+- 内部 helper / Provider / Repository：可 throw，但最近外层必须 catch 并转换为 HaiResult。
+- `getOrThrow()` 等显式命名、async generator（如 `chatStream()`）、浏览器端 Client、CLI 命令可 throw；JSDoc 必须说明。
+- 审查时先看调用边界：异常是否越过模块公共 API；若越过即违规。
 
 ### HaiResult 使用模式
 
@@ -62,6 +59,7 @@ function register(tool: Tool): HaiResult<void> {
 ## 模块生命周期
 
 - 初始化统一 `<模块>.init(config)` / `<模块>.close()`
+- `init()` 使用 `initInProgress` 防并发；并发调用返回 HaiResult 错误，`try/finally` 释放标记，禁止抛异常或泄漏连接
 - Node 与 Browser 的 API 形态必须一致，浏览器端不暴露独立 init 函数
 - 使用 NotInitializedKit 模式防止未初始化调用：
   - `core.module.createNotInitializedKit(HaiXxError.NOT_INITIALIZED, () => xxM('xx_notInitialized'))`
@@ -77,6 +75,7 @@ function register(tool: Tool): HaiResult<void> {
 
 ## Provider 模式
 
+- 新增 Provider 前必须确认同 PR/仓库内有 ≥2 个真实实现；否则用函数或对象直接实现
 - Provider 接口：`{Module}Provider`；工厂：`create{Impl}Provider`
 - Provider 用工厂 + 闭包实现，不用 class
 - main.ts 不感知子功能内部的 Provider
@@ -85,7 +84,7 @@ function register(tool: Tool): HaiResult<void> {
 ## 命名一致性
 
 - 类名、文件名、变量名三者一致
-- 接口名与实现类名对应（例如 `StorageProvider` ↔ `S3StorageProvider`）
+- 接口名与实现工厂对应（例如 `StorageProvider` ↔ `createS3StorageProvider`）
 - 重命名必须同步更新：引用点、测试、注释、文档
 - 禁止含糊命名（如 data / info / handle / process）
 - 服务对象：小写模块名（`export const storage`）
@@ -126,6 +125,8 @@ function register(tool: Tool): HaiResult<void> {
 - 使用方通过 `xx.operation()` 调用，不直接调用内部 functions / utils
 - 子功能通过 main 统一暴露（如 `iam.authn`），消费者不需要了解内部目录结构
 - 模块间只依赖对方的公共类型（`xx-types.ts`），不 import 对方内部文件
+- 常见操作不要求调用方跨越多层对象 / 中间态 / Provider 才能完成
+- 上游依赖在顶层注入一次，模块内部派生所需回调，禁止把转发样板交给使用方
 
 ## 类型约束
 
@@ -168,6 +169,7 @@ function register(tool: Tool): HaiResult<void> {
 - 在 `xx-main.ts` 中编写具体业务逻辑（调度循环、数据处理等），main 仅做生命周期管理和 API 编排
 - 在公共模块 API 中使用 `throw`（必须返回 `HaiResult<T>`）
 - 错误码段位与已有模块冲突（段位注册表见 hai-create-module §4）
+- 为单一实现新增 Provider / Factory / Strategy / Base 抽象
 - 同一模块混用扁平方法与子操作对象两种 API 风格
 - 做兼容性处理（开发期，不考虑兼容旧版本）
 - 在模块内为已有依赖包的类型定义本地鸭子类型接口：若 `dependencies` 中已有对应包，直接 import 使用真实类型；禁止以 `as unknown as` 强转规避类型不兼容

@@ -7,6 +7,10 @@ description: "Use when: creating a new SvelteKit application, adding routes, add
 
 > 面向 AI 助手的 SvelteKit 应用开发指南。适用于 `apps/` 下的所有应用。
 
+## §0 如何使用本文档
+
+> 本文档全面但较长（~500 行）。**不要整文加载**，按任务主题只读对应小节。动手前必读：§1（选型）+ §2（结构）。添加路由/API/i18n 时只读对应小节。
+
 ---
 
 ## §1 应用类型与选型
@@ -364,7 +368,7 @@ export const { apiFetch } = client
 
 ### @h-ai/ui 组件使用
 
-- 场景组件（LoginForm、RegisterForm 等）内置 i18n，不用传翻译
+- 场景组件（LoginForm、RegisterForm 等）内置 i18n，不传页面翻译样板；仅用组件显式 props 覆盖少量文本
 - 通用组件（Badge、Card、Input 等）直接使用
 - 权限组件：`setPermissionContext()` + `usePermission()` 注入权限
 - @h-ai/ui 已有组件不得重复实现
@@ -436,7 +440,7 @@ export const { apiFetch } = client
 
 ### 认证与授权
 
-- token 存储使用 httpOnly cookie（管理后台）或安全 TokenStore（移动端）
+- Web token 使用 httpOnly cookie（管理后台）；移动/桌面使用安全 TokenStore
 - 禁止 localStorage 存储敏感 token
 - 布局级认证守卫 + API 级权限检查（双重保护）
 - 重定向只允许站内路径（防 Open Redirect）

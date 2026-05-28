@@ -27,6 +27,7 @@ applyTo: "**/tests/**"
 - 成功时：`expect(result.success).toBe(true)` + 检查返回数据
 - 失败时：`expect(result.success).toBe(false)` + 校验 `error.code`
 - 不使用 `try/catch` 来断言 HaiResult 型 API
+- 流式/AsyncIterable API 使用 `for await...of` 收集关键片段，断言顺序、终止和错误事件
 
 ## 组织结构
 

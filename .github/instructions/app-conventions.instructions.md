@@ -27,16 +27,16 @@ applyTo: "apps/**"
 
 - @h-ai/ui 场景组件（`scenes/`）内置中英文翻译，自动响应全局 locale
 - **应用层只管页面级文本**：标题、错误提示、导航等由应用层 i18n 处理
-- **不要为 UI 组件传入翻译 props**：组件内部文本由 @h-ai/ui 统一管理
-- 可选覆盖：通过 `submitText` 等 props 覆盖特定文本
+- **不要把页面翻译样板传给 UI 组件**：组件内部默认文本由 @h-ai/ui 统一管理
+- 可选覆盖：仅使用组件显式提供的 `submitText` / `placeholderText` 等 props 覆盖特定文本
 - @h-ai/ui 已有组件不得重复实现
 - 翻译文件位于 `packages/ui/src/lib/messages/{zh-CN,en-US}.json`
 
 ## 路由与端点安全
 
-- API 端点应设置 CORS、CSP、X-Content-Type-Options 响应头
+- API 端点优先通过 `kit.handler` / 全局 handle 设置 CORS、CSP、X-Content-Type-Options；自定义 Response 时补齐安全头
 - 用户输入必须 Zod schema 校验后才进入业务层
-- token 存储使用 httpOnly cookie，禁止 localStorage 存敏感 token
+- Web 认证 token 使用 httpOnly cookie；移动/桌面使用安全 TokenStore；禁止 localStorage 存敏感 token
 - 文件操作 API 必须校验路径合法性，禁止 `../` 逃逸
 
 ## 环境变量
