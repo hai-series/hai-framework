@@ -45,11 +45,11 @@ data/
 tmp/
 temp/
 .cache/
-.leak-words.json
 .tmp-*/
 
 test-results/
 test-data/
 
+.leak-words.json
 
 !apps/admin-console/src/routes/admin/logs
