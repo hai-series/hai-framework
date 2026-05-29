@@ -146,15 +146,34 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       // 另一个调用方 await 同一个 in-flight Promise，避免重复创建 raw client / token manager。
       if (initPromise)
         return initPromise
+      // 已初始化后必须先 close() 再重新 init，避免旧 transport 会话被新状态覆盖后无法 destroy。
+      if (state.rawClient) {
+        return err(
+          HaiApiClientError.CONFIG_ERROR,
+          apiClientM('apiClient_alreadyInitialized'),
+        )
+      }
       initPromise = (async (): Promise<HaiResult<void>> => {
+        let nextTransport: TransportClient | undefined
         try {
+          nextTransport = buildTransportSession(config)
+          const nextTokenManager = buildTokenManager(config, nextTransport)
+          const nextRawClient = buildRawClient(contract, config, nextTokenManager, nextTransport)
+
+          // 所有可能失败的构建步骤完成后再提交状态，避免调用方看到半初始化 client。
           state.config = config
-          state.transport = buildTransportSession(config)
-          state.tokenManager = buildTokenManager(config, state.transport)
-          state.rawClient = buildRawClient(contract, config, state.tokenManager, state.transport)
+          state.transport = nextTransport
+          state.tokenManager = nextTokenManager
+          state.rawClient = nextRawClient
           return ok(undefined)
         }
         catch (error) {
+          // 构建过程中如果 transport 已创建但后续失败，必须主动释放，避免会话/定时器泄漏。
+          nextTransport?.destroy()
+          state.config = null
+          state.rawClient = null
+          state.tokenManager = undefined
+          state.transport = undefined
           return err(
             HaiApiClientError.CONFIG_ERROR,
             apiClientM('apiClient_configError', { params: { error: String(error) } }),

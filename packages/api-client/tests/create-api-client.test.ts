@@ -56,6 +56,37 @@ describe('apiClient.create', () => {
     expect(request.url).toBe('https://api.test.com/api/v1/health')
   })
 
+  it('重复 init 返回 CONFIG_ERROR 并保留原始 client 状态', async () => {
+    const firstFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { status: 'ok' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const secondFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { status: 'other' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const client = apiClient.create(testContract)
+
+    const firstInit = await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch: firstFetch })
+    const secondInit = await client.init({ baseUrl: 'https://other.test/api/v1', fetch: secondFetch })
+    const result = await client.health()
+
+    expect(firstInit.success).toBe(true)
+    expect(secondInit.success).toBe(false)
+    if (!secondInit.success) {
+      expect(secondInit.error.code).toBe(HaiApiClientError.CONFIG_ERROR.code)
+    }
+    // 重复 init 不应覆盖已可用实例；重新配置必须显式 close()，否则旧 transport 难以释放。
+    expect(client.config?.baseUrl).toBe('https://api.test.com/api/v1')
+    expect(result).toEqual({ success: true, data: { status: 'ok' } })
+    expect(firstFetch).toHaveBeenCalledTimes(1)
+    expect(secondFetch).not.toHaveBeenCalled()
+  })
+
   it('401 后使用 refreshPath 刷新 token 并重试', async () => {
     const storage = apiClient.tokenStorage.memory()
     await storage.setAccessToken('old-access')

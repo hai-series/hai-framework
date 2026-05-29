@@ -82,6 +82,8 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 - `apiClient.auth.clear()`：清理 token。
 - `apiClient.create(contract)`：创建自定义 typed client。
 
+已初始化后再次调用 `init()` 会返回 `CONFIG_ERROR`，不会覆盖现有 client；如需切换 `baseUrl` / `fetch` / `transport`，请先 `await apiClient.close()` 再重新初始化。
+
 ## 配置
 
 - `baseUrl`：API 基础地址，通常包含 `/api/v1`。
