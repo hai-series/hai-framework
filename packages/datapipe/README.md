@@ -10,6 +10,8 @@
 | 文本分块 | 句子、段落、Markdown 标题、分页符、字数、字符、自定义分隔符 |
 | 管线组合 | 链式组合清洗 → 转换 → 分块 → 分块后处理，一次执行           |
 
+> 安全提示：`customReplacements` 与 `mode: 'custom'` 的 `separator` 会作为正则使用。仅传入受信任、已审查的模式；不要把用户输入直接拼进正则，避免 ReDoS 或意外大范围替换。
+
 ## 快速开始
 
 ```ts
@@ -55,6 +57,9 @@ if (!result.success) {
       break
     case HaiDatapipeError.CONFIG_ERROR.code:
       // 配置参数校验失败
+      break
+    case HaiDatapipeError.PROCESSING_ERROR.code:
+      // 输入或自定义正则导致处理失败；记录错误并回退到安全默认策略
       break
   }
 }
