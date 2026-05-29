@@ -81,6 +81,30 @@ describe('deploy singleton', () => {
         expect(result.error.code).toBe(HaiDeployError.AUTH_FAILED.code)
       }
     })
+
+    it('应返回 AUTH_FAILED 当已配置的 provisioner 认证失败时', async () => {
+      // Vercel authenticate succeeds
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ user: { username: 'u', email: 'e' } }),
+      )
+      // Neon authenticate fails
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ error: 'Unauthorized' }, 401),
+      )
+
+      const result = await deploy.init({
+        provider: { type: 'vercel', token: 'vel_t' },
+        services: {
+          db: { provisioner: 'neon', apiKey: 'bad_neon' },
+        },
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiDeployError.AUTH_FAILED.code)
+      }
+      expect(deploy.isInitialized).toBe(false)
+    })
   })
 
   describe('close', () => {
@@ -125,7 +149,8 @@ describe('deploy singleton', () => {
         },
       })
 
-      // provision: Neon create
+      // provision: Neon list existing -> create
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ projects: [] }))
       mockFetch.mockResolvedValueOnce(mockJsonResponse({
         connection_uris: [{ connection_uri: 'postgres://u:p@h/d' }],
         project: { id: 'prj_1' },

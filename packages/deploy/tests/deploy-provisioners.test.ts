@@ -75,7 +75,8 @@ describe('neon provisioner', () => {
     const neon = createNeonProvisioner()
     await neon.authenticate({ token: 'neon_valid' })
 
-    // provision
+    // provision: list existing -> create
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ projects: [] }))
     mockFetch.mockResolvedValueOnce(mockJsonResponse({
       connection_uris: [{ connection_uri: 'postgres://user:pass@host/db' }],
       project: { id: 'neon_prj_1' },
@@ -87,6 +88,26 @@ describe('neon provisioner', () => {
       expect(result.data.serviceType).toBe('db')
       expect(result.data.provisionerName).toBe('neon')
       expect(result.data.envVars.HAI_RELDB_URL).toBe('postgres://user:pass@host/db')
+    }
+  })
+
+  it('should reuse existing Neon project by name', async () => {
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ projects: [] }))
+    const neon = createNeonProvisioner()
+    await neon.authenticate({ token: 'neon_valid' })
+
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({
+      projects: [{ id: 'neon_prj_existing', name: 'my-app-db' }],
+    }))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({
+      uri: 'postgres://existing:pass@host/neondb',
+    }))
+
+    const result = await neon.provision('my-app')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.resourceInfo).toBe('neon-project:neon_prj_existing')
+      expect(result.data.envVars.HAI_RELDB_URL).toBe('postgres://existing:pass@host/neondb')
     }
   })
 
@@ -142,6 +163,7 @@ describe('upstash provisioner', () => {
     const up = createUpstashProvisioner()
     await up.authenticate({ email: 'a@b.com', api_key: 'up_key' })
 
+    mockFetch.mockResolvedValueOnce(mockJsonResponse([]))
     mockFetch.mockResolvedValueOnce(mockJsonResponse({
       database_id: 'db_123',
       rest_url: 'https://upstash.io/redis',
@@ -153,6 +175,32 @@ describe('upstash provisioner', () => {
     if (result.success) {
       expect(result.data.serviceType).toBe('cache')
       expect(result.data.envVars.HAI_CACHE_UPSTASH_URL).toBe('https://upstash.io/redis')
+    }
+  })
+
+  it('should reuse existing Upstash database by name', async () => {
+    mockFetch.mockResolvedValueOnce(mockJsonResponse([]))
+    const up = createUpstashProvisioner()
+    await up.authenticate({ email: 'a@b.com', api_key: 'up_key' })
+
+    mockFetch.mockResolvedValueOnce(mockJsonResponse([
+      {
+        database_id: 'db_existing',
+        database_name: 'my-app-cache',
+      },
+    ]))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({
+      database_id: 'db_existing',
+      endpoint: 'rough-sound-12345.upstash.io',
+      password: 'token_existing',
+    }))
+
+    const result = await up.provision('my-app')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.resourceInfo).toBe('upstash-db:db_existing')
+      expect(result.data.envVars.HAI_CACHE_UPSTASH_URL).toBe('https://rough-sound-12345.upstash.io')
+      expect(result.data.envVars.HAI_CACHE_UPSTASH_TOKEN).toBe('token_existing')
     }
   })
 })
@@ -192,6 +240,22 @@ describe('r2 provisioner', () => {
     const r2 = createR2Provisioner()
     const result = await r2.authenticate({})
     expect(result.success).toBe(false)
+  })
+
+  it('should fail provision when API token creation fails', async () => {
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: [] }))
+    const r2 = createR2Provisioner()
+    await r2.authenticate({ accountId: 'acc_123', apiToken: 'cf_token' })
+
+    // bucket create succeeds, token create fails
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: {} }))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ error: 'token failed' }, 500))
+
+    const result = await r2.provision('my-app')
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiDeployError.PROVISION_FAILED.code)
+    }
   })
 })
 

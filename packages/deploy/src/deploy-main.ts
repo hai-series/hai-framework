@@ -7,17 +7,28 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { DeployConfig, DeployConfigInput } from './deploy-config.js'
-import type { DeployAppOptions, DeployFunctions, DeployProvider, DeployResult, ProvisionResult, ScanResult, ServiceProvisioner, ServiceType } from './deploy-types.js'
+import type { DeployProvider, ServiceProvisioner } from './deploy-internal-types.js'
+import type {
+  DeployAppOptions,
+  DeployCredentialOperations,
+  DeployFunctions,
+  DeployResult,
+  ProvisionResult,
+  ScanResult,
+  ServiceType,
+} from './deploy-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { DeployConfigSchema } from './deploy-config.js'
+import {
+  getCredentialsPath,
+  loadCredentials,
+  saveCredential,
+  saveCredentials,
+} from './deploy-credentials.js'
 import { buildApp, resolveOutputDir } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { scanApp } from './deploy-scanner.js'
-import {
-
-  HaiDeployError,
-
-} from './deploy-types.js'
+import { HaiDeployError } from './deploy-types.js'
 import { createVercelProvider } from './providers/deploy-provider-vercel.js'
 import { createAliyunProvisioner } from './provisioners/deploy-provisioner-aliyun.js'
 import { createNeonProvisioner } from './provisioners/deploy-provisioner-neon.js'
@@ -101,6 +112,19 @@ function extractCredentials(serviceConfig: Record<string, unknown>): Record<stri
   return result
 }
 
+/**
+ * Deploy 凭证子功能。
+ *
+ * 这些操作仅处理本地 `~/.hai/credentials.yml`，供 CLI 在读取 `_deploy.yml`
+ * 之前注入 `HAI_DEPLOY_*` 环境变量，因此不依赖 `deploy.init()`。
+ */
+const deployCredentials: DeployCredentialOperations = {
+  getPath: () => getCredentialsPath(),
+  load: () => loadCredentials(),
+  save: (key: string, value: string) => saveCredential(key, value),
+  saveAll: (entries: Record<string, string>) => saveCredentials(entries),
+}
+
 // ─── 模块单例 ───
 
 /**
@@ -116,6 +140,8 @@ function extractCredentials(serviceConfig: Record<string, unknown>): Record<stri
  * ```
  */
 export const deploy: DeployFunctions = {
+  credentials: deployCredentials,
+
   async init(config: DeployConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
@@ -167,18 +193,17 @@ export const deploy: DeployFunctions = {
             const credentials = extractCredentials(serviceConfig as Record<string, unknown>)
             const provAuthResult = await provisioner.authenticate(credentials)
             if (!provAuthResult.success) {
-              logger.warn('Provisioner authentication failed', {
+              logger.error('Provisioner authentication failed', {
                 service: serviceType,
                 provisioner: (serviceConfig as Record<string, unknown>).provisioner,
               })
-              // 非致命：记录警告但继续
+              currentProvisioners.clear()
+              return err(provAuthResult.error)
             }
-            else {
-              logger.info('Provisioner authenticated', {
-                service: serviceType,
-                user: provAuthResult.data,
-              })
-            }
+            logger.info('Provisioner authenticated', {
+              service: serviceType,
+              user: provAuthResult.data,
+            })
             currentProvisioners.set(serviceType, provisioner)
           }
         }
@@ -233,6 +258,7 @@ export const deploy: DeployFunctions = {
   },
 
   async scan(appDir: string): Promise<HaiResult<ScanResult>> {
+    // scan 仅做本地文件分析，不依赖 Provider / Provisioner 初始化状态。
     logger.debug('Scanning application', { appDir })
     return scanApp(appDir)
   },

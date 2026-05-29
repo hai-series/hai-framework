@@ -6,7 +6,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
+import type { ServiceProvisioner } from '../deploy-internal-types.js'
+import type { ProvisionResult } from '../deploy-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
@@ -42,7 +43,7 @@ export function createR2Provisioner(): ServiceProvisioner {
           headers: { Authorization: `Bearer ${apiTok}` },
         })
         if (!res.ok) {
-          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(res.status), body: await res.text() } }))
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(res.status) } }))
         }
 
         accountId = acctId
@@ -89,7 +90,7 @@ export function createR2Provisioner(): ServiceProvisioner {
 
         // 409 表示桶已存在，可继续
         if (!createRes.ok && createRes.status !== 409) {
-          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(createRes.status), body: await createRes.text() } }))
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(createRes.status) } }))
         }
 
         // 创建 API Token（S3 兼容访问）
@@ -112,15 +113,17 @@ export function createR2Provisioner(): ServiceProvisioner {
           },
         )
 
-        let accessKey = ''
-        let secretKey = ''
+        if (!tokenRes.ok) {
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(tokenRes.status) } }))
+        }
 
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json() as {
-            result: { id: string, value: string }
-          }
-          accessKey = tokenData.result.id
-          secretKey = tokenData.result.value
+        const tokenData = await tokenRes.json() as {
+          result?: { id?: string, value?: string }
+        }
+        const accessKey = tokenData.result?.id ?? ''
+        const secretKey = tokenData.result?.value ?? ''
+        if (!accessKey || !secretKey) {
+          throw new Error(deployM('deploy_provisionNoResult', { params: { service: 'Cloudflare R2' } }))
         }
 
         logger.info('R2 bucket provisioned', { bucketName })

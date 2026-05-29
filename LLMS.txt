@@ -796,13 +796,15 @@ await apiClient.init({
 ```typescript
 import { deploy } from '@h-ai/deploy'
 
+deploy.credentials.load()
+
 // 初始化
 await deploy.init({
   provider: { type: 'vercel', token: 'vel_xxx' },
   services: {
     db: { provisioner: 'neon', apiKey: 'neon_xxx' },
     cache: { provisioner: 'upstash', email: 'a@b.com', apiKey: 'up_xxx' },
-    storage: { provisioner: 'r2', accountId: '...', apiToken: '...' },
+    storage: { provisioner: 'cloudflare-r2', accountId: '...', apiToken: '...' },
   },
 })
 

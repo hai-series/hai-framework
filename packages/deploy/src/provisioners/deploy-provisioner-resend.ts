@@ -6,7 +6,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
+import type { ServiceProvisioner } from '../deploy-internal-types.js'
+import type { ProvisionResult } from '../deploy-types.js'
 import { core, err, ok } from '@h-ai/core'
 
 import { deployM } from '../deploy-i18n.js'
@@ -41,7 +42,7 @@ export function createResendProvisioner(): ServiceProvisioner {
           headers: { Authorization: `Bearer ${apiToken}` },
         })
         if (!res.ok) {
-          throw new Error(deployM('deploy_apiError', { params: { service: 'Resend', status: String(res.status), body: await res.text() } }))
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Resend', status: String(res.status) } }))
         }
         token = apiToken
         logger.info('Resend authenticated')

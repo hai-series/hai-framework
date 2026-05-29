@@ -15,8 +15,12 @@ describe('haiDeployError', () => {
     }
   })
 
-  it('nOT_INITIALIZED 应固定为 hai:deploy:011', () => {
-    expect(HaiDeployError.NOT_INITIALIZED.code).toBe('hai:deploy:011')
+  it('notInitialized 应固定为 hai:deploy:010', () => {
+    expect(HaiDeployError.NOT_INITIALIZED.code).toBe('hai:deploy:010')
+  })
+
+  it('envVarFailed 应固定为 hai:deploy:011', () => {
+    expect(HaiDeployError.ENV_VAR_FAILED.code).toBe('hai:deploy:011')
   })
 
   it('所有错误码应唯一', () => {

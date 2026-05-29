@@ -8,7 +8,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { scanApp } from '../src/deploy-scanner.js'
+import { deploy } from '../src/deploy-main.js'
 import { HaiDeployError } from '../src/deploy-types.js'
 
 let tmpDir: string
@@ -28,7 +28,7 @@ function writeFile(relativePath: string, content: string): void {
   fs.writeFileSync(fullPath, content, 'utf-8')
 }
 
-describe('scanApp', () => {
+describe('deploy.scan', () => {
   it('should detect SvelteKit project with adapter-vercel', async () => {
     writeFile('package.json', JSON.stringify({
       name: 'test-app',
@@ -40,7 +40,7 @@ describe('scanApp', () => {
     }))
     writeFile('svelte.config.js', 'export default {}')
 
-    const result = await scanApp(tmpDir)
+    const result = await deploy.scan(tmpDir)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.appName).toBe('test-app')
@@ -62,7 +62,7 @@ describe('scanApp', () => {
       },
     }))
 
-    const result = await scanApp(tmpDir)
+    const result = await deploy.scan(tmpDir)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.requiredServices).toContain('db')
@@ -74,7 +74,7 @@ describe('scanApp', () => {
   it('should return SCAN_FAILED for missing package.json', async () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-empty-'))
 
-    const result = await scanApp(emptyDir)
+    const result = await deploy.scan(emptyDir)
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(HaiDeployError.SCAN_FAILED.code)
@@ -95,7 +95,7 @@ describe('scanApp', () => {
       fs.unlinkSync(svelteConfig)
     }
 
-    const result = await scanApp(tmpDir)
+    const result = await deploy.scan(tmpDir)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.isSvelteKit).toBe(false)
@@ -109,7 +109,7 @@ describe('scanApp', () => {
       dependencies: {},
     }))
 
-    const result = await scanApp(tmpDir)
+    const result = await deploy.scan(tmpDir)
     expect(result.success).toBe(true)
     if (result.success) {
       // 去掉 scope 前缀

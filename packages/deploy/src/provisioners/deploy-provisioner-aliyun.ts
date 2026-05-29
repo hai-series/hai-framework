@@ -6,7 +6,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
+import type { ServiceProvisioner } from '../deploy-internal-types.js'
+import type { ProvisionResult } from '../deploy-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'

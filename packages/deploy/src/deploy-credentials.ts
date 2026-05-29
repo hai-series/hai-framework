@@ -1,7 +1,9 @@
 /**
  * @h-ai/deploy — 凭证管理
  *
- * 管理全局凭证文件 `~/.hai/credentials.yml`。 CLI 在加载 `_deploy.yml` 之前调用 `loadCredentials()` 将凭证注入 process.env， 使 core 的 `interpolateEnv()` 能自动解析 `${HAI_DEPLOY_*}` 变量。
+ * 管理全局凭证文件 `~/.hai/credentials.yml`。
+ * 这些 helper 由 `deploy.credentials.*` 对外暴露，供 CLI 在加载 `_deploy.yml`
+ * 之前注入 `HAI_DEPLOY_*` 环境变量。
  * @module deploy-credentials
  */
 
@@ -17,7 +19,54 @@ import { HaiDeployError } from './deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'credentials' })
 
+/** 仅允许写入 deploy 模块自有的环境变量前缀，避免把任意 YAML key 注入 process.env。 */
+const DEPLOY_CREDENTIAL_KEY_PATTERN = /^HAI_DEPLOY_[A-Z0-9_]+$/
+
 // ─── 内部工具 ───
+
+/** 校验凭证键名是否属于 deploy 模块。 */
+function isAllowedCredentialKey(key: string): boolean {
+  return DEPLOY_CREDENTIAL_KEY_PATTERN.test(key)
+}
+
+/**
+ * 标准化凭证键值对。
+ *
+ * 仅保留 `HAI_DEPLOY_*` 键，且值必须是可安全序列化为字符串的标量。
+ */
+function normalizeCredentialEntries(entries: Record<string, unknown>): Record<string, string> {
+  const normalized: Record<string, string> = {}
+
+  for (const [key, value] of Object.entries(entries)) {
+    if (!isAllowedCredentialKey(key)) {
+      logger.warn('Ignoring unsupported deploy credential key', { key })
+      continue
+    }
+
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      normalized[key] = String(value)
+      continue
+    }
+
+    logger.warn('Ignoring deploy credential with non-scalar value', { key })
+  }
+
+  return normalized
+}
+
+/** 在写入前校验单个凭证键名。 */
+function assertAllowedCredentialKey(key: string): void {
+  if (!isAllowedCredentialKey(key)) {
+    throw new Error(deployM('deploy_credentialInvalidKey', { params: { key } }))
+  }
+}
+
+/** 在写入前校验批量凭证键名。 */
+function assertAllowedCredentialEntries(entries: Record<string, string>): void {
+  for (const key of Object.keys(entries)) {
+    assertAllowedCredentialKey(key)
+  }
+}
 
 /**
  * 获取凭证文件路径
@@ -52,10 +101,10 @@ function readCredentialsFile(): Record<string, string> {
   }
   const content = readFileSync(filePath, 'utf-8')
   const parsed = parse(content)
-  if (parsed === null || parsed === undefined || typeof parsed !== 'object') {
+  if (parsed === null || parsed === undefined || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return {}
   }
-  return parsed as Record<string, string>
+  return normalizeCredentialEntries(parsed as Record<string, unknown>)
 }
 
 /**
@@ -127,6 +176,7 @@ export function loadCredentials(): HaiResult<string[]> {
  */
 export function saveCredential(key: string, value: string): HaiResult<void> {
   try {
+    assertAllowedCredentialKey(key)
     const data = readCredentialsFile()
     data[key] = value
     writeCredentialsFile(data)
@@ -161,6 +211,7 @@ export function saveCredential(key: string, value: string): HaiResult<void> {
  */
 export function saveCredentials(entries: Record<string, string>): HaiResult<void> {
   try {
+    assertAllowedCredentialEntries(entries)
     const data = readCredentialsFile()
     for (const [key, value] of Object.entries(entries)) {
       data[key] = value

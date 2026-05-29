@@ -6,7 +6,9 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
+import type { ServiceProvisioner } from '../deploy-internal-types.js'
+import type { ProvisionResult } from '../deploy-types.js'
+import { Buffer } from 'node:buffer'
 import { core, err, ok } from '@h-ai/core'
 
 import { deployM } from '../deploy-i18n.js'
@@ -16,6 +18,118 @@ const logger = core.logger.child({ module: 'deploy', scope: 'provisioner-upstash
 
 /** Upstash API 基址 */
 const UPSTASH_API = 'https://api.upstash.com'
+
+interface UpstashDatabase {
+  database_id?: string
+  database_name?: string
+  endpoint?: string
+  rest_url?: string
+  rest_token?: string
+  password?: string
+  token?: string
+}
+
+/** 构建 Upstash Developer API 的 Basic Auth 请求头。 */
+function createUpstashAuthHeader(email: string, apiKey: string): string {
+  return `Basic ${Buffer.from(`${email}:${apiKey}`).toString('base64')}`
+}
+
+/** 统一发起 Upstash Developer API 请求。 */
+async function upstashFetch<T>(
+  email: string,
+  apiKey: string,
+  path: string,
+  options?: RequestInit,
+): Promise<T> {
+  const response = await fetch(`${UPSTASH_API}${path}`, {
+    ...options,
+    headers: {
+      'Authorization': createUpstashAuthHeader(email, apiKey),
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(deployM('deploy_apiError', { params: { service: 'Upstash', status: String(response.status) } }))
+  }
+
+  return response.json() as Promise<T>
+}
+
+/** 列出当前账号下的所有 Upstash 数据库。 */
+async function listUpstashDatabases(email: string, apiKey: string): Promise<UpstashDatabase[]> {
+  return upstashFetch<UpstashDatabase[]>(email, apiKey, '/v2/redis/databases')
+}
+
+/** 按数据库名查找已有资源。 */
+async function findExistingUpstashDatabase(
+  email: string,
+  apiKey: string,
+  databaseName: string,
+): Promise<UpstashDatabase | null> {
+  const databases = await listUpstashDatabases(email, apiKey)
+  return databases.find(database => database.database_name === databaseName) ?? null
+}
+
+/** 获取单个数据库详情。 */
+async function getUpstashDatabase(email: string, apiKey: string, databaseId: string): Promise<UpstashDatabase> {
+  return upstashFetch<UpstashDatabase>(email, apiKey, `/v2/redis/database/${databaseId}`)
+}
+
+/**
+ * 解析 REST URL。
+ *
+ * Upstash 文档中的 Developer API 详情页可能返回 `endpoint` 或 `rest_url`，
+ * 因此这里兼容两种字段形态。
+ */
+function resolveUpstashRestUrl(database: UpstashDatabase): string {
+  if (typeof database.rest_url === 'string' && database.rest_url.length > 0) {
+    return database.rest_url
+  }
+
+  const endpoint = database.endpoint?.trim() ?? ''
+  if (!endpoint) {
+    return ''
+  }
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint
+  }
+  if (endpoint.includes('.')) {
+    return `https://${endpoint}`
+  }
+  return `https://${endpoint}.upstash.io`
+}
+
+/**
+ * 解析 REST Token。
+ *
+ * 某些响应会返回 `rest_token`，旧字段则可能仍使用 `password` / `token`。
+ */
+function resolveUpstashRestToken(database: UpstashDatabase): string {
+  return database.rest_token ?? database.token ?? database.password ?? ''
+}
+
+/** 将 Upstash 响应转换为 deploy 统一结果。 */
+function buildUpstashProvisionResult(database: UpstashDatabase): ProvisionResult {
+  const databaseId = database.database_id ?? ''
+  const restUrl = resolveUpstashRestUrl(database)
+  const restToken = resolveUpstashRestToken(database)
+
+  if (!databaseId || !restUrl || !restToken) {
+    throw new Error(deployM('deploy_provisionNoResult', { params: { service: 'Upstash' } }))
+  }
+
+  return {
+    serviceType: 'cache',
+    provisionerName: 'upstash',
+    envVars: {
+      HAI_CACHE_UPSTASH_URL: restUrl,
+      HAI_CACHE_UPSTASH_TOKEN: restToken,
+    },
+    resourceInfo: `upstash-db:${databaseId}`,
+  }
+}
 
 /**
  * 创建 Upstash Redis Provisioner
@@ -39,14 +153,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
           throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'email, api_key' } }))
         }
 
-        const res = await fetch(`${UPSTASH_API}/v2/redis/databases`, {
-          headers: {
-            Authorization: `Basic ${btoa(`${userEmail}:${userKey}`)}`,
-          },
-        })
-        if (!res.ok) {
-          throw new Error(deployM('deploy_apiError', { params: { service: 'Upstash', status: String(res.status), body: await res.text() } }))
-        }
+        await listUpstashDatabases(userEmail, userKey)
 
         email = userEmail
         apiKey = userKey
@@ -75,40 +182,32 @@ export function createUpstashProvisioner(): ServiceProvisioner {
 
       logger.debug('Provisioning Upstash Redis', { appName })
       try {
-        const res = await fetch(`${UPSTASH_API}/v2/redis/database`, {
+        const databaseName = `${appName}-cache`
+
+        const existingDatabase = await findExistingUpstashDatabase(email, apiKey, databaseName)
+        if (existingDatabase !== null) {
+          const databaseId = existingDatabase.database_id ?? ''
+          if (!databaseId) {
+            throw new Error(deployM('deploy_provisionNoResult', { params: { service: 'Upstash' } }))
+          }
+
+          const detail = await getUpstashDatabase(email, apiKey, databaseId)
+          logger.info('Upstash Redis reused', { databaseId, databaseName })
+          return ok(buildUpstashProvisionResult({ ...existingDatabase, ...detail }))
+        }
+
+        const data = await upstashFetch<UpstashDatabase>(email, apiKey, '/v2/redis/database', {
           method: 'POST',
-          headers: {
-            'Authorization': `Basic ${btoa(`${email}:${apiKey}`)}`,
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({
-            name: `${appName}-cache`,
+            name: databaseName,
             region: 'global',
             tls: true,
           }),
         })
 
-        if (!res.ok) {
-          throw new Error(deployM('deploy_apiError', { params: { service: 'Upstash', status: String(res.status), body: await res.text() } }))
-        }
-
-        const data = await res.json() as {
-          database_id: string
-          rest_url: string
-          rest_token: string
-        }
-
         logger.info('Upstash Redis provisioned', { databaseId: data.database_id })
 
-        return ok({
-          serviceType: 'cache',
-          provisionerName: 'upstash',
-          envVars: {
-            HAI_CACHE_UPSTASH_URL: data.rest_url,
-            HAI_CACHE_UPSTASH_TOKEN: data.rest_token,
-          },
-          resourceInfo: `upstash-db:${data.database_id}`,
-        })
+        return ok(buildUpstashProvisionResult(data))
       }
       catch (error) {
         logger.error('Upstash provisioning failed', { appName, error })

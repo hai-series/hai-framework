@@ -15,11 +15,12 @@
   "deploy_scanFailed": "Application scan failed: {error}",
   "deploy_envVarFailed": "Environment variable setup failed: {error}",
   "deploy_credentialError": "Credential read/write failed: {error}",
+  "deploy_credentialInvalidKey": "Unsupported credential key: {key}. Only HAI_DEPLOY_* keys are allowed",
   "deploy_credentialSaved": "Credentials saved",
   "deploy_credentialLoaded": "Credentials loaded",
   "deploy_configError": "Deploy config error: {error}",
   "deploy_credentialMissing": "Missing credential fields: {fields}",
-  "deploy_apiError": "{service} API error ({status}): {body}",
-  "deploy_fileUploadFailed": "File upload failed ({status}): {body}",
+  "deploy_apiError": "{service} API error ({status})",
+  "deploy_fileUploadFailed": "File upload failed ({status})",
   "deploy_provisionNoResult": "No connection info returned from {service}"
 }

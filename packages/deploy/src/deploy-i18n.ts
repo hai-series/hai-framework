@@ -23,8 +23,6 @@ type DeployMessageKey = keyof typeof messagesZhCN
  *
  * @example
  * ```ts
- * import { deployM } from '@h-ai/deploy'
- *
  * const text = deployM('deploy_notInitialized')
  * ```
  */

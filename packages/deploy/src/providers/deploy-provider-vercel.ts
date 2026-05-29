@@ -6,10 +6,11 @@
  */
 
 import type { HaiError, HaiErrorDef, HaiResult } from '@h-ai/core'
-import type { DeployProvider, DeployResult } from '../deploy-types.js'
+import type { DeployProvider } from '../deploy-internal-types.js'
+import type { DeployResult } from '../deploy-types.js'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
@@ -26,6 +27,13 @@ const POLL_INTERVAL = 3000
 const MAX_POLL_ATTEMPTS = 60
 
 // ─── 内部工具 ───
+
+/** Vercel API 错误，保留状态码用于区分 404 与真实失败 */
+class VercelApiError extends Error {
+  constructor(readonly status: number) {
+    super(deployM('deploy_apiError', { params: { service: 'Vercel', status: String(status) } }))
+  }
+}
 
 /** 构造标准错误对象 */
 function toDeployError(codeDef: HaiErrorDef, messageKey: string, error: unknown): HaiError {
@@ -58,8 +66,7 @@ async function vercelFetch<T>(token: string, path: string, options?: RequestInit
   })
 
   if (!response.ok) {
-    const body = await response.text()
-    throw new Error(deployM('deploy_apiError', { params: { service: 'Vercel', status: String(response.status), body } }))
+    throw new VercelApiError(response.status)
   }
 
   return response.json() as Promise<T>
@@ -82,7 +89,7 @@ function collectFiles(dir: string, baseDir: string): string[] {
       results.push(...collectFiles(fullPath, baseDir))
     }
     else {
-      results.push(relative(baseDir, fullPath))
+      results.push(relative(baseDir, fullPath).split(sep).join('/'))
     }
   }
 
@@ -144,20 +151,35 @@ export function createVercelProvider(): DeployProvider {
           return ok(existingId)
         }
 
-        // 创建新项目
-        const project = await vercelFetch<{ id: string }>(
-          token,
-          '/v10/projects',
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              name: projectName,
-              framework: 'sveltekit',
-            }),
-          },
-        )
-        logger.info('Vercel project created', { projectName, projectId: project.id })
-        return ok(project.id)
+        try {
+          const project = await vercelFetch<{ id: string }>(
+            token,
+            '/v11/projects',
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                name: projectName,
+                framework: 'sveltekit',
+              }),
+            },
+          )
+          logger.info('Vercel project created', { projectName, projectId: project.id })
+          return ok(project.id)
+        }
+        catch (error) {
+          // 官方文档说明同名项目创建会返回 409；遇到并发竞争时回查现有项目即可实现幂等。
+          if (error instanceof VercelApiError && error.status === 409) {
+            const concurrentProjectId = await findExistingProject(token, projectName)
+            if (concurrentProjectId !== null) {
+              logger.info('Vercel project reused after create conflict', {
+                projectName,
+                projectId: concurrentProjectId,
+              })
+              return ok(concurrentProjectId)
+            }
+          }
+          throw error
+        }
       }
       catch (error) {
         logger.error('Vercel project creation failed', { projectName, error })
@@ -182,9 +204,10 @@ export function createVercelProvider(): DeployProvider {
           target: ['production', 'preview', 'development'],
         }))
 
+        // Vercel 官方 `upsert=true` 支持按 key 覆盖已有环境变量，避免重复部署时报“已存在”。
         await vercelFetch(
           token,
-          `/v10/projects/${projectId}/env`,
+          `/v10/projects/${projectId}/env?upsert=true`,
           {
             method: 'POST',
             body: JSON.stringify(envEntries),
@@ -280,8 +303,11 @@ async function findExistingProject(token: string, projectName: string): Promise<
     const project = await vercelFetch<{ id: string }>(token, `/v10/projects/${projectName}`)
     return project.id
   }
-  catch {
-    return null
+  catch (error) {
+    if (error instanceof VercelApiError && error.status === 404) {
+      return null
+    }
+    throw error
   }
 }
 
@@ -294,6 +320,7 @@ async function findExistingProject(token: string, projectName: string): Promise<
  */
 async function uploadFile(token: string, content: Uint8Array, sha: string): Promise<void> {
   const url = `${VERCEL_API}/v2/files`
+  const uploadContent = new Uint8Array(content)
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -301,13 +328,12 @@ async function uploadFile(token: string, content: Uint8Array, sha: string): Prom
       'Content-Type': 'application/octet-stream',
       'x-vercel-digest': sha,
     },
-    body: new Blob([content.buffer as ArrayBuffer]),
+    body: new Blob([uploadContent]),
   })
 
   if (!response.ok && response.status !== 409) {
     // 409 表示文件已存在，可忽略
-    const body = await response.text()
-    throw new Error(deployM('deploy_fileUploadFailed', { params: { status: String(response.status), body } }))
+    throw new Error(deployM('deploy_fileUploadFailed', { params: { status: String(response.status) } }))
   }
 }
 

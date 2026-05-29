@@ -18,6 +18,9 @@
 ```typescript
 import { deploy } from '@h-ai/deploy'
 
+// 可选：从 ~/.hai/credentials.yml 注入 HAI_DEPLOY_* 环境变量
+deploy.credentials.load()
+
 // 初始化
 await deploy.init({
   provider: { type: 'vercel', token: 'vel_xxx' },
@@ -59,13 +62,27 @@ services:
     apiKey: ${HAI_DEPLOY_UPSTASH_API_KEY}
 ```
 
+如需在脚本或 CLI 中显式管理凭证文件，请通过 `deploy.credentials.*` 访问：
+
+```typescript
+deploy.credentials.load()
+deploy.credentials.save('HAI_DEPLOY_VERCEL_TOKEN', 'vel_xxx')
+deploy.credentials.saveAll({
+  HAI_DEPLOY_NEON_API_KEY: 'neon_xxx',
+})
+```
+
+> `deploy.scan()` 与 `deploy.credentials.*()` 都是本地文件系统能力，不依赖 `deploy.init()`。
+
 ## 错误处理
 
 ```typescript
+import { HaiDeployError } from '@h-ai/deploy'
+
 const result = await deploy.deployApp('./apps/my-app')
 if (!result.success) {
   switch (result.error.code) {
-    case HaiDeployError.PROVIDER_AUTH_FAILED.code:
+    case HaiDeployError.AUTH_FAILED.code:
       // Vercel Token 无效
       break
     case HaiDeployError.BUILD_FAILED.code:
@@ -80,10 +97,11 @@ if (!result.success) {
 | 错误码                            | code             | 说明         |
 | --------------------------------- | ---------------- | ------------ |
 | `HaiDeployError.DEPLOY_FAILED`    | `hai:deploy:001` | 部署失败     |
-| `HaiDeployError.BUILD_FAILED`     | `hai:deploy:002` | 构建失败     |
-| `HaiDeployError.AUTH_FAILED`      | `hai:deploy:005` | 认证失败     |
-| `HaiDeployError.PROVISION_FAILED` | `hai:deploy:006` | 资源开通失败 |
+| `HaiDeployError.BUILD_FAILED`     | `hai:deploy:003` | 构建失败     |
+| `HaiDeployError.AUTH_FAILED`      | `hai:deploy:006` | 认证失败     |
+| `HaiDeployError.PROVISION_FAILED` | `hai:deploy:007` | 资源开通失败 |
 | `HaiDeployError.NOT_INITIALIZED`  | `hai:deploy:010` | 未初始化     |
+| `HaiDeployError.ENV_VAR_FAILED`   | `hai:deploy:011` | 环境变量失败 |
 
 ## 测试
 
