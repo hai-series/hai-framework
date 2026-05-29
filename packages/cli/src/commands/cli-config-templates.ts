@@ -175,10 +175,10 @@ password:
 
 # 会话配置
 session:
-  maxAge: 86400       # 会话超时（秒），默认 24 小时
-  sliding: true       # 滑动窗口（每次请求刷新过期时间）
+  maxAge: 86400 # 会话超时（秒），默认 24 小时
+  sliding: true # 滑动窗口（每次请求刷新过期时间）
   singleDevice: false # 单设备登录
-  refreshTokenMaxAge: 604800  # refreshToken 过期（秒），默认 7 天
+  refreshTokenMaxAge: 604800 # refreshToken 过期（秒），默认 7 天
 
 # RBAC 配置
 rbac:

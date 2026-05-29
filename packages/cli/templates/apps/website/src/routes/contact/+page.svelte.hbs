@@ -1,11 +1,20 @@
 {{!-- 联系页面 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * 联系我们页面
    */
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
+  import { Button, Card, FormField, Input, PageHeader } from '@h-ai/ui'
+
+  let name = $state('')
+  let email = $state('')
+  let message = $state('')
+
+  function handleSubmit(event: SubmitEvent) {
+    event.preventDefault()
+  }
 </script>
 
 <svelte:head>
@@ -16,44 +25,38 @@
 {{/if}}
 </svelte:head>
 
-<section class="py-16 px-4 max-w-2xl mx-auto">
+<section class='py-16 px-4 max-w-2xl mx-auto'>
 {{#if hasI18n}}
-  <h1 class="text-3xl font-bold mb-8">{m.page_contact_title()}</h1>
-  <p class="text-lg text-gray-600 mb-8">{m.page_contact_desc()}</p>
+  <PageHeader title={m.page_contact_title()} description={m.page_contact_desc()} />
 {{else}}
-  <h1 class="text-3xl font-bold mb-8">联系我们</h1>
-  <p class="text-lg text-gray-600 mb-8">有任何疑问？欢迎联系我们。</p>
+  <PageHeader title='联系我们' description='有任何疑问？欢迎联系我们。' />
 {{/if}}
 
-  <form class="space-y-4">
-    <div class="form-control">
+  <Card shadow='sm' class='bg-base-100'>
+    <form class='space-y-4' onsubmit={handleSubmit}>
 {{#if hasI18n}}
-      <label class="label" for="name"><span class="label-text">{m.page_contact_name()}</span></label>
+      <FormField label={m.page_contact_name()} required>
+        <Input id='name' type='text' bind:value={name} required />
+      </FormField>
+      <FormField label={m.page_contact_email()} required>
+        <Input id='email' type='email' bind:value={email} required />
+      </FormField>
+      <FormField label={m.page_contact_message()} required>
+        <textarea id='message' class='textarea textarea-bordered w-full' rows='4' bind:value={message}></textarea>
+      </FormField>
+      <Button type='submit' variant='primary' class='w-full'>{m.page_contact_submit()}</Button>
 {{else}}
-      <label class="label" for="name"><span class="label-text">姓名</span></label>
+      <FormField label='姓名' required>
+        <Input id='name' type='text' bind:value={name} required />
+      </FormField>
+      <FormField label='邮箱' required>
+        <Input id='email' type='email' bind:value={email} required />
+      </FormField>
+      <FormField label='留言' required>
+        <textarea id='message' class='textarea textarea-bordered w-full' rows='4' bind:value={message}></textarea>
+      </FormField>
+      <Button type='submit' variant='primary' class='w-full'>发送</Button>
 {{/if}}
-      <input id="name" type="text" class="input input-bordered w-full" />
-    </div>
-    <div class="form-control">
-{{#if hasI18n}}
-      <label class="label" for="email"><span class="label-text">{m.page_contact_email()}</span></label>
-{{else}}
-      <label class="label" for="email"><span class="label-text">邮箱</span></label>
-{{/if}}
-      <input id="email" type="email" class="input input-bordered w-full" />
-    </div>
-    <div class="form-control">
-{{#if hasI18n}}
-      <label class="label" for="message"><span class="label-text">{m.page_contact_message()}</span></label>
-{{else}}
-      <label class="label" for="message"><span class="label-text">留言</span></label>
-{{/if}}
-      <textarea id="message" class="textarea textarea-bordered w-full" rows="4"></textarea>
-    </div>
-{{#if hasI18n}}
-    <button type="submit" class="btn btn-primary w-full">{m.page_contact_submit()}</button>
-{{else}}
-    <button type="submit" class="btn btn-primary w-full">发送</button>
-{{/if}}
-  </form>
+    </form>
+  </Card>
 </section>

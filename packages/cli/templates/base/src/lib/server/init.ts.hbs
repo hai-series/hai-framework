@@ -27,31 +27,39 @@
 {{/if}}
  */
 
+{{#if features.ai}}
+import type { AIConfigInput } from '@h-ai/ai'
+{{/if}}
+{{#if features.iam}}
+import type { IamConfigSettingsInput } from '@h-ai/iam'
+{{/if}}
+{{#if features.reach}}
+import type { ReachConfigInput } from '@h-ai/reach'
+{{/if}}
+{{#if features.storage}}
+import type { StorageConfigInput } from '@h-ai/storage'
+{{/if}}
+{{#if features.ai}}
+import { ai } from '@h-ai/ai'
+{{/if}}
+{{#if features.audit}}
+import { audit } from '@h-ai/audit'
+{{/if}}
 {{#if features.cache}}
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 {{/if}}
 import { core } from '@h-ai/core'
+{{#if features.iam}}
+import { iam } from '@h-ai/iam'
+{{/if}}
+{{#if features.reach}}
+import { reach } from '@h-ai/reach'
+{{/if}}
 {{#if features.db}}
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 {{/if}}
-{{#if features.iam}}
-import type { IamConfigSettingsInput } from '@h-ai/iam'
-import { iam } from '@h-ai/iam'
-{{/if}}
 {{#if features.storage}}
-import type { StorageConfigInput } from '@h-ai/storage'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
-{{/if}}
-{{#if features.ai}}
-import type { AIConfigInput } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
-{{/if}}
-{{#if features.reach}}
-import type { ReachConfigInput } from '@h-ai/reach'
-import { reach } from '@h-ai/reach'
-{{/if}}
-{{#if features.audit}}
-import { audit } from '@h-ai/audit'
 {{/if}}
 
 {{#if features.db}}

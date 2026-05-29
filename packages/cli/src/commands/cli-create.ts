@@ -940,9 +940,19 @@ function getInstallCommand(pm: 'pnpm' | 'npm' | 'yarn'): string {
 }
 
 /**
+ * 生成运行 package.json 脚本的命令
+ *
+ * npm 需要 `npm run <script>`（lifecycle 脚本除外），pnpm / yarn 可直接 `<pm> <script>`。
+ */
+function getRunCommand(pm: 'pnpm' | 'npm' | 'yarn', script: string): string {
+  return pm === 'npm' ? `npm run ${script}` : `${pm} ${script}`
+}
+
+/**
  * 生成 README
  */
-function generateReadme(name: string, appTypeLabel: string, pm: string): string {
+function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn'): string {
+  const install = getInstallCommand(pm)
   return `# ${name}
 
 基于 hai Agent Framework 构建的${appTypeLabel}应用。
@@ -950,16 +960,16 @@ function generateReadme(name: string, appTypeLabel: string, pm: string): string 
 ## 开发
 
 \`\`\`bash
-${pm} install
-${pm} dev
+${install}
+${getRunCommand(pm, 'dev')}
 \`\`\`
 
 ## 构建
 
 \`\`\`bash
-${pm} build
-${pm} i18n:compile
-${pm} preview
+${getRunCommand(pm, 'build')}
+${getRunCommand(pm, 'i18n:compile')}
+${getRunCommand(pm, 'preview')}
 \`\`\`
 
 ## 文档
@@ -1050,15 +1060,15 @@ function printCompletionMessage(options: Required<CreateProjectOptions>): void {
   core.logger.info('下一步：')
   core.logger.info(chalk.cyan(`  cd ${options.name}`))
   if (!options.install) {
-    core.logger.info(chalk.cyan(`  ${options.packageManager} install`))
+    core.logger.info(chalk.cyan(`  ${getInstallCommand(options.packageManager)}`))
   }
   if (options.appType === 'fullstack') {
-    core.logger.info(chalk.cyan(`  ${options.packageManager} typecheck`))
-    core.logger.info(chalk.cyan(`  ${options.packageManager} test`))
-    core.logger.info(chalk.cyan(`  ${options.packageManager} test:e2e`))
+    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'typecheck')}`))
+    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'test')}`))
+    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'test:e2e')}`))
   }
   else {
-    core.logger.info(chalk.cyan(`  ${options.packageManager} dev`))
+    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'dev')}`))
   }
   core.logger.info('', {})
 }

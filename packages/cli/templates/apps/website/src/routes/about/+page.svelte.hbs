@@ -1,11 +1,12 @@
 {{!-- 关于页面 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * 关于页面
    */
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
+  import { Card, PageHeader } from '@h-ai/ui'
 </script>
 
 <svelte:head>
@@ -16,12 +17,16 @@
 {{/if}}
 </svelte:head>
 
-<section class="py-16 px-4 max-w-4xl mx-auto">
+<section class='py-16 px-4 max-w-4xl mx-auto'>
 {{#if hasI18n}}
-  <h1 class="text-3xl font-bold mb-8">{m.page_about_title()}</h1>
-  <p class="text-lg text-gray-600">{m.page_about_desc()}</p>
+  <PageHeader title={m.page_about_title()} />
+  <Card shadow='sm' class='bg-base-100'>
+    <p class='text-lg text-base-content/70'>{m.page_about_desc()}</p>
+  </Card>
 {{else}}
-  <h1 class="text-3xl font-bold mb-8">关于我们</h1>
-  <p class="text-lg text-gray-600">了解我们的团队与使命。</p>
+  <PageHeader title='关于我们' />
+  <Card shadow='sm' class='bg-base-100'>
+    <p class='text-lg text-base-content/70'>了解我们的团队与使命。</p>
+  </Card>
 {{/if}}
 </section>

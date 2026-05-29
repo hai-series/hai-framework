@@ -1,11 +1,12 @@
 {{!-- Android App 首页 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * Android App 首页
    */
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
+  import { Card } from '@h-ai/ui'
 </script>
 
 <svelte:head>
@@ -16,12 +17,22 @@
 {{/if}}
 </svelte:head>
 
-<section class="p-4">
+<section class='p-4 space-y-4'>
 {{#if hasI18n}}
-  <h1 class="text-2xl font-bold mb-4">{m.page_home_title()}</h1>
-  <p class="text-gray-600">{m.page_home_desc()}</p>
+  <h1 class='text-2xl font-black tracking-tight'>{m.page_home_title()}</h1>
+  <Card shadow='sm' class='bg-base-100'>
+    <div class='flex items-center gap-3'>
+      <span class='icon-[tabler--device-mobile] size-8 text-primary'></span>
+      <p class='text-base-content/70'>{m.page_home_desc()}</p>
+    </div>
+  </Card>
 {{else}}
-  <h1 class="text-2xl font-bold mb-4">首页</h1>
-  <p class="text-gray-600">欢迎使用 Android 应用</p>
+  <h1 class='text-2xl font-black tracking-tight'>首页</h1>
+  <Card shadow='sm' class='bg-base-100'>
+    <div class='flex items-center gap-3'>
+      <span class='icon-[tabler--device-mobile] size-8 text-primary'></span>
+      <p class='text-base-content/70'>欢迎使用 Android 应用</p>
+    </div>
+  </Card>
 {{/if}}
 </section>

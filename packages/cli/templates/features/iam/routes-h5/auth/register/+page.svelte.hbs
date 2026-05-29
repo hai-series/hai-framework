@@ -1,11 +1,13 @@
 {{!-- H5 注册页面 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * H5 注册页面
    */
+  import { resolve } from '$app/paths'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
+  import { Alert, Button, FormField, Input } from '@h-ai/ui'
 
   let username = $state('')
   let password = $state('')
@@ -13,7 +15,8 @@
   let error = $state('')
   let loading = $state(false)
 
-  async function handleRegister() {
+  async function handleRegister(event: SubmitEvent) {
+    event.preventDefault()
     error = ''
     if (password !== confirmPassword) {
 {{#if hasI18n}}
@@ -33,20 +36,23 @@
       const data = await res.json()
       if (data.success) {
         window.location.href = '/auth/login'
-      } else {
+      }
+      else {
 {{#if hasI18n}}
         error = data.error?.message || m.auth_register_failed()
 {{else}}
         error = data.error?.message || '注册失败'
 {{/if}}
       }
-    } catch {
+    }
+    catch {
 {{#if hasI18n}}
       error = m.auth_error_network()
 {{else}}
       error = '网络错误'
 {{/if}}
-    } finally {
+    }
+    finally {
       loading = false
     }
   }
@@ -60,55 +66,52 @@
 {{/if}}
 </svelte:head>
 
-<div class="p-4 pt-12">
+<div class='p-4 pt-12 space-y-4'>
 {{#if hasI18n}}
-  <h1 class="text-2xl font-bold text-center mb-8">{m.auth_register_title()}</h1>
+  <h1 class='text-2xl font-black tracking-tight text-center'>{m.auth_register_title()}</h1>
 {{else}}
-  <h1 class="text-2xl font-bold text-center mb-8">注册</h1>
+  <h1 class='text-2xl font-black tracking-tight text-center'>注册</h1>
 {{/if}}
 
   {#if error}
-    <div class="alert alert-error mb-4">
-      <span>{error}</span>
-    </div>
+    <Alert variant='error'>{error}</Alert>
   {/if}
 
-  <form onsubmit={(e) => { e.preventDefault(); handleRegister() }} class="space-y-4">
-    <div class="form-control">
+  <form onsubmit={handleRegister} class='space-y-4'>
 {{#if hasI18n}}
-      <input type="text" placeholder={m.auth_label_username()} class="input input-bordered w-full" bind:value={username} required />
-{{else}}
-      <input type="text" placeholder="用户名" class="input input-bordered w-full" bind:value={username} required />
-{{/if}}
-    </div>
-    <div class="form-control">
-{{#if hasI18n}}
-      <input type="password" placeholder={m.auth_label_password()} class="input input-bordered w-full" bind:value={password} required />
-{{else}}
-      <input type="password" placeholder="密码" class="input input-bordered w-full" bind:value={password} required />
-{{/if}}
-    </div>
-    <div class="form-control">
-{{#if hasI18n}}
-      <input type="password" placeholder={m.auth_label_confirm_password()} class="input input-bordered w-full" bind:value={confirmPassword} required />
-{{else}}
-      <input type="password" placeholder="确认密码" class="input input-bordered w-full" bind:value={confirmPassword} required />
-{{/if}}
-    </div>
-    <button type="submit" class="btn btn-primary w-full" disabled={loading}>
-{{#if hasI18n}}
+    <FormField label={m.auth_label_username()} required>
+      <Input id='username' type='text' bind:value={username} required />
+    </FormField>
+    <FormField label={m.auth_label_password()} required>
+      <Input id='password' type='password' bind:value={password} required />
+    </FormField>
+    <FormField label={m.auth_label_confirm_password()} required>
+      <Input id='confirmPassword' type='password' bind:value={confirmPassword} required />
+    </FormField>
+    <Button type='submit' variant='primary' loading={loading} class='w-full'>
       {loading ? m.auth_register_loading() : m.auth_register_submit()}
+    </Button>
 {{else}}
+    <FormField label='用户名' required>
+      <Input id='username' type='text' bind:value={username} required />
+    </FormField>
+    <FormField label='密码' required>
+      <Input id='password' type='password' bind:value={password} required />
+    </FormField>
+    <FormField label='确认密码' required>
+      <Input id='confirmPassword' type='password' bind:value={confirmPassword} required />
+    </FormField>
+    <Button type='submit' variant='primary' loading={loading} class='w-full'>
       {loading ? '注册中...' : '注册'}
+    </Button>
 {{/if}}
-    </button>
   </form>
 
-  <div class="text-center mt-6">
+  <div class='text-center'>
 {{#if hasI18n}}
-    <a href="/auth/login" class="link link-primary text-sm">{m.auth_register_to_login()}</a>
+    <a href={resolve('/auth/login', {})} class='link link-primary text-sm'>{m.auth_register_to_login()}</a>
 {{else}}
-    <a href="/auth/login" class="link link-primary text-sm">已有账号？立即登录</a>
+    <a href={resolve('/auth/login', {})} class='link link-primary text-sm'>已有账号？立即登录</a>
 {{/if}}
   </div>
 </div>

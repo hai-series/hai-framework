@@ -1,22 +1,38 @@
 {{!-- H5 应用根布局 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * H5 应用根布局
    */
   import type { Snippet } from 'svelte'
-  import '../app.css'
 {{#if hasI18n}}
   import { browser } from '$app/environment'
-  import { setGlobalLocale } from '@h-ai/ui'
-  import { getLocale } from '$lib/paraglide/runtime.js'
-  import * as m from '$lib/paraglide/messages'
 {{/if}}
+  import { resolve } from '$app/paths'
+  import { page } from '$app/state'
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+  import { getLocale } from '$lib/paraglide/runtime.js'
+  import { setGlobalLocale } from '@h-ai/ui'
+{{/if}}
+  import '../app.css'
 
   interface Props {
     children: Snippet
   }
 
-  let { children }: Props = $props()
+  const { children }: Props = $props()
+
+  const navItems = [
+{{#if hasI18n}}
+    { path: '/', label: m.nav_home(), icon: 'icon-[tabler--home]' },
+    { path: '/discover', label: m.nav_discover(), icon: 'icon-[tabler--compass]' },
+    { path: '/profile', label: m.nav_profile(), icon: 'icon-[tabler--user]' },
+{{else}}
+    { path: '/', label: '首页', icon: 'icon-[tabler--home]' },
+    { path: '/discover', label: '发现', icon: 'icon-[tabler--compass]' },
+    { path: '/profile', label: '我的', icon: 'icon-[tabler--user]' },
+{{/if}}
+  ] as const
 {{#if hasI18n}}
 
   if (browser) {
@@ -26,32 +42,17 @@
 {{/if}}
 </script>
 
-<div class="min-h-screen flex flex-col bg-base-200">
-  <main class="flex-1 pb-16">
+<div class='min-h-screen flex flex-col bg-base-200'>
+  <main class='flex-1 pb-16'>
     {@render children()}
   </main>
 
-  <nav class="btm-nav btm-nav-sm">
-    <a href="/" class="text-primary">
-{{#if hasI18n}}
-      <span class="btm-nav-label">{m.nav_home()}</span>
-{{else}}
-      <span class="btm-nav-label">首页</span>
-{{/if}}
-    </a>
-    <a href="/discover">
-{{#if hasI18n}}
-      <span class="btm-nav-label">{m.nav_discover()}</span>
-{{else}}
-      <span class="btm-nav-label">发现</span>
-{{/if}}
-    </a>
-    <a href="/profile">
-{{#if hasI18n}}
-      <span class="btm-nav-label">{m.nav_profile()}</span>
-{{else}}
-      <span class="btm-nav-label">我的</span>
-{{/if}}
-    </a>
+  <nav class='btm-nav btm-nav-sm'>
+    {#each navItems as item (item.path)}
+      <a href={resolve(item.path, {})} class:active={page.url.pathname === item.path} class:text-primary={page.url.pathname === item.path}>
+        <span class='{item.icon} size-5'></span>
+        <span class='btm-nav-label'>{item.label}</span>
+      </a>
+    {/each}
   </nav>
 </div>

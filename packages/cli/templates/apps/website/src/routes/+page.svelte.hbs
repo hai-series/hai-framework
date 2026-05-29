@@ -1,11 +1,13 @@
 {{!-- 官网首页 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * 官网首页
    */
+  import { resolve } from '$app/paths'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
+  import { Badge } from '@h-ai/ui'
 </script>
 
 <svelte:head>
@@ -16,17 +18,33 @@
 {{/if}}
 </svelte:head>
 
-<section class="hero min-h-[60vh] bg-base-200">
-  <div class="hero-content text-center">
-    <div class="max-w-md">
+<section class='hero min-h-[60vh] bg-gradient-to-b from-base-200 to-base-100'>
+  <div class='hero-content text-center'>
+    <div class='max-w-xl'>
+      <div class='flex justify-center'>
+        <Badge variant='primary'>
+          <span class='icon-[tabler--sparkles] size-4'></span>
 {{#if hasI18n}}
-      <h1 class="text-5xl font-bold">{m.page_home_title()}</h1>
-      <p class="py-6">{m.page_home_subtitle()}</p>
-      <a href="/about" class="btn btn-primary">{m.page_home_cta()}</a>
+          {m.app_title()}
 {{else}}
-      <h1 class="text-5xl font-bold">欢迎</h1>
-      <p class="py-6">基于 hai Agent Framework 构建</p>
-      <a href="/about" class="btn btn-primary">了解更多</a>
+          由 hai 驱动
+{{/if}}
+        </Badge>
+      </div>
+{{#if hasI18n}}
+      <h1 class='mt-5 text-5xl font-black tracking-tight'>{m.page_home_title()}</h1>
+      <p class='py-6 text-base-content/60'>{m.page_home_subtitle()}</p>
+      <a href={resolve('/about', {})} class='btn btn-primary'>
+        <span class='icon-[tabler--arrow-right] size-5'></span>
+        {m.page_home_cta()}
+      </a>
+{{else}}
+      <h1 class='mt-5 text-5xl font-black tracking-tight'>欢迎</h1>
+      <p class='py-6 text-base-content/60'>基于 hai Agent Framework 构建</p>
+      <a href={resolve('/about', {})} class='btn btn-primary'>
+        <span class='icon-[tabler--arrow-right] size-5'></span>
+        了解更多
+      </a>
 {{/if}}
     </div>
   </div>

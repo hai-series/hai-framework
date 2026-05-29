@@ -281,7 +281,7 @@ describe('admin 应用类型生成', () => {
     it('应生成 admin 布局', async () => {
       const content = await readGenerated(projectPath, 'src/routes/admin/+layout.svelte')
       expect(content).toContain('{m.app_title()}')
-      expect(content).toContain('{m.nav_dashboard()}')
+      expect(content).toContain('m.nav_dashboard()')
     })
 
     it('应生成 admin 仪表盘', async () => {
@@ -393,9 +393,9 @@ describe('website 应用类型生成', () => {
   describe('路由结构', () => {
     it('应生成带导航的布局', async () => {
       const content = await readGenerated(projectPath, 'src/routes/+layout.svelte')
-      expect(content).toContain('{m.nav_home()}')
-      expect(content).toContain('{m.nav_about()}')
-      expect(content).toContain('{m.footer_copyright()}')
+      expect(content).toContain('m.nav_home()')
+      expect(content).toContain('m.nav_about()')
+      expect(content).toContain('m.footer_copyright(')
     })
 
     it('应生成首页 hero', async () => {
@@ -464,9 +464,9 @@ describe('h5 应用类型生成', () => {
     it('应生成底部导航布局', async () => {
       const content = await readGenerated(projectPath, 'src/routes/+layout.svelte')
       expect(content).toContain('btm-nav')
-      expect(content).toContain('{m.nav_home()}')
-      expect(content).toContain('{m.nav_discover()}')
-      expect(content).toContain('{m.nav_profile()}')
+      expect(content).toContain('m.nav_home()')
+      expect(content).toContain('m.nav_discover()')
+      expect(content).toContain('m.nav_profile()')
     })
 
     it('应生成发现页', async () => {

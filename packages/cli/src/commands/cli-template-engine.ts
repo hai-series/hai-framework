@@ -16,15 +16,24 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import Handlebars from 'handlebars'
+import { getCliVersion } from '../cli-utils.js'
 
 // 注册自定义 Handlebars helpers
 Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
   return a === b ? options.fn(this) : options.inverse(this)
 })
 
-const HAI_VERSION = `^${fse.readJsonSync(fileURLToPath(new URL('../../package.json', import.meta.url))).version}`
+// 脚手架交付项目的 @h-ai/* 依赖版本范围，取自 CLI 自身版本（兼容源码 / 打包 / npm 安装布局）
+const HAI_VERSION = `^${getCliVersion()}`
 const TEMPLATE_SKIP_IF_EMPTY_MARKER = '@skipIfEmpty'
 const NORMALIZED_RENDER_EXTENSIONS = new Set(['.ts', '.js', '.svelte', '.json', '.css'])
+
+// Capacitor 应用为纯客户端 SPA（adapter-static + ssr=false），没有服务端运行时。
+// 服务端专属产物（hooks、server init）必须跳过，否则预渲染会因访问 url.searchParams 报错。
+const CAPACITOR_SKIPPED_SERVER_FILES = new Set([
+  'src/hooks.server.ts',
+  'src/lib/server/init.ts',
+])
 
 // 以下版本号与根 pnpm-workspace.yaml catalog 保持一致，
 // 调整 catalog 时同步更新（脚手架交付的项目不使用 catalog:，因此需要具体版本号）。
@@ -499,6 +508,10 @@ export async function generateFromTemplates(
     // 通用路由（routes/）
     const sharedDirs = FEATURE_ROUTE_DIRS[featureId] || []
     for (const dirName of sharedDirs) {
+      // Capacitor SPA 无服务端运行时，跳过服务端 API 路由（routes-shared）
+      if (context.isCapacitorApp && dirName === 'routes-shared') {
+        continue
+      }
       const routesSrc = path.join(featureDir, dirName)
       if (await fse.pathExists(routesSrc)) {
         await copyStaticDir(routesSrc, path.join(projectPath, 'src', 'routes'))
@@ -574,6 +587,10 @@ async function renderDynamicFiles(
     // 通用路由（routes-shared / routes 等）
     const sharedDirs = FEATURE_ROUTE_DIRS[featureId] || []
     for (const dirName of sharedDirs) {
+      // Capacitor SPA 无服务端运行时，跳过服务端 API 路由（routes-shared）
+      if (context.isCapacitorApp && dirName === 'routes-shared') {
+        continue
+      }
       await renderHbsInDir(path.join(featureDir, dirName), routesDest, context)
     }
 
@@ -611,6 +628,11 @@ async function renderHbsInDir(
 
     const outRelPath = renderOutputPath(outRelPathTemplate, context)
     if (!isSafeRelativePath(outRelPath)) {
+      continue
+    }
+
+    // Capacitor SPA 跳过服务端专属文件（hooks / server init）
+    if (context.isCapacitorApp && CAPACITOR_SKIPPED_SERVER_FILES.has(outRelPath.split(path.sep).join('/'))) {
       continue
     }
 

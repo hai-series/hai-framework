@@ -5,18 +5,18 @@
  */
 
 import type { Handle } from '@sveltejs/kit'
-import { initApp } from '$lib/server/init.js'
-import { core } from '@h-ai/core'
-import { kit } from '@h-ai/kit'
-{{#if features.iam}}
-import { iam } from '@h-ai/iam'
-{{/if}}
-{{#if features.crypto}}
-import { crypto } from '@h-ai/crypto'
-{{/if}}
 {{#if hasI18n}}
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 {{/if}}
+import { initApp } from '$lib/server/init.js'
+import { core } from '@h-ai/core'
+{{#if features.crypto}}
+import { crypto } from '@h-ai/crypto'
+{{/if}}
+{{#if features.iam}}
+import { iam } from '@h-ai/iam'
+{{/if}}
+import { kit } from '@h-ai/kit'
 
 {{#if features.crypto}}
 // 初始化加密模块（同步）
@@ -85,7 +85,17 @@ const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
       const result = await iam.auth.verifyToken(token)
-      return result.success ? result.data : null
+      if (!result.success)
+        return null
+      const session = result.data
+      // 映射为 kit 的 SessionData 形态（携带守卫所需的核心字段）
+      return {
+        userId: session.userId,
+        username: session.username,
+        roles: session.roles,
+        permissions: session.permissions,
+        data: session.data,
+      }
     },
     operations: iam.auth,
     loginUrl: '/auth/login',

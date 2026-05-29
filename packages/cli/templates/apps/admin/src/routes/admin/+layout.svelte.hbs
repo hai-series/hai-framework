@@ -1,9 +1,11 @@
 {{!-- 后台管理布局（侧边栏 + 内容区） --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * 后台管理布局（侧边栏 + 内容区）
    */
   import type { Snippet } from 'svelte'
+  import { resolve } from '$app/paths'
+  import { page } from '$app/state'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
@@ -12,33 +14,48 @@
     children: Snippet
   }
 
-  let { children }: Props = $props()
+  const { children }: Props = $props()
+
+  const navItems = $derived([
+{{#if hasI18n}}
+    { path: '/admin', label: m.nav_dashboard(), icon: 'icon-[tabler--layout-dashboard]' },
+    { path: '/admin/settings', label: m.nav_settings(), icon: 'icon-[tabler--settings]' },
+{{else}}
+    { path: '/admin', label: '仪表盘', icon: 'icon-[tabler--layout-dashboard]' },
+    { path: '/admin/settings', label: '设置', icon: 'icon-[tabler--settings]' },
+{{/if}}
+  ] as const)
 </script>
 
-<div class="drawer lg:drawer-open">
-  <input id="admin-drawer" type="checkbox" class="drawer-toggle" />
-  <div class="drawer-content p-6">
-    <label for="admin-drawer" class="btn btn-ghost drawer-button lg:hidden mb-4">
-      ☰
+<div class='drawer lg:drawer-open'>
+  <input id='admin-drawer' type='checkbox' class='drawer-toggle' />
+  <div class='drawer-content p-6'>
+    <label for='admin-drawer' class='btn btn-ghost btn-sm drawer-button lg:hidden mb-4'>
+      <span class='icon-[tabler--menu-2] size-5'></span>
     </label>
     {@render children()}
   </div>
-  <div class="drawer-side">
-    <label for="admin-drawer" class="drawer-overlay"></label>
-    <nav class="menu p-4 w-64 min-h-full bg-base-100 text-base-content">
+  <div class='drawer-side'>
+    <label for='admin-drawer' class='drawer-overlay' aria-label='close sidebar'></label>
+    <nav class='menu p-4 w-64 min-h-full gap-1 bg-base-100 text-base-content border-r border-base-300/60'>
+      <div class='flex items-center gap-2 px-2 mb-6 text-xl font-bold'>
+        <span class='icon-[tabler--cube] size-6 text-primary'></span>
 {{#if hasI18n}}
-      <div class="text-xl font-bold mb-6 px-2">{m.app_title()}</div>
-      <ul>
-        <li><a href="/admin">{m.nav_dashboard()}</a></li>
-        <li><a href="/admin/settings">{m.nav_settings()}</a></li>
-      </ul>
+        {m.app_title()}
 {{else}}
-      <div class="text-xl font-bold mb-6 px-2">管理后台</div>
-      <ul>
-        <li><a href="/admin">仪表盘</a></li>
-        <li><a href="/admin/settings">设置</a></li>
-      </ul>
+        管理后台
 {{/if}}
+      </div>
+      <ul class='gap-1'>
+        {#each navItems as item (item.path)}
+          <li>
+            <a href={resolve(item.path, {})} class:menu-active={page.url.pathname === item.path}>
+              <span class='{item.icon} size-5'></span>
+              {item.label}
+            </a>
+          </li>
+        {/each}
+      </ul>
     </nav>
   </div>
 </div>

@@ -49,10 +49,15 @@
     "@playwright/test": "^1.60.0",
 {{#if isCapacitorApp}}
   "@aparajita/capacitor-secure-storage": "^8.0.0",
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/camera": "^8.0.2",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
     "@capacitor/android": "^8.3.4",
+    "@capacitor/device": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
+    "@capacitor/push-notifications": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.1",
     "@sveltejs/adapter-static": "^3.0.10",
 {{else}}
 {{#if_eq appType 'api'}}

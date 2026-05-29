@@ -1,10 +1,25 @@
 {{!-- 服务页面 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * 服务页面
    */
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
+{{/if}}
+  import { Card, PageHeader } from '@h-ai/ui'
+
+{{#if hasI18n}}
+  const services = $derived([
+    { title: m.page_services_item1(), desc: m.page_services_desc(), icon: 'icon-[tabler--message-circle]' },
+    { title: m.page_services_item2(), desc: m.page_services_desc(), icon: 'icon-[tabler--code]' },
+    { title: m.page_services_item1(), desc: m.page_services_desc(), icon: 'icon-[tabler--server-cog]' },
+  ])
+{{else}}
+  const services = [
+    { title: '咨询服务', desc: '提供专业的技术咨询与解决方案。', icon: 'icon-[tabler--message-circle]' },
+    { title: '定制开发', desc: '根据需求定制开发高质量应用。', icon: 'icon-[tabler--code]' },
+    { title: '运维支持', desc: '提供全方位的系统运维与技术支持。', icon: 'icon-[tabler--server-cog]' },
+  ]
 {{/if}}
 </script>
 
@@ -16,48 +31,20 @@
 {{/if}}
 </svelte:head>
 
-<section class="py-16 px-4 max-w-4xl mx-auto">
+<section class='py-16 px-4 max-w-4xl mx-auto'>
 {{#if hasI18n}}
-  <h1 class="text-3xl font-bold mb-8">{m.page_services_title()}</h1>
-  <p class="text-lg text-gray-600 mb-12">{m.page_services_desc()}</p>
+  <PageHeader title={m.page_services_title()} description={m.page_services_desc()} />
 {{else}}
-  <h1 class="text-3xl font-bold mb-8">我们的服务</h1>
-  <p class="text-lg text-gray-600 mb-12">我们提供以下专业服务。</p>
+  <PageHeader title='我们的服务' description='我们提供以下专业服务。' />
 {{/if}}
 
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-    <div class="card bg-base-100 shadow">
-      <div class="card-body">
-{{#if hasI18n}}
-        <h2 class="card-title">{m.page_services_item1()}</h2>
-        <p>{m.page_services_desc()}</p>
-{{else}}
-        <h2 class="card-title">咨询服务</h2>
-        <p>提供专业的技术咨询与解决方案。</p>
-{{/if}}
-      </div>
-    </div>
-    <div class="card bg-base-100 shadow">
-      <div class="card-body">
-{{#if hasI18n}}
-        <h2 class="card-title">{m.page_services_item2()}</h2>
-        <p>{m.page_services_desc()}</p>
-{{else}}
-        <h2 class="card-title">定制开发</h2>
-        <p>根据需求定制开发高质量应用。</p>
-{{/if}}
-      </div>
-    </div>
-    <div class="card bg-base-100 shadow">
-      <div class="card-body">
-{{#if hasI18n}}
-        <h2 class="card-title">{m.page_services_item1()}</h2>
-        <p>{m.page_services_desc()}</p>
-{{else}}
-        <h2 class="card-title">运维支持</h2>
-        <p>提供全方位的系统运维与技术支持。</p>
-{{/if}}
-      </div>
-    </div>
+  <div class='grid grid-cols-1 md:grid-cols-3 gap-6'>
+    {#each services as service (service.title)}
+      <Card shadow='sm' class='bg-base-100'>
+        <span class='{service.icon} size-8 text-primary'></span>
+        <h2 class='mt-3 text-lg font-semibold'>{service.title}</h2>
+        <p class='mt-1 text-sm text-base-content/60'>{service.desc}</p>
+      </Card>
+    {/each}
   </div>
 </section>

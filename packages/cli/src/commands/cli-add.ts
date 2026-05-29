@@ -6,14 +6,13 @@
  */
 
 import type { FeatureId, GlobalOptions } from '../cli-types.js'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
-import { detectPackageManager, fileExists, writeFile } from '../cli-utils.js'
+import { detectPackageManager, fileExists, getCliVersion, writeFile } from '../cli-utils.js'
 import { generateConfigFile } from './cli-config-templates.js'
 import { detectProject } from './cli-create.js'
 
@@ -147,9 +146,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
       pkg.dependencies = {}
 
     // 读取 CLI 自身版本作为依赖版本范围
-    const require = createRequire(import.meta.url)
-    const cliPkg = require('../../package.json') as { version: string }
-    const depVersion = `^${cliPkg.version}`
+    const depVersion = `^${getCliVersion()}`
 
     for (const pkgName of allPackages) {
       if (!pkg.dependencies[pkgName]) {

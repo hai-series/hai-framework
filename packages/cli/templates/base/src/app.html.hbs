@@ -1,6 +1,10 @@
 <!doctype html>
 {{#if hasI18n}}
+{{#if isCapacitorApp}}
+<html lang="{{defaultLocale}}">
+{{else}}
 <html lang="%lang%">
+{{/if}}
 {{else}}
 <html lang="{{defaultLocale}}">
 {{/if}}

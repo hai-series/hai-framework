@@ -1,8 +1,20 @@
+import { core } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 import { APP_HTTP_ROUTES, ENABLED_FRONTENDS, {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
 import { createServerProcedures } from './server/procedures/index.js'
 
 const STARTED_AT = new Date().toISOString()
+
+/** `_core.yml` 中的应用元信息（由 core.config 加载，未初始化时回退到默认值）。 */
+interface AppCoreConfig {
+  name?: string
+  version?: string
+}
+
+/** `_serv.yml` 中的服务端运行时设置。 */
+interface AppServConfig {
+  cors?: { origin?: string }
+}
 
 /** 应用侧最小 HTTP App 抽象；不把底层 Hono 类型暴露给项目代码。 */
 export interface ServerApp {
@@ -12,12 +24,20 @@ export interface ServerApp {
 
 /** 创建后端 HTTP App；与 @h-ai/serv 的 createApp 返回语义保持一致。 */
 export function createServerApp(): ServerApp {
+  // 配置来自 config/_core.yml 与 config/_serv.yml。
+  // 单元测试可不初始化 core，此时回退到内置默认值。
+  const coreConfig = core.config.get<AppCoreConfig>('core')
+  const servConfig = core.config.get<AppServConfig>('serv')
+  const appName = coreConfig?.name ?? '{{fullstack.servPackageName}}'
+  const appVersion = coreConfig?.version ?? '0.1.0'
+  const corsOrigin = servConfig?.cors?.origin ?? '*'
+
   return serv.createApp({
     contract: {{fullstack.contractExportName}},
     procedures: createServerProcedures({
       app: {
-        name: '{{fullstack.servPackageName}}',
-        version: '0.1.0',
+        name: appName,
+        version: appVersion,
         startedAt: STARTED_AT,
         frontends: [...ENABLED_FRONTENDS],
       },
@@ -34,7 +54,7 @@ export function createServerApp(): ServerApp {
     },
     middlewares: [{
       middleware: serv.cors({
-        origin: '*',
+        origin: corsOrigin,
         allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
       }),
     }],

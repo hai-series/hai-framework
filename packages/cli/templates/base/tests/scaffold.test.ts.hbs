@@ -22,6 +22,14 @@ describe('generated scaffold', () => {
 
   it('renders the app shell locale marker', async () => {
     const appHtml = await readFile(join(rootDir, 'src/app.html'), 'utf-8')
-    expect(appHtml).toContain('lang="{{#if hasI18n}}%lang%{{else}}{{defaultLocale}}{{/if}}"')
+    expect(appHtml).toContain('lang="{{#if hasI18n}}{{#if isCapacitorApp}}{{defaultLocale}}{{else}}%lang%{{/if}}{{else}}{{defaultLocale}}{{/if}}"')
   })
+{{#unless isCapacitorApp}}
+
+  it('ships an application config loaded at startup', async () => {
+    const coreConfig = await readFile(join(rootDir, 'config/_core.yml'), 'utf-8')
+    expect(coreConfig).toContain('name: {{projectName}}')
+    expect(coreConfig).toContain('defaultLocale: {{defaultLocale}}')
+  })
+{{/unless}}
 })

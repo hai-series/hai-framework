@@ -1,22 +1,39 @@
 {{!-- 官网根布局 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * 官网根布局
    */
   import type { Snippet } from 'svelte'
-  import '../app.css'
 {{#if hasI18n}}
   import { browser } from '$app/environment'
-  import { setGlobalLocale } from '@h-ai/ui'
-  import { getLocale } from '$lib/paraglide/runtime.js'
-  import * as m from '$lib/paraglide/messages'
 {{/if}}
+  import { resolve } from '$app/paths'
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+  import { getLocale } from '$lib/paraglide/runtime.js'
+  import { setGlobalLocale } from '@h-ai/ui'
+{{/if}}
+  import '../app.css'
 
   interface Props {
     children: Snippet
   }
 
-  let { children }: Props = $props()
+  const { children }: Props = $props()
+
+  const navItems = [
+{{#if hasI18n}}
+    { path: '/', label: m.nav_home() },
+    { path: '/about', label: m.nav_about() },
+    { path: '/services', label: m.nav_services() },
+    { path: '/contact', label: m.nav_contact() },
+{{else}}
+    { path: '/', label: '首页' },
+    { path: '/about', label: '关于' },
+    { path: '/services', label: '服务' },
+    { path: '/contact', label: '联系我们' },
+{{/if}}
+  ] as const
 {{#if hasI18n}}
 
   if (browser) {
@@ -26,39 +43,31 @@
 {{/if}}
 </script>
 
-<div class="min-h-screen flex flex-col">
-  <header class="navbar bg-base-100 shadow-sm">
-    <div class="flex-1">
+<div class='min-h-screen flex flex-col'>
+  <header class='navbar bg-base-100 shadow-sm'>
+    <div class='flex-1'>
 {{#if hasI18n}}
-      <a href="/" class="btn btn-ghost text-xl">{m.app_title()}</a>
+      <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>{m.app_title()}</a>
 {{else}}
-      <a href="/" class="btn btn-ghost text-xl">官网</a>
+      <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>官网</a>
 {{/if}}
     </div>
-    <nav class="flex-none">
-      <ul class="menu menu-horizontal px-1">
-{{#if hasI18n}}
-        <li><a href="/">{m.nav_home()}</a></li>
-        <li><a href="/about">{m.nav_about()}</a></li>
-        <li><a href="/services">{m.nav_services()}</a></li>
-        <li><a href="/contact">{m.nav_contact()}</a></li>
-{{else}}
-        <li><a href="/">首页</a></li>
-        <li><a href="/about">关于</a></li>
-        <li><a href="/services">服务</a></li>
-        <li><a href="/contact">联系我们</a></li>
-{{/if}}
+    <nav class='flex-none'>
+      <ul class='menu menu-horizontal px-1'>
+        {#each navItems as item (item.path)}
+          <li><a href={resolve(item.path, {})}>{item.label}</a></li>
+        {/each}
       </ul>
     </nav>
   </header>
 
-  <main class="flex-1">
+  <main class='flex-1'>
     {@render children()}
   </main>
 
-  <footer class="footer footer-center p-4 bg-base-300 text-base-content">
+  <footer class='footer footer-center p-4 bg-base-300 text-base-content'>
 {{#if hasI18n}}
-    <p>{m.footer_copyright()}</p>
+    <p>{m.footer_copyright({ year: new Date().getFullYear() })}</p>
 {{else}}
     <p>Copyright © 2025 - All rights reserved</p>
 {{/if}}

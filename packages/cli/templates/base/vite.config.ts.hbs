@@ -3,12 +3,12 @@
  */
 import path from 'node:path'
 import process from 'node:process'
+{{#if hasI18n}}
+import { paraglideVitePlugin } from '@inlang/paraglide-js'
+{{/if}}
 import { sveltekit } from '@sveltejs/kit/vite'
 {{#if hasUi}}
 import tailwindcss from '@tailwindcss/vite'
-{{/if}}
-{{#if hasI18n}}
-import { paraglideVitePlugin } from '@inlang/paraglide-js'
 {{/if}}
 import { defineConfig, loadEnv } from 'vite'
 

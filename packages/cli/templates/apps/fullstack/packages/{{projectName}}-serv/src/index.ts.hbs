@@ -3,6 +3,9 @@ import { core } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 import { createServerApp } from './server-app.js'
 
+// 加载 config/ 下的 _core.yml / _serv.yml 等配置文件（约定优于配置）
+core.init({ configDir: './config', logging: { level: 'info' } })
+
 const app = createServerApp()
 const port = process.env.PORT ? Number(process.env.PORT) : 3000
 const host = process.env.HOST ?? '127.0.0.1'

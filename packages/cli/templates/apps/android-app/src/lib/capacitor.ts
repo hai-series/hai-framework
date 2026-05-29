@@ -14,7 +14,7 @@ export async function initCapacitor(): Promise<void> {
   if (capacitor.isNative()) {
     await capacitor.statusBar.configure({
       backgroundColor: '#ffffff',
-      style: 'LIGHT',
+      style: 'light',
       overlay: false,
     })
   }

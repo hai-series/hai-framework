@@ -1,11 +1,13 @@
 {{!-- 管理后台首页 --}}
-<script lang="ts">
+<script lang='ts'>
   /**
    * 管理后台首页 — 入口导航
    */
+  import { resolve } from '$app/paths'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
+  import { Badge, Card } from '@h-ai/ui'
 </script>
 
 <svelte:head>
@@ -16,20 +18,38 @@
 {{/if}}
 </svelte:head>
 
-<main class="min-h-screen flex items-center justify-center">
-  <div class="text-center">
+<main class='min-h-screen flex items-center justify-center p-6'>
+  <Card shadow='lg' padding='xl' class='w-full max-w-xl bg-base-100 text-center'>
 {{#if hasI18n}}
-    <h1 class="text-4xl font-bold mb-4">{m.app_title()}</h1>
-    <p class="text-gray-600 mb-8">{m.page_home_subtitle()}</p>
-    <div class="flex gap-4 justify-center">
-      <a href="/admin" class="btn btn-primary">{m.nav_admin()}</a>
+    <div class='flex justify-center'>
+      <Badge variant='primary'>
+        <span class='icon-[tabler--sparkles] size-4'></span>
+        {m.page_home_badge()}
+      </Badge>
+    </div>
+    <h1 class='mt-4 text-4xl font-black tracking-tight'>{m.app_title()}</h1>
+    <p class='mt-3 text-base-content/60'>{m.page_home_subtitle()}</p>
+    <div class='mt-8 flex flex-wrap gap-3 justify-center'>
+      <a href={resolve('/admin', {})} class='btn btn-primary'>
+        <span class='icon-[tabler--layout-dashboard] size-5'></span>
+        {m.nav_admin()}
+      </a>
     </div>
 {{else}}
-    <h1 class="text-4xl font-bold mb-4">管理后台</h1>
-    <p class="text-gray-600 mb-8">基于 hai Agent Framework 构建</p>
-    <div class="flex gap-4 justify-center">
-      <a href="/admin" class="btn btn-primary">进入后台</a>
+    <div class='flex justify-center'>
+      <Badge variant='primary'>
+        <span class='icon-[tabler--sparkles] size-4'></span>
+        由 hai 驱动
+      </Badge>
+    </div>
+    <h1 class='mt-4 text-4xl font-black tracking-tight'>管理后台</h1>
+    <p class='mt-3 text-base-content/60'>基于 hai Agent Framework 构建</p>
+    <div class='mt-8 flex flex-wrap gap-3 justify-center'>
+      <a href={resolve('/admin', {})} class='btn btn-primary'>
+        <span class='icon-[tabler--layout-dashboard] size-5'></span>
+        进入后台
+      </a>
     </div>
 {{/if}}
-  </div>
+  </Card>
 </main>

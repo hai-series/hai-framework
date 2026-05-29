@@ -5,6 +5,7 @@
 
 import type { TemplateContext } from './cli-types.js'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import fs from 'fs-extra'
 import Handlebars from 'handlebars'
 
@@ -112,6 +113,32 @@ export async function getPackageVersion(pkgPath: string): Promise<string | null>
   catch {
     return null
   }
+}
+
+/**
+ * 读取 CLI 自身版本号
+ *
+ * 从当前模块所在目录向上查找 `@h-ai/cli` 的 package.json，
+ * 兼容源码布局（src/）与打包产物布局（dist/）以及 npm 安装后的 node_modules 布局。
+ * 用于生成项目时确定 `@h-ai/*` 依赖的版本范围，避免硬编码。
+ */
+export function getCliVersion(): string {
+  let dir = path.dirname(fileURLToPath(import.meta.url))
+  for (let i = 0; i < 6; i++) {
+    try {
+      const pkg = fs.readJsonSync(path.join(dir, 'package.json')) as { name?: string, version?: string }
+      if (pkg.name === '@h-ai/cli')
+        return pkg.version ?? '0.0.0'
+    }
+    catch {
+      // 当前目录无 package.json，继续向上查找
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir)
+      break
+    dir = parent
+  }
+  return '0.0.0'
 }
 
 /**
