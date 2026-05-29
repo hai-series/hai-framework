@@ -2,6 +2,7 @@ import type { TransportEncryptionManager } from '@h-ai/crypto'
 import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createKitClient, installBrowserTransportFetch } from '../src/client/kit-client.js'
+import { kit } from '../src/kit-main.js'
 
 const KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
 
@@ -17,6 +18,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  kit.auth.clearBrowserToken()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   clearDocumentCookie()
@@ -319,33 +321,28 @@ describe('createKitClient - 传输加密', () => {
 })
 
 describe('createKitClient - auth', () => {
-  it('auth: true 时自动注入 Authorization 头', async () => {
-    const store: Record<string, string> = { hai_access_token: 'my_token_123' }
+  it('auth: true 只读取默认内存 Token，不读取 localStorage', async () => {
+    const getItem = vi.fn(() => 'local_token_should_not_be_used')
     vi.stubGlobal('window', {
       localStorage: {
-        getItem: (key: string) => store[key] ?? null,
-        setItem: (key: string, val: string) => { store[key] = val },
-        removeItem: (key: string) => { delete store[key] },
+        getItem,
+        setItem: () => {},
+        removeItem: () => {},
       },
     })
+    kit.auth.setBrowserToken('memory_token_123')
 
     const { apiFetch } = createKitClient({ auth: true })
     await apiFetch('/api/users')
 
     const [, init] = fetchSpy.mock.calls[0]!
     const headers = new Headers(init.headers)
-    expect(headers.get('Authorization')).toBe('Bearer my_token_123')
+    expect(headers.get('Authorization')).toBe('Bearer memory_token_123')
+    // auth:true 的安全默认不应触碰 localStorage，持久化存储必须由调用方显式传入 BrowserTokenStore。
+    expect(getItem).not.toHaveBeenCalled()
   })
 
-  it('auth: true 但无 token 时不注入', async () => {
-    vi.stubGlobal('window', {
-      localStorage: {
-        getItem: () => null,
-        setItem: () => {},
-        removeItem: () => {},
-      },
-    })
-
+  it('auth: true 但默认内存中无 token 时不注入', async () => {
     const { apiFetch } = createKitClient({ auth: true })
     await apiFetch('/api/users')
 

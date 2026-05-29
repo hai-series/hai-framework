@@ -120,7 +120,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 // src/lib/utils/api.ts — 全应用共享
 import { kit } from '@h-ai/kit'
 
-const client = kit.client.create({ auth: true })
+const client = kit.client.create()
 export const { apiFetch } = client
 ```
 
@@ -132,6 +132,8 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 ```
 
 > CSRF Header 注入由 `apiFetch` 自动处理；`@h-ai/kit` 不提供独立的 CSRF 中间件工厂。
+>
+> 认证建议：同源 SvelteKit endpoint 优先使用 httpOnly Cookie，由服务端读取 Cookie 完成鉴权，浏览器端不需要把敏感 Token 写入 `localStorage`。如确需注入 Bearer Header，请传入自定义 `BrowserTokenStore`，或先用 `kit.auth.setBrowserToken()` 写入页面内存后再使用 `kit.client.create({ auth: true })`。
 
 ### 同源传输加密
 
@@ -187,7 +189,7 @@ import { kit } from '@h-ai/kit'
 export const { apiFetch } = kit.client.create()
 ```
 
-> 不再需要 `src/hooks.client.ts`：默认 `handleFetch` 行为已经够用，SvelteKit 内部 `__data.json` 请求会自动走上面安装的全局 fetch 包装。同源 Authorization 注入统一通过 `kit.client.create({ auth: true })` 完成，避免浏览器端 hooks 与全局 fetch 包装形成两条链路。
+> 不再需要 `src/hooks.client.ts`：默认 `handleFetch` 行为已经够用，SvelteKit 内部 `__data.json` 请求会自动走上面安装的全局 fetch 包装。若确需同源 Authorization Header，使用显式 `BrowserTokenStore` 或 `kit.auth.setBrowserToken()` + `kit.client.create({ auth: true })`；不要把敏感 Token 存入 `localStorage`。
 
 默认密钥协商路径为 `/api/_hai/key-exchange`。如服务端自定义 `transport.keyExchangePath`，客户端需同步配置 `transport.keyExchangeUrl`。
 

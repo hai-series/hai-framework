@@ -66,7 +66,22 @@ export interface BrowserTokenStore {
   clear: () => void
 }
 
-const defaultBrowserTokenStore = createTokenStore()
+function createMemoryTokenStore(): BrowserTokenStore {
+  let token: string | null = null
+  return {
+    get: () => token,
+    set: (value: string) => { token = value },
+    clear: () => { token = null },
+  }
+}
+
+// 默认浏览器 Token 只保存在当前页面内存中，避免 auth: true 隐式落到 localStorage。
+const defaultBrowserTokenStore = createMemoryTokenStore()
+
+/** 获取默认浏览器 Token 存储（页面内存，不持久化）。 */
+export function getDefaultBrowserTokenStore(): BrowserTokenStore {
+  return defaultBrowserTokenStore
+}
 
 // ─── 内部工具（仅 kit 包内使用） ───
 
@@ -296,6 +311,10 @@ export async function logout(
 /**
  * 创建浏览器端 Token 存储器（localStorage）。
  *
+ * ⚠️ 安全提示：localStorage 对同源脚本可读，任意 XSS 都可能窃取 Token。
+ * 本函数仅供调用方显式接受风险时使用；`kit.client.create({ auth: true })`
+ * 不会默认调用它。
+ *
  * @param key - localStorage 键名，默认 `'hai_access_token'`
  */
 export function createTokenStore(key = DEFAULT_TOKEN_COOKIE_NAME): BrowserTokenStore {
@@ -322,14 +341,14 @@ export function createTokenStore(key = DEFAULT_TOKEN_COOKIE_NAME): BrowserTokenS
 }
 
 /**
- * 写入浏览器端 Access Token。
+ * 写入默认浏览器端 Access Token（仅页面内存，不持久化到 localStorage）。
  */
 export function setBrowserToken(token: string): void {
   defaultBrowserTokenStore.set(token)
 }
 
 /**
- * 清除浏览器端 Access Token。
+ * 清除默认浏览器端 Access Token（仅页面内存）。
  */
 export function clearBrowserToken(): void {
   defaultBrowserTokenStore.clear()

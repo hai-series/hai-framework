@@ -10,7 +10,7 @@ import type { CryptoFunctions, TransportClient } from '@h-ai/crypto'
 import type { BrowserTokenStore } from '../kit-auth.js'
 import type { KitConfig } from '../kit-config.js'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
-import { createTokenStore } from '../kit-auth.js'
+import { getDefaultBrowserTokenStore } from '../kit-auth.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, resolveTransportPath, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
 
 const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
@@ -45,7 +45,7 @@ export interface KitClientConfig {
   csrfHeaderName?: string
   /**
    * 认证配置：自动从浏览器存储读取 Access Token 并注入请求头。
-   * - `true`：使用默认 localStorage 存储（key = `hai_access_token`）
+   * - `true`：使用默认页面内存存储（由 `kit.auth.setBrowserToken()` 写入，不读写 localStorage）
    * - `BrowserTokenStore`：使用自定义存储
    * - 不提供 / `false`：不自动注入
    */
@@ -257,8 +257,9 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   } = config
 
   // ── Auth token store ──
+  // 安全默认：auth:true 只读取页面内存 token，避免隐式 localStorage 持久化敏感凭证。
   const authStore: BrowserTokenStore | null = authConfig
-    ? (authConfig === true ? createTokenStore() : authConfig)
+    ? (authConfig === true ? getDefaultBrowserTokenStore() : authConfig)
     : null
 
   // ── 传输加密状态 ──
