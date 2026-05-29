@@ -5,7 +5,7 @@ description: 使用 @h-ai/kit 构建 SvelteKit 请求管道、认证守卫、统
 
 # hai-kit
 
-> `@h-ai/kit` 只负责 SvelteKit 集成：Handle Hook、guard、response、validate、client、auth、crud、A2A。公共跨端 HTTP API 契约统一使用 `@h-ai/api-contract` + `@h-ai/serv`，不要在 kit 中定义业务 API contract。
+> `@h-ai/kit` 只负责 SvelteKit 集成：`handle` hook、guard、response、validate、client、auth、crud、A2A。公共跨端 HTTP API 契约统一使用 `@h-ai/api-contract` + `@h-ai/serv`，不要在 kit 中定义业务 API contract。
 
 ## 使用步骤
 

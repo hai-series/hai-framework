@@ -45,7 +45,7 @@ description: 对应用代码进行审查：检查 TDD 合规性、架构分层�
 
 ### 架构分层
 
-- [ ] `hooks.server.ts` 仅做中间件编排（初始化、i18n、Handle Hook），无业务逻辑
+- [ ] `hooks.server.ts` 仅做中间件编排（初始化、i18n、`handle` hook），无业务逻辑
 - [ ] `+page.server.ts` / `+server.ts` 仅做请求处理（守卫 → 校验 → 调用服务 → 响应）
 - [ ] 业务逻辑集中在 `$lib/server/services/`
 - [ ] 客户端组件不直接调用数据库或服务端模块

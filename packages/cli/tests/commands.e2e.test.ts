@@ -326,9 +326,17 @@ describe('createProject — admin 类型 + iam', () => {
     const copilot = await readText(projectPath, '.github/copilot-instructions.md')
 
     expect(agents).toContain('.agents/skills/')
+    expect(agents).toContain('packages/<project>-serv')
+    expect(agents).toContain('## 完成条件')
+    expect(agents).toContain('pnpm typecheck')
     expect(claude).toContain('@AGENTS.md')
     expect(claude).toContain('.agents/skills/')
+    expect(claude).toContain('质量门禁与完成条件')
     expect(copilot).toContain('.agents/skills/')
+    expect(copilot).toContain('Fullstack 服务端')
+    expect(copilot).not.toContain('路由/SSR')
+    expect(copilot).toContain('## 质量门禁')
+    expect(copilot).toContain('## 完成条件')
   })
 })
 
@@ -647,6 +655,22 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, '.agents/skills/hai-api-contract/SKILL.md')).toBe(true)
     expect(await exists(projectPath, '.agents/skills/hai-api-client/SKILL.md')).toBe(true)
     expect(await exists(projectPath, '.agents/skills/hai-ui/SKILL.md')).toBe(true)
+  })
+
+  it('应生成包含 fullstack 职责边界、质量门禁与完成条件的 AI 指引', async () => {
+    const agents = await readText(projectPath, 'AGENTS.md')
+    const claude = await readText(projectPath, 'CLAUDE.md')
+    const copilot = await readText(projectPath, '.github/copilot-instructions.md')
+
+    expect(agents).toContain('packages/<project>-serv')
+    expect(agents).toContain('## 完成条件')
+    expect(agents).toContain('pnpm typecheck')
+    expect(claude).toContain('@AGENTS.md')
+    expect(claude).toContain('质量门禁与完成条件')
+    expect(copilot).toContain('Fullstack 服务端')
+    expect(copilot).toContain('## 质量门禁')
+    expect(copilot).toContain('## 完成条件')
+    expect(copilot).not.toContain('路由/SSR')
   })
 })
 

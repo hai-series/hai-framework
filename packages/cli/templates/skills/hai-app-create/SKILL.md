@@ -55,7 +55,7 @@ description: 以 TDD 方式在应用中创建新功能：先编写测试定义�
 
 ```
 src/
-  hooks.server.ts                # Handle Hook 入口
+  hooks.server.ts                # `handle` hook 入口
   app.css                        # 全局样式（TailwindCSS 4）
   lib/
     server/
