@@ -10,6 +10,7 @@
 -->
 <script lang='ts'>
   import type { FileUploadProps, UploadFile } from '../types.js'
+  import { SvelteMap } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
   import { cn, generateId } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
@@ -17,6 +18,7 @@
   import Progress from '../../primitives/Progress.svelte'
 
   const SAFE_HTTP_URL_REGEX = /^https?:\/\//i
+  const MAX_PARALLEL_UPLOADS = 3
 
   const {
     accept = '*',
@@ -40,6 +42,7 @@
   let files = $state<UploadFile[]>([])
   let isDragging = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
+  const activeRequests = new SvelteMap<string, XMLHttpRequest>()
 
   const containerClass = $derived(
     cn(
@@ -95,6 +98,63 @@
     return null
   }
 
+  function registerActiveRequest(fileId: string, xhr: XMLHttpRequest): void {
+    activeRequests.set(fileId, xhr)
+  }
+
+  function clearActiveRequest(fileId: string, xhr?: XMLHttpRequest): void {
+    const current = activeRequests.get(fileId)
+    if (!current || (xhr && current !== xhr)) {
+      return
+    }
+
+    current.upload.onprogress = null
+    current.onload = null
+    current.onerror = null
+    current.onabort = null
+    activeRequests.delete(fileId)
+  }
+
+  function abortActiveRequest(fileId: string): void {
+    const current = activeRequests.get(fileId)
+    if (!current) {
+      return
+    }
+
+    clearActiveRequest(fileId, current)
+    current.abort()
+  }
+
+  function abortAllActiveRequests(): void {
+    for (const fileId of [...activeRequests.keys()]) {
+      abortActiveRequest(fileId)
+    }
+  }
+
+  async function uploadPendingFiles(targetFiles: UploadFile[]): Promise<void> {
+    const queue = [...targetFiles]
+    const workerCount = Math.min(MAX_PARALLEL_UPLOADS, queue.length)
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (queue.length > 0) {
+          const nextFile = queue.shift()
+          if (!nextFile) {
+            return
+          }
+
+          await uploadFile(nextFile)
+        }
+      }),
+    )
+  }
+
+  $effect(() => {
+    return () => {
+      abortAllActiveRequests()
+    }
+  })
+
   // 添加文件
   async function addFiles(fileList: FileList | null) {
     if (!fileList)
@@ -129,9 +189,7 @@
 
     // 自动上传
     if (autoUpload) {
-      for (const file of newFiles.filter(f => f.state === 'pending')) {
-        await uploadFile(file)
-      }
+      await uploadPendingFiles(newFiles.filter(f => f.state === 'pending'))
     }
   }
 
@@ -145,6 +203,8 @@
 
     uploadFile.state = 'uploading'
     files = [...files]
+
+    let xhr: XMLHttpRequest | undefined
 
     try {
       let targetUrl = uploadUrl
@@ -176,51 +236,61 @@
       }
 
       // 上传文件
-      const xhr = new XMLHttpRequest()
+      xhr = new XMLHttpRequest()
+      registerActiveRequest(uploadFile.id, xhr)
+      const activeXhr = xhr
 
       await new Promise<void>((resolve, reject) => {
-        xhr.upload.onprogress = (e) => {
+        activeXhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             uploadFile.progress = Math.round((e.loaded / e.total) * 100)
             files = [...files]
           }
         }
 
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
+        activeXhr.onload = () => {
+          if (activeXhr.status >= 200 && activeXhr.status < 300) {
             uploadFile.state = 'success'
             uploadFile.progress = 100
             try {
-              uploadFile.response = JSON.parse(xhr.responseText)
+              uploadFile.response = JSON.parse(activeXhr.responseText)
             }
             catch {
-              uploadFile.response = xhr.responseText
+              uploadFile.response = activeXhr.responseText
             }
             resolve()
           }
           else {
-            reject(new Error(`${uiM('file_upload_failed')}: ${xhr.statusText}`))
+            reject(new Error(`${uiM('file_upload_failed')}: ${activeXhr.statusText}`))
           }
         }
 
-        xhr.onerror = () => reject(new Error(uiM('file_upload_network_error')))
+        activeXhr.onerror = () => reject(new Error(uiM('file_upload_network_error')))
+        activeXhr.onabort = () => reject(new DOMException('Upload aborted', 'AbortError'))
 
-        xhr.open('PUT', targetUrl!)
-        xhr.setRequestHeader('Content-Type', uploadFile.type || 'application/octet-stream')
+        activeXhr.open('PUT', targetUrl!)
+        activeXhr.setRequestHeader('Content-Type', uploadFile.type || 'application/octet-stream')
 
         for (const [key, value] of Object.entries(headers)) {
-          xhr.setRequestHeader(key, value)
+          activeXhr.setRequestHeader(key, value)
         }
 
-        xhr.send(uploadFile.file)
+        activeXhr.send(uploadFile.file)
       })
 
       onupload?.(uploadFile)
     }
     catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
+
       uploadFile.state = 'error'
       uploadFile.error = error instanceof Error ? error.message : uiM('file_upload_failed')
       onerror?.(uploadFile.error)
+    }
+    finally {
+      clearActiveRequest(uploadFile.id, xhr)
     }
 
     files = [...files]
@@ -230,6 +300,7 @@
   function removeFile(id: string) {
     const file = files.find(f => f.id === id)
     if (file) {
+      abortActiveRequest(id)
       files = files.filter(f => f.id !== id)
       onremove?.(file)
       onchange?.(files)
@@ -279,13 +350,12 @@
 
   /** 手动触发上传 */
   export async function upload() {
-    for (const file of files.filter(f => f.state === 'pending')) {
-      await uploadFile(file)
-    }
+    await uploadPendingFiles(files.filter(f => f.state === 'pending'))
   }
 
   /** 清空文件列表 */
   export function clear() {
+    abortAllActiveRequests()
     files = []
     onchange?.(files)
   }

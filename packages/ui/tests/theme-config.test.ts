@@ -6,8 +6,9 @@
  * =============================================================================
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  applyTheme,
   DAISYUI_THEMES_CONFIG,
   DARK_THEMES,
   DEFAULT_THEME,
@@ -23,6 +24,27 @@ import {
   THEME_STORAGE_KEY,
   THEMES,
 } from '../src/lib/theme-config.js'
+
+const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document')
+
+afterEach(() => {
+  if (originalLocalStorageDescriptor) {
+    Object.defineProperty(globalThis, 'localStorage', originalLocalStorageDescriptor)
+  }
+  else {
+    Reflect.deleteProperty(globalThis, 'localStorage')
+  }
+
+  if (originalDocumentDescriptor) {
+    Object.defineProperty(globalThis, 'document', originalDocumentDescriptor)
+  }
+  else {
+    Reflect.deleteProperty(globalThis, 'document')
+  }
+
+  vi.restoreAllMocks()
+})
 
 // =============================================================================
 // THEMES 数据完整性
@@ -245,6 +267,12 @@ describe('getThemeInitScript - 主题初始化脚本', () => {
     expect(script).toContain('data-theme')
   })
 
+  it('脚本应在读取 localStorage 时自行兜底异常', () => {
+    const script = getThemeInitScript()
+    expect(script).toContain('try{')
+    expect(script).toContain('catch{}')
+  })
+
   it('脚本应该是自执行函数', () => {
     const script = getThemeInitScript()
     expect(script.startsWith('(function(){')).toBe(true)
@@ -271,6 +299,47 @@ describe('getSavedTheme - 获取保存的主题', () => {
   it('node 环境应返回默认主题', () => {
     const theme = getSavedTheme()
     expect(theme).toBe(DEFAULT_THEME)
+  })
+
+  it('localStorage 抛错时也应回退默认主题', () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => {
+          throw new Error('blocked')
+        }),
+      },
+    })
+
+    expect(getSavedTheme()).toBe(DEFAULT_THEME)
+  })
+})
+
+describe('applyTheme - 主题应用', () => {
+  it('localStorage 写入失败时也不应阻断主题切换', () => {
+    const setAttribute = vi.fn()
+
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        documentElement: {
+          setAttribute,
+          getAttribute: vi.fn(() => null),
+        },
+      },
+    })
+
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        setItem: vi.fn(() => {
+          throw new Error('blocked')
+        }),
+      },
+    })
+
+    expect(() => applyTheme('dark')).not.toThrow()
+    expect(setAttribute).toHaveBeenCalledWith('data-theme', 'dark')
   })
 })
 

@@ -11,6 +11,7 @@ import type {
   MarkdownBlockFormatKind as AiMarkdownBlockFormatKind,
   MarkdownInlineFormatKind as AiMarkdownInlineFormatKind,
   MarkdownBlockStyleKind,
+  MarkdownCodeRunResult,
 } from '../src/lib/components/scenes/ai/document-types.js'
 import type {
   AlertProps,
@@ -100,11 +101,16 @@ describe('aI 文档编辑器类型', () => {
 
   it('aiDocumentEditorProps 同时暴露兼容和新版块级回调', () => {
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('showOutlineNumbering')
+    expectTypeOf<AiDocumentEditorProps>().toHaveProperty('allowUnsafeCodePreview')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockformat')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockstyle')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyinlineformat')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplylink')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplycolor')
+  })
+
+  it('markdownCodeRunResult 应暴露脚本沙箱控制字段', () => {
+    expectTypeOf<MarkdownCodeRunResult>().toHaveProperty('allowScripts')
   })
 })
 

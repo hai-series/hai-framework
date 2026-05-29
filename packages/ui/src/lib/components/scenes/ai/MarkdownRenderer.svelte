@@ -17,6 +17,7 @@
 -->
 <script lang='ts'>
   import type { MarkdownRendererProps } from '../types.js'
+  import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { cn } from '../../../utils.js'
   import { parseMarkdown } from './markdown-parse.js'
 
@@ -36,7 +37,7 @@
   /**
    * 事件代理：处理代码块复制按钮点击
    */
-  function handleClick(e: MouseEvent) {
+  async function handleClick(e: MouseEvent) {
     const target = e.target as HTMLElement
     const btn = target.closest('[data-copy-code]') as HTMLButtonElement | null
     if (!btn)
@@ -48,15 +49,16 @@
       return
 
     const text = codeEl.textContent ?? ''
-    navigator.clipboard.writeText(text).then(() => {
-      btn.classList.add('hai-md-copied')
-      btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+    if (!await writeTextToClipboard(text))
+      return
 
-      setTimeout(() => {
-        btn.classList.remove('hai-md-copied')
-        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
-      }, 2000)
-    }).catch(() => { /* clipboard API 可能被安全策略禁用 */ })
+    btn.classList.add('hai-md-copied')
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+
+    window.setTimeout(() => {
+      btn.classList.remove('hai-md-copied')
+      btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
+    }, 2000)
   }
 </script>
 

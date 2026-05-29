@@ -10,6 +10,7 @@
 -->
 <script lang='ts'>
   import type { HashDisplayProps } from '../types.js'
+  import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
   import { cn } from '../../../utils.js'
   import { Badge, IconButton } from '../../primitives/index.js'
@@ -44,15 +45,11 @@
     if (!value)
       return
 
-    try {
-      await navigator.clipboard.writeText(value)
+    if (await writeTextToClipboard(value)) {
       copied = true
-      setTimeout(() => {
+      window.setTimeout(() => {
         copied = false
       }, 2000)
-    }
-    catch {
-    // 复制失败
     }
   }
 </script>

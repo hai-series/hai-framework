@@ -1,6 +1,6 @@
 # @h-ai/ui
 
-> 基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），支持 32+ 主题。
+> 基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），内置 15 个精选 DaisyUI 主题。
 
 ## 安装
 
@@ -84,6 +84,8 @@ export default defineConfig({
 <Button variant="primary">提交</Button>
 ```
 
+> 除 `toast`、类型导入与 `Range`（会和 DOM `Range` 构造器冲突）外，其余公开 Svelte 组件都可通过 `@h-ai/ui/auto-import` 自动注入。
+
 ## 组件架构
 
 组件按三层划分（primitives → compounds → scenes）：
@@ -93,7 +95,9 @@ components/
 ├── primitives/   # 原子组件（不可再分的基础 UI 单元）
 ├── compounds/    # 组合组件（由原子组件 + Bits UI headless 组合而成）
 └── scenes/       # 场景组件（面向具体业务场景的完整 UI 流程）
+  ├── ai/       # AI 文档 / 表格 / Markdown 预览
     ├── app/      # 应用级（设置/反馈/主题/语言切换）
+  ├── crud/     # CRUD 页面 / 抽屉 / 过滤 / 删除确认
     ├── iam/      # 身份认证
     ├── storage/  # 存储管理
     └── crypto/   # 加密展示
@@ -101,12 +105,12 @@ components/
 
 ## 组件清单
 
-### 原子组件 Primitives（21 个）
+### 原子组件 Primitives（20 个）
 
 | 组件             | 描述         | 主要属性                                                           |
 | ---------------- | ------------ | ------------------------------------------------------------------ |
 | `Button`         | 按钮         | `variant`, `size`, `loading`, `disabled`, `outline`, `circle`      |
-| `IconButton`     | 图标按钮     | `icon: string \| Snippet`, `variant`, `size`, `tooltip`, `loading` |
+| `IconButton`     | 图标按钮     | `icon: trusted SVG string \| Snippet`, `variant`, `size`, `tooltip`, `loading` |
 | `BareButton`     | 无样式按钮   | `class`, `ariaLabel`, `role`, `tabindex`                           |
 | `Input`          | 输入框       | `type`, `value`, `size`, `error`, `validationMessage`              |
 | `BareInput`      | 无样式输入框 | `type`, `class`, `accept`, `multiple`                              |
@@ -126,7 +130,7 @@ components/
 | `Spinner`        | 加载动画     | `size`, `variant`                                                  |
 | `Progress`       | 进度条       | `value`, `max`, `variant`, `striped`, `animated`                   |
 
-### 组合组件 Compounds（25 个）
+### 组合组件 Compounds（33 个）
 
 #### 表单
 
@@ -171,6 +175,18 @@ components/
 
 > 日期值使用 `@internationalized/date` 的 `DateValue` / `CalendarDate` 类型。
 
+#### 移动端 / 增强交互
+
+| 组件             | 描述         | 主要属性                                            |
+| ---------------- | ------------ | --------------------------------------------------- |
+| `ActionSheet`    | 底部操作面板 | `open`, `title`, `items`, `cancelText`, `onselect`  |
+| `AppBar`         | 顶部导航栏   | `title`, `backHref`, `onback`, `fixed`, `safeArea`  |
+| `BottomNav`      | 底部导航栏   | `items`, `active`, `centered`, `maxWidth`           |
+| `InfiniteScroll` | 无限滚动     | `loading`, `finished`, `threshold`, `onload`        |
+| `PullRefresh`    | 下拉刷新     | `refreshing`, `threshold`, `onrefresh`              |
+| `SafeArea`       | 安全区域容器 | `top`, `bottom`, `left`, `right`                    |
+| `SwipeCell`      | 滑动操作单元 | `leftActions`, `rightActions`, `threshold`, `onaction` |
+
 #### 导航
 
 | 组件         | 描述     | 主要属性                                     |
@@ -196,7 +212,7 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-### 场景组件 Scenes（20 个）
+### 场景组件 Scenes（30 个）
 
 #### App 应用级（6 个）
 
@@ -209,7 +225,7 @@ components/
 | `ThemeSelector`  | 完整主题选择面板 | 无需 Props         |
 | `ThemeToggle`    | 明/暗主题切换    | 无需 Props         |
 
-#### IAM 身份认证（7 个）
+#### IAM 身份认证（8 个）
 
 | 组件                 | 描述       | 主要属性                                              |
 | -------------------- | ---------- | ----------------------------------------------------- |
@@ -219,6 +235,7 @@ components/
 | `ResetPasswordForm`  | 重置密码   | `loading`, `errors`, `showCode`, `onsubmit`           |
 | `ChangePasswordForm` | 修改密码   | `loading`, `errors`, `requireOldPassword`, `onsubmit` |
 | `PasswordInput`      | 密码输入框 | `value`, `showToggle`, `showStrength`, `minLength`    |
+| `PermGuard`          | 权限守卫   | `permissions`, `mode`, `fallback`                     |
 | `UserProfile`        | 用户资料   | `user`, `editable`, `fields`, `onsubmit`              |
 
 #### Storage 存储（4 个）
@@ -239,6 +256,27 @@ components/
 | `SignatureDisplay` | 签名展示 | `signature`, `publicKey`, `algorithm`, `verified`       |
 
 默认算法与 `@h-ai/crypto` 对齐：加密输入使用 `SM4`，哈希展示使用 `SM3`，签名展示使用 `SM2`。
+
+#### AI 文档与表格（4 个）
+
+| 组件                     | 描述             | 主要属性 / 能力 |
+| ------------------------ | ---------------- | ---------------- |
+| `MarkdownRenderer`       | Markdown 渲染器  | `content`, `showCopyButton`, `enableHighlight` |
+| `AiDocumentDownloadMenu` | 文档下载菜单     | `actions`, `ondownload` |
+| `AiDocumentEditor`       | AI 文档编辑器    | `content`, `showRunButton`, `showCodePreviewToggle`, `allowUnsafeCodePreview` |
+| `AiTableEditor`          | AI 表格编辑器    | `columns`, `rows`, `editable`, `ondownload` |
+
+> `AiDocumentEditor` 默认只允许 Markdown 内置预览。HTML / JS / CSS 等高风险预览需要显式设置 `allowUnsafeCodePreview`，或通过 `oncoderun` 返回受控的预览结果。
+
+#### CRUD 场景（5 个）
+
+| 组件                 | 描述         | 主要属性 / 能力 |
+| -------------------- | ------------ | ---------------- |
+| `CrudPage`           | CRUD 主页面  | `definition`, `navAdapter`, `loading` |
+| `CrudFilterBar`      | 过滤工具栏   | `filters`, `query`, `onchange` |
+| `CrudDetailDrawer`   | 详情抽屉     | `open`, `item`, `fields` |
+| `CrudEditDrawer`     | 编辑抽屉     | `open`, `schema`, `onsubmit` |
+| `CrudDeleteConfirm`  | 删除确认框   | `open`, `item`, `onconfirm` |
 
 ## 使用示例
 
@@ -427,25 +465,25 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 ### 主题切换
 
-使用内置的主题工具函数管理 32 个 DaisyUI 主题：
+使用内置的主题工具函数管理 15 个精选 DaisyUI 主题：
 
 ```ts
 import {
   applyTheme, // 应用主题（自动持久化到 localStorage）
   getCurrentTheme, // 获取当前主题
-  getThemeInitScript, // 防闪烁脚本（放在 app.html <head> 中）
+  getThemeInitScript, // 返回可注入到 HTML shell 的防闪烁脚本文本
   isDarkTheme, // 检查是否暗色主题
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 全部 32 个主题元数据
+  THEMES, // ThemeInfo[] — 15 个精选主题元数据
 } from '@h-ai/ui'
 ```
 
-在 `app.html` 中添加防闪烁脚本：
+在 SvelteKit 的 `app.html` 中，请直接写入下面这段脚本内容（与 `getThemeInitScript()` 返回值一致）：
 
 ```html
 <head>
   <script>
-    {@html getThemeInitScript()}
+    (function(){var t='light';try{var s=localStorage.getItem('theme');if(s)t=s}catch{}document.documentElement.setAttribute('data-theme',t)})()
   </script>
 </head>
 ```

@@ -10,6 +10,7 @@
 -->
 <script lang='ts'>
   import type { SignatureDisplayProps } from '../types.js'
+  import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
   import { cn } from '../../../utils.js'
   import { Badge, IconButton } from '../../primitives/index.js'
@@ -46,30 +47,22 @@
   async function copySignature() {
     if (!signature)
       return
-    try {
-      await navigator.clipboard.writeText(signature)
+    if (await writeTextToClipboard(signature)) {
       copiedSig = true
-      setTimeout(() => {
+      window.setTimeout(() => {
         copiedSig = false
       }, 2000)
-    }
-    catch {
-    // 复制失败
     }
   }
 
   async function copyPublicKey() {
     if (!publicKey)
       return
-    try {
-      await navigator.clipboard.writeText(publicKey)
+    if (await writeTextToClipboard(publicKey)) {
       copiedKey = true
-      setTimeout(() => {
+      window.setTimeout(() => {
         copiedKey = false
       }, 2000)
-    }
-    catch {
-    // 复制失败
     }
   }
 </script>

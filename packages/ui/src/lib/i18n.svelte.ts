@@ -7,6 +7,7 @@
 
 import type { Locale, LocaleInfo } from '@h-ai/core'
 import { core } from '@h-ai/core'
+import { readStoredValue, writeStoredValue } from './internal/browser-safety.js'
 
 // 从 core.i18n 解构常用函数
 const {
@@ -90,7 +91,7 @@ export function createLocaleStore(options: {
 
   if (typeof window !== 'undefined') {
     // 1. 优先从 localStorage 读取
-    const savedLocale = localStorage.getItem(persistKey)
+    const savedLocale = readStoredValue(persistKey)
     if (savedLocale && isLocaleSupported(savedLocale, supportedLocales)) {
       initialLocale = savedLocale
     }
@@ -134,7 +135,7 @@ export function createLocaleStore(options: {
 
       // 持久化到 localStorage
       if (typeof window !== 'undefined') {
-        localStorage.setItem(persistKey, resolved)
+        writeStoredValue(persistKey, resolved)
       }
     },
 

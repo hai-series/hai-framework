@@ -45,6 +45,13 @@ export interface MarkdownCodeRunResult {
   title?: string
   /** Optional preview description. */
   description?: string
+  /**
+   * 预览 iframe 是否允许执行脚本。
+   *
+   * 默认值为空，组件会以最严格的 sandbox 渲染 HTML 预览；
+   * 只有调用方显式声明后才会放开 `allow-scripts`。
+   */
+  allowScripts?: boolean
 }
 
 export interface MarkdownRewriteAction {
@@ -168,6 +175,13 @@ export interface AiDocumentEditorProps {
   showRunButton?: boolean
   /** Whether to show the code/preview toggle on code blocks. */
   showCodePreviewToggle?: boolean
+  /**
+   * 是否启用内置的高风险代码预览。
+   *
+   * 默认仅允许 Markdown 预览；HTML / JS / CSS 等会执行或渲染任意代码的内置预览
+   * 需要宿主显式开启，或由宿主通过 `oncoderun` 自行提供受控沙箱结果。
+   */
+  allowUnsafeCodePreview?: boolean
   /** Optional helper text displayed beside language when preview toggle is enabled. */
   codePreviewHint?: string
   /** Whether syntax highlighting is enabled. */

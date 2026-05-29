@@ -6,6 +6,7 @@
  */
 
 import type { UIMessageKey } from './messages.js'
+import { readStoredValue, writeStoredValue } from './internal/browser-safety.js'
 
 /**
  * 主题信息
@@ -135,12 +136,13 @@ export const DEFAULT_THEME = 'light'
 export const THEME_STORAGE_KEY = 'theme'
 
 /**
- * 获取主题初始化脚本（用于 app.html 防闪烁）
+ * 获取主题初始化脚本（用于 HTML shell 防闪烁）
  *
- * 使用方式：在 app.html 的 <head> 中添加 <script>{getThemeInitScript()}</script>
+ * 返回值是“脚本标签内的文本内容”，适合宿主在构建阶段或服务端模板中注入。
+ * 对于 SvelteKit `app.html`，请直接粘贴这段脚本字符串的内容，不能写 `{@html getThemeInitScript()}`。
  */
 export function getThemeInitScript(): string {
-  return `(function(){var t=localStorage.getItem('${THEME_STORAGE_KEY}')||'${DEFAULT_THEME}';document.documentElement.setAttribute('data-theme',t)})()`
+  return `(function(){var t='${DEFAULT_THEME}';try{var s=localStorage.getItem('${THEME_STORAGE_KEY}');if(s)t=s}catch{}document.documentElement.setAttribute('data-theme',t)})()`
 }
 
 /**
@@ -154,8 +156,8 @@ export function applyTheme(theme: string, persist = true): void {
 
   document.documentElement.setAttribute('data-theme', theme)
 
-  if (persist && typeof localStorage !== 'undefined') {
-    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  if (persist) {
+    writeStoredValue(THEME_STORAGE_KEY, theme)
   }
 }
 
@@ -172,9 +174,7 @@ export function getCurrentTheme(): string {
  * 获取保存的主题（从 localStorage）
  */
 export function getSavedTheme(): string {
-  if (typeof localStorage === 'undefined')
-    return DEFAULT_THEME
-  return localStorage.getItem(THEME_STORAGE_KEY) ?? DEFAULT_THEME
+  return readStoredValue(THEME_STORAGE_KEY) ?? DEFAULT_THEME
 }
 
 /**

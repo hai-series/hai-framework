@@ -11,6 +11,9 @@
   import type { IconButtonProps } from '../../types.js'
   import { cn, getSizeClass, getVariantClass } from '../../utils.js'
 
+  const SAFE_INLINE_SVG_REGEX = /^<svg[\s\S]*<\/svg>$/i
+  const UNSAFE_INLINE_SVG_REGEX = /<\s*(?:script|foreignObject|iframe|object|embed|link|meta|img)\b|\son[a-z]+\s*=|(?:href|xlink:href)\s*=\s*['"]\s*(?:javascript:|vbscript:|data:text\/html)/i
+
   const {
     icon,
     label = '',
@@ -27,6 +30,16 @@
 
   /** 计算最终的 aria-label */
   const computedAriaLabel = $derived(ariaLabel || label || tooltip)
+
+  /**
+   * 字符串图标仅允许受信任的内联 SVG。
+   *
+   * 这里不尝试支持任意 HTML，避免把图标位变成通用 HTML 注入入口；
+   * 若需要复杂内容，请改用 Snippet / children。
+   */
+  const sanitizedIcon = $derived(
+    typeof icon === 'string' ? sanitizeInlineSvg(icon) : '',
+  )
 
   const buttonClass = $derived(
     cn(
@@ -56,6 +69,19 @@
     }
     onclick?.(e)
   }
+
+  function sanitizeInlineSvg(markup: string): string {
+    const trimmed = markup.trim()
+    if (!trimmed) {
+      return ''
+    }
+
+    if (!SAFE_INLINE_SVG_REGEX.test(trimmed) || UNSAFE_INLINE_SVG_REGEX.test(trimmed)) {
+      return ''
+    }
+
+    return trimmed
+  }
 </script>
 
 {#if tooltip}
@@ -73,10 +99,10 @@
         {@render children()}
       {:else if typeof icon === 'function'}
         {@render icon()}
-      {:else if icon}
+      {:else if sanitizedIcon}
         <span class={iconSize}>
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -- 受控 SVG 图标渲染 -->
-          {@html icon}
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -- 字符串图标只渲染经过白名单校验的内联 SVG -->
+          {@html sanitizedIcon}
         </span>
       {/if}
     </button>
@@ -95,10 +121,10 @@
       {@render children()}
     {:else if typeof icon === 'function'}
       {@render icon()}
-    {:else if icon}
+    {:else if sanitizedIcon}
       <span class={iconSize}>
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -- 受控 SVG 图标渲染 -->
-        {@html icon}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- 字符串图标只渲染经过白名单校验的内联 SVG -->
+        {@html sanitizedIcon}
       </span>
     {/if}
   </button>

@@ -929,7 +929,7 @@ export interface StepsProps {
  * 图标按钮属性
  */
 export interface IconButtonProps {
-  /** 图标（HTML/SVG 字符串或 Snippet） */
+  /** 图标（受信任的内联 SVG 字符串或 Snippet） */
   icon?: string | Snippet
   /** 标签（无障碍） */
   label?: string

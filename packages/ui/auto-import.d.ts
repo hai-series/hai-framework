@@ -27,6 +27,7 @@ declare global {
   const Input: typeof import('@h-ai/ui')['Input']
   const Progress: typeof import('@h-ai/ui')['Progress']
   const Radio: typeof import('@h-ai/ui')['Radio']
+  // `Range` 与 DOM Range 构造器冲突，保持显式 import。
   const Rating: typeof import('@h-ai/ui')['Rating']
   const Select: typeof import('@h-ai/ui')['Select']
   const Spinner: typeof import('@h-ai/ui')['Spinner']
@@ -39,7 +40,10 @@ declare global {
 
   // compounds
   const Accordion: typeof import('@h-ai/ui')['Accordion']
+  const ActionSheet: typeof import('@h-ai/ui')['ActionSheet']
   const Alert: typeof import('@h-ai/ui')['Alert']
+  const AppBar: typeof import('@h-ai/ui')['AppBar']
+  const BottomNav: typeof import('@h-ai/ui')['BottomNav']
   const Breadcrumb: typeof import('@h-ai/ui')['Breadcrumb']
   const Calendar: typeof import('@h-ai/ui')['Calendar']
   const Card: typeof import('@h-ai/ui')['Card']
@@ -52,13 +56,17 @@ declare global {
   const Empty: typeof import('@h-ai/ui')['Empty']
   const Form: typeof import('@h-ai/ui')['Form']
   const FormField: typeof import('@h-ai/ui')['FormField']
+  const InfiniteScroll: typeof import('@h-ai/ui')['InfiniteScroll']
   const Modal: typeof import('@h-ai/ui')['Modal']
   const PageHeader: typeof import('@h-ai/ui')['PageHeader']
   const Pagination: typeof import('@h-ai/ui')['Pagination']
   const Popover: typeof import('@h-ai/ui')['Popover']
+  const PullRefresh: typeof import('@h-ai/ui')['PullRefresh']
   const Result: typeof import('@h-ai/ui')['Result']
+  const SafeArea: typeof import('@h-ai/ui')['SafeArea']
   const Skeleton: typeof import('@h-ai/ui')['Skeleton']
   const Steps: typeof import('@h-ai/ui')['Steps']
+  const SwipeCell: typeof import('@h-ai/ui')['SwipeCell']
   const Tabs: typeof import('@h-ai/ui')['Tabs']
   const TagInput: typeof import('@h-ai/ui')['TagInput']
   const Timeline: typeof import('@h-ai/ui')['Timeline']
@@ -78,6 +86,7 @@ declare global {
   const ForgotPasswordForm: typeof import('@h-ai/ui')['ForgotPasswordForm']
   const LoginForm: typeof import('@h-ai/ui')['LoginForm']
   const PasswordInput: typeof import('@h-ai/ui')['PasswordInput']
+  const PermGuard: typeof import('@h-ai/ui')['PermGuard']
   const RegisterForm: typeof import('@h-ai/ui')['RegisterForm']
   const ResetPasswordForm: typeof import('@h-ai/ui')['ResetPasswordForm']
   const UserProfile: typeof import('@h-ai/ui')['UserProfile']
@@ -92,6 +101,19 @@ declare global {
   const EncryptedInput: typeof import('@h-ai/ui')['EncryptedInput']
   const HashDisplay: typeof import('@h-ai/ui')['HashDisplay']
   const SignatureDisplay: typeof import('@h-ai/ui')['SignatureDisplay']
+
+  // scenes - ai
+  const AiDocumentDownloadMenu: typeof import('@h-ai/ui')['AiDocumentDownloadMenu']
+  const AiDocumentEditor: typeof import('@h-ai/ui')['AiDocumentEditor']
+  const AiTableEditor: typeof import('@h-ai/ui')['AiTableEditor']
+  const MarkdownRenderer: typeof import('@h-ai/ui')['MarkdownRenderer']
+
+  // scenes - crud
+  const CrudDeleteConfirm: typeof import('@h-ai/ui')['CrudDeleteConfirm']
+  const CrudDetailDrawer: typeof import('@h-ai/ui')['CrudDetailDrawer']
+  const CrudEditDrawer: typeof import('@h-ai/ui')['CrudEditDrawer']
+  const CrudFilterBar: typeof import('@h-ai/ui')['CrudFilterBar']
+  const CrudPage: typeof import('@h-ai/ui')['CrudPage']
 }
 
 export {}

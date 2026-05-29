@@ -19,7 +19,6 @@ const UI_COMPONENTS = new Set([
   'Input',
   'Progress',
   'Radio',
-  'Range',
   'Rating',
   'Select',
   'Spinner',
@@ -29,6 +28,7 @@ const UI_COMPONENTS = new Set([
   'ToggleCheckbox',
   'ToggleInput',
   'ToggleRadio',
+  // `Range` 与 DOM Range 构造器重名，保持显式 import 更稳妥。
   // compounds
   'Accordion',
   'ActionSheet',
@@ -89,8 +89,16 @@ const UI_COMPONENTS = new Set([
   'HashDisplay',
   'SignatureDisplay',
   // scenes - ai
+  'AiDocumentDownloadMenu',
   'AiDocumentEditor',
+  'AiTableEditor',
   'MarkdownRenderer',
+  // scenes - crud
+  'CrudDeleteConfirm',
+  'CrudDetailDrawer',
+  'CrudEditDrawer',
+  'CrudFilterBar',
+  'CrudPage',
 ])
 
 const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g

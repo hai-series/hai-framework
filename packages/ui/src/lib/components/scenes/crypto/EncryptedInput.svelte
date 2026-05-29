@@ -10,6 +10,7 @@
 -->
 <script lang='ts'>
   import type { Size } from '../../../types.js'
+  import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
   import { BareButton, IconButton, Input } from '../../primitives/index.js'
 
@@ -87,7 +88,7 @@
 
   function copyEncrypted() {
     if (encryptedValue) {
-      navigator.clipboard.writeText(encryptedValue)
+      void writeTextToClipboard(encryptedValue)
     }
   }
 </script>

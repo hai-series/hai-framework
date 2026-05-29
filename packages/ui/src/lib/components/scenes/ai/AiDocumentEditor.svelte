@@ -25,9 +25,14 @@
     MarkdownTextAlignKind,
   } from './document-types.js'
   import { tick } from 'svelte'
+  import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
   import { cn } from '../../../utils.js'
   import AiDocumentDownloadMenu from './AiDocumentDownloadMenu.svelte'
+  import {
+    createBuiltInCodePreview,
+    resolvePreviewSandbox,
+  } from './code-preview.js'
   import { resolveDocumentMarkdownContent } from './document-download.js'
   import { renderMarkdownDocument } from './document-parse.js'
   import { parseMarkdown } from './markdown-parse.js'
@@ -241,6 +246,8 @@
     showRunButton = false,
     // 是否在代码块头部显示“代码/预览”切换。
     showCodePreviewToggle = false,
+    // 是否显式允许内置 HTML / JS / CSS 预览执行高风险内容。
+    allowUnsafeCodePreview = false,
     // 代码预览切换模式下展示在语言标签旁的提示文案。
     codePreviewHint = '',
     // 是否启用语法高亮。
@@ -628,17 +635,9 @@
     ]
   }
 
-  const HTML_DOCUMENT_PATTERN = /<!doctype html>|<html[\s>]|<body[\s>]|<div[\s>]|<main[\s>]/i
-
   async function copyRawContent(): Promise<boolean> {
-    try {
-      await navigator.clipboard.writeText(content)
-      return true
-    }
-    catch {
-      // clipboard API 可能被安全策略禁用；保持静默避免打断阅读。
-      return false
-    }
+    // 剪贴板能力在受限 WebView / 非安全上下文中可能缺失；这里统一静默降级。
+    return writeTextToClipboard(content)
   }
 
   function triggerDocumentCopiedFeedback(): void {
@@ -682,135 +681,13 @@
       return
     }
 
-    try {
-      await navigator.clipboard.writeText(codeEl.textContent ?? '')
+    if (await writeTextToClipboard(codeEl.textContent ?? '')) {
       updateCopyButtonState(button)
-    }
-    catch {
-    // clipboard API 可能被安全策略禁用；不抛错以免阻断其他交互。
     }
   }
 
   function lookupCodeBlock(blockId: string): MarkdownCodeBlockItem | undefined {
     return renderResult.codeBlocks.find(item => item.id === blockId)
-  }
-
-  function looksLikeHtml(code: string): boolean {
-    return HTML_DOCUMENT_PATTERN.test(code)
-  }
-
-  function buildJavaScriptPreview(code: string): string {
-    const safeCode = code.replace(/<\/script/gi, '<\\/script')
-
-    return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      body {
-        margin: 0;
-        padding: 16px;
-        font: 14px/1.6 system-ui, sans-serif;
-        color: #1f2937;
-        background: #f8fafc;
-      }
-
-      #app {
-        min-height: 48px;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module">
-${safeCode}
-    <\/script>
-  </body>
-</html>`
-  }
-
-  function buildCssPreview(code: string): string {
-    return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>${code}</style>
-    <style>
-      body {
-        margin: 0;
-        padding: 20px;
-        font: 14px/1.6 system-ui, sans-serif;
-        background: #f8fafc;
-      }
-
-      .preview-card {
-        border-radius: 16px;
-        padding: 24px;
-        border: 1px dashed #cbd5e1;
-        background: white;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="preview-card">
-      <h3>CSS Preview</h3>
-      <p>This surface is provided so the stylesheet can render immediately.</p>
-      <button type="button">Action</button>
-    </div>
-  </body>
-</html>`
-  }
-
-  /**
-   * 没有外部运行器时，组件只为可直接在浏览器里安全预览的语言提供兜底能力。
-   * 其余语言返回 undefined，让上层明确知道需要后端或沙箱参与执行。
-   */
-  function createBuiltInCodePreview(
-    request: MarkdownCodeRunRequest,
-  ): MarkdownCodeRunResult | undefined {
-    const language = request.language?.trim().toLocaleLowerCase()
-
-    if (
-      language === 'html'
-      || language === 'htm'
-      || language === 'xml'
-      || language === 'svg'
-      || (!language && looksLikeHtml(request.code))
-    ) {
-      return {
-        kind: 'html',
-        title: uiM('markdown_run_preview'),
-        content: request.code,
-      }
-    }
-
-    if (language === 'javascript' || language === 'js' || language === 'mjs') {
-      return {
-        kind: 'html',
-        title: uiM('markdown_run_preview'),
-        content: buildJavaScriptPreview(request.code),
-      }
-    }
-
-    if (language === 'css') {
-      return {
-        kind: 'html',
-        title: uiM('markdown_run_preview'),
-        content: buildCssPreview(request.code),
-      }
-    }
-
-    if (language === 'markdown' || language === 'md') {
-      return {
-        kind: 'markdown',
-        title: uiM('markdown_run_preview'),
-        content: request.code,
-      }
-    }
-
-    return undefined
   }
 
   function formatPreviewLanguageLabel(language: string | undefined): string | null {
@@ -867,8 +744,12 @@ ${safeCode}
     }
 
     try {
-      const preview = await (oncoderun?.(request)
-        ?? createBuiltInCodePreview(request))
+      const preview = oncoderun
+        ? await oncoderun(request)
+        : createBuiltInCodePreview(request, {
+          allowUnsafeCodePreview,
+          previewTitle: uiM('markdown_run_preview'),
+        })
 
       if (!preview) {
         codePreviews = {
@@ -1029,7 +910,10 @@ ${safeCode}
       : ''
 
     if (result.kind === 'html') {
-      host.innerHTML = `<div class="hai-md-preview-card"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<iframe class="hai-md-preview-frame" sandbox="allow-scripts" srcdoc="${escapePreviewAttribute(result.content)}" title="${previewTitle}"></iframe></div>`
+      const previewSandbox = escapePreviewAttribute(
+        resolvePreviewSandbox(result.allowScripts),
+      )
+      host.innerHTML = `<div class="hai-md-preview-card"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<iframe class="hai-md-preview-frame" sandbox="${previewSandbox}" srcdoc="${escapePreviewAttribute(result.content)}" title="${previewTitle}"></iframe></div>`
       return
     }
 

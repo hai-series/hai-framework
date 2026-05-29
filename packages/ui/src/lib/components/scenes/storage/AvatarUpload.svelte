@@ -13,6 +13,9 @@
   import { cn } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
 
+  const SAFE_HTTP_URL_REGEX = /^https?:\/\//i
+  const SAFE_RELATIVE_URL_REGEX = /^(?:\/(?!\/)|\.\.?\/)/
+
   let {
     value = $bindable(''),
     size = 'lg',
@@ -30,6 +33,7 @@
 
   let loading = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
+  let localPreviewUrl: string | null = $state(null)
 
   const sizeClass = $derived({
     'xs': 'w-8 h-8',
@@ -75,6 +79,33 @@
     return null
   }
 
+  function isSafePreviewUrl(url: string): boolean {
+    return SAFE_HTTP_URL_REGEX.test(url) || SAFE_RELATIVE_URL_REGEX.test(url)
+  }
+
+  function replaceAvatarValue(nextValue: string): void {
+    if (localPreviewUrl && localPreviewUrl !== nextValue) {
+      URL.revokeObjectURL(localPreviewUrl)
+      localPreviewUrl = null
+    }
+
+    if (nextValue.startsWith('blob:')) {
+      localPreviewUrl = nextValue
+    }
+
+    value = nextValue
+    onchange?.(nextValue)
+  }
+
+  $effect(() => {
+    return () => {
+      if (localPreviewUrl) {
+        URL.revokeObjectURL(localPreviewUrl)
+        localPreviewUrl = null
+      }
+    }
+  })
+
   // 上传文件
   async function uploadFile(file: File) {
     loading = true
@@ -82,8 +113,7 @@
     try {
       if (!uploadUrl && !presignUrl) {
         // 没有上传地址，创建本地预览
-        value = URL.createObjectURL(file)
-        onchange?.(value)
+        replaceAvatarValue(URL.createObjectURL(file))
         return
       }
 
@@ -109,6 +139,9 @@
         }
 
         const data = await presignResponse.json()
+        if (typeof data?.url !== 'string' || !SAFE_HTTP_URL_REGEX.test(data.url)) {
+          throw new Error(uiM('avatar_upload_get_url_failed'))
+        }
         targetUrl = data.url
       }
 
@@ -128,19 +161,31 @@
 
       // 获取最终 URL
       let finalUrl = targetUrl!.split('?')[0]
+      let responseUrl: string | undefined
 
       try {
-        const data = await response.json()
-        if (data.url) {
-          finalUrl = data.url
+        const data = await response.clone().json()
+        if (typeof data?.url === 'string') {
+          responseUrl = data.url
         }
       }
       catch {
       // 响应不是 JSON
       }
 
-      value = finalUrl
-      onchange?.(finalUrl)
+      if (responseUrl) {
+        if (!isSafePreviewUrl(responseUrl)) {
+          throw new Error(uiM('avatar_upload_failed'))
+        }
+
+        finalUrl = responseUrl
+      }
+
+      if (!isSafePreviewUrl(finalUrl)) {
+        throw new Error(uiM('avatar_upload_failed'))
+      }
+
+      replaceAvatarValue(finalUrl)
     }
     catch (error) {
       const message = error instanceof Error ? error.message : uiM('avatar_upload_failed')

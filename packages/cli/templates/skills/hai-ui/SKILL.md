@@ -5,7 +5,7 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 
 # hai-ui
 
-> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，支持 32 主题、内置中英文 i18n、自动导入。内置 Shiki 代码高亮、Design Token 系统和 7 个移动端组件。
+> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题、内置中英文 i18n、自动导入。内置 Shiki 代码高亮、Design Token 系统和 7 个移动端组件。
 
 ---
 
@@ -20,8 +20,9 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 - 构建管理后台页面（表单、表格、弹窗、导航等）
 - 移动端/App 界面开发（SafeArea、BottomNav、PullRefresh 等）
 - 使用 Bits UI headless 交互组件（Combobox、DatePicker、Calendar）
-- 使用 IAM 场景组件（登录/注册/密码/用户资料表单）
-- 使用 Storage 场景组件（文件上传/图片上传/文件列表）
+- 使用 IAM 场景组件（登录/注册/密码/权限守卫/用户资料表单）
+- 使用 Storage 场景组件（文件上传/图片上传/头像上传/文件列表）
+- 使用 CRUD 场景组件（列表过滤、详情抽屉、编辑抽屉、删除确认）
 - 配置主题切换与 i18n 多语言
 - 多端平台检测与适配
 
@@ -146,7 +147,7 @@ export default defineConfig({
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script>
     // 防止主题切换闪烁：在 DOM 渲染前应用已保存的主题
-    (function(){var t=localStorage.getItem('hai-theme');if(t)document.documentElement.setAttribute('data-theme',t)})()
+    (function(){var t='light';try{var s=localStorage.getItem('theme');if(s)t=s}catch{}document.documentElement.setAttribute('data-theme',t)})()
   </script>
   %sveltekit.head%
 </head>
@@ -175,12 +176,12 @@ const p = usePlatform()
 
 ## 三层组件架构
 
-### 原子组件（Primitives，21 个）
+### 原子组件（Primitives，20 个）
 
 | 组件         | Props 要点                                                    | 说明     |
 | ------------ | ------------------------------------------------------------- | -------- |
 | `Button`     | `variant`, `size`, `loading`, `disabled`, `outline`, `circle` | 按钮     |
-| `IconButton` | `icon: string \| Snippet`, `tooltip`, `variant`, `size`       | 图标按钮 |
+| `IconButton` | `icon: trusted SVG string \| Snippet`, `tooltip`, `variant`, `size` | 图标按钮 |
 | `Input`      | `value`, `type`, `size`, `error`, `placeholder`               | 输入框   |
 | `Textarea`   | `value`, `rows`, `autoResize`, `error`                        | 文本域   |
 | `Select`     | `value`, `options: SelectOption[]`, `placeholder`             | 下拉选择 |
@@ -195,7 +196,7 @@ const p = usePlatform()
 | `Spinner`    | `size`, `variant`                                             | 加载动画 |
 | `Progress`   | `value`, `max`, `striped`, `animated`                         | 进度条   |
 
-### 组合组件（Compounds，25 + 7 移动端）
+### 组合组件（Compounds，33 个）
 
 由原子组件 + Bits UI headless 交互组合。
 
@@ -306,6 +307,7 @@ const p = usePlatform()
 | ------------- | ---------------------------------------------- | -------- |
 | `FileUpload`  | `accept`, `maxSize`, `uploadUrl`, `autoUpload` | 文件上传 |
 | `ImageUpload` | `value`, `uploadUrl`, `aspectRatio`            | 图片上传 |
+| `AvatarUpload` | `value`, `size`, `maxSize`, `fallback`        | 头像上传 |
 | `FileList`    | `files: FileItem[]`, `layout`, `showPreview`   | 文件列表 |
 
 #### AI 场景组件
@@ -313,9 +315,21 @@ const p = usePlatform()
 | 组件                 | 说明                              |
 | -------------------- | --------------------------------- |
 | `MarkdownRenderer`   | Markdown 渲染（内置 Shiki 高亮） |
-| `AiDocumentEditor`   | AI 文档编辑器                     |
+| `AiDocumentDownloadMenu` | AI 文档下载菜单              |
+| `AiDocumentEditor`   | AI 文档编辑器（支持受控代码预览） |
+| `AiTableEditor`      | AI 表格编辑器                    |
 
-> AI 场景组件使用 Shiki（纯 ESM）进行代码高亮，支持 27 种语言，通过 CSS 变量 `--hai-hl-*` 自定义颜色。无需额外安装 Shiki，已内置。
+> AI 场景组件使用 Shiki（纯 ESM）进行代码高亮，支持 27 种语言，通过 CSS 变量 `--hai-hl-*` 自定义颜色。无需额外安装 Shiki，已内置。`AiDocumentEditor` 默认只允许 Markdown 内置预览；HTML / JS / CSS 等高风险预览需要显式启用 `allowUnsafeCodePreview`，或通过 `oncoderun` 返回受控的预览结果。
+
+#### CRUD 场景组件
+
+| 组件                | 说明 |
+| ------------------- | ---- |
+| `CrudPage`          | CRUD 主页面 |
+| `CrudFilterBar`     | 过滤工具栏 |
+| `CrudDetailDrawer`  | 详情抽屉 |
+| `CrudEditDrawer`    | 编辑抽屉 |
+| `CrudDeleteConfirm` | 删除确认框 |
 
 ---
 
@@ -363,7 +377,7 @@ const p = usePlatform()
 
 ## 主题系统
 
-支持 32 个 DaisyUI 主题。
+支持 15 个精选 DaisyUI 主题。
 
 ```typescript
 import { applyTheme, getCurrentTheme, isDarkTheme, THEMES, THEME_GROUPS } from '@h-ai/ui'
@@ -409,7 +423,7 @@ typescript, javascript, python, java, go, rust, c, cpp, csharp, ruby, php, swift
 
 1. **Svelte 5 Runes**：使用 `$state`、`$derived`、`$effect`
 2. **Snippet 插槽**：使用 `{#snippet name()}...{/snippet}` 语法
-3. **自动导入例外**：`toast`、类型导入、`Range`/`FileList` 必须显式 `import`
+3. **自动导入例外**：`toast`、类型导入与 `Range` 必须显式 `import`；其余公开 Svelte 组件可自动导入
 4. **Combobox 统一单选/多选**：`MultiSelect` 已删除
 5. **移动端样式**：务必引入 `design-tokens.css` + `mobile.css`，使用 SafeArea 包裹原生 App 页面
 6. **`@source` 必须配置**：未配置则 TailwindCSS 无法扫描 `@h-ai/ui` 组件中的 class，样式会丢失
