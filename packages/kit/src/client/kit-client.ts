@@ -60,7 +60,12 @@ export interface KitClient {
   apiFetch: (url: string, init?: RequestInit) => Promise<Response>
   /** 传输加密是否就绪（未启用传输加密时始终为 true） */
   readonly ready: boolean
-  /** 手动触发密钥交换（transport 启用时） */
+  /**
+   * 手动触发密钥交换（transport 启用时）。
+   *
+   * 注意：本方法是 Client 形态的合规例外，密钥协商失败时 `throw`（与 `@h-ai/api-client` 一致），
+   * 调用方需自行 `try/catch`，不返回 `HaiResult`。
+   */
   init: () => Promise<void>
   /** 销毁密钥状态 */
   destroy: () => void
@@ -95,6 +100,15 @@ function canEncryptRequestBody(body: BodyInit | null | undefined): boolean {
   return body === undefined || body === null || typeof body === 'string'
 }
 
+/**
+ * 判断全局 fetch 包装路径下，某个 `Request` 是否可走传输加密。
+ *
+ * 与上方 {@link canEncryptRequestBody} 区别：本谓词服务于 {@link installBrowserTransportFetch}
+ * 的全局包装路径，输入是完整 `Request`，故可基于 method（GET/HEAD 无 body 安全放行）与
+ * `Content-Type`（仅 JSON 可重注入明文）综合判定；而 `canEncryptRequestBody` 服务于
+ * `createKitClient` 的 `apiFetch` 路径，仅拿到 `BodyInit`，只能按 body 类型粗判。
+ * 两者判定维度不同是有意为之，请勿合并。
+ */
 function canUseTransportForRequest(request: Request): boolean {
   const method = request.method.toUpperCase()
   if (method === 'GET' || method === 'HEAD') {

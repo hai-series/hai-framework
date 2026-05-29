@@ -10,7 +10,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
 import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
-import type { AgreementDisplay, User } from '../user/iam-user-types.js'
+import type { User } from '../user/iam-user-types.js'
 import type { ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
 import type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
@@ -19,6 +19,7 @@ import type { PasswordStrategyResult } from './password/iam-authn-password-strat
 
 import { core, err, ok } from '@h-ai/core'
 
+import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, ApiKeyConfigSchema, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -205,28 +206,6 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
   const agreementConfig = AgreementConfigSchema.parse(config.agreements ?? {})
 
   /**
-   * 构建协议展示信息
-   *
-   * 根据配置决定是否在登录时展示用户协议/隐私协议链接。
-   *
-   * @returns 协议展示信息，或 undefined（未启用时）
-   */
-  function buildAgreementDisplay(): AgreementDisplay | undefined {
-    if (!agreementConfig.showOnLogin) {
-      return undefined
-    }
-    if (!agreementConfig.userAgreementUrl && !agreementConfig.privacyPolicyUrl) {
-      return undefined
-    }
-    return {
-      userAgreementUrl: agreementConfig.userAgreementUrl,
-      privacyPolicyUrl: agreementConfig.privacyPolicyUrl,
-      showOnRegister: agreementConfig.showOnRegister,
-      showOnLogin: agreementConfig.showOnLogin,
-    }
-  }
-
-  /**
    * 检查指定登录方式是否被禁用
    *
    * @param type - 登录方式类型
@@ -351,7 +330,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
       tokens: tokenPair,
       roles: roleCodesResult.data,
       permissions: permCodesResult.data,
-      agreements: buildAgreementDisplay(),
+      agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnLogin),
     })
   }
 

@@ -28,23 +28,6 @@ export interface WechatOrderRequest {
   attach?: string
 }
 
-/** 微信下单响应 */
-export interface WechatOrderResponse {
-  prepay_id?: string
-  h5_url?: string
-  code_url?: string
-}
-
-/** 微信 JSAPI 支付参数（客户端调起） */
-export interface WechatJsapiParams {
-  appId: string
-  timeStamp: string
-  nonceStr: string
-  package: string
-  signType: string
-  paySign: string
-}
-
 /** 微信回调通知解密后内容 */
 export interface WechatNotifyResource {
   out_trade_no: string

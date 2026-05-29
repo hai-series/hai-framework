@@ -1,9 +1,8 @@
 /**
- * =============================================================================
  * Contact Form API — 使用 @h-ai/reach 发送邮件通知
- * =============================================================================
  */
 
+import process from 'node:process'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
@@ -30,9 +29,18 @@ export const POST = kit.handler(async ({ request }) => {
     return kit.response.ok({ sent: false, message: 'Message received, but email delivery is not configured' })
   }
 
+  const recipient = process.env.HAI_CONTACT_RECIPIENT?.trim()
+  if (!recipient) {
+    core.logger.warn('Contact form submission skipped because HAI_CONTACT_RECIPIENT is not configured', {
+      emailDomain: email.split('@')[1] ?? 'unknown',
+      messageLength: message.length,
+    })
+    return kit.response.ok({ sent: false, message: 'Message received, but email delivery is not configured' })
+  }
+
   const result = await reachModule.send({
     provider: 'email',
-    to: 'admin@example.com',
+    to: recipient,
     template: 'contact_form',
     vars: { name, email, message },
   })

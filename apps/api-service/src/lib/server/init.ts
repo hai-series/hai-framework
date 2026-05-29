@@ -116,7 +116,6 @@ async function doInit(): Promise<void> {
   const iamConfig = core.config.getOrThrow<IamConfigInput>('iam')
   const storageConfig = core.config.getOrThrow<StorageConfigInput>('storage')
   const aiConfig = core.config.getOrThrow<AIConfigInput>('ai')
-  void servConfig
 
   // 3. 确保数据目录存在
   if (dbConfig.type === 'sqlite') {

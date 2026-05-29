@@ -23,15 +23,6 @@ import {
 
 const logger = core.logger.child({ module: 'storage', scope: 'main' })
 
-/**
- * 返回对外可见的脱敏配置快照
- *
- * @param config - 当前解析后的内部配置
- */
-function sanitizeStorageConfig(config: StorageConfig): StorageConfig {
-  return core.sanitize.sanitizeSensitiveFields(config)
-}
-
 // ─── 内部状态 ───
 
 /** 当前使用的存储 Provider 实例（init 后非空，close 后置空） */
@@ -198,7 +189,7 @@ export const storage: StorageFunctions = {
 
   /** 当前脱敏后的存储配置快照；未初始化或已关闭时为 null */
   get config() {
-    return currentConfig ? sanitizeStorageConfig(currentConfig) : null
+    return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
   },
 
   /** 是否已完成初始化 */

@@ -14,7 +14,6 @@ export type { AiContract } from './ai/ai-contract.js'
 export * from './ai/ai-schemas.js'
 // 扁平命名空间——所有 functionality 通过 `apiContract.*` 调用。
 export { apiContract } from './api-contract-main.js'
-export * from './common/auth-schemas.js'
 export * from './common/pagination-schemas.js'
 export * from './common/response-schemas.js'
 // result-schema：仅保留 HaiErrorSchema；工厂与 void 常量走 `apiContract.haiResultSchema` / `apiContract.voidResultSchema`。

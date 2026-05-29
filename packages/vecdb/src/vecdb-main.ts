@@ -25,15 +25,6 @@ import { HaiVecdbError } from './vecdb-types.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'main' })
 
-/**
- * 返回对外可见的脱敏配置快照
- *
- * @param config - 当前解析后的内部配置
- */
-function sanitizeVecdbConfig(config: VecdbConfig): VecdbConfig {
-  return core.sanitize.sanitizeSensitiveFields(config)
-}
-
 // ─── 内部状态 ───
 
 /** 当前活跃的向量数据库 Provider（未初始化时为 null） */
@@ -191,7 +182,7 @@ export const vecdb: VecdbFunctions = {
 
   /** 获取当前脱敏配置快照（未初始化时为 null） */
   get config(): VecdbConfig | null {
-    return currentConfig ? sanitizeVecdbConfig(currentConfig) : null
+    return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
   },
 
   /** 检查是否已初始化 */

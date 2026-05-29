@@ -66,10 +66,6 @@ const DEFAULT_CLIENT_NAME = 'hai-api-client'
 const DEFAULT_REFRESH_PATH = IAM_AUTH_ROUTES.refresh
 const TRAILING_SLASHES_REGEX = /\/+$/
 
-function sanitizeApiClientConfig(config: ApiClientConfig): ApiClientConfig {
-  return core.sanitize.sanitizeSensitiveFields(config)
-}
-
 /** Token 存储方案集合：内存 / 浏览器 localStorage / httpOnly Cookie。 */
 const tokenStorage = {
   /** 内存存储——SSR / Node 测试或一次性会话使用。 */
@@ -195,7 +191,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       state.tokenManager = undefined
       state.transport = undefined
     },
-    get config() { return state.config ? sanitizeApiClientConfig(state.config) : null },
+    get config() { return state.config ? core.sanitize.sanitizeSensitiveFields(state.config) : null },
     get isInitialized() { return state.rawClient !== null },
     auth,
   }

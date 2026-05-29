@@ -132,16 +132,6 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
   const allowAutoRegister = registerConfig?.enabled ?? config.autoRegister ?? false
   const defaultEnabled = registerConfig?.defaultEnabled ?? true
 
-  /**
-   * 构建挑战响应结果
-   *
-   * @param expiresAt - 验证码过期时间
-   * @returns 包含过期时间的结果对象
-   */
-  function buildChallengeResult(expiresAt: Date): { expiresAt: Date } {
-    return { expiresAt }
-  }
-
   const strategy: AuthStrategy = {
     type: 'otp',
     name: 'otp-strategy',
@@ -311,7 +301,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       )
     }
 
-    const result = buildChallengeResult(expiresAt)
+    const result = { expiresAt }
     logger.debug('OTP challenge sent', { identifier, expiresAt })
     return ok(result)
   }

@@ -13,7 +13,6 @@ import type { SessionOperations } from '../session/iam-session-types.js'
 import type { ResetTokenRepository } from './iam-user-repository-reset-token.js'
 import type { UserRepository } from './iam-user-repository-user.js'
 import type {
-  AgreementDisplay,
   ListUsersOptions,
   RegisterOptions,
   RegisterResult,
@@ -26,6 +25,7 @@ import { crypto } from '@h-ai/crypto'
 import { reldb } from '@h-ai/reldb'
 
 import { isAccountLocked, recordLoginFailure, resetLoginFailures } from '../authn/iam-authn-utils.js'
+import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -248,22 +248,6 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
   }
 
   /**
-   * 构建注册页协议展示信息
-   */
-  function buildAgreementDisplay(): AgreementDisplay | undefined {
-    if (!agreementConfig.showOnRegister)
-      return undefined
-    if (!agreementConfig.userAgreementUrl && !agreementConfig.privacyPolicyUrl)
-      return undefined
-    return {
-      userAgreementUrl: agreementConfig.userAgreementUrl,
-      privacyPolicyUrl: agreementConfig.privacyPolicyUrl,
-      showOnRegister: agreementConfig.showOnRegister,
-      showOnLogin: agreementConfig.showOnLogin,
-    }
-  }
-
-  /**
    * 为新用户分配默认角色
    */
   async function assignDefaultRole(userId: string): Promise<void> {
@@ -334,7 +318,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       logger.info('User registered', { userId: createdUser.id, username: options.username })
       return ok({
         user: toUser(createdUser),
-        agreements: buildAgreementDisplay(),
+        agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnRegister),
       })
     },
 

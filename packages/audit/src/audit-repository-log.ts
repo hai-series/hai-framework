@@ -24,7 +24,7 @@ const logger = core.logger.child({ module: 'audit', scope: 'repository' })
 /** 审计日志表名（固定值） */
 const AUDIT_TABLE = 'hai_audit_logs'
 
-export interface AuditRepositoryConfig {
+interface AuditRepositoryConfig {
   /** 用户表名 */
   userTable: string
   /** 用户表主键列名 */

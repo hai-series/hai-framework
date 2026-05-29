@@ -40,10 +40,6 @@ import { createDbStoreProviderFromModules, getUnavailableDbDeps, isDbStoreAvaila
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
-function sanitizeAiConfig(config: AIConfig): AIConfig {
-  return core.sanitize.sanitizeSensitiveFields(config)
-}
-
 // ─── 内部状态 ───
 
 /** 并发初始化防护 */
@@ -373,7 +369,7 @@ export const ai: AIFunctions = {
   get rerank(): RerankOperations { return currentRerank ?? notInitializedRerank },
   get file(): FileOperations { return currentFile ?? notInitializedFile },
   get a2a(): A2AOperations { return a2aLazyOperations },
-  get config() { return currentConfig ? sanitizeAiConfig(currentConfig) : null },
+  get config() { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
   get isInitialized() { return currentConfig !== null },
 
   async close(): Promise<void> {

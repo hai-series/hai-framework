@@ -37,13 +37,6 @@ export function configureAuth(config: { cookieName?: string, operations?: AuthOp
     authState.operations = config.operations
 }
 
-/**
- * 获取当前配置的 Token Cookie 名
- */
-export function getTokenCookieName(): string {
-  return authState.cookieName
-}
-
 interface CookieReader {
   get: (name: string) => string | undefined
 }
@@ -88,7 +81,7 @@ export function getDefaultBrowserTokenStore(): BrowserTokenStore {
 /**
  * 从请求 Authorization 头提取 Bearer Token。
  */
-export function getBearerTokenFromRequest(request: Request): string | null {
+function getBearerTokenFromRequest(request: Request): string | null {
   const authorization = request.headers.get('authorization')
   if (!authorization)
     return null

@@ -23,10 +23,6 @@ import { createRedisProvider } from './providers/cache-provider-redis.js'
 
 const logger = core.logger.child({ module: 'cache', scope: 'main' })
 
-function sanitizeCacheConfig(config: CacheConfig): CacheConfig {
-  return core.sanitize.sanitizeSensitiveFields(config)
-}
-
 // ─── 内部状态 ───
 
 /** 当前活跃的 Provider 实例；init 后赋值，close 后置 null */
@@ -189,7 +185,7 @@ export const cache: CacheFunctions = {
   /** 分布式锁操作子接口 */
   get lock(): LockOperations { return currentProvider?.lock ?? notInitializedLock },
   /** 当前脱敏后的配置快照；未初始化时返回 null */
-  get config(): CacheConfig | null { return currentConfig ? sanitizeCacheConfig(currentConfig) : null },
+  get config(): CacheConfig | null { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
   /** 是否已初始化并连接；Provider 不存在或未连接时返回 false */
   get isInitialized(): boolean { return currentProvider !== null && currentProvider.isConnected() },
 

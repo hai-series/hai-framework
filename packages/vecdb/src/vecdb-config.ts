@@ -18,10 +18,8 @@ import { vecdbM } from './vecdb-i18n.js'
  * - `pgvector` — PostgreSQL + pgvector 扩展
  * - `qdrant` — Qdrant 向量搜索引擎
  */
-export const VecdbTypeSchema = z.enum(['lancedb', 'pgvector', 'qdrant'])
-
 /** 向量数据库类型 */
-export type VecdbType = z.infer<typeof VecdbTypeSchema>
+export type VecdbType = 'lancedb' | 'pgvector' | 'qdrant'
 
 // ─── 距离度量 ───
 
@@ -47,7 +45,7 @@ export type DistanceMetric = z.infer<typeof DistanceMetricSchema>
  * { type: 'lancedb', path: './data/vecdb' }
  * ```
  */
-export const LancedbConfigSchema = z.object({
+const LancedbConfigSchema = z.object({
   type: z.literal('lancedb'),
   /** 数据库存储路径（本地目录） */
   path: z.string().min(1, vecdbM('vecdb_configPathRequired')),
@@ -66,7 +64,7 @@ export type LancedbConfig = z.infer<typeof LancedbConfigSchema>
  * - `ivfflat` — IVFFlat 索引（适合中等规模数据）
  * - `hnsw` — HNSW 索引（适合大规模数据，检索速度更快）
  */
-export const PgvectorIndexTypeSchema = z.enum(['ivfflat', 'hnsw']).default('hnsw')
+const PgvectorIndexTypeSchema = z.enum(['ivfflat', 'hnsw']).default('hnsw')
 
 /**
  * pgvector 配置 Schema
@@ -87,7 +85,7 @@ export const PgvectorIndexTypeSchema = z.enum(['ivfflat', 'hnsw']).default('hnsw
  * }
  * ```
  */
-export const PgvectorConfigSchema = z.object({
+const PgvectorConfigSchema = z.object({
   type: z.literal('pgvector'),
   /** 连接字符串（可选，优先使用） */
   url: z.string().optional(),
@@ -122,7 +120,7 @@ export type PgvectorConfig = z.infer<typeof PgvectorConfigSchema>
  * { type: 'qdrant', url: 'http://localhost:6333' }
  * ```
  */
-export const QdrantConfigSchema = z.object({
+const QdrantConfigSchema = z.object({
   type: z.literal('qdrant'),
   /** Qdrant 服务器 URL */
   url: z.string().url().default('http://localhost:6333'),

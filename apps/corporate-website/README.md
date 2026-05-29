@@ -81,14 +81,15 @@ pnpm --filter corporate-website preview
 
 ### 环境变量
 
-| 变量名                       | 说明               | 默认值                      |
-| ---------------------------- | ------------------ | --------------------------- |
-| `HAI_RELDB_TYPE`             | 数据库类型         | `sqlite`                    |
-| `HAI_RELDB_DATABASE`         | 数据库路径/地址    | `./data/corporate.db`       |
-| `HAI_CACHE_TYPE`             | 缓存类型           | `memory`                    |
-| `HAI_STORAGE_TYPE`           | 存储类型           | `local`                     |
-| `HAI_PARTNER_ADMIN_USERNAME` | 合作管理后台用户名 | `partner-admin`             |
-| `HAI_PARTNER_ADMIN_PASSWORD` | 合作管理后台密码   | `CHANGE_ME_STRONG_PASSWORD` |
+| 变量名                       | 说明                                     | 默认值                      |
+| ---------------------------- | ---------------------------------------- | --------------------------- |
+| `HAI_RELDB_TYPE`             | 数据库类型                               | `sqlite`                    |
+| `HAI_RELDB_DATABASE`         | 数据库路径/地址                          | `./data/corporate.db`       |
+| `HAI_CACHE_TYPE`             | 缓存类型                                 | `memory`                    |
+| `HAI_STORAGE_TYPE`           | 存储类型                                 | `local`                     |
+| `HAI_PARTNER_ADMIN_USERNAME` | 合作管理后台用户名                       | `partner-admin`             |
+| `HAI_PARTNER_ADMIN_PASSWORD` | 合作管理后台密码                         | `CHANGE_ME_STRONG_PASSWORD` |
+| `HAI_CONTACT_RECIPIENT`      | 联系表单邮件接收地址（未配置则跳过发送） | _（无）_                    |
 
 ## 🌍 国际化 (i18n)
 
