@@ -108,12 +108,6 @@ export function createRetrievalOperations(
      *
      * @param request - 检索请求（query、可选 sources / topK / minScore 等）
      * @returns `ok(RetrievalResult)` 含检索项列表与引用信息；无源时返回 `RETRIEVAL_SOURCE_NOT_FOUND` 错误
-     *
-     * @example
-     * ```ts
-     * const result = await retrieval.retrieve({ query: '向量数据库', topK: 5 })
-     * if (result.success) console.log(result.data.items)
-     * ```
      */
     async retrieve(request: RetrievalRequest): Promise<HaiResult<RetrievalResult>> {
       const startTime = Date.now()

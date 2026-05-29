@@ -481,42 +481,42 @@ describe('embedding 跨模块边界', () => {
 
 describe('配置变体初始化', () => {
   it('仅 LLM 配置，无 embedding 配置', async () => {
-    ai.close()
+    await ai.close()
     const result = await ai.init({ llm: { model: 'gpt-4o', apiKey: 'sk-test' } })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.model).toBe('gpt-4o')
-    ai.close()
+    await ai.close()
   })
 
   it('仅 embedding 配置', async () => {
-    ai.close()
+    await ai.close()
     const result = await ai.init({ llm: { apiKey: 'sk-test', scenarios: { embedding: 'text-embedding-3-small' } } })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.scenarios?.embedding).toBe('text-embedding-3-small')
-    ai.close()
+    await ai.close()
   })
 
   it('完整配置（LLM + Embedding）', async () => {
-    ai.close()
+    await ai.close()
     const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-test', temperature: 0.7, maxTokens: 4096, scenarios: { embedding: 'text-embedding-3-large' } },
     })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.temperature).toBe(0.7)
     expect(ai.config?.llm?.scenarios?.embedding).toBe('text-embedding-3-large')
-    ai.close()
+    await ai.close()
   })
 
   it('空配置初始化（使用所有默认值）', async () => {
-    ai.close()
+    await ai.close()
     const result = await ai.init()
     expect(result.success).toBe(true)
     expect(ai.config).not.toBeNull()
-    ai.close()
+    await ai.close()
   })
 
   it('knowledge 配置项', async () => {
-    ai.close()
+    await ai.close()
     const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-test' },
       knowledge: {
@@ -526,6 +526,6 @@ describe('配置变体初始化', () => {
       },
     })
     expect(result.success).toBe(true)
-    ai.close()
+    await ai.close()
   })
 })

@@ -66,12 +66,6 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
      * @param query - 用户查询文本
      * @param options - 可选配置（sources / topK / minScore / systemPrompt / formatContext / history 等）
      * @returns `ok(RagResult)` 含 answer、context 列表与引用信源；检索或生成失败时返回错误
-     *
-     * @example
-     * ```ts
-     * const result = await rag.query('什么是 vecdb？')
-     * if (result.success) console.log(result.data.answer)
-     * ```
      */
     async query(query: string, options?: RagOptions): Promise<HaiResult<RagResult>> {
       logger.trace('Starting RAG query', { query: query.slice(0, 100) })

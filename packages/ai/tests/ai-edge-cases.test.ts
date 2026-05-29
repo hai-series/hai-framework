@@ -328,8 +328,8 @@ describe('collectStreamContent — 边界', () => {
 // =============================================================================
 
 describe('ai.mcp — 同步与边界场景', () => {
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('同步 tool handler 正常工作', async () => {
@@ -416,13 +416,13 @@ describe('ai.mcp — 同步与边界场景', () => {
 // =============================================================================
 
 describe('ai — 未初始化时的行为一致性', () => {
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('close 后再访问 llm 功能返回 NOT_INITIALIZED', async () => {
     await ai.init({ llm: { apiKey: 'sk-test' } })
-    ai.close()
+    await ai.close()
 
     const result = await ai.llm.chat({
       messages: [{ role: 'user', content: 'test' }],
@@ -436,7 +436,7 @@ describe('ai — 未初始化时的行为一致性', () => {
 
   it('close 后再访问 mcp 功能返回 NOT_INITIALIZED', async () => {
     await ai.init()
-    ai.close()
+    await ai.close()
 
     const result = await ai.mcp.callTool('any', {})
     expect(result.success).toBe(false)
@@ -452,7 +452,7 @@ describe('ai — 未初始化时的行为一致性', () => {
       { name: 'first', description: 'test', inputSchema: {} },
       async () => 'first',
     )
-    ai.close()
+    await ai.close()
 
     // 第二轮：之前注册的工具不应存在
     await ai.init()

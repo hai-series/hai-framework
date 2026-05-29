@@ -242,8 +242,8 @@ describe('a2A 错误码', () => {
 // ─── 未初始化占位 ───
 
 describe('a2A 未初始化行为', () => {
-  it('未初始化时 getAgentCard 返回 NOT_INITIALIZED', () => {
-    ai.close()
+  it('未初始化时 getAgentCard 返回 NOT_INITIALIZED', async () => {
+    await ai.close()
 
     const result = ai.a2a.getAgentCard()
     expect(result.success).toBe(false)
@@ -253,7 +253,7 @@ describe('a2A 未初始化行为', () => {
   })
 
   it('未初始化时 handleRequest 返回 NOT_INITIALIZED', async () => {
-    ai.close()
+    await ai.close()
 
     const result = await ai.a2a.handleRequest({})
     // handleRequest 返回 A2AHandleResult 或 HaiResult，未初始化时返回 HaiResult
@@ -261,7 +261,7 @@ describe('a2A 未初始化行为', () => {
   })
 
   it('未初始化时 listMessages 返回 NOT_INITIALIZED', async () => {
-    ai.close()
+    await ai.close()
 
     const result = await ai.a2a.listMessages({})
     expect(result.success).toBe(false)
@@ -271,7 +271,7 @@ describe('a2A 未初始化行为', () => {
   })
 
   it('未初始化时 callRemoteAgent 返回 NOT_INITIALIZED', async () => {
-    ai.close()
+    await ai.close()
 
     const result = await ai.a2a.callRemoteAgent('https://example.com', 'hello')
     expect(result.success).toBe(false)
@@ -280,8 +280,8 @@ describe('a2A 未初始化行为', () => {
     }
   })
 
-  it('未初始化时 registerExecutor 返回 NOT_INITIALIZED', () => {
-    ai.close()
+  it('未初始化时 registerExecutor 返回 NOT_INITIALIZED', async () => {
+    await ai.close()
 
     const mockExecutor = { execute: vi.fn(), cancelTask: vi.fn() }
     const result = ai.a2a.registerExecutor(mockExecutor)

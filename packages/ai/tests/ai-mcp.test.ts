@@ -7,8 +7,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
 
-afterEach(() => {
-  ai.close()
+afterEach(async () => {
+  await ai.close()
 })
 
 // =============================================================================

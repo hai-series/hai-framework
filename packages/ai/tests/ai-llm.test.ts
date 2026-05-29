@@ -116,8 +116,8 @@ describe('ai.llm.chat', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('成功发送聊天请求并获取响应', async () => {
@@ -399,8 +399,8 @@ describe('ai.llm.chatStream', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('流式接收文本响应', async () => {
@@ -496,8 +496,8 @@ describe('ai.llm.listModels', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('成功获取模型列表', async () => {
@@ -542,8 +542,8 @@ describe('ai.llm.listModels', () => {
 // =============================================================================
 
 describe('openAI 客户端配置', () => {
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
     vi.clearAllMocks()
     constructorCalls.length = 0
   })
@@ -628,8 +628,8 @@ describe('llm 完整对话流程', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('多轮对话（system + user + assistant + user）', async () => {
@@ -797,8 +797,8 @@ describe('ai.llm — chat recording', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('传入 objectId 时自动记录对话', async () => {
@@ -918,8 +918,8 @@ describe('ai.llm.listSessions', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('记录对话后自动创建会话', async () => {
@@ -1034,8 +1034,8 @@ describe('ai.llm.chatStream 记录保存', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('传入 objectId 时流式对话自动记录', async () => {
@@ -1127,8 +1127,8 @@ describe('ai.llm.ask', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('简单问答返回文本', async () => {
@@ -1178,8 +1178,8 @@ describe('ai.llm.askStream', () => {
     expect(initResult.success).toBe(true)
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   it('流式问答返回文本片段', async () => {

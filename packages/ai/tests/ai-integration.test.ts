@@ -85,8 +85,8 @@ describe('ai 全流程集成', () => {
     })
   })
 
-  afterEach(() => {
-    ai.close()
+  afterEach(async () => {
+    await ai.close()
   })
 
   // ─── 初始化后各子模块可用 ───
@@ -284,7 +284,7 @@ describe('ai 全流程集成', () => {
   // ─── Close 后子模块返回 NOT_INITIALIZED ───
 
   it('close 后各子模块返回 NOT_INITIALIZED', async () => {
-    ai.close()
+    await ai.close()
 
     expect(ai.isInitialized).toBe(false)
 

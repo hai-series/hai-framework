@@ -34,6 +34,32 @@ import { buildAgentCard } from './ai-a2a-server.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : undefined
+}
+
+function isAgentMessageEvent(event: unknown): event is { role: 'agent', parts?: unknown[] } {
+  const record = asRecord(event)
+  return record?.role === 'agent' && (record.parts === undefined || Array.isArray(record.parts))
+}
+
+function isTaskResult(value: unknown): value is Task {
+  return asRecord(value)?.status !== undefined
+}
+
+function isMessageResult(value: unknown): value is Message {
+  return Array.isArray(asRecord(value)?.parts)
+}
+
+function getPartText(part: unknown): string | undefined {
+  const record = asRecord(part)
+  return typeof record?.text === 'string' ? record.text : undefined
+}
+
+function getTextParts(parts: readonly unknown[] | undefined): string[] {
+  return parts?.map(getPartText).filter((text): text is string => text != null) ?? []
+}
+
 // ─── RelDB 持久化 TaskStore ───
 
 /**
@@ -86,15 +112,13 @@ function wrapExecutorWithLogging(
       const originalPublish = eventBus.publish.bind(eventBus)
       const wrappedBus: ExecutionEventBus = Object.create(eventBus)
       wrappedBus.publish = (event) => {
-        // @a2a-js/sdk ExecutionEventBus.publish 的 event 参数是联合类型，
-        // 此处需要通过运行时检查判断是否为 Message 类型（含 role 属性），
-        // SDK 未导出 Message 类型守卫，故使用 Record 断言访问属性
-        if (event && typeof event === 'object' && 'role' in event && (event as unknown as Record<string, unknown>).role === 'agent') {
+        // SDK 未提供 ExecutionEvent 的类型守卫；先做最小运行时判别，再记录 agent 消息。
+        if (isAgentMessageEvent(event)) {
           const outboundRecord: A2AMessageRecord = {
             id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
             taskId: requestContext.taskId,
             role: 'agent',
-            parts: (event as unknown as Record<string, unknown>).parts as unknown[] ?? [],
+            parts: event.parts ?? [],
             createdAt: Date.now(),
           }
           messageStore.save(outboundRecord.id, outboundRecord, { objectId: requestContext.taskId, status: 'agent' })
@@ -234,33 +258,27 @@ export function createA2AOperations(
           return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: remoteUrl, error: JSON.stringify(response.error) } }))
         }
 
-        // 提取 result（Task | Message）
-        // @a2a-js/sdk SendMessageResponse.result 为 Task | Message 联合类型，
-        // SDK 未提供类型守卫，通过 'status'/'parts' 属性运行时判别后断言
+        // 提取 result（Task | Message）。SDK 未提供类型守卫，使用 status / parts 做最小判别。
         const responseData = response.result
         let result: A2ACallResult
-        if (responseData && 'status' in responseData) {
-          // 通过 'status' 判别为 Task 类型
-          const task = responseData as unknown as Task
-          const textParts = task.artifacts?.flatMap(a => a.parts?.filter(p => 'text' in p).map(p => (p as { text: string }).text) ?? []) ?? []
+        if (isTaskResult(responseData)) {
+          const textParts = responseData.artifacts?.flatMap(artifact => getTextParts(artifact.parts)) ?? []
           result = {
-            taskId: task.id,
-            taskState: task.status?.state,
+            taskId: responseData.id,
+            taskState: responseData.status?.state,
             responseText: textParts.join('\n') || undefined,
-            responseParts: task.artifacts?.flatMap(a => a.parts ?? []),
+            responseParts: responseData.artifacts?.flatMap(artifact => artifact.parts ?? []),
           }
         }
-        else if (responseData && 'parts' in responseData) {
-          // 通过 'parts' 判别为 Message 类型
-          const msg = responseData as unknown as { role: string, parts: Array<{ text?: string }> }
-          const textParts = msg.parts?.filter(p => p.text).map(p => p.text!) ?? []
+        else if (isMessageResult(responseData)) {
+          const textParts = getTextParts(responseData.parts)
           result = {
             responseText: textParts.join('\n') || undefined,
-            responseParts: msg.parts,
+            responseParts: responseData.parts,
           }
         }
         else {
-          result = {} as A2ACallResult
+          result = {}
         }
 
         // 记录调用日志

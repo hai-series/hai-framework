@@ -36,7 +36,7 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
   const embeddingConfig: EmbeddingConfig = config.embedding ?? { batchSize: 100 }
 
   /**
-   * 缓存的 OpenAI 客户端实例（按 model 缓存，避免不同模型共用同一个客户端）
+   * 缓存的 OpenAI 客户端实例（按 apiKey + baseURL + timeout 缓存，避免不同端点共用同一个客户端）
    */
   let cachedClient: OpenAI | null = null
   let cachedResolvedKey: string | undefined
@@ -47,13 +47,15 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
   function getOrCreateClient(resolved: ResolvedModelConfig) {
     const apiKey = resolved.apiKey
     const baseURL = resolved.baseUrl
+    const timeout = resolved.timeout
+    const cacheKey = `${apiKey}::${baseURL}::${timeout}`
 
-    // 如果 apiKey 变了（不同模型条目），需要重建客户端
-    if (cachedClient && cachedResolvedKey === apiKey)
+    // 如果端点或超时配置变化，需要重建客户端
+    if (cachedClient && cachedResolvedKey === cacheKey)
       return cachedClient
 
-    cachedClient = new OpenAI({ apiKey, baseURL })
-    cachedResolvedKey = apiKey
+    cachedClient = new OpenAI({ apiKey, baseURL, timeout })
+    cachedResolvedKey = cacheKey
     return cachedClient
   }
 
@@ -73,7 +75,7 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
     try {
       const client = getOrCreateClient(resolved)
 
-      const params: Record<string, unknown> = {
+      const params: Parameters<typeof client.embeddings.create>[0] = {
         model: resolved.model,
         input,
       }
@@ -82,9 +84,7 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
         params.dimensions = request.dimensions ?? embeddingConfig.dimensions
       }
 
-      // OpenAI SDK embeddings.create 参数类型与动态构造的 params 不兼容，
-      // 此处按需组装 model/input/dimensions 字段后断言为 SDK 参数类型
-      const response = await client.embeddings.create(params as unknown as Parameters<typeof client.embeddings.create>[0])
+      const response = await client.embeddings.create(params)
 
       return ok({
         model: response.model,

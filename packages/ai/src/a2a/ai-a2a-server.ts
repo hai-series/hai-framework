@@ -9,20 +9,9 @@ import type { AgentCard } from '@a2a-js/sdk'
 
 import type { A2AAgentCardConfig } from './ai-a2a-types.js'
 
-// ─── SDK Server 导出 ───
+// ─── SDK Server 类型导出 ───
 
-export {
-  A2AError,
-  DefaultExecutionEventBus,
-  DefaultExecutionEventBusManager,
-  DefaultRequestHandler,
-  ExecutionEventQueue,
-  InMemoryPushNotificationStore,
-  InMemoryTaskStore,
-  JsonRpcTransportHandler,
-  RequestContext,
-  ResultManager,
-} from '@a2a-js/sdk/server'
+// 仅重导出应用层实现 executor 所需的类型；运行时 SDK 类由 ai.a2a 内部封装，避免暴露额外装配细节。
 
 export type {
   AgentExecutionEvent,

@@ -16,6 +16,9 @@ import { vecdb } from '@h-ai/vecdb'
 
 const logger = core.logger.child({ module: 'ai', scope: 'store-provider-db' })
 
+/** 单条批量 SQL 的参数上限，保守低于 SQLite 默认 999 变量限制。 */
+const MAX_BATCH_SQL_PARAMS = 900
+
 // ─── ReldbAIRelStore 实现 ───
 
 /**
@@ -146,7 +149,15 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   async saveMany(items: Array<{ id: string, data: T, scope?: StoreScope }>): Promise<void> {
     if (items.length === 0)
       return
-    await Promise.all(items.map(({ id, data, scope }) => this.save(id, data, scope)))
+
+    const colNames = this.buildSaveColumnNames()
+    const rowsPerBatch = Math.max(1, Math.floor(MAX_BATCH_SQL_PARAMS / colNames.length))
+
+    // 大批量入库时使用多行 INSERT，减少 SQL 往返；按参数数分批避免 SQLite / MySQL 参数上限。
+    for (let start = 0; start < items.length; start += rowsPerBatch) {
+      // 每批都是参数化批量 SQL；顺序执行避免同一连接上并发写入争抢。
+      await this.saveManyBatch(items.slice(start, start + rowsPerBatch), colNames)
+    }
   }
 
   async get(id: string): Promise<T | undefined> {
@@ -226,6 +237,72 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       return
     }
     await this.removeBy(filter!)
+  }
+
+  /** 构造 save/saveMany 共用的列名，确保批量写入与单条写入索引列一致。 */
+  private buildSaveColumnNames(): string[] {
+    const colNames = ['id']
+    if (this.hasObjectId)
+      colNames.push('object_id')
+    if (this.hasSessionId)
+      colNames.push('session_id')
+    if (this.hasStatus)
+      colNames.push('status')
+    if (this.hasRefId)
+      colNames.push('ref_id')
+    colNames.push('data', 'created_at', 'updated_at')
+    return colNames
+  }
+
+  /** 构造单行 upsert 参数；动态值全部通过 params 传入，SQL 中不拼接用户输入。 */
+  private buildSaveValues(id: string, data: T, scope: StoreScope | undefined, now: number): unknown[] {
+    const values: unknown[] = [id]
+    if (this.hasObjectId)
+      values.push(scope?.objectId ?? null)
+    if (this.hasSessionId)
+      values.push(scope?.sessionId ?? null)
+    if (this.hasStatus)
+      values.push(scope?.status ?? null)
+    if (this.hasRefId)
+      values.push(scope?.refId ?? null)
+    values.push(JSON.stringify(data), now, now)
+    return values
+  }
+
+  /** 构造跨数据库 upsert 更新片段；列名来自内部白名单，不接受外部输入。 */
+  private buildSaveUpdateParts(): string[] {
+    const valueRef = (column: string) => this.dbType === 'mysql' ? `VALUES(${column})` : `excluded.${column}`
+    const updateParts: string[] = [`data = ${valueRef('data')}`, `updated_at = ${valueRef('updated_at')}`]
+    if (this.hasObjectId)
+      updateParts.push(`object_id = ${valueRef('object_id')}`)
+    if (this.hasSessionId)
+      updateParts.push(`session_id = ${valueRef('session_id')}`)
+    if (this.hasStatus)
+      updateParts.push(`status = ${valueRef('status')}`)
+    if (this.hasRefId)
+      updateParts.push(`ref_id = ${valueRef('ref_id')}`)
+    return updateParts
+  }
+
+  /** 执行一批参数化 upsert；调用方已按数据库参数上限切好 batch。 */
+  private async saveManyBatch(items: Array<{ id: string, data: T, scope?: StoreScope }>, colNames: string[]): Promise<void> {
+    const now = Date.now()
+    const values: unknown[] = []
+    const placeholders = items.map(({ id, data, scope }) => {
+      const rowValues = this.buildSaveValues(id, data, scope, now)
+      values.push(...rowValues)
+      return `(${rowValues.map(() => '?').join(', ')})`
+    })
+
+    const updateParts = this.buildSaveUpdateParts()
+    const conflictSql = this.dbType === 'mysql'
+      ? `ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`
+      : `ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`
+
+    await this.sql.execute(
+      `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES ${placeholders.join(', ')} ${conflictSql}`,
+      values,
+    )
   }
 
   private buildQuery(filter: StoreFilter<T>): { sql: string, params: unknown[] } {

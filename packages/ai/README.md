@@ -1,1872 +1,226 @@
 # @h-ai/ai
 
-AI 能力模块，提供统一的 `ai` 对象访问大模型、MCP 服务和工具调用功能。
+AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、工具调用、MCP、Embedding、记忆、检索/RAG、知识库、上下文管理、文件解析、Rerank 与 A2A。Node.js 侧通过 `ai.init()` 初始化，浏览器侧通过 API/client 代理访问。
 
-## 功能特性
+## 能力概览
 
-| 子系统     | 说明                                                                | 依赖子系统                                        |
-| ---------- | ------------------------------------------------------------------- | ------------------------------------------------- |
-| Tools      | 工具定义（Zod → JSON Schema）、注册表管理、批量执行                 | —（纯函数）                                       |
-| Stream     | 流式块处理、SSE 编解码、流收集                                      | —（纯函数）                                       |
-| MCP Server | MCP HTTP 服务器、多传输层支持                                       | —（独立创建）                                     |
-| Client     | 前端轻量客户端（流式响应、SSE 解析、记忆/会话查询）                 | —（独立创建，依赖 api-client）                    |
-| LLM        | 大模型调用（非流式 / 流式）、简易问答、对话历史                     | LLM Provider                                      |
-| Token      | Token 估算（文本 / 消息列表）                                       | LLM                                               |
-| MCP        | 工具注册与调用、资源读取、提示词管理                                | LLM                                               |
-| Embedding  | 文本向量化、单条 / 批量嵌入                                         | LLM Provider                                      |
-| Summary    | 消息摘要生成（支持增量摘要）                                        | LLM                                               |
-| Rerank     | 重排序（查询-文档相关性排序）                                       | LLM                                               |
-| File       | 文件解析（PDF / DOCX / HTML / OCR）                                 | LLM（OCR 需 Vision 模型）                         |
-| Compress   | 上下文压缩（sliding-window / summary / hybrid）                     | LLM + Summary                                     |
-| Memory     | 对话记忆提取、存储、检索、注入（支持 objectId 隔离）                | LLM + Embedding + Store                           |
-| Reasoning  | 推理引擎（CoT / ReAct / Plan-Execute）                              | LLM + Tools                                       |
-| Retrieval  | 多来源向量检索、分数过滤                                            | Embedding + Store                                 |
-| RAG        | 检索增强问答（Retrieval + LLM）                                     | LLM + Retrieval                                   |
-| Knowledge  | 知识库管理（入库、检索、问答、实体提取）                            | LLM + Embedding + VecDB + RelDB + Datapipe        |
-| Context    | 有状态上下文管理器（压缩 + LLM/Memory/RAG/Reasoning 编排 + 持久化） | LLM + Memory + Compress + RAG + Reasoning + Store |
-| A2A        | Agent-to-Agent 协议（代理间通信与任务委派）                         | LLM + A2A 配置（延迟初始化）                      |
-| Store      | 统一存储抽象（对话记录、会话、检索源、记忆、上下文持久化）          | AIStoreProvider（默认实现基于 RelDB + VecDB）     |
+- `ai.tools`：工具定义、注册表、批量执行；无需初始化。
+- `ai.stream`：ChatCompletion 流式 chunk 处理；无需初始化。
+- `ai.llm`：非流式/流式对话、模型列表、历史记录。
+- `ai.mcp` / `createMcpServer`：内置 MCP 注册表与独立 MCP Server。
+- `ai.embedding`：单条/批量文本向量化。
+- `ai.memory`：记忆提取、存储、召回、注入。
+- `ai.retrieval` / `ai.rag`：多源向量检索与检索增强问答。
+- `ai.knowledge`：文档入库、实体增强检索、知识问答。
+- `ai.context`：LLM + Memory + RAG + 压缩的一体化会话管理。
+- `ai.file` / `ai.rerank`：文件解析/OCR 与文本重排序。
+- `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
+- `@h-ai/ai/client`：前端轻量客户端（配合 API 服务）。
+- `AIStoreProvider`：统一存储抽象；默认 DB Provider 基于 reldb + vecdb。
 
-## 安装
-
-```bash
-pnpm add @h-ai/ai
-```
-
-## 依赖
-
-- `@h-ai/datapipe` — 数据管道（知识库文档切分，内部使用）
-
-存储层通过 `AIStoreProvider` 抽象，**不再硬性依赖** reldb / vecdb：
-
-- **默认 DB Provider**（未传入自定义 Provider 时自动使用）：需 `@h-ai/reldb` + `@h-ai/vecdb`，且在 `ai.init()` 前完成初始化
-- **自定义 Provider**：实现 `AIStoreProvider` 接口后通过 `ai.init(config, { storeProvider })` 注入，无需 reldb / vecdb
-
-> `ai.tools` 和 `ai.stream` 为纯函数子系统，无需 init 即可使用。
+更完整的方法清单、错误码与长示例见 [REFERENCE.md](./REFERENCE.md)。
 
 ## 快速开始
 
-### 方式一：默认 DB Provider（reldb + vecdb）
+### 默认 DB Provider（reldb + vecdb）
 
 ```ts
 import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-// 1. 初始化存储依赖
 await reldb.init({ type: 'sqlite', database: './ai.db' })
 await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
 
-// 2. 初始化 AI 模块（自动使用已初始化的 reldb + vecdb 单例）
-await ai.init({
+const init = await ai.init({
   llm: {
     model: 'gpt-4o-mini',
     apiKey: process.env.HAI_AI_LLM_API_KEY,
   },
 })
-
-// 3. 对话
-const result = await ai.llm.chat({
-  messages: [
-    { role: 'system', content: '你是一个有帮助的助手' },
-    { role: 'user', content: '你好！' },
-  ],
-})
-if (result.success) {
-  const reply = result.data.choices[0].message.content
+if (!init.success) {
+  // 按 init.error.code 处理配置/依赖错误
 }
 
-// 4. 关闭
-ai.close()
+const result = await ai.llm.chat({
+  messages: [{ role: 'user', content: '你好！' }],
+})
+if (result.success) {
+  const reply = result.data.choices[0]?.message.content ?? ''
+}
+
+await ai.close()
+await vecdb.close()
+await reldb.close()
 ```
 
-### 方式二：自定义 StoreProvider
+### 自定义 StoreProvider
 
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
 import { ai } from '@h-ai/ai'
 
-// 实现自定义 Provider（对接 SaaS API、其他数据库等）
-const myProvider: AIStoreProvider = { /* ... */ }
+const storeProvider: AIStoreProvider = createMyStoreProvider()
 
 await ai.init(
   { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_API_KEY } },
-  { storeProvider: myProvider }, // 无需 reldb / vecdb
+  { storeProvider },
 )
 
-// 使用方式与默认 Provider 完全一致
-const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })
-
-ai.close()
+await ai.close()
 ```
 
----
+## API 契约
 
-## 初始化与配置
+- 对外只通过 `ai` 服务对象和少量独立工厂（如 `createMcpServer`）访问。
+- 生命周期为 `await ai.init(config, options?)` / `await ai.close()`；关闭会等待自定义 `AIStoreProvider.close()`。
+- 公共方法返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`；业务失败通过 `result.success === false` 和 `result.error.code` 表达。
+- `ai.tools` 与 `ai.stream` 是纯函数子系统，无需初始化即可使用。
+- 默认 DB Provider 需要 reldb/vecdb 已初始化；自定义 Provider 可隐藏其他存储后端。
 
-### 完整配置
+## API 概览
 
-```ts
-await ai.init({
-  // LLM 配置
-  llm: {
-    apiKey: 'sk-xxx',
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4o-mini', // 默认模型
-    maxTokens: 4096,
-    temperature: 0.7,
-    timeout: 60000, // 请求超时（毫秒）
-    // 多模型注册
-    models: [
-      { id: 'fast', model: 'gpt-4o-mini', temperature: 0.3 },
-      { id: 'strong', model: 'gpt-4o', maxTokens: 8192 },
-      { id: 'embed', model: 'text-embedding-3-small', baseUrl: 'https://...' },
-    ],
-    scenarios: {
-      chat: 'fast',
-      reasoning: 'strong',
-    },
-  },
-
-  // Embedding 配置
-  embedding: {
-    dimensions: 1536,
-    batchSize: 100,
-  },
-
-  // Knowledge 配置
-  knowledge: {
-    collection: 'hai_ai_knowledge',
-    dimension: 1536,
-    enableEntityExtraction: true,
-    cleanOptions: {
-      removeHtml: true,
-      normalizeWhitespace: true,
-    },
-    chunkOptions: {
-      mode: 'markdown', // sentence | paragraph | markdown | page | custom
-      maxSize: 1500,
-      overlap: 200,
-    },
-    entityBoostWeight: 0.15, // 实体命中加权系数 [0, 1]
-  },
-
-  // Memory 配置
-  memory: {
-    maxEntries: 1000,
-    embeddingEnabled: true, // 启用向量检索（关闭则仅关键词匹配）
-    recencyDecay: 0.95, // 时间衰减系数
-    defaultTopK: 10,
-  },
-
-  // Token 配置
-  token: {
-    tokenRatio: 0.25, // Token 估算系数（4 字符 ≈ 1 token）
-  },
-
-  // Summary 配置
-  summary: {
-    systemPrompt: '...', // 可选，覆盖内置摘要提示词
-  },
-
-  // Compress 配置
-  compress: {
-    defaultStrategy: 'hybrid', // summary | sliding-window | hybrid
-    defaultMaxTokens: 0, // 0 = 模型 maxTokens × 80%
-    preserveLastN: 4, // 保留最近 N 条不压缩
-  },
-
-  // MCP 配置
-  mcp: {
-    server: {
-      name: 'my-app',
-      version: '1.0.0',
-    },
-  },
-})
-```
-
-### 配合 core 配置文件使用
+### LLM
 
 ```ts
-import { ai } from '@h-ai/ai'
-import { core } from '@h-ai/core'
-
-await core.init({ configDir: './config' })
-await ai.init(core.config.get('ai'))
-// ...
-ai.close()
-await core.close()
-```
-
-### 初始化状态检测
-
-```ts
-ai.isInitialized // boolean
-ai.config // 当前脱敏配置快照，未初始化时为 null
-```
-
-`ai.config` 中的 `apiKey`、`privateKey`、`baseUrl` 等敏感字段会自动脱敏；其中 URL 类字段会保留地址结构，仅掩码内嵌凭证。
-
----
-
-## LLM 对话 — `ai.llm`
-
-### 非流式对话
-
-```ts
-const result = await ai.llm.chat({
-  messages: [
-    { role: 'system', content: '你是一个翻译助手' },
-    { role: 'user', content: '将以下内容翻译为英文：你好世界' },
-  ],
-  temperature: 0.3,
-  max_tokens: 1000,
-})
-
-if (result.success) {
-  const response = result.data
-  const content = response.choices[0].message.content
-  const usage = response.usage // { prompt_tokens, completion_tokens, total_tokens }
-}
-```
-
-### 指定模型
-
-```ts
-// 使用 init 时注册的模型 ID 或直接传模型名
-const result = await ai.llm.chat({
-  model: 'gpt-4o',
-  messages: [{ role: 'user', content: '复杂推理问题' }],
-})
-```
-
-### 流式对话
-
-```ts
-const messages = [{ role: 'user' as const, content: '写一首关于编程的诗' }]
-
+const result = await ai.llm.chat({ messages })
 for await (const chunk of ai.llm.chatStream({ messages })) {
   const delta = chunk.choices[0]?.delta?.content
   if (delta) {
-    process.stdout.write(delta) // 逐字输出
+    process.stdout.write(delta)
   }
 }
 ```
 
-### 多模态输入（图片）
-
-```ts
-const result = await ai.llm.chat({
-  model: 'gpt-4o',
-  messages: [{
-    role: 'user',
-    content: [
-      { type: 'text', text: '描述这张图片' },
-      { type: 'image_url', image_url: { url: 'https://example.com/photo.jpg', detail: 'high' } },
-    ],
-  }],
-})
-```
-
-### 获取可用模型列表
-
-```ts
-const models = await ai.llm.listModels()
-if (models.success) {
-  // models.data: string[]
-}
-```
-
-### 简易问答
-
-```ts
-// 非流式（返回纯文本回复）
-const result = await ai.llm.ask('什么是 TypeScript？')
-if (result.success) {
-  console.warn(result.data) // string
-}
-
-// 流式
-for await (const text of ai.llm.askStream('讲个笑话')) {
-  process.stdout.write(text)
-}
-```
-
-### 对话历史
-
-```ts
-// 获取某对象的聊天记录（需在 chat 请求中传 objectId + enablePersist）
-const history = await ai.llm.getHistory('user-001', { sessionId: 'sess-001', limit: 50 })
-if (history.success) {
-  // history.data: ChatRecord[]
-}
-
-// 列出某对象的所有会话
-const sessions = await ai.llm.listSessions('user-001')
-if (sessions.success) {
-  // sessions.data: SessionInfo[]
-}
-```
-
----
-
-## 工具调用 — `ai.tools`
-
-> `ai.tools` 为纯函数操作，**不需要初始化**即可使用。
-
-### 定义工具
-
-```ts
-import { ai } from '@h-ai/ai'
-import { z } from 'zod'
-
-const weatherTool = ai.tools.define({
-  name: 'get_weather',
-  description: '获取指定城市的天气信息',
-  parameters: z.object({
-    city: z.string().describe('城市名称'),
-    unit: z.enum(['celsius', 'fahrenheit']).optional().describe('温度单位'),
-  }),
-  handler: async ({ city, unit }) => {
-    // 调用天气 API
-    return { temperature: 20, city, unit: unit ?? 'celsius' }
-  },
-})
-```
-
-### 注册表管理
-
-```ts
-const registry = ai.tools.createRegistry()
-
-// 注册单个 / 批量注册
-registry.register(weatherTool)
-registry.registerMany([tool1, tool2, tool3])
-
-// 查询
-registry.has('get_weather') // true
-registry.get('get_weather') // Tool 对象
-registry.getNames() // ['get_weather', ...]
-registry.size // 注册数量
-
-// 获取 OpenAI 工具定义（传递给 LLM）
-const definitions = registry.getDefinitions() // ToolDefinition[]
-
-// 执行工具调用
-const toolMessage = await registry.execute(toolCall) // HaiResult<ToolMessage>
-
-// 批量执行（支持并行）
-const toolMessages = await registry.executeAll(toolCalls, { parallel: true })
-
-// 取消注册 / 清空
-registry.unregister('get_weather')
-registry.clear()
-```
-
-### 工具集成 LLM 调用
-
-```ts
-const result = await ai.llm.chat({
-  messages,
-  tools: registry.getDefinitions(),
-  tool_choice: 'auto', // 'auto' | 'none' | { type: 'function', function: { name: '...' } }
-})
-
-if (result.success) {
-  const choice = result.data.choices[0]
-
-  // 检查是否有工具调用
-  if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
-    // 执行所有工具调用并获得 ToolMessage[]
-    const toolResults = await registry.executeAll(choice.message.tool_calls, { parallel: true })
-    if (toolResults.success) {
-      // 将工具结果追加到消息继续对话
-      messages.push(choice.message) // assistant 消息（含 tool_calls）
-      messages.push(...toolResults.data) // tool 结果消息
-    }
-  }
-}
-```
-
----
-
-## 流处理 — `ai.stream`
-
-> `ai.stream` 为纯函数操作，**不需要初始化**即可使用。
-
-### 逐块处理
-
-```ts
-const processor = ai.stream.createProcessor()
-
-for await (const chunk of ai.llm.chatStream({ messages })) {
-  const delta = processor.process(chunk)
-  if (delta?.content) {
-    process.stdout.write(delta.content)
-  }
-}
-
-// 获取完整结果
-const result = processor.getResult()
-// { content: string, toolCalls: ToolCall[], finishReason: string | null }
-
-// 转为 assistant 消息（可直接 push 到 messages 数组）
-const assistantMsg = processor.toAssistantMessage()
-// { role: 'assistant', content: '...', tool_calls?: [...] }
-
-// 重置（复用 processor）
-processor.reset()
-```
-
-### 快捷收集
-
-```ts
-// 一次性收集全部内容（不做逐块处理）
-const result = await ai.stream.collect(ai.llm.chatStream({ messages }))
-// { content: string, toolCalls: ToolCall[], finishReason: string | null }
-```
-
-### 流式工具调用
-
-流式响应中 LLM 触发工具调用时，`processor` 会同样累积 `tool_calls`，通过 `finishReason` 判断后执行工具并继续对话：
-
-```ts
-const registry = ai.tools.createRegistry()
-registry.registerMany([weatherTool, searchTool])
-
-const messages: ChatMessage[] = [{ role: 'user', content: '北京今天天气怎么样？' }]
-
-let continueLoop = true
-while (continueLoop) {
-  const processor = ai.stream.createProcessor()
-
-  for await (const chunk of ai.llm.chatStream({ messages, tools: registry.getDefinitions() })) {
-    const delta = processor.process(chunk)
-    if (delta?.content) {
-      process.stdout.write(delta.content)
-    }
-  }
-
-  const result = processor.getResult()
-
-  if (result.finishReason === 'tool_calls' && result.toolCalls.length > 0) {
-    // 将 assistant 消息（含 tool_calls）追加到对话
-    messages.push(processor.toAssistantMessage())
-
-    // 执行所有工具调用
-    const toolResults = await registry.executeAll(result.toolCalls, { parallel: true })
-    if (toolResults.success) {
-      messages.push(...toolResults.data) // 追加 tool 结果消息
-    }
-    // 继续循环，让 LLM 消费工具结果
-  }
-  else {
-    // finish_reason 为 'stop'，对话结束
-    messages.push(processor.toAssistantMessage())
-    continueLoop = false
-  }
-}
-```
-
-### SSE 编解码
-
-SSE 编解码适用于**自建 HTTP 流式接口**（如 SvelteKit `GET` 路由推送 AI 内容到前端）：
-
-```ts
-// 服务端：将 LLM 流式 chunk 编码为 SSE 事件推送给客户端
-async function* streamToSSE(messages: ChatMessage[]): AsyncGenerator<string> {
-  for await (const chunk of ai.llm.chatStream({ messages })) {
-    const delta = chunk.choices[0]?.delta?.content
-    if (delta) {
-      yield ai.stream.encodeSSE({ event: 'delta', data: JSON.stringify({ text: delta }) })
-    }
-  }
-  yield ai.stream.encodeSSE({ event: 'done', data: '' })
-}
-
-// 客户端：解码 SSE 分片（rawText 可能是不完整的多行数据）
-const decoder = ai.stream.createSSEDecoder()
-
-for await (const rawChunk of response.body) {
-  for (const event of decoder.decode(rawChunk)) {
-    if (event.event === 'delta') {
-      const { text } = JSON.parse(event.data!)
-      process.stdout.write(text)
-    }
-    else if (event.event === 'done') {
-      break
-    }
-  }
-}
-
-// 重置解码器以复用（如下一次请求）
-decoder.reset()
-```
-
-> `createSSEDecoder` 内部维护缓冲区，自动拼接跨分片的不完整 SSE 帧，无需手动处理粘包。
-
----
-
-## Embedding — `ai.embedding`
-
-### 单条文本嵌入
-
-```ts
-const result = await ai.embedding.embedText('这是一段需要向量化的文本')
-if (result.success) {
-  const vector = result.data // number[]（如 1536 维向量）
-}
-```
-
-### 批量文本嵌入
-
-```ts
-const result = await ai.embedding.embedBatch([
-  '第一段文本',
-  '第二段文本',
-  '第三段文本',
-])
-if (result.success) {
-  const vectors = result.data // number[][]
-}
-```
-
-### 完整嵌入请求
-
-```ts
-const result = await ai.embedding.embed({
-  input: ['文本1', '文本2'],
-  model: 'text-embedding-3-small',
-  dimensions: 1536,
-})
-if (result.success) {
-  const response = result.data
-  // response.data: EmbeddingItem[]（{ index, embedding }）
-  // response.usage: { prompt_tokens, total_tokens }
-}
-```
-
----
-
-## 推理引擎 — `ai.reasoning`
-
-支持三种推理策略：
-
-| 策略           | 说明                       | 适用场景           |
-| -------------- | -------------------------- | ------------------ |
-| `cot`          | 思维链（Chain of Thought） | 分步推理           |
-| `react`        | 思考-行动-观察循环         | 需要工具调用的推理 |
-| `plan-execute` | 先规划后执行               | 复杂多步任务       |
-
-### 基本推理
-
-```ts
-const result = await ai.reasoning.run('如何计算圆的面积？', {
-  strategy: 'cot', // 默认 'react'
-})
-
-if (result.success) {
-  const { answer, steps, rounds } = result.data
-  // answer: 最终回答
-  // steps: ReasoningStep[]（每步包含 type, content）
-  //   type: 'thought' | 'action' | 'observation' | 'plan' | 'answer'
-  // rounds: 执行轮数
-}
-```
-
-### 带工具的推理
-
-```ts
-const registry = ai.tools.createRegistry()
-registry.register(calculatorTool)
-registry.register(searchTool)
-
-const result = await ai.reasoning.run('北京到上海的距离是多少公里？', {
-  strategy: 'react',
-  tools: registry,
-  maxRounds: 5, // 最大轮次（默认 10）
-  model: 'gpt-4o',
-  temperature: 0.2,
-  systemPrompt: '你是一个地理知识专家',
-})
-```
-
----
-
-## 检索 — `ai.retrieval`
-
-### 注册检索源
-
-检索源可以在 `ai.init()` 中通过 `retrieval.sources` 预配置，也可以在初始化后动态注册。
-
-**方式一：初始化时预配置**
-
-```ts
-await ai.init({
-  llm: { apiKey: 'sk-xxx', model: 'gpt-4o-mini' },
-  retrieval: {
-    sources: [
-      { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
-      { id: 'faq', collection: 'faq', name: '常见问题' },
-    ],
-  },
-})
-```
-
-**方式二：动态注册**
-
-```ts
-// 添加检索源（持久化到 DB）
-await ai.retrieval.addSource({
-  id: 'docs',
-  collection: 'documentation',
-  name: '产品文档',
-  topK: 5,
-  minScore: 0.7,
-})
-
-await ai.retrieval.addSource({
-  id: 'faq',
-  collection: 'faq',
-  name: '常见问题',
-})
-
-// 查看已注册的源（从 DB 读取）
-const sources = await ai.retrieval.listSources() // RetrievalSource[]
-```
-
-### 执行检索
-
-```ts
-const result = await ai.retrieval.retrieve({
-  query: '如何配置数据库连接？',
-  sources: ['docs', 'faq'], // 指定源（不传则查所有源）
-  topK: 10,
-  minScore: 0.6,
-})
-
-if (result.success) {
-  for (const item of result.data.items) {
-    // item.content   — 匹配的文本内容
-    // item.score     — 相似度分数
-    // item.sourceId  — 来自哪个检索源
-    // item.citation  — 引用信息（documentId, title, url 等）
-  }
-}
-```
-
-### 移除检索源
-
-```ts
-await ai.retrieval.removeSource('docs')
-```
-
----
-
-## RAG 问答 — `ai.rag`
-
-基于 Retrieval + LLM 的检索增强问答。
-
-```ts
-const result = await ai.rag.query('项目的部署流程是什么？', {
-  sources: ['docs'],
-  topK: 5,
-  minScore: 0.6,
-  model: 'gpt-4o-mini',
-  temperature: 0.3,
-  systemPrompt: '根据检索到的文档内容回答问题，注明信息来源。',
-})
-
-if (result.success) {
-  const { answer, citations, context } = result.data
-  // answer: LLM 生成的回答
-  // citations: Citation[]（引用来源列表）
-  // context: RagContextItem[]（使用的上下文片段）
-}
-```
-
-### 自定义上下文格式
-
-```ts
-const result = await ai.rag.query('问题', {
-  formatContext: (items) => {
-    return items
-      .map((item, i) => `[来源${i + 1}] ${item.content}`)
-      .join('\n\n')
-  },
-})
-```
-
-### 多轮 RAG 对话
-
-```ts
-const result = await ai.rag.query('更详细地解释第二点', {
-  messages: [
-    { role: 'user', content: '部署流程是什么？' },
-    { role: 'assistant', content: '部署分为三步：1. 构建镜像 2. 推送仓库 3. 更新集群' },
-  ],
-})
-```
-
----
-
-## 知识库 — `ai.knowledge`
-
-完整的知识库管理：文档入库（自动分块 + 向量化 + 实体提取）→ 语义检索 → 知识问答。
-
-### 初始化知识库
-
-```ts
-await ai.knowledge.setup({
-  collection: 'my-knowledge',
-  dimension: 1536,
-})
-```
-
-### 文档入库
-
-```ts
-const result = await ai.knowledge.ingest({
-  documentId: 'doc-001',
-  content: markdownContent,
-  title: '产品使用手册',
-  url: 'https://docs.example.com/manual',
-  enableEntityExtraction: true, // 自动提取人物、项目、概念等实体
-  cleanOptions: {
-    removeHtml: true,
-  },
-  chunkOptions: {
-    mode: 'markdown', // sentence | paragraph | markdown | page | custom
-    maxSize: 1500,
-    overlap: 200,
-  },
-  metadata: { category: 'manual', version: '2.0' },
-})
-
-if (result.success) {
-  const { chunkCount, entities, duration } = result.data
-  // chunkCount: 分块数量
-  // entities: KnowledgeEntity[]（提取到的实体）
-  // duration: 耗时（毫秒）
-}
-```
-
-### 知识检索
-
-```ts
-const result = await ai.knowledge.retrieve('数据库配置方法', {
-  topK: 10,
-  minScore: 0.6,
-  enableEntityBoost: true, // 实体命中时加权（提高相关性）
-  collection: 'my-knowledge',
-})
-
-if (result.success) {
-  for (const item of result.data.items) {
-    // item.content         — 匹配的文本
-    // item.score           — 综合分数
-    // item.citation        — 引用（documentId, title, url）
-    // item.matchedEntities — 命中的实体名称
-  }
-}
-```
-
-### 知识问答
-
-```ts
-const result = await ai.knowledge.ask('如何配置 Redis 缓存？', {
-  topK: 5,
-  model: 'gpt-4o-mini',
-  temperature: 0.3,
-  systemPrompt: '基于提供的知识回答，标注信息来源。',
-})
-
-if (result.success) {
-  const { answer, citations, usage } = result.data
-  // answer: LLM 生成的回答
-  // citations: Citation[]（引用列表）
-  // usage: { prompt_tokens, completion_tokens, total_tokens }
-}
-```
-
-### 多轮知识问答
-
-```ts
-const result = await ai.knowledge.ask('请详细解释第二步', {
-  messages: [
-    { role: 'user', content: 'Redis 配置流程？' },
-    { role: 'assistant', content: '分三步：1. 安装 2. 配置 3. 连接测试' },
-  ],
-})
-```
-
-### 实体管理
-
-```ts
-// 列出所有实体
-const entities = await ai.knowledge.listEntities({
-  type: 'person', // person | project | concept | organization | location | event | other
-  keyword: '张',
-  limit: 50,
-})
-
-// 按实体查询关联文档
-const result = await ai.knowledge.findByEntity('Redis', {
-  collection: 'my-knowledge',
-  type: 'concept',
-})
-if (result.success) {
-  // result.data: EntityDocumentResult[]
-}
-```
-
----
-
-## 记忆管理 — `ai.memory`
-
-从对话中自动提取关键信息（事实、偏好、事件等），存储并在后续对话中检索注入。支持 `objectId` 隔离不同对象（用户/智能体）的记忆空间。
-
-### 记忆类型
-
-| 类型          | 说明                 |
-| ------------- | -------------------- |
-| `fact`        | 事实信息             |
-| `preference`  | 用户偏好、习惯       |
-| `event`       | 重要事件、截止日期   |
-| `entity`      | 关键人物、组织、项目 |
-| `instruction` | 用户的明确指令或规则 |
-
-### 自动提取记忆
-
-```ts
-const messages = [
-  { role: 'user' as const, content: '我叫张三，我更喜欢用中文回复，我的项目叫 HAI Framework' },
-  { role: 'assistant' as const, content: '好的张三，我记住了你的偏好。' },
-]
-
-const result = await ai.memory.extract(messages, {
-  types: ['preference', 'entity'], // 只提取指定类型（可选）
-  minImportance: 0.5, // 过滤低重要性条目（可选）
-  objectId: 'user-001', // 关联到对象标识（可选，不传为全局）
-  model: 'gpt-4o-mini', // 指定提取模型（可选）
-  systemPrompt: 'Only extract durable user preferences and explicit long-term instructions.', // 自定义提取提示词（可选）
-})
-
-if (result.success) {
-  // result.data: MemoryEntry[]（已自动存储到内存）
-  // 每条包含：id, content, type, importance, vector, createdAt 等
-}
-```
-
-### 手动添加记忆
-
-```ts
-const result = await ai.memory.add({
-  content: '用户是后端开发工程师，使用 TypeScript',
-  type: 'fact',
-  importance: 0.8, // [0, 1]，默认 0.5
-  objectId: 'user-001', // 可选，不传为全局
-  metadata: { tags: ['tech', 'profile'] },
-})
-
-if (result.success) {
-  const entry = result.data // MemoryEntry（含自动生成的 id 和 vector）
-}
-```
-
-### 更新记忆
-
-```ts
-const result = await ai.memory.update('mem_1709712345_abc12345', {
-  content: '用户是全栈开发工程师',
-  importance: 0.9,
-})
-if (result.success) {
-  // result.data: MemoryEntry（更新后的条目）
-}
-```
-
-### 检索记忆
-
-```ts
-const result = await ai.memory.recall('用户的编程语言偏好', {
-  topK: 5, // 返回数量（默认 10）
-  types: ['preference'], // 按类型过滤
-  minImportance: 0.3, // 最低重要性
-  recencyWeight: 0.2, // 时间权重 [0, 1]（0 = 纯相似度，1 = 纯时间排序）
-  objectId: 'user-001', // 按对象过滤（可选）
-})
-
-if (result.success) {
-  for (const memory of result.data) {
-    // memory.content      — 记忆内容
-    // memory.type         — 类型
-    // memory.importance   — 重要性
-    // memory.createdAt    — 创建时间
-    // memory.accessCount  — 被检索次数
-  }
-}
-```
-
-### 注入记忆到对话
-
-```ts
-const messages = [
-  { role: 'system' as const, content: '你是一个编程助手' },
-  { role: 'user' as const, content: '帮我写一个排序函数' },
-]
-
-const result = await ai.memory.injectMemories(messages, {
-  topK: 5, // 注入记忆数量
-  maxTokens: 500, // 记忆最大 Token 预算
-  position: 'system', // 'system' = 追加到 system 末尾，'before-last' = 插入最后一条用户消息之前
-  objectId: 'user-001', // 按对象过滤（可选）
-})
-
-if (result.success) {
-  // result.data: ChatMessage[]（已注入记忆的消息列表）
-  // system 消息末尾会追加:
-  // --- Relevant Memories ---
-  // [1] (preference) 用户偏好使用 TypeScript
-  // [2] (fact) 用户是后端工程师
-  // --- End Memories ---
-
-  const response = await ai.llm.chat({ messages: result.data })
-}
-```
-
-### 列表、删除与清空
-
-```ts
-// 列出记忆（支持过滤）
-const list = await ai.memory.list({
-  types: ['fact', 'preference'],
-  objectId: 'user-001',
-  limit: 50,
-})
-
-// 分页列出记忆
-const page = await ai.memory.listPage({
-  objectId: 'user-001',
-  offset: 0,
-  limit: 20,
-})
-if (page.success) {
-  // page.data.items: MemoryEntry[]
-  // page.data.total: number
-}
-
-// 删除指定记忆
-await ai.memory.remove('mem_1709712345_abc12345')
-
-// 按类型清空
-await ai.memory.clear({ types: ['event'] })
-
-// 按对象清空
-await ai.memory.clear({ objectId: 'user-001' })
-
-// 全部清空
-await ai.memory.clear()
-```
-
----
-
-## Token 估算 — `ai.token`
-
-估算文本或消息列表的 Token 数量。
-
-```ts
-// 估算消息列表的 Token 数
-const tokenCount = ai.token.estimateMessages(messages)
-// tokenCount: number
-
-// 估算纯文本的 Token 数
-const count = ai.token.estimateText('Hello world')
-// count: number（中文约 1.5 token/字，英文约 4 字符/token）
-```
-
----
-
-## 消息摘要 — `ai.summary`
-
-对消息列表生成 LLM 摘要，支持增量追加。
-
-```ts
-// 对消息生成摘要
-const result = await ai.summary.summarize(messages, {
-  model: 'gpt-4o-mini',
-  temperature: 0.3,
-  systemPrompt: 'Focus on key decisions, constraints, and unresolved action items.',
-})
-
-if (result.success) {
-  const { summary, tokenCount, coveredMessages } = result.data
-  // summary: 摘要文本
-  // tokenCount: 摘要的估算 Token 数
-  // coveredMessages: 覆盖的原始消息数
-}
-
-// 生成纯文本摘要
-const textResult = await ai.summary.generate(messages, {
-  systemPrompt: 'Summarize in one concise paragraph for handoff notes.',
-})
-if (textResult.success) {
-  // textResult.data: string（摘要文本）
-}
-
-// 增量摘要（在已有摘要基础上追加）
-const updated = await ai.summary.summarize(newMessages, {
-  systemPrompt: 'Keep the summary focused on product decisions and next steps.',
-  previousSummary: existingSummary,
-})
-```
-
----
-
-## 上下文压缩 — `ai.compress`
-
-压缩超长对话至指定 Token 预算。
-
-### 压缩策略
-
-| 策略             | 说明                                     |
-| ---------------- | ---------------------------------------- |
-| `sliding-window` | 保留 system + 最近 N 条消息，丢弃旧消息  |
-| `summary`        | 对旧消息生成 LLM 摘要替换                |
-| `hybrid`（默认） | 先滑动窗口，仍超限则对被移除部分生成摘要 |
-
-### 压缩消息列表
-
-```ts
-const result = await ai.compress.tryCompress(messages, {
-  strategy: 'hybrid', // summary | sliding-window | hybrid
-  maxTokens: 4000, // 目标 Token 预算
-  preserveSystem: true, // 保留 system 消息（默认 true）
-  preserveLastN: 4, // 保留最近 N 条不压缩（默认 4）
-  summaryModel: 'gpt-4o-mini', // 摘要用模型
-})
-
-if (result.success) {
-  const { messages: compressed, originalTokens, compressedTokens, removedCount, summary } = result.data
-  // compressed: 压缩后的消息列表
-  // originalTokens: 原始 Token 数
-  // compressedTokens: 压缩后 Token 数
-  // removedCount: 被移除/合并的消息数
-  // summary: 生成的摘要文本（仅 summary/hybrid 策略有值）
-
-  const response = await ai.llm.chat({ messages: compressed })
-}
-```
-
----
-
-## 上下文管理 — `ai.context`
-
-有状态上下文管理器，适用于多轮对话场景。自动跟踪 Token 使用量、超限时自动压缩，并可编排 LLM / Memory / RAG / Reasoning / Tools 进行完整的对话流程。支持会话级持久化。
-
-### 创建管理器并对话
-
-```ts
-const managerResult = ai.context.createManager({
-  scope: { objectId: 'user-001', sessionId: 'sess-001' },
-  systemPrompt: '你是一个友好的助手。',
-  model: 'gpt-4o-mini',
-  compress: {
-    maxTokens: 8000,
-    strategy: 'hybrid',
-    preserveLastN: 4,
-    auto: true,
-  },
-  memory: { enable: true, enableExtract: true, topK: 5 },
-})
-
-if (!managerResult.success)
-  return
-
-const manager = managerResult.data
-
-// 直接对话（自动编排 LLM + 记忆注入/提取 + 压缩）
-const chatResult = await manager.chat('你好')
-if (chatResult.success) {
-  // chatResult.data.reply — LLM 回复
-  // chatResult.data.model — 使用的模型
-  // chatResult.data.usage — Token 使用统计
-}
-
-// 流式对话
-for await (const event of manager.chatStream('讲个故事')) {
-  if (event.type === 'delta')
-    process.stdout.write(event.text)
-  if (event.type === 'done')
-    console.warn('\n完成', event.model)
-}
-
-// 持久化
-await manager.save()
-```
-
-### 底层消息管理
-
-```ts
-const managerResult = ai.context.createManager({
-  compress: { maxTokens: 8000, strategy: 'hybrid' },
-})
-const manager = managerResult.data
-
-// 手动追加消息（超限时自动触发压缩）
-await manager.addMessage({ role: 'user', content: userInput })
-
-// 获取当前消息列表（已压缩）
-const msgs = manager.getMessages()
-const response = await ai.llm.chat({ messages: msgs.data })
-
-// 追加助手回复
-await manager.addMessage(response.data.choices[0].message)
-
-// 查看 Token 使用量
-const usage = manager.getTokenUsage()
-// usage.data.current / usage.data.budget
-
-// 查看历史摘要
-const summaries = manager.getSummaries()
-
-// 重置
-manager.reset()
-```
-
-### 恢复已有会话
-
-```ts
-const managerResult = await ai.context.restoreManager(
-  { objectId: 'user-001', sessionId: 'sess-001' },
-  { compress: { maxTokens: 8000 }, memory: { enable: true } },
-)
-if (managerResult.success) {
-  const manager = managerResult.data
-  // manager 已包含之前保存的消息和摘要
-  const result = await manager.chat('继续上次的话题')
-}
-```
-
-### 启用 RAG / Reasoning / Tools
+### 工具调用
 
 ```ts
 const registry = ai.tools.createRegistry()
 registry.register(ai.tools.define({
-  name: 'search',
-  description: '搜索',
-  parameters: z.object({ query: z.string() }),
-  execute: async ({ query }) => `结果: ${query}`,
-}))
-
-const managerResult = ai.context.createManager({
-  scope: { objectId: 'user-001', sessionId: 'sess-001' },
-  rag: { enable: true, sources: ['docs'], topK: 5 },
-  reasoning: { enable: true, strategy: 'react', maxRounds: 5 },
-  tools: registry,
-})
-```
-
-### 列出对象的所有会话
-
-```ts
-const result = await ai.context.listSessions('user-001')
-if (result.success) {
-  for (const session of result.data) {
-    // session.sessionId / session.objectId / session.createdAt / session.updatedAt
-  }
-}
-```
-
----
-
-## 重排序 — `ai.rerank`
-
-对检索结果按查询相关性重新排序，提升 RAG / 检索质量。
-
-```ts
-// 快捷方式：文本列表重排序
-const result = await ai.rerank.rerankTexts('数据库配置方法', [
-  '本文介绍如何配置 PostgreSQL 连接池',
-  '前端组件的生命周期管理',
-  '数据库连接字符串的最佳实践',
-], 2) // topN: 返回前 2 个最相关的
-
-if (result.success) {
-  for (const item of result.data) {
-    // item.index — 原始位置
-    // item.relevanceScore — 相关性分数
-    // item.document — 原始文本
-  }
-}
-
-// 完整请求
-const result = await ai.rerank.rerank({
-  query: '配置方法',
-  documents: ['文档1', '文档2', '文档3'],
-  topN: 3,
-  returnDocuments: true,
-})
-```
-
----
-
-## 文件解析 — `ai.file`
-
-解析多种格式文件为文本内容，支持 OCR。
-
-```ts
-const result = await ai.file.parse({
-  content: fileBuffer, // Buffer | string
-  mimeType: 'application/pdf',
-  maxPages: 50,
-  outputFormat: 'markdown', // 'text' | 'markdown'
-  useOcr: false, // 使用 Vision LLM 做 OCR
-})
-
-if (result.success) {
-  // result.data.text — 解析出的文本内容
-  // result.data.pages — 页数（PDF 有效）
-  // result.data.metadata — 文件元信息
-}
-```
-
-**支持格式**：`text`（UTF-8）、`html`（HTML→text）、`pdf`（pdfjs-dist）、`docx`（mammoth）、`ocr`（Vision LLM）。
-
----
-
-## A2A — `ai.a2a`
-
-Agent-to-Agent 协议支持，实现代理间通信与任务委派。A2A 为延迟初始化子系统，需在配置中提供 `a2a` 配置段。
-
-### 配置
-
-```ts
-await ai.init({
-  llm: { model: 'gpt-4o-mini', apiKey: process.env.API_KEY },
-  a2a: {
-    agentCard: {
-      name: 'my-agent',
-      description: '智能助手',
-      url: 'https://agent.example.com',
-      skills: [{ id: 'chat', name: '对话', description: '通用对话能力' }],
-    },
-  },
-})
-```
-
-### 注册执行器并处理请求
-
-```ts
-import type { AgentExecutor } from '@h-ai/ai'
-
-// 实现执行器
-const executor: AgentExecutor = {
-  async* execute(context) {
-    // context.userMessage — 用户消息
-    // 处理任务并返回结果
-    yield { state: 'completed', message: { role: 'agent', parts: [{ type: 'text', text: '处理完成' }] } }
-  },
-}
-
-ai.a2a.registerExecutor(executor)
-
-// 在 API 端点中处理请求
-const result = await ai.a2a.handleRequest(requestBody)
-if (result.streaming) {
-  // result.stream — AsyncGenerator（流式响应）
-}
-else {
-  // result.body — JSON 响应
-}
-```
-
-### 调用远端代理
-
-```ts
-const result = await ai.a2a.callRemoteAgent(
-  'https://remote-agent.example.com',
-  '帮我分析这份季度报告',
-  { timeout: 30000 },
-)
-
-if (result.success) {
-  // result.data.taskId — 任务 ID
-  // result.data.taskState — 任务状态
-  // result.data.responseText — 回复文本
-}
-```
-
-### 查询消息记录
-
-```ts
-const messages = await ai.a2a.listMessages({
-  contextId: 'ctx-001',
-  limit: 20,
-})
-if (messages.success) {
-  // messages.data.items: A2AMessageRecord[]
-  // messages.data.total: number
-}
-```
-
----
-
-## MCP 服务器 — `createMcpServer`
-
-> 独立工厂函数，**不需要初始化**即可使用。
-
-### 创建服务器
-
-```ts
-import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
-import { z } from 'zod'
-
-const mcp = createMcpServer({ name: 'my-server', version: '1.0.0' })
-```
-
-### 注册工具
-
-```ts
-mcp.registerTool('search', {
-  description: '搜索文档',
-  inputSchema: { query: z.string(), limit: z.number().optional() },
-}, async ({ query, limit }) => ({
-  content: [{ type: 'text', text: `Found ${limit ?? 10} results for: ${query}` }],
-}))
-```
-
-### 注册资源
-
-```ts
-mcp.registerResource('config', 'config://app', {
-  description: '应用配置',
-}, async uri => ({
-  contents: [{ uri: uri.href, text: JSON.stringify(appConfig) }],
-}))
-```
-
-### 注册提示词
-
-```ts
-mcp.registerPrompt('summarize', {
-  description: '总结文本',
-  argsSchema: { text: z.string() },
-}, async ({ text }) => ({
-  messages: [{ role: 'user', content: { type: 'text', text: `请总结：${text}` } }],
-}))
-```
-
-### 连接传输层
-
-```ts
-import { randomUUID } from 'node:crypto'
-
-// Streamable HTTP（推荐）
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: () => randomUUID(),
-})
-await mcp.connect(transport)
-
-// 其他传输层
-// import { SSEServerTransport, StdioServerTransport } from '@h-ai/ai'
-```
-
----
-
-## MCP 操作 — `ai.mcp`
-
-作为 MCP 客户端注册与调用工具、资源和提示词。
-
-```ts
-// 注册工具
-ai.mcp.registerTool(
-  { name: 'calc', description: '计算', inputSchema: { expr: { type: 'string' } } },
-  async ({ expr }) => ({ result: '2' }),
-)
-
-// 调用工具
-const result = await ai.mcp.callTool('calc', { expr: '1+1' })
-
-// 注册并读取资源
-ai.mcp.registerResource(
-  { uri: 'data://users', name: 'users', description: '用户列表' },
-  async () => ({ uri: 'data://users', text: JSON.stringify(users) }),
-)
-const resource = await ai.mcp.readResource('data://users')
-
-// 注册并获取提示词
-ai.mcp.registerPrompt(
-  { name: 'greet', arguments: [{ name: 'name', required: true }] },
-  async ({ name }) => [{ role: 'user', content: { type: 'text', text: `你好 ${name}` } }],
-)
-const prompt = await ai.mcp.getPrompt('greet', { name: '张三' })
-```
-
----
-
-## 前端客户端 — typed API client
-
-> 浏览器 / App 端通过 `@h-ai/api-client` 调用由 `@h-ai/api-contract` 定义、`@h-ai/serv` 挂载的 AI HTTP API。`@h-ai/ai/client` 中的低层 helper 只适用于应用自定义了 `post/stream` 适配器的场景；标准公共 API 请优先使用 typed client。
-
-```ts
-import { apiClient } from '@h-ai/api-client'
-
-await apiClient.init({ baseUrl: '/api/v1', auth: {} })
-```
-
-### 非流式对话
-
-```ts
-const response = await apiClient.ai.chats.createCompletion({
-  messages: [{ role: 'user', content: '你好' }],
-})
-if (response.success) {
-  // response.data: ChatCompletionResponse（同服务端返回结构）
-}
-```
-
-### 流式对话
-
-标准 `api-client` 不提供旧式通用流式方法；如需 SSE 流式输出，请在应用服务端显式暴露自定义流式 endpoint，再用 `fetch` / `apiFetch` 消费。
-
-### 便捷方式
-
-```ts
-// 发送单条消息，返回回复文本
-const reply = await apiClient.ai.chats.sendMessage({ message: '你好', systemPrompt: '你是一个翻译助手' })
-```
-
-### 记忆与会话查询
-
-```ts
-// 检索相关记忆
-const memories = await apiClient.ai.memories.recall({
-  query: '用户偏好',
-  topK: 5,
-  objectId: 'user-001',
-})
-
-// 分页列出记忆
-const page = await apiClient.ai.memories.list({
-  objectId: 'user-001',
-  limit: 20,
-})
-if (page.success) {
-  // page.data.items: MemoryEntry[]
-}
-
-// 列出某对象的所有会话
-const sessions = await apiClient.ai.sessions.list({ objectId: 'user-001' })
-if (sessions.success) {
-  // sessions.data.items: SessionInfo[]
-}
-```
-
----
-
-## 错误处理
-
-所有需要初始化的子系统方法均返回 `HaiResult<T>`，通过 `result.success` 判断成功/失败。
-
-```ts
-import { HaiAIError } from '@h-ai/ai'
-
-const result = await ai.llm.chat({ messages })
-
-if (!result.success) {
-  switch (result.error.code) {
-    case HaiAIError.NOT_INITIALIZED.code:
-      // 未初始化，请先调用 ai.init()
-      break
-    case HaiAIError.RATE_LIMITED.code:
-      // API 限流，稍后重试
-      break
-    case HaiAIError.TIMEOUT.code:
-      // 请求超时
-      break
-    case HaiAIError.CONTEXT_LENGTH_EXCEEDED.code:
-      // 上下文超长，需压缩消息
-      break
-    case HaiAIError.MEMORY_RECALL_FAILED.code:
-      // 记忆检索失败
-      break
-    case HaiAIError.CONTEXT_COMPRESS_FAILED.code:
-      // 上下文压缩失败
-      break
-    default:
-      // 通用错误
-      break
-  }
-}
-```
-
----
-
-## 设计说明
-
-### 架构概览
-
-AI 是**生命周期单例**模块，通过 `ai.init()` / `ai.close()` 管理运行时状态。内部由 17 个子模块构成，通过 getter 暴露给调用方。
-
-```
-ai.init(config?, options?)
-  ├─ 配置校验（Zod schema）
-  ├─ 存储 Provider 解析
-  │   ├─ options.storeProvider → 使用自定义 Provider
-  │   └─ 未提供 → 检查 reldb + vecdb 已初始化 → 创建默认 DB Provider
-  ├─ createAISubsystems() — 按依赖创建所有子模块
-  │   ├─ LLM Provider（OpenAI 兼容，多模型场景映射）
-  │   ├─ MCP（工具/资源/提示词注册表）
-  │   ├─ Embedding（文本向量化）
-  │   ├─ Token（Token 估算）
-  │   ├─ Summary（消息摘要）
-  │   ├─ Compress（上下文压缩）
-  │   ├─ Memory（记忆提取/存储/检索）
-  │   ├─ Rerank（结果重排序）
-  │   ├─ Retrieval（多源向量检索）
-  │   ├─ RAG（检索增强问答）
-  │   ├─ Knowledge（知识库管理）
-  │   ├─ Reasoning（推理引擎）
-  │   ├─ Context（有状态上下文管理器）
-  │   ├─ File（文件解析）
-  │   └─ A2A（Agent-to-Agent，延迟初始化）
-  └─ StoreProvider.setupAll()（建表/建连接）
-```
-
-初始化前访问任何需要 init 的子模块方法，均返回 `NOT_INITIALIZED` 错误（基于 `NotInitializedKit` Proxy）。`ai.tools` 和 `ai.stream` 为纯函数，**无需初始化**。
-
-### 数据存储分布
-
-> 下表为默认 DB Provider（reldb + vecdb）的存储映射。自定义 `AIStoreProvider` 可对接其他存储后端。
-
-| 数据类型   | 存储位置   | 表/集合名                                 |
-| ---------- | ---------- | ----------------------------------------- |
-| 对话记录   | DB         | `hai_ai_chat_records`                     |
-| 会话元数据 | DB         | `hai_ai_sessions`                         |
-| 检索源配置 | DB         | `hai_ai_retrieval_sources`                |
-| 记忆条目   | DB + VecDB | `hai_ai_memory` + `hai_ai_memory_vectors` |
-| 上下文状态 | DB         | `hai_ai_context`                          |
-| 知识库内容 | VecDB      | `hai_ai_knowledge`（可配置）              |
-
-### 多模型场景映射
-
-通过 `llm.models` 注册多个模型，通过 `llm.scenarios` 将不同使用场景映射到对应模型：
-
-```ts
-await ai.init({
-  llm: {
-    model: 'gpt-4o-mini', // 默认模型
-    models: [
-      { id: 'fast', model: 'gpt-4o-mini', temperature: 0.3 },
-      { id: 'strong', model: 'gpt-4o', maxTokens: 8192 },
-      { id: 'embed', model: 'text-embedding-3-small' },
-    ],
-    scenarios: {
-      default: 'fast',
-      chat: 'fast',
-      reasoning: 'strong',
-      embedding: 'embed',
-      summary: 'fast',
-      extraction: 'fast',
-      rerank: 'fast',
-      ocr: 'strong',
-    },
-  },
-})
-```
-
-各子模块自动使用对应场景的模型：
-
-- `ai.llm.chat()`：`scenarios.chat` → `scenarios.default` → `llm.model`
-- `ai.embedding.embed()`：`scenarios.embedding` → `llm.model`
-- `ai.reasoning.run()`：`scenarios.reasoning` → `llm.model`
-- `ai.summary.summarize()`：`scenarios.summary` → `llm.model`
-- `ai.rerank.rerank()`：`scenarios.rerank` → `llm.model`
-
-### Provider 模式
-
-#### LLM Provider
-
-当前内置 **OpenAI 兼容** Provider（`ai-llm-provider-openai.ts`），支持所有 OpenAI API 兼容服务（OpenAI、Azure OpenAI、Ollama、vLLM 等）：
-
-- API Key 解析顺序：模型条目 > 全局配置 > 环境变量（`HAI_AI_LLM_API_KEY` / `OPENAI_API_KEY`）
-- Base URL 解析顺序：模型条目 > 全局配置 > 环境变量（`HAI_AI_LLM_BASE_URL` / `OPENAI_BASE_URL`）> OpenAI 默认
-
-#### Store Provider
-
-存储层通过 `AIStoreProvider` 接口抽象，所有需要持久化的子系统（Memory / Knowledge / Context / Retrieval / A2A 等）统一通过此接口存取数据：
-
-```ts
-interface AIStoreProvider {
-  readonly name: string
-  createRelStore: <T>(name: string, options?: AIRelStoreOptions) => AIRelStore<T>
-  createVectorStore: (name: string) => AIVectorStore
-  createKnowledgeStore?: () => KnowledgeStore
-  setupAll: () => Promise<void>
-}
-```
-
-- **默认 DB Provider**：基于 `@h-ai/reldb` + `@h-ai/vecdb`，未传入自定义 Provider 时自动使用
-- **自定义 Provider**：通过 `ai.init(config, { storeProvider })` 注入，可对接 SaaS API、其他数据库等
-
-### 上下文管理编排
-
-`ai.context.createManager()` 创建的 ContextManager 是最上层的编排器，一次 `chat()` 调用的内部流程：
-
-```
-manager.chat(query)
-  ├─ 记忆注入（memory.injectMemories → 从 VecDB 召回相关记忆追加到 system）
-  ├─ RAG 检索（retrieval.retrieve → 从知识库检索相关片段注入上下文）
-  ├─ 上下文压缩（compress.tryCompress → 超限时自动压缩旧消息）
-  ├─ 推理引擎（reasoning.run → CoT/ReAct/Plan-Execute）或 LLM 直接调用
-  ├─ 工具调用循环（tools 注册表 → 自动执行并续接）
-  ├─ 记忆提取（memory.extract → 从新对话中提取事实/偏好/实体等）
-  └─ 持久化（save → 消息和摘要写入 DB）
-```
-
----
-
-## 典型场景
-
-### 带工具调用的多轮对话循环
-
-```ts
-import type { ChatMessage } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
-import { z } from 'zod'
-
-// 定义并注册工具
-const weatherTool = ai.tools.define({
   name: 'get_weather',
   description: '获取天气',
   parameters: z.object({ city: z.string() }),
-  handler: async ({ city }) => ({ temp: 22, city, condition: '晴' }),
-})
+  handler: async ({ city }) => ({ city, temperature: 20 }),
+}))
 
-const registry = ai.tools.createRegistry()
-registry.register(weatherTool)
+const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
+```
 
-const messages: ChatMessage[] = [
-  { role: 'user', content: '北京和上海今天天气怎么样？' },
-]
+### MCP Server
 
-// 对话循环
-let result = await ai.llm.chat({
-  messages,
-  tools: registry.getDefinitions(),
-})
+```ts
+import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
 
-while (result.success && result.data.choices[0].finish_reason === 'tool_calls') {
-  const assistantMsg = result.data.choices[0].message
-  messages.push(assistantMsg)
+const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
+server.registerTool('search', {
+  description: '搜索',
+  inputSchema: { query: z.string() },
+}, async ({ query }) => ({
+  content: [{ type: 'text', text: `Results for ${query}` }],
+}))
+await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: crypto.randomUUID }))
+```
 
-  const toolResults = await registry.executeAll(assistantMsg.tool_calls!, { parallel: true })
-  if (toolResults.success) {
-    messages.push(...toolResults.data)
-  }
+### Memory / RAG / Knowledge
 
-  result = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
+```ts
+const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
+if (!enriched.success) {
+  return enriched
 }
 
-if (result.success) {
-  const finalAnswer = result.data.choices[0].message.content
+const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], topK: 5 })
+
+const setup = await ai.knowledge.setup()
+if (setup.success) {
+  await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
 }
 ```
 
-### 记忆增强的长期对话
+### Context 管理器
 
 ```ts
-import type { ChatMessage } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
-
-await ai.init({
-  llm: { model: 'gpt-4o-mini', apiKey: process.env.API_KEY },
-  memory: { maxEntries: 500, embeddingEnabled: true },
-  compress: { defaultStrategy: 'hybrid', preserveLastN: 6 },
-})
-
-const messages: ChatMessage[] = [
-  { role: 'system', content: '你是用户的私人助手，请记住用户的偏好。' },
-]
-
-async function chat(userInput: string): Promise<string | undefined> {
-  messages.push({ role: 'user', content: userInput })
-
-  // 1. 注入历史记忆
-  const enriched = await ai.memory.injectMemories(messages, {
-    topK: 5,
-    position: 'system',
-    maxTokens: 500,
-  })
-  const enrichedMessages = enriched.success ? enriched.data : messages
-
-  // 2. 压缩上下文以适应模型限制
-  const compressed = await ai.compress.tryCompress(enrichedMessages, {
-    maxTokens: 4000,
-    strategy: 'hybrid',
-  })
-  const finalMessages = compressed.success ? compressed.data.messages : enrichedMessages
-
-  // 3. 调用 LLM
-  const result = await ai.llm.chat({ messages: finalMessages })
-  if (!result.success)
-    return undefined
-
-  const reply = result.data.choices[0].message
-  messages.push(reply)
-
-  // 4. 异步提取新记忆（不阻塞响应）
-  ai.memory.extract(messages.slice(-2), { objectId: 'chat' })
-
-  return reply.content ?? undefined
-}
-```
-
-### 知识库 + RAG 完整流程
-
-```ts
-import { ai } from '@h-ai/ai'
-
-// 初始化（默认 DB Provider 需要 vecdb + reldb）
-await ai.init({
-  llm: { model: 'gpt-4o-mini', apiKey: process.env.API_KEY },
-  embedding: { model: 'text-embedding-3-small' },
-  knowledge: {
-    enableEntityExtraction: true,
-    cleanOptions: { removeHtml: true },
-    chunkOptions: { mode: 'markdown', maxSize: 1500, overlap: 200 },
-  },
-})
-
-// 1. 初始化知识库
-await ai.knowledge.setup()
-
-// 2. 批量导入文档
-const documents = [
-  { id: 'doc-1', content: '# 产品架构\n...', title: '架构文档' },
-  { id: 'doc-2', content: '# 部署指南\n...', title: '部署文档' },
-]
-
-for (const doc of documents) {
-  const result = await ai.knowledge.ingest({
-    documentId: doc.id,
-    content: doc.content,
-    title: doc.title,
-    enableEntityExtraction: true,
-  })
-}
-
-// 3. 知识问答
-const answer = await ai.knowledge.ask('项目的部署流程是什么？', {
-  topK: 5,
-  enableEntityBoost: true,
-  systemPrompt: '基于文档准确回答，标注引用来源。',
-})
-
-if (answer.success) {
-  // answer.data.answer — LLM 回答
-  // answer.data.citations — 引用列表
-}
-```
-
-### 有状态上下文管理器 + 流式输出
-
-```ts
-import { ai } from '@h-ai/ai'
-
-await ai.init({
-  llm: { model: 'gpt-4o-mini', apiKey: process.env.API_KEY },
-  compress: { defaultStrategy: 'hybrid', preserveLastN: 6 },
-})
-
-// 创建管理器（使用嵌套 compress 配置）
-const managerResult = ai.context.createManager({
-  compress: { maxTokens: 8000, auto: true },
+const manager = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'sess-001' },
+  compress: { auto: true, strategy: 'hybrid', maxTokens: 8000 },
   memory: { enable: true, enableExtract: true },
 })
-if (!managerResult.success)
-  return
-const manager = managerResult.data
-
-// 方式一：直接使用 chatStream（推荐，自动编排）
-for await (const event of manager.chatStream('你好')) {
-  if (event.type === 'delta')
-    process.stdout.write(event.text)
-  if (event.type === 'done')
-    console.warn('\n完成，模型:', event.model)
-}
-
-// 方式二：手动编排
-async function streamChat(userInput: string): Promise<string> {
-  await manager.addMessage({ role: 'user', content: userInput })
-
-  const msgs = manager.getMessages()
-  if (!msgs.success)
-    return ''
-
-  const processor = ai.stream.createProcessor()
-  for await (const chunk of ai.llm.chatStream({ messages: msgs.data })) {
-    const delta = processor.process(chunk)
-    if (delta?.content) {
-      process.stdout.write(delta.content)
-    }
-  }
-
-  const assistantMsg = processor.toAssistantMessage()
-  await manager.addMessage(assistantMsg)
-  return assistantMsg.content ?? ''
+if (manager.success) {
+  const reply = await manager.data.chat('你好')
+  await manager.data.save()
 }
 ```
 
-### A2A 代理协作
+## 配置
+
+```yaml
+llm:
+  apiKey: ${HAI_AI_LLM_API_KEY:}
+  baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
+  model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  timeout: 60000
+  scenarios:
+    chat: fast
+    reasoning: strong
+    embedding: embed
+
+embedding:
+  dimensions: 1536
+  batchSize: 100
+
+knowledge:
+  collection: hai_ai_knowledge
+  dimension: 1536
+  cleanOptions:
+    removeHtml: true
+    normalizeWhitespace: true
+  chunkOptions:
+    mode: markdown
+    maxSize: 1500
+    overlap: 200
+
+memory:
+  maxEntries: 1000
+  recencyDecay: 0.95
+  embeddingEnabled: true
+  defaultTopK: 10
+```
+
+`ai.config` 返回脱敏后的配置快照；`apiKey`、`privateKey`、URL 内嵌凭证等敏感字段不会原样暴露。
+
+## 错误处理
 
 ```ts
-import type { AgentExecutor } from '@h-ai/ai'
-import { ai } from '@h-ai/ai'
-
-await ai.init({
-  llm: { model: 'gpt-4o-mini', apiKey: process.env.API_KEY },
-  a2a: {
-    agentCard: {
-      name: 'coordinator',
-      description: '协调代理，分发任务给专业代理',
-      url: 'https://coordinator.example.com',
-      skills: [{ id: 'coordinate', name: '任务协调', description: '分析任务并委派给合适的代理' }],
-    },
-  },
-})
-
-// 注册本地执行器
-const executor: AgentExecutor = {
-  async* execute(context) {
-    // 委派子任务给远端专业代理
-    const analysis = await ai.a2a.callRemoteAgent(
-      'https://analyst.example.com',
-      context.userMessage,
-      { timeout: 60000 },
-    )
-    if (analysis.success) {
-      yield {
-        state: 'completed',
-        message: {
-          role: 'agent',
-          parts: [{ type: 'text', text: `分析结果：${analysis.data.responseText}` }],
-        },
-      }
-    }
-  },
+const result = await ai.llm.chat({ messages })
+if (!result.success) {
+  switch (result.error.code) {
+    case HaiAIError.NOT_INITIALIZED.code:
+      // 先调用 ai.init()
+      break
+    case HaiAIError.API_ERROR.code:
+      // 上游模型服务失败，可重试或降级
+      break
+  }
 }
-ai.a2a.registerExecutor(executor)
 ```
 
----
+常见错误段位：
+
+- `hai:ai:010-012`：初始化/配置。
+- `hai:ai:100-107`：LLM 与历史记录。
+- `hai:ai:300-302`：Embedding。
+- `hai:ai:600-701`：Retrieval/RAG。
+- `hai:ai:800-805`：Knowledge。
+- `hai:ai:900-904`：Memory。
+- `hai:ai:980-984`：A2A。
 
 ## 测试
 
 ```bash
+pnpm --filter @h-ai/ai typecheck
+pnpm --filter @h-ai/ai lint
 pnpm --filter @h-ai/ai test
+pnpm --filter @h-ai/ai build
 ```
 
 ## License

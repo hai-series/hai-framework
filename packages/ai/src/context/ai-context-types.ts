@@ -171,7 +171,10 @@ export type ContextStreamEvent
  * const manager = managerResult.data
  *
  * const result = await manager.chat('你好')
- * console.log(result.data.reply)
+ * if (result.success) {
+ *   const reply = result.data.reply
+ *   // 将 reply 渲染到对话界面
+ * }
  *
  * for await (const event of manager.chatStream('讲个故事')) {
  *   if (event.type === 'delta') process.stdout.write(event.text)

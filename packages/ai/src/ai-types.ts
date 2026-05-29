@@ -172,7 +172,7 @@ export interface AIInitOptions {
  *
  * await ai.init({ llm: { model: 'gpt-4o-mini' } })
  * const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })
- * ai.close()
+ * await ai.close()
  * ```
  */
 export interface AIFunctions {
@@ -193,7 +193,7 @@ export interface AIFunctions {
    * 关闭后 `llm`、`mcp` 操作将返回 `NOT_INITIALIZED` 错误。
    * 重复关闭不会报错。
    */
-  close: () => void
+  close: () => Promise<void>
   /** 当前脱敏后的配置快照（未初始化时为 `null`） */
   readonly config: AIConfig | null
   /** 是否已初始化（`init()` 成功后为 `true`，`close()` 后为 `false`） */

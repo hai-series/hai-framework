@@ -11,6 +11,8 @@ import { createEmbeddingOperations } from '../src/embedding/ai-embedding-functio
 
 // ─── Mock OpenAI ───
 
+const openAIConstructorOptions = vi.hoisted(() => [] as Array<Record<string, unknown>>)
+
 // Embedding 函数静态依赖 openai，直接 mock 整个模块
 vi.mock('openai', () => {
   return {
@@ -33,7 +35,7 @@ vi.mock('openai', () => {
       }
 
       constructor(_options: Record<string, unknown>) {
-        // 接受 apiKey 等参数
+        openAIConstructorOptions.push(_options)
       }
     },
   }
@@ -150,5 +152,29 @@ describe('embedding operations', () => {
     if (result.success) {
       expect(result.data.model).toBe('text-embedding-3-large')
     }
+  })
+
+  it('相同 apiKey 但不同 baseUrl 的模型条目会创建独立客户端', async () => {
+    openAIConstructorOptions.length = 0
+    const config = AIConfigSchema.parse({
+      llm: {
+        apiKey: 'shared-key',
+        model: 'gpt-4',
+        models: [
+          { id: 'embed-a', model: 'text-embedding-3-small', apiKey: 'shared-key', baseUrl: 'https://a.example.com/v1' },
+          { id: 'embed-b', model: 'text-embedding-3-large', apiKey: 'shared-key', baseUrl: 'https://b.example.com/v1' },
+        ],
+      },
+      embedding: { batchSize: 100 },
+    })
+
+    const ops = createEmbeddingOperations(config)
+    await ops.embed({ input: 'A', model: 'embed-a' })
+    await ops.embed({ input: 'B', model: 'embed-b' })
+
+    expect(openAIConstructorOptions.map(options => options.baseURL)).toEqual([
+      'https://a.example.com/v1',
+      'https://b.example.com/v1',
+    ])
   })
 })

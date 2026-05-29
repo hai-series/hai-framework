@@ -427,12 +427,6 @@ export function createKnowledgeOperations(
      * @param query - 用户问题
      * @param options - 可选（满足 `KnowledgeRetrieveOptions` 的所有选项 + systemPrompt、messages、temperature、model）
      * @returns `ok(KnowledgeAskResult)` 含 answer、context 列表、citations、usage 等；检索或生成失败时返回错误
-     *
-     * @example
-     * ```ts
-     * const result = await knowledge.ask('座山方皮是什么？')
-     * if (result.success) console.log(result.data.answer)
-     * ```
      */
     async ask(query: string, options?: KnowledgeAskOptions): Promise<HaiResult<KnowledgeAskResult>> {
       // 先检索

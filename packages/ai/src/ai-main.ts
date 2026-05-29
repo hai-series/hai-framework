@@ -197,8 +197,10 @@ const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
 
 // ─── 内部辅助 ───
 
-/** 重置所有子功能引用为 null（用于 close 和 init 失败清理） */
-function resetAllState(): void {
+/** 重置所有子功能引用并释放 StoreProvider（用于 close 和 init 失败清理） */
+async function resetAllState(): Promise<void> {
+  const storeProvider = currentStoreProvider
+
   currentLLM = null
   currentMCP = null
   currentEmbedding = null
@@ -217,6 +219,15 @@ function resetAllState(): void {
   currentA2AImpl = null
   currentStoreProvider = null
   currentConfig = null
+
+  if (storeProvider?.close) {
+    try {
+      await storeProvider.close()
+    }
+    catch (error) {
+      logger.error('AI store provider close failed', { error })
+    }
+  }
 }
 
 // ─── 纯函数操作（不依赖初始化） ───
@@ -251,7 +262,7 @@ const streamOperations: StreamOperations = {
  * })
  *
  * // 关闭
- * ai.close()
+ * await ai.close()
  * ```
  */
 export const ai: AIFunctions = {
@@ -267,7 +278,7 @@ export const ai: AIFunctions = {
       // 关闭旧实例
       if (currentConfig) {
         logger.warn('AI module is already initialized, reinitializing')
-        ai.close()
+        await ai.close()
       }
 
       logger.info('Initializing AI module')
@@ -330,7 +341,7 @@ export const ai: AIFunctions = {
     }
     catch (error) {
       // 清理部分赋值的子功能引用，避免 isInitialized=false 但 getter 返回无效实例
-      resetAllState()
+      await resetAllState()
       logger.error('AI module initialization failed', { error })
       return err(
         HaiAIError.CONFIGURATION_ERROR,
@@ -365,14 +376,14 @@ export const ai: AIFunctions = {
   get config() { return currentConfig ? sanitizeAiConfig(currentConfig) : null },
   get isInitialized() { return currentConfig !== null },
 
-  close(): void {
+  async close(): Promise<void> {
     if (!currentConfig) {
       logger.info('AI module already closed, skipping')
       return
     }
 
     logger.info('Closing AI module')
-    resetAllState()
+    await resetAllState()
     logger.info('AI module closed')
   },
 }

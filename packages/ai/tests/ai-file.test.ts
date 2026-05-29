@@ -11,6 +11,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
 import { createFileOperations } from '../src/file/ai-file-functions.js'
 
+// pdfjs-dist 是可选解析路径；测试固定模拟不可用，验证 PDF 能稳定回退到 OCR。
+vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => {
+  throw new Error('Module not found')
+})
+
 // ─── Mock 辅助 ───
 
 /** 构造基础 AI 配置 */
@@ -169,11 +174,6 @@ describe('file operations — HTML', () => {
 
 describe('file operations — PDF', () => {
   it('通过 PDF magic bytes 识别格式（pdfjs 不可用时回退 OCR）', async () => {
-    // 模拟 pdfjs-dist 不可用，则 PDF 应回退 OCR
-    vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => {
-      throw new Error('Module not found')
-    })
-
     const mockLLM = makeMockLLM('PDF OCR 提取的文本')
     const ops = createFileOperations(mockConfig, mockLLM)
 
