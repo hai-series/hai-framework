@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/crypto",
   "type": "module",
-  "version": "0.1.0-alpha.19",
+  "version": "0.1.0-alpha.20",
   "description": "Hai Framework cryptography module (asymmetric, symmetric, and hash).",
   "license": "Apache-2.0",
   "exports": {
