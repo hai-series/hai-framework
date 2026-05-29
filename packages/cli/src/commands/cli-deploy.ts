@@ -35,6 +35,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
   const spinner = ora()
   const cwd = options.cwd ?? process.cwd()
   const appDir = resolve(cwd, options.appDir ?? '.')
+  let closeDeploy: (() => Promise<void>) | null = null
 
   try {
     // 动态导入 @h-ai/deploy（允许 CLI 在未安装 deploy 时仍可使用其他命令）
@@ -48,11 +49,11 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       return
     }
 
-    const { deploy, loadCredentials, scanApp } = deployModule
+    const { deploy } = deployModule
 
     // 1. 加载凭证
     spinner.start('Loading credentials...')
-    const credResult = loadCredentials()
+    const credResult = deploy.credentials.load()
     if (!credResult.success) {
       spinner.fail(chalk.red(`Failed to load credentials: ${credResult.error.message}`))
       return
@@ -75,7 +76,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
 
     // 3. 扫描应用
     spinner.start('Scanning application...')
-    const scanResult = await scanApp(appDir)
+    const scanResult = await deploy.scan(appDir)
     if (!scanResult.success) {
       spinner.fail(chalk.red(`Scan failed: ${scanResult.error.message}`))
       return
@@ -90,6 +91,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       spinner.fail(chalk.red(`Init failed: ${initResult.error.message}`))
       return
     }
+    closeDeploy = () => deploy.close()
     spinner.succeed('Deploy module initialized')
 
     // 5. 执行部署
@@ -102,7 +104,6 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
 
     if (!deployResult.success) {
       spinner.fail(chalk.red(`Deploy failed: ${deployResult.error.message}`))
-      await deploy.close()
       return
     }
 
@@ -114,13 +115,21 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       core.logger.info(chalk.gray(`  Env: ${deployResult.data.envVarsSet.join(', ')}`))
     }
     core.logger.info('')
-
-    await deploy.close()
   }
   catch (error) {
     spinner.fail(chalk.red('Deploy command failed'))
     core.logger.error(error instanceof Error ? error.message : String(error))
     throw error
+  }
+  finally {
+    if (closeDeploy) {
+      try {
+        await closeDeploy()
+      }
+      catch (error) {
+        core.logger.error('Failed to close deploy module', { error })
+      }
+    }
   }
 }
 

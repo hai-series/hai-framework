@@ -13,6 +13,8 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象
 
 > ⚠️ **服务端模块（Node.js / Fetch Runtime）。** 浏览器端通过 `@h-ai/api-client` 调用由本模块暴露的 HTTP API。
 
+> 生命周期说明：`@h-ai/serv` 是无状态 HTTP App 装配器，不提供 `init()` / `close()`；依赖模块（iam/storage/ai/crypto 等）由应用先初始化，并在 `serv.listen(..., { onClose })` 中反向释放。`serv.createApp()` 的启动期配置错误会 fail-fast 抛出。
+
 ---
 
 ## 适用场景

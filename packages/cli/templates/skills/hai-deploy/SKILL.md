@@ -61,6 +61,8 @@ services:
 ```typescript
 import { deploy } from '@h-ai/deploy'
 
+deploy.credentials.load()
+
 await deploy.init({
   provider: { type: 'vercel', token: 'vel_xxx' },
   services: {
@@ -113,9 +115,13 @@ if (result.success) {
 
 | 方法                   | 签名                                                                       | 说明         |
 | ---------------------- | -------------------------------------------------------------------------- | ------------ |
+| `deploy.credentials.load` | `() => HaiResult<string[]>`                                             | 加载凭证到 `process.env` |
+| `deploy.credentials.save` | `(key: string, value: string) => HaiResult<void>`                        | 保存单个凭证 |
+| `deploy.credentials.saveAll` | `(entries: Record<string, string>) => HaiResult<void>`                | 批量保存凭证 |
+| `deploy.credentials.getPath` | `() => string`                                                         | 获取凭证文件路径 |
 | `deploy.init`          | `(config: DeployConfigInput) => Promise<HaiResult<void>>`        | 初始化模块   |
 | `deploy.close`         | `() => Promise<void>`                                                      | 关闭模块     |
-| `deploy.scan`          | `(appDir: string) => Promise<HaiResult<ScanResult>>`             | 扫描应用     |
+| `deploy.scan`          | `(appDir: string) => Promise<HaiResult<ScanResult>>`             | 扫描应用（不依赖 init） |
 | `deploy.provisionAll`  | `(projectName: string) => Promise<HaiResult<ProvisionResult[]>>` | 开通所有服务 |
 | `deploy.deployApp`     | `(appDir: string, options?) => Promise<HaiResult<DeployResult>>` | 完整部署     |
 | `deploy.config`        | `DeployConfig \| null`                                                     | 当前配置     |
@@ -125,12 +131,9 @@ if (result.success) {
 
 ## 凭证管理
 
-| 函数                         | 说明                                       |
-| ---------------------------- | ------------------------------------------ |
-| `loadCredentials()`          | 加载 ~/.hai/credentials.yml 到 process.env |
-| `saveCredential(key, value)` | 保存单个凭证                               |
-| `saveCredentials(entries)`   | 批量保存凭证                               |
-| `getCredentialsPath()`       | 获取凭证文件路径                           |
+所有凭证操作都通过 `deploy.credentials.*` 访问，模块入口不再单独导出自由函数。
+
+> `deploy.credentials.*()` 与 `deploy.scan()` 都不依赖 `deploy.init()`，可用于 CLI 在读取 `_deploy.yml` 之前准备环境。
 
 ---
 
@@ -147,8 +150,8 @@ if (result.success) {
 | `HaiDeployError.PROVISION_FAILED`      | `hai:deploy:007`   | 基础设施开通失败         |
 | `HaiDeployError.ADAPTER_MISSING`       | `hai:deploy:008`   | SvelteKit adapter 未安装 |
 | `HaiDeployError.SCAN_FAILED`           | `hai:deploy:009`   | 应用扫描失败             |
-| `HaiDeployError.ENV_VAR_FAILED`        | `hai:deploy:010`   | 环境变量设置失败         |
-| `HaiDeployError.NOT_INITIALIZED`       | `hai:deploy:011`   | 模块未初始化             |
+| `HaiDeployError.NOT_INITIALIZED`       | `hai:deploy:010`   | 模块未初始化             |
+| `HaiDeployError.ENV_VAR_FAILED`        | `hai:deploy:011`   | 环境变量设置失败         |
 | `HaiDeployError.UNSUPPORTED_TYPE`      | `hai:deploy:012`   | 不支持的类型             |
 | `HaiDeployError.CONFIG_ERROR`          | `hai:deploy:013`   | 配置错误                 |
 | `HaiDeployError.CREDENTIAL_ERROR`      | `hai:deploy:014`   | 凭证读写失败             |

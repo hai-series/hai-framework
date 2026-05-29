@@ -94,6 +94,8 @@ await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 await apiClient.close()
 ```
 
+> 已初始化后再次 `init()` 会返回 `CONFIG_ERROR`，不会覆盖现有 client；切换 `baseUrl` / `fetch` / `transport` 前必须先 `close()`，避免旧 transport 会话泄漏。
+
 ## Token Storage 适配器
 
 | 工厂调用 | 存储位置 | 适用场景 |
@@ -130,7 +132,7 @@ if (login.success) {
 
 | API | 用途 |
 | --- | --- |
-| `apiClient.init(config)` | 初始化默认 API Service client |
+| `apiClient.init(config)` | 初始化默认 API Service client；重复初始化返回 `CONFIG_ERROR` |
 | `apiClient.close()` | 清理 client 状态 |
 | `apiClient.auth.setTokens(tokens)` | 写入 access token；非 httpOnly 存储会同时写入 refresh token |
 | `apiClient.auth.clear()` | 清理 Token |

@@ -48,9 +48,11 @@ export const POST = kit.handler(async ({ request, locals }) => {
 ```ts
 import { kit } from '@h-ai/kit'
 
-const client = kit.client.create({ auth: true })
+const client = kit.client.create()
 export const { apiFetch } = client
 ```
+
+> 同源 endpoint 优先使用 httpOnly Cookie；`auth: true` 只读取 `kit.auth.setBrowserToken()` 写入的页面内存 Token，不会默认读写 localStorage。确需 Bearer Header 时，显式传入 `BrowserTokenStore`，禁止把敏感 Token 存入 localStorage。
 
 ### 4. 同源传输加密
 
@@ -100,7 +102,7 @@ export const handle = kit.createHandle({
 // lib/utils/api.ts —— 业务层只看到 apiFetch
 import { kit } from '@h-ai/kit'
 
-export const { apiFetch } = kit.client.create({ auth: true })
+export const { apiFetch } = kit.client.create()
 ```
 
 默认协商端点：`/api/_hai/key-exchange`。如 `keyExchangePath` 自定义，浏览器端同步设置 `keyExchangeUrl`。

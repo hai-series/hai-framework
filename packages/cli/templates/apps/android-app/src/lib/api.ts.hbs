@@ -4,7 +4,7 @@
  * 使用 @h-ai/api-client 单例模式构建统一 HTTP 客户端，
  * 搭配 @h-ai/capacitor 的原生 Token 存储。
  */
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 // Capacitor 静态构建后通过 Vite 的 import.meta.env 注入 PUBLIC_* 变量
@@ -19,7 +19,8 @@ const API_BASE = (import.meta.env.PUBLIC_API_BASE as string | undefined) ?? 'htt
  * - 自动附加 Bearer Token、401 自动刷新重试
  */
 export async function initApi() {
-  return api.init({
+  // 公共入口统一命名为 apiClient；不要使用历史 api 别名，避免生成项目类型不匹配。
+  return apiClient.init({
     baseUrl: `${API_BASE}/api/v1`,
     auth: {
       storage: createCapacitorTokenStorage(),
@@ -28,4 +29,4 @@ export async function initApi() {
   })
 }
 
-export { api }
+export { apiClient }
