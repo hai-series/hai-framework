@@ -6,7 +6,6 @@
  */
 
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import adapter from '@sveltejs/adapter-static'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
 /** @type {import('@sveltejs/kit').Config} */
@@ -14,17 +13,6 @@ const config = {
   preprocess: [autoImportHaiUi(), vitePreprocess()],
   compilerOptions: {
     runes: true,
-  },
-  kit: {
-    adapter: adapter({
-      pages: 'build',
-      assets: 'build',
-      fallback: 'index.html',
-    }),
-    alias: {
-      '@h-ai/ui': '../../packages/ui/src/lib/index.ts',
-      '@h-ai/ui/*': '../../packages/ui/*',
-    },
   },
 }
 

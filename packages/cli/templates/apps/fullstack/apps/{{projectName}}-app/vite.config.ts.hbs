@@ -2,7 +2,7 @@
 {{#if fullstack.frontends.app}}
 import process from 'node:process'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
-import { sveltekit } from '@sveltejs/kit/vite'
+import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      sveltekit(),
+      svelte(),
       tailwindcss(),
       paraglideVitePlugin({
         project: './project.inlang',
