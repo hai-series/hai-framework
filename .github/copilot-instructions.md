@@ -1,9 +1,10 @@
-# Copilot 工作规范（hai-framework）
+# AI 工作规范（hai-framework）
 
 > 本文件是 AI 助手在本仓库工作的总规范。目标：**少而精、删除优先、最小知识、统一约定、教训沉淀**。
 >
-> 模块/应用/测试/Svelte 专属规范见 `.github/instructions/`（按路径自动注入）。
-> 详细操作手册见 `.github/skills/`（按任务描述命中加载）。
+> 通用入口见仓库根目录 `AGENTS.md`。本文件名保留 GitHub Copilot 约定，但内容同时供 Codex、OpenCode 等 AI 编程助手引用。
+> 模块/应用/测试/Svelte 专属规范见 `.github/instructions/`。
+> 详细操作手册见 `.github/skills/`；Codex/OpenCode 通过根目录 `AGENTS.md` 路由到同一套文件。
 
 ---
 
@@ -65,12 +66,12 @@
 - 类型/接口：哪些对外接口、类型、错误码会变？
 - 导入：哪些 import 需要新增 / 删除 / 改路径 / 改命名？
 
-### 间接影响（必须用 `grep_search` 确认，不靠猜）
+### 间接影响（必须用全局检索确认，不靠猜）
 
 - 引用点：哪些文件 import 了被修改的模块？
 - **依赖方模块/应用**：哪些 `packages/*` 和 `apps/*` 会受影响，必须**同步更新**到通过状态。
 - 测试：哪些测试需要更新 / 新增？
-- 文档：哪些 README / Skill 模板 / 代码注释 / `.github/copilot-instructions.md` 需要同步？
+- 文档：哪些 README / Skill 模板 / 代码注释 / `AGENTS.md` / `.github/copilot-instructions.md` 需要同步？
 - 纯文档/定制文件改动：也要说明无运行时代码影响；不能把未运行的门禁写成“通过”。
 
 ---
@@ -176,7 +177,7 @@ packages/<xx>/src/
 - ✅ **类型定义**：`xx-types.ts` 与 README/Skill 中的类型描述一致
 - ✅ **错误码**：新增错误码同步更新 [../LLMS.txt](../LLMS.txt) 的错误码段位（如有）
 
-### 5.3 依赖方传导（必须 `grep_search` 确认，逐一更新到通过状态）
+### 5.3 依赖方传导（必须全局检索确认，逐一更新到通过状态）
 
 - ✅ **依赖该模块的其他 `packages/*`**：调用点全部跟随更新，typecheck 通过
 - ✅ **依赖该模块的 `apps/*`**：调用点、路由、API 端点全部跟随更新，build + e2e 通过

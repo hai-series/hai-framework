@@ -45,7 +45,7 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 - **可预测的 API**：每个模块都是 `init() → use → close()`，AI 只需学一种模式就能操作所有模块
 - **不抛异常**：所有操作返回 `HaiResult<T>` —— 成功是 `{ success: true, data }` ，失败是 `{ success: false, error }`。AI 不会遗漏错误处理，链路完全可控
 - **配置即校验**：Zod Schema 在 `init()` 时完成验证，配置错了立刻报错，不会在运行时炸
-- **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.agents/skills/`），Codex / OpenCode / Copilot 等支持 skills 的助手可直接读取并正确使用 API
+- **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.agents/skills/`），OpenCode 可原生发现，Codex / Copilot 等助手可通过项目指引按需读取并正确使用 API
 - **编码规范可执行**：`.github/copilot-instructions.md` 定义了命名、分层、测试、文档的完整规范，AI 助手每次改动自动遵守
 - **LLMS.txt 作为 AI 参考手册**：根目录 `LLMS.txt` 提供完整的 API 签名与示例，AI 可直接检索
 
@@ -109,12 +109,12 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 ```
 my-app/
 ├── .agents/
-│   └── skills/                       # 单一 Skill 目录（Codex / OpenCode / Copilot 原生读取）
+│   └── skills/                       # 单一 Skill 目录（OpenCode 原生发现，其他助手通过入口指引引用）
 ├── .github/
 │   └── copilot-instructions.md       # GitHub Copilot 项目指令（配合 .agents/skills/）
 ├── AGENTS.md                         # Codex / OpenCode / 通用 AI 指引
 ├── CLAUDE.md                         # Claude Code 项目指引（通过 @AGENTS.md 复用共享规范）
-└── opencode.json                     # OpenCode 配置（instructions + skills.paths -> .agents/skills）
+└── opencode.json                     # OpenCode 配置（补充 instructions；skills 由 .agents/skills 原生发现）
 ```
 
 **工作方式**：支持 skills 的助手会从 `.agents/skills/` 获取模块级用法；Claude Code 则通过 `CLAUDE.md` + `@AGENTS.md` 复用同一套项目规范。改动后统一执行 `typecheck → lint → test` 质量门禁 —— 整个过程无需人类手动补齐额外上下文。
@@ -769,19 +769,19 @@ await reach.send({ provider: 'email', to: 'user@example.com', template: 'welcome
 | `api-service`       | Hono + oRPC API Service（contract 组合根） | core, reldb, cache, iam, storage, ai, api-contract, serv |
 | `corporate-website` | 企业官网 + 合作登记 + AI 客服              | core, reldb, cache, storage, ai, reach, kit, ui          |
 | `h5-app`            | 移动端 H5（拍照识别 / 购物车 / 登录）      | core, reldb, iam, cache, storage, ai, kit, ui            |
-| `desktop-app`       | Tauri 桌面应用                             | core, kit, ui                                            |
-| `android-app`       | Capacitor Android 应用                     | core, kit, ui, capacitor                                 |
+| `desktop-app`       | Tauri 桌面应用                             | api-client, api-service-contract, crypto, ui             |
+| `mobile-app`        | Capacitor Android / iOS 移动端应用         | api-client, api-service-contract, crypto, ui, capacitor  |
 
 ### 按应用快速启动
 
-| 应用                | 启动方式                                  |
-| ------------------- | ----------------------------------------- |
-| `admin-console`     | `pnpm --filter admin-console dev`         |
-| `api-service`       | `pnpm --filter api-service dev`           |
-| `corporate-website` | `pnpm --filter corporate-website dev`     |
-| `h5-app`            | `pnpm --filter h5-app dev`                |
-| `desktop-app`       | `cd apps/desktop-app && pnpm tauri:dev`   |
-| `android-app`       | `cd apps/android-app && pnpm cap:android` |
+| 应用                | 启动方式                                |
+| ------------------- | --------------------------------------- |
+| `admin-console`     | `pnpm --filter admin-console dev`       |
+| `api-service`       | `pnpm --filter api-service dev`         |
+| `corporate-website` | `pnpm --filter corporate-website dev`   |
+| `h5-app`            | `pnpm --filter h5-app dev`              |
+| `desktop-app`       | `cd apps/desktop-app && pnpm tauri:dev` |
+| `mobile-app`        | `pnpm --filter mobile-app dev`          |
 
 ## 开发
 
