@@ -110,6 +110,8 @@ const BRIDGE_FILES = [
   },
 ] as const
 
+const BRIDGE_PROFILE_REGEX = /^[a-z0-9-]+$/
+
 /**
  * 获取 templates/skills/ 目录的绝对路径
  *
@@ -189,14 +191,15 @@ async function copyBridgeFiles(
   templatesDir: string,
   projectPath: string,
   overwrite = true,
+  appType?: string,
 ): Promise<string[]> {
   const copiedFiles: string[] = []
 
   for (const file of BRIDGE_FILES) {
-    const src = path.join(templatesDir, file.source)
+    const src = await resolveBridgeSource(templatesDir, file.source, appType)
     const dest = path.join(projectPath, file.destination)
 
-    if (!(await fse.pathExists(src))) {
+    if (!src) {
       continue
     }
 
@@ -209,6 +212,27 @@ async function copyBridgeFiles(
   }
 
   return copiedFiles
+}
+
+async function resolveBridgeSource(
+  templatesDir: string,
+  source: string,
+  appType?: string,
+): Promise<string | null> {
+  const profile = appType && BRIDGE_PROFILE_REGEX.test(appType) ? appType : 'generic'
+  const candidates = [
+    path.join(templatesDir, 'bridges', profile, source),
+    path.join(templatesDir, 'bridges', 'generic', source),
+    path.join(templatesDir, source),
+  ]
+
+  for (const candidate of candidates) {
+    if (await fse.pathExists(candidate)) {
+      return candidate
+    }
+  }
+
+  return null
 }
 
 /**
@@ -262,7 +286,7 @@ export async function generateSkillFiles(
   copiedFiles.push(...await copySkills(templatesDir, featureSkills, projectPath))
 
   // 复制桥接文件
-  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath))
+  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, true, appType))
 
   return copiedFiles
 }
@@ -333,6 +357,7 @@ export async function generateProjectAiSupport(
   options: {
     overwriteSkills?: boolean
     overwriteBridgeFiles?: boolean
+    appType?: string
   } = {},
 ): Promise<string[]> {
   const templatesDir = getSkillTemplatesDir()
@@ -348,7 +373,7 @@ export async function generateProjectAiSupport(
 
   const copiedFiles: string[] = []
   copiedFiles.push(...await copySkills(templatesDir, skillNames, projectPath, SKILL_TARGET_DIRS, overwriteSkills))
-  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, overwriteBridgeFiles))
+  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, overwriteBridgeFiles, options.appType))
 
   return copiedFiles
 }

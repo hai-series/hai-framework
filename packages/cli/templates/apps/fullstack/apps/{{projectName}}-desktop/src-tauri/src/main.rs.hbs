@@ -1,0 +1,8 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    {{fullstack.nativeAppIdSegment}}_desktop_lib::run()
+}
+{{/if}}

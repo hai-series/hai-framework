@@ -1,0 +1,41 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "{{projectName}} Desktop",
+  "version": "0.1.0",
+  "identifier": "com.hai.{{fullstack.nativeAppIdSegment}}.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://localhost:{{fullstack.ports.desktop}}",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "{{projectName}} Desktop",
+        "width": 1280,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://localhost:* ws://127.0.0.1:*; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
+{{/if}}

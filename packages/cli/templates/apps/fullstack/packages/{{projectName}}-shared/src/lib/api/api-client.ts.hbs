@@ -14,7 +14,7 @@ export interface FetchAppInfoOptions {
 
 export async function fetchAppInfo(options: FetchAppInfoOptions = {}): Promise<AppInfo> {
   const fetchFn = options.fetchFn ?? fetch
-  const baseUrl = options.baseUrl ?? DEFAULT_API_ORIGIN
+  const baseUrl = options.baseUrl ?? resolveDefaultApiOrigin()
   const clientName = options.clientName ?? '{{projectName}}-shared'
 
   const client = apiClient.create({{fullstack.contractExportName}})
@@ -35,6 +35,10 @@ export async function fetchAppInfo(options: FetchAppInfoOptions = {}): Promise<A
   finally {
     await client.close()
   }
+}
+
+function resolveDefaultApiOrigin(): string {
+  return import.meta.env.PUBLIC_API_BASE ?? DEFAULT_API_ORIGIN
 }
 
 function normalizeApiBaseUrl(value: string): string {

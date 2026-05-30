@@ -122,6 +122,7 @@ describe('fullstack TemplateContext', () => {
 
     expect(ctx.fullstack?.contractPackageName).toBe('demo-contract')
     expect(ctx.fullstack?.servPackageName).toBe('demo-serv')
+    expect(ctx.fullstack?.nativeAppIdSegment).toBe('demo')
     expect(ctx.fullstack?.frontendApps.map(app => app.target)).toEqual(['web', 'app', 'desktop'])
     expect(ctx.fullstack?.e2eFrontend?.target).toBe('web')
   })
@@ -138,6 +139,18 @@ describe('fullstack TemplateContext', () => {
     expect(ctx.fullstack?.hasMiniapp).toBe(true)
     expect(ctx.fullstack?.frontendApps).toEqual([])
     expect(ctx.fullstack?.e2eFrontend).toBeUndefined()
+  })
+
+  it('原生壳标识应去除短横线并保证可作为标识片段', () => {
+    const ctx = buildTemplateContext({
+      name: '123-demo-app',
+      appType: 'fullstack' as AppType,
+      features: [],
+      frontends: ['app', 'desktop'],
+      packageManager: 'pnpm',
+    })
+
+    expect(ctx.fullstack?.nativeAppIdSegment).toBe('app123demoapp')
   })
 })
 

@@ -1,7 +1,7 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.app}}
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import adapter from '@sveltejs/adapter-auto'
+import adapter from '@sveltejs/adapter-static'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
 /** @type {import('@sveltejs/kit').Config} */
@@ -12,7 +12,11 @@ const config = {
     runes: true,
   },
   kit: {
-    adapter: adapter(),
+    adapter: adapter({
+      pages: 'build',
+      assets: 'build',
+      fallback: 'index.html',
+    }),
   },
 }
 

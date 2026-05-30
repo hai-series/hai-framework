@@ -1,8 +1,10 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.app}}
 <script lang="ts">
+  import { initCapacitor } from '$lib/capacitor.js'
   import { setLocale } from '$lib/paraglide/runtime.js'
   import { AppShell } from '{{fullstack.sharedPackageName}}'
+  import { onMount } from 'svelte'
   import '../app.css'
 
   const { children } = $props()
@@ -10,6 +12,10 @@
   function syncLocale(locale: string) {
     setLocale(locale as Parameters<typeof setLocale>[0])
   }
+
+  onMount(() => {
+    void initCapacitor()
+  })
 </script>
 
 <AppShell platform="app" onLocaleChange={syncLocale}>

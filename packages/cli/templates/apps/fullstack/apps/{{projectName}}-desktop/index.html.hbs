@@ -1,0 +1,15 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+<!doctype html>
+<html lang="{{fullstack.i18n.baseLocale}}" data-theme="{{fullstack.theme.defaultTheme}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{projectName}} Desktop</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+{{/if}}

@@ -176,6 +176,16 @@ describe('createProject — api 类型', () => {
     expect(await exists(projectPath, '.agents/skills/hai-reldb/SKILL.md')).toBe(true)
     expect(await exists(projectPath, '.agents/skills/hai-cache/SKILL.md')).toBe(true)
   })
+
+  it('应生成 API 类型专属 AI 指引', async () => {
+    const agents = await readText(projectPath, 'AGENTS.md')
+    const copilot = await readText(projectPath, '.github/copilot-instructions.md')
+
+    expect(agents).toContain('API 服务')
+    expect(agents).not.toContain('Fullstack')
+    expect(copilot).toContain('API 服务工程指引')
+    expect(copilot).not.toContain('管理后台')
+  })
 })
 
 describe('createProject — --yes 非交互默认配置', () => {
@@ -309,10 +319,10 @@ describe('createProject — admin 类型 + iam', () => {
     expect(await exists(projectPath, '.github/skills')).toBe(false)
   })
 
-  it('应生成 opencode.json 并声明 instructions 与 skills.paths', async () => {
+  it('应生成 opencode.json 并声明补充 instructions，Skill 由 .agents/skills 原生发现', async () => {
     const opencode = await readJson(projectPath, 'opencode.json')
-    expect(opencode.instructions).toEqual(['AGENTS.md'])
-    expect(opencode.skills.paths).toEqual(['.agents/skills'])
+    expect(opencode.instructions).toEqual(['.github/copilot-instructions.md'])
+    expect(opencode.skills).toBeUndefined()
   })
 
   it('不应生成额外的 .codex/.opencode skill 树', async () => {
@@ -326,17 +336,16 @@ describe('createProject — admin 类型 + iam', () => {
     const copilot = await readText(projectPath, '.github/copilot-instructions.md')
 
     expect(agents).toContain('.agents/skills/')
-    expect(agents).toContain('packages/<project>-serv')
+    expect(agents).toContain('管理后台')
     expect(agents).toContain('## 完成条件')
     expect(agents).toContain('pnpm typecheck')
+    expect(agents).not.toContain('packages/<project>-serv')
     expect(claude).toContain('@AGENTS.md')
-    expect(claude).toContain('.agents/skills/')
-    expect(claude).toContain('质量门禁与完成条件')
+    expect(claude).toContain('管理后台')
     expect(copilot).toContain('.agents/skills/')
-    expect(copilot).toContain('Fullstack 服务端')
-    expect(copilot).not.toContain('路由/SSR')
+    expect(copilot).toContain('管理后台')
+    expect(copilot).not.toContain('Fullstack 服务端')
     expect(copilot).toContain('## 质量门禁')
-    expect(copilot).toContain('## 完成条件')
   })
 })
 
@@ -489,6 +498,10 @@ describe('createProject — fullstack 类型', () => {
 
     const pkg = await readJson(projectPath, 'package.json')
     expect(pkg.scripts['i18n:compile']).toBe('pnpm --filter proj-fullstack-shared paraglide:compile && pnpm --filter proj-fullstack-web paraglide:compile && pnpm --filter proj-fullstack-app paraglide:compile && pnpm --filter proj-fullstack-desktop paraglide:compile')
+    expect(pkg.scripts.compile).toBe('pnpm typecheck && pnpm build')
+    expect(pkg.scripts.package).toContain('pnpm --filter proj-fullstack-app package')
+    expect(pkg.scripts.package).toContain('pnpm --filter proj-fullstack-desktop package')
+    expect(pkg.scripts.deploy).toBe('pnpm package')
     expect(pkg.scripts.typecheck).toBe('pnpm --filter proj-fullstack-contract build && pnpm i18n:compile && pnpm -r --if-present typecheck')
     expect(pkg.scripts.test).toBe('pnpm --filter proj-fullstack-contract build && pnpm i18n:compile && pnpm -r --if-present test')
     expect(pkg.scripts.postinstall).toBe('pnpm i18n:compile')
@@ -501,6 +514,8 @@ describe('createProject — fullstack 类型', () => {
     const readme = await readText(projectPath, 'README.md')
     expect(readme).toContain('packages/proj-fullstack-shared')
     expect(readme).toContain('i18n 与 shared 协同')
+    expect(readme).toContain('pnpm compile')
+    expect(readme).toContain('pnpm package')
 
     const eslintConfig = await readText(projectPath, 'eslint.config.js')
     expect(eslintConfig).toContain('\'svelte/indent\': \'off\'')
@@ -555,7 +570,7 @@ describe('createProject — fullstack 类型', () => {
   })
 
   it('应按多选前端生成 web / app / desktop 工程', async () => {
-    for (const target of ['web', 'app', 'desktop']) {
+    for (const target of ['web', 'app']) {
       const pkg = await readJson(projectPath, `apps/proj-fullstack-${target}/package.json`)
       expect(pkg.name).toBe(`proj-fullstack-${target}`)
       expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
@@ -569,6 +584,7 @@ describe('createProject — fullstack 类型', () => {
       expect(pkg.dependencies['proj-fullstack-shared']).toBe('workspace:*')
       expect(pkg.scripts['paraglide:compile']).toContain('paraglide-js compile')
       expect(pkg.scripts.typecheck).toContain('pnpm paraglide:compile')
+      expect(pkg.scripts.package).toBe(target === 'app' ? 'pnpm cap:sync' : 'pnpm build')
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/routes/+page.svelte`)).toBe(true)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/project.inlang/settings.json`)).toBe(true)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/messages/zh-CN.json`)).toBe(true)
@@ -604,12 +620,61 @@ describe('createProject — fullstack 类型', () => {
       expect(apiTest).toContain('proj-fullstack-shared')
     }
 
+    const appPkg = await readJson(projectPath, 'apps/proj-fullstack-app/package.json')
+    expect(appPkg.dependencies['@h-ai/capacitor']).toBe(HAI_DEP_VERSION)
+    expect(appPkg.devDependencies['@capacitor/android']).toBe('^8.3.4')
+    expect(appPkg.devDependencies['@capacitor/camera']).toBe('^8.0.2')
+    expect(appPkg.devDependencies['@capacitor/ios']).toBe('^8.3.4')
+    expect(appPkg.devDependencies['@capacitor/push-notifications']).toBe('^8.0.2')
+    expect(appPkg.devDependencies['@sveltejs/adapter-static']).toBe('^3.0.10')
+    expect(appPkg.scripts['cap:build:android:release']).toContain('cap build android')
+    expect(await exists(projectPath, 'apps/proj-fullstack-app/capacitor.config.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-app/src/lib/capacitor.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-app/src/routes/+layout.ts')).toBe(true)
+    const appSvelteConfig = await readText(projectPath, 'apps/proj-fullstack-app/svelte.config.js')
+    expect(appSvelteConfig).toContain('@sveltejs/adapter-static')
+    expect(appSvelteConfig).toContain('fallback: \'index.html\'')
+    const appReadme = await readText(projectPath, 'apps/proj-fullstack-app/README.md')
+    expect(appReadme).toContain('Capacitor')
+    expect(appReadme).toContain('cap:build:android:release')
+
+    const desktopPkg = await readJson(projectPath, 'apps/proj-fullstack-desktop/package.json')
+    expect(desktopPkg.name).toBe('proj-fullstack-desktop')
+    expect(desktopPkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
+    expect(desktopPkg.dependencies['proj-fullstack-shared']).toBe('workspace:*')
+    expect(desktopPkg.dependencies['@tauri-apps/api']).toBe('^2.10.1')
+    expect(desktopPkg.dependencies['@tauri-apps/plugin-shell']).toBe('^2.3.5')
+    expect(desktopPkg.devDependencies['@tauri-apps/cli']).toBe('^2.10.1')
+    expect(desktopPkg.devDependencies['@sveltejs/kit']).toBeUndefined()
+    expect(desktopPkg.scripts.package).toBe('pnpm tauri:build')
+    expect(desktopPkg.scripts['tauri:dev']).toBe('tauri dev')
+    expect(await exists(projectPath, 'apps/proj-fullstack-desktop/index.html')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-desktop/src/main.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-desktop/src/App.svelte')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-desktop/src/routes/+page.svelte')).toBe(false)
+    expect(await exists(projectPath, 'apps/proj-fullstack-desktop/src-tauri/tauri.conf.json')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-desktop/src-tauri/Cargo.toml')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-desktop/src-tauri/icons/icon.ico')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-desktop/src-tauri/icons/icon.icns')).toBe(true)
+    const tauriConfig = await readText(projectPath, 'apps/proj-fullstack-desktop/src-tauri/tauri.conf.json')
+    expect(tauriConfig).toContain('"icons/icon.ico"')
+    const desktopApp = await readText(projectPath, 'apps/proj-fullstack-desktop/src/App.svelte')
+    expect(desktopApp).toContain('platform="desktop"')
+    expect(desktopApp).toContain('fetchAppInfo')
+    const desktopVite = await readText(projectPath, 'apps/proj-fullstack-desktop/vite.config.ts')
+    expect(desktopVite).toContain('TAURI_DEV_HOST')
+    expect(desktopVite).toContain('svelte()')
+    const desktopReadme = await readText(projectPath, 'apps/proj-fullstack-desktop/README.md')
+    expect(desktopReadme).toContain('Tauri v2')
+    expect(desktopReadme).toContain('pnpm --filter proj-fullstack-desktop package')
+
     // shared 包断言
     const sharedPkg = await readJson(projectPath, 'packages/proj-fullstack-shared/package.json')
     expect(sharedPkg.name).toBe('proj-fullstack-shared')
     expect(sharedPkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(sharedPkg.devDependencies['@inlang/paraglide-js']).toBeDefined()
     expect(sharedPkg.devDependencies['@inlang/plugin-message-format']).toBeDefined()
+    expect(sharedPkg.devDependencies.vite).toBe('^8.0.14')
     expect(sharedPkg.scripts['paraglide:compile']).toContain('paraglide-js compile')
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/project.inlang/settings.json')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/messages/zh-CN.json')).toBe(true)
@@ -619,6 +684,8 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/LanguageSwitcher.svelte')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/api/api-client.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/index.ts')).toBe(true)
+    const sharedClient = await readText(projectPath, 'packages/proj-fullstack-shared/src/lib/api/api-client.ts')
+    expect(sharedClient).toContain('import.meta.env.PUBLIC_API_BASE')
 
     const inlangSettings = await readJson(projectPath, 'packages/proj-fullstack-shared/project.inlang/settings.json')
     expect(inlangSettings.baseLocale).toBe('zh-CN')
@@ -663,14 +730,18 @@ describe('createProject — fullstack 类型', () => {
     const copilot = await readText(projectPath, '.github/copilot-instructions.md')
 
     expect(agents).toContain('packages/<project>-serv')
+    expect(agents).toContain('apps/<project>-app')
+    expect(agents).toContain('Capacitor')
+    expect(agents).toContain('Tauri')
     expect(agents).toContain('## 完成条件')
     expect(agents).toContain('pnpm typecheck')
     expect(claude).toContain('@AGENTS.md')
-    expect(claude).toContain('质量门禁与完成条件')
+    expect(claude).toContain('fullstack')
     expect(copilot).toContain('Fullstack 服务端')
+    expect(copilot).toContain('Desktop')
+    expect(copilot).toContain('Tauri v2')
     expect(copilot).toContain('## 质量门禁')
     expect(copilot).toContain('## 完成条件')
-    expect(copilot).not.toContain('路由/SSR')
   })
 })
 
@@ -813,8 +884,8 @@ describe('addModule', () => {
     expect(await fse.pathExists(path.join(dir, '.github/skills'))).toBe(false)
 
     const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
-    expect(opencode.instructions).toEqual(['AGENTS.md'])
-    expect(opencode.skills.paths).toEqual(['.agents/skills'])
+    expect(opencode.instructions).toEqual(['.github/copilot-instructions.md'])
+    expect(opencode.skills).toBeUndefined()
 
     expect(await fse.pathExists(path.join(dir, '.codex/skills'))).toBe(false)
     expect(await fse.pathExists(path.join(dir, '.opencode/skills'))).toBe(false)
@@ -880,8 +951,8 @@ describe('addModule', () => {
     expect(await fse.pathExists(path.join(dir, '.github/skills'))).toBe(false)
 
     const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
-    expect(opencode.instructions).toEqual(['AGENTS.md'])
-    expect(opencode.skills.paths).toEqual(['.agents/skills'])
+    expect(opencode.instructions).toEqual(['.github/copilot-instructions.md'])
+    expect(opencode.skills).toBeUndefined()
   })
 
   it('回填 AI 支持时不应覆盖已有桥接文件，也不应删除遗留 .github/skills', async () => {

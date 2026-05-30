@@ -1,0 +1,12 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+{
+  "identifier": "default",
+  "description": "{{projectName}} Desktop 默认权限",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open"
+  ]
+}
+{{/if}}

@@ -2,7 +2,7 @@
 {{#if fullstack.frontends.desktop}}
 # {{projectName}}-desktop
 
-桌面端前端工程，使用 `@h-ai/api-client` 绑定共享 contract 调用后端 API，并通过 `@h-ai/ui` 组件搭建页面；后续可按需接入 Tauri。
+桌面端工程，参考 `apps/desktop-app` 使用 Tauri v2 + Svelte 5 + Vite，前端通过共享 contract 调用 `{{fullstack.servPackageName}}`。
 
 ## i18n 与 shared 协同
 
@@ -12,10 +12,24 @@
 
 自定义建议：桌面端菜单、状态、快捷操作文案放在本目录 `messages/`；跨端通用能力放到 shared。
 
-## 开发
+## 编译、打包与部署
 
-- `pnpm i18n:compile`：在工作区根目录统一编译 shared + 各前端 Paraglide 输出
-- `pnpm --filter {{projectName}}-desktop dev`，默认端口 4175
-- `pnpm --filter {{projectName}}-desktop paraglide:compile`：只编译本端 messages
-- `pnpm --filter {{projectName}}-desktop test`
+```bash
+# 仅前端开发，默认端口 {{fullstack.ports.desktop}}
+pnpm --filter {{projectName}}-desktop dev
+
+# Tauri 桌面开发
+pnpm --filter {{projectName}}-desktop tauri:dev
+
+# 编译 WebView 前端产物到 dist/
+pnpm --filter {{projectName}}-desktop build
+
+# 打包桌面安装包
+pnpm --filter {{projectName}}-desktop package
+
+# 当前模板的 deploy 入口默认执行 package，可按发布平台替换
+pnpm --filter {{projectName}}-desktop deploy
+```
+
+打包前需要安装 Rust 工具链和 Tauri 平台依赖。生产环境部署时同步调整 `.env` 中的 `PUBLIC_API_BASE` 与 `src-tauri/tauri.conf.json` 的 `connect-src` 白名单。
 {{/if}}

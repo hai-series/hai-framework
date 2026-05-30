@@ -2,7 +2,7 @@
 {{#if fullstack.frontends.app}}
 # {{projectName}}-app
 
-App/H5 前端工程，使用 `@h-ai/api-client` 绑定共享 contract 调用后端 API，并通过 `@h-ai/ui` 组件搭建页面。
+App/H5 前端工程，参考 `apps/mobile-app` 使用 SvelteKit SPA + Capacitor，可输出 Web 预览并同步 Android / iOS 原生工程。
 
 ## i18n 与 shared 协同
 
@@ -12,10 +12,26 @@ App/H5 前端工程，使用 `@h-ai/api-client` 绑定共享 contract 调用后�
 
 自定义建议：移动端独有引导、运营位、按钮文案放在本目录 `messages/`；跨端通用组件放到 shared。
 
-## 开发
+## 编译、打包与部署
 
-- `pnpm i18n:compile`：在工作区根目录统一编译 shared + 各前端 Paraglide 输出
-- `pnpm --filter {{projectName}}-app dev`，默认端口 4174
-- `pnpm --filter {{projectName}}-app paraglide:compile`：只编译本端 messages
-- `pnpm --filter {{projectName}}-app test`
+```bash
+# 开发预览，默认端口 {{fullstack.ports.app}}
+pnpm --filter {{projectName}}-app dev
+
+# 编译静态 SPA 产物到 build/
+pnpm --filter {{projectName}}-app build
+
+# 同步原生工程；首次使用前按需执行 cap:add:android / cap:add:ios
+pnpm --filter {{projectName}}-app package
+
+# Android / iOS 原生打包
+pnpm --filter {{projectName}}-app cap:build:android:debug
+pnpm --filter {{projectName}}-app cap:build:android:release
+pnpm --filter {{projectName}}-app cap:build:ios
+
+# 当前模板的 deploy 入口默认执行 package，可按目标商店或 CI 平台替换
+pnpm --filter {{projectName}}-app deploy
+```
+
+部署前确认 `PUBLIC_API_BASE` 在 `.env` 中指向可访问的后端服务。Android 模拟器访问宿主机通常使用 `http://10.0.2.2:3000`。
 {{/if}}

@@ -1,29 +1,36 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.app}}
+import process from 'node:process'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
+import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
 
-export default defineConfig({
-  plugins: [
-    paraglideVitePlugin({
-      project: './project.inlang',
-      outdir: './src/lib/paraglide',
-      strategy: ['cookie', 'baseLocale'],
-    }),
-    sveltekit(),
-    tailwindcss(),
-  ],
-  optimizeDeps: {
-    exclude: ['bits-ui'],
-  },
-  ssr: {
-    noExternal: [/@h-ai\//, /{{fullstack.sharedPackageName}}/],
-  },
-  test: {
-    environment: 'node',
-    include: ['tests/**/*.test.ts'],
-  },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  Object.assign(process.env, env)
+
+  return {
+    plugins: [
+      sveltekit(),
+      tailwindcss(),
+      paraglideVitePlugin({
+        project: './project.inlang',
+        outdir: './src/lib/paraglide',
+        strategy: ['cookie', 'baseLocale'],
+      }),
+    ],
+    optimizeDeps: {
+      exclude: ['bits-ui'],
+    },
+    ssr: {
+      noExternal: [/@h-ai\//, /{{fullstack.sharedPackageName}}/],
+    },
+    test: {
+      environment: 'node',
+      include: ['tests/**/*.test.ts'],
+    },
+  }
 })
 {{/if}}

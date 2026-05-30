@@ -52,7 +52,8 @@ templates/
 │   └── project.inlang/
 │       └── settings.json    # Paraglide 项目配置
 │
-└── skills/                  # AI Skill 单一来源模板（分发到 .agents/skills/）
+└── skills/                  # AI Skill 与各 appType 桥接指引
+    └── bridges/             # admin / api / website / h5 / android-app / fullstack 专属 AGENTS/Copilot/Claude
 ```
 
 ## AI Skill 模板（Single Source of Truth）
@@ -60,9 +61,10 @@ templates/
 `templates/skills/` 是 CLI 生成共享 AI 上下文时的单一来源，同时用于 `hai create` 与 `hai add`。
 
 - 每个 Skill 目录会复制到 `.agents/skills/<skill>/`
-- `copilot-instructions.md` 会复制到 `.github/copilot-instructions.md`，并引导 Copilot/其他助手读取 `.agents/skills/`
-- `AGENTS.md`、`CLAUDE.md`、`opencode.json` 会复制到项目根目录
-- `opencode.json` 使用 OpenCode 的 `instructions` 与 `skills.paths` 配置，将项目级指令与 Skill 目录显式指向 `AGENTS.md` 和 `.agents/skills/`
+- `bridges/<appType>/copilot-instructions.md` 会复制到 `.github/copilot-instructions.md`；没有专属文件时回退到通用桥接文件
+- `bridges/<appType>/AGENTS.md`、`bridges/<appType>/CLAUDE.md` 会复制到项目根目录，确保不同样板工程使用自己的 AI 指引
+- `opencode.json` 会复制到项目根目录
+- `opencode.json` 使用 OpenCode 的 `instructions` 配置复用 `.github/copilot-instructions.md`；`.agents/skills/` 由 OpenCode 原生发现，不再写入过期的 `skills.paths`
 - `CLAUDE.md` 作为 Claude Code 的原生项目指引入口，并通过 `@AGENTS.md` 复用共享规范；`.agents/skills/` 仍是共享参考目录，而非 Claude Code 的原生 project skills 目录
 - `hai add` 只补齐缺失的 AI 支持文件，不覆盖用户已自定义的桥接文件，也不会自动删除遗留的 `.github/skills/`
 
@@ -93,7 +95,7 @@ templates/
 | `{{features.storage}}` | `boolean` | 是否选中 storage feature                     |
 | `{{features.ai}}`      | `boolean` | 是否选中 ai feature                          |
 
-`fullstack.*` 包含包名、前端选择、依赖版本和 `contractExportName`，用于渲染 contract / serv / 多端 UI 的模板。
+`fullstack.*` 包含包名、前端选择、依赖版本、`contractExportName` 和原生壳 `nativeAppIdSegment`，用于渲染 contract / serv / 多端 UI / Capacitor / Tauri 模板。
 
 ### 常用条件写法
 

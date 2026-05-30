@@ -68,9 +68,9 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
 
 const FRONTEND_TARGETS: Record<FrontendTarget, { name: string, description: string, implemented: boolean }> = {
   web: { name: 'Web', description: '浏览器 Web 应用', implemented: true },
-  app: { name: 'App', description: '移动端 H5/App 前端', implemented: true },
+  app: { name: 'App', description: '移动端 Capacitor App / H5 前端', implemented: true },
   miniapp: { name: '小程序', description: '预留目标，当前只生成说明占位', implemented: false },
-  desktop: { name: '桌面端', description: '桌面端前端工程（Tauri 预留）', implemented: true },
+  desktop: { name: '桌面端', description: 'Tauri 桌面端前端工程', implemented: true },
 }
 
 const DEFAULT_FULLSTACK_FRONTENDS: FrontendTarget[] = ['web', 'app', 'desktop']
@@ -998,12 +998,27 @@ function generateFullstackReadme(name: string, pm: string, frontends: FrontendTa
 
 已启用前端：${enabledFrontends || 'Web / App / Desktop'}
 
-## 开发
+## 开发、编译与打包
 
 \`\`\`bash
 ${pm} install
 ${pm} dev
+
+# 一键编译：类型检查 + 全工作区构建
+${pm} compile
+
+# 一键打包：Web build、App Capacitor sync、Desktop Tauri build（按启用前端执行）
+${pm} package
+
+# 部署入口：默认执行 package，可替换为团队自己的 CI/CD 发布脚本
+${pm} deploy
 \`\`\`
+
+前端单独交付命令：
+
+- Web：\`${pm} --filter ${name}-web build\` / \`${pm} --filter ${name}-web package\`
+- App：\`${pm} --filter ${name}-app package\`，Android/iOS 可用 \`cap:build:android:debug\` / \`cap:build:android:release\` / \`cap:build:ios\`
+- Desktop：\`${pm} --filter ${name}-desktop tauri:dev\` / \`${pm} --filter ${name}-desktop package\`
 
 ## i18n 与 shared 协同
 

@@ -44,10 +44,23 @@ const VERSIONS = {
   core: HAI_VERSION,
   serv: HAI_VERSION,
   ui: HAI_VERSION,
+  capacitor: HAI_VERSION,
   // UI / Icon
   bitsUi: '^2.18.1',
   iconifyJsonTabler: '^1.2.35',
   iconifyTailwind: '^1.2.3',
+  // Capacitor
+  capacitorSecureStorage: '^8.0.0',
+  capacitorAndroid: '^8.3.4',
+  capacitorApp: '^8.0.1',
+  capacitorCamera: '^8.0.2',
+  capacitorCli: '^8.3.4',
+  capacitorCore: '^8.3.4',
+  capacitorDevice: '^8.0.1',
+  capacitorIos: '^8.3.4',
+  capacitorPreferences: '^8.0.1',
+  capacitorPushNotifications: '^8.0.2',
+  capacitorStatusBar: '^8.0.1',
   // Tailwind / DaisyUI
   daisyui: '^5.5.20',
   tailwindcss: '^4.3.0',
@@ -79,14 +92,18 @@ const VERSIONS = {
   playwright: '^1.60.0',
   // Validation
   zod: '^4.4.3',
+  // Tauri
+  tauriApi: '^2.10.1',
+  tauriCli: '^2.10.1',
+  tauriPluginShell: '^2.3.5',
 } as const
 
 type ImplementedFrontendTarget = Exclude<FrontendTarget, 'miniapp'>
 
 const FRONTEND_PORTS_DEFAULT: Record<ImplementedFrontendTarget, number> = {
   web: 4173,
-  app: 4174,
-  desktop: 4175,
+  app: 5175,
+  desktop: 5176,
 }
 
 const FRONTEND_LABELS: Record<FrontendTarget, string> = {
@@ -165,6 +182,8 @@ export interface FullstackTemplateContext {
   contractExportName: string
   /** 后端 service 包名 */
   servPackageName: string
+  /** 原生壳 appId / bundle identifier 使用的安全短名 */
+  nativeAppIdSegment: string
   /** 前端共享代码包名 */
   sharedPackageName: string
   /** 所有已选择前端 */
@@ -216,6 +235,7 @@ const FEATURE_APP_ROUTE_DIRS: Record<string, string[]> = {
 
 const FEATURE_ID_REGEX = /^[a-z0-9-]+$/
 const HBS_SUFFIX_REGEX = /\.hbs$/
+const FULLSTACK_FRONTEND_TEMPLATE_PATH_REGEX = /^apps\/\{\{projectName\}\}-(web|app|desktop|miniapp)\//
 const NON_IDENTIFIER_CHAR_REGEX = /[^a-z0-9]+/i
 const IDENTIFIER_START_REGEX = /^[a-z_$]/i
 
@@ -304,6 +324,39 @@ async function findHbsFiles(dir: string): Promise<string[]> {
   return results
 }
 
+/**
+ * 查找位于动态路径中的静态资源。
+ *
+ * 普通静态文件已经由 copyStaticDir 复制；这里专门补上带 Handlebars 路径片段
+ * 的资源，例如 fullstack Tauri 图标目录。
+ */
+async function findRenderedStaticPathFiles(dir: string): Promise<string[]> {
+  if (!(await fse.pathExists(dir))) {
+    return []
+  }
+
+  const results: string[] = []
+
+  async function walk(current: string): Promise<void> {
+    const entries = await fse.readdir(current, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        await walk(fullPath)
+        continue
+      }
+
+      const relPath = path.relative(dir, fullPath)
+      if (!entry.name.endsWith('.hbs') && (relPath.includes('{{') || relPath.includes('}}'))) {
+        results.push(relPath)
+      }
+    }
+  }
+
+  await walk(dir)
+  return results
+}
+
 // =============================================================================
 // 构建上下文
 // =============================================================================
@@ -384,6 +437,7 @@ function buildFullstackTemplateContext(
     contractPackageName: `${projectName}-contract`,
     contractExportName: `${toIdentifier(projectName)}Contract`,
     servPackageName: `${projectName}-serv`,
+    nativeAppIdSegment: toIdentifier(projectName).toLowerCase(),
     sharedPackageName: `${projectName}-shared`,
     selectedFrontends,
     selectedFrontendsJson: `[${selectedFrontends.map(f => `'${f}'`).join(', ')}]`,
@@ -570,6 +624,7 @@ async function renderDynamicFiles(
 
   for (const dir of rootDirs) {
     await renderHbsInDir(dir, projectPath, context)
+    await copyRenderedStaticPathFiles(dir, projectPath, context)
   }
 
   // ── feature 路由 → 输出到 src/routes/ ──
@@ -642,6 +697,44 @@ async function renderHbsInDir(
     await fse.ensureDir(path.dirname(destPath))
     await fse.writeFile(destPath, normalizedRendered, 'utf-8')
   }
+}
+
+async function copyRenderedStaticPathFiles(
+  dir: string,
+  destRoot: string,
+  context: TemplateContext,
+): Promise<void> {
+  const staticFiles = await findRenderedStaticPathFiles(dir)
+  for (const relPath of staticFiles) {
+    if (!shouldCopyRenderedStaticPathFile(relPath, context)) {
+      continue
+    }
+
+    const outRelPath = renderOutputPath(relPath, context)
+    if (!isSafeRelativePath(outRelPath)) {
+      continue
+    }
+
+    const srcPath = path.join(dir, relPath)
+    const destPath = path.join(destRoot, outRelPath)
+    await fse.ensureDir(path.dirname(destPath))
+    await fse.copyFile(srcPath, destPath)
+  }
+}
+
+function shouldCopyRenderedStaticPathFile(relPath: string, context: TemplateContext): boolean {
+  if (context.appType !== 'fullstack' || !context.fullstack) {
+    return true
+  }
+
+  const normalizedPath = relPath.split(path.sep).join('/')
+  const frontendMatch = FULLSTACK_FRONTEND_TEMPLATE_PATH_REGEX.exec(normalizedPath)
+  if (!frontendMatch) {
+    return true
+  }
+
+  const target = frontendMatch[1] as FrontendTarget
+  return Boolean(context.fullstack.frontends[target])
 }
 
 function normalizeRenderedContent(content: string, outRelPath: string): string {

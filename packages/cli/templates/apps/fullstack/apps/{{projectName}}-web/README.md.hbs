@@ -12,10 +12,19 @@ Web 前端工程，使用 `@h-ai/api-client` 绑定共享 contract 调用后端 
 
 自定义建议：Web 独有文案放在本目录 `messages/`；跨端通用文案或组件放到 shared。
 
-## 开发
+## 编译、打包与部署
 
-- `pnpm i18n:compile`：在工作区根目录统一编译 shared + 各前端 Paraglide 输出
-- `pnpm --filter {{projectName}}-web dev`，默认端口 4173
-- `pnpm --filter {{projectName}}-web paraglide:compile`：只编译本端 messages
-- `pnpm --filter {{projectName}}-web test`
+```bash
+# 开发预览，默认端口 {{fullstack.ports.web}}
+pnpm --filter {{projectName}}-web dev
+
+# 编译 Web 前端
+pnpm --filter {{projectName}}-web build
+
+# 打包部署产物；默认等同 build，可按目标平台替换
+pnpm --filter {{projectName}}-web package
+
+# 当前模板的 deploy 入口默认执行 package，可替换为 CDN / 容器发布脚本
+pnpm --filter {{projectName}}-web deploy
+```
 {{/if}}

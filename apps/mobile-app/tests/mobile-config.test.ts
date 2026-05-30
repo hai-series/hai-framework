@@ -31,8 +31,8 @@ describe('mobile app configuration', () => {
 
   it('defines Android and iOS Capacitor scripts', async () => {
     const pkg = await readPackageJson()
-    expect(pkg.scripts['cap:build:android']).toContain('cap sync android')
-    expect(pkg.scripts['cap:build:android']).toContain('cap build android')
+    expect(pkg.scripts['cap:build:android:release']).toContain('cap sync android')
+    expect(pkg.scripts['cap:build:android:release']).toContain('cap build android')
     expect(pkg.scripts['cap:sync:ios']).toContain('cap sync ios')
     expect(pkg.scripts['cap:build:ios']).toContain('cap build ios')
     expect(pkg.devDependencies['@capacitor/android']).toBe('catalog:')

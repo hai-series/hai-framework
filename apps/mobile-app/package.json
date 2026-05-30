@@ -35,7 +35,8 @@
     "cap:ios": "cap open ios",
     "cap:run:android": "cap run android",
     "cap:run:ios": "cap run ios",
-    "cap:build:android": "pnpm build && cap sync android && cap build android --androidreleasetype APK",
+    "cap:build:android:debug": "pnpm build && cap sync android && cd android && gradlew.bat assembleDebug",
+    "cap:build:android:release": "pnpm build && cap sync android && cap build android --androidreleasetype APK",
     "cap:build:ios": "pnpm build && cap sync ios && cap build ios"
   },
   "dependencies": {

@@ -1,0 +1,22 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.desktop}}
+[package]
+name = "{{fullstack.nativeAppIdSegment}}_desktop"
+version = "0.1.0"
+description = "{{projectName}} Desktop App"
+authors = ["hai"]
+edition = "2021"
+
+[lib]
+name = "{{fullstack.nativeAppIdSegment}}_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+{{/if}}
