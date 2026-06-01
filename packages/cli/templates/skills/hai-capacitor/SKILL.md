@@ -17,7 +17,7 @@ description: 使用 @h-ai/capacitor 桥接 Capacitor 原生能力（Token 安全
 
 ## 适用场景
 
-- Android/iOS 原生应用开发（SvelteKit + Capacitor）
+- Android/iOS 原生应用开发（Svelte 5 + Vite + Capacitor）
 - Token 安全存储（`@aparajita/capacitor-secure-storage`）
 - 设备信息获取（平台、型号、版本）
 - 推送通知注册与监听（FCM / APNs）
@@ -218,7 +218,7 @@ await capacitor.statusBar.show()
 
 ## 常见模式
 
-### Android 应用标准初始化
+### Mobile App 标准初始化
 
 ```typescript
 // src/lib/capacitor.ts
@@ -241,10 +241,10 @@ export async function initCapacitor() {
 ```
 
 ```svelte
-<!-- src/routes/+layout.svelte -->
-<script lang="ts">
+<!-- src/App.svelte -->
+<script lang='ts'>
   import { onMount } from 'svelte'
-  import { initCapacitor } from '$lib/capacitor'
+  import { initCapacitor } from './lib/capacitor'
 
   onMount(() => { initCapacitor() })
 </script>
@@ -252,27 +252,19 @@ export async function initCapacitor() {
 
 ### SPA 模式配置（必需）
 
-Capacitor 应用必须使用 SPA 模式：
+Capacitor 应用使用 Vite 构建 SPA，并让原生壳读取 `dist`：
 
 ```typescript
-// src/routes/+layout.ts
-export const prerender = true
-export const ssr = false
-```
+// capacitor.config.ts
+import type { CapacitorConfig } from '@capacitor/cli'
 
-```javascript
-// svelte.config.js
-import adapter from '@sveltejs/adapter-static'
-
-const config = {
-  kit: {
-    adapter: adapter({
-      pages: 'build',
-      assets: 'build',
-      fallback: 'index.html',
-    }),
-  },
+const config: CapacitorConfig = {
+  appId: 'com.example.app',
+  appName: 'Example App',
+  webDir: 'dist',
 }
+
+export default config
 ```
 
 ### Token 存储 + 认证流程

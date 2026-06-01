@@ -1,0 +1,162 @@
+<script lang='ts'>
+  import { applyTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
+  import { onMount } from 'svelte'
+  import { closeApi, initApi, resolveApiBase, usesNativeTokenStorage } from './lib/api.js'
+  import { initCapacitor, isNativeApp } from './lib/capacitor.js'
+  import * as m from './lib/paraglide/messages.js'
+  import { getLocale } from './lib/paraglide/runtime.js'
+
+  type TabId = 'home' | 'tasks' | 'profile'
+
+  let booting = $state(true)
+  let bootError = $state<string | null>(null)
+  let activeTab = $state<TabId>('home')
+  let nativeRuntime = $state(false)
+  let nativeTokenStorage = $state(false)
+
+  const navItems = $derived([
+    { id: 'home', label: m.nav_home(), iconClass: 'icon-[tabler--layout-dashboard]' },
+    { id: 'tasks', label: m.nav_tasks(), iconClass: 'icon-[tabler--checkbox]' },
+    { id: 'profile', label: m.nav_profile(), iconClass: 'icon-[tabler--user-circle]' },
+  ])
+
+  async function bootstrap(): Promise<void> {
+    try {
+      applyTheme(getSavedTheme(), false)
+      setGlobalLocale(getLocale())
+      await initCapacitor()
+      await initApi()
+      nativeRuntime = await isNativeApp()
+      nativeTokenStorage = await usesNativeTokenStorage()
+    }
+    catch (error) {
+      bootError = error instanceof Error ? error.message : String(error)
+    }
+    finally {
+      booting = false
+    }
+  }
+
+  function handleTabChange(id: string): void {
+    if (id === 'home' || id === 'tasks' || id === 'profile')
+      activeTab = id
+  }
+
+  onMount(() => {
+    void bootstrap()
+
+    return () => {
+      void closeApi()
+    }
+  })
+</script>
+
+{#if booting}
+  <div class='hai-mobile-viewport'>
+    <div class='hai-mobile-shell max-w-lg'>
+      <div class='flex min-h-screen items-center justify-center'>
+        <span class='loading loading-spinner loading-lg'></span>
+      </div>
+    </div>
+  </div>
+{:else if bootError}
+  <div class='hai-mobile-viewport'>
+    <div class='hai-mobile-shell max-w-lg'>
+      <div class='flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center'>
+        <span class='icon-[tabler--alert-triangle] text-error text-4xl'></span>
+        <h1 class='text-lg font-bold'>{m.boot_failed_title()}</h1>
+        <p class='text-base-content/60 text-sm'>{bootError}</p>
+        <Button variant='primary' size='sm' onclick={() => location.reload()}>{m.common_retry()}</Button>
+      </div>
+    </div>
+  </div>
+{:else}
+  <div class='hai-mobile-viewport'>
+    <div class='hai-mobile-shell max-w-lg'>
+      <AppBar title={m.app_title()} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8' />
+
+      <main class='hai-mobile-main'>
+        {#if activeTab === 'home'}
+          <section class='space-y-4 p-4 pb-6'>
+            <div class='bg-primary text-primary-content rounded-2xl p-5 shadow-sm'>
+              <p class='text-sm opacity-75'>{m.hero_eyebrow()}</p>
+              <h1 class='mt-1 text-2xl font-bold'>{m.hero_title()}</h1>
+              <p class='mt-2 text-sm opacity-80'>{m.hero_subtitle()}</p>
+            </div>
+
+            <div class='grid grid-cols-2 gap-3'>
+              <Card padding='sm' shadow='sm'>
+                <div class='flex flex-col gap-2'>
+                  <span class='icon-[tabler--device-mobile-code] text-primary text-2xl'></span>
+                  <span class='text-sm font-medium'>{m.feature_native_title()}</span>
+                  <span class='text-base-content/60 text-xs'>{m.feature_native_desc()}</span>
+                </div>
+              </Card>
+              <Card padding='sm' shadow='sm'>
+                <div class='flex flex-col gap-2'>
+                  <span class='icon-[tabler--api-app] text-primary text-2xl'></span>
+                  <span class='text-sm font-medium'>{m.feature_api_title()}</span>
+                  <span class='text-base-content/60 text-xs'>{m.feature_api_desc()}</span>
+                </div>
+              </Card>
+            </div>
+
+            <Card title={m.status_title()} shadow='sm'>
+              <div class='grid grid-cols-2 gap-3 text-sm'>
+                <div>
+                  <p class='text-base-content/50'>{m.status_api_label()}</p>
+                  <p class='font-medium break-all'>{resolveApiBase()}</p>
+                </div>
+                <div>
+                  <p class='text-base-content/50'>{m.status_runtime_label()}</p>
+                  <Badge variant={nativeRuntime ? 'success' : 'warning'} size='sm'>
+                    {nativeRuntime ? m.status_runtime_native() : m.status_runtime_web()}
+                  </Badge>
+                </div>
+                <div class='col-span-2'>
+                  <p class='text-base-content/50'>{m.status_token_label()}</p>
+                  <p class='font-medium'>{nativeTokenStorage ? m.status_token_native() : m.status_token_memory()}</p>
+                </div>
+              </div>
+            </Card>
+          </section>
+        {:else if activeTab === 'tasks'}
+          <section class='space-y-4 p-4 pb-6'>
+            <Card title={m.tasks_title()} shadow='sm'>
+              <div class='space-y-3'>
+                {#each [m.tasks_sync(), m.tasks_polish(), m.tasks_release()] as task (task)}
+                  <div class='bg-base-200 rounded-xl flex items-center gap-3 p-3'>
+                    <span class='icon-[tabler--circle-check] text-success text-xl'></span>
+                    <span class='text-sm font-medium'>{task}</span>
+                  </div>
+                {/each}
+              </div>
+            </Card>
+          </section>
+        {:else}
+          <section class='space-y-4 p-4 pb-6'>
+            <Card title={m.profile_title()} shadow='sm'>
+              <div class='space-y-3 text-sm'>
+                <div class='bg-base-200 rounded-xl p-3'>{m.profile_language()}</div>
+                <div class='bg-base-200 rounded-xl p-3'>{m.profile_theme()}</div>
+                <div class='bg-base-200 rounded-xl p-3'>{m.profile_secure()}</div>
+              </div>
+            </Card>
+          </section>
+        {/if}
+      </main>
+
+      <BottomNav
+        items={navItems}
+        active={activeTab}
+        onchange={handleTabChange}
+        safeArea
+        centered
+        maxWidth='lg'
+        class='border-base-content/8 shadow-[0_-12px_32px_rgba(15,23,42,0.08)]'
+      />
+    </div>
+  </div>
+{/if}
+
+<ToastContainer />

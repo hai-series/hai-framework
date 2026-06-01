@@ -1,3 +1,5 @@
+{{! @skipIfEmpty }}
+{{#unless isSvelteOnlyApp}}
 /// <reference types="@sveltejs/kit" />
 {{#if hasUi}}
 import '@h-ai/ui/auto-import'
@@ -18,3 +20,4 @@ declare global {
 }
 
 export {}
+{{/unless}}

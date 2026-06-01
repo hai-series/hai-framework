@@ -26,7 +26,7 @@ cli.option('-C, --cwd <path>', '工作目录')
 // 创建项目命令
 cli
   .command('create [name]', '创建新的 hai 项目')
-  .option('--type <type>', '应用类型 (admin, website, h5, api, android-app, fullstack)')
+  .option('--type <type>', '应用类型 (admin, website, h5, api, mobile-app, fullstack)')
   .option('--frontends <targets>', '前后端分离工程前端目标 (逗号分隔: web,app,miniapp,desktop)')
   .option('-t, --template <template>', '项目模板 (minimal, default, full, custom)')
   .option('-f, --features <features>', '功能列表 (逗号分隔: iam,db,cache,ai,storage,crypto)')

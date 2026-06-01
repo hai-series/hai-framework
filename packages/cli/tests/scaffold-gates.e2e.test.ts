@@ -16,61 +16,77 @@ const cliBin = path.resolve(process.cwd(), 'dist/index.js')
 const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const tempRoots: string[] = []
 
+interface ScaffoldGateCase {
+  title: string
+  projectName: string
+  createArgs: string[]
+  expectedFiles: string[]
+}
+
+const scaffoldGateCases: readonly ScaffoldGateCase[] = [
+  {
+    title: 'api',
+    projectName: 'sample-api',
+    createArgs: ['--type', 'api', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['e2e/app.spec.ts'],
+  },
+  {
+    title: 'admin',
+    projectName: 'sample-admin',
+    createArgs: ['--type', 'admin', '--template', 'custom', '--features', 'iam,db,cache,crypto', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['e2e/app.spec.ts', 'src/routes/api/auth/login/+server.ts'],
+  },
+  {
+    title: 'website',
+    projectName: 'sample-website',
+    createArgs: ['--type', 'website', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['e2e/app.spec.ts'],
+  },
+  {
+    title: 'h5',
+    projectName: 'sample-h5',
+    createArgs: ['--type', 'h5', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['e2e/app.spec.ts'],
+  },
+  {
+    title: 'mobile-app',
+    projectName: 'sample-mobile',
+    createArgs: ['--type', 'mobile-app', '--template', 'custom', '--features', 'api-client,capacitor', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['e2e/app.spec.ts', 'src/App.svelte'],
+  },
+  {
+    title: 'fullstack',
+    projectName: 'sample-fullstack',
+    createArgs: ['--type', 'fullstack', '--frontends', 'web,app,miniapp,desktop', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    expectedFiles: ['e2e/fullstack.spec.ts', 'packages/sample-fullstack-serv/package.json'],
+  },
+] as const
+
 afterAll(async () => {
   await Promise.all(tempRoots.map(root => rm(root, { recursive: true, force: true })))
 }, 180_000)
 
 describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
-  it('api scaffold passes install, typecheck, lint, unit and browser e2e', async () => {
-    const root = await createTempRoot()
-    const projectPath = path.join(root, 'sample-api')
+  for (const scenario of scaffoldGateCases) {
+    it(`${scenario.title} scaffold passes install, typecheck, lint, build, unit and e2e`, async () => {
+      const root = await createTempRoot()
+      const projectPath = path.join(root, scenario.projectName)
 
-    runNode([
-      cliBin,
-      '--cwd',
-      root,
-      'create',
-      'sample-api',
-      '--type',
-      'api',
-      '--template',
-      'minimal',
-      '--yes',
-      '--no-install',
-      '--no-git',
-      '--package-manager',
-      'pnpm',
-      '--no-examples',
-    ])
-    runQualityGates(projectPath)
+      runNode([
+        cliBin,
+        '--cwd',
+        root,
+        'create',
+        scenario.projectName,
+        ...scenario.createArgs,
+      ])
+      runQualityGates(projectPath)
 
-    expect(await fileExists(path.join(projectPath, 'e2e/app.spec.ts'))).toBe(true)
-  }, 1_800_000)
-
-  it('fullstack scaffold passes install, typecheck, lint, unit and page-level e2e', async () => {
-    const root = await createTempRoot()
-    const projectPath = path.join(root, 'sample-fullstack')
-
-    runNode([
-      cliBin,
-      '--cwd',
-      root,
-      'create',
-      'sample-fullstack',
-      '--type',
-      'fullstack',
-      '--frontends',
-      'web,app,miniapp,desktop',
-      '--yes',
-      '--no-install',
-      '--no-git',
-      '--package-manager',
-      'pnpm',
-    ])
-    runQualityGates(projectPath)
-
-    expect(await fileExists(path.join(projectPath, 'e2e/fullstack.spec.ts'))).toBe(true)
-  }, 1_800_000)
+      for (const relativePath of scenario.expectedFiles) {
+        expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
+      }
+    }, 1_800_000)
+  }
 })
 
 async function createTempRoot(): Promise<string> {
@@ -83,6 +99,7 @@ function runQualityGates(projectPath: string): void {
   runPnpm(projectPath, ['install'])
   runPnpm(projectPath, ['typecheck'])
   runPnpm(projectPath, ['lint'])
+  runPnpm(projectPath, ['build'])
   runPnpm(projectPath, ['test'])
   runPnpm(projectPath, ['test:e2e'])
 }

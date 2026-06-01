@@ -9,13 +9,13 @@ templates/
 ├── base/                    # 所有应用类型共用的骨架文件
 │   ├── package.json.hbs     # 动态：按 features 注入依赖
 │   ├── vite.config.ts.hbs   # 动态：按 hasI18n / hasUi 注入插件
-│   ├── tsconfig.json
-│   ├── svelte.config.js
-│   ├── .gitignore
+│   ├── tsconfig.json.hbs    # 动态：SvelteKit / 纯 Svelte 5 分支
+│   ├── svelte.config.js.hbs # 动态：SvelteKit / 纯 Svelte 5 分支
+│   ├── .gitignore.hbs      # 动态：纯 Svelte 5 应用不输出 .svelte-kit
 │   ├── playwright.config.ts
 │   └── src/
-│       ├── app.html.hbs         # 动态：i18n 时输出 %lang% 占位符
-│       ├── app.d.ts
+│       ├── app.html.hbs         # 动态：SvelteKit 应用输出 app shell
+│       ├── app.d.ts.hbs         # 动态：SvelteKit 应用输出 App namespace
 │       ├── app.css
 │       ├── hooks.server.ts.hbs  # 动态：按 features / hasI18n 组装 handle 序列
 │       └── lib/server/
@@ -33,6 +33,10 @@ templates/
 │   │   └── src/routes/
 │   ├── api/                 # 纯 API 服务（无 UI / 无 i18n）
 │   │   └── src/routes/
+│   ├── mobile-app/          # Svelte 5 + Vite + Capacitor 移动应用
+│   │   ├── index.html.hbs
+│   │   ├── messages/
+│   │   └── src/App.svelte.hbs
 │   └── fullstack/           # 前后端分离多包工程（contract / serv / web / app / desktop / miniapp 占位）
 │       ├── packages/        # 共享 contract 与后端 serv 包
 │       ├── apps/            # 多前端目标，按用户选择条件生成
@@ -53,7 +57,7 @@ templates/
 │       └── settings.json    # Paraglide 项目配置
 │
 └── skills/                  # AI Skill 与各 appType 桥接指引
-    └── bridges/             # admin / api / website / h5 / android-app / fullstack 专属 AGENTS/Copilot/Claude
+    └── bridges/             # admin / api / website / h5 / mobile-app / fullstack 专属 AGENTS/Copilot/Claude
 ```
 
 ## AI Skill 模板（Single Source of Truth）
@@ -79,21 +83,25 @@ templates/
 
 所有 `.hbs` 文件可使用以下变量：
 
-| 变量                   | 类型      | 说明                                         |
-| ---------------------- | --------- | -------------------------------------------- |
-| `{{projectName}}`      | `string`  | 项目名称（如 `my-app`）                      |
-| `{{appType}}`          | `string`  | 应用类型：`admin` / `website` / `h5` / `api` |
-| `{{hasUi}}`            | `boolean` | 是否包含 UI（非 `api` 类型为 `true`）        |
-| `{{hasI18n}}`          | `boolean` | 是否启用 i18n（非 `api` 类型为 `true`）      |
-| `{{defaultLocale}}`    | `string`  | 默认语言，如 `zh-CN`                         |
-| `{{packageManager}}`   | `string`  | 包管理器：`pnpm` / `npm` / `yarn`            |
-| `{{fullstack.*}}`      | `object`  | fullstack 类型专用上下文                     |
-| `{{features.iam}}`     | `boolean` | 是否选中 iam feature                         |
-| `{{features.db}}`      | `boolean` | 是否选中 db feature                          |
-| `{{features.cache}}`   | `boolean` | 是否选中 cache feature                       |
-| `{{features.crypto}}`  | `boolean` | 是否选中 crypto feature                      |
-| `{{features.storage}}` | `boolean` | 是否选中 storage feature                     |
-| `{{features.ai}}`      | `boolean` | 是否选中 ai feature                          |
+| 变量                   | 类型      | 说明                                      |
+| ---------------------- | --------- | ----------------------------------------- |
+| `{{projectName}}`      | `string`  | 项目名称（如 `my-app`）                   |
+| `{{appType}}`          | `string`  | 应用类型                                  |
+| `{{hasUi}}`            | `boolean` | 是否包含 UI（非 `api` 类型为 `true`）     |
+| `{{hasI18n}}`          | `boolean` | 是否启用 i18n（非 `api` 类型为 `true`）   |
+| `{{isSvelteOnlyApp}}`  | `boolean` | 是否为不依赖 SvelteKit 的纯 Svelte 5 应用 |
+| `{{isCapacitorApp}}`   | `boolean` | 是否为 Capacitor 移动应用                 |
+| `{{defaultLocale}}`    | `string`  | 默认语言，如 `zh-CN`                      |
+| `{{packageManager}}`   | `string`  | 包管理器：`pnpm` / `npm` / `yarn`         |
+| `{{fullstack.*}}`      | `object`  | fullstack 类型专用上下文                  |
+| `{{features.iam}}`     | `boolean` | 是否选中 iam feature                      |
+| `{{features.db}}`      | `boolean` | 是否选中 db feature                       |
+| `{{features.cache}}`   | `boolean` | 是否选中 cache feature                    |
+| `{{features.crypto}}`  | `boolean` | 是否选中 crypto feature                   |
+| `{{features.storage}}` | `boolean` | 是否选中 storage feature                  |
+| `{{features.ai}}`      | `boolean` | 是否选中 ai feature                       |
+
+`appType` 支持 `admin` / `website` / `h5` / `api` / `mobile-app` / `fullstack`。
 
 `fullstack.*` 包含包名、前端选择、依赖版本、`contractExportName` 和原生壳 `nativeAppIdSegment`，用于渲染 contract / serv / 多端 UI / Capacitor / Tauri 模板。
 
@@ -118,8 +126,8 @@ import { iam } from '@h-ai/iam'
 模板引擎执行 6 个步骤：
 
 1. **复制 `base/` 静态文件** → 项目根
-2. **复制 `apps/{appType}/` 路由** → 项目根（`messages/` 仅 `hasI18n` 时复制）
-3. **叠加 feature 静态路由** → `src/routes/`
+2. **复制 `apps/{appType}/` 专属文件** → 项目根（`messages/` 仅 `hasI18n` 时复制）
+3. **叠加 feature 静态路由** → `src/routes/`（纯 Svelte 5 应用跳过 SvelteKit 路由）
 4. **渲染所有 `.hbs` 文件** — `base/` + `apps/{appType}/` 输出到项目根；`features/*/routes*/` 输出到 `src/routes/`
 5. **复制 `i18n/` 脚手架** → 项目根（仅 `hasI18n` 时）
 6. **确保 `static/` 目录存在**

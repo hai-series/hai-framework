@@ -29,17 +29,17 @@
     "clean": "rimraf .turbo src/lib/paraglide"
   },
   "dependencies": {
-    "@h-ai/api-client": "{{fullstack.versions.apiClient}}",
-    "@h-ai/ui": "{{fullstack.versions.ui}}",
+    "@h-ai/api-client": "{{haiPackageSpecifier}}",
+    "@h-ai/ui": "{{haiPackageSpecifier}}",
     "{{fullstack.contractPackageName}}": "workspace:*"
   },
   "devDependencies": {
-    "@inlang/paraglide-js": "{{fullstack.versions.inlangParaglide}}",
-    "@inlang/plugin-message-format": "{{fullstack.versions.inlangMessageFormat}}",
-    "svelte": "{{fullstack.versions.svelte}}",
-    "svelte-check": "{{fullstack.versions.svelteCheck}}",
-    "typescript": "{{fullstack.versions.typescript}}",
-    "vite": "{{fullstack.versions.vite}}",
-    "vitest": "{{fullstack.versions.vitest}}"
+    "@inlang/paraglide-js": "{{fullstack.packageSpecifiers.inlangParaglide}}",
+    "@inlang/plugin-message-format": "{{fullstack.packageSpecifiers.inlangMessageFormat}}",
+    "svelte": "{{fullstack.packageSpecifiers.svelte}}",
+    "svelte-check": "{{fullstack.packageSpecifiers.svelteCheck}}",
+    "typescript": "{{fullstack.packageSpecifiers.typescript}}",
+    "vite": "{{fullstack.packageSpecifiers.vite}}",
+    "vitest": "{{fullstack.packageSpecifiers.vitest}}"
   }
 }

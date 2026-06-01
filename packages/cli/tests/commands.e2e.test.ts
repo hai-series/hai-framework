@@ -30,6 +30,8 @@ import { initProject } from '../src/commands/cli-init.js'
 
 const tmpRoot = path.join(process.cwd(), '.tmp-commands-e2e')
 const HAI_DEP_VERSION = `^${fse.readJsonSync(fileURLToPath(new URL('../package.json', import.meta.url))).version}`
+const CATALOG_DEP_SPECIFIER = 'catalog:'
+const HAI_DEP_SPECIFIER = CATALOG_DEP_SPECIFIER
 
 async function readJson(dir: string, rel: string) {
   return fse.readJson(path.join(dir, rel))
@@ -51,11 +53,38 @@ function expectQualityGateScripts(pkg: { scripts?: Record<string, string> }) {
   expect(pkg.scripts?.['test:e2e']).toBeDefined()
 }
 
-function expectHaiDepsUseCurrentVersion(pkg: { dependencies?: Record<string, string> }) {
+function expectHaiDepsUseCatalog(pkg: { dependencies?: Record<string, string> }) {
   for (const [name, version] of Object.entries(pkg.dependencies ?? {})) {
     if (name.startsWith('@h-ai/')) {
-      expect(version).toBe(HAI_DEP_VERSION)
+      expect(version).toBe(HAI_DEP_SPECIFIER)
     }
+  }
+}
+
+function expectNonWorkspaceDepsUseCatalog(pkg: {
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+}) {
+  for (const dependencyGroup of [pkg.dependencies ?? {}, pkg.devDependencies ?? {}]) {
+    for (const [name, version] of Object.entries(dependencyGroup)) {
+      if (version === 'workspace:*')
+        continue
+      expect(version, `expected ${name} to use catalog:`).toBe(CATALOG_DEP_SPECIFIER)
+    }
+  }
+}
+
+function expectHaiCatalogEntries(workspaceYaml: string, packageNames: readonly string[]) {
+  expect(workspaceYaml).toContain('catalog:')
+  for (const packageName of packageNames) {
+    expect(workspaceYaml).toContain(`'${packageName}': ${HAI_DEP_VERSION}`)
+  }
+}
+
+function expectCatalogPackageNames(workspaceYaml: string, packageNames: readonly string[]) {
+  expect(workspaceYaml).toContain('catalog:')
+  for (const packageName of packageNames) {
+    expect(workspaceYaml).toContain(`'${packageName}':`)
   }
 }
 
@@ -111,9 +140,12 @@ describe('createProject — api 类型', () => {
 
   it('package.json 包含 @h-ai/reldb 和 @h-ai/cache', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    expect(pkg.dependencies['@h-ai/reldb']).toBe(HAI_DEP_VERSION)
-    expect(pkg.dependencies['@h-ai/cache']).toBe(HAI_DEP_VERSION)
-    expectHaiDepsUseCurrentVersion(pkg)
+    expect(pkg.dependencies['@h-ai/reldb']).toBe(HAI_DEP_SPECIFIER)
+    expect(pkg.dependencies['@h-ai/cache']).toBe(HAI_DEP_SPECIFIER)
+    expectHaiDepsUseCatalog(pkg)
+
+    const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
+    expectHaiCatalogEntries(workspace, ['@h-ai/core', '@h-ai/kit', '@h-ai/reldb', '@h-ai/cache'])
   })
 
   it('应生成可执行质量门禁脚本', async () => {
@@ -253,10 +285,13 @@ describe('createProject — admin 类型 + iam', () => {
 
   it('package.json 包含 @h-ai/iam', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    expect(pkg.dependencies['@h-ai/iam']).toBe(HAI_DEP_VERSION)
-    expect(pkg.dependencies['@h-ai/crypto']).toBe(HAI_DEP_VERSION)
-    expectHaiDepsUseCurrentVersion(pkg)
+    expect(pkg.dependencies['@h-ai/iam']).toBe(HAI_DEP_SPECIFIER)
+    expect(pkg.dependencies['@h-ai/crypto']).toBe(HAI_DEP_SPECIFIER)
+    expectHaiDepsUseCatalog(pkg)
     expectQualityGateScripts(pkg)
+
+    const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
+    expectHaiCatalogEntries(workspace, ['@h-ai/core', '@h-ai/kit', '@h-ai/ui', '@h-ai/iam', '@h-ai/reldb', '@h-ai/cache', '@h-ai/crypto'])
   })
 
   it('package.json 包含 paraglide devDep（i18n）', async () => {
@@ -457,7 +492,10 @@ describe('createProject — website 类型', () => {
   it('应生成质量门禁脚本与页面级 E2E', async () => {
     const pkg = await readJson(projectPath, 'package.json')
     expectQualityGateScripts(pkg)
-    expectHaiDepsUseCurrentVersion(pkg)
+    expectHaiDepsUseCatalog(pkg)
+
+    const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
+    expectHaiCatalogEntries(workspace, ['@h-ai/core', '@h-ai/kit', '@h-ai/ui'])
 
     const spec = await readText(projectPath, 'e2e/app.spec.ts')
     expect(spec).toContain('page.goto')
@@ -465,7 +503,79 @@ describe('createProject — website 类型', () => {
 })
 
 // =============================================================================
-// 3.5. createProject — 前后端分离工程
+// 3.5. createProject — Mobile App 应用（Svelte 5 + Vite + Capacitor）
+// =============================================================================
+
+describe('createProject — mobile-app 类型', () => {
+  let projectPath: string
+
+  beforeAll(async () => {
+    projectPath = path.join(tmpRoot, 'proj-mobile')
+    await createProject({
+      name: 'proj-mobile',
+      appType: 'mobile-app',
+      template: 'custom',
+      features: ['api-client', 'capacitor'],
+      moduleConfigs: {
+        core: { name: 'proj-mobile', defaultLocale: 'zh-CN' },
+      },
+      examples: false,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      verbose: false,
+      cwd: tmpRoot,
+    })
+  })
+
+  it('应生成直接使用 Svelte 5 + Vite 的移动应用入口', async () => {
+    expect(await exists(projectPath, 'index.html')).toBe(true)
+    expect(await exists(projectPath, 'src/main.ts')).toBe(true)
+    expect(await exists(projectPath, 'src/App.svelte')).toBe(true)
+    expect(await exists(projectPath, 'src/routes/+page.svelte')).toBe(false)
+    expect(await exists(projectPath, 'src/app.html')).toBe(false)
+    expect(await exists(projectPath, 'src/app.d.ts')).toBe(false)
+
+    const app = await readText(projectPath, 'src/App.svelte')
+    expect(app).toContain('hai-mobile-shell')
+    expect(app).toContain('BottomNav')
+    expect(app).toContain('usesNativeTokenStorage')
+  })
+
+  it('package.json 不应包含 @h-ai/kit 或 SvelteKit 依赖', async () => {
+    const pkg = await readJson(projectPath, 'package.json')
+    expect(pkg.dependencies['@h-ai/api-client']).toBe(HAI_DEP_SPECIFIER)
+    expect(pkg.dependencies['@h-ai/capacitor']).toBe(HAI_DEP_SPECIFIER)
+    expect(pkg.dependencies['@h-ai/ui']).toBe(HAI_DEP_SPECIFIER)
+    expect(pkg.dependencies['@h-ai/core']).toBeUndefined()
+    expect(pkg.dependencies['@h-ai/kit']).toBeUndefined()
+    expect(pkg.dependencies.zod).toBeUndefined()
+    expect(pkg.devDependencies['@sveltejs/kit']).toBeUndefined()
+    expect(pkg.devDependencies['@sveltejs/adapter-static']).toBeUndefined()
+    expect(pkg.devDependencies['@capacitor/app']).toBe('^8.0.1')
+    expect(pkg.devDependencies['@capacitor/camera']).toBe('^8.0.1')
+    expect(pkg.devDependencies['@capacitor/device']).toBe('^8.0.1')
+    expect(pkg.devDependencies['@capacitor/push-notifications']).toBe('^8.0.1')
+    expect(pkg.scripts.typecheck).not.toContain('svelte-kit sync')
+    expect(pkg.scripts.build).toContain('pnpm paraglide:compile')
+
+    const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
+    expectHaiCatalogEntries(workspace, ['@h-ai/api-client', '@h-ai/capacitor', '@h-ai/ui'])
+  })
+
+  it('应生成移动端专属 AI 指引且不复制 hai-kit skill', async () => {
+    const agents = await readText(projectPath, 'AGENTS.md')
+    expect(agents).toContain('Mobile/Capacitor')
+    expect(agents).toContain('Svelte 5 + Vite')
+    expect(agents).not.toContain('adapter-static')
+    expect(await exists(projectPath, '.agents/skills/hai-kit/SKILL.md')).toBe(false)
+    expect(await exists(projectPath, '.agents/skills/hai-api-client/SKILL.md')).toBe(true)
+    expect(await exists(projectPath, '.agents/skills/hai-capacitor/SKILL.md')).toBe(true)
+  })
+})
+
+// =============================================================================
+// 4. createProject — 前后端分离工程
 // =============================================================================
 
 describe('createProject — fullstack 类型', () => {
@@ -495,8 +605,11 @@ describe('createProject — fullstack 类型', () => {
     const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
     expect(workspace).toContain('packages/*')
     expect(workspace).toContain('apps/*')
+    expectHaiCatalogEntries(workspace, ['@h-ai/api-contract', '@h-ai/api-client', '@h-ai/capacitor', '@h-ai/core', '@h-ai/serv', '@h-ai/ui'])
+    expectCatalogPackageNames(workspace, ['@playwright/test', '@tauri-apps/cli', '@types/node', 'daisyui', 'tsup', 'zod'])
 
     const pkg = await readJson(projectPath, 'package.json')
+    expectNonWorkspaceDepsUseCatalog(pkg)
     expect(pkg.scripts['i18n:compile']).toBe('pnpm --filter proj-fullstack-shared paraglide:compile && pnpm --filter proj-fullstack-web paraglide:compile && pnpm --filter proj-fullstack-app paraglide:compile && pnpm --filter proj-fullstack-desktop paraglide:compile')
     expect(pkg.scripts.compile).toBe('pnpm typecheck && pnpm build')
     expect(pkg.scripts.package).toContain('pnpm --filter proj-fullstack-app package')
@@ -508,8 +621,8 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.scripts['test:e2e']).toContain('playwright test')
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(pkg.dependencies['proj-fullstack-shared']).toBe('workspace:*')
-    expect(pkg.devDependencies['@playwright/test']).toBe('^1.60.0')
-    expect(pkg.devDependencies.typescript).toBe('^6.0.3')
+    expect(pkg.devDependencies['@playwright/test']).toBe(CATALOG_DEP_SPECIFIER)
+    expect(pkg.devDependencies.typescript).toBe(CATALOG_DEP_SPECIFIER)
 
     const readme = await readText(projectPath, 'README.md')
     expect(readme).toContain('packages/proj-fullstack-shared')
@@ -526,11 +639,13 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'apps/{{projectName}}-web')).toBe(false)
   })
 
-  it('应生成 contract 包并使用最新 hai 契约依赖', async () => {
+  it('应生成 contract 包并使用 catalog/workspace 契约依赖', async () => {
     const pkg = await readJson(projectPath, 'packages/proj-fullstack-contract/package.json')
+    expectNonWorkspaceDepsUseCatalog(pkg)
     expect(pkg.name).toBe('proj-fullstack-contract')
-    expect(pkg.dependencies['@h-ai/api-contract']).toBe(HAI_DEP_VERSION)
-    expectHaiDepsUseCurrentVersion(pkg)
+    expect(pkg.dependencies['@h-ai/api-contract']).toBe(HAI_DEP_SPECIFIER)
+    expect(pkg.dependencies['@h-ai/core']).toBe(HAI_DEP_SPECIFIER)
+    expect(pkg.dependencies.zod).toBe(CATALOG_DEP_SPECIFIER)
     expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/index.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/app-contract.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/app-schemas.ts')).toBe(true)
@@ -544,11 +659,12 @@ describe('createProject — fullstack 类型', () => {
 
   it('应生成 serv 包、单元测试和可启动入口', async () => {
     const pkg = await readJson(projectPath, 'packages/proj-fullstack-serv/package.json')
+    expectNonWorkspaceDepsUseCatalog(pkg)
     expect(pkg.name).toBe('proj-fullstack-serv')
-    expect(pkg.dependencies['@h-ai/serv']).toBe(HAI_DEP_VERSION)
+    expect(pkg.dependencies['@h-ai/serv']).toBe(HAI_DEP_SPECIFIER)
+    expect(pkg.dependencies['@h-ai/core']).toBe(HAI_DEP_SPECIFIER)
     expect(pkg.dependencies.hono).toBeUndefined()
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
-    expectHaiDepsUseCurrentVersion(pkg)
     expect(pkg.scripts.start).toBe('node dist/index.js')
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/server-app.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/server/procedures/app-procedures.ts')).toBe(true)
@@ -572,20 +688,27 @@ describe('createProject — fullstack 类型', () => {
   it('应按多选前端生成 web / app / desktop 工程', async () => {
     for (const target of ['web', 'app']) {
       const pkg = await readJson(projectPath, `apps/proj-fullstack-${target}/package.json`)
+      expectNonWorkspaceDepsUseCatalog(pkg)
       expect(pkg.name).toBe(`proj-fullstack-${target}`)
-      expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
-      expect(pkg.dependencies['@h-ai/api-client']).toBe(HAI_DEP_VERSION)
-      expect(pkg.dependencies['@h-ai/ui']).toBe(HAI_DEP_VERSION)
+      expect(pkg.dependencies['proj-fullstack-contract']).toBeUndefined()
+      expect(pkg.dependencies['@h-ai/api-client']).toBeUndefined()
+      expect(pkg.dependencies['@h-ai/ui']).toBe(HAI_DEP_SPECIFIER)
+      expect(pkg.dependencies['@h-ai/kit']).toBeUndefined()
       expect(pkg.devDependencies['@tailwindcss/vite']).toBeDefined()
       expect(pkg.devDependencies.daisyui).toBeDefined()
       expect(pkg.devDependencies.tailwindcss).toBeDefined()
-      expect(pkg.devDependencies.svelte).toBe('^5.55.9')
-      expect(pkg.devDependencies.vite).toBe('^8.0.14')
+      expect(pkg.devDependencies.svelte).toBe(CATALOG_DEP_SPECIFIER)
+      expect(pkg.devDependencies.vite).toBe(CATALOG_DEP_SPECIFIER)
+      expect(pkg.devDependencies['@sveltejs/kit']).toBeUndefined()
       expect(pkg.dependencies['proj-fullstack-shared']).toBe('workspace:*')
       expect(pkg.scripts['paraglide:compile']).toContain('paraglide-js compile')
       expect(pkg.scripts.typecheck).toContain('pnpm paraglide:compile')
       expect(pkg.scripts.package).toBe(target === 'app' ? 'pnpm cap:sync' : 'pnpm build')
-      expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/routes/+page.svelte`)).toBe(true)
+      expect(pkg.scripts.typecheck).not.toContain('svelte-kit sync')
+      expect(await exists(projectPath, `apps/proj-fullstack-${target}/index.html`)).toBe(true)
+      expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/main.ts`)).toBe(true)
+      expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/App.svelte`)).toBe(true)
+      expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/routes/+page.svelte`)).toBe(false)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/project.inlang/settings.json`)).toBe(true)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/messages/zh-CN.json`)).toBe(true)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/messages/en-US.json`)).toBe(true)
@@ -595,56 +718,79 @@ describe('createProject — fullstack 类型', () => {
       const eslintConfig = await readText(projectPath, `apps/proj-fullstack-${target}/eslint.config.js`)
       expect(eslintConfig).toContain('\'svelte/indent\': \'off\'')
 
-      const page = await readText(projectPath, `apps/proj-fullstack-${target}/src/routes/+page.svelte`)
-      expect(page).toContain('@h-ai/ui')
-      expect(page).toContain('proj-fullstack-shared')
-      expect(page).toContain('import * as appM')
-      expect(page).toContain('messages as sharedM')
-      expect(page).toContain('<Card')
+      const app = await readText(projectPath, `apps/proj-fullstack-${target}/src/App.svelte`)
+      expect(app).toContain('@h-ai/ui')
+      expect(app).toContain('proj-fullstack-shared')
+      expect(app).toContain('import * as appM')
+      expect(app).toContain('messages as sharedM')
+      expect(app).toContain('<Card')
+      if (target === 'web') {
+        expect(app).toContain('AppShell')
+        expect(app).toContain('platform="web"')
+      }
+      else {
+        expect(app).toContain('hai-mobile-shell')
+        expect(app).toContain('BottomNav')
+      }
 
       const css = await readText(projectPath, `apps/proj-fullstack-${target}/src/app.css`)
       expect(css).toContain('@import \'@h-ai/ui/styles/global.css\'')
       expect(css).toContain('--default')
 
+      const indexHtml = await readText(projectPath, `apps/proj-fullstack-${target}/index.html`)
+      expect(indexHtml).toContain('<script type="module" src="/src/main.ts"></script>')
+
+      const tsconfig = await readText(projectPath, `apps/proj-fullstack-${target}/tsconfig.json`)
+      expect(tsconfig).toContain('"moduleDetection": "force",')
+      expect(tsconfig.indexOf('"moduleDetection": "force",')).toBeLessThan(tsconfig.indexOf('"module": "ESNext",'))
+
       const viteConfig = await readText(projectPath, `apps/proj-fullstack-${target}/vite.config.ts`)
       expect(viteConfig).toContain('tailwindcss()')
       expect(viteConfig).toContain('paraglideVitePlugin')
       expect(viteConfig).toContain('project: \'./project.inlang\'')
+      expect(viteConfig).toContain('import tailwindcss from \'@tailwindcss/vite\'')
+      expect(viteConfig).not.toContain('  import tailwindcss from \'@tailwindcss/vite\'')
 
-      const layout = await readText(projectPath, `apps/proj-fullstack-${target}/src/routes/+layout.svelte`)
-      expect(layout).toContain('AppShell')
-      expect(layout).toContain(`platform="${target}"`)
-      expect(layout).toContain('syncLocale')
+      expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/routes/+layout.svelte`)).toBe(false)
 
       const apiTest = await readText(projectPath, `apps/proj-fullstack-${target}/tests/api.test.ts`)
       expect(apiTest).toContain('proj-fullstack-shared')
     }
 
     const appPkg = await readJson(projectPath, 'apps/proj-fullstack-app/package.json')
-    expect(appPkg.dependencies['@h-ai/capacitor']).toBe(HAI_DEP_VERSION)
-    expect(appPkg.devDependencies['@capacitor/android']).toBe('^8.3.4')
-    expect(appPkg.devDependencies['@capacitor/camera']).toBe('^8.0.2')
-    expect(appPkg.devDependencies['@capacitor/ios']).toBe('^8.3.4')
-    expect(appPkg.devDependencies['@capacitor/push-notifications']).toBe('^8.0.2')
-    expect(appPkg.devDependencies['@sveltejs/adapter-static']).toBe('^3.0.10')
+    expectNonWorkspaceDepsUseCatalog(appPkg)
+    expect(appPkg.dependencies['@h-ai/capacitor']).toBe(HAI_DEP_SPECIFIER)
+    expect(appPkg.devDependencies['@aparajita/capacitor-secure-storage']).toBe(CATALOG_DEP_SPECIFIER)
+    expect(appPkg.devDependencies['@capacitor/android']).toBe(CATALOG_DEP_SPECIFIER)
+    expect(appPkg.devDependencies['@capacitor/app']).toBe(CATALOG_DEP_SPECIFIER)
+    expect(appPkg.devDependencies['@capacitor/camera']).toBe(CATALOG_DEP_SPECIFIER)
+    expect(appPkg.devDependencies['@capacitor/device']).toBe(CATALOG_DEP_SPECIFIER)
+    expect(appPkg.devDependencies['@capacitor/ios']).toBe(CATALOG_DEP_SPECIFIER)
+    expect(appPkg.devDependencies['@capacitor/push-notifications']).toBe(CATALOG_DEP_SPECIFIER)
+    expect(appPkg.devDependencies['@sveltejs/adapter-static']).toBeUndefined()
     expect(appPkg.scripts['cap:build:android:release']).toContain('cap build android')
     expect(await exists(projectPath, 'apps/proj-fullstack-app/capacitor.config.ts')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-fullstack-app/src/lib/capacitor.ts')).toBe(true)
-    expect(await exists(projectPath, 'apps/proj-fullstack-app/src/routes/+layout.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-app/src/routes/+layout.ts')).toBe(false)
     const appSvelteConfig = await readText(projectPath, 'apps/proj-fullstack-app/svelte.config.js')
-    expect(appSvelteConfig).toContain('@sveltejs/adapter-static')
-    expect(appSvelteConfig).toContain('fallback: \'index.html\'')
+    expect(appSvelteConfig).not.toContain('@sveltejs/adapter-static')
+    expect(appSvelteConfig).not.toContain('fallback: \'index.html\'')
     const appReadme = await readText(projectPath, 'apps/proj-fullstack-app/README.md')
     expect(appReadme).toContain('Capacitor')
     expect(appReadme).toContain('cap:build:android:release')
+    const appPackageText = await readText(projectPath, 'apps/proj-fullstack-app/package.json')
+    expect(appPackageText).toContain('    "cap:build:android:debug":')
 
     const desktopPkg = await readJson(projectPath, 'apps/proj-fullstack-desktop/package.json')
+    expectNonWorkspaceDepsUseCatalog(desktopPkg)
     expect(desktopPkg.name).toBe('proj-fullstack-desktop')
-    expect(desktopPkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
+    expect(desktopPkg.dependencies['proj-fullstack-contract']).toBeUndefined()
     expect(desktopPkg.dependencies['proj-fullstack-shared']).toBe('workspace:*')
-    expect(desktopPkg.dependencies['@tauri-apps/api']).toBe('^2.10.1')
-    expect(desktopPkg.dependencies['@tauri-apps/plugin-shell']).toBe('^2.3.5')
-    expect(desktopPkg.devDependencies['@tauri-apps/cli']).toBe('^2.10.1')
+    expect(desktopPkg.dependencies['@h-ai/api-client']).toBeUndefined()
+    expect(desktopPkg.dependencies['@h-ai/ui']).toBe(HAI_DEP_SPECIFIER)
+    expect(desktopPkg.dependencies['@tauri-apps/api']).toBeUndefined()
+    expect(desktopPkg.dependencies['@tauri-apps/plugin-shell']).toBeUndefined()
+    expect(desktopPkg.devDependencies['@tauri-apps/cli']).toBe(CATALOG_DEP_SPECIFIER)
     expect(desktopPkg.devDependencies['@sveltejs/kit']).toBeUndefined()
     expect(desktopPkg.scripts.package).toBe('pnpm tauri:build')
     expect(desktopPkg.scripts['tauri:dev']).toBe('tauri dev')
@@ -670,11 +816,14 @@ describe('createProject — fullstack 类型', () => {
 
     // shared 包断言
     const sharedPkg = await readJson(projectPath, 'packages/proj-fullstack-shared/package.json')
+    expectNonWorkspaceDepsUseCatalog(sharedPkg)
     expect(sharedPkg.name).toBe('proj-fullstack-shared')
     expect(sharedPkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
+    expect(sharedPkg.dependencies['@h-ai/api-client']).toBe(HAI_DEP_SPECIFIER)
+    expect(sharedPkg.dependencies['@h-ai/ui']).toBe(HAI_DEP_SPECIFIER)
     expect(sharedPkg.devDependencies['@inlang/paraglide-js']).toBeDefined()
     expect(sharedPkg.devDependencies['@inlang/plugin-message-format']).toBeDefined()
-    expect(sharedPkg.devDependencies.vite).toBe('^8.0.14')
+    expect(sharedPkg.devDependencies.vite).toBe(CATALOG_DEP_SPECIFIER)
     expect(sharedPkg.scripts['paraglide:compile']).toContain('paraglide-js compile')
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/project.inlang/settings.json')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/messages/zh-CN.json')).toBe(true)
@@ -718,6 +867,7 @@ describe('createProject — fullstack 类型', () => {
 
   it('应生成 serv / api-contract / api-client 对应 Skill', async () => {
     expect(await exists(projectPath, '.agents/skills/hai-fullstack/SKILL.md')).toBe(false)
+    expect(await exists(projectPath, '.agents/skills/hai-kit/SKILL.md')).toBe(false)
     expect(await exists(projectPath, '.agents/skills/hai-serv/SKILL.md')).toBe(true)
     expect(await exists(projectPath, '.agents/skills/hai-api-contract/SKILL.md')).toBe(true)
     expect(await exists(projectPath, '.agents/skills/hai-api-client/SKILL.md')).toBe(true)
@@ -773,6 +923,11 @@ describe('createProject — fullstack 前端条件生成', () => {
     expect(await exists(projectPath, 'apps/proj-fullstack-web-only-app/package.json')).toBe(false)
     expect(await exists(projectPath, 'apps/proj-fullstack-web-only-desktop/package.json')).toBe(false)
     expect(await exists(projectPath, 'apps/proj-fullstack-web-only-miniapp/README.md')).toBe(false)
+
+    const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
+    expectCatalogPackageNames(workspace, ['@playwright/test', '@types/node', 'daisyui', 'zod'])
+    expect(workspace).not.toContain('\'@capacitor/core\':')
+    expect(workspace).not.toContain('\'@tauri-apps/cli\':')
   })
 })
 
@@ -858,6 +1013,21 @@ describe('detectProject', () => {
 // =============================================================================
 
 describe('addModule', () => {
+  it('已有 catalog: 风格时新增模块应继续使用 catalog:', async () => {
+    const dir = path.join(tmpRoot, 'add-ai-catalog')
+    await fse.ensureDir(dir)
+    await fse.writeJson(path.join(dir, 'package.json'), {
+      name: 'add-catalog-test',
+      version: '0.1.0',
+      dependencies: { '@h-ai/core': 'catalog:' },
+    }, { spaces: 2 })
+
+    await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+
+    const pkg = await fse.readJson(path.join(dir, 'package.json'))
+    expect(pkg.dependencies['@h-ai/ai']).toBe('catalog:')
+  })
+
   it('向已有项目添加 ai 模块', async () => {
     const dir = path.join(tmpRoot, 'add-ai')
     await fse.ensureDir(dir)

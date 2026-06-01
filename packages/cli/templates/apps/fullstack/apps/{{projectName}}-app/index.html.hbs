@@ -1,0 +1,16 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.app}}
+<!doctype html>
+<html lang="{{fullstack.i18n.baseLocale}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#2563eb" />
+    <title>{{projectName}} App</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+{{/if}}

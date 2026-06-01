@@ -23,43 +23,35 @@ Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unkno
   return a === b ? options.fn(this) : options.inverse(this)
 })
 
-// 脚手架交付项目的 @h-ai/* 依赖版本范围，取自 CLI 自身版本（兼容源码 / 打包 / npm 安装布局）
-const HAI_VERSION = `^${getCliVersion()}`
 const TEMPLATE_SKIP_IF_EMPTY_MARKER = '@skipIfEmpty'
 const NORMALIZED_RENDER_EXTENSIONS = new Set(['.ts', '.js', '.svelte', '.json', '.css'])
 
-// Capacitor 应用为纯客户端 SPA（adapter-static + ssr=false），没有服务端运行时。
+// Capacitor 应用为纯客户端 SPA（Svelte 5 + Vite），没有服务端运行时。
 // 服务端专属产物（hooks、server init）必须跳过，否则预渲染会因访问 url.searchParams 报错。
 const CAPACITOR_SKIPPED_SERVER_FILES = new Set([
   'src/hooks.server.ts',
   'src/lib/server/init.ts',
 ])
 
-// 以下版本号与根 pnpm-workspace.yaml catalog 保持一致，
-// 调整 catalog 时同步更新（脚手架交付的项目不使用 catalog:，因此需要具体版本号）。
+// 以下版本号与生成项目的 pnpm-workspace.yaml catalog 保持一致；
+// 单包脚手架直接写具体版本，pnpm fullstack workspace 会通过 catalog: 引用这些版本。
 const VERSIONS = {
   antfuEslintConfig: '^9.0.0',
-  apiContract: HAI_VERSION,
-  apiClient: HAI_VERSION,
-  core: HAI_VERSION,
-  serv: HAI_VERSION,
-  ui: HAI_VERSION,
-  capacitor: HAI_VERSION,
+  capacitorSecureStorage: '^8.0.0',
   // UI / Icon
   bitsUi: '^2.18.1',
   iconifyJsonTabler: '^1.2.35',
   iconifyTailwind: '^1.2.3',
   // Capacitor
-  capacitorSecureStorage: '^8.0.0',
   capacitorAndroid: '^8.3.4',
   capacitorApp: '^8.0.1',
-  capacitorCamera: '^8.0.2',
+  capacitorCamera: '^8.0.1',
   capacitorCli: '^8.3.4',
   capacitorCore: '^8.3.4',
   capacitorDevice: '^8.0.1',
   capacitorIos: '^8.3.4',
   capacitorPreferences: '^8.0.1',
-  capacitorPushNotifications: '^8.0.2',
+  capacitorPushNotifications: '^8.0.1',
   capacitorStatusBar: '^8.0.1',
   // Tailwind / DaisyUI
   daisyui: '^5.5.20',
@@ -68,13 +60,10 @@ const VERSIONS = {
   // i18n
   inlangParaglide: '^2.18.1',
   inlangMessageFormat: '^4.4.0',
-  // Svelte / Kit
+  // Svelte / Vite
   svelte: '^5.55.9',
-  svelteKit: '^2.61.1',
   svelteCheck: '^4.4.8',
   sveltePlugin: '^7.1.2',
-  adapterAuto: '^7.0.1',
-  adapterStatic: '^3.0.10',
   // Build / Test
   vite: '^8.0.14',
   vitest: '^4.1.7',
@@ -93,9 +82,7 @@ const VERSIONS = {
   // Validation
   zod: '^4.4.3',
   // Tauri
-  tauriApi: '^2.10.1',
   tauriCli: '^2.10.1',
-  tauriPluginShell: '^2.3.5',
 } as const
 
 type ImplementedFrontendTarget = Exclude<FrontendTarget, 'miniapp'>
@@ -117,6 +104,260 @@ const IMPLEMENTED_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop
 const DEFAULT_FULLSTACK_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop']
 const DEFAULT_THEMES = ['light', 'dark'] as const
 const DEFAULT_THEME_NAME = 'light'
+const HAI_PACKAGE_VERSION = `^${getCliVersion()}`
+const HAI_PACKAGE_SPECIFIER_CATALOG = 'catalog:'
+type FullstackPackageSpecifiers = { [Key in keyof typeof VERSIONS]: string }
+type CatalogPackageVersions = Readonly<Record<string, string>>
+
+const HAI_CATALOG_PACKAGE_NAMES = [
+  '@h-ai/ai',
+  '@h-ai/api-client',
+  '@h-ai/api-contract',
+  '@h-ai/audit',
+  '@h-ai/cache',
+  '@h-ai/capacitor',
+  '@h-ai/core',
+  '@h-ai/crypto',
+  '@h-ai/datapipe',
+  '@h-ai/deploy',
+  '@h-ai/iam',
+  '@h-ai/kit',
+  '@h-ai/payment',
+  '@h-ai/reach',
+  '@h-ai/reldb',
+  '@h-ai/scheduler',
+  '@h-ai/serv',
+  '@h-ai/storage',
+  '@h-ai/ui',
+  '@h-ai/vecdb',
+] as const
+const HAI_CATALOG_PACKAGES: Record<string, string> = Object.fromEntries(
+  HAI_CATALOG_PACKAGE_NAMES.map(packageName => [packageName, HAI_PACKAGE_VERSION]),
+)
+
+const FULLSTACK_EXTERNAL_CATALOG_PACKAGES: CatalogPackageVersions = {
+  '@antfu/eslint-config': VERSIONS.antfuEslintConfig,
+  '@aparajita/capacitor-secure-storage': VERSIONS.capacitorSecureStorage,
+  '@capacitor/android': VERSIONS.capacitorAndroid,
+  '@capacitor/app': VERSIONS.capacitorApp,
+  '@capacitor/camera': VERSIONS.capacitorCamera,
+  '@capacitor/cli': VERSIONS.capacitorCli,
+  '@capacitor/core': VERSIONS.capacitorCore,
+  '@capacitor/device': VERSIONS.capacitorDevice,
+  '@capacitor/ios': VERSIONS.capacitorIos,
+  '@capacitor/preferences': VERSIONS.capacitorPreferences,
+  '@capacitor/push-notifications': VERSIONS.capacitorPushNotifications,
+  '@capacitor/status-bar': VERSIONS.capacitorStatusBar,
+  '@iconify-json/tabler': VERSIONS.iconifyJsonTabler,
+  '@iconify/tailwind4': VERSIONS.iconifyTailwind,
+  '@inlang/paraglide-js': VERSIONS.inlangParaglide,
+  '@inlang/plugin-message-format': VERSIONS.inlangMessageFormat,
+  '@playwright/test': VERSIONS.playwright,
+  '@sveltejs/vite-plugin-svelte': VERSIONS.sveltePlugin,
+  '@tailwindcss/vite': VERSIONS.tailwindcssVite,
+  '@tauri-apps/cli': VERSIONS.tauriCli,
+  '@types/node': VERSIONS.nodeTypes,
+  'bits-ui': VERSIONS.bitsUi,
+  'daisyui': VERSIONS.daisyui,
+  'eslint': VERSIONS.eslint,
+  'eslint-plugin-format': VERSIONS.eslintPluginFormat,
+  'eslint-plugin-svelte': VERSIONS.eslintPluginSvelte,
+  'rimraf': VERSIONS.rimraf,
+  'svelte': VERSIONS.svelte,
+  'svelte-check': VERSIONS.svelteCheck,
+  'svelte-eslint-parser': VERSIONS.svelteEslintParser,
+  'tailwindcss': VERSIONS.tailwindcss,
+  'tsup': VERSIONS.tsup,
+  'typescript': VERSIONS.typescript,
+  'vite': VERSIONS.vite,
+  'vitest': VERSIONS.vitest,
+  'zod': VERSIONS.zod,
+}
+
+const FULLSTACK_CATALOG_PACKAGES: CatalogPackageVersions = {
+  ...HAI_CATALOG_PACKAGES,
+  ...FULLSTACK_EXTERNAL_CATALOG_PACKAGES,
+}
+
+const FULLSTACK_ROOT_CATALOG_PACKAGE_NAMES = [
+  '@antfu/eslint-config',
+  '@playwright/test',
+  '@sveltejs/vite-plugin-svelte',
+  '@types/node',
+  'eslint',
+  'eslint-plugin-format',
+  'eslint-plugin-svelte',
+  'rimraf',
+  'svelte',
+  'svelte-check',
+  'svelte-eslint-parser',
+  'tsup',
+  'typescript',
+  'vite',
+  'vitest',
+] as const
+
+const FULLSTACK_CONTRACT_CATALOG_PACKAGE_NAMES = [
+  '@h-ai/api-contract',
+  '@h-ai/core',
+  'zod',
+] as const
+
+const FULLSTACK_SERV_CATALOG_PACKAGE_NAMES = [
+  '@h-ai/core',
+  '@h-ai/serv',
+] as const
+
+const FULLSTACK_SHARED_CATALOG_PACKAGE_NAMES = [
+  '@h-ai/api-client',
+  '@h-ai/ui',
+  '@inlang/paraglide-js',
+  '@inlang/plugin-message-format',
+  'svelte',
+  'svelte-check',
+  'typescript',
+  'vite',
+  'vitest',
+] as const
+
+const FULLSTACK_WEB_CATALOG_PACKAGE_NAMES = [
+  '@antfu/eslint-config',
+  '@h-ai/ui',
+  '@iconify-json/tabler',
+  '@iconify/tailwind4',
+  '@inlang/paraglide-js',
+  '@inlang/plugin-message-format',
+  '@sveltejs/vite-plugin-svelte',
+  '@tailwindcss/vite',
+  'bits-ui',
+  'daisyui',
+  'eslint',
+  'eslint-plugin-format',
+  'eslint-plugin-svelte',
+  'svelte',
+  'svelte-check',
+  'svelte-eslint-parser',
+  'tailwindcss',
+  'typescript',
+  'vite',
+  'vitest',
+] as const
+
+const FULLSTACK_APP_CATALOG_PACKAGE_NAMES = [
+  ...FULLSTACK_WEB_CATALOG_PACKAGE_NAMES,
+  '@aparajita/capacitor-secure-storage',
+  '@capacitor/android',
+  '@capacitor/app',
+  '@capacitor/camera',
+  '@capacitor/cli',
+  '@capacitor/core',
+  '@capacitor/device',
+  '@capacitor/ios',
+  '@capacitor/preferences',
+  '@capacitor/push-notifications',
+  '@capacitor/status-bar',
+  '@h-ai/capacitor',
+] as const
+
+const FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES = [
+  ...FULLSTACK_WEB_CATALOG_PACKAGE_NAMES,
+  '@tauri-apps/cli',
+] as const
+
+function pickCatalogPackages(
+  packageNames: readonly string[],
+  availableCatalogPackages: CatalogPackageVersions,
+): Record<string, string> {
+  return Object.fromEntries(
+    [...new Set(packageNames)]
+      .sort((left, right) => left.localeCompare(right))
+      .map((packageName) => {
+        const version = availableCatalogPackages[packageName]
+        if (!version) {
+          throw new Error(`Missing catalog version for package "${packageName}"`)
+        }
+        return [packageName, version]
+      }),
+  )
+}
+
+function buildFullstackPackageSpecifiers(useCatalogProtocol: boolean): FullstackPackageSpecifiers {
+  return Object.fromEntries(
+    Object.entries(VERSIONS).map(([key, version]) => [key, useCatalogProtocol ? HAI_PACKAGE_SPECIFIER_CATALOG : version]),
+  ) as FullstackPackageSpecifiers
+}
+
+function buildAppHaiCatalogPackages(options: {
+  featureMap: Record<string, boolean>
+  hasUi: boolean
+  isCapacitorApp: boolean
+  isSvelteOnlyApp: boolean
+}): Record<string, string> {
+  const packageNames: string[] = []
+
+  if (options.isSvelteOnlyApp) {
+    packageNames.push('@h-ai/api-client', '@h-ai/capacitor', '@h-ai/ui')
+    return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)
+  }
+
+  packageNames.push('@h-ai/core', '@h-ai/kit')
+  if (options.hasUi)
+    packageNames.push('@h-ai/ui')
+  if (options.featureMap.db)
+    packageNames.push('@h-ai/reldb')
+  if (options.featureMap.cache)
+    packageNames.push('@h-ai/cache')
+  if (options.featureMap.iam)
+    packageNames.push('@h-ai/iam')
+  if (options.featureMap.crypto)
+    packageNames.push('@h-ai/crypto')
+  if (options.featureMap.storage)
+    packageNames.push('@h-ai/storage')
+  if (options.featureMap.ai)
+    packageNames.push('@h-ai/ai')
+  if (options.featureMap.audit)
+    packageNames.push('@h-ai/audit')
+  if (options.featureMap.reach)
+    packageNames.push('@h-ai/reach')
+  if (options.featureMap.payment)
+    packageNames.push('@h-ai/payment')
+  if (options.featureMap.vecdb)
+    packageNames.push('@h-ai/vecdb')
+  if (options.featureMap.datapipe)
+    packageNames.push('@h-ai/datapipe')
+  if (options.featureMap.scheduler)
+    packageNames.push('@h-ai/scheduler')
+  if (options.featureMap.deploy)
+    packageNames.push('@h-ai/deploy')
+  if (options.featureMap['api-client'])
+    packageNames.push('@h-ai/api-client')
+  if (options.featureMap.capacitor)
+    packageNames.push('@h-ai/capacitor')
+  if (options.isCapacitorApp && !options.featureMap['api-client'])
+    packageNames.push('@h-ai/api-client')
+  if (options.isCapacitorApp && !options.featureMap.capacitor)
+    packageNames.push('@h-ai/capacitor')
+
+  return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)
+}
+
+function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[]): Record<string, string> {
+  const packageNames = [
+    ...FULLSTACK_ROOT_CATALOG_PACKAGE_NAMES,
+    ...FULLSTACK_CONTRACT_CATALOG_PACKAGE_NAMES,
+    ...FULLSTACK_SERV_CATALOG_PACKAGE_NAMES,
+    ...FULLSTACK_SHARED_CATALOG_PACKAGE_NAMES,
+  ]
+
+  if (frontends.includes('web'))
+    packageNames.push(...FULLSTACK_WEB_CATALOG_PACKAGE_NAMES)
+  if (frontends.includes('app'))
+    packageNames.push(...FULLSTACK_APP_CATALOG_PACKAGE_NAMES)
+  if (frontends.includes('desktop'))
+    packageNames.push(...FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES)
+
+  return pickCatalogPackages(packageNames, FULLSTACK_CATALOG_PACKAGES)
+}
 
 // =============================================================================
 // 类型
@@ -128,6 +369,14 @@ const DEFAULT_THEME_NAME = 'light'
 export interface TemplateContext {
   /** 项目名称 */
   projectName: string
+  /** 是否对 @h-ai/* 依赖启用 pnpm catalog 协议 */
+  useCatalogProtocol: boolean
+  /** @h-ai/* 依赖写入 package.json 时使用的版本说明符 */
+  haiPackageSpecifier: string
+  /** 生成项目时引用的 @h-ai/* 发布版本 */
+  haiPackageVersion: string
+  /** 生成项目时写入 pnpm-workspace.yaml 的 catalog 条目 */
+  haiCatalogPackages: Record<string, string>
   /** 应用类型 */
   appType: AppType
   /** 选中的 feature 集合（用于 {{#if features.xxx}}） */
@@ -136,8 +385,10 @@ export interface TemplateContext {
   hasUi: boolean
   /** 是否有 i18n（非 api / fullstack 类型） */
   hasI18n: boolean
-  /** 是否为 Capacitor 原生应用（android-app） */
+  /** 是否为 Capacitor 原生移动应用（mobile-app） */
   isCapacitorApp: boolean
+  /** 是否为不依赖 SvelteKit 的纯 Svelte 5 应用 */
+  isSvelteOnlyApp: boolean
   /** 默认语言 */
   defaultLocale: string
   /** 包管理器 */
@@ -176,6 +427,8 @@ export interface FullstackThemeContext {
 export interface FullstackTemplateContext {
   /** 依赖版本集合 */
   versions: typeof VERSIONS
+  /** 写入 package.json 的依赖说明符（pnpm 时为 catalog:） */
+  packageSpecifiers: FullstackPackageSpecifiers
   /** 共享 contract 包名 */
   contractPackageName: string
   /** 共享 contract 导出变量名 */
@@ -391,22 +644,40 @@ export function buildTemplateContext(options: {
 
   const isApi = options.appType === 'api'
   const isFullstack = options.appType === 'fullstack'
-  const isCapacitorApp = options.appType === 'android-app'
+  const isCapacitorApp = options.appType === 'mobile-app'
+  const isSvelteOnlyApp = isCapacitorApp
+  const useCatalogProtocol = options.packageManager === 'pnpm'
+  const hasUi = !isApi && !isFullstack
+  const selectedFrontends = options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS
+  const haiCatalogPackages = isFullstack
+    ? buildFullstackCatalogPackages(selectedFrontends)
+    : buildAppHaiCatalogPackages({
+        featureMap,
+        hasUi,
+        isCapacitorApp,
+        isSvelteOnlyApp,
+      })
 
   return {
     projectName: options.name,
+    useCatalogProtocol,
+    haiPackageSpecifier: useCatalogProtocol ? HAI_PACKAGE_SPECIFIER_CATALOG : HAI_PACKAGE_VERSION,
+    haiPackageVersion: HAI_PACKAGE_VERSION,
+    haiCatalogPackages,
     appType: options.appType,
     features: featureMap,
-    hasUi: !isApi && !isFullstack,
+    hasUi,
     hasI18n: !isApi && !isFullstack,
     isCapacitorApp,
+    isSvelteOnlyApp,
     defaultLocale: options.moduleConfigs?.core?.defaultLocale ?? 'zh-CN',
     packageManager: options.packageManager,
     fullstack: isFullstack
       ? buildFullstackTemplateContext(
           options.name,
-          options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS,
+          selectedFrontends,
           options.moduleConfigs,
+          useCatalogProtocol,
         )
       : undefined,
   }
@@ -416,6 +687,7 @@ function buildFullstackTemplateContext(
   projectName: string,
   frontendsInput: readonly FrontendTarget[],
   moduleConfigs?: ModuleConfigs,
+  useCatalogProtocol = false,
 ): FullstackTemplateContext {
   const selectedFrontends = [...new Set(frontendsInput.length > 0 ? frontendsInput : DEFAULT_FULLSTACK_FRONTENDS)]
 
@@ -434,6 +706,7 @@ function buildFullstackTemplateContext(
 
   return {
     versions: VERSIONS,
+    packageSpecifiers: buildFullstackPackageSpecifiers(useCatalogProtocol),
     contractPackageName: `${projectName}-contract`,
     contractExportName: `${toIdentifier(projectName)}Contract`,
     servPackageName: `${projectName}-serv`,
@@ -545,6 +818,10 @@ export async function generateFromTemplates(
 
   // ─── ③ 叠加 feature 路由 ───
   for (const featureId of Object.keys(context.features)) {
+    if (context.isSvelteOnlyApp) {
+      continue
+    }
+
     if (!context.features[featureId]) {
       continue
     }
@@ -630,6 +907,10 @@ async function renderDynamicFiles(
   // ── feature 路由 → 输出到 src/routes/ ──
   const routesDest = path.join(projectPath, 'src', 'routes')
   for (const featureId of Object.keys(context.features)) {
+    if (context.isSvelteOnlyApp) {
+      continue
+    }
+
     if (!context.features[featureId]) {
       continue
     }

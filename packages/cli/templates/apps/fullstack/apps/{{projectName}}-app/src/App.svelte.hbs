@@ -1,0 +1,150 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.app}}
+<script lang="ts">
+  import type { AppInfo } from '{{fullstack.sharedPackageName}}'
+  import * as appM from './lib/paraglide/messages.js'
+  import { setLocale } from './lib/paraglide/runtime.js'
+  import { Alert, Button, Card, Skeleton } from '@h-ai/ui'
+  import { onMount } from 'svelte'
+  import { fetchAppInfo, getLocale as getSharedLocale, messages as sharedM } from '{{fullstack.sharedPackageName}}'
+  import { initCapacitor } from './lib/capacitor.js'
+
+  type TabId = 'workspace' | 'status' | 'settings'
+
+  let info = $state<AppInfo | null>(null)
+  let loading = $state(true)
+  let errorMessage = $state('')
+  let activeTab = $state<TabId>('workspace')
+
+  const navItems = $derived([
+    { id: 'workspace', label: appM.nav_workspace(), iconClass: 'icon-[tabler--layout-dashboard]' },
+    { id: 'status', label: appM.nav_status(), iconClass: 'icon-[tabler--activity-heartbeat]' },
+    { id: 'settings', label: appM.nav_settings(), iconClass: 'icon-[tabler--settings]' },
+  ])
+
+  function syncLocale(locale: string) {
+    setLocale(locale as Parameters<typeof setLocale>[0])
+  }
+
+  function handleTabChange(id: string): void {
+    if (id === 'workspace' || id === 'status' || id === 'settings')
+      activeTab = id
+  }
+
+  async function refreshStatus() {
+    loading = true
+    errorMessage = ''
+    try {
+      info = await fetchAppInfo({ clientName: '{{projectName}}-app' })
+    }
+    catch {
+      info = null
+      errorMessage = sharedM.home_error()
+    }
+    finally {
+      loading = false
+    }
+  }
+
+  onMount(() => {
+    document.title = appM.page_title({ name: sharedM.app_name() })
+    syncLocale(getSharedLocale())
+    void initCapacitor()
+    void refreshStatus()
+  })
+</script>
+
+<div class="hai-mobile-viewport">
+  <div class="hai-mobile-shell max-w-lg">
+    <AppBar title={sharedM.app_name()} safeArea fixed={false} class="bg-base-100/95 backdrop-blur border-base-content/8" />
+
+    <main class="hai-mobile-main">
+      {#if activeTab === 'workspace'}
+        <section class="space-y-4 p-4 pb-6">
+          <div class="bg-primary text-primary-content rounded-2xl p-5 shadow-sm">
+            <p class="text-sm opacity-75">{appM.hero_badge()}</p>
+            <h1 class="mt-1 text-2xl font-bold">{appM.hero_title({ name: sharedM.app_name() })}</h1>
+            <p class="mt-2 text-sm opacity-80">{appM.hero_subtitle()}</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <Card padding="sm" shadow="sm">
+              <div class="flex flex-col gap-2">
+                <span class="icon-[tabler--components] text-primary text-2xl"></span>
+                <span class="text-sm font-medium">{appM.preview_metric_shared()}</span>
+                <span class="text-base-content/60 text-xs">{appM.custom_shared_body()}</span>
+              </div>
+            </Card>
+            <Card padding="sm" shadow="sm">
+              <div class="flex flex-col gap-2">
+                <span class="icon-[tabler--message-language] text-primary text-2xl"></span>
+                <span class="text-sm font-medium">{appM.preview_metric_local()}</span>
+                <span class="text-base-content/60 text-xs">{appM.custom_local_body()}</span>
+              </div>
+            </Card>
+          </div>
+
+          <Alert variant="info">
+            {appM.flow_frontend()}
+          </Alert>
+        </section>
+      {:else if activeTab === 'status'}
+        <section class="space-y-4 p-4 pb-6">
+          <Card title={appM.status_title()} shadow="sm">
+            <p class="mb-4 text-sm text-base-content/65">{appM.status_description()}</p>
+            {#if loading}
+              <Skeleton variant="title" class="mb-3" />
+              <Skeleton count={3} />
+              <p class="sr-only" data-testid="service-status">{sharedM.home_loading()}</p>
+            {:else if info}
+              <Alert variant="success" title={appM.status_online({ name: info.name })}>
+                <p data-testid="service-status">{info.name}</p>
+              </Alert>
+              <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p class="text-base-content/50">{appM.status_version()}</p>
+                  <p class="font-medium">{info.version}</p>
+                </div>
+                <div>
+                  <p class="text-base-content/50">{appM.status_frontends_count({ count: String(info.frontends.length) })}</p>
+                  <p class="font-medium">{info.frontends.join(' / ')}</p>
+                </div>
+              </div>
+            {:else}
+              <Alert variant="error" title={sharedM.home_error()}>
+                <p data-testid="service-status">{errorMessage}</p>
+              </Alert>
+            {/if}
+
+            {#snippet footer()}
+              <Button variant="ghost" size="sm" onclick={refreshStatus}>{sharedM.home_refresh()}</Button>
+            {/snippet}
+          </Card>
+        </section>
+      {:else}
+        <section class="space-y-4 p-4 pb-6">
+          <Card title={appM.custom_shared_title()} shadow="sm">
+            <div class="space-y-3 text-sm">
+              <div class="bg-base-200 rounded-xl p-3">{appM.flow_contract()}</div>
+              <div class="bg-base-200 rounded-xl p-3">{appM.flow_service()}</div>
+              <div class="bg-base-200 rounded-xl p-3">{appM.flow_shared()}</div>
+            </div>
+          </Card>
+        </section>
+      {/if}
+    </main>
+
+    <BottomNav
+      items={navItems}
+      active={activeTab}
+      onchange={handleTabChange}
+      safeArea
+      centered
+      maxWidth="lg"
+      class="border-base-content/8 shadow-[0_-12px_32px_rgba(15,23,42,0.08)]"
+    />
+  </div>
+</div>
+
+<ToastContainer />
+{{/if}}

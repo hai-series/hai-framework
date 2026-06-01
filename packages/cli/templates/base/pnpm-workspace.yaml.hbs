@@ -1,0 +1,14 @@
+{{! @skipIfEmpty }}
+{{#if useCatalogProtocol}}
+shellEmulator: true
+
+trustPolicy: no-downgrade
+
+packages:
+  - .
+
+catalog:
+{{#each haiCatalogPackages}}
+  '{{@key}}': {{this}}
+{{/each}}
+{{/if}}

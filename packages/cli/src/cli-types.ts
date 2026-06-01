@@ -54,7 +54,7 @@ export interface GlobalOptions {
 /**
  * 应用类型
  */
-export type AppType = 'admin' | 'website' | 'h5' | 'api' | 'android-app' | 'fullstack'
+export type AppType = 'admin' | 'website' | 'h5' | 'api' | 'mobile-app' | 'fullstack'
 
 /**
  * 前后端分离工程的前端目标

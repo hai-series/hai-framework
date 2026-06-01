@@ -9,8 +9,11 @@ import antfu from '@antfu/eslint-config'
 export default antfu({
   formatters: true,
   ignores: [
+{{#unless isSvelteOnlyApp}}
     '**/.svelte-kit/**',
+{{/unless}}
     '**/build/**',
+    '**/dist/**',
     '**/*.d.ts',
     '**/project.inlang/**',
     '**/paraglide/**',

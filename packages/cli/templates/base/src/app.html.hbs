@@ -1,3 +1,5 @@
+{{! @skipIfEmpty }}
+{{#unless isSvelteOnlyApp}}
 <!doctype html>
 {{#if hasI18n}}
 {{#if isCapacitorApp}}
@@ -24,3 +26,4 @@
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>
+{{/unless}}

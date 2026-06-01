@@ -21,7 +21,7 @@ description: "Use when: creating a new SvelteKit application, adding routes, add
 |------|------|------|
 | `admin-console` | 管理后台 | TailwindCSS + DaisyUI，IAM 权限控制，服务端渲染 |
 | `h5-app` | 移动端 H5 | 触屏优化，PullRefresh/InfiniteScroll，简化认证 |
-| `android-app` | Android 原生壳 | Capacitor 封装，与 H5 共享核心代码 |
+| `mobile-app` | 移动端原生壳 | Capacitor + Svelte 5 + Vite，支持 Android/iOS |
 | `desktop-app` | 桌面应用 | Tauri 封装，本地文件系统访问 |
 | `api-service` | API 服务 | 纯后端，无页面渲染 |
 | `corporate-website` | 企业官网 | SSG 为主，SEO 优化 |

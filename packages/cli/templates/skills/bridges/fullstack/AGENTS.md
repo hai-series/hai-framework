@@ -9,11 +9,11 @@
 - `packages/<project>-contract`：前后端共享 API contract、Zod schema 与类型。
 - `packages/<project>-serv`：后端服务，使用 `@h-ai/serv` 实现业务 API。
 - `packages/<project>-shared`：跨端共享 UI Shell、主题、语言切换和 typed API client。
-- `apps/<project>-web`：SvelteKit Web 前端。
-- `apps/<project>-app`：SvelteKit adapter-static + Capacitor 移动端 SPA。
-- `apps/<project>-desktop`：Tauri v2 + Vite + Svelte 桌面端。
+- `apps/<project>-web`：Svelte 5 + Vite Web 前端。
+- `apps/<project>-app`：Svelte 5 + Vite + Capacitor 移动端 SPA。
+- `apps/<project>-desktop`：Svelte 5 + Vite + Tauri v2 桌面端。
 
-前端只做 UI、路由与请求编排；后端业务逻辑放在 `packages/<project>-serv`，不要写进页面组件或 `load`。
+前端只做 UI 与请求编排；后端业务逻辑放在 `packages/<project>-serv`，不要写进前端组件。
 
 ## 核心规范
 

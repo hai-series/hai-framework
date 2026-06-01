@@ -3,7 +3,6 @@ import antfu from '@antfu/eslint-config'
 export default antfu({
   formatters: true,
   ignores: [
-    '**/.svelte-kit/**',
     '**/build/**',
     '**/dist/**',
     '**/src/lib/paraglide/**',

@@ -2,13 +2,13 @@
 {{#if fullstack.frontends.app}}
 # {{projectName}}-app
 
-App/H5 前端工程，参考 `apps/mobile-app` 使用 SvelteKit SPA + Capacitor，可输出 Web 预览并同步 Android / iOS 原生工程。
+App/H5 前端工程，参考 `apps/mobile-app` 的移动端 UI 风格，使用 Svelte 5 + Vite + Capacitor，可输出 Web 预览并同步 Android / iOS 原生工程。
 
 ## i18n 与 shared 协同
 
 - 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`
 - 共享 Shell/主题/语言/API：`packages/{{fullstack.sharedPackageName}}`
-- 语言切换由 shared 的 `LanguageSwitcher` 触发，并同步本端 `$lib/paraglide/runtime.js`
+- 语言切换通过 shared runtime 与本端 `src/lib/paraglide/runtime.js` 同步。
 
 自定义建议：移动端独有引导、运营位、按钮文案放在本目录 `messages/`；跨端通用组件放到 shared。
 
@@ -18,7 +18,7 @@ App/H5 前端工程，参考 `apps/mobile-app` 使用 SvelteKit SPA + Capacitor�
 # 开发预览，默认端口 {{fullstack.ports.app}}
 pnpm --filter {{projectName}}-app dev
 
-# 编译静态 SPA 产物到 build/
+# 编译静态 SPA 产物到 dist/
 pnpm --filter {{projectName}}-app build
 
 # 同步原生工程；首次使用前按需执行 cap:add:android / cap:add:ios

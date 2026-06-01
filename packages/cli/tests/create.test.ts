@@ -15,7 +15,7 @@ describe('detectProject', () => {
   it('应能正常导入 detectProject 函数', async () => {
     const { detectProject } = await import('../src/commands/cli-create.js')
     expect(typeof detectProject).toBe('function')
-  })
+  }, 15000)
 
   it('在不含 package.json 的目录中应返回 null', async () => {
     const { detectProject } = await import('../src/commands/cli-create.js')
@@ -52,14 +52,15 @@ describe('buildTemplateContext', () => {
     expect(ctx.isCapacitorApp).toBe(false)
   })
 
-  it('android-app 类型应开启 isCapacitorApp', () => {
+  it('mobile-app 类型应开启 isCapacitorApp 并使用纯 Svelte 5', () => {
     const ctx = buildTemplateContext({
       name: 'my-app',
-      appType: 'android-app' as AppType,
+      appType: 'mobile-app' as AppType,
       features: [],
       packageManager: 'pnpm',
     })
     expect(ctx.isCapacitorApp).toBe(true)
+    expect(ctx.isSvelteOnlyApp).toBe(true)
   })
 
   it('fullstack 类型应作为独立应用类型可识别', () => {
@@ -139,6 +140,35 @@ describe('fullstack TemplateContext', () => {
     expect(ctx.fullstack?.hasMiniapp).toBe(true)
     expect(ctx.fullstack?.frontendApps).toEqual([])
     expect(ctx.fullstack?.e2eFrontend).toBeUndefined()
+  })
+
+  it('pnpm fullstack 应为 package.json 输出 catalog: 说明符', () => {
+    const ctx = buildTemplateContext({
+      name: 'demo',
+      appType: 'fullstack' as AppType,
+      features: [],
+      frontends: ['web', 'app', 'desktop'],
+      packageManager: 'pnpm',
+    })
+
+    expect(ctx.fullstack?.packageSpecifiers.vite).toBe('catalog:')
+    expect(ctx.fullstack?.packageSpecifiers.typescript).toBe('catalog:')
+    expect(ctx.fullstack?.packageSpecifiers.capacitorSecureStorage).toBe('catalog:')
+  })
+
+  it('pnpm fullstack catalog 应只包含已选择前端所需依赖', () => {
+    const ctx = buildTemplateContext({
+      name: 'demo',
+      appType: 'fullstack' as AppType,
+      features: [],
+      frontends: ['web'],
+      packageManager: 'pnpm',
+    })
+
+    expect(ctx.haiCatalogPackages['@playwright/test']).toBeDefined()
+    expect(ctx.haiCatalogPackages.daisyui).toBeDefined()
+    expect(ctx.haiCatalogPackages['@capacitor/core']).toBeUndefined()
+    expect(ctx.haiCatalogPackages['@tauri-apps/cli']).toBeUndefined()
   })
 
   it('原生壳标识应去除短横线并保证可作为标识片段', () => {

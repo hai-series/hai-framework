@@ -33,8 +33,6 @@
     "@h-ai/api-service-contract": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@h-ai/ui": "workspace:*",
-    "@tauri-apps/api": "catalog:",
-    "@tauri-apps/plugin-shell": "catalog:",
     "yaml": "catalog:",
     "zod": "catalog:"
   },

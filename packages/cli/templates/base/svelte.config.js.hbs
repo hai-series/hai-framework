@@ -1,10 +1,13 @@
 /**
  * Svelte 配置
  */
+{{#unless isSvelteOnlyApp}}
 import process from 'node:process'
+{{/unless}}
 {{#if hasUi}}
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 {{/if}}
+{{#unless isSvelteOnlyApp}}
 {{#if isCapacitorApp}}
 import adapter from '@sveltejs/adapter-static'
 {{else}}
@@ -14,8 +17,18 @@ import adapter from '@sveltejs/adapter-node'
 import adapter from '@sveltejs/adapter-auto'
 {{/if_eq}}
 {{/if}}
+{{/unless}}
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
+{{#if isSvelteOnlyApp}}
+/** @type {import('@sveltejs/vite-plugin-svelte').SvelteConfig} */
+const config = {
+  preprocess: [{{#if hasUi}}autoImportHaiUi(), {{/if}}vitePreprocess()],
+  compilerOptions: {
+    runes: true,
+  },
+}
+{{else}}
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: [{{#if hasUi}}autoImportHaiUi(), {{/if}}vitePreprocess()],
@@ -44,5 +57,6 @@ const config = {
     },
   },
 }
+{{/if}}
 
 export default config

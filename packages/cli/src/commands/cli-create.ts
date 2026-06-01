@@ -11,6 +11,7 @@
  */
 
 import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, FrontendTarget, ModuleConfigs, ProjectInfo } from '../cli-types.js'
+import { Buffer } from 'node:buffer'
 import { execFileSync, execSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
@@ -54,10 +55,10 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
     description: '纯 API 后端服务，RESTful 路由、无 UI',
     defaultFeatures: ['db', 'cache'],
   },
-  'android-app': {
-    name: 'Android 应用',
-    description: 'Android 原生应用（Capacitor + SvelteKit SPA），可打包为 APK',
-    defaultFeatures: ['iam', 'db', 'cache', 'crypto', 'api-client', 'capacitor'],
+  'mobile-app': {
+    name: '移动应用',
+    description: '移动端应用（Capacitor + Svelte 5 + Vite），可打包为 Android/iOS',
+    defaultFeatures: ['api-client', 'capacitor'],
   },
   'fullstack': {
     name: '前后端分离工程',
@@ -364,8 +365,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     // 安装依赖
     if (resolvedOptions.install) {
       spinner.start(`安装依赖 (${resolvedOptions.packageManager})...`)
-      const installCmd = getInstallCommand(resolvedOptions.packageManager!)
-      execSync(installCmd, { cwd: projectPath, stdio: 'ignore' })
+      installDependencies(projectPath, resolvedOptions.packageManager!)
       spinner.succeed()
     }
 
@@ -948,6 +948,60 @@ function getRunCommand(pm: 'pnpm' | 'npm' | 'yarn', script: string): string {
   return pm === 'npm' ? `npm run ${script}` : `${pm} ${script}`
 }
 
+function installDependencies(projectPath: string, pm: 'pnpm' | 'npm' | 'yarn'): void {
+  const installCmd = getInstallCommand(pm)
+  try {
+    execSync(installCmd, {
+      cwd: projectPath,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024,
+    })
+  }
+  catch (error) {
+    const details = formatCommandFailure(installCmd, error)
+    throw new Error(`安装依赖失败（${pm}）。\n${details}`)
+  }
+}
+
+interface CommandFailureLike {
+  stdout?: unknown
+  stderr?: unknown
+  status?: number | null
+  signal?: string | null
+}
+
+function formatCommandFailure(command: string, error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return `命令: ${command}`
+  }
+
+  const failure = error as CommandFailureLike
+  const stdout = normalizeChildOutput(failure.stdout)
+  const stderr = normalizeChildOutput(failure.stderr)
+  const status = typeof failure.status === 'number' ? `退出码: ${failure.status}` : ''
+  const signal = typeof failure.signal === 'string' ? `信号: ${failure.signal}` : ''
+  const output = [
+    `命令: ${command}`,
+    status,
+    signal,
+    stderr ? `stderr:\n${stderr}` : '',
+    stdout ? `stdout:\n${stdout}` : '',
+  ].filter(Boolean)
+
+  return output.join('\n\n')
+}
+
+function normalizeChildOutput(output: unknown): string {
+  if (typeof output === 'string') {
+    return output.trim()
+  }
+  if (Buffer.isBuffer(output)) {
+    return output.toString('utf-8').trim()
+  }
+  return ''
+}
+
 /**
  * 生成 README
  */
@@ -975,7 +1029,6 @@ ${getRunCommand(pm, 'preview')}
 ## 文档
 
 - [hai Agent Framework](https://github.com/hai-series/hai-framework)
-- [SvelteKit](https://kit.svelte.dev/)
 - [Svelte 5](https://svelte.dev/)
 `
 }
@@ -1046,7 +1099,6 @@ ${pm} test:e2e
 ## 文档
 
 - [hai Agent Framework](https://github.com/hai-series/hai-framework)
-- [SvelteKit](https://kit.svelte.dev/)
 - [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
 - [@h-ai/ui](./.agents/skills/hai-ui/SKILL.md)
 `

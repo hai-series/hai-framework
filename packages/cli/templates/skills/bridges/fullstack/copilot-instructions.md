@@ -7,11 +7,11 @@
 - Contract：`packages/<project>-contract` 定义 API contract、schema 与共享类型。
 - Fullstack 服务端：`packages/<project>-serv` 使用 `@h-ai/serv` 实现业务 API。
 - Shared：`packages/<project>-shared` 放跨端 Shell、i18n、主题和 typed API client。
-- Web：SvelteKit Web 前端。
-- App：SvelteKit adapter-static + Capacitor 原生壳。
-- Desktop：Tauri v2 + Vite + Svelte 纯客户端壳。
+- Web：Svelte 5 + Vite 前端。
+- App：Svelte 5 + Vite + Capacitor 原生壳。
+- Desktop：Svelte 5 + Vite + Tauri v2 纯客户端壳。
 
-不要把后端业务逻辑写进 Svelte 页面、`load` 或前端组件。
+不要把后端业务逻辑写进 Svelte 前端组件。
 
 ## 编码规范
 

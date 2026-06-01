@@ -2,7 +2,6 @@ node_modules
 .turbo
 dist
 build
-.svelte-kit
 **/src/lib/paraglide
 playwright-report
 test-results

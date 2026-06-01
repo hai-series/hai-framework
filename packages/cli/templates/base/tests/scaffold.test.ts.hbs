@@ -20,10 +20,17 @@ describe('generated scaffold', () => {
     expect(pkg.scripts['test:e2e']).toBeDefined()
   })
 
+{{#if isSvelteOnlyApp}}
+  it('renders the Vite app shell entry', async () => {
+    const indexHtml = await readFile(join(rootDir, 'index.html'), 'utf-8')
+    expect(indexHtml).toContain('<div id="app"></div>')
+  })
+{{else}}
   it('renders the app shell locale marker', async () => {
     const appHtml = await readFile(join(rootDir, 'src/app.html'), 'utf-8')
     expect(appHtml).toContain('lang="{{#if hasI18n}}{{#if isCapacitorApp}}{{defaultLocale}}{{else}}%lang%{{/if}}{{else}}{{defaultLocale}}{{/if}}"')
   })
+{{/if}}
 {{#unless isCapacitorApp}}
 
   it('ships an application config loaded at startup', async () => {

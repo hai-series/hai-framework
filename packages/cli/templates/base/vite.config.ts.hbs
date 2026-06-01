@@ -6,7 +6,11 @@ import process from 'node:process'
 {{#if hasI18n}}
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 {{/if}}
+{{#if isSvelteOnlyApp}}
+import { svelte } from '@sveltejs/vite-plugin-svelte'
+{{else}}
 import { sveltekit } from '@sveltejs/kit/vite'
+{{/if}}
 {{#if hasUi}}
 import tailwindcss from '@tailwindcss/vite'
 {{/if}}
@@ -18,7 +22,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
+  {{#if isSvelteOnlyApp}}
+      svelte(),
+  {{else}}
       sveltekit(),
+  {{/if}}
 {{#if hasUi}}
       tailwindcss(),
 {{/if}}
@@ -35,9 +43,11 @@ export default defineConfig(({ mode }) => {
       exclude: ['bits-ui'],
     },
 {{/if}}
+{{#unless isSvelteOnlyApp}}
     ssr: {
       noExternal: [/@h-ai\//],
     },
+{{/unless}}
     server: {
       fs: {
         allow: [path.resolve(process.cwd())],

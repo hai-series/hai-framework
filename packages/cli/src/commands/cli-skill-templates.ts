@@ -46,6 +46,9 @@ const BASE_SKILLS = [
   'hai-app-tests',
 ]
 
+const KIT_SKILLS = ['hai-kit']
+const CORE_SKILLS = ['hai-core']
+
 /**
  * 前后端分离工程额外需要的 Skill
  */
@@ -258,12 +261,19 @@ export async function generateSkillFiles(
   const copiedFiles: string[] = []
 
   // 确定需要的基础 Skill
-  const baseSkills = appType === 'api'
-    ? BASE_SKILLS.filter(s => !UI_SKILLS.includes(s))
-    : [...BASE_SKILLS]
+  let baseSkills = [...BASE_SKILLS]
+  if (appType === 'api') {
+    baseSkills = baseSkills.filter(s => !UI_SKILLS.includes(s))
+  }
+  else if (appType === 'mobile-app') {
+    baseSkills = baseSkills.filter(s => !KIT_SKILLS.includes(s) && !CORE_SKILLS.includes(s))
+  }
+  else if (appType === 'fullstack') {
+    baseSkills = baseSkills.filter(s => !KIT_SKILLS.includes(s))
+  }
 
   // Capacitor 应用额外添加 api-client 和 capacitor Skill
-  if (appType === 'android-app') {
+  if (appType === 'mobile-app') {
     baseSkills.push(...CAPACITOR_SKILLS)
   }
 
