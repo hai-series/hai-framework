@@ -666,22 +666,22 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.dependencies.hono).toBeUndefined()
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(pkg.scripts.start).toBe('node dist/index.js')
-    expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/server-app.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/server/procedures/app-procedures.ts')).toBe(true)
-    expect(await exists(projectPath, 'packages/proj-fullstack-serv/tests/server-app.test.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')).toBe(true)
 
-    const serverApp = await readText(projectPath, 'packages/proj-fullstack-serv/src/server-app.ts')
-    expect(serverApp).toContain('export interface ServerApp')
-    expect(serverApp).toContain('createServerApp(): ServerApp')
-    expect(serverApp).toContain('serv.createApp')
-    expect(serverApp).not.toContain('import type { ServHttpApp }')
-    expect(serverApp).not.toContain('from \'hono\'')
-    expect(serverApp).not.toContain(': Hono')
+    const appServer = await readText(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')
+    expect(appServer).toContain('export interface ServerApp')
+    expect(appServer).toContain('createServerApp(): ServerApp')
+    expect(appServer).toContain('serv.createApp')
+    expect(appServer).not.toContain('import type { ServHttpApp }')
+    expect(appServer).not.toContain('from \'hono\'')
+    expect(appServer).not.toContain(': Hono')
 
     const procedures = await readText(projectPath, 'packages/proj-fullstack-serv/src/server/procedures/app-procedures.ts')
     expect(procedures).toContain('serv.implement(appContract)')
 
-    const testFile = await readText(projectPath, 'packages/proj-fullstack-serv/tests/server-app.test.ts')
+    const testFile = await readText(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')
     expect(testFile).toContain('returns echo result as HaiResult')
   })
 
@@ -731,6 +731,9 @@ describe('createProject — fullstack 类型', () => {
       else {
         expect(app).toContain('hai-mobile-shell')
         expect(app).toContain('BottomNav')
+        expect(app).toContain('ThemeSwitcher')
+        expect(app).toContain('LanguageSwitcher')
+        expect(app).toContain('sharedM.settings_title()')
       }
 
       const css = await readText(projectPath, `apps/proj-fullstack-${target}/src/app.css`)
@@ -831,6 +834,7 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/AppShell.svelte')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/ThemeSwitcher.svelte')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/LanguageSwitcher.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/stores/theme-store.svelte.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/api/api-client.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/index.ts')).toBe(true)
     const sharedClient = await readText(projectPath, 'packages/proj-fullstack-shared/src/lib/api/api-client.ts')

@@ -7,9 +7,9 @@
 - `config/_core.yml`：应用元信息（名称 / 版本 / 环境 / 语言），启动时由 `core.config` 加载。
 - `config/_serv.yml`：服务端运行时设置（CORS 来源等）。
 - `src/index.ts`：进程入口，先 `core.init({ configDir: './config' })` 加载配置再启动监听。
-- `src/server-app.ts`：服务装配入口，挂载健康检查、OpenAPI、docs 与 procedures；应用名称 / 版本与 CORS 来源均取自上述配置。
+- `src/app-server.ts`：服务装配入口，挂载健康检查、OpenAPI、docs 与 procedures；应用名称 / 版本与 CORS 来源均取自上述配置。
 - `src/server/procedures/app-procedures.ts`：app 领域 procedures，对应 contract 中的 `app.info` / `app.echo` 路由。
-- `tests/server-app.test.ts`：通过 `ServerApp.request()` 验证健康检查与业务路由。
+- `tests/app-server.test.ts`：通过 `ServerApp.request()` 验证健康检查与业务路由。
 
 ## 开发
 

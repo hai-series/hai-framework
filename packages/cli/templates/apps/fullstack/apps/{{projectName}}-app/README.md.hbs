@@ -9,6 +9,7 @@ App/H5 前端工程，参考 `apps/mobile-app` 的移动端 UI 风格，使用 S
 - 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`
 - 共享 Shell/主题/语言/API：`packages/{{fullstack.sharedPackageName}}`
 - 语言切换通过 shared runtime 与本端 `src/lib/paraglide/runtime.js` 同步。
+- 设置 tab 默认集成 shared 的 `ThemeSwitcher` / `LanguageSwitcher`，可直接验证主题与语言同步。
 
 自定义建议：移动端独有引导、运营位、按钮文案放在本目录 `messages/`；跨端通用组件放到 shared。
 

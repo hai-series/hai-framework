@@ -920,7 +920,7 @@ hai-framework/
 │   ├── corporate-website/   企业官网
 │   ├── h5-app/              H5 移动应用
 │   ├── desktop-app/         Tauri 桌面应用
-│   └── android-app/         Android 原生应用
+│   └── mobile-app/          Capacitor 移动应用
 ├── pnpm-workspace.yaml
 ├── turbo.json
 └── package.json
