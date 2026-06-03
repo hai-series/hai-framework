@@ -722,7 +722,7 @@ export function buildTemplateContext(options: {
   const useCatalogProtocol = options.packageManager === 'pnpm'
   const hasUi = !isApi && !isFullstack
   const selectedFrontends = options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS
-  let haiCatalogPackages: string[]
+  let haiCatalogPackages: TemplateContext['haiCatalogPackages']
   if (isFullstack) {
     haiCatalogPackages = buildFullstackCatalogPackages(selectedFrontends)
   }
