@@ -521,7 +521,7 @@ describe('api 应用类型生成', () => {
   })
 
   describe('不包含 i18n', () => {
-    it('不应有 paraglide devDependencies', async () => {
+    it('根 package 不应有 paraglide devDependencies', async () => {
       const content = await readGenerated(projectPath, 'package.json')
       const pkg = JSON.parse(content)
       expect(pkg.devDependencies['@inlang/paraglide-js']).toBeUndefined()
@@ -536,82 +536,68 @@ describe('api 应用类型生成', () => {
       expect(await fileExists(projectPath, 'messages')).toBe(false)
     })
 
-    it('app.html 应使用静态 locale', async () => {
-      const content = await readGenerated(projectPath, 'src/app.html')
-      expect(content).toContain('lang="zh-CN"')
-      expect(content).not.toContain('%lang%')
+    it('不应生成页面级 app.html', async () => {
+      expect(await fileExists(projectPath, 'src/app.html')).toBe(false)
     })
 
-    it('vite.config.ts 不应包含 paraglide', async () => {
-      const content = await readGenerated(projectPath, 'vite.config.ts')
+    it('根 playwright 配置不应包含前端 Vite/i18n 逻辑', async () => {
+      const content = await readGenerated(projectPath, 'playwright.config.ts')
       expect(content).not.toContain('paraglideVitePlugin')
-      expect(content).not.toContain('@inlang/paraglide-js')
+      expect(content).not.toContain('vite preview')
     })
 
-    it('vite.config.ts 不应包含 tailwindcss', async () => {
-      const content = await readGenerated(projectPath, 'vite.config.ts')
-      expect(content).not.toContain('tailwindcss')
+    it('根 eslint 配置不应启用 Svelte 专项 lint', async () => {
+      const content = await readGenerated(projectPath, 'eslint.config.js')
+      expect(content).not.toContain('svelte: true')
     })
 
-    it('vite.config.ts 仍应包含 SSR noExternal', async () => {
-      const content = await readGenerated(projectPath, 'vite.config.ts')
-      expect(content).toContain('noExternal')
-      expect(content).toContain('@h-ai')
-      expect(content).not.toContain('optimizeDeps')
-    })
-
-    it('svelte.config.js 不应包含 autoImportHaiUi', async () => {
-      const content = await readGenerated(projectPath, 'svelte.config.js')
-      expect(content).not.toContain('autoImportHaiUi')
-      expect(content).toContain('runes: true')
-      expect(content).toContain('adapter-node')
-    })
-
-    it('package.json 应使用 adapter-node', async () => {
-      const content = await readGenerated(projectPath, 'package.json')
-      const pkg = JSON.parse(content)
-      expect(pkg.devDependencies['@sveltejs/adapter-node']).toBeDefined()
-      expect(pkg.devDependencies['@sveltejs/adapter-auto']).toBeUndefined()
-    })
-
-    it('package.json 包含 db feature 时应有 pnpm.onlyBuiltDependencies', async () => {
-      const content = await readGenerated(projectPath, 'package.json')
-      const pkg = JSON.parse(content)
-      expect(pkg.pnpm?.onlyBuiltDependencies).toContain('better-sqlite3')
-    })
-
-    it('hooks.server.ts 不应包含 i18nHandle', async () => {
-      const content = await readGenerated(projectPath, 'src/hooks.server.ts')
-      expect(content).not.toContain('i18nHandle')
-      expect(content).not.toContain('paraglideMiddleware')
+    it('应生成 API workspace 根文件', async () => {
+      expect(await fileExists(projectPath, 'pnpm-workspace.yaml')).toBe(true)
+      expect(await fileExists(projectPath, 'tsconfig.base.json')).toBe(true)
+      expect(await fileExists(projectPath, 'e2e/api-service.spec.ts')).toBe(true)
     })
   })
 
   describe('不包含 UI', () => {
-    it('不应有 @h-ai/ui 依赖', async () => {
+    it('根 package 不应有 @h-ai/ui 依赖', async () => {
       const content = await readGenerated(projectPath, 'package.json')
       const pkg = JSON.parse(content)
-      expect(pkg.dependencies['@h-ai/ui']).toBeUndefined()
+      expect(pkg.dependencies).toBeUndefined()
       expect(pkg.devDependencies.tailwindcss).toBeUndefined()
       expect(pkg.devDependencies.daisyui).toBeUndefined()
     })
 
-    it('不应生成空 UI 样式文件', async () => {
+    it('不应生成前端样式与 hooks 文件', async () => {
       expect(await fileExists(projectPath, 'src/app.css')).toBe(false)
+      expect(await fileExists(projectPath, 'src/hooks.server.ts')).toBe(false)
     })
   })
 
-  describe('api 路由', () => {
-    it('应生成 health 端点', async () => {
-      // API 健康检查在 api/v1/health/ 下
-      expect(await fileExists(projectPath, 'src/routes/api/v1/health/+server.ts')).toBe(true)
+  describe('workspace 结构', () => {
+    it('应生成 contract 与 service 子工程', async () => {
+      expect(await fileExists(projectPath, 'apps/test-api-contract/package.json')).toBe(true)
+      expect(await fileExists(projectPath, 'apps/test-api-service/package.json')).toBe(true)
     })
 
-    it('应生成 init.ts 并引入 db / cache', async () => {
-      const content = await readGenerated(projectPath, 'src/lib/server/init.ts')
+    it('contract 包应组合 app contract', async () => {
+      const content = await readGenerated(projectPath, 'apps/test-api-contract/src/test-api-contract.ts')
+      expect(content).toContain('apiContract.create')
+      expect(content).toContain('app: appContract')
+    })
+
+    it('service 包应包含 db / cache 初始化与 procedure 装配', async () => {
+      const content = await readGenerated(projectPath, 'apps/test-api-service/src/lib/server/init.ts')
       expect(content).toContain('from \'@h-ai/reldb\'')
       expect(content).toContain('from \'@h-ai/cache\'')
       expect(content).not.toContain('from \'@h-ai/iam\'')
+
+      const procedures = await readGenerated(projectPath, 'apps/test-api-service/src/server/procedures/index.ts')
+      expect(procedures).toContain('createAppProcedures')
+    })
+
+    it('service 配置模板应包含 _core.yml 与 _serv.yml', async () => {
+      expect(await fileExists(projectPath, 'apps/test-api-service/config/_core.yml')).toBe(true)
+      expect(await fileExists(projectPath, 'apps/test-api-service/config/_serv.yml')).toBe(true)
     })
   })
 })
@@ -703,6 +689,9 @@ describe('buildTemplateContext', () => {
     })
     expect(ctx.hasUi).toBe(false)
     expect(ctx.hasI18n).toBe(false)
+    expect(ctx.isApiWorkspace).toBe(true)
+    expect(ctx.api?.contractPackageName).toBe('test-contract')
+    expect(ctx.api?.servicePackageName).toBe('test-service')
   })
 
   it('应正确映射 features', () => {
@@ -750,7 +739,21 @@ describe('生成产物结构完整性', () => {
     'src/lib/server/init.ts',
   ]
 
-  for (const appType of ['admin', 'website', 'h5', 'api'] as AppType[]) {
+  const API_WORKSPACE_FILES = [
+    'package.json',
+    'pnpm-workspace.yaml',
+    'tsconfig.base.json',
+    'eslint.config.js',
+    'playwright.config.ts',
+    'e2e/api-service.spec.ts',
+    'apps/smoke-api-contract/package.json',
+    'apps/smoke-api-contract/src/smoke-api-contract.ts',
+    'apps/smoke-api-service/package.json',
+    'apps/smoke-api-service/src/app.ts',
+    'apps/smoke-api-service/src/lib/server/init.ts',
+  ]
+
+  for (const appType of ['admin', 'website', 'h5'] as AppType[]) {
     it(`${appType} 应包含所有基础文件`, async () => {
       const projectPath = await generateProject({
         name: `smoke-${appType}`,
@@ -766,6 +769,21 @@ describe('生成产物结构完整性', () => {
       }
     })
   }
+
+  it('api 应包含 workspace 基础文件', async () => {
+    const projectPath = await generateProject({
+      name: 'smoke-api',
+      appType: 'api',
+      features: [],
+    })
+
+    for (const file of API_WORKSPACE_FILES) {
+      expect(
+        await fileExists(projectPath, file),
+        `缺少文件: ${file} (appType=api)`,
+      ).toBe(true)
+    }
+  })
 
   it('admin/website/h5 应有 app.css', async () => {
     for (const appType of ['admin', 'website', 'h5'] as AppType[]) {

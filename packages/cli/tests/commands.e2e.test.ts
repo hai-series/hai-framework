@@ -14,6 +14,7 @@
  *   - generate      — 代码生成（page / component / api / model / migration）
  */
 
+import type { AppType } from '../src/cli-types.js'
 import { execSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -32,6 +33,16 @@ const tmpRoot = path.join(process.cwd(), '.tmp-commands-e2e')
 const HAI_DEP_VERSION = `^${fse.readJsonSync(fileURLToPath(new URL('../package.json', import.meta.url))).version}`
 const CATALOG_DEP_SPECIFIER = 'catalog:'
 const HAI_DEP_SPECIFIER = CATALOG_DEP_SPECIFIER
+const skillTemplatesDir = fileURLToPath(new URL('../templates/skills', import.meta.url))
+
+const SKILL_EXCLUSIONS_BY_APP_TYPE: Record<AppType, string[]> = {
+  'admin': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
+  'website': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
+  'h5': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
+  'api': ['hai-ui', 'hai-kit', 'hai-capacitor'],
+  'mobile-app': ['hai-core', 'hai-kit', 'hai-serv', 'hai-api-contract'],
+  'fullstack': ['hai-kit'],
+}
 
 async function readJson(dir: string, rel: string) {
   return fse.readJson(path.join(dir, rel))
@@ -88,6 +99,36 @@ function expectCatalogPackageNames(workspaceYaml: string, packageNames: readonly
   }
 }
 
+async function listTemplateSkillNames() {
+  const entries = await fse.readdir(skillTemplatesDir, { withFileTypes: true })
+  const skillNames: string[] = []
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith('hai-')) {
+      continue
+    }
+
+    if (await fse.pathExists(path.join(skillTemplatesDir, entry.name, 'SKILL.md'))) {
+      skillNames.push(entry.name)
+    }
+  }
+
+  return skillNames.sort((a, b) => a.localeCompare(b))
+}
+
+async function expectCompatibleSkills(projectPath: string, appType: AppType) {
+  const skillNames = await listTemplateSkillNames()
+  const excludedSkills = new Set(SKILL_EXCLUSIONS_BY_APP_TYPE[appType])
+
+  for (const skillName of skillNames) {
+    const expected = !excludedSkills.has(skillName)
+    expect(
+      await exists(projectPath, `.agents/skills/${skillName}/SKILL.md`),
+      `${appType} should ${expected ? '' : 'not '}include ${skillName}`,
+    ).toBe(expected)
+  }
+}
+
 // =============================================================================
 // 生命周期
 // =============================================================================
@@ -136,16 +177,30 @@ describe('createProject — api 类型', () => {
   it('package.json 名称正确', async () => {
     const pkg = await readJson(projectPath, 'package.json')
     expect(pkg.name).toBe('proj-api')
+    expectNonWorkspaceDepsUseCatalog(pkg)
   })
 
-  it('package.json 包含 @h-ai/reldb 和 @h-ai/cache', async () => {
-    const pkg = await readJson(projectPath, 'package.json')
-    expect(pkg.dependencies['@h-ai/reldb']).toBe(HAI_DEP_SPECIFIER)
-    expect(pkg.dependencies['@h-ai/cache']).toBe(HAI_DEP_SPECIFIER)
-    expectHaiDepsUseCatalog(pkg)
+  it('应生成 contract 与 service 子工程并写入 catalog/workspace 依赖', async () => {
+    const contractPkg = await readJson(projectPath, 'apps/proj-api-contract/package.json')
+    const servicePkg = await readJson(projectPath, 'apps/proj-api-service/package.json')
+
+    expect(contractPkg.name).toBe('proj-api-contract')
+    expect(contractPkg.dependencies['@h-ai/api-contract']).toBe(HAI_DEP_SPECIFIER)
+    expect(contractPkg.dependencies.zod).toBe(CATALOG_DEP_SPECIFIER)
+    expectNonWorkspaceDepsUseCatalog(contractPkg)
+
+    expect(servicePkg.name).toBe('proj-api-service')
+    expect(servicePkg.dependencies['@h-ai/core']).toBe(HAI_DEP_SPECIFIER)
+    expect(servicePkg.dependencies['@h-ai/serv']).toBe(HAI_DEP_SPECIFIER)
+    expect(servicePkg.dependencies['@h-ai/reldb']).toBe(HAI_DEP_SPECIFIER)
+    expect(servicePkg.dependencies['@h-ai/cache']).toBe(HAI_DEP_SPECIFIER)
+    expect(servicePkg.dependencies['proj-api-contract']).toBe('workspace:*')
+    expect(servicePkg.devDependencies['@h-ai/api-client']).toBe(HAI_DEP_SPECIFIER)
+    expectNonWorkspaceDepsUseCatalog(servicePkg)
 
     const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
-    expectHaiCatalogEntries(workspace, ['@h-ai/core', '@h-ai/kit', '@h-ai/reldb', '@h-ai/cache'])
+    expect(workspace).toContain('apps/*')
+    expectHaiCatalogEntries(workspace, ['@h-ai/api-client', '@h-ai/api-contract', '@h-ai/core', '@h-ai/serv', '@h-ai/reldb', '@h-ai/cache'])
   })
 
   it('应生成可执行质量门禁脚本', async () => {
@@ -154,26 +209,32 @@ describe('createProject — api 类型', () => {
   })
 
   it('应生成 config/_core.yml', async () => {
-    const content = await readText(projectPath, 'config/_core.yml')
+    const content = await readText(projectPath, 'apps/proj-api-service/config/_core.yml')
     expect(content).toContain('proj-api')
   })
 
+  it('应生成 config/_serv.yml', async () => {
+    const content = await readText(projectPath, 'apps/proj-api-service/config/_serv.yml')
+    expect(content).toContain('apiPrefix: /api/v1')
+  })
+
   it('应生成 config/_db.yml', async () => {
-    const content = await readText(projectPath, 'config/_db.yml')
+    const content = await readText(projectPath, 'apps/proj-api-service/config/_db.yml')
     expect(content).toContain('sqlite')
   })
 
   it('应生成 config/_cache.yml', async () => {
-    expect(await exists(projectPath, 'config/_cache.yml')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-service/config/_cache.yml')).toBe(true)
   })
 
   it('应生成 .env.example', async () => {
-    expect(await exists(projectPath, '.env.example')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-service/.env.example')).toBe(true)
   })
 
   it('应生成 README.md', async () => {
     const content = await readText(projectPath, 'README.md')
-    expect(content).toContain('proj-api')
+    expect(content).toContain('apps/proj-api-contract')
+    expect(content).toContain('apps/proj-api-service')
   })
 
   it('不应有 i18n 脚手架（api 类型）', async () => {
@@ -184,29 +245,30 @@ describe('createProject — api 类型', () => {
     expect(await exists(projectPath, 'messages')).toBe(false)
   })
 
-  it('应生成 src/lib/server/init.ts 含 db/cache 初始化', async () => {
-    const content = await readText(projectPath, 'src/lib/server/init.ts')
+  it('应生成 service init.ts 含 db/cache 初始化', async () => {
+    const content = await readText(projectPath, 'apps/proj-api-service/src/lib/server/init.ts')
     expect(content).toContain('@h-ai/reldb')
     expect(content).toContain('@h-ai/cache')
   })
 
-  it('health 端点存在', async () => {
-    expect(await exists(projectPath, 'src/routes/api/v1/health/+server.ts')).toBe(true)
+  it('应生成 contract 与 service 关键源文件', async () => {
+    expect(await exists(projectPath, 'apps/proj-api-contract/src/proj-api-contract.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-service/src/app.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-service/src/server/procedures/app-procedures.ts')).toBe(true)
   })
 
-  it('应生成从页面发起的 E2E 测试', async () => {
-    const spec = await readText(projectPath, 'e2e/app.spec.ts')
-    expect(spec).toContain('page.goto')
-    expect(spec).toContain('home page renders from browser')
+  it('应生成 service 级 E2E 测试', async () => {
+    const spec = await readText(projectPath, 'e2e/api-service.spec.ts')
+    expect(spec).toContain('service health endpoint returns ok')
+    expect(spec).not.toContain('page.goto')
 
     const config = await readText(projectPath, 'playwright.config.ts')
     expect(config).toMatch(/channel:\s+'chrome'/)
+    expect(config).toContain('proj-api-service')
   })
 
-  it('应生成已引用模块对应的 skills', async () => {
-    expect(await exists(projectPath, '.agents/skills/hai-core/SKILL.md')).toBe(true)
-    expect(await exists(projectPath, '.agents/skills/hai-reldb/SKILL.md')).toBe(true)
-    expect(await exists(projectPath, '.agents/skills/hai-cache/SKILL.md')).toBe(true)
+  it('应生成 api 兼容的全量 skills', async () => {
+    await expectCompatibleSkills(projectPath, 'api')
   })
 
   it('应生成 API 类型专属 AI 指引', async () => {
@@ -214,9 +276,13 @@ describe('createProject — api 类型', () => {
     const copilot = await readText(projectPath, '.github/copilot-instructions.md')
 
     expect(agents).toContain('API 服务')
-    expect(agents).not.toContain('Fullstack')
+    expect(agents).toContain('apps/<project>-service')
+    expect(agents).toContain('不要退回到 SvelteKit API routes 架构')
+    expect(agents).not.toContain('src/routes/api/v1')
     expect(copilot).toContain('API 服务工程指引')
-    expect(copilot).not.toContain('管理后台')
+    expect(copilot).toContain('@h-ai/serv')
+    expect(copilot).toContain('不要退回到 SvelteKit API routes')
+    expect(copilot).not.toContain('src/routes/api/v1')
   })
 })
 
@@ -240,9 +306,9 @@ describe('createProject — --yes 非交互默认配置', () => {
   })
 
   it('应使用默认模块配置生成可用 API 样板', async () => {
-    const coreConfig = await readText(projectPath, 'config/_core.yml')
-    const dbConfig = await readText(projectPath, 'config/_db.yml')
-    const cacheConfig = await readText(projectPath, 'config/_cache.yml')
+    const coreConfig = await readText(projectPath, 'apps/proj-api-yes-service/config/_core.yml')
+    const dbConfig = await readText(projectPath, 'apps/proj-api-yes-service/config/_db.yml')
+    const cacheConfig = await readText(projectPath, 'apps/proj-api-yes-service/config/_cache.yml')
     const pkg = await readJson(projectPath, 'package.json')
 
     expect(coreConfig).toContain('proj-api-yes')
@@ -340,8 +406,8 @@ describe('createProject — admin 类型 + iam', () => {
     expect(content).toContain('paraglideVitePlugin')
   })
 
-  it('应生成 .agents/skills 中的 skill 文件', async () => {
-    expect(await exists(projectPath, '.agents/skills/hai-iam/SKILL.md')).toBe(true)
+  it('应生成 admin 兼容的全量 skills', async () => {
+    await expectCompatibleSkills(projectPath, 'admin')
   })
 
   it('应生成从页面发起的 E2E 测试', async () => {
@@ -432,9 +498,10 @@ describe('createProject — 基础配置文件', () => {
     expect(content).toContain('@antfu/eslint-config')
   })
 
-  it('api 项目应包含 vitest.config.ts', async () => {
+  it('api 项目应为 contract/service 生成 vitest.config.ts', async () => {
     const projectPath = path.join(tmpRoot, 'proj-api')
-    expect(await exists(projectPath, 'vitest.config.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-contract/vitest.config.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-service/vitest.config.ts')).toBe(true)
   })
 
   it('admin 项目应包含 eslint.config.js', async () => {
@@ -500,6 +567,54 @@ describe('createProject — website 类型', () => {
     const spec = await readText(projectPath, 'e2e/app.spec.ts')
     expect(spec).toContain('page.goto')
   })
+
+  it('应生成 website 兼容的全量 skills', async () => {
+    await expectCompatibleSkills(projectPath, 'website')
+  })
+})
+
+// =============================================================================
+// 3.25. createProject — H5 应用
+// =============================================================================
+
+describe('createProject — h5 类型', () => {
+  let projectPath: string
+
+  beforeAll(async () => {
+    projectPath = path.join(tmpRoot, 'proj-h5')
+    await createProject({
+      name: 'proj-h5',
+      appType: 'h5',
+      template: 'custom',
+      features: [],
+      moduleConfigs: {
+        core: { name: 'proj-h5', defaultLocale: 'zh-CN' },
+      },
+      examples: false,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      verbose: false,
+      cwd: tmpRoot,
+    })
+  })
+
+  it('应生成 H5 触屏页面骨架', async () => {
+    expect(await exists(projectPath, 'src/routes/discover/+page.svelte')).toBe(true)
+    expect(await exists(projectPath, 'src/routes/profile/+page.svelte')).toBe(true)
+
+    const layout = await readText(projectPath, 'src/routes/+layout.svelte')
+    expect(layout).toContain('btm-nav')
+  })
+
+  it('应生成 H5 专属 AI 指引与兼容 skills', async () => {
+    const agents = await readText(projectPath, 'AGENTS.md')
+    const copilot = await readText(projectPath, '.github/copilot-instructions.md')
+
+    expect(agents).toContain('H5')
+    expect(copilot).toContain('H5')
+    await expectCompatibleSkills(projectPath, 'h5')
+  })
 })
 
 // =============================================================================
@@ -563,14 +678,12 @@ describe('createProject — mobile-app 类型', () => {
     expectHaiCatalogEntries(workspace, ['@h-ai/api-client', '@h-ai/capacitor', '@h-ai/ui'])
   })
 
-  it('应生成移动端专属 AI 指引且不复制 hai-kit skill', async () => {
+  it('应生成移动端专属 AI 指引与兼容 skills', async () => {
     const agents = await readText(projectPath, 'AGENTS.md')
     expect(agents).toContain('Mobile/Capacitor')
     expect(agents).toContain('Svelte 5 + Vite')
     expect(agents).not.toContain('adapter-static')
-    expect(await exists(projectPath, '.agents/skills/hai-kit/SKILL.md')).toBe(false)
-    expect(await exists(projectPath, '.agents/skills/hai-api-client/SKILL.md')).toBe(true)
-    expect(await exists(projectPath, '.agents/skills/hai-capacitor/SKILL.md')).toBe(true)
+    await expectCompatibleSkills(projectPath, 'mobile-app')
   })
 })
 
@@ -753,6 +866,7 @@ describe('createProject — fullstack 类型', () => {
       expect(viteConfig).toContain('project: \'./project.inlang\'')
       expect(viteConfig).toContain('import tailwindcss from \'@tailwindcss/vite\'')
       expect(viteConfig).not.toContain('  import tailwindcss from \'@tailwindcss/vite\'')
+      expect(viteConfig).toContain('envPrefix: [\'VITE_\', \'PUBLIC_\']')
 
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/routes/+layout.svelte`)).toBe(false)
 
@@ -869,13 +983,8 @@ describe('createProject — fullstack 类型', () => {
     expect(spec).toContain('page.goto')
   })
 
-  it('应生成 serv / api-contract / api-client 对应 Skill', async () => {
-    expect(await exists(projectPath, '.agents/skills/hai-fullstack/SKILL.md')).toBe(false)
-    expect(await exists(projectPath, '.agents/skills/hai-kit/SKILL.md')).toBe(false)
-    expect(await exists(projectPath, '.agents/skills/hai-serv/SKILL.md')).toBe(true)
-    expect(await exists(projectPath, '.agents/skills/hai-api-contract/SKILL.md')).toBe(true)
-    expect(await exists(projectPath, '.agents/skills/hai-api-client/SKILL.md')).toBe(true)
-    expect(await exists(projectPath, '.agents/skills/hai-ui/SKILL.md')).toBe(true)
+  it('应生成 fullstack 兼容的全量 skills', async () => {
+    await expectCompatibleSkills(projectPath, 'fullstack')
   })
 
   it('应生成包含 fullstack 职责边界、质量门禁与完成条件的 AI 指引', async () => {
@@ -1123,6 +1232,9 @@ describe('addModule', () => {
     expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-core/SKILL.md'))).toBe(true)
     expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-ai/SKILL.md'))).toBe(true)
     expect(await fse.pathExists(path.join(dir, '.github/skills'))).toBe(false)
+
+    expect(await fse.readFile(path.join(dir, 'AGENTS.md'), 'utf8')).toContain('## 行为契约')
+    expect(await fse.readFile(path.join(dir, '.github', 'copilot-instructions.md'), 'utf8')).toContain('规模: XS|S|M|L')
 
     const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
     expect(opencode.instructions).toEqual(['.github/copilot-instructions.md'])

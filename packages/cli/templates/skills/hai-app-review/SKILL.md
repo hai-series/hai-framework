@@ -5,7 +5,7 @@ description: 对应用代码进行审查：检查 TDD 合规性、架构分层�
 
 # hai-app-review — 应用代码审查规范
 
-> 面向 AI 助手的应用代码审查指南。用于审查使用 hai-framework 构建的 SvelteKit 应用。本技能也是 TDD Refactor 阶段的执行入口。
+> 面向 AI 助手的应用代码审查指南。用于审查使用 hai-framework 构建的 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace。本技能也是 TDD Refactor 阶段的执行入口。
 
 ---
 

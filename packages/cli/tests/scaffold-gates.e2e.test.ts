@@ -7,6 +7,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { access, mkdtemp, rm } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -23,12 +24,17 @@ interface ScaffoldGateCase {
   expectedFiles: string[]
 }
 
+interface GateEnvOptions {
+  baseUrl?: string
+  serviceBaseUrl?: string
+}
+
 const scaffoldGateCases: readonly ScaffoldGateCase[] = [
   {
     title: 'api',
     projectName: 'sample-api',
     createArgs: ['--type', 'api', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
-    expectedFiles: ['e2e/app.spec.ts'],
+    expectedFiles: ['e2e/api-service.spec.ts', 'apps/sample-api-service/package.json'],
   },
   {
     title: 'admin',
@@ -71,6 +77,12 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     it(`${scenario.title} scaffold passes install, typecheck, lint, build, unit and e2e`, async () => {
       const root = await createTempRoot()
       const projectPath = path.join(root, scenario.projectName)
+      const baseUrl = await allocateBaseUrl()
+      const envOptions: GateEnvOptions = { baseUrl }
+
+      if (scenario.title === 'fullstack') {
+        envOptions.serviceBaseUrl = await allocateBaseUrl()
+      }
 
       runNode([
         cliBin,
@@ -80,7 +92,7 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
         scenario.projectName,
         ...scenario.createArgs,
       ])
-      runQualityGates(projectPath)
+      runQualityGates(projectPath, envOptions)
 
       for (const relativePath of scenario.expectedFiles) {
         expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
@@ -95,13 +107,41 @@ async function createTempRoot(): Promise<string> {
   return root
 }
 
-function runQualityGates(projectPath: string): void {
-  runPnpm(projectPath, ['install'])
-  runPnpm(projectPath, ['typecheck'])
-  runPnpm(projectPath, ['lint'])
-  runPnpm(projectPath, ['build'])
-  runPnpm(projectPath, ['test'])
-  runPnpm(projectPath, ['test:e2e'])
+async function allocateBaseUrl(): Promise<string> {
+  const port = await getFreePort()
+  return `http://127.0.0.1:${port}`
+}
+
+async function getFreePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const server = createServer()
+    server.unref()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        server.close(() => reject(new Error('Failed to resolve free port')))
+        return
+      }
+
+      server.close((error) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(address.port)
+      })
+    })
+  })
+}
+
+function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): void {
+  runPnpm(projectPath, ['install'], envOptions)
+  runPnpm(projectPath, ['typecheck'], envOptions)
+  runPnpm(projectPath, ['lint'], envOptions)
+  runPnpm(projectPath, ['build'], envOptions)
+  runPnpm(projectPath, ['test'], envOptions)
+  runPnpm(projectPath, ['test:e2e'], envOptions)
 }
 
 function runNode(args: string[]): void {
@@ -112,19 +152,25 @@ function runNode(args: string[]): void {
   })
 }
 
-function runPnpm(cwd: string, args: string[]): void {
+function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): void {
   execFileSync(pnpmBin, args, {
     cwd,
-    env: buildChildEnv(),
+    env: buildChildEnv(envOptions),
     shell: true,
     stdio: 'inherit',
   })
 }
 
-function buildChildEnv(): NodeJS.ProcessEnv {
+function buildChildEnv(envOptions: GateEnvOptions = {}): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    BASE_URL: 'http://localhost:4173',
+    ...(envOptions.baseUrl ? { BASE_URL: envOptions.baseUrl } : {}),
+    ...(envOptions.serviceBaseUrl
+      ? {
+          PUBLIC_API_BASE: envOptions.serviceBaseUrl,
+          SERVICE_BASE_URL: envOptions.serviceBaseUrl,
+        }
+      : {}),
     CI: '1',
   }
 }

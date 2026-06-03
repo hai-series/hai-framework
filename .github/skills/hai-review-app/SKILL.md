@@ -1,11 +1,11 @@
 ---
 name: hai-review-app
-description: "Use when: reviewing SvelteKit app code, auditing app quality, checking app conventions, reviewing routes, reviewing API endpoints, app security, app i18n review. 对 hai-framework 应用层代码进行审查：路由安全 → 认证授权 → i18n → 组件使用 → API 端点 → 服务层 → 性能。"
+description: "Use when: reviewing app code in hai-framework, auditing app quality, checking app conventions, reviewing routes, reviewing API service workspaces, app security, app i18n review. 对 hai-framework 应用层代码进行审查：路由安全 → 认证授权 → i18n → 组件使用 → API 端点 / service workspace → 服务层 → 性能。"
 ---
 
 # hai-review-app — 应用代码审查规范
 
-> 面向 AI 助手的 SvelteKit 应用审查指南。审查基准参照 `hai-create-app`。
+> 面向 AI 助手的应用审查指南。适用于 `apps/` 下的 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace；审查基准参照 `hai-create-app`。
 
 ---
 

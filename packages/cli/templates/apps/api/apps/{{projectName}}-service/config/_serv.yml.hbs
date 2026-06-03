@@ -1,0 +1,26 @@
+# =============================================================================
+# {{projectName}} API Service - Serv / HTTP 入口配置
+# =============================================================================
+
+http:
+  apiPrefix: /api/v1
+  openapi:
+    path: /openapi.json
+  docs:
+    path: /docs
+  health:
+    path: /health
+    readyPath: /ready
+  rpc: false
+
+{{#if features.crypto}}transport:
+  keyExchangePath: /_hai/key-exchange
+  excludePaths:
+    - /health
+    - /ready
+    - /openapi.json
+    - /docs
+    - /_hai/scalar.js
+  maxClients: 10000
+{{else}}transport: false
+{{/if}}

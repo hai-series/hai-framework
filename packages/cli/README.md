@@ -156,6 +156,9 @@ node packages/cli/dist/index.js create ../my-new-project
 # 单元测试 + E2E 模板生成测试
 pnpm --filter @h-ai/cli test
 
+# 真实脚手架 E2E 门禁（生成项目后执行 install/typecheck/lint/build/test/e2e）
+pnpm --filter @h-ai/cli test:e2e
+
 # watch 模式
 pnpm --filter @h-ai/cli test:watch
 

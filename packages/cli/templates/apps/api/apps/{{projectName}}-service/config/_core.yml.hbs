@@ -1,0 +1,19 @@
+# =============================================================================
+# {{projectName}} API Service - 应用配置
+# =============================================================================
+
+name: {{projectName}} API Service
+version: 0.1.0
+env: ${HAI_ENV:development}
+debug: false
+
+defaultLocale: {{defaultLocale}}
+supportedLocales:
+{{#if_eq defaultLocale 'en-US'}}  - en-US
+  - zh-CN
+{{else}}  - zh-CN
+  - en-US
+{{/if_eq}}
+
+features:
+  apiAccess: true

@@ -1,0 +1,55 @@
+{
+  "name": "{{api.servicePackageName}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo",
+    "dev": "pnpm build && node dist/index.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@h-ai/core": "{{haiPackageSpecifier}}",
+    "@h-ai/serv": "{{haiPackageSpecifier}}",
+    "{{api.contractPackageName}}": "workspace:*"{{#if features.ai}},
+    "@h-ai/ai": "{{haiPackageSpecifier}}"{{/if}}{{#if features.audit}},
+    "@h-ai/audit": "{{haiPackageSpecifier}}"{{/if}}{{#if features.cache}},
+    "@h-ai/cache": "{{haiPackageSpecifier}}"{{/if}}{{#if features.crypto}},
+    "@h-ai/crypto": "{{haiPackageSpecifier}}"{{/if}}{{#if features.datapipe}},
+    "@h-ai/datapipe": "{{haiPackageSpecifier}}"{{/if}}{{#if features.deploy}},
+    "@h-ai/deploy": "{{haiPackageSpecifier}}"{{/if}}{{#if features.iam}},
+    "@h-ai/iam": "{{haiPackageSpecifier}}"{{/if}}{{#if features.payment}},
+    "@h-ai/payment": "{{haiPackageSpecifier}}"{{/if}}{{#if features.reach}},
+    "@h-ai/reach": "{{haiPackageSpecifier}}"{{/if}}{{#if features.db}},
+    "@h-ai/reldb": "{{haiPackageSpecifier}}"{{/if}}{{#if features.scheduler}},
+    "@h-ai/scheduler": "{{haiPackageSpecifier}}"{{/if}}{{#if features.storage}},
+    "@h-ai/storage": "{{haiPackageSpecifier}}"{{/if}}{{#if features.vecdb}},
+    "@h-ai/vecdb": "{{haiPackageSpecifier}}"{{/if}}
+  },
+  "devDependencies": {
+    "@h-ai/api-client": "{{haiPackageSpecifier}}",
+    "@types/node": "{{api.packageSpecifiers.nodeTypes}}",
+    "rimraf": "{{api.packageSpecifiers.rimraf}}",
+    "tsup": "{{api.packageSpecifiers.tsup}}",
+    "typescript": "{{api.packageSpecifiers.typescript}}",
+    "vitest": "{{api.packageSpecifiers.vitest}}"
+  }
+}

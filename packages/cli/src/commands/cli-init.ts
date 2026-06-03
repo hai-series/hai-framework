@@ -27,6 +27,7 @@ export interface InitOptions extends GlobalOptions {
  */
 const MODULE_CONFIG_MAP: Record<string, { configKey: string, label: string }> = {
   '@h-ai/core': { configKey: 'core', label: 'Core' },
+  '@h-ai/serv': { configKey: 'serv', label: 'Service' },
   '@h-ai/reldb': { configKey: 'db', label: 'Database' },
   '@h-ai/cache': { configKey: 'cache', label: 'Cache' },
   '@h-ai/iam': { configKey: 'iam', label: 'IAM' },

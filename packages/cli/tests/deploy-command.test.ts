@@ -66,6 +66,34 @@ afterEach(() => {
 })
 
 describe('deployCommand', () => {
+  it('deploy 成功时应透传参数并关闭 deploy 模块', async () => {
+    const appDir = createDeployApp()
+    mocks.deployApp.mockResolvedValue({
+      success: true,
+      data: {
+        url: 'https://example.test',
+        deploymentId: 'dep_123',
+        envVarsSet: ['HAI_ENV'],
+      },
+    })
+
+    await deployCommand({
+      appDir,
+      cwd: tmpRoot,
+      projectName: 'my-api',
+      skipProvision: true,
+      skipBuild: true,
+      verbose: false,
+    })
+
+    expect(mocks.deployApp).toHaveBeenCalledWith(appDir, {
+      projectName: 'my-api',
+      skipProvision: true,
+      skipBuild: true,
+    })
+    expect(mocks.close).toHaveBeenCalledTimes(1)
+  })
+
   it('deployApp 返回失败时应关闭 deploy 模块', async () => {
     const appDir = createDeployApp()
     mocks.deployApp.mockResolvedValue({

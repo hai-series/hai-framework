@@ -1,0 +1,16 @@
+# {{api.contractPackageName}}
+
+{{projectName}} API service 的共享 contract 包。
+
+## 包含内容
+
+- `app-contract.ts`：应用级路由定义
+- `app-schemas.ts`：输入输出 Zod schema
+- `{{projectName}}-contract.ts`：工程级 contract 聚合入口
+
+## 常用命令
+
+```bash
+pnpm --filter {{api.contractPackageName}} build
+pnpm --filter {{api.contractPackageName}} test
+```

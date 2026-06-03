@@ -1,0 +1,17 @@
+# {{api.servicePackageName}}
+
+{{projectName}} API service 包，负责模块初始化、procedure 装配与 HTTP 入口。
+
+## 常用命令
+
+```bash
+pnpm --filter {{api.servicePackageName}} dev
+pnpm --filter {{api.servicePackageName}} test
+```
+
+## 关键目录
+
+- `config/`：service 配置
+- `src/app.ts`：HTTP App 装配
+- `src/lib/server/init.ts`：模块初始化与关闭
+- `src/server/procedures/`：应用级 procedures

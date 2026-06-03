@@ -1,0 +1,38 @@
+{
+  "name": "{{api.contractPackageName}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@h-ai/api-contract": "{{haiPackageSpecifier}}",
+    "zod": "{{api.packageSpecifiers.zod}}"
+  },
+  "devDependencies": {
+    "@types/node": "{{api.packageSpecifiers.nodeTypes}}",
+    "rimraf": "{{api.packageSpecifiers.rimraf}}",
+    "tsup": "{{api.packageSpecifiers.tsup}}",
+    "typescript": "{{api.packageSpecifiers.typescript}}",
+    "vitest": "{{api.packageSpecifiers.vitest}}"
+  }
+}

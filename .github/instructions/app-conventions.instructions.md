@@ -4,7 +4,7 @@ applyTo: "apps/**"
 
 # 应用层开发规范
 
-> 编辑 apps/ 下的文件时自动激活。SvelteKit 应用层的架构、i18n、UI 组件使用等规范。
+> 编辑 apps/ 下的文件时自动激活。适用于 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace；其中 SvelteKit 专属规则仅在使用 Kit 的应用中生效。
 
 ## 分层约束
 

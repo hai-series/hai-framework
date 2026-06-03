@@ -1,0 +1,27 @@
+import { apiContract } from '@h-ai/api-contract'
+import { AppEchoInputSchema, AppEchoOutputSchema, AppInfoOutputSchema } from './app-schemas.js'
+
+/** 应用自有 app contract。 */
+export const appContract = {
+  info: apiContract
+    .route({
+      method: 'POST',
+      path: '/app/info',
+      operationId: 'app.info',
+      summary: 'Get service info',
+      tags: ['app'],
+    })
+    .output(AppInfoOutputSchema),
+  echo: apiContract
+    .route({
+      method: 'POST',
+      path: '/app/echo',
+      operationId: 'app.echo',
+      summary: '{{#if features.iam}}Echo a message (auth required){{else}}Echo a message{{/if}}',
+      tags: ['app'],
+    })
+    .input(AppEchoInputSchema)
+    .output(AppEchoOutputSchema),
+}
+
+export type AppContract = typeof appContract

@@ -29,6 +29,34 @@ const config = {
   },
 }
 {{else}}
+const DEFAULT_E2E_ORIGINS = ['http://localhost:4173', 'http://127.0.0.1:4173']
+
+function resolveTrustedOrigins() {
+  if (process.env.HAI_E2E !== '1')
+    return []
+
+  const rawBaseUrl = process.env.BASE_URL ?? DEFAULT_E2E_ORIGINS[0]
+
+  try {
+    const url = new URL(rawBaseUrl)
+    const origins = new Set([url.origin])
+
+    if (url.hostname === 'localhost') {
+      url.hostname = '127.0.0.1'
+      origins.add(url.origin)
+    }
+    else if (url.hostname === '127.0.0.1') {
+      url.hostname = 'localhost'
+      origins.add(url.origin)
+    }
+
+    return [...origins]
+  }
+  catch {
+    return DEFAULT_E2E_ORIGINS
+  }
+}
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: [{{#if hasUi}}autoImportHaiUi(), {{/if}}vitePreprocess()],
@@ -46,9 +74,7 @@ const config = {
     adapter: adapter(),
 {{/if}}
     csrf: {
-      trustedOrigins: process.env.HAI_E2E === '1'
-        ? ['http://localhost:4173', 'http://127.0.0.1:4173']
-        : [],
+      trustedOrigins: resolveTrustedOrigins(),
     },
     alias: {
       $components: './src/lib/components',

@@ -216,7 +216,32 @@ describe('CreateUserSchema', () => {
 import process from 'node:process'
 import { defineConfig } from '@playwright/test'
 
-const baseURL = process.env.BASE_URL || 'http://localhost:4173'
+const DEFAULT_BASE_URL = 'http://localhost:4173'
+const baseURL = process.env.BASE_URL || DEFAULT_BASE_URL
+const previewHost = resolveHostFromBaseUrl(baseURL, 'localhost')
+const previewPort = resolvePortFromBaseUrl(baseURL, '4173')
+
+function resolveHostFromBaseUrl(urlString: string, fallbackHost: string): string {
+  try {
+    const url = new URL(urlString)
+    return url.hostname || fallbackHost
+  }
+  catch {
+    return fallbackHost
+  }
+}
+
+function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string {
+  try {
+    const url = new URL(urlString)
+    if (url.port)
+      return url.port
+    return url.protocol === 'https:' ? '443' : '80'
+  }
+  catch {
+    return fallbackPort
+  }
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -233,8 +258,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'pnpm build && pnpm preview --port 4173 --strictPort',
-    env: { HAI_E2E: '1' },
+    command: `pnpm build && pnpm preview --host ${previewHost} --port ${previewPort} --strictPort`,
+    env: { HAI_E2E: '1', BASE_URL: baseURL },
     url: baseURL,
     reuseExistingServer: false,
     timeout: 180_000,

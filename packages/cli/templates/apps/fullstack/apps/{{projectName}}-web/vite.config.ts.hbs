@@ -18,6 +18,7 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['bits-ui'],
   },
+  envPrefix: ['VITE_', 'PUBLIC_'],
   ssr: {
     noExternal: [/@h-ai\//, /{{fullstack.sharedPackageName}}/],
   },

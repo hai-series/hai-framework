@@ -10,7 +10,7 @@ import type { AiModuleConfig, CacheModuleConfig, CoreModuleConfig, DbModuleConfi
 /**
  * 生成模块配置文件内容
  *
- * @param moduleKey - 模块标识（core/db/cache/iam/storage/ai）
+ * @param moduleKey - 模块标识（core/serv/db/cache/iam/storage/ai）
  * @param configs - 用户自定义配置值
  * @returns YAML 格式的配置内容
  */
@@ -18,6 +18,8 @@ export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs): 
   switch (moduleKey) {
     case 'core':
       return generateCoreConfig(configs?.core)
+    case 'serv':
+      return generateServConfig()
     case 'db':
       return generateDbConfig(configs?.db)
     case 'cache':
@@ -64,6 +66,27 @@ debug: \${HAI_DEBUG:false}
 defaultLocale: ${locale}
 supportedLocales:
 ${supportedLocales}
+`
+}
+
+function generateServConfig(): string {
+  return `# =============================================================================
+# Service / HTTP 入口配置
+# =============================================================================
+
+http:
+  apiPrefix: /api/v1
+  openapi:
+    path: /openapi.json
+  docs:
+    path: /docs
+  health:
+    path: /health
+    readyPath: /ready
+  rpc: false
+
+# 开发期默认关闭 transport；启用 @h-ai/crypto 后可按需改为对象配置
+transport: false
 `
 }
 

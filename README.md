@@ -117,7 +117,7 @@ my-app/
 └── opencode.json                     # OpenCode 配置（补充 instructions；skills 由 .agents/skills 原生发现）
 ```
 
-**工作方式**：支持 skills 的助手会从 `.agents/skills/` 获取模块级用法；Claude Code 则通过 `CLAUDE.md` + `@AGENTS.md` 复用同一套项目规范。改动后统一执行 `typecheck → lint → test` 质量门禁 —— 整个过程无需人类手动补齐额外上下文。
+**工作方式**：支持 skills 的助手会从 `.agents/skills/` 获取模块级用法；Claude Code 则通过 `CLAUDE.md` + `@AGENTS.md` 复用同一套项目规范。改动后统一执行 `typecheck → lint → test → e2e` 质量门禁 —— 整个过程无需人类手动补齐额外上下文。
 
 | AI 助手                 | 生成的关键文件                                                                                |
 | ----------------------- | --------------------------------------------------------------------------------------------- |
@@ -801,8 +801,8 @@ pnpm lint
 # 单元测试
 pnpm test
 
-# E2E 测试（admin-console）
-pnpm --filter admin-console test:e2e
+# 仓库级 E2E（CLI 样板门禁 + Playwright 应用套件）
+pnpm e2e
 
 # 只运行某个模块
 pnpm --filter @h-ai/reldb test
@@ -820,21 +820,21 @@ pnpm --filter @h-ai/reldb test
 
 ### 根目录 `.env.example` 的关键分组
 
-| 分组           | 代表变量                                                    | 说明                                                                              |
-| -------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Runtime        | `HAI_ENV`、`HAI_DEBUG`                                      | 运行环境、调试与日志开关                                                          |
-| Database       | `HAI_RELDB_*`                                               | `@h-ai/reldb` 的 SQLite / PostgreSQL / MySQL 配置                                 |
-| Cache          | `HAI_CACHE_*`                                               | `@h-ai/cache` 的 memory / Redis / Upstash 配置                                    |
-| Session / Auth | `HAI_IAM_SESSION_SECRET`、`HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam`、`@h-ai/kit` 与 `@h-ai/serv` 刷新 Cookie 的会话、安全配置             |
-| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`                           | `apps/api-service` / `@h-ai/serv` 监听地址与前端访问地址                          |
-| Storage        | `HAI_STORAGE_*`                                             | `@h-ai/storage` 的 local / S3 配置                                                |
-| AI             | `HAI_AI_LLM_*`                                              | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置（兼容 `OPENAI_*` 回退）             |
-| VecDB          | `HAI_VECDB_*`                                               | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant 配置                                 |
-| Reach          | `HAI_REACH_*`                                               | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                                         |
-| Payment        | `HAI_PAYMENT_*`                                             | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置                                   |
-| Deploy         | `HAI_DEPLOY_*`                                              | `@h-ai/deploy` / `@h-ai/cli` 的 Vercel、Neon、Upstash、R2、Resend、阿里云短信凭据 |
-| App-specific   | `HAI_PARTNER_*`、`HAI_CRYPTO_DATA_KEY`                      | 示例应用专用变量（如企业官网后台、业务数据加密）                                  |
-| Dev / Test     | `HAI_E2E`、`BASE_URL`、`PUBLIC_API_BASE`、`CI`              | 本地联调、E2E 与构建辅助                                                          |
+| 分组           | 代表变量                                                           | 说明                                                                              |
+| -------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Runtime        | `HAI_ENV`、`HAI_DEBUG`                                             | 运行环境、调试与日志开关                                                          |
+| Database       | `HAI_RELDB_*`                                                      | `@h-ai/reldb` 的 SQLite / PostgreSQL / MySQL 配置                                 |
+| Cache          | `HAI_CACHE_*`                                                      | `@h-ai/cache` 的 memory / Redis / Upstash 配置                                    |
+| Session / Auth | `HAI_IAM_SESSION_SECRET`、`HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`        | `@h-ai/iam`、`@h-ai/kit` 与 `@h-ai/serv` 刷新 Cookie 的会话、安全配置             |
+| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`                                  | `apps/api-service` / `@h-ai/serv` 监听地址与前端访问地址                          |
+| Storage        | `HAI_STORAGE_*`                                                    | `@h-ai/storage` 的 local / S3 配置                                                |
+| AI             | `HAI_AI_LLM_*`                                                     | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置（兼容 `OPENAI_*` 回退）             |
+| VecDB          | `HAI_VECDB_*`                                                      | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant 配置                                 |
+| Reach          | `HAI_REACH_*`                                                      | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                                         |
+| Payment        | `HAI_PAYMENT_*`                                                    | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置                                   |
+| Deploy         | `HAI_DEPLOY_*`                                                     | `@h-ai/deploy` / `@h-ai/cli` 的 Vercel、Neon、Upstash、R2、Resend、阿里云短信凭据 |
+| App-specific   | `HAI_PARTNER_*`、`HAI_CRYPTO_DATA_KEY`                             | 示例应用专用变量（如企业官网后台、业务数据加密）                                  |
+| Dev / Test     | `HAI_E2E`、`BASE_URL`、`PUBLIC_API_BASE`、`SERVICE_BASE_URL`、`CI` | 本地联调、E2E 与构建辅助（含 fullstack 前后端分离预览）                           |
 
 ### 常见模块变量速查
 

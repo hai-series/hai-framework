@@ -10,7 +10,6 @@
     "android",
     "ios",
     "capacitor",
-    "sveltekit",
     "svelte5",
     "api-client"
   ],

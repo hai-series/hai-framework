@@ -52,7 +52,7 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
   },
   'api': {
     name: 'API 服务',
-    description: '纯 API 后端服务，RESTful 路由、无 UI',
+    description: 'typed API workspace，含 contract + service 双工程、无 UI',
     defaultFeatures: ['db', 'cache'],
   },
   'mobile-app': {
@@ -306,27 +306,37 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     if (resolvedOptions.appType !== 'fullstack') {
       // 生成配置文件（config/*.yml）
-      const { generateConfigFile } = await import('./cli-config-templates.js')
+      const { generateConfigFile, generateEnvExample } = await import('./cli-config-templates.js')
       const configs = resolvedOptions.moduleConfigs
+      const isApiWorkspace = resolvedOptions.appType === 'api'
+      const configDir = isApiWorkspace
+        ? path.join(projectPath, 'apps', `${resolvedOptions.name}-service`, 'config')
+        : path.join(projectPath, 'config')
+      const envExamplePath = isApiWorkspace
+        ? path.join(projectPath, 'apps', `${resolvedOptions.name}-service`, '.env.example')
+        : path.join(projectPath, '.env.example')
+
       for (const featureId of resolvedOptions.features) {
         const configKey = getFeatureConfigKey(featureId)
         if (configKey) {
           const content = generateConfigFile(configKey, configs)
-          await writeFile(path.join(projectPath, 'config', `_${configKey}.yml`), content)
+          await writeFile(path.join(configDir, `_${configKey}.yml`), content)
         }
       }
-      // 始终生成 core 配置
-      await writeFile(
-        path.join(projectPath, 'config', '_core.yml'),
-        generateConfigFile('core', configs),
-      )
 
-      // 生成 .env.example
-      const { generateEnvExample } = await import('./cli-config-templates.js')
-      await writeFile(
-        path.join(projectPath, '.env.example'),
-        generateEnvExample(resolvedOptions.features, configs),
-      )
+      if (!isApiWorkspace) {
+        // 始终生成 core 配置
+        await writeFile(
+          path.join(configDir, '_core.yml'),
+          generateConfigFile('core', configs),
+        )
+      }
+
+      const envExample = isApiWorkspace
+        ? `${generateEnvExample(resolvedOptions.features, configs)}\n# =============================================================================\n# Service Runtime\n# =============================================================================\nPORT=3000\n`
+        : generateEnvExample(resolvedOptions.features, configs)
+
+      await writeFile(envExamplePath, envExample)
     }
 
     // 生成 Skill 文件
@@ -337,7 +347,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     const appTypeLabel = APP_TYPES[resolvedOptions.appType].name
     const readmeContent = resolvedOptions.appType === 'fullstack'
       ? generateFullstackReadme(resolvedOptions.name, resolvedOptions.packageManager!, resolvedOptions.frontends)
-      : generateReadme(resolvedOptions.name, appTypeLabel, resolvedOptions.packageManager!)
+      : resolvedOptions.appType === 'api'
+        ? generateApiWorkspaceReadme(resolvedOptions.name, resolvedOptions.packageManager!)
+        : generateReadme(resolvedOptions.name, appTypeLabel, resolvedOptions.packageManager!)
     await writeFile(
       path.join(projectPath, 'README.md'),
       readmeContent,
@@ -532,7 +544,9 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
 
   // 包管理器
   const detected = await detectPackageManager(options.cwd ?? '.')
-  let packageManager = selectedAppType === 'fullstack' ? 'pnpm' : options.packageManager
+  let packageManager = selectedAppType === 'fullstack' || selectedAppType === 'api'
+    ? 'pnpm'
+    : options.packageManager
   if (!packageManager && useDefaults) {
     packageManager = detected
   }
@@ -1033,6 +1047,48 @@ ${getRunCommand(pm, 'preview')}
 `
 }
 
+function generateApiWorkspaceReadme(name: string, pm: 'pnpm' | 'npm' | 'yarn'): string {
+  return `# ${name}
+
+基于 hai Agent Framework 构建的 typed API workspace。
+
+## 工程结构
+
+- \`apps/${name}-contract\`：共享 API contract、Zod schema 与类型
+- \`apps/${name}-service\`：后端 API service，基于 \`@h-ai/serv\` 暴露 HTTP 应用
+
+## 开发
+
+\`\`\`bash
+${pm} install
+${pm} dev
+\`\`\`
+
+## 质量门禁
+
+\`\`\`bash
+${pm} typecheck
+${pm} lint
+${pm} build
+${pm} test
+${pm} test:e2e
+\`\`\`
+
+## 扩展建议
+
+- 在 \`${name}-contract\` 中维护应用级 contract，前后端共用同一份类型与路径定义。
+- 在 \`${name}-service\` 中扩展 procedures、模块初始化与配置。
+- 需要 IAM / storage / ai 时，优先复用 \`@h-ai/api-contract\` 与 \`@h-ai/serv/features/*\`。
+
+## 文档
+
+- [hai Agent Framework](https://github.com/hai-series/hai-framework)
+- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
+- [@h-ai/api-contract](./.agents/skills/hai-api-contract/SKILL.md)
+- [@h-ai/api-client](./.agents/skills/hai-api-client/SKILL.md)
+`
+}
+
 function generateFullstackReadme(name: string, pm: string, frontends: FrontendTarget[]): string {
   const enabledFrontends = frontends.map(target => FRONTEND_TARGETS[target].name).join(' / ')
   return `# ${name}
@@ -1129,7 +1185,8 @@ function printCompletionMessage(options: Required<CreateProjectOptions>): void {
   if (!options.install) {
     core.logger.info(chalk.cyan(`  ${getInstallCommand(options.packageManager)}`))
   }
-  if (options.appType === 'fullstack') {
+  if (options.appType === 'fullstack' || options.appType === 'api') {
+    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'dev')}`))
     core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'typecheck')}`))
     core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'test')}`))
     core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'test:e2e')}`))

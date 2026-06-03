@@ -1,0 +1,58 @@
+import process from 'node:process'
+import { defineConfig } from '@playwright/test'
+
+const defaultBaseURL = 'http://127.0.0.1:3000'
+const baseURL = process.env.BASE_URL || defaultBaseURL
+const serviceHost = resolveHostFromBaseUrl(baseURL, '127.0.0.1')
+const servicePort = resolvePortFromBaseUrl(baseURL, '3000')
+
+function resolveHostFromBaseUrl(urlString: string, fallbackHost: string): string {
+  try {
+    const url = new URL(urlString)
+    return url.hostname || fallbackHost
+  }
+  catch {
+    return fallbackHost
+  }
+}
+
+function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string {
+  try {
+    const url = new URL(urlString)
+    if (url.port) {
+      return url.port
+    }
+
+    return url.protocol === 'https:' ? '443' : '80'
+  }
+  catch {
+    return fallbackPort
+  }
+}
+
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: 1,
+  reporter: 'list',
+  timeout: 30_000,
+  use: {
+    baseURL,
+    channel: 'chrome',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+  },
+  webServer: [{
+    name: '{{api.servicePackageName}}',
+    command: 'pnpm --filter {{api.servicePackageName}} start',
+    env: {
+      HOST: serviceHost,
+      PORT: servicePort,
+    },
+    url: `${baseURL}/health`,
+    reuseExistingServer: false,
+    timeout: 120_000,
+  }],
+})

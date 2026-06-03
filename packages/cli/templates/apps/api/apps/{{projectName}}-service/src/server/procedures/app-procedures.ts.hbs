@@ -1,0 +1,49 @@
+import type { ServContext } from '@h-ai/serv'
+{{#if features.iam}}import type { AppEchoInput, AppEchoOutputData, AppInfoOutputData } from '{{api.contractPackageName}}'
+{{else}}import type { AppEchoOutputData, AppInfoOutputData } from '{{api.contractPackageName}}'
+{{/if}}
+import { ok } from '@h-ai/core'
+import { serv } from '@h-ai/serv'
+import { appContract } from '{{api.contractPackageName}}'
+
+export interface AppProcedureDeps {
+  readonly info: {
+    readonly name: string
+    readonly version: string
+    readonly transportEnabled: boolean
+  }
+  readonly startedAt: number
+}
+
+const p = serv.implement(appContract).$context<ServContext>()
+
+/** 创建应用自有 procedures。 */
+export function createAppProcedures(deps: AppProcedureDeps) {
+  return p.router({
+    info: p.info.handler(() => {
+      const data: AppInfoOutputData = {
+        name: deps.info.name,
+        version: deps.info.version,
+        transportEnabled: deps.info.transportEnabled,
+        uptimeMs: Math.max(0, Date.now() - deps.startedAt),
+      }
+      return ok(data)
+    }),
+    echo: {{#if features.iam}}p.echo.handler(serv.requireAuth<AppEchoInput, AppEchoOutputData>(({ input, context }) => {
+      const data: AppEchoOutputData = {
+        message: input.message,
+        userId: context.session!.userId,
+        requestId: context.requestId,
+        timestamp: new Date().toISOString(),
+      }
+      return Promise.resolve(ok(data))
+    })){{else}}p.echo.handler(({ input, context }) => {
+      const data: AppEchoOutputData = {
+        message: input.message,
+        requestId: context.requestId,
+        timestamp: new Date().toISOString(),
+      }
+      return ok(data)
+    }){{/if}},
+  })
+}

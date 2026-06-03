@@ -1,0 +1,12 @@
+import { apiContract } from '@h-ai/api-contract'
+import { appContract } from './app-contract.js'
+
+/** 工程级应用 contract。 */
+export const {{api.contractExportName}} = apiContract.create({
+{{#if features.iam}}  iam: apiContract.iam,
+{{/if}}{{#if features.storage}}  storage: apiContract.storage,
+{{/if}}{{#if features.ai}}  ai: apiContract.ai,
+{{/if}}  app: appContract,
+})
+
+export type ApiWorkspaceContract = typeof {{api.contractExportName}}

@@ -1,0 +1,29 @@
+{
+  "name": "{{projectName}}",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "description": "Typed hai API workspace with separated contract and service packages.",
+  "scripts": {
+    "dev": "pnpm --filter {{api.servicePackageName}} dev",
+    "compile": "pnpm typecheck && pnpm build",
+    "build": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present build",
+    "typecheck": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present typecheck",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present test",
+    "test:e2e": "pnpm build && playwright test",
+    "clean": "pnpm -r --if-present clean && rimraf node_modules .turbo"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "{{api.packageSpecifiers.antfuEslintConfig}}",
+    "@playwright/test": "{{api.packageSpecifiers.playwright}}",
+    "@types/node": "{{api.packageSpecifiers.nodeTypes}}",
+    "eslint": "{{api.packageSpecifiers.eslint}}",
+    "eslint-plugin-format": "{{api.packageSpecifiers.eslintPluginFormat}}",
+    "rimraf": "{{api.packageSpecifiers.rimraf}}",
+    "tsup": "{{api.packageSpecifiers.tsup}}",
+    "typescript": "{{api.packageSpecifiers.typescript}}",
+    "vitest": "{{api.packageSpecifiers.vitest}}"
+  }
+}

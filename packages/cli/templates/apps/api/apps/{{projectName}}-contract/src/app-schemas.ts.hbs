@@ -1,0 +1,33 @@
+import { apiContract } from '@h-ai/api-contract'
+import { z } from 'zod'
+
+/** 服务元信息响应数据。 */
+export const AppInfoOutputDataSchema = z.object({
+  name: z.string(),
+  version: z.string(),
+  uptimeMs: z.number().int().nonnegative(),
+  transportEnabled: z.boolean(),
+})
+
+/** app.info 标准 HaiResult 输出。 */
+export const AppInfoOutputSchema = apiContract.haiResultSchema(AppInfoOutputDataSchema)
+
+/** 输入：单条文本消息（演示用，限制最大长度防止误用）。 */
+export const AppEchoInputSchema = z.object({
+  message: z.string().min(1).max(2000),
+})
+
+/** 输出：原样回显 + 调用者快照。 */
+export const AppEchoOutputDataSchema = z.object({
+  message: z.string(),
+  requestId: z.string(),
+  timestamp: z.string(),
+  userId: z.string().optional(),
+})
+
+/** app.echo 标准 HaiResult 输出。 */
+export const AppEchoOutputSchema = apiContract.haiResultSchema(AppEchoOutputDataSchema)
+
+export type AppInfoOutputData = z.infer<typeof AppInfoOutputDataSchema>
+export type AppEchoInput = z.infer<typeof AppEchoInputSchema>
+export type AppEchoOutputData = z.infer<typeof AppEchoOutputDataSchema>

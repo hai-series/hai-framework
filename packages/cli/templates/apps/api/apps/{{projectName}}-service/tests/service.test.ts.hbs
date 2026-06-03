@@ -1,0 +1,168 @@
+import type { AddressInfo } from 'node:net'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+{{#if features.ai}}import { ai } from '@h-ai/ai'
+{{/if}}import { apiClient } from '@h-ai/api-client'
+{{#if features.cache}}import { cache } from '@h-ai/cache'
+{{/if}}import { core } from '@h-ai/core'
+{{#if features.iam}}import { iam } from '@h-ai/iam'
+{{/if}}{{#if features.db}}import { reldb } from '@h-ai/reldb'
+{{/if}}import { serv } from '@h-ai/serv'
+{{#if features.storage}}import { storage } from '@h-ai/storage'
+{{/if}}{{#if features.vecdb}}import { vecdb } from '@h-ai/vecdb'
+{{/if}}import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+
+import { {{api.serviceAppFactoryName}} } from '../src/app.js'
+
+let tempRoot = ''
+let baseUrl = ''
+let client: ReturnType<typeof apiClient.create<typeof {{api.contractExportName}}>>
+let server: ReturnType<typeof serv.listen>
+{{#if features.storage}}let storageRoot = ''
+{{/if}}{{#if features.vecdb}}let vecdbRoot = ''
+{{/if}}
+
+{{#if features.iam}}
+function uniqueUser(prefix = 'api') {
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(-8)
+  return {
+    username: `${prefix}_${suffix}`,
+    password: 'TestPass123',
+    email: `${prefix}_${suffix}@test.local`,
+  }
+}
+{{/if}}
+
+beforeAll(async () => {
+  tempRoot = mkdtempSync(join(tmpdir(), '{{projectName}}-service-test-'))
+{{#if features.storage}}  storageRoot = join(tempRoot, 'storage')
+{{/if}}{{#if features.vecdb}}  vecdbRoot = join(tempRoot, 'vecdb')
+{{/if}}
+
+  core.init({
+    configDir: './config',
+    logging: { level: 'warn' },
+  })
+{{#if features.db}}
+
+  const dbResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
+  if (!dbResult.success)
+    throw new Error(`reldb: ${dbResult.error.message}`)
+{{/if}}{{#if features.cache}}
+
+  const cacheResult = await cache.init({ type: 'memory' })
+  if (!cacheResult.success)
+    throw new Error(`cache: ${cacheResult.error.message}`)
+{{/if}}{{#if features.vecdb}}
+
+  const vecdbResult = await vecdb.init({ type: 'lancedb', path: vecdbRoot })
+  if (!vecdbResult.success)
+    throw new Error(`vecdb: ${vecdbResult.error.message}`)
+{{/if}}{{#if features.iam}}
+
+  const iamResult = await iam.init({})
+  if (!iamResult.success)
+    throw new Error(`iam: ${iamResult.error.message}`)
+{{/if}}{{#if features.storage}}
+
+  const storageResult = await storage.init({ type: 'local', root: storageRoot })
+  if (!storageResult.success)
+    throw new Error(`storage: ${storageResult.error.message}`)
+{{/if}}{{#if features.ai}}
+
+  const aiResult = await ai.init({})
+  if (!aiResult.success)
+    throw new Error(`ai: ${aiResult.error.message}`)
+{{/if}}
+
+  const app = {{api.serviceAppFactoryName}}({
+    transport: 'disabled',{{#if features.iam}}
+    refreshCookie: 'disabled',{{/if}}
+  })
+  const listening = new Promise<AddressInfo>((resolve) => {
+    server = serv.listen(app, {
+      host: '127.0.0.1',
+      port: 0,
+      onListening: info => resolve(info as AddressInfo),
+    })
+  })
+  const address = await listening
+  baseUrl = `http://127.0.0.1:${address.port}`
+
+  client = apiClient.create({{api.contractExportName}})
+  const initResult = await client.init({
+    baseUrl: `${baseUrl}/api/v1`,
+    auth: { storage: apiClient.tokenStorage.memory() },
+  })
+  if (!initResult.success)
+    throw new Error(`client.init: ${initResult.error.message}`)
+}, 30_000)
+
+afterAll(async () => {
+  await client?.close()
+  await server?.close()
+{{#if features.ai}}  await ai.close()
+{{/if}}{{#if features.storage}}  await storage.close()
+{{/if}}{{#if features.iam}}  await iam.close()
+{{/if}}{{#if features.vecdb}}  await vecdb.close()
+{{/if}}{{#if features.cache}}  await cache.close()
+{{/if}}{{#if features.db}}  await reldb.close()
+{{/if}}  rmSync(tempRoot, { recursive: true, force: true })
+})
+
+describe('{{api.servicePackageName}}', () => {
+  it('returns health status', async () => {
+    const response = await fetch(`${baseUrl}/health`)
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ status: 'ok' })
+  })
+
+  it('returns app info as HaiResult', async () => {
+    const result = await client.app.info()
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.name).toContain('{{projectName}}')
+      expect(typeof result.data.transportEnabled).toBe('boolean')
+    }
+  })
+
+  it('validates echo input', async () => {
+    const result = await client.app.echo({ message: '' })
+
+    expect(result.success).toBe(false)
+  })
+
+{{#if features.iam}}
+  it('registers a user and returns authenticated echo context', async () => {
+    const user = uniqueUser('svc')
+    const register = await client.iam.auth.register({
+      username: user.username,
+      password: user.password,
+      email: user.email,
+    })
+
+    expect(register.success).toBe(true)
+
+    const result = await client.app.echo({ message: 'hello unit' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.message).toBe('hello unit')
+      expect(result.data.userId).toBeTruthy()
+    }
+  })
+{{else}}
+  it('returns echo result as HaiResult', async () => {
+    const result = await client.app.echo({ message: 'hello unit' })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.message).toBe('hello unit')
+      expect(result.data.userId).toBeUndefined()
+    }
+  })
+{{/if}}
+})

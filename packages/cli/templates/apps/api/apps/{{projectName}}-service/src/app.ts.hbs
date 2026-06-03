@@ -1,0 +1,98 @@
+import type { ServConfig } from '@h-ai/serv'
+import { core } from '@h-ai/core'
+{{#if features.crypto}}import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+{{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
+{{/if}}import { serv } from '@h-ai/serv'
+import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
+import pkg from '../package.json' with { type: 'json' }
+import { {{api.serviceProceduresFactoryName}} } from './server/procedures/index.js'
+
+const startedAt = Date.now()
+
+interface CreateApiServiceAppOptions {
+  transport?: 'config' | 'disabled'
+  refreshCookie?: 'enabled' | 'disabled'
+}
+
+const LOOPBACK_ORIGIN_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/
+const WEBVIEW_ORIGINS = new Set([
+  'capacitor://localhost',
+  'http://localhost',
+  'https://tauri.localhost',
+  'tauri://localhost',
+])
+const DEFAULT_CORS_ALLOWED_HEADERS = [
+  'Authorization',
+  'Content-Type',
+{{#if features.crypto}}  TRANSPORT_PROTOCOL.CLIENT_ID_HEADER,
+  TRANSPORT_PROTOCOL.ENCRYPTED_HEADER,
+{{/if}}  'X-Hai-Locale',
+  'X-Request-Id',
+  'X-Requested-With',
+]
+
+/** 创建 API Service HTTP 应用。 */
+export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptions = {}) {
+  const servConfig = core.config.getOrThrow<ServConfig>('serv')
+{{#if features.crypto}}  const transportMode = _options.transport ?? 'config'
+  const transport = transportMode === 'disabled' || servConfig.transport === false
+    ? undefined
+    : {
+        crypto,
+        keyExchangePath: servConfig.transport.keyExchangePath,
+        excludePaths: [...servConfig.transport.excludePaths],
+        maxClients: servConfig.transport.maxClients,
+      }
+{{else}}  const transport = undefined
+{{/if}}
+{{#if features.iam}}
+  const refreshCookie = _options.refreshCookie === 'disabled' ? undefined : {}
+{{/if}}
+
+  const appOptions: Parameters<typeof serv.createApp>[0] = {
+    contract: {{api.contractExportName}},
+    procedures: {{api.serviceProceduresFactoryName}}({
+      app: {
+        info: {
+          name: pkg.name,
+          version: pkg.version,
+          transportEnabled: transport !== undefined,
+        },
+        startedAt,
+      },
+    }),
+    http: servConfig.http,
+{{#if features.iam}}
+    iam,
+{{/if}}
+    middlewares: [
+      {
+        middleware: serv.cors({
+          origin: origin => resolveCorsOrigin(origin) !== null,
+{{#if features.iam}}          credentials: true,
+{{/if}}          allowedHeaders: DEFAULT_CORS_ALLOWED_HEADERS,{{#if features.crypto}}
+          exposedHeaders: [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, 'X-Request-Id'],{{/if}}
+        }),
+      },
+    ],
+  }
+{{#if features.iam}}
+
+  appOptions.refreshCookie = refreshCookie
+{{/if}}{{#if features.crypto}}
+  if (transport)
+    appOptions.transport = transport
+{{/if}}
+
+  return serv.createApp(appOptions)
+}
+
+function resolveCorsOrigin(origin: string | undefined): string | null {
+  if (!origin)
+    return null
+  if (WEBVIEW_ORIGINS.has(origin))
+    return origin
+  if (LOOPBACK_ORIGIN_RE.test(origin))
+    return origin
+  return null
+}

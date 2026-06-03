@@ -264,6 +264,19 @@ const FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES = [
   '@tauri-apps/cli',
 ] as const
 
+const API_WORKSPACE_EXTERNAL_CATALOG_PACKAGE_NAMES = [
+  '@antfu/eslint-config',
+  '@playwright/test',
+  '@types/node',
+  'eslint',
+  'eslint-plugin-format',
+  'rimraf',
+  'tsup',
+  'typescript',
+  'vitest',
+  'zod',
+] as const
+
 function pickCatalogPackages(
   packageNames: readonly string[],
   availableCatalogPackages: CatalogPackageVersions,
@@ -285,6 +298,45 @@ function buildFullstackPackageSpecifiers(useCatalogProtocol: boolean): Fullstack
   return Object.fromEntries(
     Object.entries(VERSIONS).map(([key, version]) => [key, useCatalogProtocol ? HAI_PACKAGE_SPECIFIER_CATALOG : version]),
   ) as FullstackPackageSpecifiers
+}
+
+function buildApiWorkspaceCatalogPackages(featureMap: Record<string, boolean>): Record<string, string> {
+  const packageNames: string[] = [
+    ...API_WORKSPACE_EXTERNAL_CATALOG_PACKAGE_NAMES,
+    '@h-ai/api-client',
+    '@h-ai/api-contract',
+    '@h-ai/core',
+    '@h-ai/serv',
+  ]
+
+  if (featureMap.db)
+    packageNames.push('@h-ai/reldb')
+  if (featureMap.cache)
+    packageNames.push('@h-ai/cache')
+  if (featureMap.iam)
+    packageNames.push('@h-ai/iam')
+  if (featureMap.crypto)
+    packageNames.push('@h-ai/crypto')
+  if (featureMap.storage)
+    packageNames.push('@h-ai/storage')
+  if (featureMap.ai)
+    packageNames.push('@h-ai/ai')
+  if (featureMap.audit)
+    packageNames.push('@h-ai/audit')
+  if (featureMap.reach)
+    packageNames.push('@h-ai/reach')
+  if (featureMap.payment)
+    packageNames.push('@h-ai/payment')
+  if (featureMap.vecdb)
+    packageNames.push('@h-ai/vecdb')
+  if (featureMap.datapipe)
+    packageNames.push('@h-ai/datapipe')
+  if (featureMap.scheduler)
+    packageNames.push('@h-ai/scheduler')
+  if (featureMap.deploy)
+    packageNames.push('@h-ai/deploy')
+
+  return pickCatalogPackages(packageNames, FULLSTACK_CATALOG_PACKAGES)
 }
 
 function buildAppHaiCatalogPackages(options: {
@@ -342,7 +394,7 @@ function buildAppHaiCatalogPackages(options: {
 }
 
 function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[]): Record<string, string> {
-  const packageNames = [
+  const packageNames: string[] = [
     ...FULLSTACK_ROOT_CATALOG_PACKAGE_NAMES,
     ...FULLSTACK_CONTRACT_CATALOG_PACKAGE_NAMES,
     ...FULLSTACK_SERV_CATALOG_PACKAGE_NAMES,
@@ -387,14 +439,35 @@ export interface TemplateContext {
   hasI18n: boolean
   /** 是否为 Capacitor 原生移动应用（mobile-app） */
   isCapacitorApp: boolean
+  /** 是否为 API workspace（service + contract） */
+  isApiWorkspace: boolean
   /** 是否为不依赖 SvelteKit 的纯 Svelte 5 应用 */
   isSvelteOnlyApp: boolean
   /** 默认语言 */
   defaultLocale: string
   /** 包管理器 */
   packageManager: string
+  /** API workspace 专用上下文 */
+  api?: ApiWorkspaceTemplateContext
   /** 前后端分离工程专用上下文 */
   fullstack?: FullstackTemplateContext
+}
+
+export interface ApiWorkspaceTemplateContext {
+  /** 依赖版本集合 */
+  versions: typeof VERSIONS
+  /** 写入 package.json 的依赖说明符（pnpm 时为 catalog:） */
+  packageSpecifiers: FullstackPackageSpecifiers
+  /** 共享 contract 包名 */
+  contractPackageName: string
+  /** 共享 contract 导出变量名 */
+  contractExportName: string
+  /** 后端 service 包名 */
+  servicePackageName: string
+  /** Service App 工厂函数名 */
+  serviceAppFactoryName: string
+  /** procedures 聚合函数名 */
+  serviceProceduresFactoryName: string
 }
 
 export interface FullstackFrontendApp {
@@ -649,14 +722,21 @@ export function buildTemplateContext(options: {
   const useCatalogProtocol = options.packageManager === 'pnpm'
   const hasUi = !isApi && !isFullstack
   const selectedFrontends = options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS
-  const haiCatalogPackages = isFullstack
-    ? buildFullstackCatalogPackages(selectedFrontends)
-    : buildAppHaiCatalogPackages({
-        featureMap,
-        hasUi,
-        isCapacitorApp,
-        isSvelteOnlyApp,
-      })
+  let haiCatalogPackages: string[]
+  if (isFullstack) {
+    haiCatalogPackages = buildFullstackCatalogPackages(selectedFrontends)
+  }
+  else if (isApi) {
+    haiCatalogPackages = buildApiWorkspaceCatalogPackages(featureMap)
+  }
+  else {
+    haiCatalogPackages = buildAppHaiCatalogPackages({
+      featureMap,
+      hasUi,
+      isCapacitorApp,
+      isSvelteOnlyApp,
+    })
+  }
 
   return {
     projectName: options.name,
@@ -669,9 +749,13 @@ export function buildTemplateContext(options: {
     hasUi,
     hasI18n: !isApi && !isFullstack,
     isCapacitorApp,
+    isApiWorkspace: isApi,
     isSvelteOnlyApp,
     defaultLocale: options.moduleConfigs?.core?.defaultLocale ?? 'zh-CN',
     packageManager: options.packageManager,
+    api: isApi
+      ? buildApiWorkspaceTemplateContext(options.name, useCatalogProtocol)
+      : undefined,
     fullstack: isFullstack
       ? buildFullstackTemplateContext(
           options.name,
@@ -680,6 +764,24 @@ export function buildTemplateContext(options: {
           useCatalogProtocol,
         )
       : undefined,
+  }
+}
+
+function buildApiWorkspaceTemplateContext(
+  projectName: string,
+  useCatalogProtocol = false,
+): ApiWorkspaceTemplateContext {
+  const identifier = toIdentifier(projectName)
+  const pascalName = toPascalIdentifier(identifier)
+
+  return {
+    versions: VERSIONS,
+    packageSpecifiers: buildFullstackPackageSpecifiers(useCatalogProtocol),
+    contractPackageName: `${projectName}-contract`,
+    contractExportName: `${identifier}Contract`,
+    servicePackageName: `${projectName}-service`,
+    serviceAppFactoryName: `create${pascalName}App`,
+    serviceProceduresFactoryName: `create${pascalName}Procedures`,
   }
 }
 
@@ -780,6 +882,12 @@ function toIdentifier(value: string): string {
   return IDENTIFIER_START_REGEX.test(camel) ? camel : `app${camel}`
 }
 
+function toPascalIdentifier(value: string): string {
+  if (!value)
+    return 'App'
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+}
+
 // =============================================================================
 // 核心：生成项目
 // =============================================================================
@@ -801,7 +909,7 @@ export async function generateFromTemplates(
   context: TemplateContext,
 ): Promise<void> {
   const root = getTemplatesRoot()
-  const includeBaseTemplate = context.appType !== 'fullstack'
+  const includeBaseTemplate = context.appType !== 'fullstack' && !context.isApiWorkspace
 
   // ─── ① 拷贝 base 骨架（静态文件） ───
   if (includeBaseTemplate) {
@@ -817,44 +925,46 @@ export async function generateFromTemplates(
   }
 
   // ─── ③ 叠加 feature 路由 ───
-  for (const featureId of Object.keys(context.features)) {
-    if (context.isSvelteOnlyApp) {
-      continue
-    }
-
-    if (!context.features[featureId]) {
-      continue
-    }
-
-    // 安全校验：featureId 只允许字母、数字和连字符，防止路径遍历
-    if (!FEATURE_ID_REGEX.test(featureId)) {
-      continue
-    }
-
-    const featureDir = path.join(root, 'features', featureId)
-    if (!(await fse.pathExists(featureDir))) {
-      continue
-    }
-
-    // 通用路由（routes/）
-    const sharedDirs = FEATURE_ROUTE_DIRS[featureId] || []
-    for (const dirName of sharedDirs) {
-      // Capacitor SPA 无服务端运行时，跳过服务端 API 路由（routes-shared）
-      if (context.isCapacitorApp && dirName === 'routes-shared') {
+  if (!context.isApiWorkspace) {
+    for (const featureId of Object.keys(context.features)) {
+      if (context.isSvelteOnlyApp) {
         continue
       }
-      const routesSrc = path.join(featureDir, dirName)
-      if (await fse.pathExists(routesSrc)) {
-        await copyStaticDir(routesSrc, path.join(projectPath, 'src', 'routes'))
-      }
-    }
 
-    // appType 专用路由（routes-{appType}）
-    const appSpecificTypes = FEATURE_APP_ROUTE_DIRS[featureId] || []
-    if (appSpecificTypes.includes(context.appType)) {
-      const appRouteSrc = path.join(featureDir, `routes-${context.appType}`)
-      if (await fse.pathExists(appRouteSrc)) {
-        await copyStaticDir(appRouteSrc, path.join(projectPath, 'src', 'routes'))
+      if (!context.features[featureId]) {
+        continue
+      }
+
+      // 安全校验：featureId 只允许字母、数字和连字符，防止路径遍历
+      if (!FEATURE_ID_REGEX.test(featureId)) {
+        continue
+      }
+
+      const featureDir = path.join(root, 'features', featureId)
+      if (!(await fse.pathExists(featureDir))) {
+        continue
+      }
+
+      // 通用路由（routes/）
+      const sharedDirs = FEATURE_ROUTE_DIRS[featureId] || []
+      for (const dirName of sharedDirs) {
+        // Capacitor SPA 无服务端运行时，跳过服务端 API 路由（routes-shared）
+        if (context.isCapacitorApp && dirName === 'routes-shared') {
+          continue
+        }
+        const routesSrc = path.join(featureDir, dirName)
+        if (await fse.pathExists(routesSrc)) {
+          await copyStaticDir(routesSrc, path.join(projectPath, 'src', 'routes'))
+        }
+      }
+
+      // appType 专用路由（routes-{appType}）
+      const appSpecificTypes = FEATURE_APP_ROUTE_DIRS[featureId] || []
+      if (appSpecificTypes.includes(context.appType)) {
+        const appRouteSrc = path.join(featureDir, `routes-${context.appType}`)
+        if (await fse.pathExists(appRouteSrc)) {
+          await copyStaticDir(appRouteSrc, path.join(projectPath, 'src', 'routes'))
+        }
       }
     }
   }
@@ -892,7 +1002,7 @@ async function renderDynamicFiles(
   context: TemplateContext,
 ): Promise<void> {
   // ── base + apps/{appType} → 输出到项目根 ──
-  const rootDirs = context.appType === 'fullstack'
+  const rootDirs = context.appType === 'fullstack' || context.isApiWorkspace
     ? [path.join(templatesRoot, 'apps', context.appType)]
     : [
         path.join(templatesRoot, 'base'),
@@ -905,6 +1015,10 @@ async function renderDynamicFiles(
   }
 
   // ── feature 路由 → 输出到 src/routes/ ──
+  if (context.isApiWorkspace) {
+    return
+  }
+
   const routesDest = path.join(projectPath, 'src', 'routes')
   for (const featureId of Object.keys(context.features)) {
     if (context.isSvelteOnlyApp) {

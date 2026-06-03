@@ -5,6 +5,7 @@
  * @module cli-skill-templates
  */
 
+import type { AppType } from '../cli-types.js'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
@@ -34,35 +35,19 @@ const MODULE_SKILL_MAP: Record<string, string> = {
 }
 
 /**
- * 基础 Skill（所有项目都需要的）
+ * 各 appType 互斥的 Skill。
+ *
+ * 生成样板工程时，默认复制 templates/skills 下所有 hai-* Skill，
+ * 仅排除与当前样板技术栈明显冲突的少数 Skill。
  */
-const BASE_SKILLS = [
-  'hai-build',
-  'hai-core',
-  'hai-kit',
-  'hai-ui',
-  'hai-app-create',
-  'hai-app-review',
-  'hai-app-tests',
-]
-
-const KIT_SKILLS = ['hai-kit']
-const CORE_SKILLS = ['hai-core']
-
-/**
- * 前后端分离工程额外需要的 Skill
- */
-const FULLSTACK_SKILLS = ['hai-serv', 'hai-api-contract', 'hai-api-client']
-
-/**
- * Capacitor 应用额外需要的 Skill
- */
-const CAPACITOR_SKILLS = ['hai-api-client', 'hai-capacitor']
-
-/**
- * API 类型项目不需要的 UI 相关 Skill
- */
-const UI_SKILLS = ['hai-ui']
+const SKILL_EXCLUSIONS_BY_APP_TYPE: Partial<Record<AppType, string[]>> = {
+  'admin': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
+  'website': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
+  'h5': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
+  'api': ['hai-ui', 'hai-kit', 'hai-capacitor'],
+  'mobile-app': ['hai-core', 'hai-kit', 'hai-serv', 'hai-api-contract'],
+  'fullstack': ['hai-kit'],
+}
 
 const WORKFLOW_SKILLS = [
   'hai-build',
@@ -72,7 +57,10 @@ const WORKFLOW_SKILLS = [
 ]
 
 const PACKAGE_SKILL_MAP: Record<string, string> = {
+  '@h-ai/api-contract': 'hai-api-contract',
+  '@h-ai/api-client': 'hai-api-client',
   '@h-ai/core': 'hai-core',
+  '@h-ai/serv': 'hai-serv',
   '@h-ai/kit': 'hai-kit',
   '@h-ai/ui': 'hai-ui',
   '@h-ai/reldb': 'hai-reldb',
@@ -88,7 +76,6 @@ const PACKAGE_SKILL_MAP: Record<string, string> = {
   '@h-ai/scheduler': 'hai-scheduler',
   '@h-ai/audit': 'hai-audit',
   '@h-ai/deploy': 'hai-deploy',
-  '@h-ai/api-client': 'hai-api-client',
   '@h-ai/capacitor': 'hai-capacitor',
 }
 
@@ -114,6 +101,32 @@ const BRIDGE_FILES = [
 ] as const
 
 const BRIDGE_PROFILE_REGEX = /^[a-z0-9-]+$/
+
+async function listTemplateSkillNames(templatesDir: string): Promise<string[]> {
+  const entries = await fse.readdir(templatesDir, { withFileTypes: true })
+  const skillNames: string[] = []
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith('hai-')) {
+      continue
+    }
+
+    const skillFilePath = path.join(templatesDir, entry.name, 'SKILL.md')
+    if (await fse.pathExists(skillFilePath)) {
+      skillNames.push(entry.name)
+    }
+  }
+
+  return skillNames.sort((a, b) => a.localeCompare(b))
+}
+
+export function resolveCompatibleSkillNames(
+  skillNames: string[],
+  appType?: AppType,
+): string[] {
+  const excludedSkills = new Set(appType ? SKILL_EXCLUSIONS_BY_APP_TYPE[appType] ?? [] : [])
+  return skillNames.filter(skillName => !excludedSkills.has(skillName))
+}
 
 /**
  * 获取 templates/skills/ 目录的绝对路径
@@ -239,17 +252,17 @@ async function resolveBridgeSource(
 }
 
 /**
- * 为新项目生成完整的 Skill 文件
+ * 为新项目生成完整的 Skill 文件。
  *
- * 根据用户选择的功能模块，复制基础 Skill 和模块 Skill 到项目中。
+ * 默认复制 templates/skills 下所有 hai-* Skill，再按 appType 排除互斥项。
  *
  * @param projectPath - 用户项目根目录
- * @param features - 用户选择的功能模块列表（如 ['db', 'iam', 'cache']）
+ * @param _features - 预留参数；保留签名兼容 createProject 调用方
  * @param appType - 应用类型（api 类型不复制 UI Skill）
  */
 export async function generateSkillFiles(
   projectPath: string,
-  features: string[],
+  _features: string[],
   appType?: string,
 ): Promise<string[]> {
   const templatesDir = getSkillTemplatesDir()
@@ -260,40 +273,10 @@ export async function generateSkillFiles(
 
   const copiedFiles: string[] = []
 
-  // 确定需要的基础 Skill
-  let baseSkills = [...BASE_SKILLS]
-  if (appType === 'api') {
-    baseSkills = baseSkills.filter(s => !UI_SKILLS.includes(s))
-  }
-  else if (appType === 'mobile-app') {
-    baseSkills = baseSkills.filter(s => !KIT_SKILLS.includes(s) && !CORE_SKILLS.includes(s))
-  }
-  else if (appType === 'fullstack') {
-    baseSkills = baseSkills.filter(s => !KIT_SKILLS.includes(s))
-  }
+  const templateSkillNames = await listTemplateSkillNames(templatesDir)
+  const compatibleSkillNames = resolveCompatibleSkillNames(templateSkillNames, appType as AppType | undefined)
 
-  // Capacitor 应用额外添加 api-client 和 capacitor Skill
-  if (appType === 'mobile-app') {
-    baseSkills.push(...CAPACITOR_SKILLS)
-  }
-
-  // 前后端分离工程额外添加 contract / service / typed client 相关 Skill
-  if (appType === 'fullstack') {
-    baseSkills.push(...FULLSTACK_SKILLS)
-  }
-
-  // 复制基础 Skill
-  copiedFiles.push(...await copySkills(templatesDir, baseSkills, projectPath))
-
-  // 复制模块 Skill
-  const featureSkills: string[] = []
-  for (const featureId of features) {
-    const skillName = MODULE_SKILL_MAP[featureId]
-    if (skillName && !baseSkills.includes(skillName)) {
-      featureSkills.push(skillName)
-    }
-  }
-  copiedFiles.push(...await copySkills(templatesDir, featureSkills, projectPath))
+  copiedFiles.push(...await copySkills(templatesDir, compatibleSkillNames, projectPath))
 
   // 复制桥接文件
   copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, true, appType))

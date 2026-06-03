@@ -1,0 +1,184 @@
+{{#if features.ai}}import type { AIConfigInput } from '@h-ai/ai'
+{{/if}}{{#if features.cache}}import type { CacheConfigInput } from '@h-ai/cache'
+{{/if}}{{#if features.iam}}import type { IamConfigInput } from '@h-ai/iam'
+{{/if}}{{#if features.crypto}}import type { ServConfig } from '@h-ai/serv'
+{{/if}}{{#if features.storage}}import type { StorageConfigInput } from '@h-ai/storage'
+{{/if}}{{#if features.ai}}import { ai, AIConfigSchema } from '@h-ai/ai'
+{{/if}}{{#if features.cache}}import { cache, CacheConfigSchema } from '@h-ai/cache'
+{{/if}}import { core } from '@h-ai/core'
+{{#if features.crypto}}import { crypto } from '@h-ai/crypto'
+{{/if}}{{#if features.iam}}import { iam, IamConfigSchema } from '@h-ai/iam'
+{{/if}}{{#if features.db}}import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+{{/if}}import { ServConfigSchema } from '@h-ai/serv'
+{{#if features.storage}}import { storage, StorageConfigSchema } from '@h-ai/storage'
+{{/if}}{{#if features.vecdb}}import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+{{/if}}
+
+{{#if features.db}}type DbConfigInput = Parameters<typeof reldb.init>[0]
+{{/if}}{{#if features.vecdb}}type VecdbConfigInput = Parameters<typeof vecdb.init>[0]
+{{/if}}
+
+let initialized = false
+let initPromise: Promise<void> | null = null
+{{#if features.crypto}}let cryptoInitialized = false
+{{/if}}
+
+export async function initApp(): Promise<void> {
+  if (initialized)
+    return
+  if (initPromise)
+    return initPromise
+
+  initPromise = doInit()
+  try {
+    await initPromise
+    initialized = true
+  }
+  finally {
+    initPromise = null
+  }
+}
+
+async function doInit(): Promise<void> {
+  core.init({
+    configDir: './config',
+    logging: { level: 'info' },
+  })
+
+  const servValidation = core.config.validate('serv', ServConfigSchema)
+  if (!servValidation.success) {
+    throw new Error(`Serv config invalid: ${servValidation.error.message}`)
+  }
+{{#if features.crypto}}
+  const servConfig = core.config.getOrThrow<ServConfig>('serv')
+  if (servConfig.transport !== false) {
+    const cryptoResult = await crypto.init()
+    if (!cryptoResult.success) {
+      throw new Error(`Crypto initialization failed: ${cryptoResult.error.message}`)
+    }
+    cryptoInitialized = true
+  }
+{{/if}}{{#if features.db}}
+
+  const dbValidation = core.config.validate('db', ReldbConfigSchema)
+  if (!dbValidation.success) {
+    throw new Error(`DB config invalid: ${dbValidation.error.message}`)
+  }
+{{/if}}{{#if features.cache}}
+
+  const cacheValidation = core.config.validate('cache', CacheConfigSchema)
+  if (!cacheValidation.success) {
+    throw new Error(`Cache config invalid: ${cacheValidation.error.message}`)
+  }
+{{/if}}{{#if features.vecdb}}
+
+  const vecdbValidation = core.config.validate('vecdb', VecdbConfigSchema)
+  if (!vecdbValidation.success) {
+    throw new Error(`VecDB config invalid: ${vecdbValidation.error.message}`)
+  }
+{{/if}}{{#if features.iam}}
+
+  const iamValidation = core.config.validate('iam', IamConfigSchema)
+  if (!iamValidation.success) {
+    throw new Error(`IAM config invalid: ${iamValidation.error.message}`)
+  }
+{{/if}}{{#if features.storage}}
+
+  const storageValidation = core.config.validate('storage', StorageConfigSchema)
+  if (!storageValidation.success) {
+    throw new Error(`Storage config invalid: ${storageValidation.error.message}`)
+  }
+{{/if}}{{#if features.ai}}
+
+  const aiValidation = core.config.validate('ai', AIConfigSchema)
+  if (!aiValidation.success) {
+    throw new Error(`AI config invalid: ${aiValidation.error.message}`)
+  }
+{{/if}}{{#if features.db}}
+
+  const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
+{{/if}}{{#if features.cache}}  const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
+{{/if}}{{#if features.vecdb}}  const vecdbConfig = core.config.getOrThrow<VecdbConfigInput>('vecdb')
+{{/if}}{{#if features.iam}}  const iamConfig = core.config.getOrThrow<IamConfigInput>('iam')
+{{/if}}{{#if features.storage}}  const storageConfig = core.config.getOrThrow<StorageConfigInput>('storage')
+{{/if}}{{#if features.ai}}  const aiConfig = core.config.getOrThrow<AIConfigInput>('ai')
+{{/if}}{{#if features.db}}
+
+  if (dbConfig.type === 'sqlite') {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const dbDir = path.dirname(dbConfig.database)
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true })
+    }
+  }
+
+  const dbResult = await reldb.init(dbConfig)
+  if (!dbResult.success) {
+    throw new Error(`Database initialization failed: ${dbResult.error.message}`)
+  }
+{{/if}}{{#if features.cache}}
+
+  const cacheResult = await cache.init(cacheConfig)
+  if (!cacheResult.success) {
+    throw new Error(`Cache initialization failed: ${cacheResult.error.message}`)
+  }
+{{/if}}{{#if features.vecdb}}
+
+  const vecdbResult = await vecdb.init(vecdbConfig)
+  if (!vecdbResult.success) {
+    throw new Error(`VecDB initialization failed: ${vecdbResult.error.message}`)
+  }
+{{/if}}{{#if features.iam}}
+
+  const iamResult = await iam.init(iamConfig)
+  if (!iamResult.success) {
+    throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
+  }
+{{/if}}{{#if features.storage}}
+
+  const storageResult = await storage.init(storageConfig)
+  if (!storageResult.success) {
+    throw new Error(`Storage initialization failed: ${storageResult.error.message}`)
+  }
+{{/if}}{{#if features.ai}}
+
+  const aiResult = await ai.init(aiConfig)
+  if (!aiResult.success) {
+    throw new Error(`AI initialization failed: ${aiResult.error.message}`)
+  }
+{{/if}}
+
+  core.logger.info('API service initialized')
+}
+
+export async function closeApp(): Promise<void> {
+  if (!initialized && !initPromise)
+    return
+
+  const closers: Array<readonly [string, () => unknown]> = [
+{{#if features.ai}}    ['ai', () => ai.close()],
+{{/if}}{{#if features.storage}}    ['storage', () => storage.close()],
+{{/if}}{{#if features.iam}}    ['iam', () => iam.close()],
+{{/if}}{{#if features.vecdb}}    ['vecdb', () => vecdb.close()],
+{{/if}}{{#if features.cache}}    ['cache', () => cache.close()],
+{{/if}}{{#if features.db}}    ['reldb', () => reldb.close()],
+{{/if}}  ]
+{{#if features.crypto}}  if (cryptoInitialized) {
+    closers.push(['crypto', () => crypto.close()])
+  }
+{{/if}}
+
+  for (const [name, close] of closers) {
+    try {
+      await close()
+    }
+    catch (error) {
+      core.logger.warn(`Module close failed: ${name}`, { error })
+    }
+  }
+
+  initialized = false
+{{#if features.crypto}}  cryptoInitialized = false
+{{/if}}  core.logger.info('API service closed')
+}

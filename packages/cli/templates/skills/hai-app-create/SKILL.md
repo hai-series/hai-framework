@@ -6,6 +6,7 @@ description: 以 TDD 方式在应用中创建新功能：先编写测试定义�
 # hai-app-create — TDD 驱动的应用功能创建规范
 
 > 面向 AI 助手的应用功能创建指南。**必须遵循 TDD**：先写测试（Red）→ 再实现（Green）→ 再重构（Refactor）。
+> 若目标是纯 API service workspace，优先围绕 `apps/*-contract`、`apps/*-service` 与测试组织改动，而不是套用页面/路由脚手架。
 
 ---
 

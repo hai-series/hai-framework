@@ -15,6 +15,7 @@
     "build": "pnpm lint && turbo run build",
     "check:leak-words": "node scripts/check-leak-words.mjs --staged",
     "dev": "turbo run dev",
+    "e2e": "turbo run test:e2e --concurrency=1 --filter=@h-ai/cli --filter=admin-console --filter=corporate-website --filter=h5-app --filter=mobile-app",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "test": "turbo run test --concurrency=1",

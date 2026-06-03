@@ -1,11 +1,11 @@
 ---
 name: hai-create-app
-description: "Use when: creating a new SvelteKit application, adding routes, adding pages, adding API endpoints, scaffold app, new app feature, mobile app, H5 app, admin console. 在 hai-framework 中创建或扩展 SvelteKit 应用，包含路由、API 端点、i18n、UI 组件集成、服务层等脚手架代码。"
+description: "Use when: creating or extending apps in hai-framework, adding routes, pages, API endpoints, service workspaces, mobile app, H5 app, admin console. 在 hai-framework 中创建或扩展应用或 API service workspace，包含路由、API 端点、typed contract、服务层与 UI 脚手架代码。"
 ---
 
 # hai-create-app — 应用创建与扩展规范
 
-> 面向 AI 助手的 SvelteKit 应用开发指南。适用于 `apps/` 下的所有应用。
+> 面向 AI 助手的应用开发指南。适用于 `apps/` 下的 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace。
 
 ## §0 如何使用本文档
 

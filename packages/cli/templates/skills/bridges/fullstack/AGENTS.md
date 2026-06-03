@@ -1,6 +1,28 @@
 # AGENTS.md
 
-> Fullstack 多包工程 AI 编程助手入口。详细 Skill 文件位于 `.agents/skills/`。
+> Fullstack 多包工程 AI 编程助手入口。优先结合 `README.md`、`.agents/skills/`、根工作区脚本、`packages/*`、`apps/*` 与 e2e 工作。
+
+## 行为契约
+
+1. 每次响应第一行写：`规模: XS|S|M|L — <一句话意图>`。
+2. 任务规模 ≥ M 时，先回顾相关 package、app、workspace 脚本、测试与 `.agents/skills/*/SKILL.md`。
+3. 在写第一行新代码前，用 1 行回答 Q1-Q7 必要性自检。
+4. 任务规模 ≥ M 时，说明将影响的 contract、serv、shared、各前端、测试、README 和发布脚本。
+
+## 必要性自检（M / L 任务必须输出）
+
+- Q1：已有 contract、procedure、shared client、跨端组件或脚本是否可复用？
+- Q2：能否扩展现有 `packages/*` / `apps/*`，而不是新建重复 package、adapter 或 wrapper？
+- Q3：当前真实调用点是哪些 package、app、页面或部署流程？
+- Q4：能否用更少的 workspace package、导出层或前端改动解决？
+- Q5：是否把服务端实现、数据库细节或原生桥接泄漏给调用方？
+- Q6：是否与现有 workspace 结构、脚本、契约与 i18n 分工一致？
+- Q7：是否比较过更高效或更安全的跨端协作方式？
+
+## 影响分析（M / L 任务必须输出）
+
+- 直接影响：哪些 `packages/<project>-contract`、`packages/<project>-serv`、`packages/<project>-shared`、`apps/<project>-*`、README、测试、打包脚本会变。
+- 间接影响：哪些 workspace 依赖、typed client、Capacitor/Tauri 配置、i18n 编译和 e2e 需要同步。
 
 ## 项目概述
 
@@ -15,13 +37,22 @@
 
 前端只做 UI 与请求编排；后端业务逻辑放在 `packages/<project>-serv`，不要写进前端组件。
 
-## 核心规范
+## 架构边界
 
 - Contract、serv、shared、各端页面必须同步演进。
 - 公共 API 返回 `HaiResult<T>`，错误直接透传，不重新包装。
 - 用户可见文本走 i18n：shared 放跨端文案，各 app 放本端文案。
 - 移动端 token 使用 Capacitor 安全存储；Web 使用 httpOnly cookie；桌面端按 Tauri 安全边界配置。
-- 代码注释中文，日志消息英文；禁止 `any`、`console.log`、硬编码密钥。
+- Web / App / Desktop 前端不承载后端业务逻辑；服务端逻辑统一放在 `packages/<project>-serv`。
+- 共享 UI、typed API client、主题与语言切换放在 `packages/<project>-shared`。
+- 本样板默认不使用 `@h-ai/kit`；不要把 fullstack 后端逻辑写回 SvelteKit 式 `load` / route 模式。
+
+## 工作流程
+
+1. 先搜索相关 package、app、workspace 脚本、测试和 README。
+2. 修改 contract / serv / shared 后，全局检索并同步所有 `packages/*` 和 `apps/*`。
+3. 修改 Web / App / Desktop 页面时，同步对应 README、messages 和测试。
+4. 涉及发布或原生壳时，同时检查根脚本、Capacitor/Tauri 配置与 e2e。
 
 ## 质量门禁
 
@@ -45,3 +76,9 @@ pnpm package
 - 修改 contract / serv / shared 后，全局检索并同步所有 `packages/*` 和 `apps/*`。
 - 修改 Web/App/Desktop 页面时，同步对应 README、messages 和测试。
 - 最终回复说明门禁状态、未执行项原因、已同步文档和依赖方。
+
+## 优先 Skills
+
+- `hai-build`、`hai-app-review`、`hai-app-tests`
+- `hai-core`、`hai-ui`、`hai-serv`、`hai-api-contract`、`hai-api-client`、`hai-capacitor`
+- 其它 `hai-*` 模块按需读取

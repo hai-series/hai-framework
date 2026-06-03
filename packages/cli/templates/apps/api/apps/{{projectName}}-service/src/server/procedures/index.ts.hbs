@@ -1,0 +1,18 @@
+import type { AppProcedureDeps } from './app-procedures.js'
+{{#if features.ai}}import { ai } from '@h-ai/ai'
+{{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
+{{/if}}{{#if features.ai}}import { createAiProcedures } from '@h-ai/serv/features/ai'
+{{/if}}{{#if features.iam}}import { createIamProcedures } from '@h-ai/serv/features/iam'
+{{/if}}{{#if features.storage}}import { createStorageProcedures } from '@h-ai/serv/features/storage'
+import { storage } from '@h-ai/storage'
+{{/if}}import { createAppProcedures } from './app-procedures.js'
+
+/** 创建应用级 procedures 聚合。 */
+export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDeps }) {
+  return {
+{{#if features.iam}}    iam: createIamProcedures({ iam }),
+{{/if}}{{#if features.storage}}    storage: createStorageProcedures({ storage }),
+{{/if}}{{#if features.ai}}    ai: createAiProcedures({ ai }),
+{{/if}}    app: createAppProcedures(deps.app),
+  }
+}

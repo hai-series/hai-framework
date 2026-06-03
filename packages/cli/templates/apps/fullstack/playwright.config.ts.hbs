@@ -1,6 +1,39 @@
 import process from 'node:process'
 import { defineConfig } from '@playwright/test'
 
+const defaultBaseURL = '{{#if fullstack.e2eFrontend}}http://127.0.0.1:{{fullstack.e2eFrontend.port}}{{else}}http://127.0.0.1:3000{{/if}}'
+const defaultServiceBaseURL = 'http://127.0.0.1:3000'
+const baseURL = process.env.BASE_URL || defaultBaseURL
+const frontendHost = resolveHostFromBaseUrl(baseURL, '127.0.0.1')
+const frontendPort = resolvePortFromBaseUrl(baseURL, '{{#if fullstack.e2eFrontend}}{{fullstack.e2eFrontend.port}}{{else}}3000{{/if}}')
+const serviceBaseURL = process.env.SERVICE_BASE_URL || defaultServiceBaseURL
+const serviceHost = resolveHostFromBaseUrl(serviceBaseURL, '127.0.0.1')
+const servicePort = resolvePortFromBaseUrl(serviceBaseURL, '3000')
+
+function resolveHostFromBaseUrl(urlString: string, fallbackHost: string): string {
+  try {
+    const url = new URL(urlString)
+    return url.hostname || fallbackHost
+  }
+  catch {
+    return fallbackHost
+  }
+}
+
+function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string {
+  try {
+    const url = new URL(urlString)
+    if (url.port) {
+      return url.port
+    }
+
+    return url.protocol === 'https:' ? '443' : '80'
+  }
+  catch {
+    return fallbackPort
+  }
+}
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -10,7 +43,7 @@ export default defineConfig({
   reporter: 'list',
   timeout: 30_000,
   use: {
-    baseURL: '{{#if fullstack.e2eFrontend}}http://127.0.0.1:{{fullstack.e2eFrontend.port}}{{else}}http://127.0.0.1:3000{{/if}}',
+    baseURL,
     channel: 'chrome',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
@@ -19,14 +52,18 @@ export default defineConfig({
     {
       name: '{{fullstack.servPackageName}}',
       command: 'pnpm --filter {{fullstack.servPackageName}} start',
-      url: 'http://127.0.0.1:3000/health',
+      env: {
+        HOST: serviceHost,
+        PORT: servicePort,
+      },
+      url: `${serviceBaseURL}/health`,
       reuseExistingServer: false,
       timeout: 120_000,
     }{{#if fullstack.e2eFrontend}},
     {
       name: '{{fullstack.e2eFrontend.packageName}}',
-      command: 'pnpm --filter {{fullstack.e2eFrontend.packageName}} preview',
-      url: 'http://127.0.0.1:{{fullstack.e2eFrontend.port}}',
+      command: `pnpm --filter {{fullstack.e2eFrontend.packageName}} exec vite preview --host ${frontendHost} --port ${frontendPort} --strictPort`,
+      url: baseURL,
       reuseExistingServer: false,
       timeout: 120_000,
     }{{/if}},
