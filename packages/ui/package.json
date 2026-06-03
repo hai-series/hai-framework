@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/ui",
   "type": "module",
-  "version": "0.1.0-alpha.20",
+  "version": "0.1.0-alpha.21",
   "description": "Hai Framework UI component library for Svelte 5 Runes.",
   "license": "Apache-2.0",
   "svelte": "./dist/index.js",
