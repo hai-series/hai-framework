@@ -1097,7 +1097,7 @@
       <thead>
         <tr>
           {#each tableColumns as column (column.key)}
-            <th>{column.label}</th>
+            <th title={column.label}>{column.label}</th>
           {/each}
           {#if editable}
             <th class='hai-ai-table-action-head'>{uiM('data_table_actions')}</th>
@@ -1122,11 +1122,13 @@
               ondrop={event => handleRowDrop(row.row_id, event)}
             >
               {#each tableColumns as column (column.key)}
+                {@const cellInputValue = getCellInputValue(row, column.key)}
                 <td>
                   <input
                     class={resolveCellInputClass(column.type)}
                     type={column.type === 'number' ? 'number' : 'text'}
-                    value={getCellInputValue(row, column.key)}
+                    value={cellInputValue}
+                    title={cellInputValue}
                     disabled={!editable}
                     oninput={event => handleCellInput(row.row_id, column, event)}
                   />

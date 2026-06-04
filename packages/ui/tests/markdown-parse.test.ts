@@ -225,8 +225,16 @@ describe('parseMarkdown - 表格', () => {
     const html = parseMarkdown(md)
     expect(html).toContain('hai-md-table-wrap')
     expect(html).toContain('<table>')
-    expect(html).toContain('<th>')
-    expect(html).toContain('<td>')
+    expect(html).toContain('<th title="A">')
+    expect(html).toContain('<td title="1">')
+  })
+
+  it('adds title attributes to table cells', () => {
+    const md = '| A | B |\n| --- | --- |\n| long cell | value "quoted" |'
+    const html = parseMarkdown(md)
+    expect(html).toContain('<th title="A">')
+    expect(html).toContain('<td title="long cell">')
+    expect(html).toContain('<td title="value &quot;quoted&quot;">')
   })
 })
 
