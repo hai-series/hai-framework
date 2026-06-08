@@ -52,9 +52,9 @@
   },
   "peerDependencies": {
     "@sveltejs/adapter-node": "catalog:",
-    "@sveltejs/adapter-static": "^3.0.0",
-    "@sveltejs/kit": "^2.53.4",
-    "svelte": "^5.53.6"
+    "@sveltejs/adapter-static": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "svelte": "catalog:"
   },
   "peerDependenciesMeta": {
     "@sveltejs/adapter-node": {

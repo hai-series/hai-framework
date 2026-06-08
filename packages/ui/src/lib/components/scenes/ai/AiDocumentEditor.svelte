@@ -36,6 +36,7 @@
   import { resolveDocumentMarkdownContent } from './document-download.js'
   import { renderMarkdownDocument } from './document-parse.js'
   import { parseMarkdown } from './markdown-parse.js'
+  import { renderMermaidDiagram } from './mermaid-render.js'
 
   interface SelectionToolbarPosition {
     /** 选区工具条相对滚动容器的 top 坐标。 */
@@ -471,6 +472,7 @@
 
     requestAnimationFrame(() => {
       syncCodePreviewHosts()
+      syncMermaidHosts()
       syncActiveHeadingFromScroll()
       syncPinnedTitleVisibility()
     })
@@ -909,6 +911,15 @@
       ? `<p class="hai-md-preview-desc">${escapePreviewText(result.description)}</p>`
       : ''
 
+    if (result.kind === 'mermaid') {
+      host.innerHTML = `<div class="hai-md-preview-card hai-md-preview-mermaid"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<div class="hai-md-mermaid hai-md-mermaid-preview"></div></div>`
+      const mermaidEl = host.querySelector<HTMLElement>('.hai-md-mermaid-preview')
+      if (mermaidEl) {
+        void renderMermaidHost(mermaidEl, result.content)
+      }
+      return
+    }
+
     if (result.kind === 'html') {
       const previewSandbox = escapePreviewAttribute(
         resolvePreviewSandbox(result.allowScripts),
@@ -929,6 +940,55 @@
     }
 
     host.innerHTML = `<div class="hai-md-preview-card"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<pre>${escapePreviewText(result.content)}</pre></div>`
+  }
+
+  /**
+   * mermaid 图表位于 `{@html}` 注入的 DOM 内部，渲染是异步的。
+   * 阅读态的图表块和 code 模式预览槽都复用这里把源码渲染为 SVG。
+   */
+  function syncMermaidHosts(): void {
+    if (!previewHost) {
+      return
+    }
+
+    const hosts = previewHost.querySelectorAll<HTMLElement>('[data-mermaid-host]')
+    for (const host of hosts) {
+      if (
+        host.dataset.mermaidStatus === 'ready'
+        || host.dataset.mermaidStatus === 'rendering'
+      ) {
+        continue
+      }
+
+      const blockId = host.dataset.mermaidHost
+      if (!blockId) {
+        continue
+      }
+
+      const block = lookupCodeBlock(blockId)
+      if (!block) {
+        continue
+      }
+
+      void renderMermaidHost(host, block.code)
+    }
+  }
+
+  /**
+   * 把单个 mermaid 源码渲染进目标节点；语法错误时展示本地化错误提示。
+   * `mermaidStatus` 既避免同一帧重复渲染，也兜住多次 effect 触发。
+   */
+  async function renderMermaidHost(host: HTMLElement, code: string): Promise<void> {
+    host.dataset.mermaidStatus = 'rendering'
+    try {
+      const svg = await renderMermaidDiagram(code)
+      host.innerHTML = svg
+      host.dataset.mermaidStatus = 'ready'
+    }
+    catch (error) {
+      host.dataset.mermaidStatus = 'error'
+      host.innerHTML = `<div class="hai-md-mermaid-error">${escapePreviewText(error instanceof Error ? error.message : uiM('markdown_mermaid_failed'))}</div>`
+    }
   }
 
   function escapePreviewText(value: string): string {
@@ -4416,6 +4476,48 @@
     padding: 1rem;
     background: oklch(var(--b1));
     color: oklch(var(--bc));
+  }
+
+  /* mermaid 图表：阅读态自动渲染，code 预览态复用同一容器。 */
+  .hai-markdown :global(.hai-md-mermaid) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1.25em 0;
+    padding: 1rem;
+    border-radius: 0.95rem;
+    border: 1px solid oklch(var(--bc) / 0.08);
+    background: oklch(var(--b1));
+    overflow-x: auto;
+  }
+
+  .hai-markdown :global(.hai-md-mermaid svg) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .hai-markdown :global(.hai-md-mermaid-error) {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0.6rem;
+    background: oklch(var(--er, 0.6 0.2 25) / 0.08);
+    color: oklch(var(--er, 0.6 0.2 25));
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    text-align: left;
+  }
+
+  :global(.hai-md-preview-mermaid) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  :global(.hai-md-mermaid-preview) {
+    margin: 0;
+    border: none;
+    background: transparent;
   }
 
   .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview'] .hai-md-preview-card) {

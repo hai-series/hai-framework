@@ -104,6 +104,27 @@ describe('createBuiltInCodePreview', () => {
     expect(preview?.content).toContain('<\\/script>')
     expect(preview?.allowScripts).toBe(true)
   })
+
+  it('mermaid 无需风险开关即可走内置预览，且不放开脚本执行', () => {
+    const preview = createBuiltInCodePreview(
+      {
+        blockId: 'code-6',
+        code: 'flowchart TD\n  A --> B',
+        language: 'mermaid',
+        sourceKind: 'code',
+      },
+      {
+        previewTitle: 'Preview',
+      },
+    )
+
+    expect(preview).toEqual({
+      kind: 'mermaid',
+      title: 'Preview',
+      content: 'flowchart TD\n  A --> B',
+    })
+    expect(preview?.allowScripts).toBeUndefined()
+  })
 })
 
 describe('resolvePreviewSandbox', () => {

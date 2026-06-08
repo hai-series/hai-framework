@@ -19,4 +19,28 @@ describe('renderMarkdownDocument', () => {
       },
     ])
   })
+
+  it('阅读态把 mermaid 代码块渲染为自动渲染占位，并保留源码到 codeBlocks', () => {
+    const result = renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```')
+
+    expect(result.html).toContain('hai-md-mermaid')
+    expect(result.html).toContain('data-mermaid-host="hai-md-code-1"')
+    expect(result.html).not.toContain('hai-md-code-block')
+    expect(result.codeBlocks).toEqual([
+      {
+        id: 'hai-md-code-1',
+        code: 'flowchart TD\n  A --> B',
+        language: 'mermaid',
+      },
+    ])
+  })
+
+  it('code/preview 切换模式下 mermaid 仍走代码块渲染以保留源码视图', () => {
+    const result = renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```', {
+      showCodePreviewToggle: true,
+    })
+
+    expect(result.html).toContain('hai-md-code-block')
+    expect(result.html).not.toContain('data-mermaid-host')
+  })
 })

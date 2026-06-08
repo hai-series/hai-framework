@@ -109,4 +109,33 @@ test.describe('Transport enabled E2E', () => {
 
     expect(page.url()).toContain('/admin/iam/roles')
   })
+
+  test('renders Mermaid document/code demos in UI gallery scenes with transport enabled', async ({ page }) => {
+    await page.goto('/auth/login')
+    await expect(page.locator('#login-username')).toBeVisible({ timeout: 10_000 })
+
+    await page.locator('#login-username').fill(DEFAULT_ADMIN.username)
+    await page.locator('input[type="password"]').first().fill(DEFAULT_ADMIN.password)
+    await Promise.all([
+      page.waitForURL('**/admin**', { timeout: 15_000 }),
+      page.locator('button[type="submit"]').click(),
+    ])
+
+    await page.goto('/admin/ui-gallery/scenes')
+    await page.waitForLoadState('domcontentloaded')
+
+    await expect(page.getByText('AiDocumentEditor · Mermaid 文档')).toBeVisible()
+    await expect(page.getByText('AiDocumentEditor · Mermaid 代码')).toBeVisible()
+
+    const documentDemo = page.getByTestId('mermaid-document-demo')
+    await expect(documentDemo).toBeVisible()
+    await expect(documentDemo.locator('.hai-md-mermaid svg').first()).toBeVisible({ timeout: 15_000 })
+
+    const codeDemo = page.getByTestId('mermaid-code-demo')
+    await expect(codeDemo).toBeVisible()
+    await expect(codeDemo.locator('code')).toContainText('stateDiagram-v2')
+
+    await codeDemo.locator('[data-code-view-toggle][data-code-view="preview"]').first().click()
+    await expect(codeDemo.locator('.hai-md-mermaid-preview svg')).toBeVisible({ timeout: 15_000 })
+  })
 })

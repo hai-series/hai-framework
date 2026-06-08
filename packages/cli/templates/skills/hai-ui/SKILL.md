@@ -5,7 +5,7 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 
 # hai-ui
 
-> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题、内置中英文 i18n、自动导入。内置 Shiki 代码高亮、Design Token 系统和 7 个移动端组件。
+> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题、内置中英文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
 
 ---
 
@@ -23,6 +23,7 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 - 使用 IAM 场景组件（登录/注册/密码/权限守卫/用户资料表单）
 - 使用 Storage 场景组件（文件上传/图片上传/头像上传/文件列表）
 - 使用 CRUD 场景组件（列表过滤、详情抽屉、编辑抽屉、删除确认）
+- 渲染 AI 输出（Markdown / Mermaid 文档、代码产物预览）
 - 配置主题切换与 i18n 多语言
 - 多端平台检测与适配
 
@@ -316,10 +317,15 @@ const p = usePlatform()
 | -------------------- | --------------------------------- |
 | `MarkdownRenderer`   | Markdown 渲染（内置 Shiki 高亮） |
 | `AiDocumentDownloadMenu` | AI 文档下载菜单              |
-| `AiDocumentEditor`   | AI 文档编辑器（支持受控代码预览） |
+| `AiDocumentEditor`   | AI 文档编辑器（支持 Mermaid 与受控代码预览） |
 | `AiTableEditor`      | AI 表格编辑器                    |
 
 > AI 场景组件使用 Shiki（纯 ESM）进行代码高亮，支持 27 种语言，通过 CSS 变量 `--hai-hl-*` 自定义颜色。无需额外安装 Shiki，已内置。`AiDocumentEditor` 默认只允许 Markdown 内置预览；HTML / JS / CSS 等高风险预览需要显式启用 `allowUnsafeCodePreview`，或通过 `oncoderun` 返回受控的预览结果。
+>
+> Mermaid 开箱即用：
+> - `sourceKind='document'` 时，文档中的 ```` ```mermaid ```` 代码块会在阅读态自动渲染为图表；
+> - `sourceKind='code'` + `showCodePreviewToggle` 时，可在「代码 / 预览」之间切换查看 Mermaid 图表；
+> - Mermaid 以 `securityLevel: 'strict'` 渲染为消毒后的 SVG，无需开启 `allowUnsafeCodePreview`。
 
 #### CRUD 场景组件
 

@@ -223,6 +223,58 @@ server.listen(3000, () => {
     '> 选中文本后可接入改写、批注等 AI 操作。',
   ].join('\n')
 
+  // === 含 Mermaid 图表的文档示例 ===
+  const aiMermaidDocumentContent = [
+    '# 订单履约流程设计',
+    '',
+    '## 流程总览',
+    '',
+    '下面的流程图展示了订单从创建到履约的关键节点：',
+    '',
+    '```mermaid',
+    'flowchart TD',
+    '  A[用户下单] --> B{库存校验}',
+    '  B -->|充足| C[锁定库存]',
+    '  B -->|不足| D[触发补货]',
+    '  C --> E[创建履约单]',
+    '  E --> F[仓库拣货]',
+    '  F --> G[物流配送]',
+    '  G --> H[确认收货]',
+    '```',
+    '',
+    '## 服务交互时序',
+    '',
+    '核心服务之间的调用顺序如下：',
+    '',
+    '```mermaid',
+    'sequenceDiagram',
+    '  participant U as 用户',
+    '  participant O as 订单服务',
+    '  participant I as 库存服务',
+    '  participant P as 支付服务',
+    '  U->>O: 提交订单',
+    '  O->>I: 校验并锁定库存',
+    '  I-->>O: 锁定成功',
+    '  O->>P: 发起支付',
+    '  P-->>O: 支付完成',
+    '  O-->>U: 返回下单结果',
+    '```',
+    '',
+    '> Mermaid 代码块会在阅读态自动渲染为图表。',
+  ].join('\n')
+
+  // === Mermaid 代码产物示例（code 模式，支持代码/预览切换） ===
+  const aiMermaidCodeContent = [
+    'stateDiagram-v2',
+    '  [*] --> 待支付',
+    '  待支付 --> 已支付: 支付成功',
+    '  待支付 --> 已取消: 超时或取消',
+    '  已支付 --> 履约中: 仓库接单',
+    '  履约中 --> 已完成: 确认收货',
+    '  已完成 --> [*]',
+    '  已取消 --> [*]',
+  ].join('\n')
+
   // === 示例数据 ===
   const demoUser = {
     id: '1',
@@ -326,6 +378,47 @@ server.listen(3000, () => {
                 { row_id: 'r3', metric: '退款率', value: 1.8, trend: '下降' },
               ],
             }}
+          />
+        </div>
+      </Card>
+    </div>
+
+    <!-- Ai 文档 Mermaid 图表示例 -->
+    <div class='grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6'>
+      <Card bordered>
+        <div class='flex items-center gap-2 mb-5'>
+          <Badge variant='success' size='sm'>AiDocumentEditor · Mermaid 文档</Badge>
+          <span class='text-sm text-base-content/60'>文档中的 Mermaid 代码块在阅读态自动渲染为图表</span>
+        </div>
+        <div class='h-104 min-h-0' data-testid='mermaid-document-demo'>
+          <AiDocumentEditor
+            title='订单履约流程设计'
+            content={aiMermaidDocumentContent}
+            sourceKind='document'
+            showToolbar
+            showOutline
+            showCopyButton
+            class='h-full'
+          />
+        </div>
+      </Card>
+
+      <Card bordered>
+        <div class='flex items-center gap-2 mb-5'>
+          <Badge variant='success' size='sm'>AiDocumentEditor · Mermaid 代码</Badge>
+          <span class='text-sm text-base-content/60'>code 模式下切换“代码 / 预览”查看图表渲染结果</span>
+        </div>
+        <div class='h-104 min-h-0' data-testid='mermaid-code-demo'>
+          <AiDocumentEditor
+            title='订单状态机'
+            content={aiMermaidCodeContent}
+            sourceKind='code'
+            codeLanguage='mermaid'
+            showCodePreviewToggle
+            showCopyButton
+            showOutline={false}
+            codePreviewHint='切换查看图表'
+            class='h-full'
           />
         </div>
       </Card>

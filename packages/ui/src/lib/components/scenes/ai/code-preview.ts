@@ -1,4 +1,5 @@
 import type { MarkdownCodeRunRequest, MarkdownCodeRunResult } from './document-types.js'
+import { isMermaidLanguage } from './mermaid-render.js'
 
 const HTML_DOCUMENT_PATTERN = /<\s*(?:!doctype|html|body|head|div|section|article|main|span|style|script|svg|canvas)\b/i
 
@@ -31,6 +32,15 @@ export function createBuiltInCodePreview(
   options: BuiltInCodePreviewOptions,
 ): MarkdownCodeRunResult | undefined {
   const language = (request.language ?? '').trim().toLowerCase()
+
+  // mermaid 由 securityLevel:'strict' 渲染为消毒后的 SVG，无需 opt-in 高风险开关。
+  if (isMermaidLanguage(language)) {
+    return {
+      kind: 'mermaid',
+      title: options.previewTitle,
+      content: request.code,
+    }
+  }
 
   if (language === 'markdown' || language === 'md') {
     return {

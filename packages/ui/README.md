@@ -267,6 +267,8 @@ components/
 | `AiTableEditor`          | AI 表格编辑器    | `columns`, `rows`, `editable`, `ondownload` |
 
 > `AiDocumentEditor` 默认只允许 Markdown 内置预览。HTML / JS / CSS 等高风险预览需要显式设置 `allowUnsafeCodePreview`，或通过 `oncoderun` 返回受控的预览结果。
+>
+> Mermaid 图表开箱即用：文档（`sourceKind='document'`）里的 ```` ```mermaid ```` 代码块在阅读态自动渲染为图表；code 模式（`sourceKind='code'` + `showCodePreviewToggle`）下可在「代码 / 预览」间切换。Mermaid 以 `securityLevel: 'strict'` 渲染为消毒后的 SVG，无需开启 `allowUnsafeCodePreview`。
 
 #### CRUD 场景（5 个）
 

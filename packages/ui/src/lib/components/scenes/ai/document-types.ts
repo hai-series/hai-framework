@@ -38,7 +38,7 @@ export interface MarkdownCodeRunRequest {
 
 export interface MarkdownCodeRunResult {
   /** Output kind that drives preview rendering. */
-  kind?: 'text' | 'markdown' | 'html'
+  kind?: 'text' | 'markdown' | 'html' | 'mermaid'
   /** Preview output content. */
   content: string
   /** Preview title; default text is used when omitted. */

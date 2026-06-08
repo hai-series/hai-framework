@@ -12,6 +12,7 @@ import {
   extractPlainTextFromTokens,
 } from './editor-markdown-extensions.js'
 import { highlightCode, isLanguageSupported } from './highlight.js'
+import { isMermaidLanguage } from './mermaid-render.js'
 
 export interface MarkdownDocumentParseOptions {
   /** Whether to enable syntax highlighting for code blocks. */
@@ -163,6 +164,19 @@ function createRendererObject(
     code({ text, lang }: Tokens.Code): string {
       // rawLanguage is the original info string from the fence.
       const rawLanguage = lang?.trim() || ''
+
+      // mermaid 块在阅读态自动渲染为图表；只有 code 模式的代码/预览切换才保留源码视图。
+      if (isMermaidLanguage(rawLanguage) && !options.showCodePreviewToggle) {
+        const mermaidBlockId = `hai-md-code-${state.codeBlocks.length + 1}`
+        state.codeBlocks.push({
+          id: mermaidBlockId,
+          code: text,
+          language: rawLanguage,
+        })
+
+        return `<div class="hai-md-mermaid" data-mermaid-host="${escapeHtml(mermaidBlockId)}"></div>`
+      }
+
       // highlightLanguage is validated against supported languages.
       const highlightLanguage = rawLanguage && isLanguageSupported(rawLanguage)
         ? rawLanguage

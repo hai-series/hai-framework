@@ -44,7 +44,7 @@
     "clean": "rimraf dist .turbo"
   },
   "peerDependencies": {
-    "svelte": "^5.55.5"
+    "svelte": "catalog:"
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
@@ -54,6 +54,7 @@
     "html2canvas": "catalog:",
     "jspdf": "catalog:",
     "marked": "catalog:",
+    "mermaid": "catalog:",
     "shiki": "catalog:",
     "tailwind-merge": "catalog:"
   },

@@ -1,0 +1,125 @@
+---
+name: hai-ui
+description: "Use when: building UI with @h-ai/ui, including Svelte 5 Runes components, DaisyUI/Bits UI integration, forms, tables, dialogs, mobile components, theme switching, Markdown/AI output rendering, and Mermaid document/code previews. 使用 @h-ai/ui 构建界面、多端组件、主题系统、AI 输出展示与 Mermaid 文档/代码预览时使用。"
+---
+
+# hai-ui — @h-ai/ui 快速指南
+
+`@h-ai/ui` 提供 Svelte 5 Runes 组件库，覆盖 primitives / compounds / scenes 三层组件架构，以及主题、i18n、Toast、平台检测、AI 输出展示等能力。
+
+> 完整安装步骤、全量组件清单与长示例见 `packages/cli/templates/skills/hai-ui/SKILL.md`；本文件保留工作区内最常用的集成要点，避免上下文过重。
+
+## 使用边界
+
+- 浏览器端界面优先复用 `@h-ai/ui` 现有组件，禁止在 app 内重复造轮子。
+- Svelte 组件使用 Svelte 5 Runes（`$state` / `$derived` / `$effect`）。
+- 页面级文案走应用自己的 i18n；`@h-ai/ui` 组件内置文案由 UI 包统一提供。
+- `toast`、类型导入以及 `Range` 需要显式 `import`；其它公开 Svelte 组件可自动导入。
+
+## 必备集成
+
+### Svelte 预处理
+
+```js
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+
+export default {
+  preprocess: [autoImportHaiUi(), vitePreprocess()],
+  compilerOptions: { runes: true },
+}
+```
+
+`autoImportHaiUi()` 必须放在 `vitePreprocess()` 前面。
+
+### Vite / SSR
+
+```ts
+export default defineConfig({
+  plugins: [sveltekit(), tailwindcss()],
+  optimizeDeps: { exclude: ['bits-ui'] },
+  ssr: { noExternal: [/@h-ai\//] },
+})
+```
+
+### 样式导入
+
+```css
+@import 'tailwindcss';
+@import '@h-ai/ui/styles/global.css';
+@import '@h-ai/ui/styles/theme.css';
+@import '@h-ai/ui/styles/design-tokens.css';
+@import '@h-ai/ui/styles/mobile.css';
+
+@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
+@source "../../../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
+```
+
+未配置 `@source` 时，Tailwind 不会扫描 `@h-ai/ui` 组件类名，样式会丢失。
+
+## 常用能力
+
+- primitives：`Button`、`Input`、`Textarea`、`Badge`、`Avatar`、`Spinner` 等。
+- compounds：`Form`、`Modal`、`Drawer`、`DataTable`、`Tabs`、`Combobox`、`DatePicker` 等。
+- mobile：`SafeArea`、`AppBar`、`BottomNav`、`PullRefresh`、`ActionSheet`、`SwipeCell`。
+- scenes：IAM / Storage / CRUD / AI 场景组件。
+
+## AI 场景组件
+
+| 组件 | 用途 |
+| --- | --- |
+| `MarkdownRenderer` | Markdown 渲染（内置 Shiki 代码高亮） |
+| `AiDocumentDownloadMenu` | AI 文档下载菜单 |
+| `AiDocumentEditor` | AI 文档编辑器，支持大纲、复制、代码/预览切换、Mermaid |
+| `AiTableEditor` | AI 结构化表格展示与编辑 |
+
+### AiDocumentEditor 与 Mermaid
+
+- `sourceKind='document'`：文档里的 ```` ```mermaid ```` 代码块会在阅读态自动渲染为图表。
+- `sourceKind='code'` + `codeLanguage='mermaid'` + `showCodePreviewToggle`：保留源码视图，并可切换到 Mermaid 图表预览。
+- Mermaid 使用懒加载 + `securityLevel: 'strict'`，输出为消毒后的 SVG；**不需要** `allowUnsafeCodePreview`。
+- `allowUnsafeCodePreview` 仍只用于 HTML / JS / CSS 等高风险预览。
+
+文档模式示例：
+
+```svelte
+<AiDocumentEditor
+  title="订单履约流程"
+  sourceKind="document"
+  content={`# 流程\n\n\`\`\`mermaid\nflowchart TD\n  A[下单] --> B[发货]\n\`\`\``}
+  showToolbar
+  showOutline
+/>
+```
+
+代码模式示例：
+
+```svelte
+<AiDocumentEditor
+  title="订单状态机"
+  sourceKind="code"
+  codeLanguage="mermaid"
+  content={`stateDiagram-v2\n  [*] --> 待支付\n  待支付 --> 已支付`}
+  showCodePreviewToggle
+  showCopyButton
+  showOutline={false}
+/>
+```
+
+## 主题与平台
+
+- 主题：`applyTheme()`、`getCurrentTheme()`、`isDarkTheme()`。
+- 平台：`detectPlatform()`、`isMobile()`、`isNativeApp()`、`usePlatform()`。
+
+## 重要约定
+
+1. 组件优先复用 `@h-ai/ui`，不要在 app 中重复实现同类组件。
+2. 页面级文案与业务逻辑放在应用层；UI 组件只做展示与交互。
+3. `@h-ai/*` 需纳入 `ssr.noExternal`，否则 SSR 下 Svelte 组件可能无法正确编译。
+4. `{@html}` 只能渲染已清洗的受控内容；`AiDocumentEditor` / `MarkdownRenderer` 已内置安全处理链。
+
+## 相关 Skills
+
+- `hai-kit`：SvelteKit 路由、服务端控制流、端点集成
+- `hai-iam`：认证鉴权 + IAM 场景组件搭配
+- `hai-capacitor`：原生 App 场景（SafeArea / AppBar / BottomNav）
