@@ -210,6 +210,7 @@
     max-height: calc(100vh - clamp(2rem, 5.2vw, 4rem));
     max-height: calc(100dvh - clamp(2rem, 5.2vw, 4rem));
     border-radius: 1.4rem;
+    overflow: hidden;
     color: var(--color-base-content);
     outline: none;
     box-shadow:
@@ -224,6 +225,7 @@
 
   .hai-modal__footer {
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-base-content) 6%, transparent);
+    border-radius: 0 0 1.4rem 1.4rem;
   }
 
   .hai-modal__close {

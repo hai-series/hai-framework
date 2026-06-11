@@ -85,6 +85,9 @@
   crud={userCrud}
   data={crudData}
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
+  form={{ variant: 'drawer', drawerWidth: '40rem' }}
+  density='compact'
+  pagination={{ showSizeChanger: true, showJumper: true }}
   onaftersubmit={handleAfterSubmit}
   {nav}
 >

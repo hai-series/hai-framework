@@ -156,9 +156,10 @@
   "feedback_type_feature": "Feature Request",
   "feedback_type_question": "Question",
   "feedback_type_other": "Other",
-  "pagination_total": "Total {count}",
+  "pagination_total": "{count} items total",
   "pagination_jump_to": "Go to",
   "pagination_page": "page",
+  "pagination_page_size": "{size} / page",
   "severity_critical": "Critical",
   "severity_high": "High",
   "severity_medium": "Medium",
@@ -274,7 +275,7 @@
   "crud_delete_failed": "Delete failed",
   "crud_network_error": "Network error, please try again later",
   "crud_filter_all": "All",
-  "crud_total": "Total {count}",
+  "crud_total": "{count} items total",
   "crud_detail_empty": "-",
   "crud_field_required": "This field is required"
 }

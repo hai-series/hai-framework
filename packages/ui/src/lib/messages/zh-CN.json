@@ -156,9 +156,10 @@
   "feedback_type_feature": "功能建议",
   "feedback_type_question": "问题咨询",
   "feedback_type_other": "其他",
-  "pagination_total": "共 {count}",
+  "pagination_total": "共 {count} 条",
   "pagination_jump_to": "跳转到",
   "pagination_page": "页",
+  "pagination_page_size": "{size} 条/页",
   "severity_critical": "严重",
   "severity_high": "高",
   "severity_medium": "中",
@@ -274,7 +275,7 @@
   "crud_delete_failed": "删除失败",
   "crud_network_error": "网络错误，请稍后重试",
   "crud_filter_all": "全部",
-  "crud_total": "共 {count}",
+  "crud_total": "共 {count} 条",
   "crud_detail_empty": "-",
   "crud_field_required": "此字段为必填项"
 }

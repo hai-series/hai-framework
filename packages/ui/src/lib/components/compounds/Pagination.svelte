@@ -14,6 +14,7 @@
   import BareButton from '../primitives/BareButton.svelte'
 
   import Input from '../primitives/Input.svelte'
+  import Select from '../primitives/Select.svelte'
 
   let {
     page = $bindable(1),
@@ -22,15 +23,18 @@
     size = 'md',
     showTotal = true,
     showJumper = false,
+    showSizeChanger = false,
+    pageSizeOptions = [10, 20, 50, 100],
     labels = {},
     class: className = '',
     onchange,
+    onpagesizechange,
   }: PaginationProps = $props()
 
   // labels 优先，缺省回退到内置消息 uiM(...)
 
-  // 计算总页数
-  const totalPages = $derived(Math.ceil(total / pageSize))
+  // 计算总页数（至少 1 页，保证分页栏在空数据时仍可渲染）
+  const totalPages = $derived(Math.max(1, Math.ceil(total / pageSize)))
 
   // 生成页码列表
   const pages = $derived(() => {
@@ -99,13 +103,36 @@
       jumperValue = ''
     }
   }
+
+  function handlePageSizeChange(value: string) {
+    const next = Number.parseInt(value, 10)
+    if (!Number.isNaN(next) && next !== pageSize) {
+      onpagesizechange?.(next)
+    }
+  }
 </script>
 
-<div class='flex items-center gap-4'>
+<div class='flex flex-wrap items-center gap-4'>
   {#if showTotal}
     <span class='text-sm text-base-content/70'>
       {(labels.total ?? uiM('pagination_total')).replace('{count}', String(total))}
     </span>
+  {/if}
+
+  {#if showSizeChanger}
+    <div class='w-28 shrink-0'>
+      <Select
+        size='sm'
+        value={String(pageSize)}
+        onchange={handlePageSizeChange}
+      >
+        {#each pageSizeOptions as opt (opt)}
+          <option value={String(opt)}>
+            {(labels.pageSize ?? uiM('pagination_page_size')).replace('{size}', String(opt))}
+          </option>
+        {/each}
+      </Select>
+    </div>
   {/if}
 
   <div class={joinClass}>
@@ -140,18 +167,18 @@
   </div>
 
   {#if showJumper}
-    <div class='flex items-center gap-2'>
-      <span class='text-sm'>{labels.jumpTo ?? uiM('pagination_jump_to')}</span>
+    <div class='flex min-w-fit items-center gap-2 whitespace-nowrap'>
+      <span class='shrink-0 text-sm'>{labels.jumpTo ?? uiM('pagination_jump_to')}</span>
       <Input
         type='number'
-        size='sm'
-        class='w-16'
+        size='xs'
+        class='w-14 shrink-0'
         min={1}
         max={totalPages}
         bind:value={jumperValue}
         onkeydown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => e.key === 'Enter' && handleJump()}
       />
-      <span class='text-sm'>{labels.page ?? uiM('pagination_page')}</span>
+      <span class='shrink-0 text-sm'>{labels.page ?? uiM('pagination_page')}</span>
     </div>
   {/if}
 </div>

@@ -110,8 +110,8 @@ declare global {
 
   // scenes - crud
   const CrudDeleteConfirm: typeof import('@h-ai/ui')['CrudDeleteConfirm']
-  const CrudDetailDrawer: typeof import('@h-ai/ui')['CrudDetailDrawer']
-  const CrudEditDrawer: typeof import('@h-ai/ui')['CrudEditDrawer']
+  const CrudDetailPanel: typeof import('@h-ai/ui')['CrudDetailPanel']
+  const CrudEditPanel: typeof import('@h-ai/ui')['CrudEditPanel']
   const CrudFilterBar: typeof import('@h-ai/ui')['CrudFilterBar']
   const CrudPage: typeof import('@h-ai/ui')['CrudPage']
 }

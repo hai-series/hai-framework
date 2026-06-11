@@ -106,6 +106,34 @@ export default defineConfig({
 />
 ```
 
+## CRUD 场景组件（CrudPage）
+
+`CrudPage` 基于 `kit.crud.define()` 的资源定义，自动渲染列表 + 搜索过滤 + 分页 + 详情 + 编辑/新建 + 删除确认。
+
+| 配置项 | 说明 |
+| --- | --- |
+| `form.variant` | `'drawer'`（抽屉，默认）或 `'modal'`（弹出窗口） |
+| `form.drawerSize` / `form.drawerWidth` | 抽屉尺寸预设 / 自定义 CSS 宽度（宽度优先） |
+| `form.modalSize` / `form.modalWidth` / `form.modalHeight` | 弹窗尺寸预设 / 自定义宽高 |
+| `pagination.showSizeChanger` | 每页条数选择器（默认开启） |
+| `pagination.pageSizeOptions` | 每页条数候选项（默认 `[10, 20, 50, 100]`） |
+| `pagination.showJumper` / `pagination.showTotal` | 跳页输入 / 总数（默认开启） |
+| `density` | 列表密度：`'normal'`（默认）或 `'compact'` |
+
+分页栏始终显示，不再因数据量小而隐藏。
+
+```svelte
+<CrudPage
+  crud={roleCrud}
+  {data}
+  permissions={{ create: true, update: true, delete: true }}
+  form={{ variant: 'modal', modalSize: 'lg' }}
+  pagination={{ showSizeChanger: true, showJumper: true }}
+  density='compact'
+  {nav}
+/>
+```
+
 ## 主题与平台
 
 - 主题：`applyTheme()`、`getCurrentTheme()`、`isDarkTheme()`。

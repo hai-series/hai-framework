@@ -435,7 +435,7 @@ server.listen(3000, () => {
       </div>
       <div>
         <h2 class='text-xl font-bold'>CRUD 业务页面</h2>
-        <p class='text-sm text-base-content/60'>CrudPage / CrudFilterBar / CrudEditDrawer / CrudDetailDrawer / CrudDeleteConfirm</p>
+        <p class='text-sm text-base-content/60'>CrudPage / CrudFilterBar / CrudEditPanel / CrudDetailPanel / CrudDeleteConfirm</p>
       </div>
       <Badge variant='info' outline size='sm'>5 组件</Badge>
     </div>

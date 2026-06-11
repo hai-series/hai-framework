@@ -120,12 +120,16 @@ describe('自动注入', () => {
 
 <AiDocumentEditor content="# demo" />
 <AiTableEditor columns={[]} rows={rows} />
-<CrudPage />`
+<CrudPage />
+<CrudDetailPanel />
+<CrudEditPanel />`
 
     const result = process(input)
     expect(result.code).toContain('AiDocumentEditor')
     expect(result.code).toContain('AiTableEditor')
     expect(result.code).toContain('CrudPage')
+    expect(result.code).toContain('CrudDetailPanel')
+    expect(result.code).toContain('CrudEditPanel')
     expect(result.code).toContain(`from '@h-ai/ui'`)
   })
 

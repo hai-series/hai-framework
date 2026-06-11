@@ -470,6 +470,8 @@ export interface DrawerProps {
   position?: Position
   /** 尺寸 */
   size?: Size
+  /** 自定义宽度（任意合法 CSS 宽度值，优先级高于 size 预设） */
+  width?: string
   /** 是否可通过点击遮罩关闭 */
   closeOnBackdrop?: boolean
   /** 是否显示关闭按钮 */
@@ -586,6 +588,10 @@ export interface PaginationProps {
   showTotal?: boolean
   /** 是否显示跳转 */
   showJumper?: boolean
+  /** 是否显示每页条数选择器 */
+  showSizeChanger?: boolean
+  /** 每页条数候选项（配合 showSizeChanger，默认 [10, 20, 50, 100]） */
+  pageSizeOptions?: number[]
   /** i18n 文案配置 */
   labels?: {
     /** 总数文案，{count} 会被替换为实际数字 */
@@ -594,11 +600,15 @@ export interface PaginationProps {
     jumpTo?: string
     /** 页 */
     page?: string
+    /** 每页条数文案，{size} 会被替换为实际数字 */
+    pageSize?: string
   }
   /** 自定义类名 */
   class?: string
   /** 页码变化事件 */
   onchange?: (page: number) => void
+  /** 每页条数变化事件 */
+  onpagesizechange?: (pageSize: number) => void
 }
 
 /**

@@ -2,17 +2,17 @@
   @component CrudPage
   通用 CRUD 页面组件
 
-  基于声明式资源定义，自动生成列表 + 搜索过滤 + 分页 + 详情抽屉 + 编辑/新建抽屉 + 删除确认。
+  基于声明式资源定义，自动生成列表 + 搜索过滤 + 分页 + 详情查看 + 编辑/新建面板 + 删除确认。
 
   使用 Svelte 5 Runes ($props, $state, $derived, $effect)
-  使用 compounds 组件：Card, DataTable, PageHeader, Pagination, Drawer
+  使用 compounds 组件：Card, DataTable, PageHeader, Pagination, Drawer, Modal
 
   @example
   <CrudPage crud={userCrud} data={data} permissions={{ create: true, update: true, delete: true }} />
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import type { Size } from '../../../types.js'
+  import type { CrudDensity, CrudFormConfig, CrudPaginationConfig } from './crud-types.js'
   import type { NavAdapter } from './nav-adapter.js'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
@@ -23,8 +23,8 @@
   import Button from '../../primitives/Button.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
   import CrudDeleteConfirm from './CrudDeleteConfirm.svelte'
-  import CrudDetailDrawer from './CrudDetailDrawer.svelte'
-  import CrudEditDrawer from './CrudEditDrawer.svelte'
+  import CrudDetailPanel from './CrudDetailPanel.svelte'
+  import CrudEditPanel from './CrudEditPanel.svelte'
   import CrudFilterBar from './CrudFilterBar.svelte'
   import { createBrowserNavAdapter } from './nav-adapter.js'
 
@@ -87,7 +87,9 @@
     crud,
     data,
     permissions = {},
-    drawerSize = '2xl' as Size,
+    form = {},
+    pagination = {},
+    density = 'normal',
     rowClickDetail = true,
     listItemActions,
     editFormExtra,
@@ -104,7 +106,9 @@
     crud: CrudDef
     data: { items: Record<string, unknown>[], total: number, page: number, pageSize: number, filters?: Record<string, unknown> }
     permissions?: { create?: boolean, update?: boolean, delete?: boolean }
-    drawerSize?: Size
+    form?: CrudFormConfig
+    pagination?: CrudPaginationConfig
+    density?: CrudDensity
     rowClickDetail?: boolean
     listItemActions?: Snippet<[Record<string, unknown>]>
     editFormExtra?: Snippet<[Record<string, unknown> | null, 'create' | 'edit']>
@@ -134,8 +138,22 @@
   const canDelete = $derived(permissions.delete !== false && Boolean(crud.api.remove))
   const searchable = $derived(crud.resource.searchable !== false)
 
+  // 表单展示配置（抽屉 / 弹窗）
+  const formVariant = $derived(form.variant ?? 'drawer')
+  const formDrawerSize = $derived(form.drawerSize ?? '2xl')
+  const formDrawerWidth = $derived(form.drawerWidth)
+  const formModalSize = $derived(form.modalSize ?? '2xl')
+  const formModalWidth = $derived(form.modalWidth)
+  const formModalHeight = $derived(form.modalHeight)
+
+  // 分页栏配置
+  const paginationShowSizeChanger = $derived(pagination.showSizeChanger !== false)
+  const paginationShowJumper = $derived(pagination.showJumper !== false)
+  const paginationShowTotal = $derived(pagination.showTotal !== false)
+  const paginationPageSizeOptions = $derived(pagination.pageSizeOptions ?? [10, 20, 50, 100])
+
   // 视图状态
-  let drawerMode = $state<'detail' | 'edit' | 'create' | null>(null)
+  let panelMode = $state<'detail' | 'edit' | 'create' | null>(null)
   let selectedItem = $state<Record<string, unknown> | null>(null)
   let formData = $state<Record<string, unknown>>({})
   let submitting = $state(false)
@@ -219,29 +237,33 @@
     navigateWithParams({ page: newPage })
   }
 
+  function handlePageSizeChange(newPageSize: number) {
+    navigateWithParams({ pageSize: newPageSize, page: 1 })
+  }
+
   // ─── 打开/关闭抽屉 ───
 
   function openDetail(item: Record<string, unknown>) {
     selectedItem = item
-    drawerMode = 'detail'
+    panelMode = 'detail'
   }
 
   function openCreate() {
     selectedItem = null
     formData = { ...crud.getDefaultValues() }
     formError = ''
-    drawerMode = 'create'
+    panelMode = 'create'
   }
 
   function openEdit(item: Record<string, unknown>) {
     selectedItem = item
     formData = { ...item }
     formError = ''
-    drawerMode = 'edit'
+    panelMode = 'edit'
   }
 
-  function closeDrawer() {
-    drawerMode = null
+  function closePanel() {
+    panelMode = null
     selectedItem = null
     formError = ''
   }
@@ -259,18 +281,18 @@
     submitting = true
 
     try {
-      if (drawerMode === 'create' && crud.api.create) {
+      if (panelMode === 'create' && crud.api.create) {
         const result = await crud.api.create(submitData)
         const submitted = (result ?? {}) as Record<string, unknown>
-        closeDrawer()
+        closePanel()
         onaftersubmit?.(submitted, 'create')
         await nav.refresh?.()
       }
-      else if (drawerMode === 'edit' && crud.api.update && selectedItem) {
+      else if (panelMode === 'edit' && crud.api.update && selectedItem) {
         const id = String(selectedItem[keyField])
         const result = await crud.api.update(id, submitData)
         const submitted = (result ?? {}) as Record<string, unknown>
-        closeDrawer()
+        closePanel()
         onaftersubmit?.(submitted, 'edit')
         await nav.refresh?.()
       }
@@ -314,7 +336,7 @@
       deletingItem = null
       // 如果删除的是当前详情/编辑中的项，关闭抽屉
       if (selectedItem && String(selectedItem[keyField]) === id) {
-        closeDrawer()
+        closePanel()
       }
       onafterdelete?.(deleted)
       await nav.refresh?.()
@@ -347,17 +369,17 @@
   const filterFields = $derived(crud.getFilterFields() as FieldDef[])
 
   // 抽屉标题
-  const drawerTitle = $derived(
-    drawerMode === 'create'
+  const panelTitle = $derived(
+    panelMode === 'create'
       ? `${uiM('crud_create')}${resourceLabel}`
-      : drawerMode === 'edit'
+      : panelMode === 'edit'
       ? `${uiM('crud_edit')}${resourceLabel}`
       : `${resourceLabel}${uiM('crud_detail')}`,
   )
 
-  // 抽屉 open 状态
-  const detailOpen = $derived(drawerMode === 'detail')
-  const editOpen = $derived(drawerMode === 'create' || drawerMode === 'edit')
+  // 面板 open 状态
+  const detailOpen = $derived(panelMode === 'detail')
+  const editOpen = $derived(panelMode === 'create' || panelMode === 'edit')
 
   // 用于 DataTable 的 columns（含自定义渲染）
   const dtColumns = $derived(
@@ -412,6 +434,7 @@
       columns={dtColumns}
       keyField={keyField}
       loading={false}
+      {density}
     >
       {#snippet actions(item)}
         {#if rowClickDetail}
@@ -451,47 +474,59 @@
       {/snippet}
     </DataTable>
 
-    <!-- 分页 -->
-    {#if data.total > data.pageSize}
-      <div class='flex justify-center p-4 border-t border-base-content/5'>
-        <Pagination
-          page={data.page}
-          total={data.total}
-          pageSize={data.pageSize}
-          size='sm'
-          showTotal
-          onchange={handlePageChange}
-        />
-      </div>
-    {/if}
+    <!-- 分页栏：始终显示，支持每页条数选择与跳页 -->
+    <div class='flex justify-center p-4 border-t border-base-content/5'>
+      <Pagination
+        page={data.page}
+        total={data.total}
+        pageSize={data.pageSize}
+        size='sm'
+        showTotal={paginationShowTotal}
+        showJumper={paginationShowJumper}
+        showSizeChanger={paginationShowSizeChanger}
+        pageSizeOptions={paginationPageSizeOptions}
+        onchange={handlePageChange}
+        onpagesizechange={handlePageSizeChange}
+      />
+    </div>
   </Card>
 </div>
 
-<!-- 详情抽屉 -->
-<CrudDetailDrawer
+<!-- 详情：抽屉或弹窗 -->
+<CrudDetailPanel
   open={detailOpen}
   item={selectedItem}
   fields={detailFields}
-  title={drawerTitle}
-  size={drawerSize}
+  title={panelTitle}
+  variant={formVariant}
+  size={formDrawerSize}
+  drawerWidth={formDrawerWidth}
+  modalSize={formModalSize}
+  modalWidth={formModalWidth}
+  modalHeight={formModalHeight}
   canEdit={canUpdate}
   onedit={switchToEdit}
-  onclose={closeDrawer}
+  onclose={closePanel}
   {detailExtra}
 />
 
-<!-- 编辑/新建抽屉 -->
-<CrudEditDrawer
+<!-- 编辑/新建：抽屉或弹窗 -->
+<CrudEditPanel
   open={editOpen}
-  mode={drawerMode === 'create' ? 'create' : 'edit'}
-  fields={drawerMode === 'create' ? createFields : editFields}
+  mode={panelMode === 'create' ? 'create' : 'edit'}
+  fields={panelMode === 'create' ? createFields : editFields}
   bind:formData
-  title={drawerTitle}
-  size={drawerSize}
+  title={panelTitle}
+  variant={formVariant}
+  size={formDrawerSize}
+  drawerWidth={formDrawerWidth}
+  modalSize={formModalSize}
+  modalWidth={formModalWidth}
+  modalHeight={formModalHeight}
   {submitting}
   error={formError}
   onsubmit={handleSubmit}
-  onclose={closeDrawer}
+  onclose={closePanel}
   {editFormExtra}
   editingItem={selectedItem}
 />

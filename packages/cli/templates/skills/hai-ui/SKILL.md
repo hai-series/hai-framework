@@ -333,8 +333,8 @@ const p = usePlatform()
 | ------------------- | ---- |
 | `CrudPage`          | CRUD 主页面 |
 | `CrudFilterBar`     | 过滤工具栏 |
-| `CrudDetailDrawer`  | 详情抽屉 |
-| `CrudEditDrawer`    | 编辑抽屉 |
+| `CrudDetailPanel`   | 详情面板（抽屉/弹窗） |
+| `CrudEditPanel`     | 编辑面板（抽屉/弹窗） |
 | `CrudDeleteConfirm` | 删除确认框 |
 
 ---

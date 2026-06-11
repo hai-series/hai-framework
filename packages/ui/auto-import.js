@@ -95,8 +95,8 @@ const UI_COMPONENTS = new Set([
   'MarkdownRenderer',
   // scenes - crud
   'CrudDeleteConfirm',
-  'CrudDetailDrawer',
-  'CrudEditDrawer',
+  'CrudDetailPanel',
+  'CrudEditPanel',
   'CrudFilterBar',
   'CrudPage',
 ])

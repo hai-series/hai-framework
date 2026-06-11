@@ -1,15 +1,17 @@
 <!--
-  @component CrudDetailDrawer
-  CRUD 详情抽屉组件（只读展示）
+  @component CrudDetailPanel
+  CRUD 详情组件（只读展示），支持抽屉（drawer）与弹窗（modal）两种展示形式
 
   使用 Svelte 5 Runes ($props, $derived)
-  使用 compounds 组件：Drawer, Badge
+  使用 compounds 组件：Drawer, Modal, Badge
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { Size } from '../../../types.js'
+  import type { CrudFormVariant } from './crud-types.js'
   import { uiM } from '../../../messages.js'
   import Drawer from '../../compounds/Drawer.svelte'
+  import Modal from '../../compounds/Modal.svelte'
   import Badge from '../../primitives/Badge.svelte'
   import Button from '../../primitives/Button.svelte'
 
@@ -28,7 +30,12 @@
     item = null,
     fields = [],
     title = '',
+    variant = 'drawer' as CrudFormVariant,
     size = '2xl' as Size,
+    drawerWidth,
+    modalSize = '2xl' as Size | 'full',
+    modalWidth,
+    modalHeight,
     canEdit = false,
     onedit,
     onclose,
@@ -38,7 +45,12 @@
     item?: Record<string, unknown> | null
     fields?: FieldDef[]
     title?: string
+    variant?: CrudFormVariant
     size?: Size
+    drawerWidth?: string
+    modalSize?: Size | 'full'
+    modalWidth?: string
+    modalHeight?: string
     canEdit?: boolean
     onedit?: () => void
     onclose?: () => void
@@ -63,14 +75,12 @@
       return field.render(value, item)
     }
 
-    // 选项类型：将 value 映射为 label
     if (field.type === 'select' || field.type === 'radio') {
       const opts = resolveOptions(field.options)
       const found = opts.find(o => String(o.value) === String(value))
       return found?.label ?? String(value)
     }
 
-    // 多选类型
     if (field.type === 'multi-select' && Array.isArray(value)) {
       const opts = resolveOptions(field.options)
       return value.map((v) => {
@@ -79,12 +89,10 @@
       }).join(', ')
     }
 
-    // 布尔
     if (field.type === 'boolean' || field.type === 'checkbox') {
       return value ? '✓' : '✗'
     }
 
-    // 日期/时间
     if (field.type === 'date' && (typeof value === 'string' || typeof value === 'number' || value instanceof Date)) {
       return new Date(value as string | number).toLocaleDateString()
     }
@@ -107,9 +115,9 @@
   }
 </script>
 
-<Drawer bind:open {title} position='right' {size} onclose={handleClose}>
+{#snippet detailBody()}
   {#if item}
-    <div class='space-y-4 pb-20'>
+    <div class='space-y-4'>
       {#each detailFields as field (field.id)}
         {@const value = item[field.id]}
         <div>
@@ -138,18 +146,47 @@
         </div>
       {/if}
     </div>
-
-    <!-- 底部操作栏 -->
-    <div class='absolute bottom-0 left-0 right-0 p-4 bg-base-200 border-t border-base-content/10 flex justify-end gap-2'>
-      {#if canEdit}
-        <Button variant='primary' onclick={onedit}>
-          <span class='icon-[tabler--edit] size-4 mr-1'></span>
-          {uiM('crud_edit')}
-        </Button>
-      {/if}
-      <Button variant='ghost' onclick={handleClose}>
-        {uiM('crud_close')}
-      </Button>
-    </div>
   {/if}
-</Drawer>
+{/snippet}
+
+{#snippet footerActions()}
+  {#if canEdit}
+    <Button variant='primary' onclick={onedit}>
+      <span class='icon-[tabler--edit] size-4 mr-1'></span>
+      {uiM('crud_edit')}
+    </Button>
+  {/if}
+  <Button variant='ghost' onclick={handleClose}>
+    {uiM('crud_close')}
+  </Button>
+{/snippet}
+
+{#if variant === 'modal'}
+  <Modal
+    bind:open
+    {title}
+    size={modalSize}
+    width={modalWidth}
+    height={modalHeight}
+    onclose={handleClose}
+  >
+    {@render detailBody()}
+
+    {#snippet footer()}
+      {@render footerActions()}
+    {/snippet}
+  </Modal>
+{:else}
+  <Drawer bind:open {title} position='right' {size} width={drawerWidth} onclose={handleClose}>
+    {#if item}
+      <div class='pb-20'>
+        {@render detailBody()}
+      </div>
+
+      <!-- 底部操作栏 -->
+      <div class='absolute bottom-0 left-0 right-0 p-4 bg-base-200 border-t border-base-content/10 flex justify-end gap-2'>
+        {@render footerActions()}
+      </div>
+    {/if}
+  </Drawer>
+{/if}

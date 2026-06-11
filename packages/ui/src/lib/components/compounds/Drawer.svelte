@@ -20,6 +20,7 @@
     title = '',
     position = 'right',
     size = 'md',
+    width,
     closeOnBackdrop = true,
     showClose = true,
     class: className = '',
@@ -40,6 +41,10 @@
     '4xl': 'w-[42rem]',
   }
 
+  // width 优先：传入自定义 CSS 宽度时通过 inline style 覆盖预设宽度类
+  const hasCustomWidth = $derived(typeof width === 'string' && width.trim().length > 0)
+  const widthStyle = $derived(hasCustomWidth ? `width: ${width!.trim()}; max-width: 100vw` : undefined)
+
   const drawerClass = $derived(
     cn(
       'drawer',
@@ -56,7 +61,7 @@
   const contentClass = $derived(
     cn(
       'menu bg-base-200 text-base-content min-h-full p-4',
-      sizeMap[size],
+      !hasCustomWidth && sizeMap[size],
       className,
     ),
   )
@@ -86,7 +91,7 @@
       onkeydown={e => e.key === 'Enter' && handleBackdropClick()}
     ></div>
 
-    <div class={contentClass}>
+    <div class={contentClass} style={widthStyle}>
       <div class='flex items-center justify-between mb-4'>
         {#if title}
           <h3 class='text-lg font-bold'>{title}</h3>

@@ -20,6 +20,40 @@ export interface CrudPermissions {
   delete?: boolean
 }
 
+/** 新建/编辑表单的展示形式 */
+export type CrudFormVariant = 'drawer' | 'modal'
+
+/** 列表显示密度 */
+export type CrudDensity = 'normal' | 'compact'
+
+/** 新建/编辑表单展示配置 */
+export interface CrudFormConfig {
+  /** 展示形式：'drawer'（抽屉，默认）或 'modal'（弹出窗口） */
+  variant?: CrudFormVariant
+  /** 抽屉尺寸预设（variant='drawer'，默认 '2xl'） */
+  drawerSize?: Size
+  /** 抽屉自定义宽度 CSS 值，优先级高于 drawerSize（variant='drawer'） */
+  drawerWidth?: string
+  /** 弹窗尺寸预设（variant='modal'，默认 '2xl'） */
+  modalSize?: Size | 'full'
+  /** 弹窗自定义宽度 CSS 值（variant='modal'） */
+  modalWidth?: string
+  /** 弹窗自定义高度 CSS 值（variant='modal'） */
+  modalHeight?: string
+}
+
+/** 分页栏展示配置 */
+export interface CrudPaginationConfig {
+  /** 是否显示每页条数选择器（默认 true） */
+  showSizeChanger?: boolean
+  /** 每页条数候选项（默认 [10, 20, 50, 100]） */
+  pageSizeOptions?: number[]
+  /** 是否显示跳页输入（默认 true） */
+  showJumper?: boolean
+  /** 是否显示总数（默认 true） */
+  showTotal?: boolean
+}
+
 /** CrudPage 初始列表数据（由 +page.server.ts load 返回） */
 export interface CrudPageData<T = Record<string, unknown>> {
   items: T[]
@@ -86,8 +120,12 @@ export interface CrudPageProps<T = Record<string, unknown>> {
   data: CrudPageData<T>
   /** 权限控制 */
   permissions?: CrudPermissions
-  /** 抽屉尺寸（默认 '2xl'） */
-  drawerSize?: Size
+  /** 新建/编辑表单展示配置（抽屉或弹窗、尺寸、宽高） */
+  form?: CrudFormConfig
+  /** 分页栏展示配置（每页条数选择、跳页、总数） */
+  pagination?: CrudPaginationConfig
+  /** 列表显示密度：'normal'（默认）或 'compact'（紧凑） */
+  density?: CrudDensity
   /** 列表行点击是否打开详情（默认 true） */
   rowClickDetail?: boolean
   /** 列表行操作按钮插槽 */

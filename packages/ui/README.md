@@ -274,11 +274,21 @@ components/
 
 | 组件                 | 描述         | 主要属性 / 能力 |
 | -------------------- | ------------ | ---------------- |
-| `CrudPage`           | CRUD 主页面  | `definition`, `navAdapter`, `loading` |
-| `CrudFilterBar`      | 过滤工具栏   | `filters`, `query`, `onchange` |
-| `CrudDetailDrawer`   | 详情抽屉     | `open`, `item`, `fields` |
-| `CrudEditDrawer`     | 编辑抽屉     | `open`, `schema`, `onsubmit` |
-| `CrudDeleteConfirm`  | 删除确认框   | `open`, `item`, `onconfirm` |
+| `CrudPage`           | CRUD 主页面  | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `nav` |
+| `CrudFilterBar`      | 过滤工具栏   | `filterFields`, `searchValue`, `onsearch`, `onfilterchange` |
+| `CrudDetailPanel`    | 详情面板（抽屉/弹窗） | `open`, `item`, `fields`, `variant`, `drawerWidth`, `modalSize` |
+| `CrudEditPanel`      | 编辑面板（抽屉/弹窗） | `open`, `fields`, `variant`, `drawerWidth`, `modalSize`, `onsubmit` |
+| `CrudDeleteConfirm`  | 删除确认框   | `open`, `loading`, `onconfirm` |
+
+> `CrudPage` 通过 `form` 配置新建/编辑的展示形式：
+>
+> - `form.variant`：`'drawer'`（抽屉，默认）或 `'modal'`（弹出窗口）。
+> - 抽屉：`form.drawerSize` 选预设尺寸，`form.drawerWidth` 传任意 CSS 宽度（优先级更高）。
+> - 弹窗：`form.modalSize` 选预设尺寸，`form.modalWidth` / `form.modalHeight` 传任意 CSS 尺寸。
+>
+> `pagination` 配置分页栏（始终显示）：`showSizeChanger`、`pageSizeOptions`、`showJumper`、`showTotal` 默认开启。
+>
+> `density` 配置列表密度：`'normal'`（默认）或 `'compact'`（紧凑）。
 
 ## 使用示例
 
@@ -367,6 +377,30 @@ components/
 
 <ToastContainer />
 ```
+
+### 声明式 CRUD 页面（CrudPage）
+
+```svelte
+<script lang='ts'>
+  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
+  import { CrudPage } from '@h-ai/ui'
+
+  let { data } = $props()
+  const nav = createSvelteKitNavAdapter()
+</script>
+
+<CrudPage
+  crud={roleCrud}
+  {data}
+  permissions={{ create: true, update: true, delete: true }}
+  form={{ variant: 'modal', modalSize: 'lg' }}
+  pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
+  density='compact'
+  {nav}
+/>
+```
+
+> 抽屉形式可改用 `form={{ variant: 'drawer', drawerWidth: '40rem' }}`。
 
 ### 登录页面
 

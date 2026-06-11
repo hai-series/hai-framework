@@ -10,6 +10,7 @@
   @prop {boolean} loading - 是否加载中
   @prop {boolean} striped - 是否斑马纹
   @prop {boolean} hoverable - 是否悬停高亮
+  @prop {'normal' | 'compact'} density - 显示密度，compact 为紧凑布局
 
   @example
   <DataTable
@@ -39,6 +40,7 @@
     loading = false,
     striped = true,
     hoverable = true,
+    density = 'normal',
     class: className = '',
   }: {
     data: T[]
@@ -49,6 +51,7 @@
     loading?: boolean
     striped?: boolean
     hoverable?: boolean
+    density?: 'normal' | 'compact'
     class?: string
   } = $props()
 
@@ -79,7 +82,7 @@
 </script>
 
 <div class='overflow-x-auto {className}'>
-  <table class='table w-full text-[13px]' class:table-zebra={striped}>
+  <table class='table w-full {density === `compact` ? `table-sm text-xs` : `text-[13px]`}' class:table-zebra={striped}>
     <thead>
       <tr class='text-xs text-base-content/50 border-b border-base-content/6'>
         {#each columns as col (String(col.key))}
