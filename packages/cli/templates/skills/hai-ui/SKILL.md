@@ -11,7 +11,7 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 
 ## 运行环境
 
-> **浏览器端专用。** Svelte 组件在浏览器中渲染，服务端无需引用。
+> **面向 Svelte / SvelteKit 界面层。** 组件可用于 SvelteKit 的 SSR + CSR 页面，也可用于纯客户端 SPA / 原生壳 App；不要在纯 Node 服务模块里直接引用 UI 组件。
 
 ---
 
@@ -22,10 +22,68 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 - 使用 Bits UI headless 交互组件（Combobox、DatePicker、Calendar）
 - 使用 IAM 场景组件（登录/注册/密码/权限守卫/用户资料表单）
 - 使用 Storage 场景组件（文件上传/图片上传/头像上传/文件列表）
-- 使用 CRUD 场景组件（列表过滤、详情抽屉、编辑抽屉、删除确认）
+- 使用 CRUD 场景组件（列表过滤、详情/编辑面板、删除确认）
 - 渲染 AI 输出（Markdown / Mermaid 文档、代码产物预览）
 - 配置主题切换与 i18n 多语言
 - 多端平台检测与适配
+
+---
+
+## 使用边界
+
+- **优先复用 `@h-ai/ui` 现有组件**，不要在 app 中重复实现同类按钮、表格、表单、弹层或场景页面。
+- **页面级文案与业务逻辑放在应用层**；`@h-ai/ui` 负责展示与交互，不承接业务服务、数据库访问或页面级 i18n 管理。
+- **场景组件自带内置中英文文案**（如 IAM / CRUD / AI / Storage 场景），除非组件显式提供覆盖 prop，否则不要把页面翻译样板再传进去。
+- **自动导入不是全能魔法**：`toast`、类型导入和 `Range` 仍需显式 `import`；其它公开 Svelte 组件可交给 `autoImportHaiUi()`。
+- **移动端组件不是样式糖**：使用 `SafeArea` / `BottomNav` / `PullRefresh` / `ActionSheet` 时，务必同步引入 `design-tokens.css` 与 `mobile.css`。
+
+---
+
+## AI 使用顺序（先判断，再落地）
+
+### 1. 先确认项目集成是否完整
+
+至少检查以下四项：
+
+- `svelte.config.*`：`autoImportHaiUi()` 在 `vitePreprocess()` 前。
+- `vite.config.*`：`ssr.noExternal` 包含 `@h-ai/*`，`optimizeDeps.exclude` 包含 `bits-ui`。
+- `app.css`：已导入 `global.css` / `theme.css`；移动端还要导入 `design-tokens.css` / `mobile.css`。
+- Tailwind：已配置 `@source` 扫描 `@h-ai/ui/dist/**/*.{svelte,js,ts}`。
+
+如果这四项不完整，优先先补集成，再写页面；否则组件很容易出现“能编译但没样式 / SSR 报错 / 自动导入失效”。
+
+### 2. 再选组件层级
+
+按复杂度从低到高选：
+
+- **primitives**：单个交互单元，例如 `Button`、`Input`、`Select`、`Badge`。
+- **compounds**：通用业务骨架，例如 `Form`、`Modal`、`Drawer`、`DataTable`、`Pagination`。
+- **scenes**：完整业务流，例如 `LoginForm`、`FileUpload`、`CrudPage`、`AiDocumentEditor`。
+
+经验法则：
+
+- 只是做一个输入控件或按钮行 → 先看 primitives。
+- 需要通用弹层/表格/分页/表单布局 → 先看 compounds。
+- 已经是“登录页 / CRUD 页 / 文件上传页 / AI 文档页”这类完整场景 → 先看 scenes，**不要手搓一遍**。
+
+### 3. 常见任务 → 首选组件
+
+| 任务 | 首选组件 | 使用要点 |
+| --- | --- | --- |
+| 后台列表页 | `PageHeader` + `Card` + `DataTable` + `Pagination` | 分页、筛选、批量操作优先复用 compounds |
+| 表单页/弹层表单 | `Form` + `FormField` + `Input/Select/...` | 表单字段布局统一交给 `FormField` |
+| 简单确认/详情弹层 | `Modal` / `Drawer` / `Confirm` | 根据桌面/移动端交互选择弹窗或抽屉 |
+| 完整 CRUD 页面 | `CrudPage` | 优先通过 `form` / `pagination` / `density` 配置，不要拆开重写 |
+| 登录/注册/资料页 | `LoginForm` / `RegisterForm` / `UserProfile` | 页面只负责路由和提交逻辑 |
+| 文件/图片上传 | `FileUpload` / `ImageUpload` / `AvatarUpload` | 上传 URL、限制和业务状态由应用层提供 |
+| 移动端页面骨架 | `SafeArea` + `AppBar` + `BottomNav` | 原生壳页面优先这一套 |
+| AI 文档/Markdown 展示 | `MarkdownRenderer` / `AiDocumentEditor` | Mermaid、代码高亮、复制/下载已内置 |
+
+### 4. 最后再决定是否自定义样式
+
+- 优先通过组件已有 props（`variant` / `size` / `outline` / `class` / snippet slot）调整。
+- 需要统一视觉规范时，优先改 `theme.css` / `design-tokens.css` 对应 token，而不是在页面里散落 magic class。
+- 只有当 `@h-ai/ui` 现有抽象确实不覆盖时，才在应用层补专属组件。
 
 ---
 
@@ -336,6 +394,42 @@ const p = usePlatform()
 | `CrudDetailPanel`   | 详情面板（抽屉/弹窗） |
 | `CrudEditPanel`     | 编辑面板（抽屉/弹窗） |
 | `CrudDeleteConfirm` | 删除确认框 |
+
+`CrudPage` 是首选入口；只有在你明确要自定义组合方式时，才直接使用 `CrudFilterBar` / `CrudDetailPanel` / `CrudEditPanel`。
+
+### CrudPage 配置重点
+
+| 配置项 | 说明 |
+| --- | --- |
+| `form.variant` | `'drawer'`（抽屉，默认）或 `'modal'`（弹出窗口） |
+| `form.drawerSize` / `form.drawerWidth` | 抽屉尺寸预设 / 自定义 CSS 宽度（宽度优先） |
+| `form.modalSize` / `form.modalWidth` / `form.modalHeight` | 弹窗尺寸预设 / 自定义宽高 |
+| `pagination.showSizeChanger` | 每页条数选择器（默认开启） |
+| `pagination.pageSizeOptions` | 每页条数候选项（默认 `[10, 20, 50, 100]`） |
+| `pagination.showJumper` / `pagination.showTotal` | 跳页输入 / 总数（默认开启） |
+| `density` | 列表密度：`'normal'`（默认）或 `'compact'` |
+
+注意：分页栏会始终显示，不再因数据量小而自动隐藏。
+
+### CrudPage 推荐用法
+
+```svelte
+<CrudPage
+  crud={roleCrud}
+  {data}
+  permissions={{ create: true, update: true, delete: true }}
+  form={{ variant: 'modal', modalSize: 'lg' }}
+  pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
+  density='compact'
+  {nav}
+/>
+```
+
+如果想维持侧边编辑体验，可改成：
+
+```svelte
+form={{ variant: 'drawer', drawerWidth: '40rem' }}
+```
 
 ---
 
