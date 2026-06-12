@@ -183,8 +183,9 @@ jobs:
           REPO_URL="https://github.com/${{ github.repository }}"
           CONTRIBUTORS_URL="${REPO_URL}/graphs/contributors"
 
-          # 查找上一个 tag（排除当前版本 tag，防止重跑时取到自身）
-          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${VERSION}$" | head -n 1 || echo "")
+          # 查找“当前提交之前”的最近发布 tag（按提交历史，不按字符串版本排序）
+          # 这样可以稳定得到“上一个版本 -> 当前版本”的差异，避免 alpha 预发布号排序失真。
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           echo "Previous tag: $PREV_TAG"
 
           if [ -z "$PREV_TAG" ]; then
