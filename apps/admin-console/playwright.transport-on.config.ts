@@ -2,7 +2,7 @@ import process from 'node:process'
 
 import { defineConfig } from '@playwright/test'
 
-const baseURL = process.env.BASE_URL || 'http://localhost:4173'
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173'
 const testDataDir = `./data-e2e-transport-on-${Date.now()}`
 
 export default defineConfig({
@@ -25,7 +25,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'pnpm build && pnpm exec vite preview --port 4173 --strictPort',
+    command: 'pnpm build && pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort',
     env: {
       HAI_E2E: '1',
       HAI_ADMIN_DEFAULT_PASSWORD: 'admin123456',

@@ -75,6 +75,7 @@ describe('getSizeClass - 尺寸类名', () => {
   it('应该支持自定义前缀', () => {
     expect(getSizeClass('sm', 'input')).toBe('input-sm')
     expect(getSizeClass('lg', 'badge')).toBe('badge-lg')
+    expect(getSizeClass('sm', 'select')).toBe('select-sm')
   })
 })
 

@@ -18,7 +18,7 @@
   }: CardProps = $props()
 
   const paddingMap = {
-    'none': '',
+    'none': 'p-0',
     'xs': 'p-2',
     'sm': 'p-3',
     'md': 'p-4',

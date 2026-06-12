@@ -288,7 +288,7 @@ components/
 >
 > `pagination` 配置分页栏（始终显示）：`showSizeChanger`、`pageSizeOptions`、`showJumper`、`showTotal` 默认开启。
 >
-> `density` 配置列表密度：`'normal'`（默认）或 `'compact'`（紧凑）。
+> `density` 配置列表密度：`'normal'`（默认）或 `'compact'`（紧凑）。它只影响列表行、行内操作、分页与创建/编辑/详情表单元素，不影响页头与筛选栏。
 
 ## 使用示例
 

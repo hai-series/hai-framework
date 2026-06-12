@@ -1,5 +1,5 @@
 <!--
-  @component CrudDetailPanel
+  @component CrudDetailDrawer
   CRUD 详情组件（只读展示），支持抽屉（drawer）与弹窗（modal）两种展示形式
 
   使用 Svelte 5 Runes ($props, $derived)
@@ -8,7 +8,7 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { Size } from '../../../types.js'
-  import type { CrudDensity, CrudFormVariant } from './crud-types.js'
+  import type { CrudFormVariant } from './crud-types.js'
   import { uiM } from '../../../messages.js'
   import Drawer from '../../compounds/Drawer.svelte'
   import Modal from '../../compounds/Modal.svelte'
@@ -29,7 +29,6 @@
     open = $bindable(false),
     item = null,
     fields = [],
-    density = 'normal' as CrudDensity,
     title = '',
     variant = 'drawer' as CrudFormVariant,
     size = '2xl' as Size,
@@ -45,7 +44,6 @@
     open?: boolean
     item?: Record<string, unknown> | null
     fields?: FieldDef[]
-    density?: CrudDensity
     title?: string
     variant?: CrudFormVariant
     size?: Size
@@ -77,12 +75,14 @@
       return field.render(value, item)
     }
 
+    // 选项类型：将 value 映射为 label
     if (field.type === 'select' || field.type === 'radio') {
       const opts = resolveOptions(field.options)
       const found = opts.find(o => String(o.value) === String(value))
       return found?.label ?? String(value)
     }
 
+    // 多选类型
     if (field.type === 'multi-select' && Array.isArray(value)) {
       const opts = resolveOptions(field.options)
       return value.map((v) => {
@@ -91,10 +91,12 @@
       }).join(', ')
     }
 
+    // 布尔
     if (field.type === 'boolean' || field.type === 'checkbox') {
       return value ? '✓' : '✗'
     }
 
+    // 日期/时间
     if (field.type === 'date' && (typeof value === 'string' || typeof value === 'number' || value instanceof Date)) {
       return new Date(value as string | number).toLocaleDateString()
     }
@@ -111,16 +113,6 @@
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
   )
 
-  const isCompact = $derived(density === 'compact')
-  const contentClass = $derived(isCompact ? 'space-y-3' : 'space-y-4')
-  const labelClass = $derived(isCompact ? 'text-[11px] font-medium text-base-content/50 mb-1' : 'text-xs font-medium text-base-content/50 mb-1')
-  const valueClass = $derived(isCompact ? 'text-[13px] text-base-content' : 'text-sm text-base-content')
-  const badgeSize = $derived(isCompact ? 'xs' : 'sm')
-  const detailExtraClass = $derived(isCompact ? 'border-t border-base-content/5 pt-3' : 'border-t border-base-content/5 pt-4')
-  const iconClass = $derived(isCompact ? 'size-3.5 mr-1' : 'size-4 mr-1')
-  const drawerBodyClass = $derived(isCompact ? 'pb-16' : 'pb-20')
-  const drawerFooterClass = $derived(isCompact ? 'absolute bottom-0 left-0 right-0 p-3 bg-base-200 border-t border-base-content/10 flex justify-end gap-2' : 'absolute bottom-0 left-0 right-0 p-4 bg-base-200 border-t border-base-content/10 flex justify-end gap-2')
-
   function handleClose() {
     open = false
     onclose?.()
@@ -129,20 +121,20 @@
 
 {#snippet detailBody()}
   {#if item}
-    <div class={contentClass}>
+    <div class='space-y-4'>
       {#each detailFields as field (field.id)}
         {@const value = item[field.id]}
         <div>
-          <div class={labelClass}>
+          <div class='text-xs font-medium text-base-content/50 mb-1'>
             {resolveText(field.label)}
           </div>
-          <div class={valueClass}>
+          <div class='text-sm text-base-content'>
             {#if field.type === 'multi-select' && Array.isArray(value) && value.length > 0}
               <div class='flex flex-wrap gap-1'>
                 {#each value as v, index (`${String(v)}:${index}`)}
                   {@const opts = resolveOptions(field.options)}
                   {@const found = opts.find(o => String(o.value) === String(v))}
-                  <Badge variant='ghost' size={badgeSize}>{found?.label ?? String(v)}</Badge>
+                  <Badge variant='ghost' size='sm'>{found?.label ?? String(v)}</Badge>
                 {/each}
               </div>
             {:else}
@@ -153,7 +145,7 @@
       {/each}
 
       {#if detailExtra && item}
-        <div class={detailExtraClass}>
+        <div class='border-t border-base-content/5 pt-4'>
           {@render detailExtra(item)}
         </div>
       {/if}
@@ -163,12 +155,12 @@
 
 {#snippet footerActions()}
   {#if canEdit}
-    <Button variant='primary' size='sm' onclick={onedit}>
-      <span class='icon-[tabler--edit] {iconClass}'></span>
+    <Button variant='primary' onclick={onedit}>
+      <span class='icon-[tabler--edit] size-4 mr-1'></span>
       {uiM('crud_edit')}
     </Button>
   {/if}
-  <Button variant='ghost' size='sm' onclick={handleClose}>
+  <Button variant='ghost' onclick={handleClose}>
     {uiM('crud_close')}
   </Button>
 {/snippet}
@@ -191,12 +183,12 @@
 {:else}
   <Drawer bind:open {title} position='right' {size} width={drawerWidth} onclose={handleClose}>
     {#if item}
-      <div class={drawerBodyClass}>
+      <div class='pb-20'>
         {@render detailBody()}
       </div>
 
       <!-- 底部操作栏 -->
-      <div class={drawerFooterClass}>
+      <div class='absolute bottom-0 left-0 right-0 p-4 bg-base-200 border-t border-base-content/10 flex justify-end gap-2'>
         {@render footerActions()}
       </div>
     {/if}

@@ -87,6 +87,18 @@
     ),
   )
 
+  const controlSize = $derived(size === 'xs' ? 'xs' : 'sm')
+  const jumperControlSize = 'xs'
+  const wrapperClass = $derived(size === 'xs' ? 'flex flex-wrap items-center justify-center gap-1.5 text-xs' : 'flex flex-wrap items-center justify-center gap-2.5 text-sm')
+  const totalClass = $derived(size === 'xs' ? 'text-xs text-base-content/70' : 'text-sm text-base-content/70')
+  const sizeChangerClass = $derived(size === 'xs' ? 'w-22 shrink-0' : 'w-24 shrink-0')
+  const jumperWrapClass = $derived(size === 'xs' ? 'flex min-w-fit items-center gap-1.5 whitespace-nowrap' : 'flex min-w-fit items-center gap-1.5 whitespace-nowrap')
+  const jumperInputClass = $derived(
+    size === 'xs'
+      ? 'w-[2.25rem] shrink-0 [&>.fieldset]:m-0 [&>.fieldset]:min-w-0'
+      : 'w-[2.5rem] shrink-0 [&>.fieldset]:m-0 [&>.fieldset]:min-w-0',
+  )
+
   function goToPage(p: number) {
     if (p >= 1 && p <= totalPages && p !== page) {
       page = p
@@ -112,17 +124,17 @@
   }
 </script>
 
-<div class='flex flex-wrap items-center gap-4'>
+<div class={wrapperClass}>
   {#if showTotal}
-    <span class='text-sm text-base-content/70'>
+    <span class={totalClass}>
       {(labels.total ?? uiM('pagination_total')).replace('{count}', String(total))}
     </span>
   {/if}
 
   {#if showSizeChanger}
-    <div class='w-28 shrink-0'>
+    <div class={sizeChangerClass}>
       <Select
-        size='sm'
+        size={controlSize}
         value={String(pageSize)}
         onchange={handlePageSizeChange}
       >
@@ -167,18 +179,20 @@
   </div>
 
   {#if showJumper}
-    <div class='flex min-w-fit items-center gap-2 whitespace-nowrap'>
-      <span class='shrink-0 text-sm'>{labels.jumpTo ?? uiM('pagination_jump_to')}</span>
-      <Input
-        type='number'
-        size='xs'
-        class='w-14 shrink-0'
-        min={1}
-        max={totalPages}
-        bind:value={jumperValue}
-        onkeydown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => e.key === 'Enter' && handleJump()}
-      />
-      <span class='shrink-0 text-sm'>{labels.page ?? uiM('pagination_page')}</span>
+    <div class={jumperWrapClass}>
+      <span class={totalClass}>{labels.jumpTo ?? uiM('pagination_jump_to')}</span>
+      <div class={jumperInputClass}>
+        <Input
+          type='number'
+          size={jumperControlSize}
+          class='h-7 w-full rounded-md [&_input]:px-1.5 [&_input]:text-center [&_input]:text-[12px]'
+          min={1}
+          max={totalPages}
+          bind:value={jumperValue}
+          onkeydown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => e.key === 'Enter' && handleJump()}
+        />
+      </div>
+      <span class={totalClass}>{labels.page ?? uiM('pagination_page')}</span>
     </div>
   {/if}
 </div>

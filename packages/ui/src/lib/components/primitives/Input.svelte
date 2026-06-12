@@ -49,6 +49,24 @@
       : 'h-10',
   )
 
+  const inputSpacingClass = $derived(
+    size === 'xs'
+      ? 'px-2.5 text-xs'
+      : size === 'sm'
+      ? 'px-3 text-sm'
+      : size === 'lg'
+      ? 'px-4 text-base'
+      : size === 'xl'
+      ? 'px-4 text-lg'
+      : 'px-3 text-sm',
+  )
+
+  const inputTypeClass = $derived(
+    type === 'number'
+      ? '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+      : '',
+  )
+
   const containerClass = $derived(
     cn(
       'flex items-center w-full rounded-lg border bg-base-100',
@@ -114,7 +132,11 @@
       {step}
       inputmode={inputmode}
       autocomplete={autocomplete as HTMLInputElement['autocomplete']}
-      class='flex-1 h-full px-3 bg-transparent border-none outline-none text-sm placeholder:text-base-content/35'
+      class={cn(
+        'flex-1 h-full bg-transparent border-none outline-none placeholder:text-base-content/35',
+        inputSpacingClass,
+        inputTypeClass,
+      )}
       bind:value
       oninput={handleInput}
       onchange={handleChange}

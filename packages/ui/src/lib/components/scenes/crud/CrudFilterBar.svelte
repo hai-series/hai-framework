@@ -57,15 +57,16 @@
   }
 </script>
 
-<div class='p-4'>
-  <div class='flex flex-col sm:flex-row gap-3'>
+<div class='grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center'>
+  <div class='flex min-w-0 flex-wrap items-center gap-3 [&_.fieldset]:m-0 [&_.fieldset]:min-w-0'>
     {#if searchable}
-      <div class='flex-1 relative'>
-        <span class='icon-[tabler--search] size-4.5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/35 z-10'></span>
+      <div class='relative min-w-[15rem] flex-[1_1_20rem]'>
+        <span class='icon-[tabler--search] pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-base-content/35'></span>
         <Input
           type='text'
+          size='sm'
           placeholder={searchPlaceholder || uiM('crud_search_placeholder')}
-          class='pl-10'
+          class='pl-10 shadow-none'
           bind:value={searchValue}
           oninput={handleSearchInput}
           autocomplete='off'
@@ -76,21 +77,24 @@
     {#each filterFields as field (field.id)}
       {@const opts = resolveOptions(field.options)}
       {#if opts.length > 0}
-        <Select
-          class='min-w-32'
-          value={String(filterValues[field.id] ?? '')}
-          onchange={value => handleFilterChange(field.id, value)}
-        >
-          <option value="">{uiM('crud_filter_all')}</option>
-          {#each opts as opt (String(opt.value))}
-            <option value={String(opt.value)}>{opt.label}</option>
-          {/each}
-        </Select>
+        <div class='w-full sm:w-[11rem] sm:flex-none'>
+          <Select
+            size='sm'
+            class='border-base-content/10 bg-base-100 shadow-none'
+            value={String(filterValues[field.id] ?? '')}
+            onchange={value => handleFilterChange(field.id, value)}
+          >
+            <option value="">{uiM('crud_filter_all')}</option>
+            {#each opts as opt (String(opt.value))}
+              <option value={String(opt.value)}>{opt.label}</option>
+            {/each}
+          </Select>
+        </div>
       {/if}
     {/each}
+  </div>
 
-    <div class='text-sm text-base-content/50 self-center whitespace-nowrap'>
-      {uiM('crud_total', { count: total })}
-    </div>
+  <div class='inline-flex items-center justify-self-start rounded-full border border-base-content/8 bg-base-200/60 px-3 py-1 text-xs font-medium text-base-content/60 md:justify-self-end'>
+    {uiM('crud_total', { count: total })}
   </div>
 </div>

@@ -10,7 +10,7 @@
 -->
 <script lang='ts' generics="T = string">
   import type { SelectProps } from '../../types.js'
-  import { cn, getInputSizeClass } from '../../utils.js'
+  import { cn, getSizeClass } from '../../utils.js'
 
   let {
     value = $bindable<T>(),
@@ -32,7 +32,7 @@
   const selectClass = $derived(
     cn(
       'select w-full',
-      getInputSizeClass(size),
+      getSizeClass(size, 'input'),
       error && 'select-error',
       className,
     ),

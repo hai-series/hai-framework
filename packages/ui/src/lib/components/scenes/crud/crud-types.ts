@@ -124,7 +124,7 @@ export interface CrudPageProps<T = Record<string, unknown>> {
   form?: CrudFormConfig
   /** 分页栏展示配置（每页条数选择、跳页、总数） */
   pagination?: CrudPaginationConfig
-  /** 列表显示密度：'normal'（默认）或 'compact'（紧凑） */
+  /** 列表显示密度：影响列表行、行内操作、分页与详情/编辑表单；不影响页头与筛选栏 */
   density?: CrudDensity
   /** 列表行点击是否打开详情（默认 true） */
   rowClickDetail?: boolean

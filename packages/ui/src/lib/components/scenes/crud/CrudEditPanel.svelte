@@ -8,7 +8,7 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { Size } from '../../../types.js'
-  import type { CrudFormVariant } from './crud-types.js'
+  import type { CrudDensity, CrudFormVariant } from './crud-types.js'
   import { uiM } from '../../../messages.js'
   import Drawer from '../../compounds/Drawer.svelte'
   import FormField from '../../compounds/FormField.svelte'
@@ -35,6 +35,7 @@
     mode = 'create' as 'create' | 'edit',
     fields = [],
     formData = $bindable<Record<string, unknown>>({}),
+    density = 'normal' as CrudDensity,
     title = '',
     variant = 'drawer' as CrudFormVariant,
     size = '2xl' as Size,
@@ -53,6 +54,7 @@
     mode?: 'create' | 'edit'
     fields?: FieldDef[]
     formData?: Record<string, unknown>
+    density?: CrudDensity
     title?: string
     variant?: CrudFormVariant
     size?: Size
@@ -81,6 +83,16 @@
   const sortedFields = $derived(
     [...fields].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
   )
+
+  const isCompact = $derived(density === 'compact')
+  const controlSize = $derived(isCompact ? 'xs' : 'sm')
+  const formClass = $derived(isCompact ? 'space-y-3' : 'space-y-4')
+  const extraClass = $derived(isCompact ? 'border-t border-base-content/5 pt-3' : 'border-t border-base-content/5 pt-4')
+  const multiSelectWrapClass = $derived(isCompact ? 'flex flex-wrap gap-2 p-2.5 bg-base-200 rounded-lg max-h-48 overflow-y-auto' : 'flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg max-h-48 overflow-y-auto')
+  const multiSelectLabelClass = $derived(isCompact ? 'inline-flex items-center gap-1.5 cursor-pointer' : 'inline-flex items-center gap-2 cursor-pointer')
+  const multiSelectTextClass = $derived(isCompact ? 'text-xs text-base-content' : 'text-sm text-base-content')
+  const drawerFormClass = $derived(isCompact ? 'space-y-3 pb-16' : 'space-y-4 pb-20')
+  const drawerFooterClass = $derived(isCompact ? 'absolute bottom-0 left-0 right-0 p-3 bg-base-200 border-t border-base-content/10 flex justify-end gap-2' : 'absolute bottom-0 left-0 right-0 p-4 bg-base-200 border-t border-base-content/10 flex justify-end gap-2')
 
   function handleClose() {
     open = false
@@ -139,6 +151,7 @@
       <FormField label={resolveText(field.label)} required={isRequired}>
         <Textarea
           id={field.id}
+          size={controlSize}
           value={String(fieldValue ?? '')}
           {placeholder}
           disabled={submitting || isReadonly}
@@ -152,6 +165,7 @@
       <FormField label={resolveText(field.label)} required={isRequired}>
         <Select
           id={field.id}
+          size={controlSize}
           value={String(fieldValue ?? '')}
           disabled={submitting || isReadonly}
           onchange={value => updateField(field.id, value)}
@@ -167,20 +181,20 @@
       {@const opts = resolveOptions(field.options)}
       {@const selectedValues = ((fieldValue ?? []) as Array<string | number | boolean>).map(String)}
       <FormField label={resolveText(field.label)} required={isRequired}>
-        <div class='flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg max-h-48 overflow-y-auto'>
+        <div class={multiSelectWrapClass}>
           {#each opts as opt (String(opt.value))}
-            <label class='inline-flex items-center gap-2 cursor-pointer'>
+            <label class={multiSelectLabelClass}>
               <Checkbox
-                size='sm'
+                size={controlSize}
                 checked={selectedValues.includes(String(opt.value))}
                 onchange={() => toggleMultiSelect(field.id, opt.value)}
                 disabled={submitting || isReadonly}
               />
-              <span class='text-sm text-base-content'>{opt.label}</span>
+              <span class={multiSelectTextClass}>{opt.label}</span>
             </label>
           {/each}
           {#if opts.length === 0}
-            <span class='text-sm text-base-content/60'>{uiM('crud_no_data')}</span>
+            <span class={multiSelectTextClass}>{uiM('crud_no_data')}</span>
           {/if}
         </div>
       </FormField>
@@ -188,6 +202,7 @@
     {:else if field.type === 'boolean' || field.type === 'checkbox'}
       <FormField label={resolveText(field.label)}>
         <Checkbox
+          size={controlSize}
           checked={Boolean(fieldValue)}
           onchange={(checked: boolean) => updateField(field.id, checked)}
           disabled={submitting || isReadonly}
@@ -199,6 +214,7 @@
         <Input
           id={field.id}
           type={getInputType(field.type)}
+          size={controlSize}
           value={String(fieldValue ?? '')}
           {placeholder}
           disabled={submitting || isReadonly}
@@ -215,17 +231,17 @@
   {/each}
 
   {#if editFormExtra}
-    <div class='border-t border-base-content/5 pt-4'>
+    <div class={extraClass}>
       {@render editFormExtra(editingItem, mode)}
     </div>
   {/if}
 {/snippet}
 
 {#snippet footerActions()}
-  <Button variant='ghost' onclick={handleClose} disabled={submitting}>
+  <Button variant='ghost' size='sm' onclick={handleClose} disabled={submitting}>
     {uiM('crud_cancel')}
   </Button>
-  <Button variant='primary' onclick={handleSubmit} disabled={submitting}>
+  <Button variant='primary' size='sm' onclick={handleSubmit} disabled={submitting}>
     {#if submitting}
       <span class='loading loading-spinner loading-xs mr-2'></span>
     {/if}
@@ -243,7 +259,7 @@
     closeOnBackdrop={false}
     onclose={handleClose}
   >
-    <form onsubmit={handleSubmit} class='space-y-4'>
+    <form onsubmit={handleSubmit} class={formClass}>
       {@render formFields()}
     </form>
 
@@ -253,12 +269,12 @@
   </Modal>
 {:else}
   <Drawer bind:open {title} position='right' {size} width={drawerWidth} onclose={handleClose} closeOnBackdrop={false}>
-    <form onsubmit={handleSubmit} class='space-y-4 pb-20'>
+    <form onsubmit={handleSubmit} class={drawerFormClass}>
       {@render formFields()}
     </form>
 
     <!-- 底部操作栏 -->
-    <div class='absolute bottom-0 left-0 right-0 p-4 bg-base-200 border-t border-base-content/10 flex justify-end gap-2'>
+    <div class={drawerFooterClass}>
       {@render footerActions()}
     </div>
   </Drawer>

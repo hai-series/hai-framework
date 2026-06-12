@@ -407,7 +407,7 @@ const p = usePlatform()
 | `pagination.showSizeChanger` | 每页条数选择器（默认开启） |
 | `pagination.pageSizeOptions` | 每页条数候选项（默认 `[10, 20, 50, 100]`） |
 | `pagination.showJumper` / `pagination.showTotal` | 跳页输入 / 总数（默认开启） |
-| `density` | 列表密度：`'normal'`（默认）或 `'compact'` |
+| `density` | 列表密度：`'normal'`（默认）或 `'compact'`；仅影响列表行、行内操作、分页与创建/编辑/详情表单 |
 
 注意：分页栏会始终显示，不再因数据量小而自动隐藏。
 

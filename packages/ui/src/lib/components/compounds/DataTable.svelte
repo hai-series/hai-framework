@@ -57,6 +57,28 @@
 
   type Column = { key: keyof T | string, label: string, width?: string, align?: 'left' | 'center' | 'right', render?: (item: T) => string }
 
+  const tableClass = $derived(
+    density === 'compact'
+      ? 'table table-sm w-full text-[12px] [&_thead_th]:px-3 [&_thead_th]:py-2 [&_tbody_td]:px-3 [&_tbody_td]:py-2'
+      : 'table w-full text-[13px] [&_thead_th]:px-4 [&_thead_th]:py-2.5 [&_tbody_td]:px-4 [&_tbody_td]:py-3',
+  )
+
+  const headerRowClass = $derived(
+    density === 'compact'
+      ? 'text-[11px] text-base-content/55 border-b border-base-content/6'
+      : 'text-[12px] text-base-content/55 border-b border-base-content/6',
+  )
+
+  const rowClass = $derived(
+    hoverable
+      ? 'border-b border-base-content/5 transition-colors hover:bg-base-content/3 last:border-b-0'
+      : 'border-b border-base-content/5 last:border-b-0',
+  )
+
+  const actionColumnClass = $derived(density === 'compact' ? 'w-20 text-center font-medium' : 'w-24 text-center font-medium')
+  const actionWrapClass = $derived(density === 'compact' ? 'flex items-center justify-center gap-0.5' : 'flex items-center justify-center gap-1')
+  const placeholderCellClass = $derived(density === 'compact' ? 'text-center py-6 text-base-content/40' : 'text-center py-8 text-base-content/40')
+
   function getValue(item: T, col: Column): string {
     if (col.render) {
       return col.render(item)
@@ -82,9 +104,9 @@
 </script>
 
 <div class='overflow-x-auto {className}'>
-  <table class='table w-full {density === `compact` ? `table-sm text-xs` : `text-[13px]`}' class:table-zebra={striped}>
+  <table class={tableClass} class:table-zebra={striped}>
     <thead>
-      <tr class='text-xs text-base-content/50 border-b border-base-content/6'>
+      <tr class={headerRowClass}>
         {#each columns as col (String(col.key))}
           <th
             style={col.width ? `width: ${col.width}` : ''}
@@ -94,20 +116,20 @@
           </th>
         {/each}
         {#if actions}
-          <th class='w-24 text-center font-medium'>{uiM('data_table_actions')}</th>
+          <th class={actionColumnClass}>{uiM('data_table_actions')}</th>
         {/if}
       </tr>
     </thead>
     <tbody>
       {#if loading}
         <tr>
-          <td colspan={columns.length + (actions ? 1 : 0)} class='text-center py-8'>
+          <td colspan={columns.length + (actions ? 1 : 0)} class={placeholderCellClass}>
             <span class='loading loading-spinner loading-sm'></span>
           </td>
         </tr>
       {:else if data.length === 0}
         <tr>
-          <td colspan={columns.length + (actions ? 1 : 0)} class='text-center py-8 text-base-content/40'>
+          <td colspan={columns.length + (actions ? 1 : 0)} class={placeholderCellClass}>
             {#if empty}
               {@render empty()}
             {:else}
@@ -117,13 +139,13 @@
         </tr>
       {:else}
         {#each data as item (item[keyField])}
-          <tr class={hoverable ? 'hover:bg-base-content/3 transition-colors' : ''}>
+          <tr class={rowClass}>
             {#each columns as col (String(col.key))}
               <td class={getAlignClass(col.align)}>{getValue(item, col)}</td>
             {/each}
             {#if actions}
               <td>
-                <div class='flex items-center justify-center gap-1'>
+                <div class={actionWrapClass}>
                   {@render actions(item)}
                 </div>
               </td>

@@ -137,6 +137,14 @@
   const canUpdate = $derived(permissions.update !== false && Boolean(crud.api.update))
   const canDelete = $derived(permissions.delete !== false && Boolean(crud.api.remove))
   const searchable = $derived(crud.resource.searchable !== false)
+  const isCompact = $derived(density === 'compact')
+  const pageGapClass = 'space-y-5'
+  const actionButtonSize = $derived(isCompact ? 'xs' : 'sm')
+  const actionIconClass = $derived(isCompact ? 'size-3.5' : 'size-4')
+  const paginationSize = $derived(isCompact ? 'xs' : 'sm')
+  const filterCardClass = 'overflow-hidden rounded-[1.25rem] border-base-content/7 shadow-sm'
+  const listCardClass = 'overflow-hidden rounded-[1.25rem] border-base-content/7 shadow-sm'
+  const paginationBarClass = 'flex justify-center border-t border-base-content/5 px-4 py-2'
 
   // 表单展示配置（抽屉 / 弹窗）
   const formVariant = $derived(form.variant ?? 'drawer')
@@ -395,7 +403,7 @@
   )
 </script>
 
-<div class='space-y-4 {className}'>
+<div class='{pageGapClass} {className}'>
   <!-- 页面标题 -->
   <PageHeader title={resourceLabel}>
     {#snippet actions()}
@@ -403,8 +411,8 @@
         {@render headerActions()}
       {/if}
       {#if canCreate}
-        <Button variant='primary' onclick={openCreate}>
-          <span class='icon-[tabler--plus] size-4.5 mr-1'></span>
+        <Button variant='primary' size='sm' onclick={openCreate} class='shadow-sm'>
+          <span class='icon-[tabler--plus] size-4.5 mr-1.5'></span>
           {uiM('crud_create')}
         </Button>
       {/if}
@@ -413,7 +421,7 @@
 
   <!-- 搜索 + 过滤栏 -->
   {#if searchable || filterFields.length > 0}
-    <Card>
+    <Card padding='sm' class={filterCardClass}>
       <CrudFilterBar
         {searchable}
         searchPlaceholder={searchPlaceholderText}
@@ -428,7 +436,7 @@
   {/if}
 
   <!-- 数据列表 -->
-  <Card>
+  <Card padding='none' class={listCardClass}>
     <DataTable
       data={data.items}
       columns={dtColumns}
@@ -440,32 +448,32 @@
         {#if rowClickDetail}
           <IconButton
             variant='ghost'
-            size='sm'
+            size={actionButtonSize}
             ariaLabel={uiM('crud_detail')}
             onclick={() => openDetail(item)}
           >
-            <span class='icon-[tabler--eye] size-4'></span>
+            <span class='icon-[tabler--eye] {actionIconClass}'></span>
           </IconButton>
         {/if}
         {#if canUpdate}
           <IconButton
             variant='ghost'
-            size='sm'
+            size={actionButtonSize}
             ariaLabel={uiM('crud_edit')}
             onclick={() => openEdit(item)}
           >
-            <span class='icon-[tabler--edit] size-4'></span>
+            <span class='icon-[tabler--edit] {actionIconClass}'></span>
           </IconButton>
         {/if}
         {#if canDelete}
           <IconButton
             variant='ghost'
-            size='sm'
+            size={actionButtonSize}
             ariaLabel={uiM('crud_delete')}
             onclick={() => requestDelete(item)}
             class='hover:text-error'
           >
-            <span class='icon-[tabler--trash] size-4'></span>
+            <span class='icon-[tabler--trash] {actionIconClass}'></span>
           </IconButton>
         {/if}
         {#if listItemActions}
@@ -475,12 +483,12 @@
     </DataTable>
 
     <!-- 分页栏：始终显示，支持每页条数选择与跳页 -->
-    <div class='flex justify-center p-4 border-t border-base-content/5'>
+    <div class={paginationBarClass}>
       <Pagination
         page={data.page}
         total={data.total}
         pageSize={data.pageSize}
-        size='sm'
+        size={paginationSize}
         showTotal={paginationShowTotal}
         showJumper={paginationShowJumper}
         showSizeChanger={paginationShowSizeChanger}
@@ -497,6 +505,7 @@
   open={detailOpen}
   item={selectedItem}
   fields={detailFields}
+  {density}
   title={panelTitle}
   variant={formVariant}
   size={formDrawerSize}
@@ -515,6 +524,7 @@
   open={editOpen}
   mode={panelMode === 'create' ? 'create' : 'edit'}
   fields={panelMode === 'create' ? createFields : editFields}
+  {density}
   bind:formData
   title={panelTitle}
   variant={formVariant}
