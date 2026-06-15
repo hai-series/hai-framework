@@ -506,22 +506,40 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 ```ts
 import {
   applyTheme, // 应用主题（自动持久化到 localStorage）
+  createThemeBootstrapScript, // 生成可注入 app.html 的首屏主题恢复脚本
   getCurrentTheme, // 获取当前主题
   getThemeInitScript, // 返回可注入到 HTML shell 的防闪烁脚本文本
   isDarkTheme, // 检查是否暗色主题
+  normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
+  normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
   THEMES, // ThemeInfo[] — 15 个精选主题元数据
 } from '@h-ai/ui'
 ```
 
-在 SvelteKit 的 `app.html` 中，请直接写入下面这段脚本内容（与 `getThemeInitScript()` 返回值一致）：
+简单场景可以直接使用 `getThemeInitScript()`；如果应用有自定义存储 key、主题色 CSS 变量或语言偏好，推荐在服务端通过 `createThemeBootstrapScript()` 生成脚本后再注入 `app.html`。
+
+在 SvelteKit 的 `app.html` 中，可以先放一个占位符：
 
 ```html
 <head>
-  <script>
-    (function(){var t='light';try{var s=localStorage.getItem('theme');if(s)t=s}catch{}document.documentElement.setAttribute('data-theme',t)})()
-  </script>
+  <script>%theme_bootstrap%</script>
 </head>
+```
+
+然后在 `hooks.server.ts` 里注入：
+
+```ts
+import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui'
+
+const themeBootstrapScript = createThemeBootstrapScript({
+  storageKey: 'hai-demo-preferences',
+  legacyThemeStorageKey: 'hai-demo-theme',
+  defaultThemeColor: '#5765f0',
+  colorCssVar: DEFAULT_THEME_COLOR_CSS_VAR,
+})
+
+transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstrapScript)
 ```
 
 ## 国际化 (i18n)

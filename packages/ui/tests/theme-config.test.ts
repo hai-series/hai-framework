@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   applyTheme,
+  createThemeBootstrapScript,
   DAISYUI_THEMES_CONFIG,
   DARK_THEMES,
   DEFAULT_THEME,
@@ -19,6 +20,10 @@ import {
   getThemeInfo,
   getThemeInitScript,
   isDarkTheme,
+  normalizeHexColor,
+  normalizeThemeId,
+  resolveThemeTone,
+  SUPPORTED_THEME_IDS,
   THEME_COLOR_PRESETS,
   THEME_GROUPS,
   THEME_STORAGE_KEY,
@@ -124,6 +129,12 @@ describe('dARK_THEMES - 暗色主题列表', () => {
   })
 })
 
+describe('sUPPORTED_THEME_IDS - 支持的主题 ID', () => {
+  it('应该与 THEMES 中的主题 ID 一致', () => {
+    expect(SUPPORTED_THEME_IDS).toEqual(THEMES.map(theme => theme.id))
+  })
+})
+
 // =============================================================================
 // THEME_GROUPS
 // =============================================================================
@@ -211,6 +222,48 @@ describe('isDarkTheme - 暗色主题判断', () => {
   })
 })
 
+describe('normalizeThemeId - 主题 ID 归一化', () => {
+  it('应保留支持的主题 ID', () => {
+    expect(normalizeThemeId('night')).toBe('night')
+  })
+
+  it('不支持的主题 ID 应回退到默认主题', () => {
+    expect(normalizeThemeId('unknown')).toBe(DEFAULT_THEME)
+  })
+
+  it('应支持自定义 fallback', () => {
+    expect(normalizeThemeId('unknown', 'coffee')).toBe('coffee')
+  })
+
+  it('fallback 非法时仍应回退到默认主题', () => {
+    expect(normalizeThemeId('unknown', 'invalid')).toBe(DEFAULT_THEME)
+  })
+})
+
+describe('normalizeHexColor - Hex 颜色归一化', () => {
+  it('应保留合法的 6 位 Hex 颜色', () => {
+    expect(normalizeHexColor('#5765f0')).toBe('#5765f0')
+  })
+
+  it('应把合法的 3 位 Hex 颜色扩展为 6 位', () => {
+    expect(normalizeHexColor('#abc')).toBe('#aabbcc')
+  })
+
+  it('非法颜色应返回 null', () => {
+    expect(normalizeHexColor('rgb(0,0,0)')).toBeNull()
+  })
+})
+
+describe('resolveThemeTone - 主题 tone 解析', () => {
+  it('暗色主题应返回 dark', () => {
+    expect(resolveThemeTone('night')).toBe('dark')
+  })
+
+  it('亮色主题应返回 light', () => {
+    expect(resolveThemeTone('light')).toBe('light')
+  })
+})
+
 // =============================================================================
 // 常量
 // =============================================================================
@@ -270,13 +323,48 @@ describe('getThemeInitScript - 主题初始化脚本', () => {
   it('脚本应在读取 localStorage 时自行兜底异常', () => {
     const script = getThemeInitScript()
     expect(script).toContain('try{')
-    expect(script).toContain('catch{}')
+    expect(script).toContain('catch{')
   })
 
   it('脚本应该是自执行函数', () => {
     const script = getThemeInitScript()
     expect(script.startsWith('(function(){')).toBe(true)
     expect(script.endsWith('})()')).toBe(true)
+  })
+})
+
+describe('createThemeBootstrapScript - 通用主题启动脚本', () => {
+  it('应包含 storage key、主题色和 tone dataset 配置', () => {
+    const script = createThemeBootstrapScript({
+      storageKey: 'hai-demo-preferences',
+      legacyThemeStorageKey: 'hai-demo-theme',
+      defaultThemeId: 'night',
+      defaultThemeColor: '#abc',
+      colorCssVar: '--demo-theme-color',
+      toneDatasetKey: 'demoThemeTone',
+      locale: {
+        key: 'language',
+        defaultValue: 'zh-CN',
+        supportedValues: ['zh-CN', 'en-US'],
+      },
+    })
+
+    expect(script).toContain('hai-demo-preferences')
+    expect(script).toContain('hai-demo-theme')
+    expect(script).toContain('--demo-theme-color')
+    expect(script).toContain('demoThemeTone')
+    expect(script).toContain('"themeColor":"#aabbcc"')
+    expect(script).toContain('"language":"zh-CN"')
+  })
+
+  it('当不处理主题色时应生成 removeProperty 分支', () => {
+    const script = createThemeBootstrapScript({
+      storageKey: 'hai-demo-preferences',
+      defaultThemeColor: null,
+      colorCssVar: '--demo-theme-color',
+    })
+
+    expect(script).toContain('style.removeProperty')
   })
 })
 
