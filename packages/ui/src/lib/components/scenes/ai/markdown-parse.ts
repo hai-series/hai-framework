@@ -41,6 +41,20 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;')
 }
 
+function createTableCellAttrs(cell: Tokens.TableCell): string {
+  const attrs = []
+
+  if (cell.align) {
+    attrs.push(`style="text-align:${cell.align}"`)
+  }
+
+  if (cell.text.trim()) {
+    attrs.push(`title="${escapeHtml(cell.text)}"`)
+  }
+
+  return attrs.length > 0 ? ` ${attrs.join(' ')}` : ''
+}
+
 /**
  * 创建自定义渲染器对象
  *
@@ -115,16 +129,14 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
     table(token: Tokens.Table): string {
       let headerHtml = ''
       for (const cell of token.header) {
-        const align = cell.align ? ` style="text-align:${cell.align}"` : ''
-        headerHtml += `<th${align}>${this.parser.parseInline(cell.tokens)}</th>`
+        headerHtml += `<th${createTableCellAttrs(cell)}>${this.parser.parseInline(cell.tokens)}</th>`
       }
 
       let bodyHtml = ''
       for (const row of token.rows) {
         let rowHtml = ''
         for (const cell of row) {
-          const align = cell.align ? ` style="text-align:${cell.align}"` : ''
-          rowHtml += `<td${align}>${this.parser.parseInline(cell.tokens)}</td>`
+          rowHtml += `<td${createTableCellAttrs(cell)}>${this.parser.parseInline(cell.tokens)}</td>`
         }
         bodyHtml += `<tr>${rowHtml}</tr>`
       }
