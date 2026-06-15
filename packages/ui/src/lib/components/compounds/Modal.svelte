@@ -86,6 +86,17 @@
     }
   }
 
+  function handleViewportKeydown(event: KeyboardEvent) {
+    if (
+      event.target === event.currentTarget
+      && closeOnBackdrop
+      && (event.key === 'Enter' || event.key === ' ')
+    ) {
+      event.preventDefault()
+      handleClose()
+    }
+  }
+
   function handleDialogCancel(event: Event) {
     // 原生 dialog 在按下 Escape 时会先触发 cancel；
     // 这里统一接管关闭逻辑，避免浏览器直接 close 后跳过组件自己的 onclose 回调。
@@ -117,74 +128,76 @@
   bind:this={modalElement}
   class='hai-modal'
   oncancel={handleDialogCancel}
-  onclick={handleDialogClick}
 >
-  <div class={modalBoxClass} style={panelStyle}>
-    {#if hasHeader}
-      <!-- 顶部栏单独固定，保证滚动时标题和关闭操作始终可见。 -->
-      <div class='hai-modal__header flex flex-none items-start justify-between gap-4 px-6 py-5 sm:px-7'>
-        {#if header}
-          <div class='flex-1 font-semibold text-[1.05rem] text-base-content/92'>
-            {@render header()}
-          </div>
-        {:else if title}
-          <h3 class='flex-1 font-semibold text-[1.05rem] tracking-tight text-base-content/92'>
-            {title}
-          </h3>
-        {:else}
-          <div class='flex-1'></div>
-        {/if}
+  <div
+    class='hai-modal__viewport'
+    role='button'
+    tabindex='-1'
+    aria-label={uiM('common_close')}
+    onclick={handleDialogClick}
+    onkeydown={handleViewportKeydown}
+  >
+    <div class={modalBoxClass} style={panelStyle}>
+      {#if hasHeader}
+        <!-- 顶部栏单独固定，保证滚动时标题和关闭操作始终可见。 -->
+        <div class='hai-modal__header flex flex-none items-start justify-between gap-4 px-6 py-5 sm:px-7'>
+          {#if header}
+            <div class='flex-1 font-semibold text-[1.05rem] text-base-content/92'>
+              {@render header()}
+            </div>
+          {:else if title}
+            <h3 class='flex-1 font-semibold text-[1.05rem] tracking-tight text-base-content/92'>
+              {title}
+            </h3>
+          {:else}
+            <div class='flex-1'></div>
+          {/if}
 
-        {#if showClose}
-          <button
-            type='button'
-            class='hai-modal__close'
-            aria-label={uiM('common_close')}
-            onclick={handleClose}
-          >
-            <svg viewBox='0 0 24 24' class='hai-modal__close-icon' aria-hidden='true'>
-              <path
-                d='M6 6l12 12M18 6L6 18'
-                fill='none'
-                stroke='currentColor'
-                stroke-width='1.9'
-                stroke-linecap='round'
-              ></path>
-            </svg>
-          </button>
+          {#if showClose}
+            <button
+              type='button'
+              class='hai-modal__close'
+              aria-label={uiM('common_close')}
+              onclick={handleClose}
+            >
+              <svg viewBox='0 0 24 24' class='hai-modal__close-icon' aria-hidden='true'>
+                <path
+                  d='M6 6l12 12M18 6L6 18'
+                  fill='none'
+                  stroke='currentColor'
+                  stroke-width='1.9'
+                  stroke-linecap='round'
+                ></path>
+              </svg>
+            </button>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- 主体区域独立滚动，避免长内容把头部和底部一起顶走。 -->
+      <div class={cn('min-h-0 flex-1 px-6 py-5 sm:px-7', bodyOverflowClass, bodyClass)}>
+        {#if children}
+          {@render children()}
         {/if}
       </div>
-    {/if}
 
-    <!-- 主体区域独立滚动，避免长内容把头部和底部一起顶走。 -->
-    <div class={cn('min-h-0 flex-1 px-6 py-5 sm:px-7', bodyOverflowClass, bodyClass)}>
-      {#if children}
-        {@render children()}
+      {#if footer}
+        <!-- 底栏固定在面板底部，用于承接确认/取消或状态摘要。 -->
+        <div class='hai-modal__footer flex flex-none items-center px-6 py-4 sm:px-7'>
+          <div class='flex w-full items-center justify-end gap-3'>
+            {@render footer()}
+          </div>
+        </div>
       {/if}
     </div>
-
-    {#if footer}
-      <!-- 底栏固定在面板底部，用于承接确认/取消或状态摘要。 -->
-      <div class='hai-modal__footer flex flex-none items-center bg-base-100 px-6 py-4 sm:px-7'>
-        <div class='flex w-full items-center justify-end gap-3'>
-          {@render footer()}
-        </div>
-      </div>
-    {/if}
   </div>
 </dialog>
 
 <style>
-  dialog.hai-modal {
-    inset: 0;
-    width: 100vw;
-    min-width: 0;
-    max-width: none;
-    height: 100vh;
-    height: 100dvh;
-    max-height: none;
+  dialog.hai-modal,
+  dialog.hai-modal:modal {
     margin: 0;
-    padding: clamp(1rem, 2.6vw, 2rem);
+    padding: 0;
     border: 0;
     background: transparent;
     outline: none;
@@ -192,9 +205,12 @@
     box-sizing: border-box;
   }
 
-  dialog.hai-modal[open] {
+  .hai-modal__viewport {
+    position: fixed;
+    inset: 0;
     display: grid;
     place-items: center;
+    padding: clamp(1rem, 2.6vw, 2rem);
   }
 
   dialog.hai-modal::backdrop {
@@ -220,10 +236,16 @@
   }
 
   .hai-modal__header {
+    /* 头部单独承接面板圆角，避免滚动主体或主题背景把顶部边缘切成直角。 */
+    border-top-left-radius: inherit;
+    border-top-right-radius: inherit;
     box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--color-base-content) 6%, transparent);
   }
 
   .hai-modal__footer {
+    /* 底栏去掉独立背景后，继续继承圆角，保证底部阴影和面板外轮廓保持一致。 */
+    border-bottom-right-radius: inherit;
+    border-bottom-left-radius: inherit;
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-base-content) 6%, transparent);
     border-radius: 0 0 1.4rem 1.4rem;
   }
