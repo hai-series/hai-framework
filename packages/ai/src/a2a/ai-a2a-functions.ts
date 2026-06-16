@@ -234,13 +234,39 @@ export function createA2AOperations(
       }
     },
 
-    async callRemoteAgent(remoteUrl: string, message: string, _options?: A2ACallOptions) {
+    async callRemoteAgent(remoteUrl: string, message: string, options?: A2ACallOptions) {
       const startTime = Date.now()
       try {
-        let client = clientCache.get(remoteUrl)
+        // 构建自定义 fetch：注入 headers 和 timeout
+        const customHeaders = options?.headers
+        const timeoutMs = options?.timeout
+        const hasCustomOptions = customHeaders || timeoutMs
+
+        let client = hasCustomOptions ? undefined : clientCache.get(remoteUrl)
         if (!client) {
-          client = new A2AClient(remoteUrl)
-          clientCache.set(remoteUrl, client)
+          const clientOptions: import('@a2a-js/sdk/client').A2AClientOptions | undefined = hasCustomOptions
+            ? {
+                fetchImpl: ((input: RequestInfo | URL, init?: RequestInit) => {
+                  const existingHeaders = init?.headers
+                    ? Object.fromEntries(new Headers(init.headers as HeadersInit).entries())
+                    : {}
+                  const mergedHeaders = {
+                    ...existingHeaders,
+                    ...customHeaders,
+                  }
+                  const fetchInit: RequestInit = {
+                    ...init,
+                    headers: mergedHeaders,
+                    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+                  }
+                  return globalThis.fetch(input, fetchInit)
+                }) as typeof fetch,
+              }
+            : undefined
+          client = new A2AClient(remoteUrl, clientOptions)
+          if (!hasCustomOptions) {
+            clientCache.set(remoteUrl, client)
+          }
         }
         const params: { message: Message } = {
           message: {
