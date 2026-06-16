@@ -5,6 +5,7 @@
  * 的实际行为：请求参数组装、响应映射、错误映射、环境变量回退等。
  */
 
+import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // vi.hoisted 确保变量在 vi.mock 工厂执行时已可用
@@ -612,6 +613,184 @@ describe('openAI 客户端配置', () => {
     )
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'gpt-4o' }),
+    )
+  })
+})
+
+// =============================================================================
+// ai.llm — 临时模型 (tempModel)
+// =============================================================================
+
+describe('ai.llm — 临时模型 (tempModel)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    constructorCalls.length = 0
+    const initResult = await ai.init({ llm: { apiKey: 'sk-global', model: 'gpt-4o-mini' } })
+    expect(initResult.success).toBe(true)
+  })
+
+  afterEach(async () => {
+    await ai.close()
+  })
+
+  it('chat 使用临时模型的 apiKey/baseUrl/timeout/model', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    constructorCalls.length = 0
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      tempModel: { model: 'claude-3', apiKey: 'sk-temp', baseUrl: 'https://temp.api/v1', timeout: 12345 },
+    })
+
+    expect(constructorCalls[0][0]).toEqual(
+      expect.objectContaining({ apiKey: 'sk-temp', baseURL: 'https://temp.api/v1', timeout: 12345 }),
+    )
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'claude-3', stream: false }),
+    )
+  })
+
+  it('临时模型回填 maxTokens/temperature 默认值', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      tempModel: { model: 'm', apiKey: 'sk-temp', maxTokens: 2048, temperature: 0.2 },
+    })
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: 2048, temperature: 0.2 }),
+    )
+  })
+
+  it('请求显式 max_tokens/temperature 优先于临时模型', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      max_tokens: 777,
+      temperature: 0.9,
+      tempModel: { model: 'm', apiKey: 'sk-temp', maxTokens: 2048, temperature: 0.2 },
+    })
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: 777, temperature: 0.9 }),
+    )
+  })
+
+  it('tempModel 字段不透传给 OpenAI 请求', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      tempModel: { model: 'm', apiKey: 'sk-temp' },
+    })
+
+    const callArg = mockCreate.mock.calls[0][0]
+    expect(callArg).not.toHaveProperty('tempModel')
+  })
+
+  it('临时模型 apiKey 缺失且无全局回退时返回 CONFIGURATION_ERROR', async () => {
+    await ai.close()
+    const savedHai = process.env.HAI_AI_LLM_API_KEY
+    const savedOpenAI = process.env.OPENAI_API_KEY
+    delete process.env.HAI_AI_LLM_API_KEY
+    delete process.env.OPENAI_API_KEY
+    try {
+      await ai.init({ llm: { model: 'gpt-4o-mini' } })
+      mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+      const result = await ai.llm.chat({
+        messages: [{ role: 'user', content: 'hi' }],
+        tempModel: { model: 'm' },
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
+    }
+    finally {
+      if (savedHai !== undefined)
+        process.env.HAI_AI_LLM_API_KEY = savedHai
+      if (savedOpenAI !== undefined)
+        process.env.OPENAI_API_KEY = savedOpenAI
+    }
+  })
+
+  it('相同临时模型配置复用客户端实例（不重复创建）', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    constructorCalls.length = 0
+    const tempModel = { model: 'm', apiKey: 'sk-temp', baseUrl: 'https://temp.api/v1' }
+
+    await ai.llm.chat({ messages: [{ role: 'user', content: 'a' }], tempModel })
+    await ai.llm.chat({ messages: [{ role: 'user', content: 'b' }], tempModel })
+
+    // 全局客户端未触发（均走临时模型），临时客户端仅创建一次
+    expect(constructorCalls).toHaveLength(1)
+  })
+
+  it('临时模型客户端缓存按 TTL 过期后重建', async () => {
+    await ai.close()
+    vi.useFakeTimers()
+    try {
+      await ai.init({ llm: { apiKey: 'sk-global', tempModelCacheTtl: 1000 } })
+      mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+      constructorCalls.length = 0
+      const tempModel = { model: 'm', apiKey: 'sk-temp' }
+
+      await ai.llm.chat({ messages: [{ role: 'user', content: 'a' }], tempModel })
+      expect(constructorCalls).toHaveLength(1)
+
+      // 未过期：复用缓存
+      vi.advanceTimersByTime(500)
+      await ai.llm.chat({ messages: [{ role: 'user', content: 'b' }], tempModel })
+      expect(constructorCalls).toHaveLength(1)
+
+      // 超过 TTL：缓存失效，重建客户端
+      vi.advanceTimersByTime(1000)
+      await ai.llm.chat({ messages: [{ role: 'user', content: 'c' }], tempModel })
+      expect(constructorCalls).toHaveLength(2)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ask 透传 tempModel', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('答复'))
+    constructorCalls.length = 0
+
+    const result = await ai.llm.ask('问题', {
+      tempModel: { model: 'm', apiKey: 'sk-temp', baseUrl: 'https://temp.api/v1' },
+    })
+
+    expect(result.success).toBe(true)
+    expect(constructorCalls[0][0]).toEqual(
+      expect.objectContaining({ apiKey: 'sk-temp', baseURL: 'https://temp.api/v1' }),
+    )
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'm' }),
+    )
+  })
+
+  it('chatStream 使用 tempModel', async () => {
+    mockCreate.mockResolvedValue((async function* () {
+      yield makeSDKChunk('ok', { finishReason: 'stop' })
+    })())
+    constructorCalls.length = 0
+
+    for await (const _chunk of ai.llm.chatStream({
+      messages: [{ role: 'user', content: 'x' }],
+      tempModel: { model: 'm', apiKey: 'sk-temp' },
+    })) {
+      // consume stream
+    }
+
+    expect(constructorCalls[0][0]).toEqual(
+      expect.objectContaining({ apiKey: 'sk-temp' }),
+    )
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'm', stream: true }),
     )
   })
 })

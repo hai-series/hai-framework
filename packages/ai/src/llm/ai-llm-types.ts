@@ -65,6 +65,32 @@ export type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam | D
 export type ToolDefinition = OpenAI.Chat.Completions.ChatCompletionTool
 
 /**
+ * 临时模型配置
+ *
+ * 单次请求级别的临时模型端点，绕过配置中注册的模型与场景映射，
+ * 直接指定 API Key / Base URL / 模型名等参数。适用于运行时动态切换模型、
+ * 多租户各自携带凭据等场景。其客户端实例按 TTL 缓存（见 `LLMConfig.tempModelCacheTtl`），
+ * 与常驻模型客户端缓存隔离。
+ *
+ * 未指定的字段回退到全局 LLM 配置：`apiKey` / `baseUrl` 回退全局值或环境变量，
+ * `maxTokens` / `temperature` / `timeout` 回退全局默认值。
+ */
+export interface TempModelConfig {
+  /** 模型名称（传给 API 的实际模型名） */
+  model: string
+  /** API Key（未指定时回退全局配置 / 环境变量） */
+  apiKey?: string
+  /** API 基础 URL（未指定时回退全局配置 / 环境变量 / 默认 OpenAI） */
+  baseUrl?: string
+  /** 最大 Token 数（未指定时回退全局配置；请求显式指定 `max_tokens` 时以请求为准） */
+  maxTokens?: number
+  /** 采样温度（未指定时回退全局配置；请求显式指定 `temperature` 时以请求为准） */
+  temperature?: number
+  /** 请求超时时间（毫秒，未指定时回退全局配置） */
+  timeout?: number
+}
+
+/**
  * 聊天完成请求参数
  *
  * 继承 OpenAI SDK 全部标准请求字段，并扩展框架专属字段（`objectId`、`sessionId`）。
@@ -83,6 +109,8 @@ export type ChatCompletionRequest
     sessionId?: string
     /** 是否持久化对话记录（默认 true；传入 false 时跳过记录，适用于内部调用如实体提取） */
     enablePersist?: boolean
+    /** 临时模型配置（传入后绕过配置注册的模型，使用临时端点；优先级高于 `model`） */
+    tempModel?: TempModelConfig
   }
 
 /** Token 使用统计 */
@@ -277,6 +305,8 @@ export interface AskOptions {
   temperature?: number
   /** 是否持久化对话记录（默认 true；传入 false 时跳过记录） */
   enablePersist?: boolean
+  /** 临时模型配置（传入后绕过配置注册的模型，使用临时端点；优先级高于 `model`） */
+  tempModel?: TempModelConfig
 }
 
 /**

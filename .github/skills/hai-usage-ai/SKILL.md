@@ -50,6 +50,7 @@ llm:
   baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
   timeout: 60000
+  tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
   scenarios:
     chat: fast
     reasoning: strong
@@ -76,6 +77,7 @@ knowledge:
 | --- | --- | --- |
 | 非流式对话 | `ai.llm.chat({ messages })` | OpenAI 兼容 Chat Completion |
 | 流式对话 | `ai.llm.chatStream({ messages })` | 返回 `AsyncIterable` |
+| 临时模型 | `ai.llm.chat({ messages, tempModel })` | 单次请求级临时端点，客户端按 TTL 缓存 |
 | 工具定义 | `ai.tools.define(...)` | Zod schema 转 JSON Schema |
 | 工具执行 | `registry.executeAll(toolCalls)` | 支持并行执行 |
 | MCP 服务 | `createMcpServer(...)` | 按需连接 HTTP/SSE/Stdio transport |
@@ -122,6 +124,30 @@ for await (const chunk of ai.llm.chatStream({ messages })) {
   if (delta?.content) process.stdout.write(delta.content)
 }
 const message = processor.toAssistantMessage()
+```
+
+## 临时模型（tempModel）
+
+单次请求级别绕过配置注册模型，直接指定端点与凭据；适用于运行时动态切换模型、多租户各带凭据。
+`chat` / `chatStream` / `ask` / `askStream` 均支持。未指定字段回退全局 LLM 配置 / 环境变量；
+请求显式 `max_tokens` / `temperature` 优先于 `tempModel.maxTokens` / `temperature`。
+临时客户端按 `apiKey+baseUrl+timeout` 缓存，TTL 默认 10 分钟（`llm.tempModelCacheTtl` 毫秒，可配置），与常驻模型客户端隔离。
+
+```ts
+const result = await ai.llm.chat({
+  messages: [{ role: 'user', content: '你好' }],
+  tempModel: {
+    model: 'claude-3-5-sonnet',
+    apiKey: 'sk-temp-xxx',
+    baseUrl: 'https://temp.endpoint/v1',
+    maxTokens: 2048, // 可选
+    temperature: 0.3, // 可选
+    timeout: 30000, // 可选
+  },
+})
+
+// ask 便捷方法同样支持
+await ai.llm.ask('翻译这段话', { tempModel: { model: 'gpt-4o', apiKey: 'sk-xxx' } })
 ```
 
 ## MCP 服务器

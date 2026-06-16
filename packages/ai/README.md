@@ -90,6 +90,13 @@ for await (const chunk of ai.llm.chatStream({ messages })) {
     process.stdout.write(delta)
   }
 }
+
+// 临时模型：单次请求绕过配置注册模型，直接指定端点与凭据（chat/chatStream/ask/askStream 均支持）
+// 临时客户端按 TTL 缓存（llm.tempModelCacheTtl，默认 10 分钟），与常驻模型客户端隔离
+const temp = await ai.llm.chat({
+  messages,
+  tempModel: { model: 'claude-3-5-sonnet', apiKey: 'sk-temp', baseUrl: 'https://temp.endpoint/v1' },
+})
 ```
 
 ### 工具调用
@@ -159,6 +166,7 @@ llm:
   baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
   timeout: 60000
+  tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
   scenarios:
     chat: fast
     reasoning: strong

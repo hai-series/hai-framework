@@ -120,6 +120,8 @@ export const LLMConfigSchema = z.object({
   temperature: z.number().min(0).max(2).optional().default(0.7),
   /** 全局请求超时时间（各模型 fallback，毫秒，默认 `60000`） */
   timeout: z.number().positive().optional().default(60000),
+  /** 临时模型客户端缓存存活时间（毫秒，默认 `600000` = 10 分钟；超时后临时模型客户端实例失效并重建） */
+  tempModelCacheTtl: z.number().positive().optional().default(600000),
   /** 多模型配置列表（各字段可选，未指定时回退到全局默认值） */
   models: z.array(ModelEntrySchema).optional(),
   /** 场景模型映射（场景名 → 模型 ID 或直接模型名称，各场景均可选） */
@@ -636,6 +638,7 @@ export const AIConfigSchema = z.object({
     maxTokens: 4096,
     temperature: 0.7,
     timeout: 60000,
+    tempModelCacheTtl: 600000,
   }),
   /** MCP 配置 */
   mcp: MCPConfigSchema.optional(),

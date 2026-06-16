@@ -171,7 +171,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     // 使用更窄的本地类型：流式响应中工具调用均为 function 类型
     const toolCalls: Array<{ id: string, type: 'function', function: { name: string, arguments: string } }> = []
     let streamId = ''
-    let resolvedModel = request.model ?? ''
+    let resolvedModel = request.model ?? request.tempModel?.model ?? ''
 
     for await (const chunk of provider.chatStream(request)) {
       yield chunk
@@ -301,6 +301,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
         objectId: options?.objectId,
         sessionId: options?.sessionId,
         enablePersist: options?.enablePersist,
+        tempModel: options?.tempModel,
       })
       if (!result.success)
         return result as HaiResult<never>
@@ -320,6 +321,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
         objectId: options?.objectId,
         sessionId: options?.sessionId,
         enablePersist: options?.enablePersist,
+        tempModel: options?.tempModel,
       })) {
         const delta = chunk.choices[0]?.delta?.content
         if (delta)
