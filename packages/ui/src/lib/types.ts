@@ -432,6 +432,8 @@ export interface ModalProps {
   title?: string
   /** 尺寸 */
   size?: Size | 'full'
+  /** 面板圆角（任意合法 CSS border-radius 值，默认 1rem） */
+  radius?: string
   /** 是否可通过点击遮罩关闭 */
   closeOnBackdrop?: boolean
   /** 是否可通过 ESC 键关闭 */

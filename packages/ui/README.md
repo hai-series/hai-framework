@@ -151,7 +151,7 @@ components/
 
 | 组件      | 描述   | 主要属性                                                |
 | --------- | ------ | ------------------------------------------------------- |
-| `Modal`   | 模态框 | `open`, `title`, `size`, `closeOnBackdrop`, `showClose` |
+| `Modal`   | 模态框 | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose` |
 | `Drawer`  | 抽屉   | `open`, `position`, `title`, `size`                     |
 | `Confirm` | 确认框 | `open`, `title`, `message`, `variant`, `onconfirm`      |
 | `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset`                 |
@@ -377,6 +377,8 @@ components/
 
 <ToastContainer />
 ```
+
+`Modal` 不传 `title` / `header` 时会保留右上角关闭按钮，但不额外渲染整条头部。需要调整圆角时可传 `radius="1.4rem"`，内部下拉等浮层需要越界显示时可传 `bodyOverflow="visible"`。
 
 ### 声明式 CRUD 页面（CrudPage）
 

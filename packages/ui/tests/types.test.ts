@@ -217,6 +217,7 @@ describe('组合组件 Props', () => {
     expectTypeOf<ModalProps>().toHaveProperty('open')
     expectTypeOf<ModalProps>().toHaveProperty('title')
     expectTypeOf<ModalProps>().toHaveProperty('size')
+    expectTypeOf<ModalProps>().toHaveProperty('radius')
     expectTypeOf<ModalProps>().toHaveProperty('closeOnBackdrop')
     expectTypeOf<ModalProps>().toHaveProperty('width')
     expectTypeOf<ModalProps>().toHaveProperty('height')
