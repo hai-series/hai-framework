@@ -57,7 +57,10 @@ input::-webkit-credentials-auto-fill-button {
 }
 
 /* ─── Focus ring ─── */
-:focus-visible {
+/* 全局 focus-visible 仅用于非表单交互元素（按钮、链接等）
+   表单组件 (.select, .radio, .checkbox, .toggle, .textarea, input, textarea)
+   由 DaisyUI 或组件自身处理焦点样式 */
+:focus-visible:not(input, select, textarea, .select, .radio, .checkbox, .toggle, .textarea) {
   outline: 2px solid oklch(0.6 0.15 250);
   outline-offset: 2px;
   border-radius: 4px;
