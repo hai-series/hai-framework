@@ -163,3 +163,44 @@
     />
   </div>
 </div>
+
+<style>
+  button {
+    border-color: var(--soft-border, color-mix(in oklab, var(--color-base-content) 12%, transparent));
+    background: var(--soft-surface, var(--color-base-100));
+    color: var(--soft-text-body, var(--color-base-content));
+    box-shadow: none;
+    font-weight: 500;
+  }
+
+  button:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--color-primary) 28%, var(--soft-border, transparent) 72%);
+    background: color-mix(
+      in oklab,
+      var(--soft-surface, var(--color-base-100)) 88%,
+      var(--color-base-200) 12%
+    );
+  }
+
+  button[aria-pressed='true'] {
+    border-color: color-mix(in oklab, var(--color-primary) 42%, var(--soft-border, transparent) 58%);
+    background: color-mix(
+      in oklab,
+      var(--color-primary) 10%,
+      var(--soft-surface, var(--color-base-100)) 90%
+    );
+    color: var(--color-primary);
+  }
+
+  button:focus,
+  button:focus-visible {
+    outline: none;
+    border-color: color-mix(in oklab, var(--color-primary) 48%, var(--soft-border, transparent) 52%);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-primary) 12%, transparent 88%);
+  }
+
+  button > span:first-child {
+    border-color: color-mix(in oklab, var(--color-base-content) 10%, transparent 90%);
+    box-shadow: none;
+  }
+</style>

@@ -11,6 +11,7 @@
     open = $bindable(false),
     title = '',
     size = 'md',
+    radius = '1rem',
     closeOnBackdrop = true,
     closeOnEscape = true,
     showClose = true,
@@ -29,8 +30,10 @@
   // 只有调用 `showModal()` 进入 top-layer 后，弹框才不会被父级布局和 overflow 裁剪。
   let modalElement: HTMLDialogElement | undefined = $state()
 
-  // 只要存在标题、自定义 header 或关闭按钮，就渲染顶部栏位，保证弹框结构稳定。
-  const hasHeader = $derived(Boolean(header || title || showClose))
+  // 标题区仅在显式提供标题或自定义 header 时出现；
+  // 仅需关闭按钮的场景改为右上角悬浮按钮，避免业务侧额外占一整行头部。
+  const hasHeader = $derived(Boolean(header || title))
+  const hasFloatingClose = $derived(showClose && !hasHeader)
   const sizeMap: Record<string, string> = {
     'xs': 'hai-modal__panel--xs',
     'sm': 'hai-modal__panel--sm',
@@ -55,12 +58,21 @@
       styles.push(`--hai-modal-height: ${height.trim()}`)
     }
 
+    if (typeof radius === 'string' && radius.trim().length > 0) {
+      styles.push(`--hai-modal-radius: ${radius.trim()}`)
+    }
+
+    if (bodyOverflow === 'visible') {
+      styles.push('--hai-modal-panel-overflow: visible')
+    }
+
     return styles.length > 0 ? styles.join('; ') : undefined
   })
 
   const modalBoxClass = $derived(
     cn(
       'hai-modal__panel flex min-h-0 flex-col',
+      'relative',
       'bg-base-100 p-0',
       sizeMap[size],
       className,
@@ -138,6 +150,25 @@
     onkeydown={handleViewportKeydown}
   >
     <div class={modalBoxClass} style={panelStyle}>
+      {#if hasFloatingClose}
+        <button
+          type='button'
+          class='hai-modal__close hai-modal__close--floating'
+          aria-label={uiM('common_close')}
+          onclick={handleClose}
+        >
+          <svg viewBox='0 0 24 24' class='hai-modal__close-icon' aria-hidden='true'>
+            <path
+              d='M6 6l12 12M18 6L6 18'
+              fill='none'
+              stroke='currentColor'
+              stroke-width='1.9'
+              stroke-linecap='round'
+            ></path>
+          </svg>
+        </button>
+      {/if}
+
       {#if hasHeader}
         <!-- 顶部栏单独固定，保证滚动时标题和关闭操作始终可见。 -->
         <div class='hai-modal__header flex flex-none items-start justify-between gap-4 px-6 py-5 sm:px-7'>
@@ -225,8 +256,8 @@
     height: var(--hai-modal-height, auto);
     max-height: calc(100vh - clamp(2rem, 5.2vw, 4rem));
     max-height: calc(100dvh - clamp(2rem, 5.2vw, 4rem));
-    border-radius: 1.4rem;
-    overflow: hidden;
+    border-radius: var(--hai-modal-radius, 1rem);
+    overflow: var(--hai-modal-panel-overflow, hidden);
     color: var(--color-base-content);
     outline: none;
     box-shadow:
@@ -247,7 +278,7 @@
     border-bottom-right-radius: inherit;
     border-bottom-left-radius: inherit;
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-base-content) 6%, transparent);
-    border-radius: 0 0 1.4rem 1.4rem;
+    border-radius: 0 0 var(--hai-modal-radius, 1rem) var(--hai-modal-radius, 1rem);
   }
 
   .hai-modal__close {
@@ -282,6 +313,13 @@
   .hai-modal__close-icon {
     width: 1rem;
     height: 1rem;
+  }
+
+  .hai-modal__close--floating {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1;
   }
 
   .hai-modal__panel--xs {
@@ -342,7 +380,7 @@
       max-width: 100%;
       max-height: calc(100vh - 1.7rem);
       max-height: calc(100dvh - 1.7rem);
-      border-radius: 1rem;
+      border-radius: min(var(--hai-modal-radius, 1rem), 1rem);
     }
   }
 </style>
