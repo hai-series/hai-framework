@@ -60,9 +60,24 @@ export default defineConfig({
 ## 常用能力
 
 - primitives：`Button`、`Input`、`Textarea`、`Badge`、`Avatar`、`Spinner` 等。
-- compounds：`Form`、`Modal`、`Drawer`、`DataTable`、`Tabs`、`Combobox`、`DatePicker` 等。
+- compounds：`Form`、`Modal`、`Drawer`、`DataTable`（列头支持排序）、`Tabs`、`Combobox`、`DatePicker` 等。
 - mobile：`SafeArea`、`AppBar`、`BottomNav`、`PullRefresh`、`ActionSheet`、`SwipeCell`。
-- scenes：IAM / Storage / CRUD / AI 场景组件。
+- scenes：IAM / Storage / CRUD / AI / 错误页 / 设置 场景组件。
+
+## 场景组件速查
+
+| 组件 | 用途 |
+| --- | --- |
+| `ErrorPage` | 通用错误页，内置 `401/403/404/500/503` 预设；`status` 驱动预设，`onhome`/`onback` 自定义跳转。SvelteKit 在 `+error.svelte` 中按 `page.status` 使用 |
+| `SettingsLayout` | 设置页布局：顶部标题/描述 + 左侧分区导航（`sections` + `active` + `onselect`）+ 右侧内容（children） |
+| `AuthShell` | 认证页布局：`variant='card'`（居中卡片）或 `'split'`（左右分栏）；split 支持 `brandTitle`/`brandText`，也支持 `illustration`/`description`/`highlights` 自由内容 |
+
+### DataTable 排序
+
+- 列定义加 `sortable: true` 即可点击列头排序；默认客户端排序当前数据。
+- 受控（服务端）排序：传 `sortKey` / `sortDir` 并实现 `onsort(key, dir)`。
+- `CrudPage` 的列表列默认 `sortable`，筛选栏在有搜索/过滤条件时显示「重置」按钮。
+- `Pagination` 统一为 table 风格（shadcn 表格分页：总数 + 每页 + 第 X / Y 页 + 首/上/下/末 + 跳转到），`CrudPage` 默认采用；过滤工具栏为无卡片平铺布局，支持 `select/boolean/number/date/date-range/text`。
 
 ## AI 场景组件
 

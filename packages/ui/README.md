@@ -161,7 +161,7 @@ components/
 | 组件        | 描述     | 主要属性                                 |
 | ----------- | -------- | ---------------------------------------- |
 | `Card`      | 卡片容器 | `title`, `bordered`, `shadow`, `padding` |
-| `DataTable` | 数据表格 | `data`, `columns`, `keyField`, `loading` |
+| `DataTable` | 数据表格 | `data`, `columns`, `keyField`, `loading`, `sortKey`, `sortDir`, `onsort`（列 `sortable` 可排序） |
 | `Accordion` | 手风琴   | `items: AccordionItem[]`                 |
 | `Timeline`  | 时间线   | `items: TimelineItem[]`                  |
 
@@ -192,7 +192,7 @@ components/
 | 组件         | 描述     | 主要属性                                     |
 | ------------ | -------- | -------------------------------------------- |
 | `Tabs`       | 标签页   | `items`, `active`, `type`, `size`            |
-| `Pagination` | 分页     | `page`, `total`, `pageSize`, `showTotal`     |
+| `Pagination` | 分页（统一 table 风格） | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger` |
 | `Breadcrumb` | 面包屑   | `items`, `separator`                         |
 | `Steps`      | 步骤条   | `items`, `current`, `direction`, `clickable` |
 | `Dropdown`   | 下拉菜单 | `items`, `trigger`, `position`               |
@@ -212,23 +212,25 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-### 场景组件 Scenes（30 个）
+### 场景组件 Scenes（33 个）
 
-#### App 应用级（6 个）
+#### App 应用级（7 个）
 
 | 组件             | 描述             | 主要属性           |
 | ---------------- | ---------------- | ------------------ |
 | `FeedbackModal`  | 反馈模态框       | `open`, `onsubmit` |
 | `SettingsModal`  | 设置模态框       | `open`, `onclose`  |
+| `SettingsLayout` | 设置页布局（分区导航 + 内容区） | `title`, `description`, `sections`, `active`, `onselect` |
 | `LanguageSwitch` | 语言切换         | 无需 Props         |
 | `ThemeColorPicker` | 主题色选择器   | `value`, `presets`, `onchange` |
 | `ThemeSelector`  | 完整主题选择面板 | 无需 Props         |
 | `ThemeToggle`    | 明/暗主题切换    | 无需 Props         |
 
-#### IAM 身份认证（8 个）
+#### IAM 身份认证（9 个）
 
 | 组件                 | 描述       | 主要属性                                              |
 | -------------------- | ---------- | ----------------------------------------------------- |
+| `AuthShell`          | 认证页布局（居中卡片 / 左右分栏） | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
 | `LoginForm`          | 登录表单   | `loading`, `errors`, `showRememberMe`, `onsubmit`     |
 | `RegisterForm`       | 注册表单   | `loading`, `errors`, `fields`, `onsubmit`             |
 | `ForgotPasswordForm` | 忘记密码   | `mode`, `loading`, `errors`, `onsubmit`               |
@@ -275,10 +277,18 @@ components/
 | 组件                 | 描述         | 主要属性 / 能力 |
 | -------------------- | ------------ | ---------------- |
 | `CrudPage`           | CRUD 主页面  | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `nav` |
-| `CrudFilterBar`      | 过滤工具栏   | `filterFields`, `searchValue`, `onsearch`, `onfilterchange` |
+| `CrudFilterBar`      | 过滤工具栏（搜索 + 多类型过滤 + 重置） | `filterFields`, `searchValue`, `onsearch`, `onfilterchange`, `onreset` |
 | `CrudDetailPanel`    | 详情面板（抽屉/弹窗） | `open`, `item`, `fields`, `variant`, `drawerWidth`, `modalSize` |
 | `CrudEditPanel`      | 编辑面板（抽屉/弹窗） | `open`, `fields`, `variant`, `drawerWidth`, `modalSize`, `onsubmit` |
 | `CrudDeleteConfirm`  | 删除确认框   | `open`, `loading`, `onconfirm` |
+
+> 列表列头默认支持点击排序（`DataTable` 内置客户端排序，受控模式可通过 `sortKey`/`sortDir`/`onsort` 接管为服务端排序）；存在搜索/过滤条件时筛选栏显示「重置」按钮。过滤工具栏支持常用控件：`select`、`boolean`、`number`、`date`、`date-range`、`text`。分页栏统一为 shadcn 风格（总数 / 每页 / 第 X / Y 页 / 首末翻页 / 跳转到）。
+
+#### 错误页场景（1 个）
+
+| 组件        | 描述         | 主要属性 / 能力 |
+| ----------- | ------------ | ---------------- |
+| `ErrorPage` | 通用错误页（内置 401/403/404/500/503 预设） | `status`, `code`, `title`, `description`, `homeUrl`, `onhome`, `onback` |
 
 > `CrudPage` 通过 `form` 配置新建/编辑的展示形式：
 >

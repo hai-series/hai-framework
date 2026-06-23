@@ -20,22 +20,27 @@ test.describe('Settings UI', () => {
     await expect(title).toBeVisible()
   })
 
-  // ---------------------------------------------------------------------------
-  // 外观设置区域
-  // ---------------------------------------------------------------------------
-  test('外观设置区域包含主题选择器', async ({ page, request }) => {
+  test('分区导航包含外观/区域/关于', async ({ page, request }) => {
     await registerAndLogin(page, request, 'setui')
     await page.goto('/admin/settings')
     await page.waitForLoadState('domcontentloaded')
 
-    // 外观设置标题（h2）
-    const sectionTitle = page.locator('h2').filter({ hasText: /外观|Appearance/ })
-    await expect(sectionTitle.first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /外观|Appearance/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /区域|Region/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /关于|About/ })).toBeVisible()
+  })
 
-    // ThemeSelector 组件应可见
-    // 主题相关的按钮/选项
-    const themeArea = page.locator('section').first()
-    await expect(themeArea).toBeVisible()
+  // ---------------------------------------------------------------------------
+  // 外观设置（默认分区）
+  // ---------------------------------------------------------------------------
+  test('外观分区默认显示主题选择器', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'setui')
+    await page.goto('/admin/settings')
+    await page.waitForLoadState('domcontentloaded')
+
+    // 主题设置标题文案（外观为默认分区）
+    const themeLabel = page.locator('text=/主题|Theme/').first()
+    await expect(themeLabel).toBeVisible()
   })
 
   test('切换主题后 data-theme 属性变化', async ({ page, request }) => {
@@ -44,9 +49,7 @@ test.describe('Settings UI', () => {
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(1000)
 
-    // 查找主题选择器中的某个选项并点击
-    // ThemeSelector 通常渲染为按钮或 radio（具体取决于 @h-ai/ui 实现）
-    // 尝试点击 dark 主题选项
+    // 外观为默认分区，主题选项直接可见
     const darkOption = page.locator('[data-theme="dark"]').first()
     if (await darkOption.isVisible()) {
       await darkOption.click()
@@ -61,26 +64,18 @@ test.describe('Settings UI', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // 区域设置
+  // 区域设置（点击导航切换）
   // ---------------------------------------------------------------------------
-  test('语言设置区域可见', async ({ page, request }) => {
+  test('切换到区域分区显示语言选项', async ({ page, request }) => {
     await registerAndLogin(page, request, 'setui')
     await page.goto('/admin/settings')
     await page.waitForLoadState('domcontentloaded')
 
-    // 区域设置标题
-    const regionTitle = page.locator('h2').filter({ hasText: /区域|Region/ })
-    await expect(regionTitle.first()).toBeVisible()
-  })
-
-  test('语言选项包含简体中文和English', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'setui')
-    await page.goto('/admin/settings')
-    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /区域|Region/ }).click()
+    await page.waitForTimeout(300)
 
     // LanguageSwitch 组件内应有语言选项
     const langArea = page.locator('text=简体中文')
-    // locator 可能匹配到按钮/选项
     if (await langArea.isVisible()) {
       await expect(langArea).toBeVisible()
     }
@@ -92,42 +87,28 @@ test.describe('Settings UI', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // 系统信息
+  // 系统信息（点击导航切换）
   // ---------------------------------------------------------------------------
-  test('系统信息区域显示应用名称和版本', async ({ page, request }) => {
+  test('切换到关于分区显示应用名称', async ({ page, request }) => {
     await registerAndLogin(page, request, 'setui')
     await page.goto('/admin/settings')
     await page.waitForLoadState('domcontentloaded')
 
-    // 关于/系统信息标题
-    const aboutTitle = page.locator('h2').filter({ hasText: /关于|系统|About/ })
-    await expect(aboutTitle.first()).toBeVisible()
-
-    // 版本号（页脚）
-    const version = page.locator('footer').getByText(/v\d+\.\d+\.\d+/)
-    await expect(version).toBeVisible()
-  })
-
-  test('系统信息区域显示应用名称', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'setui')
-    await page.goto('/admin/settings')
-    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /关于|About/ }).click()
+    await page.waitForTimeout(300)
 
     // 应用名称（m.app_title() → "hai Admin"）
     const appName = page.locator('text=hai Admin')
     await expect(appName.first()).toBeVisible()
   })
 
-  // ---------------------------------------------------------------------------
-  // 三个 section 完整可见
-  // ---------------------------------------------------------------------------
-  test('三个设置 section 全部渲染', async ({ page, request }) => {
+  test('页脚显示版本号', async ({ page, request }) => {
     await registerAndLogin(page, request, 'setui')
     await page.goto('/admin/settings')
     await page.waitForLoadState('domcontentloaded')
 
-    const sections = page.locator('section')
-    const count = await sections.count()
-    expect(count).toBeGreaterThanOrEqual(3)
+    // 版本号（页脚）
+    const version = page.locator('footer').getByText(/v\d+\.\d+\.\d+/)
+    await expect(version).toBeVisible()
   })
 })

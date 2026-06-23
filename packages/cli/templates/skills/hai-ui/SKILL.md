@@ -73,7 +73,10 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 | 后台列表页 | `PageHeader` + `Card` + `DataTable` + `Pagination` | 分页、筛选、批量操作优先复用 compounds |
 | 表单页/弹层表单 | `Form` + `FormField` + `Input/Select/...` | 表单字段布局统一交给 `FormField` |
 | 简单确认/详情弹层 | `Modal` / `Drawer` / `Confirm` | 根据桌面/移动端交互选择弹窗或抽屉 |
-| 完整 CRUD 页面 | `CrudPage` | 优先通过 `form` / `pagination` / `density` 配置，不要拆开重写 |
+| 完整 CRUD 页面 | `CrudPage` | 优先通过 `form` / `pagination` / `density` 配置，不要拆开重写；列头默认可排序、筛选栏自带「重置」 |
+| 错误页（401/403/404/500/503） | `ErrorPage` | SvelteKit `+error.svelte` 中按 `page.status` 使用，`onhome`/`onback` 接管跳转 |
+| 设置页 | `SettingsLayout` | 分区导航 + 内容区；`sections` + `active` + `onselect`，内容放入 children |
+| 登录/注册页布局 | `AuthShell` + `LoginForm` / `RegisterForm` | `variant='card'` 或 `'split'`；split 可通过 `illustration`/`description`/`highlights` 放大图与重点说明 |
 | 登录/注册/资料页 | `LoginForm` / `RegisterForm` / `UserProfile` | 页面只负责路由和提交逻辑 |
 | 文件/图片上传 | `FileUpload` / `ImageUpload` / `AvatarUpload` | 上传 URL、限制和业务状态由应用层提供 |
 | 移动端页面骨架 | `SafeArea` + `AppBar` + `BottomNav` | 原生壳页面优先这一套 |
@@ -267,12 +270,12 @@ const p = usePlatform()
 | `FormField`  | `label`, `name`, `error`, `hint`, `required`                       | 表单字段      |
 | `Modal`      | `open`, `title`, `size`, `closeOnBackdrop`                         | 模态框        |
 | `Drawer`     | `open`, `position`, `size`                                         | 抽屉          |
-| `DataTable`  | `data`, `columns`, `keyField`, snippet slots                       | 数据表格      |
+| `DataTable`  | `data`, `columns`, `keyField`, `sortKey`, `sortDir`, `onsort`, snippet slots | 数据表格（列定义 `sortable` 可排序） |
 | `Combobox`   | `options`, `value`, `multiple`, `placeholder`, `error`, `onchange` | 可搜索选择    |
 | `Calendar`   | `value`, `minValue`, `maxValue`                                    | 独立日历      |
 | `DatePicker` | `value`, `minValue`, `maxValue`, `error`                           | 日期输入+弹出 |
 | `Tabs`       | `items: TabItem[]`, `active`, `type`                               | 标签页        |
-| `Pagination` | `page`, `total`, `pageSize`, `onchange`                            | 分页          |
+| `Pagination` | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger`, `onchange` | 分页（统一为 shadcn table 风格） |
 | `Dropdown`   | `items: DropdownItem[]`, `trigger`                                 | 下拉菜单      |
 | `Accordion`  | `items: AccordionItem[]`                                           | 折叠面板      |
 | `Skeleton`   | `variant`, `count`, `animation`                                    | 骨架屏        |
@@ -356,9 +359,17 @@ const p = usePlatform()
 
 | 组件           | Props 要点                                      | 说明     |
 | -------------- | ----------------------------------------------- | -------- |
+| `AuthShell`    | `variant`('card'/'split'), `title`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` | 认证页布局（包裹登录/注册表单） |
 | `LoginForm`    | `showRememberMe`, `showRegisterLink`, `errors`  | 登录表单 |
 | `RegisterForm` | `fields`, `minPasswordLength`, `errors`         | 注册表单 |
 | `UserProfile`  | `user`, `editable`, `fields`, `avatarUploadUrl` | 用户资料 |
+
+#### 错误页 / 设置场景组件
+
+| 组件             | Props 要点                                  | 说明     |
+| ---------------- | ------------------------------------------- | -------- |
+| `ErrorPage`      | `status`, `code`, `title`, `description`, `homeUrl`, `onhome`, `onback` | 通用错误页（内置 401/403/404/500/503） |
+| `SettingsLayout` | `title`, `description`, `sections`, `active`, `onselect` | 设置页分区导航布局 |
 
 #### Storage 场景组件
 

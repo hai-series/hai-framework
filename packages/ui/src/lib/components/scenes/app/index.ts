@@ -7,6 +7,7 @@
 
 export { default as FeedbackModal } from './FeedbackModal.svelte'
 export { default as LanguageSwitch } from './LanguageSwitch.svelte'
+export { default as SettingsLayout } from './SettingsLayout.svelte'
 export { default as SettingsModal } from './SettingsModal.svelte'
 export { default as ThemeColorPicker } from './ThemeColorPicker.svelte'
 export { default as ThemeSelector } from './ThemeSelector.svelte'

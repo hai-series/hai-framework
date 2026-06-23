@@ -1,8 +1,10 @@
 <!--
   Admin Console - 认证页面布局
+  使用 @h-ai/ui 的 AuthShell 场景组件（左右分栏 split 布局）
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
+  import * as m from '$lib/paraglide/messages'
 
   interface Props {
     children: Snippet
@@ -11,28 +13,23 @@
   const { children }: Props = $props()
 </script>
 
-<div class='min-h-screen flex items-center justify-center bg-base-200/60 p-4'>
-  <div class='w-full max-w-md'>
-    <!-- Logo -->
-    <div class='text-center mb-6'>
-      <div class='flex justify-center mb-2'>
-        <div class='w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center'>
-          <span class='icon-[tabler--box] size-5 text-primary'></span>
-        </div>
+<AuthShell
+  variant='split'
+  brandTitle={m.app_title()}
+  brandText={m.meta_description()}
+>
+  {#snippet logo()}
+    <div class='flex items-center gap-2.5'>
+      <div class='flex size-9 items-center justify-center rounded-xl bg-primary/10 lg:bg-primary-content/15'>
+        <span class='icon-[tabler--box] size-5 text-primary lg:text-primary-content'></span>
       </div>
-      <h1 class='text-lg font-semibold text-base-content tracking-tight'>Admin Console</h1>
+      <span class='text-base font-semibold tracking-tight text-base-content lg:text-primary-content'>{m.app_title()}</span>
     </div>
+  {/snippet}
 
-    <!-- Card -->
-    <div class='card bg-base-100 border border-base-content/6 rounded-xl shadow-lg'>
-      <div class='card-body p-6'>
-        {@render children()}
-      </div>
-    </div>
+  {@render children()}
 
-    <!-- Footer -->
-    <div class='text-center mt-5 text-base-content/25 text-2xs'>
-      <p>Powered by hai-framework</p>
-    </div>
-  </div>
-</div>
+  {#snippet footer()}
+    <p class='text-2xs text-base-content/30'>Powered by hai-framework</p>
+  {/snippet}
+</AuthShell>

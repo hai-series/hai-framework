@@ -76,12 +76,14 @@ declare global {
   // scenes - app
   const FeedbackModal: typeof import('@h-ai/ui')['FeedbackModal']
   const LanguageSwitch: typeof import('@h-ai/ui')['LanguageSwitch']
+  const SettingsLayout: typeof import('@h-ai/ui')['SettingsLayout']
   const SettingsModal: typeof import('@h-ai/ui')['SettingsModal']
   const ThemeColorPicker: typeof import('@h-ai/ui')['ThemeColorPicker']
   const ThemeSelector: typeof import('@h-ai/ui')['ThemeSelector']
   const ThemeToggle: typeof import('@h-ai/ui')['ThemeToggle']
 
   // scenes - iam
+  const AuthShell: typeof import('@h-ai/ui')['AuthShell']
   const ChangePasswordForm: typeof import('@h-ai/ui')['ChangePasswordForm']
   const ForgotPasswordForm: typeof import('@h-ai/ui')['ForgotPasswordForm']
   const LoginForm: typeof import('@h-ai/ui')['LoginForm']
@@ -114,6 +116,9 @@ declare global {
   const CrudEditPanel: typeof import('@h-ai/ui')['CrudEditPanel']
   const CrudFilterBar: typeof import('@h-ai/ui')['CrudFilterBar']
   const CrudPage: typeof import('@h-ai/ui')['CrudPage']
+
+  // scenes - error
+  const ErrorPage: typeof import('@h-ai/ui')['ErrorPage']
 }
 
 export {}

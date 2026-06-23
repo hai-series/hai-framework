@@ -22,11 +22,11 @@ test.describe('Auth Layout', () => {
     await page.goto('/auth/login')
     await page.waitForLoadState('domcontentloaded')
 
-    // Logo 标题
-    await expect(page.locator('h1')).toContainText('Admin Console')
+    // AuthShell split 品牌区（lg 以上可见）
+    await expect(page.locator('.bg-primary').first()).toBeVisible()
 
-    // 内容卡片
-    await expect(page.locator('.card.bg-base-100')).toBeVisible()
+    // 登录表单标题（LoginForm showTitle）
+    await expect(page.locator('h2.text-xl')).toBeVisible()
 
     // 页脚 "Powered by hai-framework"
     const footer = page.locator('text=Powered by hai-framework')

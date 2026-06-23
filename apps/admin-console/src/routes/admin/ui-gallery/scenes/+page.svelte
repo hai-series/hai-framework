@@ -9,7 +9,7 @@
 <script lang='ts'>
   import { resolve } from '$app/paths'
   // FileList 与 DOM 全局类型同名，必须显式导入
-  import { AiDocumentEditor, AiTableEditor, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
+  import { AiDocumentEditor, AiTableEditor, ErrorPage, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
 
   const adminUsersPath = resolve('/admin/iam/users', {})
   const adminRolesPath = resolve('/admin/iam/roles', {})
@@ -18,6 +18,10 @@
   // === 状态 ===
   let pwdVal = $state('')
   let encVal = $state('')
+
+  // 错误页预设演示
+  const errorPresets = ['401', '403', '404', '500', '503'] as const
+  let errorStatus = $state<(typeof errorPresets)[number]>('404')
 
   // === Markdown 示例内容 ===
   const demoMarkdown = `# Markdown 渲染器演示
@@ -450,6 +454,41 @@ server.listen(3000, () => {
           <a class='btn btn-secondary btn-outline no-animation font-medium' href={adminRolesPath}>查看角色 CRUD</a>
           <a class='btn btn-info btn-outline no-animation font-medium' href={adminPermissionsPath}>查看权限 CRUD</a>
         </div>
+      </div>
+    </Card>
+  </section>
+
+  <!-- ====================================================================== -->
+  <!-- Error 错误页                                                           -->
+  <!-- ====================================================================== -->
+  <section>
+    <div class='flex items-center gap-3 mb-6'>
+      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-error/10 text-error'>
+        <span class='icon-[tabler--alert-triangle] size-5'></span>
+      </div>
+      <div>
+        <h2 class='text-xl font-bold'>Error 错误页</h2>
+        <p class='text-sm text-base-content/60'>ErrorPage（内置 401 / 403 / 404 / 500 / 503 预设）</p>
+      </div>
+      <Badge variant='error' outline size='sm'>1 组件</Badge>
+    </div>
+
+    <Card bordered>
+      <!-- 预设切换 -->
+      <div class='flex flex-wrap gap-2 border-b border-base-content/8 p-4'>
+        {#each errorPresets as preset (preset)}
+          <button
+            type='button'
+            class='btn btn-sm no-animation {errorStatus === preset ? 'btn-primary' : 'btn-ghost'}'
+            onclick={() => (errorStatus = preset)}
+          >
+            {preset}
+          </button>
+        {/each}
+      </div>
+      <!-- 预览 -->
+      <div class='bg-base-200/30'>
+        <ErrorPage status={errorStatus} showBack={false} showHome={false} />
       </div>
     </Card>
   </section>

@@ -602,6 +602,10 @@ export interface PaginationProps {
     page?: string
     /** 每页条数文案，{size} 会被替换为实际数字 */
     pageSize?: string
+    /** 每页条数前缀文案（如「每页」/「Rows per page」） */
+    rowsPerPage?: string
+    /** 页码信息文案，{page} / {total} 会被替换（如「第 {page} / {total} 页」） */
+    pageInfo?: string
   }
   /** 自定义类名 */
   class?: string

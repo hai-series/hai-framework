@@ -66,11 +66,13 @@ const UI_COMPONENTS = new Set([
   // scenes - app
   'FeedbackModal',
   'LanguageSwitch',
+  'SettingsLayout',
   'SettingsModal',
   'ThemeColorPicker',
   'ThemeSelector',
   'ThemeToggle',
   // scenes - iam
+  'AuthShell',
   'ChangePasswordForm',
   'ForgotPasswordForm',
   'LoginForm',
@@ -99,6 +101,8 @@ const UI_COMPONENTS = new Set([
   'CrudEditPanel',
   'CrudFilterBar',
   'CrudPage',
+  // scenes - error
+  'ErrorPage',
 ])
 
 const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g

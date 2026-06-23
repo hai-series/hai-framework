@@ -5,9 +5,10 @@
  * @module index
  */
 
+// 认证表单
+export { default as AuthShell } from './AuthShell.svelte'
 export { default as ChangePasswordForm } from './ChangePasswordForm.svelte'
 export { default as ForgotPasswordForm } from './ForgotPasswordForm.svelte'
-// 认证表单
 export { default as LoginForm } from './LoginForm.svelte'
 export { default as PasswordInput } from './PasswordInput.svelte'
 // 权限控制

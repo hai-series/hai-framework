@@ -5,12 +5,13 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { LayoutData } from './$types'
+  import { browser } from '$app/environment'
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
-  import { setPermissionContext, usePermission } from '@h-ai/ui'
+  import { applyTheme, getSavedTheme, setPermissionContext, usePermission } from '@h-ai/ui'
   import { SvelteSet } from 'svelte/reactivity'
 
   interface Props {
@@ -31,6 +32,14 @@
   let sidebarCollapsed = $state(false)
   let mobileMenuOpen = $state(false)
   let userMenuOpen = $state(false)
+
+  // 顶栏主题快速切换（亮/暗）
+  let currentTheme = $derived(browser ? getSavedTheme() : 'light')
+
+  function handleThemeChange(theme: string) {
+    applyTheme(theme)
+    currentTheme = theme
+  }
 
   type AdminResolvedPath = '/admin' | '/admin/iam/users' | '/admin/iam/roles' | '/admin/iam/permissions' | '/admin/ui-gallery' | '/admin/modules' | '/admin/logs' | '/admin/settings' | '/admin/profile'
 
@@ -284,6 +293,9 @@
               {m.common_dev_env()}
             </span>
           {/if}
+
+          <!-- 主题快速切换 -->
+          <ThemeToggle {currentTheme} onchange={handleThemeChange} />
 
           <!-- 用户菜单 -->
           <div class='relative user-menu-container'>

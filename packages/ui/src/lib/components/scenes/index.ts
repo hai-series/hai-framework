@@ -17,6 +17,9 @@ export * from './crud/index.js'
 // Crypto 场景组件
 export * from './crypto/index.js'
 
+// 错误页场景组件
+export * from './error/index.js'
+
 // IAM 场景组件
 export * from './iam/index.js'
 

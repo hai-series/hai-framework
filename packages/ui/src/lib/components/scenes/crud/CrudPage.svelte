@@ -142,9 +142,8 @@
   const actionButtonSize = $derived(isCompact ? 'xs' : 'sm')
   const actionIconClass = $derived(isCompact ? 'size-3.5' : 'size-4')
   const paginationSize = $derived(isCompact ? 'xs' : 'sm')
-  const filterCardClass = 'overflow-hidden rounded-[1.25rem] border-base-content/7 shadow-sm'
   const listCardClass = 'overflow-hidden rounded-[1.25rem] border-base-content/7 shadow-sm'
-  const paginationBarClass = 'flex justify-center border-t border-base-content/5 px-4 py-2'
+  const paginationBarClass = 'border-t border-base-content/5 px-4 py-3'
 
   // 表单展示配置（抽屉 / 弹窗）
   const formVariant = $derived(form.variant ?? 'drawer')
@@ -247,6 +246,12 @@
 
   function handlePageSizeChange(newPageSize: number) {
     navigateWithParams({ pageSize: newPageSize, page: 1 })
+  }
+
+  function handleResetFilters() {
+    searchValue = ''
+    filterValues = {}
+    void Promise.resolve(nav.navigate(currentBasePath)).then(() => nav.refresh?.())
   }
 
   // ─── 打开/关闭抽屉 ───
@@ -396,6 +401,7 @@
       label: col.label,
       width: col.width,
       align: col.align as 'left' | 'center' | 'right' | undefined,
+      sortable: true,
       render: col.render
         ? (item: Record<string, unknown>) => col.render!(item)
         : undefined,
@@ -421,18 +427,16 @@
 
   <!-- 搜索 + 过滤栏 -->
   {#if searchable || filterFields.length > 0}
-    <Card padding='sm' class={filterCardClass}>
-      <CrudFilterBar
-        {searchable}
-        searchPlaceholder={searchPlaceholderText}
-        bind:searchValue
-        {filterFields}
-        bind:filterValues
-        total={data.total}
-        onsearch={handleSearch}
-        onfilterchange={handleFilterChange}
-      />
-    </Card>
+    <CrudFilterBar
+      {searchable}
+      searchPlaceholder={searchPlaceholderText}
+      bind:searchValue
+      {filterFields}
+      bind:filterValues
+      onsearch={handleSearch}
+      onfilterchange={handleFilterChange}
+      onreset={handleResetFilters}
+    />
   {/if}
 
   <!-- 数据列表 -->
@@ -482,7 +486,7 @@
       {/snippet}
     </DataTable>
 
-    <!-- 分页栏：始终显示，支持每页条数选择与跳页 -->
+    <!-- 分页栏：始终显示，支持每页条数选择与跳页（shadcn table 风格） -->
     <div class={paginationBarClass}>
       <Pagination
         page={data.page}

@@ -10,6 +10,9 @@
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
   import { applyTheme, getCurrentTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
 
+  // ========== 分区导航 ==========
+  let activeSection = $state('appearance')
+
   // ========== 主题设置 ==========
   let currentTheme = $state(browser ? getCurrentTheme() : 'light')
 
@@ -53,89 +56,72 @@
   <title>{m.settings_title()} - {m.app_title()}</title>
 </svelte:head>
 
-<div class='space-y-5'>
-  <!-- 页面标题 -->
-  <PageHeader title={m.settings_title()} description={m.settings_subtitle()} />
-
-  <!-- 外观设置 -->
-  <section>
-    <h2 class='text-sm font-semibold text-base-content mb-3'>{m.settings_appearance()}</h2>
-    <Card>
-      <div class='p-4'>
-        <div class='flex items-center justify-between'>
-          <div class='flex items-center gap-3'>
-            <div class='w-9 h-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0'>
-              <span class='icon-[tabler--palette] size-4.5 text-primary'></span>
-            </div>
-            <div>
-              <p class='font-medium text-base-content'>{m.settings_theme()}</p>
-              <p class='text-sm text-base-content/50 mt-0.5'>{m.settings_theme_desc()}</p>
-            </div>
-          </div>
-          <ThemeSelector
-            {currentTheme}
-            onchange={handleThemeChange}
-            showPreview
-            grouped
-          />
+<SettingsLayout
+  title={m.settings_title()}
+  description={m.settings_subtitle()}
+  sections={[
+    { id: 'appearance', label: m.settings_appearance(), icon: 'icon-[tabler--palette]' },
+    { id: 'region', label: m.settings_region(), icon: 'icon-[tabler--language]' },
+    { id: 'about', label: m.settings_about(), icon: 'icon-[tabler--info-circle]' },
+  ]}
+  active={activeSection}
+  onselect={id => (activeSection = id)}
+>
+  {#if activeSection === 'appearance'}
+    <!-- 外观设置（shadcn 风格：无卡片，分隔线 + 行） -->
+    <section>
+      <h2 class='text-lg font-medium text-base-content'>{m.settings_appearance()}</h2>
+      <p class='mt-1 text-sm text-base-content/50'>{m.settings_theme_desc()}</p>
+      <div class='mt-5 border-t border-base-content/8'></div>
+      <div class='flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between'>
+        <div>
+          <p class='font-medium text-base-content'>{m.settings_theme()}</p>
+          <p class='mt-1 text-sm text-base-content/50'>{m.settings_theme_desc()}</p>
         </div>
+        <ThemeSelector
+          {currentTheme}
+          onchange={handleThemeChange}
+          showPreview
+          grouped
+        />
       </div>
-    </Card>
-  </section>
-
-  <!-- 区域设置 -->
-  <section>
-    <h2 class='text-sm font-semibold text-base-content mb-3'>{m.settings_region()}</h2>
-    <Card>
-      <div class='p-4'>
-        <div class='flex items-center justify-between'>
-          <div class='flex items-center gap-3'>
-            <div class='w-9 h-9 rounded-lg bg-info/8 flex items-center justify-center shrink-0'>
-              <span class='icon-[tabler--language] size-4.5 text-info'></span>
-            </div>
-            <div>
-              <p class='font-medium text-base-content'>{m.settings_language()}</p>
-              <p class='text-sm text-base-content/50 mt-0.5'>{m.settings_language_desc()}</p>
-            </div>
-          </div>
-          <LanguageSwitch
-            {currentLanguage}
-            onchange={handleLanguageChange}
-          />
+    </section>
+  {:else if activeSection === 'region'}
+    <!-- 区域设置 -->
+    <section>
+      <h2 class='text-lg font-medium text-base-content'>{m.settings_region()}</h2>
+      <p class='mt-1 text-sm text-base-content/50'>{m.settings_language_desc()}</p>
+      <div class='mt-5 border-t border-base-content/8'></div>
+      <div class='flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between'>
+        <div>
+          <p class='font-medium text-base-content'>{m.settings_language()}</p>
+          <p class='mt-1 text-sm text-base-content/50'>{m.settings_language_desc()}</p>
         </div>
+        <LanguageSwitch
+          {currentLanguage}
+          onchange={handleLanguageChange}
+        />
       </div>
-    </Card>
-  </section>
-
-  <!-- 系统信息 -->
-  <section>
-    <h2 class='text-sm font-semibold text-base-content mb-3'>{m.settings_about()}</h2>
-    <Card>
-      <div class='p-4'>
-        <div class='grid grid-cols-1 md:grid-cols-2 gap-5'>
-          <div class='flex items-center gap-3'>
-            <div class='w-9 h-9 rounded-lg bg-success/8 flex items-center justify-center shrink-0'>
-              <span class='icon-[tabler--package] size-4.5 text-success'></span>
-            </div>
-            <div>
-              <p class='text-sm text-base-content/50'>{m.settings_system_name()}</p>
-              <p class='text-base font-semibold text-base-content mt-0.5'>{m.app_title()}</p>
-            </div>
-          </div>
-          <div class='flex items-center gap-3'>
-            <div class='w-9 h-9 rounded-lg bg-warning/8 flex items-center justify-center shrink-0'>
-              <span class='icon-[tabler--tag] size-4.5 text-warning'></span>
-            </div>
-            <div>
-              <p class='text-sm text-base-content/50'>{m.settings_version()}</p>
-              <p class='text-base font-semibold text-base-content mt-0.5'>
-                0.1.0
-                <Badge variant='warning' size='sm' class='ml-2'>{m.settings_version_dev()}</Badge>
-              </p>
-            </div>
-          </div>
+    </section>
+  {:else if activeSection === 'about'}
+    <!-- 系统信息 -->
+    <section>
+      <h2 class='text-lg font-medium text-base-content'>{m.settings_about()}</h2>
+      <p class='mt-1 text-sm text-base-content/50'>{m.settings_system_name()}</p>
+      <div class='mt-5 border-t border-base-content/8'></div>
+      <dl class='divide-y divide-base-content/8'>
+        <div class='flex items-center justify-between py-4'>
+          <dt class='text-sm text-base-content/55'>{m.settings_system_name()}</dt>
+          <dd class='text-sm font-medium text-base-content'>{m.app_title()}</dd>
         </div>
-      </div>
-    </Card>
-  </section>
-</div>
+        <div class='flex items-center justify-between py-4'>
+          <dt class='text-sm text-base-content/55'>{m.settings_version()}</dt>
+          <dd class='flex items-center gap-2 text-sm font-medium text-base-content'>
+            0.1.0
+            <Badge variant='warning' size='sm'>{m.settings_version_dev()}</Badge>
+          </dd>
+        </div>
+      </dl>
+    </section>
+  {/if}
+</SettingsLayout>

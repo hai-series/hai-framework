@@ -26,6 +26,7 @@ const COMPONENT_EXPORT_INDEX_FILES = [
   'src/lib/components/scenes/ai/index.ts',
   'src/lib/components/scenes/crud/index.ts',
   'src/lib/components/scenes/crypto/index.ts',
+  'src/lib/components/scenes/error/index.ts',
   'src/lib/components/scenes/iam/index.ts',
   'src/lib/components/scenes/storage/index.ts',
 ].map(relativePath => join(PACKAGE_ROOT, relativePath))
