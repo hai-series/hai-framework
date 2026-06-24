@@ -8,6 +8,8 @@
 -->
 <script lang='ts'>
   import { resolve } from '$app/paths'
+  import DemoCard from '$lib/components/gallery/DemoCard.svelte'
+  import DemoSection from '$lib/components/gallery/DemoSection.svelte'
   // FileList 与 DOM 全局类型同名，必须显式导入
   import { AiDocumentEditor, AiTableEditor, ErrorPage, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
 
@@ -296,30 +298,112 @@ server.listen(3000, () => {
     { id: '3', name: '数据报表.xlsx', size: 1024000, type: 'application/vnd.ms-excel', url: '#' },
     { id: '4', name: '会议纪要.docx', size: 256000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#' },
   ]
+
+  // === 示例源码 ===
+  const codeMarkdownChat = `<MarkdownRenderer content={aiResponseMarkdown} />`
+
+  const codeMarkdownFull = `<MarkdownRenderer content={markdown} />
+<!-- 支持标题/列表/任务列表/引用/代码高亮/表格/图片等 GFM 全量语法 -->`
+
+  const codeAiDocEditor = `<AiDocumentEditor
+  title='AI 生成方案文档'
+  content={aiDocumentContent}
+  showToolbar
+  showOutline
+  showCopyButton
+/>`
+
+  const codeAiTableEditor = `<AiTableEditor
+  title='AI 销售摘要'
+  editable={false}
+  tableData={{ table_columns: [...], table_rows: [...] }}
+/>`
+
+  const codeMermaidDoc = `<!-- document 模式：阅读态自动把 mermaid 代码块渲染为图表 -->
+<AiDocumentEditor
+  title='订单履约流程设计'
+  content={aiMermaidDocumentContent}
+  sourceKind='document'
+  showToolbar
+  showOutline
+/>`
+
+  const codeMermaidCode = `<!-- code 模式：切换“代码 / 预览”查看图表渲染结果 -->
+<AiDocumentEditor
+  title='订单状态机'
+  content={aiMermaidCodeContent}
+  sourceKind='code'
+  codeLanguage='mermaid'
+  showCodePreviewToggle
+/>`
+
+  const codeCrud = `<!-- CRUD 场景组件已在 IAM 用户/角色/权限页真实接入，
+     基于 @h-ai/kit/client 的 SvelteKit 导航适配器完成 URL 同步与刷新 -->
+<a href='/admin/iam/users'>查看用户 CRUD</a>`
+
+  const codeErrorPage = `<ErrorPage status='404' showBack showHome />
+<!-- 内置 401 / 403 / 404 / 500 / 503 预设 -->`
+
+  const codeLoginForm = `<LoginForm
+  showTitle
+  showRememberMe
+  showForgotPassword
+  showRegisterLink
+  onsubmit={async (data) => { /* 登录逻辑 */ }}
+/>`
+
+  const codeRegisterForm = `<RegisterForm
+  showTitle
+  showLoginLink
+  showPasswordStrength
+  onsubmit={async (data) => { /* 注册逻辑 */ }}
+/>`
+
+  const codePasswordMgmt = `<ForgotPasswordForm showTitle showDescription showBackLink onsubmit={...} />
+<ResetPasswordForm showTitle showCode showPasswordStrength onsubmit={...} />
+<ChangePasswordForm requireOldPassword showPasswordStrength onsubmit={...} />`
+
+  const codePasswordInput = `<PasswordInput bind:value showToggle showStrength placeholder='请输入密码' />
+<PasswordInput placeholder='仅密码可见性切换' showToggle />
+<PasswordInput value='short' error='密码长度不足 8 位' showToggle />`
+
+  const codeUserProfile = `<UserProfile user={demoUser} editable onsubmit={async () => { /* 保存资料 */ }} />`
+
+  const codeFileUpload = `<FileUpload accept='image/*,.pdf,.doc,.docx' maxFiles={5} multiple dragDrop autoUpload={false} />
+<FileUpload accept='image/*' maxFiles={1} dragDrop autoUpload={false} />`
+
+  const codeFileList = `<FileList
+  files={demoFiles}
+  showPreview showDownload showDelete showSize
+  layout='list'
+  ondownload={f => toast.info(f.name)}
+  ondelete={f => toast.warning(f.name)}
+/>
+<FileList files={demoFiles} layout='grid' />`
+
+  const codeImageAvatar = `<ImageUpload accept='image/*' width='180px' height='180px' />
+<ImageUpload accept='image/*' width='280px' height='158px' aspectRatio='16:9' />
+<AvatarUpload size='lg' fallback='张' />`
+
+  const codeEncryptedInput = `<EncryptedInput bind:value algorithm='SM4' placeholder='输入敏感数据' />
+<EncryptedInput algorithm='SM4' disabled placeholder='不可编辑的加密输入' />`
+
+  const codeHashDisplay = `<HashDisplay value='e3b0c44298fc...' algorithm='SM3' label='文件哈希' copyable truncate />
+<HashDisplay value='a1b2c3d4e5f6...' algorithm='SM3' label='SM3 摘要' copyable />`
+
+  const codeSignatureDisplay = `<SignatureDisplay signature='MEUCIQ...' algorithm='SM2' verified={true} copyable />
+<SignatureDisplay signature='MEQCIB...' algorithm='SM2' verified={false} copyable />
+<SignatureDisplay signature='...' algorithm='SM2' copyable />`
 </script>
 
 <div class='space-y-10'>
-  <!-- ====================================================================== -->
-  <!-- AI Markdown 渲染                                                       -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2a4 4 0 0 1 4 4v1h2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2V6a4 4 0 0 1 4-4z' /><circle cx='12' cy='14' r='2' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>AI 场景组件</h2>
-        <p class='text-sm text-base-content/60'>Markdown 渲染、AI 文档编辑器、结构化表格编辑器等输出展示组件</p>
-      </div>
-      <Badge variant='primary' outline size='sm'>3 组件</Badge>
-    </div>
-
-    <!-- AI 对话场景 -->
-    <Card bordered class='mb-6'>
-      <div class='flex items-center gap-2 mb-5'>
-        <Badge variant='info' size='sm'>MarkdownRenderer</Badge>
-        <span class='text-sm text-base-content/60'>AI 对话回复示例</span>
-      </div>
+  <DemoSection
+    title='AI 场景组件'
+    subtitle='MarkdownRenderer / AiDocumentEditor / AiTableEditor'
+    iconClass='icon-[tabler--sparkles]'
+    tone='primary'
+  >
+    <DemoCard title='MarkdownRenderer · AI 对话回复' description='AI 对话回复的 Markdown 渲染' code={codeMarkdownChat}>
       <div class='bg-base-200/30 rounded-xl p-6'>
         <div class='flex gap-3'>
           <div class='shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-content text-sm font-bold'>AI</div>
@@ -328,123 +412,89 @@ server.listen(3000, () => {
           </div>
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- 全功能演示 -->
-    <Card bordered>
-      <div class='flex items-center gap-2 mb-5'>
-        <Badge variant='success' size='sm'>全功能演示</Badge>
-        <span class='text-sm text-base-content/60'>展示所有支持的 Markdown 语法元素</span>
-      </div>
+    <DemoCard title='MarkdownRenderer · 全功能演示' description='标题 / 列表 / 任务 / 引用 / 代码高亮 / 表格 / 图片等 GFM 语法' code={codeMarkdownFull} open={false}>
       <MarkdownRenderer content={demoMarkdown} />
-    </Card>
+    </DemoCard>
 
-    <!-- AI 文档与表格编辑器 -->
-    <div class='grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6'>
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='info' size='sm'>AiDocumentEditor</Badge>
-          <span class='text-sm text-base-content/60'>AI 生成文档预览、目录、代码块与下载工具栏</span>
-        </div>
-        <div class='h-104 min-h-0'>
-          <AiDocumentEditor
-            title='AI 生成方案文档'
-            content={aiDocumentContent}
-            showToolbar
-            showOutline
-            showCopyButton
-            class='h-full'
-          />
-        </div>
-      </Card>
-
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='info' size='sm'>AiTableEditor</Badge>
-          <span class='text-sm text-base-content/60'>AI 结构化表格预览、单元格编辑、复制与 CSV 下载</span>
-        </div>
-        <div class='h-104 min-h-0'>
-          <AiTableEditor
-            title='AI 销售摘要'
-            statusText='示例数据'
-            metaText='table/v1'
-            saveState='只读预览'
-            editable={false}
-            tableData={{
-              table_columns: [
-                { key: 'metric', label: '指标', type: 'text' },
-                { key: 'value', label: '数值', type: 'number' },
-                { key: 'trend', label: '趋势', type: 'tag' },
-              ],
-              table_rows: [
-                { row_id: 'r1', metric: '新增客户', value: 128, trend: '增长' },
-                { row_id: 'r2', metric: '成交订单', value: 42, trend: '稳定' },
-                { row_id: 'r3', metric: '退款率', value: 1.8, trend: '下降' },
-              ],
-            }}
-          />
-        </div>
-      </Card>
-    </div>
-
-    <!-- Ai 文档 Mermaid 图表示例 -->
-    <div class='grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6'>
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='success' size='sm'>AiDocumentEditor · Mermaid 文档</Badge>
-          <span class='text-sm text-base-content/60'>文档中的 Mermaid 代码块在阅读态自动渲染为图表</span>
-        </div>
-        <div class='h-104 min-h-0' data-testid='mermaid-document-demo'>
-          <AiDocumentEditor
-            title='订单履约流程设计'
-            content={aiMermaidDocumentContent}
-            sourceKind='document'
-            showToolbar
-            showOutline
-            showCopyButton
-            class='h-full'
-          />
-        </div>
-      </Card>
-
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='success' size='sm'>AiDocumentEditor · Mermaid 代码</Badge>
-          <span class='text-sm text-base-content/60'>code 模式下切换“代码 / 预览”查看图表渲染结果</span>
-        </div>
-        <div class='h-104 min-h-0' data-testid='mermaid-code-demo'>
-          <AiDocumentEditor
-            title='订单状态机'
-            content={aiMermaidCodeContent}
-            sourceKind='code'
-            codeLanguage='mermaid'
-            showCodePreviewToggle
-            showCopyButton
-            showOutline={false}
-            codePreviewHint='切换查看图表'
-            class='h-full'
-          />
-        </div>
-      </Card>
-    </div>
-  </section>
-
-  <!-- ====================================================================== -->
-  <!-- CRUD 场景组件                                                           -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-info/10 text-info'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 6h13' /><path d='M8 12h13' /><path d='M8 18h13' /><path d='M3 6h.01' /><path d='M3 12h.01' /><path d='M3 18h.01' /></svg>
+    <DemoCard title='AiDocumentEditor' description='AI 生成文档预览、目录、代码块与下载工具栏' code={codeAiDocEditor}>
+      <div class='h-104 min-h-0'>
+        <AiDocumentEditor
+          title='AI 生成方案文档'
+          content={aiDocumentContent}
+          showToolbar
+          showOutline
+          showCopyButton
+          class='h-full'
+        />
       </div>
-      <div>
-        <h2 class='text-xl font-bold'>CRUD 业务页面</h2>
-        <p class='text-sm text-base-content/60'>CrudPage / CrudFilterBar / CrudEditPanel / CrudDetailPanel / CrudDeleteConfirm</p>
-      </div>
-      <Badge variant='info' outline size='sm'>5 组件</Badge>
-    </div>
+    </DemoCard>
 
-    <Card bordered>
+    <DemoCard title='AiTableEditor' description='AI 结构化表格预览、单元格编辑、复制与 CSV 下载' code={codeAiTableEditor}>
+      <div class='h-104 min-h-0'>
+        <AiTableEditor
+          title='AI 销售摘要'
+          statusText='示例数据'
+          metaText='table/v1'
+          saveState='只读预览'
+          editable={false}
+          tableData={{
+            table_columns: [
+              { key: 'metric', label: '指标', type: 'text' },
+              { key: 'value', label: '数值', type: 'number' },
+              { key: 'trend', label: '趋势', type: 'tag' },
+            ],
+            table_rows: [
+              { row_id: 'r1', metric: '新增客户', value: 128, trend: '增长' },
+              { row_id: 'r2', metric: '成交订单', value: 42, trend: '稳定' },
+              { row_id: 'r3', metric: '退款率', value: 1.8, trend: '下降' },
+            ],
+          }}
+        />
+      </div>
+    </DemoCard>
+
+    <DemoCard title='AiDocumentEditor · Mermaid 文档' description='文档中的 Mermaid 代码块在阅读态自动渲染为图表' code={codeMermaidDoc}>
+      <div class='h-104 min-h-0' data-testid='mermaid-document-demo'>
+        <AiDocumentEditor
+          title='订单履约流程设计'
+          content={aiMermaidDocumentContent}
+          sourceKind='document'
+          showToolbar
+          showOutline
+          showCopyButton
+          class='h-full'
+        />
+      </div>
+    </DemoCard>
+
+    <DemoCard title='AiDocumentEditor · Mermaid 代码' description='code 模式下切换“代码 / 预览”查看图表渲染结果' code={codeMermaidCode}>
+      <div class='h-104 min-h-0' data-testid='mermaid-code-demo'>
+        <AiDocumentEditor
+          title='订单状态机'
+          content={aiMermaidCodeContent}
+          sourceKind='code'
+          codeLanguage='mermaid'
+          showCodePreviewToggle
+          showCopyButton
+          showOutline={false}
+          codePreviewHint='切换查看图表'
+          class='h-full'
+        />
+      </div>
+    </DemoCard>
+  </DemoSection>
+
+  <div class='divider'></div>
+
+  <DemoSection
+    title='CRUD 业务页面'
+    subtitle='CrudPage / CrudFilterBar / CrudEditPanel / CrudDetailPanel / CrudDeleteConfirm'
+    iconClass='icon-[tabler--list-details]'
+    tone='info'
+  >
+    <DemoCard title='CRUD 场景组件' description='已在 IAM 用户 / 角色 / 权限页真实接入' code={codeCrud}>
       <div class='grid grid-cols-1 lg:grid-cols-3 gap-4'>
         <Alert variant='info' class='lg:col-span-2'>
           CRUD 场景组件已经在 IAM 用户、角色、权限页面中真实接入，使用 @h-ai/kit/client 的 SvelteKit 导航适配器完成 URL 同步与 invalidateAll 刷新。
@@ -455,27 +505,19 @@ server.listen(3000, () => {
           <a class='btn btn-info btn-outline no-animation font-medium' href={adminPermissionsPath}>查看权限 CRUD</a>
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
-  <!-- ====================================================================== -->
-  <!-- Error 错误页                                                           -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-error/10 text-error'>
-        <span class='icon-[tabler--alert-triangle] size-5'></span>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>Error 错误页</h2>
-        <p class='text-sm text-base-content/60'>ErrorPage（内置 401 / 403 / 404 / 500 / 503 预设）</p>
-      </div>
-      <Badge variant='error' outline size='sm'>1 组件</Badge>
-    </div>
+  <div class='divider'></div>
 
-    <Card bordered>
-      <!-- 预设切换 -->
-      <div class='flex flex-wrap gap-2 border-b border-base-content/8 p-4'>
+  <DemoSection
+    title='Error 错误页'
+    subtitle='ErrorPage（内置 401 / 403 / 404 / 500 / 503 预设）'
+    iconClass='icon-[tabler--alert-triangle]'
+    tone='error'
+  >
+    <DemoCard title='ErrorPage' description='切换状态码查看不同错误页' code={codeErrorPage}>
+      <div class='flex flex-wrap gap-2 border-b border-base-content/8 pb-4 mb-4'>
         {#each errorPresets as preset (preset)}
           <button
             type='button'
@@ -486,72 +528,48 @@ server.listen(3000, () => {
           </button>
         {/each}
       </div>
-      <!-- 预览 -->
-      <div class='bg-base-200/30'>
+      <div class='bg-base-200/30 rounded-xl overflow-hidden'>
         <ErrorPage status={errorStatus} showBack={false} showHome={false} />
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
-  <!-- ====================================================================== -->
-  <!-- IAM 身份认证                                                           -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' /></svg>
+  <div class='divider'></div>
+
+  <DemoSection
+    title='IAM 身份认证'
+    subtitle='LoginForm / RegisterForm / 密码管理 / PasswordInput / UserProfile'
+    iconClass='icon-[tabler--shield-lock]'
+    tone='primary'
+  >
+    <DemoCard title='LoginForm' description='用户登录表单' code={codeLoginForm}>
+      <div class='flex justify-center'>
+        <div class='w-full max-w-sm'>
+          <LoginForm
+            showTitle
+            showRememberMe
+            showForgotPassword
+            showRegisterLink
+            onsubmit={async (data) => { toast.success(`登录: ${data.username}`) }}
+          />
+        </div>
       </div>
-      <div>
-        <h2 class='text-xl font-bold'>IAM 身份认证</h2>
-        <p class='text-sm text-base-content/60'>登录注册、密码管理、用户资料等完整身份流程组件</p>
+    </DemoCard>
+
+    <DemoCard title='RegisterForm' description='用户注册表单' code={codeRegisterForm}>
+      <div class='flex justify-center'>
+        <div class='w-full max-w-sm'>
+          <RegisterForm
+            showTitle
+            showLoginLink
+            showPasswordStrength
+            onsubmit={async (data) => { toast.success(`注册: ${data.username ?? data.email ?? ''}`) }}
+          />
+        </div>
       </div>
-      <Badge variant='primary' outline size='sm'>7 组件</Badge>
-    </div>
+    </DemoCard>
 
-    <!-- 登录 / 注册 -->
-    <div class='grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6'>
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='info' size='sm'>LoginForm</Badge>
-          <span class='text-sm text-base-content/60'>用户登录表单</span>
-        </div>
-        <div class='flex justify-center'>
-          <div class='w-full max-w-sm'>
-            <LoginForm
-              showTitle
-              showRememberMe
-              showForgotPassword
-              showRegisterLink
-              onsubmit={async (data) => { toast.success(`登录: ${data.username}`) }}
-            />
-          </div>
-        </div>
-      </Card>
-
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='info' size='sm'>RegisterForm</Badge>
-          <span class='text-sm text-base-content/60'>用户注册表单</span>
-        </div>
-        <div class='flex justify-center'>
-          <div class='w-full max-w-sm'>
-            <RegisterForm
-              showTitle
-              showLoginLink
-              showPasswordStrength
-              onsubmit={async (data) => { toast.success(`注册: ${data.username ?? data.email ?? ''}`) }}
-            />
-          </div>
-        </div>
-      </Card>
-    </div>
-
-    <!-- 密码管理 -->
-    <Card bordered>
-      <div class='flex items-center gap-2 mb-6'>
-        <Badge variant='warning' size='sm'>密码管理</Badge>
-        <span class='text-sm text-base-content/60'>忘记密码 / 重置密码 / 修改密码</span>
-      </div>
+    <DemoCard title='密码管理' description='ForgotPasswordForm / ResetPasswordForm / ChangePasswordForm' code={codePasswordMgmt}>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-6'>
         <div class='p-4 rounded-xl bg-base-200/50 border border-base-300'>
           <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>ForgotPasswordForm</p>
@@ -581,105 +599,74 @@ server.listen(3000, () => {
           />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- PasswordInput / UserProfile -->
-    <div class='grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6'>
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='secondary' size='sm'>PasswordInput</Badge>
-          <span class='text-sm text-base-content/60'>密码输入框组件</span>
+    <DemoCard title='PasswordInput' description='密码输入框组件' code={codePasswordInput}>
+      <div class='space-y-5'>
+        <div class='p-4 rounded-lg bg-base-200/30'>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>含强度指示器</p>
+          <PasswordInput bind:value={pwdVal} showToggle showStrength placeholder='请输入密码' />
+          <p class='text-xs text-base-content/40 mt-2'>已输入 {pwdVal.length} 字符</p>
         </div>
-        <div class='space-y-5'>
+        <div class='p-4 rounded-lg bg-base-200/30'>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>基础模式</p>
+          <PasswordInput placeholder='仅密码可见性切换' showToggle />
+        </div>
+        <div class='grid grid-cols-2 gap-3'>
           <div class='p-4 rounded-lg bg-base-200/30'>
-            <p class='text-xs font-medium text-base-content/50 mb-2'>含强度指示器</p>
-            <PasswordInput bind:value={pwdVal} showToggle showStrength placeholder='请输入密码' />
-            <p class='text-xs text-base-content/40 mt-2'>已输入 {pwdVal.length} 字符</p>
+            <p class='text-xs font-medium text-base-content/50 mb-2'>禁用状态</p>
+            <PasswordInput value='disabled' disabled />
           </div>
           <div class='p-4 rounded-lg bg-base-200/30'>
-            <p class='text-xs font-medium text-base-content/50 mb-2'>基础模式</p>
-            <PasswordInput placeholder='仅密码可见性切换' showToggle />
-          </div>
-          <div class='grid grid-cols-2 gap-3'>
-            <div class='p-4 rounded-lg bg-base-200/30'>
-              <p class='text-xs font-medium text-base-content/50 mb-2'>禁用状态</p>
-              <PasswordInput value='disabled' disabled />
-            </div>
-            <div class='p-4 rounded-lg bg-base-200/30'>
-              <p class='text-xs font-medium text-base-content/50 mb-2'>错误状态</p>
-              <PasswordInput value='short' error='密码长度不足 8 位' showToggle />
-            </div>
+            <p class='text-xs font-medium text-base-content/50 mb-2'>错误状态</p>
+            <PasswordInput value='short' error='密码长度不足 8 位' showToggle />
           </div>
         </div>
-      </Card>
+      </div>
+    </DemoCard>
 
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='secondary' size='sm'>UserProfile</Badge>
-          <span class='text-sm text-base-content/60'>用户资料编辑</span>
-        </div>
-        <UserProfile
-          user={demoUser}
-          editable
-          onsubmit={async () => { toast.success('资料已更新') }}
-        />
-      </Card>
-    </div>
-  </section>
+    <DemoCard title='UserProfile' description='用户资料编辑' code={codeUserProfile}>
+      <UserProfile
+        user={demoUser}
+        editable
+        onsubmit={async () => { toast.success('资料已更新') }}
+      />
+    </DemoCard>
+  </DemoSection>
 
-  <!-- 分隔线 -->
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- Storage 文件存储                                                        -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-success/10 text-success'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z' /><polyline points='13 2 13 9 20 9' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>Storage 文件存储</h2>
-        <p class='text-sm text-base-content/60'>文件上传、列表管理、图片与头像上传组件</p>
-      </div>
-      <Badge variant='success' outline size='sm'>4 组件</Badge>
-    </div>
-
-    <!-- 文件上传 -->
-    <div class='grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6'>
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='info' size='sm'>FileUpload</Badge>
-          <span class='text-sm text-base-content/60'>多文件拖拽上传</span>
+  <DemoSection
+    title='Storage 文件存储'
+    subtitle='FileUpload / FileList / ImageUpload / AvatarUpload'
+    iconClass='icon-[tabler--folder]'
+    tone='success'
+  >
+    <DemoCard title='FileUpload' description='多文件拖拽上传 / 单文件上传' code={codeFileUpload}>
+      <div class='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+        <div>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>多文件拖拽上传</p>
+          <FileUpload
+            accept='image/*,.pdf,.doc,.docx'
+            maxFiles={5}
+            multiple
+            dragDrop
+            autoUpload={false}
+          />
         </div>
-        <FileUpload
-          accept='image/*,.pdf,.doc,.docx'
-          maxFiles={5}
-          multiple
-          dragDrop
-          autoUpload={false}
-        />
-      </Card>
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='info' size='sm'>FileUpload</Badge>
-          <span class='text-sm text-base-content/60'>单文件上传</span>
+        <div>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>单文件上传</p>
+          <FileUpload
+            accept='image/*'
+            maxFiles={1}
+            dragDrop
+            autoUpload={false}
+          />
         </div>
-        <FileUpload
-          accept='image/*'
-          maxFiles={1}
-          dragDrop
-          autoUpload={false}
-        />
-      </Card>
-    </div>
-
-    <!-- 文件列表 -->
-    <Card bordered>
-      <div class='flex items-center gap-2 mb-5'>
-        <Badge variant='info' size='sm'>FileList</Badge>
-        <span class='text-sm text-base-content/60'>文件列表展示与操作</span>
       </div>
+    </DemoCard>
+
+    <DemoCard title='FileList' description='文件列表展示与操作（列表 / 网格 / 加载态）' code={codeFileList}>
       <div class='space-y-6'>
         <div>
           <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>列表布局</p>
@@ -713,14 +700,9 @@ server.listen(3000, () => {
           <FileList files={[]} loading layout='list' />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- 图片/头像上传 -->
-    <Card bordered class='mt-6'>
-      <div class='flex items-center gap-2 mb-5'>
-        <Badge variant='info' size='sm'>ImageUpload / AvatarUpload</Badge>
-        <span class='text-sm text-base-content/60'>图片与头像上传</span>
-      </div>
+    <DemoCard title='ImageUpload / AvatarUpload' description='图片与头像上传' code={codeImageAvatar}>
       <div class='grid grid-cols-2 lg:grid-cols-4 gap-6'>
         <div class='flex flex-col items-center gap-3'>
           <ImageUpload accept='image/*' width='180px' height='180px' />
@@ -739,69 +721,42 @@ server.listen(3000, () => {
           <p class='text-xs text-base-content/50'>头像（中）</p>
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
-  <!-- 分隔线 -->
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- Crypto 加密安全                                                         -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-error/10 text-error'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='11' width='18' height='11' rx='2' ry='2' /><path d='M7 11V7a5 5 0 0 1 10 0v4' /></svg>
+  <DemoSection
+    title='Crypto 加密安全'
+    subtitle='EncryptedInput / HashDisplay / SignatureDisplay'
+    iconClass='icon-[tabler--lock]'
+    tone='error'
+  >
+    <DemoCard title='EncryptedInput' description='加密输入框（SM4 对称加密）' code={codeEncryptedInput}>
+      <div class='space-y-4'>
+        <div class='p-4 rounded-lg bg-base-200/30'>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>SM4 对称加密</p>
+          <EncryptedInput bind:value={encVal} algorithm='SM4' placeholder='输入敏感数据' />
+        </div>
+        <div class='p-4 rounded-lg bg-base-200/30'>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>禁用状态</p>
+          <EncryptedInput placeholder='不可编辑的加密输入' algorithm='SM4' disabled />
+        </div>
       </div>
-      <div>
-        <h2 class='text-xl font-bold'>Crypto 加密安全</h2>
-        <p class='text-sm text-base-content/60'>加密输入、哈希展示、数字签名验证组件</p>
+    </DemoCard>
+
+    <DemoCard title='HashDisplay' description='哈希值展示（SM3）' code={codeHashDisplay}>
+      <div class='space-y-4'>
+        <div class='p-4 rounded-lg bg-base-200/30'>
+          <HashDisplay value='e3b0c44298fc1c149afbf4c8996fb924' algorithm='SM3' label='文件哈希' copyable truncate />
+        </div>
+        <div class='p-4 rounded-lg bg-base-200/30'>
+          <HashDisplay value='a1b2c3d4e5f60718293a4b5c6d7e8f90' algorithm='SM3' label='SM3 摘要' copyable />
+        </div>
       </div>
-      <Badge variant='error' outline size='sm'>3 组件</Badge>
-    </div>
+    </DemoCard>
 
-    <div class='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-      <!-- EncryptedInput -->
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='warning' size='sm'>EncryptedInput</Badge>
-          <span class='text-sm text-base-content/60'>加密输入框</span>
-        </div>
-        <div class='space-y-4'>
-          <div class='p-4 rounded-lg bg-base-200/30'>
-            <p class='text-xs font-medium text-base-content/50 mb-2'>SM4 对称加密</p>
-            <EncryptedInput bind:value={encVal} algorithm='SM4' placeholder='输入敏感数据' />
-          </div>
-          <div class='p-4 rounded-lg bg-base-200/30'>
-            <p class='text-xs font-medium text-base-content/50 mb-2'>禁用状态</p>
-            <EncryptedInput placeholder='不可编辑的加密输入' algorithm='SM4' disabled />
-          </div>
-        </div>
-      </Card>
-
-      <!-- HashDisplay -->
-      <Card bordered>
-        <div class='flex items-center gap-2 mb-5'>
-          <Badge variant='warning' size='sm'>HashDisplay</Badge>
-          <span class='text-sm text-base-content/60'>哈希值展示</span>
-        </div>
-        <div class='space-y-4'>
-          <div class='p-4 rounded-lg bg-base-200/30'>
-            <HashDisplay value='e3b0c44298fc1c149afbf4c8996fb924' algorithm='SM3' label='文件哈希' copyable truncate />
-          </div>
-          <div class='p-4 rounded-lg bg-base-200/30'>
-            <HashDisplay value='a1b2c3d4e5f60718293a4b5c6d7e8f90' algorithm='SM3' label='SM3 摘要' copyable />
-          </div>
-        </div>
-      </Card>
-    </div>
-
-    <!-- SignatureDisplay -->
-    <Card bordered class='mt-6'>
-      <div class='flex items-center gap-2 mb-5'>
-        <Badge variant='warning' size='sm'>SignatureDisplay</Badge>
-        <span class='text-sm text-base-content/60'>数字签名验证展示</span>
-      </div>
+    <DemoCard title='SignatureDisplay' description='数字签名验证展示（SM2）' code={codeSignatureDisplay}>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
         <div class='p-4 rounded-xl border-2 border-success/20 bg-success/5'>
           <p class='text-xs font-semibold text-success mb-3'>SM2 - 验证通过</p>
@@ -830,6 +785,6 @@ server.listen(3000, () => {
           />
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 </div>

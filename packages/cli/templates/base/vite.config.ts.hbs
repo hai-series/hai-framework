@@ -3,6 +3,9 @@
  */
 import path from 'node:path'
 import process from 'node:process'
+{{#if hasUi}}
+import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
+{{/if}}
 {{#if hasI18n}}
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 {{/if}}
@@ -40,7 +43,11 @@ export default defineConfig(({ mode }) => {
     ],
 {{#if hasUi}}
     optimizeDeps: {
-      exclude: ['bits-ui'],
+      // bits-ui 含 .svelte 源码须 exclude；@internationalized/date 须与 bits-ui 同为原始副本，
+      // 避免日期类型 instanceof 失败（"Unknown date type"）。
+      exclude: [...haiOptimizeExclude],
+      // 预打包 @h-ai/ui 的重型纯 JS 依赖，避免首次进入业务路由触发依赖再优化与整页刷新
+      include: [...haiPrebundledDeps],
     },
 {{/if}}
 {{#unless isSvelteOnlyApp}}

@@ -15,6 +15,10 @@
       "types": "./auto-import.d.ts",
       "import": "./auto-import.js"
     },
+    "./vite": {
+      "types": "./vite.d.ts",
+      "import": "./vite.js"
+    },
     "./components/*": {
       "types": "./dist/components/*.d.ts",
       "svelte": "./dist/components/*.js",
@@ -27,7 +31,9 @@
   "files": [
     "auto-import.d.ts",
     "auto-import.js",
-    "dist"
+    "dist",
+    "vite.d.ts",
+    "vite.js"
   ],
   "publishConfig": {
     "access": "public"

@@ -101,7 +101,7 @@
             <BitsDatePicker.Grid class='w-full border-collapse'>
               <BitsDatePicker.GridHead>
                 <BitsDatePicker.GridRow class='flex w-full'>
-                  {#each weekdays as day (day)}
+                  {#each weekdays as day, weekdayIndex (weekdayIndex)}
                     <BitsDatePicker.HeadCell class='w-9 text-center text-xs font-medium text-base-content/50'>
                       {day}
                     </BitsDatePicker.HeadCell>

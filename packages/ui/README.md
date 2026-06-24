@@ -32,13 +32,21 @@ export default config
 ### 2. 配置 vite.config.ts
 
 ```ts
+import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [sveltekit(), tailwindcss()],
-  optimizeDeps: { exclude: ['bits-ui'] },
+  optimizeDeps: {
+    // bits-ui 含 .svelte 源码须 exclude；@internationalized/date 须与 bits-ui 同为原始副本，
+    // 否则日期组件会因双实例 instanceof 失败抛 "Unknown date type"
+    exclude: [...haiOptimizeExclude],
+    // 预打包 @h-ai/ui 的重型纯 JS 依赖（语法高亮 / Mermaid / PDF 等），
+    // 避免首次进入业务路由时触发依赖再优化与整页刷新
+    include: [...haiPrebundledDeps],
+  },
   ssr: { noExternal: [/@h-ai\//] },
 })
 ```

@@ -8,6 +8,8 @@
 -->
 <script lang='ts'>
   import type { DateValue } from '@internationalized/date'
+  import DemoCard from '$lib/components/gallery/DemoCard.svelte'
+  import DemoSection from '$lib/components/gallery/DemoSection.svelte'
   import { ActionSheet, AppBar, BottomNav, InfiniteScroll, PullRefresh, SafeArea, SwipeCell, toast } from '@h-ai/ui'
   import { CalendarDate } from '@internationalized/date'
 
@@ -131,26 +133,131 @@
     ]
     mobileFeedHasMore = mobileFeedItems.length < 6
   }
+
+  // === 示例源码 ===
+  const codeBreadcrumb = `<Breadcrumb items={breadcrumbItems} />
+<Breadcrumb items={breadcrumbItems} separator='›' />`
+
+  const codeTabs = `<Tabs items={items} bind:active={subTab} type='line' />
+<Tabs items={items} active='all' type='card' />
+<Tabs items={items} active='month' type='pills' />`
+
+  const codePaginationSteps = `<Pagination total={50} bind:page pageSize={10} onchange={(p) => page = p} />
+<Pagination total={200} bind:page pageSize={20} showJumper size='sm' />
+
+<Steps items={stepsItems} current={index} clickable onchange={(i) => index = i} />
+<Steps items={stepsItems} current={2} direction='vertical' size='sm' />`
+
+  const codeMobile = `<!-- 移动端结构组件，常配合手机外壳预览 -->
+<SafeArea position='top'>
+  <AppBar title='移动工作台' fixed={false} safeArea={false} />
+</SafeArea>
+
+<PullRefresh onrefresh={refreshMobileDemo}>
+  <SwipeCell actions={swipeActions} onaction={(id) => toast.info(id)}>...</SwipeCell>
+</PullRefresh>
+
+<BottomNav items={bottomNavItems} active={active} onchange={(id) => active = id} />
+
+<ActionSheet open={open} title='选择操作' items={items} onselect={...} onclose={...} />
+<InfiniteScroll hasMore={hasMore} onloadmore={loadMore}>...</InfiniteScroll>`
+
+  const codeDataTable = `<DataTable data={tableData} columns={columns} keyField='id'>
+  {#snippet actions(item)}
+    <Button size='xs' variant='ghost'>编辑</Button>
+    <Button size='xs' variant='error'>删除</Button>
+  {/snippet}
+</DataTable>
+
+<DataTable data={[]} columns={columns} keyField='id' />        <!-- 空状态 -->
+<DataTable data={[]} columns={columns} keyField='id' loading /> <!-- 加载中 -->`
+
+  const codeAccordion = `<Accordion items={accordionItems} variant='bordered' />
+<Accordion items={accordionItems} variant='shadow' />
+<Accordion items={accordionItems} variant='joined' multiple bind:value icon='plus' />`
+
+  const codeTimeline = `<Timeline items={timelineItems} />
+<Timeline items={timelineItems} compact />`
+
+  const codeAlert = `<Alert variant='info'>信息提示</Alert>
+<Alert variant='success'>操作成功</Alert>
+<Alert variant='warning' dismissible>可关闭警告</Alert>
+<Alert variant='error'>错误提示</Alert>
+<Alert variant='info' title='带标题的提示'>带标题正文</Alert>`
+
+  const codeEmptyResult = `<Empty title='暂无数据' description='当前列表为空' icon='inbox' />
+
+<Result status='success' title='提交成功' description='...' />
+<Result status='error' title='操作失败' description='...' />`
+
+  const codeSkeleton = `<Skeleton variant='avatar' />
+<Skeleton variant='title' width='60%' />
+<Skeleton variant='text' count={4} />
+<Skeleton variant='input' />
+<Skeleton variant='button' width='120px' />`
+
+  const codeOverlayMenus = `<Tooltip content='顶部提示' position='top'>
+  <Button variant='primary' outline>上</Button>
+</Tooltip>
+
+<Popover position='bottom' trigger='click'>
+  {#snippet triggerContent()}<Button>点击弹出</Button>{/snippet}
+  <div class='p-3'>弹出内容</div>
+</Popover>
+
+<Dropdown items={dropdownItems} onselect={(k) => toast.info(k)}>
+  <Button>操作菜单 ▾</Button>
+</Dropdown>`
+
+  const codeForm = `<Form onsubmit={async () => { ... }}>
+  <FormField label='姓名' required>
+    <Input bind:value placeholder='请输入姓名' />
+  </FormField>
+  <FormField label='邮箱' error={emailError}>
+    <Input bind:value placeholder='请输入邮箱' />
+  </FormField>
+  <Button variant='primary' type='submit'>提交</Button>
+</Form>`
+
+  const codeCombobox = `<Combobox options={comboboxOpts} bind:value placeholder='搜索框架...' />
+<Combobox options={comboboxOpts} placeholder='...' error='请选择一个框架' />
+<Combobox options={multiOpts} bind:value multiple placeholder='搜索技能...' />`
+
+  const codeTagInput = `<TagInput bind:tags placeholder='输入后回车添加' />
+<TagInput tags={['标签A', '标签B']} maxTags={5} />
+<TagInput tags={[]} allowDuplicates placeholder='可重复输入' />`
+
+  const codeCalendar = `<Calendar bind:value weekStartsOn={1} />
+
+<DatePicker bind:value />
+<DatePicker error='请选择有效日期' />
+<DatePicker disabled />`
+
+  const codeCardLayout = `<Card title='默认卡片'>内容</Card>
+<Card title='带边框' bordered>内容</Card>
+<Card title='大阴影' shadow='lg'>内容</Card>
+
+<Card padding='lg' bordered>
+  {#snippet header()}...{/snippet}
+  内容
+  {#snippet footer()}...{/snippet}
+</Card>`
+
+  const codePageHeader = `<PageHeader title='用户管理' description='管理系统中的所有用户账号'>
+  {#snippet actions()}
+    <Button variant='primary' size='sm'>新建用户</Button>
+  {/snippet}
+</PageHeader>`
 </script>
 
 <div class='space-y-10'>
-  <!-- ====================================================================== -->
-  <!-- 导航与流程                                                              -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='9 18 15 12 9 6' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>导航与流程</h2>
-        <p class='text-sm text-base-content/60'>Breadcrumb / Tabs / Pagination / Steps</p>
-      </div>
-    </div>
-
-    <!-- ==================== Breadcrumb ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Breadcrumb 面包屑</h3>
+  <DemoSection
+    title='导航与流程'
+    subtitle='Breadcrumb / Tabs / Pagination / Steps'
+    iconClass='icon-[tabler--chevron-right]'
+    tone='primary'
+  >
+    <DemoCard title='Breadcrumb 面包屑' description='默认与自定义分隔符' code={codeBreadcrumb}>
       <div class='space-y-4'>
         <div>
           <p class='text-sm font-medium mb-2'>默认分隔符</p>
@@ -171,11 +278,9 @@
           ]} />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Tabs ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Tabs 标签页</h3>
+    <DemoCard title='Tabs 标签页' description='line / card / pills 三种样式' code={codeTabs}>
       <div class='space-y-4'>
         <div>
           <p class='text-sm font-medium mb-2'>线条样式（line）</p>
@@ -216,11 +321,9 @@
           />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Pagination / Steps ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Pagination 分页 / Steps 步骤条</h3>
+    <DemoCard title='Pagination 分页 / Steps 步骤条' description='分页与步骤条' code={codePaginationSteps}>
       <div class='space-y-6'>
         <div>
           <p class='text-sm font-medium mb-2'>分页（第 {paginationPage} 页，共 5 页）</p>
@@ -239,26 +342,18 @@
           <Steps items={stepsItems} current={2} direction='vertical' size='sm' />
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- 移动端应用模式                                                          -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='7' y='2' width='10' height='20' rx='2' /><path d='M11 18h2' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>移动端应用模式</h2>
-        <p class='text-sm text-base-content/60'>AppBar / BottomNav / SafeArea / ActionSheet / PullRefresh / InfiniteScroll / SwipeCell</p>
-      </div>
-    </div>
-
-    <Card bordered>
+  <DemoSection
+    title='移动端应用模式'
+    subtitle='AppBar / BottomNav / SafeArea / ActionSheet / PullRefresh / InfiniteScroll / SwipeCell'
+    iconClass='icon-[tabler--device-mobile]'
+    tone='primary'
+  >
+    <DemoCard title='移动端结构与手势' description='手机外壳预览：导航、安全区、下拉刷新、滑动单元格、上拉加载' code={codeMobile}>
       <div class='grid grid-cols-1 xl:grid-cols-[24rem_1fr] gap-6 items-start'>
         <div class='mx-auto w-full max-w-sm rounded-4xl border border-base-300 bg-base-200 p-2 shadow-sm'>
           <div class='relative overflow-hidden rounded-3xl bg-base-100 min-h-136'>
@@ -334,7 +429,7 @@
           </div>
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
     <ActionSheet
       open={actionSheetOpen}
@@ -344,27 +439,17 @@
       onselect={(id: string) => toast.info(`选择: ${id}`)}
       onclose={() => actionSheetOpen = false}
     />
-  </section>
+  </DemoSection>
 
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- 数据展示                                                                -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-info/10 text-info'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2' /><line x1='3' y1='9' x2='21' y2='9' /><line x1='9' y1='21' x2='9' y2='9' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>数据展示</h2>
-        <p class='text-sm text-base-content/60'>DataTable / Accordion / Timeline / Alert / Empty / Result / Skeleton</p>
-      </div>
-    </div>
-
-    <!-- ==================== DataTable ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>DataTable 数据表格</h3>
+  <DemoSection
+    title='数据展示'
+    subtitle='DataTable / Accordion / Timeline / Alert / Empty / Result / Skeleton'
+    iconClass='icon-[tabler--table]'
+    tone='info'
+  >
+    <DemoCard title='DataTable 数据表格' description='操作列、空状态、加载态' code={codeDataTable}>
       <div class='space-y-6'>
         <div>
           <p class='text-sm font-medium mb-2'>带操作列</p>
@@ -407,11 +492,9 @@
           />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Accordion ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Accordion 手风琴</h3>
+    <DemoCard title='Accordion 手风琴' description='bordered / shadow / joined 多选' code={codeAccordion}>
       <div class='space-y-4'>
         <div>
           <p class='text-sm font-medium mb-2'>边框样式（bordered）</p>
@@ -426,11 +509,9 @@
           <Accordion items={accordionItems} variant='joined' multiple bind:value={accordionVal} icon='plus' />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Timeline ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Timeline 时间线</h3>
+    <DemoCard title='Timeline 时间线' description='默认与紧凑模式' code={codeTimeline}>
       <div class='space-y-6'>
         <div>
           <p class='text-sm font-medium mb-2'>默认（垂直）</p>
@@ -441,11 +522,9 @@
           <Timeline items={timelineItems} compact />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Alert ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Alert 警告提示</h3>
+    <DemoCard title='Alert 警告提示' description='信息/成功/警告/错误/带标题' code={codeAlert}>
       <div class='space-y-3'>
         <Alert variant='info'>信息提示：系统将于今晚 22:00 进行例行维护，预计持续 2 小时。</Alert>
         <Alert variant='success'>操作成功！数据已保存至数据库。</Alert>
@@ -453,11 +532,9 @@
         <Alert variant='error'>错误：网络连接超时，请检查网络设置后重试。</Alert>
         <Alert variant='info' title='带标题的提示'>这是一条带有标题的信息提示，标题会以粗体显示。</Alert>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Empty / Result ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Empty 空状态 / Result 结果页</h3>
+    <DemoCard title='Empty 空状态 / Result 结果页' description='空状态与结果页' code={codeEmptyResult}>
       <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
         <Empty title='暂无数据' description='当前列表为空' icon='inbox' />
         <Empty title='未找到结果' description='尝试修改搜索条件' icon='search' />
@@ -471,11 +548,9 @@
         <Result status='warning' title='需要注意' description='部分数据已过期，请检查更新。' />
         <Result status='info' title='处理中' description='您的请求正在排队处理，请稍候。' />
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Skeleton ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Skeleton 骨架屏</h3>
+    <DemoCard title='Skeleton 骨架屏' description='卡片、表单、多行、缩略图加载态' code={codeSkeleton}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div>
           <p class='text-sm font-medium mb-2'>卡片加载态</p>
@@ -509,28 +584,18 @@
           </div>
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- 浮层与交互                                                              -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-warning/10 text-warning'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>浮层与交互</h2>
-        <p class='text-sm text-base-content/60'>Tooltip / Popover / Dropdown</p>
-      </div>
-    </div>
-
-    <!-- ==================== Tooltip / Popover / Dropdown ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Tooltip / Popover / Dropdown</h3>
+  <DemoSection
+    title='浮层与交互'
+    subtitle='Tooltip / Popover / Dropdown'
+    iconClass='icon-[tabler--message-circle]'
+    tone='warning'
+  >
+    <DemoCard title='Tooltip / Popover / Dropdown' description='提示、弹出层与下拉菜单' code={codeOverlayMenus}>
       <div class='space-y-6'>
         <div>
           <p class='text-sm font-medium mb-2'>Tooltip 位置</p>
@@ -583,28 +648,18 @@
           </div>
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- 表单组件                                                                -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-success/10 text-success'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' /><path d='M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>表单组件</h2>
-        <p class='text-sm text-base-content/60'>Form / Combobox / TagInput / Calendar / DatePicker</p>
-      </div>
-    </div>
-
-    <!-- ==================== Form / FormField ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Form / FormField 表单</h3>
+  <DemoSection
+    title='表单组件'
+    subtitle='Form / Combobox / TagInput / Calendar / DatePicker'
+    iconClass='icon-[tabler--forms]'
+    tone='success'
+  >
+    <DemoCard title='Form / FormField 表单' description='表单布局、校验与提交' code={codeForm}>
       <Form onsubmit={async () => { toast.success(`提交: ${formName}, ${formEmail}`) }}>
         <div class='grid grid-cols-1 md:grid-cols-2 gap-4'>
           <FormField label='姓名' required>
@@ -629,11 +684,9 @@
           <Button type='reset'>重置</Button>
         </div>
       </Form>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Combobox ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Combobox 可搜索选择（Bits UI）</h3>
+    <DemoCard title='Combobox 可搜索选择（Bits UI）' description='单选、多选、错误态' code={codeCombobox}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div>
           <p class='text-sm font-medium mb-2'>单选（当前: {comboboxVal || '未选择'}）</p>
@@ -662,11 +715,9 @@
           <Combobox options={multiOpts} value={[]} multiple placeholder='选择...' label='技能标签' />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== TagInput ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>TagInput 标签输入</h3>
+    <DemoCard title='TagInput 标签输入' description='基础、上限、允许重复、禁用' code={codeTagInput}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div>
           <p class='text-sm font-medium mb-2'>基础用法（当前 {tagInputVal.length} 个）</p>
@@ -685,11 +736,9 @@
           <TagInput tags={['只读A', '只读B']} disabled />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Calendar / DatePicker ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Calendar 日历 / DatePicker 日期选择（Bits UI）</h3>
+    <DemoCard title='Calendar 日历 / DatePicker 日期选择（Bits UI）' description='独立日历与日期选择器' code={codeCalendar}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div>
           <p class='text-sm font-medium mb-2'>独立日历</p>
@@ -712,28 +761,18 @@
           </div>
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- 布局组件                                                                -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-secondary/10 text-secondary'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='7' height='7' /><rect x='14' y='3' width='7' height='7' /><rect x='14' y='14' width='7' height='7' /><rect x='3' y='14' width='7' height='7' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>布局组件</h2>
-        <p class='text-sm text-base-content/60'>Card / PageHeader</p>
-      </div>
-    </div>
-
-    <!-- ==================== Card ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Card 卡片</h3>
+  <DemoSection
+    title='布局组件'
+    subtitle='Card / PageHeader'
+    iconClass='icon-[tabler--layout-grid]'
+    tone='secondary'
+  >
+    <DemoCard title='Card 卡片' description='边框、阴影、内边距、header/footer 插槽' code={codeCardLayout}>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
         <Card title='默认卡片'>
           <p class='text-sm text-base-content/70'>这是默认样式的卡片内容。</p>
@@ -771,11 +810,9 @@
           </div>
         </Card>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== PageHeader ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>PageHeader 页面头部</h3>
+    <DemoCard title='PageHeader 页面头部' description='标题、描述与操作区' code={codePageHeader}>
       <div class='space-y-4'>
         <div class='bg-base-200/50 rounded-lg p-4'>
           <PageHeader title='用户管理' description='管理系统中的所有用户账号'>
@@ -788,6 +825,6 @@
           <PageHeader title='数据分析' description='查看系统运行数据与统计报表' />
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 </div>

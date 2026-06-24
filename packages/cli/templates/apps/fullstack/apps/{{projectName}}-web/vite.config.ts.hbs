@@ -1,5 +1,6 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.web}}
+import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
@@ -16,7 +17,8 @@ export default defineConfig({
     tailwindcss(),
   ],
   optimizeDeps: {
-    exclude: ['bits-ui'],
+    exclude: [...haiOptimizeExclude],
+    include: [...haiPrebundledDeps],
   },
   envPrefix: ['VITE_', 'PUBLIC_'],
   ssr: {

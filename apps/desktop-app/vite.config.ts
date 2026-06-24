@@ -10,6 +10,7 @@
  */
 
 import process from 'node:process'
+import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
@@ -38,9 +39,12 @@ export default defineConfig({
     },
   },
 
-  // 阻止 Vite 预打包 @h-ai/ui — 保留 svelte 文件由 vite-plugin-svelte 处理
+  // 阻止 Vite 预打包 @h-ai/ui 与 bits-ui — 保留 svelte 文件由 vite-plugin-svelte 处理
   optimizeDeps: {
-    exclude: ['@h-ai/ui'],
+    // @internationalized/date 须与 bits-ui 同为原始副本，避免 "Unknown date type"。
+    exclude: ['@h-ai/ui', ...haiOptimizeExclude],
+    // 提前预打包 @h-ai/* 框架的重型纯 JS 依赖，避免运行中途触发依赖再优化与整页刷新。
+    include: [...haiPrebundledDeps],
   },
 
   // 环境变量前缀：PUBLIC_ + VITE_

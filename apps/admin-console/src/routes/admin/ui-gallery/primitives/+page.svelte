@@ -1,12 +1,15 @@
 <!--
-  原子组件（Primitives）展示 - 21 个基础 UI 单元
+  原子组件（Primitives）展示 - 基础 UI 单元
   Button / IconButton / BareButton / Input / BareInput / Textarea /
   Select / Checkbox / Switch / Radio / Range / Rating /
-  Badge / Avatar / Tag / Spinner / Progress /
-  ToggleCheckbox / ToggleInput / ToggleRadio
+  Badge / Avatar / Tag / Spinner / Progress / Toggle 系列
+
+  采用分类（DemoSection）+ 可折叠示例卡片（DemoCard，含效果与可复制源码）。
 -->
 <script lang='ts'>
   // Range 与 DOM 全局类型同名，必须显式导入
+  import DemoCard from '$lib/components/gallery/DemoCard.svelte'
+  import DemoSection from '$lib/components/gallery/DemoSection.svelte'
   import { Range, toast } from '@h-ai/ui'
 
   // === 表单状态 ===
@@ -31,25 +34,87 @@
     { value: 'react', label: 'React' },
     { value: 'angular', label: 'Angular' },
   ]
+
+  // === 示例源码 ===
+  const codeButton = `<Button variant='primary'>primary</Button>
+<Button variant='secondary'>secondary</Button>
+<Button variant='success'>success</Button>
+<Button variant='ghost'>ghost</Button>
+
+<!-- 轮廓 / 尺寸 / 状态 -->
+<Button variant='primary' outline>outline</Button>
+<Button variant='primary' size='lg'>lg</Button>
+<Button variant='primary' loading>加载中</Button>
+<Button variant='primary' disabled>禁用</Button>`
+
+  const codeBareIconButton = `<BareButton onclick={() => toast.info('裸按钮点击')}>
+  <span class='text-primary underline'>可点击文字</span>
+</BareButton>
+
+<IconButton variant='primary' tooltip='设置' label='设置' onclick={...}>
+  {#snippet icon()}<svg ... /> {/snippet}
+</IconButton>`
+
+  const codeInput = `<Input bind:value placeholder='请输入内容' />
+<BareInput placeholder='无边框、无样式' />
+<Input value='无效内容' error='请输入有效内容' />
+<Input value='不可编辑' disabled />
+<Input type='password' placeholder='输入密码' />
+
+<Textarea bind:value placeholder='多行内容' rows={3} />
+<Textarea placeholder='自动高度' rows={2} autoResize />`
+
+  const codeFormControls = `<Select bind:value options={selectOpts} placeholder='请选择框架' />
+
+<Checkbox bind:checked label='同意用户协议' />
+<Checkbox checked indeterminate label='半选状态' />
+
+<Switch bind:checked label='启用通知' />
+
+<Radio value={radioVal} options={selectOpts} direction='vertical' onchange={...} />`
+
+  const codeSelectSize = `<Select options={selectOpts} placeholder='超小' size='xs' />
+<Select options={selectOpts} placeholder='小号' size='sm' />
+<Select options={selectOpts} placeholder='大号' size='lg' />
+<Select options={selectOpts} placeholder='请选择' error='请选择一项' />`
+
+  const codeToggle = `<ToggleCheckbox bind:checked={toggleCheck} />
+<ToggleInput bind:checked={toggleInput} />
+<ToggleRadio bind:checked={toggleRadio} />
+
+<ToggleCheckbox checked disabled />`
+
+  const codeRangeRating = `<Range bind:value min={0} max={100} step={10} variant='primary' />
+<Range value={30} step={25} variant='secondary' showSteps />
+
+<Rating bind:value max={5} size='lg' clearable />
+<Rating bind:value max={5} size='lg' half clearable />
+<Rating value={4} max={5} readonly />`
+
+  const codeBadgeAvatarTag = `<Badge variant='primary'>primary</Badge>
+<Badge variant='primary' outline size='sm'>sm 轮廓</Badge>
+
+<Avatar name='张三' size='md' />
+<Avatar name='方形' size='lg' shape='square' />
+
+<Tag variant='success'>成功</Tag>
+<Tag closable onclose={() => toast.info('标签关闭')}>可关闭</Tag>`
+
+  const codeSpinnerProgress = `<Spinner size='md' variant='primary' />
+
+<Progress value={50} max={100} variant='info' size='md' showLabel />
+<Progress value={60} variant='primary' striped showLabel />
+<Progress value={45} variant='secondary' striped animated showLabel />`
 </script>
 
 <div class='space-y-10'>
-  <!-- ====================================================================== -->
-  <!-- 按钮                                                                    -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2' /><path d='M9 12h6' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>按钮与交互</h2>
-        <p class='text-sm text-base-content/60'>Button / BareButton / IconButton</p>
-      </div>
-    </div>
-
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Button 按钮</h3>
+  <DemoSection
+    title='按钮与交互'
+    subtitle='Button / BareButton / IconButton'
+    iconClass='icon-[tabler--click]'
+    tone='primary'
+  >
+    <DemoCard title='Button 按钮' description='变体 / 轮廓 / 尺寸 / 状态' code={codeButton}>
       <div class='space-y-4'>
         <div>
           <p class='text-sm font-medium mb-2'>变体（variant）</p>
@@ -95,11 +160,9 @@
           </div>
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== BareButton / IconButton ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>BareButton / IconButton</h3>
+    <DemoCard title='BareButton / IconButton' description='无样式按钮与图标按钮' code={codeBareIconButton}>
       <div class='space-y-4'>
         <div>
           <p class='text-sm font-medium mb-2'>BareButton（无样式按钮）</p>
@@ -148,28 +211,18 @@
           </div>
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- 输入控件                                                                -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-info/10 text-info'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' /><path d='M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>输入控件</h2>
-        <p class='text-sm text-base-content/60'>Input / BareInput / Textarea / Select / Checkbox / Switch / Radio</p>
-      </div>
-    </div>
-
-    <!-- ==================== Input / BareInput / Textarea ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Input / BareInput / Textarea</h3>
+  <DemoSection
+    title='输入控件'
+    subtitle='Input / BareInput / Textarea / Select / Checkbox / Switch / Radio'
+    iconClass='icon-[tabler--forms]'
+    tone='info'
+  >
+    <DemoCard title='Input / BareInput / Textarea' description='输入框、裸输入框与多行文本' code={codeInput}>
       <div class='space-y-4'>
         <div class='grid grid-cols-1 md:grid-cols-2 gap-4'>
           <div>
@@ -217,11 +270,9 @@
           <Textarea id='g-textarea-auto' placeholder='输入后自动调整高度' rows={2} autoResize />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Select / Checkbox / Switch / Radio ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Select / Checkbox / Switch / Radio</h3>
+    <DemoCard title='Select / Checkbox / Switch / Radio' description='下拉、复选、开关、单选' code={codeFormControls}>
       <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel'>下拉选择</label>
@@ -256,11 +307,9 @@
         <p class='text-sm font-medium mb-3'>Radio 水平排列</p>
         <Radio value={radioHorizontal} options={selectOpts} direction='horizontal' onchange={(v: string) => radioHorizontal = v} />
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Select 尺寸 ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Select 尺寸与状态</h3>
+    <DemoCard title='Select 尺寸与状态' description='xs / sm / lg 与错误态' code={codeSelectSize}>
       <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-xs'>xs</label>
@@ -279,11 +328,9 @@
           <Select id='g-sel-err' options={selectOpts} placeholder='请选择' error='请选择一项' />
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Toggle 系列 ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Toggle 系列</h3>
+    <DemoCard title='Toggle 系列' description='ToggleCheckbox / ToggleInput / ToggleRadio' code={codeToggle}>
       <div class='space-y-4'>
         <div class='flex flex-wrap items-center gap-8'>
           <label class='flex items-center gap-2 cursor-pointer'>
@@ -310,11 +357,9 @@
           </label>
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Range / Rating ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Range 滑块 / Rating 评分</h3>
+    <DemoCard title='Range 滑块 / Rating 评分' description='滑块与评分控件' code={codeRangeRating}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div class='space-y-4'>
           <div>
@@ -382,28 +427,18 @@
           </div>
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 
   <div class='divider'></div>
 
-  <!-- ====================================================================== -->
-  <!-- 展示与反馈                                                              -->
-  <!-- ====================================================================== -->
-  <section>
-    <div class='flex items-center gap-3 mb-6'>
-      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-success/10 text-success'>
-        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10' /><path d='M8 14s1.5 2 4 2 4-2 4-2' /><line x1='9' y1='9' x2='9.01' y2='9' /><line x1='15' y1='9' x2='15.01' y2='9' /></svg>
-      </div>
-      <div>
-        <h2 class='text-xl font-bold'>展示与反馈</h2>
-        <p class='text-sm text-base-content/60'>Badge / Avatar / Tag / Spinner / Progress</p>
-      </div>
-    </div>
-
-    <!-- ==================== Badge / Avatar / Tag ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Badge 徽章 / Avatar 头像 / Tag 标签</h3>
+  <DemoSection
+    title='展示与反馈'
+    subtitle='Badge / Avatar / Tag / Spinner / Progress'
+    iconClass='icon-[tabler--mood-smile]'
+    tone='success'
+  >
+    <DemoCard title='Badge 徽章 / Avatar 头像 / Tag 标签' description='徽章、头像与标签' code={codeBadgeAvatarTag}>
       <div class='space-y-6'>
         <div>
           <p class='text-sm font-medium mb-2'>Badge 变体</p>
@@ -480,11 +515,9 @@
           </div>
         </div>
       </div>
-    </Card>
+    </DemoCard>
 
-    <!-- ==================== Spinner / Progress ==================== -->
-    <Card bordered>
-      <h3 class='text-lg font-semibold mb-4'>Spinner 加载器 / Progress 进度条</h3>
+    <DemoCard title='Spinner 加载器 / Progress 进度条' description='加载指示与进度条' code={codeSpinnerProgress}>
       <div class='space-y-6'>
         <div>
           <p class='text-sm font-medium mb-2'>Spinner 尺寸与变体</p>
@@ -514,6 +547,6 @@
           </div>
         </div>
       </div>
-    </Card>
-  </section>
+    </DemoCard>
+  </DemoSection>
 </div>
