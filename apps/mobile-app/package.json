@@ -1,7 +1,7 @@
 {
   "name": "mobile-app",
   "type": "module",
-  "version": "0.1.0-alpha.26",
+  "version": "0.1.0-alpha.27",
   "private": true,
   "description": "hai Agent Framework - Mobile app（Capacitor + Svelte 5 + api-service contract）",
   "keywords": [
