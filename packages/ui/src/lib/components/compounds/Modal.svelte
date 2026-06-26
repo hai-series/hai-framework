@@ -143,7 +143,6 @@
 >
   <div
     class='hai-modal__viewport'
-    role='button'
     tabindex='-1'
     aria-label={uiM('common_close')}
     onclick={handleDialogClick}

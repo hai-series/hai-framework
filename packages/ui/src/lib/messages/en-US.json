@@ -29,6 +29,7 @@
   "confirm_message": "Are you sure you want to proceed?",
   "confirm_ok": "Confirm",
   "confirm_cancel": "Cancel",
+  "messagebox_title": "Tip",
   "empty_title": "No data",
   "tag_input_placeholder": "Press Enter to add",
   "common_close": "Close",

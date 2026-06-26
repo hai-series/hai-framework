@@ -29,6 +29,7 @@
   "confirm_message": "确定要继续吗？",
   "confirm_ok": "确认",
   "confirm_cancel": "取消",
+  "messagebox_title": "提示",
   "empty_title": "暂无数据",
   "tag_input_placeholder": "按 Enter 添加",
   "common_close": "关闭",

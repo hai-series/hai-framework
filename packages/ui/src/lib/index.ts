@@ -13,6 +13,14 @@ export * from './components/index.js'
 
 export * from './i18n.svelte.js'
 
+// ─── Message 轻量消息提示（类似 ElementUI Message） ───
+
+export * from './message.svelte.js'
+
+// ─── MessageBox 命令式弹框（类似 ElementUI MessageBox） ───
+
+export * from './messagebox.svelte.js'
+
 // ─── 主题配置 ───
 
 export * from './theme-config.js'
