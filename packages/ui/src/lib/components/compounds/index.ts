@@ -40,6 +40,11 @@ export { default as Form } from './Form.svelte'
 export { default as FormField } from './FormField.svelte'
 // 无限滚动 / 上拉加载
 export { default as InfiniteScroll } from './InfiniteScroll.svelte'
+// MessageBox 命令式弹框（类似 ElementUI MessageBox）
+export { default as MessageBoxContainer } from './MessageBoxContainer.svelte'
+export { default as MessageBoxDialog } from './MessageBoxDialog.svelte'
+// Message 轻量消息提示（类似 ElementUI Message）
+export { default as MessageContainer } from './MessageContainer.svelte'
 export { default as Modal } from './Modal.svelte'
 // 页面头部
 export { default as PageHeader } from './PageHeader.svelte'

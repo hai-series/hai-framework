@@ -992,3 +992,68 @@ export interface PopoverProps {
   /** 内容插槽 */
   children?: Snippet
 }
+
+// ─── MessageBox 弹框（类似 ElementUI MessageBox） ───
+
+/**
+ * MessageBox 类型
+ * - confirm: 双按钮（确认 / 取消）
+ * - alert: 单按钮（仅确认）
+ * - prompt: 带输入框的确认（预留）
+ */
+export type MessageBoxAction = 'confirm' | 'cancel' | 'close'
+
+/**
+ * MessageBox 图标类型
+ */
+export type MessageBoxIconType = 'info' | 'success' | 'warning' | 'error'
+
+/**
+ * MessageBox 配置项
+ */
+export interface MessageBoxOptions {
+  /** 标题 */
+  title?: string
+  /** 消息内容（纯文本或 HTML 字符串） */
+  message: string
+  /** 类型：confirm 双按钮 / alert 单按钮 */
+  type?: 'confirm' | 'alert'
+  /** 图标类型 */
+  iconType?: MessageBoxIconType
+  /** 确认按钮文本 */
+  confirmText?: string
+  /** 取消按钮文本 */
+  cancelText?: string
+  /** 确认按钮变体 */
+  confirmVariant?: 'default' | 'primary' | 'warning' | 'error'
+  /** 是否显示取消按钮（alert 模式下默认 false） */
+  showCancel?: boolean
+  /** 点击遮罩是否关闭（默认 false，需要显式操作） */
+  closeOnClickModal?: boolean
+  /** 是否显示右上角关闭按钮（默认 false） */
+  showClose?: boolean
+  /** 确认前回调（返回 false 可阻止关闭） */
+  beforeClose?: (action: MessageBoxAction, instance: MessageBoxInstance) => boolean | Promise<boolean>
+}
+
+/**
+ * MessageBox 实例（供 beforeClose 回调使用）
+ */
+export interface MessageBoxInstance {
+  /** 设置加载态 */
+  setLoading: (loading: boolean) => void
+}
+
+/**
+ * Message 消息提示配置项
+ */
+export interface MessageOptions {
+  /** 消息文本 */
+  message: string
+  /** 类型 */
+  type?: 'info' | 'success' | 'warning' | 'error'
+  /** 显示时长（毫秒），0 表示不自动关闭 */
+  duration?: number
+  /** 是否可手动关闭 */
+  closable?: boolean
+}
