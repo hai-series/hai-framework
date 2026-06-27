@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
+import type { ChatMessage, LLMOperations, TempModelConfig } from '../llm/ai-llm-types.js'
 import type { MemoryEntryInput, MemoryType } from './ai-memory-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -78,6 +78,7 @@ export async function extractMemories(
     minImportance?: number
     objectId?: string
     systemPrompt?: string
+    tempModel?: TempModelConfig
   },
 ): Promise<HaiResult<MemoryEntryInput[]>> {
   const conversationText = formatMessages(messages)
@@ -93,6 +94,7 @@ export async function extractMemories(
 
     const chatResult = await llm.chat({
       model: options?.model,
+      ...(options?.tempModel ? { tempModel: options.tempModel } : {}),
       messages: [
         { role: 'system', content: options?.systemPrompt ?? MEMORY_EXTRACTION_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },

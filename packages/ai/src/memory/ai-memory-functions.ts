@@ -11,7 +11,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { MemoryConfig } from '../ai-config.js'
 
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
-import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
+import type { ChatMessage, LLMOperations, TempModelConfig } from '../llm/ai-llm-types.js'
 import type { AIRelStore, AIVectorStore, StorePage, WhereClause } from '../store/ai-store-types.js'
 import type {
   MemoryClearOptions,
@@ -333,6 +333,7 @@ export function createMemoryOperations(
     candidate: MemoryEntryInput,
     related: MemoryEntry[],
     model?: string,
+    tempModel?: TempModelConfig,
   ): Promise<HaiResult<MemoryWritebackResolution>> {
     if (related.length === 0) {
       return ok({
@@ -350,6 +351,7 @@ export function createMemoryOperations(
 
     const resolutionResult = await llm.chat({
       model,
+      ...(tempModel ? { tempModel } : {}),
       messages: [
         { role: 'system', content: MEMORY_WRITEBACK_RESOLUTION_SYSTEM_PROMPT },
         {
@@ -507,6 +509,7 @@ export function createMemoryOperations(
           minImportance: options?.minImportance,
           objectId: options?.objectId,
           systemPrompt: options?.systemPrompt ?? config.systemPrompt,
+          tempModel: options?.tempModel,
         })
 
         if (!extractResult.success)
@@ -523,7 +526,7 @@ export function createMemoryOperations(
             return relatedResult
           }
 
-          const resolutionResult = await resolveWritebackResolution(entryInput, relatedResult.data, options?.model)
+          const resolutionResult = await resolveWritebackResolution(entryInput, relatedResult.data, options?.model, options?.tempModel)
           if (!resolutionResult.success) {
             return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(resolutionResult.error.message) } }), resolutionResult.error)
           }

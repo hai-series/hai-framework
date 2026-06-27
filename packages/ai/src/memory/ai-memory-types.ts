@@ -8,7 +8,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-import type { ChatMessage } from '../llm/ai-llm-types.js'
+import type { ChatMessage, TempModelConfig } from '../llm/ai-llm-types.js'
 import type { StorePage } from '../store/ai-store-types.js'
 
 import { z } from 'zod'
@@ -111,6 +111,13 @@ export interface MemoryExtractOptions {
   minImportance?: number
   /** 所属主体 ID（关联到提取结果） */
   objectId?: string
+  /**
+   * 临时模型配置（携带凭据的模型请求）。
+   *
+   * 用于传递运行时解析的 apiKey / baseUrl 等凭证，
+   * 避免回退到全局 .env 配置。优先级高于全局 config.models 查找。
+   */
+  tempModel?: TempModelConfig
 }
 
 // ─── 检索选项 ───
