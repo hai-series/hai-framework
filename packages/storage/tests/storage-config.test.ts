@@ -107,12 +107,17 @@ describe('storageConfigSchema', () => {
         forcePathStyle: true,
         prefix: 'uploads',
         publicUrl: 'https://cdn.example.com',
+        operationLog: { read: true, level: 'trace' as const, maxLength: 128 },
       }
       const result = S3ConfigSchema.parse(full)
       expect(result.endpoint).toBe('http://localhost:9000')
       expect(result.forcePathStyle).toBe(true)
       expect(result.prefix).toBe('uploads')
       expect(result.publicUrl).toBe('https://cdn.example.com')
+      expect(result.operationLog?.read).toBe(true)
+      expect(result.operationLog?.write).toBe(false)
+      expect(result.operationLog?.level).toBe('trace')
+      expect(result.operationLog?.maxLength).toBe(128)
     })
 
     it('非法 endpoint URL 应校验失败', () => {
@@ -153,9 +158,21 @@ describe('storageConfigSchema', () => {
         ...validLocal,
         directoryMode: 0o700,
         fileMode: 0o600,
+        operationLog: { write: true },
       })
       expect(result.directoryMode).toBe(0o700)
       expect(result.fileMode).toBe(0o600)
+      expect(result.operationLog?.read).toBe(false)
+      expect(result.operationLog?.write).toBe(true)
+      expect(result.operationLog?.level).toBe('debug')
+      expect(result.operationLog?.maxLength).toBe(1000)
+    })
+
+    it('操作日志等级仅支持 info/debug/trace', () => {
+      expect(() => LocalConfigSchema.parse({
+        ...validLocal,
+        operationLog: { read: true, level: 'warn' },
+      })).toThrow()
     })
   })
 

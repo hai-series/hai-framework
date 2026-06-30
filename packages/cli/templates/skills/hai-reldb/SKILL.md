@@ -38,7 +38,14 @@ database: ${HAI_RELDB_DATABASE:./data/app.db}
 # port: ${HAI_RELDB_PORT:5432}
 # user: ${HAI_RELDB_USER:postgres}
 # password: ${HAI_RELDB_PASSWORD:}
+operationLog:
+  read: false # query / get / queryPage
+  write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
+  maxLength: 1000
+  level: debug # info | debug | trace
 ```
+
+`operationLog` 在 reldb provider-base 的 DML 操作层统一输出日志，不要在 `reldb-main.ts`、各 raw provider 或调用方重复包装。`read` 覆盖 `query/get/queryPage`，`write` 覆盖 DDL、`execute/batch` 与 `tx.begin/commit/rollback`，`maxLength` 用于截断序列化后的 SQL 参数和批量语句，`level` 默认 `debug`。
 
 ### 2. 初始化与关闭
 

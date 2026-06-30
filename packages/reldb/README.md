@@ -74,6 +74,34 @@ await reldb.init({
 })
 ```
 
+### 操作日志
+
+可在数据库配置中通过 `operationLog` 开启 SQL 操作日志。日志在 reldb provider-base 的 DML 操作层统一输出，不在 `reldb-main.ts` 或各 raw provider 中重复包装。
+
+```yaml
+# config/_db.yml
+type: ${HAI_RELDB_TYPE:sqlite}
+database: ${HAI_RELDB_DATABASE:./data/app.db}
+operationLog:
+  read: false # query / get / queryPage
+  write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
+  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
+  level: debug # info | debug | trace，默认 debug
+```
+
+```ts
+await reldb.init({
+  type: 'sqlite',
+  database: './data.db',
+  operationLog: {
+    read: true,
+    write: true,
+    maxLength: 500,
+    level: 'debug',
+  },
+})
+```
+
 ## 事务
 
 三种使用方式：

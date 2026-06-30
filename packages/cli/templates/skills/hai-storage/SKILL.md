@@ -43,7 +43,14 @@ root: ${HAI_STORAGE_PATH:./data/storage}
 # forcePathStyle: false
 # prefix: ''
 # publicUrl: ''
+operationLog:
+  read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
+  write: false # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
+  maxLength: 1000
+  level: debug # info | debug | trace
 ```
+
+`operationLog` 在 Local/S3 Provider 的真实 file/dir/presign 操作处输出日志，不要在 `storage-main.ts` 或调用方重复包装。文件内容不会写入日志，上传数据只记录字节长度；`maxLength` 用于截断序列化后的参数，`level` 默认 `debug`。
 
 ### 2. 初始化与关闭
 

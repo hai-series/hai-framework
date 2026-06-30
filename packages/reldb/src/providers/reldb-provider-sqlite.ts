@@ -50,6 +50,7 @@ const logger = core.logger.child({ module: 'reldb', scope: 'sqlite' })
 export function createSqliteProvider(): ReldbProvider {
   /** 数据库实例 */
   let database: Database.Database | null = null
+  let currentConfig: ReldbConfig | null = null
   /** 串行化 SQLite 事务，避免并发 BEGIN 导致 "cannot start a transaction within a transaction" */
   let txChain: Promise<void> = Promise.resolve()
 
@@ -96,6 +97,7 @@ export function createSqliteProvider(): ReldbProvider {
   const ctx: ReldbOpsContext = {
     isConnected: () => database !== null && database.open,
     logger,
+    operationLog: () => currentConfig?.operationLog,
   }
 
   // ─── SQLite 方言辅助 ───
@@ -296,7 +298,8 @@ export function createSqliteProvider(): ReldbProvider {
     }
 
     const txDmlOps = createSqliteTxDmlOps(db)
-    return ok(createTxHandle(txDmlOps, {
+    const guardedTxDmlOps = createBaseDmlOps(ctx, txDmlOps)
+    return ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { db.exec('COMMIT') },
       rollback: async () => { db.exec('ROLLBACK') },
       release: () => finishTransaction(),
@@ -335,6 +338,7 @@ export function createSqliteProvider(): ReldbProvider {
           database.pragma('journal_mode = WAL')
         }
 
+        currentConfig = config
         logger.info('Connected to SQLite', { database: config.database })
         return ok(undefined)
       }
@@ -357,9 +361,11 @@ export function createSqliteProvider(): ReldbProvider {
           database.close()
         }
         catch (error) {
+          currentConfig = null
           database = null
           return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
         }
+        currentConfig = null
         database = null
         logger.info('Disconnected from SQLite')
       }

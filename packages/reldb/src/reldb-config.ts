@@ -21,6 +21,19 @@ export const ReldbTypeSchema = z.enum(['sqlite', 'postgresql', 'mysql'])
 /** 数据库类型 */
 export type DbType = z.infer<typeof ReldbTypeSchema>
 
+export const ReldbOperationLogConfigSchema = z.object({
+  read: z.boolean().default(false),
+  write: z.boolean().default(false),
+  maxLength: z.number().int().min(0).default(1000),
+  level: z.enum(['info', 'debug', 'trace']).default('debug'),
+})
+
+export type ReldbOperationLogConfig = z.infer<typeof ReldbOperationLogConfigSchema>
+
+const OperationLogConfigFieldSchema = {
+  operationLog: ReldbOperationLogConfigSchema.optional(),
+}
+
 /**
  * 连接池配置 Schema
  *
@@ -171,6 +184,7 @@ export const SqliteConfigSchema = z.object({
   database: z.string(),
   /** SQLite 特定选项 */
   sqlite: SqliteOptionsSchema.optional(),
+  ...OperationLogConfigFieldSchema,
 })
 
 /**
@@ -195,6 +209,7 @@ export const SqliteConfigSchema = z.object({
  */
 export const PostgresqlConfigSchema = NetworkConfigSchema.extend({
   type: z.literal('postgresql'),
+  ...OperationLogConfigFieldSchema,
 })
 
 /**
@@ -221,6 +236,7 @@ export const MysqlConfigSchema = NetworkConfigSchema.extend({
   type: z.literal('mysql'),
   /** MySQL 特定选项 */
   mysql: MysqlOptionsSchema.optional(),
+  ...OperationLogConfigFieldSchema,
 })
 
 /**

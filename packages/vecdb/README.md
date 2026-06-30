@@ -64,6 +64,34 @@ await vecdb.init({
 await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333', apiKey: 'optional-key' })
 ```
 
+### 操作日志
+
+可在向量数据库配置中通过 `operationLog` 开启操作日志。日志在集合/向量操作进入真实 Provider 前输出，不在 `vecdb-main.ts` 中做统一包装。
+
+```yaml
+# config/_vecdb.yml
+type: lancedb
+path: ./data/vecdb
+operationLog:
+  read: false # collection.exists/info/list, vector.search/count
+  write: false # collection.create/drop, vector.insert/upsert/delete
+  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
+  level: debug # info | debug | trace，默认 debug
+```
+
+```ts
+await vecdb.init({
+  type: 'lancedb',
+  path: './data/vecdb',
+  operationLog: {
+    read: true,
+    write: true,
+    maxLength: 500,
+    level: 'debug',
+  },
+})
+```
+
 > 注意：`vecdb.config` 返回的是**脱敏配置快照**；连接字符串中的用户名/密码、独立 `password` 字段和 `apiKey` 会被替换为 `[REDACTED]`。
 
 > 行为说明：空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`；缺少可选驱动时返回 `HaiVecdbError.DRIVER_NOT_FOUND`。

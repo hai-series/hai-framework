@@ -63,12 +63,14 @@ interface PgClient {
 export function createPostgresProvider(): ReldbProvider {
   /** 连接池实例 */
   let pool: PgPool | null = null
+  let currentConfig: ReldbConfig | null = null
 
   // ─── 操作上下文 ───
 
   const ctx: ReldbOpsContext = {
     isConnected: () => pool !== null,
     logger,
+    operationLog: () => currentConfig?.operationLog,
   }
 
   // ─── 辅助函数 ───
@@ -390,7 +392,8 @@ export function createPostgresProvider(): ReldbProvider {
     }
 
     const txDmlOps = createPgTxDmlOps(client)
-    return ok(createTxHandle(txDmlOps, {
+    const guardedTxDmlOps = createBaseDmlOps(ctx, txDmlOps)
+    return ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await client!.query('COMMIT') },
       rollback: async () => { await client!.query('ROLLBACK') },
       release: () => client!.release(),
@@ -407,7 +410,6 @@ export function createPostgresProvider(): ReldbProvider {
       if (config.type !== 'postgresql') {
         return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_postgresOnlyPostgresql'))
       }
-
       try {
         // eslint-disable-next-line ts/no-require-imports -- 按需加载
         const { Pool } = require('pg')
@@ -429,10 +431,12 @@ export function createPostgresProvider(): ReldbProvider {
         // 验证连接可用性
         await pool.query('SELECT 1')
 
+        currentConfig = config
         logger.info('Connected to PostgreSQL', { host: config.host, port: config.port, database: config.database })
         return ok(undefined)
       }
       catch (error) {
+        currentConfig = null
         pool = null
         return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
       }
@@ -444,9 +448,11 @@ export function createPostgresProvider(): ReldbProvider {
           await pool.end()
         }
         catch (error) {
+          currentConfig = null
           pool = null
           return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
         }
+        currentConfig = null
         pool = null
         logger.info('Disconnected from PostgreSQL')
       }

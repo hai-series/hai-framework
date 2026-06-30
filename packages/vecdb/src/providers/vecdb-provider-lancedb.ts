@@ -164,7 +164,7 @@ export function createLancedbProvider(): VecdbProvider {
 
   // ─── 操作上下文 ───
 
-  const ctx = { isConnected: () => connection !== null, logger }
+  const ctx = { isConnected: () => connection !== null, logger, operationLog: () => config?.operationLog }
 
   // ─── 集合操作适配器 ───
 

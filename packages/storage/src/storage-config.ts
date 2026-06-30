@@ -20,6 +20,19 @@ export const StorageTypeSchema = z.enum(['s3', 'local'])
 /** 存储类型 */
 export type StorageType = z.infer<typeof StorageTypeSchema>
 
+export const StorageOperationLogConfigSchema = z.object({
+  read: z.boolean().default(false),
+  write: z.boolean().default(false),
+  maxLength: z.number().int().min(0).default(1000),
+  level: z.enum(['info', 'debug', 'trace']).default('debug'),
+})
+
+export type StorageOperationLogConfig = z.infer<typeof StorageOperationLogConfigSchema>
+
+const OperationLogConfigFieldSchema = {
+  operationLog: StorageOperationLogConfigSchema.optional(),
+}
+
 /**
  * S3 存储配置 Schema
  *
@@ -53,6 +66,8 @@ export const S3ConfigSchema = z.object({
 
   /** 公开访问基础 URL（用于生成公开 URL） */
   publicUrl: z.string().url().optional(),
+
+  ...OperationLogConfigFieldSchema,
 })
 
 /** S3 配置类型（parse 后，所有字段已填充默认值） */
@@ -75,6 +90,8 @@ export const LocalConfigSchema = z.object({
 
   /** 文件创建权限 */
   fileMode: z.number().default(0o644),
+
+  ...OperationLogConfigFieldSchema,
 })
 
 /** 本地配置类型（parse 后，所有字段已填充默认值） */

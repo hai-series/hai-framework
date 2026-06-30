@@ -35,6 +35,19 @@ export const DistanceMetricSchema = z.enum(['cosine', 'euclidean', 'dot']).defau
 /** 距离度量类型 */
 export type DistanceMetric = z.infer<typeof DistanceMetricSchema>
 
+export const VecdbOperationLogConfigSchema = z.object({
+  read: z.boolean().default(false),
+  write: z.boolean().default(false),
+  maxLength: z.number().int().min(0).default(1000),
+  level: z.enum(['info', 'debug', 'trace']).default('debug'),
+})
+
+export type VecdbOperationLogConfig = z.infer<typeof VecdbOperationLogConfigSchema>
+
+const OperationLogConfigFieldSchema = {
+  operationLog: VecdbOperationLogConfigSchema.optional(),
+}
+
 // ─── LanceDB 配置 ───
 
 /**
@@ -51,6 +64,7 @@ const LancedbConfigSchema = z.object({
   path: z.string().min(1, vecdbM('vecdb_configPathRequired')),
   /** 距离度量（默认 cosine） */
   metric: DistanceMetricSchema.optional(),
+  ...OperationLogConfigFieldSchema,
 })
 
 /** LanceDB 配置类型 */
@@ -105,6 +119,7 @@ const PgvectorConfigSchema = z.object({
   metric: DistanceMetricSchema.optional(),
   /** 表名前缀（默认 'vec_'） */
   tablePrefix: z.string().default('vec_'),
+  ...OperationLogConfigFieldSchema,
 })
 
 /** pgvector 配置类型 */
@@ -128,6 +143,7 @@ const QdrantConfigSchema = z.object({
   apiKey: z.string().optional(),
   /** 距离度量（默认 cosine） */
   metric: DistanceMetricSchema.optional(),
+  ...OperationLogConfigFieldSchema,
 })
 
 /** Qdrant 配置类型 */

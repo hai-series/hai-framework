@@ -9,7 +9,7 @@
  */
 
 import type { HaiErrorDef, HaiResult } from '@h-ai/core'
-import type { VecdbConfig } from '../vecdb-config.js'
+import type { VecdbConfig, VecdbOperationLogConfig } from '../vecdb-config.js'
 import type {
   CollectionCreateOptions,
   CollectionInfo,
@@ -56,7 +56,12 @@ export interface VecdbOpsContext {
   /** Logger 实例（用于运行时异常的错误日志） */
   logger: {
     error: (msg: string, meta?: Record<string, unknown>) => void
+    info: (msg: string, meta?: Record<string, unknown>) => void
+    debug: (msg: string, meta?: Record<string, unknown>) => void
+    trace: (msg: string, meta?: Record<string, unknown>) => void
   }
+  /** 当前操作日志配置 */
+  operationLog?: () => VecdbOperationLogConfig | undefined
 }
 
 /**
@@ -94,6 +99,49 @@ export interface VectorDriver {
 }
 
 // ─── 内部帮助 ───
+
+type VecdbOperationCategory = 'read' | 'write'
+
+function stringifyOperationPayload(payload: unknown, maxLength: number): string {
+  if (maxLength <= 0) {
+    return ''
+  }
+
+  try {
+    const text = JSON.stringify(payload, (_key, value: unknown) => {
+      if (typeof value === 'bigint') {
+        return value.toString()
+      }
+      if (typeof value === 'function') {
+        return '[Function]'
+      }
+      return value
+    })
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+  }
+  catch {
+    const text = String(payload)
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+  }
+}
+
+export function logVecdbOperation(
+  ctx: VecdbOpsContext,
+  category: VecdbOperationCategory,
+  operation: string,
+  payload: unknown,
+): void {
+  const config = ctx.operationLog?.()
+  if (!config?.[category]) {
+    return
+  }
+
+  ctx.logger[config.level]('VecDB operation executed', {
+    category,
+    operation,
+    payload: stringifyOperationPayload(payload, config.maxLength),
+  })
+}
 
 /** 根据错误定义获取对应的 i18n 错误消息 */
 function errorMsgFromCode(def: HaiErrorDef, errorStr: string): string {
@@ -152,6 +200,7 @@ export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: Collection
           vecdbM('vecdb_invalidDimension', { params: { dimension: String(options.dimension) } }),
         )
       }
+      logVecdbOperation(ctx, 'write', 'collection.create', { name, options })
       return wrapOp(
         ctx,
         () => driver.create(name, options),
@@ -160,36 +209,47 @@ export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: Collection
         { name },
       )
     },
-    drop: name => wrapOp(
-      ctx,
-      () => driver.drop(name),
-      HaiVecdbError.DELETE_FAILED,
-      'Failed to drop collection',
-      { name },
-    ),
-    exists: name => wrapOp(
-      ctx,
-      () => driver.exists(name),
-      HaiVecdbError.QUERY_FAILED,
-      'Failed to check collection',
-      { name },
-    ),
-    info: name => wrapOp(
-      ctx,
-      () => driver.info(name),
-      HaiVecdbError.QUERY_FAILED,
-      'Failed to get collection info',
-      { name },
-    ),
-    list: () => wrapOp(
-      ctx,
-      () => driver.list(),
-      HaiVecdbError.QUERY_FAILED,
-      'Failed to list collections',
-    ),
+    drop: (name) => {
+      logVecdbOperation(ctx, 'write', 'collection.drop', { name })
+      return wrapOp(
+        ctx,
+        () => driver.drop(name),
+        HaiVecdbError.DELETE_FAILED,
+        'Failed to drop collection',
+        { name },
+      )
+    },
+    exists: (name) => {
+      logVecdbOperation(ctx, 'read', 'collection.exists', { name })
+      return wrapOp(
+        ctx,
+        () => driver.exists(name),
+        HaiVecdbError.QUERY_FAILED,
+        'Failed to check collection',
+        { name },
+      )
+    },
+    info: (name) => {
+      logVecdbOperation(ctx, 'read', 'collection.info', { name })
+      return wrapOp(
+        ctx,
+        () => driver.info(name),
+        HaiVecdbError.QUERY_FAILED,
+        'Failed to get collection info',
+        { name },
+      )
+    },
+    list: () => {
+      logVecdbOperation(ctx, 'read', 'collection.list', {})
+      return wrapOp(
+        ctx,
+        () => driver.list(),
+        HaiVecdbError.QUERY_FAILED,
+        'Failed to list collections',
+      )
+    },
   }
 }
-
 // ─── 向量操作工厂 ───
 
 /**
@@ -199,40 +259,55 @@ export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: Collection
  */
 export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver): VectorOperations {
   return {
-    insert: (collection, documents) => wrapOp(
-      ctx,
-      () => documents.length === 0 ? Promise.resolve(ok(undefined)) : driver.insert(collection, documents),
-      HaiVecdbError.INSERT_FAILED,
-      'Failed to insert vectors',
-      { collection },
-    ),
-    upsert: (collection, documents) => wrapOp(
-      ctx,
-      () => documents.length === 0 ? Promise.resolve(ok(undefined)) : driver.upsert(collection, documents),
-      HaiVecdbError.UPDATE_FAILED,
-      'Failed to upsert vectors',
-      { collection },
-    ),
-    delete: (collection, ids) => wrapOp(
-      ctx,
-      () => ids.length === 0 ? Promise.resolve(ok(undefined)) : driver.delete(collection, ids),
-      HaiVecdbError.DELETE_FAILED,
-      'Failed to delete vectors',
-      { collection },
-    ),
-    search: (collection, vector, options) => wrapOp(
-      ctx,
-      () => driver.search(collection, vector, options),
-      HaiVecdbError.QUERY_FAILED,
-      'Failed to search vectors',
-      { collection },
-    ),
-    count: collection => wrapOp(
-      ctx,
-      () => driver.count(collection),
-      HaiVecdbError.QUERY_FAILED,
-      'Failed to count vectors',
-      { collection },
-    ),
+    insert: (collection, documents) => {
+      logVecdbOperation(ctx, 'write', 'vector.insert', { collection, count: documents.length, documents })
+      return wrapOp(
+        ctx,
+        () => documents.length === 0 ? Promise.resolve(ok(undefined)) : driver.insert(collection, documents),
+        HaiVecdbError.INSERT_FAILED,
+        'Failed to insert vectors',
+        { collection },
+      )
+    },
+    upsert: (collection, documents) => {
+      logVecdbOperation(ctx, 'write', 'vector.upsert', { collection, count: documents.length, documents })
+      return wrapOp(
+        ctx,
+        () => documents.length === 0 ? Promise.resolve(ok(undefined)) : driver.upsert(collection, documents),
+        HaiVecdbError.UPDATE_FAILED,
+        'Failed to upsert vectors',
+        { collection },
+      )
+    },
+    delete: (collection, ids) => {
+      logVecdbOperation(ctx, 'write', 'vector.delete', { collection, count: ids.length, ids })
+      return wrapOp(
+        ctx,
+        () => ids.length === 0 ? Promise.resolve(ok(undefined)) : driver.delete(collection, ids),
+        HaiVecdbError.DELETE_FAILED,
+        'Failed to delete vectors',
+        { collection },
+      )
+    },
+    search: (collection, vector, options) => {
+      logVecdbOperation(ctx, 'read', 'vector.search', { collection, vector, options })
+      return wrapOp(
+        ctx,
+        () => driver.search(collection, vector, options),
+        HaiVecdbError.QUERY_FAILED,
+        'Failed to search vectors',
+        { collection },
+      )
+    },
+    count: (collection) => {
+      logVecdbOperation(ctx, 'read', 'vector.count', { collection })
+      return wrapOp(
+        ctx,
+        () => driver.count(collection),
+        HaiVecdbError.QUERY_FAILED,
+        'Failed to count vectors',
+        { collection },
+      )
+    },
   }
 }

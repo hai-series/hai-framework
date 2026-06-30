@@ -23,6 +23,7 @@ import {
   HaiStorageError,
 
 } from '../storage-types.js'
+import { logStorageOperation } from './storage-operation-log.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-local' })
 const PATH_SEGMENT_SPLIT_REGEX = /[\\/]+/
@@ -218,6 +219,10 @@ export function createLocalProvider(): StorageProvider {
     return safePath(getConfig().root, key)
   }
 
+  function logOperation(category: 'read' | 'write', operation: string, payload: unknown): void {
+    logStorageOperation(logger, config?.operationLog, category, operation, payload)
+  }
+
   /**
    * 将输入数据统一转为 Buffer
    *
@@ -249,6 +254,7 @@ export function createLocalProvider(): StorageProvider {
       try {
         const filePath = fullPath(key)
         const buffer = toBuffer(data)
+        logOperation('write', 'file.put', { key, byteLength: buffer.length, options })
         logger.debug('Putting file', { key, size: buffer.length })
 
         // 确保目录存在
@@ -295,6 +301,7 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = fullPath(key)
+        logOperation('read', 'file.get', { key, options })
 
         // 检查范围请求
         if (options.rangeStart !== undefined || options.rangeEnd !== undefined) {
@@ -330,6 +337,7 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = fullPath(key)
+        logOperation('read', 'file.head', { key })
         const stat = await fsp.stat(filePath)
 
         if (stat.isDirectory()) {
@@ -376,6 +384,7 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = fullPath(key)
+        logOperation('read', 'file.exists', { key })
         await fsp.access(filePath, fs.constants.F_OK)
         return ok(true)
       }
@@ -396,6 +405,7 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = fullPath(key)
+        logOperation('write', 'file.delete', { key })
         logger.debug('Deleting file', { key })
         await fsp.unlink(filePath)
 
@@ -420,6 +430,7 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async deleteMany(keys): Promise<HaiResult<void>> {
+      logOperation('write', 'file.deleteMany', { count: keys.length, keys })
       // 并行删除，避免 await-in-loop（N+1）
       const results = await Promise.allSettled(keys.map(key => file.delete(key)))
 
@@ -452,6 +463,7 @@ export function createLocalProvider(): StorageProvider {
       try {
         const sourcePath = fullPath(sourceKey)
         const destPath = fullPath(destKey)
+        logOperation('write', 'file.copy', { sourceKey, destKey, options })
         logger.debug('Copying file', { sourceKey, destKey })
 
         // 确保目标目录存在
@@ -500,6 +512,7 @@ export function createLocalProvider(): StorageProvider {
         const prefix = options.prefix || ''
         const delimiter = options.delimiter || ''
         const maxKeys = options.maxKeys || 1000
+        logOperation('read', 'dir.list', { options })
 
         const basePath = safePath(cfg.root, prefix)
         const files: FileMetadata[] = []
@@ -564,6 +577,7 @@ export function createLocalProvider(): StorageProvider {
     async delete(prefix): Promise<HaiResult<void>> {
       try {
         const dirPath = fullPath(prefix)
+        logOperation('write', 'dir.delete', { prefix })
 
         // 递归删除目录
         await fsp.rm(dirPath, { recursive: true, force: true })
@@ -586,6 +600,7 @@ export function createLocalProvider(): StorageProvider {
 
   const presign: PresignOperations = {
     async getUrl(key, options?): Promise<HaiResult<string>> {
+      logOperation('read', 'presign.getUrl', { key, options })
       // 本地存储不支持真正的签名 URL
       // 返回一个带签名参数的虚拟 URL，应用层需要自行处理
       const expiresIn = options?.expiresIn || 3600
@@ -601,6 +616,7 @@ export function createLocalProvider(): StorageProvider {
 
     async putUrl(key, options?): Promise<HaiResult<string>> {
       // 同上，返回虚拟 URL
+      logOperation('write', 'presign.putUrl', { key, options })
       const expiresIn = options?.expiresIn || 3600
       const expires = Math.floor(Date.now() / 1000) + expiresIn
       const signature = crypto
@@ -612,7 +628,8 @@ export function createLocalProvider(): StorageProvider {
       return ok(`local://${key}?action=put&expires=${expires}&signature=${signature}`)
     },
 
-    publicUrl(_key): string | null {
+    publicUrl(key): string | null {
+      logOperation('read', 'presign.publicUrl', { key })
       // 本地存储不支持公开 URL
       return null
     },

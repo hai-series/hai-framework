@@ -45,7 +45,14 @@ path: ./data/vecdb
 # type: qdrant
 # url: ${HAI_VECDB_QDRANT_URL:http://localhost:6333}
 # apiKey: ${HAI_VECDB_QDRANT_API_KEY:}
+operationLog:
+  read: false # collection.exists/info/list, vector.search/count
+  write: false # collection.create/drop, vector.insert/upsert/delete
+  maxLength: 1000
+  level: debug # info | debug | trace
 ```
+
+`operationLog` 在集合/向量操作进入真实 Provider 前输出日志，不要在 `vecdb-main.ts` 或调用方重复包装。`maxLength` 用于截断序列化后的向量、文档和过滤条件，`level` 默认 `debug`。
 
 ### 2. 初始化与关闭
 

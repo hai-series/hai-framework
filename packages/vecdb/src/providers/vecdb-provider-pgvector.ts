@@ -166,7 +166,7 @@ export function createPgvectorProvider(): VecdbProvider {
 
   // ─── 操作上下文 ───
 
-  const ctx = { isConnected: () => pool !== null, logger }
+  const ctx = { isConnected: () => pool !== null, logger, operationLog: () => config?.operationLog }
 
   // ─── 集合操作适配器 ───
 

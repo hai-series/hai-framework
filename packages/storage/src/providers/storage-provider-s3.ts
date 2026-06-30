@@ -30,6 +30,7 @@ import {
   HaiStorageError,
 
 } from '../storage-types.js'
+import { logStorageOperation } from './storage-operation-log.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
 const TRAILING_SLASHES_REGEX = /\/+$/
@@ -189,6 +190,10 @@ export function createS3Provider(): StorageProvider {
     return withPrefix(key, getConfig().prefix)
   }
 
+  function logOperation(category: 'read' | 'write', operation: string, payload: unknown): void {
+    logStorageOperation(logger, config?.operationLog, category, operation, payload)
+  }
+
   // -------------------------------------------------------------------------
   // 文件操作实现
   // -------------------------------------------------------------------------
@@ -201,6 +206,7 @@ export function createS3Provider(): StorageProvider {
         const fullPath = fullKey(key)
 
         const body = typeof data === 'string' ? Buffer.from(data) : data
+        logOperation('write', 'file.put', { key, fullPath, byteLength: body.length, options })
 
         await s3Client.send(new PutObjectCommand({
           Bucket: s3Config.bucket,
@@ -236,6 +242,7 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
+        logOperation('read', 'file.get', { key, fullPath, options })
 
         let Range: string | undefined
         if (options.rangeStart !== undefined || options.rangeEnd !== undefined) {
@@ -276,6 +283,7 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
+        logOperation('read', 'file.head', { key, fullPath })
 
         const response = await s3Client.send(new HeadObjectCommand({
           Bucket: s3Config.bucket,
@@ -297,6 +305,7 @@ export function createS3Provider(): StorageProvider {
     },
 
     async exists(key): Promise<HaiResult<boolean>> {
+      logOperation('read', 'file.exists', { key })
       const result = await file.head(key)
       if (result.success) {
         return ok(true)
@@ -312,6 +321,7 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
+        logOperation('write', 'file.delete', { key, fullPath })
 
         await s3Client.send(new DeleteObjectCommand({
           Bucket: s3Config.bucket,
@@ -334,6 +344,8 @@ export function createS3Provider(): StorageProvider {
           return ok(undefined)
         }
 
+        logOperation('write', 'file.deleteMany', { count: keys.length, keys })
+
         await s3Client.send(new DeleteObjectsCommand({
           Bucket: s3Config.bucket,
           Delete: {
@@ -354,6 +366,7 @@ export function createS3Provider(): StorageProvider {
         const s3Config = getConfig()
         const sourceFullPath = fullKey(sourceKey)
         const destFullPath = fullKey(destKey)
+        logOperation('write', 'file.copy', { sourceKey, destKey, sourceFullPath, destFullPath, options })
 
         await s3Client.send(new CopyObjectCommand({
           Bucket: s3Config.bucket,
@@ -381,6 +394,7 @@ export function createS3Provider(): StorageProvider {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
+        logOperation('read', 'dir.list', { options })
 
         // 构建完整前缀
         let prefix = s3Config.prefix || ''
@@ -422,6 +436,7 @@ export function createS3Provider(): StorageProvider {
 
     async delete(prefix): Promise<HaiResult<void>> {
       try {
+        logOperation('write', 'dir.delete', { prefix })
         // 分页列出并逐批删除，每批最多 1000 个对象
         let continuationToken: string | undefined
 
@@ -465,6 +480,7 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
+        logOperation('read', 'presign.getUrl', { key, fullPath, options })
 
         const command = new GetObjectCommand({
           Bucket: s3Config.bucket,
@@ -493,6 +509,7 @@ export function createS3Provider(): StorageProvider {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
+        logOperation('write', 'presign.putUrl', { key, fullPath, options })
 
         const command = new PutObjectCommand({
           Bucket: s3Config.bucket,
@@ -521,6 +538,7 @@ export function createS3Provider(): StorageProvider {
         return null
       }
       const fullPath = fullKey(key)
+      logOperation('read', 'presign.publicUrl', { key, fullPath })
       return `${s3Config.publicUrl.replace(TRAILING_SLASHES_REGEX, '')}/${fullPath}`
     },
   }

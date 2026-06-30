@@ -197,7 +197,7 @@ export function createQdrantProvider(): VecdbProvider {
 
   // ─── 操作上下文 ───
 
-  const ctx = { isConnected: () => client !== null, logger }
+  const ctx = { isConnected: () => client !== null, logger, operationLog: () => config?.operationLog }
 
   // ─── 集合操作适配器 ───
 

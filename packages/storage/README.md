@@ -93,6 +93,34 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 - **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `endpoint / forcePathStyle / prefix / publicUrl`
 - **Local**：`root` 必填，可选 `directoryMode / fileMode`
 
+### 操作日志
+
+可在存储配置中通过 `operationLog` 开启文件、目录和预签名 URL 操作日志。日志在 Local/S3 Provider 的真实操作处输出，不在 `storage-main.ts` 中做统一包装；文件内容不会写入日志，上传数据只记录字节长度。
+
+```yaml
+# config/_storage.yml
+type: local
+root: ./data/uploads
+operationLog:
+  read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
+  write: false # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
+  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
+  level: debug # info | debug | trace，默认 debug
+```
+
+```ts
+await storage.init({
+  type: 'local',
+  root: './data/uploads',
+  operationLog: {
+    read: true,
+    write: true,
+    maxLength: 500,
+    level: 'debug',
+  },
+})
+```
+
 `storage.presign.putUrl()` 当前仅支持 `contentType` 与 `expiresIn` 等签名参数，不提供 `maxSize` 约束。
 
 本地存储的 `storage.dir.list()` 会递归扫描匹配前缀下的文件，仅支持 `maxKeys` 截断，不支持 `continuationToken` 真分页；大目录场景建议优先使用更窄的 `prefix`，或改用 S3 Provider 获取原生分页能力。

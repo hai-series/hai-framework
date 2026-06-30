@@ -10,6 +10,7 @@
 
 import type { HaiErrorDef, HaiResult, PaginatedResult } from '@h-ai/core'
 
+import type { ReldbOperationLogConfig } from '../reldb-config.js'
 import type {
   CrudManager,
   DdlOperations,
@@ -18,7 +19,7 @@ import type {
   TxManager,
 } from '../reldb-types.js'
 
-import { err } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
 import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
@@ -39,7 +40,55 @@ export interface ReldbOpsContext {
   /** Logger 实例（用于运行时异常的错误日志） */
   logger: {
     error: (msg: string, meta?: Record<string, unknown>) => void
+    info: (msg: string, meta?: Record<string, unknown>) => void
+    debug: (msg: string, meta?: Record<string, unknown>) => void
+    trace: (msg: string, meta?: Record<string, unknown>) => void
   }
+  /** 当前操作日志配置 */
+  operationLog?: () => ReldbOperationLogConfig | undefined
+}
+
+type ReldbOperationCategory = 'read' | 'write'
+
+function stringifyOperationPayload(payload: unknown, maxLength: number): string {
+  if (maxLength <= 0) {
+    return ''
+  }
+
+  try {
+    const text = JSON.stringify(payload, (_key, value: unknown) => {
+      if (typeof value === 'bigint') {
+        return value.toString()
+      }
+      if (typeof value === 'function') {
+        return '[Function]'
+      }
+      return value
+    })
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+  }
+  catch {
+    const text = String(payload)
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+  }
+}
+
+export function logReldbOperation(
+  ctx: ReldbOpsContext,
+  category: ReldbOperationCategory,
+  operation: string,
+  payload: unknown,
+): void {
+  const config = ctx.operationLog?.()
+  if (!config?.[category]) {
+    return
+  }
+
+  ctx.logger[config.level]('RelDB operation executed', {
+    category,
+    operation,
+    payload: stringifyOperationPayload(payload, config.maxLength),
+  })
 }
 
 // ─── 统一操作包装器 ───
@@ -87,6 +136,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v2 = validateIdentifiers(Object.keys(columns))
       if (!v2.success)
         return Promise.resolve(v2)
+      logReldbOperation(ctx, 'write', 'ddl.createTable', { tableName, columns, ifNotExists })
       return wrapOp(ctx, () => raw.createTable(tableName, columns, ifNotExists), HaiReldbError.DDL_FAILED, 'DDL: createTable failed', { tableName })
     },
 
@@ -94,6 +144,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v = validateIdentifier(tableName)
       if (!v.success)
         return Promise.resolve(v)
+      logReldbOperation(ctx, 'write', 'ddl.dropTable', { tableName, ifExists })
       return wrapOp(ctx, () => raw.dropTable(tableName, ifExists), HaiReldbError.DDL_FAILED, 'DDL: dropTable failed', { tableName })
     },
 
@@ -104,6 +155,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v2 = validateIdentifier(columnName)
       if (!v2.success)
         return Promise.resolve(v2)
+      logReldbOperation(ctx, 'write', 'ddl.addColumn', { tableName, columnName, columnDef })
       return wrapOp(ctx, () => raw.addColumn(tableName, columnName, columnDef), HaiReldbError.DDL_FAILED, 'DDL: addColumn failed', { tableName, columnName })
     },
 
@@ -114,6 +166,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v2 = validateIdentifier(columnName)
       if (!v2.success)
         return Promise.resolve(v2)
+      logReldbOperation(ctx, 'write', 'ddl.dropColumn', { tableName, columnName })
       return wrapOp(ctx, () => raw.dropColumn(tableName, columnName), HaiReldbError.DDL_FAILED, 'DDL: dropColumn failed', { tableName, columnName })
     },
 
@@ -124,6 +177,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v2 = validateIdentifier(newName)
       if (!v2.success)
         return Promise.resolve(v2)
+      logReldbOperation(ctx, 'write', 'ddl.renameTable', { oldName, newName })
       return wrapOp(ctx, () => raw.renameTable(oldName, newName), HaiReldbError.DDL_FAILED, 'DDL: renameTable failed', { oldName, newName })
     },
 
@@ -137,6 +191,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v3 = validateIdentifiers(indexDef.columns)
       if (!v3.success)
         return Promise.resolve(v3)
+      logReldbOperation(ctx, 'write', 'ddl.createIndex', { tableName, indexName, indexDef })
       return wrapOp(ctx, () => raw.createIndex(tableName, indexName, indexDef), HaiReldbError.DDL_FAILED, 'DDL: createIndex failed', { tableName, indexName })
     },
 
@@ -144,10 +199,12 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v = validateIdentifier(indexName)
       if (!v.success)
         return Promise.resolve(v)
+      logReldbOperation(ctx, 'write', 'ddl.dropIndex', { indexName, ifExists })
       return wrapOp(ctx, () => raw.dropIndex(indexName, ifExists), HaiReldbError.DDL_FAILED, 'DDL: dropIndex failed', { indexName })
     },
 
     raw(sql) {
+      logReldbOperation(ctx, 'write', 'ddl.raw', { sql })
       return wrapOp(ctx, () => raw.raw(sql), HaiReldbError.DDL_FAILED, 'DDL: raw failed')
     },
   }
@@ -162,11 +219,26 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
  */
 export function createBaseDmlOps(ctx: ReldbOpsContext, raw: DmlOperations): DmlOperations {
   return {
-    query: (sql, params) => wrapOp(ctx, () => raw.query(sql, params), HaiReldbError.QUERY_FAILED, 'DML: query failed'),
-    get: (sql, params) => wrapOp(ctx, () => raw.get(sql, params), HaiReldbError.QUERY_FAILED, 'DML: get failed'),
-    execute: (sql, params) => wrapOp(ctx, () => raw.execute(sql, params), HaiReldbError.QUERY_FAILED, 'DML: execute failed'),
-    batch: stmts => wrapOp(ctx, () => raw.batch(stmts), HaiReldbError.QUERY_FAILED, 'DML: batch failed'),
-    queryPage: options => wrapOp(ctx, () => raw.queryPage(options), HaiReldbError.QUERY_FAILED, 'DML: queryPage failed'),
+    query: (sql, params) => {
+      logReldbOperation(ctx, 'read', 'query', { sql, params })
+      return wrapOp(ctx, () => raw.query(sql, params), HaiReldbError.QUERY_FAILED, 'DML: query failed')
+    },
+    get: (sql, params) => {
+      logReldbOperation(ctx, 'read', 'get', { sql, params })
+      return wrapOp(ctx, () => raw.get(sql, params), HaiReldbError.QUERY_FAILED, 'DML: get failed')
+    },
+    execute: (sql, params) => {
+      logReldbOperation(ctx, 'write', 'execute', { sql, params })
+      return wrapOp(ctx, () => raw.execute(sql, params), HaiReldbError.QUERY_FAILED, 'DML: execute failed')
+    },
+    batch: (statements) => {
+      logReldbOperation(ctx, 'write', 'batch', { count: statements.length, statements })
+      return wrapOp(ctx, () => raw.batch(statements), HaiReldbError.QUERY_FAILED, 'DML: batch failed')
+    },
+    queryPage: (options) => {
+      logReldbOperation(ctx, 'read', 'queryPage', options)
+      return wrapOp(ctx, () => raw.queryPage(options), HaiReldbError.QUERY_FAILED, 'DML: queryPage failed')
+    },
   }
 }
 
@@ -178,7 +250,26 @@ export function createBaseDmlOps(ctx: ReldbOpsContext, raw: DmlOperations): DmlO
  * 各 Provider 只需提供 beginTx 函数，base 层统一处理连接守卫 + tx.wrap 语法糖。
  */
 export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['begin']): TxManager {
-  const begin: TxManager['begin'] = () => wrapOp(ctx, beginTx, HaiReldbError.TRANSACTION_FAILED, 'TX: begin failed')
+  const begin: TxManager['begin'] = async () => {
+    logReldbOperation(ctx, 'write', 'tx.begin', {})
+    const result = await wrapOp(ctx, beginTx, HaiReldbError.TRANSACTION_FAILED, 'TX: begin failed')
+    if (!result.success) {
+      return result
+    }
+
+    const tx = result.data
+    return ok({
+      ...tx,
+      commit: async () => {
+        logReldbOperation(ctx, 'write', 'tx.commit', {})
+        return tx.commit()
+      },
+      rollback: async () => {
+        logReldbOperation(ctx, 'write', 'tx.rollback', {})
+        return tx.rollback()
+      },
+    })
+  }
   return {
     begin,
     wrap: createTxWrap(begin),
