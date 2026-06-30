@@ -8,7 +8,8 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   interface Props {
     /** 刷新回调（需返回 Promise） */
@@ -29,8 +30,10 @@
     disabled = false,
     class: className,
     children,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let pulling = $state(false)
   let refreshing = $state(false)
   let pullDistance = $state(0)
@@ -71,12 +74,12 @@
   }
 </script>
 
-<div
-  class={cn('relative overflow-hidden', className)}
-  ontouchstart={handleTouchStart}
-  ontouchmove={handleTouchMove}
-  ontouchend={handleTouchEnd}
-  role='region'
+<div {...dataAttributes}
+     class={cn('relative overflow-hidden', className)}
+     ontouchstart={handleTouchStart}
+     ontouchmove={handleTouchMove}
+     ontouchend={handleTouchEnd}
+     role='region'
 >
   <!-- 刷新指示器 -->
   <div

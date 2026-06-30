@@ -29,7 +29,9 @@
   ```
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
 
   interface Language {
@@ -63,8 +65,10 @@
     align = 'end',
     compact = false,
     class: className = '',
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let open = $state(false)
   let containerRef = $state<HTMLDivElement | null>(null)
 
@@ -94,7 +98,7 @@
   })
 </script>
 
-<div bind:this={containerRef} class='dropdown {align === 'end' ? 'dropdown-end' : ''} {open ? 'dropdown-open' : ''} {className}'>
+<div {...dataAttributes} bind:this={containerRef} class='dropdown {align === 'end' ? 'dropdown-end' : ''} {open ? 'dropdown-open' : ''} {className}'>
   <BareButton
     type='button'
     class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'btn-sm gap-2 min-w-fit'}'

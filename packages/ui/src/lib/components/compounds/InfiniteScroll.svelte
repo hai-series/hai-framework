@@ -10,7 +10,8 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   interface Props {
     /** 加载更多回调 */
@@ -40,8 +41,10 @@
     noMoreText = 'No more data',
     class: className,
     children,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let loading = $state(false)
   let containerRef: HTMLDivElement | undefined = $state()
 
@@ -62,11 +65,11 @@
   }
 </script>
 
-<div
-  bind:this={containerRef}
-  class={cn('overflow-y-auto', className)}
-  onscroll={checkAndLoad}
-  role='feed'
+<div {...dataAttributes}
+     bind:this={containerRef}
+     class={cn('overflow-y-auto', className)}
+     onscroll={checkAndLoad}
+     role='feed'
 >
   {@render children()}
 

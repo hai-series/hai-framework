@@ -9,10 +9,11 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { SignatureDisplayProps } from '../types.js'
   import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import { Badge, IconButton } from '../../primitives/index.js'
 
   const {
@@ -24,8 +25,10 @@
     copyable = true,
     labels = {},
     class: className = '',
-  }: SignatureDisplayProps = $props()
+    ...restProps
+  }: SignatureDisplayProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let copiedSig = $state(false)
   let copiedKey = $state(false)
 
@@ -67,7 +70,7 @@
   }
 </script>
 
-<div class={containerClass}>
+<div {...dataAttributes} class={containerClass}>
   <!-- 签名状态 -->
   <div class='flex items-center gap-2'>
     <span class='text-sm font-medium'>{labels.signature ?? uiM('signature_label')} ({algorithm})</span>

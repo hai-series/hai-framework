@@ -11,8 +11,9 @@
 
 <script lang='ts'>
   import type { Snippet } from 'svelte'
+  import type { DataAttributes } from '../../types.js'
   import type { TimelineItem } from './timeline-types.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   interface Props {
     /** 时间线项数据 */
@@ -45,8 +46,10 @@
     snapIcon = false,
     class: className = '',
     children,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const timelineClass = $derived(
     cn(
       'timeline',
@@ -95,7 +98,7 @@
   }
 </script>
 
-<ul class={timelineClass}>
+<ul {...dataAttributes} class={timelineClass}>
   {#each items as item, index (item.id)}
     <li>
       <!-- 前置连线 -->

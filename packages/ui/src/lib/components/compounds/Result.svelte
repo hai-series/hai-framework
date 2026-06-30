@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { ResultProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, ResultProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     status = 'info',
@@ -19,8 +19,10 @@
     icon,
     actions,
     children,
-  }: ResultProps = $props()
+    ...restProps
+  }: ResultProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const containerClass = $derived(
     cn(
       'flex flex-col items-center justify-center py-12 text-center',
@@ -36,7 +38,7 @@
   }[status])
 </script>
 
-<div class={containerClass}>
+<div {...dataAttributes} class={containerClass}>
   <!-- 图标区域 -->
   <div class='w-20 h-20 mb-6 {iconColor}'>
     {#if icon}

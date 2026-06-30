@@ -1,3 +1,5 @@
+import type { DataAttributes } from '../../../types.js'
+
 /**
  * Markdown source type, used to distinguish plain markdown, document panel, or code-only rendering.
  */
@@ -158,7 +160,7 @@ type BivariantCallback<Args extends unknown[], Return = void> = {
   bivarianceHack: (...args: Args) => Return
 }['bivarianceHack']
 
-export interface AiDocumentEditorProps {
+export interface AiDocumentEditorProps extends DataAttributes {
   /** Markdown source content. */
   content?: string
   /** Document title displayed in the header. */

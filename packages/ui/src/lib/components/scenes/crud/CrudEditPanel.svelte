@@ -7,9 +7,10 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import type { Size } from '../../../types.js'
+  import type { DataAttributes, Size } from '../../../types.js'
   import type { CrudDensity, CrudFormVariant } from './crud-types.js'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import Drawer from '../../compounds/Drawer.svelte'
   import FormField from '../../compounds/FormField.svelte'
   import Modal from '../../compounds/Modal.svelte'
@@ -49,6 +50,7 @@
     onclose,
     editFormExtra,
     editingItem = null,
+    ...restProps
   }: {
     open?: boolean
     mode?: 'create' | 'edit'
@@ -68,8 +70,9 @@
     onclose?: () => void
     editFormExtra?: Snippet<[Record<string, unknown> | null, 'create' | 'edit']>
     editingItem?: Record<string, unknown> | null
-  } = $props()
+  } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   function resolveText(text: string | (() => string)): string {
     return typeof text === 'function' ? text() : text
   }
@@ -135,7 +138,7 @@
 
 {#snippet formFields()}
   {#if error}
-    <div class='p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2'>
+    <div {...dataAttributes} class='p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2'>
       <span class='icon-[tabler--alert-circle] size-4 shrink-0'></span>
       <span>{error}</span>
     </div>

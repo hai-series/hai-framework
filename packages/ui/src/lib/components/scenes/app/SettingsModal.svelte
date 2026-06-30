@@ -10,7 +10,9 @@
   @prop {function} onthemechange - 主题变更回调
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
 
@@ -43,8 +45,10 @@
     onlanguagechange,
     onthemechange,
     onclose,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   function handleClose() {
     open = false
     onclose?.()
@@ -66,9 +70,8 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
+    {...dataAttributes}
     class='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity'
     onclick={handleBackdropClick}
   >

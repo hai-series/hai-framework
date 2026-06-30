@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { SwitchProps } from '../../types.js'
-  import { cn, generateId, getSizeClass } from '../../utils.js'
+  import type { DataAttributes, SwitchProps } from '../../types.js'
+  import { cn, generateId, getDataAttributes, getSizeClass } from '../../utils.js'
 
   let {
     checked = $bindable(false),
@@ -18,8 +18,10 @@
     disabled = false,
     class: className = '',
     onchange,
-  }: SwitchProps = $props()
+    ...restProps
+  }: SwitchProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const id = generateId('switch')
 
   const hasToggleColorVariant = $derived(
@@ -41,7 +43,7 @@
   }
 </script>
 
-<div class='inline-flex'>
+<div {...dataAttributes} class='inline-flex'>
   <label class='label cursor-pointer gap-2' for={id}>
     <input
       {id}

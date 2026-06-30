@@ -7,9 +7,10 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import type { Size } from '../../../types.js'
+  import type { DataAttributes, Size } from '../../../types.js'
   import type { CrudDensity, CrudFormVariant } from './crud-types.js'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import Drawer from '../../compounds/Drawer.svelte'
   import Modal from '../../compounds/Modal.svelte'
   import Badge from '../../primitives/Badge.svelte'
@@ -41,6 +42,7 @@
     onedit,
     onclose,
     detailExtra,
+    ...restProps
   }: {
     open?: boolean
     item?: Record<string, unknown> | null
@@ -57,8 +59,9 @@
     onedit?: () => void
     onclose?: () => void
     detailExtra?: Snippet<[Record<string, unknown>]>
-  } = $props()
+  } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   function resolveText(text: string | (() => string)): string {
     return typeof text === 'function' ? text() : text
   }
@@ -129,7 +132,7 @@
 
 {#snippet detailBody()}
   {#if item}
-    <div class={contentClass}>
+    <div {...dataAttributes} class={contentClass}>
       {#each detailFields as field (field.id)}
         {@const value = item[field.id]}
         <div>

@@ -12,9 +12,10 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
+  import type { DataAttributes } from '../../../types.js'
   import type { ErrorPreset } from './error-presets.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Button from '../../primitives/Button.svelte'
   import { ERROR_PRESETS, resolveErrorPreset } from './error-presets.js'
 
@@ -31,6 +32,7 @@
     icon,
     actions,
     class: className = '',
+    ...restProps
   }: {
     /** HTTP 状态码或预设标识；未命中预设时回退到最接近的预设 */
     status?: number | string | ErrorPreset
@@ -55,8 +57,9 @@
     /** 自定义操作区插槽（提供时覆盖默认按钮） */
     actions?: Snippet
     class?: string
-  } = $props()
+  } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const preset = $derived(ERROR_PRESETS[resolveErrorPreset(status)])
   const displayCode = $derived(code ?? preset.code)
   const displayTitle = $derived(title ?? uiM(preset.titleKey))
@@ -77,7 +80,7 @@
   }
 </script>
 
-<div class={cn('flex min-h-[60vh] w-full flex-col items-center justify-center px-6 py-12 text-center', className)}>
+<div {...dataAttributes} class={cn('flex min-h-[60vh] w-full flex-col items-center justify-center px-6 py-12 text-center', className)}>
   <!-- 图标 -->
   <div class='mb-6 flex size-16 items-center justify-center rounded-2xl bg-base-content/5 text-base-content/40'>
     {#if icon}

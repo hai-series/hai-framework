@@ -5,7 +5,9 @@
   使用 Svelte 5 Runes ($props, $state)
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
   import Input from '../../primitives/Input.svelte'
   import Select from '../../primitives/Select.svelte'
@@ -32,6 +34,7 @@
     onsearch,
     onfilterchange,
     onreset,
+    ...restProps
   }: {
     searchable?: boolean
     searchPlaceholder?: string
@@ -41,8 +44,9 @@
     onsearch?: (search: string) => void
     onfilterchange?: (filters: Record<string, unknown>) => void
     onreset?: () => void
-  } = $props()
+  } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let searchTimer: ReturnType<typeof setTimeout> | undefined
 
   // 是否存在已激活的搜索/过滤条件（用于显示重置按钮）
@@ -116,7 +120,7 @@
   }
 </script>
 
-<div class='flex flex-wrap items-center gap-2 [&_.fieldset]:m-0 [&_.fieldset]:min-w-0'>
+<div {...dataAttributes} class='flex flex-wrap items-center gap-2 [&_.fieldset]:m-0 [&_.fieldset]:min-w-0'>
   {#if searchable}
     <div class='relative w-full sm:w-64 md:w-72'>
       <span class='icon-[tabler--search] pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-base-content/35'></span>

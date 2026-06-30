@@ -3,9 +3,10 @@
   修改密码表单组件。
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { ChangePasswordFormData, ChangePasswordFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import Button from '../../primitives/Button.svelte'
   import { arePasswordsEqual } from './password-utils.js'
@@ -21,8 +22,10 @@
     class: className = '',
     errors = {},
     onsubmit,
-  }: ChangePasswordFormProps = $props()
+    ...restProps
+  }: ChangePasswordFormProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let oldPassword = $state('')
   let newPassword = $state('')
   let confirmPassword = $state('')
@@ -66,7 +69,7 @@
   }
 </script>
 
-<form class={formClass} onsubmit={handleSubmit}>
+<form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
   {#if requireOldPassword}
     <div class='space-y-1.5'>
       <label class='text-sm font-medium text-base-content/70' for='old-password'>

@@ -21,7 +21,9 @@
 -->
 <script lang='ts'>
   import type { DateValue } from '@internationalized/date'
+  import type { DataAttributes } from '../../types.js'
   import { Calendar as BitsCalendar } from 'bits-ui'
+  import { getDataAttributes } from '../../utils.js'
 
   interface Props {
     /** 选中日期（双向绑定） */
@@ -57,10 +59,13 @@
     readonly: isReadonly = false,
     class: className = '',
     onchange,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
+
+  const dataAttributes = $derived(getDataAttributes(restProps))
 </script>
 
-<div class={className}>
+<div {...dataAttributes} class={className}>
   <BitsCalendar.Root
     type='single'
     bind:value

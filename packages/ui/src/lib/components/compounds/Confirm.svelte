@@ -9,9 +9,9 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { ConfirmProps } from '../../types.js'
+  import type { ConfirmProps, DataAttributes } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import Button from '../primitives/Button.svelte'
 
   let {
@@ -25,8 +25,10 @@
     class: className = '',
     onconfirm,
     oncancel,
-  }: ConfirmProps = $props()
+    ...restProps
+  }: ConfirmProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   /** 响应式 i18n 显示值 */
   const displayTitle = $derived(title ?? uiM('confirm_title'))
   const displayMessage = $derived(message ?? uiM('confirm_message'))
@@ -61,10 +63,10 @@
   }
 </script>
 
-<dialog
-  bind:this={modalElement}
-  class={cn('modal', className)}
-  onclick={handleBackdropClick}
+<dialog {...dataAttributes}
+        bind:this={modalElement}
+        class={cn('modal', className)}
+        onclick={handleBackdropClick}
 >
   <div class='modal-box'>
     <h3 class='font-bold text-lg'>{displayTitle}</h3>

@@ -26,6 +26,7 @@ import type {
   CardProps,
   CheckboxProps,
   ConfirmProps,
+  DataAttributes,
   DrawerProps,
   DropdownItem,
   DropdownProps,
@@ -79,6 +80,13 @@ describe('基础类型', () => {
 
   it('alignment 类型应该正确', () => {
     expectTypeOf<Alignment>().toEqualTypeOf<'start' | 'center' | 'end'>()
+  })
+
+  it('公开组件 Props 应支持 data-* 属性', () => {
+    expectTypeOf<ButtonProps>().toExtend<DataAttributes>()
+    expectTypeOf<InputProps>().toExtend<DataAttributes>()
+    expectTypeOf<ModalProps>().toExtend<DataAttributes>()
+    expectTypeOf<AiDocumentEditorProps>().toExtend<DataAttributes>()
   })
 })
 

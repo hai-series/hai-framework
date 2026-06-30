@@ -7,9 +7,10 @@
   @prop {function} onchange - 颜色变更回调
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
   import { DEFAULT_THEME_COLOR, THEME_COLOR_PRESETS } from '../../../theme-config.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
 
   const HEX_COLOR_REGEX = /^#[0-9a-f]{6}$/
   const SHORT_HEX_COLOR_REGEX = /^#[0-9a-f]{3}$/
@@ -37,8 +38,10 @@
     pickerLabel,
     customLabel,
     class: className = '',
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let colorInputRef = $state<HTMLInputElement | null>(null)
 
   const defaultPresets = $derived(
@@ -97,7 +100,7 @@
   }
 </script>
 
-<div class={cn('theme-color-picker', className)}>
+<div {...dataAttributes} class={cn('theme-color-picker', className)}>
   <div class='flex flex-wrap items-center gap-2'>
     {#each normalizedPresets as preset (preset.value)}
       <button

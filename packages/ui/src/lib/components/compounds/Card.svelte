@@ -3,8 +3,8 @@
   卡片组件，默认使用 border 而非 shadow，更现代克制。
 -->
 <script lang='ts'>
-  import type { CardProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { CardProps, DataAttributes } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     title = '',
@@ -15,8 +15,10 @@
     header,
     footer,
     children,
-  }: CardProps = $props()
+    ...restProps
+  }: CardProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const paddingMap = {
     'none': 'p-0',
     'xs': 'p-2',
@@ -54,7 +56,7 @@
   )
 </script>
 
-<div class={cardClass}>
+<div {...dataAttributes} class={cardClass}>
   <div class={bodyClass}>
     {#if header}
       <div class='card-title text-sm font-semibold'>

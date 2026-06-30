@@ -5,7 +5,7 @@
  * @module utils
  */
 
-import type { Size, Variant } from './types.js'
+import type { DataAttributes, Size, Variant } from './types.js'
 import { twMerge } from 'tailwind-merge'
 
 /**
@@ -16,6 +16,27 @@ import { twMerge } from 'tailwind-merge'
  */
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return twMerge(classes.filter(Boolean).join(' '))
+}
+
+export type ForwardedDataAttributes = Record<`data-${string}`, string | number | boolean>
+
+/**
+ * 从组件未声明 props 中提取 data-* 属性，避免把普通未知属性透传到 DOM。
+ */
+export function getDataAttributes(props: DataAttributes | Record<string, unknown>): ForwardedDataAttributes {
+  const dataAttributes: ForwardedDataAttributes = {}
+
+  for (const [key, value] of Object.entries(props)) {
+    if (!key.startsWith('data-') || value === null || value === undefined) {
+      continue
+    }
+
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      dataAttributes[key as `data-${string}`] = value
+    }
+  }
+
+  return dataAttributes
 }
 
 /**

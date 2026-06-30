@@ -149,8 +149,14 @@ export default defineConfig({
 />
 ```
 
-## 主题与平台
+## data-* 属性透传
 
+- 公开 Svelte 组件支持调用方直接传入 `data-*` 属性；组件会把它们透传到根节点或主交互节点。
+- 推荐测试和自动化直接使用 `data-testid`、`data-analytics-id` 等属性，不要为了测试 ID 在应用层重复封装 `Button/Input/Modal`。
+- 只透传 `data-*`，不要依赖未声明的普通属性透传。
+
+
+## 主题与平台
 - 主题：`applyTheme()`、`getCurrentTheme()`、`isDarkTheme()`。
 - 平台：`detectPlatform()`、`isMobile()`、`isNativeApp()`、`usePlatform()`。
 

@@ -14,8 +14,10 @@
   />
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
   import { isDarkTheme } from '../../../theme-config.js'
+  import { getDataAttributes } from '../../../utils.js'
   import IconButton from '../../primitives/IconButton.svelte'
 
   interface Props {
@@ -37,8 +39,10 @@
     darkTheme = 'dark',
     labels = {},
     class: className = '',
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // labels 优先，缺省回退到内置文案
   const isDark = $derived(isDarkTheme(currentTheme))
 
@@ -48,7 +52,7 @@
   }
 </script>
 
-<div class='tooltip tooltip-bottom {className}' data-tip={isDark ? (labels.switchToLight ?? uiM('theme_switch_to_light')) : (labels.switchToDark ?? uiM('theme_switch_to_dark'))}>
+<div {...dataAttributes} class='tooltip tooltip-bottom {className}' data-tip={isDark ? (labels.switchToLight ?? uiM('theme_switch_to_light')) : (labels.switchToDark ?? uiM('theme_switch_to_dark'))}>
   <IconButton
     variant='ghost'
     size='sm'

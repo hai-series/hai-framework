@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { FormProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, FormProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     id = '',
@@ -20,8 +20,10 @@
     onreset,
     onerror,
     children,
-  }: FormProps = $props()
+    ...restProps
+  }: FormProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let formElement: HTMLFormElement
 
   const formClass = $derived(
@@ -85,12 +87,12 @@
   }
 </script>
 
-<form
-  bind:this={formElement}
-  id={id || undefined}
-  class={formClass}
-  onsubmit={handleSubmit}
-  onreset={handleReset}
+<form {...dataAttributes}
+      bind:this={formElement}
+      id={id || undefined}
+      class={formClass}
+      onsubmit={handleSubmit}
+      onreset={handleReset}
 >
   {#if children}
     {@render children()}

@@ -22,7 +22,9 @@
 -->
 <script lang='ts'>
   import type { DateValue } from '@internationalized/date'
+  import type { DataAttributes } from '../../types.js'
   import { DatePicker as BitsDatePicker } from 'bits-ui'
+  import { getDataAttributes } from '../../utils.js'
 
   interface Props {
     /** 选中日期（双向绑定） */
@@ -55,10 +57,13 @@
     error,
     class: className = '',
     onchange,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
+
+  const dataAttributes = $derived(getDataAttributes(restProps))
 </script>
 
-<div class='fieldset w-full {className}'>
+<div {...dataAttributes} class='fieldset w-full {className}'>
   <BitsDatePicker.Root
     bind:value
     {minValue}

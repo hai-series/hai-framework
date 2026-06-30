@@ -47,7 +47,9 @@
     }
   }
 
+  import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
 
   interface Props {
     open?: boolean
@@ -55,8 +57,9 @@
     onsubmit?: (data: FeedbackData) => Promise<void>
   }
 
-  let { open = $bindable(false), labels = {}, onsubmit }: Props = $props()
+  let { open = $bindable(false), labels = {}, onsubmit, ...restProps }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // 文案优先使用传入的 labels，缺省回退到内置消息 uiM(...)
 
   let feedbackType = $state<FeedbackType>('bug')
@@ -106,7 +109,7 @@
   }
 </script>
 
-<Modal bind:open title={labels.title ?? uiM('feedback_title')}>
+<Modal {...dataAttributes} bind:open title={labels.title ?? uiM('feedback_title')}>
   <p class='text-base-content/70 mb-4'>{labels.description ?? uiM('feedback_description')}</p>
 
   {#if error}

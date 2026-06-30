@@ -8,9 +8,9 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { EmptyProps } from '../../types.js'
+  import type { DataAttributes, EmptyProps } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     title,
@@ -20,8 +20,10 @@
     class: className = '',
     action,
     children,
-  }: EmptyProps = $props()
+    ...restProps
+  }: EmptyProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const displayTitle = $derived(title ?? uiM('empty_title'))
 
   const containerClass = $derived(
@@ -42,7 +44,7 @@
   )
 </script>
 
-<div class={containerClass}>
+<div {...dataAttributes} class={containerClass}>
   <!-- 图标区域 -->
   <div class='text-base-content/30 mb-4 {iconSize}'>
     {#if children}

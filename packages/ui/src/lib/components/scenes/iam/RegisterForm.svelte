@@ -3,10 +3,10 @@
   用户注册表单组件，搭配 primitives/compounds 使用。
 -->
 <script lang='ts'>
-  import type { InputProps } from '../../../types.js'
+  import type { DataAttributes, InputProps } from '../../../types.js'
   import type { RegisterField, RegisterFormData, RegisterFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
@@ -29,8 +29,10 @@
     onsubmit,
     header,
     footer,
-  }: RegisterFormProps = $props()
+    ...restProps
+  }: RegisterFormProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const hasAgreements = $derived(
     !!(agreements?.userAgreementUrl || agreements?.privacyPolicyUrl),
   )
@@ -159,7 +161,7 @@
   }
 </script>
 
-<form class={formClass} onsubmit={handleSubmit}>
+<form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
     <h2 class='text-xl font-semibold text-center mb-5'>{uiM('register_title')}</h2>

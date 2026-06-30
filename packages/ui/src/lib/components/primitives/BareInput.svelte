@@ -8,7 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { BareInputProps } from '../../types.js'
+  import type { BareInputProps, DataAttributes } from '../../types.js'
+  import { getDataAttributes } from '../../utils.js'
 
   let {
     value = $bindable(''),
@@ -42,8 +43,10 @@
     onblur,
     onfocus,
     oninvalid,
-  }: BareInputProps = $props()
+    ...restProps
+  }: BareInputProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
     value = e.currentTarget.value
     oninput?.(e)
@@ -66,36 +69,36 @@
   }
 </script>
 
-<input
-  bind:this={inputRef}
-  {id}
-  {name}
-  {type}
-  {placeholder}
-  {disabled}
-  {readonly}
-  {required}
-  {pattern}
-  {list}
-  {accept}
-  {multiple}
-  {minlength}
-  {min}
-  {max}
-  {maxlength}
-  {step}
-  inputmode={inputmode}
-  autocomplete={autocomplete as HTMLInputElement['autocomplete']}
-  role={role}
-  aria-expanded={ariaExpanded}
-  aria-controls={ariaControls}
-  aria-autocomplete={ariaAutocomplete}
-  class={className}
-  bind:value
-  oninput={handleInput}
-  onchange={handleChange}
-  onkeydown={handleKeydown}
-  onblur={handleBlur}
-  onfocus={handleFocus}
-  oninvalid={oninvalid}
+<input {...dataAttributes}
+       bind:this={inputRef}
+       {id}
+       {name}
+       {type}
+       {placeholder}
+       {disabled}
+       {readonly}
+       {required}
+       {pattern}
+       {list}
+       {accept}
+       {multiple}
+       {minlength}
+       {min}
+       {max}
+       {maxlength}
+       {step}
+       inputmode={inputmode}
+       autocomplete={autocomplete as HTMLInputElement['autocomplete']}
+       role={role}
+       aria-expanded={ariaExpanded}
+       aria-controls={ariaControls}
+       aria-autocomplete={ariaAutocomplete}
+       class={className}
+       bind:value
+       oninput={handleInput}
+       onchange={handleChange}
+       onkeydown={handleKeydown}
+       onblur={handleBlur}
+       onfocus={handleFocus}
+       oninvalid={oninvalid}
 />

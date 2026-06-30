@@ -3,9 +3,9 @@
   模态框组件，支持 backdrop-blur 和 scale-in 动画。
 -->
 <script lang='ts'>
-  import type { ModalProps } from '../../types.js'
+  import type { DataAttributes, ModalProps } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   let {
     open = $bindable(false),
@@ -24,8 +24,10 @@
     header,
     footer,
     children,
-  }: ModalProps = $props()
+    ...restProps
+  }: ModalProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // modalElement 持有原生 dialog 引用；
   // 只有调用 `showModal()` 进入 top-layer 后，弹框才不会被父级布局和 overflow 裁剪。
   let modalElement: HTMLDialogElement | undefined = $state()
@@ -136,10 +138,10 @@
   })
 </script>
 
-<dialog
-  bind:this={modalElement}
-  class='hai-modal'
-  oncancel={handleDialogCancel}
+<dialog {...dataAttributes}
+        bind:this={modalElement}
+        class='hai-modal'
+        oncancel={handleDialogCancel}
 >
   <div
     class='hai-modal__viewport'

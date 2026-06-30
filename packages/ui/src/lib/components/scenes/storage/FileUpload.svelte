@@ -9,10 +9,11 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { FileUploadProps, UploadFile } from '../types.js'
   import { SvelteMap } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
-  import { cn, generateId } from '../../../utils.js'
+  import { cn, generateId, getDataAttributes } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
   import Progress from '../../primitives/Progress.svelte'
@@ -37,8 +38,10 @@
     onupload,
     onerror,
     onremove,
-  }: FileUploadProps = $props()
+    ...restProps
+  }: FileUploadProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let files = $state<UploadFile[]>([])
   let isDragging = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
@@ -361,7 +364,7 @@
   }
 </script>
 
-<div class={containerClass}>
+<div {...dataAttributes} class={containerClass}>
   <!-- 上传区域 -->
   <div
     class={dropzoneClass}

@@ -3,9 +3,10 @@
   用户登录表单组件，搭配 primitives/compounds 使用。
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { LoginFormData, LoginFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -30,8 +31,10 @@
     onforgotpassword,
     header,
     footer,
-  }: LoginFormProps = $props()
+    ...restProps
+  }: LoginFormProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const hasAgreements = $derived(
     !!(agreements?.userAgreementUrl || agreements?.privacyPolicyUrl),
   )
@@ -66,7 +69,7 @@
   }
 </script>
 
-<form class={formClass} onsubmit={handleSubmit}>
+<form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
     <h2 class='text-xl font-semibold text-center mb-5'>{uiM('login_title')}</h2>

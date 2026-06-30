@@ -3,9 +3,10 @@
   重置密码表单组件（配合验证码/链接使用）。
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { ResetPasswordFormData, ResetPasswordFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
@@ -26,8 +27,10 @@
     class: className = '',
     errors = {},
     onsubmit,
-  }: ResetPasswordFormProps = $props()
+    ...restProps
+  }: ResetPasswordFormProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let code = $state('')
   let newPassword = $state('')
   let confirmPassword = $state('')
@@ -65,7 +68,7 @@
   }
 </script>
 
-<form class={formClass} onsubmit={handleSubmit}>
+<form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
     <h2 class='text-xl font-semibold text-center mb-4'>{uiM('reset_password_title')}</h2>

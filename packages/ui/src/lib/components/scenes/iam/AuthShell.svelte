@@ -14,7 +14,8 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { cn } from '../../../utils.js'
+  import type { DataAttributes } from '../../../types.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
 
   const {
     variant = 'card',
@@ -30,6 +31,7 @@
     footer,
     children,
     class: className = '',
+    ...restProps
   }: {
     /** 布局形态：'card'（居中卡片，默认）或 'split'（左右分栏） */
     variant?: 'card' | 'split'
@@ -56,15 +58,16 @@
     /** 表单内容 */
     children?: Snippet
     class?: string
-  } = $props()
+  } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const isSplit = $derived(variant === 'split')
   // split 模式下品牌区已展示 Logo，表单区仅在小屏展示，避免桌面端重复
   const logoWrapClass = $derived(isSplit ? 'mb-6 flex justify-center lg:hidden' : 'mb-6 flex justify-center')
 </script>
 
 {#snippet formPanel()}
-  <div class='flex w-full max-w-sm flex-col'>
+  <div {...dataAttributes} class='flex w-full max-w-sm flex-col'>
     {#if logo}
       <div class={logoWrapClass}>{@render logo()}</div>
     {/if}

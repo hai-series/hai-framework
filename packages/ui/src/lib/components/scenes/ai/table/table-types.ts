@@ -1,3 +1,5 @@
+import type { DataAttributes } from '../../../../types.js'
+
 /**
  * 表格列支持的数据类型。
  * - `text`: 普通文本输入
@@ -80,7 +82,7 @@ export interface AiTableDownloadPayload {
   filename: string
 }
 
-export interface AiTableEditorProps {
+export interface AiTableEditorProps extends DataAttributes {
   /** 原始表格内容字符串，通常是 JSON 文本，支持流式残缺片段。 */
   content?: string
   /** 结构化表格数据；有值时优先于 `content`。 */

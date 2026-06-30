@@ -12,10 +12,12 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
+  import type { DataAttributes } from '../../../types.js'
   import type { CrudDensity, CrudFormConfig, CrudPaginationConfig } from './crud-types.js'
   import type { NavAdapter } from './nav-adapter.js'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import Card from '../../compounds/Card.svelte'
   import DataTable from '../../compounds/DataTable.svelte'
   import PageHeader from '../../compounds/PageHeader.svelte'
@@ -102,6 +104,7 @@
     basePath = '',
     nav = createBrowserNavAdapter(),
     class: className = '',
+    ...restProps
   }: {
     crud: CrudDef
     data: { items: Record<string, unknown>[], total: number, page: number, pageSize: number, filters?: Record<string, unknown> }
@@ -127,8 +130,9 @@
      */
     nav?: NavAdapter
     class?: string
-  } = $props()
+  } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // ─── 状态 ───
 
   const keyField = $derived(crud.resource.keyField ?? 'id')
@@ -409,7 +413,7 @@
   )
 </script>
 
-<div class='{pageGapClass} {className}'>
+<div {...dataAttributes} class='{pageGapClass} {className}'>
   <!-- 页面标题 -->
   <PageHeader title={resourceLabel}>
     {#snippet actions()}

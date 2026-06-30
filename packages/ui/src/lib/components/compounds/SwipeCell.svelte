@@ -13,8 +13,9 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
+  import type { DataAttributes } from '../../types.js'
   import type { SwipeCellAction } from './swipe-cell-types.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   // eslint-disable-next-line no-import-assign -- type re-export
   export type { SwipeCellAction }
@@ -38,8 +39,10 @@
     disabled = false,
     class: className,
     children,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let offsetX = $state(0)
   let startX = 0
   let swiping = false
@@ -82,7 +85,7 @@
   }
 </script>
 
-<div class={cn('relative overflow-hidden', className)}>
+<div {...dataAttributes} class={cn('relative overflow-hidden', className)}>
   <!-- 内容层 -->
   <div
     class='relative transition-transform'

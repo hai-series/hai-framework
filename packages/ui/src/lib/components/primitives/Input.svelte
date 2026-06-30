@@ -3,8 +3,8 @@
   文本输入框组件，支持自定义验证消息
 -->
 <script lang='ts'>
-  import type { InputProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, InputProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   let {
     value = $bindable(''),
@@ -35,8 +35,10 @@
     onblur,
     onfocus,
     oninvalid,
-  }: InputProps = $props()
+    ...restProps
+  }: InputProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const containerHeight = $derived(
     size === 'xs'
       ? 'h-8'
@@ -112,7 +114,7 @@
   }
 </script>
 
-<div class='fieldset w-full'>
+<div {...dataAttributes} class='fieldset w-full'>
   <div class={containerClass}>
     <input
       bind:this={inputRef}

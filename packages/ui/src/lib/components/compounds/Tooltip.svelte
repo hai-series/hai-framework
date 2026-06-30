@@ -8,16 +8,18 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { TooltipProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, TooltipProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     content,
     position = 'top',
     class: className = '',
     children,
-  }: TooltipProps = $props()
+    ...restProps
+  }: TooltipProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const positionMap = {
     top: 'tooltip-top',
     right: 'tooltip-right',
@@ -34,7 +36,7 @@
   )
 </script>
 
-<div class={tooltipClass} data-tip={content}>
+<div {...dataAttributes} class={tooltipClass} data-tip={content}>
   {#if children}
     {@render children()}
   {/if}

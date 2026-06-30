@@ -12,6 +12,7 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../../types.js'
   import type { MarkdownToolbarDownloadAction } from '../document-types.js'
   import type {
     AiTableColumn,
@@ -23,7 +24,7 @@
   } from './table-types.js'
   import { SvelteSet } from 'svelte/reactivity'
   import { uiM } from '../../../../messages.js'
-  import { cn } from '../../../../utils.js'
+  import { cn, getDataAttributes } from '../../../../utils.js'
   import AiDocumentDownloadMenu from '../AiDocumentDownloadMenu.svelte'
 
   interface ExtractedArrayChunk {
@@ -92,8 +93,10 @@
     oncopytable,
     // 表格下载回调。
     ondownloadtable,
-  }: AiTableEditorProps = $props()
+    ...restProps
+  }: AiTableEditorProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // 复制反馈只影响右上角复制按钮，不和业务数据混用。
   let copied = $state(false)
   // 连续复制时按最后一次点击重新计时。
@@ -1029,7 +1032,7 @@
   }
 </script>
 
-<section class={tablePaneClass}>
+<section {...dataAttributes} class={tablePaneClass}>
   <header class='hai-ai-table-header'>
     <div class='hai-ai-table-heading'>
       <div class='hai-ai-table-eyebrow'>

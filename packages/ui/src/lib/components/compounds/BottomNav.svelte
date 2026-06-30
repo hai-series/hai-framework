@@ -5,8 +5,9 @@
   <BottomNav items={navItems} active="home" onchange={(id) => goto(`/${id}`)} />
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../types.js'
   import type { BottomNavItem } from './bottom-nav-types.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   // eslint-disable-next-line no-import-assign -- type re-export
   export type { BottomNavItem }
@@ -46,19 +47,21 @@
     centered = false,
     maxWidth = 'none',
     class: className,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const constrained = $derived(centered && maxWidth !== 'none')
 </script>
 
-<nav
-  class={cn(
-    'fixed bottom-0 bg-base-100 border-t border-base-200 z-40',
-    constrained ? 'left-1/2 right-auto w-full -translate-x-1/2' : 'left-0 right-0',
-    constrained && MAX_WIDTH_CLASS[maxWidth],
-    safeArea && 'hai-safe-bottom',
-    className,
-  )}
+<nav {...dataAttributes}
+     class={cn(
+       'fixed bottom-0 bg-base-100 border-t border-base-200 z-40',
+       constrained ? 'left-1/2 right-auto w-full -translate-x-1/2' : 'left-0 right-0',
+       constrained && MAX_WIDTH_CLASS[maxWidth],
+       safeArea && 'hai-safe-bottom',
+       className,
+     )}
 >
   <div class='flex items-center justify-around h-14'>
     {#each items as item (item.id)}

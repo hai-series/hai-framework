@@ -11,8 +11,9 @@
 
 <script lang='ts'>
   import type { Snippet } from 'svelte'
+  import type { DataAttributes } from '../../types.js'
   import type { AccordionItem } from './accordion-types.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import ToggleCheckbox from '../primitives/ToggleCheckbox.svelte'
   import ToggleRadio from '../primitives/ToggleRadio.svelte'
 
@@ -47,8 +48,10 @@
     onchange,
     class: className = '',
     children,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const groupName = `accordion-${Math.random().toString(36).slice(2, 9)}`
 
   function isExpanded(itemId: string): boolean {
@@ -103,7 +106,7 @@
   }
 </script>
 
-<div class={containerClass}>
+<div {...dataAttributes} class={containerClass}>
   {#each items as item (item.id)}
     <div class={getItemClass(item)}>
       {#if multiple}

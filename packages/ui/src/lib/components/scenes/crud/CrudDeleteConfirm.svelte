@@ -6,7 +6,9 @@
   使用 compounds 组件：Confirm
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import Confirm from '../../compounds/Confirm.svelte'
 
   let {
@@ -16,6 +18,7 @@
     message = '',
     onconfirm,
     oncancel,
+    ...restProps
   }: {
     open?: boolean
     loading?: boolean
@@ -23,17 +26,19 @@
     message?: string
     onconfirm?: () => Promise<void> | void
     oncancel?: () => void
-  } = $props()
+  } & DataAttributes = $props()
+
+  const dataAttributes = $derived(getDataAttributes(restProps))
 </script>
 
-<Confirm
-  bind:open
-  title={title || uiM('crud_delete_title')}
-  message={message || uiM('crud_delete_message')}
-  confirmText={uiM('crud_delete')}
-  cancelText={uiM('crud_cancel')}
-  variant='error'
-  {loading}
-  {onconfirm}
-  {oncancel}
+<Confirm {...dataAttributes}
+         bind:open
+         title={title || uiM('crud_delete_title')}
+         message={message || uiM('crud_delete_message')}
+         confirmText={uiM('crud_delete')}
+         cancelText={uiM('crud_cancel')}
+         variant='error'
+         {loading}
+         {onconfirm}
+         {oncancel}
 />

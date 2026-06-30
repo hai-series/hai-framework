@@ -1,10 +1,11 @@
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type {
     MarkdownSourceKind,
     MarkdownToolbarDownloadAction,
   } from './document-types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import {
     downloadAiDocument,
     resolveDocumentDownloadActions,
@@ -62,8 +63,10 @@
     triggerClass = '',
     menuClass = '',
     itemClass = '',
-  }: AiDocumentDownloadMenuProps = $props()
+    ...restProps
+  }: AiDocumentDownloadMenuProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // menuWrapEl 只负责识别外部点击，以便菜单展开后能自然收起。
   let menuWrapEl: HTMLDivElement | undefined = $state()
   // open 由组件内部维护，左右两侧可以直接复用，不需要额外再托管弹层状态。
@@ -118,9 +121,9 @@
   }
 </script>
 
-<div
-  bind:this={menuWrapEl}
-  class={cn('hai-ai-download-menu', className)}
+<div {...dataAttributes}
+     bind:this={menuWrapEl}
+     class={cn('hai-ai-download-menu', className)}
 >
   <button
     type='button'

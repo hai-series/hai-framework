@@ -11,11 +11,40 @@ import {
   getAlertVariantClass,
   getBadgeSizeClass,
   getBadgeVariantClass,
+  getDataAttributes,
   getInputSizeClass,
   getProgressVariantClass,
   getSizeClass,
   getVariantClass,
 } from '../src/lib/utils.js'
+
+describe('getDataAttributes - data-* 属性透传', () => {
+  it('应该只保留 data-* 属性', () => {
+    expect(getDataAttributes({
+      'aria-label': '保存',
+      'data-analytics-id': 'settings.save',
+      'data-count': 3,
+      'data-enabled': false,
+      'id': 'save',
+    })).toEqual({
+      'data-analytics-id': 'settings.save',
+      'data-count': 3,
+      'data-enabled': false,
+    })
+  })
+
+  it('应该忽略 null、undefined 和非标量 data-* 属性', () => {
+    expect(getDataAttributes({
+      'data-empty': null,
+      'data-list': ['a'],
+      'data-meta': { source: 'test' },
+      'data-missing': undefined,
+      'data-valid': true,
+    })).toEqual({
+      'data-valid': true,
+    })
+  })
+})
 
 describe('cn - 类名合并', () => {
   it('应该合并多个类名', () => {

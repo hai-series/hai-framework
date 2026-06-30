@@ -3,8 +3,8 @@
   徽章组件，支持多种变体与尺寸
 -->
 <script lang='ts'>
-  import type { BadgeProps } from '../../types.js'
-  import { cn, getBadgeSizeClass, getBadgeVariantClass } from '../../utils.js'
+  import type { BadgeProps, DataAttributes } from '../../types.js'
+  import { cn, getBadgeSizeClass, getBadgeVariantClass, getDataAttributes } from '../../utils.js'
 
   const {
     variant = 'default',
@@ -12,8 +12,10 @@
     outline = false,
     class: className = '',
     children,
-  }: BadgeProps = $props()
+    ...restProps
+  }: BadgeProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const badgeClass = $derived(
     cn(
       'badge',
@@ -26,7 +28,7 @@
   )
 </script>
 
-<span class={badgeClass}>
+<span {...dataAttributes} class={badgeClass}>
   {#if children}
     {@render children()}
   {/if}

@@ -11,6 +11,7 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type {
     AiDocumentEditorProps,
     MarkdownBlockFormatKind,
@@ -27,7 +28,7 @@
   import { tick } from 'svelte'
   import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import AiDocumentDownloadMenu from './AiDocumentDownloadMenu.svelte'
   import {
     createBuiltInCodePreview,
@@ -319,8 +320,10 @@
     oncopyselection,
     // 选区注释回调。
     onannotation,
-  }: AiDocumentEditorProps = $props()
+    ...restProps
+  }: AiDocumentEditorProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // outlineCollapsedInitialized 用来把 `initialOutlineCollapsed` 只消费一次，避免用户手动展开后又被 props 回写覆盖。
   let outlineCollapsedInitialized = $state(false)
   // 当前目录是否折叠。
@@ -2340,7 +2343,7 @@
   }
 </script>
 
-<section class={cn('hai-ai-doc-pane', className)}>
+<section {...dataAttributes} class={cn('hai-ai-doc-pane', className)}>
   <div class='hai-ai-doc-shell'>
     {#if showToolbar}
       <header class='hai-ai-doc-topbar'>

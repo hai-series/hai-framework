@@ -11,10 +11,14 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../types.js'
   import { onMount } from 'svelte'
   import { message } from '../../message.svelte.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
+
+  const { ...restProps }: DataAttributes = $props()
+  const dataAttributes = $derived(getDataAttributes(restProps))
 
   /** 图标类型到 tabler icon 的映射 */
   const iconMap: Record<string, string> = {
@@ -124,7 +128,7 @@
   })
 </script>
 
-<div bind:this={layerElement} popover='manual' class='hai-message-layer'>
+<div {...dataAttributes} bind:this={layerElement} popover='manual' class='hai-message-layer'>
   <div class='hai-message-stack'>
     {#each message.items as item (item.id)}
       <div

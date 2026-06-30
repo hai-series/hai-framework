@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { IconButtonProps } from '../../types.js'
-  import { cn, getSizeClass, getVariantClass } from '../../utils.js'
+  import type { DataAttributes, IconButtonProps } from '../../types.js'
+  import { cn, getDataAttributes, getSizeClass, getVariantClass } from '../../utils.js'
 
   const SAFE_INLINE_SVG_REGEX = /^<svg[\s\S]*<\/svg>$/i
   const UNSAFE_INLINE_SVG_REGEX = /<\s*(?:script|foreignObject|iframe|object|embed|link|meta|img)\b|\son[a-z]+\s*=|(?:href|xlink:href)\s*=\s*['"]\s*(?:javascript:|vbscript:|data:text\/html)/i
@@ -26,8 +26,10 @@
     class: className = '',
     onclick,
     children,
-  }: IconButtonProps = $props()
+    ...restProps
+  }: IconButtonProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   /** 计算最终的 aria-label */
   const computedAriaLabel = $derived(ariaLabel || label || tooltip)
 
@@ -85,7 +87,7 @@
 </script>
 
 {#if tooltip}
-  <div class='tooltip' data-tip={tooltip}>
+  <div {...dataAttributes} class='tooltip' data-tip={tooltip}>
     <button
       type='button'
       class={buttonClass}

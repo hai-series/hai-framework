@@ -9,7 +9,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import { cn } from '../../utils.js'
+  import type { DataAttributes } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import BareInput from './BareInput.svelte'
 
   interface Props {
@@ -49,8 +50,10 @@
     onchange,
     oninput,
     class: className = '',
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const sizeClass = $derived({
     xs: 'range-xs',
     sm: 'range-sm',
@@ -94,7 +97,7 @@
   }
 </script>
 
-<div class='w-full'>
+<div {...dataAttributes} class='w-full'>
   <BareInput
     type='range'
     class={rangeClass}

@@ -9,9 +9,10 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { ImageUploadProps } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
   import Spinner from '../../primitives/Spinner.svelte'
@@ -33,8 +34,10 @@
     class: className = '',
     onchange,
     onerror,
-  }: ImageUploadProps = $props()
+    ...restProps
+  }: ImageUploadProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let loading = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
   let previewUrl = $derived(value)
@@ -205,13 +208,13 @@
   }
 </script>
 
-<div
-  class={containerClass}
-  style={containerStyle}
-  role='button'
-  tabindex='0'
-  onclick={handleClick}
-  onkeydown={e => e.key === 'Enter' && handleClick()}
+<div {...dataAttributes}
+     class={containerClass}
+     style={containerStyle}
+     role='button'
+     tabindex='0'
+     onclick={handleClick}
+     onkeydown={e => e.key === 'Enter' && handleClick()}
 >
   <BareInput
     type='file'

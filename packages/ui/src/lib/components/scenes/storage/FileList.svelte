@@ -8,9 +8,10 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { FileItem, FileListProps } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Button from '../../primitives/Button.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
 
@@ -27,8 +28,10 @@
     ondownload,
     ondelete,
     onpreview,
-  }: FileListProps = $props()
+    ...restProps
+  }: FileListProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let previewFile = $state<FileItem | null>(null)
 
   const containerClass = $derived(
@@ -109,7 +112,7 @@
 </script>
 
 {#if loading}
-  <div class='flex justify-center py-8'>
+  <div {...dataAttributes} class='flex justify-center py-8'>
     <span class='loading loading-spinner loading-lg'></span>
   </div>
 {:else if files.length === 0}

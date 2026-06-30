@@ -33,8 +33,10 @@
   />
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../types.js'
   import { Combobox } from 'bits-ui'
   import { uiM } from '../../messages.js'
+  import { getDataAttributes } from '../../utils.js'
   import BareButton from '../primitives/BareButton.svelte'
 
   /** 选项定义 */
@@ -80,8 +82,10 @@
     label: fieldLabel,
     class: className = '',
     onchange,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // 为未提供 value 时设置初始默认值（仅在初始化时执行一次）
   // 统一以空字符串初始化，避免在初始化阶段捕获 multiple 的初始值。
   // 多选模式会通过 multiVal 派生为 [] 传给 Combobox.Root。
@@ -159,7 +163,7 @@
   }
 </script>
 
-<div class='fieldset w-full {className}'>
+<div {...dataAttributes} class='fieldset w-full {className}'>
   {#if fieldLabel}
     <legend class='fieldset-legend font-medium'>{fieldLabel}</legend>
   {/if}

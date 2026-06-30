@@ -94,6 +94,18 @@ export default defineConfig({
 
 > 除 `toast`、类型导入与 `Range`（会和 DOM `Range` 构造器冲突）外，其余公开 Svelte 组件都可通过 `@h-ai/ui/auto-import` 自动注入。
 
+### data-* 属性透传
+
+公开 Svelte 组件支持把调用方传入的 `data-*` 属性透传到组件根节点或主交互节点，便于测试选择器、埋点和自动化标记。普通未知属性不会被透传。
+
+```svelte
+<Button data-testid='save-button' data-analytics-id='settings.save'>保存</Button>
+<Input data-testid='username-input' bind:value={username} />
+<Modal data-testid='confirm-modal' bind:open={open}>...</Modal>
+```
+
+无需再为了 `data-testid` 单独封装按钮、输入框或弹层组件。
+
 ## 组件架构
 
 组件按三层划分（primitives → compounds → scenes）：

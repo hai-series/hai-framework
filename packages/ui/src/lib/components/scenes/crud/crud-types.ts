@@ -6,7 +6,7 @@
  */
 
 import type { Snippet } from 'svelte'
-import type { Size } from '../../../types.js'
+import type { DataAttributes, Size } from '../../../types.js'
 
 // 从 @h-ai/kit 导入的类型在使用处通过泛型约束，此处仅定义 UI 层特有类型
 
@@ -64,7 +64,7 @@ export interface CrudPageData<T = Record<string, unknown>> {
 }
 
 /** CrudPage 组件 Props */
-export interface CrudPageProps<T = Record<string, unknown>> {
+export interface CrudPageProps<T = Record<string, unknown>> extends DataAttributes {
   /** CRUD 操作定义（来自 kit.crud.define） */
   crud: {
     resource: {

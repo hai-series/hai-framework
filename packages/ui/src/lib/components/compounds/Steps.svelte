@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { StepsProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, StepsProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     items = [],
@@ -19,8 +19,10 @@
     clickable = false,
     class: className = '',
     onchange,
-  }: StepsProps = $props()
+    ...restProps
+  }: StepsProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const containerClass = $derived(
     cn(
       'steps',
@@ -62,7 +64,7 @@
   }
 </script>
 
-<ul class={containerClass}>
+<ul {...dataAttributes} class={containerClass}>
   {#each items as item, index (index)}
     {#if clickable}
       <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->

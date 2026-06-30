@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts' generics="T = string">
-  import type { RadioProps, SelectOption } from '../../types.js'
-  import { cn, getSizeClass } from '../../utils.js'
+  import type { DataAttributes, RadioProps, SelectOption } from '../../types.js'
+  import { cn, getDataAttributes, getSizeClass } from '../../utils.js'
 
   let {
     value = $bindable() as T,
@@ -20,8 +20,10 @@
     direction = 'vertical',
     class: className = '',
     onchange,
-  }: RadioProps<T> = $props()
+    ...restProps
+  }: RadioProps<T> & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const containerClass = $derived(
     cn(
       'flex gap-2',
@@ -43,7 +45,7 @@
   }
 </script>
 
-<div class={containerClass} role='radiogroup'>
+<div {...dataAttributes} class={containerClass} role='radiogroup'>
   {#each options as option (option.value)}
     <label class='label cursor-pointer gap-2 justify-start'>
       <input

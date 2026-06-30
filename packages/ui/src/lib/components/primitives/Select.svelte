@@ -9,8 +9,8 @@
   =============================================================================
 -->
 <script lang='ts' generics="T = string">
-  import type { SelectProps } from '../../types.js'
-  import { cn, getSizeClass } from '../../utils.js'
+  import type { DataAttributes, SelectProps } from '../../types.js'
+  import { cn, getDataAttributes, getSizeClass } from '../../utils.js'
 
   let {
     value = $bindable<T>(),
@@ -25,8 +25,10 @@
     id,
     onchange,
     children,
-  }: SelectProps<T> = $props()
+    ...restProps
+  }: SelectProps<T> & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let selectRef: HTMLSelectElement | undefined = $state()
 
   const selectClass = $derived(
@@ -62,7 +64,7 @@
   }
 </script>
 
-<div class='fieldset w-full'>
+<div {...dataAttributes} class='fieldset w-full'>
   <select
     bind:this={selectRef}
     {id}

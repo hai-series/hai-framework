@@ -3,8 +3,8 @@
   通用按钮组件，支持多种变体和尺寸。
 -->
 <script lang='ts'>
-  import type { ButtonProps } from '../../types.js'
-  import { cn, getSizeClass, getVariantClass } from '../../utils.js'
+  import type { ButtonProps, DataAttributes } from '../../types.js'
+  import { cn, getDataAttributes, getSizeClass, getVariantClass } from '../../utils.js'
 
   const {
     variant = 'default',
@@ -19,8 +19,10 @@
     type = 'button',
     onclick,
     children,
-  }: ButtonProps = $props()
+    ...restProps
+  }: ButtonProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const buttonClass = $derived(
     cn(
       'btn no-animation',
@@ -45,13 +47,13 @@
   }
 </script>
 
-<button
-  {type}
-  form={form || undefined}
-  class={buttonClass}
-  disabled={disabled || loading}
-  aria-label={ariaLabel || undefined}
-  onclick={handleClick}
+<button {...dataAttributes}
+        {type}
+        form={form || undefined}
+        class={buttonClass}
+        disabled={disabled || loading}
+        aria-label={ariaLabel || undefined}
+        onclick={handleClick}
 >
   {#if loading}
     <span class='loading loading-spinner loading-xs'></span>

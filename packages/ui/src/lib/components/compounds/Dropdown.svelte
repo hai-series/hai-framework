@@ -3,8 +3,8 @@
   下拉菜单组件，支持 click/hover 触发。
 -->
 <script lang='ts'>
-  import type { DropdownProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, DropdownProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import BareButton from '../primitives/BareButton.svelte'
 
   const {
@@ -15,8 +15,10 @@
     class: className = '',
     onselect,
     children,
-  }: DropdownProps = $props()
+    ...restProps
+  }: DropdownProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let isOpen = $state(false)
 
   const positionMap = {
@@ -55,7 +57,7 @@
   }
 </script>
 
-<div class={dropdownClass}>
+<div {...dataAttributes} class={dropdownClass}>
   <BareButton
     tabindex={0}
     role='button'

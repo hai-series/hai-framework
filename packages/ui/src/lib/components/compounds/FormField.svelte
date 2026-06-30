@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { FormFieldProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, FormFieldProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     label = '',
@@ -18,8 +18,10 @@
     required = false,
     class: className = '',
     children,
-  }: FormFieldProps = $props()
+    ...restProps
+  }: FormFieldProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const fieldClass = $derived(
     cn(
       'fieldset w-full',
@@ -28,7 +30,7 @@
   )
 </script>
 
-<div class={fieldClass}>
+<div {...dataAttributes} class={fieldClass}>
   {#if label}
     <legend class='fieldset-legend'>
       {label}

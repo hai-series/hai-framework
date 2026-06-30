@@ -4,9 +4,9 @@
   内置多语言支持，自动跟随全局 locale。
 -->
 <script lang='ts'>
-  import type { Size } from '../../../types.js'
+  import type { DataAttributes, Size } from '../../../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
   import BareInput from '../../primitives/BareInput.svelte'
   import Progress from '../../primitives/Progress.svelte'
@@ -71,8 +71,10 @@
     oninput,
     onchange,
     oninvalid,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let showPassword = $state(false)
 
   // 容器高度（与 Input 组件一致）
@@ -146,7 +148,7 @@
   }
 </script>
 
-<div class='fieldset w-full'>
+<div {...dataAttributes} class='fieldset w-full'>
   <!-- 输入框容器 -->
   <div class={cn(
     'flex items-center w-full rounded-lg border bg-base-100',

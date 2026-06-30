@@ -8,7 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { BareButtonProps } from '../../types.js'
+  import type { BareButtonProps, DataAttributes } from '../../types.js'
+  import { getDataAttributes } from '../../utils.js'
 
   const {
     type = 'button',
@@ -21,23 +22,25 @@
     onclick,
     onkeydown,
     children,
-  }: BareButtonProps = $props()
+    ...restProps
+  }: BareButtonProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   function handleClick(e: MouseEvent) {
     onclick?.(e)
   }
 </script>
 
-<button
-  {type}
-  class={className}
-  disabled={disabled}
-  aria-label={ariaLabel || undefined}
-  role={role}
-  aria-selected={ariaSelected}
-  tabindex={tabindex}
-  onclick={handleClick}
-  onkeydown={onkeydown}
+<button {...dataAttributes}
+        {type}
+        class={className}
+        disabled={disabled}
+        aria-label={ariaLabel || undefined}
+        role={role}
+        aria-selected={ariaSelected}
+        tabindex={tabindex}
+        onclick={handleClick}
+        onkeydown={onkeydown}
 >
   {#if children}
     {@render children()}

@@ -9,9 +9,9 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { DrawerProps } from '../../types.js'
+  import type { DataAttributes, DrawerProps } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn, generateId } from '../../utils.js'
+  import { cn, generateId, getDataAttributes } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
   import ToggleCheckbox from '../primitives/ToggleCheckbox.svelte'
 
@@ -26,8 +26,10 @@
     class: className = '',
     onclose,
     children,
-  }: DrawerProps = $props()
+    ...restProps
+  }: DrawerProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const id = generateId('drawer')
 
   const sizeMap = {
@@ -78,7 +80,7 @@
   }
 </script>
 
-<div class={drawerClass}>
+<div {...dataAttributes} class={drawerClass}>
   <ToggleCheckbox {id} class='drawer-toggle' bind:checked={open} />
 
   <div class={sideClass}>

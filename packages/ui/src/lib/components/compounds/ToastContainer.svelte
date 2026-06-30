@@ -14,11 +14,15 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../types.js'
   import { onMount } from 'svelte'
   import { uiM } from '../../messages.js'
   import { toast } from '../../toast.svelte.js'
-  import { cn, getAlertVariantClass } from '../../utils.js'
+  import { cn, getAlertVariantClass, getDataAttributes } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
+
+  const { ...restProps }: DataAttributes = $props()
+  const dataAttributes = $derived(getDataAttributes(restProps))
 
   const positionMap = {
     'top-right': 'toast-top toast-end',
@@ -150,7 +154,7 @@
   })
 </script>
 
-<div bind:this={layerElement} popover='manual' class='hai-toast-layer'>
+<div {...dataAttributes} bind:this={layerElement} popover='manual' class='hai-toast-layer'>
   {#each Object.entries(groupedItems()) as [position, items] (position)}
     <div class={cn('toast', positionMap[position as keyof typeof positionMap])}>
       {#each items as item (item.id)}

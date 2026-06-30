@@ -16,9 +16,10 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { MarkdownRendererProps } from '../types.js'
   import { writeTextToClipboard } from '../../../internal/browser-safety.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import { parseMarkdown } from './markdown-parse.js'
 
   const {
@@ -27,8 +28,10 @@
     showCopyButton = true,
     enableHighlight = true,
     breaks = true,
-  }: MarkdownRendererProps = $props()
+    ...restProps
+  }: MarkdownRendererProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   /** 解析后的 HTML */
   const html = $derived(
     parseMarkdown(content, { enableHighlight, showCopyButton, breaks }),
@@ -62,11 +65,9 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class={cn('hai-markdown', className)}
-  onclick={handleClick}
+<div {...dataAttributes}
+     class={cn('hai-markdown', className)}
+     onclick={handleClick}
 >
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- Markdown HTML 渲染 -->
   {@html html}

@@ -17,9 +17,10 @@
 -->
 <script lang='ts'>
   import type { ThemeInfo } from '../../../theme-config.js'
+  import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
   import { THEME_GROUPS, THEMES } from '../../../theme-config.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
 
   interface Props {
@@ -45,8 +46,10 @@
     compact = false,
     grouped = true,
     class: className = '',
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const displaySelectLabel = $derived(selectLabel ?? uiM('theme_selector_label'))
 
   let open = $state(false)
@@ -83,7 +86,7 @@
   })
 </script>
 
-<div bind:this={containerRef} class={cn('dropdown', align === 'end' ? 'dropdown-end' : '', open ? 'dropdown-open' : '', className)}>
+<div {...dataAttributes} bind:this={containerRef} class={cn('dropdown', align === 'end' ? 'dropdown-end' : '', open ? 'dropdown-open' : '', className)}>
   <BareButton
     type='button'
     class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'gap-2'}'

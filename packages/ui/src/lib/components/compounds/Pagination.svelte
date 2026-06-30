@@ -8,9 +8,9 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { PaginationProps } from '../../types.js'
+  import type { DataAttributes, PaginationProps } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import BareButton from '../primitives/BareButton.svelte'
 
   import Input from '../primitives/Input.svelte'
@@ -29,8 +29,10 @@
     class: className = '',
     onchange,
     onpagesizechange,
-  }: PaginationProps = $props()
+    ...restProps
+  }: PaginationProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // labels 优先，缺省回退到内置消息 uiM(...)
 
   // 计算总页数（至少 1 页，保证分页栏在空数据时仍可渲染）
@@ -86,7 +88,7 @@
   )
 </script>
 
-<div class={cn('flex flex-wrap items-center justify-between gap-4', className)}>
+<div {...dataAttributes} class={cn('flex flex-wrap items-center justify-between gap-4', className)}>
   {#if showTotal}
     <span class={tableTextClass}>
       {(labels.total ?? uiM('pagination_total')).replace('{count}', String(total))}

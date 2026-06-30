@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { TagProps } from '../../types.js'
-  import { cn, getSizeClass, getVariantClass } from '../../utils.js'
+  import type { DataAttributes, TagProps } from '../../types.js'
+  import { cn, getDataAttributes, getSizeClass, getVariantClass } from '../../utils.js'
   import IconButton from './IconButton.svelte'
 
   const {
@@ -23,8 +23,10 @@
     class: className = '',
     onclose,
     children,
-  }: TagProps = $props()
+    ...restProps
+  }: TagProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const tagClass = $derived(
     cn(
       'badge gap-1',
@@ -41,7 +43,7 @@
   }
 </script>
 
-<span class={tagClass}>
+<span {...dataAttributes} class={tagClass}>
   {#if children}
     {@render children()}
   {:else}

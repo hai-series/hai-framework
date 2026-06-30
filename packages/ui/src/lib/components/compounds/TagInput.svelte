@@ -8,9 +8,9 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { TagInputProps } from '../../types.js'
+  import type { DataAttributes, TagInputProps } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn, getInputSizeClass } from '../../utils.js'
+  import { cn, getDataAttributes, getInputSizeClass } from '../../utils.js'
   import BareInput from '../primitives/BareInput.svelte'
   import Tag from '../primitives/Tag.svelte'
 
@@ -23,8 +23,10 @@
     size = 'md',
     class: className = '',
     onchange,
-  }: TagInputProps = $props()
+    ...restProps
+  }: TagInputProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let inputValue = $state('')
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
 
@@ -77,12 +79,12 @@
   }
 </script>
 
-<div
-  class={containerClass}
-  onclick={() => inputElement?.focus()}
-  onkeydown={e => e.key === 'Enter' && inputElement?.focus()}
-  role='textbox'
-  tabindex='-1'
+<div {...dataAttributes}
+     class={containerClass}
+     onclick={() => inputElement?.focus()}
+     onkeydown={e => e.key === 'Enter' && inputElement?.focus()}
+     role='textbox'
+     tabindex='-1'
 >
   {#each tags as tag, index (index)}
     <Tag

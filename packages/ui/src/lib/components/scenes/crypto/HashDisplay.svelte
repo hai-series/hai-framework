@@ -9,10 +9,11 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { HashDisplayProps } from '../types.js'
   import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import { Badge, IconButton } from '../../primitives/index.js'
 
   const {
@@ -24,8 +25,10 @@
     truncateLength = 16,
     labels = {},
     class: className = '',
-  }: HashDisplayProps = $props()
+    ...restProps
+  }: HashDisplayProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let copied = $state(false)
 
   const containerClass = $derived(
@@ -54,7 +57,7 @@
   }
 </script>
 
-<div class={containerClass}>
+<div {...dataAttributes} class={containerClass}>
   {#if label}
     <div class='text-xs text-base-content/60 mb-1'>
       {label}

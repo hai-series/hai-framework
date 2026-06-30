@@ -6,14 +6,14 @@
  */
 
 import type { Snippet } from 'svelte'
-import type { Size } from '../../types.js'
+import type { DataAttributes, Size } from '../../types.js'
 
 // ─── IAM 相关类型 ───
 
 /**
  * 密码输入框属性
  */
-export interface PasswordInputProps {
+export interface PasswordInputProps extends DataAttributes {
   /** 元素 ID */
   id?: string
   /** 值 */
@@ -68,7 +68,7 @@ export interface LoginFormData {
 /**
  * 登录表单属性
  */
-export interface LoginFormProps {
+export interface LoginFormProps extends DataAttributes {
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -123,7 +123,7 @@ export interface RegisterFormData {
 /**
  * 注册表单属性
  */
-export interface RegisterFormProps {
+export interface RegisterFormProps extends DataAttributes {
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -170,7 +170,7 @@ export interface ChangePasswordFormData {
 /**
  * 修改密码表单属性
  */
-export interface ChangePasswordFormProps {
+export interface ChangePasswordFormProps extends DataAttributes {
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -202,7 +202,7 @@ export interface ForgotPasswordFormData {
 /**
  * 找回密码表单属性
  */
-export interface ForgotPasswordFormProps {
+export interface ForgotPasswordFormProps extends DataAttributes {
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -243,7 +243,7 @@ export interface ResetPasswordFormData {
 /**
  * 重置密码表单属性
  */
-export interface ResetPasswordFormProps {
+export interface ResetPasswordFormProps extends DataAttributes {
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -303,7 +303,7 @@ export interface UserProfileSubmitData {
 /**
  * 用户个人信息属性
  */
-export interface UserProfileProps {
+export interface UserProfileProps extends DataAttributes {
   /** 用户信息 */
   user?: UserProfileData
   /** 是否可编辑 */
@@ -359,7 +359,7 @@ export interface UploadFile {
 /**
  * 文件上传属性
  */
-export interface FileUploadProps {
+export interface FileUploadProps extends DataAttributes {
   /** 接受的文件类型 */
   accept?: string
   /** 最大文件大小 (bytes) */
@@ -417,7 +417,7 @@ export interface FileItem {
 /**
  * 文件列表属性
  */
-export interface FileListProps {
+export interface FileListProps extends DataAttributes {
   /** 文件列表 */
   files?: FileItem[]
   /** 加载状态 */
@@ -447,7 +447,7 @@ export interface FileListProps {
 /**
  * 图片上传属性
  */
-export interface ImageUploadProps {
+export interface ImageUploadProps extends DataAttributes {
   /** 图片 URL */
   value?: string
   /** 接受的文件类型 */
@@ -481,7 +481,7 @@ export interface ImageUploadProps {
 /**
  * 头像上传属性
  */
-export interface AvatarUploadProps {
+export interface AvatarUploadProps extends DataAttributes {
   /** 头像 URL */
   value?: string
   /** 尺寸 */
@@ -513,7 +513,7 @@ export interface AvatarUploadProps {
 /**
  * 加密输入框属性
  */
-export interface EncryptedInputProps {
+export interface EncryptedInputProps extends DataAttributes {
   /** 原始值 */
   value?: string
   /** 加密后的值 */
@@ -543,7 +543,7 @@ export interface EncryptedInputProps {
 /**
  * 哈希展示属性
  */
-export interface HashDisplayProps {
+export interface HashDisplayProps extends DataAttributes {
   /** 哈希值 */
   value?: string
   /** 算法 */
@@ -569,7 +569,7 @@ export interface HashDisplayProps {
 /**
  * Markdown 渲染器属性
  */
-export interface MarkdownRendererProps {
+export interface MarkdownRendererProps extends DataAttributes {
   /** Markdown 源文本 */
   content?: string
   /** 自定义类名 */
@@ -584,7 +584,7 @@ export interface MarkdownRendererProps {
 /**
  * 签名展示属性
  */
-export interface SignatureDisplayProps {
+export interface SignatureDisplayProps extends DataAttributes {
   /** 签名值 */
   signature?: string
   /** 公钥 */

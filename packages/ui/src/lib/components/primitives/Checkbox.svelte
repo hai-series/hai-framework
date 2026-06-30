@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { CheckboxProps } from '../../types.js'
-  import { cn, generateId, getSizeClass } from '../../utils.js'
+  import type { CheckboxProps, DataAttributes } from '../../types.js'
+  import { cn, generateId, getDataAttributes, getSizeClass } from '../../utils.js'
 
   let {
     checked = $bindable(false),
@@ -20,8 +20,10 @@
     indeterminate = false,
     class: className = '',
     onchange,
-  }: CheckboxProps = $props()
+    ...restProps
+  }: CheckboxProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const id = generateId('checkbox')
 
   const checkboxClass = $derived(
@@ -40,7 +42,7 @@
   }
 </script>
 
-<div class='inline-flex'>
+<div {...dataAttributes} class='inline-flex'>
   <label class='label cursor-pointer gap-2' for={id}>
     <input
       {id}

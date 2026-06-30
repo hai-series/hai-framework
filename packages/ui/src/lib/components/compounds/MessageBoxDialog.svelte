@@ -7,13 +7,15 @@
 -->
 <script lang='ts'>
   import type { MessageBoxItem } from '../../messagebox.svelte.js'
+  import type { DataAttributes } from '../../types.js'
   import { messageBox } from '../../messagebox.svelte.js'
   import { uiM } from '../../messages.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import Button from '../primitives/Button.svelte'
 
-  const { item }: { item: MessageBoxItem } = $props()
+  const { item, ...restProps }: { item: MessageBoxItem } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   /** 图标类型到 tabler icon 的映射 */
   const iconMap: Record<string, string> = {
     info: 'icon-[tabler--info-circle]',
@@ -46,11 +48,11 @@
 </script>
 
 <!-- 使用 hai-messagebox 而非 DaisyUI .modal，避免 ::backdrop 被隐藏 -->
-<dialog
-  bind:this={dialogEl}
-  class='hai-messagebox'
-  oncancel={e => e.preventDefault()}
-  onclick={handleBackdropClick}
+<dialog {...dataAttributes}
+        bind:this={dialogEl}
+        class='hai-messagebox'
+        oncancel={e => e.preventDefault()}
+        onclick={handleBackdropClick}
 >
   <div class='hai-messagebox__panel'>
     <!-- 标题栏：始终显示，右侧关闭按钮 -->

@@ -3,8 +3,8 @@
   骨架屏占位组件，用于加载状态展示。
 -->
 <script lang='ts'>
-  import type { SkeletonProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, SkeletonProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     variant = 'text',
@@ -14,8 +14,10 @@
     animation = true,
     count = 1,
     class: className = '',
-  }: SkeletonProps = $props()
+    ...restProps
+  }: SkeletonProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const baseClass = $derived(
     cn(
       'skeleton',
@@ -40,7 +42,7 @@
 </script>
 
 {#if count > 1}
-  <div class='space-y-2'>
+  <div {...dataAttributes} class='space-y-2'>
     {#each Array.from({ length: count }) as _, i (i)}
       <div class={baseClass} {style}></div>
     {/each}

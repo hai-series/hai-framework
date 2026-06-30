@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { PopoverProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, PopoverProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   let {
     open = $bindable(false),
@@ -21,8 +21,10 @@
     onclose,
     triggerContent,
     children,
-  }: PopoverProps = $props()
+    ...restProps
+  }: PopoverProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let triggerElement = $state<HTMLDivElement | null>(null)
   let popoverElement = $state<HTMLDivElement | null>(null)
 
@@ -95,11 +97,11 @@
   })
 </script>
 
-<div
-  class={cn('relative inline-block', className)}
-  role='group'
-  onmouseenter={handleMouseEnter}
-  onmouseleave={handleMouseLeave}
+<div {...dataAttributes}
+     class={cn('relative inline-block', className)}
+     role='group'
+     onmouseenter={handleMouseEnter}
+     onmouseleave={handleMouseLeave}
 >
   <!-- 触发器 -->
   <div

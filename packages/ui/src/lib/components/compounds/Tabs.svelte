@@ -3,8 +3,8 @@
   标签页组件，支持 line/card/pills 三种样式。
 -->
 <script lang='ts'>
-  import type { TabsProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, TabsProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import BareButton from '../primitives/BareButton.svelte'
 
   let {
@@ -15,8 +15,10 @@
     class: className = '',
     onchange,
     children,
-  }: TabsProps = $props()
+    ...restProps
+  }: TabsProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   // 默认选中第一个
   $effect(() => {
     if (!active && items.length > 0) {
@@ -56,7 +58,7 @@
   }
 </script>
 
-<div role='tablist' class={tabsClass}>
+<div {...dataAttributes} role='tablist' class={tabsClass}>
   {#each items as item (item.key)}
     <BareButton
       role='tab'

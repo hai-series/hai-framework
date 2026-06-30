@@ -9,9 +9,10 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { Size } from '../../../types.js'
+  import type { DataAttributes, Size } from '../../../types.js'
   import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import { BareButton, IconButton, Input } from '../../primitives/index.js'
 
   interface Props {
@@ -51,8 +52,10 @@
     onencrypt,
     oninput,
     onchange,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let showValue = $state(false)
 
   // 模拟加密（实际应该调用 crypto 服务）
@@ -93,7 +96,7 @@
   }
 </script>
 
-<div class='encrypted-input space-y-2 {className}'>
+<div {...dataAttributes} class='encrypted-input space-y-2 {className}'>
   <!-- 输入框 -->
   <div class='relative'>
     <Input

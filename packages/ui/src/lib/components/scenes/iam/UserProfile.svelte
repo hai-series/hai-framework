@@ -9,9 +9,10 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { UserProfileField, UserProfileProps, UserProfileSubmitData } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import Avatar from '../../primitives/Avatar.svelte'
   import BareInput from '../../primitives/BareInput.svelte'
@@ -29,8 +30,10 @@
     errors = {},
     onsubmit,
     onavatarchange,
-  }: UserProfileProps = $props()
+    ...restProps
+  }: UserProfileProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let editMode = $state(false)
   let formData = $state<UserProfileSubmitData>({
     username: '',
@@ -149,7 +152,7 @@
   }
 </script>
 
-<div class={containerClass}>
+<div {...dataAttributes} class={containerClass}>
   <form onsubmit={handleSubmit}>
     <div class='space-y-6'>
       {#each fields as field (field)}

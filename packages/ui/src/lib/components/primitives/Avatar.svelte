@@ -3,8 +3,8 @@
   头像组件，支持图片、名字首字母 fallback
 -->
 <script lang='ts'>
-  import type { AvatarProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { AvatarProps, DataAttributes } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const NAME_PART_SPLIT_REGEX = /\s+/
 
@@ -15,8 +15,10 @@
     size = 'md',
     shape = 'circle',
     class: className = '',
-  }: AvatarProps = $props()
+    ...restProps
+  }: AvatarProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const sizeMap = {
     'xs': 'w-6 h-6',
     'sm': 'w-8 h-8',
@@ -87,7 +89,7 @@
   )
 </script>
 
-<div class={containerClass}>
+<div {...dataAttributes} class={containerClass}>
   <div
     class={innerClass}
     style:width={sizeValue}

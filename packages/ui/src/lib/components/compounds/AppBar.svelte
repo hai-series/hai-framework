@@ -9,7 +9,8 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   interface Props {
     /** 标题文本 */
@@ -36,16 +37,19 @@
     leading,
     trailing,
     children,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
+
+  const dataAttributes = $derived(getDataAttributes(restProps))
 </script>
 
-<header
-  class={cn(
-    'flex items-center h-14 px-4 bg-base-100 border-b border-base-200',
-    safeArea && 'hai-safe-top',
-    fixed && 'fixed top-0 left-0 right-0 z-40',
-    className,
-  )}
+<header {...dataAttributes}
+        class={cn(
+          'flex items-center h-14 px-4 bg-base-100 border-b border-base-200',
+          safeArea && 'hai-safe-top',
+          fixed && 'fixed top-0 left-0 right-0 z-40',
+          className,
+        )}
 >
   <!-- 左侧 -->
   <div class='flex items-center min-w-[48px]'>

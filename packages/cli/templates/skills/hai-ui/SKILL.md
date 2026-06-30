@@ -539,6 +539,7 @@ typescript, javascript, python, java, go, rust, c, cpp, csharp, ruby, php, swift
 5. **移动端样式**：务必引入 `design-tokens.css` + `mobile.css`，使用 SafeArea 包裹原生 App 页面
 6. **`@source` 必须配置**：未配置则 TailwindCSS 无法扫描 `@h-ai/ui` 组件中的 class，样式会丢失
 7. **`ssr.noExternal`**：Vite SSR 需要将 `@h-ai/*` 包纳入处理，否则 SSR 时 Svelte 组件无法正确编译
+8. **data-* 属性透传**：公开 Svelte 组件会把调用方传入的 `data-*` 属性透传到根节点或主交互节点；测试和自动化优先直接使用 `data-testid`、`data-analytics-id`，不要为测试 ID 重复封装组件
 
 ---
 

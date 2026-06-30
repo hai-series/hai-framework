@@ -8,9 +8,10 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { AvatarUploadProps } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
 
   const SAFE_HTTP_URL_REGEX = /^https?:\/\//i
@@ -29,8 +30,10 @@
     class: className = '',
     onchange,
     onerror,
-  }: AvatarUploadProps = $props()
+    ...restProps
+  }: AvatarUploadProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let loading = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
   let localPreviewUrl: string | null = $state(null)
@@ -216,12 +219,12 @@
   }
 </script>
 
-<div
-  class={containerClass}
-  role='button'
-  tabindex='0'
-  onclick={handleClick}
-  onkeydown={e => e.key === 'Enter' && handleClick()}
+<div {...dataAttributes}
+     class={containerClass}
+     role='button'
+     tabindex='0'
+     onclick={handleClick}
+     onkeydown={e => e.key === 'Enter' && handleClick()}
 >
   <BareInput
     type='file'

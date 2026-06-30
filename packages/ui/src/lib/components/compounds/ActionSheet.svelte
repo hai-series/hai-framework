@@ -13,8 +13,9 @@
   />
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../types.js'
   import type { ActionSheetItem } from './action-sheet-types.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   // eslint-disable-next-line no-import-assign -- type re-export
   export type { ActionSheetItem }
@@ -44,8 +45,10 @@
     onselect,
     onclose,
     class: className,
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   function handleSelect(id: string) {
     onselect?.(id)
     onclose?.()
@@ -54,12 +57,12 @@
 
 {#if open}
   <!-- 遮罩层 -->
-  <div
-    class='fixed inset-0 bg-black/50 z-50 transition-opacity'
-    role='button'
-    tabindex='-1'
-    onclick={onclose}
-    onkeydown={e => e.key === 'Escape' && onclose?.()}
+  <div {...dataAttributes}
+       class='fixed inset-0 bg-black/50 z-50 transition-opacity'
+       role='button'
+       tabindex='-1'
+       onclick={onclose}
+       onkeydown={e => e.key === 'Escape' && onclose?.()}
   ></div>
 
   <!-- 操作面板 -->

@@ -9,8 +9,9 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   interface Props {
     /** 当前评分值 (0 - max) */
@@ -49,8 +50,10 @@
     name = `rating-${Math.random().toString(36).slice(2, 9)}`,
     onchange,
     class: className = '',
-  }: Props = $props()
+    ...restProps
+  }: Props & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const sizeClass = $derived({
     xs: 'rating-xs',
     sm: 'rating-sm',
@@ -110,7 +113,7 @@
 
 {#if readonly}
   <!-- 只读模式 - 使用 div 而非 input -->
-  <div class={cn('rating', sizeClass, className)}>
+  <div {...dataAttributes} class={cn('rating', sizeClass, className)}>
     {#each Array.from({ length: max }) as _, i (i)}
       <div
         class={cn(

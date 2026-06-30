@@ -29,7 +29,9 @@
 -->
 <script lang='ts' generics='T'>
   import type { Snippet } from 'svelte'
+  import type { DataAttributes } from '../../types.js'
   import { uiM } from '../../messages.js'
+  import { getDataAttributes } from '../../utils.js'
 
   const {
     data,
@@ -45,6 +47,7 @@
     sortDir,
     onsort,
     class: className = '',
+    ...restProps
   }: {
     data: T[]
     columns: { key: keyof T | string, label: string, width?: string, align?: 'left' | 'center' | 'right', sortable?: boolean, render?: (item: T) => string }[]
@@ -62,8 +65,9 @@
     /** 排序回调；提供时为受控模式（不再对 data 做本地排序），否则组件内部对当前数据做客户端排序 */
     onsort?: (key: string, dir: 'asc' | 'desc') => void
     class?: string
-  } = $props()
+  } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   type Column = { key: keyof T | string, label: string, width?: string, align?: 'left' | 'center' | 'right', sortable?: boolean, render?: (item: T) => string }
 
   // ─── 排序状态 ───
@@ -162,7 +166,7 @@
   }
 </script>
 
-<div class='overflow-x-auto {className}'>
+<div {...dataAttributes} class='overflow-x-auto {className}'>
   <table class={tableClass} class:table-zebra={striped}>
     <thead>
       <tr class={headerRowClass}>

@@ -8,15 +8,17 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { SpinnerProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { DataAttributes, SpinnerProps } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     size = 'md',
     variant = 'primary',
     class: className = '',
-  }: SpinnerProps = $props()
+    ...restProps
+  }: SpinnerProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const sizeMap = {
     'xs': 'loading-xs',
     'sm': 'loading-sm',
@@ -51,4 +53,4 @@
   )
 </script>
 
-<span class={spinnerClass}></span>
+<span {...dataAttributes} class={spinnerClass}></span>

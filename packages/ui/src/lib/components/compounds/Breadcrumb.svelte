@@ -8,14 +8,16 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { BreadcrumbProps } from '../../types.js'
-  import { cn } from '../../utils.js'
+  import type { BreadcrumbProps, DataAttributes } from '../../types.js'
+  import { cn, getDataAttributes } from '../../utils.js'
 
   const {
     items,
     class: className = '',
-  }: BreadcrumbProps = $props()
+    ...restProps
+  }: BreadcrumbProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const breadcrumbClass = $derived(
     cn(
       'breadcrumbs text-sm',
@@ -24,7 +26,7 @@
   )
 </script>
 
-<div class={breadcrumbClass}>
+<div {...dataAttributes} class={breadcrumbClass}>
   <ul>
     {#each items as item, index (item.href ?? `${item.label}:${index}`)}
       <li>

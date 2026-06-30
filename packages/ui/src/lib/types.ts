@@ -8,6 +8,15 @@
 import type { Snippet } from 'svelte'
 
 /**
+ * 可转发到组件根节点或主交互节点的 data-* 属性。
+ */
+export type DataAttributeValue = string | number | boolean | null | undefined
+
+export interface DataAttributes {
+  [key: `data-${string}`]: DataAttributeValue
+}
+
+/**
  * 基础变体类型
  */
 export type Variant = 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'ghost' | 'link' | 'outline'
@@ -30,7 +39,7 @@ export type Alignment = 'start' | 'center' | 'end'
 /**
  * 按钮属性
  */
-export interface ButtonProps {
+export interface ButtonProps extends DataAttributes {
   /** 变体 */
   variant?: Variant
   /** 尺寸 */
@@ -60,7 +69,7 @@ export interface ButtonProps {
 /**
  * 无样式按钮属性
  */
-export interface BareButtonProps {
+export interface BareButtonProps extends DataAttributes {
   /** 按钮类型 */
   type?: 'button' | 'submit' | 'reset'
   /** 是否禁用 */
@@ -86,7 +95,7 @@ export interface BareButtonProps {
 /**
  * 输入框属性
  */
-export interface InputProps {
+export interface InputProps extends DataAttributes {
   /** 值 */
   value?: string
   /** 占位符 */
@@ -148,7 +157,7 @@ export interface InputProps {
 /**
  * 无样式输入框属性
  */
-export interface BareInputProps {
+export interface BareInputProps extends DataAttributes {
   /** 值 */
   value?: string
   /** 占位符 */
@@ -216,7 +225,7 @@ export interface BareInputProps {
 /**
  * 文本域属性
  */
-export interface TextareaProps {
+export interface TextareaProps extends DataAttributes {
   /** 值 */
   value?: string
   /** 占位符 */
@@ -262,7 +271,7 @@ export interface SelectOption<T = string> {
 /**
  * 选择框属性
  */
-export interface SelectProps<T = string> {
+export interface SelectProps<T = string> extends DataAttributes {
   /** 值 */
   value?: T
   /** 选项（使用 options 或 children 二选一） */
@@ -292,7 +301,7 @@ export interface SelectProps<T = string> {
 /**
  * 复选框属性
  */
-export interface CheckboxProps {
+export interface CheckboxProps extends DataAttributes {
   /** 是否选中 */
   checked?: boolean
   /** 标签 */
@@ -314,7 +323,7 @@ export interface CheckboxProps {
 /**
  * 开关属性
  */
-export interface SwitchProps {
+export interface SwitchProps extends DataAttributes {
   /** 是否开启 */
   checked?: boolean
   /** 标签 */
@@ -332,7 +341,7 @@ export interface SwitchProps {
 /**
  * 原生开关输入（用于折叠/抽屉等结构要求 input 直系子元素的场景）
  */
-export interface ToggleCheckboxProps {
+export interface ToggleCheckboxProps extends DataAttributes {
   /** 是否选中 */
   checked?: boolean
   /** 表单字段名称 */
@@ -347,7 +356,7 @@ export interface ToggleCheckboxProps {
   onchange?: (checked: boolean) => void
 }
 
-export interface ToggleRadioProps {
+export interface ToggleRadioProps extends DataAttributes {
   /** 是否选中 */
   checked?: boolean
   /** 表单字段名称 */
@@ -365,7 +374,7 @@ export interface ToggleRadioProps {
 /**
  * 单选框属性
  */
-export interface RadioProps<T = string> {
+export interface RadioProps<T = string> extends DataAttributes {
   /** 值 */
   value?: T
   /** 选项 */
@@ -387,7 +396,7 @@ export interface RadioProps<T = string> {
 /**
  * 徽章属性
  */
-export interface BadgeProps {
+export interface BadgeProps extends DataAttributes {
   /** 变体 */
   variant?: Variant
   /** 尺寸 */
@@ -403,7 +412,7 @@ export interface BadgeProps {
 /**
  * 卡片属性
  */
-export interface CardProps {
+export interface CardProps extends DataAttributes {
   /** 标题 */
   title?: string
   /** 是否有边框 */
@@ -425,7 +434,7 @@ export interface CardProps {
 /**
  * 模态框属性
  */
-export interface ModalProps {
+export interface ModalProps extends DataAttributes {
   /** 是否打开 */
   open?: boolean
   /** 标题 */
@@ -463,7 +472,7 @@ export interface ModalProps {
 /**
  * 抽屉属性
  */
-export interface DrawerProps {
+export interface DrawerProps extends DataAttributes {
   /** 是否打开 */
   open?: boolean
   /** 标题 */
@@ -489,7 +498,7 @@ export interface DrawerProps {
 /**
  * 提示框属性
  */
-export interface TooltipProps {
+export interface TooltipProps extends DataAttributes {
   /** 提示内容 */
   content: string
   /** 位置 */
@@ -505,7 +514,7 @@ export interface TooltipProps {
 /**
  * 加载属性
  */
-export interface SpinnerProps {
+export interface SpinnerProps extends DataAttributes {
   /** 尺寸 */
   size?: Size
   /** 变体 */
@@ -517,7 +526,7 @@ export interface SpinnerProps {
 /**
  * 进度条属性
  */
-export interface ProgressProps {
+export interface ProgressProps extends DataAttributes {
   /** 值 (0-100) */
   value: number
   /** 最大值 */
@@ -541,7 +550,7 @@ export interface ProgressProps {
 /**
  * 警告框属性
  */
-export interface AlertProps {
+export interface AlertProps extends DataAttributes {
   /** 变体 */
   variant?: Variant
   /** 标题 */
@@ -559,7 +568,7 @@ export interface AlertProps {
 /**
  * Toast 属性
  */
-export interface ToastProps {
+export interface ToastProps extends DataAttributes {
   /** 消息 */
   message: string
   /** 变体 */
@@ -577,7 +586,7 @@ export interface ToastProps {
 /**
  * 分页属性
  */
-export interface PaginationProps {
+export interface PaginationProps extends DataAttributes {
   /** 当前页 */
   page: number
   /** 总数 */
@@ -632,7 +641,7 @@ export interface BreadcrumbItem {
 /**
  * 面包屑属性
  */
-export interface BreadcrumbProps {
+export interface BreadcrumbProps extends DataAttributes {
   /** 项目 */
   items: BreadcrumbItem[]
   /** 分隔符 */
@@ -658,7 +667,7 @@ export interface TabItem {
 /**
  * 标签页属性
  */
-export interface TabsProps {
+export interface TabsProps extends DataAttributes {
   /** 标签项 */
   items: TabItem[]
   /** 当前激活的标签 */
@@ -678,7 +687,7 @@ export interface TabsProps {
 /**
  * 头像属性
  */
-export interface AvatarProps {
+export interface AvatarProps extends DataAttributes {
   /** 图片地址 */
   src?: string
   /** 替代文本 */
@@ -716,7 +725,7 @@ export interface DropdownItem {
 /**
  * 下拉菜单属性
  */
-export interface DropdownProps {
+export interface DropdownProps extends DataAttributes {
   /** 菜单项 */
   items: DropdownItem[]
   /** 触发方式 */
@@ -738,7 +747,7 @@ export interface DropdownProps {
 /**
  * 表单属性
  */
-export interface FormProps {
+export interface FormProps extends DataAttributes {
   /** 表单 ID */
   id?: string
   /** 自定义类名 */
@@ -760,7 +769,7 @@ export interface FormProps {
 /**
  * 表单字段属性
  */
-export interface FormFieldProps {
+export interface FormFieldProps extends DataAttributes {
   /** 标签 */
   label?: string
   /** 字段名 */
@@ -780,7 +789,7 @@ export interface FormFieldProps {
 /**
  * 骨架屏属性
  */
-export interface SkeletonProps {
+export interface SkeletonProps extends DataAttributes {
   /** 变体 */
   variant?: 'text' | 'title' | 'avatar' | 'thumbnail' | 'button' | 'input'
   /** 宽度 */
@@ -800,7 +809,7 @@ export interface SkeletonProps {
 /**
  * 空状态属性
  */
-export interface EmptyProps {
+export interface EmptyProps extends DataAttributes {
   /** 标题 */
   title?: string
   /** 描述 */
@@ -820,7 +829,7 @@ export interface EmptyProps {
 /**
  * 结果页属性
  */
-export interface ResultProps {
+export interface ResultProps extends DataAttributes {
   /** 状态 */
   status?: 'success' | 'error' | 'warning' | 'info'
   /** 标题 */
@@ -840,7 +849,7 @@ export interface ResultProps {
 /**
  * 确认对话框属性
  */
-export interface ConfirmProps {
+export interface ConfirmProps extends DataAttributes {
   /** 是否打开 */
   open?: boolean
   /** 标题 */
@@ -866,7 +875,7 @@ export interface ConfirmProps {
 /**
  * 标签属性
  */
-export interface TagProps {
+export interface TagProps extends DataAttributes {
   /** 文本 */
   text?: string
   /** 变体 */
@@ -890,7 +899,7 @@ export interface TagProps {
 /**
  * 标签输入框属性
  */
-export interface TagInputProps {
+export interface TagInputProps extends DataAttributes {
   /** 标签列表 */
   tags?: string[]
   /** 占位符 */
@@ -924,7 +933,7 @@ export interface StepItem {
 /**
  * 步骤条属性
  */
-export interface StepsProps {
+export interface StepsProps extends DataAttributes {
   /** 步骤列表 */
   items?: StepItem[]
   /** 当前步骤 */
@@ -944,7 +953,7 @@ export interface StepsProps {
 /**
  * 图标按钮属性
  */
-export interface IconButtonProps {
+export interface IconButtonProps extends DataAttributes {
   /** 图标（受信任的内联 SVG 字符串或 Snippet） */
   icon?: string | Snippet
   /** 标签（无障碍） */
@@ -972,7 +981,7 @@ export interface IconButtonProps {
 /**
  * 弹出层属性
  */
-export interface PopoverProps {
+export interface PopoverProps extends DataAttributes {
   /** 是否打开 */
   open?: boolean
   /** 位置 */

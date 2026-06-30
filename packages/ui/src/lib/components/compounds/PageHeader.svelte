@@ -18,6 +18,8 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
+  import type { DataAttributes } from '../../types.js'
+  import { getDataAttributes } from '../../utils.js'
 
   interface Props {
     title: string
@@ -26,10 +28,12 @@
     class?: string
   }
 
-  const { title, description, actions, class: className = '' }: Props = $props()
+  const { title, description, actions, class: className = '', ...restProps }: Props & DataAttributes = $props()
+
+  const dataAttributes = $derived(getDataAttributes(restProps))
 </script>
 
-<div class='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 {className}'>
+<div {...dataAttributes} class='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 {className}'>
   <div>
     <h1 class='text-xl font-semibold tracking-tight'>{title}</h1>
     {#if description}

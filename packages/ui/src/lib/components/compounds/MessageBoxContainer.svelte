@@ -9,10 +9,15 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../types.js'
   import { messageBox } from '../../messagebox.svelte.js'
+  import { getDataAttributes } from '../../utils.js'
   import MessageBoxDialog from './MessageBoxDialog.svelte'
+
+  const { ...restProps }: DataAttributes = $props()
+  const dataAttributes = $derived(getDataAttributes(restProps))
 </script>
 
 {#each messageBox.items as item (item.id)}
-  <MessageBoxDialog {item} />
+  <MessageBoxDialog {...dataAttributes} {item} />
 {/each}

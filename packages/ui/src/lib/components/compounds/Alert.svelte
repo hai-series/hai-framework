@@ -3,9 +3,9 @@
   警告框组件，使用 tabler icon 替代 emoji，更精致。
 -->
 <script lang='ts'>
-  import type { AlertProps } from '../../types.js'
+  import type { AlertProps, DataAttributes } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn, getAlertVariantClass } from '../../utils.js'
+  import { cn, getAlertVariantClass, getDataAttributes } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
 
   const {
@@ -15,8 +15,10 @@
     class: className = '',
     onclose,
     children,
-  }: AlertProps = $props()
+    ...restProps
+  }: AlertProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let visible = $state(true)
 
   const alertClass = $derived(
@@ -42,7 +44,7 @@
 </script>
 
 {#if visible}
-  <div class={alertClass} role='alert'>
+  <div {...dataAttributes} class={alertClass} role='alert'>
     <span class='{iconMap[variant] ?? iconMap.info} size-5 shrink-0'></span>
 
     <div>

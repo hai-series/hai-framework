@@ -8,7 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { ToggleRadioProps } from '../../types.js'
+  import type { DataAttributes, ToggleRadioProps } from '../../types.js'
+  import { getDataAttributes } from '../../utils.js'
 
   let {
     checked = $bindable(false),
@@ -17,20 +18,22 @@
     disabled = false,
     class: className = '',
     onchange,
-  }: ToggleRadioProps = $props()
+    ...restProps
+  }: ToggleRadioProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   function handleChange(e: Event & { currentTarget: HTMLInputElement }) {
     checked = e.currentTarget.checked
     onchange?.(checked)
   }
 </script>
 
-<input
-  {id}
-  {name}
-  type='radio'
-  class={className}
-  {disabled}
-  checked={checked}
-  onchange={handleChange}
+<input {...dataAttributes}
+       {id}
+       {name}
+       type='radio'
+       class={className}
+       {disabled}
+       checked={checked}
+       onchange={handleChange}
 />

@@ -20,7 +20,8 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { cn } from '../../../utils.js'
+  import type { DataAttributes } from '../../../types.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
 
   type SettingsSection = {
@@ -40,6 +41,7 @@
     children,
     headerActions,
     class: className = '',
+    ...restProps
   }: {
     title?: string
     description?: string
@@ -49,8 +51,9 @@
     children?: Snippet
     headerActions?: Snippet
     class?: string
-  } = $props()
+  } & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   function navItemClass(id: string): string {
     return cn(
       'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
@@ -61,7 +64,7 @@
   }
 </script>
 
-<div class={cn('space-y-5', className)}>
+<div {...dataAttributes} class={cn('space-y-5', className)}>
   <!-- 标题区 -->
   {#if title || description || headerActions}
     <div class='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>

@@ -9,8 +9,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { TextareaProps } from '../../types.js'
-  import { cn, getInputSizeClass } from '../../utils.js'
+  import type { DataAttributes, TextareaProps } from '../../types.js'
+  import { cn, getDataAttributes, getInputSizeClass } from '../../utils.js'
 
   let {
     value = $bindable(''),
@@ -27,8 +27,10 @@
     id,
     name,
     oninput,
-  }: TextareaProps = $props()
+    ...restProps
+  }: TextareaProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let textareaRef: HTMLTextAreaElement | undefined = $state()
 
   const textareaClass = $derived(
@@ -71,7 +73,7 @@
   }
 </script>
 
-<div class='fieldset w-full'>
+<div {...dataAttributes} class='fieldset w-full'>
   <textarea
     bind:this={textareaRef}
     {id}

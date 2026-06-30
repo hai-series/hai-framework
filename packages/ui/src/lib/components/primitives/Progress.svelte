@@ -8,8 +8,8 @@
   =============================================================================
 -->
 <script lang='ts'>
-  import type { ProgressProps } from '../../types.js'
-  import { cn, getProgressVariantClass } from '../../utils.js'
+  import type { DataAttributes, ProgressProps } from '../../types.js'
+  import { cn, getDataAttributes, getProgressVariantClass } from '../../utils.js'
 
   const {
     value,
@@ -18,8 +18,10 @@
     variant = 'primary',
     showLabel = false,
     class: className = '',
-  }: ProgressProps = $props()
+    ...restProps
+  }: ProgressProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   const sizeMap = {
     'xs': 'h-1',
     'sm': 'h-2',
@@ -43,7 +45,7 @@
   )
 </script>
 
-<div class='w-full'>
+<div {...dataAttributes} class='w-full'>
   <progress
     class={progressClass}
     {value}

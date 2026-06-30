@@ -9,9 +9,10 @@
   =============================================================================
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { ForgotPasswordFormData, ForgotPasswordFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
-  import { cn } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
@@ -30,8 +31,10 @@
     onsubmit,
     header,
     footer,
-  }: ForgotPasswordFormProps = $props()
+    ...restProps
+  }: ForgotPasswordFormProps & DataAttributes = $props()
 
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let email = $state('')
   let phone = $state('')
 
@@ -65,7 +68,7 @@
   }
 </script>
 
-<form class={formClass} onsubmit={handleSubmit}>
+<form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
     <h2 class='text-2xl font-semibold text-center mb-4'>{uiM('forgot_password_title')}</h2>
