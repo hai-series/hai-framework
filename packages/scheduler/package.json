@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/scheduler",
   "type": "module",
-  "version": "0.1.0-alpha.29",
+  "version": "0.1.0-alpha.30",
   "description": "Hai Framework task scheduling module with cron, function, and API jobs.",
   "license": "Apache-2.0",
   "exports": {
