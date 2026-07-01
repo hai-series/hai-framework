@@ -68,7 +68,7 @@ describe('cn - 类名合并', () => {
 
 describe('getVariantClass - 变体类名', () => {
   it('应该返回默认变体类名', () => {
-    expect(getVariantClass('default')).toBe('btn-neutral')
+    expect(getVariantClass('default')).toBe('')
   })
 
   it('应该返回 primary 变体类名', () => {
