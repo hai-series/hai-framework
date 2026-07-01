@@ -135,7 +135,7 @@ components/
 | `Input`          | 输入框       | `type`, `value`, `size`, `error`, `validationMessage`              |
 | `BareInput`      | 无样式输入框 | `type`, `class`, `accept`, `multiple`                              |
 | `Textarea`       | 文本域       | `value`, `rows`, `size`, `autoResize`, `error`                     |
-| `Select`         | 下拉选择     | `options`, `value`, `placeholder`, `size`                          |
+| `Select`         | 下拉选择     | `options`, `value`, `placeholder`, `size`, `clearable`, `filterable` |
 | `Checkbox`       | 复选框       | `checked`, `label`, `size`, `indeterminate`                        |
 | `Switch`         | 开关         | `checked`, `label`, `size`                                         |
 | `Radio`          | 单选组       | `options`, `value`, `direction`, `size`                            |
@@ -338,6 +338,24 @@ components/
 
 <button onclick={notify}>通知</button>
 <ToastContainer />
+```
+
+### Message 消息提示
+
+```svelte
+<script>
+  import { message, MessageContainer } from '@h-ai/ui'
+
+  function showMessage() {
+    message.success('操作成功')
+    message.error('操作失败')
+    message.warning('请注意')
+    message.info('提示信息', 5000)
+  }
+</script>
+
+<button onclick={showMessage}>消息</button>
+<MessageContainer />
 ```
 
 ### 典型 CRUD 页面

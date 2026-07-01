@@ -274,7 +274,7 @@ export interface SelectOption<T = string> {
 export interface SelectProps<T = string> extends DataAttributes {
   /** 值 */
   value?: T
-  /** 选项（使用 options 或 children 二选一） */
+  /** 选项 */
   options?: SelectOption<T>[]
   /** 占位符 */
   placeholder?: string
@@ -284,18 +284,18 @@ export interface SelectProps<T = string> extends DataAttributes {
   disabled?: boolean
   /** 是否必填 */
   required?: boolean
+  /** 是否可清空 */
+  clearable?: boolean
+  /** 是否可筛选（启用后可在输入框内输入过滤选项） */
+  filterable?: boolean
   /** 错误消息 */
   error?: string
-  /** 自定义验证消息（用于覆盖浏览器原生验证提示） */
-  validationMessage?: string
   /** 自定义类名 */
   class?: string
   /** 元素 ID */
   id?: string
   /** 变化事件 */
   onchange?: (value: T) => void
-  /** 子元素（原生 option 元素） */
-  children?: Snippet
 }
 
 /**
