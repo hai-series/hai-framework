@@ -28,9 +28,8 @@
   }: ModalProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
-  // modalElement 持有原生 dialog 引用；
-  // 只有调用 `showModal()` 进入 top-layer 后，弹框才不会被父级布局和 overflow 裁剪。
-  let modalElement: HTMLDialogElement | undefined = $state()
+  // modalElement 持有 overlay 容器引用；不再依赖原生 `<dialog>`，改用 fixed + z-index 叠加。
+  let modalElement: HTMLDivElement | undefined = $state()
 
   // 标题区仅在显式提供标题或自定义 header 时出现；
   // 仅需关闭按钮的场景改为右上角悬浮按钮，避免业务侧额外占一整行头部。
@@ -111,37 +110,17 @@
     }
   }
 
-  function handleDialogCancel(event: Event) {
-    // 原生 dialog 在按下 Escape 时会先触发 cancel；
-    // 这里统一接管关闭逻辑，避免浏览器直接 close 后跳过组件自己的 onclose 回调。
-    event.preventDefault()
-    if (closeOnEscape) {
-      handleClose()
-    }
-  }
-
-  $effect(() => {
-    if (!modalElement) {
-      return
-    }
-
-    if (open) {
-      if (!modalElement.open) {
-        modalElement.showModal()
-      }
-      return
-    }
-
-    if (modalElement.open) {
-      modalElement.close()
-    }
-  })
 </script>
 
-<dialog {...dataAttributes}
-        bind:this={modalElement}
-        class='hai-modal'
-        oncancel={handleDialogCancel}
+<div {...dataAttributes}
+     bind:this={modalElement}
+     class='hai-modal'
+     style:display={open ? '' : 'none'}
+     aria-hidden={open ? undefined : 'true'}
+     onkeydown={(e) => {
+       if (closeOnEscape && e.key === 'Escape')
+         handleClose()
+     }}
 >
   <div
     class='hai-modal__viewport'
@@ -223,11 +202,10 @@
       {/if}
     </div>
   </div>
-</dialog>
+</div>
 
 <style>
-  dialog.hai-modal,
-  dialog.hai-modal:modal {
+  .hai-modal {
     margin: 0;
     padding: 0;
     border: 0;
@@ -237,17 +215,23 @@
     box-sizing: border-box;
   }
 
+  .hai-modal {
+    position: fixed;
+    inset: 0;
+    z-index: var(--hai-z-modal, 1100);
+    display: block;
+    pointer-events: none;
+  }
+
   .hai-modal__viewport {
     position: fixed;
     inset: 0;
     display: grid;
     place-items: center;
     padding: clamp(1rem, 2.6vw, 2rem);
-  }
-
-  dialog.hai-modal::backdrop {
+    pointer-events: auto;
     background: rgb(15 23 42 / 0.26);
-    background: color-mix(in srgb, var(--color-base-content) 22%, transparent);
+    background: color-mix(in srgb, var(--color-base-content) 15%, transparent);
     backdrop-filter: blur(2px);
   }
 
@@ -373,7 +357,7 @@
   }
 
   @media (max-width: 768px) {
-    dialog.hai-modal {
+    .hai-modal {
       padding: 0.85rem;
     }
 

@@ -89,6 +89,11 @@ input::-webkit-credentials-auto-fill-button {
   color: oklch(0.55 0 0);
 }
 
+/* ─── DaisyUI 组件微调：fieldset-legend 间距修正 ─── */
+.fieldset-legend {
+  justify-content: flex-start !important;
+}
+
 .modal-box {
   border-radius: 0.75rem;
 }
