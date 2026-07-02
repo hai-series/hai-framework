@@ -105,8 +105,8 @@
     }
 
     if (isDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
     }
   })
 
@@ -114,16 +114,13 @@
     if (disabled)
       return
 
-    if (isDropdownOpen) {
-      isDropdownOpen = false
-      filterText = ''
-    }
-    else {
+    if (!isDropdownOpen) {
       isDropdownOpen = true
-      if (filterable) {
-        // filterable 模式下打开时聚焦输入框
-        setTimeout(() => inputRef?.focus(), 0)
-      }
+    }
+
+    if (filterable) {
+      // filterable 模式下点击后始终聚焦输入框，保持下拉可筛状态
+      setTimeout(() => inputRef?.focus(), 0)
     }
   }
 
