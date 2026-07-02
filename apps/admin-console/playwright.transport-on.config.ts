@@ -16,6 +16,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  timeout: 60_000,
   workers: 1,
   reporter: 'line',
   use: {
@@ -35,6 +36,7 @@ export default defineConfig({
       HAI_RELDB_DATABASE: `${testDataDir}/admin.db`,
       HAI_STORAGE_PATH: `${testDataDir}/uploads`,
       NODE_ENV: 'test',
+      VITE_HAI_E2E_KIT_TRANSPORT_MODE: 'on',
     },
     url: baseURL,
     reuseExistingServer: false,

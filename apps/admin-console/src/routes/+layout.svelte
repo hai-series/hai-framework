@@ -17,6 +17,10 @@
     children: Snippet
   }
 
+  interface BrowserTransportDebugState {
+    __haiAdminTransportInstalled?: boolean
+  }
+
   const { children }: Props = $props()
 
   // 浏览器端一次性初始化：
@@ -25,6 +29,9 @@
   if (browser) {
     setGlobalLocale(getLocale())
     kit.client.installBrowserTransport(adminConsoleKitConfig, { crypto })
+
+    // E2E 需要一个稳定、同步可观测的标记来判断浏览器端 transport 已安装完成。
+    ;(window as Window & BrowserTransportDebugState).__haiAdminTransportInstalled = adminConsoleKitConfig.transport !== false
   }
 </script>
 

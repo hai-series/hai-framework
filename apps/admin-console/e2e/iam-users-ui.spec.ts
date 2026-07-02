@@ -144,8 +144,8 @@ test.describe('IAM Users UI', () => {
     await expect(drawer.locator('#display_name')).toBeVisible()
     // 角色多选区域
     await expect(drawer.locator('input[type="checkbox"]').first()).toBeVisible()
-    // 状态选择
-    await expect(drawer.locator('select').first()).toBeVisible()
+    // 状态选择（CrudEditPanel 的 Select 已升级为自定义 combobox，不再渲染原生 <select>）
+    await expect(drawer.locator('[role="combobox"]').first()).toBeVisible()
   })
 
   test('新建对话框可关闭', async ({ page, request }) => {
