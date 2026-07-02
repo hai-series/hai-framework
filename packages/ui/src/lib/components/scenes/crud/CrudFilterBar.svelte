@@ -170,12 +170,13 @@
           size='sm'
           class='h-8 border-base-content/20 bg-base-100 shadow-none'
           value={String(filterValues[field.id] ?? '')}
+          options={[
+            { value: '', label: uiM('crud_filter_all') },
+            { value: 'true', label: uiM('crud_filter_yes') },
+            { value: 'false', label: uiM('crud_filter_no') },
+          ]}
           onchange={(value: string) => handleFilterChange(field.id, value)}
-        >
-          <option value="">{uiM('crud_filter_all')}</option>
-          <option value='true'>{uiM('crud_filter_yes')}</option>
-          <option value='false'>{uiM('crud_filter_no')}</option>
-        </Select>
+        />
       </div>
     {:else if isDateField(field)}
       <div class='w-36 shrink-0'>
@@ -207,13 +208,12 @@
           size='sm'
           class='h-8 border-base-content/20 bg-base-100 shadow-none'
           value={String(filterValues[field.id] ?? '')}
+          options={[
+            { value: '', label: uiM('crud_filter_all') },
+            ...opts.map(opt => ({ value: String(opt.value), label: opt.label })),
+          ]}
           onchange={(value: string) => handleFilterChange(field.id, value)}
-        >
-          <option value="">{uiM('crud_filter_all')}</option>
-          {#each opts as opt (String(opt.value))}
-            <option value={String(opt.value)}>{opt.label}</option>
-          {/each}
-        </Select>
+        />
       </div>
     {:else if isTextField(field)}
       <div class='w-44 shrink-0'>

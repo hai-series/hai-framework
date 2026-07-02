@@ -171,13 +171,12 @@
           size={controlSize}
           value={String(fieldValue ?? '')}
           disabled={submitting || isReadonly}
+          options={[
+            { value: '', label: placeholder || uiM('crud_filter_all') },
+            ...opts.map(opt => ({ value: String(opt.value), label: opt.label })),
+          ]}
           onchange={value => updateField(field.id, value)}
-        >
-          <option value="">{placeholder || uiM('crud_filter_all')}</option>
-          {#each opts as opt (String(opt.value))}
-            <option value={String(opt.value)}>{opt.label}</option>
-          {/each}
-        </Select>
+        />
       </FormField>
 
     {:else if field.type === 'multi-select'}

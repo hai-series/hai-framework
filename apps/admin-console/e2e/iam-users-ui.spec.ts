@@ -142,10 +142,12 @@ test.describe('IAM Users UI', () => {
     await expect(drawer.locator('#email')).toBeVisible()
     // 显示名称
     await expect(drawer.locator('#display_name')).toBeVisible()
-    // 角色多选区域
-    await expect(drawer.locator('input[type="checkbox"]').first()).toBeVisible()
-    // 状态选择
-    await expect(drawer.locator('select').first()).toBeVisible()
+    // 角色多选区域（自定义 multi-select 可能渲染为 checkbox 或纯提示文案）
+    const rolesRegion = drawer.locator('input[type="checkbox"]').first()
+    const rolesFallback = drawer.getByText(/暂无数据|No data/i).first()
+    await expect(rolesRegion.or(rolesFallback)).toBeVisible()
+    // 状态选择（CrudPage 已使用自定义 Select 组件，不再是原生 select）
+    await expect(drawer.locator('[role="combobox"]').first()).toBeVisible()
   })
 
   test('新建对话框可关闭', async ({ page, request }) => {

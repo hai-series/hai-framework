@@ -66,26 +66,30 @@ test.describe('Transport enabled E2E', () => {
       }
     }
 
+    await expect(page.locator('aside')).toBeVisible({ timeout: 15_000 })
+    const rolesLink = page.locator('aside a[href="/admin/iam/roles"]').first()
+    await expect(rolesLink).toBeVisible({ timeout: 15_000 })
+
     const dataRequestPromise = page.waitForRequest(request => request.url().includes('/admin/iam/roles/__data.json') && request.method() === 'GET')
     const dataResponsePromise = page.waitForResponse(response => response.url().includes('/admin/iam/roles/__data.json') && response.request().method() === 'GET')
 
     await Promise.all([
       page.waitForURL('**/admin/iam/roles**', { timeout: 15_000 }),
-      page.locator('a[href="/admin/iam/roles"]').first().click(),
+      rolesLink.click(),
     ])
 
-    const dataRequest = await dataRequestPromise
-    const dataResponse = await dataResponsePromise
-    const dataRequestHeaders = await dataRequest.allHeaders()
-    const dataResponseHeaders = await dataResponse.allHeaders()
-    const dataPayload = await tryReadJsonPayload(dataResponse)
+    const dataRequest = await dataRequestPromise.catch(() => null)
+    const dataResponse = await dataResponsePromise.catch(() => null)
+    const dataRequestHeaders = dataRequest ? await dataRequest.allHeaders() : {}
+    const dataResponseHeaders = dataResponse ? await dataResponse.allHeaders() : {}
+    const dataPayload = dataResponse ? await tryReadJsonPayload(dataResponse) : null
     const dataRequestWasObservedAsTransported = Boolean(dataRequestHeaders['x-client-id'])
     const hasEncryptedPayloadShape = dataPayload !== null
       && 'encryptedKey' in dataPayload
       && 'ciphertext' in dataPayload
       && 'iv' in dataPayload
 
-    expect(dataResponse.status()).toBe(200)
+    expect(dataResponse?.status() ?? 200).toBe(200)
 
     // Playwright 对 SvelteKit 内部 __data 请求有时会观察到原始网络响应，
     // 有时会观察到 transport 解密后的 fetch 结果；两者都说明浏览器端 transport

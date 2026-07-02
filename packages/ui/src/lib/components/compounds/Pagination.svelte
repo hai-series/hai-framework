@@ -105,12 +105,9 @@
           <Select
             size={controlSize}
             value={String(pageSize)}
+            options={pageSizeOptions.map(opt => ({ value: String(opt), label: String(opt) }))}
             onchange={handlePageSizeChange}
-          >
-            {#each pageSizeOptions as opt (opt)}
-              <option value={String(opt)}>{opt}</option>
-            {/each}
-          </Select>
+          />
         </div>
       </div>
     {/if}

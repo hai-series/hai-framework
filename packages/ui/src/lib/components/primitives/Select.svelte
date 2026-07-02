@@ -96,17 +96,20 @@
   )
 
   // 点击外部关闭下拉框
-  $effect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef && !dropdownRef.contains(e.target as Node)) {
-        isDropdownOpen = false
-        filterText = ''
-      }
+  function handleClickOutside(e: MouseEvent) {
+    if (dropdownRef && !dropdownRef.contains(e.target as Node)) {
+      isDropdownOpen = false
+      filterText = ''
     }
+  }
 
+  $effect(() => {
     if (isDropdownOpen) {
       document.addEventListener('click', handleClickOutside)
-      return () => document.removeEventListener('click', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
     }
   })
 
