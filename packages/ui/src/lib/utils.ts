@@ -46,7 +46,7 @@ export function getDataAttributes(props: DataAttributes | Record<string, unknown
  */
 const VARIANT_MAPS: Record<string, Record<Variant, string>> = {
   btn: {
-    default: 'btn-neutral',
+    default: '',
     primary: 'btn-primary',
     secondary: 'btn-secondary',
     success: 'btn-success',

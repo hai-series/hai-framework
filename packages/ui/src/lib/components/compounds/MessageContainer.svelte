@@ -5,9 +5,7 @@
   轻量消息提示容器，渲染 message store 中的消息条目。
   视觉风格：顶部居中、带类型图标、自动滑入滑出。
 
-  叠加策略与 ToastContainer 一致：
-    - 有打开的 modal dialog 时，寄宿到 dialog 内部（top layer）；
-    - 否则寄宿到 <body> 以 popover 进入 top layer。
+  叠加策略：消息层始终挂载到 `document.body`，使用 fixed overlay + 超高 z-index（高于 Modal 的 `--hai-z-modal`），保证不被任何弹层遮挡；空消息时隐藏容器避免拦截交互。
   =============================================================================
 -->
 <script lang='ts'>
@@ -36,95 +34,67 @@
     error: 'text-error',
   }
 
+  /** 文案颜色映射 */
+  const textColorMap: Record<string, string> = {
+    info: 'text-info',
+    success: 'text-success',
+    warning: 'text-warning',
+    error: 'text-error',
+  }
+
   /** 背景/边框映射 */
   const bgMap: Record<string, string> = {
-    info: 'border-info/20 bg-info/5',
-    success: 'border-success/20 bg-success/5',
-    warning: 'border-warning/20 bg-warning/5',
-    error: 'border-error/20 bg-error/5',
+    info: 'border-info/30 bg-info/15',
+    success: 'border-success/30 bg-success/15',
+    warning: 'border-warning/30 bg-warning/15',
+    error: 'border-error/30 bg-error/15',
   }
 
   let layerElement: HTMLDivElement | undefined = $state()
-
   const hasItems = $derived(message.items.length > 0)
-
-  /** 找到最顶层处于打开状态的原生 modal dialog。 */
-  function findTopModalDialog(): HTMLDialogElement | null {
-    if (typeof document === 'undefined')
-      return null
-    const dialogs = document.querySelectorAll<HTMLDialogElement>('dialog')
-    let top: HTMLDialogElement | null = null
-    for (const dialog of dialogs) {
-      if (dialog.open && typeof dialog.matches === 'function' && dialog.matches(':modal')) {
-        top = dialog
-      }
-    }
-    return top
-  }
 
   function safeShowPopover(el: HTMLElement) {
     try {
-      if (typeof el.showPopover === 'function' && el.isConnected && !el.matches(':popover-open')) {
+      if (typeof el.showPopover === 'function' && el.isConnected && !el.matches(':popover-open'))
         el.showPopover()
-      }
     }
-    catch { /* 忽略异常 */ }
+    catch {
+    // 元素未连接或重复调用时忽略。
+    }
   }
 
   function safeHidePopover(el: HTMLElement) {
     try {
-      if (typeof el.hidePopover === 'function' && el.matches(':popover-open')) {
+      if (typeof el.hidePopover === 'function' && el.matches(':popover-open'))
         el.hidePopover()
-      }
     }
-    catch { /* 忽略异常 */ }
+    catch {
+    // 同上，忽略异常。
+    }
   }
 
-  function relocate() {
+  $effect(() => {
     const el = layerElement
     if (!el)
       return
-
-    const modal = hasItems ? findTopModalDialog() : null
-
-    if (modal) {
-      safeHidePopover(el)
-      if (el.hasAttribute('popover'))
-        el.removeAttribute('popover')
-      if (el.parentElement !== modal)
-        modal.appendChild(el)
-      return
-    }
-
-    if (el.parentElement !== document.body)
-      document.body.appendChild(el)
-    if (!el.hasAttribute('popover'))
-      el.setAttribute('popover', 'manual')
-    if (hasItems) {
+    if (hasItems)
       safeShowPopover(el)
-    }
-    else {
+    else
       safeHidePopover(el)
-    }
-  }
+  })
 
   onMount(() => {
-    relocate()
-    const observer = new MutationObserver(() => relocate())
-    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] })
+    const el = layerElement
+    if (el && document.body && el.parentElement !== document.body)
+      document.body.appendChild(el)
+
     return () => {
-      observer.disconnect()
       const el = layerElement
       if (el) {
         safeHidePopover(el)
         el.remove()
       }
     }
-  })
-
-  $effect(() => {
-    void hasItems
-    relocate()
   })
 </script>
 
@@ -135,6 +105,7 @@
         class={cn(
           'hai-message-item alert shadow-lg border',
           bgMap[item.type] ?? bgMap.info,
+          textColorMap[item.type] ?? textColorMap.info,
         )}
         role='alert'
       >
@@ -161,22 +132,24 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    max-width: none;
-    max-height: none;
     margin: 0;
     padding: 0;
     border: 0;
     background: transparent;
     overflow: visible;
     pointer-events: none;
-    z-index: 9999;
+    z-index: 2147483647;
   }
 
   .hai-message-stack {
     position: absolute;
     top: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    width: max-content;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;

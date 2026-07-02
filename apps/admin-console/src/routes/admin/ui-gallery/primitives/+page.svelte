@@ -16,6 +16,9 @@
   let inputVal = $state('')
   let textareaVal = $state('')
   let selectVal = $state('')
+  let selectClearVal = $state('')
+  let selectFilterVal = $state('')
+  let selectBothVal = $state('')
   let checkboxVal = $state(false)
   const checkboxIndeterminate = $state(true)
   let switchVal = $state(true)
@@ -77,6 +80,10 @@
 <Select options={selectOpts} placeholder='小号' size='sm' />
 <Select options={selectOpts} placeholder='大号' size='lg' />
 <Select options={selectOpts} placeholder='请选择' error='请选择一项' />`
+
+  const codeSelectClearFilter = `<Select bind:value options={selectOpts} placeholder='可清空' clearable />
+<Select bind:value options={selectOpts} placeholder='可筛选' filterable />
+<Select bind:value options={selectOpts} placeholder='可清空+可筛选' clearable filterable />`
 
   const codeToggle = `<ToggleCheckbox bind:checked={toggleCheck} />
 <ToggleInput bind:checked={toggleInput} />
@@ -326,6 +333,23 @@
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-err'>错误状态</label>
           <Select id='g-sel-err' options={selectOpts} placeholder='请选择' error='请选择一项' />
+        </div>
+      </div>
+    </DemoCard>
+
+    <DemoCard title='Select clearable & filterable' description='可清空、可筛选下拉框' code={codeSelectClearFilter}>
+      <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
+        <div>
+          <label class='text-sm font-medium mb-1 block' for='g-sel-clear'>clearable</label>
+          <Select id='g-sel-clear' bind:value={selectClearVal} options={selectOpts} placeholder='可清空' clearable />
+        </div>
+        <div>
+          <label class='text-sm font-medium mb-1 block' for='g-sel-filter'>filterable</label>
+          <Select id='g-sel-filter' bind:value={selectFilterVal} options={selectOpts} placeholder='可筛选' filterable />
+        </div>
+        <div>
+          <label class='text-sm font-medium mb-1 block' for='g-sel-both'>clearable + filterable</label>
+          <Select id='g-sel-both' bind:value={selectBothVal} options={selectOpts} placeholder='可清空+可筛选' clearable filterable />
         </div>
       </div>
     </DemoCard>
