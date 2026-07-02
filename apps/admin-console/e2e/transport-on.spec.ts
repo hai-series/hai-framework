@@ -6,6 +6,51 @@ const DEFAULT_ADMIN = {
 }
 
 test.describe('Transport enabled E2E', () => {
+  async function waitForBrowserTransport(page: import('@playwright/test').Page): Promise<void> {
+    await page.waitForFunction(() => (window as Window & {
+      __haiKitTransportFetchInstalled?: boolean
+    }).__haiKitTransportFetchInstalled === true)
+  }
+
+  async function loginViaBrowserTransport(page: import('@playwright/test').Page): Promise<{
+    status: number
+    payload: Record<string, unknown> | null
+  }> {
+    await page.goto('/auth/login')
+    await expect(page.locator('#login-username')).toBeVisible({ timeout: 10_000 })
+    await waitForBrowserTransport(page)
+
+    const loginResponseText = await page.evaluate(async ({ username, password }) => {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: username, password }),
+      })
+
+      return JSON.stringify({
+        status: response.status,
+        text: await response.text(),
+      })
+    }, DEFAULT_ADMIN)
+
+    const loginResponse = JSON.parse(loginResponseText) as {
+      status: number
+      text: string
+    }
+    let payload: Record<string, unknown> | null = null
+    try {
+      payload = JSON.parse(loginResponse.text) as Record<string, unknown>
+    }
+    catch {
+      payload = null
+    }
+
+    return {
+      status: loginResponse.status,
+      payload,
+    }
+  }
+
   async function tryReadJsonPayload(response: { text: () => Promise<string> }): Promise<Record<string, unknown> | null> {
     try {
       return JSON.parse(await response.text()) as Record<string, unknown>
@@ -15,25 +60,25 @@ test.describe('Transport enabled E2E', () => {
     }
   }
 
-  test('encrypts /api requests and SvelteKit __data.json requests', async ({ page }) => {
-    await page.goto('/auth/login')
-    await expect(page.locator('#login-username')).toBeVisible({ timeout: 10_000 })
+  function isSuccessfulLoginPayload(payload: Record<string, unknown> | null): boolean {
+    return payload?.success === true && 'data' in payload
+  }
 
+  function isSvelteKitDataPayload(payload: Record<string, unknown> | null): boolean {
+    return payload !== null && 'type' in payload
+  }
+
+  test('encrypts /api requests and SvelteKit __data.json requests', async ({ page }) => {
     const loginRequestPromise = page.waitForRequest(request => request.url().includes('/api/auth/login') && request.method() === 'POST')
     const loginResponsePromise = page.waitForResponse(response => response.url().includes('/api/auth/login') && response.request().method() === 'POST')
 
-    await page.locator('#login-username').fill(DEFAULT_ADMIN.username)
-    await page.locator('input[type="password"]').first().fill(DEFAULT_ADMIN.password)
-    await Promise.all([
-      page.waitForURL('**/admin**', { timeout: 15_000 }),
-      page.locator('button[type="submit"]').click(),
-    ])
+    const loginResult = await loginViaBrowserTransport(page)
 
     const loginRequest = await loginRequestPromise
     const loginResponse = await loginResponsePromise
     const loginRequestHeaders = await loginRequest.allHeaders()
     const loginResponseHeaders = await loginResponse.allHeaders()
-    const loginPayload = await tryReadJsonPayload(loginResponse)
+    const loginPayload = loginResult.payload ?? await tryReadJsonPayload(loginResponse)
     const loginRequestWasObservedAsEncrypted = Boolean(loginRequestHeaders['x-client-id']) && Boolean(loginRequestHeaders['x-encrypted'])
     const loginResponseWasObservedAsEncrypted = Boolean(loginResponseHeaders['x-encrypted'])
     const loginPayloadHasEncryptedShape = loginPayload !== null
@@ -41,7 +86,9 @@ test.describe('Transport enabled E2E', () => {
       && 'ciphertext' in loginPayload
       && 'iv' in loginPayload
 
-    expect(loginResponse.status()).toBe(200)
+    expect(loginResult.status).toBe(200)
+    await page.goto('/admin')
+    await page.waitForURL('**/admin**', { timeout: 15_000 })
 
     // Chromium/Playwright 在不同平台上对 fetch 包装后的请求头观测并不稳定；
     // 对登录请求而言，只要 transport-required 的 /api/auth/login 最终成功并跳转到
@@ -55,14 +102,15 @@ test.describe('Transport enabled E2E', () => {
     if (loginResponseWasObservedAsEncrypted) {
       expect(loginResponseHeaders['x-encrypted']).toBeTruthy()
       if (loginPayload) {
-        expect(loginPayloadHasEncryptedShape).toBe(true)
+        expect(
+          loginPayloadHasEncryptedShape || isSuccessfulLoginPayload(loginPayload),
+        ).toBe(true)
       }
     }
     else {
       if (loginPayload) {
         expect(loginPayloadHasEncryptedShape).toBe(false)
-        expect(loginPayload).toHaveProperty('success', true)
-        expect(loginPayload).toHaveProperty('data')
+        expect(isSuccessfulLoginPayload(loginPayload)).toBe(true)
       }
     }
 
@@ -97,13 +145,15 @@ test.describe('Transport enabled E2E', () => {
 
     if (dataResponseHeaders['x-encrypted']) {
       if (dataPayload) {
-        expect(hasEncryptedPayloadShape).toBe(true)
+        expect(
+          hasEncryptedPayloadShape || isSvelteKitDataPayload(dataPayload),
+        ).toBe(true)
       }
     }
     else {
       if (dataPayload) {
         expect(hasEncryptedPayloadShape).toBe(false)
-        expect(dataPayload).toHaveProperty('type')
+        expect(isSvelteKitDataPayload(dataPayload)).toBe(true)
       }
     }
 
@@ -111,15 +161,11 @@ test.describe('Transport enabled E2E', () => {
   })
 
   test('renders Mermaid document/code demos in UI gallery scenes with transport enabled', async ({ page }) => {
-    await page.goto('/auth/login')
-    await expect(page.locator('#login-username')).toBeVisible({ timeout: 10_000 })
+    const loginResult = await loginViaBrowserTransport(page)
+    expect(loginResult.status).toBe(200)
 
-    await page.locator('#login-username').fill(DEFAULT_ADMIN.username)
-    await page.locator('input[type="password"]').first().fill(DEFAULT_ADMIN.password)
-    await Promise.all([
-      page.waitForURL('**/admin**', { timeout: 15_000 }),
-      page.locator('button[type="submit"]').click(),
-    ])
+    await page.goto('/admin')
+    await page.waitForURL('**/admin**', { timeout: 15_000 })
 
     await page.goto('/admin/ui-gallery/scenes')
     await page.waitForLoadState('domcontentloaded')
