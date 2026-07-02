@@ -240,6 +240,8 @@
     sourceKind = 'markdown',
     // sourceKind=code 时的默认语言提示。
     codeLanguage,
+    // 正文字号，number 会按 px 处理。
+    fontSize,
     // 外层自定义类名。
     class: className = '',
     // 是否显示代码块复制按钮。
@@ -250,6 +252,8 @@
     showCodePreviewToggle = false,
     // 是否显式允许内置 HTML / JS / CSS 预览执行高风险内容。
     allowUnsafeCodePreview = false,
+    // 是否按安全白名单解析原始 HTML 标签。
+    allowHtmlTags = false,
     // 代码预览切换模式下展示在语言标签旁的提示文案。
     codePreviewHint = '',
     // 是否启用语法高亮。
@@ -412,6 +416,7 @@
       codeViewPreviewLabel: uiM('file_list_preview'),
       codePreviewHint: normalizedCodePreviewHint,
       breaks,
+      allowHtmlTags,
     }),
   )
   // html 是最终注入正文的内容。
@@ -466,6 +471,25 @@
       editable ? 'hai-markdown-editable' : '',
     ),
   )
+  const normalizedFontSize = $derived(resolveFontSize(fontSize))
+  const documentStyle = $derived(
+    normalizedFontSize
+      ? `--hai-markdown-font-size:${normalizedFontSize};`
+      : undefined,
+  )
+
+  function resolveFontSize(value: AiDocumentEditorProps['fontSize']): string | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return `${value}px`
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim()
+      return normalized || undefined
+    }
+
+    return undefined
+  }
 
   $effect(() => {
     void html
@@ -936,6 +960,7 @@
         enableHighlight,
         showCopyButton: false,
         breaks,
+        allowHtmlTags,
       })
 
       host.innerHTML = `<div class="hai-md-preview-card"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<div class="hai-md-preview-rendered">${markdownHtml}</div></div>`
@@ -3138,6 +3163,7 @@
           <article
             bind:this={previewHost}
             class={readerDocumentClass}
+            style={documentStyle}
             contenteditable={editable}
             role='document'
             onmousemove={handlePreviewMouseMove}
@@ -3993,6 +4019,7 @@
   }
 
   .hai-markdown-document {
+    font-size: var(--hai-markdown-font-size, 1rem);
     width: 100%;
     min-width: 0;
     max-width: 52.5rem;
@@ -4045,29 +4072,29 @@
   }
 
   .hai-markdown :global(h1) {
-    font-size: 2.2rem;
+    font-size: 2.2em;
     padding-bottom: 0.45em;
     border-bottom: 1px solid oklch(var(--bc) / 0.12);
   }
 
   .hai-markdown :global(h2) {
-    font-size: 1.48rem;
+    font-size: 1.48em;
   }
 
   .hai-markdown :global(h3) {
-    font-size: 1.18rem;
+    font-size: 1.18em;
   }
 
   .hai-markdown :global(h4) {
-    font-size: 1.02rem;
+    font-size: 1.02em;
   }
 
   .hai-markdown :global(h5) {
-    font-size: 0.95rem;
+    font-size: 0.95em;
   }
 
   .hai-markdown :global(h6) {
-    font-size: 0.88rem;
+    font-size: 0.88em;
     color: oklch(var(--bc) / 0.7);
   }
 
@@ -4264,7 +4291,7 @@
     font-family:
       ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
       'Liberation Mono', monospace;
-    font-size: 0.875rem;
+    font-size: 0.875em;
     line-height: 1.45;
     tab-size: 2;
 

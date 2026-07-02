@@ -169,6 +169,8 @@ export interface AiDocumentEditorProps extends DataAttributes {
   sourceKind?: MarkdownSourceKind
   /** Default language when sourceKind is `code`. */
   codeLanguage?: string
+  /** Content font size. Numbers are interpreted as px. */
+  fontSize?: string | number
   /** Custom class for the outer container. */
   class?: string
   /** Whether to show the copy button on code blocks. */
@@ -177,6 +179,8 @@ export interface AiDocumentEditorProps extends DataAttributes {
   showRunButton?: boolean
   /** Whether to show the code/preview toggle on code blocks. */
   showCodePreviewToggle?: boolean
+  /** Whether to parse raw HTML tags through a safe allowlist. */
+  allowHtmlTags?: boolean
   /**
    * 是否启用内置的高风险代码预览。
    *

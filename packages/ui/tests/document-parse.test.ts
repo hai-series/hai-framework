@@ -43,4 +43,14 @@ describe('renderMarkdownDocument', () => {
     expect(result.html).toContain('hai-md-code-block')
     expect(result.html).not.toContain('data-mermaid-host')
   })
+
+  it('allowHtmlTags 开启时应该解析安全 HTML，并继续转义危险标签', () => {
+    const result = renderMarkdownDocument('# 标题\n\n支持 <b>重点</b> 与 <script>alert(1)</script>', {
+      allowHtmlTags: true,
+    })
+
+    expect(result.html).toContain('<b>重点</b>')
+    expect(result.html).toContain('&lt;script&gt;')
+    expect(result.outline[0]?.text).toBe('标题')
+  })
 })

@@ -283,14 +283,31 @@ components/
 
 | 组件                     | 描述             | 主要属性 / 能力 |
 | ------------------------ | ---------------- | ---------------- |
-| `MarkdownRenderer`       | Markdown 渲染器  | `content`, `showCopyButton`, `enableHighlight` |
+| `MarkdownRenderer`       | Markdown 渲染器  | `content`, `fontSize`, `allowHtmlTags`, `showCopyButton`, `enableHighlight` |
 | `AiDocumentDownloadMenu` | 文档下载菜单     | `actions`, `ondownload` |
-| `AiDocumentEditor`       | AI 文档编辑器    | `content`, `showRunButton`, `showCodePreviewToggle`, `allowUnsafeCodePreview` |
+| `AiDocumentEditor`       | AI 文档编辑器    | `content`, `fontSize`, `allowHtmlTags`, `showRunButton`, `showCodePreviewToggle`, `allowUnsafeCodePreview` |
 | `AiTableEditor`          | AI 表格编辑器    | `columns`, `rows`, `editable`, `ondownload` |
 
 > `AiDocumentEditor` 默认只允许 Markdown 内置预览。HTML / JS / CSS 等高风险预览需要显式设置 `allowUnsafeCodePreview`，或通过 `oncoderun` 返回受控的预览结果。
 >
 > Mermaid 图表开箱即用：文档（`sourceKind='document'`）里的 ```` ```mermaid ```` 代码块在阅读态自动渲染为图表；code 模式（`sourceKind='code'` + `showCodePreviewToggle`）下可在「代码 / 预览」间切换。Mermaid 以 `securityLevel: 'strict'` 渲染为消毒后的 SVG，无需开启 `allowUnsafeCodePreview`。
+>
+> `MarkdownRenderer` 与 `AiDocumentEditor` 还支持展示层配置：
+> - `fontSize` 支持 `number`（按 px 解释）或任意 CSS 长度字符串（如 `1.125rem`）
+> - `allowHtmlTags` 默认关闭；开启后会按安全白名单解析 `<b>` / `<i>` / `<u>` / `<mark>` 等 HTML 标签，危险标签与属性仍会被消毒
+
+```svelte
+<MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
+
+<AiDocumentEditor
+  title='方案文档'
+  content={documentMarkdown}
+  fontSize={18}
+  allowHtmlTags
+  showToolbar
+  showOutline={false}
+/>
+```
 
 #### CRUD 场景（5 个）
 

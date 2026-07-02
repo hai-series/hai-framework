@@ -137,5 +137,26 @@ test.describe('Transport enabled E2E', () => {
 
     await codeDemo.locator('[data-code-view-toggle][data-code-view="preview"]').first().click()
     await expect(codeDemo.locator('.hai-md-mermaid-preview svg')).toBeVisible({ timeout: 15_000 })
+
+    await expect(page.getByText('MarkdownRenderer · 字号与 HTML 标签')).toBeVisible()
+    await expect(page.getByText('AiDocumentEditor · 字号与 HTML 标签')).toBeVisible()
+
+    const markdownHtmlOffDemo = page.getByTestId('markdown-html-off-demo')
+    const markdownHtmlOnDemo = page.getByTestId('markdown-html-on-demo')
+    await expect(markdownHtmlOffDemo.locator('b')).toHaveCount(0)
+    await expect(markdownHtmlOnDemo.locator('b').first()).toHaveText('粗体强调')
+
+    const markdownOffFontSize = await markdownHtmlOffDemo.locator('.hai-markdown').evaluate(
+      element => window.getComputedStyle(element).fontSize,
+    )
+    const markdownOnFontSize = await markdownHtmlOnDemo.locator('.hai-markdown').evaluate(
+      element => window.getComputedStyle(element).fontSize,
+    )
+    expect(Number.parseFloat(markdownOnFontSize)).toBeGreaterThan(Number.parseFloat(markdownOffFontSize))
+
+    const aiDocumentHtmlOffDemo = page.getByTestId('ai-document-html-off-demo')
+    const aiDocumentHtmlOnDemo = page.getByTestId('ai-document-html-on-demo')
+    await expect(aiDocumentHtmlOffDemo.locator('article b')).toHaveCount(0)
+    await expect(aiDocumentHtmlOnDemo.locator('article b').first()).toHaveText('重点')
   })
 })

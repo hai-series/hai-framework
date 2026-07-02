@@ -281,6 +281,31 @@ server.listen(3000, () => {
     '  已取消 --> [*]',
   ].join('\n')
 
+  const htmlTagMarkdownDemo = [
+    '## HTML 标签配置演示',
+    '',
+    '默认情况下，原始 HTML 会按普通文本显示：',
+    '',
+    '- <b>粗体强调</b>',
+    '- <i>斜体强调</i>',
+    '- <u>下划线提示</u>',
+    '- <mark>高亮标记</mark>',
+    '',
+    '开启 `allowHtmlTags` 后，上述标签会按安全白名单解析。',
+  ].join('\n')
+
+  const aiHtmlTagDocumentContent = [
+    '# 文档展示设置',
+    '',
+    '这个示例用来演示 `fontSize` 和 `allowHtmlTags`。',
+    '',
+    '## 支持的内联 HTML',
+    '',
+    '启用后可解析：<b>重点</b>、<i>强调</i>、<u>下划线</u>、<mark>高亮</mark>。',
+    '',
+    '> 不安全或不受支持的标签仍会被安全处理。',
+  ].join('\n')
+
   // === 示例数据 ===
   const demoUser = {
     id: '1',
@@ -305,12 +330,27 @@ server.listen(3000, () => {
   const codeMarkdownFull = `<MarkdownRenderer content={markdown} />
 <!-- 支持标题/列表/任务列表/引用/代码高亮/表格/图片等 GFM 全量语法 -->`
 
+  const codeMarkdownPresentation = `<MarkdownRenderer
+  content={htmlTagMarkdownDemo}
+  fontSize='1.125rem'
+  allowHtmlTags
+/>`
+
   const codeAiDocEditor = `<AiDocumentEditor
   title='AI 生成方案文档'
   content={aiDocumentContent}
   showToolbar
   showOutline
   showCopyButton
+/>`
+
+  const codeAiDocPresentation = `<AiDocumentEditor
+  title='文档展示设置'
+  content={aiHtmlTagDocumentContent}
+  fontSize={18}
+  allowHtmlTags
+  showToolbar
+  showOutline={false}
 />`
 
   const codeAiTableEditor = `<AiTableEditor
@@ -418,6 +458,19 @@ server.listen(3000, () => {
       <MarkdownRenderer content={demoMarkdown} />
     </DemoCard>
 
+    <DemoCard title='MarkdownRenderer · 字号与 HTML 标签' description='通过 fontSize 调整阅读字号；开启 allowHtmlTags 后按安全白名单解析 <b> 等标签' code={codeMarkdownPresentation}>
+      <div class='grid grid-cols-1 xl:grid-cols-2 gap-4'>
+        <div class='rounded-xl border border-base-300 bg-base-200/30 p-4' data-testid='markdown-html-off-demo'>
+          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>默认安全模式（fontSize=14 / allowHtmlTags=false）</p>
+          <MarkdownRenderer content={htmlTagMarkdownDemo} fontSize={14} />
+        </div>
+        <div class='rounded-xl border border-base-300 bg-base-200/30 p-4' data-testid='markdown-html-on-demo'>
+          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>开启解析（fontSize=18 / allowHtmlTags=true）</p>
+          <MarkdownRenderer content={htmlTagMarkdownDemo} fontSize={18} allowHtmlTags />
+        </div>
+      </div>
+    </DemoCard>
+
     <DemoCard title='AiDocumentEditor' description='AI 生成文档预览、目录、代码块与下载工具栏' code={codeAiDocEditor}>
       <div class='h-104 min-h-0'>
         <AiDocumentEditor
@@ -428,6 +481,34 @@ server.listen(3000, () => {
           showCopyButton
           class='h-full'
         />
+      </div>
+    </DemoCard>
+
+    <DemoCard title='AiDocumentEditor · 字号与 HTML 标签' description='文档模式同样支持 fontSize 与 allowHtmlTags，适合 AI 文档阅读面板' code={codeAiDocPresentation}>
+      <div class='grid grid-cols-1 xl:grid-cols-2 gap-4'>
+        <div class='h-104 min-h-0' data-testid='ai-document-html-off-demo'>
+          <AiDocumentEditor
+            title='默认安全模式'
+            content={aiHtmlTagDocumentContent}
+            fontSize={14}
+            showToolbar
+            showOutline={false}
+            showCopyButton
+            class='h-full'
+          />
+        </div>
+        <div class='h-104 min-h-0' data-testid='ai-document-html-on-demo'>
+          <AiDocumentEditor
+            title='开启安全 HTML 标签'
+            content={aiHtmlTagDocumentContent}
+            fontSize={18}
+            allowHtmlTags
+            showToolbar
+            showOutline={false}
+            showCopyButton
+            class='h-full'
+          />
+        </div>
       </div>
     </DemoCard>
 

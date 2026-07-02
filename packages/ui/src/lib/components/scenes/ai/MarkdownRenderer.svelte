@@ -24,18 +24,44 @@
 
   const {
     content = '',
+    fontSize,
     class: className = '',
     showCopyButton = true,
     enableHighlight = true,
     breaks = true,
+    allowHtmlTags = false,
     ...restProps
   }: MarkdownRendererProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const normalizedFontSize = $derived(resolveFontSize(fontSize))
+  const markdownStyle = $derived(
+    normalizedFontSize
+      ? `--hai-markdown-font-size:${normalizedFontSize};`
+      : undefined,
+  )
   /** 解析后的 HTML */
   const html = $derived(
-    parseMarkdown(content, { enableHighlight, showCopyButton, breaks }),
+    parseMarkdown(content, {
+      enableHighlight,
+      showCopyButton,
+      breaks,
+      allowHtmlTags,
+    }),
   )
+
+  function resolveFontSize(value: MarkdownRendererProps['fontSize']): string | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return `${value}px`
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim()
+      return normalized || undefined
+    }
+
+    return undefined
+  }
 
   /**
    * 事件代理：处理代码块复制按钮点击
@@ -65,9 +91,11 @@
   }
 </script>
 
-<div {...dataAttributes}
-     class={cn('hai-markdown', className)}
-     onclick={handleClick}
+<div
+  {...dataAttributes}
+  class={cn('hai-markdown', className)}
+  style={markdownStyle}
+  onclick={handleClick}
 >
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- Markdown HTML 渲染 -->
   {@html html}
@@ -81,6 +109,7 @@
    * ========================================================================= */
 
   .hai-markdown {
+    font-size: var(--hai-markdown-font-size, 1rem);
     line-height: 1.75;
     color: inherit;
     word-wrap: break-word;
@@ -171,6 +200,18 @@
     color: oklch(var(--bc) / 0.55);
   }
 
+  .hai-markdown :global(u) {
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.14em;
+  }
+
+  .hai-markdown :global(mark) {
+    padding: 0 0.12em;
+    border-radius: 0.25rem;
+    background: oklch(var(--wa, 0.9 0.14 90) / 0.34);
+    color: inherit;
+  }
+
   /* ─── 行内代码 ─── */
 
   .hai-markdown :global(:not(pre) > code) {
@@ -245,7 +286,7 @@
 
   .hai-markdown :global(.hai-md-code-block code) {
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-    font-size: 0.875rem;
+    font-size: 0.875em;
     line-height: 1.6;
     tab-size: 2;
   }

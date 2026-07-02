@@ -13,6 +13,13 @@ import {
 } from './editor-markdown-extensions.js'
 import { highlightCode, isLanguageSupported } from './highlight.js'
 import { isMermaidLanguage } from './mermaid-render.js'
+import {
+  escapeHtml,
+  isExternalLinkHref,
+  sanitizeImageSrc,
+  sanitizeLinkHref,
+  sanitizeMarkdownHtml,
+} from './safe-html.js'
 
 export interface MarkdownDocumentParseOptions {
   /** Whether to enable syntax highlighting for code blocks. */
@@ -31,6 +38,8 @@ export interface MarkdownDocumentParseOptions {
   codePreviewHint?: string
   /** Whether soft line breaks are converted to <br>. */
   breaks?: boolean
+  /** Whether raw HTML tags are parsed through a safe allowlist. */
+  allowHtmlTags?: boolean
 }
 
 export interface MarkdownRenderResult {
@@ -61,20 +70,17 @@ const DEFAULT_OPTIONS: Required<MarkdownDocumentParseOptions> = {
   codeViewPreviewLabel: 'Preview',
   codePreviewHint: '',
   breaks: true,
+  allowHtmlTags: false,
 }
-const SAFE_LINK_HREF_REGEX = /^(?:https?:\/\/|\/|#|mailto:)/i
-const SAFE_IMAGE_SRC_REGEX = /^(?:https?:\/\/|\/|data:image\/)/i
 
-/**
- * Escape HTML entities to prevent raw HTML injection.
- */
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+function readHtmlTokenSource(token: Tokens.HTML | Tokens.Tag): string {
+  if ('raw' in token && typeof token.raw === 'string') {
+    return token.raw
+  }
+
+  return 'text' in token && typeof token.text === 'string'
+    ? token.text
+    : ''
 }
 
 /**
@@ -239,17 +245,19 @@ function createRendererObject(
     },
 
     html(token: Tokens.HTML | Tokens.Tag): string {
-      return escapeHtml('text' in token ? token.text : '')
+      const source = readHtmlTokenSource(token)
+      return options.allowHtmlTags
+        ? sanitizeMarkdownHtml(source)
+        : escapeHtml(source)
     },
 
     link({ href, title, tokens }: Tokens.Link): string {
       // text preserves inline markdown within the link label.
       const text = this.parser.parseInline(tokens)
       // safeHref strips potentially unsafe protocols.
-      const safeHref = href && SAFE_LINK_HREF_REGEX.test(href) ? href : ''
+      const safeHref = sanitizeLinkHref(href)
       // isExternal controls whether target/_blank is added.
-      const isExternal = safeHref
-        && (safeHref.startsWith('http://') || safeHref.startsWith('https://'))
+      const isExternal = safeHref && isExternalLinkHref(safeHref)
       // attrs is the flattened HTML attribute string.
       const attrs = [
         `href="${escapeHtml(safeHref)}"`,
@@ -262,7 +270,7 @@ function createRendererObject(
 
     image({ href, title, text }: Tokens.Image): string {
       // safeSrc prevents dangerous image protocols.
-      const safeSrc = href && SAFE_IMAGE_SRC_REGEX.test(href) ? href : ''
+      const safeSrc = sanitizeImageSrc(href)
       // attrs is the flattened HTML attribute string.
       const attrs = [
         `src="${escapeHtml(safeSrc)}"`,
