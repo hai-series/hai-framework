@@ -85,6 +85,14 @@
 <Select bind:value options={selectOpts} placeholder='可筛选' filterable />
 <Select bind:value options={selectOpts} placeholder='可清空+可筛选' clearable filterable />`
 
+  const codeSelectLayout = `<!-- 紧凑筛选行：Select 与 Input 尺寸对齐、可随容器收缩、下拉不被相邻控件遮挡 -->
+<div class='flex items-center gap-3'>
+  <Input size='sm' placeholder='搜索' class='w-40' />
+  <Select size='sm' options={selectOpts} placeholder='框架' />
+  <Select size='sm' options={selectOpts} placeholder='状态' />
+  <Select size='sm' options={selectOpts} placeholder='来源' />
+</div>`
+
   const codeToggle = `<ToggleCheckbox bind:checked={toggleCheck} />
 <ToggleInput bind:checked={toggleInput} />
 <ToggleRadio bind:checked={toggleRadio} />
@@ -350,6 +358,53 @@
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-both'>clearable + filterable</label>
           <Select id='g-sel-both' bind:value={selectBothVal} options={selectOpts} placeholder='可清空+可筛选' clearable filterable />
+        </div>
+      </div>
+    </DemoCard>
+
+    <DemoCard title='Select 布局与对齐' description='紧凑筛选行：与 Input 尺寸对齐、可随容器收缩、下拉层级不被相邻控件遮挡' code={codeSelectLayout}>
+      <div class='space-y-4'>
+        <div>
+          <p class='text-sm font-medium mb-2'>与 Input 同尺寸对齐（sm）</p>
+          <div class='flex items-center gap-3'>
+            <Input size='sm' placeholder='搜索' class='w-40' />
+            <Select size='sm' options={selectOpts} placeholder='框架' />
+            <Select size='sm' options={selectOpts} placeholder='状态' />
+            <Select size='sm' options={selectOpts} placeholder='来源' />
+          </div>
+        </div>
+        <div>
+          <p class='text-sm font-medium mb-2'>相邻下拉展开不被遮挡（点击第一个再看后续控件）</p>
+          <div class='flex items-center gap-3'>
+            <Select options={selectOpts} placeholder='第一个' />
+            <Select options={selectOpts} placeholder='第二个' />
+            <Select options={selectOpts} placeholder='第三个' />
+          </div>
+        </div>
+        <div>
+          <p class='text-sm font-medium mb-2'>各尺寸与 Input 高度一致（xs / sm / md / lg / xl）</p>
+          <div class='space-y-2'>
+            <div class='flex items-center gap-3'>
+              <Input size='xs' placeholder='xs' class='w-40' />
+              <Select size='xs' options={selectOpts} placeholder='xs' />
+            </div>
+            <div class='flex items-center gap-3'>
+              <Input size='sm' placeholder='sm' class='w-40' />
+              <Select size='sm' options={selectOpts} placeholder='sm' />
+            </div>
+            <div class='flex items-center gap-3'>
+              <Input size='md' placeholder='md' class='w-40' />
+              <Select size='md' options={selectOpts} placeholder='md' />
+            </div>
+            <div class='flex items-center gap-3'>
+              <Input size='lg' placeholder='lg' class='w-40' />
+              <Select size='lg' options={selectOpts} placeholder='lg' />
+            </div>
+            <div class='flex items-center gap-3'>
+              <Input size='xl' placeholder='xl' class='w-40' />
+              <Select size='xl' options={selectOpts} placeholder='xl' />
+            </div>
+          </div>
         </div>
       </div>
     </DemoCard>

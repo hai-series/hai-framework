@@ -41,6 +41,7 @@
   const controlSize = $derived(size === 'xs' ? 'xs' : 'sm')
   const jumperControlSize = 'xs'
   const sizeChangerClass = $derived(size === 'xs' ? 'w-17 shrink-0' : 'w-18 shrink-0')
+  const pageSizeSelectOptions = $derived(pageSizeOptions.map(opt => ({ value: String(opt), label: String(opt) })))
   const jumperWrapClass = $derived(size === 'xs' ? 'flex min-w-fit items-center gap-1.5 whitespace-nowrap' : 'flex min-w-fit items-center gap-2 whitespace-nowrap')
   const jumperInputClass = $derived(
     size === 'xs'
@@ -105,12 +106,9 @@
           <Select
             size={controlSize}
             value={String(pageSize)}
+            options={pageSizeSelectOptions}
             onchange={handlePageSizeChange}
-          >
-            {#each pageSizeOptions as opt (opt)}
-              <option value={String(opt)}>{opt}</option>
-            {/each}
-          </Select>
+          />
         </div>
       </div>
     {/if}

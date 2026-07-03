@@ -10,7 +10,7 @@
 -->
 <script lang='ts' generics="T = string">
   import type { DataAttributes, SelectProps } from '../../types.js'
-  import { cn, getDataAttributes } from '../../utils.js'
+  import { cn, getDataAttributes, portal } from '../../utils.js'
 
   let {
     value = $bindable<T>(),
@@ -31,16 +31,21 @@
   const dataAttributes = $derived(getDataAttributes(restProps))
   let inputRef: HTMLInputElement | undefined = $state()
   let dropdownRef: HTMLDivElement | undefined = $state()
+  let triggerRef: HTMLDivElement | undefined = $state()
+  let listboxRef: HTMLUListElement | undefined = $state()
   let isDropdownOpen = $state(false)
   let filterText = $state('')
   let isHovered = $state(false)
+  // 下拉层定位样式（portal 到 body，用 fixed 逃逸 overflow/stacking）
+  let dropdownStyle = $state('')
 
-  // 尺寸映射
+  // 尺寸映射（与 Input 保持一致）
   const sizeClasses: Record<string, string> = {
-    xs: 'h-7 text-xs px-2',
+    xs: 'h-8 text-xs px-2.5',
     sm: 'h-9 text-sm px-3',
     md: 'h-10 text-sm px-3',
     lg: 'h-12 text-base px-4',
+    xl: 'h-14 text-lg px-4',
   }
 
   // 选项文字尺寸
@@ -49,6 +54,8 @@
       ? 'text-xs'
       : size === 'lg'
       ? 'text-base'
+      : size === 'xl'
+      ? 'text-lg'
       : 'text-sm',
   )
 
@@ -73,7 +80,7 @@
 
   const wrapperClass = $derived(
     cn(
-      'relative flex w-full items-center rounded-lg border bg-base-100 cursor-pointer',
+      'relative flex w-full min-w-0 items-center rounded-lg border bg-base-100 cursor-pointer',
       sizeClasses[size] || sizeClasses.md,
       error
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
@@ -82,6 +89,7 @@
         : 'border-base-content/15 hover:border-base-content/25 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
       'transition-[border-color,box-shadow] duration-150',
       disabled && 'opacity-50 cursor-not-allowed',
+      className,
     ),
   )
 
@@ -91,14 +99,16 @@
       'focus:outline-none focus:ring-0 focus:shadow-none',
       'placeholder:text-base-content/40',
       error && 'text-error',
-      className,
     ),
   )
 
-  // 点击外部关闭下拉框
+  // 点击外部关闭下拉框（下拉层已 portal 到 body，需同时排除 listbox）
   $effect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef && !dropdownRef.contains(e.target as Node)) {
+      const target = e.target as Node
+      const inTrigger = dropdownRef?.contains(target) ?? false
+      const inListbox = listboxRef?.contains(target) ?? false
+      if (!inTrigger && !inListbox) {
         isDropdownOpen = false
         filterText = ''
       }
@@ -107,6 +117,35 @@
     if (isDropdownOpen) {
       document.addEventListener('click', handleClickOutside)
       return () => document.removeEventListener('click', handleClickOutside)
+    }
+  })
+
+  // 计算下拉层位置（fixed，基于触发器视口坐标；空间不足时向上翻转）
+  function updateDropdownPosition() {
+    if (!triggerRef)
+      return
+    const rect = triggerRef.getBoundingClientRect()
+    const gap = 4
+    const maxHeight = 240
+    const spaceBelow = window.innerHeight - rect.bottom
+    const openUp = spaceBelow < maxHeight + gap && rect.top > spaceBelow
+    const vertical = openUp
+      ? `bottom:${Math.round(window.innerHeight - rect.top + gap)}px`
+      : `top:${Math.round(rect.bottom + gap)}px`
+    dropdownStyle = `position:fixed;left:${Math.round(rect.left)}px;width:${Math.round(rect.width)}px;${vertical};z-index:1200;`
+  }
+
+  // 打开时定位并跟随滚动/缩放更新
+  $effect(() => {
+    if (!isDropdownOpen)
+      return
+    updateDropdownPosition()
+    const scrollOpts = { passive: true, capture: true } as const
+    window.addEventListener('scroll', updateDropdownPosition, scrollOpts)
+    window.addEventListener('resize', updateDropdownPosition)
+    return () => {
+      window.removeEventListener('scroll', updateDropdownPosition, scrollOpts)
+      window.removeEventListener('resize', updateDropdownPosition)
     }
   })
 
@@ -173,7 +212,7 @@
 
 <div
   {...dataAttributes}
-  class='fieldset w-full'
+  class='fieldset w-full min-w-0'
   bind:this={dropdownRef}
   role='combobox'
   aria-expanded={isDropdownOpen}
@@ -183,6 +222,7 @@
 >
   <div
     class={wrapperClass}
+    bind:this={triggerRef}
     onclick={handleWrapperClick}
     onkeydown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -255,13 +295,15 @@
       {/if}
     </div>
 
-    <!-- 下拉选项列表 -->
+    <!-- 下拉选项列表（portal 到 body，fixed 定位，逃逸 overflow/stacking 裁剪） -->
     {#if isDropdownOpen}
       <ul
+        bind:this={listboxRef}
+        use:portal
         id='{id}-listbox'
-        class='absolute left-0 z-50 mt-2 w-full max-h-60 overflow-auto rounded-xl border border-base-content/10 bg-base-100 p-1.5 shadow-xl shadow-base-content/10'
+        class='max-h-60 overflow-auto rounded-xl border border-base-content/10 bg-base-100 p-1.5 shadow-xl shadow-base-content/10'
+        style={dropdownStyle}
         role='listbox'
-        style='top: 100%;'
       >
         {#each filteredOptions() as option (String(option.value))}
           <li

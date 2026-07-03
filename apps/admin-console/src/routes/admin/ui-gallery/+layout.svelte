@@ -63,6 +63,8 @@
 </svelte:head>
 
 <ToastContainer />
+<MessageContainer />
+<MessageBoxContainer />
 
 <div class='space-y-6'>
   <PageHeader title={m.gallery_title()} description={m.gallery_desc()} />

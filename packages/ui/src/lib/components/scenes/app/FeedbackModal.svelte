@@ -55,9 +55,10 @@
     open?: boolean
     labels?: FeedbackLabels
     onsubmit?: (data: FeedbackData) => Promise<void>
+    class?: string
   }
 
-  let { open = $bindable(false), labels = {}, onsubmit, ...restProps }: Props & DataAttributes = $props()
+  let { open = $bindable(false), labels = {}, onsubmit, class: className = '', ...restProps }: Props & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   // 文案优先使用传入的 labels，缺省回退到内置消息 uiM(...)
@@ -109,7 +110,7 @@
   }
 </script>
 
-<Modal {...dataAttributes} bind:open title={labels.title ?? uiM('feedback_title')}>
+<Modal {...dataAttributes} class={className} bind:open title={labels.title ?? uiM('feedback_title')}>
   <p class='text-base-content/70 mb-4'>{labels.description ?? uiM('feedback_description')}</p>
 
   {#if error}

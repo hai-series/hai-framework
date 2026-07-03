@@ -42,6 +42,7 @@
     onedit,
     onclose,
     detailExtra,
+    class: className = '',
     ...restProps
   }: {
     open?: boolean
@@ -59,6 +60,7 @@
     onedit?: () => void
     onclose?: () => void
     detailExtra?: Snippet<[Record<string, unknown>]>
+    class?: string
   } & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
@@ -179,6 +181,7 @@
 {#if variant === 'modal'}
   <Modal
     bind:open
+    class={className}
     {title}
     size={modalSize}
     width={modalWidth}
@@ -192,7 +195,7 @@
     {/snippet}
   </Modal>
 {:else}
-  <Drawer bind:open {title} position='right' {size} width={drawerWidth} onclose={handleClose}>
+  <Drawer bind:open {title} class={className} position='right' {size} width={drawerWidth} onclose={handleClose}>
     {#if item}
       <div class={drawerBodyClass}>
         {@render detailBody()}

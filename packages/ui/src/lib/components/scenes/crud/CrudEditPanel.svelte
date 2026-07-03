@@ -50,6 +50,7 @@
     onclose,
     editFormExtra,
     editingItem = null,
+    class: className = '',
     ...restProps
   }: {
     open?: boolean
@@ -70,6 +71,7 @@
     onclose?: () => void
     editFormExtra?: Snippet<[Record<string, unknown> | null, 'create' | 'edit']>
     editingItem?: Record<string, unknown> | null
+    class?: string
   } & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
@@ -171,13 +173,12 @@
           size={controlSize}
           value={String(fieldValue ?? '')}
           disabled={submitting || isReadonly}
+          options={[
+            { value: '', label: placeholder || uiM('crud_filter_all') },
+            ...opts.map(opt => ({ value: String(opt.value), label: opt.label })),
+          ]}
           onchange={value => updateField(field.id, value)}
-        >
-          <option value="">{placeholder || uiM('crud_filter_all')}</option>
-          {#each opts as opt (String(opt.value))}
-            <option value={String(opt.value)}>{opt.label}</option>
-          {/each}
-        </Select>
+        />
       </FormField>
 
     {:else if field.type === 'multi-select'}
@@ -255,6 +256,7 @@
 {#if variant === 'modal'}
   <Modal
     bind:open
+    class={className}
     {title}
     size={modalSize}
     width={modalWidth}
@@ -271,7 +273,7 @@
     {/snippet}
   </Modal>
 {:else}
-  <Drawer bind:open {title} position='right' {size} width={drawerWidth} onclose={handleClose} closeOnBackdrop={false}>
+  <Drawer bind:open {title} class={className} position='right' {size} width={drawerWidth} onclose={handleClose} closeOnBackdrop={false}>
     <form onsubmit={handleSubmit} class={drawerFormClass}>
       {@render formFields()}
     </form>

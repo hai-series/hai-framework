@@ -195,3 +195,28 @@ export function getProgressVariantClass(variant: Variant): string {
 export function generateId(prefix = 'hai'): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`
 }
+
+/**
+ * Portal action：将节点移动到目标容器（默认 document.body）下渲染。
+ *
+ * 用于弹出层（下拉、气泡等）逃逸祖先的 `overflow: hidden` 裁剪与
+ * 堆叠上下文（stacking context）限制，避免被相邻控件遮挡。
+ *
+ * @param node - 要移动的节点
+ * @param target - 目标容器或选择器；默认 body
+ */
+export function portal(node: HTMLElement, target: HTMLElement | string = 'body') {
+  function mount(to: HTMLElement | string) {
+    const targetEl = typeof to === 'string' ? document.querySelector<HTMLElement>(to) : to
+    targetEl?.appendChild(node)
+  }
+  mount(target)
+  return {
+    update(next: HTMLElement | string) {
+      mount(next)
+    },
+    destroy() {
+      node.parentNode?.removeChild(node)
+    },
+  }
+}
