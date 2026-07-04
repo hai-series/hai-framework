@@ -272,6 +272,7 @@ export function createMemoryOperations(
       type: input.type,
       importance: input.importance ?? 0.5,
       objectId: input.objectId,
+      sessionId: input.sessionId,
       metadata: input.metadata,
       vector,
       createdAt: now,
@@ -279,7 +280,7 @@ export function createMemoryOperations(
       accessCount: 0,
     }
 
-    await store.save(entry.id, entry, { objectId: entry.objectId })
+    await store.save(entry.id, entry, { objectId: entry.objectId, sessionId: entry.sessionId })
 
     if (vector) {
       await vectorStore.upsert(entry.id, vector, {
@@ -415,10 +416,15 @@ export function createMemoryOperations(
         where.importance = { $gte: options.minImportance }
       }
 
-      const candidates = await store.query({
+      const allCandidates = await store.query({
         objectId: options?.objectId,
         where: Object.keys(where).length > 0 ? where : undefined,
       })
+
+      // sessionId 过滤在内存中完成：指定 session 时严格匹配，不纳入全局记忆（sessionId 为 null）
+      const candidates = options?.sessionId
+        ? allCandidates.filter(e => e.sessionId === options.sessionId)
+        : allCandidates
 
       if (candidates.length === 0) {
         return ok([])
@@ -517,10 +523,11 @@ export function createMemoryOperations(
 
         const entries: MemoryEntry[] = []
         for (const input of extractResult.data) {
-          const entryInput: MemoryEntryInput = { ...input, objectId: input.objectId ?? options?.objectId }
+          const entryInput: MemoryEntryInput = { ...input, objectId: input.objectId ?? options?.objectId, sessionId: options?.sessionId }
           const relatedResult = await recallEntries(entryInput.content, {
             topK: config.writebackRelatedTopK,
             objectId: entryInput.objectId,
+            sessionId: entryInput.sessionId,
           }, false)
           if (!relatedResult.success) {
             return relatedResult
@@ -601,7 +608,7 @@ export function createMemoryOperations(
           return ok([...messages])
         }
 
-        const recallResult = await this.recall(query, { topK, objectId: options?.objectId })
+        const recallResult = await this.recall(query, { topK, objectId: options?.objectId, sessionId: options?.sessionId })
         if (!recallResult.success) {
           return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: recallResult.error.message } }), recallResult.error)
         }
