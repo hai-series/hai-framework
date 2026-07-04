@@ -65,6 +65,8 @@ export interface MemoryEntryInput {
   importance?: number
   /** 所属主体 ID（不指定时为全局记忆） */
   objectId?: string
+  /** 作用域（JSON 对象，key-value 匹配过滤。用于子 session 记忆隔离等场景） */
+  scope?: Record<string, unknown>
   /** 附加元数据 */
   metadata?: Record<string, unknown>
 }
@@ -83,6 +85,8 @@ export interface MemoryEntry {
   importance: number
   /** 所属主体 ID */
   objectId?: string
+  /** 作用域（JSON 对象，key-value 匹配过滤。用于子 session 记忆隔离等场景） */
+  scope?: Record<string, unknown>
   /** 附加元数据 */
   metadata?: Record<string, unknown>
   /** 向量（embedding 已计算时填充） */
@@ -111,6 +115,8 @@ export interface MemoryExtractOptions {
   minImportance?: number
   /** 所属主体 ID（关联到提取结果） */
   objectId?: string
+  /** 作用域（JSON 对象，提取的记忆将关联此 scope） */
+  scope?: Record<string, unknown>
   /**
    * 临时模型配置（携带凭据的模型请求）。
    *
@@ -136,6 +142,8 @@ export interface MemoryRecallOptions {
   recencyWeight?: number
   /** 限定主体 ID */
   objectId?: string
+  /** 限定作用域（key-value 匹配过滤，用于子 session 记忆隔离等场景） */
+  scope?: Record<string, unknown>
 }
 
 // ─── 注入选项 ───
@@ -154,6 +162,8 @@ export interface MemoryInjectionOptions {
   position?: 'system' | 'before-last'
   /** 限定主体 ID */
   objectId?: string
+  /** 限定作用域（key-value 匹配过滤，用于子 session 记忆隔离等场景） */
+  scope?: Record<string, unknown>
 }
 
 // ─── 列表与清空选项 ───
