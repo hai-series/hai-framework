@@ -384,9 +384,9 @@ const p = usePlatform()
 
 | 组件                 | 说明                              |
 | -------------------- | --------------------------------- |
-| `MarkdownRenderer`   | Markdown 渲染（内置 Shiki 高亮） |
+| `MarkdownRenderer`   | Markdown 渲染（内置 Shiki 高亮，支持 `fontSize` / `allowHtmlTags`） |
 | `AiDocumentDownloadMenu` | AI 文档下载菜单              |
-| `AiDocumentEditor`   | AI 文档编辑器（支持 Mermaid 与受控代码预览） |
+| `AiDocumentEditor`   | AI 文档编辑器（支持 Mermaid、受控代码预览，以及 `fontSize` / `allowHtmlTags`） |
 | `AiTableEditor`      | AI 表格编辑器                    |
 
 > AI 场景组件使用 Shiki（纯 ESM）进行代码高亮，支持 27 种语言，通过 CSS 变量 `--hai-hl-*` 自定义颜色。无需额外安装 Shiki，已内置。`AiDocumentEditor` 默认只允许 Markdown 内置预览；HTML / JS / CSS 等高风险预览需要显式启用 `allowUnsafeCodePreview`，或通过 `oncoderun` 返回受控的预览结果。
@@ -395,6 +395,23 @@ const p = usePlatform()
 > - `sourceKind='document'` 时，文档中的 ```` ```mermaid ```` 代码块会在阅读态自动渲染为图表；
 > - `sourceKind='code'` + `showCodePreviewToggle` 时，可在「代码 / 预览」之间切换查看 Mermaid 图表；
 > - Mermaid 以 `securityLevel: 'strict'` 渲染为消毒后的 SVG，无需开启 `allowUnsafeCodePreview`。
+>
+> 展示层还支持：
+> - `fontSize`：支持 `number`（按 px）或 CSS 长度字符串（如 `1.125rem`）
+> - `allowHtmlTags`：默认关闭；开启后按安全白名单解析 `<b>` / `<i>` / `<u>` / `<mark>` 等标签，危险标签与属性仍会被消毒
+
+```svelte
+<MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
+
+<AiDocumentEditor
+  title="方案文档"
+  content={documentMarkdown}
+  fontSize={18}
+  allowHtmlTags
+  showToolbar
+  showOutline={false}
+/>
+```
 
 #### CRUD 场景组件
 

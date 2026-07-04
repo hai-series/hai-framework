@@ -18,6 +18,7 @@
     message = '',
     onconfirm,
     oncancel,
+    class: className = '',
     ...restProps
   }: {
     open?: boolean
@@ -26,12 +27,14 @@
     message?: string
     onconfirm?: () => Promise<void> | void
     oncancel?: () => void
+    class?: string
   } & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
 </script>
 
 <Confirm {...dataAttributes}
+         class={className}
          bind:open
          title={title || uiM('crud_delete_title')}
          message={message || uiM('crud_delete_message')}

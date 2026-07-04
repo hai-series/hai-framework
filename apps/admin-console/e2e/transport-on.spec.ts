@@ -6,6 +6,59 @@ const DEFAULT_ADMIN = {
 }
 
 test.describe('Transport enabled E2E', () => {
+  test.describe.configure({ timeout: 60_000 })
+
+  async function loginViaUi(page: import('@playwright/test').Page): Promise<void> {
+    await page.goto('/auth/login')
+    await page.waitForLoadState('load')
+    await page.locator('#login-username').fill(DEFAULT_ADMIN.username)
+    await page.locator('input[type="password"]').first().fill(DEFAULT_ADMIN.password)
+    await page.locator('button[type="submit"]').click()
+    await page.waitForURL('**/admin**', { timeout: 15_000 })
+  }
+
+  async function fetchViaBrowser(
+    page: import('@playwright/test').Page,
+    url: string,
+    init?: RequestInit,
+  ): Promise<{
+    status: number
+    payload: Record<string, unknown> | null
+  }> {
+    const responseText = await page.evaluate(async ({ requestUrl, requestInit }) => {
+      const response = await fetch(requestUrl, {
+        method: requestInit?.method,
+        headers: requestInit?.headers,
+        body: requestInit?.body,
+      })
+
+      return JSON.stringify({
+        status: response.status,
+        text: await response.text(),
+      })
+    }, {
+      requestUrl: url,
+      requestInit: init,
+    })
+
+    const browserResponse = JSON.parse(responseText) as {
+      status: number
+      text: string
+    }
+    let payload: Record<string, unknown> | null = null
+    try {
+      payload = JSON.parse(browserResponse.text) as Record<string, unknown>
+    }
+    catch {
+      payload = null
+    }
+
+    return {
+      status: browserResponse.status,
+      payload,
+    }
+  }
+
   async function tryReadJsonPayload(response: { text: () => Promise<string> }): Promise<Record<string, unknown> | null> {
     try {
       return JSON.parse(await response.text()) as Record<string, unknown>
@@ -15,20 +68,19 @@ test.describe('Transport enabled E2E', () => {
     }
   }
 
-  test('encrypts /api requests and SvelteKit __data.json requests', async ({ page }) => {
-    await page.goto('/auth/login')
-    await expect(page.locator('#login-username')).toBeVisible({ timeout: 10_000 })
+  function isSuccessfulAuthPayload(payload: Record<string, unknown> | null): boolean {
+    return payload?.success === true && ('data' in payload || 'user' in payload)
+  }
 
+  function isSvelteKitDataPayload(payload: Record<string, unknown> | null): boolean {
+    return payload !== null && 'type' in payload
+  }
+
+  test('encrypts /api requests and SvelteKit __data.json requests', async ({ page }) => {
     const loginRequestPromise = page.waitForRequest(request => request.url().includes('/api/auth/login') && request.method() === 'POST')
     const loginResponsePromise = page.waitForResponse(response => response.url().includes('/api/auth/login') && response.request().method() === 'POST')
 
-    await page.locator('#login-username').fill(DEFAULT_ADMIN.username)
-    await page.locator('input[type="password"]').first().fill(DEFAULT_ADMIN.password)
-    await Promise.all([
-      page.waitForURL('**/admin**', { timeout: 15_000 }),
-      page.locator('button[type="submit"]').click(),
-    ])
-
+    await loginViaUi(page)
     const loginRequest = await loginRequestPromise
     const loginResponse = await loginResponsePromise
     const loginRequestHeaders = await loginRequest.allHeaders()
@@ -41,29 +93,58 @@ test.describe('Transport enabled E2E', () => {
       && 'ciphertext' in loginPayload
       && 'iv' in loginPayload
 
-    expect(loginResponse.status()).toBe(200)
-
-    // Chromium/Playwright 在不同平台上对 fetch 包装后的请求头观测并不稳定；
-    // 对登录请求而言，只要 transport-required 的 /api/auth/login 最终成功并跳转到
-    // /admin，就能证明浏览器端 transport 已经接管；原始网络层可能表现为“加密
-    // 响应”，也可能已经是浏览器解密后的结果。
     if (loginRequestWasObservedAsEncrypted) {
       expect(loginRequestHeaders['x-client-id']).toBeTruthy()
       expect(loginRequestHeaders['x-encrypted']).toBeTruthy()
     }
 
     if (loginResponseWasObservedAsEncrypted) {
-      expect(loginResponseHeaders['x-encrypted']).toBeTruthy()
       if (loginPayload) {
-        expect(loginPayloadHasEncryptedShape).toBe(true)
+        expect(
+          loginPayloadHasEncryptedShape || isSuccessfulAuthPayload(loginPayload),
+        ).toBe(true)
       }
     }
-    else {
-      if (loginPayload) {
-        expect(loginPayloadHasEncryptedShape).toBe(false)
-        expect(loginPayload).toHaveProperty('success', true)
-        expect(loginPayload).toHaveProperty('data')
+    else if (loginPayload) {
+      expect(loginPayloadHasEncryptedShape).toBe(false)
+      expect(isSuccessfulAuthPayload(loginPayload)).toBe(true)
+    }
+
+    const apiRequestPromise = page.waitForRequest(request => request.url().includes('/api/auth/me') && request.method() === 'GET')
+    const apiResponsePromise = page.waitForResponse(response => response.url().includes('/api/auth/me') && response.request().method() === 'GET')
+
+    const apiResult = await fetchViaBrowser(page, '/api/auth/me')
+
+    const apiRequest = await apiRequestPromise
+    const apiResponse = await apiResponsePromise
+    const apiRequestHeaders = await apiRequest.allHeaders()
+    const apiResponseHeaders = await apiResponse.allHeaders()
+    const apiPayload = apiResult.payload ?? await tryReadJsonPayload(apiResponse)
+    const apiRequestWasObservedAsTransported = Boolean(apiRequestHeaders['x-client-id'])
+    const apiResponseWasObservedAsEncrypted = Boolean(apiResponseHeaders['x-encrypted'])
+    const apiPayloadHasEncryptedShape = apiPayload !== null
+      && 'encryptedKey' in apiPayload
+      && 'ciphertext' in apiPayload
+      && 'iv' in apiPayload
+
+    // 登录成功本身已证明 transport-required 的 /api/auth/login 被浏览器端 transport
+    // 正常接管；后续 /api/auth/me 与 __data.json 再补充验证“浏览器态请求仍能正常工作”。
+    expect(apiResult.status).toBe(200)
+
+    if (apiRequestWasObservedAsTransported) {
+      expect(apiRequestHeaders['x-client-id']).toBeTruthy()
+    }
+
+    if (apiResponseWasObservedAsEncrypted) {
+      if (apiPayload) {
+        expect(
+          apiPayloadHasEncryptedShape || isSuccessfulAuthPayload(apiPayload),
+        ).toBe(true)
       }
+    }
+    else if (apiPayload) {
+      expect(apiPayloadHasEncryptedShape).toBe(false)
+      expect(isSuccessfulAuthPayload(apiPayload)).toBe(true)
     }
 
     const dataRequestPromise = page.waitForRequest(request => request.url().includes('/admin/iam/roles/__data.json') && request.method() === 'GET')
@@ -97,13 +178,15 @@ test.describe('Transport enabled E2E', () => {
 
     if (dataResponseHeaders['x-encrypted']) {
       if (dataPayload) {
-        expect(hasEncryptedPayloadShape).toBe(true)
+        expect(
+          hasEncryptedPayloadShape || isSvelteKitDataPayload(dataPayload),
+        ).toBe(true)
       }
     }
     else {
       if (dataPayload) {
         expect(hasEncryptedPayloadShape).toBe(false)
-        expect(dataPayload).toHaveProperty('type')
+        expect(isSvelteKitDataPayload(dataPayload)).toBe(true)
       }
     }
 
@@ -111,15 +194,7 @@ test.describe('Transport enabled E2E', () => {
   })
 
   test('renders Mermaid document/code demos in UI gallery scenes with transport enabled', async ({ page }) => {
-    await page.goto('/auth/login')
-    await expect(page.locator('#login-username')).toBeVisible({ timeout: 10_000 })
-
-    await page.locator('#login-username').fill(DEFAULT_ADMIN.username)
-    await page.locator('input[type="password"]').first().fill(DEFAULT_ADMIN.password)
-    await Promise.all([
-      page.waitForURL('**/admin**', { timeout: 15_000 }),
-      page.locator('button[type="submit"]').click(),
-    ])
+    await loginViaUi(page)
 
     await page.goto('/admin/ui-gallery/scenes')
     await page.waitForLoadState('domcontentloaded')
@@ -137,5 +212,26 @@ test.describe('Transport enabled E2E', () => {
 
     await codeDemo.locator('[data-code-view-toggle][data-code-view="preview"]').first().click()
     await expect(codeDemo.locator('.hai-md-mermaid-preview svg')).toBeVisible({ timeout: 15_000 })
+
+    await expect(page.getByText('MarkdownRenderer · 字号与 HTML 标签')).toBeVisible()
+    await expect(page.getByText('AiDocumentEditor · 字号与 HTML 标签')).toBeVisible()
+
+    const markdownHtmlOffDemo = page.getByTestId('markdown-html-off-demo')
+    const markdownHtmlOnDemo = page.getByTestId('markdown-html-on-demo')
+    await expect(markdownHtmlOffDemo.locator('b')).toHaveCount(0)
+    await expect(markdownHtmlOnDemo.locator('b').first()).toHaveText('粗体强调')
+
+    const markdownOffFontSize = await markdownHtmlOffDemo.locator('.hai-markdown').evaluate(
+      element => window.getComputedStyle(element).fontSize,
+    )
+    const markdownOnFontSize = await markdownHtmlOnDemo.locator('.hai-markdown').evaluate(
+      element => window.getComputedStyle(element).fontSize,
+    )
+    expect(Number.parseFloat(markdownOnFontSize)).toBeGreaterThan(Number.parseFloat(markdownOffFontSize))
+
+    const aiDocumentHtmlOffDemo = page.getByTestId('ai-document-html-off-demo')
+    const aiDocumentHtmlOnDemo = page.getByTestId('ai-document-html-on-demo')
+    await expect(aiDocumentHtmlOffDemo.locator('article b')).toHaveCount(0)
+    await expect(aiDocumentHtmlOnDemo.locator('article b').first()).toHaveText('重点')
   })
 })

@@ -36,7 +36,7 @@
   import type { DataAttributes } from '../../types.js'
   import { Combobox } from 'bits-ui'
   import { uiM } from '../../messages.js'
-  import { getDataAttributes } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import BareButton from '../primitives/BareButton.svelte'
 
   /** 选项定义 */
@@ -93,8 +93,18 @@
     value = ''
   }
 
+  // ─── 统一视觉样式（与 Select 对齐：rounded-lg / 柔和边框 / focus ring） ───
+  const controlStateClass = $derived(
+    error
+      ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
+      : 'border-base-content/15 hover:border-base-content/25 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
+  )
+  const contentClass = 'z-[1200] mt-1.5 max-h-60 w-(--bits-combobox-anchor-width) overflow-y-auto rounded-xl border border-base-content/10 bg-base-100 p-1.5 shadow-xl shadow-base-content/10'
+  const itemClass = 'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-base-content/5 data-highlighted:bg-base-content/5 data-disabled:cursor-not-allowed data-disabled:opacity-40'
+
   let searchValue = $state('')
   let open = $state(false)
+  let inputRef = $state<HTMLInputElement | null>(null)
 
   /** 根据搜索关键词过滤选项 */
   const filteredOptions = $derived(
@@ -131,6 +141,19 @@
   /** 单选模式：提供给 Combobox.Root 的类型安全值 */
   const singleVal = $derived(typeof value === 'string' ? value : '')
 
+  function syncInputElementValue() {
+    if (!inputRef)
+      return
+    const nextValue = multiple ? multiInputValue : singleInputValue
+    if (inputRef.value !== nextValue) {
+      inputRef.value = nextValue
+    }
+  }
+
+  $effect(() => {
+    syncInputElementValue()
+  })
+
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
     searchValue = e.currentTarget.value
     if (!open)
@@ -145,11 +168,19 @@
   function handleMultiValueChange(v: string[]) {
     value = v
     onchange?.(v)
+    setTimeout(() => {
+      searchValue = ''
+      syncInputElementValue()
+    }, 0)
   }
 
   function handleSingleValueChange(v: string) {
     value = v
     onchange?.(v)
+    setTimeout(() => {
+      searchValue = ''
+      syncInputElementValue()
+    }, 0)
   }
 
   /** 多选模式下移除某个已选项 */
@@ -182,18 +213,20 @@
     >
       <div class='relative'>
         <div
-          class="min-h-10 px-2 py-1.5 pr-8 border rounded-lg bg-base-100 flex flex-wrap gap-1.5 items-center transition-colors
-            {disabled ? 'opacity-50 cursor-not-allowed bg-base-200' : 'cursor-text'}
-            {error ? 'border-error focus-within:border-error' : 'border-base-content/20 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20'}"
+          class={cn(
+            'min-h-10 rounded-lg border bg-base-100 flex flex-wrap gap-1.5 items-center py-1.5 pl-2.5 pr-9 transition-[border-color,box-shadow] duration-150',
+            disabled ? 'opacity-50 cursor-not-allowed bg-base-200' : 'cursor-text',
+            controlStateClass,
+          )}
         >
           {#each selectedOptions as opt (opt.value)}
-            <span class='inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-sm rounded-md'>
+            <span class='inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-sm text-primary'>
               <span class='truncate max-w-32'>{opt.label}</span>
               {#if !disabled}
                 <BareButton
                   type='button'
-                  class='hover:bg-primary/20 rounded p-0.5 transition-colors'
-                  onclick={e => removeItem(opt.value, e)}
+                  class='rounded p-0.5 transition-colors hover:bg-primary/20'
+                  onclick={(e: MouseEvent) => removeItem(opt.value, e)}
                   ariaLabel="{uiM('combobox_remove')} {opt.label}"
                 >
                   <span class='icon-[tabler--x] size-3'></span>
@@ -203,7 +236,8 @@
           {/each}
 
           <Combobox.Input
-            class='flex-1 min-w-20 bg-transparent outline-none text-sm py-0.5'
+            bind:ref={inputRef}
+            class='flex-1 min-w-20 bg-transparent py-0.5 text-sm outline-none placeholder:text-base-content/40'
             placeholder={selectedOptions.length === 0 ? placeholder : ''}
             {disabled}
             oninput={handleInput}
@@ -215,7 +249,7 @@
         </div>
 
         <Combobox.Trigger
-          class='absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle'
+          class='absolute right-2.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-base-content/40 transition-colors hover:text-base-content/70'
         >
           <span class="icon-[tabler--chevron-down] size-4 transition-transform {open ? 'rotate-180' : ''}"></span>
         </Combobox.Trigger>
@@ -223,11 +257,11 @@
 
       <Combobox.Portal>
         <Combobox.Content
-          class='z-50 mt-1 max-h-60 w-[var(--bits-combobox-anchor-width)] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-1 shadow-lg'
+          class={contentClass}
           sideOffset={4}
         >
           {#if filteredOptions.length === 0}
-            <div class='px-3 py-2 text-sm text-base-content/50'>
+            <div class='px-3 py-2.5 text-sm text-base-content/50'>
               {uiM('combobox_no_match')}
             </div>
           {:else}
@@ -236,10 +270,10 @@
                 value={opt.value}
                 label={opt.label}
                 disabled={opt.disabled}
-                class='flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-base-200 data-[highlighted]:bg-base-200 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50'
+                class={itemClass}
               >
                 {#snippet children({ selected })}
-                  <span class="size-4 shrink-0 rounded border border-base-content/30 flex items-center justify-center {selected ? 'bg-primary border-primary' : ''}">
+                  <span class="flex size-4 shrink-0 items-center justify-center rounded border border-base-content/30 {selected ? 'border-primary bg-primary' : ''}">
                     {#if selected}
                       <span class='icon-[tabler--check] size-3 text-primary-content'></span>
                     {/if}
@@ -247,7 +281,7 @@
                   <div class='flex-1 min-w-0'>
                     <span>{opt.label}</span>
                     {#if opt.description}
-                      <div class='text-xs text-base-content/50 truncate'>{opt.description}</div>
+                      <div class='truncate text-xs text-base-content/50'>{opt.description}</div>
                     {/if}
                   </div>
                 {/snippet}
@@ -271,7 +305,12 @@
     >
       <div class='relative'>
         <Combobox.Input
-          class="input w-full pr-8 {error ? 'input-error' : ''}"
+          bind:ref={inputRef}
+          class={cn(
+            'h-10 w-full rounded-lg border bg-base-100 pl-3 pr-9 text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-base-content/40',
+            controlStateClass,
+            disabled && 'opacity-50 cursor-not-allowed',
+          )}
           {placeholder}
           {disabled}
           oninput={handleInput}
@@ -281,7 +320,7 @@
           }}
         />
         <Combobox.Trigger
-          class='absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle'
+          class='absolute right-2.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-base-content/40 transition-colors hover:text-base-content/70'
         >
           <span class="icon-[tabler--chevron-down] size-4 transition-transform {open ? 'rotate-180' : ''}"></span>
         </Combobox.Trigger>
@@ -289,11 +328,11 @@
 
       <Combobox.Portal>
         <Combobox.Content
-          class='z-50 mt-1 max-h-60 w-[var(--bits-combobox-anchor-width)] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-1 shadow-lg'
+          class={contentClass}
           sideOffset={4}
         >
           {#if filteredOptions.length === 0}
-            <div class='px-3 py-2 text-sm text-base-content/50'>
+            <div class='px-3 py-2.5 text-sm text-base-content/50'>
               {uiM('combobox_no_match')}
             </div>
           {:else}
@@ -302,7 +341,7 @@
                 value={opt.value}
                 label={opt.label}
                 disabled={opt.disabled}
-                class='flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-base-200 data-[highlighted]:bg-base-200 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50'
+                class={cn(itemClass, 'data-selected:bg-primary/10 data-selected:text-primary data-selected:font-medium')}
               >
                 {#snippet children({ selected })}
                   <span class='size-4 shrink-0'>
@@ -313,7 +352,7 @@
                   <div class='flex-1 min-w-0'>
                     <span>{opt.label}</span>
                     {#if opt.description}
-                      <div class='text-xs text-base-content/50 truncate'>{opt.description}</div>
+                      <div class='truncate text-xs text-base-content/50'>{opt.description}</div>
                     {/if}
                   </div>
                 {/snippet}

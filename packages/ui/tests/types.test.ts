@@ -13,6 +13,7 @@ import type {
   MarkdownBlockStyleKind,
   MarkdownCodeRunResult,
 } from '../src/lib/components/scenes/ai/document-types.js'
+import type { MarkdownRendererProps } from '../src/lib/components/scenes/types.js'
 import type {
   AlertProps,
   Alignment,
@@ -110,11 +111,18 @@ describe('aI 文档编辑器类型', () => {
   it('aiDocumentEditorProps 同时暴露兼容和新版块级回调', () => {
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('showOutlineNumbering')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('allowUnsafeCodePreview')
+    expectTypeOf<AiDocumentEditorProps>().toHaveProperty('fontSize')
+    expectTypeOf<AiDocumentEditorProps>().toHaveProperty('allowHtmlTags')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockformat')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockstyle')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyinlineformat')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplylink')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplycolor')
+  })
+
+  it('markdownRendererProps 暴露展示层配置', () => {
+    expectTypeOf<MarkdownRendererProps>().toHaveProperty('fontSize')
+    expectTypeOf<MarkdownRendererProps>().toHaveProperty('allowHtmlTags')
   })
 
   it('markdownCodeRunResult 应暴露脚本沙箱控制字段', () => {

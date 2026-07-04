@@ -9,7 +9,7 @@
 <script lang='ts'>
   import DemoCard from '$lib/components/gallery/DemoCard.svelte'
   import DemoSection from '$lib/components/gallery/DemoSection.svelte'
-  import { toast } from '@h-ai/ui'
+  import { message, messageBox, toast } from '@h-ai/ui'
 
   // === 覆盖层状态 ===
   let modalOpen = $state(false)
@@ -22,6 +22,15 @@
   let feedbackOpen = $state(false)
   let settingsOpen = $state(false)
   let toastModalOpen = $state(false)
+
+  // === 设置场景状态 ===
+  let themeColor = $state('#4f46e5')
+  let settingsActive = $state('appearance')
+  const settingsSections = [
+    { id: 'appearance', label: '外观', icon: 'icon-[tabler--palette]' },
+    { id: 'account', label: '账户', icon: 'icon-[tabler--user]' },
+    { id: 'notifications', label: '通知', icon: 'icon-[tabler--bell]' },
+  ]
 
   // === 示例源码 ===
   const codeModal = `<Button variant='primary' onclick={() => open = true}>打开 Modal</Button>
@@ -82,6 +91,39 @@
 <LanguageSwitch />
 <ThemeSelector showPreview grouped />
 <ThemeSelector showPreview={false} />`
+
+  const codeMessage = `import { message } from '@h-ai/ui'
+
+<Button onclick={() => message.info('这是一条信息消息')}>信息</Button>
+<Button onclick={() => message.success('保存成功')}>成功</Button>
+<Button onclick={() => message.warning('请检查输入')}>警告</Button>
+<Button onclick={() => message.error('操作失败')}>错误</Button>
+
+<!-- 应用根部需挂载一次 <MessageContainer /> -->`
+
+  const codeMessageBox = `import { messageBox } from '@h-ai/ui'
+
+const ok = await messageBox.confirm({
+  title: '确认操作',
+  message: '确定要继续吗？',
+  confirmText: '确定',
+})
+
+await messageBox.alert('这是一条提示信息')
+
+<!-- 应用根部需挂载一次 <MessageBoxContainer /> -->`
+
+  const codeThemeColorPicker = `<ThemeColorPicker value={themeColor} onchange={c => (themeColor = c)} />`
+
+  const codeSettingsLayout = `<SettingsLayout
+  title='设置'
+  description='管理你的账户与偏好'
+  sections={[{ id: 'appearance', label: '外观', icon: 'icon-[tabler--palette]' }]}
+  active={active}
+  onselect={id => (active = id)}
+>
+  {#if active === 'appearance'}<AppearanceSection />{/if}
+</SettingsLayout>`
 </script>
 
 <div class='space-y-10'>
@@ -280,6 +322,58 @@
   <div class='divider'></div>
 
   <DemoSection
+    title='轻量消息与命令式弹框'
+    subtitle='message / messageBox'
+    iconClass='icon-[tabler--bell-ringing]'
+    tone='secondary'
+  >
+    <DemoCard title='Message 轻量消息' description='顶部居中滑入的命令式消息（类似 ElementUI Message）' code={codeMessage}>
+      <div class='flex flex-wrap gap-3'>
+        <Button variant='info' outline onclick={() => message.info('这是一条信息消息')}>信息</Button>
+        <Button variant='success' outline onclick={() => message.success('保存成功')}>成功</Button>
+        <Button variant='warning' outline onclick={() => message.warning('请检查输入')}>警告</Button>
+        <Button variant='error' outline onclick={() => message.error('操作失败')}>错误</Button>
+        <Button variant='ghost' onclick={() => message.clear()}>清空</Button>
+      </div>
+    </DemoCard>
+
+    <DemoCard title='MessageBox 命令式弹框' description='返回 Promise 的确认 / 提示弹框（类似 ElementUI MessageBox）' code={codeMessageBox}>
+      <div class='flex flex-wrap gap-3'>
+        <Button
+          variant='primary'
+          onclick={async () => {
+            const ok = await messageBox.confirm({ title: '确认操作', message: '确定要继续吗？', confirmText: '确定' })
+            message[ok ? 'success' : 'info'](ok ? '已确认' : '已取消')
+          }}
+        >
+          confirm 确认框
+        </Button>
+        <Button
+          variant='error'
+          onclick={async () => {
+            const ok = await messageBox.confirm({ title: '删除确认', message: '此操作不可恢复，确定删除？', confirmText: '删除', confirmVariant: 'error' })
+            if (ok)
+              message.error('已删除')
+          }}
+        >
+          危险确认框
+        </Button>
+        <Button
+          variant='secondary'
+          outline
+          onclick={async () => {
+            await messageBox.alert('这是一条提示信息，仅有确定按钮。')
+          }}
+        >
+          alert 提示框
+        </Button>
+      </div>
+    </DemoCard>
+  </DemoSection>
+
+  <div class='divider'></div>
+
+  <DemoSection
     title='场景对话框'
     subtitle='FeedbackModal / SettingsModal'
     iconClass='icon-[tabler--message-2]'
@@ -328,6 +422,37 @@
           <ThemeSelector showPreview={false} />
         </div>
       </div>
+    </DemoCard>
+
+    <DemoCard title='ThemeColorPicker 主题色选择器' description='预置主题色 + 原生取色盘' code={codeThemeColorPicker}>
+      <div class='space-y-3'>
+        <ThemeColorPicker value={themeColor} onchange={c => (themeColor = c)} />
+        <p class='text-xs text-base-content/50'>当前颜色：<span class='font-mono'>{themeColor}</span></p>
+      </div>
+    </DemoCard>
+  </DemoSection>
+
+  <div class='divider'></div>
+
+  <DemoSection
+    title='应用设置布局'
+    subtitle='SettingsLayout'
+    iconClass='icon-[tabler--adjustments]'
+    tone='info'
+  >
+    <DemoCard title='SettingsLayout' description='标题 + 左侧分区导航 + 右侧内容区的设置页布局' code={codeSettingsLayout}>
+      <SettingsLayout
+        title='设置'
+        description='管理你的账户与偏好'
+        sections={settingsSections}
+        active={settingsActive}
+        onselect={id => (settingsActive = id)}
+      >
+        <div class='rounded-xl border border-base-300 bg-base-200/30 p-5'>
+          <p class='text-sm font-medium mb-1'>当前分区：{settingsSections.find(s => s.id === settingsActive)?.label}</p>
+          <p class='text-sm text-base-content/60'>使用方在此渲染对应分区的内容。点击左侧导航切换分区。</p>
+        </div>
+      </SettingsLayout>
     </DemoCard>
   </DemoSection>
 </div>

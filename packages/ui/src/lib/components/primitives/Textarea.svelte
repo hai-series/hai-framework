@@ -33,9 +33,20 @@
   const dataAttributes = $derived(getDataAttributes(restProps))
   let textareaRef: HTMLTextAreaElement | undefined = $state()
 
+  const wrapperClass = $derived(
+    cn(
+      'flex w-full rounded-lg border bg-base-100',
+      error
+        ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
+        : 'border-base-content/15 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
+      'transition-[border-color,box-shadow] duration-150',
+      disabled && 'opacity-50 cursor-not-allowed',
+    ),
+  )
+
   const textareaClass = $derived(
     cn(
-      'textarea w-full',
+      'textarea w-full bg-transparent border-none outline-none',
       getInputSizeClass(size),
       error && 'textarea-error',
       className,
@@ -74,20 +85,22 @@
 </script>
 
 <div {...dataAttributes} class='fieldset w-full'>
-  <textarea
-    bind:this={textareaRef}
-    {id}
-    {name}
-    {placeholder}
-    {rows}
-    {disabled}
-    {readonly}
-    {required}
-    class={textareaClass}
-    bind:value
-    oninput={handleInput}
-    oninvalid={handleInvalid}
-  ></textarea>
+  <div class={wrapperClass}>
+    <textarea
+      bind:this={textareaRef}
+      {id}
+      {name}
+      {placeholder}
+      {rows}
+      {disabled}
+      {readonly}
+      {required}
+      class={textareaClass}
+      bind:value
+      oninput={handleInput}
+      oninvalid={handleInvalid}
+    ></textarea>
+  </div>
   {#if error}
     <span class='fieldset-label text-error'>{error}</span>
   {/if}

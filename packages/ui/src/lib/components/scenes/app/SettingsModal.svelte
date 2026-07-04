@@ -12,7 +12,7 @@
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
   import { uiM } from '../../../messages.js'
-  import { getDataAttributes } from '../../../utils.js'
+  import { cn, getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
 
@@ -25,6 +25,7 @@
     onlanguagechange?: (lang: string) => void
     onthemechange?: (theme: string) => void
     onclose?: () => void
+    class?: string
   }
 
   let {
@@ -45,6 +46,7 @@
     onlanguagechange,
     onthemechange,
     onclose,
+    class: className = '',
     ...restProps
   }: Props & DataAttributes = $props()
 
@@ -76,7 +78,7 @@
     onclick={handleBackdropClick}
   >
     <div
-      class='relative w-full max-w-lg mx-4 transform overflow-hidden rounded-2xl bg-base-100 shadow-xl transition-all'
+      class={cn('relative w-full max-w-lg mx-4 transform overflow-hidden rounded-2xl bg-base-100 shadow-xl transition-all', className)}
       role='dialog'
       aria-modal='true'
     >

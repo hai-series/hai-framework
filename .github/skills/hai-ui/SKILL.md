@@ -83,9 +83,9 @@ export default defineConfig({
 
 | 组件 | 用途 |
 | --- | --- |
-| `MarkdownRenderer` | Markdown 渲染（内置 Shiki 代码高亮） |
+| `MarkdownRenderer` | Markdown 渲染（内置 Shiki 代码高亮，支持 `fontSize` / `allowHtmlTags`） |
 | `AiDocumentDownloadMenu` | AI 文档下载菜单 |
-| `AiDocumentEditor` | AI 文档编辑器，支持大纲、复制、代码/预览切换、Mermaid |
+| `AiDocumentEditor` | AI 文档编辑器，支持大纲、复制、代码/预览切换、Mermaid，以及 `fontSize` / `allowHtmlTags` |
 | `AiTableEditor` | AI 结构化表格展示与编辑 |
 
 ### AiDocumentEditor 与 Mermaid
@@ -117,6 +117,24 @@ export default defineConfig({
   content={`stateDiagram-v2\n  [*] --> 待支付\n  待支付 --> 已支付`}
   showCodePreviewToggle
   showCopyButton
+  showOutline={false}
+/>
+```
+
+### 字号与 HTML 标签解析
+
+- `fontSize` 支持 `number`（按 px）或 CSS 长度字符串（如 `1.125rem`）。
+- `allowHtmlTags` 默认关闭；开启后会按安全白名单解析 `<b>` / `<i>` / `<u>` / `<mark>` 等标签，危险标签与属性仍会被消毒。
+
+```svelte
+<MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
+
+<AiDocumentEditor
+  title="方案文档"
+  content={documentMarkdown}
+  fontSize={18}
+  allowHtmlTags
+  showToolbar
   showOutline={false}
 />
 ```

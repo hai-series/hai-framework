@@ -10,9 +10,13 @@ import type { RendererObject, Tokens } from 'marked'
 import { Marked } from 'marked'
 import { createEditorMarkdownExtensions } from './editor-markdown-extensions.js'
 import { highlightCode, isLanguageSupported } from './highlight.js'
-
-const SAFE_LINK_HREF_REGEX = /^(?:https?:\/\/|\/|#|mailto:)/i
-const SAFE_IMAGE_SRC_REGEX = /^(?:https?:\/\/|\/|data:image\/)/i
+import {
+  escapeHtml,
+  isExternalLinkHref,
+  sanitizeImageSrc,
+  sanitizeLinkHref,
+  sanitizeMarkdownHtml,
+} from './safe-html.js'
 
 /**
  * Markdown 解析配置
@@ -24,21 +28,18 @@ export interface MarkdownParseOptions {
   showCopyButton?: boolean
   /** 是否将换行符转换为 <br>（默认 true，适合 AI 输出） */
   breaks?: boolean
+  /** 是否按安全白名单解析原始 HTML 标签（默认 false） */
+  allowHtmlTags?: boolean
 }
 
-/**
- * 对 HTML 特殊字符进行转义
- *
- * @param text - 原始文本
- * @returns 转义后的安全文本
- */
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+function readHtmlTokenSource(token: Tokens.HTML | Tokens.Tag): string {
+  if ('raw' in token && typeof token.raw === 'string') {
+    return token.raw
+  }
+
+  return 'text' in token && typeof token.text === 'string'
+    ? token.text
+    : ''
 }
 
 function createTableCellAttrs(cell: Tokens.TableCell): string {
@@ -94,15 +95,18 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
 
     // 原始 HTML 块：转义以防止 XSS
     html(token: Tokens.HTML | Tokens.Tag): string {
-      return escapeHtml('text' in token ? token.text : '')
+      const source = readHtmlTokenSource(token)
+      return options.allowHtmlTags
+        ? sanitizeMarkdownHtml(source)
+        : escapeHtml(source)
     },
 
     // 链接：外部链接自动添加 target="_blank"，阻止危险协议
     link({ href, title, tokens }: Tokens.Link): string {
       const text = this.parser.parseInline(tokens)
       // 安全检查：仅允许安全协议
-      const safeHref = href && SAFE_LINK_HREF_REGEX.test(href) ? href : ''
-      const isExternal = safeHref && (safeHref.startsWith('http://') || safeHref.startsWith('https://'))
+      const safeHref = sanitizeLinkHref(href)
+      const isExternal = safeHref && isExternalLinkHref(safeHref)
       const attrs = [
         `href="${escapeHtml(safeHref)}"`,
         title ? `title="${escapeHtml(title)}"` : '',
@@ -114,7 +118,7 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
     // 图片：添加 loading="lazy"，验证 src 协议
     image({ href, title, text }: Tokens.Image): string {
       // 安全检查：仅允许安全协议
-      const safeSrc = href && SAFE_IMAGE_SRC_REGEX.test(href) ? href : ''
+      const safeSrc = sanitizeImageSrc(href)
       const attrs = [
         `src="${escapeHtml(safeSrc)}"`,
         `alt="${escapeHtml(text || '')}"`,
@@ -168,6 +172,7 @@ const DEFAULT_OPTIONS: Required<MarkdownParseOptions> = {
   enableHighlight: true,
   showCopyButton: true,
   breaks: true,
+  allowHtmlTags: false,
 }
 
 /** 缓存 Marked 实例，避免重复创建 */
@@ -178,7 +183,7 @@ let cachedOptionsKey = ''
  * 获取配置签名，用于实例缓存比较
  */
 function getOptionsKey(options: Required<MarkdownParseOptions>): string {
-  return `${options.enableHighlight}-${options.showCopyButton}-${options.breaks}`
+  return `${options.enableHighlight}-${options.showCopyButton}-${options.breaks}-${options.allowHtmlTags}`
 }
 
 /**

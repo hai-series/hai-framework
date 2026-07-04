@@ -572,6 +572,8 @@ export interface HashDisplayProps extends DataAttributes {
 export interface MarkdownRendererProps extends DataAttributes {
   /** Markdown 源文本 */
   content?: string
+  /** 文本字号，支持 number（按 px）或任意 CSS 长度字符串 */
+  fontSize?: string | number
   /** 自定义类名 */
   class?: string
   /** 是否显示代码块复制按钮（默认 true） */
@@ -580,6 +582,8 @@ export interface MarkdownRendererProps extends DataAttributes {
   enableHighlight?: boolean
   /** 是否将换行符转换为 <br>（默认 true，适合 AI 输出） */
   breaks?: boolean
+  /** 是否按安全白名单解析原始 HTML 标签（默认 false） */
+  allowHtmlTags?: boolean
 }
 /**
  * 签名展示属性

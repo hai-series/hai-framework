@@ -94,6 +94,18 @@ describe('parseMarkdown - 基础渲染', () => {
     expect(html).toContain('href="https://example.com"')
     expect(html).toContain('>world</a>')
   })
+
+  it('allowHtmlTags 开启时应该解析安全 HTML 标签并过滤危险属性', () => {
+    const html = parseMarkdown(
+      '支持 <b onclick="evil()">bold</b> 与 <a href="https://example.com" onclick="evil()">link</a>',
+      { allowHtmlTags: true },
+    )
+
+    expect(html).toContain('<b>bold</b>')
+    expect(html).toContain('href="https://example.com"')
+    expect(html).toContain('target="_blank"')
+    expect(html).not.toContain('onclick=')
+  })
 })
 
 // =============================================================================
@@ -161,6 +173,15 @@ describe('parseMarkdown - XSS 防护', () => {
     const html = parseMarkdown('<iframe src="http://evil.com"></iframe>')
     expect(html).not.toContain('<iframe')
     expect(html).toContain('&lt;iframe')
+  })
+
+  it('allowHtmlTags 开启时仍应转义危险标签', () => {
+    const html = parseMarkdown('<script>alert("xss")</script> <b>safe</b>', {
+      allowHtmlTags: true,
+    })
+
+    expect(html).toContain('&lt;script&gt;')
+    expect(html).toContain('<b>safe</b>')
   })
 
   it('应该阻止 javascript: 协议链接', () => {

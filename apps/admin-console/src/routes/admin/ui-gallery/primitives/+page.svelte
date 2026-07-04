@@ -16,6 +16,9 @@
   let inputVal = $state('')
   let textareaVal = $state('')
   let selectVal = $state('')
+  let selectClearVal = $state('')
+  let selectFilterVal = $state('')
+  let selectBothVal = $state('')
   let checkboxVal = $state(false)
   const checkboxIndeterminate = $state(true)
   let switchVal = $state(true)
@@ -77,6 +80,18 @@
 <Select options={selectOpts} placeholder='小号' size='sm' />
 <Select options={selectOpts} placeholder='大号' size='lg' />
 <Select options={selectOpts} placeholder='请选择' error='请选择一项' />`
+
+  const codeSelectClearFilter = `<Select bind:value options={selectOpts} placeholder='可清空' clearable />
+<Select bind:value options={selectOpts} placeholder='可筛选' filterable />
+<Select bind:value options={selectOpts} placeholder='可清空+可筛选' clearable filterable />`
+
+  const codeSelectLayout = `<!-- 紧凑筛选行：Select 与 Input 尺寸对齐、可随容器收缩、下拉不被相邻控件遮挡 -->
+<div class='flex items-center gap-3'>
+  <Input size='sm' placeholder='搜索' class='w-40' />
+  <Select size='sm' options={selectOpts} placeholder='框架' />
+  <Select size='sm' options={selectOpts} placeholder='状态' />
+  <Select size='sm' options={selectOpts} placeholder='来源' />
+</div>`
 
   const codeToggle = `<ToggleCheckbox bind:checked={toggleCheck} />
 <ToggleInput bind:checked={toggleInput} />
@@ -326,6 +341,70 @@
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-err'>错误状态</label>
           <Select id='g-sel-err' options={selectOpts} placeholder='请选择' error='请选择一项' />
+        </div>
+      </div>
+    </DemoCard>
+
+    <DemoCard title='Select clearable & filterable' description='可清空、可筛选下拉框' code={codeSelectClearFilter}>
+      <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
+        <div>
+          <label class='text-sm font-medium mb-1 block' for='g-sel-clear'>clearable</label>
+          <Select id='g-sel-clear' bind:value={selectClearVal} options={selectOpts} placeholder='可清空' clearable />
+        </div>
+        <div>
+          <label class='text-sm font-medium mb-1 block' for='g-sel-filter'>filterable</label>
+          <Select id='g-sel-filter' bind:value={selectFilterVal} options={selectOpts} placeholder='可筛选' filterable />
+        </div>
+        <div>
+          <label class='text-sm font-medium mb-1 block' for='g-sel-both'>clearable + filterable</label>
+          <Select id='g-sel-both' bind:value={selectBothVal} options={selectOpts} placeholder='可清空+可筛选' clearable filterable />
+        </div>
+      </div>
+    </DemoCard>
+
+    <DemoCard title='Select 布局与对齐' description='紧凑筛选行：与 Input 尺寸对齐、可随容器收缩、下拉层级不被相邻控件遮挡' code={codeSelectLayout}>
+      <div class='space-y-4'>
+        <div>
+          <p class='text-sm font-medium mb-2'>与 Input 同尺寸对齐（sm）</p>
+          <div class='flex items-center gap-3'>
+            <Input size='sm' placeholder='搜索' class='w-40' />
+            <Select size='sm' options={selectOpts} placeholder='框架' />
+            <Select size='sm' options={selectOpts} placeholder='状态' />
+            <Select size='sm' options={selectOpts} placeholder='来源' />
+          </div>
+        </div>
+        <div>
+          <p class='text-sm font-medium mb-2'>相邻下拉展开不被遮挡（点击第一个再看后续控件）</p>
+          <div class='flex items-center gap-3'>
+            <Select options={selectOpts} placeholder='第一个' />
+            <Select options={selectOpts} placeholder='第二个' />
+            <Select options={selectOpts} placeholder='第三个' />
+          </div>
+        </div>
+        <div>
+          <p class='text-sm font-medium mb-2'>各尺寸与 Input 高度一致（xs / sm / md / lg / xl）</p>
+          <div class='space-y-2'>
+            <div class='flex items-center gap-3'>
+              <Input size='xs' placeholder='xs' class='w-40' />
+              <Select size='xs' options={selectOpts} placeholder='xs' />
+            </div>
+            <div class='flex items-center gap-3'>
+              <Input size='sm' placeholder='sm' class='w-40' />
+              <Select size='sm' options={selectOpts} placeholder='sm' />
+            </div>
+            <div class='flex items-center gap-3'>
+              <Input size='md' placeholder='md' class='w-40' />
+              <Select size='md' options={selectOpts} placeholder='md' />
+            </div>
+            <div class='flex items-center gap-3'>
+              <Input size='lg' placeholder='lg' class='w-40' />
+              <Select size='lg' options={selectOpts} placeholder='lg' />
+            </div>
+            <div class='flex items-center gap-3'>
+              <Input size='xl' placeholder='xl' class='w-40' />
+              <Select size='xl' options={selectOpts} placeholder='xl' />
+            </div>
+          </div>
         </div>
       </div>
     </DemoCard>
