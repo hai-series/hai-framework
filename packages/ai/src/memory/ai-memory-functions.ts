@@ -272,6 +272,7 @@ export function createMemoryOperations(
       type: input.type,
       importance: input.importance ?? 0.5,
       objectId: input.objectId,
+      scope: input.scope,
       metadata: input.metadata,
       vector,
       createdAt: now,
@@ -415,10 +416,19 @@ export function createMemoryOperations(
         where.importance = { $gte: options.minImportance }
       }
 
-      const candidates = await store.query({
+      const allCandidates = await store.query({
         objectId: options?.objectId,
         where: Object.keys(where).length > 0 ? where : undefined,
       })
+
+      // scope 过滤在内存中完成：指定 scope 时 key-value 严格匹配，不纳入全局记忆（scope 为 null/undefined）
+      const candidates = options?.scope
+        ? allCandidates.filter((e) => {
+            if (!e.scope)
+              return false
+            return Object.entries(options.scope!).every(([k, v]) => e.scope![k] === v)
+          })
+        : allCandidates
 
       if (candidates.length === 0) {
         return ok([])
@@ -517,10 +527,11 @@ export function createMemoryOperations(
 
         const entries: MemoryEntry[] = []
         for (const input of extractResult.data) {
-          const entryInput: MemoryEntryInput = { ...input, objectId: input.objectId ?? options?.objectId }
+          const entryInput: MemoryEntryInput = { ...input, objectId: input.objectId ?? options?.objectId, scope: options?.scope }
           const relatedResult = await recallEntries(entryInput.content, {
             topK: config.writebackRelatedTopK,
             objectId: entryInput.objectId,
+            scope: entryInput.scope,
           }, false)
           if (!relatedResult.success) {
             return relatedResult
@@ -601,7 +612,7 @@ export function createMemoryOperations(
           return ok([...messages])
         }
 
-        const recallResult = await this.recall(query, { topK, objectId: options?.objectId })
+        const recallResult = await this.recall(query, { topK, objectId: options?.objectId, scope: options?.scope })
         if (!recallResult.success) {
           return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: recallResult.error.message } }), recallResult.error)
         }
