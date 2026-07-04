@@ -84,6 +84,50 @@ function readHtmlTokenSource(token: Tokens.HTML | Tokens.Tag): string {
 }
 
 /**
+ * 判断 fenced code block 是否已经输出闭合 fence。
+ *
+ * marked 在流式半截内容里也会把未闭合 fence 识别成 code token；如果此时提前
+ * 调用 Mermaid，会把临时语法错误渲染成错误 SVG 并残留在界面上。
+ */
+function isClosedFencedCodeBlock(token: Tokens.Code): boolean {
+  const firstLineEnd = token.raw.indexOf('\n')
+  const firstLine = firstLineEnd === -1
+    ? token.raw
+    : token.raw.slice(0, firstLineEnd)
+  const openingStart = firstLine.search(/\S/)
+  if (openingStart === -1 || openingStart > 3) {
+    return true
+  }
+
+  const markerChar = firstLine[openingStart]
+  if (markerChar !== '`' && markerChar !== '~') {
+    return true
+  }
+
+  let markerLength = 0
+  for (
+    let index = openingStart;
+    firstLine[index] === markerChar;
+    index += 1
+  ) {
+    markerLength += 1
+  }
+  if (markerLength < 3) {
+    return true
+  }
+
+  const trimmedRaw = token.raw.trimEnd()
+  const lastLineStart = trimmedRaw.lastIndexOf('\n')
+  if (lastLineStart === -1) {
+    return false
+  }
+
+  const closingFence = trimmedRaw.slice(lastLineStart + 1).trim()
+  return closingFence.length >= markerLength
+    && [...closingFence].every(char => char === markerChar)
+}
+
+/**
  * Create a URL-safe heading slug while keeping letters and digits.
  */
 function slugifyHeading(text: string): string {
@@ -167,12 +211,17 @@ function createRendererObject(
       return `<h${depth} id="${escapeHtml(id)}" data-heading-id="${escapeHtml(id)}">${headingHtml}</h${depth}>`
     },
 
-    code({ text, lang }: Tokens.Code): string {
+    code(token: Tokens.Code): string {
+      const { text, lang } = token
       // rawLanguage is the original info string from the fence.
       const rawLanguage = lang?.trim() || ''
 
       // mermaid 块在阅读态自动渲染为图表；只有 code 模式的代码/预览切换才保留源码视图。
-      if (isMermaidLanguage(rawLanguage) && !options.showCodePreviewToggle) {
+      if (
+        isMermaidLanguage(rawLanguage)
+        && !options.showCodePreviewToggle
+        && isClosedFencedCodeBlock(token)
+      ) {
         const mermaidBlockId = `hai-md-code-${state.codeBlocks.length + 1}`
         state.codeBlocks.push({
           id: mermaidBlockId,
@@ -180,7 +229,7 @@ function createRendererObject(
           language: rawLanguage,
         })
 
-        return `<div class="hai-md-mermaid" data-mermaid-host="${escapeHtml(mermaidBlockId)}"></div>`
+        return `<div class="hai-md-mermaid" contenteditable="false" data-mermaid-host="${escapeHtml(mermaidBlockId)}"></div>`
       }
 
       // highlightLanguage is validated against supported languages.

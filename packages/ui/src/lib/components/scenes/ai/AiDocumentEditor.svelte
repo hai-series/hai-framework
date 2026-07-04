@@ -37,6 +37,11 @@
   import { resolveDocumentMarkdownContent } from './document-download.js'
   import { renderMarkdownDocument } from './document-parse.js'
   import { parseMarkdown } from './markdown-parse.js'
+  import {
+    createMermaidSourceSignature,
+    getMermaidHostRenderAction,
+    isCurrentMermaidRenderToken,
+  } from './mermaid-host-sync.js'
   import { renderMermaidDiagram } from './mermaid-render.js'
 
   interface SelectionToolbarPosition {
@@ -421,6 +426,13 @@
   )
   // html 是最终注入正文的内容。
   const html = $derived(renderResult.html)
+  // Mermaid 占位 HTML 在流式阶段可能不变，必须额外订阅源码签名变化。
+  const mermaidRenderSignature = $derived(
+    renderResult.codeBlocks
+      .filter(block => block.language?.trim().toLowerCase() === 'mermaid')
+      .map(block => createMermaidSourceSignature(block.id, block.code))
+      .join('\n'),
+  )
   // outline 是左侧目录的原始数据源。
   const outline = $derived(renderResult.outline)
   // outlineHasContent 用来区分“目录被收起”和“正文确实没有标题”。
@@ -493,6 +505,7 @@
 
   $effect(() => {
     void html
+    void mermaidRenderSignature
     if (typeof window === 'undefined' || !previewHost) {
       return
     }
@@ -942,7 +955,11 @@
       host.innerHTML = `<div class="hai-md-preview-card hai-md-preview-mermaid"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<div class="hai-md-mermaid hai-md-mermaid-preview"></div></div>`
       const mermaidEl = host.querySelector<HTMLElement>('.hai-md-mermaid-preview')
       if (mermaidEl) {
-        void renderMermaidHost(mermaidEl, result.content)
+        void renderMermaidHost(
+          mermaidEl,
+          result.content,
+          createMermaidSourceSignature('preview', result.content),
+        )
       }
       return
     }
@@ -981,13 +998,6 @@
 
     const hosts = previewHost.querySelectorAll<HTMLElement>('[data-mermaid-host]')
     for (const host of hosts) {
-      if (
-        host.dataset.mermaidStatus === 'ready'
-        || host.dataset.mermaidStatus === 'rendering'
-      ) {
-        continue
-      }
-
       const blockId = host.dataset.mermaidHost
       if (!blockId) {
         continue
@@ -998,7 +1008,17 @@
         continue
       }
 
-      void renderMermaidHost(host, block.code)
+      const nextSignature = createMermaidSourceSignature(block.id, block.code)
+      const action = getMermaidHostRenderAction({
+        status: host.dataset.mermaidStatus,
+        renderedSignature: host.dataset.mermaidSourceSignature,
+        nextSignature,
+      })
+      if (!action.shouldRender) {
+        continue
+      }
+
+      void renderMermaidHost(host, block.code, action.token)
     }
   }
 
@@ -1006,17 +1026,38 @@
    * 把单个 mermaid 源码渲染进目标节点；语法错误时展示本地化错误提示。
    * `mermaidStatus` 既避免同一帧重复渲染，也兜住多次 effect 触发。
    */
-  async function renderMermaidHost(host: HTMLElement, code: string): Promise<void> {
+  async function renderMermaidHost(
+    host: HTMLElement,
+    code: string,
+    renderToken: string,
+  ): Promise<void> {
     host.dataset.mermaidStatus = 'rendering'
+    host.dataset.mermaidSourceSignature = renderToken
     try {
       const svg = await renderMermaidDiagram(code)
-      host.innerHTML = svg
+      if (!isCurrentMermaidRenderToken(renderToken, host.dataset.mermaidSourceSignature)) {
+        return
+      }
+
+      host.innerHTML = stripMermaidSvgStyleElements(svg)
       host.dataset.mermaidStatus = 'ready'
     }
     catch (error) {
+      if (!isCurrentMermaidRenderToken(renderToken, host.dataset.mermaidSourceSignature)) {
+        return
+      }
+
       host.dataset.mermaidStatus = 'error'
       host.innerHTML = `<div class="hai-md-mermaid-error">${escapePreviewText(error instanceof Error ? error.message : uiM('markdown_mermaid_failed'))}</div>`
     }
+  }
+
+  /**
+   * Mermaid 11.x 会在 SVG 内写入很长的 style 标签内容；在 contenteditable 预览区里，
+   * 部分浏览器会把这些 CSS 当成正文显示。这里保留 SVG 图形，剥离内联样式文本。
+   */
+  function stripMermaidSvgStyleElements(svg: string): string {
+    return svg.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
   }
 
   function escapePreviewText(value: string): string {

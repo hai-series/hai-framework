@@ -35,6 +35,20 @@ describe('renderMarkdownDocument', () => {
     ])
   })
 
+  it('流式输出未闭合 mermaid fence 时不提前渲染图表', () => {
+    const result = renderMarkdownDocument('```mermaid\nmindmap\n  root((A))')
+
+    expect(result.html).toContain('hai-md-code-block')
+    expect(result.html).not.toContain('data-mermaid-host')
+    expect(result.codeBlocks).toEqual([
+      {
+        id: 'hai-md-code-1',
+        code: 'mindmap\n  root((A))',
+        language: 'mermaid',
+      },
+    ])
+  })
+
   it('code/preview 切换模式下 mermaid 仍走代码块渲染以保留源码视图', () => {
     const result = renderMarkdownDocument('```mermaid\nflowchart TD\n  A --> B\n```', {
       showCodePreviewToggle: true,
