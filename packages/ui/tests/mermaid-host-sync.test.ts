@@ -34,7 +34,7 @@ describe('mermaid host sync', () => {
     ).toEqual({ shouldRender: true, token: 'new' })
   })
 
-  it('跳过同一份源码的 ready/rendering host', () => {
+  it('跳过同一份源码的 ready/rendering/error host', () => {
     expect(
       getMermaidHostRenderAction({
         status: 'ready',
@@ -46,6 +46,14 @@ describe('mermaid host sync', () => {
     expect(
       getMermaidHostRenderAction({
         status: 'rendering',
+        renderedSignature: 'same',
+        nextSignature: 'same',
+      }),
+    ).toEqual({ shouldRender: false })
+
+    expect(
+      getMermaidHostRenderAction({
+        status: 'error',
         renderedSignature: 'same',
         nextSignature: 'same',
       }),

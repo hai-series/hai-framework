@@ -36,7 +36,7 @@ export function getMermaidHostRenderAction(
   const status = input.status?.trim()
   const renderedSignature = input.renderedSignature?.trim()
   if (
-    (status === 'ready' || status === 'rendering')
+    (status === 'ready' || status === 'rendering' || status === 'error')
     && renderedSignature === input.nextSignature
   ) {
     return { shouldRender: false }

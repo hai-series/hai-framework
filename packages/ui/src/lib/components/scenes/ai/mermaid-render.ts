@@ -52,3 +52,11 @@ export async function renderMermaidDiagram(code: string): Promise<string> {
   const { svg } = await mermaid.render(renderId, code)
   return svg
 }
+
+/**
+ * Mermaid 11.x 会在 SVG 内写入很长的 style 标签内容；在 contenteditable 预览区里，
+ * 部分浏览器会把这些 CSS 当成正文显示。这里保留 SVG 图形，剥离内联样式文本。
+ */
+export function stripMermaidSvgStyleElements(svg: string): string {
+  return svg.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+}
