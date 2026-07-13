@@ -7,6 +7,7 @@
   @prop {DateValue} minValue - 最小可选日期
   @prop {DateValue} maxValue - 最大可选日期
   @prop {string} placeholder - 输入框占位文本
+  @prop {Size} size - 输入框尺寸
   @prop {boolean} disabled - 是否禁用
   @prop {string} error - 错误消息
   @prop {function} onchange - 日期变更回调
@@ -22,9 +23,10 @@
 -->
 <script lang='ts'>
   import type { DateValue } from '@internationalized/date'
-  import type { DataAttributes } from '../../types.js'
+  import type { DataAttributes, Size } from '../../types.js'
   import { DatePicker as BitsDatePicker } from 'bits-ui'
-  import { getDataAttributes } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
+  import { getFormControlSizeClasses } from '../control-size.js'
 
   interface Props {
     /** 选中日期（双向绑定） */
@@ -39,6 +41,8 @@
     isDateUnavailable?: (date: DateValue) => boolean
     /** 是否禁用 */
     disabled?: boolean
+    /** 尺寸 */
+    size?: Size
     /** 错误消息 */
     error?: string
     /** 自定义类名 */
@@ -54,6 +58,7 @@
     weekStartsOn = 1,
     isDateUnavailable,
     disabled = false,
+    size = 'md',
     error,
     class: className = '',
     onchange,
@@ -61,6 +66,7 @@
   }: Props & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const sizeClasses = $derived(getFormControlSizeClasses(size))
 </script>
 
 <div {...dataAttributes} class='fieldset w-full {className}'>
@@ -73,12 +79,21 @@
     {disabled}
     onValueChange={v => onchange?.(v)}
   >
-    <BitsDatePicker.Input class="input flex items-center gap-0.5 pr-2 {error ? 'input-error' : ''}">
+    <BitsDatePicker.Input
+      class={cn(
+        'flex w-full items-center gap-0.5 rounded-lg border bg-base-100 pr-2 transition-[border-color,box-shadow] duration-150',
+        sizeClasses.control,
+        error
+          ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
+          : 'border-base-content/15 hover:border-base-content/25 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
+        disabled && 'cursor-not-allowed opacity-50',
+      )}
+    >
       {#snippet children({ segments })}
         {#each segments as { part, value: segValue }, index (`${part}-${index}`)}
           <BitsDatePicker.Segment
             {part}
-            class='rounded px-0.5 py-0.5 text-sm tabular-nums focus:bg-primary focus:text-primary-content focus:outline-none data-[type=literal]:px-0 data-[type=literal]:text-base-content/50'
+            class='rounded px-0.5 py-0.5 tabular-nums focus:bg-primary focus:text-primary-content focus:outline-none data-[type=literal]:px-0 data-[type=literal]:text-base-content/50'
           >
             {segValue}
           </BitsDatePicker.Segment>

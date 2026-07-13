@@ -8,6 +8,7 @@
   @prop {string | string[]} value - 选中值（双向绑定，单选为 string，多选为 string[]）
   @prop {boolean} multiple - 是否多选模式
   @prop {string} placeholder - 输入框占位符
+  @prop {Size} size - 输入框尺寸
   @prop {boolean} disabled - 是否禁用
   @prop {string} error - 错误消息
   @prop {string} label - 表单标签
@@ -33,10 +34,11 @@
   />
 -->
 <script lang='ts'>
-  import type { DataAttributes } from '../../types.js'
+  import type { DataAttributes, Size } from '../../types.js'
   import { Combobox } from 'bits-ui'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
+  import { getFormControlSizeClasses } from '../control-size.js'
   import BareButton from '../primitives/BareButton.svelte'
 
   /** 选项定义 */
@@ -60,6 +62,8 @@
     multiple?: boolean
     /** 输入框占位符 */
     placeholder?: string
+    /** 尺寸 */
+    size?: Size
     /** 是否禁用 */
     disabled?: boolean
     /** 错误消息 */
@@ -77,6 +81,7 @@
     value = $bindable(),
     multiple = false,
     placeholder = '',
+    size = 'md',
     disabled = false,
     error,
     label: fieldLabel,
@@ -86,6 +91,7 @@
   }: Props & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const sizeClasses = $derived(getFormControlSizeClasses(size))
   // 为未提供 value 时设置初始默认值（仅在初始化时执行一次）
   // 统一以空字符串初始化，避免在初始化阶段捕获 multiple 的初始值。
   // 多选模式会通过 multiVal 派生为 [] 传给 Combobox.Root。
@@ -214,7 +220,8 @@
       <div class='relative'>
         <div
           class={cn(
-            'min-h-10 rounded-lg border bg-base-100 flex flex-wrap gap-1.5 items-center py-1.5 pl-2.5 pr-9 transition-[border-color,box-shadow] duration-150',
+            'rounded-lg border bg-base-100 flex flex-wrap gap-1.5 items-center py-1 pl-2.5 pr-9 transition-[border-color,box-shadow] duration-150',
+            sizeClasses.minHeight,
             disabled ? 'opacity-50 cursor-not-allowed bg-base-200' : 'cursor-text',
             controlStateClass,
           )}
@@ -237,7 +244,7 @@
 
           <Combobox.Input
             bind:ref={inputRef}
-            class='flex-1 min-w-20 bg-transparent py-0.5 text-sm outline-none placeholder:text-base-content/40'
+            class={cn('flex-1 min-w-20 bg-transparent py-0.5 outline-none placeholder:text-base-content/40', sizeClasses.spacing)}
             placeholder={selectedOptions.length === 0 ? placeholder : ''}
             {disabled}
             oninput={handleInput}
@@ -307,7 +314,8 @@
         <Combobox.Input
           bind:ref={inputRef}
           class={cn(
-            'h-10 w-full rounded-lg border bg-base-100 pl-3 pr-9 text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-base-content/40',
+            'w-full rounded-lg border bg-base-100 pr-9 outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-base-content/40',
+            sizeClasses.control,
             controlStateClass,
             disabled && 'opacity-50 cursor-not-allowed',
           )}

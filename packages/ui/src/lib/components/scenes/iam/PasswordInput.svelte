@@ -7,6 +7,7 @@
   import type { DataAttributes, Size } from '../../../types.js'
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
+  import { getFormControlSizeClasses } from '../../control-size.js'
   import BareButton from '../../primitives/BareButton.svelte'
   import BareInput from '../../primitives/BareInput.svelte'
   import Progress from '../../primitives/Progress.svelte'
@@ -76,19 +77,7 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   let showPassword = $state(false)
-
-  // 容器高度（与 Input 组件一致）
-  const containerHeight = $derived(
-    size === 'xs'
-      ? 'h-8'
-      : size === 'sm'
-      ? 'h-9'
-      : size === 'lg'
-      ? 'h-12'
-      : size === 'xl'
-      ? 'h-14'
-      : 'h-10',
-  )
+  const sizeClasses = $derived(getFormControlSizeClasses(size))
 
   // 图标大小
   const iconSize = $derived(
@@ -152,7 +141,7 @@
   <!-- 输入框容器 -->
   <div class={cn(
     'flex items-center w-full rounded-lg border bg-base-100',
-    containerHeight,
+    sizeClasses.height,
     error
       ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
       : 'border-base-content/15 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
@@ -163,7 +152,7 @@
     <BareInput
       type={showPassword ? 'text' : 'password'}
       {id}
-      class='flex-1 h-full px-3 bg-transparent border-none outline-none text-sm placeholder:text-base-content/35'
+      class={cn('flex-1 h-full bg-transparent border-none outline-none placeholder:text-base-content/35', sizeClasses.spacing)}
       bind:value
       bind:inputRef={inputRef}
       {placeholder}

@@ -5,6 +5,7 @@
 <script lang='ts'>
   import type { DataAttributes, InputProps } from '../../types.js'
   import { cn, getDataAttributes } from '../../utils.js'
+  import { getFormControlSizeClasses } from '../control-size.js'
 
   let {
     value = $bindable(''),
@@ -39,29 +40,7 @@
   }: InputProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
-  const containerHeight = $derived(
-    size === 'xs'
-      ? 'h-8'
-      : size === 'sm'
-      ? 'h-9'
-      : size === 'lg'
-      ? 'h-12'
-      : size === 'xl'
-      ? 'h-14'
-      : 'h-10',
-  )
-
-  const inputSpacingClass = $derived(
-    size === 'xs'
-      ? 'px-2.5 text-xs'
-      : size === 'sm'
-      ? 'px-3 text-sm'
-      : size === 'lg'
-      ? 'px-4 text-base'
-      : size === 'xl'
-      ? 'px-4 text-lg'
-      : 'px-3 text-sm',
-  )
+  const sizeClasses = $derived(getFormControlSizeClasses(size))
 
   const inputTypeClass = $derived(
     type === 'number'
@@ -72,7 +51,7 @@
   const containerClass = $derived(
     cn(
       'flex items-center w-full rounded-lg border bg-base-100',
-      containerHeight,
+      sizeClasses.height,
       error
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
         : 'border-base-content/15 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
@@ -136,7 +115,7 @@
       autocomplete={autocomplete as HTMLInputElement['autocomplete']}
       class={cn(
         'flex-1 h-full bg-transparent border-none outline-none placeholder:text-base-content/35',
-        inputSpacingClass,
+        sizeClasses.spacing,
         inputTypeClass,
       )}
       bind:value

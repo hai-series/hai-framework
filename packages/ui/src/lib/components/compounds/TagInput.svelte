@@ -10,7 +10,8 @@
 <script lang='ts'>
   import type { DataAttributes, TagInputProps } from '../../types.js'
   import { uiM } from '../../messages.js'
-  import { cn, getDataAttributes, getInputSizeClass } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
+  import { getFormControlSizeClasses } from '../control-size.js'
   import BareInput from '../primitives/BareInput.svelte'
   import Tag from '../primitives/Tag.svelte'
 
@@ -27,6 +28,7 @@
   }: TagInputProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const sizeClasses = $derived(getFormControlSizeClasses(size))
   let inputValue = $state('')
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
 
@@ -34,9 +36,10 @@
 
   const containerClass = $derived(
     cn(
-      'input flex flex-wrap items-center gap-1 min-h-[2.5rem] h-auto py-1',
-      getInputSizeClass(size),
-      disabled && 'input-disabled',
+      'flex h-auto w-full flex-wrap items-center gap-1 rounded-lg border border-base-content/15 bg-base-100 py-1 transition-[border-color,box-shadow] duration-150 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
+      sizeClasses.minHeight,
+      sizeClasses.spacing,
+      disabled && 'cursor-not-allowed opacity-50',
       className,
     ),
   )
@@ -79,32 +82,34 @@
   }
 </script>
 
-<div {...dataAttributes}
-     class={containerClass}
-     onclick={() => inputElement?.focus()}
-     onkeydown={e => e.key === 'Enter' && inputElement?.focus()}
-     role='textbox'
-     tabindex='-1'
->
-  {#each tags as tag, index (index)}
-    <Tag
-      text={tag}
-      size='sm'
-      closable={!disabled}
-      onclose={() => removeTag(index)}
-    />
-  {/each}
+<div {...dataAttributes} class='fieldset w-full'>
+  <div
+    class={containerClass}
+    onclick={() => inputElement?.focus()}
+    onkeydown={e => e.key === 'Enter' && inputElement?.focus()}
+    role='textbox'
+    tabindex='-1'
+  >
+    {#each tags as tag, index (index)}
+      <Tag
+        text={tag}
+        size='sm'
+        closable={!disabled}
+        onclose={() => removeTag(index)}
+      />
+    {/each}
 
-  {#if canAddMore && !disabled}
-    <BareInput
-      type='text'
-      class='flex-1 min-w-[100px] bg-transparent border-none outline-none text-sm'
-      bind:value={inputValue}
-      bind:inputRef={inputElement}
-      placeholder={displayPlaceholder}
-      {disabled}
-      onkeydown={handleKeydown}
-      onblur={handleBlur}
-    />
-  {/if}
+    {#if canAddMore && !disabled}
+      <BareInput
+        type='text'
+        class='flex-1 min-w-[100px] bg-transparent border-none outline-none'
+        bind:value={inputValue}
+        bind:inputRef={inputElement}
+        placeholder={displayPlaceholder}
+        {disabled}
+        onkeydown={handleKeydown}
+        onblur={handleBlur}
+      />
+    {/if}
+  </div>
 </div>

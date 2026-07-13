@@ -187,11 +187,11 @@ components/
 
 #### Bits UI headless 交互
 
-| 组件         | 描述                        | 主要属性                                            |
-| ------------ | --------------------------- | --------------------------------------------------- |
-| `Combobox`   | 可搜索下拉选择（单选/多选） | `options`, `value`, `multiple`, `placeholder`       |
-| `Calendar`   | 独立日历                    | `value: DateValue`, `minValue`, `maxValue`          |
-| `DatePicker` | 日期输入+弹出               | `value: DateValue`, `minValue`, `maxValue`, `error` |
+| 组件         | 描述                        | 主要属性                                                    |
+| ------------ | --------------------------- | ----------------------------------------------------------- |
+| `Combobox`   | 可搜索下拉选择（单选/多选） | `options`, `value`, `multiple`, `placeholder`, `size`       |
+| `Calendar`   | 独立日历                    | `value: DateValue`, `minValue`, `maxValue`                  |
+| `DatePicker` | 日期输入+弹出               | `value: DateValue`, `minValue`, `maxValue`, `error`, `size` |
 
 > 日期值使用 `@internationalized/date` 的 `DateValue` / `CalendarDate` 类型。
 

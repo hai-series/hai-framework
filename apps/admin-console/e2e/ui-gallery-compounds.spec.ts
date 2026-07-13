@@ -8,6 +8,24 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
 test.describe('UI Gallery Compounds', () => {
+  test('输入类控件在各 size 下应与 Input 保持同高', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'cmpsz')
+    await page.goto('/admin/ui-gallery/compounds')
+    await page.waitForLoadState('domcontentloaded')
+
+    await expect(page.getByText('输入类控件尺寸对齐')).toBeVisible()
+
+    for (const size of ['xs', 'sm', 'md', 'lg', 'xl']) {
+      const inputHeight = await page.getByTestId(`aligned-input-${size}`).evaluate(element => element.getBoundingClientRect().height)
+
+      for (const component of ['select', 'combobox', 'datepicker', 'taginput']) {
+        const control = page.getByTestId(`aligned-${component}-${size}`)
+        await expect(control).toBeVisible()
+        await expect.poll(async () => control.evaluate(element => element.getBoundingClientRect().height)).toBe(inputHeight)
+      }
+    }
+  })
+
   test('Combobox 多选选中后应清空搜索输入，不残留最后一个选项文本', async ({ page, request }) => {
     await registerAndLogin(page, request, 'cmpui')
     await page.goto('/admin/ui-gallery/compounds')

@@ -96,6 +96,8 @@
     { value: 'qa', label: '质量保障' },
   ]
 
+  const alignedControlSizes = ['xs', 'sm', 'md', 'lg', 'xl'] as const
+
   const actionSheetItems = [
     { id: 'share', label: '分享报表' },
     { id: 'archive', label: '归档通知' },
@@ -222,6 +224,12 @@
   const codeCombobox = `<Combobox options={comboboxOpts} bind:value placeholder='搜索框架...' />
 <Combobox options={comboboxOpts} placeholder='...' error='请选择一个框架' />
 <Combobox options={multiOpts} bind:value multiple placeholder='搜索技能...' />`
+
+  const codeControlAlignment = `<Input size='sm' placeholder='Input' />
+<Select size='sm' options={options} placeholder='Select' />
+<Combobox size='sm' options={options} placeholder='Combobox' />
+<DatePicker size='sm' />
+<TagInput size='sm' tags={[]} placeholder='TagInput' />`
 
   const codeTagInput = `<TagInput bind:tags placeholder='输入后回车添加' />
 <TagInput tags={['标签A', '标签B']} maxTags={5} />
@@ -713,6 +721,28 @@
         <div>
           <p class='text-sm font-medium mb-2'>多选 - 带标签</p>
           <Combobox options={multiOpts} value={[]} multiple placeholder='选择...' label='技能标签' />
+        </div>
+      </div>
+    </DemoCard>
+
+    <DemoCard title='输入类控件尺寸对齐' description='Input / Select / Combobox / DatePicker / TagInput 共享 xs 到 xl 的高度与字号基准' code={codeControlAlignment}>
+      <div class='overflow-x-auto'>
+        <div class='grid min-w-184 grid-cols-[3rem_repeat(5,minmax(8rem,1fr))] items-center gap-x-3 gap-y-2'>
+          <span></span>
+          <span class='text-xs font-medium text-base-content/55'>Input</span>
+          <span class='text-xs font-medium text-base-content/55'>Select</span>
+          <span class='text-xs font-medium text-base-content/55'>Combobox</span>
+          <span class='text-xs font-medium text-base-content/55'>DatePicker</span>
+          <span class='text-xs font-medium text-base-content/55'>TagInput</span>
+
+          {#each alignedControlSizes as controlSize (controlSize)}
+            <span class='text-xs font-semibold uppercase text-base-content/45'>{controlSize}</span>
+            <Input data-testid='aligned-input-{controlSize}' size={controlSize} placeholder='文本' />
+            <Select data-testid='aligned-select-{controlSize}' size={controlSize} options={comboboxOpts} placeholder='选择' />
+            <Combobox data-testid='aligned-combobox-{controlSize}' size={controlSize} options={comboboxOpts} placeholder='搜索' />
+            <DatePicker data-testid='aligned-datepicker-{controlSize}' size={controlSize} />
+            <TagInput data-testid='aligned-taginput-{controlSize}' size={controlSize} tags={[]} placeholder='标签' />
+          {/each}
         </div>
       </div>
     </DemoCard>

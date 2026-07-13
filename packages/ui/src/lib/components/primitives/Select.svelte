@@ -11,6 +11,7 @@
 <script lang='ts' generics="T = string">
   import type { DataAttributes, SelectProps } from '../../types.js'
   import { cn, getDataAttributes, portal } from '../../utils.js'
+  import { getFormControlSizeClasses } from '../control-size.js'
 
   let {
     value = $bindable<T>(),
@@ -39,14 +40,7 @@
   // 下拉层定位样式（portal 到 body，用 fixed 逃逸 overflow/stacking）
   let dropdownStyle = $state('')
 
-  // 尺寸映射（与 Input 保持一致）
-  const sizeClasses: Record<string, string> = {
-    xs: 'h-8 text-xs px-2.5',
-    sm: 'h-9 text-sm px-3',
-    md: 'h-10 text-sm px-3',
-    lg: 'h-12 text-base px-4',
-    xl: 'h-14 text-lg px-4',
-  }
+  const sizeClasses = $derived(getFormControlSizeClasses(size))
 
   // 选项文字尺寸
   const optionTextClass = $derived(
@@ -81,7 +75,7 @@
   const wrapperClass = $derived(
     cn(
       'relative flex w-full min-w-0 items-center rounded-lg border bg-base-100 cursor-pointer',
-      sizeClasses[size] || sizeClasses.md,
+      sizeClasses.control,
       error
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
         : isDropdownOpen
