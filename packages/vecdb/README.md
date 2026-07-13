@@ -1,12 +1,13 @@
 # @h-ai/vecdb
 
-向量数据库模块，通过统一的 `vecdb` 对象访问 LanceDB、pgvector、Qdrant。
+向量数据库模块，通过统一的 `vecdb` 对象访问 LanceDB、pgvector、Qdrant、Chroma。
 
 ## 支持的向量数据库
 
 - LanceDB（嵌入式，本地文件存储，零配置）
 - pgvector（PostgreSQL + pgvector 扩展）
 - Qdrant（高性能向量搜索引擎）
+- Chroma（支持嵌入式自动拉起本地服务，或直连已有服务）
 
 ## 快速开始
 
@@ -62,7 +63,17 @@ await vecdb.init({
 
 // Qdrant
 await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333', apiKey: 'optional-key' })
+
+// Chroma（嵌入式：自动拉起本地 `chroma run` 服务并持久化到 path）
+await vecdb.init({ type: 'chroma', path: './data/chroma' })
+
+// Chroma（直连已有服务，不拉起进程）
+await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 ```
+
+> Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。嵌入式模式下 `vecdb.init` 会
+> 通过 `serverCommand`（默认 `chroma`，来自 `chromadb` 包）拉起本地服务，`vecdb.close`
+> 时关闭进程。需安装可选依赖 `chromadb`；服务命令不可用时 `init` 返回 `CONNECTION_FAILED`。
 
 ### 操作日志
 

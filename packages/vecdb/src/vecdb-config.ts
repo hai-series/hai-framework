@@ -2,7 +2,7 @@
  * @h-ai/vecdb — 向量数据库配置 Schema
  *
  * 本文件定义向量数据库模块的错误码常量、Zod Schema 和配置类型。
- * 支持 LanceDB（默认）、pgvector、Qdrant 三种后端。
+ * 支持 LanceDB（默认）、pgvector、Qdrant、Chroma 四种后端。
  * @module vecdb-config
  */
 
@@ -17,9 +17,10 @@ import { vecdbM } from './vecdb-i18n.js'
  * - `lancedb` — LanceDB 嵌入式向量数据库（默认）
  * - `pgvector` — PostgreSQL + pgvector 扩展
  * - `qdrant` — Qdrant 向量搜索引擎
+ * - `chroma` — Chroma 向量数据库（支持嵌入式自动拉起本地服务）
  */
 /** 向量数据库类型 */
-export type VecdbType = 'lancedb' | 'pgvector' | 'qdrant'
+export type VecdbType = 'lancedb' | 'pgvector' | 'qdrant' | 'chroma'
 
 // ─── 距离度量 ───
 
@@ -149,6 +150,49 @@ const QdrantConfigSchema = z.object({
 /** Qdrant 配置类型 */
 export type QdrantConfig = z.infer<typeof QdrantConfigSchema>
 
+// ─── Chroma 配置 ───
+
+/**
+ * Chroma 配置 Schema
+ *
+ * Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。本 Provider 支持两种模式：
+ * - **嵌入式**：提供 `path` 且不提供 `url` 时，init 自动拉起本地 `chroma run` 服务
+ *   （持久化到 `path`），close 时关闭；数据落地本地目录，无需手动启动服务。
+ * - **直连**：提供 `url`（或已运行的 host:port）时，直接连接已有 Chroma 服务，不拉起进程。
+ *
+ * @example
+ * ```ts
+ * // 嵌入式（自动拉起本地服务）
+ * { type: 'chroma', path: './data/chroma' }
+ *
+ * // 直连已有服务
+ * { type: 'chroma', url: 'http://localhost:8000' }
+ * ```
+ */
+const ChromaConfigSchema = z.object({
+  type: z.literal('chroma'),
+  /** 本地持久化路径（嵌入式模式：提供且无 url 时自动拉起本地服务） */
+  path: z.string().optional(),
+  /** 已有 Chroma 服务 URL（提供时直连，不自动拉起进程） */
+  url: z.string().url().optional(),
+  /** 主机（默认 localhost） */
+  host: z.string().default('localhost'),
+  /** 端口（默认 8000） */
+  port: z.number().int().min(1).max(65535).default(8000),
+  /** API Key（可选，连接受保护的 Chroma 服务时使用） */
+  apiKey: z.string().optional(),
+  /** 拉起本地服务的可执行命令（默认 'chroma'，可指定绝对路径） */
+  serverCommand: z.string().default('chroma'),
+  /** 拉起本地服务的就绪等待超时（毫秒，默认 30000） */
+  startupTimeout: z.number().int().positive().default(30_000),
+  /** 距离度量（默认 cosine） */
+  metric: DistanceMetricSchema.optional(),
+  ...OperationLogConfigFieldSchema,
+})
+
+/** Chroma 配置类型 */
+export type ChromaConfig = z.infer<typeof ChromaConfigSchema>
+
 // ─── 统一配置 ───
 
 /**
@@ -160,6 +204,7 @@ export const VecdbConfigSchema = z.discriminatedUnion('type', [
   LancedbConfigSchema,
   PgvectorConfigSchema,
   QdrantConfigSchema,
+  ChromaConfigSchema,
 ])
 
 /** 向量数据库配置类型（判别联合体） */

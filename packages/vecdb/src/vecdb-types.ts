@@ -320,10 +320,45 @@ export interface VecdbFunctions {
   close: () => Promise<HaiResult<void>>
   /** 当前脱敏配置快照（未初始化时为 null） */
   readonly config: VecdbConfig | null
+  /**
+   * 获取底层后端的原始连接信息（含凭证，未初始化时为 null）
+   *
+   * 供需要直连同一向量库的外部引擎（如 mem0 OSS）复用后端。返回值包含未脱敏的凭证，
+   * 仅供同进程内集成使用，禁止写入日志或返回给外部调用方。
+   */
+  readonly rawConnection: VecdbConnection | null
   /** 是否已初始化 */
   readonly isInitialized: boolean
   /** 集合管理操作 */
   readonly collection: CollectionOperations
   /** 向量操作 */
   readonly vector: VectorOperations
+}
+
+/**
+ * 向量库原始连接信息
+ *
+ * 由 `vecdb.rawConnection` 暴露，字段按后端类型填充。包含凭证，仅供同进程内集成使用。
+ */
+export interface VecdbConnection {
+  /** 后端类型 */
+  type: VecdbConfig['type']
+  /** 服务 URL（qdrant） */
+  url?: string
+  /** API Key（qdrant） */
+  apiKey?: string
+  /** 主机（pgvector） */
+  host?: string
+  /** 端口（pgvector） */
+  port?: number
+  /** 数据库名（pgvector） */
+  database?: string
+  /** 用户名（pgvector） */
+  user?: string
+  /** 密码（pgvector） */
+  password?: string
+  /** 连接串（pgvector） */
+  connectionString?: string
+  /** 本地路径（lancedb） */
+  path?: string
 }

@@ -10,12 +10,14 @@ import type { VecdbProvider } from './providers/vecdb-provider-base.js'
 import type { VecdbConfig, VecdbConfigInput } from './vecdb-config.js'
 import type {
   CollectionOperations,
+  VecdbConnection,
   VecdbFunctions,
   VectorOperations,
 } from './vecdb-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
+import { createChromaProvider } from './providers/vecdb-provider-chroma.js'
 import { createLancedbProvider } from './providers/vecdb-provider-lancedb.js'
 import { createPgvectorProvider } from './providers/vecdb-provider-pgvector.js'
 import { createQdrantProvider } from './providers/vecdb-provider-qdrant.js'
@@ -52,6 +54,8 @@ function createProvider(config: VecdbConfig): VecdbProvider {
       return createPgvectorProvider()
     case 'qdrant':
       return createQdrantProvider()
+    case 'chroma':
+      return createChromaProvider()
   }
 }
 
@@ -183,6 +187,36 @@ export const vecdb: VecdbFunctions = {
   /** 获取当前脱敏配置快照（未初始化时为 null） */
   get config(): VecdbConfig | null {
     return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
+  },
+
+  /** 获取底层后端的原始连接信息（含凭证，未初始化时为 null；仅供同进程内集成使用） */
+  get rawConnection(): VecdbConnection | null {
+    if (!currentConfig)
+      return null
+    if (currentConfig.type === 'qdrant')
+      return { type: 'qdrant', url: currentConfig.url, apiKey: currentConfig.apiKey }
+    if (currentConfig.type === 'pgvector') {
+      return {
+        type: 'pgvector',
+        connectionString: currentConfig.url,
+        host: currentConfig.host,
+        port: currentConfig.port,
+        database: currentConfig.database,
+        user: currentConfig.user,
+        password: currentConfig.password,
+      }
+    }
+    if (currentConfig.type === 'chroma') {
+      return {
+        type: 'chroma',
+        url: currentConfig.url,
+        host: currentConfig.host,
+        port: currentConfig.port,
+        apiKey: currentConfig.apiKey,
+        path: currentConfig.path,
+      }
+    }
+    return { type: currentConfig.type, path: currentConfig.path }
   },
 
   /** 检查是否已初始化 */

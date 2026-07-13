@@ -2,7 +2,7 @@
   "name": "@h-ai/vecdb",
   "type": "module",
   "version": "0.1.0-alpha.33",
-  "description": "Hai Framework vector database module for LanceDB, pgvector, and Qdrant.",
+  "description": "Hai Framework vector database module for LanceDB, pgvector, Qdrant, and Chroma.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
@@ -36,6 +36,7 @@
   "optionalDependencies": {
     "@lancedb/lancedb": "catalog:",
     "@qdrant/js-client-rest": "catalog:",
+    "chromadb": "catalog:",
     "pg": "catalog:"
   },
   "devDependencies": {
