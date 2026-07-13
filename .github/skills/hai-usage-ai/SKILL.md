@@ -49,8 +49,11 @@ llm:
   apiKey: ${HAI_AI_LLM_API_KEY:}
   baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  api: chat # chat（默认）| responses | anthropic——底层协议，对使用方透明
   timeout: 60000
   tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
+  models: # 可为单个模型指定协议（responses / anthropic）
+    - { id: claude, model: claude-3-5-sonnet-latest, api: anthropic }
   scenarios:
     chat: fast
     reasoning: strong
@@ -82,12 +85,14 @@ memory:
 | --- | --- | --- |
 | 非流式对话 | `ai.llm.chat({ messages })` | OpenAI 兼容 Chat Completion |
 | 流式对话 | `ai.llm.chatStream({ messages })` | 返回 `AsyncIterable` |
+| 多协议 | 模型 `api: chat/responses/anthropic` | 底层走 Chat Completions / Responses / Anthropic，公共形状不变 |
+| 请求取消 | `ai.llm.chat({ messages, signal })` | 传 `AbortSignal`，`abort()` 立即停上游生成 |
 | 临时模型 | `ai.llm.chat({ messages, tempModel })` | 单次请求级临时端点，客户端按 TTL 缓存 |
 | 工具定义 | `ai.tools.define(...)` | Zod schema 转 JSON Schema |
 | 工具执行 | `registry.executeAll(toolCalls)` | 支持并行执行 |
 | MCP 服务 | `createMcpServer(...)` | 按需连接 HTTP/SSE/Stdio transport |
 | Embedding | `ai.embedding.embedText(text)` | 批量用 `embedBatch` |
-| 记忆 | `ai.memory.extract/recall/injectMemories` | 用 `objectId` 做主体隔离 |
+| 记忆 | `ai.memory.extract/recall/injectMemories` | 用 `objectId` 做主体隔离，`scope` 做业务作用域隔离 |
 | Retrieval/RAG | `ai.retrieval.retrieve` / `ai.rag.query` | Retrieval source 先注册或由配置预置 |
 | Knowledge | `ai.knowledge.setup/ingest/ask` | 入库前会调用 datapipe 清洗分块 |
 | Context | `ai.context.createManager` | 编排 LLM + Memory + RAG + 压缩 |

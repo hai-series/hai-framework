@@ -108,6 +108,46 @@ export function createContextOperations(
       summaries: initialSummaries,
     }
 
+    // 后台记忆提取任务集合：chat/chatStream 的自动提取是即发即忘，flush() 统一等待，
+    // 避免「AI 回答结束→下一轮召回/生成总结→上一轮记忆仍未写完」的时序问题。
+    const pendingMemoryTasks = new Set<Promise<unknown>>()
+
+    // 记忆注入选项：将 scope / types / minImportance / 位置等完整透传给 Memory
+    function memoryInjectionOptions() {
+      return {
+        objectId: scope?.objectId,
+        scope: options.memory?.scope,
+        types: options.memory?.types,
+        minImportance: options.memory?.minImportance,
+        topK: options.memory?.topK,
+        maxTokens: options.memory?.maxTokens,
+        position: options.memory?.position,
+      }
+    }
+
+    // 触发一次后台记忆提取并纳入 pending 集合（scope / types / 模型 / systemPrompt 完整透传）
+    function enqueueMemoryExtract(userMessage: string, reply: string): void {
+      if (!options.memory?.enableExtract || !deps?.memory)
+        return
+      const recentMessages: ChatMessage[] = [
+        { role: 'user', content: userMessage },
+        { role: 'assistant', content: reply },
+      ]
+      const task = deps.memory
+        .extract(recentMessages, {
+          objectId: scope?.objectId,
+          scope: options.memory.scope,
+          types: options.memory.types,
+          model: options.memory.extractionModel,
+          systemPrompt: options.memory.extractionSystemPrompt,
+        })
+        .catch((e: unknown) => logger.warn('Memory extract failed', { error: e }))
+        .finally(() => {
+          pendingMemoryTasks.delete(task)
+        })
+      pendingMemoryTasks.add(task)
+    }
+
     const manager: ContextManager = {
       scope,
 
@@ -164,6 +204,9 @@ export function createContextOperations(
       },
 
       async save(): Promise<HaiResult<void>> {
+        // 持久化前先等待后台记忆提取完成，确保记忆已落库（issue #14）
+        await manager.flush()
+
         if (!scope || !contextStore) {
           return ok(undefined)
         }
@@ -204,6 +247,18 @@ export function createContextOperations(
         state.summaries = []
       },
 
+      get pendingMemoryTasks(): number {
+        return pendingMemoryTasks.size
+      },
+
+      async flush(): Promise<HaiResult<void>> {
+        // 快照当前任务集合后等待；提取任务失败已在 enqueue 处降级为 warn，不影响 flush 成功
+        while (pendingMemoryTasks.size > 0) {
+          await Promise.allSettled([...pendingMemoryTasks])
+        }
+        return ok(undefined)
+      },
+
       // ─── chat/chatStream 编排 ───
 
       async chat(message: string, chatOpts?: ContextChatOptions): Promise<HaiResult<ContextChatResult>> {
@@ -223,14 +278,9 @@ export function createContextOperations(
             return messagesResult
           let messages = messagesResult.data
 
-          // 可选：注入记忆
+          // 可选：注入记忆（scope / types / minImportance 完整透传）
           if (options.memory?.enable && deps.memory) {
-            const injected = await deps.memory.injectMemories(messages, {
-              objectId: scope?.objectId,
-              topK: options.memory.topK,
-              maxTokens: options.memory.maxTokens,
-              position: options.memory.position,
-            })
+            const injected = await deps.memory.injectMemories(messages, memoryInjectionOptions())
             if (injected.success) {
               messages = injected.data
             }
@@ -253,14 +303,7 @@ export function createContextOperations(
               const reply = ragResult.data.answer
               await manager.addMessage({ role: 'assistant', content: reply })
 
-              if (options.memory?.enableExtract && deps.memory) {
-                const recentMessages: ChatMessage[] = [
-                  { role: 'user', content: message },
-                  { role: 'assistant', content: reply },
-                ]
-                deps.memory.extract(recentMessages, { objectId: scope?.objectId })
-                  .catch(e => logger.warn('Memory extract failed', { error: e }))
-              }
+              enqueueMemoryExtract(message, reply)
 
               return ok({
                 reply,
@@ -287,14 +330,7 @@ export function createContextOperations(
               const reply = reasonResult.data.answer
               await manager.addMessage({ role: 'assistant', content: reply })
 
-              if (options.memory?.enableExtract && deps.memory) {
-                const recentMessages: ChatMessage[] = [
-                  { role: 'user', content: message },
-                  { role: 'assistant', content: reply },
-                ]
-                deps.memory.extract(recentMessages, { objectId: scope?.objectId })
-                  .catch(e => logger.warn('Memory extract failed', { error: e }))
-              }
+              enqueueMemoryExtract(message, reply)
 
               return ok({ reply, model: chatOpts?.model ?? options.model ?? '', usage: undefined })
             }
@@ -316,6 +352,7 @@ export function createContextOperations(
               tools: toolDefs,
               tool_choice: toolDefs ? 'auto' : undefined,
               enablePersist: chatOpts?.enablePersist ?? false,
+              signal: chatOpts?.signal,
             })
 
             if (!chatResult.success)
@@ -366,15 +403,8 @@ export function createContextOperations(
             // 追加助手回复
             await manager.addMessage({ role: 'assistant', content: reply })
 
-            // 可选：自动提取记忆
-            if (options.memory?.enableExtract && deps.memory) {
-              const recentMessages: ChatMessage[] = [
-                { role: 'user', content: message },
-                { role: 'assistant', content: reply },
-              ]
-              deps.memory.extract(recentMessages, { objectId: scope?.objectId })
-                .catch(e => logger.warn('Memory extract failed', { error: e }))
-            }
+            // 可选：自动提取记忆（后台任务，纳入 pending 集合供 flush 等待）
+            enqueueMemoryExtract(message, reply)
 
             return ok({ reply, model: lastModel, usage: lastUsage })
           }
@@ -407,30 +437,16 @@ export function createContextOperations(
         }
         let messages = messagesResult.data
 
-        // 可选：注入记忆
+        // 可选：注入记忆（scope / types / minImportance 完整透传）
         if (options.memory?.enable && deps.memory) {
-          const injected = await deps.memory.injectMemories(messages, {
-            objectId: scope?.objectId,
-            topK: options.memory.topK,
-            maxTokens: options.memory.maxTokens,
-            position: options.memory.position,
-          })
+          const injected = await deps.memory.injectMemories(messages, memoryInjectionOptions())
           if (injected.success) {
             messages = injected.data
           }
         }
 
-        // 提取记忆的通用逻辑
-        const extractMemory = (reply: string) => {
-          if (options.memory?.enableExtract && deps?.memory) {
-            const recentMessages: ChatMessage[] = [
-              { role: 'user', content: message },
-              { role: 'assistant', content: reply },
-            ]
-            deps.memory.extract(recentMessages, { objectId: scope?.objectId })
-              .catch(e => logger.warn('Memory extract failed', { error: e }))
-          }
-        }
+        // 提取记忆的通用逻辑（纳入 pending 集合，供 flush 等待）
+        const extractMemory = (reply: string) => enqueueMemoryExtract(message, reply)
 
         // 可选：RAG 流式检索增强
         if (options.rag?.enable && deps.rag) {
@@ -512,6 +528,7 @@ export function createContextOperations(
             tools: toolDefs,
             tool_choice: toolDefs ? 'auto' : undefined,
             enablePersist: chatOpts?.enablePersist ?? false,
+            signal: chatOpts?.signal,
           })
 
           for await (const chunk of stream) {

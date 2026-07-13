@@ -43,7 +43,13 @@ export async function injectRelevantMemories(
     if (!query)
       return ok([...messages])
 
-    const recallResult = await recall(query, { topK, objectId: options?.objectId, scope: options?.scope })
+    const recallResult = await recall(query, {
+      topK,
+      objectId: options?.objectId,
+      scope: options?.scope,
+      types: options?.types,
+      minImportance: options?.minImportance,
+    })
     if (!recallResult.success) {
       return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: recallResult.error.message } }), recallResult.error)
     }

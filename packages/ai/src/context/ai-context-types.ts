@@ -11,7 +11,7 @@ import type { HaiResult } from '@h-ai/core'
 
 import type { CompressOptions } from '../compress/ai-compress-types.js'
 import type { ChatMessage, LLMOperations, ToolRegistryOperations } from '../llm/ai-llm-types.js'
-import type { MemoryInjectionOptions, MemoryOperations } from '../memory/ai-memory-types.js'
+import type { MemoryOperations, MemoryType } from '../memory/ai-memory-types.js'
 import type { RagOperations, RagOptions } from '../rag/ai-rag-types.js'
 import type { ReasoningOperations, ReasoningOptions } from '../reasoning/ai-reasoning-types.js'
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
@@ -73,13 +73,31 @@ export interface ContextManagerOptions {
   /**
    * 记忆配置
    *
-   * 引用 MemoryInjectionOptions 的检索控制字段，加上 enable/enableExtract 开关。
+   * 控制记忆注入与提取。`scope` / `types` / `minImportance` 会完整透传给 Memory 的
+   * `injectMemories` 与 `extract`，用于表达「用户 + 主题 + 角色」等多维隔离
+   * （如 `{ userId, topicId, personaId }`）。
    */
-  memory?: Pick<MemoryInjectionOptions, 'topK' | 'maxTokens' | 'position'> & {
+  memory?: {
     /** 是否启用记忆注入（默认 false） */
     enable?: boolean
     /** 是否启用自动记忆提取（默认 false） */
     enableExtract?: boolean
+    /** 业务作用域（透传给 injectMemories / extract，key-value 匹配隔离） */
+    scope?: Record<string, unknown>
+    /** 注入 / 提取时限定的记忆类型 */
+    types?: MemoryType[]
+    /** 注入时的最低重要性阈值 */
+    minImportance?: number
+    /** 注入的记忆数量 */
+    topK?: number
+    /** 注入记忆占用的最大 token 预算 */
+    maxTokens?: number
+    /** 注入位置：system 追加或最后一条用户消息前插入 */
+    position?: 'system' | 'before-last'
+    /** 记忆提取使用的模型（覆盖默认提取模型） */
+    extractionModel?: string
+    /** 记忆提取的自定义 systemPrompt */
+    extractionSystemPrompt?: string
   }
 
   /**
@@ -126,6 +144,13 @@ export interface ContextChatOptions {
   temperature?: number
   /** 是否启用本次 LLM 调用的持久化（默认 false，Context 自行管理状态） */
   enablePersist?: boolean
+  /**
+   * 请求取消信号
+   *
+   * 透传给底层 LLM 调用；主持人打断、用户切换等场景可 `abortController.abort()`
+   * 立即停止上游生成与计费。
+   */
+  signal?: AbortSignal
 }
 
 /**
@@ -220,8 +245,27 @@ export interface ContextManager {
 
   /**
    * 持久化当前状态（需要 scope + 存储可用）
+   *
+   * 内部会先 `flush()` 等待所有后台记忆提取完成，确保持久化时记忆已写入。
    */
   save: () => Promise<HaiResult<void>>
+
+  /**
+   * 等待所有后台记忆提取任务完成
+   *
+   * chat/chatStream 的自动记忆提取是「即发即忘」的后台任务；在开始下一轮召回、
+   * 生成总结或关闭前调用 `flush()`，可避免「上一轮记忆尚未写完」的时序问题（issue #14）。
+   *
+   * @returns 全部任务完成返回 ok(undefined)
+   */
+  flush: () => Promise<HaiResult<void>>
+
+  /**
+   * 当前挂起的后台记忆提取任务数量
+   *
+   * 供应用侧观测；为 0 表示无待写入的记忆任务。
+   */
+  readonly pendingMemoryTasks: number
 
   /**
    * 重置管理器（清空所有消息和摘要）

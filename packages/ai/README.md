@@ -91,11 +91,22 @@ for await (const chunk of ai.llm.chatStream({ messages })) {
   }
 }
 
+// 请求取消：传入 AbortSignal，主持人打断/用户切换时 abort() 立即停止上游生成与计费
+const controller = new AbortController()
+const cancellable = ai.llm.chat({ messages, signal: controller.signal })
+// controller.abort()
+
+// 多协议：模型的 api 决定底层走 Chat Completions / Responses / Anthropic，公共请求响应形状不变
+// - chat（默认）：OpenAI Chat Completions（兼容绝大多数厂商）
+// - responses：OpenAI Responses API（/v1/responses）
+// - anthropic：Anthropic Messages API（Claude 原生协议，环境变量 ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL）
+const claude = await ai.llm.chat({ messages, model: 'claude' }) // 该模型配置 api: anthropic
+
 // 临时模型：单次请求绕过配置注册模型，直接指定端点与凭据（chat/chatStream/ask/askStream 均支持）
 // 临时客户端按 TTL 缓存（llm.tempModelCacheTtl，默认 10 分钟），与常驻模型客户端隔离
 const temp = await ai.llm.chat({
   messages,
-  tempModel: { model: 'claude-3-5-sonnet', apiKey: 'sk-temp', baseUrl: 'https://temp.endpoint/v1' },
+  tempModel: { model: 'claude-3-5-sonnet', api: 'anthropic', apiKey: 'sk-temp' },
 })
 ```
 
@@ -165,8 +176,13 @@ llm:
   apiKey: ${HAI_AI_LLM_API_KEY:}
   baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  api: chat # chat（默认）| responses | anthropic —— 底层 API 协议，对使用方透明
   timeout: 60000
   tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
+  models: # 可为每个模型单独指定协议
+    - {id: fast, model: gpt-4o-mini}
+    - {id: strong, model: gpt-4.1, api: responses}
+    - {id: claude, model: claude-3-5-sonnet-latest, api: anthropic}
   scenarios:
     chat: fast
     reasoning: strong
@@ -189,7 +205,8 @@ knowledge:
 
 memory:
   provider: native # native | mem0
-  maxEntries: 1000
+  maxEntriesPerObject: 1000 # 单主体（objectId）最大记忆条数
+  maxEntriesGlobal: 100000 # 跨所有主体的全局上限
   recencyDecay: 0.95
   embeddingEnabled: true
   defaultTopK: 10
@@ -204,10 +221,10 @@ memory:
   defaultTopK: 10
 ```
 
-- **`native`（默认，推荐）**：HAI 原生引擎，复用同一套 vecdb（向量库）、reldb（关系库）、LLM 与 Embedding。`extract` 采用 **Mem0 式批量合并**——一次 LLM 调用对整批抽取事实与相关既有记忆做 ADD / UPDATE / DELETE / NONE 决策，实现增量更新、跨条去重与矛盾删除，并支持 `category` 主题标签。`maxEntries`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` 均作用于此后端。
+- **`native`（默认，推荐）**：HAI 原生引擎，复用同一套 vecdb（向量库）、reldb（关系库）、LLM 与 Embedding。`extract` 采用 **Mem0 式批量合并**——一次 LLM 调用对整批抽取事实与相关既有记忆做 ADD / UPDATE / DELETE / NONE 决策，实现增量更新、跨条去重与矛盾删除，并支持 `category` 主题标签。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` 均作用于此后端；淘汰按 `objectId` 分区触发，不会因某一主体写入过多而淘汰其他主体的记忆。
 - **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取（OpenAI 兼容，走 `baseUrl` / `apiKey` / 场景模型）；向量库从底层 vecdb 后端提取——`qdrant` / `pgvector` 直接复用同一后端，`lancedb` / `chroma`（mem0 TS 不支持）则退回 mem0 自带的 in-memory 存储。历史记录默认禁用。需安装 `mem0ai`（已内置为依赖）；复用 qdrant/pgvector 时需对应客户端。
 
-两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`）。`objectId` 用于隔离不同用户/Agent 的记忆；生产环境建议所有用户级操作传入 `objectId`；无参数 `clear()` 会清空全部记忆，请谨慎使用。
+两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`），均支持 `objectId`（主体隔离）与 `scope`（业务作用域 key-value 过滤，如 `{ topicId, personaId }`）。`recall` / `list` / `listPage` / `clear` 均按 `scope` 严格过滤，`clear` 在传入 `types` / `scope` 时仅删除同时匹配项（避免误删）。一个差异：mem0 后端在 `update` 涉及 type/importance/metadata 时会重建记忆并重新分配 `id`（native 后端保持 id 稳定）。
 
 `ai.config` 返回脱敏后的配置快照；`apiKey`、`privateKey`、URL 内嵌凭证等敏感字段不会原样暴露。
 

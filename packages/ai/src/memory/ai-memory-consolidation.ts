@@ -191,7 +191,7 @@ function withCategory(metadata: Record<string, unknown> | undefined, category: s
 /**
  * 应用合并操作
  *
- * 顺序执行以保证容量淘汰（maxEntries）状态一致；批量规模受单次抽取的事实数量约束
+ * 顺序执行以保证容量淘汰（maxEntriesPerObject / maxEntriesGlobal）状态一致；批量规模受单次抽取的事实数量约束
  * （通常远小于 20 条）。返回新增与更新后的记忆条目。
  */
 async function applyConsolidationOps(

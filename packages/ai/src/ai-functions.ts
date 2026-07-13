@@ -34,8 +34,8 @@ import { createFileOperations } from './file/ai-file-functions.js'
 import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js'
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
-import { createMemoryOperations } from './memory/ai-memory-functions.js'
 import { createMem0OssMemoryOperations } from './memory/providers/ai-memory-provider-mem0-oss.js'
+import { createNativeMemoryOperations } from './memory/providers/ai-memory-provider-native.js'
 import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
 import { createRerankOperations } from './rerank/ai-rerank-functions.js'
@@ -129,7 +129,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const knowledge = createKnowledgeOperations(knowledgeParsed, llm, embedding, datapipeDep, knowledgeStore)
 
   const memory: MemoryOperations = memoryStore && memoryVectorStore
-    ? createMemoryOperations(memoryParsed, llm, embedding, memoryStore, memoryVectorStore)
+    ? createNativeMemoryOperations(memoryParsed, llm, embedding, memoryStore, memoryVectorStore)
     : await createMem0OssMemoryOperations({
         config: memoryParsed,
         aiConfig: config,

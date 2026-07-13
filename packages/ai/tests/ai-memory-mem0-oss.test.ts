@@ -164,4 +164,138 @@ describe('createMem0OssMemoryOperations', () => {
     await ops.clear()
     expect(memoryMock.reset).toHaveBeenCalled()
   })
+
+  it('recall 按 scope 严格过滤（issue #6，不召回其他主题/角色）', async () => {
+    memoryMock.search.mockResolvedValue({ results: [
+      { id: 'a', memory: '主题A', score: 0.9, metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'A' } } },
+      { id: 'b', memory: '主题B', score: 0.8, metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'B' } } },
+      { id: 'c', memory: '无作用域', score: 0.7, metadata: { hai_object_id: 'u1' } },
+    ] })
+    const ops = await createOps()
+
+    const result = await ops.recall('q', { objectId: 'u1', scope: { topicId: 'A' } })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.map(e => e.content)).toEqual(['主题A'])
+  })
+
+  it('recall 兜底按 objectId 隔离（issue #10，过滤掉非归属条目）', async () => {
+    memoryMock.search.mockResolvedValue({ results: [
+      { id: 'a', memory: '属于 u1', score: 0.9, metadata: { hai_object_id: 'u1' } },
+      { id: 'x', memory: '属于 u2', score: 0.8, metadata: { hai_object_id: 'u2' } },
+    ] })
+    const ops = await createOps()
+
+    const result = await ops.recall('q', { objectId: 'u1' })
+    expect(result.success && result.data.map(e => e.content)).toEqual(['属于 u1'])
+  })
+
+  it('add 完整保留业务 metadata（issue #9）与归属主体（issue #10）', async () => {
+    memoryMock.add.mockResolvedValue({ results: [{ id: 'm9', memory: '记忆', metadata: { hai_object_id: 'u1' } }] })
+    const ops = await createOps()
+    await ops.add({
+      content: '记忆',
+      type: 'event',
+      importance: 0.6,
+      objectId: 'u1',
+      scope: { topicId: 'A', personaId: 'p1' },
+      metadata: { speakerId: 's1', turnId: 't9', interrupted: true },
+    })
+
+    const [, addOptions] = memoryMock.add.mock.calls[0] as [unknown, { metadata: Record<string, unknown> }]
+    expect(addOptions.metadata.hai_object_id).toBe('u1')
+    expect(addOptions.metadata.hai_scope).toEqual({ topicId: 'A', personaId: 'p1' })
+    expect(addOptions.metadata.hai_metadata).toEqual({ speakerId: 's1', turnId: 't9', interrupted: true })
+  })
+
+  it('get 还原准确的 objectId 与完整 metadata（issue #9/#10）', async () => {
+    memoryMock.get.mockResolvedValue({
+      id: 'm1',
+      memory: '记忆',
+      metadata: { hai_object_id: 'u7', hai_type: 'event', hai_importance: 0.6, hai_metadata: { speakerId: 's1', topicId: 'A' } },
+    })
+    const ops = await createOps()
+
+    const result = await ops.get('m1')
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.objectId).toBe('u7')
+    expect(result.data.type).toBe('event')
+    expect(result.data.metadata).toEqual({ speakerId: 's1', topicId: 'A' })
+  })
+
+  it('update 涉及 type/importance/metadata 时删除重建并合并（issue #8）', async () => {
+    memoryMock.get.mockResolvedValue({
+      id: 'm1',
+      memory: '旧内容',
+      createdAt: new Date('2024-01-01').toISOString(),
+      metadata: { hai_object_id: 'u1', hai_type: 'fact', hai_importance: 0.5, hai_metadata: { a: 1 } },
+    })
+    memoryMock.add.mockResolvedValue({ results: [{ id: 'm2', memory: '旧内容', metadata: { hai_object_id: 'u1', hai_type: 'preference', hai_importance: 0.9, hai_metadata: { a: 1, b: 2 } } }] })
+    const ops = await createOps()
+
+    const result = await ops.update('m1', { type: 'preference', importance: 0.9, metadata: { a: 1, b: 2 } })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(memoryMock.delete).toHaveBeenCalledWith('m1')
+    expect(result.data.type).toBe('preference')
+    expect(result.data.importance).toBe(0.9)
+    expect(result.data.metadata).toEqual({ a: 1, b: 2 })
+    const [, addOptions] = memoryMock.add.mock.calls[0] as [unknown, { metadata: Record<string, unknown> }]
+    expect(addOptions.metadata.hai_type).toBe('preference')
+  })
+
+  it('update 仅改 content 时原地更新，保持 memoryId 稳定（issue #8）', async () => {
+    memoryMock.get.mockResolvedValue({ id: 'm1', memory: '新内容', metadata: { hai_object_id: 'u1', hai_type: 'fact' } })
+    const ops = await createOps()
+
+    const result = await ops.update('m1', { content: '新内容' })
+    expect(result.success).toBe(true)
+    expect(memoryMock.update).toHaveBeenCalledWith('m1', '新内容')
+    expect(memoryMock.delete).not.toHaveBeenCalled()
+  })
+
+  it('clear 含 types 时逐条删除匹配项，不误删整个主体（issue #7）', async () => {
+    memoryMock.getAll.mockResolvedValue({ results: [
+      { id: 'e1', memory: '事件', metadata: { hai_object_id: 'u1', hai_type: 'event' } },
+      { id: 'f1', memory: '事实', metadata: { hai_object_id: 'u1', hai_type: 'fact' } },
+    ] })
+    const ops = await createOps()
+
+    await ops.clear({ objectId: 'u1', types: ['event'] })
+    expect(memoryMock.deleteAll).not.toHaveBeenCalled()
+    expect(memoryMock.reset).not.toHaveBeenCalled()
+    expect(memoryMock.delete).toHaveBeenCalledTimes(1)
+    expect(memoryMock.delete).toHaveBeenCalledWith('e1')
+  })
+
+  it('clear 仅含 types（无 objectId）也不触发 reset（issue #7 破坏性防护）', async () => {
+    memoryMock.getAll.mockResolvedValue({ results: [
+      { id: 'e1', memory: '事件', metadata: { hai_object_id: 'hai-global', hai_type: 'event' } },
+    ] })
+    const ops = await createOps()
+
+    await ops.clear({ types: ['event'] })
+    expect(memoryMock.reset).not.toHaveBeenCalled()
+    expect(memoryMock.delete).toHaveBeenCalledWith('e1')
+  })
+
+  it('listPage 按 scope 过滤后分页（issue #11）', async () => {
+    memoryMock.getAll.mockResolvedValue({ results: [
+      { id: 'a', memory: '1', metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'A' } } },
+      { id: 'b', memory: '2', metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'B' } } },
+      { id: 'c', memory: '3', metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'A' } } },
+    ] })
+    const ops = await createOps()
+
+    const result = await ops.listPage({ objectId: 'u1', scope: { topicId: 'A' }, offset: 0, limit: 10 })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.total).toBe(2)
+    expect(result.data.items.map(e => e.content)).toEqual(['1', '3'])
+  })
 })

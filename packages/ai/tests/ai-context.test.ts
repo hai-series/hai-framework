@@ -7,6 +7,7 @@
 
 import type { CompressConfig, SummaryConfig, TokenConfig } from '../src/ai-config.js'
 import type { ChatCompletionChunk, LLMOperations, ToolCall } from '../src/llm/ai-llm-types.js'
+import type { MemoryOperations } from '../src/memory/ai-memory-types.js'
 import type { AIRelStore, SessionInfo } from '../src/store/ai-store-types.js'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -826,5 +827,175 @@ describe('context chat tool call loop', () => {
 
     // chatStream 被调用了两次（tool_calls 轮 + 最终文本轮）
     expect(llm.chatStream).toHaveBeenCalledTimes(2)
+  })
+})
+
+// =============================================================================
+// 记忆作用域透传与后台提取 flush
+// =============================================================================
+
+describe('context memory scope + flush', () => {
+  interface MemoryMock {
+    memory: MemoryOperations
+    injectCalls: Array<Record<string, unknown> | undefined>
+    extractCalls: Array<Record<string, unknown> | undefined>
+    resolveExtract: () => void
+  }
+
+  /** 创建可观测 injectMemories / extract 调用参数的 Memory mock，extract 支持手动 resolve */
+  function createMemoryMock(): MemoryMock {
+    const injectCalls: Array<Record<string, unknown> | undefined> = []
+    const extractCalls: Array<Record<string, unknown> | undefined> = []
+    let resolveExtract: () => void = () => {}
+
+    const memory = {
+      injectMemories: vi.fn(async (messages: unknown, options?: Record<string, unknown>) => {
+        injectCalls.push(options)
+        return { success: true as const, data: messages }
+      }),
+      extract: vi.fn((_messages: unknown, options?: Record<string, unknown>) => {
+        extractCalls.push(options)
+        return new Promise((resolve) => {
+          resolveExtract = () => resolve({ success: true as const, data: [] })
+        })
+      }),
+      recall: vi.fn(),
+      add: vi.fn(),
+      update: vi.fn(),
+      get: vi.fn(),
+      remove: vi.fn(),
+      list: vi.fn(),
+      listPage: vi.fn(),
+      clear: vi.fn(),
+    } as unknown as MemoryOperations
+
+    return { memory, injectCalls, extractCalls, resolveExtract: () => resolveExtract() }
+  }
+
+  function createOpsWithMemory(llm: LLMOperations, memory: MemoryOperations) {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(defaultCompressConfig, tokenOps, summaryOps, 8000)
+    return createContextOperations(defaultCompressConfig, tokenOps, compressOps, undefined, undefined, { llm, memory })
+  }
+
+  it('chat 将 scope / types / minImportance 完整透传给 injectMemories（issue #5）', async () => {
+    const llm = createMockLLM([{ content: 'ok' }])
+    const mock = createMemoryMock()
+    const ops = createOpsWithMemory(llm, mock.memory)
+
+    const managerResult = ops.createManager({
+      scope: { objectId: 'user-1', sessionId: 'sess-1' },
+      compress: { maxTokens: 8000 },
+      memory: {
+        enable: true,
+        scope: { topicId: 'A', personaId: 'p1' },
+        types: ['preference', 'fact'],
+        minImportance: 0.3,
+        topK: 7,
+        position: 'before-last',
+      },
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    await managerResult.data.chat('你好')
+
+    expect(mock.injectCalls).toHaveLength(1)
+    expect(mock.injectCalls[0]).toMatchObject({
+      objectId: 'user-1',
+      scope: { topicId: 'A', personaId: 'p1' },
+      types: ['preference', 'fact'],
+      minImportance: 0.3,
+      topK: 7,
+      position: 'before-last',
+    })
+  })
+
+  it('chat 将 scope / model / systemPrompt 透传给 extract（issue #5）', async () => {
+    const llm = createMockLLM([{ content: 'ok' }])
+    const mock = createMemoryMock()
+    const ops = createOpsWithMemory(llm, mock.memory)
+
+    const managerResult = ops.createManager({
+      scope: { objectId: 'user-1', sessionId: 'sess-1' },
+      compress: { maxTokens: 8000 },
+      memory: {
+        enableExtract: true,
+        scope: { topicId: 'A' },
+        types: ['fact'],
+        extractionModel: 'extract-model',
+        extractionSystemPrompt: 'only durable facts',
+      },
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const manager = managerResult.data
+    await manager.chat('你好')
+    mock.resolveExtract()
+    await manager.flush()
+
+    expect(mock.extractCalls).toHaveLength(1)
+    expect(mock.extractCalls[0]).toMatchObject({
+      objectId: 'user-1',
+      scope: { topicId: 'A' },
+      types: ['fact'],
+      model: 'extract-model',
+      systemPrompt: 'only durable facts',
+    })
+  })
+
+  it('flush 等待后台记忆提取完成，pendingMemoryTasks 反映挂起数量（issue #14）', async () => {
+    const llm = createMockLLM([{ content: 'ok' }])
+    const mock = createMemoryMock()
+    const ops = createOpsWithMemory(llm, mock.memory)
+
+    const managerResult = ops.createManager({
+      scope: { objectId: 'user-1', sessionId: 'sess-1' },
+      compress: { maxTokens: 8000 },
+      memory: { enableExtract: true },
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const manager = managerResult.data
+    await manager.chat('你好')
+
+    // 提取任务尚未 resolve，应处于挂起
+    expect(manager.pendingMemoryTasks).toBe(1)
+
+    // resolve 后 flush 应完成且挂起归零
+    mock.resolveExtract()
+    const flushed = await manager.flush()
+    expect(flushed.success).toBe(true)
+    expect(manager.pendingMemoryTasks).toBe(0)
+  })
+
+  it('save 前自动 flush 后台记忆提取（issue #14）', async () => {
+    const llm = createMockLLM([{ content: 'ok' }])
+    const mock = createMemoryMock()
+    const ops = createOpsWithMemory(llm, mock.memory)
+
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      memory: { enableExtract: true },
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const manager = managerResult.data
+    await manager.chat('你好')
+    expect(manager.pendingMemoryTasks).toBe(1)
+
+    // save 无 scope/store 时也会先 flush；先安排 resolve，避免死等
+    mock.resolveExtract()
+    const saved = await manager.save()
+    expect(saved.success).toBe(true)
+    expect(manager.pendingMemoryTasks).toBe(0)
   })
 })

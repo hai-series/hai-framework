@@ -164,6 +164,10 @@ export interface MemoryInjectionOptions {
   objectId?: string
   /** 限定作用域（key-value 匹配过滤，用于子 session 记忆隔离等场景） */
   scope?: Record<string, unknown>
+  /** 限定记忆类型 */
+  types?: MemoryType[]
+  /** 最低重要性阈值 */
+  minImportance?: number
 }
 
 // ─── 列表与清空选项 ───
@@ -176,6 +180,8 @@ export interface MemoryListOptions {
   types?: MemoryType[]
   /** 限定主体 ID */
   objectId?: string
+  /** 限定作用域（key-value 匹配过滤，用于子 session / 主题 / 角色记忆隔离等场景） */
+  scope?: Record<string, unknown>
   /** 最大返回数 */
   limit?: number
 }
@@ -188,6 +194,8 @@ export interface MemoryListPageOptions {
   types?: MemoryType[]
   /** 限定主体 ID */
   objectId?: string
+  /** 限定作用域（key-value 匹配过滤，用于子 session / 主题 / 角色记忆隔离等场景） */
+  scope?: Record<string, unknown>
   /** 偏移量 */
   offset?: number
   /** 每页数量（默认 20） */
@@ -196,12 +204,17 @@ export interface MemoryListPageOptions {
 
 /**
  * 记忆清空选项
+ *
+ * 安全语义：未传任何过滤条件时清空全部；传入 objectId / types / scope 时
+ * 仅删除同时匹配所有给定条件的记忆，避免误删其他主体或类型的记忆。
  */
 export interface MemoryClearOptions {
   /** 仅清空指定类型 */
   types?: MemoryType[]
   /** 仅清空指定主体 */
   objectId?: string
+  /** 仅清空匹配指定作用域的记忆（key-value 匹配过滤） */
+  scope?: Record<string, unknown>
 }
 
 /**

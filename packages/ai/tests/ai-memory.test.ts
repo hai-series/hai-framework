@@ -11,7 +11,7 @@ import type { MemoryEntry } from '../src/memory/ai-memory-types.js'
 import type { AIRelStore, AIVectorStore, StoreFilter, StorePage, StoreScope } from '../src/store/ai-store-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { extractMemories } from '../src/memory/ai-memory-extractor.js'
-import { createMemoryOperations } from '../src/memory/ai-memory-functions.js'
+import { createNativeMemoryOperations } from '../src/memory/providers/ai-memory-provider-native.js'
 
 // ─── Mock 工厂 ───
 
@@ -280,7 +280,8 @@ function createLLMChatOk(content: string | null): MockChatResult {
 
 const defaultConfig: MemoryConfig = {
   provider: 'native',
-  maxEntries: 100,
+  maxEntriesPerObject: 100,
+  maxEntriesGlobal: 100000,
   recencyDecay: 0.95,
   embeddingEnabled: true,
   defaultTopK: 10,
@@ -297,7 +298,7 @@ function createTestMemoryOps(
 ) {
   const store = createMockStore<MemoryEntry>()
   const vectorStore = createMockVectorStore()
-  return createMemoryOperations(config, llm, embedding, store, vectorStore)
+  return createNativeMemoryOperations(config, llm, embedding, store, vectorStore)
 }
 
 function createTestMemoryHarness(
@@ -308,7 +309,7 @@ function createTestMemoryHarness(
   const store = createMockStore<MemoryEntry>()
   const vectorStore = createMockVectorStore()
   return {
-    ops: createMemoryOperations(config, llm, embedding, store, vectorStore),
+    ops: createNativeMemoryOperations(config, llm, embedding, store, vectorStore),
     store,
     vectorStore,
   }
@@ -421,9 +422,9 @@ describe('extractMemories', () => {
   })
 })
 
-// ─── createMemoryOperations 测试 ───
+// ─── createNativeMemoryOperations 测试 ───
 
-describe('createMemoryOperations', () => {
+describe('createNativeMemoryOperations', () => {
   it('add 手动添加记忆', async () => {
     const llm = createMockLLM([])
     const embedding = createMockEmbedding()
@@ -1037,6 +1038,68 @@ describe('createMemoryOperations', () => {
     const result = await ops.update('non-existent-id', { content: '新内容' })
     expect(result.success).toBe(false)
   })
+
+  it('list 按 scope 过滤（issue #12）', async () => {
+    const ops = createTestMemoryOps(defaultConfig, createMockLLM([]), createMockEmbedding())
+
+    await ops.add({ content: '主题A', type: 'fact', objectId: 'u1', scope: { topicId: 'A' } })
+    await ops.add({ content: '主题B', type: 'fact', objectId: 'u1', scope: { topicId: 'B' } })
+    await ops.add({ content: '无作用域', type: 'fact', objectId: 'u1' })
+
+    const result = await ops.list({ objectId: 'u1', scope: { topicId: 'A' } })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.map(e => e.content)).toEqual(['主题A'])
+  })
+
+  it('listPage 按 scope 过滤并分页（issue #12）', async () => {
+    const ops = createTestMemoryOps(defaultConfig, createMockLLM([]), createMockEmbedding())
+    await ops.add({ content: 'a', type: 'fact', objectId: 'u1', scope: { topicId: 'A' } })
+    await ops.add({ content: 'b', type: 'fact', objectId: 'u1', scope: { topicId: 'B' } })
+    await ops.add({ content: 'c', type: 'fact', objectId: 'u1', scope: { topicId: 'A' } })
+
+    const result = await ops.listPage({ objectId: 'u1', scope: { topicId: 'A' }, offset: 0, limit: 10 })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.total).toBe(2)
+    expect(result.data.items).toHaveLength(2)
+  })
+
+  it('clear 按 scope 仅删除匹配条目（issue #12）', async () => {
+    const ops = createTestMemoryOps(defaultConfig, createMockLLM([]), createMockEmbedding())
+    await ops.add({ content: '主题A', type: 'fact', objectId: 'u1', scope: { topicId: 'A' } })
+    await ops.add({ content: '主题B', type: 'fact', objectId: 'u1', scope: { topicId: 'B' } })
+
+    await ops.clear({ objectId: 'u1', scope: { topicId: 'A' } })
+
+    const remaining = await ops.list({ objectId: 'u1' })
+    expect(remaining.success && remaining.data.map(e => e.content)).toEqual(['主题B'])
+  })
+
+  it('多用户配额隔离：用户 A 写满不淘汰用户 B（issue #15）', async () => {
+    const config: MemoryConfig = { ...defaultConfig, maxEntriesPerObject: 3, maxEntriesGlobal: 100000, embeddingEnabled: false }
+    const harness = createTestMemoryHarness(config, createMockLLM([]), null)
+
+    // 用户 B 先写入一条基线记忆
+    const bBaseline = await harness.ops.add({ content: 'B 的记忆', type: 'fact', objectId: 'userB' })
+    expect(bBaseline.success).toBe(true)
+
+    // 用户 A 大量写入，超过单主体配额触发淘汰
+    for (let i = 0; i < 8; i++)
+      await harness.ops.add({ content: `A-${i}`, type: 'fact', objectId: 'userA', importance: 0.1 })
+
+    // 用户 B 的记忆不应被淘汰
+    const bList = await harness.ops.list({ objectId: 'userB' })
+    expect(bList.success && bList.data).toHaveLength(1)
+
+    // 用户 A 的记忆被限制在配额附近（淘汰在写入前触发，稳态约等于 maxEntriesPerObject）
+    const aList = await harness.ops.list({ objectId: 'userA' })
+    expect(aList.success).toBe(true)
+    if (aList.success)
+      expect(aList.data.length).toBeLessThanOrEqual(config.maxEntriesPerObject)
+  })
 })
 
 // ─── Mem0 Provider（嵌入式合并）测试 ───
@@ -1073,10 +1136,10 @@ function createMem0LLM(
 function createMem0Ops(llm: LLMOperations, embedding: EmbeddingOperations | null = createMockEmbedding()) {
   const store = createMockStore<MemoryEntry>()
   const vectorStore = createMockVectorStore()
-  return { ops: createMemoryOperations(mem0Config, llm, embedding, store, vectorStore), store, vectorStore }
+  return { ops: createNativeMemoryOperations(mem0Config, llm, embedding, store, vectorStore), store, vectorStore }
 }
 
-describe('createMemoryOperations 批量合并（Mem0 式）', () => {
+describe('createNativeMemoryOperations 批量合并（Mem0 式）', () => {
   it('空库时对全部抽取事实执行 ADD', async () => {
     const llm = createMem0LLM(
       [

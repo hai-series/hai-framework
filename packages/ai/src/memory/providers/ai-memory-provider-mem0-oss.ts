@@ -75,26 +75,45 @@ function parseTimestamp(value: unknown, fallback: number): number {
   return fallback
 }
 
-/** 将 hai 业务字段编码为 mem0 metadata */
-function buildMetadata(entry: Pick<MemoryEntryInput, 'type' | 'importance' | 'scope' | 'metadata'>): Record<string, unknown> {
+/**
+ * 将 hai 业务字段编码为 mem0 metadata
+ *
+ * 完整保留业务 metadata，
+ * 并记录归属主体 `hai_object_id`。
+ * `category` 额外平铺到顶层，兼容 consolidation 逻辑与 mem0 过滤。
+ *
+ * @param entry - 记忆输入字段（type / importance / scope / metadata）
+ * @param objectId - 归属主体 ID（写入 hai_object_id）
+ */
+function buildMetadata(
+  entry: Pick<MemoryEntryInput, 'type' | 'importance' | 'scope' | 'metadata'>,
+  objectId: string,
+): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
     hai_type: entry.type,
     hai_importance: entry.importance ?? DEFAULT_IMPORTANCE,
+    hai_object_id: objectId,
   }
   if (entry.scope)
     metadata.hai_scope = entry.scope
+  if (entry.metadata && Object.keys(entry.metadata).length > 0)
+    metadata.hai_metadata = entry.metadata
   const category = entry.metadata?.category
   if (typeof category === 'string' && category.trim().length > 0)
     metadata.category = category.trim()
   return metadata
 }
 
-/** 从 mem0 metadata 还原 hai 公共元数据（仅暴露业务字段） */
+/**
+ * 从 mem0 metadata 还原 hai 公共元数据（剥离内部保留键）
+ *
+ * 优先返回完整业务 metadata（`hai_metadata`）；对早期仅平铺 `category` 的数据做兼容。
+ */
 function toPublicMetadata(metadata: Record<string, unknown>): Record<string, unknown> | undefined {
-  const category = metadata.category
-  if (typeof category === 'string' && category.trim().length > 0)
-    return { category: category.trim() }
-  return undefined
+  const business: Record<string, unknown> = isRecord(metadata.hai_metadata) ? { ...metadata.hai_metadata } : {}
+  if (business.category === undefined && typeof metadata.category === 'string' && metadata.category.trim().length > 0)
+    business.category = metadata.category.trim()
+  return Object.keys(business).length > 0 ? business : undefined
 }
 
 /** 将 mem0 MemoryItem 映射为 hai MemoryEntry */
@@ -103,19 +122,30 @@ function toMemoryEntry(item: Mem0MemoryItem, fallbackObjectId: string): MemoryEn
   const now = Date.now()
   const createdAt = parseTimestamp(item.createdAt, now)
   const scope = isRecord(metadata.hai_scope) ? metadata.hai_scope : undefined
+  // 优先使用写入时记录的归属主体，避免按 memoryId 直读时误判为默认主体
+  const objectId = typeof metadata.hai_object_id === 'string' ? metadata.hai_object_id : fallbackObjectId
 
   return {
     id: item.id,
     content: item.memory ?? '',
     type: normalizeType(metadata.hai_type, 'fact'),
     importance: normalizeImportance(metadata.hai_importance, DEFAULT_IMPORTANCE),
-    objectId: fallbackObjectId,
+    objectId,
     scope,
     metadata: toPublicMetadata(metadata),
     createdAt,
     lastAccessedAt: parseTimestamp(item.updatedAt, createdAt),
     accessCount: 0,
   }
+}
+
+/**
+ * 判断记忆条目是否匹配指定业务作用域（key-value 全部相等；条目无 scope 时不匹配）
+ */
+function matchScope(entry: MemoryEntry, scope: Record<string, unknown>): boolean {
+  if (!entry.scope)
+    return false
+  return Object.entries(scope).every(([k, v]) => (entry.scope as Record<string, unknown>)[k] === v)
 }
 
 /** 将 hai 消息转换为 mem0 消息 */
@@ -219,9 +249,13 @@ async function extractMemories(context: Mem0OssContext, messages: ChatMessage[],
 
   const objectId = options?.objectId ?? context.defaultObjectId
   try {
+    // 提取阶段一并写入归属主体与作用域，保障后续按 memoryId 直读与作用域召回的准确性
+    const metadata: Record<string, unknown> = { hai_object_id: objectId }
+    if (options?.scope)
+      metadata.hai_scope = options.scope
     const response = await context.memory.add(mem0Messages, {
       userId: objectId,
-      metadata: options?.scope ? { hai_scope: options.scope } : undefined,
+      metadata,
       infer: true,
     })
     return ok(response.results.map(item => toMemoryEntry(item, objectId)))
@@ -241,6 +275,10 @@ async function recallMemories(context: Mem0OssContext, query: string, options?: 
     })
     const entries = response.results
       .map(item => toMemoryEntry(item, objectId))
+      // 主体隔离兜底：即便底层向量库未按 user 过滤，也确保只召回归属该主体的记忆（issue #10 元数据支撑）
+      .filter(entry => entry.objectId === objectId)
+      // 按业务作用域严格过滤，避免同一主体下不同主题/角色互相召回
+      .filter(entry => !options?.scope || matchScope(entry, options.scope))
       .filter(entry => entry.importance >= (options?.minImportance ?? 0))
     return ok(entries)
   }
@@ -255,7 +293,7 @@ async function addMemory(context: Mem0OssContext, entry: MemoryEntryInput): Prom
   try {
     const response = await context.memory.add([{ role: 'user', content: entry.content }], {
       userId: objectId,
-      metadata: buildMetadata(entry),
+      metadata: buildMetadata(entry, objectId),
       infer: false,
     })
     const stored = response.results[0]
@@ -269,14 +307,56 @@ async function addMemory(context: Mem0OssContext, entry: MemoryEntryInput): Prom
   }
 }
 
+/**
+ * 更新一条记忆的任意字段（content / type / importance / metadata / scope）
+ *
+ * mem0 OSS 的 `update()` 仅能改写记忆文本，且未暴露 metadata 更新 API，其内部 vectorStore
+ * 为私有字段，无法安全地原地改写 payload。为完整实现更新语义，此处采用
+ * 「读取现有条目 → 合并字段 → 删除旧条目 → infer:false 重新写入」的方式。
+ *
+ * 代价：mem0 后端会为更新后的记忆分配新的 memoryId（与 native 后端保持稳定 id 的行为不同，
+ * 已在 README 中作为后端差异说明）；通过 `timestamp` 保留原始创建时间。
+ */
 async function updateMemory(context: Mem0OssContext, memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
   try {
-    if (updates.content !== undefined)
-      await context.memory.update(memoryId, updates.content)
     const item = await context.memory.get(memoryId)
     if (!item)
       return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
-    return ok(toMemoryEntry(item, context.defaultObjectId))
+
+    const existing = toMemoryEntry(item, context.defaultObjectId)
+    const objectId = existing.objectId ?? context.defaultObjectId
+
+    // 仅改文本：mem0.update 可原地更新，保持 memoryId 稳定
+    const onlyContentChanged = updates.content !== undefined
+      && updates.type === undefined
+      && updates.importance === undefined
+      && updates.metadata === undefined
+    if (onlyContentChanged) {
+      await context.memory.update(memoryId, updates.content!)
+      const refreshed = await context.memory.get(memoryId)
+      return ok(refreshed ? toMemoryEntry(refreshed, objectId) : { ...existing, content: updates.content! })
+    }
+
+    // 涉及 type / importance / metadata：删除后按合并结果重建
+    const merged: MemoryEntryInput = {
+      content: updates.content ?? existing.content,
+      type: updates.type ?? existing.type,
+      importance: updates.importance ?? existing.importance,
+      objectId,
+      scope: existing.scope,
+      metadata: updates.metadata ?? existing.metadata,
+    }
+    await context.memory.delete(memoryId)
+    const response = await context.memory.add([{ role: 'user', content: merged.content }], {
+      userId: objectId,
+      metadata: buildMetadata(merged, objectId),
+      infer: false,
+      timestamp: existing.createdAt,
+    })
+    const stored = response.results[0]
+    if (!stored)
+      throw new Error('Mem0 OSS did not return the updated memory')
+    return ok(toMemoryEntry(stored, objectId))
   }
   catch (error) {
     logger.error('Mem0 OSS update failed', { id: memoryId, error })
@@ -306,12 +386,21 @@ async function removeMemory(context: Mem0OssContext, memoryId: string): Promise<
   }
 }
 
-async function listMemories(context: Mem0OssContext, options?: { objectId?: string, types?: MemoryType[], limit?: number }): Promise<MemoryEntry[]> {
+/**
+ * 列出指定主体的记忆条目（供 list / listPage / clear 复用）
+ *
+ * objectId 走 mem0 过滤，types / scope 在内存中匹配（scope 存于 metadata.hai_scope，无法下推）。
+ */
+async function listMemories(context: Mem0OssContext, options?: { objectId?: string, types?: MemoryType[], scope?: Record<string, unknown>, limit?: number }): Promise<MemoryEntry[]> {
   const objectId = options?.objectId ?? context.defaultObjectId
   const response = await context.memory.getAll({ filters: { userId: objectId }, topK: options?.limit })
-  let entries = response.results.map(item => toMemoryEntry(item, objectId))
+  let entries = response.results
+    .map(item => toMemoryEntry(item, objectId))
+    .filter(entry => entry.objectId === objectId)
   if (options?.types?.length)
     entries = entries.filter(entry => options.types!.includes(entry.type))
+  if (options?.scope)
+    entries = entries.filter(entry => matchScope(entry, options.scope!))
   return entries
 }
 
@@ -368,19 +457,40 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
       try {
         const offset = options?.offset ?? 0
         const limit = options?.limit ?? 20
-        const all = await listMemories(context, { objectId: options?.objectId, types: options?.types })
+        // mem0 getAll 不支持 offset 分页，只能取回匹配集合后在内存切片（后端能力限制，已在 README 说明）
+        const all = await listMemories(context, { objectId: options?.objectId, types: options?.types, scope: options?.scope })
         return ok({ items: all.slice(offset, offset + limit), total: all.length })
       }
       catch (error) {
         return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryRecallFailed', { params: { error: String(error) } }), error)
       }
     },
+    /**
+     * 清除记忆
+     *
+     * - 无任何过滤条件：`reset()` 清空整个后端。
+     * - 仅 objectId（无 types / scope）：`deleteAll({ userId })` 删除该主体全部记忆。
+     * - 含 types 或 scope：先列出同时匹配的条目，再逐条 `delete`，避免误删该主体其他类型/作用域的记忆。
+     */
     async clear(options) {
       try {
-        if (options?.objectId)
-          await context.memory.deleteAll({ userId: options.objectId })
-        else
+        const hasTypeOrScope = Boolean(options?.types?.length) || Boolean(options?.scope)
+
+        if (!options?.objectId && !hasTypeOrScope) {
           await context.memory.reset()
+          return ok(undefined)
+        }
+
+        if (options?.objectId && !hasTypeOrScope) {
+          await context.memory.deleteAll({ userId: options.objectId })
+          return ok(undefined)
+        }
+
+        // 存在 types / scope：精确匹配后逐条删除
+        const matched = await listMemories(context, { objectId: options?.objectId, types: options?.types, scope: options?.scope })
+        for (const entry of matched)
+          await context.memory.delete(entry.id)
+        logger.debug('Mem0 OSS memories cleared', { removed: matched.length, objectId: options?.objectId, types: options?.types, scoped: Boolean(options?.scope) })
         return ok(undefined)
       }
       catch (error) {
