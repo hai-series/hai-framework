@@ -31,7 +31,7 @@ import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './ai-llm-tool.js'
-import { createOpenAIProvider } from './providers/ai-llm-provider-openai.js'
+import { createLLMProvider } from './providers/ai-llm-provider-router.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'llm' })
 
@@ -66,7 +66,7 @@ export interface AILLMFunctions {
  * @returns `{ llm, tools, stream }` 三个操作接口
  */
 export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILLMFunctions {
-  const provider = createOpenAIProvider({ config })
+  const provider = createLLMProvider({ config })
   const recordStore = deps?.recordStore
   const sessionStore = deps?.sessionStore
   let recordSeq = 0
@@ -302,6 +302,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
         sessionId: options?.sessionId,
         enablePersist: options?.enablePersist,
         tempModel: options?.tempModel,
+        signal: options?.signal,
       })
       if (!result.success)
         return result as HaiResult<never>
@@ -322,6 +323,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
         sessionId: options?.sessionId,
         enablePersist: options?.enablePersist,
         tempModel: options?.tempModel,
+        signal: options?.signal,
       })) {
         const delta = chunk.choices[0]?.delta?.content
         if (delta)

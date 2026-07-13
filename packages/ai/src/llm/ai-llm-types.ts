@@ -9,7 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type OpenAI from 'openai'
 import type { ZodType } from 'zod'
 
-import type { AIConfig } from '../ai-config.js'
+import type { AIConfig, ApiType } from '../ai-config.js'
 
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 
@@ -78,6 +78,8 @@ export type ToolDefinition = OpenAI.Chat.Completions.ChatCompletionTool
 export interface TempModelConfig {
   /** 模型名称（传给 API 的实际模型名） */
   model: string
+  /** API 协议（未指定时回退全局 `api`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic） */
+  api?: ApiType
   /** API Key（未指定时回退全局配置 / 环境变量） */
   apiKey?: string
   /** API 基础 URL（未指定时回退全局配置 / 环境变量 / 默认 OpenAI） */
@@ -111,6 +113,13 @@ export type ChatCompletionRequest
     enablePersist?: boolean
     /** 临时模型配置（传入后绕过配置注册的模型，使用临时端点；优先级高于 `model`） */
     tempModel?: TempModelConfig
+    /**
+     * 请求取消信号
+     *
+     * 传入后透传给底层 SDK（OpenAI / Anthropic）的请求取消参数。主持人打断、
+     * 用户切换等场景可 `abortController.abort()` 立即停止上游生成与计费。
+     */
+    signal?: AbortSignal
   }
 
 /** Token 使用统计 */
@@ -307,6 +316,8 @@ export interface AskOptions {
   enablePersist?: boolean
   /** 临时模型配置（传入后绕过配置注册的模型，使用临时端点；优先级高于 `model`） */
   tempModel?: TempModelConfig
+  /** 请求取消信号（透传给底层 SDK，支持主动打断上游生成） */
+  signal?: AbortSignal
 }
 
 /**

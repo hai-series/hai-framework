@@ -24,6 +24,12 @@ import OpenAI from 'openai'
 import { resolveModelEntry } from '../../ai-config.js'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
+import {
+  responsesEventToChunk,
+  responsesToChatResponse,
+  toResponsesInput,
+  toResponsesTools,
+} from './ai-llm-provider-openai-responses.js'
 
 // ─── 辅助函数 ───
 
@@ -111,6 +117,8 @@ function toOpenAIMessage(message: ChatMessage): OpenAI.Chat.Completions.ChatComp
 interface ResolvedClient {
   client: OpenAI
   model: string
+  /** API 协议：chat = Chat Completions；responses = Responses API */
+  api: 'chat' | 'responses'
   maxTokens?: number
   temperature?: number
 }
@@ -175,8 +183,10 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     })
     if (!resolvedResult.success)
       return resolvedResult
-    const { apiKey, baseUrl, timeout, model } = resolvedResult.data
-    return ok({ client: getClient(apiKey ?? '', baseUrl ?? 'https://api.openai.com/v1', timeout), model })
+    const { apiKey, baseUrl, timeout, model, api } = resolvedResult.data
+    // 本 Provider 覆盖 OpenAI 原生的两种协议；anthropic 由路由层分派到 Anthropic Provider
+    const resolvedApi = api === 'responses' ? 'responses' : 'chat'
+    return ok({ client: getClient(apiKey ?? '', baseUrl ?? 'https://api.openai.com/v1', timeout), model, api: resolvedApi })
   }
 
   /**
@@ -191,12 +201,39 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', { params: { error: 'API Key is required for temp model' } }))
     const baseUrl = tempModel.baseUrl ?? config.llm.baseUrl ?? process.env.HAI_AI_LLM_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
     const timeout = tempModel.timeout ?? config.llm.timeout ?? 60000
+    const api = (tempModel.api ?? config.llm.api) === 'responses' ? 'responses' : 'chat'
     return ok({
       client: getTempClient(apiKey, baseUrl, timeout),
       model: tempModel.model,
+      api,
       maxTokens: tempModel.maxTokens ?? config.llm.maxTokens,
       temperature: tempModel.temperature ?? config.llm.temperature,
     })
+  }
+
+  /**
+   * 构建 Responses API 请求参数（非流式基础形状）
+   *
+   * 将 Chat Completions 语义映射到 Responses：messages→input、max_tokens→max_output_tokens、
+   * tools 转 Responses 工具定义；`tool_choice` 仅透传字符串枚举。
+   */
+  function buildResponsesParams(
+    request: ChatCompletionRequest,
+    resolved: ResolvedClient,
+  ): OpenAI.Responses.ResponseCreateParamsNonStreaming {
+    const maxOutput = request.max_tokens ?? resolved.maxTokens
+    const temperature = request.temperature ?? resolved.temperature
+    const toolChoice = typeof request.tool_choice === 'string' ? request.tool_choice : undefined
+    return {
+      model: resolved.model,
+      input: toResponsesInput(request.messages),
+      ...(maxOutput != null ? { max_output_tokens: maxOutput } : {}),
+      ...(temperature != null ? { temperature } : {}),
+      ...(request.top_p != null ? { top_p: request.top_p } : {}),
+      ...(toResponsesTools(request.tools) ? { tools: toResponsesTools(request.tools) } : {}),
+      ...(toolChoice ? { tool_choice: toolChoice } : {}),
+      stream: false,
+    }
   }
 
   return {
@@ -204,18 +241,29 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       const clientResult = resolveClient(request.model, request.tempModel)
       if (!clientResult.success)
         return clientResult
-      const { client, model, maxTokens, temperature } = clientResult.data
-      const { objectId: _objectId, sessionId: _sessionId, tempModel: _tempModel, ...openaiRequest } = request
-      const openaiMessages = request.messages.map(toOpenAIMessage)
+      const resolved = clientResult.data
+      const { client, model, maxTokens, temperature, api } = resolved
+      const { objectId: _objectId, sessionId: _sessionId, tempModel: _tempModel, signal, ...openaiRequest } = request
       try {
-        const response = await client.chat.completions.create({
+        // Responses API 分支：转换请求/响应形状，对调用方透明
+        if (api === 'responses') {
+          const response = await client.responses.create(buildResponsesParams(request, resolved), { signal })
+          return ok(responsesToChatResponse(response, model))
+        }
+
+        const openaiMessages = request.messages.map(toOpenAIMessage)
+        const params = {
           ...openaiRequest,
           messages: openaiMessages,
           model,
           ...(maxTokens !== undefined && openaiRequest.max_tokens == null ? { max_tokens: maxTokens } : {}),
           ...(temperature !== undefined && openaiRequest.temperature == null ? { temperature } : {}),
           stream: false,
-        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming)
+        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming
+        // 仅在存在取消信号时传入请求选项，避免无谓的第二参数
+        const response = signal
+          ? await client.chat.completions.create(params, { signal })
+          : await client.chat.completions.create(params)
         return ok(response)
       }
       catch (error) {
@@ -228,17 +276,36 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       const clientResult = resolveClient(request.model, request.tempModel)
       if (!clientResult.success)
         throw new Error(clientResult.error.message)
-      const { client, model, maxTokens, temperature } = clientResult.data
-      const { objectId: _objectId, sessionId: _sessionId, tempModel: _tempModel, ...openaiRequest } = request
+      const resolved = clientResult.data
+      const { client, model, maxTokens, temperature, api } = resolved
+      const { objectId: _objectId, sessionId: _sessionId, tempModel: _tempModel, signal, ...openaiRequest } = request
+
+      // Responses API 流式分支：转发文本增量与完成事件
+      if (api === 'responses') {
+        const responsesStream = await client.responses.create(
+          { ...buildResponsesParams(request, resolved), stream: true },
+          { signal },
+        )
+        for await (const event of responsesStream) {
+          const chunk = responsesEventToChunk(event, model)
+          if (chunk)
+            yield chunk
+        }
+        return
+      }
+
       const openaiMessages = request.messages.map(toOpenAIMessage)
-      const stream = await client.chat.completions.create({
+      const params = {
         ...openaiRequest,
         messages: openaiMessages,
         model,
         ...(maxTokens !== undefined && openaiRequest.max_tokens == null ? { max_tokens: maxTokens } : {}),
         ...(temperature !== undefined && openaiRequest.temperature == null ? { temperature } : {}),
         stream: true,
-      } as OpenAI.Chat.ChatCompletionCreateParamsStreaming)
+      } as OpenAI.Chat.ChatCompletionCreateParamsStreaming
+      const stream = signal
+        ? await client.chat.completions.create(params, { signal })
+        : await client.chat.completions.create(params)
       for await (const chunk of stream) {
         yield chunk
       }

@@ -42,6 +42,20 @@ export const ModelScenarioSchema = z.enum(['default', 'chat', 'reasoning', 'plan
 export type ModelScenario = z.infer<typeof ModelScenarioSchema>
 
 /**
+ * LLM API 协议枚举
+ *
+ * 决定底层通过哪种 API 协议与模型交互（对使用方透明，公共请求/响应形状保持一致）：
+ *
+ * - `chat` — OpenAI Chat Completions API（`/v1/chat/completions`，默认，兼容绝大多数厂商）
+ * - `responses` — OpenAI Responses API（`/v1/responses`，新一代有状态接口）
+ * - `anthropic` — Anthropic Messages API（Claude 原生协议，需安装 `@anthropic-ai/sdk`）
+ */
+export const ApiTypeSchema = z.enum(['chat', 'responses', 'anthropic'])
+
+/** LLM API 协议类型 */
+export type ApiType = z.infer<typeof ApiTypeSchema>
+
+/**
  * 模型条目 Schema
  *
  * 定义单个模型的配置信息，包含唯一 ID、模型名称和可选参数覆盖。
@@ -61,6 +75,8 @@ export const ModelEntrySchema = z.object({
   id: z.string(),
   /** 模型名称（传给 API 的实际模型名） */
   model: z.string(),
+  /** API 协议（可选，未指定时回退全局 `api`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic） */
+  api: ApiTypeSchema.optional(),
   /** API Key 覆盖（可选，未提供时使用全局配置） */
   apiKey: z.string().optional(),
   /** Base URL 覆盖（可选） */
@@ -114,6 +130,8 @@ export const LLMConfigSchema = z.object({
   baseUrl: z.url().optional(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),
+  /** 全局 API 协议（各模型 fallback，默认 `'chat'`；可选 `chat` / `responses` / `anthropic`） */
+  api: ApiTypeSchema.optional().default('chat'),
   /** 全局最大 Token 数（各模型 fallback，默认 `4096`） */
   maxTokens: z.number().positive().optional().default(4096),
   /** 全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`） */
@@ -139,6 +157,8 @@ export type LLMConfig = z.infer<typeof LLMConfigSchema>
 export interface ResolvedModelConfig {
   /** 模型名称（传给 API 的实际模型名） */
   model: string
+  /** API 协议（模型条目 > 全局配置 > `chat`） */
+  api: ApiType
   /** API Key（模型条目 > 全局配置 > 环境变量） */
   apiKey: string | undefined
   /** API 基础 URL（模型条目 > 全局配置 > 环境变量 > 默认 OpenAI） */
@@ -199,6 +219,7 @@ export function resolveModelEntry(
 
   const resolved: ResolvedModelConfig = {
     model: modelName,
+    api: entry?.api ?? llmConfig.api ?? 'chat',
     apiKey: entry?.apiKey ?? llmConfig.apiKey ?? process.env.HAI_AI_LLM_API_KEY ?? process.env.OPENAI_API_KEY,
     baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? process.env.HAI_AI_LLM_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
     maxTokens: entry?.maxTokens ?? llmConfig.maxTokens ?? 4096,
@@ -211,6 +232,26 @@ export function resolveModelEntry(
   }
 
   return ok(resolved)
+}
+
+/**
+ * 解析某次 chat 请求应使用的 API 协议（不校验 API Key）
+ *
+ * 供 LLM Provider 路由层选择底层实现使用：优先取显式模型条目的 `api`，
+ * 其次全局 `api`，最后回退 `chat`。临时模型的 `api` 由调用方单独传入优先。
+ *
+ * @param llmConfig - LLM 配置
+ * @param explicitModel - 显式指定的模型名/ID（可选）
+ * @param tempApi - 临时模型显式指定的 API 协议（可选，最高优先级）
+ * @returns 解析出的 API 协议
+ */
+export function resolveModelApi(llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType): ApiType {
+  if (tempApi)
+    return tempApi
+  const entry = explicitModel
+    ? llmConfig.models?.find(m => m.id === explicitModel || m.model === explicitModel)
+    : undefined
+  return entry?.api ?? llmConfig.api ?? 'chat'
 }
 
 // ─── MCP 配置 Schema ───
@@ -366,7 +407,8 @@ export type { EntityType } from './knowledge/ai-knowledge-types.js'
  * ```ts
  * const memoryConfig = {
  *   provider: 'native',
- *   maxEntries: 1000,
+ *   maxEntriesPerObject: 1000,
+ *   maxEntriesGlobal: 100000,
  *   embeddingEnabled: true,
  *   recencyDecay: 0.95,
  *   defaultTopK: 10,
@@ -376,8 +418,19 @@ export type { EntityType } from './knowledge/ai-knowledge-types.js'
 export const MemoryConfigSchema = z.object({
   /** 记忆后端：native = 逐条写回；mem0 = 批量 ADD/UPDATE/DELETE 合并（均为嵌入式，复用 HAI 组件） */
   provider: z.enum(['native', 'mem0']).default('native'),
-  /** 最大记忆条数（默认 1000） */
-  maxEntries: z.number().int().positive().default(1000),
+  /**
+   * 单个主体（objectId）的最大记忆条数（默认 1000）
+   *
+   * native 淘汰按 objectId 分区触发：某个主体写入超过此上限时，只淘汰该主体自身
+   * 最低优先级的条目，不会波及其他主体的记忆。
+   */
+  maxEntriesPerObject: z.number().int().positive().default(1000),
+  /**
+   * 全局最大记忆条数（默认 100000）
+   *
+   * 跨所有主体的总量上限，作为整体保护阈值；超过时淘汰全局最低优先级条目。
+   */
+  maxEntriesGlobal: z.number().int().positive().default(100000),
   /** 自定义记忆提取 systemPrompt（可选，覆盖内置默认提示词） */
   systemPrompt: z.string().optional(),
   /** 时间衰减系数（默认 0.95，每次检索乘以此系数调整 recency 权重） */
@@ -628,7 +681,7 @@ export type A2AConfig = z.infer<typeof A2AConfigSchema>
  *       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
  *     ],
  *   },
- *   memory: { maxEntries: 500, embeddingEnabled: true },
+ *   memory: { maxEntriesPerObject: 500, embeddingEnabled: true },
  *   token: { tokenRatio: 0.25 },
  *   summary: { systemPrompt: 'You are a summarizer.' },
  *   compress: { defaultStrategy: 'hybrid', preserveLastN: 4 },
@@ -639,6 +692,7 @@ export const AIConfigSchema = z.object({
   /** LLM 配置（可选，所有字段有默认值） */
   llm: LLMConfigSchema.default({
     model: 'gpt-4o-mini',
+    api: 'chat',
     maxTokens: 4096,
     temperature: 0.7,
     timeout: 60000,

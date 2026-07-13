@@ -9,7 +9,7 @@ import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // vi.hoisted 确保变量在 vi.mock 工厂执行时已可用
-const { mockCreate, mockListModels, MockAPIError, constructorCalls } = vi.hoisted(() => {
+const { mockCreate, mockResponsesCreate, mockListModels, MockAPIError, constructorCalls } = vi.hoisted(() => {
   class _MockAPIError extends Error {
     status: number
     constructor(status: number, message: string) {
@@ -20,6 +20,7 @@ const { mockCreate, mockListModels, MockAPIError, constructorCalls } = vi.hoiste
   }
   return {
     mockCreate: vi.fn(),
+    mockResponsesCreate: vi.fn(),
     mockListModels: vi.fn(),
     MockAPIError: _MockAPIError,
     constructorCalls: [] as unknown[][],
@@ -32,6 +33,7 @@ vi.mock('openai', () => {
     constructorCalls.push(args)
     return {
       chat: { completions: { create: mockCreate } },
+      responses: { create: mockResponsesCreate },
       models: { list: mockListModels },
     }
   }
@@ -1374,5 +1376,96 @@ describe('ai.llm.askStream', () => {
     }
 
     expect(chunks).toEqual(['Hello', ' World'])
+  })
+})
+
+// =============================================================================
+// AbortSignal 透传（issue #3）
+// =============================================================================
+
+describe('ai.llm chat AbortSignal', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    constructorCalls.length = 0
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    expect(initResult.success).toBe(true)
+  })
+
+  afterEach(async () => {
+    await ai.close()
+  })
+
+  it('传入 signal 时作为请求选项透传给 SDK', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    const controller = new AbortController()
+
+    await ai.llm.chat({ messages: [{ role: 'user', content: 'hi' }], signal: controller.signal })
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ stream: false }),
+      { signal: controller.signal },
+    )
+  })
+
+  it('未传 signal 时不附加请求选项参数', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({ messages: [{ role: 'user', content: 'hi' }] })
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ stream: false }),
+    )
+  })
+})
+
+// =============================================================================
+// 多协议路由（issue #4）
+// =============================================================================
+
+describe('ai.llm 多协议路由', () => {
+  afterEach(async () => {
+    await ai.close()
+  })
+
+  it('api=responses 的模型走 Responses API 并映射响应', async () => {
+    vi.clearAllMocks()
+    const initResult = await ai.init({
+      llm: {
+        apiKey: 'sk-test',
+        model: 'gpt-4.1',
+        models: [{ id: 'gpt-4.1', model: 'gpt-4.1', api: 'responses' }],
+        scenarios: { chat: 'gpt-4.1' },
+      },
+    })
+    expect(initResult.success).toBe(true)
+
+    mockResponsesCreate.mockResolvedValue({
+      id: 'resp-1',
+      created_at: 1700000000,
+      output_text: '来自 Responses',
+      model: 'gpt-4.1',
+      output: [],
+      usage: { input_tokens: 6, output_tokens: 3, total_tokens: 9 },
+    })
+
+    const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'hi' }], model: 'gpt-4.1' })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.choices[0].message.content).toBe('来自 Responses')
+    expect(mockResponsesCreate).toHaveBeenCalledTimes(1)
+    // Chat Completions 路径不应被调用
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('默认 api=chat 的模型走 Chat Completions', async () => {
+    vi.clearAllMocks()
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    expect(initResult.success).toBe(true)
+
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('来自 Chat'))
+    const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'hi' }] })
+    expect(result.success && result.data.choices[0].message.content).toBe('来自 Chat')
+    expect(mockResponsesCreate).not.toHaveBeenCalled()
   })
 })
