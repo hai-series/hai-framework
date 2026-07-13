@@ -1,11 +1,11 @@
 ---
 name: hai-vecdb
-description: 使用 @h-ai/vecdb 进行向量数据库操作（LanceDB/pgvector/Qdrant）的集合管理与向量增删改查；当需求涉及向量存储、相似度搜索、嵌入检索或语义搜索时使用。
+description: 使用 @h-ai/vecdb 进行向量数据库操作（LanceDB/pgvector/Qdrant/Chroma）的集合管理与向量增删改查；当需求涉及向量存储、相似度搜索、嵌入检索或语义搜索时使用。
 ---
 
 # hai-vecdb
 
-> `@h-ai/vecdb` 提供统一的向量数据库操作接口，支持 LanceDB、pgvector、Qdrant，包含集合管理和向量 CRUD/搜索。
+> `@h-ai/vecdb` 提供统一的向量数据库操作接口，支持 LanceDB、pgvector、Qdrant、Chroma，包含集合管理和向量 CRUD/搜索。
 
 ---
 
@@ -18,7 +18,7 @@ description: 使用 @h-ai/vecdb 进行向量数据库操作（LanceDB/pgvector/Q
 ## 适用场景
 
 - 新增或修改向量数据库访问逻辑（集合管理/向量插入/搜索）
-- 接入不同向量数据库后端（LanceDB / pgvector / Qdrant）
+- 接入不同向量数据库后端（LanceDB / pgvector / Qdrant / Chroma）
 - 基于 `HaiVecdbError` 做错误分支处理
 - 构建 RAG、语义搜索、知识库等 AI 场景
 
@@ -45,6 +45,16 @@ path: ./data/vecdb
 # type: qdrant
 # url: ${HAI_VECDB_QDRANT_URL:http://localhost:6333}
 # apiKey: ${HAI_VECDB_QDRANT_API_KEY:}
+
+# Chroma（嵌入式：提供 path 且无 url 时自动拉起本地 `chroma run` 服务并持久化）
+# type: chroma
+# path: ./data/chroma
+# Chroma（直连已有服务，不拉起进程）
+# type: chroma
+# url: ${HAI_VECDB_CHROMA_URL:http://localhost:8000}
+# apiKey: ${HAI_VECDB_CHROMA_API_KEY:}
+# serverCommand: chroma      # 嵌入式模式拉起服务的可执行命令（默认 chroma，来自 chromadb 包）
+# startupTimeout: 30000      # 嵌入式服务就绪等待超时（毫秒）
 operationLog:
   read: false # collection.exists/info/list, vector.search/count
   write: false # collection.create/drop, vector.insert/upsert/delete
@@ -157,6 +167,8 @@ await vecdb.vector.delete('docs', ['doc-1', 'doc-2'])
 ```
 
 > 空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`。Qdrant `collection.exists()` 仅在 404 时返回 `false`，网络异常会返回查询错误而不是误判不存在。
+
+> Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。嵌入式模式（提供 `path` 且无 `url`）下 `vecdb.init` 通过 `serverCommand`（默认 `chroma`，来自可选依赖 `chromadb`）拉起本地服务，`vecdb.close` 时关闭进程；服务命令不可用或就绪超时时 `init` 返回 `HaiVecdbError.CONNECTION_FAILED`。直连模式提供 `url` 即可，不拉起进程。
 
 **VectorDocument**：
 
