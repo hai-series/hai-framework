@@ -440,11 +440,15 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
   }
 
   /**
-   * 等待初始化完成
+   * 等待初始化完成（自动建表等）
+   *
+   * 内置 CRUD 方法均已在执行前调用；自定义方法若通过 `this.sql()` 直接执行原始
+   * SQL（尤其是写操作或在事务中），应先 `await this.ensureReady()` 以避免表尚未
+   * 建好时（例如刚 dropTable 后、或后端建表较慢时）产生「表不存在」的竞态失败。
    *
    * @returns 初始化结果
    */
-  private async ensureReady(): Promise<HaiResult<void>> {
+  protected async ensureReady(): Promise<HaiResult<void>> {
     const result = await this.initPromise
     if (!result.success) {
       // 透传初始化失败结果

@@ -303,6 +303,10 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
 
   /** 自定义方法中使用 this.sql(tx) 自动路由到事务 */
   async insertRaw(data: { name: string, email: string }, tx?: DmlWithTxOperations) {
+    // 自定义原始写操作应先确保表已就绪（避免刚建库/建表较慢时的竞态）
+    const ready = await this.ensureReady()
+    if (!ready.success)
+      return ready
     const now = Date.now()
     return this.sql(tx).execute(
       'INSERT INTO users (name, email, created_at, updated_at) VALUES (?, ?, ?, ?)',

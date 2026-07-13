@@ -144,6 +144,10 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
   }
 
   async insertRaw(data: { name: string, email: string, enabled?: boolean }, tx?: import('../src/index.js').DmlWithTxOperations) {
+    // 自定义原始写操作在执行前确保表已就绪，避免刚 dropTable 后或后端建表较慢时的竞态
+    const ready = await this.ensureReady()
+    if (!ready.success)
+      return ready
     const isSqlite = reldb.config?.type === 'sqlite'
     const now = isSqlite ? Date.now() : new Date()
     const enabledValue = data.enabled ?? true
