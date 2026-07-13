@@ -279,6 +279,7 @@ function createLLMChatOk(content: string | null): MockChatResult {
 }
 
 const defaultConfig: MemoryConfig = {
+  provider: 'native',
   maxEntries: 100,
   recencyDecay: 0.95,
   embeddingEnabled: true,
@@ -438,11 +439,14 @@ describe('createMemoryOperations', () => {
   })
 
   it('extract 从对话中提取并存储记忆', async () => {
-    const llm = createMockLLM([{
-      content: JSON.stringify([
+    const llm = createMockLLM([
+      { content: JSON.stringify([
         { content: '提取到的记忆', type: 'fact', importance: 0.8 },
-      ]),
-    }])
+      ]) },
+      { content: JSON.stringify({ memory: [
+        { text: '提取到的记忆', type: 'fact', importance: 0.8, event: 'ADD' },
+      ] }) },
+    ])
     const embedding = createMockEmbedding()
     const ops = createTestMemoryOps(defaultConfig, llm, embedding)
 
@@ -484,7 +488,6 @@ describe('createMemoryOperations', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(llm.chat).toHaveBeenCalledOnce()
 
     const [request] = vi.mocked(llm.chat).mock.calls[0] ?? []
     expect(request?.messages[0]).toEqual({
@@ -529,11 +532,14 @@ describe('createMemoryOperations', () => {
   })
 
   it('extract 不会把不同 scope 的旧记忆当成重复项', async () => {
-    const llm = createMockLLM([{
-      content: JSON.stringify([
+    const llm = createMockLLM([
+      { content: JSON.stringify([
         { content: '用户偏好中文', type: 'preference', importance: 0.8 },
-      ]),
-    }])
+      ]) },
+      { content: JSON.stringify({ memory: [
+        { text: '用户偏好中文', type: 'preference', importance: 0.8, event: 'ADD' },
+      ] }) },
+    ])
     const embedding = createMockEmbedding()
     const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
 
@@ -588,11 +594,13 @@ describe('createMemoryOperations', () => {
         { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
       ])))
       .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
-        action: 'update',
-        memoryId: existingResult.data.id,
-        content: '用户偏好先给结论，再根据需要展开说明',
-        type: 'instruction',
-        importance: 0.9,
+        memory: [{
+          id: existingResult.data.id,
+          text: '用户偏好先给结论，再根据需要展开说明',
+          type: 'instruction',
+          importance: 0.9,
+          event: 'UPDATE',
+        }],
       })))
 
     const result = await ops.extract([
@@ -638,11 +646,13 @@ describe('createMemoryOperations', () => {
         { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
       ])))
       .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
-        action: 'update',
-        memoryId: existingResult.data.id,
-        content: '用户偏好先给结论，再根据需要展开说明',
-        type: 'instruction',
-        importance: 0.9,
+        memory: [{
+          id: existingResult.data.id,
+          text: '用户偏好先给结论，再根据需要展开说明',
+          type: 'instruction',
+          importance: 0.9,
+          event: 'UPDATE',
+        }],
       })))
 
     const { extract } = ops
@@ -722,11 +732,13 @@ describe('createMemoryOperations', () => {
         { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
       ])))
       .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
-        action: 'update',
-        memoryId: 'missing-memory-id',
-        content: '用户偏好先给结论，再根据需要展开说明',
-        type: 'instruction',
-        importance: 0.9,
+        memory: [{
+          id: 'missing-memory-id',
+          text: '用户偏好先给结论，再根据需要展开说明',
+          type: 'instruction',
+          importance: 0.9,
+          event: 'UPDATE',
+        }],
       })))
 
     const result = await ops.extract([
@@ -1024,5 +1036,155 @@ describe('createMemoryOperations', () => {
 
     const result = await ops.update('non-existent-id', { content: '新内容' })
     expect(result.success).toBe(false)
+  })
+})
+
+// ─── Mem0 Provider（嵌入式合并）测试 ───
+
+const mem0Config: MemoryConfig = { ...defaultConfig, provider: 'mem0' }
+
+const mem0Messages = [
+  { role: 'user' as const, content: '我喜欢中文' },
+  { role: 'assistant' as const, content: '好的' },
+]
+
+/**
+ * 创建 Mem0 合并测试用 LLM：第 1 次调用返回抽取事实，第 2 次调用根据传入的既有记忆动态生成合并操作
+ */
+function createMem0LLM(
+  extraction: unknown,
+  buildOps: (existing: Array<{ id: string, content: string }>) => unknown[],
+): LLMOperations {
+  let call = 0
+  return {
+    chat: vi.fn(async (req: { messages: Array<{ role: string, content: string }> }) => {
+      call++
+      if (call === 1)
+        return createLLMChatOk(JSON.stringify(extraction))
+      const userContent = req.messages.find(message => message.role === 'user')?.content ?? '{}'
+      const payload = JSON.parse(userContent) as { existingMemories: Array<{ id: string, content: string }> }
+      return createLLMChatOk(JSON.stringify({ memory: buildOps(payload.existingMemories) }))
+    }),
+    chatStream: vi.fn(),
+    listModels: vi.fn(),
+  } as unknown as LLMOperations
+}
+
+function createMem0Ops(llm: LLMOperations, embedding: EmbeddingOperations | null = createMockEmbedding()) {
+  const store = createMockStore<MemoryEntry>()
+  const vectorStore = createMockVectorStore()
+  return { ops: createMemoryOperations(mem0Config, llm, embedding, store, vectorStore), store, vectorStore }
+}
+
+describe('createMemoryOperations 批量合并（Mem0 式）', () => {
+  it('空库时对全部抽取事实执行 ADD', async () => {
+    const llm = createMem0LLM(
+      [
+        { content: '用户喜欢中文', type: 'preference', importance: 0.8 },
+        { content: '项目名为 HAI', type: 'fact', importance: 0.9 },
+      ],
+      () => [
+        { text: '用户喜欢中文', type: 'preference', importance: 0.8, event: 'ADD' },
+        { text: '项目名为 HAI', type: 'fact', importance: 0.9, event: 'ADD' },
+      ],
+    )
+    const { ops } = createMem0Ops(llm)
+
+    const result = await ops.extract(mem0Messages, { objectId: 'u1' })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data).toHaveLength(2)
+
+    const list = await ops.list({ objectId: 'u1' })
+    expect(list.success && list.data).toHaveLength(2)
+  })
+
+  it('对既有记忆执行 UPDATE（增量更新，不新增）', async () => {
+    const llm = createMem0LLM(
+      [{ content: '用户偏好中文回复', type: 'preference', importance: 0.9 }],
+      existing => [{ id: existing[0]?.id, text: '用户偏好中文回复', type: 'preference', importance: 0.9, event: 'UPDATE' }],
+    )
+    const { ops } = createMem0Ops(llm)
+
+    const added = await ops.add({ content: '用户偏好', type: 'preference', importance: 0.5, objectId: 'u1' })
+    expect(added.success).toBe(true)
+
+    const result = await ops.extract(mem0Messages, { objectId: 'u1' })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].content).toBe('用户偏好中文回复')
+    expect(result.data[0].importance).toBe(0.9)
+
+    const list = await ops.list({ objectId: 'u1' })
+    expect(list.success && list.data).toHaveLength(1) // 更新而非新增
+  })
+
+  it('对已覆盖的事实执行 NONE（去重跳过）', async () => {
+    const llm = createMem0LLM(
+      [{ content: '用户偏好中文', type: 'preference', importance: 0.8 }],
+      existing => [{ id: existing[0]?.id, text: '用户偏好中文', type: 'preference', importance: 0.8, event: 'NONE' }],
+    )
+    const { ops } = createMem0Ops(llm)
+
+    await ops.add({ content: '用户偏好中文', type: 'preference', importance: 0.8, objectId: 'u1' })
+    const result = await ops.extract(mem0Messages, { objectId: 'u1' })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data).toHaveLength(0) // 无写入
+
+    const list = await ops.list({ objectId: 'u1' })
+    expect(list.success && list.data).toHaveLength(1)
+  })
+
+  it('对矛盾的记忆执行 DELETE', async () => {
+    const llm = createMem0LLM(
+      [{ content: '用户改用英文', type: 'preference', importance: 0.8 }],
+      existing => [{ id: existing[0]?.id, text: '用户偏好中文', type: 'preference', importance: 0.8, event: 'DELETE' }],
+    )
+    const { ops } = createMem0Ops(llm)
+
+    await ops.add({ content: '用户偏好中文', type: 'preference', importance: 0.8, objectId: 'u1' })
+    const result = await ops.extract(mem0Messages, { objectId: 'u1' })
+    expect(result.success).toBe(true)
+
+    const list = await ops.list({ objectId: 'u1' })
+    expect(list.success && list.data).toHaveLength(0) // 已删除
+  })
+
+  it('合并响应非法 JSON 时回退为 ADD-all', async () => {
+    const llm = createMockLLM([
+      { content: JSON.stringify([
+        { content: '用户喜欢中文', type: 'preference', importance: 0.8 },
+        { content: '项目名为 HAI', type: 'fact', importance: 0.9 },
+      ]) },
+      { content: 'not valid json' },
+    ])
+    const { ops } = createMem0Ops(llm)
+
+    const result = await ops.extract(mem0Messages, { objectId: 'u1' })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data).toHaveLength(2)
+  })
+
+  it('extract 以外的操作委托给 native 引擎', async () => {
+    const llm = createMockLLM([])
+    const { ops } = createMem0Ops(llm)
+
+    const added = await ops.add({ content: '直接写入的记忆', type: 'fact', importance: 0.7, objectId: 'u1' })
+    expect(added.success).toBe(true)
+    if (!added.success)
+      return
+
+    const got = await ops.get(added.data.id)
+    expect(got.success && got.data.content).toBe('直接写入的记忆')
+
+    const recalled = await ops.recall('记忆', { objectId: 'u1' })
+    expect(recalled.success).toBe(true)
   })
 })

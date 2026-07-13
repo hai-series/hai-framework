@@ -11,7 +11,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { MemoryConfig } from '../ai-config.js'
 
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
-import type { ChatMessage, LLMOperations, TempModelConfig } from '../llm/ai-llm-types.js'
+import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { AIRelStore, AIVectorStore, StorePage, WhereClause } from '../store/ai-store-types.js'
 import type {
   MemoryClearOptions,
@@ -30,33 +30,10 @@ import { core, err, ok } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
-import { extractMemories } from './ai-memory-extractor.js'
+import { extractAndConsolidate } from './ai-memory-consolidation.js'
+import { injectRelevantMemories } from './ai-memory-injection.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory' })
-const LEADING_CODE_FENCE_REGEX = /^```(?:json)?\n?/
-const TRAILING_CODE_FENCE_REGEX = /\n?```$/
-const VALID_MEMORY_TYPES = new Set<MemoryEntryInput['type']>(['fact', 'preference', 'event', 'entity', 'instruction'])
-const MEMORY_WRITEBACK_RESOLUTION_SYSTEM_PROMPT = [
-  'You reconcile candidate memory writes against existing related memories.',
-  'Return exactly one JSON object with an `action` field.',
-  'Allowed actions: `create`, `update`, `noop`.',
-  'Use `noop` when the candidate is already covered by an existing memory.',
-  'Use `update` only when exactly one existing memory clearly represents the same durable information and the candidate should refine it.',
-  'Use `create` only when the candidate is genuinely new.',
-  'When action is `update`, include `memoryId` and the final normalized `content`.',
-  'You may also include `type` and `importance`.',
-  'Be conservative. If uncertain, prefer `noop` over creating duplicates.',
-  'Return JSON only, without markdown fences or explanation.',
-].join('\n')
-
-interface MemoryWritebackResolution {
-  action: 'create' | 'update' | 'noop'
-  memoryId?: string
-  content?: string
-  type?: MemoryEntryInput['type']
-  importance?: number
-}
-
 /**
  * 生成唯一 ID
  */
@@ -80,105 +57,6 @@ function cosineSimilarity(a: number[], b: number[]): number {
   }
   const denom = Math.sqrt(normA) * Math.sqrt(normB)
   return denom === 0 ? 0 : dot / denom
-}
-
-/**
- * 从消息中提取查询文本（取最后一条用户消息）
- */
-function extractQueryFromMessages(messages: ChatMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i]
-    if (msg.role === 'user') {
-      return typeof msg.content === 'string' ? msg.content : ''
-    }
-  }
-  return ''
-}
-
-function stripCodeFences(content: string): string {
-  let cleaned = content.trim()
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(LEADING_CODE_FENCE_REGEX, '').replace(TRAILING_CODE_FENCE_REGEX, '')
-  }
-  return cleaned.trim()
-}
-
-function normalizeMemoryText(content: string): string {
-  return content.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
-}
-
-function normalizeImportance(value: unknown, fallback: number): number {
-  if (typeof value !== 'number') {
-    return fallback
-  }
-  return Math.max(0, Math.min(1, value))
-}
-
-function normalizeType(value: unknown, fallback: MemoryEntryInput['type']): MemoryEntryInput['type'] {
-  return typeof value === 'string' && VALID_MEMORY_TYPES.has(value as MemoryEntryInput['type'])
-    ? value as MemoryEntryInput['type']
-    : fallback
-}
-
-function findExactRelatedMemory(candidate: MemoryEntryInput, related: MemoryEntry[]): MemoryEntry | undefined {
-  const normalizedCandidate = normalizeMemoryText(candidate.content)
-  return related.find(memory => memory.type === candidate.type && normalizeMemoryText(memory.content) === normalizedCandidate)
-}
-
-function sanitizeWritebackResolution(
-  parsed: unknown,
-  related: MemoryEntry[],
-  candidate: MemoryEntryInput,
-): MemoryWritebackResolution {
-  const fallbackCreate: MemoryWritebackResolution = {
-    action: 'create',
-    content: candidate.content,
-    type: candidate.type,
-    importance: candidate.importance ?? 0.5,
-  }
-  const fallbackNoop: MemoryWritebackResolution = { action: 'noop' }
-
-  if (typeof parsed !== 'object' || parsed === null) {
-    logger.warn('Memory writeback resolution returned unexpected format', {
-      parsedType: parsed === null ? 'null' : typeof parsed,
-    })
-    return fallbackCreate
-  }
-
-  const record = parsed as Record<string, unknown>
-  if (record.action === 'create') {
-    return {
-      action: 'create',
-      content: typeof record.content === 'string' && record.content.trim().length > 0 ? record.content.trim() : candidate.content,
-      type: normalizeType(record.type, candidate.type),
-      importance: normalizeImportance(record.importance, candidate.importance ?? 0.5),
-    }
-  }
-
-  if (record.action === 'noop') {
-    return fallbackNoop
-  }
-
-  if (record.action === 'update') {
-    const memoryId = typeof record.memoryId === 'string' ? record.memoryId : undefined
-    if (!memoryId || !related.some(memory => memory.id === memoryId)) {
-      logger.warn('Memory writeback resolution returned invalid memoryId', { memoryId })
-      return fallbackCreate
-    }
-
-    return {
-      action: 'update',
-      memoryId,
-      content: typeof record.content === 'string' && record.content.trim().length > 0 ? record.content.trim() : candidate.content,
-      type: normalizeType(record.type, candidate.type),
-      importance: normalizeImportance(record.importance, candidate.importance ?? 0.5),
-    }
-  }
-
-  logger.warn('Memory writeback resolution returned unsupported action', {
-    action: record.action,
-  })
-  return fallbackCreate
 }
 
 /**
@@ -330,67 +208,6 @@ export function createMemoryOperations(
     }
   }
 
-  async function resolveWritebackResolution(
-    candidate: MemoryEntryInput,
-    related: MemoryEntry[],
-    model?: string,
-    tempModel?: TempModelConfig,
-  ): Promise<HaiResult<MemoryWritebackResolution>> {
-    if (related.length === 0) {
-      return ok({
-        action: 'create',
-        content: candidate.content,
-        type: candidate.type,
-        importance: candidate.importance ?? 0.5,
-      })
-    }
-
-    const exactMemory = findExactRelatedMemory(candidate, related)
-    if (exactMemory) {
-      return ok({ action: 'noop', memoryId: exactMemory.id })
-    }
-
-    const resolutionResult = await llm.chat({
-      model,
-      ...(tempModel ? { tempModel } : {}),
-      messages: [
-        { role: 'system', content: MEMORY_WRITEBACK_RESOLUTION_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            candidate,
-            relatedMemories: related.map(memory => ({
-              id: memory.id,
-              content: memory.content,
-              type: memory.type,
-              importance: memory.importance,
-            })),
-          }),
-        },
-      ],
-      temperature: 0.1,
-    })
-    if (!resolutionResult.success) {
-      return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(resolutionResult.error.message) } }), resolutionResult.error)
-    }
-
-    try {
-      const parsed = JSON.parse(stripCodeFences(resolutionResult.data.choices[0]?.message?.content ?? '')) as unknown
-      return ok(sanitizeWritebackResolution(parsed, related, candidate))
-    }
-    catch {
-      logger.warn('Memory writeback resolution returned invalid JSON', {
-        content: resolutionResult.data.choices[0]?.message?.content?.slice(0, 200),
-      })
-      return ok({
-        action: 'create',
-        content: candidate.content,
-        type: candidate.type,
-        importance: candidate.importance ?? 0.5,
-      })
-    }
-  }
-
   async function recallEntries(
     query: string,
     options?: MemoryRecallOptions,
@@ -498,85 +315,27 @@ export function createMemoryOperations(
     }
   }
 
-  return {
+  const operations: MemoryOperations = {
     /**
-     * 从对话消息中提取记忆并存储
+     * 从对话消息中提取记忆并合并存储（Mem0 式增量更新）
      *
-     * 调用 LLM 分析对话内容，提取具有持久化价值的记忆条目并写入存储。
-     * 每条记忆提取后会同步计算向量（如已启用 embedding）。
+     * 抽取事实 → 检索相关记忆 → 单次 LLM 批量合并 → 应用 ADD/UPDATE/DELETE/NONE。
+     * 相比逐条写回，能跨条去重、增量更新并删除被矛盾的旧记忆。
      *
      * @param messages - 待分析的对话消息列表
      * @param options - 可选（记忆类型过滤、最小重要性阈值、自定义 model / systemPrompt 等）
-     * @returns `ok(MemoryEntry[])` 新写入的记忆列表；LLM 调用失败时返回 `MEMORY_EXTRACT_FAILED`
+     * @returns `ok(MemoryEntry[])` 新写入与更新后的记忆列表；LLM 调用失败时返回 `MEMORY_EXTRACT_FAILED`
      */
     async extract(messages: ChatMessage[], options?: MemoryExtractOptions): Promise<HaiResult<MemoryEntry[]>> {
-      logger.trace('Extracting memories from conversation', { messageCount: messages.length })
-
-      try {
-        const extractResult = await extractMemories(llm, messages, {
-          types: options?.types,
-          model: options?.model,
-          minImportance: options?.minImportance,
-          objectId: options?.objectId,
-          systemPrompt: options?.systemPrompt ?? config.systemPrompt,
-          tempModel: options?.tempModel,
-        })
-
-        if (!extractResult.success)
-          return extractResult
-
-        const entries: MemoryEntry[] = []
-        for (const input of extractResult.data) {
-          const entryInput: MemoryEntryInput = { ...input, objectId: input.objectId ?? options?.objectId, scope: options?.scope }
-          const relatedResult = await recallEntries(entryInput.content, {
-            topK: config.writebackRelatedTopK,
-            objectId: entryInput.objectId,
-            scope: entryInput.scope,
-          }, false)
-          if (!relatedResult.success) {
-            return relatedResult
-          }
-
-          const resolutionResult = await resolveWritebackResolution(entryInput, relatedResult.data, options?.model, options?.tempModel)
-          if (!resolutionResult.success) {
-            return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(resolutionResult.error.message) } }), resolutionResult.error)
-          }
-
-          const resolution = resolutionResult.data
-          if (resolution.action === 'noop') {
-            continue
-          }
-
-          if (resolution.action === 'update' && resolution.memoryId) {
-            const updateResult = await updateEntry(resolution.memoryId, {
-              content: resolution.content,
-              type: resolution.type,
-              importance: resolution.importance,
-            })
-            if (!updateResult.success) {
-              return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(updateResult.error.message) } }), updateResult.error)
-            }
-            entries.push(updateResult.data)
-            continue
-          }
-
-          const vector = await computeVector(resolution.content ?? entryInput.content)
-          const entry = await saveEntry({
-            ...entryInput,
-            content: resolution.content ?? entryInput.content,
-            type: resolution.type ?? entryInput.type,
-            importance: resolution.importance ?? entryInput.importance,
-          }, vector)
-          entries.push(entry)
-        }
-
-        logger.trace('Memories extracted and stored', { count: entries.length })
-        return ok(entries)
-      }
-      catch (error) {
-        logger.error('Memory extraction failed', { error })
-        return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(error) } }), error)
-      }
+      return extractAndConsolidate({
+        llm,
+        recall: (query, recallOptions) => recallEntries(query, recallOptions, false),
+        add: entry => operations.add(entry),
+        update: (memoryId, updates) => updateEntry(memoryId, updates),
+        remove: memoryId => operations.remove(memoryId),
+        relatedTopK: config.writebackRelatedTopK,
+        systemPrompt: config.systemPrompt,
+      }, messages, options)
     },
 
     /**
@@ -603,80 +362,7 @@ export function createMemoryOperations(
      *    - 'before-last'：在最后一条用户消息之前插入 system 消息
      */
     async injectMemories(messages: ChatMessage[], options?: MemoryInjectionOptions): Promise<HaiResult<ChatMessage[]>> {
-      const topK = options?.topK ?? 5
-      const position = options?.position ?? 'system'
-
-      try {
-        const query = extractQueryFromMessages(messages)
-        if (!query) {
-          return ok([...messages])
-        }
-
-        const recallResult = await this.recall(query, { topK, objectId: options?.objectId, scope: options?.scope })
-        if (!recallResult.success) {
-          return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: recallResult.error.message } }), recallResult.error)
-        }
-
-        const memories = recallResult.data
-        if (memories.length === 0) {
-          return ok([...messages])
-        }
-
-        let memoryText = memories
-          .map((m, i) => `[${i + 1}] (${m.type}) ${m.content}`)
-          .join('\n')
-
-        if (options?.maxTokens && options.maxTokens > 0) {
-          const estimatedTokens = memoryText.length * 0.25
-          if (estimatedTokens > options.maxTokens) {
-            const maxChars = Math.floor(options.maxTokens / 0.25)
-            memoryText = `${memoryText.slice(0, maxChars)}...`
-          }
-        }
-
-        const memoryBlock = `\n\n--- Relevant Memories ---\n${memoryText}\n--- End Memories ---`
-
-        const result = [...messages]
-
-        if (position === 'system') {
-          const systemIdx = result.findIndex(m => m.role === 'system')
-          if (systemIdx >= 0) {
-            const systemMsg = result[systemIdx]
-            result[systemIdx] = {
-              ...systemMsg,
-              content: (systemMsg as { content: string }).content + memoryBlock,
-            }
-          }
-          else {
-            result.unshift({
-              role: 'system',
-              content: `You have the following relevant memories from previous interactions:${memoryBlock}`,
-            })
-          }
-        }
-        else {
-          let lastUserIdx = -1
-          for (let i = result.length - 1; i >= 0; i--) {
-            if (result[i].role === 'user') {
-              lastUserIdx = i
-              break
-            }
-          }
-          if (lastUserIdx > 0) {
-            result.splice(lastUserIdx, 0, {
-              role: 'system',
-              content: `Relevant memories:${memoryBlock}`,
-            })
-          }
-        }
-
-        logger.trace('Memories enriched', { count: memories.length, position })
-        return ok(result)
-      }
-      catch (error) {
-        logger.error('Memory enrichment failed', { error })
-        return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: String(error) } }), error)
-      }
+      return injectRelevantMemories(messages, options, recallEntries)
     },
 
     /**
@@ -831,4 +517,6 @@ export function createMemoryOperations(
       return ok(undefined)
     },
   }
+
+  return operations
 }

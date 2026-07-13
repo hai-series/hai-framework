@@ -358,13 +358,14 @@ export type { EntityType } from './knowledge/ai-knowledge-types.js'
 /**
  * Memory 配置 Schema
  *
- * 配置对话记忆的提取、存储与检索参数。
- * 模型通过 LLMConfigSchema.scenarios.extraction 解析，
- * apiKey / baseUrl 统一使用 LLM 配置。
+ * 配置对话记忆的提取、存储与检索参数。两种 provider 均为嵌入式，复用同一套
+ * vecdb / reldb / LLM / Embedding；模型通过 LLMConfigSchema.scenarios.extraction
+ * 解析，apiKey / baseUrl 统一使用 LLM 配置。
  *
  * @example
  * ```ts
  * const memoryConfig = {
+ *   provider: 'native',
  *   maxEntries: 1000,
  *   embeddingEnabled: true,
  *   recencyDecay: 0.95,
@@ -373,6 +374,8 @@ export type { EntityType } from './knowledge/ai-knowledge-types.js'
  * ```
  */
 export const MemoryConfigSchema = z.object({
+  /** 记忆后端：native = 逐条写回；mem0 = 批量 ADD/UPDATE/DELETE 合并（均为嵌入式，复用 HAI 组件） */
+  provider: z.enum(['native', 'mem0']).default('native'),
   /** 最大记忆条数（默认 1000） */
   maxEntries: z.number().int().positive().default(1000),
   /** 自定义记忆提取 systemPrompt（可选，覆盖内置默认提示词） */
@@ -383,6 +386,7 @@ export const MemoryConfigSchema = z.object({
   embeddingEnabled: z.boolean().default(true),
   /** 检索时默认返回数量（默认 10） */
   defaultTopK: z.number().int().positive().default(10),
+  /** 写回 / 合并时检索相关记忆的数量（native 与 mem0 共用，默认 20） */
   writebackRelatedTopK: z.number().int().positive().default(20),
 })
 

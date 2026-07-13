@@ -68,6 +68,7 @@ function formatMessages(messages: ChatMessage[]): string {
  * @param options.objectId - 所属主体 ID
  * @param options.systemPrompt - 自定义提取用的系统提示词
  * @returns 提取到的记忆输入列表
+ * @param options.tempModel - 临时模型配置
  */
 export async function extractMemories(
   llm: LLMOperations,

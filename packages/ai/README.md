@@ -188,11 +188,26 @@ knowledge:
     overlap: 200
 
 memory:
+  provider: native # native | mem0
   maxEntries: 1000
   recencyDecay: 0.95
   embeddingEnabled: true
   defaultTopK: 10
+  writebackRelatedTopK: 20
 ```
+
+启用 mem0（真·嵌入式 mem0ai/oss 引擎）：
+
+```yaml
+memory:
+  provider: mem0
+  defaultTopK: 10
+```
+
+- **`native`（默认，推荐）**：HAI 原生引擎，复用同一套 vecdb（向量库）、reldb（关系库）、LLM 与 Embedding。`extract` 采用 **Mem0 式批量合并**——一次 LLM 调用对整批抽取事实与相关既有记忆做 ADD / UPDATE / DELETE / NONE 决策，实现增量更新、跨条去重与矛盾删除，并支持 `category` 主题标签。`maxEntries`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` 均作用于此后端。
+- **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取（OpenAI 兼容，走 `baseUrl` / `apiKey` / 场景模型）；向量库从底层 vecdb 后端提取——`qdrant` / `pgvector` 直接复用同一后端，`lancedb` / `chroma`（mem0 TS 不支持）则退回 mem0 自带的 in-memory 存储。历史记录默认禁用。需安装 `mem0ai`（已内置为依赖）；复用 qdrant/pgvector 时需对应客户端。
+
+两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`）。`objectId` 用于隔离不同用户/Agent 的记忆；生产环境建议所有用户级操作传入 `objectId`；无参数 `clear()` 会清空全部记忆，请谨慎使用。
 
 `ai.config` 返回脱敏后的配置快照；`apiKey`、`privateKey`、URL 内嵌凭证等敏感字段不会原样暴露。
 

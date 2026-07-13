@@ -40,6 +40,7 @@
     "@a2a-js/sdk": "catalog:",
     "@h-ai/core": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
+    "mem0ai": "catalog:",
     "nanoid": "catalog:",
     "openai": "catalog:",
     "zod": "catalog:"
@@ -47,7 +48,8 @@
   "optionalDependencies": {
     "@h-ai/datapipe": "workspace:*",
     "@h-ai/reldb": "workspace:*",
-    "@h-ai/vecdb": "workspace:*"
+    "@h-ai/vecdb": "workspace:*",
+    "better-sqlite3": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

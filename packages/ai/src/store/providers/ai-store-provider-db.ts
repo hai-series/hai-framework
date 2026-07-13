@@ -8,7 +8,7 @@
 
 import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
-import type { AIRelStore, AIRelStoreOptions, AIStoreProvider, AIVectorStore, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
+import type { AIRelStore, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, AIVectorStore, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
 
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
@@ -868,6 +868,11 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
 
     createVectorStore(name: string): AIVectorStore {
       return new VecdbAIVectorStore(vecdbDep, name)
+    },
+
+    getVectorBackend(): AIVectorBackend | undefined {
+      const connection = vecdbDep.rawConnection
+      return connection ? { ...connection } : undefined
     },
 
     createKnowledgeStore(): KnowledgeStore {

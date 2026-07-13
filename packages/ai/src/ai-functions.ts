@@ -35,6 +35,7 @@ import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
 import { createMemoryOperations } from './memory/ai-memory-functions.js'
+import { createMem0OssMemoryOperations } from './memory/providers/ai-memory-provider-mem0-oss.js'
 import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
 import { createRerankOperations } from './rerank/ai-rerank-functions.js'
@@ -77,15 +78,19 @@ export interface AISubsystems {
 export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): Promise<AISubsystems> {
   const { storeProvider, datapipe: datapipeDep } = deps
 
+  // 记忆后端：mem0 OSS 自管理存储，无需 hai 的 memoryStore / memoryVectorStore
+  const memoryParsed = MemoryConfigSchema.parse(config.memory ?? {})
+  const useMem0Oss = memoryParsed.provider === 'mem0'
+
   // 通过 Provider 创建存储实例
   const chatRecordStore = storeProvider.createRelStore<ChatRecord>('hai_ai_chat_records', { hasObjectId: true, hasSessionId: true })
   const sessionStore = storeProvider.createRelStore<SessionInfo>('hai_ai_sessions', { hasObjectId: true })
   const sourceStore = storeProvider.createRelStore<RetrievalSource>('hai_ai_retrieval_sources')
-  const memoryStore = storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true })
+  const memoryStore = useMem0Oss ? null : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true })
   const contextStore = storeProvider.createRelStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
 
   // 向量存储
-  const memoryVectorStore = storeProvider.createVectorStore('hai_ai_memory_vectors')
+  const memoryVectorStore = useMem0Oss ? null : storeProvider.createVectorStore('hai_ai_memory_vectors')
 
   // 统一初始化（建表等）
   await storeProvider.initialize()
@@ -123,8 +128,15 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const knowledgeStore = storeProvider.createKnowledgeStore?.()
   const knowledge = createKnowledgeOperations(knowledgeParsed, llm, embedding, datapipeDep, knowledgeStore)
 
-  const memoryParsed = MemoryConfigSchema.parse(config.memory ?? {})
-  const memory = createMemoryOperations(memoryParsed, llm, embedding, memoryStore, memoryVectorStore)
+  const memory: MemoryOperations = memoryStore && memoryVectorStore
+    ? createMemoryOperations(memoryParsed, llm, embedding, memoryStore, memoryVectorStore)
+    : await createMem0OssMemoryOperations({
+        config: memoryParsed,
+        aiConfig: config,
+        collectionName: 'hai_ai_memory',
+        embeddingDims: config.embedding?.dimensions,
+        vectorBackend: storeProvider.getVectorBackend?.(),
+      })
 
   // Token / Summary / Compress
   const tokenParsed = TokenConfigSchema.parse(config.token ?? {})

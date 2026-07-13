@@ -67,6 +67,11 @@ knowledge:
     mode: markdown
     maxSize: 1500
     overlap: 200
+
+# 可选：真·mem0ai/oss 引擎（嵌入式，LLM/Embedder 从 llm 配置提取，向量库复用底层 vecdb 后端或退回 mem0 自带存储）
+memory:
+  provider: mem0
+  defaultTopK: 10
 ```
 
 `ai.config` 是脱敏快照；`apiKey`、`privateKey`、URL 内嵌凭证会被隐藏。
@@ -167,6 +172,8 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: cry
 ```
 
 ## 记忆、RAG 与知识库
+
+`memory.provider` 默认为 `native`（推荐）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding，`extract` 采用 **Mem0 式批量合并**（一次 LLM 调用对整批事实与相关既有记忆做 ADD/UPDATE/DELETE/NONE，支持 `category`）。`mem0` 则直接使用 `mem0ai/oss` 的 `Memory` 引擎：LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容），向量库从底层 vecdb 后端提取（qdrant/pgvector 复用，lancedb/chroma 退回 mem0 自带 in-memory 存储）。两者对外 `ai.memory.*` API 完全一致。
 
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })

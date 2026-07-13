@@ -307,6 +307,35 @@ export interface KnowledgeStore {
 // ─── 存储 Provider ───
 
 /**
+ * 向量库后端连接信息
+ *
+ * 由 Provider 暴露底层向量库的原始连接，供需要复用同一后端的外部引擎（如 mem0 OSS）
+ * 直连。字段按后端类型填充；包含凭证，仅供同进程内集成使用。
+ */
+export interface AIVectorBackend {
+  /** 后端类型（如 'qdrant'、'pgvector'、'lancedb'、'chroma'） */
+  type: string
+  /** 服务 URL（qdrant / chroma） */
+  url?: string
+  /** API Key（qdrant / chroma） */
+  apiKey?: string
+  /** 主机（pgvector） */
+  host?: string
+  /** 端口（pgvector / chroma） */
+  port?: number
+  /** 数据库名（pgvector） */
+  database?: string
+  /** 用户名（pgvector） */
+  user?: string
+  /** 密码（pgvector） */
+  password?: string
+  /** 连接串（pgvector） */
+  connectionString?: string
+  /** 本地路径（lancedb / chroma 嵌入式） */
+  path?: string
+}
+
+/**
  * AI 存储 Provider 接口
  *
  * 负责创建 AIRelStore / AIVectorStore 实例，并管理存储层生命周期。
@@ -330,6 +359,14 @@ export interface AIStoreProvider {
 
   /** 创建向量数据存储实例 */
   createVectorStore: (name: string) => AIVectorStore
+
+  /**
+   * 暴露底层向量库后端连接（可选）
+   *
+   * 供需要直连同一向量库的外部引擎（如 mem0 OSS）复用后端。未初始化或不支持时返回
+   * `undefined`。返回值含凭证，仅供同进程内集成使用，禁止写入日志。
+   */
+  getVectorBackend?: () => AIVectorBackend | undefined
 
   /**
    * 创建 knowledge 专用存储（可选）
