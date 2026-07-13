@@ -1,3 +1,4 @@
+import type { MarkdownDocumentBlock } from './document-parse.js'
 import type {
   MarkdownSourceKind,
   MarkdownToolbarDownloadAction,
@@ -19,6 +20,25 @@ const BROWSER_PDF_PAGE_BREAK_SAMPLE_STEP_PX = 4
 const BROWSER_PDF_PAGE_BREAK_WHITE_THRESHOLD = 246
 const BROWSER_PDF_PAGE_BREAK_ALPHA_THRESHOLD = 12
 const BROWSER_PDF_PAGE_BREAK_EMPTY_ROW_MAX_INK = 1
+
+function escapeExportHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderDocumentBlocksForExport(blocks: MarkdownDocumentBlock[]): string {
+  return blocks.map((block) => {
+    if (block.kind === 'html') {
+      return block.html
+    }
+
+    return `<pre><code class="language-${escapeExportHtml(block.language)}">${escapeExportHtml(block.code)}</code></pre>`
+  }).join('\n')
+}
 
 /**
  * 组件内置支持的文档导出格式。
@@ -138,7 +158,8 @@ export async function downloadAiDocument(
     showRunButton: false,
     breaks: true,
   })
-  const exportHtml = buildDocumentExportHtml(exportTitle, rendered.html)
+  const renderedHtml = renderDocumentBlocksForExport(rendered.blocks)
+  const exportHtml = buildDocumentExportHtml(exportTitle, renderedHtml)
 
   if (builtIn.id === 'word') {
     downloadBlob(
@@ -152,7 +173,7 @@ export async function downloadAiDocument(
 
   await downloadDocumentAsPdf(
     htmlToPdfFilename(exportTitle),
-    rendered.html,
+    renderedHtml,
   )
 }
 

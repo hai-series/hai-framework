@@ -4,7 +4,7 @@
  * Extracts HTML, outline, and code block metadata for document-mode rendering.
  */
 
-import type { RendererObject, Tokens } from 'marked'
+import type { RendererObject, Token, Tokens } from 'marked'
 import type { MarkdownCodeBlockItem, MarkdownOutlineItem } from './document-types.js'
 import { Marked } from 'marked'
 import {
@@ -43,12 +43,40 @@ export interface MarkdownDocumentParseOptions {
 }
 
 export interface MarkdownRenderResult {
-  /** Rendered HTML output. */
-  html: string
   /** Extracted outline items for navigation. */
   outline: MarkdownOutlineItem[]
   /** Extracted code blocks for run/copy features. */
   codeBlocks: MarkdownCodeBlockItem[]
+  /** 阅读态使用的稳定块列表，避免流式更新销毁重型块 DOM。 */
+  blocks: MarkdownDocumentBlock[]
+}
+
+export type MarkdownDocumentBlock
+  = | MarkdownDocumentHtmlBlock
+    | MarkdownDocumentMermaidBlock
+
+export interface MarkdownDocumentHtmlBlock {
+  /** 普通 Markdown HTML 块。 */
+  kind: 'html'
+  /** 稳定块 id，用于 Svelte keyed each。 */
+  id: string
+  /** 已按现有安全策略渲染后的 HTML。 */
+  html: string
+}
+
+export interface MarkdownDocumentMermaidBlock {
+  /** 已闭合 Mermaid fence 块。 */
+  kind: 'mermaid'
+  /** 稳定块 id，用于 Svelte keyed each。 */
+  id: string
+  /** 对应 codeBlocks 中的代码块 id。 */
+  codeBlockId: string
+  /** Mermaid 源码。 */
+  code: string
+  /** 原始 fence info string。 */
+  language: string
+  /** Mermaid 源码签名，源码变化时才需要重渲染。 */
+  signature: string
 }
 
 interface MarkdownRenderState {
@@ -58,6 +86,13 @@ interface MarkdownRenderState {
   codeBlocks: MarkdownCodeBlockItem[]
   /** Heading id counter map for stable de-duplication. */
   headingIds: Map<string, number>
+}
+
+interface MarkdownHtmlChunkRenderResult {
+  /** 已按现有安全策略渲染后的 HTML。 */
+  html: string
+  /** HTML chunk 内收集到的代码块。 */
+  codeBlocks: MarkdownCodeBlockItem[]
 }
 
 /** Default parsing options for document mode. */
@@ -81,6 +116,50 @@ function readHtmlTokenSource(token: Tokens.HTML | Tokens.Tag): string {
   return 'text' in token && typeof token.text === 'string'
     ? token.text
     : ''
+}
+
+/**
+ * 判断 fenced code block 是否已经输出闭合 fence。
+ *
+ * marked 在流式半截内容里也会把未闭合 fence 识别成 code token；如果此时提前
+ * 调用 Mermaid，会把临时语法错误渲染成错误 SVG 并残留在界面上。
+ */
+function isClosedFencedCodeBlock(token: Tokens.Code): boolean {
+  const firstLineEnd = token.raw.indexOf('\n')
+  const firstLine = firstLineEnd === -1
+    ? token.raw
+    : token.raw.slice(0, firstLineEnd)
+  const openingStart = firstLine.search(/\S/)
+  if (openingStart === -1 || openingStart > 3) {
+    return true
+  }
+
+  const markerChar = firstLine[openingStart]
+  if (markerChar !== '`' && markerChar !== '~') {
+    return true
+  }
+
+  let markerLength = 0
+  for (
+    let index = openingStart;
+    firstLine[index] === markerChar;
+    index += 1
+  ) {
+    markerLength += 1
+  }
+  if (markerLength < 3) {
+    return true
+  }
+
+  const trimmedRaw = token.raw.trimEnd()
+  const lastLineStart = trimmedRaw.lastIndexOf('\n')
+  if (lastLineStart === -1) {
+    return false
+  }
+
+  const closingFence = trimmedRaw.slice(lastLineStart + 1).trim()
+  return closingFence.length >= markerLength
+    && [...closingFence].every(char => char === markerChar)
 }
 
 /**
@@ -167,12 +246,17 @@ function createRendererObject(
       return `<h${depth} id="${escapeHtml(id)}" data-heading-id="${escapeHtml(id)}">${headingHtml}</h${depth}>`
     },
 
-    code({ text, lang }: Tokens.Code): string {
+    code(token: Tokens.Code): string {
+      const { text, lang } = token
       // rawLanguage is the original info string from the fence.
       const rawLanguage = lang?.trim() || ''
 
       // mermaid 块在阅读态自动渲染为图表；只有 code 模式的代码/预览切换才保留源码视图。
-      if (isMermaidLanguage(rawLanguage) && !options.showCodePreviewToggle) {
+      if (
+        isMermaidLanguage(rawLanguage)
+        && !options.showCodePreviewToggle
+        && isClosedFencedCodeBlock(token)
+      ) {
         const mermaidBlockId = `hai-md-code-${state.codeBlocks.length + 1}`
         state.codeBlocks.push({
           id: mermaidBlockId,
@@ -180,7 +264,7 @@ function createRendererObject(
           language: rawLanguage,
         })
 
-        return `<div class="hai-md-mermaid" data-mermaid-host="${escapeHtml(mermaidBlockId)}"></div>`
+        return `<div class="hai-md-mermaid" contenteditable="false" data-mermaid-host="${escapeHtml(mermaidBlockId)}"></div>`
       }
 
       // highlightLanguage is validated against supported languages.
@@ -330,6 +414,125 @@ function createMarkedInstance(
   })
 }
 
+function createMermaidSourceSignature(blockId: string, code: string): string {
+  return JSON.stringify([blockId, code])
+}
+
+function createEmptyRenderResult(): MarkdownRenderResult {
+  return {
+    outline: [],
+    codeBlocks: [],
+    blocks: [],
+  }
+}
+
+function createHtmlBlock(id: string, html: string): MarkdownDocumentHtmlBlock | null {
+  return html
+    ? {
+        kind: 'html',
+        id,
+        html,
+      }
+    : null
+}
+
+function renderMarkdownDocumentHtmlChunk(
+  content: string,
+  options: Required<MarkdownDocumentParseOptions>,
+  state: MarkdownRenderState,
+): MarkdownHtmlChunkRenderResult {
+  const marked = createMarkedInstance(options, state)
+  const result = marked.parse(content)
+
+  return {
+    html: typeof result === 'string' ? result : '',
+    codeBlocks: state.codeBlocks,
+  }
+}
+
+function isClosedMermaidToken(
+  token: Token,
+  options: Required<MarkdownDocumentParseOptions>,
+): token is Tokens.Code {
+  if (
+    token.type !== 'code'
+    || !('text' in token)
+    || typeof token.text !== 'string'
+  ) {
+    return false
+  }
+
+  const codeToken = token as Tokens.Code
+  const rawLanguage = codeToken.lang?.trim() || ''
+  return isMermaidLanguage(rawLanguage)
+    && !options.showCodePreviewToggle
+    && isClosedFencedCodeBlock(codeToken)
+}
+
+function renderMarkdownDocumentBlocks(
+  content: string,
+  options: Required<MarkdownDocumentParseOptions>,
+): MarkdownDocumentBlock[] {
+  const marked = new Marked({
+    extensions: createEditorMarkdownExtensions(),
+    gfm: true,
+    breaks: options.breaks,
+  })
+  const tokens = marked.lexer(content)
+  const blocks: MarkdownDocumentBlock[] = []
+  let htmlTokens: Token[] = []
+  const state: MarkdownRenderState = {
+    outline: [],
+    codeBlocks: [],
+    headingIds: new Map(),
+  }
+  let nextBlockIndex = 1
+
+  function flushHtmlTokens(): void {
+    if (htmlTokens.length === 0) {
+      return
+    }
+
+    const chunk = htmlTokens.map(token => token.raw).join('')
+    const result = renderMarkdownDocumentHtmlChunk(chunk, options, state)
+    const block = createHtmlBlock(`hai-md-block-${nextBlockIndex}`, result.html)
+    if (block) {
+      blocks.push(block)
+      nextBlockIndex += 1
+    }
+    htmlTokens = []
+  }
+
+  for (const token of tokens) {
+    if (!isClosedMermaidToken(token, options)) {
+      htmlTokens.push(token)
+      continue
+    }
+
+    flushHtmlTokens()
+
+    const codeBlockId = `hai-md-code-${state.codeBlocks.length + 1}`
+    const rawLanguage = token.lang?.trim() || ''
+    state.codeBlocks.push({
+      id: codeBlockId,
+      code: token.text,
+      language: rawLanguage,
+    })
+    blocks.push({
+      kind: 'mermaid',
+      id: `hai-md-block-${nextBlockIndex}`,
+      codeBlockId,
+      code: token.text,
+      language: rawLanguage,
+      signature: createMermaidSourceSignature(codeBlockId, token.text),
+    })
+    nextBlockIndex += 1
+  }
+
+  flushHtmlTokens()
+  return blocks
+}
+
 /**
  * Render markdown into HTML and extract outline + code block metadata.
  */
@@ -338,11 +541,7 @@ export function renderMarkdownDocument(
   options?: MarkdownDocumentParseOptions,
 ): MarkdownRenderResult {
   if (!content) {
-    return {
-      html: '',
-      outline: [],
-      codeBlocks: [],
-    }
+    return createEmptyRenderResult()
   }
 
   // mergedOptions ensures defaults are always applied.
@@ -358,12 +557,11 @@ export function renderMarkdownDocument(
   }
   // marked instance is scoped to this render call.
   const marked = createMarkedInstance(mergedOptions, state)
-  // result can be sync string or async promise; only sync string is used.
-  const result = marked.parse(content)
+  marked.parse(content)
 
   return {
-    html: typeof result === 'string' ? result : '',
     outline: createNumberedOutline(state.outline),
     codeBlocks: state.codeBlocks,
+    blocks: renderMarkdownDocumentBlocks(content, mergedOptions),
   }
 }

@@ -26,6 +26,7 @@
     MarkdownTextAlignKind,
   } from './document-types.js'
   import { tick } from 'svelte'
+  import { SvelteMap } from 'svelte/reactivity'
   import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
@@ -37,7 +38,12 @@
   import { resolveDocumentMarkdownContent } from './document-download.js'
   import { renderMarkdownDocument } from './document-parse.js'
   import { parseMarkdown } from './markdown-parse.js'
-  import { renderMermaidDiagram } from './mermaid-render.js'
+  import {
+    createMermaidSourceSignature,
+    getMermaidHostRenderAction,
+    isCurrentMermaidRenderToken,
+  } from './mermaid-host-sync.js'
+  import { renderMermaidDiagram, stripMermaidSvgStyleElements } from './mermaid-render.js'
 
   interface SelectionToolbarPosition {
     /** 选区工具条相对滚动容器的 top 坐标。 */
@@ -56,6 +62,17 @@
     /** 运行成功后用于渲染预览区的结构化结果。 */
     result?: MarkdownCodeRunResult
     /** 运行失败时展示在预览区的错误摘要。 */
+    error?: string
+  }
+
+  interface MermaidRenderCacheEntry {
+    /** 当前 Mermaid 源码签名。 */
+    signature: string
+    /** 当前 Mermaid 渲染状态。 */
+    status: 'rendering' | 'ready' | 'error'
+    /** 渲染成功后的 SVG 内容。 */
+    html?: string
+    /** 渲染失败时展示的错误摘要。 */
     error?: string
   }
 
@@ -226,6 +243,7 @@
   // 复制前后的图标以内联 SVG 缓存，避免每次点击都重新拼接按钮内容。
   const COPY_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
   const CHECK_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+  const MERMAID_SYNC_IDLE_DELAY_MS = 220
 
   let {
     // 暴露给外层的滚动容器引用，用于同步滚动或定位选区工具条。
@@ -367,6 +385,12 @@
   let copyFeedbackTimer: number | undefined = $state()
   // 每个代码块的运行状态和预览结果，key 为 codeBlockId。
   let codePreviews = $state<Record<string, CodePreviewState>>({})
+  // Mermaid host 会随 {@html} 重建，渲染缓存必须独立于 DOM 节点保存。
+  const mermaidRenderCache = new SvelteMap<string, MermaidRenderCacheEntry>()
+  // 流式输出会高频重建 {@html}，Mermaid 同步必须合并到内容静默后执行。
+  let mermaidSyncTimer: number | undefined
+  let mermaidSyncFrame: number | undefined
+  let scheduledMermaidRenderSignature = ''
   // selectionFormatState 跟随真实 DOM 选区，负责驱动按钮按下态与下拉默认值。
   let selectionFormatState = $state<SelectionFormatState>({
     ...DEFAULT_SELECTION_FORMAT_STATE,
@@ -419,8 +443,13 @@
       allowHtmlTags,
     }),
   )
-  // html 是最终注入正文的内容。
-  const html = $derived(renderResult.html)
+  // Mermaid 占位 HTML 在流式阶段可能不变，必须额外订阅源码签名变化。
+  const mermaidRenderSignature = $derived(
+    renderResult.blocks
+      .filter(block => block.kind === 'mermaid')
+      .map(block => block.signature)
+      .join('\n'),
+  )
   // outline 是左侧目录的原始数据源。
   const outline = $derived(renderResult.outline)
   // outlineHasContent 用来区分“目录被收起”和“正文确实没有标题”。
@@ -492,14 +521,26 @@
   }
 
   $effect(() => {
-    void html
+    void renderResult.blocks
+    void mermaidRenderSignature
     if (typeof window === 'undefined' || !previewHost) {
+      cancelMermaidHostsSync()
       return
+    }
+
+    if (!mermaidRenderSignature) {
+      scheduledMermaidRenderSignature = ''
+      cancelMermaidHostsSync()
+    }
+    else if (
+      mermaidRenderSignature !== scheduledMermaidRenderSignature
+    ) {
+      scheduledMermaidRenderSignature = mermaidRenderSignature
+      scheduleMermaidHostsSync()
     }
 
     requestAnimationFrame(() => {
       syncCodePreviewHosts()
-      syncMermaidHosts()
       syncActiveHeadingFromScroll()
       syncPinnedTitleVisibility()
     })
@@ -939,10 +980,16 @@
       : ''
 
     if (result.kind === 'mermaid') {
-      host.innerHTML = `<div class="hai-md-preview-card hai-md-preview-mermaid"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<div class="hai-md-mermaid hai-md-mermaid-preview"></div></div>`
+      host.innerHTML = `<div class="hai-md-preview-card hai-md-preview-mermaid"><div class="hai-md-preview-head">${previewTitle}</div>${previewDesc}<div class="hai-md-mermaid hai-md-mermaid-preview" contenteditable="false"></div></div>`
       const mermaidEl = host.querySelector<HTMLElement>('.hai-md-mermaid-preview')
       if (mermaidEl) {
-        void renderMermaidHost(mermaidEl, result.content)
+        const signature = createMermaidSourceSignature('preview', result.content)
+        void renderMermaidHost(
+          mermaidEl,
+          result.content,
+          signature,
+          `preview:${signature}`,
+        )
       }
       return
     }
@@ -974,6 +1021,43 @@
    * mermaid 图表位于 `{@html}` 注入的 DOM 内部，渲染是异步的。
    * 阅读态的图表块和 code 模式预览槽都复用这里把源码渲染为 SVG。
    */
+  function scheduleMermaidHostsSync(): void {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    if (mermaidSyncTimer !== undefined) {
+      window.clearTimeout(mermaidSyncTimer)
+    }
+    if (mermaidSyncFrame !== undefined) {
+      window.cancelAnimationFrame(mermaidSyncFrame)
+      mermaidSyncFrame = undefined
+    }
+
+    mermaidSyncTimer = window.setTimeout(() => {
+      mermaidSyncTimer = undefined
+      mermaidSyncFrame = window.requestAnimationFrame(() => {
+        mermaidSyncFrame = undefined
+        syncMermaidHosts()
+      })
+    }, MERMAID_SYNC_IDLE_DELAY_MS)
+  }
+
+  function cancelMermaidHostsSync(): void {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    if (mermaidSyncTimer !== undefined) {
+      window.clearTimeout(mermaidSyncTimer)
+      mermaidSyncTimer = undefined
+    }
+    if (mermaidSyncFrame !== undefined) {
+      window.cancelAnimationFrame(mermaidSyncFrame)
+      mermaidSyncFrame = undefined
+    }
+  }
+
   function syncMermaidHosts(): void {
     if (!previewHost) {
       return
@@ -981,13 +1065,6 @@
 
     const hosts = previewHost.querySelectorAll<HTMLElement>('[data-mermaid-host]')
     for (const host of hosts) {
-      if (
-        host.dataset.mermaidStatus === 'ready'
-        || host.dataset.mermaidStatus === 'rendering'
-      ) {
-        continue
-      }
-
       const blockId = host.dataset.mermaidHost
       if (!blockId) {
         continue
@@ -998,7 +1075,19 @@
         continue
       }
 
-      void renderMermaidHost(host, block.code)
+      const nextSignature = createMermaidSourceSignature(block.id, block.code)
+      const cached = mermaidRenderCache.get(blockId)
+      const action = getMermaidHostRenderAction({
+        status: cached?.status ?? host.dataset.mermaidStatus,
+        renderedSignature: cached?.signature ?? host.dataset.mermaidSourceSignature,
+        nextSignature,
+      })
+      if (!action.shouldRender) {
+        applyCachedMermaidRender(host, cached)
+        continue
+      }
+
+      void renderMermaidHost(host, block.code, action.token, blockId)
     }
   }
 
@@ -1006,16 +1095,98 @@
    * 把单个 mermaid 源码渲染进目标节点；语法错误时展示本地化错误提示。
    * `mermaidStatus` 既避免同一帧重复渲染，也兜住多次 effect 触发。
    */
-  async function renderMermaidHost(host: HTMLElement, code: string): Promise<void> {
+  async function renderMermaidHost(
+    host: HTMLElement,
+    code: string,
+    renderToken: string,
+    cacheKey: string,
+  ): Promise<void> {
+    const cached = mermaidRenderCache.get(cacheKey)
+    if (
+      cached
+      && (cached.status === 'ready' || cached.status === 'rendering' || cached.status === 'error')
+      && cached.signature === renderToken
+    ) {
+      applyCachedMermaidRender(host, cached)
+      return
+    }
+
     host.dataset.mermaidStatus = 'rendering'
+    host.dataset.mermaidSourceSignature = renderToken
+    mermaidRenderCache.set(cacheKey, {
+      signature: renderToken,
+      status: 'rendering',
+    })
     try {
       const svg = await renderMermaidDiagram(code)
-      host.innerHTML = svg
-      host.dataset.mermaidStatus = 'ready'
+      if (!isCurrentMermaidRenderToken(renderToken, mermaidRenderCache.get(cacheKey)?.signature)) {
+        return
+      }
+
+      const entry: MermaidRenderCacheEntry = {
+        signature: renderToken,
+        status: 'ready',
+        html: stripMermaidSvgStyleElements(svg),
+      }
+      mermaidRenderCache.set(cacheKey, entry)
+      applyCachedMermaidRender(host, entry)
+      applyCachedMermaidRenderToCurrentHosts(cacheKey, entry)
     }
     catch (error) {
-      host.dataset.mermaidStatus = 'error'
-      host.innerHTML = `<div class="hai-md-mermaid-error">${escapePreviewText(error instanceof Error ? error.message : uiM('markdown_mermaid_failed'))}</div>`
+      if (!isCurrentMermaidRenderToken(renderToken, mermaidRenderCache.get(cacheKey)?.signature)) {
+        return
+      }
+
+      const message = error instanceof Error ? error.message : uiM('markdown_mermaid_failed')
+      const entry: MermaidRenderCacheEntry = {
+        signature: renderToken,
+        status: 'error',
+        error: message,
+      }
+      mermaidRenderCache.set(cacheKey, entry)
+      applyCachedMermaidRender(host, entry)
+      applyCachedMermaidRenderToCurrentHosts(cacheKey, entry)
+    }
+  }
+
+  function applyCachedMermaidRender(
+    host: HTMLElement,
+    entry: MermaidRenderCacheEntry | undefined,
+  ): void {
+    if (!entry) {
+      return
+    }
+
+    host.dataset.mermaidStatus = entry.status
+    host.dataset.mermaidSourceSignature = entry.signature
+    if (host.dataset.mermaidAppliedSignature === entry.signature) {
+      return
+    }
+
+    if (entry.status === 'ready' && entry.html !== undefined) {
+      host.innerHTML = entry.html
+      host.dataset.mermaidAppliedSignature = entry.signature
+      return
+    }
+
+    if (entry.status === 'error') {
+      host.innerHTML = `<div class="hai-md-mermaid-error">${escapePreviewText(entry.error ?? uiM('markdown_mermaid_failed'))}</div>`
+      host.dataset.mermaidAppliedSignature = entry.signature
+    }
+  }
+
+  function applyCachedMermaidRenderToCurrentHosts(
+    cacheKey: string,
+    entry: MermaidRenderCacheEntry,
+  ): void {
+    if (!previewHost) {
+      return
+    }
+
+    for (const host of previewHost.querySelectorAll<HTMLElement>('[data-mermaid-host]')) {
+      if (host.dataset.mermaidHost === cacheKey) {
+        applyCachedMermaidRender(host, entry)
+      }
     }
   }
 
@@ -3172,8 +3343,18 @@
             oninput={handlePreviewInput}
             onblur={handlePreviewBlur}
           >
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -- Markdown HTML 渲染 -->
-            {@html html}
+            {#each renderResult.blocks as block (block.id)}
+              {#if block.kind === 'html'}
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -- Markdown HTML 块渲染 -->
+                {@html block.html}
+              {:else}
+                <div
+                  class='hai-md-mermaid'
+                  contenteditable='false'
+                  data-mermaid-host={block.codeBlockId}
+                ></div>
+              {/if}
+            {/each}
           </article>
         </div>
       </section>

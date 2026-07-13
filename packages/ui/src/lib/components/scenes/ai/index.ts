@@ -20,6 +20,9 @@ export type {
 } from './document-download.js'
 export { renderMarkdownDocument } from './document-parse.js'
 export type {
+  MarkdownDocumentBlock,
+  MarkdownDocumentHtmlBlock,
+  MarkdownDocumentMermaidBlock,
   MarkdownDocumentParseOptions,
   MarkdownRenderResult,
 } from './document-parse.js'
