@@ -169,6 +169,36 @@ if (manager.success) {
 }
 ```
 
+#### 真实对话状态（Conversation Commit Layer）
+
+默认（`turnCommit: 'auto'`）下，`chat` / `chatStream` 会把**模型生成的完整文本**写入上下文。但在「模型生成 → TTS 合成 → 实际播放」链路中，AI 可能说到一半就被打断——此时进入下一轮所有参与者可见的对话状态，应当是**实际播放出去的部分**，而非模型本想说完的全文。
+
+设置 `turnCommit: 'manual'` 后，生成结果不会自动写入上下文，而是返回一个 `turnId`；由调用方在确定「实际发生了什么」后显式提交真实文本：
+
+```ts
+const m = ai.context.createManager({ turnCommit: 'manual' /* ... */ }).data
+
+for await (const ev of m.chatStream('请展开讲讲')) {
+  if (ev.type === 'delta') {
+    feedTts(ev.text)
+  } // 边生成边合成播放
+  else if (ev.type === 'done') {
+    m.markTurnSpeaking(ev.turnId) // 可选：标记进入播放
+    if (interrupted)
+      await m.interruptTurn(ev.turnId, { text: actuallySpokenText }) // 只提交播放出去的部分
+    else
+      await m.commitTurn(ev.turnId) // 完整提交
+  }
+}
+
+// 观测每一轮的 generated / committed / status
+const turns = m.getTurns()
+```
+
+- `commitTurn(turnId, { text? })` — 提交真实文本（缺省用完整生成文本），状态转 `completed`。
+- `interruptTurn(turnId, { text? })` — 只写入实际表达出去的部分（缺省视为未表达，不写入），状态转 `interrupted`。
+- 只有 `committed` 的内容进入上下文与记忆提取；未提交/被打断丢弃的部分不会污染后续轮次。
+
 ## 配置
 
 ```yaml
@@ -210,6 +240,7 @@ memory:
   recencyDecay: 0.95
   embeddingEnabled: true
   defaultTopK: 10
+  candidateMultiplier: 5 # 候选池倍数：先取回 topK×倍数 条候选，再按 scope/重要性过滤，最后截取 topK
   writebackRelatedTopK: 20
 ```
 
@@ -225,6 +256,17 @@ memory:
 - **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取（OpenAI 兼容，走 `baseUrl` / `apiKey` / 场景模型）；向量库从底层 vecdb 后端提取——`qdrant` / `pgvector` 直接复用同一后端，`lancedb` / `chroma`（mem0 TS 不支持）则退回 mem0 自带的 in-memory 存储。历史记录默认禁用。需安装 `mem0ai`（已内置为依赖）；复用 qdrant/pgvector 时需对应客户端。
 
 两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`），均支持 `objectId`（主体隔离）与 `scope`（业务作用域 key-value 过滤，如 `{ topicId, personaId }`）。`recall` / `list` / `listPage` / `clear` 均按 `scope` 严格过滤，`clear` 在传入 `types` / `scope` 时仅删除同时匹配项（避免误删）。一个差异：mem0 后端在 `update` 涉及 type/importance/metadata 时会重建记忆并重新分配 `id`（native 后端保持 id 稳定）。
+
+**候选池与 scope 漏召回**：`scope` 过滤在内存中完成，若先按 `topK` 截断再过滤，同一主体下相关度较高的其它主题/角色记忆会把目标 scope 的记忆挤出候选池，导致「明明有却召回 0 条」。为此 `recall` / `injectMemories` 先取回 `topK × candidateMultiplier`（默认 5）条候选，过滤后再截取 `topK`。scope 隔离越细（如按 `topicId` + `personaId`），可将 `candidateMultiplier` 调大：
+
+```ts
+const memories = await ai.memory.recall('经济发展', {
+  objectId: 'user-001',
+  scope: { topicId: 'C' },
+  topK: 10,
+  candidateMultiplier: 8, // 覆盖配置默认值，扩大候选池
+})
+```
 
 `ai.config` 返回脱敏后的配置快照；`apiKey`、`privateKey`、URL 内嵌凭证等敏感字段不会原样暴露。
 

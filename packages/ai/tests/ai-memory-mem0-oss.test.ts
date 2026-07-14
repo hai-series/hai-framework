@@ -191,6 +191,36 @@ describe('createMem0OssMemoryOperations', () => {
     expect(result.success && result.data.map(e => e.content)).toEqual(['属于 u1'])
   })
 
+  it('recall 以 topK×candidateMultiplier 取回候选池，避免 scope 过滤后漏召回', async () => {
+    // 模拟：向量最相关的都是主题 A/B，主题 C 的条目相关度较低排在后面。
+    // 若只取 topK=2，则 C 完全落在候选池外 → scope=C 过滤后为 0 条（漏召回）。
+    // 候选池放大到 topK×candidateMultiplier 后，C 的条目进入候选池 → 正确召回。
+    memoryMock.search.mockResolvedValue({ results: [
+      { id: 'a1', memory: 'A1', score: 0.95, metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'A' } } },
+      { id: 'a2', memory: 'A2', score: 0.94, metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'A' } } },
+      { id: 'b1', memory: 'B1', score: 0.90, metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'B' } } },
+      { id: 'c1', memory: 'C1', score: 0.60, metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'C' } } },
+      { id: 'c2', memory: 'C2', score: 0.55, metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'C' } } },
+    ] })
+    const ops = await createOps()
+
+    const result = await ops.recall('q', { objectId: 'u1', topK: 2, scope: { topicId: 'C' } })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    // 候选池宽度 = topK×candidateMultiplier（2×5=10），C 的条目被纳入并正确召回
+    expect(memoryMock.search).toHaveBeenCalledWith('q', expect.objectContaining({ topK: 10 }))
+    expect(result.data.map(e => e.content)).toEqual(['C1', 'C2'])
+  })
+
+  it('recall 显式 candidateMultiplier 覆盖配置默认值', async () => {
+    memoryMock.search.mockResolvedValue({ results: [] })
+    const ops = await createOps()
+
+    await ops.recall('q', { objectId: 'u1', topK: 3, candidateMultiplier: 2 })
+    expect(memoryMock.search).toHaveBeenCalledWith('q', expect.objectContaining({ topK: 6 }))
+  })
+
   it('add 完整保留业务 metadata（issue #9）与归属主体（issue #10）', async () => {
     memoryMock.add.mockResolvedValue({ results: [{ id: 'm9', memory: '记忆', metadata: { hai_object_id: 'u1' } }] })
     const ops = await createOps()

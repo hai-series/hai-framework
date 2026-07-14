@@ -53,6 +53,8 @@
   "ai_contextCompressFailed": "上下文压缩失败：{error}",
   "ai_contextSummarizeFailed": "上下文总结失败：{error}",
   "ai_contextTokenEstimateFailed": "Token 估算失败：{error}",
+  "ai_turnNotFound": "对话轮次 '{turnId}' 不存在",
+  "ai_turnInvalidState": "对话轮次 '{turnId}' 已提交，无法重复提交",
 
   "ai_storeFailed": "存储操作失败：{error}",
   "ai_storeNotAvailable": "存储后端不可用，已降级为内存模式",

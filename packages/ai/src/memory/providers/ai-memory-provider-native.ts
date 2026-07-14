@@ -271,6 +271,7 @@ export function createNativeMemoryOperations(
   ): Promise<HaiResult<MemoryEntry[]>> {
     const topK = options?.topK ?? config.defaultTopK
     const recencyWeight = options?.recencyWeight ?? (1 - config.recencyDecay)
+    const candidateMultiplier = Math.max(1, options?.candidateMultiplier ?? config.candidateMultiplier)
 
     logger.trace('Recalling memories', { query: query.slice(0, 100), topK, updateAccessStats })
 
@@ -314,7 +315,7 @@ export function createNativeMemoryOperations(
       const vectorScores = new Map<string, number>()
       if (queryVector) {
         const vectorResults = await vectorStore.search(queryVector, {
-          topK: topK * 3,
+          topK: topK * candidateMultiplier,
           filter: options?.objectId ? { objectId: options.objectId } : undefined,
         })
         for (const r of vectorResults) {

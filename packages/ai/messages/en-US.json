@@ -53,6 +53,8 @@
   "ai_contextCompressFailed": "Context compression failed: {error}",
   "ai_contextSummarizeFailed": "Context summarization failed: {error}",
   "ai_contextTokenEstimateFailed": "Token estimation failed: {error}",
+  "ai_turnNotFound": "Conversation turn '{turnId}' not found",
+  "ai_turnInvalidState": "Conversation turn '{turnId}' is already committed",
 
   "ai_storeFailed": "Store operation failed: {error}",
   "ai_storeNotAvailable": "Store backend not available, degraded to memory mode",

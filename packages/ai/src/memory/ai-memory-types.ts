@@ -134,6 +134,13 @@ export interface MemoryExtractOptions {
 export interface MemoryRecallOptions {
   /** 返回数量（默认使用配置的 defaultTopK） */
   topK?: number
+  /**
+   * 候选池倍数（覆盖配置的 candidateMultiplier）
+   *
+   * 检索时先取回 `topK × candidateMultiplier` 条候选再按 scope / 类型 / 重要性过滤，
+   * 最后截取 topK。scope 过滤较严（如按 topic / persona 隔离）时应调大，避免漏召回。
+   */
+  candidateMultiplier?: number
   /** 过滤类型 */
   types?: MemoryType[]
   /** 最低重要性 */
@@ -156,6 +163,12 @@ export interface MemoryRecallOptions {
 export interface MemoryInjectionOptions {
   /** 注入的记忆数量（默认 5） */
   topK?: number
+  /**
+   * 候选池倍数（覆盖配置的 candidateMultiplier）
+   *
+   * 透传给底层 `recall`，scope 过滤较严时应调大以避免漏召回。
+   */
+  candidateMultiplier?: number
   /** 记忆占用的最大 token 预算（默认不限） */
   maxTokens?: number
   /** 注入位置：system = 追加到 system 消息末尾，before-last = 插入在最后一条用户消息之前 */

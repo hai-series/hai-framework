@@ -52,6 +52,10 @@ export interface Mem0OssDeps {
 interface Mem0OssContext {
   memory: Mem0Memory
   defaultObjectId: string
+  /** 检索默认返回数量 */
+  defaultTopK: number
+  /** 候选池倍数（scope 过滤前的候选取回宽度 = topK × candidateMultiplier） */
+  candidateMultiplier: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -266,12 +270,16 @@ async function extractMemories(context: Mem0OssContext, messages: ChatMessage[],
   }
 }
 
-async function recallMemories(context: Mem0OssContext, query: string, options?: { topK?: number, objectId?: string, minImportance?: number, scope?: Record<string, unknown> }): Promise<HaiResult<MemoryEntry[]>> {
+async function recallMemories(context: Mem0OssContext, query: string, options?: { topK?: number, candidateMultiplier?: number, objectId?: string, minImportance?: number, scope?: Record<string, unknown> }): Promise<HaiResult<MemoryEntry[]>> {
   const objectId = options?.objectId ?? context.defaultObjectId
+  const topK = options?.topK ?? context.defaultTopK
+  const candidateMultiplier = Math.max(1, options?.candidateMultiplier ?? context.candidateMultiplier)
   try {
+    // mem0 无法下推 scope（存于 metadata），只能先取回更大的候选池再在内存过滤。
+    // 若仅取 topK，scope 命中的记忆很可能已被同主体其它主题/角色的高相关条目挤出候选，导致漏召回。
     const response = await context.memory.search(query, {
       filters: { userId: objectId },
-      topK: options?.topK,
+      topK: topK * candidateMultiplier,
     })
     const entries = response.results
       .map(item => toMemoryEntry(item, objectId))
@@ -280,6 +288,8 @@ async function recallMemories(context: Mem0OssContext, query: string, options?: 
       // 按业务作用域严格过滤，避免同一主体下不同主题/角色互相召回
       .filter(entry => !options?.scope || matchScope(entry, options.scope))
       .filter(entry => entry.importance >= (options?.minImportance ?? 0))
+      // mem0 已按相关度排序，过滤后保持该顺序，仅截取 topK
+      .slice(0, topK)
     return ok(entries)
   }
   catch (error) {
@@ -428,10 +438,13 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
   const context: Mem0OssContext = {
     memory: new mod.Memory(configResult.data),
     defaultObjectId: DEFAULT_OBJECT_ID,
+    defaultTopK: deps.config.defaultTopK,
+    candidateMultiplier: deps.config.candidateMultiplier,
   }
 
   const recall: MemoryOperations['recall'] = (query, options) => recallMemories(context, query, {
     topK: options?.topK ?? deps.config.defaultTopK,
+    candidateMultiplier: options?.candidateMultiplier,
     objectId: options?.objectId,
     minImportance: options?.minImportance,
     scope: options?.scope,

@@ -285,6 +285,7 @@ const defaultConfig: MemoryConfig = {
   recencyDecay: 0.95,
   embeddingEnabled: true,
   defaultTopK: 10,
+  candidateMultiplier: 3,
   writebackRelatedTopK: 20,
 }
 

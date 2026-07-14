@@ -439,6 +439,17 @@ export const MemoryConfigSchema = z.object({
   embeddingEnabled: z.boolean().default(true),
   /** 检索时默认返回数量（默认 10） */
   defaultTopK: z.number().int().positive().default(10),
+  /**
+   * 候选池倍数（默认 5）
+   *
+   * 检索时先从向量后端取回 `topK × candidateMultiplier` 条候选，再按 scope / 重要性等
+   * 条件在内存中过滤，最后截取 topK。用于修正「向量后端仅返回 topK，随后被 scope 过滤
+   * 掉大部分、导致同一主体下特定主题/角色记忆漏召回」的问题：候选池越大，scope 命中越充分。
+   *
+   * native provider 会对全部候选评分，故此值仅影响向量预取宽度；mem0 provider 无法下推
+   * scope，必须依赖更大的候选池才能保证 scope 内记忆被召回。
+   */
+  candidateMultiplier: z.number().int().positive().default(5),
   /** 写回 / 合并时检索相关记忆的数量（native 与 mem0 共用，默认 20） */
   writebackRelatedTopK: z.number().int().positive().default(20),
 })

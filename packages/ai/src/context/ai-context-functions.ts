@@ -16,6 +16,7 @@ import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-stor
 import type { SummaryResult } from '../summary/ai-summary-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
 import type {
+  CommitTurnInput,
   ContextChatOptions,
   ContextChatResult,
   ContextDeps,
@@ -23,6 +24,7 @@ import type {
   ContextManagerOptions,
   ContextOperations,
   ContextStreamEvent,
+  ConversationTurn,
 } from './ai-context-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -79,9 +81,12 @@ export function createContextOperations(
 
   /**
    * 构造存储键
+   *
+   * 用 JSON 数组序列化 [objectId, sessionId]，避免朴素拼接 `${objectId}:${sessionId}`
+   * 在 id 本身含分隔符时产生碰撞（如 `a` + `b:c` 与 `a:b` + `c` 会得到同一键）。
    */
   function storeKey(scope: InteractionScope): string {
-    return `${scope.objectId}:${scope.sessionId}`
+    return JSON.stringify([scope.objectId, scope.sessionId])
   }
 
   /**
@@ -146,6 +151,17 @@ export function createContextOperations(
           pendingMemoryTasks.delete(task)
         })
       pendingMemoryTasks.add(task)
+    }
+
+    // ─── Conversation Commit Layer 状态 ───
+    // turnCommit=auto（默认）：生成即提交完整文本；manual：生成后登记待提交轮次，由 commit/interrupt 决定真实文本。
+    const turnCommit = options.turnCommit ?? 'auto'
+    const turns: ConversationTurn[] = []
+    // 待提交轮次（manual 模式）：turnId → 触发该轮的用户输入（用于提交时的记忆提取配对）
+    const pendingCommits = new Map<string, string>()
+
+    function generateTurnId(): string {
+      return `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
     }
 
     const manager: ContextManager = {
@@ -247,6 +263,27 @@ export function createContextOperations(
         state.summaries = []
       },
 
+      getTurns(): HaiResult<ConversationTurn[]> {
+        return ok(turns.map(t => ({ ...t })))
+      },
+
+      markTurnSpeaking(turnId: string): HaiResult<void> {
+        const turn = turns.find(t => t.id === turnId)
+        if (!turn)
+          return err(HaiAIError.CONTEXT_TURN_NOT_FOUND, aiM('ai_turnNotFound', { params: { turnId } }))
+        if (turn.status === 'generating')
+          turn.status = 'speaking'
+        return ok(undefined)
+      },
+
+      commitTurn(turnId: string, input?: CommitTurnInput): Promise<HaiResult<void>> {
+        return finalizeCommit(turnId, input?.text, 'completed')
+      },
+
+      interruptTurn(turnId: string, input?: CommitTurnInput): Promise<HaiResult<void>> {
+        return finalizeCommit(turnId, input?.text, 'interrupted')
+      },
+
       get pendingMemoryTasks(): number {
         return pendingMemoryTasks.size
       },
@@ -301,13 +338,12 @@ export function createContextOperations(
             if (ragResult.success) {
               // RAG query 已直接返回完整结果，将 answer 作为回复
               const reply = ragResult.data.answer
-              await manager.addMessage({ role: 'assistant', content: reply })
-
-              enqueueMemoryExtract(message, reply)
+              const turnId = await finalizeAssistantReply(message, reply)
 
               return ok({
                 reply,
                 model: ragResult.data.model,
+                turnId,
                 usage: ragResult.data.usage,
               })
             }
@@ -328,11 +364,9 @@ export function createContextOperations(
             })
             if (reasonResult.success) {
               const reply = reasonResult.data.answer
-              await manager.addMessage({ role: 'assistant', content: reply })
+              const turnId = await finalizeAssistantReply(message, reply)
 
-              enqueueMemoryExtract(message, reply)
-
-              return ok({ reply, model: chatOpts?.model ?? options.model ?? '', usage: undefined })
+              return ok({ reply, model: chatOpts?.model ?? options.model ?? '', turnId, usage: undefined })
             }
           }
 
@@ -400,13 +434,10 @@ export function createContextOperations(
             // 无工具调用：提取文本回复
             const reply = typeof assistantMessage.content === 'string' ? assistantMessage.content : ''
 
-            // 追加助手回复
-            await manager.addMessage({ role: 'assistant', content: reply })
+            // 完成本轮生成：auto 直接提交完整文本，manual 登记待提交轮次
+            const turnId = await finalizeAssistantReply(message, reply)
 
-            // 可选：自动提取记忆（后台任务，纳入 pending 集合供 flush 等待）
-            enqueueMemoryExtract(message, reply)
-
-            return ok({ reply, model: lastModel, usage: lastUsage })
+            return ok({ reply, model: lastModel, turnId, usage: lastUsage })
           }
 
           // 达到最大工具调用轮次，返回最后可用的回复
@@ -414,7 +445,8 @@ export function createContextOperations(
           const fallbackReply = lastAssistantMsg && 'content' in lastAssistantMsg && typeof lastAssistantMsg.content === 'string'
             ? lastAssistantMsg.content
             : ''
-          return ok({ reply: fallbackReply, model: lastModel, usage: lastUsage })
+          const fallbackTurnId = await finalizeAssistantReply(message, fallbackReply)
+          return ok({ reply: fallbackReply, model: lastModel, turnId: fallbackTurnId, usage: lastUsage })
         }
         catch (error) {
           logger.error('Context chat failed', { error })
@@ -445,9 +477,6 @@ export function createContextOperations(
           }
         }
 
-        // 提取记忆的通用逻辑（纳入 pending 集合，供 flush 等待）
-        const extractMemory = (reply: string) => enqueueMemoryExtract(message, reply)
-
         // 可选：RAG 流式检索增强
         if (options.rag?.enable && deps.rag) {
           let fullReply = ''
@@ -475,9 +504,8 @@ export function createContextOperations(
             }
           }
 
-          await manager.addMessage({ role: 'assistant', content: fullReply })
-          extractMemory(fullReply)
-          yield { type: 'done', reply: fullReply, model, usage }
+          const ragTurnId = await finalizeAssistantReply(message, fullReply)
+          yield { type: 'done', reply: fullReply, model, turnId: ragTurnId, usage }
           return
         }
 
@@ -502,9 +530,8 @@ export function createContextOperations(
             }
           }
 
-          await manager.addMessage({ role: 'assistant', content: fullReply })
-          extractMemory(fullReply)
-          yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', usage: undefined }
+          const reasonTurnId = await finalizeAssistantReply(message, fullReply)
+          yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: reasonTurnId, usage: undefined }
           return
         }
 
@@ -588,12 +615,74 @@ export function createContextOperations(
         }
 
         // 追加助手回复
-        await manager.addMessage({ role: 'assistant', content: fullReply })
+        const turnId = await finalizeAssistantReply(message, fullReply)
 
-        extractMemory(fullReply)
-
-        yield { type: 'done', reply: fullReply, model, usage }
+        yield { type: 'done', reply: fullReply, model, turnId, usage }
       },
+    }
+
+    /**
+     * 完成一次 assistant 生成。
+     *
+     * auto 模式：把完整生成文本写入上下文并触发记忆提取，轮次直接 `completed`。
+     * manual 模式：仅登记 `generating` 轮次并记录配对用户输入，等待 commit/interrupt。
+     *
+     * @returns 该轮 turnId（供 manual 模式后续提交）
+     */
+    async function finalizeAssistantReply(userMessage: string, generated: string): Promise<string> {
+      const turnId = generateTurnId()
+      const now = Date.now()
+      const turn: ConversationTurn = {
+        id: turnId,
+        speaker: 'assistant',
+        generated,
+        committed: turnCommit === 'auto' ? generated : '',
+        status: turnCommit === 'auto' ? 'completed' : 'generating',
+        createdAt: now,
+        committedAt: turnCommit === 'auto' ? now : undefined,
+      }
+      turns.push(turn)
+
+      if (turnCommit === 'auto') {
+        if (generated)
+          await manager.addMessage({ role: 'assistant', content: generated })
+        enqueueMemoryExtract(userMessage, generated)
+      }
+      else {
+        pendingCommits.set(turnId, userMessage)
+      }
+      return turnId
+    }
+
+    /**
+     * 提交 / 打断一个待提交轮次：把真实文本写入上下文并触发记忆提取。
+     */
+    async function finalizeCommit(
+      turnId: string,
+      text: string | undefined,
+      status: 'completed' | 'interrupted',
+    ): Promise<HaiResult<void>> {
+      const turn = turns.find(t => t.id === turnId)
+      if (!turn)
+        return err(HaiAIError.CONTEXT_TURN_NOT_FOUND, aiM('ai_turnNotFound', { params: { turnId } }))
+      if (turn.status === 'completed' || turn.status === 'interrupted')
+        return err(HaiAIError.CONTEXT_TURN_INVALID_STATE, aiM('ai_turnInvalidState', { params: { turnId } }))
+
+      const committed = text ?? (status === 'completed' ? turn.generated : '')
+      turn.committed = committed
+      turn.status = status
+      turn.committedAt = Date.now()
+
+      const userMessage = pendingCommits.get(turnId)
+      pendingCommits.delete(turnId)
+
+      // 只有真实表达出去的内容才进入对话状态与记忆
+      if (committed) {
+        await manager.addMessage({ role: 'assistant', content: committed })
+        if (userMessage !== undefined)
+          enqueueMemoryExtract(userMessage, committed)
+      }
+      return ok(undefined)
     }
 
     return manager

@@ -536,6 +536,181 @@ describe('context chat / chatStream', () => {
 })
 
 // =============================================================================
+// Conversation Commit Layer 测试（真实对话状态）
+// =============================================================================
+
+describe('context conversation commit layer', () => {
+  function createOpsWithDeps(llm: LLMOperations) {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(defaultCompressConfig, tokenOps, summaryOps, 8000)
+    return createContextOperations(defaultCompressConfig, tokenOps, compressOps, undefined, undefined, { llm })
+  }
+
+  it('auto 模式（默认）：chat 自动提交完整生成文本', async () => {
+    const llm = createMockLLM([{ content: '完整回答一千字' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const result = await manager.chat('问题')
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.turnId).toBeTruthy()
+
+    // 消息已写入
+    const msgs = manager.getMessages()
+    expect(msgs.success && msgs.data).toHaveLength(2)
+
+    // 轮次记录为 completed，generated === committed
+    const turns = manager.getTurns()
+    expect(turns.success).toBe(true)
+    if (turns.success) {
+      expect(turns.data).toHaveLength(1)
+      expect(turns.data[0].status).toBe('completed')
+      expect(turns.data[0].generated).toBe('完整回答一千字')
+      expect(turns.data[0].committed).toBe('完整回答一千字')
+    }
+  })
+
+  it('manual 模式：生成后不写入上下文，需显式 commitTurn', async () => {
+    const llm = createMockLLM([{ content: '完整回答' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const result = await manager.chat('问题')
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+
+    // 生成后：仅 user 消息在上下文，assistant 尚未提交
+    let msgs = manager.getMessages()
+    expect(msgs.success && msgs.data).toHaveLength(1)
+    expect(msgs.success && msgs.data[0].role).toBe('user')
+
+    // 轮次为 generating
+    const turnsBefore = manager.getTurns()
+    expect(turnsBefore.success && turnsBefore.data[0].status).toBe('generating')
+
+    // 显式提交完整文本
+    const commit = await manager.commitTurn(result.data.turnId)
+    expect(commit.success).toBe(true)
+
+    msgs = manager.getMessages()
+    expect(msgs.success && msgs.data).toHaveLength(2)
+    expect(msgs.success && msgs.data[1].content).toBe('完整回答')
+
+    const turnsAfter = manager.getTurns()
+    expect(turnsAfter.success && turnsAfter.data[0].status).toBe('completed')
+  })
+
+  it('manual 模式：被打断时只写入实际播放的文本', async () => {
+    const llm = createMockLLM([{ content: '本想说满一千字的完整回答' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const result = await manager.chat('问题')
+    if (!result.success)
+      return
+
+    // 主持人在播放到「本想说」处打断
+    const spoken = '本想说'
+    const interrupt = await manager.interruptTurn(result.data.turnId, { text: spoken })
+    expect(interrupt.success).toBe(true)
+
+    const msgs = manager.getMessages()
+    expect(msgs.success && msgs.data[1].content).toBe(spoken)
+
+    const turns = manager.getTurns()
+    expect(turns.success).toBe(true)
+    if (turns.success) {
+      expect(turns.data[0].status).toBe('interrupted')
+      expect(turns.data[0].generated).toBe('本想说满一千字的完整回答')
+      expect(turns.data[0].committed).toBe(spoken)
+    }
+  })
+
+  it('manual 模式：打断且未表达任何内容时不写入 assistant 消息', async () => {
+    const llm = createMockLLM([{ content: '还没来得及说' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const result = await manager.chat('问题')
+    if (!result.success)
+      return
+
+    const interrupt = await manager.interruptTurn(result.data.turnId)
+    expect(interrupt.success).toBe(true)
+
+    // 未表达：上下文只有 user 一条
+    const msgs = manager.getMessages()
+    expect(msgs.success && msgs.data).toHaveLength(1)
+  })
+
+  it('commitTurn 未知 turnId 返回 CONTEXT_TURN_NOT_FOUND', async () => {
+    const llm = createMockLLM([{ content: 'x' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    if (!managerResult.success)
+      return
+
+    const commit = await managerResult.data.commitTurn('turn_does_not_exist')
+    expect(commit.success).toBe(false)
+    if (!commit.success)
+      expect(commit.error.code).toBe(HaiAIError.CONTEXT_TURN_NOT_FOUND.code)
+  })
+
+  it('重复提交返回 CONTEXT_TURN_INVALID_STATE', async () => {
+    const llm = createMockLLM([{ content: 'x' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const result = await manager.chat('问题')
+    if (!result.success)
+      return
+
+    await manager.commitTurn(result.data.turnId)
+    const second = await manager.commitTurn(result.data.turnId)
+    expect(second.success).toBe(false)
+    if (!second.success)
+      expect(second.error.code).toBe(HaiAIError.CONTEXT_TURN_INVALID_STATE.code)
+  })
+
+  it('markTurnSpeaking 将 generating 轮次标记为 speaking', async () => {
+    const llm = createMockLLM([{ content: 'x' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const result = await manager.chat('问题')
+    if (!result.success)
+      return
+
+    const mark = manager.markTurnSpeaking(result.data.turnId)
+    expect(mark.success).toBe(true)
+    const turns = manager.getTurns()
+    expect(turns.success && turns.data[0].status).toBe('speaking')
+  })
+})
+
+// =============================================================================
 // chat / chatStream 工具调用循环测试
 // =============================================================================
 

@@ -92,7 +92,7 @@ memory:
 | 工具执行 | `registry.executeAll(toolCalls)` | 支持并行执行 |
 | MCP 服务 | `createMcpServer(...)` | 按需连接 HTTP/SSE/Stdio transport |
 | Embedding | `ai.embedding.embedText(text)` | 批量用 `embedBatch` |
-| 记忆 | `ai.memory.extract/recall/injectMemories` | 用 `objectId` 做主体隔离，`scope` 做业务作用域隔离 |
+| 记忆 | `ai.memory.extract/recall/injectMemories` | 用 `objectId` 做主体隔离，`scope` 做业务作用域隔离；scope 隔离越细，`candidateMultiplier` 调大以防漏召回 |
 | Retrieval/RAG | `ai.retrieval.retrieve` / `ai.rag.query` | Retrieval source 先注册或由配置预置 |
 | Knowledge | `ai.knowledge.setup/ingest/ask` | 入库前会调用 datapipe 清洗分块 |
 | Context | `ai.context.createManager` | 编排 LLM + Memory + RAG + 压缩 |
@@ -221,6 +221,25 @@ if (!managerResult.success) return managerResult
 const reply = await managerResult.data.chat('你好')
 await managerResult.data.save()
 ```
+
+### 真实对话状态（Conversation Commit Layer）
+
+`turnCommit: 'manual'` 时，`chat` / `chatStream` 不自动写入生成文本，只返回 `turnId`；由调用方提交**实际发生的内容**（TTS 播放 / 主持人打断等场景）：
+
+```ts
+const m = ai.context.createManager({ turnCommit: 'manual', scope }).data
+for await (const ev of m.chatStream('展开讲讲')) {
+  if (ev.type === 'delta') feedTts(ev.text)
+  else if (ev.type === 'done') {
+    interrupted
+      ? await m.interruptTurn(ev.turnId, { text: spokenSoFar }) // 只提交播放出去的部分
+      : await m.commitTurn(ev.turnId) // 完整提交
+  }
+}
+```
+
+- 只有 `committed` 的内容进入上下文与记忆；`getTurns()` 可观测 `generated` / `committed` / `status`。
+
 
 ## SvelteKit API 端点模式
 

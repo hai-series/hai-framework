@@ -40,6 +40,55 @@ export interface ContextDeps {
   reasoning?: ReasoningOperations
 }
 
+// ─── Conversation Commit Layer（真实对话状态） ───
+
+/**
+ * 对话轮次状态
+ *
+ * 描述一次 assistant 生成从「模型产出」到「真实进入对话」的生命周期：
+ * - `generating` — 模型正在/已生成，但尚未确定实际对外表达的内容
+ * - `speaking` — 已进入下游表达（如 TTS 合成 / 播放）
+ * - `completed` — 已提交，完整生成文本即为真实文本
+ * - `interrupted` — 被打断，仅实际表达出去的部分（committed）进入对话
+ */
+export type ConversationTurnStatus = 'generating' | 'speaking' | 'completed' | 'interrupted'
+
+/**
+ * 对话轮次
+ *
+ * 区分「模型生成的文本」与「真实进入对话的文本」，解决多智能体 / 语音访谈等场景中
+ * 「AI 说到一半被打断，下一轮所有参与者应看到真实发生了什么」的问题。
+ */
+export interface ConversationTurn {
+  /** 轮次唯一标识 */
+  id: string
+  /** 发言者 */
+  speaker: 'user' | 'assistant'
+  /** 模型生成的完整文本 */
+  generated: string
+  /** 实际提交进入上下文的文本（`completed` 时通常等于 generated；`interrupted` 时为真实表达部分） */
+  committed: string
+  /** 轮次状态 */
+  status: ConversationTurnStatus
+  /** 创建时间（Unix 毫秒） */
+  createdAt: number
+  /** 提交时间（Unix 毫秒，未提交时为 undefined） */
+  committedAt?: number
+}
+
+/**
+ * 提交 / 打断轮次的输入
+ */
+export interface CommitTurnInput {
+  /**
+   * 实际进入对话的文本。
+   *
+   * - `commitTurn` 不传时默认使用模型生成的完整文本（generated）。
+   * - `interruptTurn` 不传时默认视为「未表达任何内容」（空串，不写入上下文）。
+   */
+  text?: string
+}
+
 // ─── 有状态上下文管理器 ───
 
 /**
@@ -59,6 +108,18 @@ export interface ContextManagerOptions {
 
   /** 温度覆盖 */
   temperature?: number
+
+  /**
+   * 对话提交模式（默认 `auto`）
+   *
+   * - `auto`：`chat` / `chatStream` 生成结束后，自动把**模型生成的完整文本**写入上下文并触发记忆提取。
+   * - `manual`：生成结束后**不写入**上下文，仅登记一个待提交轮次并返回 `turnId`；由调用方在确定
+   *   「实际发生了什么」后，通过 `commitTurn` / `interruptTurn` 写入**真实文本**。
+   *
+   * 用于「模型生成 → TTS 合成 → 实际播放」链路：AI 说到一半被打断时，只有真正播放出去的
+   * 部分才应进入下一轮所有参与者可见的对话状态，而不是模型本想说完的全文。
+   */
+  turnCommit?: 'auto' | 'manual'
 
   /**
    * 压缩配置（覆盖全局 compress 配置）
@@ -161,6 +222,13 @@ export interface ContextChatResult {
   reply: string
   /** 使用的模型 */
   model: string
+  /**
+   * 本次生成对应的对话轮次 ID
+   *
+   * `turnCommit: 'manual'` 时，用于后续 `commitTurn` / `interruptTurn` 提交真实文本；
+   * `auto` 模式下该轮已自动提交（`completed`）。
+   */
+  turnId: string
   /** Token 使用统计 */
   usage?: {
     prompt_tokens: number
@@ -176,7 +244,7 @@ export type ContextStreamEvent
   = | { type: 'delta', text: string }
     | { type: 'tool_call', name: string, arguments: string }
     | { type: 'tool_result', name: string, content: string, success: boolean }
-    | { type: 'done', reply: string, model: string, usage?: { prompt_tokens: number, completion_tokens: number, total_tokens: number } }
+    | { type: 'done', reply: string, model: string, turnId: string, usage?: { prompt_tokens: number, completion_tokens: number, total_tokens: number } }
 
 /**
  * 有状态上下文管理器接口
@@ -271,6 +339,50 @@ export interface ContextManager {
    * 重置管理器（清空所有消息和摘要）
    */
   reset: () => void
+
+  /**
+   * 获取对话轮次列表（Conversation Commit Layer）
+   *
+   * 记录每次 chat/chatStream 生成的轮次及其 `generated` / `committed` / `status`，
+   * 供应用侧观测「模型生成」与「真实进入对话」的差异。
+   *
+   * @returns 轮次列表（按发生顺序）
+   */
+  getTurns: () => HaiResult<ConversationTurn[]>
+
+  /**
+   * 标记某轮次进入「表达中」（如 TTS 开始播放）
+   *
+   * 仅更新状态用于观测，不改变上下文内容。
+   *
+   * @param turnId - 轮次 ID
+   * @returns 成功返回 ok(undefined)；轮次不存在返回 CONTEXT_TURN_NOT_FOUND
+   */
+  markTurnSpeaking: (turnId: string) => HaiResult<void>
+
+  /**
+   * 提交轮次（`turnCommit: 'manual'` 场景）
+   *
+   * 把真实文本写入上下文并触发记忆提取；`text` 缺省时使用模型生成的完整文本。
+   * 提交后该轮 `status` 变为 `completed`。
+   *
+   * @param turnId - 轮次 ID
+   * @param input - 提交内容（可覆盖为真实表达文本）
+   * @returns 成功返回 ok(undefined)；轮次不存在或已提交返回对应错误
+   */
+  commitTurn: (turnId: string, input?: CommitTurnInput) => Promise<HaiResult<void>>
+
+  /**
+   * 打断轮次（`turnCommit: 'manual'` 场景）
+   *
+   * 只把「实际表达出去的部分」写入上下文；`text` 缺省时视为未表达任何内容（不写入）。
+   * 打断后该轮 `status` 变为 `interrupted`。
+   *
+   * @param turnId - 轮次 ID
+   * @param input - 实际表达出去的文本
+   * @returns 成功返回 ok(undefined)；轮次不存在或已提交返回对应错误
+   */
+  interruptTurn: (turnId: string, input?: CommitTurnInput) => Promise<HaiResult<void>>
 
   /**
    * 发送消息并获取回复（需 deps.llm 可用）

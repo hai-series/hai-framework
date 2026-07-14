@@ -45,6 +45,7 @@ export async function injectRelevantMemories(
 
     const recallResult = await recall(query, {
       topK,
+      candidateMultiplier: options?.candidateMultiplier,
       objectId: options?.objectId,
       scope: options?.scope,
       types: options?.types,
