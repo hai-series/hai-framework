@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/vecdb",
   "type": "module",
-  "version": "0.1.0-alpha.34",
+  "version": "0.1.0-alpha.35",
   "description": "Hai Framework vector database module for LanceDB, pgvector, Qdrant, and Chroma.",
   "license": "Apache-2.0",
   "exports": {
