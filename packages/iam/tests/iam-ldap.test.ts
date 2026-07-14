@@ -15,10 +15,13 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import type { LdapContainerLease } from './helpers/ldap-container.js'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 import { acquireLdapContainer } from './helpers/ldap-container.js'
+
+// 该文件会执行真实 LDAP 往返，全量测试并行时单个集成场景可能超过 Vitest 默认的 5 秒超时。
+vi.setConfig({ testTimeout: 30_000 })
 
 describe('iam.ldap', () => {
   // LDAP 容器在所有环境套件之间共享
