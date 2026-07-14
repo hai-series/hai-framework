@@ -9,10 +9,8 @@
 -->
 <script lang='ts'>
   import type { DataAttributes, IconButtonProps } from '../../types.js'
+  import { sanitizeInlineSvg } from '../../internal/icon-safety.js'
   import { cn, getDataAttributes, getSizeClass, getVariantClass } from '../../utils.js'
-
-  const SAFE_INLINE_SVG_REGEX = /^<svg[\s\S]*<\/svg>$/i
-  const UNSAFE_INLINE_SVG_REGEX = /<\s*(?:script|foreignObject|iframe|object|embed|link|meta|img)\b|\son[a-z]+\s*=|(?:href|xlink:href)\s*=\s*['"]\s*(?:javascript:|vbscript:|data:text\/html)/i
 
   const {
     icon,
@@ -72,18 +70,6 @@
     onclick?.(e)
   }
 
-  function sanitizeInlineSvg(markup: string): string {
-    const trimmed = markup.trim()
-    if (!trimmed) {
-      return ''
-    }
-
-    if (!SAFE_INLINE_SVG_REGEX.test(trimmed) || UNSAFE_INLINE_SVG_REGEX.test(trimmed)) {
-      return ''
-    }
-
-    return trimmed
-  }
 </script>
 
 {#if tooltip}

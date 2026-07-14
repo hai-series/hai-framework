@@ -18,15 +18,14 @@
   import Spinner from '../../primitives/Spinner.svelte'
 
   const SAFE_HTTP_URL_REGEX = /^https?:\/\//i
+  const SAFE_RELATIVE_URL_REGEX = /^(?:\/(?!\/)|\.\.?\/)/
 
   let {
     value = $bindable(''),
     accept = 'image/*',
     maxSize = 5 * 1024 * 1024, // 5MB
     disabled = false,
-    uploadUrl = '',
-    presignUrl = '',
-    headers = {},
+    uploadHandler,
     placeholder,
     aspectRatio = '',
     width = '',
@@ -40,6 +39,8 @@
   const dataAttributes = $derived(getDataAttributes(restProps))
   let loading = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
+  let activeUpload: AbortController | null = null
+  let localPreviewUrl: string | null = null
   let previewUrl = $derived(value)
 
   const containerClass = $derived(
@@ -84,100 +85,80 @@
     return null
   }
 
+  function isSafePreviewUrl(url: string): boolean {
+    return SAFE_HTTP_URL_REGEX.test(url) || SAFE_RELATIVE_URL_REGEX.test(url)
+  }
+
+  $effect(() => {
+    return () => {
+      activeUpload?.abort()
+      if (localPreviewUrl)
+        URL.revokeObjectURL(localPreviewUrl)
+    }
+  })
+
   // 上传文件
   async function uploadFile(file: File) {
+    activeUpload?.abort()
+    const controller = new AbortController()
+    activeUpload = controller
     loading = true
 
     // 释放旧的 Blob URL
-    if (previewUrl && previewUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(previewUrl)
+    if (localPreviewUrl) {
+      URL.revokeObjectURL(localPreviewUrl)
+      localPreviewUrl = null
     }
 
     try {
       // 先创建本地预览
-      previewUrl = URL.createObjectURL(file)
+      localPreviewUrl = URL.createObjectURL(file)
+      previewUrl = localPreviewUrl
 
-      if (!uploadUrl && !presignUrl) {
-        // 没有上传地址，只做本地预览
+      if (!uploadHandler) {
+        // 未提供上传处理器时，仅保留本地预览。
         value = previewUrl
         onchange?.(previewUrl)
         return
       }
 
-      let targetUrl = uploadUrl
-
-      // 如果配置了签名 URL，先获取
-      if (presignUrl) {
-        const presignResponse = await fetch(presignUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...headers,
-          },
-          body: JSON.stringify({
-            filename: file.name,
-            contentType: file.type,
-            size: file.size,
-          }),
-        })
-
-        if (!presignResponse.ok) {
-          throw new Error(uiM('image_upload_get_url_failed'))
-        }
-
-        const data = await presignResponse.json()
-        targetUrl = data.url
-      }
-
-      // 安全检查：验证上传 URL 协议
-      if (targetUrl && !SAFE_HTTP_URL_REGEX.test(targetUrl)) {
-        throw new Error(uiM('image_upload_failed'))
-      }
-
-      // 上传文件
-      const response = await fetch(targetUrl!, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': file.type,
-          ...headers,
-        },
-        body: file,
+      const result = await uploadHandler(file, {
+        signal: controller.signal,
+        onProgress: () => {},
       })
-
-      if (!response.ok) {
+      if (!result.url || !isSafePreviewUrl(result.url)) {
         throw new Error(uiM('image_upload_failed'))
       }
 
-      // 获取最终 URL
-      let finalUrl = targetUrl!.split('?')[0] // 移除签名参数
-
-      try {
-        const data = await response.json()
-        if (data.url) {
-          finalUrl = data.url
-        }
-      }
-      catch {
-      // 响应不是 JSON，使用 targetUrl
-      }
-
-      value = finalUrl
+      value = result.url
       // 释放 Blob URL（已有最终 URL）
-      if (previewUrl && previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previewUrl)
+      if (localPreviewUrl) {
+        URL.revokeObjectURL(localPreviewUrl)
+        localPreviewUrl = null
       }
-      previewUrl = finalUrl
-      onchange?.(finalUrl)
+      previewUrl = result.url
+      onchange?.(result.url)
     }
     catch (error) {
+      // 被后续选择替换的请求不得覆盖新请求的预览与 loading 状态。
+      if (activeUpload !== controller) {
+        return
+      }
       const message = error instanceof Error ? error.message : uiM('image_upload_failed')
       onerror?.(message)
       // 清除预览
+      if (localPreviewUrl) {
+        URL.revokeObjectURL(localPreviewUrl)
+        localPreviewUrl = null
+      }
       previewUrl = ''
       value = ''
     }
     finally {
-      loading = false
+      if (activeUpload === controller) {
+        activeUpload = null
+        loading = false
+      }
     }
   }
 
@@ -202,6 +183,11 @@
 
   function handleRemove(e: MouseEvent) {
     e.stopPropagation()
+    activeUpload?.abort()
+    if (localPreviewUrl) {
+      URL.revokeObjectURL(localPreviewUrl)
+      localPreviewUrl = null
+    }
     value = ''
     previewUrl = ''
     onchange?.('')

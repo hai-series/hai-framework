@@ -14,7 +14,7 @@ import type {
   MarkdownCodeRunResult,
 } from '../src/lib/components/scenes/ai/document-types.js'
 import type { ChartLineVariant, ChartProps, ChartTooltipMode } from '../src/lib/components/scenes/charts/chart-types.js'
-import type { MarkdownRendererProps } from '../src/lib/components/scenes/types.js'
+import type { AvatarUploadProps, FileUploadProps, ImageUploadProps, MarkdownRendererProps, UploadHandler } from '../src/lib/components/scenes/types.js'
 import type {
   AlertProps,
   Alignment,
@@ -89,6 +89,14 @@ describe('基础类型', () => {
     expectTypeOf<InputProps>().toExtend<DataAttributes>()
     expectTypeOf<ModalProps>().toExtend<DataAttributes>()
     expectTypeOf<AiDocumentEditorProps>().toExtend<DataAttributes>()
+  })
+})
+
+describe('上传组件边界', () => {
+  it('上传组件统一通过应用层 uploadHandler 注入协议实现', () => {
+    expectTypeOf<FileUploadProps>().toHaveProperty('uploadHandler').toEqualTypeOf<UploadHandler | undefined>()
+    expectTypeOf<ImageUploadProps>().toHaveProperty('uploadHandler').toEqualTypeOf<UploadHandler | undefined>()
+    expectTypeOf<AvatarUploadProps>().toHaveProperty('uploadHandler').toEqualTypeOf<UploadHandler | undefined>()
   })
 })
 

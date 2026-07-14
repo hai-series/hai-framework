@@ -28,8 +28,6 @@
   }: ModalProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
-  // modalElement 持有 overlay 容器引用；不再依赖原生 `<dialog>`，改用 fixed + z-index 叠加。
-  let modalElement: HTMLDivElement | undefined = $state()
 
   // 标题区仅在显式提供标题或自定义 header 时出现；
   // 仅需关闭按钮的场景改为右上角悬浮按钮，避免业务侧额外占一整行头部。
@@ -96,7 +94,6 @@
 </script>
 
 <div {...dataAttributes}
-     bind:this={modalElement}
      class='hai-modal'
      style:display={open ? '' : 'none'}
      aria-hidden={open ? undefined : 'true'}

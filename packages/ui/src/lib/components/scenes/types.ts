@@ -356,6 +356,29 @@ export interface UploadFile {
   response?: unknown
 }
 
+/** 上传处理器上下文 */
+export interface UploadHandlerContext {
+  /** 组件销毁、文件移除或重试时触发的取消信号 */
+  signal: AbortSignal
+  /** 汇报 0-100 的上传进度 */
+  onProgress: (progress: number) => void
+}
+
+/** 上传处理结果 */
+export interface UploadHandlerResult {
+  /** 可展示的最终文件 URL（图片/头像上传必须返回） */
+  url?: string
+  /** 业务层原始响应（回传到 UploadFile.response） */
+  response?: unknown
+}
+
+/**
+ * 应用层上传处理器。
+ *
+ * UI 组件只管理选择、校验、进度和预览；签名 URL、认证头与上传协议由应用服务层实现。
+ */
+export type UploadHandler = (file: File, context: UploadHandlerContext) => Promise<UploadHandlerResult>
+
 /**
  * 文件上传属性
  */
@@ -370,12 +393,8 @@ export interface FileUploadProps extends DataAttributes {
   multiple?: boolean
   /** 是否禁用 */
   disabled?: boolean
-  /** 上传地址 */
-  uploadUrl?: string
-  /** 签名 URL 地址 */
-  presignUrl?: string
-  /** 请求头 */
-  headers?: Record<string, string>
+  /** 应用层上传处理器；未提供时组件仅选择文件并保持 pending */
+  uploadHandler?: UploadHandler
   /** 是否自动上传 */
   autoUpload?: boolean
   /** 是否显示文件列表 */
@@ -456,12 +475,8 @@ export interface ImageUploadProps extends DataAttributes {
   maxSize?: number
   /** 是否禁用 */
   disabled?: boolean
-  /** 上传地址 */
-  uploadUrl?: string
-  /** 签名 URL 地址 */
-  presignUrl?: string
-  /** 请求头 */
-  headers?: Record<string, string>
+  /** 应用层上传处理器；未提供时仅生成本地预览 */
+  uploadHandler?: UploadHandler
   /** 占位文本 */
   placeholder?: string
   /** 宽高比 */
@@ -492,12 +507,8 @@ export interface AvatarUploadProps extends DataAttributes {
   maxSize?: number
   /** 是否禁用 */
   disabled?: boolean
-  /** 上传地址 */
-  uploadUrl?: string
-  /** 签名 URL 地址 */
-  presignUrl?: string
-  /** 请求头 */
-  headers?: Record<string, string>
+  /** 应用层上传处理器；未提供时仅生成本地预览 */
+  uploadHandler?: UploadHandler
   /** 默认文字（没有图片时显示） */
   fallback?: string
   /** 自定义类名 */

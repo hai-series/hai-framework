@@ -112,6 +112,8 @@
       document.addEventListener('click', handleClickOutside)
       return () => document.removeEventListener('click', handleClickOutside)
     }
+
+    return undefined
   })
 
   // 计算下拉层位置（fixed，基于触发器视口坐标；空间不足时向上翻转）

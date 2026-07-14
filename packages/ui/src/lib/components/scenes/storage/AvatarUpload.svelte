@@ -23,9 +23,7 @@
     accept = 'image/*',
     maxSize = 2 * 1024 * 1024, // 2MB
     disabled = false,
-    uploadUrl = '',
-    presignUrl = '',
-    headers = {},
+    uploadHandler,
     fallback = '',
     class: className = '',
     onchange,
@@ -37,6 +35,7 @@
   let loading = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
   let localPreviewUrl: string | null = $state(null)
+  let activeUpload: AbortController | null = null
 
   const sizeClass = $derived({
     'xs': 'w-8 h-8',
@@ -102,6 +101,7 @@
 
   $effect(() => {
     return () => {
+      activeUpload?.abort()
       if (localPreviewUrl) {
         URL.revokeObjectURL(localPreviewUrl)
         localPreviewUrl = null
@@ -111,91 +111,41 @@
 
   // 上传文件
   async function uploadFile(file: File) {
+    activeUpload?.abort()
+    const controller = new AbortController()
+    activeUpload = controller
     loading = true
 
     try {
-      if (!uploadUrl && !presignUrl) {
-        // 没有上传地址，创建本地预览
+      if (!uploadHandler) {
+        // 未提供上传处理器时，仅保留本地预览。
         replaceAvatarValue(URL.createObjectURL(file))
         return
       }
 
-      let targetUrl = uploadUrl
-
-      // 如果配置了签名 URL，先获取
-      if (presignUrl) {
-        const presignResponse = await fetch(presignUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...headers,
-          },
-          body: JSON.stringify({
-            filename: file.name,
-            contentType: file.type,
-            size: file.size,
-          }),
-        })
-
-        if (!presignResponse.ok) {
-          throw new Error(uiM('avatar_upload_get_url_failed'))
-        }
-
-        const data = await presignResponse.json()
-        if (typeof data?.url !== 'string' || !SAFE_HTTP_URL_REGEX.test(data.url)) {
-          throw new Error(uiM('avatar_upload_get_url_failed'))
-        }
-        targetUrl = data.url
-      }
-
-      // 上传文件
-      const response = await fetch(targetUrl!, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': file.type,
-          ...headers,
-        },
-        body: file,
+      const result = await uploadHandler(file, {
+        signal: controller.signal,
+        onProgress: () => {},
       })
-
-      if (!response.ok) {
+      if (!result.url || !isSafePreviewUrl(result.url)) {
         throw new Error(uiM('avatar_upload_failed'))
       }
 
-      // 获取最终 URL
-      let finalUrl = targetUrl!.split('?')[0]
-      let responseUrl: string | undefined
-
-      try {
-        const data = await response.clone().json()
-        if (typeof data?.url === 'string') {
-          responseUrl = data.url
-        }
-      }
-      catch {
-      // 响应不是 JSON
-      }
-
-      if (responseUrl) {
-        if (!isSafePreviewUrl(responseUrl)) {
-          throw new Error(uiM('avatar_upload_failed'))
-        }
-
-        finalUrl = responseUrl
-      }
-
-      if (!isSafePreviewUrl(finalUrl)) {
-        throw new Error(uiM('avatar_upload_failed'))
-      }
-
-      replaceAvatarValue(finalUrl)
+      replaceAvatarValue(result.url)
     }
     catch (error) {
+      // 被后续选择替换的请求不得覆盖新请求的 loading 状态或触发旧错误提示。
+      if (activeUpload !== controller) {
+        return
+      }
       const message = error instanceof Error ? error.message : uiM('avatar_upload_failed')
       onerror?.(message)
     }
     finally {
-      loading = false
+      if (activeUpload === controller) {
+        activeUpload = null
+        loading = false
+      }
     }
   }
 

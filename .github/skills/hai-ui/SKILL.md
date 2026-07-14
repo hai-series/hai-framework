@@ -64,6 +64,8 @@ export default defineConfig({
 - mobile：`SafeArea`、`AppBar`、`BottomNav`、`PullRefresh`、`ActionSheet`、`SwipeCell`。
 - scenes：IAM / Storage / CRUD / AI / 错误页 / 设置 场景组件。
 
+Storage 上传组件只负责选择、校验、进度和预览。真实上传通过应用 service 注入 `uploadHandler(file, { signal, onProgress })`；签名 URL、认证头和 PUT/POST 协议不得写入 UI 层。
+
 ## 场景组件速查
 
 | 组件 | 用途 |

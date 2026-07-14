@@ -2,7 +2,7 @@
   =============================================================================
   @h-ai/ui - FileUpload 组件
   =============================================================================
-  文件上传组件，支持签名 URL 直传和多文件上传
+  文件上传组件，负责文件选择、校验、进度与列表展示
 
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 primitives 组件：Progress, IconButton
@@ -18,7 +18,6 @@
   import IconButton from '../../primitives/IconButton.svelte'
   import Progress from '../../primitives/Progress.svelte'
 
-  const SAFE_HTTP_URL_REGEX = /^https?:\/\//i
   const MAX_PARALLEL_UPLOADS = 3
 
   const {
@@ -27,9 +26,7 @@
     maxFiles = 1,
     multiple = false,
     disabled = false,
-    uploadUrl = '',
-    presignUrl = '',
-    headers = {},
+    uploadHandler,
     autoUpload = true,
     showList = true,
     dragDrop = true,
@@ -45,7 +42,7 @@
   let files = $state<UploadFile[]>([])
   let isDragging = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
-  const activeRequests = new SvelteMap<string, XMLHttpRequest>()
+  const activeRequests = new SvelteMap<string, AbortController>()
 
   const containerClass = $derived(
     cn(
@@ -101,20 +98,16 @@
     return null
   }
 
-  function registerActiveRequest(fileId: string, xhr: XMLHttpRequest): void {
-    activeRequests.set(fileId, xhr)
+  function registerActiveRequest(fileId: string, controller: AbortController): void {
+    activeRequests.set(fileId, controller)
   }
 
-  function clearActiveRequest(fileId: string, xhr?: XMLHttpRequest): void {
+  function clearActiveRequest(fileId: string, controller?: AbortController): void {
     const current = activeRequests.get(fileId)
-    if (!current || (xhr && current !== xhr)) {
+    if (!current || (controller && current !== controller)) {
       return
     }
 
-    current.upload.onprogress = null
-    current.onload = null
-    current.onerror = null
-    current.onabort = null
     activeRequests.delete(fileId)
   }
 
@@ -124,8 +117,8 @@
       return
     }
 
-    clearActiveRequest(fileId, current)
     current.abort()
+    activeRequests.delete(fileId)
   }
 
   function abortAllActiveRequests(): void {
@@ -198,89 +191,32 @@
 
   // 上传单个文件
   async function uploadFile(uploadFile: UploadFile) {
-    if (!uploadUrl && !presignUrl) {
-      uploadFile.error = uiM('file_upload_no_url')
-      uploadFile.state = 'error'
+    if (!uploadHandler) {
       return
     }
 
     uploadFile.state = 'uploading'
     files = [...files]
 
-    let xhr: XMLHttpRequest | undefined
+    const controller = new AbortController()
+    registerActiveRequest(uploadFile.id, controller)
 
     try {
-      let targetUrl = uploadUrl
-
-      // 如果配置了签名 URL，先获取
-      if (presignUrl) {
-        const presignResponse = await fetch(presignUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...headers,
-          },
-          body: JSON.stringify({
-            filename: uploadFile.name,
-            contentType: uploadFile.type,
-            size: uploadFile.size,
-          }),
-        })
-
-        if (!presignResponse.ok) {
-          throw new Error(uiM('file_upload_get_url_failed'))
-        }
-
-        const { url } = await presignResponse.json()
-        if (!SAFE_HTTP_URL_REGEX.test(url)) {
-          throw new Error(uiM('file_upload_get_url_failed'))
-        }
-        targetUrl = url
-      }
-
-      // 上传文件
-      xhr = new XMLHttpRequest()
-      registerActiveRequest(uploadFile.id, xhr)
-      const activeXhr = xhr
-
-      await new Promise<void>((resolve, reject) => {
-        activeXhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            uploadFile.progress = Math.round((e.loaded / e.total) * 100)
-            files = [...files]
-          }
-        }
-
-        activeXhr.onload = () => {
-          if (activeXhr.status >= 200 && activeXhr.status < 300) {
-            uploadFile.state = 'success'
-            uploadFile.progress = 100
-            try {
-              uploadFile.response = JSON.parse(activeXhr.responseText)
-            }
-            catch {
-              uploadFile.response = activeXhr.responseText
-            }
-            resolve()
-          }
-          else {
-            reject(new Error(`${uiM('file_upload_failed')}: ${activeXhr.statusText}`))
-          }
-        }
-
-        activeXhr.onerror = () => reject(new Error(uiM('file_upload_network_error')))
-        activeXhr.onabort = () => reject(new DOMException('Upload aborted', 'AbortError'))
-
-        activeXhr.open('PUT', targetUrl!)
-        activeXhr.setRequestHeader('Content-Type', uploadFile.type || 'application/octet-stream')
-
-        for (const [key, value] of Object.entries(headers)) {
-          activeXhr.setRequestHeader(key, value)
-        }
-
-        activeXhr.send(uploadFile.file)
+      const result = await uploadHandler(uploadFile.file, {
+        signal: controller.signal,
+        onProgress(progress) {
+          uploadFile.progress = Math.max(0, Math.min(100, Math.round(progress)))
+          files = [...files]
+        },
       })
 
+      if (controller.signal.aborted) {
+        return
+      }
+
+      uploadFile.state = 'success'
+      uploadFile.progress = 100
+      uploadFile.response = result.response ?? result.url
       onupload?.(uploadFile)
     }
     catch (error) {
@@ -293,7 +229,7 @@
       onerror?.(uploadFile.error)
     }
     finally {
-      clearActiveRequest(uploadFile.id, xhr)
+      clearActiveRequest(uploadFile.id, controller)
     }
 
     files = [...files]

@@ -150,7 +150,7 @@ components/
 | `Spinner`        | 加载动画     | `size`, `variant`                                                  |
 | `Progress`       | 进度条       | `value`, `max`, `variant`, `striped`, `animated`                   |
 
-### 组合组件 Compounds（33 个）
+### 组合组件 Compounds（36 个）
 
 #### 表单
 
@@ -232,7 +232,7 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-### 场景组件 Scenes（33 个）
+### 场景组件 Scenes（34 个）
 
 #### App 应用级（7 个）
 
@@ -264,10 +264,12 @@ components/
 
 | 组件           | 描述     | 主要属性                                                 |
 | -------------- | -------- | -------------------------------------------------------- |
-| `FileUpload`   | 文件上传 | `accept`, `maxSize`, `maxFiles`, `multiple`, `uploadUrl` |
-| `ImageUpload`  | 图片上传 | `value`, `accept`, `maxSize`, `aspectRatio`              |
-| `AvatarUpload` | 头像上传 | `value`, `size`, `maxSize`, `fallback`                   |
+| `FileUpload`   | 文件上传 | `accept`, `maxSize`, `maxFiles`, `multiple`, `uploadHandler` |
+| `ImageUpload`  | 图片上传 | `value`, `accept`, `maxSize`, `aspectRatio`, `uploadHandler` |
+| `AvatarUpload` | 头像上传 | `value`, `size`, `maxSize`, `fallback`, `uploadHandler`      |
 | `FileList`     | 文件列表 | `files`, `layout`, `showDelete`, `showDownload`          |
+
+上传组件不内置 presign、请求头或 PUT/POST 协议。应用层通过 `uploadHandler(file, { signal, onProgress })` 调用自己的 service，并返回 `{ url?, response? }`；图片和头像上传需要返回可展示的 `url`。未提供 handler 时，`FileUpload` 只选择文件，图片/头像组件只生成本地预览。
 
 #### Crypto 加密展示（3 个）
 
