@@ -10,6 +10,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、工具
 - `ai.mcp` / `createMcpServer`：内置 MCP 注册表与独立 MCP Server。
 - `ai.embedding`：单条/批量文本向量化。
 - `ai.memory`：记忆提取、存储、召回、注入。
+- `ai.persona`：AI 角色人格档案（系统提示词 + 特征）与系统提示词组合。
 - `ai.retrieval` / `ai.rag`：多源向量检索与检索增强问答。
 - `ai.knowledge`：文档入库、实体增强检索、知识问答。
 - `ai.context`：LLM + Memory + RAG + 压缩的一体化会话管理。
@@ -199,7 +200,42 @@ const turns = m.getTurns()
 - `interruptTurn(turnId, { text? })` — 只写入实际表达出去的部分（缺省视为未表达，不写入），状态转 `interrupted`。
 - 只有 `committed` 的内容进入上下文与记忆提取；未提交/被打断丢弃的部分不会污染后续轮次。
 
-## 配置
+#### 会话固化（Memory 生命周期）
+
+会话进行中，每轮对话按 `scope: { sessionId }` 提取**短期会话记忆**；会话结束时用 `consolidate()`
+把「短期记忆 + 摘要」沉淀为**跨会话长期记忆**，形成 `Session Memory → Summary → Long-term Memory` 闭环：
+
+```ts
+// 会话结束时固化：整合摘要 → 提取长期记忆（写入不含 sessionId 的持久作用域）
+const result = await manager.consolidate({ scope: { userId: 'user-001', personaId: 'xiaoq' } })
+if (result.success) {
+  // result.data.summary  —— 本次会话整合摘要
+  // result.data.memories —— 固化到长期记忆的条目
+}
+```
+
+### Persona（AI 角色人格）
+
+Memory 用 `objectId` / `scope` 回答「谁的记忆」；Persona 回答「AI 是谁」——为每个 AI 角色定义
+稳定的系统提示词与性格特征，并通过 `scope: { personaId }` 关联其长期记忆：
+
+```ts
+await ai.persona.save({
+  id: 'xiaoq',
+  name: '小Q',
+  systemPrompt: '你是一位经济学家，善于从长期视角分析问题。',
+  traits: ['数据驱动', '偏好引用真实案例'],
+})
+
+// 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
+const composed = await ai.persona.compose('xiaoq')
+const manager = ai.context.createManager({
+  systemPrompt: composed.data,
+  memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
+})
+```
+
+`ai.persona` 提供 `save` / `get` / `update` / `remove` / `list` / `compose`；角色档案全局共享（不按 `objectId` 隔离）。
 
 ```yaml
 llm:
@@ -252,7 +288,7 @@ memory:
   defaultTopK: 10
 ```
 
-- **`native`（默认，推荐）**：HAI 原生引擎，复用同一套 vecdb（向量库）、reldb（关系库）、LLM 与 Embedding。`extract` 采用 **Mem0 式批量合并**——一次 LLM 调用对整批抽取事实与相关既有记忆做 ADD / UPDATE / DELETE / NONE 决策，实现增量更新、跨条去重与矛盾删除，并支持 `category` 主题标签。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` 均作用于此后端；淘汰按 `objectId` 分区触发，不会因某一主体写入过多而淘汰其他主体的记忆。
+- **`native`（默认，推荐）**：HAI 原生引擎，复用同一套 vecdb（向量库）、reldb（关系库）、LLM 与 Embedding。`extract` 采用 **Mem0 式批量合并**——一次 LLM 调用对整批抽取事实与相关既有记忆做 ADD / UPDATE / DELETE / NONE 决策，实现增量更新、跨条去重与矛盾删除，并支持 `category` 主题标签。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` 均作用于此后端；淘汰按 `objectId` 分区触发，不会因某一主体写入过多而淘汰其他主体的记忆。native 后端的 `scope` 过滤：候选集已被 `objectId` 索引收窄（≤ `maxEntriesPerObject`），PostgreSQL 上还会把 scope 下推为 `data @> '{"scope":...}'::jsonb` 包含查询并命中 JSONB **GIN 索引**（SQLite / MySQL 退回内存匹配，结果一致）。
 - **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取（OpenAI 兼容，走 `baseUrl` / `apiKey` / 场景模型）；向量库从底层 vecdb 后端提取——`qdrant` / `pgvector` 直接复用同一后端，`lancedb` / `chroma`（mem0 TS 不支持）则退回 mem0 自带的 in-memory 存储。历史记录默认禁用。需安装 `mem0ai`（已内置为依赖）；复用 qdrant/pgvector 时需对应客户端。
 
 两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`），均支持 `objectId`（主体隔离）与 `scope`（业务作用域 key-value 过滤，如 `{ topicId, personaId }`）。`recall` / `list` / `listPage` / `clear` 均按 `scope` 严格过滤，`clear` 在传入 `types` / `scope` 时仅删除同时匹配项（避免误删）。一个差异：mem0 后端在 `update` 涉及 type/importance/metadata 时会重建记忆并重新分配 `id`（native 后端保持 id 稳定）。

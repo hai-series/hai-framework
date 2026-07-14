@@ -711,6 +711,74 @@ describe('context conversation commit layer', () => {
 })
 
 // =============================================================================
+// Memory 生命周期：会话固化 consolidate 测试
+// =============================================================================
+
+describe('context consolidate (memory lifecycle)', () => {
+  function createMockMemory(): { memory: MemoryOperations, extract: ReturnType<typeof vi.fn> } {
+    const extract = vi.fn(async () => ({
+      success: true as const,
+      data: [{ id: 'lt1', content: '长期事实', type: 'fact' as const, importance: 0.8, createdAt: Date.now(), lastAccessedAt: Date.now(), accessCount: 0 }],
+    }))
+    return { memory: { extract } as unknown as MemoryOperations, extract }
+  }
+
+  function createOpsWithMemoryAndSummary(llm: LLMOperations, memory: MemoryOperations) {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(defaultCompressConfig, tokenOps, summaryOps, 8000)
+    return createContextOperations(defaultCompressConfig, tokenOps, compressOps, undefined, undefined, { llm, memory, summary: summaryOps })
+  }
+
+  it('consolidate 生成摘要并以持久作用域固化长期记忆', async () => {
+    // 第一个 mock 回复用于 chat，第二个用于 summary.generate
+    const llm = createMockLLM([{ content: 'AI 回复' }, { content: '本次会话摘要' }])
+    const { memory, extract } = createMockMemory()
+    const ops = createOpsWithMemoryAndSummary(llm, memory)
+
+    const managerResult = ops.createManager({
+      scope: { objectId: 'user-1', sessionId: 'sess-1' },
+      compress: { maxTokens: 8000 },
+      memory: { scope: { sessionId: 'sess-1' } },
+    })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    await manager.chat('聊点什么')
+
+    const result = await manager.consolidate({ scope: { userId: 'user-1' } })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.summary).toBe('本次会话摘要')
+    expect(result.data.memories).toHaveLength(1)
+
+    // 固化使用传入的持久作用域（不含 sessionId）
+    const extractCall = extract.mock.calls[0]
+    expect(extractCall[1]).toEqual(expect.objectContaining({ objectId: 'user-1', scope: { userId: 'user-1' } }))
+  })
+
+  it('consolidate 缺少 summary/memory 依赖时返回 MEMORY_PROMOTE_FAILED', async () => {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const llm = createMockLLM([{ content: 'x' }])
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(defaultCompressConfig, tokenOps, summaryOps, 8000)
+    // 只传 llm，无 memory / summary
+    const ops = createContextOperations(defaultCompressConfig, tokenOps, compressOps, undefined, undefined, { llm })
+
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    if (!managerResult.success)
+      return
+
+    const result = await managerResult.data.consolidate()
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiAIError.MEMORY_PROMOTE_FAILED.code)
+  })
+})
+
+// =============================================================================
 // chat / chatStream 工具调用循环测试
 // =============================================================================
 

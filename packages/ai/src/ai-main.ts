@@ -18,6 +18,7 @@ import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 import type { MemoryOperations } from './memory/ai-memory-types.js'
+import type { PersonaOperations } from './persona/ai-persona-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
@@ -62,6 +63,8 @@ let currentRag: RagOperations | null = null
 let currentKnowledge: KnowledgeOperations | null = null
 /** 当前 Memory 操作实例 */
 let currentMemory: MemoryOperations | null = null
+/** 当前 Persona 操作实例 */
+let currentPersona: PersonaOperations | null = null
 /** 当前 Context 操作实例 */
 let currentContext: ContextOperations | null = null
 /** 当前 Token 操作实例 */
@@ -149,6 +152,9 @@ const notInitializedKnowledge = notInitialized.proxy<KnowledgeOperations>()
 /** Memory 未初始化占位 */
 const notInitializedMemory = notInitialized.proxy<MemoryOperations>()
 
+/** Persona 未初始化占位 */
+const notInitializedPersona = notInitialized.proxy<PersonaOperations>()
+
 /**
  * Token 未初始化占位
  *
@@ -205,6 +211,7 @@ async function resetAllState(): Promise<void> {
   currentRag = null
   currentKnowledge = null
   currentMemory = null
+  currentPersona = null
   currentToken = null
   currentSummary = null
   currentCompress = null
@@ -323,6 +330,7 @@ export const ai: AIFunctions = {
       currentRag = subs.rag
       currentKnowledge = subs.knowledge
       currentMemory = subs.memory
+      currentPersona = subs.persona
       currentToken = subs.token
       currentSummary = subs.summary
       currentCompress = subs.compress
@@ -362,6 +370,7 @@ export const ai: AIFunctions = {
   get rag(): RagOperations { return currentRag ?? notInitializedRag },
   get knowledge(): KnowledgeOperations { return currentKnowledge ?? notInitializedKnowledge },
   get memory(): MemoryOperations { return currentMemory ?? notInitializedMemory },
+  get persona(): PersonaOperations { return currentPersona ?? notInitializedPersona },
   get token(): TokenOperations { return currentToken ?? notInitializedToken },
   get summary(): SummaryOperations { return currentSummary ?? notInitializedSummary },
   get compress(): CompressOperations { return currentCompress ?? notInitializedCompress },

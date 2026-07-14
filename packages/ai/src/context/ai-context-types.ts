@@ -11,11 +11,11 @@ import type { HaiResult } from '@h-ai/core'
 
 import type { CompressOptions } from '../compress/ai-compress-types.js'
 import type { ChatMessage, LLMOperations, ToolRegistryOperations } from '../llm/ai-llm-types.js'
-import type { MemoryOperations, MemoryType } from '../memory/ai-memory-types.js'
+import type { MemoryEntry, MemoryOperations, MemoryType } from '../memory/ai-memory-types.js'
 import type { RagOperations, RagOptions } from '../rag/ai-rag-types.js'
 import type { ReasoningOperations, ReasoningOptions } from '../reasoning/ai-reasoning-types.js'
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
-import type { SummaryResult } from '../summary/ai-summary-types.js'
+import type { SummaryOperations, SummaryResult } from '../summary/ai-summary-types.js'
 
 // 从子模块 re-export，便于 context 消费者一站式引入
 export type { CompressionStrategy } from '../compress/ai-compress-types.js'
@@ -38,6 +38,42 @@ export interface ContextDeps {
   rag?: RagOperations
   /** Reasoning 操作（推理引擎需要） */
   reasoning?: ReasoningOperations
+  /** Summary 操作（会话固化 consolidate 需要） */
+  summary?: SummaryOperations
+}
+
+// ─── Memory 生命周期（会话固化） ───
+
+/**
+ * 会话固化选项（`ContextManager.consolidate` 使用）
+ *
+ * 把「短期会话记忆 + 摘要」固化为「长期记忆」，形成
+ * `Session Memory → Summary → Long-term Memory` 的生命周期闭环。
+ */
+export interface ConsolidateOptions {
+  /**
+   * 长期记忆作用域。
+   *
+   * 默认使用管理器 `memory.scope`。通常应传入**不含 sessionId** 的作用域
+   * （如 `{ userId, personaId }`），使固化后的记忆跨会话持久，而非绑定单次会话。
+   */
+  scope?: Record<string, unknown>
+  /** 固化提取的记忆类型限制 */
+  types?: MemoryType[]
+  /** 摘要 / 提取使用的模型 */
+  model?: string
+  /** 固化提取的自定义 systemPrompt */
+  extractionSystemPrompt?: string
+}
+
+/**
+ * 会话固化结果
+ */
+export interface ConsolidateResult {
+  /** 本次会话的整合摘要 */
+  summary: string
+  /** 固化到长期记忆的条目 */
+  memories: MemoryEntry[]
 }
 
 // ─── Conversation Commit Layer（真实对话状态） ───
@@ -383,6 +419,18 @@ export interface ContextManager {
    * @returns 成功返回 ok(undefined)；轮次不存在或已提交返回对应错误
    */
   interruptTurn: (turnId: string, input?: CommitTurnInput) => Promise<HaiResult<void>>
+
+  /**
+   * 将当前会话固化为长期记忆（Memory 生命周期）
+   *
+   * 流程：整合会话摘要（历史摘要 + 当前消息）→ 从摘要中提取长期记忆 → 以持久作用域写入。
+   * 需要 deps.summary + deps.memory 可用。用于会话结束时把「短期会话记忆」沉淀为
+   * 「跨会话长期记忆」，形成 Session → Summary → Long-term Memory 闭环。
+   *
+   * @param options - 固化选项（长期作用域、类型、模型等）
+   * @returns 会话摘要与固化的记忆条目
+   */
+  consolidate: (options?: ConsolidateOptions) => Promise<HaiResult<ConsolidateResult>>
 
   /**
    * 发送消息并获取回复（需 deps.llm 可用）

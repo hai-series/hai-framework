@@ -94,6 +94,13 @@ export interface StoreFilter<T> {
   status?: string | string[]
   /** 按 ref_id 索引列过滤（需要 AIRelStoreOptions.hasRefId 启用） */
   refId?: string
+  /**
+   * 按业务作用域过滤（`data.scope` JSON 字段的 key-value 包含匹配）。
+   *
+   * 仅在 PostgreSQL 上下推为 `data @> ?::jsonb`（配合 GIN 索引加速）；
+   * SQLite / MySQL 上为 no-op（不影响结果，由调用方在内存中完成 scope 匹配）。
+   */
+  scope?: Record<string, unknown>
   /** 排序 */
   orderBy?: { field: keyof T, direction: 'asc' | 'desc' }
   /** 数量限制 */
@@ -128,6 +135,14 @@ export interface AIRelStoreOptions {
   hasStatus?: boolean
   /** 是否创建 ref_id 索引列 */
   hasRefId?: boolean
+  /**
+   * 是否为业务作用域（记录内 `data.scope` JSON 字段）建立索引以加速 scope 过滤。
+   *
+   * 仅 PostgreSQL 生效：在 JSONB `data` 列上建 GIN 索引，配合 `StoreFilter.scope`
+   * 的 `data @> ?::jsonb` 包含查询下推，避免加载全部候选再在内存过滤。
+   * SQLite / MySQL 不建索引，`scope` 过滤退回调用方内存匹配（当前行为不变）。
+   */
+  hasScopeIndex?: boolean
 }
 
 // ─── 存储适配器抽象 ───

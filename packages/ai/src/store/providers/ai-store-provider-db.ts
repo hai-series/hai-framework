@@ -36,6 +36,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   private readonly hasSessionId: boolean
   private readonly hasStatus: boolean
   private readonly hasRefId: boolean
+  private readonly hasScopeIndex: boolean
 
   constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, dbType: DbType, options?: AIRelStoreOptions) {
     this.sql = sql
@@ -46,6 +47,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     this.hasSessionId = options?.hasSessionId ?? false
     this.hasStatus = options?.hasStatus ?? false
     this.hasRefId = options?.hasRefId ?? false
+    this.hasScopeIndex = options?.hasScopeIndex ?? false
   }
 
   /** 创建表及索引（幂等） */
@@ -79,6 +81,9 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_status ON ${t}(status)`)
     if (this.hasRefId)
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`)
+    // 业务作用域索引：仅 PostgreSQL 支持 JSONB GIN，用于加速 data @> '{"scope":...}' 包含查询。
+    if (this.hasScopeIndex && db === 'postgresql')
+      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_data_gin ON ${t} USING GIN (data jsonb_path_ops)`)
   }
 
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {
@@ -361,6 +366,12 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (filter.refId && this.hasRefId) {
       conditions.push('ref_id = ?')
       params.push(filter.refId)
+    }
+    // 业务作用域下推：仅 PostgreSQL 用 JSONB 包含查询（可命中 GIN 索引）。
+    // 其它后端为 no-op —— 结果不受影响，由调用方在内存中完成 scope 匹配。
+    if (filter.scope && Object.keys(filter.scope).length > 0 && this.dbType === 'postgresql') {
+      conditions.push('data @> ?::jsonb')
+      params.push(JSON.stringify({ scope: filter.scope }))
     }
     if (filter.where)
       conditions.push(...this.buildWhereConditions(filter.where, params))

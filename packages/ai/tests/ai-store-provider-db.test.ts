@@ -108,3 +108,72 @@ describe('db store provider saveMany', () => {
     expect(calls[1].params).toHaveLength(4)
   })
 })
+
+// =============================================================================
+// 业务作用域索引（scope index）
+// =============================================================================
+
+function createMockSqlWithQuery(execCalls: ExecuteCall[], queryCalls: ExecuteCall[]): DmlOperations {
+  return {
+    query: async <T = QueryRow>(sql: string, params?: unknown[]) => {
+      queryCalls.push({ sql, params })
+      return ok<T[]>([])
+    },
+    get: async <T = QueryRow>() => ok<T | null>(null),
+    execute: async (sql: string, params?: unknown[]) => {
+      execCalls.push({ sql, params })
+      return ok({ changes: 1 })
+    },
+    batch: async () => ok(undefined),
+    queryPage: async <T = QueryRow>() => ok<PaginatedResult<T>>({ items: [], total: 0, page: 1, pageSize: 20 }),
+  }
+}
+
+describe('db store provider scope index', () => {
+  it('hasScopeIndex 在 PostgreSQL 上建 JSONB GIN 索引', async () => {
+    const execCalls: ExecuteCall[] = []
+    const provider = createDbStoreProvider({ sql: createMockSql(execCalls), jsonOps, dbType: 'postgresql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
+    await provider.initialize()
+
+    const ginIndex = execCalls.find(c => c.sql.includes('USING GIN'))
+    expect(ginIndex).toBeDefined()
+    expect(ginIndex?.sql).toContain('idx_hai_ai_memory_data_gin')
+    expect(ginIndex?.sql).toContain('data jsonb_path_ops')
+  })
+
+  it('sqlite 不建 GIN 索引（不支持）', async () => {
+    const execCalls: ExecuteCall[] = []
+    const provider = createDbStoreProvider({ sql: createMockSql(execCalls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
+    await provider.initialize()
+
+    expect(execCalls.some(c => c.sql.includes('USING GIN'))).toBe(false)
+  })
+
+  it('query scope 在 PostgreSQL 下推为 data @> ?::jsonb', async () => {
+    const queryCalls: ExecuteCall[] = []
+    const provider = createDbStoreProvider({ sql: createMockSqlWithQuery([], queryCalls), jsonOps, dbType: 'postgresql', vecdb: createMockVecdb() })
+    const store = provider.createRelStore<{ content: string }>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
+
+    await store.query({ objectId: 'u1', scope: { topicId: 'C', personaId: 'p1' } })
+
+    expect(queryCalls).toHaveLength(1)
+    const sql = queryCalls[0].sql.replace(/\s+/g, ' ')
+    expect(sql).toContain('data @> ?::jsonb')
+    // 包含参数为 { scope: {...} } 的 JSON 序列化
+    expect(queryCalls[0].params).toContain(JSON.stringify({ scope: { topicId: 'C', personaId: 'p1' } }))
+  })
+
+  it('query scope 在 SQLite 上不下推（no-op，内存过滤）', async () => {
+    const queryCalls: ExecuteCall[] = []
+    const provider = createDbStoreProvider({ sql: createMockSqlWithQuery([], queryCalls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    const store = provider.createRelStore<{ content: string }>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
+
+    await store.query({ objectId: 'u1', scope: { topicId: 'C' } })
+
+    expect(queryCalls).toHaveLength(1)
+    expect(queryCalls[0].sql).not.toContain('@>')
+    expect(queryCalls[0].params).not.toContain(JSON.stringify({ scope: { topicId: 'C' } }))
+  })
+})

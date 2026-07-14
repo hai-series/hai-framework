@@ -16,6 +16,7 @@ import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { ChatMessage, ChatRecord, LLMOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 import type { MemoryEntry, MemoryOperations } from './memory/ai-memory-types.js'
+import type { PersonaOperations, PersonaProfile } from './persona/ai-persona-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
@@ -36,6 +37,7 @@ import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
 import { createMem0OssMemoryOperations } from './memory/providers/ai-memory-provider-mem0-oss.js'
 import { createNativeMemoryOperations } from './memory/providers/ai-memory-provider-native.js'
+import { createPersonaOperations } from './persona/ai-persona-functions.js'
 import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
 import { createRerankOperations } from './rerank/ai-rerank-functions.js'
@@ -62,6 +64,7 @@ export interface AISubsystems {
   rag: RagOperations
   knowledge: KnowledgeOperations
   memory: MemoryOperations
+  persona: PersonaOperations
   token: TokenOperations
   summary: SummaryOperations
   compress: CompressOperations
@@ -86,8 +89,9 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const chatRecordStore = storeProvider.createRelStore<ChatRecord>('hai_ai_chat_records', { hasObjectId: true, hasSessionId: true })
   const sessionStore = storeProvider.createRelStore<SessionInfo>('hai_ai_sessions', { hasObjectId: true })
   const sourceStore = storeProvider.createRelStore<RetrievalSource>('hai_ai_retrieval_sources')
-  const memoryStore = useMem0Oss ? null : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true })
+  const memoryStore = useMem0Oss ? null : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
   const contextStore = storeProvider.createRelStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
+  const personaStore = storeProvider.createRelStore<PersonaProfile>('hai_ai_persona')
 
   // 向量存储
   const memoryVectorStore = useMem0Oss ? null : storeProvider.createVectorStore('hai_ai_memory_vectors')
@@ -152,10 +156,14 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
     memory: memory ?? undefined,
     rag: rag ?? undefined,
     reasoning: reasoning ?? undefined,
+    summary,
   })
+
+  // Persona（全局共享的 AI 角色档案）
+  const persona = createPersonaOperations(personaStore)
 
   // File（依赖 LLM）
   const file = createFileOperations(config, llm)
 
-  return { llm, mcp, embedding, reasoning, rerank, retrieval, rag, knowledge, memory, token, summary, compress, context, file }
+  return { llm, mcp, embedding, reasoning, rerank, retrieval, rag, knowledge, memory, persona, token, summary, compress, context, file }
 }

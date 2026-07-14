@@ -292,6 +292,7 @@ export function createNativeMemoryOperations(
 
       const allCandidates = await store.query({
         objectId: options?.objectId,
+        scope: options?.scope,
         where: Object.keys(where).length > 0 ? where : undefined,
       })
 
@@ -480,6 +481,7 @@ export function createNativeMemoryOperations(
 
       const results = await store.query({
         objectId: options?.objectId,
+        scope: options?.scope,
         where: Object.keys(where).length > 0 ? where : undefined,
         orderBy: { field: 'createdAt', direction: 'desc' },
         // scope 需要内存过滤，故不能在存储层直接 limit（否则可能截断掉待匹配条目）
@@ -526,6 +528,7 @@ export function createNativeMemoryOperations(
 
       const all = await store.query({
         objectId: options?.objectId,
+        scope: options?.scope,
         where: Object.keys(where).length > 0 ? where : undefined,
         orderBy: { field: 'createdAt', direction: 'desc' },
       })
@@ -558,6 +561,7 @@ export function createNativeMemoryOperations(
 
       const candidates = await store.query({
         objectId: options.objectId,
+        scope: options.scope,
         where: Object.keys(where).length > 0 ? where : undefined,
       })
       const toRemove = options.scope

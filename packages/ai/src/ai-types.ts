@@ -17,6 +17,7 @@ import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 import type { MemoryOperations } from './memory/ai-memory-types.js'
+import type { PersonaOperations } from './persona/ai-persona-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
@@ -100,6 +101,11 @@ const AIErrorInfo = {
   MEMORY_RECALL_FAILED: '902:500',
   MEMORY_NOT_FOUND: '903:404',
   MEMORY_ENRICH_FAILED: '904:500',
+  MEMORY_PROMOTE_FAILED: '905:500',
+
+  // Persona (910-919)
+  PERSONA_NOT_FOUND: '910:404',
+  PERSONA_SAVE_FAILED: '911:500',
 
   // File (030-049)
   FILE_PARSE_FAILED: '030:500',
@@ -220,6 +226,8 @@ export interface AIFunctions {
   readonly knowledge: KnowledgeOperations
   /** Memory 操作（记忆提取、存储、检索、注入），需要先调用 `init()` */
   readonly memory: MemoryOperations
+  /** Persona 操作（AI 角色人格档案与系统提示词组合），需要先调用 `init()` */
+  readonly persona: PersonaOperations
   /** Token 操作（Token 估算），需要先调用 `init()` */
   readonly token: TokenOperations
   /** Summary 操作（消息摘要生成），需要先调用 `init()` */

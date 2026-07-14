@@ -49,6 +49,10 @@
   "ai_memoryRecallFailed": "Memory recall failed: {error}",
   "ai_memoryNotFound": "Memory entry '{id}' not found",
   "ai_memoryEnrichFailed": "Memory enrichment failed: {error}",
+  "ai_memoryPromoteFailed": "Memory promotion (long-term consolidation) failed: {error}",
+
+  "ai_personaNotFound": "Persona '{id}' not found",
+  "ai_personaSaveFailed": "Persona save failed: {error}",
 
   "ai_contextCompressFailed": "Context compression failed: {error}",
   "ai_contextSummarizeFailed": "Context summarization failed: {error}",

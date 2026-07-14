@@ -17,6 +17,8 @@ import type { SummaryResult } from '../summary/ai-summary-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
 import type {
   CommitTurnInput,
+  ConsolidateOptions,
+  ConsolidateResult,
   ContextChatOptions,
   ContextChatResult,
   ContextDeps,
@@ -282,6 +284,52 @@ export function createContextOperations(
 
       interruptTurn(turnId: string, input?: CommitTurnInput): Promise<HaiResult<void>> {
         return finalizeCommit(turnId, input?.text, 'interrupted')
+      },
+
+      async consolidate(consolidateOpts?: ConsolidateOptions): Promise<HaiResult<ConsolidateResult>> {
+        if (!deps?.summary || !deps?.memory) {
+          return err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', { params: { error: 'summary/memory deps unavailable' } }))
+        }
+
+        // 先等待后台记忆提取完成，避免固化时短期记忆尚未落库
+        await manager.flush()
+
+        try {
+          // 1) 整合会话摘要：以历史摘要为前序上下文，对当前消息做增量摘要
+          const previousSummary = state.summaries.map(s => s.summary).join('\n\n') || undefined
+          const summaryResult = await deps.summary.generate(state.messages, {
+            model: consolidateOpts?.model,
+            previousSummary,
+          })
+          if (!summaryResult.success)
+            return summaryResult
+          const summaryText = summaryResult.data
+
+          if (!summaryText.trim()) {
+            return ok({ summary: summaryText, memories: [] })
+          }
+
+          // 2) 从摘要中提取长期记忆，写入持久作用域（默认取管理器 memory.scope，通常不含 sessionId）
+          const durableScope = consolidateOpts?.scope ?? options.memory?.scope
+          const extracted = await deps.memory.extract(
+            [{ role: 'user', content: summaryText }],
+            {
+              objectId: scope?.objectId,
+              scope: durableScope,
+              types: consolidateOpts?.types ?? options.memory?.types,
+              model: consolidateOpts?.model ?? options.memory?.extractionModel,
+              systemPrompt: consolidateOpts?.extractionSystemPrompt ?? options.memory?.extractionSystemPrompt,
+            },
+          )
+          if (!extracted.success)
+            return extracted
+
+          return ok({ summary: summaryText, memories: extracted.data })
+        }
+        catch (error) {
+          logger.error('Context consolidate failed', { error })
+          return err(HaiAIError.MEMORY_PROMOTE_FAILED, aiM('ai_memoryPromoteFailed', { params: { error: String(error) } }), error)
+        }
       },
 
       get pendingMemoryTasks(): number {
