@@ -49,7 +49,14 @@ test.describe('h5-app core flows', () => {
 
     expect(registerRes.ok()).toBeTruthy()
 
+    // history 仅在客户端 onMount 后请求；等待它可确保 Svelte 已完成 hydration，
+    // 避免 SSR 按钮尚未绑定 onclick 时过早点击。
+    const initialHistoryResponse = page.waitForResponse(response =>
+      response.request().method() === 'GET'
+      && response.url().endsWith('/api/vision/history'))
+
     await page.goto('/discover')
+    await initialHistoryResponse
 
     await page.getByRole('button', { name: /开始识别|Analyze/ }).click()
 
