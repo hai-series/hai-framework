@@ -18,6 +18,9 @@ packages:
   - 'apps/*'
 
 overrides:
+  # d3-shape@3（layerchart 图表依赖）需要 d3-path@3 的 `Path` 导出；强制统一到 3.1.0，
+  # 消除 d3-shape@1.3.7 引入的 d3-path@1.0.9 嵌套冲突（否则应用打包报 MISSING_EXPORT "Path"）。
+  d3-path: 3.1.0
   eslint-plugin-yml: 3.3.1
 # =============================================================================
 # 依赖版本统一管理 (Catalog)

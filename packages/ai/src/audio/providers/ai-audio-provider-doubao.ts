@@ -13,7 +13,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ResolvedAudioModel } from '../../ai-config.js'
 
-import type { AudioFormat, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
+import type { AudioFormat, AudioModelCapabilities, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
 import type {
   AudioProvider,
   AudioWsMessage,
@@ -31,6 +31,15 @@ import { HaiAIError } from '../../ai-types.js'
 import { audioError, concatChunks, errorMessage, openAudioWebSocket, toAudioErrorResult } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-doubao' })
+
+/** 豆包实时平台能力：WebSocket 实时识别（不产出服务端 VAD 起止事件）+ 实时合成（支持增量文本输入） */
+const DOUBAO_CAPABILITIES: AudioModelCapabilities = {
+  realtimeAudioInput: true,
+  speechBoundaryEvents: false,
+  incrementalTextInput: true,
+  streamingTranscriptOutput: true,
+  streamingAudioOutput: true,
+}
 
 // ─── 二进制协议常量 ───
 
@@ -406,7 +415,7 @@ export function createDoubaoAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream }
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, capabilities: DOUBAO_CAPABILITIES }
 }
 
 // ─── 内部辅助 ───

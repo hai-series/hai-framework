@@ -528,9 +528,9 @@ export function createContextOperations(
           }
         }
 
-        // 调用上游模型前先登记轮次并广播 turn_started：
+        // 调用上游模型前先登记轮次（含配对用户输入）并广播 turn_started：
         // 中途取消（AbortSignal）时仍能保留 turnId 与已生成文本，供调用方用真实内容 commit/interrupt。
-        const turn = beginStreamTurn()
+        const turn = beginStreamTurn(message)
         yield { type: 'turn_started', turnId: turn.id }
 
         try {
@@ -563,7 +563,7 @@ export function createContextOperations(
               }
             }
 
-            await completeStreamTurn(turn, message, fullReply)
+            await completeStreamTurn(turn, fullReply)
             yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
             return
           }
@@ -591,7 +591,7 @@ export function createContextOperations(
               }
             }
 
-            await completeStreamTurn(turn, message, fullReply)
+            await completeStreamTurn(turn, fullReply)
             yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: turn.id, usage: undefined }
             return
           }
@@ -677,14 +677,13 @@ export function createContextOperations(
             break
           }
 
-          await completeStreamTurn(turn, message, fullReply)
+          await completeStreamTurn(turn, fullReply)
           yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
         }
         catch (error) {
-          // 上游生成被取消（AbortSignal）：保留 generating 轮次与已生成文本，登记配对用户输入，
-          // 由调用方在确定真实内容后通过 commitTurn / interruptTurn 提交。
+          // 上游生成被取消（AbortSignal）：保留 generating 轮次与已生成文本（pendingCommits 已在
+          // beginStreamTurn 登记），由调用方用真实内容 commit/interrupt；若已被 interrupt 进入终态则忽略。
           if (chatOpts?.signal?.aborted) {
-            cancelStreamTurn(turn, message)
             yield { type: 'cancelled', turnId: turn.id, generated: turn.generated }
             return
           }
@@ -694,12 +693,13 @@ export function createContextOperations(
     }
 
     /**
-     * 登记一个流式生成的待完成轮次（`generating`）。
+     * 登记一个流式生成的待完成轮次（`generating`）并立即记录配对用户输入。
      *
-     * chatStream 在调用上游模型前调用，使中途取消（AbortSignal）时仍能保留已生成文本，
+     * chatStream 在调用上游模型前调用。用户输入在此刻写入 pendingCommits，使得即便调用方在流
+     * 进入 catch 前就 interruptTurn，也能触发正确的记忆提取；中途取消时也能保留已生成文本，
      * 由调用方用真实内容通过 commitTurn / interruptTurn 提交。
      */
-    function beginStreamTurn(): ConversationTurn {
+    function beginStreamTurn(userMessage: string): ConversationTurn {
       const turn: ConversationTurn = {
         id: generateTurnId(),
         speaker: 'assistant',
@@ -709,37 +709,33 @@ export function createContextOperations(
         createdAt: Date.now(),
       }
       turns.push(turn)
+      // 立即登记配对用户输入：即便调用方在流进入 catch 前就 interruptTurn，也能触发正确的记忆提取
+      pendingCommits.set(turn.id, userMessage)
       return turn
     }
 
     /**
      * 完成一次流式生成：写入最终文本。
      *
+     * 已被 commitTurn / interruptTurn 打断进入终态（completed/interrupted）时**不再覆盖**，
+     * 避免上游流恰好完成时把完整文本写回已打断的轮次。
      * auto 模式：把生成文本写入上下文并触发记忆提取，轮次置为 `completed`。
-     * manual 模式：保持 `generating` 并记录配对用户输入，等待 commit/interrupt。
+     * manual 模式：保持 `generating`，pendingCommits 已在 beginStreamTurn 登记，等待 commit/interrupt。
      */
-    async function completeStreamTurn(turn: ConversationTurn, userMessage: string, finalText: string): Promise<void> {
+    async function completeStreamTurn(turn: ConversationTurn, finalText: string): Promise<void> {
+      if (turn.status === 'completed' || turn.status === 'interrupted')
+        return
       turn.generated = finalText
       if (turnCommit === 'auto') {
         turn.committed = finalText
         turn.status = 'completed'
         turn.committedAt = Date.now()
+        const userMessage = pendingCommits.get(turn.id) ?? ''
+        pendingCommits.delete(turn.id)
         if (finalText)
           await manager.addMessage({ role: 'assistant', content: finalText })
         enqueueMemoryExtract(userMessage, finalText)
       }
-      else {
-        pendingCommits.set(turn.id, userMessage)
-      }
-    }
-
-    /**
-     * 流式生成被取消：保留 `generating` 轮次与已生成文本，登记配对用户输入，
-     * 由调用方在确定真实内容后通过 commitTurn / interruptTurn 提交。
-     */
-    function cancelStreamTurn(turn: ConversationTurn, userMessage: string): void {
-      if (!pendingCommits.has(turn.id))
-        pendingCommits.set(turn.id, userMessage)
     }
 
     /**

@@ -92,10 +92,10 @@ Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key �
 | --- | --- |
 | `extract(messages, options?)` | 从对话提取记忆并存储 |
 | `add(entry)` | 手动添加记忆 |
-| `get(memoryId)` / `update(memoryId, updates)` | 读取/更新 |
+| `get(memoryId, accessScope?)` / `update(memoryId, updates, accessScope?)` | 读取/更新（传 `accessScope: { objectId, scope? }` 做归属校验，不匹配→ `MEMORY_NOT_FOUND`） |
 | `recall(query, options?)` | 检索相关记忆 |
 | `injectMemories(messages, options?)` | 注入 system 记忆上下文 |
-| `remove(memoryId)` / `clear(options?)` | 删除 |
+| `remove(memoryId, accessScope?)` / `clear(options?)` | 删除（`accessScope` 同上） |
 | `list(options?)` / `listPage(options?)` | 列表/分页 |
 
 推荐所有记忆操作带 `objectId`，避免不同用户或 Agent 混写。
@@ -170,7 +170,8 @@ const result = await ai.rag.query('核心架构是什么？', {
 | `transcribe(request)` | `Promise<HaiResult<TranscriptionResult>>` | 完整音频 → 完整文本 |
 | `transcribeStream(request)` | `AsyncIterable<TranscriptionEvent>` | 完整音频或 `AudioInputStream` → `speech_started` / `{type:'transcript',text,final}` / `speech_stopped`（VAD 平台产出语音起止事件） |
 | `synthesize(request)` | `Promise<HaiResult<SynthesisResult>>` | 完整文本 → 完整音频 |
-| `synthesizeStream(request)` | `AsyncIterable<Uint8Array>` | `string` 或 `AsyncIterable<string>` → 音频分片 |
+| `synthesizeStream(request)` | `AsyncIterable<Uint8Array>` | `string` 或 `AsyncIterable<string>` → 音频分片；OpenAI/MiMo 不原生接收增量文本，框架按句子级分段逐句合成 |
+| `getCapabilities(modelId?)` | `HaiResult<AudioModelCapabilities>` | 查询平台实时能力（realtimeAudioInput / speechBoundaryEvents / incrementalTextInput / streamingTranscriptOutput / streamingAudioOutput），实时会话启动前校验 |
 
 - 音频类型：`AudioContent { data: Uint8Array, format: 'pcm16'|'wav'|'mp3'|'opus', sampleRate?, channels? }`；`pcm16` 等裸音频必须传 `sampleRate`。
 - 请求可选：识别 `contextHints?: string[]`（热词/提示）；合成 `instruction?: string`（自然语言风格指令）；均支持 `signal: AbortSignal`。

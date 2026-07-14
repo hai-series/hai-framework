@@ -194,7 +194,13 @@ const controller = new AbortController()
 for await (const audio of ai.audio.synthesizeStream({ text: ai.llm.askStream(question), voice: 'Cherry', instruction: '用轻快的语气', signal: controller.signal })) {
   await player.write(audio)
 }
+
+// 实时会话启动前校验模型能力（不同平台的实时语义不同）
+const caps = ai.audio.getCapabilities('qwen3-tts-flash-realtime')
+if (caps.success && caps.data.streamingAudioOutput) { /* 可实时 TTS */ }
 ```
+
+> `synthesizeStream` 对不原生支持增量文本输入的平台（OpenAI / MiMo）按**句子级分段**逐句合成以近似实时，而非等待整段文本；`getCapabilities` 的 `incrementalTextInput` 声明是否原生支持。
 
 取消/超时/连接错误统一为领域错误：`AbortSignal` 触发 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败 → `AUDIO_CONNECTION_FAILED`。实时连接时长受 `audio.maxStreamDurationMs`（默认 5 分钟）限制。
 

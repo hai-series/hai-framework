@@ -18,6 +18,7 @@ import type { EmbeddingOperations } from '../../embedding/ai-embedding-types.js'
 import type { ChatMessage, LLMOperations } from '../../llm/ai-llm-types.js'
 import type { AIRelStore, AIVectorStore, StorePage, WhereClause } from '../../store/ai-store-types.js'
 import type {
+  MemoryAccessScope,
   MemoryClearOptions,
   MemoryEntry,
   MemoryEntryInput,
@@ -35,7 +36,7 @@ import { core, err, ok } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { extractAndConsolidate } from '../ai-memory-consolidation.js'
-import { injectRelevantMemories } from '../ai-memory-injection.js'
+import { injectRelevantMemories, isMemoryAccessDenied } from '../ai-memory-injection.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory-native' })
 
@@ -216,10 +217,10 @@ export function createNativeMemoryOperations(
    * 更新一条记忆的任意字段（content / type / importance / metadata），
    * content 变更时重算向量并同步向量库。
    */
-  async function updateEntry(memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
+  async function updateEntry(memoryId: string, updates: MemoryUpdateInput, accessScope?: MemoryAccessScope): Promise<HaiResult<MemoryEntry>> {
     try {
       const existing = await store.get(memoryId)
-      if (!existing) {
+      if (!existing || isMemoryAccessDenied(existing, accessScope)) {
         return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
       }
 
@@ -427,19 +428,20 @@ export function createNativeMemoryOperations(
     /**
      * 更新一条已有记忆（仅更新传入字段，content 变更时重算向量）
      */
-    async update(memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
-      return updateEntry(memoryId, updates)
+    async update(memoryId: string, updates: MemoryUpdateInput, accessScope?: MemoryAccessScope): Promise<HaiResult<MemoryEntry>> {
+      return updateEntry(memoryId, updates, accessScope)
     },
 
     /**
      * 根据 ID 获取一条记忆并更新访问统计
      *
      * @param memoryId - 记忆条目的唯一 ID
-     * @returns `ok(MemoryEntry)` 操作成功；ID 不存在时返回 `MEMORY_NOT_FOUND`
+     * @param accessScope - 可选归属校验（不匹配返回 MEMORY_NOT_FOUND）
+     * @returns `ok(MemoryEntry)` 操作成功；ID 不存在或归属不符时返回 `MEMORY_NOT_FOUND`
      */
-    async get(memoryId: string): Promise<HaiResult<MemoryEntry>> {
+    async get(memoryId: string, accessScope?: MemoryAccessScope): Promise<HaiResult<MemoryEntry>> {
       const entry = await store.get(memoryId)
-      if (!entry) {
+      if (!entry || isMemoryAccessDenied(entry, accessScope)) {
         return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
       }
       entry.lastAccessedAt = Date.now()
@@ -452,9 +454,16 @@ export function createNativeMemoryOperations(
      * 根据 ID 删除一条记忆（同时清理关系存储与向量库）
      *
      * @param memoryId - 记忆条目的唯一 ID
-     * @returns `ok(undefined)` 删除成功；ID 不存在时返回 `MEMORY_NOT_FOUND`
+     * @param accessScope - 可选归属校验（不匹配返回 MEMORY_NOT_FOUND）
+     * @returns `ok(undefined)` 删除成功；ID 不存在或归属不符时返回 `MEMORY_NOT_FOUND`
      */
-    async remove(memoryId: string): Promise<HaiResult<void>> {
+    async remove(memoryId: string, accessScope?: MemoryAccessScope): Promise<HaiResult<void>> {
+      if (accessScope) {
+        const existing = await store.get(memoryId)
+        if (!existing || isMemoryAccessDenied(existing, accessScope)) {
+          return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
+        }
+      }
       const removed = await store.remove(memoryId)
       if (!removed) {
         return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))

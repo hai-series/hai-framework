@@ -273,6 +273,21 @@ export interface MemoryUpdateInput {
  * const response = await ai.llm.chat({ messages: enriched.value })
  * ```
  */
+
+/**
+ * 按 ID 访问单条记忆（get / update / remove）时的归属校验作用域。
+ *
+ * 传入后，Provider 先读取记忆再校验：`entry.objectId` 必须等于 `objectId`，且 `entry.scope`
+ * 包含 `scope` 的全部 key-value；不匹配时统一返回 `MEMORY_NOT_FOUND`（避免通过错误差异
+ * 枚举其他主体的记忆）。不传时不做归属校验（向后兼容）；处理不可信输入的 memoryId 时必须传入。
+ */
+export interface MemoryAccessScope {
+  /** 归属主体 ID（必须与记忆 entry.objectId 一致） */
+  objectId: string
+  /** 业务作用域（entry.scope 必须包含这些 key-value） */
+  scope?: Record<string, unknown>
+}
+
 export interface MemoryOperations {
   /**
    * 从对话消息中自动提取记忆条目
@@ -330,17 +345,19 @@ export interface MemoryOperations {
    *
    * @param memoryId - 记忆 ID
    * @param updates - 需要更新的字段
+   * @param accessScope - 可选归属校验（不匹配返回 MEMORY_NOT_FOUND）
    * @returns 更新后的完整记忆条目
    */
-  update: (memoryId: string, updates: MemoryUpdateInput) => Promise<HaiResult<MemoryEntry>>
+  update: (memoryId: string, updates: MemoryUpdateInput, accessScope?: MemoryAccessScope) => Promise<HaiResult<MemoryEntry>>
 
   /**
    * 按 ID 获取单条记忆
    *
    * @param memoryId - 记忆 ID
+   * @param accessScope - 可选归属校验（不匹配返回 MEMORY_NOT_FOUND）
    * @returns 记忆条目，不存在时返回 MEMORY_NOT_FOUND
    */
-  get: (memoryId: string) => Promise<HaiResult<MemoryEntry>>
+  get: (memoryId: string, accessScope?: MemoryAccessScope) => Promise<HaiResult<MemoryEntry>>
 
   /**
    * 删除单条记忆
@@ -348,9 +365,10 @@ export interface MemoryOperations {
    * 同时从 Store 中移除持久化数据。
    *
    * @param memoryId - 记忆 ID
+   * @param accessScope - 可选归属校验（不匹配返回 MEMORY_NOT_FOUND）
    * @returns 成功返回 ok(undefined)
    */
-  remove: (memoryId: string) => Promise<HaiResult<void>>
+  remove: (memoryId: string, accessScope?: MemoryAccessScope) => Promise<HaiResult<void>>
 
   /**
    * 获取记忆列表

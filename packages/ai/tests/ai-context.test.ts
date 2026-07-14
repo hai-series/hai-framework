@@ -1196,6 +1196,65 @@ describe('context chat tool call loop', () => {
       expect(turn?.committed).toBe('实际说了这些')
     }
   })
+
+  it('chatStream: 打断先于流完成时不被覆盖（终态保护）', async () => {
+    // 流正常产出并完成（不 abort），但迭代过程中调用方已 interruptTurn
+    const llm: LLMOperations = {
+      chat: vi.fn(),
+      chatStream: vi.fn(() => (async function* () {
+        yield {
+          id: 'c1',
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model: 'test-model',
+          choices: [{ index: 0, delta: { role: 'assistant', content: '说了一部分' }, finish_reason: null }],
+        } as ChatCompletionChunk
+        yield {
+          id: 'c2',
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model: 'test-model',
+          choices: [{ index: 0, delta: { content: '后面还想说的' }, finish_reason: 'stop' }],
+        } as ChatCompletionChunk
+      })()),
+      listModels: vi.fn(),
+    } as unknown as LLMOperations
+
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    let turnId = ''
+    let interruptOk = false
+    for await (const ev of manager.chatStream('讲讲')) {
+      if (ev.type === 'turn_started') {
+        turnId = ev.turnId
+        // 流仍在进行时立即打断，提交真实播出内容（pendingCommits 已在 turn 创建时登记）
+        const interrupt = await manager.interruptTurn(turnId, { text: '实际只说了这些' })
+        interruptOk = interrupt.success
+      }
+    }
+
+    expect(interruptOk).toBe(true)
+    const turns = manager.getTurns()
+    expect(turns.success).toBe(true)
+    if (turns.success) {
+      const turn = turns.data.find(t => t.id === turnId)
+      // 终态保持 interrupted，未被流完成覆盖为 completed，也未写入完整文本
+      expect(turn?.status).toBe('interrupted')
+      expect(turn?.committed).toBe('实际只说了这些')
+    }
+    // 上下文仅包含真实提交内容，不含模型完整文本
+    const msgs = manager.getMessages()
+    if (msgs.success) {
+      const assistantMsgs = msgs.data.filter(m => m.role === 'assistant')
+      expect(assistantMsgs).toHaveLength(1)
+      expect(assistantMsgs[0].content).toBe('实际只说了这些')
+    }
+  })
 })
 
 // =============================================================================

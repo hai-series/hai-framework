@@ -11,6 +11,7 @@ import type { AIConfig, AudioConfig, AudioProviderName } from '../ai-config.js'
 
 import type {
   AudioContent,
+  AudioModelCapabilities,
   AudioOperations,
   SynthesisRequest,
   SynthesisResult,
@@ -22,7 +23,7 @@ import type {
 } from './ai-audio-types.js'
 import type { AudioProvider } from './providers/ai-audio-provider.js'
 
-import { core, err } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { AudioConfigSchema, resolveAudioModel } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -131,7 +132,20 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream }
+  /**
+   * 查询模型所属平台的实时能力声明（不需凭据，仅解析模型→平台）
+   */
+  function getCapabilities(modelId?: string): HaiResult<AudioModelCapabilities> {
+    const targetId = modelId ?? audioConfig.transcribeModel ?? audioConfig.synthesizeModel
+    if (!targetId)
+      return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: '<default>' } }))
+    const entry = audioConfig.models?.find(m => m.id === targetId || m.model === targetId)
+    if (!entry)
+      return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: targetId } }))
+    return ok(getProvider(entry.provider).capabilities)
+  }
+
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, getCapabilities }
 }
 
 /** 按平台创建 Provider */

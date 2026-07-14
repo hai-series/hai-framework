@@ -12,7 +12,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ResolvedAudioModel } from '../../ai-config.js'
 
-import type { AudioFormat, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
+import type { AudioFormat, AudioModelCapabilities, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
 import type {
   AudioProvider,
   AudioWsConnection,
@@ -27,6 +27,15 @@ import { nanoid } from 'nanoid'
 import { concatChunks, errorMessage, fromBase64, openAudioWebSocket, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-qwen' })
+
+/** Qwen 实时平台能力：WebSocket 实时识别（含服务端 VAD）+ 实时合成（支持增量文本输入） */
+const QWEN_CAPABILITIES: AudioModelCapabilities = {
+  realtimeAudioInput: true,
+  speechBoundaryEvents: true,
+  incrementalTextInput: true,
+  streamingTranscriptOutput: true,
+  streamingAudioOutput: true,
+}
 
 /** 我方音频格式 → Qwen input_audio_format / response_format */
 const QWEN_FORMAT: Record<AudioFormat, string> = {
@@ -229,7 +238,7 @@ export function createQwenAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream }
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, capabilities: QWEN_CAPABILITIES }
 }
 
 /** 解析服务端 JSON 事件（解析失败返回空对象，交由调用方忽略） */

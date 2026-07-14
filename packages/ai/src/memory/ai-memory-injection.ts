@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { ChatMessage } from '../llm/ai-llm-types.js'
-import type { MemoryEntry, MemoryInjectionOptions, MemoryRecallOptions } from './ai-memory-types.js'
+import type { MemoryAccessScope, MemoryEntry, MemoryInjectionOptions, MemoryRecallOptions } from './ai-memory-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -18,6 +18,26 @@ import { HaiAIError } from '../ai-types.js'
 const logger = core.logger.child({ module: 'ai', scope: 'memory' })
 
 type RecallMemories = (query: string, options?: MemoryRecallOptions) => Promise<HaiResult<MemoryEntry[]>>
+
+/**
+ * 按 ID 访问单条记忆时的归属校验（native / Mem0 后端共用）。
+ *
+ * 返回 `true` 表示该记忆不属于调用主体 / 作用域，调用方应统一返回 `MEMORY_NOT_FOUND`；
+ * `accessScope` 未传时不做校验（返回 `false`，向后兼容）。
+ */
+export function isMemoryAccessDenied(entry: MemoryEntry, accessScope?: MemoryAccessScope): boolean {
+  if (!accessScope)
+    return false
+  if (entry.objectId !== accessScope.objectId)
+    return true
+  if (accessScope.scope) {
+    if (!entry.scope)
+      return true
+    const entryScope = entry.scope as Record<string, unknown>
+    return !Object.entries(accessScope.scope).every(([key, value]) => entryScope[key] === value)
+  }
+  return false
+}
 
 /** 从消息中提取最后一条用户文本 */
 function extractQueryFromMessages(messages: ChatMessage[]): string {

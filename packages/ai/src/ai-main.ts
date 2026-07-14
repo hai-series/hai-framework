@@ -202,6 +202,7 @@ const notInitializedAudio: AudioOperations = {
   async* transcribeStream() { throw notInitialized.error() },
   synthesize: () => Promise.resolve(notInitialized.result()),
   async* synthesizeStream() { throw notInitialized.error() },
+  getCapabilities: () => notInitialized.result(),
 }
 
 /** A2A 延迟初始化代理（委托给 a2a 模块的 createA2ALazyProxy） */

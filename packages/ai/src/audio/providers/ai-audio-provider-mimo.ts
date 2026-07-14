@@ -11,7 +11,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-import type { AudioContent, AudioFormat, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
+import type { AudioContent, AudioFormat, AudioModelCapabilities, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
 import type {
   AudioProvider,
   ProviderSynthesisRequest,
@@ -24,9 +24,18 @@ import { core, err, ok } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { createSSEDecoder } from '../../llm/ai-llm-stream.js'
-import { audioError, errorMessage, fromBase64, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
+import { audioError, errorMessage, fromBase64, streamSentences, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-mimo' })
+
+/** MiMo 平台能力：HTTP 识别（非持续音频输入，流式返回文本）+ HTTP 流式合成（不接收增量文本，框架内句子分段） */
+const MIMO_CAPABILITIES: AudioModelCapabilities = {
+  realtimeAudioInput: false,
+  speechBoundaryEvents: false,
+  incrementalTextInput: false,
+  streamingTranscriptOutput: true,
+  streamingAudioOutput: true,
+}
 
 /** MiMo ASR 支持的音频容器 → MIME 类型 */
 const MIMO_ASR_MIME: Partial<Record<AudioFormat, string>> = {
@@ -136,27 +145,31 @@ export function createMimoAudioProvider(): AudioProvider {
 
   async function* synthesizeStream(request: ProviderSynthesisStreamRequest): AsyncIterable<Uint8Array> {
     const { model, text, voice, instruction, format, signal } = request
-    // MiMo TTS 接收完整文本；持续文本流先聚合为完整文本再流式输出音频
-    const fullText = typeof text === 'string' ? text : await collectText(text)
     const outFormat: AudioFormat = format === 'wav' ? 'wav' : 'pcm16'
 
-    const response = await postChat(model.baseUrl, model.apiKey, {
-      model: model.model,
-      messages: buildTtsMessages(fullText, instruction),
-      audio: { format: outFormat, ...(voice ? { voice } : {}) },
-      stream: true,
-    }, model.timeout, signal)
-    if (!response.ok)
-      throw audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
+    // MiMo TTS 不原生接收增量文本：字符串一次合成；持续文本流按句子分段逐句合成，降低首音延迟
+    const segments = typeof text === 'string' ? [text] : streamSentences(text)
+    for await (const segment of segments) {
+      if (!segment)
+        continue
+      const response = await postChat(model.baseUrl, model.apiKey, {
+        model: model.model,
+        messages: buildTtsMessages(segment, instruction),
+        audio: { format: outFormat, ...(voice ? { voice } : {}) },
+        stream: true,
+      }, model.timeout, signal)
+      if (!response.ok)
+        throw audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
 
-    for await (const chunk of readChunks(response)) {
-      const base64 = chunk.choices?.[0]?.delta?.audio?.data
-      if (base64)
-        yield fromBase64(base64)
+      for await (const chunk of readChunks(response)) {
+        const base64 = chunk.choices?.[0]?.delta?.audio?.data
+        if (base64)
+          yield fromBase64(base64)
+      }
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream }
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, capabilities: MIMO_CAPABILITIES }
 }
 
 // ─── 内部辅助 ───
@@ -213,14 +226,6 @@ async function* readChunks(response: Response): AsyncIterable<MimoChunk> {
   finally {
     reader.releaseLock()
   }
-}
-
-/** 聚合持续文本流为完整文本 */
-async function collectText(stream: AsyncIterable<string>): Promise<string> {
-  let full = ''
-  for await (const part of stream)
-    full += part
-  return full
 }
 
 /** 组合取消信号与超时（不泄露原信号） */

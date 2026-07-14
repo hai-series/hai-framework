@@ -35,6 +35,7 @@ function createAudioMock(): AudioOperations {
       yield new Uint8Array([1, 2])
       yield new Uint8Array([3, 4])
     },
+    getCapabilities: () => ok({ realtimeAudioInput: false, speechBoundaryEvents: false, incrementalTextInput: false, streamingTranscriptOutput: false, streamingAudioOutput: true }),
   }
 }
 

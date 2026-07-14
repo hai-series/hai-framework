@@ -69,13 +69,13 @@ Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key �
 
 - `extract(messages, options?)`：从对话提取记忆并存储。
 - `add(entry)`：手动添加记忆。
-- `get(memoryId)` / `update(memoryId, updates)`：读取/更新。
+- `get(memoryId, accessScope?)` / `update(memoryId, updates, accessScope?)`：读取/更新。
 - `recall(query, options?)`：检索相关记忆。
 - `injectMemories(messages, options?)`：注入 system 记忆上下文。
-- `remove(memoryId)` / `clear(options?)`：删除。
+- `remove(memoryId, accessScope?)` / `clear(options?)`：删除。
 - `list(options?)` / `listPage(options?)`：列表/分页。
 
-推荐所有记忆操作带 `objectId`，避免不同用户或 Agent 混写。
+推荐所有记忆操作带 `objectId`，避免不同用户或 Agent 混写。按 ID 读写单条记忆（get/update/remove）处理不可信 memoryId 时，必须传 `accessScope: { objectId, scope? }`；归属不匹配统一返回 `MEMORY_NOT_FOUND`（避免通过错误差异枚举/越权访问其他主体的记忆）。
 
 Memory 后端通过 `memory.provider` 选择：
 
@@ -143,7 +143,8 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `transcribe(request)`：完整音频 → `HaiResult<{ text }>`。
 - `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<TranscriptionEvent>`。事件为 `speech_started` / `{ type: 'transcript', text, final }` / `speech_stopped`（支持服务端 VAD 的平台产出语音起止事件，可据此即时反应）。
 - `synthesize(request)`：完整文本 → `HaiResult<AudioContent>`。
-- `synthesizeStream(request)`：`string` 或 `AsyncIterable<string>` → `AsyncIterable<Uint8Array>`（可直接接 `ai.llm.askStream(...)` 边生成边合成）。
+- `synthesizeStream(request)`：`string` 或 `AsyncIterable<string>` → `AsyncIterable<Uint8Array>`（可直接接 `ai.llm.askStream(...)` 边生成边合成）。对不原生支持增量文本输入的平台（OpenAI / MiMo），框架按**句子级分段**逐句合成以近似实时（消除虚假增量），而非等待整段文本。
+- `getCapabilities(modelId?)`：返回该模型所属平台的 `AudioModelCapabilities`（`realtimeAudioInput` / `speechBoundaryEvents` / `incrementalTextInput` / `streamingTranscriptOutput` / `streamingAudioOutput`），供实时会话启动前校验模型能力（如实时 ASR 需 `realtimeAudioInput` + `speechBoundaryEvents`，实时 TTS 需 `streamingAudioOutput`）。
 
 请求可选字段：识别 `contextHints?: string[]`（热词/提示，按平台能力映射）；合成 `instruction?: string`（自然语言风格指令）。配置 `audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId?, timeout? }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB）/`maxStreamDurationMs`（默 5 分钟，流式连接硬上限）。
 

@@ -10,7 +10,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-import type { AudioContent, AudioFormat, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
+import type { AudioContent, AudioFormat, AudioModelCapabilities, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
 import type {
   AudioProvider,
   ProviderSynthesisRequest,
@@ -24,9 +24,18 @@ import { core, err, ok } from '@h-ai/core'
 import OpenAI, { toFile } from 'openai'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
-import { audioError, errorMessage, toAudioErrorResult } from './ai-audio-provider.js'
+import { audioError, errorMessage, streamSentences, toAudioErrorResult } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-openai' })
+
+/** OpenAI 平台能力：HTTP 文件识别（非实时）+ HTTP 流式合成（不原生接收增量文本，框架内句子分段） */
+const OPENAI_CAPABILITIES: AudioModelCapabilities = {
+  realtimeAudioInput: false,
+  speechBoundaryEvents: false,
+  incrementalTextInput: false,
+  streamingTranscriptOutput: false,
+  streamingAudioOutput: true,
+}
 
 /** 我方音频格式 → OpenAI speech response_format */
 const OPENAI_SPEECH_FORMAT: Record<AudioFormat, 'pcm' | 'wav' | 'mp3' | 'opus'> = {
@@ -140,47 +149,44 @@ export function createOpenAIAudioProvider(): AudioProvider {
     if (!model.apiKey)
       throw audioError(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
 
-    // OpenAI TTS 接收完整文本；持续文本流先聚合为完整文本再流式输出音频
-    const fullText = typeof text === 'string' ? text : await collectText(text)
     const outFormat = format ?? 'mp3'
     const client = createClient(model.apiKey, model.baseUrl, model.timeout)
-    const response = await client.audio.speech.create({
-      model: model.model,
-      voice: voice ?? 'alloy',
-      input: fullText,
-      response_format: OPENAI_SPEECH_FORMAT[outFormat],
-      ...(instruction ? { instructions: instruction } : {}),
-    }, { signal })
 
-    const body = response.body
-    if (!body) {
-      yield new Uint8Array(await response.arrayBuffer())
-      return
-    }
-    const reader = body.getReader()
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done)
-          break
-        if (value)
-          yield value
+    // OpenAI TTS 不原生接收增量文本：字符串一次合成；持续文本流按句子分段逐句合成，降低首音延迟
+    const segments = typeof text === 'string' ? [text] : streamSentences(text)
+    for await (const segment of segments) {
+      if (!segment)
+        continue
+      const response = await client.audio.speech.create({
+        model: model.model,
+        voice: voice ?? 'alloy',
+        input: segment,
+        response_format: OPENAI_SPEECH_FORMAT[outFormat],
+        ...(instruction ? { instructions: instruction } : {}),
+      }, { signal })
+
+      const body = response.body
+      if (!body) {
+        yield new Uint8Array(await response.arrayBuffer())
+        continue
       }
-    }
-    finally {
-      reader.releaseLock()
+      const reader = body.getReader()
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done)
+            break
+          if (value)
+            yield value
+        }
+      }
+      finally {
+        reader.releaseLock()
+      }
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream }
-}
-
-/** 聚合持续文本流为完整文本 */
-async function collectText(stream: AsyncIterable<string>): Promise<string> {
-  let full = ''
-  for await (const part of stream)
-    full += part
-  return full
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, capabilities: OPENAI_CAPABILITIES }
 }
 
 /** 构造上传文件：裸 pcm16 先封装为 WAV 容器（OpenAI 文件接口需要容器格式） */

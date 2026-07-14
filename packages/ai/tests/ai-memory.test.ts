@@ -927,6 +927,43 @@ describe('createNativeMemoryOperations', () => {
     expect(result.success).toBe(false)
   })
 
+  it('get / update / remove 归属校验：objectId 不匹配视为不存在', async () => {
+    const llm = createMockLLM([])
+    const ops = createTestMemoryOps(defaultConfig, llm, null)
+
+    const added = await ops.add({ content: '属于 user-A 的记忆', type: 'fact', objectId: 'user-A' })
+    expect(added.success).toBe(true)
+    if (!added.success)
+      return
+    const id = added.data.id
+
+    // 正确归属可访问
+    expect((await ops.get(id, { objectId: 'user-A' })).success).toBe(true)
+
+    // 错误归属：get / update / remove 一律视为不存在，防止越权访问
+    expect((await ops.get(id, { objectId: 'user-B' })).success).toBe(false)
+    expect((await ops.update(id, { content: '篡改' }, { objectId: 'user-B' })).success).toBe(false)
+    expect((await ops.remove(id, { objectId: 'user-B' })).success).toBe(false)
+
+    // 记忆未被篡改或删除
+    const stillThere = await ops.get(id, { objectId: 'user-A' })
+    expect(stillThere.success && stillThere.data.content).toBe('属于 user-A 的记忆')
+  })
+
+  it('scope 归属校验：scope 不匹配视为不存在', async () => {
+    const llm = createMockLLM([])
+    const ops = createTestMemoryOps(defaultConfig, llm, null)
+
+    const added = await ops.add({ content: '主题 A 的记忆', type: 'fact', objectId: 'user-A', scope: { topicId: 'A' } })
+    expect(added.success).toBe(true)
+    if (!added.success)
+      return
+    const id = added.data.id
+
+    expect((await ops.get(id, { objectId: 'user-A', scope: { topicId: 'A' } })).success).toBe(true)
+    expect((await ops.get(id, { objectId: 'user-A', scope: { topicId: 'B' } })).success).toBe(false)
+  })
+
   it('list 支持按类型过滤', async () => {
     const llm = createMockLLM([])
     const ops = createTestMemoryOps(defaultConfig, llm, null)

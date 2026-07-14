@@ -433,6 +433,48 @@ describe('ai.audio 豆包 Provider', () => {
 // 新能力：语音事件 / 取消语义 / 提示词 / 风格指令 / pcm→wav
 // =============================================================================
 
+describe('ai.audio 能力声明 getCapabilities', () => {
+  beforeEach(async () => {
+    await ai.close()
+    await initAudio({ transcribeModel: 'qwen-asr', synthesizeModel: 'oa-tts' })
+  })
+
+  it('qwen 声明实时输入 + 服务端 VAD 起止事件', () => {
+    const caps = ai.audio.getCapabilities('qwen-asr')
+    expect(caps.success).toBe(true)
+    if (!caps.success)
+      return
+    expect(caps.data.realtimeAudioInput).toBe(true)
+    expect(caps.data.speechBoundaryEvents).toBe(true)
+    expect(caps.data.incrementalTextInput).toBe(true)
+  })
+
+  it('豆包实时但不产出服务端 VAD 起止事件', () => {
+    const caps = ai.audio.getCapabilities('doubao-asr')
+    expect(caps.success && caps.data.realtimeAudioInput).toBe(true)
+    expect(caps.success && caps.data.speechBoundaryEvents).toBe(false)
+  })
+
+  it('openAI / MiMo 不原生支持增量文本输入但流式产出音频', () => {
+    const oa = ai.audio.getCapabilities('oa-tts')
+    expect(oa.success && oa.data.incrementalTextInput).toBe(false)
+    expect(oa.success && oa.data.streamingAudioOutput).toBe(true)
+    const mimo = ai.audio.getCapabilities('mimo-tts')
+    expect(mimo.success && mimo.data.incrementalTextInput).toBe(false)
+  })
+
+  it('不传 modelId 使用默认识别模型所属平台', () => {
+    expect(ai.audio.getCapabilities().success).toBe(true)
+  })
+
+  it('未知模型返回 AUDIO_MODEL_NOT_FOUND', () => {
+    const caps = ai.audio.getCapabilities('does-not-exist')
+    expect(caps.success).toBe(false)
+    if (!caps.success)
+      expect(caps.error.code).toBe(HaiAIError.AUDIO_MODEL_NOT_FOUND.code)
+  })
+})
+
 describe('ai.audio 领域事件与取消语义', () => {
   beforeEach(async () => {
     vi.clearAllMocks()

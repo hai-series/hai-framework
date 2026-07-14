@@ -15,6 +15,7 @@ import type {
   AudioContent,
   AudioFormat,
   AudioInputStream,
+  AudioModelCapabilities,
   SynthesisResult,
   TranscriptionEvent,
   TranscriptionResult,
@@ -107,6 +108,36 @@ export interface AudioProvider {
   synthesize: (request: ProviderSynthesisRequest) => Promise<HaiResult<SynthesisResult>>
   /** 流式语音合成 */
   synthesizeStream: (request: ProviderSynthesisStreamRequest) => AsyncIterable<Uint8Array>
+  /** 平台实时能力声明 */
+  readonly capabilities: AudioModelCapabilities
+}
+
+/** 句子结束边界（中英标点 + 换行） */
+const SENTENCE_BOUNDARY_REGEX = /[。！？；!?;\n]|\.(?=\s|$)/
+
+/**
+ * 将持续到达的文本流按句子边界切分，边到达边产出完整短句。
+ *
+ * 供不原生支持增量文本输入的 TTS 平台（OpenAI / MiMo）使用：以句子级分段逐句发起合成，
+ * 实现近似实时的首音低延迟，而非等待整段文本生成完毕（消除“虚假增量”语义）。
+ */
+export async function* streamSentences(stream: AsyncIterable<string>): AsyncIterable<string> {
+  let buffer = ''
+  for await (const part of stream) {
+    buffer += part
+    let match = SENTENCE_BOUNDARY_REGEX.exec(buffer)
+    while (match !== null) {
+      const end = match.index + match[0].length
+      const sentence = buffer.slice(0, end).trim()
+      buffer = buffer.slice(end)
+      if (sentence)
+        yield sentence
+      match = SENTENCE_BOUNDARY_REGEX.exec(buffer)
+    }
+  }
+  const rest = buffer.trim()
+  if (rest)
+    yield rest
 }
 
 // ─── Base64 辅助 ───

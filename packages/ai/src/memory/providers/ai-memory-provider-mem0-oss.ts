@@ -15,6 +15,7 @@ import type { AIConfig, MemoryConfig } from '../../ai-config.js'
 import type { ChatMessage, LLMOperations } from '../../llm/ai-llm-types.js'
 import type { AIVectorBackend } from '../../store/ai-store-types.js'
 import type {
+  MemoryAccessScope,
   MemoryEntry,
   MemoryEntryInput,
   MemoryExtractOptions,
@@ -29,7 +30,7 @@ import { resolveModelEntry } from '../../ai-config.js'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { extractMemories as extractTypedMemories } from '../ai-memory-extractor.js'
-import { injectRelevantMemories } from '../ai-memory-injection.js'
+import { injectRelevantMemories, isMemoryAccessDenied } from '../ai-memory-injection.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory-mem0-oss' })
 const DEFAULT_IMPORTANCE = 0.5
@@ -356,13 +357,15 @@ async function addMemory(context: Mem0OssContext, entry: MemoryEntryInput): Prom
  * 代价：mem0 后端会为更新后的记忆分配新的 memoryId（与 native 后端保持稳定 id 的行为不同，
  * 已在 README 中作为后端差异说明）；通过 `timestamp` 保留原始创建时间。
  */
-async function updateMemory(context: Mem0OssContext, memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
+async function updateMemory(context: Mem0OssContext, memoryId: string, updates: MemoryUpdateInput, accessScope?: MemoryAccessScope): Promise<HaiResult<MemoryEntry>> {
   try {
     const item = await context.memory.get(memoryId)
     if (!item)
       return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
 
     const existing = toMemoryEntry(item, context.defaultObjectId)
+    if (isMemoryAccessDenied(existing, accessScope))
+      return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
     const objectId = existing.objectId ?? context.defaultObjectId
 
     // 仅改文本：mem0.update 可原地更新，保持 memoryId 稳定
@@ -403,20 +406,28 @@ async function updateMemory(context: Mem0OssContext, memoryId: string, updates: 
   }
 }
 
-async function getMemory(context: Mem0OssContext, memoryId: string): Promise<HaiResult<MemoryEntry>> {
+async function getMemory(context: Mem0OssContext, memoryId: string, accessScope?: MemoryAccessScope): Promise<HaiResult<MemoryEntry>> {
   try {
     const item = await context.memory.get(memoryId)
     if (!item)
       return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
-    return ok(toMemoryEntry(item, context.defaultObjectId))
+    const entry = toMemoryEntry(item, context.defaultObjectId)
+    if (isMemoryAccessDenied(entry, accessScope))
+      return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
+    return ok(entry)
   }
   catch (error) {
     return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryRecallFailed', { params: { error: String(error) } }), error)
   }
 }
 
-async function removeMemory(context: Mem0OssContext, memoryId: string): Promise<HaiResult<void>> {
+async function removeMemory(context: Mem0OssContext, memoryId: string, accessScope?: MemoryAccessScope): Promise<HaiResult<void>> {
   try {
+    if (accessScope) {
+      const item = await context.memory.get(memoryId)
+      if (!item || isMemoryAccessDenied(toMemoryEntry(item, context.defaultObjectId), accessScope))
+        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
+    }
     await context.memory.delete(memoryId)
     return ok(undefined)
   }
@@ -488,9 +499,9 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
     recall,
     injectMemories: (messages, options) => injectRelevantMemories(messages, options, recall),
     add: entry => addMemory(context, entry),
-    update: (memoryId, updates) => updateMemory(context, memoryId, updates),
-    get: memoryId => getMemory(context, memoryId),
-    remove: memoryId => removeMemory(context, memoryId),
+    update: (memoryId, updates, accessScope) => updateMemory(context, memoryId, updates, accessScope),
+    get: (memoryId, accessScope) => getMemory(context, memoryId, accessScope),
+    remove: (memoryId, accessScope) => removeMemory(context, memoryId, accessScope),
     async list(options) {
       try {
         return ok(await listMemories(context, options))
