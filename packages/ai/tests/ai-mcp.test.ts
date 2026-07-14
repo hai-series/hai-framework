@@ -5,10 +5,14 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { ai, HaiAIError } from '../src/index.js'
+import { ai, createMcpServer, HaiAIError } from '../src/index.js'
 
 afterEach(async () => {
   await ai.close()
+})
+
+it('根入口导出独立 MCP Server 工厂', () => {
+  expect(createMcpServer).toBeTypeOf('function')
 })
 
 // =============================================================================

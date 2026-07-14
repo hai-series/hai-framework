@@ -11,15 +11,21 @@
  * =============================================================================
  */
 
+import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
-import { registerViaApi, uniqueUser } from './helpers'
+import { registerViaApi, uniqueUser, waitForHydration } from './helpers'
+
+async function gotoHydrated(page: Page, url: string): Promise<void> {
+  await page.goto(url)
+  await waitForHydration(page)
+}
 
 // ---------------------------------------------------------------------------
 // 认证布局
 // ---------------------------------------------------------------------------
 test.describe('Auth Layout', () => {
   test('登录页渲染完整的认证布局', async ({ page }) => {
-    await page.goto('/auth/login')
+    await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('domcontentloaded')
 
     // AuthShell split 品牌区（lg 以上可见）
@@ -39,7 +45,7 @@ test.describe('Auth Layout', () => {
 // ---------------------------------------------------------------------------
 test.describe('Login Form UI', () => {
   test('登录表单包含所有必要元素', async ({ page }) => {
-    await page.goto('/auth/login')
+    await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('domcontentloaded')
 
     // 表单标题
@@ -69,7 +75,7 @@ test.describe('Login Form UI', () => {
   })
 
   test('忘记密码链接跳转正确', async ({ page }) => {
-    await page.goto('/auth/login')
+    await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('domcontentloaded')
 
     await page.locator('a[href="/auth/forgot-password"]').click()
@@ -78,7 +84,7 @@ test.describe('Login Form UI', () => {
   })
 
   test('注册链接跳转正确', async ({ page }) => {
-    await page.goto('/auth/login')
+    await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('domcontentloaded')
 
     await page.locator('a[href="/auth/register"]').click()
@@ -90,7 +96,7 @@ test.describe('Login Form UI', () => {
     const user = uniqueUser('loginui')
     await registerViaApi(request, user)
 
-    await page.goto('/auth/login')
+    await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('load')
     await page.waitForTimeout(1500)
 
@@ -124,7 +130,7 @@ test.describe('Login Form UI', () => {
     const user = uniqueUser('loginform')
     await registerViaApi(request, user)
 
-    await page.goto('/auth/login')
+    await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('load')
 
     // 填写表单
@@ -143,7 +149,7 @@ test.describe('Login Form UI', () => {
     const user = uniqueUser('loginfail')
     await registerViaApi(request, user)
 
-    await page.goto('/auth/login')
+    await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('load')
 
     // 填写错误密码
@@ -163,7 +169,7 @@ test.describe('Login Form UI', () => {
 // ---------------------------------------------------------------------------
 test.describe('Register Form UI', () => {
   test('注册表单包含所有必要元素', async ({ page }) => {
-    await page.goto('/auth/register')
+    await gotoHydrated(page, '/auth/register')
     await page.waitForLoadState('domcontentloaded')
 
     // 表单标题
@@ -187,7 +193,7 @@ test.describe('Register Form UI', () => {
   })
 
   test('注册表单返回登录链接跳转正确', async ({ page }) => {
-    await page.goto('/auth/register')
+    await gotoHydrated(page, '/auth/register')
     await page.waitForLoadState('domcontentloaded')
 
     await page.locator('a[href="/auth/login"]').click()
@@ -196,7 +202,7 @@ test.describe('Register Form UI', () => {
   })
 
   test('注册密码不一致时 API 返回 400', async ({ page }) => {
-    await page.goto('/auth/register')
+    await gotoHydrated(page, '/auth/register')
     await page.waitForLoadState('load')
 
     const u = uniqueUser('regui')
@@ -214,7 +220,7 @@ test.describe('Register Form UI', () => {
   test('通过 UI 表单提交注册（走 apiFetch 传输加密链路）', async ({ page }) => {
     const user = uniqueUser('regui')
 
-    await page.goto('/auth/register')
+    await gotoHydrated(page, '/auth/register')
     await page.waitForLoadState('load')
 
     // 填写注册表单
@@ -247,7 +253,7 @@ test.describe('Register Form UI', () => {
 // ---------------------------------------------------------------------------
 test.describe('Forgot Password UI', () => {
   test('忘记密码页面包含表单元素', async ({ page }) => {
-    await page.goto('/auth/forgot-password')
+    await gotoHydrated(page, '/auth/forgot-password')
     await page.waitForLoadState('domcontentloaded')
 
     // 应有表单
@@ -262,7 +268,7 @@ test.describe('Forgot Password UI', () => {
   })
 
   test('返回登录链接跳转正确', async ({ page }) => {
-    await page.goto('/auth/forgot-password')
+    await gotoHydrated(page, '/auth/forgot-password')
     await page.waitForLoadState('domcontentloaded')
 
     await page.locator('a[href="/auth/login"]').click()
@@ -271,7 +277,7 @@ test.describe('Forgot Password UI', () => {
   })
 
   test('通过 UI 表单提交忘记密码（走 apiFetch 传输加密链路）', async ({ page }) => {
-    await page.goto('/auth/forgot-password')
+    await gotoHydrated(page, '/auth/forgot-password')
     await page.waitForLoadState('load')
 
     // 填写邮箱
@@ -296,7 +302,7 @@ test.describe('Forgot Password UI', () => {
   })
 
   test('忘记密码空邮箱时浏览器阻止提交', async ({ page }) => {
-    await page.goto('/auth/forgot-password')
+    await gotoHydrated(page, '/auth/forgot-password')
     await page.waitForLoadState('load')
 
     // 不填邮箱直接点提交
@@ -314,7 +320,7 @@ test.describe('Forgot Password UI', () => {
 // ---------------------------------------------------------------------------
 test.describe('Reset Password UI', () => {
   test('无 token 参数时显示警告', async ({ page }) => {
-    await page.goto('/auth/reset-password')
+    await gotoHydrated(page, '/auth/reset-password')
     await page.waitForLoadState('domcontentloaded')
 
     await expect(page.locator('form')).toHaveCount(0)
@@ -322,7 +328,7 @@ test.describe('Reset Password UI', () => {
   })
 
   test('带 token 参数时显示重置表单', async ({ page }) => {
-    await page.goto('/auth/reset-password?token=test-token-123')
+    await gotoHydrated(page, '/auth/reset-password?token=test-token-123')
     await page.waitForLoadState('domcontentloaded')
 
     // 页面应包含表单
@@ -331,7 +337,7 @@ test.describe('Reset Password UI', () => {
   })
 
   test('通过 UI 提交重置密码表单（无效 token 显示错误）', async ({ page }) => {
-    await page.goto('/auth/reset-password?token=invalid-token-xyz')
+    await gotoHydrated(page, '/auth/reset-password?token=invalid-token-xyz')
     await page.waitForLoadState('load')
 
     // 表单可见
@@ -351,7 +357,7 @@ test.describe('Reset Password UI', () => {
   })
 
   test('重置密码密码不一致时提交按钮禁用', async ({ page }) => {
-    await page.goto('/auth/reset-password?token=test-token-456')
+    await gotoHydrated(page, '/auth/reset-password?token=test-token-456')
     await page.waitForLoadState('load')
 
     await expect(page.locator('form')).toBeVisible()

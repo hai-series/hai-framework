@@ -2,7 +2,7 @@
  * @h-ai/ai — 默认 DB 存储 Provider（reldb + vecdb）
  *
  * 基于 @h-ai/reldb 和 @h-ai/vecdb 的 AIStoreProvider 默认实现。
- * 仅在选择 `store.type: 'db'` 时加载，AI 模块本身不直接依赖 reldb/vecdb。
+ * AI 默认初始化路径直接使用该实现，因此 @h-ai/reldb 与 @h-ai/vecdb 是运行时依赖。
  * @module ai-store-provider-db
  */
 

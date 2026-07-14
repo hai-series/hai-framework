@@ -72,28 +72,6 @@ export interface A2AMessageRecord {
   createdAt: number
 }
 
-/** A2A 客户端调用记录（作为客户端调用远端 Agent 时的日志） */
-export interface A2AClientCallRecord {
-  /** 记录 ID */
-  id: string
-  /** 远端 Agent URL */
-  remoteUrl: string
-  /** 远端 Agent 名称 */
-  remoteName?: string
-  /** 请求消息 Part[] */
-  requestParts: unknown[]
-  /** 响应消息 Part[]（可选，流式时可能为空） */
-  responseParts?: unknown[]
-  /** A2A Task ID（远端返回的） */
-  taskId?: string
-  /** 任务最终状态 */
-  taskState?: string
-  /** 调用耗时（毫秒） */
-  duration?: number
-  /** 创建时间戳 */
-  createdAt: number
-}
-
 /** A2A 上下文信息（对话/会话级别） */
 export interface A2AContextInfo {
   /** 上下文 ID（对应 SDK 的 contextId） */
@@ -194,6 +172,8 @@ export interface A2AOperations {
   /**
    * 作为客户端调用远端 Agent
    *
+   * remoteUrl 只应来自受信配置。框架校验协议和内嵌凭据，应用仍须按部署环境实施来源白名单与出口策略。
+   *
    * @param remoteUrl - 远端 Agent 的 A2A 端点 URL
    * @param message - 发送的消息文本
    * @param options - 调用选项
@@ -251,7 +231,7 @@ export interface A2AHandleResult {
 
 /** 远端调用选项 */
 export interface A2ACallOptions {
-  /** 请求超时（毫秒） */
+  /** 超时时间（毫秒），默认 60 秒。 */
   timeout?: number
   /** 额外请求头 */
   headers?: Record<string, string>

@@ -258,7 +258,7 @@ const p = usePlatform()
 | `Spinner`    | `size`, `variant`                                             | 加载动画 |
 | `Progress`   | `value`, `max`, `striped`, `animated`                         | 进度条   |
 
-### 组合组件（Compounds，33 个）
+### 组合组件（Compounds，36 个）
 
 由原子组件 + Bits UI headless 交互组合。
 
@@ -375,10 +375,12 @@ const p = usePlatform()
 
 | 组件          | Props 要点                                     | 说明     |
 | ------------- | ---------------------------------------------- | -------- |
-| `FileUpload`  | `accept`, `maxSize`, `uploadUrl`, `autoUpload` | 文件上传 |
-| `ImageUpload` | `value`, `uploadUrl`, `aspectRatio`            | 图片上传 |
-| `AvatarUpload` | `value`, `size`, `maxSize`, `fallback`        | 头像上传 |
+| `FileUpload`  | `accept`, `maxSize`, `uploadHandler`, `autoUpload` | 文件上传 |
+| `ImageUpload` | `value`, `uploadHandler`, `aspectRatio`            | 图片上传 |
+| `AvatarUpload` | `value`, `uploadHandler`, `size`, `fallback`      | 头像上传 |
 | `FileList`    | `files: FileItem[]`, `layout`, `showPreview`   | 文件列表 |
+
+上传协议属于应用 service：组件通过 `uploadHandler(file, { signal, onProgress })` 注入实现，并接收 `{ url?, response? }`。不要把 presign、认证头或 PUT/POST 细节塞进 UI 组件；图片与头像 handler 必须返回安全的 `url`。未提供 handler 时组件只负责文件选择或本地预览。
 
 #### AI 场景组件
 

@@ -115,6 +115,8 @@ const temp = await ai.llm.chat({
 ### 工具调用
 
 ```ts
+import { z } from 'zod'
+
 const registry = ai.tools.createRegistry()
 registry.register(ai.tools.define({
   name: 'get_weather',
@@ -130,6 +132,7 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 ```ts
 import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
+import { z } from 'zod'
 
 const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
 server.registerTool('search', {
@@ -370,6 +373,13 @@ const memories = await ai.memory.recall('经济发展', {
 
 `ai.config` 返回脱敏后的配置快照；`apiKey`、`privateKey`、URL 内嵌凭证等敏感字段不会原样暴露。
 
+## 安全边界
+
+- Prompt、检索文档和模型输出都按不可信输入处理；不要把用户内容拼进不可覆盖的系统规则。
+- Zod 只校验工具参数形状，不代表调用者有权限。高权限工具必须在 handler 内再次校验身份、租户、资源归属与配额，并只把允许自动执行的工具注册给模型。
+- `callRemoteAgent()` 是独立客户端能力，只依赖 `ai.init()`，不要求配置 Agent Card 或注册本地 executor。它拒绝非 HTTP(S) 和 URL 内嵌凭据，但应用仍必须对远端 origin 配置白名单，并在出口代理处限制 DNS 重绑定、重定向到私网和云元数据地址。
+- 不记录完整 Prompt、工具参数、A2A headers、临时模型凭据或带 query 的远端 URL；确需审计时仅保存脱敏摘要。
+
 ## 错误处理
 
 ```ts
@@ -393,7 +403,8 @@ if (!result.success) {
 - `hai:ai:300-302`：Embedding。
 - `hai:ai:600-701`：Retrieval/RAG。
 - `hai:ai:800-805`：Knowledge。
-- `hai:ai:900-904`：Memory。
+- `hai:ai:050-059`：Audio。
+- `hai:ai:900-905`：Memory。
 - `hai:ai:980-984`：A2A。
 
 ## 测试

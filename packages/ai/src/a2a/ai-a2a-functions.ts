@@ -17,7 +17,6 @@ import type {
   A2AAgentCardConfig,
   A2ACallOptions,
   A2ACallResult,
-  A2AClientCallRecord,
   A2AHandleResult,
   A2AMessageRecord,
   A2AOperations,
@@ -33,6 +32,32 @@ import { HaiAIError } from '../ai-types.js'
 import { buildAgentCard } from './ai-a2a-server.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
+const DEFAULT_A2A_CALL_TIMEOUT_MS = 60_000
+
+interface ValidatedRemoteUrl {
+  requestUrl: string
+  safeLabel: string
+}
+
+/**
+ * 校验远端 Agent URL 的基础边界。
+ *
+ * A2A 目标通常来自服务端配置；这里拒绝非 HTTP(S) 协议和 URL 内嵌凭据，
+ * 并生成不含 query/hash 的安全标签用于错误与持久化记录。部署侧仍应对可访问 origin
+ * 使用白名单，因为 DNS 解析与重定向策略属于应用网络边界。
+ */
+function validateRemoteUrl(remoteUrl: string): ValidatedRemoteUrl {
+  const parsed = new URL(remoteUrl)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+    throw new Error('A2A remote URL must use HTTP or HTTPS')
+  if (parsed.username || parsed.password)
+    throw new Error('A2A remote URL must not contain credentials')
+
+  return {
+    requestUrl: parsed.toString(),
+    safeLabel: `${parsed.origin}${parsed.pathname}`,
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? value as Record<string, unknown> : undefined
@@ -58,6 +83,76 @@ function getPartText(part: unknown): string | undefined {
 
 function getTextParts(parts: readonly unknown[] | undefined): string[] {
   return parts?.map(getPartText).filter((text): text is string => text != null) ?? []
+}
+
+async function executeRemoteAgentCall(
+  remoteUrl: string,
+  message: string,
+  options?: A2ACallOptions,
+): Promise<HaiResult<A2ACallResult>> {
+  let safeLabel = '(invalid or unavailable URL)'
+  try {
+    const validatedUrl = validateRemoteUrl(remoteUrl)
+    const requestUrl = validatedUrl.requestUrl
+    safeLabel = validatedUrl.safeLabel
+    const customHeaders = options?.headers
+    const timeoutMs = Math.max(1, options?.timeout ?? DEFAULT_A2A_CALL_TIMEOUT_MS)
+    const client = new A2AClient(requestUrl, {
+      fetchImpl: ((input: RequestInfo | URL, init?: RequestInit) => {
+        const existingHeaders = init?.headers
+          ? Object.fromEntries(new Headers(init.headers as HeadersInit).entries())
+          : {}
+        const signals = [init?.signal, AbortSignal.timeout(timeoutMs)].filter((signal): signal is AbortSignal => Boolean(signal))
+        const fetchInit: RequestInit = {
+          ...init,
+          headers: { ...existingHeaders, ...customHeaders },
+          signal: signals.length > 1 ? AbortSignal.any(signals) : signals[0],
+        }
+        return globalThis.fetch(input, fetchInit)
+      }) as typeof fetch,
+    })
+    const params: { message: Message } = {
+      message: {
+        kind: 'message',
+        messageId: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+        role: 'user',
+        parts: [{ kind: 'text', text: message }],
+      },
+    }
+
+    const response = await client.sendMessage(params)
+    if ('error' in response) {
+      return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: safeLabel, error: 'Remote agent returned an error' } }))
+    }
+
+    const responseData = response.result
+    let result: A2ACallResult
+    if (isTaskResult(responseData)) {
+      const textParts = responseData.artifacts?.flatMap(artifact => getTextParts(artifact.parts)) ?? []
+      result = {
+        taskId: responseData.id,
+        taskState: responseData.status?.state,
+        responseText: textParts.join('\n') || undefined,
+        responseParts: responseData.artifacts?.flatMap(artifact => artifact.parts ?? []),
+      }
+    }
+    else if (isMessageResult(responseData)) {
+      const textParts = getTextParts(responseData.parts)
+      result = {
+        responseText: textParts.join('\n') || undefined,
+        responseParts: responseData.parts,
+      }
+    }
+    else {
+      result = {}
+    }
+
+    return ok(result)
+  }
+  catch (error) {
+    const errorName = error instanceof Error ? error.name : 'UnknownError'
+    return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: safeLabel, error: errorName } }))
+  }
 }
 
 // ─── RelDB 持久化 TaskStore ───
@@ -162,9 +257,6 @@ export function createA2AOperations(
   const { storeProvider } = deps
   const agentCardConfig = options.agentCard
 
-  // A2AClient 实例缓存（按 URL 复用，避免每次调用都创建新实例）
-  const clientCache = new Map<string, A2AClient>()
-
   // 创建持久化存储
   const taskStore = storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', {
     hasObjectId: true,
@@ -172,10 +264,6 @@ export function createA2AOperations(
     hasRefId: true,
   })
   const messageStore = storeProvider.createRelStore<A2AMessageRecord>('hai_ai_a2a_messages', {
-    hasObjectId: true,
-    hasStatus: true,
-  })
-  const callRecordStore = storeProvider.createRelStore<A2AClientCallRecord>('hai_ai_a2a_calls', {
     hasObjectId: true,
     hasStatus: true,
   })
@@ -235,97 +323,7 @@ export function createA2AOperations(
     },
 
     async callRemoteAgent(remoteUrl: string, message: string, options?: A2ACallOptions) {
-      const startTime = Date.now()
-      try {
-        // 构建自定义 fetch：注入 headers 和 timeout
-        const customHeaders = options?.headers
-        const timeoutMs = options?.timeout
-        const hasCustomOptions = customHeaders || timeoutMs
-
-        let client = hasCustomOptions ? undefined : clientCache.get(remoteUrl)
-        if (!client) {
-          const clientOptions: import('@a2a-js/sdk/client').A2AClientOptions | undefined = hasCustomOptions
-            ? {
-                fetchImpl: ((input: RequestInfo | URL, init?: RequestInit) => {
-                  const existingHeaders = init?.headers
-                    ? Object.fromEntries(new Headers(init.headers as HeadersInit).entries())
-                    : {}
-                  const mergedHeaders = {
-                    ...existingHeaders,
-                    ...customHeaders,
-                  }
-                  const fetchInit: RequestInit = {
-                    ...init,
-                    headers: mergedHeaders,
-                    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
-                  }
-                  return globalThis.fetch(input, fetchInit)
-                }) as typeof fetch,
-              }
-            : undefined
-          client = new A2AClient(remoteUrl, clientOptions)
-          if (!hasCustomOptions) {
-            clientCache.set(remoteUrl, client)
-          }
-        }
-        const params: { message: Message } = {
-          message: {
-            kind: 'message',
-            messageId: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-            role: 'user',
-            parts: [{ kind: 'text', text: message }],
-          },
-        }
-
-        const response = await client.sendMessage(params)
-
-        // 处理 JSON-RPC 响应（SendMessageResponse = JSONRPCErrorResponse | SendMessageSuccessResponse）
-        if ('error' in response) {
-          return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: remoteUrl, error: JSON.stringify(response.error) } }))
-        }
-
-        // 提取 result（Task | Message）。SDK 未提供类型守卫，使用 status / parts 做最小判别。
-        const responseData = response.result
-        let result: A2ACallResult
-        if (isTaskResult(responseData)) {
-          const textParts = responseData.artifacts?.flatMap(artifact => getTextParts(artifact.parts)) ?? []
-          result = {
-            taskId: responseData.id,
-            taskState: responseData.status?.state,
-            responseText: textParts.join('\n') || undefined,
-            responseParts: responseData.artifacts?.flatMap(artifact => artifact.parts ?? []),
-          }
-        }
-        else if (isMessageResult(responseData)) {
-          const textParts = getTextParts(responseData.parts)
-          result = {
-            responseText: textParts.join('\n') || undefined,
-            responseParts: responseData.parts,
-          }
-        }
-        else {
-          result = {}
-        }
-
-        // 记录调用日志
-        const callRecord: A2AClientCallRecord = {
-          id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-          remoteUrl,
-          requestParts: params.message.parts,
-          responseParts: result.responseParts,
-          taskId: result.taskId,
-          taskState: result.taskState,
-          duration: Date.now() - startTime,
-          createdAt: startTime,
-        }
-        callRecordStore.save(callRecord.id, callRecord, { objectId: remoteUrl, status: result.taskState })
-          .catch(e => logger.warn('Failed to save A2A call record', { error: e }))
-
-        return ok(result)
-      }
-      catch (error) {
-        return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: remoteUrl, error: String(error) } }), error)
-      }
+      return executeRemoteAgentCall(remoteUrl, message, options)
     },
   }
 }
@@ -351,8 +349,8 @@ export interface A2ALazyProxyDeps {
 /**
  * 创建 A2A 延迟初始化代理
  *
- * 代理在 `ai.init()` 之后、`registerExecutor()` 之前即可提供 `getAgentCard()`。
- * 其余方法需在 `registerExecutor()` 成功后才可用。
+ * `callRemoteAgent()` 是独立客户端能力，只需 `ai.init()`；`getAgentCard()` 可直接读取配置。
+ * 只有服务端请求处理与消息查询依赖 `registerExecutor()`。
  *
  * @param deps - 由 ai-main 注入的状态访问器
  * @returns A2AOperations 代理对象
@@ -420,7 +418,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.callRemoteAgent(remoteUrl, message, options)
       if (!deps.isInitialized())
         return deps.notInitializedResult()
-      return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
+      return executeRemoteAgentCall(remoteUrl, message, options)
     },
   }
 }

@@ -291,3 +291,23 @@ describe('a2A 未初始化行为', () => {
     }
   })
 })
+
+describe('a2A 远端 URL 安全边界', () => {
+  it.each([
+    'file:///etc/passwd',
+    'ftp://example.com/agent',
+    'https://user:secret@example.com/agent',
+  ])('拒绝非 HTTP(S) 或内嵌凭据 URL: %s', async (remoteUrl) => {
+    const initResult = await ai.init()
+    expect(initResult.success).toBe(true)
+
+    const result = await ai.a2a.callRemoteAgent(remoteUrl, 'hello')
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAIError.A2A_REMOTE_CALL_FAILED.code)
+      expect(result.error.message).not.toContain('secret')
+    }
+
+    await ai.close()
+  })
+})

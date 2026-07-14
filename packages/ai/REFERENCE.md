@@ -156,7 +156,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `getAgentCard()`：获取 Agent Card。
 - `handleRequest(body, context?)`：处理 A2A JSON-RPC 请求。
 - `listMessages(filter)`：查询 A2A 消息记录。
-- `callRemoteAgent(remoteUrl, message, options?)`：调用远端 Agent。
+- `callRemoteAgent(remoteUrl, message, options?)`：调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor。
 
 ## 错误码速查
 
@@ -171,7 +171,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `hai:ai:500-502`：Reasoning。
 - `hai:ai:600-701`：Retrieval / RAG。
 - `hai:ai:800-805`：Knowledge。
-- `hai:ai:900-904`：Memory。
+- `hai:ai:900-905`：Memory。
 - `hai:ai:950-971`：Context / Store / Session。
 - `hai:ai:980-984`：A2A。
 

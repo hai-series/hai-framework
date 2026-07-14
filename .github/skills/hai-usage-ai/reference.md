@@ -192,9 +192,11 @@ const result = await ai.rag.query('核心架构是什么？', {
 | `getAgentCard()` | 获取 Agent Card |
 | `handleRequest(body, context?)` | 处理 A2A JSON-RPC 请求 |
 | `listMessages(filter)` | 查询 A2A 消息记录 |
-| `callRemoteAgent(remoteUrl, message, options?)` | 调用远端 Agent |
+| `callRemoteAgent(remoteUrl, message, options?)` | 调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor |
 
-A2A 的 SDK handler 延迟创建；注册 executor 或首次处理请求时才装配运行时对象。
+A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端调用不依赖服务端配置。
+
+`callRemoteAgent` 只接受 HTTP(S) 且拒绝 URL 内嵌凭据。该校验不是完整 SSRF 防护：remote URL 若来自外部输入，应用必须先按 origin 白名单过滤，并通过出口代理限制 DNS 重绑定、重定向到私网与云元数据地址。
 
 ## 错误码速查
 
@@ -211,7 +213,7 @@ A2A 的 SDK handler 延迟创建；注册 executor 或首次处理请求时才�
 | `hai:ai:500-502` | Reasoning |
 | `hai:ai:600-701` | Retrieval / RAG |
 | `hai:ai:800-805` | Knowledge |
-| `hai:ai:900-904` | Memory |
+| `hai:ai:900-905` | Memory |
 | `hai:ai:950-971` | Context / Store / Session |
 | `hai:ai:980-984` | A2A |
 

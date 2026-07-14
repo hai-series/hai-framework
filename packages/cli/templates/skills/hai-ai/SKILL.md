@@ -20,6 +20,7 @@ description: 使用 @h-ai/ai 进行 LLM 调用、工具与 MCP、流式处理、
 ## 初始化与关闭
 
 ```ts
+import { core } from '@h-ai/core'
 import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
@@ -104,6 +105,8 @@ memory:
 ## LLM + 工具调用
 
 ```ts
+import { z } from 'zod'
+
 const registry = ai.tools.createRegistry()
 registry.register(ai.tools.define({
   name: 'get_weather',
@@ -284,6 +287,8 @@ export const POST = kit.handler(async ({ request }) => {
 
 - API Key 只从配置 / 环境变量读取，禁止写死。
 - 工具 handler 必须校验输入；用户可见错误走 i18n/错误码。
+- 模型输出、Prompt 和检索内容均不可信；不要把用户内容拼入不可覆盖的系统规则。Zod 只保证参数形状，高权限工具还必须在 handler 内校验身份、租户、资源归属和配额。
+- 只向模型注册允许自动执行的工具；写操作默认要求业务侧确认或幂等键，不能把“模型请求调用”当作授权。
 - 批量导入、批量 embedding 用批量 API，避免 await-in-loop。
 - 文件解析/OCR 失败按 `HaiAIError.FILE_*` 返回，不抛业务异常。
-- A2A 认证失败返回 `A2A_AUTH_FAILED`；不要记录 token、apiKey、私钥等敏感字段。
+- A2A 认证失败返回 `A2A_AUTH_FAILED`；`callRemoteAgent` 只依赖 `ai.init()`，无需注册本地 executor。远端 URL 仅接受 HTTP(S) 且不得内嵌凭据，应用仍须配置 origin 白名单与出口网络策略。不要记录 token、apiKey、私钥、完整 headers 或带 query 的 URL。

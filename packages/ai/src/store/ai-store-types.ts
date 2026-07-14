@@ -358,11 +358,7 @@ export interface AIVectorBackend {
  *
  * @example
  * ```ts
- * // 使用默认 reldb+vecdb provider
- * ai.init({ store: { type: 'db' } })
- *
- * // 使用自定义 provider
- * ai.init({ store: { type: 'custom', provider: myProvider } })
+ * await ai.init(config, { storeProvider: myProvider })
  * ```
  */
 export interface AIStoreProvider {

@@ -2,7 +2,7 @@
  * 调试测试 - 捕获浏览器端 console 输出，定位登录报错原因
  */
 import { expect, test } from '@playwright/test'
-import { registerViaApi, uniqueUser } from './helpers'
+import { registerViaApi, uniqueUser, waitForHydration } from './helpers'
 
 test('调试登录 - 捕获浏览器 console', async ({ page, request }) => {
   const consoleMessages: string[] = []
@@ -39,8 +39,7 @@ test('调试登录 - 捕获浏览器 console', async ({ page, request }) => {
 
   // 打开登录页
   await page.goto('/auth/login')
-  await page.waitForLoadState('load')
-  await page.waitForTimeout(2000)
+  await waitForHydration(page)
 
   // 填写并提交
   await page.locator('#login-username').fill(user.username)

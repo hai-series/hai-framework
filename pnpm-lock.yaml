@@ -879,6 +879,15 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@h-ai/datapipe':
+        specifier: workspace:*
+        version: link:../datapipe
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../reldb
+      '@h-ai/vecdb':
+        specifier: workspace:*
+        version: link:../vecdb
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.27.1(@cfworker/json-schema@4.1.1)(zod@4.4.3)
@@ -898,15 +907,6 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     optionalDependencies:
-      '@h-ai/datapipe':
-        specifier: workspace:*
-        version: link:../datapipe
-      '@h-ai/reldb':
-        specifier: workspace:*
-        version: link:../reldb
-      '@h-ai/vecdb':
-        specifier: workspace:*
-        version: link:../vecdb
       better-sqlite3:
         specifier: 'catalog:'
         version: 12.6.2
