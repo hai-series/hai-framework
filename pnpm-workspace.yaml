@@ -123,6 +123,7 @@ catalog:
   chalk: ^5.4.1
   chromadb: ^3.5.0
   croner: ^10.0.1
+  d3-shape: ^3.2.0
   daisyui: ^5.5.20
   # ---------------------------------------------------------------------------
   # ESLint (已内置代码格式化，无需 Prettier)
@@ -149,6 +150,7 @@ catalog:
 
   jsdom: ^29.0.2
   jspdf: ^4.2.1
+  layerchart: 2.0.1
   lint-staged: ^16.2.7
   loglevel: ^1.9.2
   marked: ^18.0.0
