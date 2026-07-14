@@ -13,6 +13,7 @@ import type {
   MarkdownBlockStyleKind,
   MarkdownCodeRunResult,
 } from '../src/lib/components/scenes/ai/document-types.js'
+import type { ChartLineVariant, ChartProps, ChartTooltipMode } from '../src/lib/components/scenes/charts/chart-types.js'
 import type { MarkdownRendererProps } from '../src/lib/components/scenes/types.js'
 import type {
   AlertProps,
@@ -88,6 +89,17 @@ describe('基础类型', () => {
     expectTypeOf<InputProps>().toExtend<DataAttributes>()
     expectTypeOf<ModalProps>().toExtend<DataAttributes>()
     expectTypeOf<AiDocumentEditorProps>().toExtend<DataAttributes>()
+  })
+})
+
+describe('图表类型', () => {
+  it('chartProps 应暴露折线图交互变体配置', () => {
+    expectTypeOf<ChartLineVariant>().toEqualTypeOf<'default' | 'segmented-point'>()
+    expectTypeOf<ChartTooltipMode>().toEqualTypeOf<'default' | 'nearest'>()
+    expectTypeOf<ChartProps>().toHaveProperty('lineVariant')
+    expectTypeOf<ChartProps>().toHaveProperty('tooltipMode')
+    expectTypeOf<ChartProps>().toHaveProperty('showCrosshair')
+    expectTypeOf<ChartProps>().toHaveProperty('showPoints')
   })
 })
 

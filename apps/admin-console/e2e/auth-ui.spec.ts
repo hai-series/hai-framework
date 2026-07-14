@@ -279,12 +279,18 @@ test.describe('Forgot Password UI', () => {
     await expect(emailInput).toBeVisible()
     await emailInput.fill('test-forgot@test.local')
 
-    // 点击提交
-    await page.locator('button[type="submit"]').click()
+    // 先注册响应监听再点击，避免较慢环境下仅依赖固定 DOM 超时产生假失败。
+    const [forgotPasswordResponse] = await Promise.all([
+      page.waitForResponse(response =>
+        response.request().method() === 'POST'
+        && response.url().endsWith('/api/auth/forgot-password')),
+      page.locator('button[type="submit"]').click(),
+    ])
+    expect(forgotPasswordResponse.ok()).toBe(true)
 
     // 应显示成功页面（无论邮箱是否存在，API 都返回成功以防枚举）
     // 成功后 ForgotPasswordForm 切换为 Result 组件，包含"返回登录"按钮
-    await expect(page.locator('a[href="/auth/login"].btn')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('a[href="/auth/login"].btn')).toBeVisible()
     // 表单应消失
     await expect(page.locator('#forgot-email')).not.toBeVisible()
   })

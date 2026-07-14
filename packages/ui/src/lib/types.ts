@@ -16,6 +16,8 @@ export interface DataAttributes {
   [key: `data-${string}`]: DataAttributeValue
 }
 
+export type { ChartDataItem, ChartProps, ChartSeries, ChartSize, ChartType } from './components/scenes/charts/chart-types.js'
+
 /**
  * 基础变体类型
  */

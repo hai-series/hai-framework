@@ -7,7 +7,7 @@
  * - global d.ts 与运行时注册表一致
  * - 模板中使用的组件自动注入 import
  * - 显式导入例外保持稳定
- * - 跳过 @h-ai/ui 包自身文件与非 .svelte 文件
+ * - 跳过第三方依赖、@h-ai/ui 包自身文件与非 .svelte 文件
  */
 
 import { readFileSync } from 'node:fs'
@@ -173,6 +173,16 @@ describe('跳过规则', () => {
     const input = `<script lang="ts"></script>\n<Button>测试</Button>`
     const result = process(input, '/app/node_modules/@h-ai/ui/src/Button.svelte')
     expect(result.code).not.toContain(`from '@h-ai/ui'`)
+  })
+
+  it('应跳过 node_modules 中的第三方 Svelte 源码', () => {
+    const input = `<script lang="ts">
+  const Tooltip = {}
+</script>
+
+<Tooltip.Root />`
+    const result = process(input, '/app/node_modules/layerchart/dist/components/charts/DefaultTooltip.svelte')
+    expect(result.code).toBe(input)
   })
 
   it('应跳过非 .svelte 文件', () => {

@@ -264,7 +264,7 @@
     {/if}
 
     <!-- 右侧图标区域 -->
-    <div class='flex items-center pr-2 shrink-0'>
+    <div class='flex items-center shrink-0'>
       {#if showClear}
         <button
           type='button'

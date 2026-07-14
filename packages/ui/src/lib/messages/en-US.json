@@ -25,6 +25,8 @@
   "combobox_remove": "Remove",
   "data_table_actions": "Actions",
   "data_table_empty": "No data",
+  "chart_loading": "Loading chart",
+  "chart_empty": "No data",
   "confirm_title": "Confirm",
   "confirm_message": "Are you sure you want to proceed?",
   "confirm_ok": "Confirm",
