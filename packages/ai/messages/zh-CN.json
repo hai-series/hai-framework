@@ -73,6 +73,18 @@
   "ai_fileInvalidContent": "文件内容无效：{reason}",
   "ai_configMissingApiKey": "场景 '{scenario}' 需要提供 API Key",
 
+  "ai_audioNotInitialized": "Audio 服务未初始化，请先调用 ai.init()",
+  "ai_audioInvalidRequest": "语音请求参数无效：{reason}",
+  "ai_audioModelNotFound": "语音模型 '{model}' 未找到，请在 ai.init() 的 audio.models 中注册",
+  "ai_audioMissingApiKey": "语音平台 '{provider}' 缺少凭据（API Key 或 App/Access Key）",
+  "ai_audioUnsupportedInput": "平台 '{provider}' 不支持此输入方式：{reason}",
+  "ai_audioUpstreamError": "语音上游服务错误：{error}",
+  "ai_audioProtocolError": "语音协议错误：{error}",
+  "ai_audioConnectionFailed": "语音连接失败：{error}",
+  "ai_audioTimeout": "语音请求超时",
+  "ai_audioInputTooLarge": "输入音频超过大小上限（{limit} 字节）",
+  "ai_audioCancelled": "语音请求已取消",
+
   "ai_a2aNotConfigured": "A2A 服务未配置，请在 ai.init() 中提供 'a2a' 配置。",
   "ai_a2aHandleFailed": "A2A 请求处理失败：{error}",
   "ai_a2aRemoteCallFailed": "A2A 远端调用 '{url}' 失败：{error}",

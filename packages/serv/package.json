@@ -62,6 +62,7 @@
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@hono/node-server": "catalog:",
+    "@hono/node-ws": "catalog:",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",

@@ -125,8 +125,10 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter admin-console exec playwright install --with-deps chrome
 
+      # 全部应用的 E2E（admin-console / corporate-website / h5-app / mobile-app）
+      # 与 CLI 脚手架门禁，任一失败即阻断发布——不再只跑 admin-console。
       - name: E2E tests
-        run: pnpm --filter admin-console test:e2e
+        run: pnpm e2e
 
   # ===========================================================================
   # 同步版本 + 创建 Release + 发布 npm

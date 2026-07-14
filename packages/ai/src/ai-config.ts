@@ -656,6 +656,191 @@ export const A2AConfigSchema = z.object({
 /** A2A 配置类型 */
 export type A2AConfig = z.infer<typeof A2AConfigSchema>
 
+// ─── Audio 配置 Schema ───
+
+/**
+ * 语音平台枚举
+ *
+ * 决定 `ai.audio` 底层调用哪个厂商（对使用方透明，公共请求/响应形状保持一致）：
+ *
+ * - `openai` — OpenAI Audio API（transcriptions / speech）
+ * - `mimo` — 小米 MiMo（Chat Completions 风格 ASR / TTS）
+ * - `qwen` — 阿里云百炼 Qwen Realtime（DashScope WebSocket ASR / TTS）
+ * - `doubao` — 火山引擎豆包语音（二进制 WebSocket ASR / TTS）
+ */
+export const AudioProviderSchema = z.enum(['openai', 'mimo', 'qwen', 'doubao'])
+
+/** 语音平台类型 */
+export type AudioProviderName = z.infer<typeof AudioProviderSchema>
+
+/**
+ * 语音模型条目 Schema
+ *
+ * 定义单个语音模型：唯一 ID、所属平台、厂商模型名及凭据。凭据未提供时回退到对应平台的环境变量。
+ *
+ * @example
+ * ```ts
+ * const model = { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime' }
+ * ```
+ */
+export const AudioModelEntrySchema = z.object({
+  /** 模型唯一标识（用于场景解析与请求显式指定） */
+  id: z.string(),
+  /** 所属语音平台 */
+  provider: AudioProviderSchema,
+  /** 厂商模型名（传给厂商 API 的实际模型名） */
+  model: z.string(),
+  /** API Key 覆盖（未提供时回退对应平台环境变量） */
+  apiKey: z.string().optional(),
+  /** HTTP / WebSocket 端点覆盖（未提供时使用平台默认端点） */
+  baseUrl: z.string().optional(),
+  /** 火山引擎 App Key（`X-Api-App-Key`，旧版控制台 ASR 需要） */
+  appKey: z.string().optional(),
+  /** 火山引擎 Access Key（`X-Api-Access-Key`，旧版控制台 ASR 需要） */
+  accessKey: z.string().optional(),
+  /** 火山引擎资源 ID（`X-Api-Resource-Id`；未提供时使用平台默认资源 ID） */
+  resourceId: z.string().optional(),
+  /** 阿里云百炼业务空间 ID（`X-DashScope-WorkSpace`，可选） */
+  workspaceId: z.string().optional(),
+  /** 请求超时（毫秒，默认 60000） */
+  timeout: z.number().positive().optional(),
+})
+
+/** 语音模型条目类型 */
+export type AudioModelEntry = z.infer<typeof AudioModelEntrySchema>
+
+/**
+ * Audio 配置 Schema
+ *
+ * 注册语音模型并映射默认识别 / 合成模型。调用方通常无需指定模型，仅在临时切换时通过 `request.model` 覆盖。
+ *
+ * @example
+ * ```ts
+ * ai.init({
+ *   audio: {
+ *     models: [
+ *       { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime' },
+ *       { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime' },
+ *     ],
+ *     transcribeModel: 'asr',
+ *     synthesizeModel: 'tts',
+ *   },
+ * })
+ * ```
+ */
+export const AudioConfigSchema = z.object({
+  /** 注册的语音模型列表 */
+  models: z.array(AudioModelEntrySchema).optional(),
+  /** 默认识别模型 ID（`ai.audio.transcribe*` 未指定 model 时使用） */
+  transcribeModel: z.string().optional(),
+  /** 默认合成模型 ID（`ai.audio.synthesize*` 未指定 model 时使用） */
+  synthesizeModel: z.string().optional(),
+  /** 单次音频字节上限（默认 10 MiB，防止资源耗尽） */
+  maxAudioBytes: z.number().int().positive().default(10 * 1024 * 1024),
+  /** 实时连接最长持续时间（毫秒，默认 5 分钟） */
+  maxStreamDurationMs: z.number().int().positive().default(5 * 60 * 1000),
+})
+
+/** Audio 配置类型 */
+export type AudioConfig = z.infer<typeof AudioConfigSchema>
+
+/**
+ * 已解析的语音模型配置
+ *
+ * 由 `resolveAudioModel()` 返回，凭据已合并环境变量、端点已应用平台默认值。
+ */
+export interface ResolvedAudioModel {
+  /** 模型条目 ID */
+  id: string
+  /** 所属平台 */
+  provider: AudioProviderName
+  /** 厂商模型名 */
+  model: string
+  /** API Key（条目 > 平台环境变量） */
+  apiKey: string | undefined
+  /** 端点（条目 > 平台默认） */
+  baseUrl: string
+  /** 火山引擎 App Key */
+  appKey: string | undefined
+  /** 火山引擎 Access Key */
+  accessKey: string | undefined
+  /** 火山引擎资源 ID（条目 > 平台默认） */
+  resourceId: string
+  /** 阿里云百炼业务空间 ID */
+  workspaceId: string | undefined
+  /** 请求超时（毫秒） */
+  timeout: number
+}
+
+/** 各平台默认端点 */
+const AUDIO_PROVIDER_DEFAULT_BASE_URL: Record<AudioProviderName, string> = {
+  openai: 'https://api.openai.com/v1',
+  mimo: 'https://api.xiaomimimo.com/v1',
+  qwen: 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime',
+  doubao: 'wss://openspeech.bytedance.com',
+}
+
+/** 火山引擎默认资源 ID（按操作类型区分 ASR / TTS） */
+function doubaoDefaultResourceId(operation: 'transcribe' | 'synthesize'): string {
+  return operation === 'transcribe' ? 'volc.bigasr.sauc.duration' : 'seed-tts-2.0'
+}
+
+/** 读取指定平台的 API Key 环境变量（凭据未在配置中提供时的回退） */
+function audioProviderEnvApiKey(provider: AudioProviderName): string | undefined {
+  switch (provider) {
+    case 'openai':
+      return process.env.HAI_AI_AUDIO_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY
+    case 'mimo':
+      return process.env.HAI_AI_AUDIO_MIMO_API_KEY ?? process.env.MIMO_API_KEY
+    case 'qwen':
+      return process.env.HAI_AI_AUDIO_QWEN_API_KEY ?? process.env.DASHSCOPE_API_KEY
+    case 'doubao':
+      return process.env.HAI_AI_AUDIO_DOUBAO_API_KEY ?? process.env.VOLC_API_KEY
+  }
+}
+
+/**
+ * 解析语音操作应使用的模型配置
+ *
+ * 解析优先级：请求显式 `model` > 场景默认（transcribe/synthesize）；凭据回退到平台环境变量。
+ *
+ * @param audioConfig - Audio 配置
+ * @param operation - 操作类型（识别 / 合成），决定使用哪个默认模型
+ * @param explicit - 请求显式指定的模型 ID（最高优先级）
+ * @returns 成功返回已解析模型；无匹配模型返回 `AUDIO_MODEL_NOT_FOUND`；缺少凭据返回 `CONFIGURATION_ERROR`
+ */
+export function resolveAudioModel(
+  audioConfig: AudioConfig,
+  operation: 'transcribe' | 'synthesize',
+  explicit?: string,
+): HaiResult<ResolvedAudioModel> {
+  const targetId = explicit ?? (operation === 'transcribe' ? audioConfig.transcribeModel : audioConfig.synthesizeModel)
+  if (!targetId)
+    return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: `<${operation}>` } }))
+
+  const entry = audioConfig.models?.find(m => m.id === targetId || m.model === targetId)
+  if (!entry)
+    return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: targetId } }))
+
+  const apiKey = entry.apiKey ?? audioProviderEnvApiKey(entry.provider)
+  const hasDoubaoLegacy = Boolean(entry.appKey && entry.accessKey)
+  if (!apiKey && !(entry.provider === 'doubao' && hasDoubaoLegacy))
+    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: entry.provider } }))
+
+  return ok({
+    id: entry.id,
+    provider: entry.provider,
+    model: entry.model,
+    apiKey,
+    baseUrl: entry.baseUrl ?? AUDIO_PROVIDER_DEFAULT_BASE_URL[entry.provider],
+    appKey: entry.appKey ?? process.env.VOLC_APP_KEY,
+    accessKey: entry.accessKey ?? process.env.VOLC_ACCESS_KEY,
+    resourceId: entry.resourceId ?? (entry.provider === 'doubao' ? doubaoDefaultResourceId(operation) : ''),
+    workspaceId: entry.workspaceId,
+    timeout: entry.timeout ?? 60000,
+  })
+}
+
 /**
  * AI 配置 Schema
  *
@@ -729,6 +914,8 @@ export const AIConfigSchema = z.object({
   file: FileConfigSchema.optional(),
   /** A2A 配置（Agent-to-Agent 协议） */
   a2a: A2AConfigSchema.optional(),
+  /** Audio 配置（语音识别 / 语音合成） */
+  audio: AudioConfigSchema.optional(),
 })
 
 /** AI 配置类型（校验后的完整类型） */

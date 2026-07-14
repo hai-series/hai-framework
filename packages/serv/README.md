@@ -10,6 +10,7 @@
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
 - 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
+- 可选语音入口：`serv.createApp({ audio: { ai } })` 在 `${apiPrefix}/ai/audio` 挂载统一语音 WebSocket，基于 `ai.audio` 提供非实时/实时的语音识别与合成（复用 `iam` 令牌校验鉴权，`serv.listen` 自动完成 WS 升级注入）
 
 > 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。
 

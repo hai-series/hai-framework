@@ -1,18 +1,18 @@
 ---
 name: hai-usage-ai
-description: "Use when: using @h-ai/ai, LLM calls, chat completion, tool calling, function calling, MCP server, streaming, memory management, context compression, summarization, token estimation, RAG, knowledge base, AI client, embeddings, reasoning, rerank, file parsing, A2A agent-to-agent. 使用 @h-ai/ai 进行 LLM 调用、工具定义、MCP 服务器、流式处理、记忆管理、上下文压缩、知识库、推理引擎、Rerank、文件解析、A2A 与会话持久化。"
+description: "Use when: using @h-ai/ai, LLM calls, chat completion, tool calling, function calling, MCP server, streaming, memory management, context compression, summarization, token estimation, RAG, knowledge base, AI client, embeddings, reasoning, rerank, file parsing, speech recognition ASR, speech synthesis TTS, audio, A2A agent-to-agent. 使用 @h-ai/ai 进行 LLM 调用、工具定义、MCP 服务器、流式处理、记忆管理、上下文压缩、知识库、推理引擎、Rerank、文件解析、语音识别与合成、A2A 与会话持久化。"
 ---
 
 # hai-usage-ai — @h-ai/ai 快速指南
 
-`@h-ai/ai` 统一提供 LLM、工具、MCP、Embedding、Memory、Retrieval/RAG、Knowledge、Context、File、Rerank 与 A2A 能力。
+`@h-ai/ai` 统一提供 LLM、工具、MCP、Embedding、Memory、Retrieval/RAG、Knowledge、Context、File、Rerank、语音（ASR/TTS）与 A2A 能力。
 
 > 详细 API 表、错误码与长示例见同目录 `reference.md`。只有需要完整契约或边界用例时再读取，避免把长参考塞进上下文。
 
 ## 使用边界
 
 - `ai.tools`、`ai.stream` 是纯函数能力，无需 `ai.init()`。
-- `ai.llm`、`ai.embedding`、`ai.memory`、`ai.retrieval`、`ai.rag`、`ai.knowledge`、`ai.context`、`ai.a2a` 需要先 `await ai.init(...)`。
+- `ai.llm`、`ai.embedding`、`ai.memory`、`ai.retrieval`、`ai.rag`、`ai.knowledge`、`ai.context`、`ai.audio`、`ai.a2a` 需要先 `await ai.init(...)`。
 - 默认 DB Provider 需要在 `ai.init()` 前完成 `reldb.init()` 与 `vecdb.init()`；自定义 `AIStoreProvider` 可跳过这两个依赖。
 - 浏览器端不要直接调用 Node-only 能力；通过 `@h-ai/api-client` 或应用自定义 API/SSE endpoint 代理。
 - 公共 API 返回 `HaiResult<T>` 时按 `if (!result.success) return result` 处理；不要用 `try/catch` 包裹正常业务错误。
@@ -97,6 +97,8 @@ memory:
 | Retrieval/RAG | `ai.retrieval.retrieve` / `ai.rag.query` | Retrieval source 先注册或由配置预置 |
 | Knowledge | `ai.knowledge.setup/ingest/ask` | 入库前会调用 datapipe 清洗分块 |
 | Context | `ai.context.createManager` | 编排 LLM + Memory + RAG + 压缩；`manager.consolidate()` 把会话固化为长期记忆 |
+| 语音识别 | `ai.audio.transcribe` / `transcribeStream` | 完整音频返回 `HaiResult`；持续音频输入用 `AudioInputStream` 流式返回临时文本 |
+| 语音合成 | `ai.audio.synthesize` / `synthesizeStream` | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成） |
 | A2A | `ai.a2a.registerExecutor/handleRequest` | 延迟初始化 SDK handler |
 
 ## LLM + 工具调用
@@ -240,6 +242,43 @@ for await (const ev of m.chatStream('展开讲讲')) {
 ```
 
 - 只有 `committed` 的内容进入上下文与记忆；`getTurns()` 可观测 `generated` / `committed` / `status`。
+
+
+## 语音（Audio）
+
+`ai.audio` 提供 ASR/TTS，Provider（OpenAI / MiMo / Qwen / 豆包）作为内部实现，凭据未配置时回退平台环境变量。调用方只表达「音频还是文本、完整还是流式」，不感知 WebSocket / SSE / 厂商事件。
+
+```yaml
+# ai.init 配置片段
+audio:
+  models:
+    - { id: asr, provider: qwen, model: qwen3-asr-flash-realtime }
+    - { id: tts, provider: qwen, model: qwen3-tts-flash-realtime }
+  transcribeModel: asr
+  synthesizeModel: tts
+```
+
+```ts
+// 完整识别 / 合成（HaiResult）
+const t = await ai.audio.transcribe({ audio: { data: wavBytes, format: 'wav' }, language: 'zh' })
+if (!t.success) return t
+const s = await ai.audio.synthesize({ text: '欢迎', voice: 'Cherry', format: 'pcm16' })
+
+// 实时识别：持续音频输入 → 增量文本（chunk.final 标记语句最终态，可直接覆盖临时文本）
+for await (const chunk of ai.audio.transcribeStream({ audio: { chunks: micChunks, format: 'pcm16', sampleRate: 16000 } })) {
+  updateTranscript(chunk.text, chunk.final)
+}
+
+// 边生成边合成：LLM 文本流直连 TTS，支持 AbortSignal 打断
+const controller = new AbortController()
+for await (const audio of ai.audio.synthesizeStream({ text: ai.llm.askStream(question), voice: 'Cherry', signal: controller.signal })) {
+  await player.write(audio)
+}
+```
+
+- 流式方法是 `AsyncIterable`，迭代期间的连接/协议/上游错误会终止迭代（抛出），不返回 `HaiResult`。
+- 平台不支持的输入方式（如 OpenAI/MiMo 的持续音频输入）会抛 `AUDIO_UNSUPPORTED_INPUT`，不伪装成实时。
+- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口（`serv.createApp({ audio: { ai } })`）访问，`@h-ai/ai/client` 暴露一致的 `audio.*` API。
 
 
 ## SvelteKit API 端点模式

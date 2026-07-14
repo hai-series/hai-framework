@@ -9,6 +9,7 @@ import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
 
 import type { AIConfig, AIConfigInput } from './ai-config.js'
+import type { AudioOperations } from './audio/ai-audio-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
@@ -112,6 +113,18 @@ const AIErrorInfo = {
   FILE_UNSUPPORTED_FORMAT: '031:400',
   FILE_OCR_FAILED: '032:500',
   FILE_INVALID_CONTENT: '033:400',
+
+  // Audio (050-059)
+  AUDIO_INVALID_REQUEST: '050:400',
+  AUDIO_MODEL_NOT_FOUND: '051:404',
+  AUDIO_PROVIDER_NOT_FOUND: '052:404',
+  AUDIO_UNSUPPORTED_INPUT: '053:400',
+  AUDIO_UPSTREAM_ERROR: '054:502',
+  AUDIO_PROTOCOL_ERROR: '055:502',
+  AUDIO_CONNECTION_FAILED: '056:502',
+  AUDIO_TIMEOUT: '057:504',
+  AUDIO_INPUT_TOO_LARGE: '058:413',
+  AUDIO_CANCELLED: '059:499',
 
   // Context (950-999)
   CONTEXT_COMPRESS_FAILED: '950:500',
@@ -242,4 +255,6 @@ export interface AIFunctions {
   readonly file: FileOperations
   /** A2A 操作（Agent-to-Agent 协议），需要先调用 `init()` 并配置 `a2a` */
   readonly a2a: A2AOperations
+  /** Audio 操作（语音识别 / 语音合成），需要先调用 `init()` 并配置 `audio` */
+  readonly audio: AudioOperations
 }

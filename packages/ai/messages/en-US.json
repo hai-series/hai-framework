@@ -73,6 +73,18 @@
   "ai_fileInvalidContent": "Invalid file content: {reason}",
   "ai_configMissingApiKey": "API Key is required for scenario '{scenario}'",
 
+  "ai_audioNotInitialized": "Audio service not initialized. Call ai.init() first.",
+  "ai_audioInvalidRequest": "Invalid audio request: {reason}",
+  "ai_audioModelNotFound": "Audio model '{model}' not found. Register it in audio.models of ai.init().",
+  "ai_audioMissingApiKey": "Audio provider '{provider}' is missing credentials (API Key or App/Access Key).",
+  "ai_audioUnsupportedInput": "Provider '{provider}' does not support this input mode: {reason}",
+  "ai_audioUpstreamError": "Audio upstream service error: {error}",
+  "ai_audioProtocolError": "Audio protocol error: {error}",
+  "ai_audioConnectionFailed": "Audio connection failed: {error}",
+  "ai_audioTimeout": "Audio request timed out",
+  "ai_audioInputTooLarge": "Input audio exceeds size limit ({limit} bytes)",
+  "ai_audioCancelled": "Audio request was cancelled",
+
   "ai_a2aNotConfigured": "A2A service not configured. Provide 'a2a' config in ai.init().",
   "ai_a2aHandleFailed": "A2A request handling failed: {error}",
   "ai_a2aRemoteCallFailed": "A2A remote call to '{url}' failed: {error}",

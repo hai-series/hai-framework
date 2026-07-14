@@ -1,6 +1,6 @@
 # @h-ai/ai
 
-AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、工具调用、MCP、Embedding、记忆、检索/RAG、知识库、上下文管理、文件解析、Rerank 与 A2A。Node.js 侧通过 `ai.init()` 初始化，浏览器侧通过 API/client 代理访问。
+AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、工具调用、MCP、Embedding、记忆、检索/RAG、知识库、上下文管理、文件解析、Rerank、语音（ASR/TTS）与 A2A。Node.js 侧通过 `ai.init()` 初始化，浏览器侧通过 API/client 代理访问。
 
 ## 能力概览
 
@@ -15,6 +15,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、工具
 - `ai.knowledge`：文档入库、实体增强检索、知识问答。
 - `ai.context`：LLM + Memory + RAG + 压缩的一体化会话管理。
 - `ai.file` / `ai.rerank`：文件解析/OCR 与文本重排序。
+- `ai.audio`：语音识别（ASR）与语音合成（TTS），支持完整与流式调用，覆盖 OpenAI / MiMo / Qwen / 豆包平台。
 - `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
 - `@h-ai/ai/client`：前端轻量客户端（配合 API 服务）。
 - `AIStoreProvider`：统一存储抽象；默认 DB Provider 基于 reldb + vecdb。
@@ -155,6 +156,43 @@ if (setup.success) {
   await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
 }
 ```
+
+### 语音（Audio）
+
+先在 `ai.init()` 中注册语音模型并映射默认识别/合成模型（凭据可回退到平台环境变量）：
+
+```ts
+await ai.init({
+  audio: {
+    models: [
+      { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime' },
+      { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime' },
+    ],
+    transcribeModel: 'asr',
+    synthesizeModel: 'tts',
+  },
+})
+
+// 完整识别
+const result = await ai.audio.transcribe({ audio: { data: wavBytes, format: 'wav' }, language: 'zh' })
+if (result.success) {
+  const text = result.data.text
+}
+
+// 实时识别（持续音频输入 → 增量文本）
+for await (const chunk of ai.audio.transcribeStream({
+  audio: { chunks: microphoneChunks, format: 'pcm16', sampleRate: 16000 },
+})) {
+  updateTranscript(chunk.text, chunk.final)
+}
+
+// 流式合成，并可直接连接 LLM 文本流实现边生成边合成
+for await (const audio of ai.audio.synthesizeStream({ text: ai.llm.askStream(question), voice: 'Cherry' })) {
+  await player.write(audio)
+}
+```
+
+浏览器 / 移动端通过 `@h-ai/serv` 暴露的统一语音 WebSocket 入口访问，`@h-ai/ai/client` 提供与 Node 端一致的 `audio.*` API（传输细节内部隐藏）。
 
 ### Context 管理器
 

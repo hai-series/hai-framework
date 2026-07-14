@@ -17,5 +17,5 @@ export default defineConfig({
     'browser': 'src/ai-index.browser.ts',
     'client/index': 'src/client/index.ts',
   },
-  external: ['@h-ai/core', '@h-ai/vecdb', '@h-ai/reldb', '@h-ai/datapipe', 'openai', 'mem0ai', 'better-sqlite3', 'nanoid', '@modelcontextprotocol/sdk', '@a2a-js/sdk', '@lancedb/lancedb', '@qdrant/js-client-rest', 'zod'],
+  external: ['@h-ai/core', '@h-ai/vecdb', '@h-ai/reldb', '@h-ai/datapipe', 'openai', 'mem0ai', 'better-sqlite3', 'nanoid', '@modelcontextprotocol/sdk', '@a2a-js/sdk', '@lancedb/lancedb', '@qdrant/js-client-rest', 'ws', 'zod'],
 })

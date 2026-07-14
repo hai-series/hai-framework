@@ -10,6 +10,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIFunctions, AIInitOptions } from './ai-types.js'
+import type { AudioOperations } from './audio/ai-audio-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
@@ -77,6 +78,8 @@ let currentCompress: CompressOperations | null = null
 let currentRerank: RerankOperations | null = null
 /** 当前 File 操作实例 */
 let currentFile: FileOperations | null = null
+/** 当前 Audio 操作实例 */
+let currentAudio: AudioOperations | null = null
 /** A2A 配置（从 config.a2a 存储，供延迟初始化使用） */
 let currentA2AConfig: AIConfig['a2a']
 /** A2A 内部实现（registerExecutor 成功后才有值） */
@@ -187,6 +190,19 @@ const notInitializedRerank = notInitialized.proxy<RerankOperations>()
 /** File 未初始化占位 */
 const notInitializedFile = notInitialized.proxy<FileOperations>()
 
+/**
+ * Audio 未初始化占位
+ *
+ * transcribe / synthesize 返回 NOT_INITIALIZED HaiResult；
+ * 流式方法是 async generator，无法返回 HaiResult，只能在迭代时抛出异常。
+ */
+const notInitializedAudio: AudioOperations = {
+  transcribe: () => Promise.resolve(notInitialized.result()),
+  async* transcribeStream() { throw notInitialized.error() },
+  synthesize: () => Promise.resolve(notInitialized.result()),
+  async* synthesizeStream() { throw notInitialized.error() },
+}
+
 /** A2A 延迟初始化代理（委托给 a2a 模块的 createA2ALazyProxy） */
 const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
   isInitialized: () => currentConfig !== null,
@@ -218,6 +234,7 @@ async function resetAllState(): Promise<void> {
   currentContext = null
   currentRerank = null
   currentFile = null
+  currentAudio = null
   currentA2AConfig = undefined
   currentA2AImpl = null
   currentStoreProvider = null
@@ -336,6 +353,7 @@ export const ai: AIFunctions = {
       currentCompress = subs.compress
       currentContext = subs.context
       currentFile = subs.file
+      currentAudio = subs.audio
 
       currentA2AConfig = parsed.a2a
 
@@ -377,6 +395,7 @@ export const ai: AIFunctions = {
   get context(): ContextOperations { return currentContext ?? notInitializedContext },
   get rerank(): RerankOperations { return currentRerank ?? notInitializedRerank },
   get file(): FileOperations { return currentFile ?? notInitializedFile },
+  get audio(): AudioOperations { return currentAudio ?? notInitializedAudio },
   get a2a(): A2AOperations { return a2aLazyOperations },
   get config() { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
   get isInitialized() { return currentConfig !== null },

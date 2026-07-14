@@ -17,19 +17,24 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ServerType } from '@hono/node-server'
 import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
 import type { Router } from '@orpc/server'
 import type { Hono, Context as HonoContext, Next } from 'hono'
+import type { AudioWsDeps } from './features/serv-feature-audio.js'
 import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
 import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js'
 import type { CreateServContext, ServContext, ServIam, ServSession } from './serv-context.js'
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
+import { AUDIO_WS_PATH } from '@h-ai/ai'
 import { core, HaiCommonError } from '@h-ai/core'
+import { createNodeWebSocket } from '@hono/node-ws'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { RPCHandler } from '@orpc/server/fetch'
 import { Hono as HonoApp } from 'hono'
+import { registerAudioWsRoute } from './features/serv-feature-audio.js'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { requireInternalRPC } from './pipelines/serv-pipeline-require-internal-rpc.js'
 import { securityHeaders } from './pipelines/serv-pipeline-security-headers.js'
@@ -134,7 +139,41 @@ export interface CreateServAppOptions<
    * ```
    */
   readonly transport?: ServTransportConfig
+  /**
+   * 启用统一语音 WebSocket 入口（opt-in）。提供后 serv 自动：
+   * 1. 在 `${apiPrefix}/ai/audio`（可自定义 `path`）注册语音 WebSocket 路由
+   * 2. 基于 `ai.audio` 提供非实时 / 实时的语音识别与合成
+   * 3. 复用同一套令牌校验（iam / verifyToken）对 WebSocket 连接鉴权
+   *
+   * 需配合 `serv.listen()`（Node 适配器会自动完成 WebSocket 升级注入）。
+   *
+   * @example
+   * ```ts
+   * serv.createApp({ contract, procedures, iam, audio: { ai } })
+   * ```
+   */
+  readonly audio?: ServAudioConfig
 }
+
+/** `serv.createApp()` 的语音 WebSocket 接入配置。 */
+export interface ServAudioConfig {
+  /** AI 服务对象（提供 `ai.audio` 领域能力）。 */
+  readonly ai: AudioWsDeps['ai']
+  /** 语音入口路径（相对 apiPrefix，默认 `/ai/audio`）。 */
+  readonly path?: string
+  /** 单条消息字节上限（默认 1 MiB）。 */
+  readonly maxMessageBytes?: number
+  /** 单连接最长持续时间（毫秒，默认 5 分钟）。 */
+  readonly maxSessionMs?: number
+}
+
+/**
+ * 语音 WebSocket 升级注入器注册表
+ *
+ * `createApp` 启用 audio 时将 `injectWebSocket` 写入此 WeakMap，`serv.listen()` 在创建
+ * Node 服务器后取出并注入，从而不向 `ServHttpApp` 公共类型泄露 Hono / WebSocket 细节。
+ */
+export const audioWsInjectors = new WeakMap<ServHttpApp, (server: ServerType) => void>()
 
 /**
  * 创建并装配 HTTP API app。
@@ -228,6 +267,19 @@ export function createApp<
   // refresh-cookie 路由必须在 oRPC 通配符路由之前注册，Hono 按注册顺序匹配。
   if (options.refreshCookie)
     mountRefreshCookieRoutes(app, http.apiPrefix, options.refreshCookie, options.iam)
+
+  // Step 9.5：语音 WebSocket 入口同样要在 oRPC 通配符之前注册，避免 GET 升级请求被 `${apiPrefix}/*` 吞掉。
+  if (options.audio) {
+    const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
+    const audioPath = `${http.apiPrefix}${options.audio.path ?? AUDIO_WS_PATH}`
+    registerAudioWsRoute(app, audioPath, upgradeWebSocket, {
+      ai: options.audio.ai,
+      verifyToken,
+      maxMessageBytes: options.audio.maxMessageBytes,
+      maxSessionMs: options.audio.maxSessionMs,
+    })
+    audioWsInjectors.set(app, injectWebSocket)
+  }
 
   // Step 10：挂主业务 API 路由。所有 `${apiPrefix}/*` 请求都会在这里进入 contract + procedure 分发。
   mountOpenAPIRoutes(app, options.procedures, http.apiPrefix, createContext)

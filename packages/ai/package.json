@@ -43,6 +43,7 @@
     "mem0ai": "catalog:",
     "nanoid": "catalog:",
     "openai": "catalog:",
+    "ws": "catalog:",
     "zod": "catalog:"
   },
   "optionalDependencies": {
@@ -53,6 +54,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/ws": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

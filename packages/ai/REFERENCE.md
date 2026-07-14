@@ -12,6 +12,7 @@
 - `ai.retrieval` / `ai.rag`：需要 `ai.init()`；依赖 Embedding + Store。
 - `ai.knowledge`：需要 `ai.init()`；依赖 LLM + Embedding + Store + datapipe。
 - `ai.context`：需要 `ai.init()`；依赖 LLM + Store，可选 Memory/RAG/Reasoning。
+- `ai.audio`：需要 `ai.init()`；依赖 `audio.models` 及对应平台凭据（无需 Store）。
 - `ai.a2a`：需要 `ai.init()`；依赖 A2A 配置 + executor。
 
 关闭必须使用 `await ai.close()`，这样才能确定释放自定义 `AIStoreProvider.close()`。
@@ -136,6 +137,17 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `ai.rerank.rerank(request)` / `rerankTexts(query, texts, topN?)`：相关性重排。
 - `ai.reasoning.run(query, options?)` / `runStream(query, options?)`：`react`、`cot`、`plan-execute`。
 
+## Audio
+
+- `transcribe(request)`：完整音频 → `HaiResult<{ text }>`。
+- `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<{ text, final }>`（`text` 为当前语句完整文本，可覆盖临时结果）。
+- `synthesize(request)`：完整文本 → `HaiResult<AudioContent>`。
+- `synthesizeStream(request)`：`string` 或 `AsyncIterable<string>` → `AsyncIterable<Uint8Array>`（可直接接 `ai.llm.askStream(...)` 边生成边合成）。
+
+配置 `audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId?, timeout? }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB）/`maxStreamDurationMs`（默 5 分钟）。凭据回退环境变量 `HAI_AI_AUDIO_<PROVIDER>_API_KEY` 或 `OPENAI_API_KEY`/`MIMO_API_KEY`/`DASHSCOPE_API_KEY`/`VOLC_API_KEY`（豆包旧版额外 `VOLC_APP_KEY`/`VOLC_ACCESS_KEY`）。
+
+Provider 为内部实现（OpenAI Audio API / MiMo Chat Completions / Qwen 与豆包 WebSocket），不从根入口导出。流式方法在迭代期间抛出上游/协议错误；平台不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`。所有请求支持 `signal: AbortSignal`。
+
 ## A2A
 
 - `registerExecutor(executor)`：注册 Agent executor。
@@ -149,6 +161,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `hai:ai:000`：`INTERNAL_ERROR`。
 - `hai:ai:010-012`：初始化，含 `NOT_INITIALIZED` / `CONFIGURATION_ERROR` / `INIT_IN_PROGRESS`。
 - `hai:ai:020-033`：Rerank / File。
+- `hai:ai:050-059`：Audio（`AUDIO_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UNSUPPORTED_INPUT` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CONNECTION_FAILED` / `TIMEOUT` / `INPUT_TOO_LARGE` / `CANCELLED`）。
 - `hai:ai:100-107`：LLM / 历史记录。
 - `hai:ai:200-204`：MCP。
 - `hai:ai:300-302`：Embedding。

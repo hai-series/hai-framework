@@ -163,6 +163,21 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `ai.rerank.rerank(request)` / `rerankTexts(query, texts, topN?)`：相关性重排。
 - `ai.reasoning.run(query, options?)` / `runStream(query, options?)`：`react`、`cot`、`plan-execute`。
 
+## Audio
+
+| 方法 | 返回 | 说明 |
+| --- | --- | --- |
+| `transcribe(request)` | `Promise<HaiResult<TranscriptionResult>>` | 完整音频 → 完整文本 |
+| `transcribeStream(request)` | `AsyncIterable<TranscriptionChunk>` | 完整音频或 `AudioInputStream` → 增量/最终文本 |
+| `synthesize(request)` | `Promise<HaiResult<SynthesisResult>>` | 完整文本 → 完整音频 |
+| `synthesizeStream(request)` | `AsyncIterable<Uint8Array>` | `string` 或 `AsyncIterable<string>` → 音频分片 |
+
+- 音频类型：`AudioContent { data: Uint8Array, format: 'pcm16'|'wav'|'mp3'|'opus', sampleRate?, channels? }`；`pcm16` 等裸音频必须传 `sampleRate`。
+- 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]` + `transcribeModel` / `synthesizeModel`。
+- 凭据环境变量回退：`HAI_AI_AUDIO_<PROVIDER>_API_KEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。
+- 资源上限：`audio.maxAudioBytes`（默 10 MiB）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
+- Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。
+
 ## A2A
 
 | 方法 | 说明 |
@@ -182,6 +197,7 @@ A2A 的 SDK handler 延迟创建；注册 executor 或首次处理请求时才�
 | `hai:ai:000` | `INTERNAL_ERROR` |
 | `hai:ai:010-012` | 初始化：`NOT_INITIALIZED` / `CONFIGURATION_ERROR` / `INIT_IN_PROGRESS` |
 | `hai:ai:020-033` | Rerank / File |
+| `hai:ai:050-059` | Audio：`AUDIO_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UNSUPPORTED_INPUT` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CONNECTION_FAILED` / `TIMEOUT` / `INPUT_TOO_LARGE` / `CANCELLED` |
 | `hai:ai:100-107` | LLM / 历史记录 |
 | `hai:ai:200-204` | MCP |
 | `hai:ai:300-302` | Embedding |
@@ -201,3 +217,5 @@ A2A 的 SDK handler 延迟创建；注册 executor 或首次处理请求时才�
 const response = await apiClient.ai.chats.createCompletion({ messages })
 const memories = await apiClient.ai.memories.recall({ query: '偏好', objectId: 'user-001', topK: 5 })
 ```
+
+语音：`@h-ai/ai/client` 的 `createAIClient({ api, audio: { url, getToken } })` 提供 `client.audio.transcribe/transcribeStream/synthesize/synthesizeStream`，通过 `@h-ai/serv` 统一语音 WebSocket 入口（`serv.createApp({ audio: { ai } })`）访问；浏览器 WebSocket 无法设置请求头，令牌以 `access_token` 查询参数传递。

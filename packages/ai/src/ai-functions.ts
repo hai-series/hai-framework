@@ -8,6 +8,7 @@
 import type { DatapipeFunctions } from '@h-ai/datapipe'
 
 import type { AIConfig } from './ai-config.js'
+import type { AudioOperations } from './audio/ai-audio-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
@@ -28,6 +29,7 @@ import type { TokenOperations } from './token/ai-token-types.js'
 import { core } from '@h-ai/core'
 
 import { CompressConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema, RetrievalConfigSchema, SummaryConfigSchema, TokenConfigSchema } from './ai-config.js'
+import { createAudioOperations } from './audio/ai-audio-functions.js'
 import { createCompressOperations } from './compress/ai-compress-functions.js'
 import { createContextOperations } from './context/ai-context-functions.js'
 import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
@@ -70,6 +72,7 @@ export interface AISubsystems {
   compress: CompressOperations
   context: ContextOperations
   file: FileOperations
+  audio: AudioOperations
 }
 
 /**
@@ -165,5 +168,8 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   // File（依赖 LLM）
   const file = createFileOperations(config, llm)
 
-  return { llm, mcp, embedding, reasoning, rerank, retrieval, rag, knowledge, memory, persona, token, summary, compress, context, file }
+  // Audio（语音识别 / 语音合成，独立平台 Provider）
+  const audio = createAudioOperations(config)
+
+  return { llm, mcp, embedding, reasoning, rerank, retrieval, rag, knowledge, memory, persona, token, summary, compress, context, file, audio }
 }

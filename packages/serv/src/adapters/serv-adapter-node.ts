@@ -11,6 +11,7 @@ import type { AddressInfo } from 'node:net'
 import type { ServHttpApp } from '../serv-app.js'
 import process from 'node:process'
 import { serve } from '@hono/node-server'
+import { audioWsInjectors } from '../serv-app.js'
 
 /** `serv.listen` 默认监听地址。仅本机可达，避免误暴露到公网。 */
 export const DEFAULT_SERV_HOST = '127.0.0.1'
@@ -88,6 +89,11 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
     { fetch: app.fetch, hostname: host, port },
     options.onListening,
   )
+
+  // 若启用了语音 WebSocket 入口，注入升级处理器以支持 ws 握手
+  const injectWebSocket = audioWsInjectors.get(app)
+  if (injectWebSocket)
+    injectWebSocket(server)
 
   const handle: ServNodeServer = {
     server,

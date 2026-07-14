@@ -20,6 +20,9 @@ import type { MemoryEntry, MemoryEntryInput, MemoryUpdateInput } from '../memory
 import type { RagResult } from '../rag/ai-rag-types.js'
 import type { ReasoningResult } from '../reasoning/ai-reasoning-types.js'
 import type { SessionInfo, StorePage } from '../store/ai-store-types.js'
+import type { AudioClientConfig, AudioClientOperations } from './ai-audio-client.js'
+
+import { createAudioClient, createUnconfiguredAudioClient } from './ai-audio-client.js'
 
 // ─── API 适配器接口 ───
 
@@ -58,6 +61,13 @@ export interface AIClientConfig {
    * baseUrl、Token 管理、超时等通过 api-client 配置。
    */
   api: AIApiAdapter
+  /**
+   * 语音 WebSocket 配置（可选）
+   *
+   * 提供后 `client.audio.*` 通过统一 WebSocket 连接 `@h-ai/serv` 语音入口；
+   * 未提供时调用 `client.audio.*` 抛出「未配置」错误。
+   */
+  audio?: AudioClientConfig
 }
 
 /** 流式响应进度（`onProgress` 回调参数） */
@@ -147,6 +157,10 @@ export interface AIClient {
   // ─── Token ───
   /** 估算文本的 Token 数 */
   estimateTokens: (text: string) => Promise<{ tokens: number }>
+
+  // ─── Audio ───
+  /** 语音操作（识别 / 合成），需在 createAIClient 配置 `audio` */
+  audio: AudioClientOperations
 }
 
 // ─── AI API 路径（与 ai-api-contract 保持一致） ───
@@ -210,6 +224,7 @@ const AI_PATH = {
  */
 export function createAIClient(config: AIClientConfig): AIClient {
   const { api } = config
+  const audio = config.audio ? createAudioClient(config.audio) : createUnconfiguredAudioClient()
 
   return {
     async chat(req: ChatCompletionRequest): Promise<ChatCompletionResponse> {
@@ -450,6 +465,10 @@ export function createAIClient(config: AIClientConfig): AIClient {
       }
       return result.data
     },
+
+    // ─── Audio ───
+
+    audio,
   }
 }
 
