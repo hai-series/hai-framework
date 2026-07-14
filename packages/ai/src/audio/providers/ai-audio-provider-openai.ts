@@ -30,11 +30,8 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-openai' })
 
 /** OpenAI 平台能力：HTTP 文件识别（非实时）+ HTTP 流式合成（不原生接收增量文本，框架内句子分段） */
 const OPENAI_CAPABILITIES: AudioModelCapabilities = {
-  realtimeAudioInput: false,
-  speechBoundaryEvents: false,
-  incrementalTextInput: false,
-  streamingTranscriptOutput: false,
-  streamingAudioOutput: true,
+  transcribe: { supported: true, realtimeAudioInput: false, speechBoundaryEvents: false, streamingTranscriptOutput: false },
+  synthesize: { supported: true, incrementalTextInput: false, streamingAudioOutput: true },
 }
 
 /** 我方音频格式 → OpenAI speech response_format */

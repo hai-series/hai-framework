@@ -89,14 +89,14 @@ import { ai, HaiAIError } from '../src/index.js'
 // ─── 公共测试数据 ───
 
 const AUDIO_MODELS = [
-  { id: 'oa-asr', provider: 'openai' as const, model: 'gpt-4o-transcribe', apiKey: 'sk-oa' },
-  { id: 'oa-tts', provider: 'openai' as const, model: 'gpt-4o-mini-tts', apiKey: 'sk-oa' },
-  { id: 'mimo-asr', provider: 'mimo' as const, model: 'mimo-v2.5-asr', apiKey: 'mk' },
-  { id: 'mimo-tts', provider: 'mimo' as const, model: 'mimo-v2.5-tts', apiKey: 'mk' },
-  { id: 'qwen-asr', provider: 'qwen' as const, model: 'qwen3-asr-flash-realtime', apiKey: 'qk' },
-  { id: 'qwen-tts', provider: 'qwen' as const, model: 'qwen3-tts-flash-realtime', apiKey: 'qk' },
-  { id: 'doubao-asr', provider: 'doubao' as const, model: 'bigmodel', apiKey: 'dk' },
-  { id: 'doubao-tts', provider: 'doubao' as const, model: 'seed-tts-2.0', apiKey: 'dk' },
+  { id: 'oa-asr', provider: 'openai' as const, model: 'gpt-4o-transcribe', operations: ['transcribe'] as const, apiKey: 'sk-oa' },
+  { id: 'oa-tts', provider: 'openai' as const, model: 'gpt-4o-mini-tts', operations: ['synthesize'] as const, apiKey: 'sk-oa' },
+  { id: 'mimo-asr', provider: 'mimo' as const, model: 'mimo-v2.5-asr', operations: ['transcribe'] as const, apiKey: 'mk' },
+  { id: 'mimo-tts', provider: 'mimo' as const, model: 'mimo-v2.5-tts', operations: ['synthesize'] as const, apiKey: 'mk' },
+  { id: 'qwen-asr', provider: 'qwen' as const, model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] as const, apiKey: 'qk' },
+  { id: 'qwen-tts', provider: 'qwen' as const, model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] as const, apiKey: 'qk' },
+  { id: 'doubao-asr', provider: 'doubao' as const, model: 'bigmodel', operations: ['transcribe'] as const, apiKey: 'dk' },
+  { id: 'doubao-tts', provider: 'doubao' as const, model: 'seed-tts-2.0', operations: ['synthesize'] as const, apiKey: 'dk' },
 ]
 
 function wavAudio(bytes = 16): { data: Uint8Array, format: 'wav' } {
@@ -177,6 +177,19 @@ describe('ai.audio 校验与路由', () => {
     if (!r.success)
       expect(r.error.code).toBe(HaiAIError.AUDIO_MODEL_NOT_FOUND.code)
   })
+
+  it('在调用厂商前拒绝 ASR/TTS 模型混用', async () => {
+    const transcribe = await ai.audio.transcribe({ audio: wavAudio(), model: 'qwen-tts' })
+    expect(transcribe.success).toBe(false)
+    if (!transcribe.success)
+      expect(transcribe.error.code).toBe(HaiAIError.AUDIO_UNSUPPORTED_INPUT.code)
+
+    const synthesize = await ai.audio.synthesize({ text: 'hi', model: 'qwen-asr' })
+    expect(synthesize.success).toBe(false)
+    if (!synthesize.success)
+      expect(synthesize.error.code).toBe(HaiAIError.AUDIO_UNSUPPORTED_INPUT.code)
+    expect(MockWebSocket.instances).toHaveLength(0)
+  })
 })
 
 describe('ai.audio 资源上限与缺失凭据', () => {
@@ -197,7 +210,7 @@ describe('ai.audio 资源上限与缺失凭据', () => {
     delete process.env.VOLC_API_KEY
     await ai.init({
       llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
-      audio: { models: [{ id: 'db', provider: 'doubao', model: 'bigmodel' }] },
+      audio: { models: [{ id: 'db', provider: 'doubao', model: 'bigmodel', operations: ['transcribe'] }] },
     })
     const r = await ai.audio.transcribe({ audio: wavAudio(), model: 'db' })
     expect(r.success).toBe(false)
@@ -360,6 +373,32 @@ describe('ai.audio Qwen Provider', () => {
     expect(update.type).toBe('session.update')
     expect(update.session.voice).toBe('Cherry')
   })
+
+  it('synthesizeStream 按文本段产出可关联的结构化事件', async () => {
+    MockWebSocket.script = (data, ws) => {
+      if (typeof data === 'string' && data.includes('session.finish')) {
+        ws.serverText(JSON.stringify({ type: 'response.audio.delta', audio: Buffer.from([1, 2]).toString('base64') }))
+        ws.serverText(JSON.stringify({ type: 'session.finished' }))
+      }
+    }
+    async function* segments() {
+      yield { id: 'seg-1', text: '第一段。' }
+      yield { id: 'seg-2', text: '第二段。' }
+    }
+
+    const events = []
+    for await (const event of ai.audio.synthesizeStream({ text: segments() }))
+      events.push(event)
+
+    expect(events.map(event => [event.type, event.segmentId])).toEqual([
+      ['segment_started', 'seg-1'],
+      ['audio', 'seg-1'],
+      ['segment_done', 'seg-1'],
+      ['segment_started', 'seg-2'],
+      ['audio', 'seg-2'],
+      ['segment_done', 'seg-2'],
+    ])
+  })
 })
 
 // =============================================================================
@@ -440,35 +479,36 @@ describe('ai.audio 能力声明 getCapabilities', () => {
   })
 
   it('qwen 声明实时输入 + 服务端 VAD 起止事件', () => {
-    const caps = ai.audio.getCapabilities('qwen-asr')
+    const caps = ai.audio.getCapabilities({ operation: 'transcribe', model: 'qwen-asr' })
     expect(caps.success).toBe(true)
     if (!caps.success)
       return
-    expect(caps.data.realtimeAudioInput).toBe(true)
-    expect(caps.data.speechBoundaryEvents).toBe(true)
-    expect(caps.data.incrementalTextInput).toBe(true)
+    expect(caps.data.transcribe?.realtimeAudioInput).toBe(true)
+    expect(caps.data.transcribe?.speechBoundaryEvents).toBe(true)
+    expect(caps.data.synthesize).toBeUndefined()
   })
 
   it('豆包实时但不产出服务端 VAD 起止事件', () => {
-    const caps = ai.audio.getCapabilities('doubao-asr')
-    expect(caps.success && caps.data.realtimeAudioInput).toBe(true)
-    expect(caps.success && caps.data.speechBoundaryEvents).toBe(false)
+    const caps = ai.audio.getCapabilities({ operation: 'transcribe', model: 'doubao-asr' })
+    expect(caps.success && caps.data.transcribe?.realtimeAudioInput).toBe(true)
+    expect(caps.success && caps.data.transcribe?.speechBoundaryEvents).toBe(false)
   })
 
   it('openAI / MiMo 不原生支持增量文本输入但流式产出音频', () => {
-    const oa = ai.audio.getCapabilities('oa-tts')
-    expect(oa.success && oa.data.incrementalTextInput).toBe(false)
-    expect(oa.success && oa.data.streamingAudioOutput).toBe(true)
-    const mimo = ai.audio.getCapabilities('mimo-tts')
-    expect(mimo.success && mimo.data.incrementalTextInput).toBe(false)
+    const oa = ai.audio.getCapabilities({ operation: 'synthesize', model: 'oa-tts' })
+    expect(oa.success && oa.data.synthesize?.incrementalTextInput).toBe(false)
+    expect(oa.success && oa.data.synthesize?.streamingAudioOutput).toBe(true)
+    const mimo = ai.audio.getCapabilities({ operation: 'synthesize', model: 'mimo-tts' })
+    expect(mimo.success && mimo.data.synthesize?.incrementalTextInput).toBe(false)
   })
 
-  it('不传 modelId 使用默认识别模型所属平台', () => {
-    expect(ai.audio.getCapabilities().success).toBe(true)
+  it('不传 model 时按 operation 查询对应默认模型', () => {
+    expect(ai.audio.getCapabilities({ operation: 'transcribe' }).success).toBe(true)
+    expect(ai.audio.getCapabilities({ operation: 'synthesize' }).success).toBe(true)
   })
 
   it('未知模型返回 AUDIO_MODEL_NOT_FOUND', () => {
-    const caps = ai.audio.getCapabilities('does-not-exist')
+    const caps = ai.audio.getCapabilities({ operation: 'transcribe', model: 'does-not-exist' })
     expect(caps.success).toBe(false)
     if (!caps.success)
       expect(caps.error.code).toBe(HaiAIError.AUDIO_MODEL_NOT_FOUND.code)

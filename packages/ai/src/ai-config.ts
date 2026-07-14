@@ -680,7 +680,7 @@ export type AudioProviderName = z.infer<typeof AudioProviderSchema>
  *
  * @example
  * ```ts
- * const model = { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime' }
+ * const model = { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] }
  * ```
  */
 export const AudioModelEntrySchema = z.object({
@@ -690,6 +690,12 @@ export const AudioModelEntrySchema = z.object({
   provider: AudioProviderSchema,
   /** 厂商模型名（传给厂商 API 的实际模型名） */
   model: z.string(),
+  /** 模型允许执行的操作；解析模型时会在调用厂商前校验 */
+  operations: z.union([
+    z.tuple([z.literal('transcribe')]),
+    z.tuple([z.literal('synthesize')]),
+    z.tuple([z.literal('transcribe'), z.literal('synthesize')]),
+  ]),
   /** API Key 覆盖（未提供时回退对应平台环境变量） */
   apiKey: z.string().optional(),
   /** HTTP / WebSocket 端点覆盖（未提供时使用平台默认端点） */
@@ -719,8 +725,8 @@ export type AudioModelEntry = z.infer<typeof AudioModelEntrySchema>
  * ai.init({
  *   audio: {
  *     models: [
- *       { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime' },
- *       { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime' },
+ *       { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] },
+ *       { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] },
  *     ],
  *     transcribeModel: 'asr',
  *     synthesizeModel: 'tts',
@@ -821,6 +827,14 @@ export function resolveAudioModel(
   const entry = audioConfig.models?.find(m => m.id === targetId || m.model === targetId)
   if (!entry)
     return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: targetId } }))
+
+  const operations: readonly string[] = entry.operations
+  if (!operations.includes(operation)) {
+    return err(
+      HaiAIError.AUDIO_UNSUPPORTED_INPUT,
+      aiM('ai_audioUnsupportedInput', { params: { provider: entry.provider, reason: `model ${entry.id} does not support ${operation}` } }),
+    )
+  }
 
   const apiKey = entry.apiKey ?? audioProviderEnvApiKey(entry.provider)
   const hasDoubaoLegacy = Boolean(entry.appKey && entry.accessKey)

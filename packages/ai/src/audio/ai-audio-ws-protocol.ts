@@ -51,6 +51,8 @@ export interface AudioWsStartMessage {
 /** 文本输入帧（合成操作时携带待合成文本） */
 export interface AudioWsTextMessage {
   type: 'text'
+  /** 调用方分配的稳定文本段 ID */
+  segmentId: string
   /** 待合成文本片段 */
   text: string
 }
@@ -79,6 +81,19 @@ export interface AudioWsTranscriptMessage {
   final: boolean
 }
 
+/** 合成文本段开始；后续二进制帧均属于该段，直到收到对应的 `segment_done`。 */
+export interface AudioWsSegmentStartedMessage {
+  type: 'segment_started'
+  segmentId: string
+  text: string
+}
+
+/** 合成文本段的音频已全部发送。 */
+export interface AudioWsSegmentDoneMessage {
+  type: 'segment_done'
+  segmentId: string
+}
+
 /** 错误帧（领域语义错误码，不暴露厂商协议细节） */
 export interface AudioWsErrorMessage {
   type: 'error'
@@ -94,4 +109,10 @@ export interface AudioWsEndMessage {
 }
 
 /** 服务端 JSON 消息（合成音频以二进制帧返回，不走 JSON） */
-export type AudioWsServerMessage = AudioWsSpeechMessage | AudioWsTranscriptMessage | AudioWsErrorMessage | AudioWsEndMessage
+export type AudioWsServerMessage
+  = | AudioWsSpeechMessage
+    | AudioWsTranscriptMessage
+    | AudioWsSegmentStartedMessage
+    | AudioWsSegmentDoneMessage
+    | AudioWsErrorMessage
+    | AudioWsEndMessage

@@ -250,8 +250,8 @@ for await (const ev of m.chatStream('展开讲讲', { signal: controller.signal 
 # ai.init 配置片段
 audio:
   models:
-    - { id: asr, provider: qwen, model: qwen3-asr-flash-realtime }
-    - { id: tts, provider: qwen, model: qwen3-tts-flash-realtime }
+    - { id: asr, provider: qwen, model: qwen3-asr-flash-realtime, operations: [transcribe] }
+    - { id: tts, provider: qwen, model: qwen3-tts-flash-realtime, operations: [synthesize] }
   transcribeModel: asr
   synthesizeModel: tts
 ```
@@ -267,16 +267,17 @@ for await (const chunk of ai.audio.transcribeStream({ audio: { chunks: micChunks
   updateTranscript(chunk.text, chunk.final)
 }
 
-// 边生成边合成：LLM 文本流直连 TTS，支持 AbortSignal 打断
+// 分段合成：稳定 ID 关联文本与音频，支持 AbortSignal 打断
 const controller = new AbortController()
-for await (const audio of ai.audio.synthesizeStream({ text: ai.llm.askStream(question), voice: 'Cherry', signal: controller.signal })) {
-  await player.write(audio)
+for await (const event of ai.audio.synthesizeStream({ text: { id: 'seg-1', text: '欢迎。' }, voice: 'Cherry', signal: controller.signal })) {
+  if (event.type === 'audio')
+    await player.write(event.data)
 }
 ```
 
 - 流式方法是 `AsyncIterable`，迭代期间的连接/协议/上游错误会终止迭代（抛出），不返回 `HaiResult`。
 - 平台不支持的输入方式（如 OpenAI/MiMo 的持续音频输入）会抛 `AUDIO_UNSUPPORTED_INPUT`，不伪装成实时。
-- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口（`serv.createApp({ audio: { ai } })`）访问，`@h-ai/ai/client` 暴露一致的 `audio.*` API。
+- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`@h-ai/ai/client` 通过 `audio.getTicket` 建连，不把 IAM access token 放入 URL。
 
 
 ## SvelteKit API 端点模式

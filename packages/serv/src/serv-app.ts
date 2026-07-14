@@ -16,6 +16,7 @@
  * @module serv-app
  */
 
+import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
 import type { HaiResult } from '@h-ai/core'
 import type { ServerType } from '@hono/node-server'
 import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
@@ -28,7 +29,6 @@ import type { CreateServContext, ServContext, ServIam, ServSession } from './ser
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
-import { AUDIO_WS_PATH } from '@h-ai/ai'
 import { core, HaiCommonError } from '@h-ai/core'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
@@ -45,6 +45,8 @@ import { servM } from './serv-i18n.js'
 import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from './serv-openapi.js'
 import { createTransportMiddleware } from './serv-transport.js'
 import { localizeZodError, resolveRequestLocale } from './serv-validation.js'
+
+const DEFAULT_AUDIO_WS_PATH = '/ai/audio'
 
 /** 允许通过 oRPC OpenAPIHandler 转发的 HTTP 方法。 */
 const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const
@@ -143,13 +145,13 @@ export interface CreateServAppOptions<
    * 启用统一语音 WebSocket 入口（opt-in）。提供后 serv 自动：
    * 1. 在 `${apiPrefix}/ai/audio`（可自定义 `path`）注册语音 WebSocket 路由
    * 2. 基于 `ai.audio` 提供非实时 / 实时的语音识别与合成
-   * 3. 复用同一套令牌校验（iam / verifyToken）对 WebSocket 连接鉴权
+   * 3. 通过一次性 Audio ticket 验证身份，再由授权回调确认付费参数
    *
    * 需配合 `serv.listen()`（Node 适配器会自动完成 WebSocket 升级注入）。
    *
    * @example
    * ```ts
-   * serv.createApp({ contract, procedures, iam, audio: { ai } })
+   * serv.createApp({ contract, procedures, iam, audio: { ai, verifyTicket, authorize } })
    * ```
    */
   readonly audio?: ServAudioConfig
@@ -159,6 +161,21 @@ export interface CreateServAppOptions<
 export interface ServAudioConfig {
   /** AI 服务对象（提供 `ai.audio` 领域能力）。 */
   readonly ai: AudioWsDeps['ai']
+  /**
+   * 校验并原子消费短期、一次性的 Audio ticket。
+   *
+   * ticket 的签发和存储由应用决定；成功结果必须返回建立授权所需的 IAM 会话摘要。
+   */
+  readonly verifyTicket: (ticket: string) => Promise<HaiResult<ServSession>>
+  /**
+   * 基于已验证会话授权本次操作，并返回服务端确认后的付费参数。
+   *
+   * 未提供时只保留操作及音频格式，客户端提交的 model / voice / instruction 不会生效。
+   * 这里适合完成 IAM 权限、Persona、套餐配额和并发会话的检查/占用。
+   */
+  readonly authorize?: (session: ServSession, request: AudioWsStartMessage) => Promise<HaiResult<AuthorizedAudioRequest>>
+  /** 会话结束钩子，供应用释放并发占用；无论成功、失败或断连都至多调用一次。 */
+  readonly onSessionEnd?: (session: ServSession, request: AuthorizedAudioRequest) => void | Promise<void>
   /** 语音入口路径（相对 apiPrefix，默认 `/ai/audio`）。 */
   readonly path?: string
   /** 单条消息字节上限（默认 1 MiB）。 */
@@ -169,6 +186,17 @@ export interface ServAudioConfig {
   readonly maxTextBytes?: number
   /** 单连接最长持续时间（毫秒，默认 5 分钟）。 */
   readonly maxSessionMs?: number
+}
+
+/** Audio WebSocket 经应用授权后允许生效的服务端参数。 */
+export interface AuthorizedAudioRequest {
+  readonly operation: 'transcribe' | 'synthesize'
+  /** 服务端允许的模型 ID；不传时使用 `ai.audio` 对应操作的默认模型。 */
+  readonly model?: string
+  readonly voice?: string
+  readonly instruction?: string
+  readonly format?: AudioFormat
+  readonly sampleRate?: number
 }
 
 /**
@@ -275,10 +303,12 @@ export function createApp<
   // Step 9.5：语音 WebSocket 入口同样要在 oRPC 通配符之前注册，避免 GET 升级请求被 `${apiPrefix}/*` 吞掉。
   if (options.audio) {
     const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
-    const audioPath = `${http.apiPrefix}${options.audio.path ?? AUDIO_WS_PATH}`
+    const audioPath = `${http.apiPrefix}${options.audio.path ?? DEFAULT_AUDIO_WS_PATH}`
     registerAudioWsRoute(app, audioPath, upgradeWebSocket, {
       ai: options.audio.ai,
-      verifyToken,
+      verifyTicket: options.audio.verifyTicket,
+      authorize: options.audio.authorize,
+      onSessionEnd: options.audio.onSessionEnd,
       maxMessageBytes: options.audio.maxMessageBytes,
       maxBufferedBytes: options.audio.maxBufferedBytes,
       maxTextBytes: options.audio.maxTextBytes,

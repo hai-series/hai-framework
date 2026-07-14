@@ -30,11 +30,8 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-qwen' })
 
 /** Qwen 实时平台能力：WebSocket 实时识别（含服务端 VAD）+ 实时合成（支持增量文本输入） */
 const QWEN_CAPABILITIES: AudioModelCapabilities = {
-  realtimeAudioInput: true,
-  speechBoundaryEvents: true,
-  incrementalTextInput: true,
-  streamingTranscriptOutput: true,
-  streamingAudioOutput: true,
+  transcribe: { supported: true, realtimeAudioInput: true, speechBoundaryEvents: true, streamingTranscriptOutput: true },
+  synthesize: { supported: true, incrementalTextInput: true, streamingAudioOutput: true },
 }
 
 /** 我方音频格式 → Qwen input_audio_format / response_format */

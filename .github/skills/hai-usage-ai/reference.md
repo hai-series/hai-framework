@@ -170,12 +170,12 @@ const result = await ai.rag.query('核心架构是什么？', {
 | `transcribe(request)` | `Promise<HaiResult<TranscriptionResult>>` | 完整音频 → 完整文本 |
 | `transcribeStream(request)` | `AsyncIterable<TranscriptionEvent>` | 完整音频或 `AudioInputStream` → `speech_started` / `{type:'transcript',text,final}` / `speech_stopped`（VAD 平台产出语音起止事件） |
 | `synthesize(request)` | `Promise<HaiResult<SynthesisResult>>` | 完整文本 → 完整音频 |
-| `synthesizeStream(request)` | `AsyncIterable<Uint8Array>` | `string` 或 `AsyncIterable<string>` → 音频分片；OpenAI/MiMo 不原生接收增量文本，框架按句子级分段逐句合成 |
-| `getCapabilities(modelId?)` | `HaiResult<AudioModelCapabilities>` | 查询平台实时能力（realtimeAudioInput / speechBoundaryEvents / incrementalTextInput / streamingTranscriptOutput / streamingAudioOutput），实时会话启动前校验 |
+| `synthesizeStream(request)` | `AsyncIterable<SynthesisEvent>` | 带 ID 文本段 → `segment_started → audio* → segment_done`，事件均可关联 `segmentId` |
+| `getCapabilities({ operation, model? })` | `HaiResult<AudioModelCapabilities>` | 按模型与操作查询 `transcribe` / `synthesize` 能力分支，并拒绝操作不匹配模型 |
 
 - 音频类型：`AudioContent { data: Uint8Array, format: 'pcm16'|'wav'|'mp3'|'opus', sampleRate?, channels? }`；`pcm16` 等裸音频必须传 `sampleRate`。
 - 请求可选：识别 `contextHints?: string[]`（热词/提示）；合成 `instruction?: string`（自然语言风格指令）；均支持 `signal: AbortSignal`。
-- 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]` + `transcribeModel` / `synthesizeModel`。
+- 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, operations, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]`；`operations` 必须明确为识别、合成或两者。
 - 凭据环境变量回退：`HAI_AI_AUDIO_<PROVIDER>_API_KEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。
 - 资源上限：`audio.maxAudioBytes`（默 10 MiB）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
 - Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败 → `AUDIO_CONNECTION_FAILED`。
@@ -224,4 +224,4 @@ const response = await apiClient.ai.chats.createCompletion({ messages })
 const memories = await apiClient.ai.memories.recall({ query: '偏好', objectId: 'user-001', topK: 5 })
 ```
 
-语音：`@h-ai/ai/client` 的 `createAIClient({ api, audio: { url, getToken } })` 提供 `client.audio.transcribe/transcribeStream/synthesize/synthesizeStream`，通过 `@h-ai/serv` 统一语音 WebSocket 入口（`serv.createApp({ audio: { ai } })`）访问；浏览器 WebSocket 无法设置请求头，令牌以 `access_token` 查询参数传递。
+语音：`@h-ai/ai/client` 的 `createAIClient({ api, audio: { url, getTicket } })` 提供 `client.audio.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket` 应通过已登录 HTTP 请求签发短期、一次性 Audio ticket；IAM access token 不进入 WebSocket URL。

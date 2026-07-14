@@ -8,9 +8,11 @@
  */
 
 import type {
+  SynthesisEvent,
   SynthesisRequest,
   SynthesisResult,
   SynthesisStreamRequest,
+  SynthesisTextSegment,
   TranscriptionEvent,
   TranscriptionRequest,
   TranscriptionResult,
@@ -25,11 +27,11 @@ export interface AudioClientConfig {
   /** 语音 WebSocket 完整 URL（如 `wss://host/api/v1/ai/audio`） */
   url: string
   /**
-   * 获取鉴权令牌
+   * 获取短期、一次性的 Audio WebSocket ticket
    *
-   * 浏览器 WebSocket 无法设置请求头，令牌作为查询参数 `access_token` 附加。
+   * ticket 应由已登录 HTTP 请求签发，并在服务端首次校验时原子消费。
    */
-  getToken?: () => string | undefined | Promise<string | undefined>
+  getTicket: () => string | Promise<string>
 }
 
 /**
@@ -44,8 +46,8 @@ export interface AudioClientOperations {
   transcribeStream: (request: TranscriptionStreamRequest) => AsyncIterable<TranscriptionEvent>
   /** 将完整文本合成为完整音频 */
   synthesize: (request: SynthesisRequest) => Promise<SynthesisResult>
-  /** 持续输入文本或增量输出音频 */
-  synthesizeStream: (request: SynthesisStreamRequest) => AsyncIterable<Uint8Array>
+  /** 持续输入文本段并按段输出结构化音频事件 */
+  synthesizeStream: (request: SynthesisStreamRequest) => AsyncIterable<SynthesisEvent>
 }
 
 // ─── 浏览器 WebSocket 辅助 ───
@@ -166,11 +168,11 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
  */
 export function createAudioClient(config: AudioClientConfig): AudioClientOperations {
   async function buildUrl(): Promise<string> {
-    const token = await config.getToken?.()
-    if (!token)
-      return config.url
+    const ticket = await config.getTicket()
+    if (!ticket)
+      throw new Error('Audio WebSocket ticket is required')
     const separator = config.url.includes('?') ? '&' : '?'
-    return `${config.url}${separator}access_token=${encodeURIComponent(token)}`
+    return `${config.url}${separator}ticket=${encodeURIComponent(ticket)}`
   }
 
   function startMessage(operation: 'transcribe' | 'synthesize', extra: Partial<AudioWsStartMessage>): string {
@@ -249,19 +251,15 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
     }
   }
 
-  async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<Uint8Array> {
+  async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<SynthesisEvent> {
     const conn = await openBrowserWs(await buildUrl(), request.signal)
     try {
       conn.send(startMessage('synthesize', { model: request.model, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate }))
 
       const sendText = (async () => {
-        if (typeof request.text === 'string') {
-          conn.send(JSON.stringify({ type: 'text', text: request.text }))
-        }
-        else {
-          for await (const part of request.text)
-            conn.send(JSON.stringify({ type: 'text', text: part }))
-        }
+        const segments = isSynthesisTextSegment(request.text) ? singleSegment(request.text) : request.text
+        for await (const segment of segments)
+          conn.send(JSON.stringify({ type: 'text', segmentId: segment.id, text: segment.text }))
         conn.send(JSON.stringify({ type: 'done' }))
       })()
       let sendError: unknown
@@ -269,18 +267,35 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
         sendError = e
       })
 
+      let activeSegmentId: string | undefined
       for await (const message of conn.messages()) {
         if (message.isBinary && message.binary) {
-          yield message.binary
+          if (!activeSegmentId)
+            throw new Error('Audio frame received outside a synthesis segment')
+          yield { type: 'audio', segmentId: activeSegmentId, data: message.binary }
           continue
         }
         if (!message.text)
           continue
         const event = JSON.parse(message.text) as AudioWsServerMessage
-        if (event.type === 'error')
+        if (event.type === 'segment_started') {
+          if (activeSegmentId)
+            throw new Error('Synthesis segment started before the previous segment completed')
+          activeSegmentId = event.segmentId
+          yield event
+        }
+        else if (event.type === 'segment_done') {
+          if (activeSegmentId !== event.segmentId)
+            throw new Error('Synthesis segment completion does not match the active segment')
+          yield event
+          activeSegmentId = undefined
+        }
+        else if (event.type === 'error') {
           throw new Error(`${event.code}: ${event.message}`)
-        else if (event.type === 'end')
+        }
+        else if (event.type === 'end') {
           break
+        }
       }
       if (sendError)
         throw sendError
@@ -292,8 +307,10 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
 
   async function synthesize(request: SynthesisRequest): Promise<SynthesisResult> {
     const chunks: Uint8Array[] = []
-    for await (const audio of synthesizeStream(request))
-      chunks.push(audio)
+    for await (const event of synthesizeStream({ ...request, text: { id: 'synthesis', text: request.text } })) {
+      if (event.type === 'audio')
+        chunks.push(event.data)
+    }
     const total = chunks.reduce((sum, c) => sum + c.length, 0)
     const data = new Uint8Array(total)
     let offset = 0
@@ -306,6 +323,14 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
   }
 
   return { transcribe, transcribeStream, synthesize, synthesizeStream }
+}
+
+function isSynthesisTextSegment(value: SynthesisStreamRequest['text']): value is SynthesisTextSegment {
+  return typeof value === 'object' && value !== null && 'id' in value && 'text' in value
+}
+
+async function* singleSegment(segment: SynthesisTextSegment): AsyncIterable<SynthesisTextSegment> {
+  yield segment
 }
 
 /** 未配置语音入口时的占位实现（调用即抛出，提示需配置 audio） */

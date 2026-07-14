@@ -163,6 +163,19 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `ai.rerank.rerank(request)` / `rerankTexts(query, texts, topN?)`：相关性重排。
 - `ai.reasoning.run(query, options?)` / `runStream(query, options?)`：`react`、`cot`、`plan-execute`。
 
+## Audio
+
+| 方法 | 返回 | 说明 |
+| --- | --- | --- |
+| `transcribe(request)` | `Promise<HaiResult<TranscriptionResult>>` | 完整音频 → 完整文本 |
+| `transcribeStream(request)` | `AsyncIterable<TranscriptionEvent>` | 完整或持续音频 → 识别/VAD 领域事件 |
+| `synthesize(request)` | `Promise<HaiResult<SynthesisResult>>` | 完整文本 → 完整音频 |
+| `synthesizeStream(request)` | `AsyncIterable<SynthesisEvent>` | 带 ID 文本段 → `segment_started → audio* → segment_done` |
+| `getCapabilities({ operation, model? })` | `HaiResult<AudioModelCapabilities>` | 按操作查询能力，并拒绝操作不匹配模型 |
+
+- 模型配置必须包含 `operations: ['transcribe'] | ['synthesize'] | ['transcribe','synthesize']`。
+- 浏览器端使用 `audio: { url, getTicket }`；ticket 由已登录 HTTP 请求签发且一次性消费，IAM access token 不进入 WebSocket URL。
+
 ## A2A
 
 | 方法 | 说明 |

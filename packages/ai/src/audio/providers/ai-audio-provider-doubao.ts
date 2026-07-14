@@ -34,11 +34,8 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-doubao' })
 
 /** 豆包实时平台能力：WebSocket 实时识别（不产出服务端 VAD 起止事件）+ 实时合成（支持增量文本输入） */
 const DOUBAO_CAPABILITIES: AudioModelCapabilities = {
-  realtimeAudioInput: true,
-  speechBoundaryEvents: false,
-  incrementalTextInput: true,
-  streamingTranscriptOutput: true,
-  streamingAudioOutput: true,
+  transcribe: { supported: true, realtimeAudioInput: true, speechBoundaryEvents: false, streamingTranscriptOutput: true },
+  synthesize: { supported: true, incrementalTextInput: true, streamingAudioOutput: true },
 }
 
 // ─── 二进制协议常量 ───

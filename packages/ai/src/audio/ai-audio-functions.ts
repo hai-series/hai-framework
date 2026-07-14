@@ -10,12 +10,15 @@ import type { HaiError, HaiResult } from '@h-ai/core'
 import type { AIConfig, AudioConfig, AudioProviderName } from '../ai-config.js'
 
 import type {
+  AudioCapabilitiesRequest,
   AudioContent,
   AudioModelCapabilities,
   AudioOperations,
+  SynthesisEvent,
   SynthesisRequest,
   SynthesisResult,
   SynthesisStreamRequest,
+  SynthesisTextSegment,
   TranscriptionEvent,
   TranscriptionRequest,
   TranscriptionResult,
@@ -115,17 +118,22 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     return getProvider(resolved.data.provider).synthesize({ model: resolved.data, text: request.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal: request.signal })
   }
 
-  async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<Uint8Array> {
-    if (typeof request.text === 'string' && !request.text)
-      throw audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty text' } }))
-
+  async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<SynthesisEvent> {
     const resolved = resolveAudioModel(audioConfig, 'synthesize', request.model)
     if (!resolved.success)
       throw resolved.error
     logger.debug('audio synthesizeStream', { provider: resolved.data.provider, model: resolved.data.model })
     const signal = withStreamTimeout(request.signal)
     try {
-      yield* getProvider(resolved.data.provider).synthesizeStream({ model: resolved.data, text: request.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal })
+      const segments = isSynthesisTextSegment(request.text) ? singleSegment(request.text) : request.text
+      for await (const segment of segments) {
+        if (!segment.id || !segment.text)
+          throw audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty segment id or text' } }))
+        yield { type: 'segment_started', segmentId: segment.id, text: segment.text }
+        for await (const data of getProvider(resolved.data.provider).synthesizeStream({ model: resolved.data, text: segment.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal }))
+          yield { type: 'audio', segmentId: segment.id, data }
+        yield { type: 'segment_done', segmentId: segment.id }
+      }
     }
     catch (error) {
       throw mapStreamError(error, signal)
@@ -135,17 +143,35 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
   /**
    * 查询模型所属平台的实时能力声明（不需凭据，仅解析模型→平台）
    */
-  function getCapabilities(modelId?: string): HaiResult<AudioModelCapabilities> {
-    const targetId = modelId ?? audioConfig.transcribeModel ?? audioConfig.synthesizeModel
+  function getCapabilities(request: AudioCapabilitiesRequest): HaiResult<AudioModelCapabilities> {
+    const targetId = request.model ?? (request.operation === 'transcribe' ? audioConfig.transcribeModel : audioConfig.synthesizeModel)
     if (!targetId)
-      return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: '<default>' } }))
-    const entry = audioConfig.models?.find(m => m.id === targetId || m.model === targetId)
+      return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: `<${request.operation}>` } }))
+    const entry = audioConfig.models?.find(model => model.id === targetId || model.model === targetId)
     if (!entry)
       return err(HaiAIError.AUDIO_MODEL_NOT_FOUND, aiM('ai_audioModelNotFound', { params: { model: targetId } }))
-    return ok(getProvider(entry.provider).capabilities)
+    const operations: readonly string[] = entry.operations
+    if (!operations.includes(request.operation)) {
+      return err(
+        HaiAIError.AUDIO_UNSUPPORTED_INPUT,
+        aiM('ai_audioUnsupportedInput', { params: { provider: entry.provider, reason: `model ${entry.id} does not support ${request.operation}` } }),
+      )
+    }
+    const capabilities = getProvider(entry.provider).capabilities
+    return ok(request.operation === 'transcribe'
+      ? { transcribe: capabilities.transcribe }
+      : { synthesize: capabilities.synthesize })
   }
 
   return { transcribe, transcribeStream, synthesize, synthesizeStream, getCapabilities }
+}
+
+function isSynthesisTextSegment(value: SynthesisStreamRequest['text']): value is SynthesisTextSegment {
+  return typeof value === 'object' && value !== null && 'id' in value && 'text' in value
+}
+
+async function* singleSegment(segment: SynthesisTextSegment): AsyncIterable<SynthesisTextSegment> {
+  yield segment
 }
 
 /** 按平台创建 Provider */

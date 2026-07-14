@@ -143,10 +143,10 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `transcribe(request)`：完整音频 → `HaiResult<{ text }>`。
 - `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<TranscriptionEvent>`。事件为 `speech_started` / `{ type: 'transcript', text, final }` / `speech_stopped`（支持服务端 VAD 的平台产出语音起止事件，可据此即时反应）。
 - `synthesize(request)`：完整文本 → `HaiResult<AudioContent>`。
-- `synthesizeStream(request)`：`string` 或 `AsyncIterable<string>` → `AsyncIterable<Uint8Array>`（可直接接 `ai.llm.askStream(...)` 边生成边合成）。对不原生支持增量文本输入的平台（OpenAI / MiMo），框架按**句子级分段**逐句合成以近似实时（消除虚假增量），而非等待整段文本。
-- `getCapabilities(modelId?)`：返回该模型所属平台的 `AudioModelCapabilities`（`realtimeAudioInput` / `speechBoundaryEvents` / `incrementalTextInput` / `streamingTranscriptOutput` / `streamingAudioOutput`），供实时会话启动前校验模型能力（如实时 ASR 需 `realtimeAudioInput` + `speechBoundaryEvents`，实时 TTS 需 `streamingAudioOutput`）。
+- `synthesizeStream(request)`：`SynthesisTextSegment` 或 `AsyncIterable<SynthesisTextSegment>` → `AsyncIterable<SynthesisEvent>`；每段严格产出 `segment_started → audio* → segment_done`，音频事件携带 `segmentId`。
+- `getCapabilities({ operation, model? })`：按操作查询默认或指定模型，只返回 `transcribe` / `synthesize` 对应能力分支；模型操作不匹配时在厂商调用前返回 `AUDIO_UNSUPPORTED_INPUT`。
 
-请求可选字段：识别 `contextHints?: string[]`（热词/提示，按平台能力映射）；合成 `instruction?: string`（自然语言风格指令）。配置 `audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId?, timeout? }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB）/`maxStreamDurationMs`（默 5 分钟，流式连接硬上限）。
+请求可选字段：识别 `contextHints?: string[]`（热词/提示，按平台能力映射）；合成 `instruction?: string`（自然语言风格指令）。配置 `audio.models: [{ id, provider, model, operations: ['transcribe'] | ['synthesize'] | ['transcribe','synthesize'], ...credentials }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB）/`maxStreamDurationMs`（默 5 分钟，流式连接硬上限）。
 
 错误语义：`AbortSignal` 取消 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败 → `AUDIO_CONNECTION_FAILED`，厂商错误 → `AUDIO_UPSTREAM_ERROR`。平台不支持的输入方式 → `AUDIO_UNSUPPORTED_INPUT`（不伪装实时）。Provider 为内部实现，不从根入口导出。
 

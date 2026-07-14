@@ -7,10 +7,11 @@
  * @module features/serv-feature-audio
  */
 
-import type { AIFunctions, AudioWsClientMessage, AudioWsServerMessage, AudioWsStartMessage } from '@h-ai/ai'
+import type { AIFunctions, AudioWsClientMessage, AudioWsServerMessage, AudioWsStartMessage, SynthesisTextSegment } from '@h-ai/ai'
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { Hono } from 'hono'
 import type { UpgradeWebSocket, WSContext } from 'hono/ws'
+import type { AuthorizedAudioRequest } from '../serv-app.js'
 import type { ServSession } from '../serv-context.js'
 import { Buffer } from 'node:buffer'
 import { core } from '@h-ai/core'
@@ -21,8 +22,12 @@ const logger = core.logger.child({ module: 'serv', scope: 'audio-ws' })
 export interface AudioWsDeps {
   /** AI 服务对象的语音能力（`ai.audio`）。 */
   readonly ai: Pick<AIFunctions, 'audio'>
-  /** 访问令牌校验（提供后连接必须携带有效令牌；未提供则不做鉴权）。 */
-  readonly verifyToken?: (token: string) => Promise<HaiResult<ServSession>>
+  /** 校验并原子消费短期、一次性的 Audio ticket。 */
+  readonly verifyTicket: (ticket: string) => Promise<HaiResult<ServSession>>
+  /** 基于会话授权操作、模型、音色、格式和配额。 */
+  readonly authorize?: (session: ServSession, request: AudioWsStartMessage) => Promise<HaiResult<AuthorizedAudioRequest>>
+  /** 会话结束时释放应用侧并发占用。 */
+  readonly onSessionEnd?: (session: ServSession, request: AuthorizedAudioRequest) => void | Promise<void>
   /** 单条消息字节上限（默认 1 MiB，防止内存放大）。 */
   readonly maxMessageBytes?: number
   /** 单连接累计接收音频字节上限（默认 10 MiB，防止非流式缓冲无限增长）。 */
@@ -58,9 +63,8 @@ export function registerAudioWsRoute(
   const maxSessionMs = deps.maxSessionMs ?? DEFAULT_MAX_SESSION_MS
 
   app.get(path, upgradeWebSocket((c) => {
-    // 浏览器 WebSocket 无法设置请求头，令牌优先取查询参数 access_token，其次 Authorization 头
-    const token = c.req.query('access_token') ?? c.req.header('authorization')?.replace(/^Bearer\s+/i, '')
-    const conn = new AudioConnection(deps, token, maxMessageBytes, maxBufferedBytes, maxTextBytes)
+    const ticket = c.req.query('ticket')
+    const conn = new AudioConnection(deps, ticket, maxMessageBytes, maxBufferedBytes, maxTextBytes)
     let sessionTimer: ReturnType<typeof setTimeout> | undefined
 
     return {
@@ -139,8 +143,10 @@ class AsyncQueue<T> {
 class AudioConnection {
   private started = false
   private start?: AudioWsStartMessage
+  private session?: ServSession
+  private authorizedRequest?: AuthorizedAudioRequest
   private readonly audioQueue = new AsyncQueue<Uint8Array>()
-  private readonly textQueue = new AsyncQueue<string>()
+  private readonly textQueue = new AsyncQueue<SynthesisTextSegment>()
   private readonly audioBuffer: Uint8Array[] = []
   private receivedBytes = 0
   private receivedTextBytes = 0
@@ -151,7 +157,7 @@ class AudioConnection {
 
   constructor(
     private readonly deps: AudioWsDeps,
-    private readonly token: string | undefined,
+    private readonly ticket: string | undefined,
     private readonly maxMessageBytes: number,
     private readonly maxBufferedBytes: number,
     private readonly maxTextBytes: number,
@@ -161,6 +167,8 @@ class AudioConnection {
   enqueue(ws: WSContext, data: unknown): void {
     this.queue = this.queue.then(() => this.handleMessage(ws, data)).catch((error: unknown) => {
       logger.debug('audio ws message handling failed', { error: error instanceof Error ? error.message : String(error) })
+      if (!this.closed)
+        this.failFromError(ws, error)
     })
   }
 
@@ -223,7 +231,7 @@ class AudioConnection {
         this.fail(ws, 'hai:ai:058', 'buffered text exceeds limit')
         return
       }
-      this.textQueue.push(message.text)
+      this.textQueue.push({ id: message.segmentId, text: message.text })
     }
     else if (message.type === 'done') {
       this.audioQueue.end()
@@ -239,27 +247,44 @@ class AudioConnection {
       return
     }
 
-    // 鉴权先行：令牌校验通过前不置 started，避免在鉴权完成前处理业务数据（付费 ASR/TTS）。
-    // 配合 enqueue 的串行处理，后续 audio/text/done 帧会排队等待本次鉴权结果。
-    if (this.deps.verifyToken) {
-      if (!this.token) {
-        this.fail(ws, 'hai:ai:054', 'missing access token')
-        return
-      }
-      const auth = await this.deps.verifyToken(this.token)
-      if (!auth.success) {
-        this.fail(ws, 'hai:ai:054', 'unauthorized')
-        return
-      }
+    // ticket 必须在任何付费操作前完成校验与原子消费；串行消息链保证后续帧等待本次结果。
+    if (!this.ticket) {
+      this.fail(ws, 'hai:ai:054', 'missing audio ticket')
+      return
+    }
+    const verified = await this.deps.verifyTicket(this.ticket)
+    if (!verified.success) {
+      this.fail(ws, String(verified.error.code), verified.error.message)
+      return
+    }
+    this.session = verified.data
+
+    const authorized = this.deps.authorize
+      ? await this.deps.authorize(verified.data, message)
+      : { success: true as const, data: { operation: message.operation, format: message.format } }
+    if (!authorized.success) {
+      this.fail(ws, String(authorized.error.code), authorized.error.message)
+      return
+    }
+
+    const confirmed: AudioWsStartMessage = {
+      ...message,
+      operation: authorized.data.operation,
+      model: authorized.data.model,
+      voice: authorized.data.voice,
+      instruction: authorized.data.instruction,
+      format: authorized.data.format,
+      sampleRate: authorized.data.sampleRate,
     }
 
     this.started = true
-    this.start = message
+    this.start = confirmed
+    this.authorizedRequest = authorized.data
 
-    if (message.operation === 'synthesize')
-      void this.runSynthesize(ws, message)
-    else if (message.operation === 'transcribe' && message.stream)
-      void this.runStreamTranscribe(ws, message)
+    if (confirmed.operation === 'synthesize')
+      void this.runSynthesize(ws, confirmed)
+    else if (confirmed.operation === 'transcribe' && confirmed.stream)
+      void this.runStreamTranscribe(ws, confirmed)
     // 非流式识别在收到 done 后由 runBufferedTranscribe 处理
   }
 
@@ -335,8 +360,12 @@ class AudioConnection {
         model: start.model,
         signal: this.controller.signal,
       })
-      for await (const audio of stream)
-        ws.send(toArrayBuffer(audio))
+      for await (const event of stream) {
+        if (event.type === 'audio')
+          ws.send(toArrayBuffer(event.data))
+        else
+          this.send(ws, event)
+      }
       this.end(ws)
     }
     catch (error) {
@@ -375,6 +404,11 @@ class AudioConnection {
     this.audioQueue.end()
     this.textQueue.end()
     this.controller.abort()
+    if (this.session && this.authorizedRequest && this.deps.onSessionEnd) {
+      void Promise.resolve(this.deps.onSessionEnd(this.session, this.authorizedRequest)).catch((error: unknown) => {
+        logger.warn('audio ws session end hook failed', { error: error instanceof Error ? error.message : String(error) })
+      })
+    }
   }
 }
 

@@ -165,8 +165,8 @@ if (setup.success) {
 await ai.init({
   audio: {
     models: [
-      { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime' },
-      { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime' },
+      { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] },
+      { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] },
     ],
     transcribeModel: 'asr',
     synthesizeModel: 'tts',
@@ -189,18 +189,26 @@ for await (const event of ai.audio.transcribeStream({
     updateTranscript(event.text, event.final)
 }
 
-// 流式合成：可带自然语言风格指令，并直接连接 LLM 文本流边生成边合成；signal 可随时打断
+// 流式合成：调用方为文本段分配稳定 ID，事件可精确关联文本与音频；signal 可随时打断
 const controller = new AbortController()
-for await (const audio of ai.audio.synthesizeStream({ text: ai.llm.askStream(question), voice: 'Cherry', instruction: '用轻快的语气', signal: controller.signal })) {
-  await player.write(audio)
+for await (const event of ai.audio.synthesizeStream({
+  text: { id: 'answer-1', text: '欢迎参加访谈。' },
+  voice: 'Cherry',
+  instruction: '用轻快的语气',
+  signal: controller.signal,
+})) {
+  if (event.type === 'audio')
+    await player.write(event.data)
+  else if (event.type === 'segment_done')
+    markSegmentReadyToCommit(event.segmentId)
 }
 
-// 实时会话启动前校验模型能力（不同平台的实时语义不同）
-const caps = ai.audio.getCapabilities('qwen3-tts-flash-realtime')
-if (caps.success && caps.data.streamingAudioOutput) { /* 可实时 TTS */ }
+// 实时会话启动前按操作校验模型能力
+const caps = ai.audio.getCapabilities({ operation: 'synthesize', model: 'tts' })
+if (caps.success && caps.data.synthesize?.streamingAudioOutput) { /* 可实时 TTS */ }
 ```
 
-> `synthesizeStream` 对不原生支持增量文本输入的平台（OpenAI / MiMo）按**句子级分段**逐句合成以近似实时，而非等待整段文本；`getCapabilities` 的 `incrementalTextInput` 声明是否原生支持。
+> `synthesizeStream` 严格按 `segment_started → audio* → segment_done` 产出事件。播放器只有在对应音频真正播放完成后才应把该段文本计入 `spokenText`；播放状态仍由应用管理。
 
 取消/超时/连接错误统一为领域错误：`AbortSignal` 触发 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败 → `AUDIO_CONNECTION_FAILED`。实时连接时长受 `audio.maxStreamDurationMs`（默认 5 分钟）限制。
 

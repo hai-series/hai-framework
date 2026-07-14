@@ -10,7 +10,7 @@
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
 - 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
-- 可选语音入口：`serv.createApp({ audio: { ai } })` 在 `${apiPrefix}/ai/audio` 挂载统一语音 WebSocket，基于 `ai.audio` 提供非实时/实时的语音识别与合成（复用 `iam` 令牌校验鉴权，`serv.listen` 自动完成 WS 升级注入）
+- 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；一次性 ticket 负责身份验证，授权回调负责服务端确认操作、模型、音色、配额与并发占用
 
 > 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。
 
@@ -67,6 +67,30 @@ serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
 const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
+
+### Audio WebSocket：ticket 与服务端授权
+
+语音入口必须使用短期、一次性 ticket。应用通过已登录 HTTP endpoint 签发 ticket，并在 `verifyTicket` 中原子消费；框架保存返回的 `ServSession`，再调用 `authorize` 确认付费参数：
+
+```ts
+const app = serv.createApp({
+  contract,
+  procedures,
+  iam,
+  audio: {
+    ai,
+    verifyTicket: consumeAudioTicket,
+    authorize: async (session, request) => authorizeAudioRequest(session, request),
+    onSessionEnd: async (session, request) => releaseAudioConcurrency(session.userId, request.operation),
+  },
+})
+```
+
+- `verifyTicket(ticket)` 必须校验用途、过期时间并保证同一 ticket 只能成功一次，返回 `HaiResult<ServSession>`。
+- `authorize(session, request)` 适合检查 IAM 权限、模型/音色白名单、Persona、调用配额并占用并发名额；返回的 `AuthorizedAudioRequest` 才会传给 `ai.audio`。
+- 未提供 `authorize` 时，框架会忽略客户端的 `model`、`voice` 与 `instruction`，只使用服务端默认模型。
+- `onSessionEnd` 在成功、失败或断连后至多调用一次，供应用释放并发占用。
+- 浏览器 `createAIClient({ audio: { url, getTicket } })` 只把一次性 `ticket` 放入 WebSocket URL；禁止传普通 IAM access token。
 
 ### 传输加密（与 `@h-ai/crypto` 统一）
 

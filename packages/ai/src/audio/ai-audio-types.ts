@@ -138,10 +138,18 @@ export interface SynthesisRequest {
   signal?: AbortSignal
 }
 
-/** 流式语音合成请求（支持完整文本或持续文本输入） */
+/** 带稳定 ID 的合成文本段 */
+export interface SynthesisTextSegment {
+  /** 调用方分配的稳定 ID，用于关联文本、音频与播放完成状态 */
+  id: string
+  /** 本段待合成文本 */
+  text: string
+}
+
+/** 流式语音合成请求（支持单段或持续文本段输入） */
 export interface SynthesisStreamRequest {
-  /** 完整文本，或持续到达的文本流（可直接连接 LLM 文本流实现边生成边合成） */
-  text: string | AsyncIterable<string>
+  /** 单个文本段，或持续到达的文本段流 */
+  text: SynthesisTextSegment | AsyncIterable<SynthesisTextSegment>
   /** 音色（厂商音色名，不传时使用模型默认音色） */
   voice?: string
   /**
@@ -163,32 +171,49 @@ export interface SynthesisStreamRequest {
 /** 完整语音合成结果 */
 export interface SynthesisResult extends AudioContent {}
 
+/**
+ * 流式语音合成领域事件
+ *
+ * 每个文本段严格按 `segment_started → audio* → segment_done` 顺序产出，调用方可在
+ * 对应音频真正播放完成后提交该段文本，不需要按字节数反推文本边界。
+ */
+export type SynthesisEvent
+  = | { type: 'segment_started', segmentId: string, text: string }
+    | { type: 'audio', segmentId: string, data: Uint8Array }
+    | { type: 'segment_done', segmentId: string }
+
 // ─── 模型能力 ───
 
 /**
  * 语音模型的实时能力声明
  *
- * 由 `ai.audio.getCapabilities(modelId)` 返回，供实时会话在启动前校验：不同平台对「持续音频输入 /
+ * 由 `ai.audio.getCapabilities({ operation, model })` 返回，供实时会话在启动前校验：不同平台对「持续音频输入 /
  * 服务端 VAD / 增量文本输入 / 流式输出」的原生支持不同，同一方法签名在不同平台下的实时语义并不一致。
  * 调用方应据此选择模型或调整策略（如实时 ASR 要求 `realtimeAudioInput` 与 `speechBoundaryEvents`，
  * 实时 TTS 要求 `streamingAudioOutput`）。
  */
 export interface AudioModelCapabilities {
-  /** 支持持续麦克风音频输入（实时 ASR，边说边识别） */
-  realtimeAudioInput: boolean
-  /** 产出服务端 VAD 语音起止事件（`speech_started` / `speech_stopped`） */
-  speechBoundaryEvents: boolean
-  /**
-   * 原生支持增量文本输入（边生成边合成）。
-   *
-   * 为 `false` 的平台（如 OpenAI / MiMo）不原生接收增量文本；`synthesizeStream` 传入
-   * `AsyncIterable<string>` 时，框架内部按**句子级分段**逐句发起合成以近似实时，而非等待整段文本。
-   */
-  incrementalTextInput: boolean
-  /** 流式产出识别文本（临时 / 最终结果持续返回） */
-  streamingTranscriptOutput: boolean
-  /** 流式产出音频（边合成边返回音频帧） */
-  streamingAudioOutput: boolean
+  /** 语音识别能力；模型未声明识别操作时不返回 */
+  transcribe?: {
+    supported: boolean
+    realtimeAudioInput: boolean
+    speechBoundaryEvents: boolean
+    streamingTranscriptOutput: boolean
+  }
+  /** 语音合成能力；模型未声明合成操作时不返回 */
+  synthesize?: {
+    supported: boolean
+    incrementalTextInput: boolean
+    streamingAudioOutput: boolean
+  }
+}
+
+/** 查询语音模型能力的参数 */
+export interface AudioCapabilitiesRequest {
+  /** 要查询的操作，决定默认模型和返回的能力分支 */
+  operation: 'transcribe' | 'synthesize'
+  /** 模型 ID；不传时使用该操作配置的默认模型 */
+  model?: string
 }
 
 // ─── Audio 操作接口 ───
@@ -206,13 +231,13 @@ export interface AudioOperations {
   transcribeStream: (request: TranscriptionStreamRequest) => AsyncIterable<TranscriptionEvent>
   /** 将完整文本合成为完整音频 */
   synthesize: (request: SynthesisRequest) => Promise<HaiResult<SynthesisResult>>
-  /** 持续输入文本或增量输出音频 */
-  synthesizeStream: (request: SynthesisStreamRequest) => AsyncIterable<Uint8Array>
+  /** 持续输入文本段并按段输出结构化音频事件 */
+  synthesizeStream: (request: SynthesisStreamRequest) => AsyncIterable<SynthesisEvent>
   /**
    * 查询指定模型的实时能力声明
    *
-   * @param modelId - 模型 ID（不传时使用默认识别 / 合成模型所属平台）
-   * @returns 该模型所属平台的能力；模型不存在时返回 `AUDIO_MODEL_NOT_FOUND`
+   * @param request - 操作类型与可选模型 ID
+   * @returns 该模型对应操作的能力；模型不存在或操作不匹配时返回失败结果
    */
-  getCapabilities: (modelId?: string) => HaiResult<AudioModelCapabilities>
+  getCapabilities: (request: AudioCapabilitiesRequest) => HaiResult<AudioModelCapabilities>
 }

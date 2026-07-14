@@ -28,6 +28,7 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象
 - 通过 `config/_serv.yml` 管理 API 前缀、OpenAPI、docs、health、rpc 等 HTTP 挂载配置
 - 启用传输加密：`serv.createApp({ transport: { crypto } })`
 - 高级场景通过 `createApp({ middlewares })` 自定义 HTTP middleware，或通过共享类型自定义 procedure wrapper
+- 为 Audio WebSocket 配置一次性 ticket 校验、IAM/模型/配额授权与并发释放钩子
 
 ---
 
@@ -79,6 +80,26 @@ serv.listen(app, {
   onClose: closeApp, // 业务模块关闭函数（ai/storage/iam/reldb 等反向释放）
 })
 ```
+
+### 2.1 Audio WebSocket 安全接入
+
+```typescript
+const app = serv.createApp({
+  contract,
+  procedures,
+  iam,
+  audio: {
+    ai,
+    verifyTicket: consumeAudioTicket, // 校验用途/时效并原子消费，返回 ServSession
+    authorize: (session, request) => authorizeAudioRequest(session, request),
+    onSessionEnd: (session, request) => releaseAudioConcurrency(session.userId, request.operation),
+  },
+})
+```
+
+- ticket 由已登录 HTTP 请求签发，短期有效且只能消费一次；普通 IAM access token 禁止进入 WebSocket URL。
+- `authorize` 返回的 `AuthorizedAudioRequest` 是唯一会传给 `ai.audio` 的模型、音色与格式配置；未提供时客户端的付费参数会被忽略。
+- IAM 权限、Persona、套餐配额和并发计数属于应用策略；框架提供校验与结束钩子，不硬编码业务权限名或存储。
 
 ### 3. 扩展应用自有 contract + procedures
 

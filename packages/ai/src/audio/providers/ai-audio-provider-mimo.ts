@@ -30,11 +30,8 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-mimo' })
 
 /** MiMo 平台能力：HTTP 识别（非持续音频输入，流式返回文本）+ HTTP 流式合成（不接收增量文本，框架内句子分段） */
 const MIMO_CAPABILITIES: AudioModelCapabilities = {
-  realtimeAudioInput: false,
-  speechBoundaryEvents: false,
-  incrementalTextInput: false,
-  streamingTranscriptOutput: true,
-  streamingAudioOutput: true,
+  transcribe: { supported: true, realtimeAudioInput: false, speechBoundaryEvents: false, streamingTranscriptOutput: true },
+  synthesize: { supported: true, incrementalTextInput: false, streamingAudioOutput: true },
 }
 
 /** MiMo ASR 支持的音频容器 → MIME 类型 */
