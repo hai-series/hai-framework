@@ -603,6 +603,10 @@ export interface PaginationProps extends DataAttributes {
   showJumper?: boolean
   /** 是否显示每页条数选择器 */
   showSizeChanger?: boolean
+  /** 是否显示页码信息文案（如「第 1 / 5 页」，默认 true；紧凑视图可关闭） */
+  showPageInfo?: boolean
+  /** 是否显示首页 / 末页跳转按钮（默认 true；紧凑视图可仅保留上一页 / 下一页） */
+  showFirstLast?: boolean
   /** 每页条数候选项（配合 showSizeChanger，默认 [10, 20, 50, 100]） */
   pageSizeOptions?: number[]
   /** i18n 文案配置 */

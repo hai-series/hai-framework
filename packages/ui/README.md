@@ -212,7 +212,7 @@ components/
 | 组件         | 描述     | 主要属性                                     |
 | ------------ | -------- | -------------------------------------------- |
 | `Tabs`       | 标签页   | `items`, `active`, `type`, `size`            |
-| `Pagination` | 分页（统一 table 风格） | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger` |
+| `Pagination` | 分页（统一 table 风格） | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger`, `showPageInfo`, `showFirstLast` |
 | `Breadcrumb` | 面包屑   | `items`, `separator`                         |
 | `Steps`      | 步骤条   | `items`, `current`, `direction`, `clickable` |
 | `Dropdown`   | 下拉菜单 | `items`, `trigger`, `position`               |
@@ -352,7 +352,7 @@ components/
 > - 抽屉：`form.drawerSize` 选预设尺寸，`form.drawerWidth` 传任意 CSS 宽度（优先级更高）。
 > - 弹窗：`form.modalSize` 选预设尺寸，`form.modalWidth` / `form.modalHeight` 传任意 CSS 尺寸。
 >
-> `pagination` 配置分页栏（始终显示）：`showSizeChanger`、`pageSizeOptions`、`showJumper`、`showTotal` 默认开启。
+> `pagination` 配置分页栏（始终显示）：`showSizeChanger`、`pageSizeOptions`、`showJumper`、`showTotal` 默认开启；紧凑视图可用 `showPageInfo` 关闭页码文案、`showFirstLast` 关闭首页 / 末页按钮。
 >
 > `density` 配置列表密度：`'normal'`（默认）或 `'compact'`（紧凑）。它只影响列表行、行内操作、分页与创建/编辑/详情表单元素，不影响页头与筛选栏。
 

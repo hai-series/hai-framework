@@ -161,6 +161,8 @@
   const paginationShowSizeChanger = $derived(pagination.showSizeChanger !== false)
   const paginationShowJumper = $derived(pagination.showJumper !== false)
   const paginationShowTotal = $derived(pagination.showTotal !== false)
+  const paginationShowPageInfo = $derived(pagination.showPageInfo !== false)
+  const paginationShowFirstLast = $derived(pagination.showFirstLast !== false)
   const paginationPageSizeOptions = $derived(pagination.pageSizeOptions ?? [10, 20, 50, 100])
 
   // 视图状态
@@ -500,6 +502,8 @@
         showTotal={paginationShowTotal}
         showJumper={paginationShowJumper}
         showSizeChanger={paginationShowSizeChanger}
+        showPageInfo={paginationShowPageInfo}
+        showFirstLast={paginationShowFirstLast}
         pageSizeOptions={paginationPageSizeOptions}
         onchange={handlePageChange}
         onpagesizechange={handlePageSizeChange}

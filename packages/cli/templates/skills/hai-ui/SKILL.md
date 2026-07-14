@@ -275,7 +275,7 @@ const p = usePlatform()
 | `Calendar`   | `value`, `minValue`, `maxValue`                                    | 独立日历      |
 | `DatePicker` | `value`, `minValue`, `maxValue`, `error`                           | 日期输入+弹出 |
 | `Tabs`       | `items: TabItem[]`, `active`, `type`                               | 标签页        |
-| `Pagination` | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger`, `onchange` | 分页（统一为 shadcn table 风格） |
+| `Pagination` | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger`, `showPageInfo`, `showFirstLast`, `onchange` | 分页（统一为 shadcn table 风格） |
 | `Dropdown`   | `items: DropdownItem[]`, `trigger`                                 | 下拉菜单      |
 | `Accordion`  | `items: AccordionItem[]`                                           | 折叠面板      |
 | `Skeleton`   | `variant`, `count`, `animation`                                    | 骨架屏        |
@@ -454,6 +454,7 @@ const p = usePlatform()
 | `pagination.showSizeChanger` | 每页条数选择器（默认开启） |
 | `pagination.pageSizeOptions` | 每页条数候选项（默认 `[10, 20, 50, 100]`） |
 | `pagination.showJumper` / `pagination.showTotal` | 跳页输入 / 总数（默认开启） |
+| `pagination.showPageInfo` / `pagination.showFirstLast` | 页码文案 / 首页末页按钮（默认开启；紧凑视图可关闭） |
 | `density` | 列表密度：`'normal'`（默认）或 `'compact'`；仅影响列表行、行内操作、分页与创建/编辑/详情表单 |
 
 注意：分页栏会始终显示，不再因数据量小而自动隐藏。

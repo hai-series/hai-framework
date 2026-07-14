@@ -52,6 +52,10 @@ export interface CrudPaginationConfig {
   showJumper?: boolean
   /** 是否显示总数（默认 true） */
   showTotal?: boolean
+  /** 是否显示页码信息文案（默认 true；紧凑视图可关闭） */
+  showPageInfo?: boolean
+  /** 是否显示首页 / 末页跳转按钮（默认 true；紧凑视图可仅保留上一页 / 下一页） */
+  showFirstLast?: boolean
 }
 
 /** CrudPage 初始列表数据（由 +page.server.ts load 返回） */

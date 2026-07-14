@@ -24,6 +24,8 @@
     showTotal = true,
     showJumper = false,
     showSizeChanger = false,
+    showPageInfo = true,
+    showFirstLast = true,
     pageSizeOptions = [10, 20, 50, 100],
     labels = {},
     class: className = '',
@@ -113,21 +115,27 @@
       </div>
     {/if}
 
-    <span class={tableTextClass}>{pageInfoText}</span>
+    {#if showPageInfo}
+      <span class={tableTextClass}>{pageInfoText}</span>
+    {/if}
 
     <div class='flex items-center gap-1'>
-      <BareButton class={navBtnClass} disabled={page === 1} onclick={() => goToPage(1)} ariaLabel='First page'>
-        <span class={cn('icon-[tabler--chevrons-left]', navIconClass)}></span>
-      </BareButton>
+      {#if showFirstLast}
+        <BareButton class={navBtnClass} disabled={page === 1} onclick={() => goToPage(1)} ariaLabel='First page'>
+          <span class={cn('icon-[tabler--chevrons-left]', navIconClass)}></span>
+        </BareButton>
+      {/if}
       <BareButton class={navBtnClass} disabled={page === 1} onclick={() => goToPage(page - 1)} ariaLabel='Previous page'>
         <span class={cn('icon-[tabler--chevron-left]', navIconClass)}></span>
       </BareButton>
       <BareButton class={navBtnClass} disabled={page === totalPages} onclick={() => goToPage(page + 1)} ariaLabel='Next page'>
         <span class={cn('icon-[tabler--chevron-right]', navIconClass)}></span>
       </BareButton>
-      <BareButton class={navBtnClass} disabled={page === totalPages} onclick={() => goToPage(totalPages)} ariaLabel='Last page'>
-        <span class={cn('icon-[tabler--chevrons-right]', navIconClass)}></span>
-      </BareButton>
+      {#if showFirstLast}
+        <BareButton class={navBtnClass} disabled={page === totalPages} onclick={() => goToPage(totalPages)} ariaLabel='Last page'>
+          <span class={cn('icon-[tabler--chevrons-right]', navIconClass)}></span>
+        </BareButton>
+      {/if}
     </div>
 
     {#if showJumper}
