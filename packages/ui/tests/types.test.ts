@@ -403,6 +403,7 @@ describe('新增类型覆盖', () => {
   it('dropdownProps 应该有 items 和 trigger', () => {
     expectTypeOf<DropdownProps>().toHaveProperty('items')
     expectTypeOf<DropdownProps>().toHaveProperty('trigger')
+    expectTypeOf<DropdownProps>().toHaveProperty('triggerClass')
   })
 
   it('stepItem 应该有 label', () => {

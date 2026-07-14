@@ -742,6 +742,8 @@ export interface DropdownProps extends DataAttributes {
   align?: Alignment
   /** 自定义类名 */
   class?: string
+  /** 触发按钮类名 */
+  triggerClass?: string
   /** 选择事件 */
   onselect?: (key: string) => void
   /** 触发元素插槽 */

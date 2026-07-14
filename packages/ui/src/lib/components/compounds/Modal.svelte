@@ -93,23 +93,6 @@
     onclose?.()
   }
 
-  function handleDialogClick(event: MouseEvent) {
-    if (event.target === event.currentTarget && closeOnBackdrop) {
-      handleClose()
-    }
-  }
-
-  function handleViewportKeydown(event: KeyboardEvent) {
-    if (
-      event.target === event.currentTarget
-      && closeOnBackdrop
-      && (event.key === 'Enter' || event.key === ' ')
-    ) {
-      event.preventDefault()
-      handleClose()
-    }
-  }
-
 </script>
 
 <div {...dataAttributes}
@@ -124,11 +107,19 @@
 >
   <div
     class='hai-modal__viewport'
-    tabindex='-1'
-    aria-label={uiM('common_close')}
-    onclick={handleDialogClick}
-    onkeydown={handleViewportKeydown}
   >
+    {#if closeOnBackdrop}
+      <button
+        type='button'
+        class='hai-modal__backdrop'
+        aria-label={uiM('common_close')}
+        tabindex='-1'
+        onclick={handleClose}
+      ></button>
+    {:else}
+      <div class='hai-modal__backdrop' aria-hidden='true'></div>
+    {/if}
+
     <div class={modalBoxClass} style={panelStyle}>
       {#if hasFloatingClose}
         <button
@@ -230,12 +221,22 @@
     place-items: center;
     padding: clamp(1rem, 2.6vw, 2rem);
     pointer-events: auto;
+  }
+
+  .hai-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
     background: rgb(15 23 42 / 0.26);
     background: color-mix(in srgb, var(--color-base-content) 15%, transparent);
     backdrop-filter: blur(2px);
   }
 
   .hai-modal__panel {
+    z-index: 1;
     width: var(--hai-modal-width, min(100%, 44rem));
     max-width: min(100%, calc(100vw - clamp(2rem, 5.2vw, 4rem)));
     height: var(--hai-modal-height, auto);

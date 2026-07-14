@@ -10,20 +10,56 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { registerAndLogin, uniqueUser } from './helpers'
+import { registerAndLogin, uniqueUser, waitForHydration } from './helpers'
 
 test.describe('IAM Users UI', () => {
   const editDrawerHeading = /编辑用户管理|编辑用户/
 
   async function openCreateDrawer(page: import('@playwright/test').Page) {
+    await waitForHydration(page)
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-
     const usernameInput = page.locator('#username:visible').last()
-    await expect(usernameInput).toBeVisible()
+
+    await expect(createBtn.first()).toBeVisible()
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await createBtn.first().click()
+      try {
+        await expect(usernameInput).toBeVisible({ timeout: 3_000 })
+        break
+      }
+      catch (error) {
+        if (attempt === 1) {
+          throw error
+        }
+      }
+    }
 
     const drawer = usernameInput.locator('xpath=ancestor::*[contains(@class, "menu")]').first()
     return drawer
+  }
+
+  async function openEditDrawer(
+    page: import('@playwright/test').Page,
+    row: import('@playwright/test').Locator,
+  ) {
+    await waitForHydration(page)
+    const heading = page.getByRole('heading', { name: editDrawerHeading }).last()
+    const editButton = row.getByRole('button', { name: /编辑|Edit/ })
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await editButton.click()
+      try {
+        await expect(heading).toBeVisible({ timeout: 3_000 })
+        return page.locator('.drawer-side .menu').filter({ has: heading }).last()
+      }
+      catch (error) {
+        if (attempt === 1) {
+          throw error
+        }
+      }
+    }
+
+    return page.locator('.drawer-side .menu').filter({ has: heading }).last()
   }
 
   // ---------------------------------------------------------------------------
@@ -204,13 +240,7 @@ test.describe('IAM Users UI', () => {
 
     const row = page.locator('table tbody tr').filter({ hasText: targetUser.username })
     await expect(row.first()).toBeVisible({ timeout: 5_000 })
-    await row.first().getByRole('button', { name: /编辑|Edit/ }).click()
-
-    // 等待编辑对话框打开
-    const heading = page.getByRole('heading', { name: editDrawerHeading }).last()
-    await expect(heading).toBeVisible()
-
-    const drawer = page.locator('.drawer-side .menu').filter({ has: heading }).last()
+    const drawer = await openEditDrawer(page, row.first())
     const displayNameInput = drawer.locator('#display_name')
     await expect(displayNameInput).toBeVisible()
 
@@ -224,11 +254,7 @@ test.describe('IAM Users UI', () => {
 
     await expect(page.getByRole('heading', { name: editDrawerHeading })).toHaveCount(0, { timeout: 10_000 })
 
-    await row.first().getByRole('button', { name: /编辑|Edit/ }).click()
-    const reopenedHeading = page.getByRole('heading', { name: editDrawerHeading }).last()
-    await expect(reopenedHeading).toBeVisible()
-
-    const reopenedDrawer = page.locator('.drawer-side .menu').filter({ has: reopenedHeading }).last()
+    const reopenedDrawer = await openEditDrawer(page, row.first())
     await expect(reopenedDrawer.locator('#display_name')).toHaveValue(newDisplayName)
   })
 

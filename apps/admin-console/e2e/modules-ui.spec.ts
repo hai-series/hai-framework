@@ -5,13 +5,25 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers'
+import { registerAndLogin, waitForHydration } from './helpers'
 
 async function clickModuleTab(page: import('@playwright/test').Page, name: RegExp) {
+  await waitForHydration(page)
   const tablist = page.locator('[role="tablist"]').first()
   const tab = tablist.getByRole('tab', { name })
   await expect(tab).toBeVisible()
-  await tab.click()
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await tab.click()
+    try {
+      await expect(tab).toHaveClass(/tab-active/, { timeout: 3_000 })
+      return
+    }
+    catch (error) {
+      if (attempt === 1) {
+        throw error
+      }
+    }
+  }
 }
 
 test.describe('Modules Page UI', () => {

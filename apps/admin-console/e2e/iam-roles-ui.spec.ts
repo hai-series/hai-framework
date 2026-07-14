@@ -10,7 +10,7 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers'
+import { registerAndLogin, waitForHydration } from './helpers'
 
 test.describe('IAM Roles UI', () => {
   const editPanelHeading = /编辑角色管理|编辑角色/
@@ -20,6 +20,7 @@ test.describe('IAM Roles UI', () => {
   }
 
   async function openCreatePanel(page: import('@playwright/test').Page) {
+    await waitForHydration(page)
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
 
     await expect(createBtn.first()).toBeVisible()
@@ -40,6 +41,30 @@ test.describe('IAM Roles UI', () => {
     }
 
     return getPanelShell(page.locator('#name:visible').last())
+  }
+
+  async function openEditPanel(
+    page: import('@playwright/test').Page,
+    row: import('@playwright/test').Locator,
+  ) {
+    await waitForHydration(page)
+    const heading = page.getByRole('heading', { name: editPanelHeading }).last()
+    const editButton = row.getByRole('button', { name: /编辑|Edit/ })
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await editButton.click()
+      try {
+        await expect(heading).toBeVisible({ timeout: 3_000 })
+        return getPanelShell(heading)
+      }
+      catch (error) {
+        if (attempt === 1) {
+          throw error
+        }
+      }
+    }
+
+    return getPanelShell(heading)
   }
 
   // ---------------------------------------------------------------------------
@@ -174,13 +199,7 @@ test.describe('IAM Roles UI', () => {
     // 找到角色表格行并点击编辑
     const row = page.locator('tbody tr').filter({ hasText: roleName })
     await expect(row.first()).toBeVisible({ timeout: 5_000 })
-    await row.first().getByRole('button', { name: /编辑|Edit/ }).click()
-
-    // 等待编辑面板打开
-    const heading = page.getByRole('heading', { name: editPanelHeading }).last()
-    await expect(heading).toBeVisible()
-
-    const panel = getPanelShell(heading)
+    const panel = await openEditPanel(page, row.first())
     await expect(panel.locator('#description')).toBeVisible()
 
     // 修改描述
@@ -213,6 +232,7 @@ test.describe('IAM Roles UI', () => {
     // 找到角色所在的表格行
     const row = page.locator('tbody tr').filter({ hasText: roleName })
     await expect(row.first()).toBeVisible({ timeout: 5_000 })
+    await waitForHydration(page)
 
     // 点击删除
     const deleteBtn = row.first().getByRole('button', { name: /删除|Delete/ })

@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { expect, test } from '@playwright/test'
-import { registerAndLogin, registerViaApi, uniqueUser } from './helpers'
+import { registerAndLogin, registerViaApi, uniqueUser, waitForHydration } from './helpers'
 
 test.describe('Profile UI', () => {
   test('shows current username and email', async ({ page, request }) => {
@@ -38,6 +38,7 @@ test.describe('Profile UI', () => {
   test('rejects invalid email update on client side', async ({ page, request }) => {
     await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
+    await waitForHydration(page)
 
     let submitRequests = 0
     page.on('request', (req) => {
@@ -163,6 +164,7 @@ test.describe('Profile UI', () => {
     await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
     await page.waitForLoadState('domcontentloaded')
+    await waitForHydration(page)
 
     const displayName = `UIEdit_${Date.now().toString(36)}`
     const displayNameInput = page.locator('input[name="displayName"]')
@@ -182,6 +184,7 @@ test.describe('Profile UI', () => {
     await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
     await page.waitForLoadState('domcontentloaded')
+    await waitForHydration(page)
 
     const newEmail = `uiedit_${Date.now()}@test.local`
     const emailInput = page.locator('input[name="email"]')
@@ -207,6 +210,7 @@ test.describe('Profile UI', () => {
     const user = await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
     await page.waitForLoadState('domcontentloaded')
+    await waitForHydration(page)
 
     const newPassword = 'NewUIPass789!'
     const passwordCard = page.locator('[data-testid="profile-password-card"]')
@@ -237,6 +241,7 @@ test.describe('Profile UI', () => {
     await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
     await page.waitForLoadState('domcontentloaded')
+    await waitForHydration(page)
 
     const passwordCard = page.locator('[data-testid="profile-password-card"]')
     const pwdInputs = passwordCard.locator('input[type="password"]')
@@ -262,6 +267,7 @@ test.describe('Profile UI', () => {
   test('通过文件选择框上传头像并在刷新后保留', async ({ page, request }) => {
     await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
+    await waitForHydration(page)
     await expect(page.locator('[data-testid="profile-username"]')).toBeVisible()
 
     // 准备一个 1x1 透明 PNG

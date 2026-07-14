@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { waitForHydration } from './helpers'
 
 const DEFAULT_ADMIN = {
   username: 'admin',
@@ -11,6 +12,7 @@ test.describe('Transport enabled E2E', () => {
   async function loginViaUi(page: import('@playwright/test').Page): Promise<void> {
     await page.goto('/auth/login')
     await page.waitForLoadState('load')
+    await waitForHydration(page)
     await page.locator('#login-username').fill(DEFAULT_ADMIN.username)
     await page.locator('input[type="password"]').first().fill(DEFAULT_ADMIN.password)
     await page.locator('button[type="submit"]').click()

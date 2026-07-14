@@ -13,6 +13,7 @@
     position = 'bottom',
     align = 'start',
     class: className = '',
+    triggerClass = '',
     onselect,
     children,
     ...restProps
@@ -61,6 +62,7 @@
   <BareButton
     tabindex={0}
     role='button'
+    class={triggerClass}
     onclick={toggleDropdown}
     onkeydown={e => e.key === 'Enter' && toggleDropdown()}
   >

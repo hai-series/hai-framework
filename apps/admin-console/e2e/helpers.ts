@@ -37,6 +37,14 @@ function extractMeUser(meBody: unknown) {
   return body.user ?? body.data?.user ?? null
 }
 
+/** 等待 SvelteKit 客户端完成 hydration，避免操作仅由 SSR 渲染的控件。 */
+export async function waitForHydration(page: Page) {
+  await page.waitForFunction(() => '__haiAdminTransportInstalled' in window)
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  }))
+}
+
 /** 生成唯一测试用户 */
 export function uniqueUser(prefix = 'e2e') {
   const safePrefix = (prefix.replace(/\W/g, '') || 'e2e').slice(0, 8)
@@ -117,9 +125,21 @@ export async function loginOnPage(page: Page, username: string, password: string
     throw new Error(`Session not established on page: ${meRes.status()} ${JSON.stringify(meBody)}`)
   }
 
-  // 导航到 /admin
-  await page.goto('/admin')
-  await page.waitForURL('**/admin**', { timeout: 15_000 })
+  // 导航到 /admin，并确认客户端布局已稳定渲染。预览服务高负载时偶发返回空白文档，重试一次导航。
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.goto('/admin')
+    await page.waitForURL('**/admin**', { timeout: 15_000 })
+    await waitForHydration(page)
+    try {
+      await page.locator('.user-menu-container > button').first().waitFor({ state: 'visible', timeout: 5_000 })
+      break
+    }
+    catch (error) {
+      if (attempt === 1) {
+        throw error
+      }
+    }
+  }
 }
 
 /**

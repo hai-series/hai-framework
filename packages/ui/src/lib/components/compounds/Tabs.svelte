@@ -62,6 +62,7 @@
   {#each items as item (item.key)}
     <BareButton
       role='tab'
+      ariaSelected={active === item.key}
       class={cn('tab', active === item.key && 'tab-active')}
       disabled={item.disabled}
       onclick={() => handleSelect(item.key)}

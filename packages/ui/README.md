@@ -215,7 +215,7 @@ components/
 | `Pagination` | 分页（统一 table 风格） | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger`, `showPageInfo`, `showFirstLast` |
 | `Breadcrumb` | 面包屑   | `items`, `separator`                         |
 | `Steps`      | 步骤条   | `items`, `current`, `direction`, `clickable` |
-| `Dropdown`   | 下拉菜单 | `items`, `trigger`, `position`               |
+| `Dropdown`   | 下拉菜单 | `items`, `trigger`, `triggerClass`, `position` |
 | `Tooltip`    | 提示     | `content`, `position`, `delay`               |
 
 #### 状态占位

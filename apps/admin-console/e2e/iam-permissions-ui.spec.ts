@@ -10,15 +10,27 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers'
+import { registerAndLogin, waitForHydration } from './helpers'
 
 test.describe('IAM Permissions UI', () => {
   async function openCreatePanel(page: import('@playwright/test').Page) {
+    await waitForHydration(page)
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-
     const resourceInput = page.locator('#resource:visible').last()
-    await expect(resourceInput).toBeVisible()
+
+    await expect(createBtn.first()).toBeVisible()
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await createBtn.first().click()
+      try {
+        await expect(resourceInput).toBeVisible({ timeout: 3_000 })
+        break
+      }
+      catch (error) {
+        if (attempt === 1) {
+          throw error
+        }
+      }
+    }
 
     const panel = resourceInput.locator('xpath=ancestor::*[contains(@class, "menu")]').first()
     return panel

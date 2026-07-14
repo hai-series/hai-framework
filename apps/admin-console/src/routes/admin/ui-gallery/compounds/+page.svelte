@@ -207,8 +207,8 @@
   <div class='p-3'>弹出内容</div>
 </Popover>
 
-<Dropdown items={dropdownItems} onselect={(k) => toast.info(k)}>
-  <Button>操作菜单 ▾</Button>
+<Dropdown items={dropdownItems} triggerClass='btn no-animation' onselect={(k) => toast.info(k)}>
+  操作菜单 ▾
 </Dropdown>`
 
   const codeForm = `<Form onsubmit={async () => { ... }}>
@@ -647,11 +647,11 @@
         <div>
           <p class='text-sm font-medium mb-2'>Dropdown 下拉菜单</p>
           <div class='flex flex-wrap items-center gap-4'>
-            <Dropdown items={dropdownItems} onselect={(k: string) => toast.info(`选择: ${k}`)}>
-              <Button>操作菜单 ▾</Button>
+            <Dropdown items={dropdownItems} triggerClass='btn no-animation' onselect={(k: string) => toast.info(`选择: ${k}`)}>
+              操作菜单 ▾
             </Dropdown>
-            <Dropdown items={dropdownItems} position='right' onselect={(k: string) => toast.info(`选择: ${k}`)}>
-              <Button variant='secondary'>右侧展开 ▸</Button>
+            <Dropdown items={dropdownItems} triggerClass='btn btn-secondary no-animation' position='right' onselect={(k: string) => toast.info(`选择: ${k}`)}>
+              右侧展开 ▸
             </Dropdown>
           </div>
         </div>
