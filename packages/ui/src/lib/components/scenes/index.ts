@@ -11,6 +11,9 @@ export * from './ai/index.js'
 // App 应用级场景组件
 export * from './app/index.js'
 
+// Chart 图表场景组件
+export * from './charts/index.js'
+
 // CRUD 场景组件
 export * from './crud/index.js'
 
