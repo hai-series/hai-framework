@@ -309,6 +309,25 @@ components/
 />
 ```
 
+#### Charts 图表
+
+`Chart type='line'` 默认透传 LayerChart 原生折线图；需要监控看板常见的“分段线 + 圆点 + 最近点 hover + 竖向参考线”时，使用 `lineVariant='segmented-point'`：
+
+```svelte
+<Chart
+  type='line'
+  data={trendData}
+  x='label'
+  y={['rateLimit', 'circuitBreak']}
+  series={trendSeries}
+  lineVariant='segmented-point'
+  tooltipMode='nearest'
+  showCrosshair
+  legend
+  grid
+/>
+```
+
 #### CRUD 场景（5 个）
 
 | 组件                 | 描述         | 主要属性 / 能力 |
