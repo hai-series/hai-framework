@@ -13,6 +13,7 @@
 
 import type { AppType, FeatureId, FrontendTarget, ModuleConfigs } from '../cli-types.js'
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import Handlebars from 'handlebars'
@@ -106,6 +107,7 @@ const DEFAULT_THEMES = ['light', 'dark'] as const
 const DEFAULT_THEME_NAME = 'light'
 const HAI_PACKAGE_VERSION = `^${getCliVersion()}`
 const HAI_PACKAGE_SPECIFIER_CATALOG = 'catalog:'
+const HAI_PACKAGE_SPECIFIER_OVERRIDES = parseHaiPackageSpecifierOverrides(process.env.HAI_CLI_PACKAGE_SPECIFIERS)
 type FullstackPackageSpecifiers = { [Key in keyof typeof VERSIONS]: string }
 type CatalogPackageVersions = Readonly<Record<string, string>>
 
@@ -132,8 +134,36 @@ const HAI_CATALOG_PACKAGE_NAMES = [
   '@h-ai/vecdb',
 ] as const
 const HAI_CATALOG_PACKAGES: Record<string, string> = Object.fromEntries(
-  HAI_CATALOG_PACKAGE_NAMES.map(packageName => [packageName, HAI_PACKAGE_VERSION]),
+  HAI_CATALOG_PACKAGE_NAMES.map(packageName => [
+    packageName,
+    HAI_PACKAGE_SPECIFIER_OVERRIDES[packageName] ?? HAI_PACKAGE_VERSION,
+  ]),
 )
+
+/**
+ * 解析脚手架门禁注入的本地包说明符；正常 CLI 使用不设置该变量，仍生成 npm 版本范围。
+ */
+function parseHaiPackageSpecifierOverrides(raw: string | undefined): Readonly<Record<string, string>> {
+  if (!raw)
+    return {}
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  }
+  catch {
+    throw new Error('HAI_CLI_PACKAGE_SPECIFIERS must be valid JSON')
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new TypeError('HAI_CLI_PACKAGE_SPECIFIERS must be a package-to-specifier object')
+
+  const entries = Object.entries(parsed)
+  if (entries.some(([packageName, specifier]) => !packageName.startsWith('@h-ai/') || typeof specifier !== 'string' || specifier.length === 0))
+    throw new TypeError('HAI_CLI_PACKAGE_SPECIFIERS contains an invalid package specifier')
+
+  return Object.fromEntries(entries) as Record<string, string>
+}
 
 const FULLSTACK_EXTERNAL_CATALOG_PACKAGES: CatalogPackageVersions = {
   '@antfu/eslint-config': VERSIONS.antfuEslintConfig,
