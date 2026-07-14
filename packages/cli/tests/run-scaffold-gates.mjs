@@ -61,7 +61,7 @@ function packPublicPackages(packagesRoot, destination) {
       continue
 
     const before = new Set(readdirSync(destination))
-    runPnpm(['pack', '--pack-destination', destination], packageDirectory)
+    runPnpm(['pack', '--pack-destination', destination], packageDirectory, 'pipe')
     const archiveName = readdirSync(destination).find(name => !before.has(name) && name.endsWith('.tgz'))
     if (!archiveName)
       throw new Error(`pnpm pack did not create an archive for ${manifest.name}`)
@@ -73,14 +73,19 @@ function packPublicPackages(packagesRoot, destination) {
   return specifiers
 }
 
-function runPnpm(args, cwd) {
+function runPnpm(args, cwd, stdio = 'inherit') {
   const command = spawnSync(pnpmBin, args, {
     cwd,
     shell: true,
-    stdio: 'inherit',
+    stdio,
   })
   if (command.error)
     throw command.error
-  if (command.status !== 0)
+  if (command.status !== 0) {
+    if (stdio === 'pipe') {
+      process.stderr.write(command.stdout ?? '')
+      process.stderr.write(command.stderr ?? '')
+    }
     throw new Error(`pnpm ${args.join(' ')} failed with exit code ${command.status ?? 1}`)
+  }
 }
