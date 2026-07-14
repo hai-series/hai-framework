@@ -232,9 +232,9 @@ function autoImportHaiUi() {
         return { code: content }
       }
 
-      // 跳过 @h-ai/ui 包自身的文件，避免重复导入
+      // 自动导入只服务应用源码；第三方依赖和 @h-ai/ui 自身必须保持原样，避免改写依赖内部的同名组件。
       const normalizedPath = filename.replace(WINDOWS_PATH_SEPARATOR_REGEX, '/')
-      if (normalizedPath.includes('/packages/ui/') || normalizedPath.includes('/@h-ai/ui/')) {
+      if (normalizedPath.includes('/node_modules/') || normalizedPath.includes('/packages/ui/') || normalizedPath.includes('/@h-ai/ui/')) {
         return { code: content }
       }
 

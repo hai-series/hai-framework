@@ -36,6 +36,7 @@
     "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
+    "d3-shape": "catalog:",
     "yaml": "catalog:",
     "zod": "catalog:"
   },

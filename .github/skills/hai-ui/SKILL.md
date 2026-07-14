@@ -139,6 +139,25 @@ export default defineConfig({
 />
 ```
 
+## Charts 图表
+
+`Chart type='line'` 默认使用 LayerChart 原生折线图；监控看板类场景需要“分段线 + 圆点 + 最近点 hover + 竖向参考线”时，使用 `lineVariant='segmented-point'`：
+
+```svelte
+<Chart
+  type='line'
+  data={trendData}
+  x='label'
+  y={['rateLimit', 'circuitBreak']}
+  series={trendSeries}
+  lineVariant='segmented-point'
+  tooltipMode='nearest'
+  showCrosshair
+  legend
+  grid
+/>
+```
+
 ## CRUD 场景组件（CrudPage）
 
 `CrudPage` 基于 `kit.crud.define()` 的资源定义，自动渲染列表 + 搜索过滤 + 分页 + 详情 + 编辑/新建 + 删除确认。

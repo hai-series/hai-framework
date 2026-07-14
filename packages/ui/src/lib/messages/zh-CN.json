@@ -25,6 +25,8 @@
   "combobox_remove": "移除",
   "data_table_actions": "操作",
   "data_table_empty": "暂无数据",
+  "chart_loading": "图表加载中",
+  "chart_empty": "暂无数据",
   "confirm_title": "确认",
   "confirm_message": "确定要继续吗？",
   "confirm_ok": "确认",
