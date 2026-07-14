@@ -236,15 +236,16 @@ export function createContextOperations(
             updatedAt: Date.now(),
           }, { objectId: scope.objectId, sessionId: scope.sessionId })
 
-          // 同步更新会话信息
+          // 同步更新会话信息（与上下文正文共用同一复合键，避免不同主体相同 sessionId 互相覆盖）
           if (sessionStore) {
-            const existing = await sessionStore.get(scope.sessionId)
+            const sessionKey = storeKey(scope)
+            const existing = await sessionStore.get(sessionKey)
             if (existing) {
               existing.updatedAt = Date.now()
-              await sessionStore.save(scope.sessionId, existing, { objectId: existing.objectId })
+              await sessionStore.save(sessionKey, existing, { objectId: existing.objectId })
             }
             else {
-              await sessionStore.save(scope.sessionId, {
+              await sessionStore.save(sessionKey, {
                 sessionId: scope.sessionId,
                 objectId: scope.objectId,
                 createdAt: Date.now(),
@@ -527,150 +528,218 @@ export function createContextOperations(
           }
         }
 
-        // 可选：RAG 流式检索增强
-        if (options.rag?.enable && deps.rag) {
+        // 调用上游模型前先登记轮次并广播 turn_started：
+        // 中途取消（AbortSignal）时仍能保留 turnId 与已生成文本，供调用方用真实内容 commit/interrupt。
+        const turn = beginStreamTurn()
+        yield { type: 'turn_started', turnId: turn.id }
+
+        try {
+          // 可选：RAG 流式检索增强
+          if (options.rag?.enable && deps.rag) {
+            let fullReply = ''
+            let model = ''
+            let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
+
+            for await (const event of deps.rag.queryStream(message, {
+              sources: options.rag.sources,
+              topK: options.rag.topK,
+              minScore: options.rag.minScore,
+              enableRerank: options.rag.enableRerank,
+              rerankModel: options.rag.rerankModel,
+              model: chatOpts?.model ?? options.model,
+              messages,
+              enablePersist: false,
+              signal: chatOpts?.signal,
+            })) {
+              if (event.type === 'delta') {
+                fullReply += event.text
+                turn.generated = fullReply
+                yield { type: 'delta', text: event.text }
+              }
+              else if (event.type === 'done') {
+                fullReply = event.answer
+                model = event.model
+                usage = event.usage
+              }
+            }
+
+            await completeStreamTurn(turn, message, fullReply)
+            yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
+            return
+          }
+
+          // 可选：Reasoning 流式推理
+          if (options.reasoning?.enable && deps.reasoning) {
+            let fullReply = ''
+
+            for await (const event of deps.reasoning.runStream(message, {
+              strategy: options.reasoning.strategy,
+              maxRounds: options.reasoning.maxRounds,
+              model: chatOpts?.model ?? options.model,
+              temperature: chatOpts?.temperature ?? options.temperature,
+              messages,
+              tools: options.tools,
+              objectId: scope?.objectId,
+              sessionId: scope?.sessionId,
+              enablePersist: false,
+              signal: chatOpts?.signal,
+            })) {
+              if (event.type === 'delta') {
+                fullReply += event.text
+                turn.generated = fullReply
+                yield { type: 'delta', text: event.text }
+              }
+            }
+
+            await completeStreamTurn(turn, message, fullReply)
+            yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: turn.id, usage: undefined }
+            return
+          }
+
+          // 普通流式 LLM 调用（含工具调用循环）
+          const toolDefs = options.tools?.getDefinitions()
+          const maxToolRounds = options.maxToolRounds ?? 10
+
           let fullReply = ''
           let model = ''
           let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
 
-          for await (const event of deps.rag.queryStream(message, {
-            sources: options.rag.sources,
-            topK: options.rag.topK,
-            minScore: options.rag.minScore,
-            enableRerank: options.rag.enableRerank,
-            rerankModel: options.rag.rerankModel,
-            model: chatOpts?.model ?? options.model,
-            messages,
-            enablePersist: false,
-            signal: chatOpts?.signal,
-          })) {
-            if (event.type === 'delta') {
-              fullReply += event.text
-              yield { type: 'delta', text: event.text }
-            }
-            else if (event.type === 'done') {
-              fullReply = event.answer
-              model = event.model
-              usage = event.usage
-            }
-          }
+          for (let round = 0; round <= maxToolRounds; round++) {
+            const processor = createStreamProcessor()
 
-          const ragTurnId = await finalizeAssistantReply(message, fullReply)
-          yield { type: 'done', reply: fullReply, model, turnId: ragTurnId, usage }
-          return
-        }
+            const stream = deps.llm.chatStream({
+              model: chatOpts?.model ?? options.model,
+              messages,
+              temperature: chatOpts?.temperature ?? options.temperature,
+              objectId: scope?.objectId,
+              sessionId: scope?.sessionId,
+              tools: toolDefs,
+              tool_choice: toolDefs ? 'auto' : undefined,
+              enablePersist: chatOpts?.enablePersist ?? false,
+              signal: chatOpts?.signal,
+            })
 
-        // 可选：Reasoning 流式推理
-        if (options.reasoning?.enable && deps.reasoning) {
-          let fullReply = ''
+            for await (const chunk of stream) {
+              processor.process(chunk)
 
-          for await (const event of deps.reasoning.runStream(message, {
-            strategy: options.reasoning.strategy,
-            maxRounds: options.reasoning.maxRounds,
-            model: chatOpts?.model ?? options.model,
-            temperature: chatOpts?.temperature ?? options.temperature,
-            messages,
-            tools: options.tools,
-            objectId: scope?.objectId,
-            sessionId: scope?.sessionId,
-            enablePersist: false,
-            signal: chatOpts?.signal,
-          })) {
-            if (event.type === 'delta') {
-              fullReply += event.text
-              yield { type: 'delta', text: event.text }
-            }
-          }
-
-          const reasonTurnId = await finalizeAssistantReply(message, fullReply)
-          yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: reasonTurnId, usage: undefined }
-          return
-        }
-
-        // 普通流式 LLM 调用（含工具调用循环）
-        const toolDefs = options.tools?.getDefinitions()
-        const maxToolRounds = options.maxToolRounds ?? 10
-
-        let fullReply = ''
-        let model = ''
-        let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
-
-        for (let round = 0; round <= maxToolRounds; round++) {
-          const processor = createStreamProcessor()
-
-          const stream = deps.llm.chatStream({
-            model: chatOpts?.model ?? options.model,
-            messages,
-            temperature: chatOpts?.temperature ?? options.temperature,
-            objectId: scope?.objectId,
-            sessionId: scope?.sessionId,
-            tools: toolDefs,
-            tool_choice: toolDefs ? 'auto' : undefined,
-            enablePersist: chatOpts?.enablePersist ?? false,
-            signal: chatOpts?.signal,
-          })
-
-          for await (const chunk of stream) {
-            processor.process(chunk)
-
-            if (!model && chunk.model)
-              model = chunk.model
-            const delta = chunk.choices?.[0]?.delta?.content
-            if (delta) {
-              fullReply += delta
-              yield { type: 'delta', text: delta }
-            }
-            if (chunk.usage) {
-              usage = {
-                prompt_tokens: chunk.usage.prompt_tokens,
-                completion_tokens: chunk.usage.completion_tokens,
-                total_tokens: chunk.usage.total_tokens,
+              if (!model && chunk.model)
+                model = chunk.model
+              const delta = chunk.choices?.[0]?.delta?.content
+              if (delta) {
+                fullReply += delta
+                turn.generated = fullReply
+                yield { type: 'delta', text: delta }
+              }
+              if (chunk.usage) {
+                usage = {
+                  prompt_tokens: chunk.usage.prompt_tokens,
+                  completion_tokens: chunk.usage.completion_tokens,
+                  total_tokens: chunk.usage.total_tokens,
+                }
               }
             }
-          }
 
-          const streamResult = processor.getResult()
+            const streamResult = processor.getResult()
 
-          // 有工具调用：执行工具并继续下一轮
-          if (streamResult.toolCalls.length > 0 && options.tools) {
-            messages.push(processor.toAssistantMessage())
+            // 有工具调用：执行工具并继续下一轮
+            if (streamResult.toolCalls.length > 0 && options.tools) {
+              messages.push(processor.toAssistantMessage())
 
-            for (const toolCall of streamResult.toolCalls) {
-              if (toolCall.type !== 'function')
-                continue
-              yield { type: 'tool_call', name: toolCall.function.name, arguments: toolCall.function.arguments }
+              for (const toolCall of streamResult.toolCalls) {
+                if (toolCall.type !== 'function')
+                  continue
+                yield { type: 'tool_call', name: toolCall.function.name, arguments: toolCall.function.arguments }
 
-              const toolResult = await options.tools.execute(toolCall)
-              const rawContent = toolResult.success
-                ? toolResult.data.content
-                : `Tool error: ${toolResult.error.message}`
-              const toolContent = typeof rawContent === 'string'
-                ? rawContent
-                : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
+                const toolResult = await options.tools.execute(toolCall)
+                const rawContent = toolResult.success
+                  ? toolResult.data.content
+                  : `Tool error: ${toolResult.error.message}`
+                const toolContent = typeof rawContent === 'string'
+                  ? rawContent
+                  : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
 
-              yield { type: 'tool_result', name: toolCall.function.name, content: toolContent, success: toolResult.success }
+                yield { type: 'tool_result', name: toolCall.function.name, content: toolContent, success: toolResult.success }
 
-              messages.push({
-                role: 'tool',
-                tool_call_id: toolCall.id,
-                content: toolContent,
-              })
+                messages.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: toolContent,
+                })
+              }
+
+              // 重置本轮生成文本，下一轮 LLM 会产出最终文本
+              fullReply = ''
+              turn.generated = ''
+              continue
             }
 
-            // 重置 fullReply，下一轮 LLM 会产出最终文本
-            fullReply = ''
-            continue
+            // 无工具调用：结束循环
+            break
           }
 
-          // 无工具调用：结束循环
-          break
+          await completeStreamTurn(turn, message, fullReply)
+          yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
         }
-
-        // 追加助手回复
-        const turnId = await finalizeAssistantReply(message, fullReply)
-
-        yield { type: 'done', reply: fullReply, model, turnId, usage }
+        catch (error) {
+          // 上游生成被取消（AbortSignal）：保留 generating 轮次与已生成文本，登记配对用户输入，
+          // 由调用方在确定真实内容后通过 commitTurn / interruptTurn 提交。
+          if (chatOpts?.signal?.aborted) {
+            cancelStreamTurn(turn, message)
+            yield { type: 'cancelled', turnId: turn.id, generated: turn.generated }
+            return
+          }
+          throw error
+        }
       },
+    }
+
+    /**
+     * 登记一个流式生成的待完成轮次（`generating`）。
+     *
+     * chatStream 在调用上游模型前调用，使中途取消（AbortSignal）时仍能保留已生成文本，
+     * 由调用方用真实内容通过 commitTurn / interruptTurn 提交。
+     */
+    function beginStreamTurn(): ConversationTurn {
+      const turn: ConversationTurn = {
+        id: generateTurnId(),
+        speaker: 'assistant',
+        generated: '',
+        committed: '',
+        status: 'generating',
+        createdAt: Date.now(),
+      }
+      turns.push(turn)
+      return turn
+    }
+
+    /**
+     * 完成一次流式生成：写入最终文本。
+     *
+     * auto 模式：把生成文本写入上下文并触发记忆提取，轮次置为 `completed`。
+     * manual 模式：保持 `generating` 并记录配对用户输入，等待 commit/interrupt。
+     */
+    async function completeStreamTurn(turn: ConversationTurn, userMessage: string, finalText: string): Promise<void> {
+      turn.generated = finalText
+      if (turnCommit === 'auto') {
+        turn.committed = finalText
+        turn.status = 'completed'
+        turn.committedAt = Date.now()
+        if (finalText)
+          await manager.addMessage({ role: 'assistant', content: finalText })
+        enqueueMemoryExtract(userMessage, finalText)
+      }
+      else {
+        pendingCommits.set(turn.id, userMessage)
+      }
+    }
+
+    /**
+     * 流式生成被取消：保留 `generating` 轮次与已生成文本，登记配对用户输入，
+     * 由调用方在确定真实内容后通过 commitTurn / interruptTurn 提交。
+     */
+    function cancelStreamTurn(turn: ConversationTurn, userMessage: string): void {
+      if (!pendingCommits.has(turn.id))
+        pendingCommits.set(turn.id, userMessage)
     }
 
     /**
@@ -811,19 +880,20 @@ export function createContextOperations(
       }
     },
 
-    async renameSession(sessionId: string, title: string): Promise<HaiResult<void>> {
+    async renameSession(scope: InteractionScope, title: string): Promise<HaiResult<void>> {
       if (!sessionStore) {
         return ok(undefined)
       }
 
       try {
-        const existing = await sessionStore.get(sessionId)
+        const sessionKey = storeKey(scope)
+        const existing = await sessionStore.get(sessionKey)
         if (!existing) {
-          return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: `Session not found: ${sessionId}` } }))
+          return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: `Session not found: ${scope.sessionId}` } }))
         }
         existing.title = title
         existing.updatedAt = Date.now()
-        await sessionStore.save(sessionId, existing, { objectId: existing.objectId })
+        await sessionStore.save(sessionKey, existing, { objectId: existing.objectId })
         return ok(undefined)
       }
       catch (error) {
@@ -831,19 +901,17 @@ export function createContextOperations(
       }
     },
 
-    async removeSession(sessionId: string): Promise<HaiResult<void>> {
+    async removeSession(scope: InteractionScope): Promise<HaiResult<void>> {
       if (!sessionStore) {
         return ok(undefined)
       }
 
       try {
-        // 先获取会话信息，需要 objectId 来构建上下文存储 key
-        const existing = await sessionStore.get(sessionId)
-        if (existing && contextStore) {
-          const key = `${existing.objectId}:${existing.sessionId}`
-          await contextStore.remove(key)
-        }
-        await sessionStore.remove(sessionId)
+        // 上下文正文与会话元数据共用同一复合键，确保删除时正文不残留
+        const sessionKey = storeKey(scope)
+        if (contextStore)
+          await contextStore.remove(sessionKey)
+        await sessionStore.remove(sessionKey)
         return ok(undefined)
       }
       catch (error) {

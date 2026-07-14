@@ -150,6 +150,42 @@ describe('serv feature audio', () => {
     expect(msgs.find(m => m.type === 'error')).toMatchObject({ code: 'hai:ai:058' })
   })
 
+  it('鉴权未完成前不调用付费 ASR（串行化 + 鉴权先行，消除竞态）', async () => {
+    const transcribe = vi.fn(async () => ok({ text: '不该被识别' }))
+    const audio = { ...createAudioMock(), transcribe } as unknown as AudioOperations
+    // 鉴权异步失败（下一 tick 才 resolve），模拟快速连发时的竞态窗口
+    const verifyToken = async (): Promise<HaiResult<{ userId: string, roles: string[], permissions: string[] }>> => {
+      await Promise.resolve()
+      return err(HaiCommonError.UNAUTHORIZED, 'invalid')
+    }
+    const handlers = captureHandlers({ ai: { audio }, verifyToken }, 'bad-token')
+    const ws = createWsMock()
+    handlers.onOpen({}, ws)
+    // 快速连发 start → binary → done，试图在鉴权完成前触发付费 ASR
+    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: false, format: 'wav' }) }, ws)
+    handlers.onMessage({ data: new Uint8Array([1, 2, 3]) }, ws)
+    handlers.onMessage({ data: JSON.stringify({ type: 'done' }) }, ws)
+    await flush()
+
+    // 付费 ASR 未被调用，且返回鉴权错误
+    expect(transcribe).not.toHaveBeenCalled()
+    const msgs = parseJsonMessages(ws)
+    expect(msgs[0]).toMatchObject({ type: 'error' })
+  })
+
+  it('文本累计超过 maxTextBytes 返回 AUDIO_INPUT_TOO_LARGE 并关闭', async () => {
+    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, maxTextBytes: 4 })
+    const ws = createWsMock()
+    handlers.onOpen({}, ws)
+    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, ws)
+    handlers.onMessage({ data: JSON.stringify({ type: 'text', text: '这是一段很长的文本' }) }, ws)
+    await flush()
+
+    const msgs = parseJsonMessages(ws)
+    expect(msgs.find(m => m.type === 'error')).toMatchObject({ code: 'hai:ai:058' })
+    expect(ws.close).toHaveBeenCalled()
+  })
+
   it('createApp 启用 audio 时注册 WebSocket 升级注入器', () => {
     const contract = apiContract.create({})
     const procedures = serv.implement(contract).$context<ServContext>().router({})

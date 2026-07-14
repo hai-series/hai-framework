@@ -5,9 +5,11 @@
  * 不加载真实 mem0 引擎。
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AIConfigSchema, MemoryConfigSchema } from '../src/ai-config.js'
+
 import { createMem0OssMemoryOperations } from '../src/memory/providers/ai-memory-provider-mem0-oss.js'
 
 const memoryMock = vi.hoisted(() => ({
@@ -35,10 +37,30 @@ vi.mock('mem0ai/oss', () => {
 const aiConfig = AIConfigSchema.parse({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini', baseUrl: 'https://api.example.com/v1' } })
 const memoryConfig = MemoryConfigSchema.parse({ provider: 'mem0' })
 
-function createOps(vectorBackend?: { type: string, url?: string, apiKey?: string }) {
+/** 构造返回固定 chat 内容的 LLM mock（供框架层记忆提取器使用） */
+function createLlmMock(content: string): LLMOperations {
+  return {
+    chat: vi.fn(async () => ({
+      success: true as const,
+      data: {
+        id: 't',
+        object: 'chat.completion' as const,
+        created: Date.now(),
+        model: 'test-model',
+        choices: [{ index: 0, message: { role: 'assistant' as const, content }, finish_reason: 'stop' as const }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      },
+    })),
+    chatStream: vi.fn(),
+    listModels: vi.fn(),
+  } as unknown as LLMOperations
+}
+
+function createOps(vectorBackend?: { type: string, url?: string, apiKey?: string }, llm?: LLMOperations) {
   return createMem0OssMemoryOperations({
     config: memoryConfig,
     aiConfig,
+    llm: llm ?? createLlmMock('[]'),
     collectionName: 'hai_ai_memory',
     embeddingDims: 1536,
     vectorBackend,
@@ -89,9 +111,10 @@ describe('createMem0OssMemoryOperations', () => {
     expect(config.vectorStore.config.collectionName).toBe('hai_ai_memory')
   })
 
-  it('extract 调用 mem0.add(infer: true) 并映射结果', async () => {
-    memoryMock.add.mockResolvedValue({ results: [{ id: 'm1', memory: '用户喜欢中文', metadata: {} }] })
-    const ops = await createOps()
+  it('extract 用框架提取器分类后以 infer:false 写入并保留 hai_type/hai_importance', async () => {
+    const llm = createLlmMock(JSON.stringify([{ content: '用户喜欢中文', type: 'preference', importance: 0.8 }]))
+    memoryMock.add.mockResolvedValue({ results: [{ id: 'm1', memory: '用户喜欢中文', metadata: { hai_type: 'preference', hai_importance: 0.8 } }] })
+    const ops = await createOps(undefined, llm)
 
     const result = await ops.extract([{ role: 'user', content: '我喜欢中文' }], { objectId: 'u1' })
     expect(result.success).toBe(true)
@@ -99,10 +122,32 @@ describe('createMem0OssMemoryOperations', () => {
       return
     expect(result.data).toHaveLength(1)
     expect(result.data[0].content).toBe('用户喜欢中文')
+    expect(result.data[0].type).toBe('preference')
+    expect(result.data[0].importance).toBe(0.8)
+    // 以 infer:false 写入，并带上 hai_type / hai_importance 元数据（与 native 语义一致）
     expect(memoryMock.add).toHaveBeenCalledWith(
-      [{ role: 'user', content: '我喜欢中文' }],
-      expect.objectContaining({ userId: 'u1', infer: true }),
+      [{ role: 'user', content: '用户喜欢中文' }],
+      expect.objectContaining({
+        userId: 'u1',
+        infer: false,
+        metadata: expect.objectContaining({ hai_type: 'preference', hai_importance: 0.8 }),
+      }),
     )
+  })
+
+  it('recall 按 types 过滤', async () => {
+    memoryMock.search.mockResolvedValue({ results: [
+      { id: 'm1', memory: '事实', metadata: { hai_type: 'fact', hai_importance: 0.8 } },
+      { id: 'm2', memory: '偏好', metadata: { hai_type: 'preference', hai_importance: 0.8 } },
+    ] })
+    const ops = await createOps()
+
+    const result = await ops.recall('q', { objectId: 'u1', types: ['preference'] })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].content).toBe('偏好')
   })
 
   it('recall 调用 mem0.search 并按 importance 过滤', async () => {

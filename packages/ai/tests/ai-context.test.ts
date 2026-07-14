@@ -309,10 +309,12 @@ describe('context session management', () => {
   it('renameSession 修改会话标题', async () => {
     const llm = createMockLLM([])
     const { ops, sessionStore } = createOpsWithStores(defaultCompressConfig, llm, 8000)
+    const scope = { objectId: 'user-1', sessionId: 'session-1' }
+    const key = JSON.stringify([scope.objectId, scope.sessionId])
 
-    // 先手工保存一个 session
+    // 先手工保存一个 session（复合键与实现一致）
     const now = Date.now()
-    await sessionStore.save('session-1', {
+    await sessionStore.save(key, {
       sessionId: 'session-1',
       objectId: 'user-1',
       title: '旧标题',
@@ -320,11 +322,11 @@ describe('context session management', () => {
       updatedAt: now,
     })
 
-    const result = await ops.renameSession('session-1', '新标题')
+    const result = await ops.renameSession(scope, '新标题')
     expect(result.success).toBe(true)
 
     // 验证标题已更新
-    const session = await sessionStore.get('session-1')
+    const session = await sessionStore.get(key)
     expect(session?.title).toBe('新标题')
   })
 
@@ -332,43 +334,66 @@ describe('context session management', () => {
     const llm = createMockLLM([])
     const { ops } = createOpsWithStores(defaultCompressConfig, llm, 8000)
 
-    const result = await ops.renameSession('non-existent', '标题')
+    const result = await ops.renameSession({ objectId: 'user-1', sessionId: 'non-existent' }, '标题')
     expect(result.success).toBe(false)
   })
 
   it('removeSession 删除会话及上下文', async () => {
     const llm = createMockLLM([])
     const { ops, sessionStore, contextStore } = createOpsWithStores(defaultCompressConfig, llm, 8000)
+    const scope = { objectId: 'user-1', sessionId: 'session-1' }
+    const key = JSON.stringify([scope.objectId, scope.sessionId])
 
     const now = Date.now()
-    await sessionStore.save('session-1', {
+    await sessionStore.save(key, {
       sessionId: 'session-1',
       objectId: 'user-1',
       title: '会话',
       createdAt: now,
       updatedAt: now,
     })
-    await contextStore.save('user-1:session-1', {
+    await contextStore.save(key, {
       messages: [{ role: 'user', content: 'test' }],
       summaries: [],
       updatedAt: now,
     })
 
-    const result = await ops.removeSession('session-1')
+    const result = await ops.removeSession(scope)
     expect(result.success).toBe(true)
 
-    // 验证会话和上下文都被删除
-    const session = await sessionStore.get('session-1')
+    // 验证会话和上下文都被删除（复合键匹配）
+    const session = await sessionStore.get(key)
     expect(session).toBeUndefined()
-    const context = await contextStore.get('user-1:session-1')
+    const context = await contextStore.get(key)
     expect(context).toBeUndefined()
+  })
+
+  it('removeSession 多租户隔离：删除一个用户不影响另一个用户相同 sessionId', async () => {
+    const llm = createMockLLM([])
+    const { ops, sessionStore, contextStore } = createOpsWithStores(defaultCompressConfig, llm, 8000)
+    const now = Date.now()
+    const keyA = JSON.stringify(['user-A', 'shared'])
+    const keyB = JSON.stringify(['user-B', 'shared'])
+    await sessionStore.save(keyA, { sessionId: 'shared', objectId: 'user-A', createdAt: now, updatedAt: now })
+    await sessionStore.save(keyB, { sessionId: 'shared', objectId: 'user-B', createdAt: now, updatedAt: now })
+    await contextStore.save(keyA, { messages: [{ role: 'user', content: 'A' }], summaries: [], updatedAt: now })
+    await contextStore.save(keyB, { messages: [{ role: 'user', content: 'B' }], summaries: [], updatedAt: now })
+
+    await ops.removeSession({ objectId: 'user-A', sessionId: 'shared' })
+
+    // user-A 被删除
+    expect(await sessionStore.get(keyA)).toBeUndefined()
+    expect(await contextStore.get(keyA)).toBeUndefined()
+    // user-B 的会话与上下文不受影响
+    expect(await sessionStore.get(keyB)).toBeDefined()
+    expect(await contextStore.get(keyB)).toBeDefined()
   })
 
   it('removeSession 不存在的会话也成功', async () => {
     const llm = createMockLLM([])
     const { ops } = createOpsWithStores(defaultCompressConfig, llm, 8000)
 
-    const result = await ops.removeSession('non-existent')
+    const result = await ops.removeSession({ objectId: 'user-1', sessionId: 'non-existent' })
     expect(result.success).toBe(true)
   })
 
@@ -1070,6 +1095,106 @@ describe('context chat tool call loop', () => {
 
     // chatStream 被调用了两次（tool_calls 轮 + 最终文本轮）
     expect(llm.chatStream).toHaveBeenCalledTimes(2)
+  })
+
+  it('chatStream 先产出 turn_started 再 done，turnId 一致', async () => {
+    const llm: LLMOperations = {
+      chat: vi.fn(),
+      chatStream: vi.fn(() => (async function* () {
+        yield {
+          id: 'c1',
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model: 'test-model',
+          choices: [{ index: 0, delta: { role: 'assistant', content: '你好' }, finish_reason: null }],
+        } as ChatCompletionChunk
+        yield {
+          id: 'c2',
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model: 'test-model',
+          choices: [{ index: 0, delta: { content: '，世界' }, finish_reason: 'stop' }],
+        } as ChatCompletionChunk
+      })()),
+      listModels: vi.fn(),
+    } as unknown as LLMOperations
+
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const events: Array<{ type: string, [key: string]: unknown }> = []
+    for await (const event of managerResult.data.chatStream('打个招呼')) {
+      events.push(event)
+    }
+
+    expect(events[0].type).toBe('turn_started')
+    expect(events[0].turnId).toBeTruthy()
+    const doneEvent = events.find(e => e.type === 'done')
+    expect(doneEvent).toBeDefined()
+    expect(doneEvent?.reply).toBe('你好，世界')
+    // done 复用 turn_started 登记的同一 turnId
+    expect(doneEvent?.turnId).toBe(events[0].turnId)
+  })
+
+  it('chatStream 中途取消：保留 turn 与已生成文本并产出 cancelled', async () => {
+    const controller = new AbortController()
+    const llm: LLMOperations = {
+      chat: vi.fn(),
+      chatStream: vi.fn((req: { signal?: AbortSignal }) => (async function* () {
+        yield {
+          id: 'c1',
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model: 'test-model',
+          choices: [{ index: 0, delta: { role: 'assistant', content: '已经说的部分' }, finish_reason: null }],
+        } as ChatCompletionChunk
+        // 模拟外部打断
+        controller.abort()
+        if (req.signal?.aborted)
+          throw new Error('aborted')
+        yield {
+          id: 'c2',
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model: 'test-model',
+          choices: [{ index: 0, delta: { content: '不该出现' }, finish_reason: 'stop' }],
+        } as ChatCompletionChunk
+      })()),
+      listModels: vi.fn(),
+    } as unknown as LLMOperations
+
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const events: Array<{ type: string, [key: string]: unknown }> = []
+    for await (const event of manager.chatStream('讲个长故事', { signal: controller.signal })) {
+      events.push(event)
+    }
+
+    expect(events[0].type).toBe('turn_started')
+    const cancelled = events.find(e => e.type === 'cancelled')
+    expect(cancelled).toBeDefined()
+    expect(cancelled?.generated).toBe('已经说的部分')
+    const turnId = events[0].turnId as string
+
+    // 取消后 turn 仍保留，可用真实内容打断提交
+    const interrupt = await manager.interruptTurn(turnId, { text: '实际说了这些' })
+    expect(interrupt.success).toBe(true)
+
+    const turns = manager.getTurns()
+    expect(turns.success).toBe(true)
+    if (turns.success) {
+      const turn = turns.data.find(t => t.id === turnId)
+      expect(turn?.status).toBe('interrupted')
+      expect(turn?.committed).toBe('实际说了这些')
+    }
   })
 })
 

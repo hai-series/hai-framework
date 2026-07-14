@@ -27,12 +27,15 @@ export interface AudioWsDeps {
   readonly maxMessageBytes?: number
   /** 单连接累计接收音频字节上限（默认 10 MiB，防止非流式缓冲无限增长）。 */
   readonly maxBufferedBytes?: number
+  /** 单连接累计接收文本字节上限（默认 1 MiB，防止 TTS 文本输入无限增长与上游费用失控）。 */
+  readonly maxTextBytes?: number
   /** 单连接最长持续时间（毫秒，默认 5 分钟，防止恶意长连接）。 */
   readonly maxSessionMs?: number
 }
 
 const DEFAULT_MAX_MESSAGE_BYTES = 1_048_576
 const DEFAULT_MAX_BUFFERED_BYTES = 10 * 1024 * 1024
+const DEFAULT_MAX_TEXT_BYTES = 1 * 1024 * 1024
 const DEFAULT_MAX_SESSION_MS = 5 * 60 * 1000
 
 /**
@@ -51,12 +54,13 @@ export function registerAudioWsRoute(
 ): void {
   const maxMessageBytes = deps.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES
   const maxBufferedBytes = deps.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES
+  const maxTextBytes = deps.maxTextBytes ?? DEFAULT_MAX_TEXT_BYTES
   const maxSessionMs = deps.maxSessionMs ?? DEFAULT_MAX_SESSION_MS
 
   app.get(path, upgradeWebSocket((c) => {
     // 浏览器 WebSocket 无法设置请求头，令牌优先取查询参数 access_token，其次 Authorization 头
     const token = c.req.query('access_token') ?? c.req.header('authorization')?.replace(/^Bearer\s+/i, '')
-    const conn = new AudioConnection(deps, token, maxMessageBytes, maxBufferedBytes)
+    const conn = new AudioConnection(deps, token, maxMessageBytes, maxBufferedBytes, maxTextBytes)
     let sessionTimer: ReturnType<typeof setTimeout> | undefined
 
     return {
@@ -66,9 +70,8 @@ export function registerAudioWsRoute(
         }, maxSessionMs)
       },
       onMessage(evt, ws) {
-        conn.handleMessage(ws, evt.data).catch((error: unknown) => {
-          logger.debug('audio ws message handling failed', { error: error instanceof Error ? error.message : String(error) })
-        })
+        // 串行处理同一连接的消息，避免鉴权完成前处理业务帧（付费 ASR/TTS）
+        conn.enqueue(ws, evt.data)
       },
       onClose() {
         if (sessionTimer)
@@ -140,15 +143,26 @@ class AudioConnection {
   private readonly textQueue = new AsyncQueue<string>()
   private readonly audioBuffer: Uint8Array[] = []
   private receivedBytes = 0
+  private receivedTextBytes = 0
   private readonly controller = new AbortController()
   private closed = false
+  /** 消息串行处理链：确保同一连接的消息按到达顺序处理，鉴权完成前不处理业务帧。 */
+  private queue: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly deps: AudioWsDeps,
     private readonly token: string | undefined,
     private readonly maxMessageBytes: number,
     private readonly maxBufferedBytes: number,
+    private readonly maxTextBytes: number,
   ) {}
+
+  /** 将消息追加到串行处理链，保证按序处理（start 的鉴权完成前不会处理后续业务帧）。 */
+  enqueue(ws: WSContext, data: unknown): void {
+    this.queue = this.queue.then(() => this.handleMessage(ws, data)).catch((error: unknown) => {
+      logger.debug('audio ws message handling failed', { error: error instanceof Error ? error.message : String(error) })
+    })
+  }
 
   async handleMessage(ws: WSContext, data: unknown): Promise<void> {
     if (this.closed)
@@ -203,6 +217,12 @@ class AudioConnection {
       this.fail(ws, 'hai:ai:050', 'message before start')
     }
     else if (message.type === 'text') {
+      // 累计接收文本字节上限：防止 TTS 文本输入无限增长与上游费用失控
+      this.receivedTextBytes += Buffer.byteLength(message.text, 'utf8')
+      if (this.receivedTextBytes > this.maxTextBytes) {
+        this.fail(ws, 'hai:ai:058', 'buffered text exceeds limit')
+        return
+      }
       this.textQueue.push(message.text)
     }
     else if (message.type === 'done') {
@@ -218,10 +238,9 @@ class AudioConnection {
       this.fail(ws, 'hai:ai:050', 'session already started')
       return
     }
-    this.started = true
-    this.start = message
 
-    // 鉴权：配置了 verifyToken 则要求有效令牌
+    // 鉴权先行：令牌校验通过前不置 started，避免在鉴权完成前处理业务数据（付费 ASR/TTS）。
+    // 配合 enqueue 的串行处理，后续 audio/text/done 帧会排队等待本次鉴权结果。
     if (this.deps.verifyToken) {
       if (!this.token) {
         this.fail(ws, 'hai:ai:054', 'missing access token')
@@ -233,6 +252,9 @@ class AudioConnection {
         return
       }
     }
+
+    this.started = true
+    this.start = message
 
     if (message.operation === 'synthesize')
       void this.runSynthesize(ws, message)

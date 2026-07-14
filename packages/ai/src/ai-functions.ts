@@ -140,6 +140,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
     : await createMem0OssMemoryOperations({
         config: memoryParsed,
         aiConfig: config,
+        llm,
         collectionName: 'hai_ai_memory',
         embeddingDims: config.embedding?.dimensions,
         vectorBackend: storeProvider.getVectorBackend?.(),

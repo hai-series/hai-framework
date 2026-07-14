@@ -227,17 +227,15 @@ await managerResult.data.save()
 
 ### 真实对话状态（Conversation Commit Layer）
 
-`turnCommit: 'manual'` 时，`chat` / `chatStream` 不自动写入生成文本，只返回 `turnId`；由调用方提交**实际发生的内容**（TTS 播放 / 主持人打断等场景）：
+`turnCommit: 'manual'` 时，`chat` / `chatStream` 不自动写入生成文本，只返回 `turnId`；由调用方提交**实际发生的内容**（TTS 播放、被打断等场景）。`chatStream` 在调用上游模型前就产出 `turn_started`（事件序列 `turn_started → delta* → done`，中途取消 `→ cancelled`），取消时保留 `turnId` 与已生成文本：
 
 ```ts
 const m = ai.context.createManager({ turnCommit: 'manual', scope }).data
-for await (const ev of m.chatStream('展开讲讲')) {
+const controller = new AbortController()
+for await (const ev of m.chatStream('展开讲讲', { signal: controller.signal })) {
   if (ev.type === 'delta') feedTts(ev.text)
-  else if (ev.type === 'done') {
-    interrupted
-      ? await m.interruptTurn(ev.turnId, { text: spokenSoFar }) // 只提交播放出去的部分
-      : await m.commitTurn(ev.turnId) // 完整提交
-  }
+  else if (ev.type === 'done') await m.commitTurn(ev.turnId) // 完整提交
+  else if (ev.type === 'cancelled') await m.interruptTurn(ev.turnId, { text: spokenSoFar }) // 只提交播放出去的部分
 }
 ```
 

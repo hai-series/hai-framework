@@ -165,6 +165,8 @@ export interface ServAudioConfig {
   readonly maxMessageBytes?: number
   /** 单连接累计接收音频字节上限（默认 10 MiB）。 */
   readonly maxBufferedBytes?: number
+  /** 单连接累计接收文本字节上限（默认 1 MiB）。 */
+  readonly maxTextBytes?: number
   /** 单连接最长持续时间（毫秒，默认 5 分钟）。 */
   readonly maxSessionMs?: number
 }
@@ -279,6 +281,7 @@ export function createApp<
       verifyToken,
       maxMessageBytes: options.audio.maxMessageBytes,
       maxBufferedBytes: options.audio.maxBufferedBytes,
+      maxTextBytes: options.audio.maxTextBytes,
       maxSessionMs: options.audio.maxSessionMs,
     })
     audioWsInjectors.set(app, injectWebSocket)

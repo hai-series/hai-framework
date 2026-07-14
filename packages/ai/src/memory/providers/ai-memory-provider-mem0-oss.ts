@@ -9,10 +9,10 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { MemoryConfig as Mem0Config, Memory as Mem0Memory, MemoryItem as Mem0MemoryItem, Message as Mem0Message } from 'mem0ai/oss'
+import type { MemoryConfig as Mem0Config, Memory as Mem0Memory, MemoryItem as Mem0MemoryItem } from 'mem0ai/oss'
 
 import type { AIConfig, MemoryConfig } from '../../ai-config.js'
-import type { ChatMessage } from '../../llm/ai-llm-types.js'
+import type { ChatMessage, LLMOperations } from '../../llm/ai-llm-types.js'
 import type { AIVectorBackend } from '../../store/ai-store-types.js'
 import type {
   MemoryEntry,
@@ -28,6 +28,7 @@ import { core, err, ok } from '@h-ai/core'
 import { resolveModelEntry } from '../../ai-config.js'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
+import { extractMemories as extractTypedMemories } from '../ai-memory-extractor.js'
 import { injectRelevantMemories } from '../ai-memory-injection.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory-mem0-oss' })
@@ -41,6 +42,8 @@ export interface Mem0OssDeps {
   config: MemoryConfig
   /** 完整 AI 配置（用于解析 LLM / Embedder） */
   aiConfig: AIConfig
+  /** hai LLM 操作接口（用于框架层记忆提取，保证 type/importance 分类与 native 一致） */
+  llm: LLMOperations
   /** 向量库集合名 */
   collectionName: string
   /** 向量维度（可选，未提供时由 mem0 探测） */
@@ -51,6 +54,10 @@ export interface Mem0OssDeps {
 
 interface Mem0OssContext {
   memory: Mem0Memory
+  /** hai LLM 操作接口（框架层提取用） */
+  llm: LLMOperations
+  /** 提取默认 systemPrompt（模块配置，可被调用级 systemPrompt 覆盖） */
+  systemPrompt?: string
   defaultObjectId: string
   /** 检索默认返回数量 */
   defaultTopK: number
@@ -152,15 +159,6 @@ function matchScope(entry: MemoryEntry, scope: Record<string, unknown>): boolean
   return Object.entries(scope).every(([k, v]) => (entry.scope as Record<string, unknown>)[k] === v)
 }
 
-/** 将 hai 消息转换为 mem0 消息 */
-function toMem0Messages(messages: ChatMessage[]): Mem0Message[] {
-  return messages.flatMap((message): Mem0Message[] => {
-    if ((message.role !== 'user' && message.role !== 'assistant') || typeof message.content !== 'string')
-      return []
-    return [{ role: message.role, content: message.content }]
-  })
-}
-
 /** 将 hai vecdb 后端映射为 mem0 vectorStore 配置 */
 function buildVectorStoreConfig(deps: Mem0OssDeps): Mem0Config['vectorStore'] {
   const collectionName = deps.collectionName
@@ -247,22 +245,35 @@ function buildMem0Config(deps: Mem0OssDeps): HaiResult<Mem0Config> {
 }
 
 async function extractMemories(context: Mem0OssContext, messages: ChatMessage[], options?: MemoryExtractOptions): Promise<HaiResult<MemoryEntry[]>> {
-  const mem0Messages = toMem0Messages(messages)
-  if (mem0Messages.length === 0)
+  const objectId = options?.objectId ?? context.defaultObjectId
+
+  // 在框架层用统一提取器完成分类与打分（honor types / model / minImportance / systemPrompt / tempModel），
+  // 再以 infer:false 写入 mem0 并保留 hai_type / hai_importance，确保与 native 后端业务语义一致。
+  const extracted = await extractTypedMemories(context.llm, messages, {
+    types: options?.types,
+    model: options?.model,
+    minImportance: options?.minImportance,
+    systemPrompt: options?.systemPrompt ?? context.systemPrompt,
+    objectId,
+    tempModel: options?.tempModel,
+  })
+  if (!extracted.success)
+    return extracted
+  if (extracted.data.length === 0)
     return ok([])
 
-  const objectId = options?.objectId ?? context.defaultObjectId
   try {
-    // 提取阶段一并写入归属主体与作用域，保障后续按 memoryId 直读与作用域召回的准确性
-    const metadata: Record<string, unknown> = { hai_object_id: objectId }
-    if (options?.scope)
-      metadata.hai_scope = options.scope
-    const response = await context.memory.add(mem0Messages, {
-      userId: objectId,
-      metadata,
-      infer: true,
-    })
-    return ok(response.results.map(item => toMemoryEntry(item, objectId)))
+    // 批量并发写入，避免 await-in-loop（N+1）
+    const stored = await Promise.all(extracted.data.map(async (entry) => {
+      const response = await context.memory.add([{ role: 'user', content: entry.content }], {
+        userId: objectId,
+        metadata: buildMetadata({ type: entry.type, importance: entry.importance, scope: options?.scope, metadata: entry.metadata }, objectId),
+        infer: false,
+      })
+      const item = response.results[0]
+      return item ? toMemoryEntry(item, objectId) : undefined
+    }))
+    return ok(stored.filter((entry): entry is MemoryEntry => entry !== undefined))
   }
   catch (error) {
     logger.error('Mem0 OSS extract failed', { error })
@@ -270,7 +281,7 @@ async function extractMemories(context: Mem0OssContext, messages: ChatMessage[],
   }
 }
 
-async function recallMemories(context: Mem0OssContext, query: string, options?: { topK?: number, candidateMultiplier?: number, objectId?: string, minImportance?: number, scope?: Record<string, unknown> }): Promise<HaiResult<MemoryEntry[]>> {
+async function recallMemories(context: Mem0OssContext, query: string, options?: { topK?: number, candidateMultiplier?: number, objectId?: string, minImportance?: number, types?: MemoryType[], recencyWeight?: number, scope?: Record<string, unknown> }): Promise<HaiResult<MemoryEntry[]>> {
   const objectId = options?.objectId ?? context.defaultObjectId
   const topK = options?.topK ?? context.defaultTopK
   const candidateMultiplier = Math.max(1, options?.candidateMultiplier ?? context.candidateMultiplier)
@@ -281,16 +292,34 @@ async function recallMemories(context: Mem0OssContext, query: string, options?: 
       filters: { userId: objectId },
       topK: topK * candidateMultiplier,
     })
-    const entries = response.results
+    let entries = response.results
       .map(item => toMemoryEntry(item, objectId))
-      // 主体隔离兜底：即便底层向量库未按 user 过滤，也确保只召回归属该主体的记忆（issue #10 元数据支撑）
+      // 主体隔离兜底：即便底层向量库未按 user 过滤，也确保只召回归属该主体的记忆
       .filter(entry => entry.objectId === objectId)
       // 按业务作用域严格过滤，避免同一主体下不同主题/角色互相召回
       .filter(entry => !options?.scope || matchScope(entry, options.scope))
+      // 按类型过滤
+      .filter(entry => !options?.types?.length || options.types.includes(entry.type))
       .filter(entry => entry.importance >= (options?.minImportance ?? 0))
-      // mem0 已按相关度排序，过滤后保持该顺序，仅截取 topK
-      .slice(0, topK)
-    return ok(entries)
+
+    // 时间衰减重排：mem0 已按相关度排序，以排名作为相关度代理与时间新近度线性加权
+    const recencyWeight = options?.recencyWeight
+    if (recencyWeight && recencyWeight > 0 && entries.length > 1) {
+      const times = entries.map(entry => entry.createdAt)
+      const minTime = Math.min(...times)
+      const span = Math.max(1, Math.max(...times) - minTime)
+      const count = entries.length
+      entries = entries
+        .map((entry, index) => {
+          const relevance = 1 - index / (count - 1)
+          const recency = (entry.createdAt - minTime) / span
+          return { entry, score: relevance * (1 - recencyWeight) + recency * recencyWeight }
+        })
+        .sort((a, b) => b.score - a.score)
+        .map(ranked => ranked.entry)
+    }
+
+    return ok(entries.slice(0, topK))
   }
   catch (error) {
     logger.error('Mem0 OSS recall failed', { error })
@@ -437,6 +466,8 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
 
   const context: Mem0OssContext = {
     memory: new mod.Memory(configResult.data),
+    llm: deps.llm,
+    systemPrompt: deps.config.systemPrompt,
     defaultObjectId: DEFAULT_OBJECT_ID,
     defaultTopK: deps.config.defaultTopK,
     candidateMultiplier: deps.config.candidateMultiplier,
@@ -447,6 +478,8 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
     candidateMultiplier: options?.candidateMultiplier,
     objectId: options?.objectId,
     minImportance: options?.minImportance,
+    types: options?.types,
+    recencyWeight: options?.recencyWeight,
     scope: options?.scope,
   })
 

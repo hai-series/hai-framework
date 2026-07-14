@@ -244,7 +244,7 @@ export interface ContextChatOptions {
   /**
    * 请求取消信号
    *
-   * 透传给底层 LLM 调用；主持人打断、用户切换等场景可 `abortController.abort()`
+   * 透传给底层 LLM 调用；打断、用户切换等场景可 `abortController.abort()`
    * 立即停止上游生成与计费。
    */
   signal?: AbortSignal
@@ -275,12 +275,18 @@ export interface ContextChatResult {
 
 /**
  * chatStream() 产出的事件
+ *
+ * 事件序列：`turn_started` → `delta`* → `done`；中途取消（AbortSignal）时为
+ * `turn_started` → `delta`* → `cancelled`。`cancelled` 保留 turnId 与已生成文本，
+ * 调用方可用真实内容调用 `commitTurn` / `interruptTurn` 提交。
  */
 export type ContextStreamEvent
-  = | { type: 'delta', text: string }
+  = | { type: 'turn_started', turnId: string }
+    | { type: 'delta', text: string }
     | { type: 'tool_call', name: string, arguments: string }
     | { type: 'tool_result', name: string, content: string, success: boolean }
     | { type: 'done', reply: string, model: string, turnId: string, usage?: { prompt_tokens: number, completion_tokens: number, total_tokens: number } }
+    | { type: 'cancelled', turnId: string, generated: string }
 
 /**
  * 有状态上下文管理器接口
@@ -446,7 +452,7 @@ export interface ContextManager {
   /**
    * 流式发送消息并获取回复（需 deps.llm 可用）
    *
-   * 产出事件序列：delta* → done
+   * 产出事件序列：turn_started → delta* → done（中途取消时 → cancelled）
    *
    * @param message - 用户消息文本
    * @param options - 单次请求覆盖选项
@@ -511,17 +517,17 @@ export interface ContextOperations {
   /**
    * 重命名会话
    *
-   * @param sessionId - 会话 ID
+   * @param scope - 交互作用域（objectId + sessionId，用于多租户隔离）
    * @param title - 新标题
    * @returns 成功返回 ok(undefined)
    */
-  renameSession: (sessionId: string, title: string) => Promise<HaiResult<void>>
+  renameSession: (scope: InteractionScope, title: string) => Promise<HaiResult<void>>
 
   /**
    * 删除会话（删除会话元数据和对应的上下文数据）
    *
-   * @param sessionId - 会话 ID
+   * @param scope - 交互作用域（objectId + sessionId，用于多租户隔离）
    * @returns 成功返回 ok(undefined)
    */
-  removeSession: (sessionId: string) => Promise<HaiResult<void>>
+  removeSession: (scope: InteractionScope) => Promise<HaiResult<void>>
 }

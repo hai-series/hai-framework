@@ -101,9 +101,10 @@ export interface TranscriptionResult {
 /**
  * 流式语音识别领域事件
  *
- * 统一的语音领域事件（非厂商协议）。支持服务端 VAD 的平台（Qwen / 豆包）会在检测到语音
- * 起止时额外产出 `speech_started` / `speech_stopped`，使调用方可在「开始说话」的瞬间做出反应
- * （如取消当前上游生成），而无需自行运行 VAD；不支持 VAD 的平台仅产出 `transcript`。
+ * 统一的语音领域事件（非厂商协议）。支持服务端 VAD 的平台（如 Qwen 实时识别）会在检测到
+ * 语音起止时额外产出 `speech_started` / `speech_stopped`，使调用方可在「开始说话」的瞬间做出
+ * 反应（如取消当前上游生成），而无需自行运行 VAD；不产出 VAD 事件的平台（如豆包）仅产出
+ * `transcript`，此时是否需要 VAD 由调用方自行决定。
  *
  * `transcript.text` 表示当前语句的完整识别文本（非字符增量），实时 ASR 会修订前一次临时结果，
  * 调用方可直接用 `text` 覆盖当前临时文本。
