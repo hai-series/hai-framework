@@ -382,6 +382,7 @@ export function createContextOperations(
               model: chatOpts?.model ?? options.model,
               messages,
               enablePersist: false,
+              signal: chatOpts?.signal,
             })
             if (ragResult.success) {
               // RAG query 已直接返回完整结果，将 answer 作为回复
@@ -409,6 +410,7 @@ export function createContextOperations(
               objectId: scope?.objectId,
               sessionId: scope?.sessionId,
               enablePersist: false,
+              signal: chatOpts?.signal,
             })
             if (reasonResult.success) {
               const reply = reasonResult.data.answer
@@ -540,6 +542,7 @@ export function createContextOperations(
             model: chatOpts?.model ?? options.model,
             messages,
             enablePersist: false,
+            signal: chatOpts?.signal,
           })) {
             if (event.type === 'delta') {
               fullReply += event.text
@@ -571,6 +574,7 @@ export function createContextOperations(
             objectId: scope?.objectId,
             sessionId: scope?.sessionId,
             enablePersist: false,
+            signal: chatOpts?.signal,
           })) {
             if (event.type === 'delta') {
               fullReply += event.text

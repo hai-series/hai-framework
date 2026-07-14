@@ -42,6 +42,8 @@ export interface RagOptions {
   messages?: ChatMessage[]
   /** 是否启用内部 LLM 调用的持久化（默认 true；Context 层调用时传 false 避免重复记录） */
   enablePersist?: boolean
+  /** 请求取消信号（透传给内部 LLM 调用，支持中途取消生成） */
+  signal?: AbortSignal
 }
 
 /**

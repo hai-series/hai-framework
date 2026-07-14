@@ -94,7 +94,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const sourceStore = storeProvider.createRelStore<RetrievalSource>('hai_ai_retrieval_sources')
   const memoryStore = useMem0Oss ? null : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
   const contextStore = storeProvider.createRelStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
-  const personaStore = storeProvider.createRelStore<PersonaProfile>('hai_ai_persona')
+  const personaStore = storeProvider.createRelStore<PersonaProfile>('hai_ai_persona', { hasObjectId: true })
 
   // 向量存储
   const memoryVectorStore = useMem0Oss ? null : storeProvider.createVectorStore('hai_ai_memory_vectors')

@@ -173,24 +173,30 @@ await ai.init({
   },
 })
 
-// 完整识别
-const result = await ai.audio.transcribe({ audio: { data: wavBytes, format: 'wav' }, language: 'zh' })
+// 完整识别（可选热词提示提升专有名词识别率）
+const result = await ai.audio.transcribe({ audio: { data: wavBytes, format: 'wav' }, language: 'zh', contextHints: ['专有名词'] })
 if (result.success) {
   const text = result.data.text
 }
 
-// 实时识别（持续音频输入 → 增量文本）
-for await (const chunk of ai.audio.transcribeStream({
+// 实时识别（持续音频输入 → 领域事件流：speech_started / transcript / speech_stopped）
+for await (const event of ai.audio.transcribeStream({
   audio: { chunks: microphoneChunks, format: 'pcm16', sampleRate: 16000 },
 })) {
-  updateTranscript(chunk.text, chunk.final)
+  if (event.type === 'speech_started')
+    onSpeechStart() // 支持服务端 VAD 的平台会在检测到说话时立即产出，可据此取消上游生成
+  else if (event.type === 'transcript')
+    updateTranscript(event.text, event.final)
 }
 
-// 流式合成，并可直接连接 LLM 文本流实现边生成边合成
-for await (const audio of ai.audio.synthesizeStream({ text: ai.llm.askStream(question), voice: 'Cherry' })) {
+// 流式合成：可带自然语言风格指令，并直接连接 LLM 文本流边生成边合成；signal 可随时打断
+const controller = new AbortController()
+for await (const audio of ai.audio.synthesizeStream({ text: ai.llm.askStream(question), voice: 'Cherry', instruction: '用轻快的语气', signal: controller.signal })) {
   await player.write(audio)
 }
 ```
+
+取消/超时/连接错误统一为领域错误：`AbortSignal` 触发 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败 → `AUDIO_CONNECTION_FAILED`。实时连接时长受 `audio.maxStreamDurationMs`（默认 5 分钟）限制。
 
 浏览器 / 移动端通过 `@h-ai/serv` 暴露的统一语音 WebSocket 入口访问，`@h-ai/ai/client` 提供与 Node 端一致的 `audio.*` API（传输细节内部隐藏）。
 

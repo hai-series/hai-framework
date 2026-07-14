@@ -11,7 +11,7 @@ import type {
   SynthesisRequest,
   SynthesisResult,
   SynthesisStreamRequest,
-  TranscriptionChunk,
+  TranscriptionEvent,
   TranscriptionRequest,
   TranscriptionResult,
   TranscriptionStreamRequest,
@@ -40,8 +40,8 @@ export interface AudioClientConfig {
 export interface AudioClientOperations {
   /** 将完整音频识别为完整文本 */
   transcribe: (request: TranscriptionRequest) => Promise<TranscriptionResult>
-  /** 持续输入音频或增量返回识别文本 */
-  transcribeStream: (request: TranscriptionStreamRequest) => AsyncIterable<TranscriptionChunk>
+  /** 持续输入音频或增量返回识别文本（含语音起止事件） */
+  transcribeStream: (request: TranscriptionStreamRequest) => AsyncIterable<TranscriptionEvent>
   /** 将完整文本合成为完整音频 */
   synthesize: (request: SynthesisRequest) => Promise<SynthesisResult>
   /** 持续输入文本或增量输出音频 */
@@ -177,12 +177,12 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
     return JSON.stringify({ type: 'start', operation, ...extra } satisfies AudioWsStartMessage)
   }
 
-  async function* transcribeStream(request: TranscriptionStreamRequest): AsyncIterable<TranscriptionChunk> {
+  async function* transcribeStream(request: TranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
     const conn = await openBrowserWs(await buildUrl(), request.signal)
     try {
       const format = request.audio.format
       const sampleRate = request.audio.sampleRate
-      conn.send(startMessage('transcribe', { stream: true, model: request.model, language: request.language, format, sampleRate, channels: request.audio.channels }))
+      conn.send(startMessage('transcribe', { stream: true, model: request.model, language: request.language, contextHints: request.contextHints, format, sampleRate, channels: request.audio.channels }))
 
       const sendAudio = (async () => {
         if ('chunks' in request.audio) {
@@ -204,7 +204,11 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
           continue
         const event = JSON.parse(message.text) as AudioWsServerMessage
         if (event.type === 'transcript')
-          yield { text: event.text, final: event.final }
+          yield { type: 'transcript', text: event.text, final: event.final }
+        else if (event.type === 'speech_started')
+          yield { type: 'speech_started' }
+        else if (event.type === 'speech_stopped')
+          yield { type: 'speech_stopped' }
         else if (event.type === 'error')
           throw new Error(`${event.code}: ${event.message}`)
         else if (event.type === 'end')
@@ -222,7 +226,7 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
     // 完整识别：服务端缓冲全部音频后返回单条最终结果
     const conn = await openBrowserWs(await buildUrl(), request.signal)
     try {
-      conn.send(startMessage('transcribe', { stream: false, model: request.model, language: request.language, format: request.audio.format, sampleRate: request.audio.sampleRate, channels: request.audio.channels }))
+      conn.send(startMessage('transcribe', { stream: false, model: request.model, language: request.language, contextHints: request.contextHints, format: request.audio.format, sampleRate: request.audio.sampleRate, channels: request.audio.channels }))
       conn.send(request.audio.data)
       conn.send(JSON.stringify({ type: 'done' }))
 
@@ -248,7 +252,7 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
   async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<Uint8Array> {
     const conn = await openBrowserWs(await buildUrl(), request.signal)
     try {
-      conn.send(startMessage('synthesize', { model: request.model, voice: request.voice, format: request.format, sampleRate: request.sampleRate }))
+      conn.send(startMessage('synthesize', { model: request.model, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate }))
 
       const sendText = (async () => {
         if (typeof request.text === 'string') {

@@ -92,6 +92,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
         objectId: options.objectId,
         sessionId: options.sessionId,
         enablePersist: options.enablePersist,
+        signal: options.signal,
       })
 
       if (!chatResult.success)
@@ -200,6 +201,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       objectId: options.objectId,
       sessionId: options.sessionId,
       enablePersist: options.enablePersist,
+      signal: options.signal,
     })
 
     if (!chatResult.success)
@@ -263,6 +265,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       objectId: options.objectId,
       sessionId: options.sessionId,
       enablePersist: options.enablePersist,
+      signal: options.signal,
     })
 
     if (!planResult.success)
@@ -289,6 +292,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
         objectId: options.objectId,
         sessionId: options.sessionId,
         enablePersist: options.enablePersist,
+        signal: options.signal,
       })
 
       if (!execResult.success)

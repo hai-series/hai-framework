@@ -34,8 +34,12 @@ export interface AudioWsStartMessage {
   model?: string
   /** 识别语言提示 */
   language?: string
+  /** 领域提示词 / 热词（识别） */
+  contextHints?: string[]
   /** 合成音色 */
   voice?: string
+  /** 合成自然语言风格指令 */
+  instruction?: string
   /** 音频格式（识别时为输入格式，合成时为输出格式） */
   format?: AudioFormat
   /** 采样率 */
@@ -61,6 +65,11 @@ export type AudioWsClientMessage = AudioWsStartMessage | AudioWsTextMessage | Au
 
 // ─── 服务端 → 客户端 ───
 
+/** 语音起止事件（识别操作时服务端 VAD 检测到语音开始 / 结束） */
+export interface AudioWsSpeechMessage {
+  type: 'speech_started' | 'speech_stopped'
+}
+
 /** 识别结果帧（识别操作时返回当前语句的完整文本） */
 export interface AudioWsTranscriptMessage {
   type: 'transcript'
@@ -85,4 +94,4 @@ export interface AudioWsEndMessage {
 }
 
 /** 服务端 JSON 消息（合成音频以二进制帧返回，不走 JSON） */
-export type AudioWsServerMessage = AudioWsTranscriptMessage | AudioWsErrorMessage | AudioWsEndMessage
+export type AudioWsServerMessage = AudioWsSpeechMessage | AudioWsTranscriptMessage | AudioWsErrorMessage | AudioWsEndMessage

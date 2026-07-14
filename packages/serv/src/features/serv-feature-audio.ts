@@ -25,11 +25,14 @@ export interface AudioWsDeps {
   readonly verifyToken?: (token: string) => Promise<HaiResult<ServSession>>
   /** 单条消息字节上限（默认 1 MiB，防止内存放大）。 */
   readonly maxMessageBytes?: number
+  /** 单连接累计接收音频字节上限（默认 10 MiB，防止非流式缓冲无限增长）。 */
+  readonly maxBufferedBytes?: number
   /** 单连接最长持续时间（毫秒，默认 5 分钟，防止恶意长连接）。 */
   readonly maxSessionMs?: number
 }
 
 const DEFAULT_MAX_MESSAGE_BYTES = 1_048_576
+const DEFAULT_MAX_BUFFERED_BYTES = 10 * 1024 * 1024
 const DEFAULT_MAX_SESSION_MS = 5 * 60 * 1000
 
 /**
@@ -47,12 +50,13 @@ export function registerAudioWsRoute(
   deps: AudioWsDeps,
 ): void {
   const maxMessageBytes = deps.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES
+  const maxBufferedBytes = deps.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES
   const maxSessionMs = deps.maxSessionMs ?? DEFAULT_MAX_SESSION_MS
 
   app.get(path, upgradeWebSocket((c) => {
     // 浏览器 WebSocket 无法设置请求头，令牌优先取查询参数 access_token，其次 Authorization 头
     const token = c.req.query('access_token') ?? c.req.header('authorization')?.replace(/^Bearer\s+/i, '')
-    const conn = new AudioConnection(deps, token, maxMessageBytes)
+    const conn = new AudioConnection(deps, token, maxMessageBytes, maxBufferedBytes)
     let sessionTimer: ReturnType<typeof setTimeout> | undefined
 
     return {
@@ -135,6 +139,7 @@ class AudioConnection {
   private readonly audioQueue = new AsyncQueue<Uint8Array>()
   private readonly textQueue = new AsyncQueue<string>()
   private readonly audioBuffer: Uint8Array[] = []
+  private receivedBytes = 0
   private readonly controller = new AbortController()
   private closed = false
 
@@ -142,6 +147,7 @@ class AudioConnection {
     private readonly deps: AudioWsDeps,
     private readonly token: string | undefined,
     private readonly maxMessageBytes: number,
+    private readonly maxBufferedBytes: number,
   ) {}
 
   async handleMessage(ws: WSContext, data: unknown): Promise<void> {
@@ -151,8 +157,19 @@ class AudioConnection {
     // 二进制帧 → 音频分片
     const bytes = toBytes(data)
     if (bytes) {
+      // start 之前不得发送音频帧
+      if (!this.started) {
+        this.fail(ws, 'hai:ai:050', 'audio frame before start')
+        return
+      }
       if (bytes.length > this.maxMessageBytes) {
         this.fail(ws, 'hai:ai:058', 'audio frame too large')
+        return
+      }
+      // 累计接收字节背压：超过上限立即终止，避免内存耗尽
+      this.receivedBytes += bytes.length
+      if (this.receivedBytes > this.maxBufferedBytes) {
+        this.fail(ws, 'hai:ai:058', 'buffered audio exceeds limit')
         return
       }
       if (this.start?.stream)
@@ -180,6 +197,10 @@ class AudioConnection {
 
     if (message.type === 'start') {
       await this.onStart(ws, message)
+    }
+    else if (!this.started) {
+      // start 之前不得发送 text / done 控制帧
+      this.fail(ws, 'hai:ai:050', 'message before start')
     }
     else if (message.type === 'text') {
       this.textQueue.push(message.text)
@@ -220,7 +241,7 @@ class AudioConnection {
     // 非流式识别在收到 done 后由 runBufferedTranscribe 处理
   }
 
-  /** 流式识别：桥接持续音频输入，流式返回临时/最终结果 */
+  /** 流式识别：桥接持续音频输入，流式返回临时/最终结果与语音起止事件 */
   private async runStreamTranscribe(ws: WSContext, start: AudioWsStartMessage): Promise<void> {
     try {
       const stream = this.deps.ai.audio.transcribeStream({
@@ -231,11 +252,18 @@ class AudioConnection {
           channels: start.channels,
         },
         language: start.language,
+        contextHints: start.contextHints,
         model: start.model,
         signal: this.controller.signal,
       })
-      for await (const chunk of stream)
-        this.send(ws, { type: 'transcript', text: chunk.text, final: chunk.final })
+      for await (const event of stream) {
+        if (event.type === 'transcript')
+          this.send(ws, { type: 'transcript', text: event.text, final: event.final })
+        else if (event.type === 'speech_started')
+          this.send(ws, { type: 'speech_started' })
+        else if (event.type === 'speech_stopped')
+          this.send(ws, { type: 'speech_stopped' })
+      }
       this.end(ws)
     }
     catch (error) {
@@ -257,6 +285,7 @@ class AudioConnection {
           channels: start.channels,
         },
         language: start.language,
+        contextHints: start.contextHints,
         model: start.model,
         signal: this.controller.signal,
       })
@@ -278,6 +307,7 @@ class AudioConnection {
       const stream = this.deps.ai.audio.synthesizeStream({
         text: this.textQueue.iterate(),
         voice: start.voice,
+        instruction: start.instruction,
         format: start.format,
         sampleRate: start.sampleRate,
         model: start.model,

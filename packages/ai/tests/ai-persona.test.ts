@@ -22,7 +22,10 @@ function createMockStore<T>(): AIRelStore<T> {
       const v = data.get(id)
       return v ? { ...v as object } as T : undefined
     }),
-    query: vi.fn(async () => Array.from(data.values()).map(v => ({ ...v as object } as T))),
+    query: vi.fn(async (filter?: { objectId?: string }) => {
+      const all = Array.from(data.values()).map(v => ({ ...v as object } as T))
+      return filter?.objectId ? all.filter(v => (v as { objectId?: string }).objectId === filter.objectId) : all
+    }),
     queryPage: vi.fn(),
     remove: vi.fn(async (id: string) => data.delete(id)),
     removeBy: vi.fn(async () => 0),
@@ -113,5 +116,26 @@ describe('createPersonaOperations', () => {
     expect(removed.success).toBe(true)
     const got = await persona.get('x')
     expect(got.success).toBe(false)
+  })
+
+  it('不同 objectId 隔离同名角色', async () => {
+    const persona = createPersonaOperations(createMockStore())
+    await persona.save({ id: 'sociologist', objectId: 'user-a', systemPrompt: 'A 的社会学家' })
+    await persona.save({ id: 'sociologist', objectId: 'user-b', systemPrompt: 'B 的社会学家' })
+
+    const a = await persona.get('sociologist', { objectId: 'user-a' })
+    const b = await persona.get('sociologist', { objectId: 'user-b' })
+    expect(a.success && a.data.systemPrompt).toBe('A 的社会学家')
+    expect(b.success && b.data.systemPrompt).toBe('B 的社会学家')
+
+    const listA = await persona.list({ objectId: 'user-a' })
+    expect(listA.success && listA.data).toHaveLength(1)
+
+    // user-a 删除不影响 user-b
+    await persona.remove('sociologist', { objectId: 'user-a' })
+    const gone = await persona.get('sociologist', { objectId: 'user-a' })
+    const still = await persona.get('sociologist', { objectId: 'user-b' })
+    expect(gone.success).toBe(false)
+    expect(still.success).toBe(true)
   })
 })

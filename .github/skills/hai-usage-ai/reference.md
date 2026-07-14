@@ -168,15 +168,20 @@ const result = await ai.rag.query('核心架构是什么？', {
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
 | `transcribe(request)` | `Promise<HaiResult<TranscriptionResult>>` | 完整音频 → 完整文本 |
-| `transcribeStream(request)` | `AsyncIterable<TranscriptionChunk>` | 完整音频或 `AudioInputStream` → 增量/最终文本 |
+| `transcribeStream(request)` | `AsyncIterable<TranscriptionEvent>` | 完整音频或 `AudioInputStream` → `speech_started` / `{type:'transcript',text,final}` / `speech_stopped`（VAD 平台产出语音起止事件） |
 | `synthesize(request)` | `Promise<HaiResult<SynthesisResult>>` | 完整文本 → 完整音频 |
 | `synthesizeStream(request)` | `AsyncIterable<Uint8Array>` | `string` 或 `AsyncIterable<string>` → 音频分片 |
 
 - 音频类型：`AudioContent { data: Uint8Array, format: 'pcm16'|'wav'|'mp3'|'opus', sampleRate?, channels? }`；`pcm16` 等裸音频必须传 `sampleRate`。
+- 请求可选：识别 `contextHints?: string[]`（热词/提示）；合成 `instruction?: string`（自然语言风格指令）；均支持 `signal: AbortSignal`。
 - 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]` + `transcribeModel` / `synthesizeModel`。
 - 凭据环境变量回退：`HAI_AI_AUDIO_<PROVIDER>_API_KEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。
 - 资源上限：`audio.maxAudioBytes`（默 10 MiB）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
-- Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。
+- Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败 → `AUDIO_CONNECTION_FAILED`。
+
+## LLM 结构化输出
+
+`ai.llm.generateObject({ schema, messages, model?, systemPrompt?, maxRepairs?, signal? })`：按 Zod schema 约束模型输出（json_schema）并解析为对象，解析/校验失败自动带错误提示重试（默 1 次）。适用于“是否为问题/意图分类/置信度”等需要稳定结构结果的场景，避免手写 `JSON.parse`。
 
 ## A2A
 

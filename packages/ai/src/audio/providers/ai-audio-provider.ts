@@ -16,13 +16,15 @@ import type {
   AudioFormat,
   AudioInputStream,
   SynthesisResult,
-  TranscriptionChunk,
+  TranscriptionEvent,
   TranscriptionResult,
 } from '../ai-audio-types.js'
 
 import { Buffer } from 'node:buffer'
 import { core } from '@h-ai/core'
 import WebSocket from 'ws'
+import { aiM } from '../../ai-i18n.js'
+import { HaiAIError } from '../../ai-types.js'
 
 // ─── Provider 请求类型（已解析模型 + 公共请求字段） ───
 
@@ -34,6 +36,8 @@ export interface ProviderTranscriptionRequest {
   audio: AudioContent
   /** 语言提示 */
   language?: string
+  /** 领域提示词 / 热词 */
+  contextHints?: string[]
   /** 取消信号 */
   signal?: AbortSignal
 }
@@ -46,6 +50,8 @@ export interface ProviderTranscriptionStreamRequest {
   audio: AudioContent | AudioInputStream
   /** 语言提示 */
   language?: string
+  /** 领域提示词 / 热词 */
+  contextHints?: string[]
   /** 取消信号 */
   signal?: AbortSignal
 }
@@ -58,6 +64,8 @@ export interface ProviderSynthesisRequest {
   text: string
   /** 音色 */
   voice?: string
+  /** 自然语言风格指令 */
+  instruction?: string
   /** 输出格式 */
   format?: AudioFormat
   /** 输出采样率 */
@@ -74,6 +82,8 @@ export interface ProviderSynthesisStreamRequest {
   text: string | AsyncIterable<string>
   /** 音色 */
   voice?: string
+  /** 自然语言风格指令 */
+  instruction?: string
   /** 输出格式 */
   format?: AudioFormat
   /** 输出采样率 */
@@ -92,7 +102,7 @@ export interface AudioProvider {
   /** 完整语音识别 */
   transcribe: (request: ProviderTranscriptionRequest) => Promise<HaiResult<TranscriptionResult>>
   /** 流式语音识别 */
-  transcribeStream: (request: ProviderTranscriptionStreamRequest) => AsyncIterable<TranscriptionChunk>
+  transcribeStream: (request: ProviderTranscriptionStreamRequest) => AsyncIterable<TranscriptionEvent>
   /** 完整语音合成 */
   synthesize: (request: ProviderSynthesisRequest) => Promise<HaiResult<SynthesisResult>>
   /** 流式语音合成 */
@@ -128,6 +138,48 @@ export function errorMessage(error: unknown): string {
  */
 export function audioError(def: HaiErrorDef, message: string, cause?: unknown): HaiError {
   return core.error.buildHaiErrorInst(def, message, cause)
+}
+
+/**
+ * 依据取消原因返回统一取消/超时错误（区分主动取消与超时）
+ *
+ * `AbortSignal.timeout()` 触发时 `signal.reason` 是 `TimeoutError`，映射为 `AUDIO_TIMEOUT`；
+ * 其余主动取消映射为 `AUDIO_CANCELLED`。
+ *
+ * @internal
+ */
+export function audioAbortError(signal?: AbortSignal): HaiError {
+  const reason = signal?.reason as { name?: string } | undefined
+  if (reason?.name === 'TimeoutError')
+    return audioError(HaiAIError.AUDIO_TIMEOUT, aiM('ai_audioTimeout'))
+  return audioError(HaiAIError.AUDIO_CANCELLED, aiM('ai_audioCancelled'))
+}
+
+/**
+ * 将流式迭代 / 请求抛出的错误映射为统一 HaiError
+ *
+ * - 已是领域 HaiError（取消/超时/连接/协议等）→ 原样返回，保留错误码
+ * - fetch / SDK 的 `AbortError` / `TimeoutError` → 按取消原因映射 `AUDIO_CANCELLED` / `AUDIO_TIMEOUT`
+ * - 其余 → `AUDIO_UPSTREAM_ERROR`
+ *
+ * @internal
+ */
+export function mapStreamError(error: unknown, signal?: AbortSignal): HaiError {
+  const maybe = error as { code?: unknown, name?: unknown }
+  if (typeof maybe.code === 'string' && maybe.code.startsWith('hai:ai:'))
+    return error as HaiError
+  if (maybe.name === 'AbortError' || maybe.name === 'TimeoutError')
+    return audioAbortError(signal)
+  return audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+}
+
+/**
+ * 将流式迭代抛出的错误转换为 HaiResult（供非流式 transcribe/synthesize 复用底层流）
+ *
+ * @internal
+ */
+export function toAudioErrorResult<T>(error: unknown, signal?: AbortSignal): HaiResult<T> {
+  return { success: false, error: mapStreamError(error, signal) }
 }
 
 // ─── Node WebSocket 连接辅助 ───
@@ -176,9 +228,11 @@ export function openAudioWebSocket(
     let waiting: ((result: IteratorResult<AudioWsMessage>) => void) | null = null
     let closed = false
     let opened = false
+    let aborted = false
     let failure: Error | null = null
 
     const onSignalAbort = (): void => {
+      aborted = true
       try {
         ws.close()
       }
@@ -221,10 +275,10 @@ export function openAudioWebSocket(
     })
 
     ws.on('error', (error: Error) => {
-      // open 之前出错视为连接建立失败，直接 reject
+      // open 之前出错视为连接建立失败，映射为 AUDIO_CONNECTION_FAILED
       if (!opened) {
         settleClosed()
-        reject(error)
+        reject(audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', { params: { error: error.message } }), error))
         return
       }
       failure = error
@@ -256,16 +310,20 @@ export function openAudioWebSocket(
               continue
             }
             if (closed) {
+              if (aborted)
+                throw audioAbortError(options?.signal)
               if (failure)
-                throw failure
+                throw audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', { params: { error: failure.message } }), failure)
               return
             }
             const next = await new Promise<IteratorResult<AudioWsMessage>>((res) => {
               waiting = res
             })
             if (next.done) {
+              if (aborted)
+                throw audioAbortError(options?.signal)
               if (failure)
-                throw failure
+                throw audioError(HaiAIError.AUDIO_CONNECTION_FAILED, aiM('ai_audioConnectionFailed', { params: { error: failure.message } }), failure)
               return
             }
             yield next.value

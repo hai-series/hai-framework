@@ -13,7 +13,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ResolvedAudioModel } from '../../ai-config.js'
 
-import type { AudioFormat, SynthesisResult, TranscriptionChunk, TranscriptionResult } from '../ai-audio-types.js'
+import type { AudioFormat, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
 import type {
   AudioProvider,
   AudioWsMessage,
@@ -25,10 +25,10 @@ import type {
 
 import { Buffer } from 'node:buffer'
 import { gunzipSync } from 'node:zlib'
-import { core, err, ok } from '@h-ai/core'
+import { core, ok } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
-import { audioError, concatChunks, errorMessage, openAudioWebSocket } from './ai-audio-provider.js'
+import { audioError, concatChunks, errorMessage, openAudioWebSocket, toAudioErrorResult } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-doubao' })
 
@@ -251,20 +251,20 @@ export function createDoubaoAudioProvider(): AudioProvider {
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     try {
       let finalText = ''
-      for await (const chunk of transcribeStream({ model: request.model, audio: request.audio, language: request.language, signal: request.signal })) {
-        if (chunk.final)
-          finalText = chunk.text
+      for await (const event of transcribeStream({ model: request.model, audio: request.audio, language: request.language, contextHints: request.contextHints, signal: request.signal })) {
+        if (event.type === 'transcript' && event.final)
+          finalText = event.text
       }
       return ok({ text: finalText })
     }
     catch (error) {
       logger.debug('Doubao transcribe failed', { error: errorMessage(error) })
-      return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+      return toAudioErrorResult(error)
     }
   }
 
-  async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionChunk> {
-    const { model, audio, language, signal } = request
+  async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
+    const { model, audio, language, contextHints, signal } = request
     const url = `${model.baseUrl}/api/v3/sauc/bigmodel`
     const conn = await openAudioWebSocket(url, buildAuthHeaders(model, false), { signal, timeout: model.timeout })
     try {
@@ -284,6 +284,8 @@ export function createDoubaoAudioProvider(): AudioProvider {
           enable_itn: true,
           enable_punc: true,
           result_type: 'full',
+          // 领域提示词 → 热词（直传 context）
+          ...(contextHints?.length ? { context: JSON.stringify({ hotwords: contextHints.map(word => ({ word })) }) } : {}),
         },
       }))
 
@@ -317,7 +319,7 @@ export function createDoubaoAudioProvider(): AudioProvider {
         const text = extractAsrText(frame.json)
         const isLast = frame.sequence !== undefined && frame.sequence < 0
         if (text !== undefined)
-          yield { text, final: isLast }
+          yield { type: 'transcript', text, final: isLast }
         if (isLast) {
           if (sendError)
             throw sendError
@@ -344,7 +346,7 @@ export function createDoubaoAudioProvider(): AudioProvider {
     }
     catch (error) {
       logger.debug('Doubao synthesize failed', { error: errorMessage(error) })
-      return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+      return toAudioErrorResult(error)
     }
   }
 

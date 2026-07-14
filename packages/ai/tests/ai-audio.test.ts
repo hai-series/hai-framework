@@ -12,7 +12,7 @@ import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ─── Mock: OpenAI SDK + ws（均在 vi.hoisted 内定义，供 vi.mock 工厂引用） ───
-const { mockTranscribe, mockSpeech, mockChatCreate, MockWebSocket } = vi.hoisted(() => {
+const { mockTranscribe, mockSpeech, mockChatCreate, mockToFile, MockWebSocket } = vi.hoisted(() => {
   /** 可脚本化的 Node WebSocket mock */
   class MockWebSocketImpl {
     static instances: MockWebSocketImpl[] = []
@@ -61,6 +61,7 @@ const { mockTranscribe, mockSpeech, mockChatCreate, MockWebSocket } = vi.hoisted
     mockTranscribe: vi.fn(),
     mockSpeech: vi.fn(),
     mockChatCreate: vi.fn(),
+    mockToFile: vi.fn(async (data: Uint8Array, name: string) => ({ data, name })),
     MockWebSocket: MockWebSocketImpl,
   }
 })
@@ -76,7 +77,7 @@ vi.mock('openai', () => {
   }
   return {
     default: MockOpenAI,
-    toFile: vi.fn(async (data: Uint8Array, name: string) => ({ data, name })),
+    toFile: mockToFile,
   }
 })
 
@@ -425,6 +426,107 @@ describe('ai.audio 豆包 Provider', () => {
     // full client request(0001) + with event(0100) = 0x14
     expect(startFrame[1]).toBe(0x14)
     expect(readEvent(startFrame)).toBe(1) // StartConnection
+  })
+})
+
+// =============================================================================
+// 新能力：语音事件 / 取消语义 / 提示词 / 风格指令 / pcm→wav
+// =============================================================================
+
+describe('ai.audio 领域事件与取消语义', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    MockWebSocket.instances.length = 0
+    MockWebSocket.script = null
+    await initAudio({ transcribeModel: 'qwen-asr', synthesizeModel: 'qwen-tts' })
+  })
+  afterEach(async () => {
+    MockWebSocket.script = null
+    await ai.close()
+  })
+
+  it('实时识别产出 speech_started / transcript / speech_stopped 事件', async () => {
+    MockWebSocket.script = (data, ws) => {
+      if (typeof data === 'string' && data.includes('session.finish')) {
+        ws.serverText(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
+        ws.serverText(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '人工' }))
+        ws.serverText(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }))
+        ws.serverText(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: '人工智能' }))
+        ws.serverText(JSON.stringify({ type: 'session.finished' }))
+      }
+    }
+
+    async function* chunks(): AsyncIterable<Uint8Array> {
+      yield new Uint8Array([1, 2, 3])
+    }
+    const events: string[] = []
+    for await (const event of ai.audio.transcribeStream({ audio: { chunks: chunks(), format: 'pcm16', sampleRate: 16000 } }))
+      events.push(event.type)
+
+    expect(events).toContain('speech_started')
+    expect(events).toContain('transcript')
+    expect(events).toContain('speech_stopped')
+  })
+
+  it('取消信号触发时返回 AUDIO_CANCELLED', async () => {
+    const controller = new AbortController()
+    MockWebSocket.script = () => {
+      controller.abort()
+    }
+    const r = await ai.audio.synthesize({ text: '你好', signal: controller.signal })
+    expect(r.success).toBe(false)
+    if (!r.success)
+      expect(r.error.code).toBe(HaiAIError.AUDIO_CANCELLED.code)
+  })
+})
+
+describe('ai.audio 提示词 / 风格指令 / pcm→wav', () => {
+  afterEach(async () => {
+    vi.unstubAllGlobals()
+    await ai.close()
+  })
+
+  it('合成将 instruction 放入 MiMo user 消息', async () => {
+    vi.clearAllMocks()
+    await initAudio({ synthesizeModel: 'mimo-tts' })
+    const base64 = Buffer.from(new Uint8Array([1, 2])).toString('base64')
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await ai.audio.synthesize({ text: '欢迎', instruction: '用轻快的语气', format: 'wav' })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.messages[0]).toEqual({ role: 'user', content: '用轻快的语气' })
+    expect(body.messages[1]).toEqual({ role: 'assistant', content: '欢迎' })
+  })
+
+  it('豆包 ASR 将 contextHints 映射为热词 context', async () => {
+    vi.clearAllMocks()
+    MockWebSocket.instances.length = 0
+    MockWebSocket.script = (data, ws) => {
+      if (data instanceof Uint8Array && data[1] >> 4 === 0b0010)
+        ws.serverBinary(buildDoubaoAsrResponse({ result: { text: '字节跳动' } }, -1))
+    }
+    await initAudio({ transcribeModel: 'doubao-asr' })
+    const r = await ai.audio.transcribe({ audio: { data: new Uint8Array([1, 2, 3, 4]), format: 'pcm16', sampleRate: 16000 }, contextHints: ['字节跳动', '火山引擎'] })
+    expect(r.success).toBe(true)
+
+    const ws = MockWebSocket.instances[0]
+    const firstFrame = ws.sent[0] as Uint8Array
+    const payload = JSON.parse(Buffer.from(firstFrame.slice(8)).toString('utf8'))
+    const context = JSON.parse(payload.request.context)
+    expect(context.hotwords).toEqual([{ word: '字节跳动' }, { word: '火山引擎' }])
+    MockWebSocket.script = null
+  })
+
+  it('识别将裸 pcm16 封装为 WAV（OpenAI RIFF 头）', async () => {
+    vi.clearAllMocks()
+    await initAudio({ transcribeModel: 'oa-asr' })
+    mockTranscribe.mockResolvedValue({ text: 'ok' })
+    await ai.audio.transcribe({ audio: { data: new Uint8Array([0, 0, 0, 0]), format: 'pcm16', sampleRate: 16000 } })
+
+    const uploaded = mockToFile.mock.calls[0][0] as Uint8Array
+    const magic = Buffer.from(uploaded.slice(0, 4)).toString('ascii')
+    expect(magic).toBe('RIFF')
   })
 })
 

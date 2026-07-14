@@ -369,6 +369,33 @@ export interface LLMProvider {
 // ─── LLM 操作接口 ───
 
 /**
+ * 结构化输出请求
+ *
+ * 给定 Zod schema，让模型返回严格符合结构的 JSON（内部使用 `json_schema` response_format），
+ * 解析失败时自动带错误修复重试，避免调用方手写 `JSON.parse` 的不稳定性。
+ */
+export interface GenerateObjectRequest<T> {
+  /** 输出结构的 Zod schema */
+  schema: ZodType<T>
+  /** 对话消息 */
+  messages: ChatMessage[]
+  /** 模型名（可选，不传时使用默认模型） */
+  model?: string
+  /** 系统提示词（可选，追加为首条 system 消息） */
+  systemPrompt?: string
+  /** 温度覆盖 */
+  temperature?: number
+  /** 临时模型配置 */
+  tempModel?: TempModelConfig
+  /** schema 名称（用于 json_schema response_format，默认 `result`） */
+  schemaName?: string
+  /** 解析失败时的修复重试次数（默认 1） */
+  maxRepairs?: number
+  /** 取消信号 */
+  signal?: AbortSignal
+}
+
+/**
  * LLM 操作接口（通过 `ai.llm` 访问）
  *
  * 需要先调用 `ai.init()` 初始化，否则返回 `NOT_INITIALIZED` 错误。
@@ -404,6 +431,16 @@ export interface LLMOperations {
    * @returns 文本片段的异步迭代器
    */
   askStream: (question: string, options?: AskOptions) => AsyncIterable<string>
+
+  /**
+   * 结构化输出：按 Zod schema 约束模型输出并解析为对象
+   *
+   * 内部使用 `json_schema` response_format 约束输出，解析/校验失败时自动带错误提示重试。
+   *
+   * @param request - 包含 schema、messages 及可选模型/修复次数等
+   * @returns 符合 schema 的对象；多次重试仍无法解析时返回 `INVALID_REQUEST`
+   */
+  generateObject: <T>(request: GenerateObjectRequest<T>) => Promise<HaiResult<T>>
 }
 
 // ─── LLM 工厂依赖 ───

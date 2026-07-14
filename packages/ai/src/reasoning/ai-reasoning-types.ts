@@ -68,6 +68,8 @@ export interface ReasoningOptions {
   tools?: ToolRegistryOperations
   /** 温度覆盖 */
   temperature?: number
+  /** 请求取消信号（透传给内部 LLM 调用，支持中途取消推理） */
+  signal?: AbortSignal
 }
 
 // ─── 推理步骤 ───

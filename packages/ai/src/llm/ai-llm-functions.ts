@@ -19,6 +19,7 @@ import type {
   ChatHistoryOptions,
   ChatMessage,
   ChatRecord,
+  GenerateObjectRequest,
   LLMOperations,
   StreamOperations,
   TokenUsage,
@@ -26,6 +27,7 @@ import type {
 } from './ai-llm-types.js'
 
 import { core, err, ok } from '@h-ai/core'
+import { z } from 'zod'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -329,6 +331,52 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
         if (delta)
           yield delta
       }
+    },
+
+    async generateObject<T>(request: GenerateObjectRequest<T>): Promise<HaiResult<T>> {
+      const baseMessages: ChatMessage[] = []
+      if (request.systemPrompt)
+        baseMessages.push({ role: 'system', content: request.systemPrompt })
+      baseMessages.push(...request.messages)
+
+      const jsonSchema = z.toJSONSchema(request.schema)
+      const schemaName = request.schemaName ?? 'result'
+      const maxRepairs = request.maxRepairs ?? 1
+      let lastError = ''
+
+      for (let attempt = 0; attempt <= maxRepairs; attempt++) {
+        const messages: ChatMessage[] = attempt === 0
+          ? baseMessages
+          : [...baseMessages, { role: 'user', content: aiM('ai_generateObjectRepair', { params: { error: lastError } }) }]
+        const result = await chatWithRecord({
+          messages,
+          model: request.model,
+          temperature: request.temperature,
+          tempModel: request.tempModel,
+          enablePersist: false,
+          signal: request.signal,
+          response_format: { type: 'json_schema', json_schema: { name: schemaName, schema: jsonSchema, strict: true } },
+        })
+        if (!result.success)
+          return result as HaiResult<never>
+
+        const content = result.data.choices[0]?.message?.content
+        const text = typeof content === 'string' ? content : ''
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(text)
+        }
+        catch {
+          lastError = 'invalid JSON'
+          continue
+        }
+        const validated = request.schema.safeParse(parsed)
+        if (validated.success)
+          return ok(validated.data)
+        lastError = validated.error.message
+      }
+
+      return err(HaiAIError.INVALID_REQUEST, aiM('ai_generateObjectFailed', { params: { error: lastError || 'unknown' } }))
     },
   }
 

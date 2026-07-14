@@ -12,7 +12,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ResolvedAudioModel } from '../../ai-config.js'
 
-import type { AudioFormat, SynthesisResult, TranscriptionChunk, TranscriptionResult } from '../ai-audio-types.js'
+import type { AudioFormat, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
 import type {
   AudioProvider,
   AudioWsConnection,
@@ -22,11 +22,9 @@ import type {
   ProviderTranscriptionStreamRequest,
 } from './ai-audio-provider.js'
 
-import { core, err, ok } from '@h-ai/core'
+import { core, ok } from '@h-ai/core'
 import { nanoid } from 'nanoid'
-import { aiM } from '../../ai-i18n.js'
-import { HaiAIError } from '../../ai-types.js'
-import { concatChunks, errorMessage, fromBase64, openAudioWebSocket, toBase64 } from './ai-audio-provider.js'
+import { concatChunks, errorMessage, fromBase64, openAudioWebSocket, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-qwen' })
 
@@ -47,7 +45,6 @@ interface QwenServerEvent {
   audio?: string
   transcription?: { text?: string, transcript?: string }
 }
-
 /**
  * 创建 Qwen Audio Provider
  *
@@ -71,19 +68,19 @@ export function createQwenAudioProvider(): AudioProvider {
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     try {
       let finalText = ''
-      for await (const chunk of transcribeStream({ model: request.model, audio: request.audio, language: request.language, signal: request.signal })) {
-        if (chunk.final)
-          finalText = finalText ? `${finalText}${chunk.text}` : chunk.text
+      for await (const event of transcribeStream({ model: request.model, audio: request.audio, language: request.language, contextHints: request.contextHints, signal: request.signal })) {
+        if (event.type === 'transcript' && event.final)
+          finalText = finalText ? `${finalText}${event.text}` : event.text
       }
       return ok({ text: finalText })
     }
     catch (error) {
       logger.debug('Qwen transcribe failed', { error: errorMessage(error) })
-      return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+      return toAudioErrorResult(error)
     }
   }
 
-  async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionChunk> {
+  async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
     const { model, audio, language, signal } = request
     const isStreamInput = 'chunks' in audio
     const format = audio.format
@@ -126,16 +123,22 @@ export function createQwenAudioProvider(): AudioProvider {
           continue
         const event = parseEvent(message.text)
         switch (event.type) {
+          case 'input_audio_buffer.speech_started':
+            yield { type: 'speech_started' }
+            break
+          case 'input_audio_buffer.speech_stopped':
+            yield { type: 'speech_stopped' }
+            break
           case 'conversation.item.input_audio_transcription.text': {
             const text = event.text ?? event.transcript ?? event.transcription?.text ?? event.delta
             if (text)
-              yield { text, final: false }
+              yield { type: 'transcript', text, final: false }
             break
           }
           case 'conversation.item.input_audio_transcription.completed': {
             const text = event.transcript ?? event.text ?? event.transcription?.transcript ?? event.transcription?.text
             if (text)
-              yield { text, final: true }
+              yield { type: 'transcript', text, final: true }
             break
           }
           case 'session.finished':
@@ -157,18 +160,18 @@ export function createQwenAudioProvider(): AudioProvider {
     const outFormat: AudioFormat = format ?? 'pcm16'
     try {
       const chunks: Uint8Array[] = []
-      for await (const audio of synthesizeStream({ model: request.model, text: request.text, voice: request.voice, format: outFormat, sampleRate, signal: request.signal }))
+      for await (const audio of synthesizeStream({ model: request.model, text: request.text, voice: request.voice, instruction: request.instruction, format: outFormat, sampleRate, signal: request.signal }))
         chunks.push(audio)
       return ok({ data: concatChunks(chunks), format: outFormat, sampleRate: outFormat === 'pcm16' ? (sampleRate ?? 24000) : undefined, channels: 1 })
     }
     catch (error) {
       logger.debug('Qwen synthesize failed', { error: errorMessage(error) })
-      return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+      return toAudioErrorResult(error)
     }
   }
 
   async function* synthesizeStream(request: ProviderSynthesisStreamRequest): AsyncIterable<Uint8Array> {
-    const { model, text, voice, format, sampleRate, signal } = request
+    const { model, text, voice, instruction, format, sampleRate, signal } = request
     const isStreamInput = typeof text !== 'string'
     const outFormat: AudioFormat = format ?? 'pcm16'
 
@@ -183,6 +186,7 @@ export function createQwenAudioProvider(): AudioProvider {
           mode: isStreamInput ? 'server_commit' : 'commit',
           response_format: QWEN_FORMAT[outFormat],
           sample_rate: sampleRate ?? 24000,
+          ...(instruction ? { instructions: instruction } : {}),
         },
       }))
 

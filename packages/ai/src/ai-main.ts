@@ -114,6 +114,7 @@ const notInitializedLLM: LLMOperations = {
   async* askStream() {
     throw notInitialized.error()
   },
+  generateObject: () => Promise.resolve(notInitialized.result()),
 }
 
 /** MCP 未初始化占位：所有方法返回 NOT_INITIALIZED 错误 */

@@ -15,7 +15,7 @@ import type {
   SynthesisRequest,
   SynthesisResult,
   SynthesisStreamRequest,
-  TranscriptionChunk,
+  TranscriptionEvent,
   TranscriptionRequest,
   TranscriptionResult,
   TranscriptionStreamRequest,
@@ -30,7 +30,7 @@ import { createDoubaoAudioProvider } from './providers/ai-audio-provider-doubao.
 import { createMimoAudioProvider } from './providers/ai-audio-provider-mimo.js'
 import { createOpenAIAudioProvider } from './providers/ai-audio-provider-openai.js'
 import { createQwenAudioProvider } from './providers/ai-audio-provider-qwen.js'
-import { audioError } from './providers/ai-audio-provider.js'
+import { audioError, mapStreamError } from './providers/ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio' })
 
@@ -61,6 +61,12 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     return null
   }
 
+  /** 组合请求取消信号与实时连接时长上限（P0-5：maxStreamDurationMs 生效） */
+  function withStreamTimeout(signal: AbortSignal | undefined): AbortSignal {
+    const timeout = AbortSignal.timeout(audioConfig.maxStreamDurationMs)
+    return signal ? AbortSignal.any([signal, timeout]) : timeout
+  }
+
   async function transcribe(request: TranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
     if (!request.audio?.data?.length)
       return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty audio' } }))
@@ -72,10 +78,10 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     if (!resolved.success)
       return resolved
     logger.debug('audio transcribe', { provider: resolved.data.provider, model: resolved.data.model })
-    return getProvider(resolved.data.provider).transcribe({ model: resolved.data, audio: request.audio, language: request.language, signal: request.signal })
+    return getProvider(resolved.data.provider).transcribe({ model: resolved.data, audio: request.audio, language: request.language, contextHints: request.contextHints, signal: request.signal })
   }
 
-  async function* transcribeStream(request: TranscriptionStreamRequest): AsyncIterable<TranscriptionChunk> {
+  async function* transcribeStream(request: TranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
     if (!('chunks' in request.audio) && !request.audio.data?.length)
       throw audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty audio' } }))
     if (!('chunks' in request.audio)) {
@@ -88,7 +94,13 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     if (!resolved.success)
       throw resolved.error
     logger.debug('audio transcribeStream', { provider: resolved.data.provider, model: resolved.data.model })
-    yield* getProvider(resolved.data.provider).transcribeStream({ model: resolved.data, audio: request.audio, language: request.language, signal: request.signal })
+    const signal = withStreamTimeout(request.signal)
+    try {
+      yield* getProvider(resolved.data.provider).transcribeStream({ model: resolved.data, audio: request.audio, language: request.language, contextHints: request.contextHints, signal })
+    }
+    catch (error) {
+      throw mapStreamError(error, signal)
+    }
   }
 
   async function synthesize(request: SynthesisRequest): Promise<HaiResult<SynthesisResult>> {
@@ -99,7 +111,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     if (!resolved.success)
       return resolved
     logger.debug('audio synthesize', { provider: resolved.data.provider, model: resolved.data.model })
-    return getProvider(resolved.data.provider).synthesize({ model: resolved.data, text: request.text, voice: request.voice, format: request.format, sampleRate: request.sampleRate, signal: request.signal })
+    return getProvider(resolved.data.provider).synthesize({ model: resolved.data, text: request.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal: request.signal })
   }
 
   async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<Uint8Array> {
@@ -110,7 +122,13 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     if (!resolved.success)
       throw resolved.error
     logger.debug('audio synthesizeStream', { provider: resolved.data.provider, model: resolved.data.model })
-    yield* getProvider(resolved.data.provider).synthesizeStream({ model: resolved.data, text: request.text, voice: request.voice, format: request.format, sampleRate: request.sampleRate, signal: request.signal })
+    const signal = withStreamTimeout(request.signal)
+    try {
+      yield* getProvider(resolved.data.provider).synthesizeStream({ model: resolved.data, text: request.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal })
+    }
+    catch (error) {
+      throw mapStreamError(error, signal)
+    }
   }
 
   return { transcribe, transcribeStream, synthesize, synthesizeStream }

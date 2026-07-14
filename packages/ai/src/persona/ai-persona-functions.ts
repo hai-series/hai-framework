@@ -9,7 +9,7 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { AIRelStore } from '../store/ai-store-types.js'
-import type { PersonaOperations, PersonaProfile, PersonaProfileInput, PersonaProfileUpdate } from './ai-persona-types.js'
+import type { PersonaOperations, PersonaProfile, PersonaProfileInput, PersonaProfileUpdate, PersonaScopeOptions } from './ai-persona-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -17,6 +17,14 @@ import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'persona' })
+
+/** 默认主体：平台内置角色（未指定 objectId 时使用） */
+const DEFAULT_OBJECT_ID = 'system'
+
+/** 构造存储键（JSON 数组序列化 [objectId, personaId]，避免朴素拼接碰撞） */
+function personaKey(objectId: string, id: string): string {
+  return JSON.stringify([objectId, id])
+}
 
 /**
  * 将角色档案的 traits 组合进系统提示词
@@ -33,7 +41,7 @@ function composeSystemPrompt(profile: PersonaProfile): string {
 /**
  * 创建 Persona 操作接口
  *
- * @param store - 角色档案持久化存储（id 主键，全局共享）
+ * @param store - 角色档案持久化存储（按 [objectId, id] 复合键隔离多租户）
  * @returns PersonaOperations 实例
  */
 export function createPersonaOperations(store: AIRelStore<PersonaProfile>): PersonaOperations {
@@ -41,9 +49,12 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
     async save(input: PersonaProfileInput): Promise<HaiResult<PersonaProfile>> {
       try {
         const now = Date.now()
-        const existing = await store.get(input.id)
+        const objectId = input.objectId ?? DEFAULT_OBJECT_ID
+        const key = personaKey(objectId, input.id)
+        const existing = await store.get(key)
         const profile: PersonaProfile = {
           id: input.id,
+          objectId,
           name: input.name,
           systemPrompt: input.systemPrompt,
           traits: input.traits ?? [],
@@ -51,8 +62,8 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         }
-        await store.save(profile.id, profile)
-        logger.trace('Persona saved', { id: profile.id })
+        await store.save(key, profile, { objectId })
+        logger.trace('Persona saved', { id: profile.id, objectId })
         return ok(profile)
       }
       catch (error) {
@@ -60,15 +71,18 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
       }
     },
 
-    async get(id: string): Promise<HaiResult<PersonaProfile>> {
-      const profile = await store.get(id)
+    async get(id: string, options?: PersonaScopeOptions): Promise<HaiResult<PersonaProfile>> {
+      const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
+      const profile = await store.get(personaKey(objectId, id))
       if (!profile)
         return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', { params: { id } }))
       return ok(profile)
     },
 
-    async update(id: string, updates: PersonaProfileUpdate): Promise<HaiResult<PersonaProfile>> {
-      const existing = await store.get(id)
+    async update(id: string, updates: PersonaProfileUpdate, options?: PersonaScopeOptions): Promise<HaiResult<PersonaProfile>> {
+      const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
+      const key = personaKey(objectId, id)
+      const existing = await store.get(key)
       if (!existing)
         return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', { params: { id } }))
       try {
@@ -80,7 +94,7 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
           metadata: updates.metadata ?? existing.metadata,
           updatedAt: Date.now(),
         }
-        await store.save(profile.id, profile)
+        await store.save(key, profile, { objectId })
         return ok(profile)
       }
       catch (error) {
@@ -88,18 +102,21 @@ export function createPersonaOperations(store: AIRelStore<PersonaProfile>): Pers
       }
     },
 
-    async remove(id: string): Promise<HaiResult<void>> {
-      await store.remove(id)
+    async remove(id: string, options?: PersonaScopeOptions): Promise<HaiResult<void>> {
+      const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
+      await store.remove(personaKey(objectId, id))
       return ok(undefined)
     },
 
-    async list(): Promise<HaiResult<PersonaProfile[]>> {
-      const profiles = await store.query({ orderBy: { field: 'createdAt', direction: 'asc' } })
+    async list(options?: PersonaScopeOptions): Promise<HaiResult<PersonaProfile[]>> {
+      const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
+      const profiles = await store.query({ objectId, orderBy: { field: 'createdAt', direction: 'asc' } })
       return ok(profiles)
     },
 
-    async compose(id: string): Promise<HaiResult<string>> {
-      const profile = await store.get(id)
+    async compose(id: string, options?: PersonaScopeOptions): Promise<HaiResult<string>> {
+      const objectId = options?.objectId ?? DEFAULT_OBJECT_ID
+      const profile = await store.get(personaKey(objectId, id))
       if (!profile)
         return err(HaiAIError.PERSONA_NOT_FOUND, aiM('ai_personaNotFound', { params: { id } }))
       return ok(composeSystemPrompt(profile))

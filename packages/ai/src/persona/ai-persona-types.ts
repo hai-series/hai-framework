@@ -28,6 +28,12 @@ import type { HaiResult } from '@h-ai/core'
 export interface PersonaProfileInput {
   /** 角色唯一标识（业务侧稳定 ID，如 `xiaop`） */
   id: string
+  /**
+   * 所属主体 ID（多租户隔离）
+   *
+   * 不同主体可创建同名角色而互不覆盖；不传时归为平台内置角色 `system`。
+   */
+  objectId?: string
   /** 角色显示名（如「小P」） */
   name?: string
   /** 角色系统提示词（定义身份、职责、语气） */
@@ -44,6 +50,8 @@ export interface PersonaProfileInput {
 export interface PersonaProfile {
   /** 角色唯一标识 */
   id: string
+  /** 所属主体 ID（多租户隔离；平台内置角色为 `system`） */
+  objectId: string
   /** 角色显示名 */
   name?: string
   /** 角色系统提示词 */
@@ -115,31 +123,34 @@ export interface PersonaOperations {
    * @param id - 角色 ID
    * @returns 角色档案，不存在时返回 PERSONA_NOT_FOUND
    */
-  get: (id: string) => Promise<HaiResult<PersonaProfile>>
+  get: (id: string, options?: PersonaScopeOptions) => Promise<HaiResult<PersonaProfile>>
 
   /**
    * 更新角色档案（仅更新传入字段）
    *
    * @param id - 角色 ID
    * @param updates - 需要更新的字段
+   * @param options - 主体作用域（默认 `system`）
    * @returns 更新后的完整档案
    */
-  update: (id: string, updates: PersonaProfileUpdate) => Promise<HaiResult<PersonaProfile>>
+  update: (id: string, updates: PersonaProfileUpdate, options?: PersonaScopeOptions) => Promise<HaiResult<PersonaProfile>>
 
   /**
    * 删除角色档案
    *
    * @param id - 角色 ID
+   * @param options - 主体作用域（默认 `system`）
    * @returns 成功返回 ok(undefined)
    */
-  remove: (id: string) => Promise<HaiResult<void>>
+  remove: (id: string, options?: PersonaScopeOptions) => Promise<HaiResult<void>>
 
   /**
-   * 列出所有角色档案
+   * 列出指定主体的角色档案
    *
+   * @param options - 主体作用域（默认 `system`）
    * @returns 角色档案列表
    */
-  list: () => Promise<HaiResult<PersonaProfile[]>>
+  list: (options?: PersonaScopeOptions) => Promise<HaiResult<PersonaProfile[]>>
 
   /**
    * 组合角色的完整系统提示词
@@ -148,7 +159,14 @@ export interface PersonaOperations {
    * 供 `ai.context.createManager({ systemPrompt })` 使用。
    *
    * @param id - 角色 ID
+   * @param options - 主体作用域（默认 `system`）
    * @returns 组合后的系统提示词，角色不存在时返回 PERSONA_NOT_FOUND
    */
-  compose: (id: string) => Promise<HaiResult<string>>
+  compose: (id: string, options?: PersonaScopeOptions) => Promise<HaiResult<string>>
+}
+
+/** Persona 操作的主体作用域选项 */
+export interface PersonaScopeOptions {
+  /** 所属主体 ID（不传时归为平台内置角色 `system`） */
+  objectId?: string
 }

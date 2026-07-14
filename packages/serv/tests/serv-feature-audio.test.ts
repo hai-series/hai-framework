@@ -25,8 +25,10 @@ function createAudioMock(): AudioOperations {
   return {
     transcribe: async () => ok({ text: '完整识别结果' }),
     async* transcribeStream() {
-      yield { text: '临时', final: false }
-      yield { text: '最终', final: true }
+      yield { type: 'speech_started' }
+      yield { type: 'transcript', text: '临时', final: false }
+      yield { type: 'transcript', text: '最终', final: true }
+      yield { type: 'speech_stopped' }
     },
     synthesize: async () => ok({ data: new Uint8Array([1]), format: 'pcm16' }),
     async* synthesizeStream() {
@@ -84,8 +86,10 @@ describe('serv feature audio', () => {
 
     const msgs = parseJsonMessages(ws)
     expect(msgs).toEqual([
+      { type: 'speech_started' },
       { type: 'transcript', text: '临时', final: false },
       { type: 'transcript', text: '最终', final: true },
+      { type: 'speech_stopped' },
       { type: 'end' },
     ])
   })

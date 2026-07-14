@@ -11,7 +11,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-import type { AudioContent, AudioFormat, SynthesisResult, TranscriptionChunk, TranscriptionResult } from '../ai-audio-types.js'
+import type { AudioContent, AudioFormat, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
 import type {
   AudioProvider,
   ProviderSynthesisRequest,
@@ -24,7 +24,7 @@ import { core, err, ok } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { createSSEDecoder } from '../../llm/ai-llm-stream.js'
-import { audioError, errorMessage, fromBase64, toBase64 } from './ai-audio-provider.js'
+import { audioError, errorMessage, fromBase64, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-mimo' })
 
@@ -75,11 +75,11 @@ export function createMimoAudioProvider(): AudioProvider {
     }
     catch (error) {
       logger.debug('MiMo transcribe failed', { error: errorMessage(error) })
-      return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+      return toAudioErrorResult(error, signal)
     }
   }
 
-  async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionChunk> {
+  async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
     const { model, audio, language, signal } = request
     if ('chunks' in audio) {
       throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: 'mimo', reason: 'streaming audio input' } }))
@@ -103,19 +103,19 @@ export function createMimoAudioProvider(): AudioProvider {
       const delta = chunk.choices?.[0]?.delta?.content
       if (delta) {
         text += delta
-        yield { text, final: false }
+        yield { type: 'transcript', text, final: false }
       }
     }
-    yield { text, final: true }
+    yield { type: 'transcript', text, final: true }
   }
 
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {
-    const { model, text, voice, format, sampleRate, signal } = request
+    const { model, text, voice, instruction, format, sampleRate, signal } = request
     const outFormat: AudioFormat = format === 'pcm16' ? 'pcm16' : 'wav'
     try {
       const response = await postChat(model.baseUrl, model.apiKey, {
         model: model.model,
-        messages: [{ role: 'assistant', content: text }],
+        messages: buildTtsMessages(text, instruction),
         audio: { format: outFormat, ...(voice ? { voice } : {}) },
       }, model.timeout, signal)
       if (!response.ok)
@@ -130,19 +130,19 @@ export function createMimoAudioProvider(): AudioProvider {
     }
     catch (error) {
       logger.debug('MiMo synthesize failed', { error: errorMessage(error) })
-      return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+      return toAudioErrorResult(error, signal)
     }
   }
 
   async function* synthesizeStream(request: ProviderSynthesisStreamRequest): AsyncIterable<Uint8Array> {
-    const { model, text, voice, format, signal } = request
+    const { model, text, voice, instruction, format, signal } = request
     // MiMo TTS 接收完整文本；持续文本流先聚合为完整文本再流式输出音频
     const fullText = typeof text === 'string' ? text : await collectText(text)
     const outFormat: AudioFormat = format === 'wav' ? 'wav' : 'pcm16'
 
     const response = await postChat(model.baseUrl, model.apiKey, {
       model: model.model,
-      messages: [{ role: 'assistant', content: fullText }],
+      messages: buildTtsMessages(fullText, instruction),
       audio: { format: outFormat, ...(voice ? { voice } : {}) },
       stream: true,
     }, model.timeout, signal)
@@ -160,6 +160,15 @@ export function createMimoAudioProvider(): AudioProvider {
 }
 
 // ─── 内部辅助 ───
+
+/** 构造 MiMo TTS 消息：风格指令放入 user 消息，待合成文本放入 assistant 消息 */
+function buildTtsMessages(text: string, instruction?: string): Array<{ role: string, content: string }> {
+  const messages: Array<{ role: string, content: string }> = []
+  if (instruction)
+    messages.push({ role: 'user', content: instruction })
+  messages.push({ role: 'assistant', content: text })
+  return messages
+}
 
 /** 发送 Chat Completions 请求（Authorization Bearer） */
 function postChat(baseUrl: string, apiKey: string | undefined, body: Record<string, unknown>, timeout: number, signal?: AbortSignal): Promise<Response> {

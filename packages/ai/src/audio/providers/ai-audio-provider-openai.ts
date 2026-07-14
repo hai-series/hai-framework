@@ -10,7 +10,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-import type { AudioFormat, SynthesisResult, TranscriptionChunk, TranscriptionResult } from '../ai-audio-types.js'
+import type { AudioContent, AudioFormat, SynthesisResult, TranscriptionEvent, TranscriptionResult } from '../ai-audio-types.js'
 import type {
   AudioProvider,
   ProviderSynthesisRequest,
@@ -24,7 +24,7 @@ import { core, err, ok } from '@h-ai/core'
 import OpenAI, { toFile } from 'openai'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
-import { audioError, errorMessage } from './ai-audio-provider.js'
+import { audioError, errorMessage, toAudioErrorResult } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-openai' })
 
@@ -55,28 +55,29 @@ export function createOpenAIAudioProvider(): AudioProvider {
   }
 
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {
-    const { model, audio, language, signal } = request
+    const { model, audio, language, contextHints, signal } = request
     if (!model.apiKey)
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
 
     try {
       const client = createClient(model.apiKey, model.baseUrl, model.timeout)
-      const file = await toFile(Buffer.from(audio.data), OPENAI_UPLOAD_FILENAME[audio.format])
+      const file = await toUploadFile(audio)
       const result = await client.audio.transcriptions.create({
         file,
         model: model.model,
         language,
+        ...(contextHints?.length ? { prompt: contextHints.join(', ') } : {}),
       }, { signal })
       return ok({ text: result.text })
     }
     catch (error) {
       logger.debug('OpenAI transcribe failed', { error: errorMessage(error) })
-      return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+      return toAudioErrorResult(error, signal)
     }
   }
 
-  async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionChunk> {
-    const { model, audio, language, signal } = request
+  async function* transcribeStream(request: ProviderTranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
+    const { model, audio, language, contextHints, signal } = request
     if (!model.apiKey)
       throw audioError(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
 
@@ -89,28 +90,29 @@ export function createOpenAIAudioProvider(): AudioProvider {
     }
 
     const client = createClient(model.apiKey, model.baseUrl, model.timeout)
-    const file = await toFile(Buffer.from(audio.data), OPENAI_UPLOAD_FILENAME[audio.format])
+    const file = await toUploadFile(audio)
     const stream = await client.audio.transcriptions.create({
       file,
       model: model.model,
       language,
       stream: true,
+      ...(contextHints?.length ? { prompt: contextHints.join(', ') } : {}),
     }, { signal })
 
     let text = ''
     for await (const event of stream) {
       if (event.type === 'transcript.text.delta') {
         text += event.delta
-        yield { text, final: false }
+        yield { type: 'transcript', text, final: false }
       }
       else if (event.type === 'transcript.text.done') {
-        yield { text: event.text, final: true }
+        yield { type: 'transcript', text: event.text, final: true }
       }
     }
   }
 
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {
-    const { model, text, voice, format, sampleRate, signal } = request
+    const { model, text, voice, instruction, format, sampleRate, signal } = request
     if (!model.apiKey)
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
 
@@ -122,18 +124,19 @@ export function createOpenAIAudioProvider(): AudioProvider {
         voice: voice ?? 'alloy',
         input: text,
         response_format: OPENAI_SPEECH_FORMAT[outFormat],
+        ...(instruction ? { instructions: instruction } : {}),
       }, { signal })
       const data = new Uint8Array(await response.arrayBuffer())
       return ok({ data, format: outFormat, sampleRate: outFormat === 'pcm16' ? (sampleRate ?? 24000) : undefined, channels: 1 })
     }
     catch (error) {
       logger.debug('OpenAI synthesize failed', { error: errorMessage(error) })
-      return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
+      return toAudioErrorResult(error, signal)
     }
   }
 
   async function* synthesizeStream(request: ProviderSynthesisStreamRequest): AsyncIterable<Uint8Array> {
-    const { model, text, voice, format, signal } = request
+    const { model, text, voice, instruction, format, signal } = request
     if (!model.apiKey)
       throw audioError(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
 
@@ -146,6 +149,7 @@ export function createOpenAIAudioProvider(): AudioProvider {
       voice: voice ?? 'alloy',
       input: fullText,
       response_format: OPENAI_SPEECH_FORMAT[outFormat],
+      ...(instruction ? { instructions: instruction } : {}),
     }, { signal })
 
     const body = response.body
@@ -177,4 +181,37 @@ async function collectText(stream: AsyncIterable<string>): Promise<string> {
   for await (const part of stream)
     full += part
   return full
+}
+
+/** 构造上传文件：裸 pcm16 先封装为 WAV 容器（OpenAI 文件接口需要容器格式） */
+async function toUploadFile(audio: AudioContent): Promise<Awaited<ReturnType<typeof toFile>>> {
+  if (audio.format === 'pcm16') {
+    const wav = wrapPcmToWav(audio.data, audio.sampleRate ?? 16000, audio.channels ?? 1)
+    return toFile(Buffer.from(wav), 'audio.wav')
+  }
+  return toFile(Buffer.from(audio.data), OPENAI_UPLOAD_FILENAME[audio.format])
+}
+
+/** 将 16bit 小端裸 PCM 封装为 WAV 容器（44 字节头 + 数据） */
+function wrapPcmToWav(pcm: Uint8Array, sampleRate: number, channels: number): Uint8Array {
+  const bitsPerSample = 16
+  const byteRate = (sampleRate * channels * bitsPerSample) / 8
+  const blockAlign = (channels * bitsPerSample) / 8
+  const dataSize = pcm.length
+  const buffer = Buffer.alloc(44 + dataSize)
+  buffer.write('RIFF', 0)
+  buffer.writeUInt32LE(36 + dataSize, 4)
+  buffer.write('WAVE', 8)
+  buffer.write('fmt ', 12)
+  buffer.writeUInt32LE(16, 16)
+  buffer.writeUInt16LE(1, 20)
+  buffer.writeUInt16LE(channels, 22)
+  buffer.writeUInt32LE(sampleRate, 24)
+  buffer.writeUInt32LE(byteRate, 28)
+  buffer.writeUInt16LE(blockAlign, 32)
+  buffer.writeUInt16LE(bitsPerSample, 34)
+  buffer.write('data', 36)
+  buffer.writeUInt32LE(dataSize, 40)
+  Buffer.from(pcm).copy(buffer, 44)
+  return new Uint8Array(buffer)
 }

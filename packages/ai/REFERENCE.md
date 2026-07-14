@@ -23,6 +23,7 @@
 - `chatStream(options)`：流式 Chat Completion。
 - `ask(query, options?)`：返回纯文本的简易问答。
 - `askStream(query, options?)`：流式纯文本问答。
+- `generateObject({ schema, messages, model?, systemPrompt?, maxRepairs?, signal? })`：结构化输出。按 Zod schema 约束模型输出（json_schema response_format），解析/校验失败时自动带错误提示重试（默 1 次），多次仍失败返回 `INVALID_REQUEST`。
 - `listModels()`：查询可用模型。
 - `getHistory(scope, options?)`：查询会话历史。
 - `listSessions(objectId)`：查询主体会话。
@@ -140,13 +141,13 @@ const result = await ai.rag.query('核心架构是什么？', {
 ## Audio
 
 - `transcribe(request)`：完整音频 → `HaiResult<{ text }>`。
-- `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<{ text, final }>`（`text` 为当前语句完整文本，可覆盖临时结果）。
+- `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<TranscriptionEvent>`。事件为 `speech_started` / `{ type: 'transcript', text, final }` / `speech_stopped`（支持服务端 VAD 的平台产出语音起止事件，可据此即时反应）。
 - `synthesize(request)`：完整文本 → `HaiResult<AudioContent>`。
 - `synthesizeStream(request)`：`string` 或 `AsyncIterable<string>` → `AsyncIterable<Uint8Array>`（可直接接 `ai.llm.askStream(...)` 边生成边合成）。
 
-配置 `audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId?, timeout? }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB）/`maxStreamDurationMs`（默 5 分钟）。凭据回退环境变量 `HAI_AI_AUDIO_<PROVIDER>_API_KEY` 或 `OPENAI_API_KEY`/`MIMO_API_KEY`/`DASHSCOPE_API_KEY`/`VOLC_API_KEY`（豆包旧版额外 `VOLC_APP_KEY`/`VOLC_ACCESS_KEY`）。
+请求可选字段：识别 `contextHints?: string[]`（热词/提示，按平台能力映射）；合成 `instruction?: string`（自然语言风格指令）。配置 `audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId?, timeout? }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB）/`maxStreamDurationMs`（默 5 分钟，流式连接硬上限）。
 
-Provider 为内部实现（OpenAI Audio API / MiMo Chat Completions / Qwen 与豆包 WebSocket），不从根入口导出。流式方法在迭代期间抛出上游/协议错误；平台不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`。所有请求支持 `signal: AbortSignal`。
+错误语义：`AbortSignal` 取消 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败 → `AUDIO_CONNECTION_FAILED`，厂商错误 → `AUDIO_UPSTREAM_ERROR`。平台不支持的输入方式 → `AUDIO_UNSUPPORTED_INPUT`（不伪装实时）。Provider 为内部实现，不从根入口导出。
 
 ## A2A
 

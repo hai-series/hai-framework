@@ -122,6 +122,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
           objectId: options?.objectId,
           sessionId: options?.sessionId,
           enablePersist: options?.enablePersist,
+          signal: options?.signal,
         })
 
         if (!chatResult.success) {
@@ -233,6 +234,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         objectId: options?.objectId,
         sessionId: options?.sessionId,
         enablePersist: options?.enablePersist,
+        signal: options?.signal,
       })
 
       let fullAnswer = ''

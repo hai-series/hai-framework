@@ -62,6 +62,12 @@ export interface TranscriptionRequest {
   audio: AudioContent
   /** 语言提示（如 `zh` / `en`；不传时由模型自动检测） */
   language?: string
+  /**
+   * 领域提示词 / 热词（如角色名、专有名词、当前主题关键词）
+   *
+   * Provider 按能力映射为热词表 / phrase list / vocabulary / 提示词；不支持的平台会忽略。
+   */
+  contextHints?: string[]
   /** 模型 ID（不传时使用配置中的默认识别模型） */
   model?: string
   /** 取消信号 */
@@ -74,6 +80,12 @@ export interface TranscriptionStreamRequest {
   audio: AudioContent | AudioInputStream
   /** 语言提示（如 `zh` / `en`；不传时由模型自动检测） */
   language?: string
+  /**
+   * 领域提示词 / 热词（如角色名、专有名词、当前主题关键词）
+   *
+   * Provider 按能力映射为热词表 / phrase list / vocabulary / 提示词；不支持的平台会忽略。
+   */
+  contextHints?: string[]
   /** 模型 ID（不传时使用配置中的默认识别模型） */
   model?: string
   /** 取消信号 */
@@ -87,17 +99,19 @@ export interface TranscriptionResult {
 }
 
 /**
- * 流式语音识别增量结果
+ * 流式语音识别领域事件
  *
- * `text` 表示当前语句的完整识别文本（非字符增量）。实时 ASR 常会修订前一次临时结果，
- * 调用方可直接用 `text` 覆盖当前临时文本，无需理解各厂商的 delta 语义。
+ * 统一的语音领域事件（非厂商协议）。支持服务端 VAD 的平台（Qwen / 豆包）会在检测到语音
+ * 起止时额外产出 `speech_started` / `speech_stopped`，使调用方可在「开始说话」的瞬间做出反应
+ * （如取消当前上游生成），而无需自行运行 VAD；不支持 VAD 的平台仅产出 `transcript`。
+ *
+ * `transcript.text` 表示当前语句的完整识别文本（非字符增量），实时 ASR 会修订前一次临时结果，
+ * 调用方可直接用 `text` 覆盖当前临时文本。
  */
-export interface TranscriptionChunk {
-  /** 当前语句的完整识别文本 */
-  text: string
-  /** 是否为该语句的最终结果 */
-  final: boolean
-}
+export type TranscriptionEvent
+  = | { type: 'speech_started' }
+    | { type: 'transcript', text: string, final: boolean }
+    | { type: 'speech_stopped' }
 
 // ─── 语音合成（TTS） ───
 
@@ -107,6 +121,12 @@ export interface SynthesisRequest {
   text: string
   /** 音色（厂商音色名，不传时使用模型默认音色） */
   voice?: string
+  /**
+   * 自然语言风格指令（如语速、情绪、角色语气）
+   *
+   * Provider 按能力映射（如 MiMo 放入 user 消息、Qwen instructions）；不支持的平台会忽略。
+   */
+  instruction?: string
   /** 输出音频格式（不传时使用模型默认格式） */
   format?: AudioFormat
   /** 输出采样率（Hz） */
@@ -123,6 +143,12 @@ export interface SynthesisStreamRequest {
   text: string | AsyncIterable<string>
   /** 音色（厂商音色名，不传时使用模型默认音色） */
   voice?: string
+  /**
+   * 自然语言风格指令（如语速、情绪、角色语气）
+   *
+   * Provider 按能力映射（如 MiMo 放入 user 消息、Qwen instructions）；不支持的平台会忽略。
+   */
+  instruction?: string
   /** 输出音频格式（不传时使用模型默认格式） */
   format?: AudioFormat
   /** 输出采样率（Hz） */
@@ -147,8 +173,8 @@ export interface SynthesisResult extends AudioContent {}
 export interface AudioOperations {
   /** 将完整音频识别为完整文本 */
   transcribe: (request: TranscriptionRequest) => Promise<HaiResult<TranscriptionResult>>
-  /** 持续输入音频或增量返回识别文本 */
-  transcribeStream: (request: TranscriptionStreamRequest) => AsyncIterable<TranscriptionChunk>
+  /** 持续输入音频或增量返回识别文本（含语音起止领域事件） */
+  transcribeStream: (request: TranscriptionStreamRequest) => AsyncIterable<TranscriptionEvent>
   /** 将完整文本合成为完整音频 */
   synthesize: (request: SynthesisRequest) => Promise<HaiResult<SynthesisResult>>
   /** 持续输入文本或增量输出音频 */

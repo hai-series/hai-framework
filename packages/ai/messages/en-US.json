@@ -23,6 +23,9 @@
   "ai_llmRecordFailed": "Chat record save failed: {error}",
   "ai_llmHistoryFailed": "Chat history query failed: {error}",
 
+  "ai_generateObjectFailed": "Structured output parsing failed: {error}",
+  "ai_generateObjectRepair": "The previous output could not be parsed into the required structure ({error}). Output only JSON conforming to the schema, with no extra text.",
+
   "ai_embeddingApiFailed": "Embedding API call failed: {error}",
   "ai_embeddingModelNotFound": "Embedding model '{model}' not found",
   "ai_embeddingInputTooLong": "Embedding input text exceeds maximum length",
