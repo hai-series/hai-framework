@@ -136,7 +136,7 @@ jobs:
   release:
     name: Release
     needs: [detect-version, test]
-    if: needs.detect-version.outputs.changed == 'true'
+    if: needs.detect-version.outputs.changed == 'true' && needs.test.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
