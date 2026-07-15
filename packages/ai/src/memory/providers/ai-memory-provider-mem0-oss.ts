@@ -3,8 +3,8 @@
  *
  * 通过 `mem0ai/oss` 的 `Memory` 引擎实现记忆能力，LLM / Embedder 从 AIConfig 提取
  * （OpenAI 兼容，走 baseURL），向量库从 storeProvider 暴露的原始连接映射：
- * qdrant / pgvector 复用同一后端；lancedb / chroma 等 mem0 不支持的后端退回其自带
- * in-memory 存储。历史记录禁用以避免额外 SQLite 依赖。
+ * qdrant / pgvector 复用同一后端；lancedb / chroma 等 mem0 不支持的持久化后端默认
+ * fail-fast，仅在显式允许时退回 in-memory 存储。历史记录禁用以避免额外 SQLite 依赖。
  * @module ai-memory-provider-mem0-oss
  */
 
@@ -49,7 +49,7 @@ export interface Mem0OssDeps {
   collectionName: string
   /** 向量维度（可选，未提供时由 mem0 探测） */
   embeddingDims?: number
-  /** hai vecdb 后端连接（qdrant / pgvector 复用，其余退回 mem0 自带存储） */
+  /** hai vecdb 后端连接（qdrant / pgvector 复用；不支持的后端默认 fail-fast） */
   vectorBackend?: AIVectorBackend
 }
 

@@ -9,6 +9,7 @@ const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDirectory, '../../..')
 const archiveRoot = mkdtempSync(path.join(tmpdir(), 'hai-cli-local-packages-'))
+const vitestArgs = process.argv.slice(2)
 
 let result
 try {
@@ -17,7 +18,7 @@ try {
 
   result = spawnSync(
     pnpmBin,
-    ['exec', 'vitest', 'run', 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000'],
+    ['exec', 'vitest', 'run', 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000', ...vitestArgs],
     {
       env: {
         ...process.env,

@@ -9,6 +9,7 @@
  */
 
 // 领域 contract 类型（用于推导客户端类型签名）。
+export * from './ai/ai-audio-ws-schemas.js'
 export type { AiContract } from './ai/ai-contract.js'
 // Schemas（含运行时 schema 常量 + 推导类型）。
 export * from './ai/ai-schemas.js'

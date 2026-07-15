@@ -208,8 +208,10 @@ export interface StreamOperations {
 /** 工具错误类型枚举 */
 export type ToolErrorType
   = | 'TOOL_NOT_FOUND'
+    | 'TOOL_ALREADY_REGISTERED'
     | 'VALIDATION_FAILED'
     | 'EXECUTION_FAILED'
+    | 'FORBIDDEN'
     | 'TIMEOUT'
 
 /**
@@ -234,6 +236,23 @@ export interface ToolExecutionContext {
 }
 
 /**
+ * 工具授权请求
+ *
+ * `input` 已通过工具的 Zod schema 校验；授权函数在 handler 执行前调用。
+ */
+export interface ToolAuthorizationRequest<TInput = unknown> {
+  /** 工具名称 */
+  toolName: string
+  /** 已校验的工具输入 */
+  input: TInput
+  /** 本次执行上下文 */
+  context: ToolExecutionContext
+}
+
+/** 工具授权函数；返回 `false` 或抛出异常时均拒绝执行（fail-closed） */
+export type ToolAuthorizer = (request: ToolAuthorizationRequest) => Promise<boolean> | boolean
+
+/**
  * 工具执行入参（调用方传给 `execute` / `executeAll`）
  *
  * 所有字段可选。框架据此解析出传给 handler 的 {@link ToolExecutionContext}：
@@ -250,6 +269,13 @@ export interface ToolExecutionOptions {
   deadline?: number
   /** 本次执行超时（毫秒；覆盖工具默认超时） */
   timeoutMs?: number
+  /**
+   * 本次执行授权函数
+   *
+   * 与 Registry 级授权同时存在时必须全部通过。授权异常不会进入 handler，统一返回
+   * `TOOL_FORBIDDEN`，避免因授权服务故障而放行高风险操作。
+   */
+  authorize?: ToolAuthorizer
 }
 
 /**
@@ -298,13 +324,16 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
 /**
  * 工具注册表接口（由 `ai.tools.createRegistry()` 创建）
  *
- * 管理一组工具的注册、查询与批量执行，支持链式调用。
+ * 管理一组工具的注册、查询与批量执行。注册方法返回 `HaiResult<void>`，
+ * 调用方应显式处理重名等配置错误。
  */
 export interface ToolRegistryOperations {
-  /** 注册工具（同名覆盖），返回 registry 自身以支持链式调用 */
-  register: <TInput, TOutput>(tool: Tool<TInput, TOutput>) => ToolRegistryOperations
-  /** 批量注册工具，返回 registry 自身 */
-  registerMany: (tools: Tool<unknown, unknown>[]) => ToolRegistryOperations
+  /** 注册工具；同名工具已存在时返回 `TOOL_ALREADY_REGISTERED` */
+  register: <TInput, TOutput>(tool: Tool<TInput, TOutput>) => HaiResult<void>
+  /** 原子批量注册；列表内或注册表内存在重名时不写入任何工具 */
+  registerMany: (tools: Tool<unknown, unknown>[]) => HaiResult<void>
+  /** 显式替换已注册工具；目标不存在时返回 `TOOL_NOT_FOUND` */
+  replace: <TInput, TOutput>(tool: Tool<TInput, TOutput>) => HaiResult<void>
   /** 注销指定名称的工具，成功返回 `true`，不存在返回 `false` */
   unregister: (name: string) => boolean
   /** 按名称获取工具实例，不存在返回 `undefined` */
@@ -317,7 +346,7 @@ export interface ToolRegistryOperations {
   getDefinitions: () => ToolDefinition[]
   /** 执行单个工具调用，自动解析 JSON 参数并校验；失败返回 ToolError，超时 / 取消返回 TOOL_TIMEOUT */
   execute: (toolCall: ToolCall, options?: ToolExecutionOptions) => Promise<HaiResult<ToolMessage>>
-  /** 批量执行工具调用（默认并行），任一失败立即返回错误；执行上下文透传给每个工具 */
+  /** 批量执行工具调用（默认串行），任一失败立即返回错误；仅显式 `parallel: true` 时并行 */
   executeAll: (toolCalls: ToolCall[], options?: ToolExecutionOptions & { parallel?: boolean }) => Promise<HaiResult<ToolMessage[]>>
   /** 清空所有已注册的工具 */
   clear: () => void
@@ -325,12 +354,23 @@ export interface ToolRegistryOperations {
   readonly size: number
 }
 
+/** 工具注册表创建选项 */
+export interface ToolRegistryOptions {
+  /**
+   * Registry 级授权函数
+   *
+   * 适合统一执行租户、角色、资源归属和高风险操作确认。它不能替代 handler 内针对最终资源的
+   * 业务校验；两层校验应共同采用最小权限原则。
+   */
+  authorize?: ToolAuthorizer
+}
+
 /** 工具操作接口（通过 `ai.tools` 访问，纯函数，无需初始化） */
 export interface ToolsOperations {
   /** 定义工具（Zod schema 类型推断 + 自动参数校验） */
   define: <TInput, TOutput>(options: DefineToolOptions<TInput, TOutput>) => Tool<TInput, TOutput>
-  /** 创建新的工具注册表实例 */
-  createRegistry: () => ToolRegistryOperations
+  /** 创建新的工具注册表实例，可注入统一授权函数 */
+  createRegistry: (options?: ToolRegistryOptions) => ToolRegistryOperations
 }
 
 // ─── LLM Provider 接口 ───

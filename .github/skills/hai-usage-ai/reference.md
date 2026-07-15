@@ -4,6 +4,8 @@
 
 ## 初始化与依赖
 
+未初始化 reldb/vecdb 时，`ai.init()` 自动使用进程内临时 Store；两者均已初始化时使用持久化 DB Provider。需要跨进程持久化时必须使用 DB 或自定义 Provider。
+
 | 能力 | 是否需要 `ai.init()` | 依赖 |
 | --- | --- | --- |
 | `ai.tools` | 否 | 无 |
@@ -46,10 +48,12 @@ if (result.success) {
 ## Tools
 
 - `ai.tools.define({ name, description, parameters, handler })`
-- `ai.tools.createRegistry()`
-- `registry.register(tool)` / `registry.unregister(name)`
+- `ai.tools.createRegistry({ authorize? })`
+- `registry.register(tool)` / `registry.registerMany(tools)`：返回 `HaiResult<void>`，默认拒绝同名
+- `registry.replace(tool)`：显式替换已存在工具
+- `registry.unregister(name)`
 - `registry.getDefinitions()`：传给 LLM 的工具定义
-- `registry.execute(toolCall, { signal, objectId, sessionId, deadline?, timeoutMs? })` / `registry.executeAll(toolCalls, { parallel, ...ctx })`；handler `(input, ctx)` 可响应取消/超时（默认 30s，返回 `TOOL_TIMEOUT`）
+- `registry.execute(toolCall, { signal, objectId, sessionId, deadline?, timeoutMs?, authorize? })` / `registry.executeAll(toolCalls, { parallel?, ...ctx })`；默认串行；Registry/单次授权均 fail-closed；handler `(input, ctx)` 可响应取消/超时（默认 30s）
 
 工具 handler 输入由 Zod schema 约束，外部输入不要绕过 schema。
 
@@ -209,7 +213,7 @@ A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端�
 | `hai:ai:100-107` | LLM / 历史记录 |
 | `hai:ai:200-204` | MCP |
 | `hai:ai:300-302` | Embedding |
-| `hai:ai:400-403` | Tool |
+| `hai:ai:400-405` | Tool（含重复注册、授权拒绝） |
 | `hai:ai:500-502` | Reasoning |
 | `hai:ai:600-701` | Retrieval / RAG |
 | `hai:ai:800-805` | Knowledge |

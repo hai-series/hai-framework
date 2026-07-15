@@ -22,6 +22,7 @@ export interface PostgresContainerLease {
 const POSTGRES_DB = 'db_test'
 const POSTGRES_USER = 'db_user'
 const POSTGRES_PASSWORD = 'db_password'
+const CONTAINER_STOP_TIMEOUT_MS = 10_000
 
 export async function acquirePostgresContainer(): Promise<PostgresContainerLease> {
   refCount += 1
@@ -58,8 +59,13 @@ export async function acquirePostgresContainer(): Promise<PostgresContainerLease
       refCount -= 1
       if (refCount <= 0) {
         refCount = 0
-        await container.stop()
         containerPromise = null
+        // Docker Desktop 偶发会让 stop 请求长期挂起；显式限制等待时间，避免拖死整仓测试。
+        await container.stop({
+          timeout: CONTAINER_STOP_TIMEOUT_MS,
+          remove: true,
+          removeVolumes: true,
+        })
       }
     },
   }

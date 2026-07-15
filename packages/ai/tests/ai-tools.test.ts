@@ -176,7 +176,8 @@ describe('ai.tools.createRegistry', () => {
     const registry = ai.tools.createRegistry()
     const { add } = createTestTools()
 
-    registry.register(add)
+    const registered = registry.register(add)
+    expect(registered.success).toBe(true)
     expect(registry.has('add')).toBe(true)
     expect(registry.get('add')).toBeDefined()
     expect(registry.size).toBe(1)
@@ -361,21 +362,23 @@ describe('ai.tools.createRegistry', () => {
     expect(registry.has('add')).toBe(false)
   })
 
-  it('链式注册', () => {
+  it('register 返回 HaiResult 并拒绝隐式链式装配', () => {
     const registry = ai.tools.createRegistry()
     const { add, multiply } = createTestTools()
 
-    const result = registry.register(add).register(multiply)
-    expect(result).toBe(registry)
+    const first = registry.register(add)
+    const second = registry.register(multiply)
+    expect(first.success).toBe(true)
+    expect(second.success).toBe(true)
     expect(registry.size).toBe(2)
   })
 
-  it('registerMany 链式返回 registry', () => {
+  it('registerMany 返回 HaiResult', () => {
     const registry = ai.tools.createRegistry()
     const { add, multiply } = createTestTools()
 
     const result = registry.registerMany([add, multiply])
-    expect(result).toBe(registry)
+    expect(result.success).toBe(true)
   })
 
   it('get 不存在的工具返回 undefined', () => {
@@ -389,7 +392,7 @@ describe('ai.tools.createRegistry', () => {
     expect(registry.getDefinitions()).toEqual([])
   })
 
-  it('重复注册同名工具覆盖旧的', async () => {
+  it('重复注册同名工具默认拒绝，replace 显式替换', async () => {
     const registry = ai.tools.createRegistry()
     const v1 = ai.tools.define({
       name: 'calc',
@@ -404,19 +407,42 @@ describe('ai.tools.createRegistry', () => {
       handler: ({ x }) => x * 10,
     })
 
-    registry.register(v1)
-    registry.register(v2)
+    expect(registry.register(v1).success).toBe(true)
+    const duplicate = registry.register(v2)
+    expect(duplicate.success).toBe(false)
+    if (!duplicate.success)
+      expect(duplicate.error.code).toBe(HaiAIError.TOOL_ALREADY_REGISTERED.code)
     expect(registry.size).toBe(1)
 
-    const result = await registry.execute({
+    const original = await registry.execute({
       id: 'c1',
       type: 'function',
       function: { name: 'calc', arguments: '{"x":5}' },
     })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.content).toBe('50') // v2 的逻辑
-    }
+    expect(original.success && original.data.content).toBe('10')
+
+    expect(registry.replace(v2).success).toBe(true)
+    const replaced = await registry.execute({
+      id: 'c2',
+      type: 'function',
+      function: { name: 'calc', arguments: '{"x":5}' },
+    })
+    expect(replaced.success && replaced.data.content).toBe('50')
+  })
+
+  it('registerMany 遇到重复名称时保持原子性', () => {
+    const registry = ai.tools.createRegistry()
+    const { add } = createTestTools()
+    const duplicate = ai.tools.define({
+      name: 'add',
+      description: 'duplicate',
+      parameters: z.object({}),
+      handler: () => 0,
+    })
+
+    const result = registry.registerMany([add, duplicate])
+    expect(result.success).toBe(false)
+    expect(registry.size).toBe(0)
   })
 
   it('executeAll 并行模式遇到错误', async () => {
@@ -466,6 +492,34 @@ describe('ai.tools.createRegistry', () => {
       expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
       expect(result.error.message).toBe('async boom')
     }
+  })
+
+  it('executeAll 默认串行，只有显式 parallel=true 才并行', async () => {
+    const registry = ai.tools.createRegistry()
+    let active = 0
+    let maxActive = 0
+    const slow = ai.tools.define({
+      name: 'slow',
+      description: 'slow',
+      parameters: z.object({ value: z.number() }),
+      handler: async ({ value }) => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await new Promise(resolve => setTimeout(resolve, 10))
+        active -= 1
+        return value
+      },
+    })
+    registry.register(slow)
+    const calls: ToolCall[] = [1, 2].map(value => ({
+      id: `c${value}`,
+      type: 'function',
+      function: { name: 'slow', arguments: JSON.stringify({ value }) },
+    }))
+
+    const result = await registry.executeAll(calls)
+    expect(result.success).toBe(true)
+    expect(maxActive).toBe(1)
   })
 })
 
@@ -579,5 +633,124 @@ describe('ai.tools 执行上下文', () => {
     const result = await registry.executeAll(calls, { objectId: 'tenant-9' })
     expect(result.success).toBe(true)
     expect(seen).toEqual(['tenant-9', 'tenant-9'])
+  })
+})
+
+describe('ai.tools 授权', () => {
+  it('registry 授权拒绝时不执行 handler', async () => {
+    let handled = false
+    const registry = ai.tools.createRegistry({
+      authorize: ({ context }) => context.objectId === 'allowed-user',
+    })
+    registry.register(ai.tools.define({
+      name: 'delete_record',
+      description: 'delete',
+      parameters: z.object({ id: z.string() }),
+      handler: () => {
+        handled = true
+        return 'deleted'
+      },
+    }))
+
+    const result = await registry.execute({
+      id: 'c1',
+      type: 'function',
+      function: { name: 'delete_record', arguments: '{"id":"1"}' },
+    }, { objectId: 'denied-user' })
+
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiAIError.TOOL_FORBIDDEN.code)
+    expect(handled).toBe(false)
+  })
+
+  it('授权接收已通过 Zod 校验的输入', async () => {
+    let authorizedInput: unknown
+    const registry = ai.tools.createRegistry({
+      authorize: ({ input }) => {
+        authorizedInput = input
+        return true
+      },
+    })
+    registry.register(ai.tools.define({
+      name: 'validated',
+      description: 'validated',
+      parameters: z.object({ count: z.number().int().positive() }),
+      handler: ({ count }) => count,
+    }))
+
+    const invalid = await registry.execute({
+      id: 'c1',
+      type: 'function',
+      function: { name: 'validated', arguments: '{"count":0}' },
+    })
+    expect(invalid.success).toBe(false)
+    expect(authorizedInput).toBeUndefined()
+
+    const valid = await registry.execute({
+      id: 'c2',
+      type: 'function',
+      function: { name: 'validated', arguments: '{"count":2}' },
+    })
+    expect(valid.success).toBe(true)
+    expect(authorizedInput).toEqual({ count: 2 })
+  })
+
+  it('授权异常时 fail-closed 且不泄露异常消息', async () => {
+    let handled = false
+    const registry = ai.tools.createRegistry({
+      authorize: () => { throw new Error('secret authorization backend detail') },
+    })
+    registry.register(ai.tools.define({
+      name: 'secure',
+      description: 'secure',
+      parameters: z.object({}),
+      handler: () => {
+        handled = true
+        return 'ok'
+      },
+    }))
+
+    const result = await registry.execute({
+      id: 'c1',
+      type: 'function',
+      function: { name: 'secure', arguments: '{}' },
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAIError.TOOL_FORBIDDEN.code)
+      expect(result.error.message).not.toContain('secret authorization backend detail')
+    }
+    expect(handled).toBe(false)
+  })
+
+  it('registry 与单次授权必须同时通过', async () => {
+    const checked: string[] = []
+    const registry = ai.tools.createRegistry({
+      authorize: () => {
+        checked.push('registry')
+        return true
+      },
+    })
+    registry.register(ai.tools.define({
+      name: 'secure',
+      description: 'secure',
+      parameters: z.object({}),
+      handler: () => 'ok',
+    }))
+
+    const result = await registry.execute({
+      id: 'c1',
+      type: 'function',
+      function: { name: 'secure', arguments: '{}' },
+    }, {
+      authorize: () => {
+        checked.push('execution')
+        return false
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(checked).toEqual(['registry', 'execution'])
   })
 })

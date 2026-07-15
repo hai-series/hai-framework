@@ -17,6 +17,7 @@ import type {
   ToolExecutionOptions,
   ToolMessage,
   ToolRegistryOperations,
+  ToolRegistryOptions,
 } from './ai-llm-types.js'
 
 import { err, ok } from '@h-ai/core'
@@ -128,6 +129,23 @@ export function defineTool<TInput, TOutput>(
         return err(HaiAIError.TOOL_VALIDATION_FAILED, parseResult.error.message)
       }
       const { context, timeoutMs: effectiveTimeout } = resolveExecutionContext(execOptions, timeoutMs)
+      const authorizer = execOptions?.authorize
+      if (authorizer) {
+        try {
+          const allowed = await runWithCancellation(
+            ctx => authorizer({ toolName: name, input: parseResult.data, context: ctx }),
+            context,
+          )
+          if (!allowed)
+            return err(HaiAIError.TOOL_FORBIDDEN, aiM('ai_toolForbidden', { params: { name } }))
+        }
+        catch (error) {
+          if (isAbortError(error))
+            return err(HaiAIError.TOOL_TIMEOUT, aiM('ai_toolTimeout', { params: { name, ms: effectiveTimeout } }), error)
+          return err(HaiAIError.TOOL_FORBIDDEN, aiM('ai_toolForbidden', { params: { name } }))
+        }
+      }
+
       try {
         const output = await runWithCancellation(ctx => handler(parseResult.data, ctx), context)
         return ok(output)
@@ -157,35 +175,53 @@ export function defineTool<TInput, TOutput>(
 /**
  * 创建工具注册表（闭包实现，非 class）
  *
- * 注册表支持链式调用（`register` / `registerMany` 返回自身），
- * 同名工具注册时覆盖旧值。
+ * 注册表默认拒绝重复名称；确需替换时必须显式调用 `replace()`。
  *
  * @returns 工具注册表实例
  *
  * @example
  * ```ts
  * const registry = createToolRegistry()
- * registry.register(weatherTool).register(searchTool)
+ * registry.registerMany([weatherTool, searchTool])
  * const defs = registry.getDefinitions() // 用于 ChatCompletionRequest.tools
  * const result = await registry.execute(toolCall)
  * ```
  */
-export function createToolRegistry(): ToolRegistryOperations {
+export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegistryOperations {
   const tools: Map<string, Tool> = new Map()
 
+  function duplicateTool(name: string): HaiResult<void> {
+    return err(HaiAIError.TOOL_ALREADY_REGISTERED, aiM('ai_toolAlreadyRegistered', { params: { name } }))
+  }
+
   const registry: ToolRegistryOperations = {
-    /** 注册单个工具（同名覆盖），返回 registry 支持链式调用 */
-    register<TInput, TOutput>(tool: Tool<TInput, TOutput>): ToolRegistryOperations {
+    /** 注册单个工具；默认拒绝同名覆盖 */
+    register<TInput, TOutput>(tool: Tool<TInput, TOutput>): HaiResult<void> {
+      if (tools.has(tool.name))
+        return duplicateTool(tool.name)
       tools.set(tool.name, tool as Tool)
-      return registry
+      return ok(undefined)
     },
 
-    /** 批量注册工具，返回 registry 支持链式调用 */
-    registerMany(toolList: Tool<unknown, unknown>[]): ToolRegistryOperations {
+    /** 原子批量注册工具；发现任何重名时不写入 */
+    registerMany(toolList: Tool<unknown, unknown>[]): HaiResult<void> {
+      const incomingNames = new Set<string>()
       for (const tool of toolList) {
-        tools.set(tool.name, tool as Tool)
+        if (tools.has(tool.name) || incomingNames.has(tool.name))
+          return duplicateTool(tool.name)
+        incomingNames.add(tool.name)
       }
-      return registry
+      for (const tool of toolList)
+        tools.set(tool.name, tool as Tool)
+      return ok(undefined)
+    },
+
+    /** 显式替换已注册工具 */
+    replace<TInput, TOutput>(tool: Tool<TInput, TOutput>): HaiResult<void> {
+      if (!tools.has(tool.name))
+        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', { params: { name: tool.name } }))
+      tools.set(tool.name, tool as Tool)
+      return ok(undefined)
     },
 
     /** 移除指定名称的工具，返回是否成功删除 */
@@ -232,7 +268,19 @@ export function createToolRegistry(): ToolRegistryOperations {
         return err(HaiAIError.TOOL_VALIDATION_FAILED, aiM('ai_toolInvalidJson'))
       }
 
-      const result = await tool.execute(args, execOptions)
+      const registryAuthorize = options.authorize
+      const executionAuthorize = execOptions?.authorize
+      const authorize = registryAuthorize || executionAuthorize
+        ? async (request: Parameters<NonNullable<ToolExecutionOptions['authorize']>>[0]): Promise<boolean> => {
+          if (registryAuthorize && !await registryAuthorize(request))
+            return false
+          if (executionAuthorize && !await executionAuthorize(request))
+            return false
+          return true
+        }
+        : undefined
+
+      const result = await tool.execute(args, { ...execOptions, authorize })
       if (!result.success) {
         return result
       }
@@ -248,12 +296,12 @@ export function createToolRegistry(): ToolRegistryOperations {
       })
     },
 
-    /** 批量执行工具调用（默认并行），任一失败时立即返回错误（执行上下文透传给每个工具） */
+    /** 批量执行工具调用（默认串行），仅显式 parallel=true 时并行 */
     async executeAll(
       toolCalls: ToolCall[],
       options: ToolExecutionOptions & { parallel?: boolean } = {},
     ): Promise<HaiResult<ToolMessage[]>> {
-      const { parallel = true, ...execOptions } = options
+      const { parallel = false, ...execOptions } = options
       const messages: ToolMessage[] = []
 
       if (parallel) {

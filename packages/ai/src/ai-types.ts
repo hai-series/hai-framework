@@ -74,6 +74,8 @@ const AIErrorInfo = {
   TOOL_VALIDATION_FAILED: '401:400',
   TOOL_EXECUTION_FAILED: '402:500',
   TOOL_TIMEOUT: '403:504',
+  TOOL_ALREADY_REGISTERED: '404:409',
+  TOOL_FORBIDDEN: '405:403',
 
   // Reasoning (500-599)
   REASONING_FAILED: '500:500',
@@ -174,8 +176,8 @@ export interface AIInitOptions {
   /**
    * 自定义存储 Provider
    *
-   * 提供后 AI 模块将使用此 Provider 而非默认的 reldb+vecdb 实现，
-   * 此时不需要提前初始化 reldb/vecdb。
+   * 提供后 AI 模块将使用此 Provider，而不采用自动选择的存储实现。
+   * 未提供时：reldb + vecdb 已初始化则使用持久化 DB Provider，否则使用进程内临时 Provider。
    */
   storeProvider?: AIStoreProvider
 }

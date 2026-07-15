@@ -38,7 +38,8 @@ import { aiM } from './ai-i18n.js'
 import { HaiAIError } from './ai-types.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
-import { createDbStoreProviderFromModules, getUnavailableDbDeps, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
+import { createDbStoreProviderFromModules, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
+import { createMemoryStoreProvider } from './store/providers/ai-store-provider-memory.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
@@ -316,21 +317,18 @@ export const ai: AIFunctions = {
       }
       const parsed = parseResult.data
 
-      // 注入存储 Provider（外部传入或使用默认 DB Provider）
+      // 注入存储 Provider：外部 Provider > 已初始化的 DB Provider > 进程内临时 Provider。
+      // 临时 Provider 让 LLM-only 场景零依赖启动；生产持久化仍应显式初始化 reldb + vecdb。
       let storeProvider: AIStoreProvider
       if (options?.storeProvider) {
         storeProvider = options.storeProvider
       }
-      else {
-        // 默认使用 reldb + vecdb（需要已初始化）
-        if (!isDbStoreAvailable()) {
-          const missing = getUnavailableDbDeps().join(', ')
-          return err(
-            HaiAIError.CONFIGURATION_ERROR,
-            aiM('ai_configError', { params: { error: `${missing} not initialized. reldb and vecdb are required for default db store.` } }),
-          )
-        }
+      else if (isDbStoreAvailable()) {
         storeProvider = createDbStoreProviderFromModules()
+      }
+      else {
+        storeProvider = createMemoryStoreProvider()
+        logger.warn('AI is using the ephemeral in-memory store; initialize reldb and vecdb before ai.init() for persistent data')
       }
       currentStoreProvider = storeProvider
 

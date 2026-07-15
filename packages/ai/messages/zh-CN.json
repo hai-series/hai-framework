@@ -19,6 +19,8 @@
   "ai_toolNotFound": "工具 '{name}' 未找到",
   "ai_toolInvalidJson": "工具调用参数 JSON 格式无效",
   "ai_toolTimeout": "工具 '{name}' 在 {ms}ms 后超时或被取消",
+  "ai_toolAlreadyRegistered": "工具 '{name}' 已注册；如需替换请显式调用 replace()",
+  "ai_toolForbidden": "工具 '{name}' 未获执行授权",
   "ai_configError": "AI 配置校验失败：{error}",
 
   "ai_llmRecordFailed": "对话记录保存失败：{error}",

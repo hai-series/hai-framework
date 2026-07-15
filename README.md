@@ -3,15 +3,15 @@
 > 研发中，敬请期待！🚀
 
 <p align="center">
-  <strong>AI-First · 模块化 · 类型安全 · 全栈</strong>
+  <strong>AI Runtime · 企业全栈模块 · Agent Skills · 类型安全</strong>
 </p>
 
 <p align="center">
-  给 AI 用的全栈 TypeScript 框架 —— 让 AI 写出可维护的生产级代码
+  面向 AI 应用开发的 TypeScript Framework —— 从最小 LLM 调用到企业级全栈应用
 </p>
 
 <p align="center">
-  <b>21 个功能模块</b> · <b>6 个示例应用</b> · <b>69+ UI 组件</b> · <b>CLI 创建 / 一键部署</b>
+  <b>21 个功能模块</b> · <b>6 个可运行示例</b> · <b>90 个 UI 组件</b> · <b>CLI 创建 / 一键部署</b>
 </p>
 
 ---
@@ -21,7 +21,7 @@
 | 痛点                         | hai 的解法                                                                    |
 | ---------------------------- | ----------------------------------------------------------------------------- |
 | AI 生成的代码风格不一致      | 统一 `init → use → close` 生命周期 + 可执行编码规范（copilot-instructions）   |
-| AI 不知道怎么处理错误        | 所有 API 返回 `HaiResult<T>`，永远不会遗漏错误处理                            |
+| AI 不知道怎么处理错误        | 领域操作统一返回 `HaiResult<T>`；流、传输和框架控制流明确标注异常边界         |
 | 功能模块各自为政，集成成本高 | 21 个模块共享统一 API 模式、类型体系、Provider 架构与 contract 机制，开箱即用 |
 | 从 0 搭建项目要半天          | `hai create my-app` 一行命令创建完整项目（含 AI 上下文、配置、脚手架）        |
 | UI 组件不够用 / 不够现代     | 69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题，内置 i18n        |
@@ -32,7 +32,9 @@
 
 ## 框架定位
 
-hai Framework 是一个 **AI-First** 的全栈 TypeScript 开发框架。
+hai Framework 是一个以 **AI Runtime 为核心、企业全栈模块按需组合、Agent Skills 可直接教学** 的 TypeScript 开发框架。
+
+最小场景只需 `@h-ai/ai` 即可完成 LLM 和 Tool 调用；需要持久化、多租户、认证、审计、API、UI 或部署时，再组合 reldb、vecdb、iam、audit、serv、ui 等模块。框架不要求每个 AI 应用一次性采用完整技术栈。
 
 **"AI-First"不是"只给 AI 用"，而是：框架的每一个设计决策，都优先考虑 AI 编程助手能否正确使用。** 当 AI 能正确使用时，人类开发者的体验同样更好。
 
@@ -43,7 +45,7 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 具体而言：
 
 - **可预测的 API**：每个模块都是 `init() → use → close()`，AI 只需学一种模式就能操作所有模块
-- **不抛异常**：所有操作返回 `HaiResult<T>` —— 成功是 `{ success: true, data }` ，失败是 `{ success: false, error }`。AI 不会遗漏错误处理，链路完全可控
+- **显式失败语义**：领域操作优先返回 `HaiResult<T>` —— 成功是 `{ success: true, data }`，失败是 `{ success: false, error }`。`AsyncIterable`、客户端传输、回调和 SvelteKit 控制流等必须抛异常的边界在类型与文档中单独说明
 - **配置即校验**：Zod Schema 在 `init()` 时完成验证，配置错了立刻报错，不会在运行时炸
 - **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.agents/skills/`），OpenCode 可原生发现，Codex / Copilot 等助手可通过项目指引按需读取并正确使用 API
 - **编码规范可执行**：`.github/copilot-instructions.md` 定义了命名、分层、测试、文档的完整规范，AI 助手每次改动自动遵守
@@ -58,7 +60,7 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 | 设计决策                          | 给 AI 带来的好处     | 给人类带来的好处               |
 | --------------------------------- | -------------------- | ------------------------------ |
 | 统一生命周期 `init → use → close` | 只需学一种模式       | 模块行为可预期                 |
-| `HaiResult<T>` 返回值             | 永远不会遗漏错误处理 | 不用 try-catch，链路清晰       |
+| `HaiResult<T>` 领域返回值         | 主流程显式处理失败   | 减少业务 try-catch，链路清晰   |
 | Zod 配置校验                      | 配置写错立刻知道     | 启动即验证，运行时不炸         |
 | Provider 模式                     | 切换后端只需改配置   | 不同环境无缝切换               |
 | 严格 TypeScript                   | 类型推断引导正确使用 | 重构有保障                     |
@@ -335,7 +337,7 @@ pnpm add @h-ai/deploy            # 自动化部署
 
 ### HaiResult 错误处理
 
-所有模块操作都返回 `HaiResult` 类型，不抛异常：
+框架领域操作以 `HaiResult` 为统一失败语义；流式迭代、网络客户端、框架控制流和第三方回调可能抛异常，应按对应 API 文档在边界捕获：
 
 ```typescript
 import type { HaiResult } from '@h-ai/core'
@@ -379,8 +381,7 @@ if (users.success)
 // 分页查询
 const page = await reldb.sql.queryPage<User>({
   sql: 'SELECT * FROM users',
-  page: 1,
-  pageSize: 20,
+  pagination: { page: 1, pageSize: 20 },
 })
 
 // 事务
@@ -390,7 +391,14 @@ await reldb.tx.wrap(async (tx) => {
 })
 
 // CRUD 仓库（自动生成 SQL）
-const userRepo = reldb.crud.table<User>({ tableName: 'users', primaryKey: 'id' })
+const userRepo = reldb.crud.table<User>({
+  table: 'users',
+  idColumn: 'id',
+  select: ['id', 'email', 'name'],
+  createColumns: ['id', 'email', 'name'],
+  updateColumns: ['email', 'name'],
+  dbType: 'sqlite',
+})
 await userRepo.create({ id: '1', email: 'a@b.com', name: 'Alice' })
 const user = await userRepo.findById('1')
 ```

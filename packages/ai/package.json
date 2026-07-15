@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "@a2a-js/sdk": "catalog:",
+    "@h-ai/api-contract": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/datapipe": "workspace:*",
     "@h-ai/reldb": "workspace:*",

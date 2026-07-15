@@ -354,7 +354,8 @@ export interface AIVectorBackend {
  * AI 存储 Provider 接口
  *
  * 负责创建 AIRelStore / AIVectorStore 实例，并管理存储层生命周期。
- * 默认实现基于 reldb + vecdb；也可对接 SaaS API 或其他后端。
+ * reldb + vecdb 已初始化时默认使用持久化 DB 实现，否则使用进程内临时实现；
+ * 也可对接 SaaS API 或其他后端。
  *
  * @example
  * ```ts

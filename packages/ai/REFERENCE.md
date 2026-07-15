@@ -4,6 +4,8 @@
 
 ## 初始化与依赖
 
+未初始化 reldb/vecdb 时，`ai.init()` 自动使用进程内临时 Store；两者均已初始化时使用持久化 DB Provider。Memory、Context、Persona、Knowledge 等需要跨进程持久化的生产场景必须使用 DB 或自定义 Provider。
+
 - `ai.tools`：无需 `ai.init()`；无外部依赖。
 - `ai.stream`：无需 `ai.init()`；无外部依赖。
 - `ai.llm`：需要 `ai.init()`；依赖 OpenAI 兼容 LLM 配置。
@@ -44,10 +46,12 @@ if (result.success) {
 ## Tools
 
 - `ai.tools.define({ name, description, parameters, handler })`
-- `ai.tools.createRegistry()`
-- `registry.register(tool)` / `registry.unregister(name)`
+- `ai.tools.createRegistry({ authorize? })`：Registry 级授权在 Zod 校验后、handler 前执行
+- `registry.register(tool)` / `registry.registerMany(tools)`：返回 `HaiResult<void>`，默认拒绝同名和隐式覆盖
+- `registry.replace(tool)`：仅用于显式替换已存在工具
+- `registry.unregister(name)`
 - `registry.getDefinitions()`
-- `registry.execute(toolCall, { signal, objectId, sessionId, deadline?, timeoutMs? })` / `registry.executeAll(toolCalls, { parallel, ...ctx })`；handler `(input, ctx)` 可响应取消/超时（默认 30s，返回 `TOOL_TIMEOUT`）
+- `registry.execute(toolCall, { signal, objectId, sessionId, deadline?, timeoutMs?, authorize? })` / `registry.executeAll(toolCalls, { parallel?, ...ctx })`；默认串行，只有显式 `parallel: true` 才并行；Registry 与单次授权必须全部通过；handler `(input, ctx)` 可响应取消/超时（默认 30s）
 
 工具 handler 输入由 Zod schema 约束，外部输入不要绕过 schema。
 
@@ -169,7 +173,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `hai:ai:100-107`：LLM / 历史记录。
 - `hai:ai:200-204`：MCP。
 - `hai:ai:300-302`：Embedding。
-- `hai:ai:400-403`：Tool。
+- `hai:ai:400-405`：Tool（含重复注册与授权拒绝）。
 - `hai:ai:500-502`：Reasoning。
 - `hai:ai:600-701`：Retrieval / RAG。
 - `hai:ai:800-805`：Knowledge。

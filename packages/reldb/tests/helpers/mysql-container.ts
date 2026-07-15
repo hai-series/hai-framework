@@ -22,6 +22,7 @@ export interface MysqlContainerLease {
 const MYSQL_DATABASE = 'db_test'
 const MYSQL_USER = 'root'
 const MYSQL_PASSWORD = 'db_password'
+const CONTAINER_STOP_TIMEOUT_MS = 10_000
 
 export async function acquireMysqlContainer(): Promise<MysqlContainerLease> {
   refCount += 1
@@ -55,8 +56,13 @@ export async function acquireMysqlContainer(): Promise<MysqlContainerLease> {
       refCount -= 1
       if (refCount <= 0) {
         refCount = 0
-        await container.stop()
         containerPromise = null
+        // Docker Desktop 偶发会让 stop 请求长期挂起；显式限制等待时间，避免拖死整仓测试。
+        await container.stop({
+          timeout: CONTAINER_STOP_TIMEOUT_MS,
+          remove: true,
+          removeVolumes: true,
+        })
       }
     },
   }

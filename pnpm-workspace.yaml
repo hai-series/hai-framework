@@ -51,7 +51,8 @@ catalog:
   '@capacitor/push-notifications': ^8.0.2
   '@capacitor/status-bar': ^8.0.1
 
-  '@hono/node-server': ^2.0.2
+  # @hono/node-ws 1.x 的 peer contract 要求 node-server 1.x。
+  '@hono/node-server': ^1.19.11
   '@hono/node-ws': ^1.2.0
 
   '@iconify-json/tabler': ^1.2.35

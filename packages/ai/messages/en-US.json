@@ -19,6 +19,8 @@
   "ai_toolNotFound": "Tool '{name}' not found",
   "ai_toolInvalidJson": "Invalid JSON in tool call arguments",
   "ai_toolTimeout": "Tool '{name}' timed out or was cancelled after {ms}ms",
+  "ai_toolAlreadyRegistered": "Tool '{name}' is already registered; use replace() to replace it explicitly",
+  "ai_toolForbidden": "Tool '{name}' execution is not authorized",
   "ai_configError": "AI config validation failed: {error}",
 
   "ai_llmRecordFailed": "Chat record save failed: {error}",

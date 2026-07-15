@@ -29,6 +29,7 @@ import type { CreateServContext, ServContext, ServIam, ServSession } from './ser
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
+import { AUDIO_WS_PATH } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
@@ -45,8 +46,6 @@ import { servM } from './serv-i18n.js'
 import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from './serv-openapi.js'
 import { createTransportMiddleware } from './serv-transport.js'
 import { localizeZodError, resolveRequestLocale } from './serv-validation.js'
-
-const DEFAULT_AUDIO_WS_PATH = '/ai/audio'
 
 /** 允许通过 oRPC OpenAPIHandler 转发的 HTTP 方法。 */
 const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const
@@ -332,7 +331,7 @@ export function createApp<
   // Step 9.5：语音 WebSocket 入口同样要在 oRPC 通配符之前注册，避免 GET 升级请求被 `${apiPrefix}/*` 吞掉。
   if (options.audio) {
     const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
-    const audioPath = `${http.apiPrefix}${options.audio.path ?? DEFAULT_AUDIO_WS_PATH}`
+    const audioPath = `${http.apiPrefix}${options.audio.path ?? AUDIO_WS_PATH}`
     registerAudioWsRoute(app, audioPath, upgradeWebSocket, {
       ai: options.audio.ai,
       verifyTicket: options.audio.verifyTicket,

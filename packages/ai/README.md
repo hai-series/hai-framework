@@ -18,13 +18,36 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、工具
 - `ai.audio`：语音识别（ASR）与语音合成（TTS），支持完整与流式调用，覆盖 OpenAI / MiMo / Qwen / 豆包平台。
 - `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
 - `@h-ai/ai/client`：前端轻量客户端（配合 API 服务）。
-- `AIStoreProvider`：统一存储抽象；默认 DB Provider 基于 reldb + vecdb。
+- `AIStoreProvider`：统一存储抽象；无数据库时默认使用进程内临时 Store，已初始化 reldb + vecdb 时自动使用持久化 DB Provider。
 
 更完整的方法清单、错误码与长示例见 [REFERENCE.md](./REFERENCE.md)。
 
 ## 快速开始
 
-### 默认 DB Provider（reldb + vecdb）
+### LLM-only（零数据库依赖）
+
+```ts
+import { ai } from '@h-ai/ai'
+
+const init = await ai.init({
+  llm: {
+    model: 'gpt-4o-mini',
+    apiKey: process.env.HAI_AI_LLM_API_KEY,
+  },
+})
+if (!init.success)
+  return init
+
+const result = await ai.llm.chat({
+  messages: [{ role: 'user', content: '你好！' }],
+})
+
+await ai.close()
+```
+
+未初始化 reldb/vecdb 时，AI 使用进程内临时 Store 保存会话等运行时状态；`ai.close()`、进程退出或多实例切换后数据不会保留。需要 Memory、Context、Persona 或会话跨重启持久化时，使用下面的 DB Provider。
+
+### 持久化 DB Provider（reldb + vecdb）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -76,9 +99,9 @@ await ai.close()
 
 - 对外只通过 `ai` 服务对象和少量独立工厂（如 `createMcpServer`）访问。
 - 生命周期为 `await ai.init(config, options?)` / `await ai.close()`；关闭会等待自定义 `AIStoreProvider.close()`。
-- 公共方法返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`；业务失败通过 `result.success === false` 和 `result.error.code` 表达。
+- 领域方法返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`；业务失败通过 `result.success === false` 和 `result.error.code` 表达。流式 `AsyncIterable`、客户端传输和第三方回调在建立或迭代期间可能抛异常。
 - `ai.tools` 与 `ai.stream` 是纯函数子系统，无需初始化即可使用。
-- 默认 DB Provider 需要 reldb/vecdb 已初始化；自定义 Provider 可隐藏其他存储后端。
+- 未初始化 reldb/vecdb 时默认使用进程内临时 Store；两者均已初始化时自动使用 DB Provider。自定义 Provider 可隐藏其他存储后端。
 
 ## API 概览
 
@@ -117,8 +140,11 @@ const temp = await ai.llm.chat({
 ```ts
 import { z } from 'zod'
 
-const registry = ai.tools.createRegistry()
-registry.register(ai.tools.define({
+const registry = ai.tools.createRegistry({
+  // 统一授权在 Zod 校验后、handler 前执行；false/异常均 fail-closed
+  authorize: ({ toolName, context }) => canExecuteTool(context.objectId, toolName),
+})
+const registered = registry.register(ai.tools.define({
   name: 'get_weather',
   description: '获取天气',
   parameters: z.object({ city: z.string() }),
@@ -129,9 +155,14 @@ registry.register(ai.tools.define({
   },
   timeoutMs: 10_000, // 本工具默认超时（可被 execute 的 deadline / timeoutMs 覆盖）
 }))
+if (!registered.success)
+  return registered
 
 // 执行时可传入取消信号 / 超时 / 作用域；取消或超时返回 TOOL_TIMEOUT，且不再等待未响应的 handler
 const result = await registry.execute(toolCall, { signal: controller.signal, objectId: 'user-001', timeoutMs: 30_000 })
+
+// 批量调用默认串行，避免副作用工具并发启动；纯读取且确认安全时才显式并行
+const batch = await registry.executeAll(toolCalls)
 
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
@@ -381,7 +412,7 @@ memory:
 ```
 
 - **`native`（默认，推荐）**：HAI 原生引擎，复用同一套 vecdb（向量库）、reldb（关系库）、LLM 与 Embedding。`extract` 采用 **Mem0 式批量合并**——一次 LLM 调用对整批抽取事实与相关既有记忆做 ADD / UPDATE / DELETE / NONE 决策，实现增量更新、跨条去重与矛盾删除，并支持 `category` 主题标签。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` 均作用于此后端；淘汰按 `objectId` 分区触发，不会因某一主体写入过多而淘汰其他主体的记忆。native 后端的 `scope` 过滤：候选集已被 `objectId` 索引收窄（≤ `maxEntriesPerObject`），PostgreSQL 上还会把 scope 下推为 `data @> '{"scope":...}'::jsonb` 包含查询并命中 JSONB **GIN 索引**（SQLite / MySQL 退回内存匹配，结果一致）。
-- **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取（OpenAI 兼容，走 `baseUrl` / `apiKey` / 场景模型）；向量库从底层 vecdb 后端提取——`qdrant` / `pgvector` 直接复用同一后端，`lancedb` / `chroma`（mem0 TS 不支持）则退回 mem0 自带的 in-memory 存储。历史记录默认禁用。需安装 `mem0ai`（已内置为依赖）；复用 qdrant/pgvector 时需对应客户端。
+- **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取；`qdrant` / `pgvector` 可复用底层 vecdb。无法映射 `lancedb` / `chroma` 等后端时默认 fail-fast，只有显式设置 `memory.allowEphemeralFallback: true` 才使用 mem0 in-memory，避免重启后静默丢失记忆。历史记录默认禁用。
 
 两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`），均支持 `objectId`（主体隔离）与 `scope`（业务作用域 key-value 过滤，如 `{ topicId, personaId }`）。`recall` / `list` / `listPage` / `clear` 均按 `scope` 严格过滤，`clear` 在传入 `types` / `scope` 时仅删除同时匹配项（避免误删）。mem0 后端的 `extract` 在框架层用统一提取器完成分类与打分（honor `types` / `model` / `minImportance` / `systemPrompt`）后以 `infer:false` 写入，保留 `hai_type` / `hai_importance`；`recall` 同样支持 `types` 过滤与 `recencyWeight` 时间衰减——二者行为与 native 一致。一个差异：mem0 后端在 `update` 涉及 type/importance/metadata 时会重建记忆并重新分配 `id`（native 后端保持 id 稳定）。
 

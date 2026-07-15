@@ -19,7 +19,7 @@ import type { UpgradeWebSocket, WSContext } from 'hono/ws'
 import type { AudioTicketGrant, AudioTicketVerification, AuthorizedAudioRequest } from '../serv-app.js'
 import type { ServSession } from '../serv-context.js'
 import { Buffer } from 'node:buffer'
-import { AudioWsClientMessageSchema } from '@h-ai/ai'
+import { AudioWsClientMessageSchema } from '@h-ai/api-contract'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 
 const logger = core.logger.child({ module: 'serv', scope: 'audio-ws' })
