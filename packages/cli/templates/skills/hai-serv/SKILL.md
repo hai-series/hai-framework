@@ -5,6 +5,16 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象
 
 # hai-serv
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、添加认证/权限 pipeline 包装器或切换 Node/Fetch 运行时适配器时使用。 |
+| 适用场景 | 当任务与 `hai-serv` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/serv` 是 hai-framework 的 API Service 运行时，对外暴露最小 HTTP App 抽象，将 `@h-ai/api-contract` 的领域 contract 挂载成跨端可访问的 HTTP API；Hono 是内部实现细节，应用代码不要直接 import 或暴露 Hono。
 
 ---

@@ -5,6 +5,16 @@ description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/lis
 
 # hai-cache
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/list/set/zset/分布式锁）；当需求涉及缓存读写、TTL 管理、集合运算、排行榜、缓存一致性策略或分布式互斥锁时使用。 |
+| 适用场景 | 当任务与 `hai-cache` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/cache` 提供统一缓存接口，支持 Memory 与 Redis 后端，包含 KV / Hash / List / Set / ZSet / 分布式锁 六类操作。
 
 ---

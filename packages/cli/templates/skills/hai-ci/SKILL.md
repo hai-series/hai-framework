@@ -5,6 +5,16 @@ description: 设计和维护 hai-framework 应用仓库的 CI/CD、GitHub Action
 
 # hai-ci — CI/CD 与质量门禁规范
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 设计和维护 hai-framework 应用仓库的 CI/CD、GitHub Actions、质量门禁、secret scan 与 workflow 安全；当需求涉及 CI、GitHub Actions、required checks、泄漏扫描或 release workflow 编排时使用。 |
+| 适用场景 | 当任务与 `hai-ci` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 用户目标、仓库与运行环境上下文、现有配置、授权范围和质量门禁 |
+| 输出 | 与目标匹配的配置/代码/文档或审查结论，以及可复现的验证结果 |
+| 限制 | 不扩张用户授权，不输出或固化密钥，不跳过失败门禁，不假定外部服务状态 |
+
 > 面向 AI 助手和团队成员的仓库自动化指南。目标是让每个 PR 都能被机器稳定验证，同时避免把 secrets 暴露给不可信 PR 或第三方 Action。
 
 ---

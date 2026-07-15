@@ -5,6 +5,16 @@ description: 管理 hai-framework 与应用仓库之间的依赖、技能模板�
 
 # hai-framework-sync — hai-framework 与应用仓库同步规范
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 管理 hai-framework 与应用仓库之间的依赖、技能模板、Copilot/AGENTS 指令和本地联调同步；当需求涉及 hai-framework 源头修改、skills 同步、framework:use:local、framework:watch、版本漂移或双仓 PR 时使用。 |
+| 适用场景 | 当任务与 `hai-framework-sync` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 用户目标、仓库与运行环境上下文、现有配置、授权范围和质量门禁 |
+| 输出 | 与目标匹配的配置/代码/文档或审查结论，以及可复现的验证结果 |
+| 限制 | 不扩张用户授权，不输出或固化密钥，不跳过失败门禁，不假定外部服务状态 |
+
 > hai-framework 是能力与 skill 模板源头；应用仓库消费这些能力，并可以有少量项目本地覆盖。同步的目标是减少漂移，而不是把两个仓库混成一个仓库。
 
 ---

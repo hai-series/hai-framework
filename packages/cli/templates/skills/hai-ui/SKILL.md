@@ -5,6 +5,16 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 
 # hai-ui
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构（原子/组合/场景）、DaisyUI 样式 + Bits UI headless 交互、移动端组件（SafeArea/BottomNav/PullRefresh/ActionSheet/SwipeCell/InfiniteScroll/AppBar）、Design Token 系统与平台检测；当需求涉及界面、表单、表格、移动端适配或主题切换时使用。 |
+| 适用场景 | 当任务与 `hai-ui` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题、内置中英文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
 
 ---

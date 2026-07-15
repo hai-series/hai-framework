@@ -5,6 +5,16 @@ description: "Use when: using @h-ai/reldb, database operations, SQL queries, DDL
 
 # hai-usage-reldb — 数据库操作指南
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | Use when: using @h-ai/reldb, database operations, SQL queries, DDL, CRUD, transactions, pagination, JSON operations, BaseReldbCrudRepository, HaiReldbError, table creation, database access. 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作。 |
+| 适用场景 | 当任务与 `hai-usage-reldb` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/reldb` 提供统一的数据库操作接口，支持 SQLite、PostgreSQL、MySQL，包含 DDL、SQL、CRUD 抽象、事务与分页。
 
 ## §0 如何使用本文档

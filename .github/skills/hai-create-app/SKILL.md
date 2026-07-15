@@ -5,6 +5,16 @@ description: "Use when: creating or extending apps in hai-framework, adding rout
 
 # hai-create-app — 应用创建与扩展规范
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | Use when: creating or extending apps in hai-framework, adding routes, pages, API endpoints, service workspaces, mobile app, H5 app, admin console. 在 hai-framework 中创建或扩展应用或 API service workspace，包含路由、API 端点、typed contract、服务层与 UI 脚手架代码。 |
+| 适用场景 | 当任务与 `hai-create-app` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 明确的功能需求、目标路径、现有实现、仓库规范与验收条件 |
+| 输出 | 最小必要的代码、类型、测试和同步文档，以及实际验证结果 |
+| 限制 | 不为假设需求增加抽象，不绕过生命周期/HaiResult/i18n 约定，不覆盖用户已有改动 |
+
 > 面向 AI 助手的应用开发指南。适用于 `apps/` 下的 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace。
 
 ## §0 如何使用本文档

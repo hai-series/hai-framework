@@ -1,6 +1,6 @@
 # hai Framework
 
-> 研发中，敬请期待！🚀
+> 当前为 `0.1.0-alpha`：公共契约仍可能演进，生产采用前请固定版本并完成面向自身场景的安全与容量验证。
 
 <p align="center">
   <strong>AI Runtime · 企业全栈模块 · Agent Skills · 类型安全</strong>
@@ -11,22 +11,22 @@
 </p>
 
 <p align="center">
-  <b>21 个功能模块</b> · <b>6 个可运行示例</b> · <b>90 个 UI 组件</b> · <b>CLI 创建 / 一键部署</b>
+  <b>按需组合的企业能力</b> · <b>可运行示例</b> · <b>多端 UI</b> · <b>CLI 创建 / 部署</b>
 </p>
 
 ---
 
 ## 为什么选 hai？
 
-| 痛点                         | hai 的解法                                                                    |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| AI 生成的代码风格不一致      | 统一 `init → use → close` 生命周期 + 可执行编码规范（copilot-instructions）   |
-| AI 不知道怎么处理错误        | 领域操作统一返回 `HaiResult<T>`；流、传输和框架控制流明确标注异常边界         |
-| 功能模块各自为政，集成成本高 | 21 个模块共享统一 API 模式、类型体系、Provider 架构与 contract 机制，开箱即用 |
-| 从 0 搭建项目要半天          | `hai create my-app` 一行命令创建完整项目（含 AI 上下文、配置、脚手架）        |
-| UI 组件不够用 / 不够现代     | 69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题，内置 i18n        |
-| 部署复杂，需要手动配基础设施 | `hai deploy` 一键部署到 Vercel，自动开通数据库、缓存、存储                    |
-| AI 助手不了解你的框架        | 每个模块自带 Skill 文件 + LLMS.txt，AI 自动获取正确用法                       |
+| 痛点                         | hai 的解法                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| AI 生成的代码风格不一致      | 统一 `init → use → close` 生命周期 + 可执行编码规范（copilot-instructions） |
+| AI 不知道怎么处理错误        | 领域操作统一返回 `HaiResult<T>`；流、传输和框架控制流明确标注异常边界       |
+| 功能模块各自为政，集成成本高 | 模块共享统一 API 模式、类型体系与 contract 机制，可按场景组合               |
+| 从 0 搭建项目要半天          | `hai create my-app` 一行命令创建完整项目（含 AI 上下文、配置、脚手架）      |
+| UI 组件不够用 / 不够现代     | Svelte 5 Runes 分层组件、主题系统与内置 i18n                                |
+| 部署复杂，需要手动配基础设施 | `hai deploy` 一键部署到 Vercel，自动开通数据库、缓存、存储                  |
+| AI 助手不了解你的框架        | 每个模块自带 Skill 文件 + LLMS.txt，AI 自动获取正确用法                     |
 
 ---
 
@@ -341,7 +341,7 @@ pnpm add @h-ai/deploy            # 自动化部署
 
 ```typescript
 import type { HaiResult } from '@h-ai/core'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
 
 function divide(a: number, b: number): HaiResult<number> {
   if (b === 0)
@@ -354,7 +354,7 @@ if (result.success) {
   const quotient = result.data // 5
 }
 else {
-  console.error(result.error)
+  core.logger.warn('Division failed', { code: result.error.code, message: result.error.message })
 }
 ```
 
@@ -364,7 +364,9 @@ else {
 import { reldb } from '@h-ai/reldb'
 
 // 初始化（SQLite）
-await reldb.init({ type: 'sqlite', database: './data/app.db' })
+const initResult = await reldb.init({ type: 'sqlite', database: './data/app.db' })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 // DDL — 建表
 await reldb.ddl.createTable('users', {
@@ -409,7 +411,9 @@ const user = await userRepo.findById('1')
 import { vecdb } from '@h-ai/vecdb'
 
 // 初始化（LanceDB 嵌入式，零配置）
-await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+const initResult = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 // 创建集合
 await vecdb.collection.create('docs', { dimension: 1536 })
@@ -429,7 +433,9 @@ const results = await vecdb.vector.search('docs', queryVector, { topK: 5, minSco
 import { cache } from '@h-ai/cache'
 
 // 初始化（内存 or Redis）
-await cache.init({ type: 'memory' })
+const initResult = await cache.init({ type: 'memory' })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 // await cache.init({ type: 'redis', url: 'redis://localhost:6379' })
 
 // KV 操作
@@ -451,9 +457,11 @@ import { ai, createMcpServer } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 初始化（OpenAI 兼容 API）
-await ai.init({
+const initResult = await ai.init({
   llm: { apiKey: process.env.HAI_AI_LLM_API_KEY, model: 'gpt-4o-mini' },
 })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 // 同步调用
 const result = await ai.llm.chat({
@@ -501,7 +509,9 @@ const result = await datapipe.pipeline()
 import { storage } from '@h-ai/storage'
 
 // 初始化（本地 or S3 兼容）
-await storage.init({ type: 'local', root: './uploads' })
+const initResult = await storage.init({ type: 'local', root: './uploads' })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 // 上传
 await storage.file.put('docs/readme.txt', new TextEncoder().encode('Hello'))
@@ -521,12 +531,18 @@ import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 
 // 先初始化 reldb 与 cache，IAM 会复用已初始化单例
-await reldb.init({ type: 'sqlite', database: './data/app.db' })
-await cache.init({ type: 'memory' })
+const dbInit = await reldb.init({ type: 'sqlite', database: './data/app.db' })
+if (!dbInit.success)
+  throw new Error(dbInit.error.message)
+const cacheInit = await cache.init({ type: 'memory' })
+if (!cacheInit.success)
+  throw new Error(cacheInit.error.message)
 
-await iam.init({
+const iamInit = await iam.init({
   session: { secret: process.env.HAI_IAM_SESSION_SECRET! },
 })
+if (!iamInit.success)
+  throw new Error(iamInit.error.message)
 
 // 用户注册
 await iam.user.register({ username: 'alice', password: 'StrongPass123!' })
@@ -545,10 +561,12 @@ const allowed = await iam.authz.checkPermission(userId, 'users:read')
 import { payment } from '@h-ai/payment'
 import { invokePayment } from '@h-ai/payment/client'
 
-await payment.init({
+const initResult = await payment.init({
   wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...' },
   alipay: { appId: '...', privateKey: '...', alipayPublicKey: '...' },
 })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 // 创建订单（微信 JSAPI / H5 / App / Native，支付宝，Stripe）
 const result = await payment.createOrder('wechat', {
@@ -570,8 +588,12 @@ import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
 // audit 依赖 reldb，请先初始化数据库
-await reldb.init({ type: 'sqlite', database: './data/app.db' })
-await audit.init()
+const dbInit = await reldb.init({ type: 'sqlite', database: './data/app.db' })
+if (!dbInit.success)
+  throw new Error(dbInit.error.message)
+const auditInit = await audit.init()
+if (!auditInit.success)
+  throw new Error(auditInit.error.message)
 
 // 记录操作
 await audit.helper.login('user_1', '127.0.0.1')
@@ -587,7 +609,9 @@ const stats = await audit.getStats(7) // 最近 7 天
 ```typescript
 import { scheduler } from '@h-ai/scheduler'
 
-await scheduler.init({ enableDb: true })
+const initResult = await scheduler.init({ enableDb: true })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 // 注册 Cron 任务（API 任务自动持久化，重启自动恢复）
 await scheduler.register({
@@ -681,7 +705,9 @@ export const handle = kit.createHandle({
 ```typescript
 import { crypto } from '@h-ai/crypto'
 
-await crypto.init()
+const initResult = await crypto.init()
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 // 非对称加密
 const keyPair = crypto.asymmetric.generateKeyPair()
@@ -702,16 +728,21 @@ const valid = crypto.password.verify('MyPassword123', hashed.data)
 ```typescript
 import { apiClient } from '@h-ai/api-client'
 
-await apiClient.init({
+const initResult = await apiClient.init({
   baseUrl: '/api/v1',
   auth: {}, // 默认使用 httpOnly cookie refresh token；App 可传自定义 TokenStorage
 })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'xxx' })
 if (login.success)
   await apiClient.auth.setTokens(login.data.tokens)
 
 const me = await apiClient.iam.auth.currentUser()
+if (me.success) {
+  const { roles, permissions, ...user } = me.data
+}
 const upload = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
 
@@ -720,7 +751,7 @@ const upload = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 ```typescript
 import { reach } from '@h-ai/reach'
 
-await reach.init({
+const initResult = await reach.init({
   providers: [
     { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
     { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '某某科技' },
@@ -730,6 +761,8 @@ await reach.init({
   ],
   dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
 })
+if (!initResult.success)
+  throw new Error(initResult.error.message)
 
 await reach.send({ provider: 'email', to: 'user@example.com', template: 'welcome', vars: { userName: '张三' } })
 ```

@@ -5,6 +5,16 @@ description: 使用 @h-ai/deploy 进行自动化部署：Vercel 部署 + 基础�
 
 # hai-deploy
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/deploy 进行自动化部署：Vercel 部署 + 基础设施开通（Neon/Upstash/R2/Resend/Aliyun）；当需求涉及应用部署、环境配置、凭证管理或云服务开通时使用。 |
+| 适用场景 | 当任务与 `hai-deploy` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 用户目标、仓库与运行环境上下文、现有配置、授权范围和质量门禁 |
+| 输出 | 与目标匹配的配置/代码/文档或审查结论，以及可复现的验证结果 |
+| 限制 | 不扩张用户授权，不输出或固化密钥，不跳过失败门禁，不假定外部服务状态 |
+
 > `@h-ai/deploy` 提供自动化部署能力，将 SvelteKit 应用部署到 Vercel，并自动开通 PostgreSQL (Neon)、Redis (Upstash)、S3 (Cloudflare R2)、邮件 (Resend)、短信 (阿里云) 等基础设施服务。
 
 ---

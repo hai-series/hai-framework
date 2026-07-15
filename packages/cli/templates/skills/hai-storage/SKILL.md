@@ -5,6 +5,16 @@ description: 使用 @h-ai/storage 进行文件存储操作（本地/S3），包�
 
 # hai-storage
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/storage 进行文件存储操作（本地/S3），包括 file/dir/presign 三组能力；当需求涉及文件上传下载、目录批量删除、S3 预签名 URL 或客户端直传时使用。 |
+| 适用场景 | 当任务与 `hai-storage` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/storage` 提供统一文件存储接口，支持本地文件系统（LocalProvider）和 S3 兼容存储（S3Provider），通过 `storage.file`、`storage.dir`、`storage.presign` 三组接口访问能力。
 
 ---

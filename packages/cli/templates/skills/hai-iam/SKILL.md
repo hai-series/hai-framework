@@ -5,6 +5,16 @@ description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、
 
 # hai-iam
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、统一 Bearer Token 管理（TokenPair/refresh/revoke）与 RBAC 授权；当需求涉及登录、注册、权限检查、角色管理、Token 认证或通过 @h-ai/api-contract 暴露 IAM API 时使用。 |
+| 适用场景 | 当任务与 `hai-iam` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP/API Key）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（Token + 权限缓存）、`@h-ai/crypto`（密码哈希）、`@h-ai/audit`（审计日志）。
 
 ---
@@ -328,6 +338,11 @@ if (login.success) {
 
 // 获取当前用户
 const me = await apiClient.iam.auth.currentUser()
+if (me.success) {
+  // 返回 User + 服务端当前会话的 roles/permissions。
+  // 身份资料与访问范围可在状态层拆开，但不要持久化权限快照。
+  const { roles, permissions, ...user } = me.data
+}
 
 // Token 过期时，api-client 自动调用 refreshPath 刷新
 // 刷新失败时，清除 Token 并跳转登录页

@@ -5,6 +5,16 @@ description: 使用 @h-ai/core 进行配置加载、日志记录、i18n 国际�
 
 # hai-core
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/core 进行配置加载、日志记录、i18n 国际化、HaiResult 错误处理、Zod 校验错误本地化与模块生命周期管理；当需求涉及 core.init、core.logger、core.config、core.i18n、core.zodValidation、ok/err 或模块初始化模式时使用。 |
+| 适用场景 | 当任务与 `hai-core` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/core` 是 hai-framework 的基础模块，提供配置管理、结构化日志、国际化、HaiResult 错误模型、Zod 校验错误本地化与模块生命周期工具。所有其他模块均依赖 core。
 
 ---

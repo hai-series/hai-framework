@@ -5,6 +5,16 @@ description: 使用 @h-ai/api-client 构建多端共用的 oRPC/OpenAPI typed cl
 
 # hai-api-client
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/api-client 构建多端共用的 oRPC/OpenAPI typed client，通过 apiClient.init() 初始化，支持 Bearer Token 自动管理、401 刷新重试与 contract 嵌套方法调用；当需求涉及客户端 API 请求、Token 管理或多端数据层时使用。 |
+| 适用场景 | 当任务与 `hai-api-client` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/api-client` 是跨端 typed API client。公共 HTTP API 由 `@h-ai/api-contract` 定义，服务端由 `@h-ai/serv` 挂载，客户端直接调用 `apiClient.<domain>.<group>.<operation>()`。
 
 ## 使用步骤
@@ -71,6 +81,10 @@ if (login.success) {
 }
 
 const me = await apiClient.iam.auth.currentUser()
+if (me.success) {
+  // currentUser 返回服务端最新角色/权限；不要把权限快照持久化到 localStorage。
+  const { roles, permissions, ...user } = me.data
+}
 const upload = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 const answer = await apiClient.ai.chats.sendMessage({ message: 'hello' })
 ```

@@ -5,6 +5,16 @@ description: "Use when: using @h-ai/iam, authentication, login, register, sessio
 
 # hai-usage-iam — 身份与访问管理指南
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | Use when: using @h-ai/iam, authentication, login, register, session management, RBAC, roles, permissions, user management, password reset, OTP, LDAP, token management, API contracts. 使用 @h-ai/iam 进行身份认证、Bearer Token 管理与 RBAC 授权。 |
+| 适用场景 | 当任务与 `hai-usage-iam` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（服务端会话 token / OTP / 权限缓存）、`@h-ai/crypto`（密码哈希）。
 
 ## §0 如何使用本文档
@@ -275,11 +285,18 @@ if (login.success) {
   await apiClient.auth.setTokens(login.data.tokens)
 }
 
+// 会话恢复时同时取得服务端最新访问范围，不复用本地权限快照。
+const me = await apiClient.iam.auth.currentUser()
+if (me.success) {
+  const { roles, permissions, ...user } = me.data
+}
+
 // Token 过期自动刷新
 // 刷新失败清除 Token 并跳转登录页
 ```
 
 Web 管理后台优先由登录 API 写入 httpOnly cookie，不向页面代码暴露 accessToken。
+`currentUser()` 返回 `User & { roles: string[], permissions: string[] }`，供客户端在恢复会话时同步撤权结果。
 
 ---
 

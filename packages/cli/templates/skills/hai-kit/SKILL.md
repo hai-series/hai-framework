@@ -5,6 +5,16 @@ description: 使用 @h-ai/kit 构建 SvelteKit 请求管道、认证守卫、统
 
 # hai-kit
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/kit 构建 SvelteKit 请求管道、认证守卫、统一响应、Zod 校验、浏览器端 apiFetch、A2A 与双构建适配；当需求涉及 hooks.server.ts、权限守卫、CORS、限流、同源 transport 或 SvelteKit API endpoint 时使用。 |
+| 适用场景 | 当任务与 `hai-kit` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/kit` 只负责 SvelteKit 集成：`handle` hook、guard、response、validate、client、auth、crud、A2A。公共跨端 HTTP API 契约统一使用 `@h-ai/api-contract` + `@h-ai/serv`，不要在 kit 中定义业务 API contract。
 
 ## 使用步骤
@@ -82,6 +92,8 @@ export const handle = kit.createHandle({
   },
 })
 ```
+
+需要保护会话 Cookie 时配置 `crypto.encryptedCookies`，并通过 `crypto.cookieEncryptionKey` 或 `HAI_KIT_COOKIE_KEY` 提供密钥。缺少密钥会在 `createHandle()` 时失败；加解密错误不会回退到明文 Cookie。
 
 ```ts
 // routes/+layout.svelte

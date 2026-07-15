@@ -5,6 +5,16 @@ description: 使用 @h-ai/capacitor 桥接 Capacitor 原生能力（Token 安全
 
 # hai-capacitor
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/capacitor 桥接 Capacitor 原生能力（Token 安全存储、设备信息、推送通知、相机、状态栏），构建 Android/iOS 原生应用；当需求涉及原生 App 开发、Capacitor 集成、安全存储或原生设备功能时使用。 |
+| 适用场景 | 当任务与 `hai-capacitor` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 用户目标、仓库与运行环境上下文、现有配置、授权范围和质量门禁 |
+| 输出 | 与目标匹配的配置/代码/文档或审查结论，以及可复现的验证结果 |
+| 限制 | 不扩张用户授权，不输出或固化密钥，不跳过失败门禁，不假定外部服务状态 |
+
 > `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块，封装常用原生能力为统一 API，返回 `HaiResult<T>`。与 `@h-ai/api-client` 配合时，Token 仅存于原生安全存储，不回退到 Web `localStorage`。
 
 ---

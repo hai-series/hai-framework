@@ -5,6 +5,16 @@ description: 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；�
 
 # hai-api-contract
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；当需求涉及定义新领域 contract、组合应用级 contract、使用内置 IAM/Storage/AI/Payment 契约、编写自定义 procedure 输入输出 Schema 或为 @h-ai/api-client/@h-ai/serv 提供接口真相源时使用。 |
+| 适用场景 | 当任务与 `hai-api-contract` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 > `@h-ai/api-contract` 是 hai-framework 的公共 HTTP API 契约包，使用 oRPC contract + Zod v4 作为唯一接口真相源。本包只描述接口边界，不包含任何 procedure 实现。
 
 ---

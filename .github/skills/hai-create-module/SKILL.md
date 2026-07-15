@@ -5,6 +5,16 @@ description: "Use when: creating a new module, new package, scaffold, add sub-fe
 
 # hai-create-module — 模块创建决策手册
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | Use when: creating a new module, new package, scaffold, add sub-feature, add provider, create repository, module structure, tsup config, error codes, NotInitializedKit pattern. 在 hai-framework 中创建新模块（package）。 |
+| 适用场景 | 当任务与 `hai-create-module` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 明确的功能需求、目标路径、现有实现、仓库规范与验收条件 |
+| 输出 | 最小必要的代码、类型、测试和同步文档，以及实际验证结果 |
+| 限制 | 不为假设需求增加抽象，不绕过生命周期/HaiResult/i18n 约定，不覆盖用户已有改动 |
+
 > 面向 AI 助手的模块创建指南。**本文档只含决策表与原则**；代码范本（main.ts、types.ts、config.ts、package.json 等可直接套用的模板）请按需读 [reference.md](reference.md)。
 >
 > 模块通用约束（命名、暴露形式、HaiResult、NotInitializedKit、日志、错误码段位）见 [.github/instructions/module-conventions.instructions.md](../../instructions/module-conventions.instructions.md)（编辑 `packages/` 时自动注入）。

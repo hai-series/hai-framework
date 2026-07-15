@@ -5,6 +5,16 @@ description: "Use when: building UI with @h-ai/ui, including Svelte 5 Runes comp
 
 # hai-ui — @h-ai/ui 快速指南
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | Use when: building UI with @h-ai/ui, including Svelte 5 Runes components, DaisyUI/Bits UI integration, forms, tables, dialogs, mobile components, theme switching, Markdown/AI output rendering, and Mermaid document/code previews. 使用 @h-ai/ui 构建界面、多端组件、主题系统、AI 输出展示与 Mermaid 文档/代码预览时使用。 |
+| 适用场景 | 当任务与 `hai-ui` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
+| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
+| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+
 `@h-ai/ui` 提供 Svelte 5 Runes 组件库，覆盖 primitives / compounds / scenes 三层组件架构，以及主题、i18n、Toast、平台检测、AI 输出展示等能力。
 
 > 完整安装步骤、全量组件清单与长示例见 `packages/cli/templates/skills/hai-ui/SKILL.md`；本文件保留工作区内最常用的集成要点，避免上下文过重。

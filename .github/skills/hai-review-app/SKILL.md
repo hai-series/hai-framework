@@ -5,6 +5,16 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 
 # hai-review-app — 应用代码审查规范
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | Use when: reviewing app code in hai-framework, auditing app quality, checking app conventions, reviewing routes, reviewing API service workspaces, app security, app i18n review. 对 hai-framework 应用层代码进行审查：路由安全 → 认证授权 → i18n → 组件使用 → API 端点 / service workspace → 服务层 → 性能。 |
+| 适用场景 | 当任务与 `hai-review-app` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 用户指定的审查范围、代码/差异、仓库规范与可复现证据 |
+| 输出 | 按优先级排列的问题、影响、定位和修正建议；仅在用户要求时实施修改 |
+| 限制 | 不把风格偏好当缺陷，不猜测未读取的实现，不在审查请求中擅自发布或改动外部状态 |
+
 > 面向 AI 助手的应用审查指南。适用于 `apps/` 下的 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace；审查基准参照 `hai-create-app`。
 
 ---

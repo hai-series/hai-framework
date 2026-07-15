@@ -5,6 +5,16 @@ description: "Use when: reviewing code, code review, auditing module quality, ch
 
 # hai-review-module — 模块代码审查规范
 
+## 能力契约
+
+| 项目 | 契约 |
+| --- | --- |
+| 能力 | Use when: reviewing code, code review, auditing module quality, checking hai-framework conventions, verifying HaiResult<T> usage, reviewing module structure, PR review, checking naming consistency, verifying NotInitializedKit pattern, auditing performance, security, distributed systems. 对 hai-framework 模块进行全维度代码审查：架构 → 命名 → 类型 → 注释 → 性能 → 分布式 → 安全 → 日志 → 测试 → 文档。 |
+| 适用场景 | 当任务与 `hai-review-module` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
+| 输入 | 用户指定的审查范围、代码/差异、仓库规范与可复现证据 |
+| 输出 | 按优先级排列的问题、影响、定位和修正建议；仅在用户要求时实施修改 |
+| 限制 | 不把风格偏好当缺陷，不猜测未读取的实现，不在审查请求中擅自发布或改动外部状态 |
+
 > 面向 AI 助手的模块审查指南。审查基准：`copilot-instructions.md` + `module-conventions.instructions.md` + [hai-create-module](../hai-create-module/SKILL.md)。
 
 ## §0 如何使用本文档
