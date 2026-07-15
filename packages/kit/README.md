@@ -242,6 +242,8 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 | `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A 协议集成（Agent Card + JSON-RPC）                             |
 | `onError`    | `function`                               | 自定义错误处理                                                    |
 
+配置 `crypto.encryptedCookies` 时必须同时提供 `crypto.cookieEncryptionKey`，或设置 `HAI_KIT_COOKIE_KEY`。缺少密钥会在 `createHandle()` 时立即报错；受保护 Cookie 的明文、损坏密文或解密失败都按不存在处理，加密失败也不会回退写入明文。
+
 ## 导出路径
 
 - `@h-ai/kit`：主入口，提供 `kit` 命名空间与类型。

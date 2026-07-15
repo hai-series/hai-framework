@@ -17,6 +17,18 @@ import { HaiReachError } from '../reach-types.js'
 const logger = core.logger.child({ module: 'reach', scope: 'provider-api' })
 
 /**
+ * 日志中仅保留回调源站，避免 URL 用户信息、查询参数和路径泄露凭据或业务标识。
+ */
+function getSafeEndpoint(url: string): string {
+  try {
+    return new URL(url).origin
+  }
+  catch {
+    return '[invalid-url]'
+  }
+}
+
+/**
  * 将异常包装为 ReachError
  */
 function toReachError(error: unknown): HaiError {
@@ -49,7 +61,7 @@ export function createApiProvider(): ReachProvider {
       }
 
       apiConfig = config
-      logger.info('API provider connected', { url: config.url, method: config.method })
+      logger.info('API provider connected', { endpoint: getSafeEndpoint(config.url), method: config.method })
       return ok(undefined)
     },
 
@@ -70,7 +82,7 @@ export function createApiProvider(): ReachProvider {
         )
       }
 
-      logger.debug('Sending via API callback', { url: apiConfig.url, to: message.to })
+      logger.debug('Sending via API callback', { endpoint: getSafeEndpoint(apiConfig.url) })
 
       try {
         const payload = {
@@ -97,16 +109,15 @@ export function createApiProvider(): ReachProvider {
           })
 
           if (!response.ok) {
-            const text = await response.text()
-            logger.warn('API callback returned non-OK status', { status: response.status, body: text })
+            logger.warn('API callback returned non-OK status', { status: response.status })
             return err(
               HaiReachError.SEND_FAILED,
-              reachM('reach_apiSendFailed', { params: { error: `HTTP ${response.status}: ${text}` } }),
+              reachM('reach_apiSendFailed', { params: { error: `HTTP ${response.status}` } }),
             )
           }
 
           const result = await response.json() as { messageId?: string }
-          logger.info('API callback sent', { to: message.to, messageId: result.messageId })
+          logger.info('API callback sent', { messageId: result.messageId })
           return ok({ success: true, messageId: result.messageId })
         }
         finally {
@@ -114,7 +125,7 @@ export function createApiProvider(): ReachProvider {
         }
       }
       catch (error) {
-        logger.error('API callback send failed', { to: message.to, error })
+        logger.error('API callback send failed', { error })
         return err(toReachError(error))
       }
     },

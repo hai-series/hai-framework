@@ -103,7 +103,11 @@ export const ApiProviderConfigSchema = z.object({
   name: z.string().min(1, reachM('reach_config_nameRequired')),
   type: z.literal('api'),
   /** 回调 URL */
-  url: z.string().min(1, reachM('reach_config_urlRequired')),
+  url: z.string()
+    .url(reachM('reach_config_urlRequired'))
+    .refine(value => ['http:', 'https:'].includes(new URL(value).protocol), {
+      message: reachM('reach_config_urlRequired'),
+    }),
   /** HTTP 方法（默认 POST） */
   method: z.enum(['POST', 'PUT']).default('POST'),
   /** 自定义请求头 */

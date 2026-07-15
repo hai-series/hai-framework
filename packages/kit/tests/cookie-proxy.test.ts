@@ -5,7 +5,7 @@
  * 覆盖：
  * - createEncryptedCookieProxy：加密写入、解密读取、前缀识别
  * - 不在加密名单中的 Cookie 正常透传
- * - 加密/解密失败时的降级策略
+ * - 加密/解密失败时拒绝明文降级
  * - 其他 Cookies 方法（delete / getAll / serialize）原样代理
  * =============================================================================
  */
@@ -13,8 +13,10 @@
 import type { Cookies } from '@sveltejs/kit'
 import type { CookieProxyConfig } from '../src/hooks/kit-cookie-proxy.js'
 import { Buffer } from 'node:buffer'
+import { crypto } from '@h-ai/crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createEncryptedCookieProxy } from '../src/hooks/kit-cookie-proxy.js'
+import { createHandle } from '../src/hooks/kit-handle.js'
 
 // ─── Mock Cookies ───
 
@@ -101,16 +103,15 @@ describe('createEncryptedCookieProxy', () => {
       expect(setCall[1]).toBe('plain_value')
     })
 
-    it('加密失败时降级：原样写入明文', () => {
+    it('加密失败时拒绝写入明文', () => {
       const store: Record<string, string> = {}
       const cookies = createMockCookies(store)
       const config = makeConfig({ symmetric: createFailingSymmetric() })
       const proxy = createEncryptedCookieProxy(cookies, config)
 
-      proxy.set('session_token', 'my_secret_token', { path: '/' })
-
-      const setCall = cookies.set.mock.calls[0]!
-      expect(setCall[1]).toBe('my_secret_token')
+      expect(() => proxy.set('session_token', 'my_secret_token', { path: '/' }))
+        .toThrow('Cookie encryption failed')
+      expect(cookies.set).not.toHaveBeenCalled()
     })
   })
 
@@ -131,13 +132,13 @@ describe('createEncryptedCookieProxy', () => {
       expect(value).toBe('my_secret_token')
     })
 
-    it('没有 enc: 前缀的值原样返回（兼容明文迁移）', () => {
+    it('没有 enc: 前缀的受保护 Cookie 被拒绝', () => {
       const cookies = createMockCookies({ session_token: 'plain_token_value' })
       const config = makeConfig()
       const proxy = createEncryptedCookieProxy(cookies, config)
 
       const value = proxy.get('session_token')
-      expect(value).toBe('plain_token_value')
+      expect(value).toBeUndefined()
     })
 
     it('不在加密名单中的 Cookie 原样返回', () => {
@@ -158,14 +159,14 @@ describe('createEncryptedCookieProxy', () => {
       expect(value).toBeUndefined()
     })
 
-    it('解密失败时返回原始值', () => {
+    it('解密失败时不暴露原始密文', () => {
       const storedValue = 'enc:bad_iv:bad_ciphertext'
       const cookies = createMockCookies({ session_token: storedValue })
       const config = makeConfig({ symmetric: createFailingSymmetric() })
       const proxy = createEncryptedCookieProxy(cookies, config)
 
       const value = proxy.get('session_token')
-      expect(value).toBe(storedValue)
+      expect(value).toBeUndefined()
     })
   })
 
@@ -247,5 +248,21 @@ describe('createEncryptedCookieProxy', () => {
       proxy.serialize('test')
       expect(cookies.serialize).toHaveBeenCalled()
     })
+  })
+})
+
+describe('kit.createHandle Cookie 加密配置', () => {
+  it('配置加密 Cookie 但缺少密钥时启动失败', () => {
+    vi.stubEnv('HAI_KIT_COOKIE_KEY', '')
+
+    expect(() => createHandle({
+      logging: false,
+      crypto: {
+        crypto,
+        encryptedCookies: ['session_token'],
+      },
+    })).toThrow('Cookie encryption requires')
+
+    vi.unstubAllEnvs()
   })
 })

@@ -409,7 +409,8 @@ export interface HookCryptoConfig {
    * Cookie 加密密钥（32 字符十六进制 = 16 字节 SM4 密钥）
    *
    * 如不提供，则从环境变量 `HAI_KIT_COOKIE_KEY` 读取。
-   * 两者都未设置时 Cookie 加密不生效并输出警告。
+   * 配置了 `encryptedCookies` 但两者都未设置时，`kit.createHandle()` 会立即抛出配置错误，
+   * 避免受保护 Cookie 静默降级为明文。
    */
   cookieEncryptionKey?: string
 }

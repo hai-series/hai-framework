@@ -13,6 +13,7 @@ import type {
   IamChangePasswordInput,
   IamCreatePermissionInput,
   IamCreateRoleInput,
+  IamCurrentUser,
   IamListPermissionsInput,
   IamListUsersInput,
   IamLoginInput,
@@ -61,11 +62,15 @@ export function createIamProcedures(deps: IamProcedureDeps) {
           return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
         return iam.auth.logout(token)
       })),
-      currentUser: p.auth.currentUser.handler(requireAuth<unknown, User>(({ context }) => {
+      currentUser: p.auth.currentUser.handler(requireAuth<unknown, IamCurrentUser>(async ({ context }) => {
         const token = context.accessToken
         if (!token)
           return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
-        return iam.user.getCurrentUser(token)
+        return mapHaiResult<User, IamCurrentUser>(await iam.user.getCurrentUser(token), user => ({
+          ...user,
+          roles: context.session?.roles ?? [],
+          permissions: context.session?.permissions ?? [],
+        }))
       })),
       refresh: p.auth.refresh.handler(async ({ input }: { input: { refreshToken: string } }) => {
         return mapHaiResult(await iam.session.refresh(input.refreshToken), tokens => ({ tokens }))

@@ -107,14 +107,16 @@ const config = { name: 'dev', type: 'console' }
 
 ### API 回调
 
-| 字段      | 类型                     | 必填 | 默认值  | 说明          |
-| --------- | ------------------------ | ---- | ------- | ------------- |
-| `name`    | `string`                 | ✅   | —       | Provider 名称 |
-| `type`    | `string`                 | ✅   | —       | 固定 `'api'`  |
-| `url`     | `string`                 | ✅   | —       | 回调 URL      |
-| `method`  | `'POST' \| 'PUT'`        | —    | `POST`  | HTTP 方法     |
-| `headers` | `Record<string, string>` | —    | —       | 自定义请求头  |
-| `timeout` | `number`                 | —    | `10000` | 超时毫秒数    |
+| 字段      | 类型                     | 必填 | 默认值  | 说明             |
+| --------- | ------------------------ | ---- | ------- | ---------------- |
+| `name`    | `string`                 | ✅   | —       | Provider 名称    |
+| `type`    | `string`                 | ✅   | —       | 固定 `'api'`     |
+| `url`     | `string`                 | ✅   | —       | HTTP(S) 回调 URL |
+| `method`  | `'POST' \| 'PUT'`        | —    | `POST`  | HTTP 方法        |
+| `headers` | `Record<string, string>` | —    | —       | 自定义请求头     |
+| `timeout` | `number`                 | —    | `10000` | 超时毫秒数       |
+
+API 回调地址属于服务端可信配置。日志只记录回调 origin，不记录 URL 凭据、查询参数、收件人或第三方失败响应体。若回调地址来自租户/用户输入，应用层必须配置域名 allowlist；企业部署还应通过出口代理或网络策略阻止访问内网元数据地址。
 
 ### DND（免打扰）
 

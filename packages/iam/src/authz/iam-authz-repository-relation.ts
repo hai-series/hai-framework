@@ -255,7 +255,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       }
 
       const placeholders = idsResult.data.map(() => '?').join(', ')
-      const result = await reldb.sql.query<Record<string, unknown>>(
+      const result = await reldb.sql.query<Permission>(
         `SELECT * FROM ${PERMISSION_TABLE} WHERE id IN (${placeholders})`,
         idsResult.data,
       )
@@ -267,8 +267,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         )
       }
 
-      // reldb.sql.query 返回 Record<string, unknown>[]，此处强转为领域类型（字段映射由 SQL 保证）
-      return ok(result.data as unknown as Permission[])
+      return ok(result.data)
     },
 
     async getPermissionCodesForRoles(roleIds: string[]): Promise<HaiResult<string[]>> {
@@ -368,7 +367,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
 
       const uniquePermIds = [...new Set(relationsResult.data.map(r => r.permission_id))]
       const permPlaceholders = uniquePermIds.map(() => '?').join(', ')
-      const permsResult = await reldb.sql.query<Record<string, unknown>>(
+      const permsResult = await reldb.sql.query<Permission>(
         `SELECT * FROM ${PERMISSION_TABLE} WHERE id IN (${permPlaceholders})`,
         uniquePermIds,
       )
@@ -381,8 +380,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       }
 
       const permMap = new Map<string, Permission>()
-      // reldb.sql.query 返回 Record<string, unknown>[]，此处强转为领域类型（字段映射由 SQL 保证）
-      for (const perm of permsResult.data as unknown as Permission[]) {
+      for (const perm of permsResult.data) {
         permMap.set(perm.id, perm)
       }
 

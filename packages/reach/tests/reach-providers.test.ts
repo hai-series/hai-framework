@@ -436,9 +436,9 @@ describe('api provider', () => {
       timeout: 10000,
     } as ProviderConfig)
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response('Internal Server Error', { status: 500 }),
-    )
+    const response = new Response('Internal Server Error', { status: 500 })
+    const readBody = vi.spyOn(response, 'text')
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response)
 
     const result = await provider.send({
       provider: 'webhook',
@@ -449,7 +449,9 @@ describe('api provider', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(HaiReachError.SEND_FAILED.code)
+      expect(result.error.message).not.toContain('Internal Server Error')
     }
+    expect(readBody).not.toHaveBeenCalled()
   })
 
   it('send 网络错误应返回 SEND_FAILED', async () => {

@@ -66,6 +66,14 @@ describe('reach config', () => {
     }
   })
 
+  it('api 配置应拒绝非 HTTP(S) 回调地址', () => {
+    const result = ReachConfigSchema.safeParse({
+      providers: [{ name: 'webhook', type: 'api', url: 'file:///etc/passwd' }],
+    })
+
+    expect(result.success).toBe(false)
+  })
+
   it('空 providers 数组应校验失败', () => {
     const result = ReachConfigSchema.safeParse({ providers: [] })
     expect(result.success).toBe(false)
