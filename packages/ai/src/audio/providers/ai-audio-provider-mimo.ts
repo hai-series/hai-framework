@@ -18,6 +18,7 @@ import type {
   ProviderSynthesisStreamRequest,
   ProviderTranscriptionRequest,
   ProviderTranscriptionStreamRequest,
+  SynthesisOutputMeta,
 } from './ai-audio-provider.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -142,7 +143,7 @@ export function createMimoAudioProvider(): AudioProvider {
 
   async function* synthesizeStream(request: ProviderSynthesisStreamRequest): AsyncIterable<Uint8Array> {
     const { model, text, voice, instruction, format, signal } = request
-    const outFormat: AudioFormat = format === 'wav' ? 'wav' : 'pcm16'
+    const outFormat = resolveSynthesisOutput({ format }).format
 
     // MiMo TTS 不原生接收增量文本：字符串一次合成；持续文本流按句子分段逐句合成，降低首音延迟
     const segments = typeof text === 'string' ? [text] : streamSentences(text)
@@ -166,7 +167,13 @@ export function createMimoAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, capabilities: MIMO_CAPABILITIES }
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, resolveSynthesisOutput, capabilities: MIMO_CAPABILITIES }
+}
+
+/** MiMo 流式合成除 wav 外均输出 pcm16；pcm16 时补默认采样率 24000。 */
+function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
+  const format: AudioFormat = request.format === 'wav' ? 'wav' : 'pcm16'
+  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
 }
 
 // ─── 内部辅助 ───

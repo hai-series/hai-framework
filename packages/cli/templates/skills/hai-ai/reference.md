@@ -156,6 +156,8 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 常用方法：`addMessage`、`getMessages`、`getTokenUsage`、`chat`、`chatStream`、`save`、`reset`、`flush`（等待后台记忆提取完成，`save` 前自动调用）、`pendingMemoryTasks`（挂起提取任务数）。`chat/chatStream` 支持 `signal` 取消。
 
+`turnCommit: 'manual'` 时 `chat/chatStream` 不自动写入生成文本，返回 `turnId`，由 `commitTurn` / `interruptTurn` 提交真实内容。`chatStream` 事件 `turn_started → delta* → done`，`AbortSignal` 取消为 `→ cancelled`；轮次在流完成前已被 `interruptTurn` 打断进入终态时**不再产出 `done`**。
+
 ## File / Rerank / Reasoning
 
 - `ai.file.parse({ content, filename, options })`：text/html/pdf/docx/ocr 解析。
@@ -170,11 +172,11 @@ const result = await ai.rag.query('核心架构是什么？', {
 | `transcribe(request)` | `Promise<HaiResult<TranscriptionResult>>` | 完整音频 → 完整文本 |
 | `transcribeStream(request)` | `AsyncIterable<TranscriptionEvent>` | 完整或持续音频 → 识别/VAD 领域事件 |
 | `synthesize(request)` | `Promise<HaiResult<SynthesisResult>>` | 完整文本 → 完整音频 |
-| `synthesizeStream(request)` | `AsyncIterable<SynthesisEvent>` | 带 ID 文本段 → `segment_started → audio* → segment_done` |
+| `synthesizeStream(request)` | `AsyncIterable<SynthesisEvent>` | 带 ID 文本段 → `segment_started → audio* → segment_done`；`segment_started` 携带服务端解析后的真实 `format` / `sampleRate?` / `channels?` |
 | `getCapabilities({ operation, model? })` | `HaiResult<AudioModelCapabilities>` | 按操作查询能力，并拒绝操作不匹配模型 |
 
 - 模型配置必须包含 `operations: ['transcribe'] | ['synthesize'] | ['transcribe','synthesize']`。
-- 浏览器端使用 `audio: { url, getTicket }`；ticket 由已登录 HTTP 请求签发且一次性消费，IAM access token 不进入 WebSocket URL。
+- 浏览器端使用 `audio: { url, getTicket }`；ticket 由已登录 HTTP 请求签发且一次性消费，IAM access token 不进入 WebSocket URL。客户端区分正常结束 / 取消（`AUDIO_CANCELLED`）/ `end` 前异常断连（`AUDIO_CONNECTION_FAILED`），服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
 
 ## A2A
 

@@ -176,9 +176,12 @@ export interface SynthesisResult extends AudioContent {}
  *
  * 每个文本段严格按 `segment_started → audio* → segment_done` 顺序产出，调用方可在
  * 对应音频真正播放完成后提交该段文本，不需要按字节数反推文本边界。
+ *
+ * `segment_started` 携带服务端解析 Provider 后的**真实输出音频参数**（format / sampleRate / channels），
+ * 调用方据此正确解码、设置 PCM 播放参数、选择保存扩展名，而非根据请求参数猜测。
  */
 export type SynthesisEvent
-  = | { type: 'segment_started', segmentId: string, text: string }
+  = | { type: 'segment_started', segmentId: string, text: string, format: AudioFormat, sampleRate?: number, channels?: 1 | 2 }
     | { type: 'audio', segmentId: string, data: Uint8Array }
     | { type: 'segment_done', segmentId: string }
 

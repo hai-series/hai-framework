@@ -124,13 +124,16 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
       throw resolved.error
     logger.debug('audio synthesizeStream', { provider: resolved.data.provider, model: resolved.data.model })
     const signal = withStreamTimeout(request.signal)
+    const provider = getProvider(resolved.data.provider)
+    // 由 Provider 依据自身默认规则解析真实输出格式，供 segment_started 标注（不由调用方猜测）
+    const output = provider.resolveSynthesisOutput({ format: request.format, sampleRate: request.sampleRate })
     try {
       const segments = isSynthesisTextSegment(request.text) ? singleSegment(request.text) : request.text
       for await (const segment of segments) {
         if (!segment.id || !segment.text)
           throw audioError(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty segment id or text' } }))
-        yield { type: 'segment_started', segmentId: segment.id, text: segment.text }
-        for await (const data of getProvider(resolved.data.provider).synthesizeStream({ model: resolved.data, text: segment.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal }))
+        yield { type: 'segment_started', segmentId: segment.id, text: segment.text, format: output.format, sampleRate: output.sampleRate, channels: output.channels }
+        for await (const data of provider.synthesizeStream({ model: resolved.data, text: segment.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal }))
           yield { type: 'audio', segmentId: segment.id, data }
         yield { type: 'segment_done', segmentId: segment.id }
       }

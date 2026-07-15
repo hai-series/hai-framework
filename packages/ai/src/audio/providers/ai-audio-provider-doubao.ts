@@ -21,6 +21,7 @@ import type {
   ProviderSynthesisStreamRequest,
   ProviderTranscriptionRequest,
   ProviderTranscriptionStreamRequest,
+  SynthesisOutputMeta,
 } from './ai-audio-provider.js'
 
 import { Buffer } from 'node:buffer'
@@ -343,12 +344,12 @@ export function createDoubaoAudioProvider(): AudioProvider {
   // ─── TTS ───
 
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {
-    const outFormat: AudioFormat = request.format ?? 'pcm16'
+    const out = resolveSynthesisOutput({ format: request.format, sampleRate: request.sampleRate })
     try {
       const chunks: Uint8Array[] = []
-      for await (const audio of synthesizeStream({ model: request.model, text: request.text, voice: request.voice, format: outFormat, sampleRate: request.sampleRate, signal: request.signal }))
+      for await (const audio of synthesizeStream({ model: request.model, text: request.text, voice: request.voice, format: out.format, sampleRate: request.sampleRate, signal: request.signal }))
         chunks.push(audio)
-      return ok({ data: concatChunks(chunks), format: outFormat, sampleRate: outFormat === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 })
+      return ok({ data: concatChunks(chunks), format: out.format, sampleRate: out.sampleRate, channels: out.channels })
     }
     catch (error) {
       logger.debug('Doubao synthesize failed', { error: errorMessage(error) })
@@ -358,7 +359,7 @@ export function createDoubaoAudioProvider(): AudioProvider {
 
   async function* synthesizeStream(request: ProviderSynthesisStreamRequest): AsyncIterable<Uint8Array> {
     const { model, text, voice, format, sampleRate, signal } = request
-    const outFormat: AudioFormat = format ?? 'pcm16'
+    const outFormat = resolveSynthesisOutput({ format }).format
     const url = `${model.baseUrl}/api/v3/tts/bidirection`
     const conn = await openAudioWebSocket(url, buildAuthHeaders(model, true), { signal, timeout: model.timeout })
     const sessionId = globalThis.crypto.randomUUID()
@@ -412,7 +413,13 @@ export function createDoubaoAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, capabilities: DOUBAO_CAPABILITIES }
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, resolveSynthesisOutput, capabilities: DOUBAO_CAPABILITIES }
+}
+
+/** 豆包未指定格式时默认 pcm16；pcm16 时补默认采样率 24000。 */
+function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
+  const format: AudioFormat = request.format ?? 'pcm16'
+  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
 }
 
 // ─── 内部辅助 ───

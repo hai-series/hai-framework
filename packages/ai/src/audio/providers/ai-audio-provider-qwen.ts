@@ -20,6 +20,7 @@ import type {
   ProviderSynthesisStreamRequest,
   ProviderTranscriptionRequest,
   ProviderTranscriptionStreamRequest,
+  SynthesisOutputMeta,
 } from './ai-audio-provider.js'
 
 import { core, ok } from '@h-ai/core'
@@ -163,12 +164,12 @@ export function createQwenAudioProvider(): AudioProvider {
 
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {
     const { format, sampleRate } = request
-    const outFormat: AudioFormat = format ?? 'pcm16'
+    const out = resolveSynthesisOutput({ format, sampleRate })
     try {
       const chunks: Uint8Array[] = []
-      for await (const audio of synthesizeStream({ model: request.model, text: request.text, voice: request.voice, instruction: request.instruction, format: outFormat, sampleRate, signal: request.signal }))
+      for await (const audio of synthesizeStream({ model: request.model, text: request.text, voice: request.voice, instruction: request.instruction, format: out.format, sampleRate, signal: request.signal }))
         chunks.push(audio)
-      return ok({ data: concatChunks(chunks), format: outFormat, sampleRate: outFormat === 'pcm16' ? (sampleRate ?? 24000) : undefined, channels: 1 })
+      return ok({ data: concatChunks(chunks), format: out.format, sampleRate: out.sampleRate, channels: out.channels })
     }
     catch (error) {
       logger.debug('Qwen synthesize failed', { error: errorMessage(error) })
@@ -179,7 +180,7 @@ export function createQwenAudioProvider(): AudioProvider {
   async function* synthesizeStream(request: ProviderSynthesisStreamRequest): AsyncIterable<Uint8Array> {
     const { model, text, voice, instruction, format, sampleRate, signal } = request
     const isStreamInput = typeof text !== 'string'
-    const outFormat: AudioFormat = format ?? 'pcm16'
+    const outFormat = resolveSynthesisOutput({ format }).format
 
     const conn = await connect(model, signal)
     try {
@@ -235,7 +236,13 @@ export function createQwenAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, capabilities: QWEN_CAPABILITIES }
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, resolveSynthesisOutput, capabilities: QWEN_CAPABILITIES }
+}
+
+/** Qwen 未指定格式时默认 pcm16；pcm16 时补默认采样率 24000。 */
+function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
+  const format: AudioFormat = request.format ?? 'pcm16'
+  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
 }
 
 /** 解析服务端 JSON 事件（解析失败返回空对象，交由调用方忽略） */

@@ -81,11 +81,21 @@ export interface AudioWsTranscriptMessage {
   final: boolean
 }
 
-/** 合成文本段开始；后续二进制帧均属于该段，直到收到对应的 `segment_done`。 */
+/**
+ * 合成文本段开始；后续二进制帧均属于该段，直到收到对应的 `segment_done`。
+ *
+ * 携带服务端解析 Provider 后的真实输出音频参数，供浏览器正确标注音频格式。
+ */
 export interface AudioWsSegmentStartedMessage {
   type: 'segment_started'
   segmentId: string
   text: string
+  /** 真实输出音频格式（来自服务端解析后的 Provider 输出，非客户端请求参数） */
+  format: AudioFormat
+  /** 采样率（Hz）；pcm16 等裸音频必填 */
+  sampleRate?: number
+  /** 声道数（默认单声道） */
+  channels?: 1 | 2
 }
 
 /** 合成文本段的音频已全部发送。 */

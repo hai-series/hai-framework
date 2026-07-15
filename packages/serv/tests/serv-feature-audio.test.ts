@@ -34,7 +34,7 @@ function createAudioMock(): AudioOperations {
     async* synthesizeStream(request) {
       const segments = Symbol.asyncIterator in request.text ? request.text : single(request.text)
       for await (const segment of segments) {
-        yield { type: 'segment_started', segmentId: segment.id, text: segment.text }
+        yield { type: 'segment_started', segmentId: segment.id, text: segment.text, format: 'pcm16', sampleRate: 24000, channels: 1 }
         yield { type: 'audio', segmentId: segment.id, data: new Uint8Array([1, 2]) }
         yield { type: 'audio', segmentId: segment.id, data: new Uint8Array([3, 4]) }
         yield { type: 'segment_done', segmentId: segment.id }
@@ -139,7 +139,7 @@ describe('serv feature audio', () => {
     expect(binaryFrames.length).toBe(2)
     const jsonMsgs = parseJsonMessages(ws)
     expect(jsonMsgs).toEqual([
-      { type: 'segment_started', segmentId: 'seg-1', text: '你好' },
+      { type: 'segment_started', segmentId: 'seg-1', text: '你好', format: 'pcm16', sampleRate: 24000, channels: 1 },
       { type: 'segment_done', segmentId: 'seg-1' },
       { type: 'end' },
     ])

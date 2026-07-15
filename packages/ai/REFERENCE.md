@@ -131,6 +131,8 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 常用方法：`addMessage`、`getMessages`、`getTokenUsage`、`chat`、`chatStream`、`save`、`reset`。
 
+真实对话状态：`turnCommit: 'manual'` 时 `chat` / `chatStream` 不自动写入生成文本，返回 `turnId`，由 `commitTurn` / `interruptTurn` 提交真实内容。`chatStream` 事件序列 `turn_started → delta* → done`，中途 `AbortSignal` 取消为 `turn_started → delta* → cancelled`；若轮次在流完成前已被 `interruptTurn` 打断进入终态，则**不再产出 `done`**（避免误判为正常完成）。
+
 ## File / Rerank / Reasoning
 
 - `ai.file.parse({ content, filename, options })`：text/html/pdf/docx/ocr 解析。
@@ -143,12 +145,12 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `transcribe(request)`：完整音频 → `HaiResult<{ text }>`。
 - `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<TranscriptionEvent>`。事件为 `speech_started` / `{ type: 'transcript', text, final }` / `speech_stopped`（支持服务端 VAD 的平台产出语音起止事件，可据此即时反应）。
 - `synthesize(request)`：完整文本 → `HaiResult<AudioContent>`。
-- `synthesizeStream(request)`：`SynthesisTextSegment` 或 `AsyncIterable<SynthesisTextSegment>` → `AsyncIterable<SynthesisEvent>`；每段严格产出 `segment_started → audio* → segment_done`，音频事件携带 `segmentId`。
+- `synthesizeStream(request)`：`SynthesisTextSegment` 或 `AsyncIterable<SynthesisTextSegment>` → `AsyncIterable<SynthesisEvent>`；每段严格产出 `segment_started → audio* → segment_done`，音频事件携带 `segmentId`。`segment_started` 额外携带服务端解析 Provider 后的真实输出参数 `format` / `sampleRate?` / `channels?`，调用方据此正确解码，不按请求参数猜测。
 - `getCapabilities({ operation, model? })`：按操作查询默认或指定模型，只返回 `transcribe` / `synthesize` 对应能力分支；模型操作不匹配时在厂商调用前返回 `AUDIO_UNSUPPORTED_INPUT`。
 
 请求可选字段：识别 `contextHints?: string[]`（热词/提示，按平台能力映射）；合成 `instruction?: string`（自然语言风格指令）。配置 `audio.models: [{ id, provider, model, operations: ['transcribe'] | ['synthesize'] | ['transcribe','synthesize'], ...credentials }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB）/`maxStreamDurationMs`（默 5 分钟，流式连接硬上限）。
 
-错误语义：`AbortSignal` 取消 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败 → `AUDIO_CONNECTION_FAILED`，厂商错误 → `AUDIO_UPSTREAM_ERROR`。平台不支持的输入方式 → `AUDIO_UNSUPPORTED_INPUT`（不伪装实时）。Provider 为内部实现，不从根入口导出。
+错误语义：`AbortSignal` 取消 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`，厂商错误 → `AUDIO_UPSTREAM_ERROR`。平台不支持的输入方式 → `AUDIO_UNSUPPORTED_INPUT`（不伪装实时）。浏览器客户端严格区分正常结束、取消与异常断连：取消抛 `AUDIO_CANCELLED`、`end` 前断连抛 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不返回未完成的部分音频。Provider 为内部实现，不从根入口导出。
 
 ## A2A
 

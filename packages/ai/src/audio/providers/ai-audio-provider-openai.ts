@@ -17,6 +17,7 @@ import type {
   ProviderSynthesisStreamRequest,
   ProviderTranscriptionRequest,
   ProviderTranscriptionStreamRequest,
+  SynthesisOutputMeta,
 } from './ai-audio-provider.js'
 
 import { Buffer } from 'node:buffer'
@@ -122,18 +123,18 @@ export function createOpenAIAudioProvider(): AudioProvider {
     if (!model.apiKey)
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
 
-    const outFormat = format ?? 'mp3'
+    const out = resolveSynthesisOutput({ format, sampleRate })
     try {
       const client = createClient(model.apiKey, model.baseUrl, model.timeout)
       const response = await client.audio.speech.create({
         model: model.model,
         voice: voice ?? 'alloy',
         input: text,
-        response_format: OPENAI_SPEECH_FORMAT[outFormat],
+        response_format: OPENAI_SPEECH_FORMAT[out.format],
         ...(instruction ? { instructions: instruction } : {}),
       }, { signal })
       const data = new Uint8Array(await response.arrayBuffer())
-      return ok({ data, format: outFormat, sampleRate: outFormat === 'pcm16' ? (sampleRate ?? 24000) : undefined, channels: 1 })
+      return ok({ data, format: out.format, sampleRate: out.sampleRate, channels: out.channels })
     }
     catch (error) {
       logger.debug('OpenAI synthesize failed', { error: errorMessage(error) })
@@ -146,7 +147,7 @@ export function createOpenAIAudioProvider(): AudioProvider {
     if (!model.apiKey)
       throw audioError(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: 'openai' } }))
 
-    const outFormat = format ?? 'mp3'
+    const outFormat = resolveSynthesisOutput({ format }).format
     const client = createClient(model.apiKey, model.baseUrl, model.timeout)
 
     // OpenAI TTS 不原生接收增量文本：字符串一次合成；持续文本流按句子分段逐句合成，降低首音延迟
@@ -183,7 +184,13 @@ export function createOpenAIAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, capabilities: OPENAI_CAPABILITIES }
+  return { transcribe, transcribeStream, synthesize, synthesizeStream, resolveSynthesisOutput, capabilities: OPENAI_CAPABILITIES }
+}
+
+/** OpenAI 未指定格式时默认 mp3；pcm16 时补默认采样率 24000。 */
+function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: number }): SynthesisOutputMeta {
+  const format = request.format ?? 'mp3'
+  return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
 }
 
 /** 构造上传文件：裸 pcm16 先封装为 WAV 容器（OpenAI 文件接口需要容器格式） */

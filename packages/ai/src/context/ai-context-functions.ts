@@ -563,8 +563,9 @@ export function createContextOperations(
               }
             }
 
-            await completeStreamTurn(turn, fullReply)
-            yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
+            // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
+            if (await completeStreamTurn(turn, fullReply))
+              yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
             return
           }
 
@@ -591,8 +592,9 @@ export function createContextOperations(
               }
             }
 
-            await completeStreamTurn(turn, fullReply)
-            yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: turn.id, usage: undefined }
+            // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
+            if (await completeStreamTurn(turn, fullReply))
+              yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: turn.id, usage: undefined }
             return
           }
 
@@ -677,8 +679,9 @@ export function createContextOperations(
             break
           }
 
-          await completeStreamTurn(turn, fullReply)
-          yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
+          // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
+          if (await completeStreamTurn(turn, fullReply))
+            yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
         }
         catch (error) {
           // 上游生成被取消（AbortSignal）：保留 generating 轮次与已生成文本（pendingCommits 已在
@@ -721,10 +724,13 @@ export function createContextOperations(
      * 避免上游流恰好完成时把完整文本写回已打断的轮次。
      * auto 模式：把生成文本写入上下文并触发记忆提取，轮次置为 `completed`。
      * manual 模式：保持 `generating`，pendingCommits 已在 beginStreamTurn 登记，等待 commit/interrupt。
+     *
+     * @returns `false` 表示该轮已在别处进入终态（如被 interruptTurn 打断），调用方不得再产出 `done`；
+     *          `true` 表示本次正常完成，可产出 `done`。
      */
-    async function completeStreamTurn(turn: ConversationTurn, finalText: string): Promise<void> {
+    async function completeStreamTurn(turn: ConversationTurn, finalText: string): Promise<boolean> {
       if (turn.status === 'completed' || turn.status === 'interrupted')
-        return
+        return false
       turn.generated = finalText
       if (turnCommit === 'auto') {
         turn.committed = finalText
@@ -736,6 +742,7 @@ export function createContextOperations(
           await manager.addMessage({ role: 'assistant', content: finalText })
         enqueueMemoryExtract(userMessage, finalText)
       }
+      return true
     }
 
     /**

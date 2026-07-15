@@ -243,6 +243,7 @@ for await (const ev of m.chatStream('展开讲讲', { signal: controller.signal 
 ```
 
 - 只有 `committed` 的内容进入上下文与记忆；`getTurns()` 可观测 `generated` / `committed` / `status`。
+- 主持人抢话时可在 `turn_started` / 迭代过程中随时 `interruptTurn`；轮次进入终态后即便上游流恰好正常结束，`chatStream` 也**不会再产出 `done`**，业务层不会误判为正常完成。
 
 
 ## 语音（Audio）
@@ -273,14 +274,17 @@ for await (const chunk of ai.audio.transcribeStream({ audio: { chunks: micChunks
 // 分段合成：稳定 ID 关联文本与音频，支持 AbortSignal 打断
 const controller = new AbortController()
 for await (const event of ai.audio.synthesizeStream({ text: { id: 'seg-1', text: '欢迎。' }, voice: 'Cherry', signal: controller.signal })) {
-  if (event.type === 'audio')
+  if (event.type === 'segment_started')
+    prepareDecoder(event.format, event.sampleRate, event.channels) // 真实输出格式来自服务端解析后的 Provider 输出
+  else if (event.type === 'audio')
     await player.write(event.data)
 }
 ```
 
 - 流式方法是 `AsyncIterable`，迭代期间的连接/协议/上游错误会终止迭代（抛出），不返回 `HaiResult`。
+- `segment_started` 携带服务端解析 Provider 后的真实输出参数（`format` / `sampleRate?` / `channels?`）；播放器据此解码，不按请求参数猜测格式。
 - 平台不支持的输入方式（如 OpenAI/MiMo 的持续音频输入）会抛 `AUDIO_UNSUPPORTED_INPUT`，不伪装成实时。
-- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`@h-ai/ai/client` 通过 `audio.getTicket` 建连，不把 IAM access token 放入 URL。
+- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`@h-ai/ai/client` 通过 `audio.getTicket` 建连，不把 IAM access token 放入 URL。浏览器客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`）；服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
 
 
 ## SvelteKit API 端点模式

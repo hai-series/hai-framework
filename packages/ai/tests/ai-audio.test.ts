@@ -398,6 +398,10 @@ describe('ai.audio Qwen Provider', () => {
       ['audio', 'seg-2'],
       ['segment_done', 'seg-2'],
     ])
+    // segment_started 携带 Provider 解析后的真实输出格式（Qwen 默认 pcm16 / 24000）
+    const started = events.filter(event => event.type === 'segment_started')
+    for (const event of started)
+      expect(event).toMatchObject({ format: 'pcm16', sampleRate: 24000, channels: 1 })
   })
 })
 

@@ -1229,7 +1229,9 @@ describe('context chat tool call loop', () => {
 
     let turnId = ''
     let interruptOk = false
+    const seen: string[] = []
     for await (const ev of manager.chatStream('讲讲')) {
+      seen.push(ev.type)
       if (ev.type === 'turn_started') {
         turnId = ev.turnId
         // 流仍在进行时立即打断，提交真实播出内容（pendingCommits 已在 turn 创建时登记）
@@ -1239,6 +1241,8 @@ describe('context chat tool call loop', () => {
     }
 
     expect(interruptOk).toBe(true)
+    // 已打断的轮次不得再产出 done，避免业务层误判为正常完成
+    expect(seen).not.toContain('done')
     const turns = manager.getTurns()
     expect(turns.success).toBe(true)
     if (turns.success) {

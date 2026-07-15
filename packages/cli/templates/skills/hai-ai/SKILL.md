@@ -245,6 +245,7 @@ for await (const ev of m.chatStream('展开讲讲')) {
 ```
 
 - 只有 `committed` 的内容进入上下文与记忆；`getTurns()` 可观测 `generated` / `committed` / `status`。
+- 轮次在流完成前已被 `interruptTurn` 打断进入终态时，即便上游流恰好正常结束，`chatStream` 也**不会再产出 `done`**，避免业务层误判为正常完成。
 
 
 ## 语音（Audio）
@@ -262,14 +263,16 @@ audio:
 
 ```ts
 for await (const event of ai.audio.synthesizeStream({ text: { id: 'seg-1', text: '欢迎。' } })) {
-  if (event.type === 'audio')
+  if (event.type === 'segment_started')
+    prepareDecoder(event.format, event.sampleRate, event.channels) // 真实输出格式来自服务端解析后的 Provider 输出
+  else if (event.type === 'audio')
     await player.write(event.data)
 }
 
 const caps = ai.audio.getCapabilities({ operation: 'synthesize', model: 'tts' })
 ```
 
-浏览器客户端配置 `audio: { url, getTicket }`；`getTicket` 通过已登录 HTTP 请求获取短期、一次性 ticket，禁止把 IAM access token 放入 WebSocket URL。
+浏览器客户端配置 `audio: { url, getTicket }`；`getTicket` 通过已登录 HTTP 请求获取短期、一次性 ticket，禁止把 IAM access token 放入 WebSocket URL。`segment_started` 携带服务端解析后的真实 `format` / `sampleRate?` / `channels?`；客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`），`synthesize` 不返回未完成的部分音频。
 
 
 ## SvelteKit API 端点模式

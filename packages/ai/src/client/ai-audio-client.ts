@@ -19,6 +19,19 @@ import type {
   TranscriptionStreamRequest,
 } from '../audio/ai-audio-types.js'
 import type { AudioWsServerMessage, AudioWsStartMessage } from '../audio/ai-audio-ws-protocol.js'
+import { HaiAIError } from '../ai-types.js'
+
+/**
+ * 构造带领域错误码的浏览器客户端错误
+ *
+ * 浏览器 Client 约定出错抛异常；此处在 `Error.code` 上保留领域错误码
+ * （取消 / 连接失败 / 服务端领域错误），供调用方区分正常结束、取消与异常断连。
+ */
+function audioClientError(code: string | number, message: string): Error {
+  const error = new Error(message)
+  ;(error as { code?: string | number }).code = code
+  return error
+}
 
 // ─── 客户端配置 ───
 
@@ -76,9 +89,8 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
     let waiting: ((result: IteratorResult<BrowserWsMessage>) => void) | null = null
     let closed = false
     let opened = false
+    let aborted = false
     let failure: Error | null = null
-
-    const onAbort = (): void => ws.close()
 
     function settleClosed(): void {
       if (closed)
@@ -90,6 +102,31 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
         waiting = null
         w({ value: undefined, done: true })
       }
+    }
+
+    function onAbort(): void {
+      aborted = true
+      if (!opened) {
+        // 连接建立前取消：直接以取消错误拒绝建连
+        settleClosed()
+        reject(audioClientError(HaiAIError.AUDIO_CANCELLED.code, 'Audio operation cancelled'))
+      }
+      // 连接建立后取消：关闭连接，由消息迭代器在终止时抛出 AUDIO_CANCELLED
+      ws.close()
+    }
+
+    /**
+     * socket 关闭且未按协议正常收到 `end` 时的终止错误。
+     *
+     * 消费方在收到服务端 `end` 时会主动 break，因而正常结束不会走到此分支；
+     * 走到此分支即意味着连接在完成前关闭，须区分取消 / 网络异常抛出对应领域错误。
+     */
+    function terminalError(): Error {
+      if (aborted)
+        return audioClientError(HaiAIError.AUDIO_CANCELLED.code, 'Audio operation cancelled')
+      if (failure)
+        return failure
+      return audioClientError(HaiAIError.AUDIO_CONNECTION_FAILED.code, 'Audio WebSocket closed before completion')
     }
 
     function push(message: BrowserWsMessage): void {
@@ -109,9 +146,10 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
       else
         push({ isBinary: true, binary: new Uint8Array(event.data as ArrayBuffer) })
     }
+    // 连接建立前后的错误都记录：建立前直接拒绝，建立后由迭代器在关闭时抛出 AUDIO_CONNECTION_FAILED
     ws.onerror = (): void => {
+      failure = audioClientError(HaiAIError.AUDIO_CONNECTION_FAILED.code, 'Audio WebSocket connection failed')
       if (!opened) {
-        failure = new Error('Audio WebSocket connection failed')
         settleClosed()
         reject(failure)
       }
@@ -136,19 +174,13 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
               yield queue.shift() as BrowserWsMessage
               continue
             }
-            if (closed) {
-              if (failure)
-                throw failure
-              return
-            }
+            if (closed)
+              throw terminalError()
             const next = await new Promise<IteratorResult<BrowserWsMessage>>((res) => {
               waiting = res
             })
-            if (next.done) {
-              if (failure)
-                throw failure
-              return
-            }
+            if (next.done)
+              throw terminalError()
             yield next.value
           }
         },
@@ -212,7 +244,7 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
         else if (event.type === 'speech_stopped')
           yield { type: 'speech_stopped' }
         else if (event.type === 'error')
-          throw new Error(`${event.code}: ${event.message}`)
+          throw audioClientError(event.code, event.message)
         else if (event.type === 'end')
           break
       }
@@ -240,7 +272,7 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
         if (event.type === 'transcript')
           text = event.text
         else if (event.type === 'error')
-          throw new Error(`${event.code}: ${event.message}`)
+          throw audioClientError(event.code, event.message)
         else if (event.type === 'end')
           break
       }
@@ -291,9 +323,12 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
           activeSegmentId = undefined
         }
         else if (event.type === 'error') {
-          throw new Error(`${event.code}: ${event.message}`)
+          throw audioClientError(event.code, event.message)
         }
         else if (event.type === 'end') {
+          // 收到 end 但仍有未完成的合成段：视为本次合成失败，不得把部分音频当作成功结果
+          if (activeSegmentId)
+            throw audioClientError(HaiAIError.AUDIO_PROTOCOL_ERROR.code, 'Synthesis ended before the active segment completed')
           break
         }
       }
@@ -307,10 +342,16 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
 
   async function synthesize(request: SynthesisRequest): Promise<SynthesisResult> {
     const chunks: Uint8Array[] = []
+    let meta: { format: SynthesisResult['format'], sampleRate?: number, channels?: 1 | 2 } | undefined
     for await (const event of synthesizeStream({ ...request, text: { id: 'synthesis', text: request.text } })) {
-      if (event.type === 'audio')
+      if (event.type === 'segment_started')
+        meta = { format: event.format, sampleRate: event.sampleRate, channels: event.channels }
+      else if (event.type === 'audio')
         chunks.push(event.data)
     }
+    // 音频格式来自服务端解析后的 Provider 真实输出（随 segment_started 下发），不由请求参数猜测
+    if (!meta)
+      throw audioClientError(HaiAIError.AUDIO_PROTOCOL_ERROR.code, 'Synthesis completed without segment metadata')
     const total = chunks.reduce((sum, c) => sum + c.length, 0)
     const data = new Uint8Array(total)
     let offset = 0
@@ -318,8 +359,7 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
       data.set(chunk, offset)
       offset += chunk.length
     }
-    const outFormat = request.format ?? 'pcm16'
-    return { data, format: outFormat, sampleRate: outFormat === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
+    return { data, format: meta.format, sampleRate: meta.sampleRate, channels: meta.channels ?? 1 }
   }
 
   return { transcribe, transcribeStream, synthesize, synthesizeStream }

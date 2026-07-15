@@ -94,6 +94,22 @@ export interface ProviderSynthesisStreamRequest {
 }
 
 /**
+ * Provider 解析后的最终输出音频元数据
+ *
+ * 不同平台对未指定格式时的默认值不同（如 OpenAI 默认 mp3、Qwen/Doubao/MiMo 默认 pcm16），
+ * 由各 Provider 依据自身规则解析，供流式合成在 `segment_started` 标注真实格式，
+ * 避免调用方根据请求参数猜测导致解码 / 播放参数错误。
+ */
+export interface SynthesisOutputMeta {
+  /** 最终输出音频格式 */
+  format: AudioFormat
+  /** 采样率（Hz）；pcm16 等裸音频必填，wav / mp3 等自描述格式为 undefined */
+  sampleRate?: number
+  /** 声道数 */
+  channels: 1 | 2
+}
+
+/**
  * Audio Provider 内部接口
  *
  * 每个平台一个实现，负责厂商协议转换、连接、响应解析与错误映射。
@@ -108,6 +124,12 @@ export interface AudioProvider {
   synthesize: (request: ProviderSynthesisRequest) => Promise<HaiResult<SynthesisResult>>
   /** 流式语音合成 */
   synthesizeStream: (request: ProviderSynthesisStreamRequest) => AsyncIterable<Uint8Array>
+  /**
+   * 解析该次合成请求的最终输出音频元数据（格式 / 采样率 / 声道）
+   *
+   * 与 `synthesizeStream` 采用一致的默认规则，供上层在 `segment_started` 标注真实格式。
+   */
+  resolveSynthesisOutput: (request: { format?: AudioFormat, sampleRate?: number }) => SynthesisOutputMeta
   /** 平台实时能力声明 */
   readonly capabilities: AudioModelCapabilities
 }
