@@ -9,6 +9,8 @@
 
 import type { AudioFormat } from './ai-audio-types.js'
 
+import { z } from 'zod'
+
 /** 统一语音入口的默认路径（相对 API 前缀） */
 export const AUDIO_WS_PATH = '/ai/audio'
 
@@ -64,6 +66,59 @@ export interface AudioWsDoneMessage {
 
 /** 客户端 JSON 控制消息（音频输入以二进制帧发送，不走 JSON） */
 export type AudioWsClientMessage = AudioWsStartMessage | AudioWsTextMessage | AudioWsDoneMessage
+
+// ─── 运行时校验 Schema（客户端与服务端共享） ───
+//
+// TypeScript 类型在网络运行时不生效：不可信客户端可发送任意 JSON。以下 Zod schema
+// 在协议边界对每一帧做运行时结构校验，非法帧在进入业务逻辑前即被拒绝。
+
+/** 合法音频格式 */
+export const AudioFormatSchema = z.enum(['pcm16', 'wav', 'mp3', 'opus'])
+
+/** 单个字符串控制字段最大长度（model / language / voice / instruction 等） */
+const MAX_CONTROL_FIELD_LEN = 512
+/** contextHints 单条最大长度与最大条数 */
+const MAX_HINT_LEN = 256
+const MAX_HINTS = 64
+/** segmentId 最大长度 */
+const MAX_SEGMENT_ID_LEN = 128
+/** 合法采样率范围（Hz） */
+const MIN_SAMPLE_RATE = 8000
+const MAX_SAMPLE_RATE = 192000
+
+/** 会话起始帧 Schema */
+export const AudioWsStartMessageSchema = z.object({
+  type: z.literal('start'),
+  operation: z.enum(['transcribe', 'synthesize']),
+  stream: z.boolean().optional(),
+  model: z.string().max(MAX_CONTROL_FIELD_LEN).optional(),
+  language: z.string().max(MAX_CONTROL_FIELD_LEN).optional(),
+  contextHints: z.array(z.string().max(MAX_HINT_LEN)).max(MAX_HINTS).optional(),
+  voice: z.string().max(MAX_CONTROL_FIELD_LEN).optional(),
+  instruction: z.string().max(MAX_CONTROL_FIELD_LEN).optional(),
+  format: AudioFormatSchema.optional(),
+  sampleRate: z.number().int().min(MIN_SAMPLE_RATE).max(MAX_SAMPLE_RATE).optional(),
+  channels: z.union([z.literal(1), z.literal(2)]).optional(),
+})
+
+/** 文本输入帧 Schema（segmentId 非空且长度受限） */
+export const AudioWsTextMessageSchema = z.object({
+  type: z.literal('text'),
+  segmentId: z.string().min(1).max(MAX_SEGMENT_ID_LEN),
+  text: z.string(),
+})
+
+/** 输入结束帧 Schema */
+export const AudioWsDoneMessageSchema = z.object({
+  type: z.literal('done'),
+})
+
+/** 客户端 JSON 控制消息 Schema（按 type 判别） */
+export const AudioWsClientMessageSchema = z.discriminatedUnion('type', [
+  AudioWsStartMessageSchema,
+  AudioWsTextMessageSchema,
+  AudioWsDoneMessageSchema,
+])
 
 // ─── 服务端 → 客户端 ───
 

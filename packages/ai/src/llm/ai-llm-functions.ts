@@ -31,6 +31,7 @@ import { z } from 'zod'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
+import { sessionStoreKey } from '../store/ai-store-key.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './ai-llm-tool.js'
 import { createLLMProvider } from './providers/ai-llm-provider-router.js'
@@ -100,15 +101,16 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     logger.trace('Chat record saved', { id: record.id, objectId: record.objectId, sessionId: record.sessionId })
 
     if (sessionStore) {
-      const sid = record.sessionId
-      const existing = await sessionStore.get(sid)
+      // 会话目录与上下文正文共用同一复合键，避免不同主体相同 sessionId 互相覆盖
+      const sessionKey = sessionStoreKey({ objectId: record.objectId, sessionId: record.sessionId })
+      const existing = await sessionStore.get(sessionKey)
       const now = Date.now()
       if (existing) {
-        await sessionStore.save(sid, { ...existing, updatedAt: now }, { objectId: existing.objectId })
+        await sessionStore.save(sessionKey, { ...existing, updatedAt: now }, { objectId: existing.objectId })
       }
       else {
-        await sessionStore.save(sid, {
-          sessionId: sid,
+        await sessionStore.save(sessionKey, {
+          sessionId: record.sessionId,
           objectId: record.objectId,
           title: extractTitle(messages),
           createdAt: now,

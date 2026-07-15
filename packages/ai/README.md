@@ -122,8 +122,16 @@ registry.register(ai.tools.define({
   name: 'get_weather',
   description: '获取天气',
   parameters: z.object({ city: z.string() }),
-  handler: async ({ city }) => ({ city, temperature: 20 }),
+  // handler 第二参为执行上下文：可响应取消（打断/超时）、感知截止时间与交互主体
+  handler: async ({ city }, { signal }) => {
+    const res = await fetch(`https://api.example.com/weather?city=${city}`, { signal })
+    return res.json()
+  },
+  timeoutMs: 10_000, // 本工具默认超时（可被 execute 的 deadline / timeoutMs 覆盖）
 }))
+
+// 执行时可传入取消信号 / 超时 / 作用域；取消或超时返回 TOOL_TIMEOUT，且不再等待未响应的 handler
+const result = await registry.execute(toolCall, { signal: controller.signal, objectId: 'user-001', timeoutMs: 30_000 })
 
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
@@ -151,6 +159,15 @@ const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001'
 if (!enriched.success) {
   return enriched
 }
+
+// 多租户推荐入口：scoped() 绑定主体与作用域，所有操作自动携带 objectId / scope（含归属校验），杜绝「忘记传 objectId」越权
+const memory = ai.memory.scoped({ objectId: 'user-001', scope: { topicId: 't-1', personaId: 'p-1' } })
+await memory.add({ content: '用户偏好中文', type: 'preference' })
+const recalled = await memory.recall('语言偏好')
+
+// clear 拒绝空过滤（防误清全局）；全局清空只能显式走管理接口
+await memory.clear({ types: ['event'] }) // 仅清该作用域内的 event
+await ai.memory.admin.clearAll({ confirm: true }) // 危险：清空整个记忆后端，需显式确认
 
 const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], topK: 5 })
 
@@ -226,12 +243,17 @@ const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'sess-001' },
   compress: { auto: true, strategy: 'hybrid', maxTokens: 8000 },
   memory: { enable: true, enableExtract: true },
+  concurrency: 'reject', // 单活动生成（默认）：活动生成期间的新 chat 返回 CONTEXT_BUSY；'queue' 则排队
 })
 if (manager.success) {
   const reply = await manager.data.chat('你好')
   await manager.data.save()
+  // reset 生命周期完整：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词
+  await manager.data.reset() // 可传 { preserveSystemPrompt, cancelActiveTurn, waitForMemoryTasks }
 }
 ```
+
+同一管理器默认实行**单活动生成**，避免「上一轮 AI 尚未退出，下一轮 user 消息先写入」导致的消息乱序；`reset()` 现为异步并会终止活动生成、释放并发屏障、清空轮次并默认重新写入 Persona/System Prompt。
 
 #### 真实对话状态（Conversation Commit Layer）
 

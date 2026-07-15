@@ -419,6 +419,14 @@ export const MemoryConfigSchema = z.object({
   /** 记忆后端：native = 逐条写回；mem0 = 批量 ADD/UPDATE/DELETE 合并（均为嵌入式，复用 HAI 组件） */
   provider: z.enum(['native', 'mem0']).default('native'),
   /**
+   * 是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false）
+   *
+   * 仅影响 `provider='mem0'`：mem0 TS 仅支持 qdrant / pgvector。当底层 vecdb 是
+   * lancedb / chroma / 未知后端时，默认 fail-fast（初始化失败），避免服务重启后记忆静默丢失；
+   * 仅当显式设为 true 时才退回 mem0 自带 in-memory 存储（数据不持久）。
+   */
+  allowEphemeralFallback: z.boolean().default(false),
+  /**
    * 单个主体（objectId）的最大记忆条数（默认 1000）
    *
    * native 淘汰按 objectId 分区触发：某个主体写入超过此上限时，只淘汰该主体自身

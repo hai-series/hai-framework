@@ -288,7 +288,52 @@ export interface MemoryAccessScope {
   scope?: Record<string, unknown>
 }
 
-export interface MemoryOperations {
+/**
+ * 记忆作用域绑定（`ai.memory.scoped()` 使用）
+ *
+ * 绑定后，所有操作自动携带 `objectId` 与 `scope`，无需每次手动传入，
+ * 从根本上避免「忘记传 objectId 导致跨租户越权」的安全隐患。
+ */
+export interface ScopedMemoryBinding {
+  /** 归属主体 ID（所有操作自动绑定） */
+  objectId: string
+  /** 业务作用域（所有操作自动绑定并作为归属校验的一部分，如 `{ topicId, personaId }`） */
+  scope?: Record<string, unknown>
+}
+
+/**
+ * 全局清空选项（`ai.memory.admin.clearAll()` 使用）
+ *
+ * 危险操作：清空整个记忆后端的全部数据。必须显式传入 `confirm: true`，
+ * 防止误调用；普通 `clear()` 不再支持通过省略参数隐式清空全局。
+ */
+export interface MemoryClearAllOptions {
+  /** 必须显式为 `true`，否则拒绝执行 */
+  confirm: true
+}
+
+/**
+ * 记忆管理接口（`ai.memory.admin`）
+ *
+ * 承载危险的全局操作，与业务作用域操作明确分离。
+ */
+export interface MemoryAdminOperations {
+  /**
+   * 清空整个记忆后端的全部数据（跨所有主体 / 作用域）
+   *
+   * @param options - 必须传入 `{ confirm: true }`
+   * @returns 成功返回 ok(undefined)；未确认返回 MEMORY_STORE_FAILED
+   */
+  clearAll: (options: MemoryClearAllOptions) => Promise<HaiResult<void>>
+}
+
+/**
+ * 记忆核心操作（Provider 实现层）
+ *
+ * 各 Provider（native / mem0）实现这一组操作。公共入口 `ai.memory` 在其基础上
+ * 叠加作用域绑定（`scoped`）与管理接口（`admin`），并对 `clear` 施加空过滤保护。
+ */
+export interface MemoryCoreOperations {
   /**
    * 从对话消息中自动提取记忆条目
    *
@@ -394,4 +439,54 @@ export interface MemoryOperations {
    * @param options - 清空选项（可按类型/主体过滤）
    */
   clear: (options?: MemoryClearOptions) => Promise<HaiResult<void>>
+}
+
+/**
+ * 作用域绑定的记忆操作（`ai.memory.scoped()` 返回）
+ *
+ * 所有操作自动携带绑定的 `objectId` 与 `scope`，无需重复传入；`get` / `update` / `remove`
+ * 自动施加归属校验（跨租户访问返回 `MEMORY_NOT_FOUND`）；`clear` 仅清空绑定作用域内的记忆，
+ * 永远不会误清全局。
+ */
+export interface ScopedMemoryOperations {
+  /** 从对话中提取记忆（自动绑定 objectId / scope） */
+  extract: (messages: ChatMessage[], options?: Omit<MemoryExtractOptions, 'objectId' | 'scope'>) => Promise<HaiResult<MemoryEntry[]>>
+  /** 检索相关记忆（自动绑定 objectId / scope） */
+  recall: (query: string, options?: Omit<MemoryRecallOptions, 'objectId' | 'scope'>) => Promise<HaiResult<MemoryEntry[]>>
+  /** 注入相关记忆（自动绑定 objectId / scope） */
+  injectMemories: (messages: ChatMessage[], options?: Omit<MemoryInjectionOptions, 'objectId' | 'scope'>) => Promise<HaiResult<ChatMessage[]>>
+  /** 添加记忆（自动绑定 objectId / scope） */
+  add: (entry: Omit<MemoryEntryInput, 'objectId' | 'scope'>) => Promise<HaiResult<MemoryEntry>>
+  /** 更新记忆（自动施加归属校验） */
+  update: (memoryId: string, updates: MemoryUpdateInput) => Promise<HaiResult<MemoryEntry>>
+  /** 按 ID 获取记忆（自动施加归属校验） */
+  get: (memoryId: string) => Promise<HaiResult<MemoryEntry>>
+  /** 删除记忆（自动施加归属校验） */
+  remove: (memoryId: string) => Promise<HaiResult<void>>
+  /** 列出记忆（自动绑定 objectId / scope） */
+  list: (options?: Omit<MemoryListOptions, 'objectId' | 'scope'>) => Promise<HaiResult<MemoryEntry[]>>
+  /** 分页列出记忆（自动绑定 objectId / scope） */
+  listPage: (options?: Omit<MemoryListPageOptions, 'objectId' | 'scope'>) => Promise<HaiResult<StorePage<MemoryEntry>>>
+  /** 清空绑定作用域内的记忆（自动绑定 objectId / scope，不会误清全局） */
+  clear: (options?: Omit<MemoryClearOptions, 'objectId' | 'scope'>) => Promise<HaiResult<void>>
+}
+
+/**
+ * 公共记忆操作接口（通过 `ai.memory` 访问）
+ *
+ * 在核心操作基础上增加：
+ * - `scoped(binding)`：返回自动绑定 objectId / scope 的安全实例（多租户推荐入口）；
+ * - `admin`：承载危险的全局操作（如 `clearAll`）；
+ * - `clear`：拒绝空过滤调用（无 objectId / types / scope 时返回错误），防止误清全局。
+ */
+export interface MemoryOperations extends MemoryCoreOperations {
+  /**
+   * 创建绑定作用域的记忆实例
+   *
+   * @param binding - 作用域绑定（objectId + 可选 scope）
+   * @returns 所有操作自动携带该作用域的记忆实例
+   */
+  scoped: (binding: ScopedMemoryBinding) => ScopedMemoryOperations
+  /** 管理接口（危险的全局操作，需显式确认） */
+  admin: MemoryAdminOperations
 }

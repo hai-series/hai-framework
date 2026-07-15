@@ -89,15 +89,19 @@ memory:
 | 多协议 | 模型 `api: chat/responses/anthropic` | 底层走 Chat Completions / Responses / Anthropic，公共形状不变 |
 | 请求取消 | `ai.llm.chat({ messages, signal })` | 传 `AbortSignal`，`abort()` 立即停上游生成 |
 | 临时模型 | `ai.llm.chat({ messages, tempModel })` | 单次请求级临时端点，客户端按 TTL 缓存 |
-| 工具定义 | `ai.tools.define(...)` | Zod schema 转 JSON Schema |
-| 工具执行 | `registry.executeAll(toolCalls)` | 支持并行执行 |
+| 工具定义 | `ai.tools.define(...)` | Zod schema 转 JSON Schema；`handler(input, ctx)` 第二参为执行上下文 |
+| 工具执行 | `registry.execute(tc, { signal, objectId, sessionId, deadline?, timeoutMs? })` / `executeAll(...)` | 支持取消/超时（默认 30s，取消/超时返回 `TOOL_TIMEOUT` 且不再等待未响应 handler）；上下文全链路透传给 Context/Reasoning |
 | MCP 服务 | `createMcpServer(...)` | 按需连接 HTTP/SSE/Stdio transport |
 | Embedding | `ai.embedding.embedText(text)` | 批量用 `embedBatch` |
 | 记忆 | `ai.memory.extract/recall/injectMemories` | 用 `objectId` 做主体隔离，`scope` 做业务作用域隔离；scope 隔离越细，`candidateMultiplier` 调大以防漏召回 |
+| 记忆作用域 | `ai.memory.scoped({ objectId, scope })` | **多租户推荐入口**：所有操作自动绑定 objectId/scope（含归属校验）；`clear` 仅清作用域内 |
+| 记忆管理 | `ai.memory.admin.clearAll({ confirm: true })` | 唯一的全局清空入口（需显式确认）；`ai.memory.clear()` 空过滤会被拒绝，防误清全局 |
 | 角色人格 | `ai.persona.save/get/compose` | 定义 AI 身份（systemPrompt + traits），`compose` 组合系统提示词，`scope: { personaId }` 关联长期记忆 |
 | Retrieval/RAG | `ai.retrieval.retrieve` / `ai.rag.query` | Retrieval source 先注册或由配置预置 |
 | Knowledge | `ai.knowledge.setup/ingest/ask` | 入库前会调用 datapipe 清洗分块 |
 | Context | `ai.context.createManager` | 编排 LLM + Memory + RAG + 压缩；`manager.consolidate()` 把会话固化为长期记忆 |
+| Context 并发 | `createManager({ concurrency: 'reject' \| 'queue' })` | 默认单活动生成防消息乱序；活动生成期间新 chat 返回 `CONTEXT_BUSY`（reject）或排队（queue） |
+| Context 重置 | `await manager.reset({ preserveSystemPrompt?, cancelActiveTurn?, waitForMemoryTasks? })` | 异步：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词 |
 | 语音识别 | `ai.audio.transcribe` / `transcribeStream` | 完整或持续音频输入 |
 | 语音合成 | `ai.audio.synthesize` / `synthesizeStream` | 带稳定 ID 的文本段映射为结构化音频事件 |
 | A2A | `ai.a2a.registerExecutor/handleRequest` | 延迟初始化 SDK handler |
@@ -184,7 +188,7 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: cry
 
 ## 记忆、RAG 与知识库
 
-`memory.provider` 默认为 `native`（推荐）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding，`extract` 采用 **Mem0 式批量合并**（一次 LLM 调用对整批事实与相关既有记忆做 ADD/UPDATE/DELETE/NONE，支持 `category`）。`mem0` 则直接使用 `mem0ai/oss` 的 `Memory` 引擎：LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容），向量库从底层 vecdb 后端提取（qdrant/pgvector 复用，lancedb/chroma 退回 mem0 自带 in-memory 存储）。两者对外 `ai.memory.*` API 完全一致。
+`memory.provider` 默认为 `native`（推荐）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding，`extract` 采用 **Mem0 式批量合并**（一次 LLM 调用对整批事实与相关既有记忆做 ADD/UPDATE/DELETE/NONE，支持 `category`）。`mem0` 则直接使用 `mem0ai/oss` 的 `Memory` 引擎：LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容），向量库从底层 vecdb 后端提取（qdrant/pgvector 复用）。**mem0 无法映射 lancedb/chroma 等后端时默认 fail-fast**（初始化失败，避免重启后记忆静默丢失）；只有显式 `memory.allowEphemeralFallback: true` 才退回 mem0 自带 in-memory 存储。两者对外 `ai.memory.*` API 完全一致。
 
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })

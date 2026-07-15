@@ -18,6 +18,7 @@
 
   "ai_toolNotFound": "工具 '{name}' 未找到",
   "ai_toolInvalidJson": "工具调用参数 JSON 格式无效",
+  "ai_toolTimeout": "工具 '{name}' 在 {ms}ms 后超时或被取消",
   "ai_configError": "AI 配置校验失败：{error}",
 
   "ai_llmRecordFailed": "对话记录保存失败：{error}",
@@ -51,6 +52,9 @@
   "ai_memoryStoreFailed": "记忆存储失败：{error}",
   "ai_memoryRecallFailed": "记忆召回失败：{error}",
   "ai_memoryNotFound": "记忆条目 '{id}' 不存在",
+  "ai_memoryEphemeralFallbackDenied": "记忆 provider 'mem0' 无法将向量后端 '{backend}' 映射为持久化存储，拒绝静默退回内存存储。请设置 memory.allowEphemeralFallback=true 允许临时存储，或改用 qdrant/pgvector 后端。",
+  "ai_memoryClearRequiresFilter": "clear() 至少需传入一个过滤条件（objectId / types / scope）；要清空全部记忆请使用 ai.memory.admin.clearAll({ confirm: true })",
+  "ai_memoryClearAllUnconfirmed": "admin.clearAll() 需要显式确认：请传入 { confirm: true }",
   "ai_memoryEnrichFailed": "记忆注入失败：{error}",
   "ai_memoryPromoteFailed": "记忆固化（长期化）失败：{error}",
 
@@ -62,6 +66,7 @@
   "ai_contextTokenEstimateFailed": "Token 估算失败：{error}",
   "ai_turnNotFound": "对话轮次 '{turnId}' 不存在",
   "ai_turnInvalidState": "对话轮次 '{turnId}' 已提交，无法重复提交",
+  "ai_contextBusy": "上下文管理器正忙：已有一个生成正在进行（concurrency='reject'）",
 
   "ai_storeFailed": "存储操作失败：{error}",
   "ai_storeNotAvailable": "存储后端不可用，已降级为内存模式",

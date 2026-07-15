@@ -35,6 +35,19 @@ function audioClientError(code: string | number, message: string): Error {
 
 // ─── 客户端配置 ───
 
+/**
+ * getTicket 收到的当前 Audio 请求摘要
+ *
+ * 供应用签发与本次操作严格绑定的能力票据（如 `iam.ticket.issue({ grant })`），
+ * 使票据只能用于本次操作 / 模型 / 会话，降低票据被重放的风险。
+ */
+export interface AudioTicketRequest {
+  /** 本次操作类型 */
+  operation: 'transcribe' | 'synthesize'
+  /** 本次使用的模型 ID（如有指定） */
+  model?: string
+}
+
 /** 浏览器语音客户端配置 */
 export interface AudioClientConfig {
   /** 语音 WebSocket 完整 URL（如 `wss://host/api/v1/ai/audio`） */
@@ -43,8 +56,9 @@ export interface AudioClientConfig {
    * 获取短期、一次性的 Audio WebSocket ticket
    *
    * ticket 应由已登录 HTTP 请求签发，并在服务端首次校验时原子消费。
+   * 收到当前请求摘要（operation / model），可签发与本次操作严格绑定的票据。
    */
-  getTicket: () => string | Promise<string>
+  getTicket: (request: AudioTicketRequest) => string | Promise<string>
 }
 
 /**
@@ -199,8 +213,8 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
  * @returns 浏览器语音操作接口
  */
 export function createAudioClient(config: AudioClientConfig): AudioClientOperations {
-  async function buildUrl(): Promise<string> {
-    const ticket = await config.getTicket()
+  async function buildUrl(request: AudioTicketRequest): Promise<string> {
+    const ticket = await config.getTicket(request)
     if (!ticket)
       throw new Error('Audio WebSocket ticket is required')
     const separator = config.url.includes('?') ? '&' : '?'
@@ -212,7 +226,7 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
   }
 
   async function* transcribeStream(request: TranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
-    const conn = await openBrowserWs(await buildUrl(), request.signal)
+    const conn = await openBrowserWs(await buildUrl({ operation: 'transcribe', model: request.model }), request.signal)
     try {
       const format = request.audio.format
       const sampleRate = request.audio.sampleRate
@@ -258,7 +272,7 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
 
   async function transcribe(request: TranscriptionRequest): Promise<TranscriptionResult> {
     // 完整识别：服务端缓冲全部音频后返回单条最终结果
-    const conn = await openBrowserWs(await buildUrl(), request.signal)
+    const conn = await openBrowserWs(await buildUrl({ operation: 'transcribe', model: request.model }), request.signal)
     try {
       conn.send(startMessage('transcribe', { stream: false, model: request.model, language: request.language, contextHints: request.contextHints, format: request.audio.format, sampleRate: request.audio.sampleRate, channels: request.audio.channels }))
       conn.send(request.audio.data)
@@ -284,7 +298,7 @@ export function createAudioClient(config: AudioClientConfig): AudioClientOperati
   }
 
   async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<SynthesisEvent> {
-    const conn = await openBrowserWs(await buildUrl(), request.signal)
+    const conn = await openBrowserWs(await buildUrl({ operation: 'synthesize', model: request.model }), request.signal)
     try {
       conn.send(startMessage('synthesize', { model: request.model, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate }))
 

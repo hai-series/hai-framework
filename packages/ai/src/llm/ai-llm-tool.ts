@@ -13,6 +13,8 @@ import type {
   Tool,
   ToolCall,
   ToolDefinition,
+  ToolExecutionContext,
+  ToolExecutionOptions,
   ToolMessage,
   ToolRegistryOperations,
 } from './ai-llm-types.js'
@@ -22,6 +24,72 @@ import { z as zod } from 'zod'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
+
+/** 工具默认执行超时（毫秒）：未指定 deadline / timeoutMs / 工具默认时生效 */
+const DEFAULT_TOOL_TIMEOUT_MS = 30_000
+
+/**
+ * 依据执行入参解析出传给 handler 的执行上下文（含始终存在的取消信号）。
+ *
+ * 组合调用方 `signal` 与超时信号：超时时长优先级 `deadline` > `timeoutMs` > 工具默认 > 全局默认。
+ * 返回上下文与实际生效的超时毫秒数（用于超时错误信息）。
+ */
+function resolveExecutionContext(
+  options: ToolExecutionOptions | undefined,
+  toolTimeoutMs: number | undefined,
+): { context: ToolExecutionContext, timeoutMs: number } {
+  const now = Date.now()
+  const timeoutMs = options?.deadline !== undefined
+    ? Math.max(0, options.deadline - now)
+    : options?.timeoutMs ?? toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
+  const deadline = options?.deadline ?? now + timeoutMs
+
+  const timeoutSignal = AbortSignal.timeout(timeoutMs)
+  const signal = options?.signal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : timeoutSignal
+
+  return {
+    context: { signal, objectId: options?.objectId, sessionId: options?.sessionId, deadline },
+    timeoutMs,
+  }
+}
+
+/**
+ * 执行 handler 并与取消信号竞速：即便 handler 未响应 signal，取消 / 超时后也立即停止等待。
+ *
+ * 返回 handler 结果，或在取消 / 超时时抛出（由调用方映射为 TOOL_TIMEOUT）。
+ */
+async function runWithCancellation<T>(
+  run: (context: ToolExecutionContext) => Promise<T> | T,
+  context: ToolExecutionContext,
+): Promise<T> {
+  const { signal } = context
+  if (signal.aborted)
+    throw new DOMException('Aborted', 'AbortError')
+
+  return await new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(new DOMException('Aborted', 'AbortError'))
+    signal.addEventListener('abort', onAbort, { once: true })
+    Promise.resolve()
+      .then(() => run(context))
+      .then(
+        (value) => {
+          signal.removeEventListener('abort', onAbort)
+          resolve(value)
+        },
+        (error: unknown) => {
+          signal.removeEventListener('abort', onAbort)
+          reject(error instanceof Error ? error : new Error(String(error)))
+        },
+      )
+  })
+}
+
+/** 判断错误是否为取消 / 超时（AbortError / TimeoutError） */
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
+}
 
 // ─── 工具定义 ───
 
@@ -47,23 +115,26 @@ import { HaiAIError } from '../ai-types.js'
 export function defineTool<TInput, TOutput>(
   options: DefineToolOptions<TInput, TOutput>,
 ): Tool<TInput, TOutput> {
-  const { name, description, parameters, handler } = options
+  const { name, description, parameters, handler, timeoutMs } = options
 
   return {
     name,
     description,
     parameters,
 
-    async execute(input: TInput): Promise<HaiResult<TOutput>> {
+    async execute(input: TInput, execOptions?: ToolExecutionOptions): Promise<HaiResult<TOutput>> {
+      const parseResult = parameters.safeParse(input)
+      if (!parseResult.success) {
+        return err(HaiAIError.TOOL_VALIDATION_FAILED, parseResult.error.message)
+      }
+      const { context, timeoutMs: effectiveTimeout } = resolveExecutionContext(execOptions, timeoutMs)
       try {
-        const parseResult = parameters.safeParse(input)
-        if (!parseResult.success) {
-          return err(HaiAIError.TOOL_VALIDATION_FAILED, parseResult.error.message)
-        }
-        const output = await handler(parseResult.data)
+        const output = await runWithCancellation(ctx => handler(parseResult.data, ctx), context)
         return ok(output)
       }
       catch (error) {
+        if (isAbortError(error))
+          return err(HaiAIError.TOOL_TIMEOUT, aiM('ai_toolTimeout', { params: { name, ms: effectiveTimeout } }), error)
         return err(HaiAIError.TOOL_EXECUTION_FAILED, error instanceof Error ? error.message : String(error), error)
       }
     },
@@ -142,8 +213,8 @@ export function createToolRegistry(): ToolRegistryOperations {
       return Array.from(tools.values()).map(tool => tool.toDefinition())
     },
 
-    /** 执行单个工具调用，解析 JSON 参数后调用工具的 execute 方法 */
-    async execute(toolCall: ToolCall): Promise<HaiResult<ToolMessage>> {
+    /** 执行单个工具调用，解析 JSON 参数后调用工具的 execute 方法（透传执行上下文） */
+    async execute(toolCall: ToolCall, execOptions?: ToolExecutionOptions): Promise<HaiResult<ToolMessage>> {
       // 仅支持 function 类型工具调用（OpenAI SDK union 含 custom 类型）
       if (toolCall.type !== 'function') {
         return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', { params: { name: 'unknown' } }))
@@ -161,7 +232,7 @@ export function createToolRegistry(): ToolRegistryOperations {
         return err(HaiAIError.TOOL_VALIDATION_FAILED, aiM('ai_toolInvalidJson'))
       }
 
-      const result = await tool.execute(args)
+      const result = await tool.execute(args, execOptions)
       if (!result.success) {
         return result
       }
@@ -177,17 +248,17 @@ export function createToolRegistry(): ToolRegistryOperations {
       })
     },
 
-    /** 批量执行工具调用（默认并行），任一失败时立即返回错误 */
+    /** 批量执行工具调用（默认并行），任一失败时立即返回错误（执行上下文透传给每个工具） */
     async executeAll(
       toolCalls: ToolCall[],
-      options: { parallel?: boolean } = {},
+      options: ToolExecutionOptions & { parallel?: boolean } = {},
     ): Promise<HaiResult<ToolMessage[]>> {
-      const { parallel = true } = options
+      const { parallel = true, ...execOptions } = options
       const messages: ToolMessage[] = []
 
       if (parallel) {
         const results = await Promise.all(
-          toolCalls.map(tc => registry.execute(tc)),
+          toolCalls.map(tc => registry.execute(tc, execOptions)),
         )
         for (const result of results) {
           if (!result.success) {
@@ -198,7 +269,7 @@ export function createToolRegistry(): ToolRegistryOperations {
       }
       else {
         for (const toolCall of toolCalls) {
-          const result = await registry.execute(toolCall)
+          const result = await registry.execute(toolCall, execOptions)
           if (!result.success) {
             return result
           }

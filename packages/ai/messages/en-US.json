@@ -18,6 +18,7 @@
 
   "ai_toolNotFound": "Tool '{name}' not found",
   "ai_toolInvalidJson": "Invalid JSON in tool call arguments",
+  "ai_toolTimeout": "Tool '{name}' timed out or was cancelled after {ms}ms",
   "ai_configError": "AI config validation failed: {error}",
 
   "ai_llmRecordFailed": "Chat record save failed: {error}",
@@ -51,6 +52,9 @@
   "ai_memoryStoreFailed": "Memory storage failed: {error}",
   "ai_memoryRecallFailed": "Memory recall failed: {error}",
   "ai_memoryNotFound": "Memory entry '{id}' not found",
+  "ai_memoryEphemeralFallbackDenied": "Memory provider 'mem0' cannot map vector backend '{backend}' to a persistent store; refusing silent in-memory fallback. Set memory.allowEphemeralFallback=true to allow ephemeral storage, or use a qdrant/pgvector backend.",
+  "ai_memoryClearRequiresFilter": "clear() requires at least one filter (objectId / types / scope); to wipe all memories use ai.memory.admin.clearAll({ confirm: true })",
+  "ai_memoryClearAllUnconfirmed": "admin.clearAll() requires explicit confirmation: pass { confirm: true }",
   "ai_memoryEnrichFailed": "Memory enrichment failed: {error}",
   "ai_memoryPromoteFailed": "Memory promotion (long-term consolidation) failed: {error}",
 
@@ -62,6 +66,7 @@
   "ai_contextTokenEstimateFailed": "Token estimation failed: {error}",
   "ai_turnNotFound": "Conversation turn '{turnId}' not found",
   "ai_turnInvalidState": "Conversation turn '{turnId}' is already committed",
+  "ai_contextBusy": "Context manager is busy: a generation is already in progress (concurrency='reject')",
 
   "ai_storeFailed": "Store operation failed: {error}",
   "ai_storeNotAvailable": "Store backend not available, degraded to memory mode",

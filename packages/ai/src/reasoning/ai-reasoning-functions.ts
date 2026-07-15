@@ -133,8 +133,8 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
             index: stepIndex++,
           })
 
-          // 执行工具
-          const toolResult = await options.tools.execute(toolCall)
+          // 执行工具（透传取消信号与作用域，打断 / 超时时可提前中止耗时工具）
+          const toolResult = await options.tools.execute(toolCall, { signal: options.signal, objectId: options.objectId, sessionId: options.sessionId })
           const rawToolContent = toolResult.success
             ? toolResult.data.content
             : `Tool error: ${toolResult.error.message}`
@@ -325,7 +325,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
             index: stepIndex++,
           })
 
-          const toolResult = await options.tools.execute(toolCall)
+          const toolResult = await options.tools.execute(toolCall, { signal: options.signal, objectId: options.objectId, sessionId: options.sessionId })
           const rawToolContent = toolResult.success
             ? toolResult.data.content
             : `Tool error: ${toolResult.error.message}`

@@ -315,6 +315,24 @@ describe('ai.audio MiMo Provider', () => {
     expect(body.messages[0].content).toBe('欢迎参加访谈')
     expect(body.audio).toEqual({ format: 'wav', voice: 'Chloe' })
   })
+
+  it('完整合成对 mp3 使用与流式一致的输出格式（issue #10：mp3 → pcm16，不再退回 wav）', async () => {
+    const pcm = new Uint8Array([1, 2, 3, 4])
+    const base64 = Buffer.from(pcm).toString('base64')
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const r = await ai.audio.synthesize({ text: '一致性', format: 'mp3' })
+    expect(r.success).toBe(true)
+    // 修复前 synthesize 会把 mp3 映射为 wav，与 synthesizeStream 的 pcm16 不一致；
+    // 现在两者共用 resolveSynthesisOutput，mp3 一致解析为 pcm16。
+    if (r.success) {
+      expect(r.data.format).toBe('pcm16')
+      expect(r.data.sampleRate).toBe(24000)
+    }
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.audio.format).toBe('pcm16')
+  })
 })
 
 // =============================================================================

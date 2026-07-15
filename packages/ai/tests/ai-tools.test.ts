@@ -468,3 +468,116 @@ describe('ai.tools.createRegistry', () => {
     }
   })
 })
+
+// =============================================================================
+// 工具执行上下文（signal / 超时 / 取消 / objectId / sessionId）
+// =============================================================================
+
+describe('ai.tools 执行上下文', () => {
+  it('handler 收到执行上下文（signal / objectId / sessionId）', async () => {
+    let received: { hasSignal: boolean, objectId?: string, sessionId?: string } | undefined
+    const tool = ai.tools.define({
+      name: 'ctx',
+      description: 'ctx',
+      parameters: z.object({}),
+      handler: (_input, context) => {
+        received = { hasSignal: context.signal instanceof AbortSignal, objectId: context.objectId, sessionId: context.sessionId }
+        return 'ok'
+      },
+    })
+
+    const result = await tool.execute({}, { objectId: 'u-1', sessionId: 's-1' })
+    expect(result.success).toBe(true)
+    expect(received?.hasSignal).toBe(true)
+    expect(received?.objectId).toBe('u-1')
+    expect(received?.sessionId).toBe('s-1')
+  })
+
+  it('超时后返回 TOOL_TIMEOUT，且不再等待未响应 signal 的 handler', async () => {
+    const tool = ai.tools.define({
+      name: 'slow',
+      description: 'slow',
+      parameters: z.object({}),
+      // handler 不响应 signal，长时间不返回
+      handler: () => new Promise<string>((resolve) => { setTimeout(resolve, 1000, 'late') }),
+    })
+
+    const start = Date.now()
+    const result = await tool.execute({}, { timeoutMs: 20 })
+    const elapsed = Date.now() - start
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiAIError.TOOL_TIMEOUT.code)
+    // 取消后立即停止等待（远小于 handler 的 1000ms）
+    expect(elapsed).toBeLessThan(500)
+  })
+
+  it('外部 AbortSignal 取消后返回 TOOL_TIMEOUT', async () => {
+    const controller = new AbortController()
+    const tool = ai.tools.define({
+      name: 'abortable',
+      description: 'abortable',
+      parameters: z.object({}),
+      handler: () => new Promise<string>((resolve) => { setTimeout(resolve, 1000, 'late') }),
+    })
+
+    const p = tool.execute({}, { signal: controller.signal, timeoutMs: 5000 })
+    controller.abort()
+    const result = await p
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiAIError.TOOL_TIMEOUT.code)
+  })
+
+  it('handler 响应 signal 可提前中止耗时操作', async () => {
+    let aborted = false
+    const tool = ai.tools.define({
+      name: 'cooperative',
+      description: 'cooperative',
+      parameters: z.object({}),
+      handler: (_input, context) => new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(resolve, 1000, 'done')
+        context.signal.addEventListener('abort', () => {
+          clearTimeout(timer)
+          aborted = true
+          reject(new DOMException('Aborted', 'AbortError'))
+        })
+      }),
+    })
+
+    const result = await tool.execute({}, { timeoutMs: 20 })
+    expect(result.success).toBe(false)
+    expect(aborted).toBe(true)
+  })
+
+  it('registry.executeAll 将执行上下文透传给每个工具', async () => {
+    const seen: string[] = []
+    const registry = ai.tools.createRegistry()
+    registry.register(ai.tools.define({
+      name: 'a',
+      description: 'a',
+      parameters: z.object({}),
+      handler: (_i, ctx) => {
+        seen.push(ctx.objectId ?? 'none')
+        return 'a'
+      },
+    }))
+    registry.register(ai.tools.define({
+      name: 'b',
+      description: 'b',
+      parameters: z.object({}),
+      handler: (_i, ctx) => {
+        seen.push(ctx.objectId ?? 'none')
+        return 'b'
+      },
+    }))
+
+    const calls: ToolCall[] = [
+      { id: 'c1', type: 'function', function: { name: 'a', arguments: '{}' } },
+      { id: 'c2', type: 'function', function: { name: 'b', arguments: '{}' } },
+    ]
+    const result = await registry.executeAll(calls, { objectId: 'tenant-9' })
+    expect(result.success).toBe(true)
+    expect(seen).toEqual(['tenant-9', 'tenant-9'])
+  })
+})

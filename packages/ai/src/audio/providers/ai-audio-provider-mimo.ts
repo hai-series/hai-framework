@@ -118,12 +118,13 @@ export function createMimoAudioProvider(): AudioProvider {
 
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {
     const { model, text, voice, instruction, format, sampleRate, signal } = request
-    const outFormat: AudioFormat = format === 'pcm16' ? 'pcm16' : 'wav'
+    // 与 synthesizeStream 共用同一解析函数，确保完整与流式合成对同一 format 得到一致编码
+    const out = resolveSynthesisOutput({ format, sampleRate })
     try {
       const response = await postChat(model.baseUrl, model.apiKey, {
         model: model.model,
         messages: buildTtsMessages(text, instruction),
-        audio: { format: outFormat, ...(voice ? { voice } : {}) },
+        audio: { format: out.format, ...(voice ? { voice } : {}) },
       }, model.timeout, signal)
       if (!response.ok)
         return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
@@ -133,7 +134,7 @@ export function createMimoAudioProvider(): AudioProvider {
       if (!base64)
         return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: 'missing audio data' } }))
 
-      return ok({ data: fromBase64(base64), format: outFormat, sampleRate: outFormat === 'pcm16' ? (sampleRate ?? 24000) : undefined, channels: 1 })
+      return ok({ data: fromBase64(base64), format: out.format, sampleRate: out.sampleRate, channels: out.channels })
     }
     catch (error) {
       logger.debug('MiMo synthesize failed', { error: errorMessage(error) })

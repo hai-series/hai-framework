@@ -34,6 +34,7 @@ import { core, err, ok } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { createStreamProcessor } from '../llm/ai-llm-stream.js'
+import { sessionStoreKey } from '../store/ai-store-key.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'context' })
 
@@ -79,16 +80,6 @@ export function createContextOperations(
     if (fromOption > 0)
       return fromOption
     return compressConfig.defaultMaxTokens > 0 ? compressConfig.defaultMaxTokens : 4096
-  }
-
-  /**
-   * 构造存储键
-   *
-   * 用 JSON 数组序列化 [objectId, sessionId]，避免朴素拼接 `${objectId}:${sessionId}`
-   * 在 id 本身含分隔符时产生碰撞（如 `a` + `b:c` 与 `a:b` + `c` 会得到同一键）。
-   */
-  function storeKey(scope: InteractionScope): string {
-    return JSON.stringify([scope.objectId, scope.sessionId])
   }
 
   /**
@@ -166,6 +157,107 @@ export function createContextOperations(
       return `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
     }
 
+    // ─── 并发控制（单活动生成） ───
+    // 默认单活动生成，防止「上一轮 AI 尚未退出，下一轮 user 消息先写入」的乱序。
+    const concurrency = options.concurrency ?? 'reject'
+    // 是否已有活动生成（含 manual 待提交轮次持有的屏障）
+    let generationActive = false
+    // queue 模式下的排队唤醒器（前一轮进入终态时按序移交所有权）
+    const generationWaiters: Array<() => void> = []
+    // turnId → 该生成的一次性释放句柄；manual 待提交轮次的屏障持续到 commit/interrupt。
+    const generationHolders = new Map<string, () => void>()
+    // 当前活动生成的内部取消控制器（reset 时可中断上游 LLM）
+    let activeAbort: AbortController | null = null
+    // 当前活动生成的释放句柄（reset 时强制放行下一轮，避免挂起的生成器长期占用屏障）
+    let activeRelease: (() => void) | null = null
+    // 生成纪元：reset 递增，使 reset 之前启动的生成不再把结果写回已重置的上下文
+    let generationEpoch = 0
+
+    // 系统提示词文本：用于 reset 后恢复；restore 时从首条 system 消息推导
+    const systemPromptText = options.systemPrompt
+      ?? (initialMessages[0]?.role === 'system' && typeof initialMessages[0].content === 'string'
+        ? initialMessages[0].content
+        : undefined)
+
+    /**
+     * 获取生成许可（单活动生成）。
+     *
+     * reject 模式下已有活动生成时立即返回 CONTEXT_BUSY；queue 模式下排队等待前一轮进入终态。
+     * 返回本轮的内部取消信号与一次性释放句柄；调用方必须在轮次到达终态时释放。
+     */
+    async function acquireGeneration(): Promise<HaiResult<{ epoch: number, signal: AbortSignal, release: () => void }>> {
+      if (generationActive) {
+        if (concurrency === 'reject')
+          return err(HaiAIError.CONTEXT_BUSY, aiM('ai_contextBusy'))
+        // queue：排队等待被唤醒（唤醒即已接管所有权，generationActive 保持 true）
+        await new Promise<void>((resolve) => {
+          generationWaiters.push(resolve)
+        })
+      }
+      else {
+        generationActive = true
+      }
+      const abort = new AbortController()
+      activeAbort = abort
+      const epoch = generationEpoch
+      let released = false
+      const release = (): void => {
+        if (released)
+          return
+        released = true
+        if (activeAbort === abort)
+          activeAbort = null
+        if (activeRelease === release)
+          activeRelease = null
+        const next = generationWaiters.shift()
+        if (next)
+          next() // 移交所有权给下一个排队者（generationActive 保持 true）
+        else
+          generationActive = false
+      }
+      activeRelease = release
+      return ok({ epoch, signal: abort.signal, release })
+    }
+
+    /**
+     * 组合调用方信号与本轮内部取消信号（任一触发即取消上游生成）。
+     */
+    function combineSignal(caller: AbortSignal | undefined, internal: AbortSignal): AbortSignal {
+      return caller ? AbortSignal.any([caller, internal]) : internal
+    }
+
+    /**
+     * 释放某轮次持有的并发屏障（幂等）。
+     */
+    function releaseTurnHolder(turnId: string): void {
+      const release = generationHolders.get(turnId)
+      if (release) {
+        generationHolders.delete(turnId)
+        release()
+      }
+    }
+
+    /**
+     * 轮次是否已进入终态（completed / interrupted）。
+     */
+    function isTurnTerminal(turnId: string): boolean {
+      const turn = turns.find(t => t.id === turnId)
+      return !turn || turn.status === 'completed' || turn.status === 'interrupted'
+    }
+
+    /**
+     * 生成结束后结算并发屏障：
+     * - 轮次已终态：立即释放屏障；
+     * - 轮次仍未终态（manual 待提交 / 取消后待提交）：把释放责任移交该轮次，
+     *   由后续 commitTurn / interruptTurn 释放，保证「打断→立即下一轮」的顺序屏障。
+     */
+    function settleGeneration(turnId: string | null, release: () => void): void {
+      if (turnId && !isTurnTerminal(turnId))
+        generationHolders.set(turnId, release)
+      else
+        release()
+    }
+
     const manager: ContextManager = {
       scope,
 
@@ -229,7 +321,7 @@ export function createContextOperations(
           return ok(undefined)
         }
         try {
-          const key = storeKey(scope)
+          const key = sessionStoreKey(scope)
           await contextStore.save(key, {
             messages: state.messages,
             summaries: state.summaries,
@@ -238,7 +330,7 @@ export function createContextOperations(
 
           // 同步更新会话信息（与上下文正文共用同一复合键，避免不同主体相同 sessionId 互相覆盖）
           if (sessionStore) {
-            const sessionKey = storeKey(scope)
+            const sessionKey = key
             const existing = await sessionStore.get(sessionKey)
             if (existing) {
               existing.updatedAt = Date.now()
@@ -261,9 +353,45 @@ export function createContextOperations(
         }
       },
 
-      reset(): void {
+      async reset(resetOpts?): Promise<HaiResult<void>> {
+        const preserveSystemPrompt = resetOpts?.preserveSystemPrompt ?? true
+        const cancelActiveTurn = resetOpts?.cancelActiveTurn ?? true
+        const waitForMemoryTasks = resetOpts?.waitForMemoryTasks ?? false
+
+        // 使 reset 之前启动的生成不再把结果写回已重置的上下文
+        generationEpoch++
+
+        if (cancelActiveTurn) {
+          // 中断内部生成信号（best-effort 停止上游 LLM），并使所有非终态轮次进入终态、释放并发屏障
+          activeAbort?.abort()
+          for (const turn of turns) {
+            if (turn.status === 'generating' || turn.status === 'speaking') {
+              turn.status = 'interrupted'
+              turn.committed = ''
+              turn.committedAt = Date.now()
+              releaseTurnHolder(turn.id)
+            }
+          }
+          // 强制放行当前活动生成的屏障：挂起的生成器可能不会立即执行到 finally，避免长期占用
+          activeRelease?.()
+        }
+
+        // 取消或等待旧记忆提取任务
+        if (waitForMemoryTasks)
+          await manager.flush()
+
+        // 清空对话状态、轮次与待提交登记
         state.messages = []
         state.summaries = []
+        turns.length = 0
+        pendingCommits.clear()
+        generationHolders.clear()
+
+        // 默认重新写入系统提示词，避免 Persona / System Prompt 丢失
+        if (preserveSystemPrompt && systemPromptText)
+          state.messages.push({ role: 'system', content: systemPromptText })
+
+        return ok(undefined)
       },
 
       getTurns(): HaiResult<ConversationTurn[]> {
@@ -352,6 +480,14 @@ export function createContextOperations(
           return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
         }
 
+        // 单活动生成：获取许可（reject 时直接返回 CONTEXT_BUSY）
+        const acq = await acquireGeneration()
+        if (!acq.success)
+          return acq
+        const { epoch, signal: internalSignal, release } = acq.data
+        const signal = combineSignal(chatOpts?.signal, internalSignal)
+        let turnId: string | null = null
+
         try {
           // 追加用户消息（自动压缩）
           const addResult = await manager.addMessage({ role: 'user', content: message })
@@ -383,12 +519,12 @@ export function createContextOperations(
               model: chatOpts?.model ?? options.model,
               messages,
               enablePersist: false,
-              signal: chatOpts?.signal,
+              signal,
             })
             if (ragResult.success) {
               // RAG query 已直接返回完整结果，将 answer 作为回复
               const reply = ragResult.data.answer
-              const turnId = await finalizeAssistantReply(message, reply)
+              turnId = await finalizeAssistantReply(message, reply, epoch)
 
               return ok({
                 reply,
@@ -411,11 +547,11 @@ export function createContextOperations(
               objectId: scope?.objectId,
               sessionId: scope?.sessionId,
               enablePersist: false,
-              signal: chatOpts?.signal,
+              signal,
             })
             if (reasonResult.success) {
               const reply = reasonResult.data.answer
-              const turnId = await finalizeAssistantReply(message, reply)
+              turnId = await finalizeAssistantReply(message, reply, epoch)
 
               return ok({ reply, model: chatOpts?.model ?? options.model ?? '', turnId, usage: undefined })
             }
@@ -437,7 +573,7 @@ export function createContextOperations(
               tools: toolDefs,
               tool_choice: toolDefs ? 'auto' : undefined,
               enablePersist: chatOpts?.enablePersist ?? false,
-              signal: chatOpts?.signal,
+              signal,
             })
 
             if (!chatResult.success)
@@ -465,7 +601,7 @@ export function createContextOperations(
               for (const toolCall of assistantMessage.tool_calls) {
                 if (toolCall.type !== 'function')
                   continue
-                const toolResult = await options.tools.execute(toolCall)
+                const toolResult = await options.tools.execute(toolCall, { signal, objectId: scope?.objectId, sessionId: scope?.sessionId })
                 const rawContent = toolResult.success
                   ? toolResult.data.content
                   : `Tool error: ${toolResult.error.message}`
@@ -486,7 +622,7 @@ export function createContextOperations(
             const reply = typeof assistantMessage.content === 'string' ? assistantMessage.content : ''
 
             // 完成本轮生成：auto 直接提交完整文本，manual 登记待提交轮次
-            const turnId = await finalizeAssistantReply(message, reply)
+            turnId = await finalizeAssistantReply(message, reply, epoch)
 
             return ok({ reply, model: lastModel, turnId, usage: lastUsage })
           }
@@ -496,12 +632,16 @@ export function createContextOperations(
           const fallbackReply = lastAssistantMsg && 'content' in lastAssistantMsg && typeof lastAssistantMsg.content === 'string'
             ? lastAssistantMsg.content
             : ''
-          const fallbackTurnId = await finalizeAssistantReply(message, fallbackReply)
-          return ok({ reply: fallbackReply, model: lastModel, turnId: fallbackTurnId, usage: lastUsage })
+          turnId = await finalizeAssistantReply(message, fallbackReply, epoch)
+          return ok({ reply: fallbackReply, model: lastModel, turnId, usage: lastUsage })
         }
         catch (error) {
           logger.error('Context chat failed', { error })
           return err(HaiAIError.INTERNAL_ERROR, aiM('ai_internalError', { params: { error: String(error) } }), error)
+        }
+        finally {
+          // 结算并发屏障：auto 已终态立即释放；manual 待提交轮次的屏障移交 commit/interrupt
+          settleGeneration(turnId, release)
         }
       },
 
@@ -510,187 +650,203 @@ export function createContextOperations(
           throw new Error('LLM not initialized: deps.llm is required for chatStream')
         }
 
-        // 追加用户消息
-        await manager.addMessage({ role: 'user', content: message })
-
-        // 获取消息列表
-        const messagesResult = manager.getMessages()
-        if (!messagesResult.success) {
-          throw new Error(`Failed to get messages: ${String(messagesResult.error)}`)
-        }
-        let messages = messagesResult.data
-
-        // 可选：注入记忆（scope / types / minImportance 完整透传）
-        if (options.memory?.enable && deps.memory) {
-          const injected = await deps.memory.injectMemories(messages, memoryInjectionOptions())
-          if (injected.success) {
-            messages = injected.data
-          }
-        }
-
-        // 调用上游模型前先登记轮次（含配对用户输入）并广播 turn_started：
-        // 中途取消（AbortSignal）时仍能保留 turnId 与已生成文本，供调用方用真实内容 commit/interrupt。
-        const turn = beginStreamTurn(message)
-        yield { type: 'turn_started', turnId: turn.id }
+        // 单活动生成：获取许可（reject 时抛出 CONTEXT_BUSY，供调用方 for-await 捕获）
+        const acq = await acquireGeneration()
+        if (!acq.success)
+          throw core.error.buildHaiErrorInst(HaiAIError.CONTEXT_BUSY, aiM('ai_contextBusy'))
+        const { signal: internalSignal, release } = acq.data
+        const signal = combineSignal(chatOpts?.signal, internalSignal)
+        let streamTurn: ConversationTurn | null = null
 
         try {
-          // 可选：RAG 流式检索增强
-          if (options.rag?.enable && deps.rag) {
+          // 追加用户消息
+          await manager.addMessage({ role: 'user', content: message })
+
+          // 获取消息列表
+          const messagesResult = manager.getMessages()
+          if (!messagesResult.success) {
+            throw new Error(`Failed to get messages: ${String(messagesResult.error)}`)
+          }
+          let messages = messagesResult.data
+
+          // 可选：注入记忆（scope / types / minImportance 完整透传）
+          if (options.memory?.enable && deps.memory) {
+            const injected = await deps.memory.injectMemories(messages, memoryInjectionOptions())
+            if (injected.success) {
+              messages = injected.data
+            }
+          }
+
+          // 调用上游模型前先登记轮次（含配对用户输入）并广播 turn_started：
+          // 中途取消（AbortSignal）时仍能保留 turnId 与已生成文本，供调用方用真实内容 commit/interrupt。
+          const turn = beginStreamTurn(message)
+          streamTurn = turn
+          yield { type: 'turn_started', turnId: turn.id }
+
+          try {
+            // 可选：RAG 流式检索增强
+            if (options.rag?.enable && deps.rag) {
+              let fullReply = ''
+              let model = ''
+              let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
+
+              for await (const event of deps.rag.queryStream(message, {
+                sources: options.rag.sources,
+                topK: options.rag.topK,
+                minScore: options.rag.minScore,
+                enableRerank: options.rag.enableRerank,
+                rerankModel: options.rag.rerankModel,
+                model: chatOpts?.model ?? options.model,
+                messages,
+                enablePersist: false,
+                signal,
+              })) {
+                if (event.type === 'delta') {
+                  fullReply += event.text
+                  turn.generated = fullReply
+                  yield { type: 'delta', text: event.text }
+                }
+                else if (event.type === 'done') {
+                  fullReply = event.answer
+                  model = event.model
+                  usage = event.usage
+                }
+              }
+
+              // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
+              if (await completeStreamTurn(turn, fullReply))
+                yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
+              return
+            }
+
+            // 可选：Reasoning 流式推理
+            if (options.reasoning?.enable && deps.reasoning) {
+              let fullReply = ''
+
+              for await (const event of deps.reasoning.runStream(message, {
+                strategy: options.reasoning.strategy,
+                maxRounds: options.reasoning.maxRounds,
+                model: chatOpts?.model ?? options.model,
+                temperature: chatOpts?.temperature ?? options.temperature,
+                messages,
+                tools: options.tools,
+                objectId: scope?.objectId,
+                sessionId: scope?.sessionId,
+                enablePersist: false,
+                signal,
+              })) {
+                if (event.type === 'delta') {
+                  fullReply += event.text
+                  turn.generated = fullReply
+                  yield { type: 'delta', text: event.text }
+                }
+              }
+
+              // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
+              if (await completeStreamTurn(turn, fullReply))
+                yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: turn.id, usage: undefined }
+              return
+            }
+
+            // 普通流式 LLM 调用（含工具调用循环）
+            const toolDefs = options.tools?.getDefinitions()
+            const maxToolRounds = options.maxToolRounds ?? 10
+
             let fullReply = ''
             let model = ''
             let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
 
-            for await (const event of deps.rag.queryStream(message, {
-              sources: options.rag.sources,
-              topK: options.rag.topK,
-              minScore: options.rag.minScore,
-              enableRerank: options.rag.enableRerank,
-              rerankModel: options.rag.rerankModel,
-              model: chatOpts?.model ?? options.model,
-              messages,
-              enablePersist: false,
-              signal: chatOpts?.signal,
-            })) {
-              if (event.type === 'delta') {
-                fullReply += event.text
-                turn.generated = fullReply
-                yield { type: 'delta', text: event.text }
+            for (let round = 0; round <= maxToolRounds; round++) {
+              const processor = createStreamProcessor()
+
+              const stream = deps.llm.chatStream({
+                model: chatOpts?.model ?? options.model,
+                messages,
+                temperature: chatOpts?.temperature ?? options.temperature,
+                objectId: scope?.objectId,
+                sessionId: scope?.sessionId,
+                tools: toolDefs,
+                tool_choice: toolDefs ? 'auto' : undefined,
+                enablePersist: chatOpts?.enablePersist ?? false,
+                signal,
+              })
+
+              for await (const chunk of stream) {
+                processor.process(chunk)
+
+                if (!model && chunk.model)
+                  model = chunk.model
+                const delta = chunk.choices?.[0]?.delta?.content
+                if (delta) {
+                  fullReply += delta
+                  turn.generated = fullReply
+                  yield { type: 'delta', text: delta }
+                }
+                if (chunk.usage) {
+                  usage = {
+                    prompt_tokens: chunk.usage.prompt_tokens,
+                    completion_tokens: chunk.usage.completion_tokens,
+                    total_tokens: chunk.usage.total_tokens,
+                  }
+                }
               }
-              else if (event.type === 'done') {
-                fullReply = event.answer
-                model = event.model
-                usage = event.usage
+
+              const streamResult = processor.getResult()
+
+              // 有工具调用：执行工具并继续下一轮
+              if (streamResult.toolCalls.length > 0 && options.tools) {
+                messages.push(processor.toAssistantMessage())
+
+                for (const toolCall of streamResult.toolCalls) {
+                  if (toolCall.type !== 'function')
+                    continue
+                  yield { type: 'tool_call', name: toolCall.function.name, arguments: toolCall.function.arguments }
+
+                  const toolResult = await options.tools.execute(toolCall, { signal, objectId: scope?.objectId, sessionId: scope?.sessionId })
+                  const rawContent = toolResult.success
+                    ? toolResult.data.content
+                    : `Tool error: ${toolResult.error.message}`
+                  const toolContent = typeof rawContent === 'string'
+                    ? rawContent
+                    : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
+
+                  yield { type: 'tool_result', name: toolCall.function.name, content: toolContent, success: toolResult.success }
+
+                  messages.push({
+                    role: 'tool',
+                    tool_call_id: toolCall.id,
+                    content: toolContent,
+                  })
+                }
+
+                // 重置本轮生成文本，下一轮 LLM 会产出最终文本
+                fullReply = ''
+                turn.generated = ''
+                continue
               }
+
+              // 无工具调用：结束循环
+              break
             }
 
             // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
             if (await completeStreamTurn(turn, fullReply))
               yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
-            return
           }
-
-          // 可选：Reasoning 流式推理
-          if (options.reasoning?.enable && deps.reasoning) {
-            let fullReply = ''
-
-            for await (const event of deps.reasoning.runStream(message, {
-              strategy: options.reasoning.strategy,
-              maxRounds: options.reasoning.maxRounds,
-              model: chatOpts?.model ?? options.model,
-              temperature: chatOpts?.temperature ?? options.temperature,
-              messages,
-              tools: options.tools,
-              objectId: scope?.objectId,
-              sessionId: scope?.sessionId,
-              enablePersist: false,
-              signal: chatOpts?.signal,
-            })) {
-              if (event.type === 'delta') {
-                fullReply += event.text
-                turn.generated = fullReply
-                yield { type: 'delta', text: event.text }
-              }
+          catch (error) {
+            // 上游生成被取消（AbortSignal，含 reset 触发的内部取消）：保留 generating 轮次与已生成文本
+            // （pendingCommits 已在 beginStreamTurn 登记），由调用方用真实内容 commit/interrupt；
+            // 若已被 interrupt 进入终态则忽略。
+            if (signal.aborted) {
+              yield { type: 'cancelled', turnId: turn.id, generated: turn.generated }
+              return
             }
-
-            // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
-            if (await completeStreamTurn(turn, fullReply))
-              yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: turn.id, usage: undefined }
-            return
+            throw error
           }
-
-          // 普通流式 LLM 调用（含工具调用循环）
-          const toolDefs = options.tools?.getDefinitions()
-          const maxToolRounds = options.maxToolRounds ?? 10
-
-          let fullReply = ''
-          let model = ''
-          let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
-
-          for (let round = 0; round <= maxToolRounds; round++) {
-            const processor = createStreamProcessor()
-
-            const stream = deps.llm.chatStream({
-              model: chatOpts?.model ?? options.model,
-              messages,
-              temperature: chatOpts?.temperature ?? options.temperature,
-              objectId: scope?.objectId,
-              sessionId: scope?.sessionId,
-              tools: toolDefs,
-              tool_choice: toolDefs ? 'auto' : undefined,
-              enablePersist: chatOpts?.enablePersist ?? false,
-              signal: chatOpts?.signal,
-            })
-
-            for await (const chunk of stream) {
-              processor.process(chunk)
-
-              if (!model && chunk.model)
-                model = chunk.model
-              const delta = chunk.choices?.[0]?.delta?.content
-              if (delta) {
-                fullReply += delta
-                turn.generated = fullReply
-                yield { type: 'delta', text: delta }
-              }
-              if (chunk.usage) {
-                usage = {
-                  prompt_tokens: chunk.usage.prompt_tokens,
-                  completion_tokens: chunk.usage.completion_tokens,
-                  total_tokens: chunk.usage.total_tokens,
-                }
-              }
-            }
-
-            const streamResult = processor.getResult()
-
-            // 有工具调用：执行工具并继续下一轮
-            if (streamResult.toolCalls.length > 0 && options.tools) {
-              messages.push(processor.toAssistantMessage())
-
-              for (const toolCall of streamResult.toolCalls) {
-                if (toolCall.type !== 'function')
-                  continue
-                yield { type: 'tool_call', name: toolCall.function.name, arguments: toolCall.function.arguments }
-
-                const toolResult = await options.tools.execute(toolCall)
-                const rawContent = toolResult.success
-                  ? toolResult.data.content
-                  : `Tool error: ${toolResult.error.message}`
-                const toolContent = typeof rawContent === 'string'
-                  ? rawContent
-                  : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
-
-                yield { type: 'tool_result', name: toolCall.function.name, content: toolContent, success: toolResult.success }
-
-                messages.push({
-                  role: 'tool',
-                  tool_call_id: toolCall.id,
-                  content: toolContent,
-                })
-              }
-
-              // 重置本轮生成文本，下一轮 LLM 会产出最终文本
-              fullReply = ''
-              turn.generated = ''
-              continue
-            }
-
-            // 无工具调用：结束循环
-            break
-          }
-
-          // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
-          if (await completeStreamTurn(turn, fullReply))
-            yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
         }
-        catch (error) {
-          // 上游生成被取消（AbortSignal）：保留 generating 轮次与已生成文本（pendingCommits 已在
-          // beginStreamTurn 登记），由调用方用真实内容 commit/interrupt；若已被 interrupt 进入终态则忽略。
-          if (chatOpts?.signal?.aborted) {
-            yield { type: 'cancelled', turnId: turn.id, generated: turn.generated }
-            return
-          }
-          throw error
+        finally {
+          // 结算并发屏障：auto 已终态立即释放；manual / 取消后待提交轮次的屏障移交 commit/interrupt
+          settleGeneration(streamTurn?.id ?? null, release)
         }
       },
     }
@@ -751,10 +907,17 @@ export function createContextOperations(
      * auto 模式：把完整生成文本写入上下文并触发记忆提取，轮次直接 `completed`。
      * manual 模式：仅登记 `generating` 轮次并记录配对用户输入，等待 commit/interrupt。
      *
+     * `epoch` 用于识别生成期间是否发生过 reset：若纪元已变化，说明上下文已被重置，
+     * 丢弃本轮结果（不写入 turns / 上下文 / 记忆），避免旧生成污染重置后的上下文。
+     *
      * @returns 该轮 turnId（供 manual 模式后续提交）
      */
-    async function finalizeAssistantReply(userMessage: string, generated: string): Promise<string> {
+    async function finalizeAssistantReply(userMessage: string, generated: string, epoch: number): Promise<string> {
       const turnId = generateTurnId()
+      // reset 已发生：丢弃本轮，不写入 turns / 上下文 / 记忆
+      if (epoch !== generationEpoch)
+        return turnId
+
       const now = Date.now()
       const turn: ConversationTurn = {
         id: turnId,
@@ -806,6 +969,9 @@ export function createContextOperations(
         if (userMessage !== undefined)
           enqueueMemoryExtract(userMessage, committed)
       }
+
+      // 释放该轮次持有的并发屏障（manual / 取消后待提交轮次），放行下一轮生成
+      releaseTurnHolder(turnId)
       return ok(undefined)
     }
 
@@ -844,7 +1010,7 @@ export function createContextOperations(
 
       // 从存储恢复
       if (contextStore) {
-        const key = storeKey(scope)
+        const key = sessionStoreKey(scope)
         const persisted = await contextStore.get(key)
         if (persisted) {
           initialMessages = persisted.messages
@@ -889,7 +1055,7 @@ export function createContextOperations(
       }
 
       try {
-        const sessionKey = storeKey(scope)
+        const sessionKey = sessionStoreKey(scope)
         const existing = await sessionStore.get(sessionKey)
         if (!existing) {
           return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: `Session not found: ${scope.sessionId}` } }))
@@ -911,7 +1077,7 @@ export function createContextOperations(
 
       try {
         // 上下文正文与会话元数据共用同一复合键，确保删除时正文不残留
-        const sessionKey = storeKey(scope)
+        const sessionKey = sessionStoreKey(scope)
         if (contextStore)
           await contextStore.remove(sessionKey)
         await sessionStore.remove(sessionKey)

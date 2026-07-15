@@ -20,13 +20,13 @@ import type { AIRelStore, AIVectorStore, StorePage, WhereClause } from '../../st
 import type {
   MemoryAccessScope,
   MemoryClearOptions,
+  MemoryCoreOperations,
   MemoryEntry,
   MemoryEntryInput,
   MemoryExtractOptions,
   MemoryInjectionOptions,
   MemoryListOptions,
   MemoryListPageOptions,
-  MemoryOperations,
   MemoryRecallOptions,
   MemoryUpdateInput,
 } from '../ai-memory-types.js'
@@ -99,7 +99,7 @@ function matchScope(entry: MemoryEntry, scope: Record<string, unknown>): boolean
  * @param embedding - Embedding 接口（可为 null，为 null 时使用关键词回退）
  * @param store - 记忆条目持久化存储
  * @param vectorStore - 向量库存储（用于语义检索）
- * @returns MemoryOperations 实例
+ * @returns MemoryCoreOperations 实例
  */
 export function createNativeMemoryOperations(
   config: MemoryConfig,
@@ -107,7 +107,7 @@ export function createNativeMemoryOperations(
   embedding: EmbeddingOperations | null,
   store: AIRelStore<MemoryEntry>,
   vectorStore: AIVectorStore,
-): MemoryOperations {
+): MemoryCoreOperations {
   /**
    * 为文本计算 embedding 向量（embedding 不可用或关闭时返回 undefined）
    */
@@ -369,7 +369,7 @@ export function createNativeMemoryOperations(
     }
   }
 
-  const operations: MemoryOperations = {
+  const operations: MemoryCoreOperations = {
     /**
      * 从对话消息中提取记忆并合并存储（Mem0 式增量更新）
      *

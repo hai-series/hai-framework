@@ -37,6 +37,7 @@ import { createFileOperations } from './file/ai-file-functions.js'
 import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js'
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
+import { createMemoryOperations } from './memory/ai-memory-facade.js'
 import { createMem0OssMemoryOperations } from './memory/providers/ai-memory-provider-mem0-oss.js'
 import { createNativeMemoryOperations } from './memory/providers/ai-memory-provider-native.js'
 import { createPersonaOperations } from './persona/ai-persona-functions.js'
@@ -135,7 +136,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const knowledgeStore = storeProvider.createKnowledgeStore?.()
   const knowledge = createKnowledgeOperations(knowledgeParsed, llm, embedding, datapipeDep, knowledgeStore)
 
-  const memory: MemoryOperations = memoryStore && memoryVectorStore
+  const memoryCore = memoryStore && memoryVectorStore
     ? createNativeMemoryOperations(memoryParsed, llm, embedding, memoryStore, memoryVectorStore)
     : await createMem0OssMemoryOperations({
         config: memoryParsed,
@@ -145,6 +146,8 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
         embeddingDims: config.embedding?.dimensions,
         vectorBackend: storeProvider.getVectorBackend?.(),
       })
+  // 封装出对外的公共记忆接口（作用域绑定 scoped + 管理接口 admin + clear 空过滤保护）
+  const memory: MemoryOperations = createMemoryOperations(memoryCore)
 
   // Token / Summary / Compress
   const tokenParsed = TokenConfigSchema.parse(config.token ?? {})

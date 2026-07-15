@@ -158,6 +158,21 @@ export interface ContextManagerOptions {
   turnCommit?: 'auto' | 'manual'
 
   /**
+   * 并发生成策略（默认 `reject`）
+   *
+   * ContextManager 默认实行**单活动生成**：同一管理器同一时刻只允许一个未完成的
+   * `chat` / `chatStream` 轮次，避免「上一轮 AI 尚未退出，下一轮 user 消息先写入」
+   * 导致的消息乱序（user1 → user2 → assistant1）。
+   *
+   * - `reject`：已有活动生成时，新的 `chat` / `chatStream` 立即返回 `CONTEXT_BUSY` 错误。
+   * - `queue`：新请求排队，等待前一轮次进入终态（`completed` / `interrupted`）后再开始。
+   *
+   * `manual` 提交模式下，屏障持续到 `commitTurn` / `interruptTurn` 提交真实文本为止，
+   * 因此「打断当前轮次 → 立即发起下一轮」也能保证顺序正确。
+   */
+  concurrency?: 'reject' | 'queue'
+
+  /**
    * 压缩配置（覆盖全局 compress 配置）
    *
    * 直接引用 CompressOptions，加上 auto 开关。
@@ -230,6 +245,33 @@ export interface ContextManagerOptions {
 }
 
 // ─── 单次 Chat 选项与结果 ───
+
+/**
+ * 重置管理器选项（`ContextManager.reset` 使用）
+ */
+export interface ContextResetOptions {
+  /**
+   * 是否保留系统提示词（默认 `true`）
+   *
+   * 系统提示词（Persona / System Prompt）只在创建时追加一次；重置若不保留，
+   * 会连同对话历史一起清空。默认重新写入系统提示词，避免 Persona 语义丢失。
+   */
+  preserveSystemPrompt?: boolean
+  /**
+   * 是否终止活动轮次（默认 `true`）
+   *
+   * 为 `true` 时：中断内部生成信号，使所有非终态轮次进入 `interrupted` 终态，
+   * 释放并发屏障，并阻止这些旧轮次在重置后被再次 `commitTurn` / `interruptTurn`。
+   */
+  cancelActiveTurn?: boolean
+  /**
+   * 是否等待后台记忆提取任务完成后再清空（默认 `false`）
+   *
+   * 为 `true` 时先 `flush()` 等待正在运行的记忆提取写入完成；否则不等待
+   * （已在途的提取任务仍会自行写入记忆后端，但其结果不再影响本管理器状态）。
+   */
+  waitForMemoryTasks?: boolean
+}
 
 /**
  * 单次 chat/chatStream 请求的覆盖选项
@@ -378,9 +420,15 @@ export interface ContextManager {
   readonly pendingMemoryTasks: number
 
   /**
-   * 重置管理器（清空所有消息和摘要）
+   * 重置管理器
+   *
+   * 默认行为：终止活动轮次（进入终态并释放并发屏障）、清空消息 / 摘要 / 轮次 /
+   * 待提交轮次，并重新写入系统提示词。可通过选项调整。
+   *
+   * @param options - 重置选项（保留系统提示词 / 终止活动轮次 / 等待记忆任务）
+   * @returns 成功返回 ok(undefined)
    */
-  reset: () => void
+  reset: (options?: ContextResetOptions) => Promise<HaiResult<void>>
 
   /**
    * 获取对话轮次列表（Conversation Commit Layer）

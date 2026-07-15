@@ -213,6 +213,46 @@ export type ToolErrorType
     | 'TIMEOUT'
 
 /**
+ * 工具执行上下文（传给 handler）
+ *
+ * 由框架在 `execute` / `executeAll` 时构造并透传给工具 handler，使工具能够：
+ * - 响应取消（主持人打断、上层 AbortSignal）提前中止耗时操作（DB 查询 / HTTP 请求）；
+ * - 感知超时截止时间；
+ * - 获知当前交互主体 / 会话，做数据隔离或审计。
+ *
+ * `signal` 始终存在：即便调用方未传入信号，框架也会依据默认超时构造一个。
+ */
+export interface ToolExecutionContext {
+  /** 取消信号（始终存在；结合调用方信号与超时截止） */
+  signal: AbortSignal
+  /** 交互主体 ID（透传自 Context / Reasoning 作用域） */
+  objectId?: string
+  /** 会话 ID（透传自 Context / Reasoning 作用域） */
+  sessionId?: string
+  /** 截止时间（Unix 毫秒；到期自动取消） */
+  deadline?: number
+}
+
+/**
+ * 工具执行入参（调用方传给 `execute` / `executeAll`）
+ *
+ * 所有字段可选。框架据此解析出传给 handler 的 {@link ToolExecutionContext}：
+ * 组合调用方 `signal` 与超时信号，超时优先级 `deadline` > `timeoutMs` > 工具默认 > 全局默认。
+ */
+export interface ToolExecutionOptions {
+  /** 调用方取消信号（与超时信号组合） */
+  signal?: AbortSignal
+  /** 交互主体 ID */
+  objectId?: string
+  /** 会话 ID */
+  sessionId?: string
+  /** 截止时间（Unix 毫秒；优先级高于 timeoutMs） */
+  deadline?: number
+  /** 本次执行超时（毫秒；覆盖工具默认超时） */
+  timeoutMs?: number
+}
+
+/**
  * 工具定义选项（传给 `ai.tools.define()`）
  *
  * @typeParam TInput - 参数类型（由 Zod schema 推断）
@@ -225,8 +265,15 @@ export interface DefineToolOptions<TInput, TOutput> {
   description: string
   /** Zod schema，用于参数校验和 JSON Schema 转换 */
   parameters: ZodType<TInput>
-  /** 执行函数，接收校验后的参数，支持同步/异步 */
-  handler: (input: TInput) => Promise<TOutput> | TOutput
+  /**
+   * 执行函数，接收校验后的参数与执行上下文，支持同步/异步
+   *
+   * `context.signal` 用于响应取消：长耗时操作应把它透传给 DB / HTTP 客户端，
+   * 以便打断或超时时提前中止。
+   */
+  handler: (input: TInput, context: ToolExecutionContext) => Promise<TOutput> | TOutput
+  /** 本工具默认执行超时（毫秒；execute 未指定 deadline/timeoutMs 时生效） */
+  timeoutMs?: number
 }
 
 /**
@@ -242,8 +289,8 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
   description: string
   /** Zod 参数 schema */
   parameters: ZodType<TInput>
-  /** 执行工具（自动校验参数），失败返回 ToolError */
-  execute: (input: TInput) => Promise<HaiResult<TOutput>>
+  /** 执行工具（自动校验参数），失败返回 ToolError；超时 / 取消返回 TOOL_TIMEOUT */
+  execute: (input: TInput, options?: ToolExecutionOptions) => Promise<HaiResult<TOutput>>
   /** 转换为 OpenAI function calling 定义格式（$schema 字段已移除） */
   toDefinition: () => ToolDefinition
 }
@@ -268,10 +315,10 @@ export interface ToolRegistryOperations {
   getNames: () => string[]
   /** 获取所有工具的 OpenAI function calling 定义（用于传入 ChatCompletionRequest.tools） */
   getDefinitions: () => ToolDefinition[]
-  /** 执行单个工具调用，自动解析 JSON 参数并校验；失败返回 ToolError */
-  execute: (toolCall: ToolCall) => Promise<HaiResult<ToolMessage>>
-  /** 批量执行工具调用（默认并行），任一失败立即返回错误 */
-  executeAll: (toolCalls: ToolCall[], options?: { parallel?: boolean }) => Promise<HaiResult<ToolMessage[]>>
+  /** 执行单个工具调用，自动解析 JSON 参数并校验；失败返回 ToolError，超时 / 取消返回 TOOL_TIMEOUT */
+  execute: (toolCall: ToolCall, options?: ToolExecutionOptions) => Promise<HaiResult<ToolMessage>>
+  /** 批量执行工具调用（默认并行），任一失败立即返回错误；执行上下文透传给每个工具 */
+  executeAll: (toolCalls: ToolCall[], options?: ToolExecutionOptions & { parallel?: boolean }) => Promise<HaiResult<ToolMessage[]>>
   /** 清空所有已注册的工具 */
   clear: () => void
   /** 当前已注册的工具数量 */

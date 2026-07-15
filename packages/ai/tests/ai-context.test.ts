@@ -244,7 +244,7 @@ describe('context createManager', () => {
 
     const manager = managerResult.data
     await manager.addMessage({ role: 'user', content: 'Hello' })
-    manager.reset()
+    await manager.reset()
 
     const messages = manager.getMessages()
     expect(messages.success).toBe(true)
@@ -1428,5 +1428,187 @@ describe('context memory scope + flush', () => {
     const saved = await manager.save()
     expect(saved.success).toBe(true)
     expect(manager.pendingMemoryTasks).toBe(0)
+  })
+})
+
+// =============================================================================
+// 并发生成控制 + reset 生命周期
+// =============================================================================
+
+describe('context concurrency + reset', () => {
+  /** 轮询等待条件成立 */
+  async function waitFor(cond: () => boolean, timeout = 2000): Promise<void> {
+    const start = Date.now()
+    while (!cond()) {
+      if (Date.now() - start > timeout)
+        throw new Error('waitFor timeout')
+      await new Promise((r) => {
+        setTimeout(r, 5)
+      })
+    }
+  }
+
+  /** 可手动 resolve 的慢 LLM：chat 挂起直到 release()，并响应 AbortSignal 提前中止 */
+  function createControllableLLM(): { llm: LLMOperations, release: () => void, callCount: () => number } {
+    let calls = 0
+    let releaseFn: () => void = () => {}
+    const llm = {
+      chat: vi.fn(async (req: { signal?: AbortSignal }) => {
+        calls++
+        await new Promise<void>((resolve, reject) => {
+          releaseFn = resolve
+          req?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+        })
+        return {
+          success: true as const,
+          data: {
+            id: 'id',
+            object: 'chat.completion' as const,
+            created: Date.now(),
+            model: 'test-model',
+            choices: [{ index: 0, message: { role: 'assistant' as const, content: '回复' }, finish_reason: 'stop' as const }],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          },
+        }
+      }),
+      chatStream: vi.fn(),
+      listModels: vi.fn(),
+    } as unknown as LLMOperations
+    return { llm, release: () => releaseFn(), callCount: () => calls }
+  }
+
+  function createOpsWithDeps(llm: LLMOperations) {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(defaultCompressConfig, tokenOps, summaryOps, 8000)
+    return createContextOperations(defaultCompressConfig, tokenOps, compressOps, undefined, undefined, { llm })
+  }
+
+  it('concurrency=reject（默认）：活动生成期间第二次 chat 返回 CONTEXT_BUSY', async () => {
+    const { llm, release, callCount } = createControllableLLM()
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const first = manager.chat('第一轮')
+    await waitFor(() => callCount() === 1)
+    const second = await manager.chat('第二轮')
+    expect(second.success).toBe(false)
+    if (!second.success)
+      expect(second.error.code).toBe(HaiAIError.CONTEXT_BUSY.code)
+
+    release()
+    const firstResult = await first
+    expect(firstResult.success).toBe(true)
+
+    // 第一轮结束后可再次 chat（屏障已释放）
+    const third = manager.chat('第三轮')
+    await waitFor(() => callCount() === 2)
+    release()
+    expect((await third).success).toBe(true)
+  })
+
+  it('concurrency=queue：第二次 chat 排队等待前一轮完成后再执行，保持消息顺序', async () => {
+    const { llm, release, callCount } = createControllableLLM()
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, concurrency: 'queue' })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const first = manager.chat('第一轮')
+    await waitFor(() => callCount() === 1)
+    const second = manager.chat('第二轮')
+    // 排队模式下第二轮尚未调用 LLM（仍等待第一轮释放屏障）
+    await new Promise((r) => {
+      setTimeout(r, 30)
+    })
+    expect(callCount()).toBe(1)
+
+    release()
+    await first
+    await waitFor(() => callCount() === 2)
+    release()
+    const secondResult = await second
+    expect(secondResult.success).toBe(true)
+
+    // 顺序正确：user1 → assistant1 → user2 → assistant2
+    const msgs = manager.getMessages()
+    if (msgs.success) {
+      expect(msgs.data.map(m => m.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+      expect(msgs.data[0].content).toBe('第一轮')
+      expect(msgs.data[2].content).toBe('第二轮')
+    }
+  })
+
+  it('reset 默认保留系统提示词并清空消息 / 轮次', async () => {
+    const llm = createMockLLM([{ content: '回复' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, systemPrompt: '你是助手' })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    await manager.chat('你好')
+    const before = manager.getMessages()
+    if (before.success)
+      expect(before.data.length).toBeGreaterThan(1)
+
+    const resetResult = await manager.reset()
+    expect(resetResult.success).toBe(true)
+
+    const after = manager.getMessages()
+    if (after.success) {
+      // 仅保留系统提示词
+      expect(after.data).toHaveLength(1)
+      expect(after.data[0].role).toBe('system')
+      expect(after.data[0].content).toBe('你是助手')
+    }
+    // 轮次已清空
+    const turns = manager.getTurns()
+    if (turns.success)
+      expect(turns.data).toHaveLength(0)
+  })
+
+  it('reset preserveSystemPrompt=false 时不保留系统提示词', async () => {
+    const llm = createMockLLM([{ content: '回复' }])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, systemPrompt: '你是助手' })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    await manager.chat('你好')
+    await manager.reset({ preserveSystemPrompt: false })
+
+    const after = manager.getMessages()
+    if (after.success)
+      expect(after.data).toHaveLength(0)
+  })
+
+  it('reset 终止活动生成并释放屏障，之后可立即开始新一轮', async () => {
+    const { llm, release, callCount } = createControllableLLM()
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    if (!managerResult.success)
+      return
+    const manager = managerResult.data
+
+    const first = manager.chat('第一轮')
+    await waitFor(() => callCount() === 1)
+    // reset 终止活动生成（abort 内部信号）并释放并发屏障
+    await manager.reset()
+    // 活动生成被 abort，first 以错误结果结束（不悬挂）
+    const firstResult = await first
+    expect(firstResult.success).toBe(false)
+
+    // 屏障已释放：新一轮不再被 CONTEXT_BUSY 拒绝
+    const second = manager.chat('第二轮')
+    await waitFor(() => callCount() === 2)
+    release()
+    const secondResult = await second
+    expect(secondResult.success).toBe(true)
   })
 })

@@ -16,10 +16,10 @@ import type { ChatMessage, LLMOperations } from '../../llm/ai-llm-types.js'
 import type { AIVectorBackend } from '../../store/ai-store-types.js'
 import type {
   MemoryAccessScope,
+  MemoryCoreOperations,
   MemoryEntry,
   MemoryEntryInput,
   MemoryExtractOptions,
-  MemoryOperations,
   MemoryType,
   MemoryUpdateInput,
 } from '../ai-memory-types.js'
@@ -160,54 +160,87 @@ function matchScope(entry: MemoryEntry, scope: Record<string, unknown>): boolean
   return Object.entries(scope).every(([k, v]) => (entry.scope as Record<string, unknown>)[k] === v)
 }
 
-/** 将 hai vecdb 后端映射为 mem0 vectorStore 配置 */
-function buildVectorStoreConfig(deps: Mem0OssDeps): Mem0Config['vectorStore'] {
+/** mem0 向量库解析结果：配置 + 实际生效 provider + 是否持久化 */
+interface Mem0VectorStoreResolution {
+  vectorStore: Mem0Config['vectorStore']
+  /** 实际生效的向量 provider（qdrant / pgvector / memory） */
+  provider: string
+  /** 是否为持久化后端（服务重启后数据是否保留） */
+  persistent: boolean
+}
+
+/**
+ * 将 hai vecdb 后端映射为 mem0 vectorStore 配置
+ *
+ * mem0 TS 仅支持 qdrant / pgvector。当底层后端为 lancedb / chroma / 未知时无法映射，
+ * 默认 fail-fast（返回错误）以避免服务重启后记忆静默丢失；仅当显式允许时才退回内存存储。
+ */
+function buildVectorStoreConfig(deps: Mem0OssDeps): HaiResult<Mem0VectorStoreResolution> {
   const collectionName = deps.collectionName
   const dimension = deps.embeddingDims
   const backend = deps.vectorBackend
 
   if (backend?.type === 'qdrant') {
-    return {
+    return ok({
       provider: 'qdrant',
-      config: {
-        url: backend.url,
-        apiKey: backend.apiKey,
-        collectionName,
-        ...(dimension ? { dimension, embeddingModelDims: dimension } : {}),
+      persistent: true,
+      vectorStore: {
+        provider: 'qdrant',
+        config: {
+          url: backend.url,
+          apiKey: backend.apiKey,
+          collectionName,
+          ...(dimension ? { dimension, embeddingModelDims: dimension } : {}),
+        },
       },
-    }
+    })
   }
 
   if (backend?.type === 'pgvector') {
-    return {
+    return ok({
       provider: 'pgvector',
-      config: {
-        host: backend.host,
-        port: backend.port,
-        dbName: backend.database,
-        user: backend.user,
-        password: backend.password,
-        connectionString: backend.connectionString,
-        collectionName,
-        ...(dimension ? { dimension, embeddingModelDims: dimension } : {}),
+      persistent: true,
+      vectorStore: {
+        provider: 'pgvector',
+        config: {
+          host: backend.host,
+          port: backend.port,
+          dbName: backend.database,
+          user: backend.user,
+          password: backend.password,
+          connectionString: backend.connectionString,
+          collectionName,
+          ...(dimension ? { dimension, embeddingModelDims: dimension } : {}),
+        },
       },
-    }
+    })
   }
 
-  // lancedb / chroma / 未知：mem0 TS 不支持，退回其自带 in-memory 存储
-  if (backend)
-    logger.info('Mem0 OSS falls back to in-memory vector store', { backend: backend.type })
-  return {
-    provider: 'memory',
-    config: {
-      collectionName,
-      ...(dimension ? { dimension } : {}),
-    },
+  // 配置了持久化后端但 mem0 无法映射（lancedb / chroma / 未知）：默认 fail-fast，
+  // 避免服务重启后记忆静默丢失；仅当 memory.allowEphemeralFallback=true 时退回内存存储。
+  if (backend && !deps.config.allowEphemeralFallback) {
+    return err(
+      HaiAIError.CONFIGURATION_ERROR,
+      aiM('ai_memoryEphemeralFallbackDenied', { params: { backend: backend.type } }),
+    )
   }
+  if (backend)
+    logger.warn('Mem0 OSS falls back to in-memory vector store (allowEphemeralFallback=true); data will not survive restart', { backend: backend.type })
+  return ok({
+    provider: 'memory',
+    persistent: false,
+    vectorStore: {
+      provider: 'memory',
+      config: {
+        collectionName,
+        ...(dimension ? { dimension } : {}),
+      },
+    },
+  })
 }
 
-/** 解析 LLM / Embedder 配置并构建 mem0 Memory 配置 */
-function buildMem0Config(deps: Mem0OssDeps): HaiResult<Mem0Config> {
+/** 解析 LLM / Embedder 配置并构建 mem0 Memory 配置（含实际生效向量 provider 与持久化状态） */
+function buildMem0Config(deps: Mem0OssDeps): HaiResult<{ config: Mem0Config, vectorProvider: string, persistent: boolean }> {
   const llmResolved = resolveModelEntry(deps.aiConfig.llm, 'extraction', undefined, {
     missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for mem0 LLM' } }),
   })
@@ -220,28 +253,36 @@ function buildMem0Config(deps: Mem0OssDeps): HaiResult<Mem0Config> {
   if (!embedderResolved.success)
     return embedderResolved
 
+  const vectorResolved = buildVectorStoreConfig(deps)
+  if (!vectorResolved.success)
+    return vectorResolved
+
   return ok({
-    llm: {
-      provider: 'openai',
-      config: {
-        apiKey: llmResolved.data.apiKey,
-        model: llmResolved.data.model,
-        baseURL: llmResolved.data.baseUrl,
-        temperature: 0.1,
+    vectorProvider: vectorResolved.data.provider,
+    persistent: vectorResolved.data.persistent,
+    config: {
+      llm: {
+        provider: 'openai',
+        config: {
+          apiKey: llmResolved.data.apiKey,
+          model: llmResolved.data.model,
+          baseURL: llmResolved.data.baseUrl,
+          temperature: 0.1,
+        },
       },
-    },
-    embedder: {
-      provider: 'openai',
-      config: {
-        apiKey: embedderResolved.data.apiKey,
-        model: embedderResolved.data.model,
-        baseURL: embedderResolved.data.baseUrl,
-        ...(deps.embeddingDims ? { embeddingDims: deps.embeddingDims } : {}),
+      embedder: {
+        provider: 'openai',
+        config: {
+          apiKey: embedderResolved.data.apiKey,
+          model: embedderResolved.data.model,
+          baseURL: embedderResolved.data.baseUrl,
+          ...(deps.embeddingDims ? { embeddingDims: deps.embeddingDims } : {}),
+        },
       },
+      vectorStore: vectorResolved.data.vectorStore,
+      disableHistory: true,
+      customInstructions: deps.config.systemPrompt,
     },
-    vectorStore: buildVectorStoreConfig(deps),
-    disableHistory: true,
-    customInstructions: deps.config.systemPrompt,
   })
 }
 
@@ -440,10 +481,13 @@ async function removeMemory(context: Mem0OssContext, memoryId: string, accessSco
  * 列出指定主体的记忆条目（供 list / listPage / clear 复用）
  *
  * objectId 走 mem0 过滤，types / scope 在内存中匹配（scope 存于 metadata.hai_scope，无法下推）。
+ * `limit` 必须在 types / scope 过滤**之后**应用：若在 getAll 时截断，目标类型/作用域的记忆
+ * 很可能不在前 N 条候选内，导致漏返回甚至返回空列表（与 native provider 语义保持一致）。
  */
 async function listMemories(context: Mem0OssContext, options?: { objectId?: string, types?: MemoryType[], scope?: Record<string, unknown>, limit?: number }): Promise<MemoryEntry[]> {
   const objectId = options?.objectId ?? context.defaultObjectId
-  const response = await context.memory.getAll({ filters: { userId: objectId }, topK: options?.limit })
+  // 完整取回该主体候选（不在此处传 topK），过滤后再截取 limit
+  const response = await context.memory.getAll({ filters: { userId: objectId } })
   let entries = response.results
     .map(item => toMemoryEntry(item, objectId))
     .filter(entry => entry.objectId === objectId)
@@ -451,7 +495,7 @@ async function listMemories(context: Mem0OssContext, options?: { objectId?: stri
     entries = entries.filter(entry => options.types!.includes(entry.type))
   if (options?.scope)
     entries = entries.filter(entry => matchScope(entry, options.scope!))
-  return entries
+  return options?.limit !== undefined ? entries.slice(0, options.limit) : entries
 }
 
 /**
@@ -461,7 +505,7 @@ async function listMemories(context: Mem0OssContext, options?: { objectId?: stri
  * @returns MemoryOperations 实例
  * @throws 当 `mem0ai` 未安装或配置缺失时抛出，由 `ai.init()` 转为 HaiResult
  */
-export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<MemoryOperations> {
+export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<MemoryCoreOperations> {
   const configResult = buildMem0Config(deps)
   if (!configResult.success)
     throw configResult.error
@@ -475,8 +519,14 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
     throw new Error('mem0ai is required for memory.provider="mem0"; install it with `pnpm add mem0ai`')
   }
 
+  // 暴露实际生效的向量 provider 与持久化状态，便于运维确认记忆是否会在重启后保留
+  logger.info('Mem0 OSS memory initialized', {
+    vectorProvider: configResult.data.vectorProvider,
+    persistent: configResult.data.persistent,
+  })
+
   const context: Mem0OssContext = {
-    memory: new mod.Memory(configResult.data),
+    memory: new mod.Memory(configResult.data.config),
     llm: deps.llm,
     systemPrompt: deps.config.systemPrompt,
     defaultObjectId: DEFAULT_OBJECT_ID,
@@ -484,7 +534,7 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
     candidateMultiplier: deps.config.candidateMultiplier,
   }
 
-  const recall: MemoryOperations['recall'] = (query, options) => recallMemories(context, query, {
+  const recall: MemoryCoreOperations['recall'] = (query, options) => recallMemories(context, query, {
     topK: options?.topK ?? deps.config.defaultTopK,
     candidateMultiplier: options?.candidateMultiplier,
     objectId: options?.objectId,

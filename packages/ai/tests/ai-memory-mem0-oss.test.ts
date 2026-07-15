@@ -111,6 +111,51 @@ describe('createMem0OssMemoryOperations', () => {
     expect(config.vectorStore.config.collectionName).toBe('hai_ai_memory')
   })
 
+  it('配置了不支持的持久化后端（lancedb）默认 fail-fast（issue #6.1）', async () => {
+    // allowEphemeralFallback 默认 false：mem0 无法映射 lancedb 时初始化失败，避免记忆静默丢失
+    await expect(createOps({ type: 'lancedb', url: 'file://./data' })).rejects.toBeDefined()
+  })
+
+  it('显式 allowEphemeralFallback=true 时不支持的后端退回内存存储（issue #6.1）', async () => {
+    const config = MemoryConfigSchema.parse({ provider: 'mem0', allowEphemeralFallback: true })
+    const ops = await createMem0OssMemoryOperations({
+      config,
+      aiConfig,
+      llm: createLlmMock('[]'),
+      collectionName: 'hai_ai_memory',
+      embeddingDims: 1536,
+      vectorBackend: { type: 'chroma', url: 'http://localhost:8000' },
+    })
+    expect(ops).toBeDefined()
+    const ctorConfig = memoryCtorMock.mock.calls[0]?.[0] as { vectorStore: { provider: string } }
+    expect(ctorConfig.vectorStore.provider).toBe('memory')
+  })
+
+  it('list 在 types / scope 过滤之后再应用 limit（issue #6.2：不再漏返回）', async () => {
+    // getAll 若被传入 topK 则按 topK 截断（模拟后端 limit 语义）
+    const all = [
+      { id: 'f1', memory: '事实1', metadata: { hai_object_id: 'u1', hai_type: 'fact' } },
+      { id: 'f2', memory: '事实2', metadata: { hai_object_id: 'u1', hai_type: 'fact' } },
+      { id: 'f3', memory: '事实3', metadata: { hai_object_id: 'u1', hai_type: 'fact' } },
+      { id: 'p1', memory: '偏好1', metadata: { hai_object_id: 'u1', hai_type: 'preference' } },
+      { id: 'p2', memory: '偏好2', metadata: { hai_object_id: 'u1', hai_type: 'preference' } },
+    ]
+    memoryMock.getAll.mockImplementation(async (opts: { topK?: number } | undefined) =>
+      ({ results: opts?.topK !== undefined ? all.slice(0, opts.topK) : all }))
+
+    const ops = await createOps()
+    const result = await ops.list({ objectId: 'u1', types: ['preference'], limit: 2 })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    // 修复前：getAll(topK=2) 只取回前 2 条（都是 fact），过滤 preference → 0 条（漏返回）
+    // 修复后：完整取回后过滤 preference → 2 条，再截 limit
+    expect(result.data).toHaveLength(2)
+    expect(result.data.map(e => e.type)).toEqual(['preference', 'preference'])
+    // getAll 不再在过滤前传入 topK
+    expect(memoryMock.getAll).toHaveBeenCalledWith({ filters: { userId: 'u1' } })
+  })
+
   it('extract 用框架提取器分类后以 infer:false 写入并保留 hai_type/hai_importance', async () => {
     const llm = createLlmMock(JSON.stringify([{ content: '用户喜欢中文', type: 'preference', importance: 0.8 }]))
     memoryMock.add.mockResolvedValue({ results: [{ id: 'm1', memory: '用户喜欢中文', metadata: { hai_type: 'preference', hai_importance: 0.8 } }] })
