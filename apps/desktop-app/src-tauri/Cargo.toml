@@ -5,6 +5,13 @@ description = "hai Desktop App"
 authors = [ "hai" ]
 edition = "2021"
 
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
 [lib]
 name = "hai_desktop_lib"
 crate-type = [
