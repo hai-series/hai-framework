@@ -1,17 +1,33 @@
-name: LeakChecker
+name: Leak Checker
 
-on: [ push, pull_request_target ]
+# LEAK_WORDS 是仓库 secret，绝不能暴露给 fork PR 或 pull_request_target 中的第三方代码。
+# 仅在 main 合并后使用 secret 扫描；PR 阶段不向任何候选代码暴露敏感词配置。
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: leak-check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  hello_world_job:
+  scan:
+    name: Scan Changed Content
     runs-on: ubuntu-latest
-    name: Scan Keywords
+    timeout-minutes: 10
+    env:
+      LEAK_WORDS: ${{ secrets.LEAK_WORDS }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Scan Keywords
-        uses: PPG007/keywords-scanner@v1.0
+      - uses: actions/checkout@v6
         with:
-          keywords: ${{secrets.LEAK_WORDS}}
-          ignoreCase: true
-          ignoredDirs: '["architecture.png", ".git", "package-lock.json"]'
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Scan pushed commits with repository-owned code
+        run: node scripts/check-leak-words.mjs --range "${{ github.event.before }}" "${{ github.sha }}"

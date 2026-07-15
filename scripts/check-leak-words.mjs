@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { execFileSync } from 'node:child_process'
+import process from 'node:process'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const CONFIG_PATH = resolve(ROOT, '.leak-words.json')
@@ -28,13 +29,29 @@ function runGit(args, options = {}) {
 }
 
 function getConfig() {
+  const environmentTerms = process.env.LEAK_WORDS?.trim()
+  if (environmentTerms) {
+    let parsed
+    try {
+      parsed = JSON.parse(environmentTerms)
+    }
+    catch {
+      parsed = environmentTerms.split(/[\r\n,]+/)
+    }
+    const blockedTerms = Array.isArray(parsed)
+      ? parsed.filter(term => typeof term === 'string' && term.trim().length > 0).map(term => term.trim())
+      : []
+    if (blockedTerms.length > 0)
+      return { blockedTerms }
+  }
+
   if (!existsSync(CONFIG_PATH)) {
     return null
   }
 
   const config = readJson(CONFIG_PATH)
   const blockedTerms = Array.isArray(config)
-    ? config.filter(term => typeof term === 'string' && term.trim().length > 0)
+    ? config.filter(term => typeof term === 'string' && term.trim().length > 0).map(term => term.trim())
     : []
 
   if (blockedTerms.length === 0) {
@@ -45,7 +62,15 @@ function getConfig() {
 }
 
 function findTermsInText(text, blockedTerms) {
-  return blockedTerms.filter(term => text.includes(term))
+  const normalizedText = text.toLocaleLowerCase()
+  return blockedTerms.filter(term => normalizedText.includes(term.toLocaleLowerCase()))
+}
+
+function redactTerms(text, terms) {
+  return terms.reduce((redacted, term) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return redacted.replace(new RegExp(escaped, 'giu'), '[REDACTED]')
+  }, text)
 }
 
 function parsePatchMatches(patchText, blockedTerms) {
@@ -105,8 +130,8 @@ function printPatchMatches(header, matches) {
   console.error(header)
   for (const match of matches) {
     const location = match.line > 0 ? `${match.file}:${match.line}` : match.file
-    console.error(`  - ${location} hit [${match.terms.join(', ')}]`)
-    console.error(`    ${match.content}`)
+    console.error(`  - ${location} hit ${match.terms.length} blocked term(s)`)
+    console.error(`    ${redactTerms(match.content, match.terms)}`)
   }
 }
 
@@ -117,8 +142,8 @@ function printMessageMatches(header, matches) {
 
   console.error(header)
   for (const match of matches) {
-    console.error(`  - line ${match.line} hit [${match.terms.join(', ')}]`)
-    console.error(`    ${match.content}`)
+    console.error(`  - line ${match.line} hit ${match.terms.length} blocked term(s)`)
+    console.error(`    ${redactTerms(match.content, match.terms)}`)
   }
 }
 
@@ -170,7 +195,7 @@ function scanCommitPatch(commitOid, config) {
 function failWithSummary(title, detailsPrinter) {
   console.error(`\n${title}`)
   detailsPrinter()
-  console.error('\nGit hook blocked this operation. Update .leak-words.json if needed.')
+  console.error('\nLeak word check failed. Remove the match or update the authorized configuration.')
   process.exit(1)
 }
 
@@ -244,10 +269,33 @@ function handlePushMode(config) {
   }
 }
 
+function handleRangeMode(baseOid, headOid, config) {
+  if (!headOid)
+    throw new Error('Missing head commit for --range mode.')
+
+  const commits = !baseOid || baseOid === ZERO_OID
+    ? runGit(['rev-list', headOid]).split('\n').filter(Boolean)
+    : runGit(['rev-list', `${baseOid}..${headOid}`]).split('\n').filter(Boolean)
+
+  for (const commitOid of commits) {
+    const messageMatches = scanCommitMessage(commitOid, config)
+    const patchMatches = scanCommitPatch(commitOid, config)
+    if (messageMatches.length === 0 && patchMatches.length === 0)
+      continue
+
+    failWithSummary(`Detected leak words in commit ${commitOid.slice(0, 8)}:`, () => {
+      if (messageMatches.length > 0)
+        printMessageMatches('Commit message:', messageMatches)
+      if (patchMatches.length > 0)
+        printPatchMatches('Changed content:', patchMatches)
+    })
+  }
+}
+
 function main() {
   const config = getConfig()
   if (!config) {
-    console.log('No .leak-words.json found or no terms configured. Skipping leak word check.')
+    process.stdout.write('No leak words configured. Skipping leak word check.\n')
     return
   }
 
@@ -269,7 +317,13 @@ function main() {
     return
   }
 
-  throw new Error('Unsupported mode. Use --staged, --commit-msg-file <path>, or --push.')
+  const rangeIndex = args.indexOf('--range')
+  if (rangeIndex >= 0) {
+    handleRangeMode(args[rangeIndex + 1], args[rangeIndex + 2], config)
+    return
+  }
+
+  throw new Error('Unsupported mode. Use --staged, --commit-msg-file <path>, --push, or --range <base> <head>.')
 }
 
 main()
