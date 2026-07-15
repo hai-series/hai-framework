@@ -17,6 +17,7 @@ import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 import type { AuthzOperations } from './authz/iam-authz-types.js'
 import type { IamConfig, IamConfigSettingsInput } from './iam-config.js'
 import type { SessionOperations } from './session/iam-session-types.js'
+import type { TicketOperations } from './ticket/iam-ticket-types.js'
 import type { User, UserOperations } from './user/iam-user-types.js'
 import { core } from '@h-ai/core'
 
@@ -63,6 +64,10 @@ const IamErrorInfo = {
   LDAP_CONNECTION_FAILED: '301:500',
   LDAP_BIND_FAILED: '302:401',
   LDAP_SEARCH_FAILED: '303:500',
+
+  TICKET_INVALID: '110:401',
+  TICKET_EXPIRED: '111:401',
+  TICKET_ISSUE_FAILED: '112:500',
 
   REPOSITORY_ERROR: '401:500',
   NOT_FOUND: '402:404',
@@ -180,6 +185,8 @@ export interface IamFunctions {
   readonly session: SessionOperations
   /** API Key 管理（创建、列表、吐销、验证），未启用 apikey 登录时返回未初始化代理 */
   readonly apiKey: ApiKeyOperations
+  /** 一次性能力票据（签发 / 原子消费短期票据，用于 WebSocket 等无法携带 Bearer Token 的通道） */
+  readonly ticket: TicketOperations
 }
 
 // ─── 子功能类型 re-export ───
@@ -189,4 +196,5 @@ export type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, Lda
 export type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionType, Role } from './authz/iam-authz-types.js'
 export type { AuthResult, CreateSessionOptions, Session, SessionData, SessionFieldUpdates, SessionOperations, TokenPair } from './session/iam-session-types.js'
+export type { ConsumedTicket, ConsumeTicketOptions, IssuedTicket, IssueTicketOptions, TicketGrant, TicketOperations } from './ticket/iam-ticket-types.js'
 export type { AgreementDisplay, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User, UserOperations } from './user/iam-user-types.js'

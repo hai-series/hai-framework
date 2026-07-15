@@ -145,6 +145,22 @@ interface TokenPair {
 - 创建全新的 session，返回新的 TokenPair
 - 旧 refreshToken 立即失效，防止重放攻击
 
+### 一次性票据 — `iam.ticket`
+
+短期、一次性能力票据，用于无法携带 Bearer Token 的通道（如 WebSocket URL）。密码学安全随机、TTL、原子单次消费、用途绑定。
+
+| 方法       | 签名                                                                                   | 说明                                  |
+| ---------- | -------------------------------------------------------------------------------------- | ------------------------------------- |
+| `issue`    | `({ subjectId, purpose, grant?, ttlMs? }) => Promise<HaiResult<{ ticket, expiresAt }>>` | 签发（默认 30s）                      |
+| `consume`  | `(ticket, { purpose? }?) => Promise<HaiResult<{ subjectId, purpose, grant }>>`          | 原子消费（单次有效，用途不符拒绝）   |
+
+```ts
+const issued = await iam.ticket.issue({ subjectId, purpose: 'ai-audio', grant: { operation: 'transcribe' } })
+const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // 并发消费仅一个成功
+```
+
+错误码：`TICKET_INVALID`(hai:iam:110) / `TICKET_EXPIRED`(hai:iam:111) / `TICKET_ISSUE_FAILED`(hai:iam:112)。
+
 ### 用户管理 — `iam.user`
 
 | 方法                       | 签名                                                                    | 说明                                 |

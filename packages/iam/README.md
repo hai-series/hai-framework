@@ -4,14 +4,15 @@
 
 ## 功能特性
 
-| 功能           | 说明                                                   |
-| -------------- | ------------------------------------------------------ |
-| **认证**       | 密码、OTP（邮箱/短信验证码）、LDAP、API Key 多策略认证 |
-| **会话**       | 有状态会话（随机访问令牌 + 缓存，滑动续期可选）        |
-| **授权**       | RBAC 角色与权限管理（DB + 缓存，通配符权限匹配）       |
-| **用户管理**   | 注册、查询、更新、密码重置、管理员重置密码             |
-| **API Key**    | API Key 创建、吊销、验证，支持 scope 与过期时间        |
-| **前端客户端** | HTTP API 契约定义，支持独立前端使用                    |
+| 功能           | 说明                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------- |
+| **认证**       | 密码、OTP（邮箱/短信验证码）、LDAP、API Key 多策略认证                                 |
+| **会话**       | 有状态会话（随机访问令牌 + 缓存，滑动续期可选）                                        |
+| **授权**       | RBAC 角色与权限管理（DB + 缓存，通配符权限匹配）                                       |
+| **用户管理**   | 注册、查询、更新、密码重置、管理员重置密码                                             |
+| **API Key**    | API Key 创建、吊销、验证，支持 scope 与过期时间                                        |
+| **一次性票据** | 短期、一次性能力票据（签发 / 原子消费），用于 WebSocket 等无法携带 Bearer Token 的通道 |
+| **前端客户端** | HTTP API 契约定义，支持独立前端使用                                                    |
 
 ## 安装
 
@@ -487,6 +488,30 @@ const result = await iam.user.confirmPasswordReset(token, 'NewPassword456')
 // 管理员重置（无需旧密码）
 await iam.user.adminResetPassword(userId, 'TempPassword123')
 ```
+
+## 一次性票据 — `iam.ticket`
+
+短期、一次性能力票据。用于无法携带 Bearer Token 的通道（如 WebSocket URL）：由已认证的 HTTP 请求签发一个绑定主体、用途与操作的票据，服务端在首次校验时**原子消费**（单次有效）。
+
+```ts
+// 签发（已登录 HTTP 请求内）：绑定主体、用途与本次操作，30 秒过期
+const issued = await iam.ticket.issue({
+  subjectId: session.userId,
+  purpose: 'ai-audio',
+  grant: { operation: 'transcribe', model: 'whisper-1' },
+  ttlMs: 30_000,
+})
+// issued.data.ticket 交给客户端，用于建立 WebSocket 连接
+
+// 消费（服务端建连时）：原子单次，返回主体 + 用途 + grant
+const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
+if (consumed.success) {
+  const { subjectId, grant } = consumed.data
+  // 用 grant.operation / grant.model 交叉校验客户端请求
+}
+```
+
+特性：密码学安全随机值、TTL、原子单次消费（并发消费仅一个成功）、用途绑定（防跨用途重放）。
 
 ## 错误处理
 

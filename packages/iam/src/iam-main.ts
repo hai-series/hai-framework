@@ -8,7 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { IamConfig } from './iam-config.js'
-import type { ApiKeyOperations, AuthnOperations, AuthResult, AuthzOperations, IamConfigInput, IamFunctions, SessionOperations, UserOperations } from './iam-types.js'
+import type { ApiKeyOperations, AuthnOperations, AuthResult, AuthzOperations, IamConfigInput, IamFunctions, SessionOperations, TicketOperations, UserOperations } from './iam-types.js'
 
 import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
@@ -30,6 +30,7 @@ import {
 
 } from './iam-types.js'
 import { createSessionOperations } from './session/iam-session-functions.js'
+import { createTicketOperations } from './ticket/iam-ticket-functions.js'
 import { createUserOperations } from './user/iam-user-functions.js'
 import { resetResetTokenRepoSingleton } from './user/iam-user-repository-reset-token.js'
 import { resetUserRepoSingleton } from './user/iam-user-repository-user.js'
@@ -46,6 +47,7 @@ let currentUser: UserOperations | null = null
 let currentAuthz: AuthzOperations | null = null
 let currentSession: SessionOperations | null = null
 let currentApiKey: ApiKeyOperations | null = null
+let currentTicket: TicketOperations | null = null
 
 // ─── 未初始化占位 ───
 
@@ -58,6 +60,7 @@ const notInitializedAuth = notInitialized.proxy<AuthnOperations>()
 const notInitializedAuthz = notInitialized.proxy<AuthzOperations>()
 const notInitializedSession = notInitialized.proxy<SessionOperations>()
 const notInitializedApiKey = notInitialized.proxy<ApiKeyOperations>()
+const notInitializedTicket = notInitialized.proxy<TicketOperations>()
 
 /**
  * 用户子功能的未初始化代理
@@ -184,6 +187,8 @@ export const iam: IamFunctions = {
       currentUser = userResult.data
       currentConfig = parsed
       currentApiKey = authnResult.data.apiKeyFunctions
+      // 一次性票据能力（仅依赖 cache + crypto，随 IAM 初始化即可用）
+      currentTicket = createTicketOperations()
 
       // 组合 auth：注入 registerAndLogin（依赖 user + auth 两个子功能）
       const authn = authnResult.data.authn
@@ -218,6 +223,7 @@ export const iam: IamFunctions = {
   get authz(): AuthzOperations { return currentAuthz ?? notInitializedAuthz },
   get session(): SessionOperations { return currentSession ?? notInitializedSession },
   get apiKey(): ApiKeyOperations { return currentApiKey ?? notInitializedApiKey },
+  get ticket(): TicketOperations { return currentTicket ?? notInitializedTicket },
   get config() { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
   get isInitialized() { return currentConfig !== null },
   get isRegisterEnabled() { return currentConfig?.register?.enabled !== false },
@@ -235,6 +241,7 @@ export const iam: IamFunctions = {
     currentAuthz = null
     currentSession = null
     currentApiKey = null
+    currentTicket = null
     currentConfig = null
 
     // 重置所有仓库单例，释放对旧 db 实例的引用
