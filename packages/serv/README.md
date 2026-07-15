@@ -10,7 +10,7 @@
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
 - 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
-- 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；一次性 ticket 负责身份验证，授权回调负责服务端确认操作、模型、音色、配额与并发占用
+- 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；连接建立即用一次性 ticket 鉴权（返回 `{ session, grant? }`，独立预鉴权超时），每帧运行时 Zod 校验 + 严格状态机，输入/积压/发送缓冲背压与级联取消；授权回调负责服务端确认操作、模型、音色、配额与并发占用
 
 > 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。
 
@@ -70,7 +70,7 @@ export default { fetch: handler }
 
 ### Audio WebSocket：ticket 与服务端授权
 
-语音入口必须使用短期、一次性 ticket。应用通过已登录 HTTP endpoint 签发 ticket，并在 `verifyTicket` 中原子消费；框架保存返回的 `ServSession`，再调用 `authorize` 确认付费参数：
+语音入口必须使用短期、一次性 ticket。应用通过已登录 HTTP endpoint 签发 ticket（推荐 `iam.ticket.issue`），并在 `verifyTicket` 中原子消费（推荐 `iam.ticket.consume`）；连接建立即完成鉴权（独立预鉴权超时），未鉴权不处理任何业务帧。框架保存返回的 `ServSession` 与可选 `grant`，再调用 `authorize` 确认付费参数：
 
 ```ts
 const app = serv.createApp({
@@ -79,18 +79,20 @@ const app = serv.createApp({
   iam,
   audio: {
     ai,
-    verifyTicket: consumeAudioTicket,
-    authorize: async (session, request) => authorizeAudioRequest(session, request),
+    verifyTicket: consumeAudioTicket, // → HaiResult<{ session, grant? }>
+    authorize: async (session, request, grant) => authorizeAudioRequest(session, request, grant),
     onSessionEnd: async (session, request) => releaseAudioConcurrency(session.userId, request.operation),
   },
 })
 ```
 
-- `verifyTicket(ticket)` 必须校验用途、过期时间并保证同一 ticket 只能成功一次，返回 `HaiResult<ServSession>`。
-- `authorize(session, request)` 适合检查 IAM 权限、模型/音色白名单、Persona、调用配额并占用并发名额；返回的 `AuthorizedAudioRequest` 才会传给 `ai.audio`。
-- 未提供 `authorize` 时，框架会忽略客户端的 `model`、`voice` 与 `instruction`，只使用服务端默认模型。
+- `verifyTicket(ticket)` 必须校验用途、过期时间并保证同一 ticket 只能成功一次，返回 `HaiResult<AudioTicketVerification>`（`{ session, grant? }`）；`grant` 承载票据绑定的操作/模型/会话。
+- `authorize(session, request, grant)` 适合检查 IAM 权限、模型/音色白名单、Persona、调用配额并占用并发名额，并用 `grant` 交叉校验 `start` 未越权；返回的 `AuthorizedAudioRequest` 才会传给 `ai.audio`。
+- 未提供 `authorize` 时，框架会忽略客户端的 `model`、`voice` 与 `instruction`，只使用服务端默认模型（若票据 `grant.model` 存在则采用之），并拒绝与 `grant.operation` 不符的 `start`。
+- 协议边界对每一帧做运行时 Zod 校验并按严格状态机接受（识别只收音频、合成只收文本、`start`/`done` 各一次、`segmentId` 会话内唯一）；输入队列、消息积压与发送缓冲均有上限，超限或取消时以领域错误关闭并级联中止上游。
+- 可调参数：`preAuthTimeoutMs`（默认 5000）、`maxPendingMessages`（默认 256）、`maxSendBufferBytes`（默认 8 MiB）、`maxMessageBytes` / `maxBufferedBytes` / `maxTextBytes` / `maxSessionMs`。
 - `onSessionEnd` 在成功、失败或断连后至多调用一次，供应用释放并发占用。
-- 浏览器 `createAIClient({ audio: { url, getTicket } })` 只把一次性 `ticket` 放入 WebSocket URL；禁止传普通 IAM access token。
+- 浏览器 `createAIClient({ audio: { url, getTicket } })` 只把一次性 `ticket` 放入 WebSocket URL；`getTicket(request)` 接收本次操作摘要（`operation` / `model`），可签发与本次操作严格绑定的票据；禁止传普通 IAM access token。
 
 ### 传输加密（与 `@h-ai/crypto` 统一）
 

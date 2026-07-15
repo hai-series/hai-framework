@@ -61,7 +61,7 @@ function captureHandlers(deps: AudioWsTestDeps, ticket = 'ticket-1'): WsHandlers
   }) as unknown as UpgradeWebSocket
   registerAudioWsRoute(app, '/api/v1/ai/audio', upgradeWebSocket, {
     ...deps,
-    verifyTicket: deps.verifyTicket ?? (async () => ok(TEST_SESSION)),
+    verifyTicket: deps.verifyTicket ?? (async () => ok({ session: TEST_SESSION })),
   })
   const honoContext = { req: { query: (name: string) => name === 'ticket' ? ticket : undefined, header: () => undefined } }
   return factory!(honoContext)
@@ -146,7 +146,7 @@ describe('serv feature audio', () => {
   })
 
   it('无效或已消费的 ticket 返回错误并关闭', async () => {
-    const verifyTicket = async (): Promise<HaiResult<{ userId: string, roles: string[], permissions: string[] }>> => err(HaiCommonError.UNAUTHORIZED, 'invalid')
+    const verifyTicket = async (): Promise<HaiResult<never>> => err(HaiCommonError.UNAUTHORIZED, 'invalid')
     const handlers = captureHandlers({ ai: { audio: createAudioMock() }, verifyTicket }, 'used-ticket')
     const ws = createWsMock()
     handlers.onOpen({}, ws)
@@ -159,7 +159,7 @@ describe('serv feature audio', () => {
   })
 
   it('缺失 ticket 时不会调用校验或付费能力', async () => {
-    const verifyTicket = vi.fn(async () => ok(TEST_SESSION))
+    const verifyTicket = vi.fn(async () => ok({ session: TEST_SESSION }))
     const transcribeStream = vi.fn(createAudioMock().transcribeStream)
     const audio = { ...createAudioMock(), transcribeStream }
     const handlers = captureHandlers({ ai: { audio }, verifyTicket }, '')
@@ -189,7 +189,7 @@ describe('serv feature audio', () => {
     const transcribe = vi.fn(async () => ok({ text: '不该被识别' }))
     const audio = { ...createAudioMock(), transcribe } as unknown as AudioOperations
     // 鉴权异步失败（下一 tick 才 resolve），模拟快速连发时的竞态窗口
-    const verifyTicket = async (): Promise<HaiResult<{ userId: string, roles: string[], permissions: string[] }>> => {
+    const verifyTicket = async (): Promise<HaiResult<never>> => {
       await Promise.resolve()
       return err(HaiCommonError.UNAUTHORIZED, 'invalid')
     }
@@ -233,7 +233,7 @@ describe('serv feature audio', () => {
     handlers.onMessage({ data: JSON.stringify({ type: 'done' }) }, ws)
     await flush()
 
-    expect(authorize).toHaveBeenCalledWith(TEST_SESSION, expect.objectContaining({ model: 'expensive-tts', voice: 'ClientVoice' }))
+    expect(authorize).toHaveBeenCalledWith(TEST_SESSION, expect.objectContaining({ model: 'expensive-tts', voice: 'ClientVoice' }), undefined)
     expect(synthesizeStream).toHaveBeenCalledWith(expect.objectContaining({ model: 'allowed-tts', voice: 'ServerVoice' }))
   })
 
@@ -266,13 +266,72 @@ describe('serv feature audio', () => {
     expect(onSessionEnd).toHaveBeenCalledWith(TEST_SESSION, expect.objectContaining({ operation: 'synthesize' }))
   })
 
+  it('无效的协议帧（非法 operation）被运行时 Schema 拒绝', async () => {
+    const handlers = captureHandlers({ ai: { audio: createAudioMock() } })
+    const ws = createWsMock()
+    handlers.onOpen({}, ws)
+    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'delete-everything' }) }, ws)
+    await flush()
+    expect(parseJsonMessages(ws)[0]).toMatchObject({ type: 'error', code: 'hai:ai:050' })
+  })
+
+  it('识别会话拒绝文本帧、合成会话拒绝音频帧（严格状态机）', async () => {
+    const transcribe = captureHandlers({ ai: { audio: createAudioMock() } })
+    const wsT = createWsMock()
+    transcribe.onOpen({}, wsT)
+    transcribe.onMessage({ data: JSON.stringify({ type: 'start', operation: 'transcribe', stream: true, format: 'pcm16', sampleRate: 16000 }) }, wsT)
+    transcribe.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 's', text: 'x' }) }, wsT)
+    await flush()
+    expect(parseJsonMessages(wsT).find(m => m.type === 'error')).toMatchObject({ code: 'hai:ai:050' })
+
+    const synth = captureHandlers({ ai: { audio: createAudioMock() } })
+    const wsS = createWsMock()
+    synth.onOpen({}, wsS)
+    synth.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, wsS)
+    synth.onMessage({ data: new Uint8Array([1, 2, 3]) }, wsS)
+    await flush()
+    expect(parseJsonMessages(wsS).find(m => m.type === 'error')).toMatchObject({ code: 'hai:ai:050' })
+  })
+
+  it('重复 segmentId 被状态机拒绝', async () => {
+    const dupSeg = captureHandlers({ ai: { audio: createAudioMock() } })
+    const ws2 = createWsMock()
+    dupSeg.onOpen({}, ws2)
+    dupSeg.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, ws2)
+    dupSeg.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'dup', text: 'x' }) }, ws2)
+    dupSeg.onMessage({ data: JSON.stringify({ type: 'text', segmentId: 'dup', text: 'y' }) }, ws2)
+    await flush()
+    expect(parseJsonMessages(ws2).some(m => m.type === 'error' && String(m.message).includes('duplicate segmentId'))).toBe(true)
+  })
+
+  it('预鉴权超时：鉴权后未及时 start 即以领域错误关闭', async () => {
+    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, preAuthTimeoutMs: 5 })
+    const ws = createWsMock()
+    handlers.onOpen({}, ws)
+    // 不发送 start，等待超过预鉴权超时
+    await new Promise(resolve => setTimeout(resolve, 40))
+    expect(parseJsonMessages(ws).find(m => m.type === 'error')).toMatchObject({ code: 'hai:ai:057' })
+    expect(ws.close).toHaveBeenCalled()
+  })
+
+  it('票据 grant 绑定操作与 start 不符时默认授权拒绝', async () => {
+    const verifyTicket = async (): Promise<HaiResult<{ session: typeof TEST_SESSION, grant: { operation: 'transcribe' } }>> =>
+      ok({ session: TEST_SESSION, grant: { operation: 'transcribe' } })
+    const handlers = captureHandlers({ ai: { audio: createAudioMock() }, verifyTicket })
+    const ws = createWsMock()
+    handlers.onOpen({}, ws)
+    handlers.onMessage({ data: JSON.stringify({ type: 'start', operation: 'synthesize', format: 'pcm16' }) }, ws)
+    await flush()
+    expect(parseJsonMessages(ws).find(m => m.type === 'error')).toBeDefined()
+  })
+
   it('createApp 启用 audio 时注册 WebSocket 升级注入器', () => {
     const contract = apiContract.create({})
     const procedures = serv.implement(contract).$context<ServContext>().router({})
     const app = serv.createApp({
       contract,
       procedures,
-      audio: { ai: { audio: createAudioMock() }, verifyTicket: async () => ok(TEST_SESSION) },
+      audio: { ai: { audio: createAudioMock() }, verifyTicket: async () => ok({ session: TEST_SESSION }) },
       http: { openapi: false, docs: false, rpc: false },
     })
     expect(audioWsInjectors.has(app)).toBe(true)

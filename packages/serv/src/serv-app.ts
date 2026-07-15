@@ -162,18 +162,21 @@ export interface ServAudioConfig {
   /** AI 服务对象（提供 `ai.audio` 领域能力）。 */
   readonly ai: AudioWsDeps['ai']
   /**
-   * 校验并原子消费短期、一次性的 Audio ticket。
+   * 校验并原子消费短期、一次性的 Audio ticket，返回会话与可选的能力授权（grant）。
    *
-   * ticket 的签发和存储由应用决定；成功结果必须返回建立授权所需的 IAM 会话摘要。
+   * ticket 的签发和存储由应用决定（推荐 `iam.ticket.issue` / `iam.ticket.consume`）；
+   * 成功结果必须返回建立授权所需的 IAM 会话摘要，可选返回签发时绑定的 `grant`
+   * （操作 / 模型 / 会话），供服务端交叉校验 `start` 帧与票据一致。
    */
-  readonly verifyTicket: (ticket: string) => Promise<HaiResult<ServSession>>
+  readonly verifyTicket: (ticket: string) => Promise<HaiResult<AudioTicketVerification>>
   /**
    * 基于已验证会话授权本次操作，并返回服务端确认后的付费参数。
    *
    * 未提供时只保留操作及音频格式，客户端提交的 model / voice / instruction 不会生效。
    * 这里适合完成 IAM 权限、Persona、套餐配额和并发会话的检查/占用。
+   * 第三参 `grant` 为票据绑定的能力（如有），可用于确认 `start` 未越权。
    */
-  readonly authorize?: (session: ServSession, request: AudioWsStartMessage) => Promise<HaiResult<AuthorizedAudioRequest>>
+  readonly authorize?: (session: ServSession, request: AudioWsStartMessage, grant?: AudioTicketGrant) => Promise<HaiResult<AuthorizedAudioRequest>>
   /** 会话结束钩子，供应用释放并发占用；无论成功、失败或断连都至多调用一次。 */
   readonly onSessionEnd?: (session: ServSession, request: AuthorizedAudioRequest) => void | Promise<void>
   /** 语音入口路径（相对 apiPrefix，默认 `/ai/audio`）。 */
@@ -186,6 +189,32 @@ export interface ServAudioConfig {
   readonly maxTextBytes?: number
   /** 单连接最长持续时间（毫秒，默认 5 分钟）。 */
   readonly maxSessionMs?: number
+  /** 预鉴权超时（毫秒，默认 5000）：连接建立后未完成鉴权并收到 `start` 即关闭，独立于会话超时。 */
+  readonly preAuthTimeoutMs?: number
+  /** 未处理消息积压上限（默认 256）：串行处理链积压超过此数立即关闭，防止内存放大。 */
+  readonly maxPendingMessages?: number
+  /** 发送缓冲高水位（字节，默认 8 MiB）：`ws.bufferedAmount` 超过即以领域错误关闭慢客户端。 */
+  readonly maxSendBufferBytes?: number
+}
+
+/** Audio ticket 绑定的能力授权（消费时原样返回，供服务端交叉校验 start 帧）。 */
+export interface AudioTicketGrant {
+  /** 允许的操作 */
+  readonly operation?: 'transcribe' | 'synthesize'
+  /** 允许的模型 ID */
+  readonly model?: string
+  /** 绑定的会话 ID */
+  readonly sessionId?: string
+  /** 应用自定义绑定字段 */
+  readonly [key: string]: unknown
+}
+
+/** Audio ticket 验证结果：IAM 会话 + 可选能力授权。 */
+export interface AudioTicketVerification {
+  /** IAM 会话摘要 */
+  readonly session: ServSession
+  /** 票据绑定的能力授权（如有） */
+  readonly grant?: AudioTicketGrant
 }
 
 /** Audio WebSocket 经应用授权后允许生效的服务端参数。 */
@@ -313,6 +342,9 @@ export function createApp<
       maxBufferedBytes: options.audio.maxBufferedBytes,
       maxTextBytes: options.audio.maxTextBytes,
       maxSessionMs: options.audio.maxSessionMs,
+      preAuthTimeoutMs: options.audio.preAuthTimeoutMs,
+      maxPendingMessages: options.audio.maxPendingMessages,
+      maxSendBufferBytes: options.audio.maxSendBufferBytes,
     })
     audioWsInjectors.set(app, injectWebSocket)
   }

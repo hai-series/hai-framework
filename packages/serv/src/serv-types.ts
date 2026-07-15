@@ -15,7 +15,7 @@ export type {
   ServProcedureOptions,
   ServProcedureWrapper,
 } from './pipelines/serv-pipeline-types.js'
-export type { AuthorizedAudioRequest, CreateServAppOptions, ServAudioConfig, ServHttpApp, ServMiddlewareMount } from './serv-app.js'
+export type { AudioTicketGrant, AudioTicketVerification, AuthorizedAudioRequest, CreateServAppOptions, ServAudioConfig, ServHttpApp, ServMiddlewareMount } from './serv-app.js'
 export type {
   ServConfig,
   ServConfigInput,

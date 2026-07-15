@@ -90,15 +90,17 @@ const app = serv.createApp({
   iam,
   audio: {
     ai,
-    verifyTicket: consumeAudioTicket, // 校验用途/时效并原子消费，返回 ServSession
-    authorize: (session, request) => authorizeAudioRequest(session, request),
+    verifyTicket: consumeAudioTicket, // 校验用途/时效并原子消费，返回 { session, grant? }（推荐 iam.ticket.consume）
+    authorize: (session, request, grant) => authorizeAudioRequest(session, request, grant),
     onSessionEnd: (session, request) => releaseAudioConcurrency(session.userId, request.operation),
   },
 })
 ```
 
-- ticket 由已登录 HTTP 请求签发，短期有效且只能消费一次；普通 IAM access token 禁止进入 WebSocket URL。
-- `authorize` 返回的 `AuthorizedAudioRequest` 是唯一会传给 `ai.audio` 的模型、音色与格式配置；未提供时客户端的付费参数会被忽略。
+- ticket 由已登录 HTTP 请求签发（推荐 `iam.ticket.issue`），短期有效且只能消费一次；连接建立即鉴权（独立预鉴权超时，默认 5s），未鉴权不处理任何业务帧；普通 IAM access token 禁止进入 WebSocket URL。
+- `verifyTicket` 返回 `HaiResult<AudioTicketVerification>`（`{ session, grant? }`）；`grant` 承载票据绑定的操作/模型/会话，供 `authorize` 交叉校验 `start` 未越权。
+- 每帧经运行时 Zod 校验并按严格状态机接受（识别只收音频、合成只收文本、`start`/`done` 各一次、`segmentId` 会话内唯一）；输入队列、消息积压、发送缓冲均有上限（`preAuthTimeoutMs`/`maxPendingMessages`/`maxSendBufferBytes` 等可调），超限或取消时以领域错误关闭并级联中止上游。
+- `authorize` 返回的 `AuthorizedAudioRequest` 是唯一会传给 `ai.audio` 的模型、音色与格式配置；未提供时客户端的付费参数会被忽略（若票据 `grant.model` 存在则采用之）。
 - IAM 权限、Persona、套餐配额和并发计数属于应用策略；框架提供校验与结束钩子，不硬编码业务权限名或存储。
 
 ### 3. 扩展应用自有 contract + procedures
