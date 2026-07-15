@@ -35,6 +35,10 @@ if (login.success) {
 }
 
 const me = await apiClient.iam.auth.currentUser()
+if (me.success) {
+  // 身份资料与服务端重新校验后的访问范围一次返回，客户端无需持久化权限快照。
+  const { roles, permissions, ...user } = me.data
+}
 
 await apiClient.close()
 ```
@@ -104,6 +108,9 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 const result = await apiClient.iam.auth.currentUser()
 if (!result.success) {
   // result.error.code / result.error.message
+}
+else {
+  // result.data = User & { roles: string[], permissions: string[] }
 }
 ```
 

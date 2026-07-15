@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
   apiContract,
+  IamCurrentUserOutputSchema,
   IamLoginInputSchema,
   IamRefreshTokenOutputSchema,
   PaginationQuerySchema,
@@ -57,6 +58,38 @@ describe('@h-ai/api-contract', () => {
       },
     })
     expect(cookieRefreshOutput.success).toBe(true)
+  })
+
+  it('iam currentUser 输出同时携带身份资料和服务端访问范围', () => {
+    const result = IamCurrentUserOutputSchema.safeParse({
+      success: true,
+      data: {
+        id: 'u1',
+        username: 'alice',
+        enabled: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        roles: ['admin'],
+        permissions: ['user:list'],
+      },
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.data.roles).toEqual(['admin'])
+      expect(result.data.data.permissions).toEqual(['user:list'])
+    }
+
+    expect(IamCurrentUserOutputSchema.safeParse({
+      success: true,
+      data: {
+        id: 'u1',
+        username: 'alice',
+        enabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    }).success).toBe(false)
   })
 
   it('storage 和 payment contract 使用明确 OpenAPI 路由', () => {

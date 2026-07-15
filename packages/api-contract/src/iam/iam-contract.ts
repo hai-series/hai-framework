@@ -20,6 +20,7 @@ import {
   IamChangePasswordInputSchema,
   IamCreatePermissionInputSchema,
   IamCreateRoleInputSchema,
+  IamCurrentUserOutputSchema,
   IamListPermissionsInputSchema,
   IamListUsersInputSchema,
   IamLoginInputSchema,
@@ -69,8 +70,8 @@ export const iamContract = {
     logout: route({ method: 'POST', path: IAM_AUTH_ROUTES.logout, operationId: 'iam.auth.logout', summary: 'Logout', tags: ['iam', 'auth'] })
       .input(IamLogoutInputSchema)
       .output(IamVoidOutputSchema),
-    currentUser: route({ method: 'GET', path: '/auth/me', operationId: 'iam.auth.currentUser', summary: 'Get current user', tags: ['iam', 'auth'] })
-      .output(IamUserOutputSchema),
+    currentUser: route({ method: 'GET', path: '/auth/me', operationId: 'iam.auth.currentUser', summary: 'Get current user and access scope', tags: ['iam', 'auth'] })
+      .output(IamCurrentUserOutputSchema),
     refresh: route({ method: 'POST', path: IAM_AUTH_ROUTES.refresh, operationId: 'iam.auth.refresh', summary: 'Refresh access token', tags: ['iam', 'auth'] })
       .input(IamRefreshTokenInputSchema)
       .output(IamRefreshTokenOutputSchema),

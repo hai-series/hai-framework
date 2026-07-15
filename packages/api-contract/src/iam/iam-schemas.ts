@@ -51,6 +51,12 @@ export const IamAuthResultSchema = z.object({
   agreements: IamAgreementDisplaySchema.optional(),
 })
 
+/** 当前会话用户信息；包含服务端重新校验后的角色与权限快照。 */
+export const IamCurrentUserSchema = IamUserSchema.extend({
+  roles: z.array(z.string()),
+  permissions: z.array(z.string()),
+})
+
 /** 密码登录入参 Schema。 */
 export const IamLoginInputSchema = z.object({
   identifier: z.string().min(1),
@@ -217,6 +223,7 @@ export const IamCreatePermissionInputSchema = z.object({
 })
 
 export const IamAuthResultOutputSchema = haiResultSchema(IamAuthResultSchema)
+export const IamCurrentUserOutputSchema = haiResultSchema(IamCurrentUserSchema)
 export const IamRefreshTokenOutputSchema = haiResultSchema(IamRefreshTokenDataSchema)
 export const IamSendOtpOutputSchema = haiResultSchema(IamSendOtpDataSchema)
 export const IamUserOutputSchema = haiResultSchema(IamUserSchema)
@@ -235,6 +242,8 @@ export type IamOtpLoginInput = z.infer<typeof IamOtpLoginInputSchema>
 export type IamLogoutInput = z.infer<typeof IamLogoutInputSchema>
 export type IamSendOtpInput = z.infer<typeof IamSendOtpInputSchema>
 export type IamAuthResultOutput = z.infer<typeof IamAuthResultOutputSchema>
+export type IamCurrentUser = z.infer<typeof IamCurrentUserSchema>
+export type IamCurrentUserOutput = z.infer<typeof IamCurrentUserOutputSchema>
 export type IamRefreshTokenInput = z.infer<typeof IamRefreshTokenInputSchema>
 export type IamRefreshTokenOutput = z.infer<typeof IamRefreshTokenOutputSchema>
 export type IamRegisterInput = z.infer<typeof IamRegisterInputSchema>
