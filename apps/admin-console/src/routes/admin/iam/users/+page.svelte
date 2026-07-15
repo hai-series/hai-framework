@@ -58,7 +58,7 @@
       ...u,
       roleNames: u.roles,
       roles: u.roleIds,
-    })) as unknown as Record<string, unknown>[],
+    })),
     total: data.total,
     page: data.page,
     pageSize: data.pageSize,

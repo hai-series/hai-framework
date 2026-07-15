@@ -15,7 +15,7 @@
 
   // 将 server 数据转为 CrudPage 需要的格式
   const crudData = $derived({
-    items: data.logs as unknown as Record<string, unknown>[],
+    items: data.logs.map(log => ({ ...log })),
     total: data.pagination.total,
     page: data.pagination.page,
     pageSize: data.pagination.pageSize,

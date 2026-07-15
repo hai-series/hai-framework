@@ -17,7 +17,7 @@
 
 这是一个**示例**应用，演示桌面端如何对接 hai api-service：
 
-- 注册 / 登录 / 自动登录
+- 注册 / 登录 / 当前会话恢复
 - Dashboard（`desktopApiClient.app.info` / `desktopApiClient.app.echo`）
 - 用户列表（`apiClient.iam.users.list`，需要 `user:list` 权限）
 - 个人信息维护
@@ -88,7 +88,8 @@ apps/desktop-app/
 
 ## 设计要点
 
-- **Token 存储 = localStorage**：Tauri webview 与 api-service 跨域，httpOnly cookie 不可用，因此使用 `apiClient.tokenStorage.localStorage()`。Tauri 沙箱内 XSS 面较小，但仍建议生产应用结合 [`tauri-plugin-stronghold`](https://v2.tauri.app/plugin/stronghold/) 或自定义 secure storage。
+- **Token 默认仅存内存**：Tauri webview 与 api-service 跨域时无法直接复用 httpOnly cookie；示例选择安全的内存存储，应用重启后需重新登录。生产应用如需持久会话，应实现基于操作系统密钥库（如 [`tauri-plugin-stronghold`](https://v2.tauri.app/plugin/stronghold/)）的 `TokenStorage`，禁止把 access/refresh token 写入 localStorage。
+- **权限由服务端刷新**：`iam.auth.currentUser()` 同时返回当前用户、角色与权限；客户端不持久化权限快照，UI 状态始终来自已校验会话。
 - **业务 API 默认走 transport 加密**：`src/lib/api.ts` 启动时会读取 `config/_crypto.yml`，启用 `@h-ai/crypto` + `@h-ai/api-client` 的密钥协商与请求/响应加解密。
 - **完整 api-service contract**：桌面端通过 `apiClient.create(apiServiceContract)` 创建 `desktopApiClient`，避免跨应用源码 import，也能访问 api-service 自有 `app.*` 端点。
 - **权限感知导航**：`/users` 仅在当前会话拥有 `user:list` 权限时显示；普通注册用户会自动保留在 `/dashboard`。

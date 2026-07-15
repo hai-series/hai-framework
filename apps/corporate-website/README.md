@@ -54,16 +54,9 @@ pnpm --filter corporate-website preview
 - 🤝 合作登记：公开合作申请表单（`/partners`）
 - 🔐 合作管理后台：登录后查看与管理登记记录（`/partners/admin`）
 
-### 合作管理后台默认账号
+### 合作管理后台账号
 
-开发默认账号来自 `config/partner.yml` / `.env.example`：
-
-| 项目   | 开发默认值                  |
-| ------ | --------------------------- |
-| 用户名 | `partner-admin`             |
-| 密码   | `CHANGE_ME_STRONG_PASSWORD` |
-
-启动时会在开发日志中输出合作管理后台账号信息，方便示例体验。生产环境请设置 `HAI_PARTNER_ADMIN_USERNAME` / `HAI_PARTNER_ADMIN_PASSWORD`，日志不会输出由环境变量注入的明文密码。
+用户名默认是 `partner-admin`，密码必须通过 `HAI_PARTNER_ADMIN_PASSWORD` 显式注入。应用不会提供默认密码，也不会把凭据写入日志；缺少密码时启动阶段会返回明确的配置错误。
 
 ## ⚙️ 配置
 
@@ -81,15 +74,15 @@ pnpm --filter corporate-website preview
 
 ### 环境变量
 
-| 变量名                       | 说明                                     | 默认值                      |
-| ---------------------------- | ---------------------------------------- | --------------------------- |
-| `HAI_RELDB_TYPE`             | 数据库类型                               | `sqlite`                    |
-| `HAI_RELDB_DATABASE`         | 数据库路径/地址                          | `./data/corporate.db`       |
-| `HAI_CACHE_TYPE`             | 缓存类型                                 | `memory`                    |
-| `HAI_STORAGE_TYPE`           | 存储类型                                 | `local`                     |
-| `HAI_PARTNER_ADMIN_USERNAME` | 合作管理后台用户名                       | `partner-admin`             |
-| `HAI_PARTNER_ADMIN_PASSWORD` | 合作管理后台密码                         | `CHANGE_ME_STRONG_PASSWORD` |
-| `HAI_CONTACT_RECIPIENT`      | 联系表单邮件接收地址（未配置则跳过发送） | _（无）_                    |
+| 变量名                       | 说明                                     | 默认值                |
+| ---------------------------- | ---------------------------------------- | --------------------- |
+| `HAI_RELDB_TYPE`             | 数据库类型                               | `sqlite`              |
+| `HAI_RELDB_DATABASE`         | 数据库路径/地址                          | `./data/corporate.db` |
+| `HAI_CACHE_TYPE`             | 缓存类型                                 | `memory`              |
+| `HAI_STORAGE_TYPE`           | 存储类型                                 | `local`               |
+| `HAI_PARTNER_ADMIN_USERNAME` | 合作管理后台用户名                       | `partner-admin`       |
+| `HAI_PARTNER_ADMIN_PASSWORD` | 合作管理后台密码（必填）                 | _（无）_              |
+| `HAI_CONTACT_RECIPIENT`      | 联系表单邮件接收地址（未配置则跳过发送） | _（无）_              |
 
 ## 🌍 国际化 (i18n)
 

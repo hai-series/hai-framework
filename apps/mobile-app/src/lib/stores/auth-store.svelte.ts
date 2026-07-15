@@ -1,11 +1,6 @@
 import type { IamLoginInput, IamRegisterInput, IamUpdateCurrentUserInput } from '@h-ai/api-contract'
 import { mobileApiClient } from '../api.js'
 
-export type IamUser = Extract<
-  Awaited<ReturnType<typeof mobileApiClient.iam.auth.currentUser>>,
-  { success: true }
->['data']
-
 type LoginSuccessResult = Extract<
   Awaited<ReturnType<typeof mobileApiClient.iam.auth.login>>,
   { success: true }
@@ -15,6 +10,8 @@ type RegisterSuccessResult = Extract<
   Awaited<ReturnType<typeof mobileApiClient.iam.auth.register>>,
   { success: true }
 >
+
+export type IamUser = LoginSuccessResult['data']['user']
 
 let user = $state<IamUser | null>(null)
 let loading = $state(false)
@@ -180,7 +177,9 @@ export async function refreshCurrentUser(): Promise<void> {
   loading = true
   const result = await mobileApiClient.iam.auth.currentUser()
   if (result.success) {
-    user = result.data
+    const { roles: nextRoles, permissions: nextPermissions, ...currentUser } = result.data
+    user = currentUser
+    setAccessScope(nextRoles, nextPermissions)
   }
   else {
     user = null

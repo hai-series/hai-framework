@@ -28,7 +28,6 @@ describe('auth-store', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
-    localStorage.clear()
   })
 
   it('login 成功后写入 token 并更新当前用户', async () => {
@@ -85,7 +84,7 @@ describe('auth-store', () => {
   it('logout 会清理 token 与本地用户状态', async () => {
     currentUser.mockResolvedValueOnce({
       success: true,
-      data: { id: 'u-3', username: 'carol' },
+      data: { id: 'u-3', username: 'carol', roles: ['user'], permissions: ['profile:read'] },
     })
     logout.mockResolvedValueOnce({ success: true, data: undefined })
 
@@ -125,15 +124,15 @@ describe('auth-store', () => {
     expect(authStore.isLoading()).toBe(false)
   })
 
-  it('refreshCurrentUser 会恢复同一用户的本地权限快照', async () => {
-    localStorage.setItem('hai.desktop.auth.access-scope', JSON.stringify({
-      userId: 'u-5',
-      roles: ['admin'],
-      permissions: ['dashboard:view', 'user:list'],
-    }))
+  it('refreshCurrentUser 使用服务端返回的最新权限快照', async () => {
     currentUser.mockResolvedValueOnce({
       success: true,
-      data: { id: 'u-5', username: 'erin' },
+      data: {
+        id: 'u-5',
+        username: 'erin',
+        roles: ['admin'],
+        permissions: ['dashboard:view', 'user:list'],
+      },
     })
 
     const authStore = await import('../src/lib/auth-store.svelte.js')
@@ -147,7 +146,7 @@ describe('auth-store', () => {
   it('logout 服务端失败时仍会清理本地 token', async () => {
     currentUser.mockResolvedValueOnce({
       success: true,
-      data: { id: 'u-4', username: 'dave' },
+      data: { id: 'u-4', username: 'dave', roles: ['user'], permissions: [] },
     })
     logout.mockRejectedValueOnce(new Error('offline'))
 
@@ -157,7 +156,6 @@ describe('auth-store', () => {
 
     expect(clearTokens).toHaveBeenCalledTimes(1)
     expect(authStore.currentUser()).toBeNull()
-    expect(localStorage.getItem('hai.desktop.auth.access-scope')).toBeNull()
     expect(authStore.isAuthenticated()).toBe(false)
   })
 

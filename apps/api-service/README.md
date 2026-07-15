@@ -168,7 +168,7 @@ await apiClient.init({
 | `/api/v1/auth/register`                   | POST               | 注册并登录                                                           |
 | `/api/v1/auth/send-otp`                   | POST               | 发送 OTP                                                             |
 | `/api/v1/auth/change-password`            | POST               | 修改当前用户密码                                                     |
-| `/api/v1/auth/me`                         | PUT                | 更新当前用户信息                                                     |
+| `/api/v1/auth/me`                         | GET / PUT          | 获取当前用户及最新角色/权限 / 更新当前用户信息                       |
 | `/api/v1/iam/users`                       | GET / POST         | 用户列表 / 创建用户（需权限）                                        |
 | `/api/v1/iam/users/{id}`                  | GET / PUT / DELETE | 查询 / 更新 / 删除用户（需权限）                                     |
 | `/api/v1/iam/roles`                       | GET / POST         | 角色列表 / 创建角色（需权限）                                        |

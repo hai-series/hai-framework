@@ -46,7 +46,7 @@
   const roleCrud: CrudOperations = $derived(createRoleCrud(data.permissions))
 
   const crudData = $derived({
-    items: data.roles as unknown as Record<string, unknown>[],
+    items: data.roles.map(role => ({ ...role })),
     total: data.total,
     page: data.page,
     pageSize: data.pageSize,

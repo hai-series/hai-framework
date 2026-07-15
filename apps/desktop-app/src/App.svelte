@@ -1,7 +1,7 @@
 <!--
   App.svelte —— 顶层路由 + 认证守卫。
 
-  - 启动时调用 `refreshCurrentUser()` 尝试自动登录（基于 localStorage 中的 access token）。
+  - 启动时调用 `refreshCurrentUser()` 校验当前内存会话；未配置安全持久化时重启后需重新登录。
   - 已登录 → AppShell 内嵌当前视图；未登录 → 强制跳 /login 或 /register。
 -->
 <script lang='ts'>

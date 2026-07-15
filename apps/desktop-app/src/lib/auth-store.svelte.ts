@@ -8,11 +8,6 @@
 import type { IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
 import { desktopApiClient } from './api.js'
 
-export type IamUser = Extract<
-  Awaited<ReturnType<typeof desktopApiClient.iam.auth.currentUser>>,
-  { success: true }
->['data']
-
 type LoginSuccessResult = Extract<
   Awaited<ReturnType<typeof desktopApiClient.iam.auth.login>>,
   { success: true }
@@ -23,13 +18,7 @@ type RegisterSuccessResult = Extract<
   { success: true }
 >
 
-interface AuthAccessScopeSnapshot {
-  userId: string
-  roles: string[]
-  permissions: string[]
-}
-
-const AUTH_ACCESS_SCOPE_STORAGE_KEY = 'hai.desktop.auth.access-scope'
+export type IamUser = LoginSuccessResult['data']['user']
 
 let user = $state<IamUser | null>(null)
 let loading = $state(false)
@@ -83,76 +72,14 @@ function isSuccessResult<TData>(result: unknown): result is { success: true, dat
   return maybeResult.success === true && 'data' in maybeResult
 }
 
-function readAccessScopeSnapshot(): AuthAccessScopeSnapshot | null {
-  if (typeof localStorage === 'undefined')
-    return null
-
-  const raw = localStorage.getItem(AUTH_ACCESS_SCOPE_STORAGE_KEY)
-  if (!raw)
-    return null
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<AuthAccessScopeSnapshot>
-    if (
-      typeof parsed.userId !== 'string'
-      || !Array.isArray(parsed.roles)
-      || !Array.isArray(parsed.permissions)
-      || parsed.roles.some(role => typeof role !== 'string')
-      || parsed.permissions.some(permission => typeof permission !== 'string')
-    ) {
-      localStorage.removeItem(AUTH_ACCESS_SCOPE_STORAGE_KEY)
-      return null
-    }
-
-    return {
-      userId: parsed.userId,
-      roles: [...parsed.roles],
-      permissions: [...parsed.permissions],
-    }
-  }
-  catch {
-    localStorage.removeItem(AUTH_ACCESS_SCOPE_STORAGE_KEY)
-    return null
-  }
-}
-
-function writeAccessScopeSnapshot(snapshot: AuthAccessScopeSnapshot | null): void {
-  if (typeof localStorage === 'undefined')
-    return
-
-  if (!snapshot) {
-    localStorage.removeItem(AUTH_ACCESS_SCOPE_STORAGE_KEY)
-    return
-  }
-
-  localStorage.setItem(AUTH_ACCESS_SCOPE_STORAGE_KEY, JSON.stringify(snapshot))
-}
-
-function setAccessScope(userId: string, nextRoles: readonly string[], nextPermissions: readonly string[]): void {
+function setAccessScope(nextRoles: readonly string[], nextPermissions: readonly string[]): void {
   roles = [...nextRoles]
   permissions = [...nextPermissions]
-  writeAccessScopeSnapshot({
-    userId,
-    roles,
-    permissions,
-  })
-}
-
-function restoreAccessScope(userId: string): void {
-  const snapshot = readAccessScopeSnapshot()
-  if (!snapshot || snapshot.userId !== userId) {
-    clearAccessScope()
-    return
-  }
-
-  roles = [...snapshot.roles]
-  permissions = [...snapshot.permissions]
 }
 
 function clearAccessScope(): void {
   roles = []
   permissions = []
-  writeAccessScopeSnapshot(null)
 }
 
 function matchesPermission(required: string, granted: string): boolean {
@@ -218,7 +145,7 @@ export async function login(input: IamLoginInput): Promise<string | null> {
     const nextPermissions = Array.isArray(result.data.permissions) ? result.data.permissions : []
     await desktopApiClient.auth.setTokens(result.data.tokens)
     user = result.data.user
-    setAccessScope(result.data.user.id, nextRoles, nextPermissions)
+    setAccessScope(nextRoles, nextPermissions)
     return null
   }
   catch (error) {
@@ -245,7 +172,7 @@ export async function register(input: IamRegisterInput): Promise<string | null> 
     const nextPermissions = Array.isArray(result.data.permissions) ? result.data.permissions : []
     await desktopApiClient.auth.setTokens(result.data.tokens)
     user = result.data.user
-    setAccessScope(result.data.user.id, nextRoles, nextPermissions)
+    setAccessScope(nextRoles, nextPermissions)
     return null
   }
   catch (error) {
@@ -273,14 +200,15 @@ export async function logout(): Promise<void> {
   }
 }
 
-/** 拉取当前用户；用于应用启动时尝试自动登录。 */
+/** 拉取当前用户与服务端重新校验后的角色/权限。 */
 export async function refreshCurrentUser(): Promise<void> {
   loading = true
   try {
     const result = await desktopApiClient.iam.auth.currentUser()
     if (result.success) {
-      user = result.data
-      restoreAccessScope(result.data.id)
+      const { roles: nextRoles, permissions: nextPermissions, ...currentUser } = result.data
+      user = currentUser
+      setAccessScope(nextRoles, nextPermissions)
     }
     else {
       user = null

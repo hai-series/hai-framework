@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type ClientInitResult = { success: true, data: undefined } | { success: false, error: { code: string, message: string } }
+
 const createdClient = {
-  init: vi.fn(async () => undefined),
+  init: vi.fn<() => Promise<ClientInitResult>>(async () => ({ success: true, data: undefined })),
   close: vi.fn(async () => undefined),
 }
 const apiInit = vi.fn(async () => undefined)
 const apiClose = vi.fn(async () => undefined)
 const apiCreate = vi.fn(() => createdClient)
-const localStorageTokenStorage = vi.fn(() => ({ kind: 'local-storage' }))
+const memoryTokenStorage = vi.fn(() => ({ kind: 'memory' }))
 const cryptoInit = vi.fn(async () => ({ success: true as const, data: undefined }))
 const cryptoClose = vi.fn(async () => ({ success: true as const, data: undefined }))
 const navigate = vi.fn()
@@ -18,7 +20,7 @@ vi.mock('@h-ai/api-client', () => ({
     close: apiClose,
     create: apiCreate,
     tokenStorage: {
-      localStorage: localStorageTokenStorage,
+      memory: memoryTokenStorage,
     },
   },
 }))
@@ -41,6 +43,7 @@ describe('desktop api bootstrap', () => {
     vi.clearAllMocks()
     vi.resetModules()
     createdClient.init.mockClear()
+    createdClient.init.mockResolvedValue({ success: true, data: undefined })
     createdClient.close.mockClear()
   })
 
@@ -60,7 +63,7 @@ describe('desktop api bootstrap', () => {
     expect(cryptoInit).toHaveBeenCalledTimes(1)
     expect(apiCreate).toHaveBeenCalledTimes(1)
     expect(desktopApiClient).toBe(createdClient)
-    expect(localStorageTokenStorage).toHaveBeenCalledTimes(1)
+    expect(memoryTokenStorage).toHaveBeenCalledTimes(1)
     expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({
       baseUrl: 'http://localhost:3000/api/v1',
       transport: expect.objectContaining({
@@ -68,7 +71,7 @@ describe('desktop api bootstrap', () => {
       }),
       auth: expect.objectContaining({
         refreshPath: '/auth/refresh',
-        storage: { kind: 'local-storage' },
+        storage: { kind: 'memory' },
       }),
     }))
   })
@@ -80,6 +83,17 @@ describe('desktop api bootstrap', () => {
     await closeApi()
 
     expect(createdClient.close).toHaveBeenCalledTimes(1)
+    expect(cryptoClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('api-client 初始化失败时关闭 crypto 并拒绝启动', async () => {
+    createdClient.init.mockResolvedValueOnce({
+      success: false,
+      error: { code: 'api-client:001:500', message: 'invalid client config' },
+    })
+    const { initApi } = await import('../src/lib/api.js')
+
+    await expect(initApi()).rejects.toThrow('invalid client config')
     expect(cryptoClose).toHaveBeenCalledTimes(1)
   })
 })

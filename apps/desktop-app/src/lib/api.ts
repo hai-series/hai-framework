@@ -5,7 +5,7 @@
  *
  * - `baseUrl` 来自 `import.meta.env.PUBLIC_API_BASE`，默认 `http://localhost:3000/api/v1`。
  * - transport 加密配置来自 `config/_crypto.yml`。
- * - Token 存储：`apiClient.tokenStorage.localStorage()`（Tauri webview 与 server 跨域，httpOnly cookie 不可用）。
+ * - Token 存储：默认仅保存在内存中；生产应用应注入操作系统安全存储适配器。
  * - `onRefreshFailed`：触发跳转至 `/login`。
  */
 
@@ -48,10 +48,10 @@ export async function initApi(): Promise<void> {
   }
 
   try {
-    await desktopApiClient.init({
+    const initResult = await desktopApiClient.init({
       baseUrl,
       auth: {
-        storage: apiClient.tokenStorage.localStorage(),
+        storage: apiClient.tokenStorage.memory(),
         refreshPath: '/auth/refresh',
         onRefreshFailed: () => {
           // refresh token 失效 → 强制回登录页
@@ -60,6 +60,8 @@ export async function initApi(): Promise<void> {
       },
       ...(transport ? { transport } : {}),
     })
+    if (!initResult.success)
+      throw new Error(initResult.error.message)
   }
   catch (error) {
     if (transport)
