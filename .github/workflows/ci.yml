@@ -1,85 +1,50 @@
-# =============================================================================
-# hai-framework Release Workflow
-# =============================================================================
-#
-# 触发条件：main 分支的 push 事件
-# 工作流程：
-#   1. 检测根 package.json 版本号是否已有对应 Tag
-#   2. 全量单元测试 + E2E 测试
-#   3. 同步版本号到所有子模块并提交
-#   4. 创建 Git Tag + GitHub Release（含分类变更日志）
-#   5. 发布公共包到 npm
-# =============================================================================
-
-name: Release
+name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
 
-# 同一时间只允许一个发布流程
+permissions:
+  contents: read
+
 concurrency:
-  group: release
-  cancel-in-progress: false
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # ===========================================================================
-  # 检测版本是否已发布（是否存在对应 Tag）
-  # ===========================================================================
-  detect-version:
-    name: Detect Version Change
+  quality:
+    name: Typecheck, Lint, Build, Test and E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 60
+    env:
+      CI: true
     outputs:
-      changed: ${{ steps.check.outputs.changed }}
-      version: ${{ steps.check.outputs.version }}
+      version_changed: ${{ steps.check_version.outputs.changed }}
+      version: ${{ steps.check_version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Check release tag existence
-        id: check
+        if: github.event_name == 'push'
+        id: check_version
         run: |
-          # 获取当前版本
           CURRENT=$(node -p "require('./package.json').version")
-          echo "Current version: $CURRENT"
-
           VERSION_TAG="v${CURRENT}"
+
+          echo "Current version: $CURRENT"
           echo "Checking tags: ${VERSION_TAG} (and fallback: ${CURRENT})"
 
           if git rev-parse "${VERSION_TAG}" >/dev/null 2>&1 || git rev-parse "${CURRENT}" >/dev/null 2>&1; then
-            echo "Tag for current version already exists, skip build/release"
+            echo "Tag for current version already exists, skip release"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "No tag found for current version, trigger build/release"
+            echo "No tag found for current version, trigger release after quality checks"
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
           fi
-
-  # ===========================================================================
-  # 测试
-  # ---------------------------------------------------------------------------
-  # 单元测试通过 Testcontainers 动态启动以下容器（需要 Docker 守护进程）：
-  #   - postgres:alpine          (reldb, iam)
-  #   - mysql:8                  (reldb)
-  #   - redis:alpine             (cache, iam)
-  #   - pgvector/pgvector:pg17   (vecdb)
-  #   - qdrant/qdrant:latest     (vecdb)
-  #   - minio/minio:latest       (storage)
-  #   - osixia/openldap:latest   (iam)
-  # ubuntu-latest 自带 Docker，无需额外安装。
-  # ===========================================================================
-  test:
-    name: Test
-    needs: detect-version
-    if: needs.detect-version.outputs.changed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      CI: true
-    steps:
-      - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v6
 
@@ -90,17 +55,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Pre-pull Testcontainer images
-        run: |
-          docker pull postgres:alpine &
-          docker pull mysql:8 &
-          docker pull redis:alpine &
-          docker pull pgvector/pgvector:pg17 &
-          docker pull qdrant/qdrant:latest &
-          docker pull minio/minio:latest &
-          docker pull osixia/openldap:latest &
-          wait
 
       - name: Typecheck
         run: pnpm typecheck
@@ -122,21 +76,29 @@ jobs:
           restore-keys: |
             playwright-${{ runner.os }}-
 
-      - name: Install Playwright browsers
+      - name: Install Playwright browser
         run: pnpm --filter admin-console exec playwright install --with-deps chrome
 
-      # 全部应用的 E2E（admin-console / corporate-website / h5-app / mobile-app）
-      # 与 CLI 脚手架门禁，任一失败即阻断发布——不再只跑 admin-console。
-      - name: E2E tests
+      - name: Example and scaffold E2E
         run: pnpm e2e
 
-  # ===========================================================================
-  # 同步版本 + 创建 Release + 发布 npm
-  # ===========================================================================
+      - name: Pack verified build artifacts
+        if: steps.check_version.outputs.changed == 'true'
+        run: tar -czf build-artifacts.tgz packages/*/dist
+
+      - name: Upload verified build artifacts
+        if: steps.check_version.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-${{ steps.check_version.outputs.version }}
+          path: build-artifacts.tgz
+          if-no-files-found: error
+          retention-days: 1
+
   release:
     name: Release
-    needs: [detect-version, test]
-    if: needs.detect-version.outputs.changed == 'true' && needs.test.result == 'success'
+    needs: quality
+    if: needs.quality.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -158,10 +120,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
+      - name: Download verified build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-build-${{ needs.quality.outputs.version }}
+          path: ${{ runner.temp }}/release-build
 
-      # ----- 同步版本号 -----
+      - name: Restore verified build artifacts
+        run: tar -xzf "${{ runner.temp }}/release-build/build-artifacts.tgz"
+
       - name: Sync versions
         run: node scripts/sync-versions.mjs
 
@@ -173,20 +140,17 @@ jobs:
           if git diff --staged --quiet; then
             echo "No version changes to commit"
           else
-            git commit -m "chore: sync version to v${{ needs.detect-version.outputs.version }} [skip ci]"
+            git commit -m "chore: sync version to v${{ needs.quality.outputs.version }} [skip ci]"
             git push || { echo "Error: push failed, branch may have moved. Re-run release from latest main."; exit 1; }
           fi
 
-      # ----- 创建 Tag + Release -----
       - name: Generate release notes
-        id: notes
         run: |
-          VERSION="v${{ needs.detect-version.outputs.version }}"
+          VERSION="v${{ needs.quality.outputs.version }}"
           REPO_URL="https://github.com/${{ github.repository }}"
           CONTRIBUTORS_URL="${REPO_URL}/graphs/contributors"
 
-          # 查找“当前提交之前”的最近发布 tag（按提交历史，不按字符串版本排序）
-          # 这样可以稳定得到“上一个版本 -> 当前版本”的差异，避免 alpha 预发布号排序失真。
+          # 按提交历史查找当前提交之前的最近发布 tag，避免预发布版本按字符串排序失真。
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           echo "Previous tag: $PREV_TAG"
 
@@ -198,7 +162,6 @@ jobs:
             COMPARE_SECTION="## 🔍 Full Changelog\n- [${PREV_TAG}...${VERSION}](${REPO_URL}/compare/${PREV_TAG}...${VERSION})\n\n"
           fi
 
-          # 收集 commits 并分类
           FEATURES=""
           FIXES=""
           REFACTORS=""
@@ -210,44 +173,40 @@ jobs:
 
           while IFS= read -r line; do
             [ -z "$line" ] && continue
-            # 提取 commit message（去掉 hash 前缀）
             MSG="${line#* }"
             case "$MSG" in
               feat:*|feat\(*) FEATURES="${FEATURES}\n- ${MSG}" ;;
-              fix:*|fix\(*)   FIXES="${FIXES}\n- ${MSG}" ;;
+              fix:*|fix\(*) FIXES="${FIXES}\n- ${MSG}" ;;
               refactor:*|refactor\(*) REFACTORS="${REFACTORS}\n- ${MSG}" ;;
               docs:*|docs\(*) DOCS="${DOCS}\n- ${MSG}" ;;
               perf:*|perf\(*) PERF="${PERF}\n- ${MSG}" ;;
               test:*|test\(*) TESTS="${TESTS}\n- ${MSG}" ;;
               chore:*|chore\(*|ci:*|ci\(*|build:*|build\(*) CHORES="${CHORES}\n- ${MSG}" ;;
-              *)              OTHER="${OTHER}\n- ${MSG}" ;;
+              *) OTHER="${OTHER}\n- ${MSG}" ;;
             esac
           done <<< "$(git log "$RANGE" --oneline --no-merges 2>/dev/null)"
 
-          # 组装 release notes
           NOTES=""
           [ -n "$FEATURES" ] && NOTES="${NOTES}## ✨ Features\n${FEATURES}\n\n"
-          [ -n "$FIXES" ]    && NOTES="${NOTES}## 🐛 Bug Fixes\n${FIXES}\n\n"
+          [ -n "$FIXES" ] && NOTES="${NOTES}## 🐛 Bug Fixes\n${FIXES}\n\n"
           [ -n "$REFACTORS" ] && NOTES="${NOTES}## ♻️ Refactoring\n${REFACTORS}\n\n"
-          [ -n "$PERF" ]     && NOTES="${NOTES}## ⚡ Performance\n${PERF}\n\n"
-          [ -n "$DOCS" ]     && NOTES="${NOTES}## 📖 Documentation\n${DOCS}\n\n"
-          [ -n "$TESTS" ]    && NOTES="${NOTES}## 🧪 Tests\n${TESTS}\n\n"
-          [ -n "$CHORES" ]   && NOTES="${NOTES}## 🔧 Chores\n${CHORES}\n\n"
-          [ -n "$OTHER" ]    && NOTES="${NOTES}## 📦 Other\n${OTHER}\n\n"
+          [ -n "$PERF" ] && NOTES="${NOTES}## ⚡ Performance\n${PERF}\n\n"
+          [ -n "$DOCS" ] && NOTES="${NOTES}## 📖 Documentation\n${DOCS}\n\n"
+          [ -n "$TESTS" ] && NOTES="${NOTES}## 🧪 Tests\n${TESTS}\n\n"
+          [ -n "$CHORES" ] && NOTES="${NOTES}## 🔧 Chores\n${CHORES}\n\n"
+          [ -n "$OTHER" ] && NOTES="${NOTES}## 📦 Other\n${OTHER}\n\n"
 
           if [ -z "$NOTES" ]; then
             NOTES="Initial release ${VERSION}"
           fi
 
           NOTES="${NOTES}${COMPARE_SECTION}## 🙌 Contributors\n- [View all contributors](${CONTRIBUTORS_URL})\n\n"
-
-          # 写入文件以避免多行变量问题（printf '%b' 比 echo -e 更可靠，不会误解释 commit 中的转义字符）
           printf '%b' "$NOTES" > /tmp/release-notes.md
           cat /tmp/release-notes.md
 
       - name: Create tag
         run: |
-          VERSION="v${{ needs.detect-version.outputs.version }}"
+          VERSION="v${{ needs.quality.outputs.version }}"
           if git rev-parse "$VERSION" >/dev/null 2>&1; then
             echo "Tag $VERSION already exists, skipping creation"
           else
@@ -258,8 +217,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.detect-version.outputs.version }}
-          name: v${{ needs.detect-version.outputs.version }}
+          tag_name: v${{ needs.quality.outputs.version }}
+          name: v${{ needs.quality.outputs.version }}
           body_path: /tmp/release-notes.md
           draft: false
           prerelease: false
@@ -269,7 +228,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # ----- 发布到 npm -----
       - name: Publish to npm
         run: |
           echo "Publishing public packages to npm..."
