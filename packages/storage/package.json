@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/storage",
   "type": "module",
-  "version": "0.1.0-alpha.37",
+  "version": "0.1.0-alpha.38",
   "description": "Hai Framework object storage module for S3-compatible and local backends.",
   "license": "Apache-2.0",
   "exports": {
