@@ -9,6 +9,7 @@ import type { AppType } from '../cli-types.js'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
+import Handlebars from 'handlebars'
 
 /**
  * 模块名到 Skill 目录名的映射
@@ -208,11 +209,12 @@ async function copyBridgeFiles(
   projectPath: string,
   overwrite = true,
   appType?: string,
+  projectName?: string,
 ): Promise<string[]> {
   const copiedFiles: string[] = []
 
   for (const file of BRIDGE_FILES) {
-    const src = await resolveBridgeSource(templatesDir, file.source, appType)
+    const src = await resolveBridgeSource(templatesDir, file.source, appType, projectName !== undefined)
     const dest = path.join(projectPath, file.destination)
 
     if (!src) {
@@ -223,7 +225,15 @@ async function copyBridgeFiles(
       continue
     }
 
-    await fse.copy(src, dest, { overwrite })
+    await fse.ensureDir(path.dirname(dest))
+    if (src.endsWith('.hbs')) {
+      const template = await fse.readFile(src, 'utf8')
+      const rendered = Handlebars.compile(template, { noEscape: true })({ projectName })
+      await fse.writeFile(dest, rendered, 'utf8')
+    }
+    else {
+      await fse.copy(src, dest, { overwrite })
+    }
     copiedFiles.push(file.destination)
   }
 
@@ -234,9 +244,11 @@ async function resolveBridgeSource(
   templatesDir: string,
   source: string,
   appType?: string,
+  allowTemplate = false,
 ): Promise<string | null> {
   const profile = appType && BRIDGE_PROFILE_REGEX.test(appType) ? appType : 'generic'
   const candidates = [
+    ...(allowTemplate ? [path.join(templatesDir, 'bridges', profile, `${source}.hbs`)] : []),
     path.join(templatesDir, 'bridges', profile, source),
     path.join(templatesDir, 'bridges', 'generic', source),
     path.join(templatesDir, source),
@@ -264,6 +276,7 @@ export async function generateSkillFiles(
   projectPath: string,
   _features: string[],
   appType?: string,
+  projectName?: string,
 ): Promise<string[]> {
   const templatesDir = getSkillTemplatesDir()
 
@@ -279,7 +292,7 @@ export async function generateSkillFiles(
   copiedFiles.push(...await copySkills(templatesDir, compatibleSkillNames, projectPath))
 
   // 复制桥接文件
-  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, true, appType))
+  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, true, appType, projectName))
 
   return copiedFiles
 }

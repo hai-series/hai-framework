@@ -341,7 +341,12 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     // 生成 Skill 文件
     const { generateSkillFiles } = await import('./cli-skill-templates.js')
-    await generateSkillFiles(projectPath, resolvedOptions.features, resolvedOptions.appType)
+    await generateSkillFiles(
+      projectPath,
+      resolvedOptions.features,
+      resolvedOptions.appType,
+      resolvedOptions.name,
+    )
 
     // 生成 README
     const appTypeLabel = APP_TYPES[resolvedOptions.appType].name

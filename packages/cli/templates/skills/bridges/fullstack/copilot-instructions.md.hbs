@@ -10,9 +10,9 @@
 
 ## 技术栈要点
 
-- Contract：`packages/<project>-contract` 定义 API contract、schema 与共享类型。
-- Fullstack 服务端：`packages/<project>-serv` 使用 `@h-ai/serv` 实现业务 API。
-- Shared：`packages/<project>-shared` 放跨端 Shell、i18n、主题和 typed API client。
+- Contract：`packages/{{projectName}}-contract` 定义 API contract、schema 与共享类型。
+- Fullstack 服务端：`packages/{{projectName}}-serv` 使用 `@h-ai/serv` 实现业务 API。
+- Shared：`packages/{{projectName}}-shared` 放跨端 Shell、i18n、主题和 typed API client。
 - Web：Svelte 5 + Vite 前端。
 - App：Svelte 5 + Vite + Capacitor 原生壳。
 - Desktop：Svelte 5 + Vite + Tauri v2 纯客户端壳。
@@ -31,7 +31,7 @@
 ## 开发流程
 
 1. 先检索相关 package、app、workspace 脚本、messages 和测试。
-2. 修改公共契约后，全局检索并更新所有受影响的 `packages/*`、`apps/*` 和 CLI 模板。
+2. 修改公共契约后，全局检索并更新 serv procedure、shared client、所有受影响的 `packages/*`、`apps/*` 和 e2e。
 3. 修改 App / Desktop 时，同时检查 Capacitor / Tauri v2 原生壳配置与打包脚本。
 4. 不要把未运行或失败的门禁写成“已通过”。
 
@@ -50,5 +50,5 @@ pnpm package
 ## 完成条件
 
 - README、`.agents/skills/**/SKILL.md`、i18n、测试与实现同步。
-- 修改公共契约后，全局检索并更新所有受影响的 `packages/*`、`apps/*` 和 CLI 模板。
+- 修改公共契约后，全局检索并更新所有受影响的 `packages/*`、`apps/*` 和 e2e。
 - 交付说明中列出门禁状态、受影响 package/app 与未完成项。

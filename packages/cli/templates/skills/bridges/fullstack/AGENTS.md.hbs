@@ -21,21 +21,21 @@
 
 ## 影响分析（M / L 任务必须输出）
 
-- 直接影响：哪些 `packages/<project>-contract`、`packages/<project>-serv`、`packages/<project>-shared`、`apps/<project>-*`、README、测试、打包脚本会变。
+- 直接影响：哪些 `packages/{{projectName}}-contract`、`packages/{{projectName}}-serv`、`packages/{{projectName}}-shared`、`apps/{{projectName}}-*`、README、测试、打包脚本会变。
 - 间接影响：哪些 workspace 依赖、typed client、Capacitor/Tauri 配置、i18n 编译和 e2e 需要同步。
 
 ## 项目概述
 
 本项目是 hai-framework fullstack 工作区：
 
-- `packages/<project>-contract`：前后端共享 API contract、Zod schema 与类型。
-- `packages/<project>-serv`：后端服务，使用 `@h-ai/serv` 实现业务 API。
-- `packages/<project>-shared`：跨端共享 UI Shell、主题、语言切换和 typed API client。
-- `apps/<project>-web`：Svelte 5 + Vite Web 前端。
-- `apps/<project>-app`：Svelte 5 + Vite + Capacitor 移动端 SPA。
-- `apps/<project>-desktop`：Svelte 5 + Vite + Tauri v2 桌面端。
+- `packages/{{projectName}}-contract`：前后端共享 API contract、Zod schema 与类型。
+- `packages/{{projectName}}-serv`：后端服务，使用 `@h-ai/serv` 实现业务 API。
+- `packages/{{projectName}}-shared`：跨端共享 UI Shell、主题、语言切换和 typed API client。
+- `apps/{{projectName}}-web`：Svelte 5 + Vite Web 前端。
+- `apps/{{projectName}}-app`：Svelte 5 + Vite + Capacitor 移动端 SPA。
+- `apps/{{projectName}}-desktop`：Svelte 5 + Vite + Tauri v2 桌面端。
 
-前端只做 UI 与请求编排；后端业务逻辑放在 `packages/<project>-serv`，不要写进前端组件。
+前端只做 UI 与请求编排；后端业务逻辑放在 `packages/{{projectName}}-serv`，不要写进前端组件。
 
 ## 架构边界
 
@@ -43,8 +43,8 @@
 - 公共 API 返回 `HaiResult<T>`，错误直接透传，不重新包装。
 - 用户可见文本走 i18n：shared 放跨端文案，各 app 放本端文案。
 - 移动端 token 使用 Capacitor 安全存储；Web 使用 httpOnly cookie；桌面端按 Tauri 安全边界配置。
-- Web / App / Desktop 前端不承载后端业务逻辑；服务端逻辑统一放在 `packages/<project>-serv`。
-- 共享 UI、typed API client、主题与语言切换放在 `packages/<project>-shared`。
+- Web / App / Desktop 前端不承载后端业务逻辑；服务端逻辑统一放在 `packages/{{projectName}}-serv`。
+- 共享 UI、typed API client、主题与语言切换放在 `packages/{{projectName}}-shared`。
 - 本样板默认不使用 `@h-ai/kit`；不要把 fullstack 后端逻辑写回 SvelteKit 式 `load` / route 模式。
 
 ## 工作流程
