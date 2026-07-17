@@ -16,7 +16,7 @@
     "check:leak-words": "node scripts/check-leak-words.mjs --staged",
     "check:skills": "node scripts/check-skill-contracts.mjs",
     "dev": "turbo run dev",
-    "e2e": "turbo run test:e2e --concurrency=1 --filter=@h-ai/cli --filter=admin-console --filter=corporate-website --filter=h5-app --filter=mobile-app",
+    "e2e": "turbo run test:e2e --concurrency=1 --filter=@h-ai/cli --filter=admin-console --filter=ai-playground --filter=corporate-website --filter=h5-app --filter=mobile-app",
     "test:release-local": "pnpm install --frozen-lockfile && CI=true pnpm typecheck && CI=true pnpm lint && CI=true pnpm build && CI=true pnpm test && pnpm --filter admin-console exec playwright install chrome && CI=true pnpm --filter admin-console test:e2e",
     "lint": "pnpm check:skills && turbo run lint",
     "lint:fix": "turbo run lint:fix",
