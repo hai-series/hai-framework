@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/api-client",
   "type": "module",
-  "version": "0.1.0-alpha.38",
+  "version": "0.1.0-alpha.39",
   "description": "Hai Framework universal HTTP client with Bearer token and API contract support.",
   "license": "Apache-2.0",
   "exports": {
