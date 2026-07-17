@@ -94,7 +94,7 @@ Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key �
 
 | 方法 | 说明 |
 | --- | --- |
-| `extract(messages, options?)` | 从对话提取记忆并存储 |
+| `extract(messages, options?)` | 从对话提取记忆并存储；`options.signal` 可取消事实抽取及 native 对账调用 |
 | `add(entry)` | 手动添加记忆 |
 | `get(memoryId, accessScope?)` / `update(memoryId, updates, accessScope?)` | 读取/更新（传 `accessScope: { objectId, scope? }` 做归属校验，不匹配→ `MEMORY_NOT_FOUND`） |
 | `recall(query, options?)` | 检索相关记忆 |

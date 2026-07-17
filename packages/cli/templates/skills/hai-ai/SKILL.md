@@ -113,7 +113,7 @@ memory:
 | 工具执行 | `registry.execute(tc, { signal, objectId, sessionId, deadline?, timeoutMs?, authorize? })` / `executeAll(...)` | Registry/单次授权必须同时通过；默认串行，支持取消/超时；只有确认无副作用时才 `parallel: true` |
 | MCP 服务 | `createMcpServer(...)` | 按需连接 HTTP/SSE/Stdio transport |
 | Embedding | `ai.embedding.embedText(text)` | 批量用 `embedBatch` |
-| 记忆 | `ai.memory.extract/recall/injectMemories` | 用 `objectId` 做主体隔离，`scope` 做业务作用域隔离；scope 隔离越细，`candidateMultiplier` 调大以防漏召回 |
+| 记忆 | `ai.memory.extract/recall/injectMemories` | `extract(..., { signal })` 可取消整条提取链；用 `objectId` 做主体隔离，`scope` 做业务作用域隔离；scope 隔离越细，`candidateMultiplier` 调大以防漏召回 |
 | 记忆作用域 | `ai.memory.scoped({ objectId, scope })` | **多租户推荐入口**：所有操作自动绑定 objectId/scope（含归属校验）；`clear` 仅清作用域内 |
 | 记忆管理 | `ai.memory.admin.clearAll({ confirm: true })` | 唯一的全局清空入口（需显式确认）；`ai.memory.clear()` 空过滤会被拒绝，防误清全局 |
 | 角色人格 | `ai.persona.save/get/compose` | 定义 AI 身份（systemPrompt + traits），`compose` 组合系统提示词；按 `objectId` 隔离多租户（不传默认 `system` 平台角色），`scope: { personaId }` 关联长期记忆 |

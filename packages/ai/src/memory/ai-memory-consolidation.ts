@@ -262,6 +262,7 @@ export async function extractAndConsolidate(
     objectId: options?.objectId,
     systemPrompt: options?.systemPrompt ?? deps.systemPrompt,
     tempModel: options?.tempModel,
+    signal: options?.signal,
   })
   if (!extractResult.success)
     return extractResult
@@ -299,6 +300,7 @@ export async function extractAndConsolidate(
       },
     ],
     temperature: 0.1,
+    signal: options?.signal,
   })
   if (!consolidationResult.success) {
     return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(consolidationResult.error.message) } }), consolidationResult.error)

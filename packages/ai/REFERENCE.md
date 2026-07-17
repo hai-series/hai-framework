@@ -71,7 +71,7 @@ Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key �
 
 ## Memory
 
-- `extract(messages, options?)`：从对话提取记忆并存储。
+- `extract(messages, options?)`：从对话提取记忆并存储；`options.signal` 可取消事实抽取及 native 对账调用。
 - `add(entry)`：手动添加记忆。
 - `get(memoryId, accessScope?)` / `update(memoryId, updates, accessScope?)`：读取/更新。
 - `recall(query, options?)`：检索相关记忆。

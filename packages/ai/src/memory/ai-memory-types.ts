@@ -124,6 +124,8 @@ export interface MemoryExtractOptions {
    * 避免回退到全局 .env 配置。优先级高于全局 config.models 查找。
    */
   tempModel?: TempModelConfig
+  /** 取消整条记忆提取链（包括事实抽取与 native 对账 LLM 调用） */
+  signal?: AbortSignal
 }
 
 // ─── 检索选项 ───

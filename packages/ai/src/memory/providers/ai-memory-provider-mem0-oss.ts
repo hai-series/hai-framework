@@ -298,6 +298,7 @@ async function extractMemories(context: Mem0OssContext, messages: ChatMessage[],
     systemPrompt: options?.systemPrompt ?? context.systemPrompt,
     objectId,
     tempModel: options?.tempModel,
+    signal: options?.signal,
   })
   if (!extracted.success)
     return extracted

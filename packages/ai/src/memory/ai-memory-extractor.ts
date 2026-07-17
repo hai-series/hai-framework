@@ -69,6 +69,7 @@ function formatMessages(messages: ChatMessage[]): string {
  * @param options.systemPrompt - 自定义提取用的系统提示词
  * @returns 提取到的记忆输入列表
  * @param options.tempModel - 临时模型配置
+ * @param options.signal - 取消信号
  */
 export async function extractMemories(
   llm: LLMOperations,
@@ -80,6 +81,7 @@ export async function extractMemories(
     objectId?: string
     systemPrompt?: string
     tempModel?: TempModelConfig
+    signal?: AbortSignal
   },
 ): Promise<HaiResult<MemoryEntryInput[]>> {
   const conversationText = formatMessages(messages)
@@ -101,6 +103,7 @@ export async function extractMemories(
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.1,
+      signal: options?.signal,
     })
 
     if (!chatResult.success) {

@@ -406,6 +406,20 @@ describe('extractMemories', () => {
     })
   })
 
+  it('将取消信号透传给提取 LLM', async () => {
+    const mockLLM = createMockLLM([{ content: '[]' }])
+    const controller = new AbortController()
+
+    const result = await extractMemories(mockLLM, [
+      { role: 'user' as const, content: '请记住这条信息。' },
+    ], { signal: controller.signal })
+
+    expect(result.success).toBe(true)
+    expect(mockLLM.chat).toHaveBeenCalledWith(expect.objectContaining({
+      signal: controller.signal,
+    }))
+  })
+
   it('lLM 调用失败返回错误', async () => {
     const failingLLM: LLMOperations = {
       chat: vi.fn(async () => ({
@@ -469,6 +483,28 @@ describe('createNativeMemoryOperations', () => {
     if (listResult.success) {
       expect(listResult.data).toHaveLength(1)
     }
+  })
+
+  it('extract 将同一取消信号透传给抽取与对账调用', async () => {
+    const llm = createMockLLM([
+      { content: JSON.stringify([
+        { content: '提取到的记忆', type: 'fact', importance: 0.8 },
+      ]) },
+      { content: JSON.stringify({ memory: [
+        { text: '提取到的记忆', type: 'fact', importance: 0.8, event: 'ADD' },
+      ] }) },
+    ])
+    const controller = new AbortController()
+    const ops = createTestMemoryOps(defaultConfig, llm, createMockEmbedding())
+
+    const result = await ops.extract([
+      { role: 'user' as const, content: '请记住这条信息。' },
+    ], { signal: controller.signal })
+
+    expect(result.success).toBe(true)
+    expect(llm.chat).toHaveBeenCalledTimes(2)
+    for (const [request] of vi.mocked(llm.chat).mock.calls)
+      expect(request.signal).toBe(controller.signal)
   })
 
   it('extract 支持通过 options.systemPrompt 覆盖模块默认提示词', async () => {
