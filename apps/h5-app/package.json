@@ -1,7 +1,7 @@
 {
   "name": "h5-app",
   "type": "module",
-  "version": "0.1.0-alpha.37",
+  "version": "0.1.0-alpha.38",
   "private": true,
   "description": "hai Agent Framework - 移动端拍照识别示例应用",
   "keywords": [
