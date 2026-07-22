@@ -6,8 +6,10 @@
 
 import type { CompressConfig, SummaryConfig, TokenConfig } from '../src/ai-config.js'
 import type { ChatMessage, LLMOperations } from '../src/llm/ai-llm-types.js'
+import type { TokenOperations } from '../src/token/ai-token-types.js'
 
 import { describe, expect, it, vi } from 'vitest'
+import { HaiAIError } from '../src/ai-types.js'
 import { createCompressOperations } from '../src/compress/ai-compress-functions.js'
 import { createSummaryOperations } from '../src/summary/ai-summary-functions.js'
 import { createTokenOperations } from '../src/token/ai-token-functions.js'
@@ -62,8 +64,8 @@ function createOps(
   compressConfig: CompressConfig,
   llm: LLMOperations,
   modelMaxTokens: number,
+  tokenOps: TokenOperations = createTokenOperations(defaultTokenConfig),
 ) {
-  const tokenOps = createTokenOperations(defaultTokenConfig)
   const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
   return createCompressOperations(compressConfig, tokenOps, summaryOps, modelMaxTokens)
 }
@@ -115,14 +117,14 @@ describe('compress tryCompress', () => {
 
     const result = await ops.tryCompress(messages, {
       strategy: 'sliding-window',
-      maxTokens: 500,
+      maxTokens: 650,
       preserveLastN: 4,
     })
 
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.removedCount).toBeGreaterThan(0)
-      expect(result.data.compressedTokens).toBeLessThanOrEqual(500)
+      expect(result.data.compressedTokens).toBeLessThanOrEqual(650)
       expect(result.data.messages.length).toBeLessThan(messages.length)
     }
   })
@@ -151,6 +153,100 @@ describe('compress tryCompress', () => {
     }
   })
 
+  it('sliding-window 对长对话只线性扫描消息载荷', async () => {
+    const llm = createMockLLM([])
+    const baseTokenOps = createTokenOperations(defaultTokenConfig)
+    let inspectedMessageCount = 0
+    const tokenOps: TokenOperations = {
+      estimateText: baseTokenOps.estimateText,
+      estimateMessages(messages) {
+        inspectedMessageCount += messages.length
+        return baseTokenOps.estimateMessages(messages)
+      },
+    }
+    const ops = createOps(defaultCompressConfig, llm, 8000, tokenOps)
+    const messages = generateMessages(200, 40)
+
+    const result = await ops.tryCompress(messages, {
+      strategy: 'sliding-window',
+      maxTokens: 2400,
+      preserveLastN: 2,
+    })
+
+    expect(result.success).toBe(true)
+    expect(inspectedMessageCount).toBeLessThan(1000)
+  })
+
+  it('sliding-window 不拆分 assistant tool_calls 与并行 tool results', async () => {
+    const llm = createMockLLM([])
+    const ops = createOps(defaultCompressConfig, llm, 8000)
+    const messages: ChatMessage[] = [
+      { role: 'user', content: `Old question ${'x'.repeat(4000)}` },
+      { role: 'assistant', content: `Old answer ${'x'.repeat(4000)}` },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call-owner',
+            type: 'function',
+            function: { name: 'lookup_owner', arguments: '{"taskId":"task-1"}' },
+          },
+          {
+            id: 'call-calendar',
+            type: 'function',
+            function: { name: 'lookup_calendar', arguments: '{"ownerId":"owner-1"}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'call-owner', content: '{"owner":"Alice"}' },
+      { role: 'tool', tool_call_id: 'call-calendar', content: '{"available":true}' },
+      { role: 'user', content: 'Use these results to finish the assignment.' },
+    ]
+
+    const result = await ops.tryCompress(messages, {
+      strategy: 'sliding-window',
+      maxTokens: 500,
+      preserveLastN: 3,
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      const retained = result.data.messages
+      expect(retained.some(message => message.role === 'assistant' && message.tool_calls?.length === 2)).toBe(true)
+      expect(retained.filter(message => message.role === 'tool').map(message => message.tool_call_id)).toEqual([
+        'call-owner',
+        'call-calendar',
+      ])
+      expect(retained.at(-1)).toEqual({ role: 'user', content: 'Use these results to finish the assignment.' })
+    }
+  })
+
+  it('sliding-window 在最新用户消息自身超预算时返回显式预算错误', async () => {
+    const llm = createMockLLM([])
+    const ops = createOps(defaultCompressConfig, llm, 8000)
+    const latestUserMessage: ChatMessage = {
+      role: 'user',
+      content: `Required current input ${'x'.repeat(4000)}`,
+    }
+    const messages: ChatMessage[] = [
+      { role: 'user', content: `Old question ${'x'.repeat(4000)}` },
+      { role: 'assistant', content: `Old answer ${'x'.repeat(4000)}` },
+      latestUserMessage,
+    ]
+
+    const result = await ops.tryCompress(messages, {
+      strategy: 'sliding-window',
+      maxTokens: 200,
+      preserveLastN: 1,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAIError.CONTEXT_BUDGET_EXCEEDED.code)
+    }
+  })
+
   it('summary 策略生成摘要替换旧消息', async () => {
     const llm = createMockLLM([{
       content: 'Summary: The user asked about TypeScript and received explanations.',
@@ -161,7 +257,7 @@ describe('compress tryCompress', () => {
 
     const result = await ops.tryCompress(messages, {
       strategy: 'summary',
-      maxTokens: 500,
+      maxTokens: 800,
       preserveLastN: 4,
     })
 

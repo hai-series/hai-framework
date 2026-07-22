@@ -224,6 +224,8 @@ if (!compressed.success) return compressed
 const answer = await ai.rag.query('核心架构是什么？', { sources: ['docs'], topK: 5 })
 ```
 
+`tryCompress` 的成功结果一定满足 `compressedTokens <= maxTokens`。如果永久 system 指令、最近消息或最新 user 输入自身已超过预算，会返回 `HaiAIError.CONTEXT_BUDGET_EXCEEDED`；调用方应停止本次模型请求或提高预算，不能继续发送原始超长消息。
+
 知识库流程：
 
 ```ts

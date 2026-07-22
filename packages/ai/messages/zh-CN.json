@@ -64,6 +64,7 @@
   "ai_personaSaveFailed": "角色保存失败：{error}",
 
   "ai_contextCompressFailed": "上下文压缩失败：{error}",
+  "ai_contextBudgetExceeded": "受保护上下文占用 {tokens} 个 Token，无法压缩到 {budget} Token 的预算内。",
   "ai_contextSummarizeFailed": "上下文总结失败：{error}",
   "ai_contextTokenEstimateFailed": "Token 估算失败：{error}",
   "ai_turnNotFound": "对话轮次 '{turnId}' 不存在",

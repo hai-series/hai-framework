@@ -63,47 +63,15 @@ export function estimateMessagesTokens(messages: ChatMessage[], tokenRatio = 0.2
     // 每条消息固定开销（角色标记 + 分隔符）
     total += 4
 
-    const content = getMessageContent(msg)
-    total += estimateTextTokens(content, tokenRatio)
+    // 预算必须覆盖实际发送的完整协议载荷，而不只是 content 文本。
+    // tool_calls.arguments、reasoning_content、name 与多模态字段都可能占用大量 token。
+    total += estimateTextTokens(JSON.stringify(msg), tokenRatio)
   }
 
   // 回复开始标记
   total += 2
 
   return total
-}
-
-/**
- * 提取消息的文本内容
- */
-function getMessageContent(msg: ChatMessage): string {
-  if (msg.role === 'assistant') {
-    const c = msg.content
-    if (typeof c === 'string')
-      return c
-    if (Array.isArray(c))
-      return (c as Array<{ type: string, text?: string }>).filter(p => p.type === 'text').map(p => p.text ?? '').join(' ')
-    return ''
-  }
-  if (msg.role === 'tool') {
-    const c = msg.content
-    if (typeof c === 'string')
-      return c
-    if (Array.isArray(c))
-      return (c as Array<{ type: string, text?: string }>).filter(p => p.type === 'text').map(p => p.text ?? '').join(' ')
-    return ''
-  }
-  // system / user
-  const content = (msg as { content: string | Array<{ type: string, text?: string }> }).content
-  if (typeof content === 'string')
-    return content
-  if (Array.isArray(content)) {
-    return content
-      .filter((c): c is { type: 'text', text: string } => c.type === 'text')
-      .map(c => c.text)
-      .join(' ')
-  }
-  return ''
 }
 
 /**

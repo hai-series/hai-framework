@@ -21,6 +21,137 @@ import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'compress' })
+const CONVERSATION_SUMMARY_PREFIX = '[Conversation Summary]'
+
+type MessageProtocolUnit = ChatMessage[]
+
+/** 确保压缩操作只在结果确实满足调用方预算时返回成功。 */
+function completeCompression(result: CompressResult, maxTokens: number): HaiResult<CompressResult> {
+  if (result.compressedTokens > maxTokens) {
+    return err(
+      HaiAIError.CONTEXT_BUDGET_EXCEEDED,
+      aiM('ai_contextBudgetExceeded', {
+        params: {
+          tokens: result.compressedTokens,
+          budget: maxTokens,
+        },
+      }),
+    )
+  }
+
+  return ok(result)
+}
+
+/** 识别框架生成的可替换摘要，避免后续压缩把它当成永久 system 指令累积。 */
+function isGeneratedConversationSummary(message: ChatMessage): boolean {
+  return message.role === 'system'
+    && typeof message.content === 'string'
+    && message.content.startsWith(CONVERSATION_SUMMARY_PREFIX)
+}
+
+/** 将永久 system 指令与可再次摘要的对话载荷分开。 */
+function partitionSummaryMessages(messages: ChatMessage[], preserveSystem: boolean): {
+  systemMessages: ChatMessage[]
+  conversationMessages: ChatMessage[]
+} {
+  const isPreservedSystem = (message: ChatMessage): boolean => {
+    return preserveSystem && message.role === 'system' && !isGeneratedConversationSummary(message)
+  }
+  return {
+    systemMessages: messages.filter(isPreservedSystem),
+    conversationMessages: messages.filter(message => !isPreservedSystem(message)),
+  }
+}
+
+/**
+ * 将非系统消息切分为不可拆分的协议单元
+ *
+ * 普通消息各自形成一个单元；包含 tool_calls 的 assistant 消息与其后连续、匹配的
+ * tool 结果共同形成一个单元，避免压缩时产生孤立的工具调用或工具结果。
+ *
+ * @param messages - 待切分的非系统消息列表
+ * @returns 保持原始顺序的消息协议单元列表
+ */
+function unitizeNonSystemMessages(messages: ChatMessage[]): MessageProtocolUnit[] {
+  const units: MessageProtocolUnit[] = []
+
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index]
+    if (message?.role !== 'assistant' || !message.tool_calls?.length) {
+      if (message) {
+        units.push([message])
+      }
+      continue
+    }
+
+    const toolCallIds = new Set(message.tool_calls.map(toolCall => toolCall.id))
+    const unit: ChatMessage[] = [message]
+    let nextIndex = index + 1
+    while (nextIndex < messages.length) {
+      const nextMessage = messages[nextIndex]
+      if (nextMessage?.role !== 'tool' || !toolCallIds.has(nextMessage.tool_call_id)) {
+        break
+      }
+      unit.push(nextMessage)
+      nextIndex += 1
+    }
+    units.push(unit)
+    index = nextIndex - 1
+  }
+
+  return units
+}
+
+/**
+ * 将消息协议单元还原为连续消息列表
+ *
+ * @param units - 保持原始顺序的消息协议单元列表
+ * @returns 按单元与单元内顺序展开的消息列表
+ */
+function flattenUnits(units: MessageProtocolUnit[]): ChatMessage[] {
+  return units.flatMap(unit => unit)
+}
+
+/**
+ * 划分可移除前缀与受保护尾部
+ *
+ * preserveLastN 表示至少保留的消息数量；包含最新 user 的协议尾部始终受保护。
+ * 若数量边界落在工具协议单元内部，则保留整个单元。
+ *
+ * @param messages - 待划分的非系统消息列表
+ * @param preserveLastN - 至少保留的尾部消息数量
+ * @returns 可移除协议单元与受保护协议单元
+ */
+function splitProtectedSuffix(messages: ChatMessage[], preserveLastN: number): {
+  removableUnits: MessageProtocolUnit[]
+  protectedUnits: MessageProtocolUnit[]
+} {
+  const units = unitizeNonSystemMessages(messages)
+  let protectedStart = units.length
+  let protectedMessageCount = 0
+  const requiredMessageCount = Math.max(0, preserveLastN)
+
+  while (protectedStart > 0 && protectedMessageCount < requiredMessageCount) {
+    protectedStart -= 1
+    protectedMessageCount += units[protectedStart]?.length ?? 0
+  }
+
+  let latestUserUnitIndex = -1
+  for (let index = units.length - 1; index >= 0; index -= 1) {
+    if (units[index]?.some(message => message.role === 'user')) {
+      latestUserUnitIndex = index
+      break
+    }
+  }
+  if (latestUserUnitIndex >= 0) {
+    protectedStart = Math.min(protectedStart, latestUserUnitIndex)
+  }
+
+  return {
+    removableUnits: units.slice(0, protectedStart),
+    protectedUnits: units.slice(protectedStart),
+  }
+}
 
 /**
  * 创建 Compress 操作接口
@@ -39,6 +170,9 @@ export function createCompressOperations(
 ): CompressOperations {
   /**
    * 计算有效的 maxTokens
+   *
+   * @param optionMaxTokens - 单次压缩显式指定的 Token 上限
+   * @returns 本次压缩使用的 Token 上限
    */
   function resolveMaxTokens(optionMaxTokens?: number): number {
     const fromOption = optionMaxTokens ?? config.defaultMaxTokens
@@ -49,6 +183,15 @@ export function createCompressOperations(
 
   /**
    * 滑动窗口压缩
+   *
+   * 从受保护尾部开始，按完整协议单元向前扩展窗口。受保护消息自身超过预算时仍原样保留，
+   * 最终由 tryCompress 返回显式预算错误，禁止静默丢弃当前用户输入或谎报成功。
+   *
+   * @param messages - 待压缩的完整消息列表
+   * @param maxTokens - 压缩后的 Token 预算
+   * @param preserveSystem - 是否无条件保留 system 消息
+   * @param preserveLastN - 至少保留的尾部非系统消息数量
+   * @returns 压缩后的消息列表与移除消息数量
    */
   function slidingWindow(
     messages: ChatMessage[],
@@ -68,40 +211,54 @@ export function createCompressOperations(
       }
     }
 
-    const preserved = nonSystemMessages.slice(-preserveLastN)
-    const result = [...systemMessages, ...preserved]
-    const currentTokens = token.estimateMessages(result)
+    const { removableUnits, protectedUnits } = splitProtectedSuffix(nonSystemMessages, preserveLastN)
+    const emptyMessageTokens = token.estimateMessages([])
+    const estimateUnitTokens = (unit: MessageProtocolUnit): number => {
+      return Math.max(0, token.estimateMessages(unit) - emptyMessageTokens)
+    }
+    let retainedTokens = token.estimateMessages(systemMessages)
+      + protectedUnits.reduce((total, unit) => total + estimateUnitTokens(unit), 0)
+    let retainedStart = removableUnits.length
+    let retainedUnits = [...protectedUnits]
+    let finalMessages = [...systemMessages, ...flattenUnits(retainedUnits)]
 
-    if (currentTokens <= maxTokens) {
+    // 受保护尾部即使自身超过预算也不能静默丢弃；调用方可据 compressedTokens 作显式处理。
+    if (retainedTokens > maxTokens) {
       return {
-        messages: result,
-        removedCount: nonSystemMessages.length - preserved.length,
+        messages: finalMessages,
+        removedCount: flattenUnits(removableUnits).length,
       }
     }
 
-    // 从最新的消息开始逆向添加
-    let finalMessages = [...systemMessages]
-    let tokens = token.estimateMessages(finalMessages)
-    const addable: ChatMessage[] = []
-
-    for (let i = nonSystemMessages.length - 1; i >= 0; i--) {
-      const msgTokens = token.estimateMessages([nonSystemMessages[i]])
-      if (tokens + msgTokens > maxTokens)
+    // 按完整协议单元从后向前扩展连续窗口。
+    for (let index = removableUnits.length - 1; index >= 0; index -= 1) {
+      const unit = removableUnits[index]
+      if (!unit) {
+        continue
+      }
+      const unitTokens = estimateUnitTokens(unit)
+      if (retainedTokens + unitTokens > maxTokens) {
         break
-      addable.unshift(nonSystemMessages[i])
-      tokens += msgTokens
+      }
+      retainedTokens += unitTokens
+      retainedStart = index
     }
 
-    finalMessages = [...systemMessages, ...addable]
+    retainedUnits = [...removableUnits.slice(retainedStart), ...protectedUnits]
+    finalMessages = [...systemMessages, ...flattenUnits(retainedUnits)]
 
     return {
       messages: finalMessages,
-      removedCount: nonSystemMessages.length - addable.length,
+      removedCount: nonSystemMessages.length - flattenUnits(retainedUnits).length,
     }
   }
 
   /**
    * 压缩消息列表
+   *
+   * @param messages - 待压缩的完整消息列表
+   * @param options - 本次压缩策略与预算选项
+   * @returns 包含压缩消息、Token 统计与移除数量的 HaiResult
    */
   async function tryCompress(messages: ChatMessage[], options?: CompressOptions): Promise<HaiResult<CompressResult>> {
     const strategy = options?.strategy ?? config.defaultStrategy
@@ -134,27 +291,27 @@ export function createCompressOperations(
         const compressedTokens = token.estimateMessages(compressed)
 
         logger.trace('Sliding window compression completed', { originalTokens, compressedTokens, removedCount })
-        return ok({
+        return completeCompression({
           messages: compressed,
           originalTokens,
           compressedTokens,
           removedCount,
-        })
+        }, maxTokens)
       }
 
       if (strategy === 'summary') {
-        const systemMessages = preserveSystem ? messages.filter(m => m.role === 'system') : []
-        const nonSystem = messages.filter(m => m.role !== 'system' || !preserveSystem)
-        const preserved = nonSystem.slice(-preserveLastN)
-        const toSummarize = nonSystem.slice(0, nonSystem.length - preserveLastN)
+        const { systemMessages, conversationMessages } = partitionSummaryMessages(messages, preserveSystem)
+        const { removableUnits, protectedUnits } = splitProtectedSuffix(conversationMessages, preserveLastN)
+        const preserved = flattenUnits(protectedUnits)
+        const toSummarize = flattenUnits(removableUnits)
 
         if (toSummarize.length === 0) {
-          return ok({
+          return completeCompression({
             messages: [...messages],
             originalTokens,
             compressedTokens: originalTokens,
             removedCount: 0,
-          })
+          }, maxTokens)
         }
 
         const summaryResult = await summary.generate(toSummarize, { model: options?.summaryModel })
@@ -164,20 +321,20 @@ export function createCompressOperations(
         const summaryText = summaryResult.data
         const summaryMessage: ChatMessage = {
           role: 'system',
-          content: `[Conversation Summary]\n${summaryText}`,
+          content: `${CONVERSATION_SUMMARY_PREFIX}\n${summaryText}`,
         }
 
         const compressed = [...systemMessages, summaryMessage, ...preserved]
         const compressedTokens = token.estimateMessages(compressed)
 
         logger.trace('Summary compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
-        return ok({
+        return completeCompression({
           messages: compressed,
           originalTokens,
           compressedTokens,
           removedCount: toSummarize.length,
           summary: summaryText,
-        })
+        }, maxTokens)
       }
 
       // hybrid：先滑动窗口，如果仍超限则摘要
@@ -190,19 +347,19 @@ export function createCompressOperations(
       const windowTokens = token.estimateMessages(windowResult)
 
       if (windowTokens <= maxTokens) {
-        return ok({
+        return completeCompression({
           messages: windowResult,
           originalTokens,
           compressedTokens: windowTokens,
           removedCount: windowRemoved,
-        })
+        }, maxTokens)
       }
 
       // 滑动窗口不够，对被移除的部分生成摘要
-      const systemMessages = preserveSystem ? messages.filter(m => m.role === 'system') : []
-      const nonSystem = messages.filter(m => m.role !== 'system' || !preserveSystem)
-      const preservedMessages = nonSystem.slice(-preserveLastN)
-      const toSummarize = nonSystem.slice(0, nonSystem.length - preserveLastN)
+      const { systemMessages, conversationMessages } = partitionSummaryMessages(messages, preserveSystem)
+      const { removableUnits, protectedUnits } = splitProtectedSuffix(conversationMessages, preserveLastN)
+      const preservedMessages = flattenUnits(protectedUnits)
+      const toSummarize = flattenUnits(removableUnits)
 
       if (toSummarize.length > 0) {
         const summaryResult = await summary.generate(toSummarize, { model: options?.summaryModel })
@@ -212,28 +369,28 @@ export function createCompressOperations(
         const summaryText = summaryResult.data
         const summaryMessage: ChatMessage = {
           role: 'system',
-          content: `[Conversation Summary]\n${summaryText}`,
+          content: `${CONVERSATION_SUMMARY_PREFIX}\n${summaryText}`,
         }
 
         const compressed = [...systemMessages, summaryMessage, ...preservedMessages]
         const compressedTokens = token.estimateMessages(compressed)
 
         logger.trace('Hybrid compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
-        return ok({
+        return completeCompression({
           messages: compressed,
           originalTokens,
           compressedTokens,
           removedCount: toSummarize.length,
           summary: summaryText,
-        })
+        }, maxTokens)
       }
 
-      return ok({
+      return completeCompression({
         messages: windowResult,
         originalTokens,
         compressedTokens: windowTokens,
         removedCount: windowRemoved,
-      })
+      }, maxTokens)
     }
     catch (error) {
       logger.error('Context compression failed', { error })
