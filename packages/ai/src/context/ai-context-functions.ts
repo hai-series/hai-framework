@@ -283,7 +283,7 @@ export function createContextOperations(
 
         if (!compressResult.success) {
           logger.warn('Auto-compression failed, keeping original messages', { error: compressResult.error })
-          return ok(undefined)
+          return compressResult
         }
 
         if (compressResult.data.summary) {
@@ -660,7 +660,9 @@ export function createContextOperations(
 
         try {
           // 追加用户消息
-          await manager.addMessage({ role: 'user', content: message })
+          const addResult = await manager.addMessage({ role: 'user', content: message })
+          if (!addResult.success)
+            throw addResult.error
 
           // 获取消息列表
           const messagesResult = manager.getMessages()

@@ -64,6 +64,7 @@
   "ai_personaSaveFailed": "Persona save failed: {error}",
 
   "ai_contextCompressFailed": "Context compression failed: {error}",
+  "ai_contextBudgetExceeded": "Protected context uses {tokens} tokens and cannot fit within the {budget}-token compression budget.",
   "ai_contextSummarizeFailed": "Context summarization failed: {error}",
   "ai_contextTokenEstimateFailed": "Token estimation failed: {error}",
   "ai_turnNotFound": "Conversation turn '{turnId}' not found",

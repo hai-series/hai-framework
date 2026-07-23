@@ -80,10 +80,12 @@ export interface CompressOperations {
    * 尝试压缩消息列表，使其不超过指定 Token 预算
    *
    * 如果当前 token 数未超限则直接返回（不压缩），因此命名为 tryCompress。
+   * 如果受保护的 system、最近消息或最新 user 输入自身已超过预算，返回
+   * `HaiAIError.CONTEXT_BUDGET_EXCEEDED`，不会删除受保护内容或返回超预算的成功结果。
    *
    * @param messages - 消息列表
    * @param options - 压缩选项
-   * @returns 压缩结果
+   * @returns 满足预算的压缩结果，或无法满足预算时的显式错误
    */
   tryCompress: (messages: ChatMessage[], options?: CompressOptions) => Promise<HaiResult<CompressResult>>
 }

@@ -187,7 +187,7 @@ describe('context createManager', () => {
 
     const managerResult = ops.createManager({
       compress: {
-        maxTokens: 100,
+        maxTokens: 150,
         strategy: 'summary',
         preserveLastN: 2,
         auto: true,
@@ -201,8 +201,8 @@ describe('context createManager', () => {
 
     // 追加多条消息触发压缩
     for (let i = 0; i < 10; i++) {
-      await manager.addMessage({ role: 'user', content: `Message ${i}: ${'x'.repeat(100)}` })
-      await manager.addMessage({ role: 'assistant', content: `Reply ${i}: ${'y'.repeat(100)}` })
+      expect((await manager.addMessage({ role: 'user', content: `Message ${i}: ${'x'.repeat(100)}` })).success).toBe(true)
+      expect((await manager.addMessage({ role: 'assistant', content: `Reply ${i}: ${'y'.repeat(100)}` })).success).toBe(true)
     }
 
     const messages = manager.getMessages()
@@ -211,6 +211,34 @@ describe('context createManager', () => {
       // 应该比原始 20 条消息少
       expect(messages.data.length).toBeLessThan(20)
     }
+  })
+
+  it('受保护消息自身超预算时向调用方返回预算错误并保留原始消息', async () => {
+    const llm = createMockLLM([])
+    const ops = createOps(defaultCompressConfig, llm, 8000)
+    const managerResult = ops.createManager({
+      compress: {
+        maxTokens: 50,
+        strategy: 'sliding-window',
+        preserveLastN: 1,
+        auto: true,
+      },
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const message = { role: 'user' as const, content: `Required current input ${'x'.repeat(1000)}` }
+    const addResult = await managerResult.data.addMessage(message)
+
+    expect(addResult.success).toBe(false)
+    if (!addResult.success) {
+      expect(addResult.error.code).toBe(HaiAIError.CONTEXT_BUDGET_EXCEEDED.code)
+    }
+    expect(managerResult.data.getMessages()).toEqual(expect.objectContaining({
+      success: true,
+      data: [message],
+    }))
   })
 
   it('getTokenUsage 返回当前 token 和预算', async () => {
@@ -491,6 +519,32 @@ describe('context chat / chatStream', () => {
     if (!result.success) {
       expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
+  })
+
+  it('chatStream 在当前输入无法压入预算时不调用 LLM', async () => {
+    const llm = createMockLLM([])
+    const ops = createOpsWithDeps(llm)
+    const managerResult = ops.createManager({
+      compress: {
+        maxTokens: 50,
+        strategy: 'sliding-window',
+        preserveLastN: 1,
+      },
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const consumeStream = async (): Promise<void> => {
+      for await (const _event of managerResult.data.chatStream(`Required current input ${'x'.repeat(1000)}`)) {
+        // No event should be emitted before the budget error.
+      }
+    }
+
+    await expect(consumeStream()).rejects.toMatchObject({
+      code: HaiAIError.CONTEXT_BUDGET_EXCEEDED.code,
+    })
+    expect(llm.chatStream).not.toHaveBeenCalled()
   })
 
   it('chat 含 systemPrompt 时消息列表包含 system', async () => {
