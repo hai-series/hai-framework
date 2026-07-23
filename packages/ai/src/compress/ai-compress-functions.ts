@@ -22,6 +22,8 @@ import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'compress' })
 const CONVERSATION_SUMMARY_PREFIX = '[Conversation Summary]'
+/** 框架摘要的保留参与者名；不得改用 content 前缀识别，避免与调用方指令冲突。 */
+const CONVERSATION_SUMMARY_NAME = 'hai_internal_conversation_summary_v1'
 
 type MessageProtocolUnit = ChatMessage[]
 
@@ -45,8 +47,7 @@ function completeCompression(result: CompressResult, maxTokens: number): HaiResu
 /** 识别框架生成的可替换摘要，避免后续压缩把它当成永久 system 指令累积。 */
 function isGeneratedConversationSummary(message: ChatMessage): boolean {
   return message.role === 'system'
-    && typeof message.content === 'string'
-    && message.content.startsWith(CONVERSATION_SUMMARY_PREFIX)
+    && message.name === CONVERSATION_SUMMARY_NAME
 }
 
 /** 将永久 system 指令与可再次摘要的对话载荷分开。 */
@@ -321,6 +322,7 @@ export function createCompressOperations(
         const summaryText = summaryResult.data
         const summaryMessage: ChatMessage = {
           role: 'system',
+          name: CONVERSATION_SUMMARY_NAME,
           content: `${CONVERSATION_SUMMARY_PREFIX}\n${summaryText}`,
         }
 
@@ -369,6 +371,7 @@ export function createCompressOperations(
         const summaryText = summaryResult.data
         const summaryMessage: ChatMessage = {
           role: 'system',
+          name: CONVERSATION_SUMMARY_NAME,
           content: `${CONVERSATION_SUMMARY_PREFIX}\n${summaryText}`,
         }
 
