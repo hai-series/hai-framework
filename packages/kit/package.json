@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/kit",
   "type": "module",
-  "version": "0.1.0-alpha.39",
+  "version": "0.1.0-alpha.40",
   "description": "Hai Framework SvelteKit integration module.",
   "license": "Apache-2.0",
   "exports": {
