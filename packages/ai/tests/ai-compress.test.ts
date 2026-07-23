@@ -272,6 +272,121 @@ describe('compress tryCompress', () => {
     }
   })
 
+  it('summary 保留内容以摘要前缀开头的调用方 system 消息', async () => {
+    const llm = createMockLLM([{ content: 'Compressed conversation.' }])
+    const ops = createOps(defaultCompressConfig, llm, 8000)
+    const callerSystemMessage: ChatMessage = {
+      role: 'system',
+      content: '[Conversation Summary]\nThis is a permanent caller instruction.',
+    }
+    const messages: ChatMessage[] = [callerSystemMessage, ...generateMessages(20, 500)]
+
+    const result = await ops.tryCompress(messages, {
+      strategy: 'summary',
+      maxTokens: 800,
+      preserveSystem: true,
+      preserveLastN: 4,
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.messages).toContainEqual(callerSystemMessage)
+    }
+  })
+
+  it('summary 仅按框架 name 标记替换旧摘要', async () => {
+    const llm = createMockLLM([{ content: 'Replacement summary.' }])
+    const ops = createOps(defaultCompressConfig, llm, 8000)
+    const existingSummary: ChatMessage = {
+      role: 'system',
+      name: 'hai_internal_conversation_summary_v1',
+      content: 'Existing framework summary without a display prefix.',
+    }
+    const messages: ChatMessage[] = [existingSummary, ...generateMessages(20, 500)]
+
+    const result = await ops.tryCompress(messages, {
+      strategy: 'summary',
+      maxTokens: 800,
+      preserveSystem: true,
+      preserveLastN: 4,
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      const generatedSummaries = result.data.messages.filter(message =>
+        message.role === 'system' && message.name === 'hai_internal_conversation_summary_v1',
+      )
+      expect(generatedSummaries).toHaveLength(1)
+      expect(generatedSummaries[0]?.content).toBe('[Conversation Summary]\nReplacement summary.')
+    }
+  })
+
+  it('summary 多次压缩只保留最新的框架摘要', async () => {
+    const llm = createMockLLM([
+      { content: 'First summary.' },
+      { content: 'Second summary.' },
+    ])
+    const ops = createOps(defaultCompressConfig, llm, 8000)
+    const firstResult = await ops.tryCompress(generateMessages(20, 500), {
+      strategy: 'summary',
+      maxTokens: 800,
+      preserveLastN: 4,
+    })
+    expect(firstResult.success).toBe(true)
+    if (!firstResult.success)
+      return
+
+    const secondResult = await ops.tryCompress(
+      [...firstResult.data.messages, ...generateMessages(20, 500)],
+      {
+        strategy: 'summary',
+        maxTokens: 800,
+        preserveLastN: 4,
+      },
+    )
+
+    expect(secondResult.success).toBe(true)
+    if (secondResult.success) {
+      const generatedSummaries = secondResult.data.messages.filter(message =>
+        message.role === 'system' && message.name === 'hai_internal_conversation_summary_v1',
+      )
+      expect(generatedSummaries).toHaveLength(1)
+      expect(generatedSummaries[0]?.content).toBe('[Conversation Summary]\nSecond summary.')
+    }
+  })
+
+  it('hybrid 摘要降级保留与摘要前缀冲突的调用方 system 消息', async () => {
+    const llm = createMockLLM([{ content: 'Replacement summary.' }])
+    const ops = createOps(defaultCompressConfig, llm, 8000)
+    const callerSystemMessage: ChatMessage = {
+      role: 'system',
+      content: '[Conversation Summary]\nThis caller instruction must remain permanent.',
+    }
+    const existingSummary: ChatMessage = {
+      role: 'system',
+      name: 'hai_internal_conversation_summary_v1',
+      content: `[Conversation Summary]\n${'x'.repeat(2000)}`,
+    }
+
+    const result = await ops.tryCompress(
+      [callerSystemMessage, existingSummary, ...generateMessages(6, 50)],
+      {
+        strategy: 'hybrid',
+        maxTokens: 300,
+        preserveSystem: true,
+        preserveLastN: 2,
+      },
+    )
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.messages).toContainEqual(callerSystemMessage)
+      expect(result.data.messages.filter(message =>
+        message.role === 'system' && message.name === 'hai_internal_conversation_summary_v1',
+      )).toHaveLength(1)
+    }
+  })
+
   it('hybrid 策略先窗口后摘要', async () => {
     const llm = createMockLLM([{
       content: 'Hybrid summary of older messages.',
