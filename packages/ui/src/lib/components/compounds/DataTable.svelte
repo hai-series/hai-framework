@@ -342,7 +342,7 @@
             {#each columns as col (String(col.key))}
               <td style={getColumnStyle(col)} class={getAlignClass(col.align)}>
                 {#if cell}
-                  <div class='min-w-0 overflow-hidden' style={getContentStyle(col)}>
+                  <div class='min-w-0' style={getContentStyle(col)}>
                     {@render cell(item, String(col.key))}
                   </div>
                 {:else}
