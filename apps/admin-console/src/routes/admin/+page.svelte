@@ -178,7 +178,7 @@
         </div>
 
         <div class='divide-y divide-base-content/5'>
-          {#each data.recentActivity as activity (`${activity.createdAt}:${activity.action}:${activity.username ?? ''}`)}
+          {#each data.recentActivity as activity (activity.id)}
             <div class='flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0'>
               <div class='shrink-0 w-7 h-7 rounded-full bg-base-content/5 flex items-center justify-center mt-0.5'>
                 <span class='icon-[tabler--user] size-3.5 text-base-content/40'></span>
