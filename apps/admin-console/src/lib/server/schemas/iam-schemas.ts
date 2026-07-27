@@ -36,6 +36,10 @@ export const ListUsersQuerySchema = PaginationQuerySchema.extend({
     .enum(['true', 'false'])
     .transform(v => v === 'true')
     .optional(),
+  /** IAM 用户列表允许排序的领域字段。 */
+  sortBy: z.enum(['username', 'email', 'displayName', 'enabled', 'createdAt']).optional(),
+  /** 服务端排序方向。 */
+  sortDirection: z.enum(['asc', 'desc']).optional(),
 })
 
 /** 创建用户请求 Schema */

@@ -19,6 +19,7 @@ import type {
   UpdateCurrentUserInput,
   User,
   UserOperations,
+  UserSortField,
 } from './iam-user-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
@@ -35,6 +36,24 @@ import { createDbUserRepository } from './iam-user-repository-user.js'
 import { toUser } from './iam-user-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'user' })
+
+/**
+ * 用户列表排序字段到数据库列的受控映射。
+ *
+ * 排序列不能直接使用调用方传入的字符串拼接 SQL；该白名单同时保证 API 契约与存储列名解耦。
+ */
+const USER_SORT_COLUMNS: Record<UserSortField, string> = {
+  /** 用户名列。 */
+  username: 'username',
+  /** 邮箱列。 */
+  email: 'email',
+  /** 用户显示名称列。 */
+  displayName: 'display_name',
+  /** 账号启用状态列。 */
+  enabled: 'enabled',
+  /** 用户创建时间列。 */
+  createdAt: 'created_at',
+}
 
 // ─── 子功能依赖 ───
 
@@ -398,11 +417,15 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
       }
 
       const where = conditions.length > 0 ? conditions.join(' AND ') : undefined
+      /** 未指定排序时保持既有的创建时间倒序，避免改变调用方历史结果。 */
+      const sortColumn = options?.sortBy ? USER_SORT_COLUMNS[options.sortBy] : USER_SORT_COLUMNS.createdAt
+      /** 仅接受声明的 asc；其余情况均为默认 desc，防止将外部输入拼入 SQL。 */
+      const sortDirection = options?.sortBy && options.sortDirection === 'asc' ? 'ASC' : 'DESC'
 
       const usersResult = await userRepository.findPage({
         where,
         params: params.length > 0 ? params : undefined,
-        orderBy: 'created_at DESC',
+        orderBy: `${sortColumn} ${sortDirection}`,
         pagination: options ? { page: options.page, pageSize: options.pageSize } : undefined,
       })
       if (!usersResult.success) {

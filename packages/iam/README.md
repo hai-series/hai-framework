@@ -375,7 +375,14 @@ await iam.user.updateCurrentUser(accessToken, { displayName: '新名称' })
 await iam.user.changeCurrentUserPassword(accessToken, 'oldPass', 'newPass')
 
 // 管理操作
-const users = await iam.user.listUsers({ page: 1, pageSize: 20, search: 'alice', include: ['roles'] })
+const users = await iam.user.listUsers({
+  page: 1,
+  pageSize: 20,
+  search: 'alice',
+  sortBy: 'createdAt',
+  sortDirection: 'desc',
+  include: ['roles'],
+})
 await iam.user.updateUser(userId, { enabled: false }) // 禁用用户 → 自动清除会话
 await iam.user.deleteUser(userId) // 删除用户 → 事务清除角色关联
 
@@ -395,6 +402,7 @@ const valid = iam.user.validatePassword('weak')
 - **防枚举攻击**：`requestPasswordReset` 对不存在的邮箱返回 `ok(undefined)` 而非错误
 - **validatePassword 是同步方法**：这是 `UserOperations` 中唯一的同步方法，其余均为异步
 - **搜索模糊匹配**：`listUsers` 支持按用户名、邮箱、手机号、显示名称模糊搜索，LIKE 通配符已转义
+- **服务端排序**：`listUsers` 仅允许 `username`、`email`、`displayName`、`enabled`、`createdAt` 排序；字段经白名单映射，未指定时默认按创建时间倒序
 
 ---
 

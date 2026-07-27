@@ -10,6 +10,12 @@ import type { Role } from '../authz/iam-authz-types.js'
 
 // ─── 用户查询选项 ───
 
+/** 用户列表允许的服务端排序字段。 */
+export type UserSortField = 'username' | 'email' | 'displayName' | 'enabled' | 'createdAt'
+
+/** 用户列表排序方向。 */
+export type UserSortDirection = 'asc' | 'desc'
+
 /**
  * 用户列表查询选项
  */
@@ -18,6 +24,10 @@ export interface ListUsersOptions extends PaginationOptionsInput {
   search?: string
   /** 按启用状态过滤，不传则返回全部 */
   enabled?: boolean
+  /** 服务端排序字段；未指定时保持按创建时间倒序的历史行为。 */
+  sortBy?: UserSortField
+  /** 服务端排序方向；仅在指定 sortBy 时生效，默认 desc。 */
+  sortDirection?: UserSortDirection
   /** 包含关联数据（如 'roles' 表示同时返回用户角色列表） */
   include?: ('roles')[]
 }

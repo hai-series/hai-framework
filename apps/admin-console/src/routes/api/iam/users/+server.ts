@@ -16,20 +16,22 @@ import { kit } from '@h-ai/kit'
  *
  * 需要权限：user:list
  *
- * 支持分页、搜索关键字和启用状态过滤。
+ * 支持分页、搜索关键字、启用状态过滤和白名单字段排序。
  *
  * 查询参数：
  * - page: 页码（默认 1）
  * - pageSize: 每页数量（默认 20）
  * - search: 搜索关键字（模糊匹配用户名/邮箱）
  * - enabled: 启用状态过滤（true/false，不传则返回全部）
+ * - sortBy: 排序字段（username/email/displayName/enabled/createdAt）
+ * - sortDirection: 排序方向（asc/desc）
  */
 export const GET = kit.handler(async ({ url, locals }) => {
   kit.guard.require(locals.session, 'user:list')
 
-  const { page, pageSize, search, enabled } = kit.validate.query(url, ListUsersQuerySchema)
+  const { page, pageSize, search, enabled, sortBy, sortDirection } = kit.validate.query(url, ListUsersQuerySchema)
 
-  const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'] })
+  const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'], sortBy, sortDirection })
   if (!usersResult.success) {
     return kit.response.internalError(usersResult.error.message)
   }

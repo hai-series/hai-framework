@@ -38,6 +38,8 @@
       search: string
       status: string
       role: string
+      sortBy: string
+      sortDirection: string
     }
   }
 
@@ -66,8 +68,18 @@
       search: data.search || undefined,
       status: data.status || undefined,
       role: data.role || undefined,
+      sortBy: data.sortBy || undefined,
+      sortDirection: data.sortDirection || undefined,
     },
   })
+
+  /** 用户列表后端实际支持的排序列；角色为当前页关联数据，不能伪装成服务端排序。 */
+  const userSortableColumns = $derived([
+    { key: 'username', label: m.iam_users_col_username() },
+    { key: 'email', label: m.iam_users_col_email() },
+    { key: 'status', label: m.iam_users_col_status() },
+    { key: 'created_at', label: m.iam_users_col_created_at() },
+  ])
 
   // 提交前把 roles（显示名）替换为 roleIds（实际 ID）
   async function handleAfterSubmit() {
@@ -87,6 +99,7 @@
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
   form={{ variant: 'drawer', drawerWidth: '40rem' }}
   density='compact'
+  sortableColumns={userSortableColumns}
   pagination={{ showSizeChanger: true, showJumper: true }}
   onaftersubmit={handleAfterSubmit}
   {nav}

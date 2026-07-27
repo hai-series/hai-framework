@@ -471,6 +471,20 @@ describe('iam.user', () => {
           expect(result.data.items.some(user => user.username === username)).toBe(true)
         }
       })
+
+      it('应按指定字段和方向执行服务端排序', async () => {
+        const result = await getIam().user.listUsers({
+          page: 1,
+          pageSize: 100,
+          sortBy: 'username',
+          sortDirection: 'desc',
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          const usernames = result.data.items.map(user => user.username)
+          expect(usernames).toEqual([...usernames].sort((left, right) => right.localeCompare(left)))
+        }
+      })
     })
 
     // =========================================================================
