@@ -58,6 +58,9 @@ export interface CrudPaginationConfig {
   showFirstLast?: boolean
 }
 
+/** CrudPage 工具栏风格；toolbar 是默认的图标弹层布局。 */
+export type CrudToolbarStyle = 'filter-bar' | 'toolbar'
+
 /** CrudPage 初始列表数据（由 +page.server.ts load 返回） */
 export interface CrudPageData<T = Record<string, unknown>> {
   items: T[]
@@ -91,6 +94,10 @@ export interface CrudPageProps<T = Record<string, unknown>> extends DataAttribut
         align?: 'left' | 'center' | 'right'
         render?: (value: unknown, item: Record<string, unknown>) => string
         placeholder?: string | (() => string)
+        /** 日期范围起始值 key；默认 `${id}Start`。 */
+        startKey?: string
+        /** 日期范围结束值 key；默认 `${id}End`。 */
+        endKey?: string
         defaultValue?: unknown
         order?: number
       }>
@@ -132,14 +139,30 @@ export interface CrudPageProps<T = Record<string, unknown>> extends DataAttribut
   density?: CrudDensity
   /** 列表行点击是否打开详情（默认 true） */
   rowClickDetail?: boolean
+  /** 是否显示默认页面标题栏；需要把标题放进工具栏左侧时设为 false。 */
+  showHeader?: boolean
   /** 列表行操作按钮插槽 */
   listItemActions?: Snippet<[T]>
+  /** 自定义表格单元格插槽；参数依次为行记录和列 key。 */
+  tableCell?: Snippet<[T, string]>
+  /** 点击表格行的回调。 */
+  onrowclick?: (item: T) => void
   /** 编辑表单额外字段插槽 */
   editFormExtra?: Snippet<[T | null, 'create' | 'edit']>
   /** 详情额外内容插槽 */
   detailExtra?: Snippet<[T]>
   /** 页面头部额外操作区插槽 */
   headerActions?: Snippet
+  /** 工具栏风格；toolbar 使用图标弹层，filter-bar 使用平铺筛选栏。 */
+  toolbarStyle?: CrudToolbarStyle
+  /** toolbar 风格下工具栏左侧内容插槽，可放置页面标题或说明。 */
+  toolbarLeading?: Snippet
+  /** 工具栏右侧自定义操作插槽。 */
+  toolbarActions?: Snippet
+  /** 卡片列表项渲染插槽；存在时替代数据表格，分页和滚动容器保持一致。 */
+  card?: Snippet<[T]>
+  /** 可排序列；为空时默认使用全部列表列。 */
+  sortableColumns?: Array<{ key: string, label: string }>
   /** 删除前钩子（返回 false 取消） */
   onbeforedelete?: (item: T) => Promise<boolean> | boolean
   /** 提交成功后钩子 */

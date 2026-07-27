@@ -468,8 +468,13 @@ const p = usePlatform()
 | `pagination.showJumper` / `pagination.showTotal` | 跳页输入 / 总数（默认开启） |
 | `pagination.showPageInfo` / `pagination.showFirstLast` | 页码文案 / 首页末页按钮（默认开启；紧凑视图可关闭） |
 | `density` | 列表密度：`'normal'`（默认）或 `'compact'`；仅影响列表行、行内操作、分页与创建/编辑/详情表单 |
+| `toolbarStyle` | `'toolbar'`（图标弹层，默认）或 `'filter-bar'`（平铺筛选栏） |
+| `showHeader` / `toolbarLeading` | 关闭默认页头并在工具栏左侧放置标题或说明 |
+| `toolbarActions` | 工具栏业务操作 snippet |
+| `card` | 卡片列表项渲染 snippet；仍复用分页和独立滚动容器 |
+| `sortableColumns` | 可执行服务端排序的列；为空时使用全部列表列 |
 
-注意：分页栏会始终显示，不再因数据量小而自动隐藏。
+注意：`CrudPage` 会占满父级可用高度；表格无论是否有数据都会撑满剩余空间，仅数据区滚动，表头和分页栏固定。
 
 ### CrudPage 推荐用法
 
@@ -481,6 +486,7 @@ const p = usePlatform()
   form={{ variant: 'modal', modalSize: 'lg' }}
   pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
   density='compact'
+  sortableColumns={[{ key: 'createdAt', label: '创建时间' }]}
   {nav}
 />
 ```

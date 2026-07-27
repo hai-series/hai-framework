@@ -13,6 +13,7 @@ export type CrudFieldType
     | 'number'
     | 'boolean'
     | 'date'
+    | 'date-range'
     | 'datetime'
     | 'email'
     | 'url'
@@ -89,6 +90,10 @@ export interface CrudFieldDef {
   render?: (value: unknown, item: Record<string, unknown>) => string
   /** 占位符 */
   placeholder?: CrudText
+  /** 日期范围起始值的查询参数名；仅 date-range 字段使用，默认 `${id}Start` */
+  startKey?: string
+  /** 日期范围结束值的查询参数名；仅 date-range 字段使用，默认 `${id}End` */
+  endKey?: string
   /** 默认值（新建时） */
   defaultValue?: unknown
   /** 排列权重（数值越小越靠前） */

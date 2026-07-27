@@ -70,6 +70,7 @@ declare global {
   const Skeleton: typeof import('@h-ai/ui')['Skeleton']
   const Steps: typeof import('@h-ai/ui')['Steps']
   const SwipeCell: typeof import('@h-ai/ui')['SwipeCell']
+  const TableToolbar: typeof import('@h-ai/ui')['TableToolbar']
   const Tabs: typeof import('@h-ai/ui')['Tabs']
   const TagInput: typeof import('@h-ai/ui')['TagInput']
   const Timeline: typeof import('@h-ai/ui')['Timeline']
