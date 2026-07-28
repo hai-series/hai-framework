@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/api-service-contract",
   "type": "module",
-  "version": "0.1.0-alpha.40",
+  "version": "0.1.0-alpha.41",
   "description": "Shared API Service application contract for hai-framework apps.",
   "license": "Apache-2.0",
   "exports": {
