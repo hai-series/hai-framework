@@ -3,6 +3,7 @@
   import type { LabStatus } from '$lib/ai-lab-types.js'
   import AsrPanel from '$lib/components/AsrPanel.svelte'
   import ChatPanel from '$lib/components/ChatPanel.svelte'
+  import ImagePanel from '$lib/components/ImagePanel.svelte'
   import MemoryPanel from '$lib/components/MemoryPanel.svelte'
   import MicAsrPanel from '$lib/components/MicAsrPanel.svelte'
   import TtsPanel from '$lib/components/TtsPanel.svelte'
@@ -50,7 +51,7 @@
     </div>
   </section>
 
-  <section class='mb-6 grid grid-cols-2 gap-3 md:grid-cols-5' aria-label={m.status_title()}>
+  <section class='mb-6 grid grid-cols-2 gap-3 md:grid-cols-6' aria-label={m.status_title()}>
     <div class='col-span-2 rounded-2xl border border-base-content/8 bg-base-100/80 p-4 md:col-span-1'>
       <div class='text-xs text-base-content/45'>{m.status_connection()}</div>
       <div class='mt-2 flex items-center gap-2 font-semibold' data-testid='connection-status'>
@@ -74,6 +75,10 @@
       <div class='text-xs text-base-content/45'>{m.status_memory()}</div>
       <div class='mt-2 font-semibold'>{m.status_memory_ephemeral()}</div>
     </div>
+    <div class='rounded-2xl border border-base-content/8 bg-base-100/80 p-4'>
+      <div class='text-xs text-base-content/45'>{m.status_image()}</div>
+      <div class='mt-2 truncate font-mono text-sm font-semibold'>{status?.imageModel ?? '—'}</div>
+    </div>
   </section>
 
   {#if statusError}
@@ -84,6 +89,7 @@
     <ChatPanel {profileId} onmemorychange={() => memoryRefreshToken += 1} />
     <aside class='space-y-5'>
       <MemoryPanel {profileId} refreshToken={memoryRefreshToken} />
+      <ImagePanel />
       <TtsPanel voices={status?.ttsVoices ?? []} />
       <MicAsrPanel />
       <AsrPanel />

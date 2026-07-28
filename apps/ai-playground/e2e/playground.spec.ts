@@ -9,7 +9,7 @@ interface MemoryMock {
   createdAt: number
 }
 
-test('可在一个页面操作 LLM、Memory、TTS 与 ASR', async ({ page }) => {
+test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({ page }) => {
   const memories: MemoryMock[] = []
 
   await page.route('**/api/**', async (route) => {
@@ -27,6 +27,8 @@ test('可在一个页面操作 LLM、Memory、TTS 与 ASR', async ({ page }) => 
             llmModel: 'demo-llm',
             ttsModel: 'demo-tts',
             asrModel: 'demo-asr',
+            imageProvider: 'pollinations',
+            imageModel: 'zimage',
             ttsVoices: ['demo_voice'],
             memoryMode: 'ephemeral',
           },
@@ -62,6 +64,15 @@ test('可在一个页面操作 LLM、Memory、TTS 与 ASR', async ({ page }) => 
         status: 200,
         contentType: 'audio/wav',
         body: Buffer.from('RIFFmockWAVE'),
+      })
+      return
+    }
+
+    if (url.pathname === '/api/image') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XwM8WQAAAABJRU5ErkJggg==', 'base64'),
       })
       return
     }
@@ -110,6 +121,14 @@ test('可在一个页面操作 LLM、Memory、TTS 与 ASR', async ({ page }) => 
   await page.getByTestId('memory-add').click()
   await expect(page.getByTestId('memory-list')).toContainText('我偏好简洁的中文回答')
 
+  await page.getByTestId('image-references').setInputFiles({
+    name: 'reference.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgo=', 'base64'),
+  })
+  await page.getByTestId('image-run').click()
+  await expect(page.getByTestId('image-result')).toBeVisible()
+
   await page.getByTestId('tts-run').click()
   await expect(page.getByTestId('tts-audio')).toBeVisible()
 
@@ -156,6 +175,8 @@ for (const secondUseMemory of [true, false]) {
               llmModel: 'demo-llm',
               ttsModel: 'demo-tts',
               asrModel: 'demo-asr',
+              imageProvider: 'pollinations',
+              imageModel: 'zimage',
               ttsVoices: ['demo_voice'],
               memoryMode: 'ephemeral',
             },

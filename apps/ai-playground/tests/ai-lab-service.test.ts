@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { rememberExchange, sendChat } from '../src/lib/services/ai-lab.js'
+import { generateImage, rememberExchange, sendChat } from '../src/lib/services/ai-lab.js'
 
 const request = {
   profileId: 'demo-user',
@@ -84,5 +84,26 @@ describe('aI Playground client service', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/chat/remember', expect.objectContaining({
       signal: controller.signal,
     }))
+  })
+
+  it('returns the generated image blob without converting its bytes', async () => {
+    const bytes = new Uint8Array([137, 80, 78, 71])
+    const fetchMock = vi.fn().mockResolvedValue(new Response(bytes, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const reference = new File([new Uint8Array([137, 80, 78, 71])], 'reference.png', { type: 'image/png' })
+    const result = await generateImage({ prompt: 'A fox', width: 1024, height: 1024, referenceImages: [reference] })
+
+    expect(result.type).toBe('image/png')
+    expect(new Uint8Array(await result.arrayBuffer())).toEqual(bytes)
+    expect(fetchMock).toHaveBeenCalledWith('/api/image', expect.objectContaining({ method: 'POST' }))
+    const form = fetchMock.mock.calls[0]?.[1]?.body as FormData
+    expect(form.get('prompt')).toBe('A fox')
+    expect(form.get('width')).toBe('1024')
+    expect(form.get('height')).toBe('1024')
+    expect(form.getAll('referenceImages')).toEqual([reference])
   })
 })

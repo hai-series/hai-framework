@@ -9,7 +9,7 @@
 - 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @h-ai/ui 场景组件
 - 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志
 - 🧩 **UI Gallery** — 69+ @h-ai/ui 组件的交互式展览（4 分类标签页）
-- 🔧 **模块演示** — Core、DB、Cache、Storage、AI、Crypto 交互式示例
+- 🔧 **模块演示** — Core、DB、Cache、Storage、AI（含多厂商文生图）、Crypto 交互式示例
 - 🌍 **国际化** — Paraglide 集成，189+ message keys，中英文实时切换
 - 📱 **响应式布局** — Sidebar + TopBar 自适应，移动端友好
 - 🧩 **组件自动导入** — 页面中使用 @h-ai/ui 组件无需显式 import
@@ -63,7 +63,7 @@ pnpm --filter admin-console preview
 - 🎭 角色管理：角色 CRUD、权限绑定（`/admin/iam/roles`）
 - 🛡️ 权限管理：权限 CRUD、审计日志（`/admin/iam/permissions`）
 - 🧩 UI Gallery：69+ 组件交互式展示（4 标签页）（`/admin/ui-gallery`）
-- 🔧 模块演示：Core / DB / Cache / Storage / AI / Crypto 演示（`/admin/modules`）
+- 🔧 模块演示：Core / DB / Cache / Storage / AI（LLM、Audio、Image）/ Crypto 演示（`/admin/modules`）
 - ⚙️ 设置：主题切换（32 套）、语言切换（`/admin/settings`）
 
 ## ⚙️ 配置

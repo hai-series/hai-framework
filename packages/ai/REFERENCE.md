@@ -15,6 +15,7 @@
 - `ai.knowledge`：需要 `ai.init()`；依赖 LLM + Embedding + Store + datapipe。
 - `ai.context`：需要 `ai.init()`；依赖 LLM + Store，可选 Memory/RAG/Reasoning。
 - `ai.audio`：需要 `ai.init()`；依赖 `audio.models` 及对应平台凭据（无需 Store）。
+- `ai.image`：需要 `ai.init()`；依赖 `image.models` 及对应平台凭据（无需 Store）。
 - `ai.a2a`：需要 `ai.init()`；依赖 A2A 配置 + executor。
 
 关闭必须使用 `await ai.close()`，这样才能确定释放自定义 `AIStoreProvider.close()`。
@@ -156,6 +157,25 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 错误语义：`AbortSignal` 取消 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`，厂商错误 → `AUDIO_UPSTREAM_ERROR`。平台不支持的输入方式 → `AUDIO_UNSUPPORTED_INPUT`（不伪装实时）。浏览器客户端严格区分正常结束、取消与异常断连：取消抛 `AUDIO_CANCELLED`、`end` 前断连抛 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不返回未完成的部分音频。Provider 为内部实现，不从根入口导出。
 
+## Image
+
+- `generate({ prompt, model?, size?, referenceImages?, signal? })`：文本提示和可选参考图生成图片，返回 `HaiResult<{ images: GeneratedImage[] }>`。
+- `ReferenceImage` 只含 `data: Uint8Array` 与 `mimeType: string`；空字节或非 `image/*` MIME 会在调用厂商前返回 `IMAGE_INVALID_REQUEST`。
+- `GeneratedImage` 仅含图片 `Uint8Array`、MIME 类型与可选实际宽高；厂商原始响应、Provider 和临时 URL 不属于公共契约。
+- 配置：`image.models: [{ id, provider, model, apiKey?, baseUrl?, workspaceId?, timeout? }]` + `generateModel`。
+
+| Provider       | 支持模型                   | 官方请求差异                                                                                  | 原始响应          | 框架处理       |
+| -------------- | -------------------------- | --------------------------------------------------------------------------------------------- | ----------------- | -------------- |
+| `openai`       | GPT Image 1/1.5/2          | 无参考图走 JSON `/images/generations`；有参考图走 multipart `/images/edits`，字段为 `image[]` | `data[].b64_json` | 解码为字节     |
+| `google`       | Gemini Image / Nano Banana | `models/:generateContent`；参考图映射为 `inlineData` parts，提示词为 text part                | `inlineData`      | 解码为字节     |
+| `qwen`         | Qwen-Image 2.0/3.0         | 百炼 multimodal-generation；参考图映射为 `{ image: data URL }`，末尾追加 text part            | 24 小时临时 URL   | 立即下载       |
+| `seedream`     | Seedream 4.x/5.x           | 方舟 `images/generations`；参考图映射为顶层 `image: string[]` Data URL                        | Base64 或 URL     | 解码或立即下载 |
+| `pollinations` | `zimage` 等免费额度模型    | 无参考图走二进制 GET；有参考图走 OpenAI-compatible multipart `/v1/images/edits`               | 二进制或 Base64   | 读取或解码     |
+
+官方资料：[OpenAI Image generation](https://developers.openai.com/api/docs/guides/image-generation)、[Google Gemini image generation](https://ai.google.dev/gemini-api/docs/generate-content/image-generation)、[Qwen-Image API](https://help.aliyun.com/en/model-studio/qwen-image-api)、[Qwen-Image 3.0 API](https://help.aliyun.com/en/model-studio/qwen-image-generation-and-editing-api-reference)、[Seedream 图片生成 API](https://www.volcengine.com/docs/82379/1541523)、[Pollinations API](https://gen.pollinations.ai/docs)。
+
+Pollinations 提供免费额度的开发者 API Key，额度与可用模型以其控制台为准；它不是无限量或无认证服务。其社区文生图模型可能只支持纯文本，参考图必须选择支持 edits 的模型（如文档列出的 `nanobanana`、`seedream`、`klein` 等）。OpenAI API 的 Free tier 不支持 GPT Image。各厂商计费、模型名和预览状态会变化，生产配置应锁定已验证的模型 ID。
+
 ## A2A
 
 - `registerExecutor(executor)`：注册 Agent executor。
@@ -170,6 +190,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `hai:ai:010-012`：初始化，含 `NOT_INITIALIZED` / `CONFIGURATION_ERROR` / `INIT_IN_PROGRESS`。
 - `hai:ai:020-033`：Rerank / File。
 - `hai:ai:050-059`：Audio（`AUDIO_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UNSUPPORTED_INPUT` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CONNECTION_FAILED` / `TIMEOUT` / `INPUT_TOO_LARGE` / `CANCELLED`）。
+- `hai:ai:060-065`：Image（`IMAGE_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CANCELLED`）。
 - `hai:ai:100-107`：LLM / 历史记录。
 - `hai:ai:200-204`：MCP。
 - `hai:ai:300-302`：Embedding。

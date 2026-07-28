@@ -129,6 +129,21 @@ export async function synthesize(input: {
   return response.blob()
 }
 
+/** 文生图：返回可直接预览/下载的图片 Blob */
+export async function generateImage(input: { prompt: string, width: number, height: number, referenceImages?: File[] }): Promise<Blob> {
+  const formData = new FormData()
+  formData.set('prompt', input.prompt)
+  formData.set('width', String(input.width))
+  formData.set('height', String(input.height))
+  input.referenceImages?.forEach(image => formData.append('referenceImages', image))
+  const response = await fetch('/api/image', { method: 'POST', body: formData })
+  if (!response.ok) {
+    const envelope = await response.json() as ApiEnvelope<never>
+    throw new LabRequestError(envelope.error?.message ?? `HTTP ${response.status}`, envelope.error?.code)
+  }
+  return response.blob()
+}
+
 /** 语音识别（一次性）：上传音频文件返回识别文本 */
 export function transcribe(file: File, language: 'auto' | 'zh' | 'en'): Promise<{ text: string }> {
   const formData = new FormData()

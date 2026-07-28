@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { ChatRequestSchema, MAX_AUDIO_BYTES, MemoryAddRequestSchema, RememberRequestSchema, TtsRequestSchema } from '../src/lib/ai-lab-types.js'
+import { ChatRequestSchema, ImageRequestSchema, MAX_AUDIO_BYTES, MAX_REFERENCE_IMAGE_BYTES, MemoryAddRequestSchema, RememberRequestSchema, TtsRequestSchema } from '../src/lib/ai-lab-types.js'
 
 describe('aI Playground input schemas', () => {
   it('accepts a bounded chat request', () => {
@@ -42,6 +42,19 @@ describe('aI Playground input schemas', () => {
     expect(result.success).toBe(false)
   })
 
+  it('accepts documented image presets and rejects out-of-range dimensions', () => {
+    expect(ImageRequestSchema.safeParse({
+      prompt: 'A calm lake at sunrise',
+      width: 1024,
+      height: 1024,
+    }).success).toBe(true)
+    expect(ImageRequestSchema.safeParse({
+      prompt: 'A calm lake at sunrise',
+      width: 256,
+      height: 1024,
+    }).success).toBe(false)
+  })
+
   it('rejects invalid memory importance', () => {
     const result = MemoryAddRequestSchema.safeParse({
       profileId: 'demo-user',
@@ -54,5 +67,6 @@ describe('aI Playground input schemas', () => {
 
   it('keeps the audio limit aligned with AI documentation', () => {
     expect(MAX_AUDIO_BYTES).toBe(10 * 1024 * 1024)
+    expect(MAX_REFERENCE_IMAGE_BYTES).toBe(10 * 1024 * 1024)
   })
 })

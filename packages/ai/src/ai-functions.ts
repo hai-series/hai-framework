@@ -13,6 +13,7 @@ import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
+import type { ImageOperations } from './image/ai-image-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { ChatMessage, ChatRecord, LLMOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
@@ -34,6 +35,7 @@ import { createCompressOperations } from './compress/ai-compress-functions.js'
 import { createContextOperations } from './context/ai-context-functions.js'
 import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
 import { createFileOperations } from './file/ai-file-functions.js'
+import { createImageOperations } from './image/ai-image-functions.js'
 import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js'
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
@@ -74,6 +76,7 @@ export interface AISubsystems {
   context: ContextOperations
   file: FileOperations
   audio: AudioOperations
+  image: ImageOperations
 }
 
 /**
@@ -174,6 +177,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
 
   // Audio（语音识别 / 语音合成，独立平台 Provider）
   const audio = createAudioOperations(config)
+  const image = createImageOperations(config)
 
-  return { llm, mcp, embedding, reasoning, rerank, retrieval, rag, knowledge, memory, persona, token, summary, compress, context, file, audio }
+  return { llm, mcp, embedding, reasoning, rerank, retrieval, rag, knowledge, memory, persona, token, summary, compress, context, file, audio, image }
 }

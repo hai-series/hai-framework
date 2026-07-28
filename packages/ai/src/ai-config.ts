@@ -863,6 +863,116 @@ export function resolveAudioModel(
   })
 }
 
+// ─── Image 配置 Schema ───
+
+/**
+ * 文生图平台枚举
+ *
+ * - `openai` — OpenAI GPT Image（Image API）
+ * - `google` — Google Gemini Image / Nano Banana（Generate Content API）
+ * - `qwen` — 阿里云百炼 Qwen-Image 2.0 / 3.0
+ * - `seedream` — 火山方舟 Seedream 4.x / 5.x
+ * - `pollinations` — Pollinations 免费额度图片 API
+ */
+export const ImageProviderSchema = z.enum(['openai', 'google', 'qwen', 'seedream', 'pollinations'])
+
+/** 文生图平台类型 */
+export type ImageProviderName = z.infer<typeof ImageProviderSchema>
+
+/** 文生图模型条目 Schema */
+export const ImageModelEntrySchema = z.object({
+  /** 模型唯一标识（供请求选择） */
+  id: z.string(),
+  /** 所属文生图平台 */
+  provider: ImageProviderSchema,
+  /** 厂商模型名 */
+  model: z.string(),
+  /** API Key 覆盖；未提供时回退厂商环境变量 */
+  apiKey: z.string().optional(),
+  /** API 基础 URL 覆盖 */
+  baseUrl: z.url().optional(),
+  /** 阿里云百炼业务空间 ID（可选） */
+  workspaceId: z.string().optional(),
+  /** 请求超时（毫秒，默认 120000） */
+  timeout: z.number().int().positive().default(120000),
+})
+
+/** 文生图模型条目类型 */
+export type ImageModelEntry = z.infer<typeof ImageModelEntrySchema>
+
+/** 文生图配置 Schema */
+export const ImageConfigSchema = z.object({
+  /** 注册的文生图模型 */
+  models: z.array(ImageModelEntrySchema).optional(),
+  /** 默认文生图模型 ID */
+  generateModel: z.string().optional(),
+})
+
+/** 文生图配置类型 */
+export type ImageConfig = z.infer<typeof ImageConfigSchema>
+
+/** 已解析的文生图模型 */
+export interface ResolvedImageModel {
+  id: string
+  provider: ImageProviderName
+  model: string
+  apiKey: string
+  baseUrl: string
+  workspaceId?: string
+  timeout: number
+}
+
+const IMAGE_PROVIDER_DEFAULT_BASE_URL: Record<ImageProviderName, string> = {
+  openai: 'https://api.openai.com/v1',
+  google: 'https://generativelanguage.googleapis.com',
+  qwen: 'https://dashscope.aliyuncs.com/api/v1',
+  seedream: 'https://ark.cn-beijing.volces.com/api/v3',
+  pollinations: 'https://gen.pollinations.ai',
+}
+
+function imageProviderEnvApiKey(provider: ImageProviderName): string | undefined {
+  switch (provider) {
+    case 'openai':
+      return process.env.HAI_AI_IMAGE_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY
+    case 'google':
+      return process.env.HAI_AI_IMAGE_GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY
+    case 'qwen':
+      return process.env.HAI_AI_IMAGE_QWEN_API_KEY ?? process.env.DASHSCOPE_API_KEY
+    case 'seedream':
+      return process.env.HAI_AI_IMAGE_SEEDREAM_API_KEY ?? process.env.ARK_API_KEY ?? process.env.VOLC_API_KEY
+    case 'pollinations':
+      return process.env.HAI_AI_IMAGE_POLLINATIONS_API_KEY ?? process.env.POLLINATIONS_API_KEY
+  }
+}
+
+/**
+ * 解析文生图模型配置
+ *
+ * @param imageConfig - 文生图配置
+ * @param explicit - 请求显式模型 ID 或厂商模型名
+ * @returns 已解析模型；模型或凭据缺失时返回 HaiResult 错误
+ */
+export function resolveImageModel(imageConfig: ImageConfig, explicit?: string): HaiResult<ResolvedImageModel> {
+  const target = explicit ?? imageConfig.generateModel
+  if (!target)
+    return err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', { params: { model: '<generate>' } }))
+  const entry = imageConfig.models?.find(model => model.id === target || model.model === target)
+  if (!entry)
+    return err(HaiAIError.IMAGE_MODEL_NOT_FOUND, aiM('ai_imageModelNotFound', { params: { model: target } }))
+  const apiKey = entry.apiKey ?? imageProviderEnvApiKey(entry.provider)
+  if (!apiKey)
+    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_imageMissingApiKey', { params: { provider: entry.provider } }))
+  return ok({
+    id: entry.id,
+    provider: entry.provider,
+    model: entry.model,
+    apiKey,
+    baseUrl: (entry.baseUrl ?? IMAGE_PROVIDER_DEFAULT_BASE_URL[entry.provider]).replace(/\/+$/, ''),
+    workspaceId: entry.workspaceId,
+    timeout: entry.timeout,
+  })
+}
+
 /**
  * AI 配置 Schema
  *
@@ -938,6 +1048,8 @@ export const AIConfigSchema = z.object({
   a2a: A2AConfigSchema.optional(),
   /** Audio 配置（语音识别 / 语音合成） */
   audio: AudioConfigSchema.optional(),
+  /** Image 配置（文生图） */
+  image: ImageConfigSchema.optional(),
 })
 
 /** AI 配置类型（校验后的完整类型） */

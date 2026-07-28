@@ -1,0 +1,8 @@
+# 应用信息
+name: hai ai playground
+version: 0.1.0
+env: ${HAI_ENV:development}
+debug: ${HAI_DEBUG:true}
+
+logging:
+  level: ${HAI_LOG_LEVEL:debug}

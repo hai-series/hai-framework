@@ -1,6 +1,6 @@
 # @h-ai/ai
 
-AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、工具调用、MCP、Embedding、记忆、检索/RAG、知识库、上下文管理、文件解析、Rerank、语音（ASR/TTS）与 A2A。Node.js 侧通过 `ai.init()` 初始化，浏览器侧通过 API/client 代理访问。
+AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生图、工具调用、MCP、Embedding、记忆、检索/RAG、知识库、上下文管理、文件解析、Rerank、语音（ASR/TTS）与 A2A。Node.js 侧通过 `ai.init()` 初始化，浏览器侧通过 API/client 代理访问。
 
 ## 能力概览
 
@@ -16,6 +16,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、工具
 - `ai.context`：LLM + Memory + RAG + 压缩的一体化会话管理。
 - `ai.file` / `ai.rerank`：文件解析/OCR 与文本重排序。
 - `ai.audio`：语音识别（ASR）与语音合成（TTS），支持完整与流式调用，覆盖 OpenAI / MiMo / Qwen / 豆包平台。
+- `ai.image`：文生图，覆盖 OpenAI GPT Image、Google Gemini Image / Nano Banana、Qwen-Image 2.0/3.0、Seedream 4.x/5.x 与 Pollinations 免费额度模型。
 - `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
 - `@h-ai/ai/client`：前端轻量客户端（配合 API 服务）。
 - `AIStoreProvider`：统一存储抽象；无数据库时默认使用进程内临时 Store，已初始化 reldb + vecdb 时自动使用持久化 DB Provider。
@@ -267,6 +268,36 @@ if (caps.success && caps.data.synthesize?.streamingAudioOutput) { /* 可实时 T
 
 浏览器 / 移动端通过 `@h-ai/serv` 暴露的统一语音 WebSocket 入口访问，`@h-ai/ai/client` 提供与 Node 端一致的 `audio.*` API（传输细节内部隐藏）。浏览器客户端严格区分正常结束、取消（`AUDIO_CANCELLED`）与异常断连（`AUDIO_CONNECTION_FAILED`）：取消或在 `end` 前断连会抛出对应领域错误码，`synthesize` 不会把未完成的部分音频当作成功结果返回。
 
+### 文生图（Image）
+
+在 `ai.init()` 注册模型后，调用方只接收标准化图片字节，不感知厂商 Base64、内联数据或临时 URL：
+
+```ts
+await ai.init({
+  image: {
+    models: [
+      { id: 'image', provider: 'openai', model: 'gpt-image-2' },
+      { id: 'free', provider: 'pollinations', model: 'zimage' },
+    ],
+    generateModel: 'image',
+  },
+})
+
+const result = await ai.image.generate({
+  prompt: '一个正在构建开源框架的友好机器人',
+  size: { width: 1024, height: 1024 },
+  referenceImages: [
+    { data: await readImage('character.png'), mimeType: 'image/png' },
+  ],
+})
+if (result.success) {
+  const { data, mimeType } = result.data.images[0]!
+  await saveImage(data, mimeType)
+}
+```
+
+`referenceImages` 可省略；公共层只接受图片字节与 MIME，multipart、`inlineData`、Data URL 等差异由 Provider 转换。凭据可在模型条目传入，或使用 `HAI_AI_IMAGE_<PROVIDER>_API_KEY` / 厂商环境变量。Qwen 与 Seedream 返回的临时 URL 会在 Provider 内立即下载，不会泄漏到公共返回值。完整接口差异与模型说明见 [REFERENCE.md](./REFERENCE.md#image)。
+
 ### Context 管理器
 
 ```ts
@@ -460,6 +491,7 @@ if (!result.success) {
 - `hai:ai:600-701`：Retrieval/RAG。
 - `hai:ai:800-805`：Knowledge。
 - `hai:ai:050-059`：Audio。
+- `hai:ai:060-065`：Image。
 - `hai:ai:900-905`：Memory。
 - `hai:ai:980-984`：A2A。
 

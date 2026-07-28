@@ -7,11 +7,11 @@
  */
 
 import type { ChatReply, LabMessage, LabStatus, RememberResult } from '$lib/ai-lab-types.js'
-import type { ChatCompletionChunk, ChatMessage, MemoryEntry, MemoryType, TranscriptionEvent } from '@h-ai/ai'
+import type { ChatCompletionChunk, ChatMessage, MemoryEntry, MemoryType, ReferenceImage, TranscriptionEvent } from '@h-ai/ai'
 import type { HaiResult } from '@h-ai/core'
 import { ai } from '@h-ai/ai'
 import { core, ok } from '@h-ai/core'
-import { AI_ASR_MODEL, AI_AUDIO_PROVIDER, AI_LLM_MODEL, AI_TTS_MODEL, AI_TTS_VOICES } from './init.js'
+import { getAIPlaygroundMetadata } from './init.js'
 
 /** 对话系统提示：通用助手 + 记忆上下文安全约束（记忆视为不可信用户上下文，防提示注入） */
 const SYSTEM_PROMPT = `You are a helpful AI assistant.
@@ -58,15 +58,27 @@ async function prepareChatMessages(input: ChatInput): Promise<HaiResult<ChatMess
 
 /** 返回当前能力状态（连接、模型、音色、记忆模式），供首页状态卡片展示 */
 export function getLabStatus(): LabStatus {
+  const metadata = getAIPlaygroundMetadata()
   return {
     ready: ai.isInitialized,
-    provider: AI_AUDIO_PROVIDER,
-    llmModel: AI_LLM_MODEL,
-    ttsModel: AI_TTS_MODEL,
-    asrModel: AI_ASR_MODEL,
-    ttsVoices: AI_TTS_VOICES,
+    provider: metadata.provider,
+    llmModel: metadata.llmModel,
+    ttsModel: metadata.ttsModel,
+    asrModel: metadata.asrModel,
+    imageProvider: metadata.imageProvider,
+    imageModel: metadata.imageModel,
+    ttsVoices: metadata.ttsVoices,
     memoryMode: 'ephemeral',
   }
+}
+
+/** 文生图：提示词 → 标准化图片字节 */
+export async function generateImage(input: { prompt: string, width: number, height: number, referenceImages?: ReferenceImage[] }) {
+  return ai.image.generate({
+    prompt: input.prompt,
+    size: { width: input.width, height: input.height },
+    referenceImages: input.referenceImages,
+  })
 }
 
 /**

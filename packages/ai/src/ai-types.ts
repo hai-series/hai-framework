@@ -14,6 +14,7 @@ import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
+import type { ImageOperations } from './image/ai-image-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
@@ -127,6 +128,14 @@ const AIErrorInfo = {
   AUDIO_TIMEOUT: '057:504',
   AUDIO_INPUT_TOO_LARGE: '058:413',
   AUDIO_CANCELLED: '059:499',
+
+  // Image (060-069)
+  IMAGE_INVALID_REQUEST: '060:400',
+  IMAGE_MODEL_NOT_FOUND: '061:404',
+  IMAGE_PROVIDER_NOT_FOUND: '062:404',
+  IMAGE_UPSTREAM_ERROR: '063:502',
+  IMAGE_PROTOCOL_ERROR: '064:502',
+  IMAGE_CANCELLED: '065:499',
 
   // Context (950-999)
   CONTEXT_COMPRESS_FAILED: '950:500',
@@ -260,4 +269,6 @@ export interface AIFunctions {
   readonly a2a: A2AOperations
   /** Audio 操作（语音识别 / 语音合成），需要先调用 `init()` 并配置 `audio` */
   readonly audio: AudioOperations
+  /** Image 操作（文生图），需要先调用 `init()` 并配置 `image` */
+  readonly image: ImageOperations
 }

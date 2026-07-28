@@ -125,7 +125,26 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    */
   async function chatWithRecord(request: ChatCompletionRequest): Promise<HaiResult<ChatCompletionResponse>> {
     const start = Date.now()
+    const context = { model: request.model ?? request.tempModel?.model, messageCount: request.messages.length }
+    logger.debug('LLM chat started', context)
     const result = await provider.chat(request)
+    if (result.success) {
+      logger.info('LLM chat completed', {
+        ...context,
+        model: result.data.model,
+        durationMs: Date.now() - start,
+        choiceCount: result.data.choices.length,
+        totalTokens: result.data.usage?.total_tokens,
+      })
+    }
+    else {
+      logger.warn('LLM chat failed', {
+        ...context,
+        durationMs: Date.now() - start,
+        code: result.error.code,
+        error: result.error.message,
+      })
+    }
 
     // 仅在调用成功且传入了 objectId + recordStore 且未禁用持久化时记录
     if (result.success && request.objectId && recordStore && request.enablePersist !== false) {
@@ -167,6 +186,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    */
   async function* chatStreamWithRecord(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
     const start = Date.now()
+    const logContext = { model: request.model ?? request.tempModel?.model, messageCount: request.messages.length }
+    logger.debug('LLM chat stream started', logContext)
     const shouldRecord = !!(request.objectId && recordStore && request.enablePersist !== false)
 
     // 累积流式响应的中间状态
@@ -177,38 +198,51 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     let streamId = ''
     let resolvedModel = request.model ?? request.tempModel?.model ?? ''
 
-    for await (const chunk of provider.chatStream(request)) {
-      yield chunk
+    try {
+      for await (const chunk of provider.chatStream(request)) {
+        yield chunk
 
-      if (!shouldRecord)
-        continue
+        if (!shouldRecord)
+          continue
 
-      // 累积元数据
-      if (!streamId && chunk.id)
-        streamId = chunk.id
-      if (!resolvedModel && chunk.model)
-        resolvedModel = chunk.model
+        // 累积元数据
+        if (!streamId && chunk.id)
+          streamId = chunk.id
+        if (!resolvedModel && chunk.model)
+          resolvedModel = chunk.model
 
-      for (const choice of chunk.choices) {
-        if (choice.delta.content)
-          content += choice.delta.content
-        if (choice.finish_reason)
-          finishReason = choice.finish_reason
-        // 累积工具调用片段
-        if (choice.delta.tool_calls) {
-          for (const tc of choice.delta.tool_calls) {
-            if (!toolCalls[tc.index]) {
-              toolCalls[tc.index] = { id: tc.id ?? '', type: 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
+        for (const choice of chunk.choices) {
+          if (choice.delta.content)
+            content += choice.delta.content
+          if (choice.finish_reason)
+            finishReason = choice.finish_reason
+          // 累积工具调用片段
+          if (choice.delta.tool_calls) {
+            for (const tc of choice.delta.tool_calls) {
+              if (!toolCalls[tc.index]) {
+                toolCalls[tc.index] = { id: tc.id ?? '', type: 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
+              }
+              if (tc.function?.arguments)
+                toolCalls[tc.index].function.arguments += tc.function.arguments
+              if (tc.function?.name)
+                toolCalls[tc.index].function.name = tc.function.name
+              if (tc.id)
+                toolCalls[tc.index].id = tc.id
             }
-            if (tc.function?.arguments)
-              toolCalls[tc.index].function.arguments += tc.function.arguments
-            if (tc.function?.name)
-              toolCalls[tc.index].function.name = tc.function.name
-            if (tc.id)
-              toolCalls[tc.index].id = tc.id
           }
         }
       }
+      logger.info('LLM chat stream completed', {
+        ...logContext,
+        model: resolvedModel || logContext.model,
+        durationMs: Date.now() - start,
+        contentLength: content.length,
+        finishReason,
+      })
+    }
+    catch (error) {
+      logger.warn('LLM chat stream failed', { ...logContext, durationMs: Date.now() - start, error })
+      throw error
     }
 
     // 流消费完成后保存记录

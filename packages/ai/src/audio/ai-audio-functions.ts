@@ -81,8 +81,15 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     const resolved = resolveAudioModel(audioConfig, 'transcribe', request.model)
     if (!resolved.success)
       return resolved
-    logger.debug('audio transcribe', { provider: resolved.data.provider, model: resolved.data.model })
-    return getProvider(resolved.data.provider).transcribe({ model: resolved.data, audio: request.audio, language: request.language, contextHints: request.contextHints, signal: request.signal })
+    const startedAt = Date.now()
+    const context = { provider: resolved.data.provider, model: resolved.data.model, audioBytes: request.audio.data.length }
+    logger.debug('Audio transcription started', context)
+    const result = await getProvider(resolved.data.provider).transcribe({ model: resolved.data, audio: request.audio, language: request.language, contextHints: request.contextHints, signal: request.signal })
+    if (result.success)
+      logger.info('Audio transcription completed', { ...context, durationMs: Date.now() - startedAt, textLength: result.data.text.length })
+    else
+      logger.warn('Audio transcription failed', { ...context, durationMs: Date.now() - startedAt, code: result.error.code, error: result.error.message })
+    return result
   }
 
   async function* transcribeStream(request: TranscriptionStreamRequest): AsyncIterable<TranscriptionEvent> {
@@ -97,12 +104,16 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     const resolved = resolveAudioModel(audioConfig, 'transcribe', request.model)
     if (!resolved.success)
       throw resolved.error
-    logger.debug('audio transcribeStream', { provider: resolved.data.provider, model: resolved.data.model })
+    const startedAt = Date.now()
+    const context = { provider: resolved.data.provider, model: resolved.data.model }
+    logger.debug('Audio transcription stream started', context)
     const signal = withStreamTimeout(request.signal)
     try {
       yield* getProvider(resolved.data.provider).transcribeStream({ model: resolved.data, audio: request.audio, language: request.language, contextHints: request.contextHints, signal })
+      logger.info('Audio transcription stream completed', { ...context, durationMs: Date.now() - startedAt })
     }
     catch (error) {
+      logger.warn('Audio transcription stream failed', { ...context, durationMs: Date.now() - startedAt, error })
       throw mapStreamError(error, signal)
     }
   }
@@ -114,15 +125,24 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     const resolved = resolveAudioModel(audioConfig, 'synthesize', request.model)
     if (!resolved.success)
       return resolved
-    logger.debug('audio synthesize', { provider: resolved.data.provider, model: resolved.data.model })
-    return getProvider(resolved.data.provider).synthesize({ model: resolved.data, text: request.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal: request.signal })
+    const startedAt = Date.now()
+    const context = { provider: resolved.data.provider, model: resolved.data.model, textLength: request.text.length, voice: request.voice }
+    logger.debug('Audio synthesis started', context)
+    const result = await getProvider(resolved.data.provider).synthesize({ model: resolved.data, text: request.text, voice: request.voice, instruction: request.instruction, format: request.format, sampleRate: request.sampleRate, signal: request.signal })
+    if (result.success)
+      logger.info('Audio synthesis completed', { ...context, durationMs: Date.now() - startedAt, audioBytes: result.data.data.length, format: result.data.format })
+    else
+      logger.warn('Audio synthesis failed', { ...context, durationMs: Date.now() - startedAt, code: result.error.code, error: result.error.message })
+    return result
   }
 
   async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<SynthesisEvent> {
     const resolved = resolveAudioModel(audioConfig, 'synthesize', request.model)
     if (!resolved.success)
       throw resolved.error
-    logger.debug('audio synthesizeStream', { provider: resolved.data.provider, model: resolved.data.model })
+    const startedAt = Date.now()
+    const context = { provider: resolved.data.provider, model: resolved.data.model, voice: request.voice }
+    logger.debug('Audio synthesis stream started', context)
     const signal = withStreamTimeout(request.signal)
     const provider = getProvider(resolved.data.provider)
     // 由 Provider 依据自身默认规则解析真实输出格式，供 segment_started 标注（不由调用方猜测）
@@ -137,8 +157,10 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
           yield { type: 'audio', segmentId: segment.id, data }
         yield { type: 'segment_done', segmentId: segment.id }
       }
+      logger.info('Audio synthesis stream completed', { ...context, durationMs: Date.now() - startedAt })
     }
     catch (error) {
+      logger.warn('Audio synthesis stream failed', { ...context, durationMs: Date.now() - startedAt, error })
       throw mapStreamError(error, signal)
     }
   }

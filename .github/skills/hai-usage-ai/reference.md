@@ -184,6 +184,19 @@ const result = await ai.rag.query('核心架构是什么？', {
 - 资源上限：`audio.maxAudioBytes`（默 10 MiB）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
 - Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`。浏览器客户端（`@h-ai/ai/client`）严格区分正常结束 / 取消 / 异常断连：取消招 `AUDIO_CANCELLED`、`end` 前断连招 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不把未完成的部分音频当作成功返回。
 
+## Image
+
+| 方法 | 返回 | 说明 |
+| --- | --- | --- |
+| `generate(request)` | `Promise<HaiResult<GenerateImageResult>>` | 文本提示词 → 一张或多张已下载的图片字节 |
+
+- 请求：`GenerateImageRequest { prompt, model?, size?: { width, height }, referenceImages?: ReferenceImage[], signal? }`；`ReferenceImage` 为 `{ data: Uint8Array, mimeType: string }`。
+- 返回：`GenerateImageResult { images: Array<{ data: Uint8Array, mimeType, width?, height? }> }`。
+- 模型配置：`image.models: [{ id, provider: 'openai'|'google'|'qwen'|'seedream'|'pollinations', model, apiKey?, baseUrl?, workspaceId?, timeout? }]`；`image.generateModel` 选择默认模型别名。
+- 凭据优先使用模型项 `apiKey`，否则回退 `HAI_AI_IMAGE_<PROVIDER>_API_KEY` 或厂商标准环境变量。
+- 厂商差异由内部 Provider 消化：OpenAI/Pollinations 的 multipart edits、Google `inlineData`、Qwen/Seedream 的 Data URL 参考图，以及各家 Base64、临时 URL 或二进制响应均归一为图片字节。
+- Google 只接受其文档列出的宽高比；Qwen/Seedream 还可能对总像素与边长有限制。业务应提供厂商支持的尺寸预设，不要假设任意像素组合都可用。
+
 ## LLM 结构化输出
 
 `ai.llm.generateObject({ schema, messages, model?, systemPrompt?, maxRepairs?, signal? })`：按 Zod schema 约束模型输出（json_schema）并解析为对象，解析/校验失败自动带错误提示重试（默 1 次）。适用于“是否为问题/意图分类/置信度”等需要稳定结构结果的场景，避免手写 `JSON.parse`。
@@ -210,6 +223,7 @@ A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端�
 | `hai:ai:010-012` | 初始化：`NOT_INITIALIZED` / `CONFIGURATION_ERROR` / `INIT_IN_PROGRESS` |
 | `hai:ai:020-033` | Rerank / File |
 | `hai:ai:050-059` | Audio：`AUDIO_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UNSUPPORTED_INPUT` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CONNECTION_FAILED` / `TIMEOUT` / `INPUT_TOO_LARGE` / `CANCELLED` |
+| `hai:ai:060-065` | Image：`IMAGE_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CANCELLED` |
 | `hai:ai:100-107` | LLM / 历史记录 |
 | `hai:ai:200-204` | MCP |
 | `hai:ai:300-302` | Embedding |

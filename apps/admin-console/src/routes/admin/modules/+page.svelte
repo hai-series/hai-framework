@@ -55,6 +55,7 @@
     { name: m.modules_ai_feat_embed_name(), desc: m.modules_ai_feat_embed_desc(), api: 'ai.embedding.embed({ input: text })' },
     { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ llm: { provider, model } })' },
     { name: m.modules_ai_feat_stream_name(), desc: m.modules_ai_feat_stream_desc(), api: 'ai.llm.chatStream({ messages: [...] })' },
+    { name: m.modules_ai_feat_image_name(), desc: m.modules_ai_feat_image_desc(), api: 'ai.image.generate({ prompt, size })' },
   ])
 
   // VecDB 示例
@@ -369,8 +370,9 @@ if (meta.success) {
         </p>
         <div class='flex gap-2'>
           <Badge variant='info'>OpenAI</Badge>
-          <Badge variant='success'>Azure</Badge>
-          <Badge variant='warning'>{m.modules_ai_local_model()}</Badge>
+          <Badge variant='success'>Gemini</Badge>
+          <Badge variant='warning'>Qwen</Badge>
+          <Badge>Seedream</Badge>
         </div>
       </Card>
       <Card>
@@ -396,6 +398,15 @@ ai.init({
     apiKey: process.env.HAI_AI_LLM_API_KEY,
     model: 'gpt-4o-mini',
   },
+  image: {
+    models: [{
+      id: 'image',
+      provider: 'pollinations',
+      model: 'zimage',
+      apiKey: process.env.POLLINATIONS_API_KEY,
+    }],
+    generateModel: 'image',
+  },
 })
 
 // 对话
@@ -413,6 +424,12 @@ for await (const chunk of ai.llm.chatStream({
 })) {
   process.stdout.write(chunk.choices[0]?.delta?.content ?? '')
 }
+
+// 文生图（返回标准化图片字节）
+const image = await ai.image.generate({
+  prompt: '一个正在构建开源框架的机器人',
+  size: { width: 1024, height: 1024 },
+})
 
 // 文本嵌入
 const embedding = await ai.embedding.embedText('搜索查询文本')`}</code></pre>

@@ -7,12 +7,13 @@
 
 import type { ChatMessage } from '@h-ai/ai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { rememberExchange, streamChatWithMemory } from '../src/lib/server/ai-lab.js'
+import { generateImage, rememberExchange, streamChatWithMemory } from '../src/lib/server/ai-lab.js'
 
 const mocks = vi.hoisted(() => ({
   extract: vi.fn(),
   injectMemories: vi.fn(),
   chatStream: vi.fn(),
+  generateImage: vi.fn(),
 }))
 
 vi.mock('@h-ai/ai', () => ({
@@ -26,6 +27,9 @@ vi.mock('@h-ai/ai', () => ({
     llm: {
       chatStream: mocks.chatStream,
     },
+    image: {
+      generate: mocks.generateImage,
+    },
   },
 }))
 
@@ -37,17 +41,22 @@ vi.mock('@h-ai/core', () => ({
 }))
 
 vi.mock('../src/lib/server/init.js', () => ({
-  AI_ASR_MODEL: 'test-asr',
-  AI_AUDIO_PROVIDER: 'test',
-  AI_LLM_MODEL: 'test-llm',
-  AI_TTS_MODEL: 'test-tts',
-  AI_TTS_VOICES: [],
+  getAIPlaygroundMetadata: () => ({
+    asrModel: 'test-asr',
+    provider: 'test',
+    llmModel: 'test-llm',
+    imageModel: 'test-image',
+    imageProvider: 'test',
+    ttsModel: 'test-tts',
+    ttsVoices: [],
+  }),
 }))
 
 beforeEach(() => {
   mocks.extract.mockReset()
   mocks.injectMemories.mockReset()
   mocks.chatStream.mockReset()
+  mocks.generateImage.mockReset()
   mocks.injectMemories.mockImplementation(async (messages: ChatMessage[]) => ({
     success: true as const,
     data: messages,
@@ -56,6 +65,23 @@ beforeEach(() => {
 })
 
 describe('aI Playground memory extraction concurrency', () => {
+  it('forwards the prompt and dimensions to the image module', async () => {
+    mocks.generateImage.mockResolvedValue({
+      success: true,
+      data: { images: [{ data: new Uint8Array([1]), mimeType: 'image/png' }] },
+    })
+
+    const referenceImages = [{ data: new Uint8Array([137, 80, 78, 71]), mimeType: 'image/png' }]
+    await expect(generateImage({ prompt: 'A fox', width: 1024, height: 768, referenceImages })).resolves.toMatchObject({
+      success: true,
+    })
+    expect(mocks.generateImage).toHaveBeenCalledWith({
+      prompt: 'A fox',
+      size: { width: 1024, height: 768 },
+      referenceImages,
+    })
+  })
+
   it.each([true, false])('starts the next chat while extraction is pending (useMemory=%s)', async (useMemory) => {
     let markExtractionStarted: (() => void) | undefined
     const extractionStarted = new Promise<void>((resolve) => {

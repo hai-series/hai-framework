@@ -100,6 +100,17 @@ test.describe('Modules Page UI', () => {
     await expect(cryptoContent.first()).toBeVisible()
   })
 
+  test('AI 模块展示文生图能力与多厂商示例', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'modui')
+    await page.goto('/admin/modules')
+    await page.waitForLoadState('domcontentloaded')
+
+    await clickModuleTab(page, /^ai\b/i)
+    await expect(page.getByText(/文生图|Image generation/i).first()).toBeVisible()
+    await expect(page.locator('code').filter({ hasText: 'ai.image.generate' }).first()).toBeVisible()
+    await expect(page.getByText(/Seedream/i).first()).toBeVisible()
+  })
+
   // ---------------------------------------------------------------------------
   // Core 标签页内容
   // ---------------------------------------------------------------------------

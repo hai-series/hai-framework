@@ -12,6 +12,15 @@ import { z } from 'zod'
 export const CHAT_HISTORY_LIMIT = 20
 /** 语音识别上传音频的最大字节数（10 MiB） */
 export const MAX_AUDIO_BYTES = 10 * 1024 * 1024
+/** 单张参考图的最大字节数（10 MiB） */
+export const MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024
+
+/** 文生图请求：提示词与输出像素尺寸 */
+export const ImageRequestSchema = z.object({
+  prompt: z.string().trim().min(1).max(4000),
+  width: z.number().int().min(512).max(4096).default(1024),
+  height: z.number().int().min(512).max(4096).default(1024),
+})
 
 /** 对话消息（仅 user / assistant，system 由服务端注入） */
 export const LabMessageSchema = z.object({
@@ -81,6 +90,8 @@ export interface LabStatus {
   llmModel: string
   ttsModel: string
   asrModel: string
+  imageProvider: string
+  imageModel: string
   ttsVoices: string[]
   memoryMode: 'ephemeral'
 }

@@ -1,11 +1,11 @@
 ---
 name: hai-ai
-description: "Use when: using @h-ai/ai for LLM calls, tools, MCP, streaming, memory/context, RAG, audio, A2A, or the AI client. 当需求涉及 AI 对话、工具、Audio、会话、知识库或 AI 客户端时使用。"
+description: "Use when: using @h-ai/ai for LLM calls, tools, MCP, streaming, memory/context, RAG, image generation, text-to-image, GPT Image, Gemini Image, Qwen Image, Seedream, audio, A2A, or the AI client. 当需求涉及 AI 对话、工具、文生图、Audio、会话、知识库或 AI 客户端时使用。"
 ---
 
 # hai-ai — @h-ai/ai 快速指南
 
-`@h-ai/ai` 统一提供 LLM、工具、MCP、Embedding、Memory、Retrieval/RAG、Knowledge、Context、File、Rerank、Audio 与 A2A 能力。
+`@h-ai/ai` 统一提供 LLM、工具、MCP、Embedding、Memory、Retrieval/RAG、Knowledge、Context、File、Rerank、Image、Audio 与 A2A 能力。
 
 > 详细 API 表、错误码与长示例见同目录 `reference.md`。只有需要完整契约或边界用例时再读取，避免把长参考塞进上下文。
 
@@ -13,7 +13,7 @@ description: "Use when: using @h-ai/ai for LLM calls, tools, MCP, streaming, mem
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | LLM/流式生成、结构化 Tool、MCP、Embedding、Memory、RAG/Knowledge、Context、Audio、A2A |
+| 能力 | LLM/流式生成、结构化 Tool、MCP、Embedding、Memory、RAG/Knowledge、Context、Image、Audio、A2A |
 | 适用场景 | 服务端 AI 对话、Agent 工具链、知识问答、长期记忆、语音交互和 Agent-to-Agent；浏览器通过 client/API 代理 |
 | 输入 | `AIConfigInput`、消息/文本/音频、Zod Tool schema、`objectId/sessionId/scope`、`AbortSignal` |
 | 输出 | 领域操作返回 `HaiResult<T>`；流式 API 返回 `AsyncIterable`；Tool 返回 `ToolMessage`；客户端传输可能抛异常 |
@@ -22,7 +22,7 @@ description: "Use when: using @h-ai/ai for LLM calls, tools, MCP, streaming, mem
 ## 使用边界
 
 - `ai.tools`、`ai.stream` 是纯函数能力，无需 `ai.init()`。
-- `ai.llm`、`ai.embedding`、`ai.memory`、`ai.retrieval`、`ai.rag`、`ai.knowledge`、`ai.context`、`ai.audio`、`ai.a2a` 需要先 `await ai.init(...)`。
+- `ai.llm`、`ai.embedding`、`ai.memory`、`ai.retrieval`、`ai.rag`、`ai.knowledge`、`ai.context`、`ai.image`、`ai.audio`、`ai.a2a` 需要先 `await ai.init(...)`。
 - 未初始化 reldb/vecdb 时，`ai.init()` 使用进程内临时 Store，适合 LLM-only 与本地原型；数据在 `ai.close()` 或进程退出后丢失。
 - reldb 与 vecdb 均已初始化时自动使用持久化 DB Provider；生产 Memory/Context/Persona/Knowledge 应使用该路径或自定义 `AIStoreProvider`。
 - 浏览器端不要直接调用 Node-only 能力；通过 `@h-ai/api-client` 或应用自定义 API/SSE endpoint 代理。
@@ -124,6 +124,7 @@ memory:
 | Context 重置 | `await manager.reset({ preserveSystemPrompt?, cancelActiveTurn?, waitForMemoryTasks? })` | 异步：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词 |
 | 语音识别 | `ai.audio.transcribe` / `transcribeStream` | 完整音频返回 `HaiResult`；持续音频输入用 `AudioInputStream` 流式返回临时文本 |
 | 语音合成 | `ai.audio.synthesize` / `synthesizeStream` | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成） |
+| 图片生成 | `ai.image.generate({ prompt, size?, model?, referenceImages? })` | 可选参考图使用字节 + MIME；Provider 协议和临时 URL 下载由模块内部处理 |
 | A2A | `ai.a2a.registerExecutor/handleRequest` | 延迟初始化 SDK handler |
 
 ## LLM + 工具调用
@@ -315,6 +316,38 @@ for await (const event of ai.audio.synthesizeStream({ text: { id: 'seg-1', text:
 - `segment_started` 携带服务端解析 Provider 后的真实输出参数（`format` / `sampleRate?` / `channels?`）；播放器据此解码，不按请求参数猜测格式。
 - 平台不支持的输入方式（如 OpenAI/MiMo 的持续音频输入）会抛 `AUDIO_UNSUPPORTED_INPUT`，不伪装成实时。
 - 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`@h-ai/ai/client` 通过 `audio.getTicket` 建连，不把 IAM access token 放入 URL。浏览器客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`）；服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
+
+## 文生图（Image）
+
+`ai.image` 只暴露稳定的提示词、模型别名、像素尺寸、可选参考图和图片字节；OpenAI、Google、Qwen、Seedream 与 Pollinations 的请求结构、鉴权、响应解析和临时 URL 下载均封装在内部 Provider。
+
+```yaml
+image:
+  models:
+    - { id: free, provider: pollinations, model: zimage }
+    - { id: openai, provider: openai, model: gpt-image-2 }
+    - { id: google, provider: google, model: gemini-3.1-flash-image-preview }
+    - { id: qwen, provider: qwen, model: qwen-image-2.0-pro }
+    - { id: seedream, provider: seedream, model: doubao-seedream-5-0-260128 }
+  generateModel: free
+```
+
+```ts
+const image = await ai.image.generate({
+  prompt: '水墨风格的未来城市，清晨薄雾',
+  size: { width: 1024, height: 1024 },
+  referenceImages: [{ data: referenceBytes, mimeType: 'image/png' }],
+})
+if (!image.success) return image
+await saveImage(image.data.images[0].data, image.data.images[0].mimeType)
+```
+
+- `Pollinations` 提供可免费起步的开发额度，但仍需 API key；不要把“免费额度”描述为匿名或无限调用。
+- 应用应通过 `core.init({ configDir: './config' })` 加载 `_core.yml` / `_ai.yml`，再以 `core.config.validate('ai', AIConfigSchema)` 校验并传给 `ai.init`；不要在启动代码中重复拼装模型、端点和超时，也不要传入 `logging` 覆盖 `_core.yml`。
+- Pollinations 的 HTTP 402 表示账户余额或该 API Key 的预算耗尽；401 是密钥无效，403 是权限或模型访问被拒。诊断日志记录厂商、模型、状态、上游错误码和请求 ID，不记录密钥、提示词或图片内容。
+- Qwen 等返回的临时图片 URL 会在 Provider 内立即下载，公共结果不泄漏易过期 URL。
+- 参考图统一使用 `{ data: Uint8Array, mimeType: 'image/...' }`；不要把厂商 URL、multipart 或 Base64 结构泄漏到业务层。
+- Provider 请求/响应格式变更时，先更新契约测试，再修改实现。
 
 
 ## SvelteKit API 端点模式

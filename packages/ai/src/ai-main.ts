@@ -15,6 +15,7 @@ import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
+import type { ImageOperations } from './image/ai-image-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
@@ -81,6 +82,8 @@ let currentRerank: RerankOperations | null = null
 let currentFile: FileOperations | null = null
 /** 当前 Audio 操作实例 */
 let currentAudio: AudioOperations | null = null
+/** 当前 Image 操作实例 */
+let currentImage: ImageOperations | null = null
 /** A2A 配置（从 config.a2a 存储，供延迟初始化使用） */
 let currentA2AConfig: AIConfig['a2a']
 /** A2A 内部实现（registerExecutor 成功后才有值） */
@@ -206,6 +209,11 @@ const notInitializedAudio: AudioOperations = {
   getCapabilities: () => notInitialized.result(),
 }
 
+/** Image 未初始化占位 */
+const notInitializedImage: ImageOperations = {
+  generate: () => Promise.resolve(notInitialized.result()),
+}
+
 /** A2A 延迟初始化代理（委托给 a2a 模块的 createA2ALazyProxy） */
 const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
   isInitialized: () => currentConfig !== null,
@@ -238,6 +246,7 @@ async function resetAllState(): Promise<void> {
   currentRerank = null
   currentFile = null
   currentAudio = null
+  currentImage = null
   currentA2AConfig = undefined
   currentA2AImpl = null
   currentStoreProvider = null
@@ -354,6 +363,7 @@ export const ai: AIFunctions = {
       currentContext = subs.context
       currentFile = subs.file
       currentAudio = subs.audio
+      currentImage = subs.image
 
       currentA2AConfig = parsed.a2a
 
@@ -396,6 +406,7 @@ export const ai: AIFunctions = {
   get rerank(): RerankOperations { return currentRerank ?? notInitializedRerank },
   get file(): FileOperations { return currentFile ?? notInitializedFile },
   get audio(): AudioOperations { return currentAudio ?? notInitializedAudio },
+  get image(): ImageOperations { return currentImage ?? notInitializedImage },
   get a2a(): A2AOperations { return a2aLazyOperations },
   get config() { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
   get isInitialized() { return currentConfig !== null },

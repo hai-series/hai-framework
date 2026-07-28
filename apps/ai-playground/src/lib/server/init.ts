@@ -1,99 +1,94 @@
 /**
  * AI 实验台服务端初始化
  *
- * 从环境变量解析模型配置（默认接入 MiMo，可切换任意兼容 OpenAI 接口的服务），并在首次请求时
- * 惰性初始化 @h-ai/ai。使用进程内记忆存储，仅用于能力演示；生产环境应先初始化 reldb / vecdb。
+ * 配置统一由 `config/_core.yml` 与 `config/_ai.yml` 提供；环境变量只承载密钥。
  * @module server/init
  */
 
-import type { AIConfigInput, AudioProviderName } from '@h-ai/ai'
-import process from 'node:process'
-import { ai, AudioProviderSchema } from '@h-ai/ai'
+import type { AIConfig, AIConfigInput, AudioProviderName, ImageProviderName } from '@h-ai/ai'
+import { ai, AIConfigSchema } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 
-// 默认指向 MiMo 系列模型，可通过下列环境变量切换到任意兼容 OpenAI 接口的模型服务
-export const AI_BASE_URL = process.env.AI_BASE_URL || 'https://api.xiaomimimo.com/v1'
-export const AI_LLM_MODEL = process.env.AI_LLM_MODEL || 'mimo-v2.5'
-export const AI_TTS_MODEL = process.env.AI_TTS_MODEL || 'mimo-v2.5-tts'
-export const AI_ASR_MODEL = process.env.AI_ASR_MODEL || 'mimo-v2.5-asr'
-// 音频适配器标识（transcribe/synthesize），非法或缺省时回退到 mimo
-export const AI_AUDIO_PROVIDER: AudioProviderName = AudioProviderSchema.catch('mimo').parse(process.env.AI_AUDIO_PROVIDER)
-// TTS 预置音色，默认使用 MiMo 音色，可用 AI_TTS_VOICES（逗号分隔）覆盖以适配其它模型
 const DEFAULT_TTS_VOICES = ['mimo_default', '冰糖', '茉莉', '苏打', '白桦', 'Mia', 'Chloe', 'Milo', 'Dean']
-export const AI_TTS_VOICES = process.env.AI_TTS_VOICES
-  ? process.env.AI_TTS_VOICES.split(',').map(voice => voice.trim()).filter(Boolean)
-  : DEFAULT_TTS_VOICES
+
+/** 首页状态卡片所需的非敏感配置摘要。 */
+export interface AIPlaygroundMetadata {
+  provider: AudioProviderName
+  llmModel: string
+  ttsModel: string
+  asrModel: string
+  imageProvider: ImageProviderName
+  imageModel: string
+  ttsVoices: string[]
+}
 
 let initPromise: Promise<void> | undefined
+let metadata: AIPlaygroundMetadata | undefined
 
-/** 构建 AI 配置：LLM 对话 + 音频（ASR/TTS）+ 进程内原生记忆 */
-function createAIConfig(): AIConfigInput {
+function createMetadata(config: AIConfig): AIPlaygroundMetadata {
+  const transcribe = config.audio?.models?.find(model => model.id === config.audio?.transcribeModel)
+  const synthesize = config.audio?.models?.find(model => model.id === config.audio?.synthesizeModel)
+  const image = config.image?.models?.find(model => model.id === config.image?.generateModel)
+  if (!transcribe || !synthesize || !image)
+    throw new Error('AI config must define audio transcribe/synthesize models and an image generate model')
+
   return {
-    llm: {
-      apiKey: process.env.AI_API_KEY,
-      baseUrl: AI_BASE_URL,
-      model: AI_LLM_MODEL,
-      api: 'chat',
-      temperature: 0.7,
-      maxTokens: 4096,
-      timeout: 120000,
-    },
-    audio: {
-      models: [
-        {
-          id: 'asr',
-          provider: AI_AUDIO_PROVIDER,
-          model: AI_ASR_MODEL,
-          operations: ['transcribe'],
-          apiKey: process.env.AI_API_KEY,
-          baseUrl: AI_BASE_URL,
-          timeout: 120000,
-        },
-        {
-          id: 'tts',
-          provider: AI_AUDIO_PROVIDER,
-          model: AI_TTS_MODEL,
-          operations: ['synthesize'],
-          apiKey: process.env.AI_API_KEY,
-          baseUrl: AI_BASE_URL,
-          timeout: 120000,
-        },
-      ],
-      transcribeModel: 'asr',
-      synthesizeModel: 'tts',
-    },
-    memory: {
-      provider: 'native',
-      embeddingEnabled: false,
-      defaultTopK: 8,
-    },
+    provider: synthesize.provider,
+    llmModel: config.llm.model,
+    ttsModel: synthesize.model,
+    asrModel: transcribe.model,
+    imageProvider: image.provider,
+    imageModel: image.model,
+    ttsVoices: synthesize.provider === 'mimo' ? DEFAULT_TTS_VOICES : [],
   }
 }
 
-/** 实际初始化：初始化 core → 校验密钥 → 初始化 ai */
+/** 返回已加载的非敏感 AI 配置摘要。 */
+export function getAIPlaygroundMetadata(): AIPlaygroundMetadata {
+  if (!metadata)
+    throw new Error('AI Playground is not initialized')
+  return metadata
+}
+
+/** 实际初始化：加载 YAML → 校验 AI 配置 → 初始化 AI 模块。 */
 async function initialize(): Promise<void> {
-  core.init({ logging: { level: 'info' } })
+  // 不传 logging，确保 config/_core.yml 中的日志配置拥有最终决定权。
+  core.init({ configDir: './config' })
 
-  if (!process.env.AI_API_KEY)
-    throw new Error('AI_API_KEY is not configured')
+  const validated = core.config.validate('ai', AIConfigSchema)
+  if (!validated.success) {
+    core.logger.error('AI Playground config validation failed', { error: validated.error.message })
+    throw new Error(`AI config validation failed: ${validated.error.message}`)
+  }
 
-  const result = await ai.init(createAIConfig())
-  if (!result.success)
+  const config = core.config.getOrThrow<AIConfigInput>('ai')
+  const result = await ai.init(config)
+  if (!result.success) {
+    core.logger.error('AI Playground initialization failed', {
+      code: result.error.code,
+      error: result.error.message,
+    })
     throw new Error(`AI initialization failed: ${result.error.message}`)
+  }
 
+  metadata = createMetadata(validated.data)
   core.logger.info('AI Playground initialized', {
-    provider: AI_AUDIO_PROVIDER,
-    llmModel: AI_LLM_MODEL,
-    ttsModel: AI_TTS_MODEL,
-    asrModel: AI_ASR_MODEL,
+    logLevel: core.logger.getLevel(),
+    provider: metadata.provider,
+    llmModel: metadata.llmModel,
+    ttsModel: metadata.ttsModel,
+    asrModel: metadata.asrModel,
+    imageProvider: metadata.imageProvider,
+    imageModel: metadata.imageModel,
   })
 }
 
-/** 确保 AI 已初始化（并发安全，仅初始化一次；失败时清空 promise 以允许重试） */
+/** 确保 AI 已初始化（并发安全；失败时允许后续请求重试）。 */
 export async function ensureAIInitialized(): Promise<void> {
   if (!initPromise) {
     initPromise = initialize().catch((error: unknown) => {
       initPromise = undefined
+      metadata = undefined
       throw error
     })
   }

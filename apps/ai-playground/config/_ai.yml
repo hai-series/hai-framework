@@ -1,0 +1,64 @@
+# AI Playground 完整示例配置。
+# 模型、端点和行为参数放在 YAML；环境变量仅用于注入密钥，避免把凭据提交到仓库。
+llm:
+  apiKey: ${AI_API_KEY:}
+  baseUrl: https://api.xiaomimimo.com/v1
+  model: mimo-v2.5
+  api: chat
+  temperature: 0.7
+  maxTokens: 4096
+  timeout: 120000
+
+audio:
+  models:
+    - id: asr
+      provider: mimo
+      model: mimo-v2.5-asr
+      operations: [transcribe]
+      apiKey: ${AI_API_KEY:}
+      baseUrl: https://api.xiaomimimo.com/v1
+      timeout: 120000
+    - id: tts
+      provider: mimo
+      model: mimo-v2.5-tts
+      operations: [synthesize]
+      apiKey: ${AI_API_KEY:}
+      baseUrl: https://api.xiaomimimo.com/v1
+      timeout: 120000
+  transcribeModel: asr
+  synthesizeModel: tts
+
+image:
+  models:
+    # 默认示例使用 Pollinations。402 表示账户余额或该 Key 的预算耗尽；
+    # 可在 https://enter.pollinations.ai/ 创建/调整 Key 与预算。
+    - id: image
+      provider: pollinations
+      model: zimage
+      apiKey: ${AI_IMAGE_API_KEY:}
+      timeout: 120000
+
+    # 切换厂商时，取消对应块的注释，并把 generateModel 改为相应 id。
+    # - id: openai-image
+    #   provider: openai
+    #   model: gpt-image-2
+    #   apiKey: ${OPENAI_API_KEY:}
+    # - id: google-image
+    #   provider: google
+    #   model: gemini-3.1-flash-image
+    #   apiKey: ${GEMINI_API_KEY:}
+    # - id: qwen-image
+    #   provider: qwen
+    #   model: qwen-image-3.0-pro
+    #   apiKey: ${DASHSCOPE_API_KEY:}
+    #   workspaceId: ${DASHSCOPE_WORKSPACE_ID:}
+    # - id: seedream-image
+    #   provider: seedream
+    #   model: doubao-seedream-5-0-lite
+    #   apiKey: ${ARK_API_KEY:}
+  generateModel: image
+
+memory:
+  provider: native
+  embeddingEnabled: false
+  defaultTopK: 8
