@@ -87,8 +87,8 @@ test.describe('IAM Users UI', () => {
     await page.goto('/admin/iam/users')
     await page.waitForLoadState('domcontentloaded')
 
-    // 搜索输入框
-    const searchInput = page.locator('input[type="text"][placeholder]').first()
+    // 按稳定的搜索提示定位，兼容 searchbox 与 textbox 两种工具栏实现，不绑定 HTML type 或 role。
+    const searchInput = page.getByPlaceholder(/搜索用户名、邮箱或显示名称/)
     await expect(searchInput).toBeVisible()
 
     // 输入搜索关键字
@@ -115,6 +115,96 @@ test.describe('IAM Users UI', () => {
     const count = await headers.count()
     // 至少有用户名、邮箱、角色、状态、创建时间、操作 6 列
     expect(count).toBeGreaterThanOrEqual(4)
+  })
+
+  test('数据区纵向滚动时表头保持固定', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'usrui')
+    await page.goto('/admin/iam/users')
+    await page.waitForLoadState('domcontentloaded')
+
+    const table = page.locator('table')
+    const scrollContainer = table.locator('..')
+    const header = table.locator('thead')
+    await expect(table).toBeVisible()
+    await expect(scrollContainer).toHaveCSS('overflow-y', 'auto')
+    await expect(header).toHaveCSS('position', 'sticky')
+
+    // 测试内补足数据行并限制容器高度，稳定复现超过一页时的纵向滚动场景。
+    await scrollContainer.evaluate((container) => {
+      container.style.flex = 'none'
+      container.style.height = '160px'
+      container.style.width = '420px'
+      const body = container.querySelector('tbody')
+      const sourceRow = body?.querySelector('tr')
+      if (!body || !sourceRow)
+        return
+      while (body.children.length < 20)
+        body.append(sourceRow.cloneNode(true))
+    })
+
+    const headerTopBeforeScroll = await header.evaluate(element => element.getBoundingClientRect().top)
+    await scrollContainer.evaluate((container) => {
+      container.scrollTop = 120
+      container.scrollLeft = 120
+    })
+    const headerTopAfterScroll = await header.evaluate(element => element.getBoundingClientRect().top)
+
+    expect(await scrollContainer.evaluate(container => container.scrollTop)).toBeGreaterThan(0)
+    expect(Math.abs(headerTopAfterScroll - headerTopBeforeScroll)).toBeLessThanOrEqual(1)
+
+    // 固定操作列的数据格也必须位于表头下方，不能覆盖“操作”表头。
+    const actionHeader = table.locator('thead th').last()
+    const actionCell = table.locator('tbody td').last()
+    const headerZIndex = Number(await header.evaluate(element => getComputedStyle(element).zIndex))
+    const actionCellZIndex = Number(await actionCell.evaluate(element => getComputedStyle(element).zIndex))
+    const actionHeaderIsTopmost = await actionHeader.evaluate((element) => {
+      const { x, y, width, height } = element.getBoundingClientRect()
+      return document.elementFromPoint(x + width / 2, y + height / 2)?.closest('th') === element
+    })
+    expect(headerZIndex).toBeGreaterThan(actionCellZIndex)
+    expect(actionHeaderIsTopmost).toBe(true)
+  })
+
+  test('操作列补齐表头底线且在初始位置不显示固定列左侧分隔线', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'usrui')
+    await page.goto('/admin/iam/users')
+    await page.waitForLoadState('domcontentloaded')
+
+    const rows = page.locator('table tbody tr')
+    const firstRow = rows.first()
+    const secondRow = rows.nth(1)
+    const firstDataCell = firstRow.locator('td').first()
+    const firstActionCell = firstRow.locator('td').last()
+    const secondDataCell = secondRow.locator('td').first()
+    const secondActionCell = secondRow.locator('td').last()
+
+    // 固定列尚未覆盖横向滚动内容时不应出现左侧阴影。
+    const actionHeader = page.locator('table thead th').last()
+    await expect(actionHeader).toBeVisible()
+    await expect(actionHeader).toHaveCSS('box-shadow', 'none')
+
+    // 每个表头单元格必须使用完全相同的伪元素分隔线，避免 sticky 操作列产生色差或错位。
+    const headerDividers = await page.locator('table thead th').evaluateAll(headers => headers.map((header) => {
+      const style = getComputedStyle(header, '::after')
+      return { backgroundColor: style.backgroundColor, bottom: style.bottom, height: style.height }
+    }))
+    expect(headerDividers[0]).toMatchObject({ bottom: '-1px', height: '1px' })
+    expect(headerDividers[0]?.backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
+    expect(headerDividers.every(divider => JSON.stringify(divider) === JSON.stringify(headerDividers[0]))).toBe(true)
+
+    // 奇偶行必须保留不同底色，且固定操作格分别与同行数据格一致。
+    await expect(firstRow).toBeVisible()
+    await expect(secondRow).toBeVisible()
+    const firstRowBackground = await firstDataCell.evaluate(cell => getComputedStyle(cell).backgroundColor)
+    const secondRowBackground = await secondDataCell.evaluate(cell => getComputedStyle(cell).backgroundColor)
+    expect(secondRowBackground).not.toBe(firstRowBackground)
+    await expect(firstActionCell).toHaveCSS('background-color', firstRowBackground)
+    await expect(secondActionCell).toHaveCSS('background-color', secondRowBackground)
+
+    await firstRow.hover()
+    const hoverBackground = await firstDataCell.evaluate(cell => getComputedStyle(cell).backgroundColor)
+    expect(hoverBackground).not.toBe(firstRowBackground)
+    await expect(firstActionCell).toHaveCSS('background-color', hoverBackground)
   })
 
   test('当前登录用户显示在用户列表中', async ({ page, request }) => {
@@ -145,6 +235,37 @@ test.describe('IAM Users UI', () => {
     // 操作列的编辑按钮（IconButton ariaLabel 包含"编辑"）
     const editBtn = page.locator('table tbody button[aria-label]').first()
     await expect(editBtn).toBeVisible()
+  })
+
+  test('分页每页条数浮层首次打开时与触发器左侧对齐', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'usrui')
+    await page.goto('/admin/iam/users')
+    await page.waitForLoadState('domcontentloaded')
+
+    /** 分页栏内唯一的 Select combobox 根节点。 */
+    const pageSizeSelect = page.locator('main [role="combobox"]').first()
+    /** Select 实际接收点击并提供定位基准的触发器。 */
+    const pageSizeTrigger = pageSizeSelect.locator('[role="presentation"]')
+    await expect(pageSizeTrigger).toBeVisible()
+    await pageSizeTrigger.click()
+
+    /** portal 到 body 的下拉列表。 */
+    const pageSizeListbox = page.locator('[role="listbox"]')
+    await expect(pageSizeListbox).toBeVisible()
+    /** 首次打开后的触发器视口坐标。 */
+    const triggerBox = await pageSizeTrigger.boundingBox()
+    /** 首次打开后的浮层视口坐标。 */
+    const listboxBox = await pageSizeListbox.boundingBox()
+
+    expect(triggerBox).not.toBeNull()
+    expect(listboxBox).not.toBeNull()
+    if (!triggerBox || !listboxBox) {
+      return
+    }
+
+    // 浮层使用 fixed 定位，left 必须直接取触发器的视口 left，不能掺入被 portal 前的父级偏移。
+    expect(Math.abs(listboxBox.x - triggerBox.x)).toBeLessThanOrEqual(1)
+    expect(Math.abs(listboxBox.width - triggerBox.width)).toBeLessThanOrEqual(1)
   })
 
   // ---------------------------------------------------------------------------

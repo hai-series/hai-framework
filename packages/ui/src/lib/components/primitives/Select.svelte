@@ -10,6 +10,7 @@
 -->
 <script lang='ts' generics="T = string">
   import type { DataAttributes, SelectProps } from '../../types.js'
+  import { tick } from 'svelte'
   import { cn, getDataAttributes, portal } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
@@ -39,6 +40,8 @@
   let isHovered = $state(false)
   // 下拉层定位样式（portal 到 body，用 fixed 逃逸 overflow/stacking）
   let dropdownStyle = $state('')
+  /** portal 移动节点后用于二次测量的动画帧句柄，关闭时必须取消避免过期写入。 */
+  let dropdownPositionFrame: number | undefined = $state()
 
   const sizeClasses = $derived(getFormControlSizeClasses(size))
 
@@ -131,15 +134,40 @@
     dropdownStyle = `position:fixed;left:${Math.round(rect.left)}px;width:${Math.round(rect.width)}px;${vertical};z-index:1200;`
   }
 
+  /**
+   * 在 portal 完成节点移动和父级 flex 布局收敛后重算一次浮层坐标。
+   *
+   * 首次打开时，Svelte 创建浮层、portal 将其移入 body 与分页栏的 flex 尺寸更新可能落在同一渲染批次；
+   * 立即测量用于避免首帧无定位，下一帧复测则保证 fixed 坐标只基于最终的触发器视口位置。
+   */
+  async function scheduleSettledDropdownPosition(): Promise<void> {
+    await tick()
+    if (!isDropdownOpen) {
+      return
+    }
+
+    dropdownPositionFrame = window.requestAnimationFrame(() => {
+      dropdownPositionFrame = undefined
+      if (isDropdownOpen) {
+        updateDropdownPosition()
+      }
+    })
+  }
+
   // 打开时定位并跟随滚动/缩放更新
   $effect(() => {
     if (!isDropdownOpen)
       return
     updateDropdownPosition()
+    void scheduleSettledDropdownPosition()
     const scrollOpts = { passive: true, capture: true } as const
     window.addEventListener('scroll', updateDropdownPosition, scrollOpts)
     window.addEventListener('resize', updateDropdownPosition)
     return () => {
+      if (dropdownPositionFrame !== undefined) {
+        window.cancelAnimationFrame(dropdownPositionFrame)
+        dropdownPositionFrame = undefined
+      }
       window.removeEventListener('scroll', updateDropdownPosition, scrollOpts)
       window.removeEventListener('resize', updateDropdownPosition)
     }

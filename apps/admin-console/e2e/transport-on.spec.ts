@@ -17,6 +17,10 @@ test.describe('Transport enabled E2E', () => {
     await page.locator('input[type="password"]').first().fill(DEFAULT_ADMIN.password)
     await page.locator('button[type="submit"]').click()
     await page.waitForURL('**/admin**', { timeout: 15_000 })
+
+    // `waitForHydration` 的 transport 标记由根布局设置，会跨路由保留；这里再等待
+    // 登录后侧边栏的实际业务入口，避免在 `/admin` 页面尚未完成客户端挂载时继续操作。
+    await page.locator('a[href="/admin/iam/roles"]').first().waitFor({ state: 'visible', timeout: 15_000 })
   }
 
   async function fetchViaBrowser(

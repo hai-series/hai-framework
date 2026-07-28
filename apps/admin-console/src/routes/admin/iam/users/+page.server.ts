@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import type { UserSortDirection, UserSortField } from '@h-ai/iam'
 import type { PageServerLoad } from './$types'
 import { listAdminRoles } from '$lib/server/iam-admin.js'
 import { iam } from '@h-ai/iam'
@@ -23,6 +24,25 @@ interface UserData {
   updated_at: Date
 }
 
+/** 用户管理表格允许写入 URL 的前端排序字段。 */
+type UserPageSortKey = 'username' | 'email' | 'status' | 'created_at'
+
+/**
+ * 用户管理表格字段到 IAM 公共排序字段的映射。
+ *
+ * 前端字段名和 IAM 领域字段名不同，必须在边界完成白名单转换，不能直接透传 URL 参数。
+ */
+const USER_PAGE_SORT_FIELDS: Record<UserPageSortKey, UserSortField> = {
+  /** 用户名。 */
+  username: 'username',
+  /** 邮箱。 */
+  email: 'email',
+  /** 表格状态列对应 IAM 的 enabled 字段。 */
+  status: 'enabled',
+  /** 表格创建时间列对应 IAM 的 createdAt 字段。 */
+  created_at: 'createdAt',
+}
+
 function parsePositiveInt(value: string | null, fallback: number): number {
   if (!value) {
     return fallback
@@ -36,6 +56,40 @@ function parsePositiveInt(value: string | null, fallback: number): number {
   return parsed
 }
 
+/**
+ * 解析并校验用户表格排序参数。
+ *
+ * @param url 当前页面 URL
+ * @returns 可安全传递给 IAM 的排序选项，以及供客户端回填控件的原始字段名
+ */
+function parseUserSort(url: URL): {
+  /** IAM 服务端接受的排序字段。 */
+  sortBy?: UserSortField
+  /** IAM 服务端接受的排序方向。 */
+  sortDirection?: UserSortDirection
+  /** 前端表格排序字段。 */
+  pageSortBy: string
+  /** 前端表格排序方向。 */
+  pageSortDirection: string
+} {
+  /** URL 中请求的表格排序字段。 */
+  const requestedSortBy = url.searchParams.get('sortBy') ?? ''
+  /** URL 中请求的排序方向，仅 asc 有效，其余统一为 desc。 */
+  const requestedSortDirection = url.searchParams.get('sortDirection') === 'asc' ? 'asc' : 'desc'
+  /**
+   * 已通过自有键存在性判断的前端排序字段。
+   * 使用 Object.hasOwn 排除 Object 原型属性，避免 `toString` 等 URL 输入绕过字段白名单。
+   */
+  const pageSortBy = Object.hasOwn(USER_PAGE_SORT_FIELDS, requestedSortBy) ? requestedSortBy as UserPageSortKey : ''
+
+  return {
+    sortBy: pageSortBy ? USER_PAGE_SORT_FIELDS[pageSortBy] : undefined,
+    sortDirection: pageSortBy ? requestedSortDirection : undefined,
+    pageSortBy,
+    pageSortDirection: pageSortBy ? requestedSortDirection : '',
+  }
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
   // 权限检查：user:read
   if (!kit.guard.check(locals.session, 'user:read')) {
@@ -47,6 +101,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const search = url.searchParams.get('search') || undefined
   const statusParam = url.searchParams.get('status') || undefined
   const roleFilter = url.searchParams.get('role') || undefined
+  /** 校验后的服务端排序参数与客户端回填值。 */
+  const userSort = parseUserSort(url)
 
   // 将前端 status 值映射为 enabled 布尔值
   let enabled: boolean | undefined
@@ -58,7 +114,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   // 角色列表 + 用户列表（含角色）并行获取
   const [roles, usersResult] = await Promise.all([
     listAdminRoles(),
-    iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'] }),
+    iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'], sortBy: userSort.sortBy, sortDirection: userSort.sortDirection }),
   ])
   const iamUsers = usersResult.success ? usersResult.data.items : []
   const total = usersResult.success ? usersResult.data.total : 0
@@ -97,5 +153,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     search: search ?? '',
     status: statusParam ?? '',
     role: roleFilter ?? '',
+    sortBy: userSort.pageSortBy,
+    sortDirection: userSort.pageSortDirection,
   }
 }

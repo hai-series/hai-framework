@@ -61,6 +61,7 @@ const UI_COMPONENTS = new Set([
   'Skeleton',
   'Steps',
   'SwipeCell',
+  'TableToolbar',
   'Tabs',
   'TagInput',
   'Timeline',

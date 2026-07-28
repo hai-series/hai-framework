@@ -60,6 +60,8 @@ export { default as Steps } from './Steps.svelte'
 // 滑动操作
 export type { SwipeCellAction } from './swipe-cell-types.js'
 export { default as SwipeCell } from './SwipeCell.svelte'
+// 表格工具栏
+export { default as TableToolbar } from './TableToolbar.svelte'
 export { default as Tabs } from './Tabs.svelte'
 export { default as TagInput } from './TagInput.svelte'
 // 时间线

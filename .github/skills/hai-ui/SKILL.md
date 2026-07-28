@@ -88,8 +88,8 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 
 - 列定义加 `sortable: true` 即可点击列头排序；默认客户端排序当前数据。
 - 受控（服务端）排序：传 `sortKey` / `sortDir` 并实现 `onsort(key, dir)`。
-- `CrudPage` 的列表列默认 `sortable`，筛选栏在有搜索/过滤条件时显示「重置」按钮。
-- `Pagination` 统一为 table 风格（shadcn 表格分页：总数 + 每页 + 第 X / Y 页 + 首/上/下/末 + 跳转到），`CrudPage` 默认采用；过滤工具栏为无卡片平铺布局，支持 `select/boolean/number/date/date-range/text`。
+- `CrudPage` 默认使用 `TableToolbar` 图标弹层工具栏，`toolbarStyle='filter-bar'` 可切换为平铺筛选栏；`toolbarLeading` 注入左侧标题/说明且可配合 `showHeader={false}` 隐藏默认页头，`toolbarActions` 注入右侧业务操作，`card` 插槽用于保留卡片列表视图，`sortableColumns` 声明服务端排序字段。
+- `Pagination` 统一为 table 风格（总数 + 每页 + 第 X / Y 页 + 首/上/下/末 + 跳转到）。`CrudPage` 占满父级可用高度，仅数据区滚动，表头和分页栏保持固定；需要 Tooltip 等交互式单元格时，使用 `tableCell(row, columnKey)` 插槽。
 
 ## AI 场景组件
 
@@ -184,6 +184,11 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 | `pagination.showJumper` / `pagination.showTotal` | 跳页输入 / 总数（默认开启） |
 | `pagination.showPageInfo` / `pagination.showFirstLast` | 页码文案 / 首页末页按钮（默认开启；紧凑视图可关闭） |
 | `density` | 列表密度：`'normal'`（默认）或 `'compact'`；仅影响列表行、行内操作、分页与创建/编辑/详情表单 |
+| `toolbarStyle` | `'toolbar'`（图标弹层，默认）或 `'filter-bar'`（平铺筛选栏） |
+| `showHeader` / `toolbarLeading` | 隐藏默认页头，并在 toolbar 左侧放置页面标题或说明 |
+| `toolbarActions` | 工具栏业务操作 snippet |
+| `card` | 卡片列表项渲染 snippet；仍复用分页和独立滚动容器 |
+| `sortableColumns` | 可执行服务端排序的列；为空时使用全部列表列 |
 
 分页栏始终显示，不再因数据量小而隐藏。
 
@@ -195,6 +200,7 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
   form={{ variant: 'modal', modalSize: 'lg' }}
   pagination={{ showSizeChanger: true, showJumper: true }}
   density='compact'
+  sortableColumns={[{ key: 'createdAt', label: '创建时间' }]}
   {nav}
 />
 ```
