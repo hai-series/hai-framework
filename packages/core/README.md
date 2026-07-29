@@ -328,6 +328,8 @@ core.config.clear() // 清除全部
 
 **类型还原：** 当整个值恰好是单个变量表达式（如 `${PORT:3000}`）时，插值结果按 YAML 规则还原为原生类型（number / boolean 等）。混合文本始终为字符串。
 
+`${VAR:}` 或值为空字符串的 `${VAR}` 会保留为 `''`，不会被 YAML 转成 `null`。需要表达“未配置”的模块应在自身 Schema 中把空字符串规范化为 `undefined`。
+
 ```yaml
 # config/app.yml
 debug: ${DEBUG:false} # → boolean false

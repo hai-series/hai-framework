@@ -15,6 +15,16 @@ import { aiM } from './ai-i18n.js'
 import { HaiAIError } from './ai-types.js'
 import { CompressionStrategySchema } from './compress/ai-compress-types.js'
 
+/**
+ * 可选密钥 Schema。
+ *
+ * 配置文件中的空插值、空白字符串或 YAML null 都表示“未配置”，输出统一为 undefined；
+ * 非空密钥保持原值，避免模块调用方重复编写兼容清洗逻辑。
+ */
+export const OptionalSecretSchema = z.string().nullable().transform(value =>
+  value === null || value.trim() === '' ? undefined : value,
+).optional()
+
 // ─── LLM 配置 Schema ───
 
 // ─── 多模型配置 ───
@@ -78,7 +88,7 @@ export const ModelEntrySchema = z.object({
   /** API 协议（可选，未指定时回退全局 `api`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic） */
   api: ApiTypeSchema.optional(),
   /** API Key 覆盖（可选，未提供时使用全局配置） */
-  apiKey: z.string().optional(),
+  apiKey: OptionalSecretSchema,
   /** Base URL 覆盖（可选） */
   baseUrl: z.url().optional(),
   /** 最大 Token 数覆盖（可选） */
@@ -125,7 +135,7 @@ export type ModelEntry = z.infer<typeof ModelEntrySchema>
  */
 export const LLMConfigSchema = z.object({
   /** 全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_API_KEY` 或 `process.env.OPENAI_API_KEY`） */
-  apiKey: z.string().optional(),
+  apiKey: OptionalSecretSchema,
   /** 全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASE_URL` 或 `process.env.OPENAI_BASE_URL`） */
   baseUrl: z.url().optional(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
@@ -704,14 +714,14 @@ export const AudioModelEntrySchema = z.object({
     z.tuple([z.literal('synthesize')]),
     z.tuple([z.literal('transcribe'), z.literal('synthesize')]),
   ]),
-  /** API Key 覆盖（未提供时回退对应平台环境变量） */
-  apiKey: z.string().optional(),
+  /** API Key 覆盖（未提供时可按 Audio 配置继承 LLM 密钥，最后回退对应平台环境变量） */
+  apiKey: OptionalSecretSchema,
   /** HTTP / WebSocket 端点覆盖（未提供时使用平台默认端点） */
   baseUrl: z.string().optional(),
   /** 火山引擎 App Key（`X-Api-App-Key`，旧版控制台 ASR 需要） */
-  appKey: z.string().optional(),
+  appKey: OptionalSecretSchema,
   /** 火山引擎 Access Key（`X-Api-Access-Key`，旧版控制台 ASR 需要） */
-  accessKey: z.string().optional(),
+  accessKey: OptionalSecretSchema,
   /** 火山引擎资源 ID（`X-Api-Resource-Id`；未提供时使用平台默认资源 ID） */
   resourceId: z.string().optional(),
   /** 阿里云百炼业务空间 ID（`X-DashScope-WorkSpace`，可选） */
@@ -745,6 +755,8 @@ export type AudioModelEntry = z.infer<typeof AudioModelEntrySchema>
 export const AudioConfigSchema = z.object({
   /** 注册的语音模型列表 */
   models: z.array(AudioModelEntrySchema).optional(),
+  /** 是否允许未单独配置密钥的语音模型继承 LLM 全局密钥；跨供应商部署应保持关闭。 */
+  inheritLlmApiKey: z.boolean().default(false),
   /** 默认识别模型 ID（`ai.audio.transcribe*` 未指定 model 时使用） */
   transcribeModel: z.string().optional(),
   /** 默认合成模型 ID（`ai.audio.synthesize*` 未指定 model 时使用） */
@@ -761,7 +773,8 @@ export type AudioConfig = z.infer<typeof AudioConfigSchema>
 /**
  * 已解析的语音模型配置
  *
- * 由 `resolveAudioModel()` 返回，凭据已合并环境变量、端点已应用平台默认值。
+ * 由 `resolveAudioModel()` 返回，凭据已按模型条目、显式 LLM 继承、平台环境变量的顺序解析，
+ * 端点已应用平台默认值。
  */
 export interface ResolvedAudioModel {
   /** 模型条目 ID */
@@ -770,7 +783,7 @@ export interface ResolvedAudioModel {
   provider: AudioProviderName
   /** 厂商模型名 */
   model: string
-  /** API Key（条目 > 平台环境变量） */
+  /** API Key（模型条目 > 显式启用的 LLM 密钥继承 > 平台环境变量） */
   apiKey: string | undefined
   /** 端点（条目 > 平台默认） */
   baseUrl: string
@@ -821,12 +834,14 @@ function audioProviderEnvApiKey(provider: AudioProviderName): string | undefined
  * @param audioConfig - Audio 配置
  * @param operation - 操作类型（识别 / 合成），决定使用哪个默认模型
  * @param explicit - 请求显式指定的模型 ID（最高优先级）
+ * @param llmApiKey - LLM 全局密钥，仅在 `inheritLlmApiKey` 启用时参与解析
  * @returns 成功返回已解析模型；无匹配模型返回 `AUDIO_MODEL_NOT_FOUND`；缺少凭据返回 `CONFIGURATION_ERROR`
  */
 export function resolveAudioModel(
   audioConfig: AudioConfig,
   operation: 'transcribe' | 'synthesize',
   explicit?: string,
+  llmApiKey?: string,
 ): HaiResult<ResolvedAudioModel> {
   const targetId = explicit ?? (operation === 'transcribe' ? audioConfig.transcribeModel : audioConfig.synthesizeModel)
   if (!targetId)
@@ -844,7 +859,9 @@ export function resolveAudioModel(
     )
   }
 
-  const apiKey = entry.apiKey ?? audioProviderEnvApiKey(entry.provider)
+  const apiKey = entry.apiKey
+    ?? (audioConfig.inheritLlmApiKey ? llmApiKey : undefined)
+    ?? audioProviderEnvApiKey(entry.provider)
   const hasDoubaoLegacy = Boolean(entry.appKey && entry.accessKey)
   if (!apiKey && !(entry.provider === 'doubao' && hasDoubaoLegacy))
     return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: entry.provider } }))
@@ -888,7 +905,7 @@ export const ImageModelEntrySchema = z.object({
   /** 厂商模型名 */
   model: z.string(),
   /** API Key 覆盖；未提供时回退厂商环境变量 */
-  apiKey: z.string().optional(),
+  apiKey: OptionalSecretSchema,
   /** API 基础 URL 覆盖 */
   baseUrl: z.url().optional(),
   /** 阿里云百炼业务空间 ID（可选） */

@@ -136,6 +136,7 @@ unwatch()
 - `${VAR}` — 读取 `process.env.VAR`；缺失则返回 `HaiConfigError.CONFIG_ENV_VAR_MISSING` 错误
 - `${VAR:default}` — 读取 `process.env.VAR`；缺失则使用默认值
 - **类型还原**：整个值恰好是单个变量表达式时，结果还原为原生类型（number / boolean 等）；混合文本始终为字符串
+- **空值语义**：`${VAR:}` 或值为空字符串的 `${VAR}` 保持为 `''`，不会被 YAML 解析为 `null`；是否把空字符串视为未配置由模块 Schema 明确定义
 
 ```yaml
 # config/_core.yml

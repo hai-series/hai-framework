@@ -70,6 +70,9 @@ function interpolateEnv(value: unknown): HaiResult<unknown> {
     // 当原值整体是单个 ${VAR:default} 时，插值结果需还原为 YAML 原生类型
     // 例如 ${DEBUG:false} → "false" 应还原为 boolean false
     if (FULL_VAR_PATTERN.test(value)) {
+      // YAML 会把空文档解析为 null；空插值本身仍是明确的字符串值，不能改变其类型。
+      if (result === '')
+        return ok('')
       try {
         const coerced = parse(result)
         if (coerced !== undefined)

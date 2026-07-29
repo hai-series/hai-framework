@@ -562,7 +562,7 @@ describe('api 应用类型生成', () => {
     it('根 package 不应有 @h-ai/ui 依赖', async () => {
       const content = await readGenerated(projectPath, 'package.json')
       const pkg = JSON.parse(content)
-      expect(pkg.dependencies).toBeUndefined()
+      expect(pkg.dependencies?.['@h-ai/ui']).toBeUndefined()
       expect(pkg.devDependencies.tailwindcss).toBeUndefined()
       expect(pkg.devDependencies.daisyui).toBeUndefined()
     })

@@ -78,7 +78,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     if (sizeErr)
       return { success: false, error: sizeErr }
 
-    const resolved = resolveAudioModel(audioConfig, 'transcribe', request.model)
+    const resolved = resolveAudioModel(audioConfig, 'transcribe', request.model, config.llm.apiKey)
     if (!resolved.success)
       return resolved
     const startedAt = Date.now()
@@ -101,7 +101,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
         throw sizeErr
     }
 
-    const resolved = resolveAudioModel(audioConfig, 'transcribe', request.model)
+    const resolved = resolveAudioModel(audioConfig, 'transcribe', request.model, config.llm.apiKey)
     if (!resolved.success)
       throw resolved.error
     const startedAt = Date.now()
@@ -122,7 +122,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
     if (!request.text)
       return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'empty text' } }))
 
-    const resolved = resolveAudioModel(audioConfig, 'synthesize', request.model)
+    const resolved = resolveAudioModel(audioConfig, 'synthesize', request.model, config.llm.apiKey)
     if (!resolved.success)
       return resolved
     const startedAt = Date.now()
@@ -137,7 +137,7 @@ export function createAudioOperations(config: AIConfig): AudioOperations {
   }
 
   async function* synthesizeStream(request: SynthesisStreamRequest): AsyncIterable<SynthesisEvent> {
-    const resolved = resolveAudioModel(audioConfig, 'synthesize', request.model)
+    const resolved = resolveAudioModel(audioConfig, 'synthesize', request.model, config.llm.apiKey)
     if (!resolved.success)
       throw resolved.error
     const startedAt = Date.now()

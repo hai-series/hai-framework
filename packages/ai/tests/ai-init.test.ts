@@ -7,7 +7,7 @@ import type { AIRelStore, AIStoreProvider, AIVectorStore } from '../src/index.js
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { ai, HaiAIError } from '../src/index.js'
+import { ai, AIConfigSchema, HaiAIError, OptionalSecretSchema } from '../src/index.js'
 
 function createNoopRelStore<T>(): AIRelStore<T> {
   return {
@@ -33,6 +33,28 @@ function createNoopVectorStore(): AIVectorStore {
 }
 
 describe('ai.init', () => {
+  it('可选密钥应把 null 和空白字符串规范化为 undefined', () => {
+    expect(OptionalSecretSchema.parse(null)).toBeUndefined()
+    expect(OptionalSecretSchema.parse('')).toBeUndefined()
+    expect(OptionalSecretSchema.parse('   ')).toBeUndefined()
+    expect(OptionalSecretSchema.parse('sk-test')).toBe('sk-test')
+
+    const config = AIConfigSchema.parse({
+      llm: { apiKey: null },
+      audio: {
+        models: [{
+          id: 'asr',
+          provider: 'mimo',
+          model: 'mimo-v2.5-asr',
+          operations: ['transcribe'],
+          apiKey: null,
+        }],
+      },
+    })
+    expect(config.llm.apiKey).toBeUndefined()
+    expect(config.audio?.models?.[0].apiKey).toBeUndefined()
+  })
+
   it('默认配置初始化成功', async () => {
     const result = await ai.init()
     expect(result.success).toBe(true)

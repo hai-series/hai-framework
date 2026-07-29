@@ -10,19 +10,19 @@ llm:
   timeout: 120000
 
 audio:
+  # MiMo 的 LLM/ASR/TTS 共用同一密钥；跨供应商时不要启用继承。
+  inheritLlmApiKey: true
   models:
     - id: asr
       provider: mimo
       model: mimo-v2.5-asr
       operations: [transcribe]
-      apiKey: ${AI_API_KEY:}
       baseUrl: https://api.xiaomimimo.com/v1
       timeout: 120000
     - id: tts
       provider: mimo
       model: mimo-v2.5-tts
       operations: [synthesize]
-      apiKey: ${AI_API_KEY:}
       baseUrl: https://api.xiaomimimo.com/v1
       timeout: 120000
   transcribeModel: asr

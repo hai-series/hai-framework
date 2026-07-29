@@ -219,6 +219,29 @@ describe('ai.audio 资源上限与缺失凭据', () => {
     if (saved !== undefined)
       process.env.VOLC_API_KEY = saved
   })
+
+  it('显式启用后，未配置的语音密钥继承 LLM 密钥', async () => {
+    vi.clearAllMocks()
+    mockTranscribe.mockResolvedValue({ text: 'shared key' })
+    const initResult = await ai.init({
+      llm: { apiKey: 'sk-shared', model: 'gpt-4o-mini' },
+      audio: {
+        inheritLlmApiKey: true,
+        models: [{
+          id: 'oa',
+          provider: 'openai',
+          model: 'gpt-4o-transcribe',
+          operations: ['transcribe'],
+          apiKey: null,
+        }],
+      },
+    })
+    expect(initResult.success).toBe(true)
+
+    const result = await ai.audio.transcribe({ audio: wavAudio(), model: 'oa' })
+    expect(result.success).toBe(true)
+    expect(mockTranscribe).toHaveBeenCalledTimes(1)
+  })
 })
 
 // =============================================================================

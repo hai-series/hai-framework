@@ -211,11 +211,15 @@ if (setup.success) {
 
 ### 语音（Audio）
 
-先在 `ai.init()` 中注册语音模型并映射默认识别/合成模型（凭据可回退到平台环境变量）：
+先在 `ai.init()` 中注册语音模型并映射默认识别/合成模型。凭据默认回退到平台环境变量；只有 LLM 与语音模型确认使用同一凭据时，才显式启用 `inheritLlmApiKey`：
 
 ```ts
 await ai.init({
+  llm: {
+    apiKey: process.env.HAI_AI_LLM_API_KEY,
+  },
   audio: {
+    inheritLlmApiKey: true,
     models: [
       { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] },
       { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] },
@@ -261,6 +265,8 @@ for await (const event of ai.audio.synthesizeStream({
 const caps = ai.audio.getCapabilities({ operation: 'synthesize', model: 'tts' })
 if (caps.success && caps.data.synthesize?.streamingAudioOutput) { /* 可实时 TTS */ }
 ```
+
+`OptionalSecretSchema` 统一用于 LLM、Audio 与 Image 的可选密钥字段：YAML `null`、空字符串和纯空白字符串都会规范化为 `undefined`。语音密钥优先级为模型条目 `apiKey` → 启用继承后的 LLM `apiKey` → 对应平台环境变量；`inheritLlmApiKey` 默认关闭，避免跨供应商误用密钥。
 
 > `synthesizeStream` 严格按 `segment_started → audio* → segment_done` 产出事件。`segment_started` 携带服务端解析 Provider 后的**真实输出音频参数**（`format` / `sampleRate` / `channels`），播放器据此正确解码，不应按请求参数猜测格式。播放器只有在对应音频真正播放完成后才应把该段文本计入 `spokenText`；播放状态仍由应用管理。
 

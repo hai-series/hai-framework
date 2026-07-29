@@ -33,6 +33,7 @@ describe('core.config', () => {
     delete process.env.HAI_DEBUG
     delete process.env.HAI_PORT
     delete process.env.HAI_HOST
+    delete process.env.OPTIONAL_SECRET
   })
 
   // =========================================================================
@@ -119,6 +120,26 @@ describe('core.config', () => {
       expect(result.data.debug).toBe(false)
       expect(result.data.port).toBe(8080)
     }
+  })
+
+  it('load 空插值应保留为空字符串而不是 YAML null', () => {
+    const optionalSchema = z.object({ secret: z.string() })
+    // eslint-disable-next-line no-template-curly-in-string
+    writeFileSync(configPath, 'secret: ${OPTIONAL_SECRET:}\n', 'utf-8')
+
+    const defaultResult = core.config.load('app', configPath, optionalSchema)
+    expect(defaultResult.success).toBe(true)
+    if (defaultResult.success)
+      expect(defaultResult.data.secret).toBe('')
+
+    core.config.clear('app')
+    process.env.OPTIONAL_SECRET = ''
+    // eslint-disable-next-line no-template-curly-in-string
+    writeFileSync(configPath, 'secret: ${OPTIONAL_SECRET}\n', 'utf-8')
+    const environmentResult = core.config.load('app', configPath, optionalSchema)
+    expect(environmentResult.success).toBe(true)
+    if (environmentResult.success)
+      expect(environmentResult.data.secret).toBe('')
   })
 
   it('load 环境变量值应还原为 YAML 原生类型', () => {
