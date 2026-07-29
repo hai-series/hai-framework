@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test'
 
 /** 首页从真实浏览器页面发起，覆盖基础渲染链路。 */
 test('home page renders from browser', async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', error => pageErrors.push(error.message))
   await page.goto('/')
+  await expect(pageErrors).toEqual([])
   await expect(page.locator('main, section').first()).toBeVisible()
 })
