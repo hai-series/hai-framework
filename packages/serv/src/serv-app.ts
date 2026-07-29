@@ -101,10 +101,11 @@ export interface CreateServAppOptions<
   /**
    * 自定义 HTTP middleware（当前内部由 Hono 承载，但应用 API 不暴露 Hono app）。
    *
-   * 典型用途：请求日志、trace、指标、CORS、限流、租户头校验等 HTTP 层横切逻辑。
+   * 典型用途：请求日志、trace、指标、CORS、限流、租户头校验，以及不适合放入
+   * JSON/oRPC contract 的 WebSocket、文件或其它二进制 HTTP 端点。
    * 这些 middleware 会在内置安全头之后、传输加密与业务路由之前注册；
-   * 因此 CORS 这类 preflight middleware 可以直接短路返回，若需要读取解密后的业务 body，
-   * 应改用 context / procedure 层扩展，而不是 HTTP middleware。
+   * 因此 CORS preflight 或二进制端点可以直接短路返回。短路响应仍包含内置安全头，
+   * 但不会经过 transport；若需要读取解密后的业务 body，应改用 context / procedure 层扩展。
    */
   readonly middlewares?: readonly ServMiddlewareMount[]
   /**

@@ -418,7 +418,7 @@ const adminOnly = serv.requireAuth(
 
 #### HTTP middleware
 
-适用于请求日志、trace、限流、CORS、租户头校验等 **HTTP 层** 横切逻辑。常见 CORS 场景可直接复用 `serv.cors(...)`：
+适用于请求日志、trace、限流、CORS、租户头校验等 **HTTP 层** 横切逻辑，也可挂载不适合进入 JSON/oRPC contract 的 WebSocket、文件和二进制端点。常见 CORS 场景可直接复用 `serv.cors(...)`：
 
 ```typescript
 import type { ServMiddleware } from '@h-ai/serv'
@@ -451,13 +451,22 @@ const app = serv.createApp({
         await next()
       },
     },
+    {
+      path: '/assets/*',
+      middleware: c => c.body(imageBytes, 200, {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      }),
+    },
   ],
 })
 ```
 
 执行顺序固定为：`securityHeaders` → `middlewares` → `transport`（若启用）→ health/refresh-cookie/OpenAPI/RPC/docs/oRPC routes。
 
-- `middlewares` 先于 `transport` 执行，因此 CORS 这类 preflight middleware 可以直接短路返回；若需要读取解密后的业务 body，请改用 context / procedure 层扩展。
+- `middlewares` 先于 `transport` 执行，因此 CORS preflight 或二进制端点可以直接短路；短路响应仍带内置安全头，但不会经过 transport。
+- 文件端点的允许方法、路径校验、MIME、缓存和访问授权由应用显式决定；框架不内置头像等业务概念。
+- 若需要读取解密后的业务 body，请改用 context / procedure 层扩展。
 - 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），记得通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露。
 
 #### Context pipeline

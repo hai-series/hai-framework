@@ -65,6 +65,30 @@ describe('@h-ai/serv', () => {
     expect(await response.text()).toBe('intercepted')
   })
 
+  it('allows a path-scoped middleware to terminate with a binary response', async () => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      middlewares: [
+        {
+          path: '/assets/*',
+          middleware: c => c.body(new Uint8Array([0x89, 0x50, 0x4E, 0x47]), 200, {
+            'cache-control': 'public, max-age=60',
+            'content-type': 'image/png',
+          }),
+        },
+      ],
+    })
+
+    const response = await app.request('/assets/example.png')
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('image/png')
+    expect(response.headers.get('cache-control')).toBe('public, max-age=60')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([0x89, 0x50, 0x4E, 0x47])
+  })
+
   it('supports path-scoped custom middlewares', async () => {
     const app = serv.createApp({
       contract,
