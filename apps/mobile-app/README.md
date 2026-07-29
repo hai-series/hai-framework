@@ -54,16 +54,16 @@ import { apiServiceContract } from '@h-ai/api-service-contract'
 export const mobileApiClient = apiClient.create(apiServiceContract)
 ```
 
-默认 API 地址为 `http://localhost:3000/api/v1`，需要与 `apps/api-service/config/_serv.yml` 的 `http.apiPrefix` 保持一致。
+默认 API 地址为 `http://localhost:3000/api/v1`；部署时应通过环境变量与服务端 `_serv.yml` 对齐。
 
 ## 配置
 
-| 变量                           | 说明                                                    | 默认值                         |
-| ------------------------------ | ------------------------------------------------------- | ------------------------------ |
-| `PUBLIC_API_BASE`              | `apps/api-service` API 基础 URL，需包含 `/api/v1`       | `http://localhost:3000/api/v1` |
-| `PUBLIC_API_TRANSPORT`         | transport 加密开关；服务端关闭 transport 时才设为 `off` | `on`                           |
-| `PUBLIC_API_KEY_EXCHANGE_PATH` | transport 密钥协商路径                                  | `/_hai/key-exchange`           |
-| `CAPACITOR_SERVER_URL`         | Capacitor live reload 前端地址；只用于调试前端页面      | 空                             |
+| 变量                           | 说明                                                       | 默认值                         |
+| ------------------------------ | ---------------------------------------------------------- | ------------------------------ |
+| `PUBLIC_API_BASE`              | `apps/api-service` API 基础 URL；覆盖时需包含共享 API 前缀 | `http://localhost:3000/api/v1` |
+| `PUBLIC_API_TRANSPORT`         | transport 加密开关；服务端关闭 transport 时才设为 `off`    | `on`                           |
+| `PUBLIC_API_KEY_EXCHANGE_PATH` | transport 密钥协商路径                                     | `/_hai/key-exchange`           |
+| `CAPACITOR_SERVER_URL`         | Capacitor live reload 前端地址；只用于调试前端页面         | 空                             |
 
 Android 模拟器访问宿主机后端时通常使用：
 

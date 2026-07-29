@@ -48,7 +48,7 @@ import type {
   ApiClientConfig,
   ApiClientLifecycle,
 } from './api-client-types.js'
-import { apiContract, IAM_AUTH_ROUTES } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { core, err, ok } from '@h-ai/core'
 import { createORPCClient, ORPCError } from '@orpc/client'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
@@ -63,7 +63,7 @@ import { HaiApiClientError } from './api-client-types.js'
 
 const DEFAULT_TIMEOUT = 30_000
 const DEFAULT_CLIENT_NAME = 'hai-api-client'
-const DEFAULT_REFRESH_PATH = IAM_AUTH_ROUTES.refresh
+const DEFAULT_REFRESH_PATH = apiContract.pathOf(apiContract.iam.auth.refresh)
 const TRAILING_SLASHES_REGEX = /\/+$/
 
 /** Token 存储方案集合：内存 / 浏览器 localStorage / httpOnly Cookie。 */

@@ -99,17 +99,15 @@ apps/desktop-app/
 
 ## API 调用与加密配置
 
-桌面端保留 `PUBLIC_API_BASE` 负责 API 地址，transport 相关设置放到 `config/_crypto.yml`：
+桌面端通过 `PUBLIC_API_BASE` 配置完整 API 基础 URL，transport 客户端设置放在 `config/_crypto.yml`：
 
 ```yaml
 transport:
   keyExchangePath: /_hai/key-exchange
 ```
 
-- `api-service` 若使用默认 `_serv.yml`，桌面端无需额外传入自定义路径。
-- 如果 `api-service` 修改了 `http.apiPrefix` 或 `transport.keyExchangePath`，桌面端要同步调整：
-  - `PUBLIC_API_BASE`
-  - `config/_crypto.yml`
+- `PUBLIC_API_BASE` 需包含服务端 `_serv.yml.http.apiPrefix`。
+- `keyExchangePath` 需与服务端 `_serv.yml.transport.keyExchangePath` 一致。
 
 桌面端初始化入口在 `src/lib/api.ts`，调用顺序为：
 

@@ -6,7 +6,7 @@ api-service 与桌面端等客户端共享的应用级 HTTP API 契约包。
 
 - `apiServiceContract`：组合 `iam`、`storage`、`ai` 与 api-service 自有 `app` contract。
 - `appContract`：api-service 自有端点，包含 `app.info` 与 `app.echo`。
-- `App*Schema` / `App*` 类型：自有端点的输入输出 Schema 与类型。
+- `App*Schema` / `App*` 类型：跨 procedure 与实现层复用的输入/数据 Schema 与类型。
 
 ## 快速开始
 
@@ -46,7 +46,7 @@ apiServiceContract.app.echo
 
 ## 配置
 
-本包无运行时配置，不读取环境变量。
+本包无运行时配置，不读取环境变量。API 前缀、基础设施路径、CORS Header 与加密传输设置由服务端 `config/_serv.yml` 管理。
 
 ## 错误处理
 

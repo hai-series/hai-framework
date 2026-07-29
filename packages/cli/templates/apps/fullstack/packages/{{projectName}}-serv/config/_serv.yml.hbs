@@ -2,12 +2,30 @@
 # {{fullstack.servPackageName}} - Serv / HTTP 入口配置
 # =============================================================================
 #
-# HTTP 路由路径（apiPrefix / health / openapi / docs）由共享 contract
-# 统一定义，作为前后端唯一事实来源，因此不在此重复声明。
-# 本文件仅声明服务端运行时设置。
+# 业务接口路径直接写在对应 *-contract.ts；公共 HTTP 传输配置以本文件为准。
 # =============================================================================
 
-# CORS 允许的来源。
-# 开发环境放开为 *，生产环境应收敛为前端域名（如 https://app.example.com）。
+http:
+  apiPrefix: /api/v1
+  openapi:
+    path: /openapi.json
+  docs:
+    path: /docs
+  health:
+    path: /health
+    readyPath: /ready
+  rpc: false
+
 cors:
   origin: ${HAI_CORS_ORIGIN:*}
+  nativeOrigins: ${HAI_NATIVE_ORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  credentials: false
+  allowedHeaders:
+    - Authorization
+    - Content-Type
+    - X-Request-Id
+    - X-Requested-With
+  exposedHeaders:
+    - X-Request-Id
+
+transport: false

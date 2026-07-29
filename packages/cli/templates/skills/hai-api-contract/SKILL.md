@@ -80,7 +80,7 @@ const WidgetCreateInputSchema = z.object({
   description: z.string().optional(),
 })
 
-// 输出 Schema（统一包装为 HaiResult<T>）
+// 同一 contract 内两个接口复用，因此保留为文件私有常量，不从 schemas 导出。
 const WidgetOutputSchema = apiContract.haiResultSchema(z.object({
   id: z.string(),
   name: z.string(),
@@ -196,15 +196,26 @@ myContract.ai.chats.createCompletion  // POST /ai/chats/completion
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
-const OutputSchema = apiContract.haiResultSchema(z.object({
-  id: z.string(),
-  name: z.string(),
-}))
+const getWidget = apiContract
+  .route({ method: 'GET', path: '/widgets/{id}' })
+  .output(apiContract.haiResultSchema(z.object({
+    id: z.string(),
+    name: z.string(),
+  })))
 
 // 等价于:
 // { success: true, data: { id: string, name: string } }
 // | { success: false, error: HaiError }
 ```
+
+### `apiContract.pathOf(procedure)` — 读取业务路径
+
+```typescript
+const refreshPath = apiContract.pathOf(apiContract.iam.auth.refresh)
+// '/auth/refresh'
+```
+
+middleware、client 与 E2E 需要业务路径时从 contract 元数据读取，不维护第二份 route 常量。服务端挂载时再与 `_serv.yml` 的 `http.apiPrefix` 拼接。
 
 ### 公共 Schema 工具
 
@@ -224,6 +235,11 @@ const OutputSchema = apiContract.haiResultSchema(z.object({
 ### 必须遵循
 
 - **输出必须包装为 `apiContract.haiResultSchema`** — 客户端依赖 `success` 判断成功/失败
+- **业务 path 直接写在对应 `*-contract.ts`** — 禁止新增 `*-routes.ts` 或业务路径常量
+- **一次性 `*OutputSchema` 直接内联** — 不在 schemas 文件声明或导出
+- **同一 contract 内重复使用的输出可设私有常量** — 不得为复用扩大公共导出
+- **公共 HTTP 传输配置以配置文件为准** — API 前缀、健康检查、OpenAPI/docs、密钥协商路径与跨端 Header 放在 service 的 `_serv.yml`，不放 contract 包
+- **schemas 只保留真实复用结构** — 至少被多个接口或 contract/procedure 等不同层共同消费
 - **`operationId` 全局唯一** — 格式为 `domain.resource.action`，如 `iam.auth.login`
 - **`tags` 至少包含领域名** — 供 OpenAPI 文档分组
 - **输入 Schema 用 Zod v4** — 与 `@orpc/zod/zod4` 的 `ZodToJsonSchemaConverter` 配套
@@ -234,6 +250,16 @@ const OutputSchema = apiContract.haiResultSchema(z.object({
 - ❌ Contract 文件中 `import` 任何业务模块（`@h-ai/iam`、`@h-ai/storage` 等）
 - ❌ 在 contract 中使用 `z.any()` 或 `z.unknown()` 作为输出类型
 - ❌ 重复定义已存在的领域 contract
+- ❌ 导出只被单个 contract 接口使用的 `*OutputSchema`
+- ❌ 用独立 `*-routes.ts` 维护业务接口路径
+
+### 文件职责
+
+| 文件 | 只负责 |
+| --- | --- |
+| `*-contract.ts` | 业务接口 path、method、输入与输出边界 |
+| `*-schemas.ts` | 跨接口或跨层复用的输入、实体、数据结构 |
+| service `config/_serv.yml` | API 前缀、基础设施端点、跨端 Header 与加密 transport 配置 |
 
 ---
 
@@ -266,9 +292,9 @@ const getWidget = apiContract
 ### 无输入的端点
 
 ```typescript
-const healthContract = apiContract
-  .route({ method: 'GET', path: '/health', operationId: 'health.check', tags: ['system'] })
-  .output(apiContract.haiResultSchema(z.object({ status: z.string() })))
+const versionContract = apiContract
+  .route({ method: 'GET', path: '/system/version', operationId: 'system.version', tags: ['system'] })
+  .output(apiContract.haiResultSchema(z.object({ version: z.string() })))
 ```
 
 ---

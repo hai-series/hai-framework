@@ -23,9 +23,6 @@ export { HaiErrorSchema } from './common/result-schemas.js'
 // 组合 contract 输入/输出类型。
 export type { CreateApiContractOptions, CreatedApiContract } from './composition/create-api-contract.js'
 
-// 路由常量（应用端可能用于 redirect / refresh path 构造）。
-export { IAM_AUTH_ROUTES } from './iam/iam-contract.js'
-
 export type { IamContract } from './iam/iam-contract.js'
 export * from './iam/iam-schemas.js'
 export type { PaymentContract } from './payment/payment-contract.js'

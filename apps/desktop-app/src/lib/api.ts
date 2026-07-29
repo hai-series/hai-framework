@@ -52,7 +52,6 @@ export async function initApi(): Promise<void> {
       baseUrl,
       auth: {
         storage: apiClient.tokenStorage.memory(),
-        refreshPath: '/auth/refresh',
         onRefreshFailed: () => {
           // refresh token 失效 → 强制回登录页
           navigate('/login')

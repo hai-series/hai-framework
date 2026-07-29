@@ -46,11 +46,12 @@ apiServiceContract.app.echo
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
+import { AppInfoOutputDataSchema } from './app-schemas.js'
 
 export const appContract = {
   info: apiContract
     .route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
-    .output(AppInfoOutputSchema),
+    .output(apiContract.haiResultSchema(AppInfoOutputDataSchema)),
 }
 ```
 
@@ -106,25 +107,33 @@ await crypto.close()
 ### 传输加密说明
 
 - 业务接口（默认 `/api/v1/*`）需要使用 `@h-ai/api-client`、`@h-ai/crypto` transport client 或等价的 transport-aware 客户端完成密钥协商。
-- 明文可直接访问哪些路径，也由 `_serv.yml` 的 `transport.excludePaths` 决定；默认保留 `/health`、`/ready`、`/openapi.json`、`/docs`、`/_hai/scalar.js`。
-- 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；若你修改了 `http.apiPrefix` 或 `transport.keyExchangePath`，客户端也必须同步调整。
+- API 前缀、基础设施路径、明文排除路径和跨端 Header 统一由 `config/_serv.yml` 定义。
+- 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；修改配置时，客户端的完整 API Base 与密钥协商路径也需同步。
 - 启用 `auth: {}` 与 `transport: { crypto }` 时，401 后的 `/auth/refresh` 也会复用同一 transport 会话，不会降级为明文刷新。
-- 浏览器 / WebView 跨 origin 联调时，示例应用默认允许 `localhost` / `127.0.0.1` 任意端口，以及 `tauri://localhost`、`https://tauri.localhost`、`capacitor://localhost`；若生产环境需要其他 origin，请调整 `src/app.ts` 中的 origin 白名单函数。
+- 浏览器 / WebView 跨 origin 联调统一配置 `config/_serv.yml` 的 `cors.origin` 与 `cors.nativeOrigins`。生产环境禁止空值和 `*`，并按规范化后的完整 Origin 精确匹配；不要在 `src/app.ts` 维护业务侧白名单函数。
+- `serv.createRuntimeSecurityPolicy(...)` 将配置收敛为运行时安全上限：生产环境启用 Secure refresh cookie，并关闭 OpenAPI/docs；具体路径与跨端 Header 仍完全由 `_serv.yml` 决定。
 
 ```yaml
 # config/_serv.yml
 http:
   apiPrefix: /api/v1
+  health:
+    path: /health
+    readyPath: /ready
+
+cors:
+  origin: ${HAI_CORS_ORIGIN:*}
+  nativeOrigins: ${HAI_NATIVE_ORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  allowedHeaders:
+    - Authorization
+    - X-Client-Id
+  exposedHeaders:
+    - X-Encrypted
 
 transport:
   keyExchangePath: /_hai/key-exchange
   excludePaths:
     - /health
-    - /ready
-    - /openapi.json
-    - /docs
-    - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 客户端默认调用方式：
@@ -240,14 +249,14 @@ await apiClient.close()
 await crypto.close()
 ```
 
-如果你把 `config/_serv.yml` 中的 `transport.keyExchangePath` 改成了非默认值，记得同步把 `transport.keyExchangePath` 传给 `apiClient.init(...)`。
+如果修改了 `_serv.yml.transport.keyExchangePath`，记得同步客户端的 `transport.keyExchangePath`。
 
 ## 配置
 
 配置文件位于 `config/`：
 
 - `_core.yml`：应用名称、版本、运行环境。
-- `_serv.yml`：`@h-ai/serv` HTTP 入口 + transport 配置（`apiPrefix`、`openapi`、`docs`、`health`、`rpc`、`transport`）。
+- `_serv.yml`：`@h-ai/serv` 的 HTTP、CORS 与加密 transport 配置；配置文件是生产传输约定的权威来源。
 - `_db.yml`：关系数据库配置。
 - `_cache.yml`：缓存配置。
 - `_iam.yml`：认证与 RBAC 配置。

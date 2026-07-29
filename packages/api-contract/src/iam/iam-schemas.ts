@@ -1,14 +1,14 @@
 /**
  * @h-ai/api-contract — IAM 领域 Schema
  *
- * 包含用户、Token、角色、权限以及相关 input/output 的 Zod Schema 定义。
- * 所有 Output Schema 均用 `haiResultSchema()` 封装，与 `@h-ai/core` HaiResult<T> 保持一致。
+ * 包含用户、Token、角色、权限以及相关 input/data 的 Zod Schema 定义。
+ * 一次性输出包装在 contract 中内联，仅保留跨接口、跨层复用的数据结构。
  * @module iam-schemas
  */
 
+import type { HaiResult } from '@h-ai/core'
 import { z } from 'zod'
-import { paginatedSchema, PaginationQuerySchema } from '../common/pagination-schemas.js'
-import { haiResultSchema } from '../common/result-schemas.js'
+import { PaginationQuerySchema } from '../common/pagination-schemas.js'
 
 /** 用户基础信息 Schema。 */
 export const IamUserSchema = z.object({
@@ -222,30 +222,15 @@ export const IamCreatePermissionInputSchema = z.object({
   type: IamPermissionTypeSchema.optional(),
 })
 
-export const IamAuthResultOutputSchema = haiResultSchema(IamAuthResultSchema)
-export const IamCurrentUserOutputSchema = haiResultSchema(IamCurrentUserSchema)
-export const IamRefreshTokenOutputSchema = haiResultSchema(IamRefreshTokenDataSchema)
-export const IamSendOtpOutputSchema = haiResultSchema(IamSendOtpDataSchema)
-export const IamUserOutputSchema = haiResultSchema(IamUserSchema)
-export const IamNullableUserOutputSchema = haiResultSchema(IamUserSchema.nullable())
-export const IamUsersPageOutputSchema = haiResultSchema(paginatedSchema(IamUserSchema))
-export const IamRoleOutputSchema = haiResultSchema(IamRoleSchema)
-export const IamNullableRoleOutputSchema = haiResultSchema(IamRoleSchema.nullable())
-export const IamRolesPageOutputSchema = haiResultSchema(paginatedSchema(IamRoleSchema))
-export const IamPermissionOutputSchema = haiResultSchema(IamPermissionSchema)
-export const IamNullablePermissionOutputSchema = haiResultSchema(IamPermissionSchema.nullable())
-export const IamPermissionsPageOutputSchema = haiResultSchema(paginatedSchema(IamPermissionSchema))
-export const IamVoidOutputSchema = haiResultSchema(z.void())
-
 export type IamLoginInput = z.infer<typeof IamLoginInputSchema>
 export type IamOtpLoginInput = z.infer<typeof IamOtpLoginInputSchema>
 export type IamLogoutInput = z.infer<typeof IamLogoutInputSchema>
 export type IamSendOtpInput = z.infer<typeof IamSendOtpInputSchema>
-export type IamAuthResultOutput = z.infer<typeof IamAuthResultOutputSchema>
+export type IamAuthResultOutput = HaiResult<z.infer<typeof IamAuthResultSchema>>
 export type IamCurrentUser = z.infer<typeof IamCurrentUserSchema>
-export type IamCurrentUserOutput = z.infer<typeof IamCurrentUserOutputSchema>
+export type IamCurrentUserOutput = HaiResult<IamCurrentUser>
 export type IamRefreshTokenInput = z.infer<typeof IamRefreshTokenInputSchema>
-export type IamRefreshTokenOutput = z.infer<typeof IamRefreshTokenOutputSchema>
+export type IamRefreshTokenOutput = HaiResult<z.infer<typeof IamRefreshTokenDataSchema>>
 export type IamRegisterInput = z.infer<typeof IamRegisterInputSchema>
 export type IamChangePasswordInput = z.infer<typeof IamChangePasswordInputSchema>
 export type IamUpdateCurrentUserInput = z.infer<typeof IamUpdateCurrentUserInputSchema>

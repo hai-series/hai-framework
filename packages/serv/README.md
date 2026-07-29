@@ -156,6 +156,14 @@ const app = serv.createApp({
   contract,
   procedures,
   http: servConfig.http,
+  middlewares: [{
+    middleware: serv.cors({
+      origin: servConfig.cors.origin,
+      credentials: servConfig.cors.credentials,
+      allowedHeaders: [...servConfig.cors.allowedHeaders],
+      exposedHeaders: [...servConfig.cors.exposedHeaders],
+    }),
+  }],
   transport: servConfig.transport === false
     ? undefined
     : {
@@ -484,6 +492,17 @@ http:
     readyPath: /ready
   rpc: false
 
+cors:
+  origin: https://app.example.com
+  nativeOrigins: capacitor://app.example.local,tauri://app.example.local
+  credentials: true
+  allowedHeaders:
+    - Authorization
+    - Content-Type
+    - X-Client-Id
+  exposedHeaders:
+    - X-Encrypted
+
 transport:
   keyExchangePath: /_hai/key-exchange
   excludePaths:
@@ -502,7 +521,39 @@ transport:
 - `openapi`：默认 `false`；启用：`{ path: '/openapi.json' }`
 - `docs`：默认 `false`；启用：`{ path: '/docs' }`（依赖 `openapi`）；启用后自动挂载 `/_hai/scalar.js`，从 `@scalar/api-reference` 的 browser bundle 提供本地 Scalar UI 脚本，无需外网 CDN
 - `rpc`：默认 `false`；启用：`{ prefix: '/rpc', access: 'loopback' | 'private-network' | 'gateway-only', gatewayHeader?, gatewaySecret? }`
+- `cors`：配置文件中的跨端 origin、credentials、allowedHeaders 与 exposedHeaders；应用通过 `serv.cors(...)` 装配。
 - `transport`：`config/_serv.yml` 顶层配置；启用后可通过 `servConfig.transport` 装配到 `createApp({ transport })`，默认密钥协商子路径 `/_hai/key-exchange`
+
+生产环境应先通过 `serv.createRuntimeSecurityPolicy(...)` 收敛 CORS、Cookie 与文档暴露策略：
+
+```ts
+const security = serv.createRuntimeSecurityPolicy({
+  environment: coreConfig.env,
+  corsOrigin: servConfig.cors.origin,
+  nativeOrigins: servConfig.cors.nativeOrigins,
+})
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: {
+    ...servConfig.http,
+    openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
+    docs: security.exposeApiDocs ? servConfig.http.docs : false,
+  },
+  refreshCookie: { secure: security.secureRefreshCookie },
+  middlewares: [{
+    middleware: serv.cors({
+      origin: security.allowOrigin,
+      credentials: servConfig.cors.credentials,
+      allowedHeaders: [...servConfig.cors.allowedHeaders],
+      exposedHeaders: [...servConfig.cors.exposedHeaders],
+    }),
+  }],
+})
+```
+
+生产环境下 `_serv.yml` 的 `cors.origin` 为空或为 `*` 会在启动时失败；Web 与 Capacitor/Tauri Origin 均按规范化后的完整 Origin 精确匹配，避免后缀伪造。生产环境同时强制 Secure refresh cookie 并关闭 OpenAPI/docs，配置文件仍决定非生产环境具体挂载哪些端点。
 
 ## 错误处理
 

@@ -20,7 +20,7 @@ import type { Hono } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ServIam } from './serv-context.js'
 import process from 'node:process'
-import { IAM_AUTH_ROUTES } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
 import { getCookie } from 'hono/cookie'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
@@ -83,6 +83,14 @@ interface ResolvedRefreshCookieConfig {
   onRefresh: (refreshToken: string) => Promise<HaiResult<RefreshTokenPair>>
 }
 
+const IAM_AUTH_PATHS = {
+  login: apiContract.pathOf(apiContract.iam.auth.login),
+  loginWithOtp: apiContract.pathOf(apiContract.iam.auth.loginWithOtp),
+  register: apiContract.pathOf(apiContract.iam.auth.register),
+  logout: apiContract.pathOf(apiContract.iam.auth.logout),
+  refresh: apiContract.pathOf(apiContract.iam.auth.refresh),
+}
+
 function resolveRefreshCookieConfig(
   apiPrefix: string,
   config: RefreshCookieConfig,
@@ -104,7 +112,7 @@ function resolveRefreshCookieConfig(
     cookieName: config.cookieName ?? 'hai_refresh_token',
     maxAge: config.maxAge ?? 30 * 24 * 3600,
     isSecure: config.secure ?? (process.env.NODE_ENV === 'production'),
-    refreshCookiePath: `${apiPrefix}${IAM_AUTH_ROUTES.refresh}`,
+    refreshCookiePath: `${apiPrefix}${IAM_AUTH_PATHS.refresh}`,
     onRefresh,
   }
 }
@@ -197,11 +205,11 @@ export function mountRefreshCookieRoutes(
   const { cookieName, maxAge, isSecure, refreshCookiePath, onRefresh } = resolveRefreshCookieConfig(apiPrefix, config, iam)
 
   // ─── login / register / loginWithOtp：oRPC 处理后，拦截成功响应写入 cookie ──
-  // 路径从 apiContract.iam（IAM_AUTH_ROUTES）读取，保持与 contract 定义同步。
+  // 路径直接从 apiContract.iam 的 route 元数据读取，保持 contract 为唯一来源。
   const loginPaths = [
-    `${apiPrefix}${IAM_AUTH_ROUTES.login}`,
-    `${apiPrefix}${IAM_AUTH_ROUTES.loginWithOtp}`,
-    `${apiPrefix}${IAM_AUTH_ROUTES.register}`,
+    `${apiPrefix}${IAM_AUTH_PATHS.login}`,
+    `${apiPrefix}${IAM_AUTH_PATHS.loginWithOtp}`,
+    `${apiPrefix}${IAM_AUTH_PATHS.register}`,
   ]
   for (const path of loginPaths) {
     app.post(path, async (c, next) => {
@@ -232,7 +240,7 @@ export function mountRefreshCookieRoutes(
   }
 
   // ─── logout：oRPC 处理后，拦截成功响应清除 cookie ────────────────────────────
-  app.post(`${apiPrefix}${IAM_AUTH_ROUTES.logout}`, async (c, next) => {
+  app.post(`${apiPrefix}${IAM_AUTH_PATHS.logout}`, async (c, next) => {
     await next()
     if (c.res.status !== 200)
       return
@@ -249,7 +257,7 @@ export function mountRefreshCookieRoutes(
 
   // ─── refresh：专属路由，绕过 oRPC，直接从 cookie 读取 token 并刷新 ─────────
   // 此路由须在 oRPC 通配符之前注册，Hono 才能正确匹配。
-  app.post(`${apiPrefix}${IAM_AUTH_ROUTES.refresh}`, async (c) => {
+  app.post(`${apiPrefix}${IAM_AUTH_PATHS.refresh}`, async (c) => {
     // access token 认证不走这里；这里只有“用 refresh token 换新 access token”这一件事。
     const refreshToken = getCookie(c, cookieName)
     if (!refreshToken) {

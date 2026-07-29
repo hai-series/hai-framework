@@ -5,10 +5,9 @@
  * - `app.info`：公开服务元信息（无需认证）。
  * - `app.echo`：认证后回显输入，返回调用者上下文。
  *
- * 所有 Output 用 `apiContract.haiResultSchema()` 封装，与全局 HaiResult 一致。
+ * 一次性 Output 包装直接定义在 app-contract.ts，只保留跨层复用的数据结构。
  */
 
-import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
 // ─── app.info ────────────────────────────────────────────────────────────────
@@ -20,9 +19,6 @@ export const AppInfoOutputDataSchema = z.object({
   uptimeMs: z.number().int().nonnegative(),
   transportEnabled: z.boolean(),
 })
-
-/** app.info 标准 HaiResult 输出。 */
-export const AppInfoOutputSchema = apiContract.haiResultSchema(AppInfoOutputDataSchema)
 
 // ─── app.echo ────────────────────────────────────────────────────────────────
 
@@ -38,9 +34,6 @@ export const AppEchoOutputDataSchema = z.object({
   requestId: z.string(),
   timestamp: z.string(),
 })
-
-/** app.echo 标准 HaiResult 输出。 */
-export const AppEchoOutputSchema = apiContract.haiResultSchema(AppEchoOutputDataSchema)
 
 export type AppInfoOutputData = z.infer<typeof AppInfoOutputDataSchema>
 export type AppEchoInput = z.infer<typeof AppEchoInputSchema>

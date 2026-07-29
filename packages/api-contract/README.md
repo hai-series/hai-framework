@@ -7,6 +7,7 @@
 - `apiContract.iam`、`apiContract.storage`、`apiContract.ai`、`apiContract.payment`：领域级 contract。
 - `apiContract.create()`：按应用场景组合启用的领域 contract。
 - `apiContract.route()`：定义自定义 HTTP 路由元数据，供应用级 contract 复用。
+- `apiContract.pathOf()`：从 contract procedure 读取唯一业务路径，供 middleware/client 复用。
 - `apiContract.haiResultSchema()` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema()`：公共 DTO Schema 工厂。
 - 公共 DTO Schema：所有 HTTP 输出统一包装为 `HaiResult<T>`。
 - IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
@@ -30,12 +31,10 @@ export const contract = apiContract.create({
 import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
-const PingOutput = apiContract.haiResultSchema(z.object({ pong: z.boolean() }))
-
 export const appContract = {
   ping: apiContract
     .route({ method: 'POST', path: '/app/ping', operationId: 'app.ping', tags: ['app'] })
-    .output(PingOutput),
+    .output(apiContract.haiResultSchema(z.object({ pong: z.boolean() }))),
 }
 ```
 
@@ -80,8 +79,11 @@ const app = serv.createApp({
 
 - `apiContract.create(options)`：过滤 `false` / `undefined` 领域并组合应用级 contract。
 - `apiContract.route(routeConfig)`：定义自定义 endpoint 的 method/path/operationId/tags 等路由元数据。
+- `apiContract.pathOf(procedure)`：读取 procedure 在 `*-contract.ts` 中声明的业务路径，不维护独立 routes 常量。
 - `apiContract.haiResultSchema(dataSchema)` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema(itemSchema)`：公共 DTO Schema 工厂。
-- `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：领域输入 / 输出 DTO Schema。
+- `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：真正跨接口、跨层复用的输入与数据结构。
+
+业务 path 必须直接写在对应 `*-contract.ts`。只使用一次的输出 Schema 直接内联到 `.output(...)`；同一 contract 文件内重复使用时可保留私有常量，但不得从 schemas 导出。
 
 ## 配置
 

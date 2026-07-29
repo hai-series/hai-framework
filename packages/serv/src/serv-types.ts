@@ -19,6 +19,8 @@ export type { AudioTicketGrant, AudioTicketVerification, AuthorizedAudioRequest,
 export type {
   ServConfig,
   ServConfigInput,
+  ServCorsRuntimeConfig,
+  ServCorsRuntimeConfigInput,
   ServDocsHttpConfig,
   ServHealthHttpConfig,
   ServHttpConfig,
@@ -32,5 +34,6 @@ export type { CreateServContext, CreateServContextInput, ServContext, ServIam, S
 export type { RefreshCookieConfig, RefreshTokenPair } from './serv-cookie-auth.js'
 export type { ServCorsConfig } from './serv-cors.js'
 export type { GenerateOpenAPISpecOptions } from './serv-openapi.js'
+export type { ServRuntimeSecurityPolicy, ServRuntimeSecurityPolicyInput } from './serv-runtime-security.js'
 export type { ServTransportConfig } from './serv-transport.js'
 export type { ServValidationFailureBody } from './serv-validation.js'

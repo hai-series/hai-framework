@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { apiContract } from '@h-ai/api-contract'
+import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
+
+const API_PREFIX = '/api/v1'
 
 test('service health endpoint returns ok', async ({ request }) => {
   const response = await request.get('/health')
@@ -8,7 +12,7 @@ test('service health endpoint returns ok', async ({ request }) => {
 })
 
 test('service app.info endpoint returns HaiResult', async ({ request }) => {
-  const response = await request.post('/api/v1/app/info')
+  const response = await request.post(`${API_PREFIX}${apiContract.pathOf({{api.contractExportName}}.app.info)}`)
   const body = await response.json()
 
   expect(response.status()).toBe(200)

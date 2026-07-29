@@ -3,7 +3,7 @@
 # =============================================================================
 # 说明：
 # - `transport: false` 可关闭桌面端 transport 加密（仅适用于服务端同样关闭 transport 的场景）
-# - 默认 key-exchange 端点与 api-service 的 `_serv.yml.transport.keyExchangePath` 对齐
+# - key-exchange 端点需与 api-service 的 `_serv.yml.transport.keyExchangePath` 对齐
 
 transport:
   keyExchangePath: /_hai/key-exchange

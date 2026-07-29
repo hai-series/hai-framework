@@ -1,21 +1,20 @@
 import { apiContract } from '@h-ai/api-contract'
-import { APP_CONTRACT_ROUTES } from './app-routes.js'
-import { AppEchoInputSchema, AppEchoOutputSchema, AppInfoOutputSchema } from './app-schemas.js'
+import { AppEchoInputSchema, AppEchoOutputDataSchema, AppInfoOutputDataSchema } from './app-schemas.js'
 
 /** app 领域 API contract：路径、方法、输入输出 Schema 的单一来源。 */
 export const appContract = {
   info: apiContract.route({
     method: 'POST',
-    path: APP_CONTRACT_ROUTES.info,
+    path: '/app/info',
     operationId: 'app.info',
     tags: ['app'],
     summary: 'Get application runtime information',
-  }).output(AppInfoOutputSchema),
+  }).output(apiContract.haiResultSchema(AppInfoOutputDataSchema)),
   echo: apiContract.route({
     method: 'POST',
-    path: APP_CONTRACT_ROUTES.echo,
+    path: '/app/echo',
     operationId: 'app.echo',
     tags: ['app'],
     summary: 'Echo a message through the generated service route',
-  }).input(AppEchoInputSchema).output(AppEchoOutputSchema),
+  }).input(AppEchoInputSchema).output(apiContract.haiResultSchema(AppEchoOutputDataSchema)),
 }

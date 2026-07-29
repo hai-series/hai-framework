@@ -31,6 +31,7 @@ import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
 import { cors } from './serv-cors.js'
 import { servM } from './serv-i18n.js'
 import { generateSpec } from './serv-openapi.js'
+import { createRuntimeSecurityPolicy } from './serv-runtime-security.js'
 import {
   resolveRequestLocale,
   validateInputOrFail,
@@ -50,6 +51,7 @@ export const serv = {
   listen,
   toFetch,
   cors,
+  createRuntimeSecurityPolicy,
 
   // OpenAPI / 导出
   generateSpec,

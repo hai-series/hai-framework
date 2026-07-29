@@ -279,11 +279,13 @@ for await (const ev of m.chatStream('展开讲讲', { signal: controller.signal 
 
 ## 语音（Audio）
 
-`ai.audio` 提供 ASR/TTS，Provider（OpenAI / MiMo / Qwen / 豆包）作为内部实现，凭据未配置时回退平台环境变量。调用方只表达「音频还是文本、完整还是流式」，不感知 WebSocket / SSE / 厂商事件。
+`ai.audio` 提供 ASR/TTS，Provider（OpenAI / MiMo / Qwen / 豆包）作为内部实现，凭据未配置时回退平台环境变量。调用方只表达「音频还是文本、完整还是流式」，不感知 WebSocket / SSE / 厂商事件。LLM 与语音模型确认共用凭据时，可显式设置 `inheritLlmApiKey: true`；该选项默认关闭，避免跨供应商误用密钥。
 
 ```yaml
 # ai.init 配置片段
 audio:
+  # 仅当语音服务与 LLM 确认共用同一密钥时启用
+  inheritLlmApiKey: true
   models:
     - { id: asr, provider: qwen, model: qwen3-asr-flash-realtime, operations: [transcribe] }
     - { id: tts, provider: qwen, model: qwen3-tts-flash-realtime, operations: [synthesize] }
@@ -331,6 +333,8 @@ image:
     - { id: seedream, provider: seedream, model: doubao-seedream-5-0-260128 }
   generateModel: free
 ```
+
+LLM、Audio、Image 的可选密钥统一使用 `OptionalSecretSchema`：配置中的 YAML `null`、空字符串和纯空白字符串均表示未配置。语音密钥优先级为模型条目 → 启用继承后的 LLM 密钥 → 平台环境变量，业务启动代码不应再遍历配置修补 `apiKey`。
 
 ```ts
 const image = await ai.image.generate({

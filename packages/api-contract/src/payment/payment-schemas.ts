@@ -1,5 +1,5 @@
+import type { HaiResult } from '@h-ai/core'
 import { z } from 'zod'
-import { haiResultSchema } from '../common/result-schemas.js'
 
 /** 支付渠道 Schema。 */
 export const PaymentProviderSchema = z.enum(['wechat', 'alipay', 'stripe'])
@@ -67,12 +67,6 @@ export const PaymentStripeNotifyDataSchema = z.object({
   received: z.boolean(),
 })
 
-export const PaymentCreateOrderOutputSchema = haiResultSchema(PaymentCreateOrderDataSchema)
-export const PaymentQueryOrderOutputSchema = haiResultSchema(PaymentOrderSchema)
-export const PaymentRefundOutputSchema = haiResultSchema(PaymentRefundDataSchema)
-export const PaymentNotifyMessageOutputSchema = haiResultSchema(PaymentNotifyMessageSchema)
-export const PaymentStripeNotifyOutputSchema = haiResultSchema(PaymentStripeNotifyDataSchema)
-
 export type PaymentCreateOrderInput = z.infer<typeof PaymentCreateOrderInputSchema>
-export type PaymentCreateOrderOutput = z.infer<typeof PaymentCreateOrderOutputSchema>
+export type PaymentCreateOrderOutput = HaiResult<z.infer<typeof PaymentCreateOrderDataSchema>>
 export type PaymentRefundInput = z.infer<typeof PaymentRefundInputSchema>

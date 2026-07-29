@@ -1,6 +1,7 @@
+import type { ServConfigInput } from '@h-ai/serv'
 import { core } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
-import { APP_HTTP_ROUTES, ENABLED_FRONTENDS, {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
+import { serv, ServConfigSchema } from '@h-ai/serv'
+import { ENABLED_FRONTENDS, {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
 import { createServerProcedures } from './server/procedures/index.js'
 
 const STARTED_AT = new Date().toISOString()
@@ -9,11 +10,7 @@ const STARTED_AT = new Date().toISOString()
 interface AppCoreConfig {
   name?: string
   version?: string
-}
-
-/** `_serv.yml` 中的服务端运行时设置。 */
-interface AppServConfig {
-  cors?: { origin?: string }
+  env?: string
 }
 
 /** 应用侧最小 HTTP App 抽象；不把底层 Hono 类型暴露给项目代码。 */
@@ -27,10 +24,14 @@ export function createServerApp(): ServerApp {
   // 配置来自 config/_core.yml 与 config/_serv.yml。
   // 单元测试可不初始化 core，此时回退到内置默认值。
   const coreConfig = core.config.get<AppCoreConfig>('core')
-  const servConfig = core.config.get<AppServConfig>('serv')
+  const servConfig = ServConfigSchema.parse(core.config.get<ServConfigInput>('serv') ?? {})
   const appName = coreConfig?.name ?? '{{fullstack.servPackageName}}'
   const appVersion = coreConfig?.version ?? '0.1.0'
-  const corsOrigin = servConfig?.cors?.origin ?? '*'
+  const security = serv.createRuntimeSecurityPolicy({
+    environment: coreConfig?.env,
+    corsOrigin: servConfig.cors.origin,
+    nativeOrigins: servConfig.cors.nativeOrigins,
+  })
 
   return serv.createApp({
     contract: {{fullstack.contractExportName}},
@@ -43,19 +44,16 @@ export function createServerApp(): ServerApp {
       },
     }),
     http: {
-      apiPrefix: APP_HTTP_ROUTES.apiPrefix,
-      health: {
-        path: APP_HTTP_ROUTES.health,
-        readyPath: APP_HTTP_ROUTES.ready,
-      },
-      openapi: { path: APP_HTTP_ROUTES.openapi },
-      docs: { path: APP_HTTP_ROUTES.docs },
-      rpc: false,
+      ...servConfig.http,
+      openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
+      docs: security.exposeApiDocs ? servConfig.http.docs : false,
     },
     middlewares: [{
       middleware: serv.cors({
-        origin: corsOrigin,
-        allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+        origin: security.allowOrigin,
+        credentials: servConfig.cors.credentials,
+        allowedHeaders: [...servConfig.cors.allowedHeaders],
+        exposedHeaders: [...servConfig.cors.exposedHeaders],
       }),
     }],
   })

@@ -215,7 +215,10 @@ describe('createProject — api 类型', () => {
 
   it('应生成 config/_serv.yml', async () => {
     const content = await readText(projectPath, 'apps/proj-api-service/config/_serv.yml')
+    expect(content).toContain('transport: false')
     expect(content).toContain('apiPrefix: /api/v1')
+    expect(content).toContain('allowedHeaders:')
+    expect(content).toContain('X-Request-Id')
   })
 
   it('应生成 config/_db.yml', async () => {
@@ -253,6 +256,7 @@ describe('createProject — api 类型', () => {
 
   it('应生成 contract 与 service 关键源文件', async () => {
     expect(await exists(projectPath, 'apps/proj-api-contract/src/proj-api-contract.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-contract/src/http-transport.ts')).toBe(false)
     expect(await exists(projectPath, 'apps/proj-api-service/src/app.ts')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-api-service/src/server/procedures/app-procedures.ts')).toBe(true)
   })
@@ -762,12 +766,15 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/index.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/app-contract.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/app-schemas.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/http-transport.ts')).toBe(false)
+    expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/app-routes.ts')).toBe(false)
     expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/proj-fullstack-contract.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-contract/tests/contract.test.ts')).toBe(true)
 
     const appContract = await readText(projectPath, 'packages/proj-fullstack-contract/src/app-contract.ts')
     expect(appContract).toContain('apiContract.route')
-    expect(appContract).toContain('APP_CONTRACT_ROUTES.info')
+    expect(appContract).toContain('path: \'/app/info\'')
+    expect(appContract).not.toContain('OutputSchema')
   })
 
   it('应生成 serv 包、单元测试和可启动入口', async () => {

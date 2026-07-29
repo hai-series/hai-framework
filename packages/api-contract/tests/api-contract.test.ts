@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
   apiContract,
-  IamCurrentUserOutputSchema,
+  IamCurrentUserSchema,
   IamLoginInputSchema,
-  IamRefreshTokenOutputSchema,
+  IamTokenPairSchema,
   PaginationQuerySchema,
   PaymentCreateOrderInputSchema,
 } from '../src/index.js'
@@ -30,65 +30,49 @@ describe('@h-ai/api-contract', () => {
     expect('payment' in contract).toBe(false)
   })
 
-  it('iam 登录输入和刷新输出 Schema 可校验', () => {
+  it('iam 登录输入和 token pair Schema 可校验', () => {
     expect(IamLoginInputSchema.safeParse({ identifier: 'alice', password: 'password123' }).success).toBe(true)
     expect(IamLoginInputSchema.safeParse({ identifier: '', password: 'password123' }).success).toBe(false)
 
-    const refreshOutput = IamRefreshTokenOutputSchema.safeParse({
-      success: true,
-      data: {
-        tokens: {
-          accessToken: 'access',
-          refreshToken: 'refresh',
-          expiresIn: 3600,
-          tokenType: 'Bearer',
-        },
-      },
+    const tokenPair = IamTokenPairSchema.safeParse({
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      expiresIn: 3600,
+      tokenType: 'Bearer',
     })
-    expect(refreshOutput.success).toBe(true)
+    expect(tokenPair.success).toBe(true)
 
-    const cookieRefreshOutput = IamRefreshTokenOutputSchema.safeParse({
-      success: true,
-      data: {
-        tokens: {
-          accessToken: 'access',
-          expiresIn: 3600,
-          tokenType: 'Bearer',
-        },
-      },
+    const cookieTokenPair = IamTokenPairSchema.safeParse({
+      accessToken: 'access',
+      expiresIn: 3600,
+      tokenType: 'Bearer',
     })
-    expect(cookieRefreshOutput.success).toBe(true)
+    expect(cookieTokenPair.success).toBe(true)
   })
 
-  it('iam currentUser 输出同时携带身份资料和服务端访问范围', () => {
-    const result = IamCurrentUserOutputSchema.safeParse({
-      success: true,
-      data: {
-        id: 'u1',
-        username: 'alice',
-        enabled: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        roles: ['admin'],
-        permissions: ['user:list'],
-      },
+  it('iam currentUser 数据同时携带身份资料和服务端访问范围', () => {
+    const result = IamCurrentUserSchema.safeParse({
+      id: 'u1',
+      username: 'alice',
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      roles: ['admin'],
+      permissions: ['user:list'],
     })
 
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.data.roles).toEqual(['admin'])
-      expect(result.data.data.permissions).toEqual(['user:list'])
+      expect(result.data.roles).toEqual(['admin'])
+      expect(result.data.permissions).toEqual(['user:list'])
     }
 
-    expect(IamCurrentUserOutputSchema.safeParse({
-      success: true,
-      data: {
-        id: 'u1',
-        username: 'alice',
-        enabled: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
+    expect(IamCurrentUserSchema.safeParse({
+      id: 'u1',
+      username: 'alice',
+      enabled: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }).success).toBe(false)
   })
 
@@ -109,6 +93,7 @@ describe('@h-ai/api-contract', () => {
       .output(apiContract.haiResultSchema(z.object({ pong: z.boolean() })))
 
     expect(routeOf(custom)).toEqual({ method: 'POST', path: '/custom/ping' })
+    expect(apiContract.pathOf(custom)).toBe('/custom/ping')
   })
 
   it('payment 创建订单输入 Schema 可校验', () => {

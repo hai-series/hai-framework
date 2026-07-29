@@ -46,7 +46,30 @@ describe('resolveServHttpConfig', () => {
     expect(config.http.apiPrefix).toBe('/api/v1')
     expect(config.http.docs).toEqual({ path: '/docs' })
     expect(config.http.health).toEqual({ path: '/health', readyPath: '/ready' })
+    expect(config.cors).toEqual({
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+      exposedHeaders: [],
+      credentials: false,
+    })
     expect(config.transport).toBe(false)
+  })
+
+  it('parses cross-client CORS headers from _serv.yml config', () => {
+    const config = resolveServConfig({
+      cors: {
+        origin: 'https://app.example.com',
+        nativeOrigins: 'capacitor://localhost,tauri://localhost',
+        allowedHeaders: ['Authorization', 'X-Client-Id'],
+        exposedHeaders: ['X-Encrypted'],
+        credentials: true,
+      },
+    })
+
+    expect(config.cors.origin).toBe('https://app.example.com')
+    expect(config.cors.nativeOrigins).toBe('capacitor://localhost,tauri://localhost')
+    expect(config.cors.allowedHeaders).toContain('X-Client-Id')
+    expect(config.cors.exposedHeaders).toEqual(['X-Encrypted'])
+    expect(config.cors.credentials).toBe(true)
   })
 
   it('fills transport defaults from _serv.yml config', () => {

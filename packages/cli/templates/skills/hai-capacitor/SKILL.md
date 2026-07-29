@@ -69,7 +69,6 @@ await apiClient.init({
   baseUrl: import.meta.env.PUBLIC_API_BASE,
   auth: {
     storage: createCapacitorTokenStorage(),
-    refreshPath: '/api/v1/auth/refresh',
   },
 })
 ```
@@ -289,7 +288,6 @@ export async function initApi() {
     baseUrl: `${import.meta.env.PUBLIC_API_BASE}/api/v1`,
     auth: {
       storage: createCapacitorTokenStorage(),
-      refreshPath: '/auth/refresh',
     },
   })
 }

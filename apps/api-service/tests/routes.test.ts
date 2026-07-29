@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ai } from '@h-ai/ai'
 import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
@@ -42,18 +43,14 @@ let plainBase: string
 let encryptedClient: ReturnType<typeof apiClient.create<typeof apiServiceContract>>
 let plainClient: ReturnType<typeof apiClient.create<typeof apiServiceContract>>
 
-let healthPath = '/health'
-let readyPath = '/ready'
-let openapiPath = '/openapi.json'
-let docsPath = '/docs'
-let apiPrefix = '/api/v1'
+let healthPath = ''
+let readyPath = ''
+let openapiPath = ''
+let docsPath = ''
+let apiPrefix = ''
+let transportKeyExchangePath = ''
+let keyExchangePath = ''
 let apiBaseUrl = ''
-let keyExchangePath = '/api/v1/_hai/key-exchange'
-let transportKeyExchangePath = '/_hai/key-exchange'
-
-function apiPath(path: `/${string}`): `/${string}` {
-  return `${apiPrefix}${path}` as `/${string}`
-}
 
 function uniqueUser(prefix = 'e2e') {
   const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(-8)
@@ -76,21 +73,19 @@ beforeAll(async () => {
   })
 
   const servConfig = core.config.getOrThrow<ServConfig>('serv')
-  apiPrefix = servConfig.http.apiPrefix
-
-  if (servConfig.http.health === false || servConfig.http.openapi === false || servConfig.http.docs === false) {
-    throw new Error('api-service route tests require health/openapi/docs endpoints to stay enabled')
-  }
   if (servConfig.transport === false) {
     throw new Error('api-service route tests require transport encryption to stay enabled')
   }
+  if (servConfig.http.health === false || servConfig.http.openapi === false || servConfig.http.docs === false)
+    throw new Error('api-service route tests require health, OpenAPI and docs endpoints')
 
+  apiPrefix = servConfig.http.apiPrefix
   healthPath = servConfig.http.health.path
-  readyPath = servConfig.http.health.readyPath ?? servConfig.http.health.path
+  readyPath = servConfig.http.health.readyPath ?? ''
   openapiPath = servConfig.http.openapi.path
   docsPath = servConfig.http.docs.path
   transportKeyExchangePath = servConfig.transport.keyExchangePath
-  keyExchangePath = apiPath(transportKeyExchangePath as `/${string}`)
+  keyExchangePath = `${apiPrefix}${transportKeyExchangePath}`
 
   const cryptoResult = await crypto.init()
   if (!cryptoResult.success)
@@ -228,7 +223,7 @@ describe('api-service 基础设施端点', () => {
 
   it('oPTIONS /auth/login 为桌面端开发 origin 返回 CORS 预检头', async () => {
     const origin = 'http://localhost:5176'
-    const res = await fetch(`${encryptedBase}${apiPath('/auth/login')}`, {
+    const res = await fetch(`${encryptedBase}${apiPrefix}${apiContract.pathOf(apiServiceContract.iam.auth.login)}`, {
       method: 'OPTIONS',
       headers: {
         origin,
@@ -261,7 +256,7 @@ describe('api-service 基础设施端点', () => {
     })
     const exchangeBody = await exchange.json() as { clientId: string }
 
-    const response = await fetch(`${encryptedBase}${apiPath('/app/info')}`, {
+    const response = await fetch(`${encryptedBase}${apiPrefix}${apiContract.pathOf(apiServiceContract.app.info)}`, {
       method: 'POST',
       headers: {
         origin,
@@ -273,6 +268,8 @@ describe('api-service 基础设施端点', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe(origin)
     expect(response.headers.get('access-control-expose-headers')).toContain(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
     expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+    const servConfig = core.config.getOrThrow<ServConfig>('serv')
+    expect(servConfig.cors.exposedHeaders).toContain(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
   })
 
   it('pOST /api/v1/_hai/key-exchange 返回 200 并下发 clientId', async () => {
@@ -300,7 +297,7 @@ describe('api-service 基础设施端点', () => {
   })
 
   it('开启 transport 时，明文 POST /auth/login 被拒绝', async () => {
-    const res = await fetch(`${encryptedBase}${apiPath('/auth/login')}`, {
+    const res = await fetch(`${encryptedBase}${apiPrefix}${apiContract.pathOf(apiServiceContract.iam.auth.login)}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ identifier: 'someone', password: 'secret' }),

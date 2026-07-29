@@ -1,7 +1,7 @@
 import type { ServConfig } from '@h-ai/serv'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { core } from '@h-ai/core'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import pkg from '../package.json' with { type: 'json' }
@@ -15,23 +15,9 @@ interface CreateApiServiceAppOptions {
   refreshCookie?: 'enabled' | 'disabled'
 }
 
-const LOOPBACK_ORIGIN_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/
-const WEBVIEW_ORIGINS = new Set([
-  'capacitor://localhost',
-  'http://localhost',
-  'https://tauri.localhost',
-  'tauri://localhost',
-])
-const DEFAULT_CORS_ALLOWED_HEADERS = [
-  'Authorization',
-  'Content-Type',
-  TRANSPORT_PROTOCOL.CLIENT_ID_HEADER,
-  TRANSPORT_PROTOCOL.ENCRYPTED_HEADER,
-  'X-Hai-Locale',
-  'X-Request-Id',
-  'X-Requested-With',
-]
-
+interface AppCoreConfig {
+  readonly env?: string
+}
 /**
  * 创建 API Service HTTP 应用。
  *
@@ -44,6 +30,12 @@ const DEFAULT_CORS_ALLOWED_HEADERS = [
  */
 export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
   const servConfig = core.config.getOrThrow<ServConfig>('serv')
+  const coreConfig = core.config.get<AppCoreConfig>('core')
+  const security = serv.createRuntimeSecurityPolicy({
+    environment: coreConfig?.env,
+    corsOrigin: servConfig.cors.origin,
+    nativeOrigins: servConfig.cors.nativeOrigins,
+  })
   const transportMode = options.transport ?? 'config'
   const refreshCookieMode = options.refreshCookie ?? 'enabled'
   const transport = transportMode === 'disabled' || servConfig.transport === false
@@ -67,30 +59,24 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
         startedAt,
       },
     }),
-    http: servConfig.http,
+    http: {
+      ...servConfig.http,
+      openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
+      docs: security.exposeApiDocs ? servConfig.http.docs : false,
+    },
     iam,
     middlewares: [
       {
         middleware: serv.cors({
-          origin: origin => resolveCorsOrigin(origin) !== null,
-          credentials: true,
-          allowedHeaders: DEFAULT_CORS_ALLOWED_HEADERS,
-          exposedHeaders: [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, 'X-Request-Id'],
+          origin: security.allowOrigin,
+          credentials: servConfig.cors.credentials,
+          allowedHeaders: [...servConfig.cors.allowedHeaders],
+          exposedHeaders: [...servConfig.cors.exposedHeaders],
         }),
       },
     ],
-    refreshCookie: refreshCookieMode === 'disabled' ? undefined : {},
+    refreshCookie: refreshCookieMode === 'disabled' ? undefined : { secure: security.secureRefreshCookie },
     // transport 配置统一来自 config/_serv.yml，避免 key-exchange / 白名单路径散落在代码里。
     transport,
   })
-}
-
-function resolveCorsOrigin(origin: string | undefined): string | null {
-  if (!origin)
-    return null
-  if (WEBVIEW_ORIGINS.has(origin))
-    return origin
-  if (LOOPBACK_ORIGIN_RE.test(origin))
-    return origin
-  return null
 }

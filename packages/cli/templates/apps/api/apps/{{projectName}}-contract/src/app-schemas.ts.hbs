@@ -1,4 +1,3 @@
-import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
 /** 服务元信息响应数据。 */
@@ -8,9 +7,6 @@ export const AppInfoOutputDataSchema = z.object({
   uptimeMs: z.number().int().nonnegative(),
   transportEnabled: z.boolean(),
 })
-
-/** app.info 标准 HaiResult 输出。 */
-export const AppInfoOutputSchema = apiContract.haiResultSchema(AppInfoOutputDataSchema)
 
 /** 输入：单条文本消息（演示用，限制最大长度防止误用）。 */
 export const AppEchoInputSchema = z.object({
@@ -24,9 +20,6 @@ export const AppEchoOutputDataSchema = z.object({
   timestamp: z.string(),
   userId: z.string().optional(),
 })
-
-/** app.echo 标准 HaiResult 输出。 */
-export const AppEchoOutputSchema = apiContract.haiResultSchema(AppEchoOutputDataSchema)
 
 export type AppInfoOutputData = z.infer<typeof AppInfoOutputDataSchema>
 export type AppEchoInput = z.infer<typeof AppEchoInputSchema>

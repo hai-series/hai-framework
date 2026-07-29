@@ -50,6 +50,15 @@ export interface ServTransportRuntimeConfig {
   readonly maxClients: number
 }
 
+/** `config/_serv.yml` 中可序列化的跨端 CORS 配置。 */
+export interface ServCorsRuntimeConfig {
+  readonly origin?: string
+  readonly nativeOrigins?: string
+  readonly allowedHeaders: readonly string[]
+  readonly exposedHeaders: readonly string[]
+  readonly credentials: boolean
+}
+
 /** ServHttpApp 的 HTTP 挂载配置。 */
 export interface ServHttpConfig {
   readonly apiPrefix: `/api/${string}`
@@ -62,8 +71,12 @@ export interface ServHttpConfig {
 /** `config/_serv.yml` 的顶层配置结构。 */
 export interface ServConfig {
   readonly http: ServHttpConfig
+  readonly cors: ServCorsRuntimeConfig
   readonly transport: false | ServTransportRuntimeConfig
 }
+
+/** `config/_serv.yml` 中的 CORS 输入类型。 */
+export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
 
 /** `config/_serv.yml` 中的传输加密输入类型。 */
 export type ServTransportRuntimeConfigInput = Partial<{
@@ -84,6 +97,7 @@ export type ServHttpConfigInput = Partial<{
 /** `config/_serv.yml` 的顶层输入类型。 */
 export interface ServConfigInput {
   readonly http?: ServHttpConfigInput
+  readonly cors?: ServCorsRuntimeConfigInput
   readonly transport?: false | ServTransportRuntimeConfigInput
 }
 
@@ -127,6 +141,14 @@ const TransportRuntimeConfigInputSchema = z.union([
   }),
 ])
 
+const CorsRuntimeConfigInputSchema = z.object({
+  origin: z.string().optional(),
+  nativeOrigins: z.string().optional(),
+  allowedHeaders: z.array(z.string()).default(['Authorization', 'Content-Type', 'X-Requested-With']),
+  exposedHeaders: z.array(z.string()).default([]),
+  credentials: z.boolean().default(false),
+})
+
 const ServHttpConfigInputSchema = z.object({
   apiPrefix: ApiPrefixSchema.default('/api/v1'),
   openapi: OpenAPIHttpConfigInputSchema.default(false),
@@ -138,9 +160,11 @@ const ServHttpConfigInputSchema = z.object({
 /** `config/_serv.yml` 对应的配置 Schema。 */
 export const ServConfigSchema = z.object({
   http: ServHttpConfigInputSchema.optional(),
+  cors: CorsRuntimeConfigInputSchema.optional(),
   transport: TransportRuntimeConfigInputSchema.optional(),
-}).transform(({ http, transport }) => ({
+}).transform(({ http, cors, transport }) => ({
   http: resolveServHttpConfig(http ?? {}),
+  cors: resolveServCorsRuntimeConfig(cors ?? {}),
   transport: resolveServTransportRuntimeConfig(transport ?? false),
 }))
 
@@ -152,6 +176,11 @@ export const ServConfigSchema = z.object({
  */
 export function resolveServHttpConfig(input: ServHttpConfigInput = {}): ServHttpConfig {
   return ServHttpConfigInputSchema.parse(input)
+}
+
+/** 解析配置文件中的跨端 CORS Header 与凭据策略。 */
+export function resolveServCorsRuntimeConfig(input: ServCorsRuntimeConfigInput = {}): ServCorsRuntimeConfig {
+  return CorsRuntimeConfigInputSchema.parse(input)
 }
 
 /**

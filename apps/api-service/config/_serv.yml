@@ -13,6 +13,22 @@ http:
     readyPath: /ready
   rpc: false
 
+cors:
+  origin: ${HAI_CORS_ORIGIN:*}
+  nativeOrigins: ${HAI_NATIVE_ORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  credentials: true
+  allowedHeaders:
+    - Authorization
+    - Content-Type
+    - X-Client-Id
+    - X-Encrypted
+    - X-Hai-Locale
+    - X-Request-Id
+    - X-Requested-With
+  exposedHeaders:
+    - X-Encrypted
+    - X-Request-Id
+
 transport:
   keyExchangePath: /_hai/key-exchange
   excludePaths:

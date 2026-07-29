@@ -4,15 +4,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { apiClient } from '../src/index.js'
 
-const OutputSchema = apiContract.haiResultSchema(z.object({ echoed: z.unknown() }))
-const ProtectedOutputSchema = apiContract.haiResultSchema(z.object({ ok: z.boolean() }))
-
 const testContract = {
-  echo: apiContract.route({ method: 'POST', path: '/echo' }).input(z.object({ msg: z.string() })).output(OutputSchema),
+  echo: apiContract
+    .route({ method: 'POST', path: '/echo' })
+    .input(z.object({ msg: z.string() }))
+    .output(apiContract.haiResultSchema(z.object({ echoed: z.unknown() }))),
 }
 
 const protectedContract = {
-  protected: apiContract.route({ method: 'GET', path: '/protected' }).output(ProtectedOutputSchema),
+  protected: apiContract
+    .route({ method: 'GET', path: '/protected' })
+    .output(apiContract.haiResultSchema(z.object({ ok: z.boolean() }))),
 }
 
 /**

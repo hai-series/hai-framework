@@ -1,17 +1,19 @@
 import { expect, test } from '@playwright/test'
-import { APP_API_ROUTES } from '{{fullstack.contractPackageName}}'
+import { apiContract } from '@h-ai/api-contract'
+import { {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
 
 const DEFAULT_SERVICE_BASE_URL = 'http://127.0.0.1:3000'
 const apiBaseUrl = process.env.SERVICE_BASE_URL || DEFAULT_SERVICE_BASE_URL
+const apiPrefix = '/api/v1'
 
 test('service health endpoint is ready', async ({ request }) => {
-  const response = await request.get(apiBaseUrl + APP_API_ROUTES.health)
+  const response = await request.get(`${apiBaseUrl}/health`)
   expect(response.ok()).toBe(true)
   await expect(response).toBeOK()
 })
 
 test('service echo endpoint returns HaiResult', async ({ request }) => {
-  const response = await request.post(apiBaseUrl + APP_API_ROUTES.echo, {
+  const response = await request.post(`${apiBaseUrl}${apiPrefix}${apiContract.pathOf({{fullstack.contractExportName}}.app.echo)}`, {
     data: { message: 'hello e2e' },
   })
   expect(response.ok()).toBe(true)

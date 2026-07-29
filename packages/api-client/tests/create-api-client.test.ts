@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { apiClient, HaiApiClientError } from '../src/index.js'
 
-const HealthOutputSchema = apiContract.haiResultSchema(z.object({ status: z.string() }))
-
 const testContract = {
-  health: apiContract.route({ method: 'GET', path: '/health' }).output(HealthOutputSchema),
+  health: apiContract
+    .route({ method: 'GET', path: '/health' })
+    .output(apiContract.haiResultSchema(z.object({ status: z.string() }))),
 }
 
 function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {

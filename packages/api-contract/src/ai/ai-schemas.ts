@@ -3,12 +3,12 @@
  *
  * 包含聊天补全、消息占位、记忆召回与历史会话相关的 input/output Zod Schema。
  * 聊天补全结构对齐 OpenAI Chat Completions API，支持 tool calling。
- * 所有 Output Schema 均用 `haiResultSchema()` 封装。
+ * 仅保留跨接口、跨层复用的数据结构；一次性输出包装在 contract 中内联。
  * @module ai-schemas
  */
 
+import type { HaiResult } from '@h-ai/core'
 import { z } from 'zod'
-import { haiResultSchema } from '../common/result-schemas.js'
 
 /** 消息角色 Schema。 */
 export const AiMessageRoleSchema = z.enum(['system', 'user', 'assistant', 'tool'])
@@ -231,19 +231,12 @@ export const AiChatHistoryDataSchema = z.object({
   items: z.array(AiChatRecordSchema),
 })
 
-export const AiChatCompletionOutputSchema = haiResultSchema(AiChatCompletionDataSchema)
-export const AiSendMessageOutputSchema = haiResultSchema(AiSendMessageDataSchema)
-export const AiMemoryRecallOutputSchema = haiResultSchema(AiMemoryRecallDataSchema)
-export const AiMemoryListOutputSchema = haiResultSchema(AiMemoryListDataSchema)
-export const AiSessionListOutputSchema = haiResultSchema(AiSessionListDataSchema)
-export const AiChatHistoryOutputSchema = haiResultSchema(AiChatHistoryDataSchema)
-
 export type AiChatCompletionInput = z.infer<typeof AiChatCompletionInputSchema>
 export type AiChatCompletionData = z.infer<typeof AiChatCompletionDataSchema>
-export type AiChatCompletionOutput = z.infer<typeof AiChatCompletionOutputSchema>
+export type AiChatCompletionOutput = HaiResult<AiChatCompletionData>
 export type AiSendMessageInput = z.infer<typeof AiSendMessageInputSchema>
 export type AiSendMessageData = z.infer<typeof AiSendMessageDataSchema>
-export type AiSendMessageOutput = z.infer<typeof AiSendMessageOutputSchema>
+export type AiSendMessageOutput = HaiResult<AiSendMessageData>
 export type AiMemoryRecallInput = z.infer<typeof AiMemoryRecallInputSchema>
 export type AiMemoryListInput = z.infer<typeof AiMemoryListInputSchema>
 export type AiSessionListInput = z.infer<typeof AiSessionListInputSchema>

@@ -70,7 +70,6 @@ describe('desktop api bootstrap', () => {
         keyExchangePath: '/_hai/key-exchange',
       }),
       auth: expect.objectContaining({
-        refreshPath: '/auth/refresh',
         storage: { kind: 'memory' },
       }),
     }))

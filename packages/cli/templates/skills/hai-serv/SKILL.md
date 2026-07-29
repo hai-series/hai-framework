@@ -36,6 +36,7 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象
 - 自定义 `ServContext`（注入 session、tenant 等请求级数据）
 - 生成 OpenAPI 3.1 文档供外部工具消费
 - 通过 `config/_serv.yml` 管理 API 前缀、OpenAPI、docs、health、rpc 等 HTTP 挂载配置
+- 通过 `serv.createRuntimeSecurityPolicy(...)` 对生产 CORS Origin、原生 WebView Origin、Secure Cookie 与 API 文档暴露执行 fail-closed 策略
 - 启用传输加密：`serv.createApp({ transport: { crypto } })`
 - 高级场景通过 `createApp({ middlewares })` 自定义 HTTP middleware，或通过共享类型自定义 procedure wrapper
 - 为 Audio WebSocket 配置一次性 ticket 校验、IAM/模型/配额授权与并发释放钩子
@@ -90,6 +91,40 @@ serv.listen(app, {
   onClose: closeApp, // 业务模块关闭函数（ai/storage/iam/reldb 等反向释放）
 })
 ```
+
+生产部署先从 `_core.yml.env` 与 `_serv.yml.cors` 创建安全策略；不要在业务应用重复实现 Origin 解析：
+
+```typescript
+const security = serv.createRuntimeSecurityPolicy({
+  environment: coreConfig.env,
+  corsOrigin: servConfig.cors.origin,
+  nativeOrigins: servConfig.cors.nativeOrigins,
+})
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: {
+    ...servConfig.http,
+    openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
+    docs: security.exposeApiDocs ? servConfig.http.docs : false,
+  },
+  refreshCookie: { secure: security.secureRefreshCookie },
+  middlewares: [{
+    middleware: serv.cors({
+      origin: security.allowOrigin,
+      credentials: servConfig.cors.credentials,
+      allowedHeaders: [...servConfig.cors.allowedHeaders],
+      exposedHeaders: [...servConfig.cors.exposedHeaders],
+    }),
+  }],
+})
+```
+
+- 生产环境 `cors.origin` 禁止为空或 `*`，启动时 fail-fast。
+- 普通 Web Origin 仅接受 HTTP(S)；原生 Origin 通过 `cors.nativeOrigins` 显式允许 HTTP(S)、Capacitor 或 Tauri。
+- Origin 按完整规范化值精确匹配，不使用前缀/后缀匹配。
+- 生产环境自动要求 Secure refresh cookie，并把 OpenAPI/docs 作为安全上限关闭。
 
 ### 2.1 Audio WebSocket 安全接入
 

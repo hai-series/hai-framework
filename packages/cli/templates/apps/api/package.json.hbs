@@ -15,6 +15,10 @@
     "test:e2e": "pnpm build && playwright test",
     "clean": "pnpm -r --if-present clean && rimraf node_modules .turbo"
   },
+  "dependencies": {
+    "@h-ai/api-contract": "{{haiPackageSpecifier}}",
+    "{{api.contractPackageName}}": "workspace:*"
+  },
   "devDependencies": {
     "@antfu/eslint-config": "{{api.packageSpecifiers.antfuEslintConfig}}",
     "@playwright/test": "{{api.packageSpecifiers.playwright}}",

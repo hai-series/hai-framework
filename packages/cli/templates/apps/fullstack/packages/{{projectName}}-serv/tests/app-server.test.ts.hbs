@@ -1,11 +1,14 @@
-import { APP_API_ROUTES } from '{{fullstack.contractPackageName}}'
+import { apiContract } from '@h-ai/api-contract'
+import { {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
 import { describe, expect, it } from 'vitest'
 import { createServerApp } from '../src/app-server.js'
+
+const API_PREFIX = '/api/v1'
 
 describe('{{fullstack.servPackageName}}', () => {
   it('returns health status', async () => {
     const app = createServerApp()
-    const response = await app.request(APP_API_ROUTES.health)
+    const response = await app.request('/health')
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({ status: 'ok' })
@@ -13,7 +16,7 @@ describe('{{fullstack.servPackageName}}', () => {
 
   it('returns app info as HaiResult', async () => {
     const app = createServerApp()
-    const response = await app.request(APP_API_ROUTES.info, { method: 'POST' })
+    const response = await app.request(`${API_PREFIX}${apiContract.pathOf({{fullstack.contractExportName}}.app.info)}`, { method: 'POST' })
     const body = await response.json()
 
     expect(response.status).toBe(200)
@@ -23,7 +26,7 @@ describe('{{fullstack.servPackageName}}', () => {
 
   it('validates echo input', async () => {
     const app = createServerApp()
-    const response = await app.request(APP_API_ROUTES.echo, {
+    const response = await app.request(`${API_PREFIX}${apiContract.pathOf({{fullstack.contractExportName}}.app.echo)}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ message: '' }),
@@ -34,7 +37,7 @@ describe('{{fullstack.servPackageName}}', () => {
 
   it('returns echo result as HaiResult', async () => {
     const app = createServerApp()
-    const response = await app.request(APP_API_ROUTES.echo, {
+    const response = await app.request(`${API_PREFIX}${apiContract.pathOf({{fullstack.contractExportName}}.app.echo)}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ message: 'hello unit' }),

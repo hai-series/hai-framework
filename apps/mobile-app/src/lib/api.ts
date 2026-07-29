@@ -53,7 +53,6 @@ export async function initApi(): Promise<void> {
     baseUrl: resolveApiBase(),
     auth: {
       storage: await createTokenStorage(),
-      refreshPath: '/auth/refresh',
       onRefreshFailed: () => {
         navigateToLogin()
       },

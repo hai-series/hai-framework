@@ -1,5 +1,5 @@
 import { apiContract } from '@h-ai/api-contract'
-import { AppEchoInputSchema, AppEchoOutputSchema, AppInfoOutputSchema } from './app-schemas.js'
+import { AppEchoInputSchema, AppEchoOutputDataSchema, AppInfoOutputDataSchema } from './app-schemas.js'
 
 /** 应用自有 app contract。 */
 export const appContract = {
@@ -11,7 +11,7 @@ export const appContract = {
       summary: 'Get service info',
       tags: ['app'],
     })
-    .output(AppInfoOutputSchema),
+    .output(apiContract.haiResultSchema(AppInfoOutputDataSchema)),
   echo: apiContract
     .route({
       method: 'POST',
@@ -21,7 +21,7 @@ export const appContract = {
       tags: ['app'],
     })
     .input(AppEchoInputSchema)
-    .output(AppEchoOutputSchema),
+    .output(apiContract.haiResultSchema(AppEchoOutputDataSchema)),
 }
 
 export type AppContract = typeof appContract

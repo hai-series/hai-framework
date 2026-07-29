@@ -1,6 +1,6 @@
 import type { ServConfig } from '@h-ai/serv'
 import { core } from '@h-ai/core'
-{{#if features.crypto}}import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+{{#if features.crypto}}import { crypto } from '@h-ai/crypto'
 {{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
 {{/if}}import { serv } from '@h-ai/serv'
 import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
@@ -14,26 +14,18 @@ interface CreateApiServiceAppOptions {
   refreshCookie?: 'enabled' | 'disabled'
 }
 
-const LOOPBACK_ORIGIN_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/
-const WEBVIEW_ORIGINS = new Set([
-  'capacitor://localhost',
-  'http://localhost',
-  'https://tauri.localhost',
-  'tauri://localhost',
-])
-const DEFAULT_CORS_ALLOWED_HEADERS = [
-  'Authorization',
-  'Content-Type',
-{{#if features.crypto}}  TRANSPORT_PROTOCOL.CLIENT_ID_HEADER,
-  TRANSPORT_PROTOCOL.ENCRYPTED_HEADER,
-{{/if}}  'X-Hai-Locale',
-  'X-Request-Id',
-  'X-Requested-With',
-]
-
+interface AppCoreConfig {
+  readonly env?: string
+}
 /** 创建 API Service HTTP 应用。 */
 export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptions = {}) {
   const servConfig = core.config.getOrThrow<ServConfig>('serv')
+  const coreConfig = core.config.get<AppCoreConfig>('core')
+  const security = serv.createRuntimeSecurityPolicy({
+    environment: coreConfig?.env,
+    corsOrigin: servConfig.cors.origin,
+    nativeOrigins: servConfig.cors.nativeOrigins,
+  })
 {{#if features.crypto}}  const transportMode = _options.transport ?? 'config'
   const transport = transportMode === 'disabled' || servConfig.transport === false
     ? undefined
@@ -46,7 +38,7 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{else}}  const transport = undefined
 {{/if}}
 {{#if features.iam}}
-  const refreshCookie = _options.refreshCookie === 'disabled' ? undefined : {}
+  const refreshCookie = _options.refreshCookie === 'disabled' ? undefined : { secure: security.secureRefreshCookie }
 {{/if}}
 
   const appOptions: Parameters<typeof serv.createApp>[0] = {
@@ -61,17 +53,21 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
         startedAt,
       },
     }),
-    http: servConfig.http,
+    http: {
+      ...servConfig.http,
+      openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
+      docs: security.exposeApiDocs ? servConfig.http.docs : false,
+    },
 {{#if features.iam}}
     iam,
 {{/if}}
     middlewares: [
       {
         middleware: serv.cors({
-          origin: origin => resolveCorsOrigin(origin) !== null,
-{{#if features.iam}}          credentials: true,
-{{/if}}          allowedHeaders: DEFAULT_CORS_ALLOWED_HEADERS,{{#if features.crypto}}
-          exposedHeaders: [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, 'X-Request-Id'],{{/if}}
+          origin: security.allowOrigin,
+          credentials: servConfig.cors.credentials,
+          allowedHeaders: [...servConfig.cors.allowedHeaders],
+          exposedHeaders: [...servConfig.cors.exposedHeaders],
         }),
       },
     ],
@@ -85,14 +81,4 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{/if}}
 
   return serv.createApp(appOptions)
-}
-
-function resolveCorsOrigin(origin: string | undefined): string | null {
-  if (!origin)
-    return null
-  if (WEBVIEW_ORIGINS.has(origin))
-    return origin
-  if (LOOPBACK_ORIGIN_RE.test(origin))
-    return origin
-  return null
 }

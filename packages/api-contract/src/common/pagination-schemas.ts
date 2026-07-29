@@ -37,9 +37,8 @@ export const PaginationQuerySchema = z.object({
  *
  * @example
  * ```ts
- * const IamUsersPageOutputSchema = haiResultSchema(
- *   paginatedSchema(IamUserSchema)
- * )
+ * const listUsers = route({ method: 'GET', path: '/users' })
+ *   .output(haiResultSchema(paginatedSchema(IamUserSchema)))
  * // 解析结果形如：
  * // { success: true, data: { items: [...], total: 100, page: 1, pageSize: 20 } }
  * ```

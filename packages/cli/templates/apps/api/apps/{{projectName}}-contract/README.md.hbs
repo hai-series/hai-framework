@@ -4,9 +4,11 @@
 
 ## 包含内容
 
-- `app-contract.ts`：应用级路由定义
-- `app-schemas.ts`：输入输出 Zod schema
+- `app-contract.ts`：应用级接口定义，业务 path 与一次性输出 Schema 就近内联
+- `app-schemas.ts`：跨接口、跨层复用的输入/数据 Zod Schema
 - `{{projectName}}-contract.ts`：工程级 contract 聚合入口
+
+API 前缀、健康检查与跨端 Header 等传输配置位于 service 的 `config/_serv.yml`。
 
 ## 常用命令
 

@@ -7,20 +7,21 @@
  * @module ai-contract
  */
 
+import { haiResultSchema } from '../common/result-schemas.js'
 import { route } from '../common/route.js'
 import {
+  AiChatCompletionDataSchema,
   AiChatCompletionInputSchema,
-  AiChatCompletionOutputSchema,
+  AiChatHistoryDataSchema,
   AiChatHistoryInputSchema,
-  AiChatHistoryOutputSchema,
+  AiMemoryListDataSchema,
   AiMemoryListInputSchema,
-  AiMemoryListOutputSchema,
+  AiMemoryRecallDataSchema,
   AiMemoryRecallInputSchema,
-  AiMemoryRecallOutputSchema,
+  AiSendMessageDataSchema,
   AiSendMessageInputSchema,
-  AiSendMessageOutputSchema,
+  AiSessionListDataSchema,
   AiSessionListInputSchema,
-  AiSessionListOutputSchema,
 } from './ai-schemas.js'
 
 /** AI 领域 oRPC contract。 */
@@ -28,26 +29,26 @@ export const aiContract = {
   chats: {
     createCompletion: route({ method: 'POST', path: '/ai/chats/completions', operationId: 'ai.chats.createCompletion', summary: 'Create chat completion', tags: ['ai', 'chats'] })
       .input(AiChatCompletionInputSchema)
-      .output(AiChatCompletionOutputSchema),
+      .output(haiResultSchema(AiChatCompletionDataSchema)),
     sendMessage: route({ method: 'POST', path: '/ai/chats/messages', operationId: 'ai.chats.sendMessage', summary: 'Send a single chat message', tags: ['ai', 'chats'] })
       .input(AiSendMessageInputSchema)
-      .output(AiSendMessageOutputSchema),
+      .output(haiResultSchema(AiSendMessageDataSchema)),
     listHistory: route({ method: 'POST', path: '/ai/chats/history', operationId: 'ai.chats.listHistory', summary: 'List chat history', tags: ['ai', 'chats'] })
       .input(AiChatHistoryInputSchema)
-      .output(AiChatHistoryOutputSchema),
+      .output(haiResultSchema(AiChatHistoryDataSchema)),
   },
   memories: {
     recall: route({ method: 'POST', path: '/ai/memories/recall', operationId: 'ai.memories.recall', summary: 'Recall relevant memories', tags: ['ai', 'memories'] })
       .input(AiMemoryRecallInputSchema)
-      .output(AiMemoryRecallOutputSchema),
+      .output(haiResultSchema(AiMemoryRecallDataSchema)),
     list: route({ method: 'POST', path: '/ai/memories/list', operationId: 'ai.memories.list', summary: 'List memories', tags: ['ai', 'memories'] })
       .input(AiMemoryListInputSchema)
-      .output(AiMemoryListOutputSchema),
+      .output(haiResultSchema(AiMemoryListDataSchema)),
   },
   sessions: {
     list: route({ method: 'POST', path: '/ai/sessions/list', operationId: 'ai.sessions.list', summary: 'List sessions', tags: ['ai', 'sessions'] })
       .input(AiSessionListInputSchema)
-      .output(AiSessionListOutputSchema),
+      .output(haiResultSchema(AiSessionListDataSchema)),
   },
 }
 

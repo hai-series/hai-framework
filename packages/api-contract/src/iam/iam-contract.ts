@@ -11,132 +11,120 @@
  * @module iam-contract
  */
 
+import { paginatedSchema } from '../common/pagination-schemas.js'
+import { haiResultSchema, HaiVoidResultSchema } from '../common/result-schemas.js'
 import { route } from '../common/route.js'
 import {
   IamAdminCreateUserInputSchema,
   IamAdminResetPasswordInputSchema,
   IamAdminUpdateUserInputSchema,
-  IamAuthResultOutputSchema,
+  IamAuthResultSchema,
   IamChangePasswordInputSchema,
   IamCreatePermissionInputSchema,
   IamCreateRoleInputSchema,
-  IamCurrentUserOutputSchema,
+  IamCurrentUserSchema,
   IamListPermissionsInputSchema,
   IamListUsersInputSchema,
   IamLoginInputSchema,
   IamLogoutInputSchema,
-  IamNullablePermissionOutputSchema,
-  IamNullableRoleOutputSchema,
-  IamNullableUserOutputSchema,
   IamOtpLoginInputSchema,
-  IamPermissionOutputSchema,
-  IamPermissionsPageOutputSchema,
+  IamPermissionSchema,
+  IamRefreshTokenDataSchema,
   IamRefreshTokenInputSchema,
-  IamRefreshTokenOutputSchema,
   IamRegisterInputSchema,
-  IamRoleOutputSchema,
-  IamRolesPageOutputSchema,
+  IamRoleSchema,
+  IamSendOtpDataSchema,
   IamSendOtpInputSchema,
-  IamSendOtpOutputSchema,
   IamUpdateCurrentUserInputSchema,
   IamUpdateRoleInputSchema,
   IamUserIdInputSchema,
-  IamUserOutputSchema,
-  IamUsersPageOutputSchema,
-  IamVoidOutputSchema,
+  IamUserSchema,
 } from './iam-schemas.js'
 
-/**
- * IAM auth 端点的路由路径（相对于 apiPrefix）。
- * 作为单一事实来源，供 `@h-ai/serv` 的 cookie 中间件复用，避免硬编码。
- */
-export const IAM_AUTH_ROUTES = {
-  login: '/auth/login',
-  loginWithOtp: '/auth/login/otp',
-  register: '/auth/register',
-  logout: '/auth/logout',
-  refresh: '/auth/refresh',
-} as const
+// 同一 contract 内被多个接口复用的输出结构保持私有，避免扩大公共 Schema 面。
+const authResultOutputSchema = haiResultSchema(IamAuthResultSchema)
+const userOutputSchema = haiResultSchema(IamUserSchema)
+const roleOutputSchema = haiResultSchema(IamRoleSchema)
 
 /** IAM 领域 oRPC contract。 */
 export const iamContract = {
   auth: {
-    login: route({ method: 'POST', path: IAM_AUTH_ROUTES.login, operationId: 'iam.auth.login', summary: 'Password login', tags: ['iam', 'auth'] })
+    login: route({ method: 'POST', path: '/auth/login', operationId: 'iam.auth.login', summary: 'Password login', tags: ['iam', 'auth'] })
       .input(IamLoginInputSchema)
-      .output(IamAuthResultOutputSchema),
-    loginWithOtp: route({ method: 'POST', path: IAM_AUTH_ROUTES.loginWithOtp, operationId: 'iam.auth.loginWithOtp', summary: 'OTP login', tags: ['iam', 'auth'] })
+      .output(authResultOutputSchema),
+    loginWithOtp: route({ method: 'POST', path: '/auth/login/otp', operationId: 'iam.auth.loginWithOtp', summary: 'OTP login', tags: ['iam', 'auth'] })
       .input(IamOtpLoginInputSchema)
-      .output(IamAuthResultOutputSchema),
-    logout: route({ method: 'POST', path: IAM_AUTH_ROUTES.logout, operationId: 'iam.auth.logout', summary: 'Logout', tags: ['iam', 'auth'] })
+      .output(authResultOutputSchema),
+    logout: route({ method: 'POST', path: '/auth/logout', operationId: 'iam.auth.logout', summary: 'Logout', tags: ['iam', 'auth'] })
       .input(IamLogoutInputSchema)
-      .output(IamVoidOutputSchema),
+      .output(HaiVoidResultSchema),
     currentUser: route({ method: 'GET', path: '/auth/me', operationId: 'iam.auth.currentUser', summary: 'Get current user and access scope', tags: ['iam', 'auth'] })
-      .output(IamCurrentUserOutputSchema),
-    refresh: route({ method: 'POST', path: IAM_AUTH_ROUTES.refresh, operationId: 'iam.auth.refresh', summary: 'Refresh access token', tags: ['iam', 'auth'] })
+      .output(haiResultSchema(IamCurrentUserSchema)),
+    refresh: route({ method: 'POST', path: '/auth/refresh', operationId: 'iam.auth.refresh', summary: 'Refresh access token', tags: ['iam', 'auth'] })
       .input(IamRefreshTokenInputSchema)
-      .output(IamRefreshTokenOutputSchema),
+      .output(haiResultSchema(IamRefreshTokenDataSchema)),
     sendOtp: route({ method: 'POST', path: '/auth/otp/send', operationId: 'iam.auth.sendOtp', summary: 'Send OTP', tags: ['iam', 'auth'] })
       .input(IamSendOtpInputSchema)
-      .output(IamSendOtpOutputSchema),
-    register: route({ method: 'POST', path: IAM_AUTH_ROUTES.register, operationId: 'iam.auth.register', summary: 'Register and login', tags: ['iam', 'auth'] })
+      .output(haiResultSchema(IamSendOtpDataSchema)),
+    register: route({ method: 'POST', path: '/auth/register', operationId: 'iam.auth.register', summary: 'Register and login', tags: ['iam', 'auth'] })
       .input(IamRegisterInputSchema)
-      .output(IamAuthResultOutputSchema),
+      .output(authResultOutputSchema),
     changePassword: route({ method: 'POST', path: '/auth/change-password', operationId: 'iam.auth.changePassword', summary: 'Change current user password', tags: ['iam', 'auth'] })
       .input(IamChangePasswordInputSchema)
-      .output(IamVoidOutputSchema),
+      .output(HaiVoidResultSchema),
     updateCurrentUser: route({ method: 'PUT', path: '/auth/me', operationId: 'iam.auth.updateCurrentUser', summary: 'Update current user', tags: ['iam', 'auth'] })
       .input(IamUpdateCurrentUserInputSchema)
-      .output(IamUserOutputSchema),
+      .output(userOutputSchema),
   },
   users: {
     list: route({ method: 'GET', path: '/iam/users', operationId: 'iam.users.list', summary: 'List users', tags: ['iam', 'users'] })
       .input(IamListUsersInputSchema)
-      .output(IamUsersPageOutputSchema),
+      .output(haiResultSchema(paginatedSchema(IamUserSchema))),
     get: route({ method: 'GET', path: '/iam/users/{id}', operationId: 'iam.users.get', summary: 'Get user', tags: ['iam', 'users'] })
       .input(IamUserIdInputSchema)
-      .output(IamNullableUserOutputSchema),
+      .output(haiResultSchema(IamUserSchema.nullable())),
     create: route({ method: 'POST', path: '/iam/users', operationId: 'iam.users.create', summary: 'Create user', tags: ['iam', 'users'] })
       .input(IamAdminCreateUserInputSchema)
-      .output(IamUserOutputSchema),
+      .output(userOutputSchema),
     update: route({ method: 'PUT', path: '/iam/users/{id}', operationId: 'iam.users.update', summary: 'Update user', tags: ['iam', 'users'] })
       .input(IamAdminUpdateUserInputSchema)
-      .output(IamUserOutputSchema),
+      .output(userOutputSchema),
     delete: route({ method: 'DELETE', path: '/iam/users/{id}', operationId: 'iam.users.delete', summary: 'Delete user', tags: ['iam', 'users'] })
       .input(IamUserIdInputSchema)
-      .output(IamVoidOutputSchema),
+      .output(HaiVoidResultSchema),
     resetPassword: route({ method: 'POST', path: '/iam/users/{id}/reset-password', operationId: 'iam.users.resetPassword', summary: 'Reset user password', tags: ['iam', 'users'] })
       .input(IamAdminResetPasswordInputSchema)
-      .output(IamVoidOutputSchema),
+      .output(HaiVoidResultSchema),
   },
   roles: {
     list: route({ method: 'GET', path: '/iam/roles', operationId: 'iam.roles.list', summary: 'List roles', tags: ['iam', 'roles'] })
-      .output(IamRolesPageOutputSchema),
+      .output(haiResultSchema(paginatedSchema(IamRoleSchema))),
     get: route({ method: 'GET', path: '/iam/roles/{id}', operationId: 'iam.roles.get', summary: 'Get role', tags: ['iam', 'roles'] })
       .input(IamUserIdInputSchema)
-      .output(IamNullableRoleOutputSchema),
+      .output(haiResultSchema(IamRoleSchema.nullable())),
     create: route({ method: 'POST', path: '/iam/roles', operationId: 'iam.roles.create', summary: 'Create role', tags: ['iam', 'roles'] })
       .input(IamCreateRoleInputSchema)
-      .output(IamRoleOutputSchema),
+      .output(roleOutputSchema),
     update: route({ method: 'PUT', path: '/iam/roles/{id}', operationId: 'iam.roles.update', summary: 'Update role', tags: ['iam', 'roles'] })
       .input(IamUpdateRoleInputSchema)
-      .output(IamRoleOutputSchema),
+      .output(roleOutputSchema),
     delete: route({ method: 'DELETE', path: '/iam/roles/{id}', operationId: 'iam.roles.delete', summary: 'Delete role', tags: ['iam', 'roles'] })
       .input(IamUserIdInputSchema)
-      .output(IamVoidOutputSchema),
+      .output(HaiVoidResultSchema),
   },
   permissions: {
     list: route({ method: 'GET', path: '/iam/permissions', operationId: 'iam.permissions.list', summary: 'List permissions', tags: ['iam', 'permissions'] })
       .input(IamListPermissionsInputSchema)
-      .output(IamPermissionsPageOutputSchema),
+      .output(haiResultSchema(paginatedSchema(IamPermissionSchema))),
     get: route({ method: 'GET', path: '/iam/permissions/{id}', operationId: 'iam.permissions.get', summary: 'Get permission', tags: ['iam', 'permissions'] })
       .input(IamUserIdInputSchema)
-      .output(IamNullablePermissionOutputSchema),
+      .output(haiResultSchema(IamPermissionSchema.nullable())),
     create: route({ method: 'POST', path: '/iam/permissions', operationId: 'iam.permissions.create', summary: 'Create permission', tags: ['iam', 'permissions'] })
       .input(IamCreatePermissionInputSchema)
-      .output(IamPermissionOutputSchema),
+      .output(haiResultSchema(IamPermissionSchema)),
     delete: route({ method: 'DELETE', path: '/iam/permissions/{id}', operationId: 'iam.permissions.delete', summary: 'Delete permission', tags: ['iam', 'permissions'] })
       .input(IamUserIdInputSchema)
-      .output(IamVoidOutputSchema),
+      .output(HaiVoidResultSchema),
   },
 }
 

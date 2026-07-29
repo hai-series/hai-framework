@@ -1,4 +1,4 @@
-import { apiContract } from '@h-ai/api-contract'
+import type { HaiResult } from '@h-ai/core'
 import { z } from 'zod'
 
 export const AppFrontendTargetSchema = z.enum(['web', 'app', 'miniapp', 'desktop'])
@@ -23,12 +23,9 @@ export const AppEchoOutputDataSchema = z.object({
   requestId: z.string(),
 })
 
-export const AppInfoOutputSchema = apiContract.haiResultSchema(AppInfoOutputDataSchema)
-export const AppEchoOutputSchema = apiContract.haiResultSchema(AppEchoOutputDataSchema)
-
 export type AppFrontendTarget = z.infer<typeof AppFrontendTargetSchema>
 export type AppInfoOutputData = z.infer<typeof AppInfoOutputDataSchema>
-export type AppInfoOutput = z.infer<typeof AppInfoOutputSchema>
+export type AppInfoOutput = HaiResult<AppInfoOutputData>
 export type AppEchoInput = z.infer<typeof AppEchoInputSchema>
 export type AppEchoOutputData = z.infer<typeof AppEchoOutputDataSchema>
-export type AppEchoOutput = z.infer<typeof AppEchoOutputSchema>
+export type AppEchoOutput = HaiResult<AppEchoOutputData>

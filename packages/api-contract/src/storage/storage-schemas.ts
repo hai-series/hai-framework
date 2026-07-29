@@ -2,12 +2,12 @@
  * @h-ai/api-contract — Storage 领域 Schema
  *
  * 包含文件元数据、预签名 URL、文件列表与删除相关的 input/output Zod Schema。
- * 所有 Output Schema 均用 `haiResultSchema()` 封装。
+ * 仅保留跨接口、跨层复用的数据结构；一次性输出包装在 contract 中内联。
  * @module storage-schemas
  */
 
+import type { HaiResult } from '@h-ai/core'
 import { z } from 'zod'
-import { haiResultSchema } from '../common/result-schemas.js'
 
 /** 文件元数据 Schema。 */
 export const StorageFileMetadataSchema = z.object({
@@ -66,14 +66,9 @@ export const StorageDeleteFilesInputSchema = z.object({
   keys: z.array(z.string().min(1)).min(1),
 })
 
-export const StoragePresignedUrlOutputSchema = haiResultSchema(StoragePresignedUrlSchema)
-export const StorageFileMetadataOutputSchema = haiResultSchema(StorageFileMetadataSchema)
-export const StorageListFilesOutputSchema = haiResultSchema(StorageListFilesDataSchema)
-export const StorageVoidOutputSchema = haiResultSchema(z.void())
-
 export type StoragePresignDownloadInput = z.infer<typeof StoragePresignDownloadInputSchema>
 export type StoragePresignUploadInput = z.infer<typeof StoragePresignUploadInputSchema>
-export type StoragePresignedUrlOutput = z.infer<typeof StoragePresignedUrlOutputSchema>
+export type StoragePresignedUrlOutput = HaiResult<z.infer<typeof StoragePresignedUrlSchema>>
 export type StorageListFilesInput = z.infer<typeof StorageListFilesInputSchema>
 export type StorageFileKeyInput = z.infer<typeof StorageFileKeyInputSchema>
 export type StorageDeleteFilesInput = z.infer<typeof StorageDeleteFilesInputSchema>
