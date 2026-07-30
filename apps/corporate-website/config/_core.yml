@@ -4,7 +4,7 @@
 
 name: hai Corporate Website
 version: 0.1.0
-env: ${HAI_ENV:development}
+env: development
 debug: false
 
 defaultLocale: zh-CN

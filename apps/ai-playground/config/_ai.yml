@@ -1,7 +1,7 @@
 # AI Playground 完整示例配置。
-# 模型、端点和行为参数放在 YAML；环境变量仅用于注入密钥，避免把凭据提交到仓库。
+# 模型、端点和行为参数提供 YAML 默认值；约定环境变量可覆盖任意叶子项。
 llm:
-  apiKey: ${AI_API_KEY:}
+  apiKey: ''
   baseUrl: https://api.xiaomimimo.com/v1
   model: mimo-v2.5
   api: chat
@@ -35,6 +35,7 @@ image:
     - id: image
       provider: pollinations
       model: zimage
+      # 数组项通常用索引生成变量名；这里显式指定更稳定的厂商密钥名。
       apiKey: ${AI_IMAGE_API_KEY:}
       timeout: 120000
 

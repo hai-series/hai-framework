@@ -80,14 +80,17 @@ await reldb.init({
 
 ```yaml
 # config/_db.yml
-type: ${HAI_RELDB_TYPE:sqlite}
-database: ${HAI_RELDB_DATABASE:./data/app.db}
+type: sqlite
+database: ./data/app.db
 operationLog:
   read: false # query / get / queryPage
   write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
   maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
   level: debug # info | debug | trace，默认 debug
 ```
+
+通过 `core.config.load('db', ...)` 加载时，`HAI_DB_TYPE`、
+`HAI_DB_DATABASE`、`HAI_DB_OPERATIONLOG_LEVEL` 等约定变量优先于 YAML。
 
 ```ts
 await reldb.init({

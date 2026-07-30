@@ -62,6 +62,9 @@ services:
     apiKey: ${HAI_DEPLOY_UPSTASH_API_KEY}
 ```
 
+这里的变量由 `deploy.credentials` 管理，属于显式特殊映射；若同时设置
+`HAI_DEPLOY_PROVIDER_TOKEN` 等按 YAML 路径生成的约定变量，约定变量优先。
+
 如需在脚本或 CLI 中显式管理凭证文件，请通过 `deploy.credentials.*` 访问：
 
 ```typescript

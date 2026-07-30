@@ -60,8 +60,8 @@ function generateCoreConfig(cfg?: CoreModuleConfig): string {
 
 name: ${name}
 version: 0.1.0
-env: \${HAI_ENV:development}
-debug: \${HAI_DEBUG:false}
+env: development
+debug: false
 
 defaultLocale: ${locale}
 supportedLocales:
@@ -105,13 +105,13 @@ function generateDbConfig(cfg?: DbModuleConfig): string {
 type: sqlite
 
 # SQLite 数据库路径
-database: \${HAI_RELDB_DATABASE:${database}}
+database: ${database}
 
 # PostgreSQL/MySQL 配置（可选）
-# host: \${HAI_RELDB_HOST:localhost}
-# port: \${HAI_RELDB_PORT:5432}
-# user: \${HAI_RELDB_USER:postgres}
-# password: \${HAI_RELDB_PASSWORD:}
+# host: localhost
+# port: 5432
+# user: postgres
+# password: ''
 `
   }
 
@@ -125,13 +125,13 @@ database: \${HAI_RELDB_DATABASE:${database}}
 type: ${dbType}
 
 # 数据库名称
-database: \${HAI_RELDB_DATABASE:${database}}
+database: ${database}
 
 # 连接配置
-host: \${HAI_RELDB_HOST:${host}}
-port: \${HAI_RELDB_PORT:${port}}
-user: \${HAI_RELDB_USER:${user}}
-password: \${HAI_RELDB_PASSWORD:}
+host: ${host}
+port: ${port}
+user: ${user}
+password: ''
 `
 }
 
@@ -147,11 +147,11 @@ function generateCacheConfig(cfg?: CacheModuleConfig): string {
 type: memory
 
 # Redis 配置（当 type 为 redis 时使用）
-# url: \${HAI_CACHE_REDIS_URL:redis://localhost:6379/0}
-# host: \${HAI_CACHE_REDIS_HOST:localhost}
-# port: \${HAI_CACHE_REDIS_PORT:6379}
-# password: \${HAI_CACHE_REDIS_PASSWORD:}
-# keyPrefix: \${HAI_CACHE_KEY_PREFIX:hai:}
+# url: redis://localhost:6379/0
+# host: localhost
+# port: 6379
+# password: ''
+# keyPrefix: 'hai:'
 `
   }
 
@@ -166,10 +166,10 @@ type: memory
 type: redis
 
 # Redis 配置
-host: \${HAI_CACHE_REDIS_HOST:${host}}
-port: \${HAI_CACHE_REDIS_PORT:${port}}
-password: \${HAI_CACHE_REDIS_PASSWORD:}
-keyPrefix: \${HAI_CACHE_KEY_PREFIX:hai:}
+host: ${host}
+port: ${port}
+password: ''
+keyPrefix: 'hai:'
 `
 }
 
@@ -228,18 +228,18 @@ defaultProvider: local
 providers:
   local:
     type: local
-    root: \${HAI_STORAGE_PATH:${localPath}}
+    root: ${localPath}
     maxFileSize: 10485760  # 10MB
 
   # S3 配置（可选）
   # s3:
   #   type: s3
-  #   bucket: \${HAI_STORAGE_S3_BUCKET}
-  #   region: \${HAI_STORAGE_S3_REGION:us-east-1}
-  #   accessKeyId: \${HAI_STORAGE_S3_ACCESS_KEY}
-  #   secretAccessKey: \${HAI_STORAGE_S3_SECRET_KEY}
-  #   endpoint: \${HAI_STORAGE_S3_ENDPOINT}
-  #   forcePathStyle: \${HAI_STORAGE_S3_FORCE_PATH_STYLE:false}
+  #   bucket: my-bucket
+  #   region: us-east-1
+  #   accessKeyId: ''
+  #   secretAccessKey: ''
+  #   endpoint: ''
+  #   forcePathStyle: false
 `
   }
 
@@ -254,17 +254,17 @@ defaultProvider: s3
 providers:
   s3:
     type: s3
-    bucket: \${HAI_STORAGE_S3_BUCKET}
-    region: \${HAI_STORAGE_S3_REGION:us-east-1}
-    accessKeyId: \${HAI_STORAGE_S3_ACCESS_KEY}
-    secretAccessKey: \${HAI_STORAGE_S3_SECRET_KEY}
-    # endpoint: \${HAI_STORAGE_S3_ENDPOINT}
-    # forcePathStyle: \${HAI_STORAGE_S3_FORCE_PATH_STYLE:false}
+    bucket: ''
+    region: us-east-1
+    accessKeyId: ''
+    secretAccessKey: ''
+    # endpoint: ''
+    # forcePathStyle: false
 
   # 本地存储（可选）
   # local:
   #   type: local
-  #   root: \${HAI_STORAGE_PATH:./data/uploads}
+  #   root: ./data/uploads
   #   maxFileSize: 10485760  # 10MB
 `
 }
@@ -280,10 +280,10 @@ function generateAiConfig(cfg?: AiModuleConfig): string {
 
 # LLM 配置（必填）
 llm:
-  # API Key（留空时自动读取 HAI_AI_LLM_API_KEY / OPENAI_API_KEY 环境变量）
-  apiKey: \${HAI_AI_LLM_API_KEY:}
-  # Base URL（留空时自动读取 HAI_AI_LLM_BASE_URL / OPENAI_BASE_URL，默认 https://api.openai.com/v1）
-  # baseUrl: \${HAI_AI_LLM_BASE_URL:}
+  # API Key（约定环境变量 HAI_AI_LLM_APIKEY 优先）
+  apiKey: ''
+  # Base URL（约定环境变量 HAI_AI_LLM_BASEURL 优先）
+  # baseUrl: https://api.openai.com/v1
   # 默认模型
   model: ${model}
   # 全局最大 Token 数（默认 4096）
@@ -299,7 +299,7 @@ llm:
   #     model: gpt-4o-mini
   #   - id: smart
   #     model: gpt-4o
-  #     apiKey: \${HAI_AI_LLM_API_KEY:}
+  #     apiKey: ''
 
   # 场景模型映射（可选）
   # scenarios:
@@ -324,9 +324,9 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
 # =============================================================================
 #
 # Copy this file to .env and fill in actual values.
-# Config files in config/ reference these variables via \${VAR_NAME:default} syntax.
+# Config files use literal defaults; matching HAI variables override YAML leaves.
 #
-# Naming convention: HAI_<MODULE>_<SETTING>
+# Naming convention: HAI_<config name>_<YAML path>
 # =============================================================================`)
 
   // 应用基础（始终生成）
@@ -335,9 +335,9 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
 # Application
 # =============================================================================
 # Environment: development | production | test
-HAI_ENV=development
+HAI_CORE_ENV=development
 # Enable debug mode
-HAI_DEBUG=false`)
+HAI_CORE_DEBUG=false`)
 
   // 数据库
   if (features.includes('db')) {
@@ -349,21 +349,21 @@ HAI_DEBUG=false`)
 # Database (@h-ai/reldb)
 # =============================================================================
 # Database type: sqlite | postgresql | mysql
-HAI_RELDB_TYPE=${dbType}
+HAI_DB_TYPE=${dbType}
 # SQLite: file path; PostgreSQL/MySQL: database name
-HAI_RELDB_DATABASE=${dbDatabase}${isSqlite
+HAI_DB_DATABASE=${dbDatabase}${isSqlite
   ? `
 # PostgreSQL/MySQL connection (uncomment when not using sqlite)
-# HAI_RELDB_HOST=localhost
-# HAI_RELDB_PORT=5432
-# HAI_RELDB_USER=postgres
-# HAI_RELDB_PASSWORD=`
+# HAI_DB_HOST=localhost
+# HAI_DB_PORT=5432
+# HAI_DB_USER=postgres
+# HAI_DB_PASSWORD=`
   : `
 # Connection
-HAI_RELDB_HOST=${configs?.db?.host ?? 'localhost'}
-HAI_RELDB_PORT=${configs?.db?.port ?? (dbType === 'postgresql' ? 5432 : 3306)}
-HAI_RELDB_USER=${dbType === 'postgresql' ? 'postgres' : 'root'}
-HAI_RELDB_PASSWORD=`}`)
+HAI_DB_HOST=${configs?.db?.host ?? 'localhost'}
+HAI_DB_PORT=${configs?.db?.port ?? (dbType === 'postgresql' ? 5432 : 3306)}
+HAI_DB_USER=${dbType === 'postgresql' ? 'postgres' : 'root'}
+HAI_DB_PASSWORD=`}`)
   }
 
   // IAM / Session
@@ -372,11 +372,9 @@ HAI_RELDB_PASSWORD=`}`)
 # =============================================================================
 # IAM (@h-ai/iam)
 # =============================================================================
-HAI_IAM_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars
-# HAI_IAM_PASSWORD_MIN_LENGTH=8
-# HAI_IAM_SESSION_MAX_AGE=86400
-# HAI_IAM_REFRESH_TOKEN_MAX_AGE=604800
-# HAI_IAM_MAX_LOGIN_ATTEMPTS=5
+# HAI_IAM_PASSWORD_MINLENGTH=8
+# HAI_IAM_SESSION_MAXAGE=86400
+# HAI_IAM_SESSION_REFRESHTOKENMAXAGE=604800
 # HAI_KIT_COOKIE_KEY=                 # 32-char hex for SM4-CBC cookie encryption
 `)
   }
@@ -392,11 +390,11 @@ HAI_IAM_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars
 # Cache type: memory | redis
 HAI_CACHE_TYPE=redis
 # Redis connection
-HAI_CACHE_REDIS_HOST=${configs?.cache?.host ?? 'localhost'}
-HAI_CACHE_REDIS_PORT=${configs?.cache?.port ?? 6379}
-HAI_CACHE_REDIS_PASSWORD=
-# HAI_CACHE_REDIS_URL=redis://localhost:6379/0
-# HAI_CACHE_REDIS_DB=0
+HAI_CACHE_HOST=${configs?.cache?.host ?? 'localhost'}
+HAI_CACHE_PORT=${configs?.cache?.port ?? 6379}
+HAI_CACHE_PASSWORD=
+# HAI_CACHE_URL=redis://localhost:6379/0
+# HAI_CACHE_DB=0
 # HAI_CACHE_CONNECT_TIMEOUT=10000
 # HAI_CACHE_COMMAND_TIMEOUT=5000
 # HAI_CACHE_KEY_PREFIX=hai:`)
@@ -409,11 +407,11 @@ HAI_CACHE_REDIS_PASSWORD=
 # Cache type: memory | redis
 HAI_CACHE_TYPE=memory
 # Redis connection (uncomment when type=redis)
-# HAI_CACHE_REDIS_URL=redis://localhost:6379/0
-# HAI_CACHE_REDIS_HOST=localhost
-# HAI_CACHE_REDIS_PORT=6379
-# HAI_CACHE_REDIS_PASSWORD=
-# HAI_CACHE_REDIS_DB=0
+# HAI_CACHE_URL=redis://localhost:6379/0
+# HAI_CACHE_HOST=localhost
+# HAI_CACHE_PORT=6379
+# HAI_CACHE_PASSWORD=
+# HAI_CACHE_DB=0
 # HAI_CACHE_CONNECT_TIMEOUT=10000
 # HAI_CACHE_COMMAND_TIMEOUT=5000
 # HAI_CACHE_KEY_PREFIX=hai:`)
@@ -428,34 +426,34 @@ HAI_CACHE_TYPE=memory
 # =============================================================================
 # Storage (@h-ai/storage)
 # =============================================================================
-# Storage type: local | s3
-HAI_STORAGE_TYPE=s3
+# Default storage provider: local | s3
+HAI_STORAGE_DEFAULTPROVIDER=s3
 # S3 / S3-compatible
-HAI_STORAGE_S3_BUCKET=
-HAI_STORAGE_S3_REGION=us-east-1
-HAI_STORAGE_S3_ACCESS_KEY=
-HAI_STORAGE_S3_SECRET_KEY=
-# HAI_STORAGE_S3_ENDPOINT=          # Custom endpoint for MinIO / Aliyun OSS etc.
-# HAI_STORAGE_S3_FORCE_PATH_STYLE=false
+HAI_STORAGE_PROVIDERS_S3_BUCKET=
+HAI_STORAGE_PROVIDERS_S3_REGION=us-east-1
+HAI_STORAGE_PROVIDERS_S3_ACCESSKEYID=
+HAI_STORAGE_PROVIDERS_S3_SECRETACCESSKEY=
+# HAI_STORAGE_PROVIDERS_S3_ENDPOINT=          # Custom endpoint for MinIO / Aliyun OSS etc.
+# HAI_STORAGE_PROVIDERS_S3_FORCEPATHSTYLE=false
 # Local storage (uncomment when type=local)
-# HAI_STORAGE_PATH=./data/uploads`)
+# HAI_STORAGE_PROVIDERS_LOCAL_ROOT=./data/uploads`)
     }
     else {
       sections.push(`
 # =============================================================================
 # Storage (@h-ai/storage)
 # =============================================================================
-# Storage type: local | s3
-HAI_STORAGE_TYPE=local
+# Default storage provider: local | s3
+HAI_STORAGE_DEFAULTPROVIDER=local
 # Local storage root path
-HAI_STORAGE_PATH=${configs?.storage?.localPath ?? './data/uploads'}
+HAI_STORAGE_PROVIDERS_LOCAL_ROOT=${configs?.storage?.localPath ?? './data/uploads'}
 # S3 / S3-compatible (uncomment when type=s3)
-# HAI_STORAGE_S3_BUCKET=
-# HAI_STORAGE_S3_REGION=us-east-1
-# HAI_STORAGE_S3_ACCESS_KEY=
-# HAI_STORAGE_S3_SECRET_KEY=
-# HAI_STORAGE_S3_ENDPOINT=          # Custom endpoint for MinIO / Aliyun OSS etc.
-# HAI_STORAGE_S3_FORCE_PATH_STYLE=false`)
+# HAI_STORAGE_PROVIDERS_S3_BUCKET=
+# HAI_STORAGE_PROVIDERS_S3_REGION=us-east-1
+# HAI_STORAGE_PROVIDERS_S3_ACCESSKEYID=
+# HAI_STORAGE_PROVIDERS_S3_SECRETACCESSKEY=
+# HAI_STORAGE_PROVIDERS_S3_ENDPOINT=          # Custom endpoint for MinIO / Aliyun OSS etc.
+# HAI_STORAGE_PROVIDERS_S3_FORCEPATHSTYLE=false`)
     }
   }
 
@@ -468,8 +466,8 @@ HAI_STORAGE_PATH=${configs?.storage?.localPath ?? './data/uploads'}
 # AI (@h-ai/ai)
 # =============================================================================
 # OpenAI-compatible API Key (Anthropic models via OpenAI-compatible proxy)
-HAI_AI_LLM_API_KEY=
-# HAI_AI_LLM_BASE_URL=               # Custom base URL
+HAI_AI_LLM_APIKEY=
+# HAI_AI_LLM_BASEURL=               # Custom base URL
 # Optional compatibility fallback
 # OPENAI_API_KEY=`)
     }
@@ -479,8 +477,8 @@ HAI_AI_LLM_API_KEY=
 # AI (@h-ai/ai)
 # =============================================================================
 # OpenAI / OpenAI-compatible
-HAI_AI_LLM_API_KEY=
-# HAI_AI_LLM_BASE_URL=               # Custom base URL (e.g. local proxy, Azure)
+HAI_AI_LLM_APIKEY=
+# HAI_AI_LLM_BASEURL=               # Custom base URL (e.g. local proxy, Azure)
 # Optional compatibility fallback
 # OPENAI_API_KEY=`)
     }
@@ -490,8 +488,8 @@ HAI_AI_LLM_API_KEY=
 # AI (@h-ai/ai)
 # =============================================================================
 # OpenAI-compatible provider
-HAI_AI_LLM_API_KEY=
-# HAI_AI_LLM_BASE_URL=               # Custom base URL
+HAI_AI_LLM_APIKEY=
+# HAI_AI_LLM_BASEURL=               # Custom base URL
 # Optional compatibility fallback
 # OPENAI_API_KEY=`)
     }
@@ -508,8 +506,8 @@ HAI_VECDB_TYPE=lancedb
 # LanceDB data path
 HAI_VECDB_PATH=./data/vecdb
 # Qdrant (uncomment when type=qdrant)
-# HAI_VECDB_QDRANT_URL=http://localhost:6333
-# HAI_VECDB_QDRANT_API_KEY=
+# HAI_VECDB_URL=http://localhost:6333
+# HAI_VECDB_APIKEY=
 `)
   }
 
@@ -535,18 +533,18 @@ HAI_VECDB_PATH=./data/vecdb
 # Payment (@h-ai/payment)
 # =============================================================================
 # WeChat Pay
-# HAI_PAYMENT_WECHAT_MCH_ID=
-# HAI_PAYMENT_WECHAT_API_V3_KEY=
-# HAI_PAYMENT_WECHAT_SERIAL_NO=
-# HAI_PAYMENT_WECHAT_PRIVATE_KEY=
-# HAI_PAYMENT_WECHAT_APP_ID=
+# HAI_PAYMENT_WECHAT_MCHID=
+# HAI_PAYMENT_WECHAT_APIV3KEY=
+# HAI_PAYMENT_WECHAT_SERIALNO=
+# HAI_PAYMENT_WECHAT_PRIVATEKEY=
+# HAI_PAYMENT_WECHAT_APPID=
 # Alipay
-# HAI_PAYMENT_ALIPAY_APP_ID=
-# HAI_PAYMENT_ALIPAY_PRIVATE_KEY=
-# HAI_PAYMENT_ALIPAY_PUBLIC_KEY=
+# HAI_PAYMENT_ALIPAY_APPID=
+# HAI_PAYMENT_ALIPAY_PRIVATEKEY=
+# HAI_PAYMENT_ALIPAY_ALIPAYPUBLICKEY=
 # Stripe
-# HAI_PAYMENT_STRIPE_SECRET_KEY=
-# HAI_PAYMENT_STRIPE_WEBHOOK_SECRET=
+# HAI_PAYMENT_STRIPE_SECRETKEY=
+# HAI_PAYMENT_STRIPE_WEBHOOKSECRET=
 `)
   }
 
@@ -615,25 +613,25 @@ function generateVecdbConfig(): string {
 type: lancedb
 
 # LanceDB 数据目录
-path: \${HAI_VECDB_PATH:./data/vecdb}
+path: ./data/vecdb
 
 # 距离度量: cosine | euclidean | dot
 # metric: cosine
 
 # pgvector 配置（当 type 为 pgvector 时使用）
 # type: pgvector
-# host: \${HAI_RELDB_HOST:localhost}
-# port: \${HAI_RELDB_PORT:5432}
-# database: \${HAI_RELDB_DATABASE:hai}
-# user: \${HAI_RELDB_USER:postgres}
-# password: \${HAI_RELDB_PASSWORD:}
+# host: localhost
+# port: 5432
+# database: hai
+# user: postgres
+# password: ''
 # indexType: hnsw
 # tablePrefix: vec_
 
 # Qdrant 配置（当 type 为 qdrant 时使用）
 # type: qdrant
-# url: \${HAI_VECDB_QDRANT_URL:http://localhost:6333}
-# apiKey: \${HAI_VECDB_QDRANT_API_KEY:}
+# url: http://localhost:6333
+# apiKey: ''
 `
 }
 
@@ -731,23 +729,23 @@ function generatePaymentConfig(): string {
 
 # 微信支付（按需开启）
 # wechat:
-#   mchId: \${HAI_PAYMENT_WECHAT_MCH_ID}
-#   apiV3Key: \${HAI_PAYMENT_WECHAT_API_V3_KEY}
-#   serialNo: \${HAI_PAYMENT_WECHAT_SERIAL_NO}
-#   privateKey: \${HAI_PAYMENT_WECHAT_PRIVATE_KEY}
-#   appId: \${HAI_PAYMENT_WECHAT_APP_ID}
+#   mchId: ''
+#   apiV3Key: ''
+#   serialNo: ''
+#   privateKey: ''
+#   appId: ''
 
 # 支付宝（按需开启）
 # alipay:
-#   appId: \${HAI_PAYMENT_ALIPAY_APP_ID}
-#   privateKey: \${HAI_PAYMENT_ALIPAY_PRIVATE_KEY}
-#   alipayPublicKey: \${HAI_PAYMENT_ALIPAY_PUBLIC_KEY}
+#   appId: ''
+#   privateKey: ''
+#   alipayPublicKey: ''
 #   signType: RSA2
 #   sandbox: false
 
 # Stripe（按需开启）
 # stripe:
-#   secretKey: \${HAI_PAYMENT_STRIPE_SECRET_KEY}
-#   webhookSecret: \${HAI_PAYMENT_STRIPE_WEBHOOK_SECRET}
+#   secretKey: ''
+#   webhookSecret: ''
 `
 }

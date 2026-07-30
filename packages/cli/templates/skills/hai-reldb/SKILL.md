@@ -41,19 +41,22 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQ
 
 ```yaml
 # config/_db.yml
-type: ${HAI_RELDB_TYPE:sqlite}
-database: ${HAI_RELDB_DATABASE:./data/app.db}
+type: sqlite
+database: ./data/app.db
 # PostgreSQL/MySQL 额外字段：
-# host: ${HAI_RELDB_HOST:localhost}
-# port: ${HAI_RELDB_PORT:5432}
-# user: ${HAI_RELDB_USER:postgres}
-# password: ${HAI_RELDB_PASSWORD:}
+# host: localhost
+# port: 5432
+# user: postgres
+# password: ''
 operationLog:
   read: false # query / get / queryPage
   write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
   maxLength: 1000
   level: debug # info | debug | trace
 ```
+
+约定环境变量优先于 YAML，例如 `HAI_DB_TYPE`、`HAI_DB_DATABASE`、
+`HAI_DB_OPERATIONLOG_LEVEL`。
 
 `operationLog` 在 reldb provider-base 的 DML 操作层统一输出日志，不要在 `reldb-main.ts`、各 raw provider 或调用方重复包装。`read` 覆盖 `query/get/queryPage`，`write` 覆盖 DDL、`execute/batch` 与 `tx.begin/commit/rollback`，`maxLength` 用于截断序列化后的 SQL 参数和批量语句，`level` 默认 `debug`。
 

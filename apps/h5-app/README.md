@@ -65,19 +65,19 @@ pnpm --filter h5-app preview
 - `config/_storage.yml`：存储类型及参数（local / S3）
 - `config/_ai.yml`：AI 模型配置（多模态识别）
 
-配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
+每个 YAML 叶子项都可由 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，
+且环境变量优先于 YAML 值；camelCase key 不拆词。
 
 ### 环境变量
 
-| 变量名                   | 说明                          | 默认值             |
-| ------------------------ | ----------------------------- | ------------------ |
-| `HAI_RELDB_TYPE`         | 数据库类型                    | `sqlite`           |
-| `HAI_RELDB_DATABASE`     | 数据库路径/地址               | `./data/h5-app.db` |
-| `HAI_CACHE_TYPE`         | 缓存类型                      | `memory`           |
-| `HAI_STORAGE_TYPE`       | 存储类型                      | `local`            |
-| `HAI_AI_LLM_API_KEY`     | OpenAI API Key（AI 识别必填） | —                  |
-| `HAI_AI_LLM_BASE_URL`    | OpenAI API 基础 URL           | —                  |
-| `HAI_IAM_SESSION_SECRET` | Session 密钥（≥32 字符）      | —                  |
+| 变量名               | 说明                          | 默认值                      |
+| -------------------- | ----------------------------- | --------------------------- |
+| `HAI_DB_TYPE`        | 数据库类型                    | `sqlite`                    |
+| `HAI_DB_DATABASE`    | 数据库路径/地址               | `./data/h5-app.db`          |
+| `HAI_CACHE_TYPE`     | 缓存类型                      | `memory`                    |
+| `HAI_STORAGE_TYPE`   | 存储类型                      | `local`                     |
+| `HAI_AI_LLM_APIKEY`  | OpenAI API Key（AI 识别必填） | —                           |
+| `HAI_AI_LLM_BASEURL` | OpenAI API 基础 URL           | `https://api.openai.com/v1` |
 
 ## 🌍 国际化 (i18n)
 

@@ -73,7 +73,7 @@ const traceId = core.id.trace()         // 'trace-V1StGXR...'
 const reqId = core.id.request()         // 'req-V1StGXR...'
 const uuid = core.id.uuid()            // UUID v4
 
-// 配置（Node.js only，从 configDir 加载 YAML 文件，支持 ${VAR:default} 环境变量插值）
+// 配置（Node.js only；YAML 叶子项默认映射 HAI_<配置名>_<路径>，并支持 ${VAR:default} 显式插值）
 const dbConfig = core.config.get('db')
 core.config.validate('db', ReldbConfigSchema)
 const unwatch = core.config.watch('db', (cfg, error) => { /* ... */ })
@@ -412,8 +412,8 @@ import { z } from 'zod'
 // 初始化（async）— 只有 OpenAI 兼容的 Provider
 await ai.init({
   llm: {
-    apiKey: process.env.HAI_AI_LLM_API_KEY,   // 也兼容 OPENAI_API_KEY
-    baseUrl: process.env.HAI_AI_LLM_BASE_URL,  // 可指向任何 OpenAI 兼容端点
+    apiKey: process.env.HAI_AI_LLM_APIKEY,
+    baseUrl: process.env.HAI_AI_LLM_BASEURL,  // 可指向任何 OpenAI 兼容端点
     model: 'gpt-4o-mini',                     // 默认模型
     maxTokens: 4096,
     temperature: 0.7,
@@ -945,49 +945,46 @@ hai-framework/
 
 ## 环境变量
 
-命名规范：`HAI_<MODULE>_<SETTING>`。复制 `.env.example` 为 `.env` 填入实际值。
+配置命名：`HAI_<配置名>_<YAML 路径>`，约定环境变量优先于 YAML。
 
 ```bash
 # Application
-HAI_ENV=development         # development|production|test
-HAI_DEBUG=false
+HAI_CORE_ENV=development         # development|production|test
+HAI_CORE_DEBUG=false
 
 # Database (@h-ai/reldb)
-HAI_RELDB_TYPE=sqlite          # sqlite|postgresql|mysql
-HAI_RELDB_DATABASE=./data/app.db
-# HAI_RELDB_HOST=localhost
-# HAI_RELDB_PORT=5432
-# HAI_RELDB_USER=postgres
-# HAI_RELDB_PASSWORD=
+HAI_DB_TYPE=sqlite          # sqlite|postgresql|mysql
+HAI_DB_DATABASE=./data/app.db
+# HAI_DB_HOST=localhost
+# HAI_DB_PORT=5432
+# HAI_DB_USER=postgres
+# HAI_DB_PASSWORD=
 
 # Vector DB (@h-ai/vecdb)
 # HAI_VECDB_TYPE=lancedb    # lancedb|pgvector|qdrant
 # HAI_VECDB_PATH=./data/vecdb
 
-# Session / IAM (@h-ai/iam)
-HAI_IAM_SESSION_SECRET=...      # REQUIRED, ≥32 chars
-
 # Cache (@h-ai/cache)
 HAI_CACHE_TYPE=memory       # memory|redis
-# HAI_CACHE_REDIS_URL=redis://localhost:6379/0
+# HAI_CACHE_URL=redis://localhost:6379/0
 
 # Storage (@h-ai/storage)
 HAI_STORAGE_TYPE=local      # local|s3
-HAI_STORAGE_PATH=./data/uploads
-# HAI_STORAGE_S3_BUCKET=
-# HAI_STORAGE_S3_REGION=us-east-1
-# HAI_STORAGE_S3_ACCESS_KEY=
-# HAI_STORAGE_S3_SECRET_KEY=
+HAI_STORAGE_ROOT=./data/uploads
+# HAI_STORAGE_BUCKET=
+# HAI_STORAGE_REGION=us-east-1
+# HAI_STORAGE_ACCESSKEYID=
+# HAI_STORAGE_SECRETACCESSKEY=
 
 # AI (@h-ai/ai)
-# HAI_AI_LLM_API_KEY=
-# HAI_AI_LLM_BASE_URL=
+# HAI_AI_LLM_APIKEY=
+# HAI_AI_LLM_BASEURL=
 # HAI_AI_LLM_MODEL=gpt-4o-mini
 
 # Payment (@h-ai/payment)
-# HAI_PAYMENT_WECHAT_MCH_ID=
-# HAI_PAYMENT_ALIPAY_APP_ID=
-# HAI_PAYMENT_STRIPE_SECRET_KEY=
+# HAI_PAYMENT_WECHAT_MCHID=
+# HAI_PAYMENT_ALIPAY_APPID=
+# HAI_PAYMENT_STRIPE_SECRETKEY=
 
 # Deploy (@h-ai/deploy)
 # HAI_DEPLOY_VERCEL_TOKEN=

@@ -193,16 +193,19 @@ export async function initCapacitor() {
 
 ### 配置文件格式
 
-所有模块配置使用 YAML，支持 `${ENV_VAR:default}` 环境变量语法：
+所有模块配置使用 YAML 保存默认值；`HAI_<配置名>_<YAML 路径>` 环境变量
+自动覆盖对应叶子项，且优先级更高：
 
 ```yaml
 # config/_core.yml
-app:
-  name: ${HAI_APP_NAME:my-app}
-  env: ${HAI_ENV:development}
-log:
-  level: ${HAI_LOG_LEVEL:info}
+name: my-app
+env: development
+logging:
+  level: info
 ```
+
+以上字段分别对应 `HAI_CORE_NAME`、`HAI_CORE_ENV`、
+`HAI_CORE_LOGGING_LEVEL`。
 
 ---
 

@@ -3,4 +3,4 @@
 # =============================================================================
 
 type: local
-root: ${HAI_STORAGE_ROOT:./data/storage}
+root: ./data/storage

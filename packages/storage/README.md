@@ -19,8 +19,8 @@ await storage.init({
   type: 's3',
   bucket: 'my-bucket',
   region: 'us-east-1',
-  accessKeyId: process.env.HAI_STORAGE_S3_ACCESS_KEY!,
-  secretAccessKey: process.env.HAI_STORAGE_S3_SECRET_KEY!,
+  accessKeyId: process.env.HAI_STORAGE_ACCESSKEYID!,
+  secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY!,
 })
 
 // 或本地存储

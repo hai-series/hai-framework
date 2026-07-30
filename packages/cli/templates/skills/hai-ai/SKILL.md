@@ -65,9 +65,9 @@ await ai.close()
 
 ```yaml
 llm:
-  apiKey: ${HAI_AI_LLM_API_KEY:}
-  baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
-  model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  apiKey: ''
+  baseUrl: https://api.openai.com/v1
+  model: gpt-4o-mini
   api: chat # chat（默认）| responses | anthropic——底层协议，对使用方透明
   timeout: 60000
   tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
@@ -96,6 +96,9 @@ memory:
   defaultTopK: 10
   # allowEphemeralFallback: true # 仅明确接受重启丢失数据时开启
 ```
+
+约定环境变量优先于 YAML，例如 `HAI_AI_LLM_APIKEY`、
+`HAI_AI_LLM_BASEURL`、`HAI_AI_LLM_MODEL`。
 
 `ai.config` 是脱敏快照；`apiKey`、`privateKey`、URL 内嵌凭证会被隐藏。
 

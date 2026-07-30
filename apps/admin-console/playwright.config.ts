@@ -41,8 +41,8 @@ export default defineConfig({
     env: {
       HAI_E2E: '1',
       HAI_ADMIN_DEFAULT_PASSWORD: 'admin123456',
-      HAI_RELDB_DATABASE: `${testDataDir}/admin.db`,
-      HAI_STORAGE_PATH: `${testDataDir}/uploads`,
+      HAI_DB_DATABASE: `${testDataDir}/admin.db`,
+      HAI_STORAGE_ROOT: `${testDataDir}/uploads`,
       NODE_ENV: 'test',
       VITE_HAI_E2E_KIT_TRANSPORT_MODE: 'off',
     },

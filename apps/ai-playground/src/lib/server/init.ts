@@ -1,7 +1,7 @@
 /**
  * AI 实验台服务端初始化
  *
- * 配置统一由 `config/_core.yml` 与 `config/_ai.yml` 提供；环境变量只承载密钥。
+ * 配置统一由 `config/_core.yml` 与 `config/_ai.yml` 提供；约定环境变量拥有最高优先级。
  * @module server/init
  */
 

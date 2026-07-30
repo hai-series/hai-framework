@@ -122,8 +122,8 @@ http:
     readyPath: /ready
 
 cors:
-  origin: ${HAI_CORS_ORIGIN:*}
-  nativeOrigins: ${HAI_NATIVE_ORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  origin: '*'
+  nativeOrigins: http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost
   allowedHeaders:
     - Authorization
     - X-Client-Id
@@ -267,9 +267,14 @@ await crypto.close()
 常用环境变量：
 
 - `PORT`：默认 `3000`，HTTP 服务端口。
-- `HAI_RELDB_DATABASE`：默认 `./data/api-service.db`，SQLite 数据库路径。
+- `HAI_DB_DATABASE`：默认 `./data/api-service.db`，SQLite 数据库路径。
 - `HAI_CACHE_TYPE`：默认 `memory`，缓存类型。
 - `HAI_STORAGE_ROOT`：默认 `./data/storage`，本地存储目录。
+- `HAI_SERV_CORS_ORIGIN`：覆盖 `_serv.yml` 的 `cors.origin`。
+
+配置环境变量统一按 `HAI_<配置名>_<YAML 路径>` 生成，优先级高于 YAML；
+camelCase key 不拆词，例如 `cors.nativeOrigins` 对应
+`HAI_SERV_CORS_NATIVEORIGINS`。
 
 ## 错误处理
 

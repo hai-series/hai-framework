@@ -74,25 +74,25 @@ pnpm --filter admin-console preview
 
 ```bash
 # Application
-HAI_ENV=development
-HAI_DEBUG=false
+HAI_CORE_ENV=development
+HAI_CORE_DEBUG=false
 
 # Default admin is created only when the user table is empty and this variable is set.
 HAI_ADMIN_DEFAULT_PASSWORD=<change-me-to-a-strong-local-password>
 
 # Database (sqlite | postgresql | mysql)
-HAI_RELDB_TYPE=sqlite
-HAI_RELDB_DATABASE=./data/admin.db
+HAI_DB_TYPE=sqlite
+HAI_DB_DATABASE=./data/admin.db
 
 # Cache (memory | redis)
 HAI_CACHE_TYPE=memory
 
 # Storage (local | s3)
 HAI_STORAGE_TYPE=local
-HAI_STORAGE_PATH=./data/uploads
+HAI_STORAGE_ROOT=./data/uploads
 
 # AI (uncomment to enable)
-# HAI_AI_LLM_API_KEY=
+# HAI_AI_LLM_APIKEY=
 ```
 
 完整列表见 `.env.example`。
@@ -106,7 +106,10 @@ HAI_STORAGE_PATH=./data/uploads
 - `config/_kit.yml`：同源 transport 加密（密钥协商路径、是否强制加密、明文例外路径）
 - `config/_storage.yml`：存储类型及参数（local / S3）
 
-除 `config/_kit.yml` 外，配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
+除 `config/_kit.yml` 外，每个 YAML 叶子项都可由
+`HAI_<配置名>_<YAML 路径>` 环境变量覆盖，且环境变量优先于 YAML 值。
+例如 `_db.yml` 的 `database` 对应 `HAI_DB_DATABASE`，`_ai.yml` 的
+`llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`。camelCase key 不拆词。
 `config/_kit.yml` 会同时被 `hooks.server.ts` 与浏览器端 `apiFetch` 静态导入，
 因此只应放公开路径/开关配置，不要写入密钥；修改后需重启开发服务器。
 

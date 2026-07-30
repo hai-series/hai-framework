@@ -66,6 +66,9 @@ services:
     accessKeySecret: ${HAI_DEPLOY_ALIYUN_ACCESS_KEY_SECRET}
 ```
 
+这些凭证名由 `deploy.credentials` 管理，属于显式特殊映射；若同时设置
+`HAI_DEPLOY_PROVIDER_TOKEN` 等约定变量，约定变量仍拥有最高优先级。
+
 ### 2. 初始化与关闭
 
 ```typescript

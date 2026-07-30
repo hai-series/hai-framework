@@ -42,14 +42,17 @@ description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/lis
 
 ```yaml
 # config/_cache.yml
-type: ${HAI_CACHE_TYPE:memory} # memory | redis
+type: memory # memory | redis
 # Redis 配置（type=redis 时生效）：
-# host: ${HAI_CACHE_REDIS_HOST:localhost}
-# port: ${HAI_CACHE_REDIS_PORT:6379}
-# password: ${HAI_CACHE_REDIS_PASSWORD:}
-# db: ${HAI_CACHE_REDIS_DB:0}
-# keyPrefix: ${HAI_CACHE_KEY_PREFIX:hai:}
+# host: localhost
+# port: 6379
+# password: ''
+# db: 0
+# keyPrefix: 'hai:'
 ```
+
+约定环境变量优先于 YAML，例如 `HAI_CACHE_TYPE`、`HAI_CACHE_HOST`、
+`HAI_CACHE_KEYPREFIX`。
 
 ### 2. 初始化与关闭
 

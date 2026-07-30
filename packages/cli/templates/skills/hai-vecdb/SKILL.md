@@ -47,22 +47,22 @@ path: ./data/vecdb
 
 # pgvector
 # type: pgvector
-# url: ${HAI_VECDB_PG_URL:postgres://user:pass@localhost:5432/mydb}
+# url: postgres://user:pass@localhost:5432/mydb
 # indexType: hnsw
 # tablePrefix: vec_
 
 # Qdrant
 # type: qdrant
-# url: ${HAI_VECDB_QDRANT_URL:http://localhost:6333}
-# apiKey: ${HAI_VECDB_QDRANT_API_KEY:}
+# url: http://localhost:6333
+# apiKey: ''
 
 # Chroma（嵌入式：提供 path 且无 url 时自动拉起本地 `chroma run` 服务并持久化）
 # type: chroma
 # path: ./data/chroma
 # Chroma（直连已有服务，不拉起进程）
 # type: chroma
-# url: ${HAI_VECDB_CHROMA_URL:http://localhost:8000}
-# apiKey: ${HAI_VECDB_CHROMA_API_KEY:}
+# url: http://localhost:8000
+# apiKey: ''
 # serverCommand: chroma      # 嵌入式模式拉起服务的可执行命令（默认 chroma，来自 chromadb 包）
 # startupTimeout: 30000      # 嵌入式服务就绪等待超时（毫秒）
 operationLog:
@@ -71,6 +71,9 @@ operationLog:
   maxLength: 1000
   level: debug # info | debug | trace
 ```
+
+约定环境变量优先于 YAML，例如 `HAI_VECDB_URL`、
+`HAI_VECDB_APIKEY`、`HAI_VECDB_OPERATIONLOG_LEVEL`。
 
 `operationLog` 在集合/向量操作进入真实 Provider 前输出日志，不要在 `vecdb-main.ts` 或调用方重复包装。`maxLength` 用于截断序列化后的向量、文档和过滤条件，`level` 默认 `debug`。
 

@@ -51,25 +51,28 @@ description: 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一
 ```yaml
 # config/_payment.yml（自行创建）
 wechat:
-  appId: ${HAI_PAYMENT_WECHAT_APP_ID}
-  mchId: ${HAI_PAYMENT_WECHAT_MCH_ID}
-  apiV3Key: ${HAI_PAYMENT_WECHAT_API_V3_KEY}
-  privateKey: ${HAI_PAYMENT_WECHAT_PRIVATE_KEY}
-  serialNo: ${HAI_PAYMENT_WECHAT_SERIAL_NO}
-  platformCert: ${HAI_PAYMENT_WECHAT_PLATFORM_CERT}  # 可选，回调验签需要
+  appId: ''
+  mchId: ''
+  apiV3Key: ''
+  privateKey: ''
+  serialNo: ''
+  platformCert: ''  # 可选，回调验签需要
 
 alipay:
-  appId: ${HAI_PAYMENT_ALIPAY_APP_ID}
-  privateKey: ${HAI_PAYMENT_ALIPAY_PRIVATE_KEY}
-  alipayPublicKey: ${HAI_PAYMENT_ALIPAY_PUBLIC_KEY}
+  appId: ''
+  privateKey: ''
+  alipayPublicKey: ''
   signType: RSA2  # 可选，默认 RSA2
   sandbox: false   # 可选，默认 false
 
 stripe:
-  secretKey: ${HAI_PAYMENT_STRIPE_SECRET_KEY}
-  webhookSecret: ${HAI_PAYMENT_STRIPE_WEBHOOK_SECRET}
+  secretKey: ''
+  webhookSecret: ''
   webhookToleranceSeconds: 300  # 可选，默认 300 秒
 ```
+
+约定环境变量优先于 YAML，例如 `HAI_PAYMENT_WECHAT_APIV3KEY`、
+`HAI_PAYMENT_STRIPE_WEBHOOKSECRET`。生产密钥只放环境或密钥管理器。
 
 ### 2. 初始化（服务端）
 

@@ -30,12 +30,12 @@ description: "Use when: using @h-ai/iam, authentication, login, register, sessio
 ```yaml
 # config/_iam.yml
 password:
-  minLength: ${HAI_IAM_PASSWORD_MIN_LENGTH:8}
+  minLength: 8
   requireUppercase: true
   requireNumber: true
 session:
-  maxAge: ${HAI_IAM_SESSION_MAX_AGE:86400}
-  refreshTokenMaxAge: ${HAI_IAM_REFRESH_TOKEN_MAX_AGE:604800}
+  maxAge: 86400
+  refreshTokenMaxAge: 604800
   sliding: true
   singleDevice: false
 login:
@@ -44,12 +44,16 @@ login:
 register:
   enabled: true
 security:
-  maxLoginAttempts: ${HAI_IAM_MAX_LOGIN_ATTEMPTS:5}
+  maxLoginAttempts: 5
   lockoutDuration: 900
 rbac:
   defaultRole: user
   superAdminRole: super_admin
 ```
+
+环境变量按 YAML 路径自动映射并优先于文件，例如
+`HAI_IAM_PASSWORD_MINLENGTH`、`HAI_IAM_SESSION_MAXAGE` 和
+`HAI_IAM_SECURITY_MAXLOGINATTEMPTS`。
 
 ### 初始化
 

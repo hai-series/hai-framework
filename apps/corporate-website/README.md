@@ -56,7 +56,7 @@ pnpm --filter corporate-website preview
 
 ### 合作管理后台账号
 
-用户名默认是 `partner-admin`，密码必须通过 `HAI_PARTNER_ADMIN_PASSWORD` 显式注入。应用不会提供默认密码，也不会把凭据写入日志；缺少密码时启动阶段会返回明确的配置错误。
+用户名默认是 `partner-admin`，密码必须通过 `HAI_PARTNER_PASSWORD` 注入。应用不会提供默认密码，也不会把凭据写入日志；缺少密码时启动阶段会返回明确的配置错误。
 
 ## ⚙️ 配置
 
@@ -70,19 +70,20 @@ pnpm --filter corporate-website preview
 - `config/_reach.yml`：消息通知配置
 - `config/partner.yml`：合作管理后台管理员账号配置
 
-配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
+每个 YAML 叶子项都可由 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，
+且环境变量优先于 YAML 值；camelCase key 不拆词。
 
 ### 环境变量
 
-| 变量名                       | 说明                                     | 默认值                |
-| ---------------------------- | ---------------------------------------- | --------------------- |
-| `HAI_RELDB_TYPE`             | 数据库类型                               | `sqlite`              |
-| `HAI_RELDB_DATABASE`         | 数据库路径/地址                          | `./data/corporate.db` |
-| `HAI_CACHE_TYPE`             | 缓存类型                                 | `memory`              |
-| `HAI_STORAGE_TYPE`           | 存储类型                                 | `local`               |
-| `HAI_PARTNER_ADMIN_USERNAME` | 合作管理后台用户名                       | `partner-admin`       |
-| `HAI_PARTNER_ADMIN_PASSWORD` | 合作管理后台密码（必填）                 | _（无）_              |
-| `HAI_CONTACT_RECIPIENT`      | 联系表单邮件接收地址（未配置则跳过发送） | _（无）_              |
+| 变量名                  | 说明                                     | 默认值                        |
+| ----------------------- | ---------------------------------------- | ----------------------------- |
+| `HAI_DB_TYPE`           | 数据库类型                               | `sqlite`                      |
+| `HAI_DB_DATABASE`       | 数据库路径/地址                          | `./data/corporate-website.db` |
+| `HAI_CACHE_TYPE`        | 缓存类型                                 | `memory`                      |
+| `HAI_STORAGE_TYPE`      | 存储类型                                 | `local`                       |
+| `HAI_PARTNER_USERNAME`  | 合作管理后台用户名                       | `partner-admin`               |
+| `HAI_PARTNER_PASSWORD`  | 合作管理后台密码（必填）                 | _（无）_                      |
+| `HAI_CONTACT_RECIPIENT` | 联系表单邮件接收地址（未配置则跳过发送） | _（无）_                      |
 
 ## 🌍 国际化 (i18n)
 

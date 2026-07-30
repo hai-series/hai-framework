@@ -1,7 +1,7 @@
 /**
  * @h-ai/core — 配置管理（Node.js 专用）
  *
- * 提供 YAML 配置文件加载、环境变量插值、缓存管理。
+ * 提供 YAML 配置文件加载、约定式环境变量映射、显式环境变量插值、缓存管理。
  * @module core-function-config.node
  */
 
@@ -39,18 +39,81 @@ const ENV_VAR_PATTERN = /\$\{([^}:]+)(?::([^}]*))?\}/g
 const FULL_VAR_PATTERN = /^\$\{[^}:]+(?::[^}]*)?\}$/
 
 /**
- * 递归替换环境变量。
+ * 将环境变量字符串按 YAML 标量规则还原类型。
  *
- * 支持 `${VAR}` 和 `${VAR:default}` 两种语法，递归处理字符串、数组和对象。
+ * @param value - 环境变量原始字符串
+ * @returns 空字符串保持不变；其余值尽量还原为 YAML 原生类型
+ */
+function parseEnvValue(value: string): unknown {
+  // YAML 会把空文档解析为 null；空环境变量仍是明确的字符串值，不能改变其类型。
+  if (value === '')
+    return ''
+
+  try {
+    const parsed = parse(value)
+    return parsed === undefined ? value : parsed
+  }
+  catch {
+    return value
+  }
+}
+
+/**
+ * 将配置名或 YAML 路径片段规范化为环境变量片段。
+ *
+ * camelCase 不拆词，例如 apiKey → APIKEY；非字母数字字符统一为下划线。
+ *
+ * @param segment - 配置名、键名或数组索引
+ * @returns 可用于环境变量名的片段
+ */
+function normalizeEnvSegment(segment: string): string {
+  return segment
+    .replace(/[^a-z0-9]+/gi, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase()
+}
+
+/**
+ * 构建配置项的约定环境变量名。
+ *
+ * @example `ai` + `llm.apiKey` → `HAI_AI_LLM_APIKEY`
+ *
+ * @param name - 配置名称
+ * @param path - YAML 中从根到叶子的键路径；数组索引也作为一段
+ * @returns 以 HAI 开头的环境变量名
+ */
+function buildConventionEnvName(name: string, path: string[]): string {
+  return ['HAI', name, ...path]
+    .map(normalizeEnvSegment)
+    .filter(Boolean)
+    .join('_')
+}
+
+/**
+ * 解析配置中的环境变量。
+ *
+ * 每个叶子配置项都会优先读取 `HAI_<配置名>_<YAML 路径>`；
+ * 约定变量不存在时再解析显式 `${VAR}`，显式语法用于指定特殊变量名。
  *
  * @param value - 任意配置值（字符串、数组、对象或原始值）
+ * @param name - 配置名称
+ * @param path - 当前值的 YAML 路径
  * @returns 插值后的结果；当环境变量缺失且未提供默认值时返回 ENV_VAR_MISSING 错误
  */
-function interpolateEnv(value: unknown): HaiResult<unknown> {
+function resolveEnv(value: unknown, name: string, path: string[] = []): HaiResult<unknown> {
   if (typeof value === 'string') {
-    let result = value
+    const conventionEnvValue = process.env[buildConventionEnvName(name, path)]
+    if (conventionEnvValue !== undefined)
+      return ok(parseEnvValue(conventionEnvValue))
+
+    ENV_VAR_PATTERN.lastIndex = 0
+    const hasExplicitEnv = ENV_VAR_PATTERN.test(value)
     ENV_VAR_PATTERN.lastIndex = 0
 
+    if (!hasExplicitEnv)
+      return ok(value)
+
+    let result = value
     // 避免在 while 条件中赋值（满足 lint 规则 no-cond-assign）
     while (true) {
       const match = ENV_VAR_PATTERN.exec(value)
@@ -67,27 +130,17 @@ function interpolateEnv(value: unknown): HaiResult<unknown> {
       result = result.replace(fullMatch, envValue ?? defaultValue ?? '')
     }
 
-    // 当原值整体是单个 ${VAR:default} 时，插值结果需还原为 YAML 原生类型
-    // 例如 ${DEBUG:false} → "false" 应还原为 boolean false
-    if (FULL_VAR_PATTERN.test(value)) {
-      // YAML 会把空文档解析为 null；空插值本身仍是明确的字符串值，不能改变其类型。
-      if (result === '')
-        return ok('')
-      try {
-        const coerced = parse(result)
-        if (coerced !== undefined)
-          return ok(coerced)
-      }
-      catch { /* 解析失败则保持字符串 */ }
-    }
+    // 当原值整体是单个 ${VAR:default} 时，插值结果需还原为 YAML 原生类型。
+    if (FULL_VAR_PATTERN.test(value))
+      return ok(parseEnvValue(result))
 
     return ok(result)
   }
 
   if (Array.isArray(value)) {
     const results: unknown[] = []
-    for (const item of value) {
-      const r = interpolateEnv(item)
+    for (const [index, item] of value.entries()) {
+      const r = resolveEnv(item, name, [...path, String(index)])
       if (!r.success)
         return r
       results.push(r.data)
@@ -98,7 +151,7 @@ function interpolateEnv(value: unknown): HaiResult<unknown> {
   if (typeUtils.isObject(value)) {
     const results: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value)) {
-      const r = interpolateEnv(v)
+      const r = resolveEnv(v, name, [...path, k])
       if (!r.success)
         return r
       results[k] = r.data
@@ -106,7 +159,8 @@ function interpolateEnv(value: unknown): HaiResult<unknown> {
     return ok(results)
   }
 
-  return ok(value)
+  const envValue = process.env[buildConventionEnvName(name, path)]
+  return ok(envValue === undefined ? value : parseEnvValue(envValue))
 }
 
 // ─── 配置管理器 ───
@@ -188,12 +242,13 @@ function notifyWatchCallbacks(name: string, result: HaiResult<unknown>): void {
 /**
  * 加载 YAML 配置文件（不带 Schema 验证）。
  *
- * 流程：检查文件存在 → 读取 YAML → 环境变量插值。
+ * 流程：检查文件存在 → 读取 YAML → 约定式环境变量映射与显式插值。
  *
+ * @param name - 配置名称，用于生成 `HAI_<配置名>_<YAML 路径>` 环境变量名
  * @param filePath - YAML 文件路径
  * @returns 解析结果；可能的错误码：FILE_NOT_FOUND / PARSE_ERROR / ENV_VAR_MISSING
  */
-function loadYaml(filePath: string): HaiResult<unknown> {
+function loadYaml(name: string, filePath: string): HaiResult<unknown> {
   if (!existsSync(filePath)) {
     return err(HaiConfigError.CONFIG_FILE_NOT_FOUND, i18n.coreM('core_configFileNotExist', { params: { filePath } }))
   }
@@ -201,7 +256,7 @@ function loadYaml(filePath: string): HaiResult<unknown> {
   try {
     const content = readFileSync(filePath, 'utf-8')
     const parsed = parse(content)
-    return interpolateEnv(parsed)
+    return resolveEnv(parsed, name)
   }
   catch (error) {
     return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', { params: { filePath } }), error)
@@ -211,17 +266,19 @@ function loadYaml(filePath: string): HaiResult<unknown> {
 /**
  * 加载并验证配置文件。
  *
- * 流程：加载 YAML → 环境变量插值 → Zod Schema 校验。
+ * 流程：加载 YAML → 环境变量映射与插值 → Zod Schema 校验。
  *
+ * @param name - 配置名称
  * @param filePath - YAML 文件路径
  * @param schema - Zod 校验 Schema
  * @returns 校验后的配置数据；可能的错误码：FILE_NOT_FOUND / PARSE_ERROR / ENV_VAR_MISSING / VALIDATION_ERROR
  */
 function loadConfig<T>(
+  name: string,
   filePath: string,
   schema: ZodType<T>,
 ): HaiResult<T> {
-  const yamlResult = loadYaml(filePath)
+  const yamlResult = loadYaml(name, filePath)
   if (!yamlResult.success)
     return yamlResult
 
@@ -246,7 +303,7 @@ function loadAndCache<T>(
   filePath: string,
   schema?: ZodType<T>,
 ): HaiResult<T> {
-  const result = schema ? loadConfig(filePath, schema) : loadYaml(filePath) as HaiResult<T>
+  const result = schema ? loadConfig(name, filePath, schema) : loadYaml(name, filePath) as HaiResult<T>
   if (result.success) {
     configCache.set(name, {
       data: result.data,
@@ -306,7 +363,7 @@ function reloadAndNotify(name: string): HaiResult<unknown> {
   }
 
   // 无 Schema 时直接加载 YAML（不做校验），避免 schema 为 undefined 导致运行时崩溃
-  const result = entry.schema ? loadConfig(entry.filePath, entry.schema) : loadYaml(entry.filePath)
+  const result = entry.schema ? loadConfig(name, entry.filePath, entry.schema) : loadYaml(name, entry.filePath)
   if (result.success) {
     configCache.set(name, {
       ...entry,

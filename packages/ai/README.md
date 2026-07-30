@@ -33,7 +33,7 @@ import { ai } from '@h-ai/ai'
 const init = await ai.init({
   llm: {
     model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_API_KEY,
+    apiKey: process.env.HAI_AI_LLM_APIKEY,
   },
 })
 if (!init.success)
@@ -61,7 +61,7 @@ await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
 const init = await ai.init({
   llm: {
     model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_API_KEY,
+    apiKey: process.env.HAI_AI_LLM_APIKEY,
   },
 })
 if (!init.success) {
@@ -89,7 +89,7 @@ import { ai } from '@h-ai/ai'
 const storeProvider: AIStoreProvider = createMyStoreProvider()
 
 await ai.init(
-  { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_API_KEY } },
+  { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY } },
   { storeProvider },
 )
 
@@ -216,7 +216,7 @@ if (setup.success) {
 ```ts
 await ai.init({
   llm: {
-    apiKey: process.env.HAI_AI_LLM_API_KEY,
+    apiKey: process.env.HAI_AI_LLM_APIKEY,
   },
   audio: {
     inheritLlmApiKey: true,
@@ -399,9 +399,9 @@ const manager = ai.context.createManager({
 
 ```yaml
 llm:
-  apiKey: ${HAI_AI_LLM_API_KEY:}
-  baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
-  model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  apiKey: ''
+  baseUrl: https://api.openai.com/v1
+  model: gpt-4o-mini
   api: chat # chat（默认）| responses | anthropic —— 底层 API 协议，对使用方透明
   timeout: 60000
   tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
@@ -439,6 +439,9 @@ memory:
   candidateMultiplier: 5 # 候选池倍数：先取回 topK×倍数 条候选，再按 scope/重要性过滤，最后截取 topK
   writebackRelatedTopK: 20
 ```
+
+通过 `core.config.load('ai', ...)` 加载时，约定环境变量优先于 YAML；
+例如 `HAI_AI_LLM_APIKEY`、`HAI_AI_LLM_BASEURL`、`HAI_AI_LLM_MODEL`。
 
 启用 mem0（真·嵌入式 mem0ai/oss 引擎）：
 

@@ -53,14 +53,13 @@ describe('generateConfigFile', () => {
     expect(content).toBe('# unknown 配置\n')
   })
 
-  it('生成的 YAML 应该包含环境变量占位符', () => {
+  it('生成的 YAML 应该包含可被约定环境变量覆盖的默认值', () => {
     const coreContent = generateConfigFile('core')
-    // eslint-disable-next-line no-template-curly-in-string
-    expect(coreContent).toContain('${HAI_ENV:development}')
+    expect(coreContent).toContain('env: development')
 
     const dbContent = generateConfigFile('db')
-    // eslint-disable-next-line no-template-curly-in-string
-    expect(dbContent).toContain('${HAI_RELDB_DATABASE:./data/app.db}')
+    expect(dbContent).toContain('database: ./data/app.db')
+    expect(dbContent).not.toContain('${HAI_')
   })
 
   // 自定义配置值测试

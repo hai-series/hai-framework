@@ -3,12 +3,12 @@
 # =============================================================================
 #
 # 后端服务的应用级配置，由 core.config 在启动时加载。
-# 敏感信息请通过环境变量注入。
+# 每个叶子项都可由约定式 HAI 环境变量覆盖，敏感值不要写入文件。
 # =============================================================================
 
 name: {{fullstack.servPackageName}}
 version: 0.1.0
-env: ${HAI_ENV:development}
-debug: ${HAI_DEBUG:false}
+env: development
+debug: false
 
 defaultLocale: {{fullstack.i18n.baseLocale}}

@@ -2,5 +2,5 @@
 # H5 App - 存储配置
 # =============================================================================
 
-type: ${HAI_STORAGE_TYPE:local}
-root: ${HAI_STORAGE_PATH:./data/uploads}
+type: local
+root: ./data/uploads

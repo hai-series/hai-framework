@@ -18,7 +18,7 @@
 ```bash
 cd apps/ai-playground
 cp .env.example .env
-# 编辑 .env，填写 AI_API_KEY
+# 编辑 .env，填写 HAI_AI_LLM_APIKEY
 pnpm dev
 ```
 
@@ -52,13 +52,16 @@ JSON 输入先经 Zod 校验；图片与音频上传在 multipart 边界校验�
 ASR/TTS、文生图厂商、模型、端点和超时。切换 OpenAI、Google、Qwen 或
 Seedream 时直接启用 `_ai.yml` 中对应示例块，不需要修改服务端代码。
 
-`.env` 只保存 `_ai.yml` 引用的密钥：
+YAML 提供默认值；环境变量按 `HAI_<配置名>_<YAML 路径>` 自动覆盖，
+且优先级高于 YAML。camelCase key 不拆词，例如 `llm.apiKey` 对应
+`HAI_AI_LLM_APIKEY`。数组模型密钥可使用索引约定名，也可像当前图片示例一样
+在 YAML 中显式绑定稳定的厂商变量名。
 
-| 环境变量           | 用途                         |
-| ------------------ | ---------------------------- |
-| `AI_API_KEY`       | 默认 MiMo 对话与音频密钥     |
-| `AI_IMAGE_API_KEY` | 默认 Pollinations 文生图密钥 |
-| 其它厂商密钥       | 见 `_ai.yml` 的注释示例      |
+| 环境变量            | 用途                         |
+| ------------------- | ---------------------------- |
+| `HAI_AI_LLM_APIKEY` | 默认 MiMo 对话与音频密钥     |
+| `AI_IMAGE_API_KEY`  | 默认 Pollinations 文生图密钥 |
+| 其它厂商密钥        | 见 `_ai.yml` 的注释示例      |
 
 `_core.yml` 默认将开发日志设为 `debug`。文生图日志包含厂商、模型、尺寸、
 参考图数量、耗时、HTTP 状态、上游错误码和请求 ID；不会记录密钥、提示词或图片内容。

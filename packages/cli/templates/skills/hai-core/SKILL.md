@@ -131,7 +131,12 @@ const unwatch = core.config.watch('db', (cfg, error) => {
 unwatch()
 ```
 
-配置文件格式（YAML，支持环境变量插值）：
+配置文件格式（YAML，支持约定式环境变量映射和显式插值）：
+
+- 每个 YAML 叶子配置项自动映射为 `HAI_<配置名>_<YAML 路径>`；配置名和 key 转大写、层级以 `_` 分隔，camelCase 不拆词
+- 例如 `core.config.load('ai', ...)` 加载的 `llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`，`llm.models[0].temperature` 对应 `HAI_AI_LLM_MODELS_0_TEMPERATURE`
+- 约定环境变量存在时覆盖 YAML 值并按 YAML 标量规则还原类型；不存在时保留 YAML 值，且不会新增 YAML 中未声明的配置项
+- 优先级固定为约定环境变量 > 显式 `${VAR}` > YAML 默认值；显式语法只用于指定特殊变量名
 
 - `${VAR}` — 读取 `process.env.VAR`；缺失则返回 `HaiConfigError.CONFIG_ENV_VAR_MISSING` 错误
 - `${VAR:default}` — 读取 `process.env.VAR`；缺失则使用默认值
@@ -140,15 +145,15 @@ unwatch()
 
 ```yaml
 # config/_core.yml
-app:
-  name: ${HAI_APP_NAME:my-app} # → string
-  env: ${HAI_ENV:development} # → string
-log:
-  level: ${HAI_LOG_LEVEL:info} # → string
-  format: ${HAI_LOG_FORMAT:pretty} # → string，pretty | json
+name: my-app
+env: development
+logging:
+  level: info
+  format: pretty
 feature:
-  debug: ${DEBUG:false} # → boolean false（类型还原）
-  maxRetries: ${MAX_RETRIES:3} # → number 3（类型还原）
+  debug: false
+  maxRetries: 3
+  # 只有特殊变量名才需要显式语法：
   url: http://${HOST}:${PORT} # → string（混合文本，不还原）
 ```
 

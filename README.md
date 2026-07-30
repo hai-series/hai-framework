@@ -458,7 +458,7 @@ import { z } from 'zod'
 
 // 初始化（OpenAI 兼容 API）
 const initResult = await ai.init({
-  llm: { apiKey: process.env.HAI_AI_LLM_API_KEY, model: 'gpt-4o-mini' },
+  llm: { apiKey: process.env.HAI_AI_LLM_APIKEY, model: 'gpt-4o-mini' },
 })
 if (!initResult.success)
   throw new Error(initResult.error.message)
@@ -539,7 +539,7 @@ if (!cacheInit.success)
   throw new Error(cacheInit.error.message)
 
 const iamInit = await iam.init({
-  session: { secret: process.env.HAI_IAM_SESSION_SECRET! },
+  session: { maxAge: 86400, sliding: true },
 })
 if (!iamInit.success)
   throw new Error(iamInit.error.message)
@@ -855,7 +855,8 @@ pnpm --filter @h-ai/reldb test
 
 ### 命名与组织约定
 
-- 通用命名：`HAI_<MODULE>_<SETTING>`
+- 配置命名：`HAI_<配置名>_<YAML 路径>`，层级以 `_` 分隔，camelCase 不拆词
+- 配置优先级：约定环境变量 > YAML 中的显式 `${VAR}` > YAML 默认值
 - AI 兼容回退：`OPENAI_*` 仅用于 `@h-ai/ai` 的兼容 fallback
 - 应用级配置通常放在 `apps/*/config/*.yml`；环境变量用于本地开发、CI/CD 与部署覆盖
 
@@ -863,10 +864,10 @@ pnpm --filter @h-ai/reldb test
 
 | 分组           | 代表变量                                                           | 说明                                                                              |
 | -------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| Runtime        | `HAI_ENV`、`HAI_DEBUG`                                             | 运行环境、调试与日志开关                                                          |
-| Database       | `HAI_RELDB_*`                                                      | `@h-ai/reldb` 的 SQLite / PostgreSQL / MySQL 配置                                 |
+| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_DEBUG`                                   | 运行环境、调试与日志开关                                                          |
+| Database       | `HAI_DB_*`                                                         | `_db.yml` 的 SQLite / PostgreSQL / MySQL 配置                                     |
 | Cache          | `HAI_CACHE_*`                                                      | `@h-ai/cache` 的 memory / Redis / Upstash 配置                                    |
-| Session / Auth | `HAI_IAM_SESSION_SECRET`、`HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`        | `@h-ai/iam`、`@h-ai/kit` 与 `@h-ai/serv` 刷新 Cookie 的会话、安全配置             |
+| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`                                  | `@h-ai/iam`、`@h-ai/kit` 的认证与安全配置                                         |
 | API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`                                  | `apps/api-service` / `@h-ai/serv` 监听地址与前端访问地址                          |
 | Storage        | `HAI_STORAGE_*`                                                    | `@h-ai/storage` 的 local / S3 配置                                                |
 | AI             | `HAI_AI_LLM_*`                                                     | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置（兼容 `OPENAI_*` 回退）             |
@@ -881,7 +882,7 @@ pnpm --filter @h-ai/reldb test
 
 | 模块            | 常见变量前缀                                                           | 用途                                                           |
 | --------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `@h-ai/reldb`   | `HAI_RELDB_*`                                                          | 数据库连接、DSN、用户名密码                                    |
+| `@h-ai/reldb`   | `HAI_DB_*`                                                             | `_db.yml` 的数据库连接、DSN、用户名密码                        |
 | `@h-ai/cache`   | `HAI_CACHE_*`                                                          | Redis / Upstash 连接、超时、前缀                               |
 | `@h-ai/storage` | `HAI_STORAGE_*`                                                        | 本地路径、S3 Bucket / Endpoint / AK/SK                         |
 | `@h-ai/ai`      | `HAI_AI_LLM_*`                                                         | LLM API Key、Base URL、默认模型                                |

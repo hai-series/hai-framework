@@ -8,7 +8,7 @@
 - **统一日志** — Node.js 基于 pino，浏览器基于 loglevel，API 一致
 - **国际化（i18n）** — 集中式 locale 管理 + 类型安全的消息获取器
 - **Zod 校验错误映射** — 兼容 Zod v3/v4 的 issue 提取与默认英文消息本地化
-- **配置管理** — YAML 加载、环境变量插值、Zod 校验、文件监听（Node.js 专用）
+- **配置管理** — YAML 加载、约定式环境变量映射、显式环境变量插值、Zod 校验、文件监听（Node.js 专用）
 - **ID 生成** — nanoid 与 UUID v4
 - **错误定义** — 标准化错误码体系，支持跨模块统一的错误定义与实例创建
 - **模块工具** — NotInitializedKit 代理模式，各模块共用的生命周期基础设施
@@ -319,9 +319,33 @@ core.config.clear('app') // 清除单个
 core.config.clear() // 清除全部
 ```
 
-#### 环境变量插值
+#### 环境变量映射与插值
 
-`core.config.load()` 加载 YAML 时，自动对字符串值做 `${VAR}` 环境变量替换。
+`core.config.load(name, ...)` 会为每个 YAML 叶子配置项自动映射
+`HAI_<配置名>_<YAML 路径>` 环境变量。配置名和每层 key 转成大写，层级以 `_`
+分隔，camelCase 不拆词；例如 `ai.llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`，
+`ai.llm.maxTokens` 对应 `HAI_AI_LLM_MAXTOKENS`。数组索引也作为一层，例如
+`ai.llm.models[0].temperature` 对应 `HAI_AI_LLM_MODELS_0_TEMPERATURE`。
+
+环境变量存在时覆盖 YAML 值，并按 YAML 标量规则还原 number / boolean 等类型；
+环境变量不存在时保留 YAML 值。映射只覆盖 YAML 中已经声明的叶子项，不会凭空新增配置项。
+
+```yaml
+# config/_ai.yml（core.init 扫描后配置名为 ai）
+llm:
+  apiKey: ''
+  baseUrl: https://api.xiaomimimo.com/v1
+  model: mimo-v2.5
+  maxTokens: 4096
+```
+
+```dotenv
+HAI_AI_LLM_APIKEY=your-api-key
+HAI_AI_LLM_MAXTOKENS=8192
+```
+
+确实需要特殊变量名时，继续使用显式 `${VAR}` 语法。优先级固定为：
+约定环境变量 > 显式环境变量 > YAML 默认值。
 
 - `${VAR}` — 读取 `process.env.VAR`；若不存在则返回 `CONFIG_ENV_VAR_MISSING` 错误
 - `${VAR:default}` — 读取 `process.env.VAR`；若不存在则使用冒号后的默认值

@@ -54,12 +54,12 @@ description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、
 ```yaml
 # config/_iam.yml
 password:
-  minLength: ${HAI_IAM_PASSWORD_MIN_LENGTH:8}
+  minLength: 8
   requireUppercase: true
   requireNumber: true
 session:
-  maxAge: ${HAI_IAM_SESSION_MAX_AGE:86400}
-  refreshTokenMaxAge: ${HAI_IAM_REFRESH_TOKEN_MAX_AGE:604800} # 7 天
+  maxAge: 86400
+  refreshTokenMaxAge: 604800 # 7 天
   sliding: true
   singleDevice: false
 login:
@@ -68,12 +68,15 @@ login:
 register:
   enabled: true
 security:
-  maxLoginAttempts: ${HAI_IAM_MAX_LOGIN_ATTEMPTS:5}
+  maxLoginAttempts: 5
   lockoutDuration: 900
 rbac:
   defaultRole: user
   superAdminRole: super_admin
 ```
+
+约定环境变量优先于 YAML，例如 `HAI_IAM_PASSWORD_MINLENGTH`、
+`HAI_IAM_SESSION_MAXAGE`、`HAI_IAM_SECURITY_MAXLOGINATTEMPTS`。
 
 ### 2. 初始化
 

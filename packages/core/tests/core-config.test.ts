@@ -34,6 +34,12 @@ describe('core.config', () => {
     delete process.env.HAI_PORT
     delete process.env.HAI_HOST
     delete process.env.OPTIONAL_SECRET
+    delete process.env.HAI_CONVENTIONTEST_LLM_APIKEY
+    delete process.env.HAI_CONVENTIONTEST_LLM_BASEURL
+    delete process.env.HAI_CONVENTIONTEST_LLM_MAXTOKENS
+    delete process.env.HAI_CONVENTIONTEST_LLM_MODELS_0_TEMPERATURE
+    delete process.env.HAI_APP_FOO
+    delete process.env.CUSTOM_FOO
   })
 
   // =========================================================================
@@ -169,6 +175,62 @@ describe('core.config', () => {
     }
   })
 
+  it('load 应该按配置名和 YAML 路径自动映射 HAI 环境变量', () => {
+    process.env.HAI_CONVENTIONTEST_LLM_APIKEY = 'secret'
+    process.env.HAI_CONVENTIONTEST_LLM_BASEURL = 'https://example.com/v1'
+    process.env.HAI_CONVENTIONTEST_LLM_MAXTOKENS = '2048'
+    process.env.HAI_CONVENTIONTEST_LLM_MODELS_0_TEMPERATURE = '0'
+    writeFileSync(
+      configPath,
+      [
+        'llm:',
+        '  apiKey: default-key',
+        '  baseUrl: https://default.example/v1',
+        '  maxTokens: 4096',
+        '  models:',
+        '    - id: fast',
+        '      temperature: 0.7',
+      ].join('\n'),
+      'utf-8',
+    )
+    const conventionSchema = z.object({
+      llm: z.object({
+        apiKey: z.string(),
+        baseUrl: z.string(),
+        maxTokens: z.number(),
+        models: z.array(z.object({
+          id: z.string(),
+          temperature: z.number(),
+        })),
+      }),
+    })
+
+    const result = core.config.load('conventiontest', configPath, conventionSchema)
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.llm).toEqual({
+        apiKey: 'secret',
+        baseUrl: 'https://example.com/v1',
+        maxTokens: 2048,
+        models: [{ id: 'fast', temperature: 0 }],
+      })
+    }
+  })
+
+  it('load 约定环境变量应该优先于 YAML 中的显式映射', () => {
+    process.env.HAI_APP_FOO = 'convention'
+    process.env.CUSTOM_FOO = 'explicit'
+    // eslint-disable-next-line no-template-curly-in-string
+    writeFileSync(configPath, 'foo: ${CUSTOM_FOO}\nbar: fixed\n', 'utf-8')
+
+    const result = core.config.load('app', configPath, schema)
+
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.foo).toBe('convention')
+  })
+
   // =========================================================================
   // get / getOrThrow / has / keys / clear
   // =========================================================================
@@ -258,6 +320,18 @@ describe('core.config', () => {
     if (result.success) {
       expect(result.data).toEqual({ foo: 'x', bar: 'y' })
     }
+  })
+
+  it('reload 应该重新读取约定环境变量', () => {
+    writeFileSync(configPath, 'foo: yaml\nbar: fixed\n', 'utf-8')
+    core.config.load('app', configPath, schema)
+    process.env.HAI_APP_FOO = 'environment'
+
+    const result = core.config.reload('app')
+
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.foo).toBe('environment')
   })
 
   it('reload 未加载配置应返回 NOT_LOADED', () => {

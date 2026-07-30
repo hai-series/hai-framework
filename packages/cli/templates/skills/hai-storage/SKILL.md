@@ -41,15 +41,15 @@ description: 使用 @h-ai/storage 进行文件存储操作（本地/S3），包�
 
 ```yaml
 # config/_storage.yml
-type: ${HAI_STORAGE_TYPE:local} # local | s3
+type: local # local | s3
 # 本地存储
-root: ${HAI_STORAGE_PATH:./data/storage}
+root: ./data/storage
 # S3 存储（type=s3 时生效）
-# endpoint: ${HAI_STORAGE_S3_ENDPOINT:}
-# region: ${HAI_STORAGE_S3_REGION:us-east-1}
-# accessKeyId: ${HAI_STORAGE_S3_ACCESS_KEY:}
-# secretAccessKey: ${HAI_STORAGE_S3_SECRET_KEY:}
-# bucket: ${HAI_STORAGE_S3_BUCKET:my-bucket}
+# endpoint: ''
+# region: us-east-1
+# accessKeyId: ''
+# secretAccessKey: ''
+# bucket: my-bucket
 # forcePathStyle: false
 # prefix: ''
 # publicUrl: ''
@@ -59,6 +59,9 @@ operationLog:
   maxLength: 1000
   level: debug # info | debug | trace
 ```
+
+约定环境变量优先于 YAML，例如 `HAI_STORAGE_ROOT`、
+`HAI_STORAGE_ACCESSKEYID`、`HAI_STORAGE_SECRETACCESSKEY`。
 
 `operationLog` 在 Local/S3 Provider 的真实 file/dir/presign 操作处输出日志，不要在 `storage-main.ts` 或调用方重复包装。文件内容不会写入日志，上传数据只记录字节长度；`maxLength` 用于截断序列化后的参数，`level` 默认 `debug`。
 
