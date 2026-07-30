@@ -99,6 +99,7 @@
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
   form={{ variant: 'drawer', drawerWidth: '40rem' }}
   density='compact'
+  detailColumns={['username']}
   sortableColumns={userSortableColumns}
   pagination={{ showSizeChanger: true, showJumper: true }}
   onaftersubmit={handleAfterSubmit}

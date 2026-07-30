@@ -217,6 +217,59 @@ test.describe('IAM Users UI', () => {
     await expect(row.first()).toBeVisible()
   })
 
+  test('点击用户名打开详情，拖动后的抽屉宽度会被记忆', async ({ page, request }) => {
+    const user = await registerAndLogin(page, request, 'usrui')
+    await page.goto('/admin/iam/users')
+    await page.waitForLoadState('domcontentloaded')
+    await waitForHydration(page)
+
+    const row = page.locator('table tbody tr').filter({ hasText: user.username }).first()
+    const usernameCellButton = row.locator('td').first().getByRole('button')
+    await expect(usernameCellButton).toBeVisible()
+    await usernameCellButton.click()
+
+    const detailHeading = page.getByRole('heading', { name: /用户.*详情/ }).last()
+    const drawer = page.locator('.drawer-side .menu').filter({ has: detailHeading }).last()
+    const resizeHandle = drawer.locator('[data-drawer-resize-handle]')
+    await expect(detailHeading).toBeVisible()
+    await expect(resizeHandle).toBeVisible()
+
+    const initialBox = await drawer.boundingBox()
+    const handleBox = await resizeHandle.boundingBox()
+    expect(initialBox).not.toBeNull()
+    expect(handleBox).not.toBeNull()
+    if (!initialBox || !handleBox)
+      return
+
+    const startX = handleBox.x + handleBox.width / 2
+    const pointerY = handleBox.y + handleBox.height / 2
+    await resizeHandle.dispatchEvent('mousedown', { clientX: startX, clientY: pointerY, button: 0 })
+    await page.locator('body').dispatchEvent('mousemove', { clientX: startX - 96, clientY: pointerY })
+    await page.locator('body').dispatchEvent('mouseup', { clientX: startX - 96, clientY: pointerY })
+
+    const resizedBox = await drawer.boundingBox()
+    expect(resizedBox).not.toBeNull()
+    expect(resizedBox!.width).toBeGreaterThan(initialBox.width + 1)
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('hai-ui:crud:user:drawer-width'))).not.toBeNull()
+    const storedWidth = Number(await page.evaluate(() => localStorage.getItem('hai-ui:crud:user:drawer-width')))
+    expect(storedWidth).toBeGreaterThan(initialBox.width + 1)
+
+    await drawer.getByRole('button', { name: /关闭|Close/ }).first().click()
+    await expect(detailHeading).not.toBeVisible()
+    await page.reload()
+    await waitForHydration(page)
+
+    const reloadedRow = page.locator('table tbody tr').filter({ hasText: user.username }).first()
+    await reloadedRow.locator('td').first().getByRole('button').click()
+    const restoredDrawer = page.locator('.drawer-side .menu').filter({
+      has: page.getByRole('heading', { name: /用户.*详情/ }).last(),
+    }).last()
+    await expect(restoredDrawer).toBeVisible()
+    const restoredBox = await restoredDrawer.boundingBox()
+    expect(restoredBox).not.toBeNull()
+    expect(Math.abs(restoredBox!.width - storedWidth)).toBeLessThanOrEqual(4)
+  })
+
   test('用户行显示状态 Badge', async ({ page, request }) => {
     await registerAndLogin(page, request, 'usrui')
     await page.goto('/admin/iam/users')

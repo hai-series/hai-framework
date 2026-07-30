@@ -70,7 +70,7 @@ export default defineConfig({
 ## 常用能力
 
 - primitives：`Button`、`Input`、`Textarea`、`Badge`、`Avatar`、`Spinner` 等。
-- compounds：`Form`、`Modal`、`Drawer`、`DataTable`（列头支持排序）、`Tabs`、`Combobox`、`DatePicker` 等。
+- compounds：`Form`、`Modal`、`Drawer`（可选拖动并记忆宽度）、`DataTable`（列头排序、列单元格点击）、`Tabs`、`Combobox`、`DatePicker` 等。
 - mobile：`SafeArea`、`AppBar`、`BottomNav`、`PullRefresh`、`ActionSheet`、`SwipeCell`。
 - scenes：IAM / Storage / CRUD / AI / 错误页 / 设置 场景组件。
 
@@ -177,7 +177,7 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 | 配置项 | 说明 |
 | --- | --- |
 | `form.variant` | `'drawer'`（抽屉，默认）或 `'modal'`（弹出窗口） |
-| `form.drawerSize` / `form.drawerWidth` | 抽屉尺寸预设 / 自定义 CSS 宽度（宽度优先） |
+| `form.drawerSize` / `form.drawerWidth` / `form.drawerResizable` | 抽屉尺寸预设 / 自定义 CSS 宽度 / 是否允许拖动并按资源记忆宽度（默认允许） |
 | `form.modalSize` / `form.modalWidth` / `form.modalHeight` | 弹窗尺寸预设 / 自定义宽高 |
 | `pagination.showSizeChanger` | 每页条数选择器（默认开启） |
 | `pagination.pageSizeOptions` | 每页条数候选项（默认 `[10, 20, 50, 100]`） |
@@ -188,6 +188,7 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 | `showHeader` / `toolbarLeading` | 隐藏默认页头，并在 toolbar 左侧放置页面标题或说明 |
 | `toolbarActions` | 工具栏业务操作 snippet |
 | `card` | 卡片列表项渲染 snippet；仍复用分页和独立滚动容器 |
+| `detailColumns` | 点击后打开详情抽屉的列 key，例如 `['title']` |
 | `sortableColumns` | 可执行服务端排序的列；为空时使用全部列表列 |
 
 分页栏始终显示，不再因数据量小而隐藏。
@@ -200,6 +201,7 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
   form={{ variant: 'modal', modalSize: 'lg' }}
   pagination={{ showSizeChanger: true, showJumper: true }}
   density='compact'
+  detailColumns={['name']}
   sortableColumns={[{ key: 'createdAt', label: '创建时间' }]}
   {nav}
 />

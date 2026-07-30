@@ -37,6 +37,7 @@
   "common_close": "关闭",
   "modal_close": "关闭模态框",
   "drawer_close": "关闭侧边栏",
+  "drawer_resize": "调整抽屉宽度",
   "toast_dismiss": "关闭",
   "language_switch_label": "切换语言",
   "theme_selector_label": "选择主题",

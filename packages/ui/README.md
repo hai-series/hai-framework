@@ -172,7 +172,7 @@ components/
 | 组件      | 描述   | 主要属性                                                |
 | --------- | ------ | ------------------------------------------------------- |
 | `Modal`   | 模态框 | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose` |
-| `Drawer`  | 抽屉   | `open`, `position`, `title`, `size`                     |
+| `Drawer`  | 抽屉   | `open`, `position`, `title`, `size`, `width`, `resizable`, `widthStorageKey` |
 | `Confirm` | 确认框 | `open`, `title`, `message`, `variant`, `onconfirm`      |
 | `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset`                 |
 

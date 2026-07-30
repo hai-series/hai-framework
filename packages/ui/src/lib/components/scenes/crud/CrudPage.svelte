@@ -140,6 +140,7 @@
     pagination = {},
     density = 'normal',
     rowClickDetail = true,
+    detailColumns = [],
     showHeader = true,
     listItemActions,
     tableCell,
@@ -175,6 +176,8 @@
     density?: CrudDensity
     /** 点击详情图标是否打开详情面板。 */
     rowClickDetail?: boolean
+    /** 点击后打开详情的列 key。 */
+    detailColumns?: string[]
     /** 是否显示默认页面标题栏；使用 toolbarLeading 承载标题时可设为 false。 */
     showHeader?: boolean
     /** 每行额外操作按钮插槽。 */
@@ -265,6 +268,10 @@
   const formDrawerSize = $derived(form.drawerSize ?? '2xl')
   /** 抽屉自定义宽度。 */
   const formDrawerWidth = $derived(form.drawerWidth)
+  /** 是否允许拖动并记忆抽屉宽度。 */
+  const formDrawerResizable = $derived(form.drawerResizable !== false)
+  /** 同一资源的详情与编辑抽屉共享宽度记忆。 */
+  const formDrawerWidthStorageKey = $derived(`hai-ui:crud:${crud.resource.name}:drawer-width`)
   /** 弹窗尺寸预设。 */
   const formModalSize = $derived(form.modalSize ?? '2xl')
   /** 弹窗自定义宽度。 */
@@ -622,6 +629,9 @@
       render: col.render
         ? (item: Record<string, unknown>) => col.render!(item)
         : undefined,
+      onclick: detailColumns.includes(col.key)
+        ? (item: Record<string, unknown>) => openDetail(item)
+        : undefined,
     })),
   )
 </script>
@@ -795,6 +805,8 @@
   variant={formVariant}
   size={formDrawerSize}
   drawerWidth={formDrawerWidth}
+  drawerResizable={formDrawerResizable}
+  drawerWidthStorageKey={formDrawerWidthStorageKey}
   modalSize={formModalSize}
   modalWidth={formModalWidth}
   modalHeight={formModalHeight}
@@ -815,6 +827,8 @@
   variant={formVariant}
   size={formDrawerSize}
   drawerWidth={formDrawerWidth}
+  drawerResizable={formDrawerResizable}
+  drawerWidthStorageKey={formDrawerWidthStorageKey}
   modalSize={formModalSize}
   modalWidth={formModalWidth}
   modalHeight={formModalHeight}

@@ -279,7 +279,7 @@ const p = usePlatform()
 | `Form`       | `loading`, `disabled`, `onsubmit`                                  | 表单容器      |
 | `FormField`  | `label`, `name`, `error`, `hint`, `required`                       | 表单字段      |
 | `Modal`      | `open`, `title`, `size`, `closeOnBackdrop`                         | 模态框        |
-| `Drawer`     | `open`, `position`, `size`                                         | 抽屉          |
+| `Drawer`     | `open`, `position`, `size`, `width`, `resizable`, `widthStorageKey` | 可选拖动并记忆宽度的抽屉 |
 | `DataTable`  | `data`, `columns`, `keyField`, `sortKey`, `sortDir`, `onsort`, snippet slots | 数据表格（列定义 `sortable` 可排序） |
 | `Combobox`   | `options`, `value`, `multiple`, `placeholder`, `error`, `onchange` | 可搜索选择    |
 | `Calendar`   | `value`, `minValue`, `maxValue`                                    | 独立日历      |
@@ -461,7 +461,7 @@ const p = usePlatform()
 | 配置项 | 说明 |
 | --- | --- |
 | `form.variant` | `'drawer'`（抽屉，默认）或 `'modal'`（弹出窗口） |
-| `form.drawerSize` / `form.drawerWidth` | 抽屉尺寸预设 / 自定义 CSS 宽度（宽度优先） |
+| `form.drawerSize` / `form.drawerWidth` / `form.drawerResizable` | 抽屉尺寸预设 / 自定义 CSS 宽度 / 是否允许拖动并按资源记忆宽度（默认允许） |
 | `form.modalSize` / `form.modalWidth` / `form.modalHeight` | 弹窗尺寸预设 / 自定义宽高 |
 | `pagination.showSizeChanger` | 每页条数选择器（默认开启） |
 | `pagination.pageSizeOptions` | 每页条数候选项（默认 `[10, 20, 50, 100]`） |
@@ -472,6 +472,7 @@ const p = usePlatform()
 | `showHeader` / `toolbarLeading` | 关闭默认页头并在工具栏左侧放置标题或说明 |
 | `toolbarActions` | 工具栏业务操作 snippet |
 | `card` | 卡片列表项渲染 snippet；仍复用分页和独立滚动容器 |
+| `detailColumns` | 点击后打开详情抽屉的列 key，例如 `['title']` |
 | `sortableColumns` | 可执行服务端排序的列；为空时使用全部列表列 |
 
 注意：`CrudPage` 会占满父级可用高度；表格无论是否有数据都会撑满剩余空间，仅数据区滚动，表头和分页栏固定。
@@ -486,6 +487,7 @@ const p = usePlatform()
   form={{ variant: 'modal', modalSize: 'lg' }}
   pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
   density='compact'
+  detailColumns={['name']}
   sortableColumns={[{ key: 'createdAt', label: '创建时间' }]}
   {nav}
 />
@@ -496,6 +498,8 @@ const p = usePlatform()
 ```svelte
 form={{ variant: 'drawer', drawerWidth: '40rem' }}
 ```
+
+抽屉默认可拖动左侧边缘调整宽度，并按 `crud.resource.name` 记忆；传 `drawerResizable: false` 可关闭。
 
 ---
 

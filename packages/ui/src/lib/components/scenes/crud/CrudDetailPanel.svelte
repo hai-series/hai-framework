@@ -35,6 +35,8 @@
     variant = 'drawer' as CrudFormVariant,
     size = '2xl' as Size,
     drawerWidth,
+    drawerResizable = true,
+    drawerWidthStorageKey,
     modalSize = '2xl' as Size | 'full',
     modalWidth,
     modalHeight,
@@ -53,6 +55,8 @@
     variant?: CrudFormVariant
     size?: Size
     drawerWidth?: string
+    drawerResizable?: boolean
+    drawerWidthStorageKey?: string
     modalSize?: Size | 'full'
     modalWidth?: string
     modalHeight?: string
@@ -195,7 +199,17 @@
     {/snippet}
   </Modal>
 {:else}
-  <Drawer bind:open {title} class={className} position='right' {size} width={drawerWidth} onclose={handleClose}>
+  <Drawer
+    bind:open
+    {title}
+    class={className}
+    position='right'
+    {size}
+    width={drawerWidth}
+    resizable={drawerResizable}
+    widthStorageKey={drawerWidthStorageKey}
+    onclose={handleClose}
+  >
     {#if item}
       <div class={drawerBodyClass}>
         {@render detailBody()}

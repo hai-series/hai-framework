@@ -8,6 +8,7 @@
   @prop {Snippet<[T, string]>} cell - 单元格内容插槽
   @prop {Snippet<[T]>} actions - 操作按钮插槽
   @prop {(item: T) => void} onrowclick - 行点击回调
+  @prop {(item: T) => void} columns[].onclick - 指定列的单元格点击回调
   @prop {Snippet} empty - 空状态插槽
   @prop {boolean} loading - 是否加载中
   @prop {boolean} striped - 是否斑马纹
@@ -54,7 +55,7 @@
     ...restProps
   }: {
     data: T[]
-    columns: { key: keyof T | string, label: string, width?: string, align?: 'left' | 'center' | 'right', sortable?: boolean, render?: (item: T) => string }[]
+    columns: { key: keyof T | string, label: string, width?: string, align?: 'left' | 'center' | 'right', sortable?: boolean, render?: (item: T) => string, onclick?: (item: T) => void }[]
     keyField: keyof T
     /** 自定义单元格内容；参数依次为行记录和列 key。 */
     cell?: Snippet<[T, string]>
@@ -91,6 +92,8 @@
     sortable?: boolean
     /** 自定义单元格格式化函数。 */
     render?: (item: T) => string
+    /** 点击当前列单元格时的回调。 */
+    onclick?: (item: T) => void
   }
 
   // ─── 排序状态 ───
@@ -341,7 +344,23 @@
           <tr class='{rowClass} {onrowclick ? 'cursor-pointer' : ''}' onclick={() => onrowclick?.(item)}>
             {#each columns as col (String(col.key))}
               <td style={getColumnStyle(col)} class={getAlignClass(col.align)}>
-                {#if cell}
+                {#if col.onclick}
+                  <button
+                    type='button'
+                    class='block min-w-0 max-w-full cursor-pointer rounded-sm text-inherit hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
+                    style={getContentStyle(col)}
+                    onclick={(event) => {
+                      event.stopPropagation()
+                      col.onclick?.(item)
+                    }}
+                  >
+                    {#if cell}
+                      {@render cell(item, String(col.key))}
+                    {:else}
+                      <span class='block min-w-0 truncate' title={getValue(item, col)}>{getValue(item, col)}</span>
+                    {/if}
+                  </button>
+                {:else if cell}
                   <div class='min-w-0' style={getContentStyle(col)}>
                     {@render cell(item, String(col.key))}
                   </div>

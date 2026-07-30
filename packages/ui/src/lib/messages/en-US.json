@@ -37,6 +37,7 @@
   "common_close": "Close",
   "modal_close": "Close modal",
   "drawer_close": "Close sidebar",
+  "drawer_resize": "Resize drawer",
   "toast_dismiss": "Dismiss",
   "language_switch_label": "Switch language",
   "theme_selector_label": "Select theme",

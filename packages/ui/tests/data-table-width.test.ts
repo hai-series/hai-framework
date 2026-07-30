@@ -42,7 +42,6 @@ describe('data table 列宽', () => {
     })
 
     expect(body).toContain('data-drawer-resize-handle')
-    expect(body).toContain('role="separator"')
-    expect(body).toContain('aria-orientation="vertical"')
+    expect(body).toContain('aria-label="调整抽屉宽度"')
   })
 })

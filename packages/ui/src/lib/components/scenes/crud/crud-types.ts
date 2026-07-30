@@ -34,6 +34,8 @@ export interface CrudFormConfig {
   drawerSize?: Size
   /** 抽屉自定义宽度 CSS 值，优先级高于 drawerSize（variant='drawer'） */
   drawerWidth?: string
+  /** 是否允许拖动并按资源记忆抽屉宽度（variant='drawer'，默认 true） */
+  drawerResizable?: boolean
   /** 弹窗尺寸预设（variant='modal'，默认 '2xl'） */
   modalSize?: Size | 'full'
   /** 弹窗自定义宽度 CSS 值（variant='modal'） */
@@ -139,6 +141,8 @@ export interface CrudPageProps<T = Record<string, unknown>> extends DataAttribut
   density?: CrudDensity
   /** 列表行点击是否打开详情（默认 true） */
   rowClickDetail?: boolean
+  /** 点击后打开详情的列 key；只让标题等主标识列可点击时使用 */
+  detailColumns?: string[]
   /** 是否显示默认页面标题栏；需要把标题放进工具栏左侧时设为 false。 */
   showHeader?: boolean
   /** 列表行操作按钮插槽 */
