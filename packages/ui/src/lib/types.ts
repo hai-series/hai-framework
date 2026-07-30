@@ -485,6 +485,10 @@ export interface DrawerProps extends DataAttributes {
   size?: Size
   /** 自定义宽度（任意合法 CSS 宽度值，优先级高于 size 预设） */
   width?: string
+  /** 是否允许拖动抽屉边缘调整宽度；仅 left/right 位置生效 */
+  resizable?: boolean
+  /** 宽度持久化 key；设置后会从 localStorage 恢复并记忆拖动后的像素宽度 */
+  widthStorageKey?: string
   /** 是否可通过点击遮罩关闭 */
   closeOnBackdrop?: boolean
   /** 是否显示关闭按钮 */

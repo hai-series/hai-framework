@@ -334,13 +334,13 @@ components/
 
 | 组件                 | 描述         | 主要属性 / 能力 |
 | -------------------- | ------------ | ---------------- |
-| `CrudPage`           | CRUD 主页面  | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `showHeader`, `toolbarStyle`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav` |
+| `CrudPage`           | CRUD 主页面  | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `detailColumns`, `showHeader`, `toolbarStyle`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav` |
 | `CrudFilterBar`      | 过滤工具栏（搜索 + 多类型过滤 + 重置） | `filterFields`, `searchValue`, `onsearch`, `onfilterchange`, `onreset` |
 | `CrudDetailPanel`    | 详情面板（抽屉/弹窗） | `open`, `item`, `fields`, `variant`, `drawerWidth`, `modalSize` |
 | `CrudEditPanel`      | 编辑面板（抽屉/弹窗） | `open`, `fields`, `variant`, `drawerWidth`, `modalSize`, `onsubmit` |
 | `CrudDeleteConfirm`  | 删除确认框   | `open`, `loading`, `onconfirm` |
 
-> `CrudPage` 默认使用 `TableToolbar` 图标弹层工具栏，也可通过 `toolbarStyle='filter-bar'` 切回平铺筛选栏；`toolbarLeading` 用于注入左侧标题或说明，配合 `showHeader={false}` 可避免重复标题；`toolbarActions` 注入右侧业务操作，`card` 插槽可将列表项替换为卡片视图，`tableCell` 可按行和列 key 渲染交互式单元格内容（例如 Tooltip），`sortableColumns` 控制服务端排序字段。过滤工具栏支持 `select`、`boolean`、`number`、`date`、`date-range`、`text`。
+> `CrudPage` 默认使用 `TableToolbar` 图标弹层工具栏，也可通过 `toolbarStyle='filter-bar'` 切回平铺筛选栏；`detailColumns={['title']}` 可把标题等指定列绑定为详情入口；`toolbarLeading` 用于注入左侧标题或说明，配合 `showHeader={false}` 可避免重复标题；`toolbarActions` 注入右侧业务操作，`card` 插槽可将列表项替换为卡片视图，`tableCell` 可按行和列 key 渲染交互式单元格内容（例如 Tooltip），`sortableColumns` 控制服务端排序字段。过滤工具栏支持 `select`、`boolean`、`number`、`date`、`date-range`、`text`。
 >
 > 页面根容器会占满父级可用高度。表格无论是否有数据都会撑满剩余空间，仅数据区域滚动；表头固定在数据区顶部，分页栏固定在列表卡片底部。
 >
@@ -355,7 +355,7 @@ components/
 > `CrudPage` 通过 `form` 配置新建/编辑的展示形式：
 >
 > - `form.variant`：`'drawer'`（抽屉，默认）或 `'modal'`（弹出窗口）。
-> - 抽屉：`form.drawerSize` 选预设尺寸，`form.drawerWidth` 传任意 CSS 宽度（优先级更高）。
+> - 抽屉：`form.drawerSize` 选预设尺寸，`form.drawerWidth` 传任意 CSS 宽度（优先级更高）；默认可拖动左侧边缘调整宽度，并按资源记忆，`form.drawerResizable=false` 可关闭。
 > - 弹窗：`form.modalSize` 选预设尺寸，`form.modalWidth` / `form.modalHeight` 传任意 CSS 尺寸。
 >
 > `pagination` 配置分页栏（始终显示）：`showSizeChanger`、`pageSizeOptions`、`showJumper`、`showTotal` 默认开启；紧凑视图可用 `showPageInfo` 关闭页码文案、`showFirstLast` 关闭首页 / 末页按钮。
@@ -488,12 +488,13 @@ components/
   form={{ variant: 'modal', modalSize: 'lg' }}
   pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
   density='compact'
+  detailColumns={['name']}
   sortableColumns={[{ key: 'createdAt', label: '创建时间' }]}
   {nav}
 />
 ```
 
-> 抽屉形式可改用 `form={{ variant: 'drawer', drawerWidth: '40rem' }}`。
+> 抽屉形式可改用 `form={{ variant: 'drawer', drawerWidth: '40rem' }}`；用户拖动后的宽度会覆盖初始宽度并按资源记忆。
 
 ### 登录页面
 

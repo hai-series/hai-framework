@@ -265,6 +265,8 @@ describe('组合组件 Props', () => {
     expectTypeOf<DrawerProps>().toHaveProperty('open')
     expectTypeOf<DrawerProps>().toHaveProperty('position')
     expectTypeOf<DrawerProps>().toHaveProperty('size')
+    expectTypeOf<DrawerProps>().toHaveProperty('resizable')
+    expectTypeOf<DrawerProps>().toHaveProperty('widthStorageKey')
   })
 
   it('alertProps 应该包含正确的属性', () => {
