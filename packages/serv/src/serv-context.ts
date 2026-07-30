@@ -77,7 +77,8 @@ const HEADER_USER_AGENT = 'user-agent'
  *
  * 这里只处理 **access token**。
  * 若启用了 `refreshCookie`，refresh token 不会出现在 Authorization header 中，
- * 而是仅存在浏览器的 httpOnly cookie，并只在 `/auth/refresh` 路由里读取。
+ * 而是通过浏览器 httpOnly cookie 或受信原生请求的 JSON body 传输，
+ * 并只在 `/auth/refresh` 路由里读取。
  *
  * @param value - Authorization header 原始值
  * @returns token 或 undefined
@@ -96,7 +97,7 @@ export function extractBearerToken(value: string | null): string | undefined {
  *
  * - 提取 `x-request-id` / `accept-language` / `x-forwarded-for` / `x-real-ip` / `user-agent`
  * - 从 `Authorization: Bearer <token>` 提取 `accessToken`
- * - **不会**读取 refresh token：refresh token 若启用 `refreshCookie`，只走 httpOnly cookie
+ * - **不会**读取 refresh token：refresh token 若启用 `refreshCookie`，只走专属刷新路由
  *
  * `session` 字段始终为 `undefined`：若需会话填充，请使用 {@link buildAuthContextFactory}
  * 或直接通过 `serv.createApp({ iam })` 让框架自动选择合适工厂。
@@ -133,7 +134,7 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  * 4. 下游 `requireAuth` / `requirePermission` / `requireRole` 据此判断 401/403
  *
  * refresh token **不参与**这里的认证流程：它只在 access token 过期后，被 `/auth/refresh`
- * 从 httpOnly cookie 中读出，用于换发新的 access token。
+ * 从浏览器 httpOnly cookie 或受信原生 JSON body 中读出，用于换发新的 access token。
  *
  * **安全保证**：
  * - 每个请求都会重新调用 `verifyToken`（不缓存），用户被撤权后立即生效

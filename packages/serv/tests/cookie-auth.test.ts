@@ -44,6 +44,27 @@ function createTestApp(
   return { app, refreshFn }
 }
 
+/** 创建同时支持受信原生 body 传输的测试 app。 */
+function createNativeTestApp(
+  refreshFn = vi.fn().mockResolvedValue({ success: true, data: MOCK_TOKENS }),
+): { app: Hono, refreshFn: ReturnType<typeof vi.fn> } {
+  const app = new Hono()
+  const iam = { session: { verifyToken: vi.fn(), refresh: refreshFn } }
+  mountRefreshCookieRoutes(app, API_PREFIX, {
+    secure: false,
+    nativeTokenTransport: {
+      isRequest: request =>
+        request.headers.get('x-client-platform') === 'capacitor'
+        && request.headers.get('origin') === 'capacitor://localhost',
+    },
+  }, iam)
+  app.post(`${API_PREFIX}/auth/login`, c =>
+    c.json({ success: true, data: MOCK_AUTH_RESULT }))
+  app.post(`${API_PREFIX}/auth/logout`, c =>
+    c.json({ success: true, data: null }))
+  return { app, refreshFn }
+}
+
 describe('mountRefreshCookieRoutes', () => {
   describe('login', () => {
     it('成功登录后，响应中包含 httpOnly refresh token cookie', async () => {
@@ -208,6 +229,85 @@ describe('mountRefreshCookieRoutes', () => {
       const clearCookie = cookies.find(c => c.startsWith(COOKIE_NAME))
       expect(clearCookie).toBeDefined()
       expect(clearCookie).toContain('Max-Age=0')
+    })
+  })
+
+  describe('原生 token body 传输', () => {
+    const nativeHeaders = {
+      'content-type': 'application/json',
+      'origin': 'capacitor://localhost',
+      'x-client-platform': 'capacitor',
+    }
+
+    it('受信原生登录在响应体保留 refresh token 且不设置 cookie', async () => {
+      const { app } = createNativeTestApp()
+
+      const res = await app.request(`${API_PREFIX}/auth/login`, {
+        method: 'POST',
+        headers: nativeHeaders,
+        body: JSON.stringify({ identifier: 'alice', password: 'secret' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(res.headers.getSetCookie()).toHaveLength(0)
+      expect((await res.json()).data.tokens.refreshToken).toBe(MOCK_TOKENS.refreshToken)
+    })
+
+    it('受信原生刷新从 body 读取并返回轮换后的 refresh token', async () => {
+      const { app, refreshFn } = createNativeTestApp()
+
+      const res = await app.request(`${API_PREFIX}/auth/refresh`, {
+        method: 'POST',
+        headers: nativeHeaders,
+        body: JSON.stringify({ refreshToken: 'old-native-refresh-token' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(refreshFn).toHaveBeenCalledWith('old-native-refresh-token')
+      expect(res.headers.getSetCookie()).toHaveLength(0)
+      expect((await res.json()).data.tokens.refreshToken).toBe(MOCK_TOKENS.refreshToken)
+    })
+
+    it('不受信请求不能使用 body 中的 refresh token', async () => {
+      const { app, refreshFn } = createNativeTestApp()
+
+      const res = await app.request(`${API_PREFIX}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-client-platform': 'capacitor' },
+        body: JSON.stringify({ refreshToken: 'untrusted-refresh-token' }),
+      })
+
+      expect(res.status).toBe(401)
+      expect(refreshFn).not.toHaveBeenCalled()
+    })
+
+    it('原生刷新失败不写浏览器 cookie', async () => {
+      const { app } = createNativeTestApp(vi.fn().mockResolvedValue({
+        success: false,
+        error: { code: 'SESSION_EXPIRED', message: 'Session expired', httpStatus: 401 },
+      }))
+
+      const res = await app.request(`${API_PREFIX}/auth/refresh`, {
+        method: 'POST',
+        headers: nativeHeaders,
+        body: JSON.stringify({ refreshToken: 'expired-native-token' }),
+      })
+
+      expect(res.status).toBe(401)
+      expect(res.headers.getSetCookie()).toHaveLength(0)
+    })
+
+    it('受信原生登出不发送清理浏览器 cookie 的响应头', async () => {
+      const { app } = createNativeTestApp()
+
+      const res = await app.request(`${API_PREFIX}/auth/logout`, {
+        method: 'POST',
+        headers: nativeHeaders,
+        body: JSON.stringify({ refreshToken: 'native-refresh-token' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(res.headers.getSetCookie()).toHaveLength(0)
     })
   })
 

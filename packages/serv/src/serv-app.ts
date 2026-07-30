@@ -81,9 +81,9 @@ export interface ServHttpApp {
  *
  * - **`iam`**（推荐）：单一顶层引用。提供后 serv 自动：
  *   1. 使用 `iam.session.verifyToken` 填充 `context.session` → `requireAuth/Permission/Role` 生效
- *   2. 若同时启用 `refreshCookie`，使用 `iam.session.refresh` 实现 cookie 刷新
+ *   2. 若同时启用 `refreshCookie`，使用 `iam.session.refresh` 实现 refresh token 轮换
  *
- * - **`refreshCookie`**（可选）：opt-in httpOnly cookie 传输 refresh token。与 `iam` 正交：
+ * - **`refreshCookie`**（可选）：浏览器默认用 httpOnly cookie；受信原生客户端可配置 body 通道。与 `iam` 正交：
  *   `iam` 决定 *谁* 验证 token，`refreshCookie` 决定 refresh token *怎么* 传输。
  *
  * - **`verifyToken`**（高级）：不使用 IAM 模块的逆脱口。优先于 `iam.session.verifyToken`。
@@ -116,7 +116,7 @@ export interface CreateServAppOptions<
    */
   readonly iam?: ServIam
   /**
-   * 启用 httpOnly Cookie 传输 refresh token（opt-in）。
+   * 启用 refresh token 传输（opt-in）：浏览器使用 httpOnly Cookie，可选配置受信原生 body 通道。
    * 需配合 `iam` 或 `refreshCookie.onRefresh` 使用。
    */
   readonly refreshCookie?: RefreshCookieConfig

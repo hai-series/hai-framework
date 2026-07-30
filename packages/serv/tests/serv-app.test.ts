@@ -11,6 +11,7 @@ describe('@h-ai/serv', () => {
   it('keeps root API focused on runtime-level helpers', () => {
     expect(typeof serv.toFetch).toBe('function')
     expect(typeof serv.cors).toBe('function')
+    expect(typeof serv.storageAssets).toBe('function')
     expect('createDocsPage' in serv).toBe(false)
     expect('securityHeaders' in serv).toBe(false)
     expect('requireInternalRPC' in serv).toBe(false)

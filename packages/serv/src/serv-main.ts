@@ -32,6 +32,7 @@ import { cors } from './serv-cors.js'
 import { servM } from './serv-i18n.js'
 import { generateSpec } from './serv-openapi.js'
 import { createRuntimeSecurityPolicy } from './serv-runtime-security.js'
+import { storageAssets } from './serv-storage-assets.js'
 import {
   resolveRequestLocale,
   validateInputOrFail,
@@ -51,6 +52,7 @@ export const serv = {
   listen,
   toFetch,
   cors,
+  storageAssets,
   createRuntimeSecurityPolicy,
 
   // OpenAPI / 导出

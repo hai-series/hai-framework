@@ -7,6 +7,7 @@
 - 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
 - 扁平 API（最小知识）：`serv.listen / serv.toFetch / serv.requireAuth / serv.requirePermission / serv.generateSpec / ...`
 - 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；procedure wrapper 复用根入口导出的共享类型
+- 只读 Storage 资源：`serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
 - 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
@@ -284,10 +285,13 @@ const app = serv.createApp({
     },
     {
       path: '/assets/*',
-      // 路径级 middleware 可以终结请求；响应仍经过内置 securityHeaders。
-      middleware: c => c.body(imageBytes, 200, {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=31536000, immutable',
+      middleware: serv.storageAssets({
+        storage,
+        pathPrefix: '/assets/',
+        keyPattern: /^public\/[\w-]+\.png$/,
+        allowedContentTypes: ['image/png'],
+        cacheControl: 'public, max-age=31536000, immutable',
+        crossOriginResourcePolicy: 'cross-origin',
       }),
     },
   ],
@@ -306,7 +310,8 @@ const app = serv.createApp({
 - `middlewares` 按数组顺序注册
 - `path` 省略时默认 `'*'`
 - 由于 `middlewares` 先于 `transport` 执行，CORS preflight 或二进制端点可以直接短路；短路响应仍带内置安全头，但不会经过 transport
-- 文件端点的允许方法、路径校验、MIME、缓存和访问授权由应用显式决定；框架不内置头像等业务概念
+- 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，框架不内置头像等业务概念
+- 私有资源、Range 下载或动态授权继续使用自定义 middleware/procedure，不应套用公开资源 helper
 - 若需要读取解密后的业务 body，请改用 context / procedure 层扩展
 - 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），请通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露
 - 这一层直接操作 HTTP middleware context，返回的是 **HTTP Response**，不是 `HaiResult`
@@ -394,6 +399,7 @@ httpOnly cookie 模式将 refresh token 存储在服务端管理的 cookie 中�
   `serv.parseRequestContext()` / `extractBearerToken()` 解析的就是它；`buildAuthContextFactory()` 校验的也是它。
 - `refreshToken`：长期凭证。启用 `refreshCookie` 后，它不会再暴露给前端 JS，而是只保存在浏览器的 httpOnly cookie 中。
   它**不会**被 `extractBearerToken()` 读取，只会在 `/auth/refresh` 被服务端取出，用来换发新的 access token。
+  受信原生客户端可通过 `nativeTokenTransport` 改用 JSON body，但必须同时校验客户端标识与 Origin。
 
 **工作原理：**
 
@@ -401,6 +407,9 @@ httpOnly cookie 模式将 refresh token 存储在服务端管理的 cookie 中�
 2. Access token 存储在客户端内存（不持久化）
 3. Access token 过期时，浏览器自动携带 cookie 访问 `/auth/refresh`
 4. 服务端读取 cookie → 调用 `onRefresh` → 返回新 access token + 更新 cookie（响应体不暴露 refresh token）
+
+原生客户端匹配 `nativeTokenTransport.isRequest` 后，登录/注册/刷新响应会保留轮换后的
+`refreshToken`，刷新请求从 `{ refreshToken }` body 读取，且整个流程不读写浏览器 Cookie。
 
 **服务端配置：**
 
@@ -416,6 +425,12 @@ const app = serv.createApp({
     // maxAge: 30 * 24 * 3600,          // 默认 30 天
     // secure: true,                    // 默认在 NODE_ENV=production 时开启
     // onRefresh: customFn,             // 可覆盖 iam.session.refresh。
+    nativeTokenTransport: {
+      // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。
+      isRequest: request =>
+        request.headers.get('x-client-platform') === 'capacitor'
+        && security.isNativeOrigin(request.headers.get('origin') ?? ''),
+    },
   },
   // ✅ 无需再传 verifyToken，iam.session.verifyToken 自动用于填充 context.session
 })
@@ -440,6 +455,7 @@ await apiClient.init({
 - `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
 - `serv.generateSpec(contract, options)`：由 contract 生成 OpenAPI 3.1 spec
+- `serv.storageAssets(config)`：创建只读 Storage 资源 middleware，内置 key/MIME 白名单、GET/HEAD 与 ETag
 - `serv.requireAuth(handler)`：procedure 认证包装器（`context.session` 为空 → UNAUTHORIZED）
 - `serv.requirePermission(perm, handler)`：procedure 权限包装器（缺失权限 → FORBIDDEN）
 - `serv.requireRole(role, handler)`：procedure 角色包装器（缺失角色 → FORBIDDEN）
@@ -454,6 +470,7 @@ await apiClient.init({
 - HTTP App 抽象：`serv.createApp()` 返回具备 `fetch/request` 能力的公开应用对象；内部是否使用 Hono 不影响应用代码
 - `ServMiddlewareMount`：`createApp({ middlewares })` 的挂载项类型（`{ path?, middleware }`）
 - `ServMiddleware` / `ServProcedureWrapper` / `ServGuardedProcedureWrapper`：自定义 pipeline 时复用的共享类型
+- `NativeRefreshTokenTransportConfig` / `ServStorageAssetsConfig`：原生 Token 通道与只读资源 middleware 配置
 
 > 传输加密不作为 `serv.xxx` 扁平 API 暴露；它是 `createApp` 的配置能力，内部委托 `crypto.transport`。
 

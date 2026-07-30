@@ -39,6 +39,7 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象
 - 通过 `serv.createRuntimeSecurityPolicy(...)` 对生产 CORS Origin、原生 WebView Origin、Secure Cookie 与 API 文档暴露执行 fail-closed 策略
 - 启用传输加密：`serv.createApp({ transport: { crypto } })`
 - 高级场景通过 `createApp({ middlewares })` 自定义 HTTP middleware，或通过共享类型自定义 procedure wrapper
+- 公开只读文件通过 `serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
 - 为 Audio WebSocket 配置一次性 ticket 校验、IAM/模型/配额授权与并发释放钩子
 
 ---
@@ -299,7 +300,7 @@ export function createServerApp() {
   http?,          // ServHttpConfigInput — HTTP 端点配置（见下方配置节）
   middlewares?,   // readonly ServMiddlewareMount[] — 自定义 HTTP middleware（日志/CORS/限流/租户头校验）
   iam?,           // ServIam — 顶层 IAM 句柄，同时驱动 access token 校验与 refresh cookie【推荐】
-  refreshCookie?, // RefreshCookieConfig — httpOnly refresh cookie 刷新路径（见下方 cookie 节）
+  refreshCookie?, // RefreshCookieConfig — 浏览器 cookie / 受信原生 body 的 refresh token 通道
   transport?,     // { crypto, keyExchangePath?, excludePaths?, maxClients? } — 统一传输加密
   verifyToken?,   // (token) => Promise<HaiResult<ServSession>> — 逃脱口：不使用 iam 时提供自定义校验
   createContext?, // CreateServContext — 高级：完全接管上下文构造（设置后 serv 不再自动填充 session）
@@ -453,9 +454,13 @@ const app = serv.createApp({
     },
     {
       path: '/assets/*',
-      middleware: c => c.body(imageBytes, 200, {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=31536000, immutable',
+      middleware: serv.storageAssets({
+        storage,
+        pathPrefix: '/assets/',
+        keyPattern: /^public\/[\w-]+\.png$/,
+        allowedContentTypes: ['image/png'],
+        cacheControl: 'public, max-age=31536000, immutable',
+        crossOriginResourcePolicy: 'cross-origin',
       }),
     },
   ],
@@ -465,7 +470,8 @@ const app = serv.createApp({
 执行顺序固定为：`securityHeaders` → `middlewares` → `transport`（若启用）→ health/refresh-cookie/OpenAPI/RPC/docs/oRPC routes。
 
 - `middlewares` 先于 `transport` 执行，因此 CORS preflight 或二进制端点可以直接短路；短路响应仍带内置安全头，但不会经过 transport。
-- 文件端点的允许方法、路径校验、MIME、缓存和访问授权由应用显式决定；框架不内置头像等业务概念。
+- 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，框架不内置头像等业务概念。
+- 私有资源、Range 下载或动态授权继续使用自定义 middleware/procedure。
 - 若需要读取解密后的业务 body，请改用 context / procedure 层扩展。
 - 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），记得通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露。
 
@@ -695,6 +701,7 @@ procedure 包装器内置以下错误：
   `serv.parseRequestContext()` / `extractBearerToken()` 解析、`buildAuthContextFactory()` 校验的就是它。
 - `refreshToken`：长期凭证，启用 `refreshCookie` 后只保存在 httpOnly cookie；
   它不会走 `Authorization`，也不会被 `extractBearerToken()` 读取，只会在 `/auth/refresh` 被服务端取出。
+  受信原生客户端可通过 `nativeTokenTransport` 改用 JSON body，但必须同时校验客户端标识与 Origin。
 
 ### 适用场景
 
@@ -708,6 +715,9 @@ procedure 包装器内置以下错误：
 3. Access token 过期 → 客户端 POST `/auth/refresh`（浏览器自动携带 cookie）
 4. serv 读取 cookie → 调用 `iam.session.refresh` → 返回新 access token + 更新 cookie（响应体不暴露 refresh token）
 5. POST `/auth/logout` → serv 清除 cookie（`Max-Age=0`）
+
+原生客户端匹配 `nativeTokenTransport.isRequest` 后，登录/注册/刷新响应保留轮换后的
+`refreshToken`，刷新请求从 `{ refreshToken }` body 读取，且不读写浏览器 Cookie。
 
 若同时启用 `transport: { crypto }`，`/auth/refresh` 也必须走加密链路；cookie-only 刷新请求允许空 body，服务端不要把 `Request.body === null` 误判为需要解密的请求体。
 
@@ -724,6 +734,12 @@ const app = serv.createApp({
     // maxAge?: number                  默认 30 * 24 * 3600（30 天）
     // secure?: boolean                 默认 NODE_ENV=production 时开启
     // onRefresh?: (token) => ...       可选：覆盖默认的 iam.session.refresh
+    nativeTokenTransport: {
+      // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。
+      isRequest: request =>
+        request.headers.get('x-client-platform') === 'capacitor'
+        && security.isNativeOrigin(request.headers.get('origin') ?? ''),
+    },
   },
   // ✅ 顶层 iam 同时为 access token 校验提供默认实现，无需再传 verifyToken
 })
