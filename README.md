@@ -678,7 +678,10 @@ const app = serv.createApp({
 serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
 ```
 
-`contract` 负责“有哪些 API”，`procedures` 负责“如何处理请求”；两者形状必须对应。`serv` 还提供 `requireAuth()`、`requirePermission()`、`generateSpec()`、`toFetch()` 等运行时工具。
+`contract` 负责“有哪些 API”，`procedures` 负责“如何处理请求”；应用自有
+procedure 使用 `serv.implement(contract).context().route().build()` 链式实现，
+认证与权限通过 route 上的 `.auth()` / `.permission()` / `.role()` 声明。
+`serv` 还提供 `generateSpec()`、`toFetch()` 等运行时工具。
 
 ### SvelteKit 集成
 

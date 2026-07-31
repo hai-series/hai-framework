@@ -5,8 +5,9 @@
 ## 能力概览
 
 - 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
-- 扁平 API（最小知识）：`serv.listen / serv.toFetch / serv.requireAuth / serv.requirePermission / serv.generateSpec / ...`
-- 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；procedure wrapper 复用根入口导出的共享类型
+- 扁平 API（最小知识）：`serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`
+- 链式 procedure：`implement().context().route().auth/permission/role().handle().build()`
+- 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；请求级字段通过 context 工厂注入
 - 只读 Storage 资源：`serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
@@ -231,22 +232,24 @@ const app = serv.createApp({
 ### 自定义 procedure（认证 + 权限）
 
 ```ts
-const p = serv.implement(myContract).$context<ServContext>()
-
-const updateProfile = p.users.update.handler(
-  serv.requirePermission('users.write', async ({ input, context }) => {
+const procedures = serv
+  .implement(myContract)
+  .context<ServContext>()
+  .route('users.update')
+  .permission('users.write')
+  .handle(async ({ input, context }) => {
     return await userService.update(input.id, input)
-  }),
-)
+  })
+  .build()
 ```
 
-### 高级：自定义 pipeline（HTTP middleware + context + procedure wrapper）
+### 高级：自定义 pipeline（HTTP middleware + context + route guard）
 
 `@h-ai/serv` 的“pipeline”分三层，分别对应三种扩展方式：
 
 1. **HTTP middleware 层**：通过 `serv.createApp({ middlewares })` 注入 HTTP middleware。
 2. **context 层**：通过 `verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 定制请求上下文。
-3. **procedure wrapper 层**：通过 `ServProcedureWrapper` / `ServGuardedProcedureWrapper` 组合认证、审计、租户校验等业务包装。
+3. **route guard 层**：通过 `.auth()` / `.permission()` / `.role()` 声明认证授权。
 
 #### 1) 自定义 HTTP middleware
 
@@ -343,45 +346,32 @@ const app = serv.createApp({
 - 想在默认认证上下文之上追加字段：用 `buildAuthContextFactory(...) + createContext`
 - 想完全接管上下文构造：直接用 `createContext`
 
-#### 3) 自定义 procedure wrapper
+#### 3) Route guard
 
-当逻辑已经进入 oRPC procedure，需要统一做审计、租户约束、业务 guard 时，使用 procedure wrapper：
+公开 procedure 使用 `.route(path, handler)`；需要 guard 时使用
+`.route(path).auth/permission/role().handle(handler)`：
 
 ```ts
-import type { ServGuardedProcedureWrapper, ServProcedureWrapper } from '@h-ai/serv'
-import { err, HaiCommonError } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
-
-const withAudit: ServProcedureWrapper = handler => async (options) => {
-  options.context.logger.info('procedure.start', { requestId: options.context.requestId })
-  return await handler(options)
-}
-
-const requireTenant: ServGuardedProcedureWrapper<string> = (tenantId, handler) => async (options) => {
-  if (options.context.request.headers.get('x-tenant-id') !== tenantId) {
-    return err(
-      HaiCommonError.FORBIDDEN,
-      serv.m('serv_errorForbidden', { locale: options.context.locale }),
-    )
-  }
-  return await handler(options)
-}
-
-const createWidget = serv.mapHaiError(
-  serv.requireAuth(
-    withAudit(
-      requireTenant('tenant-a', async ({ input }) => widgetService.create(input)),
-    ),
-  ),
-)
+const procedures = serv
+  .implement(widgetContract)
+  .context<ServContext>()
+  .route('widgets.list', ({ input }) => widgetService.list(input))
+  .route('widgets.create')
+  .permission('widgets.write')
+  .role('editor')
+  .handle(({ input, context }) => {
+    // guard 通过后 session 在类型上已是非空，不需要 `!`。
+    return widgetService.create(context.session.userId, input)
+  })
+  .build()
 ```
 
-说明：
+约束：
 
-- `ServProcedureWrapper`：单参数 wrapper，适合 `withAudit(handler)` 这种模式
-- `ServGuardedProcedureWrapper<T>`：带配置参数的 wrapper，适合 `requireTenant('t1', handler)` 这种模式
-- procedure wrapper 返回的是 `HaiResult<T>`，和 `serv.requireAuth` / `serv.requirePermission` 保持一致
-- 常规场景优先继续用 `serv.requireAuth / requirePermission / requireRole / mapHaiError`
+- `.permission()` 与 `.role()` 自动要求认证；未登录返回 401，授权不足返回 403。
+- 同一路由声明多个 permission/role 时必须全部满足；`serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` 可放行对应类别。
+- handler 抛出的未处理异常统一转成 INTERNAL_ERROR HaiResult；预期业务失败仍应直接返回 `err(...)`。
+- 路径、input、output 从 contract 推导；重复或未知路径会被拒绝，未实现完整 contract 时不能调用 `.build()`。
 
 边界约束：
 
@@ -456,10 +446,11 @@ await apiClient.init({
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
 - `serv.generateSpec(contract, options)`：由 contract 生成 OpenAPI 3.1 spec
 - `serv.storageAssets(config)`：创建只读 Storage 资源 middleware，内置 key/MIME 白名单、GET/HEAD 与 ETag
-- `serv.requireAuth(handler)`：procedure 认证包装器（`context.session` 为空 → UNAUTHORIZED）
-- `serv.requirePermission(perm, handler)`：procedure 权限包装器（缺失权限 → FORBIDDEN）
-- `serv.requireRole(role, handler)`：procedure 角色包装器（缺失角色 → FORBIDDEN）
-- `serv.mapHaiError(handler)`：统一异常 → `HaiResult` 的包装器
+- `serv.implement(contract)`：创建链式 contract 实现器
+- `.context<ServContext>()`：声明 procedure 请求上下文
+- `.route(path, handler)`：注册公开 procedure
+- `.route(path).auth/permission/role().handle(handler)`：注册带认证授权的 procedure
+- `.build()`：所有 contract procedures 完整实现后构建 router
 - `serv.validateInputOrFail(zodSchema, input, locale)`：在 procedure 内做 Zod 二次校验，失败时返回本地化 `HaiResult` + `ValidationFormError[]`
 - `serv.resolveRequestLocale(headers)`：从 `x-hai-locale` / `Accept-Language` 解析并规范化请求 locale
 - `serv.m(key, options)`：读取 `@h-ai/serv` 自身消息，支持 `options.locale` 单次调用本地化
@@ -469,7 +460,7 @@ await apiClient.init({
 - `ServConfigSchema`：用于 `core.config.validate('serv', ServConfigSchema)` 校验 `config/_serv.yml`
 - HTTP App 抽象：`serv.createApp()` 返回具备 `fetch/request` 能力的公开应用对象；内部是否使用 Hono 不影响应用代码
 - `ServMiddlewareMount`：`createApp({ middlewares })` 的挂载项类型（`{ path?, middleware }`）
-- `ServMiddleware` / `ServProcedureWrapper` / `ServGuardedProcedureWrapper`：自定义 pipeline 时复用的共享类型
+- `ServMiddleware` / `ServProcedureHandler`：自定义 pipeline 时复用的共享类型
 - `NativeRefreshTokenTransportConfig` / `ServStorageAssetsConfig`：原生 Token 通道与只读资源 middleware 配置
 
 > 传输加密不作为 `serv.xxx` 扁平 API 暴露；它是 `createApp` 的配置能力，内部委托 `crypto.transport`。
@@ -585,9 +576,9 @@ const app = serv.createApp({
 ## 错误处理
 
 - Default procedures 全部返回 `HaiResult<T>`，客户端直接判断 `result.success`
-- 认证失败 → `HaiCommonError.UNAUTHORIZED`（由 `requireAuth` 按 `context.locale` 本地化）
-- 授权失败 → `HaiCommonError.FORBIDDEN`（由 `requirePermission` / `requireRole` 按 `context.locale` 本地化）
-- 未捕获异常 → `HaiCommonError.INTERNAL_ERROR`（由 `mapHaiError` 统一兜底并按 `context.locale` 本地化）
+- 认证失败 → `HaiCommonError.UNAUTHORIZED`（由 `.auth()` 按 `context.locale` 本地化）
+- 授权失败 → `HaiCommonError.FORBIDDEN`（由 `.permission()` / `.role()` 按 `context.locale` 本地化）
+- 未捕获异常 → `HaiCommonError.INTERNAL_ERROR`（由 route 实现器统一兜底并按 `context.locale` 本地化）
 
 正常业务请求建议按三层处理：
 
@@ -605,20 +596,26 @@ const CreateWidgetSchema = z.object({
   slug: z.string().min(3),
 })
 
-const createWidget = serv.mapHaiError(async ({ input, context }) => {
-  const validated = serv.validateInputOrFail(CreateWidgetSchema, input, context.locale)
-  if (!validated.success)
-    return validated
+const procedures = serv
+  .implement(widgetContract)
+  .context<ServContext>()
+  .route('widgets.create')
+  .permission('widgets.write')
+  .handle(({ input, context }) => {
+    const validated = serv.validateInputOrFail(CreateWidgetSchema, input, context.locale)
+    if (!validated.success)
+      return validated
 
-  if (validated.data.slug === 'admin') {
-    return err(
-      HaiCommonError.FORBIDDEN,
-      serv.m('serv_errorForbidden', { locale: context.locale }),
-    )
-  }
+    if (validated.data.slug === 'admin') {
+      return err(
+        HaiCommonError.FORBIDDEN,
+        serv.m('serv_errorForbidden', { locale: context.locale }),
+      )
+    }
 
-  return widgetService.create(validated.data)
-})
+    return widgetService.create(validated.data)
+  })
+  .build()
 ```
 
 > 如果错误来自下游业务模块（如 `iam.user.xxx()`）且该模块已经直接返回 `HaiResult`，serv 会原样透传它的 `error.message`。当前 `HaiError` 只携带最终 `message`，不携带 `messageKey/params`，因此 **serv 边界无法对任意下游错误再做一次通用 i18n 重翻译**；要支持请求级 i18n，必须在创建该错误消息的模块里就拿到 locale。

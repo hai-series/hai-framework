@@ -261,6 +261,50 @@ describe('createProject — api 类型', () => {
     expect(await exists(projectPath, 'apps/proj-api-contract/src/http-transport.ts')).toBe(false)
     expect(await exists(projectPath, 'apps/proj-api-service/src/app.ts')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-api-service/src/server/procedures/app-procedures.ts')).toBe(true)
+
+    const procedures = await readText(projectPath, 'apps/proj-api-service/src/server/procedures/app-procedures.ts')
+    expect(procedures).toContain('.implement(appContract)')
+    expect(procedures).toContain('.context<ServContext>()')
+    expect(procedures).toContain('.route(\'info\'')
+    expect(procedures).toContain('.route(\'echo\',')
+    expect(procedures).not.toContain('.auth()')
+    expect(procedures).toContain('.build()')
+    expect(procedures).not.toContain('$context')
+    expect(procedures).not.toContain('requireAuth')
+    expect(procedures).toContain('from \'proj-api-contract\'')
+  })
+
+  it('启用 IAM 时应为 echo 声明 route guard', async () => {
+    const iamProjectPath = path.join(tmpRoot, 'proj-api-iam')
+    await createProject({
+      name: 'proj-api-iam',
+      appType: 'api',
+      template: 'custom',
+      features: ['iam', 'db', 'cache'],
+      moduleConfigs: {
+        core: { name: 'proj-api-iam', defaultLocale: 'zh-CN' },
+        db: { type: 'sqlite', database: './data/app.db' },
+        cache: { type: 'memory' },
+        iam: { loginPassword: true, loginOtp: false },
+      },
+      examples: false,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      verbose: false,
+      cwd: tmpRoot,
+    })
+
+    const procedures = await readText(
+      iamProjectPath,
+      'apps/proj-api-iam-service/src/server/procedures/app-procedures.ts',
+    )
+    expect(procedures).toContain('from \'proj-api-iam-contract\'')
+    expect(procedures).toContain('.route(\'echo\')')
+    expect(procedures).toContain('.auth()')
+    expect(procedures).toContain('context.session.userId')
+    expect(procedures).not.toContain('$context')
+    expect(procedures).not.toContain('requireAuth')
   })
 
   it('应生成 service 级 E2E 测试', async () => {
@@ -801,7 +845,19 @@ describe('createProject — fullstack 类型', () => {
     expect(appServer).not.toContain(': Hono')
 
     const procedures = await readText(projectPath, 'packages/proj-fullstack-serv/src/server/procedures/app-procedures.ts')
-    expect(procedures).toContain('serv.implement(appContract)')
+    expect(procedures).toContain('.implement(appContract)')
+    expect(procedures).toContain('.context<ServContext>()')
+    expect(procedures).toContain('.route(\'info\'')
+    expect(procedures).toContain('.route(\'echo\',')
+    expect(procedures).not.toContain('.auth()')
+    expect(procedures).toContain('.build()')
+    expect(procedures).not.toContain('$context')
+    expect(procedures).not.toContain('requireAuth')
+    expect(procedures).toContain('from \'proj-fullstack-contract\'')
+    expect(procedures).toContain('startedAt: options.startedAt')
+    expect(procedures).toContain('frontends: [...options.frontends]')
+    expect(procedures).toContain('echoedAt: new Date().toISOString()')
+    expect(procedures).toContain('requestId: context.requestId')
 
     const testFile = await readText(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')
     expect(testFile).toContain('returns echo result as HaiResult')

@@ -225,7 +225,7 @@ logging:
 | 身份认证/授权         | `hai-iam`        | iam.init, 登录, 注册, RBAC, Token, Bearer         |
 | AI/LLM/MCP            | `hai-ai`         | ai.init, LLM, MCP, Agent, 工具调用                |
 | 公共 API 契约         | `hai-api-contract` | apiContract.create, contract, schema, oRPC, HaiResult |
-| API Service 运行时    | `hai-serv`       | serv.createApp, Hono, procedures, OpenAPI, docs, requireAuth |
+| API Service 运行时    | `hai-serv`       | serv.createApp, Hono, procedures, OpenAPI, docs, route guard |
 | SvelteKit 集成        | `hai-kit`        | kit.createHandle, guard, middleware, validate, response |
 | UI 组件               | `hai-ui`         | 表单, 按钮, 表格, Modal, Toast, 移动端组件        |
 | typed API 客户端      | `hai-api-client` | apiClient.init, typed client, Bearer, 401 refresh, custom fetch |

@@ -55,24 +55,28 @@ export const appContract = {
 }
 ```
 
-服务端实现位于 `src/server/procedures/app-procedures.ts`，公开过程用普通 handler，
-需要登录的过程包一层 `serv.requireAuth`：
+服务端实现位于 `src/server/procedures/app-procedures.ts`。公开过程直接注册 handler，
+需要登录的过程在同一条 route 链上声明 `.auth()`：
 
 ```ts
+import type { ServContext } from '@h-ai/serv'
 import { appContract } from '@h-ai/api-service-contract'
 import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 
-const p = serv.implement(appContract).$context<ServContext>()
-export const router = p.router({
-  info: p.info.handler(() => ok({ /* 服务元信息 */ })),
-  echo: p.echo.handler(serv.requireAuth(({ input, context }) => ok({
+export const router = serv
+  .implement(appContract)
+  .context<ServContext>()
+  .route('info', () => ok({ /* 服务元信息 */ }))
+  .route('echo')
+  .auth()
+  .handle(({ input, context }) => ok({
     message: input.message,
-    userId: context.session!.userId,
+    userId: context.session.userId,
     requestId: context.requestId,
     timestamp: new Date().toISOString(),
-  }))),
-})
+  }))
+  .build()
 ```
 
 客户端用同一个 `apiServiceContract` 构造类型安全 client：

@@ -686,9 +686,9 @@ serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
 常用 API：
 
 - `serv.createApp({ contract, procedures, http, iam, refreshCookie })`
+- `serv.implement(contract).context<ServContext>().route(path).auth/permission/role().handle(handler).build()`
 - `serv.listen(app, options)` / `serv.toFetch(app)`
-- `serv.requireAuth(handler)` / `serv.requirePermission(permission, handler)` / `serv.requireRole(role, handler)`
-- `serv.generateSpec(contract, options)` / `serv.createDocsPage(spec, options)`
+- `serv.generateSpec(contract, options)`
 
 ### @h-ai/kit — SvelteKit 集成
 

@@ -8,7 +8,7 @@
  *   与 Bearer accessToken。**不会**填充 `session`。
  * - `buildAuthContextFactory(verifyToken)`：**带认证的上下文工厂**。在 `parseRequestContext` 基础上
  *   异步调用 `verifyToken(accessToken)` 校验访问令牌，若成功则把会话写入 `context.session`。
- *   失败或 token 不存在均使 `session = undefined`，由下游 `requireAuth` 统一返回 401。
+ *   失败或 token 不存在均使 `session = undefined`，由下游 `.auth()` guard 统一返回 401。
  *
  * 应用层通常无需直接调用上述函数：`serv.createApp({ iam })` 内部自动选择最合适的工厂。
  * @module serv-context
@@ -131,7 +131,7 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  * 1. 调用 `parseRequestContext` 提取元数据 + accessToken（仅来自 Authorization Bearer）
  * 2. 若 `accessToken` 存在 → 调用 `verifyToken(accessToken)`
  * 3. `verifyToken` 成功 → `session = result.data`；失败或 token 缺失 → `session = undefined`
- * 4. 下游 `requireAuth` / `requirePermission` / `requireRole` 据此判断 401/403
+ * 4. 下游 `.auth()` / `.permission()` / `.role()` guard 据此判断 401/403
  *
  * refresh token **不参与**这里的认证流程：它只在 access token 过期后，被 `/auth/refresh`
  * 从浏览器 httpOnly cookie 或受信原生 JSON body 中读出，用于换发新的 access token。
@@ -150,7 +150,7 @@ export function buildAuthContextFactory(
   return async (input) => {
     // Step 1：先同步解析请求头，拿到 requestId / locale / accessToken 等基础元数据。
     const base = parseRequestContext(input)
-    // Step 2：没有 access token 时，直接返回基础上下文；后续由 requireAuth 统一判 401。
+    // Step 2：没有 access token 时，直接返回基础上下文；后续由 `.auth()` guard 统一判 401。
     if (!base.accessToken)
       return base
     try {
@@ -158,7 +158,7 @@ export function buildAuthContextFactory(
       const result = await verifyToken(base.accessToken)
       if (!result.success)
         return base
-      // Step 4：返回带 session 的上下文，供 requireAuth / requirePermission / requireRole 使用。
+      // Step 4：返回带 session 的上下文，供 route guard 使用。
       return { ...base, session: result.data }
     }
     catch {

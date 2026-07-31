@@ -90,12 +90,15 @@ export function localizeZodError(zodError: unknown, locale: string): ValidationF
  *
  * const Schema = z.object({ name: z.string().min(1) })
  *
- * export const handler = serv.mapHaiError(async ({ input, context }) => {
- *   const result = serv.validateInputOrFail(Schema, input, context.locale)
- *   if (!result.success) return result
- *   const { name } = result.data
- *   // ...
- * })
+ * export const procedures = serv
+ *   .implement(contract)
+ *   .context<ServContext>()
+ *   .route('profile.update', ({ input, context }) => {
+ *     const result = serv.validateInputOrFail(Schema, input, context.locale)
+ *     if (!result.success) return result
+ *     return profileService.update(result.data)
+ *   })
+ *   .build()
  * ```
  *
  * @param schema - Zod schema

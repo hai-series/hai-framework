@@ -1,6 +1,6 @@
 ---
 name: hai-serv
-description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、添加认证/权限 pipeline 包装器或切换 Node/Fetch 运行时适配器时使用。
+description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、声明 route 认证授权或切换 Node/Fetch 运行时适配器时使用。
 ---
 
 # hai-serv
@@ -9,7 +9,7 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、添加认证/权限 pipeline 包装器或切换 Node/Fetch 运行时适配器时使用。 |
+| 能力 | 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象；当需求涉及创建 API 服务、装配 procedure、挂载 OpenAPI 文档、配置健康检查、声明 route 认证授权或切换 Node/Fetch 运行时适配器时使用。 |
 | 适用场景 | 当任务与 `hai-serv` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
 | 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
 | 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
@@ -31,14 +31,14 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为最小 HTTP App 抽象
 
 - 将 `@h-ai/api-contract` contract 装配成最小 HTTP App 抽象
 - 配置 `/health`、`/ready`、`/openapi.json`、`/docs` 等系统端点
-- 在 procedure 中添加认证（`requireAuth`）或权限（`requirePermission`）检查
+- 在 procedure route 上添加 `.auth()`、`.permission()` 或 `.role()` guard
 - 切换 Node.js (`@hono/node-server`) 或 Fetch Runtime（Cloudflare Workers / Deno）部署
 - 自定义 `ServContext`（注入 session、tenant 等请求级数据）
 - 生成 OpenAPI 3.1 文档供外部工具消费
 - 通过 `config/_serv.yml` 管理 API 前缀、OpenAPI、docs、health、rpc 等 HTTP 挂载配置
 - 通过 `serv.createRuntimeSecurityPolicy(...)` 对生产 CORS Origin、原生 WebView Origin、Secure Cookie 与 API 文档暴露执行 fail-closed 策略
 - 启用传输加密：`serv.createApp({ transport: { crypto } })`
-- 高级场景通过 `createApp({ middlewares })` 自定义 HTTP middleware，或通过共享类型自定义 procedure wrapper
+- 高级场景通过 `createApp({ middlewares })` 自定义 HTTP middleware，通过 `createContext` 注入请求级业务字段
 - 公开只读文件通过 `serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
 - 为 Audio WebSocket 配置一次性 ticket 校验、IAM/模型/配额授权与并发释放钩子
 
@@ -179,16 +179,19 @@ import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 
 export function createAppProcedures(deps: { name: string; version: string }) {
-  const p = serv.implement(appContract).$context<ServContext>()
-  return p.router({
-    // 公开 procedure：handler 直接返回 HaiResult
-    info: p.info.handler(() => ok({ name: deps.name, version: deps.version })),
-    // 鉴权 procedure：用 serv.requireAuth 包一层，未登录时短路返回 ApiUnauthorized
-    echo: p.echo.handler(serv.requireAuth(({ input, context }) => ok({
+  return serv
+    .implement(appContract)
+    .context<ServContext>()
+    // 公开 procedure：route 名只出现一次，handler 直接返回 HaiResult。
+    .route('info', () => ok({ name: deps.name, version: deps.version }))
+    // 鉴权 procedure：guard 通过后 context.session 自动收窄为非空。
+    .route('echo')
+    .auth()
+    .handle(({ input, context }) => ok({
       message: input.message,
-      userId: context.session!.userId,
-    }))),
-  })
+      userId: context.session.userId,
+    }))
+    .build()
 }
 ```
 
@@ -215,7 +218,7 @@ const app = serv.createApp({ contract, procedures, http, iam })
 注意要点：
 
 - **无 input 的 POST 过程**：默认不发送 body；transport 加密层会自动跳过空 body 请求，客户端可直接 `client.app.info()`。
-- **`serv.requireAuth` 仅可在过程内调用**：必须在 `context` 中有 `session`；公开过程不要包装它。
+- **认证授权写在 route 链上**：公开过程使用 `.route(path, handler)`；需要认证时使用 `.route(path).auth().handle(handler)`。
 - **客户端导入相同 contract**：把服务端与客户端共享的 contract 独立成 package（如 `@h-ai/api-service-contract`），禁止从 app 源码目录跨应用 import。
 
 ### 5. Fetch Runtime（Cloudflare Workers / Deno / Bun）
@@ -320,8 +323,14 @@ import { serv } from '@h-ai/serv'
 // 等价于 oc.route(...)，但不让应用感知 @orpc/contract
 const route = apiContract.route({ method: 'POST', path: '/x', operationId: 'x', tags: ['x'] })
 
-// 等价于 implement(contract)
-const p = serv.implement(appContract).$context<ServContext>()
+const procedures = serv
+  .implement(appContract)
+  .context<ServContext>()
+  .route('info', infoHandler)
+  .route('echo')
+  .auth()
+  .handle(echoHandler)
+  .build()
 ```
 
 ### 传输加密
@@ -379,16 +388,17 @@ await apiClient.init({
 3. `iam.session.verifyToken`（推荐：传入 `iam` 后自动启用）
 4. 默认 `parseRequestContext`：仅解析请求元数据，`session` 为 `undefined`
 
-> ⚠️ `verifyToken` 会在每次请求调用（不缓存）；verifyToken 失败或抛错统一收敛为 `session=undefined`，由 `requireAuth` 统一返回 401。
+> ⚠️ `verifyToken` 会在每次请求调用（不缓存）；verifyToken 失败或抛错统一收敛为 `session=undefined`，由 route 的 `.auth()` / `.permission()` / `.role()` 统一返回 401。
 
-### Procedure 包装器（所有导出为 `serv.xxx` 扁平 API）
+### 链式 procedure guard
 
-| 函数 | 说明 |
+| 链式调用 | 说明 |
 | --- | --- |
-| `serv.mapHaiError(handler)` | 捕获未处理异常，转换为 `HaiResult` |
-| `serv.requireAuth(handler)` | 验证 session（`context.session` 非空，即 token 已通过 `verifyToken` 校验） |
-| `serv.requirePermission(permission, handler)` | 验证权限码，支持通配符 `serv.WILDCARD_PERMISSION`（`'*'`） |
-| `serv.requireRole(role, handler)` | 验证角色，支持通配符 `serv.WILDCARD_ROLE`（`'*'`） |
+| `.route(path, handler)` | 注册公开 procedure；path/input/output 从 contract 推导 |
+| `.route(path).auth().handle(handler)` | 要求 session；通过后 `context.session` 自动收窄 |
+| `.permission(permission)` | 隐含认证并检查权限，支持 `serv.WILDCARD_PERMISSION` |
+| `.role(role)` | 隐含认证并检查角色，支持 `serv.WILDCARD_ROLE` |
+| `.build()` | contract 全部 procedures 实现后构建 router |
 | `serv.validateInputOrFail(zodSchema, input, locale)` | 在 procedure 内执行 Zod 二次校验，失败时返回本地化 `HaiResult` + `ValidationFormError[]` |
 | `serv.resolveRequestLocale(headers)` | 从 `x-hai-locale` / `Accept-Language` 解析并规范化 locale |
 | `serv.m(key, { locale, params })` | 读取 serv 自身 i18n 消息（请求级本地化） |
@@ -396,26 +406,29 @@ await apiClient.init({
 ```typescript
 import { serv } from '@h-ai/serv'
 
-// 组合包装（从外到内：error → auth → permission/role → handler）
-const handler = serv.mapHaiError(
-  serv.requireAuth(
-    serv.requirePermission('user.write', actualHandler)
-  )
-)
-
-// 角色检查示例
-const adminOnly = serv.requireAuth(
-  serv.requireRole('admin', actualHandler)
-)
+const procedures = serv
+  .implement(appContract)
+  .context<ServContext>()
+  .route('info', infoHandler)
+  .route('users.update')
+  .permission('user.write')
+  .role('admin')
+  .handle(updateUserHandler)
+  .build()
 ```
 
-### 高级：自定义 pipeline（HTTP middleware + context + procedure wrapper）
+- `.permission()` / `.role()` 隐含 `.auth()`；未登录返回 401，授权不足返回 403。
+- 同一路由声明多个 permission/role 时必须全部满足。
+- handler 的未处理异常由 router 统一转换成 INTERNAL_ERROR HaiResult。
+- 重复/未知路径会被拒绝；遗漏 contract procedure 时 `.build()` 在类型上不可用，运行时也会校验。
+
+### 高级：自定义 pipeline（HTTP middleware + context + route guard）
 
 `@h-ai/serv` 的 pipeline 分三层：
 
 1. **HTTP middleware 层**：通过 `serv.createApp({ middlewares })` 注入 HTTP middleware
 2. **context 层**：通过 `verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 自定义请求上下文
-3. **procedure wrapper 层**：通过 `ServProcedureWrapper` / `ServGuardedProcedureWrapper` 自定义业务包装器
+3. **route guard 层**：通过 `.auth()` / `.permission()` / `.role()` 声明认证授权
 
 #### HTTP middleware
 
@@ -501,44 +514,25 @@ const app = serv.createApp({
 - 在默认认证上下文之上追加字段：`buildAuthContextFactory(...) + createContext`
 - 完全接管上下文构造：`createContext`
 
-#### Procedure wrapper
+#### Route guard
 
-适用于已进入 procedure 后的审计、租户约束、业务 guard：
+认证、权限与角色约束直接写在目标 route 上，不嵌套高阶 handler：
 
 ```typescript
-import type { ServGuardedProcedureWrapper, ServProcedureWrapper } from '@h-ai/serv'
-import { err, HaiCommonError } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
-
-const withAudit: ServProcedureWrapper = handler => async (options) => {
-  options.context.logger.info('procedure.start', { requestId: options.context.requestId })
-  return await handler(options)
-}
-
-const requireTenant: ServGuardedProcedureWrapper<string> = (tenantId, handler) => async (options) => {
-  if (options.context.request.headers.get('x-tenant-id') !== tenantId) {
-    return err(
-      HaiCommonError.FORBIDDEN,
-      serv.m('serv_errorForbidden', { locale: options.context.locale }),
-    )
-  }
-  return await handler(options)
-}
-
-const createWidget = serv.mapHaiError(
-  serv.requireAuth(
-    withAudit(
-      requireTenant('tenant-a', async ({ input }) => widgetService.create(input)),
-    ),
-  ),
-)
+const procedures = serv
+  .implement(widgetContract)
+  .context<ServContext>()
+  .route('widgets.list', ({ input }) => widgetService.list(input))
+  .route('widgets.create')
+  .permission('widgets.write')
+  .handle(({ input, context }) =>
+    widgetService.create(context.session.userId, input))
+  .build()
 ```
 
-说明：
-
-- `ServMiddleware` / `ServMiddlewareMount` / `ServProcedureWrapper` / `ServGuardedProcedureWrapper` 等共享类型由根入口 `@h-ai/serv` 对外暴露
-- `src/pipelines/*` 是模块内部默认实现目录，不作为公开子路径 API 文档承诺
-- 常规场景优先继续用 `serv.requireAuth / requirePermission / requireRole / mapHaiError`
+HTTP 审计、限流、CORS、租户头校验等跨 route 能力继续放在
+`createApp({ middlewares })`；请求级业务字段通过 `createContext` 注入。
+不要为认证授权重新嵌套多层高阶 handler。
 
 ### 正常业务请求中的错误与 i18n
 
@@ -549,22 +543,24 @@ const createWidget = serv.mapHaiError(
 3. **业务/领域错误**：不要 throw 预期失败；直接返回 `err(...)`，并在**创建错误消息的那一层**用对应模块的 i18n getter 按 `context.locale` 出消息。
 
 ```typescript
-import { err, HaiCommonError } from '@h-ai/core'
 import { z } from 'zod'
 import { serv } from '@h-ai/serv'
 
 const Schema = z.object({ title: z.string().min(1) })
 
-const handler = serv.mapHaiError(async ({ input, context }) => {
-  const validated = serv.validateInputOrFail(Schema, input, context.locale)
-  if (!validated.success)
-    return validated
+const procedures = serv
+  .implement(widgetContract)
+  .context<ServContext>()
+  .route('widgets.create')
+  .auth()
+  .handle(({ input, context }) => {
+    const validated = serv.validateInputOrFail(Schema, input, context.locale)
+    if (!validated.success)
+      return validated
 
-  if (!context.session)
-    return err(HaiCommonError.UNAUTHORIZED, serv.m('serv_errorUnauthorized', { locale: context.locale }))
-
-  return widgetService.create(validated.data)
-})
+    return widgetService.create(context.session.userId, validated.data)
+  })
+  .build()
 ```
 
 > 如果错误来自下游模块（如 `iam` / `storage`）并且该模块已经返回 `HaiResult`，serv 默认**透传**它的 `error.message`。由于 `HaiError` 目前不携带 `messageKey/params`，serv 边界不能对任意下游错误再做通用重翻译；要做请求级 i18n，必须在创建该错误的模块/feature 里就拿到 locale。
@@ -639,20 +635,17 @@ import type { ServContext } from '@h-ai/serv'
 import { serv } from '@h-ai/serv'
 import { myContract } from './my-contract.js'
 
-const { requireAuth, requirePermission } = serv
-
 export function createMyProcedures() {
-  return {
-    widget: {
-      list: requireAuth(async ({ input, context }) => {
-        // input 类型来自 contract 定义
-        return ok(await widgetService.list(input))
-      }),
-      create: requirePermission('widget:write', async ({ input }) => {
-        return ok(await widgetService.create(input))
-      }),
-    },
-  }
+  return serv
+    .implement(myContract)
+    .context<ServContext>()
+    .route('widget.list')
+    .auth()
+    .handle(({ input }) => widgetService.list(input))
+    .route('widget.create')
+    .permission('widget:write')
+    .handle(({ input }) => widgetService.create(input))
+    .build()
 }
 ```
 
@@ -681,13 +674,13 @@ const app = serv.createApp({
 
 ## 错误码
 
-procedure 包装器内置以下错误：
+route 实现器内置以下错误：
 
 | 错误码 | 触发条件 |
 | --- | --- |
-| `HaiCommonError.UNAUTHORIZED` | `requireAuth`：`context.session` 为空（无 token 或 token 校验失败） |
-| `HaiCommonError.FORBIDDEN` | `requirePermission`：无对应权限 |
-| `HaiCommonError.INTERNAL_ERROR` | `mapHaiError`：procedure 抛出未处理异常 |
+| `HaiCommonError.UNAUTHORIZED` | `.auth()`：`context.session` 为空（无 token 或 token 校验失败） |
+| `HaiCommonError.FORBIDDEN` | `.permission()` / `.role()`：无对应权限或角色 |
+| `HaiCommonError.INTERNAL_ERROR` | route handler 抛出未处理异常 |
 
 ---
 

@@ -4,33 +4,33 @@
  * 将 createApp、parseRequestContext、buildAuthContextFactory、listen、toFetch、openapi、pipeline 工具集合为扁平
  * 的 `serv` 命名空间，应用层通过这个模块访问所有 runtime 能力而无需直接导入内部文件。
  *
- * 设计原则：最小知识 — 调用方只需 `serv.listen(app, { port })`、`serv.requireAuth(...)`
- * 等扁平 API，不需要感知子模块层级（adapters/pipeline 等内部组织）。
- *
  * @module serv-main
  *
  * @example
  * ```ts
  * import { serv } from '@h-ai/serv'
  *
- * const app = serv.createApp({ contract, procedures })
- * await serv.listen(app, { port: 3000, host: '0.0.0.0' })
+ * const procedures = serv
+ *   .implement(contract)
+ *   .context<ServContext>()
+ *   .route('health', handler)
+ *   .build()
  * ```
  */
 
-import { implement } from '@orpc/server'
 import { toFetch } from './adapters/serv-adapter-fetch.js'
 import { listen } from './adapters/serv-adapter-node.js'
-import { mapHaiError } from './pipelines/serv-pipeline-helper.js'
-import { requireAuth } from './pipelines/serv-pipeline-require-auth.js'
-import { requirePermission, WILDCARD_PERMISSION } from './pipelines/serv-pipeline-require-permission.js'
-import { requireRole, WILDCARD_ROLE } from './pipelines/serv-pipeline-require-role.js'
+import {
+  WILDCARD_PERMISSION,
+  WILDCARD_ROLE,
+} from './pipelines/serv-pipeline-guard.js'
 import { createApp } from './serv-app.js'
 import { ServConfigSchema } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
 import { cors } from './serv-cors.js'
 import { servM } from './serv-i18n.js'
 import { generateSpec } from './serv-openapi.js'
+import { implement } from './serv-router.js'
 import { createRuntimeSecurityPolicy } from './serv-runtime-security.js'
 import { storageAssets } from './serv-storage-assets.js'
 import {
@@ -39,6 +39,13 @@ import {
 } from './serv-validation.js'
 
 export { ServConfigSchema }
+export type {
+  AuthenticatedServContext,
+  ServImplementer,
+  ServRouteHandler,
+  ServRoutePath,
+  ServRouterBuilder,
+} from './serv-router.js'
 
 /** hai-framework API service runtime 统一入口（扁平 API）。 */
 export const serv = {
@@ -58,15 +65,10 @@ export const serv = {
   // OpenAPI / 导出
   generateSpec,
 
-  // Procedure 装配（contract 路由定义统一使用 `apiContract.route`）。
-  /** 基于 contract 创建可注入 context 的 procedure builder（封装 `@orpc/server` 的 `implement`）。 */
+  // Contract procedure 装配。
   implement,
 
-  // oRPC procedure 包装器
-  requireAuth,
-  requirePermission,
-  requireRole,
-  mapHaiError,
+  // Procedure 工具；认证与授权统一由 route 链声明。
   validateInputOrFail,
 
   // 通配符常量

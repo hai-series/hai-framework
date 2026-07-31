@@ -327,7 +327,7 @@ describe('serv feature audio', () => {
 
   it('createApp 启用 audio 时注册 WebSocket 升级注入器', () => {
     const contract = apiContract.create({})
-    const procedures = serv.implement(contract).$context<ServContext>().router({})
+    const procedures = serv.implement(contract).context<ServContext>().build()
     const app = serv.createApp({
       contract,
       procedures,

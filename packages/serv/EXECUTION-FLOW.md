@@ -21,7 +21,7 @@
 
 `packages/serv/package.json` 当前对外暴露四类入口：
 
-- `@h-ai/serv`：扁平入口，提供 `serv.createApp()`、`serv.listen()`、`serv.requireAuth()` 等主 API
+- `@h-ai/serv`：扁平入口，提供 `serv.createApp()`、`serv.implement()`、`serv.listen()` 等主 API
 - `@h-ai/serv/features/iam`：内置 IAM procedures
 - `@h-ai/serv/features/storage`：内置 Storage procedures
 - `@h-ai/serv/features/ai`：内置 AI procedures
@@ -79,11 +79,13 @@ serv.listen(app, { onClose: closeApp })
 ### 核心运行时文件
 
 - `src/serv-main.ts`：扁平入口，暴露 `serv` 命名空间，隐藏内部目录结构
+- `src/serv-router.ts`：从 contract 推导 route，并完成 handler、guard 与 router 装配
 - `src/serv-app.ts`：应用装配器，把 config、context、middleware、routes、docs 组装为 Hono app
 - `src/serv-context.ts`：上下文工厂，解析请求头、提取 token、校验 session
-- `src/pipelines/serv-pipeline-types.ts`：pipeline 共享类型（middleware / wrapper / handler 最小接口）
+- `src/pipelines/serv-pipeline-types.ts`：pipeline 共享类型（HTTP middleware / procedure handler）
 - `src/pipelines/serv-pipeline-helper.ts`：pipeline 公共 helper（`mapHaiError`、`buildHaiErrorBody`）
-- `src/pipelines/*.ts`：按能力拆分的默认实现（安全头、内部 RPC、认证、权限、角色）
+- `src/pipelines/serv-pipeline-guard.ts`：route 认证、权限、角色 guard 与异常映射
+- `src/pipelines/*.ts`：其余 HTTP pipeline（安全头、内部 RPC 等）
 - `src/serv-transport.ts`：传输加密，负责密钥协商、请求解密、响应加密
 - `src/serv-cookie-auth.ts`：refresh cookie 传输，负责登录写 cookie、刷新 token、退出时清 cookie
 - `src/serv-openapi.ts`：文档生成，负责 OpenAPI 3.1 spec 与 Scalar HTML
@@ -188,7 +190,7 @@ flowchart TD
 3. 若配置了自定义 `middlewares`，它们会先于 health / docs / oRPC / RPC 路由执行。
 4. `handleORPC()` 调用 `createContext({ request })` 生成 `ServContext`。
 5. oRPC 根据 contract 匹配 procedure。
-6. procedure 内可能继续经过 `requireAuth()`、`requirePermission()`、`requireRole()`。
+6. 链式 router 在进入 handler 前执行该 route 声明的 auth / permission / role guard。
 7. 如果是输入校验错误，`localizeValidationResponse()` 会把默认 oRPC 400 错误改写成本地化的 `HaiResult` 失败体。
 8. 最终返回 JSON 响应。
 
@@ -234,36 +236,31 @@ flowchart TD
 - **每个请求都重新验 token，不缓存 session**
 - **失败时 fail closed**：不会因为校验异常而误判成已登录
 
-## Pipeline 包装器如何接管授权逻辑
+## 链式 Router 如何接管授权逻辑
 
-`src/pipelines/*` 里的默认实现把认证、鉴权和异常处理统一收口；其中不属于 middleware / wrapper 的公共 helper 被收敛在 `src/pipelines/serv-pipeline-helper.ts`。
+`serv.implement(contract).context<ServContext>()` 从 contract 推导全部点路径与每条 route
+的 input/output。公开 route 直接注册 handler；认证授权 route 在同一条链上声明 guard：
 
-### `mapHaiError(handler)`
-
-- 作用：捕获未处理异常
-- 输出：统一转成 `HaiResult` 失败分支
-- 意义：不让未捕获异常直接冲到 HTTP 层
-
-### `requireAuth(handler)`
-
-执行规则：
-
-1. 依赖 `context.session`，而不是只看 `accessToken`。
-2. 没有 `session` 时返回 401。
-3. 有 `session` 时继续执行原 handler。
-
-### `requirePermission(permission, handler)`
+```ts
+serv
+  .implement(contract)
+  .context<ServContext>()
+  .route('health', healthHandler)
+  .route('users.update')
+  .permission('users.write')
+  .role('admin')
+  .handle(updateUserHandler)
+  .build()
+```
 
 执行规则：
 
-1. 先调用 `requireAuth()`。
-2. 再检查 `context.session.permissions`。
-3. 若包含目标权限或通配符 `*`，则放行。
-4. 否则返回 403。
-
-### `requireRole(role, handler)`
-
-与 `requirePermission()` 类似，但检查的是 `context.session.roles`。
+1. `.auth()` 依赖 `context.session`；没有 session 时返回 401。
+2. `.permission()` / `.role()` 隐含认证，分别检查 session permissions / roles。
+3. 同一类别声明多个 guard 时按 AND 校验，通配符 `*` 可放行该类别。
+4. guard 通过后 handler 中的 `context.session` 自动收窄为非空。
+5. 所有 route 的未处理异常统一转成 INTERNAL_ERROR HaiResult。
+6. 编译期拒绝未知/重复/遗漏 route；运行时也会拒绝未知、重复和缺失路径。
 
 ## 内置 feature procedures 的关键逻辑
 
@@ -279,7 +276,7 @@ flowchart TD
 几个值得注意的内置策略：
 
 - `logout/currentUser/changePassword/updateCurrentUser` 都要求已认证
-- `users/roles/permissions` 默认使用 `requirePermission()` 保护
+- `users/roles/permissions` 默认使用 `.permission(...)` 保护
 - 删除用户时会阻止“自己删自己”
 - 创建用户时若后续绑定角色失败，会尝试回滚，避免留下脏数据
 
@@ -294,7 +291,7 @@ flowchart TD
 
 内置逻辑重点：
 
-- 所有入口默认至少 `requireAuth()`
+- 所有入口默认至少声明 `.auth()`
 - 对 key 做二次安全校验，拒绝 `..`、绝对路径、反斜杠、NUL 字节
 - **默认并不自动做租户隔离**，生产环境应在应用层再按 `context.session.userId` 收紧 key 前缀
 
@@ -428,7 +425,7 @@ const app = serv.createApp({
 1. `src/serv-main.ts`：看对外 API 面
 2. `src/serv-app.ts`：看整体装配流程
 3. `src/serv-context.ts`：看上下文与认证注入
-4. `src/pipelines/serv-pipeline-helper.ts` + `src/pipelines/*.ts`：看认证、鉴权、异常包装
+4. `src/serv-router.ts` + `src/pipelines/serv-pipeline-guard.ts`：看 route 推导、认证授权与异常映射
 5. `src/serv-transport.ts`：看加解密链路
 6. `src/serv-cookie-auth.ts`：看 refresh cookie 处理
 7. `src/features/*.ts`：看内置业务 procedures
@@ -439,7 +436,8 @@ const app = serv.createApp({
 
 - `tests/serv-app.test.ts`：健康检查、安全头、受保护 docs 页面、Scalar 脚本挂载
 - `tests/serv-transport.test.ts`：密钥协商、端到端加密 roundtrip、大响应体跳过加密
-- `tests/pipeline-orpc.test.ts`：`mapHaiError`、`requireAuth`、`requirePermission` 行为
+- `tests/pipeline-orpc.test.ts`：内部异常映射 helper 行为
+- `tests/serv-router.test.ts`：route 推导、完整性约束、认证授权与异常映射
 
 ## 一句话总结
 

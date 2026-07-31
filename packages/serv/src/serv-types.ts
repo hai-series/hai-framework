@@ -8,12 +8,10 @@
 export type { ServFetchHandler } from './adapters/serv-adapter-fetch.js'
 export type { ServListenOptions, ServNodeServer } from './adapters/serv-adapter-node.js'
 export type {
-  ServGuardedProcedureWrapper,
   ServMiddleware,
   ServMiddlewareFactory,
   ServProcedureHandler,
   ServProcedureOptions,
-  ServProcedureWrapper,
 } from './pipelines/serv-pipeline-types.js'
 export type { AudioTicketGrant, AudioTicketVerification, AuthorizedAudioRequest, CreateServAppOptions, ServAudioConfig, ServHttpApp, ServMiddlewareMount } from './serv-app.js'
 export type {

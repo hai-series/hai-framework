@@ -1,7 +1,7 @@
 /**
  * @h-ai/serv — Pipeline 公共 helper
  *
- * 放置不属于 Hono middleware / oRPC wrapper 默认实现本身、
+ * 放置不属于 Hono middleware / route guard 默认实现本身、
  * 但会被多个 pipeline 复用的公共工具。
  * @module pipelines/serv-pipeline-helper
  */
@@ -40,16 +40,10 @@ export function buildHaiErrorBody(def: ServErrorBodyDef, message: string) {
 /**
  * 捕获未处理异常并转换为 HaiResult。
  *
- * 虽然它不是 middleware / 鉴权 wrapper，但属于所有 procedure pipeline
- * 都可能复用的“公共包装能力”，因此与 `buildHaiErrorBody()` 一起放在 helper 中。
+ * 由 contract router 在注册 handler 时统一应用，业务代码无需手动包装。
  *
  * @param handler - 被包装的 procedure handler
  * @returns 带异常保护的新 handler
- *
- * @example
- * ```ts
- * const safeHandler = serv.mapHaiError(myHandler)
- * ```
  */
 export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInput, TOutput>): ServProcedureHandler<TInput, TOutput> {
   return async (options) => {

@@ -2,38 +2,21 @@
  * @h-ai/serv — IAM 默认 procedures
  *
  * 基于 `@h-ai/iam` 提供开箱即用的 IAM procedures 实现：认证、用户管理、角色权限 CRUD。
- * 通过 `createIamProcedures(deps)` 组装后直接挂载到 oRPC router。
  * @module features/serv-feature-iam
  */
 
 import type {
   IamAdminCreateUserInput,
-  IamAdminResetPasswordInput,
   IamAdminUpdateUserInput,
-  IamChangePasswordInput,
-  IamCreatePermissionInput,
-  IamCreateRoleInput,
   IamCurrentUser,
-  IamListPermissionsInput,
-  IamListUsersInput,
-  IamLoginInput,
-  IamLogoutInput,
-  IamOtpLoginInput,
-  IamRegisterInput,
-  IamSendOtpInput,
-  IamUpdateCurrentUserInput,
-  IamUpdateRoleInput,
-  IamUserIdInput,
 } from '@h-ai/api-contract'
-import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import type { IamFunctions, Permission, Role, TokenPair, User } from '@h-ai/iam'
+import type { HaiResult } from '@h-ai/core'
+import type { IamFunctions, TokenPair, User } from '@h-ai/iam'
 import type { ServContext } from '../serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
-import { implement } from '@orpc/server'
-import { requireAuth } from '../pipelines/serv-pipeline-require-auth.js'
-import { requirePermission } from '../pipelines/serv-pipeline-require-permission.js'
 import { servM } from '../serv-i18n.js'
+import { implement } from '../serv-router.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
 
 const iamContract = apiContract.iam
@@ -47,105 +30,133 @@ export interface IamProcedureDeps {
 
 /** 创建 IAM 默认 procedures。 */
 export function createIamProcedures(deps: IamProcedureDeps) {
-  const p = implement(iamContract).$context<ServContext>()
   const { iam } = deps
 
-  return p.router({
-    auth: {
-      login: p.auth.login.handler(({ input }: { input: IamLoginInput }) => iam.auth.login(input)),
-      loginWithOtp: p.auth.loginWithOtp.handler(({ input }: { input: IamOtpLoginInput }) => iam.auth.loginWithOtp(input)),
-      logout: p.auth.logout.handler(requireAuth<IamLogoutInput, void>(({ input, context }) => {
-        // 不再使用空字符串兜底：requireAuth 已确保 session 存在，但 accessToken 字段可能仍缺失
-        // （例如自定义 createContext 未填充）；此时显式返回 UNAUTHORIZED 而非把空 token 透传给 IAM。
-        const token = input.accessToken ?? context.accessToken
-        if (!token)
-          return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
-        return iam.auth.logout(token)
-      })),
-      currentUser: p.auth.currentUser.handler(requireAuth<unknown, IamCurrentUser>(async ({ context }) => {
-        const token = context.accessToken
-        if (!token)
-          return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
-        return mapHaiResult<User, IamCurrentUser>(await iam.user.getCurrentUser(token), user => ({
+  return implement(iamContract)
+    .context<ServContext>()
+
+    .route('auth.login', ({ input }) => iam.auth.login(input))
+    .route('auth.loginWithOtp', ({ input }) => iam.auth.loginWithOtp(input))
+
+    .route('auth.logout')
+    .auth()
+    .handle(({ input, context }) => {
+      const token = input.accessToken ?? context.accessToken
+      if (!token)
+        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+      return iam.auth.logout(token)
+    })
+
+    .route('auth.currentUser')
+    .auth()
+    .handle(async ({ context }) => {
+      const token = context.accessToken
+      if (!token)
+        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+
+      return mapHaiResult<User, IamCurrentUser>(
+        await iam.user.getCurrentUser(token),
+        user => ({
           ...user,
-          roles: context.session?.roles ?? [],
-          permissions: context.session?.permissions ?? [],
-        }))
-      })),
-      refresh: p.auth.refresh.handler(async ({ input }: { input: { refreshToken: string } }) => {
-        return mapHaiResult(await iam.session.refresh(input.refreshToken), tokens => ({ tokens }))
-      }),
-      sendOtp: p.auth.sendOtp.handler(({ input }: { input: IamSendOtpInput }) => iam.auth.sendOtp(input.identifier)),
-      register: p.auth.register.handler(({ input }: { input: IamRegisterInput }) => iam.auth.registerAndLogin(input)),
-      changePassword: p.auth.changePassword.handler(requireAuth<IamChangePasswordInput, void>(({ input, context }) => {
-        const token = context.accessToken
-        if (!token)
-          return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
-        return iam.user.changeCurrentUserPassword(token, input.oldPassword, input.newPassword)
-      })),
-      updateCurrentUser: p.auth.updateCurrentUser.handler(requireAuth<IamUpdateCurrentUserInput, User>(({ input, context }) => {
-        const token = context.accessToken
-        if (!token)
-          return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
-        return iam.user.updateCurrentUser(token, input)
-      })),
-    },
-    users: {
-      list: p.users.list.handler(requirePermission<IamListUsersInput, PaginatedResult<User>>('iam.users.read', ({ input }) => {
-        return iam.user.listUsers(input)
-      })),
-      get: p.users.get.handler(requirePermission<IamUserIdInput, User | null>('iam.users.read', ({ input }) => {
-        return iam.user.getUser(input.id, { include: ['roles'] })
-      })),
-      create: p.users.create.handler(requirePermission<IamAdminCreateUserInput, User>('iam.users.write', ({ input }) => {
-        return createUser(iam, input)
-      })),
-      update: p.users.update.handler(requirePermission<IamAdminUpdateUserInput, User>('iam.users.write', ({ input }) => {
-        return updateUser(iam, input)
-      })),
-      delete: p.users.delete.handler(requirePermission<IamUserIdInput, void>('iam.users.write', ({ input, context }) => {
-        // 防止自删：避免管理员误删自己的账号导致授权锁死。
-        if (context.session?.userId === input.id)
-          return Promise.resolve(err(HaiCommonError.FORBIDDEN, servM('serv_iamCannotDeleteCurrentUser', { locale: context.locale })))
-        return iam.user.deleteUser(input.id)
-      })),
-      resetPassword: p.users.resetPassword.handler(requirePermission<IamAdminResetPasswordInput, void>('iam.users.write', ({ input }) => {
-        return iam.user.adminResetPassword(input.id, input.newPassword)
-      })),
-    },
-    roles: {
-      list: p.roles.list.handler(requirePermission<unknown, PaginatedResult<Role>>('iam.roles.read', () => {
-        return iam.authz.getAllRoles()
-      })),
-      get: p.roles.get.handler(requirePermission<IamUserIdInput, Role | null>('iam.roles.read', ({ input }) => {
-        return iam.authz.getRole(input.id)
-      })),
-      create: p.roles.create.handler(requirePermission<IamCreateRoleInput, Role>('iam.roles.write', ({ input }) => {
-        return iam.authz.createRole(input)
-      })),
-      update: p.roles.update.handler(requirePermission<IamUpdateRoleInput, Role>('iam.roles.write', ({ input }) => {
-        const { id, ...data } = input
-        return iam.authz.updateRole(id, data)
-      })),
-      delete: p.roles.delete.handler(requirePermission<IamUserIdInput, void>('iam.roles.write', ({ input }) => {
-        return iam.authz.deleteRole(input.id)
-      })),
-    },
-    permissions: {
-      list: p.permissions.list.handler(requirePermission<IamListPermissionsInput, PaginatedResult<Permission>>('iam.permissions.read', ({ input }) => {
-        return iam.authz.getAllPermissions(input)
-      })),
-      get: p.permissions.get.handler(requirePermission<IamUserIdInput, Permission | null>('iam.permissions.read', ({ input }) => {
-        return iam.authz.getPermission(input.id)
-      })),
-      create: p.permissions.create.handler(requirePermission<IamCreatePermissionInput, Permission>('iam.permissions.write', ({ input }) => {
-        return iam.authz.createPermission(input)
-      })),
-      delete: p.permissions.delete.handler(requirePermission<IamUserIdInput, void>('iam.permissions.write', ({ input }) => {
-        return iam.authz.deletePermission(input.id)
-      })),
-    },
-  })
+          roles: context.session.roles,
+          permissions: context.session.permissions,
+        }),
+      )
+    })
+
+    .route('auth.refresh', async ({ input }) => {
+      return mapHaiResult(await iam.session.refresh(input.refreshToken), tokens => ({ tokens }))
+    })
+    .route('auth.sendOtp', ({ input }) => iam.auth.sendOtp(input.identifier))
+    .route('auth.register', ({ input }) => iam.auth.registerAndLogin(input))
+
+    .route('auth.changePassword')
+    .auth()
+    .handle(({ input, context }) => {
+      const token = context.accessToken
+      if (!token)
+        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+      return iam.user.changeCurrentUserPassword(token, input.oldPassword, input.newPassword)
+    })
+
+    .route('auth.updateCurrentUser')
+    .auth()
+    .handle(({ input, context }) => {
+      const token = context.accessToken
+      if (!token)
+        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+      return iam.user.updateCurrentUser(token, input)
+    })
+
+    .route('users.list')
+    .permission('iam.users.read')
+    .handle(({ input }) => iam.user.listUsers(input))
+
+    .route('users.get')
+    .permission('iam.users.read')
+    .handle(({ input }) => iam.user.getUser(input.id, { include: ['roles'] }))
+
+    .route('users.create')
+    .permission('iam.users.write')
+    .handle(({ input }) => createUser(iam, input))
+
+    .route('users.update')
+    .permission('iam.users.write')
+    .handle(({ input }) => updateUser(iam, input))
+
+    .route('users.delete')
+    .permission('iam.users.write')
+    .handle(({ input, context }) => {
+      // 防止自删：避免管理员误删自己的账号导致授权锁死。
+      if (context.session.userId === input.id)
+        return err(HaiCommonError.FORBIDDEN, servM('serv_iamCannotDeleteCurrentUser', { locale: context.locale }))
+      return iam.user.deleteUser(input.id)
+    })
+
+    .route('users.resetPassword')
+    .permission('iam.users.write')
+    .handle(({ input }) => iam.user.adminResetPassword(input.id, input.newPassword))
+
+    .route('roles.list')
+    .permission('iam.roles.read')
+    .handle(() => iam.authz.getAllRoles())
+
+    .route('roles.get')
+    .permission('iam.roles.read')
+    .handle(({ input }) => iam.authz.getRole(input.id))
+
+    .route('roles.create')
+    .permission('iam.roles.write')
+    .handle(({ input }) => iam.authz.createRole(input))
+
+    .route('roles.update')
+    .permission('iam.roles.write')
+    .handle(({ input }) => {
+      const { id, ...data } = input
+      return iam.authz.updateRole(id, data)
+    })
+
+    .route('roles.delete')
+    .permission('iam.roles.write')
+    .handle(({ input }) => iam.authz.deleteRole(input.id))
+
+    .route('permissions.list')
+    .permission('iam.permissions.read')
+    .handle(({ input }) => iam.authz.getAllPermissions(input))
+
+    .route('permissions.get')
+    .permission('iam.permissions.read')
+    .handle(({ input }) => iam.authz.getPermission(input.id))
+
+    .route('permissions.create')
+    .permission('iam.permissions.write')
+    .handle(({ input }) => iam.authz.createPermission(input))
+
+    .route('permissions.delete')
+    .permission('iam.permissions.write')
+    .handle(({ input }) => iam.authz.deletePermission(input.id))
+
+    .build()
 }
 
 async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput): Promise<HaiResult<User>> {

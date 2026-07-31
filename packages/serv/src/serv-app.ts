@@ -80,7 +80,7 @@ export interface ServHttpApp {
  * **认证 / 会话填充设计**（遵循最小知识原则）：
  *
  * - **`iam`**（推荐）：单一顶层引用。提供后 serv 自动：
- *   1. 使用 `iam.session.verifyToken` 填充 `context.session` → `requireAuth/Permission/Role` 生效
+ *   1. 使用 `iam.session.verifyToken` 填充 `context.session` → route guard 生效
  *   2. 若同时启用 `refreshCookie`，使用 `iam.session.refresh` 实现 refresh token 轮换
  *
  * - **`refreshCookie`**（可选）：浏览器默认用 httpOnly cookie；受信原生客户端可配置 body 通道。与 `iam` 正交：
@@ -377,7 +377,7 @@ export function createApp<
     app.get(docs.path, async (c) => {
       if (docs.requireAuth) {
         const context = await createContext({ request: c.req.raw })
-        // 与 procedure 层 requireAuth 语义保持一致：必须是已验证 session，
+        // 与 procedure 层 `.auth()` 语义保持一致：必须是已验证 session，
         // 不能只检查 Bearer 字符串是否存在，避免任意伪造 Token 访问受保护文档。
         if (!context.session)
           return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: resolveRequestLocale(c.req.raw.headers) })), 401)

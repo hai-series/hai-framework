@@ -11,21 +11,21 @@ export interface CreateAppProceduresOptions {
   readonly frontends: readonly AppFrontendTarget[]
 }
 
-const p = serv.implement(appContract).$context<ServContext>()
-
 /** app 领域 procedures：把共享 contract 绑定到真实业务处理函数。 */
 export function createAppProcedures(options: CreateAppProceduresOptions) {
-  return p.router({
-    info: p.info.handler(() => ok(createAppInfo(options))),
-    echo: p.echo.handler(({ input, context }) => {
+  return serv
+    .implement(appContract)
+    .context<ServContext>()
+    .route('info', () => ok(createAppInfo(options)))
+    .route('echo', ({ input, context }) => {
       const data: AppEchoOutputData = {
         message: input.message,
         echoedAt: new Date().toISOString(),
         requestId: context.requestId,
       }
       return ok(data)
-    }),
-  })
+    })
+    .build()
 }
 
 function createAppInfo(options: CreateAppProceduresOptions): AppInfoOutputData {

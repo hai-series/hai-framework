@@ -2,7 +2,6 @@
  * @h-ai/serv — AI 默认 procedures
  *
  * 基于 `@h-ai/ai` 提供开箱即用的 AI procedures 实现：对话补全、消息发送、聊天历史、记忆管理、会话列表。
- * 通过 `createAiProcedures(deps)` 组装后直接挂载到 oRPC router。
  * @module features/serv-feature-ai
  */
 
@@ -11,26 +10,19 @@ import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
-  MemoryEntry,
-  SessionInfo,
   ToolCall,
 } from '@h-ai/ai'
 import type {
   AiChatCompletionData,
   AiChatCompletionInput,
-  AiChatHistoryInput,
   AiChatRecord,
-  AiMemoryListInput,
-  AiMemoryRecallInput,
   AiSendMessageInput,
-  AiSessionListInput,
 } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { ServContext } from '../serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { ok } from '@h-ai/core'
-import { implement } from '@orpc/server'
-import { requireAuth } from '../pipelines/serv-pipeline-require-auth.js'
+import { implement } from '../serv-router.js'
 import { wrapItemsResult } from './serv-feature-helpers.js'
 
 const aiContract = apiContract.ai
@@ -42,36 +34,46 @@ export interface AiProcedureDeps {
 
 /** 创建 AI 默认 procedures。 */
 export function createAiProcedures(deps: AiProcedureDeps) {
-  const p = implement(aiContract).$context<ServContext>()
+  return implement(aiContract)
+    .context<ServContext>()
 
-  return p.router({
-    chats: {
-      createCompletion: p.chats.createCompletion.handler(requireAuth<AiChatCompletionInput, AiChatCompletionData>(async ({ input }) => {
-        return mapChatCompletionResult(await deps.ai.llm.chat(toChatCompletionRequest(input)))
-      })),
-      sendMessage: p.chats.sendMessage.handler(requireAuth<AiSendMessageInput, { content: string, model: string }>(async ({ input }) => {
-        return sendMessage(deps, input)
-      })),
-      listHistory: p.chats.listHistory.handler(requireAuth<AiChatHistoryInput, { items: AiChatRecord[] }>(async ({ input }) => {
-        const { objectId, sessionId, limit, order } = input
-        return mapChatRecordsResult(await deps.ai.llm.getHistory({ objectId, sessionId }, { limit, order }))
-      })),
-    },
-    memories: {
-      recall: p.memories.recall.handler(requireAuth<AiMemoryRecallInput, { items: MemoryEntry[] }>(async ({ input }) => {
-        const { query, ...options } = input
-        return wrapItemsResult(await deps.ai.memory.recall(query, options))
-      })),
-      list: p.memories.list.handler(requireAuth<AiMemoryListInput, { items: MemoryEntry[], total: number }>(async ({ input }) => {
-        return deps.ai.memory.listPage(input)
-      })),
-    },
-    sessions: {
-      list: p.sessions.list.handler(requireAuth<AiSessionListInput, { items: SessionInfo[] }>(async ({ input }) => {
-        return wrapItemsResult(await deps.ai.llm.listSessions(input.objectId))
-      })),
-    },
-  })
+    .route('chats.createCompletion')
+    .auth()
+    .handle(async ({ input }) => {
+      return mapChatCompletionResult(await deps.ai.llm.chat(toChatCompletionRequest(input)))
+    })
+
+    .route('chats.sendMessage')
+    .auth()
+    .handle(({ input }) => sendMessage(deps, input))
+
+    .route('chats.listHistory')
+    .auth()
+    .handle(async ({ input }) => {
+      const { objectId, sessionId, limit, order } = input
+      return mapChatRecordsResult(
+        await deps.ai.llm.getHistory({ objectId, sessionId }, { limit, order }),
+      )
+    })
+
+    .route('memories.recall')
+    .auth()
+    .handle(async ({ input }) => {
+      const { query, ...options } = input
+      return wrapItemsResult(await deps.ai.memory.recall(query, options))
+    })
+
+    .route('memories.list')
+    .auth()
+    .handle(({ input }) => deps.ai.memory.listPage(input))
+
+    .route('sessions.list')
+    .auth()
+    .handle(async ({ input }) => {
+      return wrapItemsResult(await deps.ai.llm.listSessions(input.objectId))
+    })
+
+    .build()
 }
 
 function toChatCompletionRequest(input: AiChatCompletionInput): ChatCompletionRequest {
@@ -252,7 +254,10 @@ function mapFunctionToolCalls(toolCalls: ToolCall[] | undefined) {
   })
 }
 
-async function sendMessage(deps: AiProcedureDeps, input: AiSendMessageInput): Promise<HaiResult<{ content: string, model: string }>> {
+async function sendMessage(
+  deps: AiProcedureDeps,
+  input: AiSendMessageInput,
+): Promise<HaiResult<{ content: string, model: string }>> {
   const result = await deps.ai.llm.ask(input.message, {
     systemPrompt: input.systemPrompt,
     model: input.model,

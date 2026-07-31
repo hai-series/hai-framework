@@ -5,16 +5,21 @@ import { describe, expect, it } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
 const contract = apiContract.create({})
-const procedures = serv.implement(contract).$context<ServContext>().router({})
+const procedures = serv.implement(contract).context<ServContext>().build()
 
 describe('@h-ai/serv', () => {
   it('keeps root API focused on runtime-level helpers', () => {
     expect(typeof serv.toFetch).toBe('function')
     expect(typeof serv.cors).toBe('function')
     expect(typeof serv.storageAssets).toBe('function')
+    expect(typeof serv.implement).toBe('function')
     expect('createDocsPage' in serv).toBe(false)
     expect('securityHeaders' in serv).toBe(false)
     expect('requireInternalRPC' in serv).toBe(false)
+    expect('requireAuth' in serv).toBe(false)
+    expect('requirePermission' in serv).toBe(false)
+    expect('requireRole' in serv).toBe(false)
+    expect('mapHaiError' in serv).toBe(false)
   })
 
   it('creates default context from request headers', () => {

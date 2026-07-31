@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
 const contract = apiContract.create({})
-const procedures = serv.implement(contract).$context<ServContext>().router({})
+const procedures = serv.implement(contract).context<ServContext>().build()
 
 function createCryptoWithTransportServer(
   createServer: CryptoFunctions['transport']['createServer'],
