@@ -126,7 +126,7 @@ memory:
 | Context 并发 | `createManager({ concurrency: 'reject' \| 'queue' })` | 默认单活动生成防消息乱序；活动生成期间新 chat 返回 `CONTEXT_BUSY`（reject）或排队（queue） |
 | Context 重置 | `await manager.reset({ preserveSystemPrompt?, cancelActiveTurn?, waitForMemoryTasks? })` | 异步：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词 |
 | 语音识别 | `ai.audio.transcribe` / `transcribeStream` | 完整音频返回 `HaiResult`；持续音频输入用 `AudioInputStream` 流式返回临时文本 |
-| 语音合成 | `ai.audio.synthesize` / `synthesizeStream` | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成） |
+| 语音合成 | `ai.audio.synthesize` / `synthesizeStream` | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成）；完整结果可用 `serializePlayableAudio` 转为浏览器播放负载 |
 | 图片生成 | `ai.image.generate({ prompt, size?, model?, referenceImages? })` | 可选参考图使用字节 + MIME；Provider 协议和临时 URL 下载由模块内部处理 |
 | A2A | `ai.a2a.registerExecutor/handleRequest` | 延迟初始化 SDK handler |
 
@@ -315,6 +315,20 @@ for await (const event of ai.audio.synthesizeStream({ text: { id: 'seg-1', text:
   else if (event.type === 'audio')
     await player.write(event.data)
 }
+```
+
+需要通过 API 返回浏览器可播放的 Base64 音频时，调用 `serializePlayableAudio(result.data)`；该函数会将 `pcm16` 封装为 WAV，并透传 WAV/MP3，`opus` 不支持该转换。
+
+```ts
+import { serializePlayableAudio } from '@h-ai/ai'
+
+const synthesized = await ai.audio.synthesize({ text: '欢迎参加访谈。' })
+if (!synthesized.success)
+  return synthesized
+
+const playable = serializePlayableAudio(synthesized.data)
+if (!playable.success)
+  return playable
 ```
 
 - 流式方法是 `AsyncIterable`，迭代期间的连接/协议/上游错误会终止迭代（抛出），不返回 `HaiResult`。

@@ -8,6 +8,7 @@
 
 export * from './ai-config.js'
 export * from './ai-types.js'
+export * from './audio/ai-audio-serialization.js'
 export * from './audio/ai-audio-types.js'
 export * from './audio/ai-audio-ws-protocol.js'
 export * from './client/index.js'

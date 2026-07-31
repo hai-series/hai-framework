@@ -178,6 +178,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 | `getCapabilities({ operation, model? })` | `HaiResult<AudioModelCapabilities>` | 按模型与操作查询 `transcribe` / `synthesize` 能力分支，并拒绝操作不匹配模型 |
 
 - 音频类型：`AudioContent { data: Uint8Array, format: 'pcm16'|'wav'|'mp3'|'opus', sampleRate?, channels? }`；`pcm16` 等裸音频必须传 `sampleRate`。
+- 播放负载：`serializePlayableAudio(audio)` 返回 `HaiResult<PlayableAudio>`；`PlayableAudio` 为 `{ audioBase64, format: 'wav'|'mp3', mimeType }`。该函数将 `pcm16` 封装为 WAV，透传 WAV/MP3；`opus` 不支持转换。
 - 请求可选：识别 `contextHints?: string[]`（热词/提示）；合成 `instruction?: string`（自然语言风格指令）；均支持 `signal: AbortSignal`。
 - 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, operations, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]`；`operations` 必须明确为识别、合成或两者。确认 LLM 与语音模型共用凭据时，可设置 `audio.inheritLlmApiKey: true`，默认关闭。
 - 凭据优先级：模型条目 `apiKey` → 显式启用继承后的 LLM `apiKey` → `HAI_AI_AUDIO_<PROVIDER>_API_KEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。可选密钥中的 YAML `null`、空字符串和纯空白字符串都会规范化为未配置。

@@ -38,6 +38,16 @@ export interface AudioContent {
   channels?: 1 | 2
 }
 
+/** 可直接作为浏览器音频响应传输的负载 */
+export interface PlayableAudio {
+  /** Base64 编码的音频字节 */
+  audioBase64: string
+  /** 浏览器可播放的容器格式 */
+  format: 'wav' | 'mp3'
+  /** 浏览器播放所需的 MIME 类型 */
+  mimeType: 'audio/wav' | 'audio/mpeg'
+}
+
 /**
  * 实时音频输入流（持续到达的音频分片）
  *

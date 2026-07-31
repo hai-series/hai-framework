@@ -266,6 +266,22 @@ const caps = ai.audio.getCapabilities({ operation: 'synthesize', model: 'tts' })
 if (caps.success && caps.data.synthesize?.streamingAudioOutput) { /* 可实时 TTS */ }
 ```
 
+`ai.audio.synthesize` 返回统一的 `AudioContent` 字节。需要通过 API 返回浏览器可播放的 Base64 负载时，使用 `serializePlayableAudio(result.data)`；该函数会将 `pcm16` 补齐为 WAV 容器，并透传 WAV/MP3：
+
+```ts
+import { serializePlayableAudio } from '@h-ai/ai'
+
+const synthesized = await ai.audio.synthesize({ text: '欢迎参加访谈。', voice: 'Cherry' })
+if (!synthesized.success)
+  return synthesized
+
+const playable = serializePlayableAudio(synthesized.data)
+if (!playable.success)
+  return playable
+
+return playable.data
+```
+
 `OptionalSecretSchema` 统一用于 LLM、Audio 与 Image 的可选密钥字段：YAML `null`、空字符串和纯空白字符串都会规范化为 `undefined`。语音密钥优先级为模型条目 `apiKey` → 启用继承后的 LLM `apiKey` → 对应平台环境变量；`inheritLlmApiKey` 默认关闭，避免跨供应商误用密钥。
 
 > `synthesizeStream` 严格按 `segment_started → audio* → segment_done` 产出事件。`segment_started` 携带服务端解析 Provider 后的**真实输出音频参数**（`format` / `sampleRate` / `channels`），播放器据此正确解码，不应按请求参数猜测格式。播放器只有在对应音频真正播放完成后才应把该段文本计入 `spokenText`；播放状态仍由应用管理。
