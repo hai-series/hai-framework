@@ -1,7 +1,7 @@
 {
   "name": "corporate-website",
   "type": "module",
-  "version": "0.1.0-alpha.46",
+  "version": "0.1.0-alpha.47",
   "private": true,
   "description": "hai Agent Framework - 企业官网脚手架",
   "keywords": [

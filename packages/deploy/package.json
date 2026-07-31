@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/deploy",
   "type": "module",
-  "version": "0.1.0-alpha.46",
+  "version": "0.1.0-alpha.47",
   "description": "Hai Framework deployment automation module.",
   "license": "Apache-2.0",
   "exports": {
