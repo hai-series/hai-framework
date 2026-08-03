@@ -202,6 +202,7 @@ await ai.llm.ask('翻译这段话', { tempModel: { model: 'gpt-4o', apiKey: 'sk-
 
 ```ts
 import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
+import { core } from '@h-ai/core'
 
 const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
 server.registerTool('search', {
@@ -211,7 +212,7 @@ server.registerTool('search', {
   content: [{ type: 'text', text: `Results for ${query}` }],
 }))
 
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: crypto.randomUUID }))
+await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: core.id.uuid }))
 ```
 
 ## 记忆、RAG 与知识库

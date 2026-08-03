@@ -26,6 +26,10 @@ const NANOID_REGEX_CACHE = new Map<number, RegExp>()
 /**
  * 生成 UUID v4。
  *
+ * 注意:`crypto.randomUUID` 仅在安全上下文（HTTPS/localhost）下可用，生产 http 环境会抛
+ * "crypto.randomUUID is not a function"。本函数已做 `randomUUID → getRandomValues → Math.random`
+ * 三级兜底，Node.js 与浏览器通用。业务代码生成 UUID 一律走 `id.uuid()`，不要裸调 `crypto.randomUUID`。
+ *
  * @returns UUID v4 字符串
  *
  * @example

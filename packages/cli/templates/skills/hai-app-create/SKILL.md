@@ -233,7 +233,7 @@ export async function createArticle(input: CreateArticleInput): Promise<HaiResul
   logger.debug('Creating article', { title: input.title })
 
   const result = await reldb.crud.create('articles', {
-    id: crypto.randomUUID(),
+    id: core.id.uuid(),
     ...input,
     created_at: new Date().toISOString(),
   })
