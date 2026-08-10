@@ -307,7 +307,7 @@ class UserRepository extends BaseReldbCrudRepository<User> {
 **自动能力**：
 
 - `createdAt` / `updatedAt` 字段自动填充时间戳
-- 主键生成（非 autoIncrement 主键默认使用 `crypto.randomUUID()`）
+- 主键生成（非 autoIncrement 主键默认使用随机 UUID，底层带安全上下文守卫，不可用时回退；业务侧手动生成 UUID 一律用 `core.id.uuid()`）
 - BOOLEAN → 1/0（SQLite/MySQL）或 true/false（PostgreSQL）
 - TIMESTAMP → 毫秒时间戳（SQLite）或 Date（PG/MySQL）
 - JSON → 字符串序列化（SQLite/MySQL）或原生 JSONB（PG）

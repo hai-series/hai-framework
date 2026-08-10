@@ -316,6 +316,14 @@ core.id.isValidUUID('f47ac10b-...')    // true/false
 core.id.isValidNanoId('abc123', 6)     // true/false
 ```
 
+#### UUID 生成规范（强制）
+
+- 生成 UUID **一律用 `core.id.uuid()`**，禁止裸调 `crypto.randomUUID()`。
+- 原因：`crypto.randomUUID` 仅在**安全上下文（HTTPS / localhost）**下可用，生产 http 环境会抛
+  `crypto.randomUUID is not a function`；`core.id.uuid()` 已做 `randomUUID → getRandomValues → Math.random` 三级兜底，Node.js 与浏览器通用。
+- 需要不带横线的 compact 形式：`core.id.uuid().replaceAll('-', '')`。
+- 代码评审与新建代码时以此为准，发现裸调 `crypto.randomUUID()` 一律改走 `core.id.uuid()`。
+
 ### 工具函数
 
 #### 类型检查 — `core.typeUtils`
