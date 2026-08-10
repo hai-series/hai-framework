@@ -20,7 +20,7 @@ function applyE2ETransportOverride(config: KitConfig): KitConfig {
     return config
   }
 
-  return { transport: false }
+  return { ...config, transport: false }
 }
 
 function loadKitConfig(): KitConfig {

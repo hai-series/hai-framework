@@ -23,12 +23,13 @@ export const DEFAULT_SERV_PORT = 3000
 export interface ServListenOptions {
   /**
    * 监听端口。
-   * 优先级：显式值 > `PORT` 环境变量 > 默认 `3000`。
+   * 优先级：显式值 > 默认 `3000`。
+   * 环境变量 / 配置文件的 host/port 由 `serv` 配置（`server`）解析后由应用显式传入。
    */
   readonly port?: number
   /**
    * 监听地址。
-   * 优先级：显式值 > `HOST` 环境变量 > 默认 `'127.0.0.1'`（仅本机可达）。
+   * 优先级：显式值 > 默认 `'127.0.0.1'`（仅本机可达）。
    *
    * - `'127.0.0.1'`：仅本机（推荐用于本地开发、容器内 sidecar、反向代理后端）
    * - `'0.0.0.0'`：监听所有 IPv4 网卡（容器对外暴露、需公网/内网访问）
@@ -62,7 +63,8 @@ export interface ServNodeServer {
 /**
  * 在 Node.js 中启动 ServHttpApp。
  *
- * 默认监听 `127.0.0.1:3000`（可通过 `PORT` / `HOST` 环境变量覆盖）。
+ * 默认监听 `127.0.0.1:3000`；host/port 建议由应用从 `serv` 配置的 `server`
+ *（支持 `HOST` / `PORT` 环境变量覆盖，环境变量高于配置文件）解析后显式传入。
  * 传入 `onClose` 后自动注册 SIGINT/SIGTERM 优雅关闭，应用层无需手动处理信号。
  *
  * @param app - `serv.createApp()` 返回的 HTTP app
@@ -71,19 +73,19 @@ export interface ServNodeServer {
  *
  * @example
  * ```ts
- * // 最简：读取 PORT / HOST 环境变量，自动优雅关闭
+ * // host/port 来自已解析的 serv 配置（env > 配置文件 > 默认）
+ * const { server } = core.config.getOrThrow<ServConfig>('serv')
  * serv.listen(app, {
+ *   host: server.host,
+ *   port: server.port,
  *   onListening: info => logger.info('listening', { port: info.port }),
  *   onClose: closeApp,
  * })
- *
- * // 容器对外暴露
- * serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
  * ```
  */
 export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServNodeServer {
-  const host = options.host ?? process.env.HOST ?? DEFAULT_SERV_HOST
-  const port = options.port ?? (process.env.PORT ? Number(process.env.PORT) : DEFAULT_SERV_PORT)
+  const host = options.host ?? DEFAULT_SERV_HOST
+  const port = options.port ?? DEFAULT_SERV_PORT
 
   const server = serve(
     { fetch: app.fetch, hostname: host, port },

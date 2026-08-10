@@ -86,8 +86,11 @@ const app = serv.createApp({
   },
 })
 
-// Node.js 启动（自动读取 PORT / HOST 环境变量；onClose 自动监听 SIGINT/SIGTERM）
+// Node.js 启动（host/port 来自 _serv.yml 的 server；HOST/PORT 环境变量高于配置文件；onClose 自动监听 SIGINT/SIGTERM）
+const { server } = core.config.getOrThrow<ServConfig>('serv')
 serv.listen(app, {
+  host: server.host,
+  port: server.port,
   onListening: info => logger.info('API service listening', { port: info.port }),
   onClose: closeApp, // 业务模块关闭函数（ai/storage/iam/reldb 等反向释放）
 })
@@ -265,6 +268,10 @@ const app = serv.createApp({
 
 ```yaml
 # config/_serv.yml
+server:
+  host: 127.0.0.1
+  port: 3000
+
 http:
   apiPrefix: /api/v1
   openapi:

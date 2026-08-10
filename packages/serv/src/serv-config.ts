@@ -6,6 +6,7 @@
  * @module serv-config
  */
 
+import process from 'node:process'
 import { z } from 'zod'
 
 const ApiPrefixSchema = z.custom<`/api/${string}`>(
@@ -17,6 +18,15 @@ const AbsolutePathSchema = z.custom<`/${string}`>(
   value => typeof value === 'string' && value.startsWith('/'),
   'path must start with /',
 )
+
+/** 服务器监听配置（对应 `config/_serv.yml` 的 `server`）。 */
+export interface ServServerConfig {
+  readonly host: string
+  readonly port: number
+}
+
+/** `config/_serv.yml` 中的服务器监听输入类型。 */
+export type ServServerConfigInput = Partial<ServServerConfig>
 
 /** OpenAPI JSON endpoint 配置。 */
 export interface ServOpenAPIHttpConfig {
@@ -70,6 +80,7 @@ export interface ServHttpConfig {
 
 /** `config/_serv.yml` 的顶层配置结构。 */
 export interface ServConfig {
+  readonly server: ServServerConfig
   readonly http: ServHttpConfig
   readonly cors: ServCorsRuntimeConfig
   readonly transport: false | ServTransportRuntimeConfig
@@ -96,6 +107,7 @@ export type ServHttpConfigInput = Partial<{
 
 /** `config/_serv.yml` 的顶层输入类型。 */
 export interface ServConfigInput {
+  readonly server?: ServServerConfigInput
   readonly http?: ServHttpConfigInput
   readonly cors?: ServCorsRuntimeConfigInput
   readonly transport?: false | ServTransportRuntimeConfigInput
@@ -141,6 +153,11 @@ const TransportRuntimeConfigInputSchema = z.union([
   }),
 ])
 
+const ServerConfigInputSchema = z.object({
+  host: z.string().min(1).default('127.0.0.1'),
+  port: z.number().int().min(1).max(65535).default(3000),
+})
+
 const CorsRuntimeConfigInputSchema = z.object({
   origin: z.string().optional(),
   nativeOrigins: z.string().optional(),
@@ -159,14 +176,47 @@ const ServHttpConfigInputSchema = z.object({
 
 /** `config/_serv.yml` 对应的配置 Schema。 */
 export const ServConfigSchema = z.object({
+  server: ServerConfigInputSchema.optional(),
   http: ServHttpConfigInputSchema.optional(),
   cors: CorsRuntimeConfigInputSchema.optional(),
   transport: TransportRuntimeConfigInputSchema.optional(),
-}).transform(({ http, cors, transport }) => ({
+}).transform(({ server, http, cors, transport }) => ({
+  server: resolveServServerConfig(server ?? {}),
   http: resolveServHttpConfig(http ?? {}),
   cors: resolveServCorsRuntimeConfig(cors ?? {}),
   transport: resolveServTransportRuntimeConfig(transport ?? false),
 }))
+
+/**
+ * 读取 `HOST` / `PORT` 环境变量覆盖（环境变量高于配置文件）。
+ *
+ * 仅采纳合法值：`PORT` 需为 1-65535 的整数，非法值忽略并回退到配置文件/默认值。
+ */
+function readServerEnvOverride(): ServServerConfigInput {
+  const override: { host?: string, port?: number } = {}
+  const host = process.env.HOST
+  if (host)
+    override.host = host
+  const rawPort = process.env.PORT
+  if (rawPort) {
+    const port = Number(rawPort)
+    if (Number.isInteger(port) && port >= 1 && port <= 65535)
+      override.port = port
+  }
+  return override
+}
+
+/**
+ * 解析服务器监听配置并补齐默认值。
+ *
+ * 优先级：`HOST` / `PORT` 环境变量 > `config/_serv.yml` 的 `server` > 默认 `127.0.0.1:3000`。
+ *
+ * @param input - `config/_serv.yml` 中的 server 配置
+ * @returns 完整 server 配置
+ */
+export function resolveServServerConfig(input: ServServerConfigInput = {}): ServServerConfig {
+  return { ...ServerConfigInputSchema.parse(input), ...readServerEnvOverride() }
+}
 
 /**
  * 解析 HTTP 配置并补齐默认值。

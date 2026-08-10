@@ -25,6 +25,8 @@ export type {
   ServHttpConfigInput,
   ServOpenAPIHttpConfig,
   ServRpcHttpConfig,
+  ServServerConfig,
+  ServServerConfigInput,
   ServTransportRuntimeConfig,
   ServTransportRuntimeConfigInput,
 } from './serv-config.js'

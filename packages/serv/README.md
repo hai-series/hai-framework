@@ -46,8 +46,11 @@ const app = serv.createApp({
   },
 })
 
-// 4) 启动 Node 服务（读取 PORT / HOST 环境变量，onClose 自动处理 SIGINT/SIGTERM）
+// 4) 启动 Node 服务（host/port 来自 _serv.yml 的 server；HOST/PORT 环境变量高于配置文件）
+const { server } = core.config.getOrThrow<ServConfig>('serv')
 serv.listen(app, {
+  host: server.host,
+  port: server.port,
   onListening: info => logger.info('API service listening', { port: info.port }),
   onClose: closeApp,
 })
@@ -55,13 +58,18 @@ serv.listen(app, {
 // 5) 优雅关闭由 serv 托管，无需手动注册 process.once('SIGINT', ...)
 ```
 
-### 容器对外暴露
+### host / port 配置
 
-默认 `host` 为 `127.0.0.1`（仅本机可达）。容器或需对外提供服务时显式指定：
+host/port 统一由 `config/_serv.yml` 的 `server` 提供，优先级：`HOST` / `PORT` 环境变量 > 配置文件 > 默认 `127.0.0.1:3000`。默认 `127.0.0.1` 仅本机可达，容器对外暴露时改为 `0.0.0.0`：
 
-```ts
-serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
+```yaml
+# config/_serv.yml
+server:
+  host: 127.0.0.1
+  port: 3000
 ```
+
+应用把解析后的 `server` 传给 `serv.listen`（`serv.listen` 也可直接传 `host` / `port` 显式覆盖）。
 
 ### Fetch Runtime（Workers / Bun / Deno）
 
@@ -499,6 +507,10 @@ const app = serv.createApp({
 `config/_serv.yml` 示例：
 
 ```yaml
+server:
+  host: 127.0.0.1
+  port: 3000
+
 http:
   apiPrefix: /api/v1
   openapi:
@@ -531,6 +543,8 @@ transport:
     - /_hai/scalar.js
   maxClients: 10000
 ```
+
+`server`（host/port）：优先级 `HOST` / `PORT` 环境变量 > 配置文件 > 默认 `127.0.0.1:3000`；由应用把 `servConfig.server` 传给 `serv.listen`。
 
 `ServHttpConfigInput`：
 

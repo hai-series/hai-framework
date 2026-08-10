@@ -1,5 +1,47 @@
-import { describe, expect, it } from 'vitest'
-import { resolveServConfig, resolveServHttpConfig } from '../src/serv-config.js'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveServConfig, resolveServHttpConfig, resolveServServerConfig } from '../src/serv-config.js'
+
+describe('resolveServServerConfig', () => {
+  beforeEach(() => {
+    // 清除环境中可能存在的 HOST/PORT，保证默认值用例稳定
+    vi.stubEnv('HOST', '')
+    vi.stubEnv('PORT', '')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('defaults to 127.0.0.1:3000', () => {
+    expect(resolveServServerConfig()).toEqual({ host: '127.0.0.1', port: 3000 })
+  })
+
+  it('reads host/port from config file', () => {
+    expect(resolveServServerConfig({ host: '0.0.0.0', port: 8080 })).toEqual({ host: '0.0.0.0', port: 8080 })
+  })
+
+  it('lets HOST/PORT env override config file', () => {
+    vi.stubEnv('HOST', '10.0.0.5')
+    vi.stubEnv('PORT', '9090')
+    expect(resolveServServerConfig({ host: '0.0.0.0', port: 8080 })).toEqual({ host: '10.0.0.5', port: 9090 })
+  })
+
+  it('ignores invalid PORT env and keeps config file value', () => {
+    vi.stubEnv('PORT', 'not-a-number')
+    expect(resolveServServerConfig({ port: 8080 })).toEqual({ host: '127.0.0.1', port: 8080 })
+  })
+
+  it('rejects out-of-range port from config file', () => {
+    expect(() => resolveServServerConfig({ port: 70000 })).toThrow()
+  })
+
+  it('fills server defaults in resolveServConfig when omitted', () => {
+    expect(resolveServConfig({}).server).toEqual({ host: '127.0.0.1', port: 3000 })
+  })
+
+  it('parses server from _serv.yml style config', () => {
+    expect(resolveServConfig({ server: { host: '0.0.0.0', port: 4000 } }).server).toEqual({ host: '0.0.0.0', port: 4000 })
+  })
+})
 
 describe('resolveServHttpConfig', () => {
   it('returns sane defaults when input omitted', () => {

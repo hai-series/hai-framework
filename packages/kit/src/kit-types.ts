@@ -10,7 +10,7 @@ import type { AuthnOperations } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { RateLimitStore } from './middleware/kit-ratelimit.js'
 
-export type { KitConfig, KitConfigInput, KitTransportConfig, KitTransportConfigInput } from './kit-config.js'
+export type { KitConfig, KitConfigInput, KitServerConfig, KitServerConfigInput, KitTransportConfig, KitTransportConfigInput } from './kit-config.js'
 
 /**
  * kit.auth 认证操作（由 createHandle auth.operations 注入）

@@ -131,6 +131,10 @@ transport 默认保护同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页�
 同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransport()`：
 
 ```yml
+server:
+  host: 127.0.0.1
+  port: 3000
+
 transport:
   keyExchangePath: /api/_hai/key-exchange
   requireEncryption: true
@@ -150,7 +154,8 @@ import rawKitConfig from '../config/_kit.yml?raw'
 export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 ```
 
-`_kit.yml` 只放公开的 transport 路径/开关，不放密钥；如自定义 `keyExchangePath`，浏览器端必须同步映射为 `keyExchangeUrl`。
+`resolveKitConfig()` 同时解析 `server`（host/port）与 `transport`；host/port 优先级为 `HOST` / `PORT` 环境变量 > `_kit.yml` 的 `server` > 默认 `127.0.0.1:3000`（与 `@h-ai/serv` 同构）。
+`_kit.yml` 只放公开的 server/transport 路径/开关，不放密钥；如自定义 `keyExchangePath`，浏览器端必须同步映射为 `keyExchangeUrl`。
 
 ## 核心 API
 

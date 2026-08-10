@@ -1,18 +1,18 @@
-import process from 'node:process'
+import type { ServConfigInput } from '@h-ai/serv'
 import { core } from '@h-ai/core'
-import { serv } from '@h-ai/serv'
+import { serv, ServConfigSchema } from '@h-ai/serv'
 import { createServerApp } from './app-server.js'
 
 // 加载 config/ 下的 _core.yml / _serv.yml 等配置文件（约定优于配置）
 core.init({ configDir: './config', logging: { level: 'info' } })
 
+// host/port 来自 config/_serv.yml 的 server（HOST/PORT 环境变量高于配置文件）。
+const { server } = ServConfigSchema.parse(core.config.get<ServConfigInput>('serv') ?? {})
 const app = createServerApp()
-const port = process.env.PORT ? Number(process.env.PORT) : 3000
-const host = process.env.HOST ?? '127.0.0.1'
 const listenApp = app as Parameters<typeof serv.listen>[0]
 
 serv.listen(listenApp, {
-  port,
-  host,
-  onListening: info => core.logger.info('{{fullstack.servPackageName}} listening', { host, port: info.port }),
+  host: server.host,
+  port: server.port,
+  onListening: info => core.logger.info('{{fullstack.servPackageName}} listening', { host: server.host, port: info.port }),
 })
