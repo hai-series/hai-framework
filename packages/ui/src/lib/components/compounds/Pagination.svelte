@@ -51,21 +51,26 @@
       : 'w-[2.5rem] shrink-0 [&>.fieldset]:m-0 [&>.fieldset]:min-w-0',
   )
 
+  let jumperValue = $state(String(page))
+
   function goToPage(p: number) {
-    if (p >= 1 && p <= totalPages && p !== page) {
-      page = p
-      onchange?.(p)
+    const clamped = Math.max(1, Math.min(totalPages, Math.round(p)))
+    if (clamped !== page) {
+      page = clamped
+      jumperValue = String(clamped)
+      onchange?.(clamped)
     }
   }
-
-  let jumperValue = $state('')
 
   function handleJump() {
     const p = Number.parseInt(jumperValue, 10)
     if (!Number.isNaN(p)) {
       goToPage(p)
-      jumperValue = ''
     }
+  }
+
+  function handleJumperBlur() {
+    handleJump()
   }
 
   function handlePageSizeChange(value: string) {
@@ -150,6 +155,7 @@
             max={totalPages}
             bind:value={jumperValue}
             onkeydown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => e.key === 'Enter' && handleJump()}
+            onblur={handleJumperBlur}
           />
         </div>
         <span class={tableTextClass}>{labels.page ?? uiM('pagination_page')}</span>

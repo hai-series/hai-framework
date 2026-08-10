@@ -699,7 +699,7 @@
   <Card padding='none' class={listCardClass}>
     {#if card}
       <!-- 卡片视图使用独立滚动容器，分页栏始终保留在容器外。 -->
-      <div class='min-h-0 flex-1 overflow-auto'>
+      <div class='min-h-0 flex-1 overflow-auto pt-2'>
         {#if data.items.length > 0}
           <div class='grid min-h-full grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] content-start gap-3'>
             {#each data.items as item (String(item[keyField]))}
