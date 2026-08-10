@@ -1,7 +1,7 @@
 {
   "name": "ai-playground",
   "type": "module",
-  "version": "0.1.0-alpha.47",
+  "version": "0.1.0-alpha.48",
   "private": true,
   "description": "hai Agent Framework - AI 能力交互示例",
   "keywords": [
