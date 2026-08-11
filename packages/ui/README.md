@@ -174,7 +174,7 @@ components/
 | `Modal`   | 模态框 | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose` |
 | `Drawer`  | 抽屉   | `open`, `position`, `title`, `size`, `width`, `resizable`, `widthStorageKey` |
 | `Confirm` | 确认框 | `open`, `title`, `message`, `variant`, `onconfirm`      |
-| `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset`                 |
+| `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset`, `portal`       |
 
 #### 数据展示
 

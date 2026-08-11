@@ -738,8 +738,8 @@ export interface DropdownItem {
 export interface DropdownProps extends DataAttributes {
   /** 菜单项 */
   items: DropdownItem[]
-  /** 触发方式 */
-  trigger?: 'click' | 'hover'
+  /** 触发方式；`manual` 由外部完全控制 open 状态。 */
+  trigger?: 'click' | 'hover' | 'manual'
   /** 位置 */
   position?: Position
   /** 对齐 */
@@ -1002,6 +1002,8 @@ export interface PopoverProps extends DataAttributes {
   trigger?: 'click' | 'hover'
   /** 偏移量 */
   offset?: number
+  /** 是否将内容挂到 body，以逃逸祖先 overflow 和堆叠上下文。 */
+  portal?: boolean
   /** 自定义类名 */
   class?: string
   /** 打开事件 */

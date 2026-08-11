@@ -243,16 +243,22 @@ test.describe('IAM Users UI', () => {
 
     const startX = handleBox.x + handleBox.width / 2
     const pointerY = handleBox.y + handleBox.height / 2
+    const targetX = startX - 200 // 拖动 200px 确保宽度变化足够明显
     await resizeHandle.dispatchEvent('mousedown', { clientX: startX, clientY: pointerY, button: 0 })
-    await page.locator('body').dispatchEvent('mousemove', { clientX: startX - 96, clientY: pointerY })
-    await page.locator('body').dispatchEvent('mouseup', { clientX: startX - 96, clientY: pointerY })
+    // 分多步触发 mousemove，模拟真实拖动行为，提高稳定性
+    for (const step of [50, 100, 150, 200]) {
+      await page.locator('body').dispatchEvent('mousemove', { clientX: startX - step, clientY: pointerY })
+    }
+    await page.locator('body').dispatchEvent('mouseup', { clientX: targetX, clientY: pointerY })
 
+    // 等待渲染更新
+    await page.waitForTimeout(100)
     const resizedBox = await drawer.boundingBox()
     expect(resizedBox).not.toBeNull()
-    expect(resizedBox!.width).toBeGreaterThan(initialBox.width + 1)
+    expect(resizedBox!.width).toBeGreaterThan(initialBox.width + 10)
     await expect.poll(() => page.evaluate(() => localStorage.getItem('hai-ui:crud:user:drawer-width'))).not.toBeNull()
     const storedWidth = Number(await page.evaluate(() => localStorage.getItem('hai-ui:crud:user:drawer-width')))
-    expect(storedWidth).toBeGreaterThan(initialBox.width + 1)
+    expect(storedWidth).toBeGreaterThan(initialBox.width + 10)
 
     await drawer.getByRole('button', { name: /关闭|Close/ }).first().click()
     await expect(detailHeading).not.toBeVisible()
