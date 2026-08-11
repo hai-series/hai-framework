@@ -46,17 +46,40 @@ export function writeStoredValue(key: string, value: string): boolean {
 /**
  * 安全写入剪贴板。
  *
- * 在不安全上下文、旧 WebView 或浏览器策略禁用时直接返回 false，
- * 让上层决定是否展示成功反馈。
+ * 优先使用现代 Clipboard API；在不安全上下文（HTTP）、旧 WebView
+ * 或浏览器策略禁用时回退到 `document.execCommand('copy')`，
+ * 确保尽可能多的环境下复制操作可用。
  */
 export async function writeTextToClipboard(text: string): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+
+  // 现代 Clipboard API（仅安全上下文可用）
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+    catch {
+      // Clipboard API 失败时继续尝试 fallback
+    }
+  }
+
+  // fallback：textarea + execCommand（兼容 HTTP、旧浏览器）
+  if (typeof document === 'undefined') {
     return false
   }
 
   try {
-    await navigator.clipboard.writeText(text)
-    return true
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return ok
   }
   catch {
     return false

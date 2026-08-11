@@ -515,6 +515,11 @@ export interface TooltipProps extends DataAttributes {
   class?: string
   /** 触发元素插槽 */
   children?: Snippet
+  /**
+   * 启用 portal 模式：提示内容通过 document.body 渲染，
+   * 不受父容器 overflow 裁剪。适用于表格、滚动容器等场景。
+   */
+  portal?: boolean
 }
 
 /**

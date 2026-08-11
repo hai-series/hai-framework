@@ -90,4 +90,66 @@ describe('browser-safety helpers', () => {
     await expect(writeTextToClipboard('demo')).resolves.toBe(true)
     expect(writeText).toHaveBeenCalledWith('demo')
   })
+
+  it('clipboard API 失败时应回退到 execCommand', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('not allowed'))
+
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        clipboard: {
+          writeText,
+        },
+      },
+    })
+
+    const mockExecCommand = vi.fn(() => true)
+    const mockBody = { appendChild: vi.fn(), removeChild: vi.fn() }
+    const mockTextarea = { value: '', style: { cssText: '' }, select: vi.fn() }
+    const mockCreateElement = vi.fn(() => ({ ...mockTextarea }))
+
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        createElement: mockCreateElement,
+        body: mockBody,
+        execCommand: mockExecCommand,
+      },
+    })
+
+    await expect(writeTextToClipboard('demo')).resolves.toBe(true)
+    expect(mockExecCommand).toHaveBeenCalledWith('copy')
+    expect(mockCreateElement).toHaveBeenCalledWith('textarea')
+
+    Reflect.deleteProperty(globalThis, 'document')
+  })
+
+  it('clipboard API 和 execCommand 均失败时应返回 false', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('blocked'))
+
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        clipboard: {
+          writeText,
+        },
+      },
+    })
+
+    const mockBody = { appendChild: vi.fn(), removeChild: vi.fn() }
+    const mockTextarea = { value: '', style: { cssText: '' }, select: vi.fn() }
+
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        createElement: vi.fn(() => ({ ...mockTextarea })),
+        body: mockBody,
+        execCommand: vi.fn(() => false),
+      },
+    })
+
+    await expect(writeTextToClipboard('demo')).resolves.toBe(false)
+
+    Reflect.deleteProperty(globalThis, 'document')
+  })
 })

@@ -13,6 +13,10 @@ export * from './components/index.js'
 
 export * from './i18n.svelte.js'
 
+// ─── 浏览器能力安全辅助（剪贴板、localStorage 等降级方案） ───
+
+export * from './internal/browser-safety.js'
+
 // ─── Message 轻量消息提示（类似 ElementUI Message） ───
 
 export * from './message.svelte.js'
