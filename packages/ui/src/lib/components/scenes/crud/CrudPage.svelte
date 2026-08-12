@@ -655,7 +655,7 @@
   {/if}
 
   <!-- 搜索 + 过滤栏 -->
-  {#if searchable || filterFields.length > 0}
+  {#if searchable || filterFields.length > 0 || toolbarLeading || toolbarActions}
     {#if toolbarStyle === 'toolbar'}
       <TableToolbar
         {searchable}

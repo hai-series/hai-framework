@@ -515,6 +515,11 @@ export interface TooltipProps extends DataAttributes {
   class?: string
   /** 触发元素插槽 */
   children?: Snippet
+  /**
+   * 启用 portal 模式：提示内容通过 document.body 渲染，
+   * 不受父容器 overflow 裁剪。适用于表格、滚动容器等场景。
+   */
+  portal?: boolean
 }
 
 /**
@@ -738,8 +743,8 @@ export interface DropdownItem {
 export interface DropdownProps extends DataAttributes {
   /** 菜单项 */
   items: DropdownItem[]
-  /** 触发方式 */
-  trigger?: 'click' | 'hover'
+  /** 触发方式；`manual` 由外部完全控制 open 状态。 */
+  trigger?: 'click' | 'hover' | 'manual'
   /** 位置 */
   position?: Position
   /** 对齐 */
@@ -1002,6 +1007,8 @@ export interface PopoverProps extends DataAttributes {
   trigger?: 'click' | 'hover'
   /** 偏移量 */
   offset?: number
+  /** 是否将内容挂到 body，以逃逸祖先 overflow 和堆叠上下文。 */
+  portal?: boolean
   /** 自定义类名 */
   class?: string
   /** 打开事件 */
