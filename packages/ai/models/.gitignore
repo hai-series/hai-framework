@@ -1,0 +1,7 @@
+# 模型权重缓存（prepare 下载产物），不进入 git / npm 发布物
+.cache/
+
+# Python 运行产物
+__pycache__/
+*.pyc
+*.pyo

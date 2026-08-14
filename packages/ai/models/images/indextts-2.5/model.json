@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "indextts-2.5",
+  "version": "2.5",
+  "image": "hai-ai/indextts-2.5",
+  "provides": ["audio.synthesize"],
+  "protocol": "indextts",
+  "devices": ["cpu", "gpu"],
+  "port": 8000,
+  "health": "/health",
+  "model": {
+    "id": "IndexTeam/IndexTTS-2.5"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "qwen3-4b",
+  "version": "1",
+  "image": "hai-ai/qwen3-4b",
+  "provides": ["llm.chat"],
+  "protocol": "openai",
+  "devices": ["cpu", "gpu"],
+  "port": 8000,
+  "health": "/health",
+  "model": {
+    "id": "Qwen/Qwen3-4B"
+  }
+}

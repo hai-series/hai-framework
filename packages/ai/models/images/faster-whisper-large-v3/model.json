@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "faster-whisper-large-v3",
+  "version": "1",
+  "image": "hai-ai/faster-whisper-large-v3",
+  "provides": ["audio.transcribe"],
+  "protocol": "whisper",
+  "devices": ["cpu", "gpu"],
+  "port": 8000,
+  "health": "/health",
+  "model": {
+    "id": "Systran/faster-whisper-large-v3"
+  }
+}

@@ -34,7 +34,11 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
-    "clean": "rimraf dist .turbo"
+    "clean": "rimraf dist .turbo",
+    "model:list": "node models/build.mjs list",
+    "model:prepare": "node models/build.mjs prepare",
+    "model:build": "node models/build.mjs build",
+    "model:run": "node models/build.mjs run"
   },
   "dependencies": {
     "@a2a-js/sdk": "catalog:",
