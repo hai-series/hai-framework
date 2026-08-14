@@ -226,7 +226,7 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 | 方法           | 签名                                                                    | 说明                                   |
 | -------------- | ----------------------------------------------------------------------- | -------------------------------------- |
 | `createApiKey` | `(userId, options: CreateApiKeyOptions) => Promise<HaiResult<CreateApiKeyResult>>` | 创建 API Key（明文密钥仅返回一次） |
-| `listApiKeys`  | `(userId) => Promise<HaiResult<ApiKey[]>>`                                 | 列出用户的所有 API Key                 |
+| `listApiKeys`  | `(userId, options?) => Promise<HaiResult<PaginatedResult<ApiKey>>>`        | 分页列出用户的 API Key                 |
 | `getApiKey`    | `(keyId) => Promise<HaiResult<ApiKey \| null>>`                            | 获取 API Key 详情                      |
 | `revokeApiKey` | `(keyId) => Promise<HaiResult<void>>`                                      | 吊销/删除 API Key                      |
 | `verifyApiKey` | `(rawKey) => Promise<HaiResult<ApiKey>>`                                   | 验证 API Key 并返回实体（含用户 ID）   |

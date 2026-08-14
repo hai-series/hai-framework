@@ -128,3 +128,47 @@ describe('toastState', () => {
     expect(toast.items.length).toBe(1) // 仍然存在
   })
 })
+
+describe('toast notify helpers', () => {
+  let mod: typeof import('../src/lib/toast.svelte.js')
+
+  beforeEach(async () => {
+    vi.resetModules()
+    mod = await import('../src/lib/toast.svelte.js')
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    mod?.toast?.clear?.()
+    vi.useRealTimers()
+  })
+
+  it('notifySuccess 弹出成功提示', () => {
+    mod.notifySuccess('保存成功')
+    expect(mod.toast.items[0].variant).toBe('success')
+    expect(mod.toast.items[0].message).toBe('保存成功')
+  })
+
+  it('notifyError 从 Error 取 message', () => {
+    mod.notifyError(new Error('炸了'))
+    expect(mod.toast.items[0].variant).toBe('error')
+    expect(mod.toast.items[0].message).toBe('炸了')
+  })
+
+  it('notifyError 非 Error 且为空时使用兜底文案', () => {
+    mod.notifyError(undefined, '未知错误')
+    expect(mod.toast.items[0].message).toBe('未知错误')
+  })
+
+  it('notifyError 接受字符串文案', () => {
+    mod.notifyError('直接文案')
+    expect(mod.toast.items[0].message).toBe('直接文案')
+  })
+
+  it('notifyInfo 与 notifyWarning 变体正确', () => {
+    mod.notifyInfo('信息')
+    mod.notifyWarning('警告')
+    expect(mod.toast.items[0].variant).toBe('info')
+    expect(mod.toast.items[1].variant).toBe('warning')
+  })
+})

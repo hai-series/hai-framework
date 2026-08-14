@@ -159,6 +159,11 @@
     onerror,
     basePath = '',
     nav = createBrowserNavAdapter(),
+    loading = false,
+    loaded = true,
+    error,
+    onRetry,
+    keepPreviousData = true,
     class: className = '',
     ...restProps
   }: {
@@ -219,12 +224,42 @@
      * 以获得客户端跳转 + invalidateAll 体验。
      */
     nav?: NavAdapter
+    /** 列表是否正在加载；由外部控制器（`createCrudController`）提供，用于展示查询中占位。 */
+    loading?: boolean
+    /**
+     * 是否至少成功加载过一次。仅当 `loaded && total === 0` 时展示空状态，
+     * 避免首次请求未回时误显示“暂无数据”。默认 true 以兼容 SvelteKit SSR（数据随页面就绪）。
+     */
+    loaded?: boolean
+    /** 最新一轮加载错误；无可用数据时展示错误信息与重试按钮。 */
+    error?: Error | string
+    /** 点击“重试”回调；通常传入控制器的 `reload`。 */
+    onRetry?: () => void
+    /** 失败或刷新时是否保留旧数据（默认 true）；为 false 时加载中展示查询中占位而非旧列表。 */
+    keepPreviousData?: boolean
     /** 根节点自定义 class。 */
     class?: string
   } & DataAttributes = $props()
 
   /** 透传到根节点的 data-* 属性。 */
   const dataAttributes = $derived(getDataAttributes(restProps))
+
+  // ─── 加载 / 空 / 错误展示态 ───
+
+  /** 归一化错误文案；error 允许是 Error 或字符串。 */
+  const errorMessage = $derived(error ? (typeof error === 'string' ? error : error.message) : '')
+  /** 是否已有可展示的数据行。 */
+  const hasItems = $derived(data.items.length > 0)
+  /** 加载失败且无可保留数据：整块替换为错误信息 + 重试。 */
+  const showErrorState = $derived(!!error && (!hasItems || !keepPreviousData))
+  /** 首次查询（或不保留旧数据时）尚无数据：展示查询中占位，避免误显示空状态。 */
+  const showQuerying = $derived(loading && !showErrorState && (!hasItems || !keepPreviousData))
+  /** 常规列表区块（含空状态）；仅此区块内才可能出现“暂无数据”。 */
+  const showListRegion = $derived(!showErrorState && !showQuerying)
+  /** 列表可见但仍在刷新（保留旧数据）：顶部细进度条提示。 */
+  const showRefreshing = $derived(showListRegion && loading && hasItems)
+  /** 保留旧数据时的错误细条 + 重试，不打断浏览已有列表。 */
+  const showErrorBanner = $derived(showListRegion && !!error && hasItems)
   // ─── 状态 ───
 
   /** 表格行的主键字段。 */
@@ -697,101 +732,143 @@
 
   <!-- 数据列表 -->
   <Card padding='none' class={listCardClass}>
-    {#if card}
-      <!-- 卡片视图使用独立滚动容器，分页栏始终保留在容器外。 -->
-      <div class='min-h-0 flex-1 overflow-auto pt-2'>
-        {#if data.items.length > 0}
-          <div class='grid min-h-full grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] content-start gap-3'>
-            {#each data.items as item (String(item[keyField]))}
-              {@render card(item)}
-            {/each}
-          </div>
-        {:else}
-          <div class='flex min-h-full items-center justify-center px-4 text-sm text-base-content/55'>
-            {uiM('data_table_empty')}
-          </div>
+    {#if showQuerying}
+      <!-- 首次查询：展示查询中占位，避免请求未回时误显示“暂无数据” -->
+      <div class='flex min-h-40 flex-1 flex-col items-center justify-center gap-2 px-4 py-10 text-sm text-base-content/55'>
+        <span class='loading loading-spinner loading-md text-base-content/40'></span>
+        <span>{uiM('crud_loading')}</span>
+      </div>
+    {:else if showErrorState}
+      <!-- 加载失败且无可保留数据：错误信息 + 重试 -->
+      <div class='flex min-h-40 flex-1 flex-col items-center justify-center gap-3 px-4 py-10 text-sm'>
+        <span class='icon-[tabler--alert-triangle] size-8 text-error/70'></span>
+        <p class='max-w-md text-center text-base-content/70'>{errorMessage || uiM('crud_load_failed')}</p>
+        {#if onRetry}
+          <Button size={actionButtonSize} onclick={() => onRetry?.()}>
+            <span class='icon-[tabler--refresh] mr-1 size-4'></span>
+            {uiM('crud_retry')}
+          </Button>
         {/if}
       </div>
     {:else}
-      <!-- DataTable 自身同时承接横向和纵向滚动，确保 sticky 表头与数据行共享滚动上下文。 -->
-      <DataTable
-        data={data.items}
-        columns={dtColumns}
-        keyField={keyField}
-        loading={false}
-        sortKey={sortBy || undefined}
-        sortDir={sortBy ? sortDirection : null}
-        onsort={handleSort}
-        class='min-h-0 min-w-0 flex-1 overflow-auto'
-        {density}
-        cell={tableCell}
-        {onrowclick}
-      >
-        {#snippet actions(item)}
-          {#if rowClickDetail}
-            <IconButton
-              variant='ghost'
-              size={actionButtonSize}
-              ariaLabel={uiM('crud_detail')}
-              onclick={(event) => {
-                event.stopPropagation()
-                openDetail(item)
-              }}
-            >
-              <span class='icon-[tabler--eye] {actionIconClass}'></span>
-            </IconButton>
+      {#if showErrorBanner}
+        <!-- 保留旧数据时的错误细条：不打断浏览，仍提供重试 -->
+        <div role='alert' class='flex items-center gap-2 border-b border-error/20 bg-error/10 px-3 py-2 text-xs text-error'>
+          <span class='icon-[tabler--alert-triangle] size-4 shrink-0'></span>
+          <span class='min-w-0 flex-1 truncate'>{errorMessage || uiM('crud_load_failed')}</span>
+          {#if onRetry}
+            <button type='button' class='shrink-0 font-medium underline underline-offset-2' onclick={() => onRetry?.()}>{uiM('crud_retry')}</button>
           {/if}
-          {#if canUpdate}
-            <IconButton
-              variant='ghost'
-              size={actionButtonSize}
-              ariaLabel={uiM('crud_edit')}
-              onclick={(event) => {
-                event.stopPropagation()
-                openEdit(item)
-              }}
-            >
-              <span class='icon-[tabler--edit] {actionIconClass}'></span>
-            </IconButton>
+        </div>
+      {/if}
+      {#if showRefreshing}
+        <!-- 保留旧数据的刷新态：顶部细进度提示 -->
+        <div class='h-0.5 w-full overflow-hidden'>
+          <div class='h-full w-1/3 animate-pulse rounded-full bg-primary/60'></div>
+        </div>
+      {/if}
+      {#if card}
+        <!-- 卡片视图使用独立滚动容器，分页栏始终保留在容器外。 -->
+        <div class='min-h-0 flex-1 overflow-auto pt-2'>
+          {#if hasItems}
+            <div class='grid min-h-full grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] content-start gap-3'>
+              {#each data.items as item (String(item[keyField]))}
+                {@render card(item)}
+              {/each}
+            </div>
+          {:else if loaded}
+            <div class='flex min-h-full items-center justify-center px-4 text-sm text-base-content/55'>
+              {uiM('data_table_empty')}
+            </div>
+          {:else}
+            <!-- 惰性页签尚未激活：既未加载也无数据，留白不显示空状态 -->
+            <div class='min-h-full'></div>
           {/if}
-          {#if canDelete}
-            <IconButton
-              variant='ghost'
-              size={actionButtonSize}
-              ariaLabel={uiM('crud_delete')}
-              onclick={(event) => {
-                event.stopPropagation()
-                requestDelete(item)
-              }}
-              class='hover:text-error'
-            >
-              <span class='icon-[tabler--trash] {actionIconClass}'></span>
-            </IconButton>
-          {/if}
-          {#if listItemActions}
-            {@render listItemActions(item)}
-          {/if}
-        {/snippet}
-      </DataTable>
-    {/if}
+        </div>
+      {:else if loaded || hasItems}
+        <!-- DataTable 自身同时承接横向和纵向滚动，确保 sticky 表头与数据行共享滚动上下文。 -->
+        <DataTable
+          data={data.items}
+          columns={dtColumns}
+          keyField={keyField}
+          loading={false}
+          sortKey={sortBy || undefined}
+          sortDir={sortBy ? sortDirection : null}
+          onsort={handleSort}
+          class='min-h-0 min-w-0 flex-1 overflow-auto'
+          {density}
+          cell={tableCell}
+          {onrowclick}
+        >
+          {#snippet actions(item)}
+            {#if rowClickDetail}
+              <IconButton
+                variant='ghost'
+                size={actionButtonSize}
+                ariaLabel={uiM('crud_detail')}
+                onclick={(event) => {
+                  event.stopPropagation()
+                  openDetail(item)
+                }}
+              >
+                <span class='icon-[tabler--eye] {actionIconClass}'></span>
+              </IconButton>
+            {/if}
+            {#if canUpdate}
+              <IconButton
+                variant='ghost'
+                size={actionButtonSize}
+                ariaLabel={uiM('crud_edit')}
+                onclick={(event) => {
+                  event.stopPropagation()
+                  openEdit(item)
+                }}
+              >
+                <span class='icon-[tabler--edit] {actionIconClass}'></span>
+              </IconButton>
+            {/if}
+            {#if canDelete}
+              <IconButton
+                variant='ghost'
+                size={actionButtonSize}
+                ariaLabel={uiM('crud_delete')}
+                onclick={(event) => {
+                  event.stopPropagation()
+                  requestDelete(item)
+                }}
+                class='hover:text-error'
+              >
+                <span class='icon-[tabler--trash] {actionIconClass}'></span>
+              </IconButton>
+            {/if}
+            {#if listItemActions}
+              {@render listItemActions(item)}
+            {/if}
+          {/snippet}
+        </DataTable>
+      {:else}
+        <!-- 惰性页签未激活：既未加载也无数据，留白不显示空状态 -->
+        <div class='min-h-40 flex-1'></div>
+      {/if}
 
-    <!-- 分页栏：始终显示，支持每页条数选择与跳页（shadcn table 风格） -->
-    <div class={paginationBarClass}>
-      <Pagination
-        page={data.page}
-        total={data.total}
-        pageSize={data.pageSize}
-        size={paginationSize}
-        showTotal={paginationShowTotal}
-        showJumper={paginationShowJumper}
-        showSizeChanger={paginationShowSizeChanger}
-        showPageInfo={paginationShowPageInfo}
-        showFirstLast={paginationShowFirstLast}
-        pageSizeOptions={paginationPageSizeOptions}
-        onchange={handlePageChange}
-        onpagesizechange={handlePageSizeChange}
-      />
-    </div>
+      <!-- 分页栏：始终显示，支持每页条数选择与跳页（shadcn table 风格） -->
+      <div class={paginationBarClass}>
+        <Pagination
+          page={data.page}
+          total={data.total}
+          pageSize={data.pageSize}
+          size={paginationSize}
+          showTotal={paginationShowTotal}
+          showJumper={paginationShowJumper}
+          showSizeChanger={paginationShowSizeChanger}
+          showPageInfo={paginationShowPageInfo}
+          showFirstLast={paginationShowFirstLast}
+          pageSizeOptions={paginationPageSizeOptions}
+          onchange={handlePageChange}
+          onpagesizechange={handlePageSizeChange}
+        />
+      </div>
+    {/if}
   </Card>
 </div>
 

@@ -15,18 +15,27 @@ import { kit } from '@h-ai/kit'
  *
  * 查询参数：
  * - userId: 用户 ID（必须）
+ * - page / pageSize: 分页参数
+ * - search: 按名称 / 密钥前缀模糊搜索
+ * - enabled: 按启用状态过滤
+ * - sortBy / sortDirection: 服务端排序
  */
 export const GET = kit.handler(async ({ url, locals }) => {
   kit.guard.require(locals.session, 'apikey:list')
 
-  const { userId } = kit.validate.query(url, ListApiKeysQuerySchema)
+  const { userId, page, pageSize, search, enabled, sortBy, sortDirection } = kit.validate.query(url, ListApiKeysQuerySchema)
 
-  const result = await iam.apiKey.listApiKeys(userId)
+  const result = await iam.apiKey.listApiKeys(userId, { page, pageSize, search, enabled, sortBy, sortDirection })
   if (!result.success) {
     return kit.response.internalError(result.error.message)
   }
 
-  return kit.response.ok({ apiKeys: result.data })
+  return kit.response.ok({
+    apiKeys: result.data.items,
+    total: result.data.total,
+    page: result.data.page,
+    pageSize: result.data.pageSize,
+  })
 })
 
 /**

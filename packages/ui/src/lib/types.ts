@@ -680,6 +680,19 @@ export interface TabItem {
 }
 
 /**
+ * 标签页内容上下文
+ *
+ * 传给 `Tabs` 的 `children` 插槽，支持惰性挂载：只渲染已激活过的页签内容，
+ * 不预加载不可见页签。
+ */
+export interface TabsContentContext {
+  /** 当前激活的标签 key */
+  active: string
+  /** 指定标签是否已被激活过（`lazy` 为 false 时恒为 true） */
+  isActivated: (key: string) => boolean
+}
+
+/**
  * 标签页属性
  */
 export interface TabsProps extends DataAttributes {
@@ -695,8 +708,12 @@ export interface TabsProps extends DataAttributes {
   class?: string
   /** 变化事件 */
   onchange?: (key: string) => void
-  /** 内容插槽 */
-  children?: Snippet
+  /** 页签首次激活时触发一次；用于惰性加载对应内容（如调用控制器的 load） */
+  onactivate?: (key: string) => void
+  /** 是否惰性挂载页签内容：为 true 时未激活过的页签不渲染，`isActivated` 据此判断 */
+  lazy?: boolean
+  /** 内容插槽；参数提供当前激活项与惰性挂载判断 */
+  children?: Snippet<[TabsContentContext]>
 }
 
 /**

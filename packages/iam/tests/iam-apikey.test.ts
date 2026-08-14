@@ -114,7 +114,7 @@ describe('iam.apiKey（启用）', () => {
     })
 
     describe('listApiKeys', () => {
-      it('应列出用户的所有 API Key', async () => {
+      it('应分页列出用户的 API Key', async () => {
         const user = await registerUser('apikey_list_user')
         await getIam().apiKey.createApiKey(user.id, { name: 'key-1' })
         await getIam().apiKey.createApiKey(user.id, { name: 'key-2' })
@@ -122,22 +122,48 @@ describe('iam.apiKey（启用）', () => {
         const result = await getIam().apiKey.listApiKeys(user.id)
         expect(result.success).toBe(true)
         if (result.success) {
-          expect(result.data.length).toBe(2)
-          const names = result.data.map(k => k.name).sort()
+          expect(result.data.total).toBe(2)
+          expect(result.data.items.length).toBe(2)
+          const names = result.data.items.map(k => k.name).sort()
           expect(names).toEqual(['key-1', 'key-2'])
           // 不应含 keyHash
-          for (const key of result.data) {
+          for (const key of result.data.items) {
             expect('keyHash' in key).toBe(false)
           }
         }
       })
 
-      it('无 API Key 的用户应返回空数组', async () => {
+      it('应支持服务端分页与搜索', async () => {
+        const user = await registerUser('apikey_page_user')
+        await getIam().apiKey.createApiKey(user.id, { name: 'paged-alpha' })
+        await getIam().apiKey.createApiKey(user.id, { name: 'paged-beta' })
+
+        // 每页 1 条：总数应为 2，当前页只返回 1 条。
+        const firstPage = await getIam().apiKey.listApiKeys(user.id, { page: 1, pageSize: 1 })
+        expect(firstPage.success).toBe(true)
+        if (firstPage.success) {
+          expect(firstPage.data.total).toBe(2)
+          expect(firstPage.data.items.length).toBe(1)
+          expect(firstPage.data.page).toBe(1)
+          expect(firstPage.data.pageSize).toBe(1)
+        }
+
+        // 按名称搜索：仅命中一条。
+        const search = await getIam().apiKey.listApiKeys(user.id, { search: 'paged-beta' })
+        expect(search.success).toBe(true)
+        if (search.success) {
+          expect(search.data.total).toBe(1)
+          expect(search.data.items[0]?.name).toBe('paged-beta')
+        }
+      })
+
+      it('无 API Key 的用户应返回空分页结果', async () => {
         const user = await registerUser('apikey_empty_user')
         const result = await getIam().apiKey.listApiKeys(user.id)
         expect(result.success).toBe(true)
         if (result.success) {
-          expect(result.data).toEqual([])
+          expect(result.data.items).toEqual([])
+          expect(result.data.total).toBe(0)
         }
       })
     })

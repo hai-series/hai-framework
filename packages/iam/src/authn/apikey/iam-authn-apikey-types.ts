@@ -5,7 +5,7 @@
  * @module iam-authn-apikey-types
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
 
 // ─── API Key 实体 ───
 
@@ -71,6 +71,28 @@ export interface CreateApiKeyOptions {
   scopes?: string[]
 }
 
+// ─── API Key 查询选项 ───
+
+/** API Key 列表允许的服务端排序字段。 */
+export type ApiKeySortField = 'name' | 'createdAt' | 'lastUsedAt' | 'expiresAt'
+
+/** API Key 列表排序方向。 */
+export type ApiKeySortDirection = 'asc' | 'desc'
+
+/**
+ * API Key 列表查询选项
+ */
+export interface ListApiKeysOptions extends PaginationOptionsInput {
+  /** 搜索关键字（模糊匹配名称与密钥前缀） */
+  search?: string
+  /** 按启用状态过滤，不传则返回全部 */
+  enabled?: boolean
+  /** 服务端排序字段；未指定时保持按创建时间倒序的历史行为。 */
+  sortBy?: ApiKeySortField
+  /** 服务端排序方向；仅在指定 sortBy 时生效，默认 desc。 */
+  sortDirection?: ApiKeySortDirection
+}
+
 // ─── API Key 操作接口 ───
 
 /**
@@ -87,12 +109,13 @@ export interface ApiKeyOperations {
   createApiKey: (userId: string, options: CreateApiKeyOptions) => Promise<HaiResult<CreateApiKeyResult>>
 
   /**
-   * 列出用户的所有 API Key
+   * 分页列出用户的 API Key
    *
    * @param userId - 用户 ID
-   * @returns API Key 列表（不含密钥哈希）
+   * @param options - 分页、搜索、过滤与排序选项
+   * @returns 分页 API Key 列表（不含密钥哈希）
    */
-  listApiKeys: (userId: string) => Promise<HaiResult<ApiKey[]>>
+  listApiKeys: (userId: string, options?: ListApiKeysOptions) => Promise<HaiResult<PaginatedResult<ApiKey>>>
 
   /**
    * 获取 API Key 详情

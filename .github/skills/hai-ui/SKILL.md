@@ -172,7 +172,7 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 
 ## CRUD 场景组件（CrudPage）
 
-`CrudPage` 基于 `kit.crud.define()` 的资源定义，自动渲染列表 + 搜索过滤 + 分页 + 详情 + 编辑/新建 + 删除确认。
+`CrudPage` 基于 `kit.crud.define()` 或框架级 `defineCrud()` 的资源定义，自动渲染列表 + 搜索过滤 + 分页 + 详情 + 编辑/新建 + 删除确认 + 查询中/失败/空态。
 
 | 配置项 | 说明 |
 | --- | --- |
@@ -190,8 +190,15 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 | `card` | 卡片列表项渲染 snippet；仍复用分页和独立滚动容器 |
 | `detailColumns` | 点击后打开详情抽屉的列 key，例如 `['title']` |
 | `sortableColumns` | 可执行服务端排序的列；为空时使用全部列表列 |
+| `loading` / `loaded` / `error` / `onRetry` / `keepPreviousData` | 受控加载态：仅 `loaded && total===0` 显示空状态；首次显示查询中；失败显示错误+重试；`keepPreviousData`（默认 true）失败保留旧数据 |
 
 分页栏始终显示，不再因数据量小而隐藏。
+
+### SPA CRUD 控制器与惰性页签
+
+- 纯客户端用 `defineCrud` + `createCrudController` 托管 `data` / `nav`：latest-wins（seq + AbortSignal）、失败保留旧数据、并发去重、查询串回填地址栏。传 `{ autoLoad: false }` 做惰性加载。
+- `Tabs` 传 `lazy` 后未激活页签内容不渲染（`children` 提供 `isActivated(key)`），`onactivate(key)` 首次激活触发一次；配合 `createCrudController({ autoLoad: false })` 在页签首次可见时才 `load()`，不预加载不可见页签。
+- Toast 已内置 `notifySuccess` / `notifyError(err, fallback?)` / `notifyInfo` / `notifyWarning`，业务应用无需自建 toast 工具文件。
 
 ```svelte
 <CrudPage

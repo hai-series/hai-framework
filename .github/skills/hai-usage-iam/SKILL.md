@@ -311,7 +311,7 @@ Web 管理后台优先由登录 API 写入 httpOnly cookie，不向页面代码�
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `createApiKey` | `(userId, { name, expirationDays?, scopes? }) => Promise<HaiResult<CreateApiKeyResult>>` | 创建 API Key（`rawKey` 仅返回一次） |
-| `listApiKeys` | `(userId) => Promise<HaiResult<ApiKey[]>>` | 列出用户的 API Key |
+| `listApiKeys` | `(userId, options?: ListApiKeysOptions) => Promise<HaiResult<PaginatedResult<ApiKey>>>` | 分页列出用户 API Key（支持 search / enabled / sortBy / 分页） |
 | `getApiKey` | `(keyId) => Promise<HaiResult<ApiKey \| null>>` | 获取 API Key 详情 |
 | `revokeApiKey` | `(keyId) => Promise<HaiResult<void>>` | 吊销 API Key |
 | `verifyApiKey` | `(rawKey) => Promise<HaiResult<ApiKey>>` | 验证 API Key 有效性 |

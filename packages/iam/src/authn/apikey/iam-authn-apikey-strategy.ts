@@ -5,13 +5,13 @@
  * @module iam-authn-apikey-strategy
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ApiKeyConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
 import type { ApiKeyRepository } from './iam-authn-apikey-repository.js'
-import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult } from './iam-authn-apikey-types.js'
+import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './iam-authn-apikey-types.js'
 import { randomBytes } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 import { crypto as haiCrypto } from '@h-ai/crypto'
@@ -233,11 +233,11 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       }
     },
 
-    async listApiKeys(userId: string): Promise<HaiResult<ApiKey[]>> {
-      const result = await apiKeyRepository.findByUserId(userId)
+    async listApiKeys(userId: string, options?: ListApiKeysOptions): Promise<HaiResult<PaginatedResult<ApiKey>>> {
+      const result = await apiKeyRepository.findPageByUserId(userId, options ?? {})
       if (!result.success)
-        return result as HaiResult<ApiKey[]>
-      return ok(result.data.map(toApiKey))
+        return result as HaiResult<PaginatedResult<ApiKey>>
+      return ok({ ...result.data, items: result.data.items.map(toApiKey) })
     },
 
     async getApiKey(keyId: string): Promise<HaiResult<ApiKey | null>> {

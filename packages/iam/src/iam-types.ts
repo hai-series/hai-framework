@@ -191,7 +191,7 @@ export interface IamFunctions {
 
 // ─── 子功能类型 re-export ───
 
-export type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult } from './authn/apikey/iam-authn-apikey-types.js'
+export type { ApiKey, ApiKeyOperations, ApiKeySortDirection, ApiKeySortField, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './authn/apikey/iam-authn-apikey-types.js'
 export type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
 export type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionType, Role } from './authz/iam-authz-types.js'

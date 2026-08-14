@@ -5,9 +5,9 @@
  * @module iam-authn-apikey-repository
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
-import type { StoredApiKey } from './iam-authn-apikey-types.js'
+import type { ApiKeySortField, ListApiKeysOptions, StoredApiKey } from './iam-authn-apikey-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { iamM } from '../../iam-i18n.js'
@@ -25,8 +25,8 @@ export interface ApiKeyRepository {
   findOneById: (id: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredApiKey | null>>
   /** 根据密钥前缀查找（用于快速匹配候选项） */
   findByKeyPrefix: (prefix: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredApiKey[]>>
-  /** 列出用户所有 API Key */
-  findByUserId: (userId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredApiKey[]>>
+  /** 分页列出用户 API Key（服务端搜索、过滤、排序、分页） */
+  findPageByUserId: (userId: string, options: ListApiKeysOptions, tx?: DmlWithTxOperations) => Promise<HaiResult<PaginatedResult<StoredApiKey>>>
   /** 统计用户 API Key 数量 */
   countByUserId: (userId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<number>>
   /** 根据 ID 更新（部分字段） */
@@ -38,6 +38,14 @@ export interface ApiKeyRepository {
 // ─── 字段定义 ───
 
 const TABLE_NAME = 'hai_iam_api_keys'
+
+/** API Key 排序字段到数据库列名的映射。 */
+const API_KEY_SORT_COLUMNS: Record<ApiKeySortField, string> = {
+  name: 'name',
+  createdAt: 'created_at',
+  lastUsedAt: 'last_used_at',
+  expiresAt: 'expires_at',
+}
 
 const API_KEY_FIELDS: ReldbCrudFieldDefinition[] = [
   {
@@ -189,12 +197,36 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     return ok(result.data)
   }
 
-  async findByUserId(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredApiKey[]>> {
-    const result = await this.findAll({ where: 'user_id = ?', params: [userId] }, tx)
+  async findPageByUserId(userId: string, options: ListApiKeysOptions, tx?: DmlWithTxOperations): Promise<HaiResult<PaginatedResult<StoredApiKey>>> {
+    const conditions: string[] = ['user_id = ?']
+    const params: unknown[] = [userId]
+
+    if (options.search) {
+      // 转义 LIKE 通配符，防止用户输入 % 或 _ 产生非预期匹配。
+      const escaped = options.search.replace(/[%_\\]/g, '\\$&')
+      const keyword = `%${escaped}%`
+      conditions.push('(name LIKE ? ESCAPE \'\\\' OR key_prefix LIKE ? ESCAPE \'\\\')')
+      params.push(keyword, keyword)
+    }
+
+    if (options.enabled !== undefined) {
+      conditions.push('enabled = ?')
+      params.push(options.enabled ? 1 : 0)
+    }
+
+    const sortColumn = options.sortBy ? API_KEY_SORT_COLUMNS[options.sortBy] : API_KEY_SORT_COLUMNS.createdAt
+    const sortDirection = options.sortBy && options.sortDirection === 'asc' ? 'ASC' : 'DESC'
+
+    const result = await this.findPage({
+      where: conditions.join(' AND '),
+      params,
+      orderBy: `${sortColumn} ${sortDirection}`,
+      pagination: { page: options.page, pageSize: options.pageSize },
+    }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
     }
-    return ok(result.data)
+    return result
   }
 
   async countByUserId(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<number>> {

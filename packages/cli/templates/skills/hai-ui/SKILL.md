@@ -474,6 +474,7 @@ const p = usePlatform()
 | `card` | 卡片列表项渲染 snippet；仍复用分页和独立滚动容器 |
 | `detailColumns` | 点击后打开详情抽屉的列 key，例如 `['title']` |
 | `sortableColumns` | 可执行服务端排序的列；为空时使用全部列表列 |
+| `loading` / `loaded` / `error` / `onRetry` / `keepPreviousData` | 受控加载态：仅 `loaded && total===0` 显示空状态；首次显示查询中；失败显示错误+重试；`keepPreviousData`（默认 true）失败保留旧数据 |
 
 注意：`CrudPage` 会占满父级可用高度；表格无论是否有数据都会撑满剩余空间，仅数据区滚动，表头和分页栏固定。
 
@@ -500,6 +501,12 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 ```
 
 抽屉默认可拖动左侧边缘调整宽度，并按 `crud.resource.name` 记忆；传 `drawerResizable: false` 可关闭。
+
+### 纯客户端控制器与惰性页签
+
+- 无 SvelteKit SSR 时用 `defineCrud` + `createCrudController` 托管 `data` / `nav`：latest-wins（seq + AbortSignal）、失败保留旧数据、并发去重、查询串回填地址栏。`<CrudPage data={c.data} nav={c.nav} loading={c.loading} loaded={c.loaded} error={c.error} onRetry={c.reload} />`。
+- `Tabs` 传 `lazy` 后未激活页签不渲染（`children` 提供 `isActivated(key)`），`onactivate(key)` 首次激活触发一次；配合 `createCrudController({ autoLoad: false })` 在页签首次可见时才 `load()`。
+- Toast 已内置 `notifySuccess` / `notifyError(err, fallback?)` / `notifyInfo` / `notifyWarning`，业务应用无需自建 toast 工具文件。
 
 ---
 

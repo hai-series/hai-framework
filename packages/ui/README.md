@@ -211,7 +211,7 @@ components/
 
 | 组件         | 描述     | 主要属性                                     |
 | ------------ | -------- | -------------------------------------------- |
-| `Tabs`       | 标签页   | `items`, `active`, `type`, `size`            |
+| `Tabs`       | 标签页   | `items`, `active`, `type`, `size`, `lazy`, `onactivate` |
 | `Pagination` | 分页（统一 table 风格） | `page`, `total`, `pageSize`, `showTotal`, `showJumper`, `showSizeChanger`, `showPageInfo`, `showFirstLast` |
 | `Breadcrumb` | 面包屑   | `items`, `separator`                         |
 | `Steps`      | 步骤条   | `items`, `current`, `direction`, `clickable` |
@@ -334,7 +334,7 @@ components/
 
 | 组件                 | 描述         | 主要属性 / 能力 |
 | -------------------- | ------------ | ---------------- |
-| `CrudPage`           | CRUD 主页面  | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `detailColumns`, `showHeader`, `toolbarStyle`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav` |
+| `CrudPage`           | CRUD 主页面  | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `detailColumns`, `showHeader`, `toolbarStyle`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav`, `loading`, `loaded`, `error`, `onRetry`, `keepPreviousData` |
 | `CrudFilterBar`      | 过滤工具栏（搜索 + 多类型过滤 + 重置） | `filterFields`, `searchValue`, `onsearch`, `onfilterchange`, `onreset` |
 | `CrudDetailPanel`    | 详情面板（抽屉/弹窗） | `open`, `item`, `fields`, `variant`, `drawerWidth`, `modalSize` |
 | `CrudEditPanel`      | 编辑面板（抽屉/弹窗） | `open`, `fields`, `variant`, `drawerWidth`, `modalSize`, `onsubmit` |
@@ -361,6 +361,21 @@ components/
 > `pagination` 配置分页栏（始终显示）：`showSizeChanger`、`pageSizeOptions`、`showJumper`、`showTotal` 默认开启；紧凑视图可用 `showPageInfo` 关闭页码文案、`showFirstLast` 关闭首页 / 末页按钮。
 >
 > `density` 配置列表密度：`'normal'`（默认）或 `'compact'`（紧凑）。它只影响列表行、行内操作、分页与创建/编辑/详情表单元素，不影响页头与筛选栏。
+>
+> `CrudPage` 受控加载态：`loading` / `loaded` / `error` / `onRetry` / `keepPreviousData`。仅当 `loaded && total === 0` 时才展示空状态（避免首次请求未回时误显“暂无数据”）；首次查询展示“查询中”；失败且无可用数据时展示错误与重试（`onRetry`）；`keepPreviousData`（默认 true）在刷新/失败时保留旧数据。
+>
+> 纯客户端（无 SvelteKit SSR）可用框架级 `defineCrud` + `createCrudController` 托管 `data` 与 `nav`，自带 latest-wins（seq + AbortSignal）、失败保留旧数据、惰性加载与并发去重：
+>
+> ```svelte
+> <script>
+>   import { CrudPage, createCrudController, defineCrud } from '@h-ai/ui'
+>   const crud = defineCrud({ name: 'user', label: '用户', fields: [/* ... */], api: { list: params => listUsers(params) } })
+>   const c = createCrudController(crud) // 惰性页签传 { autoLoad: false }，首次激活时 c.load()
+> </script>
+> <CrudPage {crud} data={c.data} nav={c.nav} loading={c.loading} loaded={c.loaded} error={c.error} onRetry={c.reload} />
+> ```
+>
+> `Tabs` 支持惰性页签：`lazy` 开启后未激活过的页签内容不渲染（`children` 提供 `isActivated(key)` 判断），`onactivate(key)` 在页签首次激活时触发一次，适合配合 `createCrudController({ autoLoad: false })` 在首次可见时才加载。
 
 ## 使用示例
 
@@ -381,6 +396,8 @@ components/
 <button onclick={notify}>通知</button>
 <ToastContainer />
 ```
+
+> 已内置 `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` 封装，业务应用无需自建 toast 工具文件：`notifyError(err, fallback?)` 接受 `Error` 或字符串并内置兑底文案，默认成功 3s / 失败 5s。
 
 ### Message 消息提示
 

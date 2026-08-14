@@ -439,8 +439,9 @@ const result = await iam.apiKey.createApiKey(userId, {
 })
 // result.data.rawKey → 明文密钥（仅此一次展示）
 
-// 列出用户的 API Key
-const keys = await iam.apiKey.listApiKeys(userId)
+// 列出用户的 API Key（服务端分页）
+const keys = await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20, search: 'ci' })
+// keys.data → { items, total, page, pageSize }
 
 // 吊销
 await iam.apiKey.revokeApiKey(keyId)
