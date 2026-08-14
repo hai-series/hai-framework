@@ -25,7 +25,7 @@ import { core, err, ok } from '@h-ai/core'
 import OpenAI, { toFile } from 'openai'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
-import { audioError, errorMessage, streamSentences, toAudioErrorResult } from './ai-audio-provider.js'
+import { audioError, errorMessage, streamSentences, toAudioErrorResult, toAudioUploadPart } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-openai' })
 
@@ -41,14 +41,6 @@ const OPENAI_SPEECH_FORMAT: Record<AudioFormat, 'pcm' | 'wav' | 'mp3' | 'opus'> 
   wav: 'wav',
   mp3: 'mp3',
   opus: 'opus',
-}
-
-/** 我方音频格式 → 上传文件名（transcriptions 依据扩展名识别容器） */
-const OPENAI_UPLOAD_FILENAME: Record<AudioFormat, string> = {
-  pcm16: 'audio.wav',
-  wav: 'audio.wav',
-  mp3: 'audio.mp3',
-  opus: 'audio.ogg',
 }
 
 /**
@@ -184,7 +176,11 @@ export function createOpenAIAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, resolveSynthesisOutput, capabilities: OPENAI_CAPABILITIES }
+  return {
+    transcription: { transcribe, transcribeStream },
+    synthesis: { synthesize, synthesizeStream, resolveSynthesisOutput },
+    getCapabilities: () => OPENAI_CAPABILITIES,
+  }
 }
 
 /** OpenAI 未指定格式时默认 mp3；pcm16 时补默认采样率 24000。 */
@@ -193,35 +189,8 @@ function resolveSynthesisOutput(request: { format?: AudioFormat, sampleRate?: nu
   return { format, sampleRate: format === 'pcm16' ? (request.sampleRate ?? 24000) : undefined, channels: 1 }
 }
 
-/** 构造上传文件：裸 pcm16 先封装为 WAV 容器（OpenAI 文件接口需要容器格式） */
+/** 构造上传文件：裸 pcm16 先封装为 WAV 容器，其余按真实格式生成文件名（OpenAI 文件接口依据扩展名识别容器） */
 async function toUploadFile(audio: AudioContent): Promise<Awaited<ReturnType<typeof toFile>>> {
-  if (audio.format === 'pcm16') {
-    const wav = wrapPcmToWav(audio.data, audio.sampleRate ?? 16000, audio.channels ?? 1)
-    return toFile(Buffer.from(wav), 'audio.wav')
-  }
-  return toFile(Buffer.from(audio.data), OPENAI_UPLOAD_FILENAME[audio.format])
-}
-
-/** 将 16bit 小端裸 PCM 封装为 WAV 容器（44 字节头 + 数据） */
-function wrapPcmToWav(pcm: Uint8Array, sampleRate: number, channels: number): Uint8Array {
-  const bitsPerSample = 16
-  const byteRate = (sampleRate * channels * bitsPerSample) / 8
-  const blockAlign = (channels * bitsPerSample) / 8
-  const dataSize = pcm.length
-  const buffer = Buffer.alloc(44 + dataSize)
-  buffer.write('RIFF', 0)
-  buffer.writeUInt32LE(36 + dataSize, 4)
-  buffer.write('WAVE', 8)
-  buffer.write('fmt ', 12)
-  buffer.writeUInt32LE(16, 16)
-  buffer.writeUInt16LE(1, 20)
-  buffer.writeUInt16LE(channels, 22)
-  buffer.writeUInt32LE(sampleRate, 24)
-  buffer.writeUInt32LE(byteRate, 28)
-  buffer.writeUInt16LE(blockAlign, 32)
-  buffer.writeUInt16LE(bitsPerSample, 34)
-  buffer.write('data', 36)
-  buffer.writeUInt32LE(dataSize, 40)
-  Buffer.from(pcm).copy(buffer, 44)
-  return new Uint8Array(buffer)
+  const part = toAudioUploadPart(audio)
+  return toFile(Buffer.from(part.data), part.filename)
 }

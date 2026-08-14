@@ -25,7 +25,7 @@ import { core, err, ok } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { createSSEDecoder } from '../../llm/ai-llm-stream.js'
-import { audioError, errorMessage, fromBase64, streamSentences, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
+import { audioError, combineSignal, describeHttpError, errorMessage, fromBase64, streamSentences, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-mimo' })
 
@@ -168,7 +168,11 @@ export function createMimoAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, resolveSynthesisOutput, capabilities: MIMO_CAPABILITIES }
+  return {
+    transcription: { transcribe, transcribeStream },
+    synthesis: { synthesize, synthesizeStream, resolveSynthesisOutput },
+    getCapabilities: () => MIMO_CAPABILITIES,
+  }
 }
 
 /** MiMo 流式合成除 wav 外均输出 pcm16；pcm16 时补默认采样率 24000。 */
@@ -231,16 +235,4 @@ async function* readChunks(response: Response): AsyncIterable<MimoChunk> {
   finally {
     reader.releaseLock()
   }
-}
-
-/** 组合取消信号与超时（不泄露原信号） */
-function combineSignal(signal: AbortSignal | undefined, timeout: number): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(timeout)
-  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
-}
-
-/** 读取 HTTP 错误响应摘要（截断，避免泄露过长响应体） */
-async function describeHttpError(response: Response): Promise<string> {
-  const text = await response.text().catch(() => '')
-  return `HTTP ${response.status} ${text.slice(0, 200)}`.trim()
 }

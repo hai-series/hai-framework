@@ -701,3 +701,85 @@ function buildDoubaoTtsAudio(audio: Uint8Array): Uint8Array {
   size.writeUInt32BE(audio.length)
   return new Uint8Array(Buffer.concat([header, eventBuf, sidSize, sid, size, Buffer.from(audio)]))
 }
+
+// =============================================================================
+// 能力校验（strictCapabilities）与 TTS 参数校验
+// =============================================================================
+
+describe('ai.audio 能力校验与参数校验', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    await initAudio({ transcribeModel: 'oa-asr', synthesizeModel: 'oa-tts' })
+  })
+  afterEach(async () => {
+    await ai.close()
+  })
+
+  it('严格模式请求 word 时间戳但模型不支持时前置失败', async () => {
+    const r = await ai.audio.transcribe({ audio: wavAudio(), model: 'oa-asr', timestampGranularities: ['word'], strictCapabilities: true })
+    expect(r.success).toBe(false)
+    if (!r.success)
+      expect(r.error.code).toBe(HaiAIError.AUDIO_UNSUPPORTED_INPUT.code)
+    expect(mockTranscribe).not.toHaveBeenCalled()
+  })
+
+  it('非严格模式下不支持的高级能力被忽略（best effort）', async () => {
+    mockTranscribe.mockResolvedValue({ text: 'ok' })
+    const r = await ai.audio.transcribe({ audio: wavAudio(), model: 'oa-asr', timestampGranularities: ['word'] })
+    expect(r.success).toBe(true)
+    expect(mockTranscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('严格模式请求说话人参考但模型不支持时前置失败', async () => {
+    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', speakerReference: { audio: wavAudio() }, strictCapabilities: true })
+    expect(r.success).toBe(false)
+    if (!r.success)
+      expect(r.error.code).toBe(HaiAIError.AUDIO_UNSUPPORTED_INPUT.code)
+    expect(mockSpeech).not.toHaveBeenCalled()
+  })
+
+  it('styleStrength 超出 [0,1] 返回 AUDIO_INVALID_REQUEST', async () => {
+    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', styleReference: { audio: wavAudio() }, styleStrength: 2 })
+    expect(r.success).toBe(false)
+    if (!r.success)
+      expect(r.error.code).toBe(HaiAIError.AUDIO_INVALID_REQUEST.code)
+  })
+
+  it('styleStrength 缺少 styleReference 返回 AUDIO_INVALID_REQUEST', async () => {
+    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', styleStrength: 0.5 })
+    expect(r.success).toBe(false)
+    if (!r.success)
+      expect(r.error.code).toBe(HaiAIError.AUDIO_INVALID_REQUEST.code)
+  })
+
+  it('speed 非正数返回 AUDIO_INVALID_REQUEST', async () => {
+    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', speed: 0 })
+    expect(r.success).toBe(false)
+    if (!r.success)
+      expect(r.error.code).toBe(HaiAIError.AUDIO_INVALID_REQUEST.code)
+  })
+
+  it('speed 与 targetDurationMs 冲突返回 AUDIO_INVALID_REQUEST', async () => {
+    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', speed: 1.2, targetDurationMs: 3000 })
+    expect(r.success).toBe(false)
+    if (!r.success)
+      expect(r.error.code).toBe(HaiAIError.AUDIO_INVALID_REQUEST.code)
+  })
+
+  it('durationToleranceMs 缺少 targetDurationMs 返回 AUDIO_INVALID_REQUEST', async () => {
+    const r = await ai.audio.synthesize({ text: 'hi', model: 'oa-tts', durationToleranceMs: 100 })
+    expect(r.success).toBe(false)
+    if (!r.success)
+      expect(r.error.code).toBe(HaiAIError.AUDIO_INVALID_REQUEST.code)
+  })
+
+  it('getCapabilities 按模型返回对应平台能力（无需凭据）', async () => {
+    const openai = ai.audio.getCapabilities({ operation: 'transcribe', model: 'oa-asr' })
+    const doubao = ai.audio.getCapabilities({ operation: 'transcribe', model: 'doubao-asr' })
+    expect(openai.success && doubao.success).toBe(true)
+    if (openai.success && doubao.success) {
+      expect(openai.data.transcribe?.realtimeAudioInput).toBe(false)
+      expect(doubao.data.transcribe?.realtimeAudioInput).toBe(true)
+    }
+  })
+})

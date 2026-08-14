@@ -88,6 +88,7 @@
   "ai_audioInvalidRequest": "语音请求参数无效：{reason}",
   "ai_audioModelNotFound": "语音模型 '{model}' 未找到，请在 ai.init() 的 audio.models 中注册",
   "ai_audioMissingApiKey": "语音平台 '{provider}' 缺少凭据（API Key 或 App/Access Key）",
+  "ai_audioMissingBaseUrl": "语音平台 '{provider}' 缺少端点地址，请在模型条目中配置 baseUrl",
   "ai_audioUnsupportedInput": "平台 '{provider}' 不支持此输入方式：{reason}",
   "ai_audioUpstreamError": "语音上游服务错误：{error}",
   "ai_audioProtocolError": "语音协议错误：{error}",

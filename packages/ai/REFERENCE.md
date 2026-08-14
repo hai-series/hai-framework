@@ -147,15 +147,17 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 ## Audio
 
-- `transcribe(request)`：完整音频 → `HaiResult<{ text }>`。
-- `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<TranscriptionEvent>`。事件为 `speech_started` / `{ type: 'transcript', text, final }` / `speech_stopped`（支持服务端 VAD 的平台产出语音起止事件，可据此即时反应）。
-- `synthesize(request)`：完整文本 → `HaiResult<AudioContent>`。
-- `synthesizeStream(request)`：`SynthesisTextSegment` 或 `AsyncIterable<SynthesisTextSegment>` → `AsyncIterable<SynthesisEvent>`；每段严格产出 `segment_started → audio* → segment_done`，音频事件携带 `segmentId`。`segment_started` 额外携带服务端解析 Provider 后的真实输出参数 `format` / `sampleRate?` / `channels?`，调用方据此正确解码，不按请求参数猜测。
-- `getCapabilities({ operation, model? })`：按操作查询默认或指定模型，只返回 `transcribe` / `synthesize` 对应能力分支；模型操作不匹配时在厂商调用前返回 `AUDIO_UNSUPPORTED_INPUT`。
+- `transcribe(request)`：完整音频 → `HaiResult<TranscriptionResult>`（`text`，可选 `language` / `durationMs` / `segments[]`，词级时间戳存于 `segments[].words`，毫秒整数）。
+- `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<TranscriptionEvent>`。事件为 `speech_started` / `{ type: 'transcript', text, final, startMs?, endMs?, words? }` / `speech_stopped`（支持服务端 VAD 的平台产出语音起止事件，可据此即时反应）。无原生流式的平台（如 whisper）：完整音频降级为最终结果，持续音频输入 → `AUDIO_UNSUPPORTED_INPUT`。
+- `synthesize(request)`：完整文本 → `HaiResult<SynthesisResult>`（`AudioContent` + 可选 `durationMs` / `metadata.durationMatched` / `metadata.speed`）。
+- `synthesizeStream(request)`：`SynthesisTextSegment` 或 `AsyncIterable<SynthesisTextSegment>` → `AsyncIterable<SynthesisEvent>`；每段严格产出 `segment_started → audio* → segment_done`，音频事件携带 `segmentId`。`segment_started` 额外携带服务端解析 Provider 后的真实输出参数 `format` / `sampleRate?` / `channels?`。无原生流式的平台（如 indextts）按段完整合成降级，`streamingAudioOutput` 保持 `false`。
+- `getCapabilities({ operation, model? })`：复用统一模型解析（无需凭据），只返回 `transcribe` / `synthesize` 对应能力分支；模型操作不匹配时在厂商调用前返回 `AUDIO_UNSUPPORTED_INPUT`。
 
-请求可选字段：识别 `contextHints?: string[]`（热词/提示，按平台能力映射）；合成 `instruction?: string`（自然语言风格指令）。配置 `audio.models: [{ id, provider, model, operations: ['transcribe'] | ['synthesize'] | ['transcribe','synthesize'], ...credentials }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB）/`maxStreamDurationMs`（默 5 分钟，流式连接硬上限）。
+平台：`openai` / `mimo` / `qwen` / `doubao`（云）+ `whisper`（ASR）/ `indextts`（TTS，可自托管）。`provider` 表示调用协议而非部署位置，`whisper` / `indextts` 无 canonical 端点，必须显式配置 `baseUrl`（缺失 → `CONFIGURATION_ERROR`），可无凭据。
 
-错误语义：`AbortSignal` 取消 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`，厂商错误 → `AUDIO_UPSTREAM_ERROR`。平台不支持的输入方式 → `AUDIO_UNSUPPORTED_INPUT`（不伪装实时）。浏览器客户端严格区分正常结束、取消与异常断连：取消抛 `AUDIO_CANCELLED`、`end` 前断连抛 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不返回未完成的部分音频。Provider 为内部实现，不从根入口导出。
+请求可选字段：识别 `contextHints?`（热词）/ `timestampGranularities?: ('segment'|'word')[]` / `vad?` / `strictCapabilities?`；合成 `instruction?` / `language?` / `speakerReference?` / `styleReference?` / `styleStrength?`（`[0,1]`）/ `speed?`（>1 更快，与 `targetDurationMs` 互斥）/ `targetDurationMs?` + `durationToleranceMs?` / `strictCapabilities?`。`strictCapabilities` 为真时请求的高级能力若模型不支持，在调用 Provider 前返回 `AUDIO_UNSUPPORTED_INPUT`；参数非法（风格强度越界、语速非正、速度与目标时长冲突等）返回 `AUDIO_INVALID_REQUEST`。配置 `audio.models: [{ id, provider, model, operations: string[]（至少一项，不重复）, baseUrl?, ...credentials }]` + `transcribeModel` / `synthesizeModel`；`maxAudioBytes`（默 10 MiB，同时保护说话人/风格参考）/`maxStreamDurationMs`（默 5 分钟，流式连接硬上限）。
+
+错误语义：`AbortSignal` 取消 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`，厂商错误 → `AUDIO_UPSTREAM_ERROR`。平台不支持的输入方式 → `AUDIO_UNSUPPORTED_INPUT`（不伪装实时）。浏览器客户端严格区分正常结束、取消与异常断连：取消抛 `AUDIO_CANCELLED`、`end` 前断连抛 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不返回未完成的部分音频。Provider 为内部实现，不从根入口导出。自托管模型服务镜像见 `models/`（优先 ModelScope 下载）。
 
 ## Image
 

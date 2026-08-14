@@ -16,9 +16,11 @@ import type {
   AudioFormat,
   AudioInputStream,
   AudioModelCapabilities,
+  AudioReference,
   SynthesisResult,
   TranscriptionEvent,
   TranscriptionResult,
+  TranscriptionTimestampGranularity,
 } from '../ai-audio-types.js'
 
 import { Buffer } from 'node:buffer'
@@ -39,6 +41,10 @@ export interface ProviderTranscriptionRequest {
   language?: string
   /** 领域提示词 / 热词 */
   contextHints?: string[]
+  /** 请求返回的时间戳粒度 */
+  timestampGranularities?: TranscriptionTimestampGranularity[]
+  /** 是否启用服务端 VAD */
+  vad?: boolean
   /** 取消信号 */
   signal?: AbortSignal
 }
@@ -53,6 +59,10 @@ export interface ProviderTranscriptionStreamRequest {
   language?: string
   /** 领域提示词 / 热词 */
   contextHints?: string[]
+  /** 请求返回的时间戳粒度 */
+  timestampGranularities?: TranscriptionTimestampGranularity[]
+  /** 是否启用服务端 VAD */
+  vad?: boolean
   /** 取消信号 */
   signal?: AbortSignal
 }
@@ -63,10 +73,24 @@ export interface ProviderSynthesisRequest {
   model: ResolvedAudioModel
   /** 待合成文本 */
   text: string
+  /** 目标语言 */
+  language?: string
   /** 音色 */
   voice?: string
+  /** 说话人 / 音色参考 */
+  speakerReference?: AudioReference
+  /** 风格 / 情绪参考 */
+  styleReference?: AudioReference
+  /** 风格参考强度 `[0, 1]` */
+  styleStrength?: number
   /** 自然语言风格指令 */
   instruction?: string
+  /** 语速倍数 */
+  speed?: number
+  /** 目标时长（毫秒） */
+  targetDurationMs?: number
+  /** 目标时长容差（毫秒） */
+  durationToleranceMs?: number
   /** 输出格式 */
   format?: AudioFormat
   /** 输出采样率 */
@@ -81,10 +105,20 @@ export interface ProviderSynthesisStreamRequest {
   model: ResolvedAudioModel
   /** 完整文本或持续文本流 */
   text: string | AsyncIterable<string>
+  /** 目标语言 */
+  language?: string
   /** 音色 */
   voice?: string
+  /** 说话人 / 音色参考 */
+  speakerReference?: AudioReference
+  /** 风格 / 情绪参考 */
+  styleReference?: AudioReference
+  /** 风格参考强度 `[0, 1]` */
+  styleStrength?: number
   /** 自然语言风格指令 */
   instruction?: string
+  /** 语速倍数 */
+  speed?: number
   /** 输出格式 */
   format?: AudioFormat
   /** 输出采样率 */
@@ -110,28 +144,55 @@ export interface SynthesisOutputMeta {
 }
 
 /**
- * Audio Provider 内部接口
+ * Provider ASR 子能力
  *
- * 每个平台一个实现，负责厂商协议转换、连接、响应解析与错误映射。
- * 使用工厂函数 + 闭包实现，不使用抽象基类。
+ * 仅具备语音识别能力的平台（如 Whisper）只实现本接口。`transcribeStream` 可选：
+ * 未实现时由 Framework 做有限降级（完整音频→完整识别后产出最终结果；持续音频输入→拒绝）。
  */
-export interface AudioProvider {
+export interface AudioTranscriptionProvider {
   /** 完整语音识别 */
   transcribe: (request: ProviderTranscriptionRequest) => Promise<HaiResult<TranscriptionResult>>
-  /** 流式语音识别 */
-  transcribeStream: (request: ProviderTranscriptionStreamRequest) => AsyncIterable<TranscriptionEvent>
+  /** 原生流式语音识别（未实现时由 Framework 降级） */
+  transcribeStream?: (request: ProviderTranscriptionStreamRequest) => AsyncIterable<TranscriptionEvent>
+}
+
+/**
+ * Provider TTS 子能力
+ *
+ * 仅具备语音合成能力的平台（如 IndexTTS）只实现本接口。`synthesizeStream` 可选：
+ * 未实现时由 Framework 做有限降级（每段文本完整合成后按段产出音频）。
+ */
+export interface AudioSynthesisProvider {
   /** 完整语音合成 */
   synthesize: (request: ProviderSynthesisRequest) => Promise<HaiResult<SynthesisResult>>
-  /** 流式语音合成 */
-  synthesizeStream: (request: ProviderSynthesisStreamRequest) => AsyncIterable<Uint8Array>
+  /** 原生流式语音合成（未实现时由 Framework 降级） */
+  synthesizeStream?: (request: ProviderSynthesisStreamRequest) => AsyncIterable<Uint8Array>
   /**
    * 解析该次合成请求的最终输出音频元数据（格式 / 采样率 / 声道）
    *
    * 与 `synthesizeStream` 采用一致的默认规则，供上层在 `segment_started` 标注真实格式。
    */
   resolveSynthesisOutput: (request: { format?: AudioFormat, sampleRate?: number }) => SynthesisOutputMeta
-  /** 平台实时能力声明 */
-  readonly capabilities: AudioModelCapabilities
+}
+
+/**
+ * Audio Provider 内部接口
+ *
+ * 每个平台一个实现，负责厂商协议适配、连接、响应解析与错误映射。Provider 只描述「如何调用某种协议」，
+ * 不描述服务部署在哪里。使用工厂函数 + 闭包实现，不使用抽象基类。ASR / TTS 子能力按平台按需提供，
+ * 不需要为不支持的操作实现空占位。
+ */
+export interface AudioProvider {
+  /** 可选 ASR 子能力 */
+  transcription?: AudioTranscriptionProvider
+  /** 可选 TTS 子能力 */
+  synthesis?: AudioSynthesisProvider
+  /**
+   * 获取指定模型的能力声明
+   *
+   * 同一个 Provider 下的不同模型可以返回不同 Capability。
+   */
+  getCapabilities: (model: ResolvedAudioModel) => AudioModelCapabilities
 }
 
 /** 句子结束边界（中英标点 + 换行） */
@@ -177,6 +238,79 @@ export function fromBase64(base64: string): Uint8Array {
 /** 顺序拼接多个二进制分片 */
 export function concatChunks(chunks: Uint8Array[]): Uint8Array {
   return new Uint8Array(Buffer.concat(chunks.map(c => Buffer.from(c))))
+}
+
+// ─── 音频上传辅助 ───
+
+/** 音频格式 → 上传文件扩展名（文件型服务依据扩展名识别容器） */
+const AUDIO_UPLOAD_EXT: Record<AudioFormat, string> = { pcm16: 'wav', wav: 'wav', mp3: 'mp3', opus: 'ogg' }
+
+/** 音频格式 → MIME 类型 */
+const AUDIO_UPLOAD_MIME: Record<AudioFormat, string> = { pcm16: 'audio/wav', wav: 'audio/wav', mp3: 'audio/mpeg', opus: 'audio/opus' }
+
+/** 可上传的音频分片（真实字节 + 与内容一致的文件名 / MIME） */
+export interface AudioUploadPart {
+  /** 上传字节（裸 pcm16 已封装为 WAV） */
+  data: Uint8Array
+  /** 与真实内容一致的文件名（扩展名不伪装） */
+  filename: string
+  /** 与真实内容一致的 MIME 类型 */
+  mimeType: string
+}
+
+/**
+ * 将音频内容标准化为可上传的字节 + 文件名 + MIME
+ *
+ * 裸 `pcm16` 没有容器头，文件型 Model Service 无法从字节推断采样率 / 声道，故先封装为 WAV；
+ * 其余格式按真实内容生成扩展名与 MIME，避免「扩展名是 WAV、内容是 MP3」导致模型加载异常。
+ *
+ * @internal
+ */
+export function toAudioUploadPart(audio: AudioContent, baseName = 'audio'): AudioUploadPart {
+  if (audio.format === 'pcm16') {
+    const wav = wrapPcm16ToWav(audio.data, audio.sampleRate ?? 16000, audio.channels ?? 1)
+    return { data: wav, filename: `${baseName}.wav`, mimeType: 'audio/wav' }
+  }
+  return { data: audio.data, filename: `${baseName}.${AUDIO_UPLOAD_EXT[audio.format]}`, mimeType: AUDIO_UPLOAD_MIME[audio.format] }
+}
+
+/**
+ * 将上传分片构造为 multipart Blob
+ *
+ * 复制为 ArrayBuffer 承载的字节，满足全局 `Blob` / `FormData` 的 `BlobPart` 类型约束。
+ *
+ * @internal
+ */
+export function toAudioBlob(part: AudioUploadPart): Blob {
+  return new Blob([new Uint8Array(part.data)], { type: part.mimeType })
+}
+
+/**
+ * 将 16bit 小端裸 PCM 封装为标准 WAV 容器（44 字节头 + 数据）
+ *
+ * @internal
+ */
+export function wrapPcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: 1 | 2 = 1): Uint8Array {
+  const bitsPerSample = 16
+  const byteRate = (sampleRate * channels * bitsPerSample) / 8
+  const blockAlign = (channels * bitsPerSample) / 8
+  const dataSize = pcm.length
+  const buffer = Buffer.alloc(44 + dataSize)
+  buffer.write('RIFF', 0)
+  buffer.writeUInt32LE(36 + dataSize, 4)
+  buffer.write('WAVE', 8)
+  buffer.write('fmt ', 12)
+  buffer.writeUInt32LE(16, 16)
+  buffer.writeUInt16LE(1, 20)
+  buffer.writeUInt16LE(channels, 22)
+  buffer.writeUInt32LE(sampleRate, 24)
+  buffer.writeUInt32LE(byteRate, 28)
+  buffer.writeUInt16LE(blockAlign, 32)
+  buffer.writeUInt16LE(bitsPerSample, 34)
+  buffer.write('data', 36)
+  buffer.writeUInt32LE(dataSize, 40)
+  Buffer.from(pcm).copy(buffer, 44)
+  return new Uint8Array(buffer)
 }
 
 /** 提取错误对象的简要消息（不含敏感请求体 / 凭据） */
@@ -233,6 +367,20 @@ export function mapStreamError(error: unknown, signal?: AbortSignal): HaiError {
  */
 export function toAudioErrorResult<T>(error: unknown, signal?: AbortSignal): HaiResult<T> {
   return { success: false, error: mapStreamError(error, signal) }
+}
+
+// ─── HTTP 辅助 ───
+
+/** 组合取消信号与超时（不泄露原信号） */
+export function combineSignal(signal: AbortSignal | undefined, timeout: number): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeout)
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+}
+
+/** 读取 HTTP 错误响应摘要（截断，避免泄露过长响应体） */
+export async function describeHttpError(response: Response): Promise<string> {
+  const text = await response.text().catch(() => '')
+  return `HTTP ${response.status} ${text.slice(0, 200)}`.trim()
 }
 
 // ─── Node WebSocket 连接辅助 ───

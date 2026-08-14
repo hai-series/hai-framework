@@ -413,7 +413,11 @@ export function createDoubaoAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, resolveSynthesisOutput, capabilities: DOUBAO_CAPABILITIES }
+  return {
+    transcription: { transcribe, transcribeStream },
+    synthesis: { synthesize, synthesizeStream, resolveSynthesisOutput },
+    getCapabilities: () => DOUBAO_CAPABILITIES,
+  }
 }
 
 /** 豆包未指定格式时默认 pcm16；pcm16 时补默认采样率 24000。 */

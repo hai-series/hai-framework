@@ -236,7 +236,11 @@ export function createQwenAudioProvider(): AudioProvider {
     }
   }
 
-  return { transcribe, transcribeStream, synthesize, synthesizeStream, resolveSynthesisOutput, capabilities: QWEN_CAPABILITIES }
+  return {
+    transcription: { transcribe, transcribeStream },
+    synthesis: { synthesize, synthesizeStream, resolveSynthesisOutput },
+    getCapabilities: () => QWEN_CAPABILITIES,
+  }
 }
 
 /** Qwen 未指定格式时默认 pcm16；pcm16 时补默认采样率 24000。 */

@@ -5,9 +5,9 @@
  * @module ai-config
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import process from 'node:process'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { ChunkOptionsSchema, CleanOptionsSchema } from '@h-ai/datapipe'
 import { z } from 'zod'
 import { aiM } from './ai-i18n.js'
@@ -679,17 +679,39 @@ export type A2AConfig = z.infer<typeof A2AConfigSchema>
 /**
  * 语音平台枚举
  *
- * 决定 `ai.audio` 底层调用哪个厂商（对使用方透明，公共请求/响应形状保持一致）：
+ * 决定 `ai.audio` 底层调用哪个厂商 / 协议（对使用方透明，公共请求/响应形状保持一致）：
  *
  * - `openai` — OpenAI Audio API（transcriptions / speech）
  * - `mimo` — 小米 MiMo（Chat Completions 风格 ASR / TTS）
  * - `qwen` — 阿里云百炼 Qwen Realtime（DashScope WebSocket ASR / TTS）
  * - `doubao` — 火山引擎豆包语音（二进制 WebSocket ASR / TTS）
+ * - `whisper` — hai-framework Whisper Service 协议（HTTP 文件识别，可自托管）
+ * - `indextts` — hai-framework IndexTTS Service 协议（HTTP 合成，可自托管）
+ *
+ * 平台仅表示「用哪种协议调用」，不表示服务部署在哪里；`whisper` / `indextts` 需显式配置 `baseUrl`。
  */
-export const AudioProviderSchema = z.enum(['openai', 'mimo', 'qwen', 'doubao'])
+export const AudioProviderSchema = z.enum(['openai', 'mimo', 'qwen', 'doubao', 'whisper', 'indextts'])
 
 /** 语音平台类型 */
 export type AudioProviderName = z.infer<typeof AudioProviderSchema>
+
+/** 单个语音操作类型 */
+export const AudioOperationSchema = z.enum(['transcribe', 'synthesize'])
+
+/** 语音操作类型 */
+export type AudioOperation = z.infer<typeof AudioOperationSchema>
+
+/**
+ * 语音模型允许的操作列表
+ *
+ * 至少一项，且不允许重复。
+ */
+export const AudioOperationsSchema = z
+  .array(AudioOperationSchema)
+  .min(1)
+  .refine(operations => new Set(operations).size === operations.length, {
+    message: 'audio model operations must be unique',
+  })
 
 /**
  * 语音模型条目 Schema
@@ -709,14 +731,10 @@ export const AudioModelEntrySchema = z.object({
   /** 厂商模型名（传给厂商 API 的实际模型名） */
   model: z.string(),
   /** 模型允许执行的操作；解析模型时会在调用厂商前校验 */
-  operations: z.union([
-    z.tuple([z.literal('transcribe')]),
-    z.tuple([z.literal('synthesize')]),
-    z.tuple([z.literal('transcribe'), z.literal('synthesize')]),
-  ]),
+  operations: AudioOperationsSchema,
   /** API Key 覆盖（未提供时可按 Audio 配置继承 LLM 密钥，最后回退对应平台环境变量） */
   apiKey: OptionalSecretSchema,
-  /** HTTP / WebSocket 端点覆盖（未提供时使用平台默认端点） */
+  /** HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置） */
   baseUrl: z.string().optional(),
   /** 火山引擎 App Key（`X-Api-App-Key`，旧版控制台 ASR 需要） */
   appKey: OptionalSecretSchema,
@@ -799,13 +817,21 @@ export interface ResolvedAudioModel {
   timeout: number
 }
 
-/** 各平台默认端点 */
-const AUDIO_PROVIDER_DEFAULT_BASE_URL: Record<AudioProviderName, string> = {
+/**
+ * 各平台默认端点
+ *
+ * 仅有 canonical 服务地址的云平台定义默认值；`whisper` / `indextts` 为可自托管协议，
+ * 没有固定服务端，必须由模型条目显式配置 `baseUrl`。
+ */
+const AUDIO_PROVIDER_DEFAULT_BASE_URL: Partial<Record<AudioProviderName, string>> = {
   openai: 'https://api.openai.com/v1',
   mimo: 'https://api.xiaomimimo.com/v1',
   qwen: 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime',
   doubao: 'wss://openspeech.bytedance.com',
 }
+
+/** 无需凭据即可调用的自托管平台（凭据由 Endpoint 决定，未配置时无认证） */
+const AUDIO_PROVIDER_CREDENTIAL_OPTIONAL = new Set<AudioProviderName>(['whisper', 'indextts'])
 
 /** 火山引擎默认资源 ID（按操作类型区分 ASR / TTS） */
 function doubaoDefaultResourceId(operation: 'transcribe' | 'synthesize'): string {
@@ -823,6 +849,10 @@ function audioProviderEnvApiKey(provider: AudioProviderName): string | undefined
       return process.env.HAI_AI_AUDIO_QWEN_API_KEY ?? process.env.DASHSCOPE_API_KEY
     case 'doubao':
       return process.env.HAI_AI_AUDIO_DOUBAO_API_KEY ?? process.env.VOLC_API_KEY
+    case 'whisper':
+      return process.env.HAI_AI_AUDIO_WHISPER_API_KEY
+    case 'indextts':
+      return process.env.HAI_AI_AUDIO_INDEXTTS_API_KEY
   }
 }
 
@@ -862,22 +892,43 @@ export function resolveAudioModel(
   const apiKey = entry.apiKey
     ?? (audioConfig.inheritLlmApiKey ? llmApiKey : undefined)
     ?? audioProviderEnvApiKey(entry.provider)
-  const hasDoubaoLegacy = Boolean(entry.appKey && entry.accessKey)
-  if (!apiKey && !(entry.provider === 'doubao' && hasDoubaoLegacy))
-    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: entry.provider } }))
+
+  // 端点：模型条目优先，其次平台 canonical 默认；无 canonical 的自托管平台必须显式配置
+  const baseUrl = entry.baseUrl ?? AUDIO_PROVIDER_DEFAULT_BASE_URL[entry.provider]
+  if (!baseUrl)
+    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingBaseUrl', { params: { provider: entry.provider } }))
 
   return ok({
     id: entry.id,
     provider: entry.provider,
     model: entry.model,
     apiKey,
-    baseUrl: entry.baseUrl ?? AUDIO_PROVIDER_DEFAULT_BASE_URL[entry.provider],
+    baseUrl,
     appKey: entry.appKey ?? process.env.VOLC_APP_KEY,
     accessKey: entry.accessKey ?? process.env.VOLC_ACCESS_KEY,
     resourceId: entry.resourceId ?? (entry.provider === 'doubao' ? doubaoDefaultResourceId(operation) : ''),
     workspaceId: entry.workspaceId,
     timeout: entry.timeout ?? 60000,
   })
+}
+
+/**
+ * 校验已解析模型是否具备该平台协议所需的凭据
+ *
+ * 凭据是否必需由平台协议决定：自托管的 `whisper` / `indextts` 可无凭据；豆包允许 API Key
+ * 或 App/Access Key 组合；其余云平台必须提供 API Key。仅在真正发起识别 / 合成前调用，
+ * 能力查询（`getCapabilities`）不需要凭据。
+ *
+ * @param model - 已解析模型
+ * @returns 缺少必需凭据时返回 `CONFIGURATION_ERROR`，否则返回 `null`
+ */
+export function ensureAudioCredential(model: ResolvedAudioModel): HaiError | null {
+  if (AUDIO_PROVIDER_CREDENTIAL_OPTIONAL.has(model.provider))
+    return null
+  const hasDoubaoLegacy = model.provider === 'doubao' && Boolean(model.appKey && model.accessKey)
+  if (model.apiKey || hasDoubaoLegacy)
+    return null
+  return core.error.buildHaiErrorInst(HaiAIError.CONFIGURATION_ERROR, aiM('ai_audioMissingApiKey', { params: { provider: model.provider } }))
 }
 
 // ─── Image 配置 Schema ───

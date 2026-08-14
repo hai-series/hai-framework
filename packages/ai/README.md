@@ -213,6 +213,8 @@ if (setup.success) {
 
 先在 `ai.init()` 中注册语音模型并映射默认识别/合成模型。凭据默认回退到平台环境变量；只有 LLM 与语音模型确认使用同一凭据时，才显式启用 `inheritLlmApiKey`：
 
+平台（`provider`）表示调用协议而非部署位置：`openai` / `mimo` / `qwen` / `doubao` 为云服务；`whisper`（ASR）/ `indextts`（TTS）为可自托管协议，无 canonical 端点，必须显式配置 `baseUrl`，同一协议可切换多个 Endpoint（云 / 内网 / 本地）而不改业务代码。云平台缺少凭据返回 `CONFIGURATION_ERROR`；自托管平台可无凭据（配置 `apiKey` 后按 `Authorization: Bearer` 发送）。
+
 ```ts
 await ai.init({
   llm: {
@@ -223,17 +225,41 @@ await ai.init({
     models: [
       { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] },
       { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] },
+      // 自托管：whisper / indextts 必须显式配置 baseUrl
+      { id: 'whisper', provider: 'whisper', model: 'faster-whisper-large-v3', operations: ['transcribe'], baseUrl: 'http://127.0.0.1:8101/v1' },
+      { id: 'indextts', provider: 'indextts', model: 'indextts-2.5', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8102/v1' },
     ],
     transcribeModel: 'asr',
     synthesizeModel: 'tts',
   },
 })
 
-// 完整识别（可选热词提示提升专有名词识别率）
-const result = await ai.audio.transcribe({ audio: { data: wavBytes, format: 'wav' }, language: 'zh', contextHints: ['专有名词'] })
+// 完整识别（可选热词、时间戳粒度与 VAD；strictCapabilities 要求模型真实支持所请求能力）
+const result = await ai.audio.transcribe({
+  audio: { data: wavBytes, format: 'wav' },
+  language: 'zh',
+  contextHints: ['专有名词'],
+  timestampGranularities: ['segment', 'word'],
+  vad: true,
+  model: 'whisper',
+})
 if (result.success) {
   const text = result.data.text
+  const language = result.data.language // 实际检测语言
+  const words = result.data.segments?.[0]?.words // 词级时间轴（毫秒整数）
 }
+
+// 说话人 / 风格参考合成（IndexTTS）：speakerReference 表达“谁在说”，styleReference 表达“怎么说”
+const cloned = await ai.audio.synthesize({
+  text: '我们下午三点出发。',
+  language: 'zh',
+  model: 'indextts',
+  speakerReference: { audio: speakerWav, language: 'ja' },
+  styleReference: { audio: styleWav },
+  styleStrength: 0.8,
+  targetDurationMs: 3280, // 目标时长（与 speed 互斥），metadata.durationMatched 反馈是否达标
+  durationToleranceMs: 120,
+})
 
 // 实时识别（持续音频输入 → 领域事件流：speech_started / transcript / speech_stopped）
 for await (const event of ai.audio.transcribeStream({
@@ -289,6 +315,8 @@ return playable.data
 取消/超时/连接错误统一为领域错误：`AbortSignal` 触发 → `AUDIO_CANCELLED`（超时 → `AUDIO_TIMEOUT`），连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`。实时连接时长受 `audio.maxStreamDurationMs`（默认 5 分钟）限制。
 
 浏览器 / 移动端通过 `@h-ai/serv` 暴露的统一语音 WebSocket 入口访问，`@h-ai/ai/client` 提供与 Node 端一致的 `audio.*` API（传输细节内部隐藏）。浏览器客户端严格区分正常结束、取消（`AUDIO_CANCELLED`）与异常断连（`AUDIO_CONNECTION_FAILED`）：取消或在 `end` 前断连会抛出对应领域错误码，`synthesize` 不会把未完成的部分音频当作成功结果返回。
+
+> 自托管模型服务（faster-whisper / IndexTTS / Qwen3-4B 的 CPU/GPU Docker 镜像、权重下载与离线打包）见 [`models/`](./models/README.md)。镜像与权重下载优先使用 ModelScope（中国网络友好），自动回退 HuggingFace 镜像。
 
 ### 文生图（Image）
 
