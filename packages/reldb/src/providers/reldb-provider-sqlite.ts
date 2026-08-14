@@ -7,7 +7,6 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import type Database from 'better-sqlite3'
 import type { ReldbConfig } from '../reldb-config.js'
 import type {
   DdlOperations,
@@ -19,8 +18,7 @@ import type {
   ReldbProvider,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
-
-import { createRequire } from 'node:module'
+import type { SqliteEngine } from './sqlite/reldb-sqlite-engine.js'
 
 import { core, err, ok } from '@h-ai/core'
 import { reldbM } from '../reldb-i18n.js'
@@ -35,8 +33,7 @@ import {
 } from './reldb-ddl-builder.js'
 import { createBaseCrudManager, createBaseDdlOps, createBaseDmlOps, createBaseTxManager, queryPageAsync } from './reldb-provider-base.js'
 import { createTxHandle } from './reldb-tx-assembler.js'
-
-const require = createRequire(import.meta.url)
+import { createSyncSqliteEngine, createWorkerSqliteEngine } from './sqlite/reldb-sqlite-engine.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'sqlite' })
 
@@ -48,8 +45,8 @@ const logger = core.logger.child({ module: 'reldb', scope: 'sqlite' })
  * @returns SQLite Provider
  */
 export function createSqliteProvider(): ReldbProvider {
-  /** 数据库实例 */
-  let database: Database.Database | null = null
+  /** SQLite 执行引擎（同步或 worker） */
+  let engine: SqliteEngine | null = null
   let currentConfig: ReldbConfig | null = null
   /** 串行化 SQLite 事务，避免并发 BEGIN 导致 "cannot start a transaction within a transaction" */
   let txChain: Promise<void> = Promise.resolve()
@@ -95,7 +92,7 @@ export function createSqliteProvider(): ReldbProvider {
   // ─── 操作上下文 ───
 
   const ctx: ReldbOpsContext = {
-    isConnected: () => database !== null && database.open,
+    isConnected: () => engine !== null && engine.isOpen(),
     logger,
     operationLog: () => currentConfig?.operationLog,
   }
@@ -148,39 +145,39 @@ export function createSqliteProvider(): ReldbProvider {
     async createTable(name, columns, ifNotExists = true) {
       const quotedTable = quoteIdentifier(name)
       const sql = buildDefaultCreateTableSql(sqliteBuildColumnSql, quotedTable, columns, ifNotExists)
-      database!.exec(sql)
+      await engine!.exec(sql)
       return ok(undefined)
     },
     async dropTable(name, ifExists) {
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      database!.exec(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
+      await engine!.exec(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
       return ok(undefined)
     },
     async addColumn(table, column, def) {
       const colSql = sqliteBuildColumnSql(column, def)
-      database!.exec(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
+      await engine!.exec(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
       return ok(undefined)
     },
     async dropColumn(table, column) {
-      database!.exec(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
+      await engine!.exec(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
       return ok(undefined)
     },
     async renameTable(oldName, newName) {
-      database!.exec(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
+      await engine!.exec(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
       return ok(undefined)
     },
     async createIndex(table, index, def) {
       const sql = buildDefaultCreateIndexSql(quoteIdentifier, quoteIdentifier(table), quoteIdentifier(index), def)
-      database!.exec(sql)
+      await engine!.exec(sql)
       return ok(undefined)
     },
     async dropIndex(index, ifExists = true) {
       const sql = buildDefaultDropIndexSql(quoteIdentifier, index, ifExists)
-      database!.exec(sql)
+      await engine!.exec(sql)
       return ok(undefined)
     },
     async raw(sql) {
-      database!.exec(sql)
+      await engine!.exec(sql)
       return ok(undefined)
     },
   }
@@ -189,33 +186,22 @@ export function createSqliteProvider(): ReldbProvider {
 
   const rawDml: DmlOperations = {
     async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
-      const stmt = database!.prepare(sql)
-      const rows = params ? stmt.all(...params) : stmt.all()
+      const rows = await engine!.all(sql, params)
       return ok(rows as T[])
     },
     async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
-      const stmt = database!.prepare(sql)
-      const row = params ? stmt.get(...params) : stmt.get()
+      const row = await engine!.get(sql, params)
       return ok((row as T) ?? null)
     },
     async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-      const stmt = database!.prepare(sql)
-      const result = params ? stmt.run(...params) : stmt.run()
-      return ok({ changes: result.changes, lastInsertRowid: result.lastInsertRowid })
+      const result = await engine!.run(sql, params)
+      return ok(result)
     },
     async batch(statements) {
+      // 与显式事务串行，避免并发 BEGIN 导致 "cannot start a transaction within a transaction"。
       const releaseTxLock = await acquireTxLock()
       try {
-        const db = database!
-        const transaction = db.transaction(() => {
-          for (const { sql: s, params } of statements) {
-            const stmt = db.prepare(s)
-            if (params)
-              stmt.run(...params)
-            else stmt.run()
-          }
-        })
-        transaction()
+        await engine!.batch(statements)
         return ok(undefined)
       }
       catch (error) {
@@ -227,10 +213,7 @@ export function createSqliteProvider(): ReldbProvider {
     },
     async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
       const result = await queryPageAsync<T>(
-        async (sqlStr, params) => {
-          const stmt = database!.prepare(sqlStr)
-          return params ? stmt.all(...params) : stmt.all()
-        },
+        (sqlStr, params) => engine!.all(sqlStr, params),
         options,
       )
       return ok(result)
@@ -239,37 +222,28 @@ export function createSqliteProvider(): ReldbProvider {
 
   // ─── 事务 ───
 
-  /** 创建事务连接上的 DML 操作（无守卫，由 createTxHandle 统一守卫） */
-  function createSqliteTxDmlOps(db: Database.Database): DmlOperations {
+  /** 创建事务连接上的 DML 操作（无守卫，由 createTxHandle 统一守卫）。事务内批量不再包裹嵌套事务。 */
+  function createSqliteTxDmlOps(txEngine: SqliteEngine): DmlOperations {
     return {
       async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
-        const stmt = db.prepare(sql)
-        return ok((params ? stmt.all(...params) : stmt.all()) as T[])
+        return ok((await txEngine.all(sql, params)) as T[])
       },
       async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
-        const stmt = db.prepare(sql)
-        return ok(((params ? stmt.get(...params) : stmt.get()) as T) ?? null)
+        return ok(((await txEngine.get(sql, params)) as T) ?? null)
       },
       async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-        const stmt = db.prepare(sql)
-        const result = params ? stmt.run(...params) : stmt.run()
-        return ok({ changes: result.changes, lastInsertRowid: result.lastInsertRowid })
+        return ok(await txEngine.run(sql, params))
       },
       async batch(statements) {
+        // 已处于显式事务中，逐条执行即可，不再开启嵌套事务。
         for (const { sql: s, params } of statements) {
-          const stmt = db.prepare(s)
-          if (params)
-            stmt.run(...params)
-          else stmt.run()
+          await txEngine.run(s, params)
         }
         return ok(undefined)
       },
       async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
         const result = await queryPageAsync<T>(
-          async (sqlStr, params) => {
-            const stmt = db.prepare(sqlStr)
-            return params ? stmt.all(...params) : stmt.all()
-          },
+          (sqlStr, params) => txEngine.all(sqlStr, params),
           options,
         )
         return ok(result)
@@ -278,7 +252,7 @@ export function createSqliteProvider(): ReldbProvider {
   }
 
   async function beginTx(): Promise<HaiResult<DmlWithTxOperations>> {
-    const db = database!
+    const txEngine = engine!
     let released = false
     const releaseTxLock = await acquireTxLock()
 
@@ -290,18 +264,18 @@ export function createSqliteProvider(): ReldbProvider {
     }
 
     try {
-      db.exec('BEGIN TRANSACTION')
+      await txEngine.exec('BEGIN TRANSACTION')
     }
     catch (error) {
       finishTransaction()
       return err(HaiReldbError.TRANSACTION_FAILED, sqliteTxErrorMessage(String(error)), error)
     }
 
-    const txDmlOps = createSqliteTxDmlOps(db)
+    const txDmlOps = createSqliteTxDmlOps(txEngine)
     const guardedTxDmlOps = createBaseDmlOps(ctx, txDmlOps)
     return ok(createTxHandle(guardedTxDmlOps, {
-      commit: async () => { db.exec('COMMIT') },
-      rollback: async () => { db.exec('ROLLBACK') },
+      commit: async () => { await txEngine.exec('COMMIT') },
+      rollback: async () => { await txEngine.exec('ROLLBACK') },
       release: () => finishTransaction(),
       errorMessage: sqliteTxErrorMessage,
     }))
@@ -322,24 +296,26 @@ export function createSqliteProvider(): ReldbProvider {
       }
 
       try {
-        const Database = require('better-sqlite3')
-
-        const sqliteOptions: { walMode: boolean, readonly: boolean } = {
+        const sqliteOptions = {
           walMode: true,
           readonly: false,
+          executor: 'sync' as 'sync' | 'worker',
+          workerConnectTimeoutMs: 10_000,
           ...(config.sqlite ?? {}),
         }
-        database = new Database(config.database, {
+        const engineOptions = {
+          database: config.database,
           readonly: sqliteOptions.readonly ?? false,
-        }) as Database.Database
-
-        // 启用 WAL 模式（提高并发性能）
-        if (sqliteOptions.walMode !== false) {
-          database.pragma('journal_mode = WAL')
+          walMode: sqliteOptions.walMode !== false,
         }
 
+        // worker 执行方式把同步查询移出主线程事件循环；sync 为默认保持历史行为。
+        engine = sqliteOptions.executor === 'worker'
+          ? await createWorkerSqliteEngine(engineOptions, sqliteOptions.workerConnectTimeoutMs ?? 10_000)
+          : createSyncSqliteEngine(engineOptions)
+
         currentConfig = config
-        logger.info('Connected to SQLite', { database: config.database })
+        logger.info('Connected to SQLite', { database: config.database, executor: sqliteOptions.executor })
         return ok(undefined)
       }
       catch (error) {
@@ -348,7 +324,7 @@ export function createSqliteProvider(): ReldbProvider {
     },
 
     async close(): Promise<HaiResult<void>> {
-      if (database) {
+      if (engine) {
         try {
           // 等待当前事务链清空，避免在事务进行中强制关闭连接导致
           // "database is locked" 或丢失的事务拒绝
@@ -358,15 +334,15 @@ export function createSqliteProvider(): ReldbProvider {
           catch {
             // 事务已失败的情况下忽略其拒绝，关闭仍需进行
           }
-          database.close()
+          await engine.close()
         }
         catch (error) {
           currentConfig = null
-          database = null
+          engine = null
           return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
         }
         currentConfig = null
-        database = null
+        engine = null
         logger.info('Disconnected from SQLite')
       }
       return ok(undefined)

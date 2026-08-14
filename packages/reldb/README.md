@@ -74,6 +74,24 @@ await reldb.init({
 })
 ```
 
+### SQLite 执行方式（worker 异步）
+
+better-sqlite3 是同步驱动，查询会阻塞 Node 主线程事件循环。WAL 只能改善数据库锁并发，无法避免同步调用占用主线程。需要卸载这一阻塞时，可把 SQLite 切到专用 worker 线程执行（单连接，opt-in，默认 `sync`）：
+
+```ts
+await reldb.init({
+  type: 'sqlite',
+  database: './data.db',
+  sqlite: {
+    executor: 'worker', // 'sync'（默认）| 'worker'
+    walMode: true, // 默认 true
+    workerConnectTimeoutMs: 10000, // worker 打开连接超时，默认 10000
+  },
+})
+```
+
+worker 模式下查询、写入与事务均在 worker 线程串行执行；公共 API 与返回值与同步模式完全一致。
+
 ### 操作日志
 
 可在数据库配置中通过 `operationLog` 开启 SQL 操作日志。日志在 reldb provider-base 的 DML 操作层统一输出，不在 `reldb-main.ts` 或各 raw provider 中重复包装。

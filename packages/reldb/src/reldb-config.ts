@@ -99,8 +99,9 @@ export type SslConfig = z.infer<typeof SslConfigSchema>
  * @example
  * ```ts
  * sqlite: {
- *     walMode: true,   // 启用 WAL 模式，提高并发性能
- *     readonly: false  // 只读模式
+ *     walMode: true,        // 启用 WAL 模式，提高并发性能
+ *     readonly: false,      // 只读模式
+ *     executor: 'worker'    // 用 worker 线程执行，避免同步查询阻塞主线程事件循环
  * }
  * ```
  */
@@ -109,6 +110,16 @@ export const SqliteOptionsSchema = z.object({
   walMode: z.boolean().default(true),
   /** 是否只读模式（默认 false） */
   readonly: z.boolean().default(false),
+  /**
+   * 执行方式（默认 sync）。
+   *
+   * - `sync`：主线程直接执行 better-sqlite3（同步阻塞主线程事件循环）。
+   * - `worker`：在专用 worker 线程持有唯一连接执行，把阻塞移出主线程。
+   *   注意 WAL 只改善数据库锁并发，无法避免 better-sqlite3 同步调用占用调用线程。
+   */
+  executor: z.enum(['sync', 'worker']).default('sync'),
+  /** worker 执行方式下等待连接打开的超时（毫秒，默认 10000） */
+  workerConnectTimeoutMs: z.number().int().positive().default(10_000),
 })
 
 /**
