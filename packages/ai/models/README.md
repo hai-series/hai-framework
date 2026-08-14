@@ -2,7 +2,7 @@
 
 将开源模型部署为 CPU/GPU Model Service，通过统一 Provider 机制接入 hai-framework，支持完全离线运行。
 
-镜像与权重下载**优先使用 ModelScope**（中国网络友好），失败自动回退 HuggingFace（默认 `hf-mirror.com` 镜像）；PyPI 依赖默认使用清华镜像。
+镜像与权重下载**优先使用 ModelScope**，失败自动回退 HuggingFace（默认 `hf-mirror.com` 镜像）；PyPI 依赖默认使用清华镜像。
 
 > 本目录仅在开发/部署阶段使用，不进入 npm 发布物（`package.json` 的 `files` 仅含 `dist`）。
 

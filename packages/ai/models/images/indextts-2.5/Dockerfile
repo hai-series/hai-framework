@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# 默认使用清华 PyPI 镜像（中国网络友好），可用 --build-arg PIP_INDEX_URL=... 覆盖
+# 默认使用清华 PyPI 镜像，可用 --build-arg PIP_INDEX_URL=... 覆盖
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
 # -------------------------

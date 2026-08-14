@@ -1,6 +1,6 @@
 """faster-whisper-large-v3 权重准备脚本。
 
-优先从 ModelScope（中国网络友好）下载，失败回退 HuggingFace（默认使用 hf-mirror.com 镜像）。
+优先从 ModelScope下载，失败回退 HuggingFace（默认使用 hf-mirror.com 镜像）。
 输出目录由 `HAI_MODEL_OUTPUT_DIR` 指定（build.mjs prepare 注入），默认 `models/.cache/<name>`。
 """
 

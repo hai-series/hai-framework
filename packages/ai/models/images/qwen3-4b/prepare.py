@@ -1,6 +1,6 @@
 """Qwen3-4B 权重准备脚本。
 
-优先从 ModelScope（中国网络友好，Qwen 官方在 ModelScope 提供同名仓库）下载，
+优先从 ModelScope（Qwen 官方在 ModelScope 提供同名仓库）下载，
 失败回退 HuggingFace（默认使用 hf-mirror.com 镜像）。
 """
 

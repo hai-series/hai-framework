@@ -1,6 +1,6 @@
 """IndexTTS-2.5 权重准备脚本。
 
-优先从 ModelScope（中国网络友好）下载，失败回退 HuggingFace（默认使用 hf-mirror.com 镜像）。
+优先从 ModelScope下载，失败回退 HuggingFace（默认使用 hf-mirror.com 镜像）。
 若 IndexTTS-2.5 尚未在 ModelScope 发布，可用 `HAI_MODELSCOPE_ID` 指向实际可用的 IndexTTS 仓库。
 """
 
