@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   readStoredValue,
+  registerClipboardHostWriter,
   writeStoredValue,
   writeTextToClipboard,
 } from '../src/lib/internal/browser-safety.js'
@@ -17,7 +18,7 @@ const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThi
 const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
 
 function restoreProperty(
-  propertyName: 'localStorage' | 'navigator',
+  propertyName: 'localStorage' | 'navigator' | 'document',
   descriptor: PropertyDescriptor | undefined,
 ): void {
   if (descriptor) {
@@ -31,6 +32,8 @@ function restoreProperty(
 afterEach(() => {
   restoreProperty('localStorage', originalLocalStorageDescriptor)
   restoreProperty('navigator', originalNavigatorDescriptor)
+  restoreProperty('document', undefined)
+  registerClipboardHostWriter(null)
   vi.restoreAllMocks()
 })
 
@@ -149,6 +152,70 @@ describe('browser-safety helpers', () => {
     })
 
     await expect(writeTextToClipboard('demo')).resolves.toBe(false)
+
+    Reflect.deleteProperty(globalThis, 'document')
+  })
+
+  it('execCommand 失败时应由宿主写入器兜底', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('blocked'))
+    const hostWriter = vi.fn().mockResolvedValue(true)
+
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        clipboard: {
+          writeText,
+        },
+      },
+    })
+
+    const mockBody = { appendChild: vi.fn(), removeChild: vi.fn() }
+    const mockTextarea = { value: '', style: { cssText: '' }, select: vi.fn() }
+
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        createElement: vi.fn(() => ({ ...mockTextarea })),
+        body: mockBody,
+        execCommand: vi.fn(() => false),
+      },
+    })
+    registerClipboardHostWriter(hostWriter)
+
+    await expect(writeTextToClipboard('demo')).resolves.toBe(true)
+    expect(hostWriter).toHaveBeenCalledWith('demo')
+
+    Reflect.deleteProperty(globalThis, 'document')
+  })
+
+  it('全部降级路径失败时应返回 false', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('blocked'))
+    const hostWriter = vi.fn().mockResolvedValue(false)
+
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        clipboard: {
+          writeText,
+        },
+      },
+    })
+
+    const mockBody = { appendChild: vi.fn(), removeChild: vi.fn() }
+    const mockTextarea = { value: '', style: { cssText: '' }, select: vi.fn() }
+
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        createElement: vi.fn(() => ({ ...mockTextarea })),
+        body: mockBody,
+        execCommand: vi.fn(() => false),
+      },
+    })
+    registerClipboardHostWriter(hostWriter)
+
+    await expect(writeTextToClipboard('demo')).resolves.toBe(false)
+    expect(hostWriter).toHaveBeenCalledWith('demo')
 
     Reflect.deleteProperty(globalThis, 'document')
   })
