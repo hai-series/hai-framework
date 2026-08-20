@@ -9,6 +9,12 @@ pnpm --filter {{api.servicePackageName}} dev
 pnpm --filter {{api.servicePackageName}} test
 ```
 
+## 容器运行
+
+- 根目录运行 `pnpm docker:build` / `pnpm podman:build`；镜像监听 `0.0.0.0:3000`。
+- 配置默认打包自本目录 `config/`，可在运行时只读挂载到 `/app/config`，敏感值通过环境变量注入。
+- `data/` 可作为 SQLite/本地存储目录；`pnpm docker:build:data` / `pnpm podman:build:data` 会将其固化为镜像初始数据，生产写入应挂载 `/app/data` volume。
+
 ## 关键目录
 
 - `config/`：service 配置

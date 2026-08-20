@@ -217,8 +217,11 @@ describe('createProject — api 类型', () => {
     const content = await readText(projectPath, 'apps/proj-api-service/config/_serv.yml')
     expect(content).toContain('transport: false')
     expect(content).toContain('apiPrefix: /api/v1')
-    expect(content).toContain(`origin: '*'`)
-    expect(content).toContain('nativeOrigins: http://localhost')
+    expect(content).toContain('origin: $' + '{HAI_CORS_ORIGIN:*}')
+    expect(content).toContain('credentials: $' + '{HAI_CORS_CREDENTIALS:false}')
+    expect(content).toContain(
+      'nativeOrigins: $' + '{HAI_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}',
+    )
     expect(content).toContain('allowedHeaders:')
     expect(content).toContain('X-Request-Id')
   })
@@ -240,6 +243,25 @@ describe('createProject — api 类型', () => {
     const content = await readText(projectPath, 'README.md')
     expect(content).toContain('apps/proj-api-contract')
     expect(content).toContain('apps/proj-api-service')
+    expect(content).toContain('pnpm docker:build:data')
+    expect(content).toContain('/app/config')
+  })
+
+  it('应生成可传入配置与嵌入数据的 API 镜像入口', async () => {
+    const pkg = await readJson(projectPath, 'package.json')
+    const servicePkg = await readJson(projectPath, 'apps/proj-api-service/package.json')
+    const dockerfile = await readText(projectPath, 'Dockerfile')
+
+    expect(pkg.scripts['docker:build']).toContain('--target runtime')
+    expect(pkg.scripts['docker:build:data']).toContain('--build-context embedded-data=')
+    expect(pkg.scripts['podman:build']).toContain('--jobs=1')
+    expect(pkg.scripts['podman:build']).toContain('--format docker')
+    expect(pkg.scripts['podman:build:data']).toContain('--jobs=1')
+    expect(servicePkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
+    expect(dockerfile).toContain('pnpm --filter proj-api-service --prod deploy')
+    expect(dockerfile).toContain('COPY --from=embedded-data')
+    expect(dockerfile).toContain('USER node')
+    expect(await exists(projectPath, '.dockerignore')).toBe(true)
   })
 
   it('不应有 i18n 脚手架（api 类型）', async () => {
@@ -618,6 +640,21 @@ describe('createProject — website 类型', () => {
     expect(spec).toContain('page.goto')
   })
 
+  it('应生成 SvelteKit Node 容器交付文件', async () => {
+    const pkg = await readJson(projectPath, 'package.json')
+    const svelteConfig = await readText(projectPath, 'svelte.config.js')
+    const dockerfile = await readText(projectPath, 'Dockerfile')
+
+    expect(pkg.devDependencies['@sveltejs/adapter-node']).toBe('^5.5.4')
+    expect(pkg.devDependencies['@sveltejs/adapter-auto']).toBeUndefined()
+    expect(pkg.scripts['docker:build:data']).toContain('--build-context embedded-data=./data')
+    expect(pkg.scripts['podman:build']).toContain('--jobs=1')
+    expect(pkg.scripts['podman:build']).toContain('--format docker')
+    expect(svelteConfig).toContain('from \'@sveltejs/adapter-node\'')
+    expect(dockerfile).toContain('CMD ["node", "build"]')
+    expect(dockerfile).toContain('FROM runtime-base AS runtime-with-data')
+  })
+
   it('应生成 website 兼容的全量 skills', async () => {
     await expectCompatibleSkills(projectPath, 'website')
   })
@@ -728,6 +765,20 @@ describe('createProject — mobile-app 类型', () => {
     expectHaiCatalogEntries(workspace, ['@h-ai/api-client', '@h-ai/capacitor', '@h-ai/ui'])
   })
 
+  it('应生成带 SPA fallback 的静态镜像', async () => {
+    const pkg = await readJson(projectPath, 'package.json')
+    const dockerfile = await readText(projectPath, 'Dockerfile')
+    const nginxConfig = await readText(projectPath, 'docker/nginx.conf')
+
+    expect(pkg.scripts['docker:build']).toContain('--target runtime')
+    expect(pkg.scripts['docker:build:data']).toBeUndefined()
+    expect(pkg.scripts['podman:build']).toContain('--jobs=1')
+    expect(pkg.scripts['podman:build']).toContain('--format docker')
+    expect(dockerfile).toContain('nginxinc/nginx-unprivileged')
+    expect(dockerfile).toContain('/workspace/dist')
+    expect(nginxConfig).toContain('try_files $uri $uri/ /index.html')
+  })
+
   it('应生成移动端专属 AI 指引与兼容 skills', async () => {
     const agents = await readText(projectPath, 'AGENTS.md')
     expect(agents).toContain('Mobile/Capacitor')
@@ -778,6 +829,13 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.scripts.package).toContain('pnpm --filter proj-fullstack-app package')
     expect(pkg.scripts.package).toContain('pnpm --filter proj-fullstack-desktop package')
     expect(pkg.scripts.deploy).toBe('pnpm package')
+    expect(pkg.scripts['docker:build']).toContain('--target runtime')
+    expect(pkg.scripts['docker:build:data']).toContain('--build-context embedded-data=./packages/proj-fullstack-serv/data')
+    expect(pkg.scripts['docker:build:service']).toContain('--target service')
+    expect(pkg.scripts['docker:build:web']).toContain('--target web')
+    expect(pkg.scripts['podman:build']).toContain('--jobs=1')
+    expect(pkg.scripts['podman:build']).toContain('--format docker')
+    expect(pkg.scripts['podman:build:data']).toContain('--jobs=1')
     expect(pkg.scripts.typecheck).toBe('pnpm --filter proj-fullstack-contract build && pnpm i18n:compile && pnpm -r --if-present typecheck')
     expect(pkg.scripts.test).toBe('pnpm --filter proj-fullstack-contract build && pnpm i18n:compile && pnpm -r --if-present test')
     expect(pkg.scripts.postinstall).toBe('pnpm i18n:compile')
@@ -792,6 +850,8 @@ describe('createProject — fullstack 类型', () => {
     expect(readme).toContain('i18n 与 shared 协同')
     expect(readme).toContain('pnpm compile')
     expect(readme).toContain('pnpm package')
+    expect(readme).toContain('/app/service/config')
+    expect(readme).toContain('pnpm docker:build:data')
 
     const eslintConfig = await readText(projectPath, 'eslint.config.js')
     expect(eslintConfig).toContain('\'svelte/indent\': \'off\'')
@@ -832,9 +892,14 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.dependencies.hono).toBeUndefined()
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(pkg.scripts.start).toBe('node dist/index.js')
+    expect(pkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/server/procedures/app-procedures.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')).toBe(true)
+
+    const servConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_serv.yml')
+    expect(servConfig).toContain('origin: $' + '{HAI_CORS_ORIGIN:*}')
+    expect(servConfig).toContain('credentials: $' + '{HAI_CORS_CREDENTIALS:false}')
 
     const appServer = await readText(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')
     expect(appServer).toContain('export interface ServerApp')
@@ -861,6 +926,22 @@ describe('createProject — fullstack 类型', () => {
 
     const testFile = await readText(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')
     expect(testFile).toContain('returns echo result as HaiResult')
+  })
+
+  it('应生成真实 fullstack 单镜像与独立镜像目标', async () => {
+    const dockerfile = await readText(projectPath, 'Dockerfile')
+    const containerServer = await readText(projectPath, 'docker/fullstack-server.mjs')
+    const nginxConfig = await readText(projectPath, 'docker/nginx.conf')
+
+    expect(dockerfile).toContain('pnpm --filter proj-fullstack-serv --prod deploy')
+    expect(dockerfile).toContain('FROM node:22-bookworm-slim AS runtime-base')
+    expect(dockerfile).toContain('COPY --from=embedded-data')
+    expect(dockerfile).toContain('USER node')
+    expect(containerServer).toContain('spawn(process.execPath, [\'dist/index.js\']')
+    expect(containerServer).toContain('p.set(\'apiBase\',location.origin)')
+    expect(containerServer).toContain('pathname.startsWith(\'/api/\')')
+    expect(nginxConfig).toContain('try_files $uri $uri/ /index.html')
+    expect(await exists(projectPath, '.dockerignore')).toBe(true)
   })
 
   it('应按多选前端生成 web / app / desktop 工程', async () => {

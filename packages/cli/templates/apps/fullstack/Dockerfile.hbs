@@ -1,0 +1,71 @@
+# syntax=docker/dockerfile:1.7
+FROM node:22-bookworm-slim AS build
+
+ARG PUBLIC_API_BASE
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+ENV PUBLIC_API_BASE=$PUBLIC_API_BASE
+WORKDIR /workspace
+
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+COPY . .
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN pnpm build
+RUN pnpm --filter {{fullstack.servPackageName}} --prod deploy /prod/service
+
+FROM node:22-bookworm-slim AS service
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=3000
+WORKDIR /app
+
+COPY --from=build --chown=node:node /prod/service ./
+RUN mkdir -p /app/data && chown node:node /app/data
+
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "dist/index.js"]
+
+{{#if fullstack.frontends.web}}
+FROM nginxinc/nginx-unprivileged:1.29-alpine AS web
+
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /workspace/apps/{{projectName}}-web/dist /usr/share/nginx/html
+
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1
+
+FROM node:22-bookworm-slim AS runtime-base
+
+ENV NODE_ENV=production
+ENV HAI_WEB_PORT=8080
+ENV HAI_SERV_PORT=3000
+WORKDIR /app
+
+COPY --from=build --chown=node:node /prod/service ./service
+COPY --from=build --chown=node:node /workspace/apps/{{projectName}}-web/dist ./web
+COPY --chown=node:node docker/fullstack-server.mjs ./fullstack-server.mjs
+RUN mkdir -p /app/service/data && chown node:node /app/service/data
+
+USER node
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+process.env.HAI_WEB_PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "fullstack-server.mjs"]
+
+FROM runtime-base AS runtime-with-data
+
+COPY --from=embedded-data --chown=node:node . /app/service/data
+
+FROM runtime-base AS runtime
+{{else}}
+FROM service AS runtime-with-data
+
+COPY --from=embedded-data --chown=node:node . /app/data
+
+FROM service AS runtime
+{{/if}}

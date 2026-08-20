@@ -8,15 +8,7 @@ import process from 'node:process'
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 {{/if}}
 {{#unless isSvelteOnlyApp}}
-{{#if isCapacitorApp}}
-import adapter from '@sveltejs/adapter-static'
-{{else}}
-{{#if_eq appType 'api'}}
 import adapter from '@sveltejs/adapter-node'
-{{else}}
-import adapter from '@sveltejs/adapter-auto'
-{{/if_eq}}
-{{/if}}
 {{/unless}}
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 

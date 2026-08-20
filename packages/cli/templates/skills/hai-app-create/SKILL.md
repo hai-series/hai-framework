@@ -354,6 +354,18 @@ core.init() → reldb.init() → cache.init() → iam.init() → createBusinessT
 
 ---
 
+## 容器交付
+
+- 保持脚手架根目录 `Dockerfile`、`.dockerignore` 与 `package.json` 中 `docker:build*` / `podman:build*` 命令同步。
+- Podman 多阶段构建保持 `--format docker --jobs=1`；前者保留 `HEALTHCHECK`，后者避免部分 Podman 5.8/Buildah 组合在并行 stage 构建时触发内部 semaphore panic。
+- SvelteKit 服务使用 Node adapter；纯 Vite 前端使用带 SPA fallback 的静态镜像；fullstack 默认支持 Web + Service 同源镜像。
+- 配置文件随镜像提供，并允许只读挂载覆盖；密钥只通过环境变量或 `--env-file` 注入。
+- 普通构建不携带 `data/`；只有用户明确运行 `docker:build:data` / `podman:build:data` 时才通过 named build context 嵌入 SQLite/本地存储初始快照。
+- 数据库和本地存储的持续写入必须落到 volume，不能依赖镜像可写层。
+- 完成前实际启动镜像，验证健康端点、非 root 用户、环境变量覆盖、配置挂载和预置数据读取。
+
+---
+
 ## 检查清单
 
 - [ ] **TDD 流程已执行**：先写测试 → 确认失败 → 再实现 → 确认通过
@@ -365,6 +377,7 @@ core.init() → reldb.init() → cache.init() → iam.init() → createBusinessT
 - [ ] 日志级别正确（读 debug / 写 debug+info / 失败 warn|error）
 - [ ] 禁止 `console.log`、`any`、硬编码密钥
 - [ ] 用户可见文本走 i18n
+- [ ] Docker / Podman 镜像可启动，配置/环境变量/数据目录行为已验证
 - [ ] 新增表有索引定义
 - [ ] 组件优先使用 `@h-ai/ui`
 - [ ] `pnpm typecheck && pnpm lint && pnpm test` 通过

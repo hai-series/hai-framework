@@ -4,8 +4,8 @@
 
 name: {{projectName}} API Service
 version: 0.1.0
-env: development
-debug: false
+env: ${HAI_ENV:development}
+debug: ${HAI_DEBUG:false}
 
 defaultLocale: {{defaultLocale}}
 supportedLocales:

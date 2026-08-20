@@ -478,7 +478,19 @@ export const { apiFetch } = client
 
 ---
 
-## §10 测试
+## §10 容器交付
+
+- 新应用模板必须提供根目录 `Dockerfile`、`.dockerignore` 与 `pnpm docker:build` / `pnpm podman:build`，镜像构建必须使用仓库锁文件。
+- Podman 多阶段构建命令使用 `--format docker --jobs=1`：保留 Dockerfile `HEALTHCHECK`，并避免 Buildah 并行 stage 在部分 Podman 5.8 环境触发内部 semaphore panic。
+- SvelteKit 服务使用 Node adapter；纯 Vite/Capacitor Web 产物使用带 SPA fallback 的静态服务器。
+- API/fullstack 使用 `pnpm deploy --prod` 收敛生产依赖；fullstack 默认提供 Web + Service 同源镜像，同时保留 service/web 独立 target。
+- `config/` 必须随默认镜像提供，并允许只读 bind mount 覆盖；敏感配置使用 YAML 环境变量占位符和 `--env-file`，禁止烘焙密钥。
+- `data/` 默认排除在普通 Docker context 之外；需要预置 SQLite/本地存储时，通过显式 named build context 生成带初始数据的 target，运行时写入仍挂载 volume。
+- 容器以非 root 用户运行，提供健康检查；验收至少覆盖镜像构建、启动、健康端点、环境变量覆盖、配置挂载与嵌入式数据库读取。
+
+---
+
+## §11 测试
 
 ### 单元测试（Vitest）
 
@@ -495,7 +507,7 @@ export const { apiFetch } = client
 
 ---
 
-## §11 创建检查清单
+## §12 创建检查清单
 
 ### 新应用
 
@@ -506,6 +518,8 @@ export const { apiFetch } = client
 - [ ] i18n 配置完整（messages/ + project.inlang/）
 - [ ] @h-ai/ui 正确引入（auto-import + 样式 source）
 - [ ] 环境变量无硬编码
+- [ ] Docker 镜像可构建并以非 root 用户启动
+- [ ] 配置挂载、环境变量覆盖和可选数据镜像已验证
 
 ### 新路由/页面
 

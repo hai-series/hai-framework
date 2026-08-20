@@ -18,10 +18,10 @@ http:
   rpc: false
 
 cors:
-  origin: '*'
-  nativeOrigins: http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost
-{{#if features.iam}}  credentials: true
-{{else}}  credentials: false
+  origin: ${HAI_CORS_ORIGIN:*}
+  nativeOrigins: ${HAI_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+{{#if features.iam}}  credentials: ${HAI_CORS_CREDENTIALS:true}
+{{else}}  credentials: ${HAI_CORS_CREDENTIALS:false}
 {{/if}}  allowedHeaders:
     - Authorization
     - Content-Type

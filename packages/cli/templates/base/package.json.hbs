@@ -6,6 +6,14 @@
   "keywords": ["hai", {{#unless isSvelteOnlyApp}}"sveltekit", {{/unless}}"svelte5", "{{appType}}"],
   "license": "Apache-2.0",
   "type": "module",
+{{#unless isSvelteOnlyApp}}
+  "files": [
+    "build",
+    "config",
+    "data",
+    "package.json"
+  ],
+{{/unless}}
   "scripts": {
 {{#if hasI18n}}
     "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
@@ -19,7 +27,13 @@
     "test": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "clean": "{{#if isSvelteOnlyApp}}rimraf dist build android ios .turbo src/lib/paraglide{{else}}rimraf .svelte-kit build .turbo{{/if}}"{{#if isCapacitorApp}},
+    "clean": "{{#if isSvelteOnlyApp}}rimraf dist build android ios .turbo src/lib/paraglide{{else}}rimraf .svelte-kit build .turbo{{/if}}",
+    "docker:build": "docker build --target runtime -t {{projectName}}:latest .",
+{{#unless isSvelteOnlyApp}}
+    "docker:build:data": "docker build --target runtime-with-data --build-context embedded-data=./data -t {{projectName}}:latest .",
+{{/unless}}
+    "podman:build": "podman build --format docker --jobs=1 --target runtime -t {{projectName}}:latest ."{{#unless isSvelteOnlyApp}},
+    "podman:build:data": "podman build --format docker --jobs=1 --target runtime-with-data --build-context embedded-data=./data -t {{projectName}}:latest ."{{/unless}}{{#if isCapacitorApp}},
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
     "cap:sync": "pnpm build && cap sync",
@@ -78,11 +92,7 @@
     "@capacitor/push-notifications": "^8.0.1",
     "@capacitor/status-bar": "^8.0.1",
 {{else}}
-{{#if_eq appType 'api'}}
     "@sveltejs/adapter-node": "^5.5.4",
-{{else}}
-    "@sveltejs/adapter-auto": "^7.0.1",
-{{/if_eq}}
 {{/if}}
 {{#unless isSvelteOnlyApp}}
     "@sveltejs/kit": "^2.61.1",

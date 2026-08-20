@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1.7
+FROM node:22-bookworm-slim AS build
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+WORKDIR /workspace
+
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+COPY . .
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN pnpm build
+RUN pnpm --filter {{api.servicePackageName}} --prod deploy /prod/app
+
+FROM node:22-bookworm-slim AS runtime-base
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=3000
+WORKDIR /app
+
+COPY --from=build --chown=node:node /prod/app ./
+RUN mkdir -p /app/data && chown node:node /app/data
+
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "dist/index.js"]
+
+FROM runtime-base AS runtime-with-data
+
+COPY --from=embedded-data --chown=node:node . /app/data
+
+FROM runtime-base AS runtime

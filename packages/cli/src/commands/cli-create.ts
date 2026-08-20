@@ -354,7 +354,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       ? generateFullstackReadme(resolvedOptions.name, resolvedOptions.packageManager!, resolvedOptions.frontends)
       : resolvedOptions.appType === 'api'
         ? generateApiWorkspaceReadme(resolvedOptions.name, resolvedOptions.packageManager!)
-        : generateReadme(resolvedOptions.name, appTypeLabel, resolvedOptions.packageManager!)
+        : generateReadme(resolvedOptions.name, appTypeLabel, resolvedOptions.packageManager!, resolvedOptions.appType)
     await writeFile(
       path.join(projectPath, 'README.md'),
       readmeContent,
@@ -1024,8 +1024,24 @@ function normalizeChildOutput(output: unknown): string {
 /**
  * 生成 README
  */
-function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn'): string {
+function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn', appType: AppType): string {
   const install = getInstallCommand(pm)
+  const isStaticImage = appType === 'mobile-app'
+  const containerPort = isStaticImage ? 8080 : 3000
+  const runtimeOptions = isStaticImage
+    ? ''
+    : ` --env-file .env --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly --mount type=volume,source=${name}-data,target=/app/data`
+  const embeddedData = isStaticImage
+    ? ''
+    : `
+如需把当前 \`data/\`（例如预置 SQLite 文件）固化为镜像初始快照：
+
+\`\`\`bash
+${getRunCommand(pm, 'docker:build:data')}
+\`\`\`
+
+运行后产生的新数据仍应写入 \`/app/data\` volume；配置文件可挂载到 \`/app/config\`，YAML 中的 \`\${ENV_NAME:default}\` 可由 \`--env-file\` 或 \`-e\` 覆盖。
+`
   return `# ${name}
 
 基于 hai Agent Framework 构建的${appTypeLabel}应用。
@@ -1044,6 +1060,14 @@ ${getRunCommand(pm, 'build')}
 ${getRunCommand(pm, 'i18n:compile')}
 ${getRunCommand(pm, 'preview')}
 \`\`\`
+
+## Docker
+
+\`\`\`bash
+${getRunCommand(pm, 'docker:build')}
+docker run --rm -p ${containerPort}:${containerPort}${runtimeOptions} ${name}:latest
+\`\`\`
+${embeddedData}
 
 ## 文档
 
@@ -1078,6 +1102,19 @@ ${pm} build
 ${pm} test
 ${pm} test:e2e
 \`\`\`
+
+## Docker
+
+\`\`\`bash
+${pm} docker:build
+docker run --rm -p 3000:3000 --env-file .env \\
+  --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly \\
+  --mount type=volume,source=${name}-data,target=/app/data \\
+  ${name}:latest
+\`\`\`
+
+- 配置默认来自 \`apps/${name}-service/config\`；运行时可只读挂载到 \`/app/config\` 覆盖，并用 YAML 的 \`\${ENV_NAME:default}\` 占位符接收环境变量。
+- 将 SQLite/本地存储文件放在 \`apps/${name}-service/data\` 后运行 \`${pm} docker:build:data\`，可把该目录作为镜像初始数据；生产写入仍建议使用 \`/app/data\` volume。
 
 ## 扩展建议
 
@@ -1127,6 +1164,23 @@ ${pm} package
 # 部署入口：默认执行 package，可替换为团队自己的 CI/CD 发布脚本
 ${pm} deploy
 \`\`\`
+
+## Docker
+
+默认镜像把 Web 与 API Service 合并为同源入口，外部端口为 8080：
+
+\`\`\`bash
+${pm} docker:build
+docker run --rm -p 8080:8080 --env-file .env \\
+  --mount type=bind,source=/absolute/path/to/config,target=/app/service/config,readonly \\
+  --mount type=volume,source=${name}-data,target=/app/service/data \\
+  ${name}:latest
+\`\`\`
+
+- 配置默认来自 \`packages/${name}-serv/config\`，也可挂载到 \`/app/service/config\`；YAML 中的 \`\${ENV_NAME:default}\` 可由 \`--env-file\` 或 \`-e\` 注入。
+- 将预置 SQLite/本地存储放入 \`packages/${name}-serv/data\` 后运行 \`${pm} docker:build:data\`，可生成带初始数据的镜像；持久化写入仍应使用 volume。
+- \`HAI_WEB_PORT\` 控制合并镜像的 Web 端口，\`HAI_SERV_PORT\` 控制容器内 Service 端口。
+- 需要拆分部署时，使用 \`${pm} docker:build:service\`${frontends.includes('web') ? ` 与 \`${pm} docker:build:web -- --build-arg PUBLIC_API_BASE=https://api.example.com\`` : ''}。
 
 前端单独交付命令：
 
