@@ -66,6 +66,16 @@ function createMockVecdb(): VecdbFunctions {
 }
 
 describe('db store provider saveMany', () => {
+  it('使用业务数据的时间字段填充索引列', async () => {
+    const calls: ExecuteCall[] = []
+    const provider = createDbStoreProvider({ sql: createMockSql(calls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    const store = provider.createRelStore<{ createdAt: number, updatedAt: number }>('hai_ai_timestamped')
+
+    await store.save('id-1', { createdAt: 100, updatedAt: 200 })
+
+    expect(calls[0].params?.slice(-2)).toEqual([100, 200])
+  })
+
   it('小批量数据使用单条参数化 upsert', async () => {
     const calls: ExecuteCall[] = []
     const provider = createDbStoreProvider({ sql: createMockSql(calls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })

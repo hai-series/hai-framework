@@ -19,6 +19,15 @@ const logger = core.logger.child({ module: 'ai', scope: 'store-provider-db' })
 /** 单条批量 SQL 的参数上限，保守低于 SQLite 默认 999 变量限制。 */
 const MAX_BATCH_SQL_PARAMS = 900
 
+/** 从业务数据读取可用于索引的 Unix 毫秒时间；没有时间字段时回退到写入时间。 */
+function dataTimestamp<T>(data: T, field: 'createdAt' | 'updatedAt', fallback: number): number {
+  if (typeof data !== 'object' || data === null)
+    return fallback
+
+  const value = (data as Record<string, unknown>)[field]
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 // ─── ReldbAIRelStore 实现 ───
 
 /**
@@ -89,6 +98,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {
     const now = Date.now()
     const json = JSON.stringify(data)
+    const createdAt = dataTimestamp(data, 'createdAt', now)
+    const updatedAt = dataTimestamp(data, 'updatedAt', now)
 
     const colNames = ['id']
     const values: unknown[] = [id]
@@ -116,7 +127,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     }
 
     colNames.push('data', 'created_at', 'updated_at')
-    values.push(json, now, now)
+    values.push(json, createdAt, updatedAt)
     placeholders.push('?', '?', '?')
 
     if (this.dbType === 'mysql') {
@@ -270,7 +281,11 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       values.push(scope?.status ?? null)
     if (this.hasRefId)
       values.push(scope?.refId ?? null)
-    values.push(JSON.stringify(data), now, now)
+    values.push(
+      JSON.stringify(data),
+      dataTimestamp(data, 'createdAt', now),
+      dataTimestamp(data, 'updatedAt', now),
+    )
     return values
   }
 
