@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/iam",
   "type": "module",
-  "version": "0.1.0-alpha.50",
+  "version": "0.1.0-alpha.51",
   "description": "Hai Framework identity and access management module.",
   "license": "Apache-2.0",
   "exports": {
