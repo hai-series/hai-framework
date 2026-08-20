@@ -291,6 +291,9 @@ catalogs:
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
+    undici:
+      specifier: ^7.24.7
+      version: 7.24.7
     vite:
       specifier: ^8.0.14
       version: 8.0.14
@@ -976,6 +979,9 @@ importers:
       openai:
         specifier: 'catalog:'
         version: 6.17.0(ws@8.19.0)(zod@4.4.3)
+      undici:
+        specifier: 'catalog:'
+        version: 7.24.7
       ws:
         specifier: 'catalog:'
         version: 8.19.0

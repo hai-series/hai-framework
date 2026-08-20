@@ -8,7 +8,13 @@
   "devices": ["cpu", "gpu"],
   "port": 8000,
   "health": "/health",
+  "startupTimeout": 1200000,
   "model": {
-    "id": "Systran/faster-whisper-large-v3"
+    "id": "Systran/faster-whisper-large-v3",
+    "revision": "edaa852ec7e145841d8ffdb056a99866b5f0a478",
+    "modelscope": {
+      "id": "keepitsimple/faster-whisper-large-v3",
+      "revision": "24dad542d3c19528ad5abbfdd27639a4edb46e26"
+    }
   }
 }

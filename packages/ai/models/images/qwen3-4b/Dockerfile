@@ -1,46 +1,62 @@
 # syntax=docker/dockerfile:1
 
-# Qwen3-4B 通过 vLLM 官方镜像对外提供 OpenAI-compatible API（已含 CUDA 运行时与 SSE 流式）。
-# vLLM 会优先从 ModelScope 拉取（设置 VLLM_USE_MODELSCOPE=true）；本服务默认从 /opt/models 本地加载。
-FROM vllm/vllm-openai:latest AS base
+# Qwen3-4B 通过 vLLM 官方镜像对外提供 OpenAI-compatible API。
+# CPU 与 GPU 必须使用不同的官方运行时；GPU 镜像不能通过 DEVICE=cpu 变成 CPU 构建。
+ARG VLLM_VERSION=v0.27.1
+ARG PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+
+FROM vllm/vllm-openai:${VLLM_VERSION} AS gpu-base
 ENV MODEL_PATH=/opt/models \
     SERVED_MODEL_NAME=qwen3-4b \
     PORT=8000 \
     HOST=0.0.0.0 \
+    HF_ENDPOINT=https://hf-mirror.com \
     VLLM_USE_MODELSCOPE=true
 
+# -------------------------
+# GPU 运行镜像（vLLM 默认 CUDA 后端）
+# -------------------------
+FROM gpu-base AS gpu
+ARG PYPI_INDEX_URL
+ENV DEVICE=cuda
+RUN python3 -m pip install --no-cache-dir --index-url "${PYPI_INDEX_URL}" "modelscope==1.38.1"
 WORKDIR /app
 COPY server.py /app/server.py
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=20 \
     CMD curl -fsS http://127.0.0.1:8000/health || exit 1
-
-# vLLM 官方镜像自带 ENTRYPOINT，需清空后改用本服务启动脚本
 ENTRYPOINT []
-
-# -------------------------
-# GPU 运行镜像（vLLM 默认 CUDA 后端）
-# -------------------------
-FROM base AS gpu
-ENV DEVICE=cuda
 CMD ["python3", "server.py"]
 
 # -------------------------
-# CPU 运行镜像
-# 注意：CPU 推理需 vLLM 的 CPU 构建（VLLM_TARGET_DEVICE=cpu），官方 GPU 镜像不含 CPU 后端，
-# 生产 CPU 构建请改用 vLLM CPU 基础镜像或安装 CPU 版 vLLM。
+# CPU 运行镜像（官方 x86_64 CPU 构建）
 # -------------------------
-FROM base AS cpu
-ENV DEVICE=cpu
+FROM vllm/vllm-openai-cpu:${VLLM_VERSION}-x86_64 AS cpu
+ARG PYPI_INDEX_URL
+ENV MODEL_PATH=/opt/models \
+    SERVED_MODEL_NAME=qwen3-4b \
+    PORT=8000 \
+    HOST=0.0.0.0 \
+    DEVICE=cpu \
+    VLLM_USE_MODELSCOPE=true \
+    VLLM_CPU_KVCACHE_SPACE=2 \
+    VLLM_EXTRA_ARGS="--max-model-len 4096"
+RUN python3 -m pip install --no-cache-dir --index-url "${PYPI_INDEX_URL}" "modelscope==1.38.1"
+WORKDIR /app
+COPY server.py /app/server.py
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=20 \
+    CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+ENTRYPOINT []
 CMD ["python3", "server.py"]
 
 # -------------------------
 # 离线镜像（打包权重，供隔离网络部署）
 # -------------------------
-FROM gpu AS gpu-bundled
+FROM cpu AS cpu-bundled
 COPY --from=hai_model . /opt/models
 ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 VLLM_USE_MODELSCOPE=false
 
-FROM cpu AS cpu-bundled
+FROM gpu AS gpu-bundled
 COPY --from=hai_model . /opt/models
 ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 VLLM_USE_MODELSCOPE=false

@@ -2,25 +2,38 @@
 
 # 默认使用清华 PyPI 镜像，可用 --build-arg PIP_INDEX_URL=... 覆盖
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG DEBIAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian
+ARG DEBIAN_SECURITY_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian-security
 
 # -------------------------
 # 公共服务阶段
 # -------------------------
 FROM python:3.11-slim AS base
 ARG PIP_INDEX_URL
+ARG DEBIAN_MIRROR
+ARG DEBIAN_SECURITY_MIRROR
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_INDEX_URL=${PIP_INDEX_URL} \
     MODEL_PATH=/opt/models \
     PORT=8000
 
-RUN apt-get update \
+RUN sed -i \
+      -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+      -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+      /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY server.py /app/server.py
-RUN pip install --no-cache-dir fastapi "uvicorn[standard]" python-multipart faster-whisper
+RUN pip install --no-cache-dir \
+    "fastapi==0.141.1" \
+    "uvicorn[standard]==0.52.3" \
+    "python-multipart==0.0.32" \
+    "faster-whisper==1.2.1" \
+    "modelscope==1.38.1"
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=10 \

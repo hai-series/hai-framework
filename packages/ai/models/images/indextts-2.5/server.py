@@ -7,6 +7,7 @@
 
 import io
 import os
+import re
 import tempfile
 import wave
 from pathlib import Path
@@ -18,6 +19,10 @@ from fastapi.responses import JSONResponse, Response
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "/opt/models")
 MODEL_NAME = "indextts-2.5"
+MODEL_ID = os.environ.get("HAI_MODEL_ID", "IndexTeam/IndexTTS-2.5")
+MODEL_REVISION = os.environ.get("HAI_MODEL_REVISION")
+MODELSCOPE_ID = os.environ.get("HAI_MODELSCOPE_ID", "IndexTeam/IndexTTS-2.5")
+MODELSCOPE_REVISION = os.environ.get("HAI_MODELSCOPE_REVISION", "master")
 PORT = int(os.environ.get("PORT", "8000"))
 API_KEY = os.environ.get("HAI_MODEL_API_KEY")
 
@@ -54,11 +59,47 @@ def get_engine():
     """惰性加载 IndexTTS 引擎（首次合成时初始化）。"""
     global _engine
     if _engine is None:
-        # 集成点：按实际 IndexTTS 发布的 Python API 初始化推理引擎
-        from indextts.infer_v2 import IndexTTS2
+        model_path = ensure_model_weights()
+        from indextts.infer_v2_5 import IndexTTS2
 
-        _engine = IndexTTS2(model_dir=MODEL_PATH, device=RUNTIME_DEVICE)
+        _engine = IndexTTS2(
+            cfg_path=str(model_path / "config.yaml"),
+            model_dir=str(model_path),
+            use_bf16=False,
+            device=RUNTIME_DEVICE,
+        )
     return _engine
+
+
+def ensure_model_weights() -> Path:
+    """确保官方 IndexTTS-2.5 权重位于 MODEL_PATH；非 bundled 镜像首次使用时下载。"""
+    model_path = Path(MODEL_PATH)
+    if (model_path / "config.yaml").is_file():
+        return model_path
+    if os.environ.get("HF_HUB_OFFLINE") == "1":
+        raise RuntimeError(f"Bundled model weights are incomplete: {model_path}")
+
+    model_path.mkdir(parents=True, exist_ok=True)
+    try:
+        from modelscope.hub.snapshot_download import snapshot_download as modelscope_download
+
+        print(f"[indextts] downloading {MODELSCOPE_ID} from ModelScope to {model_path}")
+        modelscope_download(
+            MODELSCOPE_ID,
+            revision=MODELSCOPE_REVISION,
+            local_dir=str(model_path),
+        )
+    except Exception as exc:  # noqa: BLE001 - 国内源失败时回退官方镜像
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+        from huggingface_hub import snapshot_download as huggingface_download
+
+        print(f"[indextts] ModelScope failed: {exc}; falling back to HuggingFace")
+        huggingface_download(
+            repo_id=MODEL_ID,
+            revision=MODEL_REVISION,
+            local_dir=str(model_path),
+        )
+    return model_path
 
 
 def require_auth(authorization: Optional[str]) -> None:
@@ -86,6 +127,33 @@ def resolve_duration_factor(speed: Optional[float]) -> float:
     if speed <= 0:
         raise HTTPException(status_code=400, detail="speed must be greater than 0")
     return max(0.5, min(2.0, 1.0 / speed))
+
+
+def resolve_language(language: Optional[str], text: str) -> str:
+    """将 Framework 语言提示转换为 IndexTTS-2.5 语言码；缺省时按文字范围做确定性判断。"""
+    if language:
+        normalized = language.strip().lower().replace("_", "-")
+        aliases = {
+            "zh": "ZH",
+            "zh-cn": "ZH",
+            "zh-hans": "ZH",
+            "en": "EN",
+            "ja": "JA",
+            "jp": "JA",
+            "es": "ES",
+            "ar": "AR",
+        }
+        resolved = aliases.get(normalized)
+        if resolved:
+            return resolved
+        raise HTTPException(status_code=400, detail=f"unsupported language: {language}")
+    if re.search(r"[\u3040-\u30ff]", text):
+        return "JA"
+    if re.search(r"[\u0600-\u06ff]", text):
+        return "AR"
+    if re.search(r"[\u3400-\u9fff]", text):
+        return "ZH"
+    return "EN"
 
 
 @app.post("/v1/audio/speech")
@@ -205,7 +273,7 @@ def infer_once(engine, text, language, speaker_path, style_path, style_strength,
             emo_audio_prompt=style_path,
             emo_alpha=style_strength if style_strength is not None else 1.0,
             duration_factor=duration_factor,
-            language=language,
+            lang=resolve_language(language, text),
         )
         return Path(output_path).read_bytes()
     finally:
@@ -270,4 +338,6 @@ def cleanup(path: Optional[str]) -> None:
 
 
 if __name__ == "__main__":
+    # 下载并加载完成后才监听端口，确保 /health 表示模型确实可用。
+    get_engine()
     uvicorn.run(app, host="0.0.0.0", port=PORT)  # noqa: S104 - 容器内监听所有网卡

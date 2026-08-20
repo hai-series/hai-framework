@@ -51,6 +51,7 @@
     "mem0ai": "catalog:",
     "nanoid": "catalog:",
     "openai": "catalog:",
+    "undici": "catalog:",
     "ws": "catalog:",
     "zod": "catalog:"
   },

@@ -337,6 +337,10 @@ if (!playable.success)
 - 平台不支持的输入方式（如 OpenAI/MiMo 的持续音频输入）会抛 `AUDIO_UNSUPPORTED_INPUT`，不伪装成实时。
 - 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`@h-ai/ai/client` 通过 `audio.getTicket` 建连，不把 IAM access token 放入 URL。浏览器客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`）；服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
 
+### 本地 CPU 模型服务
+
+hai-framework 源码仓库提供 `pnpm model <name> --device cpu` 与 `pnpm model:run <name>`，默认优先使用 Podman，可构建/启动 `faster-whisper-large-v3`、`indextts-2.5`、`qwen3-4b`。三套权重均优先从清单锁定的 ModelScope revision 下载并复用容器 volume，Hugging Face 只作回退。Whisper/IndexTTS 仍配置为 `audio.models[].baseUrl`，Qwen3-4B 仍配置为 OpenAI-compatible `llm.models[].baseUrl`；部署位置不进入 Provider 名称。离线部署使用准备权重后的 bundled 镜像。
+
 ## 文生图（Image）
 
 `ai.image` 只暴露稳定的提示词、模型别名、像素尺寸、可选参考图和图片字节；OpenAI、Google、Qwen、Seedream 与 Pollinations 的请求结构、鉴权、响应解析和临时 URL 下载均封装在内部 Provider。

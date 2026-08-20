@@ -14,6 +14,9 @@ from fastapi.responses import JSONResponse
 from faster_whisper import WhisperModel
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "/opt/models")
+MODEL_REVISION = os.environ.get("HAI_MODEL_REVISION")
+MODELSCOPE_ID = os.environ.get("HAI_MODELSCOPE_ID")
+MODELSCOPE_REVISION = os.environ.get("HAI_MODELSCOPE_REVISION", "master")
 MODEL_NAME = "faster-whisper-large-v3"
 PORT = int(os.environ.get("PORT", "8000"))
 API_KEY = os.environ.get("HAI_MODEL_API_KEY")
@@ -38,7 +41,31 @@ RUNTIME_COMPUTE = os.environ.get("COMPUTE_TYPE", "auto")
 if RUNTIME_COMPUTE == "auto":
     RUNTIME_COMPUTE = "float16" if RUNTIME_DEVICE == "cuda" else "int8"
 
-whisper_model = WhisperModel(MODEL_PATH, device=RUNTIME_DEVICE, compute_type=RUNTIME_COMPUTE)
+def ensure_model_path() -> str:
+    """优先复用挂载权重；空目录时从 ModelScope 高速、可恢复地下载。"""
+    model_dir = Path(MODEL_PATH)
+    if (model_dir / "config.json").is_file():
+        return str(model_dir)
+    if MODELSCOPE_ID:
+        from modelscope import snapshot_download
+
+        print(f"[faster-whisper] downloading {MODELSCOPE_ID} to {model_dir}")
+        snapshot_download(
+            MODELSCOPE_ID,
+            revision=MODELSCOPE_REVISION,
+            local_dir=str(model_dir),
+        )
+        return str(model_dir)
+    return MODEL_PATH
+
+
+resolved_model_path = ensure_model_path()
+whisper_model = WhisperModel(
+    resolved_model_path,
+    device=RUNTIME_DEVICE,
+    compute_type=RUNTIME_COMPUTE,
+    revision=MODEL_REVISION if resolved_model_path == MODEL_PATH and not Path(MODEL_PATH).is_dir() else None,
+)
 
 app = FastAPI(title="hai faster-whisper service")
 

@@ -12,9 +12,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MANIFEST = json.loads((HERE / "model.json").read_text(encoding="utf-8"))
 
-HF_ID = os.environ.get("HAI_MODEL_ID", MANIFEST.get("model", {}).get("id", ""))
-MODELSCOPE_ID = os.environ.get("HAI_MODELSCOPE_ID", HF_ID)
-REVISION = MANIFEST.get("model", {}).get("revision")
+MODEL = MANIFEST.get("model", {})
+MODELSCOPE = MODEL.get("modelscope", {})
+HF_ID = os.environ.get("HAI_MODEL_ID", MODEL.get("id", ""))
+MODELSCOPE_ID = os.environ.get("HAI_MODELSCOPE_ID", MODELSCOPE.get("id", HF_ID))
+HF_REVISION = MODEL.get("revision")
+MODELSCOPE_REVISION = os.environ.get(
+    "HAI_MODELSCOPE_REVISION", MODELSCOPE.get("revision", "master")
+)
 
 OUTPUT_DIR = Path(
     os.environ.get(
@@ -29,7 +34,11 @@ def prepare_from_modelscope() -> None:
     from modelscope.hub.snapshot_download import snapshot_download
 
     print(f"[prepare] ModelScope snapshot_download {MODELSCOPE_ID} -> {OUTPUT_DIR}")
-    snapshot_download(MODELSCOPE_ID, revision=REVISION, cache_dir=str(OUTPUT_DIR))
+    snapshot_download(
+        MODELSCOPE_ID,
+        revision=MODELSCOPE_REVISION,
+        local_dir=str(OUTPUT_DIR),
+    )
 
 
 def prepare_from_huggingface() -> None:
@@ -41,7 +50,7 @@ def prepare_from_huggingface() -> None:
         f"[prepare] HuggingFace snapshot_download {HF_ID} "
         f"(endpoint={os.environ['HF_ENDPOINT']}) -> {OUTPUT_DIR}"
     )
-    snapshot_download(repo_id=HF_ID, revision=REVISION, local_dir=str(OUTPUT_DIR))
+    snapshot_download(repo_id=HF_ID, revision=HF_REVISION, local_dir=str(OUTPUT_DIR))
 
 
 def main() -> None:

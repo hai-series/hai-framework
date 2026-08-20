@@ -8,7 +8,13 @@
   "devices": ["cpu", "gpu"],
   "port": 8000,
   "health": "/health",
+  "startupTimeout": 1800000,
   "model": {
-    "id": "Qwen/Qwen3-4B"
+    "id": "Qwen/Qwen3-4B",
+    "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+    "modelscope": {
+      "id": "Qwen/Qwen3-4B",
+      "revision": "2c54d5a09e7e92d4f5126b92a5a457448c9593e6"
+    }
   }
 }

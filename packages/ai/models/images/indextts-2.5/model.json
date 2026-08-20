@@ -8,7 +8,18 @@
   "devices": ["cpu", "gpu"],
   "port": 8000,
   "health": "/health",
+  "startupTimeout": 1800000,
+  "source": {
+    "repository": "index-tts/index-tts",
+    "revision": "ee40fa7d6c6b8a2c7f06105f9f1e65775b74868c",
+    "tree": "7b2fb0ecc8a02538c79a218cccf1791228cb947f"
+  },
   "model": {
-    "id": "IndexTeam/IndexTTS-2.5"
+    "id": "IndexTeam/IndexTTS-2.5",
+    "revision": "c39ce5ba981572cb187443877ff559dfb246ce63",
+    "modelscope": {
+      "id": "IndexTeam/IndexTTS-2.5",
+      "revision": "0b328234ba044f491e35f103f2d3b8ecfd90efe1"
+    }
   }
 }

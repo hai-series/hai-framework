@@ -335,6 +335,21 @@ if (!playable.success)
 - 平台不支持的输入方式（如 OpenAI/MiMo 的持续音频输入）会抛 `AUDIO_UNSUPPORTED_INPUT`，不伪装成实时。
 - 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`@h-ai/ai/client` 通过 `audio.getTicket` 建连，不把 IAM access token 放入 URL。浏览器客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`）；服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
 
+### 本地 CPU 模型服务
+
+仓库根目录可直接构建并启动已适配的本地模型镜像；构建工具默认优先使用 Podman，Podman 不可用时才回退 Docker：
+
+```bash
+pnpm model faster-whisper-large-v3 --device cpu
+pnpm model indextts-2.5 --device cpu
+pnpm model qwen3-4b --device cpu
+pnpm model:run faster-whisper-large-v3 --device cpu --port 8101
+```
+
+Whisper/IndexTTS 仍通过 `audio.models[].baseUrl` 接入，Qwen3-4B 通过现有 OpenAI-compatible `llm.models[].baseUrl` 接入；不要新增表示“本地部署”的 Provider。三套权重均优先从清单锁定的 ModelScope revision 下载并复用容器 volume，Hugging Face 只作回退。IndexTTS 的 ModelScope 仓库只提供权重，固定 Git tree 的必要推理源码文件由宿主机下载、校验后作为本地构建上下文传入。完全离线时使用 `model:prepare` + `--bundle-model` + `model:run --bundled`。
+
+Windows/macOS 的 Podman 运行在独立 VM；宿主机代理若只监听 `127.0.0.1`，不要把该地址直接注入容器。宿主机下载可使用 `--proxy`，容器内代理必须通过 `--container-proxy http://<VM可达地址>:<端口>` 显式提供。
+
 ## 文生图（Image）
 
 `ai.image` 只暴露稳定的提示词、模型别名、像素尺寸、可选参考图和图片字节；OpenAI、Google、Qwen、Seedream 与 Pollinations 的请求结构、鉴权、响应解析和临时 URL 下载均封装在内部 Provider。
