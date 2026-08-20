@@ -507,9 +507,9 @@ export function containerProxyConfig(args, proxy, engine) {
     }
   }
 
-  // Podman Desktop 使用独立 VM。宿主机代理只监听回环地址时，容器无法访问该端口。
+  // Podman 容器与宿主机使用独立网络命名空间；宿主机代理只监听回环地址时，
+  // 容器无法访问该端口（Linux、Windows、macOS 均如此）。
   const omitPodmanLoopback = engine === 'podman'
-    && (process.platform === 'win32' || process.platform === 'darwin')
     && [proxy.http, proxy.https, proxy.all].some(isLoopbackProxy)
 
   if (omitPodmanLoopback) {
