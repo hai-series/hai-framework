@@ -358,7 +358,9 @@ core.init() → reldb.init() → cache.init() → iam.init() → createBusinessT
 
 - 保持脚手架根目录 `Dockerfile`、`.dockerignore` 与 `package.json` 中 `docker:build*` / `podman:build*` 命令同步。
 - Podman 多阶段构建保持 `--format docker --jobs=1`；前者保留 `HEALTHCHECK`，后者避免部分 Podman 5.8/Buildah 组合在并行 stage 构建时触发内部 semaphore panic。
-- SvelteKit 服务使用 Node adapter；纯 Vite 前端使用带 SPA fallback 的静态镜像；fullstack 默认支持 Web + Service 同源镜像。
+- 先复制 lockfile 与 workspace 配置执行 `pnpm fetch`，再复制源码并离线安装、构建；避免源码变化重复下载依赖，同时兼容新增 workspace。
+- SvelteKit 服务使用 Node adapter；纯 Vite 前端使用带 SPA fallback 的静态镜像；fullstack 的 Service 与 Web 分别交付，Service 直接监听且不增加转发进程。
+- Web 的 `PUBLIC_*` 部署配置在容器启动时生成静态运行时配置，不作为 build arg 烘焙，确保同一镜像可跨环境部署。
 - 配置文件随镜像提供，并允许只读挂载覆盖；密钥只通过环境变量或 `--env-file` 注入。
 - 普通构建不携带 `data/`；只有用户明确运行 `docker:build:data` / `podman:build:data` 时才通过 named build context 嵌入 SQLite/本地存储初始快照。
 - 数据库和本地存储的持续写入必须落到 volume，不能依赖镜像可写层。

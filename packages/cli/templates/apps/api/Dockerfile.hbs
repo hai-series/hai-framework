@@ -3,13 +3,16 @@ FROM node:22-bookworm-slim AS build
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
+ENV CI=true
 WORKDIR /workspace
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch --frozen-lockfile
 COPY . .
-RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
 RUN pnpm build
-RUN pnpm --filter {{api.servicePackageName}} --prod deploy /prod/app
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm --filter {{api.servicePackageName}} --prod deploy /prod/app
 
 FROM node:22-bookworm-slim AS runtime-base
 
@@ -29,6 +32,6 @@ CMD ["node", "dist/index.js"]
 
 FROM runtime-base AS runtime-with-data
 
-COPY --from=embedded-data --chown=node:node . /app/data
+COPY --from=embedded-data --chown=node:node / /app/data/
 
 FROM runtime-base AS runtime

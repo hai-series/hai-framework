@@ -483,7 +483,9 @@ export const { apiFetch } = client
 - 新应用模板必须提供根目录 `Dockerfile`、`.dockerignore` 与 `pnpm docker:build` / `pnpm podman:build`，镜像构建必须使用仓库锁文件。
 - Podman 多阶段构建命令使用 `--format docker --jobs=1`：保留 Dockerfile `HEALTHCHECK`，并避免 Buildah 并行 stage 在部分 Podman 5.8 环境触发内部 semaphore panic。
 - SvelteKit 服务使用 Node adapter；纯 Vite/Capacitor Web 产物使用带 SPA fallback 的静态服务器。
-- API/fullstack 使用 `pnpm deploy --prod` 收敛生产依赖；fullstack 默认提供 Web + Service 同源镜像，同时保留 service/web 独立 target。
+- Dockerfile 必须先复制 lockfile 与 workspace 配置并执行 `pnpm fetch`，再复制源码并离线安装、构建；这样源码变化不重复下载依赖，也能兼容脚手架生成后新增的 workspace。
+- API/fullstack 使用 `pnpm deploy --prod` 收敛生产依赖；fullstack 的默认镜像由 Service 直接监听，Web 通过独立静态镜像交付，不增加转发进程。
+- 纯 Vite Web 的 `PUBLIC_*` 部署配置必须在容器启动时生成静态运行时配置，不得作为 Docker build arg 烘焙，以支持一次构建、多环境部署。
 - `config/` 必须随默认镜像提供，并允许只读 bind mount 覆盖；敏感配置使用 YAML 环境变量占位符和 `--env-file`，禁止烘焙密钥。
 - `data/` 默认排除在普通 Docker context 之外；需要预置 SQLite/本地存储时，通过显式 named build context 生成带初始数据的 target，运行时写入仍挂载 volume。
 - 容器以非 root 用户运行，提供健康检查；验收至少覆盖镜像构建、启动、健康端点、环境变量覆盖、配置挂载与嵌入式数据库读取。

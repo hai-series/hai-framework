@@ -1031,17 +1031,24 @@ function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' |
   const runtimeOptions = isStaticImage
     ? ''
     : ` --env-file .env --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly --mount type=volume,source=${name}-data,target=/app/data`
-  const embeddedData = isStaticImage
+  const embeddedDataBuild = isStaticImage
     ? ''
     : `
-如需把当前 \`data/\`（例如预置 SQLite 文件）固化为镜像初始快照：
-
-\`\`\`bash
+# 带 data/ 初始数据构建（二选一）
 ${getRunCommand(pm, 'docker:build:data')}
-\`\`\`
+${getRunCommand(pm, 'podman:build:data')}`
+  const runtimeNotes = isStaticImage
+    ? '- 该模板生成静态 Web 镜像，不包含可写数据库目录。'
+    : `以上三个运行时参数均可按需删除：
 
-运行后产生的新数据仍应写入 \`/app/data\` volume；配置文件可挂载到 \`/app/config\`，YAML 中的 \`\${ENV_NAME:default}\` 可由 \`--env-file\` 或 \`-e\` 覆盖。
-`
+| 参数 | 用途 | 可选性 |
+| --- | --- | --- |
+| \`--env-file .env\` | 批量传入环境变量；也可改用多个 \`-e NAME=value\`。 | 可选；删除后使用镜像和 YAML 默认值。 |
+| \`--mount type=bind,...target=/app/config,readonly\` | 用宿主机配置目录覆盖镜像内 \`/app/config\`；必须把 \`source\` 改成真实绝对路径，\`readonly\` 防止容器修改配置。 | 可选；删除后使用镜像自带配置。 |
+| \`--mount type=volume,...target=/app/data\` | 创建或复用 named volume，持久化 SQLite 和本地存储。 | 可选但生产环境建议保留；删除后数据只写入容器层，使用 \`--rm\` 删除容器时会丢失。 |
+
+- 带数据构建会把当前 \`data/\`（例如预置 SQLite 文件）固化为镜像初始快照；运行后产生的新数据仍应写入 \`/app/data\` volume。`
+  const testPath = isStaticImage ? '/health' : '/'
   return `# ${name}
 
 基于 hai Agent Framework 构建的${appTypeLabel}应用。
@@ -1061,13 +1068,31 @@ ${getRunCommand(pm, 'i18n:compile')}
 ${getRunCommand(pm, 'preview')}
 \`\`\`
 
-## Docker
+## 容器运行
+
+### 构建镜像
 
 \`\`\`bash
+# 普通构建（二选一）
 ${getRunCommand(pm, 'docker:build')}
-docker run --rm -p ${containerPort}:${containerPort}${runtimeOptions} ${name}:latest
+${getRunCommand(pm, 'podman:build')}${embeddedDataBuild}
 \`\`\`
-${embeddedData}
+
+### 运行镜像
+
+\`\`\`bash
+# Docker；使用 Podman 时将 docker 替换为 podman
+docker run --rm -d --name ${name} -p ${containerPort}:${containerPort}${runtimeOptions} ${name}:latest
+\`\`\`
+
+### 测试镜像
+
+\`\`\`bash
+curl --fail http://127.0.0.1:${containerPort}${testPath}
+docker stop ${name}
+\`\`\`
+
+${runtimeNotes}
 
 ## 文档
 
@@ -1103,18 +1128,50 @@ ${pm} test
 ${pm} test:e2e
 \`\`\`
 
-## Docker
+## 容器运行
+
+### 构建镜像
 
 \`\`\`bash
+# 普通构建（二选一）
 ${pm} docker:build
-docker run --rm -p 3000:3000 --env-file .env \\
+${pm} podman:build
+
+# 将 apps/${name}-service/data 作为镜像初始数据构建（二选一）
+${pm} docker:build:data
+${pm} podman:build:data
+\`\`\`
+
+### 运行镜像
+
+\`\`\`bash
+# 使用 Podman 时将 docker 替换为 podman
+docker run --rm -d --name ${name} -p 3000:3000 --env-file .env \\
   --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly \\
   --mount type=volume,source=${name}-data,target=/app/data \\
   ${name}:latest
 \`\`\`
 
+### 测试镜像
+
+\`\`\`bash
+curl --fail http://127.0.0.1:3000/health
+curl --fail http://127.0.0.1:3000/ready
+curl --fail --request POST http://127.0.0.1:3000/api/v1/app/info \\
+  --header "Content-Type: application/json" --data '{}'
+docker stop ${name}
+\`\`\`
+
 - 配置默认来自 \`apps/${name}-service/config\`；运行时可只读挂载到 \`/app/config\` 覆盖，并用 YAML 的 \`\${ENV_NAME:default}\` 占位符接收环境变量。
-- 将 SQLite/本地存储文件放在 \`apps/${name}-service/data\` 后运行 \`${pm} docker:build:data\`，可把该目录作为镜像初始数据；生产写入仍建议使用 \`/app/data\` volume。
+- 带数据构建会把 \`apps/${name}-service/data\` 固化为镜像初始数据；生产写入仍建议使用 \`/app/data\` volume。
+
+以上三个运行时参数均可按需删除：
+
+| 参数 | 用途 | 可选性 |
+| --- | --- | --- |
+| \`--env-file .env\` | 批量传入环境变量；也可改用多个 \`-e NAME=value\`。 | 可选；删除后使用镜像和 YAML 默认值。 |
+| \`--mount type=bind,...target=/app/config,readonly\` | 用宿主机配置目录覆盖镜像内 \`/app/config\`；必须把 \`source\` 改成真实绝对路径，\`readonly\` 防止容器修改配置。 | 可选；删除后使用镜像自带配置。 |
+| \`--mount type=volume,...target=/app/data\` | 创建或复用 named volume，持久化 SQLite 和本地存储。 | 可选但生产环境建议保留；删除后数据只写入容器层，使用 \`--rm\` 删除容器时会丢失。 |
 
 ## 扩展建议
 
@@ -1133,6 +1190,26 @@ docker run --rm -p 3000:3000 --env-file .env \\
 
 function generateFullstackReadme(name: string, pm: string, frontends: FrontendTarget[]): string {
   const enabledFrontends = frontends.map(target => FRONTEND_TARGETS[target].name).join(' / ')
+  const webBuildCommands = frontends.includes('web')
+    ? `
+# Web 静态镜像（二选一）
+${pm} docker:build:web
+${pm} podman:build:web`
+    : ''
+  const webRunCommand = frontends.includes('web')
+    ? `
+
+# Web；PUBLIC_API_BASE 在容器启动时注入，不需要重新构建镜像
+docker run --rm -d --name ${name}-web -p 8080:8080 \\
+  -e PUBLIC_API_BASE=https://api.example.com \\
+  ${name}-web:latest`
+    : ''
+  const webTestCommands = frontends.includes('web')
+    ? `curl --fail http://127.0.0.1:8080/health
+curl --fail http://127.0.0.1:8080/runtime-config.js
+`
+    : ''
+  const containerNames = frontends.includes('web') ? `${name} ${name}-web` : name
   return `# ${name}
 
 基于 hai Agent Framework 构建的前后端分离多包工程。
@@ -1165,22 +1242,56 @@ ${pm} package
 ${pm} deploy
 \`\`\`
 
-## Docker
+## 容器运行
 
-默认镜像把 Web 与 API Service 合并为同源入口，外部端口为 8080：
+默认镜像直接运行 API Service，外部端口为 3000。
+
+### 构建镜像
 
 \`\`\`bash
+# Service 普通构建（二选一）
 ${pm} docker:build
-docker run --rm -p 8080:8080 --env-file .env \\
-  --mount type=bind,source=/absolute/path/to/config,target=/app/service/config,readonly \\
-  --mount type=volume,source=${name}-data,target=/app/service/data \\
-  ${name}:latest
+${pm} podman:build
+
+# 将 packages/${name}-serv/data 作为镜像初始数据构建（二选一）
+${pm} docker:build:data
+${pm} podman:build:data
+${webBuildCommands}
 \`\`\`
 
-- 配置默认来自 \`packages/${name}-serv/config\`，也可挂载到 \`/app/service/config\`；YAML 中的 \`\${ENV_NAME:default}\` 可由 \`--env-file\` 或 \`-e\` 注入。
-- 将预置 SQLite/本地存储放入 \`packages/${name}-serv/data\` 后运行 \`${pm} docker:build:data\`，可生成带初始数据的镜像；持久化写入仍应使用 volume。
-- \`HAI_WEB_PORT\` 控制合并镜像的 Web 端口，\`HAI_SERV_PORT\` 控制容器内 Service 端口。
-- 需要拆分部署时，使用 \`${pm} docker:build:service\`${frontends.includes('web') ? ` 与 \`${pm} docker:build:web -- --build-arg PUBLIC_API_BASE=https://api.example.com\`` : ''}。
+### 运行镜像
+
+\`\`\`bash
+# Service；使用 Podman 时将 docker 替换为 podman
+docker run --rm -d --name ${name} -p 3000:3000 --env-file .env \\
+  --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly \\
+  --mount type=volume,source=${name}-data,target=/app/data \\
+  ${name}:latest
+${webRunCommand}
+\`\`\`
+
+### 测试镜像
+
+\`\`\`bash
+curl --fail http://127.0.0.1:3000/health
+curl --fail http://127.0.0.1:3000/ready
+curl --fail --request POST http://127.0.0.1:3000/api/v1/app/info \\
+  --header "Content-Type: application/json" --data '{}'
+${webTestCommands}docker stop ${containerNames}
+\`\`\`
+
+- 配置默认来自 \`packages/${name}-serv/config\`，也可挂载到 \`/app/config\`；YAML 中的 \`\${ENV_NAME:default}\` 可由 \`--env-file\` 或 \`-e\` 注入。
+- 带数据构建会把 \`packages/${name}-serv/data\` 固化为镜像初始数据；持久化写入仍应使用 volume。
+- Service 由 \`@h-ai/serv\` 直接对外监听，不额外启动 Web 转发层。
+${frontends.includes('web') ? `- Web 使用独立静态镜像并支持一次构建、多环境部署；构建只需运行 \`${pm} docker:build:web\`，启动容器时通过 \`-e PUBLIC_API_BASE=https://api.example.com\` 指向 Service 对外地址。未设置时默认使用 Web 页面自身 origin。` : ''}
+
+以上三个 Service 运行时参数均可按需删除：
+
+| 参数 | 用途 | 可选性 |
+| --- | --- | --- |
+| \`--env-file .env\` | 批量传入环境变量；也可改用多个 \`-e NAME=value\`。 | 可选；删除后使用镜像和 YAML 默认值。 |
+| \`--mount type=bind,...target=/app/config,readonly\` | 用宿主机配置目录覆盖镜像内 \`/app/config\`；必须把 \`source\` 改成真实绝对路径，\`readonly\` 防止容器修改配置。 | 可选；删除后使用镜像自带配置。 |
+| \`--mount type=volume,...target=/app/data\` | 创建或复用 named volume，持久化 SQLite 和本地存储。 | 可选但生产环境建议保留；删除后数据只写入容器层，使用 \`--rm\` 删除容器时会丢失。 |
 
 前端单独交付命令：
 

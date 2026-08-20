@@ -38,8 +38,16 @@ export async function fetchAppInfo(options: FetchAppInfoOptions = {}): Promise<A
 }
 
 function resolveDefaultApiOrigin(): string {
-  return import.meta.env.PUBLIC_API_BASE
+  return resolveRuntimeApiOrigin()
+    || import.meta.env.PUBLIC_API_BASE
     || (typeof globalThis.location === 'undefined' ? DEFAULT_API_ORIGIN : globalThis.location.origin)
+}
+
+function resolveRuntimeApiOrigin(): string | undefined {
+  const runtimeConfig = (globalThis as typeof globalThis & {
+    __HAI_PUBLIC_CONFIG__?: { apiBase?: string }
+  }).__HAI_PUBLIC_CONFIG__
+  return runtimeConfig?.apiBase
 }
 
 function normalizeApiBaseUrl(value: string): string {

@@ -1,7 +1,7 @@
 {
   "name": "hai-framework",
   "type": "module",
-  "version": "0.1.0-alpha.52",
+  "version": "0.1.0-alpha.53",
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "description": "hai Agent Framework - AI-Native, Configuration-Driven, Security-First",

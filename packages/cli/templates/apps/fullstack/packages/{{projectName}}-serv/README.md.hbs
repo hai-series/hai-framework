@@ -18,7 +18,8 @@
 
 ## 容器运行
 
-- 根目录 `pnpm docker:build` / `pnpm podman:build` 生成 Web + Service 同源镜像；`pnpm docker:build:service` / `pnpm podman:build:service` 只生成本服务镜像。
-- 合并镜像的配置挂载点为 `/app/service/config`，数据目录为 `/app/service/data`；service-only 镜像对应 `/app/config` 与 `/app/data`。
+- 根目录 `pnpm docker:build` / `pnpm podman:build` 直接生成本服务镜像；Web 使用独立的 `docker:build:web` / `podman:build:web` 镜像。
+- 服务镜像直接由 `@h-ai/serv` 对外监听，配置挂载点为 `/app/config`，数据目录为 `/app/data`，不包含额外转发进程。
+- Web 镜像不烘焙 API 地址；启动时使用 `-e PUBLIC_API_BASE=https://api.example.com` 注入，同一镜像可部署到不同环境。未设置时 Web 默认请求自身 origin。
 - YAML 配置使用 `${ENV_NAME:default}` 接收运行时环境变量；不要把密钥写入镜像。
 - 将 SQLite/本地存储放入本目录 `data/` 后运行 `pnpm docker:build:data` / `pnpm podman:build:data`，可生成带初始数据的镜像，持续写入仍应使用 volume。

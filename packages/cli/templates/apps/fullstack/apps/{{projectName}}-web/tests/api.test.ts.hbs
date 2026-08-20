@@ -24,5 +24,32 @@ describe('fetchAppInfo', () => {
 
     expect(info.name).toBe('{{fullstack.servPackageName}}')
   })
+
+  it('uses API origin injected at container startup', async () => {
+    Object.assign(globalThis, {
+      __HAI_PUBLIC_CONFIG__: { apiBase: 'https://api.example.com' },
+    })
+    let requestedUrl = ''
+    const fetchFn: typeof fetch = async (input) => {
+      requestedUrl = input instanceof Request ? input.url : String(input)
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          name: '{{fullstack.servPackageName}}',
+          version: '0.1.0',
+          startedAt: '2026-01-01T00:00:00.000Z',
+          frontends: ['web'],
+        },
+      }), { headers: { 'content-type': 'application/json' } })
+    }
+
+    try {
+      await fetchAppInfo({ fetchFn })
+      expect(requestedUrl).toContain('https://api.example.com/api/v1')
+    }
+    finally {
+      Reflect.deleteProperty(globalThis, '__HAI_PUBLIC_CONFIG__')
+    }
+  })
 })
 {{/if}}
