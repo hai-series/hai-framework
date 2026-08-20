@@ -23,6 +23,7 @@
     AiTableEditorProps,
   } from './table-types.js'
   import { SvelteSet } from 'svelte/reactivity'
+  import { writeTextToClipboard } from '../../../../internal/browser-safety.js'
   import { uiM } from '../../../../messages.js'
   import { cn, getDataAttributes } from '../../../../utils.js'
   import AiDocumentDownloadMenu from '../AiDocumentDownloadMenu.svelte'
@@ -969,12 +970,9 @@
       return
     }
 
-    if (typeof navigator === 'undefined' || !navigator.clipboard) {
-      return
+    if (await writeTextToClipboard(text)) {
+      triggerCopiedFeedback()
     }
-
-    await navigator.clipboard.writeText(text)
-    triggerCopiedFeedback()
   }
 
   async function handleDownloadTable(): Promise<void> {
