@@ -216,6 +216,8 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端调用不依赖服务端配置。getAgentCard 返回完整 A2A 0.3 Card（MIME、streaming、安全方案）；Kit 默认发现路径为 `/.well-known/agent-card.json`。handleRequest 在未初始化时也返回 JSON-RPC 错误；可信 context.agentId 映射 SDK user.userName。Kit 配置 authenticate 后空身份返回 401；不声明 push notifications、gRPC、REST 支持。
 
+A2A 的任务表和消息表在 `ai.init()` 阶段初始化。任务按可信 `agentId` 隔离读取（含获取、取消和继续消息）；匿名请求共享匿名作用域，需隔离的部署必须开启认证。`listMessages` 是服务端管理接口，支持 `callerId`、`contextId`、`since` 过滤，不能直接向未授权客户端暴露。旧版任务记录没有可靠主体信息，升级后不会自动推断归属或删除数据，需由应用审核后迁移 `object_id` 为 `user:<agentId>`（匿名为 `anonymous`）。旧消息缺少主体/上下文字段时不会匹配相应过滤条件。
+
 `callRemoteAgent` 只接受 HTTP(S) 且拒绝 URL 内嵌凭据。该校验不是完整 SSRF 防护：remote URL 若来自外部输入，应用必须先按 origin 白名单过滤，并通过出口代理限制 DNS 重绑定、重定向到私网与云元数据地址。
 
 ## 错误码速查

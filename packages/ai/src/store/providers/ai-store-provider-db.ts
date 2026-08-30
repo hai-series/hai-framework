@@ -6,6 +6,7 @@
  * @module ai-store-provider-db
  */
 
+import type { HaiResult } from '@h-ai/core'
 import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { AIRelStore, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, AIVectorStore, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
@@ -15,6 +16,13 @@ import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
 const logger = core.logger.child({ module: 'ai', scope: 'store-provider-db' })
+
+/** 内部 Store 以异常通知上层失败，不能把 SQL HaiResult 错误当空数据或写入成功。 */
+function requireSqlSuccess<T>(result: HaiResult<T>): HaiResult<T> {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result
+}
 
 /** 单条批量 SQL 的参数上限，保守低于 SQLite 默认 999 变量限制。 */
 const MAX_BATCH_SQL_PARAMS = 900
@@ -48,7 +56,12 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   private readonly hasScopeIndex: boolean
 
   constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, dbType: DbType, options?: AIRelStoreOptions) {
-    this.sql = sql
+    this.sql = {
+      ...sql,
+      execute: (query, params) => sql.execute(query, params).then(requireSqlSuccess),
+      query: <R>(query: string, params?: unknown[]) => sql.query<R>(query, params).then(requireSqlSuccess),
+      get: <R>(query: string, params?: unknown[]) => sql.get<R>(query, params).then(requireSqlSuccess),
+    }
     this.table = table
     this.jsonOps = jsonOps
     this.dbType = dbType
@@ -81,18 +94,33 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
 
     if (this.hasObjectId)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_id ON ${t}(object_id)`)
+      await this.createIndex(`idx_${t}_object_id`, 'object_id')
     if (this.hasSessionId)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_session_id ON ${t}(session_id)`)
+      await this.createIndex(`idx_${t}_session_id`, 'session_id')
     if (this.hasObjectId && this.hasSessionId)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_session ON ${t}(object_id, session_id)`)
+      await this.createIndex(`idx_${t}_object_session`, 'object_id, session_id')
     if (this.hasStatus)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_status ON ${t}(status)`)
+      await this.createIndex(`idx_${t}_status`, 'status')
     if (this.hasRefId)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`)
+      await this.createIndex(`idx_${t}_ref_id`, 'ref_id')
     // 业务作用域索引：仅 PostgreSQL 支持 JSONB GIN，用于加速 data @> '{"scope":...}' 包含查询。
     if (this.hasScopeIndex && db === 'postgresql')
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_data_gin ON ${t} USING GIN (data jsonb_path_ops)`)
+  }
+
+  /** MySQL 不支持 CREATE INDEX IF NOT EXISTS，先在当前数据库确认索引是否存在。 */
+  private async createIndex(name: string, columns: string): Promise<void> {
+    if (this.dbType === 'mysql') {
+      const existing = await this.sql.get(
+        'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+        [this.table, name],
+      )
+      if (existing.success && existing.data)
+        return
+      await this.sql.execute(`CREATE INDEX ${name} ON ${this.table}(${columns})`)
+      return
+    }
+    await this.sql.execute(`CREATE INDEX IF NOT EXISTS ${name} ON ${this.table}(${columns})`)
   }
 
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {

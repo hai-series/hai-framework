@@ -130,7 +130,7 @@ describe('reldbA2ATaskStore', () => {
     await taskStore.save(sampleTask)
 
     expect(mockStore.save).toHaveBeenCalledWith('task-1', sampleTask, {
-      objectId: 'ctx-1',
+      objectId: 'anonymous',
       status: 'submitted',
       refId: 'ctx-1',
     })
@@ -154,20 +154,20 @@ describe('reldbA2ATaskStore', () => {
     await taskStore.save(noStatusTask)
 
     expect(mockStore.save).toHaveBeenCalledWith('task-2', noStatusTask, {
-      objectId: undefined,
+      objectId: 'anonymous',
       status: undefined,
       refId: undefined,
     })
   })
 
-  it('load 委托到 store.get', async () => {
+  it('load 按任务 ID 和主体同时过滤', async () => {
     const mockStore = createMockStore()
-    vi.mocked(mockStore.get).mockResolvedValue(sampleTask)
+    vi.mocked(mockStore.query).mockResolvedValue([sampleTask])
     const taskStore = new ReldbA2ATaskStore(mockStore)
 
     const result = await taskStore.load('task-1')
 
-    expect(mockStore.get).toHaveBeenCalledWith('task-1')
+    expect(mockStore.query).toHaveBeenCalledWith({ objectId: 'anonymous', where: { id: 'task-1' }, limit: 1 })
     expect(result).toEqual(sampleTask)
   })
 
@@ -245,6 +245,34 @@ describe('a2A 错误码', () => {
 // ─── 未初始化占位 ───
 
 describe('a2A 公共协议入口', () => {
+  it('任务只允许所属主体读取，匿名及其他主体无法读取', async () => {
+    await ai.init({ a2a: { agentCard: { name: 'owner', url: 'https://example.com/a2a' } } })
+    ai.a2a.registerExecutor({
+      async execute(ctx, bus) {
+        bus.publish({ kind: 'task', id: ctx.taskId, contextId: ctx.contextId, status: { state: 'completed' } })
+        bus.finished()
+      },
+      cancelTask: vi.fn(),
+    })
+    const sent = await ai.a2a.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'message/send',
+      params: { message: { kind: 'message', role: 'user', messageId: 'owned', parts: [{ kind: 'text', text: 'hi' }] } },
+    }, { agentId: 'owner' })
+    expect(sent.body).toMatchObject({ result: { kind: 'task' } })
+    const task = (sent.body as { result: Task }).result
+    const request = { jsonrpc: '2.0', id: 2, method: 'tasks/get', params: { id: task.id } }
+    expect((await ai.a2a.handleRequest(request, { agentId: 'owner' })).body).toMatchObject({ result: { id: task.id } })
+    for (const context of [{ agentId: 'other' }, undefined]) {
+      expect((await ai.a2a.handleRequest(request, context)).body).toMatchObject({ error: { code: -32001 } })
+    }
+    const messages = await ai.a2a.listMessages({ callerId: 'owner', contextId: task.contextId })
+    expect(messages).toMatchObject({ success: true, data: { total: 1, items: [{ caller: { agentId: 'owner' } }] } })
+    expect(await ai.a2a.listMessages({ callerId: 'other', contextId: task.contextId })).toMatchObject({ success: true, data: { total: 0 } })
+    expect(await ai.a2a.listMessages({ callerId: 'owner', since: Date.now() + 1000 })).toMatchObject({ success: true, data: { total: 0 } })
+  })
+
   it('发现端点在注册前后均返回完整且隔离的 Agent Card', async () => {
     expect((await ai.init({ a2a: { agentCard: { name: 'echo', url: 'https://example.com/a2a' } } })).success).toBe(true)
     const first = ai.a2a.getAgentCard()

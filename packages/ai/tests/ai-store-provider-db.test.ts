@@ -8,7 +8,7 @@ import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { DmlOperations, QueryRow, ReldbJsonOps } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createDbStoreProvider } from '../src/store/providers/ai-store-provider-db.js'
 
@@ -66,6 +66,46 @@ function createMockVecdb(): VecdbFunctions {
 }
 
 describe('db store provider saveMany', () => {
+  it('mysql 索引创建使用合法语法并跳过已有索引', async () => {
+    const calls: ExecuteCall[] = []
+    const sql = createMockSql(calls)
+    const get = vi.spyOn(sql, 'get')
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_indexed', { hasObjectId: true, hasSessionId: true, hasStatus: true, hasRefId: true })
+    await provider.initialize()
+    const indexes = calls.filter(call => call.sql.startsWith('CREATE INDEX'))
+    expect(indexes).toHaveLength(5)
+    expect(indexes.every(call => !call.sql.includes('IF NOT EXISTS'))).toBe(true)
+    expect(get).toHaveBeenCalledWith(expect.stringContaining('TABLE_SCHEMA = DATABASE()'), ['hai_ai_indexed', 'idx_hai_ai_indexed_object_id'])
+
+    calls.length = 0
+    get.mockResolvedValue(ok({ INDEX_NAME: 'existing' }))
+    await provider.initialize()
+    expect(calls.filter(call => call.sql.startsWith('CREATE INDEX'))).toHaveLength(0)
+  })
+
+  it('sQL 写入或查询失败不能变成成功、空数组或缺失记录', async () => {
+    const sql = createMockSql([])
+    const failure = { success: false as const, error: { code: 'hai:reldb:002', message: 'database unavailable' } }
+    sql.execute = async () => failure
+    sql.query = async () => failure
+    sql.get = async () => failure
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })
+    const store = provider.createRelStore<{ title: string }>('hai_ai_failure')
+    for (const operation of [
+      () => provider.initialize(),
+      () => store.save('id', { title: 'test' }),
+      () => store.get('id'),
+      () => store.query({}),
+      () => store.queryPage({}, { limit: 10, offset: 0 }),
+      () => store.remove('id'),
+      () => store.count(),
+      () => store.clear(),
+    ]) {
+      await expect(operation()).rejects.toThrow('database unavailable')
+    }
+  })
+
   it('使用业务数据的时间字段填充索引列', async () => {
     const calls: ExecuteCall[] = []
     const provider = createDbStoreProvider({ sql: createMockSql(calls), jsonOps, dbType: 'sqlite', vecdb: createMockVecdb() })

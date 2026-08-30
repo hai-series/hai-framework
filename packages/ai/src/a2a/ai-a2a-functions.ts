@@ -166,16 +166,22 @@ async function executeRemoteAgentCall(
 export class ReldbA2ATaskStore implements TaskStore {
   constructor(private readonly store: AIRelStore<Task>) {}
 
-  async save(task: Task, _context?: ServerCallContext): Promise<void> {
+  async save(task: Task, context?: ServerCallContext): Promise<void> {
     await this.store.save(task.id, task, {
-      objectId: task.contextId,
+      objectId: context?.user?.isAuthenticated ? `user:${context.user.userName}` : 'anonymous',
       status: task.status?.state,
       refId: task.contextId,
     })
   }
 
-  async load(taskId: string, _context?: ServerCallContext): Promise<Task | undefined> {
-    return this.store.get(taskId)
+  async load(taskId: string, context?: ServerCallContext): Promise<Task | undefined> {
+    // 在存储查询阶段约束归属，tasks/get、cancel、继续消息与 referenceTask 均共享此边界。
+    const tasks = await this.store.query({
+      objectId: context?.user?.isAuthenticated ? `user:${context.user.userName}` : 'anonymous',
+      where: { id: taskId },
+      limit: 1,
+    })
+    return tasks[0]
   }
 }
 
@@ -196,11 +202,15 @@ function wrapExecutorWithLogging(
       const inboundRecord: A2AMessageRecord = {
         id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
         taskId: requestContext.taskId,
+        contextId: requestContext.contextId,
         role: 'user',
         parts: requestContext.userMessage.parts ?? [],
         createdAt: Date.now(),
       }
-      messageStore.save(inboundRecord.id, inboundRecord, { objectId: requestContext.taskId, status: 'user' })
+      const callerId = requestContext.context?.user?.isAuthenticated ? requestContext.context.user.userName : undefined
+      if (callerId)
+        inboundRecord.caller = { agentId: callerId }
+      messageStore.save(inboundRecord.id, inboundRecord, { objectId: callerId, status: 'user' })
         .catch(e => logger.warn('Failed to save inbound A2A message', { error: e }))
 
       // 监听出站事件并记录
@@ -218,11 +228,12 @@ function wrapExecutorWithLogging(
             const outboundRecord: A2AMessageRecord = {
               id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
               taskId: requestContext.taskId,
+              contextId: requestContext.contextId,
               role: 'agent',
               parts: event.parts ?? [],
               createdAt: Date.now(),
             }
-            messageStore.save(outboundRecord.id, outboundRecord, { objectId: requestContext.taskId, status: 'agent' })
+            messageStore.save(outboundRecord.id, outboundRecord, { objectId: callerId, status: 'agent' })
               .catch(e => logger.warn('Failed to save outbound A2A message', { error: e }))
           }
           originalPublish(event)
@@ -241,7 +252,18 @@ function wrapExecutorWithLogging(
 
 /** A2A 子功能组装依赖 */
 export interface A2ADeps {
-  storeProvider: AIStoreProvider
+  /** 初始化阶段已创建的任务存储 */
+  taskStore: AIRelStore<Task>
+  /** 初始化阶段已创建的消息存储 */
+  messageStore: AIRelStore<A2AMessageRecord>
+}
+
+/** 在 StoreProvider.initialize 前创建 A2A 表，避免延迟注册 executor 时漏建表。 */
+export function createA2AStores(storeProvider: AIStoreProvider): A2ADeps {
+  return {
+    taskStore: storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', { hasObjectId: true, hasStatus: true, hasRefId: true }),
+    messageStore: storeProvider.createRelStore<A2AMessageRecord>('hai_ai_a2a_messages', { hasObjectId: true, hasStatus: true }),
+  }
 }
 
 /** A2A 子功能配置 */
@@ -261,19 +283,8 @@ export function createA2AOperations(
   options: A2ACreateOptions,
   deps: A2ADeps,
 ): A2AOperations {
-  const { storeProvider } = deps
+  const { taskStore, messageStore } = deps
   const agentCardConfig = options.agentCard
-
-  // 创建持久化存储
-  const taskStore = storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', {
-    hasObjectId: true,
-    hasStatus: true,
-    hasRefId: true,
-  })
-  const messageStore = storeProvider.createRelStore<A2AMessageRecord>('hai_ai_a2a_messages', {
-    hasObjectId: true,
-    hasStatus: true,
-  })
 
   // 构建 SDK 层
   const agentCard = buildAgentCard(agentCardConfig)
@@ -320,8 +331,12 @@ export function createA2AOperations(
       try {
         const page = await messageStore.queryPage(
           {
-            objectId: filter.contextId ?? filter.callerId,
+            objectId: filter.callerId,
             status: filter.status,
+            where: {
+              ...(filter.contextId === undefined ? {} : { contextId: filter.contextId }),
+              ...(filter.since === undefined ? {} : { createdAt: { $gte: filter.since } }),
+            },
             orderBy: { field: 'createdAt' as keyof A2AMessageRecord, direction: 'desc' },
           },
           { offset: filter.offset ?? 0, limit: filter.limit ?? 50 },
@@ -351,8 +366,8 @@ export interface A2ALazyProxyDeps {
   getA2AImpl: () => A2AOperations | null
   /** 保存 A2A 实现引用 */
   setA2AImpl: (impl: A2AOperations) => void
-  /** 获取 StoreProvider（用于 createA2AOperations） */
-  getStoreProvider: () => AIStoreProvider | null
+  /** 获取初始化阶段已建表的 A2A 存储 */
+  getStores: () => A2ADeps | null
   /** 未初始化错误工厂 */
   notInitializedResult: <T>() => HaiResult<T>
 }
@@ -379,14 +394,14 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       if (deps.getA2AImpl()) {
         logger.warn('A2A executor already registered, re-registering')
       }
-      const storeProvider = deps.getStoreProvider()
-      if (!storeProvider) {
+      const stores = deps.getStores()
+      if (!stores) {
         return err(HaiAIError.STORE_FAILED, aiM('ai_internalError', { params: { error: 'StoreProvider not available' } }))
       }
       const agentCardWithSecurity = { ...a2aConfig.agentCard, security: a2aConfig.security }
       const impl = createA2AOperations(
         { agentCard: agentCardWithSecurity, executor },
-        { storeProvider },
+        stores,
       )
       deps.setA2AImpl(impl)
       logger.info('A2A executor registered', { agentName: a2aConfig.agentCard.name })

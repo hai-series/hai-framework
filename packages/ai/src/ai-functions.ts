@@ -6,6 +6,7 @@
  */
 
 import type { DatapipeFunctions } from '@h-ai/datapipe'
+import type { A2ADeps } from './a2a/ai-a2a-functions.js'
 
 import type { AIConfig } from './ai-config.js'
 import type { AudioOperations } from './audio/ai-audio-types.js'
@@ -28,6 +29,7 @@ import type { SummaryOperations, SummaryResult } from './summary/ai-summary-type
 import type { TokenOperations } from './token/ai-token-types.js'
 
 import { core } from '@h-ai/core'
+import { createA2AStores } from './a2a/ai-a2a-functions.js'
 
 import { CompressConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema, RetrievalConfigSchema, SummaryConfigSchema, TokenConfigSchema } from './ai-config.js'
 import { createAudioOperations } from './audio/ai-audio-functions.js'
@@ -60,6 +62,8 @@ export interface AISubsystemDeps {
 
 /** 子功能组装结果 */
 export interface AISubsystems {
+  /** 在统一初始化之前创建的 A2A 存储 */
+  a2aStores: A2ADeps | null
   llm: LLMOperations
   mcp: MCPOperations
   embedding: EmbeddingOperations
@@ -99,6 +103,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const memoryStore = useMem0Oss ? null : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
   const contextStore = storeProvider.createRelStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
   const personaStore = storeProvider.createRelStore<PersonaProfile>('hai_ai_persona', { hasObjectId: true })
+  const a2aStores = config.a2a ? createA2AStores(storeProvider) : null
 
   // 向量存储
   const memoryVectorStore = useMem0Oss ? null : storeProvider.createVectorStore('hai_ai_memory_vectors')
@@ -179,5 +184,5 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const audio = createAudioOperations(config)
   const image = createImageOperations(config)
 
-  return { llm, mcp, embedding, reasoning, rerank, retrieval, rag, knowledge, memory, persona, token, summary, compress, context, file, audio, image }
+  return { a2aStores, llm, mcp, embedding, reasoning, rerank, retrieval, rag, knowledge, memory, persona, token, summary, compress, context, file, audio, image }
 }

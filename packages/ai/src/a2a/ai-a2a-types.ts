@@ -63,6 +63,8 @@ export interface A2AMessageRecord {
   id: string
   /** 关联的 A2A Task ID */
   taskId: string
+  /** 所属会话上下文 ID（历史记录可能缺失） */
+  contextId?: string
   /** 消息角色：user（入站请求）/ agent（出站响应） */
   role: 'user' | 'agent'
   /** 消息内容（JSON 序列化的 Part[] 数组） */
@@ -109,7 +111,7 @@ export interface A2AAuthenticator {
 
 /** A2A 任务查询过滤器 */
 export interface A2ATaskFilter {
-  /** 按任务状态过滤 */
+  /** 按消息角色过滤（user / agent），不是任务生命周期状态 */
   status?: string | string[]
   /** 按上下文 ID 过滤 */
   contextId?: string
@@ -163,7 +165,7 @@ export interface A2AOperations {
   handleRequest: (requestBody: unknown, context?: Record<string, unknown>) => Promise<A2AHandleResult>
 
   /**
-   * 查询 A2A 任务列表
+   * 查询 A2A 消息列表（服务端管理接口，不自动推断调用方权限）
    *
    * @param filter - 查询过滤器
    * @returns 分页的消息记录列表

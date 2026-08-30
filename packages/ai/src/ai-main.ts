@@ -7,6 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
+import type { A2ADeps } from './a2a/ai-a2a-functions.js'
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIFunctions, AIInitOptions } from './ai-types.js'
@@ -88,6 +89,8 @@ let currentImage: ImageOperations | null = null
 let currentA2AConfig: AIConfig['a2a']
 /** A2A 内部实现（registerExecutor 成功后才有值） */
 let currentA2AImpl: A2AOperations | null = null
+/** 初始化阶段准备完成的任务与消息存储 */
+let currentA2AStores: A2ADeps | null = null
 /** 当前存储 Provider（用于 A2A 延迟初始化） */
 let currentStoreProvider: AIStoreProvider | null = null
 
@@ -220,7 +223,7 @@ const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
   getA2AConfig: () => currentA2AConfig ?? null,
   getA2AImpl: () => currentA2AImpl,
   setA2AImpl: (impl) => { currentA2AImpl = impl },
-  getStoreProvider: () => currentStoreProvider,
+  getStores: () => currentA2AStores,
   notInitializedResult: () => notInitialized.result(),
 })
 
@@ -249,6 +252,7 @@ async function resetAllState(): Promise<void> {
   currentImage = null
   currentA2AConfig = undefined
   currentA2AImpl = null
+  currentA2AStores = null
   currentStoreProvider = null
   currentConfig = null
 
@@ -366,6 +370,7 @@ export const ai: AIFunctions = {
       currentImage = subs.image
 
       currentA2AConfig = parsed.a2a
+      currentA2AStores = subs.a2aStores
 
       currentConfig = parsed
       logger.info('AI module initialized', { model: parsed.llm?.model })
