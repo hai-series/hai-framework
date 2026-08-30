@@ -110,7 +110,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const llm = llmFunctions.llm
 
   // MCP
-  const mcp = createAIMCPFunctions({ config })
+  const mcp = createAIMCPFunctions()
 
   // Embedding
   const embedding = createEmbeddingOperations(config)

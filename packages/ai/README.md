@@ -174,6 +174,8 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 ### MCP Server
 
+`ai.mcp` 是进程内注册表，独立 `createMcpServer` 使用 SDK transport，两者不会自动互相注册。`ai.mcp` 在注册时编译工具 JSON Schema，调用时校验输入；资源输出必须恰好含 `text` / `blob` 之一；提示词参数与 SDK 消息输出均校验，支持图片和音频内容。HTTP 示例只展示 transport 连接，应用仍须挂载请求处理与认证，并在退出时关闭 server。
+
 ```ts
 import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
 import { z } from 'zod'

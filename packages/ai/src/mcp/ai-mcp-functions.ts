@@ -6,9 +6,9 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation'
 
 import type {
-  AIMCPFunctionsDeps,
   MCPContext,
   MCPOperations,
   MCPPrompt,
@@ -20,6 +20,8 @@ import type {
 } from './ai-mcp-types.js'
 
 import { err, ok } from '@h-ai/core'
+import { BlobResourceContentsSchema, PromptMessageSchema, TextResourceContentsSchema } from '@modelcontextprotocol/sdk/types.js'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
@@ -32,6 +34,8 @@ interface ToolRegistration {
   definition: MCPToolDefinition
   /** 工具执行处理器 */
   handler: MCPToolHandler
+  /** 注册时编译一次，调用时复用输入校验器 */
+  validate: JsonSchemaValidator<unknown>
 }
 
 /** 资源注册记录（元数据 + 内容加载器） */
@@ -58,12 +62,11 @@ interface PromptRegistration {
  * 提供工具、资源、提示词的注册与调用功能。
  * 注册是同步，调用是异步。所有调用方法返回 `HaiResult<T>`。
  *
- * @param _deps - MCP 子功能依赖（config 保留供将来使用）
  * @returns MCPOperations 接口
  *
  * @example
  * ```ts
- * const mcp = createAIMCPFunctions({ config })
+ * const mcp = createAIMCPFunctions()
  * mcp.registerTool(
  *   { name: 'echo', description: '回音', inputSchema: { type: 'object' } },
  *   async (input) => input,
@@ -71,8 +74,8 @@ interface PromptRegistration {
  * const result = await mcp.callTool('echo', { msg: 'hi' })
  * ```
  */
-export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
-  // _deps.config 保留供将来使用
+export function createAIMCPFunctions(): MCPOperations {
+  const validator = new AjvJsonSchemaValidator()
 
   /** 工具注册表（按 name 索引） */
   const tools = new Map<string, ToolRegistration>()
@@ -87,11 +90,14 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
       definition: MCPToolDefinition,
       handler: MCPToolHandler<TInput, TOutput>,
     ): HaiResult<void> {
-      tools.set(definition.name, {
-        definition,
-        handler: handler as MCPToolHandler,
-      })
-      return ok(undefined)
+      try {
+        const validate = validator.getValidator(definition.inputSchema)
+        tools.set(definition.name, { definition, handler: handler as MCPToolHandler, validate })
+        return ok(undefined)
+      }
+      catch (error) {
+        return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolSchema', { params: { name: definition.name } }), error)
+      }
     },
 
     /** 注册 MCP 资源（同 URI 覆盖） */
@@ -130,7 +136,10 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
         if (!registration) {
           return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpToolNotFound', { params: { name } }))
         }
-        const ctx: MCPContext = context || { requestId: crypto.randomUUID() }
+        const validation = registration.validate(args)
+        if (!validation.valid)
+          return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpInvalidToolInput', { params: { name } }))
+        const ctx: MCPContext = { ...context, requestId: context?.requestId ?? crypto.randomUUID() }
         const result = await registration.handler(args, ctx)
         return ok(result)
       }
@@ -158,6 +167,11 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
           return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpResourceNotFound', { params: { uri } }))
         }
         const content = await registration.handler()
+        // SDK Schema 校验字段类型，再保证 text/blob 恰好存在一项。
+        const text = TextResourceContentsSchema.safeParse(content)
+        const blob = BlobResourceContentsSchema.safeParse(content)
+        if (text.success === blob.success)
+          return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpInvalidResource', { params: { uri } }))
         return ok(content)
       }
       catch (error) {
@@ -192,12 +206,16 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
 
         // 验证必需参数
         for (const arg of registration.prompt.arguments || []) {
-          if (arg.required && !(arg.name in args)) {
+          if (arg.required && !Object.hasOwn(args, arg.name)) {
             return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptMissingArg', { params: { name, arg: arg.name } }))
           }
+          if (Object.hasOwn(args, arg.name) && typeof args[arg.name] !== 'string')
+            return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', { params: { name } }))
         }
 
         const messages = await registration.handler(args)
+        if (!Array.isArray(messages) || messages.some(message => !PromptMessageSchema.safeParse(message).success))
+          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpInvalidPrompt', { params: { name } }))
         return ok(messages)
       }
       catch (error) {

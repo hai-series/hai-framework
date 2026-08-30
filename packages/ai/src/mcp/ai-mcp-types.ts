@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-import type { AIConfig } from '../ai-config.js'
+import type { PromptMessage } from '@modelcontextprotocol/sdk/types.js'
 
 // ─── MCP 业务类型 ───
 
@@ -84,28 +84,11 @@ export interface MCPPromptArgument {
   required?: boolean
 }
 
-/** MCP 提示词消息（getPrompt 的返回值元素） */
-export interface MCPPromptMessage {
-  /** 消息角色 */
-  role: 'user' | 'assistant'
-  /** 消息内容 */
-  content: MCPPromptContent
-}
+/** MCP 提示词消息，直接复用 SDK 的完整判别联合（含图片、音频与嵌入资源） */
+export type MCPPromptMessage = PromptMessage
 
-/** MCP 提示词内容（支持纯文本或资源引用） */
-export interface MCPPromptContent {
-  /** 内容类型：`'text'` 纯文本 | `'resource'` 资源引用 */
-  type: 'text' | 'resource'
-  /** 文本内容（type 为 `'text'` 时） */
-  text?: string
-  /** 资源引用（type 为 `'resource'` 时） */
-  resource?: {
-    uri: string
-    text?: string
-    blob?: string
-    mimeType?: string
-  }
-}
+/** MCP 提示词内容；按 type 缩窄后访问对应字段 */
+export type MCPPromptContent = PromptMessage['content']
 
 // ─── MCP Server 类型 ───
 
@@ -117,31 +100,6 @@ export interface McpServerOptions {
   version?: string
 }
 
-// ─── MCP Provider 接口 ───
-
-/**
- * MCP Provider 接口
- *
- * 定义 MCP 工具/资源/提示词的注册与调用能力。
- */
-export interface MCPProvider {
-  registerTool: <TInput, TOutput>(
-    definition: MCPToolDefinition,
-    handler: MCPToolHandler<TInput, TOutput>,
-  ) => HaiResult<void>
-  registerResource: (
-    resource: MCPResource,
-    handler: () => Promise<MCPResourceContent>,
-  ) => HaiResult<void>
-  registerPrompt: (
-    prompt: MCPPrompt,
-    handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
-  ) => HaiResult<void>
-  callTool: (name: string, args: unknown, context?: MCPContext) => Promise<HaiResult<unknown>>
-  readResource: (uri: string) => Promise<HaiResult<MCPResourceContent>>
-  getPrompt: (name: string, args: Record<string, string>) => Promise<HaiResult<MCPPromptMessage[]>>
-}
-
 // ─── MCP 操作接口 ───
 
 /**
@@ -150,27 +108,25 @@ export interface MCPProvider {
  * 需要先调用 `ai.init()` 初始化，否则所有方法返回 `NOT_INITIALIZED` 错误。
  */
 export interface MCPOperations {
+  /** 注册工具并编译 JSON Schema；非法 Schema 返回 MCP_TOOL_ERROR，同名注册覆盖 */
   registerTool: <TInput, TOutput>(
     definition: MCPToolDefinition,
     handler: MCPToolHandler<TInput, TOutput>,
   ) => HaiResult<void>
+  /** 注册资源加载器；读取时校验 text/blob 输出 */
   registerResource: (
     resource: MCPResource,
     handler: () => Promise<MCPResourceContent>,
   ) => HaiResult<void>
+  /** 注册提示词；调用时校验必填参数和 SDK 消息格式 */
   registerPrompt: (
     prompt: MCPPrompt,
     handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
   ) => HaiResult<void>
+  /** 校验输入后执行工具；自动补齐缺失的 requestId */
   callTool: (name: string, args: unknown, context?: MCPContext) => Promise<HaiResult<unknown>>
+  /** 读取资源，输出必须恰好含一个有效 text 或 blob */
   readResource: (uri: string) => Promise<HaiResult<MCPResourceContent>>
+  /** 渲染提示词；必填参数必须是自身属性，且提供的已声明参数必须是字符串 */
   getPrompt: (name: string, args: Record<string, string>) => Promise<HaiResult<MCPPromptMessage[]>>
-}
-
-// ─── MCP 工厂依赖 ───
-
-/** MCP 子功能工厂依赖（内部使用） */
-export interface AIMCPFunctionsDeps {
-  /** 校验后的 AI 配置 */
-  config: AIConfig
 }

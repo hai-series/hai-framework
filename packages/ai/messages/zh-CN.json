@@ -1,4 +1,8 @@
 {
+  "ai_mcpInvalidToolSchema": "MCP 工具输入 Schema 无效：{name}",
+  "ai_mcpInvalidToolInput": "MCP 工具输入无效：{name}",
+  "ai_mcpInvalidResource": "MCP 资源必须且只能包含有效 text 或 blob：{uri}",
+  "ai_mcpInvalidPrompt": "MCP 提示词参数或消息无效：{name}",
   "$schema": "https://inlang.com/schema/inlang-message-format",
 
   "ai_notInitialized": "AI 服务未初始化，请先调用 ai.init()",

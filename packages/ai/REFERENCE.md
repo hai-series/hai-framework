@@ -62,6 +62,8 @@ if (result.success) {
 
 `ai.mcp` 方法：`registerTool`、`callTool`、`registerResource`、`readResource`、`registerPrompt`、`getPrompt`。
 
+工具 JSON Schema 在注册时编译，调用前强制校验；资源要求 text/blob 恰好一项；提示词复用 SDK 完整消息类型并校验输出。`ai.mcp` 与独立服务器的注册和 transport 不自动互通。
+
 ## Embedding
 
 Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key 指向不同网关时不会复用错误客户端。
@@ -181,7 +183,7 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 ## A2A
 
 - `registerExecutor(executor)`：注册 Agent executor。
-- `getAgentCard()`：获取 Agent Card。
+- `getAgentCard()`：获取完整 A2A 0.3 Agent Card，含 streaming/MIME/securitySchemes；默认发现路径为 `/.well-known/agent-card.json`。
 - `handleRequest(body, context?)`：处理 A2A JSON-RPC 请求。
 - `listMessages(filter)`：查询 A2A 消息记录。
 - `callRemoteAgent(remoteUrl, message, options?)`：调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor。

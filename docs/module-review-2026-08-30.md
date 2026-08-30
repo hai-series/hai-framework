@@ -16,12 +16,12 @@
 | 8   | P2     | Kit A2A JSON 解析                 | 非法 JSON 直接抛错而非 JSON-RPC -32700                                  | 已修复 |
 | 9   | P1     | Kit A2A SSE                       | start 无界读取、没有 cancel 清理，断开连接后继续消费                    | 已修复 |
 | 10  | P3     | Kit A2A 重复实现/注释/i18n        | Hook 和路由重复协议逻辑，匿名认证注释及硬编码错误不同步                 | 已修复 |
-| 11  | P1     | AI MCP `callTool`                 | 声明的 JSON Schema 未校验，非法参数进入 handler                         | 待修复 |
-| 12  | P2     | AI MCP `getPrompt`                | in 运算符把继承属性当作必填参数，且未校验字符串类型                     | 待修复 |
-| 13  | P2     | AI MCP `readResource`             | text/blob 可同时缺失或同时存在，未校验 handler 输出                     | 待修复 |
-| 14  | P2     | AI MCP Prompt 类型                | 自建内容类型缺少协议的 image/audio 等，且允许缺失 text/resource         | 待修复 |
-| 15  | P2     | AI MCP 请求上下文                 | 传入不含 requestId 的 context 后不会自动补 UUID，与注释不符             | 待修复 |
-| 16  | P3     | AI MCP 空抽象                     | MCPProvider 重复 MCPOperations，AIMCPFunctionsDeps 配置从未读取         | 待修复 |
+| 11  | P1     | AI MCP `callTool`                 | 声明的 JSON Schema 未校验，非法参数进入 handler                         | 已修复 |
+| 12  | P2     | AI MCP `getPrompt`                | in 运算符把继承属性当作必填参数，且未校验字符串类型                     | 已修复 |
+| 13  | P2     | AI MCP `readResource`             | text/blob 可同时缺失或同时存在，未校验 handler 输出                     | 已修复 |
+| 14  | P2     | AI MCP Prompt 类型                | 自建内容类型缺少协议的 image/audio 等，且允许缺失 text/resource         | 已修复 |
+| 15  | P2     | AI MCP 请求上下文                 | 传入不含 requestId 的 context 后不会自动补 UUID，与注释不符             | 已修复 |
+| 16  | P3     | AI MCP 空抽象                     | MCPProvider 重复 MCPOperations，AIMCPFunctionsDeps 配置从未读取         | 已修复 |
 | 17  | P1     | CLI `generate` 名称               | 只检查 outputDir，name 含路径分隔符仍可逃逸或注入生成代码               | 待修复 |
 | 18  | P1     | CLI `generate` 覆盖               | force 参数没有传到写文件路径，默认也覆盖已有文件                        | 待修复 |
 | 19  | P2     | CLI `generateApi`                 | POST 不做 Schema 校验，非法 JSON 被笼统转换为 500，且 body 声明后未使用 | 待修复 |

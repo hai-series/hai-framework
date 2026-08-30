@@ -1,4 +1,8 @@
 {
+  "ai_mcpInvalidToolSchema": "Invalid input schema for MCP tool: {name}",
+  "ai_mcpInvalidToolInput": "Invalid input for MCP tool: {name}",
+  "ai_mcpInvalidResource": "MCP resource must contain either valid text or blob: {uri}",
+  "ai_mcpInvalidPrompt": "Invalid MCP prompt arguments or messages: {name}",
   "$schema": "https://inlang.com/schema/inlang-message-format",
 
   "ai_notInitialized": "AI service not initialized. Call ai.init() first.",

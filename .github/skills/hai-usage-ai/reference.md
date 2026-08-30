@@ -71,6 +71,8 @@ await mcp.connect(new StdioServerTransport())
 
 ### `ai.mcp`
 
+这是进程内注册表，不会自动绑定独立 MCP Server 的 transport。工具注册时编译 JSON Schema、调用时校验输入；非法输入不执行 handler。资源必须恰好含 text/blob 之一；提示词必填参数必须是自身字符串属性，输出使用 SDK 消息类型（含 image/audio）。同名注册覆盖，缺失 requestId 自动补 UUID。已移除未使用的 MCPProvider 与 AIMCPFunctionsDeps 类型；使用 MCPOperations 即可。
+
 | 方法 | 说明 |
 | --- | --- |
 | `registerTool(definition, handler)` | 注册内置工具 |
