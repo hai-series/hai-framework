@@ -97,6 +97,37 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
       await replaceHaiPackageSpecifiers(projectPath)
       await addLocalHaiOverrides(projectPath)
       await removeReplacedHaiCatalogEntries(projectPath)
+      if (scenario.title === 'admin') {
+        // 不只验证 create：增量生成的文件必须进入实际项目的编译、lint 与运行测试。
+        for (const [type, name, output] of [
+          ['page', 'review-page', 'src/routes'],
+          ['component', 'ReviewCard', 'src/lib/components'],
+          ['api', 'review-api', 'src/routes/api'],
+          ['model', 'review-model', 'src/lib/models'],
+          ['migration', 'review-records', 'src/lib/server/migrations'],
+        ]) {
+          runNode([cliBin, '--cwd', projectPath, 'generate', type, name, '--output', output])
+        }
+        const migrationDir = path.join(projectPath, 'src/lib/server/migrations')
+        const migration = (await readdir(migrationDir)).find(name => name.endsWith('_review_records.ts'))!
+        await writeFile(path.join(projectPath, 'tests/generated-migration.test.ts'), `import { reldb } from '@h-ai/reldb'
+import { expect, it } from 'vitest'
+import { down, up } from '../src/lib/server/migrations/${migration.replace(/\.ts$/, '')}'
+
+it('generated migration executes up and down with HaiResult', async () => {
+  expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+  try {
+    expect((await up()).success).toBe(true)
+    expect((await reldb.sql.query('SELECT * FROM hai_app_review_records')).success).toBe(true)
+    expect((await down()).success).toBe(true)
+    expect((await reldb.sql.query('SELECT * FROM hai_app_review_records')).success).toBe(false)
+  }
+  finally {
+    await reldb.close()
+  }
+})
+`)
+      }
       runQualityGates(projectPath, envOptions)
 
       for (const relativePath of scenario.expectedFiles) {

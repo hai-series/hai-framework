@@ -1602,6 +1602,24 @@ describe('generate', () => {
   })
 
   describe('generate page', () => {
+    it('默认拒绝覆盖并预检全部页面文件，force 才允许替换', async () => {
+      const output = path.join(projectDir, 'safe-pages')
+      const serverPath = path.join(output, 'kept', '+page.server.ts')
+      await fse.outputFile(serverPath, '// user implementation')
+      await expect(generate({ type: 'page', name: 'kept', output, cwd: projectDir })).rejects.toThrow()
+      expect(await fse.readFile(serverPath, 'utf8')).toBe('// user implementation')
+      expect(await fse.pathExists(path.join(output, 'kept', '+page.svelte'))).toBe(false)
+      await generate({ type: 'page', name: 'kept', output, cwd: projectDir, force: true })
+      expect(await fse.readFile(serverPath, 'utf8')).toContain('PageServerLoad')
+    })
+
+    it.each(['../escape', 'nested/name', 'nested\\name', 'bad\';code', '123name'])('拒绝不安全生成名称 %s', async (name) => {
+      await expect(generate({ type: 'page', name, cwd: projectDir })).rejects.toThrow()
+    })
+
+    it('输出路径越界时抛错，使 CLI 返回非零退出码', async () => {
+      await expect(generate({ type: 'model', name: 'escape', output: '../outside', cwd: projectDir })).rejects.toThrow()
+    })
     it('应生成 +page.svelte 和 +page.server.ts', async () => {
       await generate({
         type: 'page',
@@ -1647,6 +1665,9 @@ describe('generate', () => {
         'utf-8',
       )
       expect(content).toContain('$props()')
+      expect(content).toContain('children?: Snippet')
+      expect(content).toContain('{@render children?.()}')
+      expect(content).not.toContain('<slot')
     })
   })
 
@@ -1673,6 +1694,8 @@ describe('generate', () => {
       )
       expect(content).toContain('GET')
       expect(content).toContain('POST')
+      expect(content).toContain('kit.handler')
+      expect(content).toContain('kit.validate.body(request, InputSchema)')
     })
   })
 
@@ -1724,8 +1747,11 @@ describe('generate', () => {
         path.join(projectDir, 'migrations', migrationFile),
         'utf-8',
       )
-      expect(content).toContain('export const up')
-      expect(content).toContain('export const down')
+      expect(content).toContain('export function up')
+      expect(content).toContain('export function down')
+      expect(content).toContain('reldb.ddl.createTable')
+      expect(content).toContain('reldb.ddl.dropTable')
+      expect(content).not.toContain('MigrationFn')
     })
   })
 })

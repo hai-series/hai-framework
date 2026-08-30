@@ -22,12 +22,12 @@
 | 14  | P2     | AI MCP Prompt 类型                | 自建内容类型缺少协议的 image/audio 等，且允许缺失 text/resource                        | 已修复 |
 | 15  | P2     | AI MCP 请求上下文                 | 传入不含 requestId 的 context 后不会自动补 UUID，与注释不符                            | 已修复 |
 | 16  | P3     | AI MCP 空抽象                     | MCPProvider 重复 MCPOperations，AIMCPFunctionsDeps 配置从未读取                        | 已修复 |
-| 17  | P1     | CLI `generate` 名称               | 只检查 outputDir，name 含路径分隔符仍可逃逸或注入生成代码                              | 待修复 |
-| 18  | P1     | CLI `generate` 覆盖               | force 参数没有传到写文件路径，默认也覆盖已有文件                                       | 待修复 |
-| 19  | P2     | CLI `generateApi`                 | POST 不做 Schema 校验，非法 JSON 被笼统转换为 500，且 body 声明后未使用                | 待修复 |
-| 20  | P2     | CLI `generateMigration`           | 导入已不存在的 MigrationFn 并调用 db.run，生成文件无法编译                             | 待修复 |
-| 21  | P2     | CLI `generateComponent`           | $props 与旧 slot 混用，未使用 Svelte 5 children Snippet 模式                           | 待修复 |
-| 22  | P2     | CLI `generatePage`                | 空骨架解构未使用 locals/request，生成后 lint 报错                                      | 待修复 |
+| 17  | P1     | CLI `generate` 名称               | 只检查 outputDir，name 含路径分隔符仍可逃逸或注入生成代码                              | 已修复 |
+| 18  | P1     | CLI `generate` 覆盖               | force 参数没有传到写文件路径，默认也覆盖已有文件                                       | 已修复 |
+| 19  | P2     | CLI `generateApi`                 | POST 不做 Schema 校验，非法 JSON 被笼统转换为 500，且 body 声明后未使用                | 已修复 |
+| 20  | P2     | CLI `generateMigration`           | 导入已不存在的 MigrationFn 并调用 db.run，生成文件无法编译                             | 已修复 |
+| 21  | P2     | CLI `generateComponent`           | $props 与旧 slot 混用，未使用 Svelte 5 children Snippet 模式                           | 已修复 |
+| 22  | P2     | CLI `generatePage`                | 空骨架解构未使用 locals/request，生成后 lint 报错                                      | 已修复 |
 | 23  | P2     | Cache 内存 `isExpired`            | 恰好到期时仍有效，与 TTL 边界不符                                                      | 已修复 |
 | 24  | P2     | Cache 内存计数器                  | Number(null/boolean/array) 被当数值，NaN/Infinity 增量破坏计数值                       | 已修复 |
 | 25  | P2     | Cache 内存 `hgetall`              | 普通对象赋值 **proto** 无法保留合法字段，返回结果缺失                                  | 已修复 |
@@ -52,3 +52,4 @@
 - Cache：9 文件 233/233（内存 + Podman Redis），含精确到期、计数器拒绝非法值、特殊 Hash 字段。
 - A2A 与 RelStore 追加测试：34/34，覆盖真实 SQLite 持久化、调用方隔离、消息过滤、SQL 故障传播；MySQL 索引幂等先以 SQL 单元测试验证。[MySQL 8 索引语法](https://dev.mysql.com/doc/refman/8.0/en/create-index.html)
 - 后续根门禁、生成项目 E2E 在实际执行后追加。
+- CLI：7 文件 252 项通过；6 项真实脚手架门禁默认跳过，本轮单独运行 admin 场景，通过 install/typecheck/lint/build/test/test:e2e。该场景实际生成 page/component/api/model/migration；单元测试 4/4（含迁移 up/query/down），浏览器首页 E2E 1/1。其他五类应用的完整安装及浏览器门禁本轮未重跑，不将静态生成断言当作运行验收。

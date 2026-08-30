@@ -61,6 +61,10 @@ npx hai init --force
 
 ### 代码生成
 
+名称必须以字母开头，仅含字母、数字、短横线或下划线，不接受路径。默认先预检全部输出并拒绝覆盖；显式 `--force` 才替换文件。输出及符号链接目标必须留在工作目录内。
+
+页面/API 生成器适用于 SvelteKit；组件使用 Svelte 5 children snippet。API 使用 `kit.handler` 与 Zod 输入校验。迁移输出显式 `up()` / `down()`，调用前初始化 `reldb`，调用后检查 HaiResult；它不是自动迁移运行器，`down()` 会删除表，需应用确认后执行。
+
 ```bash
 # 交互式生成
 npx hai generate

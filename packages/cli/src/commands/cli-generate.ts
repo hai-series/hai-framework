@@ -7,9 +7,11 @@ import type { GenerateOptions, GeneratorType, TemplateContext } from '../cli-typ
 import path from 'node:path'
 import { core } from '@h-ai/core'
 import chalk from 'chalk'
+import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
-import { createTemplateContext, writeFile } from '../cli-utils.js'
+import { cliM } from '../cli-i18n.js'
+import { createTemplateContext } from '../cli-utils.js'
 import { detectProject } from './cli-create.js'
 
 /**
@@ -18,7 +20,7 @@ import { detectProject } from './cli-create.js'
 const GENERATORS: Record<GeneratorType, {
   description: string
   defaultPath: string
-  generate: (name: string, context: TemplateContext, outputDir: string) => Promise<string[]>
+  generate: (context: TemplateContext, outputDir: string) => Promise<Array<{ path: string, content: string }>>
 }> = {
   page: {
     description: 'SvelteKit 页面',
@@ -70,13 +72,16 @@ export async function generate(options: GenerateOptions): Promise<void> {
       throw new Error(`未知的生成器类型: ${resolvedOptions.type}`)
     }
 
+    // 名称会同时进入路径、标识符与源码字符串，禁止路径片段和代码字符。
+    if (!/^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$/i.test(resolvedOptions.name))
+      throw new Error(cliM('cli_invalidGenerateName'))
+
     const outputDir = path.resolve(cwd, resolvedOptions.output || generator.defaultPath)
 
     // 安全校验：输出路径必须在当前工作目录内，防止路径遍历
     const resolvedCwd = path.resolve(cwd)
     if (!outputDir.startsWith(resolvedCwd + path.sep) && outputDir !== resolvedCwd) {
-      core.logger.error(chalk.red(`输出路径 "${resolvedOptions.output}" 超出工作目录范围`))
-      return
+      throw new Error(cliM('cli_generateOutsideWorkspace'))
     }
 
     const context = createTemplateContext(resolvedOptions.name, {
@@ -85,7 +90,24 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
     spinner.start(`生成 ${generator.description}...`)
 
-    const files = await generator.generate(resolvedOptions.name, context, outputDir)
+    const files = await generator.generate(context, outputDir)
+    const realCwd = await fse.realpath(resolvedCwd)
+    // 先检查全部目标，再落盘，避免页面的第二个文件冲突时已覆盖第一个。
+    for (const file of files) {
+      if (!resolvedOptions.force && await fse.pathExists(file.path))
+        throw new Error(cliM('cli_generateExists', { params: { path: file.path } }))
+      let ancestor = file.path
+      while (!await fse.pathExists(ancestor))
+        ancestor = path.dirname(ancestor)
+      const realAncestor = await fse.realpath(ancestor)
+      const relative = path.relative(realCwd, realAncestor)
+      if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+        throw new Error(cliM('cli_generateOutsideWorkspace'))
+    }
+    for (const file of files) {
+      await fse.ensureDir(path.dirname(file.path))
+      await fse.writeFile(file.path, file.content, { encoding: 'utf-8', flag: resolvedOptions.force ? 'w' : 'wx' })
+    }
 
     spinner.succeed()
 
@@ -94,7 +116,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     core.logger.info('', {})
     core.logger.info('创建的文件:')
     files.forEach((file) => {
-      core.logger.info(chalk.cyan(`  ${path.relative(cwd, file)}`))
+      core.logger.info(chalk.cyan(`  ${path.relative(cwd, file.path)}`))
     })
     core.logger.info('', {})
   }
@@ -152,57 +174,49 @@ async function resolveGenerateOptions(options: GenerateOptions): Promise<Require
  * 生成页面
  */
 async function generatePage(
-  _name: string,
   context: TemplateContext,
   outputDir: string,
-): Promise<string[]> {
-  const files: string[] = []
+): Promise<Array<{ path: string, content: string }>> {
+  const files: Array<{ path: string, content: string }> = []
   const pageDir = path.join(outputDir, context.kebabCase)
 
   // +page.svelte
-  const pageContent = `<script lang="ts">
-  /**
-   * ${context.pascalCase} 页面
-   */
-</script>
-
+  const pageContent = `<!-- ${context.pascalCase} 页面 -->
 <svelte:head>
   <title>${context.pascalCase}</title>
 </svelte:head>
 
-<div class="container mx-auto p-4">
-  <h1 class="text-2xl font-bold mb-4">${context.pascalCase}</h1>
-  
+<div class='container mx-auto p-4'>
+  <h1 class='text-2xl font-bold mb-4'>${context.pascalCase}</h1>
+
   <!-- 页面内容 -->
 </div>
 `
 
   const pagePath = path.join(pageDir, '+page.svelte')
-  await writeFile(pagePath, pageContent)
-  files.push(pagePath)
+  files.push({ path: pagePath, content: pageContent })
 
   // +page.server.ts
   const serverContent = `/**
  * ${context.pascalCase} 页面服务端
  */
-import type { PageServerLoad, Actions } from './$types'
+import type { Actions, PageServerLoad } from './$types'
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async () => {
   return {
     // 页面数据
   }
 }
 
 export const actions: Actions = {
-  default: async ({ request, locals }) => {
+  default: async () => {
     // 表单处理
   },
 }
 `
 
   const serverPath = path.join(pageDir, '+page.server.ts')
-  await writeFile(serverPath, serverContent)
-  files.push(serverPath)
+  files.push({ path: serverPath, content: serverContent })
 
   return files
 }
@@ -211,35 +225,37 @@ export const actions: Actions = {
  * 生成组件
  */
 async function generateComponent(
-  _name: string,
   context: TemplateContext,
   outputDir: string,
-): Promise<string[]> {
-  const files: string[] = []
+): Promise<Array<{ path: string, content: string }>> {
+  const files: Array<{ path: string, content: string }> = []
 
   // Component.svelte
-  const componentContent = `<script lang="ts">
+  const componentContent = `<script lang='ts'>
+  import type { Snippet } from 'svelte'
+
   /**
    * ${context.pascalCase} 组件
    */
-  
+
   interface Props {
     /** 自定义 class */
     class?: string
+    /** 子内容（Svelte 5 snippet） */
+    children?: Snippet
   }
-  
-  let { class: className = '' }: Props = $props()
+
+  const { class: className = '', children }: Props = $props()
 </script>
 
 <div class={className}>
   <!-- 组件内容 -->
-  <slot />
+  {@render children?.()}
 </div>
 `
 
   const componentPath = path.join(outputDir, `${context.pascalCase}.svelte`)
-  await writeFile(componentPath, componentContent)
-  files.push(componentPath)
+  files.push({ path: componentPath, content: componentContent })
 
   return files
 }
@@ -248,11 +264,10 @@ async function generateComponent(
  * 生成 API 端点
  */
 async function generateApi(
-  _name: string,
   context: TemplateContext,
   outputDir: string,
-): Promise<string[]> {
-  const files: string[] = []
+): Promise<Array<{ path: string, content: string }>> {
+  const files: Array<{ path: string, content: string }> = []
   const apiDir = path.join(outputDir, context.kebabCase)
 
   // +server.ts
@@ -261,42 +276,33 @@ async function generateApi(
  */
 import type { RequestHandler } from './$types'
 import { kit } from '@h-ai/kit'
+import { z } from 'zod'
+
+/** 示例输入；添加业务逻辑前扩展字段和约束。 */
+const InputSchema = z.object({
+  /** 业务名称（非空） */
+  name: z.string().min(1),
+})
 
 /**
  * GET ${context.kebabCase}
  */
-export const GET: RequestHandler = async ({ locals }) => {
-  try {
-    const { requestId } = locals
-    
-    return kit.response.ok({ message: 'Hello from ${context.kebabCase}' }, requestId)
-  }
-  catch (error) {
-    return kit.response.internalError()
-  }
-}
+export const GET: RequestHandler = kit.handler(async ({ locals }) => {
+  return kit.response.ok({ items: [] }, locals.requestId)
+})
 
 /**
  * POST ${context.kebabCase}
  */
-export const POST: RequestHandler = async ({ request, locals }) => {
-  try {
-    const { requestId } = locals
-    const body = await request.json()
-    
-    // 处理请求
-    
-    return kit.response.ok({ success: true }, requestId)
-  }
-  catch (error) {
-    return kit.response.internalError()
-  }
-}
+export const POST: RequestHandler = kit.handler(async ({ request, locals }) => {
+  const body = await kit.validate.body(request, InputSchema)
+  // 校验通过后再执行业务操作；示例仅回传数据，不执行写入。
+  return kit.response.ok(body, locals.requestId)
+})
 `
 
   const serverPath = path.join(apiDir, '+server.ts')
-  await writeFile(serverPath, serverContent)
-  files.push(serverPath)
+  files.push({ path: serverPath, content: serverContent })
 
   return files
 }
@@ -305,11 +311,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 生成数据模型
  */
 async function generateModel(
-  _name: string,
   context: TemplateContext,
   outputDir: string,
-): Promise<string[]> {
-  const files: string[] = []
+): Promise<Array<{ path: string, content: string }>> {
+  const files: Array<{ path: string, content: string }> = []
 
   // model.ts
   const modelContent = `/**
@@ -321,9 +326,13 @@ import { z } from 'zod'
  * ${context.pascalCase} Schema
  */
 export const ${context.camelCase}Schema = z.object({
+  /** 记录唯一标识 */
   id: z.string(),
+  /** 显示名称 */
   name: z.string().min(1),
+  /** 创建时间 */
   createdAt: z.date(),
+  /** 最后修改时间 */
   updatedAt: z.date(),
 })
 
@@ -350,8 +359,7 @@ export type Update${context.pascalCase} = z.infer<typeof update${context.pascalC
 `
 
   const modelPath = path.join(outputDir, `${context.kebabCase}.ts`)
-  await writeFile(modelPath, modelContent)
-  files.push(modelPath)
+  files.push({ path: modelPath, content: modelContent })
 
   return files
 }
@@ -360,11 +368,10 @@ export type Update${context.pascalCase} = z.infer<typeof update${context.pascalC
  * 生成迁移
  */
 async function generateMigration(
-  _name: string,
   context: TemplateContext,
   outputDir: string,
-): Promise<string[]> {
-  const files: string[] = []
+): Promise<Array<{ path: string, content: string }>> {
+  const files: Array<{ path: string, content: string }> = []
   const timestamp = Date.now()
 
   // migration.ts
@@ -372,29 +379,26 @@ async function generateMigration(
  * 迁移: ${context.pascalCase}
  * 时间: ${new Date().toISOString()}
  */
-import type { MigrationFn } from '@h-ai/reldb'
+import { reldb } from '@h-ai/reldb'
 
-export const up: MigrationFn = async (db) => {
-  // 升级逻辑
-  await db.run(\`
-    CREATE TABLE IF NOT EXISTS ${context.snakeCase} (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  \`)
+/** 升级：调用前初始化 reldb，调用方必须检查返回的 HaiResult。 */
+export function up() {
+  return reldb.ddl.createTable('hai_app_${context.snakeCase}', {
+    id: { type: 'TEXT', primaryKey: true },
+    name: { type: 'TEXT', notNull: true },
+    created_at: { type: 'TIMESTAMP', notNull: true },
+    updated_at: { type: 'TIMESTAMP', notNull: true },
+  })
 }
 
-export const down: MigrationFn = async (db) => {
-  // 回滚逻辑
-  await db.run('DROP TABLE IF EXISTS ${context.snakeCase}')
+/** 回滚会删除整张表；由应用确认数据可删除后显式调用。 */
+export function down() {
+  return reldb.ddl.dropTable('hai_app_${context.snakeCase}')
 }
 `
 
   const migrationPath = path.join(outputDir, `${timestamp}_${context.snakeCase}.ts`)
-  await writeFile(migrationPath, migrationContent)
-  files.push(migrationPath)
+  files.push({ path: migrationPath, content: migrationContent })
 
   return files
 }

@@ -1,0 +1,5 @@
+{
+  "cli_invalidGenerateName": "名称必须以字母开头，且仅包含字母、数字、短横线或下划线",
+  "cli_generateOutsideWorkspace": "生成文件必须位于工作目录内，符号链接目标也不得越界",
+  "cli_generateExists": "文件已存在：{path}。使用 --force 才可覆盖"
+}

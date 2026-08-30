@@ -1,0 +1,5 @@
+{
+  "cli_invalidGenerateName": "Use a name starting with a letter, with only letters, digits, hyphens or underscores",
+  "cli_generateOutsideWorkspace": "Generated files must remain inside the workspace, including symbolic link targets",
+  "cli_generateExists": "File already exists: {path}. Use --force to overwrite it"
+}
