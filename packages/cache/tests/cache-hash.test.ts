@@ -10,6 +10,17 @@ import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suit
 
 describe('cache hash operations', () => {
   const defineCommon = () => {
+    it('hset/hgetall 保留 __proto__ 字段而不修改原型', async () => {
+      const fields = Object.fromEntries([['__proto__', { safe: true }], ['constructor', 'field']])
+      expect((await cache.hash.hset('special-fields', fields)).success).toBe(true)
+      const result = await cache.hash.hgetall('special-fields')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(Object.hasOwn(result.data, '__proto__')).toBe(true)
+        expect(Object.getOwnPropertyDescriptor(result.data, '__proto__')?.value).toEqual({ safe: true })
+        expect(Object.getPrototypeOf(result.data)).toBe(Object.prototype)
+      }
+    })
     it('hset/hget/hgetall/hexists/hdel 应该工作', async () => {
       const setOne = await cache.hash.hset('h1', 'f1', 'v1')
       expect(setOne.success).toBe(true)

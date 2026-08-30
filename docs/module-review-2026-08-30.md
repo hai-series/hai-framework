@@ -28,9 +28,9 @@
 | 20  | P2     | CLI `generateMigration`           | 导入已不存在的 MigrationFn 并调用 db.run，生成文件无法编译              | 待修复 |
 | 21  | P2     | CLI `generateComponent`           | $props 与旧 slot 混用，未使用 Svelte 5 children Snippet 模式            | 待修复 |
 | 22  | P2     | CLI `generatePage`                | 空骨架解构未使用 locals/request，生成后 lint 报错                       | 待修复 |
-| 23  | P2     | Cache 内存 `isExpired`            | 恰好到期时仍有效，与 TTL 边界不符                                       | 待修复 |
-| 24  | P2     | Cache 内存计数器                  | Number(null/boolean/array) 被当数值，NaN/Infinity 增量破坏计数值        | 待修复 |
-| 25  | P2     | Cache 内存 `hgetall`              | 普通对象赋值 **proto** 无法保留合法字段，返回结果缺失                   | 待修复 |
+| 23  | P2     | Cache 内存 `isExpired`            | 恰好到期时仍有效，与 TTL 边界不符                                       | 已修复 |
+| 24  | P2     | Cache 内存计数器                  | Number(null/boolean/array) 被当数值，NaN/Infinity 增量破坏计数值        | 已修复 |
+| 25  | P2     | Cache 内存 `hgetall`              | 普通对象赋值 **proto** 无法保留合法字段，返回结果缺失                   | 已修复 |
 
 ## 协议覆盖与边界
 

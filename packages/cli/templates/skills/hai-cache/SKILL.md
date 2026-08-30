@@ -17,6 +17,8 @@ description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/lis
 
 > `@h-ai/cache` 提供统一缓存接口，支持 Memory 与 Redis 后端，包含 KV / Hash / List / Set / ZSet / 分布式锁 六类操作。
 
+内存 KV 在到期时间点即失效。整数计数器拒绝 null/boolean/array、非整数增量和安全整数溢出，失败不修改原值；Hash 的 `__proto__` / `constructor` 名称按普通字段保留。
+
 ---
 
 ## 运行环境

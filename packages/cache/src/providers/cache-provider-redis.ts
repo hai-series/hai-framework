@@ -295,10 +295,7 @@ export function createRedisProvider(): CacheProvider {
           return client!.hset(key, fieldOrData, serialize(value))
         }
         if (typeof fieldOrData === 'object') {
-          const serialized: Record<string, string> = {}
-          for (const [k, v] of Object.entries(fieldOrData)) {
-            serialized[k] = serialize(v)
-          }
+          const serialized = Object.fromEntries(Object.entries(fieldOrData).map(([key, value]) => [key, serialize(value)]))
           return client!.hset(key, serialized)
         }
         return 0
@@ -319,11 +316,8 @@ export function createRedisProvider(): CacheProvider {
     async hgetall<T = Record<string, CacheValue>>(key: string): Promise<HaiResult<T>> {
       return wrapOperation(async () => {
         const data = await client!.hgetall(key)
-        const result: Record<string, CacheValue> = {}
-        for (const [k, v] of Object.entries(data)) {
-          result[k] = deserialize(v)
-        }
-        return result as T
+        // 保留 __proto__ 等合法字段，不触发普通对象的原型 setter。
+        return Object.fromEntries(Object.entries(data).map(([key, value]) => [key, deserialize(value)])) as T
       })
     },
 

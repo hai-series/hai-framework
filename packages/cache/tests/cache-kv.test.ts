@@ -4,9 +4,34 @@
  * =============================================================================
  */
 
-import { describe, expect, it } from 'vitest'
-import { cache } from '../src/index.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cache, HaiCacheError } from '../src/index.js'
 import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suite.js'
+
+defineCacheSuite('memory boundaries', memoryEnv, () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('到期瞬间不可读，epoch 0 也不是永不过期', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1000)
+    expect((await cache.kv.set('exact', 'value', { pxat: 1000 })).success).toBe(true)
+    expect(await cache.kv.get('exact')).toMatchObject({ success: true, data: null })
+    expect(await cache.kv.ttl('exact')).toMatchObject({ success: true, data: -2 })
+    await cache.kv.set('epoch', 'value', { pxat: 0 })
+    expect(await cache.kv.get('epoch')).toMatchObject({ success: true, data: null })
+  })
+
+  it.each([null, true, [], {}, '', ' 1 ', 1.5])('拒绝非整数计数值 %j 且保留原值', async (value) => {
+    await cache.kv.set('counter', value)
+    expect(await cache.kv.incr('counter')).toMatchObject({ success: false, error: { code: HaiCacheError.OPERATION_FAILED.code } })
+    expect(await cache.kv.get('counter')).toMatchObject({ success: true, data: value })
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0.5, Number.MAX_SAFE_INTEGER])('非法或溢出增量不污染计数器 %s', async (increment) => {
+    await cache.kv.set('counter', 1)
+    expect(await cache.kv.incrBy('counter', increment)).toMatchObject({ success: false, error: { code: HaiCacheError.OPERATION_FAILED.code } })
+    expect(await cache.kv.get('counter')).toMatchObject({ success: true, data: 1 })
+  })
+})
 
 describe('cache kv advanced operations', () => {
   const defineCommon = () => {

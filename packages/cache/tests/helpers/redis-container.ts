@@ -5,7 +5,7 @@
  */
 
 import type { StartedTestContainer } from 'testcontainers'
-import { GenericContainer } from 'testcontainers'
+import { GenericContainer, Wait } from 'testcontainers'
 
 let containerPromise: Promise<StartedTestContainer> | null = null
 let refCount = 0
@@ -22,6 +22,9 @@ export async function acquireRedisContainer(): Promise<RedisContainerLease> {
   if (!containerPromise) {
     containerPromise = new GenericContainer('redis:alpine')
       .withExposedPorts(6379)
+      // Redis 明确输出就绪日志；避免 Podman 的内部端口 exec 探测挂起。
+      // 后续 cache.init 仍会建立真实连接验证服务可达。
+      .withWaitStrategy(Wait.forLogMessage(/Ready to accept connections/))
       .start()
   }
 

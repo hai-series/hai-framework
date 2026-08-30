@@ -98,14 +98,14 @@ export function createMemoryProvider(): CacheProvider {
    * @returns 未设置 expiresAt 视为永不过期，返回 false
    */
   function isExpired(entry: CacheEntry): boolean {
-    return entry.expiresAt != null && Date.now() > entry.expiresAt
+    return entry.expiresAt != null && Date.now() >= entry.expiresAt
   }
 
   /** 定期清理 store 中的所有过期 KV 项 */
   function cleanup(): void {
     const now = Date.now()
     for (const [key, entry] of store.entries()) {
-      if (entry.expiresAt && entry.expiresAt < now) {
+      if (entry.expiresAt != null && entry.expiresAt <= now) {
         store.delete(key)
       }
     }
@@ -146,9 +146,9 @@ export function createMemoryProvider(): CacheProvider {
       return now + options.ex * 1000
     if (options.px)
       return now + options.px
-    if (options.exat)
+    if (options.exat != null)
       return options.exat * 1000
-    if (options.pxat)
+    if (options.pxat != null)
       return options.pxat
     return undefined
   }
@@ -213,15 +213,11 @@ export function createMemoryProvider(): CacheProvider {
     },
 
     async ttl(key: string): Promise<HaiResult<number>> {
-      const entry = store.get(key)
+      const entry = getValidEntry(key)
       if (!entry)
         return ok(-2)
-      if (!entry.expiresAt)
+      if (entry.expiresAt == null)
         return ok(-1)
-      if (isExpired(entry)) {
-        store.delete(key)
-        return ok(-2)
-      }
       return ok(Math.ceil((entry.expiresAt - Date.now()) / 1000))
     },
 
@@ -234,23 +230,18 @@ export function createMemoryProvider(): CacheProvider {
     },
 
     async incr(key: string): Promise<HaiResult<number>> {
-      const entry = getValidEntry(key)
-      const current = entry ? Number(entry.value) : 0
-      if (Number.isNaN(current)) {
-        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_valueNotNumber'))
-      }
-      const newValue = current + 1
-      store.set(key, { value: newValue, expiresAt: entry?.expiresAt })
-      return ok(newValue)
+      return kv.incrBy(key, 1)
     },
 
     async incrBy(key: string, increment: number): Promise<HaiResult<number>> {
       const entry = getValidEntry(key)
-      const current = entry ? Number(entry.value) : 0
-      if (Number.isNaN(current)) {
+      // 计数器只接受安全整数，避免 Number(null/boolean/array) 的隐式类型转换。
+      const value = entry?.value ?? (entry ? Number.NaN : 0)
+      const current = typeof value === 'number' || (typeof value === 'string' && /^-?\d+$/.test(value)) ? Number(value) : Number.NaN
+      const newValue = current + increment
+      if (!Number.isSafeInteger(current) || !Number.isSafeInteger(increment) || !Number.isSafeInteger(newValue)) {
         return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_valueNotNumber'))
       }
-      const newValue = current + increment
       store.set(key, { value: newValue, expiresAt: entry?.expiresAt })
       return ok(newValue)
     },
@@ -379,11 +370,8 @@ export function createMemoryProvider(): CacheProvider {
       const map = hashStore.get(key)
       if (!map)
         return ok({} as T)
-      const result: Record<string, CacheValue> = {}
-      for (const [f, v] of map.entries()) {
-        result[f] = deserializeValue(v)
-      }
-      return ok(result as T)
+      // fromEntries 保留 __proto__ 等合法字段，不触发原型 setter。
+      return ok(Object.fromEntries(Array.from(map, ([field, value]) => [field, deserializeValue(value)])) as T)
     },
 
     async hkeys(key: string): Promise<HaiResult<string[]>> {
