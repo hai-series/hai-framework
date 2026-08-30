@@ -214,7 +214,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 | `listMessages(filter)` | 查询 A2A 消息记录 |
 | `callRemoteAgent(remoteUrl, message, options?)` | 调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor |
 
-A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端调用不依赖服务端配置。
+A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端调用不依赖服务端配置。getAgentCard 返回完整 A2A 0.3 Card（MIME、streaming、安全方案）；Kit 默认发现路径为 `/.well-known/agent-card.json`。handleRequest 在未初始化时也返回 JSON-RPC 错误；可信 context.agentId 映射 SDK user.userName。Kit 配置 authenticate 后空身份返回 401；不声明 push notifications、gRPC、REST 支持。
 
 `callRemoteAgent` 只接受 HTTP(S) 且拒绝 URL 内嵌凭据。该校验不是完整 SSRF 防护：remote URL 若来自外部输入，应用必须先按 origin 白名单过滤，并通过出口代理限制 DNS 重绑定、重定向到私网与云元数据地址。
 

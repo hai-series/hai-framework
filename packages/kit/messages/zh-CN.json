@@ -1,4 +1,7 @@
 {
+  "kit_a2aAuthFailed": "A2A 身份认证失败",
+  "kit_a2aParseError": "请求体不是有效的 JSON",
+  "kit_a2aCardUnavailable": "Agent Card 不可用",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "kit_unauthorized": "未授权",
   "kit_forbidden": "权限不足：缺少 {permission} 权限",

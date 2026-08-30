@@ -22,7 +22,7 @@ export interface A2AApiKeyAuthConfig {
  * 根据配置从请求头或 query 参数中提取 API Key，
  * 通过 `iam.apiKey.verifyApiKey()` 验证后返回调用方上下文。
  *
- * - 无 API Key → 返回 `null`（匿名请求）
+ * - 无 API Key → 返回 `null`（由调用方拒绝请求）
  * - 验证失败 → 返回 `null`（拒绝）
  * - 验证成功 → 返回 `{ agentId, apiKeyId, scopes }`
  *

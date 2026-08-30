@@ -337,15 +337,16 @@ export interface HandleA2AOperations {
 export interface HandleA2AConfig {
   /** A2A 操作接口（通常传入 `ai.a2a`） */
   operations: HandleA2AOperations
-  /** Agent Card 端点路径（默认 `/.well-known/agent.json`） */
+  /** Agent Card 端点路径（默认 `/.well-known/agent-card.json`） */
   cardPath?: string
   /** JSON-RPC 端点路径（默认 `/a2a`） */
   rpcPath?: string
   /**
    * A2A 认证
    *
-   * - `'apiKey'`：自动使用 IAM API Key 认证（根据 Agent Card 的 security 配置提取 key）
-   * - 函数：自定义认证回调
+   * - `'apiKey'`：使用 IAM API Key 认证（读取 Agent Card.securitySchemes.apiKey）
+   * - 函数：自定义认证回调；返回 null/undefined 拒绝请求（401）
+   * 未配置此项才允许匿名请求。
    */
   authenticate?: 'apiKey' | ((event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>)
 }

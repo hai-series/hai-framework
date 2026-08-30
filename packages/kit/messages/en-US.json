@@ -1,4 +1,7 @@
 {
+  "kit_a2aAuthFailed": "A2A authentication failed",
+  "kit_a2aParseError": "Invalid JSON request body",
+  "kit_a2aCardUnavailable": "Agent card not available",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "kit_unauthorized": "Unauthorized",
   "kit_forbidden": "Forbidden: missing {permission} permission",

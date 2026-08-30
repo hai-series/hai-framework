@@ -25,7 +25,7 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 - Bearer Token 工具（服务端 login/logout + 浏览器端 Token 存储）
 - 浏览器端统一客户端（自动 CSRF，支持传输加密）
 - 声明式 CRUD 资源定义（`crud.define`）
-- A2A 协议集成
+- A2A 协议集成：默认发现路径 `/.well-known/agent-card.json`；配置 `authenticate` 后 null/undefined 返回 401，仅未配置认证时允许匿名。API Key 参数从完整 Agent Card 的 `securitySchemes.apiKey` 读取。Hook 与显式 A2A 路由共享 JSON-RPC 解析错误和 SSE 取消清理逻辑。
 - 双构建模式（`createAdapter()`）
 
 ## 依赖

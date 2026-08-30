@@ -8,6 +8,7 @@
 import type { RequestEvent, RequestHandler } from '@sveltejs/kit'
 
 import type { KitA2AHandlerConfig } from './kit-a2a-types.js'
+import { kitM } from '../../kit-i18n.js'
 import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
 
 /**
@@ -32,7 +33,7 @@ import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
  * ```
  */
 export function createAgentCardHandler(
-  getAgentCard: () => Record<string, unknown>,
+  getAgentCard: () => object,
 ): RequestHandler {
   return async () => {
     const card = getAgentCard()
@@ -79,29 +80,40 @@ export function createA2AHandler(
         ? config.authenticate
         : createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
       const authResult = await authFn(event)
-      if (authResult) {
-        context = authResult
-      }
+      if (!authResult)
+        return Response.json({ error: { code: 'A2A_AUTH_FAILED', message: kitM('kit_a2aAuthFailed') } }, { status: 401 })
+      context = authResult
     }
 
     // 解析 JSON-RPC 请求体
-    const requestBody = await event.request.json()
+    let requestBody: unknown
+    try {
+      requestBody = await event.request.json()
+    }
+    catch {
+      return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: kitM('kit_a2aParseError') } }, { status: 400 })
+    }
     const result = await handleRequest(requestBody, context)
 
     if (result.streaming && result.stream) {
       // 流式响应：SSE 格式
       const stream = result.stream
       const readableStream = new ReadableStream({
-        async start(controller) {
-          const encoder = new TextEncoder()
+        // 按下游拉取推进迭代，避免 start 中无界预读；断开时释放生成器。
+        async pull(controller) {
           try {
-            for await (const chunk of stream) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
-            }
+            const chunk = await stream.next()
+            if (chunk.done)
+              controller.close()
+            else
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk.value)}\n\n`))
           }
-          finally {
-            controller.close()
+          catch (error) {
+            controller.error(error)
           }
+        },
+        async cancel() {
+          await stream.return()
         },
       })
 

@@ -51,9 +51,9 @@ export function buildAgentCard(config: A2AAgentCardConfig): AgentCard {
     url: config.url,
     version: config.version ?? '1.0.0',
     protocolVersion: '0.3.0',
-    defaultInputModes: ['text'],
-    defaultOutputModes: ['text'],
-    capabilities: {},
+    defaultInputModes: ['text/plain'],
+    defaultOutputModes: ['text/plain'],
+    capabilities: { streaming: true, pushNotifications: false },
     skills: (config.skills ?? []).map(s => ({
       id: s.id,
       name: s.name,

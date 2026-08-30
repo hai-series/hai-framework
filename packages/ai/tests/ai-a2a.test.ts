@@ -8,13 +8,15 @@ import type { Task } from '@a2a-js/sdk'
 import type { ServerCallContext } from '@a2a-js/sdk/server'
 import type { AIRelStore, StorePage } from '../src/store/ai-store-types.js'
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ReldbA2ATaskStore } from '../src/a2a/ai-a2a-functions.js'
 import { buildAgentCard } from '../src/a2a/ai-a2a-server.js'
 import { AIConfigSchema } from '../src/ai-config.js'
 import { ai } from '../src/ai-main.js'
 import { HaiAIError } from '../src/ai-types.js'
+
+afterEach(() => ai.close())
 
 // ─── buildAgentCard ───
 
@@ -25,8 +27,9 @@ describe('buildAgentCard', () => {
     expect(card.name).toBe('test-agent')
     expect(card.url).toBe('https://example.com')
     expect(card.protocolVersion).toBe('0.3.0')
-    expect(card.defaultInputModes).toEqual(['text'])
-    expect(card.defaultOutputModes).toEqual(['text'])
+    expect(card.defaultInputModes).toEqual(['text/plain'])
+    expect(card.defaultOutputModes).toEqual(['text/plain'])
+    expect(card.capabilities).toEqual({ streaming: true, pushNotifications: false })
     expect(card.description).toBe('')
     expect(card.version).toBe('1.0.0')
     expect(card.skills).toEqual([])
@@ -241,6 +244,41 @@ describe('a2A 错误码', () => {
 
 // ─── 未初始化占位 ───
 
+describe('a2A 公共协议入口', () => {
+  it('发现端点在注册前后均返回完整且隔离的 Agent Card', async () => {
+    expect((await ai.init({ a2a: { agentCard: { name: 'echo', url: 'https://example.com/a2a' } } })).success).toBe(true)
+    const first = ai.a2a.getAgentCard()
+    expect(first.success).toBe(true)
+    if (!first.success)
+      return
+    expect(first.data).toMatchObject({ protocolVersion: '0.3.0', capabilities: { streaming: true } })
+    first.data.name = 'mutated'
+    expect(ai.a2a.getAgentCard()).toMatchObject({ success: true, data: { name: 'echo' } })
+
+    expect(ai.a2a.registerExecutor({ execute: vi.fn(), cancelTask: vi.fn() }).success).toBe(true)
+    expect(ai.a2a.getAgentCard()).toMatchObject({ success: true, data: { protocolVersion: '0.3.0' } })
+  })
+
+  it('真实 SDK 执行器收到认证主体并可正常结束事件总线', async () => {
+    expect((await ai.init({ a2a: { agentCard: { name: 'echo', url: 'https://example.com/a2a' } } })).success).toBe(true)
+    const execute = vi.fn(async (ctx, bus) => {
+      expect(ctx.context?.user?.userName).toBe('caller-1')
+      expect(ctx.context?.user?.isAuthenticated).toBe(true)
+      bus.publish({ kind: 'message', role: 'agent', messageId: 'reply', parts: [{ kind: 'text', text: 'hello' }] })
+      bus.finished()
+    })
+    expect(ai.a2a.registerExecutor({ execute, cancelTask: vi.fn() }).success).toBe(true)
+    const result = await ai.a2a.handleRequest({
+      jsonrpc: '2.0',
+      id: 'req-1',
+      method: 'message/send',
+      params: { message: { kind: 'message', role: 'user', messageId: 'input', parts: [{ kind: 'text', text: 'hi' }] } },
+    }, { agentId: 'caller-1' })
+    expect(result.body).toMatchObject({ jsonrpc: '2.0', id: 'req-1', result: { kind: 'message', parts: [{ text: 'hello' }] } })
+    expect(execute).toHaveBeenCalledOnce()
+  })
+})
+
 describe('a2A 未初始化行为', () => {
   it('未初始化时 getAgentCard 返回 NOT_INITIALIZED', async () => {
     await ai.close()
@@ -255,9 +293,9 @@ describe('a2A 未初始化行为', () => {
   it('未初始化时 handleRequest 返回 NOT_INITIALIZED', async () => {
     await ai.close()
 
-    const result = await ai.a2a.handleRequest({})
-    // handleRequest 返回 A2AHandleResult 或 HaiResult，未初始化时返回 HaiResult
-    expect((result as { success: boolean }).success).toBe(false)
+    const result = await ai.a2a.handleRequest({ jsonrpc: '2.0', id: 7, method: 'tasks/get' })
+    expect(result.streaming).toBe(false)
+    expect(result.body).toMatchObject({ jsonrpc: '2.0', id: 7, error: { code: -32603 } })
   })
 
   it('未初始化时 listMessages 返回 NOT_INITIALIZED', async () => {

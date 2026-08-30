@@ -205,21 +205,28 @@ function wrapExecutorWithLogging(
 
       // 监听出站事件并记录
       const originalPublish = eventBus.publish.bind(eventBus)
-      const wrappedBus: ExecutionEventBus = Object.create(eventBus)
-      wrappedBus.publish = (event) => {
+      // SDK event bus 继承原生 EventTarget，不能用 Object.create 伪造 receiver。
+      const wrappedBus: ExecutionEventBus = {
+        on: eventBus.on.bind(eventBus),
+        off: eventBus.off.bind(eventBus),
+        once: eventBus.once.bind(eventBus),
+        removeAllListeners: eventBus.removeAllListeners.bind(eventBus),
+        finished: eventBus.finished.bind(eventBus),
+        publish(event) {
         // SDK 未提供 ExecutionEvent 的类型守卫；先做最小运行时判别，再记录 agent 消息。
-        if (isAgentMessageEvent(event)) {
-          const outboundRecord: A2AMessageRecord = {
-            id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-            taskId: requestContext.taskId,
-            role: 'agent',
-            parts: event.parts ?? [],
-            createdAt: Date.now(),
+          if (isAgentMessageEvent(event)) {
+            const outboundRecord: A2AMessageRecord = {
+              id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+              taskId: requestContext.taskId,
+              role: 'agent',
+              parts: event.parts ?? [],
+              createdAt: Date.now(),
+            }
+            messageStore.save(outboundRecord.id, outboundRecord, { objectId: requestContext.taskId, status: 'agent' })
+              .catch(e => logger.warn('Failed to save outbound A2A message', { error: e }))
           }
-          messageStore.save(outboundRecord.id, outboundRecord, { objectId: requestContext.taskId, status: 'agent' })
-            .catch(e => logger.warn('Failed to save outbound A2A message', { error: e }))
-        }
-        originalPublish(event)
+          originalPublish(event)
+        },
       }
 
       await executor.execute(requestContext, wrappedBus)
@@ -283,11 +290,15 @@ export function createA2AOperations(
     },
 
     getAgentCard() {
-      return ok(agentCardConfig)
+      return ok(buildAgentCard(agentCardConfig))
     },
 
-    async handleRequest(requestBody: unknown, _context?: Record<string, unknown>): Promise<A2AHandleResult> {
-      const serverContext = new ServerCallContextImpl()
+    async handleRequest(requestBody: unknown, context?: Record<string, unknown>): Promise<A2AHandleResult> {
+      // 身份只能来自可信传输层认证结果，不能从 JSON-RPC 参数中读取。
+      const agentId = typeof context?.agentId === 'string' ? context.agentId : undefined
+      const serverContext = new ServerCallContextImpl(undefined, agentId
+        ? { isAuthenticated: true, userName: agentId }
+        : undefined)
 
       const result = await transportHandler.handle(requestBody, serverContext)
 
@@ -388,7 +399,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.getAgentCard()
       const a2aConfig = deps.getA2AConfig()
       if (a2aConfig)
-        return ok({ ...a2aConfig.agentCard, security: a2aConfig.security } as A2AAgentCardConfig)
+        return ok(buildAgentCard({ ...a2aConfig.agentCard, security: a2aConfig.security }))
       if (!deps.isInitialized())
         return deps.notInitializedResult()
       return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
@@ -398,9 +409,18 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       const impl = deps.getA2AImpl()
       if (impl)
         return impl.handleRequest(requestBody, context)
-      if (!deps.isInitialized())
-        return deps.notInitializedResult() as never
-      return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured')) as never
+      const id = asRecord(requestBody)?.id
+      return {
+        streaming: false,
+        body: {
+          jsonrpc: '2.0',
+          id: typeof id === 'string' || typeof id === 'number' ? id : null,
+          error: {
+            code: -32603,
+            message: aiM(deps.isInitialized() ? 'ai_a2aNotConfigured' : 'ai_notInitialized'),
+          },
+        },
+      }
     },
 
     async listMessages(filter) {

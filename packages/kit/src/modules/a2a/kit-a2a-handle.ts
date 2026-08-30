@@ -8,7 +8,9 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 import type { HandleA2AConfig, HandleA2AOperations, HandleConfig } from '../../kit-types.js'
+import { kitM } from '../../kit-i18n.js'
 import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
+import { createA2AHandler } from './kit-a2a-helpers.js'
 
 // ─── 解析后的 A2A 内部配置 ───
 
@@ -41,7 +43,7 @@ export function resolveA2AConfig(
   if ('getAgentCard' in input && 'handleRequest' in input) {
     return {
       operations: input as HandleA2AOperations,
-      cardPath: '/.well-known/agent.json',
+      cardPath: '/.well-known/agent-card.json',
       rpcPath: '/a2a',
     }
   }
@@ -50,7 +52,7 @@ export function resolveA2AConfig(
   const cfg = input as HandleA2AConfig
   return {
     operations: cfg.operations,
-    cardPath: cfg.cardPath ?? '/.well-known/agent.json',
+    cardPath: cfg.cardPath ?? '/.well-known/agent-card.json',
     rpcPath: cfg.rpcPath ?? '/a2a',
     authenticate: resolveAuthenticate(cfg.authenticate, cfg.operations),
   }
@@ -75,13 +77,13 @@ function resolveAuthenticate(
 
   // 'apiKey' 快捷方式：从 Agent Card 获取 security 配置
   const cardResult = operations.getAgentCard()
-  const security = cardResult.success && cardResult.data
-    ? (cardResult.data as Record<string, unknown>).security as { apiKey?: { in: 'header' | 'query', name: string } } | undefined
+  const securitySchemes = cardResult.success && cardResult.data
+    ? (cardResult.data as { securitySchemes?: Record<string, { type: string, in?: string, name?: string }> }).securitySchemes
     : undefined
-  const apiKeyCfg = security?.apiKey
+  const apiKeyCfg = securitySchemes?.apiKey
 
   return createA2AApiKeyAuthenticator({
-    in: apiKeyCfg?.in ?? 'header',
+    in: apiKeyCfg?.in === 'query' ? 'query' : 'header',
     name: apiKeyCfg?.name ?? 'x-api-key',
   })
 }
@@ -115,53 +117,21 @@ export async function handleA2ARequest(
       })
     }
     return new Response(
-      JSON.stringify({ error: { code: 'A2A_NOT_CONFIGURED', message: 'Agent card not available' } }),
+      JSON.stringify({ error: { code: 'A2A_NOT_CONFIGURED', message: kitM('kit_a2aCardUnavailable') } }),
       { status: 503, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } },
     )
   }
 
   // A2A JSON-RPC 端点
   if (pathname === config.rpcPath && event.request.method === 'POST') {
-    // 可选认证
-    let context: Record<string, unknown> | undefined
-    if (config.authenticate) {
-      const authResult = await config.authenticate(event)
-      if (authResult) {
-        context = authResult
-      }
-    }
-
-    const body = await event.request.json()
-    const result = await config.operations.handleRequest(body, context)
-
-    if (result.streaming && result.stream) {
-      const stream = result.stream
-      const readable = new ReadableStream({
-        async start(controller) {
-          const encoder = new TextEncoder()
-          try {
-            for await (const chunk of stream) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
-            }
-          }
-          finally {
-            controller.close()
-          }
-        },
-      })
-      return new Response(readable, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'X-Request-Id': requestId,
-        },
-      })
-    }
-
-    return new Response(JSON.stringify(result.body), {
-      headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
-    })
+    // Hook 与显式路由共享认证、JSON-RPC 错误和流式生命周期逻辑。
+    const handler = createA2AHandler(
+      (body, context) => config.operations.handleRequest(body, context),
+      { authenticate: config.authenticate },
+    )
+    const response = await handler(event)
+    response.headers.set('X-Request-Id', requestId)
+    return response
   }
 
   return null

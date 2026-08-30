@@ -168,6 +168,10 @@ const batch = await registry.executeAll(toolCalls)
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
 
+### A2A 协议边界
+
+`ai.a2a.getAgentCard()` 返回完整 A2A 0.3 Agent Card，含 `protocolVersion`、MIME 和 streaming 能力；Kit 默认发现路径为 `/.well-known/agent-card.json`。`handleRequest()` 始终返回 JSON-RPC/SSE 处理结果，未初始化返回 JSON-RPC 错误。可信 HTTP 认证上下文的 `agentId` 映射为 executor 的 `context.user.userName`。当前支持 JSON-RPC/SSE，不声明 push notifications、gRPC 或 REST 支持；业务资源授权仍由应用负责。
+
 ### MCP Server
 
 ```ts

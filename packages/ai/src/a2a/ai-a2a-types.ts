@@ -5,6 +5,7 @@
  * @module ai-a2a-types
  */
 
+import type { AgentCard } from '@a2a-js/sdk'
 import type { AgentExecutor } from '@a2a-js/sdk/server'
 import type { HaiResult } from '@h-ai/core'
 
@@ -146,9 +147,9 @@ export interface A2AOperations {
    *
    * 配置了 a2a 后即可使用，无需注册 executor。
    *
-   * @returns Agent Card 配置
+   * @returns 符合 A2A 0.3 的完整 Agent Card（含能力与安全方案）
    */
-  getAgentCard: () => HaiResult<A2AAgentCardConfig>
+  getAgentCard: () => HaiResult<AgentCard>
 
   /**
    * 处理入站 JSON-RPC 请求
@@ -156,8 +157,8 @@ export interface A2AOperations {
    * 将 HTTP 请求体路由到 SDK 的 JsonRpcTransportHandler。
    *
    * @param requestBody - JSON-RPC 请求体
-   * @param context - 可选的调用上下文（含认证信息）
-   * @returns JSON-RPC 响应（单条或流式）
+   * @param context - 可信 HTTP 层认证上下文；agentId 映射为 SDK user.userName
+   * @returns JSON-RPC 响应（单条或流式）；未初始化也返回 JSON-RPC 错误，不混入 HaiResult
    */
   handleRequest: (requestBody: unknown, context?: Record<string, unknown>) => Promise<A2AHandleResult>
 

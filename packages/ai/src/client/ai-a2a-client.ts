@@ -6,9 +6,9 @@
  */
 
 import type {
-  A2AAgentCardConfig,
   A2ACallResult,
   A2AMessageRecord,
+  AgentCard,
 } from '../a2a/ai-a2a-types.js'
 import type { StorePage } from '../store/ai-store-types.js'
 import type { AIApiAdapter } from './ai-client.js'
@@ -21,8 +21,8 @@ import type { AIApiAdapter } from './ai-client.js'
  * 提供浏览器端调用后端 A2A API 的能力。
  */
 export interface A2AClientOperations {
-  /** 获取当前 Agent Card 配置 */
-  getAgentCard: () => Promise<A2AAgentCardConfig>
+  /** 获取完整 A2A Agent Card；传输失败时抛出异常 */
+  getAgentCard: () => Promise<AgentCard>
   /** 查询 A2A 消息记录 */
   listMessages: (filter?: { contextId?: string, status?: string, limit?: number, offset?: number }) => Promise<StorePage<A2AMessageRecord>>
   /** 作为客户端调用远端 Agent */
@@ -47,8 +47,8 @@ const A2A_PATH = {
  */
 export function createA2AClient(api: AIApiAdapter): A2AClientOperations {
   return {
-    async getAgentCard(): Promise<A2AAgentCardConfig> {
-      const result = await api.post<A2AAgentCardConfig>(A2A_PATH.agentCard)
+    async getAgentCard(): Promise<AgentCard> {
+      const result = await api.post<AgentCard>(A2A_PATH.agentCard)
       if (!result.success) {
         throw new Error(`A2A get agent card failed: ${result.error.message}`)
       }
