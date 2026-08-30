@@ -79,7 +79,7 @@ describe('ai.mcp — 协议校验', () => {
     expect(handler).not.toHaveBeenCalled()
   })
 
-  it.each([{}, { text: 'both', blob: 'YQ==' }])('拒绝不符合 text/blob 互斥契约的资源 %j', async (content) => {
+  it.each([{}, { text: 'both', blob: 'YQ==' }, { blob: 'base64...' }, { text: 'valid', blob: 'base64...' }])('拒绝不符合 text/blob 契约的资源 %j', async (content) => {
     await ai.init()
     ai.mcp.registerResource({ uri: 'test://resource', name: 'test' }, async () => ({ uri: 'test://resource', ...content }))
     expect(await ai.mcp.readResource('test://resource')).toMatchObject({ success: false, error: { code: HaiAIError.MCP_RESOURCE_ERROR.code } })
@@ -262,14 +262,14 @@ describe('ai.mcp — Resource', () => {
 
     ai.mcp.registerResource(
       { uri: 'data://img', name: '图片', mimeType: 'image/png' },
-      async () => ({ uri: 'data://img', blob: 'base64data', mimeType: 'image/png' }),
+      async () => ({ uri: 'data://img', blob: 'YQ==', mimeType: 'application/octet-stream' }),
     )
 
     const result = await ai.mcp.readResource('data://img')
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.blob).toBe('base64data')
-      expect(result.data.mimeType).toBe('image/png')
+      expect(result.data.blob).toBe('YQ==')
+      expect(result.data.mimeType).toBe('application/octet-stream')
     }
   })
 

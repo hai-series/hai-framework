@@ -170,8 +170,11 @@ export function createAIMCPFunctions(): MCPOperations {
         // SDK Schema 校验字段类型，再保证 text/blob 恰好存在一项。
         const text = TextResourceContentsSchema.safeParse(content)
         const blob = BlobResourceContentsSchema.safeParse(content)
-        if (text.success === blob.success)
+        if (text.success === blob.success
+          || (text.success && Object.hasOwn(content, 'blob'))
+          || (blob.success && Object.hasOwn(content, 'text'))) {
           return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpInvalidResource', { params: { uri } }))
+        }
         return ok(content)
       }
       catch (error) {

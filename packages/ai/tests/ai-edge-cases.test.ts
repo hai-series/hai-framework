@@ -393,7 +393,7 @@ describe('ai.mcp — 同步与边界场景', () => {
     // blob 资源
     ai.mcp.registerResource(
       { uri: 'blob://img', name: '图片' },
-      async () => ({ uri: 'blob://img', blob: 'base64...', mimeType: 'image/png' }),
+      async () => ({ uri: 'blob://img', blob: 'YQ==', mimeType: 'application/octet-stream' }),
     )
 
     const textResult = await ai.mcp.readResource('text://doc')
@@ -406,7 +406,7 @@ describe('ai.mcp — 同步与边界场景', () => {
     const blobResult = await ai.mcp.readResource('blob://img')
     expect(blobResult.success).toBe(true)
     if (blobResult.success) {
-      expect(blobResult.data.blob).toBe('base64...')
+      expect(blobResult.data.blob).toBe('YQ==')
     }
   })
 })
