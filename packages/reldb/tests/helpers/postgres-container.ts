@@ -37,10 +37,8 @@ export async function acquirePostgresContainer(): Promise<PostgresContainerLease
       })
       // PostgreSQL 在启动过程中会输出两次 "ready to accept connections"：
       // 第一次是模板数据库初始化，第二次才是服务器真正就绪
-      .withWaitStrategy(Wait.forAll([
-        Wait.forLogMessage('database system is ready to accept connections', 2),
-        Wait.forListeningPorts(),
-      ]))
+      // 使用数据库就绪日志，实际连接由 reldb.init 验证；避免 Podman 内部端口 exec 挂起。
+      .withWaitStrategy(Wait.forLogMessage('database system is ready to accept connections', 2))
       .withStartupTimeout(120_000)
       .start()
   }

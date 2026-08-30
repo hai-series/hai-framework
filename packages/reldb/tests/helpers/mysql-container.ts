@@ -34,10 +34,8 @@ export async function acquireMysqlContainer(): Promise<MysqlContainerLease> {
         MYSQL_DATABASE,
         MYSQL_ROOT_PASSWORD: MYSQL_PASSWORD,
       })
-      .withWaitStrategy(Wait.forAll([
-        Wait.forLogMessage('ready for connections', 2),
-        Wait.forListeningPorts(),
-      ]))
+      // 只接受最终 TCP 服务的就绪日志；初始化用的临时服务器端口为 0。
+      .withWaitStrategy(Wait.forLogMessage(/ready for connections\..*port: 3306/))
       .withStartupTimeout(120_000)
       .start()
   }
