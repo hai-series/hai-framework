@@ -185,8 +185,10 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 - `registerExecutor(executor)`：注册 Agent executor。
 - `getAgentCard()`：获取完整 A2A 0.3 Agent Card，含 streaming/MIME/securitySchemes；默认发现路径为 `/.well-known/agent-card.json`。
 - `handleRequest(body, context?)`：处理 A2A JSON-RPC 请求。
-- `listMessages(filter)`：查询 A2A 消息记录。
+- `listMessages(filter)`：管理接口，按 callerId/contextId/since/status（消息角色）查询；调用方负责授权。
 - `callRemoteAgent(remoteUrl, message, options?)`：调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor。
+
+任务与消息存储在 `ai.init()` 中初始化。任务读取使用可信 `context.agentId` 的主体作用域；匿名请求共享匿名作用域，需要隔离时必须开启认证。历史任务不自动推断主体，升级迁移要求见 README 的 A2A 协议边界。内部 RelStore 遇到 SQL 错误会抛给上层转换为 HaiResult/协议错误，不将故障解释为查询无数据。
 
 ## 错误码速查
 

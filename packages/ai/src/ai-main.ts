@@ -91,7 +91,7 @@ let currentA2AConfig: AIConfig['a2a']
 let currentA2AImpl: A2AOperations | null = null
 /** 初始化阶段准备完成的任务与消息存储 */
 let currentA2AStores: A2ADeps | null = null
-/** 当前存储 Provider（用于 A2A 延迟初始化） */
+/** 当前存储 Provider（用于模块关闭时统一释放资源） */
 let currentStoreProvider: AIStoreProvider | null = null
 
 // ─── 未初始化占位 ───

@@ -403,13 +403,17 @@ await reach.close()
 
 ### @h-ai/ai — AI 集成
 
-LLM 调用（同步/流式）+ MCP Server + 工具系统 + SSE 流处理。
+LLM 调用（同步/流式，多协议）+ MCP Server + 工具系统 + SSE 流处理 + A2A。
+
+`ai.mcp` 是进程内工具/资源/提示词注册表，校验输入 Schema 和输出协议结构；不自动同步到 `createMcpServer()`。独立 MCP Server 使用 SDK 的注册方法，显式连接 transport 后才接收协议请求。
+
+`ai.a2a` 支持 A2A 0.3 JSON-RPC/SSE，默认发现路径为 `/.well-known/agent-card.json`；完整 Card 声明 streaming，不声明 push notifications/gRPC/REST。服务端需配置 a2a 并注册 executor；持久化表在 ai.init 阶段建立。可信认证 context.agentId 约束任务读取，匿名请求共享匿名作用域；消息查询属于受保护的管理接口。旧任务的主体归属必须经应用审核迁移，不能自动推断。
 
 ```typescript
 import { ai, createMcpServer } from '@h-ai/ai'
 import { z } from 'zod'
 
-// 初始化（async）— 只有 OpenAI 兼容的 Provider
+// 初始化（async）— api 可选 chat / responses / anthropic，默认 chat
 await ai.init({
   llm: {
     apiKey: process.env.HAI_AI_LLM_APIKEY,
@@ -429,7 +433,7 @@ const result = await ai.llm.chat({
   ],
   model: 'gpt-4o',  // 可选，覆盖默认
   temperature: 0.5,
-  tools: [toolDef],  // 可选，Function Calling
+  // tools 可传 registry.getDefinitions()，见下方工具注册表
 })
 // result.data → { id, choices: [{ message: { role, content, tool_calls? } }], usage }
 
@@ -442,15 +446,15 @@ for await (const chunk of stream) {
   process.stdout.write(chunk.choices[0]?.delta?.content ?? '')
 }
 
-// 收集流到完整结果
-const collected = await ai.stream.collect(stream)
+// 若只需累积结果，用 ai.stream.collect(stream) 替代上面的 for await。
+// 流是一次性迭代器，消费后不能再次收集。
 
 // --- 工具定义 ---
 const searchTool = ai.tools.define({
   name: 'search',
   description: '搜索知识库',
   parameters: z.object({ query: z.string() }),
-  execute: async ({ query }) => ({ results: [`关于 ${query} 的结果`] }),
+  handler: async ({ query }) => ({ results: [`关于 ${query} 的结果`] }),
 })
 
 // 工具注册表
@@ -460,6 +464,7 @@ registry.register(searchTool)
 // --- MCP Server ---
 const mcp = createMcpServer({ name: 'my-app', version: '1.0.0' })
 // mcp.registerTool / mcp.registerResource / mcp.registerPrompt
+// await mcp.connect(transport) — transport 由应用选择并配置认证与网络边界
 
 // --- SSE ---
 const encoded = ai.stream.encodeSSE({ event: 'message', data: '...' })
@@ -469,7 +474,8 @@ const decoder = ai.stream.createSSEDecoder()
 // 由 @h-ai/api-contract 定义、@h-ai/serv 挂载、@h-ai/api-client 调用：
 // const answer = await apiClient.ai.chats.sendMessage({ message: '你好' })
 
-ai.close()
+await mcp.close()
+await ai.close()
 ```
 
 ### @h-ai/payment — 统一支付
