@@ -87,8 +87,29 @@ pnpm --filter mobile-app build
 pnpm --filter mobile-app test:e2e
 ```
 
+## 原生交付与验收
+
+移动端原生打包独立于 Web 构建：`build` 仅产出静态资源，Capacitor 命令才同步并构建原生工程。CI 的 [`native.yml`](../../.github/workflows/native.yml) 在对应 OS 上完成原生构建；打包成功不代替安装后的行为验收。
+
+| 平台          | 必需环境                               | 构建入口                                                                                | 产物                                        |
+| ------------- | -------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Android       | JDK 21、Android SDK 36、Gradle wrapper | `cap add android` → `cap sync android` → `gradlew assembleDebug`                        | `android/app/build/outputs/apk/debug/*.apk` |
+| iOS Simulator | macOS、Xcode、SPM                      | `cap add ios --packagemanager SPM` → `cap sync ios` → `xcodebuild -sdk iphonesimulator` | `App.app`                                   |
+
+生产移动端使用 HTTPS API；HTTP 模拟器地址需显式调试网络策略，不能把 Web 可访问误认为设备可访问（`CAPACITOR_SERVER_URL` 仅用于前端 live reload）。debug APK 与 Simulator `.app` 都不是正式签名产物，真机签名、商店发布与升级验收需对应签名身份。
+
+打包后须在设备 / 模拟器完成安装后验收：下载同一提交产物、连接独立验收后端、只用测试账号，证据不得含密码 / token / 密钥。
+
+| 步骤       | 通过条件                                                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 安装与启动 | 干净环境安装后进入登录页，无白屏 / 崩溃，UI 资源从安装包加载                                                                 |
+| 认证与网络 | 注册 / 登录测试账号、读取当前用户、执行 `app.info` / `app.echo`，核对真实 API 域名、TLS、CORS 与 transport                   |
+| 断网恢复   | 断网调用失败并保留输入，恢复网络后可重试，无假成功                                                                           |
+| 安全存储   | Android 用 KeyStore、iOS 用 Keychain 加密存储，未过期会话可恢复、refresh token 过期回到登录；Web / 普通 Preferences 无 token |
+| 退出与升级 | 退出后旧 token 不再被读取；同一应用 ID + 签名身份 + 递增版本覆盖安装后重复认证 / 退出 / 网络流程                             |
+
+安装命令：Android 用 `adb install -r <apk>`，iOS Simulator 用 `xcrun simctl install booted <App.app>`。每次结果记录日期、提交 SHA、包 SHA256、平台 / 工具链、真实命令与退出码及逐步骤通过 / 失败 / 未验证；无设备或凭证时保留「未验证」，不用 skip 制造通过。依据 [Capacitor 官方文档](https://capacitorjs.com/docs)。
+
 ## License
 
 Apache-2.0
-
-原生交付使用独立 [构建与设备验收流程](../../docs/native-delivery-acceptance.md)，对应 `.github/workflows/native.yml`。Windows NSIS、Android debug APK、iOS Simulator App 分别在对应 OS 构建；工作流产物记录提交与打包状态，安装、认证/退出、重启、安全存储、真实 API 网络及升级另行记录，未验证项不视为通过。

@@ -131,4 +131,4 @@ pnpm build
 - `hai-framework-sync` — hai-framework 与应用仓库同步策略
 
 发布完成判定始终查询根版本的 npm 包；发布 job 同步包版本但不提交，标签固定指向触发质量验收的源码提交。发布成功后由独立 job 提交版本同步；完整重跑即使无需补发也会执行同步，远端已存在相同内容时成功退出，分支有新源码时拒绝覆盖并要求从最新 main 重跑。
-原生交付必须单独执行 Tauri/Gradle/Xcode 打包，并在目标 OS/设备验证安装启动、登录/退出、重启会话、安全 TokenStore、真实 API 域名与覆盖升级。Web 构建/E2E 不代替原生验收。保存提交、包 hash、平台/工具链及逐项结果；缺平台写未验证，禁止静默 skip。hai-framework 仓库参考 docs/native-delivery-acceptance.md 和 .github/workflows/native.yml。
+原生交付必须单独执行 Tauri/Gradle/Xcode 打包，并在目标 OS/设备验证安装启动、登录/退出、重启会话、安全 TokenStore、真实 API 域名与覆盖升级。Web 构建/E2E 不代替原生验收。保存提交、包 hash、平台/工具链及逐项结果；缺平台写未验证，禁止静默 skip。hai-framework 仓库参考 `.github/workflows/native.yml` 与 desktop-app / mobile-app README 的「原生交付与验收」章节。

@@ -125,8 +125,28 @@ pnpm --filter desktop-app test
 pnpm --filter desktop-app build
 ```
 
+## 原生交付与验收
+
+桌面端原生打包独立于 Web 构建：`build` 仅产出 Vite 静态资源，`tauri:build` 才生成安装包。CI 的 [`native.yml`](../../.github/workflows/native.yml) 在 Windows 上安装锁定依赖、构建共享包后执行 Tauri 构建，并按 `PUBLIC_API_BASE` 同步 CSP `connect-src` 与应用版本；打包成功不代替安装后的行为验收。
+
+| 平台        | 必需环境                             | 构建入口                                | 产物                                               |
+| ----------- | ------------------------------------ | --------------------------------------- | -------------------------------------------------- |
+| Windows x64 | Rust MSVC、C++ Build Tools、WebView2 | `pnpm --filter desktop-app tauri:build` | `src-tauri/target/release/bundle/nsis/*-setup.exe` |
+
+安装包默认未签名，不是正式发布产物；真机签名、商店发布与升级验收需对应签名身份，不得为跑通流程绕过签名或安全存储。
+
+打包后须在干净环境完成安装后验收：下载同一提交产物、连接独立验收后端、只用测试账号，证据不得含密码 / token / 密钥。
+
+| 步骤       | 通过条件                                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------- |
+| 安装与启动 | 干净环境安装后进入登录页，无白屏 / 崩溃，UI 资源从安装包加载                                               |
+| 认证与网络 | 注册 / 登录测试账号、读取当前用户、执行 `app.info` / `app.echo`，核对真实 API 域名、TLS、CORS 与 transport |
+| 断网恢复   | 断网调用失败并保留输入，恢复网络后可重试，无假成功                                                         |
+| 关闭重启   | 内存 token 决定重启后需重新登录                                                                            |
+| 退出与升级 | 退出后重启仍未登录、旧 token 不再被读取；同一应用 ID + 递增版本覆盖安装后重复认证 / 退出 / 网络流程        |
+
+Windows 可用 NSIS `/S /D=<绝对路径>` 在隔离目录静默安装。每次结果记录日期、提交 SHA、包 SHA256、平台 / 工具链、真实命令与退出码及逐步骤通过 / 失败 / 未验证；无设备或凭证时保留「未验证」，不用 skip 制造通过。依据 [Tauri Windows 安装包](https://v2.tauri.app/distribute/windows-installer/)。
+
 ## License
 
 MIT
-
-原生交付使用独立 [构建与设备验收流程](../../docs/native-delivery-acceptance.md)，对应 `.github/workflows/native.yml`。Windows NSIS、Android debug APK、iOS Simulator App 分别在对应 OS 构建；工作流产物记录提交与打包状态，安装、认证/退出、重启、安全存储、真实 API 网络及升级另行记录，未验证项不视为通过。

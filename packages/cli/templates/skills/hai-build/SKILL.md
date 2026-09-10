@@ -349,4 +349,4 @@ pnpm test         # Vitest 单元测试
 4. `pnpm --filter <app-name> test:e2e` 通过（E2E 测试）
 5. 搜索确认所有引用点已更新
 
-原生交付必须单独执行 Tauri/Gradle/Xcode 打包，并在目标 OS/设备验证安装启动、登录/退出、重启会话、安全 TokenStore、真实 API 域名与覆盖升级。Web 构建/E2E 不代替原生验收。保存提交、包 hash、平台/工具链及逐项结果；缺平台写未验证，禁止静默 skip。hai-framework 仓库参考 docs/native-delivery-acceptance.md 和 .github/workflows/native.yml。
+原生交付必须单独执行 Tauri/Gradle/Xcode 打包，并在目标 OS/设备验证安装启动、登录/退出、重启会话、安全 TokenStore、真实 API 域名与覆盖升级。Web 构建/E2E 不代替原生验收。保存提交、包 hash、平台/工具链及逐项结果；缺平台写未验证，禁止静默 skip。hai-framework 仓库参考 `.github/workflows/native.yml` 与 desktop-app / mobile-app README 的「原生交付与验收」章节。
