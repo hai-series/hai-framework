@@ -13,7 +13,11 @@ const vitestArgs = process.argv.slice(2)
 
 let result
 try {
-  runPnpm(['-r', '--filter', './packages/*', '--if-present', 'build'], repoRoot)
+  // 打包前顺序重建所有 @h-ai 包（--workspace-concurrency=1）。
+  // CI 并行构建下 tsup 的 .d.ts 生成会偶发失败（典型为 @h-ai/kit、@h-ai/capacitor），
+  // 使 tarball 缺失类型声明，生成项目 svelte-check 报 "Cannot find module … type declarations"。
+  // 顺序重建可稳定产出含 .d.ts 的完整 dist。原 './packages/*' 过滤在 shell:true 下被展开成 no-op。
+  runPnpm(['-r', '--filter', '@h-ai/*', '--workspace-concurrency=1', 'build'], repoRoot)
   const packageSpecifiers = packPublicPackages(path.join(repoRoot, 'packages'), archiveRoot)
 
   result = spawnSync(
