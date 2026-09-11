@@ -5,7 +5,7 @@
  * 显式运行：pnpm --filter @h-ai/cli test:scaffold-gates
  */
 
-import { execFileSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { access, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -181,20 +181,42 @@ function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): 
 }
 
 function runNode(args: string[]): void {
-  execFileSync(process.execPath, args, {
-    cwd: process.cwd(),
-    env: buildChildEnv(),
-    stdio: 'inherit',
-  })
+  runGate(process.execPath, args, process.cwd(), buildChildEnv(), false)
 }
 
 function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): void {
-  execFileSync(pnpmBin, args, {
+  runGate(pnpmBin, args, cwd, buildChildEnv(envOptions), true)
+}
+
+/**
+ * 运行一个门禁命令，捕获输出并在失败时把末尾输出并入错误信息。
+ *
+ * 用 stdio:'inherit' 时子进程输出只进 CI 原始日志（需鉴权才能读），失败断言只剩
+ * `output:[null,null,null]`，无法定位真正的报错。这里捕获 stdout/stderr 后透传显示，
+ * 失败时把末尾若干行并入抛出的错误，使其出现在测试报告 / CI check-run annotation 中。
+ */
+function runGate(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, shell: boolean): void {
+  const result = spawnSync(command, args, {
     cwd,
-    env: buildChildEnv(envOptions),
-    shell: true,
-    stdio: 'inherit',
+    env,
+    shell,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
   })
+  if (result.stdout)
+    process.stdout.write(result.stdout)
+  if (result.stderr)
+    process.stderr.write(result.stderr)
+  if (result.error)
+    throw result.error
+  if (result.status !== 0) {
+    const tail = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
+      .split('\n')
+      .filter(line => line.trim().length > 0)
+      .slice(-40)
+      .join('\n')
+    throw new Error(`Command failed: ${command} ${args.join(' ')} (cwd=${cwd}, status=${result.status ?? 'null'})\n--- output tail ---\n${tail}`)
+  }
 }
 
 function buildChildEnv(envOptions: GateEnvOptions = {}): NodeJS.ProcessEnv {
