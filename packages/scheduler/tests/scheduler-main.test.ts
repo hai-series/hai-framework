@@ -300,6 +300,10 @@ describe('scheduler', () => {
       if (adminLogs.success) {
         expect(adminLogs.data.items).toHaveLength(1)
         expect(adminLogs.data.items[0].triggerSource).toBe('admin-console')
+        expect(typeof adminLogs.data.items[0].startedAt).toBe('number')
+        expect(typeof adminLogs.data.items[0].finishedAt).toBe('number')
+        expect(adminLogs.data.items[0].startedAt).toBeGreaterThan(2_147_483_647)
+        expect(adminLogs.data.items[0].finishedAt).toBeGreaterThan(2_147_483_647)
       }
 
       const cliLogs = await scheduler.getLogs({ triggerType: 'manual', triggerSource: 'cli' })

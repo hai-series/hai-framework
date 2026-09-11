@@ -121,6 +121,8 @@ export function createMysqlProvider(): ReldbProvider {
         return 'VARCHAR(255)'
       case 'INTEGER':
         return def.autoIncrement ? 'BIGINT' : 'INT'
+      case 'BIGINT':
+        return 'BIGINT'
       case 'REAL':
         return 'DOUBLE'
       case 'BLOB':

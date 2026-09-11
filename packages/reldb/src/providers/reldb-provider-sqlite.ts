@@ -106,6 +106,7 @@ export function createSqliteProvider(): ReldbProvider {
       case 'JSON':
         return 'TEXT'
       case 'INTEGER':
+      case 'BIGINT':
       case 'BOOLEAN':
         return 'INTEGER'
       case 'REAL':
