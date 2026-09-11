@@ -19,6 +19,10 @@ jobs:
     timeout-minutes: 60
     env:
       CI: true
+      # Testcontainers 的 Ryuk 清理容器在 ephemeral CI runner 上偶发 "Failed to connect to Reaper"，
+      # 导致 vecdb/cache 容器化测试随机失败。测试已在 release() 显式 stop 容器，runner 用完即销毁，
+      # Ryuk 冗余，禁用即可消除该 flaky 失败。turbo test 任务已 passThroughEnv TESTCONTAINERS_*。
+      TESTCONTAINERS_RYUK_DISABLED: true
     outputs:
       version_changed: ${{ steps.check_version.outputs.changed }}
       version: ${{ steps.check_version.outputs.version }}
