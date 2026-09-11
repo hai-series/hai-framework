@@ -25,7 +25,6 @@ try {
         HAI_CLI_PACKAGE_SPECIFIERS: JSON.stringify(packageSpecifiers),
         HAI_CLI_RUN_SCAFFOLD_GATES: '1',
       },
-      shell: true,
       stdio: 'inherit',
     },
   )
@@ -77,7 +76,6 @@ function packPublicPackages(packagesRoot, destination) {
 function runPnpm(args, cwd, stdio = 'inherit') {
   const command = spawnSync(pnpmBin, args, {
     cwd,
-    shell: true,
     stdio,
   })
   if (command.error)

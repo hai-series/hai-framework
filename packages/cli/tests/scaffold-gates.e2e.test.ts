@@ -185,7 +185,7 @@ function runNode(args: string[]): void {
 }
 
 function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): void {
-  runGate(pnpmBin, args, cwd, buildChildEnv(envOptions), true)
+  runGate(pnpmBin, args, cwd, buildChildEnv(envOptions), false)
 }
 
 /**
