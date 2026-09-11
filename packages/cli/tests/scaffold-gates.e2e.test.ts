@@ -6,6 +6,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
+import { existsSync, readdirSync } from 'node:fs'
 import { access, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -215,8 +216,30 @@ function runGate(command: string, args: string[], cwd: string, env: NodeJS.Proce
       .filter(line => line.trim().length > 0)
       .slice(-40)
       .join('\n')
-    throw new Error(`Command failed: ${command} ${args.join(' ')} (cwd=${cwd}, status=${result.status ?? 'null'})\n--- output tail ---\n${tail}`)
+    throw new Error(`Command failed: ${command} ${args.join(' ')} (cwd=${cwd}, status=${result.status ?? 'null'})\n--- output tail ---\n${tail}\n--- @h-ai resolution ---\n${describeHaiModules(cwd)}`)
   }
+}
+
+/**
+ * 报告生成项目中已安装的 @h-ai 包及其类型声明是否存在，用于定位
+ * "Cannot find module '@h-ai/xxx' or its corresponding type declarations" 到底是未安装
+ * 还是安装了但缺少 .d.ts。hoisted 布局下根 node_modules/@h-ai 包含全部提升包。
+ */
+function describeHaiModules(cwd: string): string {
+  const haiDir = path.join(cwd, 'node_modules', '@h-ai')
+  let names: string[]
+  try {
+    names = readdirSync(haiDir).sort()
+  }
+  catch {
+    return `node_modules/@h-ai not found under ${cwd}`
+  }
+  return names
+    .map((name) => {
+      const dts = existsSync(path.join(haiDir, name, 'dist', 'index.d.ts'))
+      return `${name}(d.ts=${dts})`
+    })
+    .join(', ')
 }
 
 function buildChildEnv(envOptions: GateEnvOptions = {}): NodeJS.ProcessEnv {
