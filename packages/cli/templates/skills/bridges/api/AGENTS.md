@@ -4,22 +4,7 @@
 
 ## 行为契约
 
-1. 每次响应第一行写：`规模: XS|S|M|L — <一句话意图>`。
-2. 任务规模 ≥ M 时，先回顾现有 contract、service、配置、测试与 `.agents/skills/*/SKILL.md`。
-3. 在写第一行新代码前，用 1 行回答 Q1-Q7 必要性自检。
-4. 任务规模 ≥ M 时，说明将影响的 contract、procedures、配置、README 和调用方。
-
-## 必要性自检（M / L 任务必须输出）
-
-- Q1：已有 contract / procedure / module API 是否可复用？
-- Q2：能否扩展现有 schema、config、procedure，而不是新增抽象层？
-- Q3：当前真实调用点是哪些测试、客户端或 service 入口？
-- Q4：能否用更少的 contract 节点、middleware 或配置解决？
-- Q5：是否把 provider、DB 行结构或内部错误细节泄漏给调用方？
-- Q6：是否与现有 workspace 目录结构、脚本和质量门禁一致？
-- Q7：是否比较过更安全的输入校验、安全头和密钥处理方案？
-
-## 影响分析（M / L 任务必须输出）
+先读 README、package.json、相关实现/测试和所需 .agents/skills；不要加载整个 skill 树。新增抽象前确认复用路径与真实需求；保留用户改动。跨文件任务简述影响和验证计划，无须固定规模标签或重复问卷。
 
 - 直接影响：哪些 `apps/*-contract`、`apps/*-service`、config、README、测试会变。
 - 间接影响：哪些 typed client、部署脚本、环境变量说明和断言需要同步。
@@ -33,7 +18,7 @@
 - API 输入输出必须由 `apps/*-contract/src/**` 中的 Zod schema 与 contract 定义统一约束。
 - Service 通过 `@h-ai/serv` + `@h-ai/api-contract` 装配 HTTP App；不要退回到 SvelteKit API routes 架构。
 - Typed client / contract / service 三者保持同一份路径与类型定义，不要复制粘贴接口。
-- 公共模块 API 返回 `HaiResult<T>`；业务错误不要直接 `throw`。
+- 返回 `HaiResult<T>` 的业务 API 先判断 `success`；纯函数、工厂与流按实际签名处理。
 - 不生成用户页面；不要引入 UI 专属依赖或页面文案。
 - 配置和密钥来自 `apps/*-service/config/` 与环境变量，禁止硬编码。
 
@@ -41,9 +26,11 @@
 
 1. 先搜索现有 contract、procedures、init、config 和测试。
 2. 修改 contract、响应格式、安全策略或配置时，同步 README、typed client 调用方与测试。
-3. 每次改动后运行质量门禁，不能留下“已知失败”。
+3. 按改动范围验证，修复本次引入的失败；已有问题与未运行项明确报告。
 
 ## 质量门禁
+
+先核对 package.json，按影响范围执行已有脚本；文档检查引用，UI/路由变更再运行 E2E。未运行项说明原因。
 
 ```bash
 pnpm typecheck

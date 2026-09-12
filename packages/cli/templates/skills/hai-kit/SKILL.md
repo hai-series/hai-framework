@@ -1,6 +1,6 @@
 ---
 name: hai-kit
-description: 使用 @h-ai/kit 构建 SvelteKit 请求管道、认证守卫、统一响应、Zod 校验、浏览器端 apiFetch、A2A 与双构建适配；当需求涉及 hooks.server.ts、权限守卫、CORS、限流、同源 transport 或 SvelteKit API endpoint 时使用。
+description: "使用 @h-ai/kit 集成 SvelteKit hooks、守卫、校验、响应及同源客户端传输。"
 ---
 
 # hai-kit
@@ -9,11 +9,11 @@ description: 使用 @h-ai/kit 构建 SvelteKit 请求管道、认证守卫、统
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/kit 构建 SvelteKit 请求管道、认证守卫、统一响应、Zod 校验、浏览器端 apiFetch、A2A 与双构建适配；当需求涉及 hooks.server.ts、权限守卫、CORS、限流、同源 transport 或 SvelteKit API endpoint 时使用。 |
-| 适用场景 | 当任务与 `hai-kit` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/kit 集成 SvelteKit hooks、守卫、校验、响应及同源客户端传输 |
+| 适用场景 | SvelteKit hooks、load 和同源端点集成 |
+| 输入 | SvelteKit handle/RequestEvent、schema、guard、transport |
+| 输出 | handle、Response、校验值和客户端请求结果 |
+| 限制 | 无 init/close；保留 SvelteKit 控制流异常。跨端共享 HTTP contract 用 api-contract + serv，勿复制到 kit。 |
 
 > `@h-ai/kit` 只负责 SvelteKit 集成：`handle` hook、guard、response、validate、client、auth、crud、A2A。公共跨端 HTTP API 契约统一使用 `@h-ai/api-contract` + `@h-ai/serv`，不要在 kit 中定义业务 API contract。
 

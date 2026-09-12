@@ -1,6 +1,6 @@
 ---
 name: hai-ui
-description: "Use when: building UI with @h-ai/ui, including Svelte 5 Runes components, DaisyUI/Bits UI integration, forms, tables, dialogs, mobile components, theme switching, Markdown/AI output rendering, and Mermaid document/code previews. 使用 @h-ai/ui 构建界面、多端组件、主题系统、AI 输出展示与 Mermaid 文档/代码预览时使用。"
+description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动界面、主题与 AI 内容展示。"
 ---
 
 # hai-ui — @h-ai/ui 快速指南
@@ -9,15 +9,15 @@ description: "Use when: building UI with @h-ai/ui, including Svelte 5 Runes comp
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | Use when: building UI with @h-ai/ui, including Svelte 5 Runes components, DaisyUI/Bits UI integration, forms, tables, dialogs, mobile components, theme switching, Markdown/AI output rendering, and Mermaid document/code previews. 使用 @h-ai/ui 构建界面、多端组件、主题系统、AI 输出展示与 Mermaid 文档/代码预览时使用。 |
-| 适用场景 | 当任务与 `hai-ui` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动界面、主题与 AI 内容展示 |
+| 适用场景 | 已有 Svelte 项目中的组件选择与交互实现 |
+| 输入 | 现有 Svelte 页面、组件 Props、Tailwind 扫描路径与主题 |
+| 输出 | 复用原子/组合/场景组件的界面及交互验证 |
+| 限制 | 无 init/close；按公开导出使用组件。复用内置翻译；SSR 不直接访问浏览器全局，高风险代码预览须显式启用。 |
 
 `@h-ai/ui` 提供 Svelte 5 Runes 组件库，覆盖 primitives / compounds / scenes 三层组件架构，以及主题、i18n、Toast、平台检测、AI 输出展示等能力。
 
-> 完整安装步骤、全量组件清单与长示例见 `packages/cli/templates/skills/hai-ui/SKILL.md`；本文件保留工作区内最常用的集成要点，避免上下文过重。
+> 完整安装步骤、组件清单与长示例见 [CLI UI 参考](../../../packages/cli/templates/skills/hai-ui/reference.md)；本文件保留工作区内最常用的集成要点，避免上下文过重。
 
 ## 使用边界
 
@@ -224,7 +224,6 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 - 推荐测试和自动化直接使用 `data-testid`、`data-analytics-id` 等属性，不要为了测试 ID 在应用层重复封装 `Button/Input/Modal`。
 - 只透传 `data-*`，不要依赖未声明的普通属性透传。
 
-
 ## 主题与平台
 - 主题：`applyTheme()`、`getCurrentTheme()`、`isDarkTheme()`。
 - 平台：`detectPlatform()`、`isMobile()`、`isNativeApp()`、`usePlatform()`。
@@ -238,6 +237,6 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 
 ## 相关 Skills
 
-- `hai-kit`：SvelteKit 路由、服务端控制流、端点集成
-- `hai-iam`：认证鉴权 + IAM 场景组件搭配
-- `hai-capacitor`：原生 App 场景（SafeArea / AppBar / BottomNav）
+- [hai-kit](../../../packages/cli/templates/skills/hai-kit/SKILL.md)：SvelteKit 路由、服务端控制流、端点集成
+- [hai-usage-iam](../hai-usage-iam/SKILL.md)：认证鉴权 + IAM 场景组件搭配
+- [hai-capacitor](../../../packages/cli/templates/skills/hai-capacitor/SKILL.md)：原生 App 场景（SafeArea / AppBar / BottomNav）

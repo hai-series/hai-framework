@@ -1,47 +1,33 @@
 # AGENTS.md
 
-> Codex / OpenCode / 通用 AI 编程助手入口。本文件只负责路由和少量硬约束；详细规范按需读取，避免把所有材料一次性塞进上下文。
+hai-framework monorepo：`packages/*` 为框架包，`apps/*` 为应用，`packages/cli/templates/` 为生成模板。包管理使用 pnpm；PowerShell 使用 `pnpm.cmd`。
 
-## 入口顺序
+## 按任务读取
 
-1. 先读本文件，确认本次任务需要哪些规范。
-2. 需要完整仓库工作规范时，读 `.github/copilot-instructions.md`。虽然文件名保留 Copilot，这是当前仓库的通用详细规则源。
-3. 涉及特定路径时，按需读取 `.github/instructions/*.instructions.md`。
-4. 涉及具体模块或流程时，读取 `.github/skills/<skill-name>/SKILL.md`；长示例或完整 API 再读同目录 `reference.md`。
-5. `.github/skills/` 是本仓库的 skill 单一来源；可复用模板如存在，还要同步 `packages/cli/templates/skills/`。
+只读取与任务相关的规范和 skill；不要预加载所有参考文件。
 
-## 仓库约定
+| 任务                                  | 入口                                                                                                                                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 仓库开发流程、影响分析、交付          | [.github/copilot-instructions.md](.github/copilot-instructions.md)                                                                                                                                      |
+| 修改框架包                            | [.github/instructions/module-conventions.instructions.md](.github/instructions/module-conventions.instructions.md)                                                                                      |
+| 创建 / 审查框架模块                   | [.github/skills/hai-create-module/SKILL.md](.github/skills/hai-create-module/SKILL.md) / [hai-review-module](.github/skills/hai-review-module/SKILL.md)                                                 |
+| 修改应用                              | [.github/instructions/app-conventions.instructions.md](.github/instructions/app-conventions.instructions.md)；Svelte 另读 [svelte-conventions](.github/instructions/svelte-conventions.instructions.md) |
+| 修改测试                              | [.github/instructions/test-conventions.instructions.md](.github/instructions/test-conventions.instructions.md)                                                                                          |
+| 数据库                                | [.github/instructions/reldb-conventions.instructions.md](.github/instructions/reldb-conventions.instructions.md) + [hai-usage-reldb](.github/skills/hai-usage-reldb/SKILL.md)                           |
+| 模块使用 / 应用创建审查 / AI 入口维护 | [LLMS.txt](LLMS.txt) 按模块或任务导航                                                                                                                                                                   |
 
-- 本仓库是 hai-framework monorepo，核心包在 `packages/*`，示例/应用在 `apps/*`，CLI 生成模板在 `packages/cli/templates/`。
-- 包管理使用 `pnpm`。优先使用 `pnpm --filter <workspace>` 做定向验证；跨包契约、共享类型或根配置变更再提升到根命令。
-- 框架模块遵循 `module.init(config) -> use -> module.close()` 生命周期，公共 API 返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`。
-- 公共模块 API 禁止业务异常直接 `throw`；错误按 HaiResult 透传，不用 `try/catch` 包裹正常业务错误。
-- 禁止 `any`、无注释的 `as unknown as T`、`console.log`、硬编码密钥、用户可见文本绕过 i18n。
-- 代码注释中文，日志消息英文；新增用户可见文本同时更新 `zh-CN` 和 `en-US`。
+`.github/skills/` 面向本仓库开发；`packages/cli/templates/skills/` 面向生成应用，CLI 将完整目录复制到应用 `.agents/skills/`。重叠公共契约必须同步，项目私有路径不应复制到应用模板。
 
-## 规范路由
+## 硬约束
 
-- 修改 `packages/*` 模块：读 `.github/instructions/module-conventions.instructions.md`，需要创建/审查模块时再读 `.github/skills/hai-create-module` 或 `.github/skills/hai-review-module` skill。
-- 修改 Svelte/SvelteKit 应用：读 `.github/instructions/app-conventions.instructions.md` 与 `.github/instructions/svelte-conventions.instructions.md`。
-- 修改测试：读 `.github/instructions/test-conventions.instructions.md`。
-- 修改 reldb 使用：读 `.github/instructions/reldb-conventions.instructions.md` 和 `.github/skills/hai-usage-reldb` skill。
-- 修改 AI/iam/reldb 等模块用法：优先读对应 `.github/skills/hai-usage-*/SKILL.md`；通用模块模板优先看 `packages/cli/templates/skills/hai-*/SKILL.md`。
+- 先用 `rg` 查实现、引用、测试和文档，保留已有改动；复用优先，不为假设需求新增抽象。
+- 生命周期模块按 `init(config) → use → close()` 使用；纯函数、工厂、core、serv、kit 等按实际类型契约处理，不臆造生命周期。
+- 返回 `HaiResult` 的业务 API 不抛业务异常；调用方先判断 `success`。流式 API、显式抛错函数及框架控制流例外见模块规范。
+- 禁止 `any`、无说明的 `as unknown as T`、`console.log`、硬编码密钥。代码注释中文、日志英文；用户可见文本走 i18n 并同步中英文。
+- 公开 API、配置、类型、错误码或模板变动，全局核对并同步实现、调用方、测试、README、skills、LLMS.txt 和注释。
 
-## 工作流程
+## 验证与报告
 
-- 先用 `rg` / `rg --files` 搜索现有实现、引用点、测试和文档；不要靠猜测判断影响面。
-- 新增抽象、配置项、导出或文件前，确认当前仓库已有真实需求；能复用或删除冗余时优先复用/删除。
-- 修改公共 API、类型、错误码、模板或脚手架后，全局检索受影响的 `packages/*`、`apps/*`、`packages/cli/templates/*` 并成套更新。
-- 文档、README、skill、LLMS.txt、代码注释和测试要与实现同步；纯文档改动也要说明没有运行时代码影响。
+按范围执行 `pnpm typecheck` → `pnpm lint` → `pnpm build`（构建/模板/发布/跨包契约）→ `pnpm test`；优先用 `--filter <workspace>`。UI/路由/端到端改动执行相应 `test:e2e` 或根 `pnpm e2e`。
 
-## 质量门禁
-
-按影响范围执行，失败先修复：
-
-1. `pnpm typecheck`
-2. `pnpm lint`
-3. `pnpm build`（涉及构建产物、模板、发布路径或跨包契约时）
-4. `pnpm test`
-5. `pnpm --filter <workspace> test:e2e` 或 `pnpm e2e`（涉及 UI、路由、浏览器交互或端到端流程时）
-
-最终回复必须说明执行过的门禁、未执行项原因、已同步的文档/skill/依赖方。
+AI 文档执行 `pnpm check:skills` 并检查引用；CLI 模板验证 `pnpm --filter @h-ai/cli test:scaffold-gates`。最终报告已执行门禁、未执行原因、已同步文档/skill/依赖方；文档改动需明确有无运行时代码影响。

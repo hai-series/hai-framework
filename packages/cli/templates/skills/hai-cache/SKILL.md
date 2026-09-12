@@ -1,6 +1,6 @@
 ---
 name: hai-cache
-description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/list/set/zset/分布式锁）；当需求涉及缓存读写、TTL 管理、集合运算、排行榜、缓存一致性策略或分布式互斥锁时使用。
+description: "使用 @h-ai/cache 的 Memory/Redis 缓存、TTL、集合、排行榜和锁。"
 ---
 
 # hai-cache
@@ -9,23 +9,19 @@ description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/lis
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/list/set/zset/分布式锁）；当需求涉及缓存读写、TTL 管理、集合运算、排行榜、缓存一致性策略或分布式互斥锁时使用。 |
-| 适用场景 | 当任务与 `hai-cache` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/cache 的 Memory/Redis 缓存、TTL、集合、排行榜和锁 |
+| 适用场景 | 缓存读写、过期策略或共享资源互斥 |
+| 输入 | CacheConfigInput、key/value、TTL、每次获锁的唯一 owner |
+| 输出 | 缓存和锁操作的 HaiResult，获锁 data 为 boolean |
+| 限制 | 仅服务端；Memory 不跨节点。release/extend 携带本次 owner，避免锁过期后误操作新持有者。 |
 
 > `@h-ai/cache` 提供统一缓存接口，支持 Memory 与 Redis 后端，包含 KV / Hash / List / Set / ZSet / 分布式锁 六类操作。
 
 内存 KV 在到期时间点即失效。整数计数器拒绝 null/boolean/array、非整数增量和安全整数溢出，失败不修改原值；Hash 的 `__proto__` / `constructor` 名称按普通字段保留。
 
----
-
 ## 运行环境
 
 > ⚠️ **服务端模块（Node.js only）。** 浏览器端无需直接操作缓存，由服务端模块（如 IAM、Scheduler）内部使用。
-
----
 
 ## 适用场景
 
@@ -35,8 +31,6 @@ description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/lis
 - 集合操作（权限缓存、标签集合）
 - 排行榜（ZSet）与队列（List）
 - 分布式锁（多节点部署互斥控制）
-
----
 
 ## 使用步骤
 
@@ -67,8 +61,6 @@ await cache.close()
 ```
 
 `cache.config` 返回的是脱敏后的配置快照；Redis `password` / `url` 等敏感值不会原样暴露给日志或调试输出。
-
----
 
 ## 核心 API
 
@@ -116,19 +108,24 @@ await cache.zset.zadd('rank:daily', { member: 'u1', score: 100 })
 | `extend`   | 续期锁 TTL（支持 owner 验证）              |
 
 ```typescript
-// 获锁（TTL 30 秒，owner 用于标识持有者）
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+// 每次尝试生成唯一 owner，后续释放/续期复用同一个值
+const owner = core.id.generate()
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner })
 if (acquired.success && acquired.data) {
   try {
-    // 受保护的操作
+    // 长任务仅在仍持有锁时续期；失败或 data=false 时停止依赖锁的后续操作
+    const extended = await cache.lock.extend('my-lock', 60, owner)
+    if (!extended.success || !extended.data) {
+      logger.warn('Lock extension failed; protected work cancelled')
+    }
+    else {
+      // 受保护的操作
+    }
   }
   finally {
-    await cache.lock.release('my-lock', 'node-1')
+    await cache.lock.release('my-lock', owner)
   }
 }
-
-// 续期
-await cache.lock.extend('my-lock', 60, 'node-1')
 
 // 检查
 const locked = await cache.lock.isLocked('my-lock')
@@ -136,11 +133,9 @@ const locked = await cache.lock.isLocked('my-lock')
 
 **最佳实践：**
 
-- `owner` 使用稳定的节点标识（如 `nodeId`），不要每次随机生成
+- `owner` 每次获锁尝试唯一，释放/续期复用该值；仅用 nodeId 会使同节点旧任务误释放过期后重新获得的锁
 - 释放锁时传入 `owner` 防止误释放他人锁
 - Memory 后端适合开发/测试；Redis 后端用 Lua 脚本保证 release/extend 原子性
-
----
 
 ## 错误码 — `HaiCacheError`
 
@@ -156,11 +151,9 @@ const locked = await cache.lock.isLocked('my-lock')
 | `HaiCacheError.UNSUPPORTED_TYPE` | `hai:cache:011` | 不支持的缓存类型 |
 | `HaiCacheError.CONFIG_ERROR` | `hai:cache:012` | 配置错误 |
 
----
-
 ## 常见模式
 
-### 缓存穿透保护
+### 缓存命中与回源（未缓存空值，不防穿透）
 
 ```typescript
 async function getUserCached(userId: string) {
@@ -181,21 +174,23 @@ async function getUserCached(userId: string) {
 
 ```typescript
 const lockKey = 'batch:import'
-const acquired = await cache.lock.acquire(lockKey, { ttl: 60, owner: nodeId })
+const owner = core.id.generate()
+const acquired = await cache.lock.acquire(lockKey, { ttl: 60, owner })
 if (acquired.success && acquired.data) {
   try {
     await runBatchImport()
   }
   finally {
-    await cache.lock.release(lockKey, nodeId)
+    await cache.lock.release(lockKey, owner)
   }
 }
-else {
+else if (acquired.success) {
   logger.info('Another node is running the import')
 }
+else {
+  logger.error('Lock acquisition failed', { code: acquired.error.code })
+}
 ```
-
----
 
 ## 相关 Skills
 

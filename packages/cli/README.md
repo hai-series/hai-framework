@@ -15,6 +15,10 @@
 - **API 服务脚手架** — API Service 模板使用 `@h-ai/api-contract` + `@h-ai/serv` 组合公共 contract / procedures，并通过 `@h-ai/api-client` typed client 消费
 - **自动依赖解析** — 选择功能时自动补全依赖（如 IAM 自动引入 Crypto）
 
+## AI 使用指南
+
+CLI 从 `templates/skills/` 将所选 skill 的完整目录复制到生成项目 `.agents/skills/`。`SKILL.md` 提供能力边界和任务导航，`reference.md`/`guide.md` 保留按需范本；同步时不能只复制入口。AGENTS.md 保存应用约束，Claude/Copilot 桥接文件引用它；修改模板需同步相关仓库 skills。模板生成测试会核对参考文件的完整交付。
+
 ## 快速开始
 
 要求 Node.js ≥ 22.12.0；生成的根项目和工作区包均声明相同最低版本。

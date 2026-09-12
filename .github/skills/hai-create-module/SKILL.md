@@ -1,6 +1,6 @@
 ---
 name: hai-create-module
-description: "Use when: creating a new module, new package, scaffold, add sub-feature, add provider, create repository, module structure, tsup config, error codes, NotInitializedKit pattern. 在 hai-framework 中创建新模块（package）。"
+description: "在 hai-framework 源码仓库新增模块、子功能或 Provider，并维护公共契约。"
 ---
 
 # hai-create-module — 模块创建决策手册
@@ -9,19 +9,17 @@ description: "Use when: creating a new module, new package, scaffold, add sub-fe
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | Use when: creating a new module, new package, scaffold, add sub-feature, add provider, create repository, module structure, tsup config, error codes, NotInitializedKit pattern. 在 hai-framework 中创建新模块（package）。 |
-| 适用场景 | 当任务与 `hai-create-module` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 明确的功能需求、目标路径、现有实现、仓库规范与验收条件 |
-| 输出 | 最小必要的代码、类型、测试和同步文档，以及实际验证结果 |
-| 限制 | 不为假设需求增加抽象，不绕过生命周期/HaiResult/i18n 约定，不覆盖用户已有改动 |
+| 能力 | 在 hai-framework 源码仓库新增模块、子功能或 Provider，并维护公共契约 |
+| 适用场景 | 框架源码 packages 内新增能力 |
+| 输入 | 真实调用需求、目标 packages 路径、现有模块和导出约定 |
+| 输出 | 符合模块类型的实现、类型、错误定义、测试和文档 |
+| 限制 | 先决定生命周期/纯函数/工厂类型；无多个真实实现时不新增 Provider 抽象。错误命名空间不可冲突。 |
 
 > 面向 AI 助手的模块创建指南。**本文档只含决策表与原则**；代码范本（main.ts、types.ts、config.ts、package.json 等可直接套用的模板）请按需读 [reference.md](reference.md)。
 >
-> 模块通用约束（命名、暴露形式、HaiResult、NotInitializedKit、日志、错误码段位）见 [.github/instructions/module-conventions.instructions.md](../../instructions/module-conventions.instructions.md)（编辑 `packages/` 时自动注入）。
+> 模块通用约束（命名、暴露形式、HaiResult、NotInitializedKit、日志、错误码段位）见 [.github/instructions/module-conventions.instructions.md](../../instructions/module-conventions.instructions.md)（按 AGENTS.md 路由读取）。
 >
 > **变量约定**：`xx` = 模块名（如 storage、iam），`yy` / `zz` = 子功能名，`aaa` = Provider 实现名。
-
----
 
 ## §0 核心原则（动手前重读）
 
@@ -57,8 +55,6 @@ description: "Use when: creating a new module, new package, scaffold, add sub-fe
 2. 仓库里是否已有可复用的模式或实现？
 3. 使用方会不会因为这次设计被迫理解内部结构？
 4. 这个扩展点是否有**当前、明确、可验证**的真实场景？
-
----
 
 ## §1 架构决策（按顺序回答）
 
@@ -109,12 +105,10 @@ description: "Use when: creating a new module, new package, scaffold, add sub-fe
 
 | 判断 | 风格 | 示例模块 |
 | --- | --- | --- |
-| 操作可按领域分 ≥2 组且每组 ≥2 个方法 | 子操作对象（getter） | reldb (sql/migration), cache (kv/hash/list/set/zset), ai (llm/mcp/embedding/...), iam (authn/authz/user/session), crypto (asymmetric/hash/symmetric/password), capacitor (device/camera/push/statusBar/preferences), vecdb (collection/vector) |
+| 操作可按领域分 ≥2 组且每组 ≥2 个方法 | 子操作对象（getter） | reldb (sql/ddl/crud/tx), cache (kv/hash/list/set_/zset), ai (llm/tools/embedding/...), iam (auth/authz/user/session), crypto (asymmetric/hash/symmetric/password), capacitor (device/camera/push/statusBar/preferences), vecdb (collection/vector) |
 | 操作少（≤6）或语义高度内聚 | 扁平方法 | payment, audit, scheduler, deploy, reach |
 
 **选定后整个模块保持统一风格，禁止混用。**
-
----
 
 ## §2 目录结构
 
@@ -185,15 +179,13 @@ packages/xx/
 
 契约统一放 `packages/api-contract`，服务端 procedure 放 `packages/serv`，**不在业务模块内新增 `./api` 子路径**。详见 `reference.md` §R4.5。
 
----
-
 ## §3 命名规范
 
 ### 3.1 文件命名
 
 | 类别 | 规范 | 示例 |
 | --- | --- | --- |
-| 文件名 | `{模块}-{职责}.ts` kebab-case | `db-main.ts`、`iam-authn-functions.ts` |
+| 文件名 | `{模块}-{职责}.ts` kebab-case | `reldb-main.ts`、`iam-authn-functions.ts` |
 | 子功能文件 | `{模块}-{功能}-{角色}.ts` | `iam-session-types.ts`、`ai-llm-functions.ts` |
 | Provider 文件 | `{模块}-provider-{实现}.ts` | `reldb-provider-sqlite.ts` |
 | Repository | `{模块}-repository-{实体}.ts` | `audit-repository-log.ts` |
@@ -202,13 +194,13 @@ packages/xx/
 
 | 类别 | 规范 | 示例 |
 | --- | --- | --- |
-| 服务对象 | 小写模块名 | `export const db` |
+| 服务对象 | 小写模块名 | `export const reldb` |
 | 函数接口 | `{Module}Functions` | `ReldbFunctions` |
 | 子操作接口 | `{Domain}Operations` | `KvOperations`、`DeviceOperations` |
 | 错误定义对象 | `Hai{Module}Error`（`buildHaiErrorsDef` 生成） | `HaiReldbError.NOT_INITIALIZED` |
 | 错误类型 | 统一 `HaiError` | `HaiError` |
 | 配置 Schema | `{Module}ConfigSchema` | `StorageConfigSchema` |
-| 配置类型 | `{Module}Config` / `{Module}ConfigInput` | `DbConfig` / `DbConfigInput` |
+| 配置类型 | `{Module}Config` / `{Module}ConfigInput` | `ReldbConfig` / `ReldbConfigInput` |
 | Provider 接口 | `{Module}Provider` | `ReldbProvider` |
 | Provider 工厂 | `create{Impl}Provider` | `createSqliteProvider()` |
 | Repository 类 | `{Module}{Entity}Repository` | `AuditLogRepository` |
@@ -231,15 +223,13 @@ packages/xx/
 - 常量**就近定义**在 Repository / functions 文件内。
 - **不支持配置化**（禁止 `config.tableName` / `config.keyPrefix`）。
 
----
-
 ## §4 错误码段位（注册表）
 
 > 详细 ErrorInfo 格式与 Schema 模板见 `reference.md` §R1-R2。
 
 - 每模块通过 `buildHaiErrorsDef('module', ErrorInfo)` 生成，格式 `hai:{module}:{NNN}`。
 - ErrorInfo 值格式 `'NNN:HTTP'`，NNN 三位编号，HTTP 为状态码。
-- `NOT_INITIALIZED` 固定 `010`。
+- 新生命周期模块 `NOT_INITIALIZED` 使用 `010`；既有命名空间以源码为准（如 common 为 001），不要仅为统一数字改动公共错误码。
 - 段位规则：通用 000-009、初始化 010-019、业务操作 020+。
 
 **已注册命名空间**：
@@ -264,8 +254,6 @@ packages/xx/
 | `hai:scheduler` | scheduler | 定时任务 |
 | `hai:ai` | ai | AI / LLM / RAG / MCP |
 
----
-
 ## §5 实施步骤（套用范本）
 
 按下列顺序生成文件，每一步对应 `reference.md` 范本：
@@ -286,8 +274,6 @@ packages/xx/
 14. **测试** → R7
 15. **包配置**（`package.json` / `tsconfig.json` / `tsup.config.ts` / `vitest.config.ts`）→ R8
 16. **README** → R9
-
----
 
 ## §6 创建检查清单
 

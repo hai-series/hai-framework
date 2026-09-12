@@ -1,6 +1,6 @@
 ---
 name: hai-payment
-description: 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一支付；支持创建订单、回调验签、订单查询与退款；当需求涉及支付接入、订单创建、支付回调、退款或客户端调起支付时使用。
+description: "使用 @h-ai/payment 创建支付订单、验证回调、查单和退款，客户端调起支付。"
 ---
 
 # hai-payment
@@ -9,29 +9,23 @@ description: 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一支付；支持创建订单、回调验签、订单查询与退款；当需求涉及支付接入、订单创建、支付回调、退款或客户端调起支付时使用。 |
-| 适用场景 | 当任务与 `hai-payment` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/payment 创建支付订单、验证回调、查单和退款，客户端调起支付 |
+| 适用场景 | 服务端支付集成及客户端调起流程 |
+| 输入 | Provider 配置、订单/退款参数、原始回调内容 |
+| 输出 | 服务端 HaiResult；客户端 invokePayment 按 client 契约使用 |
+| 限制 | 服务端保存凭据并验签；客户端完成不代表付款成功，以可信回调/查单为准。订单履约与重试需幂等。 |
 
 > `@h-ai/payment` 是 hai-framework 的统一支付模块，通过 Provider 模式支持微信支付、支付宝、Stripe。服务端处理订单和回调，客户端调起支付。
-
----
 
 ## 运行环境
 
 > **服务端 + 浏览器分工模块。** `payment.createOrder` / `payment.handleNotify` / `payment.refund` 等操作在 Node.js 端执行。浏览器端使用 `invokePayment()`（从 `@h-ai/payment/client` 导入）调起支付。
-
----
 
 ## 依赖
 
 | 模块 | 用途 | 是否必需 | 初始化要求 |
 | --- | --- | --- | --- |
 | `@h-ai/audit` | 审计日志（支付操作自动审计） | 可选 | 已初始化时自动写入审计日志 |
-
----
 
 ## 适用场景
 
@@ -41,8 +35,6 @@ description: 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一
 - 支付回调验签与通知处理
 - 订单查询与退款
 - 客户端调起支付（Web / H5 / App）
-
----
 
 ## 使用步骤
 
@@ -165,8 +157,6 @@ import { invokePayment } from '@h-ai/payment/client'
 const payResult = await invokePayment(orderResult.data)
 ```
 
----
-
 ## 核心 API（服务端）
 
 | API                                              | 用途     | 返回值                        |
@@ -187,8 +177,6 @@ const payResult = await invokePayment(orderResult.data)
 | ------------------------ | -------- | ----------------------------- |
 | `invokePayment(options)` | 调起支付 | `HaiResult<InvokePaymentResult>` |
 
----
-
 ## 错误码 — `HaiPaymentError`
 
 | 错误码 | code | 说明 |
@@ -206,8 +194,6 @@ const payResult = await invokePayment(orderResult.data)
 | `HaiPaymentError.INVOKE_WEB_FAILED` | `hai:payment:060` | Web 端调起支付失败 |
 | `HaiPaymentError.INVOKE_APP_FAILED` | `hai:payment:061` | App 端调起支付失败 |
 | `HaiPaymentError.CONFIG_ERROR` | `hai:payment:070` | 配置无效 |
-
----
 
 ## Provider 模式
 
@@ -229,8 +215,6 @@ import { apiContract } from '@h-ai/api-contract'
 // apiContract.payment.orders.refund        — POST /payment/orders/{orderNo}/refunds
 // apiContract.payment.notifications.wechat — POST /payment/notifications/wechat
 ```
-
----
 
 ## 常见模式
 
@@ -272,15 +256,11 @@ export const POST = kit.handler(async ({ request, locals }) => {
 7. 客户端：轮询或回调查询订单状态
 ```
 
----
-
 ## 审计日志
 
 关键支付操作（创建订单、回调、退款、关闭订单）成功后自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。`queryOrder` 为只读操作，不写审计日志。
 
 内置 Provider 的 HTTP 请求默认带 15 秒超时；Stripe 可通过 `webhookToleranceSeconds` 调整 webhook 时间戳容忍窗口。
-
----
 
 ## 相关 Skills
 

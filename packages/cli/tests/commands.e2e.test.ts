@@ -127,6 +127,19 @@ async function expectCompatibleSkills(projectPath: string, appType: AppType) {
       await exists(projectPath, `.agents/skills/${skillName}/SKILL.md`),
       `${appType} should ${expected ? '' : 'not '}include ${skillName}`,
     ).toBe(expected)
+    if (expected) {
+      // 校验完整目录交付，避免入口可发现但按需引用的范本遗漏。
+      const source = path.join(skillTemplatesDir, skillName)
+      const resources = await fse.readdir(source, { recursive: true, withFileTypes: true })
+      for (const resource of resources) {
+        if (!resource.isFile())
+          continue
+        const sourcePath = path.join(resource.parentPath, resource.name)
+        const relativePath = path.relative(source, sourcePath)
+        expect(await fse.readFile(path.join(projectPath, '.agents/skills', skillName, relativePath), 'utf8'))
+          .toBe(await fse.readFile(sourcePath, 'utf8'))
+      }
+    }
   }
 }
 
@@ -1460,7 +1473,7 @@ describe('addModule', () => {
     expect(await fse.pathExists(path.join(dir, '.github/skills'))).toBe(false)
 
     expect(await fse.readFile(path.join(dir, 'AGENTS.md'), 'utf8')).toContain('## 行为契约')
-    expect(await fse.readFile(path.join(dir, '.github', 'copilot-instructions.md'), 'utf8')).toContain('规模: XS|S|M|L')
+    expect(await fse.readFile(path.join(dir, '.github', 'copilot-instructions.md'), 'utf8')).toContain('[AGENTS.md](../AGENTS.md)')
 
     const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
     expect(opencode.instructions).toEqual(['.github/copilot-instructions.md'])

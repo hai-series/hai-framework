@@ -1,6 +1,6 @@
 ---
 name: hai-api-client
-description: 使用 @h-ai/api-client 构建多端共用的 oRPC/OpenAPI typed client，通过 apiClient.init() 初始化，支持 Bearer Token 自动管理、401 刷新重试与 contract 嵌套方法调用；当需求涉及客户端 API 请求、Token 管理或多端数据层时使用。
+description: "使用 @h-ai/api-client 调用 typed API，管理 Token、刷新与加密传输。"
 ---
 
 # hai-api-client
@@ -9,11 +9,11 @@ description: 使用 @h-ai/api-client 构建多端共用的 oRPC/OpenAPI typed cl
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/api-client 构建多端共用的 oRPC/OpenAPI typed client，通过 apiClient.init() 初始化，支持 Bearer Token 自动管理、401 刷新重试与 contract 嵌套方法调用；当需求涉及客户端 API 请求、Token 管理或多端数据层时使用。 |
-| 适用场景 | 当任务与 `hai-api-client` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/api-client 调用 typed API，管理 Token、刷新与加密传输 |
+| 适用场景 | 跨端调用共享 HTTP API 或排查认证刷新 |
+| 输入 | baseUrl、共享 contract、TokenStorage、可选 transport.crypto |
+| 输出 | typed client；领域响应为 HaiResult |
+| 限制 | 先 init，结束 close；浏览器 Cookie 与服务端配置匹配，原生端使用安全 TokenStorage。不要在多用户 SSR 中共享带用户 token 的单例。 |
 
 > `@h-ai/api-client` 是跨端 typed API client。公共 HTTP API 由 `@h-ai/api-contract` 定义，服务端由 `@h-ai/serv` 挂载，客户端直接调用 `apiClient.<domain>.<group>.<operation>()`。
 

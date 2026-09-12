@@ -1,6 +1,6 @@
 ---
 name: hai-ci
-description: 设计和维护 hai-framework 应用仓库的 CI/CD、GitHub Actions、质量门禁、secret scan 与 workflow 安全；当需求涉及 CI、GitHub Actions、required checks、泄漏扫描或 release workflow 编排时使用。
+description: "维护 hai 应用的 CI/CD、GitHub Actions、质量门禁和凭据泄漏扫描。"
 ---
 
 # hai-ci — CI/CD 与质量门禁规范
@@ -11,22 +11,19 @@ description: 设计和维护 hai-framework 应用仓库的 CI/CD、GitHub Action
 
 框架发布通过实际 npm 精确版本和 GitHub Release 判断完成，不能只看 tag。部分失败重跑原提交，只补发缺失包；npm 全部成功后再建 tag/Release。查询异常与 404 必须区分，tag 指向其他提交时停止补发，禁止将新源码混入旧版本。
 
-
 Turbo 的 `build.env` 必须列出影响产物的变量；框架包含容器构建开关、E2E 构建模式及 PUBLIC/VITE/TAURI 前缀，共享 tsup 配置也纳入依赖。Docker/Testcontainers 连接变量通过测试任务透传。验证缓存须切换变量检查哈希和真实产物，不能只检查配置文本。
 
 框架仓库发布验收使用 `pnpm test:release-local`；其 E2E 与 CI 共用根 `pnpm e2e`，覆盖 CLI 和全部 Web 应用，不能缩减为仅 Admin Console。应用仓库应在自己的根 E2E 命令集中维护所有端到端入口。容器和原生验收须独立记录实际结果。
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 设计和维护 hai-framework 应用仓库的 CI/CD、GitHub Actions、质量门禁、secret scan 与 workflow 安全；当需求涉及 CI、GitHub Actions、required checks、泄漏扫描或 release workflow 编排时使用。 |
-| 适用场景 | 当任务与 `hai-ci` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 用户目标、仓库与运行环境上下文、现有配置、授权范围和质量门禁 |
-| 输出 | 与目标匹配的配置/代码/文档或审查结论，以及可复现的验证结果 |
-| 限制 | 不扩张用户授权，不输出或固化密钥，不跳过失败门禁，不假定外部服务状态 |
+| 能力 | 维护 hai 应用的 CI/CD、GitHub Actions、质量门禁和凭据泄漏扫描 |
+| 适用场景 | 应用 CI/CD 和质量门禁维护 |
+| 输入 | 现有 workflow、package scripts、权限和发布策略 |
+| 输出 | 可执行工作流与检查结果 |
+| 限制 | 默认验证真实 npm 依赖；最小 workflow 权限，不向不可信 PR 暴露 secret，未经授权不发布。 |
 
 > 面向 AI 助手和团队成员的仓库自动化指南。目标是让每个 PR 都能被机器稳定验证，同时避免把 secrets 暴露给不可信 PR 或第三方 Action。
-
----
 
 ## 适用场景
 
@@ -38,8 +35,6 @@ Turbo 的 `build.env` 必须列出影响产物的变量；框架包含容器构�
 
 不负责：PR 人工审查流程（用 `hai-pr-review`）、测试用例设计（用 `hai-app-tests`）、代码质量审查（用 `hai-app-review`）、云资源开通与应用部署 API（用 `hai-deploy`）。
 
----
-
 ## 核心原则
 
 1. **确定性检查优先**：CI 只负责可重复的机器检查；测试内容设计交给 `hai-app-tests`，代码规范判断交给 `hai-app-review`。
@@ -48,8 +43,6 @@ Turbo 的 `build.env` 必须列出影响产物的变量；框架包含容器构�
 4. **禁用高风险组合**：禁止 `pull_request_target` + checkout PR 代码 + secrets/写权限。
 5. **先轻后重**：核心 CI 必须稳定；E2E、发布、安全深扫可以拆成 manual/nightly 或独立 workflow。
 6. **可追溯**：workflow 改动必须说明触发条件、权限、缓存、失败路径和验证命令。
-
----
 
 ## 标准 CI 工作流
 
@@ -79,8 +72,6 @@ pnpm build
 - 本地联调使用 `framework:use:local` / `framework:watch`，但不要让默认 PR CI 隐式依赖本机路径。
 - 需要验证本地 framework 改动时，创建显式的 sync/drift check 或双仓联动 PR。
 
----
-
 ## GitHub Actions 安全清单
 
 - [ ] workflow 顶层声明 `permissions`
@@ -91,8 +82,6 @@ pnpm build
 - [ ] 不在 CI 日志打印 token、cookie、连接串、`.env` 内容
 - [ ] release workflow 独立提权，只在 main/tag/manual 触发
 - [ ] 失败日志可定位，不吞错、不 `|| true` 掩盖核心质量门禁
-
----
 
 ## Secret scan 策略
 
@@ -108,8 +97,6 @@ pnpm build
 - ❌ 把完整密钥关键词列表传给未知第三方 action
 - ❌ 为了通过扫描而删除失败证据或扩大忽略范围
 
----
-
 ## Workflow 变更交付清单
 
 修改 CI/CD 时，PR 描述必须包含：
@@ -119,8 +106,6 @@ pnpm build
 - 执行命令：每个 job 的核心命令
 - 安全影响：是否读取 secrets、是否写仓库、是否评论 PR
 - 验证方式：本地命令或 GitHub Actions dry run 结果
-
----
 
 ## 相关 Skills
 

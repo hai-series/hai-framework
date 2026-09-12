@@ -4,13 +4,19 @@ applyTo: "packages/**"
 
 # Package 模块开发规范
 
-> 编辑 packages/ 下的文件时自动激活。模块专属的结构、生命周期、错误码、Provider 模式等规范。
+> 适用于 packages/ 下的文件的修改。模块专属的结构、生命周期、错误码、Provider 模式等规范。
+
+## 先确定模块类型
+
+生命周期约定适用于 reldb/cache/iam/ai 等有状态模块。core.init 同步返回 void 且无 close；datapipe、kit、api-contract 是纯函数/定义；serv 是 App 工厂；ui 是组件库。不要为这些模块补造 init/close 或 HaiResult 包装。
+
+以 package.json.exports 为公开导入边界：/client、/adapter、UI 子路径可合法存在，禁止跨包导入未公开源码。Node/Browser 共享形态不代表能力完全相同，例如 crypto.password 仅服务端。
 
 ## 文件命名与职责
 
 - `xx-main.ts`：模块主入口，仅生命周期管理（init/close）和 API 编排，禁止具体业务逻辑（调度循环、数据处理等）
 - `xx-types.ts`：对外接口类型定义（public types）
-- `xx-config.ts`：配置定义与默认值、错误码枚举
+- `xx-config.ts`：配置定义与默认值、错误定义（现有模块通常在 xx-types.ts；以实际定义为准）
 - `xx-functions.ts`：具体业务逻辑委托目标
 - `xx-i18n.ts`：i18n 消息获取器
 
@@ -22,17 +28,18 @@ applyTo: "packages/**"
 
 ## 错误处理
 
-- 公共 API 禁止 throw，必须返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`
+- 领域业务操作返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`，不得抛业务异常；工具/工厂/流及框架适配 API 按下述边界处理
 - 调用方不应使用 `try/catch` 来处理模块返回的错误
-- 错误码：每模块独占命名空间（注册表见 hai-create-module §4）；新模块 `NOT_INITIALIZED` 使用 X010，历史模块若不一致需在审查中标出并同步实现/文档
+- 错误码：每模块独占命名空间（注册表见 hai-create-module §4）；新模块 `NOT_INITIALIZED` 使用 `hai:<module>:010`，历史模块若不一致需在审查中标出并同步实现/文档
 - 错误创建：错误码 + `xxM('key')`，禁止硬编码消息
 
 ### Throw / HaiResult 判定
 
-- 使用方直接 import 的公共 API：必须返回 HaiResult，禁止 throw。
+- 领域业务 API：返回 HaiResult。纯工具、schema、工厂和配置 getter 等按公开签名返回直接值，不强行包装。
 - 内部 helper / Provider / Repository：可 throw，但最近外层必须 catch 并转换为 HaiResult。
 - `getOrThrow()` 等显式命名、async generator（如 `chatStream()`）、浏览器端 Client、CLI 命令可 throw；JSDoc 必须说明。
-- 审查时先看调用边界：异常是否越过模块公共 API；若越过即违规。
+- 审查先确认签名和边界：普通业务异常不得越过 HaiResult API；显式抛错 API、SvelteKit 控制流和流迭代分别按契约判断。
+- reldb.tx.wrap 回调正常返回就提交（包括返回失败 HaiResult）；回调内每次操作须检查 success，失败抛错以触发外层回滚。需透传原领域错误时改用 begin/rollback/commit。
 
 ### HaiResult 使用模式
 
@@ -69,7 +76,7 @@ function register(tool: Tool): HaiResult<void> {
 
 ## 配置校验
 
-- 模块使用配置前必须 `core.config.validate(name, schema)` 校验
+- 应用从 YAML 加载配置时使用 `core.config.validate(name, schema)` 后检查结果；模块 init 自身仍须用模块 schema 校验直接传入的配置
 - 不允许在模块入口做隐式注册/自动校验（避免副作用和隐藏依赖）
 - Zod Schema 完整、导出 `XxConfig`（parse 后）+ `XxConfigInput`（用户输入）
 
@@ -118,13 +125,13 @@ function register(tool: Tool): HaiResult<void> {
 
 - 返回使用方关心的业务类型，不暴露 DB 行结构 / ORM 对象 / 内部中间态
 - 需要返回部分字段时，定义专用类型（如 `XxSummary`），不使用 `Partial<XxInternal>`
-- 分页结果统一使用 `PageResult<T>` 包装，不自定义结构
+- 分页结果统一使用 `PaginatedResult<T>` 包装，不自定义结构
 
 ### 封装边界
 
 - 使用方通过 `xx.operation()` 调用，不直接调用内部 functions / utils
-- 子功能通过 main 统一暴露（如 `iam.authn`），消费者不需要了解内部目录结构
-- 模块间只依赖对方的公共类型（`xx-types.ts`），不 import 对方内部文件
+- 子功能通过 main 统一暴露（如 `iam.auth`），消费者不需要了解内部目录结构
+- 模块间仅通过包公开入口导入服务对象与类型，不 import 对方内部文件
 - 常见操作不要求调用方跨越多层对象 / 中间态 / Provider 才能完成
 - 上游依赖在顶层注入一次，模块内部派生所需回调，禁止把转发样板交给使用方
 
@@ -167,7 +174,7 @@ function register(tool: Tool): HaiResult<void> {
 ## 模块禁止事项
 
 - 在 `xx-main.ts` 中编写具体业务逻辑（调度循环、数据处理等），main 仅做生命周期管理和 API 编排
-- 在公共模块 API 中使用 `throw`（必须返回 `HaiResult<T>`）
+- 在 HaiResult 型业务 API 中泄漏 throw（例外按上文边界判断）
 - 错误码段位与已有模块冲突（段位注册表见 hai-create-module §4）
 - 为单一实现新增 Provider / Factory / Strategy / Base 抽象
 - 同一模块混用扁平方法与子操作对象两种 API 风格

@@ -1,6 +1,6 @@
 ---
 name: hai-review-app
-description: "Use when: reviewing app code in hai-framework, auditing app quality, checking app conventions, reviewing routes, reviewing API service workspaces, app security, app i18n review. 对 hai-framework 应用层代码进行审查：路由安全 → 认证授权 → i18n → 组件使用 → API 端点 / service workspace → 服务层 → 性能。"
+description: "审查 hai 应用的路由、权限、i18n、服务层与交互体验。"
 ---
 
 # hai-review-app — 应用代码审查规范
@@ -9,23 +9,19 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | Use when: reviewing app code in hai-framework, auditing app quality, checking app conventions, reviewing routes, reviewing API service workspaces, app security, app i18n review. 对 hai-framework 应用层代码进行审查：路由安全 → 认证授权 → i18n → 组件使用 → API 端点 / service workspace → 服务层 → 性能。 |
-| 适用场景 | 当任务与 `hai-review-app` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 用户指定的审查范围、代码/差异、仓库规范与可复现证据 |
-| 输出 | 按优先级排列的问题、影响、定位和修正建议；仅在用户要求时实施修改 |
-| 限制 | 不把风格偏好当缺陷，不猜测未读取的实现，不在审查请求中擅自发布或改动外部状态 |
+| 能力 | 审查 hai 应用的路由、权限、i18n、服务层与交互体验 |
+| 适用场景 | 用户要求应用代码/体验审查或修复评估 |
+| 输入 | 用户指定范围、代码/差异、运行证据与验收要求 |
+| 输出 | 按优先级列出的证据、影响和修正建议 |
+| 限制 | 只读审查不自动改代码；未读取的实现不下结论，不把偏好当缺陷。实现修复需用户已授权。 |
 
 > 面向 AI 助手的应用审查指南。适用于 `apps/` 下的 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace；审查基准参照 `hai-create-app`。
-
----
 
 ## §1 审查准则
 
 1. **先读后改**：审查前先读 `hai-create-app` 确认基准。
 2. **分层审查**：UI 层 → 服务层 → API 层 → 基础设施层，逐层展开。
 3. **成套更新**：代码 / 翻译 / 测试 / 文档同步。
-
----
 
 ## §2 结构与分层审查
 
@@ -34,8 +30,6 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] 禁止在 services 层写 UI 代码（不引用 Svelte / DOM）
 - [ ] 底层操作通过 @h-ai 模块调用，不直接操作 DB/加密/存储
 - [ ] init.ts 按依赖顺序初始化
-
----
 
 ## §3 认证与授权审查
 
@@ -47,8 +41,6 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] 重定向目标经过校验（防 Open Redirect，只允许站内路径）
 - [ ] CSRF token 通过 `kit.client.create` 自动附加
 
----
-
 ## §4 路由与页面审查
 
 - [ ] 路由组织合理（认证分组、保护目录、API 分离）
@@ -57,8 +49,6 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] 无 N+1 数据加载（循环中 await）
 - [ ] 分页参数校验（正整数、上限）
 - [ ] Svelte 组件只做渲染和交互，无业务逻辑
-
----
 
 ## §5 API 端点审查
 
@@ -71,8 +61,6 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] 文件上传有类型白名单 + 大小限制
 - [ ] 无 SQL 字符串拼接
 
----
-
 ## §6 i18n 审查
 
 - [ ] 所有用户可见文本使用 i18n key
@@ -82,8 +70,6 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] zh-CN 和 en-US 两个文件保持同步
 - [ ] 日志消息英文，代码注释中文
 
----
-
 ## §7 UI 组件审查
 
 - [ ] 使用 @h-ai/ui 已有组件，未重复实现
@@ -91,8 +77,6 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] 客户端 localStorage 无敏感 token
 - [ ] 组件 props 使用 TypeScript 类型，无 `any`
 - [ ] 权限组件使用 `setPermissionContext()` + `usePermission()`
-
----
 
 ## §7.1 产品体验与交互审查（用户视角走查）
 
@@ -130,8 +114,6 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] 国际化文本展开后不破坏布局（德语 / 中文长短差异）
 - [ ] 业务规则边界明确：配额、超限、过期等场景有明确文案
 
----
-
 ## §8 安全审查
 
 ### 输入与注入
@@ -146,9 +128,9 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] 无硬编码密钥
 - [ ] `PUBLIC_` 前缀变量无敏感信息
 - [ ] 敏感信息未出现在日志中
-- [ ] 服务端密钥用 `$env/static/private`
-- [ ] 登录/注册 API 不向前端返回 `accessToken`（优先使用 httpOnly Cookie 会话）
-- [ ] 前端不使用 `localStorage` / `sessionStorage` / `kit.auth.createTokenStore` 持久化敏感 Token
+- [ ] 服务端密钥使用配置/环境变量；SvelteKit 可用 `$env/static/private`，serv 按当前配置加载入口处理
+- [ ] Cookie 会话登录不向页面暴露 token；Bearer 客户端明确内存/安全 TokenStorage 与刷新流程，不能按 Cookie 模式误判
+- [ ] 前端不使用 `localStorage` / `sessionStorage` 持久化敏感 Token
 - [ ] 默认/初始管理员密码不写入日志；首次初始化密码必须通过环境变量或安全密钥管理注入
 
 ### HTTP 安全
@@ -156,17 +138,13 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 - [ ] CORS / CSP / X-Content-Type-Options 响应头
 - [ ] 外部 URL 经过校验（防 SSRF）
 
----
-
 ## §9 性能审查
 
-- [ ] 无 await-in-loop（N+1）
+- [ ] 独立查询避免 N+1；有依赖或事务顺序要求的操作可串行
 - [ ] 并行加载无依赖数据（`Promise.all`）
 - [ ] 大列表分页
 - [ ] 模块实例缓存复用
 - [ ] 无阻塞同步 I/O（运行时路径）
-
----
 
 ## §10 审查流程
 
@@ -183,8 +161,7 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 3. 审查服务层和 Schema
 4. 审查 i18n 和 UI 组件使用
 5. **走查产品体验**（§7.1 四态 / 危险操作 / 死路 / 响应式）
-6. 汇总 + 修复 P0/P1 + 门禁验证
-
+6. 汇总发现；已授权修复时处理 P0/P1 并验证
 
 ### 问题格式
 
@@ -198,20 +175,7 @@ description: "Use when: reviewing app code in hai-framework, auditing app qualit
 
 | 等级 | 含义 | 处理 |
 |------|------|------|
-| **P0** | 安全漏洞 / 数据泄露 / 服务崩溃 | 立即修复 |
-| **P1** | 权限绕过 / 认证缺失 / 错误吞没 | 本轮修复 |
+| **P0** | 安全漏洞 / 数据泄露 / 服务崩溃 | 优先报告；已授权时修复 |
+| **P1** | 权限绕过 / 认证缺失 / 错误吞没 | 已授权修复时优先处理 |
 | **P2** | 性能瓶颈 / 缺少校验 / i18n 遗漏 | 建议修复 |
-| **P3** | 风格 / 命名 / 结构 | 顺手修复 |
-
----
-
-## 示例触发语句
-
-- "审查 admin-console 代码"
-- "review h5-app 的认证流程"
-- "检查这个页面的安全性"
-- "审查 API 端点"
-
-管理端数据读取在 HTTP 应用边界保留失败：查询异常返回 503 和可刷新错误页，分页任一页或权限关联失败均中止加载，禁止回退为空列表、零统计或空权限。未知权限代码返回 400，权限读取失败时不得继续写入。底层模块仍使用 HaiResult。
-
-失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
+| **P3** | 风格 / 命名 / 结构 | 按授权范围处理 |

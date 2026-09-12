@@ -1,6 +1,6 @@
 ---
 name: hai-review-module
-description: "Use when: reviewing code, code review, auditing module quality, checking hai-framework conventions, verifying HaiResult<T> usage, reviewing module structure, PR review, checking naming consistency, verifying NotInitializedKit pattern, auditing performance, security, distributed systems. 对 hai-framework 模块进行全维度代码审查：架构 → 命名 → 类型 → 注释 → 性能 → 分布式 → 安全 → 日志 → 测试 → 文档。"
+description: "审查 hai-framework packages 模块的公共契约、生命周期、性能与安全。"
 ---
 
 # hai-review-module — 模块代码审查规范
@@ -9,11 +9,11 @@ description: "Use when: reviewing code, code review, auditing module quality, ch
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | Use when: reviewing code, code review, auditing module quality, checking hai-framework conventions, verifying HaiResult<T> usage, reviewing module structure, PR review, checking naming consistency, verifying NotInitializedKit pattern, auditing performance, security, distributed systems. 对 hai-framework 模块进行全维度代码审查：架构 → 命名 → 类型 → 注释 → 性能 → 分布式 → 安全 → 日志 → 测试 → 文档。 |
-| 适用场景 | 当任务与 `hai-review-module` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 用户指定的审查范围、代码/差异、仓库规范与可复现证据 |
-| 输出 | 按优先级排列的问题、影响、定位和修正建议；仅在用户要求时实施修改 |
-| 限制 | 不把风格偏好当缺陷，不猜测未读取的实现，不在审查请求中擅自发布或改动外部状态 |
+| 能力 | 审查 hai-framework packages 模块的公共契约、生命周期、性能与安全 |
+| 适用场景 | 用户要求框架模块审查或修复评估 |
+| 输入 | 明确模块范围、源码入口、调用方、测试和文档 |
+| 输出 | 带位置、证据、优先级、影响和验收条件的问题清单 |
+| 限制 | 只读审查不自动修改；按模块类型判断 HaiResult/throw 例外，不把内部实现约定强加给调用方。 |
 
 > 面向 AI 助手的模块审查指南。审查基准：`copilot-instructions.md` + `module-conventions.instructions.md` + [hai-create-module](../hai-create-module/SKILL.md)。
 
@@ -23,10 +23,10 @@ description: "Use when: reviewing code, code review, auditing module quality, ch
 
 ## §1 审查契约
 
-1. **先搜再判**：用 `grep_search` 确认引用点、依赖方、测试与文档，禁止靠猜。
+1. **先搜再判**：用 `rg` 确认引用点、依赖方、测试与文档，禁止靠猜。
 2. **先删后加**：冗余、死代码、纯转发、未来预留优先删除/折叠。
 3. **成套更新**：代码 / 类型 / 测试 / README / Skill / 注释同步，禁止只改一处。
-4. **P0/P1 本轮修复**：数据损坏、安全漏洞、崩溃、连接泄漏、竞态、权限绕过必须修到通过。
+4. **P0/P1 优先报告**：给出证据和影响；用户已授权修复时优先修到通过。
 5. **质量门禁**：修复后按影响范围运行 typecheck → lint → test → build；涉及 UI/路由运行 e2e 或说明豁免。
 6. **输出未完成项**：未运行、豁免或保留建议必须写明原因和后续动作。
 
@@ -77,10 +77,10 @@ description: "Use when: reviewing code, code review, auditing module quality, ch
 
 ## §5 类型、错误与生命周期审查
 
-- [ ] 公共 API 返回 `HaiResult<T>` / `Promise<HaiResult<T>>`，不 throw
-- [ ] Throw 只停留在内部 helper / Provider / Repository，最近外层 catch 并转 HaiResult
+- [ ] 先区分生命周期操作、纯函数、getter、工厂与流；返回 HaiResult 的业务 API 不抛业务异常
+- [ ] 内部 SDK 异常在约定的公共边界转 HaiResult；显式抛错 API 与框架控制流另按契约审查
 - [ ] async generator / Client / CLI / `getOrThrow()` 等例外已由命名或 JSDoc 明确说明
-- [ ] 错误码命名空间与注册表一致；新模块 `NOT_INITIALIZED` 使用 X010；文档错误码与源码一致
+- [ ] 错误码命名空间与注册表一致；新模块 `NOT_INITIALIZED` 使用 `hai:<module>:010`；文档错误码与源码一致
 - [ ] 错误消息用错误码 + i18n key，禁止硬编码用户可见文本
 - [ ] 禁止 `any`、禁止无注释 `as unknown as T`；已有依赖类型直接 import
 - [ ] 对外类型集中在 `xx-types.ts`，不泄漏 DB 行、Provider 状态或内部中间态
@@ -130,7 +130,7 @@ description: "Use when: reviewing code, code review, auditing module quality, ch
 
 1. **定范围**：列出将审查的模块、入口文件、测试、README、skill/template。
 2. **查引用**：搜索 public API、错误码、配置项、导出路径的所有引用。
-3. **逐项审查**：按 §3-§8 打勾；发现 P0/P1 立即修复，P2/P3 能顺手修则修。
+3. **逐项审查**：按 §3-§8 打勾；先报告发现；已授权修复时按优先级实施，不顺手扩大范围。
 4. **反向质疑**：再问一遍“能删吗？能复用吗？是否让调用方知道太多？是否为未来假设？”
 5. **跑门禁**：按影响范围运行 typecheck / lint / test / build / e2e。
 6. **完成报告**：列出已修复、保留建议、门禁状态、未完成项。
@@ -139,10 +139,10 @@ description: "Use when: reviewing code, code review, auditing module quality, ch
 
 | 等级 | 含义 | 处理 |
 | --- | --- | --- |
-| P0 | 数据损坏 / 安全漏洞 / 服务崩溃 / 死锁 / OOM | 必须立即修复 |
-| P1 | 连接泄漏 / 竞态 / 权限绕过 / 错误吞没 / 非幂等写入 | 本轮修复 |
+| P0 | 数据损坏 / 安全漏洞 / 服务崩溃 / 死锁 / OOM | 优先报告；已授权时立即修复 |
+| P1 | 连接泄漏 / 竞态 / 权限绕过 / 错误吞没 / 非幂等写入 | 已授权修复时优先处理 |
 | P2 | 性能瓶颈 / 可读性差 / 冗余抽象 / 测试缺口 | 优先修复或明确保留 |
-| P3 | 风格 / 命名 / 注释 / 文档小问题 | 顺手修复 |
+| P3 | 风格 / 命名 / 注释 / 文档小问题 | 按授权范围处理 |
 
 ### 输出格式
 
@@ -171,10 +171,3 @@ description: "Use when: reviewing code, code review, auditing module quality, ch
 - `createProvider` default throw：配置 schema 已枚举所有合法类型且位于 init 内部时合规。
 - 模块级 Map/Set：SDK client、不可变配置、连接池、单节点 memory provider 内部状态合规；跨节点业务数据不合规。
 - 同步 I/O：仅 CLI 或 init 一次性路径合规；请求/任务热路径不合规。
-
-## 示例触发语句
-
-- "审查 crypto 模块"
-- "review iam 模块代码质量"
-- "检查 scheduler 模块的分布式安全性"
-- "做一次完整代码审查"

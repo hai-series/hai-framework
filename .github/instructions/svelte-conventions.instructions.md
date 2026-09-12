@@ -4,14 +4,14 @@ applyTo: "**/*.svelte"
 
 # Svelte 组件专属规范
 
-> 编辑 `.svelte` 文件时自动激活。**仅记录 Svelte 组件层独有的规则**。
+> 适用于 `.svelte` 文件的修改。**仅记录 Svelte 组件层独有的规则**。
 > 应用层通用规范（i18n、路由安全、localStorage、环境变量、@h-ai/ui 用法）见 [app-conventions.instructions.md](app-conventions.instructions.md)，不在此重复。
 
 ## 组件职责（Svelte 特有）
 
 - 组件只负责**渲染 + 用户交互**，禁止写业务逻辑（DB / 加密 / 支付 / 网络调用）。
 - 业务逻辑放在 `src/lib/services/` 或 `src/lib/stores/`，组件通过 import 调用。
-- 副作用使用 Svelte 5 Runes：`$state` / `$derived` / `$effect`，禁止在模板中调用副作用函数。
+- `$state` 管理状态、`$derived` 计算派生值、`$effect` 管理副作用；禁止在模板求值期间执行副作用。
 
 ## `{@html}` 安全（Svelte 独有指令）
 

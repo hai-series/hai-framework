@@ -1,6 +1,6 @@
 ---
 name: hai-framework-sync
-description: 管理 hai-framework 与应用仓库之间的依赖、技能模板、Copilot/AGENTS 指令和本地联调同步；当需求涉及 hai-framework 源头修改、skills 同步、framework:use:local、framework:watch、版本漂移或双仓 PR 时使用。
+description: "同步 hai-framework 通用 skills、AI 入口与应用依赖，排查 npm/本地联调漂移。"
 ---
 
 # hai-framework-sync — hai-framework 与应用仓库同步规范
@@ -9,15 +9,13 @@ description: 管理 hai-framework 与应用仓库之间的依赖、技能模板�
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 管理 hai-framework 与应用仓库之间的依赖、技能模板、Copilot/AGENTS 指令和本地联调同步；当需求涉及 hai-framework 源头修改、skills 同步、framework:use:local、framework:watch、版本漂移或双仓 PR 时使用。 |
-| 适用场景 | 当任务与 `hai-framework-sync` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 用户目标、仓库与运行环境上下文、现有配置、授权范围和质量门禁 |
-| 输出 | 与目标匹配的配置/代码/文档或审查结论，以及可复现的验证结果 |
-| 限制 | 不扩张用户授权，不输出或固化密钥，不跳过失败门禁，不假定外部服务状态 |
+| 能力 | 同步 hai-framework 通用 skills、AI 入口与应用依赖，排查 npm/本地联调漂移 |
+| 适用场景 | 有明确源/目标仓库的模板或版本同步 |
+| 输入 | 框架源目录、应用目录、版本、现有本地覆盖 |
+| 输出 | 同步后的完整 skill 目录、入口及版本验证结果 |
+| 限制 | 仅操作授权仓库；保留应用私有规则。先查 scripts，不假定 framework:* 联调命令存在；未发布行为不能当 npm 已支持。 |
 
 > hai-framework 是能力与 skill 模板源头；应用仓库消费这些能力，并可以有少量项目本地覆盖。同步的目标是减少漂移，而不是把两个仓库混成一个仓库。
-
----
 
 ## 适用场景
 
@@ -28,8 +26,6 @@ description: 管理 hai-framework 与应用仓库之间的依赖、技能模板�
 - 排查应用仓库与 hai-framework npm 版本不一致
 - 规划双仓 PR 或同步发布
 
----
-
 ## 同步原则
 
 1. **通用规范先改 hai-framework**：可复用的 skill、模板、AI 工作流从 `packages/cli/templates/skills/` 起源。
@@ -37,8 +33,6 @@ description: 管理 hai-framework 与应用仓库之间的依赖、技能模板�
 3. **默认 CI 使用 npm 依赖**：确保 PR 能代表真实安装环境；本地路径联调必须显式开启。
 4. **双仓改动要成套**：framework 模板、应用本地 `.agents/skills`、AGENTS/Copilot 路由同时更新。
 5. **不复制敏感聊天记录**：只同步脱敏后的团队规则和流程。
-
----
 
 ## 标准同步流程
 
@@ -57,7 +51,7 @@ description: 管理 hai-framework 与应用仓库之间的依赖、技能模板�
 
 ### 3. 同步到应用仓库
 
-把源头 skill 复制到应用仓库 `.agents/skills/<skill>/SKILL.md`，并同步入口引用：
+把源头完整 skill 目录（含 reference.md 等被引用资源）复制到应用仓库 `.agents/skills/<skill>/`，并同步入口引用：
 
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
@@ -70,15 +64,13 @@ description: 管理 hai-framework 与应用仓库之间的依赖、技能模板�
 
 - 仅模板 / skill 变更：检查 diff、入口引用与模板泛化程度。
 - 同步到应用仓库：按 `hai-ci` 定义的质量门禁运行。
-- 涉及 framework runtime 时，再选择：
+- 涉及 framework runtime 时，先确认应用 package.json 已定义下列脚本；没有时按 README 的本地联调方式操作：
 
 ```bash
 pnpm framework:status
 pnpm framework:use:local <package>
 pnpm framework:watch <package>
 ```
-
----
 
 ## 漂移检查清单
 
@@ -89,8 +81,6 @@ pnpm framework:watch <package>
 - [ ] 本地联调结束后可恢复 npm 模式
 - [ ] README 或 PR 描述说明双仓改动顺序
 
----
-
 ## 禁止事项
 
 - ❌ 只改应用 `.agents/skills`，忘记更新 hai-framework 模板中的通用规范
@@ -98,8 +88,6 @@ pnpm framework:watch <package>
 - ❌ 把 unpublished framework 行为当成已发布 npm 行为
 - ❌ 把聊天记录原文、token、私有 URL 写入模板
 - ❌ 双仓 PR 没有关联 issue 或同步说明
-
----
 
 ## 相关 Skills
 

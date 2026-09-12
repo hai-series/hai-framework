@@ -1,6 +1,6 @@
 ---
 name: hai-storage
-description: 使用 @h-ai/storage 进行文件存储操作（本地/S3），包括 file/dir/presign 三组能力；当需求涉及文件上传下载、目录批量删除、S3 预签名 URL 或客户端直传时使用。
+description: "使用 @h-ai/storage 访问本地/S3 文件、目录和预签名上传下载。"
 ---
 
 # hai-storage
@@ -9,21 +9,17 @@ description: 使用 @h-ai/storage 进行文件存储操作（本地/S3），包�
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/storage 进行文件存储操作（本地/S3），包括 file/dir/presign 三组能力；当需求涉及文件上传下载、目录批量删除、S3 预签名 URL 或客户端直传时使用。 |
-| 适用场景 | 当任务与 `hai-storage` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/storage 访问本地/S3 文件、目录和预签名上传下载 |
+| 适用场景 | 文件接口、目录操作或浏览器直传 |
+| 输入 | StorageConfigInput、文件 key、内容、presign 选项 |
+| 输出 | file/dir/presign 操作的 HaiResult |
+| 限制 | 仅服务端；浏览器经 API/预签名 URL。Local list 非真分页；putUrl 不提供 maxSize 强制约束，上传大小须服务端验证。 |
 
 > `@h-ai/storage` 提供统一文件存储接口，支持本地文件系统（LocalProvider）和 S3 兼容存储（S3Provider），通过 `storage.file`、`storage.dir`、`storage.presign` 三组接口访问能力。
-
----
 
 ## 运行环境
 
 > ⚠️ **服务端模块**。`storage.file` / `storage.dir` / `storage.presign` 均在 Node.js 端使用。浏览器端通过预签名 URL 或 API 端点间接访问存储（见下方「浏览器端文件上传」）。
-
----
 
 ## 适用场景
 
@@ -32,8 +28,6 @@ description: 使用 @h-ai/storage 进行文件存储操作（本地/S3），包�
 - S3 兼容存储对接（AWS S3、MinIO、阿里云 OSS 等）
 - 本地开发文件存储
 - 目录前缀清理与批量文件删除
-
----
 
 ## 使用步骤
 
@@ -79,8 +73,6 @@ if (!closeResult.success) {
 ```
 
 > `storage.config` 返回的是**脱敏配置快照**；S3 的 `accessKeyId` / `secretAccessKey` 等敏感字段会被替换为 `[REDACTED]`。
-
----
 
 ## 核心 API
 
@@ -133,8 +125,6 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 
 > `storage.presign.putUrl()` 当前不支持 `maxSize` 约束参数；如需大小限制，请在应用层上传前校验，或在服务端落库/回调处二次校验。
 
----
-
 ## 错误码 — `HaiStorageError`
 
 | 错误码 | code | 说明 |
@@ -155,8 +145,6 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 | `HaiStorageError.UPLOAD_FAILED` | `hai:storage:014` | 上传失败 |
 | `HaiStorageError.DOWNLOAD_FAILED` | `hai:storage:015` | 下载失败 |
 
----
-
 ## HTTP API 契约
 
 公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv/features/storage` 绑定到本模块。
@@ -166,8 +154,6 @@ import { apiClient } from '@h-ai/api-client'
 
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
-
----
 
 ## 常见模式
 
@@ -184,7 +170,7 @@ const UploadSchema = z.object({
 })
 
 export const POST = kit.handler(async ({ request, locals }) => {
-  kit.guard.requirePermission(locals.session, 'storage:write')
+  kit.guard.require(locals.session, 'storage:write')
   const formData = await request.formData()
   const file = formData.get('file') as File
   if (!file)
@@ -215,8 +201,6 @@ if (result.success) {
   await iam.user.updateUser(userId, { avatarUrl: publicUrl ?? '' })
 }
 ```
-
----
 
 ## 浏览器端文件上传（预签名 URL 模式）
 
@@ -254,8 +238,6 @@ if (result.success) {
   await fetch(result.data.url, { method: 'PUT', body: file })
 }
 ```
-
----
 
 ## 相关 Skills
 

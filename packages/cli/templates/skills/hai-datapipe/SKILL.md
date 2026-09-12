@@ -1,6 +1,6 @@
 ---
 name: hai-datapipe
-description: 使用 @h-ai/datapipe 进行文本清洗（HTML/URL/空白移除）、多模式分块（句子/段落/Markdown/字符/自定义）和管线组合；当需求涉及文本预处理、文档分块、数据清洗或 RAG 入库前处理时使用。
+description: "使用 @h-ai/datapipe 清洗文本、分块并组合 RAG 入库管线。"
 ---
 
 # hai-datapipe
@@ -9,21 +9,17 @@ description: 使用 @h-ai/datapipe 进行文本清洗（HTML/URL/空白移除）
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/datapipe 进行文本清洗（HTML/URL/空白移除）、多模式分块（句子/段落/Markdown/字符/自定义）和管线组合；当需求涉及文本预处理、文档分块、数据清洗或 RAG 入库前处理时使用。 |
-| 适用场景 | 当任务与 `hai-datapipe` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/datapipe 清洗文本、分块并组合 RAG 入库管线 |
+| 适用场景 | 文档进入检索/知识库前的文本预处理 |
+| 输入 | 文本、清洗/分块选项、管线步骤 |
+| 输出 | 清洗/分块的 HaiResult；管线工厂按签名使用 |
+| 限制 | 纯函数，无 init/close；区分字符数和模型 token 数，分块结果不等于已生成 embedding。 |
 
 > `@h-ai/datapipe` 提供文本清洗（clean）、多模式分块（chunk）和可组合管线（pipeline），纯函数模块，无需初始化。
-
----
 
 ## 运行环境
 
 > **服务端模块（Node.js only）。** 通常在 AI 知识库入库或文档预处理场景中使用，由 `@h-ai/ai` 内部调用或在服务端显式调用。
-
----
 
 ## 适用场景
 
@@ -31,8 +27,6 @@ description: 使用 @h-ai/datapipe 进行文本清洗（HTML/URL/空白移除）
 - 文本分块：句子、段落、Markdown 标题、字数、字符、自定义分隔符
 - RAG 入库前的文档预处理管线
 - 管线模式组合多步清洗 + 分块 + 自定义转换
-
----
 
 ## 使用步骤
 
@@ -63,13 +57,11 @@ if (result.success) {
 }
 ```
 
----
-
 ## 核心 API
 
 ### 清洗 — `datapipe.clean`
 
-```typescript
+```text
 datapipe.clean(text: string, options?: CleanOptionsInput): HaiResult<string>
 ```
 
@@ -86,7 +78,7 @@ datapipe.clean(text: string, options?: CleanOptionsInput): HaiResult<string>
 
 ### 分块 — `datapipe.chunk`
 
-```typescript
+```text
 datapipe.chunk(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]>
 ```
 
@@ -127,7 +119,7 @@ interface DataChunk {
 
 ```typescript
 datapipe.pipeline()
-  .clean(options?)              // 添加清洗步骤
+  .clean(options)              // 添加清洗步骤
   .transform(fn)                // 添加文本转换步骤（同步/异步）
   .chunk(options)               // 添加分块步骤
   .chunkTransform(fn)           // 添加分块后处理步骤
@@ -143,8 +135,6 @@ interface PipelineResult {
 }
 ```
 
----
-
 ## 错误码 — `HaiDatapipeError`
 
 | 错误码 | code | 说明 |
@@ -155,8 +145,6 @@ interface PipelineResult {
 | `HaiDatapipeError.PIPELINE_FAILED` | `hai:datapipe:004` | 管线执行失败 |
 | `HaiDatapipeError.CONFIG_ERROR` | `hai:datapipe:005` | 配置错误 |
 | `HaiDatapipeError.MISSING_SEPARATOR` | `hai:datapipe:006` | 自定义分隔符缺失 |
-
----
 
 ## 常见模式
 
@@ -220,8 +208,6 @@ if (!result.success) {
   }
 }
 ```
-
----
 
 ## 相关 Skills
 

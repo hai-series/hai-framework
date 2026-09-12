@@ -2,11 +2,9 @@
 
 > 本文件是 [SKILL.md](SKILL.md) 的范本附录，**仅在需要套用具体模板时主动加载**。
 >
-> SKILL.md 已包含全部决策表、原则与检查清单；本文件只保留可直接复制粘贴的代码骨架与文件级模板。
+> SKILL.md 已包含全部决策表、原则与检查清单；本文件提供需按需求补齐的骨架与源码参考，不保证把不同变体直接拼接即可编译。
 >
 > 所有代码块均为示例占位（`xx` = 模块名，`yy`/`zz` = 子功能名，`aaa` = Provider 实现名），生成实际代码时必须替换。
-
----
 
 ## R1 配置 Schema 范本（对应 SKILL §4）
 
@@ -35,8 +33,6 @@ export type XxConfig = z.infer<typeof XxConfigSchema>
 export type XxConfigInput = z.input<typeof XxConfigSchema>
 ```
 
----
-
 ## R2 类型定义范本（对应 SKILL §3、§4）
 
 ```ts
@@ -63,7 +59,7 @@ export interface ZzOperations {
 
 export interface XxFunctions {
   init: (config: XxConfigInput) => Promise<HaiResult<void>>
-  close: () => Promise<void>
+  close: () => Promise<HaiResult<void>>
   readonly config: XxConfig | null
   readonly isInitialized: boolean
   readonly zz: ZzOperations
@@ -79,297 +75,34 @@ export interface XxProvider {
 }
 ```
 
----
+## R3 生命周期与 Provider 范本
 
-## R3 入口 main.ts 三种范本（对应 SKILL §1 决策表）
+先按 SKILL §1 决定模块类型，再参考下面真实实现；不要复制一个通用闭包后补造未需要的能力。下面链接均从仓库源码读取，避免范本与实际实现长期漂移。
 
 ### R3.1 无子功能 + 无 Provider
 
-```ts
-// xx-main.ts ——示例
-import type { HaiResult } from '@h-ai/core'
-import type { XxConfig, XxConfigInput } from './xx-config.js'
-import type { XxFunctions, ZzOperations } from './xx-types.js'
-import { core, err, ok } from '@h-ai/core'
-import { XxConfigSchema } from './xx-config.js'
-import { HaiXxError } from './xx-types.js'
-import { createXxFunctions } from './xx-functions.js'
-import { xxM } from './xx-i18n.js'
+参考 [audit-main.ts](../../../packages/audit/src/audit-main.ts) 的生命周期及公开操作装配。业务逻辑留在 functions，main 管理依赖、状态和公共入口。
 
-const logger = core.logger.child({ module: 'xx', scope: 'main' })
+### R3.2 多 Provider
 
-let currentConfig: XxConfig | null = null
-let currentZz: ZzOperations | null = null
-let initInProgress = false
-
-const notInitialized = core.module.createNotInitializedKit(
-  HaiXxError.NOT_INITIALIZED,
-  () => xxM('xx_notInitialized'),
-)
-const notInitializedZz = notInitialized.proxy<ZzOperations>()
-
-export const xx: XxFunctions = {
-  async init(config: XxConfigInput): Promise<HaiResult<void>> {
-    if (initInProgress) {
-      logger.warn('Xx init already in progress, skipping concurrent call')
-      return err(HaiXxError.OPERATION_FAILED, xxM('xx_operationFailed', {
-        params: { error: 'Concurrent initialization detected' },
-      }))
-    }
-    initInProgress = true
-    try {
-      if (currentConfig) {
-        logger.warn('Xx module is already initialized, reinitializing')
-        await xx.close()
-      }
-      logger.info('Initializing xx module')
-      const parsed = XxConfigSchema.parse(config)
-      currentZz = createXxFunctions({ config: parsed })
-      currentConfig = parsed
-      logger.info('Xx module initialized')
-      return ok(undefined)
-    }
-    catch (error) {
-      logger.error('Xx module initialization failed', { error })
-      return err(HaiXxError.CONFIG_ERROR, xxM('xx_initFailed', {
-        params: { error: error instanceof Error ? error.message : String(error) },
-      }), error)
-    }
-    finally {
-      initInProgress = false
-    }
-  },
-
-  get zz(): ZzOperations { return currentZz ?? notInitializedZz },
-  get config() { return currentConfig },
-  get isInitialized() { return currentConfig !== null },
-
-  async close() {
-    if (!currentConfig) return
-    logger.info('Closing xx module')
-    currentZz = null
-    currentConfig = null
-    logger.info('Xx module closed')
-  },
-}
-```
-
-### R3.2 无子功能 + 有 Provider
-
-```ts
-// xx-main.ts ——示例（按 config.type 切换后端）
-import type { HaiResult } from '@h-ai/core'
-import type { XxConfig, XxConfigInput } from './xx-config.js'
-import type { XxFunctions, XxProvider, ZzOperations } from './xx-types.js'
-import { core, err, ok } from '@h-ai/core'
-import { createTypeAProvider } from './providers/xx-provider-typeA.js'
-import { createTypeBProvider } from './providers/xx-provider-typeB.js'
-import { XxConfigSchema } from './xx-config.js'
-import { HaiXxError } from './xx-types.js'
-import { xxM } from './xx-i18n.js'
-
-const logger = core.logger.child({ module: 'xx', scope: 'main' })
-
-let currentProvider: XxProvider | null = null
-let currentConfig: XxConfig | null = null
-let initInProgress = false
-
-function createProvider(config: XxConfig): XxProvider {
-  switch (config.type) {
-    case 'typeA': return createTypeAProvider()
-    case 'typeB': return createTypeBProvider()
-    default:
-      throw new Error(xxM('xx_unsupportedType', { params: { type: config.type } }))
-  }
-}
-
-const notInitialized = core.module.createNotInitializedKit(
-  HaiXxError.NOT_INITIALIZED,
-  () => xxM('xx_notInitialized'),
-)
-const notInitializedZz = notInitialized.proxy<ZzOperations>()
-
-export const xx: XxFunctions = {
-  async init(config: XxConfigInput): Promise<HaiResult<void>> {
-    if (initInProgress) {
-      logger.warn('Xx init already in progress, skipping concurrent call')
-      return err(HaiXxError.OPERATION_FAILED, xxM('xx_operationFailed', {
-        params: { error: 'Concurrent initialization detected' },
-      }))
-    }
-    initInProgress = true
-    try {
-      if (currentProvider) {
-        logger.warn('Xx module is already initialized, reinitializing')
-        await xx.close()
-      }
-      logger.info('Initializing xx module')
-      const parsed = XxConfigSchema.parse(config)
-      const provider = createProvider(parsed)
-      const connectResult = await provider.connect(parsed)
-      if (!connectResult.success) {
-        logger.error('Xx module initialization failed', {
-          code: connectResult.error.code,
-          message: connectResult.error.message,
-        })
-        return connectResult
-      }
-      currentProvider = provider
-      currentConfig = parsed
-      logger.info('Xx module initialized', { type: parsed.type })
-      return ok(undefined)
-    }
-    catch (error) {
-      logger.error('Xx module initialization failed', { error })
-      return err(HaiXxError.CONNECTION_FAILED, xxM('xx_initFailed', {
-        params: { error: error instanceof Error ? error.message : String(error) },
-      }), error)
-    }
-    finally {
-      initInProgress = false
-    }
-  },
-
-  get zz(): ZzOperations { return currentProvider?.zz ?? notInitializedZz },
-  get config() { return currentConfig },
-  get isInitialized() { return currentProvider !== null },
-
-  async close() {
-    if (!currentProvider) {
-      currentConfig = null
-      return
-    }
-    logger.info('Closing xx module')
-    try {
-      await currentProvider.close()
-      logger.info('Xx module closed')
-    }
-    catch (error) {
-      logger.error('Xx module close failed', { error })
-    }
-    finally {
-      currentProvider = null
-      currentConfig = null
-    }
-  },
-}
-```
+配置选择单一后端时参考 [reldb-main.ts](../../../packages/reldb/src/reldb-main.ts)；注册多个支付渠道时参考 [payment-main.ts](../../../packages/payment/src/payment-main.ts)。选择机制由实际需求决定，不把“Provider”一律等同于 config.type 切换。
 
 ### R3.3 有子功能
 
-```ts
-// xx-main.ts ——示例（main.ts 只组装子功能）
-import type { HaiResult } from '@h-ai/core'
-import type { XxConfig, XxConfigInput } from './xx-config.js'
-import type { XxFunctions } from './xx-types.js'
-import type { XxYyFunctions } from './yy/xx-yy-types.js'
-import type { XxZzFunctions } from './zz/xx-zz-types.js'
-import { core, err, ok } from '@h-ai/core'
-import { XxConfigSchema } from './xx-config.js'
-import { HaiXxError } from './xx-types.js'
-import { xxM } from './xx-i18n.js'
-import { createXxYyFunctions } from './yy/xx-yy-functions.js'
-import { createXxZzFunctions } from './zz/xx-zz-functions.js'
+参考 [iam-main.ts](../../../packages/iam/src/iam-main.ts) 的 session/auth/authz/user 装配与 [iam-types.ts](../../../packages/iam/src/iam-types.ts) 的公共类型。用户使用 iam.auth，内部 authn 目录名不是公共 API。
 
-const logger = core.logger.child({ module: 'xx', scope: 'main' })
+### R3.4 NotInitializedKit 与 Getter
 
-let currentConfig: XxConfig | null = null
-let currentYy: XxYyFunctions | null = null
-let currentZz: XxZzFunctions | null = null
-let initInProgress = false
+参考 [core-util-module.ts](../../../packages/core/src/utils/core-util-module.ts) 的公开 NotInitializedKit 类型与 [storage-main.ts](../../../packages/storage/src/storage-main.ts) 的占位 getter。
 
-const notInitialized = core.module.createNotInitializedKit(
-  HaiXxError.NOT_INITIALIZED,
-  () => xxM('xx_notInitialized'),
-)
-const notInitializedYy = notInitialized.proxy<XxYyFunctions>()
-const notInitializedZz = notInitialized.proxy<XxZzFunctions>()
+按实际资源验证以下边界：
 
-export const xx: XxFunctions = {
-  async init(config: XxConfigInput): Promise<HaiResult<void>> {
-    if (initInProgress) {
-      logger.warn('Xx init already in progress, skipping concurrent call')
-      return err(HaiXxError.OPERATION_FAILED, xxM('xx_operationFailed', {
-        params: { error: 'Concurrent initialization detected' },
-      }))
-    }
-    initInProgress = true
-    try {
-      if (currentConfig) {
-        logger.warn('Xx module is already initialized, reinitializing')
-        await xx.close()
-      }
-      logger.info('Initializing xx module')
-      const parsed = XxConfigSchema.parse(config)
-      const yyResult = await createXxYyFunctions({ config: parsed })
-      if (!yyResult.success) {
-        logger.error('Xx module initialization failed', {
-          code: yyResult.error.code,
-          message: yyResult.error.message,
-        })
-        return yyResult
-      }
-      currentYy = yyResult.data
-      currentZz = createXxZzFunctions({ config: parsed })
-      currentConfig = parsed
-      logger.info('Xx module initialized')
-      return ok(undefined)
-    }
-    catch (error) {
-      logger.error('Xx module initialization failed', { error })
-      return err(HaiXxError.CONFIG_ERROR, xxM('xx_initFailed', {
-        params: { error: error instanceof Error ? error.message : String(error) },
-      }), error)
-    }
-    finally {
-      initInProgress = false
-    }
-  },
-
-  get yy(): XxYyFunctions { return currentYy ?? notInitializedYy },
-  get zz(): XxZzFunctions { return currentZz ?? notInitializedZz },
-  get config() { return currentConfig },
-  get isInitialized() { return currentConfig !== null },
-
-  async close() {
-    if (!currentConfig) return
-    logger.info('Closing xx module')
-    await currentYy?.close?.()
-    currentYy = null
-    currentZz = null
-    currentConfig = null
-    logger.info('Xx module closed')
-  },
-}
-```
-
-### R3.4 NotInitializedKit 与 Getter 三种变体
-
-```ts
-// 变体 A：Provider 引用（有 Provider 时）
-const currentProvider: XxProvider | null = null
-const notInitializedZz = notInitialized.proxy<ZzOperations>()
-const xx = {
-  get zz(): ZzOperations { return currentProvider?.zz ?? notInitializedZz },
-}
-
-// 变体 B：操作实例引用（有子功能工厂时）
-const currentYy: XxYyFunctions | null = null
-const notInitializedYy = notInitialized.proxy<XxYyFunctions>()
-const xx = {
-  get yy(): XxYyFunctions { return currentYy ?? notInitializedYy },
-}
-
-// 变体 C：布尔标志（操作是静态对象时）
-const initialized = false
-const deviceOps: DeviceOperations = { getInfo, getAppVersion }
-const notInitializedDevice = notInitialized.proxy<DeviceOperations>()
-const xx = {
-  get device(): DeviceOperations { return initialized ? deviceOps : notInitializedDevice },
-}
-```
-
----
+- init 有并发标记及 finally 释放；配置校验失败不发布半初始化状态。
+- 重新初始化先检查 close 的 HaiResult，关闭失败不继续创建新实例。
+- connect 返回失败或抛异常时，释放本次已创建的 Provider；创建后续子功能失败时清理先前子功能。
+- public close 按模块签名返回 HaiResult，不吞掉关闭错误；内部 Provider 的 close 可返回 void 或 HaiResult，以类型为准。
+- 所有关闭/失败路径清空状态，getter 切回顶层创建的未初始化 Proxy；不得在 getter 中重复创建 Proxy。
+- 纯函数、无资源模块不为套用范本添加 init/close；配置含凭据时公开 config 使用脱敏快照。
 
 ## R4 业务实现范本（对应 SKILL §3）
 
@@ -463,8 +196,6 @@ function sanitizeRedisUrl(url: string): string {
 logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 ```
 
----
-
 ## R5 messages JSON 范本
 
 ```jsonc
@@ -477,8 +208,6 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 ```
 
 规则：日志英文、代码注释中文、用户可见文本必须 i18n、键格式 `{module}_{camelCase}`。
-
----
 
 ## R6 注释规范（公共 API JSDoc）
 
@@ -507,18 +236,14 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 - 模块 section 分隔线：`// ─── 内部状态 ────`
 - **代码注释中文、日志消息英文**。
 
----
-
 ## R7 测试规范要点
 
 - 文件拆分：`<模块名>-init.test.ts`、`<模块名>-<feature>.test.ts`。
-- 统一入口：通过服务对象（如 `crypto.sm2`、`storage.file`）调用，不直接调用内部工厂。
+- 统一入口：通过服务对象（如 `crypto.asymmetric`、`storage.file`）调用，不直接调用内部工厂。
 - 覆盖：正常 / 边界 / 参数选项 / 多实现。
 - 断言：始终校验 `result.success`；失败时检查 `error.code`；**不用 try/catch 包裹 HaiResult API**。
 - 外部依赖：优先 Testcontainers 隔离。
 - 详细规范见 [test-conventions.instructions.md](../../instructions/test-conventions.instructions.md)。
-
----
 
 ## R8 包配置范本
 
@@ -601,8 +326,6 @@ import { baseVitestConfig } from '../vitest.base'
 
 export default defineConfig({ ...baseVitestConfig })
 ```
-
----
 
 ## R9 README 章节顺序（面向人类）
 

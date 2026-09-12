@@ -4,7 +4,7 @@ applyTo: "packages/reldb/**"
 
 # @h-ai/reldb 模块规范
 
-> 编辑 reldb 代码时自动激活。
+> 适用于 reldb 实现或使用方式的修改。
 
 ## 核心 API
 
@@ -16,18 +16,18 @@ applyTo: "packages/reldb/**"
 
 ## 错误码段位
 
-reldb 模块（HaiReldbError）
+`HaiReldbError` 定义见 `packages/reldb/src/reldb-types.ts`，code 为 `hai:reldb:<三位码>`。
 
 ## SQL 安全
 
-- 所有 SQL 必须参数化（使用 `?` 占位符），禁止字符串拼接/模板字面量构造 SQL
+- SQL 动态值必须参数化（`?`）；动态表/列/排序仅使用白名单或可信代码，不能把用户输入直接拼入 SQL
 - 使用 `reldb.sql.query(sql, params)` 而非内联参数
 
 ## Repository 模式
 
 - 业务仓库继承 `BaseReldbCrudRepository`
 - 类名：`{Module}{Entity}Repository`
-- 实现 `fieldMapping`、`toEntity`、`fromEntity`
+- 构造配置使用 `fields` 的 fieldName/columnName 映射、`def` 列定义与 select/create/update 标记；不要臆造 fieldMapping/toEntity/fromEntity 扩展方法
 - 跨仓库事务：多个 Repository 共享同一 `tx` 句柄
 - 表名规则以 module-conventions 为准：`hai_<module>_<feature>`、就近定义、不可配置
 

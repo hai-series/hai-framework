@@ -4,22 +4,7 @@
 
 ## 行为契约
 
-1. 每次响应第一行写：`规模: XS|S|M|L — <一句话意图>`。
-2. 任务规模 ≥ M 时，先回顾现有页面、原生桥接、API 调用、messages、测试与 `.agents/skills/*/SKILL.md`。
-3. 在写第一行新代码前，用 1 行回答 Q1-Q7 必要性自检。
-4. 任务规模 ≥ M 时，说明将影响的页面、状态管理、原生桥接、API、messages、README 和测试。
-
-## 必要性自检（M / L 任务必须输出）
-
-- Q1：已有页面、store、service、Capacitor 封装是否可复用？
-- Q2：能否扩展现有 `src/lib/capacitor.ts`、service 或组件，而不是新建抽象层？
-- Q3：当前真实调用点是哪些页面、原生能力或 API 流程？
-- Q4：能否用更少的 page、store、helper 解决？
-- Q5：是否把原生桥接、token 或 API 细节泄漏给页面层？
-- Q6：是否与现有 Svelte 5 + Vite + Capacitor 目录、脚本和 i18n 一致？
-- Q7：是否比较过更安全的存储、权限和网络调用方案？
-
-## 影响分析（M / L 任务必须输出）
+先读 README、package.json、相关实现/测试和所需 .agents/skills；不要加载整个 skill 树。新增抽象前确认复用路径与真实需求；保留用户改动。跨文件任务简述影响和验证计划，无须固定规模标签或重复问卷。
 
 - 直接影响：哪些页面、store、原生桥接、messages、README、测试和打包脚本会变。
 - 间接影响：哪些 Android/iOS 权限、API 调用方、构建/打包流程和共享组件需要同步。
@@ -52,9 +37,11 @@ pnpm cap:build:android:release
 
 1. 先搜索现有页面、stores、原生桥接、API client、messages 和测试。
 2. 修改原生能力、权限、登录态或 API 流程时，同步 README、i18n 和测试。
-3. 每次改动后运行质量门禁，不能留下“已知失败”。
+3. 按改动范围验证，修复本次引入的失败；已有问题与未运行项明确报告。
 
 ## 质量门禁
+
+先核对 package.json，按影响范围执行已有脚本；文档检查引用，UI/路由变更再运行 E2E。未运行项说明原因。
 
 ```bash
 pnpm typecheck

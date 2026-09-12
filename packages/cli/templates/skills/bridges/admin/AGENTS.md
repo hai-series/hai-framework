@@ -4,22 +4,7 @@
 
 ## 行为契约
 
-1. 每次响应第一行写：`规模: XS|S|M|L — <一句话意图>`。
-2. 任务规模 ≥ M 时，先回顾相关路由、服务、测试、i18n 文案与 `.agents/skills/*/SKILL.md`。
-3. 在写第一行新代码前，用 1 行回答 Q1-Q7 必要性自检。
-4. 任务规模 ≥ M 时，说明将影响的页面、layout、API、认证流程、测试和文档。
-
-## 必要性自检（M / L 任务必须输出）
-
-- Q1：已有页面 / service / 模块 API 是否可复用？
-- Q2：能否扩展现有 `src/lib/server/services`、`src/routes`、共享组件，而不是新建抽象？
-- Q3：当前真实调用点是哪些页面、表单、API 或 guard？
-- Q4：能否用更少的 route / load / helper / 组件解决？
-- Q5：是否把 provider、DB 细节或中间态泄漏给页面层？
-- Q6：是否与现有路由结构、i18n、权限模型和脚本一致？
-- Q7：是否比较过更安全的鉴权、校验和数据处理方案？
-
-## 影响分析（M / L 任务必须输出）
+先读 README、package.json、相关实现/测试和所需 .agents/skills；不要加载整个 skill 树。新增抽象前确认复用路径与真实需求；保留用户改动。跨文件任务简述影响和验证计划，无须固定规模标签或重复问卷。
 
 - 直接影响：哪些 `+page.svelte`、`+layout.svelte`、`+page.server.ts`、`+server.ts`、service、messages、README、测试会变。
 - 间接影响：哪些角色权限、导航入口、共享组件、表单流程和依赖模块需要同步。
@@ -44,6 +29,8 @@
 3. 修改页面、API、认证流程后，同步测试、README 和 i18n。
 
 ## 质量门禁
+
+先核对 package.json，按影响范围执行已有脚本；文档检查引用，UI/路由变更再运行 E2E。未运行项说明原因。
 
 ```bash
 pnpm typecheck

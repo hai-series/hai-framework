@@ -1,6 +1,6 @@
 ---
 name: hai-crypto
-description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）、密码哈希与传输加密；当需求涉及加密、解密、签名、验签、哈希、密码存储、密钥管理或 crypto.transport 时使用。
+description: "使用 @h-ai/crypto 进行 SM2/SM3/SM4、密码哈希与传输加密。"
 ---
 
 # hai-crypto
@@ -9,15 +9,13 @@ description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）、密
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）、密码哈希与传输加密；当需求涉及加密、解密、签名、验签、哈希、密码存储、密钥管理或 crypto.transport 时使用。 |
-| 适用场景 | 当任务与 `hai-crypto` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/crypto 进行 SM2/SM3/SM4、密码哈希与传输加密 |
+| 适用场景 | 应用加密、验签、密码保存或传输保护 |
+| 输入 | CryptoConfigInput、字节/文本、密钥和 transport 装配选项 |
+| 输出 | 加解密/验签的 HaiResult；transport 工厂按公开类型使用 |
+| 限制 | 先 init；password 仅服务端，浏览器仅支持部分能力。传输通过 serv/kit/api-client 顶层装配，不导入内部工厂。 |
 
 > `@h-ai/crypto` 提供非对称加密、哈希、对称加密与密码哈希能力，支持 Node.js 与浏览器双端。
-
----
 
 ## 运行环境
 
@@ -33,8 +31,6 @@ description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）、密
 
 浏览器端主要用于 kit 传输加密场景（`kit.client.create({ transport: { crypto } })`），一般不需要直接调用 crypto API。
 
----
-
 ## 适用场景
 
 - 非对称加密/解密、签名/验签、密钥生成
@@ -42,8 +38,6 @@ description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）、密
 - 对称加密/解密（ECB/CBC 模式）
 - 密码存储与验证（加盐迭代哈希）
 - 传输加密：为 serv / kit / api-client 提供统一协议、密钥协商和请求响应加解密
-
----
 
 ## 使用步骤
 
@@ -57,8 +51,6 @@ await crypto.init()
 // 使用后关闭
 await crypto.close()
 ```
-
----
 
 ## 核心 API
 
@@ -221,8 +213,6 @@ const sharedServer = crypto.transport.createServer({
 - kit：`kit.createHandle({ crypto: { crypto, transport: true } })` + `kit.client.create({ transport: { crypto } })`
 - api-client：`apiClient.init({ transport: { crypto } })`
 
----
-
 ## 错误码 — `HaiCryptoError`
 
 | 错误码 | code | 说明 |
@@ -239,8 +229,6 @@ const sharedServer = crypto.transport.createServer({
 | `HaiCryptoError.HASH_FAILED` | `hai:crypto:040` | 哈希计算失败 |
 | `HaiCryptoError.HMAC_FAILED` | `hai:crypto:041` | HMAC 计算失败 |
 | `HaiCryptoError.INVALID_IV` | `hai:crypto:060` | 无效 IV |
-
----
 
 ## 常见模式
 
@@ -272,8 +260,6 @@ if (verifyResult.success && verifyResult.data) {
   // 密码匹配
 }
 ```
-
----
 
 ## 相关 Skills
 

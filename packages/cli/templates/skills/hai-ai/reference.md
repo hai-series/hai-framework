@@ -16,7 +16,7 @@
 | `ai.retrieval` / `ai.rag` | 是 | Embedding + Store |
 | `ai.knowledge` | 是 | LLM + Embedding + Store + datapipe |
 | `ai.context` | 是 | LLM + Store + 可选 Memory/RAG/Reasoning |
-| `ai.a2a` | 是 | A2A 配置 + executor |
+| `ai.a2a` | 是 | 接收请求需本地 executor；调用远端无需注册 executor |
 
 关闭必须使用 `await ai.close()`，这样才能确定释放自定义 `AIStoreProvider.close()`。
 

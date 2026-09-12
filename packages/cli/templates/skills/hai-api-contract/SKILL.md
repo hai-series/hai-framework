@@ -1,6 +1,6 @@
 ---
 name: hai-api-contract
-description: 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；当需求涉及定义新领域 contract、组合应用级 contract、使用内置 IAM/Storage/AI/Payment 契约、编写自定义 procedure 输入输出 Schema 或为 @h-ai/api-client/@h-ai/serv 提供接口真相源时使用。
+description: "使用 @h-ai/api-contract 定义、组合和扩展共享 HTTP contract 与 Zod 输入输出。"
 ---
 
 # hai-api-contract
@@ -9,21 +9,17 @@ description: 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；�
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；当需求涉及定义新领域 contract、组合应用级 contract、使用内置 IAM/Storage/AI/Payment 契约、编写自定义 procedure 输入输出 Schema 或为 @h-ai/api-client/@h-ai/serv 提供接口真相源时使用。 |
-| 适用场景 | 当任务与 `hai-api-contract` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 模块配置、类型化业务参数、依赖初始化状态和目标运行环境 |
-| 输出 | 符合模块公共 API 的实现或示例；业务结果使用 HaiResult，并同步必要测试与文档 |
-| 限制 | 遵守 init → use → close 生命周期与运行环境边界；不绕过类型、授权、输入校验或敏感信息保护 |
+| 能力 | 使用 @h-ai/api-contract 定义、组合和扩展共享 HTTP contract 与 Zod 输入输出 |
+| 适用场景 | 新增/修改共享接口定义，不负责实现 handler |
+| 输入 | 领域路径、schema、HTTP 方法、共享错误模型 |
+| 输出 | 供 serv 实现和 api-client 消费的 contract |
+| 限制 | 纯定义，无 init/close；不包含服务端实现或密钥。业务路径属于 contract，公共传输配置属于 transport。 |
 
 > `@h-ai/api-contract` 是 hai-framework 的公共 HTTP API 契约包，使用 oRPC contract + Zod v4 作为唯一接口真相源。本包只描述接口边界，不包含任何 procedure 实现。
 
----
-
 ## 运行环境
 
-> ✅ **纯定义包，无运行时依赖。** 可在客户端、服务端、测试环境直接引用。
-
----
+> ✅ **契约定义包，无服务端业务依赖；Zod/oRPC schema 构造仍有运行时代码。** 可在客户端、服务端、测试环境直接引用。
 
 ## 适用场景
 
@@ -33,8 +29,6 @@ description: 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；�
 - 向 `@h-ai/api-client` 提供 contract（生成类型安全客户端）
 - 复用内置领域 contract（iam/storage/ai/payment）
 - 复用公共 Schema 工厂（`apiContract.haiResultSchema`、分页 Schema）
-
----
 
 ## 使用步骤
 
@@ -144,8 +138,6 @@ const app = serv.createApp({
 })
 ```
 
----
-
 ## 核心 API
 
 ### `apiContract.create(options)` — 组合领域 contract
@@ -225,10 +217,7 @@ middleware、client 与 E2E 需要业务路径时从 contract 元数据读取，
 | `apiContract.voidResultSchema` | `HaiResult<void>` 空结果包装 |
 | `apiContract.paginatedSchema(itemSchema)` | 分页列表输出 Schema |
 | `HaiErrorSchema` | HaiError 公共字段 Schema |
-| `PaginationInputSchema` | 分页参数 Schema（page/limit） |
-| `PaginationOutputSchema` | 分页元数据 Schema（total/page/limit） |
-
----
+| `PaginationQuerySchema` | 分页参数 Schema（可选 page/pageSize，pageSize 上限 100；默认值由服务端处理） |
 
 ## Contract 定义规范
 
@@ -261,21 +250,19 @@ middleware、client 与 E2E 需要业务路径时从 contract 元数据读取，
 | `*-schemas.ts` | 跨接口或跨层复用的输入、实体、数据结构 |
 | service `config/_serv.yml` | API 前缀、基础设施端点、跨端 Header 与加密 transport 配置 |
 
----
-
 ## 常见模式
 
 ### 带分页的列表接口
 
 ```typescript
-import { apiContract, PaginationInputSchema } from '@h-ai/api-contract'
+import { apiContract, PaginationQuerySchema } from '@h-ai/api-contract'
 import { z } from 'zod'
 
 const WidgetSchema = z.object({ id: z.string(), name: z.string() })
 
 const listWidgets = apiContract
   .route({ method: 'GET', path: '/widgets', operationId: 'widget.list', tags: ['widget'] })
-  .input(PaginationInputSchema.extend({ keyword: z.string().optional() }))
+  .input(PaginationQuerySchema.extend({ keyword: z.string().optional() }))
   .output(apiContract.haiResultSchema(apiContract.paginatedSchema(WidgetSchema)))
 ```
 
@@ -296,8 +283,6 @@ const versionContract = apiContract
   .route({ method: 'GET', path: '/system/version', operationId: 'system.version', tags: ['system'] })
   .output(apiContract.haiResultSchema(z.object({ version: z.string() })))
 ```
-
----
 
 ## 测试
 

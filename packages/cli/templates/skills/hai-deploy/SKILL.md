@@ -1,6 +1,6 @@
 ---
 name: hai-deploy
-description: 使用 @h-ai/deploy 进行自动化部署：Vercel 部署 + 基础设施开通（Neon/Upstash/R2/Resend/Aliyun）；当需求涉及应用部署、环境配置、凭证管理或云服务开通时使用。
+description: "使用 @h-ai/deploy 配置部署和 Vercel/Neon/Upstash/R2 等基础设施。"
 ---
 
 # hai-deploy
@@ -11,21 +11,17 @@ description: 使用 @h-ai/deploy 进行自动化部署：Vercel 部署 + 基础�
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/deploy 进行自动化部署：Vercel 部署 + 基础设施开通（Neon/Upstash/R2/Resend/Aliyun）；当需求涉及应用部署、环境配置、凭证管理或云服务开通时使用。 |
-| 适用场景 | 当任务与 `hai-deploy` 的能力描述匹配，并且需要遵循本 Skill 的流程和边界时 |
-| 输入 | 用户目标、仓库与运行环境上下文、现有配置、授权范围和质量门禁 |
-| 输出 | 与目标匹配的配置/代码/文档或审查结论，以及可复现的验证结果 |
-| 限制 | 不扩张用户授权，不输出或固化密钥，不跳过失败门禁，不假定外部服务状态 |
+| 能力 | 使用 @h-ai/deploy 配置部署和 Vercel/Neon/Upstash/R2 等基础设施 |
+| 适用场景 | 部署目标配置、云资源开通或部署故障排查 |
+| 输入 | 项目构建产物、部署目标、环境配置与凭据引用 |
+| 输出 | 部署/资源操作结果和可验证的目标状态 |
+| 限制 | 核对实际 provider 与应用运行时；开通收费资源、发布或删除必须在用户授权范围内，凭据不写入仓库。 |
 
 > `@h-ai/deploy` 提供自动化部署能力，将 SvelteKit 应用部署到 Vercel，并自动开通 PostgreSQL (Neon)、Redis (Upstash)、S3 (Cloudflare R2)、邮件 (Resend)、短信 (阿里云) 等基础设施服务。
-
----
 
 ## 运行环境
 
 > ⚠️ **Node.js CLI / 服务端模块。** 通过 `hai deploy` CLI 命令或在 Node.js 脚本中使用。
-
----
 
 ## 适用场景
 
@@ -34,8 +30,6 @@ description: 使用 @h-ai/deploy 进行自动化部署：Vercel 部署 + 基础�
 - 管理部署凭证（~/.hai/credentials.yml）
 - 扫描应用依赖，自动检测所需服务
 - CLI 部署流程（`hai deploy`）
-
----
 
 ## 使用步骤
 
@@ -128,8 +122,6 @@ if (result.success) {
 }
 ```
 
----
-
 ## 核心 API
 
 | 方法                   | 签名                                                                       | 说明         |
@@ -146,15 +138,11 @@ if (result.success) {
 | `deploy.config`        | `DeployConfig \| null`                                                     | 当前配置     |
 | `deploy.isInitialized` | `boolean`                                                                  | 初始化状态   |
 
----
-
 ## 凭证管理
 
 所有凭证操作都通过 `deploy.credentials.*` 访问，模块入口不再单独导出自由函数。
 
 > `deploy.credentials.*()` 与 `deploy.scan()` 都不依赖 `deploy.init()`，可用于 CLI 在读取 `_deploy.yml` 之前准备环境。
-
----
 
 ## 错误码 — `HaiDeployError`
 
@@ -175,8 +163,6 @@ if (result.success) {
 | `HaiDeployError.CONFIG_ERROR`          | `hai:deploy:013`   | 配置错误                 |
 | `HaiDeployError.CREDENTIAL_ERROR`      | `hai:deploy:014`   | 凭证读写失败             |
 
----
-
 ## CLI 命令
 
 ```bash
@@ -195,8 +181,6 @@ hai deploy --skip-build
 # 自定义项目名
 hai deploy --project-name my-custom-name
 ```
-
----
 
 ## 常见模式
 
@@ -228,8 +212,6 @@ await deploy.init({
 // 使用 deploy API 部署
 const result = await deploy.deployApp('./apps/my-app')
 ```
-
----
 
 ## 相关 Skills
 
