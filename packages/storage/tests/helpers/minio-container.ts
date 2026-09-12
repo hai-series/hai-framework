@@ -24,13 +24,23 @@ export interface MinioContainerLease {
 const MINIO_ROOT_USER = 'minioadmin'
 const MINIO_ROOT_PASSWORD = 'minioadmin'
 const MINIO_BUCKET = 'test-bucket'
+const MINIO_IMAGE = 'quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z'
+const CONTAINER_STOP_TIMEOUT_MS = 10_000
+
+async function stopMinioContainer(container: StartedTestContainer): Promise<void> {
+  await container.stop({
+    timeout: CONTAINER_STOP_TIMEOUT_MS,
+    remove: true,
+    removeVolumes: true,
+  })
+}
 
 export async function acquireMinioContainer(): Promise<MinioContainerLease> {
   refCount += 1
 
   if (!containerPromise) {
-    // 固定镜像版本：minio/minio:latest 的新版本会改动启动行为导致 /minio/health/ready 在 CI 永不就绪。
-    containerPromise = new GenericContainer('minio/minio:RELEASE.2025-09-07T16-13-09Z')
+    // Docker Hub 上的 minio/minio 已归档，干净的 CI runner 无法再拉取；固定版本从官方 Quay 仓库获取。
+    containerPromise = new GenericContainer(MINIO_IMAGE)
       .withExposedPorts(9000)
       .withEnvironment({
         MINIO_ROOT_USER,
@@ -38,6 +48,7 @@ export async function acquireMinioContainer(): Promise<MinioContainerLease> {
       })
       .withCommand(['server', '/data'])
       .withWaitStrategy(Wait.forHttp('/minio/health/ready', 9000))
+      .withStartupTimeout(120_000)
       .start()
   }
 
@@ -68,13 +79,35 @@ export async function acquireMinioContainer(): Promise<MinioContainerLease> {
     },
   })
 
+  let released = false
+  const release = async (): Promise<void> => {
+    if (released)
+      return
+    released = true
+
+    refCount -= 1
+    if (refCount <= 0) {
+      refCount = 0
+      containerPromise = null
+      await stopMinioContainer(container)
+    }
+  }
+
   try {
     await s3.send(new HeadBucketCommand({ Bucket: MINIO_BUCKET }))
   }
   catch {
-    await s3.send(new CreateBucketCommand({ Bucket: MINIO_BUCKET }))
+    try {
+      await s3.send(new CreateBucketCommand({ Bucket: MINIO_BUCKET }))
+    }
+    catch (error) {
+      await release()
+      throw error
+    }
   }
-  s3.destroy()
+  finally {
+    s3.destroy()
+  }
 
   return {
     host,
@@ -82,13 +115,6 @@ export async function acquireMinioContainer(): Promise<MinioContainerLease> {
     accessKeyId: MINIO_ROOT_USER,
     secretAccessKey: MINIO_ROOT_PASSWORD,
     endpoint,
-    release: async () => {
-      refCount -= 1
-      if (refCount <= 0) {
-        refCount = 0
-        await container.stop()
-        containerPromise = null
-      }
-    },
+    release,
   }
 }
