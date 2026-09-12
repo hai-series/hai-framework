@@ -29,7 +29,8 @@ export async function acquireMinioContainer(): Promise<MinioContainerLease> {
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('minio/minio:latest')
+    // 固定镜像版本：minio/minio:latest 的新版本会改动启动行为导致 /minio/health/ready 在 CI 永不就绪。
+    containerPromise = new GenericContainer('minio/minio:RELEASE.2025-09-07T16-13-09Z')
       .withExposedPorts(9000)
       .withEnvironment({
         MINIO_ROOT_USER,
