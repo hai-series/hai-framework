@@ -40,7 +40,17 @@ export async function acquireMinioContainer(): Promise<MinioContainerLease> {
       .start()
   }
 
-  const container = await containerPromise
+  let container: StartedTestContainer
+  try {
+    container = await containerPromise
+  }
+  catch (error) {
+    // 启动失败时重置共享状态：避免被拒绝的 promise 级联失败同一 worker 内的后续测试文件，并防止引用计数泄漏。
+    refCount = Math.max(0, refCount - 1)
+    if (refCount === 0)
+      containerPromise = null
+    throw error
+  }
   const host = container.getHost()
   const port = container.getMappedPort(9000)
   const endpoint = `http://${host}:${port}`
