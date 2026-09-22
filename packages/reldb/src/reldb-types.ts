@@ -47,6 +47,7 @@ export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInf
  * |------------|---------|------------------|--------------|
  * | TEXT       | TEXT    | TEXT             | VARCHAR(255) |
  * | INTEGER    | INTEGER | INTEGER/SERIAL   | INT/BIGINT   |
+ * | BIGINT     | INTEGER | BIGINT           | BIGINT       |
  * | REAL       | REAL    | DOUBLE PRECISION | DOUBLE       |
  * | BLOB       | BLOB    | BYTEA            | BLOB         |
  * | BOOLEAN    | INTEGER | BOOLEAN          | TINYINT(1)   |
@@ -59,6 +60,7 @@ export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInf
 export type ColumnType
   = | 'TEXT'
     | 'INTEGER'
+    | 'BIGINT'
     | 'REAL'
     | 'BLOB'
     | 'BOOLEAN'

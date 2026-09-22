@@ -49,8 +49,8 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         { fieldName: 'status', columnName: 'status', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
         { fieldName: 'result', columnName: 'result', def: { type: 'TEXT' }, select: true, create: true, update: false },
         { fieldName: 'error', columnName: 'error', def: { type: 'TEXT' }, select: true, create: true, update: false },
-        { fieldName: 'startedAt', columnName: 'started_at', def: { type: 'INTEGER', notNull: true }, select: true, create: true, update: false },
-        { fieldName: 'finishedAt', columnName: 'finished_at', def: { type: 'INTEGER', notNull: true }, select: true, create: true, update: false },
+        { fieldName: 'startedAt', columnName: 'started_at', def: { type: 'BIGINT', notNull: true }, select: true, create: true, update: false },
+        { fieldName: 'finishedAt', columnName: 'finished_at', def: { type: 'BIGINT', notNull: true }, select: true, create: true, update: false },
         { fieldName: 'duration', columnName: 'duration', def: { type: 'INTEGER', notNull: true }, select: true, create: true, update: false },
       ],
     })
@@ -140,8 +140,8 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
           status: row.status as TaskExecutionLog['status'],
           result: row.result ?? null,
           error: row.error ?? null,
-          startedAt: row.startedAt,
-          finishedAt: row.finishedAt,
+          startedAt: Number(row.startedAt),
+          finishedAt: Number(row.finishedAt),
           duration: row.duration,
         })),
       })

@@ -179,6 +179,30 @@ describe('reldb.ddl', () => {
       expect(dup.success).toBe(false)
     })
 
+    it(`${options.label}: BIGINT 应支持 Unix 毫秒时间戳`, async () => {
+      await reldb.ddl.dropTable('timestamp_values', true)
+      const createTable = await reldb.ddl.createTable('timestamp_values', {
+        id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+        started_at: { type: 'BIGINT', notNull: true },
+      })
+      expect(createTable.success).toBe(true)
+
+      const timestamp = 1_789_009_309_698
+      const insert = await reldb.sql.execute(
+        'INSERT INTO timestamp_values (started_at) VALUES (?)',
+        [timestamp],
+      )
+      expect(insert.success).toBe(true)
+      const selected = await reldb.sql.get<{ started_at: number | string }>(
+        'SELECT started_at FROM timestamp_values WHERE id = ?',
+        [1],
+      )
+      expect(selected.success).toBe(true)
+      if (selected.success) {
+        expect(Number(selected.data?.started_at)).toBe(timestamp)
+      }
+    })
+
     it(`${options.label}: raw DDL 无效语句应返回 DDL_FAILED`, async () => {
       const result = await reldb.ddl.raw('THIS IS NOT VALID SQL')
       expect(result.success).toBe(false)

@@ -204,6 +204,8 @@ export function createPostgresProvider(): ReldbProvider {
         return 'TEXT'
       case 'INTEGER':
         return def.autoIncrement ? 'BIGSERIAL' : 'INTEGER'
+      case 'BIGINT':
+        return 'BIGINT'
       case 'REAL':
         return 'DOUBLE PRECISION'
       case 'BLOB':
