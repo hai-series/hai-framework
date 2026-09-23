@@ -26,6 +26,12 @@ const DeployErrorInfo = {
   UNSUPPORTED_TYPE: '012:400',
   CONFIG_ERROR: '013:500',
   CREDENTIAL_ERROR: '014:500',
+  CONTAINER_RUNTIME_NOT_FOUND: '015:500',
+  CONTAINER_BUILD_FAILED: '016:500',
+  REMOTE_CONNECT_FAILED: '017:500',
+  REMOTE_COMMAND_FAILED: '018:500',
+  IMAGE_TRANSFER_FAILED: '019:500',
+  HEALTH_CHECK_FAILED: '020:500',
 } as const satisfies ErrorInfo
 
 export const HaiDeployError = core.error.buildHaiErrorsDef('deploy', DeployErrorInfo)
@@ -56,7 +62,7 @@ export interface DeployError {
 // ─── 服务类型 ───
 
 /** 基础设施服务类型 */
-export type ServiceType = 'db' | 'cache' | 'storage' | 'email' | 'sms'
+export type ServiceType = 'db' | 'cache' | 'storage' | 'email' | 'sms' | 'vecdb'
 
 // ─── 扫描结果 ───
 
@@ -72,8 +78,12 @@ export interface ScanResult {
   isSvelteKit: boolean
   /** 目标平台 adapter 是否已安装（如 @sveltejs/adapter-vercel） */
   adapterInstalled: boolean
+  /** 容器部署所需的 @sveltejs/adapter-node 是否已安装 */
+  nodeAdapterInstalled: boolean
   /** 检测到的模块依赖需要的服务列表 */
   requiredServices: ServiceType[]
+  /** 各服务检测到的后端类型（如 db→postgresql/mysql，vecdb→qdrant），用于生成匹配的 sidecar */
+  serviceBackends: Partial<Record<ServiceType, string>>
   /** 构建命令 */
   buildCommand: string
 }
@@ -94,6 +104,10 @@ export interface DeployResult {
   status: 'ready' | 'building' | 'error'
   /** 已设置的环境变量名列表 */
   envVarsSet: string[]
+  /** 部署 Provider 名称（如 vercel / docker-ssh），容器部署时返回 */
+  provider?: string
+  /** 健康检查结果：passed 表示 HTTP 探测成功，container-only 表示仅确认容器运行 */
+  healthCheck?: 'passed' | 'container-only' | 'skipped'
 }
 
 // ─── 开通结果 ───

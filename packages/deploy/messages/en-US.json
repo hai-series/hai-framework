@@ -24,5 +24,13 @@
   "deploy_fileUploadFailed": "File upload failed ({status})",
   "deploy_provisionNoResult": "No connection info returned from {service}",
   "deploy_recoveryFailure": "Deployment stopped at {stage}; inspect the recovery details.",
-  "deploy_recoverySuggestion": "Inspect listed resources in the provider console before retrying with the same project name. Unknown means the request may have created a resource. Reused resources are never deleted automatically; remove newly created resources manually only after checking their use."
+  "deploy_recoverySuggestion": "Inspect listed resources in the provider console before retrying with the same project name. Unknown means the request may have created a resource. Reused resources are never deleted automatically; remove newly created resources manually only after checking their use.",
+  "deploy_commandTimeout": "Command timed out: {command}",
+  "deploy_commandFailed": "Command failed ({command}): {error}",
+  "deploy_containerRuntimeNotFound": "No usable container runtime found: {runtime}",
+  "deploy_containerBuildFailed": "Container image build failed: {error}",
+  "deploy_remoteConnectFailed": "Cannot connect to remote host {host}: {error}",
+  "deploy_remoteRuntimeMissing": "Remote host missing container runtime or compose: {runtime}",
+  "deploy_imageTransferFailed": "Image transfer failed: {error}",
+  "deploy_healthCheckFailed": "Health check failed, app not ready at {url}"
 }

@@ -67,6 +67,25 @@ describe('deploy singleton', () => {
       expect(deploy.config).not.toBeNull()
     })
 
+    it('应无需远程连接即可初始化 docker-ssh Provider', async () => {
+      const result = await deploy.init({
+        provider: {
+          type: 'docker-ssh',
+          ssh: { host: '10.0.0.10', username: 'deploy' },
+          expose: { type: 'port', hostPort: 18080 },
+        },
+      })
+
+      expect(result.success).toBe(true)
+      expect(deploy.isInitialized).toBe(true)
+      expect(deploy.config?.provider.type).toBe('docker-ssh')
+      // 未发起任何网络请求（容器 Provider 在部署时才连接远程）
+      expect(mockFetch).not.toHaveBeenCalled()
+
+      await deploy.close()
+      expect(deploy.isInitialized).toBe(false)
+    })
+
     it('应返回 AUTH_FAILED 当 provider 认证失败时', async () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ error: 'Unauthorized' }, 401),

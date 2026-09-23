@@ -73,84 +73,87 @@ function hasDependency(pkg: Record<string, unknown>, name: string): boolean {
 }
 
 /**
- * 扫描 config/ 目录，推断所需基础设施服务
+ * 扫描 config/ 目录，推断所需基础设施服务及各自后端类型
  *
  * @param configDir - 配置目录路径
- * @returns 需要的服务类型列表
+ * @returns 所需服务列表与后端类型映射
  */
-function detectRequiredServices(configDir: string): ServiceType[] {
+function detectRequiredServices(configDir: string): { services: ServiceType[], backends: Partial<Record<ServiceType, string>> } {
   const services: ServiceType[] = []
+  const backends: Partial<Record<ServiceType, string>> = {}
 
   if (!existsSync(configDir)) {
-    return services
+    return { services, backends }
   }
 
   const files = readdirSync(configDir)
 
-  // 检测数据库需求
-  if (files.includes('_db.yml') || files.includes('_db.yaml')) {
-    const dbConfig = readYaml(join(configDir, files.find(f => f.startsWith('_db.'))!))
-    // sqlite 在云端也需要切换为 postgresql，标记为需要 db
+  // 数据库：记录实际后端（postgresql / mysql / sqlite）以生成匹配 sidecar
+  const dbFile = files.find(f => f.startsWith('_db.'))
+  if (dbFile) {
+    const dbConfig = readYaml(join(configDir, dbFile))
     if (dbConfig !== null) {
       services.push('db')
+      backends.db = (dbConfig.type as string | undefined) ?? 'postgresql'
     }
   }
 
-  // 检测缓存需求
-  if (files.includes('_cache.yml') || files.includes('_cache.yaml')) {
-    const cacheConfig = readYaml(join(configDir, files.find(f => f.startsWith('_cache.'))!))
-    if (cacheConfig !== null) {
-      const cacheType = cacheConfig.type as string | undefined
-      // memory 模式不需要外部服务，redis 需要
-      if (cacheType === 'redis') {
-        services.push('cache')
-      }
+  // 缓存：仅 redis 需要外部服务，memory 模式无需 sidecar
+  const cacheFile = files.find(f => f.startsWith('_cache.'))
+  if (cacheFile) {
+    const cacheConfig = readYaml(join(configDir, cacheFile))
+    if (cacheConfig !== null && cacheConfig.type === 'redis') {
+      services.push('cache')
+      backends.cache = 'redis'
     }
   }
 
-  // 检测存储需求
-  if (files.includes('_storage.yml') || files.includes('_storage.yaml')) {
-    const storageConfig = readYaml(join(configDir, files.find(f => f.startsWith('_storage.'))!))
-    if (storageConfig !== null) {
-      detectStorageServices(storageConfig, services)
+  // 存储：s3 需要对象存储
+  const storageFile = files.find(f => f.startsWith('_storage.'))
+  if (storageFile) {
+    const storageConfig = readYaml(join(configDir, storageFile))
+    if (storageConfig !== null && detectStorageIsS3(storageConfig)) {
+      services.push('storage')
+      backends.storage = 's3'
     }
   }
 
-  // 检测 reach（邮件 / 短信）需求
-  if (files.includes('_reach.yml') || files.includes('_reach.yaml')) {
-    const reachConfig = readYaml(join(configDir, files.find(f => f.startsWith('_reach.'))!))
+  // 向量数据库：记录后端（qdrant / pgvector / lancedb / chroma）
+  const vecdbFile = files.find(f => f.startsWith('_vecdb.'))
+  if (vecdbFile) {
+    const vecdbConfig = readYaml(join(configDir, vecdbFile))
+    if (vecdbConfig !== null) {
+      services.push('vecdb')
+      backends.vecdb = (vecdbConfig.type as string | undefined) ?? 'qdrant'
+    }
+  }
+
+  // reach（邮件 / 短信）为外部 API，不生成 sidecar
+  const reachFile = files.find(f => f.startsWith('_reach.'))
+  if (reachFile) {
+    const reachConfig = readYaml(join(configDir, reachFile))
     if (reachConfig !== null) {
       detectReachServices(reachConfig, services)
     }
   }
 
-  return services
+  return { services, backends }
 }
 
 /**
- * 检测存储配置中的 S3 需求
+ * 判断存储配置是否使用 S3（直接配置或多 provider 配置）
  *
  * @param config - 存储配置内容
- * @param services - 服务列表（原地修改）
  */
-function detectStorageServices(config: Record<string, unknown>, services: ServiceType[]): void {
-  // 直接配置
+function detectStorageIsS3(config: Record<string, unknown>): boolean {
   if (config.type === 's3') {
-    services.push('storage')
-    return
+    return true
   }
-  // 多 provider 配置
   const providers = config.providers as Record<string, unknown> | undefined
   if (providers === undefined) {
-    return
+    return false
   }
-  for (const providerConfig of Object.values(providers)) {
-    const typed = providerConfig as Record<string, unknown> | undefined
-    if (typed?.type === 's3') {
-      services.push('storage')
-      return
-    }
-  }
+  return Object.values(providers).some(p => (p as Record<string, unknown> | undefined)?.type === 's3')
 }
 
 /**
@@ -216,11 +219,12 @@ export async function scanApp(appDir: string): Promise<HaiResult<ScanResult>> {
     const isSvelteKit = existsSync(join(appDir, 'svelte.config.js'))
       || existsSync(join(appDir, 'svelte.config.ts'))
     const adapterInstalled = hasDependency(pkg, '@sveltejs/adapter-vercel')
+    const nodeAdapterInstalled = hasDependency(pkg, '@sveltejs/adapter-node')
     const configDir = join(appDir, 'config')
-    const configServices = detectRequiredServices(configDir)
+    const configDetection = detectRequiredServices(configDir)
     const depServices = detectServicesFromDependencies(pkg)
     // 合并去重：config 检测优先，依赖检测补充
-    const requiredServices = Array.from(new Set([...configServices, ...depServices]))
+    const requiredServices = Array.from(new Set([...configDetection.services, ...depServices]))
     const scripts = pkg.scripts as Record<string, string> | undefined
     const buildCommand = scripts?.build ?? 'pnpm build'
 
@@ -228,7 +232,9 @@ export async function scanApp(appDir: string): Promise<HaiResult<ScanResult>> {
       appName,
       isSvelteKit,
       adapterInstalled,
+      nodeAdapterInstalled,
       requiredServices,
+      serviceBackends: configDetection.backends,
       buildCommand,
     }
 
@@ -236,7 +242,9 @@ export async function scanApp(appDir: string): Promise<HaiResult<ScanResult>> {
       appName,
       isSvelteKit,
       adapterInstalled,
+      nodeAdapterInstalled,
       requiredServices,
+      serviceBackends: configDetection.backends,
     })
 
     return ok(scanResult)
@@ -269,6 +277,7 @@ function detectServicesFromDependencies(pkg: Record<string, unknown>): ServiceTy
     '@h-ai/reldb': 'db',
     '@h-ai/cache': 'cache',
     '@h-ai/storage': 'storage',
+    '@h-ai/vecdb': 'vecdb',
   }
   const services: ServiceType[] = []
   for (const [depName, serviceType] of Object.entries(depMap)) {

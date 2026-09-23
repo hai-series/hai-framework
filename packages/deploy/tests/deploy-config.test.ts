@@ -100,3 +100,68 @@ describe('deployConfigSchema', () => {
     }
   })
 })
+
+describe('docker-ssh provider schema', () => {
+  it('应校验最小 docker-ssh 配置并填充默认值', () => {
+    const result = DeployConfigSchema.safeParse({
+      provider: {
+        type: 'docker-ssh',
+        ssh: { host: '10.0.0.10', username: 'deploy' },
+        expose: { type: 'port', hostPort: 18080 },
+      },
+    })
+    expect(result.success).toBe(true)
+    if (result.success && result.data.provider.type === 'docker-ssh') {
+      expect(result.data.provider.ssh.port).toBe(22)
+      expect(result.data.provider.ssh.strictHostKeyChecking).toBe(true)
+      expect(result.data.provider.remote.baseDir).toBe('/opt/hai/apps')
+      expect(result.data.provider.remote.runtime).toBe('auto')
+      expect(result.data.provider.expose.containerPort).toBe(3000)
+      expect(result.data.provider.expose.hostPort).toBe(18080)
+    }
+  })
+
+  it('docker-ssh 缺少 ssh.host 应校验失败', () => {
+    const result = DeployConfigSchema.safeParse({
+      provider: {
+        type: 'docker-ssh',
+        ssh: { username: 'deploy' },
+        expose: { type: 'port', hostPort: 18080 },
+      },
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('docker-ssh 缺少 expose.hostPort 应校验失败', () => {
+    const result = DeployConfigSchema.safeParse({
+      provider: {
+        type: 'docker-ssh',
+        ssh: { host: '10.0.0.10', username: 'deploy' },
+        expose: { type: 'port' },
+      },
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('container.runtime 仅接受 auto/docker/podman', () => {
+    const valid = DeployConfigSchema.safeParse({
+      provider: {
+        type: 'docker-ssh',
+        ssh: { host: '10.0.0.10', username: 'deploy' },
+        expose: { type: 'port', hostPort: 18080 },
+      },
+      container: { runtime: 'podman' },
+    })
+    expect(valid.success).toBe(true)
+
+    const invalid = DeployConfigSchema.safeParse({
+      provider: {
+        type: 'docker-ssh',
+        ssh: { host: '10.0.0.10', username: 'deploy' },
+        expose: { type: 'port', hostPort: 18080 },
+      },
+      container: { runtime: 'containerd' },
+    })
+    expect(invalid.success).toBe(false)
+  })
+})

@@ -92,7 +92,6 @@ catalog:
   # Markdown & Syntax Highlighting
   # ---------------------------------------------------------------------------
   '@shikijs/langs': ^4.0.2
-  '@sveltejs/adapter-auto': ^7.0.1
   '@sveltejs/adapter-node': ^5.5.4
   '@sveltejs/adapter-static': ^3.0.10
   '@sveltejs/kit': ^2.61.1

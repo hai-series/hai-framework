@@ -43,7 +43,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 | **按需组合**          | 21 个独立发布的模块，最小依赖 `@h-ai/core`，按业务场景逐步引入。           |
 | **端到端类型安全**    | 严格模式 TypeScript，`api-contract → serv → api-client` 全链路类型推断。   |
 | **多端 UI**           | 90 个 Svelte 5 Runes 组件（原子 / 组合 / 场景），覆盖桌面与移动端。        |
-| **脚手架与部署**      | `hai create` 创建完整项目，`hai deploy` 部署并自动开通基础设施。           |
+| **脚手架与部署**      | `hai create` 创建完整项目，`hai deploy` 部署到 Vercel 或自建主机。         |
 | **Agent Skills 内置** | 每个模块随附标准化 Skill 文件，AI 助手可直接获取正确用法。                 |
 
 ## 设计理念
@@ -86,7 +86,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 | 桌面端     | Tauri                                                          |
 | 移动端     | Capacitor（Android / iOS）                                     |
 | 构建       | pnpm + Turborepo + Vite + tsup                                 |
-| 部署       | Vercel + Neon（PG）+ Upstash（Redis）+ Cloudflare R2（S3）     |
+| 部署       | Vercel（SaaS）· docker-ssh 自建主机 · Neon / Upstash / R2      |
 
 ## 快速入门
 
@@ -129,8 +129,15 @@ hai g:component UserCard
 ### 一键部署
 
 ```bash
-hai deploy                          # 部署当前项目到 Vercel
+# hai deploy 依据 config/_deploy.yml 中的 provider 选择部署方式
+
+# 方式一：Vercel（SaaS）—— 部署并自动开通云端基础设施（Neon / Upstash / R2 …）
+hai deploy                          # 部署到 Vercel
 hai deploy --skip-provision         # 跳过基础设施自动开通
+
+# 方式二：docker-ssh —— 容器化后经 SSH 部署到自有 Linux 主机（远程需 docker/podman + compose）
+# 按所选功能（_db.yml / _cache.yml / _storage.yml …）自动生成对应 compose sidecar
+hai deploy                          # 部署到自有主机
 ```
 
 ### 在现有项目中集成
@@ -193,11 +200,11 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 ### 界面与工具
 
-| 包名           | 职责                                                                             |                     Provider 支持                     |                                             npm 最新版                                              |
-| -------------- | -------------------------------------------------------------------------------- | :---------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | UI 组件库：90 个 Svelte 5 Runes 组件（20 原子 + 36 组合 + 34 场景），15 精选主题 |                           —                           |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
-| `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                               |                           —                           |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
-| `@h-ai/deploy` | 自动化部署：Vercel 部署 + 基础设施自动开通（数据库 / 缓存 / 存储 / 邮件 / 短信） | ✅ Vercel / Neon / Upstash / R2 / Resend / 阿里云短信 | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
+| 包名           | 职责                                                                                                       |                           Provider 支持                            |                                             npm 最新版                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
+| `@h-ai/ui`     | UI 组件库：90 个 Svelte 5 Runes 组件（20 原子 + 36 组合 + 34 场景），15 精选主题                           |                                 —                                  |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
+| `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                                                         |                                 —                                  |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
+| `@h-ai/deploy` | 自动化部署：Vercel（SaaS，自动开通云资源）与 docker-ssh（容器化经 SSH 部署到自有主机，按功能生成 sidecar） | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / 阿里云短信 | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
 
 ### 模块文档索引
 

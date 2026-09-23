@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ContainerDeployProvider } from './container/deploy-container-types.js'
 import type { DeployConfig, DeployConfigInput } from './deploy-config.js'
 import type { DeployProvider, ServiceProvisioner } from './deploy-internal-types.js'
 import type {
@@ -31,6 +32,7 @@ import { deployM } from './deploy-i18n.js'
 import { getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
 import { scanApp } from './deploy-scanner.js'
 import { HaiDeployError } from './deploy-types.js'
+import { createDockerSshProvider } from './providers/deploy-provider-docker-ssh.js'
 import { createVercelProvider } from './providers/deploy-provider-vercel.js'
 import { createAliyunProvisioner } from './provisioners/deploy-provisioner-aliyun.js'
 import { createNeonProvisioner } from './provisioners/deploy-provisioner-neon.js'
@@ -44,6 +46,7 @@ const logger = core.logger.child({ module: 'deploy', scope: 'main' })
 
 let currentConfig: DeployConfig | null = null
 let currentProvider: DeployProvider | null = null
+let currentContainerProvider: ContainerDeployProvider | null = null
 const currentProvisioners: Map<ServiceType, ServiceProvisioner> = new Map()
 
 /** 并发初始化防护标志 */
@@ -127,6 +130,30 @@ const deployCredentials: DeployCredentialOperations = {
   saveAll: (entries: Record<string, string>) => saveCredentials(entries),
 }
 
+/** 归一化项目名为容器/镜像安全的 `[a-z0-9-]`。 */
+function normalizeProjectName(name: string): string {
+  const normalized = name
+    .replace(/^@[^/]+\//, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || 'app'
+}
+
+/** 合并 Provisioner 输出环境变量，并聚合 HAI_REACH_PROVIDERS 数组。 */
+function mergeProvisionEnv(results: ProvisionResult[]): Record<string, string> {
+  let env: Record<string, string> = {}
+  const reachProviders: unknown[] = []
+  for (const prov of results) {
+    if (prov.envVars.HAI_REACH_PROVIDERS)
+      reachProviders.push(...JSON.parse(prov.envVars.HAI_REACH_PROVIDERS) as unknown[])
+    env = { ...env, ...prov.envVars }
+  }
+  if (reachProviders.length > 0)
+    env.HAI_REACH_PROVIDERS = JSON.stringify(reachProviders)
+  return env
+}
+
 // ─── 模块单例 ───
 
 /**
@@ -156,7 +183,7 @@ export const deploy: DeployFunctions = {
     initInProgress = true
 
     try {
-      if (currentProvider) {
+      if (currentProvider || currentContainerProvider) {
         logger.warn('Deploy module is already initialized, reinitializing')
         await deploy.close()
       }
@@ -175,15 +202,23 @@ export const deploy: DeployFunctions = {
       const parsed = parseResult.data
 
       try {
-        // 创建 Provider
-        const provider = createProviderByType(parsed.provider.type)
-        const authResult = await provider.authenticate(parsed.provider.token)
-        if (!authResult.success) {
-          return err(authResult.error)
+        // 创建部署 Provider：docker-ssh 走容器路径（无远程认证），其余走平台路径并即时认证
+        let provider: DeployProvider | null = null
+        let containerProvider: ContainerDeployProvider | null = null
+        if (parsed.provider.type === 'docker-ssh') {
+          containerProvider = createDockerSshProvider(parsed.provider, parsed.container?.runtime)
+          logger.info('Container deploy provider ready', { provider: 'docker-ssh', host: parsed.provider.ssh.host })
         }
-        logger.info('Provider authenticated', { provider: parsed.provider.type, user: authResult.data })
+        else {
+          provider = createProviderByType(parsed.provider.type)
+          const authResult = await provider.authenticate(parsed.provider.token)
+          if (!authResult.success) {
+            return err(authResult.error)
+          }
+          logger.info('Provider authenticated', { provider: parsed.provider.type, user: authResult.data })
+        }
 
-        // 创建 Provisioners
+        // 创建 Provisioners（两类 Provider 均可复用云资源开通）
         currentProvisioners.clear()
         if (parsed.services) {
           const serviceEntries = Object.entries(parsed.services) as Array<[ServiceType, Record<string, unknown> | undefined]>
@@ -211,6 +246,7 @@ export const deploy: DeployFunctions = {
         }
 
         currentProvider = provider
+        currentContainerProvider = containerProvider
         currentConfig = parsed
         logger.info('Deploy module initialized', {
           provider: parsed.provider.type,
@@ -221,6 +257,7 @@ export const deploy: DeployFunctions = {
       catch (error) {
         // 清理部分赋值的状态
         currentProvider = null
+        currentContainerProvider = null
         currentConfig = null
         currentProvisioners.clear()
         logger.error('Deploy module initialization failed', { error })
@@ -239,13 +276,14 @@ export const deploy: DeployFunctions = {
   },
 
   async close(): Promise<void> {
-    if (!currentProvider) {
+    if (!currentProvider && !currentContainerProvider) {
       logger.info('Deploy module already closed, skipping')
       return
     }
 
     logger.info('Closing deploy module')
     currentProvider = null
+    currentContainerProvider = null
     currentConfig = null
     currentProvisioners.clear()
     logger.info('Deploy module closed')
@@ -256,7 +294,7 @@ export const deploy: DeployFunctions = {
   },
 
   get isInitialized(): boolean {
-    return currentProvider !== null
+    return currentProvider !== null || currentContainerProvider !== null
   },
 
   async scan(appDir: string): Promise<HaiResult<ScanResult>> {
@@ -266,7 +304,7 @@ export const deploy: DeployFunctions = {
   },
 
   async provisionAll(projectName: string): Promise<HaiResult<ProvisionResult[]>> {
-    if (!currentProvider) {
+    if (!currentProvider && !currentContainerProvider) {
       return notInitialized.result()
     }
 
@@ -304,7 +342,7 @@ export const deploy: DeployFunctions = {
     appDir: string,
     options?: DeployAppOptions,
   ): Promise<HaiResult<DeployResult>> {
-    if (!currentProvider) {
+    if (!currentProvider && !currentContainerProvider) {
       return notInitialized.result()
     }
 
@@ -317,6 +355,16 @@ export const deploy: DeployFunctions = {
     }
     const scan = scanResult.data
     const projectName = options?.projectName ?? scan.appName
+
+    // 容器 Provider（docker-ssh）：走独立的容器部署编排
+    if (currentContainerProvider) {
+      return deployContainerApp(currentContainerProvider, appDir, scan, projectName, options)
+    }
+
+    // 到此必为平台 Provider（vercel）
+    if (!currentProvider) {
+      return notInitialized.result()
+    }
 
     // 2. 检查 adapter
     if (scan.isSvelteKit && !scan.adapterInstalled) {
@@ -337,14 +385,7 @@ export const deploy: DeployFunctions = {
         return err(provResults.error)
       }
       recovery.resources = provResults.data.map(({ envVars: _envVars, ...resource }) => resource)
-      const reachProviders: unknown[] = []
-      for (const prov of provResults.data) {
-        if (prov.envVars.HAI_REACH_PROVIDERS)
-          reachProviders.push(...JSON.parse(prov.envVars.HAI_REACH_PROVIDERS) as unknown[])
-        allEnvVars = { ...allEnvVars, ...prov.envVars }
-      }
-      if (reachProviders.length > 0)
-        allEnvVars.HAI_REACH_PROVIDERS = JSON.stringify(reachProviders)
+      allEnvVars = mergeProvisionEnv(provResults.data)
     }
 
     // 4. 创建平台项目
@@ -392,4 +433,45 @@ export const deploy: DeployFunctions = {
 
     return ok(result)
   },
+}
+
+/**
+ * 容器 Provider（docker-ssh）部署编排。
+ *
+ * 校验 adapter-node → 开通云资源（可选）→ 交由容器 Provider 完成
+ * 构建 / 传输 / compose up / 健康检查。
+ *
+ * @param provider - 容器部署 Provider
+ * @param appDir - 应用根目录
+ * @param scan - 扫描结果
+ * @param rawProjectName - 原始项目名（未归一化）
+ * @param options - 部署选项
+ */
+async function deployContainerApp(
+  provider: ContainerDeployProvider,
+  appDir: string,
+  scan: ScanResult,
+  rawProjectName: string,
+  options?: DeployAppOptions,
+): Promise<HaiResult<DeployResult>> {
+  const projectName = normalizeProjectName(rawProjectName)
+
+  // 容器部署要求 @sveltejs/adapter-node（输出可用 node 直接运行的 build/）
+  if (scan.isSvelteKit && !scan.nodeAdapterInstalled) {
+    return err(
+      HaiDeployError.ADAPTER_MISSING,
+      deployM('deploy_adapterMissing', { params: { adapter: '@sveltejs/adapter-node' } }),
+    )
+  }
+
+  let provisionEnv: Record<string, string> = {}
+  if (!options?.skipProvision) {
+    const provResults = await deploy.provisionAll(projectName)
+    if (!provResults.success) {
+      return err(provResults.error)
+    }
+    provisionEnv = mergeProvisionEnv(provResults.data)
+  }
+
+  return provider.deploy({ appDir, projectName, scan, provisionEnv })
 }

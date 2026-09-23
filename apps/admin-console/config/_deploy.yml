@@ -1,0 +1,34 @@
+# =============================================================================
+# 部署配置 (@h-ai/deploy) — docker-ssh
+# =============================================================================
+# 将应用容器化后经 SSH 部署到自有 Linux 主机（远程需 SSH + docker/podman + compose）。
+# 凭证经 ~/.hai/credentials.yml 注入，引用格式 ${VAR}。
+#
+# 运行 `hai deploy` 读取本文件并输出访问地址。启用的服务（_db.yml/_cache.yml/
+# _storage.yml 等）会按其实际后端类型自动生成 compose sidecar。
+
+provider:
+  type: docker-ssh
+  ssh:
+    host: ${HAI_DEPLOY_SSH_HOST} # 主机 IP 或 ~/.ssh/config 别名
+    port: 22
+    username: deploy
+    identityFile: ${HAI_DEPLOY_SSH_KEY} # 私钥文件路径，省略则用 ssh-agent
+  remote:
+    baseDir: /opt/hai/apps # 远程部署根目录
+    runtime: auto # 远程运行时；auto 优先 podman，其次 docker
+  expose:
+    type: port
+    containerPort: 3000 # 容器内端口（adapter-node 默认 3000）
+    hostPort: 18080 # 宿主机端口 → 访问地址 http://<host>:18080
+
+# 本地构建运行时（可选，默认 auto 优先 podman）
+container:
+  runtime: auto
+
+# 云 Provisioner（可选）：配置后对应服务优先用云资源，不再自建 sidecar
+services: {}
+# 也可切换为 Vercel：
+# provider:
+#   type: vercel
+#   token: ${HAI_DEPLOY_VERCEL_TOKEN}

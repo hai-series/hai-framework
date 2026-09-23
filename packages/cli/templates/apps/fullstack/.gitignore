@@ -11,3 +11,6 @@ test-results
 !.env.example.hbs
 **/src-tauri/gen/
 **/src-tauri/target/
+
+# hai deploy 产物（compose / .env.runtime / 镜像 tar / sidecar 凭据）
+.hai/

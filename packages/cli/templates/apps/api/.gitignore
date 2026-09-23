@@ -8,3 +8,6 @@ test-results
 .env.*
 !.env.example
 !.env.example.hbs
+
+# hai deploy 产物（compose / .env.runtime / 镜像 tar / sidecar 凭据）
+.hai/

@@ -1,6 +1,6 @@
 ---
 name: hai-deploy
-description: "使用 @h-ai/deploy 配置部署和 Vercel/Neon/Upstash/R2 等基础设施。"
+description: "使用 @h-ai/deploy 部署应用：Vercel 云平台或 docker-ssh 容器化部署到任意 Linux 主机，并按需开通/生成基础设施。"
 ---
 
 # hai-deploy
@@ -11,22 +11,26 @@ description: "使用 @h-ai/deploy 配置部署和 Vercel/Neon/Upstash/R2 等基�
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/deploy 配置部署和 Vercel/Neon/Upstash/R2 等基础设施 |
-| 适用场景 | 部署目标配置、云资源开通或部署故障排查 |
-| 输入 | 项目构建产物、部署目标、环境配置与凭据引用 |
-| 输出 | 部署/资源操作结果和可验证的目标状态 |
+| 能力 | 使用 @h-ai/deploy 部署应用：Vercel 云平台或 docker-ssh 容器化部署到任意 Linux 主机 |
+| 适用场景 | 部署目标配置、云资源开通、SSH 主机容器部署或部署故障排查 |
+| 输入 | 项目构建产物、部署目标（vercel / docker-ssh）、环境配置与凭据引用 |
+| 输出 | 部署/资源操作结果和可验证的目标状态（含访问 URL 与健康检查） |
 | 限制 | 核对实际 provider 与应用运行时；开通收费资源、发布或删除必须在用户授权范围内，凭据不写入仓库。 |
 
-> `@h-ai/deploy` 提供自动化部署能力，将 SvelteKit 应用部署到 Vercel，并自动开通 PostgreSQL (Neon)、Redis (Upstash)、S3 (Cloudflare R2)、邮件 (Resend)、短信 (阿里云) 等基础设施服务。
+> `@h-ai/deploy` 提供两种部署方式：
+> 1. **vercel** — 将 SvelteKit（adapter-vercel）应用部署到 Vercel，并自动开通 Neon/Upstash/R2/Resend/阿里云等云基础设施；
+> 2. **docker-ssh** — 将 SvelteKit（adapter-node）应用容器化后经 SSH 部署到任意具备 docker/podman + compose 的 Linux 主机，按所选功能自动生成 compose sidecar。
 
 ## 运行环境
 
 > ⚠️ **Node.js CLI / 服务端模块。** 通过 `hai deploy` CLI 命令或在 Node.js 脚本中使用。
+> docker-ssh 方式要求本地安装 docker 或 podman（`auto` 优先 podman）。
 
 ## 适用场景
 
 - 一键部署 SvelteKit 应用到 Vercel
-- 自动开通 PostgreSQL、Redis、S3 等云服务
+- 容器化后经 SSH 部署到自有服务器 / 云主机 / 内网虚拟机（docker-ssh）
+- 自动开通 PostgreSQL、Redis、S3 等云服务，或按功能生成自建 sidecar
 - 管理部署凭证（~/.hai/credentials.yml）
 - 扫描应用依赖，自动检测所需服务
 - CLI 部署流程（`hai deploy`）
@@ -68,6 +72,49 @@ services:
 
 这些凭证名由 `deploy.credentials` 管理，属于显式特殊映射；若同时设置
 `HAI_DEPLOY_PROVIDER_TOKEN` 等约定变量，约定变量仍拥有最高优先级。
+
+#### docker-ssh 配置
+
+将上面的 `provider` 替换为 docker-ssh（远程主机需 SSH + docker/podman + compose）：
+
+```yaml
+# config/_deploy.yml
+provider:
+  type: docker-ssh
+  ssh:
+    host: ${HAI_DEPLOY_SSH_HOST}
+    port: 22
+    username: deploy
+    identityFile: ${HAI_DEPLOY_SSH_KEY} # 私钥文件路径，省略则用 ssh-agent
+  remote:
+    baseDir: /opt/hai/apps
+    runtime: auto # auto 优先 podman，其次 docker
+  expose:
+    type: port
+    containerPort: 3000
+    hostPort: 18080 # 访问地址 http://<host>:18080
+
+container:
+  runtime: auto # 本地构建运行时，可选
+
+services:
+  # 启用的服务会被加入远程 compose sidecar（postgres/redis/minio）
+  # 若配置了云 Provisioner（如 neon），则优先用云资源，不再自建 sidecar
+  db:
+    provisioner: neon
+    apiKey: ${HAI_DEPLOY_NEON_API_KEY}
+```
+
+docker-ssh 要点：
+
+- 应用镜像使用工程自带的 `Dockerfile`（`@sveltejs/adapter-node`），缺少 adapter-node 会返回 `ADAPTER_MISSING`
+- compose 按 `deploy.scan()` 识别的服务**及其后端类型**生成匹配 sidecar 并注入 `HAI_*` 覆盖变量：
+  - `db`：`postgresql`→postgres、`mysql`→mysql、`sqlite`→数据卷（无 sidecar）→ `HAI_DB`
+  - `cache`：`redis`→redis → `HAI_CACHE`；`storage`：`s3`→minio → `HAI_STORAGE`
+  - `vecdb`：`qdrant`/`pgvector`/`chroma`→对应 sidecar、`lancedb`→数据卷 → `HAI_VECDB`
+- 若同一服务已配置云 Provisioner（如 neon 提供 `HAI_DB`），优先用云资源，不再自建 sidecar
+- sidecar 密码等敏感值只写入远程 `.env.runtime`（权限 600），不入 `compose.yml`
+- `identityFile` 是私钥**路径**（非私钥内容）；禁止把私钥内容写进 `_deploy.yml`
 
 ### 2. 初始化与关闭
 
@@ -162,6 +209,12 @@ if (result.success) {
 | `HaiDeployError.UNSUPPORTED_TYPE`      | `hai:deploy:012`   | 不支持的类型             |
 | `HaiDeployError.CONFIG_ERROR`          | `hai:deploy:013`   | 配置错误                 |
 | `HaiDeployError.CREDENTIAL_ERROR`      | `hai:deploy:014`   | 凭证读写失败             |
+| `HaiDeployError.CONTAINER_RUNTIME_NOT_FOUND` | `hai:deploy:015` | 未找到容器运行时     |
+| `HaiDeployError.CONTAINER_BUILD_FAILED` | `hai:deploy:016`  | 镜像构建失败             |
+| `HaiDeployError.REMOTE_CONNECT_FAILED` | `hai:deploy:017`   | 远程连接失败             |
+| `HaiDeployError.REMOTE_COMMAND_FAILED` | `hai:deploy:018`   | 远程命令失败             |
+| `HaiDeployError.IMAGE_TRANSFER_FAILED` | `hai:deploy:019`   | 镜像传输失败             |
+| `HaiDeployError.HEALTH_CHECK_FAILED`   | `hai:deploy:020`   | 健康检查未通过           |
 
 ## CLI 命令
 
@@ -181,6 +234,9 @@ hai deploy --skip-build
 # 自定义项目名
 hai deploy --project-name my-custom-name
 ```
+
+> 部署方式由 `config/_deploy.yml` 的 `provider.type` 决定（vercel / docker-ssh），
+> CLI 命令相同。docker-ssh 成功后输出的访问地址为 `http://<host>:<hostPort>`。
 
 ## 常见模式
 

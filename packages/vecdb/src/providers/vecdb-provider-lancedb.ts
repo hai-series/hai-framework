@@ -15,11 +15,15 @@ import type {
 } from '../vecdb-types.js'
 import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
+import { createRequire } from 'node:module'
 import { core, err, ok } from '@h-ai/core'
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
 import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
+
+// @lancedb/lancedb 为可选原生依赖，用 require 运行时加载（见 loadLancedb）
+const require = createRequire(import.meta.url)
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'lancedb' })
 
@@ -90,11 +94,15 @@ export function createLancedbProvider(): VecdbProvider {
   // ─── 辅助函数 ───
 
   /**
-   * 动态加载 @lancedb/lancedb
+   * 加载 @lancedb/lancedb。
+   *
+   * 用 require 而非 import()：import() 会被打包器（如 SvelteKit adapter-node）静态跟随并尝试
+   * 内联原生 .node 二进制导致构建失败；require 为运行时调用，打包器不跟随，消费方无需将
+   * @lancedb/lancedb 声明为直接依赖（与 @h-ai/reldb 加载 better-sqlite3 的方式一致）。
    */
-  async function loadLancedb(): Promise<HaiResult<typeof import('@lancedb/lancedb')>> {
+  function loadLancedb(): HaiResult<typeof import('@lancedb/lancedb')> {
     try {
-      const mod = await import('@lancedb/lancedb')
+      const mod = require('@lancedb/lancedb') as typeof import('@lancedb/lancedb')
       return ok(mod)
     }
     catch (error) {
@@ -402,7 +410,7 @@ export function createLancedbProvider(): VecdbProvider {
       }
 
       const lanceConfig = cfg as LancedbConfig
-      const loadResult = await loadLancedb()
+      const loadResult = loadLancedb()
       if (!loadResult.success)
         return loadResult
 

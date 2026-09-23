@@ -24,5 +24,13 @@
   "deploy_fileUploadFailed": "文件上传失败（{status}）",
   "deploy_provisionNoResult": "{service} 未返回连接信息",
   "deploy_recoveryFailure": "部署在 {stage} 阶段停止，请查看恢复清单。",
-  "deploy_recoverySuggestion": "重试前在服务商控制台核对清单，并使用相同项目名。unknown 表示请求可能已创建资源。复用资源不会自动删除；新建资源仅在确认未被使用后人工清理。"
+  "deploy_recoverySuggestion": "重试前在服务商控制台核对清单，并使用相同项目名。unknown 表示请求可能已创建资源。复用资源不会自动删除；新建资源仅在确认未被使用后人工清理。",
+  "deploy_commandTimeout": "命令执行超时：{command}",
+  "deploy_commandFailed": "命令执行失败（{command}）：{error}",
+  "deploy_containerRuntimeNotFound": "未找到可用的容器运行时：{runtime}",
+  "deploy_containerBuildFailed": "容器镜像构建失败：{error}",
+  "deploy_remoteConnectFailed": "无法连接远程主机 {host}：{error}",
+  "deploy_remoteRuntimeMissing": "远程主机缺少容器运行时或 compose：{runtime}",
+  "deploy_imageTransferFailed": "镜像传输失败：{error}",
+  "deploy_healthCheckFailed": "健康检查失败，应用未在 {url} 就绪"
 }

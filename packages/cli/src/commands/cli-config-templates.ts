@@ -533,6 +533,30 @@ provider:
   type: vercel
   token: \${HAI_DEPLOY_VERCEL_TOKEN}
 
+# ---------------------------------------------------------------------------
+# 方式二：docker-ssh — 将应用容器化后通过 SSH 部署到任意 Linux 主机
+# 远程主机只需具备 SSH + docker/podman + compose，本地需 docker 或 podman
+# 切换时用下方 provider 替换上面的 vercel provider
+# ---------------------------------------------------------------------------
+# provider:
+#   type: docker-ssh
+#   ssh:
+#     host: \${HAI_DEPLOY_SSH_HOST}
+#     port: 22
+#     username: deploy
+#     identityFile: \${HAI_DEPLOY_SSH_KEY}   # 私钥文件路径（省略则用 ssh-agent）
+#   remote:
+#     baseDir: /opt/hai/apps
+#     runtime: auto                          # auto 优先 podman，其次 docker
+#   expose:
+#     type: port
+#     containerPort: 3000
+#     hostPort: 18080                        # 访问地址 http://<host>:18080
+
+# 本地构建运行时（docker-ssh 使用；auto 优先 podman）
+# container:
+#   runtime: auto
+
 # 基础设施服务（按需开启）
 services:
   # PostgreSQL 数据库 (Neon)
@@ -566,6 +590,11 @@ services:
   #   accessKeyId: \${HAI_DEPLOY_ALIYUN_ACCESS_KEY_ID}
   #   accessKeySecret: \${HAI_DEPLOY_ALIYUN_ACCESS_KEY_SECRET}
   #   signName: \${HAI_DEPLOY_ALIYUN_SIGN_NAME}
+
+# docker-ssh 说明：
+# - 应用镜像使用工程自带的 Dockerfile（adapter-node），本地构建后经 SSH 传输并 load
+# - compose 会按上方启用的 db/cache/storage 自动追加 postgres/redis/minio sidecar
+# - 若同时配置了对应云 Provisioner，则优先使用云资源，不再自建 sidecar
 `
 }
 
