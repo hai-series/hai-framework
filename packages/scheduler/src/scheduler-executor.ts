@@ -50,8 +50,9 @@ function resolveTaskType(task: TaskDefinition, hooks: Readonly<SchedulerTaskHook
   return 'hook'
 }
 
-function createTaskContext(task: TaskDefinition, trigger: TaskTriggerInfo): SchedulerTaskContext {
+function createTaskContext(task: TaskDefinition, trigger: TaskTriggerInfo, occurrenceId?: string): SchedulerTaskContext {
   return {
+    ...(occurrenceId ? { occurrenceId } : {}),
     task,
     taskId: task.id,
     params: task.params ?? {},
@@ -335,10 +336,11 @@ export async function executeTask(
   trigger: TaskTriggerInfo,
   hooks: Readonly<SchedulerTaskHooks>,
   signal: AbortSignal = new AbortController().signal,
+  occurrenceId?: string,
 ): Promise<TaskExecutionLog> {
   const startedAt = Date.now()
   const taskType = resolveTaskType(task, hooks)
-  const context = createTaskContext(task, trigger)
+  const context = createTaskContext(task, trigger, occurrenceId)
 
   await notifyTaskStart(hooks, { task, trigger, startedAt, signal })
 
@@ -350,7 +352,8 @@ export async function executeTask(
   }
   else if (!task.handler) {
     executionResult = await executeHookTask(task, context, hooks, startedAt, signal)
-    shouldNotifyInterrupted = !executionResult.success
+    // 业务失败需要重试；只有宿主明确跳过或取消才属于 interrupted。
+    shouldNotifyInterrupted = !hooks.onTaskExecute || (!executionResult.success && executionResult.error.cause instanceof Error && executionResult.error.cause.name === 'SchedulerTaskSkippedError')
   }
   else if (task.handler.kind === 'api') {
     executionResult = await executeApiTask(task, context, signal)

@@ -139,6 +139,13 @@ export const scheduler: SchedulerFunctions = {
     }
   },
 
+  /** 刷新数据库任务投影，不执行任何任务。 */
+  async refreshTasks(): Promise<HaiResult<void>> {
+    if (!currentConfig)
+      return notInitialized.result()
+    return loadPersistedTasks(taskRepo)
+  },
+
   async register(task: TaskDefinition): Promise<HaiResult<void>> {
     if (!currentConfig)
       return notInitialized.result()

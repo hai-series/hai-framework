@@ -162,6 +162,8 @@ export interface TaskTriggerInfo {
  * 任务执行上下文
  */
 export interface SchedulerTaskContext {
+  /** 一次调度发生的稳定标识；所有重试共享，供宿主构造业务幂等键。 */
+  occurrenceId?: string
   /** 当前任务 */
   task: TaskDefinition
   /** 任务 ID */
@@ -348,6 +350,8 @@ export interface SchedulerInitInput extends SchedulerConfigInput {
  * 调度器函数接口
  */
 export interface SchedulerFunctions {
+  /** 刷新共享数据库中的任务定义，用于跨实例配置读取。 */
+  refreshTasks: () => Promise<HaiResult<void>>
   /** 初始化调度器 */
   init: (config?: SchedulerInitInput) => Promise<HaiResult<void>>
 

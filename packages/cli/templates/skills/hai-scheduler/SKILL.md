@@ -9,6 +9,8 @@ description: "使用 @h-ai/scheduler 注册 cron/API/JS/Hook 任务、手工触�
 
 持久化动态任务每个 `tickInterval`（默认 1000ms）在运行节点刷新；API 操作及获锁后的每次尝试重读定义，读取失败或任务已禁用/删除/改期时中断执行。`tasks` 仅表示最近成功刷新快照，已开始的外部副作用不会回滚。跨节点任务使用 `register()` 与共享数据库、Redis；`init({ tasks })` 是节点本地配置，memory cache 不支持跨进程防重。
 
+`refreshTasks()` 主动刷新而不执行，同一快照的并发读取合并；保存、更新和删除落库成功后才发布内存投影。清空可选策略使用 `retry: null` / `handler: null`。Hook 业务异常为 `failed` 并重试，缺处理器、取消或 `SchedulerTaskSkippedError` 为 `interrupted`；一次性任务只在成功后删除。`event.context.occurrenceId` 在一次发生的重试期间不变，宿主用其绑定持久幂等回执；跨周期长任务使用宿主持久租约。配置被替换时旧发生停止重试，成功清理前再次核对定义。
+
 关闭必须 `await scheduler.close()` 后再关闭数据库和缓存：关闭会拒绝新任务、取消 HTTP/Worker/重试并等待执行链退出。生命周期回调通过事件 `signal` 协作取消，必须自行停止外部副作用，禁止在 Hook 阻塞主线程。旧任务取消后不重试、不删除新实例同 ID 的任务。
 
 JS 任务每次调用独立 Worker，默认 30000 毫秒期限包含线程启动；超时后等待线程终止才返回失败或重试，同步死循环不会占用主事件循环。上下文和结果须支持结构化克隆。Worker/vm 不构成安全沙箱，仍只接受受信任的服务端代码。
@@ -140,6 +142,7 @@ const logs = await scheduler.getLogs({
 | `init` | `(config?) => Promise<HaiResult<void>>` | 初始化调度器 |
 | `register` | `(task) => Promise<HaiResult<void>>` | 注册统一任务模型 |
 | `updateTask` | `(taskId, updates) => Promise<HaiResult<void>>` | 更新 cron / params / handler |
+| `refreshTasks` | `() => Promise<HaiResult<void>>` | 主动刷新共享定义，不执行任务 |
 | `register` 扩展字段 | `description / deleteAfterRun / retry` | 支持任务描述、一次性任务、失败重试策略 |
 | `trigger` | `(taskId, { source? }) => Promise<HaiResult<TaskExecutionLog>>` | 手工触发并记录来源 |
 | `getLogs` | `(options?) => Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | 支持按 trigger + startedAfter/startedBefore 过滤日志 |

@@ -32,6 +32,8 @@ const taskRegistry = new Map<string, TaskDefinition>()
 const cronCache = new Map<string, Cron>()
 const persistedTaskIds = new Set<string>()
 let definitionEpoch = 0
+/** 同一快照的并发读取共用一次查询，避免互相推进 epoch 后误判写冲突。 */
+let activeRefresh: { repository: SchedulerTaskRepository, epoch: number, promise: Promise<HaiResult<void>> } | undefined
 
 /** 当前全局生命周期回调 */
 let currentHooks: SchedulerTaskHooks = {}
@@ -92,6 +94,7 @@ export function getHooks(): Readonly<SchedulerTaskHooks> {
 
 export function resetTaskState(): void {
   definitionEpoch++
+  activeRefresh = undefined
   persistedTaskIds.clear()
   taskRegistry.clear()
   cronCache.clear()
@@ -132,11 +135,27 @@ function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<
 
 // ─── 业务函数 ───
 
+/** 合并同一任务仓库的在途刷新；配置写入或关闭后不复用旧快照。 */
 export async function loadPersistedTasks(taskRepo: SchedulerTaskRepository | null): Promise<HaiResult<void>> {
   if (!taskRepo)
     return ok(undefined)
 
   const epoch = definitionEpoch
+  if (activeRefresh?.repository === taskRepo && activeRefresh.epoch === epoch)
+    return activeRefresh.promise
+  const refresh = { repository: taskRepo, epoch, promise: refreshPersistedTasks(taskRepo, epoch) }
+  activeRefresh = refresh
+  try {
+    return await refresh.promise
+  }
+  finally {
+    if (activeRefresh === refresh)
+      activeRefresh = undefined
+  }
+}
+
+/** 验证完整持久快照后替换内存投影；发生本地写入时拒绝覆盖更新。 */
+async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: number): Promise<HaiResult<void>> {
   const loadResult = await taskRepo.loadTasks()
   if (!loadResult.success)
     return loadResult
@@ -216,16 +235,10 @@ export async function registerTask(
     params: task.params ?? {},
   }
 
-  setTask(task.id, normalizedTask)
-  setCron(task.id, cronResult.data)
-
   if (taskRepo) {
     const saveResult = await taskRepo.saveTask(normalizedTask)
     if (!saveResult.success) {
-      // 持久化失败：回滚内存状态，避免内存与 DB 之间的状态漂移
-      logger.warn('Failed to persist task definition, rolling back in-memory registration', { taskId: task.id, error: saveResult.error.message })
-      deleteTask(task.id)
-      deleteCron(task.id)
+      logger.warn('Failed to persist task definition', { taskId: task.id, error: saveResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', { params: { error: saveResult.error.message } }),
@@ -235,12 +248,17 @@ export async function registerTask(
     persistedTaskIds.add(task.id)
   }
 
+  // 成功落库后才开放调度，失败的保存不能提前执行。
+  setTask(task.id, normalizedTask)
+  setCron(task.id, cronResult.data)
+
   return ok(undefined)
 }
 
 export async function unregisterTask(
   taskId: string,
   taskRepo?: SchedulerTaskRepository | null,
+  expected?: TaskDefinition,
 ): Promise<HaiResult<void>> {
   if (!hasTask(taskId)) {
     return err(
@@ -249,13 +267,10 @@ export async function unregisterTask(
     )
   }
 
-  deleteTask(taskId)
-  deleteCron(taskId)
-
   if (taskRepo) {
-    const deleteResult = await taskRepo.deleteTask(taskId)
+    const deleteResult = await taskRepo.deleteTask(taskId, expected)
     if (!deleteResult.success) {
-      // 持久化删除失败：不回滚内存（任务已不应再被调度），但将错误上报给调用方
+      // 删除失败保留原投影；数据库不可用时调度刷新也会阻止执行。
       logger.warn('Failed to delete persisted task definition', { taskId, error: deleteResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
@@ -263,7 +278,13 @@ export async function unregisterTask(
         deleteResult.error,
       )
     }
+    if (expected && !deleteResult.data)
+      return ok(undefined)
   }
+
+  deleteTask(taskId)
+  deleteCron(taskId)
+  persistedTaskIds.delete(taskId)
 
   return ok(undefined)
 }
@@ -281,8 +302,8 @@ export async function updateRegisteredTask(
     )
   }
 
-  // 提前保存旧 cron 实例，供 DB 失败时回滚使用
-  const existingCron = getCron(taskId)
+  // 完整验证与持久化成功前，不发布任何部分更新。
+  let updatedCron = getCron(taskId)
 
   if (updates.cron !== undefined || updates.timezone !== undefined) {
     const cronExpression = updates.cron ?? existingTask.cron
@@ -291,7 +312,7 @@ export async function updateRegisteredTask(
     if (!cronResult.success)
       return cronResult
 
-    setCron(taskId, cronResult.data)
+    updatedCron = cronResult.data
   }
 
   let normalizedRetry: TaskRetryPolicy | null | undefined
@@ -309,7 +330,7 @@ export async function updateRegisteredTask(
   }
 
   const normalizedDescription = updates.description !== undefined
-    ? normalizeTaskDescription(updates.description)
+    ? normalizeTaskDescription(updates.description) ?? ''
     : undefined
 
   const normalizedUpdates: TaskUpdateInput = {
@@ -321,7 +342,7 @@ export async function updateRegisteredTask(
   const updatedTask: TaskDefinition = {
     ...existingTask,
     ...(normalizedUpdates.name !== undefined ? { name: normalizedUpdates.name } : {}),
-    ...(normalizedUpdates.description !== undefined ? { description: normalizedUpdates.description } : {}),
+    ...(normalizedUpdates.description !== undefined ? { description: normalizedUpdates.description || undefined } : {}),
     ...(normalizedUpdates.cron !== undefined ? { cron: normalizedUpdates.cron } : {}),
     ...(normalizedUpdates.timezone !== undefined ? { timezone: normalizedUpdates.timezone ?? undefined } : {}),
     ...(normalizedUpdates.enabled !== undefined ? { enabled: normalizedUpdates.enabled } : {}),
@@ -331,16 +352,10 @@ export async function updateRegisteredTask(
     ...(normalizedUpdates.handler !== undefined ? { handler: normalizedUpdates.handler ?? undefined } : {}),
   }
 
-  setTask(taskId, updatedTask)
-
   if (taskRepo) {
     const updateResult = await taskRepo.updateTask(taskId, normalizedUpdates)
     if (!updateResult.success) {
-      // 持久化更新失败：回滚内存状态，避免内存与 DB 之间的状态漂移
-      logger.warn('Failed to update persisted task definition, rolling back in-memory update', { taskId, error: updateResult.error.message })
-      setTask(taskId, existingTask)
-      if ((updates.cron !== undefined || updates.timezone !== undefined) && existingCron)
-        setCron(taskId, existingCron)
+      logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', { params: { error: updateResult.error.message } }),
@@ -348,6 +363,10 @@ export async function updateRegisteredTask(
       )
     }
   }
+
+  setTask(taskId, updatedTask)
+  if (updatedCron)
+    setCron(taskId, updatedCron)
 
   return ok(undefined)
 }

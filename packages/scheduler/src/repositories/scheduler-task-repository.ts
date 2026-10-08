@@ -181,8 +181,32 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
     }
   }
 
-  async deleteTask(taskId: string): Promise<HaiResult<void>> {
+  /** 删除任务；自动清理携带执行定义，在同一条 DELETE 内原子比较，保留并发编辑。 */
+  async deleteTask(taskId: string, expected?: TaskDefinition): Promise<HaiResult<boolean>> {
     try {
+      if (expected) {
+        const conditions = ['task_id = ?', 'task_name = ?', 'cron = ?', 'COALESCE(timezone, \'\') = ?', 'COALESCE(description, \'\') = ?', 'enabled = ?', 'delete_after_run = ?']
+        const postgres = this.db.config?.type === 'postgresql'
+        const enabled = expected.enabled !== false
+        const deleteAfterRun = expected.deleteAfterRun === true
+        const params: unknown[] = [taskId, expected.name, expected.cron, expected.timezone ?? '', expected.description ?? '', postgres ? enabled : Number(enabled), postgres ? deleteAfterRun : Number(deleteAfterRun)]
+        const jsonValue = this.db.config?.type === 'mysql' ? 'CAST(? AS JSON)' : this.db.config?.type === 'postgresql' ? 'CAST(? AS JSONB)' : '?'
+        // JSON 比较使用各数据库的原生类型；标识符仅来自固定列白名单。
+        const jsonFields: Array<[string, unknown]> = [['retry', expected.retry], ['params', expected.params ?? {}], ['handler', expected.handler]]
+        for (const [column, value] of jsonFields) {
+          if (value === undefined || value === null) {
+            // CRUD 的 JSON 列可能保存 JSON null，而不是 SQL NULL，两者都表示未配置。
+            conditions.push(`(${column} IS NULL OR ${column} = ${jsonValue})`)
+            params.push('null')
+          }
+          else {
+            conditions.push(`${column} = ${jsonValue}`)
+            params.push(JSON.stringify(value))
+          }
+        }
+        const deleted = await this.db.sql.execute(`DELETE FROM ${SCHEDULER_TASK_TABLE} WHERE ${conditions.join(' AND ')}`, params)
+        return deleted.success ? ok(deleted.data.changes > 0) : deleted
+      }
       const rows = await this.findAll({ where: 'task_id = ?', params: [taskId], limit: 1 })
       if (!rows.success) {
         return err(
@@ -193,7 +217,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
       }
 
       if (rows.data.length === 0)
-        return ok(undefined)
+        return ok(false)
 
       const deleteResult = await this.deleteById(rows.data[0].id)
       if (!deleteResult.success) {
@@ -205,7 +229,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         )
       }
 
-      return ok(undefined)
+      return ok(deleteResult.data.changes > 0)
     }
     catch (error) {
       logger.error('Failed to delete task definition', { taskId, error })

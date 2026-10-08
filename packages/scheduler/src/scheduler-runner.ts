@@ -14,6 +14,8 @@
 
 import type { SchedulerTaskRepository } from './repositories/index.js'
 import type { TaskDefinition, TaskExecutionLog, TaskTriggerInfo } from './scheduler-types.js'
+import { randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
@@ -180,6 +182,7 @@ async function runTaskExecution(
 ): Promise<TaskExecutionLog> {
   const hooks = getHooks()
   const repository = currentTaskRepo
+  const occurrenceId = minuteTimestamp === undefined ? `manual:${randomUUID()}` : `scheduled:${minuteTimestamp}`
   const lockKey = minuteTimestamp !== undefined ? `hai:scheduler:${task.id}:${minuteTimestamp}` : undefined
 
   if (cache.isInitialized && lockKey) {
@@ -222,7 +225,7 @@ async function runTaskExecution(
   runningTasks.add(task.id)
 
   try {
-    const maxAttempts = Math.max(1, task.retry?.maxAttempts ?? 1)
+    let maxAttempts = Math.max(1, task.retry?.maxAttempts ?? 1)
     let log: TaskExecutionLog | null = null
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -237,12 +240,14 @@ async function runTaskExecution(
       }
       const latest = getTask(task.id)
       const stillDue = minuteTimestamp === undefined || getCron(task.id)?.match(new Date(minuteTimestamp * 60000))
-      if (!latest || latest.enabled === false || !stillDue) {
+      if (!latest || latest.enabled === false || !stillDue || (attempt > 1 && !isDeepStrictEqual(latest, task))) {
         log = await interruptTask(task, trigger, schedulerM('scheduler_taskNoLongerDue', { params: { taskId: task.id } }), hooks, signal)
         break
       }
       task = latest
-      log = await executeTask(task, trigger, hooks, signal)
+      if (attempt === 1)
+        maxAttempts = Math.max(1, task.retry?.maxAttempts ?? 1)
+      log = await executeTask(task, trigger, hooks, signal, occurrenceId)
       if (log.status !== 'failed')
         break
 
@@ -276,15 +281,19 @@ async function runTaskExecution(
     else
       logger.debug('Task execution succeeded', { taskId: task.id, duration: log.duration })
 
-    if (task.deleteAfterRun === true && !signal.aborted && log.status !== 'interrupted') {
-      const unregisterResult = await unregisterTask(task.id, repository)
+    if (task.deleteAfterRun === true && !signal.aborted && log.status === 'success') {
+      // 执行期间配置可能已更新；旧 occurrence 不能删除新定义。
+      const refreshed = await loadPersistedTasks(repository)
+      if (!refreshed.success || !isDeepStrictEqual(getTask(task.id), task))
+        return log
+      const unregisterResult = await unregisterTask(task.id, repository, task)
       if (!unregisterResult.success) {
         logger.warn('Failed to auto-delete one-time task after run', {
           taskId: task.id,
           error: unregisterResult.error.message,
         })
       }
-      else {
+      else if (!getTask(task.id)) {
         logger.info('Auto-deleted one-time task after run', { taskId: task.id })
       }
     }

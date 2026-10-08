@@ -50,7 +50,7 @@ return result
 | @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A](packages/cli/templates/skills/hai-ai/SKILL.md) | tools/stream 无需 init；临时 Store 不持久化 |
 | @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) | 服务端验签；浏览器 /client 调起不代表已付款 |
 | @h-ai/audit | [审计记录、查询、清理](packages/cli/templates/skills/hai-audit/SKILL.md) | 服务端，审计数据须脱敏 |
-| @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) | vm 不是安全沙箱；多节点需共享锁 |
+| @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) | refreshTasks 刷新共享定义；occurrenceId 供宿主幂等；多节点需共享锁 |
 | @h-ai/crypto | [SM2/SM3/SM4、密码、transport](packages/cli/templates/skills/hai-crypto/SKILL.md) | password 仅 Node；经顶层集成点装配 transport |
 | @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) | 业务路径唯一来源，不含服务端实现 |
 | @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫](packages/cli/templates/skills/hai-serv/SKILL.md) | Node/Fetch 入口不同，Hono 是内部实现 |

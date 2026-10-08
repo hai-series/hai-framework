@@ -4,6 +4,10 @@
 
 启用数据库时，运行中的节点每个 `tickInterval`（默认 1000 毫秒）刷新持久化定义；`tasks` 是最近一次成功刷新的快照。注册、修改、删除、手工触发和获得调度锁后的每次尝试均重新读取定义，删除/禁用/已改调度时间的旧任务不会继续执行，读取失败则中断本次尝试。已经开始的业务副作用不因远端定义变化自动回滚。`init({ tasks })` 仍是节点本地配置，跨节点动态任务请用持久化的 `register()` 管理；跨节点防重需要共享 Redis，内存缓存仅限单进程。
 
+可调用 `await scheduler.refreshTasks()` 主动刷新而不执行任务；同一快照的并发刷新共用一次读取。注册、更新与删除成功持久化后才更新内存投影，整份更新验证失败不改变 cron。清除重试或内置处理器时分别传 `retry: null`、`handler: null`。
+
+Hook 抛出的业务失败记录为 `failed` 并应用 `retry`；缺少处理器、取消或宿主抛出的 `SchedulerTaskSkippedError` 记录为 `interrupted`。`event.context.occurrenceId` 标识一次发生：同一调度分钟跨节点一致，手工触发每次独立，重试共享原标识。宿主可据此持久化业务幂等回执；跨周期的长任务互斥仍需宿主持续租约。`deleteAfterRun` 仅在成功后删除，失败任务保留；重试前与成功清理前核对当前定义，数据库清理在同一条 DELETE 内原子匹配执行定义，保留期间提交的并发更新。
+
 多节点回归测试会构建当前源码、启动两个真实 Node 进程共享 SQLite 和 Testcontainers Redis，验证定义收敛及同分钟锁竞争；运行 `pnpm --filter @h-ai/scheduler test` 前须有可用的 Docker/Podman 服务。
 
 `await scheduler.close()` 先停止接收任务，取消 HTTP、JS Worker 与重试等待，再等待执行链退出后清理状态。重新初始化等待关闭完成。所有生命周期事件提供 `signal`；Hook 必须监听取消并停止自己的外部副作用（框架无法强制终止同一线程中的业务代码），不要在 Hook 中阻塞事件循环。取消后的旧执行不再重试、不自动删除任务，也不会调用新实例的 Hook。关闭期间保持数据库和缓存可用，待 scheduler 关闭后再关闭依赖。
@@ -174,6 +178,7 @@ const logs = await scheduler.getLogs({
 - `register(task)`
 - `unregister(taskId)`
 - `updateTask(taskId, updates)`
+- `refreshTasks()`
 - `start()` / `stop()`
 - `trigger(taskId, { source? })`
 - `getLogs(options?)`
