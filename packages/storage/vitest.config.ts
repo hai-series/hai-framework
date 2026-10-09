@@ -3,7 +3,7 @@ import { baseTestConfig } from '../vitest.base'
 
 export default mergeConfig(baseTestConfig, {
   test: {
-    // S3 集成测试会启动 MinIO；禁止测试文件并行，避免 CI runner 同时启动多个容器导致就绪探测失败。
+    // S3 集成测试会启动 MinIO / RustFS；测试文件串行执行，控制 CI runner 的容器资源占用。
     fileParallelism: false,
   },
   resolve: {

@@ -43,7 +43,7 @@ return result
 | @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) | SQLite/PostgreSQL/MySQL；动态值参数化 |
 | @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) | LanceDB/pgvector/Qdrant/Chroma；维度需匹配 |
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) | Memory 不跨节点；锁 owner 每次获锁唯一 |
-| @h-ai/storage | [本地/S3、预签名上传](packages/cli/templates/skills/hai-storage/SKILL.md) | 浏览器经 API/预签名；Local list 非真分页 |
+| @h-ai/storage | [本地/S3、预签名上传](packages/cli/templates/skills/hai-storage/SKILL.md) | S3 包含 MinIO/RustFS；浏览器经 API/预签名；Local list 非真分页 |
 | @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) | 不负责 embedding，无生命周期 |
 | @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md) | 服务端公开入口 iam.auth；先初始化 reldb/cache |
 | @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) | 模板绑定 Provider；真实发送遵循授权 |

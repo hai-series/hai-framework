@@ -12,7 +12,7 @@ import { storageM } from './storage-i18n.js'
  * 存储类型枚举
  *
  * 支持的存储类型：
- * - `s3` - S3 协议对象存储（兼容 AWS S3、MinIO、阿里云 OSS 等）
+ * - `s3` - S3 协议对象存储（兼容 AWS S3、MinIO、RustFS、阿里云 OSS 等）
  * - `local` - 本地文件存储（仅后端）
  */
 export const StorageTypeSchema = z.enum(['s3', 'local'])
@@ -36,7 +36,7 @@ const OperationLogConfigFieldSchema = {
 /**
  * S3 存储配置 Schema
  *
- * 支持标准 AWS S3 以及兼容 S3 协议的存储服务（MinIO、阿里云 OSS 等）。
+ * 支持标准 AWS S3 以及兼容 S3 协议的存储服务（MinIO、RustFS、阿里云 OSS 等）。
  * 必填字段：bucket、region、accessKeyId、secretAccessKey。
  */
 export const S3ConfigSchema = z.object({
@@ -55,7 +55,7 @@ export const S3ConfigSchema = z.object({
   /** Secret Access Key */
   secretAccessKey: z.string().min(1, storageM('storage_config_secretAccessKeyRequired')),
 
-  /** 自定义端点（用于 MinIO、阿里云 OSS 等） */
+  /** 自定义端点（用于 MinIO、RustFS、阿里云 OSS 等） */
   endpoint: z.string().url().optional(),
 
   /** 强制使用路径风格 URL（某些 S3 兼容服务需要） */

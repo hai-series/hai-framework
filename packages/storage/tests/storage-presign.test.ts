@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
-import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
+import { defineS3StorageSuites, defineStorageSuite, localStorageEnv } from './helpers/storage-test-suite.js'
 
 describe('storage.presign', () => {
   const defineCommon = (label: 'local' | 's3') => {
@@ -31,6 +31,7 @@ describe('storage.presign', () => {
 
     it(`${label}: getUrl 带 responseContentType 应成功`, async () => {
       const result = await storage.presign.getUrl('doc.pdf', {
+        expiresIn: 3600,
         responseContentType: 'application/pdf',
       })
       expect(result.success).toBe(true)
@@ -41,6 +42,7 @@ describe('storage.presign', () => {
 
     it(`${label}: getUrl 带 responseContentDisposition 应成功`, async () => {
       const result = await storage.presign.getUrl('report.xlsx', {
+        expiresIn: 3600,
         responseContentDisposition: 'attachment; filename="report.xlsx"',
       })
       expect(result.success).toBe(true)
@@ -69,6 +71,7 @@ describe('storage.presign', () => {
 
     it(`${label}: putUrl 嵌套路径应成功`, async () => {
       const result = await storage.presign.putUrl('uploads/2024/01/doc.pdf', {
+        expiresIn: 3600,
         contentType: 'application/pdf',
       })
       expect(result.success).toBe(true)
@@ -89,7 +92,7 @@ describe('storage.presign', () => {
 
   defineStorageSuite('local', localStorageEnv, () => defineCommon('local'))
 
-  defineStorageSuite('s3', s3Env, () => defineCommon('s3'))
+  defineS3StorageSuites(() => defineCommon('s3'))
 
   // ===========================================================================
   // S3 专属：publicUrl 与 prefix 行为

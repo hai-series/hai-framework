@@ -4,7 +4,7 @@
 
 ## 支持的后端
 
-- S3 协议（AWS S3 / MinIO / OSS 等）
+- S3 协议（AWS S3 / MinIO / RustFS / OSS 等）
 - 本地文件系统
 
 ## 快速开始
@@ -93,6 +93,23 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 - **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `endpoint / forcePathStyle / prefix / publicUrl`
 - **Local**：`root` 必填，可选 `directoryMode / fileMode`
 
+MinIO、RustFS 共用 S3 Provider，使用 `type: 's3'`，无需单独的存储类型。连接自建实例时指定 S3 API 端点（通常为 9000 端口）并启用路径风格；存储桶须预先创建。
+
+```ts
+const initResult = await storage.init({
+  type: 's3',
+  endpoint: 'http://localhost:9000',
+  bucket: 'my-bucket',
+  region: 'us-east-1',
+  accessKeyId: process.env.HAI_STORAGE_ACCESSKEYID!,
+  secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY!,
+  forcePathStyle: true,
+})
+if (!initResult.success) {
+  throw new Error(initResult.error.message)
+}
+```
+
 ### 操作日志
 
 可在存储配置中通过 `operationLog` 开启文件、目录和预签名 URL 操作日志。日志在 Local/S3 Provider 的真实操作处输出，不在 `storage-main.ts` 中做统一包装；文件内容不会写入日志，上传数据只记录字节长度。
@@ -154,7 +171,12 @@ if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.cod
 pnpm --filter @h-ai/storage test
 ```
 
-> MinIO/S3 相关测试需要 Docker 环境。
+S3 集成测试需要可用的 Docker 或兼容运行时；同一套初始化、文件、目录、预签名及真实 HTTP 上传下载用例分别在 MinIO 和 RustFS 上运行，不跳过容器启动失败。
+
+- MinIO：[`ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z`](https://github.com/coollabsio/minio)，从上游源码构建的社区镜像。
+- RustFS：[`ghcr.io/rustfs/rustfs:1.0.1`](https://github.com/rustfs/rustfs)，官方镜像。
+
+容器使用临时生成的测试凭据，等待服务就绪后通过 S3 API 建桶；最后一个租约释放时移除容器及匿名卷。
 
 ## License
 

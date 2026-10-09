@@ -11,6 +11,7 @@ import * as path from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe } from 'vitest'
 import { storage } from '../../src/index.js'
 import { acquireMinioContainer } from './minio-container.js'
+import { acquireRustfsContainer } from './rustfs-container.js'
 
 export interface StorageTestEnv {
   config: StorageConfigInput
@@ -68,20 +69,27 @@ export function localStorageEnv(): StorageTestEnv {
 }
 
 /**
- * 创建 S3（MinIO）存储测试环境
+ * 创建 S3（MinIO / RustFS）存储测试环境
  */
-export async function s3Env(): Promise<StorageTestEnv> {
-  const lease = await acquireMinioContainer()
+export async function s3Env(backend: 'minio' | 'rustfs'): Promise<StorageTestEnv> {
+  const lease = await (backend === 'minio' ? acquireMinioContainer() : acquireRustfsContainer())
   return {
     config: {
       type: 's3',
-      bucket: 'test-bucket',
-      region: 'us-east-1',
+      bucket: lease.bucket,
+      region: lease.region,
       endpoint: lease.endpoint,
       accessKeyId: lease.accessKeyId,
       secretAccessKey: lease.secretAccessKey,
       forcePathStyle: true,
     },
     cleanup: lease.release,
+  }
+}
+
+/** 在 MinIO 和 RustFS 上执行相同的 S3 协议用例 */
+export function defineS3StorageSuites(defineTests: () => void, suffix = ''): void {
+  for (const backend of ['minio', 'rustfs'] as const) {
+    defineStorageSuite(`s3-${backend}${suffix ? `-${suffix}` : ''}`, () => s3Env(backend), defineTests)
   }
 }

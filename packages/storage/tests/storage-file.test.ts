@@ -11,7 +11,7 @@ import * as path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
 import { HaiStorageError } from '../src/storage-types.js'
-import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
+import { defineS3StorageSuites, defineStorageSuite, localStorageEnv } from './helpers/storage-test-suite.js'
 
 describe('storage.file', () => {
   const defineCommon = (label: 'local' | 's3') => {
@@ -368,7 +368,7 @@ describe('storage.file', () => {
 
   defineStorageSuite('local', localStorageEnv, () => defineCommon('local'))
 
-  defineStorageSuite('s3', s3Env, () => defineCommon('s3'))
+  defineS3StorageSuites(() => defineCommon('s3'))
 
   // ===========================================================================
   // Local 专属边界测试

@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
 import { HaiStorageError } from '../src/storage-types.js'
-import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
+import { defineS3StorageSuites, defineStorageSuite, localStorageEnv } from './helpers/storage-test-suite.js'
 
 describe('storage.dir', () => {
   const defineCommon = (label: 'local' | 's3') => {
@@ -211,5 +211,5 @@ describe('storage.dir', () => {
 
   defineStorageSuite('local', localStorageEnv, () => defineCommon('local'))
 
-  defineStorageSuite('s3', s3Env, () => defineCommon('s3'))
+  defineS3StorageSuites(() => defineCommon('s3'))
 })

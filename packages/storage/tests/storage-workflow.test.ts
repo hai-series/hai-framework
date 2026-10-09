@@ -22,7 +22,7 @@ import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
 import { downloadWithPresignedUrl, storage, uploadWithPresignedUrl } from '../src/index.js'
 import { HaiStorageError } from '../src/storage-types.js'
-import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
+import { defineS3StorageSuites, defineStorageSuite, localStorageEnv } from './helpers/storage-test-suite.js'
 
 describe('storage workflow', () => {
   /**
@@ -212,13 +212,13 @@ describe('storage workflow', () => {
 
   defineStorageSuite('local', localStorageEnv, () => defineCommon('local'))
 
-  defineStorageSuite('s3', s3Env, () => defineCommon('s3'))
+  defineS3StorageSuites(() => defineCommon('s3'))
 
   // ===========================================================================
   // S3 专属：通过签名 URL 进行客户端上传/下载（真实 HTTP 请求）
   // ===========================================================================
 
-  defineStorageSuite('s3-presigned-http', s3Env, () => {
+  defineS3StorageSuites(() => {
     it('s3: 客户端通过签名 URL 上传文件，再通过签名 URL 下载验证', async () => {
       const fileContent = 'client-uploaded content via presigned URL'
 
@@ -366,5 +366,5 @@ describe('storage workflow', () => {
         expect(text).toBe(content)
       }
     })
-  })
+  }, 'presigned-http')
 })

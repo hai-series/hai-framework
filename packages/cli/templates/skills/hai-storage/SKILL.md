@@ -25,7 +25,7 @@ description: "使用 @h-ai/storage 访问本地/S3 文件、目录和预签名�
 
 - 文件上传与下载
 - 预签名 URL 生成（客户端直传）
-- S3 兼容存储对接（AWS S3、MinIO、阿里云 OSS 等）
+- S3 兼容存储对接（AWS S3、MinIO、RustFS、阿里云 OSS 等）
 - 本地开发文件存储
 - 目录前缀清理与批量文件删除
 
@@ -56,6 +56,8 @@ operationLog:
 
 约定环境变量优先于 YAML，例如 `HAI_STORAGE_ROOT`、
 `HAI_STORAGE_ACCESSKEYID`、`HAI_STORAGE_SECRETACCESSKEY`。
+
+MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoint`（通常为 9000 端口）和 `forcePathStyle: true`，并预先创建 `bucket`；不要新增 `type: minio` 或 `type: rustfs`。
 
 `operationLog` 在 Local/S3 Provider 的真实 file/dir/presign 操作处输出日志，不要在 `storage-main.ts` 或调用方重复包装。文件内容不会写入日志，上传数据只记录字节长度；`maxLength` 用于截断序列化后的参数，`level` 默认 `debug`。
 

@@ -11,7 +11,7 @@ import * as path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
 import { HaiStorageError } from '../src/storage-types.js'
-import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
+import { defineS3StorageSuites, defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-storage-init-'))
 
@@ -66,7 +66,7 @@ describe('storage.init', () => {
 
   defineStorageSuite('local', localStorageEnv, () => defineCommon('local'))
 
-  defineStorageSuite('s3', s3Env, () => defineCommon('s3'))
+  defineS3StorageSuites(() => defineCommon('s3'))
 })
 
 describe('storage.init 配置校验', () => {
@@ -160,8 +160,8 @@ describe('storage.init 配置校验', () => {
     }
   })
 
-  it('s3 config getter 应返回脱敏快照', async () => {
-    const env = await s3Env()
+  it.each(['minio', 'rustfs'] as const)('%s: s3 config getter 应返回脱敏快照', async (backend) => {
+    const env = await s3Env(backend)
 
     try {
       await storage.close()

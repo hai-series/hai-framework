@@ -2,7 +2,7 @@
  * @h-ai/storage — S3 Provider 实现
  *
  * 基于 AWS SDK v3 实现的 S3 协议存储 Provider。
- * 支持 AWS S3、MinIO、阿里云 OSS 等兼容 S3 协议的存储服务。
+ * 支持 AWS S3、MinIO、RustFS、阿里云 OSS 等兼容 S3 协议的存储服务。
  * @module storage-provider-s3
  */
 
