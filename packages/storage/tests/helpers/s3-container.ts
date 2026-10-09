@@ -19,6 +19,38 @@ export interface S3ContainerLease {
   release: () => Promise<void>
 }
 
+/** 容器启动重试次数（含首次尝试）；吸收 CI 偶发的镜像拉取与注册表 5xx/超时抖动 */
+const CONTAINER_START_ATTEMPTS = 3
+/** 每次重试前的退避基数（毫秒），按尝试次数线性递增 */
+const CONTAINER_START_BACKOFF_MS = 3000
+
+const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * 带退避重试地启动容器。
+ *
+ * CI runner 拉取镜像时偶发 "HTTP 500 unauthorized"、连接重置或超时等瞬时故障，
+ * 单次失败不代表环境不可用；有界重试可消除这类 flaky，真实错误仍会在耗尽尝试后抛出。
+ */
+async function startContainerWithRetry(
+  startContainer: (credentials: Pick<S3ContainerLease, 'accessKeyId' | 'secretAccessKey'>) => Promise<StartedTestContainer>,
+  credentials: Pick<S3ContainerLease, 'accessKeyId' | 'secretAccessKey'>,
+): Promise<StartedTestContainer> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= CONTAINER_START_ATTEMPTS; attempt += 1) {
+    try {
+      return await startContainer(credentials)
+    }
+    catch (error) {
+      lastError = error
+      if (attempt < CONTAINER_START_ATTEMPTS) {
+        await delay(CONTAINER_START_BACKOFF_MS * attempt)
+      }
+    }
+  }
+  throw lastError
+}
+
 /** 创建独立的 S3 容器管理器；最后一个租约释放时停止并移除容器及匿名卷 */
 export function createS3ContainerManager(
   startContainer: (credentials: Pick<S3ContainerLease, 'accessKeyId' | 'secretAccessKey'>) => Promise<StartedTestContainer>,
@@ -35,7 +67,7 @@ export function createS3ContainerManager(
 
   return async () => {
     refCount += 1
-    containerPromise ??= startContainer(credentials)
+    containerPromise ??= startContainerWithRetry(startContainer, credentials)
 
     let container: StartedTestContainer
     try {
