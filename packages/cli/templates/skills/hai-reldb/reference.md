@@ -173,6 +173,8 @@ const page = await reldb.sql.queryPage<User>({
 
 通过配置创建单表 CRUD 仓库，免写 SQL：
 
+`CrudConfig.dbType` 必填，必须与实际初始化的数据库后端一致（含环境变量覆盖后的类型）。以下为 SQLite 示例；切换到 PostgreSQL/MySQL 时同步修改。`BaseReldbCrudRepository` 会从已初始化的 `reldb.config.type` 获取类型，无需手动传入。
+
 ```typescript
 const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
   table: 'users',
@@ -180,6 +182,7 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
   select: ['id', 'name', 'email'],   // 查询列，默认 '*'
   createColumns: ['name', 'email'],   // 允许插入的列
   updateColumns: ['name', 'email'],   // 允许更新的列
+  dbType: 'sqlite',   // 必填，与本例初始化后端一致
 })
 ```
 

@@ -7,14 +7,6 @@ description: "维护 hai 应用的 CI/CD、GitHub Actions、质量门禁和凭�
 
 ## 能力契约
 
-框架完整质量门禁在 Node.js 22.12.0（声明的最低版本）执行；升级 engines 时同步 CI、README 和脚手架，不能只在更高版本通过后宣称最低版本通过。
-
-框架发布通过实际 npm 精确版本和 GitHub Release 判断完成，不能只看 tag。部分失败重跑原提交，只补发缺失包；npm 全部成功后再建 tag/Release。查询异常与 404 必须区分，tag 指向其他提交时停止补发，禁止将新源码混入旧版本。
-
-Turbo 的 `build.env` 必须列出影响产物的变量；框架包含容器构建开关、E2E 构建模式及 PUBLIC/VITE/TAURI 前缀，共享 tsup 配置也纳入依赖。Docker/Testcontainers 连接变量通过测试任务透传。验证缓存须切换变量检查哈希和真实产物，不能只检查配置文本。
-
-框架仓库发布验收使用 `pnpm test:release-local`；其 E2E 与 CI 共用根 `pnpm e2e`，覆盖 CLI 和全部 Web 应用，不能缩减为仅 Admin Console。应用仓库应在自己的根 E2E 命令集中维护所有端到端入口。容器和原生验收须独立记录实际结果。
-
 | 项目 | 契约 |
 | --- | --- |
 | 能力 | 维护 hai 应用的 CI/CD、GitHub Actions、质量门禁和凭据泄漏扫描 |
@@ -41,7 +33,7 @@ Turbo 的 `build.env` 必须列出影响产物的变量；框架包含容器构�
 2. **最小权限**：默认 `permissions: contents: read`，只有 release、comment、pages 等明确场景才提升权限。
 3. **PR 不使用 secrets**：来自 fork 或不可信分支的 PR 不得运行读取 secrets 的 workflow。
 4. **禁用高风险组合**：禁止 `pull_request_target` + checkout PR 代码 + secrets/写权限。
-5. **先轻后重**：核心 CI 必须稳定；E2E、发布、安全深扫可以拆成 manual/nightly 或独立 workflow。
+5. **按风险选择门禁**：核心 CI 必须稳定；E2E、发布、安全深扫可拆为独立 workflow，但关键权限/数据完整性路径不能因不稳定而长期没有验收。
 6. **可追溯**：workflow 改动必须说明触发条件、权限、缓存、失败路径和验证命令。
 
 ## 标准 CI 工作流
@@ -54,11 +46,13 @@ Turbo 的 `build.env` 必须列出影响产物的变量；框架包含容器构�
 pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm lint
-pnpm test
 pnpm build
+pnpm test
 ```
 
-测试覆盖范围与 TDD 断言由 `hai-app-tests` 定义；本技能只决定这些命令如何在 workflow 中稳定执行。
+从当前 package.json 确认实际 scripts，使用声明的最低 Node 版本验证并与 engines/README 同步；PowerShell 使用 `pnpm.cmd`。测试内容由 `hai-app-tests` 定义；本技能决定门禁如何稳定执行。
+
+lint/typecheck 只能执行已配置的规则。新增开发规范时区分可静态检测项（如显式 any/console.log）与必须行为验收项（如资源越权、事务/幂等、失败结果、生命周期清理），后者在适用单元/集成/E2E 中验证。禁止通过关闭规则、添加无依据忽略或把 `|| true` 加到门禁来“统一风格”。
 
 ### E2E 策略
 
@@ -69,7 +63,7 @@ pnpm build
 ### hai-framework 依赖策略
 
 - CI 默认使用 `pnpm-lock.yaml` 中的 npm/published 依赖，确保与真实安装环境一致。
-- 本地联调使用 `framework:use:local` / `framework:watch`，但不要让默认 PR CI 隐式依赖本机路径。
+- 本地联调先查项目是否定义 `framework:use:local` / `framework:watch`；没有时按本项目 README 操作，不要让默认 PR CI 隐式依赖本机路径。
 - 需要验证本地 framework 改动时，创建显式的 sync/drift check 或双仓联动 PR。
 
 ## GitHub Actions 安全清单
@@ -88,7 +82,7 @@ pnpm build
 ### 推荐
 
 - 用无 secrets 的高置信正则扫描常见密钥形态。
-- 排除示例 skill、锁文件、图片等容易误报的路径。
+- 技能/文档与配置同样可能泄漏凭据，不按目录整体排除；只对已确认的测试占位和固定误报做有依据的最小忽略，检查修改是否掩盖真实密钥。
 - 需要私有关键词表时，仅在受信任分支的独立 workflow 中运行，不对 fork PR 暴露。
 
 ### 禁止
@@ -115,5 +109,4 @@ pnpm build
 - `hai-deploy` — 应用部署与云服务开通
 - `hai-framework-sync` — hai-framework 与应用仓库同步策略
 
-发布完成判定始终查询根版本的 npm 包；发布 job 同步包版本但不提交，标签固定指向触发质量验收的源码提交。发布成功后由独立 job 提交版本同步；完整重跑即使无需补发也会执行同步，远端已存在相同内容时成功退出，分支有新源码时拒绝覆盖并要求从最新 main 重跑。
-原生交付必须单独执行 Tauri/Gradle/Xcode 打包，并在目标 OS/设备验证安装启动、登录/退出、重启会话、安全 TokenStore、真实 API 域名与覆盖升级。Web 构建/E2E 不代替原生验收。保存提交、包 hash、平台/工具链及逐项结果；缺平台写未验证，禁止静默 skip。hai-framework 仓库参考 `.github/workflows/native.yml` 与 desktop-app / mobile-app README 的「原生交付与验收」章节。
+涉及发布时按本应用实际 registry/镜像/部署目标核验精确版本与提交，不以 tag 或 CI 绿灯代替发布产物；未经授权不发布。原生/容器交付按当前项目入口单独构建与启动验收，保存产物、平台和行为证据；缺平台写未验证，Web E2E 不代替原生验收。

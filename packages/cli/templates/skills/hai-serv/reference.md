@@ -374,7 +374,7 @@ await apiClient.init({
 3. `iam.session.verifyToken`（推荐：传入 `iam` 后自动启用）
 4. 默认 `parseRequestContext`：仅解析请求元数据，`session` 为 `undefined`
 
-> ⚠️ `verifyToken` 会在每次请求调用（不缓存）；verifyToken 失败或抛错统一收敛为 `session=undefined`，由 route 的 `.auth()` / `.permission()` / `.role()` 统一返回 401。
+> ⚠️ `verifyToken` 会在每次请求调用（不缓存）；verifyToken 失败或抛错统一收敛为 `session=undefined`，由 route 的 `.auth()` / `.permission()` / `.role()` 返回失败 HaiResult，`error.httpStatus=401`；普通 procedure 的 HTTP 响应默认仍为 200。
 
 ### 链式 procedure guard
 
@@ -403,7 +403,7 @@ const procedures = serv
   .build()
 ```
 
-- `.permission()` / `.role()` 隐含 `.auth()`；未登录返回 401，授权不足返回 403。
+- `.permission()` / `.role()` 隐含 `.auth()`；未登录返回 `error.httpStatus=401` 的失败 HaiResult，授权不足为 403。普通 procedure 的 HTTP 响应默认仍为 200，必须检查 `success` 与 `error.code`。
 - 同一路由声明多个 permission/role 时必须全部满足。
 - handler 的未处理异常由 router 统一转换成 INTERNAL_ERROR HaiResult。
 - 重复/未知路径会被拒绝；遗漏 contract procedure 时 `.build()` 在类型上不可用，运行时也会校验。
@@ -521,6 +521,20 @@ HTTP 审计、限流、CORS、租户头校验等跨 route 能力继续放在
 不要为认证授权重新嵌套多层高阶 handler。
 
 ### 正常业务请求中的错误与 i18n
+
+先区分 HTTP 状态与 HaiResult 中的 `error.httpStatus`；普通 procedure 返回的领域错误元数据不会自动改写 HTTP 状态，当前默认装配如下（显式自定义响应状态或 middleware 按实际入口契约验证）：
+
+| 失败来源 | HTTP 响应 | 结果判定 |
+| --- | --- | --- |
+| procedure `.auth()` / `.permission()` / `.role()` | 200 | `success=false`；`error.httpStatus` 为 401 / 403 |
+| handler 返回 `err(...)` 或下游模块失败 HaiResult | 200 | 检查 `success`、`error.code`，例如数据库查询错误的 `error.httpStatus=500` |
+| handler 未处理异常被 route 实现器捕获 | 200 | INTERNAL_ERROR 失败 HaiResult，`error.httpStatus=500` |
+| oRPC contract 输入 schema 校验失败（handler 之前） | 400 | 本地化失败体，`error.httpStatus=400` 与字段错误 |
+| handler 内 `serv.validateInputOrFail(...)` 失败 | 200 | 失败 HaiResult，`error.httpStatus=400` 与字段错误 |
+
+HTTP middleware、自定义 Response、refresh-cookie、OpenAPI/RPC 入口权限和 transport 协议错误分别按自身响应契约处理，可返回真实 HTTP 4xx/5xx。`@h-ai/api-client` 的自动刷新只由真实 HTTP 401 触发，不会因 HTTP 200 失败包络中的 `error.httpStatus=401` 自动刷新。
+
+SvelteKit 的 `kit.response.fromError` 根据 `error.httpStatus` 生成 HTTP Response；`kit.response.fromResult` 使用显式错误码映射，未命中默认 400。这些响应转换规则不能套用到 serv 普通 procedure。
 
 按三层处理：
 

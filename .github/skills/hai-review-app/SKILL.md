@@ -19,7 +19,7 @@ description: "审查 hai 应用的路由、权限、i18n、服务层与交互体
 
 ## §1 审查准则
 
-1. **先读后改**：审查前先读 `hai-create-app` 确认基准。
+1. **先读后改**：审查前先读 `hai-create-app` 和 [应用开发共同规则](../../../packages/cli/templates/skills/hai-app-create/development.md)，依据实际技术栈、版本和调用链确认基准。
 2. **分层审查**：UI 层 → 服务层 → API 层 → 基础设施层，逐层展开。
 3. **成套更新**：代码 / 翻译 / 测试 / 文档同步。
 
@@ -29,37 +29,39 @@ description: "审查 hai 应用的路由、权限、i18n、服务层与交互体
 - [ ] 禁止在 UI 层写业务逻辑（组件只负责渲染和交互）
 - [ ] 禁止在 services 层写 UI 代码（不引用 Svelte / DOM）
 - [ ] 底层操作通过 @h-ai 模块调用，不直接操作 DB/加密/存储
-- [ ] init.ts 按依赖顺序初始化
+- [ ] 对本次真实需求核对适用的框架模块、同模块 feature/config 和已有调用方；自建替代有能力缺口证据，没有强装无关模块
+- [ ] 实际启动入口按依赖顺序初始化有状态模块，检查失败并清理已创建资源；纯函数、工厂不臆造生命周期
 
 ## §3 认证与授权审查
 
-- [ ] hooks.server.ts 包含完整初始化 + i18n + 会话验证
-- [ ] 保护路由有 `+layout.server.ts` 守卫（检查 `locals.session`）
-- [ ] API 端点有权限检查（`kit.guard.require` / `kit.guard.check`）
+- [ ] SvelteKit 的 hooks/server load 或 serv 的 procedures/middleware 按实际架构完成初始化与会话验证
+- [ ] 保护页面和 API 均验证身份、租户及资源权限，服务端有拒绝跨用户/跨租户访问的证据
+- [ ] API 端点复用实际集成层的权限检查（kit 或 serv），不只隐藏 UI
 - [ ] 认证守卫 + API 权限双重保护
 - [ ] token 使用 httpOnly cookie 或安全 TokenStore，未存 localStorage
 - [ ] 重定向目标经过校验（防 Open Redirect，只允许站内路径）
-- [ ] CSRF token 通过 `kit.client.create` 自动附加
+- [ ] Cookie 写操作按实际 kit/client 或 serv/typed client 的集成验证 CSRF；不为无关认证模式补造该流程
 
 ## §4 路由与页面审查
 
 - [ ] 路由组织合理（认证分组、保护目录、API 分离）
 - [ ] `+page.svelte` 使用 `$props()` 接收 data，类型正确
 - [ ] `+page.server.ts` 并行加载无依赖数据（`Promise.all`）
-- [ ] 无 N+1 数据加载（循环中 await）
+- [ ] 无可合并的重复独立查询；事务、限流及有依赖的操作可串行
 - [ ] 分页参数校验（正整数、上限）
 - [ ] Svelte 组件只做渲染和交互，无业务逻辑
 
 ## §5 API 端点审查
 
-- [ ] 输入用 Zod Schema 校验（`kit.validate.body` / `query` / `params`）
-- [ ] 权限用 `kit.guard.require`
-- [ ] 响应用 `kit.response.*`（不手动构造 Response）
-- [ ] HaiResult 型错误用 `kit.response.fromError` 转换
+- [ ] 输入用实际 schema/contract 校验；SvelteKit 可用 kit.validate，serv 沿用 contract 输入 schema
+- [ ] 权限检查沿用实际 kit guard 或 serv procedures/middleware
+- [ ] 普通响应与错误经实际集成层转换；流、文件下载及框架控制流按其公开契约处理
+- [ ] HaiResult 先检查 success 再访问 data；事务与流的失败处理按实际契约验证
+- [ ] HTTP 状态与失败包络按真实架构核验；serv/oRPC 普通 procedure 的失败 HaiResult 可以位于 HTTP 200，error.httpStatus 不能当作真实 response.status
 - [ ] 投递等业务状态按 `sent` 等字段判断，失败保留用户输入；HTTP/HaiResult 成功不代替业务完成
-- [ ] Schema 定义集中在 `lib/server/schemas/`
+- [ ] Schema 放在当前服务端或共享 contract 层，客户端不引用 server-only 实现
 - [ ] 文件上传有类型白名单 + 大小限制
-- [ ] 无 SQL 字符串拼接
+- [ ] SQL 动态值参数化；表名、列名和排序片段来自白名单/可信代码
 
 ## §6 i18n 审查
 
@@ -130,7 +132,7 @@ description: "审查 hai 应用的路由、权限、i18n、服务层与交互体
 - [ ] 敏感信息未出现在日志中
 - [ ] 服务端密钥使用配置/环境变量；SvelteKit 可用 `$env/static/private`，serv 按当前配置加载入口处理
 - [ ] Cookie 会话登录不向页面暴露 token；Bearer 客户端明确内存/安全 TokenStorage 与刷新流程，不能按 Cookie 模式误判
-- [ ] 前端不使用 `localStorage` / `sessionStorage` 持久化敏感 Token
+- [ ] 前端不使用 `localStorage` / `sessionStorage` 持久化敏感 Token；可执行门禁的能力与未覆盖的业务权限风险分别报告
 - [ ] 默认/初始管理员密码不写入日志；首次初始化密码必须通过环境变量或安全密钥管理注入
 
 ### HTTP 安全

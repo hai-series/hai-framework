@@ -27,7 +27,7 @@ description: "审查 PR 范围、风险、验证证据和合并准备度。"
 - 设计 AI PR Review 方案
 - 选择 Copilot、CodeRabbit、reviewdog、DangerJS、Claude Code Action、Codex Action 等工具
 
-不负责：代码级质量审查（用 `hai-app-review` / 模块审查技能）、测试用例设计（用 `hai-app-tests`）、workflow 触发/权限/secret 细节（用 `hai-ci`）。
+代码级框架复用、安全与风格审查交给 [hai-app-review](../hai-app-review/SKILL.md)，测试用例设计交给 `hai-app-tests`，workflow 触发/权限/secret 细节交给 `hai-ci`。
 
 ## 审查分层
 
@@ -41,7 +41,8 @@ description: "审查 PR 范围、风险、验证证据和合并准备度。"
 
 - scope 是否清晰且与 issue 对齐
 - 测试是否覆盖成功路径、失败路径、边界条件
-- 是否符合 hai-framework 约定：HaiResult、i18n、日志、分层、TDD
+- 本次需求是否复用适用框架能力/feature/配置，自定义或新依赖是否有已安装版本的缺口依据（见 [development.md](../hai-app-create/development.md)）
+- 是否符合实际返回契约、i18n、日志、分层、当前 lint 风格，以及输入/越权/失败等适用行为验收；不能以导入包数量或 CI 全绿替代代码与安全审查
 - 是否引入密钥、权限扩大、workflow 风险或两仓漂移
 
 ### 第 3 层：AI Review（默认 advisory）
@@ -91,7 +92,7 @@ PR 描述必须说明：
 - [ ] PR 模板完整填写
 - [ ] CI required checks 全绿
 - [ ] 新行为有测试，失败路径有覆盖
-- [ ] 代码级质量问题已由 `hai-app-review` / 模块审查技能覆盖
+- [ ] 框架能力选择、代码风格与适用安全边界已由 `hai-app-review` 覆盖，有行为证据或明确未验证项
 - [ ] 文档 / skill / README 与代码同步
 - [ ] workflow 权限或 secrets 变化已由 `hai-ci` 审查
 - [ ] AI-assisted 内容已由人类复核
@@ -99,5 +100,5 @@ PR 描述必须说明：
 ## 相关 Skills
 
 - `hai-ci` — CI/CD 与 workflow 安全
-- `hai-review-module` / `hai-app-review` — 代码质量审查
+- `hai-app-review` — 应用代码质量与框架复用审查
 - `hai-framework-sync` — 两仓同步审查

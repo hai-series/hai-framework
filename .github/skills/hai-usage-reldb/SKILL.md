@@ -18,6 +18,7 @@ description: "使用 @h-ai/reldb 访问 SQLite/PostgreSQL/MySQL，编写 SQL、C
 ## 使用路径
 
 - `_db.yml` 对应 core.config 的 db；先校验 ReldbConfigSchema，再 init 并检查 success。
+- `reldb.crud.table` / `tx.crud.table` 的 `dbType` 必填并与实际后端一致；`BaseReldbCrudRepository` 自动读取已初始化的配置。
 - 事务每步检查结果，避免把失败当普通返回值提交；同一事务操作须共享 tx。
 - SQL 值参数化；where/orderBy/json 列名不是任意用户输入。分页使用 PaginatedResult。
 

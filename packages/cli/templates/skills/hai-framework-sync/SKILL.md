@@ -38,6 +38,8 @@ description: "同步 hai-framework 通用 skills、AI 入口与应用依赖，�
 
 ### 1. 判断来源
 
+先读取当前应用入口与 package.json/lockfile，记录实际 npm/local 模式及解析版本。同步 skill 不能证明新 API 已安装或可用：以目标依赖的公开 exports/types 验证示例与配置，未发布框架能力仅用于已授权本地联调。
+
 | 变更类型 | 首选位置 |
 | --- | --- |
 | 通用 hai 模块用法 | `hai-framework/packages/cli/templates/skills/hai-*/SKILL.md` |
@@ -56,13 +58,16 @@ description: "同步 hai-framework 通用 skills、AI 入口与应用依赖，�
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
 - `CLAUDE.md`（如存在）
+- `.claude/skills/<skill>/SKILL.md` 的原生发现入口；描述同步共享技能，正文和参考仍从 `.agents/skills/` 读取，保留已声明的本地覆盖
 - `opencode.json`（如结构变化）
+
+新增/修改/修复任务入口必须能到达 `hai-app-create` 与其 `development.md`；审查入口能到达 `hai-app-review`。按目标架构/依赖交付所需模块技能，不把 SvelteKit 指令套到 API/Vite 项目。复制前比对应用私有覆盖，合并通用修正并保留差异，不能直接覆盖业务规则。
 
 ### 4. 验证
 
 按变更类型选择验证方式：
 
-- 仅模板 / skill 变更：检查 diff、入口引用与模板泛化程度。
+- 仅模板 / skill 变更：检查 diff、目标中实际存在的入口/相邻资源及其相对引用，确认没有框架仓库私有路径/命令；本地能力导航对可选 skill 先检查存在，不把目录缺失当成能力缺失。
 - 同步到应用仓库：按 `hai-ci` 定义的质量门禁运行。
 - 涉及 framework runtime 时，先确认应用 package.json 已定义下列脚本；没有时按 README 的本地联调方式操作：
 
@@ -75,6 +80,8 @@ pnpm framework:watch <package>
 ## 漂移检查清单
 
 - [ ] framework 模板和应用 `.agents/skills` 对同名 skill 内容一致，除非 PR 明确说明本地覆盖
+- [ ] 普通功能修改/修复也路由到能力匹配与安全/质量自查，不仅“创建项目”或手工调用 skill 才生效
+- [ ] 技能示例与目标实际依赖版本、架构、公开 API 一致；没有把模板更新当成 runtime 升级
 - [ ] `AGENTS.md` 的 skill 列表包含新增/重命名 skill
 - [ ] Copilot/Claude/OpenCode 入口能找到新增 skill
 - [ ] CI 默认不依赖 `/home/.../hai-framework` 本地路径

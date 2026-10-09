@@ -1,6 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { access, readdir, readFile } from 'node:fs/promises'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 
 const ROOT = process.cwd()
 const SKILL_ROOTS = [
@@ -9,18 +10,27 @@ const SKILL_ROOTS = [
 ]
 const REQUIRED_CONTRACT_ITEMS = ['能力', '适用场景', '输入', '输出', '限制']
 
-async function findSkillFiles(directory) {
+async function findMarkdownFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
   const nested = await Promise.all(entries.map(async (entry) => {
     const path = join(directory, entry.name)
     if (entry.isDirectory())
-      return findSkillFiles(path)
-    return entry.isFile() && entry.name === 'SKILL.md' ? [path] : []
+      return findMarkdownFiles(path)
+    return entry.isFile() && entry.name.endsWith('.md') ? [path] : []
   }))
   return nested.flat()
 }
 
-function validateSkill(path, content) {
+/** 通过入口识别技能目录，不依赖命名前缀；桥接目录没有 SKILL.md。 */
+async function findSkillDirectories(directory) {
+  const entries = await readdir(directory, { withFileTypes: true })
+  if (entries.some(entry => entry.isFile() && entry.name === 'SKILL.md'))
+    return [directory]
+  return (await Promise.all(entries.filter(entry => entry.isDirectory())
+    .map(entry => findSkillDirectories(join(directory, entry.name))))).flat()
+}
+
+function validateSkill(root, path, content) {
   const failures = []
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1] ?? ''
 
@@ -37,17 +47,69 @@ function validateSkill(path, content) {
       failures.push(`能力契约缺少“${item}”或内容为空`)
   }
 
-  return failures.map(message => `${relative(ROOT, path)}: ${message}`)
+  return failures.map(message => `${relative(root, path)}: ${message}`)
 }
 
-const files = (await Promise.all(SKILL_ROOTS.map(findSkillFiles))).flat()
-const results = await Promise.all(files.map(async path => validateSkill(path, await readFile(path, 'utf8'))))
-const failures = results.flat()
-
-if (failures.length > 0) {
-  console.error(failures.join('\n'))
-  process.exitCode = 1
+/** 检查 skill 内按需读取的本地资源，跳过范本代码中的示例链接。 */
+async function validateReferences(root, path, content) {
+  const failures = []
+  let referenceCount = 0
+  let fence
+  const prose = content.split(/\r?\n/u).filter((line) => {
+    const marker = line.trimStart().match(/^(?:`{3,}|~{3,})/u)?.[0]
+    if (marker && (!fence || marker.startsWith(fence))) {
+      fence = fence ? undefined : marker
+      return false
+    }
+    return !fence
+  }).join('\n')
+  for (const match of prose.matchAll(/\[[^\]\r\n]*\]\(([^)\r\n]*)\)/gu)) {
+    const target = match[1].trim().match(/^(?:<([^>]+)>|(\S+))/u)
+    const destination = target?.[1] ?? target?.[2]
+    if (!destination)
+      continue
+    if (/^(?:[a-z][a-z\d+.-]*:|#|\/\/)/iu.test(destination))
+      continue
+    const localPath = destination.split(/[?#]/u)[0]
+    if (!localPath)
+      continue
+    referenceCount++
+    try {
+      await access(resolve(dirname(path), decodeURIComponent(localPath)))
+    }
+    catch {
+      failures.push(`${relative(root, path)}: 本地参考文件不存在: ${destination}`)
+    }
+  }
+  return { failures, referenceCount }
 }
-else {
-  console.log(`Skill contracts OK (${files.length} files)`)
+
+/** 验证契约和全部相邻参考文件的引用；桥接路径由生成项目测试验证。 */
+export async function checkSkillContracts(root = ROOT, skillRoots = SKILL_ROOTS) {
+  const directories = (await Promise.all(skillRoots.map(findSkillDirectories))).flat()
+  const files = (await Promise.all(directories.map(findMarkdownFiles))).flat()
+  const results = await Promise.all(files.map(async (path) => {
+    const content = await readFile(path, 'utf8')
+    const references = await validateReferences(root, path, content)
+    return {
+      failures: [...(basename(path) === 'SKILL.md' ? validateSkill(root, path, content) : []), ...references.failures],
+      referenceCount: references.referenceCount,
+    }
+  }))
+  return {
+    skillCount: files.filter(path => path.endsWith('SKILL.md')).length,
+    referenceCount: results.reduce((total, result) => total + result.referenceCount, 0),
+    failures: results.flatMap(result => result.failures),
+  }
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  const result = await checkSkillContracts()
+  if (result.failures.length > 0) {
+    process.stderr.write(`${result.failures.join('\n')}\n`)
+    process.exitCode = 1
+  }
+  else {
+    process.stdout.write(`Skill contracts OK (${result.skillCount} skills, ${result.referenceCount} local references)\n`)
+  }
 }

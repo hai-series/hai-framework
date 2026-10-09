@@ -9,6 +9,7 @@ README 文档入口：[简体中文](README.md) · [English](README.en.md) · [�
 1. 修改本仓库：先读 [AGENTS.md](AGENTS.md)，按路径选择规范。
 2. 使用模块：下表选择一个 SKILL.md；仅在任务需要时读其相邻 reference.md/guide.md。
 3. `.github/skills/` 面向仓库开发；`packages/cli/templates/skills/` 面向生成应用，CLI 复制完整目录到应用 `.agents/skills/`。
+   Codex/Cursor/Copilot/OpenCode 读取共享技能；Claude Code 通过生成的 `.claude/skills/` 原生入口读取同一份共享正文。工具专属常驻入口保留项目规则，详细用法不各自复制。
 4. API 示例是使用片段，业务变量/schema 需结合当前应用补齐；先判断返回类型，再处理结果，不能猜测导出或初始化方式。
 
 ## 生命周期与返回值
@@ -71,7 +72,8 @@ return result
 | 仓库新增/审查应用 | [hai-create-app](.github/skills/hai-create-app/SKILL.md) / [hai-review-app](.github/skills/hai-review-app/SKILL.md) |
 | 仓库 AI / IAM / reldb / UI 用法 | [AI](.github/skills/hai-usage-ai/SKILL.md) / [IAM](.github/skills/hai-usage-iam/SKILL.md) / [reldb](.github/skills/hai-usage-reldb/SKILL.md) / [UI](.github/skills/hai-ui/SKILL.md) |
 | 生成应用架构/构建 | [hai-build](packages/cli/templates/skills/hai-build/SKILL.md) |
-| 生成应用功能/审查/测试 | [hai-app-create](packages/cli/templates/skills/hai-app-create/SKILL.md) / [hai-app-review](packages/cli/templates/skills/hai-app-review/SKILL.md) / [hai-app-tests](packages/cli/templates/skills/hai-app-tests/SKILL.md) |
+| 生成应用新增/修改/修复功能 | [hai-app-create](packages/cli/templates/skills/hai-app-create/SKILL.md)，先读 [能力选择与安全质量规则](packages/cli/templates/skills/hai-app-create/development.md)；按实际版本/目标端复用适用功能和配置 |
+| 生成应用审查/测试 | [hai-app-review](packages/cli/templates/skills/hai-app-review/SKILL.md) / [hai-app-tests](packages/cli/templates/skills/hai-app-tests/SKILL.md) |
 | CI / PR 审查 | [hai-ci](packages/cli/templates/skills/hai-ci/SKILL.md) / [hai-pr-review](packages/cli/templates/skills/hai-pr-review/SKILL.md) |
 | 框架与应用 skills/版本同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md) |
 

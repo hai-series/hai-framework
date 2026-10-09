@@ -102,6 +102,18 @@ export async function initProject(options: InitOptions): Promise<void> {
     const { project, existing, missing } = result
     spinner.succeed(`检测到项目: ${chalk.cyan(project.name)}`)
 
+    // 即使配置齐备，也补全新增 AI 参考资源；已有项目规则与 Skill 不覆盖。
+    if (project.isHaiProject) {
+      const { generateProjectAiSupport, resolveSkillNamesForPackages } = await import('./cli-skill-templates.js')
+      const generatedFiles = await generateProjectAiSupport(cwd, resolveSkillNamesForPackages(project.haiPackages), {
+        overwriteSkills: false,
+        overwriteBridgeFiles: false,
+      })
+      for (const generatedFile of generatedFiles) {
+        core.logger.info(chalk.gray(`  + ${generatedFile}`))
+      }
+    }
+
     // 显示项目状态
     core.logger.info('')
     core.logger.info(chalk.bold('项目状态:'))

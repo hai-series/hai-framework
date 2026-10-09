@@ -1,173 +1,79 @@
 ---
 name: hai-app-review
-description: "审查 hai 应用的路由、权限、i18n、服务层与交互体验。"
+description: "审查 hai 应用的框架复用、安全边界、返回契约、代码风格与真实交互，支持开发后的自查。"
 ---
 
-# hai-app-review — 应用代码审查规范
+# hai-app-review
 
 ## 能力契约
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 审查 hai 应用的路由、权限、i18n、服务层与交互体验 |
-| 适用场景 | 用户要求应用代码/体验审查或修复评估 |
-| 输入 | 用户指定范围、代码/差异、运行证据与验收要求 |
-| 输出 | 按优先级列出的证据、影响和修正建议 |
-| 限制 | 只读审查不自动改代码；未读取的实现不下结论，不把偏好当缺陷。实现修复需用户已授权。 |
+| 能力 | 审查应用的框架复用、安全、质量、风格与交互 |
+| 适用场景 | 用户要求审查/规范化，或完成功能开发后的自查 |
+| 输入 | 指定范围、需求/验收、代码差异、当前依赖与运行证据 |
+| 输出 | 有路径、影响、依据、验收方法的问题及验证结果 |
+| 限制 | 只读审查不自动改代码；已有实现/修复授权时可修正本次范围内的问题。未读实现不下结论，不把偏好当缺陷。 |
 
-> 面向 AI 助手的应用代码审查指南。用于审查使用 hai-framework 构建的 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace。本技能也是 TDD Refactor 阶段的执行入口。
+## 审查路径
 
-## 适用场景
+1. 读取当前项目入口规则、package scripts、lockfile 与差异，确认 SvelteKit、API workspace、fullstack 或 Vite/原生架构。
+2. 按 [development.md](../hai-app-create/development.md) 对需求核对实际框架能力、当前安装版本及适用安全边界；只读所涉及模块 skill、公开类型和相关调用方。
+3. 沿真实路径检查输入 → 身份/资源权限 → 服务/副作用 → 结果 → UI。先报告能导致安全或行为错误的问题，再检查风格与维护性。
+4. 对已授权修复做最小改动并验证。修正真实缺陷不以“已有测试未发现”为前提；保留用户已有改动与业务目标。
 
-- 审查应用代码是否符合 hai-framework 规范
-- TDD Refactor 阶段：在测试通过后进行代码重构与规范化
-- 规范化现有代码（分层、命名、日志、i18n）
-- 安全审查（权限、输入校验、密钥管理）
+## 框架复用与架构
 
-## 工作准则
+- 本次需求是否已经由应用已有服务、框架 feature/配置/扩展点实现？查实际 API 与版本，不能只计算导入包数量。
+- 登录/刷新、数据库连接/CRUD/事务、缓存、上传、AI provider、任务调度及通用 UI 若已有适用能力，应复用。自定义代码或新依赖应有具体缺口证据，不能为覆盖率安装无关模块。
+- SvelteKit 的 hooks 仅编排初始化/中间件，load/端点守卫 → 校验 → 服务 → 响应；API workspace/fullstack 在现有 contract/procedure/serv 扩展，不生成 kit 路由。
+- UI 负责显示与交互；数据库、密钥与服务端模块留在服务端。浏览器共享类型从客户端可用的 contract/types/shared 引入，不从 server services 引入。
+- 从 `package.json.exports` 公开入口导入；复用真实类型，拒绝内部源码路径、本地仿造类型和无用途转发层。公共 contract/配置变化同步服务、客户端、测试和文档。
 
-1. **先搜索再改动**：用全局检索确认引用关系，避免遗漏更新。
-2. **最小变更**：除非测试暴露缺陷，不改业务行为。
-3. **成套更新**：代码 / 测试 / 文档同步。
-4. **重构后测试必须仍通过**：任何重构都不能破坏已有测试。
+## 返回、失败与生命周期
 
-## 审查清单
+- 返回 HaiResult 的调用先检查 `success` 再读 `data`，服务层保留上游错误；纯函数、getter、工厂、流式 API 与显式抛错按实际签名。
+- SvelteKit 控制流及 kit.guard.require/kit.validate.body 抛出的响应按 kit/SvelteKit 契约处理，不吞掉 redirect/error。服务端 SDK/流迭代异常不能因“框架不抛业务异常”而遗漏。
+- HTTP 边界沿实际状态/包络与安全 i18n 契约，不暴露 SQL、路径、凭据和堆栈。serv/oRPC 普通 procedure 的失败 HaiResult 可位于 HTTP 200，error.httpStatus 不等于传输状态；不能照搬 kit 的 Response 断言。不能将依赖失败回退为空列表、零统计或空权限；权限读取失败不得继续写入。
+- 投递、支付、调度等需要继续判断业务状态字段；HTTP/HaiResult 成功不能替代送达、完成或提交。失败反馈保留用户输入，重试明确幂等。
+- 初始化复用当前入口；只对有生命周期的模块按真实依赖顺序 init → use → close，检查每个结果。关键依赖失败停止启动、清理已创建资源；关闭反序释放，覆盖并发初始化与失败路径。
 
-### TDD 合规性
+## 安全验收
 
-- [ ] 每个功能都有对应的单元测试（`tests/` 目录）
-- [ ] 关键流程有对应的 E2E 测试（`e2e/` 目录）
-- [ ] 单元测试覆盖四种路径：正常、边界、权限、错误
-- [ ] E2E 测试覆盖 API 端点的未认证/认证场景
-- [ ] 测试先于实现编写（TDD 流程已遵循）
-- [ ] `pnpm test` 单元测试全部通过
-- [ ] `pnpm test:e2e` E2E 测试全部通过
+按 development.md 的安全表选本次适用项，并检查可观察行为：
 
-## 审查清单
+- 非法/超限输入被 schema 拒绝且没有写入/外部副作用。SvelteKit 用对应 kit 校验，API service 在 contract/procedure 边界校验，不给其它架构强加 kit.validate。
+- 未登录、缺权限、跨资源/用户/租户访问被拒绝；客户端身份字段不能替代服务端会话。公开接口有明确匿名策略。
+- SQL 值参数化；动态标识符白名单；文件路径/类型/大小与目的地 URL 限制匹配真实入口；不可信 HTML/AI 内容不能执行。
+- 日志、响应、客户端构建产物与公共环境变量无密钥/密码/token。会话沿现有 Cookie/内存或原生安全 TokenStorage；相关 CORS、Cookie、CSRF、刷新与退出路径得到验证。
+- 适用的事务、幂等、并发/重复请求、回调验签、金额与订单绑定、任务重试/取消得到验证。共享业务状态不放单进程 memory。
 
-### 架构分层
+typecheck/lint 不能证明越权、租户隔离、事务、错误状态或资源清理正确；需要适用的失败/攻击用例、运行检查或明确未验证说明。
 
-- [ ] `hooks.server.ts` 仅做中间件编排（初始化、i18n、`handle` hook），无业务逻辑
-- [ ] `+page.server.ts` / `+server.ts` 仅做请求处理（守卫 → 校验 → 调用服务 → 响应）
-- [ ] 业务逻辑集中在 `$lib/server/services/`
-- [ ] 客户端组件不直接调用数据库或服务端模块
-- [ ] 依赖方向：路由 → 服务 → 框架模块，不反向
+## 代码风格与质量
 
-### HaiResult 处理
+- 禁止 `any`、无说明的 `as unknown as T`、`console.log`、硬编码密钥；外部 `unknown` 先校验/缩窄。必要第三方断言有真实依据。
+- 遵循当前 ESLint、TypeScript、目录与命名规则，函数返回类型按真实契约标注；不把所有返回类型都强制成 HaiResult。
+- 注释中文，结构化日志英文并脱敏。读操作用 debug，写操作成功用 info，失败按业务/系统性质用 warn/error；避免记录整份请求、凭据或未经脱敏的 error/context。
+- 用户可见文案沿现有 i18n 入口，同步中英文；包括错误、空态、降级、校验和状态文案。禁止手改 Paraglide 生成文件；框架组件内置翻译沿公开 Props 使用。
+- 业务逻辑不塞入 UI/hook；优先 early return、按职责拆分复杂函数。遵守实际 lint 的复杂度/长度限制，不为了数字拆出无意义转发链。
+- 循环串行/并发按依赖、事务、限流与资源限制选择；列表分页/流式处理，避免热路径同步 I/O、重复连接和无界并发。
 
-- [ ] 投递等业务状态按 `sent` 等字段判断，失败保留用户输入；HTTP/HaiResult 成功不代替业务完成
+## 交互与行为验证
 
-- [ ] 返回 HaiResult 的调用先检查 `result.success`
-- [ ] 上游 HaiResult 错误直接透传，不重新包装
-- [ ] 不使用 `try/catch` 来处理框架模块返回的错误（HaiResult 型 API 的业务错误在结果中；流/显式抛错 API 另按契约处理）
+涉及 UI 时沿真实用户路径走查，确认适用的：
 
-```typescript
-// ❌ 重新包装
-const result = await reldb.sql.query(sql)
-if (!result.success) {
-  return { success: false, error: { code: 'QUERY_FAILED', message: result.error.message } }
-}
+- Svelte 5 Runes、props 事件、SSR/浏览器边界及项目样式系统；优先复用 `@h-ai/ui` 的公开组件。
+- Loading/Empty/Error/Success 四态、表单校验/错误焦点、长任务进度、失败后输入恢复与重试。
+- 桌面/移动布局、长文本与中英文展开、主题对比、键盘/触摸/IME、焦点与可访问性；危险操作有符合产品目标的确认/撤销。
+- 并发操作、网络失败、权限变化与返回导航不导致假成功、丢失输入或死路。
 
-// ✅ 直接透传
-const result = await reldb.sql.query(sql)
-if (!result.success)
-  return result
-```
+新增/改变行为有对应的有效单元/集成/E2E 用例；关键接口覆盖正常、失败及适用权限/边界路径。已有代码是否遵循 TDD 不能仅从最终 diff 推断，需当时执行证据；测试数量与机械打勾不代替行为验证。
 
-### 权限与安全
+## 门禁与输出
 
-- [ ] 受保护端点/load 有与实际框架匹配的守卫；公开路由显式允许匿名，不给 API service 强加 kit.guard
-- [ ] 所有用户输入通过 Zod Schema 校验（`kit.validate.*`）
-- [ ] 无硬编码 API Key / 密钥
-- [ ] 日志不输出密码、token 明文
+从当前 package.json 选择实际 scripts，优先 workspace filter；PowerShell 使用 `pnpm.cmd`。按 typecheck → lint → build（构建/配置/跨包变更）→ test → 相关 E2E 执行。浏览器、真实 provider、容器和原生交付各自报告实际结果。
 
-### 日志规范
+交付说明需求/范围、带路径与影响的发现、已复用能力和必要缺口、已修正项、已执行门禁/行为证据、同步的 contract/调用方/i18n/配置/文档，以及未验证项和原因。只读审查报告问题与验证建议；不能凭审查清单宣称所有测试通过。
 
-- [ ] 禁止 `console.log`，统一使用 `core.logger`
-- [ ] 日志级别正确：
-
-| 场景                  | 级别                           |
-| --------------------- | ------------------------------ |
-| 读操作 / 查询         | `debug`                        |
-| 写操作进入            | `debug`                        |
-| 写操作成功            | `info`                         |
-| 校验失败              | `warn`                         |
-| 系统异常              | `error`                        |
-| 初始化完成 / 关闭     | `info`                         |
-| 安全操作（登录/登出） | `info`（成功）/ `warn`（失败） |
-
-- [ ] 日志消息英文、简洁动宾结构
-- [ ] 失败日志附带 `{ error }` 或 `{ reason }`
-
-### 类型安全
-
-- [ ] 禁止 `any`，不确定用 `unknown` + 缩窄
-- [ ] 函数返回类型明确标注（`HaiResult<T>` / `Promise<HaiResult<T>>`）
-
-### i18n
-
-- [ ] 所有用户可见文本走 i18n key（`$lib/paraglide/messages.js`）
-- [ ] 禁止直接修改 `src/lib/paraglide` 生成文件
-- [ ] `@h-ai/ui` 组件内置翻译，不传入翻译 props
-
-### 代码质量
-
-- [ ] return 语句不包含复杂逻辑（条件判断、循环、多级调用链）
-- [ ] 无超过 2 层的 if 嵌套（使用 Early Return）
-- [ ] 单函数 ≤ 120 行（不含注释和空行）
-- [ ] 错误创建用错误码 + i18n 消息，无硬编码字符串
-
-### Svelte 5 规范
-
-- [ ] 使用 Runes 语法（`$props()`、`$state()`、`$derived()`、`$effect()`）
-- [ ] 事件回调通过 props 传入（非 `createEventDispatcher`）
-- [ ] 样式使用 TailwindCSS 4 + DaisyUI 5
-
-### 产品体验与交互审查（用户视角走查）
-
-- [ ] 页面层级与视觉重心清晰，主操作足够突出
-- [ ] 响应式断点（桌面 / 平板 / 移动）下无溢出、遮挡、错位
-- [ ] 暗色 / 亮色主题下文字对比度满足 WCAG AA
-- [ ] 关键路径步骤最短，无多余跳转或确认
-- [ ] 危险操作（删除、提交、不可逆变更）有二次确认或可撤销机制
-- [ ] 所有可点击区域 hit area ≥ 44px（移动端尤其）
-- [ ] 表单具备失焦校验、提交校验与首个错误项聚焦
-- [ ] 长任务有进度反馈（百分比 / 预计时间 / skeleton）
-- [ ] 四态反馈完整：Loading / Empty / Error / Success
-- [ ] 边界场景覆盖：空数据、超长文本、并发操作、权限不足、网络抖动
-- [ ] 导航无死路：用户在任意页面都能退出/返回
-- [ ] 国际化文本展开后不破坏布局
-
-### 初始化
-
-- [ ] 模块初始化顺序正确：`core → db → cache → iam → ...`
-- [ ] 初始化在 `$lib/server/init.ts` 统一管理
-- [ ] 配置文件路径遵循 `config/_<module>.yml` 约定
-
-## 质量门禁
-
-审查完成后按顺序执行：
-
-1. `pnpm typecheck`
-2. `pnpm lint`
-3. `pnpm test`（单元测试）
-4. `pnpm --filter <app-name> test:e2e`（E2E 测试）
-
-优先使用 `pnpm --filter <app-name>` 指定应用。
-
-## 输出要求
-
-- 列出改动文件与原因
-- 说明是否修复了缺陷或仅做规范化
-- 明确测试（单元 + E2E）与 lint 结果
-- 确认重构后所有测试仍然通过
-
-## 相关 Skills
-
-- `hai-build`：项目架构总览与 TDD 工作流导航
-- `hai-app-create`：TDD 驱动的应用功能创建规范
-- `hai-app-tests`：TDD 测试规范（Red 阶段详细指引）
-
-管理端数据读取在 HTTP 应用边界保留失败：查询异常返回 503 和可刷新错误页，分页任一页或权限关联失败均中止加载，禁止回退为空列表、零统计或空权限。未知权限代码返回 400，权限读取失败时不得继续写入。底层模块仍使用 HaiResult。
-
-失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
+相关技能：[hai-app-create](../hai-app-create/SKILL.md)、[hai-app-tests](../hai-app-tests/SKILL.md)、[hai-build](../hai-build/SKILL.md)。

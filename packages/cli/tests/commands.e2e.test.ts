@@ -20,10 +20,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { addModule } from '../src/commands/cli-add.js'
 import { createProject, detectProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
 import { initProject } from '../src/commands/cli-init.js'
+import { generateModuleSkillFile, generateProjectAiSupport } from '../src/commands/cli-skill-templates.js'
 
 // =============================================================================
 // 测试工具
@@ -118,6 +120,9 @@ async function listTemplateSkillNames() {
 }
 
 async function expectCompatibleSkills(projectPath: string, appType: AppType) {
+  const agents = await readText(projectPath, 'AGENTS.md')
+  expect(agents).toContain('.agents/skills/hai-app-create/SKILL.md')
+  expect(agents).toContain('.agents/skills/hai-app-create/development.md')
   const skillNames = await listTemplateSkillNames()
   const excludedSkills = new Set(SKILL_EXCLUSIONS_BY_APP_TYPE[appType])
 
@@ -127,7 +132,17 @@ async function expectCompatibleSkills(projectPath: string, appType: AppType) {
       await exists(projectPath, `.agents/skills/${skillName}/SKILL.md`),
       `${appType} should ${expected ? '' : 'not '}include ${skillName}`,
     ).toBe(expected)
+    const aliasPath = `.claude/skills/${skillName}/SKILL.md`
+    expect(await exists(projectPath, aliasPath)).toBe(expected)
     if (expected) {
+      const alias = await readText(projectPath, aliasPath)
+      const metadata: unknown = parse(alias.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1] ?? '')
+      expect(metadata).toEqual({ name: skillName, description: expect.any(String) })
+      const sharedLink = alias.match(/\[共享技能正文\]\(([^)]+)\)/u)?.[1]
+      expect(sharedLink).toBeDefined()
+      expect(path.resolve(projectPath, path.dirname(aliasPath), sharedLink!))
+        .toBe(path.resolve(projectPath, '.agents/skills', skillName, 'SKILL.md'))
+      expect(await fse.readdir(path.join(projectPath, '.claude/skills', skillName))).toEqual(['SKILL.md'])
       // 校验完整目录交付，避免入口可发现但按需引用的范本遗漏。
       const source = path.join(skillTemplatesDir, skillName)
       const resources = await fse.readdir(source, { recursive: true, withFileTypes: true })
@@ -1364,6 +1379,60 @@ describe('detectProject', () => {
 // 5. addModule
 // =============================================================================
 
+describe('ai 支持交付与回填', () => {
+  it('单模块回填应补全工作流资源并保留已有 Skill 内容', async () => {
+    const dir = path.join(tmpRoot, 'skill-module-backfill')
+    const customSkill = '# project-specific development instructions\n'
+    await fse.outputFile(path.join(dir, '.agents/skills/hai-app-create/SKILL.md'), customSkill)
+
+    const copied = await generateModuleSkillFile(dir, 'ai')
+
+    expect(copied).toContain('.agents/skills/hai-app-create/development.md')
+    expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md')).toBe(customSkill)
+    expect(await readText(dir, '.agents/skills/hai-app-create/development.md'))
+      .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-app-create/development.md'), 'utf8'))
+    for (const skillName of ['hai-build', 'hai-app-review', 'hai-app-tests', 'hai-ai']) {
+      expect(await exists(dir, `.agents/skills/${skillName}/SKILL.md`)).toBe(true)
+    }
+    expect(await generateModuleSkillFile(dir, 'ai')).toBeNull()
+  })
+
+  it('fullstack 回填应从实际项目名称和包布局恢复专属桥接及兼容技能', async () => {
+    const dir = path.join(tmpRoot, 'skill-fullstack-backfill')
+    await fse.outputJson(path.join(dir, 'package.json'), { name: 'renamed-root', private: true })
+    for (const suffix of ['contract', 'serv', 'shared']) {
+      await fse.outputJson(path.join(dir, `packages/renamed-root-${suffix}/package.json`), { name: `renamed-root-${suffix}` })
+    }
+
+    await generateProjectAiSupport(dir, [])
+
+    const agents = await readText(dir, 'AGENTS.md')
+    expect(agents).toContain('packages/renamed-root-serv')
+    expect(agents).not.toContain('{{projectName}}')
+    await expectCompatibleSkills(dir, 'fullstack')
+  })
+
+  it('单应用回填应使用 package.json 中已有的模板标识', async () => {
+    const dir = path.join(tmpRoot, 'skill-admin-backfill')
+    await fse.outputJson(path.join(dir, 'package.json'), { name: 'actual-admin', keywords: ['hai', 'sveltekit', 'admin'] })
+
+    await generateProjectAiSupport(dir, [])
+
+    expect(await readText(dir, 'AGENTS.md')).toContain('管理后台')
+    await expectCompatibleSkills(dir, 'admin')
+  })
+
+  it('无法确认实际布局时应保留通用入口且仍交付普通开发工作流', async () => {
+    const dir = path.join(tmpRoot, 'skill-unknown-project')
+    await fse.outputJson(path.join(dir, 'package.json'), { name: 'unknown-project', keywords: ['fullstack'] })
+
+    await generateProjectAiSupport(dir, [])
+
+    expect(await readText(dir, 'AGENTS.md')).toContain('通用 AI 编程助手入口')
+    expect(await exists(dir, '.agents/skills/hai-app-create/development.md')).toBe(true)
+  })
+})
+
 describe('addModule', () => {
   it('已有 catalog: 风格时新增模块应继续使用 catalog:', async () => {
     const dir = path.join(tmpRoot, 'add-ai-catalog')
@@ -1547,6 +1616,94 @@ describe('addModule', () => {
 // =============================================================================
 
 describe('initProject', () => {
+  it('已有 Claude 技能目录链接到共享目录时不把正文改写成自引用', async () => {
+    const dir = path.join(tmpRoot, 'claude-shared-directory-link')
+    const sharedDirectory = path.join(dir, '.agents/skills')
+    await fse.ensureDir(sharedDirectory)
+    await fse.ensureSymlink(sharedDirectory, path.join(dir, '.claude/skills'), 'junction')
+
+    await generateProjectAiSupport(dir, ['hai-app-create'])
+
+    expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md'))
+      .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-app-create/SKILL.md'), 'utf8'))
+    expect(await readText(dir, '.claude/skills/hai-app-create/SKILL.md'))
+      .toBe(await readText(dir, '.agents/skills/hai-app-create/SKILL.md'))
+  })
+
+  it('claude 原生入口目录链接到项目外时不写入外部目录', async () => {
+    const dir = path.join(tmpRoot, 'claude-outside-directory-link')
+    const outside = path.join(tmpRoot, 'claude-outside-target')
+    await fse.ensureDir(outside)
+    await fse.ensureSymlink(outside, path.join(dir, '.claude/skills'), 'junction')
+
+    await expect(generateProjectAiSupport(dir, ['hai-app-create']))
+      .rejects
+      .toThrow('Claude skill output must stay inside the project')
+    expect(await fse.readdir(outside)).toEqual([])
+  })
+
+  it('补全 Claude 原生发现入口但保留已有 Claude 规则与设置', async () => {
+    const dir = path.join(tmpRoot, 'init-claude-aliases')
+    await fse.outputJson(path.join(dir, 'package.json'), {
+      name: 'existing-claude-project',
+      version: '0.1.0',
+      dependencies: { '@h-ai/core': 'workspace:*' },
+    })
+    await fse.outputFile(path.join(dir, 'config/_core.yml'), 'name: existing-claude-project\n')
+    await fse.outputFile(path.join(dir, '.claude/skills/hai-core/SKILL.md'), '# custom Claude skill\n')
+    await fse.outputFile(path.join(dir, '.claude/settings.json'), '{"permissions":{"deny":["Bash(rm *)"]}}\n')
+
+    await initProject({ cwd: dir, verbose: false })
+
+    expect(await readText(dir, '.claude/skills/hai-core/SKILL.md')).toBe('# custom Claude skill\n')
+    expect(await readText(dir, '.claude/settings.json')).toBe('{"permissions":{"deny":["Bash(rm *)"]}}\n')
+    expect(await exists(dir, '.claude/skills/hai-app-create/SKILL.md')).toBe(true)
+    expect(await exists(dir, '.agents/skills/hai-app-create/development.md')).toBe(true)
+  })
+
+  it('claude 发现描述沿用已有共享技能而不复制正文', async () => {
+    const dir = path.join(tmpRoot, 'init-shared-claude-description')
+    const sharedContent = '---\nname: hai-app-create\ndescription: 本项目的功能开发规则\n---\n\n# custom workflow\n'
+    await fse.outputFile(path.join(dir, '.agents/skills/hai-app-create/SKILL.md'), sharedContent)
+
+    await generateProjectAiSupport(dir, ['hai-app-create'], { overwriteSkills: false, overwriteBridgeFiles: false })
+
+    const alias = await readText(dir, '.claude/skills/hai-app-create/SKILL.md')
+    const metadata: unknown = parse(alias.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1] ?? '')
+    expect(metadata).toEqual({ name: 'hai-app-create', description: '本项目的功能开发规则' })
+    expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md')).toBe(sharedContent)
+    expect(alias).not.toContain('# custom workflow')
+  })
+
+  it('配置齐备时也应补全缺失 AI 资源并保留已有入口与 Skill', async () => {
+    const dir = path.join(tmpRoot, 'init-ai-resources')
+    await fse.outputJson(path.join(dir, 'package.json'), {
+      name: 'existing-hai-project',
+      version: '0.1.0',
+      dependencies: { '@h-ai/core': 'workspace:*' },
+    })
+    await fse.outputFile(path.join(dir, 'config/_core.yml'), 'name: existing-hai-project\n')
+    await fse.outputFile(path.join(dir, 'AGENTS.md'), '# custom project rules\n')
+    await fse.outputFile(path.join(dir, '.agents/skills/hai-app-create/SKILL.md'), '# custom workflow\n')
+
+    await initProject({ cwd: dir, verbose: false })
+
+    expect(await readText(dir, 'AGENTS.md')).toBe('# custom project rules\n')
+    expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md')).toBe('# custom workflow\n')
+    expect(await exists(dir, '.agents/skills/hai-app-create/development.md')).toBe(true)
+    expect(await exists(dir, '.agents/skills/hai-core/SKILL.md')).toBe(true)
+  })
+
+  it('非 hai 项目不应创建 AI 支持文件', async () => {
+    const dir = path.join(tmpRoot, 'init-plain-no-ai')
+    await fse.outputJson(path.join(dir, 'package.json'), { name: 'plain-project', version: '0.1.0' })
+
+    await initProject({ cwd: dir, verbose: false })
+
+    expect(await exists(dir, 'AGENTS.md')).toBe(false)
+    expect(await exists(dir, '.agents/skills')).toBe(false)
+  })
+
   it('校验并补全缺失的 config 文件', async () => {
     const dir = path.join(tmpRoot, 'init-missing')
     await fse.ensureDir(path.join(dir, 'config'))

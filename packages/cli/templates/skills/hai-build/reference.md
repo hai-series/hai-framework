@@ -2,13 +2,9 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
-框架开发、CLI、服务端最低 Node.js 版本统一为 22.12.0；包与脚手架 engines、共享 node22 编译目标和 CI 最低版本必须同步。不再按 Node 20 编写兼容分支。
+应用 Node/工具链要求以当前 `package.json.engines`、lockfile 与 CI 为准。使用 Turbo 时核对影响产物的环境变量、共享配置和模式切换清理策略，并验证实际产物；不要假定应用使用框架仓库的 tsup/Turbo 私有脚本。
 
-tsup 包的 Turbo `build` 依赖不缓存的 `build:clean`（仅清本包 dist），再执行构建或恢复缓存。不要移除此步骤：Turbo 缓存恢复不会自动移除另一模式的多余文件。
-
-使用 Turbo 时，影响构建的环境变量必须进入任务 `env`，共享构建配置进入 `globalDependencies`。框架的 `HAI_DOCKER_PROD_BUILD=true` 关闭声明和 sourcemap，应与普通构建使用不同缓存；PUBLIC/VITE/TAURI 变量同样参与构建缓存。切换后验证实际产物并恢复普通开发构建。
-
-> 本技能是 hai-framework 应用开发的起点。帮助理解项目结构、定位正确的技能、并遵循 **TDD 驱动的标准工作流**。支持 SSR Web、SPA、Android/iOS 原生 App 等多端构建。
+本技能帮助识别应用架构、依赖和技能。日常开发决策、安全边界与能力选择见 [development.md](../hai-app-create/development.md)。
 
 ## 适用场景
 
@@ -20,26 +16,39 @@ tsup 包的 Turbo `build` 依赖不缓存的 `build:clean`（仅清本包 dist�
 
 ## 项目架构
 
+### 先辨别当前项目
+
+| 架构 | 接口/服务 | UI 与客户端 | 常见位置（以当前项目为准） |
+| --- | --- | --- | --- |
+| SvelteKit | `@h-ai/kit`、文件路由与 server services | Svelte 组件与既有数据加载 | `src/routes/`、`src/lib/server/` |
+| API workspace | `@h-ai/api-contract` + `@h-ai/serv` | 无需页面 | `apps/*-contract`、`apps/*-service` |
+| fullstack | contract + serv，共享业务结构 | Vite Svelte Web/所选原生前端，typed client | `packages/*-contract`、`packages/*-serv`、`packages/*-shared`、`apps/*` |
+| Vite SPA/原生 | 远端服务 contract | `@h-ai/api-client` 与适用平台适配 | `src/App.svelte`、`src/lib/api.ts` 或 shared 客户端 |
+
+不要从目录名称推断运行环境；沿入口、导入与 scripts 核实。下列 SvelteKit 示例只适用于对应项目。
+
 ### 技术栈
 
 | 层次     | 技术                           |
 | -------- | ------------------------------ |
-| 框架     | SvelteKit 2 + Svelte 5 (Runes) |
+| UI     | Svelte 5 (Runes)；SvelteKit 或 Vite 以项目为准 |
 | 样式     | TailwindCSS 4 + DaisyUI 5      |
 | 语言     | TypeScript 5.7+ (strict)       |
 | 构建     | Vite + tsup                    |
 | 包管理   | pnpm                           |
 | 单元测试 | Vitest                         |
 | E2E 测试 | Playwright                     |
-| 原生 App | Capacitor 7                    |
+| 原生 App | Capacitor / Tauri / 小程序适配按当前项目选择 |
 | 公共 API | oRPC contract + Hono + typed client |
 | 认证     | Bearer access token + httpOnly refresh cookie（浏览器推荐） |
 
-### 多端构建模式
+### SvelteKit Adapter 模式
+
+仅在项目实际使用 SvelteKit 和 `@h-ai/kit/adapter` 时使用；Vite SPA 不配置 SvelteKit adapter，fullstack 各前端按自身 scripts 构建。
 
 | 模式    | Adapter        | 认证方式              | 部署目标                |
 | ------- | -------------- | --------------------- | ----------------------- |
-| SSR Web | adapter-node   | Bearer access token + Cookie | Node.js 服务器          |
+| SSR Web | adapter-node   | 项目现有 Cookie/会话管道 | Node.js 服务器          |
 | SPA     | adapter-static | Bearer access token + httpOnly refresh cookie | CDN / 静态托管          |
 | Android | adapter-static | Bearer access token + Capacitor secure storage | Capacitor → Android APK |
 | iOS     | adapter-static | Bearer access token + Capacitor secure storage | Capacitor → iOS IPA     |
@@ -60,7 +69,7 @@ const config = {
 - `VITE_ADAPTER=node`（默认）→ adapter-node（SSR）
 - `VITE_ADAPTER=static` → adapter-static（SPA / 原生 App）
 
-### 目录结构
+### SvelteKit 目录示例
 
 ```
 项目根/
@@ -80,7 +89,6 @@ const config = {
       capacitor.ts                # Capacitor 初始化（原生 App）
       server/
         init.ts                   # 模块初始化入口（单例，SSR）
-        procedures/               # 应用私有 oRPC procedures（仅 API Service 场景）
       paraglide/                  # i18n 生成文件（禁止手动修改）
       components/                 # 应用组件
     routes/
@@ -100,12 +108,12 @@ const config = {
 ```
 core（基础能力：配置、日志、i18n、HaiResult）
   ├── crypto（加密：SM2/SM3/SM4）
-  ├── db（数据库：SQLite/PostgreSQL/MySQL）
+  ├── reldb（数据库：SQLite/PostgreSQL/MySQL）
   ├── cache（缓存：内存/Redis）
   ├── storage（存储：本地/S3）
   ├── ai（AI：LLM/MCP/Agent）
-  ├── iam（身份管理）← 依赖 crypto + db + cache
-  ├── payment（支付）← 依赖 db + crypto
+  ├── iam（身份管理）← 依赖 crypto + reldb + cache
+  ├── payment（支付）← 依赖 reldb + crypto
   ├── api-contract（公共 HTTP API 契约）← 纯定义，依赖 core + zod + oRPC contract
   ├── serv（Hono + oRPC API Service）← 依赖 api-contract；features 按需依赖 iam/storage/ai
   ├── kit（SvelteKit 集成）← Hook / guard / validate / response，不定义公共 contract
@@ -113,6 +121,8 @@ core（基础能力：配置、日志、i18n、HaiResult）
   ├── capacitor（原生能力）← 纯浏览器端
   └── ui（UI 组件库）← 依赖 core
 ```
+
+这是常见关联；具体配置/依赖以所选模块当前版本为准。其它能力（reach/audit/scheduler/datapipe/vecdb）及同模块 feature 的任务导航见 [需求能力表](../hai-app-create/development.md#将需求映射到现有能力)。
 
 ### 模块初始化顺序
 
@@ -151,14 +161,16 @@ if (!identity.success) {
 // 检查关闭结果；core 无 close，kit/api-contract/serv 不需要 init。
 ```
 
-#### SPA / 原生 App 模式（src/lib/api.ts）
+#### SPA / 原生 App 模式（已有 api.ts 或 shared 客户端）
+
+复用当前项目初始化函数、API base 运行时配置和 TokenStorage；以下仅展示浏览器 Cookie 模式。原生端按 `hai-api-client` / `hai-capacitor` 配置安全存储，不用 localStorage 持久化敏感 token。
 
 ```typescript
 import { apiClient } from '@h-ai/api-client'
 
 export async function initApi() {
   return apiClient.init({
-    baseUrl: import.meta.env.VITE_API_BASE_URL,
+    baseUrl: configuredApiBase, // 来自当前项目已校验的运行时配置
     auth: {}, // 浏览器默认 httpOnly cookie；原生 App 传入 Capacitor TokenStorage
     timeout: 15_000,
   })
@@ -201,6 +213,8 @@ logging:
 
 ### 模块使用（API 与集成）
 
+先按 [development.md 的需求能力表](../hai-app-create/development.md#将需求映射到现有能力) 匹配需求，再查以下 API 入口；不用通读所有技能。
+
 | 任务                  | 技能             | 触发关键词                                        |
 | --------------------- | ---------------- | ------------------------------------------------- |
 | 配置/日志/i18n/HaiResult | `hai-core`       | core.init, core.logger, core.config, HaiResult       |
@@ -222,16 +236,16 @@ logging:
 
 | 任务                   | 技能             | 触发关键词                             |
 | ---------------------- | ---------------- | -------------------------------------- |
-| 创建页面/组件/API/模型 | `hai-app-create` | 新建页面, 添加组件, API 端点, 数据模型 |
+| 新增/修改/修复应用功能 | `hai-app-create` | 页面, 组件, API, 模型, 功能修复 |
 | 代码审查与规范化       | `hai-app-review` | 审查, review, 规范, 优化               |
 | 编写/补充测试          | `hai-app-tests`  | 测试, test, 单测, 覆盖率, TDD, E2E     |
 | CI/CD 与质量门禁       | `hai-ci`         | CI, CD, GitHub Actions, workflow, secret scan |
 | PR / Issue 交付审查    | `hai-pr-review`  | PR, pull request, issue, CODEOWNERS, 自动 Review, AI Review |
 | hai-framework 同步     | `hai-framework-sync` | hai-framework, skills 同步, framework:use:local, framework:watch |
 
-## TDD 开发工作流（强制）
+## 行为开发工作流
 
-> 所有新功能开发必须遵循 TDD：**先写测试 → 确认失败 → 再实现 → 确认通过 → 重构**。
+新增/改变行为时：先写有意义的目标用例 → 确认因目标行为缺失失败 → 实现 → 通过 → 审查。纯文案、格式和文档变化按影响验证，不机械新增单元与 E2E 测试。
 
 ### 完整流程
 
@@ -262,7 +276,9 @@ pnpm --filter <app-name> test
 pnpm --filter <app-name> test:e2e
 
 # Refactor：质量门禁
-pnpm typecheck && pnpm lint && pnpm test
+pnpm typecheck
+pnpm lint
+pnpm test
 ```
 
 ## 统一编码规范
@@ -271,7 +287,8 @@ pnpm typecheck && pnpm lint && pnpm test
 
 - **禁止 `any`**：不确定类型用 `unknown`，在边界处做类型缩窄
 - **禁止 `console.log`**：使用 `core.logger`（trace/debug/info/warn/error/fatal）
-- **禁止硬编码密钥**：使用环境变量，新增变量需在 `.env` 中写入占位符
+- **禁止硬编码密钥**：使用服务端配置/环境变量；新增变量在 `.env.example` 中写入占位符，PUBLIC/VITE 变量不得包含密钥
+- **禁止无说明的 `as unknown as T`**：必要第三方断言写明依据；代码注释中文、日志英文并脱敏
 - **禁止硬编码用户文案**：所有用户可见文本必须使用 i18n key
 - **禁止修改 `src/lib/paraglide`** 生成文件
 
@@ -292,11 +309,12 @@ return kit.response.ok(result.data)
 
 ### 质量门禁
 
-每次变更后按顺序执行：
+按当前项目已定义的 scripts 和变更影响执行；PowerShell 使用 `pnpm.cmd`：
 
 ```bash
 pnpm typecheck    # TypeScript 类型检查
 pnpm lint         # ESLint 检查
+pnpm build        # 构建/配置/模板/跨包契约变更
 pnpm test         # Vitest 单元测试
 ```
 
@@ -304,14 +322,15 @@ pnpm test         # Vitest 单元测试
 
 ### 变更前：需求分析 + 测试设计
 
-1. 列出将修改的文件路径
-2. 确认哪些类型/接口会变
-3. 搜索确认引用关系（避免遗漏）
-4. **设计测试用例清单**（单元测试 + E2E 测试）
+1. 按 development.md 匹配适用框架能力、已有 feature/配置和实际版本，说明必要自定义缺口
+2. 列出将修改的文件路径
+3. 确认哪些类型/接口会变
+4. 搜索确认引用关系（避免遗漏）
+5. 按行为风险设计测试与安全验收场景
 
 ### 变更中：TDD 三步走
 
-1. **Red**：编写单元测试（Vitest）+ E2E 测试（Playwright），确认新增目标用例失败、既有回归通过
+1. **Red**：为新增/改变行为编写适用的单元/集成/E2E 测试，确认目标用例失败、既有回归通过
 2. **Green**：按技能指引完成功能实现，逐步让测试通过
 3. **Refactor**：审查代码规范、重构优化
 
@@ -319,8 +338,9 @@ pnpm test         # Vitest 单元测试
 
 1. `pnpm typecheck` 通过
 2. `pnpm lint` 通过
-3. `pnpm test` 通过（单元测试）
-4. `pnpm --filter <app-name> test:e2e` 通过（E2E 测试）
-5. 搜索确认所有引用点已更新
+3. 构建/配置/跨包变更 `pnpm build` 通过
+4. `pnpm test` 通过（单元测试）
+5. UI/路由/端到端改动执行相应 `test:e2e`；从 package.json 确认入口
+6. 搜索确认所有引用点已更新，报告未验证边界
 
-原生交付必须单独执行 Tauri/Gradle/Xcode 打包，并在目标 OS/设备验证安装启动、登录/退出、重启会话、安全 TokenStore、真实 API 域名与覆盖升级。Web 构建/E2E 不代替原生验收。保存提交、包 hash、平台/工具链及逐项结果；缺平台写未验证，禁止静默 skip。hai-framework 仓库参考 `.github/workflows/native.yml` 与 desktop-app / mobile-app README 的「原生交付与验收」章节。
+涉及原生交付时按当前项目 Tauri/Gradle/Xcode 等实际入口打包，在目标 OS/设备验证安装启动、会话、安全 TokenStorage、API 域名及覆盖升级。Web 构建/E2E 不代替原生验收；记录平台/工具链与结果，缺平台写未验证。

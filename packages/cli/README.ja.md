@@ -23,6 +23,16 @@
 
 CLI は選択した skill のディレクトリー全体を `templates/skills/` から生成先の `.agents/skills/` にコピーします。`SKILL.md` は機能の境界とタスク案内、`reference.md`/`guide.md` は必要時に読む例を提供します。入口だけをコピーしてはいけません。AGENTS.md にアプリの制約を置き、Claude/Copilot のブリッジから参照します。テンプレート変更は関連するリポジトリー skill と同期し、生成テストで参照ファイルの完全な提供を確認します。
 
+通常の機能追加・変更・修正では、`AGENTS.md` が `hai-app-create/SKILL.md` と `development.md` に案内します。要件を既存のフレームワーク機能・設定・拡張点に対応付け、インストール済みバージョンの exports と型を確認して実装します。適用できる機能を優先して再利用し、不足する能力を具体的に説明します。利用率のために無関係な依存を追加しません。Codex は `.agents/skills/` とプロジェクトルートの `AGENTS.md` を使用します。
+
+各ツールの入口は同じ規則を共有します。Codex/Cursor は AGENTS と `.agents/skills/`、Copilot は `.github/copilot-instructions.md` と共有技能、OpenCode は AGENTS・opencode.json と共有技能を使用します。Claude Code は CLAUDE.md と `.claude/skills/<name>/SKILL.md` のネイティブ入口を使用し、発見用メタデータと共有本文へのリンクだけを保持します。参照ファイルは `.agents/skills/` に置き、シンボリックリンク権限や本文の複製は不要です。根拠：[Claude](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
+
+生成プロジェクトは `eslint-rules.js` を共有します。lint は明示的な `any`、console、説明のない抑制、unknown を介した二重アサーション、フレームワーク内部ソースの import、既知の機密 localStorage キーへの書き込みを拒否します。必要なサードパーティーの回避策は局所的な説明を付けます。権限分離・入力安全性・トランザクション・ログのマスキングは静的規則だけでは証明できないため、テストとレビューで確認します。
+
+既存プロジェクトは CLI を更新して `hai init` を実行すると、不足するワークフロー skill・参照リソース・入口ファイルが補完されます。`--force` を使っても既存の AI 規則は上書きしません。既存の入口・skills・ESLint 設定・scripts は新規生成プロジェクトと比較してマージし、不足する .npmrc/.gitignore も補完してください。ファイル補完だけで古い規則は更新されません。公開前は本リポジトリーでビルドした CLI で比較用プロジェクトを生成し、未公開の能力とインストール済みパッケージの能力を区別します。
+
+配布検証はパッケージアーカイブと生成プロジェクトの両方を対象にします。`.npmrc` / `.gitignore` のテンプレート源には `.hbs` を付けて梱包時の除外を避け、生成時に通常の名前へ戻します。依存配置と機密生成物の無視規則を維持し、全テンプレートが `.tgz` に含まれることを回帰検証します。
+
 ## クイックスタート
 
 Node.js ≥ 22.12.0 が必要です。生成するルートプロジェクトと各 workspace パッケージも同じ最低バージョンを宣言します。

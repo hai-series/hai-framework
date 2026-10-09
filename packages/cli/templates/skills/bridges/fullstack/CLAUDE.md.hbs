@@ -3,3 +3,7 @@
 @AGENTS.md
 
 共享规范见 [AGENTS.md](AGENTS.md)；若未自动展开，先手动阅读。fullstack 后端业务在 `packages/{{projectName}}-serv`；contract、shared client 与前端调用方同步修改。模块用法按需读取 `.agents/skills/`。
+
+普通新增、修改、修复任务先读 [应用开发 Skill](.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](.agents/skills/hai-app-create/development.md)，依照 AGENTS.md 的默认规则复用框架并完成安全与质量验证。
+
+Claude Code 从 `.claude/skills/` 原生发现技能入口，再读取 `.agents/skills/` 的共享正文与相邻参考。项目规则通过 `@AGENTS.md` 加载；同名技能不在入口目录另维护一份规则。

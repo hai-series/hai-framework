@@ -23,6 +23,16 @@
 
 CLI 从 `templates/skills/` 将所选 skill 的完整目录复制到生成项目 `.agents/skills/`。`SKILL.md` 提供能力边界和任务导航，`reference.md`/`guide.md` 保留按需范本；同步时不能只复制入口。AGENTS.md 保存应用约束，Claude/Copilot 桥接文件引用它；修改模板需同步相关仓库 skills。模板生成测试会核对参考文件的完整交付。
 
+日常新增、修改、修复功能由 `AGENTS.md` 引导读取 `hai-app-create/SKILL.md` 与 `development.md`：先把需求映射到框架现成功能、配置和扩展点，再依据当前安装版本的 exports/类型实现。适用能力优先复用；能力不足时说明具体缺口，不为模块覆盖率安装无关依赖。Codex 使用 `.agents/skills/`，仍需遵循项目根 `AGENTS.md` 的常驻规则。
+
+工具入口按各自机制交付：Codex/Cursor 使用 AGENTS 与共享 `.agents/skills/`；Copilot 使用 `.github/copilot-instructions.md` 与共享技能；OpenCode 使用 AGENTS、opencode.json 与共享技能。Claude Code 使用 CLAUDE.md 和 `.claude/skills/<name>/SKILL.md` 原生入口，该入口仅保留发现元数据并指向共享正文，参考文件仍只维护在 `.agents/skills/`。无需符号链接权限，也不为每个工具复制完整正文。依据：[Claude](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
+
+生成项目共享 `eslint-rules.js`，lint 拦截显式 `any`、console、无理由抑制、双重 unknown 断言、框架内部源码导入及明确的 localStorage 敏感键写入；合理的第三方 workaround 需局部说明。静态规则不能证明权限隔离、输入安全、事务或日志脱敏，相关行为仍需测试与审查。
+
+已有项目先更新 CLI，再运行 `hai init` 补齐缺失的流程 skill、参考资源和入口；该操作保留现有文件，即使 `--force` 也不覆盖 AI 规则。旧入口、已存在的 skills、ESLint 配置与脚本需要对照新生成项目合并，缺失的 .npmrc/.gitignore 也需补齐；只补文件不会自动升级旧规则。模板变更未发布前可通过本仓库构建的 CLI 生成对照项目，不要把未发布能力当作已安装包能力。
+
+交付验证同时检查发布归档和生成项目。`.npmrc` / `.gitignore` 在模板源中使用 `.hbs` 后缀，避免打包时被排除；生成时仍恢复正常文件名，保留依赖布局与敏感产物忽略规则。归档回归检查全部模板都进入 `.tgz`，不能仅验证源码目录中的 create。
+
 ## 快速开始
 
 要求 Node.js ≥ 22.12.0；生成的根项目和工作区包均声明相同最低版本。

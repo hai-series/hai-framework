@@ -1024,6 +1024,21 @@ function normalizeChildOutput(output: unknown): string {
 /**
  * 生成 README
  */
+/** 生成各类项目共用的 AI 开发入口说明。 */
+function generateAiDevelopmentReadme(): string {
+  return `## AI 辅助开发
+
+从本项目根目录打开所用编码工具，先读取 [AGENTS.md](./AGENTS.md)。Claude Code 通过 [CLAUDE.md](./CLAUDE.md) 加载项目规则；GitHub Copilot 使用 [.github/copilot-instructions.md](./.github/copilot-instructions.md)，OpenCode 使用 AGENTS.md 和 [opencode.json](./opencode.json)。
+
+Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 从 .claude/skills/ 的原生入口读取同一份共享正文。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
+
+优先复用适用的 hai-framework 公开 API 与已有业务实现。完成时说明复用的能力、相关能力未采用的原因，以及安全边界和类型、配置、文案、调用方的同步情况。质量验证按当前 package.json 执行 typecheck → lint → build → test；UI、路由与端到端流程另运行 test:e2e，未运行项说明原因。安全与质量规则既要按规范审查，也要运行门禁验证。
+
+已有 hai 项目可运行 hai init 补齐缺失的 AI 支持文件与参考资源；已有 AGENTS.md、Skill 和自定义规则会保留，升级时需将上述普通开发入口与规范显式合并到旧指引。
+
+`
+}
+
 function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn', appType: AppType): string {
   const install = getInstallCommand(pm)
   const isStaticImage = appType === 'mobile-app'
@@ -1094,7 +1109,7 @@ docker stop ${name}
 
 ${runtimeNotes}
 
-## 文档
+${generateAiDevelopmentReadme()}## 文档
 
 - [hai Agent Framework](https://github.com/hai-series/hai-framework)
 - [Svelte 5](https://svelte.dev/)
@@ -1179,7 +1194,7 @@ docker stop ${name}
 - 在 \`${name}-service\` 中扩展 procedures、模块初始化与配置。
 - 需要 IAM / storage / ai 时，优先复用 \`@h-ai/api-contract\` 与 \`@h-ai/serv/features/*\`。
 
-## 文档
+${generateAiDevelopmentReadme()}## 文档
 
 - [hai Agent Framework](https://github.com/hai-series/hai-framework)
 - [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
@@ -1318,11 +1333,12 @@ ${frontends.includes('web') ? `- Web 使用独立静态镜像并支持一次构�
 \`\`\`bash
 ${pm} typecheck
 ${pm} lint
+${pm} build
 ${pm} test
 ${pm} test:e2e
 \`\`\`
 
-## 文档
+${generateAiDevelopmentReadme()}## 文档
 
 - [hai Agent Framework](https://github.com/hai-series/hai-framework)
 - [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)

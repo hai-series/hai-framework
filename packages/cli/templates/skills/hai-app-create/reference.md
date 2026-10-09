@@ -2,8 +2,7 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
-> 面向 AI 助手的应用功能创建指南。**必须遵循 TDD**：先写测试（Red）→ 再实现（Green）→ 再重构（Refactor）。
-> 若目标是纯 API service workspace，优先围绕 `apps/*-contract`、`apps/*-service` 与测试组织改动，而不是套用页面/路由脚手架。
+新增、修改和修复功能前先读 [development.md](development.md)，确认适用框架能力、当前安装版本与安全边界。这里的路由/页面示例适用于 SvelteKit；API workspace 围绕已有 contract/service 扩展，fullstack 使用现有 contract/serv/shared 和所选前端，不套用 SvelteKit 目录。
 
 ## 适用场景
 
@@ -12,22 +11,23 @@
 - 新增服务层模块（`$lib/server/services/`）
 - 新增数据库表 / 数据模型
 - 新增业务组件
+- 修改或修复已有功能、接口和交互
 
-## TDD 开发流程（强制）
+## 行为开发与验证
 
-创建任何新功能时，必须按以下顺序执行：
+新增/改变行为时采用下列流程；纯文案、格式或文档变化按影响验证，不为流程补无意义测试。
 
 ### Step 1：需求分析与测试设计
 
 1. 明确功能的输入、输出、边界条件、错误场景
-2. 确定需要创建的文件（服务、路由、Schema、组件等）
-3. 设计测试用例清单（参照 `hai-app-tests` 技能的覆盖范围要求）
+2. 按 development.md 匹配现有应用实现、框架模块及其 feature/配置；查公开类型与安装版本，再确定修改文件（服务、路由、Schema、组件等）
+3. 设计正常、错误和适用安全边界的可观察验收（参照 `hai-app-tests`）；已有行为优先扩展现有用例
 
 ### Step 2：编写测试（Red 阶段）
 
-1. **创建单元测试**：在 `tests/` 下为服务层、Schema 编写 Vitest 测试
-2. **创建 E2E 测试**：在 `e2e/` 下为 API 端点、页面交互编写 Playwright 测试
-3. **创建空的实现文件**：仅包含函数签名和类型定义，不写实际逻辑（确保 import 不报错）
+1. **编写目标用例**：按当前项目测试结构为改变的服务行为、Schema、接口或交互选择单元/集成/E2E 测试，不要求每次创建两套测试
+2. **保留既有回归**：新增目标用例不得依赖破坏现有实现才能失败
+3. 新文件可先提供最小签名，但不能为制造 Red 把现有功能替换成空实现
 4. **运行测试确认新增目标用例因预期行为缺失而失败（既有回归保持通过）**：
    ```bash
    pnpm --filter <app-name> test        # 新增目标用例应 FAIL，既有回归应 PASS
@@ -40,10 +40,12 @@
 ### Step 4：重构与验证（Refactor 阶段）
 
 1. 参照 `hai-app-review` 审查代码规范
-2. 运行质量门禁：`pnpm typecheck && pnpm lint && pnpm test`
-3. 运行 E2E：`pnpm --filter <app-name> test:e2e`
+2. 依当前 scripts 顺序执行 `typecheck → lint → build（构建/配置/跨包变更）→ test`，优先 workspace filter，PowerShell 使用 `pnpm.cmd`
+3. UI/路由/端到端改动执行相应 E2E；报告失败路径与安全验收结果，未运行的边界说明原因
 
 ## 目录结构约定
+
+以下为 SvelteKit 示例；其它架构沿当前项目目录，不生成这些文件。
 
 ```
 src/
@@ -129,23 +131,27 @@ src/
 import type { PageServerLoad } from './$types'
 import { error, redirect } from '@sveltejs/kit'
 
+// someService 与 safeLoadErrorMessage 由应用已有服务与请求 locale 的 i18n 提供。
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.session)
     redirect(303, '/auth/login')
   const result = await someService.list()
   if (!result.success)
-    error(500, result.error.message)
+    error(503, safeLoadErrorMessage)
   return { items: result.data }
 }
 ```
 
 ## 创建 API 端点
 
-### RESTful 端点模板
+API workspace/fullstack 先检查 [hai-api-contract](../hai-api-contract/SKILL.md) 的内置领域 contract 与 [hai-serv](../hai-serv/SKILL.md) 的 feature procedures；应用私有接口通过现有 contract → procedure → typed client 扩展。身份/权限守卫用 serv route 的 auth/permission/role，业务资源归属在服务层检查；不添加 `+server.ts` 或 kit.validate。
+
+### SvelteKit RESTful 端点模板
+
+本例依赖应用提供 `service`；`toHttpError(result.error)` 是应用已有或需实现的错误边界：保留安全错误码、映射 HTTP 状态，对内部失败使用当前 locale 的安全文案且不暴露 SQL/路径/凭据。不能不分类便直接透传内部错误消息。
 
 ```typescript
 // src/routes/api/[resource]/+server.ts
-import type { RequestHandler } from './$types'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
@@ -160,7 +166,7 @@ export const GET = kit.handler(async ({ locals }) => {
 
   const result = await service.list()
   if (!result.success)
-    return kit.response.error(result.error.code, result.error.message)
+    return toHttpError(result.error)
   return kit.response.ok(result.data)
 })
 
@@ -172,18 +178,18 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
   const result = await service.create(data)
   if (!result.success)
-    return kit.response.error(result.error.code, result.error.message)
+    return toHttpError(result.error)
   return kit.response.created(result.data)
 })
 ```
 
 ### 要点
 
-- 所有端点**必须**用 `kit.handler(async ({ locals, request, ... }) => { ... })` 包裹，由 handler 统一处理 throw 的 Response
-- 权限守卫使用 `kit.guard.require(locals.session, 'xxx:yyy')`，它本身就是 throw 模式（未通过时 throw 403 Response），**无需**检查返回值
+- 使用 kit.guard.require / kit.validate.body 的 SvelteKit 端点用 `kit.handler(async ({ locals, request, ... }) => { ... })` 包裹，由 handler 统一处理 throw 的 Response；其它架构用对应运行时
+- 权限守卫使用 `kit.guard.require(locals.session, 'xxx:yyy')`，它本身就是 throw 模式（未登录 throw 401、无权限 throw 403 Response），**无需**检查返回值
 - 输入校验使用 `await kit.validate.body(request, Schema)`，校验失败时 throw 400 Response，**无需**手动判断 valid
 - 返回统一使用 `kit.response.*`
-- HaiResult 错误直接透传，不重新包装
+- 服务层保留上游 HaiResult 错误；本例 SvelteKit HTTP 边界按安全消息和状态转换，不能把数据库失败作为 400 或空列表成功。serv/oRPC 普通 procedure 按真实 HaiResult 包络契约验收，不照搬本例状态映射
 - HaiResult 型业务操作先检查 result.success；流和显式抛错 API 按各自契约处理
 
 ## 创建服务层
@@ -218,7 +224,7 @@ export async function listArticles(params: ListParams): Promise<HaiResult<Pagina
 
 ### 服务层规则
 
-- 统一返回 `HaiResult<T>`
+- 应用领域操作沿现有契约返回 `HaiResult<T>`；纯 getter、工具、工厂与流按实际签名，不统一改造
 - 写操作需 `debug`（进入）+ `info`（成功）日志
 - 读操作仅 `debug` 日志
 - 禁止 `console.log`，使用 `core.logger`
@@ -228,7 +234,7 @@ export async function listArticles(params: ListParams): Promise<HaiResult<Pagina
 
 ### Schema 定义（SQL DDL）
 
-数据库表 Schema 定义在 `$lib/server/init.ts` 中：
+沿用当前应用的迁移/建表入口；仅开发初始化用的简单 SvelteKit 示例可在 `$lib/server/init.ts` 建表。不要把本例 SQLite DDL 无修改复制到 PostgreSQL/MySQL，迁移与索引需匹配实际数据库。
 
 ```typescript
 const BUSINESS_SCHEMA = `
@@ -275,7 +281,8 @@ interface CreateArticleInput {
 ```svelte
 <!-- src/lib/components/ArticleCard.svelte -->
 <script lang="ts">
-  import type { Article } from '$lib/server/services/article'
+  import type { Article } from '$lib/types/article'
+  import * as m from '$lib/paraglide/messages.js'
 
   let { article, onEdit }: { article: Article, onEdit?: () => void } = $props()
 </script>
@@ -286,12 +293,14 @@ interface CreateArticleInput {
     <p>{article.content ?? ''}</p>
     {#if onEdit}
       <div class="card-actions justify-end">
-        <button class="btn btn-primary" onclick={onEdit}>编辑</button>
+        <button class="btn btn-primary" onclick={onEdit}>{m.article_edit()}</button>
       </div>
     {/if}
   </div>
 </div>
 ```
+
+`Article` 放在客户端可用的共享类型位置，`article_edit` 在中英文 messages 中新增后由项目生成；实际已安装 `@h-ai/ui` 有适用 Card/Button 时使用其公开组件和 Props，本例只展示业务 props、事件与文案边界。
 
 ### 组件规则
 
@@ -303,15 +312,17 @@ interface CreateArticleInput {
 
 ## 初始化顺序
 
-在 `$lib/server/init.ts` 中管理模块初始化顺序：
+复用当前应用服务端启动/关闭入口；SvelteKit 通常为 `$lib/server/init.ts`，API/fullstack 使用已有 service/serv 初始化文件。下列是启用 IAM 时的常见依赖关系，不要求无关应用安装这些模块：
 
 ```
-core.init() → reldb.init() → cache.init() → iam.init() → createBusinessTables()
+core.init() → crypto.init() → reldb.init() → cache.init() → iam.init() → createBusinessTables()
 ```
 
-新增模块时需在此文件中按依赖顺序添加初始化调用。
+新增生命周期模块时按实际配置/依赖添加初始化、检查结果并反序关闭；关键依赖失败停止启动并清理已创建资源。core 无 close、datapipe 为纯函数、serv/kit/contract 为工厂或适配器，不能虚构 init/close。
 
 ## 容器交付
+
+仅涉及容器构建/部署变更时使用本节；普通功能开发无需每次启动镜像。
 
 - 保持脚手架根目录 `Dockerfile`、`.dockerignore` 与 `package.json` 中 `docker:build*` / `podman:build*` 命令同步。
 - Podman 多阶段构建保持 `--format docker --jobs=1`；前者保留 `HEALTHCHECK`，后者避免部分 Podman 5.8/Buildah 组合在并行 stage 构建时触发内部 semaphore panic。
@@ -325,19 +336,20 @@ core.init() → reldb.init() → cache.init() → iam.init() → createBusinessT
 
 ## 检查清单
 
-- [ ] **TDD 流程已执行**：先写测试 → 确认失败 → 再实现 → 确认通过
-- [ ] 单元测试已编写（服务层、Schema）
-- [ ] E2E 测试已编写（API 端点、页面交互）
+- [ ] 需求已匹配框架现有能力/feature/配置，版本与契约已核验，自定义缺口有依据
+- [ ] 新增/改变行为有意义的目标用例先失败、后通过；既有回归保持通过
+- [ ] 适用安全边界已验证：非法输入、越权/租户隔离、失败结果及相关事务/幂等/清理
+- [ ] 相关 API/页面改动已执行适用集成/E2E 流程
 - [ ] 页面使用 Svelte 5 Runes 语法
 - [ ] API 端点有权限守卫与输入校验
-- [ ] 服务层统一返回 `HaiResult<T>`
+- [ ] 服务层和调用方遵循实际返回/抛错/流契约，不能以 HTTP 成功替代业务状态成功
 - [ ] 日志级别正确（读 debug / 写 debug+info / 失败 warn|error）
 - [ ] 禁止 `console.log`、`any`、硬编码密钥
 - [ ] 用户可见文本走 i18n
-- [ ] Docker / Podman 镜像可启动，配置/环境变量/数据目录行为已验证
+- [ ] 涉及容器交付时，镜像启动及配置/环境变量/数据目录行为已验证
 - [ ] 新增表有索引定义
 - [ ] 组件优先使用 `@h-ai/ui`
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` 通过
+- [ ] 按当前 scripts 运行适用 typecheck/lint/build/test/E2E 并报告未验证项
 
 ## 相关 Skills
 

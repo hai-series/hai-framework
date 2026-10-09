@@ -17,9 +17,10 @@ description: "定位 hai 应用架构、模块依赖、初始化顺序、构建�
 
 ## 使用路径
 
-- 先读当前 package.json 和 README，识别 SvelteKit / API workspace / Vite SPA / 原生 App，按实际 scripts 验证。
-- core → reldb/cache 等基础依赖 → iam/ai 等业务模块；逐步检查初始化，失败清理已创建资源。
-- Node 最低版本、Turbo 缓存 env/globalDependencies、build:clean 与框架构建模板保持同步。
+- 先读当前 package.json、lockfile 与 README，识别 SvelteKit / API workspace / fullstack / Vite SPA / 原生 App，按实际 scripts 验证。
+- 功能开发先用 [development.md](../hai-app-create/development.md) 把需求匹配到当前版本的框架能力与配置；再读取所选模块 skill 和公开类型。
+- 有生命周期的模块按真实依赖初始化、检查结果并反序清理；core、纯函数和工厂不套用相同生命周期。
+- 构建任务检查当前 engines、适配器、环境变量、缓存与目标产物，不能照搬框架仓库私有构建命令。
 
 ## 按需参考
 
@@ -28,6 +29,6 @@ description: "定位 hai 应用架构、模块依赖、初始化顺序、构建�
 - 适用场景
 - 项目架构
 - 技能导航
-- TDD 开发工作流（强制）
+- 行为开发工作流
 - 统一编码规范
 - 标准工作流

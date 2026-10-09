@@ -23,6 +23,16 @@
 
 The CLI copies complete selected skill directories from `templates/skills/` into the generated project's `.agents/skills/`. `SKILL.md` defines boundaries and task navigation; `reference.md`/`guide.md` hold on-demand examples. Do not copy only the entry file. AGENTS.md holds application constraints and Claude/Copilot bridge files reference it. Template changes must sync relevant repository skills. Generation tests verify delivery of reference files.
 
+For everyday feature additions, changes and fixes, `AGENTS.md` routes to `hai-app-create/SKILL.md` and `development.md`. Map requirements to existing framework features, configuration and extension points before implementing against the installed package's exports and types. Reuse applicable capabilities and explain concrete gaps; do not install unrelated dependencies to increase module coverage. Codex uses `.agents/skills/` and the project root's persistent `AGENTS.md` rules.
+
+Tool-specific entry points share the same guidance: Codex/Cursor use AGENTS and `.agents/skills/`; Copilot uses `.github/copilot-instructions.md` and shared skills; OpenCode uses AGENTS, opencode.json and shared skills. Claude Code uses CLAUDE.md and native `.claude/skills/<name>/SKILL.md` aliases containing discovery metadata and a link to the shared body. References stay in `.agents/skills/`, without symlink permissions or duplicated skill bodies. Sources: [Claude](https://code.claude.com/docs/en/skills), [Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills), [OpenCode](https://docs.opencode.ai/docs/skills/), [Cursor](https://cursor.com/docs/skills).
+
+Generated projects share `eslint-rules.js`. Lint rejects explicit `any`, console calls, unexplained suppressions, double unknown assertions, internal framework source imports and writes to known sensitive localStorage keys. A necessary third-party workaround requires a documented local exception. Static rules do not prove authorization, input safety, transaction behavior or log redaction; verify those through tests and review.
+
+For existing projects, update the CLI and run `hai init` to fill missing workflow skills, resources and entry files. Existing files are preserved, including AI rules when using `--force`. Merge existing entry files, skills, ESLint configuration and scripts against a newly generated project, and restore missing .npmrc/.gitignore files; filling missing files does not upgrade old rules. Before release, use the CLI built from this repository to create the comparison project and keep unpublished capabilities separate from installed package capabilities.
+
+Delivery checks cover both the package archive and generated projects. Source `.npmrc` / `.gitignore` templates use a `.hbs` suffix to avoid packaging exclusions; generation restores their normal names and preserves dependency layout and sensitive-artifact ignore rules. An archive regression verifies every template is in the `.tgz`, beyond creation from the source checkout.
+
 ## Quick start
 
 Requires Node.js ≥ 22.12.0; generated root projects and workspace packages declare the same minimum.

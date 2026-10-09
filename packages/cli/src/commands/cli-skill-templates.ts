@@ -10,6 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import Handlebars from 'handlebars'
+import { parse, stringify } from 'yaml'
 
 /**
  * 模块名到 Skill 目录名的映射
@@ -103,6 +104,48 @@ const BRIDGE_FILES = [
 
 const BRIDGE_PROFILE_REGEX = /^[a-z0-9-]+$/
 
+/** 从已有模板标识与实际包布局确认桥接类型，不按项目名称猜测技术栈。 */
+async function detectBridgeContext(projectPath: string): Promise<{ appType?: AppType, projectName?: string }> {
+  const packagePath = path.join(projectPath, 'package.json')
+  if (!(await fse.pathExists(packagePath))) {
+    return {}
+  }
+
+  let metadata: unknown
+  try {
+    metadata = await fse.readJson(packagePath)
+  }
+  catch {
+    return {}
+  }
+  if (!metadata || typeof metadata !== 'object' || !('name' in metadata)
+    || typeof metadata.name !== 'string' || !BRIDGE_PROFILE_REGEX.test(metadata.name)) {
+    return {}
+  }
+
+  const projectName = metadata.name
+  for (const [appType, directory, suffixes] of [
+    ['fullstack', 'packages', ['contract', 'serv', 'shared']],
+    ['api', 'apps', ['contract', 'service']],
+  ] as const) {
+    const manifests = await Promise.all(suffixes.map(suffix => fse.pathExists(
+      path.join(projectPath, directory, `${projectName}-${suffix}`, 'package.json'),
+    )))
+    if (manifests.every(Boolean)) {
+      return { appType, projectName }
+    }
+  }
+
+  if ('keywords' in metadata && Array.isArray(metadata.keywords) && metadata.keywords.includes('hai')) {
+    for (const appType of ['admin', 'website', 'h5', 'mobile-app'] as const) {
+      if (metadata.keywords.includes(appType)) {
+        return { appType, projectName }
+      }
+    }
+  }
+  return { projectName }
+}
+
 async function listTemplateSkillNames(templatesDir: string): Promise<string[]> {
   const entries = await fse.readdir(templatesDir, { withFileTypes: true })
   const skillNames: string[] = []
@@ -166,20 +209,90 @@ async function copySkill(
   }
 
   const copiedFiles: string[] = []
+  const resources = await fse.readdir(src, { recursive: true, withFileTypes: true })
+  const relativeFiles = resources.filter(resource => resource.isFile())
+    .map(resource => path.relative(src, path.join(resource.parentPath, resource.name)))
 
   for (const targetDir of targetDirs) {
     const dest = path.join(projectPath, targetDir, skillName)
-    const skillFilePath = path.join(dest, 'SKILL.md')
-
-    if (!overwrite && await fse.pathExists(skillFilePath)) {
-      continue
+    if (!overwrite) {
+      // 已有入口不能使新参考资源被跳过；逐文件补缺，同时保留用户修改。
+      const missingFiles: string[] = []
+      for (const relativeFile of relativeFiles) {
+        if (!(await fse.pathExists(path.join(dest, relativeFile)))) {
+          missingFiles.push(relativeFile)
+        }
+      }
+      if (missingFiles.length === 0) {
+        continue
+      }
+      await fse.copy(src, dest, { overwrite: false })
+      copiedFiles.push(...missingFiles.map(relativeFile => `${targetDir}/${skillName}/${relativeFile.replaceAll(path.sep, '/')}`))
     }
-
-    await fse.copy(src, dest, { overwrite: true })
-    copiedFiles.push(`${targetDir}/${skillName}/SKILL.md`)
+    else {
+      await fse.copy(src, dest, { overwrite: true })
+      copiedFiles.push(`${targetDir}/${skillName}/SKILL.md`)
+    }
   }
 
+  copiedFiles.push(...await copyClaudeSkillAlias(templatesDir, skillName, projectPath, overwrite))
   return copiedFiles
+}
+
+/** Claude 使用原生发现入口，技能正文与参考仍从共享目录读取。 */
+async function copyClaudeSkillAlias(
+  templatesDir: string,
+  skillName: string,
+  projectPath: string,
+  overwrite: boolean,
+): Promise<string[]> {
+  const destination = `.claude/skills/${skillName}/SKILL.md`
+  const aliasPath = path.join(projectPath, destination)
+  const sharedPath = path.join(projectPath, '.agents/skills', skillName, 'SKILL.md')
+  if (await fse.pathExists(aliasPath)) {
+    // 兼容项目已有目录链接；原生入口已指向共享正文时不能覆写成自引用。
+    if (!overwrite || await fse.realpath(aliasPath) === await fse.realpath(sharedPath))
+      return []
+  }
+
+  let ancestor = aliasPath
+  while (!(await fse.pathExists(ancestor)))
+    ancestor = path.dirname(ancestor)
+  const relativeAncestor = path.relative(await fse.realpath(projectPath), await fse.realpath(ancestor))
+  if (relativeAncestor === '..' || relativeAncestor.startsWith(`..${path.sep}`) || path.isAbsolute(relativeAncestor))
+    throw new Error('Claude skill output must stay inside the project')
+
+  const sharedContent = await fse.readFile(sharedPath, 'utf8')
+  const sourceContent = await fse.readFile(path.join(templatesDir, skillName, 'SKILL.md'), 'utf8')
+  const description = readSkillDescription(sharedContent) ?? readSkillDescription(sourceContent)
+  if (!description)
+    throw new Error(`Skill description missing: ${skillName}`)
+
+  const template = await fse.readFile(path.join(templatesDir, 'claude-skill.md.hbs'), 'utf8')
+  const content = Handlebars.compile(template, { noEscape: true })({
+    skillName,
+    frontmatter: `---\n${stringify({ name: skillName, description })}---`,
+  })
+  await fse.outputFile(aliasPath, content, 'utf8')
+  return [destination]
+}
+
+/** 保留已有共享技能的描述；历史无 frontmatter 入口由模板提供发现元数据。 */
+function readSkillDescription(content: string): string | undefined {
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1]
+  if (!frontmatter)
+    return undefined
+  try {
+    const metadata: unknown = parse(frontmatter)
+    if (metadata && typeof metadata === 'object' && 'description' in metadata
+      && typeof metadata.description === 'string' && metadata.description.trim()) {
+      return metadata.description
+    }
+  }
+  catch {
+    // 自定义历史入口无法解析时不覆盖它，仅回退模板的发现描述。
+  }
+  return undefined
 }
 
 async function copySkills(
@@ -300,7 +413,7 @@ export async function generateSkillFiles(
 /**
  * 为已有项目添加单个模块的 Skill 文件
  *
- * 在 `hai add <module>` 时调用，仅复制对应模块的 Skill 文件。
+ * 同时补全普通开发所需工作流及缺失参考资源，保留已有文件。
  *
  * @param projectPath - 用户项目根目录
  * @param moduleId - 模块标识（如 'db'、'iam'）
@@ -315,33 +428,11 @@ export async function generateModuleSkillFile(
     return null
   }
 
-  const templatesDir = getSkillTemplatesDir()
-  if (!(await fse.pathExists(templatesDir))) {
-    return null
-  }
-
-  const missingTargetDirs: string[] = []
-
-  for (const targetDir of SKILL_TARGET_DIRS) {
-    const skillFilePath = path.join(projectPath, targetDir, skillName, 'SKILL.md')
-    if (!(await fse.pathExists(skillFilePath))) {
-      missingTargetDirs.push(targetDir)
-    }
-  }
-
-  const copiedBridgeFiles = await copyBridgeFiles(templatesDir, projectPath, false)
-  if (missingTargetDirs.length === 0) {
-    return copiedBridgeFiles.length > 0 ? copiedBridgeFiles : null
-  }
-
-  const copiedSkillFiles = await copySkill(templatesDir, skillName, projectPath, missingTargetDirs)
-  const copiedFiles = [...copiedBridgeFiles, ...copiedSkillFiles]
-
-  if (copiedFiles.length === 0) {
-    return null
-  }
-
-  return copiedFiles
+  const copiedFiles = await generateProjectAiSupport(projectPath, [skillName], {
+    overwriteSkills: false,
+    overwriteBridgeFiles: false,
+  })
+  return copiedFiles.length > 0 ? copiedFiles : null
 }
 
 export function resolveSkillNamesForPackages(packageNames: string[]): string[] {
@@ -364,6 +455,7 @@ export async function generateProjectAiSupport(
     overwriteSkills?: boolean
     overwriteBridgeFiles?: boolean
     appType?: string
+    projectName?: string
   } = {},
 ): Promise<string[]> {
   const templatesDir = getSkillTemplatesDir()
@@ -377,9 +469,16 @@ export async function generateProjectAiSupport(
     overwriteBridgeFiles = true,
   } = options
 
+  const detected = await detectBridgeContext(projectPath)
+  const appType = options.appType ?? detected.appType
+  const projectName = options.projectName ?? detected.projectName
+  // 已确认的样板补全整个兼容目录；其它项目只补工作流与明确请求的模块。
+  const selectedSkillNames = appType
+    ? [...resolveCompatibleSkillNames(await listTemplateSkillNames(templatesDir), appType as AppType), ...WORKFLOW_SKILLS, ...skillNames]
+    : [...WORKFLOW_SKILLS, ...skillNames]
   const copiedFiles: string[] = []
-  copiedFiles.push(...await copySkills(templatesDir, skillNames, projectPath, SKILL_TARGET_DIRS, overwriteSkills))
-  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, overwriteBridgeFiles, options.appType))
+  copiedFiles.push(...await copySkills(templatesDir, selectedSkillNames, projectPath, SKILL_TARGET_DIRS, overwriteSkills))
+  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, overwriteBridgeFiles, appType, projectName))
 
   return copiedFiles
 }

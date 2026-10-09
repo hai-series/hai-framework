@@ -4,6 +4,8 @@
 
 > 面向 AI 助手的应用开发指南。适用于 `apps/` 下的 SvelteKit 应用、纯 Svelte/Vite 客户端与 API service workspace。
 
+所有架构共同遵循 [能力选择与安全质量规则](../../../packages/cli/templates/skills/hai-app-create/development.md)。下列 hooks、load、kit、`$env` 与文件路由范本只适用于 SvelteKit；API workspace/SPA 按现有 contract、serv 和 typed client 扩展。
+
 ## §1 应用类型与选型
 
 ### 已有应用类型
@@ -415,9 +417,9 @@ export const { apiFetch } = client
 
 ### 认证与授权
 
-- Web token 使用 httpOnly cookie（管理后台）；移动/桌面使用安全 TokenStore
+- Web 沿实际 Cookie/内存 access token 与刷新流程；移动/桌面沿当前平台的安全 TokenStorage，不套用另一种认证模式
 - 禁止 localStorage 存储敏感 token
-- 布局级认证守卫 + API 级权限检查（双重保护）
+- 页面守卫与服务端身份/租户/资源权限分别验证；SvelteKit 布局或 serv procedures 按当前架构使用
 - 重定向只允许站内路径（防 Open Redirect）
 
 ### 输入校验
@@ -434,12 +436,12 @@ export const { apiFetch } = client
 ### 环境变量
 
 - `PUBLIC_` 前缀仅用于客户端安全变量
-- 服务端密钥用 `$env/static/private` 或 `$env/dynamic/private`
+- 服务端密钥走当前配置/环境入口；SvelteKit 可用 `$env/static/private` 或 `$env/dynamic/private`，serv 不导入 SvelteKit 的 `$env`
 - 禁止硬编码密钥
 
 ### CSRF
 
-- 写方法自动附加 CSRF token（通过 `kit.client.create`）
+- Cookie 写操作验证当前请求管道的 CSRF 保护；SvelteKit 可复用 `kit.client.create`，其它架构按实际 transport/client 契约接入
 
 ## §10 容器交付
 

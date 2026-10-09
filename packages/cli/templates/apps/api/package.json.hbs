@@ -15,7 +15,7 @@
     "podman:build": "podman build --format docker --jobs=1 --target runtime -t {{projectName}}:latest .",
     "podman:build:data": "podman build --format docker --jobs=1 --target runtime-with-data --build-context embedded-data=./apps/{{projectName}}-service/data -t {{projectName}}:latest .",
     "typecheck": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present typecheck",
-    "lint": "pnpm -r --if-present lint",
+    "lint": "eslint *.js *.ts e2e && pnpm -r --if-present lint",
     "test": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present test",
     "test:e2e": "pnpm build && playwright test",
     "clean": "pnpm -r --if-present clean && rimraf node_modules .turbo"

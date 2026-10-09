@@ -10,6 +10,7 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDirectory, '../../..')
 const archiveRoot = mkdtempSync(path.join(tmpdir(), 'hai-cli-local-packages-'))
 const vitestArgs = process.argv.slice(2)
+const vitestCli = path.join(path.dirname(fileURLToPath(import.meta.resolve('vitest/package.json'))), 'vitest.mjs')
 
 let result
 try {
@@ -21,15 +22,16 @@ try {
   const packageSpecifiers = packPublicPackages(path.join(repoRoot, 'packages'), archiveRoot)
 
   result = spawnSync(
-    pnpmBin,
-    ['exec', 'vitest', 'run', 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000', ...vitestArgs],
+    process.execPath,
+    [vitestCli, 'run', 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000', ...vitestArgs],
     {
       env: {
         ...process.env,
         HAI_CLI_PACKAGE_SPECIFIERS: JSON.stringify(packageSpecifiers),
         HAI_CLI_RUN_SCAFFOLD_GATES: '1',
       },
-      shell: true,
+      // 直接启动 Node，测试名中的空格/正则不能被 Windows shell 当成命令。
+      shell: false,
       stdio: 'inherit',
     },
   )

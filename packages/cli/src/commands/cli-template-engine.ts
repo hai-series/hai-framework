@@ -915,6 +915,10 @@ export async function generateFromTemplates(
   if (includeBaseTemplate) {
     await copyStaticDir(path.join(root, 'base'), projectPath)
   }
+  else {
+    // API/fullstack 自有骨架，质量门禁仍复用单包模板的同一份规则。
+    await fse.copy(path.join(root, 'base', 'eslint-rules.js'), path.join(projectPath, 'eslint-rules.js'))
+  }
 
   // ─── ② 拷贝 apps/{appType} 路由 ───
   // messages/ 目录仅在 hasI18n 时拷贝
