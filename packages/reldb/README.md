@@ -1,5 +1,9 @@
 # @h-ai/reldb
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
+
 关系型数据库访问模块，通过统一的 `reldb` 对象访问 SQLite、PostgreSQL、MySQL。
 
 ## 支持的数据库

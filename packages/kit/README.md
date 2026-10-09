@@ -1,5 +1,9 @@
 # @h-ai/kit
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md) · [@h-ai/iam](../iam/README.md)
+
 `@h-ai/kit` 是 hai-framework 的 SvelteKit 集成模块，提供统一的请求管道与同源 endpoint 工具：
 
 - `kit.createHandle()`：会话解析、路由守卫、中间件链、可选传输加密与 Cookie 加密

@@ -1,5 +1,9 @@
 # @h-ai/capacitor
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/api-client](../api-client/README.md) · [@h-ai/core](../core/README.md)
+
 Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 Token 存储、设备信息、推送通知、相机与状态栏等能力的统一封装。
 
 ## 支持的能力

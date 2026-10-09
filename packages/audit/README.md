@@ -1,5 +1,9 @@
 # @h-ai/audit
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
+
 统一审计日志模块，通过 `audit` 对象提供审计日志的记录、查询、清理与统计功能，基于 `@h-ai/reldb` 实现持久化。
 
 ## 依赖

@@ -1,5 +1,9 @@
 # @h-ai/ui
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
+
 > 基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），内置 15 个精选 DaisyUI 主题。
 
 ## 安装

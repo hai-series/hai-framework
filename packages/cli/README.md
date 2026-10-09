@@ -1,5 +1,9 @@
 # @h-ai/cli
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
+
 > hai Agent Framework CLI — 交互式项目脚手架与代码生成工具。
 
 ## 支持的能力

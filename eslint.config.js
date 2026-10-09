@@ -24,7 +24,7 @@ export default antfu({
     '**/paraglide/**', // Paraglide 自动生成的文件
     '**/.github/skills/**/*.md', // 仓库内 AI Skill 文档（示例代码片段）不参与 lint
     '**/packages/cli/templates/skills/**/*.md', // Skill 模板文档（示例代码片段）不参与 lint
-    '**/packages/ui/README.md', // markdown 规则冲突，临时忽略
+    '**/packages/ui/README*.md', // 三语 README 沿用现有 markdown 规则冲突豁免
   ],
 
   // 启用 Svelte 支持

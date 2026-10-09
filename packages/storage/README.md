@@ -1,5 +1,9 @@
 # @h-ai/storage
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
+
 对象存储模块，提供统一 `storage` 访问入口，支持 S3 兼容存储与本地文件系统。
 
 ## 支持的后端

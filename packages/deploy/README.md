@@ -1,5 +1,9 @@
 # @h-ai/deploy
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
+
 自动化部署模块，支持两种部署方式：一键将 SvelteKit 应用部署到 Vercel（并自动开通云基础设施），或将应用容器化后通过 SSH 部署到任意 Linux 主机（docker-ssh）。
 
 ## 支持的部署方式

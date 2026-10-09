@@ -1,5 +1,9 @@
 # @h-ai/crypto
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
+
 加密模块，提供非对称加密、哈希、对称加密与密码哈希能力。
 
 ## 支持的能力

@@ -1,5 +1,9 @@
 # @h-ai/iam
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/audit](../audit/README.md) · [@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md) · [@h-ai/reldb](../reldb/README.md)
+
 身份与访问管理模块，提供统一的 `iam` 对象实现认证、会话、授权与用户管理。
 
 ## 功能特性

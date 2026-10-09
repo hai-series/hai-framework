@@ -1,5 +1,7 @@
 # hai Framework
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
 > 当前处于 `0.1.0-alpha` 阶段：公共契约仍在演进。生产采用前请锁定版本，并针对自身场景完成安全与容量验证。
 
 <p align="center">

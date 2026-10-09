@@ -1,5 +1,9 @@
 # @h-ai/api-contract
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
+
 > hai-framework 的公共 HTTP API 契约包，使用 oRPC contract + Zod 作为唯一真相源。
 
 ## 能力概览

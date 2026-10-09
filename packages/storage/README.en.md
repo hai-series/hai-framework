@@ -1,0 +1,187 @@
+# @h-ai/storage
+
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
+
+An object storage module with a unified `storage` entry point for S3-compatible storage and local filesystems.
+
+## Supported backends
+
+- S3 protocol (AWS S3 / MinIO / RustFS / OSS, etc.)
+- Local filesystem
+
+## Quick start
+
+### Node.js server
+
+```ts
+import { storage } from '@h-ai/storage'
+
+// 初始化（S3）
+await storage.init({
+  type: 's3',
+  bucket: 'my-bucket',
+  region: 'us-east-1',
+  accessKeyId: process.env.HAI_STORAGE_ACCESSKEYID!,
+  secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY!,
+})
+
+// 或本地存储
+await storage.init({ type: 'local', root: '/data/uploads' })
+
+// 上传/下载
+await storage.file.put('uploads/image.png', imageBuffer, { contentType: 'image/png' })
+const file = await storage.file.get('uploads/image.png')
+
+// 签名 URL
+const url = await storage.presign.getUrl('uploads/image.png', { expiresIn: 3600 })
+
+// 关闭连接
+const closeResult = await storage.close()
+if (!closeResult.success) {
+  throw new Error(closeResult.error.message)
+}
+```
+
+### Browser client
+
+The browser entry exports only client capabilities (signed URL uploads/downloads), without the `storage` service object.
+
+```ts
+import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
+
+// 业务端点路径由应用自行定义（例如 /api/files/presign-put）
+const { uploadUrl } = await fetch('/api/files/presign-put').then(r => r.json())
+await uploadWithPresignedUrl(uploadUrl, file)
+```
+
+> Note: `@h-ai/storage` does not include HTTP routes. Implement the signed URL API in the application layer.
+
+## HTTP API contracts
+
+Public HTTP contracts come from `@h-ai/api-contract`; `createStorageProcedures({ storage })` in `@h-ai/serv` binds them to this module.
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+```
+
+## API overview
+
+- `storage.file`
+  - `put/get/head/exists/delete/deleteMany/copy`
+- `storage.dir`
+  - `list/delete`
+- `storage.presign`
+  - `getUrl/putUrl/publicUrl`
+
+> Note: `publicUrl` returns a string only when S3's `publicUrl` is configured; otherwise it returns `null`.
+
+> Note: `storage.config` returns a **redacted configuration snapshot**. S3 secret fields are replaced with `[REDACTED]`, so it cannot be used for reinitialization.
+
+## Client helpers
+
+`@h-ai/storage/client` also provides these browser utilities:
+
+- `uploadWithPresignedUrl(url, data, options)`
+- `downloadWithPresignedUrl(url, options)`
+- `downloadAndSave(url, { filename })`
+- `getFileExtension(file)`
+- `getMimeType(extension)`
+- `formatFileSize(bytes)`
+
+## Configuration
+
+- **S3**: requires `bucket / region / accessKeyId / secretAccessKey`; optional `endpoint / forcePathStyle / prefix / publicUrl`.
+- **Local**: requires `root`; optional `directoryMode / fileMode`.
+
+MinIO and RustFS share the S3 provider with `type: 's3'`; no separate storage type is needed. For self-hosted instances, set the S3 API endpoint (usually port 9000) and enable path-style access. Create the bucket beforehand.
+
+```ts
+const initResult = await storage.init({
+  type: 's3',
+  endpoint: 'http://localhost:9000',
+  bucket: 'my-bucket',
+  region: 'us-east-1',
+  accessKeyId: process.env.HAI_STORAGE_ACCESSKEYID!,
+  secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY!,
+  forcePathStyle: true,
+})
+if (!initResult.success) {
+  throw new Error(initResult.error.message)
+}
+```
+
+### Operation logging
+
+Enable file, directory, and presigned URL operation logs with `operationLog`. Logs are emitted at the actual Local/S3 provider operations, without a shared wrapper in `storage-main.ts`. File contents are never logged; uploads log only the byte length.
+
+```yaml
+# config/_storage.yml
+type: local
+root: ./data/uploads
+operationLog:
+  read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
+  write: false # file.put/delete/deleteMany/copy, dir.delete, presign.putUrl
+  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
+  level: debug # info | debug | trace，默认 debug
+```
+
+```ts
+await storage.init({
+  type: 'local',
+  root: './data/uploads',
+  operationLog: {
+    read: true,
+    write: true,
+    maxLength: 500,
+    level: 'debug',
+  },
+})
+```
+
+`storage.presign.putUrl()` currently supports signing options such as `contentType` and `expiresIn`, but no `maxSize` constraint.
+
+For local storage, `storage.dir.list()` recursively scans files under the matching prefix. It supports `maxKeys` truncation but no true pagination with `continuationToken`. For large directories, narrow `prefix` or use the S3 provider's native pagination.
+
+## Error handling
+
+```ts
+import { HaiStorageError, storage } from '@h-ai/storage'
+
+const result = await storage.file.get('image.png')
+if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.code) {
+  // 存储未初始化
+}
+```
+
+Common error codes:
+
+| Error code                          | code              | Description                     |
+| ----------------------------------- | ----------------- | ------------------------------- |
+| `HaiStorageError.NOT_INITIALIZED`   | `hai:storage:010` | Not initialized                 |
+| `HaiStorageError.CONNECTION_FAILED` | `hai:storage:001` | Connection failed               |
+| `HaiStorageError.OPERATION_FAILED`  | `hai:storage:002` | Operation failed                |
+| `HaiStorageError.NOT_FOUND`         | `hai:storage:003` | File not found                  |
+| `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | Permission denied               |
+| `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | Presigned URL generation failed |
+| `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | Invalid configuration           |
+
+## Tests
+
+```bash
+pnpm --filter @h-ai/storage test
+```
+
+S3 integration tests require Docker or a compatible runtime. The same initialization, file, directory, presigning, and real HTTP upload/download cases run against both MinIO and RustFS; container startup failures are not skipped.
+
+- MinIO: [`ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z`](https://github.com/coollabsio/minio), a community image built from upstream source.
+- RustFS: [`ghcr.io/rustfs/rustfs:1.0.1`](https://github.com/rustfs/rustfs), the official image.
+
+Containers use temporary test credentials. Buckets are created through the S3 API after service readiness; containers and anonymous volumes are removed when the final lease is released.
+
+## License
+
+Apache-2.0

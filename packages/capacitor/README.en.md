@@ -1,0 +1,151 @@
+# @h-ai/capacitor
+
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[Framework home](../../README.en.md) · Related modules: [@h-ai/api-client](../api-client/README.en.md) · [@h-ai/core](../core/README.en.md)
+
+A Capacitor native bridge for hai Framework mobile apps, with a unified API for secure token storage, device information, push notifications, camera, and status bar access.
+
+## Capabilities
+
+- **Token storage**: `@aparajita/capacitor-secure-storage` (required on native platforms). Android uses KeyStore + encrypted SharedPreferences; iOS uses Keychain. No Web fallback.
+- **Preferences**: `@capacitor/preferences` (required). General preferences storage for nonsensitive settings, not authentication tokens.
+- **Device information**: `@capacitor/device` (optional). Platform, version, and model detection.
+- **App version**: `@capacitor/app` (optional). Read appVersion / appBuild.
+- **Push notifications**: `@capacitor/push-notifications` (optional). Register FCM/APNs tokens and listen for push events.
+- **Camera/gallery**: `@capacitor/camera` (optional). Capture photos or select gallery images.
+- **Status bar**: `@capacitor/status-bar` (optional). Immersive mode, background color, and style settings.
+
+## Quick start
+
+```ts
+import { capacitor } from '@h-ai/capacitor'
+
+// 应用启动时初始化（检测 Capacitor 环境）
+const result = await capacitor.init()
+if (!result.success) {
+  // 非 Capacitor 环境（纯 Web）
+}
+```
+
+### Secure token storage with api-client
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+
+await apiClient.init({
+  baseUrl: 'https://api.example.com/v1',
+  auth: {
+    storage: createCapacitorTokenStorage(),
+    refreshPath: '/auth/refresh',
+  },
+})
+```
+
+`createCapacitorTokenStorage()` persists tokens only on native Android/iOS and requires `@aparajita/capacitor-secure-storage`. On Web it does not fall back to `localStorage`: `get*()` returns `null`, and `set*()` / `clear()` are no-ops.
+
+### Device information and push notifications
+
+```ts
+import { capacitor } from '@h-ai/capacitor'
+
+const info = await capacitor.device.getInfo()
+if (info.success) {
+  // info.data.platform — 'android' | 'ios' | 'web'
+}
+
+const reg = await capacitor.push.register()
+if (reg.success) {
+  // reg.data.token — FCM/APNs 推送 Token
+}
+```
+
+### Status bar
+
+```ts
+import { capacitor } from '@h-ai/capacitor'
+
+await capacitor.statusBar.configure({
+  style: 'dark',
+  overlay: true,
+  backgroundColor: '#ffffff',
+})
+```
+
+### Camera
+
+```ts
+const photo = await capacitor.camera.takePhoto({
+  source: 'camera',
+  resultType: 'base64',
+  quality: 80,
+})
+```
+
+### Preferences
+
+```ts
+await capacitor.preferences.set('my_key', 'value')
+const result = await capacitor.preferences.get('my_key')
+await capacitor.preferences.remove('my_key')
+```
+
+`capacitor.preferences` is for general preferences such as language, theme, and drafts. Use `createCapacitorTokenStorage()` for authentication tokens.
+
+## Configuration
+
+This module has no configuration file. `capacitor.init()` only checks whether the Capacitor runtime is available.
+
+Capacitor applications must use SPA mode:
+
+```ts
+// src/routes/+layout.ts
+export const prerender = true
+export const ssr = false
+```
+
+## Error handling
+
+All asynchronous APIs return `HaiResult<T>` instead of throwing directly:
+
+```ts
+import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
+
+const result = await capacitor.camera.takePhoto({ source: 'camera' })
+if (!result.success) {
+  if (result.error.code === HaiCapacitorError.CAMERA_FAILED.code) {
+    // 相机权限被拒绝或插件未安装
+  }
+}
+```
+
+Common error codes:
+
+| Error code                                    | code                | Description                         |
+| --------------------------------------------- | ------------------- | ----------------------------------- |
+| `HaiCapacitorError.INIT_FAILED`               | `hai:capacitor:001` | Initialization failed               |
+| `HaiCapacitorError.NOT_AVAILABLE`             | `hai:capacitor:002` | Capability unavailable              |
+| `HaiCapacitorError.INIT_IN_PROGRESS`          | `hai:capacitor:003` | Initialization in progress          |
+| `HaiCapacitorError.NOT_INITIALIZED`           | `hai:capacitor:010` | Not initialized                     |
+| `HaiCapacitorError.PREFERENCES_GET_FAILED`    | `hai:capacitor:011` | Preferences read failed             |
+| `HaiCapacitorError.PREFERENCES_SET_FAILED`    | `hai:capacitor:012` | Preferences write failed            |
+| `HaiCapacitorError.PREFERENCES_REMOVE_FAILED` | `hai:capacitor:013` | Preferences removal failed          |
+| `HaiCapacitorError.DEVICE_INFO_FAILED`        | `hai:capacitor:020` | Device information retrieval failed |
+| `HaiCapacitorError.APP_VERSION_FAILED`        | `hai:capacitor:021` | App version retrieval failed        |
+| `HaiCapacitorError.PUSH_REGISTER_FAILED`      | `hai:capacitor:030` | Push registration failed            |
+| `HaiCapacitorError.PUSH_LISTEN_FAILED`        | `hai:capacitor:031` | Push listener failed                |
+| `HaiCapacitorError.CAMERA_FAILED`             | `hai:capacitor:040` | Camera operation failed             |
+| `HaiCapacitorError.STATUS_BAR_FAILED`         | `hai:capacitor:050` | Status bar operation failed         |
+
+## Tests
+
+```bash
+pnpm --filter @h-ai/capacitor test
+```
+
+> Tests must mock `@capacitor/*` modules because they depend on native plugins.
+
+## License
+
+Apache-2.0

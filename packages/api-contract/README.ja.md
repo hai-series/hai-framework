@@ -1,0 +1,109 @@
+# @h-ai/api-contract
+
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
+
+> hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を唯一の定義元として使用します。
+
+## 機能概要
+
+- `apiContract.iam`、`apiContract.storage`、`apiContract.ai`、`apiContract.payment`：ドメイン単位の contract。
+- `apiContract.create()`：アプリケーションに必要なドメインの contract を組み合わせる。
+- `apiContract.route()`：アプリケーションの contract で再利用する独自 HTTP ルートのメタデータを定義。
+- `apiContract.pathOf()`：contract procedure から業務パスを取得し、middleware/client で再利用。
+- `apiContract.haiResultSchema()` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema()`：共通 DTO Schema のファクトリー。
+- 共通 DTO Schema：すべての HTTP 出力を `HaiResult<T>` でラップ。
+- IAM Token DTO は httpOnly cookie に対応。レスポンス本文に `refreshToken` が含まれない場合は、サーバーが `Set-Cookie` で管理します。
+- IAM の `auth.currentUser` はユーザー情報と現在のサーバーセッションの `roles` / `permissions` を返します。セッション復元のためにクライアントが権限のスナップショットを永続化する必要はありません。
+
+## クイックスタート
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+
+export const contract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
+  ai: false,
+})
+```
+
+独自のアプリケーション contract も、このパッケージでルートを定義します。`@h-ai/serv` への依存は不要です：
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { z } from 'zod'
+
+export const appContract = {
+  ping: apiContract
+    .route({ method: 'POST', path: '/app/ping', operationId: 'app.ping', tags: ['app'] })
+    .output(apiContract.haiResultSchema(z.object({ pong: z.boolean() }))),
+}
+```
+
+## API 契約
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+
+const myContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
+
+myContract.iam.auth.login
+myContract.storage.presignedUrls.createUpload
+myContract.ai.chats.createCompletion
+```
+
+クライアントは `@h-ai/api-client` でネストしたメソッドを直接呼び出します：
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
+const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
+await apiClient.close()
+```
+
+サーバーは `@h-ai/serv` で contract をマウントします：
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
+
+const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: { apiPrefix: '/api/v1' },
+})
+```
+
+## API 一覧
+
+- `apiContract.create(options)`：`false` / `undefined` のドメインを除外し、アプリケーション contract を構成。
+- `apiContract.route(routeConfig)`：独自 endpoint の method/path/operationId/tags などのルートメタデータを定義。
+- `apiContract.pathOf(procedure)`：`*-contract.ts` に宣言された業務パスを取得。独立した routes 定数の管理は不要です。
+- `apiContract.haiResultSchema(dataSchema)` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema(itemSchema)`：共通 DTO Schema のファクトリー。
+- `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：複数の API・層で再利用する入力とデータ構造。
+
+業務 path は対応する `*-contract.ts` に直接記述します。一度しか使わない出力 Schema は `.output(...)` にインラインで定義します。同じ contract ファイル内で再利用する場合は非公開の定数にできますが、schemas からエクスポートしてはいけません。
+
+## 設定
+
+このパッケージには実行時設定がなく、環境変数も読み込みません。
+
+## エラー処理
+
+Contract は入出力構造のみを定義します。業務エラーは procedure が返す `HaiResult<T>` で表し、クライアント側で業務例外を捕捉する必要はありません。
+
+## テスト
+
+```bash
+pnpm --filter @h-ai/api-contract test
+pnpm --filter @h-ai/api-contract typecheck
+```
+
+## License
+
+Apache-2.0

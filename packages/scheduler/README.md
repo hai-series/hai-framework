@@ -1,5 +1,9 @@
 # @h-ai/scheduler
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
+
 定时任务调度模块，支持统一任务模型、cron 调度、JS 函数字符串 / HTTP API 执行、任务持久化、执行日志查询，以及全局任务生命周期回调。
 
 启用数据库时，运行中的节点每个 `tickInterval`（默认 1000 毫秒）刷新持久化定义；`tasks` 是最近一次成功刷新的快照。注册、修改、删除、手工触发和获得调度锁后的每次尝试均重新读取定义，删除/禁用/已改调度时间的旧任务不会继续执行，读取失败则中断本次尝试。已经开始的业务副作用不因远端定义变化自动回滚。`init({ tasks })` 仍是节点本地配置，跨节点动态任务请用持久化的 `register()` 管理；跨节点防重需要共享 Redis，内存缓存仅限单进程。

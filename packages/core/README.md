@@ -1,5 +1,9 @@
 # @h-ai/core
 
+[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+
+[框架首页](../../README.md)
+
 > hai Agent Framework 核心模块 — 提供统一的基础工具、类型定义、配置管理和日志功能。
 
 ## 支持的能力
