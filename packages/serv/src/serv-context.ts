@@ -8,7 +8,7 @@
  *   与 Bearer accessToken。**不会**填充 `session`。
  * - `buildAuthContextFactory(verifyToken)`：**带认证的上下文工厂**。在 `parseRequestContext` 基础上
  *   异步调用 `verifyToken(accessToken)` 校验访问令牌，若成功则把会话写入 `context.session`。
- *   失败或 token 不存在均使 `session = undefined`，由下游 `.auth()` guard 统一返回 401。
+ *   失败或 token 不存在均使 `session = undefined`，下游 `.auth()` 返回失败 HaiResult（error.httpStatus=401），普通 procedure 默认 HTTP 200。
  *
  * 应用层通常无需直接调用上述函数：`serv.createApp({ iam })` 内部自动选择最合适的工厂。
  * @module serv-context
@@ -131,14 +131,14 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  * 1. 调用 `parseRequestContext` 提取元数据 + accessToken（仅来自 Authorization Bearer）
  * 2. 若 `accessToken` 存在 → 调用 `verifyToken(accessToken)`
  * 3. `verifyToken` 成功 → `session = result.data`；失败或 token 缺失 → `session = undefined`
- * 4. 下游 `.auth()` / `.permission()` / `.role()` guard 据此判断 401/403
+ * 4. 下游 `.auth()` / `.permission()` / `.role()` guard 据此返回 HaiResult（error.httpStatus=401/403），普通 procedure 默认 HTTP 200
  *
  * refresh token **不参与**这里的认证流程：它只在 access token 过期后，被 `/auth/refresh`
  * 从浏览器 httpOnly cookie 或受信原生 JSON body 中读出，用于换发新的 access token。
  *
  * **安全保证**：
  * - 每个请求都会重新调用 `verifyToken`（不缓存），用户被撤权后立即生效
- * - `verifyToken` 失败时**不**抛错，统一收敛为 `session=undefined` → 401
+ * - `verifyToken` 失败时**不**抛错，统一收敛为 `session=undefined`，交由 guard 返回未认证的失败 HaiResult
  * - 异常通过 try/catch 兜底，避免向 HTTP 层泄漏堆栈
  *
  * @param verifyToken - 访问令牌校验回调（通常是 `token => iam.session.verifyToken(token)` 或自定义函数）
@@ -150,7 +150,7 @@ export function buildAuthContextFactory(
   return async (input) => {
     // Step 1：先同步解析请求头，拿到 requestId / locale / accessToken 等基础元数据。
     const base = parseRequestContext(input)
-    // Step 2：没有 access token 时，直接返回基础上下文；后续由 `.auth()` guard 统一判 401。
+    // Step 2：没有 access token 时返回基础上下文；后续由 `.auth()` guard 返回未认证的失败 HaiResult。
     if (!base.accessToken)
       return base
     try {

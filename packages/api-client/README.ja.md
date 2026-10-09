@@ -120,6 +120,8 @@ else {
 
 未初期化、ネットワークエラー、タイムアウト、401/403/404 などのクライアント側の問題も、失敗の `HaiResult` に変換されます。
 
+自動更新は実際の HTTP 401（`Response.status`）でのみ動作します。serv の通常の procedure は既定で失敗の HaiResult を HTTP 200 で返し、その包絡中の `error.httpStatus=401` は更新を起動しません。呼び出し側は `success` と `error.code` を確認し、認証の失効を処理してください。
+
 ## テスト
 
 ```bash

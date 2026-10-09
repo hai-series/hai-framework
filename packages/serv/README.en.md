@@ -380,7 +380,7 @@ const procedures = serv
 
 Constraints:
 
-- `.permission()` and `.role()` require authentication automatically: 401 if unauthenticated, 403 if unauthorized.
+- `.permission()` and `.role()` require authentication automatically. Failures return HaiResult with `error.httpStatus` 401/403; ordinary procedure responses remain HTTP 200 by default.
 - Multiple permissions/roles on one route must all pass. `serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` allow their respective categories.
 - Unhandled handler exceptions become INTERNAL_ERROR HaiResult values; expected business failures should return `err(...)` directly.
 - Paths, input, and output come from the contract. Duplicate/unknown paths are rejected; `.build()` requires complete contract implementation.
@@ -592,6 +592,10 @@ const app = serv.createApp({
 In production, empty or `*` `_serv.yml` `cors.origin` fails startup. Web and Capacitor/Tauri origins use exact normalized full-Origin matching to prevent suffix spoofing. Production also enforces Secure refresh cookies and disables OpenAPI/docs; configuration controls nonproduction endpoints.
 
 ## Error handling
+
+Ordinary procedures return authentication, authorization, business failures and caught handler exceptions as HaiResult over HTTP 200 by default. `error.httpStatus` is domain-error metadata and does not change the response status. Clients must check `success` and `error.code`: an unauthenticated failure has `error.httpStatus=401`, while database query failures or INTERNAL_ERROR have 500.
+
+oRPC contract input validation fails before procedures with HTTP 400 and a localized body containing `error.httpStatus=400` and field errors. Procedure-level `serv.validateInputOrFail` failures remain HTTP 200. HTTP middleware, refresh-cookie, OpenAPI/RPC access checks and transport protocol failures follow their own HTTP response contracts. api-client refreshes only after an actual HTTP 401; `error.httpStatus=401` inside an HTTP 200 envelope does not trigger refresh.
 
 - All default procedures return `HaiResult<T>`; clients check `result.success`.
 - Authentication failure → `HaiCommonError.UNAUTHORIZED`, localized by `.auth()` using `context.locale`.

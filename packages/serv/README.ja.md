@@ -380,7 +380,7 @@ const procedures = serv
 
 制約：
 
-- `.permission()` と `.role()` は認証も要求し、未認証は 401、権限不足は 403。
+- `.permission()` と `.role()` は認証も要求します。失敗時の HaiResult の `error.httpStatus` は未認証で 401、権限不足で 403 ですが、通常の procedure の HTTP 応答は既定で 200 です。
 - 同じルートの複数 permission/role はすべて満たす必要があります。`serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` は各分類を許可。
 - 未処理の handler 例外は INTERNAL_ERROR の HaiResult に変換。予期する業務失敗は直接 `err(...)` を返します。
 - path・input・output は contract から推論。重複・未知のパスを拒否し、完全に実装するまで `.build()` は呼べません。
@@ -592,6 +592,10 @@ const app = serv.createApp({
 本番では `_serv.yml` の `cors.origin` が空・`*` なら起動に失敗します。Web・Capacitor/Tauri は正規化済み Origin 全体を厳密照合し、末尾偽装を防ぎます。本番は Secure refresh cookie を強制し OpenAPI/docs を無効化します。非本番の endpoint は設定ファイルで決めます。
 
 ## エラー処理
+
+通常の procedure は認証・認可・業務の失敗と捕捉した handler 例外を HaiResult として既定で HTTP 200 で返します。`error.httpStatus` はドメインエラーのメタデータで、HTTP 応答ステータスを変更しません。クライアントは `success` と `error.code` を確認してください。未認証では `error.httpStatus=401`、DB クエリー失敗や INTERNAL_ERROR では 500 です。
+
+oRPC contract の入力検証は procedure の前に失敗すると HTTP 400 となり、ローカライズ済み body に `error.httpStatus=400` とフィールドエラーを含みます。procedure 内の `serv.validateInputOrFail` の失敗は HTTP 200 のままです。HTTP middleware、refresh-cookie、OpenAPI/RPC のアクセス確認、transport のプロトコルエラーは各自の HTTP 応答契約に従います。api-client の自動更新は実際の HTTP 401 のみで動作し、HTTP 200 の包絡中の `error.httpStatus=401` では動作しません。
 
 - 既定 procedures はすべて `HaiResult<T>` を返し、クライアントで `result.success` を確認。
 - 認証失敗 → `HaiCommonError.UNAUTHORIZED`。`.auth()` が `context.locale` でローカライズ。

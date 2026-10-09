@@ -120,6 +120,8 @@ else {
 
 Client-side failures such as missing initialization, network errors, timeouts, and 401/403/404 responses are also converted to failed `HaiResult` values.
 
+Automatic refresh is triggered only by an actual HTTP 401 (`Response.status`). Ordinary serv procedures return failed HaiResult values over HTTP 200 by default. `error.httpStatus=401` inside that envelope does not trigger refresh; callers must still check `success` and `error.code` and handle expired authentication.
+
 ## Tests
 
 ```bash

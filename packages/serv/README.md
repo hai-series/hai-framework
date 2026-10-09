@@ -380,7 +380,7 @@ const procedures = serv
 
 约束：
 
-- `.permission()` 与 `.role()` 自动要求认证；未登录返回 401，授权不足返回 403。
+- `.permission()` 与 `.role()` 自动要求认证；未登录/授权不足返回失败 HaiResult，`error.httpStatus` 分别为 401/403；普通 procedure 的 HTTP 响应默认仍为 200。
 - 同一路由声明多个 permission/role 时必须全部满足；`serv.WILDCARD_PERMISSION` / `serv.WILDCARD_ROLE` 可放行对应类别。
 - handler 抛出的未处理异常统一转成 INTERNAL_ERROR HaiResult；预期业务失败仍应直接返回 `err(...)`。
 - 路径、input、output 从 contract 推导；重复或未知路径会被拒绝，未实现完整 contract 时不能调用 `.build()`。
@@ -592,6 +592,10 @@ const app = serv.createApp({
 生产环境下 `_serv.yml` 的 `cors.origin` 为空或为 `*` 会在启动时失败；Web 与 Capacitor/Tauri Origin 均按规范化后的完整 Origin 精确匹配，避免后缀伪造。生产环境同时强制 Secure refresh cookie 并关闭 OpenAPI/docs，配置文件仍决定非生产环境具体挂载哪些端点。
 
 ## 错误处理
+
+普通 procedure 的认证、授权、业务失败和被捕获的 handler 异常都作为 `HaiResult` 输出，默认通过 HTTP 200 返回；`error.httpStatus` 是领域错误元数据，不会自动改写响应状态。客户端必须检查 `success` 与 `error.code`。例如未登录为 `error.httpStatus=401`，数据库查询失败或 INTERNAL_ERROR 为 500。
+
+oRPC contract 输入校验在 procedure 之前失败时返回 HTTP 400，本地化失败体包含 `error.httpStatus=400` 和字段错误；procedure 内 `serv.validateInputOrFail` 返回的失败仍为 HTTP 200。HTTP middleware、refresh-cookie、OpenAPI/RPC 权限与 transport 协议错误另按自身契约返回真实 HTTP 状态。api-client 自动刷新只响应真实 HTTP 401，不因 HTTP 200 包络中的 `error.httpStatus=401` 触发。
 
 - Default procedures 全部返回 `HaiResult<T>`，客户端直接判断 `result.success`
 - 认证失败 → `HaiCommonError.UNAUTHORIZED`（由 `.auth()` 按 `context.locale` 本地化）

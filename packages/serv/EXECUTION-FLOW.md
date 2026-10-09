@@ -255,12 +255,14 @@ serv
 
 执行规则：
 
-1. `.auth()` 依赖 `context.session`；没有 session 时返回 401。
+1. `.auth()` 依赖 `context.session`；没有 session 时返回失败 HaiResult，`error.httpStatus=401`；普通 procedure 的 HTTP 响应默认仍为 200。
 2. `.permission()` / `.role()` 隐含认证，分别检查 session permissions / roles。
 3. 同一类别声明多个 guard 时按 AND 校验，通配符 `*` 可放行该类别。
 4. guard 通过后 handler 中的 `context.session` 自动收窄为非空。
 5. 所有 route 的未处理异常统一转成 INTERNAL_ERROR HaiResult。
 6. 编译期拒绝未知/重复/遗漏 route；运行时也会拒绝未知、重复和缺失路径。
+
+认证、授权、业务失败与被捕获的 handler 异常均是普通 procedure 的 HaiResult 输出，不从 `error.httpStatus` 自动映射 HTTP 状态。contract 输入 schema 校验失败发生在 handler 之前，返回 HTTP 400；handler 内的 `validateInputOrFail` 失败仍返回 HTTP 200。HTTP middleware、refresh-cookie、OpenAPI/RPC 入口权限与 transport 协议错误另按自身契约处理。
 
 ## 内置 feature procedures 的关键逻辑
 
