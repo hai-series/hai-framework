@@ -41,6 +41,9 @@ packages/*/src/**/*.d.ts.map
 # 运行时数据（SQLite 数据库、上传文件等）
 data/
 
+# E2E 隔离数据（数据库、会话与上传文件）
+data-e2e*/
+
 # 临时文件
 tmp/
 temp/

@@ -31,6 +31,8 @@ Generated projects share `eslint-rules.js`. Lint rejects explicit `any`, console
 
 For existing projects, update the CLI and run `hai init` to fill missing workflow skills, resources and entry files. Existing files are preserved, including AI rules when using `--force`. Merge existing entry files, skills, ESLint configuration and scripts against a newly generated project, and restore missing .npmrc/.gitignore files; filling missing files does not upgrade old rules. Before release, use the CLI built from this repository to create the comparison project and keep unpublished capabilities separate from installed package capabilities.
 
+Before writing AI files, the CLI resolves existing file and directory links. Shared skills, Claude aliases and project bridges must stay inside the project; external targets stop the write. Linking Claude's skill directory to the shared directory inside the project remains supported.
+
 Delivery checks cover both the package archive and generated projects. Source `.npmrc` / `.gitignore` templates use a `.hbs` suffix to avoid packaging exclusions; generation restores their normal names and preserves dependency layout and sensitive-artifact ignore rules. An archive regression verifies every template is in the `.tgz`, beyond creation from the source checkout.
 
 ## Quick start

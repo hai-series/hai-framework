@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import Handlebars from 'handlebars'
 import { parse, stringify } from 'yaml'
+import { cliM } from '../cli-i18n.js'
 
 /**
  * 模块名到 Skill 目录名的映射
@@ -215,6 +216,7 @@ async function copySkill(
 
   for (const targetDir of targetDirs) {
     const dest = path.join(projectPath, targetDir, skillName)
+    await assertProjectOutputPath(projectPath, dest)
     if (!overwrite) {
       // 已有入口不能使新参考资源被跳过；逐文件补缺，同时保留用户修改。
       const missingFiles: string[] = []
@@ -226,10 +228,14 @@ async function copySkill(
       if (missingFiles.length === 0) {
         continue
       }
+      for (const relativeFile of missingFiles)
+        await assertProjectOutputPath(projectPath, path.join(dest, relativeFile))
       await fse.copy(src, dest, { overwrite: false })
       copiedFiles.push(...missingFiles.map(relativeFile => `${targetDir}/${skillName}/${relativeFile.replaceAll(path.sep, '/')}`))
     }
     else {
+      for (const relativeFile of relativeFiles)
+        await assertProjectOutputPath(projectPath, path.join(dest, relativeFile))
       await fse.copy(src, dest, { overwrite: true })
       copiedFiles.push(`${targetDir}/${skillName}/SKILL.md`)
     }
@@ -255,12 +261,7 @@ async function copyClaudeSkillAlias(
       return []
   }
 
-  let ancestor = aliasPath
-  while (!(await fse.pathExists(ancestor)))
-    ancestor = path.dirname(ancestor)
-  const relativeAncestor = path.relative(await fse.realpath(projectPath), await fse.realpath(ancestor))
-  if (relativeAncestor === '..' || relativeAncestor.startsWith(`..${path.sep}`) || path.isAbsolute(relativeAncestor))
-    throw new Error('Claude skill output must stay inside the project')
+  await assertProjectOutputPath(projectPath, aliasPath)
 
   const sharedContent = await fse.readFile(sharedPath, 'utf8')
   const sourceContent = await fse.readFile(path.join(templatesDir, skillName, 'SKILL.md'), 'utf8')
@@ -275,6 +276,20 @@ async function copyClaudeSkillAlias(
   })
   await fse.outputFile(aliasPath, content, 'utf8')
   return [destination]
+}
+
+/** 写入前解析已有目录/文件链接，所有 AI 输出均限制在当前项目内。 */
+async function assertProjectOutputPath(projectPath: string, destination: string): Promise<void> {
+  let ancestor = destination
+  while (!(await fse.pathExists(ancestor))) {
+    const parent = path.dirname(ancestor)
+    if (parent === ancestor)
+      throw new Error(cliM('cli_generateOutsideWorkspace'))
+    ancestor = parent
+  }
+  const relativeAncestor = path.relative(await fse.realpath(projectPath), await fse.realpath(ancestor))
+  if (relativeAncestor === '..' || relativeAncestor.startsWith(`..${path.sep}`) || path.isAbsolute(relativeAncestor))
+    throw new Error(cliM('cli_generateOutsideWorkspace'))
 }
 
 /** 保留已有共享技能的描述；历史无 frontmatter 入口由模板提供发现元数据。 */
@@ -338,6 +353,7 @@ async function copyBridgeFiles(
       continue
     }
 
+    await assertProjectOutputPath(projectPath, dest)
     await fse.ensureDir(path.dirname(dest))
     if (src.endsWith('.hbs')) {
       const template = await fse.readFile(src, 'utf8')

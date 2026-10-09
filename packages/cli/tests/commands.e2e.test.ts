@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { cliM } from '../src/cli-i18n.js'
 import { addModule } from '../src/commands/cli-add.js'
 import { createProject, detectProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
@@ -1616,6 +1617,18 @@ describe('addModule', () => {
 // =============================================================================
 
 describe('initProject', () => {
+  it('共享技能目录链接到项目外时不补写外部资源', async () => {
+    const dir = path.join(tmpRoot, 'shared-outside-directory-link')
+    const outside = path.join(tmpRoot, 'shared-outside-target')
+    await fse.ensureDir(outside)
+    await fse.ensureSymlink(outside, path.join(dir, '.agents/skills'), 'junction')
+
+    await expect(generateProjectAiSupport(dir, ['hai-app-create'], { overwriteSkills: false }))
+      .rejects
+      .toThrow(cliM('cli_generateOutsideWorkspace'))
+    expect(await fse.readdir(outside)).toEqual([])
+  })
+
   it('已有 Claude 技能目录链接到共享目录时不把正文改写成自引用', async () => {
     const dir = path.join(tmpRoot, 'claude-shared-directory-link')
     const sharedDirectory = path.join(dir, '.agents/skills')
@@ -1638,7 +1651,19 @@ describe('initProject', () => {
 
     await expect(generateProjectAiSupport(dir, ['hai-app-create']))
       .rejects
-      .toThrow('Claude skill output must stay inside the project')
+      .toThrow(cliM('cli_generateOutsideWorkspace'))
+    expect(await fse.readdir(outside)).toEqual([])
+  })
+
+  it('copilot 规则目录链接到项目外时不写入外部入口', async () => {
+    const dir = path.join(tmpRoot, 'copilot-outside-directory-link')
+    const outside = path.join(tmpRoot, 'copilot-outside-target')
+    await fse.ensureDir(outside)
+    await fse.ensureSymlink(outside, path.join(dir, '.github'), 'junction')
+
+    await expect(generateProjectAiSupport(dir, ['hai-app-create']))
+      .rejects
+      .toThrow(cliM('cli_generateOutsideWorkspace'))
     expect(await fse.readdir(outside)).toEqual([])
   })
 
