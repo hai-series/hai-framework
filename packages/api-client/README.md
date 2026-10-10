@@ -120,7 +120,7 @@ else {
 
 未初始化、网络错误、超时、401/403/404 等客户端侧问题也会转换为失败的 `HaiResult`。
 
-自动刷新仅由真实 HTTP 401（`Response.status`）触发。serv 普通 procedure 默认通过 HTTP 200 返回失败 HaiResult，包络中的 `error.httpStatus=401` 不会触发刷新；调用方仍须检查 `success` 与 `error.code` 并处理登录失效。
+自动刷新在真实 HTTP 401（`Response.status`）或 HTTP 200 的有效失败 HaiResult（`success=false`、`error.code/message` 为字符串且 `error.httpStatus=401`）后触发，刷新成功后只重试一次原请求。内置登录、注册与配置的 `auth.refreshPath` 不触发自动刷新，403/500 等其它失败也不会触发。serv 普通 procedure 的 HTTP 状态仍为 200；调用方须检查最终结果的 `success` 与 `error.code`，并处理刷新失败后的登录失效。
 
 ## 测试
 

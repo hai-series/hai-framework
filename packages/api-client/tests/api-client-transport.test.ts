@@ -59,7 +59,7 @@ function makeServerFetch(): typeof fetch {
   }) as typeof fetch
 }
 
-function makeRefreshServerFetch(): { fetch: typeof fetch, calls: string[] } {
+function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fetch, calls: string[] } {
   const mgrResult = crypto.transport.createServer()
   if (!mgrResult.success)
     throw new Error('createServer failed')
@@ -115,6 +115,8 @@ function makeRefreshServerFetch(): { fetch: typeof fetch, calls: string[] } {
     if (url.pathname === '/api/v1/protected') {
       const authorization = req.headers.get('authorization')
       if (authorization === 'Bearer old-access') {
+        if (domainUnauthorized)
+          return encryptedJson(clientId, { success: false, error: { code: 'hai:serv:401', message: 'Expired', httpStatus: 401 } })
         return new Response(JSON.stringify({ success: false, error: { message: 'expired' } }), {
           status: 401,
           headers: { 'Content-Type': 'application/json' },
@@ -154,9 +156,9 @@ describe('api-client transport', () => {
     await client.close()
   })
 
-  it('refresh request also uses transport when auth and transport are both enabled', async () => {
+  it.each([false, true])('hTTP/domain unauthorized=%s refresh keeps encrypted transport', async (domainUnauthorized) => {
     const client = apiClient.create(protectedContract)
-    const server = makeRefreshServerFetch()
+    const server = makeRefreshServerFetch(domainUnauthorized)
     let refreshed = false
     let refreshFailed = false
     const init = await client.init({

@@ -120,7 +120,7 @@ else {
 
 未初期化、ネットワークエラー、タイムアウト、401/403/404 などのクライアント側の問題も、失敗の `HaiResult` に変換されます。
 
-自動更新は実際の HTTP 401（`Response.status`）でのみ動作します。serv の通常の procedure は既定で失敗の HaiResult を HTTP 200 で返し、その包絡中の `error.httpStatus=401` は更新を起動しません。呼び出し側は `success` と `error.code` を確認し、認証の失効を処理してください。
+自動更新は実際の HTTP 401（`Response.status`）、または HTTP 200 の有効な失敗 HaiResult（`success=false`、文字列の `error.code/message`、`error.httpStatus=401`）で動作します。更新が成功すると元のリクエストを一度だけ再試行します。組み込みのログイン・登録と設定された `auth.refreshPath` は自動更新の対象外で、403/500 など他の失敗でも更新しません。serv の通常の procedure は引き続き HTTP 200 を返します。呼び出し側は最終結果の `success` と `error.code` を確認し、更新失敗による認証失効を処理してください。
 
 ## テスト
 

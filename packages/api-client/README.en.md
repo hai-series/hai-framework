@@ -120,7 +120,7 @@ else {
 
 Client-side failures such as missing initialization, network errors, timeouts, and 401/403/404 responses are also converted to failed `HaiResult` values.
 
-Automatic refresh is triggered only by an actual HTTP 401 (`Response.status`). Ordinary serv procedures return failed HaiResult values over HTTP 200 by default. `error.httpStatus=401` inside that envelope does not trigger refresh; callers must still check `success` and `error.code` and handle expired authentication.
+Automatic refresh handles an actual HTTP 401 (`Response.status`) or a valid failed HaiResult over HTTP 200 (`success=false`, string `error.code/message` and `error.httpStatus=401`). After a successful refresh, the original request is retried once. Built-in login and registration routes and the configured `auth.refreshPath` never trigger automatic refresh; other failures such as 403/500 do not trigger it either. Ordinary serv procedures still return HTTP 200. Callers must check the final `success` and `error.code` and handle expired authentication when refresh fails.
 
 ## Tests
 

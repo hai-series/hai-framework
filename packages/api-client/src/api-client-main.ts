@@ -64,6 +64,10 @@ import { HaiApiClientError } from './api-client-types.js'
 const DEFAULT_TIMEOUT = 30_000
 const DEFAULT_CLIENT_NAME = 'hai-api-client'
 const DEFAULT_REFRESH_PATH = apiContract.pathOf(apiContract.iam.auth.refresh)
+const AUTH_ENTRY_PATHS = [
+  apiContract.pathOf(apiContract.iam.auth.login),
+  apiContract.pathOf(apiContract.iam.auth.register),
+]
 const TRAILING_SLASHES_REGEX = /\/+$/
 
 /** Token 存储方案集合：内存 / 浏览器 localStorage / httpOnly Cookie。 */
@@ -362,7 +366,15 @@ function buildTokenManager(config: ApiClientConfig, transport: TransportClient |
   const refreshPath = config.auth.refreshPath ?? DEFAULT_REFRESH_PATH
   const refreshUrl = `${baseUrl}${refreshPath.startsWith('/') ? refreshPath : `/${refreshPath}`}`
 
-  const manager = createTokenManager(storage, refreshUrl, fetchFn, config.auth.onRefreshFailed, config.auth.refreshTimeoutMs)
+  // 刷新沿用客户端标识与自定义头（包括原生 body 通道标识），并复用同一加密 fetch。
+  const refreshFetch: typeof fetch = async (input, init) => {
+    const configured = typeof config.headers === 'function' ? await config.headers() : config.headers ?? {}
+    const headers = new Headers(configured)
+    headers.set('x-request-client', config.clientName ?? DEFAULT_CLIENT_NAME)
+    new Headers(init?.headers).forEach((value, name) => headers.set(name, value))
+    return fetchFn(input, { ...init, headers })
+  }
+  const manager = createTokenManager(storage, refreshUrl, refreshFetch, config.auth.onRefreshFailed, config.auth.refreshTimeoutMs)
   if (config.auth.onTokenRefreshed) {
     manager.onTokenRefreshed(config.auth.onTokenRefreshed)
   }
@@ -409,7 +421,7 @@ async function buildHeaders(
   }
 }
 
-/** 401 自动 refresh 并重试一次。 */
+/** HTTP / HaiResult 认证失效时自动 refresh 并重试一次。 */
 async function fetchWithRefresh(
   request: Request,
   init: { redirect?: Request['redirect'] },
@@ -421,7 +433,16 @@ async function fetchWithRefresh(
   // 必须在首次发送前 `clone()` 一份。即使没有 401，clone 后的副本也只会被 GC 回收，无副作用。
   const retryRequest = tokenManager ? request.clone() : undefined
   const response = await fetchWithTimeout(request, init, config, transport)
-  if (response.status !== 401 || !tokenManager || !retryRequest)
+  if (!tokenManager || !retryRequest)
+    return response
+
+  // 登录失败必须保留原始错误；refresh 本身也不能再次触发自动刷新。
+  const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
+  const refreshPath = config.auth?.refreshPath ?? DEFAULT_REFRESH_PATH
+  const excludedPaths = [...AUTH_ENTRY_PATHS, refreshPath]
+  if (excludedPaths.some(path => new URL(`${baseUrl}${path.startsWith('/') ? path : `/${path}`}`).pathname === new URL(request.url).pathname))
+    return response
+  if (response.status !== 401 && !await isUnauthorizedResult(response))
     return response
 
   const tokens = await tokenManager.refresh()
@@ -431,6 +452,26 @@ async function fetchWithRefresh(
   const headers = new Headers(retryRequest.headers)
   headers.set('authorization', `Bearer ${tokens.accessToken}`)
   return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport)
+}
+
+/** serv 领域失败保留 HTTP 200；克隆响应读取元数据，原响应仍交给 oRPC 消费。 */
+async function isUnauthorizedResult(response: Response): Promise<boolean> {
+  if (response.status !== 200 || !response.headers.get('content-type')?.includes('application/json'))
+    return false
+  try {
+    const body: unknown = await response.clone().json()
+    if (!body || typeof body !== 'object' || !('success' in body) || body.success !== false
+      || !('error' in body) || !body.error || typeof body.error !== 'object') {
+      return false
+    }
+    return 'httpStatus' in body.error && body.error.httpStatus === 401
+      && 'code' in body.error && typeof body.error.code === 'string'
+      && 'message' in body.error && typeof body.error.message === 'string'
+  }
+  catch {
+    // 非 JSON/非法包络交由既有客户端解析路径报告，不掩盖为认证失败。
+    return false
+  }
 }
 
 /** fetch + AbortController 超时控制（联动调用方原始 signal）。 */

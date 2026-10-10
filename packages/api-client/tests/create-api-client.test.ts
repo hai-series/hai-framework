@@ -123,6 +123,8 @@ describe('apiClient.create', () => {
       baseUrl: 'https://api.test.com/api/v1',
       fetch,
       auth: { storage, refreshPath: '/auth/refresh' },
+      clientName: 'native-app',
+      headers: async () => ({ 'x-hai-token-transport': 'body' }),
     })
 
     const result = await client.health()
@@ -131,6 +133,12 @@ describe('apiClient.create', () => {
     expect(await storage.getAccessToken()).toBe('new-access')
     expect(await storage.getRefreshToken()).toBe('new-refresh')
     expect(fetch).toHaveBeenCalledTimes(3)
+    const refreshCall = fetch.mock.calls.find(([input]) => toRequest(input).url.endsWith('/auth/refresh'))
+    expect(refreshCall).toBeDefined()
+    const refreshRequest = toRequest(refreshCall![0], refreshCall![1])
+    expect(refreshRequest.headers.get('x-hai-token-transport')).toBe('body')
+    expect(refreshRequest.headers.get('x-request-client')).toBe('native-app')
+    expect(refreshRequest.headers.get('content-type')).toBe('application/json')
   })
 
   it('apiClient 默认单例绑定 iam/storage/ai contract，并保留 create/tokenStorage 入口', async () => {
@@ -148,6 +156,56 @@ describe('apiClient.create', () => {
     expect(apiClient.config?.baseUrl).toBe('https://api.test.com/api/v1')
     expect(typeof apiClient.create).toBe('function')
     expect(typeof apiClient.tokenStorage.memory).toBe('function')
+  })
+
+  it('hTTP 200 HaiResult 的 401 能恢复 Cookie 会话并只重试一次', async () => {
+    let refreshed = false
+    let calls = 0
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = toRequest(input, init)
+      if (request.url.endsWith('/auth/refresh')) {
+        expect(request.credentials).toBe('include')
+        expect(request.body).toBeNull()
+        refreshed = true
+        return Response.json({ success: true, data: { tokens: { accessToken: 'restored', expiresIn: 3600, tokenType: 'Bearer' } } })
+      }
+      calls++
+      if (!refreshed)
+        return Response.json({ success: false, error: { code: 'hai:serv:401', message: 'Unauthorized', httpStatus: 401 } })
+      expect(request.headers.get('authorization')).toBe('Bearer restored')
+      // 第二次仍未授权时必须原样返回，不能进入无限刷新。
+      return Response.json({ success: false, error: { code: 'hai:serv:401', message: 'Still unauthorized', httpStatus: 401 } })
+    })
+    const client = apiClient.create(testContract)
+    expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, auth: {} })).success).toBe(true)
+    const result = await client.health()
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.message).toBe('Still unauthorized')
+    expect(calls).toBe(2)
+    expect(fetch).toHaveBeenCalledTimes(3)
+    await client.close()
+  })
+
+  it.each([403, 500])('hTTP 200 HaiResult 的 %i 不触发认证刷新', async (status) => {
+    const failure = { success: false, error: { code: 'app:failure', message: 'Failure', httpStatus: status } }
+    const fetch = vi.fn(async () => Response.json(failure))
+    const client = apiClient.create(testContract)
+    expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, auth: {} })).success).toBe(true)
+    expect(await client.health()).toEqual(failure)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    await client.close()
+  })
+
+  it('登录失败不自动刷新已有 Cookie 或重试错误凭据', async () => {
+    const contract = apiContract.create({ iam: apiContract.iam })
+    const fetch = vi.fn(async () => Response.json({ success: false, error: { code: 'hai:iam:401', message: 'Invalid credentials', httpStatus: 401 } }))
+    const client = apiClient.create(contract)
+    expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, auth: {} })).success).toBe(true)
+    const result = await client.iam.auth.login({ identifier: 'alice', password: 'wrong-password' })
+    expect(result.success).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    await client.close()
   })
 
   it('config getter 应返回脱敏后的 baseUrl 与 headers 快照', async () => {
