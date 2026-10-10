@@ -387,6 +387,7 @@ describe('getSavedTheme - 获取保存的主题', () => {
   it('node 环境应返回默认主题', () => {
     const theme = getSavedTheme()
     expect(theme).toBe(DEFAULT_THEME)
+    expect(getSavedTheme('corporate')).toBe('corporate')
   })
 
   it('localStorage 抛错时也应回退默认主题', () => {
@@ -400,6 +401,15 @@ describe('getSavedTheme - 获取保存的主题', () => {
     })
 
     expect(getSavedTheme()).toBe(DEFAULT_THEME)
+    expect(getSavedTheme('corporate')).toBe('corporate')
+  })
+
+  it('保存的用户主题优先于宿主默认主题', () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: { getItem: vi.fn(() => 'dark') },
+    })
+    expect(getSavedTheme('corporate')).toBe('dark')
   })
 })
 

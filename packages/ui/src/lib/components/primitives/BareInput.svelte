@@ -48,7 +48,9 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
-    value = e.currentTarget.value
+    // 文件输入的 value 由浏览器管理，不能把 fakepath 写回原生控件。
+    if (type !== 'file')
+      value = e.currentTarget.value
     oninput?.(e)
   }
 
@@ -94,7 +96,7 @@
        aria-controls={ariaControls}
        aria-autocomplete={ariaAutocomplete}
        class={className}
-       bind:value
+       value={type === 'file' ? undefined : value}
        oninput={handleInput}
        onchange={handleChange}
        onkeydown={handleKeydown}

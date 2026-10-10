@@ -7,6 +7,8 @@
  * =============================================================================
  */
 
+import { parse } from 'svelte/compiler'
+
 const UI_COMPONENTS = new Set([
   // primitives
   'Avatar',
@@ -112,10 +114,8 @@ const UI_COMPONENTS = new Set([
 const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g
 const SCRIPT_REGEX = /<script\b([^>]*)>([\s\S]*?)<\/script>/g
 const UI_IMPORT_REGEX = /import\s*\{([^}]+)\}\s*from\s*['"]@h-ai\/ui['"];?/
-const IMPORT_ALIAS_SPLIT_REGEX = /\s+as\s+/i
 const WINDOWS_PATH_SEPARATOR_REGEX = /\\/g
 const MODULE_CONTEXT_ATTR_REGEX = /context\s*=\s*['"]module['"]/i
-const TYPE_IMPORT_PREFIX_REGEX = /^type\s+/
 
 function collectUsedComponents(content) {
   const used = new Set()
@@ -130,73 +130,16 @@ function collectUsedComponents(content) {
 
 function collectImportedNames(scriptContent) {
   const imported = new Set()
-  const lines = scriptContent.split('\n')
-  let buffer = ''
-
-  const flushImport = (statement) => {
-    const fromIndex = statement.lastIndexOf(' from ')
-    if (fromIndex === -1)
-      return
-
-    let clause = statement.slice('import '.length, fromIndex).trim()
-    clause = clause.replace(TYPE_IMPORT_PREFIX_REGEX, '')
-    if (!clause)
-      return
-
-    // default + named: Button, { Input as UiInput }
-    if (clause.includes('{')) {
-      const [defaultPart, namedPart] = clause.split('{')
-      const defaultName = defaultPart.replace(',', '').trim()
-      if (defaultName)
-        imported.add(defaultName)
-
-      const raw = namedPart.replace('}', '')
-      for (const segment of raw.split(',')) {
-        const cleaned = segment.trim().replace(TYPE_IMPORT_PREFIX_REGEX, '')
-        if (!cleaned)
-          continue
-        const [original] = cleaned.split(IMPORT_ALIAS_SPLIT_REGEX)
-        if (original)
-          imported.add(original.trim())
-      }
-      return
-    }
-
-    // namespace import: * as name
-    if (clause.startsWith('* as ')) {
-      const name = clause.replace('* as ', '').trim()
-      if (name)
-        imported.add(name)
-      return
-    }
-
-    // default import
-    imported.add(clause)
-  }
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!buffer) {
-      if (!trimmed.startsWith('import '))
-        continue
-      buffer = trimmed
-      if (trimmed.endsWith(';')) {
-        flushImport(buffer)
-        buffer = ''
-      }
+  // 复用 Svelte 的 TS 解析器识别绑定，兼容无分号、跨行、注释及别名。
+  const ast = parse(`<script lang="ts">${scriptContent}</script>`, { modern: true })
+  for (const statement of ast.instance?.content.body ?? []) {
+    if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type')
       continue
-    }
-
-    buffer += ` ${trimmed}`
-    if (trimmed.endsWith(';')) {
-      flushImport(buffer)
-      buffer = ''
+    for (const specifier of statement.specifiers) {
+      if (specifier.importKind !== 'type')
+        imported.add(specifier.local.name)
     }
   }
-
-  if (buffer)
-    flushImport(buffer)
-
   return imported
 }
 

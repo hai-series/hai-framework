@@ -26,6 +26,8 @@
     alwaysEditable = false,
     loading = false,
     fields = ['avatar', 'username', 'email', 'displayName', 'phone'],
+    avatarAccept = 'image/*',
+    avatarHint,
     class: className = '',
     errors = {},
     onsubmit,
@@ -34,6 +36,7 @@
   }: UserProfileProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const avatarInputId = $props.id()
   let editMode = $state(false)
   let formData = $state<UserProfileSubmitData>({
     username: '',
@@ -163,24 +166,25 @@
             <Avatar
               src={user?.avatarUrl ?? user?.avatar}
               alt={uiM('user_profile_avatar')}
+              name={user?.displayName || user?.nickname || user?.username}
               size='lg'
-              ring
               class='shadow-sm'
-              placeholder={user?.username?.charAt(0).toUpperCase() || 'U'}
             />
             {#if editable && (editMode || alwaysEditable)}
               <div>
                 <BareInput
+                  id={avatarInputId}
                   type='file'
-                  class='file-input file-input-sm w-full max-w-xs'
-                  accept='image/*'
+                  class='hidden'
+                  accept={avatarAccept}
                   disabled={loading}
                   onchange={handleAvatarChange}
                 />
+                <Button type='button' variant='outline' size='sm' disabled={loading} onclick={() => document.getElementById(avatarInputId)?.click()}>{uiM('user_profile_upload_avatar')}</Button>
                 {#if errors.avatar}
                   <p class='text-xs text-error mt-1' role='alert'>{errors.avatar}</p>
                 {:else}
-                  <p class='text-xs text-base-content/60 mt-1'>{uiM('user_profile_avatar_hint')}</p>
+                  <p class='text-xs text-base-content/60 mt-1'>{avatarHint ?? uiM('user_profile_avatar_hint')}</p>
                 {/if}
               </div>
             {/if}

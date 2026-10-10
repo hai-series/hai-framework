@@ -98,6 +98,16 @@ With auto-import enabled, use components directly in templates without individua
 
 > `@h-ai/ui/auto-import` injects all public Svelte components except `toast`, type imports, and `Range` (which conflicts with the DOM `Range` constructor).
 
+Pages using a subset of components, such as administration screens, can import public component-directory entry points directly. Import theme utilities from the lightweight `@h-ai/ui/theme` entry so theme consumers do not load the root entry's AI and chart components. Check the installed package's exports; do not import its internal `src/` or `dist/` paths.
+
+The preprocessor recognizes semicolon-free, multiline and aliased imports without injecting components already bound locally. Type-only imports do not replace runtime components.
+
+```ts
+import { Card } from '@h-ai/ui/components/compounds/index'
+import { Button } from '@h-ai/ui/components/primitives/index'
+import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
+```
+
 ### data-\* attribute forwarding
 
 Public Svelte components forward caller-supplied `data-*` attributes to their root or primary interactive element for tests, analytics, and automation. Other unknown attributes are not forwarded.
@@ -154,6 +164,8 @@ components/
 | `Spinner`        | Loading animation   | `size`, `variant`                                                              |
 | `Progress`       | Progress bar        | `value`, `max`, `variant`, `striped`, `animated`                               |
 
+For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchange` and leave the file path `value` unbound. Other input types support `bind:value`.
+
 ### Compounds (36)
 
 #### Forms
@@ -175,7 +187,7 @@ components/
 
 | Component | Description         | Key props                                                                    |
 | --------- | ------------------- | ---------------------------------------------------------------------------- |
-| `Modal`   | Modal               | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose`               |
+| `Modal`   | Modal with dialog semantics, focus trap and restoration | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose`               |
 | `Drawer`  | Drawer              | `open`, `position`, `title`, `size`, `width`, `resizable`, `widthStorageKey` |
 | `Confirm` | Confirmation dialog | `open`, `title`, `message`, `variant`, `onconfirm`                           |
 | `Popover` | Popover             | `open`, `position`, `trigger`, `offset`, `portal`                            |
@@ -262,7 +274,7 @@ components/
 | `ChangePasswordForm` | Change password                                  | `loading`, `errors`, `requireOldPassword`, `onsubmit`                                                  |
 | `PasswordInput`      | Password input                                   | `value`, `showToggle`, `showStrength`, `minLength`                                                     |
 | `PermGuard`          | Permission guard                                 | `permissions`, `mode`, `fallback`                                                                      |
-| `UserProfile`        | User profile                                     | `user`, `editable`, `fields`, `onsubmit`                                                               |
+| `UserProfile`        | User profile                                     | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
 
 #### Storage (4)
 
@@ -628,13 +640,14 @@ import {
   applyTheme, // 应用主题（自动持久化到 localStorage）
   createThemeBootstrapScript, // 生成可注入 app.html 的首屏主题恢复脚本
   getCurrentTheme, // 获取当前主题
+  getSavedTheme, // Read saved appearance, with an optional application default
   getThemeInitScript, // 返回可注入到 HTML shell 的防闪烁脚本文本
   isDarkTheme, // 检查是否暗色主题
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
   THEMES, // ThemeInfo[] — 15 个精选主题元数据
-} from '@h-ai/ui'
+} from '@h-ai/ui/theme'
 ```
 
 Use `getThemeInitScript()` for simple cases. For custom storage keys, theme color CSS variables, or language preferences, generate `createThemeBootstrapScript()` on the server and inject it into `app.html`.
@@ -650,7 +663,7 @@ Place a placeholder in SvelteKit `app.html`:
 Then inject it from `hooks.server.ts`:
 
 ```ts
-import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui'
+import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui/theme'
 
 const themeBootstrapScript = createThemeBootstrapScript({
   storageKey: 'hai-demo-preferences',

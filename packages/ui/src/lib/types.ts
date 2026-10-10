@@ -160,7 +160,7 @@ export interface InputProps extends DataAttributes {
  * 无样式输入框属性
  */
 export interface BareInputProps extends DataAttributes {
-  /** 值 */
+  /** 文本值；file 类型通过事件读取 files，不绑定文件路径。 */
   value?: string
   /** 占位符 */
   placeholder?: string

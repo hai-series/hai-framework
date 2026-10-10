@@ -315,6 +315,10 @@ export interface UserProfileProps extends DataAttributes {
   fields?: UserProfileField[]
   /** 头像上传地址 */
   avatarUploadUrl?: string
+  /** 文件选择器允许的头像类型；最终校验由业务上传服务负责。 */
+  avatarAccept?: string
+  /** 与业务上传限制一致的提示文案。 */
+  avatarHint?: string
   /** 自定义类名 */
   class?: string
   /** 错误信息 */

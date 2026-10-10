@@ -156,6 +156,31 @@ describe('自动注入', () => {
     expect(result.code).toContain(`import { Button } from '@h-ai/ui'`)
   })
 
+  it('连续无分号的公开子路径导入不应被重复注入', () => {
+    const input = `<script lang="ts">
+  import type { Snippet } from 'svelte'
+  import { Avatar, Button } from '@h-ai/ui/components/primitives/index'
+  import {
+    Alert,
+    Skeleton,
+  } from '@h-ai/ui/components/compounds/index'
+  import * as m from './messages.js'
+  let name = $state('')
+</script>
+<Avatar name={name} /><Button /><Alert /><Skeleton />`
+    expect(process(input).code).toBe(input)
+  })
+
+  it('组件别名和仅类型导入不应屏蔽同名运行时组件', () => {
+    const input = `<script lang="ts">
+  import { Button as OtherButton, type Card } from './other.js'
+</script>
+<Button /><OtherButton /><Card />`
+    const result = process(input)
+    expect(result.code).toContain(`import { Button, Card } from '@h-ai/ui'`)
+    expect(result.code).toContain('Button as OtherButton, type Card')
+  })
+
   it('range 应保持显式导入，避免和 DOM Range 构造器冲突', () => {
     const result = process('<script lang="ts"></script>\n<Range />')
     expect(result.code).not.toContain(`from '@h-ai/ui'`)

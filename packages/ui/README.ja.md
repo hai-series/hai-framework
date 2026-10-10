@@ -98,6 +98,16 @@ export default defineConfig({
 
 > `toast`・型 import・DOM の `Range` と衝突する `Range` を除き、公開 Svelte コンポーネントは `@h-ai/ui/auto-import` で自動注入できます。
 
+管理画面など一部のコンポーネントを使うページは、公開コンポーネントディレクトリーの入口から直接 import できます。テーマツールは軽量な `@h-ai/ui/theme` から読み込み、テーマの利用だけでルート入口の AI・グラフコンポーネントを読み込まないようにします。インストール済みパッケージの exports を確認し、内部 `src/`・`dist/` は import しないでください。
+
+自動 import はセミコロンなし、複数行、別名の import を認識し、既存のローカル名を重複注入しません。型のみの import は実行時コンポーネントの代わりにはなりません。
+
+```ts
+import { Card } from '@h-ai/ui/components/compounds/index'
+import { Button } from '@h-ai/ui/components/primitives/index'
+import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
+```
+
 ### data-\* 属性の転送
 
 公開 Svelte コンポーネントは `data-*` をルート・主操作要素へ転送し、テスト・計測・自動化に使えます。通常の未知属性は転送しません。
@@ -154,6 +164,8 @@ components/
 | `Spinner`        | 読み込み表示           | `size`, `variant`                                                              |
 | `Progress`       | プログレスバー         | `value`, `max`, `variant`, `striped`, `animated`                               |
 
+`BareInput` の `type="file"` では `onchange` の `event.currentTarget.files` を読み取り、ファイルパスの `value` はバインドしません。他の入力型では `bind:value` を使用できます。
+
 ### Compounds：複合コンポーネント（36）
 
 #### フォーム
@@ -175,7 +187,7 @@ components/
 
 | コンポーネント | 説明           | 主なプロパティ                                                               |
 | -------------- | -------------- | ---------------------------------------------------------------------------- |
-| `Modal`        | モーダル       | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose`               |
+| `Modal`        | モーダル（ダイアログ属性・フォーカス制御と復元） | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose`               |
 | `Drawer`       | ドロワー       | `open`, `position`, `title`, `size`, `width`, `resizable`, `widthStorageKey` |
 | `Confirm`      | 確認ダイアログ | `open`, `title`, `message`, `variant`, `onconfirm`                           |
 | `Popover`      | ポップオーバー | `open`, `position`, `trigger`, `offset`, `portal`                            |
@@ -262,7 +274,7 @@ components/
 | `ChangePasswordForm` | パスワード変更                          | `loading`, `errors`, `requireOldPassword`, `onsubmit`                                                  |
 | `PasswordInput`      | パスワード入力                          | `value`, `showToggle`, `showStrength`, `minLength`                                                     |
 | `PermGuard`          | 権限ガード                              | `permissions`, `mode`, `fallback`                                                                      |
-| `UserProfile`        | ユーザープロフィール                    | `user`, `editable`, `fields`, `onsubmit`                                                               |
+| `UserProfile`        | ユーザープロフィール                    | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
 
 #### Storage：ストレージ（4）
 
@@ -628,13 +640,14 @@ import {
   applyTheme, // 应用主题（自动持久化到 localStorage）
   createThemeBootstrapScript, // 生成可注入 app.html 的首屏主题恢复脚本
   getCurrentTheme, // 获取当前主题
+  getSavedTheme, // 保存済みテーマ。アプリ既定値を指定可能
   getThemeInitScript, // 返回可注入到 HTML shell 的防闪烁脚本文本
   isDarkTheme, // 检查是否暗色主题
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
   THEMES, // ThemeInfo[] — 15 个精选主题元数据
-} from '@h-ai/ui'
+} from '@h-ai/ui/theme'
 ```
 
 単純な場合は `getThemeInitScript()` を使えます。独自ストレージ key・テーマカラーの CSS 変数・言語設定がある場合、サーバーの `createThemeBootstrapScript()` で生成して `app.html` に注入することを推奨します。
@@ -650,7 +663,7 @@ SvelteKit の `app.html` にプレースホルダーを置きます：
 次に `hooks.server.ts` で注入します：
 
 ```ts
-import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui'
+import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui/theme'
 
 const themeBootstrapScript = createThemeBootstrapScript({
   storageKey: 'hai-demo-preferences',

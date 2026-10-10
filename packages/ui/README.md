@@ -98,6 +98,16 @@ export default defineConfig({
 
 > 除 `toast`、类型导入与 `Range`（会和 DOM `Range` 构造器冲突）外，其余公开 Svelte 组件都可通过 `@h-ai/ui/auto-import` 自动注入。
 
+管理后台等只使用部分组件的页面，可直接使用公开组件目录入口；主题工具通过轻量 `@h-ai/ui/theme` 导入，避免主题消费加载根入口中的 AI、图表等组件。组件路径以已安装版本的 exports 为准，不导入包内 `src/` 或 `dist/`。
+
+自动导入器识别无分号、跨行及带别名的显式导入，已绑定的组件名称不会重复注入；仅类型导入不会替代运行时组件。
+
+```ts
+import { Card } from '@h-ai/ui/components/compounds/index'
+import { Button } from '@h-ai/ui/components/primitives/index'
+import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
+```
+
 ### data-* 属性透传
 
 公开 Svelte 组件支持把调用方传入的 `data-*` 属性透传到组件根节点或主交互节点，便于测试选择器、埋点和自动化标记。普通未知属性不会被透传。
@@ -154,6 +164,8 @@ components/
 | `Spinner`        | 加载动画     | `size`, `variant`                                                  |
 | `Progress`       | 进度条       | `value`, `max`, `variant`, `striped`, `animated`                   |
 
+`BareInput` 的 `file` 类型通过 `onchange` 读取 `event.currentTarget.files`，不绑定文件路径 `value`；其他输入类型可使用 `bind:value`。
+
 ### 组合组件 Compounds（36 个）
 
 #### 表单
@@ -175,7 +187,7 @@ components/
 
 | 组件      | 描述   | 主要属性                                                |
 | --------- | ------ | ------------------------------------------------------- |
-| `Modal`   | 模态框 | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose` |
+| `Modal`   | 模态框（语义标签、焦点约束与恢复） | `open`, `title`, `size`, `radius`, `bodyOverflow`, `showClose` |
 | `Drawer`  | 抽屉   | `open`, `position`, `title`, `size`, `width`, `resizable`, `widthStorageKey` |
 | `Confirm` | 确认框 | `open`, `title`, `message`, `variant`, `onconfirm`      |
 | `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset`, `portal`       |
@@ -262,7 +274,7 @@ components/
 | `ChangePasswordForm` | 修改密码   | `loading`, `errors`, `requireOldPassword`, `onsubmit` |
 | `PasswordInput`      | 密码输入框 | `value`, `showToggle`, `showStrength`, `minLength`    |
 | `PermGuard`          | 权限守卫   | `permissions`, `mode`, `fallback`                     |
-| `UserProfile`        | 用户资料   | `user`, `editable`, `fields`, `onsubmit`              |
+| `UserProfile`        | 用户资料   | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
 
 #### Storage 存储（4 个）
 
@@ -627,13 +639,14 @@ import {
   applyTheme, // 应用主题（自动持久化到 localStorage）
   createThemeBootstrapScript, // 生成可注入 app.html 的首屏主题恢复脚本
   getCurrentTheme, // 获取当前主题
+  getSavedTheme, // 读取安全缓存，可传入应用配置的默认主题
   getThemeInitScript, // 返回可注入到 HTML shell 的防闪烁脚本文本
   isDarkTheme, // 检查是否暗色主题
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
   THEMES, // ThemeInfo[] — 15 个精选主题元数据
-} from '@h-ai/ui'
+} from '@h-ai/ui/theme'
 ```
 
 简单场景可以直接使用 `getThemeInitScript()`；如果应用有自定义存储 key、主题色 CSS 变量或语言偏好，推荐在服务端通过 `createThemeBootstrapScript()` 生成脚本后再注入 `app.html`。
@@ -649,7 +662,7 @@ import {
 然后在 `hooks.server.ts` 里注入：
 
 ```ts
-import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui'
+import { createThemeBootstrapScript, DEFAULT_THEME_COLOR_CSS_VAR } from '@h-ai/ui/theme'
 
 const themeBootstrapScript = createThemeBootstrapScript({
   storageKey: 'hai-demo-preferences',

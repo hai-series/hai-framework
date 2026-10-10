@@ -28,6 +28,9 @@
   }: ModalProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const modalId = $props.id()
+  const titleId = `${modalId}-title`
+  let panel = $state<HTMLDivElement>()
 
   // 标题区仅在显式提供标题或自定义 header 时出现；
   // 仅需关闭按钮的场景改为右上角悬浮按钮，避免业务侧额外占一整行头部。
@@ -91,16 +94,60 @@
     onclose?.()
   }
 
+  function focusableElements(): HTMLElement[] {
+    return [...(panel?.querySelectorAll<HTMLElement>('button, a[href], input:not([type="hidden"]), select, textarea, [tabindex]') ?? [])]
+      .filter(element => element.tabIndex >= 0 && !element.hasAttribute('disabled') && element.getClientRects().length > 0)
+  }
+
+  // 打开时把焦点移入弹窗，关闭后恢复原操作位置。
+  $effect(() => {
+    if (!open || !panel)
+      return
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const elements = focusableElements()
+    const input = elements.find(element => element.matches('input:not([readonly]), textarea, select'))
+    const target = input ?? elements[0] ?? panel
+    target.focus()
+    return () => {
+      if (previous?.isConnected)
+        previous.focus()
+    }
+  })
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (!open)
+      return
+    if (event.key === 'Escape' && closeOnEscape) {
+      event.preventDefault()
+      event.stopPropagation()
+      handleClose()
+    }
+    else if (event.key === 'Tab') {
+      const elements = focusableElements()
+      const first = elements[0]
+      const last = elements.at(-1)
+      if (!first) {
+        event.preventDefault()
+        panel?.focus()
+      }
+      else if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        event.preventDefault()
+        last?.focus()
+      }
+      else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+  }
+
 </script>
 
 <div {...dataAttributes}
      class='hai-modal'
      style:display={open ? '' : 'none'}
      aria-hidden={open ? undefined : 'true'}
-     onkeydown={(e) => {
-       if (closeOnEscape && e.key === 'Escape')
-         handleClose()
-     }}
+     onkeydown={handleKeydown}
 >
   <div
     class='hai-modal__viewport'
@@ -117,7 +164,7 @@
       <div class='hai-modal__backdrop' aria-hidden='true'></div>
     {/if}
 
-    <div class={modalBoxClass} style={panelStyle}>
+    <div bind:this={panel} class={modalBoxClass} style={panelStyle} role='dialog' aria-modal='true' aria-labelledby={title && !header ? titleId : undefined} aria-label={title && !header ? undefined : title || uiM('common_dialog')} tabindex='-1'>
       {#if hasFloatingClose}
         <button
           type='button'
@@ -145,7 +192,7 @@
               {@render header()}
             </div>
           {:else if title}
-            <h3 class='flex-1 font-semibold text-[1.05rem] tracking-tight text-base-content/92'>
+            <h3 id={titleId} class='flex-1 font-semibold text-[1.05rem] tracking-tight text-base-content/92'>
               {title}
             </h3>
           {:else}

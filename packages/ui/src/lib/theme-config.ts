@@ -297,10 +297,12 @@ export function getCurrentTheme(): string {
 }
 
 /**
- * 获取保存的主题（从 localStorage）
+ * 获取保存的主题；存储为空或不可用时使用宿主默认主题。
+ *
+ * @param fallbackTheme - 未保存主题时的默认值，默认 light
  */
-export function getSavedTheme(): string {
-  return readStoredValue(THEME_STORAGE_KEY) ?? DEFAULT_THEME
+export function getSavedTheme(fallbackTheme = DEFAULT_THEME): string {
+  return readStoredValue(THEME_STORAGE_KEY) ?? fallbackTheme
 }
 
 /**
