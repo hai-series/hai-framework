@@ -14,6 +14,8 @@
 - Custom pipelines: mount HTTP middleware with `createApp({ middlewares })`; inject request fields through context factories.
 - Read-only storage assets: `serv.storageAssets(...)` handles safe keys, MIME allowlists, GET/HEAD, ETags, and cache headers.
 - Default feature procedures: `createIamProcedures()`, `createStorageProcedures()`, `createAiProcedures()`.
+- `build()` synchronously returns a plain router, so nested default feature procedures can be selected directly. Match the mounted contract to the selected procedures; unselected routes stay unavailable.
+- Missing routes return localized HaiResult JSON with HTTP 404. Transport encryption preserves that status instead of producing a 500 for a non-JSON response.
 - Built-in security headers and health checks; optional OpenAPI JSON, Scalar docs, and internal RPC endpoints.
 - Optional transport encryption: `serv.createApp({ transport: { crypto } })` mounts key exchange and request/response encryption automatically.
 - Optional audio: `serv.createApp({ audio: { ai, verifyTicket, authorize } })` mounts a unified audio WebSocket. Connections authenticate immediately with one-time tickets (`{ session, grant? }`, separate pre-auth timeout). Every frame uses runtime Zod validation and a strict state machine, with input/queue/send-buffer backpressure and cascading cancellation. Authorization verifies operations, models, voices, quotas, and concurrency on the server.
@@ -595,7 +597,7 @@ In production, empty or `*` `_serv.yml` `cors.origin` fails startup. Web and Cap
 
 Ordinary procedures return authentication, authorization, business failures and caught handler exceptions as HaiResult over HTTP 200 by default. `error.httpStatus` is domain-error metadata and does not change the response status. Clients must check `success` and `error.code`: an unauthenticated failure has `error.httpStatus=401`, while database query failures or INTERNAL_ERROR have 500.
 
-oRPC contract input validation fails before procedures with HTTP 400 and a localized body containing `error.httpStatus=400` and field errors. Procedure-level `serv.validateInputOrFail` failures remain HTTP 200. HTTP middleware, refresh-cookie, OpenAPI/RPC access checks and transport protocol failures follow their own HTTP response contracts. api-client refreshes only after an actual HTTP 401; `error.httpStatus=401` inside an HTTP 200 envelope does not trigger refresh.
+oRPC contract input validation fails before procedures with HTTP 400 and a localized body containing `error.httpStatus=400` and field errors. Procedure-level `serv.validateInputOrFail` failures remain HTTP 200. HTTP middleware, refresh-cookie, OpenAPI/RPC access checks and transport protocol failures follow their own HTTP response contracts. api-client refreshes after an actual HTTP 401 or a valid failed HaiResult over HTTP 200 (`success=false`, string `error.code/message` and `error.httpStatus=401`) and retries once on success. Built-in login and registration and the configured refresh path are excluded; 403/500 do not trigger refresh. With transport enabled, refresh and retry share the encrypted fetch path.
 
 - All default procedures return `HaiResult<T>`; clients check `result.success`.
 - Authentication failure → `HaiCommonError.UNAUTHORIZED`, localized by `.auth()` using `context.locale`.

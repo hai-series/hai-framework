@@ -1,6 +1,6 @@
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
@@ -69,6 +69,17 @@ describe('@h-ai/serv', () => {
     expect(response.status).toBe(418)
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
     expect(await response.text()).toBe('intercepted')
+  })
+
+  it('returns localized JSON 404 for a missing route', async () => {
+    const app = serv.createApp({ contract, procedures })
+    const response = await app.request('/api/v1/unregistered', { headers: { 'accept-language': 'en-US' } })
+    expect(response.status).toBe(404)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: { code: HaiCommonError.NOT_FOUND.code, message: core.i18n.coreM('core_errorNotFound', { locale: 'en-US' }) },
+    })
   })
 
   it('allows a path-scoped middleware to terminate with a binary response', async () => {

@@ -1,4 +1,4 @@
-import type { Router } from '@orpc/server'
+import type { Router, UnlaziedRouter } from '@orpc/server'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { core, err, ok } from '@h-ai/core'
@@ -55,7 +55,7 @@ function handlerOptions<THandler extends (...args: never[]) => unknown>(
 }
 
 function procedureHandler(
-  procedure: Router<typeof testContract, ServContext>['nested']['echo'],
+  procedure: UnlaziedRouter<Router<typeof testContract, ServContext>>['nested']['echo'],
 ) {
   return procedure['~orpc'].handler
 }

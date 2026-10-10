@@ -14,6 +14,8 @@
 - 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；请求级字段通过 context 工厂注入
 - 只读 Storage 资源：`serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
+- `build()` 同步返回普通 router，可按嵌套属性选取默认 feature procedures；挂载的 contract 与所选 procedures 保持一致，未选入口不开放。
+- 缺失路由返回本地化的 HaiResult JSON 404，启用传输加密后保留 404，不误报为非 JSON 响应导致的 500。
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
 - 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
 - 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；连接建立即用一次性 ticket 鉴权（返回 `{ session, grant? }`，独立预鉴权超时），每帧运行时 Zod 校验 + 严格状态机，输入/积压/发送缓冲背压与级联取消；授权回调负责服务端确认操作、模型、音色、配额与并发占用
@@ -595,7 +597,7 @@ const app = serv.createApp({
 
 普通 procedure 的认证、授权、业务失败和被捕获的 handler 异常都作为 `HaiResult` 输出，默认通过 HTTP 200 返回；`error.httpStatus` 是领域错误元数据，不会自动改写响应状态。客户端必须检查 `success` 与 `error.code`。例如未登录为 `error.httpStatus=401`，数据库查询失败或 INTERNAL_ERROR 为 500。
 
-oRPC contract 输入校验在 procedure 之前失败时返回 HTTP 400，本地化失败体包含 `error.httpStatus=400` 和字段错误；procedure 内 `serv.validateInputOrFail` 返回的失败仍为 HTTP 200。HTTP middleware、refresh-cookie、OpenAPI/RPC 权限与 transport 协议错误另按自身契约返回真实 HTTP 状态。api-client 自动刷新只响应真实 HTTP 401，不因 HTTP 200 包络中的 `error.httpStatus=401` 触发。
+oRPC contract 输入校验在 procedure 之前失败时返回 HTTP 400，本地化失败体包含 `error.httpStatus=400` 和字段错误；procedure 内 `serv.validateInputOrFail` 返回的失败仍为 HTTP 200。HTTP middleware、refresh-cookie、OpenAPI/RPC 权限与 transport 协议错误另按自身契约返回真实 HTTP 状态。api-client 在真实 HTTP 401 或 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`）后自动刷新，成功后只重试一次；内置登录、注册和配置的刷新路径除外，403/500 不刷新。启用 transport 时刷新和重试复用加密链路。
 
 - Default procedures 全部返回 `HaiResult<T>`，客户端直接判断 `result.success`
 - 认证失败 → `HaiCommonError.UNAUTHORIZED`（由 `.auth()` 按 `context.locale` 本地化）

@@ -14,6 +14,8 @@
 - 独自パイプライン：`createApp({ middlewares })` で HTTP middleware を接続し、context ファクトリーでリクエストごとの値を注入。
 - 読み取り専用 Storage：`serv.storageAssets(...)` で安全な key、MIME 許可リスト、GET/HEAD、ETag、キャッシュヘッダーを管理。
 - 既定の機能 procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`。
+- `build()` は通常の router を同期的に返すため、標準 feature のネストした procedures を直接選択できます。接続する contract と procedures を一致させ、未選択の入口は公開しません。
+- 存在しないルートは翻訳された HaiResult JSON と HTTP 404 を返します。通信暗号化でも 404 を保ち、非 JSON 応答による 500 にしません。
 - 安全な応答ヘッダー・ヘルスチェックを内蔵し、OpenAPI JSON・Scalar 文書・内部 RPC endpoint は任意。
 - 任意の通信暗号化：`serv.createApp({ transport: { crypto } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
 - 任意の音声入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` が共通 WebSocket を接続します。接続直後に単回 ticket で認証（`{ session, grant? }`、独立した事前認証 timeout）。各フレームを Zod と厳密な状態機械で検証し、入力・キュー・送信バッファの背圧と連鎖キャンセルを管理します。サーバーの認可処理で操作・モデル・声・割当量・同時使用数を確認します。
@@ -595,7 +597,7 @@ const app = serv.createApp({
 
 通常の procedure は認証・認可・業務の失敗と捕捉した handler 例外を HaiResult として既定で HTTP 200 で返します。`error.httpStatus` はドメインエラーのメタデータで、HTTP 応答ステータスを変更しません。クライアントは `success` と `error.code` を確認してください。未認証では `error.httpStatus=401`、DB クエリー失敗や INTERNAL_ERROR では 500 です。
 
-oRPC contract の入力検証は procedure の前に失敗すると HTTP 400 となり、ローカライズ済み body に `error.httpStatus=400` とフィールドエラーを含みます。procedure 内の `serv.validateInputOrFail` の失敗は HTTP 200 のままです。HTTP middleware、refresh-cookie、OpenAPI/RPC のアクセス確認、transport のプロトコルエラーは各自の HTTP 応答契約に従います。api-client の自動更新は実際の HTTP 401 のみで動作し、HTTP 200 の包絡中の `error.httpStatus=401` では動作しません。
+oRPC contract の入力検証は procedure の前に失敗すると HTTP 400 となり、ローカライズ済み body に `error.httpStatus=400` とフィールドエラーを含みます。procedure 内の `serv.validateInputOrFail` の失敗は HTTP 200 のままです。HTTP middleware、refresh-cookie、OpenAPI/RPC のアクセス確認、transport のプロトコルエラーは各自の HTTP 応答契約に従います。api-client は実際の HTTP 401、または HTTP 200 の有効な失敗 HaiResult（`success=false`、文字列の `error.code/message`、`error.httpStatus=401`）で自動更新し、成功後に一度だけ再試行します。組み込みのログイン・登録と設定された更新パスは対象外で、403/500 でも更新しません。transport 有効時は更新と再試行も同じ暗号化 fetch を使用します。
 
 - 既定 procedures はすべて `HaiResult<T>` を返し、クライアントで `result.success` を確認。
 - 認証失敗 → `HaiCommonError.UNAUTHORIZED`。`.auth()` が `context.locale` でローカライズ。

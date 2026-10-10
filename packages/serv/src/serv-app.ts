@@ -264,6 +264,11 @@ export function createApp<
   const http = resolveServHttpConfig(options.http)
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
+  // 缺失路由也返回标准 JSON，保持 404 并允许统一传输加密。
+  app.notFound(c => c.json(buildHaiErrorBody(
+    HaiCommonError.NOT_FOUND,
+    core.i18n.coreM('core_errorNotFound', { locale: resolveRequestLocale(c.req.raw.headers) }),
+  ), 404))
 
   // Step 3：决定请求上下文工厂。这个选择直接决定后续 procedure 是否能拿到 `context.session`。
   // 上下文工厂选择优先级（顶位优先）：

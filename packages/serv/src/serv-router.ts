@@ -19,6 +19,7 @@ import type {
   Meta,
   ProcedureHandler,
   Router,
+  UnlaziedRouter,
 } from '@orpc/server'
 import type { ServGuardRequirements } from './pipelines/serv-pipeline-guard.js'
 import type { ServContext } from './serv-context.js'
@@ -212,8 +213,8 @@ type ServRouterBuilderBuild<
   TRemaining,
 > = [TRemaining] extends [never]
   ? {
-      /** 所有 contract procedures 均实现后才可调用。 */
-      readonly build: () => Router<TContract, TInitialContext>
+      /** 同步返回完整的普通 router，允许按需选用嵌套的默认 procedures。 */
+      readonly build: () => UnlaziedRouter<Router<TContract, TInitialContext>>
     }
   : {
       /** 仅供 TypeScript/IDE 展示尚未实现的 route；运行时不存在。 */
