@@ -7,6 +7,9 @@ export const AppFrontendTargetSchema = z.enum(['web', 'app', 'miniapp', 'desktop
 export const AppInfoOutputDataSchema = z.object({
   name: z.string(),
   version: z.string(),
+  env: z.string(),
+  defaultLocale: z.string(),
+  supportedLocales: z.array(z.string()),
   startedAt: z.string().datetime(),
   frontends: z.array(AppFrontendTargetSchema),
 })

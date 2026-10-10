@@ -1,7 +1,16 @@
+{{#unless isSvelteOnlyApp}}
+import type { CoreConfig } from '@h-ai/core'
+{{/unless}}
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+{{#unless isSvelteOnlyApp}}
+import { core } from '@h-ai/core'
+{{/unless}}
 import { describe, expect, it } from 'vitest'
+{{#unless isSvelteOnlyApp}}
+import { load } from '../src/routes/+layout.server'
+{{/unless}}
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
 
@@ -37,6 +46,17 @@ describe('generated scaffold', () => {
     const coreConfig = await readFile(join(rootDir, 'config/_core.yml'), 'utf-8')
     expect(coreConfig).toContain('name: {{projectName}}')
     expect(coreConfig).toContain('defaultLocale: {{defaultLocale}}')
+  })
+{{/unless}}
+{{#unless isSvelteOnlyApp}}
+
+  it('publishes only public metadata from parsed core configuration', () => {
+    core.init({ configDir: './config' })
+    const config = core.config.getOrThrow<CoreConfig>('core')
+    expect(core.logger.getLevel()).toBe(config.logging?.level ?? 'info')
+    expect(load()).toEqual({
+      appConfig: { name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale },
+    })
   })
 {{/unless}}
 })

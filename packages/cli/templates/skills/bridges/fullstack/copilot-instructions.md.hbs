@@ -4,6 +4,9 @@
 
 - `packages/{{projectName}}-contract` 定义 API；Fullstack 服务端 `packages/{{projectName}}-serv` 实现业务；`packages/{{projectName}}-shared` 共享 UI、i18n 和 typed client。
 - 前端按选择生成；App 使用 Capacitor，Desktop 使用 Tauri v2。miniapp 当前仅预留说明，不是可运行应用。
+- 默认 mini 管理后台复用 IAM/reldb/cache/audit/storage/crypto。管理员管理用户、固定 admin/user 角色及审计；普通用户仅操作个人设置，服务端按角色和当前会话验证权限。
+- typed api-client 与 serv 的 crypto transport 统一加解密 JSON 请求与响应，包含认证与刷新。Web 使用内存 access token + HttpOnly refresh Cookie，App 原生端使用 Capacitor 安全 TokenStorage，Desktop 使用内存 TokenStorage；具体边界与例外见根 AGENTS。
+- 应用名称、版本、环境、日志与 locale 配置通过 core 获取；前端消费 `app.info`。头像、分页、偏好与管理员保护以 contract、服务端实现和根 AGENTS 为准，改动时同步各端。
 
 ## 质量门禁
 

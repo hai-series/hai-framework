@@ -26,9 +26,14 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动�
 - `EncryptedInput` 的 `onencrypt` 必须接入真实加密服务；`algorithm` 仅标注算法。缺少回调时显示不可用，不生成密文，不允许用编码代替加密。
 
 - 浏览器端界面优先复用 `@h-ai/ui` 现有组件，禁止在 app 内重复造轮子。
+- 只消费部分组件时优先检查公开 `@h-ai/ui/components/*` 目录入口；主题工具通过 `@h-ai/ui/theme` 获取，避免根入口引入无关 AI/图表依赖。先确认安装版本的 exports，禁止内部 src/dist 导入。
 - Svelte 组件使用 Svelte 5 Runes（`$state` / `$derived` / `$effect`）。
+- 主题 DOM 与安全缓存复用 `@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme(fallbackTheme?)`；默认主题取应用配置，选择范围与已编译 CSS 主题一致。
 - 页面级文案走应用自己的 i18n；`@h-ai/ui` 组件内置文案由 UI 包统一提供。
+- `UserProfile` 用 `avatarAccept` / `avatarHint` 对齐业务的头像格式与大小限制；文件最终校验和上传由业务回调完成。
+- `BareInput type="file"` 通过 `onchange` 的 `currentTarget.files` 读取文件，不绑定文件路径 `value`；其他输入类型可 `bind:value`。
 - `toast`、类型导入以及 `Range` 需要显式 `import`；其它公开 Svelte 组件可自动导入。
+- 自动导入识别无分号、跨行及别名的运行时 import；已绑定的本地组件名称不会重复注入。
 
 ## 必备集成
 

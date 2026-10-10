@@ -62,8 +62,8 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
   },
   'fullstack': {
     name: '前后端分离工程',
-    description: '多包工作区，包含 contract、serv、Web/App/Desktop 前端',
-    defaultFeatures: [],
+    description: '多端 mini 管理系统，包含用户、角色、审计、个人设置与双向传输加密',
+    defaultFeatures: ['iam', 'db', 'cache', 'crypto', 'storage', 'audit'],
   },
 }
 
@@ -304,14 +304,17 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     // 拷贝模板 + 渲染动态文件
     await generateFromTemplates(projectPath, context)
 
-    if (resolvedOptions.appType !== 'fullstack') {
+    {
       // 生成配置文件（config/*.yml）
       const { generateConfigFile, generateEnvExample } = await import('./cli-config-templates.js')
       const configs = resolvedOptions.moduleConfigs
       const isApiWorkspace = resolvedOptions.appType === 'api'
+      const isFullstack = resolvedOptions.appType === 'fullstack'
       const configDir = isApiWorkspace
         ? path.join(projectPath, 'apps', `${resolvedOptions.name}-service`, 'config')
-        : path.join(projectPath, 'config')
+        : isFullstack
+          ? path.join(projectPath, 'packages', `${resolvedOptions.name}-serv`, 'config')
+          : path.join(projectPath, 'config')
       const envExamplePath = isApiWorkspace
         ? path.join(projectPath, 'apps', `${resolvedOptions.name}-service`, '.env.example')
         : path.join(projectPath, '.env.example')
@@ -319,12 +322,14 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       for (const featureId of resolvedOptions.features) {
         const configKey = getFeatureConfigKey(featureId)
         if (configKey) {
-          const content = generateConfigFile(configKey, configs)
+          const content = isFullstack && configKey === 'iam'
+            ? generateConfigFile(configKey, configs).replace('seedDefaultData: true', 'seedDefaultData: false')
+            : generateConfigFile(configKey, configs)
           await writeFile(path.join(configDir, `_${configKey}.yml`), content)
         }
       }
 
-      if (!isApiWorkspace) {
+      if (!isApiWorkspace && !isFullstack) {
         // 始终生成 core 配置
         await writeFile(
           path.join(configDir, '_core.yml'),
@@ -334,7 +339,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
       const envExample = isApiWorkspace
         ? `${generateEnvExample(resolvedOptions.features, configs)}\n# =============================================================================\n# Service Runtime\n# =============================================================================\nPORT=3000\n`
-        : generateEnvExample(resolvedOptions.features, configs)
+        : isFullstack
+          ? `${generateEnvExample(resolvedOptions.features, configs)}\n# Required only for the first start; no default password is generated.\nHAI_ADMIN_DEFAULT_PASSWORD=\n\n# Local development API. Use your public API origin for deployment/native clients.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
+          : generateEnvExample(resolvedOptions.features, configs)
 
       await writeFile(envExamplePath, envExample)
     }
@@ -492,7 +499,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   const appTypeDefaults = APP_TYPES[selectedAppType].defaultFeatures
 
   if (selectedAppType === 'fullstack') {
-    selectedFeatures = []
+    selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
   }
   else if (selectedTemplate === 'custom' && !options.features && useDefaults) {
     selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
@@ -527,7 +534,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
 
   // 模块配置
   const moduleConfigs = selectedAppType === 'fullstack'
-    ? options.moduleConfigs ?? {}
+    ? { ...buildDefaultModuleConfigs(selectedFeatures, projectName!), ...options.moduleConfigs }
     : options.moduleConfigs ?? (useDefaults
       ? buildDefaultModuleConfigs(selectedFeatures, projectName!)
       : await promptModuleConfigs(selectedFeatures, projectName!))
@@ -1030,7 +1037,7 @@ function generateAiDevelopmentReadme(): string {
 
 从本项目根目录打开所用编码工具，先读取 [AGENTS.md](./AGENTS.md)。Claude Code 通过 [CLAUDE.md](./CLAUDE.md) 加载项目规则；GitHub Copilot 使用 [.github/copilot-instructions.md](./.github/copilot-instructions.md)，OpenCode 使用 AGENTS.md 和 [opencode.json](./opencode.json)。
 
-Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 从 .claude/skills/ 的原生入口读取同一份共享正文。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
+Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 通过 CLAUDE.md 引用 AGENTS.md，并按项目指引读取 .agents/skills/ 的同一份正文。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
 
 优先复用适用的 hai-framework 公开 API 与已有业务实现。完成时说明复用的能力、相关能力未采用的原因，以及安全边界和类型、配置、文案、调用方的同步情况。质量验证按当前 package.json 执行 typecheck → lint → build → test；UI、路由与端到端流程另运行 test:e2e，未运行项说明原因。安全与质量规则既要按规范审查，也要运行门禁验证。
 
@@ -1241,6 +1248,18 @@ curl --fail http://127.0.0.1:8080/runtime-config.js
 
 已启用前端：${enabledFrontends || 'Web / App / Desktop'}
 
+## 默认管理功能
+
+默认启用 IAM、reldb、cache、audit、storage 和 crypto。管理员可以管理用户（新增、编辑、禁用、删除、角色分配、头像上传）、查看两种固定角色及人数、维护角色说明、分页筛选审计日志；普通用户只能维护个人资料、头像、语言、主题和密码。密码修改后全部会话失效，需要重新登录。
+
+首次启动前，将根目录 \`.env.example\` 复制为 \`.env\`，填写 \`HAI_ADMIN_DEFAULT_PASSWORD\`（至少 8 位）；后端首次创建用户名 \`admin\`，不提供硬编码默认密码。\`dev\` / \`start\` 自动读取该文件；也可直接设置同名环境变量。已有用户时不会重复创建管理员。
+
+本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
+
+所有业务 JSON 请求和响应默认通过 \`@h-ai/crypto\` transport 双向加密（含登录、刷新、头像上传）；前端统一使用共享 typed API client。Web 访问令牌仅存内存、刷新令牌由 HttpOnly Cookie 保存；受信原生端使用平台安全存储或内存。头像为随机路径只读图片资源，支持 PNG/JPEG/WebP，最大 512 KiB。健康检查和只读头像图片可直接访问。
+
+应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。默认 SQLite、本地存储与内存缓存适合单实例，管理写入仅支持单写实例；多实例读取可使用共享数据库、Redis cache 和 S3 存储，但管理写请求须统一路由到同一写实例。另需会话粘性路由使请求命中同一进程内传输私钥，服务重启后客户端重新协商。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
+
 ## 开发、编译与打包
 
 \`\`\`bash
@@ -1290,8 +1309,6 @@ ${webRunCommand}
 \`\`\`bash
 curl --fail http://127.0.0.1:3000/health
 curl --fail http://127.0.0.1:3000/ready
-curl --fail --request POST http://127.0.0.1:3000/api/v1/app/info \\
-  --header "Content-Type: application/json" --data '{}'
 ${webTestCommands}docker stop ${containerNames}
 \`\`\`
 

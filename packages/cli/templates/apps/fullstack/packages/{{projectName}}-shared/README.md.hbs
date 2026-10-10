@@ -1,39 +1,32 @@
 # {{fullstack.sharedPackageName}}
 
-Frontend shared package for **{{projectName}}**. Provides:
+Shared mini administration workspace for **{{projectName}}**. Web, Capacitor App and Tauri desktop use the same `AdminWorkspace`, responsive `AppShell`, typed API client and management store.
 
-- `AppShell` — common layout (header / footer / theme + language switchers)
-- `ThemeSwitcher`, `LanguageSwitcher`
-- `themeStore` — daisyUI theme persistence
-- `fetchAppInfo` — typed API client wrapping `@h-ai/api-client`
-- Shared Inlang Paraglide messages compiled from this package's `project.inlang/` + `messages/`
+- Administrators manage users, upload user avatars, assign the built-in administrator/user roles, edit role descriptions and query audit logs.
+- Ordinary users can only update their own profile, avatar, language, appearance and password. The server enforces access on every request.
+- `ManagementStore` owns API calls and business state; components render the state and forward user interactions.
+- Application name, version, environment and default locale come from the backend `app.info` contract, which reads `core` configuration. Do not duplicate these values in translations or frontend constants.
+- Requests, token refresh and JSON responses use the same `@h-ai/api-client` + `@h-ai/crypto` transport. Avatar uploads use encrypted JSON and validate PNG/JPEG/WebP content, with a 512 KiB limit.
+- Read metadata through the same initialized `managementApi.app.info()` client; inspect `success` before using `data`.
 
-Consumed by `{{projectName}}-web`, `{{projectName}}-app`, `{{projectName}}-desktop`, and the reserved `{{projectName}}-miniapp` guidance.
+All three Vite apps read the workspace root .env. Development and preview servers proxy /api to the local backend when no explicit API base is configured, so browser clients can use a single origin. In deployments, configure PUBLIC_API_BASE or the Web container runtime API origin for the actual service.
 
-## i18n collaboration
+An origin-only API base uses `/api/v1`. For a custom service `http.apiPrefix`, include that path in `PUBLIC_API_BASE` or the runtime API base; the client preserves the configured path and restricts avatar URLs to its matching resource prefix.
 
-- `packages/{{fullstack.sharedPackageName}}/messages/` stores **shared UI copy** used by reusable components such as `AppShell`, `ThemeSwitcher`, and `LanguageSwitcher`.
-- `apps/{{projectName}}-web/messages/`, `apps/{{projectName}}-app/messages/`, and `apps/{{projectName}}-desktop/messages/` store **frontend-specific product copy**.
-- `apps/{{projectName}}-miniapp/messages/` is prepared for mini-app-specific copy even though the mini target is currently a placeholder.
-- Keep `baseLocale` and `locales` aligned across shared and every frontend `project.inlang/settings.json`. The language switcher updates shared and the host app runtime together.
+## Authentication and preferences
 
-Rule of thumb: if a string appears inside reusable shared components, put it here; if it belongs to one product surface, put it in that frontend's `messages/` directory.
+Web and browser previews keep access tokens in memory and refresh tokens in the server's httpOnly Cookie. Requests include credentials; reload restores the session through the encrypted refresh flow. Never store authentication tokens in localStorage.
 
-## Scripts
+Capacitor native uses `createCapacitorTokenStorage()` and the trusted native token channel. Tauri native uses memory token storage and requires a new login after restarting the application. Native builds require a reachable `PUBLIC_API_BASE` in the workspace root `.env`; missing configuration produces a connection configuration error. Both send their frontend `clientName` and `X-HAI-Token-Transport: body`; the service verifies the allowed native origin before returning a refresh token in JSON.
 
-- `pnpm paraglide:compile` — compile messages → `src/lib/paraglide/`
-- `pnpm paraglide:watch` — watch + recompile on message edits
-- `pnpm typecheck`, `pnpm lint`, `pnpm test`
+Language and theme preferences are saved in IAM user metadata, restored after login and synchronized with the shared/host Paraglide runtimes and `core.i18n`. The small reactive theme store delegates DOM updates and safe appearance caching to `@h-ai/ui/theme` (`applyTheme` / `getSavedTheme`); the framework uses the `theme` localStorage key. Appearance selectors live in personal settings and save through the authenticated profile contract.
 
-## Adding a locale
+## i18n and themes
 
-1. Add the locale to `project.inlang/settings.json` `locales` array.
-2. Add the same locale to every enabled frontend `project.inlang/settings.json`.
-3. Create `messages/{locale}.json` in shared and each enabled frontend.
-4. Run root `pnpm i18n:compile` to compile shared and every enabled frontend Paraglide output. You can also run `pnpm paraglide:compile` inside one package when editing that package only.
+Shared page copy belongs in `messages/{zh-CN,en-US}.json`. Frontend-specific copy belongs in each app's own messages directory. Keep `baseLocale` and `locales` aligned across all enabled projects, then run root `pnpm i18n:compile`; do not edit generated Paraglide files.
 
-## Customizing theme and shell
+The scaffold theme configuration determines the themes compiled into frontend CSS. Personal settings offer only those available themes. Customize the common layout in `src/lib/components/AppShell.svelte`, the management pages in adjacent components, and business behavior in `src/lib/stores/management-store.svelte.ts`.
 
-- Theme names come from the scaffold `fullstack.theme` config and are rendered into each frontend `src/app.css` daisyUI plugin block.
-- `themeStore` persists the selected theme in local storage under `{{projectName}}:theme`.
-- To customize the global chrome, edit `src/lib/components/AppShell.svelte`; to customize a single frontend page, edit that frontend's route and messages.
+## Validation
+
+Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Shared API tests exercise real transport key exchange, encrypted request/response handling, configured core metadata and credential forwarding. Root browser tests cover administrator and ordinary-user workflows, avatar rendering, persisted preferences, password/session invalidation and narrow-screen layout.

@@ -1,0 +1,21 @@
+login:
+  password: true
+  otp: false
+  ldap: false
+  apikey: false
+password:
+  minLength: 8
+  maxLength: 128
+  requireUppercase: false
+  requireLowercase: false
+  requireNumber: false
+  requireSpecialChar: false
+session:
+  maxAge: 86400
+  sliding: true
+  singleDevice: false
+  refreshTokenMaxAge: 604800
+rbac:
+  defaultRole: user
+# 仅由应用创建 admin/user，避免生成无业务用途的默认角色与权限。
+seedDefaultData: false

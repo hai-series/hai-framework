@@ -2,14 +2,24 @@
 
 后端 API Service，基于 `@h-ai/serv` 将共享 contract 装配为最小 HTTP App 抽象，不在应用代码中直接暴露 Hono。
 
-## 骨架说明
+## 默认功能与配置
 
 - `config/_core.yml`：应用元信息（名称 / 版本 / 环境 / 语言），启动时由 `core.config` 加载。
 - `config/_serv.yml`：服务端运行时设置（CORS 来源等）。
-- `src/index.ts`：进程入口，先 `core.init({ configDir: './config' })` 加载配置再启动监听。
+- `config/_db.yml` / `_cache.yml` / `_iam.yml` / `_storage.yml` / `_audit.yml`：mini 管理所需模块配置，初始化前使用模块公开 Schema 验证。
+- `src/index.ts`：进程入口，先 `core.init({ configDir: './config' })`，再初始化 reldb → cache → crypto → storage → iam → audit；启动失败及退出反序释放。
 - `src/app-server.ts`：服务装配入口，挂载健康检查、OpenAPI、docs 与 procedures；应用名称 / 版本与 CORS 来源均取自上述配置。
 - `src/server/procedures/app-procedures.ts`：app 领域 procedures，对应 contract 中的 `app.info` / `app.echo` 路由。
-- `tests/app-server.test.ts`：通过 `ServerApp.request()` 验证健康检查与业务路由。
+- `src/server/procedures/admin-procedures.ts`：认证、管理员用户/角色/审计管理和个人设置，使用 `.auth()` / `.role('admin')` 守卫。每个请求读取用户最新启用状态、角色和权限。
+- 当前用户与刷新 procedures 直接选用 `@h-ai/serv/features/iam` 的默认实现；仅覆写登录、退出、修改密码以追加业务审计。未选的注册/OTP/通用管理接口不挂载，HTTP App 类型直接复用公开 `ServHttpApp`。
+- `src/server/admin-service.ts`：角色分配、头像上传和审计编排，全部底层操作复用 hai 模块。固定 admin/user 两种角色；锁内重新鉴权，禁止管理员自删、自禁用、自降级，并补偿用户更新失败后的角色变更。
+- `tests/app-server.test.ts`：真实加密 HTTP 测试，覆盖 Cookie/受信原生刷新、RBAC、旧会话权限、并发管理操作、补偿、头像安全、偏好、审计及会话失效。
+
+首次启动前复制根目录 `.env.example` 为 `.env` 并填写 `HAI_ADMIN_DEFAULT_PASSWORD`（至少 8 位）；`dev`/`start` 自动读取。仅在没有用户时创建用户名 `admin`，无默认密码。所有业务 JSON 请求和响应强制加密；健康检查和随机路径的只读头像图片可直接访问。头像支持 PNG/JPEG/WebP，最大 512 KiB，校验内容特征和大小后由服务端生成 key，不能指定任意文件路径。
+
+默认 SQLite + 本地 storage + memory cache 适合单实例，管理写入仅支持单写实例：进程内保护无过期时间，共享 cache 锁定期续租，丢失锁或释放失败会记录错误。多实例读取可使用共享数据库、Redis cache 和 S3 storage，但管理写请求必须统一路由到同一写实例；仅更换 Redis 不提供任意多写副本的最后管理员原子保证。另需配置传输会话粘性路由：服务端私钥驻留单个进程，服务重启后客户端需重新协商。Web 使用 HttpOnly refresh Cookie + 内存 access token；仅同时满足客户端标识、body 通道头与受信原生 Origin 的 App/Desktop 请求返回 refresh token body。
+
+业务修改提交后的审计记录采用最大努力策略：写入失败输出包含操作及资源的结构化错误日志，业务仍返回原操作结果，避免将已经完成的变更误报为失败；应用启动时 audit 初始化失败则停止启动。
 
 ## 开发
 

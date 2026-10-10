@@ -41,9 +41,9 @@
       <div class='flex items-center gap-2 px-2 mb-6 text-xl font-bold'>
         <span class='icon-[tabler--cube] size-6 text-primary'></span>
 {{#if hasI18n}}
-        {m.app_title()}
+        {page.data.appConfig.name}
 {{else}}
-        管理后台
+        {page.data.appConfig.name}
 {{/if}}
       </div>
       <ul class='gap-1'>

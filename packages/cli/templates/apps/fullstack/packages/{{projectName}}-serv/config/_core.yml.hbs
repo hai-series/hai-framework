@@ -6,9 +6,16 @@
 # 每个叶子项都可由约定式 HAI 环境变量覆盖，敏感值不要写入文件。
 # =============================================================================
 
-name: {{fullstack.servPackageName}}
+{{yaml 'name' fullstack.appName}}
 version: 0.1.0
-env: ${HAI_ENV:development}
-debug: ${HAI_DEBUG:false}
+env: development
+debug: false
 
 defaultLocale: {{fullstack.i18n.baseLocale}}
+logging:
+  level: info
+  format: json
+  redact:
+    - password
+    - token
+    - secret

@@ -29,7 +29,18 @@ Fullstack 多包工程入口。先读 README、根 workspace 脚本与相关 pac
 
 - 前端负责 UI 与请求编排；后端业务放 serv，共享能力放 shared。本样板默认不用 `@h-ai/kit`，不要混入 SvelteKit load / route 结构。
 - 用户文本按 shared 跨端文案与各 app 专属文案分工，同步现有 locale。
-- 认证接入前检查现有实现；样板不意味着已配好 Cookie 或安全 token 存储。新增认证时 Web 明确 Cookie/内存方案，App 原生端配置安全 TokenStorage，Desktop 按 Tauri 安全边界实现。
+- 本样板默认启用 IAM、reldb、cache、audit、storage 和 crypto，复用现有初始化与关闭顺序；新增模块前先检查依赖、配置与公开契约。
+- 应用名称、版本、环境、日志与 locale 配置通过 core 统一获取；浏览器显示来自服务端 `app.info`，不另写硬编码副本或将私有配置注入客户端。
+
+## 管理与安全边界
+
+- `admin` / `user` 是固定角色代码。管理员进入用户、角色和审计管理；普通用户只进入个人设置。服务端为每个管理操作验证角色，个人资料、密码和头像按当前会话绑定用户，不能只靠导航隐藏保护权限。
+- 角色管理更新说明并显示人数，用户管理负责角色分配；保留当前管理员的自删除、自禁用、自降级及最后管理员保护，并验证并发管理请求。
+- JSON 业务请求与响应统一经 typed api-client 和 serv 的 crypto transport 加解密，包含登录与刷新；健康/就绪检查和公开头像二进制资源遵循已有例外，不能为新增业务 API 绕过传输加密。
+- Web 使用内存 access token 和 HttpOnly refresh Cookie；App 原生端装配 `createCapacitorTokenStorage`，浏览器预览沿用 Cookie；Desktop 原生端使用内存 TokenStorage，重启后重新登录。原生 body 刷新通道同时验证 `X-HAI-Token-Transport: body`、端对应的 `x-request-client` 与受信完整 Origin，刷新请求沿用这些头。敏感 token 不写 localStorage，不擅自将其持久化到普通配置文件。
+- 头像接受 PNG/JPEG/WebP，最大 512 KiB；contract、客户端与服务端校验保持一致。服务端验证实际图片数据并生成 storage key；普通用户仅更新自己的头像，管理员可替用户更新。
+- 用户与审计查询按 contract 分页，`page >= 1`、`pageSize` 为 1–100；页面默认每页 20 条。新增筛选同步 schema、procedure、store 和测试，SQL 值参数化。
+- 语言与主题偏好保存到当前用户 metadata，客户端只应用已支持的值。审计仅记录操作字段和资源标识，不记录密码、token、头像内容或联系信息。
 
 ## 质量门禁
 
@@ -52,4 +63,4 @@ pnpm test:e2e
 
 ## 优先 Skills
 
-构建与验收：`hai-build`、`hai-app-review`、`hai-app-tests`。模块使用：`hai-core`、`hai-ui`、`hai-serv`、`hai-api-contract`、`hai-api-client`、`hai-capacitor`；其余按需选择。
+构建与验收：`hai-build`、`hai-app-review`、`hai-app-tests`。管理业务按需读取 `hai-iam`、`hai-reldb`、`hai-cache`、`hai-audit`、`hai-storage`、`hai-crypto`；配置与跨端读取 `hai-core`、`hai-ui`、`hai-serv`、`hai-api-contract`、`hai-api-client`、`hai-capacitor`。

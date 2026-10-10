@@ -10,19 +10,11 @@ import { paraglideMiddleware } from '$lib/paraglide/server.js'
 {{/if}}
 import { initApp } from '$lib/server/init.js'
 import { core } from '@h-ai/core'
-{{#if features.crypto}}
-import { crypto } from '@h-ai/crypto'
-{{/if}}
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
 {{/if}}
 import { kit } from '@h-ai/kit'
 
-{{#if features.crypto}}
-// 初始化加密模块（同步）
-crypto.init()
-
-{{/if}}
 // =============================================================================
 // 应用初始化
 // =============================================================================

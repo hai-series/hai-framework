@@ -42,7 +42,7 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
   {
     title: 'admin',
     projectName: 'sample-admin',
-    createArgs: ['--type', 'admin', '--template', 'custom', '--features', 'iam,db,cache,crypto', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'admin', '--template', 'custom', '--features', 'iam,db,cache,crypto,storage,ai,audit', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
     expectedFiles: ['e2e/app.spec.ts', 'src/routes/api/auth/login/+server.ts'],
   },
   {
@@ -173,7 +173,7 @@ async function getFreePort(): Promise<number> {
 }
 
 function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): void {
-  runPnpm(projectPath, ['install'], envOptions)
+  runPnpm(projectPath, ['install', '--prefer-offline'], envOptions)
   runPnpm(projectPath, ['typecheck'], envOptions)
   runPnpm(projectPath, ['lint'], envOptions)
   runPnpm(projectPath, ['build'], envOptions)
@@ -186,7 +186,8 @@ function runNode(args: string[]): void {
 }
 
 function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): void {
-  runGate(pnpmBin, args, cwd, buildChildEnv(envOptions), true)
+  const nodeEnv = args[0] === 'build' || args[0] === 'test:e2e' ? 'production' : 'test'
+  runGate(pnpmBin, args, cwd, buildChildEnv(envOptions, nodeEnv), true)
 }
 
 /**
@@ -242,7 +243,7 @@ function describeHaiModules(cwd: string): string {
     .join(', ')
 }
 
-function buildChildEnv(envOptions: GateEnvOptions = {}): NodeJS.ProcessEnv {
+function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'production' = 'test'): NodeJS.ProcessEnv {
   return {
     ...process.env,
     ...(envOptions.baseUrl ? { BASE_URL: envOptions.baseUrl } : {}),
@@ -253,6 +254,13 @@ function buildChildEnv(envOptions: GateEnvOptions = {}): NodeJS.ProcessEnv {
         }
       : {}),
     CI: '1',
+    // 产物按生产模式构建，业务环境独立使用 core 覆盖值，避免继承 Vitest 的开发编译模式。
+    NODE_ENV: nodeEnv,
+    // 各种脚手架必须消费 core 的覆盖值，避免包名/翻译名称或固定日志级别冒充配置。
+    HAI_CORE_NAME: 'Configured scaffold',
+    HAI_CORE_VERSION: '9.8.7',
+    HAI_CORE_ENV: 'test',
+    HAI_CORE_LOGGING_LEVEL: 'warn',
   }
 }
 

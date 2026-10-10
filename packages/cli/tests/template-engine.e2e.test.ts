@@ -16,8 +16,10 @@
 
 import type { AppType, FeatureId } from '../src/cli-types.js'
 import path from 'node:path'
+import { runInNewContext } from 'node:vm'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
 // =============================================================================
@@ -75,6 +77,30 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await fse.remove(tmpRoot)
+})
+
+it('fullstack 的原生应用名称应读取 core 配置并正确转义', async () => {
+  const projectPath = path.join(tmpRoot, 'configured-fullstack')
+  const name = 'Operations: "管理台"\n<Workspace>\'s'
+  const context = buildTemplateContext({
+    name: 'configured-fullstack',
+    appType: 'fullstack',
+    frontends: ['web', 'app', 'desktop'],
+    features: [],
+    moduleConfigs: { core: { name } },
+    packageManager: 'pnpm',
+  })
+  await generateFromTemplates(projectPath, context)
+  const coreConfig: { name: string } = parse(await readGenerated(projectPath, 'packages/configured-fullstack-serv/config/_core.yml'))
+  const tauriConfig = JSON.parse(await readGenerated(projectPath, 'apps/configured-fullstack-desktop/src-tauri/tauri.conf.json'))
+  const capacitorConfig = await readGenerated(projectPath, 'apps/configured-fullstack-app/capacitor.config.ts')
+  const capacitorName = capacitorConfig.match(/appName: ('(?:\\.|[^'])*'),/)?.[1]
+  expect(coreConfig.name).toBe(name)
+  expect(await readGenerated(projectPath, 'apps/configured-fullstack-web/index.html')).toContain('&lt;Workspace&gt;&#x27;s')
+  expect(tauriConfig.productName).toBe(name)
+  expect(tauriConfig.app.windows[0].title).toBe(name)
+  expect(capacitorName).toBeDefined()
+  expect(runInNewContext(capacitorName!)).toBe(name)
 })
 
 // =============================================================================
@@ -271,7 +297,7 @@ describe('admin 应用类型生成', () => {
     it('应生成根 +page.svelte（带 i18n）', async () => {
       const content = await readGenerated(projectPath, 'src/routes/+page.svelte')
       expect(content).toContain('import * as m from \'$lib/paraglide/messages\'')
-      expect(content).toContain('{m.app_title()}')
+      expect(content).toContain('{page.data.appConfig.name}')
       // i18n 模式下不应有硬编码中文文案（注释除外）
       const scriptEnd = content.indexOf('</script>')
       const htmlPart = content.slice(scriptEnd)
@@ -280,7 +306,7 @@ describe('admin 应用类型生成', () => {
 
     it('应生成 admin 布局', async () => {
       const content = await readGenerated(projectPath, 'src/routes/admin/+layout.svelte')
-      expect(content).toContain('{m.app_title()}')
+      expect(content).toContain('{page.data.appConfig.name}')
       expect(content).toContain('m.nav_dashboard()')
     })
 

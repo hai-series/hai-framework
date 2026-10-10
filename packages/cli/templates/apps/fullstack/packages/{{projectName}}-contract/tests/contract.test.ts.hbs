@@ -19,6 +19,9 @@ describe('{{fullstack.contractPackageName}}', () => {
     const result = AppInfoOutputDataSchema.safeParse({
       name: '{{fullstack.servPackageName}}',
       version: '0.1.0',
+      env: 'test',
+      defaultLocale: 'zh-CN',
+      supportedLocales: ['zh-CN', 'en-US'],
       startedAt: '2026-01-01T00:00:00.000Z',
       frontends: [...ENABLED_FRONTENDS],
     })

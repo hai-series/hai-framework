@@ -57,7 +57,7 @@ templates/
 │       └── settings.json    # Paraglide 项目配置
 │
 └── skills/                  # AI Skill 与各 appType 桥接指引
-    └── bridges/             # admin / api / website / h5 / mobile-app / fullstack 专属 AGENTS/Copilot/Claude
+    └── bridges/             # admin / api / website / h5 / mobile-app / fullstack 专属 AGENTS/Copilot
 ```
 
 ## AI Skill 模板（Single Source of Truth）
@@ -66,12 +66,12 @@ templates/
 
 - `hai create` 会把 `templates/skills/` 下所有 `hai-*` Skill 目录复制到 `.agents/skills/<skill>/`，再按 appType 排除互斥项（例如 fullstack 不复制 `hai-kit`；admin / website / h5 不复制 `hai-serv`、`hai-api-contract`、`hai-api-client`、`hai-capacitor`；mobile-app 不复制 `hai-core`、`hai-kit`、`hai-serv`、`hai-api-contract`）
 - `bridges/<appType>/copilot-instructions.md` 会复制到 `.github/copilot-instructions.md`；没有专属文件时回退到通用桥接文件
-- `bridges/<appType>/AGENTS.md`、`bridges/<appType>/CLAUDE.md` 会复制到项目根目录，确保不同样板工程使用自己的 AI 指引
+- `bridges/<appType>/AGENTS.md` 会复制到项目根目录，确保不同样板工程使用自己的 AI 指引；通用 `CLAUDE.md` 仅包含 `@AGENTS.md`
 - `opencode.json` 会复制到项目根目录
 - `templates/skills/AGENTS.md`、`CLAUDE.md`、`copilot-instructions.md` 与 `opencode.json` 不是多余副本：它们是 generic fallback，主要服务于缺少 appType 上下文时的桥接复制与 `hai add` 回填 AI 支持
 - `opencode.json` 使用 OpenCode 的 `instructions` 配置复用 `.github/copilot-instructions.md`；`.agents/skills/` 由 OpenCode 原生发现，不再写入过期的 `skills.paths`
-- `CLAUDE.md` 作为 Claude Code 的原生项目指引入口，并通过 `@AGENTS.md` 复用共享规范；`.agents/skills/` 仍是共享参考目录，而非 Claude Code 的原生 project skills 目录
-- `hai add` 只补齐缺失的 AI 支持文件，不覆盖用户已自定义的桥接文件，也不会自动删除遗留的 `.github/skills/`
+- `CLAUDE.md` 通过 `@AGENTS.md` 复用共享规范，Claude Code 按其中的任务导航读取 `.agents/skills/` 正文与参考。CLI 不生成 `.claude/` 技能副本；此模式不提供 Claude 原生技能自动发现或 `/skill` 命令。依据：[Claude Code 项目指引](https://code.claude.com/docs/en/memory)、[原生 skills](https://code.claude.com/docs/en/skills)
+- `hai add` / `hai init` 只补齐缺失的 AI 支持文件，不覆盖用户已自定义的桥接文件，也不会自动删除遗留的 `.github/skills/` 或 `.claude/`
 
 ## 文件类型说明
 

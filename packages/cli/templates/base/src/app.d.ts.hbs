@@ -6,6 +6,10 @@ import '@h-ai/ui/auto-import'
 {{/if}}
 declare global {
   namespace App {
+    interface PageData {
+      /** 经服务端 core 解析后可公开的应用配置 */
+      appConfig: Pick<import('@h-ai/core').CoreConfig, 'name' | 'version' | 'env' | 'defaultLocale'>
+    }
     interface Locals {
       /** 请求 ID */
       requestId: string

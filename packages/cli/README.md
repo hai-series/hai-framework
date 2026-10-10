@@ -25,13 +25,15 @@ CLI 从 `templates/skills/` 将所选 skill 的完整目录复制到生成项目
 
 日常新增、修改、修复功能由 `AGENTS.md` 引导读取 `hai-app-create/SKILL.md` 与 `development.md`：先把需求映射到框架现成功能、配置和扩展点，再依据当前安装版本的 exports/类型实现。适用能力优先复用；能力不足时说明具体缺口，不为模块覆盖率安装无关依赖。Codex 使用 `.agents/skills/`，仍需遵循项目根 `AGENTS.md` 的常驻规则。
 
-工具入口按各自机制交付：Codex/Cursor 使用 AGENTS 与共享 `.agents/skills/`；Copilot 使用 `.github/copilot-instructions.md` 与共享技能；OpenCode 使用 AGENTS、opencode.json 与共享技能。Claude Code 使用 CLAUDE.md 和 `.claude/skills/<name>/SKILL.md` 原生入口，该入口仅保留发现元数据并指向共享正文，参考文件仍只维护在 `.agents/skills/`。无需符号链接权限，也不为每个工具复制完整正文。依据：[Claude](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
+工具入口共享同一份规则与技能：Codex/Cursor 使用 AGENTS 与 `.agents/skills/`；Copilot 使用 `.github/copilot-instructions.md` 与共享技能；OpenCode 使用 AGENTS、opencode.json 与共享技能。Claude Code 的根 CLAUDE.md 仅包含 `@AGENTS.md`，通过共享规则的任务导航按需读取 `.agents/skills/` 正文和参考文件。CLI 不创建 `.claude/`，无需重复技能或符号链接。此模式不提供 Claude 原生技能自动发现或 `/skill` 命令；项目已有的 Claude 设置与技能保留。依据：[Claude 项目指引](https://code.claude.com/docs/en/memory)、[Claude 原生 skills](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
+
+Claude Code v2.1.277 起也可直接读取根 `AGENTS.md`（没有更高优先级项目 CLAUDE 文件且相关内置插件启用时）。保留这一行导入可兼容旧版及未开启该能力的会话，官方说明导入不会重复加载规则；仍无须 `.claude/` 目录。参见 [AGENTS.md 支持](https://code.claude.com/docs/en/memory#agentsmd)。
 
 生成项目共享 `eslint-rules.js`，lint 拦截显式 `any`、console、无理由抑制、双重 unknown 断言、框架内部源码导入及明确的 localStorage 敏感键写入；合理的第三方 workaround 需局部说明。静态规则不能证明权限隔离、输入安全、事务或日志脱敏，相关行为仍需测试与审查。
 
 已有项目先更新 CLI，再运行 `hai init` 补齐缺失的流程 skill、参考资源和入口；该操作保留现有文件，即使 `--force` 也不覆盖 AI 规则。旧入口、已存在的 skills、ESLint 配置与脚本需要对照新生成项目合并，缺失的 .npmrc/.gitignore 也需补齐；只补文件不会自动升级旧规则。模板变更未发布前可通过本仓库构建的 CLI 生成对照项目，不要把未发布能力当作已安装包能力。
 
-AI 文件写入前会解析已有文件和目录链接；共享技能、Claude 入口与项目桥接文件均限制在当前项目内。链接指向项目外时停止写入；项目内 Claude 目录链接到共享技能的用法仍受支持。
+AI 文件写入前会解析已有文件和目录链接；共享技能与项目桥接文件均限制在当前项目内。链接指向项目外时停止写入。已有 `.claude/` 目录及其链接不参与生成，`hai init` / `hai add` 不修改或删除其中的内容。
 
 交付验证同时检查发布归档和生成项目。`.npmrc` / `.gitignore` 在模板源中使用 `.hbs` 后缀，避免打包时被排除；生成时仍恢复正常文件名，保留依赖布局与敏感产物忽略规则。归档回归检查全部模板都进入 `.tgz`，不能仅验证源码目录中的 create。
 
@@ -115,6 +117,39 @@ npx hai g:model order
 | `default` | 标准模板 | IAM + DB + Cache + Crypto                           |
 | `full`    | 完整模板 | 全量业务模块 + API Service / contract 机制          |
 | `custom`  | 自定义   | 按需选择                                            |
+
+## Fullstack mini 管理后台
+
+`--type fullstack` 默认生成包含 IAM、reldb、cache、audit、storage、crypto 的管理工程；即使选择 minimal，管理所需模块也会保留。`--frontends` 选择 Web、Capacitor App 和 Tauri Desktop；miniapp 仍是说明占位，不参与运行或构建。
+
+```powershell
+npx hai create mini-admin --type fullstack --frontends web,app,desktop
+cd mini-admin
+pnpm.cmd install
+$env:HAI_ADMIN_DEFAULT_PASSWORD = '<your-strong-password>'
+pnpm.cmd dev
+```
+
+首次启动且用户表为空时必须提供 `HAI_ADMIN_DEFAULT_PASSWORD`，服务端据此创建 `admin` 账号；未提供时停止启动。密码遵循 `_iam.yml` 的策略，默认至少 8 位。已有用户后，该变量不会重设账号或密码；不要把实际密码写入源码、镜像或提交的环境文件。
+
+- 管理员可搜索、分页、新增、编辑、启禁用、删除用户并上传头像；服务端保护当前管理员，管理写操作在锁内重新鉴权，防止并发操作使管理员全部失权。
+- 角色固定为 `admin` / `user`，角色页显示人数并编辑说明，用户页分配角色。普通用户仅进入个人设置，直接请求管理接口也会被服务端拒绝。
+- 审计页按操作、资源与日期查询记录；成功登录、退出、密码变更和管理写操作写入审计，记录不含密码、token 或头像内容。
+- 个人设置提供资料、头像、语言、主题和密码修改；偏好保存到 IAM 用户 metadata。头像接受 PNG/JPEG/WebP，最大 512 KiB，服务端验证图片内容并生成 storage key。
+
+前端 typed api-client 与 serv 的 crypto transport 统一加解密 JSON 业务、登录与刷新。Web 使用内存 access token 和 HttpOnly refresh Cookie；App 原生端使用 Capacitor 安全 TokenStorage，Desktop 原生端仅在内存保存 token，重启后重新登录。原生刷新 body 通道校验客户端标识、显式传输头和受信 Origin；浏览器预览沿用 Cookie。公开头像是白名单内的二进制图片资源。
+
+Web/App/Desktop 复用同一个 `AdminWorkspace`、management store 和 typed client。当前用户与刷新直接选用框架默认 IAM procedures，主题缓存与 DOM 更新复用 `@h-ai/ui/theme`；应用只编排固定角色、自我保护、头像与审计等业务规则。
+
+默认 SQLite、本地 storage 与 memory cache 适用于单实例 mini 后台。管理写入仅支持单写实例；多实例读取需要共享数据库、存储、Redis cache 和传输会话粘性路由，管理写请求仍须路由至同一实例。仅更换 Redis 不能保证任意多写副本的最后管理员原子保护。生成后的根脚本提供 typecheck、lint、build、test、test:e2e；Capacitor/Tauri 交付另执行对应原生构建和打包。
+
+## 应用配置与显示
+
+所有模板从 `_core.yml` 统一读取 `name`、`version`、`env`、`defaultLocale` 和 `logging`，通过 `core.config` 获取元信息并使用 `core.logger`。单应用配置在 `config/`；API workspace 在 `apps/<project>-service/config/`；fullstack 在 `packages/<project>-serv/config/`。日志级别与格式由 YAML 决定，不在初始化时另写固定 `logging` 覆盖。
+
+环境变量可按 core 约定覆盖，如 `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL`；整体 `HAI_CORE` 覆盖遵循父节点优先规则。服务端配置变更后重启服务，容器显式设置 `HAI_CORE_ENV=production`，由该值启用生产安全策略。
+
+SvelteKit 的服务端 layout 只下发名称、版本、环境和默认语言等公开白名单。独立 mobile-app 的 Vite 配置在 Node 构建阶段通过 core 解析 YAML，再注入公开值及浏览器日志级别/格式；修改 YAML 或覆盖变量后需要重新构建。Fullstack 前端通过加密的 `app.info` 获取服务端公开元信息。任何模板都不能把完整 core/模块配置、密钥或日志脱敏上下文注入浏览器。
 
 ## 全局选项
 

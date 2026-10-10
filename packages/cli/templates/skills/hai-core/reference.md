@@ -140,6 +140,8 @@ feature:
 
 `core.logger` 既是默认 Logger 实例，也是日志管理的统一入口。
 
+`core.init` 加载 `_core.yml.logging`、`configure` 和 `setLevel` 会改变已有默认、模块及嵌套 child Logger 的后续实际输出；不需要重新创建模块 Logger。`create` 显式指定的 level/format/context 保持优先，未指定选项动态继承全局配置；调用时 context 覆盖固定 context，附加 redact 规则统一生效。
+
 **日志记录**（实例方法）：`trace` / `debug` / `info` / `warn` / `error` / `fatal`
 
 ```typescript
@@ -525,9 +527,9 @@ logger.debug('Data fetched', { count: items.length })
 | 功能 | 行为 |
 |------|------|
 | `core.config` 文件配置 | 不支持；文件相关方法返回 `SERVICE_UNAVAILABLE`，配置应由服务端读取后下发 |
-| `format: 'json' \| 'pretty'` | 被忽略（始终输出到 DevTools console） |
-| 自定义 `redact` 配置 | 浏览器不使用该配置，但默认 sanitizeSensitiveFields 仍会清理上下文敏感字段；消息文本需调用方脱敏 |
-| `fatal` 级别 | 映射为 `console.error`（带 `[FATAL]` 前缀） |
-| context 输出 | JSON 字符串追加到消息末尾（非结构化对象） |
+| `format: 'json' \| 'pretty'` | 始终输出到 DevTools console；json 为包含 level/msg 的 JSON 字符串，pretty 为可读消息与上下文 |
+| 自定义 `redact` 配置 | 与默认 sanitizeSensitiveFields 同时生效；支持嵌套点/括号路径与 `*`，不修改调用方对象；消息文本需调用方脱敏 |
+| `fatal` 级别 | 映射为 console.error；pretty 带 `[FATAL]` 前缀，json 使用 `level: 'fatal'` |
+| context 输出 | pretty 追加 JSON 上下文，json 合并上下文到结构化 JSON 字符串 |
 
 云资源输出格式与部署配置消费见 [hai-deploy](../hai-deploy/SKILL.md)；这里的父节点覆盖规则同样适用。

@@ -7,6 +7,9 @@ import { appContract } from '{{fullstack.contractPackageName}}'
 export interface CreateAppProceduresOptions {
   readonly name: string
   readonly version: string
+  readonly env: string
+  readonly defaultLocale: string
+  readonly supportedLocales: readonly string[]
   readonly startedAt: string
   readonly frontends: readonly AppFrontendTarget[]
 }
@@ -32,6 +35,9 @@ function createAppInfo(options: CreateAppProceduresOptions): AppInfoOutputData {
   return {
     name: options.name,
     version: options.version,
+    env: options.env,
+    defaultLocale: options.defaultLocale,
+    supportedLocales: [...options.supportedLocales],
     startedAt: options.startedAt,
     frontends: [...options.frontends],
   }

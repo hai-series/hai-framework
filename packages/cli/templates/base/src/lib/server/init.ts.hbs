@@ -30,6 +30,10 @@
 {{#if features.ai}}
 import type { AIConfigInput } from '@h-ai/ai'
 {{/if}}
+{{#if features.audit}}
+import type { AuditInitConfigInput } from '@h-ai/audit'
+{{/if}}
+import type { CoreConfig } from '@h-ai/core'
 {{#if features.iam}}
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 {{/if}}
@@ -43,12 +47,15 @@ import type { StorageConfigInput } from '@h-ai/storage'
 import { ai } from '@h-ai/ai'
 {{/if}}
 {{#if features.audit}}
-import { audit } from '@h-ai/audit'
+import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 {{/if}}
 {{#if features.cache}}
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 {{/if}}
 import { core } from '@h-ai/core'
+{{#if features.crypto}}
+import { crypto } from '@h-ai/crypto'
+{{/if}}
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
 {{/if}}
@@ -81,8 +88,14 @@ export async function initApp(): Promise<void> {
   // 1. 加载配置
   core.init({
     configDir: './config',
-    logging: { level: 'info' },
   })
+
+{{#if features.crypto}}
+  // 加密模块初始化完成后才继续启动依赖它的 IAM / transport。
+  const cryptoResult = await crypto.init()
+  if (!cryptoResult.success)
+    throw new Error(`Crypto initialization failed: ${cryptoResult.error.message}`)
+{{/if}}
 
 {{#if features.db}}
   // ─── 配置校验 ───
@@ -97,6 +110,11 @@ export async function initApp(): Promise<void> {
     throw new Error(`Cache config invalid: ${cacheValidation.error.message}`)
   }
 {{/if}}
+{{#if features.audit}}
+  const auditValidation = core.config.validate('audit', AuditInitConfigSchema)
+  if (!auditValidation.success)
+    throw new Error(`Audit config invalid: ${auditValidation.error.message}`)
+{{/if}}
 
 {{#if features.db}}
   // ─── 获取配置 ───
@@ -107,6 +125,9 @@ export async function initApp(): Promise<void> {
 {{/if}}
 {{#if features.iam}}
   const iamConfig = core.config.getOrThrow<IamConfigSettingsInput>('iam')
+{{/if}}
+{{#if features.audit}}
+  const auditConfig = core.config.getOrThrow<AuditInitConfigInput>('audit')
 {{/if}}
 {{#if features.storage}}
   const storageConfig = core.config.get<StorageConfigInput>('storage')
@@ -177,9 +198,9 @@ export async function initApp(): Promise<void> {
 
 {{#if features.audit}}
   // ─── 初始化审计 ───
-  const auditResult = await audit.init()
+  const auditResult = await audit.init(auditConfig)
   if (!auditResult.success) {
-    core.logger.warn('Audit initialization failed', { error: auditResult.error.message })
+    throw new Error(`Audit initialization failed: ${auditResult.error.message}`)
   }
 {{/if}}
 
@@ -194,5 +215,5 @@ export async function initApp(): Promise<void> {
 {{/if}}
 
   initialized = true
-  core.logger.info('{{projectName}} initialized.')
+  core.logger.info('Application initialized', { app: core.config.getOrThrow<CoreConfig>('core').name })
 }

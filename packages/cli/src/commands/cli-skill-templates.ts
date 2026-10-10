@@ -10,7 +10,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import Handlebars from 'handlebars'
-import { parse, stringify } from 'yaml'
 import { cliM } from '../cli-i18n.js'
 
 /**
@@ -241,41 +240,7 @@ async function copySkill(
     }
   }
 
-  copiedFiles.push(...await copyClaudeSkillAlias(templatesDir, skillName, projectPath, overwrite))
   return copiedFiles
-}
-
-/** Claude 使用原生发现入口，技能正文与参考仍从共享目录读取。 */
-async function copyClaudeSkillAlias(
-  templatesDir: string,
-  skillName: string,
-  projectPath: string,
-  overwrite: boolean,
-): Promise<string[]> {
-  const destination = `.claude/skills/${skillName}/SKILL.md`
-  const aliasPath = path.join(projectPath, destination)
-  const sharedPath = path.join(projectPath, '.agents/skills', skillName, 'SKILL.md')
-  if (await fse.pathExists(aliasPath)) {
-    // 兼容项目已有目录链接；原生入口已指向共享正文时不能覆写成自引用。
-    if (!overwrite || await fse.realpath(aliasPath) === await fse.realpath(sharedPath))
-      return []
-  }
-
-  await assertProjectOutputPath(projectPath, aliasPath)
-
-  const sharedContent = await fse.readFile(sharedPath, 'utf8')
-  const sourceContent = await fse.readFile(path.join(templatesDir, skillName, 'SKILL.md'), 'utf8')
-  const description = readSkillDescription(sharedContent) ?? readSkillDescription(sourceContent)
-  if (!description)
-    throw new Error(`Skill description missing: ${skillName}`)
-
-  const template = await fse.readFile(path.join(templatesDir, 'claude-skill.md.hbs'), 'utf8')
-  const content = Handlebars.compile(template, { noEscape: true })({
-    skillName,
-    frontmatter: `---\n${stringify({ name: skillName, description })}---`,
-  })
-  await fse.outputFile(aliasPath, content, 'utf8')
-  return [destination]
 }
 
 /** 写入前解析已有目录/文件链接，所有 AI 输出均限制在当前项目内。 */
@@ -290,24 +255,6 @@ async function assertProjectOutputPath(projectPath: string, destination: string)
   const relativeAncestor = path.relative(await fse.realpath(projectPath), await fse.realpath(ancestor))
   if (relativeAncestor === '..' || relativeAncestor.startsWith(`..${path.sep}`) || path.isAbsolute(relativeAncestor))
     throw new Error(cliM('cli_generateOutsideWorkspace'))
-}
-
-/** 保留已有共享技能的描述；历史无 frontmatter 入口由模板提供发现元数据。 */
-function readSkillDescription(content: string): string | undefined {
-  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1]
-  if (!frontmatter)
-    return undefined
-  try {
-    const metadata: unknown = parse(frontmatter)
-    if (metadata && typeof metadata === 'object' && 'description' in metadata
-      && typeof metadata.description === 'string' && metadata.description.trim()) {
-      return metadata.description
-    }
-  }
-  catch {
-    // 自定义历史入口无法解析时不覆盖它，仅回退模板的发现描述。
-  }
-  return undefined
 }
 
 async function copySkills(

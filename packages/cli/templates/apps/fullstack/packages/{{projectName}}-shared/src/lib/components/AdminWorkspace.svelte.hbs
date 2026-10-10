@@ -1,0 +1,73 @@
+<script lang="ts">
+  import type { ManagementApiOptions } from '../api/api-client.js'
+  import { Alert, Skeleton } from '@h-ai/ui/components/compounds/index'
+  import { Button } from '@h-ai/ui/components/primitives/index'
+  import { LoginForm } from '@h-ai/ui/components/scenes/iam/index'
+  import { onMount } from 'svelte'
+  import * as m from '../paraglide/messages.js'
+  import { ManagementStore } from '../stores/management-store.svelte.js'
+  import AppShell from './AppShell.svelte'
+
+  interface Props {
+    platform: 'web' | 'app' | 'desktop'
+    apiOptions?: ManagementApiOptions
+    onLocaleChange?: (locale: string) => void
+  }
+  const { platform, apiOptions = {}, onLocaleChange }: Props = $props()
+  const store = new ManagementStore()
+  const loginErrors = $derived({ general: store.error })
+  const pageComponent = $derived.by(() => {
+    if (store.isAdmin && store.page === 'users')
+      return import('./UserManagement.svelte')
+    if (store.isAdmin && store.page === 'roles')
+      return import('./RoleManagement.svelte')
+    if (store.isAdmin && store.page === 'audit')
+      return import('./AuditManagement.svelte')
+    return import('./ProfileSettings.svelte')
+  })
+  onMount(() => {
+    void store.initialize(apiOptions, onLocaleChange)
+    return () => {
+      void store.close()
+    }
+  })
+  $effect(() => {
+    if (store.info)
+      document.title = store.info.name
+  })
+</script>
+
+{#key store.locale}
+  {#if store.initializing}
+    <div class="grid min-h-dvh place-items-center bg-base-200/50"><div class="w-72 space-y-4"><Skeleton variant="title" /><Skeleton count={3} /><p class="text-center text-sm text-base-content/50">{m.home_loading()}</p></div></div>
+  {:else if !store.user}
+    <main class="grid min-h-dvh place-items-center bg-base-200/50 px-4 py-10">
+      <section class="w-full max-w-md rounded-2xl border border-base-content/8 bg-base-100 p-7 shadow-xl shadow-base-content/3 sm:p-9" data-testid="login-page">
+        <div class="mb-7 flex items-center gap-3">
+          <span class="grid size-11 place-items-center rounded-xl bg-primary text-primary-content"><span class="icon-[tabler--hexagon-letter-h] size-6"></span></span>
+          <div><h1 class="text-lg font-semibold" data-testid="app-name">{store.info?.name || m.login_title()}</h1><p class="mt-1 text-xs text-base-content/45">{m.login_description()}</p></div>
+        </div>
+        {#if store.notice}<Alert variant="success" class="mb-5" data-testid="notice">{store.notice}</Alert>{/if}
+        {#if !store.info}
+          <Alert variant="error">{store.error || m.home_error()}</Alert>
+          <Button class="mt-5 w-full" variant="primary" onclick={() => void store.initialize(apiOptions, onLocaleChange)}>{m.home_refresh()}</Button>
+        {:else}
+          <LoginForm loading={store.saving} showRememberMe={false} showForgotPassword={false} errors={loginErrors} onsubmit={data => store.login(data)} data-testid="login-form" />
+          <p class="mt-6 text-center text-xs text-base-content/40"><span data-testid="app-version">v{store.info.version}</span> · <span data-testid="app-environment">{store.info.env}</span></p>
+        {/if}
+      </section>
+    </main>
+  {:else}
+    <AppShell {platform} {store}>
+      <div class="space-y-5">
+        {#if store.error}<Alert variant="error" data-testid="error">{store.error}</Alert>{/if}
+        {#if store.notice}<Alert variant="success" data-testid="notice">{store.notice}</Alert>{/if}
+        {#await pageComponent}
+          <div class="space-y-4"><Skeleton variant="title" /><Skeleton count={3} /></div>
+        {:then { default: Page }}
+          <Page {store} />
+        {/await}
+      </div>
+    </AppShell>
+  {/if}
+{/key}

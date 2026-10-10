@@ -57,8 +57,7 @@ description: "同步 hai-framework 通用 skills、AI 入口与应用依赖，�
 
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
-- `CLAUDE.md`（如存在）
-- `.claude/skills/<skill>/SKILL.md` 的原生发现入口；描述同步共享技能，正文和参考仍从 `.agents/skills/` 读取，保留已声明的本地覆盖
+- `CLAUDE.md`（如存在，通过 `@AGENTS.md` 复用共享规则；不另复制 `.claude/skills/`，保留用户已有规则和技能）
 - `opencode.json`（如结构变化）
 
 新增/修改/修复任务入口必须能到达 `hai-app-create` 与其 `development.md`；审查入口能到达 `hai-app-review`。按目标架构/依赖交付所需模块技能，不把 SvelteKit 指令套到 API/Vite 项目。复制前比对应用私有覆盖，合并通用修正并保留差异，不能直接覆盖业务规则。

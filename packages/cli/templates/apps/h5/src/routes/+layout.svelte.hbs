@@ -42,6 +42,10 @@
 {{/if}}
 </script>
 
+<svelte:head>
+  <title>{page.data.appConfig.name}</title>
+</svelte:head>
+
 <div class='min-h-screen flex flex-col bg-base-200'>
   <main class='flex-1 pb-16'>
     {@render children()}

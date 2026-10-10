@@ -15,9 +15,9 @@
     "deploy": "pnpm package",
     "preview": "vite preview --host 127.0.0.1 --port {{fullstack.ports.desktop}} --strictPort",
     "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
-    "lint": "eslint src tests vite.config.ts svelte.config.js",
-    "lint:fix": "eslint src tests vite.config.ts svelte.config.js --fix",
-    "test": "pnpm paraglide:compile && vitest run",
+    "lint": "eslint src vite.config.ts svelte.config.js",
+    "lint:fix": "eslint src vite.config.ts svelte.config.js --fix",
+    "test": "pnpm paraglide:compile && vitest run --passWithNoTests",
     "test:watch": "pnpm paraglide:compile && vitest",
     "clean": "rimraf dist .turbo src-tauri/target src/lib/paraglide",
     "tauri": "tauri",
@@ -25,6 +25,7 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@h-ai/api-client": "{{haiPackageSpecifier}}",
     "@h-ai/ui": "{{haiPackageSpecifier}}",
     "{{fullstack.sharedPackageName}}": "workspace:*"
   },

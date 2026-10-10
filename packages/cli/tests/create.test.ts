@@ -112,6 +112,16 @@ describe('buildTemplateContext', () => {
 /* ---------- buildFullstackProjectContext 验证 ---------- */
 
 describe('fullstack TemplateContext', () => {
+  it.each([{ features: [] as FeatureId[] }, { features: ['crypto'] as FeatureId[] }])('fullstack 不允许 $features 移除管理后台必需模块', ({ features }) => {
+    const context = buildTemplateContext({ name: 'mini-admin', appType: 'fullstack', features, packageManager: 'pnpm' })
+    for (const feature of ['iam', 'db', 'cache', 'crypto', 'audit', 'storage']) expect(context.features[feature]).toBe(true)
+    for (const name of ['iam', 'reldb', 'cache', 'crypto', 'audit', 'storage']) expect(context.haiCatalogPackages[`@h-ai/${name}`]).toBeDefined()
+  })
+
+  it('fullstack 显示名称采用 core 配置，不采用 serv 包名', () => {
+    const context = buildTemplateContext({ name: 'mini-admin', appType: 'fullstack', features: [], moduleConfigs: { core: { name: 'Configured app' } }, packageManager: 'pnpm' })
+    expect(context.fullstack?.appName).toBe('Configured app')
+  })
   it('应生成 contract / serv 包名和 E2E 默认前端', () => {
     const ctx = buildTemplateContext({
       name: 'demo',

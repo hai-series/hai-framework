@@ -11,6 +11,8 @@
 
 ## 将需求映射到现有能力
 
+应用元信息只有一份配置来源：名称、版本、环境、默认语言与日志设置来自 `_core.yml`，使用 `core.config` 与 `core.logger`；Node 启动时不通过固定 `logging` 覆盖 YAML。SvelteKit 服务端 layout 和 fullstack `app.info` 仅公开必要元信息，不能下发整个 core 或模块配置。独立 Vite mobile-app 在 Node 构建阶段经 core 加载 YAML/环境覆盖并注入公开字段，配置变化需重新构建。环境覆盖使用 `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` 等既有规则；容器明确配置生产环境，不能用另一个状态来源代替 `core.env`。
+
 开发前，对本次涉及的需求简述“需求 → 现有应用实现/框架能力 → 版本与契约依据 → 修改位置与验收”。简单任务可用几句话；跨模块任务用表格。查找顺序：已有应用实现 → 框架公开能力和配置 → 最小业务补充。
 
 下表技能名用于能力导航；先确认 `.agents/skills/<name>/SKILL.md` 存在再读取。CLI 按应用类型/已选模块交付技能，缺目录不代表框架没有该能力：继续查已安装包的公开 exports/types；确需补充模块/技能时按当前 CLI 帮助和项目依赖策略处理，不能跳过需求匹配或猜测不存在的 API。
@@ -38,6 +40,8 @@
 | 原生设备与安全 token 存储 | `hai-capacitor` | 仅在适用平台启用；桌面/小程序依当前项目适配 |
 
 已有能力满足需求时使用它；已导入模块但仍手写其已有认证、缓存、上传、分页或 UI 功能，需要修正。确有缺口时记录缺失的具体能力、当前版本和最小补充方案，按需求增加依赖或应用代码；不为凑模块覆盖率增加服务和抽象。
+
+独立 fullstack 默认后台的 Web/App/Desktop 共用管理组件、状态与 typed client。`@h-ai/serv/features/iam` 默认 procedures 可按需选用并与 contract 对齐；仅为业务审计或资源策略覆写必要路由。主题的 DOM 更新和安全缓存使用 `@h-ai/ui/theme`（`applyTheme` / `getSavedTheme`），应用只保留响应式状态与已编译主题白名单。固定角色、管理员自我保护、头像资源范围及写失败补偿仍由应用按需求实现。
 
 ## 落实契约与安全边界
 

@@ -6,6 +6,7 @@
  */
 
 import type { AiModuleConfig, CacheModuleConfig, CoreModuleConfig, DbModuleConfig, FeatureId, IamModuleConfig, ModuleConfigs, StorageModuleConfig } from '../cli-types.js'
+import { stringify } from 'yaml'
 
 /**
  * 生成模块配置文件内容
@@ -58,10 +59,18 @@ function generateCoreConfig(cfg?: CoreModuleConfig): string {
 # 应用配置
 # =============================================================================
 
-name: ${name}
+${stringify({ name }).trim()}
 version: 0.1.0
 env: development
 debug: false
+
+logging:
+  level: info
+  format: json
+  redact:
+    - password
+    - token
+    - secret
 
 defaultLocale: ${locale}
 supportedLocales:
@@ -701,9 +710,6 @@ function generateAuditConfig(): string {
   return `# =============================================================================
 # 审计日志配置 (@h-ai/audit)
 # =============================================================================
-
-# 审计日志表名
-tableName: hai_audit_logs
 
 # 用户表名（用于 JOIN 查询）
 userTable: hai_iam_users

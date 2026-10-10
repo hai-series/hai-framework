@@ -2,6 +2,7 @@
   import { applyTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
   import { onMount } from 'svelte'
   import { closeApi, initApi, resolveApiBase, usesNativeTokenStorage } from './lib/api.js'
+  import { appConfig, initClientCore } from './lib/app-config.js'
   import { initCapacitor, isNativeApp } from './lib/capacitor.js'
   import * as m from './lib/paraglide/messages.js'
   import { getLocale } from './lib/paraglide/runtime.js'
@@ -22,6 +23,8 @@
 
   async function bootstrap(): Promise<void> {
     try {
+      initClientCore()
+      document.title = appConfig.name
       applyTheme(getSavedTheme(), false)
       setGlobalLocale(getLocale())
       await initCapacitor()
@@ -73,7 +76,7 @@
 {:else}
   <div class='hai-mobile-viewport'>
     <div class='hai-mobile-shell max-w-lg'>
-      <AppBar title={m.app_title()} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8' />
+      <AppBar title={appConfig.name} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8' />
 
       <main class='hai-mobile-main'>
         {#if activeTab === 'home'}
@@ -102,6 +105,7 @@
             </div>
 
             <Card title={m.status_title()} shadow='sm'>
+              <p class='mb-3 text-xs text-base-content/50'>{appConfig.name} · {appConfig.version} · {appConfig.env}</p>
               <div class='grid grid-cols-2 gap-3 text-sm'>
                 <div>
                   <p class='text-base-content/50'>{m.status_api_label()}</p>

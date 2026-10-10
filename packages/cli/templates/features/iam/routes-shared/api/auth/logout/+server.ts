@@ -5,11 +5,13 @@ import type { RequestHandler } from './$types'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
-export const POST: RequestHandler = async ({ cookies, locals }) => {
+export const POST: RequestHandler = kit.handler(async ({ cookies, locals }) => {
   const token = cookies.get('session_token')
   if (token) {
-    await iam.auth.logout(token)
+    const result = await iam.auth.logout(token)
+    if (!result.success)
+      return kit.response.fromError(result.error, locals.requestId)
   }
   cookies.delete('session_token', { path: '/' })
-  return kit.response.ok({ message: 'Logout successful' }, locals.requestId)
-}
+  return kit.response.ok({ authenticated: false }, locals.requestId)
+})

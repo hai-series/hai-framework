@@ -22,14 +22,21 @@ http:
 
 cors:
   origin: ${HAI_CORS_ORIGIN:*}
-  nativeOrigins: ${HAI_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
-  credentials: ${HAI_CORS_CREDENTIALS:false}
+  nativeOrigins: ${HAI_CORS_NATIVEORIGINS:http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  credentials: ${HAI_CORS_CREDENTIALS:true}
   allowedHeaders:
     - Authorization
     - Content-Type
     - X-Request-Id
     - X-Requested-With
+    - X-Request-Client
+    - X-HAI-Token-Transport
+    - X-Client-Id
+    - X-Encrypted
   exposedHeaders:
     - X-Request-Id
+    - X-Encrypted
 
-transport: false
+transport:
+  keyExchangePath: /_hai/key-exchange
+  maxClients: 10000

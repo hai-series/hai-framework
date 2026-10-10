@@ -21,17 +21,19 @@
 
 ## AI 向け使用ガイド
 
+Claude Code v2.1.277 以降は、優先されるプロジェクト CLAUDE ファイルがなく、標準機能が有効ならルート `AGENTS.md` を直接読めます。一行の `@AGENTS.md` ブリッジは旧版や無効なセッションも支援し、規則の重複や `.claude/` ディレクトリーを必要としません。[AGENTS.md の対応](https://code.claude.com/docs/en/memory#agentsmd)を参照してください。
+
 CLI は選択した skill のディレクトリー全体を `templates/skills/` から生成先の `.agents/skills/` にコピーします。`SKILL.md` は機能の境界とタスク案内、`reference.md`/`guide.md` は必要時に読む例を提供します。入口だけをコピーしてはいけません。AGENTS.md にアプリの制約を置き、Claude/Copilot のブリッジから参照します。テンプレート変更は関連するリポジトリー skill と同期し、生成テストで参照ファイルの完全な提供を確認します。
 
 通常の機能追加・変更・修正では、`AGENTS.md` が `hai-app-create/SKILL.md` と `development.md` に案内します。要件を既存のフレームワーク機能・設定・拡張点に対応付け、インストール済みバージョンの exports と型を確認して実装します。適用できる機能を優先して再利用し、不足する能力を具体的に説明します。利用率のために無関係な依存を追加しません。Codex は `.agents/skills/` とプロジェクトルートの `AGENTS.md` を使用します。
 
-各ツールの入口は同じ規則を共有します。Codex/Cursor は AGENTS と `.agents/skills/`、Copilot は `.github/copilot-instructions.md` と共有技能、OpenCode は AGENTS・opencode.json と共有技能を使用します。Claude Code は CLAUDE.md と `.claude/skills/<name>/SKILL.md` のネイティブ入口を使用し、発見用メタデータと共有本文へのリンクだけを保持します。参照ファイルは `.agents/skills/` に置き、シンボリックリンク権限や本文の複製は不要です。根拠：[Claude](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
+各ツールの入口は一つの規則と skill を共有します。Codex/Cursor は AGENTS と `.agents/skills/`、Copilot は `.github/copilot-instructions.md` と共有 skill、OpenCode は AGENTS・opencode.json と共有 skill を使用します。Claude Code のルート CLAUDE.md は `@AGENTS.md` のみを含み、共有規則のタスク案内から `.agents/skills/` の本文と参照ファイルを必要時に読みます。CLI は `.claude/` を生成せず、skill の複製やシンボリックリンクも不要です。この構成では Claude のネイティブ skill 自動検出や `/skill` コマンドは登録されません。既存の Claude 設定と skill は保持します。根拠：[Claude プロジェクト指針](https://code.claude.com/docs/en/memory)、[Claude ネイティブ skills](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
 
 生成プロジェクトは `eslint-rules.js` を共有します。lint は明示的な `any`、console、説明のない抑制、unknown を介した二重アサーション、フレームワーク内部ソースの import、既知の機密 localStorage キーへの書き込みを拒否します。必要なサードパーティーの回避策は局所的な説明を付けます。権限分離・入力安全性・トランザクション・ログのマスキングは静的規則だけでは証明できないため、テストとレビューで確認します。
 
 既存プロジェクトは CLI を更新して `hai init` を実行すると、不足するワークフロー skill・参照リソース・入口ファイルが補完されます。`--force` を使っても既存の AI 規則は上書きしません。既存の入口・skills・ESLint 設定・scripts は新規生成プロジェクトと比較してマージし、不足する .npmrc/.gitignore も補完してください。ファイル補完だけで古い規則は更新されません。公開前は本リポジトリーでビルドした CLI で比較用プロジェクトを生成し、未公開の能力とインストール済みパッケージの能力を区別します。
 
-AI ファイルの書き込み前に既存のファイル・ディレクトリーリンクを解決します。共有 skill、Claude 入口、プロジェクトのブリッジはプロジェクト内に限定し、外部へのリンクでは書き込みを停止します。プロジェクト内で Claude の skill ディレクトリーを共有ディレクトリーへリンクする構成は引き続き利用できます。
+AI ファイルの書き込み前に既存のファイル・ディレクトリーリンクを解決します。共有 skill とプロジェクトのブリッジはプロジェクト内に限定し、外部へのリンクでは書き込みを停止します。既存の `.claude/` ディレクトリーとリンクは生成対象外で、`hai init` / `hai add` はその内容を変更・削除しません。
 
 配布検証はパッケージアーカイブと生成プロジェクトの両方を対象にします。`.npmrc` / `.gitignore` のテンプレート源には `.hbs` を付けて梱包時の除外を避け、生成時に通常の名前へ戻します。依存配置と機密生成物の無視規則を維持し、全テンプレートが `.tgz` に含まれることを回帰検証します。
 
@@ -115,6 +117,39 @@ npx hai g:model order
 | `default`    | 標準構成   | IAM + DB + Cache + Crypto                                 |
 | `full`       | 全機能構成 | すべての業務モジュール + API Service / contract の仕組み  |
 | `custom`     | カスタム   | 必要に応じて選択                                          |
+
+## Fullstack mini 管理画面
+
+`--type fullstack` は IAM、reldb、cache、audit、storage、crypto を含む管理 workspace を既定で生成します。minimal を選んでも管理に必要なモジュールは有効です。`--frontends` で Web、Capacitor App、Tauri Desktop を選択します。miniapp は説明用のプレースホルダーで、実行・ビルド対象には含まれません。
+
+```powershell
+npx hai create mini-admin --type fullstack --frontends web,app,desktop
+cd mini-admin
+pnpm.cmd install
+$env:HAI_ADMIN_DEFAULT_PASSWORD = '<your-strong-password>'
+pnpm.cmd dev
+```
+
+初回起動でユーザーテーブルが空の場合、`admin` アカウントを作成するため `HAI_ADMIN_DEFAULT_PASSWORD` が必要です。未設定なら起動を停止します。パスワードは `_iam.yml` のポリシーに従い、既定では 8 文字以上です。ユーザーが存在する場合、この変数でアカウントやパスワードはリセットされません。実際のパスワードをソース、イメージ、コミットする環境ファイルに保存しないでください。
+
+- 管理者はユーザーの検索、ページング、作成、編集、有効・無効化、削除、アバター更新を行えます。サーバーは現在の管理者を保護し、更新ロック内で認可を再確認するため、同時操作で全管理者の権限を失うことを防ぎます。
+- ロールは `admin` / `user` の 2 種類です。ロール画面は人数表示と説明編集、ユーザー画面はロール割り当てを担当します。一般ユーザーは個人設定のみ利用でき、管理 API への直接アクセスもサーバーで拒否します。
+- 監査画面は操作、リソース、日付で記録を検索します。ログイン成功、ログアウト、パスワード変更、管理の書き込みを監査に記録し、パスワード、token、アバター内容は含めません。
+- 個人設定はプロフィール、アバター、言語、テーマ、パスワード変更を提供します。設定は IAM ユーザー metadata に保存します。アバターは PNG/JPEG/WebP、最大 512 KiB で、サーバーが画像内容を検証して storage key を生成します。
+
+型付き api-client と serv の crypto transport が、JSON 業務リクエスト、ログイン、更新を双方向に暗号化します。Web はメモリー内 access token と HttpOnly refresh Cookie を使います。App のネイティブ版は Capacitor の安全な TokenStorage、Desktop のネイティブ版はメモリーのみを使い、再起動後は再ログインします。ネイティブの refresh body 通路はクライアント識別子、明示的な通信ヘッダー、信頼する Origin を検証し、ブラウザープレビューは Cookie モードを使います。公開アバターはホワイトリスト内のバイナリー画像リソースです。
+
+Web/App/Desktop は同じ `AdminWorkspace`、management store、型付き client を使います。現在のユーザーと refresh はフレームワーク標準 IAM procedures、テーマの保存と DOM 更新は `@h-ai/ui/theme` を使い、アプリは固定ロール、自己保護、アバター、業務監査を組み合わせます。
+
+既定の SQLite、ローカル storage、memory cache は単一インスタンスの mini 管理サービス向けです。管理の書き込みは単一 writer のみ対応します。複数の読み取りインスタンスには共有 DB、storage、Redis cache と transport セッションの固定ルーティングが必要で、管理の書き込みは同じ writer に送ります。Redis への変更だけでは任意の複数 writer 間で最後の管理者を原子的に保護できません。生成するルート scripts は typecheck、lint、build、test、test:e2e を提供し、Capacitor/Tauri の配布には対応するネイティブビルドとパッケージ作成も必要です。
+
+## アプリ設定と表示
+
+全テンプレートは `_core.yml` から `name`、`version`、`env`、`defaultLocale`、`logging` を読み、`core.config` でメタ情報を取得して `core.logger` を使います。単一アプリの設定は `config/`、API workspace は `apps/<project>-service/config/`、fullstack は `packages/<project>-serv/config/` にあります。ログレベルと形式は YAML で決め、初期化で固定の `logging` を指定して上書きしません。
+
+Core の環境変数上書きには `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` を使えます。`HAI_CORE` 全体の上書きは親ノード優先です。サーバー設定の変更後はサービスを再起動します。コンテナは `HAI_CORE_ENV=production` を明示し、この値で本番の安全ポリシーを有効にします。
+
+SvelteKit のサーバー layout は名称、バージョン、環境、既定言語など公開メタ情報のホワイトリストのみを渡します。単独 mobile-app の Vite 設定は Node ビルド時に core で YAML を解析し、公開値とブラウザーログレベル・形式を注入するため、YAML や上書き変数を変えたら再ビルドが必要です。Fullstack の画面は暗号化された `app.info` でサーバーの公開メタ情報を取得します。core/モジュール設定全体、秘密情報、ログのマスキング文脈はブラウザーに公開しません。
 
 ## 共通オプション
 

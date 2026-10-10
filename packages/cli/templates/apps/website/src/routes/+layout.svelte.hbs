@@ -8,6 +8,7 @@
   import { browser } from '$app/environment'
 {{/if}}
   import { resolve } from '$app/paths'
+  import { page } from '$app/state'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime.js'
@@ -43,13 +44,17 @@
 {{/if}}
 </script>
 
+<svelte:head>
+  <title>{page.data.appConfig.name}</title>
+</svelte:head>
+
 <div class='min-h-screen flex flex-col'>
   <header class='navbar bg-base-100 shadow-sm'>
     <div class='flex-1'>
 {{#if hasI18n}}
-      <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>{m.app_title()}</a>
+      <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>{page.data.appConfig.name}</a>
 {{else}}
-      <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>官网</a>
+      <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>{page.data.appConfig.name}</a>
 {{/if}}
     </div>
     <nav class='flex-none'>
@@ -66,6 +71,7 @@
   </main>
 
   <footer class='footer footer-center p-4 bg-base-300 text-base-content'>
+    <span>{page.data.appConfig.name} · {page.data.appConfig.version} · {page.data.appConfig.env}</span>
 {{#if hasI18n}}
     <p>{m.footer_copyright({ year: new Date().getFullYear() })}</p>
 {{else}}

@@ -126,7 +126,7 @@ Access token 存在内存中，refresh token 由服务端通过 `HttpOnly` cooki
 
 启用 `transport` 时，登录、业务请求以及 401 后的自动刷新都会复用同一个加密 fetch 链路；不要在业务代码中手写明文 `/auth/refresh` 请求。
 
-自动刷新仅检查真实 HTTP 401（`Response.status`）。serv 普通 procedure 默认通过 HTTP 200 返回失败 HaiResult，其中 `error.httpStatus=401` 不会触发自动刷新；调用方仍须检查 `success` 与 `error.code` 并处理登录失效。
+自动刷新识别真实 HTTP 401（`Response.status`），以及 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`），成功后只重试一次原请求。内置登录、注册与配置的 `auth.refreshPath` 排除自动刷新，403/500 等其它失败也不刷新。serv 普通 procedure 的 HTTP 状态仍为 200；调用方须检查最终 `success/error.code` 并处理刷新失败后的登录失效。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'

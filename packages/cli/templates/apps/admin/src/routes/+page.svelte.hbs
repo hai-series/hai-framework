@@ -4,6 +4,7 @@
    * 管理后台首页 — 入口导航
    */
   import { resolve } from '$app/paths'
+  import { page } from '$app/state'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
@@ -12,9 +13,9 @@
 
 <svelte:head>
 {{#if hasI18n}}
-  <title>{m.app_title()}</title>
+  <title>{page.data.appConfig.name}</title>
 {{else}}
-  <title>管理后台</title>
+  <title>{page.data.appConfig.name}</title>
 {{/if}}
 </svelte:head>
 
@@ -27,7 +28,7 @@
         {m.page_home_badge()}
       </Badge>
     </div>
-    <h1 class='mt-4 text-4xl font-black tracking-tight'>{m.app_title()}</h1>
+    <h1 class='mt-4 text-4xl font-black tracking-tight'>{page.data.appConfig.name}</h1>
     <p class='mt-3 text-base-content/60'>{m.page_home_subtitle()}</p>
     <div class='mt-8 flex flex-wrap gap-3 justify-center'>
       <a href={resolve('/admin', {})} class='btn btn-primary'>
@@ -42,7 +43,7 @@
         由 hai 驱动
       </Badge>
     </div>
-    <h1 class='mt-4 text-4xl font-black tracking-tight'>管理后台</h1>
+    <h1 class='mt-4 text-4xl font-black tracking-tight'>{page.data.appConfig.name}</h1>
     <p class='mt-3 text-base-content/60'>基于 hai Agent Framework 构建</p>
     <div class='mt-8 flex flex-wrap gap-3 justify-center'>
       <a href={resolve('/admin', {})} class='btn btn-primary'>

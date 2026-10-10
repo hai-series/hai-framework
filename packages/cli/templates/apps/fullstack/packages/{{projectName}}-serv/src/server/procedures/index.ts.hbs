@@ -1,4 +1,5 @@
 import type { CreateAppProceduresOptions } from './app-procedures.js'
+import { createAdminProcedures, createAuthProcedures, createProfileProcedures } from './admin-procedures.js'
 import { createAppProcedures } from './app-procedures.js'
 
 export interface CreateServerProceduresOptions {
@@ -9,5 +10,8 @@ export interface CreateServerProceduresOptions {
 export function createServerProcedures(options: CreateServerProceduresOptions) {
   return {
     app: createAppProcedures(options.app),
+    iam: { auth: createAuthProcedures() },
+    admin: createAdminProcedures(),
+    profile: createProfileProcedures(),
   }
 }

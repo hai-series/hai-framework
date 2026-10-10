@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 
 describe('generateConfigFile', () => {
@@ -68,6 +69,12 @@ describe('generateConfigFile', () => {
       const content = generateConfigFile('core', { core: { name: 'my-admin', defaultLocale: 'en-US' } })
       expect(content).toContain('name: my-admin')
       expect(content).toContain('defaultLocale: en-US')
+    })
+
+    it('core: 应用名称中的引号、冒号和换行应保持为完整配置值', () => {
+      const name = 'Operations: "管理台"\n<Workspace>'
+      const config: { name: string } = parse(generateConfigFile('core', { core: { name } }))
+      expect(config.name).toBe(name)
     })
 
     it('db: 应该生成 PostgreSQL 配置', () => {

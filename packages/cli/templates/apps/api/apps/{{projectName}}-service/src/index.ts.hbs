@@ -1,3 +1,4 @@
+import type { CoreConfig } from '@h-ai/core'
 import type { ServConfig } from '@h-ai/serv'
 import process from 'node:process'
 import { core } from '@h-ai/core'
@@ -5,10 +6,10 @@ import { serv } from '@h-ai/serv'
 import { {{api.serviceAppFactoryName}} } from './app.js'
 import { closeApp, initApp } from './lib/server/init.js'
 
-const logger = core.logger.child({ app: '{{api.servicePackageName}}', scope: 'entrypoint' })
-
 async function main(): Promise<void> {
   await initApp()
+  const config = core.config.getOrThrow<CoreConfig>('core')
+  const logger = core.logger.child({ app: config.name, scope: 'entrypoint' })
 
   // host/port 来自 config/_serv.yml 的 server（HOST/PORT 环境变量高于配置文件）。
   const { server } = core.config.getOrThrow<ServConfig>('serv')
@@ -21,6 +22,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  logger.error('API service failed to start', { error })
+  core.logger.error('API service failed to start', { error })
   process.exitCode = 1
 })

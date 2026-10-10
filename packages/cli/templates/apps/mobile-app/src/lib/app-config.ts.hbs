@@ -1,0 +1,13 @@
+import type { CoreConfig } from '@h-ai/core'
+import { core } from '@h-ai/core'
+
+declare const __APP_CORE_CONFIG__: Pick<CoreConfig, 'name' | 'version' | 'env' | 'defaultLocale'> & {
+  logging?: Pick<NonNullable<CoreConfig['logging']>, 'level' | 'format'>
+}
+
+/** Vite 经 core 加载后注入的公开配置，修改 YAML 后重新构建客户端。 */
+export const appConfig = __APP_CORE_CONFIG__
+
+export function initClientCore(): void {
+  core.init({ logging: appConfig.logging })
+}

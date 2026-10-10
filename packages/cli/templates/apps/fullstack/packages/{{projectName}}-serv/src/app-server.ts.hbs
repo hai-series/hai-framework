@@ -1,48 +1,73 @@
-import type { ServConfigInput } from '@h-ai/serv'
-import { core } from '@h-ai/core'
+import type { CoreConfig } from '@h-ai/core'
+import type { ServHttpApp } from '@h-ai/serv'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { createReldbTransportKeyStore, crypto } from '@h-ai/crypto'
+import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
 import { serv, ServConfigSchema } from '@h-ai/serv'
-import { ENABLED_FRONTENDS, {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
+import { storage } from '@h-ai/storage'
+import { ENABLED_FRONTENDS, {{fullstack.contractExportName}}, SUPPORTED_LOCALES } from '{{fullstack.contractPackageName}}'
 import { createServerProcedures } from './server/procedures/index.js'
 
 const STARTED_AT = new Date().toISOString()
 
-/** `_core.yml` 中的应用元信息（由 core.config 加载，未初始化时回退到默认值）。 */
-interface AppCoreConfig {
-  name?: string
-  version?: string
-  env?: string
-}
-
-/** 应用侧最小 HTTP App 抽象；不把底层 Hono 类型暴露给项目代码。 */
-export interface ServerApp {
-  readonly fetch: (request: Request) => Response | Promise<Response>
-  readonly request: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>
-}
-
 /** 创建后端 HTTP App；与 @h-ai/serv 的 createApp 返回语义保持一致。 */
-export function createServerApp(): ServerApp {
-  // 配置来自 config/_core.yml 与 config/_serv.yml。
-  // 单元测试可不初始化 core，此时回退到内置默认值。
-  const coreConfig = core.config.get<AppCoreConfig>('core')
-  const servConfig = ServConfigSchema.parse(core.config.get<ServConfigInput>('serv') ?? {})
-  const appName = coreConfig?.name ?? '{{fullstack.servPackageName}}'
-  const appVersion = coreConfig?.version ?? '0.1.0'
+export function createServerApp(): ServHttpApp {
+  const coreConfig = core.config.getOrThrow<CoreConfig>('core')
+  const servConfig = ServConfigSchema.parse(core.config.getOrThrow('serv'))
   const security = serv.createRuntimeSecurityPolicy({
-    environment: coreConfig?.env,
+    environment: coreConfig.env,
     corsOrigin: servConfig.cors.origin,
     nativeOrigins: servConfig.cors.nativeOrigins,
   })
+  const publicPaths = [
+    ...(servConfig.http.health ? [servConfig.http.health.path, servConfig.http.health.readyPath].filter((path): path is `/${string}` => Boolean(path)) : []),
+    ...(servConfig.http.openapi && security.exposeApiDocs ? [servConfig.http.openapi.path] : []),
+    ...(servConfig.http.docs && security.exposeApiDocs ? [servConfig.http.docs.path] : []),
+  ]
 
   return serv.createApp({
     contract: {{fullstack.contractExportName}},
     procedures: createServerProcedures({
       app: {
-        name: appName,
-        version: appVersion,
+        name: coreConfig.name,
+        version: coreConfig.version,
+        env: coreConfig.env,
+        defaultLocale: coreConfig.defaultLocale,
+        supportedLocales: SUPPORTED_LOCALES,
         startedAt: STARTED_AT,
         frontends: [...ENABLED_FRONTENDS],
       },
     }),
+    iam,
+    verifyToken: async (token) => {
+      const session = await iam.session.verifyToken(token)
+      if (!session.success)
+        return session
+      const user = await iam.user.getUser(session.data.userId)
+      if (!user.success)
+        return user
+      if (!user.data?.enabled)
+        return err(HaiCommonError.UNAUTHORIZED, core.i18n.coreM('core_errorUnauthorized'))
+      // 会话中的授权同步属于最大努力，业务守卫始终读取最新持久化角色与权限。
+      const [roles, permissions] = await Promise.all([
+        iam.authz.getUserRoles(user.data.id),
+        iam.authz.getUserPermissions(user.data.id),
+      ])
+      if (!roles.success)
+        return roles
+      if (!permissions.success)
+        return permissions
+      return ok({ ...session.data, roles: roles.data.map(role => role.code), permissions: permissions.data.map(permission => permission.code) })
+    },
+    refreshCookie: {
+      secure: security.secureRefreshCookie,
+      nativeTokenTransport: { isRequest: request => request.headers.get('x-hai-token-transport') === 'body'
+        && ['{{projectName}}-app', '{{projectName}}-desktop'].includes(request.headers.get('x-request-client') ?? '')
+        && security.isNativeOrigin(request.headers.get('origin') ?? '') },
+    },
+    // 管理业务默认强制双向加密；客户端公钥复用 reldb 保存，服务端密钥仅驻留进程。
+    transport: { ...(servConfig.transport || {}), excludePaths: publicPaths, crypto, keyStore: createReldbTransportKeyStore({ reldb }) },
     http: {
       ...servConfig.http,
       openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
@@ -52,8 +77,18 @@ export function createServerApp(): ServerApp {
       middleware: serv.cors({
         origin: security.allowOrigin,
         credentials: servConfig.cors.credentials,
-        allowedHeaders: [...servConfig.cors.allowedHeaders],
-        exposedHeaders: [...servConfig.cors.exposedHeaders],
+        allowedHeaders: [...new Set([...servConfig.cors.allowedHeaders, 'X-Client-Id', 'X-Encrypted', 'X-Request-Client', 'X-HAI-Token-Transport'])],
+        exposedHeaders: [...new Set([...servConfig.cors.exposedHeaders, 'X-Encrypted'])],
+      }),
+    }, {
+      path: `${servConfig.http.apiPrefix}/assets/*`,
+      middleware: serv.storageAssets({
+        storage,
+        pathPrefix: `${servConfig.http.apiPrefix}/assets/`,
+        keyPattern: /^avatars\/[\w-]+\/[\w-]+\.(png|jpg|webp)$/,
+        allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp'],
+        cacheControl: 'public, max-age=31536000, immutable',
+        crossOriginResourcePolicy: 'cross-origin',
       }),
     }],
   })

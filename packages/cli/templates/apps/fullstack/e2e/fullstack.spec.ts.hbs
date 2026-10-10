@@ -1,33 +1,190 @@
+import type { Page } from '@playwright/test'
+import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
+import process from 'node:process'
 import { apiContract } from '@h-ai/api-contract'
 import { expect, test } from '@playwright/test'
 import { {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
 
-const DEFAULT_SERVICE_BASE_URL = 'http://127.0.0.1:3000'
-const apiBaseUrl = process.env.SERVICE_BASE_URL || DEFAULT_SERVICE_BASE_URL
+const apiBaseUrl = process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000'
 const apiPrefix = '/api/v1'
+const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!'
+const configuredName = process.env.HAI_CORE_NAME || 'Configured scaffold'
+const configuredVersion = process.env.HAI_CORE_VERSION || '9.8.7'
+const configuredEnv = process.env.HAI_CORE_ENV || 'test'
+
+// 测试专用的一像素 PNG；上传仍使用完整前后端加密链路。
+const avatar = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSxkAAAAASUVORK5CYII=', 'base64')
+
+async function login(page: Page, username: string, password: string) {
+  await expect(page.getByTestId('login-form')).toBeVisible()
+  await page.locator('#login-username').fill(username)
+  await page.getByTestId('login-form').locator('input[type="password"]').fill(password)
+  await page.getByTestId('login-form').getByRole('button', { name: /登录|Sign in|Login|Log in/i }).click()
+}
+
+async function userEditor(page: Page, username: string) {
+  await page.getByTestId('users-search').locator('input').fill(username)
+  await page.getByTestId('users-page').getByRole('button', { name: /查询|Search/ }).click()
+  const row = page.getByRole('row').filter({ hasText: username })
+  await expect(row).toBeVisible()
+  await row.getByRole('button', { name: /编辑|Edit/, exact: true }).click()
+  return row
+}
 
 test('service health endpoint is ready', async ({ request }) => {
   const response = await request.get(`${apiBaseUrl}/health`)
-  expect(response.ok()).toBe(true)
   await expect(response).toBeOK()
 })
 
-test('service echo endpoint returns HaiResult', async ({ request }) => {
-  const response = await request.post(`${apiBaseUrl}${apiPrefix}${apiContract.pathOf({{fullstack.contractExportName}}.app.echo)}`, {
-    data: { message: 'hello e2e' },
-  })
-  expect(response.ok()).toBe(true)
-
-  const body = await response.json()
-  expect(body.success).toBe(true)
-  expect(body.data.message).toBe('hello e2e')
-  expect(body.data.requestId).toBeTruthy()
+test('service rejects plaintext business requests', async ({ request }) => {
+  const response = await request.post(`${apiBaseUrl}${apiPrefix}${apiContract.pathOf({{fullstack.contractExportName}}.app.echo)}`, { data: { message: 'hello e2e' } })
+  expect(response.status()).toBe(400)
 })
+
 {{#if fullstack.e2eFrontend}}
 
-test('frontend loads service status from page', async ({ page }) => {
+test('frontend displays configured core metadata and restores the administrator session', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(page.getByTestId('service-status')).toContainText('{{fullstack.servPackageName}}')
+  await expect(page.getByTestId('app-name')).toHaveText(configuredName)
+  await expect(page).toHaveTitle(configuredName)
+  await expect(page.getByTestId('app-version')).toHaveText(`v${configuredVersion}`)
+  await expect(page.getByTestId('app-environment')).toHaveText(configuredEnv)
+  await login(page, 'admin', adminPassword)
+  await expect(page.getByTestId('users-page')).toBeVisible()
+  await page.reload()
+  await expect(page.getByTestId('users-page')).toBeVisible()
+  await expect(page.getByTestId('nav-roles')).toBeVisible()
+  await expect(page.getByTestId('nav-audit')).toBeVisible()
+  await page.getByTestId('logout').click()
+  await expect(page.getByTestId('login-form')).toBeVisible()
+})
+
+test('administrator and user complete account, avatar, preference, password and audit workflows', async ({ page, browser }) => {
+  test.setTimeout(120_000)
+  const username = `member-${randomUUID().slice(0, 8)}`
+  const password = 'User-test-Pass123!'
+  const newPassword = 'Changed-test-Pass123!'
+  const encryptedRequests: string[] = []
+  const encryptedResponses: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes(`${apiPrefix}/`) && !request.url().includes('/_hai/') && request.postData()) {
+      expect(request.headers()['x-encrypted']).toBe('true')
+      expect(request.postData()).not.toContain('"password"')
+      expect(request.postData()).not.toContain(adminPassword)
+      encryptedRequests.push(request.url())
+    }
+  })
+  page.on('response', (response) => {
+    if (response.request().method() !== 'OPTIONS' && response.url().includes(`${apiPrefix}/`) && !response.url().includes('/_hai/') && !response.url().includes('/assets/')) {
+      expect(response.headers()['x-encrypted']).toBe('true')
+      encryptedResponses.push(response.url())
+    }
+  })
+  await page.goto('/')
+  await login(page, 'admin', adminPassword)
+  await expect(page.getByTestId('users-page')).toBeVisible()
+  await page.getByTestId('create-user').click()
+  await expect(page.getByRole('dialog', { name: /新增用户|New user|Create user|Add user/ })).toBeVisible()
+  await expect(page.getByTestId('user-username').locator('input')).toBeFocused()
+  await page.getByTestId('user-username').locator('input').fill(username)
+  await page.getByTestId('user-display-name').locator('input').fill('Test member')
+  await page.getByTestId('user-email').locator('input').fill(`${username}@example.com`)
+  await page.getByTestId('user-password').locator('input').fill(password)
+  await page.getByTestId('user-save').click()
+  await expect(page.getByTestId('user-editor')).not.toBeVisible()
+  const userRow = page.getByRole('row').filter({ hasText: username })
+  await expect(userRow).toBeVisible()
+  await userRow.getByTestId('user-avatar-input').setInputFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: avatar })
+  await expect(userRow.locator('img')).toHaveAttribute('src', /\/assets\/avatars\//)
+  await expect.poll(() => userRow.locator('img').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+  await page.getByTestId('nav-roles').click()
+  await expect(page.getByTestId('roles-page')).toBeVisible()
+  await page.getByTestId('roles-page').getByRole('button', { name: /编辑说明|Edit description/ }).first().click()
+  await page.getByTestId('role-description').locator('textarea').fill('Workspace administration')
+  await page.getByRole('dialog').getByRole('button', { name: /保存|Save/, exact: true }).focus()
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('dialog').getByRole('button', { name: /关闭|Close/, exact: true })).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(page.getByRole('dialog').getByRole('button', { name: /保存|Save/, exact: true })).toBeFocused()
+  await page.getByRole('dialog').getByRole('button', { name: /保存|Save/, exact: true }).click()
+  await expect(page.getByTestId('roles-page')).toContainText('Workspace administration')
+
+  const userContext = await browser.newContext()
+  const userPage = await userContext.newPage()
+  try {
+    await userPage.goto('/')
+    await login(userPage, username, password)
+    await expect(userPage.getByTestId('settings-page')).toBeVisible()
+    await expect(userPage.getByTestId('nav-users')).toHaveCount(0)
+    await expect(userPage.getByTestId('nav-roles')).toHaveCount(0)
+    await expect(userPage.getByTestId('nav-audit')).toHaveCount(0)
+    await userPage.getByTestId('profile-form').locator('input[name="displayName"]').fill('Updated member')
+    await userPage.getByTestId('profile-form').locator('input[name="email"]').fill('')
+    await userPage.getByTestId('profile-form').getByRole('button', { name: /保存|Save/, exact: true }).click()
+    await expect(userPage.getByTestId('notice')).toBeVisible()
+    await userPage.getByTestId('profile-form').locator('input[type="file"]').setInputFiles({ name: 'personal.png', mimeType: 'image/png', buffer: avatar })
+    await expect(userPage.getByTestId('notice')).toHaveText(/头像已更新|Avatar updated/)
+    await userPage.getByTestId('profile-language').click()
+    await userPage.getByRole('option', { name: 'English', exact: true }).click()
+    await expect(userPage.getByTestId('nav-settings')).toHaveText('Personal settings')
+    await expect(userPage.locator('html')).toHaveAttribute('lang', 'en-US')
+    const themes = [{{#each fullstack.theme.themes}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}]
+    const selectedTheme = themes.find(theme => theme !== '{{fullstack.theme.defaultTheme}}') ?? themes[0]
+    await userPage.getByTestId('profile-theme').click()
+    await userPage.getByRole('option').nth(themes.indexOf(selectedTheme)).click()
+    await expect(userPage.locator('html')).toHaveAttribute('data-theme', selectedTheme)
+    await userPage.reload()
+    await expect(userPage.getByTestId('settings-page')).toBeVisible()
+    await expect(userPage.getByTestId('nav-settings')).toHaveText('Personal settings')
+    await expect(userPage.locator('html')).toHaveAttribute('data-theme', selectedTheme)
+    await expect(userPage.getByTestId('profile-form').locator('input[name="displayName"]')).toHaveValue('Updated member')
+    await expect(userPage.getByTestId('profile-form').locator('input[name="email"]')).toHaveValue('')
+    await expect.poll(() => userPage.getByTestId('profile-form').locator('img').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+    await userPage.setViewportSize({ width: 390, height: 844 })
+    await expect.poll(() => userPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await userPage.getByTestId('mobile-menu').click()
+    await expect(userPage.getByTestId('nav-settings')).toBeVisible()
+    await userPage.getByTestId('nav-settings').click()
+    const passwordInputs = userPage.getByTestId('password-form').locator('input[type="password"]')
+    await passwordInputs.nth(0).fill(password)
+    await passwordInputs.nth(1).fill(password)
+    await passwordInputs.nth(2).fill(password)
+    await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
+    await expect(userPage.getByTestId('settings-page')).toBeVisible()
+    await expect(userPage.getByTestId('error')).toContainText(/检查|check/i)
+    await passwordInputs.nth(1).fill(newPassword)
+    await passwordInputs.nth(2).fill(newPassword)
+    await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
+    await expect(userPage.getByTestId('login-form')).toBeVisible()
+    await login(userPage, username, password)
+    await expect(userPage.getByTestId('login-form')).toContainText(/不正确|incorrect/)
+    await login(userPage, username, newPassword)
+    await expect(userPage.getByTestId('settings-page')).toBeVisible()
+
+    await page.getByTestId('nav-users').click()
+    await userEditor(page, username)
+    await page.getByTestId('user-editor').locator('input[type="checkbox"]').uncheck()
+    await page.getByTestId('user-save').click()
+    await expect(page.getByTestId('user-editor')).not.toBeVisible()
+    await userPage.getByTestId('profile-form').getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(userPage.getByTestId('login-form')).toBeVisible()
+    await expect(userPage.getByTestId('login-form')).toContainText(/expired|过期/)
+  }
+  finally {
+    await userContext.close()
+  }
+
+  await page.getByRole('row').filter({ hasText: username }).getByRole('button', { name: /删除|Delete/, exact: true }).click()
+  await page.getByTestId('confirm-delete-user').click()
+  await expect(page.getByRole('row').filter({ hasText: username })).toHaveCount(0)
+  await page.getByTestId('nav-audit').click()
+  await page.getByTestId('audit-resource').locator('input').fill('users')
+  await page.getByTestId('audit-page').getByRole('button', { name: /查询|Search/ }).click()
+  await expect(page.getByTestId('audit-page')).toContainText('delete')
+  await page.getByTestId('audit-page').getByRole('button', { name: /详情|Details/ }).first().click()
+  await expect(page.getByRole('dialog')).toContainText(/users/)
+  expect(encryptedRequests.length).toBeGreaterThan(5)
+  expect(encryptedResponses.length).toBeGreaterThan(5)
 })
 {{/if}}

@@ -8,6 +8,8 @@ export interface AppProcedureDeps {
   readonly info: {
     readonly name: string
     readonly version: string
+    readonly env: AppInfoOutputData['env']
+    readonly defaultLocale: string
     readonly transportEnabled: boolean
   }
   readonly startedAt: number
@@ -22,6 +24,8 @@ export function createAppProcedures(deps: AppProcedureDeps) {
       const data: AppInfoOutputData = {
         name: deps.info.name,
         version: deps.info.version,
+        env: deps.info.env,
+        defaultLocale: deps.info.defaultLocale,
         transportEnabled: deps.info.transportEnabled,
         uptimeMs: Math.max(0, Date.now() - deps.startedAt),
       }

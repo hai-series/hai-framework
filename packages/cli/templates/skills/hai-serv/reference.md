@@ -532,7 +532,7 @@ HTTP 审计、限流、CORS、租户头校验等跨 route 能力继续放在
 | oRPC contract 输入 schema 校验失败（handler 之前） | 400 | 本地化失败体，`error.httpStatus=400` 与字段错误 |
 | handler 内 `serv.validateInputOrFail(...)` 失败 | 200 | 失败 HaiResult，`error.httpStatus=400` 与字段错误 |
 
-HTTP middleware、自定义 Response、refresh-cookie、OpenAPI/RPC 入口权限和 transport 协议错误分别按自身响应契约处理，可返回真实 HTTP 4xx/5xx。`@h-ai/api-client` 的自动刷新只由真实 HTTP 401 触发，不会因 HTTP 200 失败包络中的 `error.httpStatus=401` 自动刷新。
+HTTP middleware、自定义 Response、refresh-cookie、OpenAPI/RPC 入口权限和 transport 协议错误分别按自身响应契约处理，可返回真实 HTTP 4xx/5xx。`@h-ai/api-client` 在真实 HTTP 401 或 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`）后自动刷新，成功后只重试一次；内置登录、注册和配置的刷新路径除外，403/500 不刷新。启用 transport 时刷新和重试复用加密链路，不能手写明文刷新请求。
 
 SvelteKit 的 `kit.response.fromError` 根据 `error.httpStatus` 生成 HTTP Response；`kit.response.fromResult` 使用显式错误码映射，未命中默认 400。这些响应转换规则不能套用到 serv 普通 procedure。
 
@@ -611,6 +611,8 @@ http: {
 ```
 
 ## Feature Procedures（默认实现）
+
+`serv.implement(...).context().route(...).build()` 同步返回普通 router，可直接按嵌套属性选取 `@h-ai/serv/features/iam` 等默认 procedures。挂载 contract 只包含实际选用的路由；不要为复用当前用户或刷新功能而同时开放注册、OTP 或通用管理入口。
 
 `@h-ai/serv` 内置了三个 feature 模块，开箱即用：
 

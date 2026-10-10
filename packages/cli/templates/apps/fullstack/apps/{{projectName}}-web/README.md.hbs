@@ -2,13 +2,13 @@
 {{#if fullstack.frontends.web}}
 # {{projectName}}-web
 
-Web 前端工程，通过 `packages/{{fullstack.sharedPackageName}}` 调用后端 API，并通过 `@h-ai/ui` 组件搭建页面。
+响应式 mini 后台 Web 前端，通过 `packages/{{fullstack.sharedPackageName}}` 调用后端 API，并通过 `@h-ai/ui` 组件搭建页面。
 
 ## i18n 与 shared 协同
 
 - 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`
 - 共享 Shell/主题/语言/API：`packages/{{fullstack.sharedPackageName}}`
-- 语言切换由 shared 的 `LanguageSwitcher` 触发，并同步本端 `$lib/paraglide/runtime.js`
+- 个人设置保存语言与风格偏好到 IAM 元数据，并同步 shared 和本端 Paraglide runtime
 
 自定义建议：Web 独有文案放在本目录 `messages/`；跨端通用文案或组件放到 shared。
 

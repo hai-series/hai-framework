@@ -1,0 +1,18 @@
+{{! @skipIfEmpty }}
+{{#unless isSvelteOnlyApp}}
+import type { CoreConfig } from '@h-ai/core'
+import { core } from '@h-ai/core'
+
+/** 只向浏览器提供公开配置，避免暴露日志上下文、凭证或其它模块配置。 */
+export function load() {
+  const config = core.config.getOrThrow<CoreConfig>('core')
+  return {
+    appConfig: {
+      name: config.name,
+      version: config.version,
+      env: config.env,
+      defaultLocale: config.defaultLocale,
+    },
+  }
+}
+{{/unless}}

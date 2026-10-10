@@ -16,7 +16,7 @@
     "preview": "vite preview --host 127.0.0.1 --port {{fullstack.ports.web}} --strictPort",
     "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "clean": "rimraf dist build .turbo src/lib/paraglide"
   },

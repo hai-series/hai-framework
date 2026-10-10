@@ -20,7 +20,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import { cliM } from '../src/cli-i18n.js'
 import { addModule } from '../src/commands/cli-add.js'
 import { createProject, detectProject } from '../src/commands/cli-create.js'
@@ -124,6 +123,8 @@ async function expectCompatibleSkills(projectPath: string, appType: AppType) {
   const agents = await readText(projectPath, 'AGENTS.md')
   expect(agents).toContain('.agents/skills/hai-app-create/SKILL.md')
   expect(agents).toContain('.agents/skills/hai-app-create/development.md')
+  expect((await readText(projectPath, 'CLAUDE.md')).trim()).toBe('@AGENTS.md')
+  expect(await exists(projectPath, '.claude')).toBe(false)
   const skillNames = await listTemplateSkillNames()
   const excludedSkills = new Set(SKILL_EXCLUSIONS_BY_APP_TYPE[appType])
 
@@ -133,17 +134,7 @@ async function expectCompatibleSkills(projectPath: string, appType: AppType) {
       await exists(projectPath, `.agents/skills/${skillName}/SKILL.md`),
       `${appType} should ${expected ? '' : 'not '}include ${skillName}`,
     ).toBe(expected)
-    const aliasPath = `.claude/skills/${skillName}/SKILL.md`
-    expect(await exists(projectPath, aliasPath)).toBe(expected)
     if (expected) {
-      const alias = await readText(projectPath, aliasPath)
-      const metadata: unknown = parse(alias.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1] ?? '')
-      expect(metadata).toEqual({ name: skillName, description: expect.any(String) })
-      const sharedLink = alias.match(/\[共享技能正文\]\(([^)]+)\)/u)?.[1]
-      expect(sharedLink).toBeDefined()
-      expect(path.resolve(projectPath, path.dirname(aliasPath), sharedLink!))
-        .toBe(path.resolve(projectPath, '.agents/skills', skillName, 'SKILL.md'))
-      expect(await fse.readdir(path.join(projectPath, '.claude/skills', skillName))).toEqual(['SKILL.md'])
       // 校验完整目录交付，避免入口可发现但按需引用的范本遗漏。
       const source = path.join(skillTemplatesDir, skillName)
       const resources = await fse.readdir(source, { recursive: true, withFileTypes: true })
@@ -564,8 +555,7 @@ describe('createProject — admin 类型 + iam', () => {
     expect(agents).toContain('## 完成条件')
     expect(agents).toContain('pnpm typecheck')
     expect(agents).not.toContain('packages/<project>-serv')
-    expect(claude).toContain('@AGENTS.md')
-    expect(claude).toContain('管理后台')
+    expect(claude.trim()).toBe('@AGENTS.md')
     expect(copilot).toContain('.agents/skills/')
     expect(copilot).toContain('管理后台')
     expect(copilot).not.toContain('Fullstack 服务端')
@@ -978,7 +968,7 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.dependencies['@h-ai/core']).toBe(HAI_DEP_SPECIFIER)
     expect(pkg.dependencies.hono).toBeUndefined()
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
-    expect(pkg.scripts.start).toBe('node dist/index.js')
+    expect(pkg.scripts.start).toBe('node --env-file-if-exists=../../.env dist/index.js')
     expect(pkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/data/.gitkeep')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')).toBe(true)
@@ -987,13 +977,12 @@ describe('createProject — fullstack 类型', () => {
 
     const servConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_serv.yml')
     expect(servConfig).toContain('origin: $' + '{HAI_CORS_ORIGIN:*}')
-    expect(servConfig).toContain('credentials: $' + '{HAI_CORS_CREDENTIALS:false}')
+    expect(servConfig).toContain('credentials: $' + '{HAI_CORS_CREDENTIALS:true}')
 
     const appServer = await readText(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')
-    expect(appServer).toContain('export interface ServerApp')
-    expect(appServer).toContain('createServerApp(): ServerApp')
+    expect(appServer).toContain('import type { ServHttpApp } from \'@h-ai/serv\'')
+    expect(appServer).toContain('createServerApp(): ServHttpApp')
     expect(appServer).toContain('serv.createApp')
-    expect(appServer).not.toContain('import type { ServHttpApp }')
     expect(appServer).not.toContain('from \'hono\'')
     expect(appServer).not.toContain(': Hono')
 
@@ -1013,7 +1002,23 @@ describe('createProject — fullstack 类型', () => {
     expect(procedures).toContain('requestId: context.requestId')
 
     const testFile = await readText(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')
-    expect(testFile).toContain('returns echo result as HaiResult')
+    expect(testFile).toContain('mini administration')
+    expect(testFile).toContain('crypto.transport.createClient')
+    for (const moduleName of ['iam', 'reldb', 'cache', 'crypto', 'storage', 'audit']) {
+      expect(pkg.dependencies[`@h-ai/${moduleName}`]).toBe(HAI_DEP_SPECIFIER)
+    }
+    for (const configKey of ['core', 'db', 'cache', 'storage', 'iam', 'audit']) {
+      expect(await exists(projectPath, `packages/proj-fullstack-serv/config/_${configKey}.yml`)).toBe(true)
+    }
+    const iamConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_iam.yml')
+    expect(iamConfig).toContain('seedDefaultData: false')
+    const envExample = await readText(projectPath, '.env.example')
+    expect(envExample).toContain('HAI_ADMIN_DEFAULT_PASSWORD=')
+    expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
+    expect(await exists(projectPath, 'src/routes/api/auth/login/+server.ts')).toBe(false)
+    expect(appServer).toContain('refreshCookie:')
+    expect(appServer).toContain('createReldbTransportKeyStore')
+    expect(appServer).toContain('X-HAI-Token-Transport')
   })
 
   it('应生成由 Service 直接监听的默认镜像与独立 Web 镜像', async () => {
@@ -1073,28 +1078,24 @@ describe('createProject — fullstack 类型', () => {
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/project.inlang/settings.json`)).toBe(true)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/messages/zh-CN.json`)).toBe(true)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/messages/en-US.json`)).toBe(true)
-      expect(await exists(projectPath, `apps/proj-fullstack-${target}/tests/api.test.ts`)).toBe(true)
+      expect(await exists(projectPath, `apps/proj-fullstack-${target}/tests/api.test.ts`)).toBe(false)
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/eslint.config.js`)).toBe(true)
 
       const eslintConfig = await readText(projectPath, `apps/proj-fullstack-${target}/eslint.config.js`)
       expect(eslintConfig).toContain('\'svelte/indent\': \'off\'')
 
       const app = await readText(projectPath, `apps/proj-fullstack-${target}/src/App.svelte`)
-      expect(app).toContain('@h-ai/ui')
       expect(app).toContain('proj-fullstack-shared')
-      expect(app).toContain('import * as appM')
-      expect(app).toContain('messages as sharedM')
-      expect(app).toContain('<Card')
+      expect(app).toContain('AdminWorkspace')
+      expect(app).toContain('reload: false')
       if (target === 'web') {
-        expect(app).toContain('AppShell')
         expect(app).toContain('platform="web"')
       }
       else {
-        expect(app).toContain('hai-mobile-shell')
-        expect(app).toContain('BottomNav')
-        expect(app).toContain('ThemeSwitcher')
-        expect(app).toContain('LanguageSwitcher')
-        expect(app).toContain('sharedM.settings_title()')
+        expect(app).toContain('platform="app"')
+        expect(app).toContain('createCapacitorTokenStorage')
+        expect(app).toContain('capacitor.isNative()')
+        expect(app).toContain('X-HAI-Token-Transport')
       }
 
       const css = await readText(projectPath, `apps/proj-fullstack-${target}/src/app.css`)
@@ -1117,9 +1118,6 @@ describe('createProject — fullstack 类型', () => {
       expect(viteConfig).toContain('envPrefix: [\'VITE_\', \'PUBLIC_\']')
 
       expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/routes/+layout.svelte`)).toBe(false)
-
-      const apiTest = await readText(projectPath, `apps/proj-fullstack-${target}/tests/api.test.ts`)
-      expect(apiTest).toContain('proj-fullstack-shared')
     }
 
     const appPkg = await readJson(projectPath, 'apps/proj-fullstack-app/package.json')
@@ -1151,7 +1149,7 @@ describe('createProject — fullstack 类型', () => {
     expect(desktopPkg.name).toBe('proj-fullstack-desktop')
     expect(desktopPkg.dependencies['proj-fullstack-contract']).toBeUndefined()
     expect(desktopPkg.dependencies['proj-fullstack-shared']).toBe('workspace:*')
-    expect(desktopPkg.dependencies['@h-ai/api-client']).toBeUndefined()
+    expect(desktopPkg.dependencies['@h-ai/api-client']).toBe(HAI_DEP_SPECIFIER)
     expect(desktopPkg.dependencies['@h-ai/ui']).toBe(HAI_DEP_SPECIFIER)
     expect(desktopPkg.dependencies['@tauri-apps/api']).toBeUndefined()
     expect(desktopPkg.dependencies['@tauri-apps/plugin-shell']).toBeUndefined()
@@ -1171,7 +1169,9 @@ describe('createProject — fullstack 类型', () => {
     expect(tauriConfig).toContain('"icons/icon.ico"')
     const desktopApp = await readText(projectPath, 'apps/proj-fullstack-desktop/src/App.svelte')
     expect(desktopApp).toContain('platform="desktop"')
-    expect(desktopApp).toContain('fetchAppInfo')
+    expect(desktopApp).toContain('AdminWorkspace')
+    expect(desktopApp).toContain('tokenStorage.memory()')
+    expect(desktopApp).toContain('__TAURI_INTERNALS__')
     const desktopVite = await readText(projectPath, 'apps/proj-fullstack-desktop/vite.config.ts')
     expect(desktopVite).toContain('TAURI_DEV_HOST')
     expect(desktopVite).toContain('svelte()')
@@ -1185,6 +1185,8 @@ describe('createProject — fullstack 类型', () => {
     expect(sharedPkg.name).toBe('proj-fullstack-shared')
     expect(sharedPkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(sharedPkg.dependencies['@h-ai/api-client']).toBe(HAI_DEP_SPECIFIER)
+    expect(sharedPkg.dependencies['@h-ai/core']).toBe(HAI_DEP_SPECIFIER)
+    expect(sharedPkg.dependencies['@h-ai/crypto']).toBe(HAI_DEP_SPECIFIER)
     expect(sharedPkg.dependencies['@h-ai/ui']).toBe(HAI_DEP_SPECIFIER)
     expect(sharedPkg.devDependencies['@inlang/paraglide-js']).toBeDefined()
     expect(sharedPkg.devDependencies['@inlang/plugin-message-format']).toBeDefined()
@@ -1194,13 +1196,27 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/messages/zh-CN.json')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/messages/en-US.json')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/AppShell.svelte')).toBe(true)
-    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/ThemeSwitcher.svelte')).toBe(true)
-    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/LanguageSwitcher.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/AdminWorkspace.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/UserManagement.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/RoleManagement.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/AuditManagement.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/ProfileSettings.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/tests/api-client.test.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/stores/theme-store.svelte.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/api/api-client.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/index.ts')).toBe(true)
     const sharedClient = await readText(projectPath, 'packages/proj-fullstack-shared/src/lib/api/api-client.ts')
     expect(sharedClient).toContain('import.meta.env.PUBLIC_API_BASE')
+    expect(sharedClient).toContain('transport: { crypto }')
+    expect(sharedClient).toContain('credentials: \'include\'')
+
+    const sharedStore = await readText(projectPath, 'packages/proj-fullstack-shared/src/lib/stores/management-store.svelte.ts')
+    expect(sharedStore).toContain('admin.users.list')
+    expect(sharedStore).toContain('admin.roles.list')
+    expect(sharedStore).toContain('admin.audit.list')
+    expect(sharedStore).toContain('profile.avatar')
+    expect(sharedStore).toContain('iam.auth.changePassword')
+    expect(sharedStore).toContain('info.data.defaultLocale')
 
     const inlangSettings = await readJson(projectPath, 'packages/proj-fullstack-shared/project.inlang/settings.json')
     expect(inlangSettings.baseLocale).toBe('zh-CN')
@@ -1226,8 +1242,9 @@ describe('createProject — fullstack 类型', () => {
     expect(config).toContain('reuseExistingServer: false')
 
     const spec = await readText(projectPath, 'e2e/fullstack.spec.ts')
-    expect(spec).toContain('service echo endpoint returns HaiResult')
-    expect(spec).toContain('frontend loads service status from page')
+    expect(spec).toContain('service rejects plaintext business requests')
+    expect(spec).toContain('frontend displays configured core metadata')
+    expect(spec).toContain('administrator and user complete account')
     expect(spec).toContain('page.goto')
   })
 
@@ -1247,10 +1264,7 @@ describe('createProject — fullstack 类型', () => {
     expect(agents).toContain('Tauri')
     expect(agents).toContain('## 完成条件')
     expect(agents).toContain('pnpm typecheck')
-    expect(claude).toContain('@AGENTS.md')
-    expect(claude).toContain('fullstack')
-    expect(claude).toContain('packages/proj-fullstack-serv')
-    expect(claude).not.toContain('<project>')
+    expect(claude.trim()).toBe('@AGENTS.md')
     expect(copilot).toContain('Fullstack 服务端')
     expect(copilot).toContain('packages/proj-fullstack-contract')
     expect(copilot).toContain('packages/proj-fullstack-serv')
@@ -1643,16 +1657,15 @@ describe('initProject', () => {
       .toBe(await readText(dir, '.agents/skills/hai-app-create/SKILL.md'))
   })
 
-  it('claude 原生入口目录链接到项目外时不写入外部目录', async () => {
+  it('已有 Claude 技能目录链接到项目外时不触碰其内容', async () => {
     const dir = path.join(tmpRoot, 'claude-outside-directory-link')
     const outside = path.join(tmpRoot, 'claude-outside-target')
     await fse.ensureDir(outside)
     await fse.ensureSymlink(outside, path.join(dir, '.claude/skills'), 'junction')
 
-    await expect(generateProjectAiSupport(dir, ['hai-app-create']))
-      .rejects
-      .toThrow(cliM('cli_generateOutsideWorkspace'))
+    await generateProjectAiSupport(dir, ['hai-app-create'])
     expect(await fse.readdir(outside)).toEqual([])
+    expect((await readText(dir, 'CLAUDE.md')).trim()).toBe('@AGENTS.md')
   })
 
   it('copilot 规则目录链接到项目外时不写入外部入口', async () => {
@@ -1667,7 +1680,7 @@ describe('initProject', () => {
     expect(await fse.readdir(outside)).toEqual([])
   })
 
-  it('补全 Claude 原生发现入口但保留已有 Claude 规则与设置', async () => {
+  it('回填共享技能时保留已有 Claude 规则与设置，不新增 Claude 技能', async () => {
     const dir = path.join(tmpRoot, 'init-claude-aliases')
     await fse.outputJson(path.join(dir, 'package.json'), {
       name: 'existing-claude-project',
@@ -1682,22 +1695,22 @@ describe('initProject', () => {
 
     expect(await readText(dir, '.claude/skills/hai-core/SKILL.md')).toBe('# custom Claude skill\n')
     expect(await readText(dir, '.claude/settings.json')).toBe('{"permissions":{"deny":["Bash(rm *)"]}}\n')
-    expect(await exists(dir, '.claude/skills/hai-app-create/SKILL.md')).toBe(true)
+    expect(await fse.readdir(path.join(dir, '.claude/skills'))).toEqual(['hai-core'])
+    expect(await exists(dir, '.claude/skills/hai-app-create/SKILL.md')).toBe(false)
     expect(await exists(dir, '.agents/skills/hai-app-create/development.md')).toBe(true)
   })
 
-  it('claude 发现描述沿用已有共享技能而不复制正文', async () => {
+  it('仅生成 CLAUDE 共享规则引用，不创建重复技能目录，并保留共享技能', async () => {
     const dir = path.join(tmpRoot, 'init-shared-claude-description')
     const sharedContent = '---\nname: hai-app-create\ndescription: 本项目的功能开发规则\n---\n\n# custom workflow\n'
     await fse.outputFile(path.join(dir, '.agents/skills/hai-app-create/SKILL.md'), sharedContent)
 
     await generateProjectAiSupport(dir, ['hai-app-create'], { overwriteSkills: false, overwriteBridgeFiles: false })
 
-    const alias = await readText(dir, '.claude/skills/hai-app-create/SKILL.md')
-    const metadata: unknown = parse(alias.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1] ?? '')
-    expect(metadata).toEqual({ name: 'hai-app-create', description: '本项目的功能开发规则' })
+    expect((await readText(dir, 'CLAUDE.md')).trim()).toBe('@AGENTS.md')
+    expect(await exists(dir, '.claude')).toBe(false)
     expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md')).toBe(sharedContent)
-    expect(alias).not.toContain('# custom workflow')
+    expect(await exists(dir, '.agents/skills/hai-app-create/development.md')).toBe(true)
   })
 
   it('配置齐备时也应补全缺失 AI 资源并保留已有入口与 Skill', async () => {

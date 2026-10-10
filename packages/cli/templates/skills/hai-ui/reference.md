@@ -257,7 +257,7 @@ const p = usePlatform()
 | ------------ | ------------------------------------------------------------------ | ------------- |
 | `Form`       | `loading`, `disabled`, `onsubmit`                                  | 表单容器      |
 | `FormField`  | `label`, `name`, `error`, `hint`, `required`                       | 表单字段      |
-| `Modal`      | `open`, `title`, `size`, `closeOnBackdrop`                         | 模态框        |
+| `Modal`      | `open`, `title`, `size`, `closeOnBackdrop`                         | 模态框，内置对话框语义、焦点约束和关闭后焦点恢复 |
 | `Drawer`     | `open`, `position`, `size`, `width`, `resizable`, `widthStorageKey` | 可选拖动并记忆宽度的抽屉 |
 | `DataTable`  | `data`, `columns`, `keyField`, `sortKey`, `sortDir`, `onsort`, snippet slots | 数据表格（列定义 `sortable` 可排序） |
 | `Combobox`   | `options`, `value`, `multiple`, `placeholder`, `error`, `onchange` | 可搜索选择    |
@@ -351,7 +351,7 @@ const p = usePlatform()
 | `AuthShell`    | `variant`('card'/'split'), `title`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` | 认证页布局（包裹登录/注册表单） |
 | `LoginForm`    | `showRememberMe`, `showRegisterLink`, `errors`  | 登录表单 |
 | `RegisterForm` | `fields`, `minPasswordLength`, `errors`         | 注册表单 |
-| `UserProfile`  | `user`, `editable`, `fields`, `avatarUploadUrl` | 用户资料 |
+| `UserProfile`  | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint` | 用户资料，选择器和提示对齐业务校验；最终验证和上传仍由回调负责 |
 
 #### 错误页 / 设置场景组件
 
@@ -532,10 +532,11 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 支持 15 个精选 DaisyUI 主题。
 
 ```typescript
-import { applyTheme, getCurrentTheme, isDarkTheme, THEMES, THEME_GROUPS } from '@h-ai/ui'
+import { applyTheme, getCurrentTheme, getSavedTheme, isDarkTheme, THEMES, THEME_GROUPS } from '@h-ai/ui/theme'
 
 applyTheme('dark')      // 应用主题（自动持久化 localStorage）
 getCurrentTheme()        // 获取当前主题名
+getSavedTheme('corporate') // 存储为空或不可用时使用应用默认主题
 isDarkTheme('dracula')   // 检查是否暗色主题
 ```
 
@@ -583,8 +584,10 @@ typescript, javascript, python, java, go, rust, c, cpp, csharp, ruby, php, swift
 | 路径                        | 用途                                   |
 | --------------------------- | -------------------------------------- |
 | `@h-ai/ui`                 | 主入口：所有组件、工具函数、类型       |
+| `@h-ai/ui/theme`           | 轻量主题元数据与工具，不经过组件根入口 |
 | `@h-ai/ui/auto-import`     | Svelte 预处理器：组件自动导入          |
-| `@h-ai/ui/components/*`    | 按路径引用单个组件                     |
+| `@h-ai/ui/components/*`    | 公开组件目录的 JS 入口，按实际 exports/产物选择 |
+| `@h-ai/ui/components/primitives/index` | 公开原子组件目录入口，如 Button/Input |
 | `@h-ai/ui/styles/global.css`       | 全局基础样式（重置/滚动条/焦点）       |
 | `@h-ai/ui/styles/theme.css`        | Tailwind v4 `@theme` Token            |
 | `@h-ai/ui/styles/design-tokens.css`| CSS 自定义属性（间距/圆角/z-index）    |

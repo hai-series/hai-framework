@@ -55,6 +55,12 @@ export default defineConfig({
       env: {
         HOST: serviceHost,
         PORT: servicePort,
+        // 仅供脚手架验收：生产启动必须由部署环境提供初始管理员密码。
+        HAI_ADMIN_DEFAULT_PASSWORD: process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!',
+        HAI_CORE_NAME: process.env.HAI_CORE_NAME || 'Configured scaffold',
+        HAI_CORE_VERSION: process.env.HAI_CORE_VERSION || '9.8.7',
+        HAI_CORE_ENV: process.env.HAI_CORE_ENV || 'test',
+        HAI_CORE_LOGGING_LEVEL: 'warn',
       },
       url: `${serviceBaseURL}/health`,
       reuseExistingServer: false,

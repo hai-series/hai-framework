@@ -1,10 +1,10 @@
+import type { CoreConfig } from '@h-ai/core'
 import type { ServConfig } from '@h-ai/serv'
 import { core } from '@h-ai/core'
 {{#if features.crypto}}import { crypto } from '@h-ai/crypto'
 {{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
 {{/if}}import { serv } from '@h-ai/serv'
 import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
-import pkg from '../package.json' with { type: 'json' }
 import { {{api.serviceProceduresFactoryName}} } from './server/procedures/index.js'
 
 const startedAt = Date.now()
@@ -14,15 +14,12 @@ interface CreateApiServiceAppOptions {
   refreshCookie?: 'enabled' | 'disabled'
 }
 
-interface AppCoreConfig {
-  readonly env?: string
-}
 /** 创建 API Service HTTP 应用。 */
 export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptions = {}) {
   const servConfig = core.config.getOrThrow<ServConfig>('serv')
-  const coreConfig = core.config.get<AppCoreConfig>('core')
+  const coreConfig = core.config.getOrThrow<CoreConfig>('core')
   const security = serv.createRuntimeSecurityPolicy({
-    environment: coreConfig?.env,
+    environment: coreConfig.env,
     corsOrigin: servConfig.cors.origin,
     nativeOrigins: servConfig.cors.nativeOrigins,
   })
@@ -46,8 +43,10 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
     procedures: {{api.serviceProceduresFactoryName}}({
       app: {
         info: {
-          name: pkg.name,
-          version: pkg.version,
+          name: coreConfig.name,
+          version: coreConfig.version,
+          env: coreConfig.env,
+          defaultLocale: coreConfig.defaultLocale,
           transportEnabled: transport !== undefined,
         },
         startedAt,

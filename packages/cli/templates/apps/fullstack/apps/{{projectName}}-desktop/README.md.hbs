@@ -8,7 +8,9 @@
 
 - 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`
 - 共享 Shell/主题/语言/API：`packages/{{fullstack.sharedPackageName}}`
-- 语言切换由 shared 的 `LanguageSwitcher` 触发，并同步本端 `$lib/paraglide/runtime.js`
+- 个人设置保存语言与风格偏好到 IAM 元数据，并同步 shared 和本端 Paraglide runtime
+
+原生 Tauri 使用内存 TokenStorage，不将凭证写入磁盘；重启后需要重新登录。浏览器预览使用 httpOnly refresh Cookie。两种方式均经共享加密 API 客户端。`src-tauri/tauri.conf.json` 的资源与网络白名单应与部署的 API 地址同步。
 
 自定义建议：桌面端菜单、状态、快捷操作文案放在本目录 `messages/`；跨端通用能力放到 shared。
 

@@ -1,3 +1,4 @@
+import type { CoreConfig } from '@h-ai/core'
 import type { ServConfig } from '@h-ai/serv'
 import type { AddressInfo } from 'node:net'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -130,7 +131,8 @@ describe('{{api.servicePackageName}}', () => {
 
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.name).toContain('{{projectName}}')
+      const config = core.config.getOrThrow<CoreConfig>('core')
+      expect(result.data).toMatchObject({ name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale })
       expect(typeof result.data.transportEnabled).toBe('boolean')
     }
   })

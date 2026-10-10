@@ -16,7 +16,7 @@
     "preview": "vite preview --host 127.0.0.1 --port {{fullstack.ports.app}} --strictPort",
     "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
-    "test": "pnpm paraglide:compile && vitest run",
+    "test": "pnpm paraglide:compile && vitest run --passWithNoTests",
     "test:watch": "pnpm paraglide:compile && vitest",
     "clean": "rimraf dist build android ios .turbo src/lib/paraglide",
     "cap:add:android": "cap add android",

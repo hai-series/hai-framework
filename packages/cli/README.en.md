@@ -21,17 +21,19 @@
 
 ## AI usage guidance
 
+Claude Code v2.1.277 and later can also read root `AGENTS.md` directly when no higher-priority project CLAUDE file overrides it and the built-in support is enabled. The single-line `@AGENTS.md` bridge supports older or disabled sessions without duplicating instructions or requiring a `.claude/` directory. See [AGENTS.md support](https://code.claude.com/docs/en/memory#agentsmd).
+
 The CLI copies complete selected skill directories from `templates/skills/` into the generated project's `.agents/skills/`. `SKILL.md` defines boundaries and task navigation; `reference.md`/`guide.md` hold on-demand examples. Do not copy only the entry file. AGENTS.md holds application constraints and Claude/Copilot bridge files reference it. Template changes must sync relevant repository skills. Generation tests verify delivery of reference files.
 
 For everyday feature additions, changes and fixes, `AGENTS.md` routes to `hai-app-create/SKILL.md` and `development.md`. Map requirements to existing framework features, configuration and extension points before implementing against the installed package's exports and types. Reuse applicable capabilities and explain concrete gaps; do not install unrelated dependencies to increase module coverage. Codex uses `.agents/skills/` and the project root's persistent `AGENTS.md` rules.
 
-Tool-specific entry points share the same guidance: Codex/Cursor use AGENTS and `.agents/skills/`; Copilot uses `.github/copilot-instructions.md` and shared skills; OpenCode uses AGENTS, opencode.json and shared skills. Claude Code uses CLAUDE.md and native `.claude/skills/<name>/SKILL.md` aliases containing discovery metadata and a link to the shared body. References stay in `.agents/skills/`, without symlink permissions or duplicated skill bodies. Sources: [Claude](https://code.claude.com/docs/en/skills), [Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills), [OpenCode](https://docs.opencode.ai/docs/skills/), [Cursor](https://cursor.com/docs/skills).
+Tool entry points share one set of rules and skills: Codex/Cursor use AGENTS and `.agents/skills/`; Copilot uses `.github/copilot-instructions.md` and shared skills; OpenCode uses AGENTS, opencode.json and shared skills. Claude Code's root CLAUDE.md contains only `@AGENTS.md`; task navigation in the shared rules leads to skill bodies and references in `.agents/skills/` as needed. The CLI does not create `.claude/`, duplicate skills or require symlinks. This setup does not register native Claude skills or `/skill` commands; existing Claude settings and skills are preserved. Sources: [Claude project instructions](https://code.claude.com/docs/en/memory), [Claude native skills](https://code.claude.com/docs/en/skills), [Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills), [OpenCode](https://docs.opencode.ai/docs/skills/), [Cursor](https://cursor.com/docs/skills).
 
 Generated projects share `eslint-rules.js`. Lint rejects explicit `any`, console calls, unexplained suppressions, double unknown assertions, internal framework source imports and writes to known sensitive localStorage keys. A necessary third-party workaround requires a documented local exception. Static rules do not prove authorization, input safety, transaction behavior or log redaction; verify those through tests and review.
 
 For existing projects, update the CLI and run `hai init` to fill missing workflow skills, resources and entry files. Existing files are preserved, including AI rules when using `--force`. Merge existing entry files, skills, ESLint configuration and scripts against a newly generated project, and restore missing .npmrc/.gitignore files; filling missing files does not upgrade old rules. Before release, use the CLI built from this repository to create the comparison project and keep unpublished capabilities separate from installed package capabilities.
 
-Before writing AI files, the CLI resolves existing file and directory links. Shared skills, Claude aliases and project bridges must stay inside the project; external targets stop the write. Linking Claude's skill directory to the shared directory inside the project remains supported.
+Before writing AI files, the CLI resolves existing file and directory links. Shared skills and project bridges must stay inside the project; external targets stop the write. Existing `.claude/` directories and links are outside generation; `hai init` / `hai add` do not modify or delete their contents.
 
 Delivery checks cover both the package archive and generated projects. Source `.npmrc` / `.gitignore` templates use a `.hbs` suffix to avoid packaging exclusions; generation restores their normal names and preserves dependency layout and sensitive-artifact ignore rules. An archive regression verifies every template is in the `.tgz`, beyond creation from the source checkout.
 
@@ -115,6 +117,39 @@ npx hai g:model order
 | `default` | Default     | IAM + DB + Cache + Crypto                                 |
 | `full`    | Full        | All business modules + API Service / contract integration |
 | `custom`  | Custom      | Choose as needed                                          |
+
+## Fullstack mini administration
+
+`--type fullstack` generates an administration workspace with IAM, reldb, cache, audit, storage and crypto by default. The required management modules remain enabled even with the minimal preset. `--frontends` selects Web, Capacitor App and Tauri Desktop; miniapp remains a documentation placeholder excluded from runtime and builds.
+
+```powershell
+npx hai create mini-admin --type fullstack --frontends web,app,desktop
+cd mini-admin
+pnpm.cmd install
+$env:HAI_ADMIN_DEFAULT_PASSWORD = '<your-strong-password>'
+pnpm.cmd dev
+```
+
+When the user table is empty on first startup, `HAI_ADMIN_DEFAULT_PASSWORD` is required to create the `admin` account; startup stops if it is missing. The password follows `_iam.yml` policy, with a default minimum of 8 characters. Once users exist, the variable does not reset accounts or passwords. Keep real passwords out of source, images and committed environment files.
+
+- Administrators can search, paginate, create, edit, enable, disable and delete users and upload avatars. The server protects the current administrator and rechecks authorization inside a mutation lock so concurrent actions cannot remove every administrator's access.
+- Roles are fixed as `admin` / `user`. The role page shows member counts and edits descriptions; the user page assigns roles. Ordinary users only access personal settings, and the server rejects direct management API calls from them.
+- The audit page filters by action, resource and date. Successful login, logout, password changes and management writes produce audit records without passwords, tokens or avatar contents.
+- Personal settings cover profile, avatar, language, theme and password changes. Preferences are stored in IAM user metadata. Avatars accept PNG/JPEG/WebP up to 512 KiB; the server validates image contents and generates the storage key.
+
+The typed api-client and serv crypto transport encrypt JSON business requests, login and refresh in both directions. Web uses an in-memory access token and an HttpOnly refresh Cookie. Native App uses Capacitor secure TokenStorage; native Desktop stores tokens only in memory and requires login after restart. The native refresh body channel verifies the client identifier, explicit transport header and trusted Origin; browser previews use Cookie mode. Public avatars are binary image resources restricted by a whitelist.
+
+Web/App/Desktop share one `AdminWorkspace`, management store and typed client. Current-user and refresh routes use the framework's default IAM procedures; theme caching and DOM updates use `@h-ai/ui/theme`. Application code composes fixed roles, self-protection, avatars and business auditing.
+
+Default SQLite, local storage and memory cache suit a single-instance mini administration service. Management writes support one writer instance. Multiple read instances require shared database, storage, Redis cache and sticky transport sessions; all management writes must still reach the same writer. Redis alone does not provide atomic last-administrator protection across arbitrary writers. Generated root scripts provide typecheck, lint, build, test and test:e2e; Capacitor/Tauri delivery additionally requires the appropriate native build and packaging.
+
+## Application configuration and display
+
+Every template reads `name`, `version`, `env`, `defaultLocale` and `logging` from `_core.yml`, obtains metadata through `core.config` and uses `core.logger`. Single-app configuration lives in `config/`, API workspace configuration in `apps/<project>-service/config/`, and fullstack configuration in `packages/<project>-serv/config/`. YAML controls log level and format; initialization does not replace them with a fixed `logging` option.
+
+Core environment overrides include `HAI_CORE_NAME`, `HAI_CORE_VERSION`, `HAI_CORE_ENV` and `HAI_CORE_LOGGING_LEVEL`; a whole `HAI_CORE` override follows parent-node precedence. Restart services after server configuration changes. Containers explicitly set `HAI_CORE_ENV=production`, which enables production security policy.
+
+SvelteKit server layouts expose only whitelisted public metadata such as name, version, environment and default locale. Standalone mobile-app Vite configuration parses YAML through core in the Node build process and injects public values plus browser logging level/format; YAML or override changes require a rebuild. Fullstack frontends obtain public server metadata through encrypted `app.info`. No template exposes complete core/module configuration, secrets or log-redaction context to the browser.
 
 ## Global options
 

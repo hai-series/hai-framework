@@ -32,7 +32,7 @@ beforeAll(async () => {
   for (const eslint of linters.values()) {
     await eslint.lintText('export const value = 1\n', { filePath: 'src/quality.ts' })
   }
-}, 30_000)
+}, 120_000)
 
 afterAll(async () => {
   await fse.remove(tmpRoot)

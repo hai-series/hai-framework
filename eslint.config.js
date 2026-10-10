@@ -22,6 +22,7 @@ export default antfu({
     '**/*.d.ts', // 声明文件（生成产物）不参与 lint
     '**/project.inlang/**', // inlang 工程元数据（工具生成）
     '**/paraglide/**', // Paraglide 自动生成的文件
+    '**/docs/**/*.md', // 设计/报告文档（示例与伪代码片段）不参与 lint
     '**/.github/skills/**/*.md', // 仓库内 AI Skill 文档（示例代码片段）不参与 lint
     '**/packages/cli/templates/skills/**/*.md', // Skill 模板文档（示例代码片段）不参与 lint
     '**/packages/ui/README*.md', // 三语 README 沿用现有 markdown 规则冲突豁免

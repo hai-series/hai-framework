@@ -16,12 +16,19 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import Handlebars from 'handlebars'
+import { stringify } from 'yaml'
 import { getCliVersion } from '../cli-utils.js'
 
 // 注册自定义 Handlebars helpers
 Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
   return a === b ? options.fn(this) : options.inverse(this)
 })
+
+// 配置中的显示名称可包含引号、空格和换行，嵌入 TS / JSON / YAML 时必须作为字面量编码。
+Handlebars.registerHelper('json', (value: unknown) => JSON.stringify(value))
+Handlebars.registerHelper('html', (value: string) => Handlebars.escapeExpression(value))
+Handlebars.registerHelper('yaml', (key: string, value: unknown) => stringify({ [key]: value }).trim())
+Handlebars.registerHelper('jsString', (value: string) => `'${JSON.stringify(value).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, '\\\'')}'`)
 
 const TEMPLATE_SKIP_IF_EMPTY_MARKER = '@skipIfEmpty'
 const NORMALIZED_RENDER_EXTENSIONS = new Set(['.ts', '.js', '.svelte', '.json', '.css'])
@@ -204,12 +211,21 @@ const FULLSTACK_CONTRACT_CATALOG_PACKAGE_NAMES = [
 ] as const
 
 const FULLSTACK_SERV_CATALOG_PACKAGE_NAMES = [
+  '@h-ai/audit',
+  '@h-ai/cache',
   '@h-ai/core',
+  '@h-ai/crypto',
+  '@h-ai/iam',
+  '@h-ai/reldb',
   '@h-ai/serv',
+  '@h-ai/storage',
+  'zod',
 ] as const
 
 const FULLSTACK_SHARED_CATALOG_PACKAGE_NAMES = [
   '@h-ai/api-client',
+  '@h-ai/core',
+  '@h-ai/crypto',
   '@h-ai/ui',
   '@inlang/paraglide-js',
   '@inlang/plugin-message-format',
@@ -498,6 +514,8 @@ export interface FullstackThemeContext {
 }
 
 export interface FullstackTemplateContext {
+  /** 显示名称来自 core 配置。 */
+  appName: string
   /** 依赖版本集合 */
   versions: typeof VERSIONS
   /** 写入 package.json 的依赖说明符（pnpm 时为 catalog:） */
@@ -703,6 +721,11 @@ export function buildTemplateContext(options: {
     featureMap[f] = true
   }
 
+  // fullstack 默认交付完整 mini 管理功能，不能移除其必需模块。
+  if (options.appType === 'fullstack') {
+    for (const feature of ['iam', 'db', 'cache', 'crypto', 'storage', 'audit']) featureMap[feature] = true
+  }
+
   // 强制补全模块硬依赖，防止调用方未经过 resolveFeatureDependencies 时遗漏依赖
   // iam 依赖 reldb（用户/角色/权限持久化）和 cache（会话/OTP 缓存），以及 crypto（密码哈希）
   if (featureMap.iam) {
@@ -807,6 +830,7 @@ function buildFullstackTemplateContext(
     }))
 
   return {
+    appName: moduleConfigs?.core?.name ?? projectName,
     versions: VERSIONS,
     packageSpecifiers: buildFullstackPackageSpecifiers(useCatalogProtocol),
     contractPackageName: `${projectName}-contract`,
@@ -929,7 +953,7 @@ export async function generateFromTemplates(
   }
 
   // ─── ③ 叠加 feature 路由 ───
-  if (!context.isApiWorkspace) {
+  if (!context.isApiWorkspace && context.appType !== 'fullstack') {
     for (const featureId of Object.keys(context.features)) {
       if (context.isSvelteOnlyApp) {
         continue
@@ -1019,7 +1043,7 @@ async function renderDynamicFiles(
   }
 
   // ── feature 路由 → 输出到 src/routes/ ──
-  if (context.isApiWorkspace) {
+  if (context.isApiWorkspace || context.appType === 'fullstack') {
     return
   }
 

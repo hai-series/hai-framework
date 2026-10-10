@@ -17,6 +17,8 @@ test('service app.info endpoint returns HaiResult', async ({ request }) => {
 
   expect(response.status()).toBe(200)
   expect(body.success).toBe(true)
-  expect(body.data.name).toContain('{{projectName}}')
+  expect(body.data.name).toBe(process.env.HAI_CORE_NAME ?? '{{projectName}} API Service')
+  expect(body.data.version).toBe(process.env.HAI_CORE_VERSION ?? '0.1.0')
+  expect(body.data.env).toBe(process.env.HAI_CORE_ENV ?? 'development')
   expect(typeof body.data.transportEnabled).toBe('boolean')
 })
