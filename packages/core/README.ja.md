@@ -138,7 +138,7 @@ opLogger.error('Login failed', { reason: 'invalid_password' })
 #### ログの管理
 
 ```typescript
-// 配置输出格式和级别（Node.js）
+// 配置输出格式和级别（Node.js / Browser）
 core.logger.configure({
   level: 'info',
   format: 'json', // 'json' | 'pretty'
@@ -149,6 +149,10 @@ core.logger.configure({
 core.logger.setLevel('debug')
 const level = core.logger.getLevel() // 'debug'
 ```
+
+`core.init()` で `_core.yml.logging` を読み込んだ後、または `configure` / `setLevel` の後は、既定・モジュール・ネストした child Logger の次の出力に現在の共通設定を適用します。初期化前に作成したインスタンスも対象です。`create({ level, format, context })` の明示指定は優先され、省略項目は共通設定を動的に継承します。呼び出し時の context は固定 context を上書きし、追加 `redact` 規則も全インスタンスに適用するため、モジュール Logger の再作成は不要です。
+
+ブラウザーでは引き続き DevTools console に出力します。`pretty` は読みやすいメッセージと context、`json` は `level` / `msg` を含む JSON 文字列です。既定の認証情報マスキングと設定したパスのマスキングを併用し、ネストしたドット・括弧パスと `*` に対応します。メッセージ本文の機密情報は呼び出し側で除去してください。
 
 `core.logger` は既定でログの機密情報をマスクします。`password`、`token`、`secret`、`privateKey`、`apiV3Key` などは `[REDACTED]` に置換されます。`url` / `baseUrl` / `endpoint` は URL 内のユーザー名・パスワードのみをマスクします。メールアドレス・電話番号は既定では隠しません。
 

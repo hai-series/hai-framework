@@ -5,7 +5,7 @@
  * @module core-function-logger.browser
  */
 
-import type { LoggingConfig, LogLevel } from '../core-config.js'
+import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import log from 'loglevel'
 import { sanitize as sanitizeUtils } from '../utils/core-util-sanitize.js'
@@ -14,6 +14,12 @@ import { sanitize as sanitizeUtils } from '../utils/core-util-sanitize.js'
 
 /** 全局日志级别（默认 'info'） */
 let globalLevel: LogLevel = 'info'
+
+/** 浏览器默认可读输出；可配置 JSON 格式用于采集。 */
+let globalFormat: LogFormat = 'pretty'
+
+/** 附加脱敏路径，与默认凭据脱敏同时生效。 */
+let globalRedact: string[] = []
 
 /** 全局默认上下文（每条日志自动附带） */
 let globalContext: Record<string, unknown> = {}
@@ -53,8 +59,10 @@ function configureLogger(config: Partial<LoggingConfig>): void {
   if (config.context) {
     globalContext = { ...globalContext, ...config.context }
   }
-  // 重置默认 logger 缓存，使下次 getLogger() 返回新配置的实例
-  defaultLogger = null
+  if (config.format)
+    globalFormat = config.format
+  if (config.redact)
+    globalRedact = [...config.redact]
 }
 
 /**
@@ -89,7 +97,26 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
     return ctx
   }
 
-  return sanitizeUtils.sanitizeSensitiveFields(ctx) as LogContext
+  const sanitized = sanitizeUtils.sanitizeSensitiveFields(ctx)
+  for (const path of globalRedact)
+    redactPath(sanitized, path.match(/\*|[^.[\]"']+/g) ?? [])
+  return sanitized
+}
+
+/** 在已脱敏的副本上处理点/括号路径和通配符，不修改调用方原始对象。 */
+function redactPath(value: unknown, segments: string[]): void {
+  if (!value || typeof value !== 'object' || segments.length === 0)
+    return
+  const record = value as Record<string, unknown>
+  const [segment, ...rest] = segments
+  const keys = segment === '*' ? Object.keys(record) : [segment!]
+  for (const key of keys) {
+    if (!Object.hasOwn(record, key) || ['__proto__', 'constructor', 'prototype'].includes(key))
+      continue
+    if (rest.length === 0)
+      record[key] = '[REDACTED]'
+    else redactPath(record[key], rest)
+  }
 }
 
 // ─── Logger 实现 ───
@@ -103,8 +130,11 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
  * @param context - 日志上下文（空对象时不输出）
  * @returns 格式化后的字符串
  */
-function formatMessage(message: string, context?: LogContext): string {
+function formatMessage(message: string, context?: LogContext, format: LogFormat = globalFormat, level: LogLevel = 'info'): string {
   const sanitizedContext = sanitizeLogContext(context)
+
+  if (format === 'json')
+    return JSON.stringify({ ...sanitizedContext, level, msg: message })
 
   if (!sanitizedContext || Object.keys(sanitizedContext).length === 0) {
     return message
@@ -117,32 +147,34 @@ function formatMessage(message: string, context?: LogContext): string {
  *
  * 将 loglevel 实例包装为统一 Logger 接口，自动合并基础上下文。
  *
- * @param loggerInstance - loglevel 实例
- * @param baseContext - 基础上下文（会与每次调用时的 ctx 合并）
+ * @param resolveLogger - 当前级别的 loglevel 实例
+ * @param resolveContext - 当前基础上下文（会与每次调用时的 ctx 合并）
+ * @param resolveFormat - 当前输出格式
  * @returns 统一 Logger 实例
  */
-function wrapLoglevel(loggerInstance: log.Logger, baseContext: Record<string, unknown>): Logger {
+function wrapLoglevel(resolveLogger: () => log.Logger, resolveContext: () => Record<string, unknown>, resolveFormat: () => LogFormat): Logger {
   return {
     trace(message: string, ctx?: LogContext) {
-      loggerInstance.trace(formatMessage(message, { ...baseContext, ...ctx }))
+      resolveLogger().trace(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'trace'))
     },
     debug(message: string, ctx?: LogContext) {
-      loggerInstance.debug(formatMessage(message, { ...baseContext, ...ctx }))
+      resolveLogger().debug(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'debug'))
     },
     info(message: string, ctx?: LogContext) {
-      loggerInstance.info(formatMessage(message, { ...baseContext, ...ctx }))
+      resolveLogger().info(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'info'))
     },
     warn(message: string, ctx?: LogContext) {
-      loggerInstance.warn(formatMessage(message, { ...baseContext, ...ctx }))
+      resolveLogger().warn(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'warn'))
     },
     error(message: string, ctx?: LogContext) {
-      loggerInstance.error(formatMessage(message, { ...baseContext, ...ctx }))
+      resolveLogger().error(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'error'))
     },
     fatal(message: string, ctx?: LogContext) {
-      loggerInstance.error(`[FATAL] ${formatMessage(message, { ...baseContext, ...ctx })}`)
+      const text = formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'fatal')
+      resolveLogger().error(resolveFormat() === 'json' ? text : `[FATAL] ${text}`)
     },
     child(childContext: Record<string, unknown>): Logger {
-      return wrapLoglevel(loggerInstance, { ...baseContext, ...childContext })
+      return wrapLoglevel(resolveLogger, () => ({ ...resolveContext(), ...childContext }), resolveFormat)
     },
   }
 }
@@ -160,16 +192,20 @@ function wrapLoglevel(loggerInstance: log.Logger, baseContext: Record<string, un
  * ```
  */
 function createLogger(options: LoggerOptions = {}): Logger {
-  const { name, level, context } = options
+  const { name, level, format } = options
+  const context = { ...options.context }
 
   // 创建或获取 logger 实例
   const loggerInstance = name ? log.getLogger(name) : log
 
-  // 设置级别
-  const effectiveLevel = level ?? globalLevel
-  loggerInstance.setLevel(LEVEL_MAP[effectiveLevel])
-
-  return wrapLoglevel(loggerInstance, { ...globalContext, ...context })
+  const resolveLogger = (): log.Logger => {
+    const effectiveLevel = LEVEL_MAP[level ?? globalLevel]
+    if (loggerInstance.getLevel() !== log.levels[String(effectiveLevel).toUpperCase() as keyof typeof log.levels])
+      loggerInstance.setLevel(effectiveLevel)
+    return loggerInstance
+  }
+  resolveLogger()
+  return wrapLoglevel(resolveLogger, () => ({ ...globalContext, ...context }), () => format ?? globalFormat)
 }
 
 // ─── 默认 Logger 实例 ───

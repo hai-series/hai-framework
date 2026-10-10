@@ -152,14 +152,15 @@ function initCore(options: CoreOptions = {}): void {
     core.logger.configure(options.logging)
   }
 
-  logger.info('[core] Initializing...')
-
   let configItems: ConfigLoadItem[] = []
 
   if (options.configDir) {
     // 约定优于配置模式
     configItems = scanConfigDir(options.configDir)
   }
+
+  // 先应用 core 的日志配置，避免其它配置加载日志使用初始化前的级别与格式。
+  configItems.sort((left, right) => Number(right.name === 'core') - Number(left.name === 'core'))
 
   // 2. Load config files
   for (const item of configItems) {

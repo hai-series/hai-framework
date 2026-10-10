@@ -138,7 +138,7 @@ opLogger.error('Login failed', { reason: 'invalid_password' })
 #### 日志管理
 
 ```typescript
-// 配置输出格式和级别（Node.js）
+// 配置输出格式和级别（Node.js / Browser）
 core.logger.configure({
   level: 'info',
   format: 'json', // 'json' | 'pretty'
@@ -149,6 +149,10 @@ core.logger.configure({
 core.logger.setLevel('debug')
 const level = core.logger.getLevel() // 'debug'
 ```
+
+`core.init()` 加载 `_core.yml.logging` 后，或调用 `configure` / `setLevel` 后，默认、模块和嵌套 child Logger 会在后续输出中使用当前全局配置，即使这些实例在初始化前创建。`create({ level, format, context })` 的显式级别、格式和本地上下文仍优先；未指定的选项动态继承全局配置，调用时上下文覆盖固定上下文。附加 `redact` 对这些实例统一生效，不需要重建模块 Logger。
+
+浏览器仍输出到 DevTools console：`pretty` 使用可读消息与上下文，`json` 输出包含 `level` / `msg` 的 JSON 字符串。默认凭据脱敏与配置的字段路径脱敏同时生效，支持嵌套点/括号路径和 `*`；消息文本本身需调用方脱敏。
 
 `core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段只会掩码 URL 中内嵌的用户名和密码；邮箱、手机号默认不会被遮盖。
 

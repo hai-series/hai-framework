@@ -54,6 +54,9 @@ let globalContext: Record<string, unknown> = {}
 /** 全局脱敏字段路径列表（如 ['password', 'token']） */
 let globalRedact: string[] = []
 
+/** 格式和脱敏规则变化时，已有 Logger 在下次输出时更新底层实例。 */
+let outputRevision = 0
+
 /** 默认 Logger 单例缓存 */
 let defaultLogger: Logger | null = null
 
@@ -70,14 +73,16 @@ let defaultLogger: Logger | null = null
 function configureLogger(config: Partial<LoggingConfig>): void {
   if (config.level)
     globalLevel = config.level
-  if (config.format)
+  if (config.format) {
     globalFormat = config.format
+    outputRevision++
+  }
   if (config.context)
     globalContext = { ...globalContext, ...config.context }
-  if (config.redact)
-    globalRedact = config.redact
-  // 重置默认 logger 缓存，使下次 getLogger() 返回新配置的实例
-  defaultLogger = null
+  if (config.redact) {
+    globalRedact = [...config.redact]
+    outputRevision++
+  }
 }
 
 /**
@@ -121,33 +126,33 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
  *
  * 将 pino 的原生方法映射为 Logger 接口，自动合并上下文。
  *
- * @param pinoLogger - pino 实例
- * @param context - 基础上下文（会与每次调用时的 ctx 合并）
+ * @param resolvePino - 当前配置对应的 pino 实例
+ * @param resolveContext - 当前基础上下文（会与每次调用时的 ctx 合并）
  * @returns 统一 Logger 实例
  */
-function wrapPino(pinoLogger: pino.Logger, context: Record<string, unknown>): Logger {
+function wrapPino(resolvePino: () => pino.Logger, resolveContext: () => Record<string, unknown>): Logger {
   return {
     trace(message: string, ctx?: LogContext) {
-      pinoLogger.trace(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
+      resolvePino().trace(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
     },
     debug(message: string, ctx?: LogContext) {
-      pinoLogger.debug(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
+      resolvePino().debug(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
     },
     info(message: string, ctx?: LogContext) {
-      pinoLogger.info(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
+      resolvePino().info(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
     },
     warn(message: string, ctx?: LogContext) {
-      pinoLogger.warn(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
+      resolvePino().warn(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
     },
     error(message: string, ctx?: LogContext) {
-      pinoLogger.error(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
+      resolvePino().error(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
     },
     fatal(message: string, ctx?: LogContext) {
-      pinoLogger.fatal(sanitizeLogContext({ ...context, ...ctx }) ?? {}, message)
+      resolvePino().fatal(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
     },
     child(childContext: Record<string, unknown>): Logger {
-      const sanitizedChildContext = sanitizeLogContext(childContext) ?? {}
-      return wrapPino(pinoLogger.child(sanitizedChildContext), { ...context, ...sanitizedChildContext })
+      // 只保存本地上下文，输出时继承父级的当前配置；不绑定旧 pino child。
+      return wrapPino(resolvePino, () => ({ ...resolveContext(), ...childContext }))
     },
   }
 }
@@ -165,9 +170,28 @@ function wrapPino(pinoLogger: pino.Logger, context: Record<string, unknown>): Lo
  * ```
  */
 function createLogger(options: LoggerOptions = {}): Logger {
+  const localOptions = { ...options, context: { ...options.context } }
+  let revision = outputRevision
+  let output = createPinoOutput(localOptions)
+  const resolvePino = (): pino.Logger => {
+    if (revision !== outputRevision) {
+      const updated = createPinoOutput(localOptions)
+      output.close()
+      output = updated
+      revision = outputRevision
+    }
+    const level = localOptions.level ?? globalLevel
+    if (output.instance.level !== level)
+      output.instance.level = level
+    return output.instance
+  }
+  return wrapPino(resolvePino, () => ({ ...globalContext, ...localOptions.context }))
+}
+
+/** 底层输出只负责格式和脱敏；已有包装在输出时应用当前全局配置。 */
+function createPinoOutput(options: LoggerOptions): { instance: pino.Logger, close: () => void } {
   const level = options.level ?? globalLevel
   const format = options.format ?? globalFormat
-  const context = { ...globalContext, ...options.context }
 
   // 先构造一份与输出介质无关的基础配置，后面再按 transport 能力决定是否启用 pretty。
   const pinoOptions: pino.LoggerOptions = {
@@ -187,21 +211,20 @@ function createLogger(options: LoggerOptions = {}): Logger {
   }
 
   let pinoInstance: pino.Logger
+  let transport: ReturnType<typeof pino.transport> | undefined
 
   if (format === 'pretty' && isPrettyTransportAvailable()) {
     // 只有在 pino-pretty 可解析时才挂载 transport，避免可选依赖缺失直接导致 logger 初始化失败。
     try {
-      pinoInstance = pino({
-        ...pinoOptions,
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'SYS:standard',
-            ignore: 'pid,hostname',
-          },
+      transport = pino.transport({
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname',
         },
       })
+      pinoInstance = pino(pinoOptions, transport)
     }
     catch (error) {
       // 其他初始化异常应重新抛出，便于排查
@@ -217,7 +240,7 @@ function createLogger(options: LoggerOptions = {}): Logger {
     pinoInstance = pino(pinoOptions)
   }
 
-  return wrapPino(pinoInstance, context)
+  return { instance: pinoInstance, close: () => transport?.end() }
 }
 
 function isPrettyTransportAvailable(): boolean {

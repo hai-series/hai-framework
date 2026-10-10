@@ -138,7 +138,7 @@ opLogger.error('Login failed', { reason: 'invalid_password' })
 #### Logger management
 
 ```typescript
-// 配置输出格式和级别（Node.js）
+// 配置输出格式和级别（Node.js / Browser）
 core.logger.configure({
   level: 'info',
   format: 'json', // 'json' | 'pretty'
@@ -149,6 +149,10 @@ core.logger.configure({
 core.logger.setLevel('debug')
 const level = core.logger.getLevel() // 'debug'
 ```
+
+After `core.init()` loads `_core.yml.logging`, or after `configure` / `setLevel`, default, module and nested child loggers use current global configuration for subsequent output, including instances created before initialization. Explicit `create({ level, format, context })` options retain priority; omitted options inherit global configuration dynamically, and per-call context overrides fixed context. Additional `redact` rules apply to all these instances without recreating module loggers.
+
+Browser logs still use the DevTools console: `pretty` prints readable messages with context, while `json` prints a JSON string containing `level` / `msg`. Default credential masking and configured path redaction both apply, including nested dot/bracket paths and `*`. Callers remain responsible for redacting message text.
 
 `core.logger` redacts log context by default: credentials such as `password`, `token`, `secret`, `privateKey`, and `apiV3Key` become `[REDACTED]`. Fields such as `url` / `baseUrl` / `endpoint` mask only embedded usernames/passwords. Email addresses and phone numbers are not masked by default.
 

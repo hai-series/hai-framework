@@ -286,8 +286,11 @@ export interface LogContext {
  */
 export interface LoggerOptions {
   name?: string
+  /** 显式级别保持不变；未指定时动态继承全局配置。 */
   level?: LogLevel
+  /** 显式格式保持不变；未指定时动态继承全局配置。 */
   format?: LogFormat
+  /** 固定上下文覆盖当前全局上下文，调用时上下文可进一步覆盖。 */
   context?: Record<string, unknown>
 }
 
@@ -325,7 +328,7 @@ export interface Logger {
 export interface CoreLogger extends Logger {
   /** 创建新的 Logger 实例 */
   create: (options?: LoggerOptions) => Logger
-  /** 配置全局 Logger 选项（级别、格式、上下文等） */
+  /** 配置全局 Logger 选项，后续输出同时应用到已有默认、模块与 child Logger。 */
   configure: (config: Partial<LoggingConfig>) => void
   /** 设置全局日志级别 */
   setLevel: (level: LogLevel) => void

@@ -47,20 +47,16 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
   let cachedCoreLogger: CoreLogger | null = null
 
   const buildCoreLogger = (): CoreLogger => {
-    const base = loggerFns.getLogger()
     return {
-      trace: (msg, ctx) => base.trace(msg, ctx),
-      debug: (msg, ctx) => base.debug(msg, ctx),
-      info: (msg, ctx) => base.info(msg, ctx),
-      warn: (msg, ctx) => base.warn(msg, ctx),
-      error: (msg, ctx) => base.error(msg, ctx),
-      fatal: (msg, ctx) => base.fatal(msg, ctx),
-      child: ctx => base.child(ctx),
+      trace: (msg, ctx) => loggerFns.getLogger().trace(msg, ctx),
+      debug: (msg, ctx) => loggerFns.getLogger().debug(msg, ctx),
+      info: (msg, ctx) => loggerFns.getLogger().info(msg, ctx),
+      warn: (msg, ctx) => loggerFns.getLogger().warn(msg, ctx),
+      error: (msg, ctx) => loggerFns.getLogger().error(msg, ctx),
+      fatal: (msg, ctx) => loggerFns.getLogger().fatal(msg, ctx),
+      child: ctx => loggerFns.getLogger().child(ctx),
       create: loggerFns.createLogger,
-      configure: (config) => {
-        loggerFns.configureLogger(config)
-        cachedCoreLogger = null // 重置缓存
-      },
+      configure: loggerFns.configureLogger,
       setLevel: loggerFns.setLogLevel,
       getLevel: loggerFns.getLogLevel,
     }
