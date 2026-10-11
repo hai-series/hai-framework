@@ -15,7 +15,7 @@
 - `src/server/admin-service.ts`：角色分配、头像上传和审计编排，全部底层操作复用 hai 模块。固定 admin/user 两种角色；锁内重新鉴权，禁止管理员自删、自禁用、自降级，并补偿用户更新失败后的角色变更。
 - `tests/app-server.test.ts`：真实加密 HTTP 测试，覆盖 Cookie/受信原生刷新、RBAC、旧会话权限、并发管理操作、补偿、头像安全、偏好、审计及会话失效。
 
-首次启动前复制根目录 `.env.example` 为 `.env` 并填写 `HAI_ADMIN_DEFAULT_PASSWORD`（至少 8 位）；`dev`/`start` 自动读取。仅在没有用户时创建用户名 `admin`，无默认密码。所有业务 JSON 请求和响应强制加密；健康检查和随机路径的只读头像图片可直接访问。头像支持 PNG/JPEG/WebP，最大 512 KiB，校验内容特征和大小后由服务端生成 key，不能指定任意文件路径。
+CLI 已生成根目录 `.env`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项目独立的随机强密码；`dev`/`start` 自动读取，首次登录使用用户名 `admin` 和该密码。仅在没有用户时创建管理员，不重设已有用户密码。密码不符合 `_iam.yml` 策略时，启动日志显示具体原因及错误码。`.env` 被 Git 和容器构建忽略，`.env.example` 不含真实密码；部署时设置目标环境自己的密码。所有业务 JSON 请求和响应强制加密；健康检查和随机路径的只读头像图片可直接访问。头像支持 PNG/JPEG/WebP，最大 512 KiB，校验内容特征和大小后由服务端生成 key，不能指定任意文件路径。
 
 默认 SQLite + 本地 storage + memory cache 适合单实例，管理写入仅支持单写实例：进程内保护无过期时间，共享 cache 锁定期续租，丢失锁或释放失败会记录错误。多实例读取可使用共享数据库、Redis cache 和 S3 storage，但管理写请求必须统一路由到同一写实例；仅更换 Redis 不提供任意多写副本的最后管理员原子保证。另需配置传输会话粘性路由：服务端私钥驻留单个进程，服务重启后客户端需重新协商。Web 使用 HttpOnly refresh Cookie + 内存 access token；仅同时满足客户端标识、body 通道头与受信原生 Origin 的 App/Desktop 请求返回 refresh token body。
 

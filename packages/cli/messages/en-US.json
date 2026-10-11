@@ -23,5 +23,6 @@
   "cli_deploy_url": "  URL: {url}",
   "cli_deploy_id": "  ID: {id}",
   "cli_deploy_env": "  Env: {names}",
-  "cli_deploy_command_failed": "Deploy command failed"
+  "cli_deploy_command_failed": "Deploy command failed",
+  "cli_adminPasswordSaved": "  Administrator: admin; the random initial password is saved as HAI_ADMIN_DEFAULT_PASSWORD in .env"
 }

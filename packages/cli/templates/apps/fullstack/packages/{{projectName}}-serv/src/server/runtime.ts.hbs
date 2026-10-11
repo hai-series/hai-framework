@@ -55,7 +55,7 @@ async function runInitialization(): Promise<void> {
 /** 此函数仅用于进程启动边界，业务请求继续返回 HaiResult。 */
 function requireInitialized<T>(result: HaiResult<T>, moduleName: string): T {
   if (!result.success)
-    throw new Error(`Failed to initialize ${moduleName}: ${result.error.code}`)
+    throw new Error(`Failed to initialize ${moduleName}: ${result.error.message} (${result.error.code})`)
   return result.data
 }
 

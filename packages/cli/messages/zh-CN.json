@@ -23,5 +23,6 @@
   "cli_deploy_url": "  地址：{url}",
   "cli_deploy_id": "  标识：{id}",
   "cli_deploy_env": "  环境变量：{names}",
-  "cli_deploy_command_failed": "部署命令失败"
+  "cli_deploy_command_failed": "部署命令失败",
+  "cli_adminPasswordSaved": "  管理员：admin；随机初始密码已保存到 .env 的 HAI_ADMIN_DEFAULT_PASSWORD"
 }

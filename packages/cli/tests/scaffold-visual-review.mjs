@@ -49,13 +49,38 @@ async function login(page, username, secret) {
 }
 
 async function snapshot(page, name, { fullPage = false } = {}) {
+  await page.waitForLoadState('networkidle')
+  if (name.includes('audit')) {
+    await expect(page.getByTestId('audit-page')).toBeVisible()
+    await expect(page.getByTestId('audit-page').locator('form button[type="submit"]')).toBeEnabled()
+    await expect(page.getByTestId('audit-page').locator('.loading-spinner, .animate-spin')).toHaveCount(0)
+  }
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: path.join(outputDirectory, `${name}.png`), fullPage, animations: 'disabled' })
   const overflow = await page.evaluate(() => [...document.querySelectorAll('main *, header *')].map(element => ({ tag: element.tagName, class: element.className, right: element.getBoundingClientRect().right, width: element.getBoundingClientRect().width })).filter(element => element.right > innerWidth + 1).slice(0, 12))
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth))
     process.stdout.write(`Overflow ${name}: ${JSON.stringify(overflow)}\n`)
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  screenshots.push({ name, viewport: page.viewportSize(), fullPage, title: await page.title(), documentWidth: await page.evaluate(() => document.documentElement.scrollWidth) })
+  let auditControls
+  if (await page.getByTestId('audit-page').isVisible()) {
+    auditControls = await page.getByTestId('audit-page').locator('form').evaluate(form => [
+      form.querySelector('#audit-action')?.parentElement,
+      form.querySelector('#audit-resource')?.parentElement,
+      form.querySelector('#audit-start'),
+      form.querySelector('#audit-end'),
+      form.querySelector('button[type="submit"]'),
+    ].map((element) => {
+      if (!element)
+        throw new Error('Audit filter control is missing')
+      const rect = element.getBoundingClientRect()
+      return { top: rect.top, bottom: rect.bottom, height: rect.height }
+    }))
+    for (const control of auditControls)
+      assert(Math.abs(control.height - 40) < 1, 'Audit controls must use the same height')
+    if (page.viewportSize().width >= 1280)
+      assert(Math.max(...auditControls.map(control => control.top)) - Math.min(...auditControls.map(control => control.top)) < 1, 'Desktop audit controls must align')
+  }
+  screenshots.push({ name, viewport: page.viewportSize(), fullPage, title: await page.title(), documentWidth: await page.evaluate(() => document.documentElement.scrollWidth), auditControls })
   process.stdout.write(`Captured ${name}\n`)
 }
 
@@ -129,6 +154,17 @@ try {
   await page.getByTestId('audit-page').getByRole('button', { name: /查询|Search/ }).click()
   await expect(page.getByTestId('audit-page')).toContainText('create')
   await snapshot(page, '12-audit-desktop')
+  await page.getByTestId('nav-settings').click()
+  await page.getByTestId('profile-language').click()
+  await page.getByRole('option', { name: 'English', exact: true }).click()
+  await page.getByTestId('nav-audit').click()
+  await expect(page.getByTestId('audit-page').getByRole('heading')).toHaveText('Audit logs')
+  await snapshot(page, '12-audit-desktop-en')
+  await page.getByTestId('nav-settings').click()
+  await page.getByTestId('profile-language').click()
+  await page.getByRole('option', { name: /中文/ }).click()
+  await expect(page.getByTestId('nav-audit')).toHaveText('审计日志')
+  await page.getByTestId('nav-audit').click()
   await page.setViewportSize({ width: 390, height: 844 })
   await snapshot(page, '12-audit-mobile')
   await page.getByTestId('audit-page').getByRole('button', { name: /详情|Details/ }).first().click()

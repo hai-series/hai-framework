@@ -60,6 +60,39 @@ test('frontend displays configured core metadata and restores the administrator 
   await expect(page.getByTestId('login-form')).toBeVisible()
 })
 
+test('audit filters align and fit desktop, tablet and narrow mobile screens', async ({ page }) => {
+  await page.goto('/')
+  await login(page, 'admin', adminPassword)
+  await page.getByTestId('nav-audit').click()
+  await expect(page.getByTestId('audit-page')).toBeVisible()
+  for (const width of [1440, 960, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    const controls = await page.getByTestId('audit-page').locator('form').evaluate(form => [
+      form.querySelector('#audit-action')?.parentElement,
+      form.querySelector('#audit-resource')?.parentElement,
+      form.querySelector('#audit-start'),
+      form.querySelector('#audit-end'),
+      form.querySelector('button[type="submit"]'),
+    ].map((element) => {
+      if (!element)
+        throw new Error('Audit filter control is missing')
+      const rect = element.getBoundingClientRect()
+      return { top: rect.top, bottom: rect.bottom, height: rect.height }
+    }))
+    for (const control of controls)
+      expect(control.height).toBeCloseTo(40, 0)
+    if (width >= 1280) {
+      expect(Math.max(...controls.map(control => control.top)) - Math.min(...controls.map(control => control.top))).toBeLessThan(1)
+      expect(Math.max(...controls.map(control => control.bottom)) - Math.min(...controls.map(control => control.bottom))).toBeLessThan(1)
+    }
+    else if (width >= 640) {
+      expect(controls[0]!.top).toBeCloseTo(controls[1]!.top, 0)
+      expect(controls[2]!.top).toBeCloseTo(controls[3]!.top, 0)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+})
+
 test('administrator and user complete account, avatar, preference, password and audit workflows', async ({ page, browser }) => {
   test.setTimeout(120_000)
   const username = `member-${randomUUID().slice(0, 8)}`

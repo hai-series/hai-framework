@@ -43,6 +43,8 @@
 
 独立 fullstack 默认后台的 Web/App/Desktop 共用管理组件、状态与 typed client。`@h-ai/serv/features/iam` 默认 procedures 可按需选用并与 contract 对齐；仅为业务审计或资源策略覆写必要路由。主题的 DOM 更新和安全缓存使用 `@h-ai/ui/theme`（`applyTheme` / `getSavedTheme`），应用只保留响应式状态与已编译主题白名单。固定角色、管理员自我保护、头像资源范围及写失败补偿仍由应用按需求实现。
 
+Fullstack 创建时在被 Git 与容器构建忽略的根 `.env` 写入独立随机 `HAI_ADMIN_DEFAULT_PASSWORD`，`.env.example` 保留空占位。`dev` / `start` 自动读取；已有用户不重设密码。启动边界保留模块错误的具体说明与错误码，失败后反序清理。不能把生成的本地凭据复制到前端配置、日志、源码或镜像。
+
 ## 落实契约与安全边界
 
 按本次真实输入、资源和副作用选取下面检查，并把适用项变成可观察验收。不能用“已遵循安全规范”或 lint 通过替代行为证据。

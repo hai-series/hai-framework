@@ -20,15 +20,15 @@
 <section class="space-y-5" data-testid="audit-page">
   <div><h1 class="text-xl font-semibold tracking-tight">{m.nav_audit()}</h1><p class="mt-1 text-sm text-base-content/50">{m.audit_description()}</p></div>
   <div class="rounded-xl border border-base-content/8 bg-base-100">
-    <form class="grid gap-3 border-b border-base-content/8 p-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]" onsubmit={(event) => {
+    <form class="grid items-end gap-3 border-b border-base-content/8 p-4 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] [&_.fieldset]:p-0" onsubmit={(event) => {
       event.preventDefault()
       void store.loadAudit()
     }}>
-      <div class="space-y-1"><label class="text-xs text-base-content/60" for="audit-action">{m.audit_action()}</label><Input id="audit-action" bind:value={store.auditAction} placeholder={m.audit_action_placeholder()} data-testid="audit-action" /></div>
-      <div class="space-y-1"><label class="text-xs text-base-content/60" for="audit-resource">{m.audit_resource()}</label><Input id="audit-resource" bind:value={store.auditResource} placeholder={m.audit_resource_placeholder()} data-testid="audit-resource" /></div>
-      <div class="space-y-1"><label class="text-xs text-base-content/60" for="audit-start">{m.audit_start()}</label><input id="audit-start" type="date" class="input w-full" bind:value={store.auditStartDate} /></div>
-      <div class="space-y-1"><label class="text-xs text-base-content/60" for="audit-end">{m.audit_end()}</label><input id="audit-end" type="date" class="input w-full" bind:value={store.auditEndDate} /></div>
-      <div class="flex items-end"><Button type="submit" variant="outline" disabled={store.loading} class="w-full">{m.search()}</Button></div>
+      <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-action">{m.audit_action()}</label><Input id="audit-action" bind:value={store.auditAction} placeholder={m.audit_action_placeholder()} data-testid="audit-action" /></div>
+      <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-resource">{m.audit_resource()}</label><Input id="audit-resource" bind:value={store.auditResource} placeholder={m.audit_resource_placeholder()} data-testid="audit-resource" /></div>
+      <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-start">{m.audit_start()}</label><input id="audit-start" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditStartDate} /></div>
+      <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-end">{m.audit_end()}</label><input id="audit-end" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditEndDate} /></div>
+      <Button type="submit" variant="outline" disabled={store.loading} class="h-10 w-full">{m.search()}</Button>
     </form>
     <div class="overflow-x-auto">
       <DataTable data={store.audit} {columns} keyField="id" loading={store.loading} striped={false}>

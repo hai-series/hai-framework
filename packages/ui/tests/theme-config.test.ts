@@ -33,6 +33,13 @@ import {
 const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document')
 
+it('主题工具可通过公开子路径在浏览器条件下导入', async () => {
+  const theme = await import('@h-ai/ui/theme')
+  expect(theme.DEFAULT_THEME).toBe(DEFAULT_THEME)
+  expect(typeof theme.applyTheme).toBe('function')
+  expect(typeof theme.getSavedTheme).toBe('function')
+})
+
 afterEach(() => {
   if (originalLocalStorageDescriptor) {
     Object.defineProperty(globalThis, 'localStorage', originalLocalStorageDescriptor)

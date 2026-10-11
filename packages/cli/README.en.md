@@ -126,11 +126,10 @@ npx hai g:model order
 npx hai create mini-admin --type fullstack --frontends web,app,desktop
 cd mini-admin
 pnpm.cmd install
-$env:HAI_ADMIN_DEFAULT_PASSWORD = '<your-strong-password>'
 pnpm.cmd dev
 ```
 
-When the user table is empty on first startup, `HAI_ADMIN_DEFAULT_PASSWORD` is required to create the `admin` account; startup stops if it is missing. The password follows `_iam.yml` policy, with a default minimum of 8 characters. Once users exist, the variable does not reset accounts or passwords. Keep real passwords out of source, images and committed environment files.
+The CLI generates a root `.env` with a unique random strong `HAI_ADMIN_DEFAULT_PASSWORD`, so `dev` / `start` work directly. Sign in as `admin` using that password; an environment variable with the same name overrides it. Passwords follow `_iam.yml` policy, with a default minimum of 8 characters. Startup logs include the specific validation reason and error code when a password violates the policy. Once users exist, the variable does not reset accounts or passwords. Git and container builds ignore `.env`, while `.env.example` contains only a placeholder. Set a separate password in each deployment environment.
 
 - Administrators can search, paginate, create, edit, enable, disable and delete users and upload avatars. The server protects the current administrator and rechecks authorization inside a mutation lock so concurrent actions cannot remove every administrator's access.
 - Roles are fixed as `admin` / `user`. The role page shows member counts and edits descriptions; the user page assigns roles. Ordinary users only access personal settings, and the server rejects direct management API calls from them.

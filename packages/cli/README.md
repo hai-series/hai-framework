@@ -126,11 +126,10 @@ npx hai g:model order
 npx hai create mini-admin --type fullstack --frontends web,app,desktop
 cd mini-admin
 pnpm.cmd install
-$env:HAI_ADMIN_DEFAULT_PASSWORD = '<your-strong-password>'
 pnpm.cmd dev
 ```
 
-首次启动且用户表为空时必须提供 `HAI_ADMIN_DEFAULT_PASSWORD`，服务端据此创建 `admin` 账号；未提供时停止启动。密码遵循 `_iam.yml` 的策略，默认至少 8 位。已有用户后，该变量不会重设账号或密码；不要把实际密码写入源码、镜像或提交的环境文件。
+CLI 自动生成根目录 `.env`，其中 `HAI_ADMIN_DEFAULT_PASSWORD` 是每个项目独立的随机强密码；直接运行 `dev` / `start` 即可。首次登录使用 `admin` 和 `.env` 中的密码，同名环境变量可以覆盖它。密码遵循 `_iam.yml` 策略，默认至少 8 位；不符合策略时启动日志显示具体校验原因与错误码。已有用户后，该变量不会重设账号或密码。`.env` 被 Git 和容器构建忽略，`.env.example` 仅保留占位；部署时设置目标环境自己的密码。
 
 - 管理员可搜索、分页、新增、编辑、启禁用、删除用户并上传头像；服务端保护当前管理员，管理写操作在锁内重新鉴权，防止并发操作使管理员全部失权。
 - 角色固定为 `admin` / `user`，角色页显示人数并编辑说明，用户页分配角色。普通用户仅进入个人设置，直接请求管理接口也会被服务端拒绝。

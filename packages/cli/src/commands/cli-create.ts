@@ -13,6 +13,7 @@
 import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, FrontendTarget, ModuleConfigs, ProjectInfo } from '../cli-types.js'
 import { Buffer } from 'node:buffer'
 import { execFileSync, execSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import { core } from '@h-ai/core'
@@ -20,6 +21,7 @@ import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
+import { cliM } from '../cli-i18n.js'
 import { detectPackageManager, fileExists, writeFile } from '../cli-utils.js'
 import { buildTemplateContext, generateFromTemplates } from './cli-template-engine.js'
 
@@ -340,10 +342,15 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       const envExample = isApiWorkspace
         ? `${generateEnvExample(resolvedOptions.features, configs)}\n# =============================================================================\n# Service Runtime\n# =============================================================================\nPORT=3000\n`
         : isFullstack
-          ? `${generateEnvExample(resolvedOptions.features, configs)}\n# Required only for the first start; no default password is generated.\nHAI_ADMIN_DEFAULT_PASSWORD=\n\n# Local development API. Use your public API origin for deployment/native clients.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
+          ? `${generateEnvExample(resolvedOptions.features, configs)}\n# First-start administrator password. The CLI generates a random value in .env.\nHAI_ADMIN_DEFAULT_PASSWORD=\n\n# Local development API. Use your public API origin for deployment/native clients.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
           : generateEnvExample(resolvedOptions.features, configs)
 
       await writeFile(envExamplePath, envExample)
+      if (isFullstack) {
+        // 每个项目使用独立随机密码，保证四类字符；真实凭据只写入被忽略的本地文件。
+        const password = `Aa1!${randomBytes(24).toString('base64url')}`
+        await fse.writeFile(path.join(projectPath, '.env'), envExample.replace('HAI_ADMIN_DEFAULT_PASSWORD=\n', `HAI_ADMIN_DEFAULT_PASSWORD=${password}\n`), { mode: 0o600 })
+      }
     }
 
     // 生成 Skill 文件
@@ -1252,7 +1259,7 @@ curl --fail http://127.0.0.1:8080/runtime-config.js
 
 默认启用 IAM、reldb、cache、audit、storage 和 crypto。管理员可以管理用户（新增、编辑、禁用、删除、角色分配、头像上传）、查看两种固定角色及人数、维护角色说明、分页筛选审计日志；普通用户只能维护个人资料、头像、语言、主题和密码。密码修改后全部会话失效，需要重新登录。
 
-首次启动前，将根目录 \`.env.example\` 复制为 \`.env\`，填写 \`HAI_ADMIN_DEFAULT_PASSWORD\`（至少 8 位）；后端首次创建用户名 \`admin\`，不提供硬编码默认密码。\`dev\` / \`start\` 自动读取该文件；也可直接设置同名环境变量。已有用户时不会重复创建管理员。
+CLI 已在根目录生成 \`.env\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\` 是每个项目独立生成的随机强密码。直接运行 \`dev\` / \`start\` 即可，首次登录使用用户名 \`admin\` 和该密码；也可通过同名环境变量覆盖。密码须满足 \`_iam.yml\` 策略，启动失败会显示具体校验原因及错误码。\`.env\` 已被 Git 和容器构建忽略，\`.env.example\` 不含真实密码；部署时设置目标环境自己的密码。已有用户时不会重复创建管理员或重设密码。
 
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
@@ -1385,6 +1392,8 @@ function printCompletionMessage(options: Required<CreateProjectOptions>): void {
 
   core.logger.info('下一步：')
   core.logger.info(chalk.cyan(`  cd ${options.name}`))
+  if (options.appType === 'fullstack')
+    core.logger.info(chalk.cyan(cliM('cli_adminPasswordSaved')))
   if (!options.install) {
     core.logger.info(chalk.cyan(`  ${getInstallCommand(options.packageManager)}`))
   }
