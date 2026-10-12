@@ -32,14 +32,14 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "clean": "rimraf dist .turbo",
@@ -66,12 +66,12 @@
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@hono/node-server": "catalog:",
-    "@hono/node-ws": "catalog:",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
     "@scalar/api-reference": "catalog:",
     "hono": "catalog:",
+    "ws": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -79,6 +79,7 @@
     "@h-ai/iam": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@types/node": "catalog:",
+    "@types/ws": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

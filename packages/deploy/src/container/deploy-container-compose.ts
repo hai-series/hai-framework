@@ -425,18 +425,18 @@ export function generateDockerignore(): string {
  */
 export function generateFallbackDockerfile(packageName: string, containerPort: number): string {
   return `# syntax=docker/dockerfile:1.7
-FROM node:22-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV CI=true
 WORKDIR /workspace
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
 COPY . .
 RUN pnpm install --frozen-lockfile --ignore-scripts
 RUN pnpm --filter ${packageName} build
-RUN pnpm --filter ${packageName} --prod deploy /prod/app
+RUN pnpm pm deploy --filter ${packageName} --prod /prod/app
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=${containerPort}

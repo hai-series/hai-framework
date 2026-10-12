@@ -18,7 +18,6 @@
 
 import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
 import type { HaiResult } from '@h-ai/core'
-import type { ServerType } from '@hono/node-server'
 import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
 import type { Router } from '@orpc/server'
 import type { Hono, Context as HonoContext, Next } from 'hono'
@@ -31,10 +30,11 @@ import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
 import { AUDIO_WS_PATH } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
-import { createNodeWebSocket } from '@hono/node-ws'
+import { upgradeWebSocket } from '@hono/node-server'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { RPCHandler } from '@orpc/server/fetch'
 import { Hono as HonoApp } from 'hono'
+import { WebSocketServer } from 'ws'
 import { registerAudioWsRoute } from './features/serv-feature-audio.js'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { requireInternalRPC } from './pipelines/serv-pipeline-require-internal-rpc.js'
@@ -229,12 +229,12 @@ export interface AuthorizedAudioRequest {
 }
 
 /**
- * 语音 WebSocket 升级注入器注册表
+ * 语音 WebSocket 服务器注册表
  *
- * `createApp` 启用 audio 时将 `injectWebSocket` 写入此 WeakMap，`serv.listen()` 在创建
- * Node 服务器后取出并注入，从而不向 `ServHttpApp` 公共类型泄露 Hono / WebSocket 细节。
+ * `createApp` 启用 audio 时创建服务器，`serv.listen()` 交给 Node adapter 的原生升级支持，
+ * 不向 `ServHttpApp` 公共类型泄露 Hono / WebSocket 细节。
  */
-export const audioWsInjectors = new WeakMap<ServHttpApp, (server: ServerType) => void>()
+export const audioWsServers = new WeakMap<ServHttpApp, WebSocketServer>()
 
 /**
  * 创建并装配 HTTP API app。
@@ -336,7 +336,6 @@ export function createApp<
 
   // Step 9.5：语音 WebSocket 入口同样要在 oRPC 通配符之前注册，避免 GET 升级请求被 `${apiPrefix}/*` 吞掉。
   if (options.audio) {
-    const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
     const audioPath = `${http.apiPrefix}${options.audio.path ?? AUDIO_WS_PATH}`
     registerAudioWsRoute(app, audioPath, upgradeWebSocket, {
       ai: options.audio.ai,
@@ -351,7 +350,7 @@ export function createApp<
       maxPendingMessages: options.audio.maxPendingMessages,
       maxSendBufferBytes: options.audio.maxSendBufferBytes,
     })
-    audioWsInjectors.set(app, injectWebSocket)
+    audioWsServers.set(app, new WebSocketServer({ noServer: true }))
   }
 
   // Step 10：挂主业务 API 路由。所有 `${apiPrefix}/*` 请求都会在这里进入 contract + procedure 分发。

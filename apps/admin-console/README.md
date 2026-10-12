@@ -22,8 +22,8 @@
 
 ### 前置要求
 
-- Node.js ≥ 22.12.0
-- pnpm ≥ 9
+- Node.js 22.22.2+ / 24.15.0+ / 26+
+- pnpm ≥ 12.11.2
 
 ### 安装与启动
 
@@ -175,7 +175,7 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 
 - **前端框架**：SvelteKit 2 + Svelte 5 (Runes)
 - **样式**：TailwindCSS v4 + DaisyUI
-- **语言**：TypeScript 5.7+
+- **语言**：TypeScript 6 / 7
 - **构建工具**：Vite 6
 - **i18n**：Paraglide
 - **包管理**：pnpm

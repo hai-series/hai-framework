@@ -6,6 +6,6 @@ export default defineConfig({
   target: 'node22',
   sourcemap: true,
   clean: true,
-  dts: true,
+  dts: { compilerOptions: { ignoreDeprecations: '6.0' } },
   external: ['@h-ai/api-contract', 'zod'],
 })

@@ -215,7 +215,7 @@ describe('serializeEnvFile', () => {
 describe('generateFallbackDockerfile', () => {
   it('生成 adapter-node 运行时 Dockerfile', () => {
     const dockerfile = generateFallbackDockerfile('demo', 3000)
-    expect(dockerfile).toContain('pnpm --filter demo --prod deploy /prod/app')
+    expect(dockerfile).toContain('pnpm pm deploy --filter demo --prod /prod/app')
     expect(dockerfile).toContain('CMD ["node", "build"]')
     expect(dockerfile).toContain('ENV PORT=3000')
   })

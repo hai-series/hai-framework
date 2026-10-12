@@ -27,15 +27,15 @@ jobs:
       version_changed: ${{ steps.check_version.outputs.changed }}
       version: ${{ steps.check_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.1.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
-          node-version: 22.12.0
+          node-version: 24.18.0
           cache: pnpm
 
       - name: Install dependencies
@@ -61,7 +61,7 @@ jobs:
         run: pnpm test
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -80,7 +80,7 @@ jobs:
 
       - name: Upload verified build artifacts
         if: steps.check_version.outputs.changed == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: release-build-${{ steps.check_version.outputs.version }}
           path: build-artifacts.tgz
@@ -96,16 +96,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.1.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
-          node-version: 22.12.0
+          node-version: 24.18.0
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
@@ -113,7 +113,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download verified build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7.0.0
         with:
           name: release-build-${{ needs.quality.outputs.version }}
           path: ${{ runner.temp }}/release-build
@@ -222,7 +222,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: v${{ needs.quality.outputs.version }}
           name: v${{ needs.quality.outputs.version }}
@@ -240,12 +240,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.5.0
         with:
-          node-version: 22.12.0
+          node-version: 24.18.0
       - name: Sync and commit versions
         run: |
           node scripts/sync-versions.mjs

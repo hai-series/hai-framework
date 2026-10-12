@@ -184,10 +184,12 @@ describe('admin 应用类型生成', () => {
       expect(await fileExists(projectPath, 'static')).toBe(true)
     })
 
-    it('应生成 .npmrc（含 node-linker=hoisted）', async () => {
+    it('pnpm 专属设置应位于 workspace，.npmrc 仅用于注册表与认证', async () => {
       const content = await readGenerated(projectPath, '.npmrc')
-      expect(content).toContain('node-linker=hoisted')
-      expect(content).toContain('shamefully-hoist=true')
+      const workspace: Record<string, unknown> = parse(await readGenerated(projectPath, 'pnpm-workspace.yaml'))
+      expect(workspace.nodeLinker).toBe('hoisted')
+      expect(workspace.shamefullyHoist).toBeUndefined()
+      expect(content).not.toMatch(/^\s*(?:node-linker|shamefully-hoist)\s*=/m)
     })
   })
 

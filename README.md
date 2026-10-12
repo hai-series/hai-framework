@@ -72,8 +72,8 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 
 | 层面       | 选型                                                           |
 | ---------- | -------------------------------------------------------------- |
-| 语言       | TypeScript 5.7+（严格模式）                                    |
-| 运行时     | Node.js ≥ 22.12.0                                              |
+| 语言       | TypeScript 6 / 7（严格模式）                                   |
+| 运行时     | Node.js 22.22.2+ / 24.15.0+ / 26+                              |
 | 前端框架   | Svelte 5（Runes）+ SvelteKit 2                                 |
 | UI         | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                        |
 | API 契约   | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`） |
@@ -94,8 +94,8 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 
 ### 环境要求
 
-- Node.js ≥ 22.12.0
-- pnpm ≥ 9.0.0
+- Node.js 22.22.2+ / 24.15.0+ / 26+
+- pnpm ≥ 12.11.2
 
 ### 创建新项目
 

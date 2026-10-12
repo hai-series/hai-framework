@@ -530,14 +530,14 @@ export function createRedisProvider(): CacheProvider {
     async zrange(key: string, start: number, stop: number, withScores?: boolean): Promise<HaiResult<string[] | ZMember[]>> {
       return wrapOperation(async () => {
         if (withScores) {
-          const result = await client!.zrange(key, start, stop, 'WITHSCORES')
+          const result = await client!.zrange(key, String(start), String(stop), 'WITHSCORES')
           const members: ZMember[] = []
           for (let i = 0; i < result.length; i += 2) {
             members.push({ member: result[i], score: Number.parseFloat(result[i + 1]) })
           }
           return members
         }
-        return client!.zrange(key, start, stop)
+        return client!.zrange(key, String(start), String(stop))
       })
     },
 

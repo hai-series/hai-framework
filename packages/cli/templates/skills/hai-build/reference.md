@@ -33,14 +33,16 @@
 | -------- | ------------------------------ |
 | UI     | Svelte 5 (Runes)；SvelteKit 或 Vite 以项目为准 |
 | 样式     | TailwindCSS 4 + DaisyUI 5      |
-| 语言     | TypeScript 5.7+ (strict)       |
+| 语言     | TypeScript 6 / 7 (strict)       |
 | 构建     | Vite + tsup                    |
-| 包管理   | pnpm                           |
+| 包管理   | pnpm 12                        |
 | 单元测试 | Vitest                         |
 | E2E 测试 | Playwright                     |
 | 原生 App | Capacitor / Tauri / 小程序适配按当前项目选择 |
 | 公共 API | oRPC contract + Hono + typed client |
 | 认证     | Bearer access token + httpOnly refresh cookie（浏览器推荐） |
+
+pnpm 专属配置放在 `pnpm-workspace.yaml`，`.npmrc` 仅用于注册表与认证。Docker 缓存层使用 `pnpm fetch` 读取锁文件；pnpm 12 的该命令不支持 `--frozen-lockfile`。后续仍通过 `pnpm install --offline --frozen-lockfile` 校验清单与锁文件一致。容器裁剪用 `pnpm pm deploy --filter <服务包> --prod <目标目录>`，确保执行内置命令，避免项目同名 `deploy` 脚本覆盖它。
 
 ### SvelteKit Adapter 模式
 

@@ -69,6 +69,11 @@ function escapeLanceFilterValue(value: string): string {
     .replace(/_/g, '\\_')
 }
 
+/** SQL 字符串字面量使用单引号，ID 中的引号按标准 SQL 转义，保留其他字符。 */
+function escapeLanceSqlValue(value: string): string {
+  return value.replace(/'/g, '\'\'')
+}
+
 /**
  * 集合元信息（内存维护，LanceDB 不存储维度等信息）
  */
@@ -197,7 +202,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const table = await connection!.createTable(name, [initRecord])
       // 删除初始记录
-      await table.delete('id = "__init__"')
+      await table.delete('id = \'__init__\'')
 
       collectionMetas.set(name, { dimension, metric })
 
@@ -312,7 +317,7 @@ export function createLancedbProvider(): VecdbProvider {
       }
       else {
         logger.warn('LanceDB mergeInsert is unavailable, falling back to delete/add upsert')
-        const ids = documents.map(d => `"${escapeLanceFilterValue(d.id)}"`).join(', ')
+        const ids = documents.map(d => `'${escapeLanceSqlValue(d.id)}'`).join(', ')
         await table.delete(`id IN (${ids})`)
         await table.add(records)
       }
@@ -329,7 +334,7 @@ export function createLancedbProvider(): VecdbProvider {
         return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
       }
 
-      const idList = ids.map(id => `"${escapeLanceFilterValue(id)}"`).join(', ')
+      const idList = ids.map(id => `'${escapeLanceSqlValue(id)}'`).join(', ')
       await table.delete(`id IN (${idList})`)
 
       logger.info('Vectors deleted', { collection, count: ids.length })

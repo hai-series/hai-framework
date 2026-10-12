@@ -4,7 +4,7 @@
  * 验证「统一 WebSocket 消息 → ai.audio 调用 → 统一 WebSocket 返回」的服务层桥接：
  * - 流式 / 非流式识别、语音合成的消息往返
  * - 鉴权失败、超大消息等边界
- * - createApp 启用 audio 时注册升级注入器
+ * - createApp 与 Node adapter 的真实 WebSocket 消息往返
  */
 
 import type { AudioOperations } from '@h-ai/ai'
@@ -13,11 +13,13 @@ import type { Hono } from 'hono'
 import type { UpgradeWebSocket, WSContext } from 'hono/ws'
 import type { AudioWsDeps } from '../src/features/serv-feature-audio.js'
 import type { ServContext } from '../src/serv-context.js'
+import { once } from 'node:events'
 import { apiContract } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
+import WebSocket from 'ws'
 import { registerAudioWsRoute } from '../src/features/serv-feature-audio.js'
-import { audioWsInjectors } from '../src/serv-app.js'
+import { audioWsServers } from '../src/serv-app.js'
 import { serv } from '../src/serv-main.js'
 
 /** 构造可控的 ai.audio mock */
@@ -93,6 +95,51 @@ function parseJsonMessages(ws: { messages: unknown[] }): Array<Record<string, un
 }
 
 describe('serv feature audio', () => {
+  it('node adapter 完成真实 WebSocket 握手并传输音频消息', async () => {
+    const contract = apiContract.create({})
+    const procedures = serv.implement(contract).context<ServContext>().build()
+    const app = serv.createApp({
+      contract,
+      procedures,
+      audio: { ai: { audio: createAudioMock() }, verifyTicket: async () => ok({ session: TEST_SESSION }) },
+      http: { openapi: false, docs: false, rpc: false },
+    })
+    const handle = serv.listen(app, { port: 0 })
+    if (!handle.server.listening)
+      await once(handle.server, 'listening')
+    const address = handle.server.address()
+    if (!address || typeof address === 'string')
+      throw new Error('The test HTTP server did not expose a TCP address')
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/v1/ai/audio?ticket=test-ticket`)
+    try {
+      await once(socket, 'open')
+      const messages: Array<Record<string, unknown>> = []
+      const completed = new Promise<void>((resolve, reject) => {
+        socket.on('error', reject)
+        socket.on('message', (data, isBinary) => {
+          if (isBinary)
+            return
+          const message = JSON.parse(data.toString()) as Record<string, unknown>
+          messages.push(message)
+          if (message.type === 'end')
+            resolve()
+        })
+      })
+      socket.send(JSON.stringify({ type: 'start', operation: 'transcribe', stream: false, format: 'wav' }))
+      socket.send(new Uint8Array([1, 2, 3]))
+      socket.send(JSON.stringify({ type: 'done' }))
+      await completed
+      expect(messages).toEqual([
+        { type: 'transcript', text: '完整识别结果', final: true },
+        { type: 'end' },
+      ])
+    }
+    finally {
+      socket.terminate()
+      await handle.close()
+    }
+  })
+
   it('流式识别返回临时与最终文本，并以 end 结束', async () => {
     const handlers = captureHandlers({ ai: { audio: createAudioMock() } })
     const ws = createWsMock()
@@ -325,7 +372,7 @@ describe('serv feature audio', () => {
     expect(parseJsonMessages(ws).find(m => m.type === 'error')).toBeDefined()
   })
 
-  it('createApp 启用 audio 时注册 WebSocket 升级注入器', () => {
+  it('createApp 启用 audio 时注册 WebSocket 服务器', () => {
     const contract = apiContract.create({})
     const procedures = serv.implement(contract).context<ServContext>().build()
     const app = serv.createApp({
@@ -334,6 +381,6 @@ describe('serv feature audio', () => {
       audio: { ai: { audio: createAudioMock() }, verifyTicket: async () => ok({ session: TEST_SESSION }) },
       http: { openapi: false, docs: false, rpc: false },
     })
-    expect(audioWsInjectors.has(app)).toBe(true)
+    expect(audioWsServers.has(app)).toBe(true)
   })
 })

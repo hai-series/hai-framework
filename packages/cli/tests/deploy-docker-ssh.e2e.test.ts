@@ -50,7 +50,7 @@ const FIXTURE_IMAGE = 'hai-deploy-e2e-fixture:latest'
 const SSH_PORT = 2222
 const HOST_PORT = 18080
 // 生成应用 Dockerfile 依赖的基础镜像（受限网络下按镜像预拉取）
-const BASE_IMAGES = ['python:3.11-slim', 'node:22-bookworm-slim']
+const BASE_IMAGES = ['python:3.11-slim', 'node:24-bookworm-slim']
 
 // 夹具：Debian + sshd + podman + podman-compose（嵌套 podman 运行远程 compose）；
 // nftables/iptables 供 netavark 网络；cgroupfs 与 --cgroupns=host 配合使嵌套 podman 可建 pod。
@@ -187,7 +187,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
 
     // 5. 用 CLI 生成一个最小 website 项目（custom + 无功能，确保无 DB 依赖可稳定启动）
     if (NPM_MIRROR)
-      process.env.npm_config_registry = NPM_MIRROR
+      process.env.pnpm_config_registry = NPM_MIRROR
     await createProject({
       name: 'e2e-web',
       appType: 'website',
@@ -203,13 +203,13 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
     appDir = path.join(workDir, 'e2e-web')
     // 受限网络：调整生成应用的 Dockerfile —— 去掉 syntax 指令（避免 BuildKit 从 docker.io
     // 拉取前端镜像；内置 frontend 已支持 RUN --mount=type=cache），并在构建阶段注入 npm 镜像
-    // （.npmrc 在 pnpm fetch 前尚未 COPY，故用 ENV npm_config_registry）
+    // （.npmrc 在 pnpm fetch 前尚未 COPY，故用 ENV pnpm_config_registry）
     const dfPath = path.join(appDir, 'Dockerfile')
     let dockerfile = readFileSync(dfPath, 'utf-8')
     if (REGISTRY_MIRROR)
       dockerfile = dockerfile.replace(/^# syntax=.*\r?\n/m, '')
     if (NPM_MIRROR)
-      dockerfile = dockerfile.replace(/(FROM [^\n]+ AS build\r?\n)/g, `$1ENV npm_config_registry=${NPM_MIRROR}\n`)
+      dockerfile = dockerfile.replace(/(FROM [^\n]+ AS build\r?\n)/g, `$1ENV pnpm_config_registry=${NPM_MIRROR}\n`)
     writeFileSync(dfPath, dockerfile)
   }, 900_000)
 

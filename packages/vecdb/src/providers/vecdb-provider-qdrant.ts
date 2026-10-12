@@ -45,7 +45,7 @@ interface QdrantClient {
   deleteCollection: (name: string) => Promise<unknown>
   upsert: (collection: string, params: Record<string, unknown>) => Promise<unknown>
   delete: (collection: string, params: Record<string, unknown>) => Promise<unknown>
-  search: (collection: string, params: Record<string, unknown>) => Promise<Record<string, unknown>[]>
+  query: (collection: string, params: Record<string, unknown>) => Promise<{ points: Record<string, unknown>[] }>
 }
 
 /** Qdrant getCollection 的返回类型 */
@@ -395,15 +395,15 @@ export function createQdrantProvider(): VecdbProvider {
         filter = { must: mustConditions }
       }
 
-      const searchResult = await client!.search(collection, {
-        vector,
+      const searchResult = await client!.query(collection, {
+        query: vector,
         limit: topK,
         score_threshold: minScore > 0 ? minScore : undefined,
         filter,
         with_payload: true,
       })
 
-      const results: VectorSearchResult[] = searchResult.map((point: Record<string, unknown>) => {
+      const results: VectorSearchResult[] = searchResult.points.map((point: Record<string, unknown>) => {
         const payload = point.payload as Record<string, unknown> ?? {}
         const { _id, _content, ...metadata } = payload
         return {

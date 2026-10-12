@@ -43,53 +43,56 @@ const CAPACITOR_SKIPPED_SERVER_FILES = new Set([
 // 以下版本号与生成项目的 pnpm-workspace.yaml catalog 保持一致；
 // 单包脚手架直接写具体版本，pnpm fullstack workspace 会通过 catalog: 引用这些版本。
 const VERSIONS = {
-  antfuEslintConfig: '^9.0.0',
-  capacitorSecureStorage: '^8.0.0',
+  antfuEslintConfig: '^9.5.1',
+  capacitorSecureStorage: '^8.0.1',
   // UI / Icon
-  bitsUi: '^2.18.1',
-  iconifyJsonTabler: '^1.2.35',
+  bitsUi: '^2.19.5',
+  iconifyJsonTabler: '^1.2.42',
   iconifyTailwind: '^1.2.3',
   // Capacitor
-  capacitorAndroid: '^8.3.4',
-  capacitorApp: '^8.0.1',
-  capacitorCamera: '^8.0.1',
-  capacitorCli: '^8.3.4',
-  capacitorCore: '^8.3.4',
-  capacitorDevice: '^8.0.1',
-  capacitorIos: '^8.3.4',
+  capacitorAndroid: '^8.5.3',
+  capacitorApp: '^8.1.2',
+  capacitorCamera: '^8.2.5',
+  capacitorCli: '^8.5.3',
+  capacitorCore: '^8.5.3',
+  capacitorDevice: '^8.0.3',
+  capacitorIos: '^8.5.3',
   capacitorPreferences: '^8.0.1',
-  capacitorPushNotifications: '^8.0.1',
-  capacitorStatusBar: '^8.0.1',
+  capacitorPushNotifications: '^8.1.3',
+  capacitorStatusBar: '^8.0.4',
   // Tailwind / DaisyUI
-  daisyui: '^5.5.20',
-  tailwindcss: '^4.3.0',
-  tailwindcssVite: '^4.3.0',
+  daisyui: '^5.7.47',
+  tailwindcss: '^4.3.3',
+  tailwindcssVite: '^4.3.3',
   // i18n
-  inlangParaglide: '^2.18.1',
-  inlangMessageFormat: '^4.4.0',
+  inlangParaglide: '^2.27.0',
+  inlangMessageFormat: '^4.5.0',
   // Svelte / Vite
-  svelte: '^5.55.9',
-  svelteCheck: '^4.4.8',
-  sveltePlugin: '^7.1.2',
+  svelte: '^5.57.2',
+  svelteKit: '^2.70.3',
+  svelteAdapterNode: '^5.5.7',
+  svelteCheck: '^4.7.6',
+  sveltePlugin: '^7.3.1',
   // Build / Test
-  vite: '^8.0.14',
-  vitest: '^4.1.7',
+  vite: '^8.3.4',
+  vitest: '^4.1.11',
   tsup: '^8.5.1',
   rimraf: '^6.1.3',
   // ESLint
-  eslint: '^10.4.0',
+  eslint: '^10.12.0',
   eslintPluginFormat: '^2.0.1',
-  eslintPluginSvelte: '^3.17.1',
-  svelteEslintParser: '^1.6.1',
+  eslintPluginSvelte: '^3.23.1',
+  svelteEslintParser: '^1.9.0',
   // Node / TS
-  nodeTypes: '^25.9.1',
+  nodeTypes: '^26.6.5',
+  // Svelte / ESLint / tsup 继续使用稳定的 JavaScript 编译 API。
   typescript: '^6.0.3',
   // E2E
-  playwright: '^1.60.0',
+  playwright: '^1.64.0',
   // Validation
-  zod: '^4.4.3',
+  zod: '^4.6.5',
   // Tauri
-  tauriCli: '^2.10.1',
+  tauriCli: '^2.12.1',
 } as const
 
 type ImplementedFrontendTarget = Exclude<FrontendTarget, 'miniapp'>
@@ -435,6 +438,8 @@ function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[]): Re
  * 模板渲染上下文
  */
 export interface TemplateContext {
+  /** 所有应用模板共用的第三方依赖版本，避免单包与 workspace 版本表漂移。 */
+  versions: typeof VERSIONS
   /** 项目名称 */
   projectName: string
   /** 是否对 @h-ai/* 依赖启用 pnpm catalog 协议 */
@@ -763,6 +768,7 @@ export function buildTemplateContext(options: {
 
   return {
     projectName: options.name,
+    versions: VERSIONS,
     useCatalogProtocol,
     haiPackageSpecifier: useCatalogProtocol ? HAI_PACKAGE_SPECIFIER_CATALOG : HAI_PACKAGE_VERSION,
     haiPackageVersion: HAI_PACKAGE_VERSION,

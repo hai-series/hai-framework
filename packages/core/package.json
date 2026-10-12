@@ -22,7 +22,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "build": "tsup",
@@ -30,7 +30,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "clean": "rimraf dist .turbo",

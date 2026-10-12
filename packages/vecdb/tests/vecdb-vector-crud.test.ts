@@ -91,6 +91,24 @@ describe('vecdb.vector CRUD', () => {
       }
     })
 
+    it('删除特殊字符 ID 时只删除指定记录', async () => {
+      const created = await vecdb.collection.create(COLLECTION, { dimension: DIM })
+      expect(created.success).toBe(true)
+      const ids = ['O\'Reilly', 'double"quote', 'slash\\id', 'literal%', 'under_score', 'x\') OR true --']
+      const inserted = await vecdb.vector.insert(COLLECTION, [
+        { id: 'keep', vector: randomVector(DIM) },
+        ...ids.map(id => ({ id, vector: randomVector(DIM) })),
+      ])
+      expect(inserted.success).toBe(true)
+
+      const deleted = await vecdb.vector.delete(COLLECTION, ids)
+      expect(deleted.success).toBe(true)
+      const count = await vecdb.vector.count(COLLECTION)
+      expect(count.success).toBe(true)
+      if (count.success)
+        expect(count.data).toBe(1)
+    })
+
     it('批量插入多条文档', async () => {
       await vecdb.collection.create(COLLECTION, { dimension: DIM })
 

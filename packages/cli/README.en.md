@@ -39,7 +39,7 @@ Delivery checks cover both the package archive and generated projects. Source `.
 
 ## Quick start
 
-Requires Node.js ≥ 22.12.0; generated root projects and workspace packages declare the same minimum.
+Requires Node.js 22.22.2+ / 24.15.0+ / 26+; generated root projects and workspace packages declare the same minimum.
 
 ### Create a project
 

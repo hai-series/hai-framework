@@ -72,8 +72,8 @@ This philosophy leads to these decisions:
 
 | Layer                | Technology                                                         |
 | -------------------- | ------------------------------------------------------------------ |
-| Language             | TypeScript 5.7+ (strict mode)                                      |
-| Runtime              | Node.js ≥ 22.12.0                                                  |
+| Language             | TypeScript 6 / 7 (strict mode)                                     |
+| Runtime              | Node.js 22.22.2+ / 24.15.0+ / 26+                                  |
 | Frontend             | Svelte 5（Runes）+ SvelteKit 2                                     |
 | UI                   | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                            |
 | API contracts        | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`）     |
@@ -94,8 +94,8 @@ This philosophy leads to these decisions:
 
 ### Requirements
 
-- Node.js ≥ 22.12.0
-- pnpm ≥ 9.0.0
+- Node.js 22.22.2+ / 24.15.0+ / 26+
+- pnpm ≥ 12.11.2
 
 ### Create a project
 

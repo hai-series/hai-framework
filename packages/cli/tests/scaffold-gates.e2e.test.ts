@@ -310,19 +310,11 @@ async function replaceHaiPackageSpecifiers(directory: string): Promise<void> {
 
 /** 强制传递依赖也使用本次工作区 tarball，避免混入 registry 中的旧版 @h-ai 包。 */
 async function addLocalHaiOverrides(projectPath: string): Promise<void> {
-  const manifestPath = path.join(projectPath, 'package.json')
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
-  const pnpmConfig = manifest.pnpm && typeof manifest.pnpm === 'object' && !Array.isArray(manifest.pnpm)
-    ? manifest.pnpm as Record<string, unknown>
-    : {}
-  const overrides = pnpmConfig.overrides && typeof pnpmConfig.overrides === 'object' && !Array.isArray(pnpmConfig.overrides)
-    ? pnpmConfig.overrides as Record<string, unknown>
-    : {}
-
-  Object.assign(overrides, localPackageSpecifiers)
-  pnpmConfig.overrides = overrides
-  manifest.pnpm = pnpmConfig
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  // pnpm 12 不再读取 package.json.pnpm，且必须保留模板已有的安全版本覆盖。
+  const workspacePath = path.join(projectPath, 'pnpm-workspace.yaml')
+  const workspace = parse(await readFile(workspacePath, 'utf8')) as Record<string, unknown>
+  workspace.overrides = { ...(workspace.overrides as Record<string, unknown> | undefined), ...localPackageSpecifiers }
+  await writeFile(workspacePath, stringify(workspace))
 }
 
 /**

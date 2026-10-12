@@ -3,13 +3,13 @@
   "type": "module",
   "version": "0.1.0-alpha.57",
   "private": true,
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@12.11.2",
   "description": "hai Agent Framework - AI-Native, Configuration-Driven, Security-First",
   "author": "hai-series",
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=22.12.0",
-    "pnpm": ">=9.0.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0",
+    "pnpm": ">=12.11.2"
   },
   "scripts": {
     "build": "pnpm lint && turbo run build",
@@ -35,6 +35,7 @@
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
     "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
     "eslint": "catalog:",
     "eslint-plugin-svelte": "catalog:",
     "husky": "catalog:",
@@ -46,7 +47,7 @@
     "vitest": "catalog:"
   },
   "overrides": {
-    "eslint-plugin-yml": "3.3.1"
+    "eslint-plugin-yml": "3.9.0"
   },
   "lint-staged": {
     "*.{js,ts,svelte,json,md,yml,yaml}": [

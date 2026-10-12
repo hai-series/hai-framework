@@ -92,7 +92,7 @@ interface ConnectionLimits {
  *
  * @param app - Hono app
  * @param path - 绝对路径（已与 apiPrefix 拼接）
- * @param upgradeWebSocket - 由 `createNodeWebSocket` 提供的升级处理器
+ * @param upgradeWebSocket - Node adapter 原生提供的升级处理器
  * @param deps - 语音接入依赖
  */
 export function registerAudioWsRoute(

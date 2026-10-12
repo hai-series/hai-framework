@@ -2,6 +2,7 @@ import process from 'node:process'
 import { defineConfig } from '@playwright/test'
 
 const baseURL = process.env.BASE_URL || 'http://localhost:4176'
+const testDataDir = `./data-e2e-h5-${Date.now()}`
 
 /**
  * hai H5 App - Playwright E2E 测试配置
@@ -31,6 +32,8 @@ export default defineConfig({
     command: 'pnpm build && pnpm exec vite preview --port 4176 --strictPort',
     env: {
       HAI_E2E: '1',
+      HAI_DB_DATABASE: `${testDataDir}/h5.db`,
+      HAI_STORAGE_ROOT: `${testDataDir}/uploads`,
     },
     url: baseURL,
     reuseExistingServer: false,

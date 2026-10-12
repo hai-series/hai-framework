@@ -10,7 +10,7 @@ A vector database module with a unified `vecdb` object for LanceDB, pgvector, Qd
 
 - LanceDB (embedded, local file storage, zero configuration)
 - pgvector (PostgreSQL + pgvector extension)
-- Qdrant (high-performance vector search engine)
+- Qdrant (high-performance vector search engine; server 1.10.0+ with the Query API)
 - Chroma (automatically start a local service in embedded mode, or connect to an existing service)
 
 ## Quick start

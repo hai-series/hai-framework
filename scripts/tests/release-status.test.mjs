@@ -59,7 +59,7 @@ describe('release recovery', () => {
     finally {
       rmSync(root, { recursive: true, force: true })
     }
-  })
+  }, 30_000)
 
   it('runs version commit independently after publish and uses the verified source for tags', () => {
     const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')

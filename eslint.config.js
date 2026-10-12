@@ -9,9 +9,12 @@
  * =============================================================================
  */
 
-import antfu from '@antfu/eslint-config'
+import antfu, { GLOB_SRC } from '@antfu/eslint-config'
 
 export default antfu({
+  // unused-imports 使用 TS 规则；JS 使用同一 parser 保持 scope 契约一致。
+  typescript: { files: [GLOB_SRC] },
+
   // 格式化器（CSS/HTML/Markdown）
   formatters: true,
 
@@ -22,6 +25,7 @@ export default antfu({
     '**/*.d.ts', // 声明文件（生成产物）不参与 lint
     '**/project.inlang/**', // inlang 工程元数据（工具生成）
     '**/paraglide/**', // Paraglide 自动生成的文件
+    '**/src-tauri/gen/**', // Tauri 自动生成的能力与平台 schema
     '**/docs/**/*.md', // 设计/报告文档（示例与伪代码片段）不参与 lint
     '**/.github/skills/**/*.md', // 仓库内 AI Skill 文档（示例代码片段）不参与 lint
     '**/packages/cli/templates/skills/**/*.md', // Skill 模板文档（示例代码片段）不参与 lint

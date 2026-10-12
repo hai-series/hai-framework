@@ -10,7 +10,7 @@
 
 - LanceDB（嵌入式，本地文件存储，零配置）
 - pgvector（PostgreSQL + pgvector 扩展）
-- Qdrant（高性能向量搜索引擎）
+- Qdrant（高性能向量搜索引擎；服务端需 1.10.0+，使用 Query API）
 - Chroma（支持嵌入式自动拉起本地服务，或直连已有服务）
 
 ## 快速开始

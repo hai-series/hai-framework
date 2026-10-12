@@ -72,8 +72,8 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 
 | 分野                   | 採用技術                                                       |
 | ---------------------- | -------------------------------------------------------------- |
-| 言語                   | TypeScript 5.7+（厳密モード）                                  |
-| ランタイム             | Node.js ≥ 22.12.0                                              |
+| 言語                   | TypeScript 6 / 7（厳密モード）                                 |
+| ランタイム             | Node.js 22.22.2+ / 24.15.0+ / 26+                              |
 | フロントエンド         | Svelte 5（Runes）+ SvelteKit 2                                 |
 | UI                     | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                        |
 | API 契約               | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`） |
@@ -94,8 +94,8 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 
 ### 必要環境
 
-- Node.js ≥ 22.12.0
-- pnpm ≥ 9.0.0
+- Node.js 22.22.2+ / 24.15.0+ / 26+
+- pnpm ≥ 12.11.2
 
 ### 新規プロジェクト作成
 

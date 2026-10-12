@@ -11,13 +11,13 @@
     "orpc"
   ],
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
     "build": "tsup",
     "preview": "node dist/index.js",
-    "check": "tsc --noEmit",
+    "check": "node ../../scripts/typecheck.mjs --noEmit",
     "test": "vitest run",
     "lint": "eslint src tests tsup.config.ts vitest.config.ts",
     "lint:fix": "eslint src tests tsup.config.ts vitest.config.ts --fix",

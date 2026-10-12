@@ -3,6 +3,32 @@
 shellEmulator: true
 
 trustPolicy: no-downgrade
+# 上游构建工具仍要求 4.x；4.0.3 tarball 已核对原 lockfile 的 SHA-512。
+trustPolicyExclude:
+  - chokidar@4.0.3
+
+# pnpm 12 配置；原生依赖仅运行明确列出的安装脚本。
+nodeLinker: hoisted
+allowBuilds:
+  cpu-features: true
+  onnxruntime-node: true
+  protobufjs: true
+  ssh2: true
+  vue-demi: true
+  better-sqlite3: true
+  esbuild: true
+  core-js: false
+
+overrides:
+  "@ai-sdk/provider-utils@>=4.0.0 <4.0.33": 4.0.57
+  cookie@<0.7.0: 0.7.2
+  esbuild@<0.28.1: 0.28.2
+  katex@<0.18.2: 0.18.10
+  sharp@<0.35.5: 0.35.5
+  tinypool@<2.1.2: 2.2.0
+  '@qdrant/js-client-rest>undici': 7.30.0
+  xcode>uuid: 11.1.1
+  "@types/node": "{{versions.nodeTypes}}"
 
 packages:
   - .
