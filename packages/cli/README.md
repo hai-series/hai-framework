@@ -41,15 +41,26 @@ AI 文件写入前会解析已有文件和目录链接；共享技能与项目�
 
 要求 Node.js 22.22.2+ / 24.15.0+ / 26+；生成的根项目和工作区包均声明相同最低版本。
 
+### 安装 CLI
+
+先全局安装 `@h-ai/cli`，它提供 `hai` 命令；以下快速开始示例均以完成安装为前提。
+
+```bash
+pnpm add -g @h-ai/cli
+hai --version
+```
+
+PowerShell 中使用 `pnpm.cmd add -g @h-ai/cli`。已安装 CLI 时，执行相同安装命令可更新到当前发布版本；使用 `hai --help` 核对可用命令。仓库内未发布的模板按下方“开发阶段本地使用”构建并运行。
+
 ### 创建项目
 
 ```bash
 # 交互式创建（推荐）
-npx hai create my-admin-app
+hai create my-admin-app
 
 # 指定模板与功能
-npx hai create my-app -t full
-npx hai create my-app -t custom -f iam,db,ai
+hai create my-app -t full
+hai create my-app -t custom -f iam,db,ai
 ```
 
 交互流程：
@@ -66,11 +77,11 @@ npx hai create my-app -t custom -f iam,db,ai
 
 ```bash
 # 交互式选择
-npx hai add
+hai add
 
 # 指定模块
-npx hai add iam
-npx hai add storage
+hai add iam
+hai add storage
 ```
 
 向现有项目增量添加模块。自动更新 `package.json`、生成配置文件、解析依赖。
@@ -79,10 +90,10 @@ npx hai add storage
 
 ```bash
 # 校验配置完整性，补全缺失配置
-npx hai init
+hai init
 
 # 强制重新生成所有配置
-npx hai init --force
+hai init --force
 ```
 
 ### 代码生成
@@ -93,20 +104,20 @@ npx hai init --force
 
 ```bash
 # 交互式生成
-npx hai generate
+hai generate
 
 # 指定类型
-npx hai generate page users
-npx hai generate component UserCard
-npx hai generate api users
-npx hai generate model user
-npx hai generate migration add-users
+hai generate page users
+hai generate component UserCard
+hai generate api users
+hai generate model user
+hai generate migration add-users
 
 # 快捷命令
-npx hai g:page dashboard
-npx hai g:component StatusBadge
-npx hai g:api orders
-npx hai g:model order
+hai g:page dashboard
+hai g:component StatusBadge
+hai g:api orders
+hai g:model order
 ```
 
 ## 项目模板
@@ -123,7 +134,7 @@ npx hai g:model order
 `--type fullstack` 默认生成包含 IAM、reldb、cache、audit、storage、crypto 的管理工程；即使选择 minimal，管理所需模块也会保留。`--frontends` 选择 Web、Capacitor App 和 Tauri Desktop；miniapp 仍是说明占位，不参与运行或构建。
 
 ```powershell
-npx hai create mini-admin --type fullstack --frontends web,app,desktop
+hai create mini-admin --type fullstack --frontends web,app,desktop
 cd mini-admin
 pnpm.cmd install
 pnpm.cmd dev

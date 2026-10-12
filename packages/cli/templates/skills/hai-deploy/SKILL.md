@@ -218,6 +218,8 @@ if (result.success) {
 
 ## CLI 命令
 
+通过 CLI 部署前，先按 [CLI 安装与命令](../hai-app-create/development.md#cli-安装与命令) 全局安装 `@h-ai/cli`，确认 `hai --version` 可运行后再执行下列命令。在 Node.js 脚本中直接使用 `@h-ai/deploy` API 时无需安装 CLI。
+
 ```bash
 # 部署当前目录
 hai deploy

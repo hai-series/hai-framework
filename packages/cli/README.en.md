@@ -41,15 +41,26 @@ Delivery checks cover both the package archive and generated projects. Source `.
 
 Requires Node.js 22.22.2+ / 24.15.0+ / 26+; generated root projects and workspace packages declare the same minimum.
 
+### Install the CLI
+
+First install `@h-ai/cli` globally. It provides the `hai` command; the quick-start examples below assume this installation is complete.
+
+```bash
+pnpm add -g @h-ai/cli
+hai --version
+```
+
+In PowerShell, use `pnpm.cmd add -g @h-ai/cli`. To update an installed CLI to the current published version, run the same installation command. Check available commands with `hai --help`. For unpublished templates, follow the local development section below to build and run the CLI from this repository.
+
 ### Create a project
 
 ```bash
 # 交互式创建（推荐）
-npx hai create my-admin-app
+hai create my-admin-app
 
 # 指定模板与功能
-npx hai create my-app -t full
-npx hai create my-app -t custom -f iam,db,ai
+hai create my-app -t full
+hai create my-app -t custom -f iam,db,ai
 ```
 
 Interactive steps:
@@ -66,11 +77,11 @@ Interactive steps:
 
 ```bash
 # 交互式选择
-npx hai add
+hai add
 
 # 指定模块
-npx hai add iam
-npx hai add storage
+hai add iam
+hai add storage
 ```
 
 Add modules incrementally to an existing project. The CLI updates `package.json`, creates configuration, and resolves dependencies.
@@ -79,10 +90,10 @@ Add modules incrementally to an existing project. The CLI updates `package.json`
 
 ```bash
 # 校验配置完整性，补全缺失配置
-npx hai init
+hai init
 
 # 强制重新生成所有配置
-npx hai init --force
+hai init --force
 ```
 
 ### Code generation
@@ -93,20 +104,20 @@ Page/API generators target SvelteKit; components use Svelte 5 children snippets.
 
 ```bash
 # 交互式生成
-npx hai generate
+hai generate
 
 # 指定类型
-npx hai generate page users
-npx hai generate component UserCard
-npx hai generate api users
-npx hai generate model user
-npx hai generate migration add-users
+hai generate page users
+hai generate component UserCard
+hai generate api users
+hai generate model user
+hai generate migration add-users
 
 # 快捷命令
-npx hai g:page dashboard
-npx hai g:component StatusBadge
-npx hai g:api orders
-npx hai g:model order
+hai g:page dashboard
+hai g:component StatusBadge
+hai g:api orders
+hai g:model order
 ```
 
 ## Project templates
@@ -123,7 +134,7 @@ npx hai g:model order
 `--type fullstack` generates an administration workspace with IAM, reldb, cache, audit, storage and crypto by default. The required management modules remain enabled even with the minimal preset. `--frontends` selects Web, Capacitor App and Tauri Desktop; miniapp remains a documentation placeholder excluded from runtime and builds.
 
 ```powershell
-npx hai create mini-admin --type fullstack --frontends web,app,desktop
+hai create mini-admin --type fullstack --frontends web,app,desktop
 cd mini-admin
 pnpm.cmd install
 pnpm.cmd dev

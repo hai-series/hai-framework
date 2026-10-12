@@ -53,6 +53,8 @@ description: "同步 hai-framework 通用 skills、AI 入口与应用依赖，�
 
 ### 3. 同步到应用仓库
 
+通过已发布 CLI 补齐缺失文件时，先按 [CLI 安装与命令](../hai-app-create/development.md#cli-安装与命令) 安装或更新 `@h-ai/cli`，再从应用根目录运行 `hai init`。它只补齐缺失内容，不覆盖已有 AI 规则和 skills；已有文件仍需对照模板合并。未发布的模板修正需从框架源目录同步，不能假定已安装 CLI 包含这些修正。
+
 把源头完整 skill 目录（含 reference.md 等被引用资源）复制到应用仓库 `.agents/skills/<skill>/`，并同步入口引用：
 
 - `AGENTS.md`

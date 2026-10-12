@@ -9,6 +9,21 @@
 - 从所属 workspace 的依赖与 lockfile 确认 `@h-ai/*` 实际解析版本和 npm/local 模式。模板 skill 提供导航，**当前安装包的 `package.json.exports`、公开 `.d.ts` 与随包文档决定可用 API**；本地框架源码只在版本匹配或显式联调时作实现证据。
 - 若 skill 与安装版本不符，以公开类型和实际行为核验。先使用已支持能力；任务确需新版本时列明版本变更、调用方与验证范围。不能直接复制未发布源码的 API，也不能为绕过差异添加虚构兼容层。
 
+## CLI 安装与命令
+
+CLI 的 npm 包名是 `@h-ai/cli`，安装后提供 `hai` 命令。使用脚手架前先全局安装并确认版本；PowerShell 中使用 `pnpm.cmd` 执行 pnpm 命令。
+
+```bash
+pnpm add -g @h-ai/cli
+hai --version
+hai --help
+
+# 新建项目
+hai create my-app
+```
+
+已有项目先进入项目根目录，再按需要执行 `hai add <module>`、`hai init` 或 `hai generate <type> <name>`。已安装 CLI 时，相同安装命令可更新到当前发布版本；需要指定版本时使用 `@h-ai/cli@<version>`。命令和模板以实际安装的 CLI 为准，不能把未发布的框架源码能力当作已安装包能力。
+
 ## 将需求映射到现有能力
 
 应用元信息只有一份配置来源：名称、版本、环境、默认语言与日志设置来自 `_core.yml`，使用 `core.config` 与 `core.logger`；Node 启动时不通过固定 `logging` 覆盖 YAML。SvelteKit 服务端 layout 和 fullstack `app.info` 仅公开必要元信息，不能下发整个 core 或模块配置。独立 Vite mobile-app 在 Node 构建阶段经 core 加载 YAML/环境覆盖并注入公开字段，配置变化需重新构建。环境覆盖使用 `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` 等既有规则；容器明确配置生产环境，不能用另一个状态来源代替 `core.env`。

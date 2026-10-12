@@ -41,15 +41,26 @@ AI ファイルの書き込み前に既存のファイル・ディレクトリ�
 
 Node.js 22.22.2+ / 24.15.0+ / 26+ が必要です。生成するルートプロジェクトと各 workspace パッケージも同じ最低バージョンを宣言します。
 
+### CLI のインストール
+
+まず `@h-ai/cli` をグローバルにインストールします。このパッケージが `hai` コマンドを提供します。以下のクイックスタートの例はインストール完了を前提としています。
+
+```bash
+pnpm add -g @h-ai/cli
+hai --version
+```
+
+PowerShell では `pnpm.cmd add -g @h-ai/cli` を使用してください。同じインストールコマンドで、既存の CLI を現在公開されているバージョンに更新できます。利用可能なコマンドは `hai --help` で確認します。未公開のテンプレートは、後述のローカル開発手順に従って本リポジトリーの CLI をビルドして実行してください。
+
 ### プロジェクトの作成
 
 ```bash
 # 交互式创建（推荐）
-npx hai create my-admin-app
+hai create my-admin-app
 
 # 指定模板与功能
-npx hai create my-app -t full
-npx hai create my-app -t custom -f iam,db,ai
+hai create my-app -t full
+hai create my-app -t custom -f iam,db,ai
 ```
 
 対話式の手順：
@@ -66,11 +77,11 @@ npx hai create my-app -t custom -f iam,db,ai
 
 ```bash
 # 交互式选择
-npx hai add
+hai add
 
 # 指定模块
-npx hai add iam
-npx hai add storage
+hai add iam
+hai add storage
 ```
 
 既存プロジェクトにモジュールを追加します。`package.json` の更新、設定生成、依存解決を自動実行します。
@@ -79,10 +90,10 @@ npx hai add storage
 
 ```bash
 # 校验配置完整性，补全缺失配置
-npx hai init
+hai init
 
 # 强制重新生成所有配置
-npx hai init --force
+hai init --force
 ```
 
 ### コード生成
@@ -93,20 +104,20 @@ npx hai init --force
 
 ```bash
 # 交互式生成
-npx hai generate
+hai generate
 
 # 指定类型
-npx hai generate page users
-npx hai generate component UserCard
-npx hai generate api users
-npx hai generate model user
-npx hai generate migration add-users
+hai generate page users
+hai generate component UserCard
+hai generate api users
+hai generate model user
+hai generate migration add-users
 
 # 快捷命令
-npx hai g:page dashboard
-npx hai g:component StatusBadge
-npx hai g:api orders
-npx hai g:model order
+hai g:page dashboard
+hai g:component StatusBadge
+hai g:api orders
+hai g:model order
 ```
 
 ## プロジェクトテンプレート
@@ -123,7 +134,7 @@ npx hai g:model order
 `--type fullstack` は IAM、reldb、cache、audit、storage、crypto を含む管理 workspace を既定で生成します。minimal を選んでも管理に必要なモジュールは有効です。`--frontends` で Web、Capacitor App、Tauri Desktop を選択します。miniapp は説明用のプレースホルダーで、実行・ビルド対象には含まれません。
 
 ```powershell
-npx hai create mini-admin --type fullstack --frontends web,app,desktop
+hai create mini-admin --type fullstack --frontends web,app,desktop
 cd mini-admin
 pnpm.cmd install
 pnpm.cmd dev
