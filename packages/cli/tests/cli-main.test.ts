@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 interface RegisteredCommand {
@@ -100,6 +101,23 @@ afterEach(() => {
 })
 
 describe('cli-main', () => {
+  it('create 失败设置退出码并让 stderr 完成输出，不强制终止进程', async () => {
+    const previousExitCode = process.exitCode
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('Forced process exit')
+    })
+    try {
+      commandMocks.createProject.mockRejectedValueOnce(new Error('Install failed'))
+      await expect(getCommandAction('create [name]')('failed-create', {})).resolves.toBeUndefined()
+      expect(process.exitCode).toBe(1)
+      expect(exit).not.toHaveBeenCalled()
+    }
+    finally {
+      process.exitCode = previousExitCode
+      exit.mockRestore()
+    }
+  })
+
   it('wires create command options to createProject', async () => {
     await getCommandAction('create [name]')('demo-api', {
       cwd: 'C:/workspace',

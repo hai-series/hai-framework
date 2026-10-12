@@ -62,7 +62,7 @@ return result
 | @h-ai/capacitor | [原生设备、推送、安全存储](packages/cli/templates/skills/hai-capacitor/SKILL.md) | Web 与 Android/iOS 能力不同 |
 | @h-ai/deploy | [部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md) | 核对目标 Provider 和发布授权 |
 | @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | components 公开目录入口与轻量 /theme；Tailwind 扫描路径须正确 |
-| @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 先 `pnpm add -g @h-ai/cli`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准 |
+| @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 先 `pnpm add -g @h-ai/cli`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准；生成框架依赖固定为 CLI 对应版本，安装失败展示命令和原始输出 |
 
 ## 任务导航
 

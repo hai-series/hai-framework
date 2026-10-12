@@ -7,6 +7,7 @@
 
 import type { AppType, FeatureId } from '../src/cli-types.js'
 import { describe, expect, it } from 'vitest'
+import { getCliVersion } from '../src/cli-utils.js'
 import { buildTemplateContext } from '../src/commands/cli-template-engine.js'
 
 /* ---------- detectProject 导入验证 ---------- */
@@ -28,6 +29,16 @@ describe('detectProject', () => {
 /* ---------- buildTemplateContext 验证 ---------- */
 
 describe('buildTemplateContext', () => {
+  it.each(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'] as const)('%s 固定框架版本，避免旧 alpha9 被范围解析选中', (appType) => {
+    const context = buildTemplateContext({ name: 'version-test', appType, features: [], packageManager: 'pnpm' })
+    const haiVersions = Object.entries(context.haiCatalogPackages).filter(([name]) => name.startsWith('@h-ai/'))
+    expect(haiVersions.length).toBeGreaterThan(0)
+    expect(context.haiPackageVersion).toBe(getCliVersion())
+    const npmContext = buildTemplateContext({ name: 'version-test', appType, features: [], packageManager: 'npm' })
+    expect(npmContext.haiPackageSpecifier).toBe(getCliVersion())
+    for (const [, version] of haiVersions) expect(version).toBe(getCliVersion())
+  })
+
   it('api 类型应关闭 hasUi 和 hasI18n', () => {
     const ctx = buildTemplateContext({
       name: 'my-api',

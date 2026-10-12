@@ -1,4 +1,13 @@
 {
+  "cli_createFailed": "创建项目失败:",
+  "cli_installFailed": "安装依赖失败（{pm}）。",
+  "cli_commandLabel": "命令: {command}",
+  "cli_exitCode": "退出码: {code}",
+  "cli_signal": "信号: {signal}",
+  "cli_selectHint": "- ↑/↓ 选择，回车确认",
+  "cli_multiselectHint": "- 空格选择，回车确认",
+  "cli_featuresPrompt": "选择功能:",
+  "cli_frontendsPrompt": "选择前端目标:",
   "cli_invalidGenerateName": "名称必须以字母开头，且仅包含字母、数字、短横线或下划线",
   "cli_generateOutsideWorkspace": "生成文件必须位于工作目录内，符号链接目标也不得越界",
   "cli_generateExists": "文件已存在：{path}。使用 --force 才可覆盖",

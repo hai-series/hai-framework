@@ -7,10 +7,9 @@
 
 import type { AppType, CreateProjectOptions, FeatureId, FrontendTarget, GeneratorType } from './cli-types.js'
 import process from 'node:process'
-import { core } from '@h-ai/core'
 import { cac } from 'cac'
 import chalk from 'chalk'
-import { getCliVersion } from './cli-utils.js'
+import { getCliVersion, writeCliMessage } from './cli-utils.js'
 import { addModule, createProject, deployCommand, generate, initProject } from './commands/cli-commands.js'
 
 // CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
@@ -64,7 +63,8 @@ cli
       })
     }
     catch {
-      process.exit(1)
+      // 保留自然退出，让终端/管道中的失败详情写完。
+      process.exitCode = 1
     }
   })
 
@@ -181,8 +181,8 @@ const parsed = cli.parse()
 
 // 无命令且未请求帮助/版本时显示帮助
 if (!cli.matchedCommand && !parsed.options.help && !parsed.options.version) {
-  core.logger.info('', {})
-  core.logger.info(chalk.cyan('hai Agent Framework CLI'))
-  core.logger.info('', {})
+  writeCliMessage('')
+  writeCliMessage(chalk.cyan('hai Agent Framework CLI'))
+  writeCliMessage('')
   cli.outputHelp()
 }

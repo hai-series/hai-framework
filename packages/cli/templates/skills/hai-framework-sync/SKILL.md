@@ -40,6 +40,8 @@ description: "同步 hai-framework 通用 skills、AI 入口与应用依赖，�
 
 先读取当前应用入口与 package.json/lockfile，记录实际 npm/local 模式及解析版本。同步 skill 不能证明新 API 已安装或可用：以目标依赖的公开 exports/types 验证示例与配置，未发布框架能力仅用于已授权本地联调。
 
+CLI 生成的 `@h-ai/*` 依赖固定为 CLI 对应版本，pnpm catalog 也使用精确版本。统一升级所有框架包后检查 lockfile 与已安装 exports。
+
 | 变更类型 | 首选位置 |
 | --- | --- |
 | 通用 hai 模块用法 | `hai-framework/packages/cli/templates/skills/hai-*/SKILL.md` |

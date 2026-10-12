@@ -148,8 +148,8 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     const existingHaiSpecifier = Object.entries(pkg.dependencies as Record<string, string>)
       .find(([pkgName]) => pkgName.startsWith('@h-ai/'))?.[1]
 
-    // 已存在的 @h-ai/* 依赖若使用 catalog:，新增模块保持一致；否则回退到当前 CLI 版本范围
-    const depVersion = existingHaiSpecifier === 'catalog:' ? 'catalog:' : `^${getCliVersion()}`
+    // 已存在的 @h-ai/* 依赖若使用 catalog:，新增模块保持一致；否则固定当前 CLI 对应版本。
+    const depVersion = existingHaiSpecifier === 'catalog:' ? 'catalog:' : getCliVersion()
 
     for (const pkgName of allPackages) {
       if (!pkg.dependencies[pkgName]) {

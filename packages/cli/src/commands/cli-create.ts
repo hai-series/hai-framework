@@ -16,13 +16,12 @@ import { execFileSync, execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
-import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
 import { cliM } from '../cli-i18n.js'
-import { detectPackageManager, fileExists, writeFile } from '../cli-utils.js'
+import { detectPackageManager, fileExists, formatPromptDescription, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
 import { buildTemplateContext, generateFromTemplates } from './cli-template-engine.js'
 
 // =============================================================================
@@ -264,7 +263,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     // 安全校验：项目名必须仅含小写字母、数字和连字符，防止路径遍历
     if (!PROJECT_NAME_REGEX.test(resolvedOptions.name)) {
-      core.logger.error(chalk.red(`项目名称不合法: "${resolvedOptions.name}"，只能包含小写字母、数字和连字符`))
+      writeCliError(chalk.red(`项目名称不合法: "${resolvedOptions.name}"，只能包含小写字母、数字和连字符`))
       return
     }
 
@@ -280,7 +279,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       })
 
       if (!overwrite) {
-        core.logger.info(chalk.yellow('已取消'))
+        writeCliMessage(chalk.yellow('已取消'))
         return
       }
 
@@ -405,7 +404,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
   }
   catch (error) {
     spinner.fail()
-    core.logger.error(chalk.red('创建项目失败:'), { error })
+    writeCliError(chalk.red(cliM('cli_createFailed')), error)
     throw error
   }
 }
@@ -420,13 +419,13 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 async function resolveOptions(options: CreateProjectOptions): Promise<Required<CreateProjectOptions>> {
   const useDefaults = options.yes ?? false
 
-  core.logger.info('', {})
-  core.logger.info(chalk.bold.cyan('  🚀 hai Agent Framework'))
-  core.logger.info(chalk.gray('     AI-Native · Configuration-Driven · Security-First'))
-  core.logger.info('', {})
+  writeCliMessage('')
+  writeCliMessage(chalk.bold.cyan('  🚀 hai Agent Framework'))
+  writeCliMessage(chalk.gray('     AI-Native · Configuration-Driven · Security-First'))
+  writeCliMessage('')
 
   const onCancel = () => {
-    core.logger.info(chalk.red('\n已取消'))
+    writeCliMessage(chalk.red('\n已取消'))
     process.exit(1)
   }
 
@@ -462,8 +461,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       type: 'select',
       name: 'appType',
       message: '应用类型:',
+      hint: cliM('cli_selectHint'),
       choices: Object.entries(APP_TYPES).map(([key, t]) => ({
-        title: `${chalk.bold(t.name.padEnd(10))} ${chalk.gray(t.description)}`,
+        title: t.name,
+        description: formatPromptDescription(t.description),
         value: key,
       })),
       initial: 0,
@@ -491,8 +492,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
         type: 'select',
         name: 'template',
         message: '选择模板:',
+        hint: cliM('cli_selectHint'),
         choices: Object.values(PROJECT_TEMPLATES).map(t => ({
-          title: `${chalk.bold(t.name.padEnd(10))} ${chalk.gray(t.description)}`,
+          title: t.name,
+          description: formatPromptDescription(t.description),
           value: t.name,
         })),
         initial: 1,
@@ -513,7 +516,8 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   }
   else if (selectedTemplate === 'custom' && !options.features) {
     const featureChoices = SELECTABLE_FEATURES.map(id => ({
-      title: `${chalk.bold(FEATURES[id].name.padEnd(10))} ${chalk.gray(FEATURES[id].description)}`,
+      title: FEATURES[id].name,
+      description: formatPromptDescription(FEATURES[id].description),
       value: id,
       selected: appTypeDefaults.includes(id),
     }))
@@ -521,9 +525,9 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     const { features } = await prompts({
       type: 'multiselect',
       name: 'features',
-      message: '选择功能 (空格选择，回车确认):',
+      message: cliM('cli_featuresPrompt'),
       choices: featureChoices,
-      hint: '- 空格选择，回车确认',
+      hint: cliM('cli_multiselectHint'),
       instructions: false,
     }, { onCancel })
 
@@ -693,13 +697,14 @@ async function resolveFrontendTargets(
   const { selectedFrontends } = await prompts({
     type: 'multiselect',
     name: 'selectedFrontends',
-    message: '选择前端目标 (空格选择，回车确认):',
+    message: cliM('cli_frontendsPrompt'),
     choices: Object.entries(FRONTEND_TARGETS).map(([id, target]) => ({
-      title: `${chalk.bold(target.name.padEnd(8))} ${chalk.gray(target.description)}`,
+      title: target.name,
+      description: formatPromptDescription(target.description),
       value: id,
       selected: DEFAULT_FULLSTACK_FRONTENDS.includes(id as FrontendTarget),
     })),
-    hint: '- 小程序当前为预留占位，不生成可运行工程',
+    hint: cliM('cli_multiselectHint'),
     instructions: false,
   }, { onCancel })
 
@@ -751,14 +756,14 @@ function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
 async function promptModuleConfigs(features: FeatureId[], projectName: string): Promise<ModuleConfigs> {
   const configs: ModuleConfigs = {}
   const onCancel = () => {
-    core.logger.info(chalk.red('\n已取消'))
+    writeCliMessage(chalk.red('\n已取消'))
     process.exit(1)
   }
 
-  core.logger.info('')
-  core.logger.info(chalk.bold('  ⚙ 模块配置'))
-  core.logger.info(chalk.gray('     设置关键配置项（回车使用默认值）'))
-  core.logger.info('')
+  writeCliMessage('')
+  writeCliMessage(chalk.bold('  ⚙ 模块配置'))
+  writeCliMessage(chalk.gray('     设置关键配置项（回车使用默认值）'))
+  writeCliMessage('')
 
   // core 配置（始终收集）
   configs.core = await promptCoreConfig(projectName, onCancel)
@@ -786,7 +791,7 @@ async function promptModuleConfigs(features: FeatureId[], projectName: string): 
  * 收集 core 模块配置
  */
 async function promptCoreConfig(projectName: string, onCancel: () => void): Promise<ModuleConfigs['core']> {
-  core.logger.info(chalk.cyan('  [core] 应用基础配置'))
+  writeCliMessage(chalk.cyan('  [core] 应用基础配置'))
   const { defaultLocale } = await prompts({
     type: 'select',
     name: 'defaultLocale',
@@ -804,7 +809,7 @@ async function promptCoreConfig(projectName: string, onCancel: () => void): Prom
  * 收集 db 模块配置
  */
 async function promptDbConfig(projectName: string, onCancel: () => void): Promise<ModuleConfigs['db']> {
-  core.logger.info(chalk.cyan('  [db] 数据库配置'))
+  writeCliMessage(chalk.cyan('  [db] 数据库配置'))
   const { type } = await prompts({
     type: 'select',
     name: 'type',
@@ -840,7 +845,7 @@ async function promptDbConfig(projectName: string, onCancel: () => void): Promis
  * 收集 cache 模块配置
  */
 async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['cache']> {
-  core.logger.info(chalk.cyan('  [cache] 缓存配置'))
+  writeCliMessage(chalk.cyan('  [cache] 缓存配置'))
   const { type } = await prompts({
     type: 'select',
     name: 'type',
@@ -867,7 +872,7 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
  * 收集 iam 模块配置
  */
 async function promptIamConfig(onCancel: () => void): Promise<ModuleConfigs['iam']> {
-  core.logger.info(chalk.cyan('  [iam] 认证授权配置'))
+  writeCliMessage(chalk.cyan('  [iam] 认证授权配置'))
   const answers = await prompts([
     { type: 'confirm', name: 'loginPassword', message: '启用密码登录?', initial: true },
     { type: 'confirm', name: 'loginOtp', message: '启用 OTP 验证码登录?', initial: false },
@@ -879,7 +884,7 @@ async function promptIamConfig(onCancel: () => void): Promise<ModuleConfigs['iam
  * 收集 storage 模块配置
  */
 async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs['storage']> {
-  core.logger.info(chalk.cyan('  [storage] 文件存储配置'))
+  writeCliMessage(chalk.cyan('  [storage] 文件存储配置'))
   const { type } = await prompts({
     type: 'select',
     name: 'type',
@@ -908,7 +913,7 @@ async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs[
  * 收集 ai 模块配置
  */
 async function promptAiConfig(onCancel: () => void): Promise<ModuleConfigs['ai']> {
-  core.logger.info(chalk.cyan('  [ai] AI 集成配置'))
+  writeCliMessage(chalk.cyan('  [ai] AI 集成配置'))
   const { defaultProvider } = await prompts({
     type: 'select',
     name: 'defaultProvider',
@@ -993,7 +998,7 @@ function installDependencies(projectPath: string, pm: 'pnpm' | 'npm' | 'yarn'): 
   }
   catch (error) {
     const details = formatCommandFailure(installCmd, error)
-    throw new Error(`安装依赖失败（${pm}）。\n${details}`)
+    throw new Error(`${cliM('cli_installFailed', { params: { pm } })}\n${details}`)
   }
 }
 
@@ -1006,16 +1011,16 @@ interface CommandFailureLike {
 
 function formatCommandFailure(command: string, error: unknown): string {
   if (!error || typeof error !== 'object') {
-    return `命令: ${command}`
+    return cliM('cli_commandLabel', { params: { command } })
   }
 
   const failure = error as CommandFailureLike
   const stdout = normalizeChildOutput(failure.stdout)
   const stderr = normalizeChildOutput(failure.stderr)
-  const status = typeof failure.status === 'number' ? `退出码: ${failure.status}` : ''
-  const signal = typeof failure.signal === 'string' ? `信号: ${failure.signal}` : ''
+  const status = typeof failure.status === 'number' ? cliM('cli_exitCode', { params: { code: failure.status } }) : ''
+  const signal = typeof failure.signal === 'string' ? cliM('cli_signal', { params: { signal: failure.signal } }) : ''
   const output = [
-    `命令: ${command}`,
+    cliM('cli_commandLabel', { params: { command } }),
     status,
     signal,
     stderr ? `stderr:\n${stderr}` : '',
@@ -1374,39 +1379,39 @@ ${generateAiDevelopmentReadme()}## 文档
  * 打印完成提示
  */
 function printCompletionMessage(options: Required<CreateProjectOptions>): void {
-  core.logger.info('', {})
-  core.logger.info(chalk.green('✔ 项目创建成功！'))
-  core.logger.info('', {})
+  writeCliMessage('')
+  writeCliMessage(chalk.green('✔ 项目创建成功！'))
+  writeCliMessage('')
 
   // 功能摘要
   if (options.features.length > 0) {
-    core.logger.info(chalk.bold('已启用功能:'))
+    writeCliMessage(chalk.bold('已启用功能:'))
     for (const featureId of options.features) {
       const feature = FEATURES[featureId]
       if (feature) {
-        core.logger.info(chalk.gray(`  • ${feature.name} (${featureId})`))
+        writeCliMessage(chalk.gray(`  • ${feature.name} (${featureId})`))
       }
     }
-    core.logger.info('', {})
+    writeCliMessage('')
   }
 
-  core.logger.info('下一步：')
-  core.logger.info(chalk.cyan(`  cd ${options.name}`))
+  writeCliMessage('下一步：')
+  writeCliMessage(chalk.cyan(`  cd ${options.name}`))
   if (options.appType === 'fullstack')
-    core.logger.info(chalk.cyan(cliM('cli_adminPasswordSaved')))
+    writeCliMessage(chalk.cyan(cliM('cli_adminPasswordSaved')))
   if (!options.install) {
-    core.logger.info(chalk.cyan(`  ${getInstallCommand(options.packageManager)}`))
+    writeCliMessage(chalk.cyan(`  ${getInstallCommand(options.packageManager)}`))
   }
   if (options.appType === 'fullstack' || options.appType === 'api') {
-    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'dev')}`))
-    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'typecheck')}`))
-    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'test')}`))
-    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'test:e2e')}`))
+    writeCliMessage(chalk.cyan(`  ${getRunCommand(options.packageManager, 'dev')}`))
+    writeCliMessage(chalk.cyan(`  ${getRunCommand(options.packageManager, 'typecheck')}`))
+    writeCliMessage(chalk.cyan(`  ${getRunCommand(options.packageManager, 'test')}`))
+    writeCliMessage(chalk.cyan(`  ${getRunCommand(options.packageManager, 'test:e2e')}`))
   }
   else {
-    core.logger.info(chalk.cyan(`  ${getRunCommand(options.packageManager, 'dev')}`))
+    writeCliMessage(chalk.cyan(`  ${getRunCommand(options.packageManager, 'dev')}`))
   }
-  core.logger.info('', {})
+  writeCliMessage('')
 }
 
 // =============================================================================

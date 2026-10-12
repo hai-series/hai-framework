@@ -166,6 +166,8 @@ catalog:
   # ESLint Svelte Support
   # ---------------------------------------------------------------------------
   eslint-plugin-svelte: ^3.23.1
+  fast-string-width: ^3.0.2
+  fast-wrap-ansi: ^0.2.2
   fs-extra: ^11.4.1
   handlebars: ^4.7.10
   hono: ^4.13.13

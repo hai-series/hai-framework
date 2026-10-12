@@ -54,6 +54,10 @@ In PowerShell, use `pnpm.cmd add -g @h-ai/cli`. To update an installed CLI to th
 
 ### Create a project
 
+Generated `@h-ai/*` dependencies are pinned to the CLI version; pnpm references that exact version through `catalog:`. Upgrade framework packages together and verify the versions resolved in the lockfile.
+
+Creation messages are written directly to the terminal. Installation failures display the package manager command, exit code and stdout/stderr, and retain generated files for a retry from the project directory. The `prebuild-install@7.1.3` deprecation warning comes from the upstream `better-sqlite3` installer dependency. That warning alone does not fail installation; do not override or remove the native installer to hide it.
+
 ```bash
 # 交互式创建（推荐）
 hai create my-admin-app

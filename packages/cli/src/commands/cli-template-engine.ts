@@ -114,7 +114,8 @@ const IMPLEMENTED_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop
 const DEFAULT_FULLSTACK_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop']
 const DEFAULT_THEMES = ['light', 'dark'] as const
 const DEFAULT_THEME_NAME = 'light'
-const HAI_PACKAGE_VERSION = `^${getCliVersion()}`
+// 框架与模板同步发布；范围版本会把旧命名 alpha9 视为比 alpha.58 更新。
+const HAI_PACKAGE_VERSION = getCliVersion()
 const HAI_PACKAGE_SPECIFIER_CATALOG = 'catalog:'
 type FullstackPackageSpecifiers = { [Key in keyof typeof VERSIONS]: string }
 type CatalogPackageVersions = Readonly<Record<string, string>>

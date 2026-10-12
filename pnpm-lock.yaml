@@ -363,6 +363,12 @@ catalogs:
     eslint-plugin-svelte:
       specifier: ^3.23.1
       version: 3.23.1
+    fast-string-width:
+      specifier: ^3.0.2
+      version: 3.0.2
+    fast-wrap-ansi:
+      specifier: ^0.2.2
+      version: 0.2.2
     fs-extra:
       specifier: ^11.4.1
       version: 11.4.1
@@ -1389,6 +1395,9 @@ importers:
       chalk:
         specifier: 'catalog:'
         version: 6.0.1
+      fast-wrap-ansi:
+        specifier: 'catalog:'
+        version: 0.2.2
       fs-extra:
         specifier: 'catalog:'
         version: 11.4.1
@@ -1429,6 +1438,9 @@ importers:
       '@types/prompts':
         specifier: 'catalog:'
         version: 2.4.9
+      fast-string-width:
+        specifier: 'catalog:'
+        version: 3.0.2
       rimraf:
         specifier: 'catalog:'
         version: 6.1.3

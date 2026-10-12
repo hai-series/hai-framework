@@ -1,4 +1,13 @@
 {
+  "cli_createFailed": "Failed to create project:",
+  "cli_installFailed": "Dependency installation failed ({pm}).",
+  "cli_commandLabel": "Command: {command}",
+  "cli_exitCode": "Exit code: {code}",
+  "cli_signal": "Signal: {signal}",
+  "cli_selectHint": "- ↑/↓ select, Enter confirm",
+  "cli_multiselectHint": "- Space select, Enter confirm",
+  "cli_featuresPrompt": "Select features:",
+  "cli_frontendsPrompt": "Select frontend targets:",
   "cli_invalidGenerateName": "Use a name starting with a letter, with only letters, digits, hyphens or underscores",
   "cli_generateOutsideWorkspace": "Generated files must remain inside the workspace, including symbolic link targets",
   "cli_generateExists": "File already exists: {path}. Use --force to overwrite it",

@@ -5,12 +5,31 @@
 
 import type { TemplateContext } from './cli-types.js'
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { wrapAnsi } from 'fast-wrap-ansi'
 import fs from 'fs-extra'
 import Handlebars from 'handlebars'
 
 const CAMEL_CASE_SEPARATOR_REGEX = /[-_\s]+(.)?/g
 const LEADING_CHAR_REGEX = /^./
+
+/** CLI 交互提示直接写终端，不能交给异步 JSON 日志 transport。 */
+export function writeCliMessage(message: string): void {
+  process.stdout.write(`${message}\n`)
+}
+
+/** 显示异常的 message，保留子命令输出；Error 的不可枚举属性不能依赖 JSON 序列化。 */
+export function writeCliError(message: string, error?: unknown): void {
+  process.stderr.write(`${message}\n`)
+  if (error !== undefined)
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+}
+
+/** 显式按显示宽度换行，为 prompts 的前缀和缩进预留空间，避免中文自动折行后擦除不足。 */
+export function formatPromptDescription(description: string): string {
+  return wrapAnsi(description, Math.max(1, (process.stdout.columns || 80) - 32), { hard: true })
+}
 
 /**
  * 转换为驼峰命名
@@ -120,7 +139,7 @@ export async function getPackageVersion(pkgPath: string): Promise<string | null>
  *
  * 从当前模块所在目录向上查找 `@h-ai/cli` 的 package.json，
  * 兼容源码布局（src/）与打包产物布局（dist/）以及 npm 安装后的 node_modules 布局。
- * 用于生成项目时确定 `@h-ai/*` 依赖的版本范围，避免硬编码。
+ * 用于生成项目时固定 `@h-ai/*` 依赖版本，避免硬编码与预发布版本漂移。
  */
 export function getCliVersion(): string {
   let dir = path.dirname(fileURLToPath(import.meta.url))

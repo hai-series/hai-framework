@@ -32,7 +32,7 @@ import { generateModuleSkillFile, generateProjectAiSupport } from '../src/comman
 // =============================================================================
 
 const tmpRoot = path.join(process.cwd(), '.tmp-commands-e2e')
-const HAI_DEP_VERSION = `^${fse.readJsonSync(fileURLToPath(new URL('../package.json', import.meta.url))).version}`
+const HAI_DEP_VERSION = fse.readJsonSync(fileURLToPath(new URL('../package.json', import.meta.url))).version
 const CATALOG_DEP_SPECIFIER = 'catalog:'
 const HAI_DEP_SPECIFIER = CATALOG_DEP_SPECIFIER
 const skillTemplatesDir = fileURLToPath(new URL('../templates/skills', import.meta.url))
