@@ -227,7 +227,15 @@ Projects in `apps/*` reference local packages through `workspace:*` and can use 
 node packages/cli/dist/index.js create ../my-new-project
 ```
 
-### 5. Run tests
+## 5. Configuration driven authentication
+
+Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
+
+Admin/H5/website templates with IAM include AuthPanel and standard routes; mobile and fullstack clients share API actions. Server config/_iam.yml controls methods, registration, recovery, agreement modals and branding. LDAP/Reach are optional: install ldapts only for the default LDAP client, then enable login.ldap and set connection settings. Email/SMS use Reach templates or custom callbacks. Forms expose header/extraFields/footer snippets and AuthPanel forwards login*/register* snippets. Multiple nodes share a database and Redis.
+
+[完整 IAM 配置 / IAM configuration](../iam/README.en.md)
+
+### 6. Run tests
 
 ```bash
 # 单元测试 + E2E 模板生成测试

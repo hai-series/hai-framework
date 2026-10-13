@@ -59,6 +59,7 @@ import {
   createTokenManager,
 } from './api-client-auth.js'
 import { apiClientM } from './api-client-i18n.js'
+import { createIamAuthActions } from './api-client-iam.js'
 import { HaiApiClientError } from './api-client-types.js'
 
 const DEFAULT_TIMEOUT = 30_000
@@ -66,6 +67,10 @@ const DEFAULT_CLIENT_NAME = 'hai-api-client'
 const DEFAULT_REFRESH_PATH = apiContract.pathOf(apiContract.iam.auth.refresh)
 const AUTH_ENTRY_PATHS = [
   apiContract.pathOf(apiContract.iam.auth.login),
+  apiContract.pathOf(apiContract.iam.auth.loginWithOtp),
+  apiContract.pathOf(apiContract.iam.auth.loginWithLdap),
+  apiContract.pathOf(apiContract.iam.auth.requestPasswordReset),
+  apiContract.pathOf(apiContract.iam.auth.confirmPasswordReset),
   apiContract.pathOf(apiContract.iam.auth.register),
 ]
 const TRAILING_SLASHES_REGEX = /\/+$/
@@ -283,6 +288,7 @@ const defaultApiContract = apiContract.create({ iam: apiContract.iam, storage: a
 export type DefaultApiClient = ApiClient<typeof defaultApiContract> & {
   readonly create: typeof createApiClient
   readonly tokenStorage: typeof tokenStorage
+  readonly createAuthActions: typeof createIamAuthActions
 }
 
 /** hai-framework API client 统一入口（默认单例 + `create` + `tokenStorage`）。 */
@@ -292,6 +298,8 @@ export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiCli
       return createApiClient
     if (property === 'tokenStorage')
       return tokenStorage
+    if (property === 'createAuthActions')
+      return createIamAuthActions
     return Reflect.get(target as object, property, receiver)
   },
 }) as DefaultApiClient

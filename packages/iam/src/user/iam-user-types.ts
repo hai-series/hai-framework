@@ -72,6 +72,10 @@ export interface User {
  * 用户协议/隐私协议展示配置
  */
 export interface AgreementDisplay {
+  /** 用户协议 Markdown 正文，显示优先于 URL。 */
+  userAgreementMarkdown?: string
+  /** 隐私协议 Markdown 正文，显示优先于 URL。 */
+  privacyPolicyMarkdown?: string
   /** 用户协议 URL */
   userAgreementUrl?: string
   /** 隐私协议 URL */
@@ -156,6 +160,8 @@ export interface UpdateCurrentUserInput {
  * 用户子功能接口
  */
 export interface UserOperations {
+  /** 管理端创建账户，不受自助注册开关限制；调用端必须执行管理员授权。 */
+  createUser: (options: RegisterOptions) => Promise<HaiResult<RegisterResult>>
   /**
    * 注册用户
    *

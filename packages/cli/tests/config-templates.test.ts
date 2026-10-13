@@ -37,6 +37,11 @@ describe('generateConfigFile', () => {
     expect(content).toContain('rbac:')
   })
 
+  it('reach 标准模板数组应可通过配置和环境整体覆盖', () => {
+    const config: { templates: unknown[] } = parse(generateConfigFile('reach'))
+    expect(config.templates).toEqual([])
+  })
+
   it('应该生成 storage 配置', () => {
     const content = generateConfigFile('storage')
     expect(content).toContain('type: local')

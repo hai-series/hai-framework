@@ -64,8 +64,8 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
 
   const { username, email, password, roles, status } = await kit.validate.body(request, createCreateUserSchema())
 
-  // 使用 IAM 模块注册用户
-  const registerResult = await iam.user.register({
+  // 管理员创建不受自助注册开关影响。
+  const registerResult = await iam.user.createUser({
     username,
     email,
     password,
@@ -78,17 +78,26 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
     return kit.response.badRequest(registerResult.error.message)
   }
 
-  const { user } = registerResult.data
+  let { user } = registerResult.data
 
   // 如果管理员创建时指定了非 active 状态，需要禁用用户
   if (status && status !== 'active') {
-    await iam.user.updateUser(user.id, { enabled: false })
+    const disabled = await iam.user.updateUser(user.id, { enabled: false })
+    if (!disabled.success) {
+      await iam.user.deleteUser(user.id)
+      return kit.response.fromError(disabled.error)
+    }
+    user = disabled.data
   }
 
-  // 分配角色（iam.user.register 已分配 config.rbac.defaultRole）
+  // 分配角色（iam.user.createUser 已分配 config.rbac.defaultRole）
   // 管理员创建时额外分配指定角色
-  if (roles?.length) {
-    await iam.authz.syncRoles(user.id, roles)
+  if (roles !== undefined) {
+    const assigned = await iam.authz.syncRoles(user.id, roles)
+    if (!assigned.success) {
+      await iam.user.deleteUser(user.id)
+      return kit.response.fromError(assigned.error)
+    }
   }
 
   // 审计日志 + 用户信息并行获取

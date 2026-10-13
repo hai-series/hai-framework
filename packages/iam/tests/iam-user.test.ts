@@ -663,9 +663,9 @@ describe('iam.user', () => {
     // =========================================================================
 
     describe('requestPasswordReset / confirmPasswordReset', () => {
-      it('requestPasswordReset 应返回 ok（防止用户枚举）', async () => {
+      it('未配置重置通知时统一返回 PASSWORD_RESET_DISABLED', async () => {
         const result = await getIam().user.requestPasswordReset('any@test.com')
-        expect(result.success).toBe(true)
+        expect(result).toMatchObject({ success: false, error: { code: HaiIamError.PASSWORD_RESET_DISABLED.code } })
       })
 
       it('confirmPasswordReset 使用无效令牌应返回 RESET_TOKEN_INVALID', async () => {

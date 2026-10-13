@@ -20,18 +20,22 @@ import {
   IamAdminUpdateUserInputSchema,
   IamAuthResultSchema,
   IamChangePasswordInputSchema,
+  IamConfirmPasswordResetInputSchema,
   IamCreatePermissionInputSchema,
   IamCreateRoleInputSchema,
   IamCurrentUserSchema,
+  IamLdapLoginInputSchema,
   IamListPermissionsInputSchema,
   IamListUsersInputSchema,
   IamLoginInputSchema,
   IamLogoutInputSchema,
   IamOtpLoginInputSchema,
   IamPermissionSchema,
+  IamPublicConfigSchema,
   IamRefreshTokenDataSchema,
   IamRefreshTokenInputSchema,
   IamRegisterInputSchema,
+  IamRequestPasswordResetInputSchema,
   IamRoleSchema,
   IamSendOtpDataSchema,
   IamSendOtpInputSchema,
@@ -49,6 +53,17 @@ const roleOutputSchema = haiResultSchema(IamRoleSchema)
 /** IAM 领域 oRPC contract。 */
 export const iamContract = {
   auth: {
+    publicConfig: route({ method: 'GET', path: '/auth/config', operationId: 'iam.auth.publicConfig', summary: 'Public authentication configuration', tags: ['iam', 'auth'] })
+      .output(haiResultSchema(IamPublicConfigSchema.nullable())),
+    loginWithLdap: route({ method: 'POST', path: '/auth/login/ldap', operationId: 'iam.auth.loginWithLdap', summary: 'LDAP login', tags: ['iam', 'auth'] })
+      .input(IamLdapLoginInputSchema)
+      .output(authResultOutputSchema),
+    requestPasswordReset: route({ method: 'POST', path: '/auth/password-reset/request', operationId: 'iam.auth.requestPasswordReset', summary: 'Request password reset', tags: ['iam', 'auth'] })
+      .input(IamRequestPasswordResetInputSchema)
+      .output(HaiVoidResultSchema),
+    confirmPasswordReset: route({ method: 'POST', path: '/auth/password-reset/confirm', operationId: 'iam.auth.confirmPasswordReset', summary: 'Confirm password reset', tags: ['iam', 'auth'] })
+      .input(IamConfirmPasswordResetInputSchema)
+      .output(HaiVoidResultSchema),
     login: route({ method: 'POST', path: '/auth/login', operationId: 'iam.auth.login', summary: 'Password login', tags: ['iam', 'auth'] })
       .input(IamLoginInputSchema)
       .output(authResultOutputSchema),

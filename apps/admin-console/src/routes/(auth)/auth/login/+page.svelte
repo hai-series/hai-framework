@@ -11,7 +11,9 @@
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
-  import { apiFetch } from '$lib/utils/api'
+  import { authActions as actions } from '$lib/services/auth'
+
+  const methods = $derived((['password', 'ldap', 'email', 'sms'] as const).filter(method => page.data.iamPublicConfig.login[method]))
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -23,10 +25,7 @@
   const returnUrl = $derived(page.url.searchParams.get('returnUrl') ?? '')
   const loginAgreements = $derived(
     iamPublicConfig?.agreements?.showOnLogin
-      ? {
-        userAgreementUrl: iamPublicConfig.agreements.userAgreementUrl,
-        privacyPolicyUrl: iamPublicConfig.agreements.privacyPolicyUrl,
-      }
+      ? iamPublicConfig.agreements
       : undefined,
   )
 
@@ -55,16 +54,7 @@
     loading = true
 
     try {
-      const response = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: data.username,
-          password: data.password,
-        }),
-      })
-
-      const result = await response.json()
+      const result = await actions.login({ identifier: data.username, password: data.password, method: data.method, code: data.code })
 
       if (result.success) {
         const redirectTarget = resolve(resolveRedirectTarget(returnUrl), {})
@@ -90,6 +80,12 @@
 <LoginForm
   {loading}
   {errors}
+  {methods}
+  showRememberMe={false}
+  showForgotPassword={iamPublicConfig.passwordReset.enabled}
+  otpLength={iamPublicConfig.otp.length}
+  resendInterval={iamPublicConfig.otp.resendInterval}
+  onsendotp={actions.sendOtp}
   showTitle
   showRegisterLink={showRegisterLink}
   forgotPasswordUrl={forgotPasswordPath}

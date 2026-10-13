@@ -1,6 +1,8 @@
 import type { Page } from '@playwright/test'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import { apiContract } from '@h-ai/api-contract'
 import { expect, test } from '@playwright/test'
@@ -43,6 +45,66 @@ test('service rejects plaintext business requests', async ({ request }) => {
 })
 
 {{#if fullstack.e2eFrontend}}
+test('shared authentication supports public registration with configuration', async ({ page }) => {
+  test.setTimeout(90_000)
+  const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
+  await mkdir(evidence, { recursive: true })
+  await page.goto('/')
+  await expect(page.getByTestId('login-form')).toBeVisible()
+  await page.screenshot({ path: path.join(evidence, '{{projectName}}-login.png'), fullPage: true })
+  await page.getByRole('button', { name: /立即注册|Register now/i }).click()
+  await expect(page.locator('input[name="username"]')).toBeVisible()
+  await page.screenshot({ path: path.join(evidence, '{{projectName}}-register.png'), fullPage: true })
+  const username = `signup${Date.now()}`
+  await page.locator('input[name="username"]').fill(username)
+  await page.locator('input[name="email"]').fill(`${username}@example.com`)
+  await page.locator('input[type="password"]').nth(0).fill('SignupPassword123')
+  await page.locator('input[type="password"]').nth(1).fill('SignupPassword123')
+  await page.locator('button[type="submit"]').click()
+  await expect(page.getByTestId('settings-page')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  if (!process.env.IAM_NOTIFICATION_URL)
+    return
+  const email = `${username}@example.com`
+  await page.getByTestId('logout').click()
+  await page.getByRole('button', { name: /邮件验证码|Email code/i, exact: true }).click()
+  await page.screenshot({ path: path.join(evidence, '{{projectName}}-email.png'), fullPage: true })
+  await page.locator('#login-username').fill(email)
+  await page.getByRole('button', { name: /发送验证码|Send code/i, exact: true }).click()
+  await expect(page.getByRole('button', { name: /秒后重发|Resend in/ })).toBeDisabled()
+  async function received(template: string) {
+    const response = await page.request.get(`${process.env.IAM_NOTIFICATION_URL}/messages?to=${encodeURIComponent(email)}`)
+    const messages = await response.json() as { template: string, vars: Record<string, string> }[]
+    return messages.findLast(item => item.template === template)?.vars
+  }
+  const otp = await received('otp_email')
+  expect(Boolean(otp?.code)).toBe(true)
+  await page.locator('#login-code').fill(otp?.code ?? '')
+  await page.locator('button[type="submit"]').click()
+  await expect(page.getByTestId('settings-page')).toBeVisible()
+  await page.getByTestId('logout').click()
+  await page.getByRole('button', { name: /忘记密码|Forgot password/i }).click()
+  await page.screenshot({ path: path.join(evidence, '{{projectName}}-forgot.png'), fullPage: true })
+  await page.locator('input[type="email"]').fill(email)
+  await page.locator('button[type="submit"]').click()
+  await expect(page.locator('.alert-success')).toBeVisible()
+  const reset = await received('password_reset')
+  expect(Boolean(reset?.token)).toBe(true)
+  await page.getByRole('button', { name: /已有重置令牌|I have a reset token/i }).click()
+  await page.screenshot({ path: path.join(evidence, '{{projectName}}-reset.png'), fullPage: true })
+  await page.goto(`/?token=${encodeURIComponent(reset?.token ?? '')}`)
+  await expect(page.locator('input[type="password"]').nth(0)).toBeVisible()
+  await page.locator('input[type="password"]').nth(0).fill('FullstackReset456')
+  await page.locator('input[type="password"]').nth(1).fill('FullstackReset456')
+  await page.locator('button[type="submit"]').click()
+  await expect(page.locator('.alert-success')).toBeVisible()
+  await page.getByRole('button', { name: /^(登录|Sign in|Login)$/i }).click()
+  await login(page, username, 'FullstackReset456')
+  await expect(page.getByTestId('settings-page')).toBeVisible()
+  expect(new URL(page.url()).searchParams.has('token')).toBe(false)
+  await page.reload()
+  await expect(page.getByTestId('settings-page')).toBeVisible()
+})
 
 test('frontend displays configured core metadata and restores the administrator session', async ({ page }) => {
   await page.goto('/')
@@ -191,7 +253,7 @@ test('administrator and user complete account, avatar, preference, password and 
     await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
     await expect(userPage.getByTestId('login-form')).toBeVisible()
     await login(userPage, username, password)
-    await expect(userPage.getByTestId('login-form')).toContainText(/不正确|incorrect/)
+    await expect(userPage.getByTestId('login-form')).toContainText(/不正确|incorrect/i)
     await login(userPage, username, newPassword)
     await expect(userPage.getByTestId('settings-page')).toBeVisible()
 

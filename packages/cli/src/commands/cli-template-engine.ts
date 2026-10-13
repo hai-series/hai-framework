@@ -220,6 +220,7 @@ const FULLSTACK_SERV_CATALOG_PACKAGE_NAMES = [
   '@h-ai/core',
   '@h-ai/crypto',
   '@h-ai/iam',
+  '@h-ai/reach',
   '@h-ai/reldb',
   '@h-ai/serv',
   '@h-ai/storage',
@@ -228,6 +229,7 @@ const FULLSTACK_SERV_CATALOG_PACKAGE_NAMES = [
 
 const FULLSTACK_SHARED_CATALOG_PACKAGE_NAMES = [
   '@h-ai/api-client',
+  '@h-ai/api-contract',
   '@h-ai/core',
   '@h-ai/crypto',
   '@h-ai/ui',
@@ -368,7 +370,7 @@ function buildAppHaiCatalogPackages(options: {
   const packageNames: string[] = []
 
   if (options.isSvelteOnlyApp) {
-    packageNames.push('@h-ai/api-client', '@h-ai/capacitor', '@h-ai/ui')
+    packageNames.push('@h-ai/api-client', '@h-ai/api-contract', '@h-ai/capacitor', '@h-ai/ui')
     return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)
   }
 
@@ -580,7 +582,7 @@ const FEATURE_ROUTE_DIRS: Record<string, string[]> = {
  * feature 的 appType 专用路由
  */
 const FEATURE_APP_ROUTE_DIRS: Record<string, string[]> = {
-  iam: ['admin', 'h5'],
+  iam: ['admin', 'h5', 'website'],
 }
 
 const FEATURE_ID_REGEX = /^[a-z0-9-]+$/

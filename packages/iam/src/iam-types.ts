@@ -11,11 +11,13 @@
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
 
+import type { ReachFunctions } from '@h-ai/reach'
 import type { ApiKeyOperations } from './authn/apikey/iam-authn-apikey-types.js'
 import type { AuthnOperations } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 import type { AuthzOperations } from './authz/iam-authz-types.js'
 import type { IamConfig, IamConfigSettingsInput } from './iam-config.js'
+import type { IamPublicConfig } from './iam-public-config.js'
 import type { SessionOperations } from './session/iam-session-types.js'
 import type { TicketOperations } from './ticket/iam-ticket-types.js'
 import type { User, UserOperations } from './user/iam-user-types.js'
@@ -46,6 +48,8 @@ const IamErrorInfo = {
   RESET_TOKEN_EXPIRED: '020:400',
   RESET_TOKEN_MAX_ATTEMPTS: '021:429',
   OTP_EXPIRED: '022:400',
+  SECURITY_BUSY: '023:429',
+  PASSWORD_RESET_DISABLED: '024:403',
 
   SESSION_NOT_FOUND: '101:401',
   SESSION_EXPIRED: '102:401',
@@ -91,7 +95,12 @@ export const HaiIamError = core.error.buildHaiErrorsDef('iam', IamErrorInfo)
  * 传入 `iam.init()` 的唯一参数。
  */
 export interface IamConfigInput extends IamConfigSettingsInput {
-  /** LDAP 客户端工厂（启用 LDAP 登录时必填） */
+  /**
+   * 可选、已初始化的触达模块；由应用安装并注入，IAM 不导入或关闭该模块。
+   * 自动使用 otp_email、otp_sms、password_reset、password_reset_sms 模板；显式发送回调优先。
+   */
+  reach?: ReachFunctions
+  /** LDAP 客户端工厂（可选）；启用 LDAP 且未注入时才加载应用安装的 ldapts。 */
   ldapClientFactory?: LdapClientFactory
   /** LDAP 用户同步开关（默认 true） */
   ldapSyncUser?: boolean
@@ -100,7 +109,7 @@ export interface IamConfigInput extends IamConfigSettingsInput {
    *
    * 当用户请求密码重置时，框架生成令牌后通过此回调通知业务层，
    * 业务层负责将令牌通过邮件/短信等渠道发送给用户。
-   * 若未提供此回调，requestPasswordReset 将仅记录日志不发送通知。
+   * 也可传入已初始化的 reach 自动发送；两者均未配置时重置功能不可用。
    *
    * @param user - 请求重置的用户信息
    * @param token - 重置令牌（明文，需发送给用户）
@@ -113,7 +122,8 @@ export interface IamConfigInput extends IamConfigSettingsInput {
    *
    * 当用户请求 OTP 验证码时，框架生成验证码后通过此回调通知业务层，
    * 业务层负责将验证码通过邮件发送给用户。
-   * 若未提供此回调，sendOtp 将返回"发送方式未配置"错误。
+   * 显式回调覆盖 Reach 的 otp_email 模板；两者均不可用时该登录入口关闭。
+   * 投递失败须拒绝 Promise，异常由 IAM 转为业务结果，不要在回调中吞掉失败。
    *
    * @param email - 目标邮箱
    * @param code - 验证码
@@ -125,7 +135,8 @@ export interface IamConfigInput extends IamConfigSettingsInput {
    *
    * 当用户请求 OTP 验证码时，框架生成验证码后通过此回调通知业务层，
    * 业务层负责将验证码通过短信发送给用户。
-   * 若未提供此回调，sendOtp 将返回"发送方式未配置"错误。
+   * 显式回调覆盖 Reach 的 otp_sms 模板；两者均不可用时该登录入口关闭。
+   * 投递失败须拒绝 Promise，异常由 IAM 转为业务结果，不要在回调中吞掉失败。
    *
    * @param phone - 目标手机号
    * @param code - 验证码
@@ -144,7 +155,7 @@ export interface IamFunctions {
   /**
    * 初始化 IAM 服务
    *
-   * 幂等操作：已初始化时直接返回成功。
+   * 已初始化时先关闭旧内部状态再重新初始化；并发初始化返回配置错误。
    * 内部按依赖顺序创建 session → authz → authn → user 子功能，
    * 并可选执行种子数据初始化。
    *
@@ -171,6 +182,8 @@ export interface IamFunctions {
 
   /** 当前脱敏后的配置快照（未初始化时为 null） */
   readonly config: IamConfig | null
+  /** 安全且反映实际可用能力的认证页面配置。 */
+  readonly publicConfig: IamPublicConfig | null
   /** 是否已初始化 */
   readonly isInitialized: boolean
   /** 注册功能是否启用（未初始化或未配置时默认启用） */
@@ -195,6 +208,7 @@ export type { ApiKey, ApiKeyOperations, ApiKeySortDirection, ApiKeySortField, Cr
 export type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
 export type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionType, Role } from './authz/iam-authz-types.js'
+export type { IamPublicConfig } from './iam-public-config.js'
 export type { AuthResult, CreateSessionOptions, Session, SessionData, SessionFieldUpdates, SessionOperations, TokenPair } from './session/iam-session-types.js'
 export type { ConsumedTicket, ConsumeTicketOptions, IssuedTicket, IssueTicketOptions, TicketGrant, TicketOperations } from './ticket/iam-ticket-types.js'
 export type { AgreementDisplay, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User, UserOperations, UserSortDirection, UserSortField } from './user/iam-user-types.js'

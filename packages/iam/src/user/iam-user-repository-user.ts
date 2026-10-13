@@ -19,6 +19,10 @@ import { HaiIamError } from '../iam-types.js'
  * 用户存储接口
  */
 export interface UserRepository extends ReldbCrudRepository<StoredUser> {
+  /** 在数据库中原子累加失败次数并执行锁定策略。 */
+  recordLoginFailure: (userId: string, policy: { maxLoginAttempts: number, lockoutDuration: number }) => Promise<HaiResult<void>>
+  /** 仅未锁定且启用的账户可以清除失败计数。 */
+  resetLoginFailures: (userId: string) => Promise<HaiResult<void>>
   /**
    * 根据用户名获取用户
    */
@@ -245,6 +249,44 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       table: TABLE_NAME,
       fields: USER_FIELDS,
     })
+  }
+
+  async recordLoginFailure(userId: string, policy: { maxLoginAttempts: number, lockoutDuration: number }): Promise<HaiResult<void>> {
+    const sqlite = reldb.config?.type === 'sqlite'
+    const now = sqlite ? Date.now() : new Date()
+    const deadline = Date.now() + policy.lockoutDuration * 1000
+    const lockedUntil = sqlite ? deadline : new Date(deadline)
+    // 到期解锁是条件更新；后续原子递增不读取进程中的旧计数。
+    const expired = await reldb.sql.execute(`UPDATE ${TABLE_NAME} SET login_failed_count = 0, locked_until = NULL, last_login_failed_at = NULL WHERE id = ? AND locked_until <= ?`, [userId, now])
+    if (!expired.success)
+      return this.buildQueryError(expired.error, expired.error)
+    // 先计算锁定期限再递增次数，避免 MySQL 按 SET 顺序读取已更新的计数而提前锁定。
+    const result = await reldb.sql.execute(
+      `UPDATE ${TABLE_NAME} SET locked_until = CASE WHEN COALESCE(login_failed_count, 0) + 1 >= ? THEN ? ELSE locked_until END, login_failed_count = COALESCE(login_failed_count, 0) + 1, last_login_failed_at = ? WHERE id = ? AND locked_until IS NULL`,
+      [policy.maxLoginAttempts, lockedUntil, now, userId],
+    )
+    if (!result.success)
+      return this.buildQueryError(result.error, result.error)
+    return ok(undefined)
+  }
+
+  async resetLoginFailures(userId: string): Promise<HaiResult<void>> {
+    const result = await reldb.sql.execute(
+      `UPDATE ${TABLE_NAME} SET login_failed_count = 0, last_login_failed_at = NULL, locked_until = NULL WHERE id = ? AND enabled = ? AND (locked_until IS NULL OR locked_until <= ?)`,
+      [userId, reldb.config?.type === 'postgresql' ? true : 1, reldb.config?.type === 'sqlite' ? Date.now() : new Date()],
+    )
+    if (!result.success)
+      return this.buildQueryError(result.error, result.error)
+    if (result.data.changes === 0) {
+      const user = await this.findById(userId)
+      if (!user.success)
+        return user
+      if (!user.data?.enabled)
+        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      if (user.data.lockedUntil && user.data.lockedUntil > new Date())
+        return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
+    }
+    return ok(undefined)
   }
 
   /** 根据用户名查找用户 */

@@ -223,6 +223,51 @@ Storage 上传组件只负责选择、校验、进度和预览。真实上传通
 />
 ```
 
+## 配置驱动认证页面
+
+协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
+
+```yaml
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  userAgreementMarkdown: |
+    # 用户协议
+
+    **账户使用条款**
+
+    - 请妥善保管账户凭据。
+  privacyPolicyMarkdown: |
+    # 隐私政策
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # 可选 URL；同主题同时配置 Markdown 和 URL 时，弹窗优先显示 Markdown。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+```
+
+
+
+AuthPanel 直接接收 IAM 白名单配置和 actions，内置登录（密码/LDAP/邮件/短信）、注册、找回、重置及协议展示。使用 `config.ui` 配置卡片/分栏、标题、品牌、Logo 和配图。`LoginForm` 提供 methods、onsendotp、otpLength、resendInterval；密码表单接受 passwordPolicy。组件只渲染与交互，网络和 Token 存储通过 actions 注入。认证场景按公开 IAM 错误码显示当前 UI 语言的提示，应用自定义错误保留原文。
+
+
+协议在 Modal 内显示并保留表单输入；使用 URL 时，协议页面须允许 iframe 嵌入，组件禁用其脚本，另提供新窗口查看入口。登录/注册表单使用 `header/extraFields/footer` snippet，AuthPanel 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`，底部保留内置导航。自定义字段由应用绑定状态和提交，不会隐式写入 IAM 用户模型。
+
+```svelte
+<!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
+<AuthPanel {config} {actions}>
+  {#snippet loginHeader()}
+    <p>{m.loginHelp()}</p>
+  {/snippet}
+  {#snippet registerFields()}
+    <label><input type='checkbox' bind:checked={subscribe} />{m.subscribe()}</label>
+  {/snippet}
+</AuthPanel>
+```
+
+上例的 subscribe 为应用自身的 $state，应用包装 register 动作校验/提交扩展业务数据；如需单独组合表单，使用 `<RegisterForm> {#snippet extraFields()}...{/snippet} </RegisterForm>`。扩展里的按钮须为 `type="button"`，避免误提交。
+
+
 ## data-* 属性透传
 
 - 公开 Svelte 组件支持调用方直接传入 `data-*` 属性；组件会把它们透传到根节点或主交互节点。

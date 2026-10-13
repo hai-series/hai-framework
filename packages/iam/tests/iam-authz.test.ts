@@ -554,6 +554,8 @@ describe('iam.authz', () => {
         if (!regResult.success)
           return
 
+        expect((await getIam().authz.syncRoles(regResult.data.user.id, [])).success).toBe(true)
+
         const result = await getIam().authz.getUserRoles(regResult.data.user.id)
         expect(result.success).toBe(true)
         if (result.success) {
@@ -581,6 +583,8 @@ describe('iam.authz', () => {
         })
         if (!regResult.success)
           return
+
+        expect((await getIam().authz.syncRoles(regResult.data.user.id, [])).success).toBe(true)
 
         const result = await getIam().authz.getUserPermissions(regResult.data.user.id)
         expect(result.success).toBe(true)

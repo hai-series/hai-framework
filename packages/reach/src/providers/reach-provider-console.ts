@@ -1,7 +1,7 @@
 /**
  * @h-ai/reach — Console Provider
  *
- * 开发/测试用 Provider，将触达消息输出到日志。
+ * 开发/测试用 Provider，仅将触达元数据输出到日志，保护验证码和令牌。
  * @module reach-provider-console
  */
 
@@ -43,11 +43,10 @@ export function createConsoleProvider(): ReachProvider {
       logger.debug('Sending message via console', {
         provider: message.provider,
         to: message.to,
-        subject: message.subject,
-        body: message.body,
+        hasSubject: Boolean(message.subject),
+        bodyLength: message.body?.length ?? 0,
         template: message.template,
-        vars: message.vars,
-        extra: message.extra,
+        variableNames: Object.keys(message.vars ?? {}),
       })
 
       const messageId = `console-${Date.now()}`

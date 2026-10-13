@@ -25,6 +25,10 @@
     "{{api.contractPackageName}}": "workspace:*"
   },
   "devDependencies": {
+    "@h-ai/api-client": "{{haiPackageSpecifier}}",
+{{#if features.crypto}}
+    "@h-ai/crypto": "{{haiPackageSpecifier}}",
+{{/if}}
     "@antfu/eslint-config": "{{api.packageSpecifiers.antfuEslintConfig}}",
     "@playwright/test": "{{api.packageSpecifiers.playwright}}",
     "@types/node": "{{api.packageSpecifiers.nodeTypes}}",

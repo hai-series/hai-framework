@@ -28,6 +28,7 @@ import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { iam, IamConfigSchema } from '@h-ai/iam'
+import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { ServConfigSchema } from '@h-ai/serv'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
@@ -146,7 +147,13 @@ async function doInit(): Promise<void> {
   }
 
   // 7. 初始化 IAM 模块（依赖 reldb/cache）
-  const iamResult = await iam.init(iamConfig)
+  const reachConfig = core.config.get('reach')
+  if (reachConfig) {
+    const result = await reach.init(ReachConfigSchema.parse(reachConfig))
+    if (!result.success)
+      throw new Error('Reach initialization failed')
+  }
+  const iamResult = await iam.init({ ...iamConfig, reach })
   if (!iamResult.success) {
     throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
   }
@@ -186,6 +193,7 @@ export async function closeApp(): Promise<void> {
     ['ai', () => ai.close()],
     ['storage', () => storage.close()],
     ['iam', () => iam.close()],
+    ['reach', () => reach.close()],
     ['vecdb', () => vecdb.close()],
     ['cache', () => cache.close()],
     ['reldb', () => reldb.close()],

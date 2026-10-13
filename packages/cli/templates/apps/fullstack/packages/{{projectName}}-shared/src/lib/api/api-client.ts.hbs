@@ -86,3 +86,6 @@ function normalizeApiBaseUrl(value: string): string {
     url.pathname = '/api/v1'
   return url.toString().replace(/\/+$/, '')
 }
+
+/** 标准 IAM 表单动作，平台安全 TokenStorage 由原有初始化配置决定。 */
+export const managementAuthActions = apiClient.createAuthActions(managementApi)

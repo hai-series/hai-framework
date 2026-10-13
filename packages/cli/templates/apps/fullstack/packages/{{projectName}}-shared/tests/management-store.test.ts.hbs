@@ -3,8 +3,8 @@ import * as m from '../src/lib/paraglide/messages.js'
 import { ManagementStore } from '../src/lib/stores/management-store.svelte.js'
 
 const api = vi.hoisted(() => ({
-  auth: { clear: vi.fn(), setTokens: vi.fn() },
-  iam: { auth: { login: vi.fn(), logout: vi.fn(), currentUser: vi.fn() } },
+  auth: { clear: vi.fn() },
+  iam: { auth: { logout: vi.fn(), currentUser: vi.fn() } },
   admin: { users: { list: vi.fn() } },
 }))
 vi.mock('../src/lib/api/api-client.js', () => ({
@@ -35,7 +35,6 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  api.iam.auth.login.mockResolvedValue({ success: true, data: { tokens: { accessToken: 'test-access', expiresIn: 3600, tokenType: 'Bearer' } } })
   api.iam.auth.logout.mockResolvedValue({ success: true })
   api.iam.auth.currentUser.mockResolvedValue({ success: true, data: member })
 })
@@ -48,7 +47,7 @@ describe('management session and request ownership', () => {
     store.user = administrator
     const loading = store.loadUsers()
     await store.logout()
-    await store.login({ username: 'member', password: 'test-password', rememberMe: false })
+    await store.authenticated()
     oldRequest.resolve(forbidden)
     await loading
     expect(store.user?.id).toBe(member.id)
@@ -89,13 +88,13 @@ describe('management session and request ownership', () => {
     expect(api.iam.auth.currentUser).toHaveBeenCalledTimes(1)
   })
 
-  it('reports a connection failure separately from invalid credentials', async () => {
-    api.iam.auth.login.mockResolvedValueOnce({ success: false, error: { code: 'test:unavailable', message: 'Unavailable', httpStatus: 502 } })
+  it('reports a connection failure when loading the authenticated user', async () => {
+    api.iam.auth.currentUser.mockRejectedValueOnce(new Error('Connection unavailable'))
     const store = new ManagementStore()
-    await store.login({ username: 'member', password: 'test-password', rememberMe: false })
+    await store.authenticated()
     expect(store.error).toBe(m.network_error())
     expect(store.error).not.toBe(m.login_invalid())
     expect(store.saving).toBe(false)
-    expect(api.iam.auth.currentUser).not.toHaveBeenCalled()
+    expect(api.iam.auth.currentUser).toHaveBeenCalledTimes(1)
   })
 })

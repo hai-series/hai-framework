@@ -7,10 +7,11 @@
  */
 
 import type { LayoutServerLoad } from './$types'
-import { buildIamPublicConfig } from '$lib/server/iam-public-config'
+import { iam } from '@h-ai/iam'
 
 export const load: LayoutServerLoad = async () => {
   return {
-    iamPublicConfig: buildIamPublicConfig(),
+    // hooks 已完成 IAM 初始化，直接使用同一份公开白名单配置。
+    iamPublicConfig: iam.publicConfig!,
   }
 }

@@ -262,10 +262,11 @@ For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchang
 | `ThemeSelector`    | Full theme selector                            | No props required                                        |
 | `ThemeToggle`      | Light/dark toggle                              | No props required                                        |
 
-#### IAM authentication (9)
+#### IAM authentication (10)
 
 | Component            | Description                                      | Key props                                                                                              |
 | -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `AuthPanel`          | Configuration driven authentication | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | Auth page layout (centered card / split columns) | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
 | `LoginForm`          | Login form                                       | `loading`, `errors`, `showRememberMe`, `onsubmit`                                                      |
 | `RegisterForm`       | Registration form                                | `loading`, `errors`, `fields`, `onsubmit`                                                              |
@@ -724,6 +725,35 @@ import {
 } from '@h-ai/ui'
 ```
 
+## Configuration driven authentication
+
+Agreement content can be configured as `agreements.userAgreementMarkdown` and `privacyPolicyMarkdown` using YAML `|`. The modal safely renders configured Markdown and prefers it over the URL of the same agreement. URL-only content stays in a sandboxed iframe.
+
+```yaml
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  userAgreementMarkdown: |
+    # 用户协议
+
+    **账户使用条款**
+
+    - 请妥善保管账户凭据。
+  privacyPolicyMarkdown: |
+    # 隐私政策
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # 可选 URL；同主题同时配置 Markdown 和 URL 时，弹窗优先显示 Markdown。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+```
+
+
+
+AuthPanel accepts public IAM config and actions for password/LDAP/email/SMS login, registration and recovery. config.ui supplies layout, branding and images. LoginForm supports methods, onsendotp, otpLength and resendInterval; password forms accept passwordPolicy. Network and token storage remain in actions. Known IAM authentication errors use the current UI language; custom application messages are preserved.
+
+[完整 IAM 配置 / IAM configuration](../iam/README.en.md)
+
 ## Other exports
 
 ```ts
@@ -739,4 +769,18 @@ import { cn, generateId, getSizeClass, getVariantClass } from '@h-ai/ui'
 ```ts
 // Toast 单例
 import { toast } from '@h-ai/ui'
+```
+
+Agreements open in a Modal and preserve form input. Pages must allow iframe embedding; scripts are disabled and a new-window fallback is provided. LoginForm/RegisterForm expose `header/extraFields/footer`. AuthPanel forwards `loginHeader/loginFields/loginFooter` and `registerHeader/registerFields/registerFooter` while preserving navigation. Bind additional fields to application state and handle them in custom actions; they are not automatically sent to IAM. Use `type="button"` for extension buttons.
+
+```svelte
+<!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
+<AuthPanel {config} {actions}>
+  {#snippet loginHeader()}
+    <p>{m.loginHelp()}</p>
+  {/snippet}
+  {#snippet registerFields()}
+    <label><input type='checkbox' bind:checked={subscribe} />{m.subscribe()}</label>
+  {/snippet}
+</AuthPanel>
 ```

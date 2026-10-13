@@ -10,6 +10,8 @@
   import Alert from '../../compounds/Alert.svelte'
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
+  import AgreementNotice from './AgreementNotice.svelte'
+  import { passwordPolicyError, passwordPolicyHint } from './password-utils.js'
   import PasswordInput from './PasswordInput.svelte'
 
   const {
@@ -19,6 +21,7 @@
     showPasswordStrength = true,
     requireConfirmPassword = true,
     minPasswordLength = 8,
+    passwordPolicy,
     fields = ['username', 'email', 'password'],
     showLoginLink = false,
     loginUrl = '/login',
@@ -28,14 +31,12 @@
     errors = {},
     onsubmit,
     header,
+    extraFields,
     footer,
     ...restProps
   }: RegisterFormProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
-  const hasAgreements = $derived(
-    !!(agreements?.userAgreementUrl || agreements?.privacyPolicyUrl),
-  )
 
   // 表单数据
   let username = $state('')
@@ -44,6 +45,8 @@
   let password = $state('')
   let confirmPassword = $state('')
   let nickname = $state('')
+
+  const policyError = $derived(passwordPolicy && password ? passwordPolicyError(password, passwordPolicy) : '')
 
   const formClass = $derived(
     cn(
@@ -112,7 +115,7 @@
 
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
-    if (loading || disabled)
+    if (policyError || loading || disabled)
       return
     if (!passwordsMatch)
       return
@@ -173,6 +176,9 @@
       {@render header()}
     </div>
   {/if}
+
+  {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
+  {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
 
   <!-- 动态字段 -->
   {#each fields as field (field)}
@@ -235,6 +241,9 @@
   {/each}
 
   <!-- 通用错误 -->
+  {#if extraFields}
+    <div class='register-form-extra-fields'>{@render extraFields()}</div>
+  {/if}
   {#if errors.general}
     <Alert variant='error'>
       {errors.general}
@@ -246,27 +255,14 @@
     type='submit'
     variant='primary'
     class='w-full'
-    disabled={loading || disabled || !passwordsMatch}
+    disabled={loading || disabled || !passwordsMatch || Boolean(policyError)}
     loading={loading}
   >
     {submitText || uiM('register_submit')}
   </Button>
 
   <!-- 协议提示 -->
-  {#if hasAgreements}
-    <p class='text-xs text-base-content/50 text-center'>
-      {uiM('agreement_prefix')}
-      {#if agreements?.userAgreementUrl}
-        <a href={agreements.userAgreementUrl} target='_blank' rel='noopener noreferrer' class='link link-primary'>{uiM('agreement_user_agreement')}</a>
-      {/if}
-      {#if agreements?.userAgreementUrl && agreements?.privacyPolicyUrl}
-        {uiM('agreement_and')}
-      {/if}
-      {#if agreements?.privacyPolicyUrl}
-        <a href={agreements.privacyPolicyUrl} target='_blank' rel='noopener noreferrer' class='link link-primary'>{uiM('agreement_privacy_policy')}</a>
-      {/if}
-    </p>
-  {/if}
+  <AgreementNotice {agreements} />
 
   <!-- 自定义底部 -->
   {#if footer}

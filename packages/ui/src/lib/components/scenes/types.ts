@@ -5,6 +5,7 @@
  * @module types
  */
 
+import type { HaiResult } from '@h-ai/core'
 import type { Snippet } from 'svelte'
 import type { DataAttributes, Size } from '../../types.js'
 
@@ -50,6 +51,10 @@ export interface PasswordInputProps extends DataAttributes {
  * 协议展示配置
  */
 export interface AgreementDisplay {
+  /** 用户协议 Markdown 正文；配置时优先于 URL。 */
+  userAgreementMarkdown?: string
+  /** 隐私协议 Markdown 正文；由内置安全渲染器显示。 */
+  privacyPolicyMarkdown?: string
   /** 用户协议 URL */
   userAgreementUrl?: string
   /** 隐私协议 URL */
@@ -60,6 +65,10 @@ export interface AgreementDisplay {
  * 登录表单数据
  */
 export interface LoginFormData {
+  /** 当前登录方式；省略时使用密码。 */
+  method?: AuthLoginMethod
+  /** 邮件/短信验证码 */
+  code?: string
   username: string
   password: string
   rememberMe: boolean
@@ -69,6 +78,14 @@ export interface LoginFormData {
  * 登录表单属性
  */
 export interface LoginFormProps extends DataAttributes {
+  /** 实际可用的方式；空数组表示无可用登录方式。 */
+  methods?: AuthLoginMethod[]
+  /** 验证码长度 */
+  otpLength?: number
+  /** 重发间隔（秒） */
+  resendInterval?: number
+  /** 发送验证码；失败信息在表单内显示。 */
+  onsendotp?: (identifier: string) => Promise<HaiResult<unknown>>
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -99,6 +116,8 @@ export interface LoginFormProps extends DataAttributes {
   onforgotpassword?: () => void
   /** 头部插槽 */
   header?: Snippet
+  /** 内置字段后、提交按钮前的扩展内容；额外字段值由应用自行绑定与提交。 */
+  extraFields?: Snippet
   /** 底部插槽 */
   footer?: Snippet
 }
@@ -124,6 +143,7 @@ export interface RegisterFormData {
  * 注册表单属性
  */
 export interface RegisterFormProps extends DataAttributes {
+  passwordPolicy?: PasswordPolicy
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -154,6 +174,8 @@ export interface RegisterFormProps extends DataAttributes {
   onsubmit?: (data: RegisterFormData) => void | Promise<void>
   /** 头部插槽 */
   header?: Snippet
+  /** 内置字段后、提交按钮前的扩展内容；额外字段值由应用自行绑定与提交。 */
+  extraFields?: Snippet
   /** 底部插槽 */
   footer?: Snippet
 }
@@ -171,6 +193,7 @@ export interface ChangePasswordFormData {
  * 修改密码表单属性
  */
 export interface ChangePasswordFormProps extends DataAttributes {
+  passwordPolicy?: PasswordPolicy
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -244,6 +267,7 @@ export interface ResetPasswordFormData {
  * 重置密码表单属性
  */
 export interface ResetPasswordFormProps extends DataAttributes {
+  passwordPolicy?: PasswordPolicy
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -270,6 +294,71 @@ export interface ResetPasswordFormProps extends DataAttributes {
   errors?: Record<string, string>
   /** 提交事件 */
   onsubmit?: (data: ResetPasswordFormData) => void | Promise<void>
+}
+
+/** 认证页面直接消费 IAM 白名单配置，无需依赖服务端 IAM 包。 */
+export type AuthLoginMethod = 'password' | 'ldap' | 'email' | 'sms'
+/** 与 IAM 公开密码策略一致；前端提示不能代替服务端校验。 */
+export interface PasswordPolicy {
+  minLength: number
+  maxLength: number
+  requireUppercase: boolean
+  requireLowercase: boolean
+  requireNumber: boolean
+  requireSpecialChar: boolean
+}
+/** 仅消费安全公开配置，不能将 iam.config 或连接密钥传入浏览器。 */
+export interface AuthPanelConfig {
+  /** 只有已启用且具备运行时依赖的方式才应为 true。 */
+  login: { password: boolean, ldap: boolean, email: boolean, sms: boolean }
+  register: { enabled: boolean }
+  passwordReset: { enabled: boolean, mode?: 'email' | 'phone' }
+  password: PasswordPolicy
+  /** 验证码位数和重发间隔（秒），用于输入校验和倒计时。 */
+  otp: { length: number, resendInterval: number }
+  /** 协议 URL 由服务端校验；弹窗展示开关按当前页面分别生效。 */
+  agreements: AgreementDisplay & { showOnLogin: boolean, showOnRegister: boolean }
+  ui: { variant: 'card' | 'split', title?: string, subtitle?: string, brandTitle?: string, brandText?: string, logoUrl?: string, illustrationUrl?: string }
+}
+/** 认证动作可由框架工厂直接创建，也可包装以处理应用自己的扩展数据。 */
+export interface AuthPanelActions {
+  /** password/ldap 使用 password，email/sms 使用 code；成功后由工厂保存凭证。 */
+  login: (input: { identifier: string, password: string, method?: AuthLoginMethod, code?: string }) => Promise<HaiResult<unknown>>
+  /** 注册并登录；禁用新账户的待启用状态由面板单独提示。 */
+  register: (input: { username: string, password: string, email?: string, phone?: string, displayName?: string }) => Promise<HaiResult<unknown>>
+  sendOtp: (identifier: string) => Promise<HaiResult<unknown>>
+  requestPasswordReset: (identifier: string) => Promise<HaiResult<unknown>>
+  confirmPasswordReset: (token: string, newPassword: string) => Promise<HaiResult<unknown>>
+}
+
+/** AuthPanel 的初始页面；未传独立路由时由组件内部导航。 */
+export type AuthPanelMode = 'login' | 'register' | 'forgot' | 'reset'
+
+/** 配置驱动认证场景；网络、通知和令牌存储由应用注入 actions。 */
+export interface AuthPanelProps extends DataAttributes {
+  /** 未取得配置时显示加载状态，只消费 IAM 的公开配置。 */
+  config: AuthPanelConfig | null
+  /** 由 Kit 或 API client 提供标准动作，组件不处理底层传输。 */
+  actions: AuthPanelActions
+  initialMode?: AuthPanelMode
+  /** 来自重置链接的令牌；未传时显示手动输入框。 */
+  resetToken?: string
+  loginUrl?: string
+  registerUrl?: string
+  forgotPasswordUrl?: string
+  /** 登录或注册成功后由应用导航或刷新用户资料。 */
+  onauthenticated?: () => void | Promise<void>
+  /** 公开配置获取失败的提示与重试动作。 */
+  error?: string
+  onretry?: () => void
+  /** 登录表单的头部、扩展字段、底部；底部仍保留内置导航。 */
+  loginHeader?: Snippet
+  loginFields?: Snippet
+  loginFooter?: Snippet
+  /** 注册表单的头部、扩展字段、底部；额外字段通过应用状态处理。 */
+  registerHeader?: Snippet
+  registerFields?: Snippet
+  registerFooter?: Snippet
 }
 
 /**

@@ -113,7 +113,7 @@ export async function createAdminUser(input: AdminCreateUser, context: ServConte
     return role
   if (!role.data)
     return err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale }))
-  const registered = await iam.user.register(input)
+  const registered = await iam.user.createUser(input)
   if (!registered.success)
     return registered
   const userId = registered.data.user.id

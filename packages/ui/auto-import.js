@@ -79,6 +79,7 @@ const UI_COMPONENTS = new Set([
   'ThemeToggle',
   // scenes - iam
   'AuthShell',
+  'AuthPanel',
   'ChangePasswordForm',
   'ForgotPasswordForm',
   'LoginForm',

@@ -34,27 +34,8 @@ export function createRegisterSchema() {
   return z
     .object({
       username: z.string().regex(USERNAME_REGEX, m.api_auth_username_format_invalid()),
-      email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()),
-      password: z.string().min(minLen, m.api_auth_password_too_short()),
-      confirmPassword: z.string(),
-    })
-    .refine(d => d.password === d.confirmPassword, {
-      message: m.api_auth_password_mismatch(),
-      path: ['confirmPassword'],
-    })
-}
-
-/** 忘记密码请求 Schema */
-export const ForgotPasswordSchema = z.object({
-  email: z.string().min(1, m.api_auth_email_required()),
-})
-
-/** 重置密码请求 Schema */
-export function createResetPasswordSchema() {
-  const minLen = getPasswordMinLength()
-  return z
-    .object({
-      token: z.string().min(1, m.api_common_required_fields()),
+      email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(),
+      phone: z.string().optional(),
       password: z.string().min(minLen, m.api_auth_password_too_short()),
       confirmPassword: z.string(),
     })

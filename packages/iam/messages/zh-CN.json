@@ -1,5 +1,9 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+  "iam_securityStateFailed": "无法更新认证安全状态，请稍后重试",
+  "iam_securityBusy": "认证请求过于频繁，请稍后重试",
+  "iam_passwordResetDisabled": "密码重置未启用或通知渠道未配置",
+  "iam_passwordResetDeliveryFailed": "重置通知发送失败，请稍后重试",
   "iam_passwordMinLength": "密码长度至少为 {minLength} 个字符",
   "iam_passwordMaxLength": "密码长度不能超过 {maxLength} 个字符",
   "iam_passwordNeedUppercase": "密码必须包含大写字母",
@@ -122,7 +126,7 @@
   "iam_queryOtpFailed": "查询 OTP 失败: {message}",
   "iam_updateOtpAttemptsFailed": "更新 OTP 尝试次数失败: {message}",
   "iam_deleteOtpFailed": "删除 OTP 失败: {message}",
-  "iam_otpSendFailed": "验证码发送失败: {message}",
+  "iam_otpSendFailed": "验证码发送失败，请稍后重试",
   "iam_resetTokenInvalid": "密码重置令牌无效或已过期",
   "iam_resetTokenMaxAttempts": "验证次数过多，请重新申请重置令牌",
   "iam_saveResetTokenFailed": "保存密码重置令牌失败: {message}",

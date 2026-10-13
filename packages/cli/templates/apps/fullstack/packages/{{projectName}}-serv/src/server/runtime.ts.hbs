@@ -7,6 +7,7 @@ import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { iam, IamConfigSchema } from '@h-ai/iam'
+import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { ServConfigSchema } from '@h-ai/serv'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
@@ -39,7 +40,10 @@ async function runInitialization(): Promise<void> {
     requireInitialized(await cache.init(cacheConfig), 'cache')
     requireInitialized(await crypto.init(), 'crypto')
     requireInitialized(await storage.init(storageConfig), 'storage')
-    requireInitialized(await iam.init(iamConfig), 'iam')
+    const reachConfig = core.config.get('reach')
+    if (reachConfig)
+      requireInitialized(await reach.init(ReachConfigSchema.parse(reachConfig)), 'reach')
+    requireInitialized(await iam.init({ ...iamConfig, reach }), 'iam')
     requireInitialized(await audit.init(auditConfig), 'audit')
     await ensureRolesAndAdmin()
     initialized = true
@@ -71,7 +75,7 @@ async function ensureRolesAndAdmin(): Promise<void> {
   const password = process.env.HAI_ADMIN_DEFAULT_PASSWORD?.trim()
   if (!password)
     throw new Error('Set HAI_ADMIN_DEFAULT_PASSWORD before the first start to create the administrator account')
-  const registered = requireInitialized(await iam.user.register({ username: 'admin', password, displayName: serverM('admin') }), 'iam-bootstrap')
+  const registered = requireInitialized(await iam.user.createUser({ username: 'admin', password, displayName: serverM('admin') }), 'iam-bootstrap')
   const adminRole = requireInitialized(await iam.authz.getRoleByCode('admin'), 'iam-role')
   if (!adminRole)
     throw new Error('Administrator role is missing')
@@ -87,7 +91,7 @@ async function ensureRolesAndAdmin(): Promise<void> {
 
 /** 关闭顺序与依赖初始化顺序相反，同时覆盖启动失败路径。 */
 export async function closeModules(): Promise<void> {
-  for (const [name, module] of [['audit', audit], ['iam', iam], ['storage', storage], ['crypto', crypto], ['cache', cache], ['reldb', reldb]] as const) {
+  for (const [name, module] of [['audit', audit], ['iam', iam], ['reach', reach], ['storage', storage], ['crypto', crypto], ['cache', cache], ['reldb', reldb]] as const) {
     if (!module.isInitialized)
       continue
     const result = await module.close()

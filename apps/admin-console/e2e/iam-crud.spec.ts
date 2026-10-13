@@ -448,7 +448,7 @@ test.describe('Auth Flow', () => {
     expect(logoutBody.success).toBe(true)
   })
 
-  test('POST /api/auth/forgot-password 正常调用', async ({ request }) => {
+  test('POST /api/auth/password-reset/request 正常调用', async ({ request }) => {
     const u = uniqueUser('forgot')
     await request.post('/api/auth/register', {
       data: {
@@ -460,29 +460,28 @@ test.describe('Auth Flow', () => {
     })
 
     // 发起找回密码请求（无论用户是否存在都返回成功）
-    const res = await request.post('/api/auth/forgot-password', {
-      data: { email: u.email },
+    const res = await request.post('/api/auth/password-reset/request', {
+      data: { identifier: u.email },
     })
     expect(res.ok()).toBe(true)
     const body = await res.json()
     expect(body.success).toBe(true)
   })
 
-  test('POST /api/auth/forgot-password 邮箱为空返回 400', async ({ request }) => {
-    const res = await request.post('/api/auth/forgot-password', {
-      data: { email: '' },
+  test('POST /api/auth/password-reset/request 标识符为空返回 400', async ({ request }) => {
+    const res = await request.post('/api/auth/password-reset/request', {
+      data: { identifier: '' },
     })
     expect(res.status()).toBe(400)
     const body = await res.json()
     expect(body.success).toBe(false)
   })
 
-  test('POST /api/auth/reset-password 无效 token 返回 400', async ({ request }) => {
-    const res = await request.post('/api/auth/reset-password', {
+  test('POST /api/auth/password-reset/confirm 无效 token 返回 400', async ({ request }) => {
+    const res = await request.post('/api/auth/password-reset/confirm', {
       data: {
         token: 'invalid-token-12345',
-        password: 'NewPass123!',
-        confirmPassword: 'NewPass123!',
+        newPassword: 'NewPass123!',
       },
     })
     expect(res.status()).toBe(400)
@@ -490,12 +489,10 @@ test.describe('Auth Flow', () => {
     expect(body.success).toBe(false)
   })
 
-  test('POST /api/auth/reset-password 密码不一致返回 400', async ({ request }) => {
-    const res = await request.post('/api/auth/reset-password', {
+  test('POST /api/auth/password-reset/confirm 缺少新密码返回 400', async ({ request }) => {
+    const res = await request.post('/api/auth/password-reset/confirm', {
       data: {
         token: 'some-token',
-        password: 'Pass1234!',
-        confirmPassword: 'Different!',
       },
     })
     expect(res.status()).toBe(400)

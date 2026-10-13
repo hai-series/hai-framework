@@ -4,8 +4,7 @@
  * 覆盖范围：
  * - 未初始化守卫：auth/user/authz/session/validatePassword 均返回 NOT_INITIALIZED
  * - 缺少依赖：db/cache 缺失时返回 CONFIG_ERROR
- * - 正常初始化、幂等 init、close 生命周期
- * - client 不依赖 init
+ * - 正常初始化、重复 init 重建状态、close 生命周期
  * - seedDefaultData: false 时不创建默认角色/权限
  * - 自定义密码/session 配置后 config 反映正确值
  */
@@ -96,7 +95,7 @@ describe('iam.init', () => {
       await iam.close()
     })
 
-    it('重复初始化应幂等（直接返回 ok）', async () => {
+    it('重复初始化应重新建立可用的模块状态', async () => {
       await iam.close()
       await iam.init({})
       const result = await iam.init({})

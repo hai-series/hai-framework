@@ -88,6 +88,7 @@ declare global {
 
   // scenes - iam
   const AuthShell: typeof import('@h-ai/ui')['AuthShell']
+  const AuthPanel: typeof import('@h-ai/ui')['AuthPanel']
   const ChangePasswordForm: typeof import('@h-ai/ui')['ChangePasswordForm']
   const ForgotPasswordForm: typeof import('@h-ai/ui')['ForgotPasswordForm']
   const LoginForm: typeof import('@h-ai/ui')['LoginForm']

@@ -13,6 +13,7 @@ import type { SendLogRepository } from './repositories/reach-repository-send-log
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
 
 import { core, err, ok } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 
 import { createAliyunSmsProvider } from './providers/reach-provider-aliyun-sms.js'
 import { createApiProvider } from './providers/reach-provider-api.js'
@@ -78,17 +79,8 @@ function createProvider(config: ProviderConfig): ReachProvider {
  * 尝试获取 db 实例（可选依赖，不可用时返回 null）
  */
 async function tryGetDb(): Promise<ReldbFunctions | null> {
-  try {
-    const dbModuleName = '@h-ai/reldb'
-    const mod = await (import(/* @vite-ignore */ dbModuleName) as Promise<{ reldb: ReldbFunctions }>)
-    if (!mod.reldb.isInitialized) {
-      return null
-    }
-    return mod.reldb
-  }
-  catch {
-    return null
-  }
+  // 与 Repository 的公开静态导入一致，避免 SSR 打包后动态导入得到另一份未初始化单例。
+  return reldb.isInitialized ? reldb : null
 }
 
 /**

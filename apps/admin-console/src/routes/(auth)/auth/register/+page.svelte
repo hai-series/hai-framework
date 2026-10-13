@@ -11,7 +11,7 @@
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
-  import { apiFetch } from '$lib/utils/api'
+  import { authActions as actions } from '$lib/services/auth'
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -19,14 +19,11 @@
   const loginPath = resolve('/auth/login', {})
 
   // 从 layout server data 读取 IAM 配置
-  const iamPublicConfig = $derived(page.data.iamPublicConfig as { password?: { minLength?: number }, agreements?: { showOnRegister?: boolean, userAgreementUrl?: string, privacyPolicyUrl?: string } } | undefined)
+  const iamPublicConfig = $derived(page.data.iamPublicConfig)
   const passwordMinLength = $derived(iamPublicConfig?.password?.minLength ?? 8)
   const registerAgreements = $derived(
     iamPublicConfig?.agreements?.showOnRegister !== false
-      ? {
-        userAgreementUrl: iamPublicConfig?.agreements?.userAgreementUrl,
-        privacyPolicyUrl: iamPublicConfig?.agreements?.privacyPolicyUrl,
-      }
+      ? iamPublicConfig.agreements
       : undefined,
   )
 
@@ -35,21 +32,10 @@
     loading = true
 
     const username = data.username?.trim() ?? ''
-    const email = data.email?.trim() ?? ''
+    const email = data.email?.trim() || undefined
 
     try {
-      const response = await apiFetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          email,
-          password: data.password,
-          confirmPassword: data.confirmPassword ?? data.password,
-        }),
-      })
-
-      const result = await response.json()
+      const result = await actions.register({ username, email, phone: data.phone?.trim() || undefined, password: data.password })
 
       if (result.success) {
         await goto(adminHomePath)
@@ -76,10 +62,11 @@
   {errors}
   showTitle
   showLoginLink
-  fields={['username', 'email', 'password']}
+  fields={iamPublicConfig.passwordReset.mode === 'phone' ? ['username', 'phone', 'password'] : ['username', 'email', 'password']}
   requireConfirmPassword={true}
   showPasswordStrength={true}
   minPasswordLength={passwordMinLength}
+  passwordPolicy={iamPublicConfig.password}
   loginUrl={loginPath}
   agreements={registerAgreements}
   onsubmit={handleRegister}

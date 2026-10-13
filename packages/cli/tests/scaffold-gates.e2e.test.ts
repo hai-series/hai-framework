@@ -5,20 +5,22 @@
  * 显式运行：pnpm --filter @h-ai/cli test:scaffold-gates
  */
 
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { access, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 
 const runScaffoldGates = process.env.HAI_CLI_RUN_SCAFFOLD_GATES === '1'
 const cliBin = path.resolve(process.cwd(), 'dist/index.js')
 const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-const tempRoots: string[] = []
+const tempRoots = new Set<string>()
 const localPackageSpecifiers = parseLocalPackageSpecifiers(process.env.HAI_CLI_PACKAGE_SPECIFIERS)
+let notificationUrl = ''
+let closeNotifications: (() => Promise<void>) | undefined
 
 interface ScaffoldGateCase {
   title: string
@@ -30,6 +32,7 @@ interface ScaffoldGateCase {
 interface GateEnvOptions {
   baseUrl?: string
   serviceBaseUrl?: string
+  publicApiBase?: string
 }
 
 const scaffoldGateCases: readonly ScaffoldGateCase[] = [
@@ -42,25 +45,37 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
   {
     title: 'admin',
     projectName: 'sample-admin',
-    createArgs: ['--type', 'admin', '--template', 'custom', '--features', 'iam,db,cache,crypto,storage,ai,audit', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'admin', '--template', 'custom', '--features', 'iam,db,cache,crypto,storage,ai,audit,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
     expectedFiles: ['e2e/app.spec.ts', 'src/routes/api/auth/login/+server.ts'],
+  },
+  {
+    title: 'api-iam',
+    projectName: 'sample-api-iam',
+    createArgs: ['--type', 'api', '--template', 'custom', '--features', 'iam,db,cache,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['e2e/api-service.spec.ts', 'apps/sample-api-iam-service/config/_iam.yml'],
+  },
+  {
+    title: 'api-iam-basic',
+    projectName: 'sample-api-iam-basic',
+    createArgs: ['--type', 'api', '--template', 'custom', '--features', 'iam,db,cache', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['e2e/api-service.spec.ts', 'apps/sample-api-iam-basic-service/config/_iam.yml'],
   },
   {
     title: 'website',
     projectName: 'sample-website',
-    createArgs: ['--type', 'website', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'website', '--template', 'custom', '--features', 'iam,db,cache,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
     expectedFiles: ['e2e/app.spec.ts'],
   },
   {
     title: 'h5',
     projectName: 'sample-h5',
-    createArgs: ['--type', 'h5', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'h5', '--template', 'custom', '--features', 'iam,db,cache,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
     expectedFiles: ['e2e/app.spec.ts'],
   },
   {
     title: 'mobile-app',
     projectName: 'sample-mobile',
-    createArgs: ['--type', 'mobile-app', '--template', 'custom', '--features', 'api-client,capacitor', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'mobile-app', '--template', 'custom', '--features', 'api-client,capacitor,iam', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
     expectedFiles: ['e2e/app.spec.ts', 'src/App.svelte'],
   },
   {
@@ -71,9 +86,39 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
   },
 ] as const
 
+beforeAll(async () => {
+  if (!runScaffoldGates)
+    return
+  notificationUrl = await allocateBaseUrl()
+  const fixture = spawn(process.execPath, [path.resolve(process.cwd(), '../../apps/admin-console/e2e/notification-fixture.mjs')], {
+    windowsHide: true,
+    stdio: 'ignore',
+    env: { ...process.env, IAM_NOTIFICATION_PORT: new URL(notificationUrl).port, IAM_FIXTURE_LDAP: '0' },
+  })
+  closeNotifications = async () => {
+    if (fixture.exitCode !== null)
+      return
+    await new Promise<void>((resolve) => {
+      fixture.once('exit', () => resolve())
+      fixture.kill()
+    })
+  }
+  for (let attempt = 0; attempt < 120; attempt++) {
+    if (fixture.exitCode !== null)
+      throw new Error('Notification fixture exited before ready')
+    if ((await fetch(notificationUrl).catch(() => null))?.ok)
+      return
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
+  throw new Error('Notification fixture did not become ready')
+}, 60_000)
+
 afterAll(async () => {
-  await Promise.all(tempRoots.map(root => rm(root, { recursive: true, force: true })))
-}, 180_000)
+  await closeNotifications?.()
+  // 只收尾未完成场景；Windows 不同时递归删除多个大型 node_modules，避免磁盘争用。
+  for (const root of tempRoots)
+    await removeTempRoot(root)
+}, 300_000)
 
 describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
   for (const scenario of scaffoldGateCases) {
@@ -129,19 +174,95 @@ it('generated migration executes up and down with HaiResult', async () => {
 })
 `)
       }
-      runQualityGates(projectPath, envOptions)
+      if (scenario.title === 'mobile-app') {
+        envOptions.serviceBaseUrl = await allocateBaseUrl()
+        envOptions.publicApiBase = `${envOptions.serviceBaseUrl}/api/v1`
+        const closeService = await startNativeApiService(root, envOptions.serviceBaseUrl)
+        try {
+          runQualityGates(projectPath, envOptions)
+        }
+        finally { await closeService() }
+      }
+      else {
+        runQualityGates(projectPath, envOptions)
+      }
 
       for (const relativePath of scenario.expectedFiles) {
         expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
       }
+      if (scenario.title === 'api-iam-basic') {
+        // 生成项目实际安装和运行基础认证，且没有强制添加可选通知模块或 LDAP SDK。
+        const servicePath = path.join(projectPath, 'apps/sample-api-iam-basic-service')
+        const manifest: { dependencies?: Record<string, string> } = JSON.parse(await readFile(path.join(servicePath, 'package.json'), 'utf8'))
+        expect(manifest.dependencies).not.toHaveProperty('@h-ai/reach')
+        expect(manifest.dependencies).not.toHaveProperty('ldapts')
+        expect(await fileExists(path.join(servicePath, 'config/_reach.yml'))).toBe(false)
+      }
+      // 每个成功场景立即释放磁盘资源，清理计入该场景的整体超时预算。
+      await removeTempRoot(root)
     }, 1_800_000)
   }
 })
 
 async function createTempRoot(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'hai-cli-scaffold-gates-'))
-  tempRoots.push(root)
+  tempRoots.add(root)
   return root
+}
+
+/** 仅删除本次门禁创建的临时根目录，禁止误删其他路径。 */
+async function removeTempRoot(root: string): Promise<void> {
+  const target = path.resolve(root)
+  if (path.dirname(target) !== path.resolve(tmpdir()) || !path.basename(target).startsWith('hai-cli-scaffold-gates-'))
+    throw new Error('Unexpected scaffold cleanup directory')
+  await rm(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  tempRoots.delete(root)
+}
+
+/** 独立移动模板通过真实 API 示例服务验证；进程和数据只属于本次样板门禁。 */
+async function startNativeApiService(root: string, baseUrl: string): Promise<() => Promise<void>> {
+  const repo = path.resolve(process.cwd(), '../..')
+  runPnpm(repo, ['--filter', 'api-service', 'build'])
+  const service = spawn(process.execPath, ['dist/index.js'], {
+    cwd: path.join(repo, 'apps/api-service'),
+    windowsHide: true,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      ...authFixtureEnv(),
+      HAI_CORE_ENV: 'test',
+      HAI_CORE_LOGGING_LEVEL: 'fatal',
+      HAI_SERV_SERVER_PORT: new URL(baseUrl).port,
+      HAI_SERV_TRANSPORT: 'false',
+      HAI_DB_DATABASE: path.join(root, 'api-data/app.db'),
+      HAI_VECDB_PATH: path.join(root, 'api-data/vecdb'),
+      HAI_STORAGE_ROOT: path.join(root, 'api-data/uploads'),
+      HAI_IAM_REGISTER_ENABLED: 'true',
+    },
+  })
+  const close = async () => {
+    if (service.exitCode !== null)
+      return
+    await new Promise<void>((resolve) => {
+      service.once('exit', () => resolve())
+      service.kill()
+    })
+  }
+  try {
+    for (let attempt = 0; attempt < 120; attempt++) {
+      if (service.exitCode !== null)
+        throw new Error('Native API fixture exited before ready')
+      const response = await fetch(`${baseUrl}/health`).catch(() => null)
+      if (response?.ok)
+        return close
+      await new Promise(resolve => setTimeout(resolve, 250))
+    }
+    throw new Error('Native API fixture did not become ready')
+  }
+  catch (error) {
+    await close()
+    throw error
+  }
 }
 
 async function allocateBaseUrl(): Promise<string> {
@@ -246,10 +367,11 @@ function describeHaiModules(cwd: string): string {
 function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'production' = 'test'): NodeJS.ProcessEnv {
   return {
     ...process.env,
+    ...authFixtureEnv(),
     ...(envOptions.baseUrl ? { BASE_URL: envOptions.baseUrl } : {}),
     ...(envOptions.serviceBaseUrl
       ? {
-          PUBLIC_API_BASE: envOptions.serviceBaseUrl,
+          PUBLIC_API_BASE: envOptions.publicApiBase ?? envOptions.serviceBaseUrl,
           SERVICE_BASE_URL: envOptions.serviceBaseUrl,
         }
       : {}),
@@ -261,6 +383,26 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
     HAI_CORE_VERSION: '9.8.7',
     HAI_CORE_ENV: 'test',
     HAI_CORE_LOGGING_LEVEL: 'warn',
+    HAI_AUTH_EVIDENCE_DIR: path.resolve(process.cwd(), '../../docs/assets/iam-auth-2026-10-12'),
+  }
+}
+
+/** 验证真实通知 HTTP 链路；验证码只在内存收件箱中保留。 */
+function authFixtureEnv(): NodeJS.ProcessEnv {
+  if (!notificationUrl)
+    return {}
+  return {
+    IAM_NOTIFICATION_URL: notificationUrl,
+    HAI_IAM_LOGIN_OTP: 'true',
+    HAI_IAM_PASSWORDRESET_ENABLED: 'true',
+    HAI_REACH_PROVIDERS: JSON.stringify(['email', 'sms'].map(name => ({ name, type: 'api', url: `${notificationUrl}/send` }))),
+    HAI_REACH_TEMPLATES: JSON.stringify([
+      { name: 'otp_email', provider: 'email', body: 'Code: {code}' },
+      { name: 'otp_sms', provider: 'sms', body: 'Code: {code}' },
+      { name: 'password_reset', provider: 'email', body: 'Reset: {token}' },
+      { name: 'password_reset_sms', provider: 'sms', body: 'Reset: {token}' },
+    ]),
+    HAI_IAM_AGREEMENTS: JSON.stringify({ showOnRegister: true, showOnLogin: true, userAgreementMarkdown: '# Configured registration agreement\n\n**Registration terms**\n\n- Keep your account credentials secure.', userAgreementUrl: `${notificationUrl}/terms`, privacyPolicyUrl: `${notificationUrl}/privacy` }),
   }
 }
 

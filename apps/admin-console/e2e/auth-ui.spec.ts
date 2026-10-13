@@ -289,7 +289,7 @@ test.describe('Forgot Password UI', () => {
     const [forgotPasswordResponse] = await Promise.all([
       page.waitForResponse(response =>
         response.request().method() === 'POST'
-        && response.url().endsWith('/api/auth/forgot-password')),
+        && response.url().endsWith('/api/auth/password-reset/request')),
       page.locator('button[type="submit"]').click(),
     ])
     expect(forgotPasswordResponse.ok()).toBe(true)
@@ -319,12 +319,12 @@ test.describe('Forgot Password UI', () => {
 // 重置密码页面 UI
 // ---------------------------------------------------------------------------
 test.describe('Reset Password UI', () => {
-  test('无 token 参数时显示警告', async ({ page }) => {
+  test('无 token 参数时支持手动输入重置令牌', async ({ page }) => {
     await gotoHydrated(page, '/auth/reset-password')
     await page.waitForLoadState('domcontentloaded')
 
-    await expect(page.locator('form')).toHaveCount(0)
-    await expect(page.locator('a[href="/auth/forgot-password"].btn')).toBeVisible()
+    await expect(page.locator('form')).toBeVisible()
+    await expect(page.locator('#reset-code')).toBeVisible()
   })
 
   test('带 token 参数时显示重置表单', async ({ page }) => {

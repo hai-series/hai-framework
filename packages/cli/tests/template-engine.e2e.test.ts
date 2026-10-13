@@ -333,21 +333,19 @@ describe('admin 应用类型生成', () => {
       expect(await fileExists(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')).toBe(true)
     })
 
-    it('iam 登录页应使用 i18n', async () => {
+    it('iam 登录页复用带 i18n 的配置认证场景', async () => {
       const content = await readGenerated(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
-      expect(content).toContain('import * as m from \'$lib/paraglide/messages\'')
-      expect(content).toContain('{m.auth_login_title()}')
-      expect(content).toContain('m.auth_login_submit()')
-      expect(content).toContain('m.auth_login_failed()')
+      expect(content).toContain('AuthPanel')
+      expect(content).toContain('page.data.iamPublicConfig')
+      expect(content).toContain('kit.client.createAuthActions()')
       expect(content).not.toContain('>登录<')
     })
 
-    it('iam 注册页应使用 i18n', async () => {
+    it('iam 注册页复用带 i18n 的配置认证场景', async () => {
       const content = await readGenerated(projectPath, 'src/routes/(auth)/auth/register/+page.svelte')
-      expect(content).toContain('import * as m from \'$lib/paraglide/messages\'')
-      expect(content).toContain('{m.auth_register_title()}')
-      expect(content).toContain('{m.auth_label_email()}')
-      expect(content).toContain('m.auth_error_password_mismatch()')
+      expect(content).toContain('AuthPanel')
+      expect(content).toContain('page.data.iamPublicConfig')
+      expect(content).toContain('initialMode=\'register\'')
       expect(content).not.toContain('注册失败')
     })
 
@@ -513,17 +511,17 @@ describe('h5 应用类型生成', () => {
       expect(await fileExists(projectPath, 'src/routes/auth/login/+page.svelte')).toBe(true)
     })
 
-    it('h5 登录页应使用 i18n', async () => {
+    it('h5 登录页复用带 i18n 的配置认证场景', async () => {
       const content = await readGenerated(projectPath, 'src/routes/auth/login/+page.svelte')
-      expect(content).toContain('import * as m from \'$lib/paraglide/messages\'')
-      expect(content).toContain('{m.auth_login_title()}')
+      expect(content).toContain('AuthPanel')
+      expect(content).toContain('page.data.iamPublicConfig')
       expect(content).not.toContain('>登录<')
     })
 
-    it('h5 注册页应使用 i18n', async () => {
+    it('h5 注册页复用带 i18n 的配置认证场景', async () => {
       const content = await readGenerated(projectPath, 'src/routes/auth/register/+page.svelte')
-      expect(content).toContain('import * as m from \'$lib/paraglide/messages\'')
-      expect(content).toContain('{m.auth_register_title()}')
+      expect(content).toContain('AuthPanel')
+      expect(content).toContain('initialMode=\'register\'')
       expect(content).not.toContain('>注册<')
     })
 
@@ -680,14 +678,14 @@ describe('feature 叠加', () => {
     expect(content).toContain('haiHandle,')
   })
 
-  it('iam 认证页面的 .hbs 应正确渲染为 i18n 版本', async () => {
+  it('iam 认证模板应装配统一场景、配置与客户端动作', async () => {
     const login = await readGenerated(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
-    expect(login).toContain('import * as m from \'$lib/paraglide/messages\'')
-    expect(login).toContain('{m.auth_login_title()}')
+    expect(login).toContain('AuthPanel')
+    expect(login).toContain('kit.client.createAuthActions()')
 
     const register = await readGenerated(projectPath, 'src/routes/(auth)/auth/register/+page.svelte')
-    expect(register).toContain('{m.auth_register_title()}')
-    expect(register).toContain('{m.auth_label_email()}')
+    expect(register).toContain('AuthPanel')
+    expect(register).toContain('page.data.iamPublicConfig')
   })
 })
 

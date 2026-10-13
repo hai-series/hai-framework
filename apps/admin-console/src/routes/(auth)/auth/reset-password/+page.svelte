@@ -7,28 +7,27 @@
 -->
 <script lang='ts'>
   import type { ResetPasswordFormData } from '@h-ai/ui'
-  import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
-  import { apiFetch } from '$lib/utils/api'
+  import { authActions as actions } from '$lib/services/auth'
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
   let success = $state(false)
   const loginPath = resolve('/auth/login', {})
-  const forgotPasswordPath = resolve('/auth/forgot-password', {})
 
   // 从 URL 获取 token
   const token = $derived(page.url.searchParams.get('token') ?? '')
 
   // 从 layout server data 读取 IAM 配置
-  const passwordMinLength = $derived((page.data as { iamPublicConfig?: { password?: { minLength?: number } } }).iamPublicConfig?.password?.minLength ?? 8)
+  const passwordMinLength = $derived(page.data.iamPublicConfig.password.minLength)
 
   async function handleResetPassword(data: ResetPasswordFormData) {
     errors = {}
 
-    if (!token) {
+    const resetToken = token || data.code
+    if (!resetToken) {
       errors = { general: m.auth_reset_invalid_link() }
       return
     }
@@ -36,24 +35,10 @@
     loading = true
 
     try {
-      const response = await apiFetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          password: data.newPassword,
-          confirmPassword: data.confirmPassword,
-        }),
-      })
-
-      const result = await response.json()
+      const result = await actions.confirmPasswordReset(resetToken, data.newPassword)
 
       if (result.success) {
         success = true
-        // 3秒后跳转到登录页
-        setTimeout(() => {
-          void goto(loginPath)
-        }, 3000)
       }
       else {
         errors = { general: result.error?.message || m.auth_reset_failed() }
@@ -82,24 +67,15 @@
       <a href={loginPath} class='btn btn-primary'>{m.auth_reset_login_now()}</a>
     {/snippet}
   </Result>
-{:else if !token}
-  <Result
-    status='warning'
-    title={m.auth_reset_invalid_link_title()}
-    description={m.auth_reset_invalid_link_desc()}
-  >
-    {#snippet actions()}
-      <a href={forgotPasswordPath} class='btn btn-primary'>{m.auth_reset_request_again()}</a>
-    {/snippet}
-  </Result>
 {:else}
   <ResetPasswordForm
+    passwordPolicy={page.data.iamPublicConfig.password}
     {loading}
     {errors}
     showTitle
     showDescription
     showBackLink
-    showCode={false}
+    showCode={!token}
     showPasswordStrength={true}
     minPasswordLength={passwordMinLength}
     loginUrl={loginPath}

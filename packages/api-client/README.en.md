@@ -104,6 +104,14 @@ Calling `init()` on an initialized client returns `CONFIG_ERROR` and leaves the 
 - `transport.keyExchangePath`: key exchange subpath; defaults to `/_hai/key-exchange` and is appended to `baseUrl` automatically.
 - `apiClient.config`: a **redacted snapshot of runtime configuration**; credentials embedded in `baseUrl`, `headers.authorization`, and other sensitive values are hidden automatically.
 
+## Configuration driven authentication
+
+Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
+
+apiClient.createAuthActions(client) supplies publicConfig, login, register, sendOtp and password-reset actions for a client containing the standard IAM contract. Login uses identifier/password/method/code; successful authentication saves tokens through the existing configured storage. Applications only refresh their own state or navigate after authentication.
+
+[完整 IAM 配置 / IAM configuration](../iam/README.en.md)
+
 ## Error handling
 
 Business APIs return `HaiResult<T>`:

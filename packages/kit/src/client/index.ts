@@ -7,5 +7,6 @@
  * @module index
  */
 
+export * from './kit-client-auth.js'
 export * from './kit-client.js'
 export * from './kit-nav-adapter.js'

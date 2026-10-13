@@ -74,7 +74,7 @@ const haiHandle = kit.createHandle({
     verifyToken: validateSession,
     cookieName: 'h5_access_token',
     protectedPaths: ['/api/user/*', '/api/vision/*', '/api/upload'],
-    publicPaths: ['/api/auth/*'],
+    publicPaths: kit.auth.publicPaths,
     operations: () => iam.auth,
   },
   rateLimit: { windowMs: 60000, maxRequests: 200 },

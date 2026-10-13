@@ -25,8 +25,20 @@ Language and theme preferences are saved in IAM user metadata, restored after lo
 
 Shared page copy belongs in `messages/{zh-CN,en-US}.json`. Frontend-specific copy belongs in each app's own messages directory. Keep `baseLocale` and `locales` aligned across all enabled projects, then run root `pnpm i18n:compile`; do not edit generated Paraglide files.
 
+All frontend and shared projects load the installed message-format plugin from the workspace root `node_modules`, matching the scaffold's hoisted dependency layout. Compilation uses the workspace dependency version and does not fetch a plugin from a CDN.
+
 The scaffold theme configuration determines the themes compiled into frontend CSS. Personal settings offer only those available themes. Customize the common layout in `src/lib/components/AppShell.svelte`, the management pages in adjacent components, and business behavior in `src/lib/stores/management-store.svelte.ts`.
 
 ## Validation
 
 Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Shared API tests exercise real transport key exchange, encrypted request/response handling, configured core metadata and credential forwarding. Root browser tests cover administrator and ordinary-user workflows, avatar rendering, persisted preferences, password/session invalidation and narrow-screen layout.
+
+## IAM configuration
+
+The service's `config/_iam.yml` controls login methods, registration, password reset, agreements and `ui` branding. Email and SMS use providers/templates in `_reach.yml` or custom callbacks. `AuthPanel` uses the public configuration and framework auth actions to manage tokens, resend countdowns and errors. All service nodes must share the same database and Redis; memory cache is for a single process.
+
+LDAP and Reach are optional. Install ldapts in the IAM service workspace only when using its default LDAP client, then enable login.ldap and set connection settings. Custom onOtpSendEmail/onOtpSendSms/onPasswordResetRequest callbacks work without Reach and must reject on delivery failure. Agreements open in a Modal. LoginForm/RegisterForm support header/extraFields/footer snippets; AuthPanel forwards loginHeader/loginFields/loginFooter and registerHeader/registerFields/registerFooter. See the generated hai-iam/hai-ui skills for configuration and examples.
+
+协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+See `.agents/skills/hai-iam/reference.md` in the generated application for the complete contract.

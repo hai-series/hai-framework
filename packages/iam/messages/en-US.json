@@ -1,5 +1,9 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+  "iam_securityStateFailed": "Unable to update authentication security state. Please try again later.",
+  "iam_securityBusy": "Too many authentication requests. Please try again later.",
+  "iam_passwordResetDisabled": "Password reset is disabled or delivery is not configured.",
+  "iam_passwordResetDeliveryFailed": "Unable to deliver the reset notification. Please try again later.",
   "iam_passwordMinLength": "Password must be at least {minLength} characters",
   "iam_passwordMaxLength": "Password cannot exceed {maxLength} characters",
   "iam_passwordNeedUppercase": "Password must contain uppercase letters",
@@ -122,7 +126,7 @@
   "iam_queryOtpFailed": "Failed to query OTP: {message}",
   "iam_updateOtpAttemptsFailed": "Failed to update OTP attempts: {message}",
   "iam_deleteOtpFailed": "Failed to delete OTP: {message}",
-  "iam_otpSendFailed": "Failed to send OTP: {message}",
+  "iam_otpSendFailed": "Failed to send verification code. Please try again later.",
   "iam_resetTokenInvalid": "Invalid or expired password reset token",
   "iam_resetTokenMaxAttempts": "Too many verification attempts, please request a new reset token",
   "iam_saveResetTokenFailed": "Failed to save password reset token: {message}",

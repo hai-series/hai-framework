@@ -8,26 +8,22 @@
 <script lang='ts'>
   import type { ForgotPasswordFormData } from '@h-ai/ui'
   import { resolve } from '$app/paths'
+  import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
-  import { apiFetch } from '$lib/utils/api'
+  import { authActions as actions } from '$lib/services/auth'
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
   let success = $state(false)
   const loginPath = resolve('/auth/login', {})
+  const resetPath = resolve('/auth/reset-password', {})
 
   async function handleForgotPassword(data: ForgotPasswordFormData) {
     errors = {}
     loading = true
 
     try {
-      const response = await apiFetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.email }),
-      })
-
-      const result = await response.json()
+      const result = await actions.requestPasswordReset(data.email || data.phone || '')
 
       if (result.success) {
         success = true
@@ -56,7 +52,8 @@
     description={m.auth_forgot_email_sent_desc()}
   >
     {#snippet actions()}
-      <a href={loginPath} class='btn btn-primary'>{m.auth_back_to_login()}</a>
+      <a href={resetPath} class='btn btn-primary'>{m.auth_reset_password_title()}</a>
+      <a href={loginPath} class='btn btn-outline'>{m.auth_back_to_login()}</a>
     {/snippet}
   </Result>
 {:else}
@@ -66,7 +63,7 @@
     showTitle
     showDescription
     showBackLink
-    mode='email'
+    mode={page.data.iamPublicConfig.passwordReset.mode}
     loginUrl={loginPath}
     onsubmit={handleForgotPassword}
   />

@@ -495,9 +495,11 @@ describe('createProject — admin 类型 + iam', () => {
     expect(await exists(projectPath, 'messages/en-US.json')).toBe(true)
   })
 
-  it('iam 登录页存在且含 i18n', async () => {
+  it('iam 登录页复用带 i18n 的配置认证场景', async () => {
     const content = await readText(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
-    expect(content).toContain('m.auth_login_title()')
+    expect(content).toContain('AuthPanel')
+    expect(content).toContain('page.data.iamPublicConfig')
+    expect(content).toContain('kit.client.createAuthActions()')
   })
 
   it('iam API 路由存在', async () => {

@@ -36,6 +36,9 @@ export const IamTokenPairSchema = z.object({
 
 /** 协议展示 Schema。 */
 export const IamAgreementDisplaySchema = z.object({
+  /** 配置中的 Markdown 原文由客户端安全渲染。 */
+  userAgreementMarkdown: z.string().min(1).optional(),
+  privacyPolicyMarkdown: z.string().min(1).optional(),
   userAgreementUrl: z.string().optional(),
   privacyPolicyUrl: z.string().optional(),
   showOnRegister: z.boolean(),
@@ -62,6 +65,23 @@ export const IamLoginInputSchema = z.object({
   identifier: z.string().min(1),
   password: z.string().min(1),
   rememberMe: z.boolean().optional(),
+})
+
+/** LDAP 登录与密码找回入参。 */
+export const IamLdapLoginInputSchema = z.object({ username: z.string().trim().min(1), password: z.string().min(1) })
+export const IamRequestPasswordResetInputSchema = z.object({ identifier: z.string().trim().min(1) })
+export const IamConfirmPasswordResetInputSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(1) })
+
+/** 认证页面公开配置白名单，独立于服务端连接/凭据配置。 */
+export const IamPublicConfigSchema = z.object({
+  password: z.object({ minLength: z.number(), maxLength: z.number(), requireUppercase: z.boolean(), requireLowercase: z.boolean(), requireNumber: z.boolean(), requireSpecialChar: z.boolean(), expirationDays: z.number() }),
+  register: z.object({ enabled: z.boolean() }),
+  login: z.object({ password: z.boolean(), otp: z.boolean(), ldap: z.boolean(), email: z.boolean(), sms: z.boolean() }),
+  passwordReset: z.object({ enabled: z.boolean(), mode: z.enum(['email', 'phone']) }),
+  otp: z.object({ length: z.number(), resendInterval: z.number() }),
+  agreements: IamAgreementDisplaySchema,
+  ui: z.object({ variant: z.enum(['card', 'split']), title: z.string().optional(), subtitle: z.string().optional(), brandTitle: z.string().optional(), brandText: z.string().optional(), logoUrl: z.string().optional(), illustrationUrl: z.string().optional() }),
+  session: z.object({ maxAge: z.number() }),
 })
 
 /** OTP 登录入参 Schema。 */
@@ -98,7 +118,7 @@ export const IamRefreshTokenDataSchema = z.object({
 /** 注册入参 Schema。 */
 export const IamRegisterInputSchema = z.object({
   username: z.string().min(1),
-  password: z.string().min(6),
+  password: z.string().min(1),
   email: z.string().email().optional(),
   phone: z.string().optional(),
   displayName: z.string().optional(),
@@ -108,7 +128,7 @@ export const IamRegisterInputSchema = z.object({
 /** 修改密码入参 Schema。 */
 export const IamChangePasswordInputSchema = z.object({
   oldPassword: z.string().min(1),
-  newPassword: z.string().min(6),
+  newPassword: z.string().min(1),
 })
 
 /** 当前用户更新入参 Schema。 */
@@ -133,7 +153,7 @@ export const IamAdminCreateUserInputSchema = z.object({
   username: z.string().min(1),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  password: z.string().min(6),
+  password: z.string().min(1),
   displayName: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   roleIds: z.array(z.string()).optional(),
@@ -161,7 +181,7 @@ export const IamUserIdInputSchema = z.object({
 /** Admin 重置密码入参 Schema。 */
 export const IamAdminResetPasswordInputSchema = z.object({
   id: z.string().min(1),
-  newPassword: z.string().min(6),
+  newPassword: z.string().min(1),
 })
 
 /** 角色基础信息 Schema。 */
@@ -223,6 +243,8 @@ export const IamCreatePermissionInputSchema = z.object({
 })
 
 export type IamLoginInput = z.infer<typeof IamLoginInputSchema>
+export type IamLdapLoginInput = z.infer<typeof IamLdapLoginInputSchema>
+export type IamPublicConfig = z.infer<typeof IamPublicConfigSchema>
 export type IamOtpLoginInput = z.infer<typeof IamOtpLoginInputSchema>
 export type IamLogoutInput = z.infer<typeof IamLogoutInputSchema>
 export type IamSendOtpInput = z.infer<typeof IamSendOtpInputSchema>

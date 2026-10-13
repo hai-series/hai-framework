@@ -8,6 +8,13 @@ login:
   otp: false
   ldap: false
 
+# LDAP 可选：安装 ldapts 后开启上方 login.ldap，再声明连接配置或注入工厂。
+# ldap:
+#   url: ldaps://ldap.example.com:636
+#   bindDn: cn=service,dc=example,dc=com
+#   bindPassword: '${LDAP_BIND_PASSWORD}'
+#   searchBase: ou=users,dc=example,dc=com
+
 # 密码策略
 password:
   minLength: 8
@@ -32,5 +39,53 @@ session:
 rbac:
   defaultRole: user
 
-# 是否自动创建默认数据（角色、权限、admin用户）
+# 是否自动创建默认角色与权限；管理员账户由应用启动逻辑创建。
 seedDefaultData: true
+
+# 注册与登录安全
+register:
+  enabled: true
+  defaultEnabled: true
+security:
+  maxLoginAttempts: 5
+  lockoutDuration: 900
+
+# OTP 需启用 login.otp，并选择 Reach 标准模板或自定义发送回调。
+otp:
+  email: true
+  sms: true
+  length: 6
+  expiresIn: 300
+  maxAttempts: 3
+  resendInterval: 60
+passwordReset:
+  enabled: true
+  mode: email # phone 使用 password_reset_sms 模板
+  tokenExpiresIn: 3600
+  maxAttempts: 3
+  # resetUrl: https://example.com/auth/reset-password
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  # 正文直接从配置加载；可替换为应用自己的协议，同主题同时配置 URL 时优先正文。
+  userAgreementMarkdown: |
+    # 用户协议示例
+
+    本应用提供账户与个人信息管理功能。
+
+    - 请妥善保管账户凭据。
+    - 请按应用提供的功能使用服务。
+  privacyPolicyMarkdown: |
+    # 隐私政策示例
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+ui:
+  variant: split
+  # title: Account center
+  # subtitle: Welcome back
+  # brandTitle: Your application
+  # brandText: Sign in securely
+  # logoUrl: /logo.svg
+  # illustrationUrl: /auth-illustration.svg

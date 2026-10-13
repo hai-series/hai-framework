@@ -232,7 +232,6 @@ describe('iam.ldap', () => {
           security: { maxLoginAttempts: 3, lockoutDuration: 60 },
           login: { password: true, ldap: true },
           ldap: ldapLease.ldapConfig,
-          ldapClientFactory: ldapLease.ldapClientFactory,
         })
       })
 
@@ -277,7 +276,6 @@ describe('iam.ldap', () => {
     () => ({
       login: { password: true, ldap: true },
       ldap: ldapLease.ldapConfig,
-      ldapClientFactory: ldapLease.ldapClientFactory,
     }),
   )
 
@@ -288,7 +286,6 @@ describe('iam.ldap', () => {
     () => ({
       login: { password: true, ldap: true },
       ldap: ldapLease.ldapConfig,
-      ldapClientFactory: ldapLease.ldapClientFactory,
     }),
   )
 })

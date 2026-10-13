@@ -68,26 +68,39 @@ rbac:
 ### 2. 初始化
 
 ```typescript
+import type { IamConfigSettingsInput } from '@h-ai/iam'
 import { cache } from '@h-ai/cache'
-import { reldb } from '@h-ai/reldb'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
 
-// 必须先初始化 reldb 和 cache
-await reldb.init(core.config.get('db'))
-await cache.init(core.config.get('cache'))
-
-// IAM 自动使用已初始化的 reldb 和 cache 单例
-await iam.init({
-  ...core.config.get('iam'),
-  seedDefaultData: true,
-})
+// 位于应用启动函数内；依赖初始化失败时立即返回，不能继续启动 IAM。
+core.init({ configDir: './config' })
+const db = await reldb.init({ type: 'sqlite', database: './data.db' })
+if (!db.success) return db
+const cached = await cache.init({ type: 'memory' })
+if (!cached.success) return cached
+const initialized = await iam.init(core.config.getOrThrow<IamConfigSettingsInput>('iam'))
+if (!initialized.success) return initialized
+// 关闭时按 iam → cache → reldb 的反向依赖顺序执行。
 ```
 
 `iam.config` 返回的是脱敏后的配置快照；LDAP `url` / `bindPassword` 等敏感值会自动隐藏。
 
-初始化时自动创建数据库表（5 张）：`hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`。
+基础初始化创建用户/RBAC 五张表；启用 API Key 登录时另创建 `hai_iam_api_keys`。
 
 Token 和 OTP 存储在 cache 中（不落库）。refreshToken 使用独立的 cache key 存储。
+
+### 可选 LDAP 与通知
+
+LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h-ai/reach` 是可选 peer dependency，基础密码/RBAC 无需安装这两个包。
+
+- 默认 LDAP 客户端：在服务端 workspace 执行 `pnpm add ldapts`，配置 `login.ldap: true` 与 `ldap.url/bindDn/bindPassword/searchBase`。`searchFilter` 默认 `(uid={{username}})`；AD 可使用 `(sAMAccountName={{username}})` 与对应 `usernameAttribute`。`ldaps://` 使用 TLS，`ldap://` + `useTls: true` 使用 StartTLS。`ldapClientFactory` 可注入返回 `bind/search/unbind` 和 HaiResult 的客户端，此时无需安装 ldapts。
+- Reach 自动发送：应用安装、初始化 `@h-ai/reach`，在 `iam.init({ ...settings, reach })` 中注入一次。`otp_email/otp_sms` 模板使用 `{code}`；`password_reset/password_reset_sms` 使用 `{token}/{expiresAt}/{resetUrl}`。模板需在 IAM 初始化前配置，Provider 绑定实际邮件/短信通道。`passwordReset.mode` 选择 `email/phone`。
+- 自定义发送：直接传 `onOtpSendEmail(email, code)`、`onOtpSendSms(phone, code)`、`onPasswordResetRequest(user, token, expiresAt)`，均返回 `Promise<void>`。可以只实现选用通道或与 Reach 混用，显式回调优先。检查发送服务结果，投递失败在回调内抛错；IAM 捕获并返回业务错误，不要吞掉发送失败。
+- `otp` 必须有配置并开启所需通道；缺少回调或标准模板时 `iam.publicConfig` 不公布该入口。Reach 由应用管理生命周期，IAM 不负责初始化或关闭。Console 仅记录元数据。
+
+协议以 Modal 显示，关闭后保留输入。URL 方式必须为 HTTP(S) 且页面允许 iframe 嵌入；脚本被隔离禁用。`LoginForm/RegisterForm` 提供 `header/extraFields/footer`；`AuthPanel` 提供 `loginHeader/loginFields/loginFooter`、`registerHeader/registerFields/registerFooter`。额外字段由应用绑定状态，在自己的动作中处理，IAM 不接收未经定义的字段。
 
 ## 核心 API
 
@@ -331,6 +344,58 @@ await apiClient.auth.clear()
 
 - `deleteUser` / `updateUser({ enabled: false })` / `changePassword` / `confirmPasswordReset`
 - `assignRole` / `removeRole` / `deleteRole` 会同步更新活跃会话中的角色列表
+
+## 配置驱动认证页面
+
+### 配置 Markdown 协议
+
+协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
+
+```yaml
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  userAgreementMarkdown: |
+    # 用户协议
+
+    **账户使用条款**
+
+    - 请妥善保管账户凭据。
+  privacyPolicyMarkdown: |
+    # 隐私政策
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # 可选 URL；同主题同时配置 Markdown 和 URL 时，弹窗优先显示 Markdown。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+```
+
+
+
+服务端通过 `iam.publicConfig` 提供白名单配置，或通过客户端的 `client.iam.auth.publicConfig()` 标准 HTTP contract 获取。只展示已开启且具备依赖的登录方式；LDAP 为可选集成，见上方配置与安装说明。
+
+| 配置 | 用途 |
+| --- | --- |
+| `login.password / otp / ldap` | 独立启用密码、验证码、企业账号 |
+| `otp.email / sms` | 独立启用邮件、短信 |
+| `register.enabled / defaultEnabled` | 自助注册及新账户状态 |
+| `passwordReset.enabled / mode / resetUrl` | 启用重置、选择 email/phone 渠道、配置重置页面绝对地址 |
+| `agreements.showOnRegister / showOnLogin` | 注册/登录协议弹窗显示；链接只接受 HTTP(S) |
+| `ui.variant / title / subtitle / brandTitle / brandText / logoUrl / illustrationUrl` | 卡片/分栏布局、标题、品牌、Logo 和配图 |
+
+选择 Reach 时，在 reldb/cache/Reach 初始化成功后使用 `iam.init({ ...settings, reach })` 自动接入 Reach 的 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 模板。模板绑定对应邮件/短信 Provider；显式发送回调可覆盖默认行为。Console Provider 只记录元数据，实际收信需配置 SMTP、短信或 HTTP 通知服务。发送失败返回错误，不会伪报已发送。
+
+SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点白名单使用 `kit.auth.publicPaths`。客户端通过 `kit.client.createAuthActions()` 连接 Cookie 端点；独立 HTTP 客户端通过 `apiClient.createAuthActions(client)` 连接 IAM contract 并自动保存 Token 到已配置安全存储。将配置及动作直接传入 `AuthPanel`，完成登录、注册、找回及重置；单独使用 `LoginForm` 可传 `methods`、`onsendotp`、`resendInterval`，密码表单可传完整 `passwordPolicy`。
+
+管理员使用 `iam.user.createUser()` 建用户，调用端必须校验管理员权限；关闭自助注册不影响管理端。注册与密码登录开关独立，`registerAndLogin` 在注册完成后创建会话；默认禁用账户不会创建会话。
+
+### 分布式安全与边界
+
+所有节点必须共享同一数据库和 Redis；Memory 仅用于单进程。登录 `maxLoginAttempts / lockoutDuration` 使用数据库原子更新，到期后的失败重新计数。OTP `maxAttempts / resendInterval` 使用共享锁和独立发送间隔状态，耗尽或消费验证码不能绕过重发限制，并发只消费一次。重置 `tokenExpiresIn / maxAttempts` 使用共享缓存 TTL 和每用户共享锁；每次有效令牌请求（包括密码策略失败）计数，最新令牌有效且只成功消费一次。重置后撤销旧会话、解除登录锁定；禁用用户不能通过密码、LDAP、OTP 登录。密码策略以服务端为准。
+
+可选字段（如 `ldap`）若尚未写入 YAML，请先声明该字段，或通过 `HAI_IAM` 的 JSON 值整体覆盖模块配置；已有字段支持 `HAI_IAM_LOGIN_OTP` 等环境变量覆盖。
+
+标准 HTTP 入口：`GET /auth/config`、`POST /auth/login/ldap`、`POST /auth/password-reset/request`、`POST /auth/password-reset/confirm`；验证码继续使用 `/auth/otp/send` 与 `/auth/login/otp`。安全错误：`SECURITY_BUSY (hai:iam:023)`、`PASSWORD_RESET_DISABLED (hai:iam:024)`。
 
 ## 相关 Skills
 

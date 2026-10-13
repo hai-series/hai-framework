@@ -32,3 +32,5 @@ description: "使用 @h-ai/reach 配置邮件、短信、API 通知和多渠道�
 - 错误码
 - 常见模式
 - 相关 Skills
+
+IAM 通知使用 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 标准模板；将已初始化的 `reach` 传入 `iam.init`。Console Provider 只记录元数据，不输出验证码/令牌，不代替实际邮件/短信发送。

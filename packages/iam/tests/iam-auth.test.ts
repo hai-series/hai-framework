@@ -302,15 +302,15 @@ describe('iam.auth', () => {
       })
     })
 
-    describe('loginWithLdap（无 LDAP 策略）', () => {
-      it('未配置 LDAP 策略时应返回 STRATEGY_NOT_SUPPORTED', async () => {
+    describe('loginWithLdap（默认关闭）', () => {
+      it('未启用 LDAP 时应返回 LOGIN_DISABLED', async () => {
         const result = await getIam().auth.loginWithLdap({
           username: 'admin',
           password: 'secret',
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(HaiIamError.STRATEGY_NOT_SUPPORTED.code)
+          expect(result.error.code).toBe(HaiIamError.LOGIN_DISABLED.code)
         }
       })
     })

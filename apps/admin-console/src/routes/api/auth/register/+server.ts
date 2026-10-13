@@ -15,9 +15,9 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
     return kit.response.forbidden(m.common_error())
   }
 
-  const { username, email, password } = await kit.validate.body(request, createRegisterSchema())
+  const { username, email, phone, password } = await kit.validate.body(request, createRegisterSchema())
 
-  const result = await kit.auth.registerAndLogin(cookies, { username, email, password })
+  const result = await kit.auth.registerAndLogin(cookies, { username, email, phone, password })
   if (!result.success) {
     if (result.error.code === HaiIamError.USER_NOT_FOUND.code || result.error.code === HaiIamError.USER_ALREADY_EXISTS.code) {
       return kit.response.conflict(m.api_auth_username_or_email_taken())

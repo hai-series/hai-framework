@@ -141,7 +141,7 @@
     <FormField label={m.user_display_name()}><Input bind:value={displayName} maxlength={100} data-testid="user-display-name" /></FormField>
     <FormField label={m.user_email()}><Input type="email" bind:value={email} data-testid="user-email" /></FormField>
     {#if !editing}
-      <FormField label={m.user_password()} hint={m.initial_password_rules()} required><PasswordInput bind:value={password} autocomplete="new-password" minLength={8} data-testid="user-password" /></FormField>
+      <FormField label={m.user_password()} hint={m.initial_password_rules({ min: store.authConfig?.password.minLength ?? 8 })} required><PasswordInput bind:value={password} autocomplete="new-password" minLength={store.authConfig?.password.minLength ?? 8} data-testid="user-password" /></FormField>
     {/if}
     <FormField label={m.user_role()}><Select bind:value={role} options={roleOptions} disabled={editing?.id === store.user?.id} data-testid="user-role" /></FormField>
     <Checkbox bind:checked={enabled} label={m.account_enabled()} disabled={editing?.id === store.user?.id} />

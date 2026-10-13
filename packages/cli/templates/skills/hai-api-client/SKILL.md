@@ -174,3 +174,8 @@ if (login.success) {
 - 客户端不导入 `@h-ai/crypto` 的内部 transport 工厂，只通过 `transport: { crypto }` 装配。
 - 前端只依赖 `@h-ai/api-client` 和 contract 类型，不依赖业务模块实现。
 - httpOnly cookie 模式需服务端与客户端同步配置，不支持跨域刷新（`SameSite=Strict`）。
+
+
+## 配置驱动认证页面
+
+`apiClient.createAuthActions(client)` 为含标准 iam contract 的客户端提供 publicConfig、login、register、sendOtp、requestPasswordReset、confirmPasswordReset。login 输入使用 identifier/password/method/code，method 为 password、ldap、email、sms。成功认证自动调用既有安全 TokenStorage；应用只需把动作传给 AuthPanel，并在 onauthenticated 中刷新自己的用户状态或导航。

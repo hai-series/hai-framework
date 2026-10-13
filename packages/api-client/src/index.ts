@@ -28,6 +28,7 @@
  * @module api-client
  */
 
+export type { IamAuthLoginInput } from './api-client-iam.js'
 // 统一公开入口——默认单例 + 工厂命名空间。
 export { apiClient } from './api-client-main.js'
 export type { DefaultApiClient } from './api-client-main.js'

@@ -35,6 +35,18 @@
     "clean": "rimraf dist .turbo",
     "build:clean": "rimraf dist"
   },
+  "peerDependencies": {
+    "@h-ai/reach": "workspace:*",
+    "ldapts": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@h-ai/reach": {
+      "optional": true
+    },
+    "ldapts": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@h-ai/audit": "workspace:*",
     "@h-ai/cache": "workspace:*",
@@ -44,7 +56,9 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/reach": "workspace:*",
     "@types/node": "catalog:",
+    "ldapts": "catalog:",
     "rimraf": "catalog:",
     "testcontainers": "catalog:",
     "tsup": "catalog:",

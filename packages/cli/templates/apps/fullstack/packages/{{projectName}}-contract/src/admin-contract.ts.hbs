@@ -56,8 +56,15 @@ export const profileContract = {
     .output(apiContract.haiResultSchema(AvatarOutputSchema)),
 }
 
-/** 复用框架认证契约，避免额外开放自助注册和未配置的认证方式。 */
+/** 复用框架认证契约；注册、通知和登录方式由 IAM 配置控制。 */
 export const authContract = {
+  publicConfig: apiContract.iam.auth.publicConfig,
+  register: apiContract.iam.auth.register,
+  loginWithLdap: apiContract.iam.auth.loginWithLdap,
+  loginWithOtp: apiContract.iam.auth.loginWithOtp,
+  sendOtp: apiContract.iam.auth.sendOtp,
+  requestPasswordReset: apiContract.iam.auth.requestPasswordReset,
+  confirmPasswordReset: apiContract.iam.auth.confirmPasswordReset,
   login: apiContract.iam.auth.login,
   logout: apiContract.iam.auth.logout,
   currentUser: apiContract.iam.auth.currentUser,

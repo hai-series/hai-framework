@@ -593,6 +593,14 @@ const app = serv.createApp({
 
 In production, empty or `*` `_serv.yml` `cors.origin` fails startup. Web and Capacitor/Tauri origins use exact normalized full-Origin matching to prevent suffix spoofing. Production also enforces Secure refresh cookies and disables OpenAPI/docs; configuration controls nonproduction endpoints.
 
+## Configuration driven authentication
+
+Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
+
+createIamProcedures({ iam }) implements public config, password/LDAP/OTP login, registration and recovery directly. LDAP uses the existing refresh Cookie/native transport policy. Administrator creation uses iam.user.createUser and remains available when public registration is disabled; existing permission guards apply.
+
+[完整 IAM 配置 / IAM configuration](../iam/README.en.md)
+
 ## Error handling
 
 Ordinary procedures return authentication, authorization, business failures and caught handler exceptions as HaiResult over HTTP 200 by default. `error.httpStatus` is domain-error metadata and does not change the response status. Clients must check `success` and `error.code`: an unauthenticated failure has `error.httpStatus=401`, while database query failures or INTERNAL_ERROR have 500.

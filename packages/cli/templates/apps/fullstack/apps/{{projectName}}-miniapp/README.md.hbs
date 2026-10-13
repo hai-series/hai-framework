@@ -7,6 +7,8 @@
 - `project.inlang/settings.json`：小程序端 locale 配置
 - `messages/zh-CN.json`、`messages/en-US.json`：小程序端自有文案
 
+消息格式插件复用 workspace 已安装的依赖，从根目录 `node_modules` 加载；生成后先在 workspace 根目录安装依赖，无需从 CDN 加载插件。
+
 后续实现时建议复用 `packages/{{fullstack.contractPackageName}}` 中的 Schema 与路径常量，保持接口真相源一致。
 
 协同边界：跨端通用文案/组件放 `packages/{{fullstack.sharedPackageName}}`，小程序独有页面文案放本目录 `messages/`。

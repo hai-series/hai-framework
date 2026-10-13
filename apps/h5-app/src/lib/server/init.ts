@@ -18,6 +18,7 @@ import { ai } from '@h-ai/ai'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
+import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 
@@ -107,7 +108,13 @@ export async function initApp(): Promise<void> {
   }
 
   // 5. 初始化 IAM
-  const iamResult = await iam.init(iamConfig)
+  const reachConfig = core.config.get('reach')
+  if (reachConfig) {
+    const result = await reach.init(ReachConfigSchema.parse(reachConfig))
+    if (!result.success)
+      throw new Error('Reach initialization failed')
+  }
+  const iamResult = await iam.init({ ...iamConfig, reach })
   if (!iamResult.success) {
     throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
   }

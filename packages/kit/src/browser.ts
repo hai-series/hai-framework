@@ -5,6 +5,7 @@
  * @module browser
  */
 
+import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
 import { clearBrowserToken, createTokenStore, setBrowserToken } from './kit-auth.js'
@@ -17,6 +18,7 @@ import { setAllModulesLocale } from './kit-i18n.js'
 export const kit = {
   client: {
     create: createKitClient,
+    createAuthActions: createKitAuthActions,
     installBrowserTransport,
     installBrowserTransportFetch,
   },

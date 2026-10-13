@@ -19,6 +19,7 @@ import type {
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
 
+import { createRequire } from 'node:module'
 import { core, err, ok } from '@h-ai/core'
 import { reldbM } from '../reldb-i18n.js'
 import { quoteIdentifier } from '../reldb-security.js'
@@ -413,8 +414,8 @@ export function createPostgresProvider(): ReldbProvider {
         return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_postgresOnlyPostgresql'))
       }
       try {
-        // eslint-disable-next-line ts/no-require-imports -- 按需加载
-        const { Pool } = require('pg')
+        // Node ESM 按需加载驱动，避免构建器生成无法执行的动态 require。
+        const { Pool } = createRequire(import.meta.url)('pg')
 
         pool = new Pool({
           connectionString: config.url,

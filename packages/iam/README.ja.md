@@ -2,7 +2,7 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
-[フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/audit](../audit/README.ja.md) · [@h-ai/cache](../cache/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/crypto](../crypto/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
+[フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/audit](../audit/README.ja.md) · [@h-ai/cache](../cache/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/crypto](../crypto/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md) · [@h-ai/reach](../reach/README.ja.md)
 
 共通の `iam` オブジェクトで認証、セッション、認可、ユーザー管理を提供する Identity and Access Management モジュールです。
 
@@ -31,65 +31,181 @@ pnpm add @h-ai/iam
 - `@h-ai/crypto`：内部で使用するパスワードハッシュ。自動初期化。
 - `@h-ai/audit`：主要な RBAC 操作の監査記録。
 
+- `@h-ai/reach`：**任意**。アプリがインストール、初期化、注入して通知テンプレートを使用します。独自送信コールバックでは不要です。
+- `ldapts`：**任意**。LDAP を明示的に有効化し、`ldapClientFactory` がない場合だけ読み込みます。
+
+## 任意の LDAP と通知連携
+
+パスワード認証、ユーザー管理、RBAC は LDAP/Reach なしで動作します。両方とも任意の peer dependency で、必要な連携だけをインストールします。以下は reldb/cache 初期化後の起動・認証関数内の例で、`username/password` は検証済み入力です。
+
+### LDAP / Active Directory
+
+既定クライアントは `pnpm add ldapts` で追加し、`login.ldap: true` と接続設定を明示します。接続設定だけでは LDAP は有効になりません。SDK なしで既定クライアントを有効にすると初期化が設定エラーを返します。
+
+```yaml
+# config/_iam.yml（启动前设置 LDAP_BIND_PASSWORD）
+login:
+  ldap: true
+ldap:
+  url: ldaps://ldap.example.com:636
+  bindDn: cn=service,dc=example,dc=com
+  bindPassword: '${LDAP_BIND_PASSWORD}'
+  searchBase: ou=users,dc=example,dc=com
+  searchFilter: '(uid={{username}})'
+  usernameAttribute: uid
+  emailAttribute: mail
+  displayNameAttribute: cn
+  connectTimeout: 5000
+```
+
+`ldaps://` は TLS、`ldap://` と `useTls: true` は StartTLS を使用します。Active Directory では `searchFilter: "(sAMAccountName={{username}})"` と `usernameAttribute: sAMAccountName` を指定できます。検索前に入力をエスケープします。初回ログインはローカルユーザーを同期して既定ロールを割り当て、無効化とロックも適用します。`ldapSyncUser: false` または `bind/search/unbind` を HaiResult で返す `ldapClientFactory` を注入できます。独自ファクトリでは ldapts は不要です。
+
+```ts
+import type { IamConfigSettingsInput } from '@h-ai/iam'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+// core 已加载 config/，reldb 与 cache 已成功初始化。
+const initialized = await iam.init(core.config.getOrThrow<IamConfigSettingsInput>('iam'))
+if (!initialized.success)
+  return initialized
+const result = await iam.auth.loginWithLdap({ username, password })
+if (!result.success)
+  return result
+return result
+```
+
+### 任意の Reach による自動送信
+
+`pnpm add @h-ai/reach` で追加します。設定、初期化、終了はアプリが管理し、IAM は注入されたインスタンスだけを使用します。SMTP/HTTP は例で、SMS ゲートウェイは [Reach 通知仕様](../reach/README.ja.md) を受け取ります。Console はメタデータのみを記録し、実際の送信は行いません。
+
+```yaml
+# config/_reach.yml；环境变量仅在服务端设置。
+providers:
+  - name: email
+    type: smtp
+    host: '${SMTP_HOST}'
+    port: 465
+    secure: true
+    user: '${SMTP_USER}'
+    pass: '${SMTP_PASSWORD}'
+    from: '${MAIL_FROM}'
+  - name: sms
+    type: api
+    url: '${SMS_GATEWAY_URL}'
+templates:
+  - name: otp_email
+    provider: email
+    subject: Verification code
+    body: 'Your code is {code}.'
+  - name: otp_sms
+    provider: sms
+    body: 'Your code is {code}.'
+  - name: password_reset
+    provider: email
+    subject: Password reset
+    body: 'Reset: {resetUrl}. Expires: {expiresAt}.'
+  - name: password_reset_sms
+    provider: sms
+    body: 'Reset: {resetUrl}. Expires: {expiresAt}.'
+```
+
+`otp_email / otp_sms` は `{code}`、`password_reset / password_reset_sms` は `{token}`、`{expiresAt}`、`{resetUrl}` を使用します。`passwordReset.mode: phone` で SMS リセットを選択します。テンプレートは `iam.init()` より前に設定し、利用できないチャネルは公開設定で非表示になります。
+
+```ts
+import type { ReachConfigInput } from '@h-ai/reach'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+import { reach } from '@h-ai/reach'
+
+// core、reldb、cache 已初始化；按应用生命周期反序关闭 IAM 与 Reach。
+const notification = await reach.init(core.config.getOrThrow<ReachConfigInput>('reach'))
+if (!notification.success)
+  return notification
+const initialized = await iam.init({
+  reach,
+  login: { otp: true },
+  otp: { email: true, sms: true },
+  passwordReset: { mode: 'email', resetUrl: 'https://app.example.com/auth/reset-password' },
+})
+if (!initialized.success)
+  return initialized
+return iam.auth.sendOtp('user@example.com')
+```
+
+### 独自メール・SMS 送信
+
+`onOtpSendEmail`、`onOtpSendSms`、`onPasswordResetRequest` を注入して既存の送信サービスを使用します。必要なものだけ実装でき、Reach と併用する場合は明示コールバックを優先します。例のサービスはアプリ実装で、送信成功時のみ Promise を解決します。HaiResult を返すサービスは `success` を検査し、失敗時はコールバック内で例外にします。IAM は例外を捕捉して業務エラーを返し、コードや Token、送信内部情報をユーザーに表示しません。
+
+```ts
+import { iam } from '@h-ai/iam'
+import { mailService, smsService } from './notifications.js'
+
+// mailService/smsService 为应用已有的发送服务；不需要安装或初始化 Reach。
+// 调用方须检查服务投递结果，失败时拒绝 Promise，不能吞掉错误。
+const initialized = await iam.init({
+  otp: { email: true, sms: true },
+  onOtpSendEmail: async (email, code) => {
+    await mailService.send({ to: email, subject: 'Verification code', text: code })
+  },
+  onOtpSendSms: async (phone, code) => {
+    await smsService.send({ to: phone, code })
+  },
+  passwordReset: { mode: 'email' },
+  onPasswordResetRequest: async (user, token, expiresAt) => {
+    if (!user.email)
+      throw new Error('Reset recipient unavailable')
+    const url = new URL('https://app.example.com/auth/reset-password')
+    url.searchParams.set('token', token)
+    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt })
+  },
+})
+if (!initialized.success)
+  return initialized
+```
+
 ## クイックスタート
 
 ```ts
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 
-// 1. 初始化依赖
-await reldb.init({ type: 'sqlite', database: './data.db' })
-await cache.init({ type: 'memory' })
-
-// 2. 初始化 IAM（自动使用已初始化的 reldb 和 cache 单例）
-await iam.init({
-  session: { maxAge: 86400, sliding: true },
-  // OTP 回调（启用 OTP 登录时注入发送逻辑）
-  onOtpSendEmail: async (email, code) => {
-    await sendEmail(email, `验证码: ${code}`)
-  },
-  // 密码重置回调（启用密码重置时注入通知逻辑）
-  onPasswordResetRequest: async (user, token, expiresAt) => {
-    await sendEmail(user.email!, `重置链接: https://example.com/reset?token=${token}`)
-  },
-})
-
-// 2. 注册
-const userResult = await iam.user.register({
-  username: 'admin',
-  email: 'admin@example.com',
-  password: 'Password123',
-})
-
-// 3. 登录
-const loginResult = await iam.auth.login({
-  identifier: 'admin',
-  password: 'Password123',
-})
-if (loginResult.success) {
-  const { user, tokens } = loginResult.data
+// 基础密码认证不需要安装 Reach 或 ldapts。
+async function example() {
+  try {
+    const db = await reldb.init({ type: 'sqlite', database: './data.db' })
+    if (!db.success)
+      return db
+    const cached = await cache.init({ type: 'memory' })
+    if (!cached.success)
+      return cached
+    const initialized = await iam.init({})
+    if (!initialized.success)
+      return initialized
+    const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
+    if (!registered.success)
+      return registered
+    const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
+    if (!login.success)
+      return login
+    return await iam.auth.verifyToken(login.data.tokens.accessToken)
+  }
+  finally {
+    // 应用关闭时按依赖的反向顺序释放。
+    await iam.close()
+    await cache.close()
+    await reldb.close()
+  }
 }
 
-// 4. 验证令牌
-const session = await iam.auth.verifyToken(loginResult.data.tokens.accessToken)
-
-// 5. OTP 验证码登录
-await iam.auth.sendOtp('user@example.com')
-const otpResult = await iam.auth.loginWithOtp({
-  identifier: 'user@example.com',
-  code: '123456',
-})
-
-// 6. 检查权限
-const hasPermission = await iam.authz.checkPermission(
-  loginResult.data.user.id,
-  'user:read',
-)
-
-// 7. 关闭
-await iam.close()
+const result = await example()
+if (!result.success)
+  core.logger.error('Authentication example failed', { code: result.error.code })
 ```
+
+LDAP は既定で無効です。公開 OTP は `otp` 設定と送信コールバック、パスワードリセットは通知コールバックが必要です。
 
 `iam.config` は**機密情報をマスクした設定スナップショット**を返します。LDAP の `url` / `bindPassword` などは自動的に非表示になります。状態確認用で、元の設定の代わりにはなりません。
 
@@ -114,14 +230,14 @@ iam.init()
 
 ### データの保存先
 
-| データ種別                                        | 保存先           | 説明                                                                                                                          |
-| ------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| ユーザー、ロール、権限、関連付け、API Key         | DB（6 テーブル） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
-| セッション（accessToken → Session）               | キャッシュ       | TTL 付き、任意の自動延長                                                                                                      |
-| Token 対応（refreshToken → userId + accessToken） | キャッシュ       | 独立 key、更新後に旧 Token を即時無効化                                                                                       |
-| OTP コード                                        | キャッシュ       | TTL + 試行回数制限                                                                                                            |
-| パスワードリセット Token                          | キャッシュ       | TTL + 最大検証回数                                                                                                            |
-| API Key                                           | DB               | `hai_iam_api_keys`。平文は保存せず hash のみ。接頭辞で候補検索                                                                |
+| データ種別                                        | 保存先                                  | 説明                                                                                                                          |
+| ------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ユーザー、ロール、権限、関連付け、API Key         | DB（基本 5、任意の API Key 1 テーブル） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
+| セッション（accessToken → Session）               | キャッシュ                              | TTL 付き、任意の自動延長                                                                                                      |
+| Token 対応（refreshToken → userId + accessToken） | キャッシュ                              | 独立 key、更新後に旧 Token を即時無効化                                                                                       |
+| OTP コード                                        | キャッシュ                              | TTL + 試行回数制限                                                                                                            |
+| パスワードリセット Token                          | キャッシュ                              | TTL + 最大検証回数                                                                                                            |
+| API Key                                           | DB                                      | `hai_iam_api_keys`。平文は保存せず hash のみ。接頭辞で候補検索                                                                |
 
 ---
 
@@ -174,7 +290,7 @@ const result = await iam.auth.login({ identifier: 'admin', password: 'Password12
 await iam.auth.sendOtp('user@example.com')
 const result = await iam.auth.loginWithOtp({ identifier: 'user@example.com', code: '123456' })
 
-// LDAP 登录（需在 init 时提供 ldapClientFactory）
+// LDAP 登录（内置客户端，可选注入 ldapClientFactory）
 const result = await iam.auth.loginWithLdap({ username: 'jdoe', password: 'pass' })
 
 // API Key 登录（需启用 login.apikey: true）
@@ -250,7 +366,7 @@ await iam.session.deleteByUserId(userId)
 
 #### 注意点
 
-- **キャッシュのみの保存**：DB に保存せず、再起動後はすべてのセッションが無効になります（安全性の設計方針）。
+- **キャッシュのみの保存**：Memory は再起動時に消失します。共有 Redis のセッションは IAM サービス再起動後も TTL または失効まで保持します。
 - **自動延長**：`sliding: true` なら各 `get()` で TTL を延長。
 - **Refresh Rotation**：旧 refreshToken は一度の使用で無効化。再使用は漏洩の兆候。
 - **Token 強度**：256-bit の暗号学的乱数（`crypto.getRandomValues(new Uint8Array(32))`）、base64url 形式。
@@ -258,6 +374,8 @@ await iam.session.deleteByUserId(userId)
 ---
 
 ### 認可（authz）— `iam.authz`
+
+ロール一覧は `iam.authz.getRoleUserCounts(roleIds)` の 1 回の集計で現在のページの実際の所属人数を取得し、`HaiResult<Map<string, number>>` を返します。関連がなければ 0、検索失敗は読み込みエラーを表示し、0 件の統計を作りません。
 
 #### 主要な型
 
@@ -528,6 +646,45 @@ if (consumed.success) {
 
 特徴：暗号学的に安全な乱数、TTL、アトミックな単回消費（並行消費では 1 件のみ成功）、用途の固定による別用途の再使用防止。
 
+## 設定による認証画面
+
+`iam.publicConfig` とクライアントの HTTP `client.iam.auth.publicConfig()` は秘密情報を含まない設定だけを公開し、実際に利用可能な認証方式を表示します。`login.password/otp/ldap`、`otp.email/sms`、`register.enabled/defaultEnabled`、`passwordReset.enabled/mode/resetUrl` と規約表示を個別に設定できます。`ui` はカード/分割レイアウト、タイトル、説明、ブランド、Logo、画像を指定します。LDAP は任意で既定は無効です。既定クライアントを選択する時だけ ldapts を追加するか、独自ファクトリを注入します。
+
+任意の Reach を選択した場合、reldb/cache/Reach の初期化後、`iam.init({ ...settings, reach })` を呼び出します。`otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` テンプレートを対応する送信 Provider に接続します。明示的なコールバックは既定動作を上書きします。Console はメタデータだけを記録するため、実際の配送には SMTP、SMS または HTTP サービスが必要です。送信失敗はエラーになります。
+
+SvelteKit は `kit.auth.createApi(iam)` と匿名用の `kit.auth.publicPaths` を使用し、Cookie 認証のフォームには `kit.client.createAuthActions()` を使用します。HTTP クライアントは `apiClient.createAuthActions(client)` により安全な設定済みストレージに Token を保存します。`AuthPanel` に設定と actions を渡すと、ログイン、登録、パスワード復旧を利用できます。`LoginForm` は複数方式と再送間隔を、パスワードフォームは完全な `passwordPolicy` を受け取ります。管理者は権限を検証した上で `iam.user.createUser()` を使用できます。
+
+規約は入力を保持したまま Modal で開きます。URL のページは iframe 埋め込みを許可する必要があり、スクリプトを無効にし別ウィンドウ表示も用意します。LoginForm/RegisterForm は `header/extraFields/footer`、AuthPanel は `loginHeader/loginFields/loginFooter` と `registerHeader/registerFields/registerFooter` を提供します。追加フィールドはアプリの状態と actions で処理します。[UI の使い方](../ui/README.ja.md) を参照してください。
+
+複数ノードは同じ DB と Redis を共有する必要があります。Memory は単一プロセス専用です。ログイン失敗は DB の原子的更新で累積し、OTP の試行回数、再送間隔、単回使用は共有状態で管理します。コードの使用や試行上限によって再送制限を回避できません。リセットは共有 TTL とユーザー別ロックを使用し、ポリシー違反も試行に含め、最新 Token の成功使用は一回だけです。リセット後は旧セッションとログインロックを解除します。無効なユーザーは認証できません。
+
+標準 HTTP 入口は `GET /auth/config`、`POST /auth/login/ldap`、`POST /auth/password-reset/request`、`POST /auth/password-reset/confirm` です。セキュリティエラーは `SECURITY_BUSY (hai:iam:023)` と `PASSWORD_RESET_DISABLED (hai:iam:024)` です。`ldap` などの任意項目は YAML に宣言してから環境変数で上書きするか、`HAI_IAM` の JSON 値でモジュール設定全体を置き換えます。既存項目には `HAI_IAM_LOGIN_OTP` などを使用できます。
+
+`passwordReset.mode` は `email`（既定、`password_reset`）または `phone`（`password_reset_sms`）を選び、公開設定に応じて復旧フォームが入力欄を切り替えます。
+
+### Markdown の規約
+
+`agreements.userAgreementMarkdown` と `privacyPolicyMarkdown` で設定から直接本文を読み込みます。YAML の `|` は段落と改行を保持します。Modal は安全な MarkdownRenderer を再利用し、生 HTML、スクリプト、コードツールを無効にします。同じ規約に本文と URL を指定した場合は本文を優先し、URL は任意の外部表示リンクとして使用します。URL のみの場合は隔離 iframe で表示します。
+
+```yaml
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  userAgreementMarkdown: |
+    # 用户协议
+
+    **账户使用条款**
+
+    - 请妥善保管账户凭据。
+  privacyPolicyMarkdown: |
+    # 隐私政策
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # 可选 URL；同主题同时配置 Markdown 和 URL 时，弹窗优先显示 Markdown。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+```
+
 ## エラー処理
 
 すべての操作は `HaiResult<T>` を返し、`HaiIamError` で分岐します：
@@ -552,5 +709,3 @@ pnpm test
 ## ライセンス
 
 Apache-2.0
-
-ロール一覧は `iam.authz.getRoleUserCounts(roleIds)` の 1 回の集計で現在のページの実際の所属人数を取得し、`HaiResult<Map<string, number>>` を返します。関連がなければ 0、検索失敗は読み込みエラーを表示し、0 件の統計を作りません。

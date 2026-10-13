@@ -23,6 +23,8 @@
     subtitle = '',
     brandTitle = '',
     brandText = '',
+    logoUrl,
+    illustrationUrl,
     logo,
     illustration,
     description,
@@ -43,6 +45,9 @@
     brandTitle?: string
     /** split 模式品牌区描述文案 */
     brandText?: string
+    /** 配置形式的 Logo 与配图；插槽优先。 */
+    logoUrl?: string
+    illustrationUrl?: string
     /** 顶部 Logo 插槽 */
     logo?: Snippet
     /** split 模式品牌区插图（如大图/海报） */
@@ -68,8 +73,8 @@
 
 {#snippet formPanel()}
   <div {...dataAttributes} class='flex w-full max-w-sm flex-col'>
-    {#if logo}
-      <div class={logoWrapClass}>{@render logo()}</div>
+    {#if logo || logoUrl}
+      <div class={logoWrapClass}>{#if logo}{@render logo()}{:else}<img src={logoUrl} alt={brandTitle || title} class='h-12 max-w-full object-contain' />{/if}</div>
     {/if}
     {#if title}
       <h1 class='text-center text-2xl font-semibold tracking-tight text-base-content'>{title}</h1>
@@ -98,11 +103,15 @@
           <div class='space-y-6'>
             {#if logo}
               <div>{@render logo()}</div>
+            {:else if logoUrl}
+              <img src={logoUrl} alt={brandTitle || title} class='h-12 max-w-full self-start object-contain' />
             {/if}
             {#if illustration}
               <div class='overflow-hidden rounded-2xl border border-primary-content/15 bg-primary-content/5 p-2'>
                 {@render illustration()}
               </div>
+            {:else if illustrationUrl}
+              <img src={illustrationUrl} alt='' class='max-h-96 w-full rounded-2xl object-contain' />
             {/if}
           </div>
 

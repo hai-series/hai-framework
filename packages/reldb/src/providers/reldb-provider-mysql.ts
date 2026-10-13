@@ -19,6 +19,7 @@ import type {
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
 
+import { createRequire } from 'node:module'
 import { core, err, ok } from '@h-ai/core'
 import { reldbM } from '../reldb-i18n.js'
 import { HaiReldbError } from '../reldb-types.js'
@@ -377,8 +378,8 @@ export function createMysqlProvider(): ReldbProvider {
         return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_mysqlOnlyMysql'))
       }
       try {
-        // eslint-disable-next-line ts/no-require-imports -- 按需加载
-        const mysql = require('mysql2/promise')
+        // Node ESM 按需加载驱动，避免构建器生成无法执行的动态 require。
+        const mysql = createRequire(import.meta.url)('mysql2/promise')
 
         pool = mysql.createPool({
           uri: config.url,

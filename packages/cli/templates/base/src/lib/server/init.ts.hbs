@@ -190,7 +190,7 @@ export async function initApp(): Promise<void> {
 
 {{#if features.iam}}
   // ─── 初始化 IAM ───
-  const iamResult = await iam.init(iamConfig)
+  const iamResult = await iam.init({ ...iamConfig{{#if features.reach}}, reach{{/if}} })
   if (!iamResult.success) {
     throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
   }

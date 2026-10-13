@@ -42,6 +42,7 @@ export default defineConfig(({ mode }) => {
 {{/if}}
 
   return {
+    envPrefix: ['VITE_', 'PUBLIC_'],
 {{#if isSvelteOnlyApp}}
     define: { __APP_CORE_CONFIG__: JSON.stringify(appConfig) },
 {{/if}}

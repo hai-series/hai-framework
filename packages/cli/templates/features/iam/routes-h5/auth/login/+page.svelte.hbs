@@ -1,102 +1,11 @@
-{{!-- H5 登录页面 --}}
 <script lang='ts'>
-  /**
-   * H5 登录页面
-   */
+  import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-{{#if hasI18n}}
-  import * as m from '$lib/paraglide/messages'
-{{/if}}
-  import { Alert, Button, FormField, Input } from '@h-ai/ui'
+  import { page } from '$app/state'
+  import { kit } from '@h-ai/kit'
+  import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
 
-  let username = $state('')
-  let password = $state('')
-  let error = $state('')
-  let loading = $state(false)
-
-  async function handleLogin(event: SubmitEvent) {
-    event.preventDefault()
-    error = ''
-    loading = true
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: username, password }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        window.location.href = '/'
-      }
-      else {
-{{#if hasI18n}}
-        error = data.error?.message || m.auth_login_failed()
-{{else}}
-        error = data.error?.message || '登录失败'
-{{/if}}
-      }
-    }
-    catch {
-{{#if hasI18n}}
-      error = m.auth_error_network()
-{{else}}
-      error = '网络错误'
-{{/if}}
-    }
-    finally {
-      loading = false
-    }
-  }
+  const authActions = kit.client.createAuthActions()
 </script>
 
-<svelte:head>
-{{#if hasI18n}}
-  <title>{m.auth_login_title()}</title>
-{{else}}
-  <title>登录</title>
-{{/if}}
-</svelte:head>
-
-<div class='p-4 pt-12 space-y-4'>
-{{#if hasI18n}}
-  <h1 class='text-2xl font-black tracking-tight text-center'>{m.auth_login_title()}</h1>
-{{else}}
-  <h1 class='text-2xl font-black tracking-tight text-center'>登录</h1>
-{{/if}}
-
-  {#if error}
-    <Alert variant='error'>{error}</Alert>
-  {/if}
-
-  <form onsubmit={handleLogin} class='space-y-4'>
-{{#if hasI18n}}
-    <FormField label={m.auth_label_username()} required>
-      <Input id='username' type='text' bind:value={username} required />
-    </FormField>
-    <FormField label={m.auth_label_password()} required>
-      <Input id='password' type='password' bind:value={password} required />
-    </FormField>
-    <Button type='submit' variant='primary' loading={loading} class='w-full'>
-      {loading ? m.auth_login_loading() : m.auth_login_submit()}
-    </Button>
-{{else}}
-    <FormField label='用户名' required>
-      <Input id='username' type='text' bind:value={username} required />
-    </FormField>
-    <FormField label='密码' required>
-      <Input id='password' type='password' bind:value={password} required />
-    </FormField>
-    <Button type='submit' variant='primary' loading={loading} class='w-full'>
-      {loading ? '登录中...' : '登录'}
-    </Button>
-{{/if}}
-  </form>
-
-  <div class='text-center'>
-{{#if hasI18n}}
-    <a href={resolve('/auth/register', {})} class='link link-primary text-sm'>{m.auth_login_to_register()}</a>
-{{else}}
-    <a href={resolve('/auth/register', {})} class='link link-primary text-sm'>没有账号？立即注册</a>
-{{/if}}
-  </div>
-</div>
+<AuthPanel config={page.data.iamPublicConfig} actions={authActions} initialMode='login' loginUrl={resolve('/auth/login', {})} registerUrl={resolve('/auth/register', {})} onauthenticated={() => goto(resolve('/', {}))} />

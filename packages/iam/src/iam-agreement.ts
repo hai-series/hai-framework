@@ -9,7 +9,7 @@ import type { AgreementConfig } from './iam-config.js'
 import type { AgreementDisplay } from './user/iam-user-types.js'
 
 /**
- * 根据展示开关构建协议展示信息；未启用或未配置任何协议链接时返回 undefined。
+ * 根据展示开关构建协议展示信息；未启用或未配置正文/链接时返回 undefined。
  *
  * @param config - 协议配置
  * @param enabled - 当前场景（登录/注册）是否展示协议
@@ -20,9 +20,11 @@ export function buildAgreementDisplay(
 ): AgreementDisplay | undefined {
   if (!enabled)
     return undefined
-  if (!config.userAgreementUrl && !config.privacyPolicyUrl)
+  if (!config.userAgreementMarkdown && !config.privacyPolicyMarkdown && !config.userAgreementUrl && !config.privacyPolicyUrl)
     return undefined
   return {
+    userAgreementMarkdown: config.userAgreementMarkdown,
+    privacyPolicyMarkdown: config.privacyPolicyMarkdown,
     userAgreementUrl: config.userAgreementUrl,
     privacyPolicyUrl: config.privacyPolicyUrl,
     showOnRegister: config.showOnRegister,

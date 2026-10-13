@@ -93,7 +93,9 @@ export interface LdapStrategyConfig {
    *
    * @param userId - 新创建的用户 ID
    */
-  onUserAutoRegistered?: (userId: string) => Promise<void>
+  onUserAutoRegistered?: (userId: string) => Promise<HaiResult<void>>
+  /** 新同步账户是否默认启用 */
+  defaultEnabled?: boolean
 }
 
 /**
@@ -172,6 +174,8 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       }
 
       const { username, password } = credentialResult.data
+      if (!username.trim() || !password)
+        return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
 
       // 创建 LDAP 客户端
       const clientResult = await ldapClientFactory(ldapConfig)
@@ -255,7 +259,9 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         const userBindResult = await client.bind(entry.dn, password)
         if (!userBindResult.success) {
           if (storedUser) {
-            await recordLoginFailure(userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
+            const failureResult = await recordLoginFailure(userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
+            if (!failureResult.success)
+              return failureResult
           }
           logger.warn('LDAP authentication failed', { username })
           return err(
@@ -270,7 +276,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             username: ldapUsername,
             email: ldapEmail,
             displayName: ldapDisplayName,
-            enabled: true,
+            enabled: config.defaultEnabled ?? true,
             emailVerified: !!ldapEmail,
             metadata: {
               ldapDn: entry.dn,
@@ -294,7 +300,11 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           // LDAP 新用户同步后回调（分配默认角色等）
           if (storedUser && config.onUserAutoRegistered) {
             try {
-              await config.onUserAutoRegistered(storedUser.id)
+              const assigned = await config.onUserAutoRegistered(storedUser.id)
+              if (!assigned.success) {
+                await userRepository.deleteById(storedUser.id)
+                return assigned
+              }
             }
             catch (callbackError) {
               logger.warn('onUserAutoRegistered callback failed', { userId: storedUser?.id, error: callbackError })
@@ -326,7 +336,9 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           return ok(ldapUser)
         }
 
-        await resetLoginFailures(userRepository, storedUser)
+        const resetResult = await resetLoginFailures(userRepository, storedUser)
+        if (!resetResult.success)
+          return resetResult
         logger.info('LDAP authentication succeeded', { userId: storedUser.id })
 
         return ok(toUser(storedUser))

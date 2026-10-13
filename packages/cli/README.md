@@ -227,7 +227,15 @@ monorepo 内的 `apps/*` 项目已通过 `workspace:*` 协议引用本地包，�
 node packages/cli/dist/index.js create ../my-new-project
 ```
 
-### 5. 运行测试
+## 5. 配置驱动认证页面
+
+协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+选用 IAM 的 admin/h5/website 模板提供 AuthPanel 和标准认证路由；mobile-app 与 fullstack Web/App/Desktop 使用 API 客户端共享动作。修改服务端 config/_iam.yml 控制登录方式、注册、重置、协议弹窗和品牌。LDAP/Reach 均可选：默认 LDAP 客户端需要应用安装 ldapts，再启用 login.ldap 并配置连接；短信/邮件可选择 Reach 模板或自定义发送回调。表单预留 header/extraFields/footer，AuthPanel 透传 login*/register* snippet。分布式部署使用共享数据库与 Redis。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.md)
+
+### 6. 运行测试
 
 ```bash
 # 单元测试 + E2E 模板生成测试

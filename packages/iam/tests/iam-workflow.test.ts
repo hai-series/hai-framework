@@ -938,7 +938,7 @@ describe('iam.workflow', () => {
         await initIam()
       })
 
-      it('未配置 onOtpSendEmail 时 sendOtp 应返回 INTERNAL_ERROR', async () => {
+      it('未配置发送渠道时 sendOtp 应返回 LOGIN_DISABLED', async () => {
         const otpIam = await initIam({
           login: { password: true, otp: true },
           otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
@@ -948,7 +948,7 @@ describe('iam.workflow', () => {
         const sendResult = await otpIam.auth.sendOtp('nohandler@test.com')
         expect(sendResult.success).toBe(false)
         if (!sendResult.success) {
-          expect(sendResult.error.code).toBe(HaiIamError.INTERNAL_ERROR.code)
+          expect(sendResult.error.code).toBe(HaiIamError.LOGIN_DISABLED.code)
         }
 
         await initIam()

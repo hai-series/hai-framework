@@ -104,6 +104,14 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 - `transport.keyExchangePath`：鍵交換のサブパス。既定は `/_hai/key-exchange` で、`baseUrl` に自動的に連結されます。
 - `apiClient.config`：**機密情報をマスクした実行時設定のスナップショット**。`baseUrl` 内の認証情報や `headers.authorization` などの機密値は自動的に非表示になります。
 
+## 設定による認証画面
+
+規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
+
+標準 IAM contract のクライアントには apiClient.createAuthActions(client) を使用します。複数方式、登録、OTP、復旧を統一し、認証成功時に設定済み TokenStorage に保存します。アプリ側は認証後の状態更新と遷移だけを担当します。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
+
 ## エラー処理
 
 業務 API は `HaiResult<T>` を返します：

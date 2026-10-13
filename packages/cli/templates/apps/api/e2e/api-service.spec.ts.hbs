@@ -1,8 +1,36 @@
-import { apiContract } from '@h-ai/api-contract'
+import process from 'node:process'
+import { apiClient } from '@h-ai/api-client'
+{{#if features.crypto}}
+import { crypto } from '@h-ai/crypto'
+{{/if}}
 import { expect, test } from '@playwright/test'
 import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
 
 const API_PREFIX = '/api/v1'
+const client = apiClient.create({{api.contractExportName}})
+
+test.beforeAll(async () => {
+{{#if features.crypto}}
+  expect((await crypto.init()).success).toBe(true)
+{{/if}}
+  const result = await client.init({
+    baseUrl: `${process.env.BASE_URL || 'http://127.0.0.1:3000'}${API_PREFIX}`,
+{{#if features.iam}}
+    auth: { storage: apiClient.tokenStorage.memory() },
+{{/if}}
+{{#if features.crypto}}
+    transport: process.env.HAI_SERV_TRANSPORT === 'false' ? undefined : { crypto },
+{{/if}}
+  })
+  expect(result.success).toBe(true)
+})
+
+test.afterAll(async () => {
+  await client.close()
+{{#if features.crypto}}
+  await crypto.close()
+{{/if}}
+})
 
 test('service health endpoint returns ok', async ({ request }) => {
   const response = await request.get('/health')
@@ -11,14 +39,52 @@ test('service health endpoint returns ok', async ({ request }) => {
   await expect(response.json()).resolves.toEqual({ status: 'ok' })
 })
 
-test('service app.info endpoint returns HaiResult', async ({ request }) => {
-  const response = await request.post(`${API_PREFIX}${apiContract.pathOf({{api.contractExportName}}.app.info)}`)
-  const body = await response.json()
-
-  expect(response.status()).toBe(200)
+test('service app.info endpoint returns HaiResult', async () => {
+  const body = await client.app.info()
   expect(body.success).toBe(true)
+  if (!body.success)
+    return
   expect(body.data.name).toBe(process.env.HAI_CORE_NAME ?? '{{projectName}} API Service')
   expect(body.data.version).toBe(process.env.HAI_CORE_VERSION ?? '0.1.0')
   expect(body.data.env).toBe(process.env.HAI_CORE_ENV ?? 'development')
   expect(typeof body.data.transportEnabled).toBe('boolean')
 })
+{{#if features.iam}}
+
+/** 通过真实 API 验证 IAM 开关、登录、通知和重置，不需要页面适配。 */
+test('configured IAM supports registration, OTP and reset', async ({ request }) => {
+  test.setTimeout(60_000)
+  const actions = apiClient.createAuthActions(client)
+  const publicConfig = await actions.publicConfig()
+  expect(publicConfig.success).toBe(true)
+  if (!publicConfig.success)
+    return
+  expect(publicConfig.data?.register.enabled).toBe(true)
+  const username = `api${Date.now()}`
+  const email = `${username}@example.com`
+  const password = 'ApiPassword123'
+  expect((await actions.register({ username, email, password })).success).toBe(true)
+  expect((await actions.login({ identifier: username, password })).success).toBe(true)
+  if (!publicConfig.data?.login.email) {
+    // 无 Reach/发送回调时，基础认证仍可用，未就绪的通知入口保持关闭。
+    expect((await actions.sendOtp(email)).success).toBe(false)
+    return
+  }
+  if (!process.env.IAM_NOTIFICATION_URL)
+    return
+  async function received(template: string) {
+    const response = await request.get(`${process.env.IAM_NOTIFICATION_URL}/messages?to=${encodeURIComponent(email)}`)
+    const messages = await response.json() as { template: string, vars: Record<string, string> }[]
+    return messages.findLast(item => item.template === template)?.vars
+  }
+  expect((await actions.sendOtp(email)).success).toBe(true)
+  const otp = await received('otp_email')
+  expect(Boolean(otp?.code)).toBe(true)
+  expect((await actions.login({ identifier: email, method: 'email', code: otp?.code })).success).toBe(true)
+  expect((await actions.requestPasswordReset(email)).success).toBe(true)
+  const reset = await received('password_reset')
+  expect(Boolean(reset?.token)).toBe(true)
+  expect((await actions.confirmPasswordReset(reset?.token ?? '', 'ApiResetPassword456')).success).toBe(true)
+  expect((await actions.login({ identifier: username, password: 'ApiResetPassword456' })).success).toBe(true)
+})
+{{/if}}

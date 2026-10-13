@@ -155,54 +155,7 @@ async function runInitApp(): Promise<void> {
   // 8. 初始化 IAM 模块（使用 reach 发送密码重置和 OTP 通知）
   const iamResult = await iam.init({
     ...effectiveIamConfig,
-    onPasswordResetRequest: reach.isInitialized
-      ? async (user, token, expiresAt) => {
-        const result = await reach.send({
-          provider: 'email',
-          to: user.email ?? '',
-          template: 'password_reset',
-          vars: { token, expiresAt: expiresAt.toISOString() },
-        })
-        if (!result.success) {
-          core.logger.warn('Failed to send password reset email', {
-            hasRecipient: Boolean(user.email),
-            error: result.error.message,
-          })
-        }
-      }
-      : undefined,
-    onOtpSendEmail: reach.isInitialized
-      ? async (email, code) => {
-        const result = await reach.send({
-          provider: 'email',
-          to: email,
-          template: 'otp_email',
-          vars: { code },
-        })
-        if (!result.success) {
-          core.logger.warn('Failed to send OTP email', {
-            emailDomain: email.split('@')[1] ?? 'unknown',
-            error: result.error.message,
-          })
-        }
-      }
-      : undefined,
-    onOtpSendSms: reach.isInitialized
-      ? async (phone, code) => {
-        const result = await reach.send({
-          provider: 'sms',
-          to: phone,
-          template: 'otp_sms',
-          vars: { code },
-        })
-        if (!result.success) {
-          core.logger.warn('Failed to send OTP SMS', {
-            phoneSuffix: phone.slice(-4),
-            error: result.error.message,
-          })
-        }
-      }
-      : undefined,
+    reach,
   })
   if (!iamResult.success) {
     const cause = iamResult.error.cause
@@ -255,7 +208,7 @@ async function ensureDefaultAdmin(): Promise<void> {
   }
 
   // 注册管理员用户
-  const registerResult = await iam.user.register({
+  const registerResult = await iam.user.createUser({
     username: 'admin',
     email: 'admin@localhost',
     password,

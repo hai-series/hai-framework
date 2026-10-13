@@ -5,10 +5,12 @@
  * @module kit-main
  */
 
+import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
 import { hasPermission, requirePermission } from './guards/kit-permission.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
+import { authApiPublicPaths, createAuthApi } from './kit-auth-api.js'
 import {
   clearBrowserToken,
   createTokenStore,
@@ -106,6 +108,8 @@ export const kit = {
   client: {
     /** 创建统一客户端（CSRF + 传输加密透明合并） */
     create: createKitClient,
+    /** 标准认证表单动作（Cookie 模式）。 */
+    createAuthActions: createKitAuthActions,
     /**
      * 用解析后的 {@link KitConfig} 一键安装浏览器端传输加密
      * （应用层推荐入口；内部预热 crypto 并调用 installBrowserTransportFetch）
@@ -118,6 +122,10 @@ export const kit = {
   // ─── 认证工具 ───
 
   auth: {
+    /** 标准匿名认证端点白名单。 */
+    publicPaths: authApiPublicPaths,
+    /** 标准配置/登录/注册/验证码/重置 handler 集合。 */
+    createApi: createAuthApi,
     /** 服务端登录（密码）：内部调用 iam.auth.login + 自动写入 Token Cookie */
     login,
     /** 服务端登录（OTP 验证码）：内部调用 iam.auth.loginWithOtp + 自动写入 Token Cookie */

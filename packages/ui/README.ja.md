@@ -262,10 +262,11 @@ components/
 | `ThemeSelector`    | テーマ選択パネル                            | プロパティ不要                                           |
 | `ThemeToggle`      | ライト・ダーク切り替え                      | プロパティ不要                                           |
 
-#### IAM：認証（9）
+#### IAM：認証（10）
 
 | コンポーネント       | 説明                                    | 主なプロパティ                                                                                         |
 | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `AuthPanel`          | 設定による認証画面 | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | 認証ページ配置（中央カード / 左右分割） | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
 | `LoginForm`          | ログインフォーム                        | `loading`, `errors`, `showRememberMe`, `onsubmit`                                                      |
 | `RegisterForm`       | 登録フォーム                            | `loading`, `errors`, `fields`, `onsubmit`                                                              |
@@ -724,6 +725,35 @@ import {
 } from '@h-ai/ui'
 ```
 
+## 設定による認証画面
+
+YAML の `|` で `agreements.userAgreementMarkdown` と `privacyPolicyMarkdown` を設定できます。Modal は本文を安全に描画し、同じ規約の URL より本文を優先します。URL のみの場合は隔離 iframe を使用します。
+
+```yaml
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  userAgreementMarkdown: |
+    # 用户协议
+
+    **账户使用条款**
+
+    - 请妥善保管账户凭据。
+  privacyPolicyMarkdown: |
+    # 隐私政策
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # 可选 URL；同主题同时配置 Markdown 和 URL 时，弹窗优先显示 Markdown。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+```
+
+
+
+AuthPanel に IAM 公開設定と actions を渡すと、複数方式のログイン、登録、復旧、規約を利用できます。config.ui でレイアウトとブランド画像を指定し、パスワードフォームは passwordPolicy を受け取ります。通信と Token 保存は actions の責務です。既知の IAM 認証エラーは現在の UI 言語で表示し、アプリ独自のメッセージはそのまま保持します。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
+
 ## その他のエクスポート
 
 ```ts
@@ -739,4 +769,18 @@ import { cn, generateId, getSizeClass, getVariantClass } from '@h-ai/ui'
 ```ts
 // Toast 单例
 import { toast } from '@h-ai/ui'
+```
+
+規約は入力を保持したまま Modal で表示します。ページは iframe 埋め込みを許可し、スクリプトを無効化して別ウィンドウ表示も用意します。LoginForm/RegisterForm は `header/extraFields/footer`、AuthPanel は `loginHeader/loginFields/loginFooter` と `registerHeader/registerFields/registerFooter` を提供し、既定ナビゲーションを保持します。追加フィールドはアプリ状態と独自 actions で処理し、IAM に自動送信しません。拡張ボタンは `type="button"` を指定します。
+
+```svelte
+<!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
+<AuthPanel {config} {actions}>
+  {#snippet loginHeader()}
+    <p>{m.loginHelp()}</p>
+  {/snippet}
+  {#snippet registerFields()}
+    <label><input type='checkbox' bind:checked={subscribe} />{m.subscribe()}</label>
+  {/snippet}
+</AuthPanel>
 ```

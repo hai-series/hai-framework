@@ -59,6 +59,10 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
     },
 {{#if features.iam}}
     iam,
+    refreshCookie,
+{{/if}}
+{{#if features.crypto}}
+    transport,
 {{/if}}
     middlewares: [
       {
@@ -71,13 +75,6 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
       },
     ],
   }
-{{#if features.iam}}
-
-  appOptions.refreshCookie = refreshCookie
-{{/if}}{{#if features.crypto}}
-  if (transport)
-    appOptions.transport = transport
-{{/if}}
 
   return serv.createApp(appOptions)
 }

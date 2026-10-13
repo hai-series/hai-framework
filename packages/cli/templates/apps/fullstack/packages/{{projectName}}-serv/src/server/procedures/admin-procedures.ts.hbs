@@ -20,7 +20,7 @@ import { serverM } from '../messages.js'
 
 /** 身份认证沿用框架公共契约与 refresh-cookie 传输。 */
 export function createAuthProcedures() {
-  const { currentUser, refresh } = createIamProcedures({ iam }).auth
+  const { currentUser, refresh, publicConfig, loginWithOtp, loginWithLdap, register, sendOtp, requestPasswordReset, confirmPasswordReset } = createIamProcedures({ iam }).auth
   const { login, logout, changePassword } = authContract
   // 仅覆写需要业务审计的认证操作，其余直接复用框架；未选认证入口不挂载。
   const audited = serv.implement({ login, logout, changePassword }).context<ServContext>().route('login', async ({ input, context }) => {
@@ -42,7 +42,7 @@ export function createAuthProcedures() {
     await recordAudit(context, 'password-change', 'profile', context.session.userId)
     return result
   }).build()
-  return { ...audited, currentUser, refresh }
+  return { ...audited, currentUser, refresh, publicConfig, loginWithOtp, loginWithLdap, register, sendOtp, requestPasswordReset, confirmPasswordReset }
 }
 
 export function createAdminProcedures() {

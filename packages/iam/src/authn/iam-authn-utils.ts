@@ -73,18 +73,8 @@ export async function recordLoginFailure(
   userRepository: UserRepository,
   user: StoredUser,
   policy: LoginFailurePolicy,
-): Promise<void> {
-  const failedCount = (user.loginFailedCount || 0) + 1
-  const updateData: Partial<StoredUser> = {
-    loginFailedCount: failedCount,
-    lastLoginFailedAt: new Date(),
-  }
-
-  if (failedCount >= policy.maxLoginAttempts) {
-    updateData.lockedUntil = new Date(Date.now() + policy.lockoutDuration * 1000)
-  }
-
-  await userRepository.updateById(user.id, updateData)
+): Promise<HaiResult<void>> {
+  return userRepository.recordLoginFailure(user.id, policy)
 }
 
 /**
@@ -99,12 +89,6 @@ export async function recordLoginFailure(
 export async function resetLoginFailures(
   userRepository: UserRepository,
   user: StoredUser,
-): Promise<void> {
-  if (user.loginFailedCount && user.loginFailedCount > 0) {
-    await userRepository.updateById(user.id, {
-      loginFailedCount: 0,
-      lastLoginFailedAt: undefined,
-      lockedUntil: undefined,
-    })
-  }
+): Promise<HaiResult<void>> {
+  return userRepository.resetLoginFailures(user.id)
 }

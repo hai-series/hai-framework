@@ -21,3 +21,15 @@ pnpm --filter {{api.servicePackageName}} test
 - `src/app.ts`：HTTP App 装配
 - `src/lib/server/init.ts`：模块初始化与关闭
 - `src/server/procedures/`：应用级 procedures
+
+{{#if features.iam}}
+## IAM 认证配置
+
+服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。客户端可通过安全公开配置和框架认证动作接入 `AuthPanel`。所有节点共享同一 DB 与 Redis；Memory 仅用于单进程。
+
+LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
+
+协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+完整契约见生成应用的 `.agents/skills/hai-iam/reference.md`。
+{{/if}}

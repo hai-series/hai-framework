@@ -7,13 +7,9 @@
  * 容器启动后会自动创建测试用户。
  */
 
-import type { HaiResult } from '@h-ai/core'
 import type { StartedTestContainer } from 'testcontainers'
-import type { LdapClient, LdapClientFactory, LdapSearchEntry } from '../../src/authn/ldap/iam-authn-ldap-strategy.js'
 import type { LdapConfig } from '../../src/iam-config.js'
-import { err, ok } from '@h-ai/core'
 import { GenericContainer, Wait } from 'testcontainers'
-import { HaiIamError } from '../../src/iam-types.js'
 
 let containerPromise: Promise<StartedTestContainer> | null = null
 let refCount = 0
@@ -44,7 +40,6 @@ export interface LdapContainerLease {
     dn: string
   }
   ldapConfig: LdapConfig
-  ldapClientFactory: LdapClientFactory
   release: () => Promise<void>
 }
 
@@ -103,7 +98,6 @@ export async function acquireLdapContainer(): Promise<LdapContainerLease> {
       dn: `uid=ldapuser,ou=users,${LDAP_BASE_DN}`,
     },
     ldapConfig,
-    ldapClientFactory: createTestLdapClientFactory(),
     release: async () => {
       refCount -= 1
       if (refCount <= 0) {
@@ -155,173 +149,4 @@ async function seedTestData(container: StartedTestContainer): Promise<void> {
   if (execResult.exitCode !== 0 && execResult.exitCode !== 68) {
     console.warn(`ldapadd exited with code ${execResult.exitCode}: ${execResult.output}`)
   }
-}
-
-/**
- * 创建测试用 LDAP 客户端工厂
- *
- * 基于容器内 ldapwhoami/ldapsearch 命令实现，避免引入 ldapjs 依赖。
- */
-function createTestLdapClientFactory(): LdapClientFactory {
-  return async (_config: LdapConfig): Promise<HaiResult<LdapClient>> => {
-    const client = createSimpleLdapClient(_config)
-    return ok(client)
-  }
-}
-
-/**
- * 简易 LDAP 客户端
- *
- * 通过容器内 ldapwhoami/ldapsearch 命令执行 LDAP 操作。
- * 避免引入 ldapjs 依赖。
- */
-function createSimpleLdapClient(config: LdapConfig): LdapClient {
-  return {
-    async bind(dn: string, password: string): Promise<HaiResult<void>> {
-      try {
-        const container = await containerPromise
-        if (!container) {
-          return err(
-            HaiIamError.LDAP_CONNECTION_FAILED,
-            'LDAP container not available',
-          )
-        }
-
-        // 使用容器内 ldapwhoami 验证绑定凭证
-        const result = await container.exec([
-          'ldapwhoami',
-          '-x',
-          '-H',
-          'ldap://localhost:389',
-          '-D',
-          dn,
-          '-w',
-          password,
-        ])
-
-        if (result.exitCode !== 0) {
-          return err(
-            HaiIamError.LDAP_BIND_FAILED,
-            `Bind failed for ${dn}: ${result.output}`,
-          )
-        }
-
-        return ok(undefined)
-      }
-      catch (error) {
-        return err(
-          HaiIamError.LDAP_BIND_FAILED,
-          `Bind failed: ${(error as Error).message}`,
-        )
-      }
-    },
-
-    async search(base: string, filter: string, attributes: string[]): Promise<HaiResult<LdapSearchEntry[]>> {
-      try {
-        const container = await containerPromise
-        if (!container) {
-          return err(
-            HaiIamError.LDAP_SEARCH_FAILED,
-            'LDAP container not available',
-          )
-        }
-
-        const args = [
-          'ldapsearch',
-          '-x',
-          '-H',
-          'ldap://localhost:389',
-          '-D',
-          config.bindDn,
-          '-w',
-          config.bindPassword,
-          '-b',
-          base,
-          '-LLL',
-          filter,
-          ...attributes,
-        ]
-
-        const result = await container.exec(args)
-
-        // exitCode 32 = no such object（搜索结果为空），返回空数组
-        if (result.exitCode === 32) {
-          return ok([])
-        }
-
-        if (result.exitCode !== 0) {
-          return err(
-            HaiIamError.LDAP_SEARCH_FAILED,
-            `Search failed: ${result.output}`,
-          )
-        }
-
-        const entries = parseLdifOutput(result.output)
-        return ok(entries)
-      }
-      catch (error) {
-        return err(
-          HaiIamError.LDAP_SEARCH_FAILED,
-          `Search failed: ${(error as Error).message}`,
-        )
-      }
-    },
-
-    async unbind(): Promise<HaiResult<void>> {
-      return ok(undefined)
-    },
-  }
-}
-
-/**
- * 解析 ldapsearch 的 LDIF 输出为结构化条目
- */
-function parseLdifOutput(output: string): LdapSearchEntry[] {
-  const entries: LdapSearchEntry[] = []
-  const blocks = output.split('\n\n').filter(b => b.trim())
-
-  for (const block of blocks) {
-    const lines = block.split('\n').filter(l => l.trim() && !l.startsWith('#'))
-    let dn = ''
-    const attributes: Record<string, string | string[]> = {}
-
-    for (const line of lines) {
-      const colonIdx = line.indexOf(':')
-      if (colonIdx === -1)
-        continue
-
-      const key = line.substring(0, colonIdx).trim()
-      let value = line.substring(colonIdx + 1).trim()
-
-      // 处理 base64 编码值（以 :: 分隔）
-      if (line.charAt(colonIdx + 1) === ':') {
-        // eslint-disable-next-line node/prefer-global/buffer -- 测试辅助函数，直接使用 Node.js Buffer
-        value = Buffer.from(value, 'base64').toString('utf-8')
-      }
-
-      if (key === 'dn') {
-        dn = value
-      }
-      else {
-        const existing = attributes[key]
-        if (existing) {
-          if (Array.isArray(existing)) {
-            existing.push(value)
-          }
-          else {
-            attributes[key] = [existing, value]
-          }
-        }
-        else {
-          attributes[key] = value
-        }
-      }
-    }
-
-    if (dn) {
-      entries.push({ dn, attributes })
-    }
-  }
-
-  return entries
 }

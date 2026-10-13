@@ -593,6 +593,14 @@ const app = serv.createApp({
 
 本番では `_serv.yml` の `cors.origin` が空・`*` なら起動に失敗します。Web・Capacitor/Tauri は正規化済み Origin 全体を厳密照合し、末尾偽装を防ぎます。本番は Secure refresh cookie を強制し OpenAPI/docs を無効化します。非本番の endpoint は設定ファイルで決めます。
 
+## 設定による認証画面
+
+規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
+
+createIamProcedures({ iam }) は公開設定、LDAP/OTP/パスワード、登録、復旧を直接実装します。LDAP も既存の Cookie/ネイティブ Token 方針を使用し、自助登録が無効でも管理者のユーザー作成は権限検証の下で利用できます。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
+
 ## エラー処理
 
 通常の procedure は認証・認可・業務の失敗と捕捉した handler 例外を HaiResult として既定で HTTP 200 で返します。`error.httpStatus` はドメインエラーのメタデータで、HTTP 応答ステータスを変更しません。クライアントは `success` と `error.code` を確認してください。未認証では `error.httpStatus=401`、DB クエリー失敗や INTERNAL_ERROR では 500 です。

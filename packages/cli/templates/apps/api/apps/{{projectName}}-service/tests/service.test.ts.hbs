@@ -146,7 +146,8 @@ describe('{{api.servicePackageName}}', () => {
 {{#if features.iam}}
   it('registers a user and returns authenticated echo context', async () => {
     const user = uniqueUser('svc')
-    const register = await client.iam.auth.register({
+    const authActions = apiClient.createAuthActions(client)
+    const register = await authActions.register({
       username: user.username,
       password: user.password,
       email: user.email,

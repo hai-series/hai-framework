@@ -26,6 +26,7 @@ import { HaiIamError } from '../iam-types.js'
 import { createDbUserRepository } from '../user/iam-user-repository-user.js'
 import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.js'
 import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
+import { loadLdapClientFactory } from './ldap/iam-authn-ldap-client.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
 import { createCacheOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
 import { createOtpStrategy } from './otp/iam-authn-otp-strategy.js'
@@ -62,6 +63,8 @@ export interface AuthnOperationsResult {
   passwordStrategyResult: PasswordStrategyResult
   /** API Key 管理操作（仅在启用 apikey 登录时可用） */
   apiKeyFunctions: ApiKeyOperations | null
+  /** 注册完成后直接创建会话，不受密码登录方式开关影响。 */
+  loginRegisteredUser: (user: User) => Promise<HaiResult<AuthResult>>
 }
 
 /**
@@ -82,13 +85,15 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
      *
      * 供 OTP/LDAP 策略在自动创建用户后调用。
      */
-    async function onUserAutoRegistered(userId: string): Promise<void> {
-      if (!config.rbac?.defaultRole)
-        return
+    async function onUserAutoRegistered(userId: string): Promise<HaiResult<void>> {
+      if (!config.rbac?.enabled || !config.rbac.defaultRole)
+        return ok(undefined)
       const roleResult = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
-      if (roleResult.success && roleResult.data) {
-        await authzFunctions.assignRole(userId, roleResult.data.id)
-      }
+      if (!roleResult.success)
+        return roleResult
+      if (!roleResult.data)
+        return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+      return authzFunctions.assignRole(userId, roleResult.data.id)
     }
 
     // 密码策略
@@ -120,12 +125,15 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 
     // LDAP 策略
     let ldapStrategy: AuthStrategy | undefined
-    if (loginConfig.ldap && config.ldap && ldapClientFactory) {
+    if (loginConfig.ldap && config.ldap) {
+      // 仅在启用目录认证且未注入工厂时加载可选 SDK；缺少 SDK 在 init 时返回配置错误。
+      const clientFactory = ldapClientFactory ?? await loadLdapClientFactory()
       ldapStrategy = createLdapStrategy({
         ldapConfig: config.ldap,
         userRepository,
-        ldapClientFactory,
+        ldapClientFactory: clientFactory,
         syncUser: ldapSyncUser ?? true,
+        defaultEnabled: config.register.defaultEnabled,
         maxLoginAttempts: securityConfig.maxLoginAttempts,
         lockoutDuration: securityConfig.lockoutDuration,
         onUserAutoRegistered,
@@ -160,7 +168,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     })
 
     logger.info('Authn sub-feature initialized')
-    return ok({ authn: operations, passwordStrategyResult: passwordResult, apiKeyFunctions })
+    return ok({ authn: operations.authn, loginRegisteredUser: operations.loginRegisteredUser, passwordStrategyResult: passwordResult, apiKeyFunctions })
   }
   catch (error) {
     logger.error('Authn sub-feature initialization failed', { error })
@@ -190,7 +198,7 @@ interface BuildAuthnDeps {
  *
  * 不含 registerAndLogin，该方法需要 userFunctions 依赖，由 iam-main 在初始化后组合注入。
  */
-function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'registerAndLogin'> {
+function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult, 'authn' | 'loginRegisteredUser'> {
   const {
     passwordStrategy,
     otpStrategy,
@@ -292,6 +300,8 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
    * @returns 包含用户信息、访问令牌、过期时间和协议展示的认证结果
    */
   async function buildAuthResult(user: User): Promise<HaiResult<AuthResult>> {
+    if (!user.enabled)
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     // 并行获取角色和权限，登录时一次性查 DB，后续纯缓存
     const [roleCodesResult, permCodesResult] = await Promise.all([
       resolveUserRoleCodes(user.id),
@@ -374,7 +384,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
     return result
   }
 
-  return {
+  return { loginRegisteredUser: buildAuthResult, authn: {
     async login(credentials: PasswordCredentials): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('password', credentials, passwordStrategy)
     },
@@ -425,5 +435,5 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
 
       return otpChallenge(identifier)
     },
-  }
+  } }
 }

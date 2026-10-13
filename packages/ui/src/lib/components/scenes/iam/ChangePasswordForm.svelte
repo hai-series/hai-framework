@@ -9,7 +9,7 @@
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import Button from '../../primitives/Button.svelte'
-  import { arePasswordsEqual } from './password-utils.js'
+  import { arePasswordsEqual, passwordPolicyError, passwordPolicyHint } from './password-utils.js'
   import PasswordInput from './PasswordInput.svelte'
 
   const {
@@ -18,6 +18,7 @@
     requireOldPassword = true,
     showPasswordStrength = true,
     minPasswordLength = 8,
+    passwordPolicy,
     submitText,
     class: className = '',
     errors = {},
@@ -29,6 +30,8 @@
   let oldPassword = $state('')
   let newPassword = $state('')
   let confirmPassword = $state('')
+
+  const policyError = $derived(passwordPolicy && newPassword ? passwordPolicyError(newPassword, passwordPolicy) : '')
 
   const formClass = $derived(
     cn(
@@ -56,7 +59,7 @@
    */
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
-    if (loading || disabled || !canSubmit)
+    if (policyError || loading || disabled || !canSubmit)
       return
 
     const data: ChangePasswordFormData = {
@@ -125,11 +128,14 @@
     </Alert>
   {/if}
 
+  {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
+  {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
+
   <Button
     type='submit'
     variant='primary'
     class='w-full sm:w-auto sm:min-w-40'
-    disabled={loading || disabled || !canSubmit}
+    disabled={loading || disabled || !canSubmit || Boolean(policyError)}
     {loading}
   >
     {submitText || uiM('change_password_submit')}

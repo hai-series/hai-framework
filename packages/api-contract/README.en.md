@@ -93,6 +93,14 @@ Write each business path directly in its `*-contract.ts` file. Inline output sch
 
 This package has no runtime configuration and does not read environment variables.
 
+## Configuration driven authentication
+
+Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
+
+IAM adds GET /auth/config and POST /auth/login/ldap, /auth/password-reset/request and /auth/password-reset/confirm. Public config is a schema whitelist; IamLdapLoginInput and IamPublicConfig are exported. Password lengths follow the configured IAM policy.
+
+[完整 IAM 配置 / IAM configuration](../iam/README.en.md)
+
 ## Error handling
 
 Contracts describe input and output structures only. Procedures express business errors with `HaiResult<T>`, so clients need not catch business exceptions.

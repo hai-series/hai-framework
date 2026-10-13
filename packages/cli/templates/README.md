@@ -142,3 +142,11 @@ import { iam } from '@h-ai/iam'
 ### 新增 feature 路由
 
 在 `features/{featureId}/routes-shared/`（API 路由）或 `features/{featureId}/routes-{appType}/`（UI 页面）下创建文件，然后在 `cli-template-engine.ts` 的 `FEATURE_ROUTE_DIRS` / `FEATURE_APP_ROUTE_DIRS` 中注册该目录。
+
+## 配置驱动认证页面
+
+协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+选用 IAM 的 admin/h5/website 模板提供 AuthPanel 和标准认证路由；mobile-app 与 fullstack Web/App/Desktop 使用 API 客户端共享动作。修改服务端 config/_iam.yml 即可控制登录方式、注册、重置、协议和品牌，无需改表单。配置 Reach 模板和真实发送 Provider 后启用 OTP/重置。分布式部署使用共享数据库与 Redis。
+
+LDAP/Reach 是可选 peer；IAM 不强制启用 Reach。默认 LDAP 客户端由应用选择安装 ldapts。自定义通知回调、协议弹窗、表单 snippet 用法随 hai-iam/hai-ui skills 完整复制到生成项目，不能要求应用读取本仓库私有路径。

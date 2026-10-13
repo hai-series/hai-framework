@@ -93,6 +93,14 @@ const app = serv.createApp({
 
 このパッケージには実行時設定がなく、環境変数も読み込みません。
 
+## 設定による認証画面
+
+規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
+
+IAM に公開設定、LDAP、復旧要求と確定の標準 route を追加しました。IamPublicConfig は安全な Schema で、登録パスワードの長さは IAM 設定に従います。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
+
 ## エラー処理
 
 Contract は入出力構造のみを定義します。業務エラーは procedure が返す `HaiResult<T>` で表し、クライアント側で業務例外を捕捉する必要はありません。

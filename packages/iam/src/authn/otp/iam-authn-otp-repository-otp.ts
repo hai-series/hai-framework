@@ -150,7 +150,9 @@ export function createCacheOtpRepository(): OtpRepository {
       }
 
       // 同步重置尝试计数器（避免新生成的 OTP 复用旧计数）
-      await cache.kv.del(buildOtpAttemptsKey(identifier))
+      const reset = await cache.kv.del(buildOtpAttemptsKey(identifier))
+      if (!reset.success)
+        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), reset.error)
 
       return ok(undefined)
     },
@@ -171,6 +173,8 @@ export function createCacheOtpRepository(): OtpRepository {
 
       // 合并存储的尝试次数（独立键，支持原子 incr）
       const attemptsResult = await cache.kv.get<number>(buildOtpAttemptsKey(identifier))
+      if (!attemptsResult.success)
+        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), attemptsResult.error)
       const attempts = attemptsResult.success && typeof attemptsResult.data === 'number'
         ? attemptsResult.data
         : 0
@@ -209,8 +213,12 @@ export function createCacheOtpRepository(): OtpRepository {
 
       // 同步对齐 OTP 键剩余 TTL，确保 attempts 与 OTP 同时过期
       const ttlResult = await cache.kv.ttl(otpKey)
+      if (!ttlResult.success)
+        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), ttlResult.error)
       const ttl = ttlResult.success && ttlResult.data > 0 ? ttlResult.data : 1
-      await cache.kv.expire(attemptsKey, ttl)
+      const expire = await cache.kv.expire(attemptsKey, ttl)
+      if (!expire.success)
+        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), expire.error)
 
       return ok(incrResult.data)
     },
@@ -225,7 +233,9 @@ export function createCacheOtpRepository(): OtpRepository {
         )
       }
       // 同步清理尝试计数键
-      await cache.kv.del(buildOtpAttemptsKey(identifier))
+      const removed = await cache.kv.del(buildOtpAttemptsKey(identifier))
+      if (!removed.success)
+        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), removed.error)
       return ok(undefined)
     },
   }

@@ -262,6 +262,14 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 - `@h-ai/kit/a2a`：A2A 协议集成。
 - `@h-ai/kit/crypto`：加密模块集成。
 
+## 配置驱动认证页面
+
+协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+路由直接导出 `kit.auth.createApi(iam)` 的 login、loginWithOtp、loginWithLdap、register、publicConfig、sendOtp、requestPasswordReset、confirmPasswordReset handler；自动执行 schema 验证、Cookie 设置和 HaiResult 映射。匿名白名单使用 `kit.auth.publicPaths`，不会放开 /me 和改密端点。浏览器用 `kit.client.createAuthActions({ apiFetch })` 直接连接 AuthPanel，复用 CSRF/transport。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.md)
+
 ## 错误处理
 
 - 推荐使用 `kit.handler()` 包装 API 端点。

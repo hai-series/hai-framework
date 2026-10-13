@@ -262,10 +262,11 @@ components/
 | `ThemeSelector`  | 完整主题选择面板 | 无需 Props         |
 | `ThemeToggle`    | 明/暗主题切换    | 无需 Props         |
 
-#### IAM 身份认证（9 个）
+#### IAM 身份认证（10 个）
 
 | 组件                 | 描述       | 主要属性                                              |
 | -------------------- | ---------- | ----------------------------------------------------- |
+| `AuthPanel`          | 配置驱动认证页 | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | 认证页布局（居中卡片 / 左右分栏） | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
 | `LoginForm`          | 登录表单   | `loading`, `errors`, `showRememberMe`, `onsubmit`     |
 | `RegisterForm`       | 注册表单   | `loading`, `errors`, `fields`, `onsubmit`             |
@@ -683,6 +684,35 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 - 应用层只需处理**页面级文本**，组件内部文本由 @h-ai/ui 统一管理
 - 如需覆盖特定文本，通过 `submitText`、`labels` 等 props 传入
 
+## 配置驱动认证页面
+
+协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
+
+```yaml
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  userAgreementMarkdown: |
+    # 用户协议
+
+    **账户使用条款**
+
+    - 请妥善保管账户凭据。
+  privacyPolicyMarkdown: |
+    # 隐私政策
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # 可选 URL；同主题同时配置 Markdown 和 URL 时，弹窗优先显示 Markdown。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+```
+
+
+
+AuthPanel 直接接收 IAM 白名单配置和 actions，内置登录（密码/LDAP/邮件/短信）、注册、找回、重置及协议展示。使用 `config.ui` 配置卡片/分栏、标题、品牌、Logo 和配图。`LoginForm` 提供 methods、onsendotp、otpLength、resendInterval；密码表单接受 passwordPolicy。组件只渲染与交互，网络和 Token 存储通过 actions 注入。认证场景按公开 IAM 错误码显示当前 UI 语言的提示，应用自定义错误保留原文。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.md)
+
 ### createLocaleStore
 
 用于客户端 locale 状态管理，自动同步到 `@h-ai/core` 全局 locale 管理器：
@@ -722,6 +752,24 @@ import {
   setGlobalLocale, // 设置全局 locale（同步 @h-ai/core）
 } from '@h-ai/ui'
 ```
+
+
+协议在 Modal 内显示并保留表单输入；使用 URL 时，协议页面须允许 iframe 嵌入，组件禁用其脚本，另提供新窗口查看入口。登录/注册表单使用 `header/extraFields/footer` snippet，AuthPanel 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`，底部保留内置导航。自定义字段由应用绑定状态和提交，不会隐式写入 IAM 用户模型。
+
+```svelte
+<!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
+<AuthPanel {config} {actions}>
+  {#snippet loginHeader()}
+    <p>{m.loginHelp()}</p>
+  {/snippet}
+  {#snippet registerFields()}
+    <label><input type='checkbox' bind:checked={subscribe} />{m.subscribe()}</label>
+  {/snippet}
+</AuthPanel>
+```
+
+上例的 subscribe 为应用自身的 $state，应用包装 register 动作校验/提交扩展业务数据；如需单独组合表单，使用 `<RegisterForm> {#snippet extraFields()}...{/snippet} </RegisterForm>`。扩展里的按钮须为 `type="button"`，避免误提交。
+
 
 ## 其他导出
 

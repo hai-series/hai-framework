@@ -5,6 +5,7 @@
  * @module index
  */
 
+export { default as AuthPanel } from './AuthPanel.svelte'
 // 认证表单
 export { default as AuthShell } from './AuthShell.svelte'
 export { default as ChangePasswordForm } from './ChangePasswordForm.svelte'

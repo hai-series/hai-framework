@@ -196,6 +196,52 @@ login:
   otp: ${loginOtp}
   ldap: false
 
+# 注册与登录安全
+register:
+  enabled: true
+  defaultEnabled: true
+security:
+  maxLoginAttempts: 5
+  lockoutDuration: 900
+
+# LDAP 可选：安装 ldapts 后开启 login.ldap，并声明 ldap 连接配置；也可注入工厂。
+# OTP 需启用 login.otp，并选择 Reach 标准模板或自定义发送回调。
+otp:
+  email: true
+  sms: true
+  length: 6
+  expiresIn: 300
+  maxAttempts: 3
+  resendInterval: 60
+passwordReset:
+  enabled: true
+  mode: email # phone 使用 password_reset_sms 模板
+  tokenExpiresIn: 3600
+  maxAttempts: 3
+  # resetUrl: https://example.com/auth/reset-password
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  # 用 | 配置 Markdown 正文；同主题同时提供 URL 时优先显示正文。
+  userAgreementMarkdown: |
+    # 用户协议示例
+
+    请妥善保管账户凭据，并按应用提供的功能使用服务。
+  privacyPolicyMarkdown: |
+    # 隐私政策示例
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+ui:
+  variant: card
+  # title: Account center
+  # subtitle: Welcome back
+  # brandTitle: Your application
+  # brandText: Sign in securely
+  # logoUrl: /logo.svg
+  # illustrationUrl: /auth-illustration.svg
+
 # 密码策略
 password:
   minLength: 8
@@ -665,12 +711,24 @@ providers:
   #   accessKeySecret: \${HAI_REACH_SMS_SECRET_KEY}
   #   signName: MyApp
 
-# 模板（可选）
+# IAM 标准模板：保留空数组以支持 HAI_REACH_TEMPLATES 整体覆盖。
+templates: []
+# 开启对应 Provider 后，将空数组替换为需要的模板列表，例如：
 # templates:
-#   - name: verification_code
+#   - name: otp_email
 #     provider: email
-#     subject: "验证码: {code}"
-#     body: "您的验证码是 {code}，有效期 {minutes} 分钟。"
+#     subject: "Verification code"
+#     body: "Your verification code is {code}."
+#   - name: otp_sms
+#     provider: sms
+#     body: "Your verification code is {code}."
+#   - name: password_reset
+#     provider: email
+#     subject: "Password reset"
+#     body: "Reset your password: {resetUrl}. Expires at {expiresAt}."
+#   - name: password_reset_sms
+#     provider: sms
+#     body: "Reset your password: {resetUrl}. Expires at {expiresAt}."
 
 # 免打扰（可选）
 # dnd:

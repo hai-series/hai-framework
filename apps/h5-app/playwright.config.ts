@@ -28,15 +28,22 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  webServer: {
+  webServer: [{
+    command: 'node ../admin-console/e2e/notification-fixture.mjs',
+    url: 'http://127.0.0.1:12580',
+    timeout: 30_000,
+  }, {
     command: 'pnpm build && pnpm exec vite preview --port 4176 --strictPort',
     env: {
       HAI_E2E: '1',
+      HAI_IAM_LOGIN_OTP: 'true',
+      HAI_REACH_PROVIDERS: JSON.stringify([{ name: 'email', type: 'api', url: 'http://127.0.0.1:12580/send' }, { name: 'sms', type: 'api', url: 'http://127.0.0.1:12580/send' }]),
+      HAI_IAM_AGREEMENTS: JSON.stringify({ showOnRegister: true, showOnLogin: false, userAgreementMarkdown: '# H5 配置协议\n\n**账户使用条款**\n\n- 请保管账户凭据。' }),
       HAI_DB_DATABASE: `${testDataDir}/h5.db`,
       HAI_STORAGE_ROOT: `${testDataDir}/uploads`,
     },
     url: baseURL,
     reuseExistingServer: false,
     timeout: 180_000,
-  },
+  }],
 })

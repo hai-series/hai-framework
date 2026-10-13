@@ -159,7 +159,9 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     }
 
     if (!verifyResult.data) {
-      await recordLoginFailure(config.userRepository, user, { maxLoginAttempts, lockoutDuration })
+      const failureResult = await recordLoginFailure(config.userRepository, user, { maxLoginAttempts, lockoutDuration })
+      if (!failureResult.success)
+        return failureResult
       logger.warn('Password verification failed', { userId: user.id })
       return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
     }
@@ -207,7 +209,9 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       }
 
       // 登录成功，重置失败计数
-      await resetLoginFailures(config.userRepository, storedUser)
+      const resetResult = await resetLoginFailures(config.userRepository, storedUser)
+      if (!resetResult.success)
+        return resetResult
       logger.info('Password authentication succeeded', { userId: storedUser.id })
 
       return ok(toUser(storedUser))

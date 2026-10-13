@@ -7,6 +7,9 @@
 
 import { z } from 'zod'
 
+/** 浏览器可访问链接仅接受 HTTP(S)，避免配置被用于脚本协议。 */
+const WebUrlSchema = z.url().refine(value => ['http:', 'https:'].includes(new URL(value).protocol))
+
 // ─── 认证策略配置 ───
 
 /**
@@ -29,7 +32,7 @@ export const PasswordConfigSchema = z.object({
   /** 最小长度（默认 8） */
   minLength: z.number().int().min(1).default(8),
   /** 最大长度（默认 128） */
-  maxLength: z.number().int().max(256).default(128),
+  maxLength: z.number().int().min(1).max(256).default(128),
   /** 需要大写字母 */
   requireUppercase: z.boolean().default(true),
   /** 需要小写字母 */
@@ -40,7 +43,7 @@ export const PasswordConfigSchema = z.object({
   requireSpecialChar: z.boolean().default(false),
   /** 密码过期天数（0 表示不过期） */
   expirationDays: z.number().int().min(0).default(0),
-})
+}).refine(config => config.maxLength >= config.minLength, { message: 'maxLength must be >= minLength', path: ['maxLength'] })
 
 /** 密码配置类型 */
 export type PasswordConfig = z.infer<typeof PasswordConfigSchema>
@@ -49,6 +52,9 @@ export type PasswordConfig = z.infer<typeof PasswordConfigSchema>
  * OTP 配置 Schema
  */
 export const OtpConfigSchema = z.object({
+  /** 分别启用邮件、短信验证码 */
+  email: z.boolean().default(true),
+  sms: z.boolean().default(true),
   /** 验证码长度（默认 6） */
   length: z.number().int().min(4).max(8).default(6),
   /** 验证码过期时间（秒，默认 300） */
@@ -66,6 +72,12 @@ export type OtpConfig = z.infer<typeof OtpConfigSchema>
  * 密码重置配置 Schema
  */
 export const PasswordResetConfigSchema = z.object({
+  /** 重置通知渠道，phone 使用 password_reset_sms 模板。 */
+  mode: z.enum(['email', 'phone']).default('email'),
+  /** 重置页面的绝对地址，通知模板可使用 resetUrl。 */
+  resetUrl: WebUrlSchema.optional(),
+  /** 是否启用密码重置 */
+  enabled: z.boolean().default(true),
   /** 重置令牌有效期（秒，默认 3600 = 1小时） */
   tokenExpiresIn: z.number().int().min(300).default(3600),
   /** 最大验证尝试次数（默认 3） */
@@ -80,7 +92,7 @@ export type PasswordResetConfig = z.infer<typeof PasswordResetConfigSchema>
  */
 export const LdapConfigSchema = z.object({
   /** LDAP 服务器 URL */
-  url: z.string().url(),
+  url: z.url().refine(value => ['ldap:', 'ldaps:'].includes(new URL(value).protocol)),
   /** 绑定 DN */
   bindDn: z.string(),
   /** 绑定密码 */
@@ -127,8 +139,8 @@ export const LoginConfigSchema = z.object({
   password: z.boolean().default(true),
   /** 是否启用 OTP 登录 */
   otp: z.boolean().default(true),
-  /** 是否启用 LDAP 登录 */
-  ldap: z.boolean().default(true),
+  /** 是否启用 LDAP 登录；需要显式开启并提供 ldap 配置。 */
+  ldap: z.boolean().default(false),
   /** 是否启用 API Key 登录 */
   apikey: z.boolean().default(false),
 })
@@ -157,10 +169,14 @@ export type SecurityConfig = z.infer<typeof SecurityConfigSchema>
 
 /** 协议展示配置 */
 export const AgreementConfigSchema = z.object({
+  /** 用户协议 Markdown 正文；同时配置 URL 时优先显示正文。 */
+  userAgreementMarkdown: z.string().min(1).optional(),
+  /** 隐私协议 Markdown 正文；YAML 使用 | 保留段落和换行。 */
+  privacyPolicyMarkdown: z.string().min(1).optional(),
   /** 用户协议 URL */
-  userAgreementUrl: z.url().optional(),
+  userAgreementUrl: WebUrlSchema.optional(),
   /** 隐私协议 URL */
-  privacyPolicyUrl: z.url().optional(),
+  privacyPolicyUrl: WebUrlSchema.optional(),
   /** 注册时展示协议 */
   showOnRegister: z.boolean().default(true),
   /** 登录时展示协议 */
@@ -168,6 +184,19 @@ export const AgreementConfigSchema = z.object({
 })
 
 export type AgreementConfig = z.infer<typeof AgreementConfigSchema>
+
+/** 认证页面外观；文本由应用配置或 i18n 提供，图片只接受 HTTP(S) 或站内路径。 */
+const AuthImageSchema = z.string().refine(value => /^https?:\/\//.test(value) || (value.startsWith('/') && !value.startsWith('//')))
+export const AuthUiConfigSchema = z.object({
+  variant: z.enum(['card', 'split']).default('card'),
+  title: z.string().optional(),
+  subtitle: z.string().optional(),
+  brandTitle: z.string().optional(),
+  brandText: z.string().optional(),
+  logoUrl: AuthImageSchema.optional(),
+  illustrationUrl: AuthImageSchema.optional(),
+})
+export type AuthUiConfig = z.infer<typeof AuthUiConfigSchema>
 
 // ─── 会话配置 ───
 
@@ -225,6 +254,8 @@ export type RbacConfig = z.infer<typeof RbacConfigSchema>
  * ```
  */
 export const IamConfigSchema = z.object({
+  /** 认证页外观 */
+  ui: AuthUiConfigSchema.optional(),
   // ─── 认证策略配置 ───
 
   /** 密码配置 */
@@ -246,7 +277,7 @@ export const IamConfigSchema = z.object({
   login: LoginConfigSchema.default({
     password: true,
     otp: true,
-    ldap: true,
+    ldap: false,
     apikey: false,
   }),
 
@@ -276,7 +307,7 @@ export const IamConfigSchema = z.object({
   // ─── 授权配置 ───
 
   /** RBAC 配置 */
-  rbac: RbacConfigSchema.optional(),
+  rbac: RbacConfigSchema.default(() => RbacConfigSchema.parse({})),
 
   // ─── 运行时选项 ───
 

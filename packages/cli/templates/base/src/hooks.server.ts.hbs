@@ -89,10 +89,10 @@ const haiHandle = kit.createHandle({
         data: session.data,
       }
     },
-    operations: iam.auth,
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
-    publicPaths: ['/api/auth/*', '/api/public/*', '/api/health'],
+    publicPaths: [...kit.auth.publicPaths, '/api/auth/logout', '/api/public/*', '/api/health'],
+    operations: () => iam.auth,
   },
 {{/if}}
   rateLimit: { windowMs: 60000, maxRequests: 200 },

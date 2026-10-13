@@ -1,0 +1,21 @@
+# 开发触达示例；生产环境改为 SMTP、短信或 API Provider。
+providers:
+  - name: email
+    type: console
+  - name: sms
+    type: console
+templates:
+  - name: otp_email
+    provider: email
+    subject: Verification code
+    body: 'Your verification code is {code}.'
+  - name: otp_sms
+    provider: sms
+    body: 'Your verification code is {code}.'
+  - name: password_reset
+    provider: email
+    subject: Password reset
+    body: 'Reset your password: {resetUrl}. Expires at {expiresAt}.'
+  - name: password_reset_sms
+    provider: sms
+    body: 'Reset your password: {resetUrl}. Expires at {expiresAt}.'

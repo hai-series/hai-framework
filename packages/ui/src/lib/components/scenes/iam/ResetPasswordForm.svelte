@@ -10,7 +10,7 @@
   import Alert from '../../compounds/Alert.svelte'
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
-  import { arePasswordsEqual } from './password-utils.js'
+  import { arePasswordsEqual, passwordPolicyError, passwordPolicyHint } from './password-utils.js'
   import PasswordInput from './PasswordInput.svelte'
 
   const {
@@ -21,6 +21,7 @@
     showCode = true,
     showPasswordStrength = true,
     minPasswordLength = 8,
+    passwordPolicy,
     showBackLink = false,
     loginUrl = '/login',
     submitText,
@@ -34,6 +35,8 @@
   let code = $state('')
   let newPassword = $state('')
   let confirmPassword = $state('')
+
+  const policyError = $derived(passwordPolicy && newPassword ? passwordPolicyError(newPassword, passwordPolicy) : '')
 
   const formClass = $derived(
     cn(
@@ -55,7 +58,7 @@
 
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
-    if (loading || disabled || !canSubmit)
+    if (policyError || loading || disabled || !canSubmit)
       return
 
     const data: ResetPasswordFormData = {
@@ -136,12 +139,15 @@
     </Alert>
   {/if}
 
+  {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
+  {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
+
   <!-- 提交按钮 -->
   <Button
     type='submit'
     variant='primary'
     {loading}
-    disabled={loading || disabled || !canSubmit}
+    disabled={loading || disabled || !canSubmit || Boolean(policyError)}
     class='w-full'
   >
     {submitText || uiM('reset_password_submit')}

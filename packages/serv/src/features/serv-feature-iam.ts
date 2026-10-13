@@ -37,6 +37,10 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('auth.login', ({ input }) => iam.auth.login(input))
     .route('auth.loginWithOtp', ({ input }) => iam.auth.loginWithOtp(input))
+    .route('auth.loginWithLdap', ({ input }) => iam.auth.loginWithLdap(input))
+    .route('auth.publicConfig', () => ok(iam.publicConfig))
+    .route('auth.requestPasswordReset', ({ input }) => iam.user.requestPasswordReset(input.identifier))
+    .route('auth.confirmPasswordReset', ({ input }) => iam.user.confirmPasswordReset(input.token, input.newPassword))
 
     .route('auth.logout')
     .auth()
@@ -160,7 +164,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 }
 
 async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput): Promise<HaiResult<User>> {
-  const registerResult = await iam.user.register(input)
+  const registerResult = await iam.user.createUser(input)
   if (!registerResult.success)
     return registerResult
 
@@ -173,7 +177,7 @@ async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput): Pr
       iamFeatureLogger.error('createUser rollback failed, orphan user may exist', { userId, reason, error: deleteResult.error })
   }
 
-  if (input.roleIds?.length) {
+  if (input.roleIds !== undefined) {
     const rolesResult = await iam.authz.syncRoles(userId, input.roleIds)
     if (!rolesResult.success) {
       await rollback('syncRoles failed')

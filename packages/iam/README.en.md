@@ -2,7 +2,7 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
-[Framework home](../../README.en.md) · Related modules: [@h-ai/audit](../audit/README.en.md) · [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
+[Framework home](../../README.en.md) · Related modules: [@h-ai/audit](../audit/README.en.md) · [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/reldb](../reldb/README.en.md) · [@h-ai/reach](../reach/README.en.md)
 
 Identity and access management through a unified `iam` object for authentication, sessions, authorization, and user management.
 
@@ -31,65 +31,181 @@ pnpm add @h-ai/iam
 - `@h-ai/crypto`: password hashing, used internally and initialized automatically.
 - `@h-ai/audit`: audit records for key RBAC operations.
 
+- `@h-ai/reach`: **optional**, installed, initialized and injected by the application for standard notifications; custom callbacks do not require Reach.
+- `ldapts`: **optional**, loaded only when LDAP is explicitly enabled without an injected `ldapClientFactory`.
+
+## Optional LDAP and notifications
+
+Password authentication, users and RBAC work without LDAP or Reach. Both are optional peer dependencies: install only the integrations you use. The snippets below run inside application startup/authentication functions after reldb/cache initialization; `username/password` are validated input.
+
+### LDAP / Active Directory
+
+For the default client run `pnpm add ldapts`, then explicitly set `login.ldap: true` and connection settings. Connection settings alone do not enable LDAP. Enabling the default client without the SDK returns an initialization configuration error.
+
+```yaml
+# config/_iam.yml（启动前设置 LDAP_BIND_PASSWORD）
+login:
+  ldap: true
+ldap:
+  url: ldaps://ldap.example.com:636
+  bindDn: cn=service,dc=example,dc=com
+  bindPassword: '${LDAP_BIND_PASSWORD}'
+  searchBase: ou=users,dc=example,dc=com
+  searchFilter: '(uid={{username}})'
+  usernameAttribute: uid
+  emailAttribute: mail
+  displayNameAttribute: cn
+  connectTimeout: 5000
+```
+
+`ldaps://` uses TLS; `ldap://` with `useTls: true` uses StartTLS. For Active Directory use `searchFilter: "(sAMAccountName={{username}})"` and `usernameAttribute: sAMAccountName`; the username placeholder is escaped before searching. First login synchronizes a local user and assigns the default role; disabled accounts and lockouts still apply. Set `ldapSyncUser: false` or inject a `ldapClientFactory` returning `bind/search/unbind` methods with HaiResult results. An injected factory does not require ldapts.
+
+```ts
+import type { IamConfigSettingsInput } from '@h-ai/iam'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+// core 已加载 config/，reldb 与 cache 已成功初始化。
+const initialized = await iam.init(core.config.getOrThrow<IamConfigSettingsInput>('iam'))
+if (!initialized.success)
+  return initialized
+const result = await iam.auth.loginWithLdap({ username, password })
+if (!result.success)
+  return result
+return result
+```
+
+### Automatic delivery with optional Reach
+
+Run `pnpm add @h-ai/reach`. The application configures, initializes and closes Reach; IAM uses only the injected instance. These SMTP/HTTP providers are examples; the SMS gateway accepts the [Reach notification interface](../reach/README.en.md). Console logs metadata and does not deliver messages.
+
+```yaml
+# config/_reach.yml；环境变量仅在服务端设置。
+providers:
+  - name: email
+    type: smtp
+    host: '${SMTP_HOST}'
+    port: 465
+    secure: true
+    user: '${SMTP_USER}'
+    pass: '${SMTP_PASSWORD}'
+    from: '${MAIL_FROM}'
+  - name: sms
+    type: api
+    url: '${SMS_GATEWAY_URL}'
+templates:
+  - name: otp_email
+    provider: email
+    subject: Verification code
+    body: 'Your code is {code}.'
+  - name: otp_sms
+    provider: sms
+    body: 'Your code is {code}.'
+  - name: password_reset
+    provider: email
+    subject: Password reset
+    body: 'Reset: {resetUrl}. Expires: {expiresAt}.'
+  - name: password_reset_sms
+    provider: sms
+    body: 'Reset: {resetUrl}. Expires: {expiresAt}.'
+```
+
+Standard templates: `otp_email / otp_sms` use `{code}`; `password_reset / password_reset_sms` use `{token}`, `{expiresAt}`, `{resetUrl}`. `passwordReset.mode: phone` selects SMS reset. Configure templates before `iam.init()`; unavailable channels are hidden by the public configuration.
+
+```ts
+import type { ReachConfigInput } from '@h-ai/reach'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+import { reach } from '@h-ai/reach'
+
+// core、reldb、cache 已初始化；按应用生命周期反序关闭 IAM 与 Reach。
+const notification = await reach.init(core.config.getOrThrow<ReachConfigInput>('reach'))
+if (!notification.success)
+  return notification
+const initialized = await iam.init({
+  reach,
+  login: { otp: true },
+  otp: { email: true, sms: true },
+  passwordReset: { mode: 'email', resetUrl: 'https://app.example.com/auth/reset-password' },
+})
+if (!initialized.success)
+  return initialized
+return iam.auth.sendOtp('user@example.com')
+```
+
+### Custom email and SMS delivery
+
+Inject `onOtpSendEmail`, `onOtpSendSms` and `onPasswordResetRequest` to use existing application services. Implement only needed callbacks or mix them with Reach; explicit callbacks take priority. These services are application implementations whose promises resolve only after successful delivery. If a service returns HaiResult, check `success` and throw inside the callback on failure. IAM catches callback exceptions and returns a business error without exposing codes, tokens or internal delivery details.
+
+```ts
+import { iam } from '@h-ai/iam'
+import { mailService, smsService } from './notifications.js'
+
+// mailService/smsService 为应用已有的发送服务；不需要安装或初始化 Reach。
+// 调用方须检查服务投递结果，失败时拒绝 Promise，不能吞掉错误。
+const initialized = await iam.init({
+  otp: { email: true, sms: true },
+  onOtpSendEmail: async (email, code) => {
+    await mailService.send({ to: email, subject: 'Verification code', text: code })
+  },
+  onOtpSendSms: async (phone, code) => {
+    await smsService.send({ to: phone, code })
+  },
+  passwordReset: { mode: 'email' },
+  onPasswordResetRequest: async (user, token, expiresAt) => {
+    if (!user.email)
+      throw new Error('Reset recipient unavailable')
+    const url = new URL('https://app.example.com/auth/reset-password')
+    url.searchParams.set('token', token)
+    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt })
+  },
+})
+if (!initialized.success)
+  return initialized
+```
+
 ## Quick start
 
 ```ts
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 
-// 1. 初始化依赖
-await reldb.init({ type: 'sqlite', database: './data.db' })
-await cache.init({ type: 'memory' })
-
-// 2. 初始化 IAM（自动使用已初始化的 reldb 和 cache 单例）
-await iam.init({
-  session: { maxAge: 86400, sliding: true },
-  // OTP 回调（启用 OTP 登录时注入发送逻辑）
-  onOtpSendEmail: async (email, code) => {
-    await sendEmail(email, `验证码: ${code}`)
-  },
-  // 密码重置回调（启用密码重置时注入通知逻辑）
-  onPasswordResetRequest: async (user, token, expiresAt) => {
-    await sendEmail(user.email!, `重置链接: https://example.com/reset?token=${token}`)
-  },
-})
-
-// 2. 注册
-const userResult = await iam.user.register({
-  username: 'admin',
-  email: 'admin@example.com',
-  password: 'Password123',
-})
-
-// 3. 登录
-const loginResult = await iam.auth.login({
-  identifier: 'admin',
-  password: 'Password123',
-})
-if (loginResult.success) {
-  const { user, tokens } = loginResult.data
+// 基础密码认证不需要安装 Reach 或 ldapts。
+async function example() {
+  try {
+    const db = await reldb.init({ type: 'sqlite', database: './data.db' })
+    if (!db.success)
+      return db
+    const cached = await cache.init({ type: 'memory' })
+    if (!cached.success)
+      return cached
+    const initialized = await iam.init({})
+    if (!initialized.success)
+      return initialized
+    const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
+    if (!registered.success)
+      return registered
+    const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
+    if (!login.success)
+      return login
+    return await iam.auth.verifyToken(login.data.tokens.accessToken)
+  }
+  finally {
+    // 应用关闭时按依赖的反向顺序释放。
+    await iam.close()
+    await cache.close()
+    await reldb.close()
+  }
 }
 
-// 4. 验证令牌
-const session = await iam.auth.verifyToken(loginResult.data.tokens.accessToken)
-
-// 5. OTP 验证码登录
-await iam.auth.sendOtp('user@example.com')
-const otpResult = await iam.auth.loginWithOtp({
-  identifier: 'user@example.com',
-  code: '123456',
-})
-
-// 6. 检查权限
-const hasPermission = await iam.authz.checkPermission(
-  loginResult.data.user.id,
-  'user:read',
-)
-
-// 7. 关闭
-await iam.close()
+const result = await example()
+if (!result.success)
+  core.logger.error('Authentication example failed', { code: result.error.code })
 ```
+
+LDAP is disabled by default. Public OTP methods require `otp` settings and send callbacks; password reset requires a notification callback.
 
 `iam.config` returns a **redacted configuration snapshot**. Sensitive LDAP `url` / `bindPassword` and similar fields are hidden automatically. Use it to inspect state, not as the original configuration source.
 
@@ -114,14 +230,14 @@ Before initialization, every subsystem method returns `NOT_INITIALIZED` through 
 
 ### Data storage
 
-| Data                                                | Storage       | Description                                                                                                                   |
-| --------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Users, roles, permissions, associations, API keys   | DB (6 tables) | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
-| Sessions (accessToken → Session)                    | Cache         | TTL, optional sliding renewal                                                                                                 |
-| Token mapping (refreshToken → userId + accessToken) | Cache         | Separate keys; old tokens expire immediately after refresh                                                                    |
-| OTP codes                                           | Cache         | TTL + attempt limit                                                                                                           |
-| Password reset tokens                               | Cache         | TTL + maximum verification attempts                                                                                           |
-| API Key                                             | DB            | `hai_iam_api_keys`; store hashes only, never plaintext; prefix narrows candidates                                             |
+| Data                                                | Storage                                      | Description                                                                                                                   |
+| --------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Users, roles, permissions, associations, API keys   | DB (5 base tables, 1 optional API Key table) | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
+| Sessions (accessToken → Session)                    | Cache                                        | TTL, optional sliding renewal                                                                                                 |
+| Token mapping (refreshToken → userId + accessToken) | Cache                                        | Separate keys; old tokens expire immediately after refresh                                                                    |
+| OTP codes                                           | Cache                                        | TTL + attempt limit                                                                                                           |
+| Password reset tokens                               | Cache                                        | TTL + maximum verification attempts                                                                                           |
+| API Key                                             | DB                                           | `hai_iam_api_keys`; store hashes only, never plaintext; prefix narrows candidates                                             |
 
 ---
 
@@ -174,7 +290,7 @@ const result = await iam.auth.login({ identifier: 'admin', password: 'Password12
 await iam.auth.sendOtp('user@example.com')
 const result = await iam.auth.loginWithOtp({ identifier: 'user@example.com', code: '123456' })
 
-// LDAP 登录（需在 init 时提供 ldapClientFactory）
+// LDAP 登录（内置客户端，可选注入 ldapClientFactory）
 const result = await iam.auth.loginWithLdap({ username: 'jdoe', password: 'pass' })
 
 // API Key 登录（需启用 login.apikey: true）
@@ -250,7 +366,7 @@ await iam.session.deleteByUserId(userId)
 
 #### Considerations
 
-- **Cache-only storage**: no database persistence; all sessions expire after restart, following the security design.
+- **Cache-only storage**: Memory sessions are lost on restart; shared Redis sessions survive IAM service restarts until TTL or revocation.
 - **Sliding renewal**: with `sliding: true`, each `get()` extends TTL automatically.
 - **Refresh rotation**: old refreshToken expires after one use; replay detection indicates token leakage.
 - **Token strength**: 256-bit cryptographic randomness (`crypto.getRandomValues(new Uint8Array(32))`), base64url encoded.
@@ -258,6 +374,8 @@ await iam.session.deleteByUserId(userId)
 ---
 
 ### Authorization (authz) — `iam.authz`
+
+Role lists use `iam.authz.getRoleUserCounts(roleIds)` to aggregate actual membership for the current page in one query, returning `HaiResult<Map<string, number>>`. Missing relations mean zero; query failures display an error instead of invented zero counts.
 
 #### Key types
 
@@ -527,6 +645,45 @@ if (consumed.success) {
 ```
 
 Features: cryptographically secure randomness, TTL, atomic single use (only one concurrent consumer succeeds), and purpose binding to prevent cross-purpose replay.
+
+## Configuration driven authentication
+
+`iam.publicConfig` and the client's `client.iam.auth.publicConfig()` HTTP contract expose a safe configuration whitelist and only advertise configured, available methods. `login.password/otp/ldap`, `otp.email/sms`, `register.enabled/defaultEnabled`, `passwordReset.enabled/mode/resetUrl` and agreement display flags are independent. `ui` configures card/split layout, title, subtitle, brand text, Logo and illustration URLs. Browser links only accept HTTP(S). LDAP is optional and disabled by default; install ldapts only for the default client, or inject a custom factory.
+
+When using optional Reach, initialize it after reldb/cache and call `iam.init({ ...settings, reach })`. Standard `otp_email`, `otp_sms`, `password_reset` and `password_reset_sms` templates supply notification callbacks. Explicit callbacks override these defaults. Configure a real SMTP, SMS or HTTP provider for delivery; Console records metadata only. Delivery failures return errors.
+
+SvelteKit routes export handlers from `kit.auth.createApi(iam)`; use `kit.auth.publicPaths` for anonymous endpoints and `kit.client.createAuthActions()` for Cookie based form actions. HTTP clients use `apiClient.createAuthActions(client)`, which saves successful authentication tokens through the configured storage. Pass actions and config to `AuthPanel` for login, registration and password recovery. Individual `LoginForm` components support `methods/onsendotp/resendInterval`; password forms accept the full `passwordPolicy`. Administrators use permission-guarded `iam.user.createUser()`; disabling public registration does not disable administrator creation.
+
+Agreements open in a Modal without losing form input. URL pages must allow iframe embedding; scripts are disabled and a new-window fallback is available. LoginForm/RegisterForm expose `header/extraFields/footer` snippets. AuthPanel forwards `loginHeader/loginFields/loginFooter` and `registerHeader/registerFields/registerFooter`; application state and actions handle additional fields. See [UI usage](../ui/README.en.md#configuration-driven-authentication).
+
+All nodes must share a database and Redis. Memory is limited to one process. Login counters and lock expiry use atomic database updates. OTP attempt limits, resend intervals and consumption use shared state; consuming/exhausting a code does not reset the resend interval. Reset TTL and attempt limits use shared cache and per-user locks: policy failures count, only the newest token is valid, and concurrent use succeeds once. Reset revokes old sessions and clears login locks. Disabled users cannot authenticate. Server password policy is authoritative.
+
+Standard endpoints: `GET /auth/config`, `POST /auth/login/ldap`, `POST /auth/password-reset/request`, `POST /auth/password-reset/confirm`. Security errors: `SECURITY_BUSY (hai:iam:023)` and `PASSWORD_RESET_DISABLED (hai:iam:024)`. Declare optional fields such as `ldap` in YAML before overriding them, or replace the module configuration with a JSON value in `HAI_IAM`. Existing fields support overrides such as `HAI_IAM_LOGIN_OTP`.
+
+`passwordReset.mode` selects `email` (default, `password_reset`) or `phone` (`password_reset_sms`); the public config tells the recovery form which identifier to request.
+
+### Markdown agreements
+
+Configure `agreements.userAgreementMarkdown` and `privacyPolicyMarkdown` to load agreement content directly from configuration. YAML `|` preserves paragraphs and newlines. The modal reuses the safe MarkdownRenderer with raw HTML, scripts and code tools disabled. Markdown takes priority over a URL for the same agreement; a URL remains an optional external-view link. URL-only agreements use a sandboxed iframe.
+
+```yaml
+agreements:
+  showOnRegister: true
+  showOnLogin: false
+  userAgreementMarkdown: |
+    # 用户协议
+
+    **账户使用条款**
+
+    - 请妥善保管账户凭据。
+  privacyPolicyMarkdown: |
+    # 隐私政策
+
+    注册资料用于账户管理，会话信息用于身份认证。
+  # 可选 URL；同主题同时配置 Markdown 和 URL 时，弹窗优先显示 Markdown。
+  # userAgreementUrl: https://example.com/terms
+  # privacyPolicyUrl: https://example.com/privacy
+```
 
 ## Error handling
 

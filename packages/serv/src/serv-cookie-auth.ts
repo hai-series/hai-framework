@@ -107,6 +107,7 @@ interface ResolvedRefreshCookieConfig {
 const IAM_AUTH_PATHS = {
   login: apiContract.pathOf(apiContract.iam.auth.login),
   loginWithOtp: apiContract.pathOf(apiContract.iam.auth.loginWithOtp),
+  loginWithLdap: apiContract.pathOf(apiContract.iam.auth.loginWithLdap),
   register: apiContract.pathOf(apiContract.iam.auth.register),
   logout: apiContract.pathOf(apiContract.iam.auth.logout),
   refresh: apiContract.pathOf(apiContract.iam.auth.refresh),
@@ -238,6 +239,7 @@ export function mountRefreshCookieRoutes(
   const loginPaths = [
     `${apiPrefix}${IAM_AUTH_PATHS.login}`,
     `${apiPrefix}${IAM_AUTH_PATHS.loginWithOtp}`,
+    `${apiPrefix}${IAM_AUTH_PATHS.loginWithLdap}`,
     `${apiPrefix}${IAM_AUTH_PATHS.register}`,
   ]
   for (const path of loginPaths) {

@@ -262,6 +262,14 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 - `@h-ai/kit/a2a`：A2A 統合。
 - `@h-ai/kit/crypto`：暗号モジュール統合。
 
+## 設定による認証画面
+
+規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
+
+kit.auth.createApi(iam) の標準 handler と kit.auth.publicPaths を使用し、AuthPanel には kit.client.createAuthActions({ apiFetch }) を接続します。検証、Cookie、HaiResult 変換を共通化し、ユーザー情報と改密の保護を維持します。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
+
 ## エラー処理
 
 - API endpoint は `kit.handler()` でラップすることを推奨。

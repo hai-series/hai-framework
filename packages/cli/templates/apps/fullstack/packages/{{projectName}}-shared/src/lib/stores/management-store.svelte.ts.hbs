@@ -1,5 +1,6 @@
+import type { IamPublicConfig } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
-import type { ChangePasswordFormData, LoginFormData, UserProfileSubmitData } from '@h-ai/ui'
+import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
 import type { AdminAuditLog, AdminCreateUser, AdminRole, AdminUpdateUser, AdminUser, AvatarUpload, ProfileUpdate } from '{{fullstack.contractPackageName}}'
 import type { AppInfo, ManagementApiOptions } from '../api/api-client.js'
 import { HaiApiClientError } from '@h-ai/api-client'
@@ -17,6 +18,7 @@ export type ManagementPage = 'users' | 'roles' | 'audit' | 'settings'
 /** 页面状态和业务操作在共享 store 中收敛，宿主端仅装配平台能力。 */
 export class ManagementStore {
   info = $state<AppInfo | null>(null)
+  authConfig = $state<IamPublicConfig | null>(null)
   user = $state<CurrentUser | null>(null)
   page = $state<ManagementPage>('settings')
   locale = $state(getLocale())
@@ -63,6 +65,12 @@ export class ManagementStore {
         return
       }
       this.info = info.data
+      const authConfig = await managementApi.iam.auth.publicConfig()
+      if (!authConfig.success) {
+        this.error = authConfig.error.message
+        return
+      }
+      this.authConfig = authConfig.data
       this.applyLocale(info.data.defaultLocale)
       // 默认 Cookie 存储通过 api-client 的加密刷新链路恢复会话。
       const me = await managementApi.iam.auth.currentUser()
@@ -89,20 +97,12 @@ export class ManagementStore {
     await managementApi.close()
   }
 
-  async login(data: LoginFormData): Promise<void> {
-    await this.mutate(async () => {
-      const login = await managementApi.iam.auth.login({ identifier: data.username, password: data.password })
-      if (!login.success) {
-        this.error = login.error.httpStatus && login.error.httpStatus < 500 ? m.login_invalid() : m.network_error()
-        return
-      }
-      await managementApi.auth.setTokens(login.data.tokens)
-      const me = await this.request(() => managementApi.iam.auth.currentUser())
-      if (!me?.success)
-        return
-      this.setUser(me.data)
-      await this.navigate(this.isAdmin ? 'users' : 'settings')
-    })
+  async authenticated(): Promise<void> {
+    const me = await this.request(() => managementApi.iam.auth.currentUser())
+    if (!me?.success)
+      return
+    this.setUser(me.data)
+    await this.navigate(this.isAdmin ? 'users' : 'settings')
   }
 
   async logout(): Promise<void> {
@@ -135,8 +135,8 @@ export class ManagementStore {
     await this.load(async (version) => {
       const result = await this.request(() => managementApi.admin.users.list({
         page,
-pageSize: this.pageSize,
-search: this.usersSearch.trim() || undefined,
+        pageSize: this.pageSize,
+        search: this.usersSearch.trim() || undefined,
         enabled: this.usersStatus === 'all' ? undefined : this.usersStatus === 'enabled',
       }), version)
       if (result?.success && version === this.requestVersion) {
@@ -163,8 +163,8 @@ search: this.usersSearch.trim() || undefined,
     await this.load(async (version) => {
       const result = await this.request(() => managementApi.admin.audit.list({
         page,
-pageSize: this.pageSize,
-action: this.auditAction.trim() || undefined,
+        pageSize: this.pageSize,
+        action: this.auditAction.trim() || undefined,
         resource: this.auditResource.trim() || undefined,
         startDate: this.auditStartDate ? new SvelteDate(`${this.auditStartDate}T00:00:00`).toISOString() : undefined,
         endDate: this.auditEndDate ? new SvelteDate(`${this.auditEndDate}T23:59:59.999`).toISOString() : undefined,
@@ -340,7 +340,7 @@ action: this.auditAction.trim() || undefined,
       if (!result.success) {
         if (result.error.httpStatus === 401 && this.user) {
           this.expireSession()
-}
+        }
         else if (result.error.httpStatus === 403 && this.user) {
           const current = await managementApi.iam.auth.currentUser()
           if (!isCurrent())

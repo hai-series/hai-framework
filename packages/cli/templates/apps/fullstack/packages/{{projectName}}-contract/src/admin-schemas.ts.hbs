@@ -28,7 +28,7 @@ export const AdminUsersSchema = z.object({
 })
 export const AdminCreateUserSchema = z.object({
   username: z.string().min(3).max(64).regex(/^[\w-]+$/),
-  password: z.string().min(8).max(128),
+  password: z.string().min(1),
   email: z.email().optional(),
   displayName: z.string().max(100).optional(),
   role: AdminRoleCodeSchema.default('user'),

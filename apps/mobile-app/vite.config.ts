@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
   Object.assign(process.env, env)
 
   return {
+    envPrefix: ['VITE_', 'PUBLIC_'],
     plugins: [
       sveltekit(),
       tailwindcss(),

@@ -48,7 +48,7 @@ return result
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) | Memory 不跨节点；锁 owner 每次获锁唯一 |
 | @h-ai/storage | [本地/S3、预签名上传](packages/cli/templates/skills/hai-storage/SKILL.md) | S3 包含 MinIO/RustFS；浏览器经 API/预签名；Local list 非真分页 |
 | @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) | 不负责 embedding，无生命周期 |
-| @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md) | 服务端公开入口 iam.auth；先初始化 reldb/cache |
+| @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md) | 服务端公开入口 iam.auth；先初始化 reldb/cache；公开配置 iam.publicConfig；LDAP/Reach 可选，默认 LDAP 关闭；发送可用 Reach 模板或回调；分布式使用共享 DB + Redis |
 | @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) | 模板绑定 Provider；真实发送遵循授权 |
 | @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A](packages/cli/templates/skills/hai-ai/SKILL.md) | tools/stream 无需 init；临时 Store 不持久化 |
 | @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) | 服务端验签；浏览器 /client 调起不代表已付款 |
@@ -61,7 +61,7 @@ return result
 | @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) | Cookie/transport 与服务端一致；SSR 避免共享用户状态 |
 | @h-ai/capacitor | [原生设备、推送、安全存储](packages/cli/templates/skills/hai-capacitor/SKILL.md) | Web 与 Android/iOS 能力不同 |
 | @h-ai/deploy | [部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md) | 核对目标 Provider 和发布授权 |
-| @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | components 公开目录入口与轻量 /theme；Tailwind 扫描路径须正确 |
+| @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | 认证使用 AuthPanel + IAM 公开配置、Markdown/URL 协议弹窗和表单 snippet；错误提示跟随 UI 语言；components 公开入口与轻量 /theme；Tailwind 扫描路径须正确 |
 | @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 先 `pnpm add -g @h-ai/cli`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准；生成框架依赖固定为 CLI 对应版本，安装失败展示命令和原始输出 |
 
 ## 任务导航

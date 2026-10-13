@@ -4,7 +4,7 @@
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
-  import type { LoginFormData, LoginFormProps } from '../types.js'
+  import type { AuthLoginMethod, LoginFormData, LoginFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
@@ -12,9 +12,15 @@
   import Button from '../../primitives/Button.svelte'
   import Checkbox from '../../primitives/Checkbox.svelte'
   import Input from '../../primitives/Input.svelte'
+  import AgreementNotice from './AgreementNotice.svelte'
+  import { authErrorMessage } from './auth-error-message.js'
   import PasswordInput from './PasswordInput.svelte'
 
   const {
+    methods = ['password'],
+    otpLength = 6,
+    resendInterval = 60,
+    onsendotp,
     loading = false,
     disabled = false,
     showTitle = false,
@@ -30,18 +36,65 @@
     onsubmit,
     onforgotpassword,
     header,
+    extraFields,
     footer,
     ...restProps
   }: LoginFormProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
-  const hasAgreements = $derived(
-    !!(agreements?.userAgreementUrl || agreements?.privacyPolicyUrl),
-  )
 
   let username = $state('')
   let password = $state('')
   let rememberMe = $state(false)
+  let selectedMethod = $state<AuthLoginMethod>('password')
+  const method = $derived(methods.includes(selectedMethod) ? selectedMethod : methods[0])
+  const isOtp = $derived(method === 'email' || method === 'sms')
+  let code = $state('')
+  let sending = $state(false)
+  let sendError = $state('')
+  let resendAt = $state(0)
+  let now = $state(Date.now())
+  const remaining = $derived(Math.max(0, Math.ceil((resendAt - now) / 1000)))
+  // 倒计时只负责 UI 提示；服务端独立校验 resendInterval，刷新页面不能绕过限制。
+  $effect(() => {
+    if (resendAt <= Date.now())
+      return
+    const timer = setInterval(() => {
+      now = Date.now()
+    }, 1000)
+    return () => clearInterval(timer)
+  })
+
+  function methodLabel(value: AuthLoginMethod): string {
+    if (value === 'ldap')
+      return uiM('login_method_ldap')
+    if (value === 'email')
+      return uiM('login_method_email')
+    if (value === 'sms')
+      return uiM('login_method_sms')
+    return uiM('login_method_password')
+  }
+
+  async function sendOtp() {
+    if (!onsendotp || sending || remaining || !username.trim())
+      return
+    sending = true
+    sendError = ''
+    try {
+      const result = await onsendotp(username.trim())
+      if (!result.success) {
+        sendError = authErrorMessage(result.error)
+      }
+      else {
+        now = Date.now()
+        resendAt = now + resendInterval * 1000
+      }
+    }
+    catch {
+      sendError = uiM('auth_network_error')
+    }
+    finally { sending = false }
+  }
 
   const formClass = $derived(
     cn(
@@ -52,13 +105,15 @@
 
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
-    if (loading || disabled)
+    if (loading || disabled || !method)
       return
 
     const data: LoginFormData = {
       username,
       password,
       rememberMe,
+      method,
+      code: isOtp ? code : undefined,
     }
 
     await onsubmit?.(data)
@@ -83,41 +138,73 @@
   {/if}
 
   <!-- 用户名 -->
-  <div class='space-y-1.5'>
-    <label class='text-sm font-medium text-base-content/70' for='login-username'>
-      {uiM('login_username')}
-    </label>
-    <Input
-      id='login-username'
-      name='username'
-      type='text'
-      placeholder={uiM('login_username_placeholder')}
-      bind:value={username}
-      autocomplete='username'
-      {disabled}
-      required
-      error={errors.username}
-    />
-  </div>
+  {#if methods.length > 1}
+    <div class='grid grid-cols-2 gap-1 rounded-lg bg-base-200 p-1 sm:flex' aria-label={uiM('login_methods')}>
+      {#each methods as value (value)}
+        <button type='button' class={cn('flex-1 rounded-md px-2 py-2 text-sm transition-colors', method === value ? 'bg-base-100 font-medium shadow-sm' : 'text-base-content/60')} aria-pressed={method === value} disabled={loading || disabled} onclick={() => {
+          selectedMethod = value
+          password = ''
+          code = ''
+          sendError = ''
+        }}>
+          {methodLabel(value)}
+        </button>
+      {/each}
+    </div>
+  {/if}
+  {#if !method}
+    <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
+  {:else}
+    <div class='space-y-1.5'>
+      <label class='text-sm font-medium text-base-content/70' for='login-username'>
+        {method === 'email' ? uiM('register_email') : method === 'sms' ? uiM('register_phone') : uiM('login_username')}
+      </label>
+      <Input
+        id='login-username'
+        name='username'
+        type={method === 'email' ? 'email' : method === 'sms' ? 'tel' : 'text'}
+        placeholder={method === 'email' ? uiM('register_email_placeholder') : method === 'sms' ? uiM('register_phone_placeholder') : uiM('login_username_placeholder')}
+        bind:value={username}
+        autocomplete='username'
+        {disabled}
+        required
+        error={errors.username}
+      />
+    </div>
 
-  <!-- 密码 -->
-  <div class='space-y-1.5'>
-    <label class='text-sm font-medium text-base-content/70' for='login-password'>
-      {uiM('login_password')}
-    </label>
-    <PasswordInput
-      bind:value={password}
-      placeholder={uiM('login_password_placeholder')}
-      autocomplete='current-password'
-      {disabled}
-      required
-      error={errors.password}
-      showStrength={false}
-    />
-  </div>
+    <!-- 密码 -->
+    {#if isOtp}
+      <div class='space-y-1.5'>
+        <label class='text-sm font-medium text-base-content/70' for='login-code'>{uiM('login_code')}</label>
+        <div class='flex items-start gap-2'>
+          <Input id='login-code' name='code' bind:value={code} autocomplete='one-time-code' inputmode='numeric' maxlength={otpLength} pattern={`[0-9]{${otpLength}}`} placeholder={uiM('login_code_placeholder', { length: otpLength })} required {disabled} />
+          <Button type='button' variant='outline' loading={sending} disabled={loading || disabled || !username.trim() || remaining > 0 || !onsendotp} onclick={sendOtp}>
+            {remaining ? uiM('login_resend_wait', { seconds: remaining }) : uiM('login_send_code')}
+          </Button>
+        </div>
+        {#if sendError}<p role='alert' class='text-sm text-error'>{sendError}</p>{/if}
+      </div>
+    {:else}
+      <div class='space-y-1.5'>
+        <label class='text-sm font-medium text-base-content/70' for='login-password'>
+          {uiM('login_password')}
+        </label>
+        <PasswordInput
+          id='login-password'
+          bind:value={password}
+          placeholder={uiM('login_password_placeholder')}
+          autocomplete='current-password'
+          {disabled}
+          required
+          error={errors.password}
+          showStrength={false}
+        />
+      </div>
+    {/if}
+  {/if}
 
   <!-- 记住我 & 忘记密码 -->
-  {#if showRememberMe || showForgotPassword}
+  {#if method === 'password' && (showRememberMe || showForgotPassword)}
     <div class='flex items-center justify-between'>
       {#if showRememberMe}
         <Checkbox
@@ -149,6 +236,9 @@
   {/if}
 
   <!-- 通用错误 -->
+  {#if extraFields}
+    <div class='login-form-extra-fields'>{@render extraFields()}</div>
+  {/if}
   {#if errors.general}
     <Alert variant='error'>
       {errors.general}
@@ -160,27 +250,14 @@
     type='submit'
     variant='primary'
     {loading}
-    disabled={loading || disabled}
+    disabled={loading || disabled || !method}
     class='w-full'
   >
     {submitText || uiM('login_submit')}
   </Button>
 
   <!-- 协议提示 -->
-  {#if hasAgreements}
-    <p class='text-xs text-base-content/50 text-center'>
-      {uiM('agreement_prefix')}
-      {#if agreements?.userAgreementUrl}
-        <a href={agreements.userAgreementUrl} target='_blank' rel='noopener noreferrer' class='link link-primary'>{uiM('agreement_user_agreement')}</a>
-      {/if}
-      {#if agreements?.userAgreementUrl && agreements?.privacyPolicyUrl}
-        {uiM('agreement_and')}
-      {/if}
-      {#if agreements?.privacyPolicyUrl}
-        <a href={agreements.privacyPolicyUrl} target='_blank' rel='noopener noreferrer' class='link link-primary'>{uiM('agreement_privacy_policy')}</a>
-      {/if}
-    </p>
-  {/if}
+  <AgreementNotice {agreements} />
 
   <!-- 自定义底部 -->
   {#if footer}

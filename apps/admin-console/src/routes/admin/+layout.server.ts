@@ -5,8 +5,8 @@
  */
 
 import type { LayoutServerLoad } from './$types'
-import { buildIamPublicConfig } from '$lib/server/iam-public-config'
 import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
 import { redirect } from '@sveltejs/kit'
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
@@ -38,6 +38,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
       env: coreConfig?.env ?? 'development',
       locale: coreConfig?.defaultLocale ?? 'zh-CN',
     },
-    iamPublicConfig: buildIamPublicConfig({ includeSession: true }),
+    // 与认证页面共用 IAM 公开配置，session.maxAge 已包含在标准白名单中。
+    iamPublicConfig: iam.publicConfig!,
   }
 }

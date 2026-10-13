@@ -55,6 +55,9 @@ describe('generated scaffold', () => {
     const config = core.config.getOrThrow<CoreConfig>('core')
     expect(core.logger.getLevel()).toBe(config.logging?.level ?? 'info')
     expect(load()).toEqual({
+{{#if features.iam}}
+      iamPublicConfig: null,
+{{/if}}
       appConfig: { name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale },
     })
   })

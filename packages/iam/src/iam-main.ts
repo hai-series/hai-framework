@@ -8,6 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { IamConfig } from './iam-config.js'
+import type { IamPublicConfig } from './iam-public-config.js'
 import type { ApiKeyOperations, AuthnOperations, AuthResult, AuthzOperations, IamConfigInput, IamFunctions, SessionOperations, TicketOperations, UserOperations } from './iam-types.js'
 
 import { cache } from '@h-ai/cache'
@@ -23,6 +24,8 @@ import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permi
 import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
 import { IamConfigSchema } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
+import { resolveIamNotifications } from './iam-notifications.js'
+import { buildIamPublicConfig } from './iam-public-config.js'
 import { seedIamData } from './iam-seed.js'
 import {
 
@@ -42,6 +45,7 @@ const logger = core.logger.child({ module: 'iam', scope: 'main' })
 /** init() 是否正在执行（并发防护） */
 let initInProgress = false
 let currentConfig: IamConfig | null = null
+let currentPublicConfig: IamPublicConfig | null = null
 let currentAuth: AuthnOperations | null = null
 let currentUser: UserOperations | null = null
 let currentAuthz: AuthzOperations | null = null
@@ -97,7 +101,7 @@ export const iam: IamFunctions = {
         logger.warn('IAM module is already initialized, reinitializing')
         await iam.close()
       }
-      const { ldapClientFactory, ldapSyncUser, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms, ...settingsInput } = config
+      const { ldapClientFactory, ldapSyncUser } = config
 
       logger.info('Initializing IAM module')
 
@@ -127,7 +131,8 @@ export const iam: IamFunctions = {
         }
       }
 
-      const parseResult = IamConfigSchema.safeParse(settingsInput)
+      // Schema 只保留声明的设置字段，运行时模块和发送回调不会进入配置快照。
+      const parseResult = IamConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('IAM config validation failed', { error: parseResult.error.message })
         return err(
@@ -137,6 +142,10 @@ export const iam: IamFunctions = {
         )
       }
       const parsed = parseResult.data
+
+      // Reach 是可选的外部依赖；通知回调解析在基础依赖和配置验证成功后执行。
+      const { onPasswordResetRequest, onOtpSendEmail, onOtpSendSms } = await resolveIamNotifications(config)
+      logger.info('IAM notification channels resolved', { email: Boolean(onOtpSendEmail), sms: Boolean(onOtpSendSms), passwordReset: Boolean(onPasswordResetRequest) })
 
       // 创建子功能（按依赖顺序），使用局部变量暂存，全部成功后再原子性赋值
       const sessionResult = await createSessionOperations({ config: parsed })
@@ -186,6 +195,7 @@ export const iam: IamFunctions = {
       currentAuthz = authzResult.data
       currentUser = userResult.data
       currentConfig = parsed
+      currentPublicConfig = buildIamPublicConfig(parsed, { ...config, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms })
       currentApiKey = authnResult.data.apiKeyFunctions
       // 一次性票据能力（仅依赖 cache + crypto，随 IAM 初始化即可用）
       currentTicket = createTicketOperations()
@@ -199,7 +209,7 @@ export const iam: IamFunctions = {
           if (!regResult.success) {
             return regResult as HaiResult<AuthResult>
           }
-          return authn.login({ identifier: options.username, password: options.password })
+          return authnResult.data.loginRegisteredUser(regResult.data.user)
         },
       }
       logger.info('IAM module initialized')
@@ -225,6 +235,7 @@ export const iam: IamFunctions = {
   get apiKey(): ApiKeyOperations { return currentApiKey ?? notInitializedApiKey },
   get ticket(): TicketOperations { return currentTicket ?? notInitializedTicket },
   get config() { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
+  get publicConfig() { return currentPublicConfig ? structuredClone(currentPublicConfig) : null },
   get isInitialized() { return currentConfig !== null },
   get isRegisterEnabled() { return currentConfig?.register?.enabled !== false },
 
@@ -243,6 +254,7 @@ export const iam: IamFunctions = {
     currentApiKey = null
     currentTicket = null
     currentConfig = null
+    currentPublicConfig = null
 
     // 重置所有仓库单例，释放对旧 db 实例的引用
     resetApiKeyRepoSingleton()

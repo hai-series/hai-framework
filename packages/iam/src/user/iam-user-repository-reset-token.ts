@@ -1,9 +1,10 @@
 /**
  * @h-ai/iam — 密码重置令牌存储实现
  *
- * 基于 @h-ai/cache 的密码重置令牌存储，采用两个缓存键实现令牌验证与尝试次数限制：
+ * 基于 @h-ai/cache 的密码重置令牌存储，三个键共享 TTL，并在用户共享锁内更新：
  * - `hai:iam:reset:{hashedToken}` → userId（带 TTL 自动过期）
  * - `hai:iam:reset:attempts:{userId}` → 尝试次数（带 TTL 自动过期）
+ * - `hai:iam:reset:user:{userId}` → 最新 hashedToken（新令牌替换旧令牌）
  *
  * @module iam-user-repository-reset-token
  */
@@ -14,6 +15,7 @@ import { err, ok } from '@h-ai/core'
 import { crypto as haiCrypto } from '@h-ai/crypto'
 
 import { iamM } from '../iam-i18n.js'
+import { withIamLock } from '../iam-security.js'
 import { HaiIamError } from '../iam-types.js'
 
 /**
@@ -41,6 +43,8 @@ export function hashResetToken(token: string): HaiResult<string> {
  * 密码重置令牌存储接口
  */
 export interface ResetTokenRepository {
+  /** 锁内验证、计数及消费令牌；仅成功操作删除令牌。 */
+  useToken: (token: string, maxAttempts: number, operation: (userId: string) => Promise<HaiResult<void>>) => Promise<HaiResult<void>>
   /**
    * 保存重置令牌
    *
@@ -149,69 +153,91 @@ export function createCacheResetTokenRepository(): ResetTokenRepository {
 
   const repo: ResetTokenRepository = {
     async saveToken(token, userId, expiresAt): Promise<HaiResult<void>> {
-      const hashResult = hashResetToken(token)
-      if (!hashResult.success) {
-        return hashResult
-      }
-      const hashedToken = hashResult.data
-      const ttlSeconds = Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 1000))
-      const userTokenKey = buildUserTokenKey(userId)
+      return withIamLock(`reset:${userId}`, async () => {
+        const hashResult = hashResetToken(token)
+        if (!hashResult.success) {
+          return hashResult
+        }
+        const hashedToken = hashResult.data
+        const ttlSeconds = Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 1000))
+        const userTokenKey = buildUserTokenKey(userId)
 
-      const existingTokenResult = await cache.kv.get<string>(userTokenKey)
-      if (!existingTokenResult.success) {
-        return buildResetTokenRepositoryError(
-          'iam_queryResetTokenFailed',
-          existingTokenResult.error.message,
-          existingTokenResult.error,
-        ) as HaiResult<void>
-      }
-
-      if (existingTokenResult.data && existingTokenResult.data !== hashedToken) {
-        const removeExistingTokenResult = await cache.kv.del(buildResetTokenKey(existingTokenResult.data))
-        if (!removeExistingTokenResult.success) {
+        const existingTokenResult = await cache.kv.get<string>(userTokenKey)
+        if (!existingTokenResult.success) {
           return buildResetTokenRepositoryError(
-            'iam_saveResetTokenFailed',
-            removeExistingTokenResult.error.message,
-            removeExistingTokenResult.error,
+            'iam_queryResetTokenFailed',
+            existingTokenResult.error.message,
+            existingTokenResult.error,
           ) as HaiResult<void>
         }
-      }
 
-      // 存储 hashedToken → userId（带 TTL）
-      const setResult = await cache.kv.set(buildResetTokenKey(hashedToken), userId, { ex: ttlSeconds })
-      if (!setResult.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_saveResetTokenFailed', { params: { message: setResult.error.message } }),
-          setResult.error,
-        )
-      }
+        if (existingTokenResult.data && existingTokenResult.data !== hashedToken) {
+          const removeExistingTokenResult = await cache.kv.del(buildResetTokenKey(existingTokenResult.data))
+          if (!removeExistingTokenResult.success) {
+            return buildResetTokenRepositoryError(
+              'iam_saveResetTokenFailed',
+              removeExistingTokenResult.error.message,
+              removeExistingTokenResult.error,
+            ) as HaiResult<void>
+          }
+        }
 
-      const saveUserTokenResult = await cache.kv.set(userTokenKey, hashedToken, { ex: ttlSeconds })
-      if (!saveUserTokenResult.success) {
-        await cache.kv.del(buildResetTokenKey(hashedToken))
-        return buildResetTokenRepositoryError(
-          'iam_saveResetTokenFailed',
-          saveUserTokenResult.error.message,
-          saveUserTokenResult.error,
-        ) as HaiResult<void>
-      }
+        // 存储 hashedToken → userId（带 TTL）
+        const setResult = await cache.kv.set(buildResetTokenKey(hashedToken), userId, { ex: ttlSeconds })
+        if (!setResult.success) {
+          return err(
+            HaiIamError.REPOSITORY_ERROR,
+            iamM('iam_saveResetTokenFailed', { params: { message: setResult.error.message } }),
+            setResult.error,
+          )
+        }
 
-      // 重置尝试次数（与令牌相同 TTL）
-      const attemptsResult = await cache.kv.set(buildAttemptsKey(userId), 0, { ex: ttlSeconds })
-      if (!attemptsResult.success) {
-        await Promise.all([
-          cache.kv.del(buildResetTokenKey(hashedToken)),
-          cache.kv.del(userTokenKey),
-        ])
-        return buildResetTokenRepositoryError(
-          'iam_saveResetTokenFailed',
-          attemptsResult.error.message,
-          attemptsResult.error,
-        ) as HaiResult<void>
-      }
+        const saveUserTokenResult = await cache.kv.set(userTokenKey, hashedToken, { ex: ttlSeconds })
+        if (!saveUserTokenResult.success) {
+          await cache.kv.del(buildResetTokenKey(hashedToken))
+          return buildResetTokenRepositoryError(
+            'iam_saveResetTokenFailed',
+            saveUserTokenResult.error.message,
+            saveUserTokenResult.error,
+          ) as HaiResult<void>
+        }
 
-      return ok(undefined)
+        // 重置尝试次数（与令牌相同 TTL）
+        const attemptsResult = await cache.kv.set(buildAttemptsKey(userId), 0, { ex: ttlSeconds })
+        if (!attemptsResult.success) {
+          await Promise.all([
+            cache.kv.del(buildResetTokenKey(hashedToken)),
+            cache.kv.del(userTokenKey),
+          ])
+          return buildResetTokenRepositoryError(
+            'iam_saveResetTokenFailed',
+            attemptsResult.error.message,
+            attemptsResult.error,
+          ) as HaiResult<void>
+        }
+
+        return ok(undefined)
+      })
+    },
+
+    async useToken(token, maxAttempts, operation): Promise<HaiResult<void>> {
+      const hash = hashResetToken(token)
+      if (!hash.success)
+        return hash
+      const user = await cache.kv.get<string>(buildResetTokenKey(hash.data))
+      if (!user.success)
+        return buildResetTokenRepositoryError('iam_queryResetTokenFailed', user.error.message, user.error)
+      if (!user.data)
+        return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
+      return withIamLock(`reset:${user.data}`, async () => {
+        const verified = await repo.tryGetUserByToken(token, maxAttempts)
+        if (!verified.success)
+          return verified
+        const result = await operation(verified.data)
+        if (!result.success)
+          return result
+        return repo.removeToken(token)
+      })
     },
 
     async tryGetUserByToken(token, maxAttempts): Promise<HaiResult<string>> {
@@ -239,6 +265,11 @@ export function createCacheResetTokenRepository(): ResetTokenRepository {
       }
 
       const userId = result.data
+      const current = await cache.kv.get<string>(buildUserTokenKey(userId))
+      if (!current.success)
+        return buildResetTokenRepositoryError('iam_queryResetTokenFailed', current.error.message, current.error)
+      if (current.data !== hashedToken)
+        return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
       const attemptsKey = buildAttemptsKey(userId)
 
       // 原子递增尝试次数

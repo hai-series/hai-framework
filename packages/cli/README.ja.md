@@ -227,7 +227,15 @@ hai create my-app
 node packages/cli/dist/index.js create ../my-new-project
 ```
 
-### 5. テスト実行
+## 5. 設定による認証画面
+
+規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
+
+IAM を選択した admin/h5/website は AuthPanel と標準 route を生成し、mobile と fullstack は API actions を共用します。サーバーの _iam.yml で認証方式、登録、復旧、規約 Modal、ブランドを設定します。LDAP/Reach は任意です。既定 LDAP クライアントを使用する時だけ ldapts をインストールし、login.ldap と接続設定を指定します。メール/SMS は Reach テンプレートまたは独自コールバックを使用します。フォームは header/extraFields/footer、AuthPanel は login*/register* snippet を提供します。複数ノードは DB と Redis を共有します。
+
+[完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
+
+### 6. テスト実行
 
 ```bash
 # 单元测试 + E2E 模板生成测试

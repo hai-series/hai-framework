@@ -262,6 +262,14 @@ With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HA
 - `@h-ai/kit/a2a`: A2A integration.
 - `@h-ai/kit/crypto`: crypto integration.
 
+## Configuration driven authentication
+
+Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
+
+Export standard handlers from kit.auth.createApi(iam), use kit.auth.publicPaths for anonymous endpoints, and connect AuthPanel with kit.client.createAuthActions({ apiFetch }). Validation, Cookie writes and HaiResult mapping are built in; current-user and password-change endpoints remain guarded.
+
+[完整 IAM 配置 / IAM configuration](../iam/README.en.md)
+
 ## Error handling
 
 - Wrap API endpoints with `kit.handler()`.

@@ -215,8 +215,8 @@ interface UserFnContext {
   authzFunctions: AuthzOperations
   config: IamConfig
   registerConfig: { enabled: boolean, defaultEnabled: boolean }
-  agreementConfig: { showOnRegister: boolean, showOnLogin: boolean, userAgreementUrl?: string, privacyPolicyUrl?: string }
-  resetConfig: { tokenExpiresIn: number, maxAttempts: number }
+  agreementConfig: IamConfig['agreements']
+  resetConfig: { enabled: boolean, tokenExpiresIn: number, maxAttempts: number }
   loginConfig: { maxLoginAttempts: number, lockoutDuration: number }
   onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
 }
@@ -226,7 +226,7 @@ interface UserFnContext {
 /**
  * 构建用户注册相关操作
  */
-function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'register' | 'validatePassword'> {
+function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'register' | 'createUser' | 'validatePassword'> {
   const { userRepository, authzFunctions, config, registerConfig, agreementConfig } = ctx
   const { validatePassword, hashPassword } = ctx
 
@@ -234,18 +234,13 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
    * 校验注册前置条件
    */
   async function validateRegisterPreconditions(options: RegisterOptions): Promise<HaiResult<void>> {
-    if (!registerConfig.enabled) {
-      return err(
-        HaiIamError.REGISTER_DISABLED,
-        iamM('iam_registerDisabled'),
-      )
-    }
-
     const validateResult = validatePassword(options.password)
     if (!validateResult.success)
       return validateResult
 
     const existsResult = await userRepository.existsByUsername(options.username)
+    if (!existsResult.success)
+      return existsResult
     if (existsResult.success && existsResult.data) {
       return err(
         HaiIamError.USER_ALREADY_EXISTS,
@@ -255,6 +250,8 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
 
     if (options.email) {
       const emailExistsResult = await userRepository.existsByEmail(options.email)
+      if (!emailExistsResult.success)
+        return emailExistsResult
       if (emailExistsResult.success && emailExistsResult.data) {
         return err(
           HaiIamError.USER_ALREADY_EXISTS,
@@ -269,78 +266,91 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
   /**
    * 为新用户分配默认角色
    */
-  async function assignDefaultRole(userId: string): Promise<void> {
-    if (!config.rbac?.defaultRole)
-      return
+  async function assignDefaultRole(userId: string): Promise<HaiResult<void>> {
+    if (!config.rbac?.enabled || !config.rbac.defaultRole)
+      return ok(undefined)
     const roleResult = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
-    if (roleResult.success && roleResult.data) {
-      await authzFunctions.assignRole(userId, roleResult.data.id)
+    if (!roleResult.success)
+      return roleResult
+    if (!roleResult.data)
+      return err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+    return authzFunctions.assignRole(userId, roleResult.data.id)
+  }
+
+  async function createUser(options: RegisterOptions, enabled: boolean): Promise<HaiResult<RegisterResult>> {
+    // 校验前置条件
+    const preResult = await validateRegisterPreconditions(options)
+    if (!preResult.success)
+      return preResult as HaiResult<RegisterResult>
+
+    // 哈希密码
+    const hashResult = hashPassword(options.password)
+    if (!hashResult.success)
+      return hashResult as HaiResult<RegisterResult>
+
+    // 事务：创建用户
+    const txResult = await reldb.tx.begin()
+    if (!txResult.success) {
+      return mapRepositoryError('iam_createUserFailed', txResult.error.message) as HaiResult<RegisterResult>
     }
+    const tx = txResult.data
+
+    const createResult = await userRepository.create({
+      username: options.username,
+      email: options.email,
+      phone: options.phone,
+      displayName: options.displayName,
+      enabled,
+      emailVerified: false,
+      phoneVerified: false,
+      passwordHash: hashResult.data,
+      passwordUpdatedAt: new Date(),
+      metadata: options.metadata,
+    }, tx)
+
+    if (!createResult.success) {
+      await tx.rollback()
+      return mapUpdateErrorAsDomainError(createResult.error.message) as HaiResult<RegisterResult>
+    }
+
+    const createdUserResult = await userRepository.findByUsername(options.username, tx)
+    if (!createdUserResult.success || !createdUserResult.data) {
+      await tx.rollback()
+      return err(
+        HaiIamError.USER_NOT_FOUND,
+        iamM('iam_userNotExist'),
+      )
+    }
+
+    const commitResult = await tx.commit()
+    if (!commitResult.success) {
+      return mapRepositoryError('iam_createUserFailed', commitResult.error.message) as HaiResult<RegisterResult>
+    }
+
+    const createdUser = createdUserResult.data
+
+    // 角色配置失败时撤销新账户，避免注册成功但权限缺失。
+    const assigned = await assignDefaultRole(createdUser.id)
+    if (!assigned.success) {
+      await authzFunctions.syncRoles(createdUser.id, [])
+      await userRepository.deleteById(createdUser.id)
+      return assigned
+    }
+
+    logger.info('User registered', { userId: createdUser.id, username: options.username })
+    return ok({
+      user: toUser(createdUser),
+      agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnRegister),
+    })
   }
 
   return {
-    async register(options: RegisterOptions): Promise<HaiResult<RegisterResult>> {
-      // 校验前置条件
-      const preResult = await validateRegisterPreconditions(options)
-      if (!preResult.success)
-        return preResult as HaiResult<RegisterResult>
-
-      // 哈希密码
-      const hashResult = hashPassword(options.password)
-      if (!hashResult.success)
-        return hashResult as HaiResult<RegisterResult>
-
-      // 事务：创建用户
-      const txResult = await reldb.tx.begin()
-      if (!txResult.success) {
-        return mapRepositoryError('iam_createUserFailed', txResult.error.message) as HaiResult<RegisterResult>
-      }
-      const tx = txResult.data
-
-      const createResult = await userRepository.create({
-        username: options.username,
-        email: options.email,
-        phone: options.phone,
-        displayName: options.displayName,
-        enabled: registerConfig.defaultEnabled,
-        emailVerified: false,
-        phoneVerified: false,
-        passwordHash: hashResult.data,
-        passwordUpdatedAt: new Date(),
-        metadata: options.metadata,
-      }, tx)
-
-      if (!createResult.success) {
-        await tx.rollback()
-        return mapUpdateErrorAsDomainError(createResult.error.message) as HaiResult<RegisterResult>
-      }
-
-      const createdUserResult = await userRepository.findByUsername(options.username, tx)
-      if (!createdUserResult.success || !createdUserResult.data) {
-        await tx.rollback()
-        return err(
-          HaiIamError.USER_NOT_FOUND,
-          iamM('iam_userNotExist'),
-        )
-      }
-
-      const commitResult = await tx.commit()
-      if (!commitResult.success) {
-        return mapRepositoryError('iam_createUserFailed', commitResult.error.message) as HaiResult<RegisterResult>
-      }
-
-      const createdUser = createdUserResult.data
-
-      // 分配默认角色（事务外，失败不影响注册结果）
-      await assignDefaultRole(createdUser.id)
-
-      logger.info('User registered', { userId: createdUser.id, username: options.username })
-      return ok({
-        user: toUser(createdUser),
-        agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnRegister),
-      })
+    createUser: options => createUser(options, true),
+    register(options) {
+      if (!registerConfig.enabled)
+        return Promise.resolve(err(HaiIamError.REGISTER_DISABLED, iamM('iam_registerDisabled')))
+      return createUser(options, registerConfig.defaultEnabled)
     },
-
     validatePassword(password: string): HaiResult<void> {
       return validatePassword(password)
     },
@@ -720,10 +730,12 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       const verifyResult = crypto.password.verify(oldPassword, user.passwordHash)
       if (!verifyResult.success || !verifyResult.data) {
         // 记录失败计数 / 触发锁定，防止通过 changePassword 端点暴力枚举旧密码
-        await recordLoginFailure(userRepository, user, {
+        const failureResult = await recordLoginFailure(userRepository, user, {
           maxLoginAttempts: ctx.loginConfig.maxLoginAttempts,
           lockoutDuration: ctx.loginConfig.lockoutDuration,
         })
+        if (!failureResult.success)
+          return failureResult
         return err(
           HaiIamError.INVALID_CREDENTIALS,
           iamM('iam_originalPasswordWrong'),
@@ -731,7 +743,9 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       }
 
       // 成功验证旧密码后重置失败计数
-      await resetLoginFailures(userRepository, user)
+      const resetResult = await resetLoginFailures(userRepository, user)
+      if (!resetResult.success)
+        return resetResult
 
       // 验证新密码强度
       const validateResult = validatePassword(newPassword)
@@ -792,6 +806,8 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       logger.debug('Password reset requested', { identifier })
 
       const resetConfig = ctx.resetConfig
+      if (!resetConfig.enabled || !onPasswordResetRequest)
+        return err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
 
       // 根据标识符查找用户
       const userResult = await userRepository.findByIdentifier(identifier)
@@ -807,29 +823,26 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       }
 
       const user = toUser(userResult.data)
+      if (!user.enabled)
+        return ok(undefined)
 
       // 生成 256-bit 加密安全令牌（与 session token 强度一致）
       const token = generateToken()
       const expiresAt = new Date(Date.now() + resetConfig.tokenExpiresIn * 1000)
 
-      // 保存新令牌（saveToken 内部重置尝试次数）
+      // 保存新令牌并替换旧令牌，尝试次数与令牌拥有同一有效期。
       const saveResult = await resetTokenRepository.saveToken(token, user.id, expiresAt)
       if (!saveResult.success) {
         return saveResult
       }
 
       // 通过回调通知业务层（如发送邮件）
-      if (onPasswordResetRequest) {
-        try {
-          await onPasswordResetRequest(user, token, expiresAt)
-        }
-        catch (callbackError) {
-          logger.error('Password reset callback failed', { userId: user.id, error: callbackError })
-          // 回调失败不影响令牌生成，仍返回成功
-        }
+      try {
+        await onPasswordResetRequest(user, token, expiresAt)
       }
-      else {
-        logger.warn('No password reset callback configured, token will not be delivered to user', { userId: user.id })
+      catch {
+        logger.error('Password reset callback failed', { userId: user.id })
+        return err(HaiIamError.INTERNAL_ERROR, iamM('iam_passwordResetDeliveryFailed'))
       }
 
       logger.info('Password reset token generated', { userId: user.id })
@@ -840,54 +853,54 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       logger.debug('Confirming password reset')
 
       const resetConfig = ctx.resetConfig
+      if (!resetConfig.enabled)
+        return err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
 
-      // 先验证新密码强度（不消耗尝试次数）
-      const validateResult = validatePassword(newPassword)
-      if (!validateResult.success)
-        return validateResult
+      return resetTokenRepository.useToken(token, resetConfig.maxAttempts, async (userId) => {
+      // 每次持有有效令牌的重置请求都计入尝试次数，包括密码策略失败。
+        const validateResult = validatePassword(newPassword)
+        if (!validateResult.success)
+          return validateResult
 
-      // 验证令牌并获取 userId（自动递增尝试次数、超限自动删除令牌）
-      const tokenResult = await resetTokenRepository.tryGetUserByToken(token, resetConfig.maxAttempts)
-      if (!tokenResult.success) {
-        return tokenResult as HaiResult<void>
-      }
+        // 查找用户
+        const userResult = await userRepository.findById(userId)
+        if (!userResult.success) {
+          return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
+        }
+        if (!userResult.data) {
+          return err(
+            HaiIamError.USER_NOT_FOUND,
+            iamM('iam_userNotExist'),
+          )
+        }
+        if (!userResult.data.enabled)
+          return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
 
-      const userId = tokenResult.data
+        // 哈希新密码
+        const hashResult = hashPassword(newPassword)
+        if (!hashResult.success)
+          return hashResult as HaiResult<void>
 
-      // 查找用户
-      const userResult = await userRepository.findById(userId)
-      if (!userResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
-      }
-      if (!userResult.data) {
-        return err(
-          HaiIamError.USER_NOT_FOUND,
-          iamM('iam_userNotExist'),
-        )
-      }
+        // 更新密码
+        const updateResult = await userRepository.updateById(userId, {
+          passwordHash: hashResult.data,
+          passwordUpdatedAt: new Date(),
+          loginFailedCount: 0,
+          lockedUntil: null,
+          lastLoginFailedAt: null,
+        })
+        if (!updateResult.success) {
+          return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
+        }
 
-      // 哈希新密码
-      const hashResult = hashPassword(newPassword)
-      if (!hashResult.success)
-        return hashResult as HaiResult<void>
+        // 注销该用户所有活跃会话
+        const revoked = await sessionFunctions.deleteByUserId(userId)
+        if (!revoked.success)
+          return revoked
 
-      // 更新密码
-      const updateResult = await userRepository.updateById(userId, {
-        passwordHash: hashResult.data,
-        passwordUpdatedAt: new Date(),
+        logger.info('Password reset confirmed', { userId })
+        return ok(undefined)
       })
-      if (!updateResult.success) {
-        return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
-      }
-
-      // 删除已使用的令牌
-      await resetTokenRepository.removeToken(token)
-
-      // 注销该用户所有活跃会话
-      await sessionFunctions.deleteByUserId(userId)
-
-      logger.info('Password reset confirmed', { userId })
-      return ok(undefined)
     },
   }
 }

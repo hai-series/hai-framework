@@ -159,12 +159,11 @@ async function createHaiHandle(): Promise<Handle> {
       loginUrl: '/auth/login',
       protectedPaths: ['/admin/*', '/api/*'],
       publicPaths: [
+        ...kit.auth.publicPaths,
         '/admin/public/*',
         '/api/auth/login',
         '/api/auth/register',
         '/api/auth/logout',
-        '/api/auth/forgot-password',
-        '/api/auth/reset-password',
         '/api/storage/*',
         '/api/public/*',
         ...transportPublicPaths,

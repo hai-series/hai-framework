@@ -113,11 +113,18 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     }
   })
 
-  it('does not mount unselected default IAM routes', async () => {
+  it('mounts public auth routes while keeping default IAM administration routes private', async () => {
+    const config = await transport.encryptedFetch(`http://localhost${PREFIX}/auth/config`)
+    expect(config.status).toBe(200)
+    for (const route of ['/auth/register', '/auth/login/ldap', '/auth/login/otp', '/auth/otp/send', '/auth/password-reset/request', '/auth/password-reset/confirm']) {
+      const response = await transport.encryptedFetch(`http://localhost${PREFIX}${route}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+      expect(response.status).toBe(400)
+    }
     for (const [route, method] of [
-      ['/auth/register', 'POST'],
-      ['/auth/login/otp', 'POST'],
-      ['/auth/otp/send', 'POST'],
       ['/iam/users', 'GET'],
       ['/iam/roles', 'POST'],
     ] as const) {

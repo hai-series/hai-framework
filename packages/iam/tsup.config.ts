@@ -6,5 +6,5 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
   },
-  external: ['@h-ai/core', '@h-ai/audit', '@h-ai/crypto', '@h-ai/reldb', '@h-ai/cache', 'zod'],
+  external: ['@h-ai/core', '@h-ai/audit', '@h-ai/crypto', '@h-ai/reldb', '@h-ai/cache', '@h-ai/reach', 'zod', 'ldapts'],
 })

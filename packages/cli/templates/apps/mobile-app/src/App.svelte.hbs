@@ -1,11 +1,35 @@
 <script lang='ts'>
+{{#if features.iam}}
+  import type { IamPublicConfig } from '@h-ai/api-contract'
+  import { apiClient } from '@h-ai/api-client'
+{{/if}}
   import { applyTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
+{{#if features.iam}}
+  import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
+{{/if}}
   import { onMount } from 'svelte'
   import { closeApi, initApi, resolveApiBase, usesNativeTokenStorage } from './lib/api.js'
   import { appConfig, initClientCore } from './lib/app-config.js'
   import { initCapacitor, isNativeApp } from './lib/capacitor.js'
   import * as m from './lib/paraglide/messages.js'
   import { getLocale } from './lib/paraglide/runtime.js'
+
+{{#if features.iam}}
+  const authActions = apiClient.createAuthActions(apiClient)
+  let authConfig = $state<IamPublicConfig | null>(null)
+  let authenticated = $state(false)
+  let resetToken = $state('')
+
+  function handleAuthenticated() {
+    if (resetToken) {
+      const url = new URL(location.href)
+      url.searchParams.delete('token')
+      history.replaceState(history.state, '', url)
+    }
+    resetToken = ''
+    authenticated = true
+  }
+{{/if}}
 
   type TabId = 'home' | 'tasks' | 'profile'
 
@@ -29,6 +53,16 @@
       setGlobalLocale(getLocale())
       await initCapacitor()
       await initApi()
+{{#if features.iam}}
+      const config = await authActions.publicConfig()
+      if (!config.success)
+        throw new Error(config.error.message)
+      authConfig = config.data
+      if (!authConfig)
+        throw new Error(m.boot_failed_title())
+      const me = await apiClient.iam.auth.currentUser()
+      authenticated = !resetToken && me.success
+{{/if}}
       nativeRuntime = await isNativeApp()
       nativeTokenStorage = await usesNativeTokenStorage()
     }
@@ -46,6 +80,9 @@
   }
 
   onMount(() => {
+{{#if features.iam}}
+    resetToken = new URL(location.href).searchParams.get('token') ?? ''
+{{/if}}
     void bootstrap()
 
     return () => {
@@ -73,6 +110,12 @@
       </div>
     </div>
   </div>
+{{#if features.iam}}
+{:else if !authenticated}
+  <main>
+    <AuthPanel config={authConfig} actions={authActions} {resetToken} initialMode={resetToken ? 'reset' : 'login'} onauthenticated={handleAuthenticated} />
+  </main>
+{{/if}}
 {:else}
   <div class='hai-mobile-viewport'>
     <div class='hai-mobile-shell max-w-lg'>

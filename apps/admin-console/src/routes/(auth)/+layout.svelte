@@ -4,6 +4,7 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
+  import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
 
   interface Props {
@@ -14,17 +15,22 @@
 </script>
 
 <AuthShell
-  variant='split'
-  brandTitle={m.app_title()}
-  brandText={m.meta_description()}
+  {...page.data.iamPublicConfig?.ui}
+  variant={page.data.iamPublicConfig?.ui.variant ?? 'split'}
+  brandTitle={page.data.iamPublicConfig?.ui.brandTitle || m.app_title()}
+  brandText={page.data.iamPublicConfig?.ui.brandText || m.meta_description()}
 >
   {#snippet logo()}
-    <div class='flex items-center gap-2.5'>
-      <div class='flex size-9 items-center justify-center rounded-xl bg-primary/10 lg:bg-primary-content/15'>
-        <span class='icon-[tabler--box] size-5 text-primary lg:text-primary-content'></span>
+    {#if page.data.iamPublicConfig?.ui.logoUrl}
+      <img src={page.data.iamPublicConfig.ui.logoUrl} alt={m.app_title()} class='h-12 max-w-full object-contain' />
+    {:else}
+      <div class='flex items-center gap-2.5'>
+        <div class='flex size-9 items-center justify-center rounded-xl bg-primary/10 lg:bg-primary-content/15'>
+          <span class='icon-[tabler--box] size-5 text-primary lg:text-primary-content'></span>
+        </div>
+        <span class='text-base font-semibold tracking-tight text-base-content lg:text-primary-content'>{m.app_title()}</span>
       </div>
-      <span class='text-base font-semibold tracking-tight text-base-content lg:text-primary-content'>{m.app_title()}</span>
-    </div>
+    {/if}
   {/snippet}
 
   {@render children()}
