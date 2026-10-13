@@ -20,6 +20,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { cliM } from '../src/cli-i18n.js'
 import { addModule } from '../src/commands/cli-add.js'
 import { createProject, detectProject } from '../src/commands/cli-create.js'
@@ -747,7 +748,7 @@ describe('createProject — h5 类型', () => {
     expect(await exists(projectPath, 'src/routes/profile/+page.svelte')).toBe(true)
 
     const layout = await readText(projectPath, 'src/routes/+layout.svelte')
-    expect(layout).toContain('btm-nav')
+    expect(layout).toContain('<BottomNav')
   })
 
   it('应生成 H5 专属 AI 指引与兼容 skills', async () => {
@@ -997,6 +998,20 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/server/procedures/app-procedures.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')).toBe(true)
+
+    // 实际 create 命令不能覆盖模板生成的可选配置和 Reach 标准通知模板。
+    for (const moduleKey of ['ai', 'vecdb', 'payment', 'scheduler', 'deploy']) {
+      const content = await readText(projectPath, `packages/proj-fullstack-serv/config/_${moduleKey}.yml`)
+      expect(parse(content)).toBeNull()
+    }
+    const reach = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_reach.yml'))
+    expect(reach.templates.map((template: { name: string }) => template.name)).toEqual(['otp_email', 'otp_sms', 'password_reset', 'password_reset_sms'])
+    expect(await readText(projectPath, '.env.example')).toContain('# HAI_AI_LLM_APIKEY=')
+    // CLI 自动写出的 .env 只启用必需值，避免默认覆盖让后续 YAML 修改失效。
+    const envDefaults = (await readText(projectPath, '.env.example')).split('\n').filter(line => /^HAI_(?:CORE|DB|CACHE|STORAGE)_/.test(line))
+    expect(envDefaults).toEqual([])
+    const activeEnvNames = (await readText(projectPath, '.env')).split('\n').filter(line => /^[A-Z_]+=/.test(line)).map(line => line.slice(0, line.indexOf('=')))
+    expect(activeEnvNames).toEqual(['HAI_ADMIN_DEFAULT_PASSWORD', 'PUBLIC_API_BASE'])
 
     const servConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_serv.yml')
     expect(servConfig).toContain('origin: $' + '{HAI_CORS_ORIGIN:*}')

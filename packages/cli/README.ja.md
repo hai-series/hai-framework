@@ -159,11 +159,21 @@ Web/App/Desktop は同じ `AdminWorkspace`、management store、型付き client
 
 ## アプリ設定と表示
 
+生成されるすべての `.gitignore` に `**/data/` を含め、ルートと各 workspace の実行データおよび `.gitkeep` を除外します。必要なディレクトリは実行時に作成します。
+
+Fullstack の `packages/<project>-serv/config/` は `_core`、`_serv`、`_db`、`_cache`、`_iam`、`_storage`、`_audit`、`_reach`、`_ai`、`_vecdb`、`_payment`、`_scheduler`、`_deploy` の 13 個の `.yml` を常に生成します。使用するモジュールは既定値を有効にし、未使用のモジュール、任意項目、代替 Provider はコメントとして残します。`.env.example` も未使用モジュールの認証情報をコメントで示し、作成時に指定した設定値を保持します。
+
+拡張時はサービスの workspace に必要なパッケージを追加し、`src/server/runtime.ts` で公開 Schema による検証、初期化、逆順の終了処理を実装してから設定を有効にします。全体がコメントのファイルは外側のコメントを一層外し、任意ブロックは必要なものだけ有効にします。設定ファイルの存在だけでは業務機能は接続されません。SQLite/Redis/S3 や Reach Provider の切り替え時は既存の接続ブロックを置き換え、Provider 名を重複させません。`crypto.init()` は設定引数を取らず、datapipe は純関数のため、架空の YAML は生成しません。
+
 全テンプレートは `_core.yml` から `name`、`version`、`env`、`defaultLocale`、`logging` を読み、`core.config` でメタ情報を取得して `core.logger` を使います。単一アプリの設定は `config/`、API workspace は `apps/<project>-service/config/`、fullstack は `packages/<project>-serv/config/` にあります。ログレベルと形式は YAML で決め、初期化で固定の `logging` を指定して上書きしません。
 
 Core の環境変数上書きには `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` を使えます。`HAI_CORE` 全体の上書きは親ノード優先です。サーバー設定の変更後はサービスを再起動します。コンテナは `HAI_CORE_ENV=production` を明示し、この値で本番の安全ポリシーを有効にします。
 
 SvelteKit のサーバー layout は名称、バージョン、環境、既定言語など公開メタ情報のホワイトリストのみを渡します。単独 mobile-app の Vite 設定は Node ビルド時に core で YAML を解析し、公開値とブラウザーログレベル・形式を注入するため、YAML や上書き変数を変えたら再ビルドが必要です。Fullstack の画面は暗号化された `app.info` でサーバーの公開メタ情報を取得します。core/モジュール設定全体、秘密情報、ログのマスキング文脈はブラウザーに公開しません。
+
+葉の環境変数は YAML に存在するパスだけを上書きします。コメントの項目は先に有効にするか、`HAI_DB`、`HAI_CACHE` などでオブジェクト全体を置き換えます。camelCase は分割せず、`connectTimeout` は `HAI_CACHE_CONNECTTIMEOUT` に対応します。言語一覧は各フロントエンド/shared の `project.inlang/settings.json` で管理し、`_core.yml` は既定言語のみを指定します。
+
+Fullstack が自動生成する `.env` は初期管理者パスワードと `PUBLIC_API_BASE` のみ有効にします。モジュールの環境変数上書きはコメントとして残し、YAML を既定値の元にします。必要な環境変数だけを明示的に有効にし、YAML 編集時は既存の上書きも確認します。
 
 ## 共通オプション
 

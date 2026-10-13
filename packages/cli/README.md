@@ -159,9 +159,19 @@ Web/App/Desktop 复用同一个 `AdminWorkspace`、management store 和 typed cl
 
 ## 应用配置与显示
 
+所有生成项目的 `.gitignore` 都包含 `**/data/`，忽略根目录及嵌套 workspace 的运行数据，包括 `.gitkeep`；运行时会创建需要的数据目录。
+
+Fullstack 的 `packages/<project>-serv/config/` 始终保留 13 份配置：`_core`、`_serv`、`_db`、`_cache`、`_iam`、`_storage`、`_audit`、`_reach`、`_ai`、`_vecdb`、`_payment`、`_scheduler`、`_deploy`（均为 `.yml`）。已用模块保留有效默认值，未启用模块整份注释，各模块的可选字段和替代 Provider 也以注释保留。`.env.example` 同时提供未启用模块的注释凭据示例。创建时填写的模块选项会保留。
+
+扩展时先在服务端 workspace 安装所需模块，在 `src/server/runtime.ts` 按公开 Schema 校验配置、初始化并反序关闭，再取消所需配置的注释。整份注释的文件先去掉一层外层注释，可选块继续按需开启；配置文件存在并不等于业务能力已接入。切换 SQLite/Redis/S3 或 Reach Provider 时替换原连接块，同名 Provider 只保留一个。`crypto.init()` 无配置参数，datapipe 是纯函数，不生成虚构的 YAML 配置。
+
 所有模板从 `_core.yml` 统一读取 `name`、`version`、`env`、`defaultLocale` 和 `logging`，通过 `core.config` 获取元信息并使用 `core.logger`。单应用配置在 `config/`；API workspace 在 `apps/<project>-service/config/`；fullstack 在 `packages/<project>-serv/config/`。日志级别与格式由 YAML 决定，不在初始化时另写固定 `logging` 覆盖。
 
 环境变量可按 core 约定覆盖，如 `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL`；整体 `HAI_CORE` 覆盖遵循父节点优先规则。服务端配置变更后重启服务，容器显式设置 `HAI_CORE_ENV=production`，由该值启用生产安全策略。
+
+叶子环境变量只覆盖 YAML 中已有的路径；注释掉的键须先取消注释，或使用 `HAI_DB`、`HAI_CACHE` 等整体对象覆盖。camelCase 不拆词，例如 `connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。语言列表由各前端与 shared 的 `project.inlang/settings.json` 维护，`_core.yml` 只配置默认语言。
+
+Fullstack 自动生成的 `.env` 默认只启用初始管理员密码和 `PUBLIC_API_BASE`；模块环境覆盖全部保留注释，以 YAML 为默认值来源。需要环境覆盖时显式取消对应变量的注释，修改 YAML 时同步核对已有环境覆盖。
 
 SvelteKit 的服务端 layout 只下发名称、版本、环境和默认语言等公开白名单。独立 mobile-app 的 Vite 配置在 Node 构建阶段通过 core 解析 YAML，再注入公开值及浏览器日志级别/格式；修改 YAML 或覆盖变量后需要重新构建。Fullstack 前端通过加密的 `app.info` 获取服务端公开元信息。任何模板都不能把完整 core/模块配置、密钥或日志脱敏上下文注入浏览器。
 

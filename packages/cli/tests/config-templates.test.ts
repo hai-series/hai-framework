@@ -4,16 +4,30 @@
  * =============================================================================
  */
 
+import { CacheConfigSchema } from '@h-ai/cache'
+import { CoreConfigSchema } from '@h-ai/core'
+import { ReachConfigSchema } from '@h-ai/reach'
+import { ReldbConfigSchema } from '@h-ai/reldb'
+import { StorageConfigSchema } from '@h-ai/storage'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { generateConfigFile } from '../src/commands/cli-config-templates.js'
+import { generateConfigFile, generateEnvExample } from '../src/commands/cli-config-templates.js'
 
 describe('generateConfigFile', () => {
+  it.each([
+    ['core', CoreConfigSchema],
+    ['db', ReldbConfigSchema],
+    ['cache', CacheConfigSchema],
+    ['reach', ReachConfigSchema],
+    ['storage', StorageConfigSchema],
+  ] as const)('%s 默认配置应通过模块公开 Schema 校验', (moduleKey, schema) => {
+    expect(schema.safeParse(parse(generateConfigFile(moduleKey))).success).toBe(true)
+  })
   it('应该生成 core 配置', () => {
     const content = generateConfigFile('core')
     expect(content).toContain('name: my-app')
     expect(content).toContain('defaultLocale: zh-CN')
-    expect(content).toContain('supportedLocales:')
+    expect(content).not.toContain('supportedLocales:')
   })
 
   it('应该生成 db 配置', () => {
@@ -35,6 +49,12 @@ describe('generateConfigFile', () => {
     expect(content).toContain('password:')
     expect(content).toContain('session:')
     expect(content).toContain('rbac:')
+  })
+
+  it('默认关闭 OTP 登录时仍应保留策略入口，支持只改登录开关后启用', () => {
+    const config = parse(generateConfigFile('iam'))
+    expect(config.login.otp).toBe(false)
+    expect(config.otp).toEqual({})
   })
 
   it('reach 标准模板数组应可通过配置和环境整体覆盖', () => {
@@ -65,7 +85,7 @@ describe('generateConfigFile', () => {
 
     const dbContent = generateConfigFile('db')
     expect(dbContent).toContain('database: ./data/app.db')
-    expect(dbContent).not.toContain('${HAI_')
+    expect(parse(dbContent)).toEqual({ type: 'sqlite', database: './data/app.db' })
   })
 
   // 自定义配置值测试
@@ -130,5 +150,25 @@ describe('generateConfigFile', () => {
       const content = generateConfigFile('ai', { ai: { defaultProvider: 'deepseek', model: 'deepseek-chat' } })
       expect(content).toContain('model: deepseek-chat')
     })
+  })
+})
+
+describe('generateEnvExample', () => {
+  it('完整示例应保留未选择模块的凭据注释，且不激活其环境变量', () => {
+    const content = generateEnvExample(['db', 'cache', 'iam', 'storage'], undefined, true)
+    expect(content).toContain('# HAI_AI_LLM_APIKEY=')
+    expect(content).toContain('# HAI_VECDB_TYPE=lancedb')
+    expect(content).toContain('# HAI_DEPLOY_VERCEL_TOKEN=')
+    expect(content).toContain('# HAI_REACH_SMTP_PASS=')
+    const activeVariables = content.split('\n').filter(line => line && !line.startsWith('#'))
+    expect(activeVariables).toEqual([])
+  })
+
+  it('redis 环境变量应与 camelCase 配置路径一致', () => {
+    const content = generateEnvExample(['cache'], { cache: { type: 'redis' } })
+    expect(content).toContain('HAI_CACHE_CONNECTTIMEOUT=')
+    expect(content).toContain('HAI_CACHE_COMMANDTIMEOUT=')
+    expect(content).toContain('HAI_CACHE_KEYPREFIX=')
+    expect(content).not.toContain('HAI_CACHE_CONNECT_TIMEOUT')
   })
 })

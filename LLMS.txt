@@ -81,6 +81,7 @@ return result
 ## 配置与依赖
 
 - Node 配置：`core.init({ configDir: './config' })` 加载 YAML；例如 `_db.yml` 注册为 `db`。使用模块 Schema 校验结果后传给 init；依赖按顺序初始化并检查 success，失败清理已创建资源。
+- CLI 所有项目忽略 `**/data/`（含嵌套 workspace 和 `.gitkeep`）。Fullstack 始终生成 13 份模块 YAML，未使用模块及可选字段用注释保留；先安装、校验、初始化模块并接入业务，再按需取消注释，存在文件不代表模块已启用。详细步骤见 [CLI 配置说明](packages/cli/README.md#应用配置与显示)。
 - `HAI_<配置名>_<YAML路径>` 可整体覆盖 YAML 根/对象/数组或具体叶子项；层级用 `_`，camelCase 不拆词。例如 `llm.apiKey` → `HAI_AI_LLM_APIKEY`，`llm.models[0].temperature` → `HAI_AI_LLM_MODELS_0_TEMPERATURE`。
 - 父节点约定变量优先于子节点，且整体替换后不再遍历叶子变量；当前节点约定变量优先于显式 `${VAR}`/`${VAR:default}` 和 YAML 默认值。根对象覆盖（如 HAI_DB）可提供原 YAML 未声明的连接字段；没有父节点覆盖时只遍历已有路径。
 - 密钥不写死、不进入日志或 PUBLIC_/VITE_ 客户端变量。日志英文，代码注释中文，用户文案同步 i18n。

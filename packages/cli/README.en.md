@@ -159,9 +159,19 @@ Default SQLite, local storage and memory cache suit a single-instance mini admin
 
 ## Application configuration and display
 
+Every generated `.gitignore` includes `**/data/`, covering runtime data and `.gitkeep` at every workspace depth. Runtime code creates the required directories.
+
+Fullstack always includes 13 `.yml` files in `packages/<project>-serv/config/`: `_core`, `_serv`, `_db`, `_cache`, `_iam`, `_storage`, `_audit`, `_reach`, `_ai`, `_vecdb`, `_payment`, `_scheduler`, and `_deploy`. Used modules retain working defaults; unused modules, optional fields, and alternative providers remain as comments. `.env.example` also includes commented credentials for unused modules. Module choices entered during creation are preserved.
+
+To extend the service, install the required package in its workspace, validate with the public schema, initialize it and close it in reverse order in `src/server/runtime.ts`, then uncomment the relevant configuration. For a fully commented file, remove one outer comment layer first and enable optional blocks as needed. A configuration file alone does not connect business features. Replace connection blocks when switching SQLite/Redis/S3 or Reach providers, keeping each provider name unique. `crypto.init()` takes no configuration and datapipe provides pure functions; neither gets an invented YAML file.
+
 Every template reads `name`, `version`, `env`, `defaultLocale` and `logging` from `_core.yml`, obtains metadata through `core.config` and uses `core.logger`. Single-app configuration lives in `config/`, API workspace configuration in `apps/<project>-service/config/`, and fullstack configuration in `packages/<project>-serv/config/`. YAML controls log level and format; initialization does not replace them with a fixed `logging` option.
 
 Core environment overrides include `HAI_CORE_NAME`, `HAI_CORE_VERSION`, `HAI_CORE_ENV` and `HAI_CORE_LOGGING_LEVEL`; a whole `HAI_CORE` override follows parent-node precedence. Restart services after server configuration changes. Containers explicitly set `HAI_CORE_ENV=production`, which enables production security policy.
+
+Leaf overrides apply only to existing YAML paths: uncomment the key first, or replace the whole object with `HAI_DB`, `HAI_CACHE`, etc. CamelCase remains one segment: `connectTimeout` maps to `HAI_CACHE_CONNECTTIMEOUT`. Locale lists belong in each frontend/shared `project.inlang/settings.json`; `_core.yml` specifies only the default locale.
+
+The automatically generated fullstack `.env` enables only the initial administrator password and `PUBLIC_API_BASE`. Module overrides remain commented so YAML supplies defaults. Explicitly uncomment environment overrides when needed, and check existing overrides when editing YAML.
 
 SvelteKit server layouts expose only whitelisted public metadata such as name, version, environment and default locale. Standalone mobile-app Vite configuration parses YAML through core in the Node build process and injects public values plus browser logging level/format; YAML or override changes require a rebuild. Fullstack frontends obtain public server metadata through encrypted `app.info`. No template exposes complete core/module configuration, secrets or log-redaction context to the browser.
 

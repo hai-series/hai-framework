@@ -323,10 +323,11 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       for (const featureId of resolvedOptions.features) {
         const configKey = getFeatureConfigKey(featureId)
         if (configKey) {
-          const content = isFullstack && configKey === 'iam'
-            ? generateConfigFile(configKey, configs).replace('seedDefaultData: true', 'seedDefaultData: false')
-            : generateConfigFile(configKey, configs)
-          await writeFile(path.join(configDir, `_${configKey}.yml`), content)
+          const configPath = path.join(configDir, `_${configKey}.yml`)
+          // fullstack 已用模块配置 helper 渲染完整配置，不能再覆盖 Reach 模板等应用默认值。
+          if (isFullstack && await fse.pathExists(configPath))
+            continue
+          await writeFile(configPath, generateConfigFile(configKey, configs))
         }
       }
 
@@ -341,7 +342,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       const envExample = isApiWorkspace
         ? `${generateEnvExample(resolvedOptions.features, configs)}\n# =============================================================================\n# Service Runtime\n# =============================================================================\nPORT=3000\n`
         : isFullstack
-          ? `${generateEnvExample(resolvedOptions.features, configs)}\n# First-start administrator password. The CLI generates a random value in .env.\nHAI_ADMIN_DEFAULT_PASSWORD=\n\n# Local development API. Use your public API origin for deployment/native clients.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
+          ? `${generateEnvExample(resolvedOptions.features, configs, true)}\n# First-start administrator password. The CLI generates a random value in .env.\nHAI_ADMIN_DEFAULT_PASSWORD=\n\n# Local development API. Use your public API origin for deployment/native clients.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
           : generateEnvExample(resolvedOptions.features, configs)
 
       await writeFile(envExamplePath, envExample)
@@ -1271,6 +1272,16 @@ CLI 已在根目录生成 \`.env\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\` 是�
 所有业务 JSON 请求和响应默认通过 \`@h-ai/crypto\` transport 双向加密（含登录、刷新、头像上传）；前端统一使用共享 typed API client。Web 访问令牌仅存内存、刷新令牌由 HttpOnly Cookie 保存；受信原生端使用平台安全存储或内存。头像为随机路径只读图片资源，支持 PNG/JPEG/WebP，最大 512 KiB。健康检查和只读头像图片可直接访问。
 
 应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。默认 SQLite、本地存储与内存缓存适合单实例，管理写入仅支持单写实例；多实例读取可使用共享数据库、Redis cache 和 S3 存储，但管理写请求须统一路由到同一写实例。另需会话粘性路由使请求命中同一进程内传输私钥，服务重启后客户端重新协商。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
+
+## 配置扩展
+
+服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
+
+自动生成的 \`.env\` 默认只启用初始管理员密码和 \`PUBLIC_API_BASE\`，模块环境覆盖保留注释，YAML 是默认值来源。需要环境覆盖时显式取消对应变量的注释；编辑 YAML 时同步核对已有覆盖。
+
+扩展时先在服务端 workspace 安装需要的包，在 \`src/server/runtime.ts\` 按模块公开 Schema 校验配置、初始化并反序关闭，再接入 contract/procedure 和界面。整份注释文件先去掉一层外层注释，可选块继续按需开启；配置文件存在不代表业务功能已接入。\`crypto.init()\` 无配置参数，datapipe 为纯函数，不生成虚构 YAML。
+
+环境变量只覆盖 YAML 已有路径，注释键须先启用，或用 \`HAI_DB\` / \`HAI_CACHE\` 等整体对象覆盖。camelCase 不拆词，例如 \`connectTimeout\` 对应 \`HAI_CACHE_CONNECTTIMEOUT\`。修改配置后重启服务；语言列表在各前端/shared 的 \`project.inlang/settings.json\` 中同步。\`**/data/\` 忽略任意层级的数据目录及 \`.gitkeep\`，运行数据不入 Git，运行时自动创建目录。
 
 ## 开发、编译与打包
 

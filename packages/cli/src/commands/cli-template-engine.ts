@@ -18,6 +18,7 @@ import fse from 'fs-extra'
 import Handlebars from 'handlebars'
 import { stringify } from 'yaml'
 import { getCliVersion } from '../cli-utils.js'
+import { generateConfigFile } from './cli-config-templates.js'
 
 // 注册自定义 Handlebars helpers
 Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
@@ -29,6 +30,19 @@ Handlebars.registerHelper('json', (value: unknown) => JSON.stringify(value))
 Handlebars.registerHelper('html', (value: string) => Handlebars.escapeExpression(value))
 Handlebars.registerHelper('yaml', (key: string, value: unknown) => stringify({ [key]: value }).trim())
 Handlebars.registerHelper('jsString', (value: string) => `'${JSON.stringify(value).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, '\\\'')}'`)
+
+// 同一份模块配置供直接渲染和 create 命令使用，避免精简配置覆盖完整模板。
+// 未选择的模块只输出注释；说明也加两层注释，整文件去掉外层后仍是合法 YAML。
+Handlebars.registerHelper('moduleConfig', function (this: TemplateContext, moduleKey: string, enabled: boolean) {
+  // 文件模板自身保留结尾换行，helper 不再重复输出空行。
+  const content = generateConfigFile(moduleKey, this.moduleConfigs).trimEnd()
+  const configured = this.appType === 'fullstack' && moduleKey === 'iam'
+    ? content.replace('seedDefaultData: true', 'seedDefaultData: false')
+    : content
+  return enabled
+    ? configured
+    : `# # 未启用：安装对应模块并在服务端 runtime 中初始化，再取消所需配置的注释。\n${configured.split('\n').map(line => line ? `# ${line}` : '').join('\n')}`
+})
 
 const TEMPLATE_SKIP_IF_EMPTY_MARKER = '@skipIfEmpty'
 const NORMALIZED_RENDER_EXTENSIONS = new Set(['.ts', '.js', '.svelte', '.json', '.css'])
@@ -457,6 +471,8 @@ export interface TemplateContext {
   appType: AppType
   /** 选中的 feature 集合（用于 {{#if features.xxx}}） */
   features: Record<string, boolean>
+  /** 创建时指定的模块配置；配置模板需保留这些值。 */
+  moduleConfigs?: ModuleConfigs
   /** 是否有 UI（非 api / fullstack 类型） */
   hasUi: boolean
   /** 是否有 i18n（非 api / fullstack 类型） */
@@ -778,6 +794,7 @@ export function buildTemplateContext(options: {
     haiCatalogPackages,
     appType: options.appType,
     features: featureMap,
+    moduleConfigs: options.moduleConfigs,
     hasUi,
     hasI18n: !isApi && !isFullstack,
     isCapacitorApp,

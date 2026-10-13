@@ -104,7 +104,13 @@ templates/
 
 `appType` 支持 `admin` / `website` / `h5` / `api` / `mobile-app` / `fullstack`。
 
+H5 业务页面复用 `@h-ai/ui` 的 `BottomNav` 和移动端壳样式，桌面预览保持居中限宽，认证路由独立显示。
+
 `fullstack.*` 包含包名、前端选择、依赖版本、`contractExportName` 和原生壳 `nativeAppIdSegment`，用于渲染 contract / serv / 多端 UI / Capacitor / Tauri 模板。
+
+`moduleConfigs` 保留创建时指定的模块值。Fullstack 的模块 YAML 用 `{{{moduleConfig 'db' true}}}` 等 helper 复用 `cli-config-templates.ts`；可选模块传 `features.ai` 等开关，未选择时整份注释。创建流程保留已渲染的配置，不再用精简内容覆盖；core、serv、Reach 保留应用专用默认值及完整的可选字段。新增 Schema 字段同步此生成器和相应模板。
+
+所有根 `.gitignore`（base / api / fullstack）保留 `**/data/`，包括 `.gitkeep` 在内的运行数据不跟踪。Fullstack 服务端 config 始终含 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML；不为无配置入口的 crypto/datapipe 生成 YAML。未启用块的后续接入步骤见 [CLI 配置说明](../README.md#应用配置与显示)。
 
 ### 常用条件写法
 

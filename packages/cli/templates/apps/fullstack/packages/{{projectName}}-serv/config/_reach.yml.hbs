@@ -4,6 +4,30 @@ providers:
     type: console
   - name: sms
     type: console
+  # SMTP 替换 email 控制台 Provider；同名 Provider 只保留一个。
+  # - name: email
+  #   type: smtp
+  #   host: ${HAI_REACH_SMTP_HOST:smtp.example.com}
+  #   port: ${HAI_REACH_SMTP_PORT:465}
+  #   secure: true
+  #   user: ${HAI_REACH_SMTP_USER:}
+  #   pass: ${HAI_REACH_SMTP_PASS:}
+  #   from: ${HAI_REACH_SMTP_FROM:noreply@example.com}
+  # 阿里云短信替换 sms 控制台 Provider。
+  # - name: sms
+  #   type: aliyun-sms
+  #   accessKeyId: ${HAI_REACH_SMS_ACCESS_KEY}
+  #   accessKeySecret: ${HAI_REACH_SMS_SECRET_KEY}
+  #   signName: MyApp
+  #   endpoint: dysmsapi.aliyuncs.com
+  # 自有发送服务：按需将 template.provider 改为 custom。
+  # - name: custom
+  #   type: api
+  #   url: https://notify.example.com/send
+  #   method: POST # POST | PUT
+  #   headers:
+  #     Authorization: 'Bearer ${HAI_REACH_API_TOKEN}'
+  #   timeout: 10000
 templates:
   - name: otp_email
     provider: email
@@ -19,3 +43,10 @@ templates:
   - name: password_reset_sms
     provider: sms
     body: 'Reset your password: {resetUrl}. Expires at {expiresAt}.'
+
+# 免打扰可选；验证码应避免 delay，以免延迟到失效后投递。
+# dnd:
+#   enabled: false
+#   strategy: discard # discard | delay
+#   start: '22:00'
+#   end: '08:00'

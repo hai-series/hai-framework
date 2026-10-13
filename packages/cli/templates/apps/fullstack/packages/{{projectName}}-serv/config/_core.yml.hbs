@@ -15,7 +15,14 @@ defaultLocale: {{fullstack.i18n.baseLocale}}
 logging:
   level: info
   format: json
+  # context:
+  #   service: api
   redact:
     - password
     - token
     - secret
+
+# 短 ID 生成配置；未设置时采用框架默认值。
+# id:
+#   prefix: app_
+#   length: 21

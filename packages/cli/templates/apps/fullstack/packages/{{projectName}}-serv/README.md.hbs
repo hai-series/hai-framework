@@ -6,12 +6,13 @@
 
 - `config/_core.yml`：应用元信息（名称 / 版本 / 环境 / 语言），启动时由 `core.config` 加载。
 - `config/_serv.yml`：服务端运行时设置（CORS 来源等）。
-- `config/_db.yml` / `_cache.yml` / `_iam.yml` / `_storage.yml` / `_audit.yml`：mini 管理所需模块配置，初始化前使用模块公开 Schema 验证。
-- `src/index.ts`：进程入口，先 `core.init({ configDir: './config' })`，再初始化 reldb → cache → crypto → storage → iam → audit；启动失败及退出反序释放。
+- `config/_db.yml` / `_cache.yml` / `_iam.yml` / `_storage.yml` / `_audit.yml` / `_reach.yml`：管理及开发通知配置，初始化前使用模块公开 Schema 验证。Reach 默认控制台 Provider，生产按注释替换为 SMTP/短信/API。
+- `config/_ai.yml` / `_vecdb.yml` / `_payment.yml` / `_scheduler.yml` / `_deploy.yml`：保留未启用模块的完整注释示例；配置文件存在不代表模块已接入。先在本 workspace 安装对应依赖，再在 `src/server/runtime.ts` 按公开 Schema 校验、初始化并反序关闭，接入实际业务后按需取消注释。整份注释先去掉一层外层注释，可选字段继续按需开启。
+- `src/index.ts`：进程入口，先 `core.init({ configDir: './config' })`，再初始化 reldb → cache → crypto → storage → reach（有配置时）→ iam → audit；启动失败及退出反序释放。
 - `src/app-server.ts`：服务装配入口，挂载健康检查、OpenAPI、docs 与 procedures；应用名称 / 版本与 CORS 来源均取自上述配置。
 - `src/server/procedures/app-procedures.ts`：app 领域 procedures，对应 contract 中的 `app.info` / `app.echo` 路由。
 - `src/server/procedures/admin-procedures.ts`：认证、管理员用户/角色/审计管理和个人设置，使用 `.auth()` / `.role('admin')` 守卫。每个请求读取用户最新启用状态、角色和权限。
-- 当前用户与刷新 procedures 直接选用 `@h-ai/serv/features/iam` 的默认实现；仅覆写登录、退出、修改密码以追加业务审计。未选的注册/OTP/通用管理接口不挂载，HTTP App 类型直接复用公开 `ServHttpApp`。
+- 标准认证 procedures 复用 `@h-ai/serv/features/iam`，注册、登录方式、重置与协议由 `_iam.yml` 控制；登录、退出、修改密码追加业务审计。HTTP App 类型复用公开 `ServHttpApp`。
 - `src/server/admin-service.ts`：角色分配、头像上传和审计编排，全部底层操作复用 hai 模块。固定 admin/user 两种角色；锁内重新鉴权，禁止管理员自删、自禁用、自降级，并补偿用户更新失败后的角色变更。
 - `tests/app-server.test.ts`：真实加密 HTTP 测试，覆盖 Cookie/受信原生刷新、RBAC、旧会话权限、并发管理操作、补偿、头像安全、偏好、审计及会话失效。
 
@@ -22,6 +23,10 @@ CLI 已生成根目录 `.env`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项目独�
 业务修改提交后的审计记录采用最大努力策略：写入失败输出包含操作及资源的结构化错误日志，业务仍返回原操作结果，避免将已经完成的变更误报为失败；应用启动时 audit 初始化失败则停止启动。
 
 ## 开发
+
+所有配置字段以模块 Schema 为准；未使用字段和替代 Provider 用注释保留。叶子环境变量只覆盖已有 YAML 路径，先取消相应键的注释，或用 `HAI_DB` / `HAI_CACHE` 等整体对象覆盖；`connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。凭据示例在根 `.env.example`，实际密钥保存在忽略的 `.env` 或部署环境。`.gitignore` 的 `**/data/` 忽略所有运行数据及 `.gitkeep`；运行时会创建目录。`crypto.init()` 无配置参数，datapipe 为纯函数，不提供虚构配置。
+
+自动生成的 `.env` 只启用初始管理员密码和 `PUBLIC_API_BASE`；模块环境覆盖保留注释，以 YAML 为默认值来源。有明确环境覆盖时编辑 YAML 要同步核对。
 
 - `pnpm --filter {{fullstack.servPackageName}} dev`
 - `pnpm --filter {{fullstack.servPackageName}} test`

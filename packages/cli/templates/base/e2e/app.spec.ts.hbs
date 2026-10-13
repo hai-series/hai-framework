@@ -7,18 +7,38 @@ import { expect, test } from '@playwright/test'
 
 /** 首页从真实浏览器页面发起，覆盖基础渲染链路。 */
 test('home page renders from browser', async ({ page }) => {
+{{#if_eq appType 'h5'}}
+  await page.setViewportSize({ width: 390, height: 844 })
+{{/if_eq}}
   const pageErrors: string[] = []
   page.on('pageerror', error => pageErrors.push(error.message))
   await page.goto('/')
   await expect(page).toHaveTitle(process.env.HAI_CORE_NAME ?? '{{projectName}}')
   await expect(pageErrors).toEqual([])
   await expect(page.locator('main, section').first()).toBeVisible()
+{{#if_eq appType 'h5'}}
+  // 在手机宽度验证导航真正切换路由，避免样式失效但首页渲染测试仍通过。
+  const nav = page.locator('nav')
+  await nav.getByRole('button', { name: /发现|Discover/i, exact: true }).click()
+  await expect(page).toHaveURL(/\/discover$/)
+  await nav.getByRole('button', { name: /首页|Home/i, exact: true }).click()
+  await expect(page).toHaveURL(/\/$/)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+{{#if features.iam}}
+  const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
+  await mkdir(evidence, { recursive: true })
+  await page.screenshot({ path: path.join(evidence, '{{projectName}}-home.png'), fullPage: true })
+{{/if}}
+{{/if_eq}}
 })
 {{#if features.iam}}
 
 /** 实际注册和密码登录；截图只保存空白表单。 */
 test('configured IAM registration and password login', async ({ page, context }) => {
   test.setTimeout(90_000)
+{{#if_eq appType 'h5'}}
+  await page.setViewportSize({ width: 390, height: 844 })
+{{/if_eq}}
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
   await mkdir(evidence, { recursive: true })
   const username = `scaf${Date.now()}`

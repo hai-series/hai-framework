@@ -15,8 +15,10 @@
  */
 
 import type { AppType, FeatureId } from '../src/cli-types.js'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { runInNewContext } from 'node:vm'
+import { core } from '@h-ai/core'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -77,6 +79,75 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await fse.remove(tmpRoot)
+})
+
+it.each<AppType>(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'])('%s 应忽略所有层级的数据目录，包括占位文件', async (appType) => {
+  const projectPath = await generateProject({ name: `ignore-data-${appType}`, appType })
+  const dataPaths = ['data/app.db', 'data/.gitkeep', 'packages/service/data/uploads/avatar.png', 'apps/web/data/.gitkeep']
+  for (const dataPath of dataPaths)
+    await fse.outputFile(path.join(projectPath, dataPath), '')
+  execFileSync('git', ['init', '--quiet', projectPath])
+  const ignored = execFileSync('git', ['-C', projectPath, 'check-ignore', '--stdin'], {
+    input: [...dataPaths, 'src/main.ts', 'config/_iam.yml'].join('\n'),
+    encoding: 'utf-8',
+  }).trim().split(/\r?\n/)
+  expect(ignored).toEqual(dataPaths)
+})
+
+it('fullstack 应保留完整配置文件、用户选择和未启用模块的注释示例', async () => {
+  const projectName = 'complete-fullstack'
+  const projectPath = path.join(tmpRoot, projectName)
+  await generateFromTemplates(projectPath, buildTemplateContext({
+    name: projectName,
+    appType: 'fullstack',
+    features: [],
+    frontends: ['web'],
+    moduleConfigs: {
+      db: { type: 'postgresql', host: 'db.internal', port: 5433, database: 'app: primary' },
+      cache: { type: 'redis', host: 'cache.internal', port: 6380 },
+      iam: { loginPassword: true, loginOtp: true },
+    },
+    packageManager: 'pnpm',
+  }))
+  const configDir = `packages/${projectName}-serv/config`
+  const db = parse(await readGenerated(projectPath, `${configDir}/_db.yml`))
+  const cache = parse(await readGenerated(projectPath, `${configDir}/_cache.yml`))
+  const iam = parse(await readGenerated(projectPath, `${configDir}/_iam.yml`))
+  expect(db).toMatchObject({ type: 'postgresql', host: 'db.internal', port: 5433, database: 'app: primary' })
+  expect(cache).toMatchObject({ type: 'redis', host: 'cache.internal', port: 6380 })
+  expect(iam).toMatchObject({ login: { otp: true }, seedDefaultData: false })
+  for (const moduleKey of ['ai', 'vecdb', 'payment', 'scheduler', 'deploy']) {
+    const content = await readGenerated(projectPath, `${configDir}/_${moduleKey}.yml`)
+    // 注释文件解析为空，不会触发可选模块，也不会读取其凭据占位符。
+    expect(parse(content)).toBeNull()
+    expect(content.trim().split('\n').every(line => !line.trim() || line.startsWith('#'))).toBe(true)
+    const loaded = core.config.load(`cli-template-${moduleKey}`, path.join(projectPath, configDir, `_${moduleKey}.yml`))
+    expect(loaded.success).toBe(true)
+    if (loaded.success)
+      expect(loaded.data).toBeNull()
+  }
+  const iamContent = await readGenerated(projectPath, `${configDir}/_iam.yml`)
+  expect(iamContent).toContain('searchFilter:')
+  expect(iamContent).toContain('expirationDays:')
+  expect(iamContent).toContain('superAdminRole:')
+  // 用户整文件去掉一层注释后，应直接得到合法配置，而非残留说明文字导致 YAML 解析失败。
+  const aiExample = await readGenerated(projectPath, `${configDir}/_ai.yml`)
+  expect(parse(aiExample.replace(/^# /gm, ''))).toMatchObject({ llm: { model: 'gpt-4o-mini' } })
+})
+
+it('fullstack 选择可选模块时应保留其可用配置及创建参数', async () => {
+  const projectName = 'ai-fullstack'
+  const projectPath = path.join(tmpRoot, projectName)
+  await generateFromTemplates(projectPath, buildTemplateContext({
+    name: projectName,
+    appType: 'fullstack',
+    features: ['ai'],
+    frontends: ['web'],
+    moduleConfigs: { ai: { defaultProvider: 'anthropic', model: 'claude-sonnet-4-5' } },
+    packageManager: 'pnpm',
+  }))
+  const config = parse(await readGenerated(projectPath, `packages/${projectName}-serv/config/_ai.yml`))
+  expect(config).toMatchObject({ llm: { api: 'anthropic', model: 'claude-sonnet-4-5' } })
 })
 
 it('fullstack 的原生应用名称应读取 core 配置并正确转义', async () => {
@@ -489,7 +560,7 @@ describe('h5 应用类型生成', () => {
   describe('路由结构', () => {
     it('应生成底部导航布局', async () => {
       const content = await readGenerated(projectPath, 'src/routes/+layout.svelte')
-      expect(content).toContain('btm-nav')
+      expect(content).toContain('<BottomNav')
       expect(content).toContain('m.nav_home()')
       expect(content).toContain('m.nav_discover()')
       expect(content).toContain('m.nav_profile()')
