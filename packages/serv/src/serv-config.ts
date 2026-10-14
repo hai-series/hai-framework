@@ -8,6 +8,7 @@
 
 import process from 'node:process'
 import { z } from 'zod'
+import { isTrustedProxyEntry } from './serv-client-ip.js'
 
 const ApiPrefixSchema = z.custom<`/api/${string}`>(
   value => typeof value === 'string' && value.startsWith('/api/'),
@@ -71,6 +72,8 @@ export interface ServCorsRuntimeConfig {
 
 /** ServHttpApp 的 HTTP 挂载配置。 */
 export interface ServHttpConfig {
+  /** 可信任的连接代理 IP/CIDR；默认空数组，不采纳转发头。 */
+  readonly trustedProxies: readonly string[]
   readonly apiPrefix: `/api/${string}`
   readonly openapi: false | ServOpenAPIHttpConfig
   readonly docs: false | ServDocsHttpConfig
@@ -98,6 +101,7 @@ export type ServTransportRuntimeConfigInput = Partial<{
 
 /** `serv.createApp` 接受的 HTTP 配置入参类型。 */
 export type ServHttpConfigInput = Partial<{
+  readonly trustedProxies: readonly string[]
   readonly apiPrefix: `/api/${string}`
   readonly openapi: false | Partial<ServOpenAPIHttpConfig>
   readonly docs: false | Partial<ServDocsHttpConfig>
@@ -167,6 +171,7 @@ const CorsRuntimeConfigInputSchema = z.object({
 })
 
 const ServHttpConfigInputSchema = z.object({
+  trustedProxies: z.array(z.string().trim().refine(isTrustedProxyEntry, 'Expected an IP address or CIDR')).default([]),
   apiPrefix: ApiPrefixSchema.default('/api/v1'),
   openapi: OpenAPIHttpConfigInputSchema.default(false),
   docs: DocsHttpConfigInputSchema.default(false),

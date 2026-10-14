@@ -84,6 +84,8 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
+Node `serv.listen()` は socket の接続元を自動で渡し、既定では転送ヘッダーを無視します。`http.trustedProxies` の IP/CIDR のみ信頼し、XFF を右から左へ調べ、最初の非信頼アドレスで停止します。その左側は無視します。信頼チェーンが不正・長すぎる場合は IP 未定義となり、代理をクライアントとして扱いません。代理は転送ヘッダーを清掃・追加してください。Fetch は `app.fetch(request, { remoteAddress: platformPeerAddress })` で信頼できる接続元を渡します。メタデータなしは IP 未定義です。任意のヘッダーをコピーしないでください。独自 `createContext(input)` は input 全体を再利用し、解決済み `input.ip` を保持します。内部 RPC は接続元で制限します。
+
 ### Audio WebSocket：ticket とサーバー認可
 
 音声接続には短期・単回 ticket が必要です。認証済み HTTP endpoint で発行（推奨：`iam.ticket.issue`）し、`verifyTicket` でアトミックに消費します（推奨：`iam.ticket.consume`）。接続直後に独立 timeout で認証し、認証前に業務フレームを処理しません。返された `ServSession` と任意の `grant` を保存してから `authorize` で有料パラメーターを確認します：
@@ -152,6 +154,7 @@ await apiClient.init({
 ```yaml
 # config/_serv.yml
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
 
 transport:
@@ -344,11 +347,11 @@ const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(t
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async ({ request }) => {
-    const context = await baseContext({ request })
+  createContext: async (input) => {
+    const context = await baseContext(input)
     return {
       ...context,
-      tenantId: request.headers.get('x-tenant-id') ?? null,
+      tenantId: input.request.headers.get('x-tenant-id') ?? null,
     }
   },
 })
@@ -518,6 +521,7 @@ server:
   port: 3000
 
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json

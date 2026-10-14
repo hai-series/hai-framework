@@ -89,7 +89,13 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
   const audioServer = audioWsServers.get(app)
 
   const server = serve(
-    { fetch: app.fetch, hostname: host, port, websocket: audioServer ? { server: audioServer } : undefined },
+    {
+      // 保留原 bindings 对象，WebSocket 升级状态由 Node adapter 在同一对象上共享。
+      fetch: (request, bindings) => app.fetch(request, Object.assign(bindings, { remoteAddress: bindings.incoming.socket.remoteAddress })),
+      hostname: host,
+      port,
+      websocket: audioServer ? { server: audioServer } : undefined,
+    },
     options.onListening,
   )
 

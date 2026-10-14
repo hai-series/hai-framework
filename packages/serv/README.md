@@ -84,6 +84,8 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
+Node `serv.listen()` 自动提供 socket 对端地址；默认忽略 `X-Forwarded-For` / `X-Real-IP`。只有 `http.trustedProxies` 中列出的代理 IP/CIDR 才能提供转发头，XFF 从右向左停在首个不可信地址，忽略其左侧内容；可信链无法解析或过长时 IP 为 undefined，不能回退为代理身份。代理必须清洗或追加转发头。Fetch 平台通过 `app.fetch(request, { remoteAddress: platformPeerAddress })` 显式提供可信对端，缺失时 IP 为 undefined，不能从任意请求头复制。自定义 `createContext(input)` 复用完整 input，保留框架已解析的 `input.ip`。内部 RPC 仍按连接对端限制。
+
 ### Audio WebSocket：ticket 与服务端授权
 
 语音入口必须使用短期、一次性 ticket。应用通过已登录 HTTP endpoint 签发 ticket（推荐 `iam.ticket.issue`），并在 `verifyTicket` 中原子消费（推荐 `iam.ticket.consume`）；连接建立即完成鉴权（独立预鉴权超时），未鉴权不处理任何业务帧。框架保存返回的 `ServSession` 与可选 `grant`，再调用 `authorize` 确认付费参数：
@@ -152,6 +154,7 @@ await apiClient.init({
 ```yaml
 # config/_serv.yml
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
 
 transport:
@@ -344,11 +347,11 @@ const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(t
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async ({ request }) => {
-    const context = await baseContext({ request })
+  createContext: async (input) => {
+    const context = await baseContext(input)
     return {
       ...context,
-      tenantId: request.headers.get('x-tenant-id') ?? null,
+      tenantId: input.request.headers.get('x-tenant-id') ?? null,
     }
   },
 })
@@ -518,6 +521,7 @@ server:
   port: 3000
 
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json

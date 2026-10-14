@@ -254,6 +254,7 @@ server:
   port: 3000
 
 http:
+  trustedProxies: [] # 仅信任会清洗/追加转发头的代理 IP/CIDR
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json
@@ -484,11 +485,11 @@ const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(t
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async ({ request }) => {
-    const context = await baseContext({ request })
+  createContext: async (input) => {
+    const context = await baseContext(input)
     return {
       ...context,
-      tenantId: request.headers.get('x-tenant-id') ?? null,
+      tenantId: input.request.headers.get('x-tenant-id') ?? null,
     }
   },
 })
@@ -567,13 +568,15 @@ const procedures = serv
 
 ### `serv.parseRequestContext` — 默认 Context 解析器
 
+默认忽略转发头，缺少运行时对端时 IP 为 undefined。XFF 从右向左停在首个不可信地址，忽略左侧；可信链无效/过长时保留 IP 未知，不能回退为代理身份。Fetch 使用 `app.fetch(request, { remoteAddress: platformPeerAddress })`，对端必须来自可信平台 API。自定义 context 传递完整 input，保留已解析的 ip；内部 RPC 使用连接对端，转发头不能放宽来源限制。
+
 从 HTTP 请求头自动解析：
 
 | 字段 | 来源 |
 | --- | --- |
 | `accessToken` | `Authorization: Bearer <token>` |
 | `requestId` | `x-request-id` 或自动生成 UUID |
-| `ip` | `x-forwarded-for` / `x-real-ip` |
+| `ip` | Node socket / Fetch 显式 remoteAddress；仅 http.trustedProxies 中的代理可提供 XFF（从右向左）或 X-Real-IP |
 | `locale` | `accept-language` |
 | `userAgent` | `user-agent` |
 

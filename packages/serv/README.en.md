@@ -84,6 +84,8 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
+Node `serv.listen()` supplies the socket peer address. Forwarded headers are ignored by default. Only proxy IPs/CIDRs in `http.trustedProxies` may supply them: XFF is walked from right to left until the first untrusted address; content to the left of that address is ignored. An invalid or excessively long trusted chain leaves IP undefined rather than promoting the proxy to client identity. Proxies must sanitize or append forwarded headers. Fetch platforms explicitly provide a trusted peer through `app.fetch(request, { remoteAddress: platformPeerAddress })`; without metadata IP is undefined. Do not copy arbitrary headers into metadata. Custom `createContext(input)` forwards the complete input to preserve resolved `input.ip`. Internal RPC checks the connection peer.
+
 ### Audio WebSocket: tickets and server authorization
 
 Audio connections require short-lived, one-time tickets. Issue them through an authenticated HTTP endpoint (recommended: `iam.ticket.issue`) and consume atomically in `verifyTicket` (recommended: `iam.ticket.consume`). Authentication runs at connection time with a separate timeout; no business frames are processed beforehand. The framework stores the returned `ServSession` and optional `grant`, then calls `authorize` to approve paid parameters:
@@ -152,6 +154,7 @@ When using `@h-ai/core` and `ServConfigSchema` with `config/_serv.yml`, transpor
 ```yaml
 # config/_serv.yml
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
 
 transport:
@@ -344,11 +347,11 @@ const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(t
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async ({ request }) => {
-    const context = await baseContext({ request })
+  createContext: async (input) => {
+    const context = await baseContext(input)
     return {
       ...context,
-      tenantId: request.headers.get('x-tenant-id') ?? null,
+      tenantId: input.request.headers.get('x-tenant-id') ?? null,
     }
   },
 })
@@ -518,6 +521,7 @@ server:
   port: 3000
 
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json

@@ -7,6 +7,7 @@ import type { Context } from 'hono'
 import type { ServRpcHttpConfig } from '../serv-config.js'
 import type { ServMiddleware } from './serv-pipeline-types.js'
 import { core, HaiCommonError } from '@h-ai/core'
+import { readRemoteAddress } from '../serv-client-ip.js'
 import { servM } from '../serv-i18n.js'
 import { resolveRequestLocale } from '../serv-validation.js'
 import { buildHaiErrorBody } from './serv-pipeline-helper.js'
@@ -83,6 +84,10 @@ export function requireInternalRPC(config: ServRpcHttpConfig): ServMiddleware {
 }
 
 async function getRequestRemoteAddress(c: Context): Promise<string | undefined> {
+  // serv adapter 提供真实连接对端；内部 RPC 不使用转发后的客户端 IP。
+  const remoteAddress = readRemoteAddress(c.env)
+  if (remoteAddress)
+    return remoteAddress
   const getConnInfo = await resolveGetConnInfo()
   if (!getConnInfo)
     return undefined

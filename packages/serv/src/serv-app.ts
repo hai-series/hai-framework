@@ -24,7 +24,7 @@ import type { Hono, Context as HonoContext, Next } from 'hono'
 import type { AudioWsDeps } from './features/serv-feature-audio.js'
 import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
 import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js'
-import type { CreateServContext, ServContext, ServIam, ServSession } from './serv-context.js'
+import type { CreateServContext, ServContext, ServIam, ServRequestMetadata, ServSession } from './serv-context.js'
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
@@ -39,6 +39,7 @@ import { registerAudioWsRoute } from './features/serv-feature-audio.js'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { requireInternalRPC } from './pipelines/serv-pipeline-require-internal-rpc.js'
 import { securityHeaders } from './pipelines/serv-pipeline-security-headers.js'
+import { createClientIpResolver, readRemoteAddress } from './serv-client-ip.js'
 import { resolveServHttpConfig } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
 import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
@@ -70,7 +71,7 @@ export interface ServMiddlewareMount {
  * - `request`：测试 / 本地直连时发起 in-process 请求，避免消费方 import Hono。
  */
 export interface ServHttpApp {
-  readonly fetch: (request: Request) => Response | Promise<Response>
+  readonly fetch: (request: Request, metadata?: ServRequestMetadata) => Response | Promise<Response>
   readonly request: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>
 }
 
@@ -283,8 +284,10 @@ export function createApp<
   const iamRef = options.iam
   const verifyToken = options.verifyToken
     ?? (iamRef ? (token: string) => iamRef.auth.verifyToken(token) : undefined)
-  const createContext: CreateServContext = options.createContext
+  const contextFactory: CreateServContext = options.createContext
     ?? (verifyToken ? buildAuthContextFactory(verifyToken) : parseRequestContext)
+  const resolveIp = createClientIpResolver(http.trustedProxies)
+  const createContext: CreateServContext = input => contextFactory({ ...input, ip: resolveIp(input.request, input.remoteAddress) })
 
   // Step 4：准备文档 spec 的懒缓存。只有真正访问 openapi/docs 时才生成，避免启动时做重活。
   // OpenAPI spec 是相对昂贵的同步生成；延迟到第一次访问 `/openapi.json` 或 `/docs` 时再算一次。
@@ -380,7 +383,7 @@ export function createApp<
 
     app.get(docs.path, async (c) => {
       if (docs.requireAuth) {
-        const context = await createContext({ request: c.req.raw })
+        const context = await createContext({ request: c.req.raw, remoteAddress: readRemoteAddress(c.env) })
         // 与 procedure 层 `.auth()` 语义保持一致：必须是已验证 session，
         // 不能只检查 Bearer 字符串是否存在，避免任意伪造 Token 访问受保护文档。
         if (!context.session)
@@ -439,7 +442,7 @@ async function handleORPC(
   createContext: CreateServContext,
 ): Promise<Response | void> {
   // Step A：为本次请求创建 ServContext（可能只含元数据，也可能已带 session）。
-  const context = await createContext({ request: c.req.raw })
+  const context = await createContext({ request: c.req.raw, remoteAddress: readRemoteAddress(c.env) })
   // Step B：交给 oRPC handler 做 contract 匹配 + procedure 执行。
   const { matched, response } = await handler.handle(c.req.raw, { prefix, context })
   if (!matched) {

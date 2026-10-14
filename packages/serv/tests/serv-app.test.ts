@@ -33,11 +33,11 @@ describe('@h-ai/serv', () => {
       },
     })
 
-    const context = serv.parseRequestContext({ request })
+    const context = serv.parseRequestContext({ request, remoteAddress: '192.0.2.10' })
 
     expect(context.accessToken).toBe('access-token')
     expect(context.requestId).toBe('req_1')
-    expect(context.ip).toBe('127.0.0.1')
+    expect(context.ip).toBe('192.0.2.10')
     expect(context.locale).toBe('en-US')
     expect(context.userAgent).toBe('vitest')
   })
