@@ -1,3 +1,4 @@
+import type { HaiError } from '@h-ai/core'
 /** 按公开 IAM 错误码展示当前 UI 语言；应用自定义错误保留原文。 */
 import type { UIMessageKey } from '../../../messages.js'
 import { uiM } from '../../../messages.js'
@@ -31,7 +32,7 @@ const messages: Partial<Record<string, UIMessageKey>> = {
   'hai:iam:999': 'auth_error_service',
 }
 
-export function authErrorMessage(error: { code: string, message: string }): string {
+export function authErrorMessage(error: Pick<HaiError, 'code' | 'message'>): string {
   const key = messages[error.code]
   return key ? uiM(key) : error.message
 }

@@ -36,6 +36,8 @@ export function generateToken(): string {
  */
 export function buildSession(options: CreateSessionOptions, now: Date, sessionTtl: number, accessToken: string): Session {
   return {
+    apiKeyId: options.apiKeyId,
+    apiKeyScopes: options.apiKeyScopes,
     userId: options.userId,
     username: options.username,
     displayName: options.displayName,

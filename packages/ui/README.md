@@ -248,7 +248,14 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-### 场景组件 Scenes（34 个）
+### 场景组件 Scenes（36 个）
+
+#### Guide 引导与帮助（2 个）
+
+| 组件 | 描述 | 主要属性 |
+| --- | --- | --- |
+| `GuideHost` | 首次邀请、页面导览与帮助弹窗宿主 | `guide`, `locale`, `scope`, `autoStart` |
+| `HelpCenter` | 可独立使用的帮助中心 | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
 #### App 应用级（7 个）
 
@@ -772,6 +779,58 @@ import {
 
 上例的 subscribe 为应用自身的 $state，应用包装 register 动作校验/提交扩展业务数据；如需单独组合表单，使用 `<RegisterForm> {#snippet extraFields()}...{/snippet} </RegisterForm>`。扩展里的按钮须为 `type="button"`，避免误提交。
 
+
+## 新手引导与帮助中心
+
+`@h-ai/ui/guide` 提供 `createGuide`、`GuideHost`、`HelpCenter` 和相关类型。无需 init/close；引擎在开始导览时按需加载，浮层复用当前主题。组件内置中英文按钮、进度和错误提示，业务内容使用应用 i18n。
+
+同一入口的 `resolveGuideText(text?)` 可解析字符串或 i18n 回调；宿主组件已自动解析文案。
+
+下例放在应用布局中；`nav` 是应用现有 NavAdapter，`locale`、`user` 与翻译函数 `m` 来自应用，翻译 key 需在应用消息中定义。目标按钮放在 `/users` 页面。
+
+```svelte
+<script lang='ts'>
+  import { createGuide, GuideHost } from '@h-ai/ui/guide'
+
+  const guide = createGuide({
+    nav,
+    persistKey: 'my-app-guide',
+    tours: [{
+      id: 'users',
+      version: 1,
+      route: '/users',
+      title: () => m.guide_users_title(),
+      description: () => m.guide_users_description(),
+      steps: [{
+        target: 'users-create',
+        title: () => m.guide_create_title(),
+        description: () => m.guide_create_description(),
+      }],
+    }],
+    articles: [{
+      id: 'users-help',
+      title: () => m.guide_users_title(),
+      content: () => m.guide_users_markdown(),
+      tourId: 'users',
+    }],
+  })
+</script>
+
+<GuideHost {guide} {locale} scope={user.id} autoStart='users' />
+<Button onclick={() => guide.openHelp()}>{m.help()}</Button>
+<!-- 在目标页面为现有按钮添加锚点，无需额外包装。 -->
+<Button data-guide='users-create' onclick={createUser}>{m.create_user()}</Button>
+```
+
+- `start(id)` 返回 `Promise<boolean>`，允许手动重看；失败返回 false 并设置 `error`。`startIfNeeded(id)` 返回 boolean 并显示首次邀请，通常由 autoStart 处理。
+- `openHelp(articleId?)` 打开帮助，`stop()` 取消导览，`reset(id)` 删除当前用户的偏好。完成、稍后和不再提醒分别记录；稍后暂缓一天，Cookie 默认保存一年。
+- `persistence` 支持 cookie（默认）、localStorage、memory；受限存储回退到实例内存。scope 使用非敏感用户标识，version 变化会重新提示。
+- 通过已有 NavAdapter 接入 SvelteKit、SPA 或原生 WebView；默认完整导航使用 sessionStorage 保存短期启动记录。宿主只在浏览器挂载后读取记录，SSR 实例不得跨用户共享。
+- 目标等待默认 3000ms，可用 waitTimeout 调整。before(signal) 可展开页签/抽屉；必要元素缺失停止，可选步骤使用 optional 跳过。引导不会自动提交业务表单。
+- 业务文案用函数延迟求值，并传入当前 locale。步骤内容按纯文本显示；帮助正文复用安全 MarkdownRenderer，原始 HTML 关闭。
+- HelpCenter 可独立放入帮助页面，props 为 articles、tours（可选）、locale、selectedId 和 onstart；支持类别标签、标题/正文搜索和关联导览。
+
+admin-console 示例和 CLI fullstack Web/App/Desktop 默认包含帮助入口、首次邀请及个人资料导览。完整配置和验证场景见 [引导指南](../cli/templates/skills/hai-ui/guide.md)。
 
 ## 其他导出
 

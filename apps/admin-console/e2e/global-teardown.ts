@@ -9,6 +9,7 @@
  * globalSetup 会在下次运行前清理。
  */
 
+import type { FullConfig } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 import { cwd } from 'node:process'
@@ -20,7 +21,14 @@ function getE2EDataDirs() {
     .map(entry => path.resolve(root, entry.name))
 }
 
-export default function globalTeardown() {
+export default async function globalTeardown(config: FullConfig) {
+  // 在 Playwright 终止 Windows 子进程前释放 LDAP，避免占用下一轮的固定端口。
+  if (config.metadata.notificationFixture === true) {
+    const response = await fetch('http://127.0.0.1:12580/shutdown', { method: 'POST', signal: AbortSignal.timeout(15_000) })
+    if (!response.ok)
+      throw new Error('Notification fixture shutdown failed')
+    await response.json()
+  }
   for (const dataDir of getE2EDataDirs()) {
     if (fs.existsSync(dataDir)) {
       try {

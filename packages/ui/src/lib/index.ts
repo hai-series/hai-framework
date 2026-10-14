@@ -8,6 +8,8 @@
 // ─── 组件导出（从 components/ 统一导出所有三层组件及其类型） ───
 
 export * from './components/index.js'
+export * from './guide-types.js'
+export * from './guide.svelte.js'
 
 // ─── i18n 国际化（Paraglide 辅助工具） ───
 

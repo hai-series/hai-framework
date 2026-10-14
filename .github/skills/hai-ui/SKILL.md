@@ -1,6 +1,6 @@
 ---
 name: hai-ui
-description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动界面、主题与 AI 内容展示。"
+description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手引导、帮助中心、主题与 AI 内容展示。"
 ---
 
 # hai-ui — @h-ai/ui 快速指南
@@ -20,6 +20,8 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动�
 > 完整安装步骤、组件清单与长示例见 [CLI UI 参考](../../../packages/cli/templates/skills/hai-ui/reference.md)；本文件保留工作区内最常用的集成要点，避免上下文过重。
 
 ## 使用边界
+
+- 新手引导和帮助中心复用 `@h-ai/ui/guide` 的 `createGuide` / `GuideHost` / `HelpCenter`；按 [引导接入与状态契约](../../../packages/cli/templates/skills/hai-ui/guide.md) 配置业务文案、导航、用户范围和 data-guide 锚点。
 
 - 加密输入变更会清空密文，乱序/清空/卸载后的旧结果不会回填；失败显示错误。提交前确认当前密文非空，不缓存上次密文。
 

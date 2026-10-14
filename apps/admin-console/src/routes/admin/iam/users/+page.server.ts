@@ -114,7 +114,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   // 角色列表 + 用户列表（含角色）并行获取
   const [roles, usersResult] = await Promise.all([
     listAdminRoles(),
-    iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'], sortBy: userSort.sortBy, sortDirection: userSort.sortDirection }),
+    iam.user.listUsers({ page, pageSize, search, enabled, roleCode: roleFilter || undefined, include: ['roles'], sortBy: userSort.sortBy, sortDirection: userSort.sortDirection }),
   ])
   const data = requireAdminData(usersResult)
   const iamUsers = data.items
@@ -137,17 +137,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     }
   })
 
-  // 如果指定了角色筛选则过滤
-  const filteredUsers = roleFilter
-    ? usersWithRoles.filter(u => u.roles.includes(roleFilter))
-    : usersWithRoles
-
-  // 角色筛选后的 total 可能需要修正（因 API 层不支持按角色过滤）
-  const filteredTotal = roleFilter ? filteredUsers.length : total
-
   return {
-    users: filteredUsers,
-    total: filteredTotal,
+    users: usersWithRoles,
+    total,
     page,
     pageSize,
     roles,

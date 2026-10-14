@@ -87,7 +87,7 @@ export async function registerViaApi(request: APIRequestContext, user: ReturnTyp
  *
  * 在浏览器上下文中通过 fetch 调用登录 API，cookie 自动生效。
  */
-export async function loginOnPage(page: Page, username: string, password: string) {
+export async function loginOnPage(page: Page, username: string, password: string, options: { keepGuide?: boolean } = {}) {
   // 先导航到登录页以建立浏览器上下文
   await page.goto('/auth/login')
   await page.waitForLoadState('domcontentloaded')
@@ -140,12 +140,15 @@ export async function loginOnPage(page: Page, username: string, password: string
       }
     }
   }
+  // 业务用例先暂缓首次提示，专门的引导用例保留默认体验。
+  if (!options.keepGuide && await page.getByTestId('guide-later').isVisible())
+    await page.getByTestId('guide-later').click()
 }
 
 /**
  * 注册 + 登录 一步到位
  */
-export async function registerAndLogin(page: Page, request: APIRequestContext, prefix = 'e2e') {
+export async function registerAndLogin(page: Page, request: APIRequestContext, prefix = 'e2e', options: { keepGuide?: boolean } = {}) {
   const user = uniqueUser(prefix)
   const registerRes = await registerViaApi(request, user)
   const registerBody = await registerRes.json()
@@ -153,7 +156,7 @@ export async function registerAndLogin(page: Page, request: APIRequestContext, p
     throw new Error(`Register failed: ${registerRes.status()} ${JSON.stringify(registerBody)}`)
   }
 
-  await loginOnPage(page, user.username, user.password)
+  await loginOnPage(page, user.username, user.password, options)
   return user
 }
 

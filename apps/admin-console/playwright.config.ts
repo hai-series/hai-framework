@@ -18,6 +18,7 @@ export default defineConfig({
   testIgnore: ['./e2e/debug-login.spec.ts', './e2e/transport-on.spec.ts'],
   globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
+  metadata: { notificationFixture: true },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

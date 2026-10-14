@@ -6,6 +6,8 @@
 
 用户触达模块，支持同时注册多个 Provider（邮件、短信、API 回调等），通过模板绑定 Provider 实现按场景路由发送。内置免打扰（DND）机制，支持通过配置文件定义模板。
 
+模板发送只需 `template`、`to` 和 `vars`，Provider 默认来自模板；显式 `provider` 仍可覆盖。无模板的直接发送必须提供 Provider，缺少时返回失败 HaiResult。
+
 ## 依赖
 
 - `@h-ai/reldb` — 数据库（发送日志与模板持久化），可选；已初始化时自动启用持久化
@@ -57,7 +59,6 @@ await reach.init({
 
 // 通过 provider 字段选择发送渠道
 await reach.send({
-  provider: 'email',
   to: 'user@example.com',
   template: 'welcome_email',
   vars: { userName: '张三' },

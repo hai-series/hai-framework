@@ -66,6 +66,7 @@ catalog:
   '@antfu/eslint-config': ^9.5.1
   '@aparajita/capacitor-secure-storage': ^8.0.1
   '@aws-sdk/client-s3': ^3.1149.0
+  '@aws-sdk/lib-storage': ^3.1149.0
   '@aws-sdk/s3-request-presigner': ^3.1149.0
 
   '@capacitor/android': ^8.5.3
@@ -156,6 +157,7 @@ catalog:
   croner: ^10.0.1
   d3-shape: ^3.2.0
   daisyui: ^5.7.47
+  driver.js: 1.9.0
   # ---------------------------------------------------------------------------
   # ESLint (已内置代码格式化，无需 Prettier)
   # ---------------------------------------------------------------------------

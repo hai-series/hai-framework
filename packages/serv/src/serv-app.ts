@@ -24,7 +24,7 @@ import type { Hono, Context as HonoContext, Next } from 'hono'
 import type { AudioWsDeps } from './features/serv-feature-audio.js'
 import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
 import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js'
-import type { CreateServContext, ServContext, ServIam, ServSession } from './serv-context.js'
+import type { CreateServContext, ServContext, ServIam, ServRequestMetadata, ServSession } from './serv-context.js'
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
@@ -39,6 +39,7 @@ import { registerAudioWsRoute } from './features/serv-feature-audio.js'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { requireInternalRPC } from './pipelines/serv-pipeline-require-internal-rpc.js'
 import { securityHeaders } from './pipelines/serv-pipeline-security-headers.js'
+import { createClientIpResolver, readRemoteAddress } from './serv-client-ip.js'
 import { resolveServHttpConfig } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
 import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
@@ -70,7 +71,7 @@ export interface ServMiddlewareMount {
  * - `request`：测试 / 本地直连时发起 in-process 请求，避免消费方 import Hono。
  */
 export interface ServHttpApp {
-  readonly fetch: (request: Request) => Response | Promise<Response>
+  readonly fetch: (request: Request, metadata?: ServRequestMetadata) => Response | Promise<Response>
   readonly request: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>
 }
 
@@ -80,13 +81,13 @@ export interface ServHttpApp {
  * **认证 / 会话填充设计**（遵循最小知识原则）：
  *
  * - **`iam`**（推荐）：单一顶层引用。提供后 serv 自动：
- *   1. 使用 `iam.session.verifyToken` 填充 `context.session` → route guard 生效
+ *   1. 使用 `iam.auth.verifyToken` 填充 `context.session` → route guard 生效
  *   2. 若同时启用 `refreshCookie`，使用 `iam.session.refresh` 实现 refresh token 轮换
  *
  * - **`refreshCookie`**（可选）：浏览器默认用 httpOnly cookie；受信原生客户端可配置 body 通道。与 `iam` 正交：
  *   `iam` 决定 *谁* 验证 token，`refreshCookie` 决定 refresh token *怎么* 传输。
  *
- * - **`verifyToken`**（高级）：不使用 IAM 模块的逆脱口。优先于 `iam.session.verifyToken`。
+ * - **`verifyToken`**（高级）：不使用 IAM 模块的逆脱口。优先于 `iam.auth.verifyToken`。
  *
  * - **`createContext`**（高级）：完全接管上下文构造，设置后 serv **不再**自动填充 session，
  *   由调用方负责。
@@ -109,7 +110,7 @@ export interface CreateServAppOptions<
    */
   readonly middlewares?: readonly ServMiddlewareMount[]
   /**
-   * IAM 模块引用（推荐）。提供后 serv 自动使用 `iam.session.verifyToken` 填充 session，
+   * IAM 模块引用（推荐）。提供后 serv 自动使用 `iam.auth.verifyToken` 填充 session，
    * 以及在 `refreshCookie` 启用时使用 `iam.session.refresh` 实现 cookie 刷新。
    *
    * 类型上要求 {@link ServIam}（`iam` 可以直接传入，结构类型保证兼容）。
@@ -121,7 +122,7 @@ export interface CreateServAppOptions<
    */
   readonly refreshCookie?: RefreshCookieConfig
   /**
-   * 高级：自定义访问令牌校验回调，覆盖 `iam.session.verifyToken`。
+   * 高级：自定义访问令牌校验回调，覆盖 `iam.auth.verifyToken`。
    * 不使用 IAM 模块的场景下使用。
    */
   readonly verifyToken?: (token: string) => Promise<HaiResult<ServSession>>
@@ -274,17 +275,19 @@ export function createApp<
   // 上下文工厂选择优先级（顶位优先）：
   //   1. options.createContext
   //   2. options.verifyToken
-  //   3. options.iam.session.verifyToken
+  //   3. options.iam.auth.verifyToken
   //   4. 都未提供 → parseRequestContext（仅解析元数据，session 始终 undefined）
   //
-  // ⚠️ 对 `iam.session.verifyToken` **不**做 `.bind()`：IAM 模块使用 NotInitializedKit Proxy 模式，
-  //    `iam.session` 的方法实现会在 `init()` 后切换。提前 bind 会捕获未初始化 Proxy 的方法引用。
+  // ⚠️ 对 `iam.auth.verifyToken` **不**做 `.bind()`：IAM 模块使用 NotInitializedKit Proxy 模式，
+  //    `iam.auth` 的方法实现会在 `init()` 后切换。提前 bind 会捕获未初始化 Proxy 的方法引用。
   //    用闭包函数延迟到请求处理时再读取，确保始终调用最新实现。
   const iamRef = options.iam
   const verifyToken = options.verifyToken
-    ?? (iamRef ? (token: string) => iamRef.session.verifyToken(token) : undefined)
-  const createContext: CreateServContext = options.createContext
+    ?? (iamRef ? (token: string) => iamRef.auth.verifyToken(token) : undefined)
+  const contextFactory: CreateServContext = options.createContext
     ?? (verifyToken ? buildAuthContextFactory(verifyToken) : parseRequestContext)
+  const resolveIp = createClientIpResolver(http.trustedProxies)
+  const createContext: CreateServContext = input => contextFactory({ ...input, ip: resolveIp(input.request, input.remoteAddress) })
 
   // Step 4：准备文档 spec 的懒缓存。只有真正访问 openapi/docs 时才生成，避免启动时做重活。
   // OpenAPI spec 是相对昂贵的同步生成；延迟到第一次访问 `/openapi.json` 或 `/docs` 时再算一次。
@@ -380,7 +383,7 @@ export function createApp<
 
     app.get(docs.path, async (c) => {
       if (docs.requireAuth) {
-        const context = await createContext({ request: c.req.raw })
+        const context = await createContext({ request: c.req.raw, remoteAddress: readRemoteAddress(c.env) })
         // 与 procedure 层 `.auth()` 语义保持一致：必须是已验证 session，
         // 不能只检查 Bearer 字符串是否存在，避免任意伪造 Token 访问受保护文档。
         if (!context.session)
@@ -439,7 +442,7 @@ async function handleORPC(
   createContext: CreateServContext,
 ): Promise<Response | void> {
   // Step A：为本次请求创建 ServContext（可能只含元数据，也可能已带 session）。
-  const context = await createContext({ request: c.req.raw })
+  const context = await createContext({ request: c.req.raw, remoteAddress: readRemoteAddress(c.env) })
   // Step B：交给 oRPC handler 做 contract 匹配 + procedure 执行。
   const { matched, response } = await handler.handle(c.req.raw, { prefix, context })
   if (!matched) {

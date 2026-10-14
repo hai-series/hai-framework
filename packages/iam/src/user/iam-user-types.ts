@@ -20,6 +20,8 @@ export type UserSortDirection = 'asc' | 'desc'
  * 用户列表查询选项
  */
 export interface ListUsersOptions extends PaginationOptionsInput {
+  /** 角色 code 精确筛选，在数据库分页前执行。 */
+  roleCode?: string
   /** 搜索关键字（模糊匹配用户名、邮箱、手机号、显示名称） */
   search?: string
   /** 按启用状态过滤，不传则返回全部 */
@@ -160,6 +162,8 @@ export interface UpdateCurrentUserInput {
  * 用户子功能接口
  */
 export interface UserOperations {
+  /** 批量查询最多 1000 个用户 ID，去重并保持输入顺序，忽略不存在的 ID；可批量包含角色。 */
+  getUsers: (userIds: readonly string[], options?: { include?: ('roles')[] }) => Promise<HaiResult<User[]>>
   /** 管理端创建账户，不受自助注册开关限制；调用端必须执行管理员授权。 */
   createUser: (options: RegisterOptions) => Promise<HaiResult<RegisterResult>>
   /**

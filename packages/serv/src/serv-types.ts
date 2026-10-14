@@ -30,7 +30,7 @@ export type {
   ServTransportRuntimeConfig,
   ServTransportRuntimeConfigInput,
 } from './serv-config.js'
-export type { CreateServContext, CreateServContextInput, ServContext, ServIam, ServSession } from './serv-context.js'
+export type { CreateServContext, CreateServContextInput, ServContext, ServIam, ServRequestMetadata, ServSession } from './serv-context.js'
 export type { NativeRefreshTokenTransportConfig, RefreshCookieConfig, RefreshTokenPair } from './serv-cookie-auth.js'
 export type { ServCorsConfig } from './serv-cors.js'
 export type { GenerateOpenAPISpecOptions } from './serv-openapi.js'

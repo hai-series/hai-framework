@@ -36,6 +36,8 @@ const StorageErrorInfo = {
   PRESIGN_FAILED: '013:500',
   UPLOAD_FAILED: '014:500',
   DOWNLOAD_FAILED: '015:500',
+  CHECKSUM_FAILED: '016:500',
+  INVALID_CHECKSUM: '017:400',
 } as const satisfies ErrorInfo
 
 export const HaiStorageError = core.error.buildHaiErrorsDef('storage', StorageErrorInfo)
@@ -56,7 +58,7 @@ export interface FileMetadata {
   contentType: string
   /** 最后修改时间 */
   lastModified: Date
-  /** ETag（用于缓存验证，本地存储为 MD5，S3 由服务端生成） */
+  /** ETag（缓存验证标记；本地为 size-mtime，S3 由服务端生成，不等同于内容 checksum） */
   etag?: string
   /** 自定义元数据键值对 */
   metadata?: Record<string, string>
@@ -106,6 +108,10 @@ export interface ListResult {
  * 用于控制 `storage.file.put()` 的元数据与缓存行为。
  */
 export interface UploadOptions {
+  /** 仅当 key 不存在时原子写入；S3 使用标准 If-None-Match，后端不支持时返回错误。 */
+  ifNoneMatch?: '*'
+  /** 取消上传；失败或取消时清理未完成的临时文件/分片。 */
+  signal?: AbortSignal
   /** 内容类型（不指定时根据文件扩展名自动推断） */
   contentType?: string
   /** 自定义元数据键值对（存储后可通过 head 获取） */
@@ -123,6 +129,8 @@ export interface UploadOptions {
  * 两个字段均为字节偏移（含），与 HTTP Range 语义一致。
  */
 export interface DownloadOptions {
+  /** 取消读取。 */
+  signal?: AbortSignal
   /** 范围起始位置（字节，含）；不指定时从文件开头读取 */
   rangeStart?: number
   /** 范围结束位置（字节，含）；不指定时读取到文件末尾 */
@@ -144,6 +152,25 @@ export interface CopyOptions {
 
 // ─── 操作接口 ───
 
+/** 文件内容；异步字节流支持 Node Readable 等，不将整个文件载入内存。 */
+export type StorageData = Buffer | Uint8Array | string | AsyncIterable<Uint8Array>
+
+/** 常见 checksum 算法；MD5/SHA-1 仅用于兼容性完整性校验，不用于安全认证。 */
+export type ChecksumAlgorithm = 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'
+
+/** checksum 计算选项；默认 SHA-256、小写 hex。 */
+export interface ChecksumOptions {
+  algorithm?: ChecksumAlgorithm
+  encoding?: 'hex' | 'base64'
+  signal?: AbortSignal
+}
+
+/** Node 端无状态 checksum 工具，不依赖 storage.init；流输入仅消费一次。 */
+export interface ChecksumOperations {
+  generate: (data: StorageData, options?: ChecksumOptions) => Promise<HaiResult<string>>
+  verify: (data: StorageData, expected: string, options?: ChecksumOptions) => Promise<HaiResult<boolean>>
+}
+
 /**
  * 文件操作接口
  *
@@ -154,7 +181,7 @@ export interface FileOperations {
    * 上传文件
    *
    * @param key - 文件键/路径
-   * @param data - 文件内容（Buffer、Uint8Array 或字符串）
+   * @param data - 文件内容（Buffer、Uint8Array、字符串或异步字节流）
    * @param options - 上传选项
    * @returns 上传结果包含文件元数据
    * @example
@@ -165,7 +192,7 @@ export interface FileOperations {
    * }
    * ```
    */
-  put: (key: string, data: Buffer | Uint8Array | string, options?: UploadOptions) => Promise<HaiResult<FileMetadata>>
+  put: (key: string, data: StorageData, options?: UploadOptions) => Promise<HaiResult<FileMetadata>>
 
   /**
    * 下载文件
@@ -182,6 +209,12 @@ export interface FileOperations {
    * ```
    */
   get: (key: string, options?: DownloadOptions) => Promise<HaiResult<Buffer>>
+
+  /**
+   * 读取字节流，支持 Range 与取消；消费方负责及时迭代或关闭流。
+   * @throws 迭代期间的 I/O/取消错误；初始请求失败通过 HaiResult 返回。
+   */
+  getStream: (key: string, options?: DownloadOptions) => Promise<HaiResult<AsyncIterable<Uint8Array>>>
 
   /**
    * 获取文件元数据
@@ -346,6 +379,8 @@ export interface PresignOperations {
  * - `storage.isInitialized` — 初始化状态
  */
 export interface StorageFunctions {
+  /** 无状态 checksum 生成与校验，Node 专用，无需初始化。 */
+  readonly checksum: ChecksumOperations
   /**
    * 初始化存储连接
    *

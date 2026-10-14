@@ -118,7 +118,8 @@ export interface AuthnOperations {
   /**
    * 使用 API Key 登录
    *
-   * 验证 API Key 有效性 → 查找关联用户 → 创建会话 → 返回令牌。
+   * 验证 API Key 有效性 → 查找关联用户 → 按 scopes 收敛授权 → 创建绑定 key 的会话。
+   * 空 scopes 无操作权限；显式 * 也不超出主体权限。受限 key 通过 permission 授权，不保留角色入口。
    *
    * @param credentials - API Key 凭证
    * @returns 成功返回 AuthResult；API Key 无效/过期/禁用返回对应错误
@@ -138,7 +139,8 @@ export interface AuthnOperations {
   /**
    * 验证令牌
    *
-   * 查询会话并校验有效性，滑动窗口模式下自动续期。
+   * 验证会话并读取当前用户状态、角色与权限；重新应用 API Key scopes，依赖失败即拒绝。
+   * 会话同步仅是缓存快照，受保护请求使用此入口而非低层 session.verifyToken。
    *
    * @param accessToken - 访问令牌
    * @returns 成功返回会话信息；令牌无效/过期返回 SESSION_INVALID

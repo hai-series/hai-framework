@@ -25,6 +25,7 @@ const getMessage = core.i18n.createMessageGetter({
  *
  * @param key - 消息 key
  * @param params - 可选的插值参数
+ * @param locale - 可选的宿主语言；省略时使用现有全局语言
  * @returns 当前 locale 对应的翻译文本
  *
  * @example
@@ -32,8 +33,8 @@ const getMessage = core.i18n.createMessageGetter({
  * uiM('password_show') // => '显示密码' (zh-CN) 或 'Show password' (en-US)
  * ```
  */
-export function uiM(key: UIMessageKey, params?: Record<string, string | number | boolean>): string {
-  return getMessage(key, params ? { params } : undefined)
+export function uiM(key: UIMessageKey, params?: Record<string, string | number | boolean>, locale?: string): string {
+  return getMessage(key, { params, locale })
 }
 
 /**

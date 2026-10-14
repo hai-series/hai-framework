@@ -28,7 +28,13 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  webServer: {
+  webServer: [{
+    // 共用 globalTeardown 会关闭通知 fixture，传输组也需完整装配它。
+    command: 'node e2e/notification-fixture.mjs',
+    url: 'http://127.0.0.1:12580',
+    reuseExistingServer: false,
+    timeout: 90_000,
+  }, {
     command: `pnpm build && pnpm exec vite preview --host ${previewHost} --port ${previewPort} --strictPort`,
     env: {
       HAI_E2E: '1',
@@ -41,5 +47,5 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: false,
     timeout: 180_000,
-  },
+  }],
 })

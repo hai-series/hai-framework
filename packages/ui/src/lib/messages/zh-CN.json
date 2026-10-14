@@ -351,5 +351,22 @@
   "password_policy_uppercase": "包含大写字母",
   "password_policy_lowercase": "包含小写字母",
   "password_policy_number": "包含数字",
-  "password_policy_special": "包含特殊字符"
+  "password_policy_special": "包含特殊字符",
+  "guide_welcome": "欢迎使用",
+  "guide_start": "开始引导",
+  "guide_later": "稍后提醒",
+  "guide_dismiss": "不再提醒",
+  "guide_help": "帮助中心",
+  "guide_close": "关闭",
+  "guide_loading": "正在准备引导…",
+  "guide_next": "下一步",
+  "guide_previous": "上一步",
+  "guide_done": "完成",
+  "guide_progress": "第 {current} / {total} 步",
+  "guide_search": "搜索帮助内容",
+  "guide_empty": "没有找到相关帮助内容",
+  "guide_tours": "操作导览",
+  "guide_unavailable": "此引导暂不可用，请从帮助中心选择其他内容。",
+  "guide_targetMissing": "当前页面暂未提供此操作。请稍后重试或查看帮助内容。",
+  "guide_startFailed": "无法开始引导，请稍后重试。"
 }

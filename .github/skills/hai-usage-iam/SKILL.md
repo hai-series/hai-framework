@@ -21,12 +21,17 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 - 角色资料与 permissionIds 一次保存：未传保持、空数组清空、未知 ID 失败；人数查询失败不能显示为 0。
 - IAM 服务端是 iam.auth；typed HTTP client 的路径是 apiClient.iam.auth。
 - OTP/API Key 等先核对 login 开关；不把未启用能力的 NOT_INITIALIZED 当认证失败。
+- API Key 的配置、scope 交集示例表与创建→登录→操作授权→撤销代码见参考中的 API Key 小节。不要以 `checkPermission(userId)` 绕过请求 scope；ID/code/name 分别用于关联、守卫与展示。
+- API Key scopes 与主体权限取交集；默认空数组无操作权限，显式 * 仍受主体限制。受限 key 使用 permission 守卫，不能通过角色授权；派生会话读取/刷新重新检查 key，撤销/禁用/到期立即拒绝。
 
 - 认证页面使用 iam.publicConfig + AuthPanel，协议用弹窗，表单通过 header/extraFields/footer 或 AuthPanel 的 login*/register* snippet 扩展；Kit 使用 kit.auth.createApi/publicPaths + kit.client.createAuthActions，HTTP 客户端使用 apiClient.createAuthActions。
 - LDAP/Reach 均可选：基础认证无需安装；默认 LDAP 关闭，选用默认客户端才安装 ldapts 并设置 login.ldap + ldap。OTP 邮件/短信由 otp.email/sms 控制，选择 Reach 标准模板或自定义发送回调；具体签名与失败处理见参考中的“可选 LDAP 与通知”。
 - 多节点共享 DB + Redis，Memory 只用于单进程。重置的策略失败计入 maxAttempts；OTP 消费不解除 resendInterval。管理员 createUser 不受自助注册开关限制。
 
 - 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+- 受保护请求使用 `iam.auth.verifyToken`：当前用户状态 + 角色 JOIN + 批量权限读取，失败即拒绝；`iam.session.verifyToken` 仅验证会话快照。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
+- 用户批量读取用 `iam.user.getUsers(ids, { include: ['roles'] })`（最多 1000，去重保留输入顺序，缺失省略）；角色筛选用 `listUsers({ roleCode })`，在分页前执行，避免 N+1 和分页后过滤。
 
 ## 按需参考
 

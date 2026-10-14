@@ -5,10 +5,19 @@ import process from 'node:process'
 import { GenericContainer, Wait } from 'testcontainers'
 
 const messages = new Map()
+let ldap
 const port = Number(process.env.IAM_NOTIFICATION_PORT ?? 12580)
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://127.0.0.1:${port}`)
   response.setHeader('Content-Type', 'application/json')
+  if (request.method === 'POST' && url.pathname === '/shutdown') {
+    const container = ldap
+    ldap = undefined
+    await container?.stop()
+    response.end(JSON.stringify({ stopped: true }))
+    server.close()
+    return
+  }
   if (request.method === 'POST' && url.pathname === '/send') {
     const chunks = []
     for await (const chunk of request) chunks.push(chunk)
@@ -31,17 +40,28 @@ const server = createServer(async (request, response) => {
   response.end(JSON.stringify({ ready: true }))
 })
 async function start() {
-  let ldap
   if (process.env.IAM_FIXTURE_LDAP === '1') {
     ldap = await new GenericContainer('osixia/openldap:latest')
       .withExposedPorts({ container: 389, host: 12583 })
       .withEnvironment({ LDAP_ORGANISATION: 'IAM UI Test', LDAP_DOMAIN: 'example.org', LDAP_ADMIN_PASSWORD: 'admin' })
       .withWaitStrategy(Wait.forLogMessage('slapd starting'))
       .start()
-    const ldif = ['dn: ou=users,dc=example,dc=org', 'objectClass: organizationalUnit', 'ou: users', '', 'dn: uid=ldapui,ou=users,dc=example,dc=org', 'objectClass: inetOrgPerson', 'uid: ldapui', 'cn: LDAP UI User', 'sn: User', 'mail: ldapui@example.org', 'userPassword: LdapUiTest123', ''].join('\\n')
-    const seeded = await ldap.exec(['sh', '-c', `printf '${ldif}' | ldapadd -x -D 'cn=admin,dc=example,dc=org' -w admin`])
-    if (seeded.exitCode !== 0)
-      throw new Error('LDAP fixture seeding failed')
+    // 用真实 LDAP 请求种数据，兼容不支持容器 exec 流的运行时。
+    const { Client } = await import('ldapts')
+    const client = new Client({ url: `ldap://${ldap.getHost()}:${ldap.getMappedPort(389)}`, timeout: 10_000, connectTimeout: 10_000 })
+    try {
+      await client.bind('cn=admin,dc=example,dc=org', 'admin')
+      await client.add('ou=users,dc=example,dc=org', { objectClass: ['organizationalUnit'], ou: ['users'] })
+      await client.add('uid=ldapui,ou=users,dc=example,dc=org', {
+        objectClass: ['inetOrgPerson'],
+        uid: ['ldapui'],
+        cn: ['LDAP UI User'],
+        sn: ['User'],
+        mail: ['ldapui@example.org'],
+        userPassword: ['LdapUiTest123'],
+      })
+    }
+    finally { await client.unbind() }
   }
   server.listen(port, '127.0.0.1')
   for (const signal of ['SIGTERM', 'SIGINT']) {

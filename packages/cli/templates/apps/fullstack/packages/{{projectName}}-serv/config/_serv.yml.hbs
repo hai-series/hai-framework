@@ -10,6 +10,8 @@ server:
   port: 3000
 
 http:
+  # 仅列出会清洗/追加转发头的代理 IP/CIDR；空数组忽略 X-Forwarded-For/X-Real-IP。
+  trustedProxies: []
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json

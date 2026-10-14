@@ -12,7 +12,7 @@
 | -------------- | -------------------------------------------------------------------------------------- |
 | **认证**       | 密码、OTP（邮箱/短信验证码）、LDAP、API Key 多策略认证                                 |
 | **会话**       | 有状态会话（随机访问令牌 + 缓存，滑动续期可选）                                        |
-| **授权**       | RBAC 角色与权限管理（DB + 缓存，通配符权限匹配）                                       |
+| **授权**       | RBAC 角色与权限管理（DB 批量读取，通配符权限匹配）                                     |
 | **用户管理**   | 注册、查询、更新、密码重置、管理员重置密码                                             |
 | **API Key**    | API Key 创建、吊销、验证，支持 scope 与过期时间                                        |
 | **一次性票据** | 短期、一次性能力票据（签发 / 原子消费），用于 WebSocket 等无法携带 Bearer Token 的通道 |
@@ -27,7 +27,7 @@ pnpm add @h-ai/iam
 ## 依赖
 
 - `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
-- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/权限缓存），**需在 iam.init() 前初始化**
+- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/一次性票据/共享锁），**需在 iam.init() 前初始化**
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
 - `@h-ai/audit` — 审计日志（RBAC 关键操作记录）
 
@@ -218,7 +218,7 @@ IAM 是**生命周期单例**模块，通过 `iam.init()` / `iam.close()` 管理
 ```
 iam.init()
   ├─ session  （缓存会话管理，无 DB 依赖）
-  ├─ authz    （RBAC 角色/权限，DB + 缓存）
+  ├─ authz    （RBAC 角色/权限，DB 批量读取）
   ├─ authn    （认证策略，依赖 session + authz）
   ├─ user     （用户管理，依赖 session + authz + passwordStrategy）
   └─ seed     （种子数据，依赖 authz）
@@ -275,32 +275,41 @@ login(credentials)
 verifyToken(accessToken)
   → session.get(accessToken) → 缓存查询
   → 滑动续期模式下自动延长 TTL
-  → 返回 Session 对象（含 userId、roles、permissions）
+  → 读取当前用户状态 + 角色 JOIN + 批量权限查询（无角色时省略权限查询）
+  → 用户停用或数据库读取失败时拒绝；API Key 会话再次收敛 scope
+  → 返回当前 Session 对象（含 userId、roles、permissions）
 ```
 
 #### 使用方式
 
-`authz.createRole({ ..., permissionIds })` 和 `authz.updateRole(id, { ..., permissionIds })` 在同一事务中保存角色资料和完整权限集合；任一步失败均回滚。`permissionIds: []` 清空权限，省略则保持不变；重复 ID 去重，未知权限失败。并发更新以最后提交的完整集合为准，不合并两个集合。自管事务提交后同步现有用户会话；使用外部事务时，调用方仍须在提交后同步会话。Admin Console 直接使用此接口，不再拆分更新或补偿删除角色。
+以下示例运行于服务端，reldb/cache/IAM 已成功初始化，参数来自校验后的请求。密码登录默认可用；OTP 需 `login.otp: true`、`otp` 通道和发送回调/Reach 模板；LDAP 需 `login.ldap: true`（配置见前文）；API Key 需 `login.apikey: true`（完整流程见下文）。登录返回 `AuthResult`，注册并登录返回相同认证结构；`register.enabled` 与密码登录开关分别控制。
+
+OTP 是两次交互：先发送，用户取得验证码后再登录；发送/登录失败均返回 HaiResult。LDAP 使用 `iam.auth.loginWithLdap({ username, password })`，API Key 使用 `loginWithApiKey({ key })`，不要用密码登录替代。所有示例先检查 `success` 再访问 `data`。
 
 ```ts
-// 密码登录
-const result = await iam.auth.login({ identifier: 'admin', password: 'Password123' })
+import { iam } from '@h-ai/iam'
 
-// OTP 登录
-await iam.auth.sendOtp('user@example.com')
-const result = await iam.auth.loginWithOtp({ identifier: 'user@example.com', code: '123456' })
+async function passwordLogin(identifier: string, password: string) {
+  const result = await iam.auth.login({ identifier, password })
+  if (!result.success)
+    return result
+  // 成功后返回 user、tokens、roles、permissions；令牌只交给安全存储。
+  return result
+}
 
-// LDAP 登录（内置客户端，可选注入 ldapClientFactory）
-const result = await iam.auth.loginWithLdap({ username: 'jdoe', password: 'pass' })
+async function requestLoginCode(identifier: string) {
+  // identifier 为启用通道对应的邮箱/手机号，返回 expiresAt。
+  return iam.auth.sendOtp(identifier)
+}
 
-// API Key 登录（需启用 login.apikey: true）
-const result = await iam.auth.loginWithApiKey({ key: 'hai_xxxx...' })
+async function otpLogin(identifier: string, code: string) {
+  // 用户收到验证码并输入后调用；发送失败时不能伪报成功。
+  return iam.auth.loginWithOtp({ identifier, code })
+}
 
-// 验证令牌
-const session = await iam.auth.verifyToken(accessToken)
-
-// 注册并登录（一站式）
-const result = await iam.auth.registerAndLogin({ username: 'new', password: 'Pass123' })
+async function registerWithSession(username: string, password: string) {
+  return iam.auth.registerAndLogin({ username, password })
+}
 ```
 
 #### 特别关注
@@ -345,23 +354,37 @@ create(options) [singleDevice=true]
 
 #### 使用方式
 
+登录成功后通过 `tokens.accessToken` 认证请求，通过 `tokens.refreshToken` 换取新令牌；`expiresIn` 单位为秒。独立 API 使用 `Authorization: Bearer <accessToken>`；SvelteKit Cookie 入口使用 kit 的标准认证集成，详见下方前端调用。
+
+受保护请求使用 `iam.auth.verifyToken`，返回当前用户资料、角色和权限；`iam.session.get/verifyToken` 是低层会话快照入口，不能替代当前授权。`session.create` 只用于可信服务端集成，不接受客户端自报 roles/permissions 或 API Key 绑定。
+
 ```ts
-// 创建会话（通常由 login 内部调用）
-const session = await iam.session.create({
-  userId: 'user-id',
-  username: 'admin',
-  roles: ['admin'],
-  permissions: ['user:read', 'user:write'],
-})
+import { iam } from '@h-ai/iam'
 
-// 验证令牌
-const session = await iam.session.verifyToken(accessToken)
+async function authenticateRequest(accessToken: string) {
+  // 受保护请求读取当前用户状态及角色/权限，失败时停止业务操作。
+  const verified = await iam.auth.verifyToken(accessToken)
+  if (!verified.success)
+    return verified
+  return verified
+}
 
-// 刷新令牌
-const newTokens = await iam.session.refresh(refreshToken)
+async function rotateTokens(refreshToken: string) {
+  const refreshed = await iam.session.refresh(refreshToken)
+  if (!refreshed.success)
+    return refreshed
+  // 安全存储替换两个令牌；下一次请求仍走 auth.verifyToken。
+  return refreshed
+}
 
-// 强制下线
-await iam.session.deleteByUserId(userId)
+async function signOut(accessToken: string) {
+  return iam.auth.logout(accessToken)
+}
+
+async function forceSignOut(userId: string) {
+  // 调用前已验证管理员权限，返回撤销的会话数。
+  return iam.session.deleteByUserId(userId)
+}
 ```
 
 #### 特别关注
@@ -393,7 +416,7 @@ checkPermission(userId, permission)
   → RBAC 未启用 → 直接返回 true
   → 查询用户角色列表（DB）
   → 检查是否包含超管角色（缓存 superAdminRoleId）→ 是则直接返回 true
-  → 逐角色查询权限代码列表（缓存优先，miss 时查 DB 并写入缓存）
+  → 一次批量查询这些角色的权限代码（DB）；读取失败返回错误
   → 逐权限匹配：精确匹配 或 通配符匹配（`admin:*` 匹配 `admin:read`）
   → 返回 true / false
 ```
@@ -403,34 +426,56 @@ checkPermission(userId, permission)
 ```
 assignPermissionToRole(roleId, permId)
   → DB 写入关联关系
-  → 清除角色权限缓存
   → 查询该角色下所有用户 → 逐用户重新解析权限 → 更新活跃 session
   （best-effort：同步失败仅 log.error，不影响权限分配结果）
 ```
 
 #### 使用方式
 
+先创建权限，使用权限 **ID** 保存角色的 `permissionIds`，再使用角色 **ID** 分配用户。会话中的 `roles`/`permissions` 和守卫使用稳定 **code**；显示 `name` 可独立修改，不能代替 ID/code。示例默认 RBAC 已启用，管理操作须由应用先校验调用者权限和资源范围。
+
+`createRole/updateRole` 将角色资料与完整 `permissionIds` 放在同一事务：省略保持、空数组清空、重复去重、未知权限失败；并发以最后提交的完整集合为准。使用自管事务时提交后同步会话；使用外部事务时调用方须在提交后完成同步。
+
+`checkPermission(userId, code)` 查询主体的 RBAC 权限，不识别请求所属 API Key 的 scopes；`getUserAuthorization` 也是主体授权读取。API Key 请求必须使用 `iam.auth.verifyToken` 返回的已收敛权限（下文完整示例），不能只拿 userId 重查并据此放行。serv 可用 `.permission('record:read')` 声明精确权限守卫；菜单/按钮隐藏只是体验控制，业务 API 仍须授权。
+
 ```ts
-// 角色管理
-const role = await iam.authz.createRole({ code: 'editor', name: '编辑' })
-const roles = await iam.authz.getAllRoles({ page: 1, pageSize: 20 })
+import { iam } from '@h-ai/iam'
 
-// 权限管理
-const perm = await iam.authz.createPermission({
-  code: 'article:publish',
-  name: '发布文章',
-  type: 'api',
-  resource: 'article',
-  action: 'publish',
-})
+async function provisionReader(userId: string) {
+  // 示例初始化权限/角色；生产种子应先按 code 查询，保证幂等。
+  const permission = await iam.authz.createPermission({
+    code: 'record:read',
+    name: '读取记录',
+    type: 'api',
+    resource: 'record',
+    action: 'read',
+  })
+  if (!permission.success)
+    return permission
+  const role = await iam.authz.createRole({
+    code: 'record_reader',
+    name: '记录读取者',
+    permissionIds: [permission.data.id],
+  })
+  if (!role.success)
+    return role
+  return iam.authz.assignRole(userId, role.data.id)
+}
 
-// 分配与检查
-await iam.authz.assignRole(userId, role.data.id)
-await iam.authz.assignPermissionToRole(role.data.id, perm.data.id)
-const allowed = await iam.authz.checkPermission(userId, 'article:publish')
+async function replaceRolePermissions(roleId: string, permissionIds: string[]) {
+  // 完整替换：[] 清空；省略 permissionIds 则保持已有权限。
+  return iam.authz.updateRole(roleId, { permissionIds })
+}
 
-// 批量同步角色
-await iam.authz.syncRoles(userId, [roleId1, roleId2])
+async function replaceUserRoles(userId: string, roleIds: string[]) {
+  // 完整替换用户的角色集合；[] 移除全部角色。
+  return iam.authz.syncRoles(userId, roleIds)
+}
+
+async function currentAuthorization(userId: string) {
+  // 返回 roles/permissions 的 code 数组，不接受 ID 或显示名称代替 code。
+  return iam.authz.getUserAuthorization(userId)
+}
 ```
 
 #### 特别关注
@@ -438,7 +483,7 @@ await iam.authz.syncRoles(userId, [roleId1, roleId2])
 - **通配符匹配**：`admin:*` 匹配 `admin:read`、`admin:write:detail` 等（单层 `*` 匹配冒号后全部）
 - **超管角色**：配置的 `rbac.superAdminRole`（默认 `super_admin`）自动拥有所有权限
 - **事务保护**：`deleteRole` / `deletePermission` 使用 DB 事务，先清关联再删实体
-- **会话同步延迟**：权限变更后活跃 session 中的权限列表会被同步更新，但为 best-effort（大量用户场景可能有延迟）
+- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，每次读取当前状态与授权，读取失败拒绝。`iam.session.verifyToken` 仅验证会话快照。`iam.authz.getUserAuthorization(userId)` 复用角色 JOIN 与批量权限查询。
 - **种子数据**：`seedDefaultData: true` 时自动创建 admin/user/guest 三个默认角色及基础权限，幂等执行
 
 ---
@@ -451,7 +496,7 @@ await iam.authz.syncRoles(userId, [roleId1, roleId2])
 - **`User`** — 用户实体（公开字段）：`{ id, username, email, phone, displayName, avatarUrl, enabled, roles? }`
 - **`StoredUser`** — 内部存储用户（含 `passwordHash`、`loginFailedCount`、`lockedUntil` 等敏感字段）
 - **`RegisterOptions`** / **`RegisterResult`** — 注册输入与输出
-- **`UpdateCurrentUserInput`** — 当前用户可修改的白名单字段（`displayName` / `avatarUrl` / `phone` / `metadata`）
+- **`UpdateCurrentUserInput`** — 当前用户可修改的白名单字段（`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`）
 
 #### 关键流程
 
@@ -485,38 +530,60 @@ confirmPasswordReset(token, newPassword)
 
 #### 使用方式
 
+`register` 返回用户但不登录；需要同时登录时使用 `auth.registerAndLogin`。`createUser` 是管理端入口，关闭自助注册不阻止管理员建用户。当前用户资料用 `getCurrentUser/updateCurrentUser`，允许 username/email/displayName/avatarUrl/phone/metadata，安全字段和角色使用经授权的管理入口。
+
+分页返回统一 `PaginatedResult<User>`；角色过滤使用 `roleCode`，角色关联按需 `include: ['roles']`。批量查询保留去重后的输入顺序，缺失项省略，不能假定第 n 个结果必对应第 n 个输入；按 id 映射关联。各方法返回公开用户结构，管理查询仍需数据范围和字段披露控制。
+
+`getUser(id)` 成功但不存在时返回 `null`；`getCurrentUser(token)` 缺失/会话无效时失败。不要把 DB 读取失败解释成空列表。`validatePassword` 为同步 HaiResult 检查；`deleteUser`、停用、密码修改/重置会清除受影响会话。
+
 ```ts
-// 注册
-const result = await iam.user.register({
-  username: 'alice',
-  email: 'alice@example.com',
-  password: 'Password123',
-})
+import { iam } from '@h-ai/iam'
 
-// 当前用户操作
-const me = await iam.user.getCurrentUser(accessToken)
-await iam.user.updateCurrentUser(accessToken, { displayName: '新名称' })
-await iam.user.changeCurrentUserPassword(accessToken, 'oldPass', 'newPass')
+async function registerUser(username: string, email: string, password: string) {
+  // 返回 RegisterResult，不自动建立会话。
+  return iam.user.register({ username, email, password })
+}
 
-// 管理操作
-const users = await iam.user.listUsers({
-  page: 1,
-  pageSize: 20,
-  search: 'alice',
-  sortBy: 'createdAt',
-  sortDirection: 'desc',
-  include: ['roles'],
-})
-await iam.user.updateUser(userId, { enabled: false }) // 禁用用户 → 自动清除会话
-await iam.user.deleteUser(userId) // 删除用户 → 事务清除角色关联
+async function createManagedUser(username: string, password: string) {
+  // 先验证调用者管理权限；不受 register.enabled 开关限制。
+  return iam.user.createUser({ username, password })
+}
 
-// 密码重置
-await iam.user.requestPasswordReset('alice@example.com')
-await iam.user.confirmPasswordReset(token, 'NewPassword456')
-await iam.user.adminResetPassword(userId, 'TempPassword123')
+async function updateMyProfile(accessToken: string, displayName: string) {
+  return iam.user.updateCurrentUser(accessToken, { displayName })
+}
 
-// 密码强度验证（同步方法）
-const valid = iam.user.validatePassword('weak')
+async function changeMyPassword(accessToken: string, oldPassword: string, newPassword: string) {
+  // 成功后撤销该用户全部会话，客户端回到登录入口。
+  return iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)
+}
+
+async function listReaders(page: number) {
+  const result = await iam.user.listUsers({
+    page,
+    pageSize: 20,
+    roleCode: 'record_reader',
+    search: 'alice',
+    enabled: true,
+    include: ['roles'],
+    sortBy: 'createdAt',
+    sortDirection: 'desc',
+  })
+  if (!result.success)
+    return result
+  // 直接使用 items/total/page/pageSize，不对当前页再次过滤。
+  return result
+}
+
+async function loadUsers(userIds: readonly string[]) {
+  // 最多 1000 个输入 ID；去重保留输入顺序，缺失 ID 省略。
+  return iam.user.getUsers(userIds, { include: ['roles'] })
+}
+
+async function disableUser(userId: string) {
+  // 调用前已验证管理权限；成功后自动清除该用户会话。
+  return iam.user.updateUser(userId, { enabled: false })
+}
 ```
 
 #### 特别关注
@@ -531,6 +598,8 @@ const valid = iam.user.validatePassword('weak')
 ---
 
 ### 子模块：API Key — `iam.apiKey`
+
+`scopes` 与主体权限取交集，支持 `*` 和命名空间 `:*`；默认空数组只保留身份，不授予操作权限。受限 key 的会话 `roles` 为空，通过 permission 守卫访问，显式 `*` 也不能超出主体授权。API Key 登录绑定 key ID，派生会话的 get/verifyToken/refresh 每次检查持久化 key，撤销、禁用、过期或 DB 读取失败即拒绝。单独 verifyApiKey 仅返回验证后的 key 元数据，仍需主体与操作授权。
 
 #### 关键对象
 
@@ -554,22 +623,89 @@ verifyApiKey(rawKey)
 
 #### 使用方式
 
-```ts
-// 创建 API Key
-const result = await iam.apiKey.createApiKey(userId, {
-  name: 'CI/CD',
-  expirationDays: 90,
-  scopes: ['api:read'],
-})
-// result.data.rawKey → 明文密钥（仅此一次展示）
+先在初始化配置中启用 API Key。它是用户的受限凭据，不能独立授予用户未拥有的权限：**有效权限 = 当前主体权限 ∩ scopes**。scopes 是与权限 code 相同的字符串，不是角色名、菜单名称或资源 ID；不会创建权限，也不会替代租户/记录归属校验。
 
-// 列出用户的 API Key（服务端分页）
-const keys = await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20, search: 'ci' })
-// keys.data → { items, total, page, pageSize }
-
-// 吊销
-await iam.apiKey.revokeApiKey(keyId)
+```yaml
+# config/_iam.yml
+login:
+  apikey: true
+apikey:
+  maxKeysPerUser: 10
+  defaultExpirationDays: 30
 ```
+
+假设主体拥有 `record:read`、`record:write`、`user:read`，不同 scopes 的结果如下（主体授权改变后重新计算）：
+
+| scopes                         | 有效权限                      | roles        |
+| ------------------------------ | ----------------------------- | ------------ |
+| 未传或 `[]`                    | 无操作权限，仅可识别身份      | `[]`         |
+| `['record:read']`              | `record:read`                 | `[]`         |
+| `['record:*']`                 | `record:read`、`record:write` | `[]`         |
+| `['record:read', 'user:read']` | 两个指定权限                  | `[]`         |
+| `['missing:read']`             | 主体未拥有，因此无权限        | `[]`         |
+| `['*']`                        | 主体当前拥有的全部权限        | 保留主体角色 |
+
+`record:*` 匹配冒号后的全部层级，不支持任意正则或 `record:r*` 等中间通配符。主体仅拥有 `record:read` 时，`['record:*']` 仍只得到读取权限；主体持有通配符时，交集保留较窄范围。受限 Key 没有角色入口，使用 permission 守卫；显式 `*` 是宽授权，按实际需要选择。
+
+以下为创建 → Key 登录 → Bearer 会话验证与操作授权 → 列表 → 撤销的服务端示例。先检查所有 HaiResult；每个管理入口还要校验本人归属或管理员权限，IAM 不知道业务的调用者身份。
+
+```ts
+import { err, HaiCommonError, ok } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+async function createReadKey(userId: string) {
+  // 调用前校验管理权限或本人归属；scopes 使用权限 code。
+  const created = await iam.apiKey.createApiKey(userId, {
+    name: 'Read client',
+    expirationDays: 30,
+    scopes: ['record:read'],
+  })
+  if (!created.success)
+    return created
+  // rawKey 仅本次返回；通过安全渠道展示一次，不写日志。
+  return created
+}
+
+async function apiKeyLogin(rawKey: string) {
+  // 通常由客户端取得 Key 后调用；服务器内部验证并绑定 Key。
+  return iam.auth.loginWithApiKey({ key: rawKey })
+}
+
+async function requireRecordRead(accessToken: string, deniedMessage: string) {
+  // deniedMessage 由应用 i18n 提供；先读取当前且已收敛 scope 的会话。
+  const verified = await iam.auth.verifyToken(accessToken)
+  if (!verified.success)
+    return verified
+  const allowed = verified.data.permissions.some(code =>
+    code === '*' || code === 'record:read'
+    || (code.endsWith(':*') && 'record:read'.startsWith(code.slice(0, -1))),
+  )
+  if (!allowed)
+    return err(HaiCommonError.FORBIDDEN, deniedMessage)
+  // 这里只确认操作权限；业务层还须检查具体记录的数据归属。
+  return ok({ userId: verified.data.userId })
+}
+
+async function listMyKeys(userId: string) {
+  return iam.apiKey.listApiKeys(userId, {
+    page: 1,
+    pageSize: 20,
+    search: 'Read',
+    enabled: true,
+  })
+}
+
+async function revokeKey(keyId: string) {
+  // 调用前校验本人归属或管理权限。
+  return iam.apiKey.revokeApiKey(keyId)
+}
+```
+
+创建后只有 `rawKey` 能用于 Key 登录；`apiKey.id` 是管理 ID，`keyPrefix` 仅用于显示/检索，均不能代替 rawKey。`verifyApiKey(rawKey)` 仅验证 Key 并返回元数据，不能代替用户状态、scopes 与操作授权。
+
+Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不会丢失该绑定或扩大 scopes。撤销成功后，已有 accessToken 的 get/verify 以及 refreshToken 的 refresh 都会失败；过期、禁用及持久化读取失败同样拒绝。角色撤权由 `iam.auth.verifyToken` 读取当前授权生效。改 scope 使用创建新 Key 后撤销旧 Key，当前 API 不提供 scope 更新操作。
+
+`expirationDays: 0` 表示不设过期时间，省略时使用 `apikey.defaultExpirationDays`；需要限时访问时显式设置。明文 Key 和 Token 不进入 URL、日志、公开配置或普通 localStorage。
 
 #### 特别关注
 
@@ -611,15 +747,25 @@ await apiClient.iam.auth.changePassword({
 
 ## 密码重置
 
+重置需要启用 `passwordReset.enabled` 和可用的通知回调/Reach 模板。申请成功仅表示请求已处理，不证明账户存在或用户已收信；发送或内部处理失败仍须处理失败 HaiResult。令牌只允许一次成功消费且有有效期/尝试限制，成功后撤销旧会话。管理员重置无需旧密码，但须由应用验证管理权限。
+
 ```ts
-// 请求重置（即使用户不存在也返回 ok，防止枚举）
-await iam.user.requestPasswordReset('admin@example.com')
+import { iam } from '@h-ai/iam'
 
-// 确认重置（校验令牌有效期和尝试次数 → 更新密码 → 清除所有会话）
-const result = await iam.user.confirmPasswordReset(token, 'NewPassword456')
+async function requestReset(identifier: string) {
+  // 缺失用户与有效用户使用相同成功响应，避免枚举账户。
+  return iam.user.requestPasswordReset(identifier)
+}
 
-// 管理员重置（无需旧密码）
-await iam.user.adminResetPassword(userId, 'TempPassword123')
+async function confirmReset(token: string, newPassword: string) {
+  // token 来自通知中的重置链接；成功后重新登录。
+  return iam.user.confirmPasswordReset(token, newPassword)
+}
+
+async function resetByAdministrator(userId: string, newPassword: string) {
+  // 管理权限校验在服务端入口完成；不接受未经校验的 userId。
+  return iam.user.adminResetPassword(userId, newPassword)
+}
 ```
 
 ## 一次性票据 — `iam.ticket`
@@ -627,20 +773,29 @@ await iam.user.adminResetPassword(userId, 'TempPassword123')
 短期、一次性能力票据。用于无法携带 Bearer Token 的通道（如 WebSocket URL）：由已认证的 HTTP 请求签发一个绑定主体、用途与操作的票据，服务端在首次校验时**原子消费**（单次有效）。
 
 ```ts
-// 签发（已登录 HTTP 请求内）：绑定主体、用途与本次操作，30 秒过期
-const issued = await iam.ticket.issue({
-  subjectId: session.userId,
-  purpose: 'ai-audio',
-  grant: { operation: 'transcribe', model: 'whisper-1' },
-  ttlMs: 30_000,
-})
-// issued.data.ticket 交给客户端，用于建立 WebSocket 连接
+import type { Session } from '@h-ai/iam'
+import { iam } from '@h-ai/iam'
 
-// 消费（服务端建连时）：原子单次，返回主体 + 用途 + grant
-const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
-if (consumed.success) {
-  const { subjectId, grant } = consumed.data
-  // 用 grant.operation / grant.model 交叉校验客户端请求
+async function issueAudioTicket(session: Session) {
+  // session 已通过当前授权校验，签发前还须验证该操作及资源范围。
+  const issued = await iam.ticket.issue({
+    subjectId: session.userId,
+    purpose: 'ai-audio',
+    grant: { operation: 'transcribe', model: 'whisper-1' },
+    ttlMs: 30_000,
+  })
+  if (!issued.success)
+    return issued
+  // 仅将短期票据交给客户端，不把长期 accessToken 放进 URL。
+  return issued
+}
+
+async function consumeAudioTicket(ticket: string) {
+  const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
+  if (!consumed.success)
+    return consumed
+  // 按 grant 校验本次建连操作/资源；票据本身不自动读取当前 RBAC。
+  return consumed
 }
 ```
 

@@ -68,7 +68,6 @@ describe.sequential('reach.send (multi-provider)', () => {
     })
 
     const result = await reach.send({
-      provider: '',
       to: '13800138000',
       template: 'sms_code',
       vars: { code: '123456' },
@@ -91,6 +90,13 @@ describe.sequential('reach.send (multi-provider)', () => {
       body: '短信内容',
     })
     expect(smsResult.success).toBe(true)
+  })
+
+  it('无模板的直接发送仍要求 Provider', async () => {
+    const result = await reach.send({ to: 'user@example.com', body: 'hello' })
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiReachError.PROVIDER_NOT_FOUND.code)
   })
 
   it('使用不存在的模板应返回 TEMPLATE_NOT_FOUND', async () => {

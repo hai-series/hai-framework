@@ -116,37 +116,39 @@ export async function acquireLdapContainer(): Promise<LdapContainerLease> {
 /**
  * 向 LDAP 容器写入测试种子数据
  *
- * 通过 sh -c 执行 heredoc + ldapadd 创建 OU 及测试用户。
- * 若资源已存在（exitCode = 68），静默忽略。
+ * 通过 LDAP Client 创建 OU 及测试用户，已存在的条目保持不变。
  */
 async function seedTestData(container: StartedTestContainer): Promise<void> {
-  const ldifLines = [
-    `dn: ou=users,${LDAP_BASE_DN}`,
-    'objectClass: organizationalUnit',
-    'ou: users',
-    '',
-    `dn: uid=ldapuser,ou=users,${LDAP_BASE_DN}`,
-    'objectClass: inetOrgPerson',
-    'objectClass: posixAccount',
-    'objectClass: shadowAccount',
-    'uid: ldapuser',
-    'sn: User',
-    'cn: LDAP Test User',
-    'mail: ldapuser@example.org',
-    `userPassword: ${TEST_USER_PASSWORD}`,
-    'uidNumber: 10000',
-    'gidNumber: 10000',
-    'homeDirectory: /home/ldapuser',
-  ]
-
-  // 使用 printf + 管道向 ldapadd 传入 LDIF 数据
-  const ldifEscaped = ldifLines.join('\\n')
-  const cmd = `printf '${ldifEscaped}' | ldapadd -x -D '${LDAP_ADMIN_DN}' -w '${LDAP_ADMIN_PASSWORD}'`
-
-  const execResult = await container.exec(['sh', '-c', cmd])
-
-  // exitCode 68 = already exists，静默忽略
-  if (execResult.exitCode !== 0 && execResult.exitCode !== 68) {
-    console.warn(`ldapadd exited with code ${execResult.exitCode}: ${execResult.output}`)
+  // 通过真实 LDAP 协议写入，避免 Windows 容器 exec 流的兼容性限制。
+  const { AlreadyExistsError, Client } = await import('ldapts')
+  const client = new Client({ url: `ldap://${container.getHost()}:${container.getMappedPort(389)}`, timeout: 10_000, connectTimeout: 10_000 })
+  try {
+    await client.bind(LDAP_ADMIN_DN, LDAP_ADMIN_PASSWORD)
+    const entries: [string, Record<string, string[]>][] = [
+      [`ou=users,${LDAP_BASE_DN}`, { objectClass: ['organizationalUnit'], ou: ['users'] }],
+      [`uid=ldapuser,ou=users,${LDAP_BASE_DN}`, {
+        objectClass: ['inetOrgPerson', 'posixAccount', 'shadowAccount'],
+        uid: ['ldapuser'],
+        sn: ['User'],
+        cn: ['LDAP Test User'],
+        mail: ['ldapuser@example.org'],
+        userPassword: [TEST_USER_PASSWORD],
+        uidNumber: ['10000'],
+        gidNumber: ['10000'],
+        homeDirectory: ['/home/ldapuser'],
+      }],
+    ]
+    for (const [dn, attributes] of entries) {
+      try {
+        await client.add(dn, attributes)
+      }
+      catch (error) {
+        if (!(error instanceof AlreadyExistsError))
+          throw error
+      }
+    }
+  }
+  finally {
+    await client.unbind()
   }
 }

@@ -12,7 +12,7 @@
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
 | **認証**                       | パスワード、OTP（メール・SMS コード）、LDAP、API Key の認証方式                           |
 | **セッション**                 | 状態を持つセッション（ランダム access token + キャッシュ、任意の自動延長）                |
-| **認可**                       | RBAC のロール・権限管理（DB + キャッシュ、ワイルドカード照合）                            |
+| **認可**                       | RBAC のロール・権限管理（DB 一括検索、ワイルドカード照合）                                |
 | **ユーザー管理**               | 登録、検索、更新、パスワードリセット、管理者によるリセット                                |
 | **API Key**                    | scope・期限付き API Key の作成、失効、検証                                                |
 | **一度限りのチケット**         | Bearer Token を付けられない WebSocket などのための短期チケット（発行 / アトミックな消費） |
@@ -27,7 +27,7 @@ pnpm add @h-ai/iam
 ## 依存関係
 
 - `@h-ai/reldb`：ユーザー・ロール・権限の永続化。**iam.init() より先に初期化**。
-- `@h-ai/cache`：セッション・OTP・リセット Token・権限のキャッシュ。**iam.init() より先に初期化**。
+- `@h-ai/cache`：セッション・OTP・リセット Token・一度限りのチケット・共有ロック。**iam.init() より先に初期化**。
 - `@h-ai/crypto`：内部で使用するパスワードハッシュ。自動初期化。
 - `@h-ai/audit`：主要な RBAC 操作の監査記録。
 
@@ -218,7 +218,7 @@ IAM は `iam.init()` / `iam.close()` で状態を管理する**ライフサイ�
 ```
 iam.init()
   ├─ session  （キャッシュによるセッション、DB 依存なし）
-  ├─ authz    （RBAC ロール・権限、DB + キャッシュ）
+  ├─ authz    （RBAC ロール・権限、DB 一括検索）
   ├─ authn    （認証、session + authz に依存）
   ├─ user     （ユーザー管理、session + authz + passwordStrategy に依存）
   └─ seed     （初期データ、authz に依存）
@@ -275,32 +275,41 @@ login(credentials)
 verifyToken(accessToken)
   → session.get(accessToken) → キャッシュ検索
   → 自動延長モードなら TTL を延長
-  → Session を返す（userId、roles、permissions）
+  → 現在のユーザー状態・ロール JOIN・権限一括検索（ロールなしなら権限検索を省略）
+  → 無効ユーザー・DB 読取失敗は拒否し、API Key scope を再適用
+  → 現在の Session を返す（userId、roles、permissions）
 ```
 
 #### 使用方法
 
-`authz.createRole({ ..., permissionIds })` と `authz.updateRole(id, { ..., permissionIds })` は、同じトランザクションでロールと権限集合全体を保存し、途中の失敗はすべてロールバックします。`permissionIds: []` は消去、省略は維持、重複 ID は除去、不明な権限は失敗です。並行更新は最後にコミットした完全な集合を採用し、集合を合成しません。自動管理のコミット後はユーザーセッションを同期し、外部トランザクションでは呼び出し元がコミット後に同期します。Admin Console も直接この API を使い、分割更新や補償削除は行いません。
+例は reldb/cache/IAM の初期化に成功したサーバーで実行し、検証済みの入力を使います。パスワード認証は既定で有効です。OTP には `login.otp: true`、`otp` チャネル、送信コールバック/Reach テンプレートが必要です。LDAP は `login.ldap: true`、API Key は `login.apikey: true` を有効にします。ログインと登録後ログインは `AuthResult` を返します。登録とパスワード認証のスイッチは独立しています。
+
+OTP は送信と受信したコードによるログインの二段階です。両方とも HaiResult を返します。LDAP は `iam.auth.loginWithLdap({ username, password })`、API Key は `loginWithApiKey({ key })` を使います。`data` の前に `success` を確認してください。
 
 ```ts
-// 密码登录
-const result = await iam.auth.login({ identifier: 'admin', password: 'Password123' })
+import { iam } from '@h-ai/iam'
 
-// OTP 登录
-await iam.auth.sendOtp('user@example.com')
-const result = await iam.auth.loginWithOtp({ identifier: 'user@example.com', code: '123456' })
+async function passwordLogin(identifier: string, password: string) {
+  const result = await iam.auth.login({ identifier, password })
+  if (!result.success)
+    return result
+  // 成功后返回 user、tokens、roles、permissions；令牌只交给安全存储。
+  return result
+}
 
-// LDAP 登录（内置客户端，可选注入 ldapClientFactory）
-const result = await iam.auth.loginWithLdap({ username: 'jdoe', password: 'pass' })
+async function requestLoginCode(identifier: string) {
+  // identifier 为启用通道对应的邮箱/手机号，返回 expiresAt。
+  return iam.auth.sendOtp(identifier)
+}
 
-// API Key 登录（需启用 login.apikey: true）
-const result = await iam.auth.loginWithApiKey({ key: 'hai_xxxx...' })
+async function otpLogin(identifier: string, code: string) {
+  // 用户收到验证码并输入后调用；发送失败时不能伪报成功。
+  return iam.auth.loginWithOtp({ identifier, code })
+}
 
-// 验证令牌
-const session = await iam.auth.verifyToken(accessToken)
-
-// 注册并登录（一站式）
-const result = await iam.auth.registerAndLogin({ username: 'new', password: 'Pass123' })
+async function registerWithSession(username: string, password: string) {
+  return iam.auth.registerAndLogin({ username, password })
+}
 ```
 
 #### 注意点
@@ -345,23 +354,37 @@ create(options) [singleDevice=true]
 
 #### 使用方法
 
+`tokens.accessToken` でリクエストを認証し、`tokens.refreshToken` で新しいペアを取得します。`expiresIn` は秒です。独立 API は `Authorization: Bearer <accessToken>`、SvelteKit の Cookie 入口は後述の kit 標準連携を使います。
+
+保護されたリクエストは `iam.auth.verifyToken` で現在のユーザー状態・ロール・権限を読みます。`iam.session.get/verifyToken` は低水準のスナップショットで、現在の認可を代替しません。`session.create` は信頼できるサーバー連携専用で、クライアント指定のロール/権限/Key バインドを受け入れません。
+
 ```ts
-// 创建会话（通常由 login 内部调用）
-const session = await iam.session.create({
-  userId: 'user-id',
-  username: 'admin',
-  roles: ['admin'],
-  permissions: ['user:read', 'user:write'],
-})
+import { iam } from '@h-ai/iam'
 
-// 验证令牌
-const session = await iam.session.verifyToken(accessToken)
+async function authenticateRequest(accessToken: string) {
+  // 受保护请求读取当前用户状态及角色/权限，失败时停止业务操作。
+  const verified = await iam.auth.verifyToken(accessToken)
+  if (!verified.success)
+    return verified
+  return verified
+}
 
-// 刷新令牌
-const newTokens = await iam.session.refresh(refreshToken)
+async function rotateTokens(refreshToken: string) {
+  const refreshed = await iam.session.refresh(refreshToken)
+  if (!refreshed.success)
+    return refreshed
+  // 安全存储替换两个令牌；下一次请求仍走 auth.verifyToken。
+  return refreshed
+}
 
-// 强制下线
-await iam.session.deleteByUserId(userId)
+async function signOut(accessToken: string) {
+  return iam.auth.logout(accessToken)
+}
+
+async function forceSignOut(userId: string) {
+  // 调用前已验证管理员权限，返回撤销的会话数。
+  return iam.session.deleteByUserId(userId)
+}
 ```
 
 #### 注意点
@@ -393,7 +416,7 @@ checkPermission(userId, permission)
   → RBAC 無効なら true
   → ユーザーのロール一覧を DB から取得
   → 最高管理者を確認（キャッシュの superAdminRoleId）、あれば true
-  → 各ロールの権限を取得（キャッシュ優先、miss は DB から取得して保存）
+  → 各ロールの権限コードを DB で一括取得。読み取り失敗はエラーを返す
   → 厳密・ワイルドカード照合（`admin:*` は `admin:read` に一致）
   → true / false を返す
 ```
@@ -403,34 +426,56 @@ checkPermission(userId, permission)
 ```
 assignPermissionToRole(roleId, permId)
   → 関連を DB に保存
-  → ロール権限のキャッシュを消去
   → 所属ユーザー検索 → 各権限を再解決 → 活動中 session を更新
   （best-effort：失敗は log.error のみで割り当て結果に影響しない）
 ```
 
 #### 使用方法
 
+権限を作成し、その **ID** を `permissionIds` に保存してロールを作成し、ロール **ID** でユーザーに割り当てます。セッションとガードは安定した **code** を使います。表示名は独立して変更できます。例は RBAC が有効であることを前提とし、管理操作の権限とリソース範囲はアプリで確認します。
+
+`createRole/updateRole` はロール情報と完全な権限集合を同一トランザクションに保存します。省略は維持、空配列は解除、重複は除去、不明な ID は失敗です。同時更新は最後にコミットした完全な集合を採用します。自管理トランザクションはコミット後にセッションを同期し、外部トランザクションは呼び出し側がコミット後に同期します。
+
+`checkPermission(userId, code)` と `getUserAuthorization` はユーザーの RBAC を読み、リクエストの API Key scopes を考慮しません。Key リクエストでは `iam.auth.verifyToken` の収束済み権限を使用し、userId の再照会だけで許可しないでください。serv の `.permission('record:read')` は厳密な権限ガードです。メニュー/ボタンの非表示は API 認可の代替ではありません。
+
 ```ts
-// 角色管理
-const role = await iam.authz.createRole({ code: 'editor', name: '编辑' })
-const roles = await iam.authz.getAllRoles({ page: 1, pageSize: 20 })
+import { iam } from '@h-ai/iam'
 
-// 权限管理
-const perm = await iam.authz.createPermission({
-  code: 'article:publish',
-  name: '发布文章',
-  type: 'api',
-  resource: 'article',
-  action: 'publish',
-})
+async function provisionReader(userId: string) {
+  // 示例初始化权限/角色；生产种子应先按 code 查询，保证幂等。
+  const permission = await iam.authz.createPermission({
+    code: 'record:read',
+    name: '读取记录',
+    type: 'api',
+    resource: 'record',
+    action: 'read',
+  })
+  if (!permission.success)
+    return permission
+  const role = await iam.authz.createRole({
+    code: 'record_reader',
+    name: '记录读取者',
+    permissionIds: [permission.data.id],
+  })
+  if (!role.success)
+    return role
+  return iam.authz.assignRole(userId, role.data.id)
+}
 
-// 分配与检查
-await iam.authz.assignRole(userId, role.data.id)
-await iam.authz.assignPermissionToRole(role.data.id, perm.data.id)
-const allowed = await iam.authz.checkPermission(userId, 'article:publish')
+async function replaceRolePermissions(roleId: string, permissionIds: string[]) {
+  // 完整替换：[] 清空；省略 permissionIds 则保持已有权限。
+  return iam.authz.updateRole(roleId, { permissionIds })
+}
 
-// 批量同步角色
-await iam.authz.syncRoles(userId, [roleId1, roleId2])
+async function replaceUserRoles(userId: string, roleIds: string[]) {
+  // 完整替换用户的角色集合；[] 移除全部角色。
+  return iam.authz.syncRoles(userId, roleIds)
+}
+
+async function currentAuthorization(userId: string) {
+  // 返回 roles/permissions 的 code 数组，不接受 ID 或显示名称代替 code。
+  return iam.authz.getUserAuthorization(userId)
+}
 ```
 
 #### 注意点
@@ -438,7 +483,7 @@ await iam.authz.syncRoles(userId, [roleId1, roleId2])
 - **ワイルドカード**：`admin:*` は `admin:read`、`admin:write:detail` などに一致。1 つの `*` がコロン以降全体に一致します。
 - **最高管理者**：`rbac.superAdminRole`（既定 `super_admin`）はすべての権限を持ちます。
 - **トランザクション**：`deleteRole` / `deletePermission` は DB トランザクションで関連を削除してから本体を削除。
-- **同期の遅延**：権限変更は稼働中のセッションへ best-effort で反映し、多数のユーザーでは遅延する場合があります。
+- **セッション同期**：キャッシュ更新は best-effort です。保護されたリクエストは `iam.auth.verifyToken` で現在の状態・権限を読み、読取失敗を拒否します。`iam.session.verifyToken` はスナップショット検証のみです。`iam.authz.getUserAuthorization(userId)` はロール JOIN と権限一括検索を共有します。
 - **初期データ**：`seedDefaultData: true` で admin/user/guest と基本権限を冪等に作成。
 
 ---
@@ -451,7 +496,7 @@ await iam.authz.syncRoles(userId, [roleId1, roleId2])
 - **`User`**（公開フィールド）：`{ id, username, email, phone, displayName, avatarUrl, enabled, roles? }`。
 - **`StoredUser`**：内部保存用ユーザー。`passwordHash`、`loginFailedCount`、`lockedUntil` などの機密フィールドを含みます。
 - **`RegisterOptions`** / **`RegisterResult`**：登録の入力・出力。
-- **`UpdateCurrentUserInput`**：現在のユーザーが変更できるフィールド（`displayName` / `avatarUrl` / `phone` / `metadata`）。
+- **`UpdateCurrentUserInput`**：現在のユーザーが変更できるフィールド（`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`）。
 
 #### 主要な処理
 
@@ -485,38 +530,60 @@ confirmPasswordReset(token, newPassword)
 
 #### 使用方法
 
+`register` はユーザーだけを返し、セッションは作りません。同時ログインには `auth.registerAndLogin` を使います。管理用の `createUser` は自己登録設定と独立しています。自己プロフィールは `getCurrentUser/updateCurrentUser` で username/email/displayName/avatarUrl/phone/metadata を更新します。安全性に関わるフィールドとロールは認可された管理入口を使います。
+
+一覧は `PaginatedResult<User>` を返し、`roleCode` はページング前に絞り込みます。必要時のみ `include: ['roles']` を指定します。一括取得は入力を重複排除した順序で返し、不明 ID は省略するため、配列位置ではなく id で関連付けます。公開 DTO でもデータ範囲と開示フィールドはアプリで制御します。
+
+`getUser(id)` は検索成功・不存在時に `null`、`getCurrentUser(token)` は無効セッション/不存在時に失敗します。DB エラーを空データ扱いにしません。`validatePassword` は同期 HaiResult です。削除、無効化、パスワード変更/リセットは対象セッションを取り消します。
+
 ```ts
-// 注册
-const result = await iam.user.register({
-  username: 'alice',
-  email: 'alice@example.com',
-  password: 'Password123',
-})
+import { iam } from '@h-ai/iam'
 
-// 当前用户操作
-const me = await iam.user.getCurrentUser(accessToken)
-await iam.user.updateCurrentUser(accessToken, { displayName: '新名称' })
-await iam.user.changeCurrentUserPassword(accessToken, 'oldPass', 'newPass')
+async function registerUser(username: string, email: string, password: string) {
+  // 返回 RegisterResult，不自动建立会话。
+  return iam.user.register({ username, email, password })
+}
 
-// 管理操作
-const users = await iam.user.listUsers({
-  page: 1,
-  pageSize: 20,
-  search: 'alice',
-  sortBy: 'createdAt',
-  sortDirection: 'desc',
-  include: ['roles'],
-})
-await iam.user.updateUser(userId, { enabled: false }) // 禁用用户 → 自动清除会话
-await iam.user.deleteUser(userId) // 删除用户 → 事务清除角色关联
+async function createManagedUser(username: string, password: string) {
+  // 先验证调用者管理权限；不受 register.enabled 开关限制。
+  return iam.user.createUser({ username, password })
+}
 
-// 密码重置
-await iam.user.requestPasswordReset('alice@example.com')
-await iam.user.confirmPasswordReset(token, 'NewPassword456')
-await iam.user.adminResetPassword(userId, 'TempPassword123')
+async function updateMyProfile(accessToken: string, displayName: string) {
+  return iam.user.updateCurrentUser(accessToken, { displayName })
+}
 
-// 密码强度验证（同步方法）
-const valid = iam.user.validatePassword('weak')
+async function changeMyPassword(accessToken: string, oldPassword: string, newPassword: string) {
+  // 成功后撤销该用户全部会话，客户端回到登录入口。
+  return iam.user.changeCurrentUserPassword(accessToken, oldPassword, newPassword)
+}
+
+async function listReaders(page: number) {
+  const result = await iam.user.listUsers({
+    page,
+    pageSize: 20,
+    roleCode: 'record_reader',
+    search: 'alice',
+    enabled: true,
+    include: ['roles'],
+    sortBy: 'createdAt',
+    sortDirection: 'desc',
+  })
+  if (!result.success)
+    return result
+  // 直接使用 items/total/page/pageSize，不对当前页再次过滤。
+  return result
+}
+
+async function loadUsers(userIds: readonly string[]) {
+  // 最多 1000 个输入 ID；去重保留输入顺序，缺失 ID 省略。
+  return iam.user.getUsers(userIds, { include: ['roles'] })
+}
+
+async function disableUser(userId: string) {
+  // 调用前已验证管理权限；成功后自动清除该用户会话。
+  return iam.user.updateUser(userId, { enabled: false })
+}
 ```
 
 #### 注意点
@@ -531,6 +598,8 @@ const valid = iam.user.validatePassword('weak')
 ---
 
 ### API Key — `iam.apiKey`
+
+`scopes` は主体の権限との共通範囲を適用し、`*` と名前空間 `:*` に対応します。既定の空配列は本人確認のみで操作権限を付与しません。制限付き key のセッション `roles` は空で permission ガードを使用し、明示的な `*` も主体の権限を超えません。ログインは key ID に結び付き、get/verifyToken/refresh は永続状態を再確認し、失効・無効・期限切れ・DB エラーを拒否します。verifyApiKey 単独は鍵のメタデータ検証のみで、主体・操作の認可は別途必要です。
 
 #### 主要な型
 
@@ -554,22 +623,89 @@ verifyApiKey(rawKey)
 
 #### 使用方法
 
-```ts
-// 创建 API Key
-const result = await iam.apiKey.createApiKey(userId, {
-  name: 'CI/CD',
-  expirationDays: 90,
-  scopes: ['api:read'],
-})
-// result.data.rawKey → 明文密钥（仅此一次展示）
+初期化設定で API Key を有効にします。Key はユーザーの制限付き認証情報です：**有効権限 = 現在のユーザー権限 ∩ scopes**。scope は権限 code で、ロール名、表示名、リソース ID ではありません。権限を作成せず、テナント/レコード所有権の検証も代替しません。
 
-// 列出用户的 API Key（服务端分页）
-const keys = await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20, search: 'ci' })
-// keys.data → { items, total, page, pageSize }
-
-// 吊销
-await iam.apiKey.revokeApiKey(keyId)
+```yaml
+# config/_iam.yml
+login:
+  apikey: true
+apikey:
+  maxKeysPerUser: 10
+  defaultExpirationDays: 30
 ```
+
+ユーザーが `record:read`、`record:write`、`user:read` を持つ場合、権限変更時にも交集を再計算します：
+
+| scopes                         | 有効権限                       | roles                |
+| ------------------------------ | ------------------------------ | -------------------- |
+| 省略または `[]`                | 身元のみ、操作権限なし         | `[]`                 |
+| `['record:read']`              | `record:read`                  | `[]`                 |
+| `['record:*']`                 | `record:read`、`record:write`  | `[]`                 |
+| `['record:read', 'user:read']` | 指定した二つの権限             | `[]`                 |
+| `['missing:read']`             | ユーザーが持たないため権限なし | `[]`                 |
+| `['*']`                        | 現在のユーザー権限すべて       | ユーザーロールを維持 |
+
+`record:*` はコロン後の全階層に一致します。`record:r*` 等の任意パターンは未対応です。ユーザーが `record:read` のみなら `['record:*']` でも読み取りのみです。ユーザーがワイルドカードを持つ場合も狭い範囲を保持します。制限付き Key はロール認可を持たず、permission ガードを使います。広いアクセスが必要な場合のみ明示的な `*` を選びます。
+
+以下は作成 → Key ログイン → Bearer 検証と操作認可 → 一覧 → 取り消しの例です。管理入口は本人の所有権または管理権限を検証します。IAM 自体は業務上の呼び出し者を知りません。
+
+```ts
+import { err, HaiCommonError, ok } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+async function createReadKey(userId: string) {
+  // 调用前校验管理权限或本人归属；scopes 使用权限 code。
+  const created = await iam.apiKey.createApiKey(userId, {
+    name: 'Read client',
+    expirationDays: 30,
+    scopes: ['record:read'],
+  })
+  if (!created.success)
+    return created
+  // rawKey 仅本次返回；通过安全渠道展示一次，不写日志。
+  return created
+}
+
+async function apiKeyLogin(rawKey: string) {
+  // 通常由客户端取得 Key 后调用；服务器内部验证并绑定 Key。
+  return iam.auth.loginWithApiKey({ key: rawKey })
+}
+
+async function requireRecordRead(accessToken: string, deniedMessage: string) {
+  // deniedMessage 由应用 i18n 提供；先读取当前且已收敛 scope 的会话。
+  const verified = await iam.auth.verifyToken(accessToken)
+  if (!verified.success)
+    return verified
+  const allowed = verified.data.permissions.some(code =>
+    code === '*' || code === 'record:read'
+    || (code.endsWith(':*') && 'record:read'.startsWith(code.slice(0, -1))),
+  )
+  if (!allowed)
+    return err(HaiCommonError.FORBIDDEN, deniedMessage)
+  // 这里只确认操作权限；业务层还须检查具体记录的数据归属。
+  return ok({ userId: verified.data.userId })
+}
+
+async function listMyKeys(userId: string) {
+  return iam.apiKey.listApiKeys(userId, {
+    page: 1,
+    pageSize: 20,
+    search: 'Read',
+    enabled: true,
+  })
+}
+
+async function revokeKey(keyId: string) {
+  // 调用前校验本人归属或管理权限。
+  return iam.apiKey.revokeApiKey(keyId)
+}
+```
+
+Key ログインには `rawKey` のみ使用できます。`apiKey.id` は管理 ID、`keyPrefix` は表示/検索用です。`verifyApiKey(rawKey)` は Key のメタデータ検証のみで、ユーザー状態・scope・操作認可を代替しません。
+
+Key セッションは `iam.session.refresh` 後も Key に紐付きます。取り消し成功後は既存 accessToken の get/verify と refreshToken の refresh が失敗します。期限切れ、無効化、永続化読み取りエラーも拒否します。ロール変更は `iam.auth.verifyToken` の現在の認可で反映します。scope 更新 API はないため、新 Key を作成して旧 Key を取り消します。
+
+`expirationDays: 0` は無期限、省略時は `apikey.defaultExpirationDays` を使用します。期限が必要なら明示します。生 Key/Token を URL、ログ、公開設定、通常の localStorage に保存しません。
 
 #### 注意点
 
@@ -611,15 +747,25 @@ await apiClient.iam.auth.changePassword({
 
 ## パスワードリセット
 
+リセットには `passwordReset.enabled` と送信コールバック/Reach テンプレートが必要です。成功はアカウントの存在や受信を証明しません。送信・内部処理の HaiResult エラーも処理します。期限/試行回数制限があり、一度だけ成功消費でき、成功時に旧セッションを取り消します。管理者リセットに旧パスワードは不要ですが、アプリで管理権限を確認します。
+
 ```ts
-// 请求重置（即使用户不存在也返回 ok，防止枚举）
-await iam.user.requestPasswordReset('admin@example.com')
+import { iam } from '@h-ai/iam'
 
-// 确认重置（校验令牌有效期和尝试次数 → 更新密码 → 清除所有会话）
-const result = await iam.user.confirmPasswordReset(token, 'NewPassword456')
+async function requestReset(identifier: string) {
+  // 缺失用户与有效用户使用相同成功响应，避免枚举账户。
+  return iam.user.requestPasswordReset(identifier)
+}
 
-// 管理员重置（无需旧密码）
-await iam.user.adminResetPassword(userId, 'TempPassword123')
+async function confirmReset(token: string, newPassword: string) {
+  // token 来自通知中的重置链接；成功后重新登录。
+  return iam.user.confirmPasswordReset(token, newPassword)
+}
+
+async function resetByAdministrator(userId: string, newPassword: string) {
+  // 管理权限校验在服务端入口完成；不接受未经校验的 userId。
+  return iam.user.adminResetPassword(userId, newPassword)
+}
 ```
 
 ## 一度限りのチケット — `iam.ticket`
@@ -627,20 +773,29 @@ await iam.user.adminResetPassword(userId, 'TempPassword123')
 WebSocket URL など Bearer Token を付けられない経路向けの短期チケットです。認証済み HTTP リクエストで、主体・用途・操作に結び付けて発行します。サーバーは初回検証時に**アトミックに消費**し、一度のみ有効です。
 
 ```ts
-// 签发（已登录 HTTP 请求内）：绑定主体、用途与本次操作，30 秒过期
-const issued = await iam.ticket.issue({
-  subjectId: session.userId,
-  purpose: 'ai-audio',
-  grant: { operation: 'transcribe', model: 'whisper-1' },
-  ttlMs: 30_000,
-})
-// issued.data.ticket 交给客户端，用于建立 WebSocket 连接
+import type { Session } from '@h-ai/iam'
+import { iam } from '@h-ai/iam'
 
-// 消费（服务端建连时）：原子单次，返回主体 + 用途 + grant
-const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
-if (consumed.success) {
-  const { subjectId, grant } = consumed.data
-  // 用 grant.operation / grant.model 交叉校验客户端请求
+async function issueAudioTicket(session: Session) {
+  // session 已通过当前授权校验，签发前还须验证该操作及资源范围。
+  const issued = await iam.ticket.issue({
+    subjectId: session.userId,
+    purpose: 'ai-audio',
+    grant: { operation: 'transcribe', model: 'whisper-1' },
+    ttlMs: 30_000,
+  })
+  if (!issued.success)
+    return issued
+  // 仅将短期票据交给客户端，不把长期 accessToken 放进 URL。
+  return issued
+}
+
+async function consumeAudioTicket(ticket: string) {
+  const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
+  if (!consumed.success)
+    return consumed
+  // 按 grant 校验本次建连操作/资源；票据本身不自动读取当前 RBAC。
+  return consumed
 }
 ```
 

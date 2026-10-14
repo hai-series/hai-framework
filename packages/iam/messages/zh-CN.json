@@ -1,4 +1,5 @@
 {
+  "iam_batchUserIdsInvalid": "请提供最多 1000 个非空用户 ID",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "iam_securityStateFailed": "无法更新认证安全状态，请稍后重试",
   "iam_securityBusy": "认证请求过于频繁，请稍后重试",

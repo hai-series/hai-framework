@@ -32,6 +32,7 @@ export { IdParamSchema }
 
 /** 用户列表查询参数 Schema（扩展通用分页参数） */
 export const ListUsersQuerySchema = PaginationQuerySchema.extend({
+  roleCode: z.string().trim().min(1).max(100).optional(),
   enabled: z
     .enum(['true', 'false'])
     .transform(v => v === 'true')

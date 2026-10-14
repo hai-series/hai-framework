@@ -77,6 +77,8 @@ const UI_COMPONENTS = new Set([
   'ThemeColorPicker',
   'ThemeSelector',
   'ThemeToggle',
+  'GuideHost',
+  'HelpCenter',
   // scenes - iam
   'AuthShell',
   'AuthPanel',

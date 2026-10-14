@@ -55,6 +55,10 @@ export interface AuthResult {
  * 会话数据
  */
 export interface Session {
+  /** API Key 派生会话绑定的 key ID；普通用户登录时省略。 */
+  apiKeyId?: string
+  /** 当前 key scopes；get/verify/refresh 每次重新验证持久化 key 并收敛权限。 */
+  apiKeyScopes?: string[]
   /** 用户 ID */
   userId: string
   /** 用户名 */
@@ -95,6 +99,9 @@ export type SessionData = Record<string, unknown> & {
  * 创建会话选项
  */
 export interface CreateSessionOptions {
+  /** 服务端已验证的 API Key 绑定；不得来自未验证客户端输入。 */
+  apiKeyId?: string
+  apiKeyScopes?: string[]
   /** 用户 ID */
   userId: string
   /** 用户名 */
@@ -134,7 +141,7 @@ export interface SessionOperations {
   /**
    * 获取会话
    *
-   * 查询缓存中的会话数据。滑动窗口模式下自动续期。
+   * 查询缓存中的会话数据。API Key 会话先重新校验持久化 key 与 scopes；滑动窗口模式下自动续期。
    * 已过期的会话会自动删除并返回 null。
    *
    * @param accessToken - 访问令牌
@@ -145,7 +152,7 @@ export interface SessionOperations {
   /**
    * 验证访问令牌
    *
-   * 等同于 get 但在会话不存在时返回错误而非 null。
+   * 等同于 get 但在会话不存在时返回错误而非 null；API Key 撤销/禁用/过期立即拒绝。
    *
    * @param accessToken - 访问令牌
    * @returns 成功返回会话；会话无效返回 SESSION_INVALID

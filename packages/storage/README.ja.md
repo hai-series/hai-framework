@@ -71,11 +71,19 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 ## API 一覧
 
 - `storage.file`
-  - `put/get/head/exists/delete/deleteMany/copy`
+  - `put/get/getStream/head/exists/delete/deleteMany/copy`
 - `storage.dir`
   - `list/delete`
 - `storage.presign`
   - `getUrl/putUrl/publicUrl`
+- `storage.checksum`
+  - `generate(data, options?) / verify(data, expected, options?)`
+
+`file.put()` は Buffer、Uint8Array、文字列と `AsyncIterable<Uint8Array>`（Node Readable 等）を受け付け、ストリームはバッファ量を制限した S3 multipart で送信します。`getStream()` は Range と `signal` による中止に対応するバイトストリームを返します。初期エラーは HaiResult、反復中の I/O・中止エラーは呼び出し側で処理します。`get()` は従来どおり全体を Buffer に読み込み、小さいファイル向けです。
+
+`{ ifNoneMatch: '*' }` は標準 S3 条件付き書き込み、またはローカルの原子的公開で上書きを拒否し、競合時に `ALREADY_EXISTS` を返します。非対応の S3 サービスではエラーとし、上書きに切り替えません。失敗・中止時は一時ファイルや未完了パートを削除しますが、公開済みオブジェクトは中止で取り消せません。
+
+`checksum` は初期化不要の Node 専用ツールです。実際の入力バイトを生成・検証し、ストリームは一度だけ消費します。既定値は SHA-256、小文字 hex。`algorithm: 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'`、`encoding: 'hex' | 'base64'`、`signal` を指定できます。不一致は `ok(false)`、不正形式・アルゴリズムや読み取り失敗はエラーです。MD5/SHA-1 は互換性確認のみで、認証用ではありません。ETag と multipart の複合 checksum はファイル全体の摘要と異なり、AWS checksum 拡張の実装は強制しません。
 
 > 注：`publicUrl` は S3 の `publicUrl` を設定した場合のみ文字列を返し、それ以外は `null` を返します。
 

@@ -84,6 +84,8 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
+Node `serv.listen()` supplies the socket peer address. Forwarded headers are ignored by default. Only proxy IPs/CIDRs in `http.trustedProxies` may supply them: XFF is walked from right to left until the first untrusted address; content to the left of that address is ignored. An invalid or excessively long trusted chain leaves IP undefined rather than promoting the proxy to client identity. Proxies must sanitize or append forwarded headers. Fetch platforms explicitly provide a trusted peer through `app.fetch(request, { remoteAddress: platformPeerAddress })`; without metadata IP is undefined. Do not copy arbitrary headers into metadata. Custom `createContext(input)` forwards the complete input to preserve resolved `input.ip`. Internal RPC checks the connection peer.
+
 ### Audio WebSocket: tickets and server authorization
 
 Audio connections require short-lived, one-time tickets. Issue them through an authenticated HTTP endpoint (recommended: `iam.ticket.issue`) and consume atomically in `verifyTicket` (recommended: `iam.ticket.consume`). Authentication runs at connection time with a separate timeout; no business frames are processed beforehand. The framework stores the returned `ServSession` and optional `grant`, then calls `authorize` to approve paid parameters:
@@ -152,6 +154,7 @@ When using `@h-ai/core` and `ServConfigSchema` with `config/_serv.yml`, transpor
 ```yaml
 # config/_serv.yml
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
 
 transport:
@@ -205,10 +208,10 @@ const app = serv.createApp({
 
 Pass the top-level `iam` handle to `serv.createApp` to derive:
 
-- **Access token verification**: `iam.session.verifyToken` fills `context.session` on every request without caching.
+- **Access token verification**: `iam.auth.verifyToken` fills `context.session` on every request without caching.
 - **Refresh rotation**: with `refreshCookie`, `iam.session.refresh` becomes the httpOnly-cookie refresh callback.
 
-**Context factory precedence**: explicit `createContext` > `verifyToken` > `iam.session.verifyToken` > metadata-only default.
+**Context factory precedence**: explicit `createContext` > `verifyToken` > `iam.auth.verifyToken` > metadata-only default.
 
 ```ts
 // 推荐：传入 iam，一行打开认证与 Cookie 刷新
@@ -233,7 +236,7 @@ const app = serv.createApp({
   createContext: async ({ request }) => {
     const base = serv.parseRequestContext({ request })
     // 手动填充 session（serv 不再自动填充）
-    const result = await iam.session.verifyToken(base.accessToken ?? '')
+    const result = await iam.auth.verifyToken(base.accessToken ?? '')
     return {
       ...base,
       session: result.success ? result.data : undefined,
@@ -339,16 +342,16 @@ To reuse `Bearer token -> session` and add tenant, workspace, or source-system f
 prefer `serv.buildAuthContextFactory()` to assemble a custom `createContext`:
 
 ```ts
-const baseContext = serv.buildAuthContextFactory(token => iam.session.verifyToken(token))
+const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async ({ request }) => {
-    const context = await baseContext({ request })
+  createContext: async (input) => {
+    const context = await baseContext(input)
     return {
       ...context,
-      tenantId: request.headers.get('x-tenant-id') ?? null,
+      tenantId: input.request.headers.get('x-tenant-id') ?? null,
     }
   },
 })
@@ -436,7 +439,7 @@ const app = serv.createApp({
         && security.isNativeOrigin(request.headers.get('origin') ?? ''),
     },
   },
-  // ✅ 无需再传 verifyToken，iam.session.verifyToken 自动用于填充 context.session
+  // ✅ 无需再传 verifyToken，iam.auth.verifyToken 自动用于填充 context.session
 })
 ```
 
@@ -518,6 +521,7 @@ server:
   port: 3000
 
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json

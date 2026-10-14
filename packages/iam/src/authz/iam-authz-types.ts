@@ -6,6 +6,7 @@
 
 import type { HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
+import type { Session } from '../session/iam-session-types.js'
 
 // ─── 授权类型（RBAC） ───
 
@@ -100,6 +101,8 @@ export interface UserRole {
  * 授权子功能接口
  */
 export interface AuthzOperations {
+  /** 查询当前角色与权限代码，一次读取角色并批量聚合权限，不依赖会话缓存。 */
+  getUserAuthorization: (userId: string) => Promise<HaiResult<Pick<Session, 'roles' | 'permissions'>>>
   /**
    * 检查权限
    *

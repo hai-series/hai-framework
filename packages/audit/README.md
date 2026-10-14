@@ -80,7 +80,7 @@ await audit.init({
 
 - `audit.init(config)` - 初始化审计模块
 - `audit.log(input)` - 记录审计日志
-- `audit.list(options)` - 分页查询审计日志（含用户名 JOIN）
+- `audit.list(options)` - 返回统一 `PaginatedResult<AuditLogWithUser>`（items/total/page/pageSize，含用户名 JOIN）；页码/条数复用 core 分页规范化，默认 pageSize 为 20，调用方直接使用返回元数据。
 - `audit.getUserRecent(userId, limit)` - 获取用户最近活动
 - `audit.cleanup(days)` - 清理旧日志
 - `audit.getStats(days)` - 获取操作统计

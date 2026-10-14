@@ -351,5 +351,22 @@
   "password_policy_uppercase": "Include uppercase letters",
   "password_policy_lowercase": "Include lowercase letters",
   "password_policy_number": "Include numbers",
-  "password_policy_special": "Include special characters"
+  "password_policy_special": "Include special characters",
+  "guide_welcome": "Welcome",
+  "guide_start": "Start tour",
+  "guide_later": "Remind me later",
+  "guide_dismiss": "Do not remind me",
+  "guide_help": "Help center",
+  "guide_close": "Close",
+  "guide_loading": "Preparing your tour…",
+  "guide_next": "Next",
+  "guide_previous": "Previous",
+  "guide_done": "Done",
+  "guide_progress": "Step {current} of {total}",
+  "guide_search": "Search help",
+  "guide_empty": "No matching help content",
+  "guide_tours": "Product tours",
+  "guide_unavailable": "This tour is unavailable. Choose another topic in the help center.",
+  "guide_targetMissing": "This action is not available on the current page. Try again later or read the help content.",
+  "guide_startFailed": "Unable to start the tour. Please try again later."
 }

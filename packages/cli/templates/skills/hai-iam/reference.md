@@ -2,13 +2,15 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
+用户的 `checkPermission(userId, code)` / `getUserAuthorization` 仅查询主体授权，不含请求的 API Key scope；受保护请求使用 `iam.auth.verifyToken` 的已收敛会话权限。API Key 的完整配置、交集示例和撤销流程见对应小节。
+
 角色成员数使用 `getRoleUserCounts(roleIds)`，一次聚合返回 `HaiResult<Map<string, number>>`；成功时无关联为 0，失败必须展示错误，不能伪造零值。
 
 角色资料和权限必须通过 `createRole({ ..., permissionIds })` / `updateRole(id, { ..., permissionIds })` 一次事务保存，禁止在应用层并行增删权限模拟替换。空数组清空、未传保持、未知权限失败、重复 ID 去重；并发以最后提交的完整集合为准。自管事务提交后同步会话，外部事务由调用方提交后同步。
 
 管理界面自动创建角色时使用 `role_${core.id.generate()}` 生成 code，显示名称独立保存；不要通过移除中文、表情或折叠大小写生成标识。重命名不重建 code。
 
-> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP/API Key）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（Token + 权限缓存）、`@h-ai/crypto`（密码哈希）、`@h-ai/audit`（审计日志）。
+> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP/API Key）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（会话 / OTP / 重置令牌 / 一次性票据 / 共享锁）、`@h-ai/crypto`（密码哈希）、`@h-ai/audit`（审计日志）。
 
 ## 运行环境
 
@@ -19,7 +21,7 @@
 | 模块 | 用途 | 是否必需 | 初始化要求 |
 | --- | --- | --- | --- |
 | `@h-ai/reldb` | 数据库（用户/角色/权限持久化） | **必需** | 需在 `iam.init()` 前初始化 |
-| `@h-ai/cache` | 缓存（会话/OTP/重置令牌/权限缓存） | **必需** | 需在 `iam.init()` 前初始化 |
+| `@h-ai/cache` | 缓存（会话/OTP/重置令牌/一次性票据/共享锁） | **必需** | 需在 `iam.init()` 前初始化 |
 | `@h-ai/crypto` | 密码哈希 | 内部使用 | 自动初始化 |
 | `@h-ai/audit` | 审计日志（RBAC 关键操作记录） | 内部使用 | 已初始化时自动写入 |
 
@@ -113,7 +115,7 @@ LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h
 | `loginWithLdap`    | `({ username, password }) => Promise<HaiResult<AuthResult>>`   | LDAP 登录                          |
 | `loginWithApiKey`  | `({ key }) => Promise<HaiResult<AuthResult>>`                  | API Key 登录                       |
 | `sendOtp`          | `(identifier) => Promise<HaiResult<{ expiresAt }>>`            | 发送 OTP 验证码                    |
-| `verifyToken`      | `(token) => Promise<HaiResult<Session>>`                       | 验证令牌（推荐入口，委托 session） |
+| `verifyToken`      | `(token) => Promise<HaiResult<Session>>`                       | 验证会话并读取当前用户状态及授权；数据库失败拒绝 |
 | `logout`           | `(token) => Promise<HaiResult<void>>`                          | 登出                               |
 | `registerAndLogin` | `(options: RegisterOptions) => Promise<HaiResult<AuthResult>>`  | 注册并登录（一站式）               |
 
@@ -180,7 +182,8 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 | `getUser`                  | `(id, options?) => Promise<HaiResult<User \| null>>`                       | 获取用户（可选 include: ['roles']）  |
 | `getCurrentUser`           | `(token) => Promise<HaiResult<User>>`                                      | 通过令牌获取当前用户                 |
 | `updateCurrentUser`        | `(token, data: UpdateCurrentUserInput) => Promise<HaiResult<User>>`        | 当前用户修改个人资料（白名单字段）   |
-| `listUsers`                | `(options?: ListUsersOptions) => Promise<HaiResult<PaginatedResult<User>>>` | 用户列表（分页 + 搜索 + 过滤 + 白名单排序） |
+| `getUsers` | `(ids, options?) => Promise<HaiResult<User[]>>` | 批量公开用户，上限 1000；去重输入顺序、缺失省略、可 include roles |
+| `listUsers`                | `(options?: ListUsersOptions) => Promise<HaiResult<PaginatedResult<User>>>` | 用户列表（分页 + 搜索 + roleCode 分页前筛选 + 白名单排序） |
 | `updateUser`               | `(id, data) => Promise<HaiResult<User>>`                                   | 更新用户信息                         |
 | `deleteUser`               | `(id) => Promise<HaiResult<void>>`                                         | 删除用户（自动清除会话）             |
 | `changePassword`           | `(id, old, new) => Promise<HaiResult<void>>`                               | 修改密码（自动清除会话）             |
@@ -195,6 +198,7 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 | 方法                       | 签名                                                                             | 说明                                         |
 | -------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------- |
 | `checkPermission`          | `(userId, permission) => Promise<HaiResult<boolean>>`                               | 检查权限（超管自动通过，支持通配符）         |
+| `getUserAuthorization` | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>` | 当前角色及权限代码，角色 JOIN + 批量权限查询；失败不回退缓存 |
 | `getUserPermissions`       | `(userId) => Promise<HaiResult<Permission[]>>`                                      | 获取用户权限列表（通过角色聚合去重）         |
 | `getUserRoles`             | `(userId) => Promise<HaiResult<Role[]>>`                                            | 获取用户角色列表                             |
 | `getUserRolesForMany`      | `(userIds) => Promise<HaiResult<Map<string, Role[]>>>`                              | 批量获取多用户角色（避免 N+1）               |
@@ -221,6 +225,85 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 
 ### API Key 管理 — `iam.apiKey`
 
+先在初始化配置中启用 API Key。它是用户的受限凭据，不能独立授予用户未拥有的权限：**有效权限 = 当前主体权限 ∩ scopes**。scopes 是与权限 code 相同的字符串，不是角色名、菜单名称或资源 ID；不会创建权限，也不会替代租户/记录归属校验。
+
+```yaml
+# config/_iam.yml
+login:
+  apikey: true
+apikey:
+  maxKeysPerUser: 10
+  defaultExpirationDays: 30
+```
+
+假设主体拥有 `record:read`、`record:write`、`user:read`，不同 scopes 的结果如下（主体授权改变后重新计算）：
+
+| scopes | 有效权限 | roles |
+| --- | --- | --- |
+| 未传或 `[]` | 无操作权限，仅可识别身份 | `[]` |
+| `['record:read']` | `record:read` | `[]` |
+| `['record:*']` | `record:read`、`record:write` | `[]` |
+| `['record:read', 'user:read']` | 两个指定权限 | `[]` |
+| `['missing:read']` | 主体未拥有，因此无权限 | `[]` |
+| `['*']` | 主体当前拥有的全部权限 | 保留主体角色 |
+
+`record:*` 匹配冒号后的全部层级，不支持任意正则或 `record:r*` 等中间通配符。主体仅拥有 `record:read` 时，`['record:*']` 仍只得到读取权限；主体持有通配符时，交集保留较窄范围。受限 Key 没有角色入口，使用 permission 守卫；显式 `*` 是宽授权，按实际需要选择。
+
+以下为创建 → Key 登录 → Bearer 会话验证与操作授权 → 列表 → 撤销的服务端示例。先检查所有 HaiResult；每个管理入口还要校验本人归属或管理员权限，IAM 不知道业务的调用者身份。
+
+```ts
+import { err, HaiCommonError, ok } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+async function createReadKey(userId: string) {
+  // 调用前校验管理权限或本人归属；scopes 使用权限 code。
+  const created = await iam.apiKey.createApiKey(userId, {
+    name: 'Read client', expirationDays: 30, scopes: ['record:read'],
+  })
+  if (!created.success)
+    return created
+  // rawKey 仅本次返回；通过安全渠道展示一次，不写日志。
+  return created
+}
+
+async function apiKeyLogin(rawKey: string) {
+  // 通常由客户端取得 Key 后调用；服务器内部验证并绑定 Key。
+  return iam.auth.loginWithApiKey({ key: rawKey })
+}
+
+async function requireRecordRead(accessToken: string, deniedMessage: string) {
+  // deniedMessage 由应用 i18n 提供；先读取当前且已收敛 scope 的会话。
+  const verified = await iam.auth.verifyToken(accessToken)
+  if (!verified.success)
+    return verified
+  const allowed = verified.data.permissions.some(code =>
+    code === '*' || code === 'record:read'
+    || (code.endsWith(':*') && 'record:read'.startsWith(code.slice(0, -1))),
+  )
+  if (!allowed)
+    return err(HaiCommonError.FORBIDDEN, deniedMessage)
+  // 这里只确认操作权限；业务层还须检查具体记录的数据归属。
+  return ok({ userId: verified.data.userId })
+}
+
+async function listMyKeys(userId: string) {
+  return iam.apiKey.listApiKeys(userId, {
+    page: 1, pageSize: 20, search: 'Read', enabled: true,
+  })
+}
+
+async function revokeKey(keyId: string) {
+  // 调用前校验本人归属或管理权限。
+  return iam.apiKey.revokeApiKey(keyId)
+}
+```
+
+创建后只有 `rawKey` 能用于 Key 登录；`apiKey.id` 是管理 ID，`keyPrefix` 仅用于显示/检索，均不能代替 rawKey。`verifyApiKey(rawKey)` 仅验证 Key 并返回元数据，不能代替用户状态、scopes 与操作授权。
+
+Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不会丢失该绑定或扩大 scopes。撤销成功后，已有 accessToken 的 get/verify 以及 refreshToken 的 refresh 都会失败；过期、禁用及持久化读取失败同样拒绝。角色撤权由 `iam.auth.verifyToken` 读取当前授权生效。改 scope 使用创建新 Key 后撤销旧 Key，当前 API 不提供 scope 更新操作。
+
+`expirationDays: 0` 表示不设过期时间，省略时使用 `apikey.defaultExpirationDays`；需要限时访问时显式设置。明文 Key 和 Token 不进入 URL、日志、公开配置或普通 localStorage。
+
 | 方法           | 签名                                                                    | 说明                                   |
 | -------------- | ----------------------------------------------------------------------- | -------------------------------------- |
 | `createApiKey` | `(userId, options: CreateApiKeyOptions) => Promise<HaiResult<CreateApiKeyResult>>` | 创建 API Key（明文密钥仅返回一次） |
@@ -228,8 +311,6 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 | `getApiKey`    | `(keyId) => Promise<HaiResult<ApiKey \| null>>`                            | 获取 API Key 详情                      |
 | `revokeApiKey` | `(keyId) => Promise<HaiResult<void>>`                                      | 吊销/删除 API Key                      |
 | `verifyApiKey` | `(rawKey) => Promise<HaiResult<ApiKey>>`                                   | 验证 API Key 并返回实体（含用户 ID）   |
-
-> 需在 `login.apikey: true` 时才会初始化此子模块，否则访问返回 `NOT_INITIALIZED` 错误。
 
 ## HTTP API 契约
 
@@ -403,6 +484,6 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 - `hai-kit`：SvelteKit 集成（Bearer Token + 契约处理）
 - `hai-api-client`：客户端契约调用
 - `hai-reldb`：底层数据存储
-- `hai-cache`：Token 与权限缓存
+- `hai-cache`：会话、OTP/重置状态、一次性票据和共享锁
 - `hai-crypto`：密码哈希（内部依赖）
 - `hai-ui`：IAM 场景组件（LoginForm/RegisterForm 等）

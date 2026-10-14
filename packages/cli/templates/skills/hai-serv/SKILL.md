@@ -17,7 +17,7 @@ description: "使用 @h-ai/serv 装配 contract/procedures、认证守卫、Open
 
 ## 使用路径
 
-- 先确定 Node listen 还是 Fetch adapter，再从共享 contract 装配 procedures；不要直接暴露 Hono。
+- 先确定 Node listen 还是 Fetch adapter，再从共享 contract 装配 procedures；不要直接暴露 Hono。Node 自动提供 socket 对端；Fetch 通过 app.fetch 的 remoteAddress 元数据提供可信平台对端。http.trustedProxies 默认为空，仅显式代理 IP/CIDR 可以提供转发头；自定义 context 传递完整 input 保留解析后的 ip。
 - 认证绑定 route 的 auth/permission/role；启动配置错误与正常请求领域错误分别处理。
 - 普通 procedure 的失败 HaiResult 默认通过 HTTP 200 返回，必须检查 success 与 error.code；error.httpStatus 是领域错误元数据。contract 输入校验失败为 HTTP 400，HTTP middleware、刷新 cookie 等响应另按自身契约处理，不能混为同一种状态映射。
 - 浏览器 Cookie、CORS、apiPrefix、transport 须与 api-client 同步；语音 ticket 单独核验。

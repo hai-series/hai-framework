@@ -140,7 +140,7 @@ describe('models build.mjs 清单', () => {
     expect(buildScript).not.toContain('\'--rm\',')
     expect(buildScript).toContain('\'{{.State.Running}} {{.State.ExitCode}}\'')
     expect(buildScript).toContain('Container exited before becoming healthy')
-    expect(buildScript).toContain('\'rm\',\n        \'--force\',')
+    expect(buildScript).toMatch(/'rm',\s*'--force',/)
   })
 
   it('显式容器代理不做宿主机地址改写', () => {

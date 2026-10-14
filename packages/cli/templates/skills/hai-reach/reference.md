@@ -176,7 +176,7 @@ interface ReachConfigInput {
 
 | 字段       | 类型                      | 必填 | 说明                                |
 | ---------- | ------------------------- | ---- | ----------------------------------- |
-| `provider` | `string`                  | ✅   | 目标 Provider 名称                  |
+| `provider` | `string`                  | 条件 | 模板发送省略时由模板推导；直接发送必填；显式值优先 |
 | `to`       | `string`                  | ✅   | 接收方（邮箱或手机号）              |
 | `subject`  | `string`                  | —    | 邮件主题（直接发送时）              |
 | `body`     | `string`                  | —    | 消息正文（直接发送时）              |
@@ -230,7 +230,6 @@ reach.template.save({
 async function sendCode(channel: 'email' | 'sms', target: string, code: string) {
   const template = channel === 'email' ? 'email_code' : 'sms_code'
   return reach.send({
-    provider: channel,
     to: target,
     template,
     vars: { code, minutes: '5' },
@@ -262,13 +261,13 @@ await iam.init({
   db,
   cache,
   onPasswordResetRequest: async (user, token, expiresAt) => {
-    await reach.send({ provider: 'email', to: user.email ?? '', template: 'password_reset', vars: { token, expiresAt: expiresAt.toISOString() } })
+    await reach.send({ to: user.email ?? '', template: 'password_reset', vars: { token, expiresAt: expiresAt.toISOString() } })
   },
   onOtpSendEmail: async (email, code) => {
-    await reach.send({ provider: 'email', to: email, template: 'otp_email', vars: { code } })
+    await reach.send({ to: email, template: 'otp_email', vars: { code } })
   },
   onOtpSendSms: async (phone, code) => {
-    await reach.send({ provider: 'sms', to: phone, template: 'otp_sms', vars: { code } })
+    await reach.send({ to: phone, template: 'otp_sms', vars: { code } })
   },
 })
 ```

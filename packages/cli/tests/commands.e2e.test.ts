@@ -124,6 +124,7 @@ async function expectCompatibleSkills(projectPath: string, appType: AppType) {
   const agents = await readText(projectPath, 'AGENTS.md')
   expect(agents).toContain('.agents/skills/hai-app-create/SKILL.md')
   expect(agents).toContain('.agents/skills/hai-app-create/development.md')
+  expect(agents).toContain('.agents/skills/hai-spec-review/SKILL.md')
   expect((await readText(projectPath, 'CLAUDE.md')).trim()).toBe('@AGENTS.md')
   expect(await exists(projectPath, '.claude')).toBe(false)
   const skillNames = await listTemplateSkillNames()
@@ -1446,7 +1447,7 @@ describe('ai 支持交付与回填', () => {
     expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md')).toBe(customSkill)
     expect(await readText(dir, '.agents/skills/hai-app-create/development.md'))
       .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-app-create/development.md'), 'utf8'))
-    for (const skillName of ['hai-build', 'hai-app-review', 'hai-app-tests', 'hai-ai']) {
+    for (const skillName of ['hai-build', 'hai-spec-review', 'hai-app-review', 'hai-app-tests', 'hai-ai']) {
       expect(await exists(dir, `.agents/skills/${skillName}/SKILL.md`)).toBe(true)
     }
     expect(await generateModuleSkillFile(dir, 'ai')).toBeNull()

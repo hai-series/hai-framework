@@ -5,7 +5,7 @@
  * @module audit-types
  */
 
-import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { ErrorInfo, HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
 import type { AuditInitConfigInput } from './audit-config.js'
 import { core } from '@h-ai/core'
 
@@ -89,7 +89,7 @@ export interface CreateAuditLogInput {
  *
  * 所有字段均为可选，不传则不过滤。
  */
-export interface ListAuditLogsOptions {
+export interface ListAuditLogsOptions extends PaginationOptionsInput {
   /** 按用户 ID 过滤 */
   userId?: string
   /** 按操作类型过滤（精确匹配） */
@@ -100,14 +100,6 @@ export interface ListAuditLogsOptions {
   startDate?: Date
   /** 结束时间（含），只返回此时间之前的日志 */
   endDate?: Date
-  /** 页码，从 1 开始 */
-  page?: number
-  /**
-   * 每页条数
-   *
-   * @default 20
-   */
-  pageSize?: number
 }
 
 /**
@@ -257,9 +249,9 @@ export interface AuditFunctions {
    * 分页查询审计日志列表（含用户名 LEFT JOIN）
    *
    * @param options - 查询过滤与分页选项
-   * @returns 成功时返回 { items, total }；失败时返回 QUERY_FAILED
+   * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；失败时返回 QUERY_FAILED
    */
-  list: (options?: ListAuditLogsOptions) => Promise<HaiResult<{ items: AuditLogWithUser[], total: number }>>
+  list: (options?: ListAuditLogsOptions) => Promise<HaiResult<PaginatedResult<AuditLogWithUser>>>
   /**
    * 获取指定用户的最近活动记录
    *

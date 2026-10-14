@@ -1,4 +1,5 @@
 {
+  "iam_batchUserIdsInvalid": "Provide at most 1000 non-empty user IDs",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "iam_securityStateFailed": "Unable to update authentication security state. Please try again later.",
   "iam_securityBusy": "Too many authentication requests. Please try again later.",

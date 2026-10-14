@@ -327,6 +327,39 @@ test.describe('IAM Users UI', () => {
     expect(Math.abs(listboxBox.width - triggerBox.width)).toBeLessThanOrEqual(1)
   })
 
+  test('角色筛选在分页前执行，第二页与总数一致', async ({ page, request }, testInfo) => {
+    await registerAndLogin(page, request, 'rolepage')
+    const prefix = uniqueUser('rolepage').username.slice(0, 15)
+    const roleResponse = await request.post('/api/iam/roles', {
+      data: { name: `角色筛选 ${prefix}`, permissions: [] },
+    })
+    expect(roleResponse.ok()).toBe(true)
+    const { data: role } = await roleResponse.json()
+    for (let index = 0; index < 3; index++) {
+      const user = uniqueUser('rolepage')
+      const created = await request.post('/api/iam/users', {
+        data: { ...user, username: `${prefix}${index}`, roles: index < 2 ? [role.id] : [] },
+      })
+      expect(created.ok()).toBe(true)
+    }
+    const filtered = await request.get(`/api/iam/users?search=${prefix}&roleCode=${role.code}&pageSize=1&page=2`)
+    expect(filtered.ok()).toBe(true)
+    const body = await filtered.json()
+    expect(body.data.total).toBe(2)
+    expect(body.data.users).toHaveLength(1)
+
+    await page.goto(`/admin/iam/users?search=${prefix}&role=${role.code}&pageSize=1&sortBy=username&sortDirection=asc`)
+    await waitForHydration(page)
+    await expect(page.locator('tbody tr')).toHaveCount(1)
+    await expect(page.locator('tbody')).toContainText(`${prefix}0`)
+    await page.getByRole('button', { name: 'Next page', exact: true }).click()
+    await expect(page).toHaveURL(/page=2/)
+    await expect(page.locator('tbody')).toContainText(`${prefix}1`)
+    await expect(page.locator('tbody')).not.toContainText(`${prefix}2`)
+    await expect(page.getByRole('button', { name: 'Next page', exact: true })).toBeDisabled()
+    await page.screenshot({ path: testInfo.outputPath('iam-role-pagination.png'), fullPage: true })
+  })
+
   // ---------------------------------------------------------------------------
   // 新建用户对话框
   // ---------------------------------------------------------------------------

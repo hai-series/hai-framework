@@ -17,6 +17,7 @@
 import type { HaiResult, Logger } from '@h-ai/core'
 import type { RefreshTokenPair } from './serv-cookie-auth.js'
 import { core } from '@h-ai/core'
+import { normalizeClientIp } from './serv-client-ip.js'
 import { resolveRequestLocale } from './serv-validation.js'
 
 /** 当前请求解析出的会话摘要。 */
@@ -38,9 +39,11 @@ export interface ServSession {
  * 模块消费者**无需**知道 IAM 内部 Session 类型与 ServSession 的差异：结构类型确保兼容。
  */
 export interface ServIam {
-  readonly session: {
-    /** 校验访问令牌，成功返回会话快照（结构上是 ServSession 的超集即可）。 */
+  readonly auth: {
+    /** 验证会话并读取当前有效的用户与授权；不依赖最大努力会话同步。 */
     verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>
+  }
+  readonly session: {
     /** 使用 refresh token 换发新的 token 对。仅 `refreshCookie` 启用时被调用。 */
     refresh: (refreshToken: string) => Promise<HaiResult<RefreshTokenPair>>
   }
@@ -58,17 +61,22 @@ export interface ServContext {
   readonly logger: Logger
 }
 
+/** 运行时提供的连接元数据；必须来自 socket/平台，不能从请求头复制。 */
+export interface ServRequestMetadata {
+  readonly remoteAddress?: string
+}
+
 /** 创建上下文所需的输入。 */
-export interface CreateServContextInput {
+export interface CreateServContextInput extends ServRequestMetadata {
   readonly request: Request
+  /** createApp 已按 trustedProxies 解析的客户端地址，供自定义上下文复用。 */
+  readonly ip?: string
 }
 
 /** 应用可传入的上下文工厂。 */
 export type CreateServContext = (input: CreateServContextInput) => ServContext | Promise<ServContext>
 
 const HEADER_REQUEST_ID = 'x-request-id'
-const HEADER_FORWARDED_FOR = 'x-forwarded-for'
-const HEADER_REAL_IP = 'x-real-ip'
 const HEADER_AUTHORIZATION = 'authorization'
 const HEADER_USER_AGENT = 'user-agent'
 
@@ -95,7 +103,7 @@ export function extractBearerToken(value: string | null): string | undefined {
 /**
  * 解析 HTTP 请求元数据并构造基础 ServContext（**同步**，**不**填充 session）。
  *
- * - 提取 `x-request-id` / `accept-language` / `x-forwarded-for` / `x-real-ip` / `user-agent`
+ * - 提取 `x-request-id` / `accept-language` / `user-agent`；IP 仅来自运行时元数据
  * - 从 `Authorization: Bearer <token>` 提取 `accessToken`
  * - **不会**读取 refresh token：refresh token 若启用 `refreshCookie`，只走专属刷新路由
  *
@@ -108,8 +116,8 @@ export function extractBearerToken(value: string | null): string | undefined {
 export function parseRequestContext(input: CreateServContextInput): ServContext {
   const headers = input.request.headers
   const requestId = headers.get(HEADER_REQUEST_ID) ?? core.id.uuid()
-  const forwardedFor = headers.get(HEADER_FORWARDED_FOR)
-  const ip = headers.get(HEADER_REAL_IP) ?? forwardedFor?.split(',')[0]?.trim()
+  // 显式 ip: undefined 表示代理链未确认客户端，不能再回退成代理对端。
+  const ip = normalizeClientIp(Object.hasOwn(input, 'ip') ? input.ip : input.remoteAddress)
   const locale = resolveRequestLocale(headers)
   const accessToken = extractBearerToken(headers.get(HEADER_AUTHORIZATION))
 
@@ -141,7 +149,7 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  * - `verifyToken` 失败时**不**抛错，统一收敛为 `session=undefined`，交由 guard 返回未认证的失败 HaiResult
  * - 异常通过 try/catch 兜底，避免向 HTTP 层泄漏堆栈
  *
- * @param verifyToken - 访问令牌校验回调（通常是 `token => iam.session.verifyToken(token)` 或自定义函数）
+ * @param verifyToken - 访问令牌校验回调（通常是 `token => iam.auth.verifyToken(token)` 或自定义函数）
  * @returns 异步上下文工厂
  */
 export function buildAuthContextFactory(

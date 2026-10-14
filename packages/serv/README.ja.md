@@ -84,6 +84,8 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
+Node `serv.listen()` は socket の接続元を自動で渡し、既定では転送ヘッダーを無視します。`http.trustedProxies` の IP/CIDR のみ信頼し、XFF を右から左へ調べ、最初の非信頼アドレスで停止します。その左側は無視します。信頼チェーンが不正・長すぎる場合は IP 未定義となり、代理をクライアントとして扱いません。代理は転送ヘッダーを清掃・追加してください。Fetch は `app.fetch(request, { remoteAddress: platformPeerAddress })` で信頼できる接続元を渡します。メタデータなしは IP 未定義です。任意のヘッダーをコピーしないでください。独自 `createContext(input)` は input 全体を再利用し、解決済み `input.ip` を保持します。内部 RPC は接続元で制限します。
+
 ### Audio WebSocket：ticket とサーバー認可
 
 音声接続には短期・単回 ticket が必要です。認証済み HTTP endpoint で発行（推奨：`iam.ticket.issue`）し、`verifyTicket` でアトミックに消費します（推奨：`iam.ticket.consume`）。接続直後に独立 timeout で認証し、認証前に業務フレームを処理しません。返された `ServSession` と任意の `grant` を保存してから `authorize` で有料パラメーターを確認します：
@@ -152,6 +154,7 @@ await apiClient.init({
 ```yaml
 # config/_serv.yml
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
 
 transport:
@@ -205,10 +208,10 @@ const app = serv.createApp({
 
 `serv.createApp` にトップレベルの `iam` を渡すと、次を自動構成します：
 
-- **access token 検証**：各リクエストで `iam.session.verifyToken` を呼び `context.session` を設定（キャッシュなし）。
+- **access token 検証**：各リクエストで `iam.auth.verifyToken` を呼び `context.session` を設定（キャッシュなし）。
 - **refresh token の更新**：`refreshCookie` 有効時、`iam.session.refresh` を httpOnly cookie 更新処理に使用。
 
-**context の優先順位**：明示的 `createContext` > `verifyToken` > `iam.session.verifyToken` > メタデータのみの既定解析。
+**context の優先順位**：明示的 `createContext` > `verifyToken` > `iam.auth.verifyToken` > メタデータのみの既定解析。
 
 ```ts
 // 推荐：传入 iam，一行打开认证与 Cookie 刷新
@@ -233,7 +236,7 @@ const app = serv.createApp({
   createContext: async ({ request }) => {
     const base = serv.parseRequestContext({ request })
     // 手动填充 session（serv 不再自动填充）
-    const result = await iam.session.verifyToken(base.accessToken ?? '')
+    const result = await iam.auth.verifyToken(base.accessToken ?? '')
     return {
       ...base,
       session: result.success ? result.data : undefined,
@@ -339,16 +342,16 @@ const app = serv.createApp({
 `serv.buildAuthContextFactory()` で独自の `createContext` を構成してください：
 
 ```ts
-const baseContext = serv.buildAuthContextFactory(token => iam.session.verifyToken(token))
+const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 
 const app = serv.createApp({
   contract,
   procedures,
-  createContext: async ({ request }) => {
-    const context = await baseContext({ request })
+  createContext: async (input) => {
+    const context = await baseContext(input)
     return {
       ...context,
-      tenantId: request.headers.get('x-tenant-id') ?? null,
+      tenantId: input.request.headers.get('x-tenant-id') ?? null,
     }
   },
 })
@@ -436,7 +439,7 @@ const app = serv.createApp({
         && security.isNativeOrigin(request.headers.get('origin') ?? ''),
     },
   },
-  // ✅ 无需再传 verifyToken，iam.session.verifyToken 自动用于填充 context.session
+  // ✅ 无需再传 verifyToken，iam.auth.verifyToken 自动用于填充 context.session
 })
 ```
 
@@ -518,6 +521,7 @@ server:
   port: 3000
 
 http:
+  trustedProxies: []
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json

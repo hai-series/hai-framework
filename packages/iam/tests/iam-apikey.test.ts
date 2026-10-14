@@ -264,6 +264,80 @@ describe('iam.apiKey（启用）', () => {
     // =========================================================================
 
     describe('loginWithApiKey', () => {
+      it('受限 key 按用户权限交集授权，空 scopes 无操作权限，角色与刷新不能绕过', async () => {
+        const subject = await registerUser('apikey_scoped_user')
+        const read = await getIam().authz.createPermission({ code: 'sample:read', name: 'Read', type: 'api' })
+        const write = await getIam().authz.createPermission({ code: 'sample:write', name: 'Write', type: 'api' })
+        expect(read.success && write.success).toBe(true)
+        if (!read.success || !write.success)
+          return
+        const role = await getIam().authz.createRole({ code: 'scoped-role', name: 'Scoped', permissionIds: [read.data.id, write.data.id] })
+        expect(role.success).toBe(true)
+        if (!role.success)
+          return
+        expect((await getIam().authz.assignRole(subject.id, role.data.id)).success).toBe(true)
+        const key = await getIam().apiKey.createApiKey(subject.id, { name: 'read-only', scopes: ['sample:read', 'other:write'] })
+        expect(key.success).toBe(true)
+        if (!key.success)
+          return
+        const login = await getIam().auth.loginWithApiKey({ key: key.data.rawKey })
+        expect(login.success).toBe(true)
+        if (!login.success)
+          return
+        expect(login.data.permissions).toEqual(['sample:read'])
+        expect(login.data.roles).toEqual([])
+        // 模拟角色同步把完整授权写回缓存，读取时仍须受 key 约束。
+        expect((await getIam().session.patchUserSessions(subject.id, { roles: ['*'], permissions: ['sample:read', 'sample:write'] })).success).toBe(true)
+        const verified = await getIam().session.verifyToken(login.data.tokens.accessToken)
+        expect(verified.success).toBe(true)
+        if (verified.success) {
+          expect(verified.data.apiKeyId).toBe(key.data.apiKey.id)
+          expect(verified.data.roles).toEqual([])
+          expect(verified.data.permissions).toEqual(['sample:read'])
+        }
+        const refreshed = await getIam().session.refresh(login.data.tokens.refreshToken)
+        expect(refreshed.success).toBe(true)
+        if (refreshed.success) {
+          const after = await getIam().auth.verifyToken(refreshed.data.accessToken)
+          expect(after.success).toBe(true)
+          if (after.success) {
+            expect(after.data.roles).toEqual([])
+            expect(after.data.permissions).not.toContain('*')
+          }
+        }
+        const empty = await getIam().apiKey.createApiKey(subject.id, { name: 'identity-only' })
+        expect(empty.success).toBe(true)
+        if (empty.success) {
+          const result = await getIam().auth.loginWithApiKey({ key: empty.data.rawKey })
+          expect(result.success).toBe(true)
+          if (result.success)
+            expect(result.data.permissions).toEqual([])
+        }
+      })
+
+      it('显式 * key 仍不超出主体权限，撤销使已签发 access 和 refresh 失效', async () => {
+        const subject = await registerUser('apikey_bound_user')
+        const key = await getIam().apiKey.createApiKey(subject.id, { name: 'bound', scopes: ['*'] })
+        expect(key.success).toBe(true)
+        if (!key.success)
+          return
+        const passwordLogin = await getIam().auth.login({ identifier: subject.username, password: TEST_PASSWORD })
+        const login = await getIam().auth.loginWithApiKey({ key: key.data.rawKey })
+        expect(passwordLogin.success && login.success).toBe(true)
+        if (!passwordLogin.success || !login.success)
+          return
+        expect(login.data.permissions).toEqual(passwordLogin.data.permissions)
+        expect(login.data.roles).toEqual(passwordLogin.data.roles)
+        expect((await getIam().apiKey.revokeApiKey(key.data.apiKey.id)).success).toBe(true)
+        const access = await getIam().session.verifyToken(login.data.tokens.accessToken)
+        const refresh = await getIam().session.refresh(login.data.tokens.refreshToken)
+        expect(access.success).toBe(false)
+        expect(refresh.success).toBe(false)
+        if (!access.success)
+          expect(access.error.code).toBe(HaiIamError.APIKEY_INVALID.code)
+        expect((await getIam().session.verifyToken(passwordLogin.data.tokens.accessToken)).success).toBe(true)
+      })
+
       it('有效 API Key 应返回 user + accessToken', async () => {
         const user = await registerUser('apikey_login_user')
         const createResult = await getIam().apiKey.createApiKey(user.id, { name: 'login-key' })

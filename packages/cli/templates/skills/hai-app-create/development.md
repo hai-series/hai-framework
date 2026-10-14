@@ -4,6 +4,8 @@
 
 ## 先确认应用与版本
 
+- 新手引导与帮助中心使用 `@h-ai/ui/guide`，按 [UI 引导指南](../hai-ui/guide.md) 接入。fullstack 的共享管理界面已有默认帮助入口；业务内容放共享 guide-store，使用应用 i18n 和稳定 data-guide 锚点，不重复实现浮层。
+
 - 读取当前 `AGENTS.md`、README、`package.json`、lockfile、初始化入口和已有相似功能；用 `rg` 查实现、引用、测试。保留已有改动，沿用项目分层、命名、ESLint、i18n 与测试入口。
 - 确认架构：SvelteKit 使用 `kit` 和文件路由；API workspace 使用 contract/service；fullstack 使用 contract/serv/shared 与所选前端；Vite SPA/原生端通过 typed API 客户端调用服务。不要把服务端目录、DB、密钥或 Node 初始化复制到浏览器。
 - 从所属 workspace 的依赖与 lockfile 确认 `@h-ai/*` 实际解析版本和 npm/local 模式。模板 skill 提供导航，**当前安装包的 `package.json.exports`、公开 `.d.ts` 与随包文档决定可用 API**；本地框架源码只在版本匹配或显式联调时作实现证据。
@@ -28,7 +30,7 @@ hai create my-app
 
 应用元信息只有一份配置来源：名称、版本、环境、默认语言与日志设置来自 `_core.yml`，使用 `core.config` 与 `core.logger`；Node 启动时不通过固定 `logging` 覆盖 YAML。SvelteKit 服务端 layout 和 fullstack `app.info` 仅公开必要元信息，不能下发整个 core 或模块配置。独立 Vite mobile-app 在 Node 构建阶段经 core 加载 YAML/环境覆盖并注入公开字段，配置变化需重新构建。环境覆盖使用 `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` 等既有规则；容器明确配置生产环境，不能用另一个状态来源代替 `core.env`。
 
-开发前，对本次涉及的需求简述“需求 → 现有应用实现/框架能力 → 版本与契约依据 → 修改位置与验收”。简单任务可用几句话；跨模块任务用表格。查找顺序：已有应用实现 → 框架公开能力和配置 → 最小业务补充。
+开发前，对本次涉及的需求简述“需求 → 现有应用实现/框架能力 → 已安装版本与公开契约依据 → 最小业务补充/修改位置 → 成功、权限与失败验收”。简单任务可用几句话；跨模块任务用表格。查找顺序：已有应用实现 → 框架公开能力和配置 → 最小业务补充。
 
 下表技能名用于能力导航；先确认 `.agents/skills/<name>/SKILL.md` 存在再读取。CLI 按应用类型/已选模块交付技能，缺目录不代表框架没有该能力：继续查已安装包的公开 exports/types；确需补充模块/技能时按当前 CLI 帮助和项目依赖策略处理，不能跳过需求匹配或猜测不存在的 API。
 
@@ -37,20 +39,20 @@ hai create my-app
 | 配置、日志、ID、结果/错误、i18n | `hai-core` | getter、logger、ID 是直接值；ID 不作为密钥 |
 | 数据库查询、CRUD、事务、分页 | `hai-reldb` | 先检查现有 CRUD/Repository 与事务支持，不另建 DB 连接层 |
 | 缓存、TTL、共享锁 | `hai-cache` | 区分 memory 与共享后端；单进程状态不能承担跨节点防重 |
-| 注册、登录、会话、角色/权限 | `hai-iam` | 优先配置内置认证能力；业务资源/租户授权仍由应用检查 |
+| 注册、登录、会话、角色/权限 | `hai-iam` | 优先配置内置认证能力；受保护请求使用 iam.auth.verifyToken，serv 注入 IAM 时自动使用；批量用户与角色筛选复用公开 API；业务资源/租户授权仍由应用检查 |
 | SvelteKit Hook、守卫、校验、响应 | `hai-kit` | 只用于 SvelteKit；沿用已有认证/transport 管道 |
 | 共享输入输出和 HTTP contract | `hai-api-contract` | 扩展已有 contract 与 schema，不维护第二份业务路径 |
 | API 运行时、内置 feature、route guard | `hai-serv` | 先检查内置 procedures/features 与 route auth/permission；不另写平行服务器 |
 | 浏览器/原生 API、刷新会话 | `hai-api-client` | 已支持接口复用 typed client、认证与 transport；额外 fetch/刷新封装需有缺口依据 |
 | 页面、表单、表格、弹窗、移动 UI | `hai-ui` | 按实际导出选择场景/组合/原子组件；应用补业务交互 |
-| 文件上传、下载、元数据、预签名 URL | `hai-storage` | 检查已有 storage feature；资源授权、大小/类型/路径限制不可省略 |
+| 文件上传、下载、元数据、预签名 URL | `hai-storage` | 检查已有 storage feature；大文件用流式读写，checksum 按实际字节计算，ifNoneMatch 拒覆盖；资源授权、大小/类型/路径限制不可省略 |
 | 加密、签名、哈希 | `hai-crypto` | 复用公开 API 与密钥配置，不自创加密或硬编码密钥 |
 | LLM、流式、Embedding、RAG、Agent/MCP | `hai-ai` | 先检查内置能力与 provider 配置，再补应用编排 |
 | 文本清洗、分块、管线 | `hai-datapipe` | 纯函数无生命周期；分块不代表已经生成向量 |
 | 向量集合与检索 | `hai-vecdb` | 后端、维度与过滤条件使用实际契约 |
-| 邮件/短信/通知触达 | `hai-reach` | 复用已有 provider；投递状态不等于 HTTP 成功 |
+| 邮件/短信/通知触达 | `hai-reach` | 模板已绑定 provider 时只传 template/to/vars；直接发送才指定 provider；投递状态不等于 HTTP 成功 |
 | 支付、订单、订阅、回调 | `hai-payment` | 验签、金额/订单绑定、幂等与状态迁移仍需业务验收 |
-| 操作审计 | `hai-audit` | 复用审计记录/查询；应用决定脱敏、保留期及失败策略 |
+| 操作审计 | `hai-audit` | 复用审计记录/查询与 PaginatedResult 元数据；应用决定脱敏、保留期及失败策略 |
 | cron、持久任务、重试、手工触发 | `hai-scheduler` | 复用任务模型；明确取消、幂等、共享锁及可信代码边界 |
 | 原生设备与安全 token 存储 | `hai-capacitor` | 仅在适用平台启用；桌面/小程序依当前项目适配 |
 
@@ -61,6 +63,8 @@ hai create my-app
 Fullstack 创建时在被 Git 与容器构建忽略的根 `.env` 写入独立随机 `HAI_ADMIN_DEFAULT_PASSWORD`，`.env.example` 保留空占位。`dev` / `start` 自动读取；已有用户不重设密码。启动边界保留模块错误的具体说明与错误码，失败后反序清理。不能把生成的本地凭据复制到前端配置、日志、源码或镜像。
 
 ## 落实契约与安全边界
+
+沿现有服务层按顺序落实 schema → 当前授权与操作权限 → 从资源 ID 查所有者/范围 → 需要时核验对应操作凭据 → 存储/通知等副作用 → HaiResult 与审计。框架身份授权不能替代业务资源范围，数据库实体/存储 key 不交给客户端决定。文件失败、checksum 不匹配、不可覆盖冲突及通知失败/延迟分别向调用方反馈，并按业务一致性要求事务回滚或补偿；不能静默返回成功。
 
 按本次真实输入、资源和副作用选取下面检查，并把适用项变成可观察验收。不能用“已遵循安全规范”或 lint 通过替代行为证据。
 

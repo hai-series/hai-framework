@@ -362,10 +362,35 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
 /**
  * 构建用户查询操作
  */
-function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrentUser' | 'getUser' | 'listUsers'> {
+function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrentUser' | 'getUser' | 'getUsers' | 'listUsers'> {
   const { userRepository, sessionFunctions, authzFunctions } = ctx
 
   return {
+    async getUsers(userIds, options) {
+      if (userIds.length > 1000 || userIds.some(id => typeof id !== 'string' || !id.trim()))
+        return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_batchUserIdsInvalid'))
+      const ids = [...new Set(userIds)]
+      const found = new Map<string, User>()
+      // 小批次控制占位符数量，兼容数据库限制；不为每个用户发起查询。
+      for (let offset = 0; offset < ids.length; offset += 500) {
+        const batch = ids.slice(offset, offset + 500)
+        const users = await userRepository.findAll({ where: `id IN (${batch.map(() => '?').join(', ')})`, params: batch })
+        if (!users.success)
+          return users
+        for (const user of users.data)
+          found.set(user.id, toUser(user))
+      }
+      const items = ids.flatMap(id => found.has(id) ? [found.get(id)!] : [])
+      if (options?.include?.includes('roles') && items.length) {
+        const roles = await authzFunctions.getUserRolesForMany(items.map(user => user.id))
+        if (!roles.success)
+          return roles
+        for (const user of items)
+          user.roles = roles.data.get(user.id) ?? []
+      }
+      return ok(items)
+    },
+
     async getCurrentUser(accessToken: string): Promise<HaiResult<User>> {
       const verifyResult = await sessionFunctions.verifyToken(accessToken)
       if (!verifyResult.success) {
@@ -401,9 +426,9 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
 
       if (options?.include?.includes('roles')) {
         const rolesResult = await authzFunctions.getUserRoles(userId)
-        if (rolesResult.success) {
-          user.roles = rolesResult.data
-        }
+        if (!rolesResult.success)
+          return rolesResult
+        user.roles = rolesResult.data
       }
 
       return ok(user)
@@ -424,6 +449,12 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
       if (options?.enabled !== undefined) {
         conditions.push('enabled = ?')
         params.push(options.enabled ? 1 : 0)
+      }
+
+      if (options?.roleCode) {
+        // 关系表属于 IAM 内部；应用只传角色 code，不接触表结构或先分页后过滤。
+        conditions.push('EXISTS (SELECT 1 FROM hai_iam_user_roles ur JOIN hai_iam_roles r ON r.id = ur.role_id WHERE ur.user_id = hai_iam_users.id AND r.code = ?)')
+        params.push(options.roleCode)
       }
 
       const where = conditions.length > 0 ? conditions.join(' AND ') : undefined
@@ -447,11 +478,10 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
       if (options?.include?.includes('roles') && items.length > 0) {
         const userIds = items.map(u => u.id)
         const rolesMapResult = await authzFunctions.getUserRolesForMany(userIds)
-        if (rolesMapResult.success) {
-          for (const user of items) {
-            user.roles = rolesMapResult.data.get(user.id) ?? []
-          }
-        }
+        if (!rolesMapResult.success)
+          return rolesMapResult
+        for (const user of items)
+          user.roles = rolesMapResult.data.get(user.id) ?? []
       }
 
       return ok({

@@ -81,6 +81,8 @@ export interface RolePermissionRepository {
  * 用户-角色关联存储接口
  */
 export interface UserRoleRepository {
+  /** 单次 JOIN 获取授权读取需要的角色 ID/code，避免完整角色模型的额外查询。 */
+  getRoleSummaries: (userId: string) => Promise<HaiResult<Array<Pick<Role, 'id' | 'code'>>>>
   /** 一次聚合查询多个角色的成员数 */
   getUserCounts: (roleIds: string[]) => Promise<HaiResult<Map<string, number>>>
   /**
@@ -401,6 +403,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
 // ─── 用户-角色关联存储实现 ───
 
 const USER_ROLE_TABLE = 'hai_iam_user_roles'
+const ROLE_TABLE = 'hai_iam_roles'
 const USER_ROLE_SCHEMA = {
   user_id: { type: 'TEXT' as const, notNull: true },
   role_id: { type: 'TEXT' as const, notNull: true },
@@ -523,6 +526,13 @@ export async function createDbUserRoleRepository(
 
     async getRoleIds(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<string[]>> {
       return getRoleIdsInternal(userId, tx)
+    },
+
+    async getRoleSummaries(userId) {
+      return reldb.sql.query<Pick<Role, 'id' | 'code'>>(
+        `SELECT r.id, r.code FROM ${USER_ROLE_TABLE} ur JOIN ${ROLE_TABLE} r ON r.id = ur.role_id WHERE ur.user_id = ?`,
+        [userId],
+      )
     },
 
     async getRoles(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<Role[]>> {

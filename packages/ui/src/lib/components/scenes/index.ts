@@ -23,11 +23,12 @@ export * from './crypto/index.js'
 // 错误页场景组件
 export * from './error/index.js'
 
+export * from './guide/index.js'
+
 // IAM 场景组件
 export * from './iam/index.js'
 
 // Storage 场景组件
 export * from './storage/index.js'
-
 // 场景组件类型
 export * from './types.js'

@@ -1,6 +1,6 @@
 ---
 name: hai-ui
-description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动界面、主题与 AI 内容展示。"
+description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手引导、帮助中心、主题与 AI 内容展示。"
 ---
 
 # hai-ui
@@ -28,6 +28,8 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、移动�
 - AI 文本视为不可信；Markdown/Mermaid 预览与允许执行 HTML/JS 的预览有不同边界。
 
 ## 按需参考
+
+新手引导、首次 Cookie 提示、操作导览和帮助中心见 [guide.md](guide.md)。fullstack 默认在共享管理界面接入，新增业务只补内容与 data-guide 锚点。
 
 详细配置、API 签名、错误码和范本在 [reference.md](reference.md)。按下列标题定位所需小节，不默认通读；用例中的业务变量需结合当前应用补齐。
 

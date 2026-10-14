@@ -12,10 +12,10 @@ description: "使用 @h-ai/storage 访问本地/S3 文件、目录和预签名�
 | 能力 | 使用 @h-ai/storage 访问本地/S3 文件、目录和预签名上传下载 |
 | 适用场景 | 文件接口、目录操作或浏览器直传 |
 | 输入 | StorageConfigInput、文件 key、内容、presign 选项 |
-| 输出 | file/dir/presign 操作的 HaiResult |
+| 输出 | file/dir/presign 操作的 HaiResult；checksum 生成字符串或校验结果 |
 | 限制 | 仅服务端；浏览器经 API/预签名 URL。Local list 非真分页；putUrl 不提供 maxSize 强制约束，上传大小须服务端验证。 |
 
-> `@h-ai/storage` 提供统一文件存储接口，支持本地文件系统（LocalProvider）和 S3 兼容存储（S3Provider），通过 `storage.file`、`storage.dir`、`storage.presign` 三组接口访问能力。
+> `@h-ai/storage` 提供统一文件存储接口，支持本地文件系统（LocalProvider）和 S3 兼容存储（S3Provider），通过 `storage.file`、`storage.dir`、`storage.presign` 访问存储，`storage.checksum` 提供 Node 端无需初始化的字节完整性工具。
 
 ## 运行环境
 
@@ -84,6 +84,7 @@ if (!closeResult.success) {
 
 - `put(key, data, options?)`
 - `get(key, options?)`
+- `getStream(key, options?)`（字节流，迭代错误可抛出）
 - `head(key)`
 - `exists(key)`
 - `delete(key)`
@@ -135,6 +136,8 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 | `HaiStorageError.OPERATION_FAILED` | `hai:storage:002` | 操作失败 |
 | `HaiStorageError.NOT_FOUND` | `hai:storage:003` | 文件不存在 |
 | `HaiStorageError.ALREADY_EXISTS` | `hai:storage:004` | 文件已存在 |
+| `HaiStorageError.CHECKSUM_FAILED` | `hai:storage:016` | checksum 读取/计算失败 |
+| `HaiStorageError.INVALID_CHECKSUM` | `hai:storage:017` | checksum 格式/算法非法 |
 | `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 权限不足 |
 | `HaiStorageError.QUOTA_EXCEEDED` | `hai:storage:006` | 配额超限 |
 | `HaiStorageError.INVALID_PATH` | `hai:storage:007` | 路径无效 |
@@ -158,6 +161,10 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 ```
 
 ## 常见模式
+
+大文件上传用 `file.put(key, readableOrAsyncByteStream, { signal, ifNoneMatch: '*' })`，内部使用有界 S3 multipart；下载用 `file.getStream(key, { signal, rangeStart, rangeEnd })`，及时消费或关闭，迭代期间 I/O/取消可能抛错。`get()` 返回完整 Buffer，只用于容量可控的数据。仅创建写入采用 S3 标准条件或本地原子发布，冲突返回 `ALREADY_EXISTS`；后端不支持时失败，不退回覆盖。
+
+`checksum.generate(data, options?)` / `checksum.verify(data, expected, options?)` 默认 SHA-256、小写 hex，可选 sha384/sha512/sha1/md5、base64 编码与 signal；流仅消费一次，读取失败返回 HaiResult 错误，不匹配返回 false。MD5/SHA-1 不作安全认证，ETag 和 multipart 复合 checksum 不当作完整文件摘要。浏览器不导入 Node checksum；离线增量摘要需使用适用的浏览器实现，不把 SubtleCrypto.digest 当流式 API。
 
 ### 与 kit 集成（文件上传 API）
 

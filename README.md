@@ -44,7 +44,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 | **配置即校验**        | Zod Schema 在 `init()` 阶段完成校验，配置错误在启动时暴露，而非运行时。    |
 | **按需组合**          | 21 个独立发布的模块，最小依赖 `@h-ai/core`，按业务场景逐步引入。           |
 | **端到端类型安全**    | 严格模式 TypeScript，`api-contract → serv → api-client` 全链路类型推断。   |
-| **多端 UI**           | 90 个 Svelte 5 Runes 组件（原子 / 组合 / 场景），覆盖桌面与移动端。        |
+| **多端 UI**           | 92 个 Svelte 5 Runes 组件（原子 / 组合 / 场景），覆盖桌面与移动端。        |
 | **脚手架与部署**      | `hai create` 创建完整项目，`hai deploy` 部署到 Vercel 或自建主机。         |
 | **Agent Skills 内置** | 每个模块随附标准化 Skill 文件，AI 助手可直接获取正确用法。                 |
 
@@ -204,7 +204,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 | 包名           | 职责                                                                                                       |                           Provider 支持                            |                                             npm 最新版                                              |
 | -------------- | ---------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | UI 组件库：90 个 Svelte 5 Runes 组件（20 原子 + 36 组合 + 34 场景），15 精选主题                           |                                 —                                  |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
+| `@h-ai/ui`     | UI 组件库：92 个 Svelte 5 Runes 组件（20 原子 + 36 组合 + 36 场景），15 精选主题                           |                                 —                                  |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
 | `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                                                         |                                 —                                  |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
 | `@h-ai/deploy` | 自动化部署：Vercel（SaaS，自动开通云资源）与 docker-ssh（容器化经 SSH 部署到自有主机，按功能生成 sidecar） | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / 阿里云短信 | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
 
@@ -526,6 +526,12 @@ if (login.success)
 ```
 
 > 其余模块（`storage` / `datapipe` / `payment` / `audit` / `scheduler` / `reach` / `crypto` / `kit` / `capacitor` / `deploy`）的用法见各自 README 与 `LLMS.txt`。
+
+## 新手引导与帮助中心
+
+`@h-ai/ui/guide` 提供 `createGuide`、`GuideHost` 和 `HelpCenter`：首次 Cookie 提示、手动重看、进入指定页面后逐步高亮，以及可搜索的 Markdown 帮助中心。样式跟随现有主题，通用文案内置中英文，业务内容复用应用 i18n。
+
+`apps/admin-console` 与 CLI fullstack 的 Web/App/Desktop 默认启用。引导偏好按用户和版本隔离，支持稍后与不再提醒。接入示例和完整边界见 [UI 新手引导](packages/ui/README.md#新手引导与帮助中心)。
 
 ## 示例应用
 

@@ -6,6 +6,8 @@
 
 メール・SMS・API 通知など複数の Provider を同時登録できる通知モジュールです。テンプレートと Provider の対応で用途に応じて配信します。通知抑制（DND）と設定ファイルによるテンプレート定義を備えます。
 
+テンプレート送信は `template`、`to`、`vars` のみで利用でき、Provider はテンプレートから選ばれます。明示した `provider` は優先されます。直接送信は Provider が必須で、省略すると失敗 HaiResult を返します。
+
 ## 依存関係
 
 - `@h-ai/reldb`：送信ログ・テンプレートの永続化（任意）。初期化済みなら自動有効化。
@@ -57,7 +59,6 @@ await reach.init({
 
 // 通过 provider 字段选择发送渠道
 await reach.send({
-  provider: 'email',
   to: 'user@example.com',
   template: 'welcome_email',
   vars: { userName: '张三' },

@@ -377,6 +377,18 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       return getUserPermissionsInternal(userId)
     },
 
+    async getUserAuthorization(userId) {
+      const roles = await userRoleRepository.getRoleSummaries(userId)
+      if (!roles.success)
+        return roles
+      const permissions = roles.data.length
+        ? await rolePermissionRepository.getPermissionCodesForRoles(roles.data.map(role => role.id))
+        : ok<string[]>([])
+      if (!permissions.success)
+        return permissions
+      return ok({ roles: roles.data.map(role => role.code), permissions: permissions.data })
+    },
+
     async getUserRoles(userId: string): Promise<HaiResult<Role[]>> {
       return userRoleRepository.getRoles(userId)
     },

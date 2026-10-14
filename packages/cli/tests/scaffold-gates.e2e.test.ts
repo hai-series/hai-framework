@@ -143,6 +143,24 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
       await replaceHaiPackageSpecifiers(projectPath)
       await addLocalHaiOverrides(projectPath)
       await removeReplacedHaiCatalogEntries(projectPath)
+      if (scenario.title === 'admin' || scenario.title === 'fullstack') {
+        // 验证实际安装的 tarball 公共类型与运行行为，不能只靠框架源码别名。
+        const moduleRoot = scenario.title === 'fullstack' ? `packages/${scenario.projectName}-serv` : '.'
+        const testsRoot = path.join(projectPath, moduleRoot, 'tests')
+        const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
+        await writeFile(path.join(testsRoot, 'public-capabilities.test.ts'), await readFile(path.join(fixtures, 'public-capabilities.ts')))
+        const include = [`${moduleRoot}/tests/public-capabilities.test.ts`]
+        if (scenario.title === 'fullstack') {
+          await writeFile(path.join(testsRoot, 'public-client-ip.test.ts'), await readFile(path.join(fixtures, 'public-client-ip.ts')))
+          include.push(`${moduleRoot}/tests/public-client-ip.test.ts`)
+        }
+        await writeFile(path.join(projectPath, 'tsconfig.capabilities.json'), `${JSON.stringify({
+          extends: `./${moduleRoot}/tsconfig.json`,
+          compilerOptions: { types: ['node'], noEmit: true },
+          include,
+          exclude: ['node_modules'],
+        }, null, 2)}\n`)
+      }
       if (scenario.title === 'admin') {
         // 不只验证 create：增量生成的文件必须进入实际项目的编译、lint 与运行测试。
         for (const [type, name, output] of [
@@ -296,6 +314,8 @@ async function getFreePort(): Promise<number> {
 function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): void {
   runPnpm(projectPath, ['install', '--prefer-offline'], envOptions)
   runPnpm(projectPath, ['typecheck'], envOptions)
+  if (existsSync(path.join(projectPath, 'tsconfig.capabilities.json')))
+    runPnpm(projectPath, ['exec', 'tsc', '--noEmit', '-p', 'tsconfig.capabilities.json'], envOptions)
   runPnpm(projectPath, ['lint'], envOptions)
   runPnpm(projectPath, ['build'], envOptions)
   runPnpm(projectPath, ['test'], envOptions)
