@@ -27,6 +27,8 @@ CLI は選択した skill のディレクトリー全体を `templates/skills/` 
 
 すべてのアプリ種別に `hai-spec-review` を提供します。生成前に要件・設計の完全性、曖昧さ、技術・フレームワーク利用の正確性、命名の一貫性を厳密に確認し、箇所と具体的な修正案を報告します。問題が解決され、証拠が十分な場合のみ AI 生成に進めると判定します。`hai init` / `hai add` は既存のカスタムファイルを保持してこの skill も補完します。
 
+審査後の文書からの実装は、独立した `hai-spec-implement` が担当します。全アプリに提供し、`hai init` / `hai add` でも関連リソース全体を補完します。AI は独立して検証できる機能と実際の依存関係に基づいて分割を判断し、既定では `docs/task-list.md` と `docs/tasks/<id>-<slug>.md` を使います。各タスクは専用 Git ブランチで TDD と品質チェックを行い、ローカルでマージして実際のコミットと統合検証を記録してから完了にします。修正時は元の番号・ファイル・ブランチを再利用し、以前の証拠に関連付けた新しい実施回を追加します。Markdown、Git、既存の開発・テスト skills を使い、新しいランタイム依存やワークフローエンジンは不要です。「文書からタスク一覧だけ作成」「文書から実装」「T003 を実行」「T002 を修正してマージ」のように指定できます。計画だけの依頼では実装せず、指定タスクは依存を確認し、リモート操作はユーザーの許可範囲に従います。
+
 通常の機能追加・変更・修正では、`AGENTS.md` が `hai-app-create/SKILL.md` と `development.md` に案内します。要件を既存のフレームワーク機能・設定・拡張点に対応付け、インストール済みバージョンの exports と型を確認して実装します。適用できる機能を優先して再利用し、不足する能力を具体的に説明します。利用率のために無関係な依存を追加しません。Codex は `.agents/skills/` とプロジェクトルートの `AGENTS.md` を使用します。
 
 各ツールの入口は一つの規則と skill を共有します。Codex/Cursor は AGENTS と `.agents/skills/`、Copilot は `.github/copilot-instructions.md` と共有 skill、OpenCode は AGENTS・opencode.json と共有 skill を使用します。Claude Code のルート CLAUDE.md は `@AGENTS.md` のみを含み、共有規則のタスク案内から `.agents/skills/` の本文と参照ファイルを必要時に読みます。CLI は `.claude/` を生成せず、skill の複製やシンボリックリンクも不要です。この構成では Claude のネイティブ skill 自動検出や `/skill` コマンドは登録されません。既存の Claude 設定と skill は保持します。根拠：[Claude プロジェクト指針](https://code.claude.com/docs/en/memory)、[Claude ネイティブ skills](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
