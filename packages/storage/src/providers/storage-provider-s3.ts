@@ -10,6 +10,7 @@ import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
 import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageProvider } from '../storage-types.js'
 import { Buffer } from 'node:buffer'
+import { Readable } from 'node:stream'
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
@@ -25,6 +26,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { core, err, ok } from '@h-ai/core'
 
 import { storageM } from '../storage-i18n.js'
+import { toByteStream } from '../storage-stream.js'
 import {
 
   HaiStorageError,
@@ -71,6 +73,9 @@ function sanitizeEndpointUrl(url: string): string {
  */
 function toStorageError(error: unknown, key?: string): HaiError {
   const e = error as { name?: string, message?: string, Code?: string }
+
+  if (e.name === 'PreconditionFailed' || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 412)
+    return { ...HaiStorageError.ALREADY_EXISTS, message: storageM('storage_fileAlreadyExists', { params: { key: key ?? '' } }), cause: error }
 
   // S3 特定错误处理
   if (e.name === 'NoSuchKey' || e.Code === 'NoSuchKey'
@@ -205,18 +210,46 @@ export function createS3Provider(): StorageProvider {
         const s3Config = getConfig()
         const fullPath = fullKey(key)
 
+        options.signal?.throwIfAborted()
         const body = typeof data === 'string' ? Buffer.from(data) : data
-        logOperation('write', 'file.put', { key, fullPath, byteLength: body.length, options })
-
-        await s3Client.send(new PutObjectCommand({
+        const buffered = body instanceof Uint8Array
+        let size = buffered ? body.byteLength : 0
+        const params = {
           Bucket: s3Config.bucket,
           Key: fullPath,
-          Body: body,
           ContentType: options.contentType,
           Metadata: options.metadata,
           CacheControl: options.cacheControl,
           ContentDisposition: options.contentDisposition,
-        }))
+          IfNoneMatch: options.ifNoneMatch,
+        }
+        logOperation('write', 'file.put', { key, fullPath, byteLength: buffered ? size : undefined, options })
+        if (buffered) {
+          await s3Client.send(new PutObjectCommand({ ...params, Body: body }), { abortSignal: options.signal })
+        }
+        else {
+          async function* counted(): AsyncIterable<Uint8Array> {
+            for await (const chunk of toByteStream(data, options.signal)) {
+              size += chunk.byteLength
+              yield chunk
+            }
+          }
+          const stream = Readable.from(counted(), { objectMode: false })
+          const controller = new AbortController()
+          const abort = () => controller.abort()
+          options.signal?.addEventListener('abort', abort, { once: true })
+          try {
+            if (options.signal?.aborted)
+              abort()
+            // 标准 S3 multipart；SDK 管理分片与失败清理，最多缓冲两片。
+            const { Upload } = await import('@aws-sdk/lib-storage')
+            await new Upload({ client: s3Client, params: { ...params, Body: stream }, queueSize: 2, leavePartsOnError: false, abortController: controller }).done()
+          }
+          finally {
+            options.signal?.removeEventListener('abort', abort)
+            stream.destroy()
+          }
+        }
 
         // 获取上传后的元数据
         const headResult = await file.head(key)
@@ -227,7 +260,7 @@ export function createS3Provider(): StorageProvider {
         // 如果获取元数据失败，返回基本信息
         return ok({
           key,
-          size: body.length,
+          size,
           contentType: options.contentType || 'application/octet-stream',
           lastModified: new Date(),
         })
@@ -238,11 +271,26 @@ export function createS3Provider(): StorageProvider {
     },
 
     async get(key, options = {}): Promise<HaiResult<Buffer>> {
+      const streamed = await file.getStream(key, options)
+      if (!streamed.success)
+        return streamed
+      try {
+        const chunks: Uint8Array[] = []
+        for await (const chunk of streamed.data)
+          chunks.push(chunk)
+        return ok(Buffer.concat(chunks))
+      }
+      catch (error) {
+        return err(toStorageError(error, key))
+      }
+    },
+
+    async getStream(key, options = {}) {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
-        logOperation('read', 'file.get', { key, fullPath, options })
+        logOperation('read', 'file.getStream', { key, fullPath, options })
 
         let Range: string | undefined
         if (options.rangeStart !== undefined || options.rangeEnd !== undefined) {
@@ -255,7 +303,7 @@ export function createS3Provider(): StorageProvider {
           Bucket: s3Config.bucket,
           Key: fullPath,
           Range,
-        }))
+        }), { abortSignal: options.signal })
 
         if (!response.Body) {
           return err(
@@ -264,14 +312,9 @@ export function createS3Provider(): StorageProvider {
           )
         }
 
-        // 将流转换为 Buffer
-        const chunks: Uint8Array[] = []
+        // Node SDK 的 Body 是字节可迭代流；SDK 类型联合也包含其他运行时的 Blob。
         const stream = response.Body as AsyncIterable<Uint8Array>
-        for await (const chunk of stream) {
-          chunks.push(chunk)
-        }
-
-        return ok(Buffer.concat(chunks))
+        return ok(stream)
       }
       catch (error) {
         return err(toStorageError(error, key))
@@ -574,6 +617,9 @@ export function createS3Provider(): StorageProvider {
           region: cfg.region,
           endpoint: cfg.endpoint,
           forcePathStyle: cfg.forcePathStyle,
+          // 不强制兼容服务实现 AWS checksum 扩展；校验工具按实际字节独立计算。
+          requestChecksumCalculation: 'WHEN_REQUIRED',
+          responseChecksumValidation: 'WHEN_REQUIRED',
           credentials: {
             accessKeyId: cfg.accessKeyId,
             secretAccessKey: cfg.secretAccessKey,

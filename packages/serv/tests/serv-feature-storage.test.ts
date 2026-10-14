@@ -28,9 +28,11 @@ function createStorageMock(): StorageFunctions {
     close: async () => {},
     config: null,
     isInitialized: true,
+    checksum: { generate: async () => ok('digest'), verify: async () => ok(true) },
     file: {
       put: async () => ok(baseFileMetadata),
       get: async () => ok(Buffer.from('demo')),
+      getStream: async () => ok((async function* () { yield Buffer.from('demo') })()),
       head: async key => ok({ ...baseFileMetadata, key }),
       exists: async () => ok(true),
       delete: async () => ok(undefined),

@@ -66,6 +66,7 @@ catalog:
   '@antfu/eslint-config': ^9.5.1
   '@aparajita/capacitor-secure-storage': ^8.0.1
   '@aws-sdk/client-s3': ^3.1149.0
+  '@aws-sdk/lib-storage': ^3.1149.0
   '@aws-sdk/s3-request-presigner': ^3.1149.0
 
   '@capacitor/android': ^8.5.3

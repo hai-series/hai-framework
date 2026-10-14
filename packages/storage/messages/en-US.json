@@ -33,5 +33,9 @@
   "storage_pathTraversal": "Path traversal attack detected",
   "storage_localNotInitialized": "Local storage not initialized",
   "storage_configError": "Storage config validation failed: {error}",
-  "storage_metaFileAccess": "Direct access to metadata files is not allowed: {key}"
+  "storage_metaFileAccess": "Direct access to internal files is not allowed: {key}",
+  "storage_fileAlreadyExists": "File already exists: {key}",
+  "storage_checksumFailed": "Failed to calculate checksum",
+  "storage_checksumInvalid": "Invalid checksum or algorithm",
+  "storage_streamInvalidChunk": "File stream must contain byte chunks"
 }

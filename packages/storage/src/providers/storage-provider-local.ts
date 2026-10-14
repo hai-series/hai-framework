@@ -12,12 +12,15 @@ import { Buffer } from 'node:buffer'
 import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
-
 import * as path from 'node:path'
+import { Readable } from 'node:stream'
+
+import { pipeline } from 'node:stream/promises'
 import { core, err, ok } from '@h-ai/core'
 
 import { storageM } from '../storage-i18n.js'
 import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
+import { toByteStream } from '../storage-stream.js'
 import {
 
   HaiStorageError,
@@ -46,6 +49,10 @@ const PATH_SEGMENT_SPLIT_REGEX = /[\\/]+/
  */
 function toStorageError(error: unknown, key?: string): HaiError {
   const e = error as NodeJS.ErrnoException
+
+  if (e.code === 'EEXIST') {
+    return { ...HaiStorageError.ALREADY_EXISTS, message: storageM('storage_fileAlreadyExists', { params: { key: key ?? '' } }), cause: error }
+  }
 
   if (e.code === 'ENOENT') {
     return {
@@ -125,7 +132,7 @@ function calculateEtag(stat: fs.Stats): string {
  * 拦截外部对 .meta.json 文件的直接访问，防止元数据泄漏。
  */
 function isMetaFile(key: string): boolean {
-  return key.endsWith('.meta.json')
+  return key.endsWith('.meta.json') || key.endsWith('.upload.tmp')
 }
 
 /**
@@ -223,22 +230,6 @@ export function createLocalProvider(): StorageProvider {
     logStorageOperation(logger, config?.operationLog, category, operation, payload)
   }
 
-  /**
-   * 将输入数据统一转为 Buffer
-   *
-   * @param data - 字符串、Buffer 或 Uint8Array
-   * @returns Buffer 实例
-   */
-  function toBuffer(data: Buffer | Uint8Array | string): Buffer {
-    if (typeof data === 'string') {
-      return Buffer.from(data)
-    }
-    if (data instanceof Buffer) {
-      return data
-    }
-    return Buffer.from(data)
-  }
-
   // -------------------------------------------------------------------------
   // 文件操作实现
   // -------------------------------------------------------------------------
@@ -251,18 +242,27 @@ export function createLocalProvider(): StorageProvider {
           storageM('storage_metaFileAccess', { params: { key } }),
         )
       }
+      let temporaryPath: string | undefined
       try {
         const filePath = fullPath(key)
-        const buffer = toBuffer(data)
-        logOperation('write', 'file.put', { key, byteLength: buffer.length, options })
-        logger.debug('Putting file', { key, size: buffer.length })
+        logOperation('write', 'file.put', { key, options })
 
         // 确保目录存在
         const dir = path.dirname(filePath)
         await fsp.mkdir(dir, { recursive: true, mode: getConfig().directoryMode })
 
-        // 写入文件
-        await fsp.writeFile(filePath, buffer, { mode: getConfig().fileMode })
+        // 先流式写入同目录临时文件，失败不破坏已有对象；发布采用原子文件系统操作。
+        temporaryPath = `${filePath}.${crypto.randomUUID()}.upload.tmp`
+        await pipeline(
+          Readable.from(toByteStream(data, options.signal), { objectMode: false }),
+          fs.createWriteStream(temporaryPath, { flags: 'wx', mode: getConfig().fileMode }),
+          { signal: options.signal },
+        )
+        options.signal?.throwIfAborted()
+        if (options.ifNoneMatch === '*')
+          await fsp.link(temporaryPath, filePath)
+        else
+          await fsp.rename(temporaryPath, filePath)
 
         // 获取元数据
         const stat = await fsp.stat(filePath)
@@ -276,7 +276,7 @@ export function createLocalProvider(): StorageProvider {
         }
 
         // 存储自定义元数据（使用扩展属性或元数据文件）
-        if (options.metadata) {
+        if (options.metadata || options.contentType) {
           const metaPath = `${filePath}.meta.json`
           await fsp.writeFile(metaPath, JSON.stringify({
             contentType: options.contentType,
@@ -290,9 +290,28 @@ export function createLocalProvider(): StorageProvider {
         logger.warn('Put file failed', { key, error })
         return err(toStorageError(error, key))
       }
+      finally {
+        if (temporaryPath)
+          await fsp.unlink(temporaryPath).catch(() => {})
+      }
     },
 
     async get(key, options = {}): Promise<HaiResult<Buffer>> {
+      const streamed = await file.getStream(key, options)
+      if (!streamed.success)
+        return streamed
+      try {
+        const chunks: Uint8Array[] = []
+        for await (const chunk of streamed.data)
+          chunks.push(chunk)
+        return ok(Buffer.concat(chunks))
+      }
+      catch (error) {
+        return err(toStorageError(error, key))
+      }
+    },
+
+    async getStream(key, options = {}) {
       if (isMetaFile(key)) {
         return err(
           HaiStorageError.INVALID_PATH,
@@ -301,27 +320,16 @@ export function createLocalProvider(): StorageProvider {
       }
       try {
         const filePath = fullPath(key)
-        logOperation('read', 'file.get', { key, options })
-
-        // 检查范围请求
-        if (options.rangeStart !== undefined || options.rangeEnd !== undefined) {
-          const stat = await fsp.stat(filePath)
-          const start = options.rangeStart ?? 0
-          const end = options.rangeEnd !== undefined ? options.rangeEnd : stat.size - 1
-
-          // 使用流读取指定范围
-          return new Promise((resolve) => {
-            const chunks: Buffer[] = []
-            const stream = fs.createReadStream(filePath, { start, end })
-
-            stream.on('data', (chunk: Buffer) => chunks.push(chunk))
-            stream.on('end', () => resolve(ok(Buffer.concat(chunks))))
-            stream.on('error', error => resolve(err(toStorageError(error, key))))
-          })
+        logOperation('read', 'file.getStream', { key, options })
+        options.signal?.throwIfAborted()
+        await fsp.stat(filePath)
+        // 延迟打开，未消费的返回值不会占用文件句柄；迭代错误交由流消费者处理。
+        async function* read(): AsyncIterable<Uint8Array> {
+          const stream = fs.createReadStream(filePath, { start: options.rangeStart, end: options.rangeEnd, signal: options.signal })
+          for await (const chunk of stream)
+            yield chunk
         }
-
-        const data = await fsp.readFile(filePath)
-        return ok(data)
+        return ok(read())
       }
       catch (error) {
         return err(toStorageError(error, key))
@@ -536,7 +544,7 @@ export function createLocalProvider(): StorageProvider {
             const key = path.relative(cfg.root, fullEntryPath).replace(/\\/g, '/')
 
             // 跳过元数据文件
-            if (entry.name.endsWith('.meta.json'))
+            if (isMetaFile(entry.name))
               continue
 
             if (entry.isDirectory()) {

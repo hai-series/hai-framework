@@ -43,7 +43,7 @@ hai create my-app
 | API 运行时、内置 feature、route guard | `hai-serv` | 先检查内置 procedures/features 与 route auth/permission；不另写平行服务器 |
 | 浏览器/原生 API、刷新会话 | `hai-api-client` | 已支持接口复用 typed client、认证与 transport；额外 fetch/刷新封装需有缺口依据 |
 | 页面、表单、表格、弹窗、移动 UI | `hai-ui` | 按实际导出选择场景/组合/原子组件；应用补业务交互 |
-| 文件上传、下载、元数据、预签名 URL | `hai-storage` | 检查已有 storage feature；资源授权、大小/类型/路径限制不可省略 |
+| 文件上传、下载、元数据、预签名 URL | `hai-storage` | 检查已有 storage feature；大文件用流式读写，checksum 按实际字节计算，ifNoneMatch 拒覆盖；资源授权、大小/类型/路径限制不可省略 |
 | 加密、签名、哈希 | `hai-crypto` | 复用公开 API 与密钥配置，不自创加密或硬编码密钥 |
 | LLM、流式、Embedding、RAG、Agent/MCP | `hai-ai` | 先检查内置能力与 provider 配置，再补应用编排 |
 | 文本清洗、分块、管线 | `hai-datapipe` | 纯函数无生命周期；分块不代表已经生成向量 |

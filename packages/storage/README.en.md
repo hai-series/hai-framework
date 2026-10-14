@@ -71,11 +71,19 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 ## API overview
 
 - `storage.file`
-  - `put/get/head/exists/delete/deleteMany/copy`
+  - `put/get/getStream/head/exists/delete/deleteMany/copy`
 - `storage.dir`
   - `list/delete`
 - `storage.presign`
   - `getUrl/putUrl/publicUrl`
+- `storage.checksum`
+  - `generate(data, options?) / verify(data, expected, options?)`
+
+`file.put()` accepts Buffer, Uint8Array, strings and `AsyncIterable<Uint8Array>` (including Node Readable), with bounded S3 multipart uploads for streams. `getStream()` returns a byte stream with Range and `signal` cancellation. Initial failures return HaiResult; consumers handle I/O/cancellation errors during iteration. `get()` still buffers the complete file and is intended for small files.
+
+`{ ifNoneMatch: '*' }` uses standard S3 conditional writes or atomic local publication to reject overwrites with `ALREADY_EXISTS`. Unsupported S3 conditions fail without falling back to an overwrite. Failed/cancelled uploads clean temporary files or unfinished parts; cancellation cannot undo an already published object.
+
+`checksum` is a stateless Node tool requiring no initialization. It generates/verifies the actual input bytes and consumes streams once. Defaults: SHA-256, lowercase hex. Options: `algorithm: 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'`, `encoding: 'hex' | 'base64'`, and `signal`. Mismatches return `ok(false)`; invalid format/algorithm and read failures return errors. MD5/SHA-1 are for compatibility integrity checks, not security authentication. ETags and S3 multipart composite checksums are not whole-file digests. The tool does not require compatible services to implement AWS checksum extensions.
 
 > Note: `publicUrl` returns a string only when S3's `publicUrl` is configured; otherwise it returns `null`.
 

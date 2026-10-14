@@ -13,6 +13,7 @@ import { core, err, ok } from '@h-ai/core'
 
 import { createLocalProvider } from './providers/storage-provider-local.js'
 import { createS3Provider } from './providers/storage-provider-s3.js'
+import { checksum } from './storage-checksum.js'
 import { StorageConfigSchema } from './storage-config.js'
 import { storageM } from './storage-i18n.js'
 import {
@@ -107,6 +108,7 @@ const notInitializedPresign = new Proxy(
  * ```
  */
 export const storage: StorageFunctions = {
+  checksum,
   /**
    * 初始化存储连接。
    *
