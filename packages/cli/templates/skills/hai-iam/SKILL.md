@@ -21,6 +21,7 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 - 角色资料与 permissionIds 一次保存：未传保持、空数组清空、未知 ID 失败；人数查询失败不能显示为 0。
 - IAM 服务端是 iam.auth；typed HTTP client 的路径是 apiClient.iam.auth。
 - OTP/API Key 等先核对 login 开关；不把未启用能力的 NOT_INITIALIZED 当认证失败。
+- API Key 的配置、scope 交集示例表与创建→登录→操作授权→撤销代码见参考中的 API Key 小节。不要以 `checkPermission(userId)` 绕过请求 scope；ID/code/name 分别用于关联、守卫与展示。
 - API Key scopes 与主体权限取交集，默认空数组无操作权限；受限 key 无角色授权，使用 permission 守卫。显式 * 仍受主体限制，派生会话读取/刷新检查 key，撤销/禁用/到期立即拒绝。
 
 - 认证页面使用 iam.publicConfig + AuthPanel，协议用弹窗，表单通过 header/extraFields/footer 或 AuthPanel 的 login*/register* snippet 扩展；Kit 使用 kit.auth.createApi/publicPaths + kit.client.createAuthActions，HTTP 客户端使用 apiClient.createAuthActions。

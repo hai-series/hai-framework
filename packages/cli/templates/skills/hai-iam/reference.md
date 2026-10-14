@@ -2,6 +2,8 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
+用户的 `checkPermission(userId, code)` / `getUserAuthorization` 仅查询主体授权，不含请求的 API Key scope；受保护请求使用 `iam.auth.verifyToken` 的已收敛会话权限。API Key 的完整配置、交集示例和撤销流程见对应小节。
+
 角色成员数使用 `getRoleUserCounts(roleIds)`，一次聚合返回 `HaiResult<Map<string, number>>`；成功时无关联为 0，失败必须展示错误，不能伪造零值。
 
 角色资料和权限必须通过 `createRole({ ..., permissionIds })` / `updateRole(id, { ..., permissionIds })` 一次事务保存，禁止在应用层并行增删权限模拟替换。空数组清空、未传保持、未知权限失败、重复 ID 去重；并发以最后提交的完整集合为准。自管事务提交后同步会话，外部事务由调用方提交后同步。
@@ -223,7 +225,84 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 
 ### API Key 管理 — `iam.apiKey`
 
-scopes 与主体权限取交集，支持 * / 命名空间 :*；默认空数组无操作权限。受限 key 的会话 roles 为空，使用 permission 守卫，显式 * 仍不能超出主体权限。loginWithApiKey 绑定 key，派生会话的 get/verifyToken/refresh 每次检查撤销、禁用、过期状态，依赖读取失败即拒绝。verifyApiKey 只返回验证后的 key 元数据，不替代主体及操作授权。
+先在初始化配置中启用 API Key。它是用户的受限凭据，不能独立授予用户未拥有的权限：**有效权限 = 当前主体权限 ∩ scopes**。scopes 是与权限 code 相同的字符串，不是角色名、菜单名称或资源 ID；不会创建权限，也不会替代租户/记录归属校验。
+
+```yaml
+# config/_iam.yml
+login:
+  apikey: true
+apikey:
+  maxKeysPerUser: 10
+  defaultExpirationDays: 30
+```
+
+假设主体拥有 `record:read`、`record:write`、`user:read`，不同 scopes 的结果如下（主体授权改变后重新计算）：
+
+| scopes | 有效权限 | roles |
+| --- | --- | --- |
+| 未传或 `[]` | 无操作权限，仅可识别身份 | `[]` |
+| `['record:read']` | `record:read` | `[]` |
+| `['record:*']` | `record:read`、`record:write` | `[]` |
+| `['record:read', 'user:read']` | 两个指定权限 | `[]` |
+| `['missing:read']` | 主体未拥有，因此无权限 | `[]` |
+| `['*']` | 主体当前拥有的全部权限 | 保留主体角色 |
+
+`record:*` 匹配冒号后的全部层级，不支持任意正则或 `record:r*` 等中间通配符。主体仅拥有 `record:read` 时，`['record:*']` 仍只得到读取权限；主体持有通配符时，交集保留较窄范围。受限 Key 没有角色入口，使用 permission 守卫；显式 `*` 是宽授权，按实际需要选择。
+
+以下为创建 → Key 登录 → Bearer 会话验证与操作授权 → 列表 → 撤销的服务端示例。先检查所有 HaiResult；每个管理入口还要校验本人归属或管理员权限，IAM 不知道业务的调用者身份。
+
+```ts
+import { err, HaiCommonError, ok } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+async function createReadKey(userId: string) {
+  // 调用前校验管理权限或本人归属；scopes 使用权限 code。
+  const created = await iam.apiKey.createApiKey(userId, {
+    name: 'Read client', expirationDays: 30, scopes: ['record:read'],
+  })
+  if (!created.success)
+    return created
+  // rawKey 仅本次返回；通过安全渠道展示一次，不写日志。
+  return created
+}
+
+async function apiKeyLogin(rawKey: string) {
+  // 通常由客户端取得 Key 后调用；服务器内部验证并绑定 Key。
+  return iam.auth.loginWithApiKey({ key: rawKey })
+}
+
+async function requireRecordRead(accessToken: string, deniedMessage: string) {
+  // deniedMessage 由应用 i18n 提供；先读取当前且已收敛 scope 的会话。
+  const verified = await iam.auth.verifyToken(accessToken)
+  if (!verified.success)
+    return verified
+  const allowed = verified.data.permissions.some(code =>
+    code === '*' || code === 'record:read'
+    || (code.endsWith(':*') && 'record:read'.startsWith(code.slice(0, -1))),
+  )
+  if (!allowed)
+    return err(HaiCommonError.FORBIDDEN, deniedMessage)
+  // 这里只确认操作权限；业务层还须检查具体记录的数据归属。
+  return ok({ userId: verified.data.userId })
+}
+
+async function listMyKeys(userId: string) {
+  return iam.apiKey.listApiKeys(userId, {
+    page: 1, pageSize: 20, search: 'Read', enabled: true,
+  })
+}
+
+async function revokeKey(keyId: string) {
+  // 调用前校验本人归属或管理权限。
+  return iam.apiKey.revokeApiKey(keyId)
+}
+```
+
+创建后只有 `rawKey` 能用于 Key 登录；`apiKey.id` 是管理 ID，`keyPrefix` 仅用于显示/检索，均不能代替 rawKey。`verifyApiKey(rawKey)` 仅验证 Key 并返回元数据，不能代替用户状态、scopes 与操作授权。
+
+Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不会丢失该绑定或扩大 scopes。撤销成功后，已有 accessToken 的 get/verify 以及 refreshToken 的 refresh 都会失败；过期、禁用及持久化读取失败同样拒绝。角色撤权由 `iam.auth.verifyToken` 读取当前授权生效。改 scope 使用创建新 Key 后撤销旧 Key，当前 API 不提供 scope 更新操作。
+
+`expirationDays: 0` 表示不设过期时间，省略时使用 `apikey.defaultExpirationDays`；需要限时访问时显式设置。明文 Key 和 Token 不进入 URL、日志、公开配置或普通 localStorage。
 
 | 方法           | 签名                                                                    | 说明                                   |
 | -------------- | ----------------------------------------------------------------------- | -------------------------------------- |
@@ -232,8 +311,6 @@ scopes 与主体权限取交集，支持 * / 命名空间 :*；默认空数组�
 | `getApiKey`    | `(keyId) => Promise<HaiResult<ApiKey \| null>>`                            | 获取 API Key 详情                      |
 | `revokeApiKey` | `(keyId) => Promise<HaiResult<void>>`                                      | 吊销/删除 API Key                      |
 | `verifyApiKey` | `(rawKey) => Promise<HaiResult<ApiKey>>`                                   | 验证 API Key 并返回实体（含用户 ID）   |
-
-> 需在 `login.apikey: true` 时才会初始化此子模块，否则访问返回 `NOT_INITIALIZED` 错误。
 
 ## HTTP API 契约
 
