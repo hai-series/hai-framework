@@ -22,5 +22,6 @@ describe('authentication error localization', () => {
 
   it('未知应用错误保留调用方的业务文案', () => {
     expect(authErrorMessage({ code: 'app:account:001', message: 'Application message' })).toBe('Application message')
+    expect(authErrorMessage({ code: 400, message: 'Numeric application error' })).toBe('Numeric application error')
   })
 })

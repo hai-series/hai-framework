@@ -328,7 +328,7 @@
       </div>
     </aside>
 
-    <section class='card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-2'>
+    <section class='card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-2' data-guide='admin-profile-form'>
       <div class='card-body gap-4'>
         <div class='flex items-center justify-between'>
           <h2 class='text-sm font-semibold text-base-content'>{m.nav_profile()}</h2>
@@ -352,7 +352,7 @@
     </section>
   </div>
 
-  <section class='card bg-base-100 border border-base-content/6 rounded-xl overflow-hidden' data-testid='profile-password-card'>
+  <section class='card bg-base-100 border border-base-content/6 rounded-xl overflow-hidden' data-testid='profile-password-card' data-guide='admin-password'>
     <div class='grid grid-cols-1 lg:grid-cols-12'>
       <aside class='lg:col-span-4 bg-base-content/2 border-b lg:border-b-0 lg:border-r border-base-content/6 p-5 space-y-4'>
         <div>

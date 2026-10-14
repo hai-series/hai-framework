@@ -44,7 +44,7 @@ A consistent API style brings together four capability groups, helping AI assist
 | **Validated configuration**    | Zod validates configuration during `init()`, exposing errors at startup.                           |
 | **Composable modules**         | 21 independently published modules, with `@h-ai/core` as the minimum dependency, added as needed.  |
 | **End-to-end type safety**     | Strict TypeScript with inference across `api-contract → serv → api-client`.                        |
-| **Cross-platform UI**          | 90 Svelte 5 Runes components (primitives / compounds / scenes) for desktop and mobile.             |
+| **Cross-platform UI**          | 92 Svelte 5 Runes components (primitives / compounds / scenes) for desktop and mobile.             |
 | **Scaffolding and deployment** | `hai create` scaffolds projects; `hai deploy` targets Vercel or self-hosted machines.              |
 | **Built-in Agent Skills**      | Standardized module skills give AI assistants direct access to correct usage.                      |
 
@@ -204,7 +204,7 @@ The framework provides **21 independently published modules**, organized into fi
 
 | Package        | Responsibility                                                                     |                             Provider support                              |                                            Latest on npm                                            |
 | -------------- | ---------------------------------------------------------------------------------- | :-----------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | 90 Svelte 5 Runes components (20 primitives + 36 compounds + 34 scenes), 15 themes |                                     —                                     |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
+| `@h-ai/ui`     | 92 Svelte 5 Runes components (20 primitives + 36 compounds + 36 scenes), 15 themes |                                     —                                     |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
 | `@h-ai/cli`    | CLI: project creation, module addition, code generation, deployment                |                                     —                                     |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
 | `@h-ai/deploy` | Deployment: Vercel with cloud provisioning; docker-ssh with feature-based sidecars | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / Alibaba Cloud SMS | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
 
@@ -526,6 +526,12 @@ if (login.success)
 ```
 
 > See individual READMEs and `LLMS.txt` for `storage` / `datapipe` / `payment` / `audit` / `scheduler` / `reach` / `crypto` / `kit` / `capacitor` / `deploy`.
+
+## Onboarding and help center
+
+`@h-ai/ui/guide` provides `createGuide`, `GuideHost` and `HelpCenter` for first-use cookie invitations, manual replay, navigation to guided pages and searchable Markdown help. Tours follow existing themes; built-in controls support Chinese and English, while business content uses application i18n.
+
+The admin-console example and CLI fullstack Web/App/Desktop enable this by default. Preferences are isolated by user and tour version, with later and dismiss options. See [UI onboarding](packages/ui/README.en.md#onboarding-and-help-center).
 
 ## Example applications
 

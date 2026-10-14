@@ -137,6 +137,8 @@ hai g:model order
 
 ## Fullstack mini administration
 
+The default workspace includes `@h-ai/ui/guide` onboarding and help: first-use invitations, element tours, searchable instructions, manual replay and profile setup tours. Web/App/Desktop share content and translations; Web uses Cookies and native WebViews use localStorage, isolated by user and tour version. Extend the shared guide-store and data-guide anchors; see the [guide skill](templates/skills/hai-ui/guide.md).
+
 `--type fullstack` generates an administration workspace with IAM, reldb, cache, audit, storage and crypto by default. The required management modules remain enabled even with the minimal preset. `--frontends` selects Web, Capacitor App and Tauri Desktop; miniapp remains a documentation placeholder excluded from runtime and builds.
 
 ```powershell

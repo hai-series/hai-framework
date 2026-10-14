@@ -248,7 +248,14 @@ components/
 | -------------- | -------------- | ---------------------------------------------- |
 | `PageHeader`   | ページヘッダー | `title`, `description`、`actions` スロット対応 |
 
-### Scenes：用途別コンポーネント（34）
+### Scenes：用途別コンポーネント（36）
+
+#### Guide：案内・ヘルプ（2）
+
+| コンポーネント | 説明 | 主なプロパティ |
+| --- | --- | --- |
+| `GuideHost` | 初回案内・ガイド・ヘルプダイアログ | `guide`, `locale`, `scope`, `autoStart` |
+| `HelpCenter` | 独立して使える検索付きヘルプ | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
 #### App：アプリ全体（7）
 
@@ -755,6 +762,56 @@ AuthPanel に IAM 公開設定と actions を渡すと、複数方式のログ�
 AuthPanel は SSR 中のフォーム操作を無効にし、クライアントのマウントとイベント登録が完了してから入力を有効にします。ハイドレーションによる入力の消失を防ぎ、アプリ側の追加の準備処理は不要です。E2E では入力可能な状態を待ち、クライアントスクリプトの読み込みが遅れる場合も検証します。
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
+
+## 初回ガイドとヘルプセンター
+
+`@h-ai/ui/guide` から `createGuide`、`GuideHost`、`HelpCenter` をインポートします。init/close は不要です。ガイド開始時にエンジンを読み込み、既存テーマと中国語・英語の共通文言を使用します。業務内容はアプリの翻訳関数を使います。
+
+同じ入口の `resolveGuideText(text?)` は文字列や i18n コールバックを評価します。ホストコンポーネントは文言を自動で解析します。
+
+レイアウト内でコントローラーを作成し、id/title/steps と任意の route/version を登録します。`<GuideHost {guide} {locale} scope={user.id} autoStart='overview' />` を配置し、対象コンポーネントに data-guide を付けます。SPA は既存の NavAdapter を提供してください。
+
+```svelte
+<script lang='ts'>
+  import { createGuide, GuideHost } from '@h-ai/ui/guide'
+
+  const guide = createGuide({
+    nav,
+    persistKey: 'my-app-guide',
+    tours: [{
+      id: 'users',
+      version: 1,
+      route: '/users',
+      title: () => m.guide_users_title(),
+      description: () => m.guide_users_description(),
+      steps: [{
+        target: 'users-create',
+        title: () => m.guide_create_title(),
+        description: () => m.guide_create_description(),
+      }],
+    }],
+    articles: [{
+      id: 'users-help',
+      title: () => m.guide_users_title(),
+      content: () => m.guide_users_markdown(),
+      tourId: 'users',
+    }],
+  })
+</script>
+
+<GuideHost {guide} {locale} scope={user.id} autoStart='users' />
+<Button onclick={() => guide.openHelp()}>{m.help()}</Button>
+<!-- 在目标页面为现有按钮添加锚点，无需额外包装。 -->
+<Button data-guide='users-create' onclick={createUser}>{m.create_user()}</Button>
+```
+
+start(id) は Promise<boolean> を返し、手動で再表示できます。失敗時は false と error を設定します。startIfNeeded(id) は初回案内の有無を boolean で返します。openHelp(articleId?) は検索付き Markdown ヘルプを開き、stop() は完了として記録せず終了し、reset(id) は現在のユーザーの状態を削除します。
+
+保存先は cookie（既定）、localStorage、memory です。保存が制限された環境ではインスタンス内のメモリーに戻ります。ユーザーとバージョンごとに状態を分け、後で表示は一日延期、Cookie は一年保存します。既定のページ遷移は短期 sessionStorage 記録で移動先から開始します。
+
+文言は `() => m.key()` で遅延評価し、現在の locale を渡します。説明はプレーンテキスト、ヘルプは安全な MarkdownRenderer を使用し、生 HTML を無効にします。要素の待機は既定で 3000ms。before(signal) でタブ等を準備し、optional の要素のみ省略できます。必要な要素がなければ終了し、アンマウント時に処理を解除します。SSR ユーザー間でコントローラーを共有しないでください。
+
+HelpCenter は articles、任意の tours、locale、selectedId、onstart で独立ページにも配置できます。admin-console と CLI fullstack Web/App/Desktop は初回案内、ヘルプ、プロフィールガイドを標準搭載します。[詳細ガイド](../cli/templates/skills/hai-ui/guide.md)を参照してください。
 
 ## その他のエクスポート
 

@@ -9,9 +9,13 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
+  import { createAdminGuide } from '$lib/guide/admin-guide'
   import * as m from '$lib/paraglide/messages'
+  import { getLocale } from '$lib/paraglide/runtime.js'
   import { apiFetch } from '$lib/utils/api'
+  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { applyTheme, getSavedTheme, setPermissionContext, usePermission } from '@h-ai/ui'
+  import { GuideHost } from '@h-ai/ui/guide'
   import { SvelteSet } from 'svelte/reactivity'
 
   interface Props {
@@ -20,6 +24,7 @@
   }
 
   const { data, children }: Props = $props()
+  const guide = createAdminGuide(createSvelteKitNavAdapter())
 
   const appName = $derived(data.appConfig?.name ?? m.app_title())
   const appVersion = $derived(data.appConfig?.version ?? '0.1.0')
@@ -295,10 +300,15 @@
           {/if}
 
           <!-- 主题快速切换 -->
-          <ThemeToggle {currentTheme} onchange={handleThemeChange} />
+          <div data-guide='admin-theme'><ThemeToggle {currentTheme} onchange={handleThemeChange} /></div>
+
+          <Button variant='ghost' size='sm' ariaLabel={m.guide_help_title()} onclick={() => guide.openHelp()} data-guide='admin-help' data-testid='admin-help'>
+            <span class='icon-[tabler--help-circle] size-4'></span>
+            <span class='hidden sm:inline'>{m.guide_help_title()}</span>
+          </Button>
 
           <!-- 用户菜单 -->
-          <div class='relative user-menu-container'>
+          <div class='relative user-menu-container' data-guide='admin-profile'>
             <BareButton
               type='button'
               class='flex items-center gap-2 px-2 py-1.5 -mr-2 rounded-lg hover:bg-base-content/4 transition-colors duration-150'
@@ -358,7 +368,7 @@
     </header>
 
     <!-- 页面内容 -->
-    <main class='flex-1 overflow-auto p-5 lg:p-6'>
+    <main class='flex-1 overflow-auto p-5 lg:p-6' data-guide='admin-content'>
       <div class='max-w-7xl mx-auto'>
         {@render children()}
       </div>
@@ -372,3 +382,5 @@
     </footer>
   </div>
 </div>
+
+<GuideHost {guide} locale={getLocale()} scope={data.user.id} autoStart='overview' />

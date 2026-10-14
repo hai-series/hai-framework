@@ -44,7 +44,7 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 | **設定の検証**         | Zod Schema が `init()` で設定を検証し、起動時にエラーを検出します。                   |
 | **必要に応じた構成**   | 独立公開の 21 モジュール。最小依存の `@h-ai/core` から必要に応じて追加します。        |
 | **全体の型安全性**     | 厳密な TypeScript と `api-contract → serv → api-client` 全体の型推論。                |
-| **複数端末の UI**      | デスクトップ・モバイル向けの 90 Svelte 5 Runes コンポーネント（基本・複合・用途別）。 |
+| **複数端末の UI**      | デスクトップ・モバイル向けの 92 Svelte 5 Runes コンポーネント（基本・複合・用途別）。 |
 | **生成・デプロイ**     | `hai create` で作成し、`hai deploy` で Vercel・自前ホストへ展開。                     |
 | **Agent Skills 内蔵**  | 標準化された Skill により AI 支援が正しい用法を取得できます。                         |
 
@@ -204,7 +204,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 | パッケージ     | 役割                                                                      |                               対応 Provider                               |                                             npm 最新版                                              |
 | -------------- | ------------------------------------------------------------------------- | :-----------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | 90 の Svelte 5 Runes 部品（基本 20 + 複合 36 + 用途別 34）、15 テーマ     |                                     —                                     |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
+| `@h-ai/ui`     | 92 の Svelte 5 Runes 部品（基本 20 + 複合 36 + 用途別 36）、15 テーマ     |                                     —                                     |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
 | `@h-ai/cli`    | CLI：作成、モジュール追加、コード生成、デプロイ                           |                                     —                                     |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
 | `@h-ai/deploy` | 自動デプロイ：クラウドを作成する Vercel、機能別 sidecar を伴う docker-ssh | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / Alibaba Cloud SMS | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
 
@@ -526,6 +526,12 @@ if (login.success)
 ```
 
 > `storage` / `datapipe` / `payment` / `audit` / `scheduler` / `reach` / `crypto` / `kit` / `capacitor` / `deploy` は各 README と `LLMS.txt` を参照してください。
+
+## 初回ガイドとヘルプセンター
+
+`@h-ai/ui/guide` は `createGuide`、`GuideHost`、`HelpCenter` を提供します。Cookie による初回案内、手動再表示、対象ページへの移動と段階的な強調表示、Markdown ヘルプの検索を利用できます。既存テーマに対応し、共通文言は中国語・英語、業務内容はアプリの i18n を使用します。
+
+admin-console と CLI fullstack の Web/App/Desktop で標準搭載されます。ユーザーとガイドのバージョンごとに状態を保存し、後で表示する選択肢と再通知しない選択肢を提供します。[UI ガイド](packages/ui/README.ja.md#初回ガイドとヘルプセンター)を参照してください。
 
 ## サンプルアプリ
 

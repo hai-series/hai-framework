@@ -16,6 +16,8 @@ type AutoImportHaiUiPreprocessor = {
 export function autoImportHaiUi(): AutoImportHaiUiPreprocessor
 
 declare global {
+  const GuideHost: typeof import('@h-ai/ui')['GuideHost']
+  const HelpCenter: typeof import('@h-ai/ui')['HelpCenter']
   // primitives
   const Avatar: typeof import('@h-ai/ui')['Avatar']
   const Badge: typeof import('@h-ai/ui')['Badge']

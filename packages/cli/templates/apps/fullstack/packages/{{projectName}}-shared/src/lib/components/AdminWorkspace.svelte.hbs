@@ -3,10 +3,12 @@
   import { Alert, Skeleton } from '@h-ai/ui/components/compounds/index'
   import { Button } from '@h-ai/ui/components/primitives/index'
   import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
-  import { onMount } from 'svelte'
+  import { GuideHost } from '@h-ai/ui/guide'
+  import { onMount, untrack } from 'svelte'
   import { managementAuthActions } from '../api/api-client.js'
   import * as m from '../paraglide/messages.js'
   import { ManagementStore } from '../stores/management-store.svelte.js'
+  import { createManagementGuide } from '../stores/guide-store.js'
   import AppShell from './AppShell.svelte'
 
   interface Props {
@@ -16,6 +18,8 @@
   }
   const { platform, apiOptions = {}, onLocaleChange }: Props = $props()
   const store = new ManagementStore()
+  // 宿主平台在组件生命周期中固定，引导控制器只创建一次。
+  const guide = untrack(() => createManagementGuide(store, platform))
   let resetToken = $state('')
   async function authenticated() {
     await store.authenticated()
@@ -67,7 +71,7 @@
       {/if}
     </main>
   {:else}
-    <AppShell {platform} {store}>
+    <AppShell {platform} {store} onhelp={() => guide.openHelp()}>
       <div class='space-y-5'>
         {#if store.error}<Alert variant='error' data-testid='error'>{store.error}</Alert>{/if}
         {#if store.notice}<Alert variant='success' data-testid='notice'>{store.notice}</Alert>{/if}
@@ -78,5 +82,6 @@
         {/await}
       </div>
     </AppShell>
+    <GuideHost {guide} locale={store.locale} scope={store.user.id} autoStart='overview' />
   {/if}
 {/key}

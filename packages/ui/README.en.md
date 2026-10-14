@@ -248,7 +248,14 @@ For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchang
 | ------------ | ----------- | ----------------------------------------------- |
 | `PageHeader` | Page header | `title`, `description`; supports `actions` slot |
 
-### Scenes (34)
+### Scenes (36)
+
+#### Guide (2)
+
+| Component | Description | Key props |
+| --- | --- | --- |
+| `GuideHost` | First-use invitations, tours and help dialog host | `guide`, `locale`, `scope`, `autoStart` |
+| `HelpCenter` | Standalone searchable help center | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
 #### App (7)
 
@@ -755,6 +762,56 @@ AuthPanel accepts public IAM config and actions for password/LDAP/email/SMS logi
 AuthPanel disables native form controls during SSR and enables input after client mount binds events, preventing early input from being lost during hydration. Applications need no extra readiness code. E2E tests wait for editable controls and cover delayed client scripts.
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
+
+## Onboarding and help center
+
+Import `createGuide`, `GuideHost` and `HelpCenter` from `@h-ai/ui/guide`. No init/close is required. The tour engine loads when a tour starts; controls follow the current theme and include Chinese/English translations. Business text uses application i18n callbacks.
+
+The same entry exports `resolveGuideText(text?)` to evaluate strings or i18n callbacks; host components resolve text automatically.
+
+Create the controller inside a layout component, register tours with id/title/steps and optional route/version, then mount `<GuideHost {guide} {locale} scope={user.id} autoStart='overview' />`. Add `data-guide` to existing target components. Supply the application's NavAdapter for SPA navigation.
+
+```svelte
+<script lang='ts'>
+  import { createGuide, GuideHost } from '@h-ai/ui/guide'
+
+  const guide = createGuide({
+    nav,
+    persistKey: 'my-app-guide',
+    tours: [{
+      id: 'users',
+      version: 1,
+      route: '/users',
+      title: () => m.guide_users_title(),
+      description: () => m.guide_users_description(),
+      steps: [{
+        target: 'users-create',
+        title: () => m.guide_create_title(),
+        description: () => m.guide_create_description(),
+      }],
+    }],
+    articles: [{
+      id: 'users-help',
+      title: () => m.guide_users_title(),
+      content: () => m.guide_users_markdown(),
+      tourId: 'users',
+    }],
+  })
+</script>
+
+<GuideHost {guide} {locale} scope={user.id} autoStart='users' />
+<Button onclick={() => guide.openHelp()}>{m.help()}</Button>
+<!-- 在目标页面为现有按钮添加锚点，无需额外包装。 -->
+<Button data-guide='users-create' onclick={createUser}>{m.create_user()}</Button>
+```
+
+`start(id)` returns Promise<boolean> and always allows replay; failure returns false and sets error. `startIfNeeded(id)` returns boolean and offers a first-use invitation. `openHelp(articleId?)` opens searchable Markdown help; `stop()` cancels without marking completion; `reset(id)` clears the current user's preference.
+
+Persistence supports cookie (default), localStorage and memory, with an in-instance fallback when storage is restricted. Preferences are isolated by user and version. Later delays reminders for one day; Cookie preferences expire after one year. The default full-page navigation uses a short-lived sessionStorage record to start on the destination page.
+
+Use `() => m.key()` for localized content and pass the current locale. Steps render as plain text; help uses the existing safe Markdown renderer with raw HTML disabled. Targets wait up to 3000ms by default; before(signal) prepares tabs or drawers, optional skips nonessential missing targets, and missing required targets stop the tour. Unmounting cancels pending work. Never share controllers across SSR users.
+
+HelpCenter can also render a standalone page using articles, optional tours, locale, selectedId and onstart. The admin-console example and CLI fullstack Web/App/Desktop include first-use invitations, help and profile tours by default. See the [complete integration guide](../cli/templates/skills/hai-ui/guide.md).
 
 ## Other exports
 

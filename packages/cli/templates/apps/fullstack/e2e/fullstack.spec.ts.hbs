@@ -18,11 +18,18 @@ const configuredEnv = process.env.HAI_CORE_ENV || 'test'
 // 测试专用的一像素 PNG；上传仍使用完整前后端加密链路。
 const avatar = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSxkAAAAASUVORK5CYII=', 'base64')
 
-async function login(page: Page, username: string, password: string) {
+async function submitLogin(page: Page, username: string, password: string) {
   await expect(page.getByTestId('login-form')).toBeVisible()
   await page.locator('#login-username').fill(username)
   await page.getByTestId('login-form').locator('input[type="password"]').fill(password)
   await page.getByTestId('login-form').getByRole('button', { name: /登录|Sign in|Login|Log in/i }).click()
+}
+
+async function login(page: Page, username: string, password: string, keepGuide = false) {
+  await submitLogin(page, username, password)
+  await expect(page.getByTestId('logout')).toBeVisible()
+  if (!keepGuide && await page.getByTestId('guide-later').isVisible())
+    await page.getByTestId('guide-later').click()
 }
 
 async function userEditor(page: Page, username: string) {
@@ -45,6 +52,48 @@ test('service rejects plaintext business requests', async ({ request }) => {
 })
 
 {{#if fullstack.e2eFrontend}}
+test('first-use tour, help search and settings navigation work on desktop and mobile', async ({ page }, testInfo) => {
+  await page.goto('/')
+  await login(page, 'admin', adminPassword, true)
+  await expect(page.getByTestId('guide-offer')).toBeVisible()
+  await page.getByTestId('guide-start').click()
+  const popover = page.locator('.hai-guide-popover')
+  await expect(popover).toBeVisible()
+  for (let step = 1; step < 3; step++) {
+    await popover.locator('.driver-popover-next-btn').click()
+    await expect(popover.locator('.driver-popover-progress-text')).toContainText(String(step + 1))
+  }
+  await popover.locator('.driver-popover-next-btn').click()
+  await expect(popover).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByTestId('admin-help')).toBeVisible()
+  await expect(page.getByTestId('guide-offer')).toHaveCount(0)
+  await page.getByTestId('admin-help').click()
+  const profileTitle = (await page.getByTestId('guide-article-profile').textContent())!.trim()
+  await page.getByTestId('guide-search').locator('input').fill(profileTitle)
+  await expect(page.getByTestId('guide-article-profile')).toBeVisible()
+  await expect(page.getByTestId('guide-article-overview')).toHaveCount(0)
+  await page.getByTestId('guide-article-start').click()
+  await expect(page.getByTestId('settings-page')).toBeVisible()
+  await expect(popover).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(popover).toHaveCount(0)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByTestId('admin-help').click()
+  await expect(page.getByTestId('help-center')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('fullstack-guide-help-mobile.png'), fullPage: true, animations: 'disabled' })
+  await page.getByTestId('guide-tour-overview').click()
+  await expect(popover.locator('.driver-popover-next-btn')).toBeEnabled()
+  // 下一步未渲染时仍能通过宿主提示取消，不能被引擎遮罩阻止。
+  await page.locator('[data-guide="admin-profile"]').evaluate(element => element.removeAttribute('data-guide'))
+  await popover.locator('.driver-popover-next-btn').click()
+  await expect(page.getByTestId('guide-loading')).toBeVisible()
+  await page.getByTestId('guide-cancel').click()
+  await expect(popover).toHaveCount(0)
+  await expect(page.getByTestId('guide-error')).toHaveCount(0)
+})
+
 test('shared authentication supports public registration with configuration', async ({ page }) => {
   test.setTimeout(90_000)
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
@@ -266,7 +315,7 @@ test('administrator and user complete account, avatar, preference, password and 
     await passwordInputs.nth(2).fill(newPassword)
     await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
     await expect(userPage.getByTestId('login-form')).toBeVisible()
-    await login(userPage, username, password)
+    await submitLogin(userPage, username, password)
     await expect(userPage.getByTestId('login-form')).toContainText(/不正确|incorrect/i)
     await login(userPage, username, newPassword)
     await expect(userPage.getByTestId('settings-page')).toBeVisible()

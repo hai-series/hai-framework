@@ -137,6 +137,8 @@ hai g:model order
 
 ## Fullstack mini 管理画面
 
+既定の管理画面は `@h-ai/ui/guide` の初回案内、要素ガイド、検索付きヘルプ、再表示、個人設定ガイドを提供します。Web/App/Desktop は内容と翻訳を共有し、Web は Cookie、WebView は localStorage でユーザーとバージョンごとに状態を保存します。共有 guide-store と data-guide を拡張してください。[ガイド skill](templates/skills/hai-ui/guide.md)を参照してください。
+
 `--type fullstack` は IAM、reldb、cache、audit、storage、crypto を含む管理 workspace を既定で生成します。minimal を選んでも管理に必要なモジュールは有効です。`--frontends` で Web、Capacitor App、Tauri Desktop を選択します。miniapp は説明用のプレースホルダーで、実行・ビルド対象には含まれません。
 
 ```powershell

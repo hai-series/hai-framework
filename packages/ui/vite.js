@@ -68,6 +68,7 @@ export const haiPrebundledDeps = Object.freeze([
   'html2canvas',
   // ─── 工具 ───
   'tailwind-merge',
+  'driver.js',
   // ─── 框架运行时（@h-ai/core / @h-ai/crypto / @h-ai/kit 在登录等路径引入） ───
   'nanoid',
   'process',

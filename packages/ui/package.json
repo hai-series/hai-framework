@@ -23,6 +23,11 @@
       "types": "./dist/theme-config.d.ts",
       "import": "./dist/theme-config.js"
     },
+    "./guide": {
+      "types": "./dist/guide.d.ts",
+      "svelte": "./dist/guide.js",
+      "import": "./dist/guide.js"
+    },
     "./components/*": {
       "types": "./dist/components/*.d.ts",
       "svelte": "./dist/components/*.js",
@@ -64,6 +69,7 @@
     "@internationalized/date": "catalog:",
     "@shikijs/langs": "catalog:",
     "bits-ui": "catalog:",
+    "driver.js": "catalog:",
     "html2canvas": "catalog:",
     "jspdf": "catalog:",
     "layerchart": "catalog:",

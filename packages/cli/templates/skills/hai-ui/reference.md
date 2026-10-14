@@ -344,6 +344,15 @@ const p = usePlatform()
 
 内置中英文翻译的业务场景组件。
 
+#### 引导与帮助场景组件
+
+| 组件 | Props 要点 | 说明 |
+| --- | --- | --- |
+| `GuideHost` | `guide`, `locale`, `scope`, `autoStart` | 首次邀请、操作导览和帮助弹窗 |
+| `HelpCenter` | `articles`, `tours`, `locale`, `selectedId`, `onstart` | 可独立使用的搜索帮助中心 |
+
+控制器与导航、偏好和业务 i18n 契约见 [guide.md](guide.md)。
+
 #### IAM 场景组件
 
 | 组件           | Props 要点                                      | 说明     |
@@ -627,6 +636,8 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 8. **data-* 属性透传**：公开 Svelte 组件会把调用方传入的 `data-*` 属性透传到根节点或主交互节点；测试和自动化优先直接使用 `data-testid`、`data-analytics-id`，不要为测试 ID 重复封装组件
 
 ## 导出路径
+
+新手引导与帮助中心使用公开 `@h-ai/ui/guide` 入口；`createGuide` 控制器、`GuideHost` 和独立 `HelpCenter` 的接入、首次偏好和导航契约见 [guide.md](guide.md)。
 
 | 路径                        | 用途                                   |
 | --------------------------- | -------------------------------------- |

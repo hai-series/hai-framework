@@ -137,6 +137,8 @@ hai g:model order
 
 ## Fullstack mini 管理后台
 
+默认管理界面启用 `@h-ai/ui/guide` 新手引导与帮助中心：首次邀请、页面逐步高亮、搜索使用说明、手动重看和个人设置导览。Web/App/Desktop 共用 guide-store 和业务翻译，Web 用 Cookie、原生 WebView 用 localStorage，按用户和引导版本记录。新增页面只需补共享内容与 data-guide 锚点，见 [引导 skill](templates/skills/hai-ui/guide.md)。
+
 `--type fullstack` 默认生成包含 IAM、reldb、cache、audit、storage、crypto 的管理工程；即使选择 minimal，管理所需模块也会保留。`--frontends` 选择 Web、Capacitor App 和 Tauri Desktop；miniapp 仍是说明占位，不参与运行或构建。
 
 ```powershell
