@@ -85,6 +85,8 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 
 `checksum` は初期化不要の Node 専用ツールです。実際の入力バイトを生成・検証し、ストリームは一度だけ消費します。既定値は SHA-256、小文字 hex。`algorithm: 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'`、`encoding: 'hex' | 'base64'`、`signal` を指定できます。不一致は `ok(false)`、不正形式・アルゴリズムや読み取り失敗はエラーです。MD5/SHA-1 は互換性確認のみで、認証用ではありません。ETag と multipart の複合 checksum はファイル全体の摘要と異なり、AWS checksum 拡張の実装は強制しません。
 
+checksum の中止時は次のチャンクを待つ処理を終了し、入力イテレーターの終了を要求します。ローカルの `getStream()` はディレクトリをストリームとして返さず、その場で `INVALID_PATH` を返します。
+
 > 注：`publicUrl` は S3 の `publicUrl` を設定した場合のみ文字列を返し、それ以外は `null` を返します。
 
 > 注：`storage.config` は**機密情報をマスクした設定スナップショット**を返します。S3 の秘密情報は `[REDACTED]` に置換され、再初期化には使用できません。

@@ -68,6 +68,9 @@
       "cache": true
     },
     "test:e2e": {
+      "passThroughEnv": [
+        "HAI_AUTH_EVIDENCE_DIR"
+      ],
       "dependsOn": [
         "^build"
       ],

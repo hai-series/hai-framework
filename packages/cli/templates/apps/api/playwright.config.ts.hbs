@@ -32,6 +32,7 @@ function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/capture-evidence.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

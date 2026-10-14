@@ -18,6 +18,14 @@ const configuredEnv = process.env.HAI_CORE_ENV || 'test'
 // 测试专用的一像素 PNG；上传仍使用完整前后端加密链路。
 const avatar = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSxkAAAAASUVORK5CYII=', 'base64')
 
+async function capture(page: Page, name: string, fallback: string) {
+  const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
+  if (evidence)
+    await mkdir(evidence, { recursive: true })
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: evidence ? path.join(evidence, name) : fallback, fullPage: true, animations: 'disabled' })
+}
+
 async function submitLogin(page: Page, username: string, password: string) {
   await expect(page.getByTestId('login-form')).toBeVisible()
   await page.locator('#login-username').fill(username)
@@ -59,6 +67,7 @@ test('first-use tour, help search and settings navigation work on desktop and mo
   await page.getByTestId('guide-start').click()
   const popover = page.locator('.hai-guide-popover')
   await expect(popover).toBeVisible()
+  await capture(page, '{{projectName}}-guide-desktop.png', testInfo.outputPath('guide-desktop.png'))
   for (let step = 1; step < 3; step++) {
     await popover.locator('.driver-popover-next-btn').click()
     await expect(popover.locator('.driver-popover-progress-text')).toContainText(String(step + 1))
@@ -82,7 +91,7 @@ test('first-use tour, help search and settings navigation work on desktop and mo
   await page.getByTestId('admin-help').click()
   await expect(page.getByTestId('help-center')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('fullstack-guide-help-mobile.png'), fullPage: true, animations: 'disabled' })
+  await capture(page, '{{projectName}}-guide-help-mobile.png', testInfo.outputPath('guide-help-mobile.png'))
   await page.getByTestId('guide-tour-overview').click()
   await expect(popover.locator('.driver-popover-next-btn')).toBeEnabled()
   // 下一步未渲染时仍能通过宿主提示取消，不能被引擎遮罩阻止。
@@ -93,6 +102,52 @@ test('first-use tour, help search and settings navigation work on desktop and mo
   await expect(popover).toHaveCount(0)
   await expect(page.getByTestId('guide-error')).toHaveCount(0)
 })
+
+// 所有已生成的浏览器前端都验证共享引导，不能用 Web 的成功代替 App/Desktop 预览。
+const additionalFrontends = [
+{{#each fullstack.frontendApps}}
+  {
+    target: '{{target}}',
+    url: process.env.HAI_E2E_{{target}}_URL || 'http://127.0.0.1:{{port}}',
+  },
+{{/each}}
+].filter(frontend => frontend.target !== '{{fullstack.e2eFrontend.target}}')
+
+for (const frontend of additionalFrontends) {
+  test(`${frontend.target} preview supports login, tour, help and profile navigation`, async ({ browser }, testInfo) => {
+    const page = await browser.newPage({ viewport: frontend.target === 'app' ? { width: 390, height: 844 } : { width: 1440, height: 960 } })
+    const pageErrors: string[] = []
+    page.on('pageerror', error => pageErrors.push(error.message))
+    try {
+      await page.goto(frontend.url)
+      await expect(page.getByTestId('login-form')).toBeVisible()
+      await capture(page, `{{projectName}}-${frontend.target}-login.png`, testInfo.outputPath(`${frontend.target}-login.png`))
+      await login(page, 'admin', adminPassword, true)
+      await expect(page.getByTestId('guide-offer')).toBeVisible()
+      await page.getByTestId('guide-start').click()
+      const popover = page.locator('.hai-guide-popover')
+      await expect(popover).toBeVisible()
+      await capture(page, `{{projectName}}-${frontend.target}-guide.png`, testInfo.outputPath(`${frontend.target}-guide.png`))
+      await page.keyboard.press('Escape')
+      await expect(popover).toHaveCount(0)
+      await page.getByTestId('admin-help').click()
+      await expect(page.getByTestId('help-center')).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await capture(page, `{{projectName}}-${frontend.target}-help.png`, testInfo.outputPath(`${frontend.target}-help.png`))
+      await page.getByTestId('guide-article-profile').click()
+      await page.getByTestId('guide-article-start').click()
+      await expect(page.getByTestId('settings-page')).toBeVisible()
+      await expect(popover).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(popover).toHaveCount(0)
+      await capture(page, `{{projectName}}-${frontend.target}-profile.png`, testInfo.outputPath(`${frontend.target}-profile.png`))
+      expect(pageErrors).toEqual([])
+    }
+    finally {
+      await page.close()
+    }
+  })
+}
 
 test('shared authentication supports public registration with configuration', async ({ page }) => {
   test.setTimeout(90_000)

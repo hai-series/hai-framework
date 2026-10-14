@@ -322,7 +322,9 @@ export function createLocalProvider(): StorageProvider {
         const filePath = fullPath(key)
         logOperation('read', 'file.getStream', { key, options })
         options.signal?.throwIfAborted()
-        await fsp.stat(filePath)
+        const stat = await fsp.stat(filePath)
+        if (stat.isDirectory())
+          return err(HaiStorageError.INVALID_PATH, storageM('storage_pathIsDir', { params: { key } }))
         // 延迟打开，未消费的返回值不会占用文件句柄；迭代错误交由流消费者处理。
         async function* read(): AsyncIterable<Uint8Array> {
           const stream = fs.createReadStream(filePath, { start: options.rangeStart, end: options.rangeEnd, signal: options.signal })

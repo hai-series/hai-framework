@@ -34,4 +34,44 @@ describe('storage.checksum', () => {
     expect((await storage.checksum.generate(broken())).success).toBe(false)
     expect((await storage.checksum.generate('abc', { signal: AbortSignal.abort() })).success).toBe(false)
   })
+
+  it.each(['consumer', 'source'] as const)('取消等待中的字节流立即返回失败并关闭迭代器（%s）', async (cancelledBy) => {
+    const waiting = Promise.withResolvers<IteratorResult<Uint8Array>>()
+    const entered = Promise.withResolvers<void>()
+    const controller = new AbortController()
+    let closed = false
+    const content: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            entered.resolve()
+            if (cancelledBy === 'source')
+              controller.abort()
+            return waiting.promise
+          },
+          async return() {
+            closed = true
+            return { done: true, value: undefined }
+          },
+        }
+      },
+    }
+    const calculating = storage.checksum.generate(content, { signal: controller.signal })
+    await entered.promise
+    controller.abort()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const result = await Promise.race([
+      calculating,
+      new Promise<null>((resolve) => { timer = setTimeout(resolve, 100, null) }),
+    ])
+    // 即使用例失败也释放挂起输入，避免污染后续测试。
+    waiting.resolve({ done: true, value: undefined })
+    await calculating
+    clearTimeout(timer)
+    expect(result).not.toBeNull()
+    expect(result?.success).toBe(false)
+    if (result && !result.success)
+      expect(result.error.code).toBe(HaiStorageError.CHECKSUM_FAILED.code)
+    expect(closed).toBe(true)
+  })
 })

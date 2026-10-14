@@ -267,6 +267,8 @@ pnpm --filter @h-ai/cli test:coverage
 
 Admin/fullstack の門禁では実際にインストールしたローカル tarball の公開型と動作も検証します：ストリーム/checksum/上書き拒否、API Key scope/失効、現在の認可、ユーザー一括/ロールページ検索、Reach テンプレート、Audit ページ情報。fullstack は信頼できる接続元 IP も検証します。
 
+成功時のスクリーンショットは CLI の `test-results/scaffold-evidence/` に保存します。`HAI_AUTH_EVIDENCE_DIR` で保存先を指定でき、生成プロジェクトの削除後も残ります。fullstack E2E は選択した全 Web/App/Desktop のブラウザープレビューでログイン、ガイド、ヘルプ、個人設定を検証します。小程序とネイティブシェルは各プラットフォームで別途検証します。
+
 ## License
 
 Apache-2.0

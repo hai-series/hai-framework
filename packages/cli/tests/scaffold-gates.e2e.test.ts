@@ -33,6 +33,7 @@ interface GateEnvOptions {
   baseUrl?: string
   serviceBaseUrl?: string
   publicApiBase?: string
+  frontendUrls?: Record<string, string>
 }
 
 const scaffoldGateCases: readonly ScaffoldGateCase[] = [
@@ -130,6 +131,7 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
 
       if (scenario.title === 'fullstack') {
         envOptions.serviceBaseUrl = await allocateBaseUrl()
+        envOptions.frontendUrls = { app: await allocateBaseUrl(), desktop: await allocateBaseUrl() }
       }
 
       runNode([
@@ -395,6 +397,7 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
           SERVICE_BASE_URL: envOptions.serviceBaseUrl,
         }
       : {}),
+    ...Object.fromEntries(Object.entries(envOptions.frontendUrls ?? {}).map(([target, url]) => [`HAI_E2E_${target}_URL`, url])),
     CI: '1',
     // 产物按生产模式构建，业务环境独立使用 core 覆盖值，避免继承 Vitest 的开发编译模式。
     NODE_ENV: nodeEnv,
@@ -403,7 +406,8 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
     HAI_CORE_VERSION: '9.8.7',
     HAI_CORE_ENV: 'test',
     HAI_CORE_LOGGING_LEVEL: 'warn',
-    HAI_AUTH_EVIDENCE_DIR: path.resolve(process.cwd(), '../../docs/assets/iam-auth-2026-10-12'),
+    // 截图独立于会被清理的生成项目；调用方可为本轮验收指定目录。
+    HAI_AUTH_EVIDENCE_DIR: process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve(process.cwd(), 'test-results/scaffold-evidence'),
   }
 }
 

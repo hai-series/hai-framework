@@ -267,6 +267,8 @@ pnpm --filter @h-ai/cli test:coverage
 
 Admin and fullstack gates also verify public types and runtime behavior from installed local tarballs: streams/checksums/create-only writes, API Key scopes/revocation, current authorization, batch users/role pagination, Reach templates and Audit metadata. Fullstack also verifies trusted peer IPs.
 
+Successful screenshots default to the CLI's `test-results/scaffold-evidence/`. Set `HAI_AUTH_EVIDENCE_DIR` to retain them in a chosen directory after generated projects are cleaned up. Fullstack E2E starts every selected Web/App/Desktop browser preview and checks login, tours, help and profile navigation. Miniapp and native shells require separate platform acceptance.
+
 ## License
 
 Apache-2.0

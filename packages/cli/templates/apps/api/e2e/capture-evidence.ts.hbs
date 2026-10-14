@@ -1,0 +1,23 @@
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
+import process from 'node:process'
+import { chromium, expect } from '@playwright/test'
+
+/** 仅在指定证据目录时采集健康端点截图，常规 API 测试通过 HTTP 请求完成。 */
+export default async function captureEvidence() {
+  const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
+  if (!evidence)
+    return
+  const browser = await chromium.launch({ channel: 'chrome' })
+  try {
+    const page = await browser.newPage()
+    const response = await page.goto(new URL('/health', process.env.BASE_URL || 'http://127.0.0.1:3000').href)
+    expect(response?.status()).toBe(200)
+    await expect(page.locator('body')).toContainText('ok')
+    await mkdir(evidence, { recursive: true })
+    await page.screenshot({ path: path.join(evidence, '{{projectName}}-health.png'), fullPage: true })
+  }
+  finally {
+    await browser.close()
+  }
+}

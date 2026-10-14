@@ -162,7 +162,7 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 
 ## 常见模式
 
-大文件上传用 `file.put(key, readableOrAsyncByteStream, { signal, ifNoneMatch: '*' })`，内部使用有界 S3 multipart；下载用 `file.getStream(key, { signal, rangeStart, rangeEnd })`，及时消费或关闭，迭代期间 I/O/取消可能抛错。`get()` 返回完整 Buffer，只用于容量可控的数据。仅创建写入采用 S3 标准条件或本地原子发布，冲突返回 `ALREADY_EXISTS`；后端不支持时失败，不退回覆盖。
+大文件上传用 `file.put(key, readableOrAsyncByteStream, { signal, ifNoneMatch: '*' })`，内部使用有界 S3 multipart；下载用 `file.getStream(key, { signal, rangeStart, rangeEnd })`，及时消费或关闭，迭代期间 I/O/取消可能抛错。本地读取目录直接返回 `INVALID_PATH`。checksum 的 signal 取消会停止等待下一块数据并请求关闭输入迭代器。`get()` 返回完整 Buffer，只用于容量可控的数据。仅创建写入采用 S3 标准条件或本地原子发布，冲突返回 `ALREADY_EXISTS`；后端不支持时失败，不退回覆盖。
 
 `checksum.generate(data, options?)` / `checksum.verify(data, expected, options?)` 默认 SHA-256、小写 hex，可选 sha384/sha512/sha1/md5、base64 编码与 signal；流仅消费一次，读取失败返回 HaiResult 错误，不匹配返回 false。MD5/SHA-1 不作安全认证，ETag 和 multipart 复合 checksum 不当作完整文件摘要。浏览器不导入 Node checksum；离线增量摘要需使用适用的浏览器实现，不把 SubtleCrypto.digest 当流式 API。
 

@@ -85,6 +85,8 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 
 `checksum` is a stateless Node tool requiring no initialization. It generates/verifies the actual input bytes and consumes streams once. Defaults: SHA-256, lowercase hex. Options: `algorithm: 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'`, `encoding: 'hex' | 'base64'`, and `signal`. Mismatches return `ok(false)`; invalid format/algorithm and read failures return errors. MD5/SHA-1 are for compatibility integrity checks, not security authentication. ETags and S3 multipart composite checksums are not whole-file digests. The tool does not require compatible services to implement AWS checksum extensions.
 
+Cancelling a checksum stops waiting for the next chunk and requests closure of the input iterator. Local `getStream()` rejects directories with `INVALID_PATH` before returning a stream.
+
 > Note: `publicUrl` returns a string only when S3's `publicUrl` is configured; otherwise it returns `null`.
 
 > Note: `storage.config` returns a **redacted configuration snapshot**. S3 secret fields are replaced with `[REDACTED]`, so it cannot be used for reinitialization.

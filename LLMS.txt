@@ -46,7 +46,7 @@ return result
 | @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) | SQLite/PostgreSQL/MySQL；动态值参数化 |
 | @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) | LanceDB/pgvector/Qdrant/Chroma；维度需匹配，Qdrant 服务端 1.10.0+ |
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) | Memory 不跨节点；锁 owner 每次获锁唯一 |
-| @h-ai/storage | [本地/S3、流式读写、checksum、预签名上传](packages/cli/templates/skills/hai-storage/SKILL.md) | S3 包含 MinIO/RustFS；ifNoneMatch 原子拒覆盖；Node checksum 无需 init；浏览器经 API/预签名；Local list 非真分页 |
+| @h-ai/storage | [本地/S3、流式读写、checksum、预签名上传](packages/cli/templates/skills/hai-storage/SKILL.md) | S3 包含 MinIO/RustFS；ifNoneMatch 原子拒覆盖；Node checksum 无需 init，取消会停止等待输入；本地目录读取返回 INVALID_PATH；浏览器经 API/预签名；Local list 非真分页 |
 | @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) | 不负责 embedding，无生命周期 |
 | @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md) | 服务端公开入口 iam.auth，verifyToken 读取当前状态/授权并拒绝读取失败；用户 getUsers 批量读取、listUsers roleCode 分页前筛选；API Key scopes 收敛权限，配置/交集示例/登录/撤销见 IAM README 与 skill；受限 key 无角色授权，不能只用 userId 重查放行；先初始化 reldb/cache；公开配置 iam.publicConfig；LDAP/Reach 可选，默认 LDAP 关闭；发送可用 Reach 模板或回调；分布式使用共享 DB + Redis |
 | @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) | 模板绑定 Provider，发送可省略 provider；直接发送才必填，检查 HaiResult 与投递状态；真实发送遵循授权 |

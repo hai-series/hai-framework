@@ -1,7 +1,5 @@
-{{#if features.iam}}
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-{{/if}}
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
 
@@ -24,12 +22,11 @@ test('home page renders from browser', async ({ page }) => {
   await nav.getByRole('button', { name: /首页|Home/i, exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-{{#if features.iam}}
+{{/if_eq}}
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
   await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: path.join(evidence, '{{projectName}}-home.png'), fullPage: true })
-{{/if}}
-{{/if_eq}}
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: path.join(evidence, '{{projectName}}-home.png'), fullPage: true, animations: 'disabled' })
 })
 {{#if features.iam}}
 

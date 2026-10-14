@@ -16,6 +16,9 @@
 
 import type { AppType } from '../src/cli-types.js'
 import { execSync } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
@@ -32,7 +35,7 @@ import { generateModuleSkillFile, generateProjectAiSupport } from '../src/comman
 // 测试工具
 // =============================================================================
 
-const tmpRoot = path.join(process.cwd(), '.tmp-commands-e2e')
+const tmpRoot = mkdtempSync(path.join(tmpdir(), 'hai-cli-commands-e2e-'))
 const HAI_DEP_VERSION = fse.readJsonSync(fileURLToPath(new URL('../package.json', import.meta.url))).version
 const CATALOG_DEP_SPECIFIER = 'catalog:'
 const HAI_DEP_SPECIFIER = CATALOG_DEP_SPECIFIER
@@ -156,13 +159,11 @@ async function expectCompatibleSkills(projectPath: string, appType: AppType) {
 // 生命周期
 // =============================================================================
 
-beforeAll(async () => {
-  await fse.remove(tmpRoot)
-  await fse.ensureDir(tmpRoot)
-})
-
 afterAll(async () => {
-  await fse.remove(tmpRoot)
+  // 每次运行独享目录；只清理本轮创建的根目录，并重试 Windows 短暂文件锁。
+  if (path.dirname(tmpRoot) !== path.resolve(tmpdir()) || !path.basename(tmpRoot).startsWith('hai-cli-commands-e2e-'))
+    throw new Error('Unexpected CLI command test cleanup directory')
+  await rm(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 })
 })
 
 // =============================================================================

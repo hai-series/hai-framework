@@ -76,3 +76,13 @@ describe('storage streams', () => {
   defineStorageSuite('local', localStorageEnv, defineStreamTests)
   defineS3StorageSuites(defineStreamTests, 'stream')
 })
+
+defineStorageSuite('local stream boundaries', localStorageEnv, () => {
+  it('目录不是文件，流式读取在返回阶段报告 INVALID_PATH', async () => {
+    expect((await storage.file.put('directory/file.txt', 'content')).success).toBe(true)
+    const result = await storage.file.getStream('directory')
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiStorageError.INVALID_PATH.code)
+  })
+})

@@ -267,6 +267,8 @@ pnpm --filter @h-ai/cli test:coverage
 
 Admin 与 fullstack 门禁还用实际安装的本地 tarball 验证公开类型和运行行为：流式文件/checksum/拒覆盖、API Key scope 与撤销、当前授权、批量用户/角色分页、Reach 模板路由和 Audit 分页元数据；fullstack 同时验证可信对端 IP。
 
+成功截图默认保存在 CLI 的 `test-results/scaffold-evidence/`，可通过 `HAI_AUTH_EVIDENCE_DIR` 指定独立目录，生成项目清理后仍保留。fullstack E2E 启动所有已选 Web/App/Desktop 浏览器预览，并验证各端的登录、导览、帮助与个人设置；小程序和原生壳仍需要对应平台验收。
+
 ## License
 
 Apache-2.0
