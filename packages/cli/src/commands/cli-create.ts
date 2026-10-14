@@ -1050,7 +1050,7 @@ function generateAiDevelopmentReadme(): string {
 
 从本项目根目录打开所用编码工具，先读取 [AGENTS.md](./AGENTS.md)。Claude Code 通过 [CLAUDE.md](./CLAUDE.md) 加载项目规则；GitHub Copilot 使用 [.github/copilot-instructions.md](./.github/copilot-instructions.md)，OpenCode 使用 AGENTS.md 和 [opencode.json](./opencode.json)。
 
-Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 通过 CLAUDE.md 引用 AGENTS.md，并按项目指引读取 .agents/skills/ 的同一份正文。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
+Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 通过 CLAUDE.md 引用 AGENTS.md，并按项目指引读取 .agents/skills/ 的同一份正文。需求或设计文档在生成前使用 [文档审查 Skill](./.agents/skills/hai-spec-review/SKILL.md) 严格检查完备性、歧义、技术正确性和命名一致性，问题解决后再生成。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
 
 优先复用适用的 hai-framework 公开 API 与已有业务实现。完成时说明复用的能力、相关能力未采用的原因，以及安全边界和类型、配置、文案、调用方的同步情况。质量验证按当前 package.json 执行 typecheck → lint → build → test；UI、路由与端到端流程另运行 test:e2e，未运行项说明原因。安全与质量规则既要按规范审查，也要运行门禁验证。
 

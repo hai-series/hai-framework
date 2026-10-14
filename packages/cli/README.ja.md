@@ -25,6 +25,8 @@ Claude Code v2.1.277 以降は、優先されるプロジェクト CLAUDE ファ
 
 CLI は選択した skill のディレクトリー全体を `templates/skills/` から生成先の `.agents/skills/` にコピーします。`SKILL.md` は機能の境界とタスク案内、`reference.md`/`guide.md` は必要時に読む例を提供します。入口だけをコピーしてはいけません。AGENTS.md にアプリの制約を置き、Claude/Copilot のブリッジから参照します。テンプレート変更は関連するリポジトリー skill と同期し、生成テストで参照ファイルの完全な提供を確認します。
 
+すべてのアプリ種別に `hai-spec-review` を提供します。生成前に要件・設計の完全性、曖昧さ、技術・フレームワーク利用の正確性、命名の一貫性を厳密に確認し、箇所と具体的な修正案を報告します。問題が解決され、証拠が十分な場合のみ AI 生成に進めると判定します。`hai init` / `hai add` は既存のカスタムファイルを保持してこの skill も補完します。
+
 通常の機能追加・変更・修正では、`AGENTS.md` が `hai-app-create/SKILL.md` と `development.md` に案内します。要件を既存のフレームワーク機能・設定・拡張点に対応付け、インストール済みバージョンの exports と型を確認して実装します。適用できる機能を優先して再利用し、不足する能力を具体的に説明します。利用率のために無関係な依存を追加しません。Codex は `.agents/skills/` とプロジェクトルートの `AGENTS.md` を使用します。
 
 各ツールの入口は一つの規則と skill を共有します。Codex/Cursor は AGENTS と `.agents/skills/`、Copilot は `.github/copilot-instructions.md` と共有 skill、OpenCode は AGENTS・opencode.json と共有 skill を使用します。Claude Code のルート CLAUDE.md は `@AGENTS.md` のみを含み、共有規則のタスク案内から `.agents/skills/` の本文と参照ファイルを必要時に読みます。CLI は `.claude/` を生成せず、skill の複製やシンボリックリンクも不要です。この構成では Claude のネイティブ skill 自動検出や `/skill` コマンドは登録されません。既存の Claude 設定と skill は保持します。根拠：[Claude プロジェクト指針](https://code.claude.com/docs/en/memory)、[Claude ネイティブ skills](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。

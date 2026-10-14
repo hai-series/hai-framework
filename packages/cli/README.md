@@ -23,6 +23,8 @@
 
 CLI 从 `templates/skills/` 将所选 skill 的完整目录复制到生成项目 `.agents/skills/`。`SKILL.md` 提供能力边界和任务导航，`reference.md`/`guide.md` 保留按需范本；同步时不能只复制入口。AGENTS.md 保存应用约束，Claude/Copilot 桥接文件引用它；修改模板需同步相关仓库 skills。模板生成测试会核对参考文件的完整交付。
 
+所有应用类型均交付 `hai-spec-review`：生成前严格检查需求/设计文档的完备性、歧义、技术及框架使用错误、命名一致性，给出带位置和修正建议的问题清单；问题解决且证据充分后才判定可以进入 AI 生成。`hai init` / `hai add` 同时为已有项目补齐该工作流 skill，保留自定义文件。
+
 日常新增、修改、修复功能由 `AGENTS.md` 引导读取 `hai-app-create/SKILL.md` 与 `development.md`：先把需求映射到框架现成功能、配置和扩展点，再依据当前安装版本的 exports/类型实现。适用能力优先复用；能力不足时说明具体缺口，不为模块覆盖率安装无关依赖。Codex 使用 `.agents/skills/`，仍需遵循项目根 `AGENTS.md` 的常驻规则。
 
 工具入口共享同一份规则与技能：Codex/Cursor 使用 AGENTS 与 `.agents/skills/`；Copilot 使用 `.github/copilot-instructions.md` 与共享技能；OpenCode 使用 AGENTS、opencode.json 与共享技能。Claude Code 的根 CLAUDE.md 仅包含 `@AGENTS.md`，通过共享规则的任务导航按需读取 `.agents/skills/` 正文和参考文件。CLI 不创建 `.claude/`，无需重复技能或符号链接。此模式不提供 Claude 原生技能自动发现或 `/skill` 命令；项目已有的 Claude 设置与技能保留。依据：[Claude 项目指引](https://code.claude.com/docs/en/memory)、[Claude 原生 skills](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。

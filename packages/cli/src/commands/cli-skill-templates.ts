@@ -53,6 +53,7 @@ const SKILL_EXCLUSIONS_BY_APP_TYPE: Partial<Record<AppType, string[]>> = {
 
 const WORKFLOW_SKILLS = [
   'hai-build',
+  'hai-spec-review',
   'hai-app-create',
   'hai-app-review',
   'hai-app-tests',
