@@ -18,6 +18,7 @@ description: "定位 hai 应用架构、模块依赖、初始化顺序、构建�
 ## 使用路径
 
 - 先读当前 package.json、lockfile 与 README，识别 SvelteKit / API workspace / fullstack / Vite SPA / 原生 App，按实际 scripts 验证。
+- 升级 hai-framework、比较版本差异或同步框架 skills 时，使用 [hai-framework-sync](../hai-framework-sync/SKILL.md) 完成版本发现、差异分析、选择/阻塞处理、迁移与验证。
 - 功能开发先用 [development.md](../hai-app-create/development.md) 把需求匹配到当前版本的框架能力与配置；再读取所选模块 skill 和公开类型。
 - 有生命周期的模块按真实依赖初始化、检查结果并反序清理；core、纯函数和工厂不套用相同生命周期。
 - 构建任务检查当前 engines、适配器、环境变量、缓存与目标产物，不能照搬框架仓库私有构建命令。

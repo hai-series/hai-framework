@@ -9,7 +9,7 @@
 - 读取当前 `AGENTS.md`、README、`package.json`、lockfile、初始化入口和已有相似功能；用 `rg` 查实现、引用、测试。保留已有改动，沿用项目分层、命名、ESLint、i18n 与测试入口。
 - 确认架构：SvelteKit 使用 `kit` 和文件路由；API workspace 使用 contract/service；fullstack 使用 contract/serv/shared 与所选前端；Vite SPA/原生端通过 typed API 客户端调用服务。不要把服务端目录、DB、密钥或 Node 初始化复制到浏览器。
 - 从所属 workspace 的依赖与 lockfile 确认 `@h-ai/*` 实际解析版本和 npm/local 模式。模板 skill 提供导航，**当前安装包的 `package.json.exports`、公开 `.d.ts` 与随包文档决定可用 API**；本地框架源码只在版本匹配或显式联调时作实现证据。
-- 若 skill 与安装版本不符，以公开类型和实际行为核验。先使用已支持能力；任务确需新版本时列明版本变更、调用方与验证范围。不能直接复制未发布源码的 API，也不能为绕过差异添加虚构兼容层。
+- 若 skill 与安装版本不符，以公开类型和实际行为核验。先使用已支持能力；任务要求升级时按 [hai-framework-sync](../hai-framework-sync/SKILL.md) 发现目标、比较差异并完成迁移验证。不能直接复制未发布源码的 API，也不能为绕过差异添加虚构兼容层。
 
 ## CLI 安装与命令
 

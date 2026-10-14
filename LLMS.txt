@@ -78,7 +78,7 @@ return result
 | Fullstack 默认管理后台与验证 | [CLI 用法](packages/cli/README.md#fullstack-mini-管理后台)；生成含随机初始管理员密码的私有 `.env`；Web/App/Desktop 共享管理界面、typed client，使用 IAM 默认认证 procedures 和 UI 公开主题子路径，保留应用业务守卫 |
 | 生成应用审查/测试 | [hai-app-review](packages/cli/templates/skills/hai-app-review/SKILL.md) / [hai-app-tests](packages/cli/templates/skills/hai-app-tests/SKILL.md) |
 | CI / PR 审查 | [hai-ci](packages/cli/templates/skills/hai-ci/SKILL.md) / [hai-pr-review](packages/cli/templates/skills/hai-pr-review/SKILL.md) |
-| 框架与应用 skills/版本同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md) |
+| 框架升级到最新/指定版本、差异分析与 skills 同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md)，发现发布版本，处理用户选择/阻塞，迁移并验证 |
 
 ## 配置与依赖
 

@@ -57,6 +57,9 @@ const WORKFLOW_SKILLS = [
   'hai-app-create',
   'hai-app-review',
   'hai-app-tests',
+  'hai-framework-sync',
+  'hai-ci',
+  'hai-pr-review',
 ]
 
 const PACKAGE_SKILL_MAP: Record<string, string> = {

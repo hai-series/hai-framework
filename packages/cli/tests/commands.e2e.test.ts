@@ -1437,6 +1437,39 @@ describe('detectProject', () => {
 // =============================================================================
 
 describe('ai 支持交付与回填', () => {
+  it.each(['init', 'add'] as const)('旧项目 %s 应补齐框架升级流程并保留自定义规则', async (command) => {
+    const dir = path.join(tmpRoot, `framework-upgrade-backfill-${command}`)
+    const customAgents = '# custom project rules\n'
+    const customUpgradeSkill = command === 'add' ? '# custom framework upgrade rules\n' : undefined
+    const originalPackage = {
+      name: `legacy-framework-${command}`,
+      version: '0.1.0',
+      dependencies: { '@h-ai/core': HAI_DEP_VERSION, '@h-ai/ai': HAI_DEP_VERSION },
+    }
+    await fse.outputJson(path.join(dir, 'package.json'), originalPackage)
+    await fse.outputFile(path.join(dir, 'AGENTS.md'), customAgents)
+    if (customUpgradeSkill !== undefined) {
+      await fse.outputFile(path.join(dir, '.agents/skills/hai-framework-sync/SKILL.md'), customUpgradeSkill)
+    }
+
+    if (command === 'init') {
+      await initProject({ cwd: dir, force: true, verbose: false })
+    }
+    else {
+      await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+    }
+
+    for (const resource of ['hai-framework-sync/SKILL.md', 'hai-framework-sync/sync.md', 'hai-ci/SKILL.md', 'hai-pr-review/SKILL.md']) {
+      expect(await exists(dir, `.agents/skills/${resource}`), resource).toBe(true)
+      const expected = resource === 'hai-framework-sync/SKILL.md' && customUpgradeSkill !== undefined
+        ? customUpgradeSkill
+        : await readText(skillTemplatesDir, resource)
+      expect(await readText(dir, `.agents/skills/${resource}`)).toBe(expected)
+    }
+    expect(await readText(dir, 'AGENTS.md')).toBe(customAgents)
+    expect(await readJson(dir, 'package.json')).toEqual(originalPackage)
+  })
+
   it('单模块回填应补全工作流资源并保留已有 Skill 内容', async () => {
     const dir = path.join(tmpRoot, 'skill-module-backfill')
     const customSkill = '# project-specific development instructions\n'

@@ -101,4 +101,4 @@ PR 描述必须说明：
 
 - `hai-ci` — CI/CD 与 workflow 安全
 - `hai-app-review` — 应用代码质量与框架复用审查
-- `hai-framework-sync` — 两仓同步审查
+- `hai-framework-sync` — 框架升级差异与双仓同步审查

@@ -58,6 +58,8 @@ In PowerShell, use `pnpm.cmd add -g @h-ai/cli`. To update an installed CLI to th
 
 Generated `@h-ai/*` dependencies are pinned to the CLI version; pnpm references that exact version through `catalog:`. Upgrade framework packages together and verify the versions resolved in the lockfile.
 
+In your application repository, ask the AI to "upgrade Hai-framework to the latest version". Project instructions route to [hai-framework-sync](templates/skills/hai-framework-sync/SKILL.md) to check published versions online, compare cumulative changes and application impact, request decisions or blocker resolution when needed, then migrate dependencies/code/configuration, merge skills and AI instructions, and validate. Comparison-only requests do not modify the application. `hai init` / `hai add` backfill the upgrade skill, adjacent resources and referenced CI/PR workflow skills even when the original template cannot be identified. Existing files are preserved; older skills and routing still need to be merged.
+
 Creation messages are written directly to the terminal. Installation failures display the package manager command, exit code and stdout/stderr, and retain generated files for a retry from the project directory. The `prebuild-install@7.1.3` deprecation warning comes from the upstream `better-sqlite3` installer dependency. That warning alone does not fail installation; do not override or remove the native installer to hide it.
 
 ```bash

@@ -58,6 +58,8 @@ PowerShell 中使用 `pnpm.cmd add -g @h-ai/cli`。已安装 CLI 时，执行相
 
 生成项目的 `@h-ai/*` 依赖固定为 CLI 对应版本；pnpm 通过 `catalog:` 引用该精确版本。升级时统一更新框架包并验证 lockfile 中实际解析的版本。
 
+在应用仓库对 AI 说“升级 Hai-framework 到最新版本”，项目入口会引导读取 [hai-framework-sync](templates/skills/hai-framework-sync/SKILL.md)：在线确认发布版本、比较累计差异与应用影响，需要用户选择或处理阻塞时提示，随后迁移依赖/代码/配置、合并 skills 与 AI 入口并验证。仅要求比较时不会修改应用。`hai init` / `hai add` 为旧项目补齐升级 skill、相邻资源及引用的 CI/PR 流程技能，即使无法识别原模板也会交付；已有文件保留，旧版 skill 及入口仍须合并。
+
 创建提示直接输出到终端；安装失败会显示包管理器命令、退出码和 stdout/stderr，已生成文件保留，可进入目录重试安装。`prebuild-install@7.1.3` 的弃用警告来自 `better-sqlite3` 的上游安装依赖，单独的警告不会令安装失败；不要为隐藏警告覆盖或删除原生安装器。
 
 ```bash

@@ -243,7 +243,7 @@ logging:
 | 编写/补充测试          | `hai-app-tests`  | 测试, test, 单测, 覆盖率, TDD, E2E     |
 | CI/CD 与质量门禁       | `hai-ci`         | CI, CD, GitHub Actions, workflow, secret scan |
 | PR / Issue 交付审查    | `hai-pr-review`  | PR, pull request, issue, CODEOWNERS, 自动 Review, AI Review |
-| hai-framework 同步     | `hai-framework-sync` | hai-framework, skills 同步, framework:use:local, framework:watch |
+| hai-framework 升级与同步 | `hai-framework-sync` | 升级框架, 最新版本, 版本差异, skills 同步, npm/local 漂移 |
 
 ## 行为开发工作流
 

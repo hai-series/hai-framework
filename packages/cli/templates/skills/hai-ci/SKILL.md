@@ -107,6 +107,6 @@ lint/typecheck 只能执行已配置的规则。新增开发规范时区分可�
 - `hai-app-tests` — Vitest / Playwright 测试规范
 - `hai-pr-review` — PR 审查与 AI Review 策略
 - `hai-deploy` — 应用部署与云服务开通
-- `hai-framework-sync` — hai-framework 与应用仓库同步策略
+- `hai-framework-sync` — 框架版本升级、差异分析与 npm/本地同步
 
 涉及发布时按本应用实际 registry/镜像/部署目标核验精确版本与提交，不以 tag 或 CI 绿灯代替发布产物；未经授权不发布。原生/容器交付按当前项目入口单独构建与启动验收，保存产物、平台和行为证据；缺平台写未验证，Web E2E 不代替原生验收。
