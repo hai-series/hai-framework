@@ -35,6 +35,19 @@ async function createSkill() {
 }
 
 describe('skill reference delivery contract', () => {
+  it('discovers shared repository skills and CLI templates without a Copilot skills directory', async () => {
+    const { root } = await createSkill()
+    for (const directory of ['.agents/skills', 'packages/cli/templates/skills']) {
+      const skillPath = path.join(root, directory, 'hai-sample')
+      await mkdir(skillPath, { recursive: true })
+      await writeFile(path.join(skillPath, 'SKILL.md'), contract)
+    }
+
+    const result = await checkSkillContracts(root)
+    expect(result.failures).toEqual([])
+    expect(result.skillCount).toBe(2)
+  })
+
   it('checks reachable nested resources while ignoring remote, anchor and code example links', async () => {
     const { root, skillsRoot, skillPath } = await createSkill()
     await mkdir(path.join(skillPath, 'references'))
@@ -62,5 +75,19 @@ describe('skill reference delivery contract', () => {
     const result = await checkSkillContracts(root, [skillsRoot])
     expect(result.failures).toHaveLength(1)
     expect(result.failures[0]).toContain('guide.md: 本地参考文件不存在: missing.md')
+  })
+
+  it('checks task navigation and tool bridges alongside skill references', async () => {
+    const { root, skillsRoot, skillPath } = await createSkill()
+    await writeFile(path.join(skillPath, 'SKILL.md'), contract)
+    const agentsPath = path.join(root, 'AGENTS.md')
+    const bridgePath = path.join(root, 'copilot-instructions.md')
+    await writeFile(agentsPath, '[Workflow](.agents/instructions/workspace.md)\n')
+    await writeFile(bridgePath, '[Shared rules](AGENTS.md)\n')
+
+    const result = await checkSkillContracts(root, [skillsRoot], [agentsPath, bridgePath])
+    expect(result.failures).toHaveLength(1)
+    expect(result.failures[0]).toContain('AGENTS.md: 本地参考文件不存在: .agents/instructions/workspace.md')
+    expect(result.referenceCount).toBe(2)
   })
 })

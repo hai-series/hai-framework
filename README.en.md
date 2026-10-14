@@ -582,32 +582,37 @@ hai-framework/
 ├── scripts/             # Validation and release scripts
 ├── AGENTS.md            # AI assistant workflow entry
 ├── LLMS.txt             # AI usage index
-└── .github/             # Conventions, instructions, and repository development skills
+├── .agents/             # Shared development instructions/ and repository skills/
+├── AGENTS.md            # Shared AI entry point and task navigation
+└── .github/             # GitHub Actions and lightweight Copilot entry points
 ```
 
 ### AI-first infrastructure
 
-`hai create` generates AI context for GitHub Copilot, Cursor, Codex, and OpenCode, plus Claude Code project guidance that reuses shared conventions:
+This repository uses [AGENTS.md](AGENTS.md) as its shared entry point, `.agents/instructions/` for detailed conventions, and `.agents/skills/` for repository development skills. Copilot path instructions contain matching metadata and links; Claude and OpenCode entry points reuse the shared rules. Codex reads `AGENTS.md` and discovers `.agents/skills/` natively. Invoke skills such as `$hai-create-module` or `$hai-review-module` in the project and load references as needed. Sources: [Codex skills](https://learn.chatgpt.com/docs/build-skills), [project instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+
+`hai create` generates the same shared entry points and skills, with application-specific `AGENTS.md` rules:
 
 ```
 my-app/
 ├── .agents/
-│   └── skills/                       # One skills directory: native OpenCode discovery, entry guidance for other assistants
+│   └── skills/                       # Shared skill bodies and references; native Codex discovery
 ├── .github/
-│   └── copilot-instructions.md       # GitHub Copilot project instructions with .agents/skills/
+│   └── copilot-instructions.md       # References the shared AGENTS.md
 ├── AGENTS.md                         # Codex / OpenCode / shared AI guidance
 ├── CLAUDE.md                         # Claude Code guidance reusing @AGENTS.md
-└── opencode.json                     # Additional instructions; native skills discovery in .agents/skills/
+└── opencode.json                     # instructions references AGENTS.md directly
 ```
 
-| AI assistant            | Generated files                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------ |
-| GitHub Copilot / Cursor | `.github/copilot-instructions.md` + `.agents/skills/`                                            |
-| Claude Code             | `CLAUDE.md` + `AGENTS.md` (reuse through `@AGENTS.md`; no native discovery of `.agents/skills/`) |
-| Codex                   | `AGENTS.md` + `.agents/skills/`                                                                  |
-| OpenCode                | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                                |
+| AI assistant   | Generated files                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| GitHub Copilot | `.github/copilot-instructions.md` → `AGENTS.md` + `.agents/skills/`                              |
+| Cursor         | `AGENTS.md` + `.agents/skills/`                                                                  |
+| Claude Code    | `CLAUDE.md` + `AGENTS.md` (reuse through `@AGENTS.md`; no native discovery of `.agents/skills/`) |
+| Codex          | `AGENTS.md` + `.agents/skills/`                                                                  |
+| OpenCode       | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                                |
 
-Skills are managed in `packages/cli/templates/skills/` and distributed by `@h-ai/cli` into user projects' `.agents/skills/`. The **27 built-in templates** include 20 module skills and seven overview/workflow skills (`hai-build`, `hai-app-create`, `hai-app-review`, `hai-app-tests`, `hai-ci`, `hai-framework-sync`, `hai-pr-review`), supporting application building, tests, reviews, module usage, and convention synchronization. Run `typecheck → lint → test → e2e` after changes.
+Skills are managed in `packages/cli/templates/skills/` and distributed by `@h-ai/cli` into user projects' `.agents/skills/`. The **28 built-in templates** include 20 module skills and eight overview/workflow skills (`hai-build`, `hai-spec-review`, `hai-app-create`, `hai-app-review`, `hai-app-tests`, `hai-ci`, `hai-framework-sync`, `hai-pr-review`), supporting application building, tests, reviews, module usage, and convention synchronization. Repository development skills and application templates retain their own task boundaries while sharing public contracts. Run scoped `typecheck → lint → build → test` checks, followed by the relevant E2E gates for UI, routes, or CLI templates.
 
 ### Configuration and environment variables
 

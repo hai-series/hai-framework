@@ -243,7 +243,7 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 - 覆盖：正常 / 边界 / 参数选项 / 多实现。
 - 断言：始终校验 `result.success`；失败时检查 `error.code`；**不用 try/catch 包裹 HaiResult API**。
 - 外部依赖：优先 Testcontainers 隔离。
-- 详细规范见 [test-conventions.instructions.md](../../instructions/test-conventions.instructions.md)。
+- 详细规范见 [test-conventions.md](../../instructions/test-conventions.md)。
 
 ## R8 包配置范本
 

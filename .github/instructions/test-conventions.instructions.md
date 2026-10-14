@@ -2,41 +2,6 @@
 applyTo: "**/tests/**"
 ---
 
-# 测试开发规范
+# Copilot 路径指引
 
-> 适用于 tests/ 下的文件的修改。Vitest 测试的编写规范。
-
-## 核心原则
-
-1. **统一入口**：测试通过 `<模块名>.xx` 进入（如 `crypto.asymmetric`、`storage.file`），不直接调用内部实现或工厂函数
-2. **从实际场景出发**：验证实际使用时的行为和结果，不做形式覆盖
-3. **问题修正**：测试不通过时先审查业务逻辑是否有问题，不直接修改测试迎合实现
-
-## 覆盖范围
-
-- **正常路径**：核心功能可用
-- **边界路径**：非法输入、空值、格式校验失败、超时
-- **参数选项**：可选配置的差异化行为
-- **多实现**：如有多种实现（内存/Redis 等），抽象公共测试套件后分别执行
-- **跨端能力**：涉及 Node/Browser 时，测试需拆分环境或显式隔离，避免互相污染
-- 每个新功能/修复必须有对应测试，变更边界行为时补齐边界用例
-
-## 断言风格
-
-- 始终校验 `result.success`
-- 成功时：`expect(result.success).toBe(true)` + 检查返回数据
-- 失败时：`expect(result.success).toBe(false)` + 校验 `error.code`
-- 不使用 `try/catch` 来断言 HaiResult 型 API
-- 流式/AsyncIterable API 使用 `for await...of` 收集关键片段，断言顺序、终止和错误事件
-
-## 组织结构
-
-- 按功能拆分文件：`<模块名>-init.test.ts`、`<模块名>-sm2.test.ts`
-- 测试名称清晰表达场景（中文或英文均可，保持模块内一致）
-- 避免不稳定断言（随机性、时序依赖）
-
-## 外部依赖
-
-- 避免真实外部依赖：使用注入 + mock（网络/数据库/云服务不直连）
-- 如有外部依赖（数据库、缓存等），优先使用 Testcontainers 隔离环境
-- 禁止在测试中使用 `console.log` 调试（使用 logger 或 vitest 的 `--reporter`）
+修改匹配路径前，读取 [通用规范](../../.agents/instructions/test-conventions.md)。规范正文在 `.agents/instructions/` 维护，共享入口见 [AGENTS.md](../../AGENTS.md)。

@@ -27,7 +27,9 @@ CLI 从 `templates/skills/` 将所选 skill 的完整目录复制到生成项目
 
 日常新增、修改、修复功能由 `AGENTS.md` 引导读取 `hai-app-create/SKILL.md` 与 `development.md`：先把需求映射到框架现成功能、配置和扩展点，再依据当前安装版本的 exports/类型实现。适用能力优先复用；能力不足时说明具体缺口，不为模块覆盖率安装无关依赖。Codex 使用 `.agents/skills/`，仍需遵循项目根 `AGENTS.md` 的常驻规则。
 
-工具入口共享同一份规则与技能：Codex/Cursor 使用 AGENTS 与 `.agents/skills/`；Copilot 使用 `.github/copilot-instructions.md` 与共享技能；OpenCode 使用 AGENTS、opencode.json 与共享技能。Claude Code 的根 CLAUDE.md 仅包含 `@AGENTS.md`，通过共享规则的任务导航按需读取 `.agents/skills/` 正文和参考文件。CLI 不创建 `.claude/`，无需重复技能或符号链接。此模式不提供 Claude 原生技能自动发现或 `/skill` 命令；项目已有的 Claude 设置与技能保留。依据：[Claude 项目指引](https://code.claude.com/docs/en/memory)、[Claude 原生 skills](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
+工具入口共享同一份规则与技能：Codex/Cursor 使用 AGENTS 与 `.agents/skills/`；Copilot 的 `.github/copilot-instructions.md` 只引用共享 `AGENTS.md`，不另保存各应用类型规则；OpenCode 的 opencode.json 通过 `instructions: ["AGENTS.md"]` 直接引用共享规则。Claude Code 的根 CLAUDE.md 仅包含 `@AGENTS.md`，通过共享规则的任务导航按需读取 `.agents/skills/` 正文和参考文件。CLI 不创建 `.claude/`，无需重复技能或符号链接。此模式不提供 Claude 原生技能自动发现或 `/skill` 命令；项目已有的 Claude 设置与技能保留。依据：[Claude 项目指引](https://code.claude.com/docs/en/memory)、[Claude 原生 skills](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。
+
+Codex 原生发现 `.agents/skills/` 并按任务自动选择，也可显式输入 `$hai-app-create`、`$hai-app-review` 等名称调用；入口和参考文件保持按需读取。无需额外 `.codex/skills` 或 Copilot 设置。依据：[Codex skills](https://learn.chatgpt.com/docs/build-skills)、[AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。
 
 Claude Code v2.1.277 起也可直接读取根 `AGENTS.md`（没有更高优先级项目 CLAUDE 文件且相关内置插件启用时）。保留这一行导入可兼容旧版及未开启该能力的会话，官方说明导入不会重复加载规则；仍无须 `.claude/` 目录。参见 [AGENTS.md 支持](https://code.claude.com/docs/en/memory#agentsmd)。
 

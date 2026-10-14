@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = process.cwd()
 const SKILL_ROOTS = [
-  join(ROOT, '.github', 'skills'),
-  join(ROOT, 'packages', 'cli', 'templates', 'skills'),
+  '.agents/skills',
+  'packages/cli/templates/skills',
 ]
 const REQUIRED_CONTRACT_ITEMS = ['能力', '适用场景', '输入', '输出', '限制']
 
@@ -84,10 +84,10 @@ async function validateReferences(root, path, content) {
   return { failures, referenceCount }
 }
 
-/** 验证契约和全部相邻参考文件的引用；桥接路径由生成项目测试验证。 */
-export async function checkSkillContracts(root = ROOT, skillRoots = SKILL_ROOTS) {
+/** 验证契约、相邻资源和入口导航；生成项目的桥接路径另由生成测试验证。 */
+export async function checkSkillContracts(root = ROOT, skillRoots = SKILL_ROOTS.map(directory => join(root, directory)), guidanceFiles = []) {
   const directories = (await Promise.all(skillRoots.map(findSkillDirectories))).flat()
-  const files = (await Promise.all(directories.map(findMarkdownFiles))).flat()
+  const files = [...(await Promise.all(directories.map(findMarkdownFiles))).flat(), ...guidanceFiles]
   const results = await Promise.all(files.map(async (path) => {
     const content = await readFile(path, 'utf8')
     const references = await validateReferences(root, path, content)
@@ -104,7 +104,12 @@ export async function checkSkillContracts(root = ROOT, skillRoots = SKILL_ROOTS)
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  const result = await checkSkillContracts()
+  const guidanceFiles = [
+    ...['AGENTS.md', 'CLAUDE.md', 'LLMS.txt', '.github/copilot-instructions.md'].map(file => join(ROOT, file)),
+    ...(await findMarkdownFiles(join(ROOT, '.agents', 'instructions'))),
+    ...(await findMarkdownFiles(join(ROOT, '.github', 'instructions'))),
+  ]
+  const result = await checkSkillContracts(ROOT, undefined, guidanceFiles)
   if (result.failures.length > 0) {
     process.stderr.write(`${result.failures.join('\n')}\n`)
     process.exitCode = 1

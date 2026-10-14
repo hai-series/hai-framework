@@ -582,32 +582,37 @@ hai-framework/
 ├── scripts/             # 校验与发布脚本
 ├── AGENTS.md            # AI 助手工作入口
 ├── LLMS.txt             # AI 使用索引
-└── .github/             # 编码规范、指令与仓库开发 skills
+├── .agents/             # 通用开发规范（instructions/）与仓库 skills（skills/）
+├── AGENTS.md            # 通用 AI 入口与任务导航
+└── .github/             # GitHub Actions 与 Copilot 轻量入口
 ```
 
 ### AI-First 基础设施
 
-使用 `hai create` 创建项目时，CLI 会自动生成一套完整的 AI 上下文体系，原生覆盖 GitHub Copilot、Cursor、Codex、OpenCode，并为 Claude Code 生成可复用共享规范的项目指引：
+本仓库以 [AGENTS.md](AGENTS.md) 为通用入口，详细规范在 `.agents/instructions/`，仓库开发 skills 在 `.agents/skills/`。Copilot 的路径指令只保留匹配条件和链接，Claude/OpenCode 的入口复用共享规则。Codex 原生读取 `AGENTS.md` 并发现 `.agents/skills/`，可在项目中用 `$hai-create-module`、`$hai-review-module` 等名称调用；参考文件按任务读取。依据：[Codex skills](https://learn.chatgpt.com/docs/build-skills)、[项目指引](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。
+
+使用 `hai create` 创建项目时，CLI 生成同样的共享入口与 skills，并按应用类型提供 `AGENTS.md`：
 
 ```
 my-app/
 ├── .agents/
-│   └── skills/                       # 单一 Skill 目录（OpenCode 原生发现，其他助手通过入口指引引用）
+│   └── skills/                       # 共享技能正文与参考（Codex 原生发现）
 ├── .github/
-│   └── copilot-instructions.md       # GitHub Copilot 项目指令（配合 .agents/skills/）
+│   └── copilot-instructions.md       # 只引用共享 AGENTS.md
 ├── AGENTS.md                         # Codex / OpenCode / 通用 AI 指引
 ├── CLAUDE.md                         # Claude Code 项目指引（通过 @AGENTS.md 复用共享规范）
-└── opencode.json                     # OpenCode 配置（补充 instructions；skills 由 .agents/skills 原生发现）
+└── opencode.json                     # instructions 直接引用 AGENTS.md
 ```
 
-| AI 助手                 | 生成的关键文件                                                                            |
-| ----------------------- | ----------------------------------------------------------------------------------------- |
-| GitHub Copilot / Cursor | `.github/copilot-instructions.md` + `.agents/skills/`                                     |
-| Claude Code             | `CLAUDE.md` + `AGENTS.md`（通过 `@AGENTS.md` 复用共享规范；不原生发现 `.agents/skills/`） |
-| Codex                   | `AGENTS.md` + `.agents/skills/`                                                           |
-| OpenCode                | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                         |
+| AI 助手        | 生成的关键文件                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| GitHub Copilot | `.github/copilot-instructions.md` → `AGENTS.md` + `.agents/skills/`                       |
+| Cursor         | `AGENTS.md` + `.agents/skills/`                                                           |
+| Claude Code    | `CLAUDE.md` + `AGENTS.md`（通过 `@AGENTS.md` 复用共享规范；不原生发现 `.agents/skills/`） |
+| Codex          | `AGENTS.md` + `.agents/skills/`                                                           |
+| OpenCode       | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                         |
 
-Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` 分发到用户项目的 `.agents/skills/`。当前内置 **27 个 Skill 模板**：20 个模块 Skill 与 7 个总览 / 工作流 Skill（`hai-build`、`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-ci`、`hai-framework-sync`、`hai-pr-review`），便于 AI 助手在"搭应用、补测试、做 Review、查模块用法、同步框架规范"之间切换上下文。改动后统一执行 `typecheck → lint → test → e2e` 质量门禁。
+Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` 分发到用户项目的 `.agents/skills/`。当前内置 **28 个 Skill 模板**：20 个模块 Skill 与 8 个总览 / 工作流 Skill（`hai-build`、`hai-spec-review`、`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-ci`、`hai-framework-sync`、`hai-pr-review`），便于 AI 助手在"搭应用、补测试、做 Review、查模块用法、同步框架规范"之间切换上下文。仓库开发 skills 与应用模板分别维护，同步公共契约时保留各自的任务边界。改动后按范围执行 `typecheck → lint → build → test`，UI/路由与 CLI 模板再执行对应 E2E 门禁。
 
 ### 配置与环境变量
 

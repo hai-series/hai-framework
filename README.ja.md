@@ -582,32 +582,37 @@ hai-framework/
 ├── scripts/             # 検証・公開スクリプト
 ├── AGENTS.md            # AI 支援の作業入口
 ├── LLMS.txt             # AI 向け使用索引
-└── .github/             # 規約・指示・リポジトリー開発 Skill
+├── .agents/             # 共通開発規約（instructions/）とリポジトリー Skill（skills/）
+├── AGENTS.md            # 共通 AI 入口とタスク案内
+└── .github/             # GitHub Actions と Copilot の軽量な入口
 ```
 
 ### AI-First の基盤
 
-`hai create` は GitHub Copilot、Cursor、Codex、OpenCode 向けの AI コンテキストと、共通規約を再利用する Claude Code 向けガイドを生成します：
+本リポジトリーは [AGENTS.md](AGENTS.md) を共通入口とし、詳細な規約を `.agents/instructions/`、開発 Skill を `.agents/skills/` に保存します。Copilot のパス指示にはマッチ条件とリンクのみを置き、Claude/OpenCode の入口も共通規約を参照します。Codex は `AGENTS.md` と `.agents/skills/` を標準で検出し、プロジェクト内で `$hai-create-module`、`$hai-review-module` などを呼び出せます。参考ファイルは必要なタスクに応じて読みます。根拠：[Codex skills](https://learn.chatgpt.com/docs/build-skills)、[プロジェクト指針](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。
+
+`hai create` は同じ共通入口と Skill を生成し、アプリ種別に応じた `AGENTS.md` を提供します：
 
 ```
 my-app/
 ├── .agents/
-│   └── skills/                       # 共通 Skill ディレクトリー（OpenCode は自動検出、ほかは入口から参照）
+│   └── skills/                       # 共通 Skill 本文と参考（Codex が標準で検出）
 ├── .github/
-│   └── copilot-instructions.md       # GitHub Copilot 指示（.agents/skills/ と連携）
+│   └── copilot-instructions.md       # 共通 AGENTS.md を参照
 ├── AGENTS.md                         # Codex / OpenCode / 共通 AI ガイド
 ├── CLAUDE.md                         # Claude Code ガイド（@AGENTS.md を再利用）
-└── opencode.json                     # 追加 instructions、.agents/skills/ の自動検出
+└── opencode.json                     # instructions で AGENTS.md を直接参照
 ```
 
-| AI 支援ツール           | 生成する主なファイル                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| GitHub Copilot / Cursor | `.github/copilot-instructions.md` + `.agents/skills/`                                      |
-| Claude Code             | `CLAUDE.md` + `AGENTS.md`（`@AGENTS.md` で規約再利用、`.agents/skills/` は自動検出しない） |
-| Codex                   | `AGENTS.md` + `.agents/skills/`                                                            |
-| OpenCode                | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                          |
+| AI 支援ツール  | 生成する主なファイル                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| GitHub Copilot | `.github/copilot-instructions.md` → `AGENTS.md` + `.agents/skills/`                        |
+| Cursor         | `AGENTS.md` + `.agents/skills/`                                                            |
+| Claude Code    | `CLAUDE.md` + `AGENTS.md`（`@AGENTS.md` で規約再利用、`.agents/skills/` は自動検出しない） |
+| Codex          | `AGENTS.md` + `.agents/skills/`                                                            |
+| OpenCode       | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                          |
 
-Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用先の `.agents/skills/` へ配布します。**27 テンプレート**は 20 のモジュール Skill と 7 つの全体・作業用 Skill（`hai-build`、`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-ci`、`hai-framework-sync`、`hai-pr-review`）で、アプリ構築・テスト・審査・用法確認・規約同期を支援します。変更後は `typecheck → lint → test → e2e` を実行します。
+Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用先の `.agents/skills/` へ配布します。**28 テンプレート**は 20 のモジュール Skill と 8 つの全体・作業用 Skill（`hai-build`、`hai-spec-review`、`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-ci`、`hai-framework-sync`、`hai-pr-review`）で、アプリ構築・テスト・審査・用法確認・規約同期を支援します。リポジトリー開発 Skill とアプリテンプレートは用途を分け、公開契約を同期します。影響範囲に応じて `typecheck → lint → build → test` を実行し、UI・ルート・CLI テンプレートは対応する E2E 門禁も実行します。
 
 ### 設定・環境変数
 

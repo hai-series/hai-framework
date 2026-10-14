@@ -130,6 +130,14 @@ async function expectCompatibleSkills(projectPath: string, appType: AppType) {
   expect(agents).toContain('.agents/skills/hai-spec-review/SKILL.md')
   expect((await readText(projectPath, 'CLAUDE.md')).trim()).toBe('@AGENTS.md')
   expect(await exists(projectPath, '.claude')).toBe(false)
+  // 解析工具入口到实际共享规则，确认各模板不会加载另一份项目规范。
+  const copilot = await readText(projectPath, '.github/copilot-instructions.md')
+  const rulesTarget = copilot.match(/\[AGENTS\.md\]\(([^)]+)\)/)?.[1]
+  const rulesPath = path.resolve(projectPath, '.github', rulesTarget ?? '')
+  expect(rulesPath).toBe(path.join(projectPath, 'AGENTS.md'))
+  expect(await fse.readFile(rulesPath, 'utf8')).toBe(agents)
+  const opencode = await readJson(projectPath, 'opencode.json')
+  expect(opencode.instructions).toEqual(['AGENTS.md'])
   const skillNames = await listTemplateSkillNames()
   const excludedSkills = new Set(SKILL_EXCLUSIONS_BY_APP_TYPE[appType])
 
@@ -383,16 +391,11 @@ describe('createProject — api 类型', () => {
 
   it('应生成 API 类型专属 AI 指引', async () => {
     const agents = await readText(projectPath, 'AGENTS.md')
-    const copilot = await readText(projectPath, '.github/copilot-instructions.md')
 
     expect(agents).toContain('API 服务')
     expect(agents).toContain('apps/<project>-service')
     expect(agents).toContain('不要退回到 SvelteKit API routes 架构')
     expect(agents).not.toContain('src/routes/api/v1')
-    expect(copilot).toContain('API 服务工程指引')
-    expect(copilot).toContain('@h-ai/serv')
-    expect(copilot).toContain('不要退回到 SvelteKit API routes')
-    expect(copilot).not.toContain('src/routes/api/v1')
   })
 })
 
@@ -541,9 +544,9 @@ describe('createProject — admin 类型 + iam', () => {
     expect(await exists(projectPath, '.github/skills')).toBe(false)
   })
 
-  it('应生成 opencode.json 并声明补充 instructions，Skill 由 .agents/skills 原生发现', async () => {
+  it('应生成 opencode.json 并直接引用共享规则，Skill 由 .agents/skills 原生发现', async () => {
     const opencode = await readJson(projectPath, 'opencode.json')
-    expect(opencode.instructions).toEqual(['.github/copilot-instructions.md'])
+    expect(opencode.instructions).toEqual(['AGENTS.md'])
     expect(opencode.skills).toBeUndefined()
   })
 
@@ -552,10 +555,9 @@ describe('createProject — admin 类型 + iam', () => {
     expect(await exists(projectPath, '.opencode/skills')).toBe(false)
   })
 
-  it('agents.md、claude.md 与 copilot 指引应保留共享技能入口说明', async () => {
+  it('共享指引应保留管理后台架构与验收要求', async () => {
     const agents = await readText(projectPath, 'AGENTS.md')
     const claude = await readText(projectPath, 'CLAUDE.md')
-    const copilot = await readText(projectPath, '.github/copilot-instructions.md')
 
     expect(agents).toContain('.agents/skills/')
     expect(agents).toContain('管理后台')
@@ -563,10 +565,6 @@ describe('createProject — admin 类型 + iam', () => {
     expect(agents).toContain('pnpm typecheck')
     expect(agents).not.toContain('packages/<project>-serv')
     expect(claude.trim()).toBe('@AGENTS.md')
-    expect(copilot).toContain('.agents/skills/')
-    expect(copilot).toContain('管理后台')
-    expect(copilot).not.toContain('Fullstack 服务端')
-    expect(copilot).toContain('## 质量门禁')
   })
 })
 
@@ -755,10 +753,8 @@ describe('createProject — h5 类型', () => {
 
   it('应生成 H5 专属 AI 指引与兼容 skills', async () => {
     const agents = await readText(projectPath, 'AGENTS.md')
-    const copilot = await readText(projectPath, '.github/copilot-instructions.md')
 
     expect(agents).toContain('H5')
-    expect(copilot).toContain('H5')
     await expectCompatibleSkills(projectPath, 'h5')
   })
 
@@ -1297,7 +1293,6 @@ describe('createProject — fullstack 类型', () => {
   it('应生成包含 fullstack 职责边界、质量门禁与完成条件的 AI 指引', async () => {
     const agents = await readText(projectPath, 'AGENTS.md')
     const claude = await readText(projectPath, 'CLAUDE.md')
-    const copilot = await readText(projectPath, '.github/copilot-instructions.md')
 
     expect(agents).toContain('packages/proj-fullstack-serv')
     expect(agents).toContain('apps/proj-fullstack-app')
@@ -1307,15 +1302,11 @@ describe('createProject — fullstack 类型', () => {
     expect(agents).toContain('## 完成条件')
     expect(agents).toContain('pnpm typecheck')
     expect(claude.trim()).toBe('@AGENTS.md')
-    expect(copilot).toContain('Fullstack 服务端')
-    expect(copilot).toContain('packages/proj-fullstack-contract')
-    expect(copilot).toContain('packages/proj-fullstack-serv')
-    expect(copilot).toContain('packages/proj-fullstack-shared')
-    expect(copilot).not.toContain('<project>')
-    expect(copilot).toContain('Desktop')
-    expect(copilot).toContain('Tauri v2')
-    expect(copilot).toContain('## 质量门禁')
-    expect(copilot).toContain('## 完成条件')
+    expect(agents).toContain('packages/proj-fullstack-contract')
+    expect(agents).toContain('packages/proj-fullstack-shared')
+    expect(agents).not.toContain('<project>')
+    expect(agents).toContain('Desktop')
+    expect(agents).toContain('Tauri v2')
   })
 })
 
@@ -1565,7 +1556,7 @@ describe('addModule', () => {
     expect(await fse.pathExists(path.join(dir, '.github/skills'))).toBe(false)
 
     const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
-    expect(opencode.instructions).toEqual(['.github/copilot-instructions.md'])
+    expect(opencode.instructions).toEqual(['AGENTS.md'])
     expect(opencode.skills).toBeUndefined()
 
     expect(await fse.pathExists(path.join(dir, '.codex/skills'))).toBe(false)
@@ -1635,7 +1626,7 @@ describe('addModule', () => {
     expect(await fse.readFile(path.join(dir, '.github', 'copilot-instructions.md'), 'utf8')).toContain('[AGENTS.md](../AGENTS.md)')
 
     const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
-    expect(opencode.instructions).toEqual(['.github/copilot-instructions.md'])
+    expect(opencode.instructions).toEqual(['AGENTS.md'])
     expect(opencode.skills).toBeUndefined()
   })
 

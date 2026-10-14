@@ -2,21 +2,29 @@
 
 hai-framework monorepo：`packages/*` 为框架包，`apps/*` 为应用，`packages/cli/templates/` 为生成模板。包管理使用 pnpm；PowerShell 使用 `pnpm.cmd`。
 
+本文件是所有 AI 编程助手的共享入口。仓库开发或审查任务先读 [工作规范](.agents/instructions/workspace.md)，再按下表选择专属规范和 skill。
+
 ## 按任务读取
 
 只读取与任务相关的规范和 skill；不要预加载所有参考文件。
 
-| 任务                                  | 入口                                                                                                                                                                                                    |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 仓库开发流程、影响分析、交付          | [.github/copilot-instructions.md](.github/copilot-instructions.md)                                                                                                                                      |
-| 修改框架包                            | [.github/instructions/module-conventions.instructions.md](.github/instructions/module-conventions.instructions.md)                                                                                      |
-| 创建 / 审查框架模块                   | [.github/skills/hai-create-module/SKILL.md](.github/skills/hai-create-module/SKILL.md) / [hai-review-module](.github/skills/hai-review-module/SKILL.md)                                                 |
-| 修改应用                              | [.github/instructions/app-conventions.instructions.md](.github/instructions/app-conventions.instructions.md)；Svelte 另读 [svelte-conventions](.github/instructions/svelte-conventions.instructions.md) |
-| 修改测试                              | [.github/instructions/test-conventions.instructions.md](.github/instructions/test-conventions.instructions.md)                                                                                          |
-| 数据库                                | [.github/instructions/reldb-conventions.instructions.md](.github/instructions/reldb-conventions.instructions.md) + [hai-usage-reldb](.github/skills/hai-usage-reldb/SKILL.md)                           |
-| 模块使用 / 应用创建审查 / AI 入口维护 | [LLMS.txt](LLMS.txt) 按模块或任务导航                                                                                                                                                                   |
+| 任务                                  | 入口                                                                                                                                                             |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 仓库开发流程、影响分析、交付          | [.agents/instructions/workspace.md](.agents/instructions/workspace.md)                                                                                           |
+| 修改框架包                            | [.agents/instructions/module-conventions.md](.agents/instructions/module-conventions.md)                                                                         |
+| 创建 / 审查框架模块                   | [.agents/skills/hai-create-module/SKILL.md](.agents/skills/hai-create-module/SKILL.md) / [hai-review-module](.agents/skills/hai-review-module/SKILL.md)          |
+| 修改应用                              | [.agents/instructions/app-conventions.md](.agents/instructions/app-conventions.md)；Svelte 另读 [svelte-conventions](.agents/instructions/svelte-conventions.md) |
+| 修改测试                              | [.agents/instructions/test-conventions.md](.agents/instructions/test-conventions.md)                                                                             |
+| 数据库                                | [.agents/instructions/reldb-conventions.md](.agents/instructions/reldb-conventions.md) + [hai-usage-reldb](.agents/skills/hai-usage-reldb/SKILL.md)              |
+| 模块使用 / 应用创建审查 / AI 入口维护 | [LLMS.txt](LLMS.txt) 按模块或任务导航                                                                                                                            |
 
-`.github/skills/` 面向本仓库开发；`packages/cli/templates/skills/` 面向生成应用，CLI 将完整目录复制到应用 `.agents/skills/`。重叠公共契约必须同步，项目私有路径不应复制到应用模板。
+`.agents/skills/` 面向本仓库开发；`packages/cli/templates/skills/` 面向生成应用，CLI 将完整目录复制到应用 `.agents/skills/`。重叠公共契约必须同步，项目私有路径不应复制到应用模板。
+
+## 工具入口
+
+- Codex 原生读取根 `AGENTS.md` 并发现 `.agents/skills/`；可用 `$hai-create-module` 等名称调用，或按任务自动选择。规范由本文件路由，不依赖 Copilot 的 `applyTo`。
+- 详细规范正文只在 `.agents/instructions/` 维护。`.github/copilot-instructions.md` 和 `.github/instructions/*.instructions.md` 仅桥接共享入口与对应规范，保留 Copilot 的路径匹配。
+- Claude Code 通过根 `CLAUDE.md` 的 `@AGENTS.md` 复用规则，并按导航读取共享 skills；OpenCode 的 `opencode.json` 直接引用 `AGENTS.md`。不为各工具复制 skill 正文。
 
 ## 硬约束
 

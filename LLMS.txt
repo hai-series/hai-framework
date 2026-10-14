@@ -8,8 +8,8 @@ README 文档入口：[简体中文](README.md) · [English](README.en.md) · [�
 
 1. 修改本仓库：先读 [AGENTS.md](AGENTS.md)，按路径选择规范。
 2. 使用模块：下表选择一个 SKILL.md；仅在任务需要时读其相邻 reference.md/guide.md。
-3. `.github/skills/` 面向仓库开发；`packages/cli/templates/skills/` 面向生成应用，CLI 复制完整目录到应用 `.agents/skills/`。
-   Codex/Cursor/Copilot/OpenCode 读取共享技能；Claude Code 通过根 `CLAUDE.md` 的 `@AGENTS.md` 导入共享规则，并按导航读取同一份技能正文和参考。CLI 不生成 `.claude/` 技能副本；此模式不提供 Claude 原生技能自动发现或 `/skill` 命令。
+3. `.agents/instructions/` 保存工具无关的仓库规范；`.agents/skills/` 面向仓库开发；`packages/cli/templates/skills/` 面向生成应用，CLI 复制完整 skill 目录到应用 `.agents/skills/`，不把仓库私有路径复制到应用。
+   Codex 原生读取 `AGENTS.md` 并发现 `.agents/skills/`，可用 `$hai-create-module` 等名称调用；规范按 AGENTS 的任务导航读取，不依赖 `applyTo`。Copilot 的 `.github` 指令仅桥接共享规则，OpenCode 直接引用 `AGENTS.md`。Claude Code 通过根 `CLAUDE.md` 的 `@AGENTS.md` 导入共享规则，并按导航读取同一份技能正文和参考。CLI 不生成 `.claude/` 技能副本；此模式不提供 Claude 原生技能自动发现或 `/skill` 命令。
 4. API 示例是使用片段，业务变量/schema 需结合当前应用补齐；先判断返回类型，再处理结果，不能猜测导出或初始化方式。
 
 ## 生命周期与返回值
@@ -69,9 +69,9 @@ return result
 
 | 任务 | 入口 |
 | --- | --- |
-| 仓库新增/审查模块 | [hai-create-module](.github/skills/hai-create-module/SKILL.md) / [hai-review-module](.github/skills/hai-review-module/SKILL.md) |
-| 仓库新增/审查应用 | [hai-create-app](.github/skills/hai-create-app/SKILL.md) / [hai-review-app](.github/skills/hai-review-app/SKILL.md) |
-| 仓库 AI / IAM / reldb / UI 用法 | [AI](.github/skills/hai-usage-ai/SKILL.md) / [IAM](.github/skills/hai-usage-iam/SKILL.md) / [reldb](.github/skills/hai-usage-reldb/SKILL.md) / [UI](.github/skills/hai-ui/SKILL.md) |
+| 仓库新增/审查模块 | [hai-create-module](.agents/skills/hai-create-module/SKILL.md) / [hai-review-module](.agents/skills/hai-review-module/SKILL.md) |
+| 仓库新增/审查应用 | [hai-create-app](.agents/skills/hai-create-app/SKILL.md) / [hai-review-app](.agents/skills/hai-review-app/SKILL.md) |
+| 仓库 AI / IAM / reldb / UI 用法 | [AI](.agents/skills/hai-usage-ai/SKILL.md) / [IAM](.agents/skills/hai-usage-iam/SKILL.md) / [reldb](.agents/skills/hai-usage-reldb/SKILL.md) / [UI](.agents/skills/hai-ui/SKILL.md) |
 | 生成应用架构/构建 | [hai-build](packages/cli/templates/skills/hai-build/SKILL.md) |
 | 需求/设计文档与 AI 生成准备审查 | [hai-spec-review](packages/cli/templates/skills/hai-spec-review/SKILL.md)，严格检查完备性、歧义、技术正确性与命名一致性；问题未解决不判定可生成 |
 | 生成应用新增/修改/修复功能 | [hai-app-create](packages/cli/templates/skills/hai-app-create/SKILL.md)，先读 [能力选择与安全质量规则](packages/cli/templates/skills/hai-app-create/development.md)；按实际版本/目标端复用适用功能和配置 |
@@ -94,4 +94,4 @@ return result
 
 `packages/<module>/package.json` 的 exports 确定入口；`src/*-types.ts`、`*-config.ts` 和公共实现确定签名、Schema 与错误码。错误由 `buildHaiErrorsDef` 生成 `hai:<namespace>:<三位码>`，不要自行猜数字或把错误定义对象当 code 字符串。
 
-优先定向运行 `pnpm --filter <workspace> typecheck/lint/build/test`（分别执行），UI/路由再跑对应 test:e2e。根 lint 包含 check:skills；CLI 模板交付用 `pnpm --filter @h-ai/cli test:scaffold-gates`。详见 [工作规范](.github/copilot-instructions.md)。未运行、mock、真实外部服务和实际部署的结果必须分别报告。
+优先定向运行 `pnpm --filter <workspace> typecheck/lint/build/test`（分别执行），UI/路由再跑对应 test:e2e。根 lint 包含 check:skills；CLI 模板交付用 `pnpm --filter @h-ai/cli test:scaffold-gates`。详见 [工作规范](.agents/instructions/workspace.md)。未运行、mock、真实外部服务和实际部署的结果必须分别报告。

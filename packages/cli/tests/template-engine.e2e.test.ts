@@ -16,6 +16,7 @@
 
 import type { AppType, FeatureId } from '../src/cli-types.js'
 import { execFileSync } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { core } from '@h-ai/core'
@@ -28,8 +29,8 @@ import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli
 // 测试工具
 // =============================================================================
 
-/** 临时目录根路径 */
-const tmpRoot = path.join(process.cwd(), '.tmp-e2e-test')
+/** 每次运行使用独立临时目录，避免并发测试互删生成项目。 */
+let tmpRoot = ''
 
 /**
  * 生成一个测试项目并返回其路径
@@ -73,12 +74,12 @@ async function fileExists(projectPath: string, relativePath: string): Promise<bo
 // =============================================================================
 
 beforeAll(async () => {
-  await fse.remove(tmpRoot)
-  await fse.ensureDir(tmpRoot)
+  tmpRoot = await mkdtemp(path.join(process.cwd(), '.tmp-e2e-test-'))
 })
 
 afterAll(async () => {
-  await fse.remove(tmpRoot)
+  if (tmpRoot)
+    await rm(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 })
 
 it.each<AppType>(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'])('%s 应忽略所有层级的数据目录，包括占位文件', async (appType) => {
