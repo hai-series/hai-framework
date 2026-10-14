@@ -48,7 +48,6 @@ export type ReachChannel = 'email' | 'sms' | 'api'
  * ```ts
  * // 使用模板发送邮件
  * const msg: ReachMessage = {
- *   provider: 'email',
  *   to: 'user@example.com',
  *   template: 'welcome',
  *   vars: { userName: '张三' },
@@ -56,7 +55,6 @@ export type ReachChannel = 'email' | 'sms' | 'api'
  *
  * // 使用模板发送短信
  * const msg: ReachMessage = {
- *   provider: 'sms',
  *   to: '13800138000',
  *   template: 'verification_code',
  *   vars: { code: '123456' },
@@ -64,8 +62,8 @@ export type ReachChannel = 'email' | 'sms' | 'api'
  * ```
  */
 export interface ReachMessage {
-  /** 目标 Provider 名称（对应 Provider 配置中的 name） */
-  provider: string
+  /** 目标 Provider 名称；模板发送可省略，直接发送必须提供。 */
+  provider?: string
   /** 接收方（邮箱地址或手机号） */
   to: string
   /** 邮件主题（直接发送时使用） */

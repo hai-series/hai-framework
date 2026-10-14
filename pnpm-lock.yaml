@@ -637,6 +637,9 @@ importers:
       daisyui:
         specifier: 'catalog:'
         version: 5.7.47
+      ldapts:
+        specifier: 'catalog:'
+        version: 9.2.0
       rimraf:
         specifier: 'catalog:'
         version: 6.1.3

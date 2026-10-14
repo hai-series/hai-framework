@@ -6,6 +6,8 @@
 
 A notification module supporting multiple providers (email, SMS, API callbacks) at once. Templates bind to providers for scenario-based routing. Includes do-not-disturb (DND) policies and configuration-defined templates.
 
+Template sends need only `template`, `to` and `vars`; the provider comes from the template. An explicit `provider` still overrides it. Direct sends require a provider; omitting it returns a failed HaiResult.
+
 ## Dependencies
 
 - `@h-ai/reldb`: optional persistence for delivery logs and templates; enabled automatically when initialized.
@@ -57,7 +59,6 @@ await reach.init({
 
 // 通过 provider 字段选择发送渠道
 await reach.send({
-  provider: 'email',
   to: 'user@example.com',
   template: 'welcome_email',
   vars: { userName: '张三' },

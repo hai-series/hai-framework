@@ -5,7 +5,7 @@
  * @module audit-main
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { AuditInitConfigInput } from './audit-config.js'
 import type {
   AuditFunctions,
@@ -260,9 +260,9 @@ export const audit: AuditFunctions = {
    * 分页查询审计日志列表（含用户名 LEFT JOIN）
    *
    * @param options - 过滤条件与分页参数
-   * @returns 成功时返回 { items, total }；未初始化时返回 NOT_INITIALIZED
+   * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；未初始化时返回 NOT_INITIALIZED
    */
-  list(options?: ListAuditLogsOptions): Promise<HaiResult<{ items: AuditLogWithUser[], total: number }>> {
+  list(options?: ListAuditLogsOptions): Promise<HaiResult<PaginatedResult<AuditLogWithUser>>> {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }

@@ -83,7 +83,7 @@ if (!closeResult.success) {
 | 方法                  | 签名                                                                                | 说明                 |
 | --------------------- | ----------------------------------------------------------------------------------- | -------------------- |
 | `audit.log`           | `(input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>`             | 记录审计日志         |
-| `audit.list`          | `(options?: ListAuditLogsOptions) => Promise<HaiResult<{ items, total }>>` | 分页查询（含用户名） |
+| `audit.list`          | `(options?: ListAuditLogsOptions) => Promise<HaiResult<PaginatedResult<AuditLogWithUser>>>` | 分页查询（items/total/page/pageSize，含用户名；使用返回的规范化元数据，默认 pageSize 20） |
 | `audit.getUserRecent` | `(userId: string, limit?: number) => Promise<HaiResult<AuditLog[]>>`       | 用户最近活动         |
 | `audit.cleanup`       | `(olderThanDays?: number) => Promise<HaiResult<number>>`                   | 清理旧日志           |
 | `audit.getStats`      | `(days?: number) => Promise<HaiResult<AuditStatItem[]>>`                   | 操作统计             |

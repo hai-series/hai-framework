@@ -80,7 +80,7 @@ await audit.init({
 
 - `audit.init(config)`：監査モジュールを初期化。
 - `audit.log(input)`：監査ログを記録。
-- `audit.list(options)`：ユーザー名の JOIN を含む監査ログのページ検索。
+- `audit.list(options)`：`PaginatedResult<AuditLogWithUser>`（items/total/page/pageSize、ユーザー名 JOIN）を返します。core がページ入力を正規化し、既定 pageSize は 20 です。返されたメタデータを直接利用してください。
 - `audit.getUserRecent(userId, limit)`：ユーザーの最近の操作を取得。
 - `audit.cleanup(days)`：古いログを削除。
 - `audit.getStats(days)`：操作統計を取得。

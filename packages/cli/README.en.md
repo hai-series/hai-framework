@@ -261,6 +261,8 @@ pnpm --filter @h-ai/cli test:watch
 pnpm --filter @h-ai/cli test:coverage
 ```
 
+Admin and fullstack gates also verify public types and runtime behavior from installed local tarballs: streams/checksums/create-only writes, API Key scopes/revocation, current authorization, batch users/role pagination, Reach templates and Audit metadata. Fullstack also verifies trusted peer IPs.
+
 ## License
 
 Apache-2.0

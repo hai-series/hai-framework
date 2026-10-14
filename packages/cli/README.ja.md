@@ -261,6 +261,8 @@ pnpm --filter @h-ai/cli test:watch
 pnpm --filter @h-ai/cli test:coverage
 ```
 
+Admin/fullstack の門禁では実際にインストールしたローカル tarball の公開型と動作も検証します：ストリーム/checksum/上書き拒否、API Key scope/失効、現在の認可、ユーザー一括/ロールページ検索、Reach テンプレート、Audit ページ情報。fullstack は信頼できる接続元 IP も検証します。
+
 ## License
 
 Apache-2.0

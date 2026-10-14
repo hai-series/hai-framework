@@ -5,7 +5,7 @@
  * @module audit-repository
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { AuditLog, AuditLogWithUser, AuditStatItem, ListAuditLogsOptions } from './audit-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
@@ -161,9 +161,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * 分页查询日志列表（含用户名 LEFT JOIN）
    *
    * @param options - 过滤条件与分页参数
-   * @returns 成功时返回 { items, total }；失败时返回 QUERY_FAILED
+   * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；失败时返回 QUERY_FAILED
    */
-  async listWithUser(options: ListAuditLogsOptions = {}): Promise<HaiResult<{ items: AuditLogWithUser[], total: number }>> {
+  async listWithUser(options: ListAuditLogsOptions = {}): Promise<HaiResult<PaginatedResult<AuditLogWithUser>>> {
     logger.debug('Querying audit logs', { userId: options.userId, action: options.action, resource: options.resource })
 
     const conditions: string[] = []
@@ -216,7 +216,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         )
       }
 
-      return ok({ items: result.data.items, total: result.data.total })
+      return ok(result.data)
     }
     catch (error) {
       logger.error('Failed to query audit logs', { error })

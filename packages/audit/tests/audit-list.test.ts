@@ -54,6 +54,8 @@ describe('audit.list', () => {
     if (result.success) {
       expect(result.data.items.length).toBe(2)
       expect(result.data.total).toBe(3)
+      expect(result.data.page).toBe(1)
+      expect(result.data.pageSize).toBe(2)
     }
   })
 
@@ -72,6 +74,8 @@ describe('audit.list', () => {
     if (result.success) {
       expect(result.data.items.length).toBe(1)
       expect(result.data.total).toBe(3)
+      expect(result.data.page).toBe(2)
+      expect(result.data.pageSize).toBe(2)
     }
   })
 

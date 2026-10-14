@@ -85,7 +85,7 @@ export function createAdminProcedures() {
     const result = await audit.list({ ...input, startDate: input.startDate ? new Date(input.startDate) : undefined, endDate: input.endDate ? new Date(input.endDate) : undefined })
     if (!result.success)
       return result
-    return ok({ ...result.data, page: input.page, pageSize: input.pageSize, items: result.data.items.map(item => ({ ...item, createdAt: new Date(item.createdAt).toISOString() })) })
+    return ok({ ...result.data, items: result.data.items.map(item => ({ ...item, createdAt: new Date(item.createdAt).toISOString() })) })
   }).build()
 }
 

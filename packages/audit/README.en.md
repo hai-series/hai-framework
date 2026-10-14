@@ -80,7 +80,7 @@ Audit logs are stored in the fixed `hai_audit_logs` table and require an initial
 
 - `audit.init(config)`: initialize the audit module.
 - `audit.log(input)`: record an audit log.
-- `audit.list(options)`: query paginated audit logs, including a JOIN for usernames.
+- `audit.list(options)`: returns `PaginatedResult<AuditLogWithUser>` (items/total/page/pageSize, including usernames). Core normalizes pagination, with pageSize 20 by default; consume the returned metadata directly.
 - `audit.getUserRecent(userId, limit)`: get recent user activity.
 - `audit.cleanup(days)`: delete old logs.
 - `audit.getStats(days)`: get operation statistics.

@@ -25,15 +25,15 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     error(500, { message: 'Failed to load audit logs' })
   }
 
-  const { items, total } = listResult.data
+  const { items, total, page: actualPage, pageSize: actualPageSize } = listResult.data
 
   return {
     logs: items,
     pagination: {
-      page,
-      pageSize,
+      page: actualPage,
+      pageSize: actualPageSize,
       total,
-      totalPages: Math.ceil(total / pageSize),
+      totalPages: Math.ceil(total / actualPageSize),
     },
   }
 }

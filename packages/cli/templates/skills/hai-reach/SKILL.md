@@ -17,7 +17,7 @@ description: "使用 @h-ai/reach 配置邮件、短信、API 通知和多渠道�
 
 ## 使用路径
 
-- 先配置并注册 Provider，再保存绑定 Provider 的模板；发送结果须检查，DND/禁用与成功发送区分。
+- 先配置并注册 Provider，再保存绑定 Provider 的模板；模板发送只传 template/to/vars 即可，显式 provider 可覆盖；直接发送须提供 provider。发送结果须检查，DND/禁用与成功发送区分。
 - 验证模板替换和错误分支时使用隔离测试收件人；真实通知须在用户授权范围内。
 
 ## 按需参考

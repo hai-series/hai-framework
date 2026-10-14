@@ -106,7 +106,7 @@ test('shared authentication supports public registration with configuration', as
   await expect(page.getByTestId('settings-page')).toBeVisible()
 })
 
-test('frontend displays configured core metadata and restores the administrator session', async ({ page }) => {
+test('frontend displays configured core metadata and restores the administrator session', async ({ page }, testInfo) => {
   await page.goto('/')
   await expect(page.getByTestId('app-name')).toHaveText(configuredName)
   await expect(page).toHaveTitle(configuredName)
@@ -118,11 +118,15 @@ test('frontend displays configured core metadata and restores the administrator 
   await expect(page.getByTestId('users-page')).toBeVisible()
   await expect(page.getByTestId('nav-roles')).toBeVisible()
   await expect(page.getByTestId('nav-audit')).toBeVisible()
+  const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
+  if (evidence)
+    await mkdir(evidence, { recursive: true })
+  await page.screenshot({ path: evidence ? path.join(evidence, '{{projectName}}-users.png') : testInfo.outputPath('users.png'), fullPage: true })
   await page.getByTestId('logout').click()
   await expect(page.getByTestId('login-form')).toBeVisible()
 })
 
-test('audit filters align and fit desktop, tablet and narrow mobile screens', async ({ page }) => {
+test('audit filters align and fit desktop, tablet and narrow mobile screens', async ({ page }, testInfo) => {
   await page.goto('/')
   await login(page, 'admin', adminPassword)
   await page.getByTestId('nav-audit').click()
@@ -152,6 +156,13 @@ test('audit filters align and fit desktop, tablet and narrow mobile screens', as
       expect(controls[2]!.top).toBeCloseTo(controls[3]!.top, 0)
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    if (width === 1440 || width === 390) {
+      const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
+      if (evidence)
+        await mkdir(evidence, { recursive: true })
+      const file = `{{projectName}}-audit-${width}.png`
+      await page.screenshot({ path: evidence ? path.join(evidence, file) : testInfo.outputPath(file), fullPage: true })
+    }
   }
 })
 

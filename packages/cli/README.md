@@ -261,6 +261,8 @@ pnpm --filter @h-ai/cli test:watch
 pnpm --filter @h-ai/cli test:coverage
 ```
 
+Admin 与 fullstack 门禁还用实际安装的本地 tarball 验证公开类型和运行行为：流式文件/checksum/拒覆盖、API Key scope 与撤销、当前授权、批量用户/角色分页、Reach 模板路由和 Audit 分页元数据；fullstack 同时验证可信对端 IP。
+
 ## License
 
 Apache-2.0

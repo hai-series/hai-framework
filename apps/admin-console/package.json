@@ -55,6 +55,7 @@
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
     "daisyui": "catalog:",
+    "ldapts": "catalog:",
     "rimraf": "catalog:",
     "svelte": "catalog:",
     "svelte-check": "catalog:",
