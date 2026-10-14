@@ -38,9 +38,11 @@ export interface ServSession {
  * 模块消费者**无需**知道 IAM 内部 Session 类型与 ServSession 的差异：结构类型确保兼容。
  */
 export interface ServIam {
-  readonly session: {
-    /** 校验访问令牌，成功返回会话快照（结构上是 ServSession 的超集即可）。 */
+  readonly auth: {
+    /** 验证会话并读取当前有效的用户与授权；不依赖最大努力会话同步。 */
     verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>
+  }
+  readonly session: {
     /** 使用 refresh token 换发新的 token 对。仅 `refreshCookie` 启用时被调用。 */
     refresh: (refreshToken: string) => Promise<HaiResult<RefreshTokenPair>>
   }
@@ -141,7 +143,7 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  * - `verifyToken` 失败时**不**抛错，统一收敛为 `session=undefined`，交由 guard 返回未认证的失败 HaiResult
  * - 异常通过 try/catch 兜底，避免向 HTTP 层泄漏堆栈
  *
- * @param verifyToken - 访问令牌校验回调（通常是 `token => iam.session.verifyToken(token)` 或自定义函数）
+ * @param verifyToken - 访问令牌校验回调（通常是 `token => iam.auth.verifyToken(token)` 或自定义函数）
  * @returns 异步上下文工厂
  */
 export function buildAuthContextFactory(

@@ -86,7 +86,7 @@ LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h
 | `loginWithLdap` | `({ username, password }) => Promise<HaiResult<AuthResult>>` | LDAP 登录 |
 | `loginWithApiKey` | `({ key }) => Promise<HaiResult<AuthResult>>` | API Key 登录（需启用 `login.apikey`） |
 | `sendOtp` | `(identifier) => Promise<HaiResult<{ expiresAt }>>` | 发送 OTP |
-| `verifyToken` | `(token) => Promise<HaiResult<Session>>` | 验证令牌 |
+| `verifyToken` | `(token) => Promise<HaiResult<Session>>` | 验证会话并读取当前用户状态及授权；数据库失败拒绝 |
 | `logout` | `(token) => Promise<HaiResult<void>>` | 登出 |
 | `registerAndLogin` | `(options: RegisterOptions) => Promise<HaiResult<AuthResult>>` | 注册并登录（一站式） |
 
@@ -149,7 +149,8 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
 | `getCurrentUser` | `(token) => Promise<HaiResult<User>>` | 通过令牌获取当前用户 |
 | `updateCurrentUser` | `(token, data: UpdateCurrentUserInput) => Promise<HaiResult<User>>` | 更新当前用户（白名单字段） |
 | `getUser` | `(id, options?) => Promise<HaiResult<User \| null>>` | 获取用户（可 include roles） |
-| `listUsers` | `(options?) => Promise<HaiResult<PaginatedResult<User>>>` | 分页列表（支持 search、include、sortBy/sortDirection 白名单排序） |
+| `getUsers` | `(ids, options?) => Promise<HaiResult<User[]>>` | 批量公开用户，上限 1000；去重输入顺序、缺失省略、可 include roles |
+| `listUsers` | `(options?) => Promise<HaiResult<PaginatedResult<User>>>` | 分页列表（search、roleCode、include、白名单排序）；roleCode 在分页前筛选 |
 | `updateUser` | `(id, data) => Promise<HaiResult<User>>` | 更新用户 |
 | `deleteUser` | `(id) => Promise<HaiResult<void>>` | 删除用户（清除会话 + 角色关联） |
 | `changePassword` | `(id, old, new) => Promise<HaiResult<void>>` | 修改密码（按用户 ID） |
@@ -166,6 +167,7 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `checkPermission` | `(userId, permission) => Promise<HaiResult<boolean>>` | 检查权限（支持通配符） |
+| `getUserAuthorization` | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>` | 当前角色及权限代码，角色 JOIN + 批量权限查询；失败不回退缓存 |
 | `getUserPermissions` | `(userId) => Promise<HaiResult<Permission[]>>` | 获取用户所有权限 |
 | `getUserRoles` | `(userId) => Promise<HaiResult<Role[]>>` | 获取用户角色 |
 | `getUserRolesForMany` | `(userIds[]) => Promise<HaiResult<Map<string, Role[]>>>` | 批量获取多用户角色 |

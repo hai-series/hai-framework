@@ -10,6 +10,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
 import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
+import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { User } from '../user/iam-user-types.js'
 import type { ApiKeyStrategyResult } from './apikey/iam-authn-apikey-strategy.js'
 import type { ApiKey, ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
@@ -166,6 +167,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
       apiKeyStrategy,
       sessionFunctions,
       authzFunctions,
+      userRepository,
       config,
     })
 
@@ -185,6 +187,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 // ─── 内部实现 ───
 
 interface BuildAuthnDeps {
+  userRepository: UserRepository
   passwordStrategy: AuthStrategy
   otpStrategy?: AuthStrategy
   otpChallenge?: (identifier: string) => Promise<HaiResult<{ expiresAt: Date }>>
@@ -209,6 +212,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     apiKeyStrategy,
     sessionFunctions,
     authzFunctions,
+    userRepository,
     config,
   } = deps
 
@@ -229,34 +233,6 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       )
     }
     return null
-  }
-
-  /**
-   * 查询用户角色 code 列表
-   *
-   * @param userId - 用户 ID
-   * @returns 角色 code 数组
-   */
-  async function resolveUserRoleCodes(userId: string): Promise<HaiResult<string[]>> {
-    const rolesResult = await authzFunctions.getUserRoles(userId)
-    if (!rolesResult.success) {
-      return rolesResult as HaiResult<string[]>
-    }
-    return ok(rolesResult.data.map(role => role.code))
-  }
-
-  /**
-   * 查询用户权限 code 列表
-   *
-   * @param userId - 用户 ID
-   * @returns 权限 code 数组
-   */
-  async function resolveUserPermissionCodes(userId: string): Promise<HaiResult<string[]>> {
-    const permissionsResult = await authzFunctions.getUserPermissions(userId)
-    if (!permissionsResult.success) {
-      return permissionsResult as HaiResult<string[]>
-    }
-    return ok(permissionsResult.data.map(p => p.code))
   }
 
   /**
@@ -304,19 +280,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
   async function buildAuthResult(user: User, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
     if (!user.enabled)
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
-    // 并行获取角色和权限，登录时一次性查 DB，后续纯缓存
-    const [roleCodesResult, permCodesResult] = await Promise.all([
-      resolveUserRoleCodes(user.id),
-      resolveUserPermissionCodes(user.id),
-    ])
-    if (!roleCodesResult.success) {
-      return roleCodesResult as HaiResult<AuthResult>
-    }
-    if (!permCodesResult.success) {
-      return permCodesResult as HaiResult<AuthResult>
-    }
-
-    const access = { roles: roleCodesResult.data, permissions: permCodesResult.data }
+    const authorization = await authzFunctions.getUserAuthorization(user.id)
+    if (!authorization.success)
+      return authorization
+    const access = authorization.data
     const effective = apiKey ? applyApiKeyScopes(access, apiKey.scopes) : access
     const sessionResult = await sessionFunctions.create({
       userId: user.id,
@@ -429,7 +396,21 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     },
 
     async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
-      return sessionFunctions.verifyToken(accessToken)
+      const session = await sessionFunctions.verifyToken(accessToken)
+      if (!session.success)
+        return session
+      const [user, authorization] = await Promise.all([
+        userRepository.findById(session.data.userId),
+        authzFunctions.getUserAuthorization(session.data.userId),
+      ])
+      if (!user.success)
+        return user
+      if (!user.data?.enabled)
+        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      if (!authorization.success)
+        return authorization
+      const current = { ...session.data, username: user.data.username, displayName: user.data.displayName, avatarUrl: user.data.avatarUrl, ...authorization.data }
+      return ok(current.apiKeyId ? applyApiKeyScopes(current, current.apiKeyScopes ?? []) : current)
     },
 
     async sendOtp(identifier: string): Promise<HaiResult<{ expiresAt: Date }>> {

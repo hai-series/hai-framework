@@ -23,15 +23,16 @@ import { kit } from '@h-ai/kit'
  * - pageSize: 每页数量（默认 20）
  * - search: 搜索关键字（模糊匹配用户名/邮箱）
  * - enabled: 启用状态过滤（true/false，不传则返回全部）
+ * - roleCode: 角色代码过滤（在数据库分页前执行）
  * - sortBy: 排序字段（username/email/displayName/enabled/createdAt）
  * - sortDirection: 排序方向（asc/desc）
  */
 export const GET = kit.handler(async ({ url, locals }) => {
   kit.guard.require(locals.session, 'user:list')
 
-  const { page, pageSize, search, enabled, sortBy, sortDirection } = kit.validate.query(url, ListUsersQuerySchema)
+  const { page, pageSize, search, enabled, roleCode, sortBy, sortDirection } = kit.validate.query(url, ListUsersQuerySchema)
 
-  const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'], sortBy, sortDirection })
+  const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled, roleCode, include: ['roles'], sortBy, sortDirection })
   if (!usersResult.success) {
     return kit.response.internalError(usersResult.error.message)
   }

@@ -37,7 +37,7 @@ hai create my-app
 | 配置、日志、ID、结果/错误、i18n | `hai-core` | getter、logger、ID 是直接值；ID 不作为密钥 |
 | 数据库查询、CRUD、事务、分页 | `hai-reldb` | 先检查现有 CRUD/Repository 与事务支持，不另建 DB 连接层 |
 | 缓存、TTL、共享锁 | `hai-cache` | 区分 memory 与共享后端；单进程状态不能承担跨节点防重 |
-| 注册、登录、会话、角色/权限 | `hai-iam` | 优先配置内置认证能力；业务资源/租户授权仍由应用检查 |
+| 注册、登录、会话、角色/权限 | `hai-iam` | 优先配置内置认证能力；受保护请求使用 iam.auth.verifyToken，serv 注入 IAM 时自动使用；批量用户与角色筛选复用公开 API；业务资源/租户授权仍由应用检查 |
 | SvelteKit Hook、守卫、校验、响应 | `hai-kit` | 只用于 SvelteKit；沿用已有认证/transport 管道 |
 | 共享输入输出和 HTTP contract | `hai-api-contract` | 扩展已有 contract 与 schema，不维护第二份业务路径 |
 | API 运行时、内置 feature、route guard | `hai-serv` | 先检查内置 procedures/features 与 route auth/permission；不另写平行服务器 |

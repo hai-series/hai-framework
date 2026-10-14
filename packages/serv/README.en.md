@@ -205,10 +205,10 @@ const app = serv.createApp({
 
 Pass the top-level `iam` handle to `serv.createApp` to derive:
 
-- **Access token verification**: `iam.session.verifyToken` fills `context.session` on every request without caching.
+- **Access token verification**: `iam.auth.verifyToken` fills `context.session` on every request without caching.
 - **Refresh rotation**: with `refreshCookie`, `iam.session.refresh` becomes the httpOnly-cookie refresh callback.
 
-**Context factory precedence**: explicit `createContext` > `verifyToken` > `iam.session.verifyToken` > metadata-only default.
+**Context factory precedence**: explicit `createContext` > `verifyToken` > `iam.auth.verifyToken` > metadata-only default.
 
 ```ts
 // 推荐：传入 iam，一行打开认证与 Cookie 刷新
@@ -233,7 +233,7 @@ const app = serv.createApp({
   createContext: async ({ request }) => {
     const base = serv.parseRequestContext({ request })
     // 手动填充 session（serv 不再自动填充）
-    const result = await iam.session.verifyToken(base.accessToken ?? '')
+    const result = await iam.auth.verifyToken(base.accessToken ?? '')
     return {
       ...base,
       session: result.success ? result.data : undefined,
@@ -339,7 +339,7 @@ To reuse `Bearer token -> session` and add tenant, workspace, or source-system f
 prefer `serv.buildAuthContextFactory()` to assemble a custom `createContext`:
 
 ```ts
-const baseContext = serv.buildAuthContextFactory(token => iam.session.verifyToken(token))
+const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 
 const app = serv.createApp({
   contract,
@@ -436,7 +436,7 @@ const app = serv.createApp({
         && security.isNativeOrigin(request.headers.get('origin') ?? ''),
     },
   },
-  // ✅ 无需再传 verifyToken，iam.session.verifyToken 自动用于填充 context.session
+  // ✅ 无需再传 verifyToken，iam.auth.verifyToken 自动用于填充 context.session
 })
 ```
 

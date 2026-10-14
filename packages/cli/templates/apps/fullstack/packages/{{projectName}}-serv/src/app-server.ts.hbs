@@ -1,6 +1,6 @@
 import type { CoreConfig } from '@h-ai/core'
 import type { ServHttpApp } from '@h-ai/serv'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core } from '@h-ai/core'
 import { createReldbTransportKeyStore, crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
@@ -40,26 +40,6 @@ export function createServerApp(): ServHttpApp {
       },
     }),
     iam,
-    verifyToken: async (token) => {
-      const session = await iam.session.verifyToken(token)
-      if (!session.success)
-        return session
-      const user = await iam.user.getUser(session.data.userId)
-      if (!user.success)
-        return user
-      if (!user.data?.enabled)
-        return err(HaiCommonError.UNAUTHORIZED, core.i18n.coreM('core_errorUnauthorized'))
-      // 会话中的授权同步属于最大努力，业务守卫始终读取最新持久化角色与权限。
-      const [roles, permissions] = await Promise.all([
-        iam.authz.getUserRoles(user.data.id),
-        iam.authz.getUserPermissions(user.data.id),
-      ])
-      if (!roles.success)
-        return roles
-      if (!permissions.success)
-        return permissions
-      return ok({ ...session.data, roles: roles.data.map(role => role.code), permissions: permissions.data.map(permission => permission.code) })
-    },
     refreshCookie: {
       secure: security.secureRefreshCookie,
       nativeTokenTransport: { isRequest: request => request.headers.get('x-hai-token-transport') === 'body'

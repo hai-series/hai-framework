@@ -275,7 +275,9 @@ login(credentials)
 verifyToken(accessToken)
   → session.get(accessToken) → キャッシュ検索
   → 自動延長モードなら TTL を延長
-  → Session を返す（userId、roles、permissions）
+  → 現在のユーザー状態・ロール JOIN・権限一括検索（ロールなしなら権限検索を省略）
+  → 無効ユーザー・DB 読取失敗は拒否し、API Key scope を再適用
+  → 現在の Session を返す（userId、roles、permissions）
 ```
 
 #### 使用方法
@@ -438,7 +440,7 @@ await iam.authz.syncRoles(userId, [roleId1, roleId2])
 - **ワイルドカード**：`admin:*` は `admin:read`、`admin:write:detail` などに一致。1 つの `*` がコロン以降全体に一致します。
 - **最高管理者**：`rbac.superAdminRole`（既定 `super_admin`）はすべての権限を持ちます。
 - **トランザクション**：`deleteRole` / `deletePermission` は DB トランザクションで関連を削除してから本体を削除。
-- **同期の遅延**：権限変更は稼働中のセッションへ best-effort で反映し、多数のユーザーでは遅延する場合があります。
+- **セッション同期**：キャッシュ更新は best-effort です。保護されたリクエストは `iam.auth.verifyToken` で現在の状態・権限を読み、読取失敗を拒否します。`iam.session.verifyToken` はスナップショット検証のみです。`iam.authz.getUserAuthorization(userId)` はロール JOIN と権限一括検索を共有します。
 - **初期データ**：`seedDefaultData: true` で admin/user/guest と基本権限を冪等に作成。
 
 ---
@@ -503,10 +505,12 @@ const users = await iam.user.listUsers({
   page: 1,
   pageSize: 20,
   search: 'alice',
+  roleCode: 'editor', // ページ分割前に絞り込み、total にも反映。
   sortBy: 'createdAt',
   sortDirection: 'desc',
   include: ['roles'],
 })
+const batch = await iam.user.getUsers([userId1, userId2], { include: ['roles'] }) // 最大 1000 ID、重複除去・入力順維持・未存在 ID は省略。
 await iam.user.updateUser(userId, { enabled: false }) // 禁用用户 → 自动清除会话
 await iam.user.deleteUser(userId) // 删除用户 → 事务清除角色关联
 

@@ -82,7 +82,7 @@ function translateAuditAction(action: string): string {
 }
 
 /** 创建用户管理 CRUD 定义。 */
-export function createUserCrud(roles: Array<{ id: string, name: string }>) {
+export function createUserCrud(roles: Array<{ id: string, code: string, name: string }>) {
   const roleOptions = () => roles.map(r => ({ label: r.name, value: r.id }))
 
   const fields: CrudFieldDef[] = [
@@ -152,13 +152,25 @@ export function createUserCrud(roles: Array<{ id: string, name: string }>) {
       order: 5,
     },
     {
+      id: 'role',
+      label: () => m.iam_users_col_roles(),
+      type: 'select',
+      filterable: true,
+      options: () => roles.map(role => ({ label: role.name, value: role.code })),
+      inList: false,
+      inCreate: false,
+      inEdit: false,
+      inDetail: false,
+      order: 6,
+    },
+    {
       id: 'created_at',
       label: () => m.iam_users_col_created_at(),
       type: 'datetime',
       inCreate: false,
       inEdit: false,
       render: value => value ? new Date(value as string).toLocaleDateString(getLocale()) : '-',
-      order: 6,
+      order: 7,
     },
   ]
 

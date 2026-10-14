@@ -275,7 +275,9 @@ login(credentials)
 verifyToken(accessToken)
   → session.get(accessToken) → 缓存查询
   → 滑动续期模式下自动延长 TTL
-  → 返回 Session 对象（含 userId、roles、permissions）
+  → 读取当前用户状态 + 角色 JOIN + 批量权限查询（无角色时省略权限查询）
+  → 用户停用或数据库读取失败时拒绝；API Key 会话再次收敛 scope
+  → 返回当前 Session 对象（含 userId、roles、permissions）
 ```
 
 #### 使用方式
@@ -438,7 +440,7 @@ await iam.authz.syncRoles(userId, [roleId1, roleId2])
 - **通配符匹配**：`admin:*` 匹配 `admin:read`、`admin:write:detail` 等（单层 `*` 匹配冒号后全部）
 - **超管角色**：配置的 `rbac.superAdminRole`（默认 `super_admin`）自动拥有所有权限
 - **事务保护**：`deleteRole` / `deletePermission` 使用 DB 事务，先清关联再删实体
-- **会话同步延迟**：权限变更后活跃 session 中的权限列表会被同步更新，但为 best-effort（大量用户场景可能有延迟）
+- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，每次读取当前状态与授权，读取失败拒绝。`iam.session.verifyToken` 仅验证会话快照。`iam.authz.getUserAuthorization(userId)` 复用角色 JOIN 与批量权限查询。
 - **种子数据**：`seedDefaultData: true` 时自动创建 admin/user/guest 三个默认角色及基础权限，幂等执行
 
 ---
@@ -503,10 +505,12 @@ const users = await iam.user.listUsers({
   page: 1,
   pageSize: 20,
   search: 'alice',
+  roleCode: 'editor', // 角色 code 在数据库分页前筛选，total 与 items 保持一致。
   sortBy: 'createdAt',
   sortDirection: 'desc',
   include: ['roles'],
 })
+const batch = await iam.user.getUsers([userId1, userId2], { include: ['roles'] }) // 上限 1000；去重保留输入顺序，缺失 ID 省略。
 await iam.user.updateUser(userId, { enabled: false }) // 禁用用户 → 自动清除会话
 await iam.user.deleteUser(userId) // 删除用户 → 事务清除角色关联
 

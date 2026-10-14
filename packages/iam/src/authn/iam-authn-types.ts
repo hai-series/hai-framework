@@ -139,7 +139,8 @@ export interface AuthnOperations {
   /**
    * 验证令牌
    *
-   * 查询会话并校验有效性，滑动窗口模式下自动续期。
+   * 验证会话并读取当前用户状态、角色与权限；重新应用 API Key scopes，依赖失败即拒绝。
+   * 会话同步仅是缓存快照，受保护请求使用此入口而非低层 session.verifyToken。
    *
    * @param accessToken - 访问令牌
    * @returns 成功返回会话信息；令牌无效/过期返回 SESSION_INVALID

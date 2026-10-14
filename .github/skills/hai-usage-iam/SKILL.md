@@ -29,6 +29,9 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 
 - 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
+- 受保护请求使用 `iam.auth.verifyToken`：当前用户状态 + 角色 JOIN + 批量权限读取，失败即拒绝；`iam.session.verifyToken` 仅验证会话快照。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
+- 用户批量读取用 `iam.user.getUsers(ids, { include: ['roles'] })`（最多 1000，去重保留输入顺序，缺失省略）；角色筛选用 `listUsers({ roleCode })`，在分页前执行，避免 N+1 和分页后过滤。
+
 ## 按需参考
 
 详细配置、API 签名、错误码和范本在 [reference.md](reference.md)。按下列标题定位所需小节，不默认通读；用例中的业务变量需结合当前应用补齐。

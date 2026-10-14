@@ -113,7 +113,7 @@ LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h
 | `loginWithLdap`    | `({ username, password }) => Promise<HaiResult<AuthResult>>`   | LDAP 登录                          |
 | `loginWithApiKey`  | `({ key }) => Promise<HaiResult<AuthResult>>`                  | API Key 登录                       |
 | `sendOtp`          | `(identifier) => Promise<HaiResult<{ expiresAt }>>`            | 发送 OTP 验证码                    |
-| `verifyToken`      | `(token) => Promise<HaiResult<Session>>`                       | 验证令牌（推荐入口，委托 session） |
+| `verifyToken`      | `(token) => Promise<HaiResult<Session>>`                       | 验证会话并读取当前用户状态及授权；数据库失败拒绝 |
 | `logout`           | `(token) => Promise<HaiResult<void>>`                          | 登出                               |
 | `registerAndLogin` | `(options: RegisterOptions) => Promise<HaiResult<AuthResult>>`  | 注册并登录（一站式）               |
 
@@ -180,7 +180,8 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 | `getUser`                  | `(id, options?) => Promise<HaiResult<User \| null>>`                       | 获取用户（可选 include: ['roles']）  |
 | `getCurrentUser`           | `(token) => Promise<HaiResult<User>>`                                      | 通过令牌获取当前用户                 |
 | `updateCurrentUser`        | `(token, data: UpdateCurrentUserInput) => Promise<HaiResult<User>>`        | 当前用户修改个人资料（白名单字段）   |
-| `listUsers`                | `(options?: ListUsersOptions) => Promise<HaiResult<PaginatedResult<User>>>` | 用户列表（分页 + 搜索 + 过滤 + 白名单排序） |
+| `getUsers` | `(ids, options?) => Promise<HaiResult<User[]>>` | 批量公开用户，上限 1000；去重输入顺序、缺失省略、可 include roles |
+| `listUsers`                | `(options?: ListUsersOptions) => Promise<HaiResult<PaginatedResult<User>>>` | 用户列表（分页 + 搜索 + roleCode 分页前筛选 + 白名单排序） |
 | `updateUser`               | `(id, data) => Promise<HaiResult<User>>`                                   | 更新用户信息                         |
 | `deleteUser`               | `(id) => Promise<HaiResult<void>>`                                         | 删除用户（自动清除会话）             |
 | `changePassword`           | `(id, old, new) => Promise<HaiResult<void>>`                               | 修改密码（自动清除会话）             |
@@ -195,6 +196,7 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 | 方法                       | 签名                                                                             | 说明                                         |
 | -------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------- |
 | `checkPermission`          | `(userId, permission) => Promise<HaiResult<boolean>>`                               | 检查权限（超管自动通过，支持通配符）         |
+| `getUserAuthorization` | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>` | 当前角色及权限代码，角色 JOIN + 批量权限查询；失败不回退缓存 |
 | `getUserPermissions`       | `(userId) => Promise<HaiResult<Permission[]>>`                                      | 获取用户权限列表（通过角色聚合去重）         |
 | `getUserRoles`             | `(userId) => Promise<HaiResult<Role[]>>`                                            | 获取用户角色列表                             |
 | `getUserRolesForMany`      | `(userIds) => Promise<HaiResult<Map<string, Role[]>>>`                              | 批量获取多用户角色（避免 N+1）               |

@@ -205,10 +205,10 @@ const app = serv.createApp({
 
 `serv.createApp` 推荐直接传入顶层 `iam` 句柄，自动派生两件事：
 
-- **access token 校验**：每个请求调用 `iam.session.verifyToken` 填充 `context.session`（不缓存）。
+- **access token 校验**：每个请求调用 `iam.auth.verifyToken` 填充 `context.session`（不缓存）。
 - **refresh token 轮换**：启用 `refreshCookie` 后，自动使用 `iam.session.refresh` 作为 httpOnly cookie 刷新回调。
 
-**上下文工厂优先级**：显式 `createContext` > `verifyToken` > `iam.session.verifyToken` > 默认仅解析元数据。
+**上下文工厂优先级**：显式 `createContext` > `verifyToken` > `iam.auth.verifyToken` > 默认仅解析元数据。
 
 ```ts
 // 推荐：传入 iam，一行打开认证与 Cookie 刷新
@@ -233,7 +233,7 @@ const app = serv.createApp({
   createContext: async ({ request }) => {
     const base = serv.parseRequestContext({ request })
     // 手动填充 session（serv 不再自动填充）
-    const result = await iam.session.verifyToken(base.accessToken ?? '')
+    const result = await iam.auth.verifyToken(base.accessToken ?? '')
     return {
       ...base,
       session: result.success ? result.data : undefined,
@@ -339,7 +339,7 @@ const app = serv.createApp({
 优先用 `serv.buildAuthContextFactory()` 组装自定义 `createContext`：
 
 ```ts
-const baseContext = serv.buildAuthContextFactory(token => iam.session.verifyToken(token))
+const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 
 const app = serv.createApp({
   contract,
@@ -436,7 +436,7 @@ const app = serv.createApp({
         && security.isNativeOrigin(request.headers.get('origin') ?? ''),
     },
   },
-  // ✅ 无需再传 verifyToken，iam.session.verifyToken 自动用于填充 context.session
+  // ✅ 无需再传 verifyToken，iam.auth.verifyToken 自动用于填充 context.session
 })
 ```
 

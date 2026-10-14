@@ -275,7 +275,9 @@ login(credentials)
 verifyToken(accessToken)
   → session.get(accessToken) → cache lookup
   → Extend TTL automatically when sliding renewal is enabled
-  → Return Session (userId, roles, permissions)
+  → Read current user status, role JOIN and one batched permission query (skip permissions for no roles)
+  → Reject disabled users or database failures; intersect API Key scopes again
+  → Return current Session (userId, roles, permissions)
 ```
 
 #### Usage
@@ -438,7 +440,7 @@ await iam.authz.syncRoles(userId, [roleId1, roleId2])
 - **Wildcard matching**: `admin:*` matches `admin:read`, `admin:write:detail`, etc.; one `*` matches everything after the colon.
 - **Super-admin role**: `rbac.superAdminRole` (default `super_admin`) automatically grants all permissions.
 - **Transactions**: `deleteRole` / `deletePermission` clear associations before deleting entities in a DB transaction.
-- **Session synchronization latency**: permission changes update active session permissions on a best-effort basis; many users may cause delay.
+- **Session synchronization**: cache updates are best-effort. Protected requests use `iam.auth.verifyToken` to read current user status and authorization and reject read failures. `iam.session.verifyToken` validates a session snapshot only. `iam.authz.getUserAuthorization(userId)` shares the role JOIN and batched permission query.
 - **Seed data**: `seedDefaultData: true` idempotently creates admin/user/guest roles and basic permissions.
 
 ---
@@ -503,10 +505,12 @@ const users = await iam.user.listUsers({
   page: 1,
   pageSize: 20,
   search: 'alice',
+  roleCode: 'editor', // Filter before pagination; total reflects this filter.
   sortBy: 'createdAt',
   sortDirection: 'desc',
   include: ['roles'],
 })
+const batch = await iam.user.getUsers([userId1, userId2], { include: ['roles'] }) // Up to 1000 IDs; unique input order, missing IDs omitted.
 await iam.user.updateUser(userId, { enabled: false }) // 禁用用户 → 自动清除会话
 await iam.user.deleteUser(userId) // 删除用户 → 事务清除角色关联
 

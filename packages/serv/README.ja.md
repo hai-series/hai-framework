@@ -205,10 +205,10 @@ const app = serv.createApp({
 
 `serv.createApp` にトップレベルの `iam` を渡すと、次を自動構成します：
 
-- **access token 検証**：各リクエストで `iam.session.verifyToken` を呼び `context.session` を設定（キャッシュなし）。
+- **access token 検証**：各リクエストで `iam.auth.verifyToken` を呼び `context.session` を設定（キャッシュなし）。
 - **refresh token の更新**：`refreshCookie` 有効時、`iam.session.refresh` を httpOnly cookie 更新処理に使用。
 
-**context の優先順位**：明示的 `createContext` > `verifyToken` > `iam.session.verifyToken` > メタデータのみの既定解析。
+**context の優先順位**：明示的 `createContext` > `verifyToken` > `iam.auth.verifyToken` > メタデータのみの既定解析。
 
 ```ts
 // 推荐：传入 iam，一行打开认证与 Cookie 刷新
@@ -233,7 +233,7 @@ const app = serv.createApp({
   createContext: async ({ request }) => {
     const base = serv.parseRequestContext({ request })
     // 手动填充 session（serv 不再自动填充）
-    const result = await iam.session.verifyToken(base.accessToken ?? '')
+    const result = await iam.auth.verifyToken(base.accessToken ?? '')
     return {
       ...base,
       session: result.success ? result.data : undefined,
@@ -339,7 +339,7 @@ const app = serv.createApp({
 `serv.buildAuthContextFactory()` で独自の `createContext` を構成してください：
 
 ```ts
-const baseContext = serv.buildAuthContextFactory(token => iam.session.verifyToken(token))
+const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 
 const app = serv.createApp({
   contract,
@@ -436,7 +436,7 @@ const app = serv.createApp({
         && security.isNativeOrigin(request.headers.get('origin') ?? ''),
     },
   },
-  // ✅ 无需再传 verifyToken，iam.session.verifyToken 自动用于填充 context.session
+  // ✅ 无需再传 verifyToken，iam.auth.verifyToken 自动用于填充 context.session
 })
 ```
 

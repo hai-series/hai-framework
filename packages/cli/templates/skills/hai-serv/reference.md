@@ -371,7 +371,7 @@ await apiClient.init({
 
 1. 显式 `createContext`（高级场景：多租户、额外字段）
 2. `verifyToken`（逃脱口：使用非 @h-ai/iam 的认证服务）
-3. `iam.session.verifyToken`（推荐：传入 `iam` 后自动启用）
+3. `iam.auth.verifyToken`（推荐：传入 `iam` 后自动启用）
 4. 默认 `parseRequestContext`：仅解析请求元数据，`session` 为 `undefined`
 
 > ⚠️ `verifyToken` 会在每次请求调用（不缓存）；verifyToken 失败或抛错统一收敛为 `session=undefined`，由 route 的 `.auth()` / `.permission()` / `.role()` 返回失败 HaiResult，`error.httpStatus=401`；普通 procedure 的 HTTP 响应默认仍为 200。
@@ -479,7 +479,7 @@ const app = serv.createApp({
 如果想复用“Bearer token → session”这段逻辑，再追加租户/工作区等字段，优先：
 
 ```typescript
-const baseContext = serv.buildAuthContextFactory(token => iam.session.verifyToken(token))
+const baseContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 
 const app = serv.createApp({
   contract,

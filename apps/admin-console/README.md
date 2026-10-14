@@ -11,7 +11,7 @@
 - 🎨 **现代化 UI** — Svelte 5 Runes + TailwindCSS v4 + DaisyUI，32 套主题随时切换
 - 🔒 **API 传输加密** — 浏览器与 `/api/*` 默认通过 `@h-ai/crypto` 做密钥协商与请求/响应加解密
 - 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @h-ai/ui 场景组件
-- 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志
+- 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志；用户按角色 code 在数据库分页前筛选，总数与结果一致
 - 🧩 **UI Gallery** — 69+ @h-ai/ui 组件的交互式展览（4 分类标签页）
 - 🔧 **模块演示** — Core、DB、Cache、Storage、AI（含多厂商文生图）、Crypto 交互式示例
 - 🌍 **国际化** — Paraglide 集成，189+ message keys，中英文实时切换

@@ -116,7 +116,7 @@ const IAM_AUTH_PATHS = {
 function resolveRefreshCookieConfig(
   apiPrefix: string,
   config: RefreshCookieConfig,
-  iam: ServIam | undefined,
+  iam: Pick<ServIam, 'session'> | undefined,
 ): ResolvedRefreshCookieConfig {
   // ⚠️ 不 `.bind(iam.session)`：IAM NotInitializedKit Proxy 在 init 后才切换为真实实现，
   //    提前 bind 会捕获未初始化 Proxy。用闭包延迟到调用点再解析。
@@ -223,7 +223,7 @@ export function mountRefreshCookieRoutes(
   app: Hono,
   apiPrefix: string,
   config: RefreshCookieConfig,
-  iam: ServIam | undefined,
+  iam: Pick<ServIam, 'session'> | undefined,
 ): void {
   const {
     cookieName,
