@@ -10,7 +10,7 @@
 
 管理界面自动创建角色时使用 `role_${core.id.generate()}` 生成 code，显示名称独立保存；不要通过移除中文、表情或折叠大小写生成标识。重命名不重建 code。
 
-> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（服务端会话 token / OTP / 权限缓存）、`@h-ai/crypto`（密码哈希）。
+> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP/API Key）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（服务端会话 / OTP / 重置令牌 / 一次性票据 / 共享锁）、`@h-ai/crypto`（密码哈希）。
 
 ## §1 配置与初始化
 

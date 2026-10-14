@@ -12,7 +12,7 @@
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
 | **認証**                       | パスワード、OTP（メール・SMS コード）、LDAP、API Key の認証方式                           |
 | **セッション**                 | 状態を持つセッション（ランダム access token + キャッシュ、任意の自動延長）                |
-| **認可**                       | RBAC のロール・権限管理（DB + キャッシュ、ワイルドカード照合）                            |
+| **認可**                       | RBAC のロール・権限管理（DB 一括検索、ワイルドカード照合）                                |
 | **ユーザー管理**               | 登録、検索、更新、パスワードリセット、管理者によるリセット                                |
 | **API Key**                    | scope・期限付き API Key の作成、失効、検証                                                |
 | **一度限りのチケット**         | Bearer Token を付けられない WebSocket などのための短期チケット（発行 / アトミックな消費） |
@@ -27,7 +27,7 @@ pnpm add @h-ai/iam
 ## 依存関係
 
 - `@h-ai/reldb`：ユーザー・ロール・権限の永続化。**iam.init() より先に初期化**。
-- `@h-ai/cache`：セッション・OTP・リセット Token・権限のキャッシュ。**iam.init() より先に初期化**。
+- `@h-ai/cache`：セッション・OTP・リセット Token・一度限りのチケット・共有ロック。**iam.init() より先に初期化**。
 - `@h-ai/crypto`：内部で使用するパスワードハッシュ。自動初期化。
 - `@h-ai/audit`：主要な RBAC 操作の監査記録。
 
@@ -218,7 +218,7 @@ IAM は `iam.init()` / `iam.close()` で状態を管理する**ライフサイ�
 ```
 iam.init()
   ├─ session  （キャッシュによるセッション、DB 依存なし）
-  ├─ authz    （RBAC ロール・権限、DB + キャッシュ）
+  ├─ authz    （RBAC ロール・権限、DB 一括検索）
   ├─ authn    （認証、session + authz に依存）
   ├─ user     （ユーザー管理、session + authz + passwordStrategy に依存）
   └─ seed     （初期データ、authz に依存）
@@ -416,7 +416,7 @@ checkPermission(userId, permission)
   → RBAC 無効なら true
   → ユーザーのロール一覧を DB から取得
   → 最高管理者を確認（キャッシュの superAdminRoleId）、あれば true
-  → 各ロールの権限を取得（キャッシュ優先、miss は DB から取得して保存）
+  → 各ロールの権限コードを DB で一括取得。読み取り失敗はエラーを返す
   → 厳密・ワイルドカード照合（`admin:*` は `admin:read` に一致）
   → true / false を返す
 ```
@@ -426,7 +426,6 @@ checkPermission(userId, permission)
 ```
 assignPermissionToRole(roleId, permId)
   → 関連を DB に保存
-  → ロール権限のキャッシュを消去
   → 所属ユーザー検索 → 各権限を再解決 → 活動中 session を更新
   （best-effort：失敗は log.error のみで割り当て結果に影響しない）
 ```

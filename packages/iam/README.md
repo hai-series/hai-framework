@@ -12,7 +12,7 @@
 | -------------- | -------------------------------------------------------------------------------------- |
 | **认证**       | 密码、OTP（邮箱/短信验证码）、LDAP、API Key 多策略认证                                 |
 | **会话**       | 有状态会话（随机访问令牌 + 缓存，滑动续期可选）                                        |
-| **授权**       | RBAC 角色与权限管理（DB + 缓存，通配符权限匹配）                                       |
+| **授权**       | RBAC 角色与权限管理（DB 批量读取，通配符权限匹配）                                     |
 | **用户管理**   | 注册、查询、更新、密码重置、管理员重置密码                                             |
 | **API Key**    | API Key 创建、吊销、验证，支持 scope 与过期时间                                        |
 | **一次性票据** | 短期、一次性能力票据（签发 / 原子消费），用于 WebSocket 等无法携带 Bearer Token 的通道 |
@@ -27,7 +27,7 @@ pnpm add @h-ai/iam
 ## 依赖
 
 - `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
-- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/权限缓存），**需在 iam.init() 前初始化**
+- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/一次性票据/共享锁），**需在 iam.init() 前初始化**
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
 - `@h-ai/audit` — 审计日志（RBAC 关键操作记录）
 
@@ -218,7 +218,7 @@ IAM 是**生命周期单例**模块，通过 `iam.init()` / `iam.close()` 管理
 ```
 iam.init()
   ├─ session  （缓存会话管理，无 DB 依赖）
-  ├─ authz    （RBAC 角色/权限，DB + 缓存）
+  ├─ authz    （RBAC 角色/权限，DB 批量读取）
   ├─ authn    （认证策略，依赖 session + authz）
   ├─ user     （用户管理，依赖 session + authz + passwordStrategy）
   └─ seed     （种子数据，依赖 authz）
@@ -416,7 +416,7 @@ checkPermission(userId, permission)
   → RBAC 未启用 → 直接返回 true
   → 查询用户角色列表（DB）
   → 检查是否包含超管角色（缓存 superAdminRoleId）→ 是则直接返回 true
-  → 逐角色查询权限代码列表（缓存优先，miss 时查 DB 并写入缓存）
+  → 一次批量查询这些角色的权限代码（DB）；读取失败返回错误
   → 逐权限匹配：精确匹配 或 通配符匹配（`admin:*` 匹配 `admin:read`）
   → 返回 true / false
 ```
@@ -426,7 +426,6 @@ checkPermission(userId, permission)
 ```
 assignPermissionToRole(roleId, permId)
   → DB 写入关联关系
-  → 清除角色权限缓存
   → 查询该角色下所有用户 → 逐用户重新解析权限 → 更新活跃 session
   （best-effort：同步失败仅 log.error，不影响权限分配结果）
 ```

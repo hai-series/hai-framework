@@ -10,7 +10,7 @@
 
 管理界面自动创建角色时使用 `role_${core.id.generate()}` 生成 code，显示名称独立保存；不要通过移除中文、表情或折叠大小写生成标识。重命名不重建 code。
 
-> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP/API Key）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（Token + 权限缓存）、`@h-ai/crypto`（密码哈希）、`@h-ai/audit`（审计日志）。
+> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP/API Key）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（会话 / OTP / 重置令牌 / 一次性票据 / 共享锁）、`@h-ai/crypto`（密码哈希）、`@h-ai/audit`（审计日志）。
 
 ## 运行环境
 
@@ -21,7 +21,7 @@
 | 模块 | 用途 | 是否必需 | 初始化要求 |
 | --- | --- | --- | --- |
 | `@h-ai/reldb` | 数据库（用户/角色/权限持久化） | **必需** | 需在 `iam.init()` 前初始化 |
-| `@h-ai/cache` | 缓存（会话/OTP/重置令牌/权限缓存） | **必需** | 需在 `iam.init()` 前初始化 |
+| `@h-ai/cache` | 缓存（会话/OTP/重置令牌/一次性票据/共享锁） | **必需** | 需在 `iam.init()` 前初始化 |
 | `@h-ai/crypto` | 密码哈希 | 内部使用 | 自动初始化 |
 | `@h-ai/audit` | 审计日志（RBAC 关键操作记录） | 内部使用 | 已初始化时自动写入 |
 
@@ -484,6 +484,6 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 - `hai-kit`：SvelteKit 集成（Bearer Token + 契约处理）
 - `hai-api-client`：客户端契约调用
 - `hai-reldb`：底层数据存储
-- `hai-cache`：Token 与权限缓存
+- `hai-cache`：会话、OTP/重置状态、一次性票据和共享锁
 - `hai-crypto`：密码哈希（内部依赖）
 - `hai-ui`：IAM 场景组件（LoginForm/RegisterForm 等）

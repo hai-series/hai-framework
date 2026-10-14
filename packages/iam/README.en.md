@@ -12,7 +12,7 @@ Identity and access management through a unified `iam` object for authentication
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | **Authentication**   | Password, OTP (email/SMS codes), LDAP, and API Key strategies                                                          |
 | **Sessions**         | Stateful sessions (random access tokens + cache, optional sliding renewal)                                             |
-| **Authorization**    | RBAC roles and permissions (DB + cache, wildcard matching)                                                             |
+| **Authorization**    | RBAC roles and permissions (batched DB reads, wildcard matching)                                                       |
 | **User management**  | Registration, queries, updates, password reset, and admin password reset                                               |
 | **API Key**          | Create, revoke, and verify API keys with scopes and expiration                                                         |
 | **One-time tickets** | Short-lived capability tickets (issue / atomic consume) for channels such as WebSocket that cannot carry Bearer tokens |
@@ -27,7 +27,7 @@ pnpm add @h-ai/iam
 ## Dependencies
 
 - `@h-ai/reldb`: persistence for users/roles/permissions; **initialize before iam.init()**.
-- `@h-ai/cache`: sessions/OTP/reset tokens/permission cache; **initialize before iam.init()**.
+- `@h-ai/cache`: sessions/OTP/reset tokens/one-time tickets/shared locks; **initialize before iam.init()**.
 - `@h-ai/crypto`: password hashing, used internally and initialized automatically.
 - `@h-ai/audit`: audit records for key RBAC operations.
 
@@ -218,7 +218,7 @@ IAM is a **lifecycle singleton** managed through `iam.init()` / `iam.close()`. F
 ```
 iam.init()
   ├─ session  (cached sessions; no DB dependency)
-  ├─ authz    (RBAC roles/permissions; DB + cache)
+  ├─ authz    (RBAC roles/permissions; batched DB reads)
   ├─ authn    (authentication; depends on session + authz)
   ├─ user     (users; depends on session + authz + passwordStrategy)
   └─ seed     (seed data; depends on authz)
@@ -416,7 +416,7 @@ checkPermission(userId, permission)
   → Return true if RBAC is disabled
   → Query user roles (DB)
   → Check super-admin role (cached superAdminRoleId); return true if present
-  → Get each role's permission codes (cache first; DB on miss, then cache)
+  → Read these roles' permission codes in one DB query; return errors on read failure
   → Match each permission exactly or by wildcard (`admin:*` matches `admin:read`)
   → Return true / false
 ```
@@ -426,7 +426,6 @@ checkPermission(userId, permission)
 ```
 assignPermissionToRole(roleId, permId)
   → Write association to DB
-  → Clear role permission cache
   → Find role users → resolve permissions per user → update active sessions
   (best-effort: failures only log.error; permission assignment still succeeds)
 ```
