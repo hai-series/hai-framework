@@ -128,6 +128,7 @@ async function expectCompatibleSkills(projectPath: string, appType: AppType) {
   expect(agents).toContain('.agents/skills/hai-app-create/SKILL.md')
   expect(agents).toContain('.agents/skills/hai-app-create/development.md')
   expect(agents).toContain('.agents/skills/hai-spec-review/SKILL.md')
+  expect(agents).toContain('.agents/skills/hai-spec-implement/SKILL.md')
   expect((await readText(projectPath, 'CLAUDE.md')).trim()).toBe('@AGENTS.md')
   expect(await exists(projectPath, '.claude')).toBe(false)
   // 解析工具入口到实际共享规则，确认各模板不会加载另一份项目规范。
@@ -1472,10 +1473,27 @@ describe('ai 支持交付与回填', () => {
     expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md')).toBe(customSkill)
     expect(await readText(dir, '.agents/skills/hai-app-create/development.md'))
       .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-app-create/development.md'), 'utf8'))
-    for (const skillName of ['hai-build', 'hai-spec-review', 'hai-app-review', 'hai-app-tests', 'hai-ai']) {
+    for (const skillName of ['hai-build', 'hai-spec-review', 'hai-spec-implement', 'hai-app-review', 'hai-app-tests', 'hai-ai']) {
       expect(await exists(dir, `.agents/skills/${skillName}/SKILL.md`)).toBe(true)
     }
     expect(await generateModuleSkillFile(dir, 'ai')).toBeNull()
+  })
+
+  it('文档实施工作流回填应保留自定义入口并完整补齐任务与执行范本', async () => {
+    const dir = path.join(tmpRoot, 'skill-spec-implement-backfill')
+    const skillRoot = '.agents/skills/hai-spec-implement'
+    const customSkill = '# project-specific implementation instructions\n'
+    await fse.outputFile(path.join(dir, skillRoot, 'SKILL.md'), customSkill)
+
+    const copied = await generateProjectAiSupport(dir, [], { overwriteSkills: false, overwriteBridgeFiles: false })
+
+    expect(await readText(dir, `${skillRoot}/SKILL.md`)).toBe(customSkill)
+    for (const resource of ['workflow.md', 'templates.md']) {
+      expect(copied).toContain(`${skillRoot}/${resource}`)
+      expect(await readText(dir, `${skillRoot}/${resource}`))
+        .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-spec-implement', resource), 'utf8'))
+    }
+    expect(await generateProjectAiSupport(dir, [], { overwriteSkills: false, overwriteBridgeFiles: false })).toEqual([])
   })
 
   it('fullstack 回填应从实际项目名称和包布局恢复专属桥接及兼容技能', async () => {
@@ -1553,6 +1571,7 @@ describe('addModule', () => {
   it('添加 ai 时应同步生成 GitHub/OpenCode Skill 文件与配置', async () => {
     const dir = path.join(tmpRoot, 'add-ai')
     expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-ai/SKILL.md'))).toBe(true)
+    expect(await exists(dir, '.agents/skills/hai-spec-implement/workflow.md')).toBe(true)
     expect(await fse.pathExists(path.join(dir, '.github/skills'))).toBe(false)
 
     const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
@@ -1796,6 +1815,8 @@ describe('initProject', () => {
     expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md')).toBe('# custom workflow\n')
     expect(await exists(dir, '.agents/skills/hai-app-create/development.md')).toBe(true)
     expect(await exists(dir, '.agents/skills/hai-core/SKILL.md')).toBe(true)
+    expect(await exists(dir, '.agents/skills/hai-spec-implement/SKILL.md')).toBe(true)
+    expect(await exists(dir, '.agents/skills/hai-spec-implement/templates.md')).toBe(true)
   })
 
   it('非 hai 项目不应创建 AI 支持文件', async () => {

@@ -1052,6 +1052,8 @@ function generateAiDevelopmentReadme(): string {
 
 Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 通过 CLAUDE.md 引用 AGENTS.md，并按项目指引读取 .agents/skills/ 的同一份正文。需求或设计文档在生成前使用 [文档审查 Skill](./.agents/skills/hai-spec-review/SKILL.md) 严格检查完备性、歧义、技术正确性和命名一致性，问题解决后再生成。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
 
+根据文档规划、实施或返修时，使用 [文档实施 Skill](./.agents/skills/hai-spec-implement/SKILL.md)：按可验收功能拆分，维护 docs/task-list.md 与 docs/tasks/ 记录，每项在独立分支走 TDD、验证与本地合并；返修沿用原任务与分支并追加证据。仅规划不开始实现，指定任务先核验依赖。
+
 优先复用适用的 hai-framework 公开 API 与已有业务实现。完成时说明复用的能力、相关能力未采用的原因，以及安全边界和类型、配置、文案、调用方的同步情况。质量验证按当前 package.json 执行 typecheck → lint → build → test；UI、路由与端到端流程另运行 test:e2e，未运行项说明原因。安全与质量规则既要按规范审查，也要运行门禁验证。
 
 已有 hai 项目可运行 hai init 补齐缺失的 AI 支持文件与参考资源；已有 AGENTS.md、Skill 和自定义规则会保留，升级时需将上述普通开发入口与规范显式合并到旧指引。

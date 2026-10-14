@@ -8,6 +8,8 @@
 
 升级 hai-framework 到最新/指定版本、比较版本差异或同步框架 skills 时，先读 [框架升级与同步 Skill](.agents/skills/hai-framework-sync/SKILL.md)，执行版本发现、差异分析、用户选择/阻塞处理、迁移与验证；仅要求比较时不修改应用。
 
+根据文档规划、实施、继续或返修任务时，读取 [hai-spec-implement](.agents/skills/hai-spec-implement/SKILL.md)：审查后按可验收功能和依赖拆分，维护 docs 下的清单及 docs/tasks 下的任务信息，每项独立分支 TDD、验证并本地合并；返修复用原任务与分支。仅规划不实施，指定任务先核验依赖。
+
 普通新增、修改、修复任务开始前，先读 [应用开发 Skill](.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](.agents/skills/hai-app-create/development.md)；再按任务读取模块 Skill 及其相邻参考文件。架构/构建、审查、测试分别读取 hai-build、hai-app-review、hai-app-tests，不加载整个 skill 树。
 
 - 对当前需求逐项检索 hai-framework 能力和已有实现，确认适用的公开 API 后优先复用；未安装模块先核对依赖与配置，不能因 Skill 已存在就假定已启用。框架不适用时说明具体限制与选用方案，不为覆盖清单引入无关模块。
