@@ -221,6 +221,8 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 
 ### API Key 管理 — `iam.apiKey`
 
+scopes 与主体权限取交集，支持 * / 命名空间 :*；默认空数组无操作权限。受限 key 的会话 roles 为空，使用 permission 守卫，显式 * 仍不能超出主体权限。loginWithApiKey 绑定 key，派生会话的 get/verifyToken/refresh 每次检查撤销、禁用、过期状态，依赖读取失败即拒绝。verifyApiKey 只返回验证后的 key 元数据，不替代主体及操作授权。
+
 | 方法           | 签名                                                                    | 说明                                   |
 | -------------- | ----------------------------------------------------------------------- | -------------------------------------- |
 | `createApiKey` | `(userId, options: CreateApiKeyOptions) => Promise<HaiResult<CreateApiKeyResult>>` | 创建 API Key（明文密钥仅返回一次） |

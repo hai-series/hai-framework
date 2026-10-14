@@ -40,8 +40,10 @@ export interface ApiKeyStrategyConfig {
  * API Key 策略工厂返回值
  */
 export interface ApiKeyStrategyResult {
-  /** 认证策略（用于通用登录流程） */
-  strategy: AuthStrategy
+  /** 认证策略保留已验证的 key 身份，避免二次验证或丢失 scopes。 */
+  strategy: Omit<AuthStrategy, 'authenticate'> & {
+    authenticate: (credentials: Credentials) => Promise<HaiResult<{ user: User, apiKey: ApiKey }>>
+  }
   /** API Key 管理操作（用于 CRUD） */
   apiKeyFunctions: ApiKeyOperations
 }
@@ -141,14 +143,14 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
 
   // ─── AuthStrategy 实现 ───
 
-  const strategy: AuthStrategy = {
+  const strategy: ApiKeyStrategyResult['strategy'] = {
     type: 'apikey',
     name: 'apikey-strategy',
 
-    async authenticate(credentials: Credentials): Promise<HaiResult<User>> {
+    async authenticate(credentials: Credentials) {
       const credentialResult = ensureCredentialType(credentials, 'apikey')
       if (!credentialResult.success) {
-        return credentialResult as HaiResult<User>
+        return credentialResult
       }
 
       const { key } = credentialResult.data
@@ -156,7 +158,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       // 验证 API Key
       const verifyResult = await verifyRawKey(key)
       if (!verifyResult.success) {
-        return verifyResult as HaiResult<User>
+        return verifyResult
       }
 
       const apiKey = verifyResult.data
@@ -174,7 +176,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       }
 
       logger.info('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
-      return ok(toUser(userResult.data))
+      return ok({ user: toUser(userResult.data), apiKey })
     },
   }
 

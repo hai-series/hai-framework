@@ -532,6 +532,8 @@ const valid = iam.user.validatePassword('weak')
 
 ### API keys — `iam.apiKey`
 
+`scopes` intersect the subject's permissions and support `*` and namespace `:*`. The default empty array grants identity only, without operation permissions. Restricted keys have empty session `roles` and use permission guards; explicit `*` never exceeds subject authorization. API Key login binds the key ID: get/verifyToken/refresh recheck its persistent state and reject revoked, disabled, expired keys or DB failures. Standalone verifyApiKey returns verified key metadata and still requires subject/operation authorization.
+
 #### Key types
 
 - **`ApiKeyOperations`**: `createApiKey` / `listApiKeys` / `getApiKey` / `revokeApiKey` / `verifyApiKey`.

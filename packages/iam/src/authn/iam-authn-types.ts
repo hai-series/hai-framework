@@ -118,7 +118,8 @@ export interface AuthnOperations {
   /**
    * 使用 API Key 登录
    *
-   * 验证 API Key 有效性 → 查找关联用户 → 创建会话 → 返回令牌。
+   * 验证 API Key 有效性 → 查找关联用户 → 按 scopes 收敛授权 → 创建绑定 key 的会话。
+   * 空 scopes 无操作权限；显式 * 也不超出主体权限。受限 key 通过 permission 授权，不保留角色入口。
    *
    * @param credentials - API Key 凭证
    * @returns 成功返回 AuthResult；API Key 无效/过期/禁用返回对应错误

@@ -6,10 +6,13 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ApiKeyRepository } from '../authn/apikey/iam-authn-apikey-repository.js'
 import type { IamConfig } from '../iam-config.js'
 import type { SessionRepository } from './iam-session-repository-cache.js'
 import type { CreateSessionOptions, Session, SessionOperations, TokenPair } from './iam-session-types.js'
 import { core, err, ok } from '@h-ai/core'
+import { createDbApiKeyRepository } from '../authn/apikey/iam-authn-apikey-repository.js'
+import { applyApiKeyScopes } from '../authn/apikey/iam-authn-apikey-scope.js'
 import { SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -61,6 +64,7 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
       sliding: sessionConfig.sliding,
       singleDevice: sessionConfig.singleDevice,
       sessionRepository,
+      apiKeyRepository: config.login.apikey ? await createDbApiKeyRepository() : undefined,
     })
 
     logger.info('Session sub-feature initialized')
@@ -82,6 +86,7 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
  * 内部会话构建器配置
  */
 interface SessionBuilderConfig {
+  apiKeyRepository?: ApiKeyRepository
   /** 会话最大有效期（秒，默认 86400 = 24小时） */
   maxAge?: number
   /** 是否滑动窗口 */
@@ -100,6 +105,25 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   const sliding = config.sliding ?? true
   const singleDevice = config.singleDevice ?? false
   const repo = config.sessionRepository
+
+  /** 持久化 key 是派生会话的授权上限；撤销、禁用、到期与读取失败均拒绝访问。 */
+  async function validateApiKey(session: Session): Promise<HaiResult<Session>> {
+    if (!session.apiKeyId)
+      return ok(session)
+    if (!config.apiKeyRepository)
+      return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
+    const found = await config.apiKeyRepository.findOneById(session.apiKeyId)
+    if (!found.success)
+      return found
+    const key = found.data
+    if (!key || key.userId !== session.userId)
+      return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
+    if (!key.enabled)
+      return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
+    if (key.expiresAt && new Date() > key.expiresAt)
+      return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
+    return ok(applyApiKeyScopes({ ...session, apiKeyScopes: key.scopes }, key.scopes))
+  }
 
   return {
     async create(options: CreateSessionOptions): Promise<HaiResult<Session>> {
@@ -162,6 +186,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         return ok(null)
       }
 
+      const validated = await validateApiKey(session)
+      if (!validated.success)
+        return validated
+
       if (sliding) {
         const now = new Date()
         const updateResult = await repo.updateByAccessToken(accessToken, {
@@ -175,7 +203,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
 
       // 对外不暴露内部保留的 _tokenPair（含 refreshToken），
       // 防止调用方（包括 event.locals.session 等上下文）意外泄漏刷新令牌。
-      return ok(stripInternalSessionFields(session))
+      return ok(stripInternalSessionFields(validated.data))
     },
 
     async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
@@ -228,6 +256,11 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           )
         }
 
+        const validated = await validateApiKey(oldSession)
+        if (!validated.success)
+          return validated
+        const effectiveSession = validated.data
+
         // Rotation 策略：删除旧会话（removeByAccessToken 内部同时清理 refreshToken 映射）
         const removeOldSessionResult = await repo.removeByAccessToken(oldSession.accessToken)
         if (!removeOldSessionResult.success) {
@@ -240,8 +273,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           username: oldSession.username,
           displayName: oldSession.displayName,
           avatarUrl: oldSession.avatarUrl,
-          roles: oldSession.roles,
-          permissions: oldSession.permissions,
+          roles: effectiveSession.roles,
+          permissions: effectiveSession.permissions,
+          apiKeyId: effectiveSession.apiKeyId,
+          apiKeyScopes: effectiveSession.apiKeyScopes,
           source: oldSession.source,
           data: oldSession.data ? { ...oldSession.data, _tokenPair: undefined } : undefined,
         })

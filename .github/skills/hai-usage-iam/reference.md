@@ -285,6 +285,8 @@ Web 管理后台优先由登录 API 写入 httpOnly cookie，不向页面代码�
 
 ## §8 API Key 管理 — `iam.apiKey`
 
+scopes 是权限代码范围，与主体权限取交集，支持全局 * 和命名空间 :*；默认空数组只保留身份，不授予操作权限。受限 key 的会话 roles 为空，通过 permission 守卫访问；显式 * 不超出主体授权。loginWithApiKey 绑定 key ID，session.get/verifyToken/refresh 每次检查持久化 key，撤销、禁用、过期或读取失败均拒绝。单独 verifyApiKey 仅验证并返回 key 元数据，调用方仍须执行主体及操作授权。
+
 > 需在配置中启用 `login.apikey: true`，否则 `iam.apiKey` 返回未初始化代理。
 
 | 方法 | 签名 | 说明 |

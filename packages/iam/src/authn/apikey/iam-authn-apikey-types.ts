@@ -31,7 +31,7 @@ export interface ApiKey {
   createdAt: Date
   /** 最后使用时间 */
   lastUsedAt: Date | null
-  /** 权限范围 */
+  /** 权限代码范围，支持 * / 命名空间 :*；空数组无操作权限，* 不超出主体权限。 */
   scopes: string[]
 }
 
@@ -67,7 +67,7 @@ export interface CreateApiKeyOptions {
   name: string
   /** 有效期天数（0 或不传表示永不过期） */
   expirationDays?: number
-  /** 权限范围 */
+  /** 权限代码范围；默认空数组。受限 key 不保留角色授权入口，使用 permission 守卫。 */
   scopes?: string[]
 }
 

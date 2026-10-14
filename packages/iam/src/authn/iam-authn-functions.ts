@@ -11,7 +11,8 @@ import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
 import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
 import type { User } from '../user/iam-user-types.js'
-import type { ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
+import type { ApiKeyStrategyResult } from './apikey/iam-authn-apikey-strategy.js'
+import type { ApiKey, ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
 import type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategyResult } from './otp/iam-authn-otp-strategy.js'
@@ -25,6 +26,7 @@ import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { createDbUserRepository } from '../user/iam-user-repository-user.js'
 import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.js'
+import { applyApiKeyScopes } from './apikey/iam-authn-apikey-scope.js'
 import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
 import { loadLdapClientFactory } from './ldap/iam-authn-ldap-client.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
@@ -141,7 +143,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     }
 
     // API Key 策略
-    let apiKeyStrategy: AuthStrategy | undefined
+    let apiKeyStrategy: ApiKeyStrategyResult['strategy'] | undefined
     let apiKeyFunctions: ApiKeyOperations | null = null
     if (loginConfig.apikey) {
       const apiKeyConfig = config.apikey ? ApiKeyConfigSchema.parse(config.apikey) : undefined
@@ -187,7 +189,7 @@ interface BuildAuthnDeps {
   otpStrategy?: AuthStrategy
   otpChallenge?: (identifier: string) => Promise<HaiResult<{ expiresAt: Date }>>
   ldapStrategy?: AuthStrategy
-  apiKeyStrategy?: AuthStrategy
+  apiKeyStrategy?: ApiKeyStrategyResult['strategy']
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
   config: IamConfig
@@ -219,7 +221,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    * @param type - 登录方式类型
    * @returns 禁用时返回错误 HaiResult，否则返回 null
    */
-  function loginDisabled(type: 'password' | 'otp' | 'ldap' | 'apikey'): HaiResult<void> | null {
+  function loginDisabled(type: 'password' | 'otp' | 'ldap' | 'apikey'): HaiResult<never> | null {
     if (!loginConfig[type]) {
       return err(
         HaiIamError.LOGIN_DISABLED,
@@ -299,7 +301,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    * @param user - 已认证的用户信息
    * @returns 包含用户信息、访问令牌、过期时间和协议展示的认证结果
    */
-  async function buildAuthResult(user: User): Promise<HaiResult<AuthResult>> {
+  async function buildAuthResult(user: User, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
     if (!user.enabled)
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     // 并行获取角色和权限，登录时一次性查 DB，后续纯缓存
@@ -314,13 +316,16 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return permCodesResult as HaiResult<AuthResult>
     }
 
+    const access = { roles: roleCodesResult.data, permissions: permCodesResult.data }
+    const effective = apiKey ? applyApiKeyScopes(access, apiKey.scopes) : access
     const sessionResult = await sessionFunctions.create({
       userId: user.id,
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      roles: roleCodesResult.data,
-      permissions: permCodesResult.data,
+      ...effective,
+      apiKeyId: apiKey?.id,
+      apiKeyScopes: apiKey?.scopes,
     })
 
     if (!sessionResult.success) {
@@ -338,8 +343,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     return ok({
       user,
       tokens: tokenPair,
-      roles: roleCodesResult.data,
-      permissions: permCodesResult.data,
+      ...effective,
       agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnLogin),
     })
   }
@@ -355,8 +359,8 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    * @returns 认证结果（包含用户、令牌、协议）
    */
   async function loginWithStrategy(
-    type: 'password' | 'otp' | 'ldap' | 'apikey',
-    credentials: PasswordCredentials | OtpCredentials | LdapCredentials | ApiKeyCredentials,
+    type: 'password' | 'otp' | 'ldap',
+    credentials: PasswordCredentials | OtpCredentials | LdapCredentials,
     strategy?: AuthStrategy,
   ): Promise<HaiResult<AuthResult>> {
     const disabled = loginDisabled(type)
@@ -398,7 +402,15 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     },
 
     async loginWithApiKey(credentials: ApiKeyCredentials): Promise<HaiResult<AuthResult>> {
-      return loginWithStrategy('apikey', credentials, apiKeyStrategy)
+      const disabled = loginDisabled('apikey')
+      if (disabled)
+        return disabled
+      if (!apiKeyStrategy)
+        return err(HaiIamError.STRATEGY_NOT_SUPPORTED, iamM('iam_featureNotImplemented'))
+      const authenticated = await apiKeyStrategy.authenticate({ type: 'apikey', ...credentials })
+      if (!authenticated.success)
+        return authenticated
+      return buildAuthResult(authenticated.data.user, authenticated.data.apiKey)
     },
 
     async logout(accessToken: string): Promise<HaiResult<void>> {

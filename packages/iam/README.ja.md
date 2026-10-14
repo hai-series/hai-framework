@@ -532,6 +532,8 @@ const valid = iam.user.validatePassword('weak')
 
 ### API Key — `iam.apiKey`
 
+`scopes` は主体の権限との共通範囲を適用し、`*` と名前空間 `:*` に対応します。既定の空配列は本人確認のみで操作権限を付与しません。制限付き key のセッション `roles` は空で permission ガードを使用し、明示的な `*` も主体の権限を超えません。ログインは key ID に結び付き、get/verifyToken/refresh は永続状態を再確認し、失効・無効・期限切れ・DB エラーを拒否します。verifyApiKey 単独は鍵のメタデータ検証のみで、主体・操作の認可は別途必要です。
+
 #### 主要な型
 
 - **`ApiKeyOperations`**：`createApiKey` / `listApiKeys` / `getApiKey` / `revokeApiKey` / `verifyApiKey`。
