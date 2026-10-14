@@ -22,6 +22,7 @@ async function capture(page: Page, name: string, fallback: string) {
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
   if (evidence)
     await mkdir(evidence, { recursive: true })
+  await expect(page.getByTestId('guide-loading')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: evidence ? path.join(evidence, name) : fallback, fullPage: true, animations: 'disabled' })
 }

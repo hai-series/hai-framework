@@ -1,12 +1,13 @@
 /** H5 共用 IAM UI 和标准 Kit 端点的真实注册/OTP/重置流程。 */
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 import { expect, test } from '@playwright/test'
 
 test('H5 认证配置和完整恢复流程', async ({ page, context }) => {
   test.setTimeout(60_000)
   await page.setViewportSize({ width: 390, height: 844 })
-  const evidence = path.resolve('../../docs/assets/iam-auth-2026-10-12')
+  const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
   await mkdir(evidence, { recursive: true })
   const username = `h5flow${Date.now()}`
   const email = `${username}@example.com`

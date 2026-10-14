@@ -326,6 +326,8 @@ export function createGuide(options: GuideOptions): GuideController {
             void showStep(tour.steps.length)
         },
         onHighlighted: () => finishHighlight?.(),
+        // 引擎首帧未完成时不会触发 onDestroyed；从关闭开始时统一取消等待。
+        onDestroyStarted: stop,
         onDestroyed: () => {
           if (driver) {
             driver = undefined

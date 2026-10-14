@@ -807,6 +807,8 @@ AuthPanel は SSR 中のフォーム操作を無効にし、クライアント�
 
 start(id) は Promise<boolean> を返し、手動で再表示できます。失敗時は false と error を設定します。startIfNeeded(id) は初回案内の有無を boolean で返します。openHelp(articleId?) は検索付き Markdown ヘルプを開き、stop() は完了として記録せず終了し、reset(id) は現在のユーザーの状態を削除します。
 
+閉じるボタン、Escape、オーバーレイのクリックは、最初の位置決めフレームが完了する前でも待機と `busy` 状態を解除します。開始中の `start()` は false を返し、完了として記録しません。
+
 保存先は cookie（既定）、localStorage、memory です。保存が制限された環境ではインスタンス内のメモリーに戻ります。ユーザーとバージョンごとに状態を分け、後で表示は一日延期、Cookie は一年保存します。既定のページ遷移は短期 sessionStorage 記録で移動先から開始します。
 
 文言は `() => m.key()` で遅延評価し、現在の locale を渡します。説明はプレーンテキスト、ヘルプは安全な MarkdownRenderer を使用し、生 HTML を無効にします。要素の待機は既定で 3000ms。before(signal) でタブ等を準備し、optional の要素のみ省略できます。必要な要素がなければ終了し、アンマウント時に処理を解除します。SSR ユーザー間でコントローラーを共有しないでください。

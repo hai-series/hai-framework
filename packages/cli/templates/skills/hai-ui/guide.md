@@ -51,7 +51,7 @@
 | `guide.start(id)` | 手动启动或重看；返回 `Promise<boolean>`。失败返回 false，`guide.error` 为当前 UI 语言提示 |
 | `guide.startIfNeeded(id)` | 尚未看过时提供首次邀请；返回 boolean，不直接跳转。通常由 GuideHost 的 autoStart 代劳 |
 | `guide.openHelp(articleId?)` | 打开帮助中心，可直接定位文章；开始导览时自动关闭帮助弹窗 |
-| `guide.stop()` | 取消等待并释放浮层，不记为完成 |
+| `guide.stop()` | 取消等待并释放浮层，不记为完成；关闭按钮、Escape 和遮罩点击在首帧定位期间也会清除 busy，启动中的 start 返回 false |
 | `guide.reset(id)` | 删除当前 scope 的偏好，使首次邀请可以再次显示 |
 | `persistence` | `'cookie'`（默认）、`'localStorage'` 或 `'memory'`；受限存储在实例内回退到内存 |
 | `persistKey` / `scope` / `version` | 应用、用户、引导版本独立记录；使用非敏感标识，不能用于权限校验 |

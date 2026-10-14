@@ -3,6 +3,13 @@ import path from 'node:path'
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
 
+{{#if_eq appType 'h5'}}
+test.use({ viewport: { width: 390, height: 844 } })
+{{/if_eq}}
+{{#if isCapacitorApp}}
+test.use({ viewport: { width: 390, height: 844 } })
+{{/if}}
+
 /** 首页从真实浏览器页面发起，覆盖基础渲染链路。 */
 test('home page renders from browser', async ({ page }) => {
 {{#if_eq appType 'h5'}}

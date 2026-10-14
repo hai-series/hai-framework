@@ -807,6 +807,8 @@ Create the controller inside a layout component, register tours with id/title/st
 
 `start(id)` returns Promise<boolean> and always allows replay; failure returns false and sets error. `startIfNeeded(id)` returns boolean and offers a first-use invitation. `openHelp(articleId?)` opens searchable Markdown help; `stop()` cancels without marking completion; `reset(id)` clears the current user's preference.
 
+The close button, Escape, and overlay clicks cancel pending highlighting and clear `busy` even before the first positioning frame completes. A pending `start()` resolves to false without recording completion.
+
 Persistence supports cookie (default), localStorage and memory, with an in-instance fallback when storage is restricted. Preferences are isolated by user and version. Later delays reminders for one day; Cookie preferences expire after one year. The default full-page navigation uses a short-lived sessionStorage record to start on the destination page.
 
 Use `() => m.key()` for localized content and pass the current locale. Steps render as plain text; help uses the existing safe Markdown renderer with raw HTML disabled. Targets wait up to 3000ms by default; before(signal) prepares tabs or drawers, optional skips nonessential missing targets, and missing required targets stop the tour. Unmounting cancels pending work. Never share controllers across SSR users.

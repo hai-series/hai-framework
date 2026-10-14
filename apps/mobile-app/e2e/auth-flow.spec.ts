@@ -2,9 +2,10 @@
 import type { Page } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 import { expect, test } from '@playwright/test'
 
-const evidence = path.resolve('../../docs/assets/iam-auth-2026-10-12')
+const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
 async function screenshot(page: Page, name: string) {
   await mkdir(evidence, { recursive: true })
   await page.screenshot({ path: path.join(evidence, `${name}.png`), fullPage: true })

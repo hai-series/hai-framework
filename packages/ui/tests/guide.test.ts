@@ -107,6 +107,36 @@ describe('guide first-use preferences', () => {
 })
 
 describe('guide tour behavior', () => {
+  it.each(['keyboard', 'button', 'overlay'] as const)('首帧定位未完成时通过 %s 退出也会终止等待并释放忙碌状态', async (source) => {
+    target()
+    // 只执行动画首帧，覆盖浮层已可关闭而高亮尚未完成的窗口。
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    vi.spyOn(Date, 'now').mockReturnValue(1000)
+    let frame: FrameRequestCallback | undefined
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frame = callback
+      return 1
+    })
+    const guide = makeGuide()
+    const pending = guide.start('intro')
+    await vi.waitFor(() => expect(document.querySelector('.driver-popover')).not.toBeNull())
+    frame?.(0)
+    expect(guide.busy).toBe(true)
+    if (source === 'keyboard')
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true }))
+    else if (source === 'button')
+      document.querySelector<HTMLButtonElement>('.driver-popover-close-btn')!.click()
+    else
+      document.querySelector('.driver-overlay path')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(guide.busy).toBe(false)
+    expect(guide.activeTourId).toBeNull()
+    expect(await pending).toBe(false)
+    expect(document.querySelector('.driver-popover')).toBeNull()
+    expect(document.querySelector('.driver-overlay')).toBeNull()
+    expect(guide.getProgress('intro')).toBeNull()
+    expect(guide.error).toBe('')
+  })
+
   it('目标卸载后立即点击完成也不会写入完成记录', async () => {
     const element = target()
     const guide = makeGuide()
