@@ -133,6 +133,9 @@ test('audit filters align and fit desktop, tablet and narrow mobile screens', as
   await expect(page.getByTestId('audit-page')).toBeVisible()
   for (const width of [1440, 960, 390, 320]) {
     await page.setViewportSize({ width, height: 900 })
+    // 等待移动侧栏收起，避免过渡帧遮挡内容并污染截图。
+    if (width < 1024)
+      await expect.poll(() => page.locator('aside').evaluate(sidebar => sidebar.getBoundingClientRect().right)).toBeLessThanOrEqual(1)
     const controls = await page.getByTestId('audit-page').locator('form').evaluate(form => [
       form.querySelector('#audit-action')?.parentElement,
       form.querySelector('#audit-resource')?.parentElement,
@@ -161,7 +164,7 @@ test('audit filters align and fit desktop, tablet and narrow mobile screens', as
       if (evidence)
         await mkdir(evidence, { recursive: true })
       const file = `{{projectName}}-audit-${width}.png`
-      await page.screenshot({ path: evidence ? path.join(evidence, file) : testInfo.outputPath(file), fullPage: true })
+      await page.screenshot({ path: evidence ? path.join(evidence, file) : testInfo.outputPath(file), fullPage: true, animations: 'disabled' })
     }
   }
 })

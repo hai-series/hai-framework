@@ -154,12 +154,12 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
           await writeFile(path.join(testsRoot, 'public-client-ip.test.ts'), await readFile(path.join(fixtures, 'public-client-ip.ts')))
           include.push(`${moduleRoot}/tests/public-client-ip.test.ts`)
         }
-        await writeFile(path.join(projectPath, 'tsconfig.capabilities.json'), JSON.stringify({
+        await writeFile(path.join(projectPath, 'tsconfig.capabilities.json'), `${JSON.stringify({
           extends: `./${moduleRoot}/tsconfig.json`,
-          compilerOptions: { noEmit: true, types: ['node'] },
+          compilerOptions: { types: ['node'], noEmit: true },
           include,
           exclude: ['node_modules'],
-        }, null, 2))
+        }, null, 2)}\n`)
       }
       if (scenario.title === 'admin') {
         // 不只验证 create：增量生成的文件必须进入实际项目的编译、lint 与运行测试。
