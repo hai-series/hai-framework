@@ -752,6 +752,8 @@ agreements:
 
 AuthPanel accepts public IAM config and actions for password/LDAP/email/SMS login, registration and recovery. config.ui supplies layout, branding and images. LoginForm supports methods, onsendotp, otpLength and resendInterval; password forms accept passwordPolicy. Network and token storage remain in actions. Known IAM authentication errors use the current UI language; custom application messages are preserved.
 
+AuthPanel disables native form controls during SSR and enables input after client mount binds events, preventing early input from being lost during hydration. Applications need no extra readiness code. E2E tests wait for editable controls and cover delayed client scripts.
+
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
 ## Other exports

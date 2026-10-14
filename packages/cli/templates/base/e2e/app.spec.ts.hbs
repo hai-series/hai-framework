@@ -113,7 +113,29 @@ test('configured IAM registration and password login', async ({ page, context })
   expect(Boolean(reset?.token)).toBe(true)
   await page.getByRole('button', { name: /已有重置令牌|I have a reset token/i }).click()
   await page.screenshot({ path: path.join(evidence, '{{projectName}}-reset.png'), fullPage: true })
-  await page.goto(`{{#if isCapacitorApp}}/{{else}}/auth/reset-password{{/if}}?token=${encodeURIComponent(reset?.token ?? '')}`)
+  const resetUrl = `{{#if isCapacitorApp}}/{{else}}/auth/reset-password{{/if}}?token=${encodeURIComponent(reset?.token ?? '')}`
+{{#if_eq appType 'h5'}}
+  // 延迟客户端脚本，确定性覆盖 SSR 页面已显示、事件绑定尚未完成的窗口。
+  let resumeClient = () => {}
+  const clientBoot = new Promise<void>((resolve) => {
+    resumeClient = resolve
+  })
+  await page.route('**/*.js', async (route) => {
+    await clientBoot
+    await route.continue()
+  })
+  try {
+    await page.goto(resetUrl, { waitUntil: 'commit' })
+    await expect(page.locator('input[type="password"]').nth(0)).toBeDisabled()
+  }
+  finally {
+    resumeClient()
+    // 等待正在恢复的路由完成，避免提前移除拦截导致 continue 被重复处理。
+    await page.unrouteAll({ behavior: 'wait' })
+  }
+{{else}}
+  await page.goto(resetUrl)
+{{/if_eq}}
   await expect(page.locator('input[type="password"]').nth(0)).toBeVisible()
   await page.locator('input[type="password"]').nth(0).fill('ScaffoldReset456')
   await page.locator('input[type="password"]').nth(1).fill('ScaffoldReset456')

@@ -21,6 +21,27 @@ function snippet(text: string) {
 }
 
 describe('authentication form extensions and agreements', () => {
+  it.each(['login', 'register', 'forgot', 'reset'] as const)('客户端接管完成前禁止输入，完成后恢复交互：%s', async (initialMode) => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const action = async () => ok(undefined)
+    const component = mount(AuthPanel, { target, props: {
+      config: { ...config, passwordReset: { enabled: true } },
+      initialMode,
+      actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
+    } })
+    try {
+      const input = target.querySelector<HTMLInputElement>('form input')!
+      expect(input.matches(':disabled')).toBe(true)
+      flushSync()
+      expect(input.matches(':disabled')).toBe(false)
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
   it.each([
     { pathname: '/auth/reset-password', loginUrl: '/auth/login', staysReset: true },
     { pathname: '/auth/login', loginUrl: '/auth/login', staysReset: false },
