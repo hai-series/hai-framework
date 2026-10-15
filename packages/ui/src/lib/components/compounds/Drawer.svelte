@@ -10,8 +10,9 @@
 -->
 <script lang='ts'>
   import type { DataAttributes, DrawerProps } from '../../types.js'
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, setContext } from 'svelte'
   import { readStoredValue, writeStoredValue } from '../../internal/browser-safety.js'
+  import { FORM_VISIBILITY_CONTEXT } from '../../internal/form-context.js'
   import { uiM } from '../../messages.js'
   import { cn, generateId, getDataAttributes } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
@@ -34,6 +35,9 @@
   }: DrawerProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  setContext(FORM_VISIBILITY_CONTEXT, {
+    get open() { return open },
+  })
   const id = generateId('drawer')
   /** 用户拖动后的像素宽度；优先于 width 与 size。 */
   let resizedWidth = $state<number | null>(null)

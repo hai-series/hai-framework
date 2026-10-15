@@ -4,6 +4,15 @@ import { getContext } from 'svelte'
 
 export const FORM_LAYOUT_CONTEXT = Symbol('hai-form-layout')
 export const FORM_FIELD_CONTEXT = Symbol('hai-form-field')
+export const FORM_VISIBILITY_CONTEXT = Symbol('hai-form-visibility')
+
+interface FormVisibilityContext {
+  readonly open: boolean
+}
+
+export function getFormVisibilityContext(): FormVisibilityContext | undefined {
+  return getContext<FormVisibilityContext | undefined>(FORM_VISIBILITY_CONTEXT)
+}
 
 export interface FormFieldContext {
   readonly controlId: string

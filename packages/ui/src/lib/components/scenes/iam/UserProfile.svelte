@@ -31,6 +31,7 @@
     labelPosition = 'top',
     labelWidth = '8rem',
     fields = ['avatar', 'username', 'email', 'displayName', 'phone'],
+    fieldConstraints = {},
     avatarAccept = 'image/*',
     avatarHint,
     class: className = '',
@@ -167,7 +168,7 @@
         {@const modelKey = getModelKey(field)}
         {#if field === 'avatar'}
           <!-- 头像 -->
-          <div class='flex items-center gap-4'>
+          <div class='flex flex-wrap items-center gap-4 border-b border-base-content/8 pb-5'>
             <Avatar
               src={user?.avatarUrl ?? user?.avatar}
               alt={uiM('user_profile_avatar')}
@@ -176,7 +177,7 @@
               class='shadow-sm'
             />
             {#if editable && (editMode || alwaysEditable)}
-              <div>
+              <div class='min-w-0 flex-1 basis-48'>
                 <BareInput
                   id={avatarInputId}
                   type='file'
@@ -196,10 +197,11 @@
           </div>
         {:else}
           <!-- 其他字段 -->
-          <FormField label={getFieldLabel(field)} colSpan={field === 'bio' ? 2 : 'auto'}>
+          <FormField label={getFieldLabel(field)} required={fieldConstraints[field]?.required} colSpan={field === 'bio' ? 2 : 'auto'}>
             {#if editable && (editMode || alwaysEditable)}
               {#if field === 'bio'}
                 <Textarea
+                  {...fieldConstraints[field]}
                   name={modelKey}
                   rows={3}
                   bind:value={formData[modelKey]}
@@ -208,6 +210,7 @@
                 />
               {:else}
                 <Input
+                  {...fieldConstraints[field]}
                   type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
                   name={modelKey}
                   bind:value={formData[modelKey]}

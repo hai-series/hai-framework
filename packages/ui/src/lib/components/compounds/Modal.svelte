@@ -4,6 +4,8 @@
 -->
 <script lang='ts'>
   import type { DataAttributes, ModalProps } from '../../types.js'
+  import { setContext } from 'svelte'
+  import { FORM_VISIBILITY_CONTEXT } from '../../internal/form-context.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
@@ -28,6 +30,9 @@
   }: ModalProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  setContext(FORM_VISIBILITY_CONTEXT, {
+    get open() { return open },
+  })
   const modalId = $props.id()
   const titleId = `${modalId}-title`
   let panel = $state<HTMLDivElement>()

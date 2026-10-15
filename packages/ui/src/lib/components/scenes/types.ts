@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { Snippet } from 'svelte'
-import type { DataAttributes, FormLayoutOptions, FormText, Size } from '../../types.js'
+import type { DataAttributes, FormLayoutOptions, FormText, InputProps, Size } from '../../types.js'
 
 // ─── IAM 相关类型 ───
 
@@ -37,7 +37,7 @@ export interface PasswordInputProps extends DataAttributes {
   showToggle?: boolean
   /** 是否显示密码强度 */
   showStrength?: boolean
-  /** 最小长度 */
+  /** 最小长度；提供时校验，省略时仅以 8 位为基准计算强度。 */
   minLength?: number
   /** 自定义类名 */
   class?: string
@@ -402,6 +402,8 @@ export interface UserProfileProps extends FormLayoutOptions, DataAttributes {
   loading?: boolean
   /** 显示的字段 */
   fields?: UserProfileField[]
+  /** 按业务规则声明字段的原生约束，复用控件失焦校验。 */
+  fieldConstraints?: Partial<Record<Exclude<UserProfileField, 'avatar'>, Pick<InputProps, 'required' | 'minlength' | 'maxlength' | 'pattern' | 'validationMessage'>>>
   /** 头像上传地址 */
   avatarUploadUrl?: string
   /** 文件选择器允许的头像类型；最终校验由业务上传服务负责。 */

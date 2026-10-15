@@ -83,6 +83,9 @@
       <FormField for='old-password' label={uiM('change_password_old')}>
         <PasswordInput
           value={oldPassword}
+          id='old-password'
+          autocomplete='current-password'
+          required
           oninput={(e) => { oldPassword = e.currentTarget.value }}
           placeholder={uiM('change_password_old_placeholder')}
           {disabled}
@@ -95,6 +98,9 @@
     <FormField for='new-password' label={uiM('change_password_new')}>
       <PasswordInput
         value={newPassword}
+        id='new-password'
+        autocomplete='new-password'
+        required
         oninput={(e) => { newPassword = e.currentTarget.value }}
         placeholder={uiM('change_password_new_placeholder')}
         {disabled}
@@ -107,6 +113,9 @@
     <FormField for='confirm-password' label={uiM('change_password_confirm')}>
       <PasswordInput
         value={confirmPassword}
+        id='confirm-password'
+        autocomplete='new-password'
+        required
         oninput={(e) => { confirmPassword = e.currentTarget.value }}
         placeholder={uiM('change_password_confirm_placeholder')}
         {disabled}

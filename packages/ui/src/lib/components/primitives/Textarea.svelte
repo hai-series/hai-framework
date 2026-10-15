@@ -88,7 +88,7 @@
   }
 
   function handleInvalid(e: Event & { currentTarget: HTMLTextAreaElement }) {
-    validation.invalid(e.currentTarget)
+    validation.validate(e.currentTarget)
     oninvalid?.(e)
   }
 </script>
@@ -112,6 +112,7 @@
       class={textareaClass}
       bind:value
       oninput={handleInput}
+      onblur={e => validation.validate(e.currentTarget)}
       oninvalid={handleInvalid}
     ></textarea>
   </div>

@@ -79,9 +79,12 @@
   const panelId = $props.id()
   let formElement: HTMLFormElement | undefined = $state()
   let attempted = $state(false)
+  let touched = $state<Record<string, boolean>>({})
   $effect(() => {
-    if (!open)
+    if (!open) {
       attempted = false
+      touched = {}
+    }
   })
   function resolveOptions(options?: CrudFieldDef['options']): Array<{ label: string, value: string | number | boolean }> {
     if (!options)
@@ -94,10 +97,8 @@
   )
   const fieldErrors = $derived.by(() => {
     const errors: Record<string, string> = {}
-    if (!attempted)
-      return errors
     for (const field of sortedFields) {
-      if (mode === 'edit' && field.readonly)
+      if ((!attempted && !touched[field.id]) || (mode === 'edit' && field.readonly))
         continue
       const issue = getCrudValidationIssue(field, formData[field.id])
       if (issue)
@@ -146,6 +147,15 @@
 
   function updateField(fieldId: string, value: unknown) {
     formData = { ...formData, [fieldId]: value }
+  }
+
+  function handleFieldBlur(event: FocusEvent) {
+    if (!(event.target instanceof HTMLElement))
+      return
+    const field = event.target.closest<HTMLElement>('[data-field]')
+    if (!field?.dataset.field || (event.relatedTarget instanceof Node && field.contains(event.relatedTarget)))
+      return
+    touched = { ...touched, [field.dataset.field]: true }
   }
 
   function toggleMultiSelect(fieldId: string, optValue: string | number | boolean) {
@@ -295,7 +305,7 @@
     closeOnBackdrop={false}
     onclose={handleClose}
   >
-    <form bind:this={formElement} novalidate onsubmit={handleSubmit}>
+    <form bind:this={formElement} novalidate onsubmit={handleSubmit} onfocusout={handleFieldBlur}>
       <!-- 底部按钮在表单外；保留原生提交控件，使多字段表单支持回车提交。 -->
       <input type='submit' class='hidden' tabindex='-1' aria-hidden='true' value={uiM('crud_save')} />
       {@render formFields()}
@@ -318,7 +328,7 @@
     onclose={handleClose}
     closeOnBackdrop={false}
   >
-    <form bind:this={formElement} novalidate onsubmit={handleSubmit} class={drawerFormClass}>
+    <form bind:this={formElement} novalidate onsubmit={handleSubmit} onfocusout={handleFieldBlur} class={drawerFormClass}>
       <input type='submit' class='hidden' tabindex='-1' aria-hidden='true' value={uiM('crud_save')} />
       {@render formFields()}
     </form>

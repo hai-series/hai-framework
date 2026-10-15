@@ -42,7 +42,7 @@
     showToggle?: boolean
     /** 是否显示密码强度 */
     showStrength?: boolean
-    /** 最小长度 */
+    /** 最小长度；提供时校验，省略时仅以 8 位为基准计算强度。 */
     minLength?: number
     /** 自定义类名 */
     class?: string
@@ -68,7 +68,7 @@
     error = '',
     showToggle = true,
     showStrength = false,
-    minLength = 8,
+    minLength,
     class: className = '',
     inputRef = $bindable<HTMLInputElement | undefined>(),
     oninput,
@@ -79,7 +79,7 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   const field = getFormFieldContext()
-  const validation = createControlValidation(undefined, () => [value, required, readonly, disabled])
+  const validation = createControlValidation(undefined, () => [value, required, readonly, disabled, minLength])
   const uniqueId = $props.id()
   const messageId = `${uniqueId}-error`
   const localError = $derived(resolveFormText(error) || validation.message)
@@ -110,7 +110,7 @@
     let score = 0
 
     // 长度检查
-    if (value.length >= minLength)
+    if (value.length >= (minLength ?? 8))
       score += 1
     if (value.length >= 12)
       score += 1
@@ -173,12 +173,14 @@
       {disabled}
       {readonly}
       {required}
+      minlength={minLength}
       ariaInvalid={effectiveError ? true : undefined}
       ariaDescribedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
       oninput={handleInput}
       onchange={handleChange}
+      onblur={e => validation.validate(e.currentTarget)}
       oninvalid={(e) => {
-        validation.invalid(e.currentTarget)
+        validation.validate(e.currentTarget)
         oninvalid?.(e)
       }}
     />

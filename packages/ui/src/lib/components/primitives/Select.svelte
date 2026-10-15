@@ -258,6 +258,17 @@
     onchange?.(undefined as T)
   }
 
+  function handleFocusOut(event: FocusEvent) {
+    const next = event.relatedTarget
+    // 选项通过 portal 渲染，触发器与选项之间的焦点移动仍属于同一字段。
+    if (next instanceof Node && (dropdownRef?.contains(next) || listboxRef?.contains(next)))
+      return
+    if (nativeSelect)
+      validation.validate(nativeSelect)
+    isDropdownOpen = false
+    filterText = ''
+  }
+
   // 判断是否显示清除按钮
   const showClear = $derived(clearable && value !== undefined && value !== null && value !== '' && isHovered)
 </script>
@@ -268,6 +279,7 @@
   bind:this={dropdownRef}
   onmouseenter={() => isHovered = true}
   onmouseleave={() => isHovered = false}
+  onfocusout={handleFocusOut}
 >
   <select
     bind:this={nativeSelect}
@@ -280,7 +292,7 @@
     value={nativeValue}
     oninvalid={(e) => {
       e.preventDefault()
-      validation.invalid(e.currentTarget)
+      validation.validate(e.currentTarget)
       inputRef?.focus()
     }}
   >
@@ -387,6 +399,7 @@
         class='max-h-60 overflow-auto rounded-xl border border-base-content/10 bg-base-100 p-1.5 shadow-xl shadow-base-content/10'
         style={dropdownStyle}
         role='listbox'
+        onfocusout={handleFocusOut}
       >
         {#each filteredOptions() as option (String(option.value))}
           <li

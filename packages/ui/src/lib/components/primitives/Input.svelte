@@ -89,6 +89,7 @@
   }
 
   function handleBlur(e: FocusEvent & { currentTarget: HTMLInputElement }) {
+    validation.validate(e.currentTarget)
     onblur?.(e)
   }
 
@@ -97,7 +98,7 @@
   }
 
   function handleInvalid(e: Event & { currentTarget: HTMLInputElement }) {
-    validation.invalid(e.currentTarget)
+    validation.validate(e.currentTarget)
     oninvalid?.(e)
   }
 </script>

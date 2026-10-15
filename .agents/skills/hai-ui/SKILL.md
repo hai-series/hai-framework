@@ -297,6 +297,10 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 ## 表单布局与错误提示
 
+输入控件与 CRUD 新增/编辑默认在首次失焦后显示前端错误，修正输入时即时更新；未操作字段在提交时校验。Select 在焦点离开触发器及选项后校验。应用无需逐项绑定 blur；业务异步校验仍由应用提供。PasswordInput 的 minLength 提供时执行长度校验；登录现有密码时省略该属性。
+
+UserProfile 的 `fieldConstraints` 按字段声明 `required/minlength/maxlength/pattern/validationMessage`；单行控件支持 pattern，业务文案可用翻译函数。不要只在保存回调内放前端校验，服务端仍须执行 schema 校验。
+
 状态层通过轻量入口 `@h-ai/ui/i18n` 导入 `setGlobalLocale` / `createLocaleStore`，不加载组件或引导 CSS。
 
 数据新增/修改统一使用 `Form`（托管提交）或原生 `<form>` + `FormLayout`，不要在应用复制字段 grid。两者支持 `columns={1 | 2}`、`labelPosition='top' | 'left'`、`labelWidth`；默认单列/标签在上，窄容器自动收拢。`FormField.colSpan='auto'` 自动让多行文本、上传和多选占两列，`1` / `2` 可覆盖；自定义宽控件标注 `data-form-wide`。已有控件 ID 或原生控件给 FormField 配 `for`，避免重复或失效的标签。
