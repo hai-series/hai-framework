@@ -1049,6 +1049,7 @@ describe('createProject — fullstack 类型', () => {
     }
     const iamConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_iam.yml')
     expect(iamConfig).toContain('seedDefaultData: false')
+    expect(iamConfig).toContain('variant: split')
     const envExample = await readText(projectPath, '.env.example')
     expect(envExample).toContain('HAI_ADMIN_DEFAULT_PASSWORD=')
     expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')

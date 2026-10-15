@@ -37,7 +37,7 @@ Handlebars.registerHelper('moduleConfig', function (this: TemplateContext, modul
   // 文件模板自身保留结尾换行，helper 不再重复输出空行。
   const content = generateConfigFile(moduleKey, this.moduleConfigs).trimEnd()
   const configured = this.appType === 'fullstack' && moduleKey === 'iam'
-    ? content.replace('seedDefaultData: true', 'seedDefaultData: false')
+    ? content.replace('seedDefaultData: true', 'seedDefaultData: false').replace('variant: card', 'variant: split')
     : content
   return enabled
     ? configured

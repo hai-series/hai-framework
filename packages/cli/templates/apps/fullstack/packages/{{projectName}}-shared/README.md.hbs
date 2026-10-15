@@ -43,6 +43,8 @@ Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test
 
 The service's `config/_iam.yml` controls login methods, registration, password reset, agreements and `ui` branding. Email and SMS use providers/templates in `_reach.yml` or custom callbacks. `AuthPanel` uses the public configuration and framework auth actions to manage tokens, resend countdowns and errors. All service nodes must share the same database and Redis; memory cache is for a single process.
 
+Authentication defaults to a split layout. Set `ui.variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `logoUrl` and `illustrationUrl` to customize login and registration. Without a `brandTitle`, the displayed application name comes from `app.info` and follows `core` configuration.
+
 LDAP and Reach are optional. Install ldapts in the IAM service workspace only when using its default LDAP client, then enable login.ldap and set connection settings. Custom onOtpSendEmail/onOtpSendSms/onPasswordResetRequest callbacks work without Reach and must reject on delivery failure. Agreements open in a Modal. LoginForm/RegisterForm support header/extraFields/footer snippets; AuthPanel forwards loginHeader/loginFields/loginFooter and registerHeader/registerFields/registerFooter. See the generated hai-iam/hai-ui skills for configuration and examples.
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
@@ -51,4 +53,4 @@ See `.agents/skills/hai-iam/reference.md` in the generated application for the c
 
 ## Form layouts
 
-The user editor uses `FormLayout columns={2} labelPosition="left"`; profile and password forms reuse the same UI options. Narrow containers automatically stack fields and labels. Field validation errors follow the current UI language. The management store syncs locale through the lightweight `@h-ai/ui/i18n` entry, without loading components or tour CSS. Configure `colSpan` on FormField to override automatic spans for textareas, uploads and multiple choices.
+The user editor uses `FormLayout columns={2} labelPosition="left"`. Personal settings use a bounded page width, stacked labels and a single avatar editor. Narrow containers automatically stack fields and labels. UI controls and CRUD forms show client validation on blur, update errors while correcting input and validate untouched fields on submit. Field errors follow the current UI language. The management store syncs locale through the lightweight `@h-ai/ui/i18n` entry, without loading components or tour CSS. Configure `colSpan` on FormField to override automatic spans for textareas, uploads and multiple choices.

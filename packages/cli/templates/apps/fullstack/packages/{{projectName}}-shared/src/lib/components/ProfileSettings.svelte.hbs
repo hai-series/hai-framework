@@ -1,7 +1,7 @@
 <script lang='ts'>
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card } from '@h-ai/ui/components/compounds/index'
-  import { Avatar, Select } from '@h-ai/ui/components/primitives/index'
+  import { Card, FormField, FormLayout } from '@h-ai/ui/components/compounds/index'
+  import { Badge, Select } from '@h-ai/ui/components/primitives/index'
   import { ChangePasswordForm, UserProfile } from '@h-ai/ui/components/scenes/iam/index'
   import { getThemeInfo } from '@h-ai/ui/theme'
   import * as m from '../paraglide/messages.js'
@@ -14,44 +14,33 @@
   const themeOptions = AVAILABLE_THEMES.map(theme => ({ value: theme, label: getThemeInfo(theme)?.name ?? theme }))
 </script>
 
-<section class='space-y-5' data-testid='settings-page'>
+<section class='mx-auto w-full max-w-4xl space-y-6' data-testid='settings-page'>
   <div>
     <h1 class='text-xl font-semibold tracking-tight'>{m.settings_title()}</h1>
     <p class='mt-1 text-sm text-base-content/50'>{m.settings_description()}</p>
   </div>
   {#if store.user}
-    <div class='grid gap-5 xl:grid-cols-[0.75fr_1.25fr]'>
-      <Card bordered shadow={false} class='h-fit'>
-        <div class='flex items-center gap-4'>
-          <Avatar name={store.user.displayName || store.user.username} src={store.user.avatarUrl} size='lg' />
-          <div class='min-w-0'>
-            <h2 class='truncate text-lg font-semibold'>{store.user.displayName || store.user.username}</h2>
-            <p class='text-sm text-base-content/50'>@{store.user.username}</p>
-            <p class='mt-2 text-xs text-primary'>{store.isAdmin ? m.role_admin() : m.role_user()}</p>
-          </div>
-        </div>
-        <p class='mt-4 text-xs leading-6 text-base-content/50'>{m.avatar_hint()}</p>
-      </Card>
-      <Card title={m.profile_title()} bordered shadow={false} data-guide='admin-profile-form'>
-        <UserProfile columns={2} labelPosition='left' user={store.user} editable alwaysEditable fields={['avatar', 'displayName', 'email']} avatarAccept='image/png,image/jpeg,image/webp' avatarHint={m.avatar_hint()} loading={store.saving} onsubmit={data => store.saveProfile(data)} onavatarchange={file => void store.uploadAvatar(file)} data-testid='profile-form' />
-      </Card>
-    </div>
+    <Card title={m.profile_title()} bordered shadow={false} data-guide='admin-profile-form'>
+      <div class='mb-5 flex flex-wrap items-center gap-3 border-b border-base-content/8 pb-4'>
+        <p class='min-w-0 break-all text-sm text-base-content/55'>@{store.user.username}</p>
+        <Badge size='sm' variant='ghost'>{store.isAdmin ? m.role_admin() : m.role_user()}</Badge>
+      </div>
+      <UserProfile columns={2} user={store.user} editable alwaysEditable fields={['avatar', 'displayName', 'email']} avatarAccept='image/png,image/jpeg,image/webp' avatarHint={m.avatar_hint()} loading={store.saving} onsubmit={data => store.saveProfile(data)} onavatarchange={file => void store.uploadAvatar(file)} data-testid='profile-form' />
+    </Card>
     <Card title={m.preferences_title()} bordered shadow={false} data-guide='admin-preferences'>
       <p class='mb-5 text-sm text-base-content/50'>{m.preferences_description()}</p>
-      <div class='grid gap-6 sm:grid-cols-2'>
-        <div class='space-y-2'>
-          <label class='text-sm font-medium' for='profile-language'>{m.settings_language()}</label>
+      <FormLayout columns={2}>
+        <FormField label={m.settings_language()} for='profile-language'>
           <Select id='profile-language' value={store.locale} options={languageOptions} disabled={store.saving} onchange={locale => void store.savePreferences({ locale })} data-testid='profile-language' />
-        </div>
-        <div class='space-y-2'>
-          <label class='text-sm font-medium' for='profile-theme'>{m.settings_theme()}</label>
+        </FormField>
+        <FormField label={m.settings_theme()} for='profile-theme'>
           <Select id='profile-theme' value={themeStore.current} options={themeOptions} disabled={store.saving} onchange={theme => void store.savePreferences({ theme })} data-testid='profile-theme' />
-        </div>
-      </div>
+        </FormField>
+      </FormLayout>
     </Card>
     <Card title={m.password_title()} bordered shadow={false} data-guide='admin-password'>
       <p class='mb-5 text-sm text-base-content/50'>{m.password_rules()}</p>
-      <div class='max-w-xl'><ChangePasswordForm labelPosition='left' loading={store.saving} passwordPolicy={store.authConfig?.password} minPasswordLength={store.authConfig?.password.minLength ?? 8} onsubmit={data => store.changePassword(data)} data-testid='password-form' /></div>
+      <ChangePasswordForm loading={store.saving} passwordPolicy={store.authConfig?.password} minPasswordLength={store.authConfig?.password.minLength ?? 8} onsubmit={data => store.changePassword(data)} data-testid='password-form' />
     </Card>
   {/if}
 </section>
