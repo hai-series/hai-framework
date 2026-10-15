@@ -98,7 +98,7 @@ export default defineConfig({
 
 > `toast`・型 import・DOM の `Range` と衝突する `Range` を除き、公開 Svelte コンポーネントは `@h-ai/ui/auto-import` で自動注入できます。
 
-管理画面など一部のコンポーネントを使うページは、公開コンポーネントディレクトリーの入口から直接 import できます。テーマツールは軽量な `@h-ai/ui/theme` から読み込み、テーマの利用だけでルート入口の AI・グラフコンポーネントを読み込まないようにします。インストール済みパッケージの exports を確認し、内部 `src/`・`dist/` は import しないでください。
+管理画面など一部のコンポーネントを使うページは、公開コンポーネントディレクトリーの入口から直接 import できます。テーマツールは軽量な `@h-ai/ui/theme` から読み込み、テーマの利用だけでルート入口の AI・グラフコンポーネントを読み込まないようにします。ストアの言語ツールは `@h-ai/ui/i18n` から読み込み、コンポーネントやガイド CSS を読み込みません。インストール済みパッケージの exports を確認し、内部 `src/`・`dist/` は import しないでください。
 
 自動 import はセミコロンなし、複数行、別名の import を認識し、既存のローカル名を重複注入しません。型のみの import は実行時コンポーネントの代わりにはなりません。
 
@@ -166,15 +166,41 @@ components/
 
 `BareInput` の `type="file"` では `onchange` の `event.currentTarget.files` を読み取り、ファイルパスの `value` はバインドしません。他の入力型では `bind:value` を使用できます。
 
-### Compounds：複合コンポーネント（36）
+### Compounds：複合コンポーネント（37）
 
 #### フォーム
 
 | コンポーネント | 説明               | 主なプロパティ                               |
 | -------------- | ------------------ | -------------------------------------------- |
-| `Form`         | フォームコンテナー | `loading`, `disabled`, `onsubmit`            |
-| `FormField`    | フォーム項目       | `label`, `error`, `hint`, `required`         |
+| `Form`         | フォームコンテナー | `columns`, `labelPosition`, `labelWidth`, `loading`, `disabled`, `onsubmit`            |
+| `FormField`    | フォーム項目       | `label`, `for`, `colSpan`, `labelPosition`, `error`, `hint`, `required`         |
+| `FormLayout` | フォーム配置 | `columns`, `labelPosition`, `labelWidth` |
 | `TagInput`     | タグ入力           | `tags`, `maxTags`, `allowDuplicates`, `size` |
+
+#### フォームのレイアウトと検証
+
+`Form` とネイティブ `<form>` 内で使う `FormLayout` は、`columns={1 | 2}`、`labelPosition="top" | "left"`、`labelWidth`（既定 `8rem`）を共有します。既定は1列・ラベルを上に配置します。コンテナー幅が `36rem` 未満では1列、`28rem` 未満では横並びラベルも縦並びになります。
+
+`FormField.colSpan` の既定は `'auto'`。Textarea、ファイル・画像アップロード、TagInput、複数選択 Combobox は2列を占めます。`1` / `2` で指定でき、独自の幅広コントロールには `data-form-wide` を付けます。見出し、エラー概要、操作ボタンなどの非 FormField 要素は行全体を使用します。項目ごとに `labelPosition` / `labelWidth` を上書きできます。
+
+ラベルは内部 UI コントロールに自動で関連付けられます。明示 ID やネイティブ要素は `<FormField for="control-id">` を使います。エラーとヒントは `aria-describedby`、無効な要素は `aria-invalid` で通知し、エラーは重複表示しません。`label` / `error` / `hint` は文字列または翻訳関数を受け取ります。
+
+`Input`、`Textarea`、`Select`、`PasswordInput` のネイティブ検証は中国語・英語に対応します。`validationMessage` は失敗時だけ適用され、有効な入力を無効にし続けません。UI の `setGlobalLocale` / `createLocaleStore` で言語を同期すると表示中のエラーも更新されます。`Textarea` は `minlength` / `maxlength`、`Select` は `name`・必須検証・FormData に対応します。
+
+`LoginForm`、`RegisterForm`、`ChangePasswordForm`、`ForgotPasswordForm`、`ResetPasswordForm`、`AuthPanel`、`UserProfile`、`FeedbackModal` は同じレイアウト設定に対応します。`CrudPage.form` または `CrudEditPanel` に渡します。CRUD 項目は `colSpan` と翻訳関数の `validation.message` に対応し、ボタンと Enter のどちらも送信前に検証します。入力修正でエラーが消えます。サーバー側の検証も必要です。
+
+```svelte
+<!-- m、save、name、notes 为应用自己的翻译、提交回调和状态 -->
+<Form columns={2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
+  <FormField label={() => m.name()} required>
+    <Input name="name" bind:value={name} required />
+  </FormField>
+  <FormField label={() => m.notes()}>
+    <Textarea name="notes" bind:value={notes} />
+  </FormField>
+  <Button type="submit">{m.save()}</Button>
+</Form>
+```
 
 #### フィードバック
 
@@ -531,7 +557,7 @@ components/
   crud={roleCrud}
   {data}
   permissions={{ create: true, update: true, delete: true }}
-  form={{ variant: 'modal', modalSize: 'lg' }}
+  form={{ variant: 'modal', modalSize: '3xl', columns: 2, labelPosition: 'top' }}
   pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
   density='compact'
   detailColumns={['name']}
@@ -698,7 +724,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 
 ```svelte
 <script>
-  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui'
+  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui/i18n'
   import { setLocale } from '$lib/paraglide/runtime'
 
   const localeStore = createLocaleStore()
@@ -729,7 +755,7 @@ import {
   isLocaleSupported, // 检查 locale 是否支持
   resolveLocale, // 解析 locale（支持回退）
   setGlobalLocale, // 设置全局 locale（同步 @h-ai/core）
-} from '@h-ai/ui'
+} from '@h-ai/ui/i18n'
 ```
 
 ## 設定による認証画面

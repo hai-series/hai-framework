@@ -9,6 +9,7 @@
 -->
 <script lang='ts'>
   import type { BareInputProps, DataAttributes } from '../../types.js'
+  import { getFormFieldContext } from '../../internal/form-context.js'
   import { getDataAttributes } from '../../utils.js'
 
   let {
@@ -37,6 +38,8 @@
     ariaExpanded,
     ariaControls,
     ariaAutocomplete,
+    ariaInvalid,
+    ariaDescribedby,
     oninput,
     onchange,
     onkeydown,
@@ -47,6 +50,7 @@
   }: BareInputProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const field = getFormFieldContext()
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
     // 文件输入的 value 由浏览器管理，不能把 fakepath 写回原生控件。
     if (type !== 'file')
@@ -73,7 +77,9 @@
 
 <input {...dataAttributes}
        bind:this={inputRef}
-       {id}
+       id={id ?? field?.controlId}
+       aria-invalid={ariaInvalid ?? (field?.error ? true : undefined)}
+       aria-describedby={ariaDescribedby ?? field?.messageId}
        {name}
        {type}
        {placeholder}

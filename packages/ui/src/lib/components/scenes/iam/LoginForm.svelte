@@ -3,11 +3,14 @@
   用户登录表单组件，搭配 primitives/compounds 使用。
 -->
 <script lang='ts'>
+  import type { HaiError } from '@h-ai/core'
   import type { DataAttributes } from '../../../types.js'
   import type { AuthLoginMethod, LoginFormData, LoginFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
+  import FormField from '../../compounds/FormField.svelte'
+  import FormLayout from '../../compounds/FormLayout.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
   import Button from '../../primitives/Button.svelte'
   import Checkbox from '../../primitives/Checkbox.svelte'
@@ -22,6 +25,9 @@
     resendInterval = 60,
     onsendotp,
     loading = false,
+    columns = 1,
+    labelPosition = 'top',
+    labelWidth = '8rem',
     disabled = false,
     showTitle = false,
     showRememberMe = true,
@@ -51,7 +57,8 @@
   const isOtp = $derived(method === 'email' || method === 'sms')
   let code = $state('')
   let sending = $state(false)
-  let sendError = $state('')
+  let sendFailure = $state<Pick<HaiError, 'code' | 'message'> | 'network'>()
+  const sendError = $derived(sendFailure === 'network' ? uiM('auth_network_error') : sendFailure ? authErrorMessage(sendFailure) : '')
   let resendAt = $state(0)
   let now = $state(Date.now())
   const remaining = $derived(Math.max(0, Math.ceil((resendAt - now) / 1000)))
@@ -79,11 +86,11 @@
     if (!onsendotp || sending || remaining || !username.trim())
       return
     sending = true
-    sendError = ''
+    sendFailure = undefined
     try {
       const result = await onsendotp(username.trim())
       if (!result.success) {
-        sendError = authErrorMessage(result.error)
+        sendFailure = result.error
       }
       else {
         now = Date.now()
@@ -91,7 +98,7 @@
       }
     }
     catch {
-      sendError = uiM('auth_network_error')
+      sendFailure = 'network'
     }
     finally { sending = false }
   }
@@ -125,149 +132,144 @@
 </script>
 
 <form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
-  <!-- 标题 -->
-  {#if showTitle}
-    <h2 class='text-xl font-semibold text-center mb-5'>{uiM('login_title')}</h2>
-  {/if}
+  <FormLayout {columns} {labelPosition} {labelWidth}>
+    <!-- 标题 -->
+    {#if showTitle}
+      <h2 class='text-xl font-semibold text-center mb-5'>{uiM('login_title')}</h2>
+    {/if}
 
-  <!-- 自定义头部 -->
-  {#if header}
-    <div class='login-form-header'>
-      {@render header()}
-    </div>
-  {/if}
-
-  <!-- 用户名 -->
-  {#if methods.length > 1}
-    <div class='grid grid-cols-2 gap-1 rounded-lg bg-base-200 p-1 sm:flex' aria-label={uiM('login_methods')}>
-      {#each methods as value (value)}
-        <button type='button' class={cn('flex-1 rounded-md px-2 py-2 text-sm transition-colors', method === value ? 'bg-base-100 font-medium shadow-sm' : 'text-base-content/60')} aria-pressed={method === value} disabled={loading || disabled} onclick={() => {
-          selectedMethod = value
-          password = ''
-          code = ''
-          sendError = ''
-        }}>
-          {methodLabel(value)}
-        </button>
-      {/each}
-    </div>
-  {/if}
-  {#if !method}
-    <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
-  {:else}
-    <div class='space-y-1.5'>
-      <label class='text-sm font-medium text-base-content/70' for='login-username'>
-        {method === 'email' ? uiM('register_email') : method === 'sms' ? uiM('register_phone') : uiM('login_username')}
-      </label>
-      <Input
-        id='login-username'
-        name='username'
-        type={method === 'email' ? 'email' : method === 'sms' ? 'tel' : 'text'}
-        placeholder={method === 'email' ? uiM('register_email_placeholder') : method === 'sms' ? uiM('register_phone_placeholder') : uiM('login_username_placeholder')}
-        bind:value={username}
-        autocomplete='username'
-        {disabled}
-        required
-        error={errors.username}
-      />
-    </div>
-
-    <!-- 密码 -->
-    {#if isOtp}
-      <div class='space-y-1.5'>
-        <label class='text-sm font-medium text-base-content/70' for='login-code'>{uiM('login_code')}</label>
-        <div class='flex items-start gap-2'>
-          <Input id='login-code' name='code' bind:value={code} autocomplete='one-time-code' inputmode='numeric' maxlength={otpLength} pattern={`[0-9]{${otpLength}}`} placeholder={uiM('login_code_placeholder', { length: otpLength })} required {disabled} />
-          <Button type='button' variant='outline' loading={sending} disabled={loading || disabled || !username.trim() || remaining > 0 || !onsendotp} onclick={sendOtp}>
-            {remaining ? uiM('login_resend_wait', { seconds: remaining }) : uiM('login_send_code')}
-          </Button>
-        </div>
-        {#if sendError}<p role='alert' class='text-sm text-error'>{sendError}</p>{/if}
-      </div>
-    {:else}
-      <div class='space-y-1.5'>
-        <label class='text-sm font-medium text-base-content/70' for='login-password'>
-          {uiM('login_password')}
-        </label>
-        <PasswordInput
-          id='login-password'
-          bind:value={password}
-          placeholder={uiM('login_password_placeholder')}
-          autocomplete='current-password'
-          {disabled}
-          required
-          error={errors.password}
-          showStrength={false}
-        />
+    <!-- 自定义头部 -->
+    {#if header}
+      <div class='login-form-header'>
+        {@render header()}
       </div>
     {/if}
-  {/if}
 
-  <!-- 记住我 & 忘记密码 -->
-  {#if method === 'password' && (showRememberMe || showForgotPassword)}
-    <div class='flex items-center justify-between'>
-      {#if showRememberMe}
-        <Checkbox
-          bind:checked={rememberMe}
-          label={uiM('login_remember_me')}
+    <!-- 用户名 -->
+    {#if methods.length > 1}
+      <div class='grid grid-cols-2 gap-1 rounded-lg bg-base-200 p-1 sm:flex' aria-label={uiM('login_methods')}>
+        {#each methods as value (value)}
+          <button type='button' class={cn('flex-1 rounded-md px-2 py-2 text-sm transition-colors', method === value ? 'bg-base-100 font-medium shadow-sm' : 'text-base-content/60')} aria-pressed={method === value} disabled={loading || disabled} onclick={() => {
+            selectedMethod = value
+            password = ''
+            code = ''
+            sendFailure = undefined
+          }}>
+            {methodLabel(value)}
+          </button>
+        {/each}
+      </div>
+    {/if}
+    {#if !method}
+      <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
+    {:else}
+      <FormField for='login-username' label={method === 'email' ? uiM('register_email') : method === 'sms' ? uiM('register_phone') : uiM('login_username')}>
+        <Input
+          id='login-username'
+          name='username'
+          type={method === 'email' ? 'email' : method === 'sms' ? 'tel' : 'text'}
+          placeholder={method === 'email' ? uiM('register_email_placeholder') : method === 'sms' ? uiM('register_phone_placeholder') : uiM('login_username_placeholder')}
+          bind:value={username}
+          autocomplete='username'
           {disabled}
-          size='sm'
+          required
+          error={errors.username}
         />
+      </FormField>
+
+      <!-- 密码 -->
+      {#if isOtp}
+        <FormField for='login-code' label={uiM('login_code')}>
+          <div class='flex items-start gap-2'>
+            <Input id='login-code' name='code' bind:value={code} autocomplete='one-time-code' inputmode='numeric' maxlength={otpLength} pattern={`[0-9]{${otpLength}}`} placeholder={uiM('login_code_placeholder', { length: otpLength })} required {disabled} />
+            <Button type='button' variant='outline' loading={sending} disabled={loading || disabled || !username.trim() || remaining > 0 || !onsendotp} onclick={sendOtp}>
+              {remaining ? uiM('login_resend_wait', { seconds: remaining }) : uiM('login_send_code')}
+            </Button>
+          </div>
+          {#if sendError}<p role='alert' class='text-sm text-error'>{sendError}</p>{/if}
+        </FormField>
       {:else}
-        <div></div>
+        <FormField for='login-password' label={uiM('login_password')}>
+          <PasswordInput
+            id='login-password'
+            bind:value={password}
+            placeholder={uiM('login_password_placeholder')}
+            autocomplete='current-password'
+            {disabled}
+            required
+            error={errors.password}
+            showStrength={false}
+          />
+        </FormField>
       {/if}
+    {/if}
 
-      {#if showForgotPassword}
-        {#if onforgotpassword}
-          <BareButton
-            type='button'
-            class='link link-primary text-sm'
-            onclick={handleForgotPassword}
-          >
-            {uiM('login_forgot_password')}
-          </BareButton>
+    <!-- 记住我 & 忘记密码 -->
+    {#if method === 'password' && (showRememberMe || showForgotPassword)}
+      <div class='flex items-center justify-between'>
+        {#if showRememberMe}
+          <Checkbox
+            bind:checked={rememberMe}
+            label={uiM('login_remember_me')}
+            {disabled}
+            size='sm'
+          />
         {:else}
-          <a href={forgotPasswordUrl} class='link link-primary text-sm'>
-            {uiM('login_forgot_password')}
-          </a>
+          <div></div>
         {/if}
-      {/if}
-    </div>
-  {/if}
 
-  <!-- 通用错误 -->
-  {#if extraFields}
-    <div class='login-form-extra-fields'>{@render extraFields()}</div>
-  {/if}
-  {#if errors.general}
-    <Alert variant='error'>
-      {errors.general}
-    </Alert>
-  {/if}
+        {#if showForgotPassword}
+          {#if onforgotpassword}
+            <BareButton
+              type='button'
+              class='link link-primary text-sm'
+              onclick={handleForgotPassword}
+            >
+              {uiM('login_forgot_password')}
+            </BareButton>
+          {:else}
+            <a href={forgotPasswordUrl} class='link link-primary text-sm'>
+              {uiM('login_forgot_password')}
+            </a>
+          {/if}
+        {/if}
+      </div>
+    {/if}
 
-  <!-- 提交按钮 -->
-  <Button
-    type='submit'
-    variant='primary'
-    {loading}
-    disabled={loading || disabled || !method}
-    class='w-full'
-  >
-    {submitText || uiM('login_submit')}
-  </Button>
+    <!-- 通用错误 -->
+    {#if extraFields}
+      <div class='login-form-extra-fields'>{@render extraFields()}</div>
+    {/if}
+    {#if errors.general}
+      <Alert variant='error'>
+        {errors.general}
+      </Alert>
+    {/if}
 
-  <!-- 协议提示 -->
-  <AgreementNotice {agreements} />
+    <!-- 提交按钮 -->
+    <Button
+      type='submit'
+      variant='primary'
+      {loading}
+      disabled={loading || disabled || !method}
+      class='w-full'
+    >
+      {submitText || uiM('login_submit')}
+    </Button>
 
-  <!-- 自定义底部 -->
-  {#if footer}
-    <div class='login-form-footer'>
-      {@render footer()}
-    </div>
-  {:else if showRegisterLink}
-    <div class='text-center mt-4 text-sm text-base-content/60'>
-      <span>{uiM('login_no_account')}</span>
-      <a href={registerUrl} class='link link-primary ml-1'>{uiM('login_register_now')}</a>
-    </div>
-  {/if}
+    <!-- 协议提示 -->
+    <AgreementNotice {agreements} />
+
+    <!-- 自定义底部 -->
+    {#if footer}
+      <div class='login-form-footer'>
+        {@render footer()}
+      </div>
+    {:else if showRegisterLink}
+      <div class='text-center mt-4 text-sm text-base-content/60'>
+        <span>{uiM('login_no_account')}</span>
+        <a href={registerUrl} class='link link-primary ml-1'>{uiM('login_register_now')}</a>
+      </div>
+    {/if}
+  </FormLayout>
 </form>

@@ -14,6 +14,7 @@
  */
 
 import type { PaginatedResult } from '@h-ai/core'
+import type { FormColSpan } from '../../../types.js'
 import type { NavAdapter } from './nav-adapter.js'
 import { SvelteURLSearchParams } from 'svelte/reactivity'
 
@@ -69,7 +70,9 @@ export interface CrudFieldDef {
   /** 选项（select / radio / multi-select），支持工厂函数。 */
   options?: CrudOption[] | (() => CrudOption[])
   /** 校验规则。 */
-  validation?: { required?: boolean, min?: number, max?: number, pattern?: string, message?: string }
+  validation?: { required?: boolean, min?: number, max?: number, pattern?: string, message?: CrudText }
+  /** 表单占用列数，默认 auto；多行文本、多选等自动占两列。 */
+  colSpan?: FormColSpan
   /** 列宽（CSS）。 */
   width?: string
   /** 列对齐。 */

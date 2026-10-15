@@ -255,8 +255,8 @@ const p = usePlatform()
 
 | 组件         | Props 要点                                                         | 说明          |
 | ------------ | ------------------------------------------------------------------ | ------------- |
-| `Form`       | `loading`, `disabled`, `onsubmit`                                  | 表单容器      |
-| `FormField`  | `label`, `name`, `error`, `hint`, `required`                       | 表单字段      |
+| `Form`       | `columns`, `labelPosition`, `labelWidth`, `loading`, `disabled`, `onsubmit`                                  | 表单容器      |
+| `FormField`  | `label`, `for`, `colSpan`, `labelPosition`, `error`, `hint`, `required`                       | 表单字段      |
 | `Modal`      | `open`, `title`, `size`, `closeOnBackdrop`                         | 模态框，内置对话框语义、焦点约束和关闭后焦点恢复 |
 | `Drawer`     | `open`, `position`, `size`, `width`, `resizable`, `widthStorageKey` | 可选拖动并记忆宽度的抽屉 |
 | `DataTable`  | `data`, `columns`, `keyField`, `sortKey`, `sortDir`, `onsort`, snippet slots | 数据表格（列定义 `sortable` 可排序） |
@@ -643,6 +643,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 | --------------------------- | -------------------------------------- |
 | `@h-ai/ui`                 | 主入口：所有组件、工具函数、类型       |
 | `@h-ai/ui/theme`           | 轻量主题元数据与工具，不经过组件根入口 |
+| `@h-ai/ui/i18n`            | 轻量语言工具，供状态层使用，不加载组件或引导 CSS |
 | `@h-ai/ui/auto-import`     | Svelte 预处理器：组件自动导入          |
 | `@h-ai/ui/components/*`    | 公开组件目录的 JS 入口，按实际 exports/产物选择 |
 | `@h-ai/ui/components/primitives/index` | 公开原子组件目录入口，如 Button/Input |
@@ -657,3 +658,25 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 - `hai-iam`：IAM 模块 API（与 LoginForm/RegisterForm 配合）
 - `hai-capacitor`：原生 App 开发（与 SafeArea/AppBar 配合）
 - `hai-api-client`：客户端数据获取
+
+## 表单布局与错误提示
+
+数据新增/修改统一使用 `Form`（托管提交）或原生 `<form>` + `FormLayout`，不要在应用复制字段 grid。两者支持 `columns={1 | 2}`、`labelPosition='top' | 'left'`、`labelWidth`；默认单列/标签在上，窄容器自动收拢。`FormField.colSpan='auto'` 自动让多行文本、上传和多选占两列，`1` / `2` 可覆盖；自定义宽控件标注 `data-form-wide`。已有控件 ID 或原生控件给 FormField 配 `for`，避免重复或失效的标签。
+
+IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；CRUD 使用 `form={{ columns: 2, labelPosition: 'left', labelWidth: '6rem' }}`，字段支持 `colSpan` 和延迟翻译的 `validation.message: () => m.required()`。通用字段的 `label/error/hint`、Input/Textarea/Select 的 `validationMessage` 支持翻译函数。内置必填、类型、长度和范围错误由 UI 提供；应用只提供业务文案。通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的错误随之更新；自定义提示只用于失败，不能把固定提示直接设成持续的 customValidity。字段错误只在 FormField 或控件其中一处展示。
+
+验证一列/双列与两种标签位置、自动/显式跨列、窄抽屉/手机、无效提交与修正、切换语言后的错误、按钮和回车提交，以及关闭重开后的状态。
+
+
+```svelte
+<!-- m、save、name、notes 为应用自己的翻译、提交回调和状态 -->
+<Form columns={2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
+  <FormField label={() => m.name()} required>
+    <Input name="name" bind:value={name} required />
+  </FormField>
+  <FormField label={() => m.notes()}>
+    <Textarea name="notes" bind:value={notes} />
+  </FormField>
+  <Button type="submit">{m.save()}</Button>
+</Form>
+```

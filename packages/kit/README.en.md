@@ -285,3 +285,7 @@ pnpm --filter @h-ai/kit test
 ## License
 
 Apache-2.0
+
+## CRUD fields
+
+Declarative CRUD fields support `colSpan: 'auto' | 1 | 2` for UI form widths. `validation.message` accepts a string or `() => string` for current-locale validation messages. Configure layout through `CrudPage.form`; validate independently on the server.

@@ -486,5 +486,20 @@
   "guide_password_title": "修改密码",
   "guide_password_description": "输入当前密码、新密码和确认密码，按页面提示提交。修改前请确认新密码符合密码规则。",
   "guide_overview_article": "## 从哪里开始\n\n- 使用导航菜单打开需要的功能。可见菜单和操作由当前权限决定。\n- 工作区显示列表、详情或设置内容。按页面提示完成操作，提交前确认信息。\n- 点击头像访问个人资料与设置。\n- 点击帮助入口搜索说明或重新查看导览。\n\n## 首次引导\n\n选择“稍后提醒”会暂缓一天；选择“不再提醒”会保留你的选择。完成导览后不会重复提示，仍可手动重看。",
-  "guide_profile_article": "## 个人资料与偏好\n\n打开个人资料页面，查看或修改个人信息与头像。头像需符合页面显示的文件要求，保存后查看结果提示。外观和语言可在设置中调整。\n\n## 密码\n\n修改密码需要当前密码、新密码和确认密码。按页面显示的密码规则填写，提交后查看结果。\n\n点击“开始引导”可以直接进入对应页面。导览不会自动保存表单或修改账户。"
+  "guide_profile_article": "## 个人资料与偏好\n\n打开个人资料页面，查看或修改个人信息与头像。头像需符合页面显示的文件要求，保存后查看结果提示。外观和语言可在设置中调整。\n\n## 密码\n\n修改密码需要当前密码、新密码和确认密码。按页面显示的密码规则填写，提交后查看结果。\n\n点击“开始引导”可以直接进入对应页面。导览不会自动保存表单或修改账户。",
+  "gallery_form_title": "Form / FormField 表单布局",
+  "gallery_form_description": "标签独立成行或同行、单列或双列、自动跨列与校验",
+  "gallery_form_single": "一列",
+  "gallery_form_double": "双列",
+  "gallery_form_label_top": "标签独立成行",
+  "gallery_form_label_left": "标签与控件同行",
+  "gallery_form_name": "姓名",
+  "gallery_form_short_notes": "简短备注（固定一列）",
+  "gallery_form_notes": "备注（自动跨列）",
+  "gallery_form_full_row": "摘要（固定两列）",
+  "gallery_form_save": "提交",
+  "gallery_form_reset": "重置",
+  "gallery_form_saved": "表单已提交",
+  "gallery_form_admin": "管理员",
+  "gallery_form_user": "普通用户"
 }

@@ -12,6 +12,8 @@
   />
 -->
 <script lang='ts'>
+  import FormField from '../../compounds/FormField.svelte'
+  import FormLayout from '../../compounds/FormLayout.svelte'
   import Modal from '../../compounds/Modal.svelte'
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
@@ -47,18 +49,18 @@
     }
   }
 
-  import type { DataAttributes } from '../../../types.js'
+  import type { DataAttributes, FormLayoutOptions } from '../../../types.js'
   import { uiM } from '../../../messages.js'
   import { getDataAttributes } from '../../../utils.js'
 
-  interface Props {
+  interface Props extends FormLayoutOptions {
     open?: boolean
     labels?: FeedbackLabels
     onsubmit?: (data: FeedbackData) => Promise<void>
     class?: string
   }
 
-  let { open = $bindable(false), labels = {}, onsubmit, class: className = '', ...restProps }: Props & DataAttributes = $props()
+  let { open = $bindable(false), labels = {}, columns = 1, labelPosition = 'top', labelWidth = '8rem', onsubmit, class: className = '', ...restProps }: Props & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   // 文案优先使用传入的 labels，缺省回退到内置消息 uiM(...)
@@ -67,7 +69,9 @@
   let description = $state('')
   let contact = $state('')
   let loading = $state(false)
-  let error = $state('')
+  let error = $state<'empty' | 'submit' | ''>('')
+  let submitError = $state('')
+  const errorText = $derived(error === 'empty' ? labels.errorEmpty ?? uiM('feedback_error_empty') : error === 'submit' ? submitError || labels.errorSubmit || uiM('feedback_error_submit') : '')
 
   const typeOptions = $derived([
     { value: 'bug', label: labels.types?.bug ?? uiM('feedback_type_bug') },
@@ -77,8 +81,10 @@
   ])
 
   async function handleSubmit() {
+    if (loading)
+      return
     if (!description.trim()) {
-      error = labels.errorEmpty ?? uiM('feedback_error_empty')
+      error = 'empty'
       return
     }
 
@@ -95,7 +101,8 @@
       resetForm()
     }
     catch (e) {
-      error = e instanceof Error ? e.message : (labels.errorSubmit ?? uiM('feedback_error_submit'))
+      submitError = e instanceof Error ? e.message : ''
+      error = 'submit'
     }
     finally {
       loading = false
@@ -107,41 +114,44 @@
     description = ''
     contact = ''
     error = ''
+    submitError = ''
   }
 </script>
 
 <Modal {...dataAttributes} class={className} bind:open title={labels.title ?? uiM('feedback_title')}>
   <p class='text-base-content/70 mb-4'>{labels.description ?? uiM('feedback_description')}</p>
 
-  {#if error}
+  {#if error === 'submit'}
     <div class='alert alert-error mb-4'>
       <span class='icon-[tabler--alert-circle] size-5'></span>
-      <span>{error}</span>
+      <span>{errorText}</span>
     </div>
   {/if}
 
-  <div class='space-y-4'>
-    <div class='fieldset'>
-      <legend class='fieldset-legend'>{labels.typeLabel ?? uiM('feedback_type_label')}</legend>
+  <FormLayout {columns} {labelPosition} {labelWidth}>
+    <FormField for='feedback-type' label={labels.typeLabel ?? uiM('feedback_type_label')}>
       <Select
         id='feedback-type'
         options={typeOptions}
         bind:value={feedbackType}
       />
-    </div>
+    </FormField>
 
-    <div class='fieldset'>
-      <legend class='fieldset-legend'>{labels.contentLabel ?? uiM('feedback_content_label')} <span class='text-error'>*</span></legend>
+    <FormField for='feedback-desc' label={labels.contentLabel ?? uiM('feedback_content_label')} required error={error === 'empty' ? errorText : ''}>
       <Textarea
         id='feedback-desc'
         class='h-32'
         placeholder={labels.contentPlaceholder ?? uiM('feedback_content_placeholder')}
         bind:value={description}
+        disabled={loading}
+        oninput={() => {
+          if (description.trim())
+            error = ''
+        }}
       />
-    </div>
+    </FormField>
 
-    <div class='fieldset'>
-      <legend class='fieldset-legend'>{labels.contactLabel ?? uiM('feedback_contact_label')}</legend>
+    <FormField for='feedback-contact' label={labels.contactLabel ?? uiM('feedback_contact_label')}>
       <Input
         id='feedback-contact'
         type='text'
@@ -150,8 +160,8 @@
         bind:value={contact}
         autocomplete='email'
       />
-    </div>
-  </div>
+    </FormField>
+  </FormLayout>
 
   {#snippet footer()}
     <Button variant='ghost' onclick={() => open = false}>

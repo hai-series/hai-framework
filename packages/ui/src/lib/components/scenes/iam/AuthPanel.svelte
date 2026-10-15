@@ -1,6 +1,7 @@
 <!-- 配置驱动认证场景；网络、通知及 Token 存储由 actions 注入。 -->
 <script lang='ts'>
-  import type { HaiResult } from '@h-ai/core'
+  import type { HaiError, HaiResult } from '@h-ai/core'
+  import type { UIMessageKey } from '../../../messages.js'
   import type { AuthLoginMethod, AuthPanelMode, AuthPanelProps } from '../types.js'
   import { onMount, untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
@@ -16,12 +17,14 @@
   import RegisterForm from './RegisterForm.svelte'
   import ResetPasswordForm from './ResetPasswordForm.svelte'
 
-  const { config, actions, initialMode = 'login', resetToken = '', loginUrl, registerUrl, forgotPasswordUrl, onauthenticated, error = '', onretry, loginHeader, loginFields, loginFooter, registerHeader, registerFields, registerFooter, ...restProps }: AuthPanelProps = $props()
+  const { config, actions, columns = 1, labelPosition = 'top', labelWidth = '8rem', initialMode = 'login', resetToken = '', loginUrl, registerUrl, forgotPasswordUrl, onauthenticated, error = '', onretry, loginHeader, loginFields, loginFooter, registerHeader, registerFields, registerFooter, ...restProps }: AuthPanelProps = $props()
   const dataAttributes = $derived(getDataAttributes(restProps))
   let mode = $state<AuthPanelMode>(untrack(() => initialMode))
   let loading = $state(false)
-  let errors = $state<Record<string, string>>({})
-  let notice = $state('')
+  let actionError = $state<Pick<HaiError, 'code' | 'message'>>()
+  let networkFailed = $state(false)
+  const errors = $derived<Record<string, string>>(actionError ? { general: authErrorMessage(actionError) } : networkFailed ? { general: uiM('auth_network_error') } : {})
+  let notice = $state<UIMessageKey | ''>('')
   // SSR 表单先显示但不可编辑；客户端绑定事件后开放输入，避免接管时丢失早到的输入。
   let interactive = $state(false)
   onMount(() => {
@@ -33,13 +36,15 @@
 
   function switchMode(next: AuthPanelMode) {
     mode = next
-    errors = {}
+    actionError = undefined
+    networkFailed = false
     notice = ''
   }
-  async function run(operation: () => Promise<HaiResult<unknown>>, authenticate = false, successNotice = '') {
+  async function run(operation: () => Promise<HaiResult<unknown>>, authenticate = false, successNotice: UIMessageKey | '' = '') {
     if (loading)
       return
-    errors = {}
+    actionError = undefined
+    networkFailed = false
     notice = ''
     loading = true
     try {
@@ -48,10 +53,10 @@
         if (mode === 'register' && result.error.code === 'hai:iam:004') {
           // 默认禁用的新账户已完成注册，提示等待启用，避免用户重复注册。
           switchMode('login')
-          notice = uiM('auth_registration_pending')
+          notice = 'auth_registration_pending'
         }
         else {
-          errors = { general: authErrorMessage(result.error) }
+          actionError = result.error
         }
       }
       else if (authenticate) {
@@ -61,7 +66,7 @@
         notice = successNotice
       }
     }
-    catch { errors = { general: uiM('auth_network_error') } }
+    catch { networkFailed = true }
     finally { loading = false }
   }
 </script>
@@ -80,44 +85,47 @@
 
 <AuthShell {...dataAttributes} {...config?.ui} title={config?.ui.title || title} brandTitle={config?.ui.brandTitle || uiM('auth_brand')}>
   <fieldset class='m-0 min-w-0 border-0 p-0' disabled={!interactive}>
-    {#if error}
-      <Alert variant='error'>{error}</Alert>
-      {#if onretry}<Button class='mt-4 w-full' onclick={onretry}>{uiM('crud_retry')}</Button>{/if}
-    {:else if !config}
-      <div class='flex justify-center' role='status'><Spinner /></div>
-    {:else if !available}
-      <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
-      <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
-    {:else}
-      {#if notice}<Alert variant='success' class='mb-4'>{notice}</Alert>{/if}
-      {#if mode === 'login'}
-        <LoginForm {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showRememberMe={false} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
-                   onforgotpassword={forgotPasswordUrl ? undefined : () => switchMode('forgot')}
-                   otpLength={config.otp.length} resendInterval={config.otp.resendInterval} onsendotp={actions.sendOtp}
-                   agreements={config.agreements.showOnLogin ? config.agreements : undefined}
-                   onsubmit={data => run(() => actions.login({ identifier: data.username, password: data.password, method: data.method, code: data.code }), true)}>
-          {#snippet footer()}
-            {#if loginFooter}{@render loginFooter()}{/if}
-            {#if config?.register.enabled}<div class='text-center text-sm'>{uiM('login_no_account')} {@render link('register', uiM('login_register_now'), registerUrl)}</div>{/if}
-          {/snippet}
-        </LoginForm>
-      {:else if mode === 'register'}
-        <RegisterForm {loading} {errors} header={registerHeader} extraFields={registerFields} fields={config.passwordReset.mode === 'phone' ? ['username', 'phone', 'password'] : ['username', 'email', 'password']} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
-                      agreements={config.agreements.showOnRegister ? config.agreements : undefined} onsubmit={data => run(() => actions.register({ username: data.username || '', password: data.password, email: data.email, phone: data.phone, displayName: data.nickname }), true)}>
-          {#snippet footer()}
-            {#if registerFooter}{@render registerFooter()}{/if}
-            <div class='text-center'>{@render link('login', uiM('register_login_now'), loginUrl)}</div>
-          {/snippet}
-        </RegisterForm>
-      {:else if mode === 'forgot'}
-        <ForgotPasswordForm {loading} {errors} mode={config.passwordReset.mode ?? 'email'} onsubmit={data => run(() => actions.requestPasswordReset(data.email || data.phone || ''), false, uiM('auth_reset_sent'))}>
-          {#snippet footer()}<div class='flex justify-between gap-3'>{@render link('login', uiM('login_submit'), loginUrl)}{@render link('reset', uiM('auth_have_token'))}</div>{/snippet}
-        </ForgotPasswordForm>
-      {:else}
-        <ResetPasswordForm {loading} {errors} showCode={!resetToken} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
-                           onsubmit={data => run(() => actions.confirmPasswordReset(resetToken || data.code || '', data.newPassword), false, uiM('auth_reset_done'))} />
+    <!-- 固定内容包装节点，避免 fieldset 插入通知时丢失容器查询子树的布局。 -->
+    <div class='min-w-0'>
+      {#if error}
+        <Alert variant='error'>{error}</Alert>
+        {#if onretry}<Button class='mt-4 w-full' onclick={onretry}>{uiM('crud_retry')}</Button>{/if}
+      {:else if !config}
+        <div class='flex justify-center' role='status'><Spinner /></div>
+      {:else if !available}
+        <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
         <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
+      {:else}
+        {#if notice}<Alert variant='success' class='mb-4'>{uiM(notice)}</Alert>{/if}
+        {#if mode === 'login'}
+          <LoginForm {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showRememberMe={false} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
+                     onforgotpassword={forgotPasswordUrl ? undefined : () => switchMode('forgot')}
+                     otpLength={config.otp.length} resendInterval={config.otp.resendInterval} onsendotp={actions.sendOtp}
+                     agreements={config.agreements.showOnLogin ? config.agreements : undefined}
+                     onsubmit={data => run(() => actions.login({ identifier: data.username, password: data.password, method: data.method, code: data.code }), true)}>
+            {#snippet footer()}
+              {#if loginFooter}{@render loginFooter()}{/if}
+              {#if config?.register.enabled}<div class='text-center text-sm'>{uiM('login_no_account')} {@render link('register', uiM('login_register_now'), registerUrl)}</div>{/if}
+            {/snippet}
+          </LoginForm>
+        {:else if mode === 'register'}
+          <RegisterForm {columns} {labelPosition} {labelWidth} {loading} {errors} header={registerHeader} extraFields={registerFields} fields={config.passwordReset.mode === 'phone' ? ['username', 'phone', 'password'] : ['username', 'email', 'password']} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
+                        agreements={config.agreements.showOnRegister ? config.agreements : undefined} onsubmit={data => run(() => actions.register({ username: data.username || '', password: data.password, email: data.email, phone: data.phone, displayName: data.nickname }), true)}>
+            {#snippet footer()}
+              {#if registerFooter}{@render registerFooter()}{/if}
+              <div class='text-center'>{@render link('login', uiM('register_login_now'), loginUrl)}</div>
+            {/snippet}
+          </RegisterForm>
+        {:else if mode === 'forgot'}
+          <ForgotPasswordForm {columns} {labelPosition} {labelWidth} {loading} {errors} mode={config.passwordReset.mode ?? 'email'} onsubmit={data => run(() => actions.requestPasswordReset(data.email || data.phone || ''), false, 'auth_reset_sent')}>
+            {#snippet footer()}<div class='flex justify-between gap-3'>{@render link('login', uiM('login_submit'), loginUrl)}{@render link('reset', uiM('auth_have_token'))}</div>{/snippet}
+          </ForgotPasswordForm>
+        {:else}
+          <ResetPasswordForm {columns} {labelPosition} {labelWidth} {loading} {errors} showCode={!resetToken} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
+                             onsubmit={data => run(() => actions.confirmPasswordReset(resetToken || data.code || '', data.newPassword), false, 'auth_reset_done')} />
+          <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
+        {/if}
       {/if}
-    {/if}
+    </div>
   </fieldset>
 </AuthShell>

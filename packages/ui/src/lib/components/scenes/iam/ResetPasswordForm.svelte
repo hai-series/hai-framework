@@ -8,6 +8,8 @@
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
+  import FormField from '../../compounds/FormField.svelte'
+  import FormLayout from '../../compounds/FormLayout.svelte'
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
   import { arePasswordsEqual, passwordPolicyError, passwordPolicyHint } from './password-utils.js'
@@ -15,6 +17,9 @@
 
   const {
     loading = false,
+    columns = 1,
+    labelPosition = 'top',
+    labelWidth = '8rem',
     disabled = false,
     showTitle = false,
     showDescription = false,
@@ -72,91 +77,84 @@
 </script>
 
 <form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
-  <!-- 标题 -->
-  {#if showTitle}
-    <h2 class='text-xl font-semibold text-center mb-4'>{uiM('reset_password_title')}</h2>
-  {/if}
+  <FormLayout {columns} {labelPosition} {labelWidth}>
+    <!-- 标题 -->
+    {#if showTitle}
+      <h2 class='text-xl font-semibold text-center mb-4'>{uiM('reset_password_title')}</h2>
+    {/if}
 
-  <!-- 描述 -->
-  {#if showDescription}
-    <p class='text-center text-base-content/45 text-sm mb-5'>
-      {uiM('reset_password_desc')}
-    </p>
-  {/if}
+    <!-- 描述 -->
+    {#if showDescription}
+      <p class='text-center text-base-content/45 text-sm mb-5'>
+        {uiM('reset_password_desc')}
+      </p>
+    {/if}
 
-  <!-- 验证码 -->
-  {#if showCode}
-    <div class='space-y-1.5'>
-      <label class='text-sm font-medium text-base-content/70' for='reset-code'>
-        {uiM('reset_password_code_label')}
-      </label>
-      <Input
-        id='reset-code'
-        name='code'
-        type='text'
-        placeholder={uiM('reset_password_code_placeholder')}
-        bind:value={code}
+    <!-- 验证码 -->
+    {#if showCode}
+      <FormField for='reset-code' label={uiM('reset_password_code_label')}>
+        <Input
+          id='reset-code'
+          name='code'
+          type='text'
+          placeholder={uiM('reset_password_code_placeholder')}
+          bind:value={code}
+          {disabled}
+          required
+          error={errors.code}
+        />
+      </FormField>
+    {/if}
+
+    <!-- 新密码 -->
+    <FormField for='reset-new-password' label={uiM('reset_password_new_label')}>
+      <PasswordInput
+        bind:value={newPassword}
+        placeholder={uiM('reset_password_new_placeholder')}
         {disabled}
-        required
-        error={errors.code}
+        error={errors.newPassword}
+        showStrength={showPasswordStrength}
+        minLength={minPasswordLength}
       />
-    </div>
-  {/if}
+    </FormField>
 
-  <!-- 新密码 -->
-  <div class='space-y-1.5'>
-    <label class='text-sm font-medium text-base-content/70' for='reset-new-password'>
-      {uiM('reset_password_new_label')}
-    </label>
-    <PasswordInput
-      bind:value={newPassword}
-      placeholder={uiM('reset_password_new_placeholder')}
-      {disabled}
-      error={errors.newPassword}
-      showStrength={showPasswordStrength}
-      minLength={minPasswordLength}
-    />
-  </div>
+    <!-- 确认新密码 -->
+    <FormField for='reset-confirm-password' label={uiM('reset_password_confirm_label')}>
+      <PasswordInput
+        bind:value={confirmPassword}
+        placeholder={uiM('reset_password_confirm_placeholder')}
+        {disabled}
+        error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? uiM('reset_password_mismatch') : '')}
+        showStrength={false}
+      />
+    </FormField>
 
-  <!-- 确认新密码 -->
-  <div class='space-y-1.5'>
-    <label class='text-sm font-medium text-base-content/70' for='reset-confirm-password'>
-      {uiM('reset_password_confirm_label')}
-    </label>
-    <PasswordInput
-      bind:value={confirmPassword}
-      placeholder={uiM('reset_password_confirm_placeholder')}
-      {disabled}
-      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? uiM('reset_password_mismatch') : '')}
-      showStrength={false}
-    />
-  </div>
+    <!-- 通用错误 -->
+    {#if errors.general}
+      <Alert variant='error'>
+        {errors.general}
+      </Alert>
+    {/if}
 
-  <!-- 通用错误 -->
-  {#if errors.general}
-    <Alert variant='error'>
-      {errors.general}
-    </Alert>
-  {/if}
+    {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
+    {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
 
-  {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
-  {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
+    <!-- 提交按钮 -->
+    <Button
+      type='submit'
+      variant='primary'
+      {loading}
+      disabled={loading || disabled || !canSubmit || Boolean(policyError)}
+      class='w-full'
+    >
+      {submitText || uiM('reset_password_submit')}
+    </Button>
 
-  <!-- 提交按钮 -->
-  <Button
-    type='submit'
-    variant='primary'
-    {loading}
-    disabled={loading || disabled || !canSubmit || Boolean(policyError)}
-    class='w-full'
-  >
-    {submitText || uiM('reset_password_submit')}
-  </Button>
-
-  <!-- 返回链接 -->
-  {#if showBackLink}
-    <div class='text-center mt-4 text-sm'>
-      <a href={loginUrl} class='link link-primary'>← {uiM('reset_password_back')}</a>
-    </div>
-  {/if}
+    <!-- 返回链接 -->
+    {#if showBackLink}
+      <div class='text-center mt-4 text-sm'>
+        <a href={loginUrl} class='link link-primary'>← {uiM('reset_password_back')}</a>
+      </div>
+    {/if}
+  </FormLayout>
 </form>

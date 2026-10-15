@@ -29,7 +29,7 @@ test.describe('IAM Roles UI', () => {
     for (let attempt = 0; attempt < 2; attempt++) {
       await createBtn.first().click({ force: true })
       try {
-        const nameInput = page.locator('#name:visible').last()
+        const nameInput = page.locator('[name="name"]:visible').last()
         await expect(nameInput).toBeVisible({ timeout: 3_000 })
         return getPanelShell(nameInput)
       }
@@ -40,7 +40,7 @@ test.describe('IAM Roles UI', () => {
       }
     }
 
-    return getPanelShell(page.locator('#name:visible').last())
+    return getPanelShell(page.locator('[name="name"]:visible').last())
   }
 
   async function openEditPanel(
@@ -122,9 +122,9 @@ test.describe('IAM Roles UI', () => {
     await expect(panel).toBeVisible()
 
     // 包含名称输入框
-    await expect(panel.locator('#name')).toBeVisible()
+    await expect(panel.locator('[name="name"]')).toBeVisible()
     // 包含描述输入框
-    await expect(panel.locator('#description')).toBeVisible()
+    await expect(panel.locator('[name="description"]')).toBeVisible()
   })
 
   test('角色面板包含权限选择区域', async ({ page, request }) => {
@@ -151,7 +151,7 @@ test.describe('IAM Roles UI', () => {
     await page.waitForTimeout(300)
 
     // 面板消失
-    await expect(page.locator('#name:visible')).toHaveCount(0, { timeout: 5_000 })
+    await expect(page.locator('[name="name"]:visible')).toHaveCount(0, { timeout: 5_000 })
   })
 
   // ---------------------------------------------------------------------------
@@ -169,12 +169,11 @@ test.describe('IAM Roles UI', () => {
     const panel = await openCreatePanel(page)
 
     // 填写表单
-    await panel.locator('#name').fill(roleName)
-    await panel.locator('#description').fill(roleDesc)
+    await panel.locator('[name="name"]').fill(roleName)
+    await panel.locator('[name="description"]').fill(roleDesc)
 
-    // 点击创建按钮
-    const submitBtn = panel.getByRole('button', { name: /新建|创建|保存|提交/ }).last()
-    await submitBtn.click()
+    // 回车走与底部保存按钮一致的校验和提交路径。
+    await panel.locator('[name="name"]').press('Enter')
 
     // 新角色出现在表格中
     const row = page.locator('tbody tr').filter({ hasText: roleName })
@@ -200,11 +199,11 @@ test.describe('IAM Roles UI', () => {
     const row = page.locator('tbody tr').filter({ hasText: roleName })
     await expect(row.first()).toBeVisible({ timeout: 5_000 })
     const panel = await openEditPanel(page, row.first())
-    await expect(panel.locator('#description')).toBeVisible()
+    await expect(panel.locator('[name="description"]')).toBeVisible()
 
     // 修改描述
     const newDesc = 'UI 编辑后的描述'
-    await panel.locator('#description').fill(newDesc)
+    await panel.locator('[name="description"]').fill(newDesc)
 
     // 点击保存
     const saveBtn = panel.getByRole('button', { name: /保存|提交/ }).last()

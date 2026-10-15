@@ -217,3 +217,9 @@ Apache License 2.0
 管理端数据读取在 HTTP 应用边界保留失败：查询异常返回 503 和可刷新错误页，分页任一页或权限关联失败均中止加载，禁止回退为空列表、零统计或空权限。未知权限代码返回 400，权限读取失败时不得继续写入。底层模块仍使用 HaiResult。
 
 LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
+
+## 表单布局
+
+新增/编辑复用 `@h-ai/ui` 的 Form/FormLayout/FormField：可选一列或双列、标签独立成行或与控件同行，多行文本与多选自动跨列，窄容器自动收为一列。CRUD 使用 `form` 配置，字段可用 `colSpan` 覆盖。错误显示在字段附近并随 UI 语言更新。UI Gallery 的表单示例可切换四种布局；IAM 用户采用双列同行标签，角色采用双列顶部标签，个人资料与密码表单复用相同参数。
+
+新建权限时资源和操作必填，权限名称留空时在提交阶段按 `resource:action` 生成；表单不会提前用名称必填校验阻止生成流程。

@@ -181,3 +181,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 - 传输加密只通过 `crypto.transport` 间接装配，不在 kit 中新增本地加密工厂或鸭子类型。
 - 服务端业务模块直接调用模块 API，不通过 HTTP 自环。
 - API endpoint 必须用 Zod 校验用户输入，并设置认证/权限边界。
+
+## 声明式 CRUD 表单字段
+
+`kit.crud.define` 的字段支持 `colSpan: 'auto' | 1 | 2`，以及 `validation.message: string | (() => string)`。布局通过 UI 的 `CrudPage.form` 配置；客户端校验用于交互提示，服务端仍使用 Zod 验证和现有权限守卫。UI 公共契约见相邻 [hai-ui skill](../hai-ui/SKILL.md)。

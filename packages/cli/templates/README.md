@@ -157,3 +157,7 @@ import { iam } from '@h-ai/iam'
 选用 IAM 的 admin/h5/website 模板提供 AuthPanel 和标准认证路由；mobile-app 与 fullstack Web/App/Desktop 使用 API 客户端共享动作。修改服务端 config/_iam.yml 即可控制登录方式、注册、重置、协议和品牌，无需改表单。配置 Reach 模板和真实发送 Provider 后启用 OTP/重置。分布式部署使用共享数据库与 Redis。
 
 LDAP/Reach 是可选 peer；IAM 不强制启用 Reach。默认 LDAP 客户端由应用选择安装 ldapts。自定义通知回调、协议弹窗、表单 snippet 用法随 hai-iam/hai-ui skills 完整复制到生成项目，不能要求应用读取本仓库私有路径。
+
+## 表单布局
+
+新增/编辑复用 `@h-ai/ui` 的 Form/FormLayout/FormField：可选一列或双列、标签独立成行或与控件同行，多行文本与多选自动跨列，窄容器自动收为一列。CRUD 使用 `form` 配置，字段可用 `colSpan` 覆盖。错误显示在字段附近并随 UI 语言更新。website 联系页采用 FormLayout + FormField；fullstack 共享用户编辑页采用双列同行标签，个人资料与密码页复用 UI 场景组件。没有数据表单的模板保留现有骨架，新增表单按 hai-ui skill 接入。

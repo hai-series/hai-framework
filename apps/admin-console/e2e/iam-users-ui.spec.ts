@@ -18,7 +18,7 @@ test.describe('IAM Users UI', () => {
   async function openCreateDrawer(page: import('@playwright/test').Page) {
     await waitForHydration(page)
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    const usernameInput = page.locator('#username:visible').last()
+    const usernameInput = page.locator('input[name="username"]:visible').last()
 
     await expect(createBtn.first()).toBeVisible()
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -301,10 +301,10 @@ test.describe('IAM Users UI', () => {
     await page.goto('/admin/iam/users')
     await page.waitForLoadState('domcontentloaded')
 
-    /** 分页栏内唯一的 Select combobox 根节点。 */
+    /** 分页栏内唯一的 Select 可访问输入框。 */
     const pageSizeSelect = page.locator('main [role="combobox"]').first()
     /** Select 实际接收点击并提供定位基准的触发器。 */
-    const pageSizeTrigger = pageSizeSelect.locator('[role="presentation"]')
+    const pageSizeTrigger = pageSizeSelect.locator('xpath=..')
     await expect(pageSizeTrigger).toBeVisible()
     await pageSizeTrigger.click()
 
@@ -371,10 +371,10 @@ test.describe('IAM Users UI', () => {
     const drawer = await openCreateDrawer(page)
 
     // 对话框内应有表单字段
-    const usernameInput = drawer.locator('#username')
+    const usernameInput = drawer.locator('input[name="username"]')
     await expect(usernameInput).toBeVisible()
 
-    const emailInput = drawer.locator('#email')
+    const emailInput = drawer.locator('input[name="email"]')
     await expect(emailInput).toBeVisible()
   })
 
@@ -386,14 +386,14 @@ test.describe('IAM Users UI', () => {
     const drawer = await openCreateDrawer(page)
 
     // 用户名
-    await expect(drawer.locator('#username')).toBeVisible()
+    await expect(drawer.locator('input[name="username"]')).toBeVisible()
     // 邮箱
-    await expect(drawer.locator('#email')).toBeVisible()
+    await expect(drawer.locator('input[name="email"]')).toBeVisible()
     // 显示名称
-    await expect(drawer.locator('#display_name')).toBeVisible()
+    await expect(drawer.locator('[name="display_name"]')).toBeVisible()
     // 角色多选区域
     await expect(drawer.locator('input[type="checkbox"]').first()).toBeVisible()
-    // 状态选择（CrudEditPanel 的 Select 已升级为自定义 combobox，不再渲染原生 <select>）
+    // 状态选择使用可见的 combobox；隐藏原生 select 仅用于校验和表单提交。
     await expect(drawer.locator('[role="combobox"]').first()).toBeVisible()
   })
 
@@ -403,7 +403,7 @@ test.describe('IAM Users UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     const drawer = await openCreateDrawer(page)
-    const usernameInput = drawer.locator('#username')
+    const usernameInput = drawer.locator('input[name="username"]')
     await expect(usernameInput).toBeVisible()
 
     // 对话框的取消按钮
@@ -427,7 +427,7 @@ test.describe('IAM Users UI', () => {
     await submitBtn.click()
 
     // 空表单提交后，新建面板应仍然保持打开
-    await expect(drawer.locator('#username')).toBeVisible()
+    await expect(drawer.locator('input[name="username"]')).toBeVisible()
   })
 
   // ---------------------------------------------------------------------------
@@ -454,7 +454,7 @@ test.describe('IAM Users UI', () => {
     const row = page.locator('table tbody tr').filter({ hasText: targetUser.username })
     await expect(row.first()).toBeVisible({ timeout: 5_000 })
     const drawer = await openEditDrawer(page, row.first())
-    const displayNameInput = drawer.locator('#display_name')
+    const displayNameInput = drawer.locator('[name="display_name"]')
     await expect(displayNameInput).toBeVisible()
 
     // 修改显示名称
@@ -468,7 +468,7 @@ test.describe('IAM Users UI', () => {
     await expect(page.getByRole('heading', { name: editDrawerHeading })).toHaveCount(0, { timeout: 10_000 })
 
     const reopenedDrawer = await openEditDrawer(page, row.first())
-    await expect(reopenedDrawer.locator('#display_name')).toHaveValue(newDisplayName)
+    await expect(reopenedDrawer.locator('[name="display_name"]')).toHaveValue(newDisplayName)
   })
 
   // ---------------------------------------------------------------------------

@@ -10,7 +10,10 @@
 -->
 <script lang='ts' generics="T = string">
   import type { DataAttributes, SelectProps } from '../../types.js'
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
+  import { getFormFieldContext } from '../../internal/form-context.js'
+  import { createControlValidation, resolveFormText } from '../../internal/form-validation.svelte.js'
+  import { uiM } from '../../messages.js'
   import { cn, getDataAttributes, portal } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
@@ -24,13 +27,38 @@
     clearable = false,
     filterable = false,
     error = '',
+    validationMessage = '',
     class: className = '',
     id,
+    name,
     onchange,
     ...restProps
   }: SelectProps<T> & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const field = getFormFieldContext()
+  const uniqueId = $props.id()
+  const controlId = $derived(id ?? field?.controlId ?? `${uniqueId}-control`)
+  const messageId = `${uniqueId}-error`
+  const validation = createControlValidation(() => validationMessage)
+  const localError = $derived(resolveFormText(error) || validation.message)
+  const effectiveError = $derived(field?.error || localError)
+  let nativeSelect: HTMLSelectElement | undefined = $state()
+  // 独立保存原生选中值，筛选输入的文字不能代替表单实际选项。
+  const nativeValue = $derived(value === undefined || value === null ? '' : String(value))
+  $effect(() => {
+    void options
+    void required
+    void disabled
+    if (nativeSelect) {
+      nativeSelect.value = nativeValue
+      untrack(() => validation.input(nativeSelect!))
+    }
+  })
+  $effect(() => {
+    if (nativeSelect)
+      nativeSelect.setCustomValidity(validation.message)
+  })
   let inputRef: HTMLInputElement | undefined = $state()
   let dropdownRef: HTMLDivElement | undefined = $state()
   let triggerRef: HTMLDivElement | undefined = $state()
@@ -58,7 +86,7 @@
 
   // 获取当前选中的标签
   const selectedLabel = $derived(() => {
-    if (!options || !value)
+    if (!options || value === undefined || value === null)
       return ''
     const selected = options.find(opt => opt.value === value)
     return selected ? selected.label : ''
@@ -79,7 +107,7 @@
     cn(
       'relative flex w-full min-w-0 items-center rounded-lg border bg-base-100 cursor-pointer',
       sizeClasses.control,
-      error
+      effectiveError
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
         : isDropdownOpen
         ? 'border-primary/50 ring-2 ring-primary/10'
@@ -95,7 +123,7 @@
       'flex-1 min-w-0 bg-transparent outline-none border-none',
       'focus:outline-none focus:ring-0 focus:shadow-none',
       'placeholder:text-base-content/40',
-      error && 'text-error',
+      effectiveError && 'text-error',
     ),
   )
 
@@ -238,12 +266,31 @@
   {...dataAttributes}
   class='fieldset w-full min-w-0'
   bind:this={dropdownRef}
-  role='combobox'
-  aria-expanded={isDropdownOpen}
-  aria-haspopup='listbox'
   onmouseenter={() => isHovered = true}
   onmouseleave={() => isHovered = false}
 >
+  <select
+    bind:this={nativeSelect}
+    class='sr-only'
+    tabindex='-1'
+    aria-hidden='true'
+    {name}
+    {required}
+    {disabled}
+    value={nativeValue}
+    oninvalid={(e) => {
+      e.preventDefault()
+      validation.invalid(e.currentTarget)
+      inputRef?.focus()
+    }}
+  >
+    <option value=''></option>
+    {#each options ?? [] as option (String(option.value))}
+      {#if String(option.value) !== ''}
+        <option value={String(option.value)} disabled={option.disabled}>{option.label}</option>
+      {/if}
+    {/each}
+  </select>
   <div
     class={wrapperClass}
     bind:this={triggerRef}
@@ -260,11 +307,12 @@
       <!-- 可筛选模式：可输入的 input -->
       <input
         bind:this={inputRef}
-        {id}
+        id={controlId}
+        aria-invalid={effectiveError ? true : undefined}
+        aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
         type='text'
         class={inputClass}
         {disabled}
-        {required}
         {placeholder}
         value={isDropdownOpen ? filterText : selectedLabel()}
         oninput={handleFilterInput}
@@ -274,22 +322,33 @@
             isDropdownOpen = true
         }}
         role='combobox'
+        aria-haspopup='listbox'
         aria-autocomplete='list'
-        aria-controls='{id}-listbox'
+        aria-controls='{controlId}-listbox'
         aria-expanded={isDropdownOpen}
       />
     {:else}
       <!-- 普通模式：只读 input 显示选中值 -->
       <input
-        {id}
+        bind:this={inputRef}
+        id={controlId}
+        aria-invalid={effectiveError ? true : undefined}
+        aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
         type='text'
         class={inputClass}
         readonly
         {disabled}
-        {required}
         {placeholder}
         value={selectedLabel()}
-        tabindex='-1'
+        onkeydown={handleInputKeydown}
+        onfocus={() => {
+          if (!disabled)
+            isDropdownOpen = true
+        }}
+        role='combobox'
+        aria-haspopup='listbox'
+        aria-controls='{controlId}-listbox'
+        aria-expanded={isDropdownOpen}
       />
     {/if}
 
@@ -301,7 +360,7 @@
           class='flex items-center justify-center w-5 h-5 rounded-full hover:bg-base-content/10 transition-colors'
           onclick={handleClear}
           tabindex='-1'
-          aria-label='清空选择'
+          aria-label={uiM('select_clear')}
         >
           <svg xmlns='http://www.w3.org/2000/svg' class='h-3.5 w-3.5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
             <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
@@ -324,7 +383,7 @@
       <ul
         bind:this={listboxRef}
         use:portal
-        id='{id}-listbox'
+        id='{controlId}-listbox'
         class='max-h-60 overflow-auto rounded-xl border border-base-content/10 bg-base-100 p-1.5 shadow-xl shadow-base-content/10'
         style={dropdownStyle}
         role='listbox'
@@ -356,13 +415,13 @@
           </li>
         {:else}
           <li class={cn('px-3 py-3 text-base-content/40 text-center', optionTextClass)}>
-            无匹配选项
+            {uiM('select_no_match')}
           </li>
         {/each}
       </ul>
     {/if}
   </div>
-  {#if error}
-    <span class='fieldset-label text-error'>{error}</span>
+  {#if localError && !field?.error}
+    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
   {/if}
 </div>

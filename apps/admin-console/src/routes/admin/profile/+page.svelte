@@ -339,6 +339,8 @@
         {/if}
 
         <UserProfile
+          columns={2}
+          labelPosition='left'
           user={profileUser}
           editable
           alwaysEditable
@@ -376,6 +378,7 @@
 
       <div class='lg:col-span-8 p-6 lg:p-8'>
         <ChangePasswordForm
+          labelPosition='left'
           class='w-full'
           loading={passwordLoading}
           errors={passwordErrors}

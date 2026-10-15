@@ -276,7 +276,8 @@ export function createPermissionCrud(permissionRolesMap: Record<string, string[]
       id: 'name',
       label: () => m.iam_permissions_col_name(),
       type: 'string',
-      validation: { required: true },
+      // 名称由提交接口按 resource:action 生成，不在生成前做必填校验。
+      placeholder: () => m.iam_permissions_form_name_placeholder(),
       order: 1,
     },
     {
@@ -292,6 +293,8 @@ export function createPermissionCrud(permissionRolesMap: Record<string, string[]
       id: 'action',
       label: () => m.iam_permissions_form_action(),
       type: 'string',
+      validation: { required: true },
+      placeholder: () => m.iam_permissions_form_action_placeholder(),
       inList: true,
       render: value => value ? String(value) : '-',
       order: 3,
@@ -345,6 +348,7 @@ export function createPermissionCrud(permissionRolesMap: Record<string, string[]
       type: 'string',
       inList: false,
       validation: { required: true },
+      placeholder: () => m.iam_permissions_form_resource_placeholder(),
       order: 10,
     },
   ]

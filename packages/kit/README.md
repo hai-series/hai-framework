@@ -285,3 +285,7 @@ pnpm --filter @h-ai/kit test
 ## License
 
 Apache-2.0
+
+## CRUD fields
+
+声明式 CRUD 字段支持 `colSpan: 'auto' | 1 | 2`，供 UI 双列表单决定字段宽度；`validation.message` 支持字符串或 `() => string`，便于随当前语言显示校验错误。UI 布局在 `CrudPage.form` 上配置，服务端仍须独立校验。

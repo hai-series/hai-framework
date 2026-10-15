@@ -285,3 +285,7 @@ pnpm --filter @h-ai/kit test
 ## License
 
 Apache-2.0
+
+## CRUD fields
+
+宣言型 CRUD 項目は UI フォームの幅を指定する `colSpan: 'auto' | 1 | 2` に対応します。`validation.message` は文字列または `() => string` を受け取り、現在の言語で表示できます。レイアウトは `CrudPage.form` で設定し、サーバーでも検証してください。

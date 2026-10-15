@@ -98,7 +98,7 @@ export default defineConfig({
 
 > 除 `toast`、类型导入与 `Range`（会和 DOM `Range` 构造器冲突）外，其余公开 Svelte 组件都可通过 `@h-ai/ui/auto-import` 自动注入。
 
-管理后台等只使用部分组件的页面，可直接使用公开组件目录入口；主题工具通过轻量 `@h-ai/ui/theme` 导入，避免主题消费加载根入口中的 AI、图表等组件。组件路径以已安装版本的 exports 为准，不导入包内 `src/` 或 `dist/`。
+管理后台等只使用部分组件的页面，可直接使用公开组件目录入口；主题工具通过轻量 `@h-ai/ui/theme` 导入，避免主题消费加载根入口中的 AI、图表等组件。状态层的语言工具使用 `@h-ai/ui/i18n`，不加载组件与引导 CSS。组件路径以已安装版本的 exports 为准，不导入包内 `src/` 或 `dist/`。
 
 自动导入器识别无分号、跨行及带别名的显式导入，已绑定的组件名称不会重复注入；仅类型导入不会替代运行时组件。
 
@@ -166,15 +166,41 @@ components/
 
 `BareInput` 的 `file` 类型通过 `onchange` 读取 `event.currentTarget.files`，不绑定文件路径 `value`；其他输入类型可使用 `bind:value`。
 
-### 组合组件 Compounds（36 个）
+### 组合组件 Compounds（37 个）
 
 #### 表单
 
 | 组件        | 描述     | 主要属性                                     |
 | ----------- | -------- | -------------------------------------------- |
-| `Form`      | 表单容器 | `loading`, `disabled`, `onsubmit`            |
-| `FormField` | 表单字段 | `label`, `error`, `hint`, `required`         |
+| `Form`      | 表单容器 | `columns`, `labelPosition`, `labelWidth`, `loading`, `disabled`, `onsubmit`            |
+| `FormField` | 表单字段 | `label`, `for`, `colSpan`, `labelPosition`, `error`, `hint`, `required`         |
+| `FormLayout` | 表单布局 | `columns`, `labelPosition`, `labelWidth` |
 | `TagInput`  | 标签输入 | `tags`, `maxTags`, `allowDuplicates`, `size` |
+
+#### 表单布局与校验
+
+`Form` 和可嵌入原生 `<form>` 的 `FormLayout` 共用 `columns={1 | 2}`、`labelPosition="top" | "left"`、`labelWidth`（默认 `8rem`）。默认单列、标签独立成行；双列在容器不足 `36rem` 时收为单列，同行标签在容器不足 `28rem` 时改为上下排列。
+
+`FormField.colSpan` 默认 `'auto'`：多行文本、文件/图片上传、TagInput 和多选 Combobox 自动占两列；`1` / `2` 显式覆盖。自定义宽控件标注 `data-form-wide`。标题、错误摘要、按钮及其他非 FormField 内容自动独占一行。字段可单独覆盖 `labelPosition` / `labelWidth`。
+
+标签自动关联内部 UI 控件；已有控件 ID 或原生控件使用 `<FormField for="control-id">`。错误/提示通过 `aria-describedby` 关联，错误控件带 `aria-invalid`，只显示一份字段提示。`label` / `error` / `hint` 支持字符串或延迟翻译函数。
+
+`Input`、`Textarea`、`Select` 和 `PasswordInput` 的原生校验使用内置中英文提示；`validationMessage` 只覆盖失败提示，不让有效输入一直无效。应用通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的校验错误即时更新。`Textarea` 支持 `minlength` / `maxlength`，`Select` 支持 `name`、必填校验和 FormData 序列化。
+
+`LoginForm`、`RegisterForm`、`ChangePasswordForm`、`ForgotPasswordForm`、`ResetPasswordForm`、`AuthPanel`、`UserProfile` 和 `FeedbackModal` 接受同一组布局参数。`CrudPage` 通过 `form` 传入；`CrudEditPanel` 直接接收。CRUD 字段支持 `colSpan`，`validation.message` 支持翻译函数；按钮与回车均先校验，修正后错误消失，客户端校验不能替代服务端校验。
+
+```svelte
+<!-- m、save、name、notes 为应用自己的翻译、提交回调和状态 -->
+<Form columns={2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
+  <FormField label={() => m.name()} required>
+    <Input name="name" bind:value={name} required />
+  </FormField>
+  <FormField label={() => m.notes()}>
+    <Textarea name="notes" bind:value={notes} />
+  </FormField>
+  <Button type="submit">{m.save()}</Button>
+</Form>
+```
 
 #### 反馈
 
@@ -530,7 +556,7 @@ components/
   crud={roleCrud}
   {data}
   permissions={{ create: true, update: true, delete: true }}
-  form={{ variant: 'modal', modalSize: 'lg' }}
+  form={{ variant: 'modal', modalSize: '3xl', columns: 2, labelPosition: 'top' }}
   pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
   density='compact'
   detailColumns={['name']}
@@ -728,7 +754,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 ```svelte
 <script>
-  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui'
+  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui/i18n'
   import { setLocale } from '$lib/paraglide/runtime'
 
   const localeStore = createLocaleStore()
@@ -759,7 +785,7 @@ import {
   isLocaleSupported, // 检查 locale 是否支持
   resolveLocale, // 解析 locale（支持回退）
   setGlobalLocale, // 设置全局 locale（同步 @h-ai/core）
-} from '@h-ai/ui'
+} from '@h-ai/ui/i18n'
 ```
 
 

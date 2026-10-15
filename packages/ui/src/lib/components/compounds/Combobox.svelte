@@ -34,8 +34,10 @@
   />
 -->
 <script lang='ts'>
-  import type { DataAttributes, Size } from '../../types.js'
+  import type { DataAttributes, FormText, Size } from '../../types.js'
   import { Combobox } from 'bits-ui'
+  import { getFormFieldContext } from '../../internal/form-context.js'
+  import { resolveFormText } from '../../internal/form-validation.svelte.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
@@ -67,7 +69,7 @@
     /** 是否禁用 */
     disabled?: boolean
     /** 错误消息 */
-    error?: string
+    error?: FormText
     /** 表单标签 */
     label?: string
     /** 自定义类名 */
@@ -91,6 +93,11 @@
   }: Props & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const field = getFormFieldContext()
+  const uniqueId = $props.id()
+  const messageId = `${uniqueId}-message`
+  const localError = $derived(resolveFormText(error))
+  const effectiveError = $derived(field?.error || localError)
   const sizeClasses = $derived(getFormControlSizeClasses(size))
   // 为未提供 value 时设置初始默认值（仅在初始化时执行一次）
   // 统一以空字符串初始化，避免在初始化阶段捕获 multiple 的初始值。
@@ -101,7 +108,7 @@
 
   // ─── 统一视觉样式（与 Select 对齐：rounded-lg / 柔和边框 / focus ring） ───
   const controlStateClass = $derived(
-    error
+    effectiveError
       ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
       : 'border-base-content/15 hover:border-base-content/25 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
   )
@@ -200,7 +207,7 @@
   }
 </script>
 
-<div {...dataAttributes} class='fieldset w-full {className}'>
+<div {...dataAttributes} class='fieldset w-full {className}' data-form-wide={multiple ? '' : undefined}>
   {#if fieldLabel}
     <legend class='fieldset-legend font-medium'>{fieldLabel}</legend>
   {/if}
@@ -243,6 +250,9 @@
           {/each}
 
           <Combobox.Input
+            id={field?.controlId}
+            aria-invalid={effectiveError ? true : undefined}
+            aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
             bind:ref={inputRef}
             class={cn('flex-1 min-w-20 bg-transparent py-0.5 outline-none placeholder:text-base-content/40', sizeClasses.spacing)}
             placeholder={selectedOptions.length === 0 ? placeholder : ''}
@@ -312,6 +322,9 @@
     >
       <div class='relative'>
         <Combobox.Input
+          id={field?.controlId}
+          aria-invalid={effectiveError ? true : undefined}
+          aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
           bind:ref={inputRef}
           class={cn(
             'w-full rounded-lg border bg-base-100 pr-9 outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-base-content/40',
@@ -372,7 +385,7 @@
     </Combobox.Root>
   {/if}
 
-  {#if error}
-    <span class='fieldset-label text-error'>{error}</span>
+  {#if localError && !field?.error}
+    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
   {/if}
 </div>

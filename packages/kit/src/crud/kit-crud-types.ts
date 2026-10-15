@@ -39,7 +39,7 @@ export interface CrudFieldValidation {
   /** 正则表达式 */
   pattern?: string
   /** 自定义错误提示 */
-  message?: string
+  message?: CrudText
 }
 
 // ─── 选项 ───
@@ -82,6 +82,8 @@ export interface CrudFieldDef {
   options?: CrudFieldOptions
   /** 校验规则 */
   validation?: CrudFieldValidation
+  /** 双列表单中的占用列数；auto 按控件类型判断，默认 auto。 */
+  colSpan?: 'auto' | 1 | 2
   /** 列宽（列表模式） */
   width?: string
   /** 列对齐方式 */

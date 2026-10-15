@@ -33,7 +33,7 @@
         <p class='mt-4 text-xs leading-6 text-base-content/50'>{m.avatar_hint()}</p>
       </Card>
       <Card title={m.profile_title()} bordered shadow={false} data-guide='admin-profile-form'>
-        <UserProfile user={store.user} editable alwaysEditable fields={['avatar', 'displayName', 'email']} avatarAccept='image/png,image/jpeg,image/webp' avatarHint={m.avatar_hint()} loading={store.saving} onsubmit={data => store.saveProfile(data)} onavatarchange={file => void store.uploadAvatar(file)} data-testid='profile-form' />
+        <UserProfile columns={2} labelPosition='left' user={store.user} editable alwaysEditable fields={['avatar', 'displayName', 'email']} avatarAccept='image/png,image/jpeg,image/webp' avatarHint={m.avatar_hint()} loading={store.saving} onsubmit={data => store.saveProfile(data)} onavatarchange={file => void store.uploadAvatar(file)} data-testid='profile-form' />
       </Card>
     </div>
     <Card title={m.preferences_title()} bordered shadow={false} data-guide='admin-preferences'>
@@ -51,7 +51,7 @@
     </Card>
     <Card title={m.password_title()} bordered shadow={false} data-guide='admin-password'>
       <p class='mb-5 text-sm text-base-content/50'>{m.password_rules()}</p>
-      <div class='max-w-xl'><ChangePasswordForm loading={store.saving} passwordPolicy={store.authConfig?.password} minPasswordLength={store.authConfig?.password.minLength ?? 8} onsubmit={data => store.changePassword(data)} data-testid='password-form' /></div>
+      <div class='max-w-xl'><ChangePasswordForm labelPosition='left' loading={store.saving} passwordPolicy={store.authConfig?.password} minPasswordLength={store.authConfig?.password.minLength ?? 8} onsubmit={data => store.changePassword(data)} data-testid='password-form' /></div>
     </Card>
   {/if}
 </section>

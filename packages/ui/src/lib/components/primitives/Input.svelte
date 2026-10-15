@@ -4,6 +4,8 @@
 -->
 <script lang='ts'>
   import type { DataAttributes, InputProps } from '../../types.js'
+  import { getFormFieldContext } from '../../internal/form-context.js'
+  import { createControlValidation, resolveFormText } from '../../internal/form-validation.svelte.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
@@ -40,6 +42,17 @@
   }: InputProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const field = getFormFieldContext()
+  const validation = createControlValidation(() => validationMessage, () => [value, required, readonly, disabled, pattern, min, max, minlength, maxlength, step])
+  const uniqueId = $props.id()
+  const messageId = `${uniqueId}-error`
+  const localError = $derived(resolveFormText(error) || validation.message)
+  const effectiveError = $derived(field?.error || localError)
+  $effect(() => {
+    // 修正输入后清除旧的 customError，切换语言时同步原生提示。
+    if (inputRef)
+      inputRef.setCustomValidity(validation.message)
+  })
   const sizeClasses = $derived(getFormControlSizeClasses(size))
 
   const inputTypeClass = $derived(
@@ -52,7 +65,7 @@
     cn(
       'flex items-center w-full rounded-lg border bg-base-100',
       sizeClasses.height,
-      error
+      effectiveError
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
         : 'border-base-content/15 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
       'transition-[border-color,box-shadow] duration-150',
@@ -62,9 +75,7 @@
   )
 
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
-    if (validationMessage) {
-      e.currentTarget.setCustomValidity('')
-    }
+    validation.input(e.currentTarget)
     value = e.currentTarget.value
     oninput?.(e)
   }
@@ -86,9 +97,7 @@
   }
 
   function handleInvalid(e: Event & { currentTarget: HTMLInputElement }) {
-    if (validationMessage) {
-      e.currentTarget.setCustomValidity(validationMessage)
-    }
+    validation.invalid(e.currentTarget)
     oninvalid?.(e)
   }
 </script>
@@ -97,7 +106,9 @@
   <div class={containerClass}>
     <input
       bind:this={inputRef}
-      {id}
+      id={id ?? field?.controlId}
+      aria-invalid={effectiveError ? true : undefined}
+      aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
       {name}
       {type}
       {placeholder}
@@ -114,7 +125,7 @@
       inputmode={inputmode}
       autocomplete={autocomplete as HTMLInputElement['autocomplete']}
       class={cn(
-        'flex-1 h-full bg-transparent border-none outline-none placeholder:text-base-content/35',
+        'flex-1 min-w-0 h-full bg-transparent border-none outline-none placeholder:text-base-content/35',
         sizeClasses.spacing,
         inputTypeClass,
       )}
@@ -127,7 +138,7 @@
       oninvalid={handleInvalid}
     />
   </div>
-  {#if error}
-    <p class='mt-1.5 text-xs text-error/80 leading-tight'>{error}</p>
+  {#if localError && !field?.error}
+    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
   {/if}
 </div>

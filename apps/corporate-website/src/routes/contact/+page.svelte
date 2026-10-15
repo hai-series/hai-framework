@@ -67,42 +67,44 @@
         {/if}
 
         <form class='space-y-4' onsubmit={handleSubmit}>
-          <FormField label={m.contact_form_name_label()} required>
-            <Input
-              id='name'
-              placeholder={m.contact_form_name_placeholder()}
-              bind:value={name}
-              required
-            />
-          </FormField>
+          <FormLayout columns={2} labelPosition='top'>
+            <FormField for='name' label={m.contact_form_name_label()} required>
+              <Input
+                id='name'
+                placeholder={m.contact_form_name_placeholder()}
+                bind:value={name}
+                required
+              />
+            </FormField>
 
-          <FormField label={m.contact_form_email_label()} required>
-            <Input
-              id='email'
-              type='email'
-              placeholder={m.contact_form_email_placeholder()}
-              bind:value={email}
-              required
-            />
-          </FormField>
+            <FormField for='email' label={m.contact_form_email_label()} required>
+              <Input
+                id='email'
+                type='email'
+                placeholder={m.contact_form_email_placeholder()}
+                bind:value={email}
+                required
+              />
+            </FormField>
 
-          <FormField label={m.contact_form_message_label()} required>
-            <Textarea
-              id='message'
-              placeholder={m.contact_form_message_placeholder()}
-              rows={4}
-              bind:value={message}
-              required
-            />
-          </FormField>
+            <FormField for='message' label={m.contact_form_message_label()} required>
+              <Textarea
+                id='message'
+                placeholder={m.contact_form_message_placeholder()}
+                rows={4}
+                bind:value={message}
+                required
+              />
+            </FormField>
 
-          <Button type='submit' variant='primary' class='w-full' loading={submitting} disabled={submitting}>
-            {#if submitting}
-              {m.contact_form_submitting()}
-            {:else}
-              {m.contact_form_submit()}
-            {/if}
-          </Button>
+            <Button type='submit' variant='primary' class='w-full' loading={submitting} disabled={submitting}>
+              {#if submitting}
+                {m.contact_form_submitting()}
+              {:else}
+                {m.contact_form_submit()}
+              {/if}
+            </Button>
+          </FormLayout>
         </form>
       </Card>
 

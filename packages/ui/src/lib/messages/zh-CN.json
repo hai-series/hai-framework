@@ -368,5 +368,17 @@
   "guide_tours": "操作导览",
   "guide_unavailable": "此引导暂不可用，请从帮助中心选择其他内容。",
   "guide_targetMissing": "当前页面暂未提供此操作。请稍后重试或查看帮助内容。",
-  "guide_startFailed": "无法开始引导，请稍后重试。"
+  "guide_startFailed": "无法开始引导，请稍后重试。",
+  "form_required": "请填写此项。",
+  "form_email": "请输入有效的邮箱地址。",
+  "form_url": "请输入有效的网址。",
+  "form_number": "请输入有效的数字。",
+  "form_min_length": "请至少输入 {min} 个字符。",
+  "form_max_length": "请最多输入 {max} 个字符。",
+  "form_min": "请输入不小于 {min} 的值。",
+  "form_max": "请输入不大于 {max} 的值。",
+  "form_step": "请按 {step} 的步长输入。",
+  "form_pattern": "请按要求的格式填写。",
+  "select_clear": "清空选择",
+  "select_no_match": "无匹配选项"
 }

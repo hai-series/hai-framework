@@ -6,6 +6,7 @@
  */
 
 import { core } from '@h-ai/core'
+import { changeUILocale, readUILocale } from './internal/locale.js'
 
 // 导入消息文件
 import messagesEnUS from './messages/en-US.json'
@@ -34,19 +35,19 @@ const getMessage = core.i18n.createMessageGetter({
  * ```
  */
 export function uiM(key: UIMessageKey, params?: Record<string, string | number | boolean>, locale?: string): string {
-  return getMessage(key, { params, locale })
+  return getMessage(key, { params, locale: locale ?? readUILocale() })
 }
 
 /**
  * 获取当前 UI 模块使用的 locale
  */
 export function getUILocale(): string {
-  return core.i18n.getGlobalLocale()
+  return readUILocale()
 }
 
 /**
  * 手动设置 UI 模块的 locale（通常不需要，会自动同步）
  */
 export function setUILocale(locale: string): void {
-  core.i18n.setGlobalLocale(locale)
+  changeUILocale(locale)
 }

@@ -113,9 +113,9 @@ export interface InputProps extends DataAttributes {
   /** 是否必填 */
   required?: boolean
   /** 错误消息 */
-  error?: string
+  error?: FormText
   /** 自定义验证消息（用于覆盖浏览器原生验证提示） */
-  validationMessage?: string
+  validationMessage?: FormText
   /** 自定义类名 */
   class?: string
   /** 元素 ID */
@@ -182,6 +182,10 @@ export interface BareInputProps extends DataAttributes {
   ariaControls?: string
   /** aria-autocomplete */
   ariaAutocomplete?: 'none' | 'list' | 'inline' | 'both'
+  /** 字段校验状态 */
+  ariaInvalid?: boolean
+  /** 字段提示/错误元素 ID */
+  ariaDescribedby?: string
   /** 元素 ID */
   id?: string
   /** input 引用 */
@@ -244,10 +248,17 @@ export interface TextareaProps extends DataAttributes {
   required?: boolean
   /** 是否自动调整高度 */
   autoResize?: boolean
-  inputmode?: HTMLInputElement['inputMode']
-  error?: string
+  inputmode?: InputProps['inputmode']
+  error?: FormText
   /** 自定义验证消息（用于覆盖浏览器原生验证提示） */
-  validationMessage?: string
+  validationMessage?: FormText
+  /** 最小长度 */
+  minlength?: number
+  /** 最大长度 */
+  maxlength?: number
+  /** 原生控件引用 */
+  textareaRef?: HTMLTextAreaElement
+  oninvalid?: (e: Event & { currentTarget: HTMLTextAreaElement }) => void
   /** 自定义类名 */
   class?: string
   /** 元素 ID */
@@ -291,7 +302,11 @@ export interface SelectProps<T = string> extends DataAttributes {
   /** 是否可筛选（启用后可在输入框内输入过滤选项） */
   filterable?: boolean
   /** 错误消息 */
-  error?: string
+  error?: FormText
+  /** 自定义验证提示，仅在校验失败时显示。 */
+  validationMessage?: FormText
+  /** 表单字段名 */
+  name?: string
   /** 自定义类名 */
   class?: string
   /** 元素 ID */
@@ -304,6 +319,8 @@ export interface SelectProps<T = string> extends DataAttributes {
  * 复选框属性
  */
 export interface CheckboxProps extends DataAttributes {
+  /** 元素 ID；用于 FormField 标签关联。 */
+  id?: string
   /** 是否选中 */
   checked?: boolean
   /** 标签 */
@@ -781,7 +798,32 @@ export interface DropdownProps extends DataAttributes {
 /**
  * 表单属性
  */
-export interface FormProps extends DataAttributes {
+/** 表单标签位置：独立成行或与控件同行。 */
+export type FormLabelPosition = 'top' | 'left'
+
+/** 双列表单字段占用列数；auto 根据控件类型判断。 */
+export type FormColSpan = 'auto' | 1 | 2
+
+/** 支持延迟求值的表单文案，切换语言时重新解析。 */
+export type FormText = string | (() => string)
+
+/** 表单布局配置；窄容器自动收为单列。 */
+export interface FormLayoutOptions {
+  /** 字段列数，默认 1。 */
+  columns?: 1 | 2
+  /** 标签位置，默认 top。 */
+  labelPosition?: FormLabelPosition
+  /** 同行标签宽度（CSS 值），默认 8rem。 */
+  labelWidth?: string
+}
+
+/** 可嵌入原生 form 的布局容器。 */
+export interface FormLayoutProps extends FormLayoutOptions, DataAttributes {
+  class?: string
+  children?: Snippet
+}
+
+export interface FormProps extends FormLayoutOptions, DataAttributes {
   /** 表单 ID */
   id?: string
   /** 自定义类名 */
@@ -805,13 +847,21 @@ export interface FormProps extends DataAttributes {
  */
 export interface FormFieldProps extends DataAttributes {
   /** 标签 */
-  label?: string
+  label?: FormText
+  /** 关联控件 ID；省略时为内部控件自动提供唯一 ID。 */
+  for?: string
+  /** 覆盖所在表单的标签位置。 */
+  labelPosition?: FormLabelPosition
+  /** 覆盖所在表单的同行标签宽度。 */
+  labelWidth?: string
+  /** 双列时的占用列数，默认 auto；多行文本、上传和多选自动占两列。 */
+  colSpan?: FormColSpan
   /** 字段名 */
   name?: string
   /** 错误消息 */
-  error?: string
+  error?: FormText
   /** 提示信息 */
-  hint?: string
+  hint?: FormText
   /** 是否必填 */
   required?: boolean
   /** 自定义类名 */

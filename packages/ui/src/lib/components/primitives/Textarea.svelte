@@ -10,6 +10,8 @@
 -->
 <script lang='ts'>
   import type { DataAttributes, TextareaProps } from '../../types.js'
+  import { getFormFieldContext } from '../../internal/form-context.js'
+  import { createControlValidation, resolveFormText } from '../../internal/form-validation.svelte.js'
   import { cn, getDataAttributes, getInputSizeClass } from '../../utils.js'
 
   let {
@@ -23,20 +25,30 @@
     autoResize = false,
     error = '',
     validationMessage = '',
+    minlength,
+    maxlength,
+    inputmode,
+    textareaRef = $bindable<HTMLTextAreaElement | undefined>(),
     class: className = '',
     id,
     name,
     oninput,
+    oninvalid,
     ...restProps
   }: TextareaProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
-  let textareaRef: HTMLTextAreaElement | undefined = $state()
+  const field = getFormFieldContext()
+  const validation = createControlValidation(() => validationMessage, () => [value, required, readonly, disabled, minlength, maxlength])
+  const uniqueId = $props.id()
+  const messageId = `${uniqueId}-error`
+  const localError = $derived(resolveFormText(error) || validation.message)
+  const effectiveError = $derived(field?.error || localError)
 
   const wrapperClass = $derived(
     cn(
       'flex w-full rounded-lg border bg-base-100',
-      error
+      effectiveError
         ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
         : 'border-base-content/15 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
       'transition-[border-color,box-shadow] duration-150',
@@ -48,7 +60,7 @@
     cn(
       'textarea w-full bg-transparent border-none outline-none',
       getInputSizeClass(size),
-      error && 'textarea-error',
+      effectiveError && 'textarea-error',
       className,
     ),
   )
@@ -56,7 +68,7 @@
   // 当 validationMessage 变化时更新自定义验证消息
   $effect(() => {
     if (textareaRef) {
-      textareaRef.setCustomValidity(validationMessage)
+      textareaRef.setCustomValidity(validation.message)
     }
   })
 
@@ -70,17 +82,14 @@
     }
 
     // 输入时重置自定义验证
-    if (validationMessage) {
-      e.currentTarget.setCustomValidity(validationMessage)
-    }
+    validation.input(e.currentTarget)
 
     oninput?.(e)
   }
 
   function handleInvalid(e: Event & { currentTarget: HTMLTextAreaElement }) {
-    if (validationMessage) {
-      e.currentTarget.setCustomValidity(validationMessage)
-    }
+    validation.invalid(e.currentTarget)
+    oninvalid?.(e)
   }
 </script>
 
@@ -88,20 +97,25 @@
   <div class={wrapperClass}>
     <textarea
       bind:this={textareaRef}
-      {id}
+      id={id ?? field?.controlId}
+      aria-invalid={effectiveError ? true : undefined}
+      aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
       {name}
       {placeholder}
       {rows}
       {disabled}
       {readonly}
       {required}
+      {minlength}
+      {maxlength}
+      {inputmode}
       class={textareaClass}
       bind:value
       oninput={handleInput}
       oninvalid={handleInvalid}
     ></textarea>
   </div>
-  {#if error}
-    <span class='fieldset-label text-error'>{error}</span>
+  {#if localError && !field?.error}
+    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
   {/if}
 </div>

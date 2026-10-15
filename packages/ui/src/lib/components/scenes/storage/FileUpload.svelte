@@ -300,7 +300,7 @@
   }
 </script>
 
-<div {...dataAttributes} class={containerClass}>
+<div {...dataAttributes} class={containerClass} data-form-wide>
   <!-- 上传区域 -->
   <div
     class={dropzoneClass}

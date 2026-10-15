@@ -9,10 +9,12 @@
 -->
 <script lang='ts'>
   import type { CheckboxProps, DataAttributes } from '../../types.js'
-  import { cn, generateId, getDataAttributes, getSizeClass } from '../../utils.js'
+  import { getFormFieldContext } from '../../internal/form-context.js'
+  import { cn, getDataAttributes, getSizeClass } from '../../utils.js'
 
   let {
     checked = $bindable(false),
+    id: providedId,
     label = '',
     size = 'md',
     disabled = false,
@@ -24,7 +26,9 @@
   }: CheckboxProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
-  const id = generateId('checkbox')
+  const field = getFormFieldContext()
+  const uniqueId = $props.id()
+  const id = $derived(providedId ?? uniqueId)
 
   const checkboxClass = $derived(
     cn(
@@ -46,6 +50,8 @@
   <label class='label cursor-pointer gap-2' for={id}>
     <input
       {id}
+      aria-invalid={field?.error ? true : undefined}
+      aria-describedby={field?.messageId}
       type='checkbox'
       class={checkboxClass}
       disabled={disabled || readonly}

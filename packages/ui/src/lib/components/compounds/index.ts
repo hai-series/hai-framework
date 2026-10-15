@@ -38,6 +38,7 @@ export { default as Empty } from './Empty.svelte'
 // 表单组合
 export { default as Form } from './Form.svelte'
 export { default as FormField } from './FormField.svelte'
+export { default as FormLayout } from './FormLayout.svelte'
 // 无限滚动 / 上拉加载
 export { default as InfiniteScroll } from './InfiniteScroll.svelte'
 // MessageBox 命令式弹框（类似 ElementUI MessageBox）

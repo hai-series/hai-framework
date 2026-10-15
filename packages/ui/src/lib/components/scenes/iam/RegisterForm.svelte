@@ -8,6 +8,8 @@
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
+  import FormField from '../../compounds/FormField.svelte'
+  import FormLayout from '../../compounds/FormLayout.svelte'
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
   import AgreementNotice from './AgreementNotice.svelte'
@@ -16,6 +18,9 @@
 
   const {
     loading = false,
+    columns = 1,
+    labelPosition = 'top',
+    labelWidth = '8rem',
     disabled = false,
     showTitle = false,
     showPasswordStrength = true,
@@ -165,114 +170,107 @@
 </script>
 
 <form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
-  <!-- 标题 -->
-  {#if showTitle}
-    <h2 class='text-xl font-semibold text-center mb-5'>{uiM('register_title')}</h2>
-  {/if}
+  <FormLayout {columns} {labelPosition} {labelWidth}>
+    <!-- 标题 -->
+    {#if showTitle}
+      <h2 class='text-xl font-semibold text-center mb-5'>{uiM('register_title')}</h2>
+    {/if}
 
-  <!-- 自定义头部 -->
-  {#if header}
-    <div class='register-form-header'>
-      {@render header()}
-    </div>
-  {/if}
-
-  {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
-  {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
-
-  <!-- 动态字段 -->
-  {#each fields as field (field)}
-    {#if field === 'password'}
-      <!-- 密码字段 -->
-      <div class='space-y-1.5'>
-        <label class='text-sm font-medium text-base-content/70' for='register-password'>
-          {getFieldLabel('password')}
-        </label>
-        <PasswordInput
-          id='register-password'
-          bind:value={password}
-          placeholder={getFieldPlaceholder('password')}
-          autocomplete='new-password'
-          {disabled}
-          required
-          showStrength={showPasswordStrength}
-          minLength={minPasswordLength}
-          error={errors.password}
-        />
+    <!-- 自定义头部 -->
+    {#if header}
+      <div class='register-form-header'>
+        {@render header()}
       </div>
+    {/if}
 
-      <!-- 确认密码字段 -->
-      {#if requireConfirmPassword}
-        <div class='space-y-1.5'>
-          <label class='text-sm font-medium text-base-content/70' for='register-confirm-password'>
-            {getFieldLabel('confirmPassword')}
-          </label>
+    {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
+    {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
+
+    <!-- 动态字段 -->
+    {#each fields as field (field)}
+      {#if field === 'password'}
+        <!-- 密码字段 -->
+        <FormField for='register-password' label={getFieldLabel('password')}>
           <PasswordInput
-            id='register-confirm-password'
-            bind:value={confirmPassword}
-            placeholder={getFieldPlaceholder('confirmPassword')}
+            id='register-password'
+            bind:value={password}
+            placeholder={getFieldPlaceholder('password')}
             autocomplete='new-password'
             {disabled}
             required
-            showStrength={false}
-            error={confirmPasswordError}
+            showStrength={showPasswordStrength}
+            minLength={minPasswordLength}
+            error={errors.password}
           />
-        </div>
+        </FormField>
+
+        <!-- 确认密码字段 -->
+        {#if requireConfirmPassword}
+          <FormField for='register-confirm-password' label={getFieldLabel('confirmPassword')}>
+            <PasswordInput
+              id='register-confirm-password'
+              bind:value={confirmPassword}
+              placeholder={getFieldPlaceholder('confirmPassword')}
+              autocomplete='new-password'
+              {disabled}
+              required
+              showStrength={false}
+              error={confirmPasswordError}
+            />
+          </FormField>
+        {/if}
+      {:else if field !== 'confirmPassword'}
+        <FormField for='register-{field}' label={getFieldLabel(field)}>
+          <Input
+            id={`register-${field}`}
+            type={getFieldType(field)}
+            name={field}
+            placeholder={getFieldPlaceholder(field)}
+            value={getFieldValue(field)}
+            oninput={(e: Event & { currentTarget: HTMLInputElement }) => setFieldValue(field, e.currentTarget.value)}
+            {disabled}
+            required={field === 'username' || field === 'email'}
+            autocomplete={field === 'username' ? 'username' : field === 'email' ? 'email' : undefined}
+            error={errors[field]}
+          />
+        </FormField>
       {/if}
-    {:else if field !== 'confirmPassword'}
-      <div class='space-y-1.5'>
-        <label class='text-sm font-medium text-base-content/70' for='register-{field}'>
-          {getFieldLabel(field)}
-        </label>
-        <Input
-          id={`register-${field}`}
-          type={getFieldType(field)}
-          name={field}
-          placeholder={getFieldPlaceholder(field)}
-          value={getFieldValue(field)}
-          oninput={(e: Event & { currentTarget: HTMLInputElement }) => setFieldValue(field, e.currentTarget.value)}
-          {disabled}
-          required={field === 'username' || field === 'email'}
-          autocomplete={field === 'username' ? 'username' : field === 'email' ? 'email' : undefined}
-          error={errors[field]}
-        />
+    {/each}
+
+    <!-- 通用错误 -->
+    {#if extraFields}
+      <div class='register-form-extra-fields'>{@render extraFields()}</div>
+    {/if}
+    {#if errors.general}
+      <Alert variant='error'>
+        {errors.general}
+      </Alert>
+    {/if}
+
+    <!-- 提交按钮 -->
+    <Button
+      type='submit'
+      variant='primary'
+      class='w-full'
+      disabled={loading || disabled || !passwordsMatch || Boolean(policyError)}
+      loading={loading}
+    >
+      {submitText || uiM('register_submit')}
+    </Button>
+
+    <!-- 协议提示 -->
+    <AgreementNotice {agreements} />
+
+    <!-- 自定义底部 -->
+    {#if footer}
+      <div class='register-form-footer'>
+        {@render footer()}
+      </div>
+    {:else if showLoginLink}
+      <div class='text-center mt-4 text-sm text-base-content/60'>
+        <span>{uiM('register_has_account')}</span>
+        <a href={loginUrl} class='link link-primary ml-1'>{uiM('register_login_now')}</a>
       </div>
     {/if}
-  {/each}
-
-  <!-- 通用错误 -->
-  {#if extraFields}
-    <div class='register-form-extra-fields'>{@render extraFields()}</div>
-  {/if}
-  {#if errors.general}
-    <Alert variant='error'>
-      {errors.general}
-    </Alert>
-  {/if}
-
-  <!-- 提交按钮 -->
-  <Button
-    type='submit'
-    variant='primary'
-    class='w-full'
-    disabled={loading || disabled || !passwordsMatch || Boolean(policyError)}
-    loading={loading}
-  >
-    {submitText || uiM('register_submit')}
-  </Button>
-
-  <!-- 协议提示 -->
-  <AgreementNotice {agreements} />
-
-  <!-- 自定义底部 -->
-  {#if footer}
-    <div class='register-form-footer'>
-      {@render footer()}
-    </div>
-  {:else if showLoginLink}
-    <div class='text-center mt-4 text-sm text-base-content/60'>
-      <span>{uiM('register_has_account')}</span>
-      <a href={loginUrl} class='link link-primary ml-1'>{uiM('register_login_now')}</a>
-    </div>
-  {/if}
+  </FormLayout>
 </form>

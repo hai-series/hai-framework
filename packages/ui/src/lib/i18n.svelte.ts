@@ -8,12 +8,12 @@
 import type { Locale, LocaleInfo } from '@h-ai/core'
 import { core } from '@h-ai/core'
 import { readStoredValue, writeStoredValue } from './internal/browser-safety.js'
+import { changeUILocale as setGlobalLocale } from './internal/locale.js'
 
 // 从 core.i18n 解构常用函数
 const {
   DEFAULT_LOCALE,
   DEFAULT_LOCALES,
-  setGlobalLocale,
 } = core.i18n
 
 function isLocaleSupported(locale: Locale, supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): boolean {

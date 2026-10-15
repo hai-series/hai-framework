@@ -82,7 +82,7 @@
   }
 </script>
 
-<div {...dataAttributes} class='fieldset w-full'>
+<div {...dataAttributes} class='fieldset w-full' data-form-wide>
   <div
     class={containerClass}
     onclick={() => inputElement?.focus()}

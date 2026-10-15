@@ -66,11 +66,11 @@
       {/if}
 
       <form class='grid gap-4' onsubmit={handleLogin}>
-        <FormField label={m.admin_login_username()} required>
+        <FormField for='admin-username' label={m.admin_login_username()} required>
           <Input id='admin-username' bind:value={username} required />
         </FormField>
 
-        <FormField label={m.admin_login_password()} required>
+        <FormField for='admin-password' label={m.admin_login_password()} required>
           <PasswordInput id='admin-password' bind:value={password} required showStrength={false} />
         </FormField>
 

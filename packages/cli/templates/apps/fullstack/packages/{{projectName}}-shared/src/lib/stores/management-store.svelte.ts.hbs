@@ -4,7 +4,7 @@ import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
 import type { AdminAuditLog, AdminCreateUser, AdminRole, AdminUpdateUser, AdminUser, AvatarUpload, ProfileUpdate } from '{{fullstack.contractPackageName}}'
 import type { AppInfo, ManagementApiOptions } from '../api/api-client.js'
 import { HaiApiClientError } from '@h-ai/api-client'
-import { core } from '@h-ai/core'
+import { setGlobalLocale } from '@h-ai/ui/i18n'
 import { SvelteDate } from 'svelte/reactivity'
 import { initializeManagementApi, managementApi, resolveAvatarUrl } from '../api/api-client.js'
 import * as m from '../paraglide/messages.js'
@@ -305,7 +305,7 @@ export class ManagementStore {
       return
     this.locale = locale
     setLocale(locale, { reload: false })
-    core.i18n.setGlobalLocale(locale)
+    setGlobalLocale(locale)
     if (typeof document !== 'undefined')
       document.documentElement.lang = locale
     this.onLocaleChange?.(locale)

@@ -123,46 +123,44 @@
           </Alert>
         {/if}
 
-        <form class='grid gap-4' onsubmit={handleSubmit}>
-          <FormField label={m.partner_form_company()} required error={errors.companyName}>
-            <Input id='company-name' bind:value={form.companyName} required />
-          </FormField>
+        <form onsubmit={handleSubmit}>
+          <FormLayout columns={2}>
+            <FormField for='company-name' label={m.partner_form_company()} colSpan={2} required error={errors.companyName}>
+              <Input id='company-name' bind:value={form.companyName} required />
+            </FormField>
 
-          <div class='grid gap-4 md:grid-cols-2'>
-            <FormField label={m.partner_form_contact()} required error={errors.contactName}>
+            <FormField for='contact-name' label={m.partner_form_contact()} required error={errors.contactName}>
               <Input id='contact-name' bind:value={form.contactName} required />
             </FormField>
 
-            <FormField label={m.partner_form_phone()} required error={errors.phone}>
+            <FormField for='contact-phone' label={m.partner_form_phone()} required error={errors.phone}>
               <Input id='contact-phone' bind:value={form.phone} required />
             </FormField>
-          </div>
 
-          <div class='grid gap-4 md:grid-cols-2'>
-            <FormField label={m.partner_form_email()} required error={errors.email}>
+            <FormField for='contact-email' label={m.partner_form_email()} required error={errors.email}>
               <Input id='contact-email' type='email' bind:value={form.email} required />
             </FormField>
 
-            <FormField label={m.partner_form_budget()}>
+            <FormField for='budget-range' label={m.partner_form_budget()}>
               <Select id='budget-range' options={budgetOptions} bind:value={form.budgetRange} />
             </FormField>
-          </div>
 
-          <FormField label={m.partner_form_type()}>
-            <Select id='cooperation-type' options={cooperationTypeOptions} bind:value={form.cooperationType} />
-          </FormField>
+            <FormField for='cooperation-type' label={m.partner_form_type()}>
+              <Select id='cooperation-type' options={cooperationTypeOptions} bind:value={form.cooperationType} />
+            </FormField>
 
-          <FormField label={m.partner_form_message()} required error={errors.message}>
-            <Textarea id='cooperation-message' bind:value={form.message} required rows={5} />
-          </FormField>
+            <FormField for='cooperation-message' label={m.partner_form_message()} required error={errors.message}>
+              <Textarea id='cooperation-message' bind:value={form.message} required rows={5} />
+            </FormField>
 
-          <Button type='submit' variant='primary' class='mt-2' loading={submitting} disabled={submitting}>
-            {#if submitting}
-              {m.partner_form_submitting()}
-            {:else}
-              {m.partner_form_submit()}
-            {/if}
-          </Button>
+            <Button type='submit' variant='primary' class='mt-2' loading={submitting} disabled={submitting}>
+              {#if submitting}
+                {m.partner_form_submitting()}
+              {:else}
+                {m.partner_form_submit()}
+              {/if}
+            </Button>
+          </FormLayout>
         </form>
       </Card>
 

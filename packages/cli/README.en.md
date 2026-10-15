@@ -275,12 +275,16 @@ Admin and fullstack gates also verify public types and runtime behavior from ins
 
 Successful screenshots default to the CLI's `test-results/scaffold-evidence/`. Set `HAI_AUTH_EVIDENCE_DIR` to retain them in a chosen directory after generated projects are cleaned up. Fullstack E2E starts every selected Web/App/Desktop browser preview and checks login, tours, help and profile navigation. Miniapp and native shells require separate platform acceptance.
 
-## License
-
-Apache-2.0
-
 Failures and degraded-state messages must also be localized: website APIs use the request locale for AI fallback and email delivery status; undelivered messages must not be described as received. CLI deployment status uses cliM, and Gallery encryption limitations use bilingual messages. Verify unconfigured, failed, and successful paths in Chinese and English without paid service calls.
 
 Provisioned configuration: Neon emits HAI_DB (PostgreSQL JSON), Upstash HAI_CACHE (Redis rediss URL JSON), and R2 HAI_STORAGE (flat S3 JSON). Email/SMS emit HAI_REACH_PROVIDERS; deployApp merges both channels while preserving YAML message templates, replacing the original providers array. Core supports whole-object/array overrides, with parents preceding leaves and schema validation retained. Build subprocesses and target runtimes share provisioned values. R2 needs existing S3 accessKeyId/secretAccessKey, Resend a verified-domain from address, and Alibaba Cloud approved signName/templates. Applications need matching `_db.yml` / `_cache.yml` / `_storage.yml` / `_reach.yml` loaded at startup; network clients require Node.
 
 Deployment recovery: `ProvisionResult.resourceStatus` marks created/reused. `getDeployRecovery(result.error)` reads projectName, stage, platformProjectId, and resource lists; unknown means an uncertain request result that must first be checked in the provider console. Preserve returned IDs for failed resources. Recovery excludes envVars, raw exceptions, and credentials; the CLI shows resources and advice. Same-name retries reuse resources. Reused resources are never deleted automatically; clean up newly created resources only after manually confirming they are unused.
+
+## Generated form layouts
+
+Website contact forms and fullstack management screens reuse UI FormLayout/FormField: one or two columns, stacked or inline labels, automatic spans and narrow-container fallback. User, profile and password forms share the same options and built-in Chinese/English validation. The generated hai-ui skill documents the complete contract.
+
+## License
+
+Apache-2.0

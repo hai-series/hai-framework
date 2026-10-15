@@ -8,12 +8,17 @@
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
+  import FormField from '../../compounds/FormField.svelte'
+  import FormLayout from '../../compounds/FormLayout.svelte'
   import Button from '../../primitives/Button.svelte'
   import { arePasswordsEqual, passwordPolicyError, passwordPolicyHint } from './password-utils.js'
   import PasswordInput from './PasswordInput.svelte'
 
   const {
     loading = false,
+    columns = 1,
+    labelPosition = 'top',
+    labelWidth = '8rem',
     disabled = false,
     requireOldPassword = true,
     showPasswordStrength = true,
@@ -73,71 +78,64 @@
 </script>
 
 <form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
-  {#if requireOldPassword}
-    <div class='space-y-1.5'>
-      <label class='text-sm font-medium text-base-content/70' for='old-password'>
-        {uiM('change_password_old')}
-      </label>
+  <FormLayout {columns} {labelPosition} {labelWidth}>
+    {#if requireOldPassword}
+      <FormField for='old-password' label={uiM('change_password_old')}>
+        <PasswordInput
+          value={oldPassword}
+          oninput={(e) => { oldPassword = e.currentTarget.value }}
+          placeholder={uiM('change_password_old_placeholder')}
+          {disabled}
+          error={errors.oldPassword}
+          showStrength={false}
+        />
+      </FormField>
+    {/if}
+
+    <FormField for='new-password' label={uiM('change_password_new')}>
       <PasswordInput
-        value={oldPassword}
-        oninput={(e) => { oldPassword = e.currentTarget.value }}
-        placeholder={uiM('change_password_old_placeholder')}
+        value={newPassword}
+        oninput={(e) => { newPassword = e.currentTarget.value }}
+        placeholder={uiM('change_password_new_placeholder')}
         {disabled}
-        error={errors.oldPassword}
+        error={errors.newPassword}
+        showStrength={showPasswordStrength}
+        minLength={minPasswordLength}
+      />
+    </FormField>
+
+    <FormField for='confirm-password' label={uiM('change_password_confirm')}>
+      <PasswordInput
+        value={confirmPassword}
+        oninput={(e) => { confirmPassword = e.currentTarget.value }}
+        placeholder={uiM('change_password_confirm_placeholder')}
+        {disabled}
+        error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? uiM('change_password_mismatch') : '')}
         showStrength={false}
       />
+    </FormField>
+
+    <div class='rounded-lg bg-base-content/3 px-3.5 py-2.5 text-xs text-base-content/50'>
+      {uiM('change_password_relogin_hint')}
     </div>
-  {/if}
 
-  <div class='space-y-1.5'>
-    <label class='text-sm font-medium text-base-content/70' for='new-password'>
-      {uiM('change_password_new')}
-    </label>
-    <PasswordInput
-      value={newPassword}
-      oninput={(e) => { newPassword = e.currentTarget.value }}
-      placeholder={uiM('change_password_new_placeholder')}
-      {disabled}
-      error={errors.newPassword}
-      showStrength={showPasswordStrength}
-      minLength={minPasswordLength}
-    />
-  </div>
+    {#if errors.general}
+      <Alert variant='error'>
+        {errors.general}
+      </Alert>
+    {/if}
 
-  <div class='space-y-1.5'>
-    <label class='text-sm font-medium text-base-content/70' for='confirm-password'>
-      {uiM('change_password_confirm')}
-    </label>
-    <PasswordInput
-      value={confirmPassword}
-      oninput={(e) => { confirmPassword = e.currentTarget.value }}
-      placeholder={uiM('change_password_confirm_placeholder')}
-      {disabled}
-      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? uiM('change_password_mismatch') : '')}
-      showStrength={false}
-    />
-  </div>
+    {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
+    {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
 
-  <div class='rounded-lg bg-base-content/3 px-3.5 py-2.5 text-xs text-base-content/50'>
-    {uiM('change_password_relogin_hint')}
-  </div>
-
-  {#if errors.general}
-    <Alert variant='error'>
-      {errors.general}
-    </Alert>
-  {/if}
-
-  {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
-  {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
-
-  <Button
-    type='submit'
-    variant='primary'
-    class='w-full sm:w-auto sm:min-w-40'
-    disabled={loading || disabled || !canSubmit || Boolean(policyError)}
-    {loading}
-  >
-    {submitText || uiM('change_password_submit')}
-  </Button>
+    <Button
+      type='submit'
+      variant='primary'
+      class='w-full sm:w-auto sm:min-w-40'
+      disabled={loading || disabled || !canSubmit || Boolean(policyError)}
+      {loading}
+    >
+      {submitText || uiM('change_password_submit')}
+    </Button>
+  </FormLayout>
 </form>

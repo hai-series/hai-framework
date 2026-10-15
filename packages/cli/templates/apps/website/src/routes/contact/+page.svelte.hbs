@@ -6,7 +6,7 @@
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
-  import { Button, Card, FormField, Input, PageHeader } from '@h-ai/ui'
+  import { Button, Card, FormField, FormLayout, Input, PageHeader, Textarea } from '@h-ai/ui'
 
   let name = $state('')
   let email = $state('')
@@ -33,30 +33,32 @@
 {{/if}}
 
   <Card shadow='sm' class='bg-base-100'>
-    <form class='space-y-4' onsubmit={handleSubmit}>
+    <form onsubmit={handleSubmit}>
+      <FormLayout columns={2} labelPosition='top'>
 {{#if hasI18n}}
-      <FormField label={m.page_contact_name()} required>
-        <Input id='name' type='text' bind:value={name} required />
-      </FormField>
-      <FormField label={m.page_contact_email()} required>
-        <Input id='email' type='email' bind:value={email} required />
-      </FormField>
-      <FormField label={m.page_contact_message()} required>
-        <textarea id='message' class='textarea textarea-bordered w-full' rows='4' bind:value={message}></textarea>
-      </FormField>
-      <Button type='submit' variant='primary' class='w-full'>{m.page_contact_submit()}</Button>
+        <FormField for='name' label={m.page_contact_name()} required>
+          <Input id='name' type='text' bind:value={name} required />
+        </FormField>
+        <FormField for='email' label={m.page_contact_email()} required>
+          <Input id='email' type='email' bind:value={email} required />
+        </FormField>
+        <FormField for='message' label={m.page_contact_message()} required>
+          <Textarea id='message' rows={4} bind:value={message} required />
+        </FormField>
+        <Button type='submit' variant='primary' class='w-full'>{m.page_contact_submit()}</Button>
 {{else}}
-      <FormField label='姓名' required>
-        <Input id='name' type='text' bind:value={name} required />
-      </FormField>
-      <FormField label='邮箱' required>
-        <Input id='email' type='email' bind:value={email} required />
-      </FormField>
-      <FormField label='留言' required>
-        <textarea id='message' class='textarea textarea-bordered w-full' rows='4' bind:value={message}></textarea>
-      </FormField>
-      <Button type='submit' variant='primary' class='w-full'>发送</Button>
+        <FormField for='name' label='姓名' required>
+          <Input id='name' type='text' bind:value={name} required />
+        </FormField>
+        <FormField for='email' label='邮箱' required>
+          <Input id='email' type='email' bind:value={email} required />
+        </FormField>
+        <FormField for='message' label='留言' required>
+          <Textarea id='message' rows={4} bind:value={message} required />
+        </FormField>
+        <Button type='submit' variant='primary' class='w-full'>发送</Button>
 {{/if}}
+      </FormLayout>
     </form>
   </Card>
 </section>

@@ -19,6 +19,11 @@
       "types": "./vite.d.ts",
       "import": "./vite.js"
     },
+    "./i18n": {
+      "types": "./dist/i18n.svelte.d.ts",
+      "svelte": "./dist/i18n.svelte.js",
+      "import": "./dist/i18n.svelte.js"
+    },
     "./theme": {
       "types": "./dist/theme-config.d.ts",
       "import": "./dist/theme-config.js"

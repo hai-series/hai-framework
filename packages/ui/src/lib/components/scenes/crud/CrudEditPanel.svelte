@@ -7,29 +7,23 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import type { DataAttributes, Size } from '../../../types.js'
+  import type { DataAttributes, FormLayoutOptions, Size } from '../../../types.js'
+  import type { CrudFieldDef } from './crud-controller.svelte.js'
   import type { CrudDensity, CrudFormVariant } from './crud-types.js'
+  import { tick } from 'svelte'
+  import { resolveFormText as resolveText } from '../../../internal/form-validation.svelte.js'
   import { uiM } from '../../../messages.js'
   import { getDataAttributes } from '../../../utils.js'
   import Drawer from '../../compounds/Drawer.svelte'
   import FormField from '../../compounds/FormField.svelte'
+  import FormLayout from '../../compounds/FormLayout.svelte'
   import Modal from '../../compounds/Modal.svelte'
   import Button from '../../primitives/Button.svelte'
   import Checkbox from '../../primitives/Checkbox.svelte'
   import Input from '../../primitives/Input.svelte'
   import Select from '../../primitives/Select.svelte'
   import Textarea from '../../primitives/Textarea.svelte'
-
-  type FieldDef = {
-    id: string
-    label: string | (() => string)
-    type: string
-    readonly?: boolean
-    options?: Array<{ label: string, value: string | number | boolean }> | (() => Array<{ label: string, value: string | number | boolean }>)
-    validation?: { required?: boolean, min?: number, max?: number, pattern?: string, message?: string }
-    placeholder?: string | (() => string)
-    order?: number
-  }
+  import { getCrudValidationIssue } from './crud-form-validation.js'
 
   let {
     open = $bindable(false),
@@ -47,6 +41,9 @@
     modalWidth,
     modalHeight,
     submitting = false,
+    columns = 1,
+    labelPosition = 'top',
+    labelWidth = '8rem',
     error = '',
     onsubmit,
     onclose,
@@ -57,7 +54,7 @@
   }: {
     open?: boolean
     mode?: 'create' | 'edit'
-    fields?: FieldDef[]
+    fields?: CrudFieldDef[]
     formData?: Record<string, unknown>
     density?: CrudDensity
     title?: string
@@ -76,14 +73,17 @@
     editFormExtra?: Snippet<[Record<string, unknown> | null, 'create' | 'edit']>
     editingItem?: Record<string, unknown> | null
     class?: string
-  } & DataAttributes = $props()
+  } & FormLayoutOptions & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
-  function resolveText(text: string | (() => string)): string {
-    return typeof text === 'function' ? text() : text
-  }
-
-  function resolveOptions(options?: FieldDef['options']): Array<{ label: string, value: string | number | boolean }> {
+  const panelId = $props.id()
+  let formElement: HTMLFormElement | undefined = $state()
+  let attempted = $state(false)
+  $effect(() => {
+    if (!open)
+      attempted = false
+  })
+  function resolveOptions(options?: CrudFieldDef['options']): Array<{ label: string, value: string | number | boolean }> {
     if (!options)
       return []
     return typeof options === 'function' ? options() : options
@@ -92,15 +92,27 @@
   const sortedFields = $derived(
     [...fields].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
   )
+  const fieldErrors = $derived.by(() => {
+    const errors: Record<string, string> = {}
+    if (!attempted)
+      return errors
+    for (const field of sortedFields) {
+      if (mode === 'edit' && field.readonly)
+        continue
+      const issue = getCrudValidationIssue(field, formData[field.id])
+      if (issue)
+        errors[field.id] = field.validation?.message ? resolveText(field.validation.message) : uiM(issue.key, issue.params)
+    }
+    return errors
+  })
 
   const isCompact = $derived(density === 'compact')
   const controlSize = $derived(isCompact ? 'xs' : 'sm')
-  const formClass = $derived(isCompact ? 'space-y-3' : 'space-y-4')
   const extraClass = $derived(isCompact ? 'border-t border-base-content/5 pt-3' : 'border-t border-base-content/5 pt-4')
   const multiSelectWrapClass = $derived(isCompact ? 'flex flex-wrap gap-2 p-2.5 bg-base-200 rounded-lg max-h-48 overflow-y-auto' : 'flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg max-h-48 overflow-y-auto')
   const multiSelectLabelClass = $derived(isCompact ? 'inline-flex items-center gap-1.5 cursor-pointer' : 'inline-flex items-center gap-2 cursor-pointer')
   const multiSelectTextClass = $derived(isCompact ? 'text-xs text-base-content' : 'text-sm text-base-content')
-  const drawerFormClass = $derived(isCompact ? 'space-y-3 pb-16' : 'space-y-4 pb-20')
+  const drawerFormClass = $derived(isCompact ? 'pb-16' : 'pb-20')
   const drawerFooterClass = $derived(isCompact ? 'absolute bottom-0 left-0 right-0 p-3 bg-base-200 border-t border-base-content/10 flex justify-end gap-2' : 'absolute bottom-0 left-0 right-0 p-4 bg-base-200 border-t border-base-content/10 flex justify-end gap-2')
 
   function handleClose() {
@@ -110,6 +122,14 @@
 
   async function handleSubmit(e: Event) {
     e.preventDefault()
+    if (submitting)
+      return
+    attempted = true
+    if (Object.keys(fieldErrors).length) {
+      await tick()
+      formElement?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+      return
+    }
     await onsubmit?.(formData)
   }
 
@@ -120,8 +140,6 @@
       case 'tel': return 'tel'
       case 'password': return 'password'
       case 'number': return 'number'
-      case 'date': return 'text'
-      case 'datetime': return 'text'
       default: return 'text'
     }
   }
@@ -143,113 +161,122 @@
 </script>
 
 {#snippet formFields()}
-  {#if error}
-    <div {...dataAttributes} class='p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2'>
-      <span class='icon-[tabler--alert-circle] size-4 shrink-0'></span>
-      <span>{error}</span>
-    </div>
-  {/if}
-
-  {#each sortedFields as field (field.id)}
-    {@const isReadonly = field.readonly && mode === 'edit'}
-    {@const isRequired = field.validation?.required}
-    {@const fieldValue = formData[field.id]}
-    {@const placeholder = field.placeholder ? resolveText(field.placeholder) : ''}
-
-    {#if field.type === 'textarea'}
-      <FormField label={resolveText(field.label)} required={isRequired}>
-        <Textarea
-          id={field.id}
-          size={controlSize}
-          value={String(fieldValue ?? '')}
-          {placeholder}
-          disabled={submitting || isReadonly}
-          required={isRequired}
-          oninput={e => updateField(field.id, (e.target as HTMLTextAreaElement).value)}
-        />
-      </FormField>
-
-    {:else if field.type === 'select' || field.type === 'radio'}
-      {@const opts = resolveOptions(field.options)}
-      <FormField label={resolveText(field.label)} required={isRequired}>
-        <Select
-          id={field.id}
-          size={controlSize}
-          value={String(fieldValue ?? '')}
-          disabled={submitting || isReadonly}
-          options={[
-            { value: '', label: placeholder || uiM('crud_filter_all') },
-            ...opts.map(opt => ({ value: String(opt.value), label: opt.label })),
-          ]}
-          onchange={value => updateField(field.id, value)}
-        />
-      </FormField>
-
-    {:else if field.type === 'multi-select'}
-      {@const opts = resolveOptions(field.options)}
-      {@const selectedValues = ((fieldValue ?? []) as Array<string | number | boolean>).map(String)}
-      <FormField label={resolveText(field.label)} required={isRequired}>
-        <div class={multiSelectWrapClass}>
-          {#each opts as opt (String(opt.value))}
-            <label class={multiSelectLabelClass}>
-              <Checkbox
-                size={controlSize}
-                checked={selectedValues.includes(String(opt.value))}
-                onchange={() => toggleMultiSelect(field.id, opt.value)}
-                disabled={submitting || isReadonly}
-              />
-              <span class={multiSelectTextClass}>{opt.label}</span>
-            </label>
-          {/each}
-          {#if opts.length === 0}
-            <span class={multiSelectTextClass}>{uiM('crud_no_data')}</span>
-          {/if}
-        </div>
-      </FormField>
-
-    {:else if field.type === 'boolean' || field.type === 'checkbox'}
-      <FormField label={resolveText(field.label)}>
-        <Checkbox
-          size={controlSize}
-          checked={Boolean(fieldValue)}
-          onchange={(checked: boolean) => updateField(field.id, checked)}
-          disabled={submitting || isReadonly}
-        />
-      </FormField>
-
-    {:else}
-      <FormField label={resolveText(field.label)} required={isRequired}>
-        <Input
-          id={field.id}
-          type={getInputType(field.type)}
-          size={controlSize}
-          value={String(fieldValue ?? '')}
-          {placeholder}
-          disabled={submitting || isReadonly}
-          required={isRequired}
-          pattern={field.validation?.pattern}
-          minlength={field.type !== 'number' ? field.validation?.min : undefined}
-          maxlength={field.type !== 'number' ? field.validation?.max : undefined}
-          min={field.type === 'number' ? field.validation?.min : undefined}
-          max={field.type === 'number' ? field.validation?.max : undefined}
-          oninput={e => updateField(field.id, field.type === 'number' ? Number((e.currentTarget as HTMLInputElement).value) : (e.currentTarget as HTMLInputElement).value)}
-        />
-      </FormField>
+  <FormLayout {columns} {labelPosition} {labelWidth} class={isCompact ? '[--hai-form-gap:0.75rem]' : ''}>
+    {#if error}
+      <div {...dataAttributes} role='alert' class='p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2'>
+        <span class='icon-[tabler--alert-circle] size-4 shrink-0'></span>
+        <span>{error}</span>
+      </div>
     {/if}
-  {/each}
 
-  {#if editFormExtra}
-    <div class={extraClass}>
-      {@render editFormExtra(editingItem, mode)}
-    </div>
-  {/if}
+    {#each sortedFields as field (field.id)}
+      {@const isReadonly = field.readonly && mode === 'edit'}
+      {@const isRequired = field.validation?.required}
+      {@const fieldValue = formData[field.id]}
+      {@const placeholder = field.placeholder ? resolveText(field.placeholder) : ''}
+      {@const controlId = `${panelId}-${field.id}`}
+      <FormField
+        for={controlId}
+        label={resolveText(field.label)}
+        required={isRequired}
+        error={fieldErrors[field.id]}
+        colSpan={field.colSpan ?? (['textarea', 'multi-select', 'date-range', 'custom'].includes(field.type) ? 2 : 'auto')}
+        data-field={field.id}
+      >
+
+        {#if field.type === 'textarea'}
+          <Textarea
+            id={controlId}
+            name={field.id}
+            size={controlSize}
+            value={String(fieldValue ?? '')}
+            {placeholder}
+            disabled={submitting || isReadonly}
+            required={isRequired}
+            minlength={field.validation?.min}
+            maxlength={field.validation?.max}
+            oninput={e => updateField(field.id, (e.target as HTMLTextAreaElement).value)}
+          />
+
+        {:else if field.type === 'select' || field.type === 'radio'}
+          {@const opts = resolveOptions(field.options)}
+          <Select
+            id={controlId}
+            name={field.id}
+            required={isRequired}
+            size={controlSize}
+            value={String(fieldValue ?? '')}
+            disabled={submitting || isReadonly}
+            options={[
+              { value: '', label: placeholder || uiM('crud_filter_all') },
+              ...opts.map(opt => ({ value: String(opt.value), label: opt.label })),
+            ]}
+            onchange={value => updateField(field.id, opts.find(opt => String(opt.value) === value)?.value ?? value)}
+          />
+
+        {:else if field.type === 'multi-select'}
+          {@const opts = resolveOptions(field.options)}
+          {@const selectedValues = ((fieldValue ?? []) as Array<string | number | boolean>).map(String)}
+          <div id={controlId} role='group' tabindex='-1' aria-label={resolveText(field.label)} class={multiSelectWrapClass} data-form-wide>
+            {#each opts as opt (String(opt.value))}
+              <div class={multiSelectLabelClass}>
+                <Checkbox
+                  label={opt.label}
+                  size={controlSize}
+                  checked={selectedValues.includes(String(opt.value))}
+                  onchange={() => toggleMultiSelect(field.id, opt.value)}
+                  disabled={submitting || isReadonly}
+                />
+              </div>
+            {/each}
+            {#if opts.length === 0}
+              <span class={multiSelectTextClass}>{uiM('crud_no_data')}</span>
+            {/if}
+          </div>
+
+        {:else if field.type === 'boolean' || field.type === 'checkbox'}
+          <Checkbox
+            id={controlId}
+            size={controlSize}
+            checked={Boolean(fieldValue)}
+            onchange={(checked: boolean) => updateField(field.id, checked)}
+            disabled={submitting || isReadonly}
+          />
+
+        {:else}
+          <Input
+            id={controlId}
+            name={field.id}
+            type={getInputType(field.type)}
+            size={controlSize}
+            value={String(fieldValue ?? '')}
+            {placeholder}
+            disabled={submitting || isReadonly}
+            required={isRequired}
+            pattern={field.validation?.pattern}
+            minlength={field.type !== 'number' ? field.validation?.min : undefined}
+            maxlength={field.type !== 'number' ? field.validation?.max : undefined}
+            min={field.type === 'number' ? field.validation?.min : undefined}
+            max={field.type === 'number' ? field.validation?.max : undefined}
+            oninput={e => updateField(field.id, field.type === 'number' && e.currentTarget.value !== '' ? Number(e.currentTarget.value) : e.currentTarget.value)}
+          />
+        {/if}
+      </FormField>
+    {/each}
+
+    {#if editFormExtra}
+      <div class={extraClass}>
+        {@render editFormExtra(editingItem, mode)}
+      </div>
+    {/if}
+  </FormLayout>
 {/snippet}
 
 {#snippet footerActions()}
   <Button variant='ghost' size='sm' onclick={handleClose} disabled={submitting}>
     {uiM('crud_cancel')}
   </Button>
-  <Button variant='primary' size='sm' onclick={handleSubmit} disabled={submitting}>
+  <Button variant='primary' size='sm' onclick={() => formElement?.requestSubmit()} disabled={submitting}>
     {#if submitting}
       <span class='loading loading-spinner loading-xs mr-2'></span>
     {/if}
@@ -268,7 +295,9 @@
     closeOnBackdrop={false}
     onclose={handleClose}
   >
-    <form onsubmit={handleSubmit} class={formClass}>
+    <form bind:this={formElement} novalidate onsubmit={handleSubmit}>
+      <!-- 底部按钮在表单外；保留原生提交控件，使多字段表单支持回车提交。 -->
+      <input type='submit' class='hidden' tabindex='-1' aria-hidden='true' value={uiM('crud_save')} />
       {@render formFields()}
     </form>
 
@@ -289,7 +318,8 @@
     onclose={handleClose}
     closeOnBackdrop={false}
   >
-    <form onsubmit={handleSubmit} class={drawerFormClass}>
+    <form bind:this={formElement} novalidate onsubmit={handleSubmit} class={drawerFormClass}>
+      <input type='submit' class='hidden' tabindex='-1' aria-hidden='true' value={uiM('crud_save')} />
       {@render formFields()}
     </form>
 

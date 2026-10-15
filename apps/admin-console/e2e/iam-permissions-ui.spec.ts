@@ -16,7 +16,7 @@ test.describe('IAM Permissions UI', () => {
   async function openCreatePanel(page: import('@playwright/test').Page) {
     await waitForHydration(page)
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    const resourceInput = page.locator('#resource:visible').last()
+    const resourceInput = page.locator('[name="resource"]:visible').last()
 
     await expect(createBtn.first()).toBeVisible()
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -81,9 +81,9 @@ test.describe('IAM Permissions UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     const panel = await openCreatePanel(page)
-    await expect(panel.locator('#name')).toBeVisible()
-    await expect(panel.locator('#action')).toBeVisible()
-    await expect(panel.locator('#resource')).toBeVisible()
+    await expect(panel.locator('[name="name"]')).toBeVisible()
+    await expect(panel.locator('[name="action"]')).toBeVisible()
+    await expect(panel.locator('[name="resource"]')).toBeVisible()
   })
 
   test('新建抽屉可关闭', async ({ page, request }) => {
@@ -92,13 +92,13 @@ test.describe('IAM Permissions UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     const panel = await openCreatePanel(page)
-    await expect(panel.locator('#resource')).toBeVisible()
+    await expect(panel.locator('[name="resource"]')).toBeVisible()
 
     // 点击取消按钮关闭抽屉
     const cancelBtn = panel.getByRole('button', { name: /取消|Cancel/ })
     await cancelBtn.click({ force: true })
 
-    await expect(panel.locator('#resource')).not.toBeVisible({ timeout: 5000 })
+    await expect(panel.locator('[name="resource"]')).not.toBeVisible({ timeout: 5000 })
   })
 
   // ---------------------------------------------------------------------------
@@ -118,17 +118,21 @@ test.describe('IAM Permissions UI', () => {
     const panel = await openCreatePanel(page)
 
     // 填写资源和操作
-    await panel.locator('#resource').fill(resource)
-    await panel.locator('#action').fill(action)
-    // name 字段应自动生成（resource:action）
-    await page.waitForTimeout(300)
+    await panel.locator('[name="resource"]').fill(resource)
+    await panel.locator('[name="action"]').fill(action)
+    // 名称保持空值，提交时按 resource:action 生成，客户端必填校验不应拦截。
+    await expect(panel.locator('[name="name"]')).toHaveValue('')
 
     // 点击创建
     const submitBtn = panel.getByRole('button', { name: /创建|提交|新建/ }).last()
-    await submitBtn.click()
+    const [createResponse] = await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/iam/permissions')),
+      submitBtn.click(),
+    ])
+    expect(createResponse.ok()).toBe(true)
 
     // 抽屉应关闭
-    await expect(panel.locator('#resource')).not.toBeVisible({ timeout: 10_000 })
+    await expect(panel.locator('[name="resource"]')).not.toBeVisible({ timeout: 10_000 })
 
     // 新权限应出现在页面中（列表展示 name/code，不展示 resource 单列）
     const permRow = page.locator('tbody tr').filter({ hasText: permissionName })

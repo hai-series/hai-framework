@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { AdminRoleCode, AdminUser } from '{{fullstack.contractPackageName}}'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, DataTable, FormField, Modal, Pagination, Skeleton } from '@h-ai/ui/components/compounds/index'
+  import { Card, DataTable, FormField, FormLayout, Modal, Pagination, Skeleton } from '@h-ai/ui/components/compounds/index'
   import { Avatar, Badge, BareInput, Button, Checkbox, Input, Select } from '@h-ai/ui/components/primitives/index'
   import { PasswordInput } from '@h-ai/ui/components/scenes/iam/index'
   import * as m from '../paraglide/messages.js'
@@ -133,23 +133,25 @@
   </div>
 </section>
 
-<Modal bind:open={editorOpen} title={editing ? m.user_edit() : m.user_create()} closeOnBackdrop={!store.saving} closeOnEscape={!store.saving} data-testid="user-editor">
-  <form class="space-y-4" onsubmit={submit}>
-    <FormField label={m.user_username()} required>
-      <Input bind:value={username} name="username" readonly={!!editing} required minlength={3} maxlength={64} pattern="[\w\-]+" autocomplete="off" data-testid="user-username" />
-    </FormField>
-    <FormField label={m.user_display_name()}><Input bind:value={displayName} maxlength={100} data-testid="user-display-name" /></FormField>
-    <FormField label={m.user_email()}><Input type="email" bind:value={email} data-testid="user-email" /></FormField>
-    {#if !editing}
-      <FormField label={m.user_password()} hint={m.initial_password_rules({ min: store.authConfig?.password.minLength ?? 8 })} required><PasswordInput bind:value={password} autocomplete="new-password" minLength={store.authConfig?.password.minLength ?? 8} data-testid="user-password" /></FormField>
-    {/if}
-    <FormField label={m.user_role()}><Select bind:value={role} options={roleOptions} disabled={editing?.id === store.user?.id} data-testid="user-role" /></FormField>
-    <Checkbox bind:checked={enabled} label={m.account_enabled()} disabled={editing?.id === store.user?.id} />
-    {#if store.error}<p class="text-sm text-error" role="alert">{store.error}</p>{/if}
-    <div class="flex justify-end gap-2 border-t border-base-content/8 pt-4">
-      <Button variant="ghost" disabled={store.saving} onclick={() => { editorOpen = false }}>{m.cancel()}</Button>
-      <Button type="submit" variant="primary" loading={store.saving} disabled={!editing && password.length < 8} data-testid="user-save">{m.save()}</Button>
-    </div>
+<Modal bind:open={editorOpen} title={editing ? m.user_edit() : m.user_create()} closeOnBackdrop={!store.saving} closeOnEscape={!store.saving} size="3xl" data-testid="user-editor">
+  <form onsubmit={submit}>
+    <FormLayout columns={2} labelPosition="left" labelWidth="6rem">
+      <FormField label={m.user_username()} required>
+        <Input bind:value={username} name="username" readonly={!!editing} required minlength={3} maxlength={64} pattern="[\w\-]+" autocomplete="off" data-testid="user-username" />
+      </FormField>
+      <FormField label={m.user_display_name()}><Input bind:value={displayName} maxlength={100} data-testid="user-display-name" /></FormField>
+      <FormField label={m.user_email()}><Input type="email" bind:value={email} data-testid="user-email" /></FormField>
+      {#if !editing}
+        <FormField label={m.user_password()} hint={m.initial_password_rules({ min: store.authConfig?.password.minLength ?? 8 })} required><PasswordInput required bind:value={password} autocomplete="new-password" minLength={store.authConfig?.password.minLength ?? 8} data-testid="user-password" /></FormField>
+      {/if}
+      <FormField label={m.user_role()}><Select bind:value={role} options={roleOptions} disabled={editing?.id === store.user?.id} data-testid="user-role" /></FormField>
+      <Checkbox bind:checked={enabled} label={m.account_enabled()} disabled={editing?.id === store.user?.id} />
+      {#if store.error}<p class="text-sm text-error" role="alert">{store.error}</p>{/if}
+      <div class="flex justify-end gap-2 border-t border-base-content/8 pt-4">
+        <Button variant="ghost" disabled={store.saving} onclick={() => { editorOpen = false }}>{m.cancel()}</Button>
+        <Button type="submit" variant="primary" loading={store.saving} disabled={!editing && password.length < 8} data-testid="user-save">{m.save()}</Button>
+      </div>
+    </FormLayout>
   </form>
 </Modal>
 

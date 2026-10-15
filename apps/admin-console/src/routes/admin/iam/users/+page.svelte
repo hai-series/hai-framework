@@ -98,7 +98,7 @@
   crud={userCrud}
   data={crudData}
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
-  form={{ variant: 'drawer', drawerWidth: '40rem' }}
+  form={{ variant: 'drawer', drawerWidth: '44rem', columns: 2, labelPosition: 'left', labelWidth: '5.5rem' }}
   density='compact'
   detailColumns={['username']}
   sortableColumns={userSortableColumns}

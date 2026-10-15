@@ -13,6 +13,7 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../../types.js'
+  import type { CrudFieldDef } from './crud-controller.svelte.js'
   import type { CrudDensity, CrudFormConfig, CrudPaginationConfig, CrudToolbarStyle } from './crud-types.js'
   import type { NavAdapter } from './nav-adapter.js'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
@@ -33,47 +34,7 @@
 
   // ─── 类型定义 ───
 
-  /** CRUD 字段定义，决定列表、筛选器和表单的字段行为。 */
-  type FieldDef = {
-    /** 字段稳定标识，同时对应数据记录中的属性名。 */
-    id: string
-    /** 字段显示文案，允许通过函数延迟读取当前语言。 */
-    label: string | (() => string)
-    /** 字段控件类型，最终由表单或筛选器解释。 */
-    type: string
-    /** 是否出现在列表中；未设置时默认显示。 */
-    inList?: boolean
-    /** 是否出现在筛选器中；只有显式为 true 时显示。 */
-    filterable?: boolean
-    /** 编辑时是否禁止修改。 */
-    readonly?: boolean
-    /** 是否出现在新建表单中；未设置时默认显示。 */
-    inCreate?: boolean
-    /** 是否出现在编辑表单中；未设置时默认显示。 */
-    inEdit?: boolean
-    /** 是否出现在详情面板中；未设置时默认显示。 */
-    inDetail?: boolean
-    /** 选择类字段的静态选项或动态选项工厂。 */
-    options?: Array<{ label: string, value: string | number | boolean }> | (() => Array<{ label: string, value: string | number | boolean }>)
-    /** 表单校验规则。 */
-    validation?: { required?: boolean, min?: number, max?: number, pattern?: string, message?: string }
-    /** 列宽 CSS 值。 */
-    width?: string
-    /** 单元格对齐方式。 */
-    align?: 'left' | 'center' | 'right'
-    /** 列表单元格的自定义渲染函数。 */
-    render?: (value: unknown, item: Record<string, unknown>) => string
-    /** 输入控件占位文案。 */
-    placeholder?: string | (() => string)
-    /** 日期范围起始值 key。 */
-    startKey?: string
-    /** 日期范围结束值 key。 */
-    endKey?: string
-    /** 新建记录时使用的默认值。 */
-    defaultValue?: unknown
-    /** 字段排序权重，数值越小越靠前。 */
-    order?: number
-  }
+  type FieldDef = CrudFieldDef
 
   // 使用 method shorthand 语法（双向协变）以兼容来自 @h-ai/kit 的 CrudOperations 类型
   // 详见：https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-6.html#strict-function-types
@@ -911,6 +872,9 @@
   modalHeight={formModalHeight}
   {submitting}
   error={formError}
+  columns={form?.columns}
+  labelPosition={form?.labelPosition}
+  labelWidth={form?.labelWidth}
   onsubmit={handleSubmit}
   onclose={closePanel}
   {editFormExtra}

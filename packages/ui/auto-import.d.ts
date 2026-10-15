@@ -58,6 +58,7 @@ declare global {
   const Empty: typeof import('@h-ai/ui')['Empty']
   const Form: typeof import('@h-ai/ui')['Form']
   const FormField: typeof import('@h-ai/ui')['FormField']
+  const FormLayout: typeof import('@h-ai/ui')['FormLayout']
   const InfiniteScroll: typeof import('@h-ai/ui')['InfiniteScroll']
   const MessageContainer: typeof import('@h-ai/ui')['MessageContainer']
   const MessageBoxContainer: typeof import('@h-ai/ui')['MessageBoxContainer']

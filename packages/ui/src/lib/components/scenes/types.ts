@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { Snippet } from 'svelte'
-import type { DataAttributes, Size } from '../../types.js'
+import type { DataAttributes, FormLayoutOptions, FormText, Size } from '../../types.js'
 
 // ─── IAM 相关类型 ───
 
@@ -32,7 +32,7 @@ export interface PasswordInputProps extends DataAttributes {
   /** 是否必填 */
   required?: boolean
   /** 错误消息 */
-  error?: string
+  error?: FormText
   /** 是否显示切换按钮 */
   showToggle?: boolean
   /** 是否显示密码强度 */
@@ -77,7 +77,7 @@ export interface LoginFormData {
 /**
  * 登录表单属性
  */
-export interface LoginFormProps extends DataAttributes {
+export interface LoginFormProps extends FormLayoutOptions, DataAttributes {
   /** 实际可用的方式；空数组表示无可用登录方式。 */
   methods?: AuthLoginMethod[]
   /** 验证码长度 */
@@ -142,7 +142,7 @@ export interface RegisterFormData {
 /**
  * 注册表单属性
  */
-export interface RegisterFormProps extends DataAttributes {
+export interface RegisterFormProps extends FormLayoutOptions, DataAttributes {
   passwordPolicy?: PasswordPolicy
   /** 加载状态 */
   loading?: boolean
@@ -192,7 +192,7 @@ export interface ChangePasswordFormData {
 /**
  * 修改密码表单属性
  */
-export interface ChangePasswordFormProps extends DataAttributes {
+export interface ChangePasswordFormProps extends FormLayoutOptions, DataAttributes {
   passwordPolicy?: PasswordPolicy
   /** 加载状态 */
   loading?: boolean
@@ -225,7 +225,7 @@ export interface ForgotPasswordFormData {
 /**
  * 找回密码表单属性
  */
-export interface ForgotPasswordFormProps extends DataAttributes {
+export interface ForgotPasswordFormProps extends FormLayoutOptions, DataAttributes {
   /** 加载状态 */
   loading?: boolean
   /** 禁用状态 */
@@ -266,7 +266,7 @@ export interface ResetPasswordFormData {
 /**
  * 重置密码表单属性
  */
-export interface ResetPasswordFormProps extends DataAttributes {
+export interface ResetPasswordFormProps extends FormLayoutOptions, DataAttributes {
   passwordPolicy?: PasswordPolicy
   /** 加载状态 */
   loading?: boolean
@@ -335,7 +335,7 @@ export interface AuthPanelActions {
 export type AuthPanelMode = 'login' | 'register' | 'forgot' | 'reset'
 
 /** 配置驱动认证场景；网络、通知和令牌存储由应用注入 actions。 */
-export interface AuthPanelProps extends DataAttributes {
+export interface AuthPanelProps extends FormLayoutOptions, DataAttributes {
   /** 未取得配置时显示加载状态，只消费 IAM 的公开配置。 */
   config: AuthPanelConfig | null
   /** 由 Kit 或 API client 提供标准动作，组件不处理底层传输。 */
@@ -392,7 +392,7 @@ export interface UserProfileSubmitData {
 /**
  * 用户个人信息属性
  */
-export interface UserProfileProps extends DataAttributes {
+export interface UserProfileProps extends FormLayoutOptions, DataAttributes {
   /** 用户信息 */
   user?: UserProfileData
   /** 是否可编辑 */

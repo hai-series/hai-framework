@@ -49,6 +49,7 @@ const UI_COMPONENTS = new Set([
   'Empty',
   'Form',
   'FormField',
+  'FormLayout',
   'InfiniteScroll',
   'MessageContainer',
   'MessageBoxContainer',

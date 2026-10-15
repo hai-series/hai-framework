@@ -7,9 +7,11 @@
   Card / PageHeader / ToastContainer
 -->
 <script lang='ts'>
+  import type { FormLabelPosition } from '@h-ai/ui'
   import type { DateValue } from '@internationalized/date'
   import DemoCard from '$lib/components/gallery/DemoCard.svelte'
   import DemoSection from '$lib/components/gallery/DemoSection.svelte'
+  import * as m from '$lib/paraglide/messages'
   import { ActionSheet, AppBar, BottomNav, InfiniteScroll, PullRefresh, SafeArea, SwipeCell, toast } from '@h-ai/ui'
   import { CalendarDate } from '@internationalized/date'
 
@@ -23,6 +25,8 @@
   let stepsIndex = $state(1)
   let subTab = $state('info')
   let tagInputVal = $state<string[]>(['Svelte', 'TypeScript'])
+  let formColumns = $state<1 | 2>(2)
+  let formLabelPosition = $state<FormLabelPosition>('top')
   let formName = $state('')
   let formEmail = $state('')
   let accordionVal = $state<string | string[]>()
@@ -211,14 +215,16 @@
   操作菜单 ▾
 </Dropdown>`
 
-  const codeForm = `<Form onsubmit={async () => { ... }}>
-  <FormField label='姓名' required>
-    <Input bind:value placeholder='请输入姓名' />
+  const codeForm = `<Form columns={2} labelPosition='left' labelWidth='6rem' onsubmit={save}>
+  <FormField label={m.name()} required>
+    <Input name='name' bind:value required />
   </FormField>
-  <FormField label='邮箱' error={emailError}>
-    <Input bind:value placeholder='请输入邮箱' />
+  <FormField label={m.email()}>
+    <Input name='email' type='email' bind:value />
   </FormField>
-  <Button variant='primary' type='submit'>提交</Button>
+  <!-- 多行文本自动占两列；colSpan={1 | 2} 可覆盖 -->
+  <FormField label={m.notes()}><Textarea name='notes' /></FormField>
+  <Button type='submit'>{m.save()}</Button>
 </Form>`
 
   const codeCombobox = `<Combobox options={comboboxOpts} bind:value placeholder='搜索框架...' />
@@ -667,29 +673,38 @@
     iconClass='icon-[tabler--forms]'
     tone='success'
   >
-    <DemoCard title='Form / FormField 表单' description='表单布局、校验与提交' code={codeForm}>
-      <Form onsubmit={async () => { toast.success(`提交: ${formName}, ${formEmail}`) }}>
-        <div class='grid grid-cols-1 md:grid-cols-2 gap-4'>
-          <FormField label='姓名' required>
-            <Input bind:value={formName} placeholder='请输入姓名' />
-          </FormField>
-          <FormField label='邮箱' error={formEmail && !formEmail.includes('@') ? '邮箱格式不正确' : ''}>
-            <Input bind:value={formEmail} placeholder='请输入邮箱' />
-          </FormField>
-          <FormField label='角色' hint='选择用户在系统中的角色'>
-            <Select options={[
-              { value: 'admin', label: '管理员' },
-              { value: 'editor', label: '编辑' },
-              { value: 'viewer', label: '访客' },
-            ]} placeholder='请选择角色' />
-          </FormField>
-          <FormField label='备注'>
-            <Textarea placeholder='可选备注信息' rows={2} />
-          </FormField>
-        </div>
-        <div class='mt-4 flex gap-2'>
-          <Button variant='primary' type='submit'>提交</Button>
-          <Button type='reset'>重置</Button>
+    <DemoCard title={m.gallery_form_title()} description={m.gallery_form_description()} code={codeForm}>
+      <div class='mb-5 flex flex-wrap gap-2'>
+        <Button size='sm' variant={formColumns === 1 ? 'primary' : 'outline'} onclick={() => formColumns = 1} data-testid='form-columns-1'>{m.gallery_form_single()}</Button>
+        <Button size='sm' variant={formColumns === 2 ? 'primary' : 'outline'} onclick={() => formColumns = 2} data-testid='form-columns-2'>{m.gallery_form_double()}</Button>
+        <Button size='sm' variant={formLabelPosition === 'top' ? 'primary' : 'outline'} onclick={() => formLabelPosition = 'top'} data-testid='form-label-top'>{m.gallery_form_label_top()}</Button>
+        <Button size='sm' variant={formLabelPosition === 'left' ? 'primary' : 'outline'} onclick={() => formLabelPosition = 'left'} data-testid='form-label-left'>{m.gallery_form_label_left()}</Button>
+      </div>
+      <Form columns={formColumns} labelPosition={formLabelPosition} labelWidth='6rem' onsubmit={() => { toast.success(m.gallery_form_saved()) }} data-testid='form-layout-demo'>
+        <FormField label={m.gallery_form_name()} required data-testid='form-name-field'>
+          <Input name='name' bind:value={formName} required />
+        </FormField>
+        <FormField label={m.iam_users_col_email()} data-testid='form-email-field'>
+          <Input name='email' type='email' bind:value={formEmail} />
+        </FormField>
+        <FormField label={m.iam_users_col_roles()}>
+          <Select name='role' options={[
+            { value: 'admin', label: m.gallery_form_admin() },
+            { value: 'user', label: m.gallery_form_user() },
+          ]} />
+        </FormField>
+        <FormField label={m.gallery_form_short_notes()} colSpan={1} data-testid='form-short-notes-field'>
+          <Textarea name='shortNotes' rows={2} />
+        </FormField>
+        <FormField label={m.gallery_form_notes()} data-testid='form-notes-field'>
+          <Textarea name='notes' rows={3} />
+        </FormField>
+        <FormField label={m.gallery_form_full_row()} colSpan={2} data-testid='form-full-row-field'>
+          <Input name='summary' />
+        </FormField>
+        <div class='flex gap-2'>
+          <Button variant='primary' type='submit' data-testid='form-save'>{m.gallery_form_save()}</Button>
+          <Button type='reset'>{m.gallery_form_reset()}</Button>
         </div>
       </Form>
     </DemoCard>

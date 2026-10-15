@@ -23,8 +23,10 @@
 -->
 <script lang='ts'>
   import type { DateValue } from '@internationalized/date'
-  import type { DataAttributes, Size } from '../../types.js'
+  import type { DataAttributes, FormText, Size } from '../../types.js'
   import { DatePicker as BitsDatePicker } from 'bits-ui'
+  import { getFormFieldContext } from '../../internal/form-context.js'
+  import { resolveFormText } from '../../internal/form-validation.svelte.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
@@ -44,7 +46,7 @@
     /** 尺寸 */
     size?: Size
     /** 错误消息 */
-    error?: string
+    error?: FormText
     /** 自定义类名 */
     class?: string
     /** 日期变更回调 */
@@ -66,6 +68,11 @@
   }: Props & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const field = getFormFieldContext()
+  const uniqueId = $props.id()
+  const messageId = `${uniqueId}-message`
+  const localError = $derived(resolveFormText(error))
+  const effectiveError = $derived(field?.error || localError)
   const sizeClasses = $derived(getFormControlSizeClasses(size))
 </script>
 
@@ -80,10 +87,12 @@
     onValueChange={v => onchange?.(v)}
   >
     <BitsDatePicker.Input
+      aria-labelledby={field?.labelId}
+      aria-describedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
       class={cn(
         'flex w-full items-center gap-0.5 rounded-lg border bg-base-100 pr-2 transition-[border-color,box-shadow] duration-150',
         sizeClasses.control,
-        error
+        effectiveError
           ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
           : 'border-base-content/15 hover:border-base-content/25 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
         disabled && 'cursor-not-allowed opacity-50',
@@ -149,7 +158,7 @@
     </BitsDatePicker.Content>
   </BitsDatePicker.Root>
 
-  {#if error}
-    <span class='fieldset-label text-error'>{error}</span>
+  {#if localError && !field?.error}
+    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
   {/if}
 </div>

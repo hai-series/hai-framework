@@ -195,6 +195,7 @@
 </script>
 
 <div {...dataAttributes}
+     data-form-wide
      class={containerClass}
      style={containerStyle}
      role='button'

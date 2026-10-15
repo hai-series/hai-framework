@@ -6,7 +6,8 @@
  */
 
 import type { Snippet } from 'svelte'
-import type { DataAttributes, Size } from '../../../types.js'
+import type { DataAttributes, FormLayoutOptions, Size } from '../../../types.js'
+import type { CrudFieldDef } from './crud-controller.svelte.js'
 
 // 从 @h-ai/kit 导入的类型在使用处通过泛型约束，此处仅定义 UI 层特有类型
 
@@ -27,7 +28,7 @@ export type CrudFormVariant = 'drawer' | 'modal'
 export type CrudDensity = 'normal' | 'compact'
 
 /** 新建/编辑表单展示配置 */
-export interface CrudFormConfig {
+export interface CrudFormConfig extends FormLayoutOptions {
   /** 展示形式：'drawer'（抽屉，默认）或 'modal'（弹出窗口） */
   variant?: CrudFormVariant
   /** 抽屉尺寸预设（variant='drawer'，默认 '2xl'） */
@@ -80,29 +81,7 @@ export interface CrudPageProps<T = Record<string, unknown>> extends DataAttribut
       name: string
       label: string | (() => string)
       keyField?: string
-      fields: Array<{
-        id: string
-        label: string | (() => string)
-        type: string
-        inList?: boolean
-        filterable?: boolean
-        readonly?: boolean
-        inCreate?: boolean
-        inEdit?: boolean
-        inDetail?: boolean
-        options?: Array<{ label: string, value: string | number | boolean }> | (() => Array<{ label: string, value: string | number | boolean }>)
-        validation?: { required?: boolean, min?: number, max?: number, pattern?: string, message?: string }
-        width?: string
-        align?: 'left' | 'center' | 'right'
-        render?: (value: unknown, item: Record<string, unknown>) => string
-        placeholder?: string | (() => string)
-        /** 日期范围起始值 key；默认 `${id}Start`。 */
-        startKey?: string
-        /** 日期范围结束值 key；默认 `${id}End`。 */
-        endKey?: string
-        defaultValue?: unknown
-        order?: number
-      }>
+      fields: CrudFieldDef[]
       defaultPageSize?: number
       searchable?: boolean
       searchPlaceholder?: string | (() => string)
@@ -114,11 +93,11 @@ export interface CrudPageProps<T = Record<string, unknown>> extends DataAttribut
         remove?: (id: string) => Promise<void>
       }
     }
-    getListFields: () => Array<Record<string, unknown>>
-    getFilterFields: () => Array<Record<string, unknown>>
-    getCreateFields: () => Array<Record<string, unknown>>
-    getEditFields: () => Array<Record<string, unknown>>
-    getDetailFields: () => Array<Record<string, unknown>>
+    getListFields: () => CrudFieldDef[]
+    getFilterFields: () => CrudFieldDef[]
+    getCreateFields: () => CrudFieldDef[]
+    getEditFields: () => CrudFieldDef[]
+    getDetailFields: () => CrudFieldDef[]
     toTableColumns: () => Array<{ key: string, label: string, width?: string, align?: string, render?: (item: Record<string, unknown>) => string }>
     getDefaultValues: () => Record<string, unknown>
     api: {

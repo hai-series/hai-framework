@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { AuthPanelConfig } from '../src/lib/components/scenes/types.js'
-import { ok } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
 import { describe, expect, it, vi } from 'vitest'
 import { AuthPanel, LoginForm, RegisterForm } from '../src/lib/components/scenes/iam/index.js'
@@ -21,6 +21,89 @@ function snippet(text: string) {
 }
 
 describe('authentication form extensions and agreements', () => {
+  it('找回密码通知保留表单与重置入口，并随语言更新', async () => {
+    setUILocale('zh-CN')
+    const target = document.createElement('div')
+    document.body.append(target)
+    const action = async () => ok(undefined)
+    const component = mount(AuthPanel, { target, props: {
+      config: { ...config, passwordReset: { enabled: true } },
+      initialMode: 'forgot',
+      actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
+    } })
+    try {
+      flushSync()
+      target.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+      await vi.waitFor(() => expect(target.textContent).toContain('重置通知已发送'))
+      expect(target.querySelector('.forgot-password-form')).not.toBeNull()
+      setUILocale('en-US')
+      flushSync()
+      expect(target.textContent).toContain('If the account exists')
+      const reset = [...target.querySelectorAll('button')].find(button => button.textContent === 'I have a reset token')!
+      expect(reset).toBeDefined()
+      reset.click()
+      flushSync()
+      expect(target.querySelector('.reset-password-form')).not.toBeNull()
+    }
+    finally {
+      setUILocale('zh-CN')
+      await unmount(component)
+      target.remove()
+    }
+  })
+
+  it('lDAP 登录不受本地新密码长度策略限制', async () => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const onsubmit = vi.fn()
+    const component = mount(LoginForm, { target, props: { methods: ['ldap'], onsubmit } })
+    try {
+      flushSync()
+      const username = target.querySelector<HTMLInputElement>('input[name="username"]')!
+      username.value = 'ldap-user'
+      username.dispatchEvent(new Event('input', { bubbles: true }))
+      const password = target.querySelector<HTMLInputElement>('input[type="password"]')!
+      password.value = 'short'
+      password.dispatchEvent(new Event('input', { bubbles: true }))
+      flushSync()
+      target.querySelector('form')!.requestSubmit()
+      expect(onsubmit).toHaveBeenCalledOnce()
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
+  it('已显示的认证错误随 UI 语言更新，布局参数透传给场景表单', async () => {
+    setUILocale('en-US')
+    const target = document.createElement('div')
+    document.body.append(target)
+    const action = async () => err({ code: 'hai:iam:001', httpStatus: 401, system: 'hai', module: 'iam' }, 'Server language')
+    const component = mount(AuthPanel, { target, props: {
+      config,
+      columns: 2,
+      labelPosition: 'left',
+      actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
+    } })
+    try {
+      flushSync()
+      target.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+      await vi.waitFor(() => expect(target.textContent).toContain('Username or password is incorrect.'))
+      expect(target.querySelector('.hai-form-grid')?.getAttribute('data-columns')).toBe('2')
+      expect(target.querySelector('.hai-form-field')?.getAttribute('data-label-position')).toBe('left')
+      setUILocale('zh-CN')
+      flushSync()
+      expect(target.textContent).toContain('用户名或密码不正确')
+      expect(target.textContent).not.toContain('Server language')
+    }
+    finally {
+      setUILocale('zh-CN')
+      await unmount(component)
+      target.remove()
+    }
+  })
+
   it.each(['login', 'register', 'forgot', 'reset'] as const)('客户端接管完成前禁止输入，完成后恢复交互：%s', async (initialMode) => {
     const target = document.createElement('div')
     document.body.append(target)

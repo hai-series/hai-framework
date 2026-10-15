@@ -98,7 +98,7 @@ With auto-import enabled, use components directly in templates without individua
 
 > `@h-ai/ui/auto-import` injects all public Svelte components except `toast`, type imports, and `Range` (which conflicts with the DOM `Range` constructor).
 
-Pages using a subset of components, such as administration screens, can import public component-directory entry points directly. Import theme utilities from the lightweight `@h-ai/ui/theme` entry so theme consumers do not load the root entry's AI and chart components. Check the installed package's exports; do not import its internal `src/` or `dist/` paths.
+Pages using a subset of components, such as administration screens, can import public component-directory entry points directly. Import theme utilities from the lightweight `@h-ai/ui/theme` entry so theme consumers do not load the root entry's AI and chart components. Use `@h-ai/ui/i18n` for locale utilities in stores without loading components or tour CSS. Check the installed package's exports; do not import its internal `src/` or `dist/` paths.
 
 The preprocessor recognizes semicolon-free, multiline and aliased imports without injecting components already bound locally. Type-only imports do not replace runtime components.
 
@@ -166,15 +166,41 @@ components/
 
 For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchange` and leave the file path `value` unbound. Other input types support `bind:value`.
 
-### Compounds (36)
+### Compounds (37)
 
 #### Forms
 
 | Component   | Description    | Key props                                    |
 | ----------- | -------------- | -------------------------------------------- |
-| `Form`      | Form container | `loading`, `disabled`, `onsubmit`            |
-| `FormField` | Form field     | `label`, `error`, `hint`, `required`         |
+| `Form`      | Form container | `columns`, `labelPosition`, `labelWidth`, `loading`, `disabled`, `onsubmit`            |
+| `FormField` | Form field     | `label`, `for`, `colSpan`, `labelPosition`, `error`, `hint`, `required`         |
+| `FormLayout` | Form layout | `columns`, `labelPosition`, `labelWidth` |
 | `TagInput`  | Tag input      | `tags`, `maxTags`, `allowDuplicates`, `size` |
+
+#### Form layouts and validation
+
+`Form` and `FormLayout` (for native `<form>` elements) share `columns={1 | 2}`, `labelPosition="top" | "left"` and `labelWidth` (default `8rem`). Defaults are one column and stacked labels. Two columns collapse below a container width of `36rem`; inline labels stack below `28rem`.
+
+`FormField.colSpan` defaults to `'auto'`: textareas, file/image uploads, TagInput and multiple Combobox controls span both columns. Use `1` or `2` to override, or mark a custom wide control with `data-form-wide`. Non-field content, including headings, error summaries and actions, spans the full row. Fields may override `labelPosition` / `labelWidth`.
+
+Labels connect to nested UI controls automatically; use `<FormField for="control-id">` for explicit IDs or native controls. Errors and hints use `aria-describedby`, invalid controls use `aria-invalid`, and field errors appear once. `label` / `error` / `hint` accept strings or deferred translation functions.
+
+`Input`, `Textarea`, `Select` and `PasswordInput` provide Chinese/English native validation messages. `validationMessage` overrides failures without keeping valid input invalid. Sync locale with the UI `setGlobalLocale` / `createLocaleStore` to update visible validation errors immediately. `Textarea` supports `minlength` / `maxlength`; `Select` supports `name`, required validation and FormData serialization.
+
+`LoginForm`, `RegisterForm`, `ChangePasswordForm`, `ForgotPasswordForm`, `ResetPasswordForm`, `AuthPanel`, `UserProfile` and `FeedbackModal` accept the same layout options. Pass them through `CrudPage.form` or directly to `CrudEditPanel`. CRUD fields support `colSpan` and deferred `validation.message`. Buttons and Enter both validate before submission; corrections clear errors. Server validation remains required.
+
+```svelte
+<!-- m、save、name、notes 为应用自己的翻译、提交回调和状态 -->
+<Form columns={2} labelPosition="left" labelWidth="6rem" onsubmit={save}>
+  <FormField label={() => m.name()} required>
+    <Input name="name" bind:value={name} required />
+  </FormField>
+  <FormField label={() => m.notes()}>
+    <Textarea name="notes" bind:value={notes} />
+  </FormField>
+  <Button type="submit">{m.save()}</Button>
+</Form>
+```
 
 #### Feedback
 
@@ -531,7 +557,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
   crud={roleCrud}
   {data}
   permissions={{ create: true, update: true, delete: true }}
-  form={{ variant: 'modal', modalSize: 'lg' }}
+  form={{ variant: 'modal', modalSize: '3xl', columns: 2, labelPosition: 'top' }}
   pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
   density='compact'
   detailColumns={['name']}
@@ -698,7 +724,7 @@ Client locale state management, automatically synchronized with the `@h-ai/core`
 
 ```svelte
 <script>
-  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui'
+  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui/i18n'
   import { setLocale } from '$lib/paraglide/runtime'
 
   const localeStore = createLocaleStore()
@@ -729,7 +755,7 @@ import {
   isLocaleSupported, // 检查 locale 是否支持
   resolveLocale, // 解析 locale（支持回退）
   setGlobalLocale, // 设置全局 locale（同步 @h-ai/core）
-} from '@h-ai/ui'
+} from '@h-ai/ui/i18n'
 ```
 
 ## Configuration driven authentication

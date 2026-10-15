@@ -4,7 +4,9 @@
   内置多语言支持，自动跟随全局 locale。
 -->
 <script lang='ts'>
-  import type { DataAttributes, Size } from '../../../types.js'
+  import type { DataAttributes, FormText, Size } from '../../../types.js'
+  import { getFormFieldContext } from '../../../internal/form-context.js'
+  import { createControlValidation, resolveFormText } from '../../../internal/form-validation.svelte.js'
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import { getFormControlSizeClasses } from '../../control-size.js'
@@ -35,7 +37,7 @@
     /** 是否必填 */
     required?: boolean
     /** 错误消息 */
-    error?: string
+    error?: FormText
     /** 是否显示切换按钮 */
     showToggle?: boolean
     /** 是否显示密码强度 */
@@ -76,6 +78,16 @@
   }: Props & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const field = getFormFieldContext()
+  const validation = createControlValidation(undefined, () => [value, required, readonly, disabled])
+  const uniqueId = $props.id()
+  const messageId = `${uniqueId}-error`
+  const localError = $derived(resolveFormText(error) || validation.message)
+  const effectiveError = $derived(field?.error || localError)
+  $effect(() => {
+    if (inputRef)
+      inputRef.setCustomValidity(validation.message)
+  })
   let showPassword = $state(false)
   const sizeClasses = $derived(getFormControlSizeClasses(size))
 
@@ -124,6 +136,7 @@
   })
 
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
+    validation.input(e.currentTarget)
     value = e.currentTarget.value
     oninput?.(e)
   }
@@ -142,7 +155,7 @@
   <div class={cn(
     'flex items-center w-full rounded-lg border bg-base-100',
     sizeClasses.height,
-    error
+    effectiveError
       ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
       : 'border-base-content/15 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10',
     'transition-[border-color,box-shadow] duration-150',
@@ -152,7 +165,7 @@
     <BareInput
       type={showPassword ? 'text' : 'password'}
       {id}
-      class={cn('flex-1 h-full bg-transparent border-none outline-none placeholder:text-base-content/35', sizeClasses.spacing)}
+      class={cn('flex-1 min-w-0 h-full bg-transparent border-none outline-none placeholder:text-base-content/35', sizeClasses.spacing)}
       bind:value
       bind:inputRef={inputRef}
       {placeholder}
@@ -160,9 +173,14 @@
       {disabled}
       {readonly}
       {required}
+      ariaInvalid={effectiveError ? true : undefined}
+      ariaDescribedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
       oninput={handleInput}
       onchange={handleChange}
-      oninvalid={oninvalid}
+      oninvalid={(e) => {
+        validation.invalid(e.currentTarget)
+        oninvalid?.(e)
+      }}
     />
 
     {#if showToggle}
@@ -197,7 +215,7 @@
     </div>
   {/if}
 
-  {#if error}
-    <p class='mt-1.5 text-xs text-error/80 leading-tight'>{error}</p>
+  {#if localError && !field?.error}
+    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
   {/if}
 </div>

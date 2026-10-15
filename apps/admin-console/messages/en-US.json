@@ -486,5 +486,20 @@
   "guide_password_title": "Change password",
   "guide_password_description": "Enter your current password, new password and confirmation. Check the password rules before submitting.",
   "guide_overview_article": "## Getting started\n\n- Open features through navigation. Menus and actions depend on your current permissions.\n- The workspace contains lists, details or settings. Follow the page instructions and check information before submitting.\n- Use your avatar to access your profile and settings.\n- Search instructions or replay tours through the help button.\n\n## First-use tour\n\n“Remind me later” pauses reminders for one day. “Do not remind me” saves your preference. Completed tours no longer prompt automatically and remain available for manual replay.",
-  "guide_profile_article": "## Profile and preferences\n\nOpen your profile to view or update personal information and your avatar. Check the file requirements, save changes and read the result message. Appearance and language can be adjusted in settings.\n\n## Password\n\nChanging a password requires the current password, new password and confirmation. Follow the displayed password rules and check the result after submitting.\n\n“Start tour” opens the relevant page. Tours never save forms or change your account automatically."
+  "guide_profile_article": "## Profile and preferences\n\nOpen your profile to view or update personal information and your avatar. Check the file requirements, save changes and read the result message. Appearance and language can be adjusted in settings.\n\n## Password\n\nChanging a password requires the current password, new password and confirmation. Follow the displayed password rules and check the result after submitting.\n\n“Start tour” opens the relevant page. Tours never save forms or change your account automatically.",
+  "gallery_form_title": "Form / FormField layouts",
+  "gallery_form_description": "Stacked or inline labels, one or two columns, automatic spans and validation",
+  "gallery_form_single": "One column",
+  "gallery_form_double": "Two columns",
+  "gallery_form_label_top": "Stacked labels",
+  "gallery_form_label_left": "Inline labels",
+  "gallery_form_name": "Name",
+  "gallery_form_short_notes": "Short notes (one column)",
+  "gallery_form_notes": "Notes (automatic span)",
+  "gallery_form_full_row": "Summary (two columns)",
+  "gallery_form_save": "Submit",
+  "gallery_form_reset": "Reset",
+  "gallery_form_saved": "Form submitted",
+  "gallery_form_admin": "Administrator",
+  "gallery_form_user": "User"
 }

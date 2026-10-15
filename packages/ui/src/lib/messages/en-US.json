@@ -368,5 +368,17 @@
   "guide_tours": "Product tours",
   "guide_unavailable": "This tour is unavailable. Choose another topic in the help center.",
   "guide_targetMissing": "This action is not available on the current page. Try again later or read the help content.",
-  "guide_startFailed": "Unable to start the tour. Please try again later."
+  "guide_startFailed": "Unable to start the tour. Please try again later.",
+  "form_required": "This field is required.",
+  "form_email": "Enter a valid email address.",
+  "form_url": "Enter a valid URL.",
+  "form_number": "Enter a valid number.",
+  "form_min_length": "Enter at least {min} characters.",
+  "form_max_length": "Enter no more than {max} characters.",
+  "form_min": "Enter a value of at least {min}.",
+  "form_max": "Enter a value no greater than {max}.",
+  "form_step": "Enter a value in increments of {step}.",
+  "form_pattern": "Enter a value in the required format.",
+  "select_clear": "Clear selection",
+  "select_no_match": "No matching options"
 }

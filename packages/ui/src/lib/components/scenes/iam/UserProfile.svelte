@@ -14,6 +14,8 @@
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
+  import FormField from '../../compounds/FormField.svelte'
+  import FormLayout from '../../compounds/FormLayout.svelte'
   import Avatar from '../../primitives/Avatar.svelte'
   import BareInput from '../../primitives/BareInput.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -25,6 +27,9 @@
     editable = false,
     alwaysEditable = false,
     loading = false,
+    columns = 1,
+    labelPosition = 'top',
+    labelWidth = '8rem',
     fields = ['avatar', 'username', 'email', 'displayName', 'phone'],
     avatarAccept = 'image/*',
     avatarHint,
@@ -157,7 +162,7 @@
 
 <div {...dataAttributes} class={containerClass}>
   <form onsubmit={handleSubmit}>
-    <div class='space-y-6'>
+    <FormLayout {columns} {labelPosition} {labelWidth}>
       {#each fields as field (field)}
         {@const modelKey = getModelKey(field)}
         {#if field === 'avatar'}
@@ -191,8 +196,7 @@
           </div>
         {:else}
           <!-- 其他字段 -->
-          <div class='fieldset'>
-            <legend class='fieldset-legend font-medium'>{getFieldLabel(field)}</legend>
+          <FormField label={getFieldLabel(field)} colSpan={field === 'bio' ? 2 : 'auto'}>
             {#if editable && (editMode || alwaysEditable)}
               {#if field === 'bio'}
                 <Textarea
@@ -216,7 +220,7 @@
                 {formData[modelKey] || '-'}
               </p>
             {/if}
-          </div>
+          </FormField>
         {/if}
       {/each}
 
@@ -259,6 +263,6 @@
           {/if}
         </div>
       {/if}
-    </div>
+    </FormLayout>
   </form>
 </div>

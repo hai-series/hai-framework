@@ -36,6 +36,8 @@
 
   {#if me}
     <UserProfile
+      columns={2}
+      labelPosition='left'
       user={{ id: me.id, username: me.username, email: me.email ?? undefined }}
       editable
       alwaysEditable

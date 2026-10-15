@@ -275,12 +275,16 @@ Admin 与 fullstack 门禁还用实际安装的本地 tarball 验证公开类型
 
 成功截图默认保存在 CLI 的 `test-results/scaffold-evidence/`，可通过 `HAI_AUTH_EVIDENCE_DIR` 指定独立目录，生成项目清理后仍保留。fullstack E2E 启动所有已选 Web/App/Desktop 浏览器预览，并验证各端的登录、导览、帮助与个人设置；小程序和原生壳仍需要对应平台验收。
 
-## License
-
-Apache-2.0
-
 失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
 
 云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；构建子进程与目标运行环境使用相同开通结果。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应\_db/\_cache/\_storage/\_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
 
 部署失败恢复：`ProvisionResult.resourceStatus` 标记 created/reused；`getDeployRecovery(result.error)` 读取 projectName、stage、platformProjectId 和资源清单，unknown 表示请求结果不确定，必须先在服务商控制台核对。失败资源已返回 ID 时保留该 ID。恢复结果不含 envVars、原始异常或连接凭证，CLI 会展示清单和建议。同名重试复用现有资源；不自动删除复用资源，新建资源仅在人工确认未被使用后清理。
+
+## 生成项目的表单布局
+
+website 联系页与 fullstack 管理界面复用 UI 的 FormLayout/FormField：支持一列/双列、标签独立成行/同行、自动跨列和窄容器回落。用户编辑、资料与密码表单使用同组参数，校验提示由 UI 内置中英文处理；完整配置随生成项目的 hai-ui skill 提供。
+
+## License
+
+Apache-2.0

@@ -83,6 +83,8 @@
     {#if me}
       <Card title={m.profile_account_title()} shadow='sm'>
         <UserProfile
+          columns={2}
+          labelPosition='left'
           user={{ id: me.id, username: me.username, email: me.email ?? undefined }}
           editable
           alwaysEditable

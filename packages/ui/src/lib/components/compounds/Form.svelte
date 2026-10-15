@@ -10,12 +10,16 @@
 <script lang='ts'>
   import type { DataAttributes, FormProps } from '../../types.js'
   import { cn, getDataAttributes } from '../../utils.js'
+  import FormLayout from './FormLayout.svelte'
 
   const {
     id = '',
     class: className = '',
     loading = false,
     disabled = false,
+    columns = 1,
+    labelPosition = 'top',
+    labelWidth = '8rem',
     onsubmit,
     onreset,
     onerror,
@@ -65,9 +69,7 @@
     }
   }
 
-  function handleReset(e: Event) {
-    e.preventDefault()
-    formElement?.reset()
+  function handleReset() {
     onreset?.()
   }
 
@@ -94,7 +96,9 @@
       onsubmit={handleSubmit}
       onreset={handleReset}
 >
-  {#if children}
-    {@render children()}
-  {/if}
+  <FormLayout {columns} {labelPosition} {labelWidth}>
+    {#if children}
+      {@render children()}
+    {/if}
+  </FormLayout>
 </form>

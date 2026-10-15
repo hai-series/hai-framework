@@ -73,7 +73,7 @@
   crud={roleCrud}
   data={crudData}
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
-  form={{ variant: 'modal', modalSize: 'lg' }}
+  form={{ variant: 'modal', modalSize: '3xl', columns: 2, labelPosition: 'top' }}
   pagination={{ showSizeChanger: true, showJumper: true, pageSizeOptions: [10, 20, 50] }}
   onbeforedelete={handleBeforeDelete}
   {nav}

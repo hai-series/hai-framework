@@ -275,12 +275,16 @@ Admin/fullstack の門禁では実際にインストールしたローカル tar
 
 成功時のスクリーンショットは CLI の `test-results/scaffold-evidence/` に保存します。`HAI_AUTH_EVIDENCE_DIR` で保存先を指定でき、生成プロジェクトの削除後も残ります。fullstack E2E は選択した全 Web/App/Desktop のブラウザープレビューでログイン、ガイド、ヘルプ、個人設定を検証します。小程序とネイティブシェルは各プラットフォームで別途検証します。
 
-## License
-
-Apache-2.0
-
 失敗・縮退時の表示も国際化します。サイト API はリクエストの locale で AI 縮退・メール到達状態を表示し、未到達を受信済みと表現しません。CLI のデプロイ状態は cliM、Gallery の暗号化制限は二言語メッセージを使います。中国語・英語で未設定・失敗・成功を検証し、有料サービスの呼び出しは不要です。
 
 クラウド設定の利用：Neon は HAI_DB（PostgreSQL JSON）、Upstash は HAI_CACHE（Redis rediss URL JSON）、R2 は HAI_STORAGE（フラットな S3 JSON）を出力します。メール・SMS は HAI_REACH_PROVIDERS を出力し、deployApp が両チャネルと YAML のメッセージテンプレートを統合して元の providers 配列を置換します。Core はオブジェクト・配列全体の上書きをサポートし、親ノードを末端より優先して Schema 検証を維持します。ビルド子プロセスと対象環境は同じ値を使います。R2 は既存の S3 accessKeyId/secretAccessKey、Resend は検証済みドメインの from、Alibaba Cloud は承認済み signName・テンプレートが必要です。アプリは対応する `_db.yml` / `_cache.yml` / `_storage.yml` / `_reach.yml` を起動時に読み込み、ネットワーククライアントには Node が必要です。
 
 デプロイ失敗からの復旧：`ProvisionResult.resourceStatus` は created/reused を示します。`getDeployRecovery(result.error)` で projectName、stage、platformProjectId、リソース一覧を取得し、unknown は結果不明なので先にサービス側の管理画面で確認します。失敗リソースの ID が返った場合は保持します。復旧情報に envVars・元の例外・接続認証情報は含まれず、CLI が一覧と提案を表示します。同名の再試行は既存リソースを再利用し、自動削除しません。新規作成分も未使用を人が確認した後にのみ削除します。
+
+## 生成フォームのレイアウト
+
+website の連絡フォームと fullstack 管理画面は UI の FormLayout/FormField を使い、1列・2列、ラベルの縦・横配置、自動列結合と狭いコンテナーへの対応を共有します。ユーザー編集・プロフィール・パスワードは同じ設定と中国語・英語の検証メッセージを使用します。生成された hai-ui skill に設定を記載しています。
+
+## License
+
+Apache-2.0
