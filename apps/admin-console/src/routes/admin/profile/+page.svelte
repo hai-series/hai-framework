@@ -11,9 +11,6 @@
 
   const { data }: Props = $props()
 
-  const USERNAME_PATTERN = /^\w{3,20}$/
-  const EMAIL_PATTERN = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
-
   // 从 IAM 配置读取密码最小长度（通过 layout server data 传递）
   const MIN_PASSWORD_LENGTH = $derived(data.iamPublicConfig?.password?.minLength ?? 8)
 
@@ -163,18 +160,6 @@
     const username = formData.username?.trim() || undefined
     const email = formData.email?.trim() || undefined
 
-    if (username && !USERNAME_PATTERN.test(username)) {
-      profileErrors = { username: m.api_auth_username_format_invalid() }
-      profileLoading = false
-      return
-    }
-
-    if (email && !EMAIL_PATTERN.test(email)) {
-      profileErrors = { email: m.api_auth_email_invalid() }
-      profileLoading = false
-      return
-    }
-
     try {
       const { response, body } = await saveProfile({
         username,
@@ -287,7 +272,7 @@
   <title>{m.nav_profile()} - {m.app_title()}</title>
 </svelte:head>
 
-<div class='space-y-5'>
+<div class='mx-auto w-full max-w-5xl space-y-6'>
   <div class='flex items-end justify-between gap-4'>
     <div>
       <h1 class='text-xl font-semibold tracking-tight text-base-content'>{m.nav_profile()}</h1>
@@ -298,8 +283,8 @@
     </div>
   </div>
 
-  <div class='grid grid-cols-1 xl:grid-cols-3 gap-4'>
-    <aside class='card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-1'>
+  <div class='grid grid-cols-1 items-start gap-5 xl:grid-cols-[16rem_minmax(0,1fr)]'>
+    <aside class='card hidden bg-base-100 border border-base-content/6 rounded-xl xl:block'>
       <div class='card-body gap-4'>
         <div class='flex items-center gap-3 pb-2 border-b border-base-content/6'>
           <Avatar
@@ -328,7 +313,7 @@
       </div>
     </aside>
 
-    <section class='card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-2' data-guide='admin-profile-form'>
+    <section class='card min-w-0 bg-base-100 border border-base-content/6 rounded-xl' data-guide='admin-profile-form'>
       <div class='card-body gap-4'>
         <div class='flex items-center justify-between'>
           <h2 class='text-sm font-semibold text-base-content'>{m.nav_profile()}</h2>
@@ -340,11 +325,14 @@
 
         <UserProfile
           columns={2}
-          labelPosition='left'
           user={profileUser}
           editable
           alwaysEditable
           fields={['avatar', 'username', 'email', 'displayName', 'phone']}
+          fieldConstraints={{
+            username: { pattern: '\\w{3,20}', validationMessage: () => m.api_auth_username_format_invalid() },
+            email: { pattern: '[^\\s@]+@[^\\s@][^\\s.@]*\\.[^\\s@]+', validationMessage: () => m.api_auth_email_invalid() },
+          }}
           errors={profileErrors}
           loading={profileLoading}
           onsubmit={handleProfileSubmit}
@@ -378,7 +366,7 @@
 
       <div class='lg:col-span-8 p-6 lg:p-8'>
         <ChangePasswordForm
-          labelPosition='left'
+          passwordPolicy={data.iamPublicConfig?.password}
           class='w-full'
           loading={passwordLoading}
           errors={passwordErrors}

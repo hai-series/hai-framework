@@ -31,12 +31,11 @@ test.describe('Auth Layout', () => {
     // AuthShell split 品牌区（lg 以上可见）
     await expect(page.locator('.bg-primary').first()).toBeVisible()
 
-    // 登录表单标题（LoginForm showTitle）
-    await expect(page.locator('h2.text-xl')).toBeVisible()
+    // AuthPanel 统一提供页面主标题。
+    await expect(page.getByRole('heading', { name: '登录', level: 1, exact: true })).toBeVisible()
 
-    // 页脚 "Powered by hai-framework"
-    const footer = page.locator('text=Powered by hai-framework')
-    await expect(footer).toBeVisible()
+    // 品牌内容来自 IAM 公开配置。
+    await expect(page.getByRole('heading', { name: 'IAM flow branding' })).toBeVisible()
   })
 })
 
@@ -49,7 +48,7 @@ test.describe('Login Form UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 表单标题
-    const title = page.locator('h2.text-xl')
+    const title = page.getByRole('heading', { name: '登录', level: 1, exact: true })
     await expect(title).toBeVisible()
 
     // 用户名输入框
@@ -173,7 +172,7 @@ test.describe('Register Form UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 表单标题
-    await expect(page.locator('h2.text-xl')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /创建账号|Create Account/, level: 1 })).toBeVisible()
 
     // 用户名
     await expect(page.locator('#register-username')).toBeVisible()

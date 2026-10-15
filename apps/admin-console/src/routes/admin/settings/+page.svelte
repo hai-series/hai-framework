@@ -57,6 +57,7 @@
 </svelte:head>
 
 <SettingsLayout
+  class='mx-auto w-full max-w-5xl'
   title={m.settings_title()}
   description={m.settings_subtitle()}
   sections={[

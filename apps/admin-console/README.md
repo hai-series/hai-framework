@@ -165,6 +165,8 @@ HAI_STORAGE_ROOT=./data/uploads
 
 认证方式、注册、重置、协议和品牌由服务端 config/_iam.yml 控制。SvelteKit 页面消费 iam.publicConfig；移动/桌面页面从 API 服务读取公开配置。选用 Reach 时，初始化成功后传入 iam.init({ ...settings, reach })，使用标准通知模板。多节点共享 DB 与 Redis。UI 复用 AuthPanel/LoginForm 和框架认证动作，应用只负责业务导航与用户状态。
 
+登录与注册页统一使用 `AuthPanel`，`ui` 可配置布局、标题、副标题、品牌、Logo 和配图。个人资料使用限宽布局与上下标签；用户名和邮箱规则通过 `UserProfile.fieldConstraints` 在失焦时显示，CRUD 新建/编辑也复用 UI 的失焦校验与错误修正。
+
 [完整配置与安全约束](../../packages/iam/README.md)
 
 ### 添加新业务服务
