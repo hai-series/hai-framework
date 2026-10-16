@@ -1050,13 +1050,15 @@ function generateAiDevelopmentReadme(): string {
 
 从本项目根目录打开所用编码工具，先读取 [AGENTS.md](./AGENTS.md)。Claude Code 通过 [CLAUDE.md](./CLAUDE.md) 加载项目规则；GitHub Copilot 使用 [.github/copilot-instructions.md](./.github/copilot-instructions.md)，OpenCode 使用 AGENTS.md 和 [opencode.json](./opencode.json)。
 
+业务以用户当前明确要求及其指定的需求/设计文档为准。模板 AGENTS、README、skills、生成代码与测试中的角色/权限、流程、限额和架构是可调整的初始方案；审查将差异列为模板适配项，实施按授权同步冲突代码、测试与过期规则，不要求把需求改回模板。框架 API 以当前安装版本公开契约为准，服务端授权、资源隔离、输入校验和凭据保护仍需落实。
+
 Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 通过 CLAUDE.md 引用 AGENTS.md，并按项目指引读取 .agents/skills/ 的同一份正文。需求或设计文档在生成前使用 [文档审查 Skill](./.agents/skills/hai-spec-review/SKILL.md) 严格检查完备性、歧义、技术正确性和命名一致性，问题解决后再生成。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
 
 根据文档规划、实施或返修时，使用 [文档实施 Skill](./.agents/skills/hai-spec-implement/SKILL.md)：按可验收功能拆分，维护 docs/task-list.md 与 docs/tasks/ 记录，每项在独立分支走 TDD、验证与本地合并；返修沿用原任务与分支并追加证据。仅规划不开始实现，指定任务先核验依赖。
 
 优先复用适用的 hai-framework 公开 API 与已有业务实现。完成时说明复用的能力、相关能力未采用的原因，以及安全边界和类型、配置、文案、调用方的同步情况。质量验证按当前 package.json 执行 typecheck → lint → build → test；UI、路由与端到端流程另运行 test:e2e，未运行项说明原因。安全与质量规则既要按规范审查，也要运行门禁验证。
 
-已有 hai 项目可运行 hai init 补齐缺失的 AI 支持文件与参考资源；已有 AGENTS.md、Skill 和自定义规则会保留，升级时需将上述普通开发入口与规范显式合并到旧指引。
+已有 hai 项目可运行 hai init 补齐缺失的 AI 支持文件与参考资源；已有 AGENTS.md、Skill 和自定义规则会保留，升级时需将上述需求优先规则、普通开发入口与规范显式合并到旧指引，并修正已被需求替代的模板约束。
 
 `
 }
@@ -1265,7 +1267,9 @@ curl --fail http://127.0.0.1:8080/runtime-config.js
 
 ## 默认管理功能
 
-默认启用 IAM、reldb、cache、audit、storage 和 crypto。管理员可以管理用户（新增、编辑、禁用、删除、角色分配、头像上传）、查看两种固定角色及人数、维护角色说明、分页筛选审计日志；普通用户只能维护个人资料、头像、语言、主题和密码。密码修改后全部会话失效，需要重新登录。
+以下描述可运行示例的初始业务，可按实际需求调整或移除，并同步代码、数据、鉴权、界面、测试和文档。
+
+默认启用 IAM、reldb、cache、audit、storage 和 crypto。初始管理员可以管理用户（新增、编辑、禁用、删除、角色分配、头像上传）、查看 admin/user 角色及人数、维护角色说明、分页筛选审计日志；初始普通用户进入个人资料、头像、语言、主题和密码设置。默认密码修改后全部会话失效，需要重新登录；角色模型、访问范围和会话策略由业务需求决定。
 
 CLI 已在根目录生成 \`.env\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\` 是每个项目独立生成的随机强密码。直接运行 \`dev\` / \`start\` 即可，首次登录使用用户名 \`admin\` 和该密码；也可通过同名环境变量覆盖。密码须满足 \`_iam.yml\` 策略，启动失败会显示具体校验原因及错误码。\`.env\` 已被 Git 和容器构建忽略，\`.env.example\` 不含真实密码；部署时设置目标环境自己的密码。已有用户时不会重复创建管理员或重设密码。
 

@@ -23,6 +23,8 @@
 
 CLI 从 `templates/skills/` 将所选 skill 的完整目录复制到生成项目 `.agents/skills/`。`SKILL.md` 提供能力边界和任务导航，`reference.md`/`guide.md` 保留按需范本；同步时不能只复制入口。AGENTS.md 保存应用约束，Claude/Copilot 桥接文件引用它；修改模板需同步相关仓库 skills。模板生成测试会核对参考文件的完整交付。
 
+业务以用户当前明确要求及其指定的需求/设计文档为准。模板 AGENTS、README、skills、生成代码及测试中的角色/权限、流程、限额和架构是可调整的初始方案。审查将差异列为模板适配项，不因偏离模板判定需求错误；实施按授权同步修改冲突代码、测试和过期规则。框架 API 仍以安装版本公开契约为准，服务端授权、资源隔离、输入校验和凭据保护仍需落实。已有项目需显式合并这些规则，`hai init` 不覆盖现有文件。
+
 所有应用类型均交付 `hai-spec-review`：生成前严格检查需求/设计文档的完备性、歧义、技术及框架使用错误、命名一致性，给出带位置和修正建议的问题清单；问题解决且证据充分后才判定可以进入 AI 生成。`hai init` / `hai add` 同时为已有项目补齐该工作流 skill，保留自定义文件。
 
 审查后的文档实施使用独立的 `hai-spec-implement`，同样交付到所有应用并由 `hai init` / `hai add` 补齐。AI 按可独立验收的功能和实际依赖决定是否拆分，默认写入 `docs/task-list.md` 与 `docs/tasks/<编号>-<slug>.md`；每项在独立 Git 分支走 TDD、门禁、本地合并，记录真实合并提交后更新清单。返修复用原任务编号、文件和分支，追加轮次并关联此前证据。流程复用 Markdown、Git 和已有开发/测试 skills，无新增运行依赖或工作流引擎。可以请求“只根据 docs/需求.md 拆分任务”“根据该文档生成代码”“执行 T003”或“T002 返修后合并”；仅规划时不实施，指定任务先核验依赖，远端操作依实际授权。
@@ -157,13 +159,13 @@ pnpm.cmd dev
 CLI 自动生成根目录 `.env`，其中 `HAI_ADMIN_DEFAULT_PASSWORD` 是每个项目独立的随机强密码；直接运行 `dev` / `start` 即可。首次登录使用 `admin` 和 `.env` 中的密码，同名环境变量可以覆盖它。密码遵循 `_iam.yml` 策略，默认至少 8 位；不符合策略时启动日志显示具体校验原因与错误码。已有用户后，该变量不会重设账号或密码。`.env` 被 Git 和容器构建忽略，`.env.example` 仅保留占位；部署时设置目标环境自己的密码。
 
 - 管理员可搜索、分页、新增、编辑、启禁用、删除用户并上传头像；服务端保护当前管理员，管理写操作在锁内重新鉴权，防止并发操作使管理员全部失权。
-- 角色固定为 `admin` / `user`，角色页显示人数并编辑说明，用户页分配角色。普通用户仅进入个人设置，直接请求管理接口也会被服务端拒绝。
+- 初始角色为 `admin` / `user`，角色页显示人数并编辑说明，用户页分配角色。默认普通用户仅进入个人设置，直接请求管理接口也会被服务端拒绝；这些业务规则可按实际需求调整。
 - 审计页按操作、资源与日期查询记录；成功登录、退出、密码变更和管理写操作写入审计，记录不含密码、token 或头像内容。
 - 个人设置提供资料、头像、语言、主题和密码修改；偏好保存到 IAM 用户 metadata。头像接受 PNG/JPEG/WebP，最大 512 KiB，服务端验证图片内容并生成 storage key。
 
 前端 typed api-client 与 serv 的 crypto transport 统一加解密 JSON 业务、登录与刷新。Web 使用内存 access token 和 HttpOnly refresh Cookie；App 原生端使用 Capacitor 安全 TokenStorage，Desktop 原生端仅在内存保存 token，重启后重新登录。原生刷新 body 通道校验客户端标识、显式传输头和受信 Origin；浏览器预览沿用 Cookie。公开头像是白名单内的二进制图片资源。
 
-Web/App/Desktop 复用同一个 `AdminWorkspace`、management store 和 typed client。当前用户与刷新直接选用框架默认 IAM procedures，主题缓存与 DOM 更新复用 `@h-ai/ui/theme`；应用只编排固定角色、自我保护、头像与审计等业务规则。
+Web/App/Desktop 复用同一个 `AdminWorkspace`、management store 和 typed client。当前用户与刷新直接选用框架默认 IAM procedures，主题缓存与 DOM 更新复用 `@h-ai/ui/theme`；应用编排初始角色、自我保护、头像与审计等示例业务，这些规则可按实际需求调整。
 
 默认 SQLite、本地 storage 与 memory cache 适用于单实例 mini 后台。管理写入仅支持单写实例；多实例读取需要共享数据库、存储、Redis cache 和传输会话粘性路由，管理写请求仍须路由至同一实例。仅更换 Redis 不能保证任意多写副本的最后管理员原子保护。生成后的根脚本提供 typecheck、lint、build、test、test:e2e；Capacitor/Tauri 交付另执行对应原生构建和打包。
 

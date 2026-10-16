@@ -395,7 +395,9 @@ describe('createProject — api 类型', () => {
 
     expect(agents).toContain('API 服务')
     expect(agents).toContain('apps/<project>-service')
-    expect(agents).toContain('不要退回到 SvelteKit API routes 架构')
+    // 核对默认技术栈，不把模板架构锁成禁止迁移的措辞。
+    expect(agents).toContain('@h-ai/serv')
+    expect(agents).toContain('@h-ai/api-contract')
     expect(agents).not.toContain('src/routes/api/v1')
   })
 })

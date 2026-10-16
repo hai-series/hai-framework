@@ -14,7 +14,7 @@ import {
   ProfileUpdateSchema,
 } from './admin-schemas.js'
 
-/** mini 管理业务路径统一定义；仅开放两种固定角色。 */
+/** mini 管理示例的业务路径；初始 admin/user 角色可按实际需求调整。 */
 export const adminContract = {
   users: {
     list: apiContract.route({ method: 'POST', path: '/admin/users/list', tags: ['admin'] })

@@ -2,8 +2,10 @@
 
 Shared mini administration workspace for **{{projectName}}**. Web, Capacitor App and Tauri desktop use the same `AdminWorkspace`, responsive `AppShell`, typed API client and management store.
 
+The behavior below describes the initial example. Roles, permissions, workflows, limits, preferences and audit policies can change with the user's requirements. Update conflicting implementation, tests and guidance together; preserve the applicable public API contracts and server security checks.
+
 - Administrators manage users, upload user avatars, assign the built-in administrator/user roles, edit role descriptions and query audit logs.
-- Ordinary users can only update their own profile, avatar, language, appearance and password. The server enforces access on every request.
+- By default, ordinary users update their own profile, avatar, language, appearance and password. The server enforces the actual business permissions on every request.
 - `ManagementStore` owns API calls and business state; components render the state and forward user interactions.
 - Application name, version, environment and default locale come from the backend `app.info` contract, which reads `core` configuration. Do not duplicate these values in translations or frontend constants.
 - Requests, token refresh and JSON responses use the same `@h-ai/api-client` + `@h-ai/crypto` transport. Avatar uploads use encrypted JSON and validate PNG/JPEG/WebP content, with a 512 KiB limit.

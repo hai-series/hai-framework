@@ -4,6 +4,8 @@
 
 ## 默认功能与配置
 
+以下是可运行示例的初始实现，角色/权限、管理流程、头像限额、分页、审计策略及部署方案均可按用户需求调整。需求与代码或模板规则不一致时，以需求为业务基线同步实现、测试与过期说明；实际框架 API 契约和服务端安全校验仍需满足。
+
 - `config/_core.yml`：应用元信息（名称 / 版本 / 环境 / 语言），启动时由 `core.config` 加载。
 - `config/_serv.yml`：服务端运行时设置（CORS 来源等）。
 - `config/_db.yml` / `_cache.yml` / `_iam.yml` / `_storage.yml` / `_audit.yml` / `_reach.yml`：管理及开发通知配置，初始化前使用模块公开 Schema 验证。Reach 默认控制台 Provider，生产按注释替换为 SMTP/短信/API。
@@ -13,7 +15,7 @@
 - `src/server/procedures/app-procedures.ts`：app 领域 procedures，对应 contract 中的 `app.info` / `app.echo` 路由。
 - `src/server/procedures/admin-procedures.ts`：认证、管理员用户/角色/审计管理和个人设置，使用 `.auth()` / `.role('admin')` 守卫。每个请求读取用户最新启用状态、角色和权限。
 - 标准认证 procedures 复用 `@h-ai/serv/features/iam`，注册、登录方式、重置与协议由 `_iam.yml` 控制；登录、退出、修改密码追加业务审计。HTTP App 类型复用公开 `ServHttpApp`。
-- `src/server/admin-service.ts`：角色分配、头像上传和审计编排，全部底层操作复用 hai 模块。固定 admin/user 两种角色；锁内重新鉴权，禁止管理员自删、自禁用、自降级，并补偿用户更新失败后的角色变更。
+- `src/server/admin-service.ts`：角色分配、头像上传和审计编排，全部底层操作复用 hai 模块。初始使用 admin/user 两种角色；锁内重新鉴权，默认禁止管理员自删、自禁用、自降级，并补偿用户更新失败后的角色变更。业务规则可按需求替换，保留的不变量需验证并发与失败路径。
 - `tests/app-server.test.ts`：真实加密 HTTP 测试，覆盖 Cookie/受信原生刷新、RBAC、旧会话权限、并发管理操作、补偿、头像安全、偏好、审计及会话失效。
 
 CLI 已生成根目录 `.env`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项目独立的随机强密码；`dev`/`start` 自动读取，首次登录使用用户名 `admin` 和该密码。仅在没有用户时创建管理员，不重设已有用户密码。密码不符合 `_iam.yml` 策略时，启动日志显示具体原因及错误码。`.env` 被 Git 和容器构建忽略，`.env.example` 不含真实密码；部署时设置目标环境自己的密码。所有业务 JSON 请求和响应强制加密；健康检查和随机路径的只读头像图片可直接访问。头像支持 PNG/JPEG/WebP，最大 512 KiB，校验内容特征和大小后由服务端生成 key，不能指定任意文件路径。

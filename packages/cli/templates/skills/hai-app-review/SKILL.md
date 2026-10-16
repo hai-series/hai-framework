@@ -17,10 +17,10 @@ description: "审查 hai 应用的框架复用、安全边界、返回契约、�
 
 ## 审查路径
 
-1. 读取当前项目入口规则、package scripts、lockfile 与差异，确认 SvelteKit、API workspace、fullstack 或 Vite/原生架构。
+1. 读取当前项目入口规则、用户指定需求、package scripts、lockfile 与差异，确认 SvelteKit、API workspace、fullstack 或 Vite/原生架构。业务以当前明确需求为准；模板角色、流程、限额和生成代码是初始实现，不能据此否定新需求或要求恢复已被替代的行为。
 2. 按 [development.md](../hai-app-create/development.md) 对需求核对实际框架能力、当前安装版本及适用安全边界；只读所涉及模块 skill、公开类型和相关调用方。
 3. 沿真实路径检查输入 → 身份/资源权限 → 服务/副作用 → 结果 → UI。先报告能导致安全或行为错误的问题，再检查风格与维护性。
-4. 对已授权修复做最小改动并验证。修正真实缺陷不以“已有测试未发现”为前提；保留用户已有改动与业务目标。
+4. 对已授权修复做最小改动并验证。修正真实缺陷不以“已有测试未发现”为前提；保留用户已有改动与业务目标。区分实现偏离需求的缺陷与待做的模板适配，核对测试及 AGENTS/skills/README 是否仍描述过期默认业务。
 
 ## 框架复用与架构
 
