@@ -17,6 +17,16 @@
 - 从所属 workspace 的依赖与 lockfile 确认 `@h-ai/*` 实际解析版本和 npm/local 模式。模板 skill 提供导航，**当前安装包的 `package.json.exports`、公开 `.d.ts` 与随包文档决定可用 API**；本地框架源码只在版本匹配或显式联调时作实现证据。
 - 若 skill 与安装版本不符，以公开类型和实际行为核验。先使用已支持能力；任务要求升级时按 [hai-framework-sync](../hai-framework-sync/SKILL.md) 发现目标、比较差异并完成迁移验证。不能直接复制未发布源码的 API，也不能为绕过差异添加虚构兼容层。
 
+### 页面与布局
+
+页面共用根布局的 header/footer。独立移动应用的页面放在 `src/lib/pages/**/*.svelte`，Fullstack 放在 `packages/<name>-shared/src/lib/pages/**/*.svelte`，由 `HashRouter` 和 `import.meta.glob` 自动发现；新增页面无需修改路由表，菜单按业务配置入口。SvelteKit 保留 `src/routes/**/+page.svelte` 自动文件路由、服务端鉴权和刷新定位。
+
+### 环境配置
+
+- 运行参数用 `HAI_<配置名>_<路径>` 显式引用，`.env.example` 完整说明字段用途、默认值、枚举和范围。
+- `.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，与 `.env.example` 一并提交 Git；`.env.local` 保存本机私有覆盖，不提交。
+- 优先级为进程环境 > `.env.local` > 环境文件 > `.env`。Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles({ mode, envDir })` 的结果后注入；Node 按同样顺序传入 `--env-file`。`core.init` 不读取 dotenv，密钥不进入客户端变量。
+
 ## CLI 安装与命令
 
 CLI 的 npm 包名是 `@h-ai/cli`，安装后提供 `hai` 命令。使用脚手架前先全局安装并确认版本；PowerShell 中使用 `pnpm.cmd` 执行 pnpm 命令。
@@ -66,7 +76,7 @@ hai create my-app
 
 独立 fullstack 默认后台的 Web/App/Desktop 共用管理组件、状态与 typed client。`@h-ai/serv/features/iam` 默认 procedures 可按需选用并与 contract 对齐；有业务缺口时覆写必要路由。主题的 DOM 更新和安全缓存使用 `@h-ai/ui/theme`（`applyTheme` / `getSavedTheme`），应用保留响应式状态与已编译主题白名单。初始 admin/user、管理员自我保护、头像限额、分页和审计策略都是应用示例，可按需求替换；实际权限、资源范围和写入一致性按目标业务落实。
 
-Fullstack 创建时在被 Git 与容器构建忽略的根 `.env` 写入独立随机 `HAI_ADMIN_DEFAULT_PASSWORD`，`.env.example` 保留空占位。`dev` / `start` 自动读取；已有用户不重设密码。启动边界保留模块错误的具体说明与错误码，失败后反序清理。不能把生成的本地凭据复制到前端配置、日志、源码或镜像。
+Fullstack 创建时在被 Git 与容器构建忽略的根 `.env.local` 写入独立随机 `HAI_ADMIN_DEFAULT_PASSWORD`，`.env.example` 保留空占位。`dev` / `start` 自动读取；已有用户不重设密码。启动边界保留模块错误的具体说明与错误码，失败后反序清理。不能把生成的本地凭据复制到前端配置、日志、源码或镜像。
 
 ## 落实契约与安全边界
 
@@ -88,6 +98,33 @@ Fullstack 创建时在被 Git 与容器构建忽略的根 `.env` 写入独立随
 不把所有函数改成 HaiResult：纯工具、getter、工厂、客户端/流及控制流按实际签名。不把所有模块加上 init/close。应用服务根据已有业务契约返回 HaiResult，HTTP/UI 层做适当转换。
 
 serv/oRPC 普通 procedure 返回的失败 HaiResult 可以位于 HTTP 200 包络，`error.httpStatus` 是错误元数据，不等于响应状态；输入 schema 校验、传输错误、路由中间件及 kit 的 Response 各有状态契约。验收同时检查响应体 `success/error.code` 和真实 HTTP 状态，不照搬另一架构的 401/500 断言，也不以 HTTP 200 判为业务成功。
+
+## JSDoc 注释
+
+所有导出函数、核心业务流程、表/列、接口/type/schema 及字段提供中文 JSDoc，说明用途、约束、单位、关联及失败行为，并包含 `@example`。函数用实际的 `@param` / `@returns`，仅会抛错的契约写 `@throws`；数据结构给合法数据，数据库表说明主外键、可空性、默认值、唯一约束和典型行。核心逻辑解释决策与边界，避免重复代码字面含义。
+
+```ts
+/**
+ * 分页输入；page 从 1 开始，pageSize 为 1–100。
+ * @example const query: PageQuery = { page: 1, pageSize: 20 }
+ */
+export interface PageQuery {
+  /** 当前页，最小为 1。 */
+  page: number
+  /** 每页记录数，最大为 100。 */
+  pageSize: number
+}
+
+/**
+ * 将已校验的分页参数转换为数据库偏移量。
+ * @param query - 已通过边界 Schema 校验的分页参数
+ * @returns 从零开始的偏移量
+ * @example pageOffset({ page: 2, pageSize: 20 }) // 20
+ */
+export function pageOffset(query: PageQuery): number {
+  return (query.page - 1) * query.pageSize
+}
+```
 
 ## 验证与交付
 

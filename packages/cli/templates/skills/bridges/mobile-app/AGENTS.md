@@ -36,6 +36,8 @@
 
 ## 架构边界
 
+- 页面统一继承公共 header/footer；新增 SPA 页面放 `src/lib/pages/**/*.svelte`，由 `HashRouter` 自动发现。菜单只维护业务入口，不维护路由表。
+
 - 当前客户端使用 Vite SPA；保留此架构时不混入 SvelteKit 路由、server hooks 或 `@h-ai/kit`。
 - 需求迁移到 SvelteKit 时同步运行环境、路由、初始化、构建与原生壳集成；不能仅添加 `+page.svelte` 等文件就视为完成迁移。
 - 原生能力通过 `@h-ai/capacitor` 使用；token 原生端使用 Capacitor 安全存储，Web 预览仅使用内存存储。
@@ -59,6 +61,13 @@ pnpm cap:build:android:release
 1. 先搜索现有页面、stores、原生桥接、API client、messages 和测试。
 2. 修改原生能力、权限、登录态或 API 流程时，同步 README、i18n 和测试。
 3. 按改动范围验证，修复本次引入的失败；已有问题与未运行项明确报告。
+
+## 代码注释与示例
+
+- 尽可能补充有信息量的中文 JSDoc：所有 export 的函数/类/方法、核心算法与业务流程、所有数据库表/列、接口/type/schema 及其字段都必须说明用途、单位、约束和关联关系。核心逻辑解释决策原因、边界、权限与失败路径，不逐行复述代码。
+- 函数按实际契约写 @param、@returns，仅确实抛错时写 @throws；异步、HaiResult 与事务失败行为须说明。类型/表结构说明字段含义、可空性、默认值、主外键和唯一约束。
+- 上述函数和结构的 JSDoc 均提供可理解的 @example：函数给调用及结果判断，结构给合法数据，表给典型行或查询示例。省略上下文要标明，不使用真实凭据。示例随实现同步，不能只堆叠没有信息量的注释。
+- 调用及结构示例见 [.agents/skills/hai-app-create/development.md](.agents/skills/hai-app-create/development.md) 的 JSDoc 注释一节。
 
 ## 质量门禁
 

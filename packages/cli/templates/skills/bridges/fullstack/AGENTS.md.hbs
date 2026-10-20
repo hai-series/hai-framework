@@ -30,6 +30,8 @@ Fullstack 多包工程入口。先读 README、根 workspace 脚本与相关 pac
 
 ## 初始架构
 
+- 页面统一继承公共 header/footer；新增 SPA 页面放 `packages/{{projectName}}-shared/src/lib/pages/**/*.svelte`，由 `HashRouter` 自动发现。菜单只维护业务入口，不维护路由表。
+
 以下为生成时的目录和分层；需求调整架构时同步相关包、脚本与说明，按调整后的实际结构工作。
 
 | 路径 | 职责 |
@@ -62,6 +64,13 @@ Fullstack 多包工程入口。先读 README、根 workspace 脚本与相关 pac
 - JSON 业务请求与响应经 typed api-client 和 serv 的 crypto transport 加解密，包含登录与刷新；健康/就绪检查和公开头像二进制资源使用既有例外。新增 API 沿用当前管道；需求调整传输方案时同步客户端、服务端及测试，不能静默绕过仍生效的安全契约。
 - Web 使用内存 access token 和 HttpOnly refresh Cookie；App 原生端装配 `createCapacitorTokenStorage`，浏览器预览沿用 Cookie；Desktop 原生端使用内存 TokenStorage，重启后重新登录。原生 body 刷新通道同时验证 `X-HAI-Token-Transport: body`、端对应的 `x-request-client` 与受信完整 Origin，刷新请求沿用这些头。调整会话方案时保持凭据保护和通道校验；敏感 token 不写 localStorage 或普通配置文件。
 - 服务端依据实际权限模型验证每个受保护操作，个人操作绑定当前会话，代他人操作验证对应权限；不能只靠隐藏导航保护资源。SQL 动态值参数化，日志与审计不泄露密码、token 或密钥。
+
+## 代码注释与示例
+
+- 尽可能补充有信息量的中文 JSDoc：所有 export 的函数/类/方法、核心算法与业务流程、所有数据库表/列、接口/type/schema 及其字段都必须说明用途、单位、约束和关联关系。核心逻辑解释决策原因、边界、权限与失败路径，不逐行复述代码。
+- 函数按实际契约写 @param、@returns，仅确实抛错时写 @throws；异步、HaiResult 与事务失败行为须说明。类型/表结构说明字段含义、可空性、默认值、主外键和唯一约束。
+- 上述函数和结构的 JSDoc 均提供可理解的 @example：函数给调用及结果判断，结构给合法数据，表给典型行或查询示例。省略上下文要标明，不使用真实凭据。示例随实现同步，不能只堆叠没有信息量的注释。
+- 调用及结构示例见 [.agents/skills/hai-app-create/development.md](.agents/skills/hai-app-create/development.md) 的 JSDoc 注释一节。
 
 ## 质量门禁
 
