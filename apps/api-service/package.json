@@ -14,14 +14,22 @@
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
-    "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
+    "dev": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.dev --env-file-if-exists=.env.local dist/index.js\"",
+    "dev:test": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local dist/index.js\"",
+    "dev:prod": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local dist/index.js\"",
     "build": "tsup",
-    "preview": "node dist/index.js",
-    "check": "node ../../scripts/typecheck.mjs --noEmit",
-    "test": "vitest run",
+    "build:prod": "tsup",
+    "preview": "pnpm start",
+    "start": "node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local dist/index.js",
+    "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local dist/index.js",
+    "start:prod": "pnpm start",
+    "check": "pnpm typecheck",
+    "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "eslint src tests tsup.config.ts vitest.config.ts",
     "lint:fix": "eslint src tests tsup.config.ts vitest.config.ts --fix",
-    "clean": "rimraf dist .turbo"
+    "test": "vitest run",
+    "clean": "rimraf dist .turbo",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@h-ai/ai": "workspace:*",

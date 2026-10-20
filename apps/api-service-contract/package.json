@@ -23,13 +23,14 @@
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
-    "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run",
-    "test:watch": "vitest watch",
+    "build": "tsup",
+    "check": "pnpm typecheck",
     "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {

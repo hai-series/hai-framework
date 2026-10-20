@@ -14,8 +14,10 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup",
+    "check": "pnpm typecheck",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rimraf dist .turbo"

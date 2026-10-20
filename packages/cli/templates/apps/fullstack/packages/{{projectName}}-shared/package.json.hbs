@@ -24,8 +24,10 @@
     "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
     "paraglide:watch": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --watch",
     "prepare": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+    "check": "pnpm typecheck",
     "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run --passWithNoTests",
     "clean": "rimraf .turbo src/lib/paraglide"
   },

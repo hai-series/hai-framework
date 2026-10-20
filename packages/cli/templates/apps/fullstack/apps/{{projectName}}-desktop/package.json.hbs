@@ -9,11 +9,15 @@
   "scripts": {
     "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
     "paraglide:watch": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --watch",
+    "dev:test": "vite --mode test",
+    "dev:prod": "vite --mode prod",
     "dev": "vite dev --host 127.0.0.1 --port {{fullstack.ports.desktop}}",
     "build": "pnpm paraglide:compile && vite build",
+    "build:prod": "pnpm paraglide:compile && vite build --mode prod",
     "package": "pnpm tauri:build",
     "deploy": "pnpm package",
     "preview": "vite preview --host 127.0.0.1 --port {{fullstack.ports.desktop}} --strictPort",
+    "check": "pnpm typecheck",
     "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint src vite.config.ts svelte.config.js",
     "lint:fix": "eslint src vite.config.ts svelte.config.js --fix",
@@ -31,6 +35,7 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "{{fullstack.packageSpecifiers.antfuEslintConfig}}",
+    "@h-ai/core": "{{haiPackageSpecifier}}",
     "@iconify-json/tabler": "{{fullstack.packageSpecifiers.iconifyJsonTabler}}",
     "@iconify/tailwind4": "{{fullstack.packageSpecifiers.iconifyTailwind}}",
     "@inlang/paraglide-js": "{{fullstack.packageSpecifiers.inlangParaglide}}",

@@ -21,11 +21,20 @@
     "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
 {{/if}}
     "dev": "vite dev",
+    "dev:test": "vite dev --mode test",
+    "dev:prod": "vite dev --mode prod",
     "build": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vite build",
+    "build:prod": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vite build --mode prod",
+{{#unless isSvelteOnlyApp}}
+    "start": "node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js",
+    "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local build/index.js",
+    "start:prod": "pnpm start",
+{{/unless}}
     "preview": "vite preview",
-    "check": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}{{#if isSvelteOnlyApp}}svelte-check --tsconfig ./tsconfig.json{{else}}svelte-kit sync && svelte-check --tsconfig ./tsconfig.json{{/if}}",
+    "check": "pnpm typecheck",
     "typecheck": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}{{#if isSvelteOnlyApp}}svelte-check --tsconfig ./tsconfig.json{{else}}svelte-kit sync && svelte-check --tsconfig ./tsconfig.json{{/if}}",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -79,6 +88,9 @@
 {{/if}}
   },
   "devDependencies": {
+{{#if isSvelteOnlyApp}}
+    "@h-ai/core": "{{haiPackageSpecifier}}",
+{{/if}}
     "@antfu/eslint-config": "{{versions.antfuEslintConfig}}",
     "@playwright/test": "{{versions.playwright}}",
 {{#if isCapacitorApp}}
