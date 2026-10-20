@@ -2,5 +2,11 @@
 # API Service - 数据库配置
 # =============================================================================
 
-type: sqlite
-database: ./data/api-service.db
+type: ${HAI_DB_TYPE:sqlite}
+database: ${HAI_DB_DATABASE:./data/api-service.db}
+host: ${HAI_DB_HOST:localhost}
+port: ${HAI_DB_PORT:5432}
+user: ${HAI_DB_USER:postgres}
+password: ${HAI_DB_PASSWORD:}
+url: ${HAI_DB_URL:}
+ssl: ${HAI_DB_SSL:false}

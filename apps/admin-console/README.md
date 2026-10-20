@@ -37,8 +37,7 @@
 # 在 hai-framework monorepo 根目录
 pnpm install
 
-# 复制环境变量（按需修改）
-cp apps/admin-console/.env.example apps/admin-console/.env
+# 按 .env.example 的字段说明，在 .env.local 中仅填写需要覆盖的私有值
 
 # 启动开发服务器
 pnpm --filter admin-console dev
@@ -53,7 +52,7 @@ pnpm --filter admin-console dev
 | 用户名 | `admin`                           |
 | 密码   | 来自 `HAI_ADMIN_DEFAULT_PASSWORD` |
 
-请通过本地 `.env` 或密钥管理注入强密码；启动日志只显示用户名与密码来源，不输出明文密码。
+请通过本地 `.env.local` 或密钥管理注入强密码；启动日志只显示用户名与密码来源，不输出明文密码。
 
 ### 构建
 
@@ -76,33 +75,23 @@ pnpm --filter admin-console preview
 - 🔧 模块演示：Core / DB / Cache / Storage / AI（LLM、Audio、Image）/ Crypto 演示（`/admin/modules`）
 - ⚙️ 设置：主题切换（32 套）、语言切换（`/admin/settings`）
 
+### 示例业务行为
+
+角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
+
+管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。
+
 ## ⚙️ 配置
+
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod`、`build:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置手册](../../docs/environment-configuration.md)。
 
 ### 环境变量
 
-复制 `.env.example` 到 `.env` 并按需修改：
+公共基础及环境文件已提交；将以下私有配置写入 `.env.local`，其他可选字段按 `.env.example` 启用：
 
-```bash
-# Application
-HAI_CORE_ENV=development
-HAI_CORE_DEBUG=false
-
-# Default admin is created only when the user table is empty and this variable is set.
+```dotenv
+# 用户表为空时创建 admin；仅在本机或目标部署环境注入。
 HAI_ADMIN_DEFAULT_PASSWORD=<change-me-to-a-strong-local-password>
-
-# Database (sqlite | postgresql | mysql)
-HAI_DB_TYPE=sqlite
-HAI_DB_DATABASE=./data/admin.db
-
-# Cache (memory | redis)
-HAI_CACHE_TYPE=memory
-
-# Storage (local | s3)
-HAI_STORAGE_TYPE=local
-HAI_STORAGE_ROOT=./data/uploads
-
-# AI (uncomment to enable)
-# HAI_AI_LLM_APIKEY=
 ```
 
 完整列表见 `.env.example`。
@@ -116,12 +105,25 @@ HAI_STORAGE_ROOT=./data/uploads
 - `config/_kit.yml`：同源 transport 加密（密钥协商路径、是否强制加密、明文例外路径）
 - `config/_storage.yml`：存储类型及参数（local / S3）
 
-除 `config/_kit.yml` 外，每个 YAML 叶子项都可由
+每个 YAML 叶子项都可由
 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，且环境变量优先于 YAML 值。
 例如 `_db.yml` 的 `database` 对应 `HAI_DB_DATABASE`，`_ai.yml` 的
 `llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`。camelCase key 不拆词。
-`config/_kit.yml` 会同时被 `hooks.server.ts` 与浏览器端 `apiFetch` 静态导入，
-因此只应放公开路径/开关配置，不要写入密钥；修改后需重启开发服务器。
+`config/_kit.yml` 在 Node 构建阶段加载环境引用并校验，公开的 transport 路径与开关
+同时供 `hooks.server.ts` 和浏览器 `apiFetch` 使用；浏览器不接收 server 字段。
+修改 transport 后需重启开发服务器或重新构建。
+
+### 认证页面
+
+协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+认证方式、注册、重置、协议和品牌由服务端 config/_iam.yml 控制。SvelteKit 页面消费 iam.publicConfig；移动/桌面页面从 API 服务读取公开配置。选用 Reach 时，初始化成功后传入 iam.init({ ...settings, reach })，使用标准通知模板。多节点共享 DB 与 Redis。UI 复用 AuthPanel/LoginForm 和框架认证动作，应用只负责业务导航与用户状态。
+
+登录与注册页统一使用 `AuthPanel`，`ui` 可配置布局、标题、副标题、品牌、Logo 和配图。个人资料使用限宽布局与上下标签；用户名和邮箱规则通过 `UserProfile.fieldConstraints` 在失焦时显示，CRUD 新建/编辑也复用 UI 的失焦校验与错误修正。
+
+[完整配置与安全约束](../../packages/iam/README.md)
+
+LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
 
 ## 🌍 国际化 (i18n)
 
@@ -159,20 +161,20 @@ HAI_STORAGE_ROOT=./data/uploads
 4. 浏览器侧调用优先统一走 `$lib/utils/api.ts` 导出的 `apiFetch()`，以自动获得 CSRF + transport 加密
 5. 若端点必须支持浏览器原生明文请求（如 `multipart/form-data` 上传、`<img src>` 公开文件、外部探活），需同步加入 `config/_kit.yml` 的 `transport.excludePaths`
 
-## 配置驱动认证页面
+### 服务端错误处理
 
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
-
-认证方式、注册、重置、协议和品牌由服务端 config/_iam.yml 控制。SvelteKit 页面消费 iam.publicConfig；移动/桌面页面从 API 服务读取公开配置。选用 Reach 时，初始化成功后传入 iam.init({ ...settings, reach })，使用标准通知模板。多节点共享 DB 与 Redis。UI 复用 AuthPanel/LoginForm 和框架认证动作，应用只负责业务导航与用户状态。
-
-登录与注册页统一使用 `AuthPanel`，`ui` 可配置布局、标题、副标题、品牌、Logo 和配图。个人资料使用限宽布局与上下标签；用户名和邮箱规则通过 `UserProfile.fieldConstraints` 在失焦时显示，CRUD 新建/编辑也复用 UI 的失焦校验与错误修正。
-
-[完整配置与安全约束](../../packages/iam/README.md)
+管理端数据读取在 HTTP 应用边界保留失败：查询异常返回 503 和可刷新错误页，分页任一页或权限关联失败均中止加载，禁止回退为空列表、零统计或空权限。未知权限代码返回 400，权限读取失败时不得继续写入。底层模块仍使用 HaiResult。
 
 ### 添加新业务服务
 
 1. 在 `src/lib/server/services/` 下创建服务文件
 2. 在 `src/lib/server/services/index.ts` 中聚合导出
+
+### 表单布局
+
+新增/编辑复用 `@h-ai/ui` 的 Form/FormLayout/FormField：可选一列或双列、标签独立成行或与控件同行，多行文本与多选自动跨列，窄容器自动收为一列。CRUD 使用 `form` 配置，字段可用 `colSpan` 覆盖。错误显示在字段附近并随 UI 语言更新。UI Gallery 的表单示例可切换四种布局；IAM 用户采用双列同行标签，角色采用双列顶部标签，个人资料与密码表单复用相同参数。
+
+新建权限时资源和操作必填，权限名称留空时在提交阶段按 `resource:action` 生成；表单不会提前用名称必填校验阻止生成流程。
 
 ## 🧪 开发命令
 
@@ -211,17 +213,3 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 ## 📄 许可证
 
 Apache License 2.0
-
-角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
-
-管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。
-
-管理端数据读取在 HTTP 应用边界保留失败：查询异常返回 503 和可刷新错误页，分页任一页或权限关联失败均中止加载，禁止回退为空列表、零统计或空权限。未知权限代码返回 400，权限读取失败时不得继续写入。底层模块仍使用 HaiResult。
-
-LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
-
-## 表单布局
-
-新增/编辑复用 `@h-ai/ui` 的 Form/FormLayout/FormField：可选一列或双列、标签独立成行或与控件同行，多行文本与多选自动跨列，窄容器自动收为一列。CRUD 使用 `form` 配置，字段可用 `colSpan` 覆盖。错误显示在字段附近并随 UI 语言更新。UI Gallery 的表单示例可切换四种布局；IAM 用户采用双列同行标签，角色采用双列顶部标签，个人资料与密码表单复用相同参数。
-
-新建权限时资源和操作必填，权限名称留空时在提交阶段按 `resource:action` 生成；表单不会提前用名称必填校验阻止生成流程。

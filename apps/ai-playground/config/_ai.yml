@@ -1,44 +1,43 @@
 # AI Playground 完整示例配置。
 # 模型、端点和行为参数提供 YAML 默认值；约定环境变量可覆盖任意叶子项。
 llm:
-  apiKey: ''
-  baseUrl: https://api.xiaomimimo.com/v1
-  model: mimo-v2.5
-  api: chat
-  temperature: 0.7
-  maxTokens: 4096
-  timeout: 120000
+  apiKey: ${HAI_AI_LLM_APIKEY:}
+  baseUrl: ${HAI_AI_LLM_BASEURL:https://api.xiaomimimo.com/v1}
+  model: ${HAI_AI_LLM_MODEL:mimo-v2.5}
+  api: ${HAI_AI_LLM_API:chat}
+  temperature: ${HAI_AI_LLM_TEMPERATURE:0.7}
+  maxTokens: ${HAI_AI_LLM_MAXTOKENS:4096}
+  timeout: ${HAI_AI_LLM_TIMEOUT:120000}
 
 audio:
   # MiMo 的 LLM/ASR/TTS 共用同一密钥；跨供应商时不要启用继承。
-  inheritLlmApiKey: true
+  inheritLlmApiKey: ${HAI_AI_AUDIO_INHERITLLMAPIKEY:true}
   models:
     - id: asr
-      provider: mimo
-      model: mimo-v2.5-asr
-      operations: [transcribe]
-      baseUrl: https://api.xiaomimimo.com/v1
-      timeout: 120000
+      provider: ${HAI_AI_AUDIO_MODELS_0_PROVIDER:mimo}
+      model: ${HAI_AI_AUDIO_MODELS_0_MODEL:mimo-v2.5-asr}
+      operations: [ transcribe ]
+      baseUrl: ${HAI_AI_AUDIO_MODELS_0_BASEURL:https://api.xiaomimimo.com/v1}
+      timeout: ${HAI_AI_AUDIO_MODELS_0_TIMEOUT:120000}
     - id: tts
-      provider: mimo
-      model: mimo-v2.5-tts
-      operations: [synthesize]
-      baseUrl: https://api.xiaomimimo.com/v1
-      timeout: 120000
-  transcribeModel: asr
-  synthesizeModel: tts
+      provider: ${HAI_AI_AUDIO_MODELS_1_PROVIDER:mimo}
+      model: ${HAI_AI_AUDIO_MODELS_1_MODEL:mimo-v2.5-tts}
+      operations: [ synthesize ]
+      baseUrl: ${HAI_AI_AUDIO_MODELS_1_BASEURL:https://api.xiaomimimo.com/v1}
+      timeout: ${HAI_AI_AUDIO_MODELS_1_TIMEOUT:120000}
+  transcribeModel: ${HAI_AI_AUDIO_TRANSCRIBEMODEL:asr}
+  synthesizeModel: ${HAI_AI_AUDIO_SYNTHESIZEMODEL:tts}
 
 image:
   models:
     # 默认示例使用 Pollinations。402 表示账户余额或该 Key 的预算耗尽；
     # 可在 https://enter.pollinations.ai/ 创建/调整 Key 与预算。
     - id: image
-      provider: pollinations
-      model: zimage
+      provider: ${HAI_AI_IMAGE_MODELS_0_PROVIDER:pollinations}
+      model: ${HAI_AI_IMAGE_MODELS_0_MODEL:zimage}
       # 数组项通常用索引生成变量名；这里显式指定更稳定的厂商密钥名。
-      apiKey: ${AI_IMAGE_API_KEY:}
-      timeout: 120000
-
+      apiKey: ${HAI_AI_IMAGE_POLLINATIONS_APIKEY:}
+      timeout: ${HAI_AI_IMAGE_MODELS_0_TIMEOUT:120000}
     # 切换厂商时，取消对应块的注释，并把 generateModel 改为相应 id。
     # - id: openai-image
     #   provider: openai
@@ -57,9 +56,9 @@ image:
     #   provider: seedream
     #   model: doubao-seedream-5-0-lite
     #   apiKey: ${ARK_API_KEY:}
-  generateModel: image
+  generateModel: ${HAI_AI_IMAGE_GENERATEMODEL:image}
 
 memory:
-  provider: native
-  embeddingEnabled: false
-  defaultTopK: 8
+  provider: ${HAI_AI_MEMORY_PROVIDER:native}
+  embeddingEnabled: ${HAI_AI_MEMORY_EMBEDDINGENABLED:false}
+  defaultTopK: ${HAI_AI_MEMORY_DEFAULTTOPK:8}

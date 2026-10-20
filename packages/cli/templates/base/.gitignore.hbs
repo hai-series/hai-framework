@@ -6,9 +6,6 @@ build
 dist
 android
 ios
-.env
-.env.*
-!.env.example
 *.log
 .DS_Store
 test-results/
@@ -17,3 +14,7 @@ playwright-report/
 
 # hai deploy 产物（compose / .env.runtime / 镜像 tar / sidecar 凭据）
 .hai/
+
+# 本机私有配置；公共 .env 与 dev/test/prod 环境文件纳入版本控制。
+.env.local
+.env.*.local

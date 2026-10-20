@@ -6,9 +6,7 @@ import type { CoreConfig } from '@h-ai/core'
 {{/if}}
 import path from 'node:path'
 import process from 'node:process'
-{{#if isSvelteOnlyApp}}
 import { core } from '@h-ai/core'
-{{/if}}
 {{#if hasUi}}
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 {{/if}}
@@ -23,10 +21,13 @@ import { sveltekit } from '@sveltejs/kit/vite'
 {{#if hasUi}}
 import tailwindcss from '@tailwindcss/vite'
 {{/if}}
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  const envResult = core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+  if (!envResult.success)
+    throw new Error(envResult.error.message)
+  const env = envResult.data
   Object.assign(process.env, env)
 {{#if isSvelteOnlyApp}}
   // 浏览器无法读取 YAML；构建时通过 core 解析，仅注入明确可公开的字段。
@@ -42,6 +43,7 @@ export default defineConfig(({ mode }) => {
 {{/if}}
 
   return {
+    envDir: false,
     envPrefix: ['VITE_', 'PUBLIC_'],
 {{#if isSvelteOnlyApp}}
     define: { __APP_CORE_CONFIG__: JSON.stringify(appConfig) },

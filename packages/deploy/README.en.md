@@ -60,16 +60,16 @@ Keep Git-safe configuration in `config/_deploy.yml` and secrets in `~/.hai/crede
 # config/_deploy.yml
 provider:
   type: vercel
-  token: ${HAI_DEPLOY_VERCEL_TOKEN}
+  token: ${HAI_DEPLOY_PROVIDER_TOKEN}
 
 services:
   db:
     provisioner: neon
-    apiKey: ${HAI_DEPLOY_NEON_API_KEY}
+    apiKey: ${HAI_DEPLOY_SERVICES_DB_APIKEY}
   cache:
     provisioner: upstash
-    email: ${HAI_DEPLOY_UPSTASH_EMAIL}
-    apiKey: ${HAI_DEPLOY_UPSTASH_API_KEY}
+    email: ${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
+    apiKey: ${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
 ```
 
 These variables are explicit special mappings managed by `deploy.credentials`. If convention-based variables
@@ -79,9 +79,9 @@ Use `deploy.credentials.*` to manage credential files explicitly in scripts or t
 
 ```typescript
 deploy.credentials.load()
-deploy.credentials.save('HAI_DEPLOY_VERCEL_TOKEN', 'vel_xxx')
+deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', 'vel_xxx')
 deploy.credentials.saveAll({
-  HAI_DEPLOY_NEON_API_KEY: 'neon_xxx',
+  HAI_DEPLOY_SERVICES_DB_APIKEY: 'neon_xxx',
 })
 ```
 
@@ -102,7 +102,7 @@ Containerize the application and deploy over SSH to any Linux host; no cloud acc
 1. Store the SSH private key path in the credential file, outside the repository. Edit `~/.hai/credentials.yml` or use the API:
 
 ```typescript
-deploy.credentials.save('HAI_DEPLOY_SSH_KEY', '~/.ssh/hai_deploy')
+deploy.credentials.save('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', '~/.ssh/hai_deploy')
 ```
 
 2. Declare the target host in `config/_deploy.yml`:
@@ -114,7 +114,7 @@ provider:
     host: 10.0.0.20 # 主机 IP 或 ~/.ssh/config 别名
     port: 22
     username: deploy
-    identityFile: ${HAI_DEPLOY_SSH_KEY} # 私钥文件路径，省略则用 ssh-agent
+    identityFile: ${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE} # 私钥文件路径，省略则用 ssh-agent
   remote:
     baseDir: /opt/hai/apps # 远程部署根目录
     runtime: auto # 远程运行时；auto 优先 podman，其次 docker

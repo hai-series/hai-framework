@@ -225,16 +225,17 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
   /**
    * 解析 Anthropic 端点参数
    *
-   * apiKey / baseUrl 采用 Anthropic 专属环境变量兜底（ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL），
-   * 避免误用面向 OpenAI 的全局默认 baseUrl。
+   * 默认协议为 Anthropic 时使用全局标准配置与 HAI_AI_LLM_BASEURL；
+   * 混合模型池中的 Anthropic 条目不继承 OpenAI 的全局端点，最后使用厂商变量兜底。
    */
   function resolveAnthropic(requestModel?: string, tempModel?: TempModelConfig): HaiResult<ResolvedAnthropic> {
     const entry = requestModel ? config.llm.models?.find(m => m.id === requestModel || m.model === requestModel) : undefined
     const model = tempModel?.model ?? entry?.model ?? requestModel ?? config.llm.model ?? 'claude-3-5-sonnet-latest'
-    const apiKey = tempModel?.apiKey ?? entry?.apiKey ?? config.llm.apiKey ?? process.env.HAI_AI_ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_API_KEY
+    const apiKey = tempModel?.apiKey ?? entry?.apiKey ?? config.llm.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.ANTHROPIC_API_KEY)
     if (!apiKey)
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', { params: { error: 'API Key is required for Anthropic' } }))
-    const baseUrl = (tempModel?.baseUrl ?? entry?.baseUrl ?? process.env.HAI_AI_ANTHROPIC_BASE_URL ?? process.env.ANTHROPIC_BASE_URL ?? DEFAULT_ANTHROPIC_BASE_URL).replace(/\/+$/, '')
+    const globalBaseUrl = config.llm.api === 'anthropic' ? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || undefined) : undefined
+    const baseUrl = (tempModel?.baseUrl ?? entry?.baseUrl ?? globalBaseUrl ?? process.env.ANTHROPIC_BASE_URL ?? DEFAULT_ANTHROPIC_BASE_URL).replace(/\/+$/, '')
     return ok({
       apiKey,
       baseUrl,

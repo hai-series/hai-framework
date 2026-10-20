@@ -72,6 +72,8 @@ function register(tool: Tool): HaiResult<void> {
 
 ## 配置校验
 
+环境文件采用六类：`.env.example` 完整列出字段用途、默认值、枚举和范围；`.env` 为公共基础；`.env.dev`、`.env.test`、`.env.prod` 为公共环境覆盖，这五类均提交 Git。`.env.local` 为本机私有配置，不提交 Git。优先级为进程环境 > `.env.local` > 环境文件 > `.env`；Vite 在 Node 配置阶段调用 `core.config.loadEnvFiles({ mode, envDir })` 并检查 success 后注入进程，Node 脚本按相同顺序传入 `--env-file`。`core.init` 不自行读取 dotenv。
+
 - 应用从 YAML 加载配置时使用 `core.config.validate(name, schema)` 后检查结果；模块 init 自身仍须用模块 schema 校验直接传入的配置
 - 不允许在模块入口做隐式注册/自动校验（避免副作用和隐藏依赖）
 - Zod Schema 完整、导出 `XxConfig`（parse 后）+ `XxConfigInput`（用户输入）

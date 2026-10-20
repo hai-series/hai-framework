@@ -15,7 +15,7 @@ const testDataDir = `./data-e2e-transport-off-${Date.now()}`
  */
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: ['./e2e/debug-login.spec.ts', './e2e/transport-on.spec.ts'],
+  testIgnore: ['**/debug-login.spec.ts', '**/transport-on.spec.ts'],
   globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
   metadata: { notificationFixture: true },
@@ -47,6 +47,7 @@ export default defineConfig({
     command: `pnpm build && pnpm exec vite preview --host ${previewHost} --port ${previewPort} --strictPort`,
     env: {
       HAI_E2E: '1',
+      HAI_CORE_ENV: 'production',
       // LDAP 是可选 YAML 字段，使用整个 IAM 对象覆盖并保留本轮验收的密码/会话策略。
       HAI_IAM: JSON.stringify({
         login: { password: true, otp: true, ldap: true },

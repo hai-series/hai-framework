@@ -60,16 +60,16 @@ await deploy.close()
 # config/_deploy.yml
 provider:
   type: vercel
-  token: ${HAI_DEPLOY_VERCEL_TOKEN}
+  token: ${HAI_DEPLOY_PROVIDER_TOKEN}
 
 services:
   db:
     provisioner: neon
-    apiKey: ${HAI_DEPLOY_NEON_API_KEY}
+    apiKey: ${HAI_DEPLOY_SERVICES_DB_APIKEY}
   cache:
     provisioner: upstash
-    email: ${HAI_DEPLOY_UPSTASH_EMAIL}
-    apiKey: ${HAI_DEPLOY_UPSTASH_API_KEY}
+    email: ${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
+    apiKey: ${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
 ```
 
 这里的变量由 `deploy.credentials` 管理，属于显式特殊映射；若同时设置
@@ -79,9 +79,9 @@ services:
 
 ```typescript
 deploy.credentials.load()
-deploy.credentials.save('HAI_DEPLOY_VERCEL_TOKEN', 'vel_xxx')
+deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', 'vel_xxx')
 deploy.credentials.saveAll({
-  HAI_DEPLOY_NEON_API_KEY: 'neon_xxx',
+  HAI_DEPLOY_SERVICES_DB_APIKEY: 'neon_xxx',
 })
 ```
 
@@ -102,7 +102,7 @@ deploy.credentials.saveAll({
 1）把 SSH 私钥路径存入凭证文件（不进仓库）。编辑 `~/.hai/credentials.yml`，或用 API：
 
 ```typescript
-deploy.credentials.save('HAI_DEPLOY_SSH_KEY', '~/.ssh/hai_deploy')
+deploy.credentials.save('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', '~/.ssh/hai_deploy')
 ```
 
 2）在 `config/_deploy.yml` 声明目标主机：
@@ -114,7 +114,7 @@ provider:
     host: 10.0.0.20 # 主机 IP 或 ~/.ssh/config 别名
     port: 22
     username: deploy
-    identityFile: ${HAI_DEPLOY_SSH_KEY} # 私钥文件路径，省略则用 ssh-agent
+    identityFile: ${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE} # 私钥文件路径，省略则用 ssh-agent
   remote:
     baseDir: /opt/hai/apps # 远程部署根目录
     runtime: auto # 远程运行时；auto 优先 podman，其次 docker

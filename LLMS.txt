@@ -12,6 +12,8 @@ README 文档入口：[简体中文](README.md) · [English](README.en.md) · [�
    Codex 原生读取 `AGENTS.md` 并发现 `.agents/skills/`，可用 `$hai-create-module` 等名称调用；规范按 AGENTS 的任务导航读取，不依赖 `applyTo`。Copilot 的 `.github` 指令仅桥接共享规则，OpenCode 直接引用 `AGENTS.md`。Claude Code 通过根 `CLAUDE.md` 的 `@AGENTS.md` 导入共享规则，并按导航读取同一份技能正文和参考。CLI 不生成 `.claude/` 技能副本；此模式不提供 Claude 原生技能自动发现或 `/skill` 命令。
 4. API 示例是使用片段，业务变量/schema 需结合当前应用补齐；先判断返回类型，再处理结果，不能猜测导出或初始化方式。
 
+5. 配置变量总表读取根 [.env.example](.env.example)；分环境加载与 CLI 模板入口读取 [配置手册](docs/environment-configuration.md)。
+
 ## 生命周期与返回值
 
 | 类别 | 契约 |

@@ -196,10 +196,10 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
    * `maxTokens` / `temperature` 作为请求未显式指定时的回填默认值返回。
    */
   function resolveTempClient(tempModel: TempModelConfig): HaiResult<ResolvedClient> {
-    const apiKey = tempModel.apiKey ?? config.llm.apiKey ?? process.env.HAI_AI_LLM_API_KEY ?? process.env.OPENAI_API_KEY
+    const apiKey = tempModel.apiKey ?? config.llm.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.OPENAI_API_KEY)
     if (!apiKey)
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', { params: { error: 'API Key is required for temp model' } }))
-    const baseUrl = tempModel.baseUrl ?? config.llm.baseUrl ?? process.env.HAI_AI_LLM_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
+    const baseUrl = tempModel.baseUrl ?? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || process.env.OPENAI_BASE_URL) ?? 'https://api.openai.com/v1'
     const timeout = tempModel.timeout ?? config.llm.timeout ?? 60000
     const api = (tempModel.api ?? config.llm.api) === 'responses' ? 'responses' : 'chat'
     return ok({

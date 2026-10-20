@@ -616,7 +616,9 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 
 ### 配置与环境变量
 
-框架统一采用 `HAI_<配置名>_<YAML 路径>` 约定，环境变量可覆盖 YAML 配置。仓库根目录提供统一样例 [`.env.example`](./.env.example)，复制为 `.env` 后按需填写；各 `apps/*/.env.example` 仅补充应用侧差异化变量。
+应用与模板使用统一的 `HAI_<配置名>_<路径>` 环境变量；根 [`.env.example`](.env.example) 列出所有可用变量、用途、枚举和范围。分环境文件、启动命令与 Provider 切换见 [配置手册](docs/environment-configuration.md)。
+
+环境文件按用途维护：`.env.example` 完整记录字段与约束；`.env` 是公共基础，`.env.dev` / `.env.test` / `.env.prod` 是公共环境覆盖，均提交 Git；`.env.local` 是被忽略的本机私有覆盖。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。各应用自己的 `.env.example` 包含该应用的完整参数。
 
 - **配置命名**：`HAI_<配置名>_<YAML 路径>`，层级以 `_` 分隔，camelCase 不拆词（如 `llm.apiKey` → `HAI_AI_LLM_APIKEY`）
 - **配置优先级**：约定环境变量 > YAML 中的显式 `${VAR}` > YAML 默认值

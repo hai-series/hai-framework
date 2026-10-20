@@ -6,4 +6,4 @@
 # - key-exchange 端点需与 api-service 的 `_serv.yml.transport.keyExchangePath` 对齐
 
 transport:
-  keyExchangePath: /_hai/key-exchange
+  keyExchangePath: ${HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH:/_hai/key-exchange}

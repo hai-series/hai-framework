@@ -43,13 +43,13 @@ pnpm add @h-ai/iam
 既定クライアントは `pnpm add ldapts` で追加し、`login.ldap: true` と接続設定を明示します。接続設定だけでは LDAP は有効になりません。SDK なしで既定クライアントを有効にすると初期化が設定エラーを返します。
 
 ```yaml
-# config/_iam.yml（启动前设置 LDAP_BIND_PASSWORD）
+# config/_iam.yml（启动前设置 HAI_IAM_LDAP_BINDPASSWORD）
 login:
   ldap: true
 ldap:
   url: ldaps://ldap.example.com:636
   bindDn: cn=service,dc=example,dc=com
-  bindPassword: '${LDAP_BIND_PASSWORD}'
+  bindPassword: '${HAI_IAM_LDAP_BINDPASSWORD}'
   searchBase: ou=users,dc=example,dc=com
   searchFilter: '(uid={{username}})'
   usernameAttribute: uid

@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 describe('ai Playground YAML config', () => {
   beforeAll(() => {
     vi.stubEnv('AI_API_KEY', 'test-llm-key')
-    vi.stubEnv('AI_IMAGE_API_KEY', 'test-image-key')
+    vi.stubEnv('HAI_AI_IMAGE_POLLINATIONS_APIKEY', 'test-image-key')
   })
 
   afterAll(() => {

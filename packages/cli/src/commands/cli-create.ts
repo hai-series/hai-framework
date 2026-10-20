@@ -11,6 +11,7 @@
  */
 
 import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, FrontendTarget, ModuleConfigs, ProjectInfo } from '../cli-types.js'
+import type { ConfigEnvironmentVariable } from './cli-config-environment.js'
 import { Buffer } from 'node:buffer'
 import { execFileSync, execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -22,6 +23,7 @@ import ora from 'ora'
 import prompts from 'prompts'
 import { cliM } from '../cli-i18n.js'
 import { detectPackageManager, fileExists, formatPromptDescription, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
+import { renderEnvironment, runtimeEnvironmentVariables } from './cli-config-environment.js'
 import { buildTemplateContext, generateFromTemplates } from './cli-template-engine.js'
 
 // =============================================================================
@@ -339,17 +341,47 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         )
       }
 
-      const envExample = isApiWorkspace
-        ? `${generateEnvExample(resolvedOptions.features, configs)}\n# =============================================================================\n# Service Runtime\n# =============================================================================\nPORT=3000\n`
+      const configContents: Record<string, string> = {}
+      for (const file of await fse.readdir(configDir)) {
+        if (/^_.*\.yml$/.test(file))
+          configContents[file.slice(1, -4)] = await fse.readFile(path.join(configDir, file), 'utf8')
+      }
+      const envFeatures: FeatureId[] = resolvedOptions.features
+      const envContents = generateEnvExample(envFeatures, configs, isFullstack, configContents)
+      let envExample = isApiWorkspace
+        ? envContents
         : isFullstack
-          ? `${generateEnvExample(resolvedOptions.features, configs, true)}\n# First-start administrator password. The CLI generates a random value in .env.\nHAI_ADMIN_DEFAULT_PASSWORD=\n\n# Local development API. Use your public API origin for deployment/native clients.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
-          : generateEnvExample(resolvedOptions.features, configs)
+          ? `${envContents}\n# First-start administrator password; must satisfy the IAM password policy.\nHAI_ADMIN_DEFAULT_PASSWORD=\n\n# Public API origin; never include credentials.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
+          : context.isSvelteOnlyApp
+            ? `${envContents}\n# Public API URL including /api/v1; never include credentials.\nPUBLIC_API_BASE=http://10.0.2.2:3000/api/v1\n`
+            : envContents
+
+      const runtimeVariables = new Map<string, ConfigEnvironmentVariable>()
+      for (const file of await fse.readdir(projectPath, { recursive: true, encoding: 'utf8' })) {
+        if (!/\.(?:ts|js|mjs|svelte|envsh)$/.test(file))
+          continue
+        for (const variable of runtimeEnvironmentVariables(await fse.readFile(path.join(projectPath, file), 'utf8')))
+          runtimeVariables.set(variable.name, variable)
+      }
+      const existingNames = new Set([...envExample.matchAll(/^(?:#\s*)?([A-Z][A-Z0-9_]*)=/gm)].map(match => match[1]))
+      const runtimeExample = renderEnvironment([...runtimeVariables.values()].filter(variable => !existingNames.has(variable.name)))
+      if (runtimeExample)
+        envExample += `\n# 可选运行入口（按用途注入，不进入公共默认值）：\n${runtimeExample.split('\n').map(line => line && !line.startsWith('#') ? `# ${line}` : line).join('\n')}\n`
 
       await writeFile(envExamplePath, envExample)
+      const envDirectory = path.dirname(envExamplePath)
+      const sharedVariables = envExample.split('\n').filter(line => /^[A-Z][A-Z0-9_]*=/.test(line))
+      await writeFile(path.join(envDirectory, '.env'), `# 公共基础配置（可提交）；完整字段说明见 .env.example。\n${sharedVariables.join('\n')}\n`)
+      for (const [mode, environment] of [['dev', 'development'], ['test', 'test'], ['prod', 'production']] as const) {
+        await writeFile(path.join(envDirectory, `.env.${mode}`), `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_DEBUG=false\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : mode === 'dev' ? 'debug' : 'info'}\n`)
+      }
       if (isFullstack) {
         // 每个项目使用独立随机密码，保证四类字符；真实凭据只写入被忽略的本地文件。
         const password = `Aa1!${randomBytes(24).toString('base64url')}`
-        await fse.writeFile(path.join(projectPath, '.env'), envExample.replace('HAI_ADMIN_DEFAULT_PASSWORD=\n', `HAI_ADMIN_DEFAULT_PASSWORD=${password}\n`), { mode: 0o600 })
+        await fse.writeFile(path.join(projectPath, '.env.local'), `# 本机私有配置，不提交 Git。\nHAI_ADMIN_DEFAULT_PASSWORD=${password}\n`, { mode: 0o600 })
+      }
+      else {
+        await writeFile(path.join(envDirectory, '.env.local'), '# 本机私有配置，不提交 Git；覆盖公共基础和环境配置。\n')
       }
     }
 
@@ -1063,6 +1095,24 @@ Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Cla
 `
 }
 
+/** 生成各类工程共用的配置与命令说明，放在开发/部署章节之间。 */
+function generateEnvironmentReadme(): string {
+  return `## 分环境配置
+
+运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程环境 > \`.env.local\` > 环境文件 > \`.env\`。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [配置手册](docs/environment-configuration.md)。
+
+| 用途 | 命令 |
+| --- | --- |
+| 开发 / 测试模式 / 生产模式预览 | \`pnpm dev\` / \`dev:test\` / \`dev:prod\` |
+| 类型检查（check 为别名） | \`pnpm typecheck\` |
+| 检查 / 自动修复格式 | \`pnpm lint\` / \`lint:fix\` |
+| 构建 / 生产模式构建 | \`pnpm build\` / \`build:prod\` |
+| 单元测试 / 监听 / 浏览器验收 | \`pnpm test\` / \`test:watch\` / \`test:e2e\` |
+| Node 服务按环境启动（构建后） | \`pnpm start\` / \`start:test\` / \`start:prod\` |
+
+Vite 客户端使用 \`preview\` 预览静态产物，Node 服务使用 \`start\`；纯 contract/shared 库只提供适用的构建和质量命令。API workspace 的环境文件位于 \`apps/<name>-service\`，fullstack 位于工程根。`
+}
+
 function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn', appType: AppType): string {
   const install = getInstallCommand(pm)
   const isStaticImage = appType === 'mobile-app'
@@ -1092,12 +1142,18 @@ ${getRunCommand(pm, 'podman:build:data')}`
 
 基于 hai Agent Framework 构建的${appTypeLabel}应用。
 
+## 页面布局与路由
+
+页面统一继承根布局的 header/footer。${appType === 'mobile-app' ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。' : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}
+
 ## 开发
 
 \`\`\`bash
 ${install}
 ${getRunCommand(pm, 'dev')}
 \`\`\`
+
+${generateEnvironmentReadme()}
 
 ## 构建
 
@@ -1156,6 +1212,8 @@ function generateApiWorkspaceReadme(name: string, pm: 'pnpm' | 'npm' | 'yarn'): 
 ${pm} install
 ${pm} dev
 \`\`\`
+
+${generateEnvironmentReadme()}
 
 ## 质量门禁
 
@@ -1265,13 +1323,17 @@ curl --fail http://127.0.0.1:8080/runtime-config.js
 
 已启用前端：${enabledFrontends || 'Web / App / Desktop'}
 
+## 页面布局与路由
+
+Web/App/Desktop 共享 AppShell 的 header/footer。新增页面放 shared/src/lib/pages/**/*.svelte，由 HashRouter 自动发现并按需加载；菜单只维护入口。地址使用 #/页面路径，支持刷新、查询串与浏览器前进后退；API 权限仍由服务端校验。
+
 ## 默认管理功能
 
 以下描述可运行示例的初始业务，可按实际需求调整或移除，并同步代码、数据、鉴权、界面、测试和文档。
 
 默认启用 IAM、reldb、cache、audit、storage 和 crypto。初始管理员可以管理用户（新增、编辑、禁用、删除、角色分配、头像上传）、查看 admin/user 角色及人数、维护角色说明、分页筛选审计日志；初始普通用户进入个人资料、头像、语言、主题和密码设置。默认密码修改后全部会话失效，需要重新登录；角色模型、访问范围和会话策略由业务需求决定。
 
-CLI 已在根目录生成 \`.env\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\` 是每个项目独立生成的随机强密码。直接运行 \`dev\` / \`start\` 即可，首次登录使用用户名 \`admin\` 和该密码；也可通过同名环境变量覆盖。密码须满足 \`_iam.yml\` 策略，启动失败会显示具体校验原因及错误码。\`.env\` 已被 Git 和容器构建忽略，\`.env.example\` 不含真实密码；部署时设置目标环境自己的密码。已有用户时不会重复创建管理员或重设密码。
+CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\` 是每个项目独立生成的随机强密码。直接运行 \`dev\` / \`start\` 即可，首次登录使用用户名 \`admin\` 和该密码；也可通过同名环境变量覆盖。密码须满足 \`_iam.yml\` 策略，启动失败会显示具体校验原因及错误码。\`.env.local\` 已被 Git 和容器构建忽略，\`.env.example\` 不含真实密码；部署时设置目标环境自己的密码。已有用户时不会重复创建管理员或重设密码。
 
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
@@ -1283,11 +1345,13 @@ CLI 已在根目录生成 \`.env\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\` 是�
 
 服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
 
-自动生成的 \`.env\` 默认只启用初始管理员密码和 \`PUBLIC_API_BASE\`，模块环境覆盖保留注释，YAML 是默认值来源。需要环境覆盖时显式取消对应变量的注释；编辑 YAML 时同步核对已有覆盖。
+自动生成的 \`.env\` 包含已启用模块的环境参数；YAML 显式引用相同变量并保留本地回退。编辑环境参数优先修改对应 \`.env\`；未启用模块仍保留注释。
 
 扩展时先在服务端 workspace 安装需要的包，在 \`src/server/runtime.ts\` 按模块公开 Schema 校验配置、初始化并反序关闭，再接入 contract/procedure 和界面。整份注释文件先去掉一层外层注释，可选块继续按需开启；配置文件存在不代表业务功能已接入。\`crypto.init()\` 无配置参数，datapipe 为纯函数，不生成虚构 YAML。
 
 环境变量只覆盖 YAML 已有路径，注释键须先启用，或用 \`HAI_DB\` / \`HAI_CACHE\` 等整体对象覆盖。camelCase 不拆词，例如 \`connectTimeout\` 对应 \`HAI_CACHE_CONNECTTIMEOUT\`。修改配置后重启服务；语言列表在各前端/shared 的 \`project.inlang/settings.json\` 中同步。\`**/data/\` 忽略任意层级的数据目录及 \`.gitkeep\`，运行数据不入 Git，运行时自动创建目录。
+
+${generateEnvironmentReadme()}
 
 ## 开发、编译与打包
 
@@ -1326,7 +1390,7 @@ ${webBuildCommands}
 
 \`\`\`bash
 # Service；使用 Podman 时将 docker 替换为 podman
-docker run --rm -d --name ${name} -p 3000:3000 --env-file .env \\
+docker run --rm -d --name ${name} -p 3000:3000 --env-file .env --env-file .env.prod --env-file .env.local \\
   --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly \\
   --mount type=volume,source=${name}-data,target=/app/data \\
   ${name}:latest
@@ -1341,6 +1405,7 @@ curl --fail http://127.0.0.1:3000/ready
 ${webTestCommands}docker stop ${containerNames}
 \`\`\`
 
+- 上例按公共基础、生产环境、本机私有文件的顺序注入变量；运行前在目标机器创建 \`.env.local\` 并设置自己的管理员密码。部署平台也可直接注入同名变量。
 - 配置默认来自 \`packages/${name}-serv/config\`，也可挂载到 \`/app/config\`；YAML 中的 \`\${ENV_NAME:default}\` 可由 \`--env-file\` 或 \`-e\` 注入。
 - 带数据构建会把 \`packages/${name}-serv/data\` 固化为镜像初始数据；持久化写入仍应使用 volume。
 - Service 由 \`@h-ai/serv\` 直接对外监听，不额外启动 Web 转发层。

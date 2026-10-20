@@ -25,6 +25,7 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 - 从真实路由/contract、UI 组件和服务层扩展；API workspace、SvelteKit 和 SPA 的文件结构不能混用。
 - 新手引导和帮助中心使用 `@h-ai/ui/guide`，复用已有导航适配器、i18n 和主题；fullstack 共享管理界面已有默认入口，按 [引导指南](../../../packages/cli/templates/skills/hai-ui/guide.md) 扩展内容和锚点。
 - 名称、版本、环境、语言与日志复用 `_core.yml` 和 core.config/core.logger；SvelteKit layout 与 fullstack app.info 只公开元信息白名单，Vite mobile-app 经 Node 构建阶段解析后注入，配置变更重新构建。不能硬编码显示副本或把完整配置交给浏览器。
+- 环境配置遵守 [六类文件与加载约定](../../../packages/cli/templates/shared/environment-configuration.md)：公共基础和环境文件提交 Git，本机私有值只写 `.env.local`；完整示例逐项说明字段与约束。新增或修改变量时同步应用、模板、模块说明和根 `.env.example`。
 - 对新增行为先写有意义的目标用例，仍适用的回归保持通过；被明确新需求替代的模板断言同步更新并记录依据，同步 i18n、README 和调用方。
 
 ## 按需参考

@@ -3,10 +3,16 @@
 # =============================================================================
 
 # 数据库类型: sqlite | postgresql | mysql
-type: sqlite
+type: ${HAI_DB_TYPE:sqlite}
 
 # SQLite 数据库路径，或 PostgreSQL/MySQL 连接字符串
-database: ./data/admin.db
+database: ${HAI_DB_DATABASE:./data/admin.db}
+host: ${HAI_DB_HOST:localhost}
+port: ${HAI_DB_PORT:5432}
+user: ${HAI_DB_USER:postgres}
+password: ${HAI_DB_PASSWORD:}
+url: ${HAI_DB_URL:}
+ssl: ${HAI_DB_SSL:false}
 
 # PostgreSQL/MySQL 配置（可选）
 # host: localhost

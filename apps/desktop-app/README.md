@@ -39,11 +39,7 @@
    # 默认监听 http://localhost:3000
    ```
 
-3. 复制环境文件：
-
-   ```bash
-   cp .env.example .env
-   ```
+3. 按 `.env.example` 的字段说明，在 `.env.local` 中仅填写需要覆盖的本机私有值。
 
 ## 启动
 
@@ -99,11 +95,13 @@ apps/desktop-app/
 
 ## API 调用与加密配置
 
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。命令和加载规则见 [配置手册](../../docs/environment-configuration.md)。
+
 桌面端通过 `PUBLIC_API_BASE` 配置完整 API 基础 URL，transport 客户端设置放在 `config/_crypto.yml`：
 
 ```yaml
 transport:
-  keyExchangePath: /_hai/key-exchange
+  keyExchangePath: ${HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH:/_hai/key-exchange}
 ```
 
 - `PUBLIC_API_BASE` 需包含服务端 `_serv.yml.http.apiPrefix`。
@@ -112,11 +110,11 @@ transport:
 桌面端初始化入口在 `src/lib/api.ts`，调用顺序为：
 
 1. 读取 `PUBLIC_API_BASE`
-2. 读取 `config/_crypto.yml`
+2. 构建期通过 core 解析 `config/_crypto.yml` 的环境引用，仅向浏览器注入公开传输路径
 3. 若启用 transport，则先 `crypto.init()`
 4. 再 `desktopApiClient.init({ baseUrl, transport, auth })`
 
-## 配置驱动认证页面
+### 认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 

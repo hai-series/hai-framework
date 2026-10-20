@@ -43,13 +43,13 @@ pnpm add @h-ai/iam
 使用默认客户端时执行 `pnpm add ldapts`，再显式设置 `login.ldap: true` 和 `ldap` 连接配置。只提供连接配置不会启用 LDAP。启用默认客户端却缺少 SDK 时，`iam.init()` 返回配置错误。
 
 ```yaml
-# config/_iam.yml（启动前设置 LDAP_BIND_PASSWORD）
+# config/_iam.yml（启动前设置 HAI_IAM_LDAP_BINDPASSWORD）
 login:
   ldap: true
 ldap:
   url: ldaps://ldap.example.com:636
   bindDn: cn=service,dc=example,dc=com
-  bindPassword: '${LDAP_BIND_PASSWORD}'
+  bindPassword: '${HAI_IAM_LDAP_BINDPASSWORD}'
   searchBase: ou=users,dc=example,dc=com
   searchFilter: '(uid={{username}})'
   usernameAttribute: uid

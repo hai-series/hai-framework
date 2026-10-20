@@ -38,6 +38,7 @@ export default defineConfig({
     command: `pnpm build && pnpm exec vite preview --host ${previewHost} --port ${previewPort} --strictPort`,
     env: {
       HAI_E2E: '1',
+      HAI_CORE_ENV: 'development',
       HAI_ADMIN_DEFAULT_PASSWORD: 'admin123456',
       HAI_DB_DATABASE: `${testDataDir}/admin.db`,
       HAI_STORAGE_ROOT: `${testDataDir}/uploads`,

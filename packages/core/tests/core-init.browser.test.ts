@@ -34,6 +34,11 @@ describe('core.init (browser)', () => {
     expect(core.config.keys()).toEqual([])
     expect(core.config.isWatching('app')).toBe(false)
 
+    const envResult = core.config.loadEnvFiles({ mode: 'dev' })
+    expect(envResult.success).toBe(false)
+    if (!envResult.success)
+      expect(envResult.error.code).toBe(HaiCommonError.SERVICE_UNAVAILABLE.code)
+
     const loadResult = core.config.load('app', './config/app.yml')
     expect(loadResult.success).toBe(false)
     if (!loadResult.success)

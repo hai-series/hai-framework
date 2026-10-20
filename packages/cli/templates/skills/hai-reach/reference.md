@@ -34,17 +34,17 @@
 providers:
   - name: email
     type: smtp
-    host: ${HAI_REACH_SMTP_HOST:smtp.example.com}
-    port: ${HAI_REACH_SMTP_PORT:465}
+    host: ${HAI_REACH_PROVIDERS_0_HOST:smtp.example.com}
+    port: ${HAI_REACH_PROVIDERS_0_PORT:465}
     secure: true
-    user: ${HAI_REACH_SMTP_USER:}
-    pass: ${HAI_REACH_SMTP_PASS:}
-    from: ${HAI_REACH_SMTP_FROM:noreply@example.com}
+    user: ${HAI_REACH_PROVIDERS_0_USER:}
+    pass: ${HAI_REACH_PROVIDERS_0_PASS:}
+    from: ${HAI_REACH_PROVIDERS_0_FROM:noreply@example.com}
   - name: sms
     type: aliyun-sms
-    accessKeyId: ${HAI_REACH_SMS_ACCESS_KEY:}
-    accessKeySecret: ${HAI_REACH_SMS_SECRET_KEY:}
-    signName: ${HAI_REACH_SMS_SIGN_NAME:}
+    accessKeyId: ${HAI_REACH_PROVIDERS_0_ACCESSKEYID:}
+    accessKeySecret: ${HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET:}
+    signName: ${HAI_REACH_PROVIDERS_0_SIGNNAME:}
   - name: webhook
     type: api
     url: ${HAI_REACH_WEBHOOK_URL:}

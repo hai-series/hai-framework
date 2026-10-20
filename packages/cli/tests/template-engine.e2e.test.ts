@@ -24,6 +24,7 @@ import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
+import { loadConfigText } from './helpers/config.js'
 
 // =============================================================================
 // 测试工具
@@ -111,9 +112,9 @@ it('fullstack 应保留完整配置文件、用户选择和未启用模块的注
     packageManager: 'pnpm',
   }))
   const configDir = `packages/${projectName}-serv/config`
-  const db = parse(await readGenerated(projectPath, `${configDir}/_db.yml`))
-  const cache = parse(await readGenerated(projectPath, `${configDir}/_cache.yml`))
-  const iam = parse(await readGenerated(projectPath, `${configDir}/_iam.yml`))
+  const db = loadConfigText('db', await readGenerated(projectPath, `${configDir}/_db.yml`))
+  const cache = loadConfigText('cache', await readGenerated(projectPath, `${configDir}/_cache.yml`))
+  const iam = loadConfigText('iam', await readGenerated(projectPath, `${configDir}/_iam.yml`))
   expect(db).toMatchObject({ type: 'postgresql', host: 'db.internal', port: 5433, database: 'app: primary' })
   expect(cache).toMatchObject({ type: 'redis', host: 'cache.internal', port: 6380 })
   expect(iam).toMatchObject({ login: { otp: true }, seedDefaultData: false })
@@ -133,7 +134,7 @@ it('fullstack 应保留完整配置文件、用户选择和未启用模块的注
   expect(iamContent).toContain('superAdminRole:')
   // 用户整文件去掉一层注释后，应直接得到合法配置，而非残留说明文字导致 YAML 解析失败。
   const aiExample = await readGenerated(projectPath, `${configDir}/_ai.yml`)
-  expect(parse(aiExample.replace(/^# /gm, ''))).toMatchObject({ llm: { model: 'gpt-4o-mini' } })
+  expect(loadConfigText('ai', aiExample.replace(/^# /gm, ''))).toMatchObject({ llm: { model: 'gpt-4o-mini' } })
 })
 
 it('fullstack 选择可选模块时应保留其可用配置及创建参数', async () => {
@@ -147,7 +148,7 @@ it('fullstack 选择可选模块时应保留其可用配置及创建参数', asy
     moduleConfigs: { ai: { defaultProvider: 'anthropic', model: 'claude-sonnet-4-5' } },
     packageManager: 'pnpm',
   }))
-  const config = parse(await readGenerated(projectPath, `packages/${projectName}-serv/config/_ai.yml`))
+  const config = loadConfigText('ai', await readGenerated(projectPath, `packages/${projectName}-serv/config/_ai.yml`))
   expect(config).toMatchObject({ llm: { api: 'anthropic', model: 'claude-sonnet-4-5' } })
 })
 

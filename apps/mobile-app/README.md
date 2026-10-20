@@ -58,6 +58,8 @@ export const mobileApiClient = apiClient.create(apiServiceContract)
 
 ## 配置
 
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod`、`build:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置手册](../../docs/environment-configuration.md)。
+
 | 变量                           | 说明                                                       | 默认值                         |
 | ------------------------------ | ---------------------------------------------------------- | ------------------------------ |
 | `PUBLIC_API_BASE`              | `apps/api-service` API 基础 URL；覆盖时需包含共享 API 前缀 | `http://localhost:3000/api/v1` |
@@ -71,7 +73,7 @@ Android 模拟器访问宿主机后端时通常使用：
 PUBLIC_API_BASE=http://10.0.2.2:3000/api/v1
 ```
 
-## 配置驱动认证页面
+### 认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 

@@ -7,6 +7,7 @@
 
 import type { AiModuleConfig, CacheModuleConfig, CoreModuleConfig, DbModuleConfig, FeatureId, IamModuleConfig, ModuleConfigs, StorageModuleConfig } from '../cli-types.js'
 import { stringify } from 'yaml'
+import { configEnvironmentVariables, moduleEnvironmentVariables, parameterizeConfig, renderEnvironment } from './cli-config-environment.js'
 
 /**
  * 生成模块配置文件内容
@@ -16,6 +17,10 @@ import { stringify } from 'yaml'
  * @returns YAML 格式的配置内容
  */
 export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
+  return parameterizeConfig(moduleKey, generateLiteralConfigFile(moduleKey, configs))
+}
+
+function generateLiteralConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
   switch (moduleKey) {
     case 'core':
       return generateCoreConfig(configs?.core)
@@ -127,9 +132,9 @@ function generateDbConfig(cfg?: DbModuleConfig): string {
   const dbType = cfg?.type ?? 'sqlite'
   const database = cfg?.database ?? (dbType === 'sqlite' ? './data/app.db' : 'hai')
   const host = cfg?.host ?? 'localhost'
-  const port = cfg?.port ?? (dbType === 'postgresql' ? 5432 : 3306)
+  const port = cfg?.port ?? (dbType === 'mysql' ? 3306 : 5432)
 
-  const user = dbType === 'postgresql' ? 'postgres' : 'root'
+  const user = dbType === 'mysql' ? 'root' : 'postgres'
   const connection = stringify({ host, port, user, password: '' }).trim()
   const networkOptions = `# url: \${HAI_DB_URL} # 可用连接串替代 host/port/user/password
 # ssl: false # false | true | require | prefer | allow | disable，或 TLS 对象
@@ -153,24 +158,9 @@ type: ${dbType}
 # SQLite 使用文件路径，PostgreSQL/MySQL 使用数据库名称。
 ${stringify({ database }).trim()}
 
-${dbType === 'sqlite'
-  ? `# SQLite 驱动选项；worker 将查询移到工作线程。
-# sqlite:
-#   walMode: true
-#   readonly: false
-#   executor: sync # sync | worker
-#   workerConnectTimeoutMs: 10000
-
-# 切换到 PostgreSQL/MySQL 时修改 type、database，并取消连接项的注释。
-${stringify({ host: 'localhost', port: 5432, user: 'postgres', password: '' }).trim().split('\n').map(line => `# ${line}`).join('\n')}`
-  : `# 网络数据库连接；凭据通过环境变量注入。
 ${connection}
-# SQLite 替代方案：type: sqlite，database: ./data/app.db
-# sqlite:
-#   walMode: true
-#   readonly: false
-#   executor: sync
-#   workerConnectTimeoutMs: 10000`}
+url: \${HAI_DB_URL:}
+ssl: \${HAI_DB_SSL:false}
 ${networkOptions}
 
 # SQL 日志按需开启；maxLength 限制 SQL / 参数输出长度。
@@ -195,16 +185,16 @@ function generateCacheConfig(cfg?: CacheModuleConfig): string {
 # 缓存类型: memory | redis
 type: ${cacheType}
 
-# Redis 配置；memory 时均不生效，切换 type 后取消需要的注释。
-${cacheType === 'redis' ? connection : connection.split('\n').map(line => `# ${line}`).join('\n')}
-# url: redis://localhost:6379/0
-# db: 0
-# connectTimeout: 10000
-# commandTimeout: 5000
-# tls: false
-# maxRetries: 3
-# retryDelay: 50
-# readOnly: false
+# Redis 配置；memory 时不生效；跨环境切换 type 后自动使用连接项。
+${connection}
+url: ''
+db: 0
+connectTimeout: 10000
+commandTimeout: 5000
+tls: false
+maxRetries: 3
+retryDelay: 50
+readOnly: false
 # 集群与 Sentinel 二选一；普通 Redis 不需要这两块。
 # cluster:
 #   - host: redis-1.internal
@@ -339,10 +329,11 @@ secretAccessKey: ''
 # publicUrl: https://cdn.example.com`
   return `# 存储配置；HAI_STORAGE 可整体替换连接配置。
 type: ${type}
-${type === 'local' ? local : s3}
+${local}
+${s3}
 
-# 切换 type 后使用另一种存储的连接项。
-${(type === 'local' ? s3 : local).split('\n').map(line => line.startsWith('#') ? line : `# ${line}`).join('\n')}
+# type 选择 Provider；未选分支字段由模块 Schema 忽略。
+# endpoint / publicUrl 为可选 URL，启用时取消对应字段注释并通过环境变量提供。
 
 # operationLog:
 #   read: false
@@ -526,278 +517,32 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
  *
  * @param features - 选中的功能模块列表
  * @param configs - 用户自定义配置值
- * @param includeDisabled - 是否输出所有模块的完整注释示例（fullstack 使用，默认值以 YAML 为准）
+ * @param includeDisabled - 是否输出所有模块的完整注释示例（fullstack 使用，未启用模块保留注释）
  * @returns .env.example 文件内容
  */
-export function generateEnvExample(features: FeatureId[], configs?: ModuleConfigs, includeDisabled = false): string {
-  const sections: string[] = []
-
-  // 文件头
-  sections.push(`# =============================================================================
-# Environment Variables
-# =============================================================================
-#
-# Copy this file to .env and fill in actual values.
-# Config files use literal defaults; matching HAI variables override YAML leaves.
-# Uncomment the matching YAML keys before using leaf overrides; HAI_<module> replaces the whole object.
-#
-# Naming convention: HAI_<config name>_<YAML path>
-# =============================================================================`)
-
-  // 应用基础（始终生成）
-  sections.push(`
-# =============================================================================
-# Application
-# =============================================================================
-# Environment: development | production | test
-HAI_CORE_ENV=development
-# Enable debug mode
-HAI_CORE_DEBUG=false`)
-
-  // 数据库
-  if (features.includes('db') || includeDisabled) {
-    const dbType = configs?.db?.type ?? 'sqlite'
-    const dbDatabase = configs?.db?.database ?? (dbType === 'sqlite' ? './data/app.db' : 'hai')
-    const isSqlite = dbType === 'sqlite'
-    sections.push(`
-# =============================================================================
-# Database (@h-ai/reldb)
-# =============================================================================
-# Database type: sqlite | postgresql | mysql
-HAI_DB_TYPE=${dbType}
-# SQLite: file path; PostgreSQL/MySQL: database name
-HAI_DB_DATABASE=${dbDatabase}${isSqlite
-  ? `
-# PostgreSQL/MySQL connection (uncomment when not using sqlite)
-# HAI_DB_HOST=localhost
-# HAI_DB_PORT=5432
-# HAI_DB_USER=postgres
-# HAI_DB_PASSWORD=`
-  : `
-# Connection
-HAI_DB_HOST=${configs?.db?.host ?? 'localhost'}
-HAI_DB_PORT=${configs?.db?.port ?? (dbType === 'postgresql' ? 5432 : 3306)}
-HAI_DB_USER=${dbType === 'postgresql' ? 'postgres' : 'root'}
-HAI_DB_PASSWORD=`}`)
+export function generateEnvExample(features: FeatureId[], configs?: ModuleConfigs, includeDisabled = false, configContents: Record<string, string> = {}): string {
+  const keys = new Set(['core', ...(configContents.serv ? ['serv'] : []), ...features.filter(feature => !['crypto', 'api-client', 'capacitor', 'datapipe'].includes(feature))])
+  const allKeys = ['core', 'serv', 'db', 'cache', 'iam', 'storage', 'ai', 'vecdb', 'reach', 'payment', 'scheduler', 'deploy', 'audit']
+  const sections = [`# Environment configuration
+# .env / .env.dev / .env.test / .env.prod are public configuration tracked in Git.
+# .env.local is private to this machine and ignored by Git.
+# Priority: process environment > .env.local > .env.<dev|test|prod> > .env.
+# Naming: HAI_<CONFIG>_<PATH>; camelCase stays joined (apiKey -> APIKEY); arrays use zero-based indexes.
+# PUBLIC_ / VITE_ variables are visible in browsers and must never contain secrets.
+# YAML declares references and local fallbacks; constraints are validated by module Schemas.
+# Values in this example are safe defaults. Keep real credentials in ignored .env.local or secret management.
+`]
+  for (const key of allKeys) {
+    if (!keys.has(key) && !includeDisabled)
+      continue
+    const variables = configEnvironmentVariables(key, configContents[key] ?? generateConfigFile(key, configs))
+    const section = renderEnvironment(variables)
+    const activeNames = new Set(variables.map(variable => variable.name))
+    const optional = renderEnvironment(moduleEnvironmentVariables(key).filter(variable => !activeNames.has(variable.name)))
+    const commented = (value: string) => value.split('\n').map(line => line && !line.startsWith('#') ? `# ${line}` : line).join('\n')
+    sections.push(`# --- ${key} ---\n${keys.has(key) ? section : commented(section)}\n\n# 可选字段：先启用 YAML 路径，或用父级对象整体覆盖。\n${commented(optional)}`)
   }
-
-  // IAM / Session
-  if (features.includes('iam') || includeDisabled) {
-    sections.push(`
-# =============================================================================
-# IAM (@h-ai/iam)
-# =============================================================================
-# HAI_IAM_PASSWORD_MINLENGTH=8
-# HAI_IAM_SESSION_MAXAGE=86400
-# HAI_IAM_SESSION_REFRESHTOKENMAXAGE=604800
-# HAI_IAM_OTP={"email":true,"sms":true,"length":6,"expiresIn":300,"maxAttempts":3,"resendInterval":60}
-# HAI_IAM_LDAP_BINDPASSWORD=          # Enable login.ldap and uncomment the ldap block first.
-# HAI_IAM_PASSWORDRESET_RESETURL=https://app.example.com/auth/reset-password
-# HAI_KIT_COOKIE_KEY=                 # 32-char hex for SM4-CBC cookie encryption
-`)
-  }
-
-  // 缓存
-  if (features.includes('cache') || includeDisabled) {
-    const cacheType = configs?.cache?.type ?? 'memory'
-    if (cacheType === 'redis') {
-      sections.push(`
-# =============================================================================
-# Cache (@h-ai/cache)
-# =============================================================================
-# Cache type: memory | redis
-HAI_CACHE_TYPE=redis
-# Redis connection
-HAI_CACHE_HOST=${configs?.cache?.host ?? 'localhost'}
-HAI_CACHE_PORT=${configs?.cache?.port ?? 6379}
-HAI_CACHE_PASSWORD=
-# HAI_CACHE_URL=redis://localhost:6379/0
-# HAI_CACHE_DB=0
-# HAI_CACHE_CONNECTTIMEOUT=10000
-# HAI_CACHE_COMMANDTIMEOUT=5000
-# HAI_CACHE_KEYPREFIX=hai:`)
-    }
-    else {
-      sections.push(`
-# =============================================================================
-# Cache (@h-ai/cache)
-# =============================================================================
-# Cache type: memory | redis
-HAI_CACHE_TYPE=memory
-# Redis connection (uncomment when type=redis)
-# HAI_CACHE_URL=redis://localhost:6379/0
-# HAI_CACHE_HOST=localhost
-# HAI_CACHE_PORT=6379
-# HAI_CACHE_PASSWORD=
-# HAI_CACHE_DB=0
-# HAI_CACHE_CONNECTTIMEOUT=10000
-# HAI_CACHE_COMMANDTIMEOUT=5000
-# HAI_CACHE_KEYPREFIX=hai:`)
-    }
-  }
-
-  // 存储
-  if (features.includes('storage') || includeDisabled) {
-    const storageType = configs?.storage?.type ?? 'local'
-    if (storageType === 's3') {
-      sections.push(`
-# =============================================================================
-# Storage (@h-ai/storage)
-# =============================================================================
-# Default storage provider: local | s3
-HAI_STORAGE_TYPE=s3
-# S3 / S3-compatible
-HAI_STORAGE_BUCKET=
-HAI_STORAGE_REGION=us-east-1
-HAI_STORAGE_ACCESSKEYID=
-HAI_STORAGE_SECRETACCESSKEY=
-# HAI_STORAGE_ENDPOINT=          # Custom endpoint for MinIO / Aliyun OSS etc.
-# HAI_STORAGE_FORCEPATHSTYLE=false
-# Local storage (uncomment when type=local)
-# HAI_STORAGE_ROOT=./data/uploads`)
-    }
-    else {
-      sections.push(`
-# =============================================================================
-# Storage (@h-ai/storage)
-# =============================================================================
-# Default storage provider: local | s3
-HAI_STORAGE_TYPE=local
-# Local storage root path
-HAI_STORAGE_ROOT=${configs?.storage?.localPath ?? './data/uploads'}
-# S3 / S3-compatible (uncomment when type=s3)
-# HAI_STORAGE_BUCKET=
-# HAI_STORAGE_REGION=us-east-1
-# HAI_STORAGE_ACCESSKEYID=
-# HAI_STORAGE_SECRETACCESSKEY=
-# HAI_STORAGE_ENDPOINT=          # Custom endpoint for MinIO / Aliyun OSS etc.
-# HAI_STORAGE_FORCEPATHSTYLE=false`)
-    }
-  }
-
-  // AI
-  if (features.includes('ai') || includeDisabled) {
-    sections.push(`
-# =============================================================================
-# AI (@h-ai/ai)
-# =============================================================================
-# Select chat / responses / anthropic in _ai.yml (llm.api).
-HAI_AI_LLM_APIKEY=
-# HAI_AI_LLM_BASEURL=               # Custom base URL
-# Optional compatibility fallback
-# OPENAI_API_KEY=`)
-  }
-
-  // VecDB
-  if (features.includes('vecdb') || includeDisabled) {
-    sections.push(`
-# =============================================================================
-# Vector Database (@h-ai/vecdb)
-# =============================================================================
-# Backend type: lancedb | pgvector | qdrant | chroma
-HAI_VECDB_TYPE=lancedb
-# LanceDB data path
-HAI_VECDB_PATH=./data/vecdb
-# Qdrant (uncomment when type=qdrant)
-# HAI_VECDB_URL=http://localhost:6333
-# HAI_VECDB_APIKEY=
-`)
-  }
-
-  // Reach
-  if (features.includes('reach') || includeDisabled) {
-    sections.push(`
-# =============================================================================
-# Reach (@h-ai/reach)
-# =============================================================================
-# SMTP (uncomment when enabling email provider)
-# HAI_REACH_SMTP_HOST=smtp.example.com
-# HAI_REACH_SMTP_PORT=465
-# HAI_REACH_SMTP_USER=
-# HAI_REACH_SMTP_PASS=
-# HAI_REACH_SMTP_FROM=noreply@example.com
-# HAI_REACH_SMS_ACCESS_KEY=
-# HAI_REACH_SMS_SECRET_KEY=
-# HAI_REACH_API_TOKEN=
-# HAI_REACH_PROVIDERS=                # JSON array replacing all providers, while retaining templates.
-`)
-  }
-
-  // Payment
-  if (features.includes('payment') || includeDisabled) {
-    sections.push(`
-# =============================================================================
-# Payment (@h-ai/payment)
-# =============================================================================
-# WeChat Pay
-# HAI_PAYMENT_WECHAT_MCHID=
-# HAI_PAYMENT_WECHAT_APIV3KEY=
-# HAI_PAYMENT_WECHAT_SERIALNO=
-# HAI_PAYMENT_WECHAT_PRIVATEKEY=
-# HAI_PAYMENT_WECHAT_PLATFORMCERT=
-# HAI_PAYMENT_WECHAT_APPID=
-# Alipay
-# HAI_PAYMENT_ALIPAY_APPID=
-# HAI_PAYMENT_ALIPAY_PRIVATEKEY=
-# HAI_PAYMENT_ALIPAY_ALIPAYPUBLICKEY=
-# Stripe
-# HAI_PAYMENT_STRIPE_SECRETKEY=
-# HAI_PAYMENT_STRIPE_WEBHOOKSECRET=
-`)
-  }
-
-  if (features.includes('deploy') || includeDisabled) {
-    sections.push(`
-# =============================================================================
-# Deployment (@h-ai/deploy)
-# =============================================================================
-# HAI_DEPLOY_VERCEL_TOKEN=
-# HAI_DEPLOY_SSH_HOST=
-# HAI_DEPLOY_SSH_KEY=
-# HAI_DEPLOY_SSH_KNOWNHOSTSFILE=
-# HAI_DEPLOY_NEON_API_KEY=
-# HAI_DEPLOY_UPSTASH_EMAIL=
-# HAI_DEPLOY_UPSTASH_API_KEY=
-# HAI_DEPLOY_CF_ACCOUNT_ID=
-# HAI_DEPLOY_CF_API_TOKEN=
-# HAI_DEPLOY_R2_ACCESS_KEY_ID=
-# HAI_DEPLOY_R2_SECRET_ACCESS_KEY=
-# HAI_DEPLOY_RESEND_API_KEY=
-# HAI_DEPLOY_RESEND_FROM=
-# HAI_DEPLOY_ALIYUN_ACCESS_KEY_ID=
-# HAI_DEPLOY_ALIYUN_ACCESS_KEY_SECRET=
-# HAI_DEPLOY_ALIYUN_SIGN_NAME=
-`)
-  }
-
-  if (includeDisabled) {
-    sections.push(`
-# =============================================================================
-# Service (@h-ai/serv)
-# =============================================================================
-# HOST=127.0.0.1                     # HOST/PORT override _serv.yml server settings.
-# PORT=3000
-# HAI_CORS_ORIGIN=http://127.0.0.1:4173,http://localhost:4173
-# HAI_CORS_NATIVEORIGINS=http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost
-# HAI_CORS_CREDENTIALS=true
-# HAI_SERV_HTTP_RPC_GATEWAYSECRET=   # Enable the gateway-only RPC block before setting this.
-`)
-  }
-
-  // 测试（始终生成）
-  sections.push(`
-# =============================================================================
-# Testing
-# =============================================================================
-# E2E test mode (relaxes rate limiting etc.)
-# HAI_E2E=1
-`)
-
-  const content = sections.join('\n')
-  // fullstack 自动生成 .env；默认覆盖也必须注释，否则后续编辑 YAML 会被旧值悄悄覆盖。
-  return includeDisabled
-    ? content.split('\n').map(line => line && !line.startsWith('#') ? `# ${line}` : line).join('\n')
-    : content
+  return `${sections.join('\n\n')}\n`
 }
 
 function generateDeployConfig(): string {
@@ -810,7 +555,7 @@ function generateDeployConfig(): string {
 # 部署平台
 provider:
   type: vercel
-  token: \${HAI_DEPLOY_VERCEL_TOKEN}
+  token: \${HAI_DEPLOY_PROVIDER_TOKEN}
 
 # ---------------------------------------------------------------------------
 # 方式二：docker-ssh — 将应用容器化后通过 SSH 部署到任意 Linux 主机
@@ -820,11 +565,11 @@ provider:
 # provider:
 #   type: docker-ssh
 #   ssh:
-#     host: \${HAI_DEPLOY_SSH_HOST}
+#     host: \${HAI_DEPLOY_PROVIDER_SSH_HOST}
 #     port: 22
 #     username: deploy
-#     identityFile: \${HAI_DEPLOY_SSH_KEY}   # 私钥文件路径（省略则用 ssh-agent）
-#     knownHostsFile: \${HAI_DEPLOY_SSH_KNOWNHOSTSFILE}
+#     identityFile: \${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE}   # 私钥文件路径（省略则用 ssh-agent）
+#     knownHostsFile: \${HAI_DEPLOY_PROVIDER_SSH_KNOWNHOSTSFILE}
 #     strictHostKeyChecking: true
 #     connectTimeoutSeconds: 10
 #   remote:
@@ -844,34 +589,34 @@ provider:
   # PostgreSQL 数据库 (Neon)
   # db:
   #   provisioner: neon
-  #   apiKey: \${HAI_DEPLOY_NEON_API_KEY}
+  #   apiKey: \${HAI_DEPLOY_SERVICES_DB_APIKEY}
 
   # Redis 缓存 (Upstash)
   # cache:
   #   provisioner: upstash
-  #   email: \${HAI_DEPLOY_UPSTASH_EMAIL}
-  #   apiKey: \${HAI_DEPLOY_UPSTASH_API_KEY}
+  #   email: \${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
+  #   apiKey: \${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
 
   # S3 存储 (Cloudflare R2)
   # storage:
   #   provisioner: cloudflare-r2
-  #   accountId: \${HAI_DEPLOY_CF_ACCOUNT_ID}
-  #   apiToken: \${HAI_DEPLOY_CF_API_TOKEN}
-  #   accessKeyId: \${HAI_DEPLOY_R2_ACCESS_KEY_ID}
-  #   secretAccessKey: \${HAI_DEPLOY_R2_SECRET_ACCESS_KEY}
+  #   accountId: \${HAI_DEPLOY_SERVICES_STORAGE_ACCOUNTID}
+  #   apiToken: \${HAI_DEPLOY_SERVICES_STORAGE_APITOKEN}
+  #   accessKeyId: \${HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID}
+  #   secretAccessKey: \${HAI_DEPLOY_SERVICES_STORAGE_SECRETACCESSKEY}
 
   # 邮件 (Resend)
   # email:
   #   provisioner: resend
-  #   apiKey: \${HAI_DEPLOY_RESEND_API_KEY}
-  #   from: \${HAI_DEPLOY_RESEND_FROM}
+  #   apiKey: \${HAI_DEPLOY_SERVICES_EMAIL_APIKEY}
+  #   from: \${HAI_DEPLOY_SERVICES_EMAIL_FROM}
 
   # 短信 (阿里云)
   # sms:
   #   provisioner: aliyun
-  #   accessKeyId: \${HAI_DEPLOY_ALIYUN_ACCESS_KEY_ID}
-  #   accessKeySecret: \${HAI_DEPLOY_ALIYUN_ACCESS_KEY_SECRET}
-  #   signName: \${HAI_DEPLOY_ALIYUN_SIGN_NAME}
+  #   accessKeyId: \${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYID}
+  #   accessKeySecret: \${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYSECRET}
+  #   signName: \${HAI_DEPLOY_SERVICES_SMS_SIGNNAME}
 
 # docker-ssh 说明：
 # - 应用镜像使用工程自带的 Dockerfile（adapter-node），本地构建后经 SSH 传输并 load
@@ -941,18 +686,18 @@ providers:
   # SMTP 邮件（按需开启）
   # - name: email
   #   type: smtp
-  #   host: \${HAI_REACH_SMTP_HOST:smtp.example.com}
-  #   port: \${HAI_REACH_SMTP_PORT:465}
+  #   host: \${HAI_REACH_PROVIDERS_0_HOST:smtp.example.com}
+  #   port: \${HAI_REACH_PROVIDERS_0_PORT:465}
   #   secure: true
-  #   user: \${HAI_REACH_SMTP_USER:}
-  #   pass: \${HAI_REACH_SMTP_PASS:}
-  #   from: \${HAI_REACH_SMTP_FROM:noreply@example.com}
+  #   user: \${HAI_REACH_PROVIDERS_0_USER:}
+  #   pass: \${HAI_REACH_PROVIDERS_0_PASS:}
+  #   from: \${HAI_REACH_PROVIDERS_0_FROM:noreply@example.com}
 
   # 阿里云短信（按需开启）
   # - name: sms
   #   type: aliyun-sms
-  #   accessKeyId: \${HAI_REACH_SMS_ACCESS_KEY}
-  #   accessKeySecret: \${HAI_REACH_SMS_SECRET_KEY}
+  #   accessKeyId: \${HAI_REACH_PROVIDERS_0_ACCESSKEYID}
+  #   accessKeySecret: \${HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET}
   #   signName: MyApp
   #   endpoint: dysmsapi.aliyuncs.com
 
@@ -962,7 +707,7 @@ providers:
   #   url: https://notify.example.com/send
   #   method: POST # POST | PUT
   #   headers:
-  #     Authorization: 'Bearer \${HAI_REACH_API_TOKEN}'
+  #     Authorization: 'Bearer \${HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION}'
   #   timeout: 10000
 
 # IAM 标准模板：保留空数组以支持 HAI_REACH_TEMPLATES 整体覆盖。

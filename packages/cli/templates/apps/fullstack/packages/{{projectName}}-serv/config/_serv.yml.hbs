@@ -30,9 +30,9 @@ http:
   #   gatewaySecret: ${HAI_SERV_HTTP_RPC_GATEWAYSECRET}
 
 cors:
-  origin: ${HAI_CORS_ORIGIN:*}
-  nativeOrigins: ${HAI_CORS_NATIVEORIGINS:http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
-  credentials: ${HAI_CORS_CREDENTIALS:true}
+  origin: ${HAI_SERV_CORS_ORIGIN:*}
+  nativeOrigins: ${HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  credentials: ${HAI_SERV_CORS_CREDENTIALS:true}
   allowedHeaders:
     - Authorization
     - Content-Type

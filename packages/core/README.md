@@ -91,7 +91,7 @@ core.array.unique([1, 1, 2])
 浏览器端会保留 `core.config` API 形态以匹配类型定义，但不支持文件配置：
 
 - `core.config.get()` 返回 `undefined`，`has()` 返回 `false`，`keys()` 返回 `[]`
-- `load()` / `validate()` / `reload()` 返回 `HaiCommonError.SERVICE_UNAVAILABLE`
+- `loadEnvFiles()` / `load()` / `validate()` / `reload()` 返回 `HaiCommonError.SERVICE_UNAVAILABLE`
 - `watch()` 会立即用同一错误调用回调，并返回安全的 no-op 取消函数
 - 需要配置时请由服务端读取后通过接口下发，或只在浏览器端用 `core.init({ logging })` 配置日志
 
@@ -325,6 +325,18 @@ unwatch() // 取消监听
 // 清除缓存（同时停止对应监听）
 core.config.clear('app') // 清除单个
 core.config.clear() // 清除全部
+```
+
+#### dotenv 文件与环境切换
+
+Node 专用的 `core.config.loadEnvFiles({ mode, envDir })` 返回 HaiResult，读取 `.env` → `.env.<mode>` → `.env.local`，已有进程环境最高；development/production 映射为 dev/prod，文件不存在时跳过。该函数不修改进程，调用方检查 success 后注入。除 `.env.local` 外的公共环境文件及完整说明 `.env.example` 提交 Git。`core.init` 不自动读取 dotenv，浏览器调用返回 SERVICE_UNAVAILABLE。
+
+```ts
+const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
+if (!env.success)
+  throw new Error(env.error.message)
+Object.assign(process.env, env.data)
+core.init({ configDir: './config' })
 ```
 
 #### 环境变量映射与插值

@@ -29,6 +29,9 @@ function unsupportedError(): HaiError {
 
 /** 浏览器端 config 占位对象，API 与 Node.js config 保持一致。 */
 export const config: ConfigFn = {
+  loadEnvFiles(_options: { mode: string, envDir?: string }): HaiResult<Record<string, string>> {
+    return unsupported<Record<string, string>>()
+  },
   load<T>(_name: string, _filePath: string, _schema?: ZodType<T>): HaiResult<T> {
     return unsupported<T>()
   },

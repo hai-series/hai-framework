@@ -5,17 +5,22 @@
  */
 
 import process from 'node:process'
+import { core } from '@h-ai/core'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  const envResult = core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+  if (!envResult.success)
+    throw new Error(envResult.error.message)
+  const env = envResult.data
   Object.assign(process.env, env)
 
   return {
+    envDir: false,
     envPrefix: ['VITE_', 'PUBLIC_'],
     plugins: [
       sveltekit(),

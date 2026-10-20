@@ -616,7 +616,9 @@ Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用�
 
 ### 設定・環境変数
 
-環境変数 `HAI_<CONFIG_NAME>_<YAML_PATH>` は YAML を上書きします。ルートの [`.env.example`](./.env.example) を `.env` にコピーして必要項目を設定します。各 `apps/*/.env.example` はアプリ固有の差分のみを追加します。
+アプリとテンプレートは `HAI_<CONFIG>_<PATH>` を共用します。ルートの [`.env.example`](.env.example) に変数の用途、列挙値と範囲を掲載しています。環境ファイル、起動コマンドと Provider の切り替えは [設定ガイド](docs/environment-configuration.md) を参照してください。
+
+`.env.example` は全項目の説明と制約、`.env` は共通の公開設定、`.env.dev` / `.env.test` / `.env.prod` は環境別の公開設定として Git に登録します。端末固有の秘密情報は登録対象外の `.env.local` に保存します。優先順位はプロセス環境 > `.env.local` > 環境別ファイル > `.env` です。各アプリの `.env.example` に利用できる全項目を掲載します。
 
 - **命名**：`HAI_<CONFIG_NAME>_<YAML_PATH>`。階層を `_` で区切り、camelCase は分割しません（`llm.apiKey` → `HAI_AI_LLM_APIKEY`）。
 - **優先順位**：規約の環境変数 > YAML の明示的 `${VAR}` > YAML 既定値。

@@ -929,13 +929,13 @@ importers:
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      yaml:
-        specifier: 'catalog:'
-        version: 2.9.1
       zod:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@h-ai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -1118,6 +1118,9 @@ importers:
       '@capacitor/status-bar':
         specifier: 'catalog:'
         version: 8.0.4(@capacitor/core@8.5.3)
+      '@h-ai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42

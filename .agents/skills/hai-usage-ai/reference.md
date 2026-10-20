@@ -185,7 +185,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - `strictCapabilities` 为真时请求的高级能力若模型不支持 → 调 Provider 前 `AUDIO_UNSUPPORTED_INPUT`；参数非法（风格强度越界、语速非正、speed 与 targetDurationMs 冲突、durationTolerance 缺 target 等）→ `AUDIO_INVALID_REQUEST`。
 - 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao'|'whisper'|'indextts', model, operations: ('transcribe'|'synthesize')[]（至少一项、不重复）, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]`。`provider` 表示调用协议而非部署位置；`whisper`（ASR）/ `indextts`（TTS）可自托管，无 canonical 端点，必须显式配置 `baseUrl`（缺失 → `CONFIGURATION_ERROR`），可无凭据（配 `apiKey` 后按 `Authorization: Bearer` 发送）；云平台缺凭据 → `CONFIGURATION_ERROR`。
 - 无原生流式的平台：`whisper` 完整音频降级为最终 `transcript`、持续音频输入 → `AUDIO_UNSUPPORTED_INPUT`；`indextts` 按段完整合成降级、`streamingAudioOutput` 保持 `false`。自托管镜像见 `packages/ai/models/`（优先 ModelScope 下载）。
-- 凭据环境变量回退：`HAI_AI_AUDIO_<PROVIDER>_API_KEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。
+- 凭据环境变量回退：`HAI_AI_AUDIO_<PROVIDER>_APIKEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。
 - 资源上限：`audio.maxAudioBytes`（默 10 MiB，同时保护说话人/风格参考）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
 - Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`。浏览器客户端（`@h-ai/ai/client`）严格区分正常结束 / 取消 / 异常断连：取消招 `AUDIO_CANCELLED`、`end` 前断连招 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不把未完成的部分音频当作成功返回。
 
@@ -198,7 +198,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - 请求：`GenerateImageRequest { prompt, model?, size?: { width, height }, referenceImages?: ReferenceImage[], signal? }`；`ReferenceImage` 为 `{ data: Uint8Array, mimeType: string }`。
 - 返回：`GenerateImageResult { images: Array<{ data: Uint8Array, mimeType, width?, height? }> }`。
 - 模型配置：`image.models: [{ id, provider: 'openai'|'google'|'qwen'|'seedream'|'pollinations', model, apiKey?, baseUrl?, workspaceId?, timeout? }]`；`image.generateModel` 选择默认模型别名。
-- 凭据优先使用模型项 `apiKey`，否则回退 `HAI_AI_IMAGE_<PROVIDER>_API_KEY` 或厂商标准环境变量。
+- 凭据优先使用模型项 `apiKey`，否则回退 `HAI_AI_IMAGE_<PROVIDER>_APIKEY` 或厂商标准环境变量。
 - 厂商差异由内部 Provider 消化：OpenAI/Pollinations 的 multipart edits、Google `inlineData`、Qwen/Seedream 的 Data URL 参考图，以及各家 Base64、临时 URL 或二进制响应均归一为图片字节。
 - Google 只接受其文档列出的宽高比；Qwen/Seedream 还可能对总像素与边长有限制。业务应提供厂商支持的尺寸预设，不要假设任意像素组合都可用。
 

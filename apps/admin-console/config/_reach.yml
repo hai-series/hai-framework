@@ -6,9 +6,9 @@
 providers:
   # 开发环境使用 console provider（输出到日志）
   - name: email
-    type: console
+    type: ${HAI_REACH_PROVIDERS_0_TYPE:console}
   - name: sms
-    type: console
+    type: ${HAI_REACH_PROVIDERS_1_TYPE:console}
 
 # 模板配置
 templates:

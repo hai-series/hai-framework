@@ -30,8 +30,7 @@
 # 在 hai-framework monorepo 根目录
 pnpm install
 
-# 可选：复制环境变量并修改合作管理后台密码
-cp apps/corporate-website/.env.example apps/corporate-website/.env
+# 按 .env.example 的字段说明，在 .env.local 中仅填写需要覆盖的私有值
 
 # 启动开发服务器
 pnpm --filter corporate-website dev
@@ -61,6 +60,8 @@ pnpm --filter corporate-website preview
 用户名默认是 `partner-admin`，密码必须通过 `HAI_PARTNER_PASSWORD` 注入。应用不会提供默认密码，也不会把凭据写入日志；缺少密码时启动阶段会返回明确的配置错误。
 
 ## ⚙️ 配置
+
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod`、`build:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置手册](../../docs/environment-configuration.md)。
 
 ### YAML 配置文件
 

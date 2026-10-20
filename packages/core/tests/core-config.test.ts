@@ -80,6 +80,17 @@ describe('core.config', () => {
     }
   })
 
+  it('显式别名中的美元符号保持原值，不解释为替换表达式', () => {
+    const value = 'secret$&$$$`$\'end'
+    vi.stubEnv('CUSTOM_FOO', value)
+    // eslint-disable-next-line no-template-curly-in-string
+    writeFileSync(configPath, 'foo: ${CUSTOM_FOO}\nbar: prefix-${CUSTOM_FOO}-suffix\n', 'utf-8')
+    expect(core.config.load('app', configPath, schema)).toMatchObject({
+      success: true,
+      data: { foo: value, bar: `prefix-${value}-suffix` },
+    })
+  })
+
   it('load 文件不存在时应返回 FILE_NOT_FOUND', () => {
     const result = core.config.load('app', join(tempDir, 'nonexistent.yml'), schema)
     expect(result.success).toBe(false)

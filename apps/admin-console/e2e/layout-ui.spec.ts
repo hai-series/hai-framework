@@ -82,12 +82,11 @@ test.describe('Header', () => {
     await expect(page.locator('.user-menu-container').getByText(user.username)).toBeVisible()
   })
 
-  test('顶栏显示开发环境徽章', async ({ page, request }) => {
+  test('生产环境不显示开发环境徽章', async ({ page, request }) => {
     await registerAndLogin(page, request, 'header')
 
-    // 开发环境徽章
-    const devBadge = page.locator('header [class*="bg-amber"]')
-    await expect(devBadge).toBeVisible()
+    // 默认门禁显式使用 production；development 覆写由 transport-on 组验证。
+    await expect(page.getByTestId('app-environment-badge')).toHaveCount(0)
   })
 
   test('顶栏面包屑导航可见', async ({ page, request }) => {

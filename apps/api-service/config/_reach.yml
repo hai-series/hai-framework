@@ -1,9 +1,9 @@
 # 开发触达示例；生产环境改为 SMTP、短信或 API Provider。
 providers:
   - name: email
-    type: console
+    type: ${HAI_REACH_PROVIDERS_0_TYPE:console}
   - name: sms
-    type: console
+    type: ${HAI_REACH_PROVIDERS_1_TYPE:console}
 templates:
   - name: otp_email
     provider: email

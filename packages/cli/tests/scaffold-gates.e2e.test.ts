@@ -251,12 +251,12 @@ async function startNativeApiService(root: string, baseUrl: string): Promise<() 
   const service = spawn(process.execPath, ['dist/index.js'], {
     cwd: path.join(repo, 'apps/api-service'),
     windowsHide: true,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
       ...authFixtureEnv(),
       HAI_CORE_ENV: 'test',
-      HAI_CORE_LOGGING_LEVEL: 'fatal',
+      HAI_CORE_LOGGING_LEVEL: 'error',
       HAI_SERV_SERVER_PORT: new URL(baseUrl).port,
       HAI_SERV_TRANSPORT: 'false',
       HAI_DB_DATABASE: path.join(root, 'api-data/app.db'),
@@ -264,6 +264,13 @@ async function startNativeApiService(root: string, baseUrl: string): Promise<() 
       HAI_STORAGE_ROOT: path.join(root, 'api-data/uploads'),
       HAI_IAM_REGISTER_ENABLED: 'true',
     },
+  })
+  let startupError = ''
+  service.stdout?.setEncoding('utf8').on('data', (chunk: string) => {
+    startupError = (startupError + chunk).slice(-4000)
+  })
+  service.stderr?.setEncoding('utf8').on('data', (chunk: string) => {
+    startupError = (startupError + chunk).slice(-4000)
   })
   const close = async () => {
     if (service.exitCode !== null)
@@ -276,7 +283,7 @@ async function startNativeApiService(root: string, baseUrl: string): Promise<() 
   try {
     for (let attempt = 0; attempt < 120; attempt++) {
       if (service.exitCode !== null)
-        throw new Error('Native API fixture exited before ready')
+        throw new Error(`Native API fixture exited before ready: ${startupError}`)
       const response = await fetch(`${baseUrl}/health`).catch(() => null)
       if (response?.ok)
         return close
@@ -402,7 +409,7 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
           SERVICE_BASE_URL: envOptions.serviceBaseUrl,
         }
       : {}),
-    ...Object.fromEntries(Object.entries(envOptions.frontendUrls ?? {}).map(([target, url]) => [`HAI_E2E_${target}_URL`, url])),
+    ...Object.fromEntries(Object.entries(envOptions.frontendUrls ?? {}).map(([target, url]) => [`HAI_E2E_${target.toUpperCase()}_URL`, url])),
     CI: '1',
     // 产物按生产模式构建，业务环境独立使用 core 覆盖值，避免继承 Vitest 的开发编译模式。
     NODE_ENV: nodeEnv,

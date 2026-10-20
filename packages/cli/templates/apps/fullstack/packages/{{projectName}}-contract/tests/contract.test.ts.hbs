@@ -1,36 +1,30 @@
 import { apiContract } from '@h-ai/api-contract'
 import { describe, expect, it } from 'vitest'
-import {
-  appContract,
-  AppEchoInputSchema,
-  AppInfoOutputDataSchema,
-  ENABLED_FRONTENDS,
-  {{fullstack.contractExportName}},
-} from '../src/index.js'
+import * as contracts from '../src/index.js'
 
 describe('{{fullstack.contractPackageName}}', () => {
   it('defines app contract routes', () => {
-    expect({{fullstack.contractExportName}}.app).toBeDefined()
-    expect(appContract.info).toBeDefined()
-    expect(apiContract.pathOf(appContract.info)).toBe('/app/info')
+    expect(contracts.{{fullstack.contractExportName}}.app).toBeDefined()
+    expect(contracts.appContract.info).toBeDefined()
+    expect(apiContract.pathOf(contracts.appContract.info)).toBe('/app/info')
   })
 
   it('validates app info payload', () => {
-    const result = AppInfoOutputDataSchema.safeParse({
+    const result = contracts.AppInfoOutputDataSchema.safeParse({
       name: '{{fullstack.servPackageName}}',
       version: '0.1.0',
       env: 'test',
       defaultLocale: 'zh-CN',
       supportedLocales: ['zh-CN', 'en-US'],
       startedAt: '2026-01-01T00:00:00.000Z',
-      frontends: [...ENABLED_FRONTENDS],
+      frontends: [...contracts.ENABLED_FRONTENDS],
     })
 
     expect(result.success).toBe(true)
   })
 
   it('validates echo input boundaries', () => {
-    expect(AppEchoInputSchema.safeParse({ message: 'hello' }).success).toBe(true)
-    expect(AppEchoInputSchema.safeParse({ message: '' }).success).toBe(false)
+    expect(contracts.AppEchoInputSchema.safeParse({ message: 'hello' }).success).toBe(true)
+    expect(contracts.AppEchoInputSchema.safeParse({ message: '' }).success).toBe(false)
   })
 })

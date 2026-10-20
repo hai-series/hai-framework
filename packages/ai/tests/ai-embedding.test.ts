@@ -119,10 +119,10 @@ describe('embedding operations', () => {
 
     // 清除环境变量
     const origKeys = {
-      HAI_AI_LLM_API_KEY: process.env.HAI_AI_LLM_API_KEY,
+      HAI_AI_LLM_APIKEY: process.env.HAI_AI_LLM_APIKEY,
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     }
-    delete process.env.HAI_AI_LLM_API_KEY
+    delete process.env.HAI_AI_LLM_APIKEY
     delete process.env.OPENAI_API_KEY
 
     try {
@@ -135,8 +135,8 @@ describe('embedding operations', () => {
     }
     finally {
       // 恢复环境变量
-      if (origKeys.HAI_AI_LLM_API_KEY)
-        process.env.HAI_AI_LLM_API_KEY = origKeys.HAI_AI_LLM_API_KEY
+      if (origKeys.HAI_AI_LLM_APIKEY)
+        process.env.HAI_AI_LLM_APIKEY = origKeys.HAI_AI_LLM_APIKEY
       if (origKeys.OPENAI_API_KEY)
         process.env.OPENAI_API_KEY = origKeys.OPENAI_API_KEY
     }

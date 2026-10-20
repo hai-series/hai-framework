@@ -60,16 +60,16 @@ Git に保存できる設定は `config/_deploy.yml`、秘密情報は `~/.hai/c
 # config/_deploy.yml
 provider:
   type: vercel
-  token: ${HAI_DEPLOY_VERCEL_TOKEN}
+  token: ${HAI_DEPLOY_PROVIDER_TOKEN}
 
 services:
   db:
     provisioner: neon
-    apiKey: ${HAI_DEPLOY_NEON_API_KEY}
+    apiKey: ${HAI_DEPLOY_SERVICES_DB_APIKEY}
   cache:
     provisioner: upstash
-    email: ${HAI_DEPLOY_UPSTASH_EMAIL}
-    apiKey: ${HAI_DEPLOY_UPSTASH_API_KEY}
+    email: ${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
+    apiKey: ${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
 ```
 
 ここでの変数は `deploy.credentials` が管理する明示的な特殊マッピングです。YAML パスから生成する
@@ -79,9 +79,9 @@ services:
 
 ```typescript
 deploy.credentials.load()
-deploy.credentials.save('HAI_DEPLOY_VERCEL_TOKEN', 'vel_xxx')
+deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', 'vel_xxx')
 deploy.credentials.saveAll({
-  HAI_DEPLOY_NEON_API_KEY: 'neon_xxx',
+  HAI_DEPLOY_SERVICES_DB_APIKEY: 'neon_xxx',
 })
 ```
 
@@ -102,7 +102,7 @@ deploy.credentials.saveAll({
 1. SSH 秘密鍵のパスをリポジトリー外の認証情報ファイルに保存します。`~/.hai/credentials.yml` を編集するか API を使います：
 
 ```typescript
-deploy.credentials.save('HAI_DEPLOY_SSH_KEY', '~/.ssh/hai_deploy')
+deploy.credentials.save('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', '~/.ssh/hai_deploy')
 ```
 
 2. `config/_deploy.yml` に対象ホストを定義します：
@@ -114,7 +114,7 @@ provider:
     host: 10.0.0.20 # 主机 IP 或 ~/.ssh/config 别名
     port: 22
     username: deploy
-    identityFile: ${HAI_DEPLOY_SSH_KEY} # 私钥文件路径，省略则用 ssh-agent
+    identityFile: ${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE} # 私钥文件路径，省略则用 ssh-agent
   remote:
     baseDir: /opt/hai/apps # 远程部署根目录
     runtime: auto # 远程运行时；auto 优先 podman，其次 docker

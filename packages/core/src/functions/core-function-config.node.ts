@@ -9,7 +9,9 @@ import type { ZodType } from 'zod'
 import type { HaiError, HaiResult } from '../core-types.js'
 
 import { existsSync, readFileSync, watch } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
+import { parseEnv } from 'node:util'
 import { parse } from 'yaml'
 
 // ─── 配置文件监听 ───
@@ -128,7 +130,7 @@ function resolveEnv(value: unknown, name: string, path: string[] = []): HaiResul
       if (envValue === undefined && defaultValue === undefined) {
         return err(HaiConfigError.CONFIG_ENV_VAR_MISSING, i18n.coreM('core_configEnvVarMissing', { params: { varName } }))
       }
-      result = result.replace(fullMatch, envValue ?? defaultValue ?? '')
+      result = result.replace(fullMatch, () => envValue ?? defaultValue ?? '')
     }
 
     // 当原值整体是单个 ${VAR:default} 时，插值结果需还原为 YAML 原生类型。
@@ -508,6 +510,48 @@ function clearCache(name?: string): void {
  * ```
  */
 export const config = {
+  /**
+   * 读取 dotenv 文件并按统一顺序合并，不修改进程环境。
+   *
+   * 优先级：已有进程环境 > .env.local > .env.<mode> > .env。
+   * development/production 分别映射到 dev/prod；不存在的文件跳过。
+   * 返回值可能包含私有配置，仅在 Node 启动/构建边界注入，不下发浏览器。
+   * @param options - 文件所在目录及环境模式
+   * @param options.mode - dev/test/prod 或 Vite 的 development/production
+   * @param options.envDir - dotenv 所在目录，默认进程工作目录
+   * @returns 已合并的变量；非法模式或读取失败返回配置错误，不包含文件内容
+   * @example
+   * ```ts
+   * const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
+   * if (!env.success) throw new Error(env.error.message)
+   * Object.assign(process.env, env.data)
+   * core.init({ configDir: './config' })
+   * ```
+   */
+  loadEnvFiles(options: { mode: string, envDir?: string }): HaiResult<Record<string, string>> {
+    const mode = options.mode === 'development' ? 'dev' : options.mode === 'production' ? 'prod' : options.mode
+    if (!/^[a-z0-9][\w-]*$/i.test(mode))
+      return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'))
+    const envDir = options.envDir ?? process.cwd()
+    try {
+      const merged: Record<string, string> = {}
+      for (const name of ['.env', `.env.${mode}`, '.env.local']) {
+        const file = join(envDir, name)
+        if (existsSync(file))
+          Object.assign(merged, parseEnv(readFileSync(file, 'utf8')))
+      }
+      for (const name of Object.keys(merged)) {
+        if (process.env[name] !== undefined)
+          merged[name] = process.env[name]
+      }
+      return ok(merged)
+    }
+    catch {
+      // dotenv 解析异常可能携带原始行，错误边界不暴露文件内容。
+      return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', { params: { filePath: envDir } }))
+    }
+  },
+
   /**
    * 加载配置到缓存。
    *

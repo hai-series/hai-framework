@@ -3,47 +3,47 @@
 # =============================================================================
 
 login:
-  password: true
-  otp: false
-  ldap: false
+  password: ${HAI_IAM_LOGIN_PASSWORD:true}
+  otp: ${HAI_IAM_LOGIN_OTP:false}
+  ldap: ${HAI_IAM_LOGIN_LDAP:false}
 
   # LDAP 可选：安装 ldapts 后开启 login.ldap，并声明连接配置或注入工厂。
   # ldap:
   #   url: ldaps://ldap.example.com:636
   #   bindDn: cn=service,dc=example,dc=com
-  #   bindPassword: '${LDAP_BIND_PASSWORD}'
+  #   bindPassword: '${HAI_IAM_LDAP_BINDPASSWORD}'
   #   searchBase: ou=users,dc=example,dc=com
-  apikey: false
+  apikey: ${HAI_IAM_LOGIN_APIKEY:false}
 
 register:
-  enabled: true
-  defaultEnabled: true
+  enabled: ${HAI_IAM_REGISTER_ENABLED:true}
+  defaultEnabled: ${HAI_IAM_REGISTER_DEFAULTENABLED:true}
 
 rbac:
   enabled: true
   superAdminRole: super_admin
   defaultRole: user
 
-seedDefaultData: true
+seedDefaultData: ${HAI_IAM_SEEDDEFAULTDATA:true}
 
 # 注册与登录安全
 security:
-  maxLoginAttempts: 5
-  lockoutDuration: 900
+  maxLoginAttempts: ${HAI_IAM_SECURITY_MAXLOGINATTEMPTS:5}
+  lockoutDuration: ${HAI_IAM_SECURITY_LOCKOUTDURATION:900}
 
 # OTP 需启用 login.otp，并选择 Reach 标准模板或自定义发送回调。
 otp:
-  email: true
-  sms: true
-  length: 6
-  expiresIn: 300
-  maxAttempts: 3
-  resendInterval: 60
+  email: ${HAI_IAM_OTP_EMAIL:true}
+  sms: ${HAI_IAM_OTP_SMS:true}
+  length: ${HAI_IAM_OTP_LENGTH:6}
+  expiresIn: ${HAI_IAM_OTP_EXPIRESIN:300}
+  maxAttempts: ${HAI_IAM_OTP_MAXATTEMPTS:3}
+  resendInterval: ${HAI_IAM_OTP_RESENDINTERVAL:60}
 passwordReset:
-  enabled: true
-  mode: email # phone 使用 password_reset_sms 模板
-  tokenExpiresIn: 3600
-  maxAttempts: 3
+  enabled: ${HAI_IAM_PASSWORDRESET_ENABLED:true}
+  mode: ${HAI_IAM_PASSWORDRESET_MODE:email} # phone 使用 password_reset_sms 模板
+  tokenExpiresIn: ${HAI_IAM_PASSWORDRESET_TOKENEXPIRESIN:3600}
+  maxAttempts: ${HAI_IAM_PASSWORDRESET_MAXATTEMPTS:3}
   # resetUrl: https://example.com/auth/reset-password
 agreements:
   showOnRegister: true

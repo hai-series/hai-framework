@@ -3,42 +3,42 @@
 # =============================================================================
 
 server:
-  host: 127.0.0.1
-  port: 3000
+  host: ${HAI_SERV_SERVER_HOST:127.0.0.1}
+  port: ${HAI_SERV_SERVER_PORT:3000}
 
 http:
-  apiPrefix: /api/v1
+  apiPrefix: ${HAI_SERV_HTTP_APIPREFIX:/api/v1}
   openapi:
-    path: /openapi.json
+    path: ${HAI_SERV_HTTP_OPENAPI_PATH:/openapi.json}
   docs:
-    path: /docs
+    path: ${HAI_SERV_HTTP_DOCS_PATH:/docs}
   health:
-    path: /health
-    readyPath: /ready
-  rpc: false
+    path: ${HAI_SERV_HTTP_HEALTH_PATH:/health}
+    readyPath: ${HAI_SERV_HTTP_HEALTH_READYPATH:/ready}
+  rpc: ${HAI_SERV_HTTP_RPC:false}
 
 cors:
-  origin: '*'
-  nativeOrigins: http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost
-  credentials: true
+  origin: ${HAI_SERV_CORS_ORIGIN:*}
+  nativeOrigins: ${HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  credentials: ${HAI_SERV_CORS_CREDENTIALS:true}
   allowedHeaders:
-    - Authorization
-    - Content-Type
-    - X-Client-Id
-    - X-Encrypted
-    - X-Hai-Locale
-    - X-Request-Id
-    - X-Requested-With
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_0:Authorization}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_1:Content-Type}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_2:X-Client-Id}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_3:X-Encrypted}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_4:X-Hai-Locale}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_5:X-Request-Id}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_6:X-Requested-With}
   exposedHeaders:
-    - X-Encrypted
-    - X-Request-Id
+    - ${HAI_SERV_CORS_EXPOSEDHEADERS_0:X-Encrypted}
+    - ${HAI_SERV_CORS_EXPOSEDHEADERS_1:X-Request-Id}
 
 transport:
-  keyExchangePath: /_hai/key-exchange
+  keyExchangePath: ${HAI_SERV_TRANSPORT_KEYEXCHANGEPATH:/_hai/key-exchange}
   excludePaths:
-    - /health
-    - /ready
-    - /openapi.json
-    - /docs
-    - /_hai/scalar.js
-  maxClients: 10000
+    - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_0:/health}
+    - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_1:/ready}
+    - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_2:/openapi.json}
+    - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_3:/docs}
+    - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_4:/_hai/scalar.js}
+  maxClients: ${HAI_SERV_TRANSPORT_MAXCLIENTS:10000}

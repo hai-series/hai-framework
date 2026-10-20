@@ -87,6 +87,8 @@ test.describe('Transport enabled E2E', () => {
     const loginResponsePromise = page.waitForResponse(response => response.url().includes('/api/auth/login') && response.request().method() === 'POST')
 
     await loginViaUi(page)
+    // 该组通过进程变量覆写 .env.prod，验证显示值来自实际环境配置。
+    await expect(page.getByTestId('app-environment-badge')).toBeVisible()
     const loginRequest = await loginRequestPromise
     const loginResponse = await loginResponsePromise
     const loginRequestHeaders = await loginRequest.allHeaders()

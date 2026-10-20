@@ -2,5 +2,5 @@
 # API Service - VecDB 配置
 # =============================================================================
 
-type: lancedb
-path: ./data/vecdb
+type: ${HAI_VECDB_TYPE:lancedb}
+path: ${HAI_VECDB_PATH:./data/vecdb}

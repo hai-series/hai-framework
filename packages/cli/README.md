@@ -156,7 +156,7 @@ pnpm.cmd install
 pnpm.cmd dev
 ```
 
-CLI 自动生成根目录 `.env`，其中 `HAI_ADMIN_DEFAULT_PASSWORD` 是每个项目独立的随机强密码；直接运行 `dev` / `start` 即可。首次登录使用 `admin` 和 `.env` 中的密码，同名环境变量可以覆盖它。密码遵循 `_iam.yml` 策略，默认至少 8 位；不符合策略时启动日志显示具体校验原因与错误码。已有用户后，该变量不会重设账号或密码。`.env` 被 Git 和容器构建忽略，`.env.example` 仅保留占位；部署时设置目标环境自己的密码。
+CLI 自动生成根目录 `.env.local`，其中 `HAI_ADMIN_DEFAULT_PASSWORD` 是每个项目独立的随机强密码；直接运行 `dev` / `start` 即可。首次登录使用 `admin` 和 `.env.local` 中的密码，同名环境变量可以覆盖它。密码遵循 `_iam.yml` 策略，默认至少 8 位；不符合策略时启动日志显示具体校验原因与错误码。已有用户后，该变量不会重设账号或密码。`.env.local` 被 Git 和容器构建忽略，`.env.example` 仅保留占位；部署时设置目标环境自己的密码。
 
 - 管理员可搜索、分页、新增、编辑、启禁用、删除用户并上传头像；服务端保护当前管理员，管理写操作在锁内重新鉴权，防止并发操作使管理员全部失权。
 - 初始角色为 `admin` / `user`，角色页显示人数并编辑说明，用户页分配角色。默认普通用户仅进入个人设置，直接请求管理接口也会被服务端拒绝；这些业务规则可按实际需求调整。
@@ -171,11 +171,13 @@ Web/App/Desktop 复用同一个 `AdminWorkspace`、management store 和 typed cl
 
 ## 应用配置与显示
 
+配置字段使用显式 `HAI_<配置名>_<路径>` 引用。每个项目的 `.env.example` 包含已启用参数和可选字段的用途、枚举、范围；框架根 [`.env.example`](../../.env.example) 是完整总表。分环境加载和命令见 [配置手册](../../docs/environment-configuration.md)。
+
 所有生成项目的 `.gitignore` 都包含 `**/data/`，忽略根目录及嵌套 workspace 的运行数据，包括 `.gitkeep`；运行时会创建需要的数据目录。
 
 Fullstack 的 `packages/<project>-serv/config/` 始终保留 13 份配置：`_core`、`_serv`、`_db`、`_cache`、`_iam`、`_storage`、`_audit`、`_reach`、`_ai`、`_vecdb`、`_payment`、`_scheduler`、`_deploy`（均为 `.yml`）。已用模块保留有效默认值，未启用模块整份注释，各模块的可选字段和替代 Provider 也以注释保留。`.env.example` 同时提供未启用模块的注释凭据示例。创建时填写的模块选项会保留。
 
-扩展时先在服务端 workspace 安装所需模块，在 `src/server/runtime.ts` 按公开 Schema 校验配置、初始化并反序关闭，再取消所需配置的注释。整份注释的文件先去掉一层外层注释，可选块继续按需开启；配置文件存在并不等于业务能力已接入。切换 SQLite/Redis/S3 或 Reach Provider 时替换原连接块，同名 Provider 只保留一个。`crypto.init()` 无配置参数，datapipe 是纯函数，不生成虚构的 YAML 配置。
+扩展时先在服务端 workspace 安装所需模块，在 `src/server/runtime.ts` 按公开 Schema 校验配置、初始化并反序关闭，再取消所需配置的注释。整份注释的文件先去掉一层外层注释，可选块继续按需开启；配置文件存在并不等于业务能力已接入。数据库、缓存和存储可通过环境变量切换 Provider 并填写连接字段；Reach Provider 使用标准配置数组，同名 Provider 只保留一个。`crypto.init()` 无配置参数，datapipe 是纯函数，不生成虚构的 YAML 配置。
 
 所有模板从 `_core.yml` 统一读取 `name`、`version`、`env`、`defaultLocale` 和 `logging`，通过 `core.config` 获取元信息并使用 `core.logger`。单应用配置在 `config/`；API workspace 在 `apps/<project>-service/config/`；fullstack 在 `packages/<project>-serv/config/`。日志级别与格式由 YAML 决定，不在初始化时另写固定 `logging` 覆盖。
 
@@ -183,7 +185,7 @@ Fullstack 的 `packages/<project>-serv/config/` 始终保留 13 份配置：`_co
 
 叶子环境变量只覆盖 YAML 中已有的路径；注释掉的键须先取消注释，或使用 `HAI_DB`、`HAI_CACHE` 等整体对象覆盖。camelCase 不拆词，例如 `connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。语言列表由各前端与 shared 的 `project.inlang/settings.json` 维护，`_core.yml` 只配置默认语言。
 
-Fullstack 自动生成的 `.env` 默认只启用初始管理员密码和 `PUBLIC_API_BASE`；模块环境覆盖全部保留注释，以 YAML 为默认值来源。需要环境覆盖时显式取消对应变量的注释，修改 YAML 时同步核对已有环境覆盖。
+Fullstack 的 `.env` 启用当前模块的运行参数；YAML 引用同名变量并保留本地回退。未启用模块的变量和可选 Schema 字段保留注释。使用 `dev:test` / `dev:prod`、`build:prod` 与服务端 `start:test` / `start:prod` 加载环境覆盖。
 
 SvelteKit 的服务端 layout 只下发名称、版本、环境和默认语言等公开白名单。独立 mobile-app 的 Vite 配置在 Node 构建阶段通过 core 解析 YAML，再注入公开值及浏览器日志级别/格式；修改 YAML 或覆盖变量后需要重新构建。Fullstack 前端通过加密的 `app.info` 获取服务端公开元信息。任何模板都不能把完整 core/模块配置、密钥或日志脱敏上下文注入浏览器。
 
@@ -249,7 +251,7 @@ monorepo 内的 `apps/*` 项目已通过 `workspace:*` 协议引用本地包，�
 node packages/cli/dist/index.js create ../my-new-project
 ```
 
-## 5. 配置驱动认证页面
+## 配置驱动认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 

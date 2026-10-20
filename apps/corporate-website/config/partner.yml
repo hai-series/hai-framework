@@ -2,6 +2,6 @@
 # Corporate Website - 合作管理后台配置
 # =============================================================================
 
-username: partner-admin
-password: ''
-sessionTtlSeconds: 14400
+username: ${HAI_PARTNER_USERNAME:partner-admin}
+password: ${HAI_PARTNER_PASSWORD:}
+sessionTtlSeconds: ${HAI_PARTNER_SESSIONTTLSECONDS:14400}

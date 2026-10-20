@@ -1,0 +1,4690 @@
+[
+  {
+    "name": "HAI_ADMIN_DEFAULT_PASSWORD",
+    "module": "admin",
+    "path": "HAI_ADMIN_DEFAULT_PASSWORD",
+    "description": "首次创建管理员的密码",
+    "value": "",
+    "constraint": "满足 IAM 密码策略；敏感值仅在本地或目标进程注入"
+  },
+  {
+    "name": "HAI_AI",
+    "module": "ai",
+    "path": "ai",
+    "description": "ai. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_A2A",
+    "module": "ai",
+    "path": "ai.a2a",
+    "description": "A2A 配置（Agent-to-Agent 协议）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD",
+    "module": "ai",
+    "path": "ai.a2a.agentCard",
+    "description": "Agent Card 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_DESCRIPTION",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.description",
+    "description": "Agent 描述",
+    "value": "A simple echo agent that repeats your message (A2A demo)",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_NAME",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.name",
+    "description": "Agent 名称",
+    "value": "echo-agent",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_SKILLS",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.skills",
+    "description": "Agent 技能列表",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_SKILLS_0",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.skills.0",
+    "description": "Agent 技能列表；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_SKILLS_0_DESCRIPTION",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.skills.0.description",
+    "description": "技能描述",
+    "value": "Echoes back the user message",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_SKILLS_0_ID",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.skills.0.id",
+    "description": "技能 ID",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_SKILLS_0_NAME",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.skills.0.name",
+    "description": "技能名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.skills.0.tags",
+    "description": "标签列表",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_0",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.skills.0.tags.0",
+    "description": "标签列表；此变量整体替换单个数组项",
+    "value": "demo",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_1",
+    "module": "ai",
+    "path": "HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_1",
+    "description": "标签列表；此变量整体替换单个数组项",
+    "value": "echo",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_URL",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.url",
+    "description": "Agent 对外 URL",
+    "value": "http://localhost:5173",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_AGENTCARD_VERSION",
+    "module": "ai",
+    "path": "ai.a2a.agentCard.version",
+    "description": "Agent 版本",
+    "value": "0.1.0",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_A2A_SECURITY",
+    "module": "ai",
+    "path": "ai.a2a.security",
+    "description": "A2A 安全认证配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_A2A_SECURITY_APIKEY",
+    "module": "ai",
+    "path": "ai.a2a.security.apiKey",
+    "description": "API Key 认证（通过 IAM apiKey.verifyApiKey 验证）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_A2A_SECURITY_APIKEY_IN",
+    "module": "ai",
+    "path": "ai.a2a.security.apiKey.in",
+    "description": "API Key 的传递位置（默认 header）",
+    "value": "header",
+    "constraint": "字符串；取值：header | query"
+  },
+  {
+    "name": "HAI_AI_A2A_SECURITY_APIKEY_NAME",
+    "module": "ai",
+    "path": "ai.a2a.security.apiKey.name",
+    "description": "参数名（默认 x-api-key）",
+    "value": "x-api-key",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO",
+    "module": "ai",
+    "path": "ai.audio",
+    "description": "Audio 配置（语音识别 / 语音合成）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_AUDIO_DOUBAO_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_DOUBAO_APIKEY",
+    "description": "DOUBAO 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_AUDIO_INDEXTTS_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_INDEXTTS_APIKEY",
+    "description": "INDEXTTS 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_AUDIO_INHERITLLMAPIKEY",
+    "module": "ai",
+    "path": "ai.audio.inheritLlmApiKey",
+    "description": "是否允许未单独配置密钥的语音模型继承 LLM 全局密钥；跨供应商部署应保持关闭。",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MAXAUDIOBYTES",
+    "module": "ai",
+    "path": "ai.audio.maxAudioBytes",
+    "description": "单次音频字节上限（默认 10 MiB，防止资源耗尽）",
+    "value": "10485760",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MAXSTREAMDURATIONMS",
+    "module": "ai",
+    "path": "ai.audio.maxStreamDurationMs",
+    "description": "实时连接最长持续时间（毫秒，默认 5 分钟）",
+    "value": "300000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MIMO_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_MIMO_APIKEY",
+    "description": "MIMO 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS",
+    "module": "ai",
+    "path": "ai.audio.models",
+    "description": "注册的语音模型列表",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0",
+    "module": "ai",
+    "path": "ai.audio.models.0",
+    "description": "注册的语音模型列表；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_ACCESSKEY",
+    "module": "ai",
+    "path": "ai.audio.models.0.accessKey",
+    "description": "火山引擎 Access Key（`X-Api-Access-Key`，旧版控制台 ASR 需要）",
+    "value": "",
+    "constraint": "string,null"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_APIKEY",
+    "module": "ai",
+    "path": "ai.audio.models.0.apiKey",
+    "description": "API Key 覆盖（未提供时可按 Audio 配置继承 LLM 密钥，最后回退对应平台环境变量）",
+    "value": "",
+    "constraint": "string,null"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_APPKEY",
+    "module": "ai",
+    "path": "ai.audio.models.0.appKey",
+    "description": "火山引擎 App Key（`X-Api-App-Key`，旧版控制台 ASR 需要）",
+    "value": "",
+    "constraint": "string,null"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_BASEURL",
+    "module": "ai",
+    "path": "ai.audio.models.0.baseUrl",
+    "description": "HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置）",
+    "value": "https://api.xiaomimimo.com/v1",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_ID",
+    "module": "ai",
+    "path": "ai.audio.models.0.id",
+    "description": "模型唯一标识（用于场景解析与请求显式指定）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_MODEL",
+    "module": "ai",
+    "path": "ai.audio.models.0.model",
+    "description": "厂商模型名（传给厂商 API 的实际模型名）",
+    "value": "mimo-v2.5-asr",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_OPERATIONS",
+    "module": "ai",
+    "path": "ai.audio.models.0.operations",
+    "description": "模型允许执行的操作；解析模型时会在调用厂商前校验",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_OPERATIONS_0",
+    "module": "ai",
+    "path": "ai.audio.models.0.operations.0",
+    "description": "模型允许执行的操作；解析模型时会在调用厂商前校验；此变量整体替换单个数组项",
+    "value": "transcribe",
+    "constraint": "字符串；取值：transcribe | synthesize"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_PROVIDER",
+    "module": "ai",
+    "path": "ai.audio.models.0.provider",
+    "description": "所属语音平台",
+    "value": "mimo",
+    "constraint": "字符串；取值：openai | mimo | qwen | doubao | whisper | indextts"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_RESOURCEID",
+    "module": "ai",
+    "path": "ai.audio.models.0.resourceId",
+    "description": "火山引擎资源 ID（`X-Api-Resource-Id`；未提供时使用平台默认资源 ID）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_TIMEOUT",
+    "module": "ai",
+    "path": "ai.audio.models.0.timeout",
+    "description": "请求超时（毫秒，默认 60000）",
+    "value": "120000",
+    "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_0_WORKSPACEID",
+    "module": "ai",
+    "path": "ai.audio.models.0.workspaceId",
+    "description": "阿里云百炼业务空间 ID（`X-DashScope-WorkSpace`，可选）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_1_BASEURL",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_MODELS_1_BASEURL",
+    "description": "HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置）",
+    "value": "https://api.xiaomimimo.com/v1",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_1_MODEL",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_MODELS_1_MODEL",
+    "description": "厂商模型名（传给厂商 API 的实际模型名）",
+    "value": "mimo-v2.5-tts",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_1_PROVIDER",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_MODELS_1_PROVIDER",
+    "description": "所属语音平台",
+    "value": "mimo",
+    "constraint": "字符串；取值：openai | mimo | qwen | doubao | whisper | indextts"
+  },
+  {
+    "name": "HAI_AI_AUDIO_MODELS_1_TIMEOUT",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_MODELS_1_TIMEOUT",
+    "description": "请求超时（毫秒，默认 60000）",
+    "value": "120000",
+    "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AI_AUDIO_OPENAI_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_OPENAI_APIKEY",
+    "description": "OPENAI 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_AUDIO_QWEN_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_QWEN_APIKEY",
+    "description": "QWEN 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_AUDIO_SYNTHESIZEMODEL",
+    "module": "ai",
+    "path": "ai.audio.synthesizeModel",
+    "description": "默认合成模型 ID（`ai.audio.synthesize*` 未指定 model 时使用）",
+    "value": "tts",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_TRANSCRIBEMODEL",
+    "module": "ai",
+    "path": "ai.audio.transcribeModel",
+    "description": "默认识别模型 ID（`ai.audio.transcribe*` 未指定 model 时使用）",
+    "value": "asr",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_AUDIO_WHISPER_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_AUDIO_WHISPER_APIKEY",
+    "description": "WHISPER 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_COMPRESS",
+    "module": "ai",
+    "path": "ai.compress",
+    "description": "Compress 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_COMPRESS_DEFAULTMAXTOKENS",
+    "module": "ai",
+    "path": "ai.compress.defaultMaxTokens",
+    "description": "默认 Token 预算（默认 0 表示取模型上限的 80%）",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_AI_COMPRESS_DEFAULTSTRATEGY",
+    "module": "ai",
+    "path": "ai.compress.defaultStrategy",
+    "description": "默认压缩策略（默认 'hybrid'）",
+    "value": "hybrid",
+    "constraint": "字符串；取值：summary | sliding-window | hybrid"
+  },
+  {
+    "name": "HAI_AI_COMPRESS_PRESERVELASTN",
+    "module": "ai",
+    "path": "ai.compress.preserveLastN",
+    "description": "默认保留最近消息数（默认 4）",
+    "value": "4",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_AI_EMBEDDING",
+    "module": "ai",
+    "path": "ai.embedding",
+    "description": "Embedding 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_EMBEDDING_BATCHSIZE",
+    "module": "ai",
+    "path": "ai.embedding.batchSize",
+    "description": "批量大小（单次请求最多处理的文本数，默认 100）",
+    "value": "100",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_EMBEDDING_DIMENSIONS",
+    "module": "ai",
+    "path": "ai.embedding.dimensions",
+    "description": "向量维度（可选，部分模型支持指定维度）",
+    "value": "",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_FILE",
+    "module": "ai",
+    "path": "ai.file",
+    "description": "File 解析配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_FILE_SYSTEMPROMPT",
+    "module": "ai",
+    "path": "ai.file.systemPrompt",
+    "description": "OCR 系统提示词（可选，覆盖内置默认提示词）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_IMAGE",
+    "module": "ai",
+    "path": "ai.image",
+    "description": "Image 配置（文生图）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_IMAGE_GENERATEMODEL",
+    "module": "ai",
+    "path": "ai.image.generateModel",
+    "description": "默认文生图模型 ID",
+    "value": "image",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_IMAGE_GOOGLE_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_IMAGE_GOOGLE_APIKEY",
+    "description": "GOOGLE 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS",
+    "module": "ai",
+    "path": "ai.image.models",
+    "description": "注册的文生图模型",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS_0",
+    "module": "ai",
+    "path": "ai.image.models.0",
+    "description": "注册的文生图模型；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS_0_APIKEY",
+    "module": "ai",
+    "path": "ai.image.models.0.apiKey",
+    "description": "API Key 覆盖；未提供时回退厂商环境变量",
+    "value": "",
+    "constraint": "string,null"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS_0_BASEURL",
+    "module": "ai",
+    "path": "ai.image.models.0.baseUrl",
+    "description": "API 基础 URL 覆盖",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS_0_ID",
+    "module": "ai",
+    "path": "ai.image.models.0.id",
+    "description": "模型唯一标识（供请求选择）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS_0_MODEL",
+    "module": "ai",
+    "path": "ai.image.models.0.model",
+    "description": "厂商模型名",
+    "value": "zimage",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS_0_PROVIDER",
+    "module": "ai",
+    "path": "ai.image.models.0.provider",
+    "description": "所属文生图平台",
+    "value": "pollinations",
+    "constraint": "字符串；取值：openai | google | qwen | seedream | pollinations"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS_0_TIMEOUT",
+    "module": "ai",
+    "path": "ai.image.models.0.timeout",
+    "description": "请求超时（毫秒，默认 120000）",
+    "value": "120000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MODELS_0_WORKSPACEID",
+    "module": "ai",
+    "path": "ai.image.models.0.workspaceId",
+    "description": "阿里云百炼业务空间 ID（可选）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_IMAGE_OPENAI_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_IMAGE_OPENAI_APIKEY",
+    "description": "OPENAI 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_IMAGE_POLLINATIONS_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_IMAGE_POLLINATIONS_APIKEY",
+    "description": "POLLINATIONS 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_IMAGE_QWEN_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_IMAGE_QWEN_APIKEY",
+    "description": "QWEN 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_IMAGE_SEEDREAM_APIKEY",
+    "module": "ai",
+    "path": "HAI_AI_IMAGE_SEEDREAM_APIKEY",
+    "description": "SEEDREAM 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE",
+    "module": "ai",
+    "path": "ai.knowledge",
+    "description": "Knowledge 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS",
+    "module": "ai",
+    "path": "ai.knowledge.chunkOptions",
+    "description": "默认分块选项 字段含义与",
+    "value": "{\"mode\":\"markdown\",\"maxSize\":1500,\"overlap\":200,\"markdownMinLevel\":2,\"markdownKeepTitle\":true}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_MARKDOWNKEEPTITLE",
+    "module": "ai",
+    "path": "ai.knowledge.chunkOptions.markdownKeepTitle",
+    "description": "是否保留 Markdown 标题在分块内容中（默认 true）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_MARKDOWNMINLEVEL",
+    "module": "ai",
+    "path": "ai.knowledge.chunkOptions.markdownMinLevel",
+    "description": "Markdown 标题分割深度（1-6，默认 2，即 # 和 ## 作为分块边界；设为 3 则 ### 也作为分块边界）",
+    "value": "2",
+    "constraint": "整数；>= 1；<= 6"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_MAXSIZE",
+    "module": "ai",
+    "path": "ai.knowledge.chunkOptions.maxSize",
+    "description": "每个分块的最大大小（字符数 / 字数，取决于 mode，默认 1000）",
+    "value": "1500",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_MODE",
+    "module": "ai",
+    "path": "ai.knowledge.chunkOptions.mode",
+    "description": "分块模式",
+    "value": "sentence",
+    "constraint": "字符串；取值：sentence | paragraph | markdown | page | word | character | custom"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_OVERLAP",
+    "module": "ai",
+    "path": "ai.knowledge.chunkOptions.overlap",
+    "description": "重叠大小（字符数 / 字数，用于上下文衔接，默认 200）",
+    "value": "200",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_SEPARATOR",
+    "module": "ai",
+    "path": "ai.knowledge.chunkOptions.separator",
+    "description": "自定义分隔符正则（仅 mode='custom' 时使用） ❗ 安全提示：separator 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击。",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions",
+    "description": "默认文本清洗选项 字段含义与",
+    "value": "{\"removeHtml\":true,\"removeUrls\":false,\"removeEmails\":false,\"normalizeWhitespace\":true,\"trim\":true}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_CUSTOMREPLACEMENTS",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.customReplacements",
+    "description": "自定义替换规则（正则→替换字符串） ❗ 安全提示：pattern 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_CUSTOMREPLACEMENTS_0",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.customReplacements.0",
+    "description": "自定义替换规则（正则→替换字符串） ❗ 安全提示：pattern 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_CUSTOMREPLACEMENTS_0_PATTERN",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.customReplacements.0.pattern",
+    "description": "正则表达式字符串",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_CUSTOMREPLACEMENTS_0_REPLACEMENT",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.customReplacements.0.replacement",
+    "description": "替换文本",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_NORMALIZEWHITESPACE",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.normalizeWhitespace",
+    "description": "标准化空白字符（多空格→单空格、去掉多余空行，默认 true）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_REMOVEEMAILS",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.removeEmails",
+    "description": "移除 Email 地址（默认 false）",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_REMOVEHTML",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.removeHtml",
+    "description": "移除 HTML 标签（默认 true）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_REMOVEURLS",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.removeUrls",
+    "description": "移除 URL（默认 false）",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_CLEANOPTIONS_TRIM",
+    "module": "ai",
+    "path": "ai.knowledge.cleanOptions.trim",
+    "description": "去除首尾空白（默认 true）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_COLLECTION",
+    "module": "ai",
+    "path": "ai.knowledge.collection",
+    "description": "默认向量集合名（默认 'hai_ai_knowledge'）",
+    "value": "hai_ai_knowledge",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_DIMENSION",
+    "module": "ai",
+    "path": "ai.knowledge.dimension",
+    "description": "向量维度（默认 1536，需与 embedding 模型匹配）",
+    "value": "1536",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_ENABLEENTITYEXTRACTION",
+    "module": "ai",
+    "path": "ai.knowledge.enableEntityExtraction",
+    "description": "是否启用实体提取（默认 true）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_ENTITYBOOSTWEIGHT",
+    "module": "ai",
+    "path": "ai.knowledge.entityBoostWeight",
+    "description": "实体查询命中的额外加权系数（默认 0.15，叠加到向量分数上）",
+    "value": "0.15",
+    "constraint": "数字；>= 0；<= 1"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_ENTITYTYPES",
+    "module": "ai",
+    "path": "ai.knowledge.entityTypes",
+    "description": "自定义实体类型列表（不指定时使用内置默认类型）",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_ENTITYTYPES_0",
+    "module": "ai",
+    "path": "ai.knowledge.entityTypes.0",
+    "description": "自定义实体类型列表（不指定时使用内置默认类型）；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_KNOWLEDGE_SYSTEMPROMPT",
+    "module": "ai",
+    "path": "ai.knowledge.systemPrompt",
+    "description": "自定义实体提取系统提示词（不指定时使用内置默认提示词）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM",
+    "module": "ai",
+    "path": "ai.llm",
+    "description": "LLM 配置（可选，所有字段有默认值）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_LLM_API",
+    "module": "ai",
+    "path": "ai.llm.api",
+    "description": "全局 API 协议（各模型 fallback，默认 `'chat'`；可选 `chat` / `responses` / `anthropic`）",
+    "value": "chat",
+    "constraint": "字符串；取值：chat | responses | anthropic"
+  },
+  {
+    "name": "HAI_AI_LLM_APIKEY",
+    "module": "ai",
+    "path": "ai.llm.apiKey",
+    "description": "全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）",
+    "value": "",
+    "constraint": "string,null"
+  },
+  {
+    "name": "HAI_AI_LLM_BASEURL",
+    "module": "ai",
+    "path": "ai.llm.baseUrl",
+    "description": "全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`）",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_AI_LLM_MAXTOKENS",
+    "module": "ai",
+    "path": "ai.llm.maxTokens",
+    "description": "全局最大 Token 数（各模型 fallback，默认 `4096`）",
+    "value": "4096",
+    "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AI_LLM_MODEL",
+    "module": "ai",
+    "path": "ai.llm.model",
+    "description": "默认模型名称（默认 `'gpt-4o-mini'`）",
+    "value": "gpt-4o-mini",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS",
+    "module": "ai",
+    "path": "ai.llm.models",
+    "description": "多模型配置列表（各字段可选，未指定时回退到全局默认值）",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0",
+    "module": "ai",
+    "path": "ai.llm.models.0",
+    "description": "多模型配置列表（各字段可选，未指定时回退到全局默认值）；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_API",
+    "module": "ai",
+    "path": "ai.llm.models.0.api",
+    "description": "API 协议（可选，未指定时回退全局 `api`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic）",
+    "value": "chat",
+    "constraint": "字符串；取值：chat | responses | anthropic"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_APIKEY",
+    "module": "ai",
+    "path": "ai.llm.models.0.apiKey",
+    "description": "API Key 覆盖（可选，未提供时使用全局配置）",
+    "value": "",
+    "constraint": "string,null"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_BASEURL",
+    "module": "ai",
+    "path": "ai.llm.models.0.baseUrl",
+    "description": "Base URL 覆盖（可选）",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_ID",
+    "module": "ai",
+    "path": "ai.llm.models.0.id",
+    "description": "模型唯一标识（用于 ModelResolver 解析）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_MAXTOKENS",
+    "module": "ai",
+    "path": "ai.llm.models.0.maxTokens",
+    "description": "最大 Token 数覆盖（可选）",
+    "value": "",
+    "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_MODEL",
+    "module": "ai",
+    "path": "ai.llm.models.0.model",
+    "description": "模型名称（传给 API 的实际模型名）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_TEMPERATURE",
+    "module": "ai",
+    "path": "ai.llm.models.0.temperature",
+    "description": "温度覆盖（可选）",
+    "value": "",
+    "constraint": "数字；>= 0；<= 2"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_TIMEOUT",
+    "module": "ai",
+    "path": "ai.llm.models.0.timeout",
+    "description": "超时覆盖（可选，毫秒）",
+    "value": "",
+    "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS",
+    "module": "ai",
+    "path": "ai.llm.scenarios",
+    "description": "场景模型映射（场景名 → 模型 ID 或直接模型名称，各场景均可选）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_CHAT",
+    "module": "ai",
+    "path": "ai.llm.scenarios.chat",
+    "description": "场景 chat 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_DEFAULT",
+    "module": "ai",
+    "path": "ai.llm.scenarios.default",
+    "description": "场景 default 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_EMBEDDING",
+    "module": "ai",
+    "path": "ai.llm.scenarios.embedding",
+    "description": "场景 embedding 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_EXECUTE",
+    "module": "ai",
+    "path": "ai.llm.scenarios.execute",
+    "description": "场景 execute 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_EXTRACTION",
+    "module": "ai",
+    "path": "ai.llm.scenarios.extraction",
+    "description": "场景 extraction 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_FAST",
+    "module": "ai",
+    "path": "ai.llm.scenarios.fast",
+    "description": "场景 fast 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_OCR",
+    "module": "ai",
+    "path": "ai.llm.scenarios.ocr",
+    "description": "场景 ocr 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_PLAN",
+    "module": "ai",
+    "path": "ai.llm.scenarios.plan",
+    "description": "场景 plan 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_REASONING",
+    "module": "ai",
+    "path": "ai.llm.scenarios.reasoning",
+    "description": "场景 reasoning 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_RERANK",
+    "module": "ai",
+    "path": "ai.llm.scenarios.rerank",
+    "description": "场景 rerank 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_SCENARIOS_SUMMARY",
+    "module": "ai",
+    "path": "ai.llm.scenarios.summary",
+    "description": "场景 summary 使用的模型 ID，须与 llm.models 中的 ID 一致",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_LLM_TEMPERATURE",
+    "module": "ai",
+    "path": "ai.llm.temperature",
+    "description": "全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`）",
+    "value": "0.7",
+    "constraint": "数字；>= 0；<= 2"
+  },
+  {
+    "name": "HAI_AI_LLM_TEMPMODELCACHETTL",
+    "module": "ai",
+    "path": "ai.llm.tempModelCacheTtl",
+    "description": "临时模型客户端缓存存活时间（毫秒，默认 `600000` = 10 分钟；超时后临时模型客户端实例失效并重建）",
+    "value": "600000",
+    "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AI_LLM_TIMEOUT",
+    "module": "ai",
+    "path": "ai.llm.timeout",
+    "description": "全局请求超时时间（各模型 fallback，毫秒，默认 `60000`）",
+    "value": "60000",
+    "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AI_MCP",
+    "module": "ai",
+    "path": "ai.mcp",
+    "description": "MCP 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVER",
+    "module": "ai",
+    "path": "ai.mcp.server",
+    "description": "服务器配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVER_CAPABILITIES",
+    "module": "ai",
+    "path": "ai.mcp.server.capabilities",
+    "description": "服务器能力声明",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVER_CAPABILITIES_PROMPTS",
+    "module": "ai",
+    "path": "ai.mcp.server.capabilities.prompts",
+    "description": "是否支持提示词模板（默认 `true`）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVER_CAPABILITIES_RESOURCES",
+    "module": "ai",
+    "path": "ai.mcp.server.capabilities.resources",
+    "description": "是否支持资源访问（默认 `true`）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVER_CAPABILITIES_TOOLS",
+    "module": "ai",
+    "path": "ai.mcp.server.capabilities.tools",
+    "description": "是否支持工具调用（默认 `true`）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVER_NAME",
+    "module": "ai",
+    "path": "ai.mcp.server.name",
+    "description": "服务器名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVER_VERSION",
+    "module": "ai",
+    "path": "ai.mcp.server.version",
+    "description": "服务器版本（默认 `'1.0.0'`）",
+    "value": "1.0.0",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_MEMORY",
+    "module": "ai",
+    "path": "ai.memory",
+    "description": "Memory 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_MEMORY_ALLOWEPHEMERALFALLBACK",
+    "module": "ai",
+    "path": "ai.memory.allowEphemeralFallback",
+    "description": "是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false） 仅影响 `provider='mem0'`：mem0 TS 仅支持 qdrant / pgvector。当底层 vecdb 是 lancedb / chroma / 未知后端时，默认 fail-fast（初始化失败），避免服务重启后记忆静默丢失； 仅当显式设为 true 时才退回 mem0 自带 in-memory 存储（数据不持久）。",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_MEMORY_CANDIDATEMULTIPLIER",
+    "module": "ai",
+    "path": "ai.memory.candidateMultiplier",
+    "description": "候选池倍数（默认 5） 检索时先从向量后端取回 `topK × candidateMultiplier` 条候选，再按 scope / 重要性等 条件在内存中过滤，最后截取 topK。用于修正「向量后端仅返回 topK，随后被 scope 过滤 掉大部分、导致同一主体下特定主题/角色记忆漏召回」的问题：候选池越大，scope 命中越充分。 native provider 会对全部候选评分，故此值仅影响向量预取宽度；mem0 provider 无法下推 scope，必须依赖更大的候选池才能保证 scope 内记忆被召回。",
+    "value": "5",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_MEMORY_DEFAULTTOPK",
+    "module": "ai",
+    "path": "ai.memory.defaultTopK",
+    "description": "检索时默认返回数量（默认 10）",
+    "value": "10",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_MEMORY_EMBEDDINGENABLED",
+    "module": "ai",
+    "path": "ai.memory.embeddingEnabled",
+    "description": "是否启用向量检索（默认 true，关闭则仅使用关键词匹配）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_MEMORY_MAXENTRIESGLOBAL",
+    "module": "ai",
+    "path": "ai.memory.maxEntriesGlobal",
+    "description": "全局最大记忆条数（默认 100000） 跨所有主体的总量上限，作为整体保护阈值；超过时淘汰全局最低优先级条目。",
+    "value": "100000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_MEMORY_MAXENTRIESPEROBJECT",
+    "module": "ai",
+    "path": "ai.memory.maxEntriesPerObject",
+    "description": "单个主体（objectId）的最大记忆条数（默认 1000） native 淘汰按 objectId 分区触发：某个主体写入超过此上限时，只淘汰该主体自身 最低优先级的条目，不会波及其他主体的记忆。",
+    "value": "1000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_MEMORY_PROVIDER",
+    "module": "ai",
+    "path": "ai.memory.provider",
+    "description": "记忆后端：native = 逐条写回；mem0 = 批量 ADD/UPDATE/DELETE 合并（均为嵌入式，复用 HAI 组件）",
+    "value": "native",
+    "constraint": "字符串；取值：native | mem0"
+  },
+  {
+    "name": "HAI_AI_MEMORY_RECENCYDECAY",
+    "module": "ai",
+    "path": "ai.memory.recencyDecay",
+    "description": "时间衰减系数（默认 0.95，每次检索乘以此系数调整 recency 权重）",
+    "value": "0.95",
+    "constraint": "数字；>= 0；<= 1"
+  },
+  {
+    "name": "HAI_AI_MEMORY_SYSTEMPROMPT",
+    "module": "ai",
+    "path": "ai.memory.systemPrompt",
+    "description": "自定义记忆提取 systemPrompt（可选，覆盖内置默认提示词）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_MEMORY_WRITEBACKRELATEDTOPK",
+    "module": "ai",
+    "path": "ai.memory.writebackRelatedTopK",
+    "description": "写回 / 合并时检索相关记忆的数量（native 与 mem0 共用，默认 20）",
+    "value": "20",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL",
+    "module": "ai",
+    "path": "ai.retrieval",
+    "description": "Retrieval 配置（预注册检索源）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES",
+    "module": "ai",
+    "path": "ai.retrieval.sources",
+    "description": "预注册检索源列表",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES_0",
+    "module": "ai",
+    "path": "ai.retrieval.sources.0",
+    "description": "预注册检索源列表；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES_0_COLLECTION",
+    "module": "ai",
+    "path": "ai.retrieval.sources.0.collection",
+    "description": "vecdb collection 名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES_0_FILTER",
+    "module": "ai",
+    "path": "ai.retrieval.sources.0.filter",
+    "description": "元数据过滤条件",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES_0_ID",
+    "module": "ai",
+    "path": "ai.retrieval.sources.0.id",
+    "description": "来源唯一标识",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES_0_MINSCORE",
+    "module": "ai",
+    "path": "ai.retrieval.sources.0.minScore",
+    "description": "最低相似度 0~1（低于此值的结果被过滤）",
+    "value": "",
+    "constraint": "数字；>= 0；<= 1"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES_0_NAME",
+    "module": "ai",
+    "path": "ai.retrieval.sources.0.name",
+    "description": "信源显示名",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES_0_TOPK",
+    "module": "ai",
+    "path": "ai.retrieval.sources.0.topK",
+    "description": "最大返回条数（默认 5）",
+    "value": "",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_RETRIEVAL_SOURCES_0_URL",
+    "module": "ai",
+    "path": "ai.retrieval.sources.0.url",
+    "description": "信源 URL / 路径",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_SUMMARY",
+    "module": "ai",
+    "path": "ai.summary",
+    "description": "Summary 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_SUMMARY_SYSTEMPROMPT",
+    "module": "ai",
+    "path": "ai.summary.systemPrompt",
+    "description": "自定义摘要 systemPrompt（可选，覆盖内置默认提示词）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_TOKEN",
+    "module": "ai",
+    "path": "ai.token",
+    "description": "Token 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_TOKEN_TOKENRATIO",
+    "module": "ai",
+    "path": "ai.token.tokenRatio",
+    "description": "Token 估算每字符系数（默认 0.25，即 4 字符 ≈ 1 token）",
+    "value": "0.25",
+    "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AUDIT",
+    "module": "audit",
+    "path": "audit",
+    "description": "audit. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_USERIDCOLUMN",
+    "module": "audit",
+    "path": "audit.userIdColumn",
+    "description": "用户表主键列名，用于 JOIN 条件",
+    "value": "id",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AUDIT_USERNAMECOLUMN",
+    "module": "audit",
+    "path": "audit.userNameColumn",
+    "description": "用户表用户名列名，用于 SELECT 输出",
+    "value": "username",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AUDIT_USERTABLE",
+    "module": "audit",
+    "path": "audit.userTable",
+    "description": "用户表名，用于 list 查询时 LEFT JOIN 获取用户名",
+    "value": "hai_iam_users",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AUTH_EVIDENCE_DIR",
+    "module": "auth",
+    "path": "HAI_AUTH_EVIDENCE_DIR",
+    "description": "浏览器验收截图输出目录",
+    "value": "",
+    "constraint": "目录路径"
+  },
+  {
+    "name": "HAI_CACHE",
+    "module": "cache",
+    "path": "cache",
+    "description": "cache. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_CACHE_CLUSTER",
+    "module": "cache",
+    "path": "cache.cluster",
+    "description": "集群节点列表；配置后以集群模式连接",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_CACHE_CLUSTER_0",
+    "module": "cache",
+    "path": "cache.cluster.0",
+    "description": "集群节点列表；配置后以集群模式连接；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_CACHE_CLUSTER_0_HOST",
+    "module": "cache",
+    "path": "cache.cluster.0.host",
+    "description": "节点主机地址",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CACHE_CLUSTER_0_PORT",
+    "module": "cache",
+    "path": "cache.cluster.0.port",
+    "description": "节点端口号（1~65535）",
+    "value": "",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_CACHE_COMMANDTIMEOUT",
+    "module": "cache",
+    "path": "cache.commandTimeout",
+    "description": "命令执行超时（毫秒）；默认 5000",
+    "value": "5000",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_CACHE_CONNECTTIMEOUT",
+    "module": "cache",
+    "path": "cache.connectTimeout",
+    "description": "连接超时时间（毫秒）；默认 10000",
+    "value": "10000",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_CACHE_DB",
+    "module": "cache",
+    "path": "cache.db",
+    "description": "数据库编号（0~15）；默认 0",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 15"
+  },
+  {
+    "name": "HAI_CACHE_HOST",
+    "module": "cache",
+    "path": "cache.host",
+    "description": "主机地址；默认 'localhost'",
+    "value": "localhost",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CACHE_KEYPREFIX",
+    "module": "cache",
+    "path": "cache.keyPrefix",
+    "description": "键前缀（自动加在所有键前）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CACHE_MAXRETRIES",
+    "module": "cache",
+    "path": "cache.maxRetries",
+    "description": "最大重试次数；默认 3",
+    "value": "3",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_CACHE_PASSWORD",
+    "module": "cache",
+    "path": "cache.password",
+    "description": "认证密码",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CACHE_PORT",
+    "module": "cache",
+    "path": "cache.port",
+    "description": "端口号；默认 6379",
+    "value": "6379",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_CACHE_READONLY",
+    "module": "cache",
+    "path": "cache.readOnly",
+    "description": "是否只读模式；默认 false",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CACHE_RETRYDELAY",
+    "module": "cache",
+    "path": "cache.retryDelay",
+    "description": "重试间隔基数（毫秒）；实际间隔 = retryDelay × 重试次数；默认 50",
+    "value": "50",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_CACHE_SENTINEL",
+    "module": "cache",
+    "path": "cache.sentinel",
+    "description": "哨兵配置；配置后以哨兵模式连接",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_CACHE_SENTINEL_NAME",
+    "module": "cache",
+    "path": "cache.sentinel.name",
+    "description": "哨兵监控的主节点名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CACHE_SENTINEL_SENTINELS",
+    "module": "cache",
+    "path": "cache.sentinel.sentinels",
+    "description": "哨兵节点列表（至少 1 个）",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1"
+  },
+  {
+    "name": "HAI_CACHE_SENTINEL_SENTINELS_0",
+    "module": "cache",
+    "path": "cache.sentinel.sentinels.0",
+    "description": "哨兵节点列表（至少 1 个）；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_CACHE_SENTINEL_SENTINELS_0_HOST",
+    "module": "cache",
+    "path": "cache.sentinel.sentinels.0.host",
+    "description": "节点主机地址",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CACHE_SENTINEL_SENTINELS_0_PORT",
+    "module": "cache",
+    "path": "cache.sentinel.sentinels.0.port",
+    "description": "节点端口号（1~65535）",
+    "value": "",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_CACHE_TLS",
+    "module": "cache",
+    "path": "cache.tls",
+    "description": "是否开启 TLS；默认 false",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CACHE_TYPE",
+    "module": "cache",
+    "path": "cache.type",
+    "description": "后端或功能类型，按枚举选择",
+    "value": "memory",
+    "constraint": "字符串；取值：memory | redis"
+  },
+  {
+    "name": "HAI_CACHE_URL",
+    "module": "cache",
+    "path": "cache.url",
+    "description": "Redis 连接 URL（如 redis://user:pass",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CONTACT_RECIPIENT",
+    "module": "contact",
+    "path": "HAI_CONTACT_RECIPIENT",
+    "description": "企业官网联系表单的通知收件人",
+    "value": "",
+    "constraint": "有效邮箱地址"
+  },
+  {
+    "name": "HAI_CONTAINER_ENGINE",
+    "module": "container",
+    "path": "HAI_CONTAINER_ENGINE",
+    "description": "部署/集成测试使用的容器引擎",
+    "value": "",
+    "constraint": "docker | podman"
+  },
+  {
+    "name": "HAI_CORE",
+    "module": "core",
+    "path": "core",
+    "description": "core. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_CORE_DEBUG",
+    "module": "core",
+    "path": "core.debug",
+    "description": "是否调试模式（默认 false）",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CORE_DEFAULTLOCALE",
+    "module": "core",
+    "path": "core.defaultLocale",
+    "description": "默认语言（默认 'zh-CN'）",
+    "value": "zh-CN",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CORE_ENV",
+    "module": "core",
+    "path": "core.env",
+    "description": "运行环境（默认 'development'）",
+    "value": "development",
+    "constraint": "字符串；取值：development | production | test | staging"
+  },
+  {
+    "name": "HAI_CORE_FEATURES_AIASSISTANT",
+    "module": "core",
+    "path": "HAI_CORE_FEATURES_AIASSISTANT",
+    "description": "示例应用功能开关：aiassistant",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CORE_FEATURES_AIENABLED",
+    "module": "core",
+    "path": "HAI_CORE_FEATURES_AIENABLED",
+    "description": "示例应用功能开关：aienabled",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CORE_FEATURES_APIACCESS",
+    "module": "core",
+    "path": "HAI_CORE_FEATURES_APIACCESS",
+    "description": "示例应用功能开关：apiaccess",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CORE_FEATURES_CONTACTFORM",
+    "module": "core",
+    "path": "HAI_CORE_FEATURES_CONTACTFORM",
+    "description": "示例应用功能开关：contactform",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CORE_FEATURES_FILEUPLOAD",
+    "module": "core",
+    "path": "HAI_CORE_FEATURES_FILEUPLOAD",
+    "description": "示例应用功能开关：fileupload",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CORE_FEATURES_MCPENABLED",
+    "module": "core",
+    "path": "HAI_CORE_FEATURES_MCPENABLED",
+    "description": "示例应用功能开关：mcpenabled",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CORE_FEATURES_REGISTRATION",
+    "module": "core",
+    "path": "HAI_CORE_FEATURES_REGISTRATION",
+    "description": "示例应用功能开关：registration",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_CORE_ID",
+    "module": "core",
+    "path": "core.id",
+    "description": "ID 生成器配置（可选）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_CORE_ID_LENGTH",
+    "module": "core",
+    "path": "core.id.length",
+    "description": "ID 长度（范围 6-64，默认 21）",
+    "value": "21",
+    "constraint": "整数；>= 6；<= 64"
+  },
+  {
+    "name": "HAI_CORE_ID_PREFIX",
+    "module": "core",
+    "path": "core.id.prefix",
+    "description": "ID 前缀（可选，生成时自动拼接）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CORE_LOGGING",
+    "module": "core",
+    "path": "core.logging",
+    "description": "日志配置（可选）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_CORE_LOGGING_CONTEXT",
+    "module": "core",
+    "path": "core.logging.context",
+    "description": "默认上下文，会自动添加到每条日志",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_CORE_LOGGING_FORMAT",
+    "module": "core",
+    "path": "core.logging.format",
+    "description": "日志格式：'json' 用于生产环境，'pretty' 用于开发环境（默认 'json'）",
+    "value": "json",
+    "constraint": "字符串；取值：json | pretty"
+  },
+  {
+    "name": "HAI_CORE_LOGGING_LEVEL",
+    "module": "core",
+    "path": "core.logging.level",
+    "description": "日志级别（默认 'info'）",
+    "value": "info",
+    "constraint": "字符串；取值：trace | debug | info | warn | error | fatal"
+  },
+  {
+    "name": "HAI_CORE_LOGGING_REDACT",
+    "module": "core",
+    "path": "core.logging.redact",
+    "description": "要脱敏的字段路径列表（如 ['password', 'token']，默认 []）",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_CORE_LOGGING_REDACT_0",
+    "module": "core",
+    "path": "core.logging.redact.0",
+    "description": "要脱敏的字段路径列表（如 ['password', 'token']，默认 []）；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CORE_NAME",
+    "module": "core",
+    "path": "core.name",
+    "description": "应用名称（默认 'hai Admin'）",
+    "value": "hai Admin",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CORE_VERSION",
+    "module": "core",
+    "path": "core.version",
+    "description": "应用版本（默认 '0.1.0'）",
+    "value": "0.1.0",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_CRYPTO",
+    "module": "crypto",
+    "path": "crypto",
+    "description": "crypto 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体替换该配置"
+  },
+  {
+    "name": "HAI_CRYPTO_TRANSPORT",
+    "module": "crypto",
+    "path": "HAI_CRYPTO_TRANSPORT",
+    "description": "桌面示例公开传输配置；在构建阶段与浏览器使用同一 Schema 校验",
+    "value": "false",
+    "constraint": "false 关闭；或 JSON/YAML 对象，keyExchangePath 须以 / 开头；不接受 true"
+  },
+  {
+    "name": "HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH",
+    "module": "crypto",
+    "path": "HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH",
+    "description": "桌面示例公开密钥交换端点，构建期插值",
+    "value": "/_hai/key-exchange",
+    "constraint": "以 / 开头的路径"
+  },
+  {
+    "name": "HAI_DB",
+    "module": "db",
+    "path": "db",
+    "description": "db. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DB_DATABASE",
+    "module": "db",
+    "path": "db.database",
+    "description": "数据库名称",
+    "value": "./data/admin.db",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_DB_HOST",
+    "module": "db",
+    "path": "db.host",
+    "description": "数据库主机地址（默认 localhost）",
+    "value": "localhost",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_DB_MYSQL",
+    "module": "db",
+    "path": "db.mysql",
+    "description": "MySQL 特定选项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DB_MYSQL_CHARSET",
+    "module": "db",
+    "path": "db.mysql.charset",
+    "description": "字符集（默认 utf8mb4），推荐使用 utf8mb4 支持完整 Unicode",
+    "value": "utf8mb4",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_DB_MYSQL_TIMEZONE",
+    "module": "db",
+    "path": "db.mysql.timezone",
+    "description": "时区设置，如 '+08:00'",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_DB_OPERATIONLOG",
+    "module": "db",
+    "path": "db.operationLog",
+    "description": "db 操作日志的读写开关、级别与字段截断规则",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DB_OPERATIONLOG_LEVEL",
+    "module": "db",
+    "path": "db.operationLog.level",
+    "description": "操作日志的输出级别",
+    "value": "debug",
+    "constraint": "字符串；取值：info | debug | trace"
+  },
+  {
+    "name": "HAI_DB_OPERATIONLOG_MAXLENGTH",
+    "module": "db",
+    "path": "db.operationLog.maxLength",
+    "description": "操作日志字段的最大字符数，0 表示不截断",
+    "value": "1000",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_DB_OPERATIONLOG_READ",
+    "module": "db",
+    "path": "db.operationLog.read",
+    "description": "是否记录读取操作",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_DB_OPERATIONLOG_WRITE",
+    "module": "db",
+    "path": "db.operationLog.write",
+    "description": "是否记录写入操作",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_DB_PASSWORD",
+    "module": "db",
+    "path": "db.password",
+    "description": "数据库密码",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_DB_POOL",
+    "module": "db",
+    "path": "db.pool",
+    "description": "连接池配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DB_POOL_ACQUIRETIMEOUT",
+    "module": "db",
+    "path": "db.pool.acquireTimeout",
+    "description": "获取连接超时时间，单位毫秒（默认 10000）",
+    "value": "10000",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_DB_POOL_IDLETIMEOUT",
+    "module": "db",
+    "path": "db.pool.idleTimeout",
+    "description": "空闲连接超时时间，单位毫秒（默认 30000）",
+    "value": "30000",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_DB_POOL_MAX",
+    "module": "db",
+    "path": "db.pool.max",
+    "description": "最大连接数（默认 10）",
+    "value": "10",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_DB_POOL_MIN",
+    "module": "db",
+    "path": "db.pool.min",
+    "description": "最小连接数（默认 1）",
+    "value": "1",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_DB_PORT",
+    "module": "db",
+    "path": "db.port",
+    "description": "数据库端口 - PostgreSQL 默认 5432 - MySQL 默认 3306",
+    "value": "5432",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_DB_SQLITE",
+    "module": "db",
+    "path": "db.sqlite",
+    "description": "SQLite 特定选项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DB_SQLITE_EXECUTOR",
+    "module": "db",
+    "path": "db.sqlite.executor",
+    "description": "执行方式（默认 sync）。 - `sync`：主线程直接执行 better-sqlite3（同步阻塞主线程事件循环）。 - `worker`：在专用 worker 线程持有唯一连接执行，把阻塞移出主线程。 注意 WAL 只改善数据库锁并发，无法避免 better-sqlite3 同步调用占用调用线程。",
+    "value": "sync",
+    "constraint": "字符串；取值：sync | worker"
+  },
+  {
+    "name": "HAI_DB_SQLITE_READONLY",
+    "module": "db",
+    "path": "db.sqlite.readonly",
+    "description": "是否只读模式（默认 false）",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_DB_SQLITE_WALMODE",
+    "module": "db",
+    "path": "db.sqlite.walMode",
+    "description": "是否启用 WAL 模式（默认 true），可提高并发读写性能",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_DB_SQLITE_WORKERCONNECTTIMEOUTMS",
+    "module": "db",
+    "path": "db.sqlite.workerConnectTimeoutMs",
+    "description": "worker 执行方式下等待连接打开的超时（毫秒，默认 10000）",
+    "value": "10000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_DB_SSL",
+    "module": "db",
+    "path": "db.ssl",
+    "description": "SSL/TLS 连接配置",
+    "value": "false",
+    "constraint": "true | false；字符串；JSON 对象；整体覆盖时替换该节点；取值：require | prefer | allow | disable"
+  },
+  {
+    "name": "HAI_DB_TYPE",
+    "module": "db",
+    "path": "db.type",
+    "description": "后端或功能类型，按枚举选择",
+    "value": "sqlite",
+    "constraint": "字符串；取值：sqlite | postgresql | mysql"
+  },
+  {
+    "name": "HAI_DB_URL",
+    "module": "db",
+    "path": "db.url",
+    "description": "连接字符串（可选） 如果提供 url，将优先使用，忽略 host/port 等字段",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_DB_USER",
+    "module": "db",
+    "path": "db.user",
+    "description": "数据库用户名",
+    "value": "postgres",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_DEPLOY",
+    "module": "deploy",
+    "path": "deploy",
+    "description": "deploy. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER",
+    "module": "deploy",
+    "path": "deploy.container",
+    "description": "本地容器构建参数（docker-ssh 使用；auto 优先 podman）",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_RUNTIME",
+    "module": "deploy",
+    "path": "deploy.container.runtime",
+    "description": "本地或远程容器运行时，auto 按部署模块顺序探测",
+    "value": "auto",
+    "constraint": "字符串；取值：auto | docker | podman"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER",
+    "module": "deploy",
+    "path": "deploy.provider",
+    "description": "应用部署目标平台及其连接参数，按 type 选择对应平台字段",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE",
+    "module": "deploy",
+    "path": "deploy.provider.expose",
+    "description": "应用暴露方式",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_CONTAINERPORT",
+    "module": "deploy",
+    "path": "deploy.provider.expose.containerPort",
+    "description": "容器内监听端口（adapter-node 默认 3000）",
+    "value": "3000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT",
+    "module": "deploy",
+    "path": "deploy.provider.expose.hostPort",
+    "description": "宿主机映射端口",
+    "value": "18080",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_TYPE",
+    "module": "deploy",
+    "path": "deploy.provider.expose.type",
+    "description": "应用部署：平台/暴露方式，按所在节点的枚举选择",
+    "value": "port",
+    "constraint": "字符串；取值：port"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_REMOTE",
+    "module": "deploy",
+    "path": "deploy.provider.remote",
+    "description": "远程主机运行参数",
+    "value": "{\"baseDir\":\"/opt/hai/apps\",\"runtime\":\"auto\"}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_REMOTE_BASEDIR",
+    "module": "deploy",
+    "path": "deploy.provider.remote.baseDir",
+    "description": "远程应用根目录",
+    "value": "/opt/hai/apps",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME",
+    "module": "deploy",
+    "path": "deploy.provider.remote.runtime",
+    "description": "远程容器运行时（auto 优先 podman）",
+    "value": "auto",
+    "constraint": "字符串；取值：auto | docker | podman"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH",
+    "module": "deploy",
+    "path": "deploy.provider.ssh",
+    "description": "SSH 连接参数",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_CONNECTTIMEOUTSECONDS",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.connectTimeoutSeconds",
+    "description": "连接超时（秒）",
+    "value": "10",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_HOST",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.host",
+    "description": "远程主机地址或 ~/.ssh/config 中的 Host 别名",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.identityFile",
+    "description": "私钥文件路径（省略时使用 ssh-agent 或 ~/.ssh 默认密钥）",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_KNOWNHOSTSFILE",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.knownHostsFile",
+    "description": "known_hosts 文件路径（省略时使用默认；配合 CI/临时环境隔离主机指纹）",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_PORT",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.port",
+    "description": "SSH 端口",
+    "value": "22",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_STRICTHOSTKEYCHECKING",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.strictHostKeyChecking",
+    "description": "严格主机密钥校验，默认开启（true→accept-new 首次信任并拒绝变更；false→关闭校验）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_USERNAME",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.username",
+    "description": "SSH 用户名",
+    "value": "deploy",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_TOKEN",
+    "module": "deploy",
+    "path": "deploy.provider.token",
+    "description": "应用部署：部署平台访问令牌",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_TYPE",
+    "module": "deploy",
+    "path": "deploy.provider.type",
+    "description": "应用部署：平台/暴露方式，按所在节点的枚举选择",
+    "value": "docker-ssh",
+    "constraint": "字符串；取值：vercel | docker-ssh"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES",
+    "module": "deploy",
+    "path": "deploy.services",
+    "description": "自动开通依赖服务的服务商及连接配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_CACHE",
+    "module": "deploy",
+    "path": "deploy.services.cache",
+    "description": "自动开通缓存服务的服务商及连接配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_CACHE_APIKEY",
+    "module": "deploy",
+    "path": "deploy.services.cache.apiKey",
+    "description": "自动开通 cache 服务：服务商 API 密钥",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_CACHE_EMAIL",
+    "module": "deploy",
+    "path": "deploy.services.cache.email",
+    "description": "自动开通 cache 服务：服务商账号邮箱",
+    "value": "",
+    "constraint": "字符串；格式 email；正则 ^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_CACHE_PROVISIONER",
+    "module": "deploy",
+    "path": "deploy.services.cache.provisioner",
+    "description": "自动开通 cache 服务：资源开通服务商",
+    "value": "upstash",
+    "constraint": "字符串；取值：upstash"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_DB",
+    "module": "deploy",
+    "path": "deploy.services.db",
+    "description": "自动开通关系数据库服务的服务商及连接配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_DB_APIKEY",
+    "module": "deploy",
+    "path": "deploy.services.db.apiKey",
+    "description": "自动开通 db 服务：服务商 API 密钥",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_DB_PROVISIONER",
+    "module": "deploy",
+    "path": "deploy.services.db.provisioner",
+    "description": "自动开通 db 服务：资源开通服务商",
+    "value": "neon",
+    "constraint": "字符串；取值：neon"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_EMAIL",
+    "module": "deploy",
+    "path": "deploy.services.email",
+    "description": "自动开通 email 服务：服务商账号邮箱",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_EMAIL_APIKEY",
+    "module": "deploy",
+    "path": "deploy.services.email.apiKey",
+    "description": "自动开通 email 服务：服务商 API 密钥",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_EMAIL_FROM",
+    "module": "deploy",
+    "path": "deploy.services.email.from",
+    "description": "自动开通 email 服务：已验证域名的发件邮箱",
+    "value": "",
+    "constraint": "字符串；格式 email；正则 ^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_EMAIL_PROVISIONER",
+    "module": "deploy",
+    "path": "deploy.services.email.provisioner",
+    "description": "自动开通 email 服务：资源开通服务商",
+    "value": "resend",
+    "constraint": "字符串；取值：resend"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_SMS",
+    "module": "deploy",
+    "path": "deploy.services.sms",
+    "description": "是否允许短信验证码",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_SMS_ACCESSKEYID",
+    "module": "deploy",
+    "path": "deploy.services.sms.accessKeyId",
+    "description": "自动开通 sms 服务：服务商访问密钥 ID",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_SMS_ACCESSKEYSECRET",
+    "module": "deploy",
+    "path": "deploy.services.sms.accessKeySecret",
+    "description": "自动开通 sms 服务：服务商访问密钥 Secret",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_SMS_PROVISIONER",
+    "module": "deploy",
+    "path": "deploy.services.sms.provisioner",
+    "description": "自动开通 sms 服务：资源开通服务商",
+    "value": "aliyun",
+    "constraint": "字符串；取值：aliyun"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_SMS_SIGNNAME",
+    "module": "deploy",
+    "path": "deploy.services.sms.signName",
+    "description": "自动开通 sms 服务：短信服务审核通过的签名",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_STORAGE",
+    "module": "deploy",
+    "path": "deploy.services.storage",
+    "description": "自动开通对象存储服务的服务商及连接配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID",
+    "module": "deploy",
+    "path": "deploy.services.storage.accessKeyId",
+    "description": "自动开通 storage 服务：服务商访问密钥 ID",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_STORAGE_ACCOUNTID",
+    "module": "deploy",
+    "path": "deploy.services.storage.accountId",
+    "description": "自动开通 storage 服务：Cloudflare 账号 ID",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_STORAGE_APITOKEN",
+    "module": "deploy",
+    "path": "deploy.services.storage.apiToken",
+    "description": "自动开通 storage 服务：Cloudflare API 令牌",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_STORAGE_PROVISIONER",
+    "module": "deploy",
+    "path": "deploy.services.storage.provisioner",
+    "description": "自动开通 storage 服务：资源开通服务商",
+    "value": "cloudflare-r2",
+    "constraint": "字符串；取值：cloudflare-r2"
+  },
+  {
+    "name": "HAI_DEPLOY_SERVICES_STORAGE_SECRETACCESSKEY",
+    "module": "deploy",
+    "path": "deploy.services.storage.secretAccessKey",
+    "description": "自动开通 storage 服务：对象存储访问密钥 Secret",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DOCKER_PROD_BUILD",
+    "module": "docker",
+    "path": "HAI_DOCKER_PROD_BUILD",
+    "description": "容器生产构建时省略声明文件和 sourcemap",
+    "value": "",
+    "constraint": "true 启用；其余值关闭"
+  },
+  {
+    "name": "HAI_E2E",
+    "module": "e2e",
+    "path": "HAI_E2E",
+    "description": "示例/模板端到端测试开关",
+    "value": "",
+    "constraint": "1 启用；其余值关闭"
+  },
+  {
+    "name": "HAI_E2E_APP_URL",
+    "module": "e2e",
+    "path": "HAI_E2E_APP_URL",
+    "description": "Fullstack 移动端浏览器预览验收地址",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL；同时决定对应预览服务的监听地址"
+  },
+  {
+    "name": "HAI_E2E_DATA_ROOT",
+    "module": "e2e",
+    "path": "HAI_E2E_DATA_ROOT",
+    "description": "端到端测试的隔离运行数据目录",
+    "value": "",
+    "constraint": "目录路径"
+  },
+  {
+    "name": "HAI_E2E_DESKTOP_URL",
+    "module": "e2e",
+    "path": "HAI_E2E_DESKTOP_URL",
+    "description": "Fullstack 桌面端浏览器预览验收地址",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL；同时决定对应预览服务的监听地址"
+  },
+  {
+    "name": "HAI_E2E_LIVE",
+    "module": "e2e",
+    "path": "HAI_E2E_LIVE",
+    "description": "AI 示例启用真实厂商端到端测试",
+    "value": "",
+    "constraint": "1 启用；其余值关闭"
+  },
+  {
+    "name": "HAI_E2E_MOCK",
+    "module": "e2e",
+    "path": "HAI_E2E_MOCK",
+    "description": "AI 示例使用确定性端到端测试服务",
+    "value": "",
+    "constraint": "1 启用；其余值关闭"
+  },
+  {
+    "name": "HAI_E2E_WEB_URL",
+    "module": "e2e",
+    "path": "HAI_E2E_WEB_URL",
+    "description": "Fullstack Web 端验收地址",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL；同时决定对应预览服务的监听地址"
+  },
+  {
+    "name": "HAI_IAM",
+    "module": "iam",
+    "path": "iam",
+    "description": "iam. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_AGREEMENTS",
+    "module": "iam",
+    "path": "iam.agreements",
+    "description": "协议展示配置",
+    "value": "{\"showOnRegister\":true,\"showOnLogin\":false}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_AGREEMENTS_PRIVACYPOLICYMARKDOWN",
+    "module": "iam",
+    "path": "iam.agreements.privacyPolicyMarkdown",
+    "description": "隐私协议 Markdown 正文；YAML 使用 | 保留段落和换行。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_IAM_AGREEMENTS_PRIVACYPOLICYURL",
+    "module": "iam",
+    "path": "iam.agreements.privacyPolicyUrl",
+    "description": "隐私协议 URL",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_IAM_AGREEMENTS_SHOWONLOGIN",
+    "module": "iam",
+    "path": "iam.agreements.showOnLogin",
+    "description": "登录时展示协议",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_AGREEMENTS_SHOWONREGISTER",
+    "module": "iam",
+    "path": "iam.agreements.showOnRegister",
+    "description": "注册时展示协议",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_AGREEMENTS_USERAGREEMENTMARKDOWN",
+    "module": "iam",
+    "path": "iam.agreements.userAgreementMarkdown",
+    "description": "用户协议 Markdown 正文；同时配置 URL 时优先显示正文。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_IAM_AGREEMENTS_USERAGREEMENTURL",
+    "module": "iam",
+    "path": "iam.agreements.userAgreementUrl",
+    "description": "用户协议 URL",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_IAM_APIKEY",
+    "module": "iam",
+    "path": "iam.apikey",
+    "description": "API Key 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_APIKEY_DEFAULTEXPIRATIONDAYS",
+    "module": "iam",
+    "path": "iam.apikey.defaultExpirationDays",
+    "description": "API Key 默认有效期（天，0 表示永不过期，默认 0）",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_APIKEY_MAXKEYSPERUSER",
+    "module": "iam",
+    "path": "iam.apikey.maxKeysPerUser",
+    "description": "单用户最大 API Key 数量（默认 10）",
+    "value": "10",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_APIKEY_PREFIX",
+    "module": "iam",
+    "path": "iam.apikey.prefix",
+    "description": "API Key 前缀（默认 'hai_'）",
+    "value": "hai_",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP",
+    "module": "iam",
+    "path": "iam.ldap",
+    "description": "LDAP 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_LDAP_BINDDN",
+    "module": "iam",
+    "path": "iam.ldap.bindDn",
+    "description": "绑定 DN",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP_BINDPASSWORD",
+    "module": "iam",
+    "path": "iam.ldap.bindPassword",
+    "description": "绑定密码",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP_CONNECTTIMEOUT",
+    "module": "iam",
+    "path": "iam.ldap.connectTimeout",
+    "description": "连接超时（毫秒）",
+    "value": "5000",
+    "constraint": "整数；>= 1000；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_LDAP_DISPLAYNAMEATTRIBUTE",
+    "module": "iam",
+    "path": "iam.ldap.displayNameAttribute",
+    "description": "显示名称属性",
+    "value": "cn",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP_EMAILATTRIBUTE",
+    "module": "iam",
+    "path": "iam.ldap.emailAttribute",
+    "description": "邮箱属性",
+    "value": "mail",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP_SEARCHBASE",
+    "module": "iam",
+    "path": "iam.ldap.searchBase",
+    "description": "搜索基础 DN",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP_SEARCHFILTER",
+    "module": "iam",
+    "path": "iam.ldap.searchFilter",
+    "description": "搜索过滤器（默认使用 uid）",
+    "value": "(uid={{username}})",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP_URL",
+    "module": "iam",
+    "path": "iam.ldap.url",
+    "description": "LDAP 服务器 URL",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_IAM_LDAP_USERNAMEATTRIBUTE",
+    "module": "iam",
+    "path": "iam.ldap.usernameAttribute",
+    "description": "用户名属性",
+    "value": "uid",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LDAP_USETLS",
+    "module": "iam",
+    "path": "iam.ldap.useTls",
+    "description": "启用 TLS",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_LOGIN",
+    "module": "iam",
+    "path": "iam.login",
+    "description": "登录启用配置",
+    "value": "{\"password\":true,\"otp\":true,\"ldap\":false,\"apikey\":false}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_LOGIN_APIKEY",
+    "module": "iam",
+    "path": "iam.login.apikey",
+    "description": "是否启用 API Key 登录",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_LOGIN_LDAP",
+    "module": "iam",
+    "path": "iam.login.ldap",
+    "description": "是否启用 LDAP 登录；需要显式开启并提供 ldap 配置。",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_LOGIN_OTP",
+    "module": "iam",
+    "path": "iam.login.otp",
+    "description": "是否启用 OTP 登录",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_LOGIN_PASSWORD",
+    "module": "iam",
+    "path": "iam.login.password",
+    "description": "是否启用密码登录",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_OTP",
+    "module": "iam",
+    "path": "iam.otp",
+    "description": "OTP 配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_OTP_EMAIL",
+    "module": "iam",
+    "path": "iam.otp.email",
+    "description": "分别启用邮件、短信验证码",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_OTP_EXPIRESIN",
+    "module": "iam",
+    "path": "iam.otp.expiresIn",
+    "description": "验证码过期时间（秒，默认 300）",
+    "value": "300",
+    "constraint": "整数；>= 60；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_OTP_LENGTH",
+    "module": "iam",
+    "path": "iam.otp.length",
+    "description": "验证码长度（默认 6）",
+    "value": "6",
+    "constraint": "整数；>= 4；<= 8"
+  },
+  {
+    "name": "HAI_IAM_OTP_MAXATTEMPTS",
+    "module": "iam",
+    "path": "iam.otp.maxAttempts",
+    "description": "最大重试次数（默认 3）",
+    "value": "3",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_OTP_RESENDINTERVAL",
+    "module": "iam",
+    "path": "iam.otp.resendInterval",
+    "description": "发送间隔（秒，默认 60）",
+    "value": "60",
+    "constraint": "整数；>= 30；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_OTP_SMS",
+    "module": "iam",
+    "path": "iam.otp.sms",
+    "description": "是否允许短信验证码",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD",
+    "module": "iam",
+    "path": "iam.password",
+    "description": "密码配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_EXPIRATIONDAYS",
+    "module": "iam",
+    "path": "iam.password.expirationDays",
+    "description": "密码过期天数（0 表示不过期）",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_MAXLENGTH",
+    "module": "iam",
+    "path": "iam.password.maxLength",
+    "description": "最大长度（默认 128）",
+    "value": "128",
+    "constraint": "整数；>= 1；<= 256"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_MINLENGTH",
+    "module": "iam",
+    "path": "iam.password.minLength",
+    "description": "最小长度（默认 8）",
+    "value": "8",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_REQUIRELOWERCASE",
+    "module": "iam",
+    "path": "iam.password.requireLowercase",
+    "description": "需要小写字母",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_REQUIRENUMBER",
+    "module": "iam",
+    "path": "iam.password.requireNumber",
+    "description": "需要数字",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_REQUIRESPECIALCHAR",
+    "module": "iam",
+    "path": "iam.password.requireSpecialChar",
+    "description": "需要特殊字符",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_REQUIREUPPERCASE",
+    "module": "iam",
+    "path": "iam.password.requireUppercase",
+    "description": "需要大写字母",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_PASSWORDRESET",
+    "module": "iam",
+    "path": "iam.passwordReset",
+    "description": "密码重置配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_PASSWORDRESET_ENABLED",
+    "module": "iam",
+    "path": "iam.passwordReset.enabled",
+    "description": "是否启用密码重置",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_PASSWORDRESET_MAXATTEMPTS",
+    "module": "iam",
+    "path": "iam.passwordReset.maxAttempts",
+    "description": "最大验证尝试次数（默认 3）",
+    "value": "3",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_PASSWORDRESET_MODE",
+    "module": "iam",
+    "path": "iam.passwordReset.mode",
+    "description": "重置通知渠道，phone 使用 password_reset_sms 模板。",
+    "value": "email",
+    "constraint": "字符串；取值：email | phone"
+  },
+  {
+    "name": "HAI_IAM_PASSWORDRESET_RESETURL",
+    "module": "iam",
+    "path": "iam.passwordReset.resetUrl",
+    "description": "重置页面的绝对地址，通知模板可使用 resetUrl。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_IAM_PASSWORDRESET_TOKENEXPIRESIN",
+    "module": "iam",
+    "path": "iam.passwordReset.tokenExpiresIn",
+    "description": "重置令牌有效期（秒，默认 3600 = 1小时）",
+    "value": "3600",
+    "constraint": "整数；>= 300；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_RBAC",
+    "module": "iam",
+    "path": "iam.rbac",
+    "description": "RBAC 配置",
+    "value": "{\"enabled\":true,\"superAdminRole\":\"super_admin\",\"defaultRole\":\"user\"}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_RBAC_DEFAULTROLE",
+    "module": "iam",
+    "path": "iam.rbac.defaultRole",
+    "description": "默认用户角色",
+    "value": "user",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_RBAC_ENABLED",
+    "module": "iam",
+    "path": "iam.rbac.enabled",
+    "description": "是否启用 RBAC",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_RBAC_SUPERADMINROLE",
+    "module": "iam",
+    "path": "iam.rbac.superAdminRole",
+    "description": "超级管理员角色代码",
+    "value": "super_admin",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_REGISTER",
+    "module": "iam",
+    "path": "iam.register",
+    "description": "注册配置",
+    "value": "{\"enabled\":true,\"defaultEnabled\":true}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_REGISTER_DEFAULTENABLED",
+    "module": "iam",
+    "path": "iam.register.defaultEnabled",
+    "description": "新注册用户是否默认启用",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_REGISTER_ENABLED",
+    "module": "iam",
+    "path": "iam.register.enabled",
+    "description": "是否启用注册",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_SECURITY",
+    "module": "iam",
+    "path": "iam.security",
+    "description": "安全策略配置",
+    "value": "{\"maxLoginAttempts\":5,\"lockoutDuration\":900}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_SECURITY_LOCKOUTDURATION",
+    "module": "iam",
+    "path": "iam.security.lockoutDuration",
+    "description": "锁定时长（秒，默认 900）",
+    "value": "900",
+    "constraint": "整数；>= 60；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_SECURITY_MAXLOGINATTEMPTS",
+    "module": "iam",
+    "path": "iam.security.maxLoginAttempts",
+    "description": "最大登录失败次数（默认 5）",
+    "value": "5",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_SEEDDEFAULTDATA",
+    "module": "iam",
+    "path": "iam.seedDefaultData",
+    "description": "是否初始化默认角色和权限（默认 true）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_SESSION",
+    "module": "iam",
+    "path": "iam.session",
+    "description": "会话配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_SESSION_MAXAGE",
+    "module": "iam",
+    "path": "iam.session.maxAge",
+    "description": "会话超时时间（秒，默认 86400 = 24小时）",
+    "value": "86400",
+    "constraint": "整数；>= 60；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_SESSION_REFRESHTOKENMAXAGE",
+    "module": "iam",
+    "path": "iam.session.refreshTokenMaxAge",
+    "description": "refreshToken 过期时间（秒，默认 604800 = 7天）",
+    "value": "604800",
+    "constraint": "整数；>= 3600；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_SESSION_SINGLEDEVICE",
+    "module": "iam",
+    "path": "iam.session.singleDevice",
+    "description": "单设备登录（踢掉其他设备）",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_SESSION_SLIDING",
+    "module": "iam",
+    "path": "iam.session.sliding",
+    "description": "是否滑动窗口（每次访问刷新过期时间）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_UI",
+    "module": "iam",
+    "path": "iam.ui",
+    "description": "认证页外观",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_UI_BRANDTEXT",
+    "module": "iam",
+    "path": "iam.ui.brandText",
+    "description": "认证页品牌介绍正文",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_UI_BRANDTITLE",
+    "module": "iam",
+    "path": "iam.ui.brandTitle",
+    "description": "认证页品牌区域标题",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_UI_ILLUSTRATIONURL",
+    "module": "iam",
+    "path": "iam.ui.illustrationUrl",
+    "description": "认证页插图 URL",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_UI_LOGOURL",
+    "module": "iam",
+    "path": "iam.ui.logoUrl",
+    "description": "认证页品牌 Logo URL",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_UI_SUBTITLE",
+    "module": "iam",
+    "path": "iam.ui.subtitle",
+    "description": "认证面板副标题",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_UI_TITLE",
+    "module": "iam",
+    "path": "iam.ui.title",
+    "description": "认证面板标题",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_UI_VARIANT",
+    "module": "iam",
+    "path": "iam.ui.variant",
+    "description": "认证页布局样式",
+    "value": "card",
+    "constraint": "字符串；取值：card | split"
+  },
+  {
+    "name": "HAI_KIT",
+    "module": "kit",
+    "path": "kit",
+    "description": "kit. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_COOKIE_KEY",
+    "module": "kit",
+    "path": "HAI_KIT_COOKIE_KEY",
+    "description": "kit Cookie 加密密钥",
+    "value": "",
+    "constraint": "满足 crypto SM4 密钥格式；敏感值仅本机或目标进程注入"
+  },
+  {
+    "name": "HAI_KIT_SERVER",
+    "module": "kit",
+    "path": "kit.server",
+    "description": "HTTP 服务监听地址与端口",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_SERVER_HOST",
+    "module": "kit",
+    "path": "kit.server.host",
+    "description": "HTTP 监听主机名或 IP",
+    "value": "127.0.0.1",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_KIT_SERVER_PORT",
+    "module": "kit",
+    "path": "kit.server.port",
+    "description": "HTTP 监听端口",
+    "value": "3000",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT",
+    "module": "kit",
+    "path": "kit.transport",
+    "description": "传输加密开关或密钥协商配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_ENCRYPTRESPONSE",
+    "module": "kit",
+    "path": "kit.transport.encryptResponse",
+    "description": "是否加密服务端业务响应",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_EXCLUDEPATHS",
+    "module": "kit",
+    "path": "kit.transport.excludePaths",
+    "description": "不进入传输加密管道的路径",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_EXCLUDEPATHS_0",
+    "module": "kit",
+    "path": "kit.transport.excludePaths.0",
+    "description": "不进入传输加密管道的路径",
+    "value": "/api/storage",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_EXCLUDEPATHS_1",
+    "module": "kit",
+    "path": "HAI_KIT_TRANSPORT_EXCLUDEPATHS_1",
+    "description": "不进入传输加密管道的路径",
+    "value": "/api/public",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_EXCLUDEPATHS_2",
+    "module": "kit",
+    "path": "HAI_KIT_TRANSPORT_EXCLUDEPATHS_2",
+    "description": "不进入传输加密管道的路径",
+    "value": "/api/auth/profile/avatar",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_KEYEXCHANGEPATH",
+    "module": "kit",
+    "path": "kit.transport.keyExchangePath",
+    "description": "客户端与服务端约定的密钥交换端点",
+    "value": "/api/_hai/key-exchange",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_MAXCLIENTS",
+    "module": "kit",
+    "path": "kit.transport.maxClients",
+    "description": "服务端最多保留的客户端传输密钥会话数",
+    "value": "10000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_REQUIREENCRYPTION",
+    "module": "kit",
+    "path": "kit.transport.requireEncryption",
+    "description": "是否要求业务请求使用传输加密",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_MODEL_API_KEY",
+    "module": "model",
+    "path": "HAI_MODEL_API_KEY",
+    "description": "本地语音模型 HTTP 服务的 Bearer 认证密钥",
+    "value": "",
+    "constraint": "敏感字符串；空值表示该模型服务未启用认证"
+  },
+  {
+    "name": "HAI_MODEL_ID",
+    "module": "model",
+    "path": "HAI_MODEL_ID",
+    "description": "本地模型权重的 Hugging Face 仓库 ID",
+    "value": "",
+    "constraint": "有效模型仓库 ID，例如组织名/模型名；由模型目录提供默认值"
+  },
+  {
+    "name": "HAI_MODEL_OUTPUT_DIR",
+    "module": "model",
+    "path": "HAI_MODEL_OUTPUT_DIR",
+    "description": "模型 prepare 子进程的权重输出目录",
+    "value": "",
+    "constraint": "目录路径；通常由 model:prepare 自动注入"
+  },
+  {
+    "name": "HAI_MODEL_REVISION",
+    "module": "model",
+    "path": "HAI_MODEL_REVISION",
+    "description": "Hugging Face 权重修订版本",
+    "value": "",
+    "constraint": "仓库已有的分支、标签或 commit；为空时使用厂商默认版本"
+  },
+  {
+    "name": "HAI_MODELSCOPE_ID",
+    "module": "modelscope",
+    "path": "HAI_MODELSCOPE_ID",
+    "description": "本地模型权重的 ModelScope 仓库 ID",
+    "value": "",
+    "constraint": "有效模型仓库 ID；优先使用模型目录的配置"
+  },
+  {
+    "name": "HAI_MODELSCOPE_REVISION",
+    "module": "modelscope",
+    "path": "HAI_MODELSCOPE_REVISION",
+    "description": "ModelScope 权重修订版本",
+    "value": "",
+    "constraint": "仓库已有的分支、标签或 commit；通常为 master"
+  },
+  {
+    "name": "HAI_PARTNER",
+    "module": "partner",
+    "path": "partner",
+    "description": "partner 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体替换该配置"
+  },
+  {
+    "name": "HAI_PARTNER_PASSWORD",
+    "module": "partner",
+    "path": "HAI_PARTNER_PASSWORD",
+    "description": "企业官网合作伙伴演示的登录密码",
+    "value": "",
+    "constraint": "敏感字符串，仅本机或目标进程注入"
+  },
+  {
+    "name": "HAI_PARTNER_SESSIONTTLSECONDS",
+    "module": "partner",
+    "path": "HAI_PARTNER_SESSIONTTLSECONDS",
+    "description": "合作伙伴演示会话有效期",
+    "value": "14400",
+    "constraint": "正整数，单位秒"
+  },
+  {
+    "name": "HAI_PARTNER_USERNAME",
+    "module": "partner",
+    "path": "HAI_PARTNER_USERNAME",
+    "description": "企业官网合作伙伴演示的登录用户名",
+    "value": "partner-admin",
+    "constraint": "非空字符串"
+  },
+  {
+    "name": "HAI_PAYMENT",
+    "module": "payment",
+    "path": "payment",
+    "description": "payment. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_PAYMENT_ALIPAY",
+    "module": "payment",
+    "path": "payment.alipay",
+    "description": "支付宝渠道的商户配置与验签参数",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_PAYMENT_ALIPAY_ALIPAYPUBLICKEY",
+    "module": "payment",
+    "path": "payment.alipay.alipayPublicKey",
+    "description": "alipay：支付宝平台公钥，用于验签",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_ALIPAY_APPID",
+    "module": "payment",
+    "path": "payment.alipay.appId",
+    "description": "alipay：商户应用 ID",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_ALIPAY_PRIVATEKEY",
+    "module": "payment",
+    "path": "payment.alipay.privateKey",
+    "description": "alipay：商户签名私钥（PEM）",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_ALIPAY_SANDBOX",
+    "module": "payment",
+    "path": "payment.alipay.sandbox",
+    "description": "alipay：是否使用沙箱网关",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_PAYMENT_ALIPAY_SIGNTYPE",
+    "module": "payment",
+    "path": "payment.alipay.signType",
+    "description": "alipay：请求签名算法",
+    "value": "RSA2",
+    "constraint": "字符串；取值：RSA2 | RSA"
+  },
+  {
+    "name": "HAI_PAYMENT_STRIPE",
+    "module": "payment",
+    "path": "payment.stripe",
+    "description": "Stripe渠道的商户配置与验签参数",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_PAYMENT_STRIPE_SECRETKEY",
+    "module": "payment",
+    "path": "payment.stripe.secretKey",
+    "description": "stripe：Stripe 服务端密钥",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_STRIPE_WEBHOOKSECRET",
+    "module": "payment",
+    "path": "payment.stripe.webhookSecret",
+    "description": "stripe：Stripe Webhook 验签密钥",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_STRIPE_WEBHOOKTOLERANCESECONDS",
+    "module": "payment",
+    "path": "payment.stripe.webhookToleranceSeconds",
+    "description": "stripe：Webhook 时间戳允许偏差，单位秒",
+    "value": "300",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_PAYMENT_WECHAT",
+    "module": "payment",
+    "path": "payment.wechat",
+    "description": "微信支付渠道的商户配置与验签参数",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_PAYMENT_WECHAT_APIV3KEY",
+    "module": "payment",
+    "path": "payment.wechat.apiV3Key",
+    "description": "wechat：微信支付 API v3 密钥",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_WECHAT_APPID",
+    "module": "payment",
+    "path": "payment.wechat.appId",
+    "description": "wechat：商户应用 ID",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_WECHAT_MCHID",
+    "module": "payment",
+    "path": "payment.wechat.mchId",
+    "description": "wechat：微信支付商户号",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_WECHAT_PLATFORMCERT",
+    "module": "payment",
+    "path": "payment.wechat.platformCert",
+    "description": "wechat：微信支付平台证书（PEM），用于验签",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_PAYMENT_WECHAT_PRIVATEKEY",
+    "module": "payment",
+    "path": "payment.wechat.privateKey",
+    "description": "wechat：商户签名私钥（PEM）",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_PAYMENT_WECHAT_SERIALNO",
+    "module": "payment",
+    "path": "payment.wechat.serialNo",
+    "description": "wechat：商户 API 证书序列号",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH",
+    "module": "reach",
+    "path": "reach",
+    "description": "reach. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_DND",
+    "module": "reach",
+    "path": "reach.dnd",
+    "description": "免打扰配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_DND_ENABLED",
+    "module": "reach",
+    "path": "reach.dnd.enabled",
+    "description": "是否启用免打扰（默认 false）",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_REACH_DND_END",
+    "module": "reach",
+    "path": "reach.dnd.end",
+    "description": "免打扰结束时间（HH:mm 格式）",
+    "value": "00:00",
+    "constraint": "字符串；正则 ^([01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
+    "name": "HAI_REACH_DND_START",
+    "module": "reach",
+    "path": "reach.dnd.start",
+    "description": "免打扰开始时间（HH:mm 格式）",
+    "value": "00:00",
+    "constraint": "字符串；正则 ^([01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
+    "name": "HAI_REACH_DND_STRATEGY",
+    "module": "reach",
+    "path": "reach.dnd.strategy",
+    "description": "免打扰策略：discard 丢弃 / delay 延时发送（默认 discard）",
+    "value": "discard",
+    "constraint": "字符串；取值：discard | delay"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS",
+    "module": "reach",
+    "path": "reach.providers",
+    "description": "Provider 配置列表",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0",
+    "module": "reach",
+    "path": "reach.providers.0",
+    "description": "Provider 配置列表；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_ACCESSKEYID",
+    "module": "reach",
+    "path": "reach.providers.0.accessKeyId",
+    "description": "阿里云 AccessKey ID",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET",
+    "module": "reach",
+    "path": "reach.providers.0.accessKeySecret",
+    "description": "阿里云 AccessKey Secret",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_ENDPOINT",
+    "module": "reach",
+    "path": "reach.providers.0.endpoint",
+    "description": "API 端点（默认 dysmsapi.aliyuncs.com）",
+    "value": "dysmsapi.aliyuncs.com",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_FROM",
+    "module": "reach",
+    "path": "reach.providers.0.from",
+    "description": "发件人地址",
+    "value": "noreply@example.com",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_HEADERS",
+    "module": "reach",
+    "path": "reach.providers.0.headers",
+    "description": "自定义请求头",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION",
+    "module": "reach",
+    "path": "HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION",
+    "description": "API 通知 Provider 的完整 Authorization 请求头",
+    "value": "",
+    "constraint": "敏感字符串，包含认证方案及凭据，例如 Bearer <token>"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_HOST",
+    "module": "reach",
+    "path": "reach.providers.0.host",
+    "description": "SMTP 服务器地址",
+    "value": "smtp.example.com",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_METHOD",
+    "module": "reach",
+    "path": "reach.providers.0.method",
+    "description": "HTTP 方法（默认 POST）",
+    "value": "POST",
+    "constraint": "字符串；取值：POST | PUT"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_NAME",
+    "module": "reach",
+    "path": "reach.providers.0.name",
+    "description": "Provider 唯一名称",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_PASS",
+    "module": "reach",
+    "path": "reach.providers.0.pass",
+    "description": "SMTP 认证密码",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_PORT",
+    "module": "reach",
+    "path": "reach.providers.0.port",
+    "description": "SMTP 端口（默认 465）",
+    "value": "465",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_SECURE",
+    "module": "reach",
+    "path": "reach.providers.0.secure",
+    "description": "是否使用 TLS（默认 true）",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_SIGNNAME",
+    "module": "reach",
+    "path": "reach.providers.0.signName",
+    "description": "短信签名",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_TIMEOUT",
+    "module": "reach",
+    "path": "reach.providers.0.timeout",
+    "description": "请求超时毫秒数（默认 10000）",
+    "value": "10000",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_TYPE",
+    "module": "reach",
+    "path": "reach.providers.0.type",
+    "description": "后端或功能类型，按枚举选择",
+    "value": "console",
+    "constraint": "字符串；取值：console | smtp | aliyun-sms | api"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_URL",
+    "module": "reach",
+    "path": "reach.providers.0.url",
+    "description": "回调 URL",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_USER",
+    "module": "reach",
+    "path": "reach.providers.0.user",
+    "description": "SMTP 认证用户名",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_1_TYPE",
+    "module": "reach",
+    "path": "HAI_REACH_PROVIDERS_1_TYPE",
+    "description": "后端或功能类型，按枚举选择",
+    "value": "console",
+    "constraint": "字符串；取值：console | smtp | aliyun-sms | api"
+  },
+  {
+    "name": "HAI_REACH_TEMPLATES",
+    "module": "reach",
+    "path": "reach.templates",
+    "description": "模板配置（通过配置文件注册）",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_REACH_TEMPLATES_0",
+    "module": "reach",
+    "path": "reach.templates.0",
+    "description": "模板配置（通过配置文件注册）；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_TEMPLATES_0_BODY",
+    "module": "reach",
+    "path": "reach.templates.0.body",
+    "description": "正文模板",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_TEMPLATES_0_NAME",
+    "module": "reach",
+    "path": "reach.templates.0.name",
+    "description": "模板名称",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_TEMPLATES_0_PROVIDER",
+    "module": "reach",
+    "path": "reach.templates.0.provider",
+    "description": "绑定的 Provider 名称",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_TEMPLATES_0_SUBJECT",
+    "module": "reach",
+    "path": "reach.templates.0.subject",
+    "description": "邮件主题模板",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "ANTHROPIC_API_KEY",
+    "module": "runtime",
+    "path": "ANTHROPIC_API_KEY",
+    "description": "ANTHROPIC 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "ANTHROPIC_BASE_URL",
+    "module": "runtime",
+    "path": "ANTHROPIC_BASE_URL",
+    "description": "厂商 SDK 服务基础地址回退",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL"
+  },
+  {
+    "name": "ARK_API_KEY",
+    "module": "runtime",
+    "path": "ARK_API_KEY",
+    "description": "ARK 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "BASE_URL",
+    "module": "runtime",
+    "path": "BASE_URL",
+    "description": "Playwright 验收访问的前端基础地址",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL；按项目 Playwright 配置选择默认端口"
+  },
+  {
+    "name": "CAPACITOR_SERVER_URL",
+    "module": "runtime",
+    "path": "CAPACITOR_SERVER_URL",
+    "description": "Capacitor 开发时的前端热加载地址",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL；发布原生包时不设置"
+  },
+  {
+    "name": "CI",
+    "module": "runtime",
+    "path": "CI",
+    "description": "持续集成环境标记",
+    "value": "",
+    "constraint": "true 或 1 启用；未设置为本地运行"
+  },
+  {
+    "name": "COMPUTE_TYPE",
+    "module": "runtime",
+    "path": "COMPUTE_TYPE",
+    "description": "faster-whisper 计算精度",
+    "value": "auto",
+    "constraint": "auto | default | float32 | float16 | bfloat16 | int16 | int8 | int8_float32 | int8_float16 | int8_bfloat16；须受当前设备支持"
+  },
+  {
+    "name": "DASHSCOPE_API_KEY",
+    "module": "runtime",
+    "path": "DASHSCOPE_API_KEY",
+    "description": "DASHSCOPE 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "DASHSCOPE_WORKSPACE_ID",
+    "module": "runtime",
+    "path": "DASHSCOPE_WORKSPACE_ID",
+    "description": "DashScope 厂商工作空间标识",
+    "value": "",
+    "constraint": "字符串，由厂商控制台提供"
+  },
+  {
+    "name": "DEVICE",
+    "module": "runtime",
+    "path": "DEVICE",
+    "description": "本地语音模型运行设备",
+    "value": "auto",
+    "constraint": "auto | cpu | cuda；auto 按 CUDA 可用性选择"
+  },
+  {
+    "name": "E2E_ADMIN_PASSWORD",
+    "module": "runtime",
+    "path": "E2E_ADMIN_PASSWORD",
+    "description": "端到端测试创建的管理员密码",
+    "value": "",
+    "constraint": "满足 IAM 密码策略；仅测试进程使用"
+  },
+  {
+    "name": "E2E_PORT",
+    "module": "runtime",
+    "path": "E2E_PORT",
+    "description": "端到端测试 Web 服务监听端口",
+    "value": "",
+    "constraint": "整数 1–65535"
+  },
+  {
+    "name": "GEMINI_API_KEY",
+    "module": "runtime",
+    "path": "GEMINI_API_KEY",
+    "description": "GEMINI 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "GITHUB_API_URL",
+    "module": "runtime",
+    "path": "GITHUB_API_URL",
+    "description": "发布检查使用的 GitHub API 基础地址",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL；默认 https://api.github.com"
+  },
+  {
+    "name": "GITHUB_OUTPUT",
+    "module": "runtime",
+    "path": "GITHUB_OUTPUT",
+    "description": "GitHub Actions 步骤输出文件",
+    "value": "",
+    "constraint": "由工作流自动注入的可写文件路径"
+  },
+  {
+    "name": "GITHUB_REF_NAME",
+    "module": "runtime",
+    "path": "GITHUB_REF_NAME",
+    "description": "发布检查使用的 Git 分支或标签名",
+    "value": "",
+    "constraint": "由 GitHub Actions 注入的引用名称"
+  },
+  {
+    "name": "GITHUB_REPOSITORY",
+    "module": "runtime",
+    "path": "GITHUB_REPOSITORY",
+    "description": "发布检查使用的 GitHub 仓库",
+    "value": "",
+    "constraint": "owner/repo 格式"
+  },
+  {
+    "name": "GITHUB_TOKEN",
+    "module": "runtime",
+    "path": "GITHUB_TOKEN",
+    "description": "发布检查调用 GitHub API 的认证令牌",
+    "value": "",
+    "constraint": "敏感字符串；权限由目标仓库与工作流决定"
+  },
+  {
+    "name": "HF_ENDPOINT",
+    "module": "runtime",
+    "path": "HF_ENDPOINT",
+    "description": "Hugging Face 下载服务基础地址",
+    "value": "https://hf-mirror.com",
+    "constraint": "有效 HTTP(S) URL；本地模型下载回退默认 https://hf-mirror.com"
+  },
+  {
+    "name": "HF_HUB_OFFLINE",
+    "module": "runtime",
+    "path": "HF_HUB_OFFLINE",
+    "description": "本地模型是否只使用已存在的离线权重",
+    "value": "",
+    "constraint": "1 启用；其余值关闭；离线权重缺失时启动失败"
+  },
+  {
+    "name": "HOST",
+    "module": "runtime",
+    "path": "HOST",
+    "description": "部署平台 HTTP 监听地址，覆盖 serv/kit server.host",
+    "value": "0.0.0.0",
+    "constraint": "主机名或 IP"
+  },
+  {
+    "name": "IAM_FIXTURE_LDAP",
+    "module": "runtime",
+    "path": "IAM_FIXTURE_LDAP",
+    "description": "通知测试服务是否启用 LDAP fixture",
+    "value": "",
+    "constraint": "0 关闭；1 启用"
+  },
+  {
+    "name": "IAM_NOTIFICATION_PORT",
+    "module": "runtime",
+    "path": "IAM_NOTIFICATION_PORT",
+    "description": "通知测试服务监听端口",
+    "value": "",
+    "constraint": "整数 1–65535"
+  },
+  {
+    "name": "IAM_NOTIFICATION_URL",
+    "module": "runtime",
+    "path": "IAM_NOTIFICATION_URL",
+    "description": "确定性通知测试服务地址",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL"
+  },
+  {
+    "name": "LANG",
+    "module": "runtime",
+    "path": "LANG",
+    "description": "子进程默认语言与字符集",
+    "value": "",
+    "constraint": "操作系统支持的 locale，例如 en_US.UTF-8"
+  },
+  {
+    "name": "LC_ALL",
+    "module": "runtime",
+    "path": "LC_ALL",
+    "description": "子进程所有 locale 分类的覆盖值",
+    "value": "",
+    "constraint": "操作系统支持的 locale，例如 en_US.UTF-8"
+  },
+  {
+    "name": "LEAK_WORDS",
+    "module": "runtime",
+    "path": "LEAK_WORDS",
+    "description": "提交检查禁止出现的词语",
+    "value": "",
+    "constraint": "JSON 字符串数组，或逗号/换行分隔的词语列表"
+  },
+  {
+    "name": "MIMO_API_KEY",
+    "module": "runtime",
+    "path": "MIMO_API_KEY",
+    "description": "MIMO 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "MODEL_PATH",
+    "module": "runtime",
+    "path": "MODEL_PATH",
+    "description": "模型容器内的权重目录或模型仓库 ID",
+    "value": "/opt/models",
+    "constraint": "可读取的模型路径或有效仓库 ID；默认 /opt/models"
+  },
+  {
+    "name": "NODE_ENV",
+    "module": "runtime",
+    "path": "NODE_ENV",
+    "description": "Node/Vite 运行模式",
+    "value": "",
+    "constraint": "development | test | production"
+  },
+  {
+    "name": "OPENAI_API_KEY",
+    "module": "runtime",
+    "path": "OPENAI_API_KEY",
+    "description": "OPENAI 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "OPENAI_BASE_URL",
+    "module": "runtime",
+    "path": "OPENAI_BASE_URL",
+    "description": "厂商 SDK 服务基础地址回退",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL"
+  },
+  {
+    "name": "POLLINATIONS_API_KEY",
+    "module": "runtime",
+    "path": "POLLINATIONS_API_KEY",
+    "description": "POLLINATIONS 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "PORT",
+    "module": "runtime",
+    "path": "PORT",
+    "description": "部署平台 HTTP 监听端口，覆盖 serv/kit server.port",
+    "value": "8000",
+    "constraint": "整数 1–65535"
+  },
+  {
+    "name": "PUBLIC_API_BASE",
+    "module": "runtime",
+    "path": "PUBLIC_API_BASE",
+    "description": "浏览器/原生客户端 API 地址，不能含凭据",
+    "value": "-",
+    "constraint": "有效 HTTP(S) URL；是否含 /api/v1 以对应客户端为准"
+  },
+  {
+    "name": "PUBLIC_API_BASE_BASE64",
+    "module": "runtime",
+    "path": "PUBLIC_API_BASE_BASE64",
+    "description": "容器生成前端运行时配置时使用的 API 地址编码",
+    "value": "",
+    "constraint": "PUBLIC_API_BASE 的 Base64 编码，不含凭据"
+  },
+  {
+    "name": "PUBLIC_API_KEY_EXCHANGE_PATH",
+    "module": "runtime",
+    "path": "PUBLIC_API_KEY_EXCHANGE_PATH",
+    "description": "公开密钥交换端点，须与服务端一致",
+    "value": "",
+    "constraint": "以 / 开头的路径"
+  },
+  {
+    "name": "PUBLIC_API_TRANSPORT",
+    "module": "runtime",
+    "path": "PUBLIC_API_TRANSPORT",
+    "description": "客户端传输加密开关，须与服务端一致",
+    "value": "on",
+    "constraint": "on | off"
+  },
+  {
+    "name": "PYTHONIOENCODING",
+    "module": "runtime",
+    "path": "PYTHONIOENCODING",
+    "description": "本地 Python 模型进程标准输入输出编码",
+    "value": "",
+    "constraint": "Python 支持的编码名，通常 utf-8"
+  },
+  {
+    "name": "SERVED_MODEL_NAME",
+    "module": "runtime",
+    "path": "SERVED_MODEL_NAME",
+    "description": "vLLM 对外报告的模型名",
+    "value": "qwen3-4b",
+    "constraint": "非空字符串；客户端请求 model 须与之匹配"
+  },
+  {
+    "name": "SERVICE_BASE_URL",
+    "module": "runtime",
+    "path": "SERVICE_BASE_URL",
+    "description": "Fullstack 开发代理访问服务端的地址",
+    "value": "",
+    "constraint": "有效 HTTP(S) URL"
+  },
+  {
+    "name": "TAURI_DEV_HOST",
+    "module": "runtime",
+    "path": "TAURI_DEV_HOST",
+    "description": "Tauri 开发时 HMR 可访问的宿主机地址",
+    "value": "",
+    "constraint": "主机名或 IP，由 Tauri 开发工具注入"
+  },
+  {
+    "name": "VITE_ADAPTER",
+    "module": "runtime",
+    "path": "VITE_ADAPTER",
+    "description": "SvelteKit 构建适配器",
+    "value": "",
+    "constraint": "node | static；未识别的值回退 node"
+  },
+  {
+    "name": "VITE_HAI_E2E_KIT_TRANSPORT_MODE",
+    "module": "runtime",
+    "path": "VITE_HAI_E2E_KIT_TRANSPORT_MODE",
+    "description": "管理后台端到端测试传输加密模式",
+    "value": "",
+    "constraint": "on | off"
+  },
+  {
+    "name": "VITEST",
+    "module": "runtime",
+    "path": "VITEST",
+    "description": "Vitest 自动注入的测试运行标记",
+    "value": "",
+    "constraint": "true 表示运行测试；通常无需手动设置"
+  },
+  {
+    "name": "VLLM_EXTRA_ARGS",
+    "module": "runtime",
+    "path": "VLLM_EXTRA_ARGS",
+    "description": "追加到 vLLM 服务的启动参数",
+    "value": "",
+    "constraint": "按 shell 参数语法拆分的字符串；参数由当前 vLLM 版本校验"
+  },
+  {
+    "name": "VLLM_USE_MODELSCOPE",
+    "module": "runtime",
+    "path": "VLLM_USE_MODELSCOPE",
+    "description": "vLLM 是否通过 ModelScope 下载权重",
+    "value": "",
+    "constraint": "1 | true | yes 启用（忽略大小写）；其余值关闭"
+  },
+  {
+    "name": "VOLC_ACCESS_KEY",
+    "module": "runtime",
+    "path": "VOLC_ACCESS_KEY",
+    "description": "VOLC 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "VOLC_API_KEY",
+    "module": "runtime",
+    "path": "VOLC_API_KEY",
+    "description": "VOLC 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "VOLC_APP_KEY",
+    "module": "runtime",
+    "path": "VOLC_APP_KEY",
+    "description": "VOLC 厂商凭据回退；优先在模型项配置 apiKey",
+    "value": "",
+    "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "HAI_SCHEDULER",
+    "module": "scheduler",
+    "path": "scheduler",
+    "description": "scheduler. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SCHEDULER_ENABLEDB",
+    "module": "scheduler",
+    "path": "scheduler.enableDb",
+    "description": "是否启用数据库记录（默认 true，需要",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_SCHEDULER_LOCKEXPIREMS",
+    "module": "scheduler",
+    "path": "scheduler.lockExpireMs",
+    "description": "分布式锁过期时间，单位毫秒（默认 300000，即 5 分钟）",
+    "value": "300000",
+    "constraint": "整数；>= 10000；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_SCHEDULER_MAXLOGS",
+    "module": "scheduler",
+    "path": "scheduler.maxLogs",
+    "description": "执行日志最大保留条数（启用 DB 时生效）",
+    "value": "",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_SCHEDULER_NODEID",
+    "module": "scheduler",
+    "path": "scheduler.nodeId",
+    "description": "节点标识（默认自动生成 UUID，多节点部署时建议设置固定标识以便审计）",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_SCHEDULER_RETENTIONDAYS",
+    "module": "scheduler",
+    "path": "scheduler.retentionDays",
+    "description": "执行日志保留天数（启用 DB 时生效）",
+    "value": "",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_SCHEDULER_TICKINTERVAL",
+    "module": "scheduler",
+    "path": "scheduler.tickInterval",
+    "description": "调度检查间隔，单位毫秒（默认 1000，即每秒检查一次）",
+    "value": "1000",
+    "constraint": "整数；>= 100；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_SERV",
+    "module": "serv",
+    "path": "serv",
+    "description": "serv. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_CORS",
+    "module": "serv",
+    "path": "serv.cors",
+    "description": "跨域访问的来源、请求头与凭据策略",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS",
+    "module": "serv",
+    "path": "serv.cors.allowedHeaders",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "[\"Authorization\",\"Content-Type\",\"X-Requested-With\"]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_0",
+    "module": "serv",
+    "path": "serv.cors.allowedHeaders.0",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "Authorization",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_1",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_1",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "Content-Type",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_2",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_2",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Client-Id",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_3",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_3",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Encrypted",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_4",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_4",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Hai-Locale",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_5",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_5",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Request-Id",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_6",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_6",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Requested-With",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_CREDENTIALS",
+    "module": "serv",
+    "path": "serv.cors.credentials",
+    "description": "是否允许跨域请求携带凭据",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_SERV_CORS_EXPOSEDHEADERS",
+    "module": "serv",
+    "path": "serv.cors.exposedHeaders",
+    "description": "CORS 允许客户端读取的响应头",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_0",
+    "module": "serv",
+    "path": "serv.cors.exposedHeaders.0",
+    "description": "CORS 允许客户端读取的响应头",
+    "value": "X-Encrypted",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
+    "description": "CORS 允许客户端读取的响应头",
+    "value": "X-Request-Id",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_NATIVEORIGINS",
+    "module": "serv",
+    "path": "serv.cors.nativeOrigins",
+    "description": "允许使用原生凭据通道的完整 Origin 列表",
+    "value": "http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ORIGIN",
+    "module": "serv",
+    "path": "serv.cors.origin",
+    "description": "CORS 允许的 Origin，星号表示任意来源",
+    "value": "*",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP",
+    "module": "serv",
+    "path": "serv.http",
+    "description": "HTTP 基础路径、请求体大小及访问配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_HTTP_APIPREFIX",
+    "module": "serv",
+    "path": "serv.http.apiPrefix",
+    "description": "业务 HTTP API 的基础路径前缀",
+    "value": "/api/v1",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_DOCS",
+    "module": "serv",
+    "path": "serv.http.docs",
+    "description": "HTTP API 文档功能开关或文档访问配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_DOCS_PATH",
+    "module": "serv",
+    "path": "serv.http.docs.path",
+    "description": "当前 HTTP 功能的端点路径",
+    "value": "/docs",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_DOCS_REQUIREAUTH",
+    "module": "serv",
+    "path": "serv.http.docs.requireAuth",
+    "description": "是否要求认证后访问接口文档",
+    "value": "",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_HEALTH",
+    "module": "serv",
+    "path": "serv.http.health",
+    "description": "HTTP 健康检查开关或检查配置",
+    "value": "{\"path\":\"/health\",\"readyPath\":\"/ready\"}",
+    "constraint": "JSON 对象；true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_HEALTH_PATH",
+    "module": "serv",
+    "path": "serv.http.health.path",
+    "description": "当前 HTTP 功能的端点路径",
+    "value": "/health",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_HEALTH_READYPATH",
+    "module": "serv",
+    "path": "serv.http.health.readyPath",
+    "description": "服务就绪检查的端点路径",
+    "value": "/ready",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_OPENAPI",
+    "module": "serv",
+    "path": "serv.http.openapi",
+    "description": "OpenAPI 端点开关或端点配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_OPENAPI_PATH",
+    "module": "serv",
+    "path": "serv.http.openapi.path",
+    "description": "当前 HTTP 功能的端点路径",
+    "value": "/openapi.json",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC",
+    "module": "serv",
+    "path": "serv.http.rpc",
+    "description": "RPC 端点开关或访问配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC_ACCESS",
+    "module": "serv",
+    "path": "serv.http.rpc.access",
+    "description": "RPC 对外访问策略",
+    "value": "loopback",
+    "constraint": "字符串；取值：loopback | private-network | gateway-only"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC_GATEWAYHEADER",
+    "module": "serv",
+    "path": "serv.http.rpc.gatewayHeader",
+    "description": "受信网关认证请求头名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC_GATEWAYSECRET",
+    "module": "serv",
+    "path": "serv.http.rpc.gatewaySecret",
+    "description": "受信网关认证密钥",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC_PREFIX",
+    "module": "serv",
+    "path": "serv.http.rpc.prefix",
+    "description": "RPC 端点的路径前缀",
+    "value": "/rpc",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_TRUSTEDPROXIES",
+    "module": "serv",
+    "path": "serv.http.trustedProxies",
+    "description": "可信代理的 IP/CIDR，只有这些代理的转发头会被信任",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_HTTP_TRUSTEDPROXIES_0",
+    "module": "serv",
+    "path": "serv.http.trustedProxies.0",
+    "description": "可信代理的 IP/CIDR，只有这些代理的转发头会被信任",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_SERVER",
+    "module": "serv",
+    "path": "serv.server",
+    "description": "HTTP 服务监听地址与端口",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_SERVER_HOST",
+    "module": "serv",
+    "path": "serv.server.host",
+    "description": "HTTP 监听主机名或 IP",
+    "value": "127.0.0.1",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_SERV_SERVER_PORT",
+    "module": "serv",
+    "path": "serv.server.port",
+    "description": "HTTP 监听端口",
+    "value": "3000",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT",
+    "module": "serv",
+    "path": "serv.transport",
+    "description": "传输加密开关或密钥协商配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS",
+    "module": "serv",
+    "path": "serv.transport.excludePaths",
+    "description": "不进入传输加密管道的路径",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_0",
+    "module": "serv",
+    "path": "serv.transport.excludePaths.0",
+    "description": "不进入传输加密管道的路径",
+    "value": "/health",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_1",
+    "module": "serv",
+    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_1",
+    "description": "不进入传输加密管道的路径",
+    "value": "/ready",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_2",
+    "module": "serv",
+    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_2",
+    "description": "不进入传输加密管道的路径",
+    "value": "/openapi.json",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_3",
+    "module": "serv",
+    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_3",
+    "description": "不进入传输加密管道的路径",
+    "value": "/docs",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_4",
+    "module": "serv",
+    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_4",
+    "description": "不进入传输加密管道的路径",
+    "value": "/_hai/scalar.js",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_KEYEXCHANGEPATH",
+    "module": "serv",
+    "path": "serv.transport.keyExchangePath",
+    "description": "客户端与服务端约定的密钥交换端点",
+    "value": "/_hai/key-exchange",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_MAXCLIENTS",
+    "module": "serv",
+    "path": "serv.transport.maxClients",
+    "description": "服务端最多保留的客户端传输密钥会话数",
+    "value": "10000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_STORAGE",
+    "module": "storage",
+    "path": "storage",
+    "description": "storage. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_STORAGE_ACCESSKEYID",
+    "module": "storage",
+    "path": "storage.accessKeyId",
+    "description": "Access Key ID",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_STORAGE_BUCKET",
+    "module": "storage",
+    "path": "storage.bucket",
+    "description": "存储桶名称",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_STORAGE_DIRECTORYMODE",
+    "module": "storage",
+    "path": "storage.directoryMode",
+    "description": "目录创建权限",
+    "value": "493",
+    "constraint": "数字"
+  },
+  {
+    "name": "HAI_STORAGE_ENDPOINT",
+    "module": "storage",
+    "path": "storage.endpoint",
+    "description": "自定义端点（用于 MinIO、RustFS、阿里云 OSS 等）",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_STORAGE_FILEMODE",
+    "module": "storage",
+    "path": "storage.fileMode",
+    "description": "文件创建权限",
+    "value": "420",
+    "constraint": "数字"
+  },
+  {
+    "name": "HAI_STORAGE_FORCEPATHSTYLE",
+    "module": "storage",
+    "path": "storage.forcePathStyle",
+    "description": "强制使用路径风格 URL（某些 S3 兼容服务需要）",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_STORAGE_OPERATIONLOG",
+    "module": "storage",
+    "path": "storage.operationLog",
+    "description": "storage 操作日志的读写开关、级别与字段截断规则",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_STORAGE_OPERATIONLOG_LEVEL",
+    "module": "storage",
+    "path": "storage.operationLog.level",
+    "description": "操作日志的输出级别",
+    "value": "debug",
+    "constraint": "字符串；取值：info | debug | trace"
+  },
+  {
+    "name": "HAI_STORAGE_OPERATIONLOG_MAXLENGTH",
+    "module": "storage",
+    "path": "storage.operationLog.maxLength",
+    "description": "操作日志字段的最大字符数，0 表示不截断",
+    "value": "1000",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_STORAGE_OPERATIONLOG_READ",
+    "module": "storage",
+    "path": "storage.operationLog.read",
+    "description": "是否记录读取操作",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_STORAGE_OPERATIONLOG_WRITE",
+    "module": "storage",
+    "path": "storage.operationLog.write",
+    "description": "是否记录写入操作",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_STORAGE_PREFIX",
+    "module": "storage",
+    "path": "storage.prefix",
+    "description": "路径前缀（所有操作都会加上此前缀）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_STORAGE_PUBLICURL",
+    "module": "storage",
+    "path": "storage.publicUrl",
+    "description": "公开访问基础 URL（用于生成公开 URL）",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_STORAGE_REGION",
+    "module": "storage",
+    "path": "storage.region",
+    "description": "区域",
+    "value": "us-east-1",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_STORAGE_ROOT",
+    "module": "storage",
+    "path": "storage.root",
+    "description": "根目录路径",
+    "value": "./data/uploads",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_STORAGE_SECRETACCESSKEY",
+    "module": "storage",
+    "path": "storage.secretAccessKey",
+    "description": "Secret Access Key",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_STORAGE_TYPE",
+    "module": "storage",
+    "path": "storage.type",
+    "description": "存储类型",
+    "value": "local",
+    "constraint": "字符串；取值：s3 | local"
+  },
+  {
+    "name": "HAI_VECDB",
+    "module": "vecdb",
+    "path": "vecdb",
+    "description": "vecdb. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_VECDB_APIKEY",
+    "module": "vecdb",
+    "path": "vecdb.apiKey",
+    "description": "API Key（可选，连接受保护的 Chroma 服务时使用）",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_VECDB_DATABASE",
+    "module": "vecdb",
+    "path": "vecdb.database",
+    "description": "数据库名称",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_VECDB_HOST",
+    "module": "vecdb",
+    "path": "vecdb.host",
+    "description": "主机（默认 localhost）",
+    "value": "localhost",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_VECDB_INDEXTYPE",
+    "module": "vecdb",
+    "path": "vecdb.indexType",
+    "description": "索引类型（默认 hnsw）",
+    "value": "hnsw",
+    "constraint": "字符串；取值：ivfflat | hnsw"
+  },
+  {
+    "name": "HAI_VECDB_METRIC",
+    "module": "vecdb",
+    "path": "vecdb.metric",
+    "description": "距离度量（默认 cosine）",
+    "value": "cosine",
+    "constraint": "字符串；取值：cosine | euclidean | dot"
+  },
+  {
+    "name": "HAI_VECDB_OPERATIONLOG",
+    "module": "vecdb",
+    "path": "vecdb.operationLog",
+    "description": "vecdb 操作日志的读写开关、级别与字段截断规则",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_VECDB_OPERATIONLOG_LEVEL",
+    "module": "vecdb",
+    "path": "vecdb.operationLog.level",
+    "description": "操作日志的输出级别",
+    "value": "debug",
+    "constraint": "字符串；取值：info | debug | trace"
+  },
+  {
+    "name": "HAI_VECDB_OPERATIONLOG_MAXLENGTH",
+    "module": "vecdb",
+    "path": "vecdb.operationLog.maxLength",
+    "description": "操作日志字段的最大字符数，0 表示不截断",
+    "value": "1000",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_VECDB_OPERATIONLOG_READ",
+    "module": "vecdb",
+    "path": "vecdb.operationLog.read",
+    "description": "是否记录读取操作",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_VECDB_OPERATIONLOG_WRITE",
+    "module": "vecdb",
+    "path": "vecdb.operationLog.write",
+    "description": "是否记录写入操作",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_VECDB_PASSWORD",
+    "module": "vecdb",
+    "path": "vecdb.password",
+    "description": "密码",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_VECDB_PATH",
+    "module": "vecdb",
+    "path": "vecdb.path",
+    "description": "本地持久化路径（嵌入式模式：提供且无 url 时自动拉起本地服务）",
+    "value": "./data/vecdb",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_VECDB_PORT",
+    "module": "vecdb",
+    "path": "vecdb.port",
+    "description": "端口（默认 8000）",
+    "value": "5432",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_VECDB_SERVERCOMMAND",
+    "module": "vecdb",
+    "path": "vecdb.serverCommand",
+    "description": "拉起本地服务的可执行命令（默认 'chroma'，可指定绝对路径）",
+    "value": "chroma",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_VECDB_STARTUPTIMEOUT",
+    "module": "vecdb",
+    "path": "vecdb.startupTimeout",
+    "description": "拉起本地服务的就绪等待超时（毫秒，默认 30000）",
+    "value": "30000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_VECDB_TABLEPREFIX",
+    "module": "vecdb",
+    "path": "vecdb.tablePrefix",
+    "description": "表名前缀（默认 'vec_'）",
+    "value": "vec_",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_VECDB_TYPE",
+    "module": "vecdb",
+    "path": "vecdb.type",
+    "description": "后端或功能类型，按枚举选择",
+    "value": "lancedb",
+    "constraint": "字符串；取值：lancedb | pgvector | qdrant | chroma"
+  },
+  {
+    "name": "HAI_VECDB_URL",
+    "module": "vecdb",
+    "path": "vecdb.url",
+    "description": "已有 Chroma 服务 URL（提供时直连，不自动拉起进程）",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_VECDB_USER",
+    "module": "vecdb",
+    "path": "vecdb.user",
+    "description": "用户名",
+    "value": "",
+    "constraint": "字符串"
+  }
+]

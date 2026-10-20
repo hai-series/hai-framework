@@ -248,12 +248,12 @@ describe('createProject — api 类型', () => {
 
   it('应生成 config/_serv.yml', async () => {
     const content = await readText(projectPath, 'apps/proj-api-service/config/_serv.yml')
-    expect(content).toContain('transport: false')
-    expect(content).toContain('apiPrefix: /api/v1')
-    expect(content).toContain('origin: $' + '{HAI_CORS_ORIGIN:*}')
-    expect(content).toContain('credentials: $' + '{HAI_CORS_CREDENTIALS:false}')
+    expect(content).toContain('transport: $' + '{HAI_SERV_TRANSPORT:false}')
+    expect(content).toContain('apiPrefix: $' + '{HAI_SERV_HTTP_APIPREFIX:/api/v1}')
+    expect(content).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:*}')
+    expect(content).toContain('credentials: $' + '{HAI_SERV_CORS_CREDENTIALS:false}')
     expect(content).toContain(
-      'nativeOrigins: $' + '{HAI_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}',
+      'nativeOrigins: $' + '{HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}',
     )
     expect(content).toContain('allowedHeaders:')
     expect(content).toContain('X-Request-Id')
@@ -887,8 +887,8 @@ describe('createProject — fullstack 类型', () => {
     })
   })
 
-  it('应生成可直接启动的私有 .env，示例不包含随机管理员密码', async () => {
-    const env = await readText(projectPath, '.env')
+  it('随机管理员密码只写入被忽略的 .env.local，公共环境文件不含密码', async () => {
+    const env = await readText(projectPath, '.env.local')
     const password = env.match(/^HAI_ADMIN_DEFAULT_PASSWORD=(.+)$/m)?.[1]?.trim()
     expect(password).toBeDefined()
     expect(password!.length).toBeGreaterThanOrEqual(24)
@@ -896,12 +896,13 @@ describe('createProject — fullstack 类型', () => {
     expect(password).toMatch(/[a-z]/)
     expect(password).toMatch(/\d/)
     expect(password).toMatch(/\W/)
-    expect(env).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
+    expect(await readText(projectPath, '.env')).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
+    expect(await readText(projectPath, '.env')).not.toContain(password)
     expect(await readText(projectPath, '.env.example')).not.toContain(password)
     expect(await readText(projectPath, '.gitignore')).toContain('.env')
     expect(await readText(projectPath, '.dockerignore')).toContain('.env')
     await createProject({ name: 'proj-fullstack-env-other', appType: 'fullstack', frontends: ['web'], yes: true, install: false, git: false, cwd: tmpRoot, packageManager: 'pnpm' })
-    expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env')).not.toContain(password)
+    expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.local')).not.toContain(password)
   }, 30_000)
 
   it('应生成 pnpm workspace 多包工程', async () => {
@@ -993,7 +994,7 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.dependencies['@h-ai/core']).toBe(HAI_DEP_SPECIFIER)
     expect(pkg.dependencies.hono).toBeUndefined()
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
-    expect(pkg.scripts.start).toBe('node --env-file-if-exists=../../.env dist/index.js')
+    expect(pkg.scripts.start).toBe('node --env-file=../../.env --env-file=../../.env.prod --env-file-if-exists=../../.env.local dist/index.js')
     expect(pkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/data/.gitkeep')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')).toBe(true)
@@ -1008,15 +1009,17 @@ describe('createProject — fullstack 类型', () => {
     const reach = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_reach.yml'))
     expect(reach.templates.map((template: { name: string }) => template.name)).toEqual(['otp_email', 'otp_sms', 'password_reset', 'password_reset_sms'])
     expect(await readText(projectPath, '.env.example')).toContain('# HAI_AI_LLM_APIKEY=')
-    // CLI 自动写出的 .env 只启用必需值，避免默认覆盖让后续 YAML 修改失效。
+    // 公共 .env 提供基础参数，私有值仅放 .env.local。
     const envDefaults = (await readText(projectPath, '.env.example')).split('\n').filter(line => /^HAI_(?:CORE|DB|CACHE|STORAGE)_/.test(line))
-    expect(envDefaults).toEqual([])
+    expect(envDefaults).toContain('HAI_DB_TYPE=\'sqlite\'')
+    for (const file of ['.env', '.env.dev', '.env.test', '.env.prod'])
+      expect(await exists(projectPath, file)).toBe(true)
     const activeEnvNames = (await readText(projectPath, '.env')).split('\n').filter(line => /^[A-Z_]+=/.test(line)).map(line => line.slice(0, line.indexOf('=')))
-    expect(activeEnvNames).toEqual(['HAI_ADMIN_DEFAULT_PASSWORD', 'PUBLIC_API_BASE'])
+    expect(activeEnvNames).toEqual(expect.arrayContaining(['HAI_CORE_NAME', 'HAI_DB_TYPE', 'HAI_CACHE_TYPE', 'HAI_STORAGE_TYPE', 'HAI_ADMIN_DEFAULT_PASSWORD', 'PUBLIC_API_BASE']))
 
     const servConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_serv.yml')
-    expect(servConfig).toContain('origin: $' + '{HAI_CORS_ORIGIN:*}')
-    expect(servConfig).toContain('credentials: $' + '{HAI_CORS_CREDENTIALS:true}')
+    expect(servConfig).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:*}')
+    expect(servConfig).toContain('credentials: $' + '{HAI_SERV_CORS_CREDENTIALS:true}')
 
     const appServer = await readText(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')
     expect(appServer).toContain('import type { ServHttpApp } from \'@h-ai/serv\'')
@@ -1050,9 +1053,11 @@ describe('createProject — fullstack 类型', () => {
       expect(await exists(projectPath, `packages/proj-fullstack-serv/config/_${configKey}.yml`)).toBe(true)
     }
     const iamConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_iam.yml')
-    expect(iamConfig).toContain('seedDefaultData: false')
+    expect(iamConfig).toContain('seedDefaultData: $' + '{HAI_IAM_SEEDDEFAULTDATA:false}')
     expect(iamConfig).toContain('variant: split')
     const envExample = await readText(projectPath, '.env.example')
+    for (const name of ['BASE_URL', 'HAI_E2E_WEB_URL', 'HAI_E2E_APP_URL', 'HAI_E2E_DESKTOP_URL', 'E2E_ADMIN_PASSWORD'])
+      expect(envExample).toContain(`# ${name}=`)
     expect(envExample).toContain('HAI_ADMIN_DEFAULT_PASSWORD=')
     expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
     expect(await exists(projectPath, 'src/routes/api/auth/login/+server.ts')).toBe(false)
@@ -1239,10 +1244,10 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/messages/en-US.json')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/AppShell.svelte')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/AdminWorkspace.svelte')).toBe(true)
-    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/UserManagement.svelte')).toBe(true)
-    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/RoleManagement.svelte')).toBe(true)
-    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/AuditManagement.svelte')).toBe(true)
-    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/components/ProfileSettings.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/pages/users.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/pages/roles.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/pages/audit.svelte')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/pages/settings.svelte')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/tests/api-client.test.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/stores/theme-store.svelte.ts')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/lib/api/api-client.ts')).toBe(true)

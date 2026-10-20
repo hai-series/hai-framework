@@ -7,7 +7,7 @@
 
 import type { AIConfig } from '../src/ai-config.js'
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AIConfigSchema } from '../src/ai-config.js'
 import { HaiAIError } from '../src/ai-types.js'
 import { createAnthropicProvider } from '../src/llm/providers/ai-llm-provider-anthropic.js'
@@ -39,6 +39,36 @@ describe('anthropic provider chat', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock)
     fetchMock.mockReset()
+  })
+
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('标准全局环境变量用于 Anthropic 默认协议，混合模型不继承 OpenAI 端点', async () => {
+    vi.stubEnv('HAI_AI_LLM_APIKEY', 'test-anthropic-key')
+    vi.stubEnv('HAI_AI_LLM_BASEURL', 'https://anthropic-proxy.example')
+    fetchMock.mockImplementation(async () => jsonResponse({
+      id: 'msg_env',
+      model: 'claude-test',
+      content: [],
+      usage: { input_tokens: 0, output_tokens: 0 },
+    }))
+    const config = AIConfigSchema.parse({ llm: { api: 'anthropic', model: 'claude-test' } })
+    const result = await createAnthropicProvider({ config }).chat({ messages: [{ role: 'user', content: 'test' }] })
+    expect(result.success).toBe(true)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://anthropic-proxy.example/v1/messages')
+    expect(((fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>)['x-api-key']).toBe('test-anthropic-key')
+
+    config.llm.api = 'chat'
+    config.llm.baseUrl = 'https://openai.example'
+    vi.stubEnv('ANTHROPIC_BASE_URL', 'https://anthropic-vendor.example')
+    await createAnthropicProvider({ config }).chat({ model: 'claude-test', messages: [{ role: 'user', content: 'test' }] })
+    expect(fetchMock.mock.calls[1][0]).toBe('https://anthropic-vendor.example/v1/messages')
+
+    config.llm.api = 'anthropic'
+    config.llm.baseUrl = undefined
+    vi.stubEnv('HAI_AI_LLM_BASEURL', '   ')
+    await createAnthropicProvider({ config }).chat({ messages: [{ role: 'user', content: 'test' }] })
+    expect(fetchMock.mock.calls[2][0]).toBe('https://anthropic-vendor.example/v1/messages')
   })
 
   it('转换 system + messages 并映射文本响应与用量', async () => {

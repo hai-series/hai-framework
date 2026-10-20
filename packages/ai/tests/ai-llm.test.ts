@@ -694,9 +694,9 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
 
   it('临时模型 apiKey 缺失且无全局回退时返回 CONFIGURATION_ERROR', async () => {
     await ai.close()
-    const savedHai = process.env.HAI_AI_LLM_API_KEY
+    const savedHai = process.env.HAI_AI_LLM_APIKEY
     const savedOpenAI = process.env.OPENAI_API_KEY
-    delete process.env.HAI_AI_LLM_API_KEY
+    delete process.env.HAI_AI_LLM_APIKEY
     delete process.env.OPENAI_API_KEY
     try {
       await ai.init({ llm: { model: 'gpt-4o-mini' } })
@@ -713,7 +713,7 @@ describe('ai.llm — 临时模型 (tempModel)', () => {
     }
     finally {
       if (savedHai !== undefined)
-        process.env.HAI_AI_LLM_API_KEY = savedHai
+        process.env.HAI_AI_LLM_APIKEY = savedHai
       if (savedOpenAI !== undefined)
         process.env.OPENAI_API_KEY = savedOpenAI
     }

@@ -14,10 +14,13 @@ import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
+import { desktopBuildConfig } from './config-env.js'
 
 const host = process.env.TAURI_DEV_HOST
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  envDir: false,
+  define: { __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig(mode) },
   plugins: [svelte(), tailwindcss()],
 
   // Vite 选项专为 Tauri 调整
@@ -49,4 +52,4 @@ export default defineConfig({
 
   // 环境变量前缀：PUBLIC_ + VITE_
   envPrefix: ['VITE_', 'PUBLIC_'],
-})
+}))

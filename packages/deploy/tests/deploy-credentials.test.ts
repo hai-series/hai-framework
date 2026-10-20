@@ -41,15 +41,15 @@ describe('loadCredentials', () => {
     fs.mkdirSync(haiDir, { recursive: true })
     fs.writeFileSync(
       path.join(haiDir, 'credentials.yml'),
-      'HAI_DEPLOY_VERCEL_TOKEN: vel_test\nHAI_DEPLOY_NEON_KEY: neon_test\n',
+      'HAI_DEPLOY_PROVIDER_TOKEN: vel_test\nHAI_DEPLOY_SERVICES_DB_APIKEY: neon_test\n',
       'utf-8',
     )
 
     const result = deploy.credentials.load()
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data).toContain('HAI_DEPLOY_VERCEL_TOKEN')
-      expect(result.data).toContain('HAI_DEPLOY_NEON_KEY')
+      expect(result.data).toContain('HAI_DEPLOY_PROVIDER_TOKEN')
+      expect(result.data).toContain('HAI_DEPLOY_SERVICES_DB_APIKEY')
     }
   })
 
@@ -58,7 +58,7 @@ describe('loadCredentials', () => {
     fs.mkdirSync(haiDir, { recursive: true })
     fs.writeFileSync(
       path.join(haiDir, 'credentials.yml'),
-      'HAI_DEPLOY_VERCEL_TOKEN: vel_test\nUNSAFE_TOKEN: injected\n',
+      'HAI_DEPLOY_PROVIDER_TOKEN: vel_test\nUNSAFE_TOKEN: injected\n',
       'utf-8',
     )
     delete process.env.UNSAFE_TOKEN
@@ -66,7 +66,7 @@ describe('loadCredentials', () => {
     const result = deploy.credentials.load()
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data).toContain('HAI_DEPLOY_VERCEL_TOKEN')
+      expect(result.data).toContain('HAI_DEPLOY_PROVIDER_TOKEN')
       expect(result.data).not.toContain('UNSAFE_TOKEN')
     }
     expect(process.env.UNSAFE_TOKEN).toBeUndefined()
@@ -75,26 +75,26 @@ describe('loadCredentials', () => {
 
 describe('saveCredential', () => {
   it('should save a single credential and create directory', () => {
-    const result = deploy.credentials.save('HAI_DEPLOY_VERCEL_TOKEN', 'vel_new')
+    const result = deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', 'vel_new')
     expect(result.success).toBe(true)
 
     // 验证文件已写入
     const loadResult = deploy.credentials.load()
     expect(loadResult.success).toBe(true)
     if (loadResult.success) {
-      expect(loadResult.data).toContain('HAI_DEPLOY_VERCEL_TOKEN')
+      expect(loadResult.data).toContain('HAI_DEPLOY_PROVIDER_TOKEN')
     }
   })
 
   it('should merge with existing credentials', () => {
-    deploy.credentials.save('HAI_DEPLOY_VERCEL_TOKEN', 'vel_1')
-    deploy.credentials.save('HAI_DEPLOY_NEON_KEY', 'neon_1')
+    deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', 'vel_1')
+    deploy.credentials.save('HAI_DEPLOY_SERVICES_DB_APIKEY', 'neon_1')
 
     const result = deploy.credentials.load()
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data).toContain('HAI_DEPLOY_VERCEL_TOKEN')
-      expect(result.data).toContain('HAI_DEPLOY_NEON_KEY')
+      expect(result.data).toContain('HAI_DEPLOY_PROVIDER_TOKEN')
+      expect(result.data).toContain('HAI_DEPLOY_SERVICES_DB_APIKEY')
     }
   })
 
@@ -110,16 +110,16 @@ describe('saveCredential', () => {
 describe('saveCredentials', () => {
   it('should save all credentials at once', () => {
     const result = deploy.credentials.saveAll({
-      HAI_DEPLOY_VERCEL_TOKEN: 'vel_bulk',
-      HAI_DEPLOY_UPSTASH_KEY: 'up_bulk',
+      HAI_DEPLOY_PROVIDER_TOKEN: 'vel_bulk',
+      HAI_DEPLOY_SERVICES_CACHE_APIKEY: 'up_bulk',
     })
     expect(result.success).toBe(true)
 
     const loadResult = deploy.credentials.load()
     expect(loadResult.success).toBe(true)
     if (loadResult.success) {
-      expect(loadResult.data).toContain('HAI_DEPLOY_VERCEL_TOKEN')
-      expect(loadResult.data).toContain('HAI_DEPLOY_UPSTASH_KEY')
+      expect(loadResult.data).toContain('HAI_DEPLOY_PROVIDER_TOKEN')
+      expect(loadResult.data).toContain('HAI_DEPLOY_SERVICES_CACHE_APIKEY')
     }
   })
 })

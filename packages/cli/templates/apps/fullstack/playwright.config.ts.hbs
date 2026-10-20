@@ -5,12 +5,17 @@ const defaultBaseURL = '{{#if fullstack.e2eFrontend}}http://127.0.0.1:{{fullstac
 const defaultServiceBaseURL = 'http://127.0.0.1:3000'
 const baseURL = process.env.BASE_URL || defaultBaseURL
 const primaryFrontend = '{{fullstack.e2eFrontend.target}}'
+const frontendUrls = {
+  web: process.env.HAI_E2E_WEB_URL,
+  app: process.env.HAI_E2E_APP_URL,
+  desktop: process.env.HAI_E2E_DESKTOP_URL,
+}
 const frontends: { target: string, name: string, url: string }[] = [
 {{#each fullstack.frontendApps}}
   {
     target: '{{target}}',
     name: '{{packageName}}',
-    url: process.env.HAI_E2E_{{target}}_URL || 'http://127.0.0.1:{{port}}',
+    url: frontendUrls.{{target}} || 'http://127.0.0.1:{{port}}',
   },
 {{/each}}
 ]

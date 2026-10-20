@@ -183,7 +183,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - 播放负载：`serializePlayableAudio(audio)` 返回 `HaiResult<PlayableAudio>`；`PlayableAudio` 为 `{ audioBase64, format: 'wav'|'mp3', mimeType }`。该函数将 `pcm16` 封装为 WAV，透传 WAV/MP3；`opus` 不支持转换。
 - 请求可选：识别 `contextHints?: string[]`（热词/提示）；合成 `instruction?: string`（自然语言风格指令）；均支持 `signal: AbortSignal`。
 - 模型配置：`audio.models: [{ id, provider: 'openai'|'mimo'|'qwen'|'doubao', model, operations, apiKey?, baseUrl?, appKey?, accessKey?, resourceId?, workspaceId? }]`；`operations` 必须明确为识别、合成或两者。确认 LLM 与语音模型共用凭据时，可设置 `audio.inheritLlmApiKey: true`，默认关闭。
-- 凭据优先级：模型条目 `apiKey` → 显式启用继承后的 LLM `apiKey` → `HAI_AI_AUDIO_<PROVIDER>_API_KEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。可选密钥中的 YAML `null`、空字符串和纯空白字符串都会规范化为未配置。
+- 凭据优先级：模型条目 `apiKey` → 显式启用继承后的 LLM `apiKey` → `HAI_AI_AUDIO_<PROVIDER>_APIKEY` 或 `OPENAI_API_KEY` / `MIMO_API_KEY` / `DASHSCOPE_API_KEY` / `VOLC_API_KEY`（豆包旧版控制台额外 `VOLC_APP_KEY` / `VOLC_ACCESS_KEY`）。可选密钥中的 YAML `null`、空字符串和纯空白字符串都会规范化为未配置。
 - 资源上限：`audio.maxAudioBytes`（默 10 MiB）、`audio.maxStreamDurationMs`（默 5 分钟）；所有请求支持 `signal: AbortSignal` 打断。
 - Provider 为内部实现，不从根入口导出；不支持的输入方式招 `AUDIO_UNSUPPORTED_INPUT`，不伪装实时。取消 → `AUDIO_CANCELLED`，超时 → `AUDIO_TIMEOUT`，连接失败或 `end` 前异常断连 → `AUDIO_CONNECTION_FAILED`。浏览器客户端（`@h-ai/ai/client`）严格区分正常结束 / 取消 / 异常断连：取消招 `AUDIO_CANCELLED`、`end` 前断连招 `AUDIO_CONNECTION_FAILED`、服务端 error 帧保留其领域错误码，`synthesize` 不把未完成的部分音频当作成功返回。
 
@@ -196,7 +196,7 @@ const result = await ai.rag.query('核心架构是什么？', {
 - 请求：`GenerateImageRequest { prompt, model?, size?: { width, height }, referenceImages?: ReferenceImage[], signal? }`；`ReferenceImage` 为 `{ data: Uint8Array, mimeType: string }`。
 - 返回：`GenerateImageResult { images: Array<{ data: Uint8Array, mimeType, width?, height? }> }`。
 - 模型配置：`image.models: [{ id, provider: 'openai'|'google'|'qwen'|'seedream'|'pollinations', model, apiKey?, baseUrl?, workspaceId?, timeout? }]`；`image.generateModel` 选择默认模型别名。
-- 凭据优先使用模型项 `apiKey`，否则回退 `HAI_AI_IMAGE_<PROVIDER>_API_KEY` 或厂商标准环境变量。
+- 凭据优先使用模型项 `apiKey`，否则回退 `HAI_AI_IMAGE_<PROVIDER>_APIKEY` 或厂商标准环境变量。
 - 厂商差异由内部 Provider 消化：OpenAI/Pollinations 的 multipart edits、Google `inlineData`、Qwen/Seedream 的 Data URL 参考图，以及各家 Base64、临时 URL 或二进制响应均归一为图片字节。
 - Google 只接受其文档列出的宽高比；Qwen/Seedream 还可能对总像素与边长有限制。业务应提供厂商支持的尺寸预设，不要假设任意像素组合都可用。
 

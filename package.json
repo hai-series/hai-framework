@@ -30,7 +30,9 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rimraf node_modules .turbo",
     "format": "eslint --fix .",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "generate:env": "node scripts/generate-env-catalog.mjs && node scripts/generate-app-env.mjs",
+    "check:env": "node scripts/generate-env-catalog.mjs --check && node scripts/generate-app-env.mjs --check"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",

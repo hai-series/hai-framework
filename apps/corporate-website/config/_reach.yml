@@ -5,10 +5,14 @@
 
 providers:
   - name: email
-    type: console
+    type: ${HAI_REACH_PROVIDERS_0_TYPE:console}
 
 templates:
   - name: contact_form
     provider: email
     subject: 'New contact from website: {name}'
-    body: "Name: {name}\nEmail: {email}\nMessage: {message}"
+    body: 'Name: {name}
+
+      Email: {email}
+
+      Message: {message}'

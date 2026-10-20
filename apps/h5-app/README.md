@@ -29,8 +29,7 @@
 # 在 hai-framework monorepo 根目录
 pnpm install
 
-# 复制环境变量（按需修改）
-cp apps/h5-app/.env.example apps/h5-app/.env
+# 按 .env.example 的字段说明，在 .env.local 中仅填写需要覆盖的私有值
 
 # 启动开发服务器
 pnpm --filter h5-app dev
@@ -56,6 +55,8 @@ pnpm --filter h5-app preview
 
 ## ⚙️ 配置
 
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod`、`build:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置手册](../../docs/environment-configuration.md)。
+
 ### YAML 配置文件
 
 - `config/_core.yml`：应用名称、版本、运行环境
@@ -68,14 +69,6 @@ pnpm --filter h5-app preview
 每个 YAML 叶子项都可由 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，
 且环境变量优先于 YAML 值；camelCase key 不拆词。
 
-## 配置驱动认证页面
-
-协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
-
-认证方式、注册、重置、协议和品牌由服务端 config/_iam.yml 控制。SvelteKit 页面消费 iam.publicConfig；移动/桌面页面从 API 服务读取公开配置。选用 Reach 时，初始化成功后传入 iam.init({ ...settings, reach })，使用标准通知模板。多节点共享 DB 与 Redis。UI 复用 AuthPanel/LoginForm 和框架认证动作，应用只负责业务导航与用户状态。
-
-[完整配置与安全约束](../../packages/iam/README.md)
-
 ### 环境变量
 
 | 变量名               | 说明                          | 默认值                      |
@@ -86,6 +79,14 @@ pnpm --filter h5-app preview
 | `HAI_STORAGE_TYPE`   | 存储类型                      | `local`                     |
 | `HAI_AI_LLM_APIKEY`  | OpenAI API Key（AI 识别必填） | —                           |
 | `HAI_AI_LLM_BASEURL` | OpenAI API 基础 URL           | `https://api.openai.com/v1` |
+
+### 认证页面
+
+协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
+
+认证方式、注册、重置、协议和品牌由服务端 config/_iam.yml 控制。SvelteKit 页面消费 iam.publicConfig；移动/桌面页面从 API 服务读取公开配置。选用 Reach 时，初始化成功后传入 iam.init({ ...settings, reach })，使用标准通知模板。多节点共享 DB 与 Redis。UI 复用 AuthPanel/LoginForm 和框架认证动作，应用只负责业务导航与用户状态。
+
+[完整配置与安全约束](../../packages/iam/README.md)
 
 ## 🌍 国际化 (i18n)
 

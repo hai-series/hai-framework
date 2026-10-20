@@ -166,12 +166,12 @@ export function loadCredentials(): HaiResult<string[]> {
  *
  * 读取已有凭证 → 合并新凭证 → 写回文件。已有同名 key 会被覆盖。
  *
- * @param key - 环境变量名（如 HAI_DEPLOY_VERCEL_TOKEN）
+ * @param key - 环境变量名（如 HAI_DEPLOY_PROVIDER_TOKEN）
  * @param value - 凭证值
  *
  * @example
  * ```ts
- * saveCredential('HAI_DEPLOY_VERCEL_TOKEN', 'vel_xxx')
+ * saveCredential('HAI_DEPLOY_PROVIDER_TOKEN', 'vel_xxx')
  * ```
  */
 export function saveCredential(key: string, value: string): HaiResult<void> {
@@ -204,8 +204,8 @@ export function saveCredential(key: string, value: string): HaiResult<void> {
  * @example
  * ```ts
  * saveCredentials({
- *   HAI_DEPLOY_VERCEL_TOKEN: 'vel_xxx',
- *   HAI_DEPLOY_NEON_API_KEY: 'neon_xxx',
+ *   HAI_DEPLOY_PROVIDER_TOKEN: 'vel_xxx',
+ *   HAI_DEPLOY_SERVICES_DB_APIKEY: 'neon_xxx',
  * })
  * ```
  */

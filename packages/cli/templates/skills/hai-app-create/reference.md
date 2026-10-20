@@ -314,13 +314,13 @@ interface CreateArticleInput {
 
 CLI 项目统一忽略 `**/data/`，含根目录、workspace 子目录及 `.gitkeep`；数据库/上传文件不入 Git。Fullstack 的服务端 config 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML，未启用模块整份注释，可选字段及替代 Provider 按块注释，`.env.example` 也保留未启用模块的注释凭据。
 
-H5 认证路由独立显示；业务页面使用 `@h-ai/ui` 的 `BottomNav` 与移动端壳样式，导航启用 centered/maxWidth/safeArea，与页面同宽。
+H5 所有页面继承根布局的 header/footer；认证页隐藏底部导航，业务页面使用 `@h-ai/ui` 的 `BottomNav` 与移动端壳样式，导航启用 centered/maxWidth/safeArea，与页面同宽。
 
 扩展这些配置前先核对当前安装版本及模块公开 Schema。在服务端 workspace 安装需要的依赖，在 `src/server/runtime.ts` 按依赖顺序校验/初始化、失败清理并反序关闭，再接入 contract/procedure。整份注释文件先去掉一层外层注释，可选块只开启需要的字段；切换 Provider 时替换旧连接块并保持名称唯一。配置文件存在不代表模块已启用。crypto.init() 无配置参数，datapipe 无生命周期，不增加虚构的 YAML。
 
 环境变量叶子覆盖只遍历 YAML 已有路径，注释键须先取消注释，或用 HAI_DB/HAI_CACHE 等整体对象覆盖。camelCase 不拆词，例如 connectTimeout → HAI_CACHE_CONNECTTIMEOUT；密钥仅写入被忽略的环境文件或部署环境。语言列表在前端/shared 的 project.inlang/settings.json 中同步，core 只配置 defaultLocale。
 
-Fullstack 自动生成的 .env 默认只启用管理员初始密码和 PUBLIC_API_BASE，其余环境覆盖保留注释，YAML 修改可直接生效。显式开启环境覆盖后，修改 YAML 时须核对该覆盖是否仍适用。
+Fullstack 的公共 `.env` 启用当前模块的运行参数，YAML 显式引用同名变量并保留本地回退；未启用模块与可选字段保留注释。环境文件的用途、加载优先级及私有值保存方式遵守 [环境配置规范](development.md#环境配置)，模块仍按公开 Schema 校验。
 
 复用当前应用服务端启动/关闭入口；SvelteKit 通常为 `$lib/server/init.ts`，API/fullstack 使用已有 service/serv 初始化文件。下列是启用 IAM 时的常见依赖关系，不要求无关应用安装这些模块：
 

@@ -17,12 +17,12 @@
 
 ```bash
 cd apps/ai-playground
-cp .env.example .env
-# 编辑 .env，填写 HAI_AI_LLM_APIKEY
+# 按 .env.example 的字段说明，在 .env.local 中仅填写需要覆盖的私有值
+# 编辑 .env.local，填写 HAI_AI_LLM_APIKEY
 pnpm dev
 ```
 
-打开 `http://localhost:5173`。`.env` 已由仓库根 `.gitignore` 忽略，不会进入 Git；不要把密钥改写到 `.env.example` 或源码中。
+打开 `http://localhost:5173`。`.env.local` 已由仓库根 `.gitignore` 忽略，不会进入 Git；不要把密钥改写到 `.env.example` 或源码中。
 
 应用按以下生命周期使用框架：服务端启动时 `ai.init(config)`，API 路由调用 `ai.llm` / `ai.image` / `ai.memory` / `ai.audio`。当前示例使用进程内 Memory Store，服务重启会清空，适合能力验证；生产环境应先初始化 reldb 和 vecdb。
 
@@ -47,6 +47,8 @@ JSON 输入先经 Zod 校验；图片与音频上传在 multipart 边界校验�
 
 ## 配置
 
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod`、`build:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置手册](../../docs/environment-configuration.md)。
+
 应用启动时扫描 [`config/_core.yml`](./config/_core.yml) 和
 [`config/_ai.yml`](./config/_ai.yml)：前者控制日志等级，后者集中声明 LLM、
 ASR/TTS、文生图厂商、模型、端点和超时。切换 OpenAI、Google、Qwen 或
@@ -57,11 +59,11 @@ YAML 提供默认值；环境变量按 `HAI_<配置名>_<YAML 路径>` 自动覆
 `HAI_AI_LLM_APIKEY`。数组模型密钥可使用索引约定名，也可像当前图片示例一样
 在 YAML 中显式绑定稳定的厂商变量名。
 
-| 环境变量            | 用途                         |
-| ------------------- | ---------------------------- |
-| `HAI_AI_LLM_APIKEY` | 默认 MiMo 对话与音频密钥     |
-| `AI_IMAGE_API_KEY`  | 默认 Pollinations 文生图密钥 |
-| 其它厂商密钥        | 见 `_ai.yml` 的注释示例      |
+| 环境变量                           | 用途                         |
+| ---------------------------------- | ---------------------------- |
+| `HAI_AI_LLM_APIKEY`                | 默认 MiMo 对话与音频密钥     |
+| `HAI_AI_IMAGE_POLLINATIONS_APIKEY` | 默认 Pollinations 文生图密钥 |
+| 其它厂商密钥                       | 见 `_ai.yml` 的注释示例      |
 
 `_core.yml` 默认将开发日志设为 `debug`。文生图日志包含厂商、模型、尺寸、
 参考图数量、耗时、HTTP 状态、上游错误码和请求 ID；不会记录密钥、提示词或图片内容。

@@ -18,6 +18,7 @@ import fse from 'fs-extra'
 import Handlebars from 'handlebars'
 import { stringify } from 'yaml'
 import { getCliVersion } from '../cli-utils.js'
+import { parameterizeConfig } from './cli-config-environment.js'
 import { generateConfigFile } from './cli-config-templates.js'
 
 // 注册自定义 Handlebars helpers
@@ -37,7 +38,7 @@ Handlebars.registerHelper('moduleConfig', function (this: TemplateContext, modul
   // 文件模板自身保留结尾换行，helper 不再重复输出空行。
   const content = generateConfigFile(moduleKey, this.moduleConfigs).trimEnd()
   const configured = this.appType === 'fullstack' && moduleKey === 'iam'
-    ? content.replace('seedDefaultData: true', 'seedDefaultData: false').replace('variant: card', 'variant: split')
+    ? content.replace('HAI_IAM_SEEDDEFAULTDATA:true', 'HAI_IAM_SEEDDEFAULTDATA:false').replace('variant: card', 'variant: split')
     : content
   return enabled
     ? configured
@@ -1025,6 +1026,7 @@ export async function generateFromTemplates(
 
   // ─── ④ 渲染 .hbs 动态模板 ───
   await renderDynamicFiles(root, projectPath, context)
+  await fse.copy(path.join(root, 'shared', 'environment-configuration.md'), path.join(projectPath, 'docs', 'environment-configuration.md'))
 
   // ─── ⑤ 拷贝 i18n 脚手架（project.inlang + messages） ───
   if (context.hasI18n) {
@@ -1141,7 +1143,8 @@ async function renderHbsInDir(
     }
 
     const destPath = path.join(destRoot, outRelPath)
-    const normalizedRendered = normalizeRenderedContent(rendered, outRelPath)
+    const configMatch = /(?:^|[/\\])config[/\\]_([^/\\]+)\.ya?ml$/.exec(outRelPath)
+    const normalizedRendered = normalizeRenderedContent(configMatch ? parameterizeConfig(configMatch[1], rendered) : rendered, outRelPath)
 
     await fse.ensureDir(path.dirname(destPath))
     await fse.writeFile(destPath, normalizedRendered, 'utf-8')

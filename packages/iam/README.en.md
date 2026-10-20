@@ -43,13 +43,13 @@ Password authentication, users and RBAC work without LDAP or Reach. Both are opt
 For the default client run `pnpm add ldapts`, then explicitly set `login.ldap: true` and connection settings. Connection settings alone do not enable LDAP. Enabling the default client without the SDK returns an initialization configuration error.
 
 ```yaml
-# config/_iam.yml（启动前设置 LDAP_BIND_PASSWORD）
+# config/_iam.yml（启动前设置 HAI_IAM_LDAP_BINDPASSWORD）
 login:
   ldap: true
 ldap:
   url: ldaps://ldap.example.com:636
   bindDn: cn=service,dc=example,dc=com
-  bindPassword: '${LDAP_BIND_PASSWORD}'
+  bindPassword: '${HAI_IAM_LDAP_BINDPASSWORD}'
   searchBase: ou=users,dc=example,dc=com
   searchFilter: '(uid={{username}})'
   usernameAttribute: uid

@@ -6,12 +6,12 @@ build
 **/src/lib/paraglide
 playwright-report
 test-results
-.env
-.env.*
-!.env.example
-!.env.example.hbs
 **/src-tauri/gen/
 **/src-tauri/target/
 
 # hai deploy 产物（compose / .env.runtime / 镜像 tar / sidecar 凭据）
 .hai/
+
+# 本机私有配置；公共 .env 与 dev/test/prod 环境文件纳入版本控制。
+.env.local
+.env.*.local

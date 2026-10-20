@@ -134,9 +134,9 @@ export type ModelEntry = z.infer<typeof ModelEntrySchema>
  * ```
  */
 export const LLMConfigSchema = z.object({
-  /** 全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_API_KEY` 或 `process.env.OPENAI_API_KEY`） */
+  /** 全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`） */
   apiKey: OptionalSecretSchema,
-  /** 全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASE_URL` 或 `process.env.OPENAI_BASE_URL`） */
+  /** 全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`） */
   baseUrl: z.url().optional(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),
@@ -230,8 +230,8 @@ export function resolveModelEntry(
   const resolved: ResolvedModelConfig = {
     model: modelName,
     api: entry?.api ?? llmConfig.api ?? 'chat',
-    apiKey: entry?.apiKey ?? llmConfig.apiKey ?? process.env.HAI_AI_LLM_API_KEY ?? process.env.OPENAI_API_KEY,
-    baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? process.env.HAI_AI_LLM_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
+    apiKey: entry?.apiKey ?? llmConfig.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.OPENAI_API_KEY),
+    baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || process.env.OPENAI_BASE_URL) ?? 'https://api.openai.com/v1',
     maxTokens: entry?.maxTokens ?? llmConfig.maxTokens ?? 4096,
     temperature: entry?.temperature ?? llmConfig.temperature ?? 0.7,
     timeout: entry?.timeout ?? llmConfig.timeout ?? 60000,
@@ -842,17 +842,17 @@ function doubaoDefaultResourceId(operation: 'transcribe' | 'synthesize'): string
 function audioProviderEnvApiKey(provider: AudioProviderName): string | undefined {
   switch (provider) {
     case 'openai':
-      return process.env.HAI_AI_AUDIO_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY
+      return (process.env.HAI_AI_AUDIO_OPENAI_APIKEY?.trim() || process.env.OPENAI_API_KEY)
     case 'mimo':
-      return process.env.HAI_AI_AUDIO_MIMO_API_KEY ?? process.env.MIMO_API_KEY
+      return (process.env.HAI_AI_AUDIO_MIMO_APIKEY?.trim() || process.env.MIMO_API_KEY)
     case 'qwen':
-      return process.env.HAI_AI_AUDIO_QWEN_API_KEY ?? process.env.DASHSCOPE_API_KEY
+      return (process.env.HAI_AI_AUDIO_QWEN_APIKEY?.trim() || process.env.DASHSCOPE_API_KEY)
     case 'doubao':
-      return process.env.HAI_AI_AUDIO_DOUBAO_API_KEY ?? process.env.VOLC_API_KEY
+      return (process.env.HAI_AI_AUDIO_DOUBAO_APIKEY?.trim() || process.env.VOLC_API_KEY)
     case 'whisper':
-      return process.env.HAI_AI_AUDIO_WHISPER_API_KEY
+      return process.env.HAI_AI_AUDIO_WHISPER_APIKEY
     case 'indextts':
-      return process.env.HAI_AI_AUDIO_INDEXTTS_API_KEY
+      return process.env.HAI_AI_AUDIO_INDEXTTS_APIKEY
   }
 }
 
@@ -1001,15 +1001,15 @@ const IMAGE_PROVIDER_DEFAULT_BASE_URL: Record<ImageProviderName, string> = {
 function imageProviderEnvApiKey(provider: ImageProviderName): string | undefined {
   switch (provider) {
     case 'openai':
-      return process.env.HAI_AI_IMAGE_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY
+      return (process.env.HAI_AI_IMAGE_OPENAI_APIKEY?.trim() || process.env.OPENAI_API_KEY)
     case 'google':
-      return process.env.HAI_AI_IMAGE_GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY
+      return (process.env.HAI_AI_IMAGE_GOOGLE_APIKEY?.trim() || process.env.GEMINI_API_KEY)
     case 'qwen':
-      return process.env.HAI_AI_IMAGE_QWEN_API_KEY ?? process.env.DASHSCOPE_API_KEY
+      return (process.env.HAI_AI_IMAGE_QWEN_APIKEY?.trim() || process.env.DASHSCOPE_API_KEY)
     case 'seedream':
-      return process.env.HAI_AI_IMAGE_SEEDREAM_API_KEY ?? process.env.ARK_API_KEY ?? process.env.VOLC_API_KEY
+      return (process.env.HAI_AI_IMAGE_SEEDREAM_APIKEY?.trim() || process.env.ARK_API_KEY) ?? process.env.VOLC_API_KEY
     case 'pollinations':
-      return process.env.HAI_AI_IMAGE_POLLINATIONS_API_KEY ?? process.env.POLLINATIONS_API_KEY
+      return (process.env.HAI_AI_IMAGE_POLLINATIONS_APIKEY?.trim() || process.env.POLLINATIONS_API_KEY)
   }
 }
 

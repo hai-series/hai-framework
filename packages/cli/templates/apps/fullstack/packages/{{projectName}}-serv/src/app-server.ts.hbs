@@ -6,7 +6,7 @@ import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { serv, ServConfigSchema } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
-import { ENABLED_FRONTENDS, {{fullstack.contractExportName}}, SUPPORTED_LOCALES } from '{{fullstack.contractPackageName}}'
+import * as contracts from '{{fullstack.contractPackageName}}'
 import { createServerProcedures } from './server/procedures/index.js'
 
 const STARTED_AT = new Date().toISOString()
@@ -27,16 +27,16 @@ export function createServerApp(): ServHttpApp {
   ]
 
   return serv.createApp({
-    contract: {{fullstack.contractExportName}},
+    contract: contracts.{{fullstack.contractExportName}},
     procedures: createServerProcedures({
       app: {
         name: coreConfig.name,
         version: coreConfig.version,
         env: coreConfig.env,
         defaultLocale: coreConfig.defaultLocale,
-        supportedLocales: SUPPORTED_LOCALES,
+        supportedLocales: contracts.SUPPORTED_LOCALES,
         startedAt: STARTED_AT,
-        frontends: [...ENABLED_FRONTENDS],
+        frontends: [...contracts.ENABLED_FRONTENDS],
       },
     }),
     iam,

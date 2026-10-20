@@ -2,23 +2,27 @@
 {{#if fullstack.frontends.desktop}}
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { core } from '@h-ai/core'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
-import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
 
 const host = process.env.TAURI_DEV_HOST
 const envDir = fileURLToPath(new URL('../../', import.meta.url))
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, envDir, 'PUBLIC_')
+  const envResult = core.config.loadEnvFiles({ mode, envDir })
+  if (!envResult.success)
+    throw new Error(envResult.error.message)
+  const env = envResult.data
+  Object.assign(process.env, env)
   const target = (env.PUBLIC_API_BASE || process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000').replace(/\/api\/v1\/?$/, '')
   const proxy = { '/api': { target, changeOrigin: true } }
 
   return {
-    envDir,
+    envDir: false,
     preview: { proxy },
     build: {
       rolldownOptions: {

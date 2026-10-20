@@ -358,7 +358,7 @@ if (result.success) {
 }
 ```
 
-`referenceImages` is optional. Public APIs accept only image bytes and MIME; providers convert multipart, `inlineData`, and Data URLs. Set credentials on model entries or with `HAI_AI_IMAGE_<PROVIDER>_API_KEY` / vendor environment variables. Qwen and Seedream temporary URLs are downloaded immediately inside providers and never exposed publicly. See [REFERENCE.md (Chinese)](./REFERENCE.md#image) for model details and API differences.
+`referenceImages` is optional. Public APIs accept only image bytes and MIME; providers convert multipart, `inlineData`, and Data URLs. Set credentials on model entries or with `HAI_AI_IMAGE_<PROVIDER>_APIKEY` / vendor environment variables. Qwen and Seedream temporary URLs are downloaded immediately inside providers and never exposed publicly. See [REFERENCE.md (Chinese)](./REFERENCE.md#image) for model details and API differences.
 
 ### Context manager
 

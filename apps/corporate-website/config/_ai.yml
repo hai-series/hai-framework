@@ -4,6 +4,6 @@
 # AI 助手配置，用于网站智能客服
 
 llm:
-  model: gpt-4o-mini
-  apiKey: ''
-  baseUrl: ''
+  model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  apiKey: ${HAI_AI_LLM_APIKEY:}
+  baseUrl: ${HAI_AI_LLM_BASEURL:}

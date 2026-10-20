@@ -3,24 +3,24 @@
 # =============================================================================
 
 llm:
-  type: openai
-  apiKey: sk-placeholder
-  model: gpt-4o-mini
+  api: ${HAI_AI_LLM_API:chat}
+  apiKey: ${HAI_AI_LLM_APIKEY:sk-placeholder}
+  model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
 
 a2a:
   agentCard:
-    name: echo-agent
-    description: A simple echo agent that repeats your message (A2A demo)
-    url: http://localhost:5173
-    version: 0.1.0
+    name: ${HAI_AI_A2A_AGENTCARD_NAME:echo-agent}
+    description: ${HAI_AI_A2A_AGENTCARD_DESCRIPTION:A simple echo agent that repeats your message (A2A demo)}
+    url: ${HAI_AI_A2A_AGENTCARD_URL:http://localhost:5173}
+    version: ${HAI_AI_A2A_AGENTCARD_VERSION:0.1.0}
     skills:
       - id: echo
         name: Echo
-        description: Echoes back the user message
+        description: ${HAI_AI_A2A_AGENTCARD_SKILLS_0_DESCRIPTION:Echoes back the user message}
         tags:
-          - demo
-          - echo
+          - ${HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_0:demo}
+          - ${HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_1:echo}
   security:
     apiKey:
-      in: header
-      name: x-api-key
+      in: ${HAI_AI_A2A_SECURITY_APIKEY_IN:header}
+      name: ${HAI_AI_A2A_SECURITY_APIKEY_NAME:x-api-key}

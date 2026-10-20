@@ -616,7 +616,9 @@ Skills are managed in `packages/cli/templates/skills/` and distributed by `@h-ai
 
 ### Configuration and environment variables
 
-Environment variables following `HAI_<CONFIG_NAME>_<YAML_PATH>` override YAML. Copy the root [`.env.example`](./.env.example) to `.env` and fill needed values. Each `apps/*/.env.example` adds application-specific differences only.
+Applications and templates share `HAI_<CONFIG>_<PATH>`. The root [`.env.example`](.env.example) lists available variables, descriptions, enums and bounds. See the [configuration guide](docs/environment-configuration.md) for mode files, startup commands and provider switching.
+
+Track `.env.example` (complete descriptions and constraints), `.env` (shared public values), and `.env.dev` / `.env.test` / `.env.prod` (public environment overrides). Ignore `.env.local` for machine secrets. Priority: process environment > `.env.local` > environment file > `.env`. Each application example lists its complete available settings.
 
 - **Naming**: `HAI_<CONFIG_NAME>_<YAML_PATH>`, levels separated by `_`, camelCase kept intact (such as `llm.apiKey` → `HAI_AI_LLM_APIKEY`).
 - **Precedence**: convention-based variables > explicit YAML `${VAR}` > YAML defaults.

@@ -91,7 +91,7 @@ core.array.unique([1, 1, 2])
 ブラウザー版は型定義に合わせて `core.config` の API 形状を保持しますが、ファイル設定には対応しません：
 
 - `core.config.get()` は `undefined`、`has()` は `false`、`keys()` は `[]` を返します。
-- `load()` / `validate()` / `reload()` は `HaiCommonError.SERVICE_UNAVAILABLE` を返します。
+- `loadEnvFiles()` / `load()` / `validate()` / `reload()` は `HaiCommonError.SERVICE_UNAVAILABLE` を返します。
 - `watch()` は同じエラーで直ちにコールバックを呼び、安全な no-op の監視解除関数を返します。
 - 設定が必要な場合はサーバーで読み込み API で渡すか、ブラウザーでは `core.init({ logging })` でログのみ設定してください。
 
@@ -325,6 +325,18 @@ unwatch() // 取消监听
 // 清除缓存（同时停止对应监听）
 core.config.clear('app') // 清除单个
 core.config.clear() // 清除全部
+```
+
+#### dotenv ファイルと環境切り替え
+
+Node 専用の `core.config.loadEnvFiles({ mode, envDir })` は HaiResult を返し、`.env` → `.env.<mode>` → `.env.local` の順で読み込みます。既存のプロセス変数が最優先です。development/production は dev/prod に対応し、存在しないファイルは省略します。プロセスは変更しないため、success を確認してから代入します。公開設定と `.env.example` は Git 登録し、私有の `.env.local` は除外します。core.init は dotenv を読み込まず、ブラウザーでは SERVICE_UNAVAILABLE を返します。
+
+```ts
+const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
+if (!env.success)
+  throw new Error(env.error.message)
+Object.assign(process.env, env.data)
+core.init({ configDir: './config' })
 ```
 
 #### 環境変数のマッピングと展開

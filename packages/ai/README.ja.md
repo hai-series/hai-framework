@@ -358,7 +358,7 @@ if (result.success) {
 }
 ```
 
-`referenceImages` は省略可能です。公開層は画像バイト列と MIME のみを受け付け、multipart・`inlineData`・Data URL は Provider が変換します。認証情報はモデル項目、`HAI_AI_IMAGE_<PROVIDER>_API_KEY`、サービス環境変数で指定できます。Qwen・Seedream の一時 URL は Provider 内ですぐダウンロードし、公開戻り値に出しません。詳細は [REFERENCE.md（中国語）](./REFERENCE.md#image) を参照してください。
+`referenceImages` は省略可能です。公開層は画像バイト列と MIME のみを受け付け、multipart・`inlineData`・Data URL は Provider が変換します。認証情報はモデル項目、`HAI_AI_IMAGE_<PROVIDER>_APIKEY`、サービス環境変数で指定できます。Qwen・Seedream の一時 URL は Provider 内ですぐダウンロードし、公開戻り値に出しません。詳細は [REFERENCE.md（中国語）](./REFERENCE.md#image) を参照してください。
 
 ### Context 管理
 

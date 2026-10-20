@@ -2,5 +2,9 @@
 # API Service - Storage 配置
 # =============================================================================
 
-type: local
-root: ./data/storage
+type: ${HAI_STORAGE_TYPE:local}
+root: ${HAI_STORAGE_ROOT:./data/storage}
+bucket: ${HAI_STORAGE_BUCKET:}
+region: ${HAI_STORAGE_REGION:us-east-1}
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID:}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY:}

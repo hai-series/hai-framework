@@ -7,17 +7,17 @@ providers:
   # SMTP 替换 email 控制台 Provider；同名 Provider 只保留一个。
   # - name: email
   #   type: smtp
-  #   host: ${HAI_REACH_SMTP_HOST:smtp.example.com}
-  #   port: ${HAI_REACH_SMTP_PORT:465}
+  #   host: ${HAI_REACH_PROVIDERS_0_HOST:smtp.example.com}
+  #   port: ${HAI_REACH_PROVIDERS_0_PORT:465}
   #   secure: true
-  #   user: ${HAI_REACH_SMTP_USER:}
-  #   pass: ${HAI_REACH_SMTP_PASS:}
-  #   from: ${HAI_REACH_SMTP_FROM:noreply@example.com}
+  #   user: ${HAI_REACH_PROVIDERS_0_USER:}
+  #   pass: ${HAI_REACH_PROVIDERS_0_PASS:}
+  #   from: ${HAI_REACH_PROVIDERS_0_FROM:noreply@example.com}
   # 阿里云短信替换 sms 控制台 Provider。
   # - name: sms
   #   type: aliyun-sms
-  #   accessKeyId: ${HAI_REACH_SMS_ACCESS_KEY}
-  #   accessKeySecret: ${HAI_REACH_SMS_SECRET_KEY}
+  #   accessKeyId: ${HAI_REACH_PROVIDERS_0_ACCESSKEYID}
+  #   accessKeySecret: ${HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET}
   #   signName: MyApp
   #   endpoint: dysmsapi.aliyuncs.com
   # 自有发送服务：按需将 template.provider 改为 custom。
@@ -26,7 +26,7 @@ providers:
   #   url: https://notify.example.com/send
   #   method: POST # POST | PUT
   #   headers:
-  #     Authorization: 'Bearer ${HAI_REACH_API_TOKEN}'
+  #     Authorization: '${HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION}'
   #   timeout: 10000
 templates:
   - name: otp_email

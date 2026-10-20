@@ -3,10 +3,14 @@
 # =============================================================================
 
 # 存储类型: local | s3
-type: local
+type: ${HAI_STORAGE_TYPE:local}
 
 # 本地存储配置
-root: ./data/uploads
+root: ${HAI_STORAGE_ROOT:./data/uploads}
+bucket: ${HAI_STORAGE_BUCKET:}
+region: ${HAI_STORAGE_REGION:us-east-1}
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID:}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY:}
 
 # S3 配置（当 type 为 s3 时使用）
 # type: s3

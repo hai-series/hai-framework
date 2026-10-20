@@ -2,5 +2,9 @@
 # H5 App - 存储配置
 # =============================================================================
 
-type: local
-root: ./data/uploads
+type: ${HAI_STORAGE_TYPE:local}
+root: ${HAI_STORAGE_ROOT:./data/uploads}
+bucket: ${HAI_STORAGE_BUCKET:}
+region: ${HAI_STORAGE_REGION:us-east-1}
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID:}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY:}

@@ -91,7 +91,7 @@ core.array.unique([1, 1, 2])
 The browser retains the `core.config` API shape for type compatibility, but does not support file configuration:
 
 - `core.config.get()` returns `undefined`, `has()` returns `false`, and `keys()` returns `[]`.
-- `load()` / `validate()` / `reload()` return `HaiCommonError.SERVICE_UNAVAILABLE`.
+- `loadEnvFiles()` / `load()` / `validate()` / `reload()` return `HaiCommonError.SERVICE_UNAVAILABLE`.
 - `watch()` immediately calls its callback with the same error and returns a safe no-op unsubscribe function.
 - Read configuration on the server and deliver it through an API, or use `core.init({ logging })` only to configure browser logging.
 
@@ -325,6 +325,18 @@ unwatch() // 取消监听
 // 清除缓存（同时停止对应监听）
 core.config.clear('app') // 清除单个
 core.config.clear() // 清除全部
+```
+
+#### Dotenv files and environment modes
+
+Node-only `core.config.loadEnvFiles({ mode, envDir })` returns HaiResult and merges `.env` → `.env.<mode>` → `.env.local`, with existing process variables taking priority. development/production map to dev/prod; missing files are skipped. It does not mutate the process: check success before assigning. Track public environment files and `.env.example`; ignore private `.env.local`. core.init does not load dotenv. Browser calls return SERVICE_UNAVAILABLE.
+
+```ts
+const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
+if (!env.success)
+  throw new Error(env.error.message)
+Object.assign(process.env, env.data)
+core.init({ configDir: './config' })
 ```
 
 #### Environment variable mapping and interpolation

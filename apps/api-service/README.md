@@ -257,6 +257,8 @@ await crypto.close()
 
 ## 配置
 
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod`、`build:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置手册](../../docs/environment-configuration.md)。
+
 配置文件位于 `config/`：
 
 - `_core.yml`：应用名称、版本、运行环境。
@@ -280,17 +282,17 @@ await crypto.close()
 camelCase key 不拆词，例如 `cors.nativeOrigins` 对应
 `HAI_SERV_CORS_NATIVEORIGINS`。
 
-## 错误处理
-
-业务错误通过 `HaiResult<T>` 返回，客户端统一判断 `result.success`。API 文档和 OpenAPI JSON 可用于生成跨端 SDK 或联调。
-
-## 配置驱动认证页面
+### 认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
 认证方式、注册、重置、协议和品牌由服务端 config/_iam.yml 控制。SvelteKit 页面消费 iam.publicConfig；移动/桌面页面从 API 服务读取公开配置。选用 Reach 时，初始化成功后传入 iam.init({ ...settings, reach })，使用标准通知模板。多节点共享 DB 与 Redis。UI 复用 AuthPanel/LoginForm 和框架认证动作，应用只负责业务导航与用户状态。
 
 [完整配置与安全约束](../../packages/iam/README.md)
+
+## 错误处理
+
+业务错误通过 `HaiResult<T>` 返回，客户端统一判断 `result.success`。API 文档和 OpenAPI JSON 可用于生成跨端 SDK 或联调。
 
 ## 测试
 

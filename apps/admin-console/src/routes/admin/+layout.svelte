@@ -294,7 +294,7 @@
 
         <div class='flex items-center gap-2'>
           {#if data.appConfig?.env === 'development'}
-            <span class='hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-2xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/15'>
+            <span data-testid='app-environment-badge' class='hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-2xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/15'>
               {m.common_dev_env()}
             </span>
           {/if}

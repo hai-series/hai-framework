@@ -3,6 +3,9 @@ import type { CoreConfig } from '@h-ai/core'
 {{/unless}}
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+{{#unless isSvelteOnlyApp}}
+import process from 'node:process'
+{{/unless}}
 import { fileURLToPath } from 'node:url'
 {{#unless isSvelteOnlyApp}}
 import { core } from '@h-ai/core'
@@ -43,9 +46,12 @@ describe('generated scaffold', () => {
 {{#unless isCapacitorApp}}
 
   it('ships an application config loaded at startup', async () => {
-    const coreConfig = await readFile(join(rootDir, 'config/_core.yml'), 'utf-8')
-    expect(coreConfig).toContain('name: {{projectName}}')
-    expect(coreConfig).toContain('defaultLocale: {{defaultLocale}}')
+    const result = core.config.load<CoreConfig>('core', join(rootDir, 'config/_core.yml'))
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    expect(result.data.name).toBe(process.env.HAI_CORE_NAME ?? '{{projectName}}')
+    expect(result.data.defaultLocale).toBe(process.env.HAI_CORE_DEFAULTLOCALE ?? '{{defaultLocale}}')
   })
 {{/unless}}
 {{#unless isSvelteOnlyApp}}

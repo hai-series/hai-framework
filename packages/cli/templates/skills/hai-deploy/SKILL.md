@@ -43,31 +43,31 @@ description: "使用 @h-ai/deploy 部署应用：Vercel 云平台或 docker-ssh 
 # config/_deploy.yml
 provider:
   type: vercel
-  token: ${HAI_DEPLOY_VERCEL_TOKEN}
+  token: ${HAI_DEPLOY_PROVIDER_TOKEN}
 
 services:
   db:
     provisioner: neon
-    apiKey: ${HAI_DEPLOY_NEON_API_KEY}
+    apiKey: ${HAI_DEPLOY_SERVICES_DB_APIKEY}
   cache:
     provisioner: upstash
-    email: ${HAI_DEPLOY_UPSTASH_EMAIL}
-    apiKey: ${HAI_DEPLOY_UPSTASH_API_KEY}
+    email: ${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
+    apiKey: ${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
   storage:
     provisioner: cloudflare-r2
-    accountId: ${HAI_DEPLOY_CF_ACCOUNT_ID}
-    apiToken: ${HAI_DEPLOY_CF_API_TOKEN}
-    accessKeyId: ${HAI_DEPLOY_R2_ACCESS_KEY_ID}
-    secretAccessKey: ${HAI_DEPLOY_R2_SECRET_ACCESS_KEY}
+    accountId: ${HAI_DEPLOY_SERVICES_STORAGE_ACCOUNTID}
+    apiToken: ${HAI_DEPLOY_SERVICES_STORAGE_APITOKEN}
+    accessKeyId: ${HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID}
+    secretAccessKey: ${HAI_DEPLOY_SERVICES_STORAGE_SECRETACCESSKEY}
   email:
     provisioner: resend
-    apiKey: ${HAI_DEPLOY_RESEND_API_KEY}
-    from: ${HAI_DEPLOY_RESEND_FROM}
+    apiKey: ${HAI_DEPLOY_SERVICES_EMAIL_APIKEY}
+    from: ${HAI_DEPLOY_SERVICES_EMAIL_FROM}
   sms:
     provisioner: aliyun
-    accessKeyId: ${HAI_DEPLOY_ALIYUN_ACCESS_KEY_ID}
-    accessKeySecret: ${HAI_DEPLOY_ALIYUN_ACCESS_KEY_SECRET}
-    signName: ${HAI_DEPLOY_ALIYUN_SIGN_NAME}
+    accessKeyId: ${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYID}
+    accessKeySecret: ${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYSECRET}
+    signName: ${HAI_DEPLOY_SERVICES_SMS_SIGNNAME}
 ```
 
 这些凭证名由 `deploy.credentials` 管理，属于显式特殊映射；若同时设置
@@ -82,10 +82,10 @@ services:
 provider:
   type: docker-ssh
   ssh:
-    host: ${HAI_DEPLOY_SSH_HOST}
+    host: ${HAI_DEPLOY_PROVIDER_SSH_HOST}
     port: 22
     username: deploy
-    identityFile: ${HAI_DEPLOY_SSH_KEY} # 私钥文件路径，省略则用 ssh-agent
+    identityFile: ${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE} # 私钥文件路径，省略则用 ssh-agent
   remote:
     baseDir: /opt/hai/apps
     runtime: auto # auto 优先 podman，其次 docker
@@ -102,7 +102,7 @@ services:
   # 若配置了云 Provisioner（如 neon），则优先用云资源，不再自建 sidecar
   db:
     provisioner: neon
-    apiKey: ${HAI_DEPLOY_NEON_API_KEY}
+    apiKey: ${HAI_DEPLOY_SERVICES_DB_APIKEY}
 ```
 
 docker-ssh 要点：

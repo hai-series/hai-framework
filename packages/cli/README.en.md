@@ -156,7 +156,7 @@ pnpm.cmd install
 pnpm.cmd dev
 ```
 
-The CLI generates a root `.env` with a unique random strong `HAI_ADMIN_DEFAULT_PASSWORD`, so `dev` / `start` work directly. Sign in as `admin` using that password; an environment variable with the same name overrides it. Passwords follow `_iam.yml` policy, with a default minimum of 8 characters. Startup logs include the specific validation reason and error code when a password violates the policy. Once users exist, the variable does not reset accounts or passwords. Git and container builds ignore `.env`, while `.env.example` contains only a placeholder. Set a separate password in each deployment environment.
+The CLI generates a root `.env.local` with a unique random strong `HAI_ADMIN_DEFAULT_PASSWORD`, so `dev` / `start` work directly. Sign in as `admin` using that password; an environment variable with the same name overrides it. Passwords follow `_iam.yml` policy, with a default minimum of 8 characters. Startup logs include the specific validation reason and error code when a password violates the policy. Once users exist, the variable does not reset accounts or passwords. Git and container builds ignore `.env.local`, while `.env.example` contains only a placeholder. Set a separate password in each deployment environment.
 
 - Administrators can search, paginate, create, edit, enable, disable and delete users and upload avatars. The server protects the current administrator and rechecks authorization inside a mutation lock so concurrent actions cannot remove every administrator's access.
 - Initial roles are `admin` / `user`. The role page shows member counts and edits descriptions; the user page assigns roles. By default, ordinary users only access personal settings, and the server rejects direct management API calls from them. Adapt these business rules to actual requirements.
@@ -171,6 +171,8 @@ Default SQLite, local storage and memory cache suit a single-instance mini admin
 
 ## Application configuration and display
 
+Each project documents its variables, enums and bounds in `.env.example`. The [root catalog](../../.env.example) covers all modules; the [configuration guide](../../docs/environment-configuration.md) explains mode loading and common scripts.
+
 Every generated `.gitignore` includes `**/data/`, covering runtime data and `.gitkeep` at every workspace depth. Runtime code creates the required directories.
 
 Fullstack always includes 13 `.yml` files in `packages/<project>-serv/config/`: `_core`, `_serv`, `_db`, `_cache`, `_iam`, `_storage`, `_audit`, `_reach`, `_ai`, `_vecdb`, `_payment`, `_scheduler`, and `_deploy`. Used modules retain working defaults; unused modules, optional fields, and alternative providers remain as comments. `.env.example` also includes commented credentials for unused modules. Module choices entered during creation are preserved.
@@ -183,7 +185,7 @@ Core environment overrides include `HAI_CORE_NAME`, `HAI_CORE_VERSION`, `HAI_COR
 
 Leaf overrides apply only to existing YAML paths: uncomment the key first, or replace the whole object with `HAI_DB`, `HAI_CACHE`, etc. CamelCase remains one segment: `connectTimeout` maps to `HAI_CACHE_CONNECTTIMEOUT`. Locale lists belong in each frontend/shared `project.inlang/settings.json`; `_core.yml` specifies only the default locale.
 
-The automatically generated fullstack `.env` enables only the initial administrator password and `PUBLIC_API_BASE`. Module overrides remain commented so YAML supplies defaults. Explicitly uncomment environment overrides when needed, and check existing overrides when editing YAML.
+The automatically generated fullstack `.env.local` enables only the initial administrator password and `PUBLIC_API_BASE`. Module overrides remain commented so YAML supplies defaults. Explicitly uncomment environment overrides when needed, and check existing overrides when editing YAML.
 
 SvelteKit server layouts expose only whitelisted public metadata such as name, version, environment and default locale. Standalone mobile-app Vite configuration parses YAML through core in the Node build process and injects public values plus browser logging level/format; YAML or override changes require a rebuild. Fullstack frontends obtain public server metadata through encrypted `app.info`. No template exposes complete core/module configuration, secrets or log-redaction context to the browser.
 
