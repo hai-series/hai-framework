@@ -1,4 +1,5 @@
 <script lang='ts'>
+  import type { Component } from 'svelte'
   import type { ManagementApiOptions } from '../api/api-client.js'
   import { Alert, Skeleton } from '@h-ai/ui/components/compounds/index'
   import { Button } from '@h-ai/ui/components/primitives/index'
@@ -6,9 +7,10 @@
   import { GuideHost } from '@h-ai/ui/guide'
   import { onMount, untrack } from 'svelte'
   import { managementAuthActions } from '../api/api-client.js'
+  import { HashRouter } from '../navigation/hash-router.svelte.js'
   import * as m from '../paraglide/messages.js'
-  import { ManagementStore } from '../stores/management-store.svelte.js'
   import { createManagementGuide } from '../stores/guide-store.js'
+  import { ManagementStore } from '../stores/management-store.svelte.js'
   import AppShell from './AppShell.svelte'
 
   interface Props {
@@ -17,7 +19,9 @@
     onLocaleChange?: (locale: string) => void
   }
   const { platform, apiOptions = {}, onLocaleChange }: Props = $props()
-  const store = new ManagementStore()
+  const pages = import.meta.glob<{ default: Component<{ store: ManagementStore }> }>('../pages/**/*.svelte')
+  const router = new HashRouter(Object.keys(pages), '/users')
+  const store = new ManagementStore(router)
   // 宿主平台在组件生命周期中固定，引导控制器只创建一次。
   const guide = untrack(() => createManagementGuide(store, platform))
   let resetToken = $state('')
@@ -34,19 +38,16 @@
     }
     resetToken = ''
   }
-  const pageComponent = $derived.by(() => {
-    if (store.isAdmin && store.page === 'users')
-      return import('./UserManagement.svelte')
-    if (store.isAdmin && store.page === 'roles')
-      return import('./RoleManagement.svelte')
-    if (store.isAdmin && store.page === 'audit')
-      return import('./AuditManagement.svelte')
-    return import('./ProfileSettings.svelte')
-  })
+  const pageComponent = $derived(pages[router.file]())
   onMount(() => {
+    const stopRouting = router.start(() => {
+      if (store.user)
+        void store.navigate(router.path.slice(1))
+    })
     resetToken = new URL(location.href).searchParams.get('token') ?? ''
     void store.initialize(apiOptions, onLocaleChange)
     return () => {
+      stopRouting()
       void store.close()
     }
   })
@@ -60,6 +61,7 @@
   {#if store.initializing}
     <div class='grid min-h-dvh place-items-center bg-base-200/50'><div class='w-72 space-y-4'><Skeleton variant='title' /><Skeleton count={3} /><p class='text-center text-sm text-base-content/50'>{m.home_loading()}</p></div></div>
   {:else if !store.user || resetToken}
+    <header class='border-b border-base-content/8 bg-base-100 px-6 py-3 text-sm font-medium'>{store.info?.name}</header>
     <main data-testid='login-page'>
       {#if !store.info || !store.authConfig}
         <section class='mx-auto mt-20 max-w-md space-y-4 p-6'>
@@ -71,7 +73,7 @@
           {#if store.authConfig && store.error}<Alert variant='error' class='mx-auto max-w-lg'>{store.error}</Alert>{/if}
           <AuthPanel config={authConfig} actions={managementAuthActions} {resetToken} initialMode={resetToken ? 'reset' : 'login'} error={store.authConfig ? '' : store.error} onretry={() => void store.initialize(apiOptions, onLocaleChange)} onauthenticated={authenticated} />
         </div>
-        <p class='fixed bottom-3 left-0 right-0 text-center text-xs text-base-content/50'><span data-testid='app-name'>{store.info.name}</span> · <span data-testid='app-version'>v{store.info.version}</span> · <span data-testid='app-environment'>{store.info.env}</span></p>
+        <footer class='border-t border-base-content/8 p-3 text-center text-xs text-base-content/50'><span data-testid='app-name'>{store.info.name}</span> · <span data-testid='app-version'>v{store.info.version}</span> · <span data-testid='app-environment'>{store.info.env}</span></footer>
       {/if}
     </main>
   {:else}

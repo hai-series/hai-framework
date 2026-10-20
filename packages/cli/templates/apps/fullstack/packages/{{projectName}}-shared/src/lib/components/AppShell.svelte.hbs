@@ -22,7 +22,7 @@
 : []),
     { id: 'settings' as const, label: m.settings_title(), icon: 'icon-[tabler--settings]' },
   ])
-  const title = $derived(items.find(item => item.id === store.page)?.label ?? m.settings_title())
+  const title = $derived(items.find(item => item.id === store.page)?.label ?? store.info?.name ?? '')
 
   function navigate(page: ManagementPage) {
     menuOpen = false

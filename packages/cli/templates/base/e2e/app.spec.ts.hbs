@@ -21,14 +21,26 @@ test('home page renders from browser', async ({ page }) => {
   await expect(page).toHaveTitle(process.env.HAI_CORE_NAME ?? '{{projectName}}')
   await expect(pageErrors).toEqual([])
   await expect(page.locator('main, section').first()).toBeVisible()
+  await expect(page.locator('header').first()).toBeVisible()
+  await expect(page.locator('footer').first()).toBeAttached()
 {{#if_eq appType 'h5'}}
   // 在手机宽度验证导航真正切换路由，避免样式失效但首页渲染测试仍通过。
   const nav = page.locator('nav')
   await nav.getByRole('button', { name: /发现|Discover/i, exact: true }).click()
   await expect(page).toHaveURL(/\/discover$/)
+  await page.reload()
+  await expect(page).toHaveURL(/\/discover$/)
+  await expect(page.getByRole('heading', { name: /发现|Discover/i })).toBeVisible()
   await nav.getByRole('button', { name: /首页|Home/i, exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+{{/if_eq}}
+{{#if_eq appType 'website'}}
+  await page.goto('/about')
+  await page.reload()
+  await expect(page).toHaveURL(/\/about$/)
+  await expect(page.locator('header')).toBeVisible()
+  await expect(page.locator('footer')).toBeVisible()
 {{/if_eq}}
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
   await mkdir(evidence, { recursive: true })
@@ -50,6 +62,8 @@ test('configured IAM registration and password login', async ({ page, context })
   const authUrl = '{{#if isCapacitorApp}}/{{else}}/auth/login{{/if}}'
   await page.goto(authUrl)
   await expect(page.locator('#login-username')).toBeVisible()
+  await expect(page.locator('header').first()).toBeVisible()
+  await expect(page.locator('footer')).toBeVisible()
   await page.screenshot({ path: path.join(evidence, '{{projectName}}-login.png'), fullPage: true })
   await page.getByRole('{{#if isCapacitorApp}}button{{else}}link{{/if}}', { name: /立即注册|Register now/i }).click()
   await expect(page.locator('input[name="username"]')).toBeVisible()

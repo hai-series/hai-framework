@@ -145,6 +145,15 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
       await replaceHaiPackageSpecifiers(projectPath)
       await addLocalHaiOverrides(projectPath)
       await removeReplacedHaiCatalogEntries(projectPath)
+      if (scenario.title === 'fullstack' || scenario.title === 'mobile-app') {
+        const pageRoot = scenario.title === 'fullstack'
+          ? `packages/${scenario.projectName}-shared/src/lib/pages`
+          : 'src/lib/pages'
+        // 生成后只新增页面文件，禁止修改路由器或菜单，验证页面目录自动发现。
+        await writeFile(path.join(projectPath, pageRoot, 'auto-discovered.svelte'), '<section data-testid=\'route-probe\'>Scaffold discovered page</section>\n')
+        const discovery = await readFile(path.resolve(process.cwd(), 'tests/fixtures/hash-discovery.ts'), 'utf8')
+        await writeFile(path.join(projectPath, 'e2e/hash-discovery.spec.ts'), discovery.replaceAll('SCAFFOLD_HASH_APP_TYPE', scenario.title))
+      }
       if (scenario.title === 'admin' || scenario.title === 'fullstack') {
         // 验证实际安装的 tarball 公共类型与运行行为，不能只靠框架源码别名。
         const moduleRoot = scenario.title === 'fullstack' ? `packages/${scenario.projectName}-serv` : '.'

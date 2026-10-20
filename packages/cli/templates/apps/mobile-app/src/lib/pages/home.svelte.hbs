@@ -1,0 +1,58 @@
+<script lang='ts'>
+  import { resolveApiBase } from '../api.js'
+  import { appConfig } from '../app-config.js'
+  import * as m from '../paraglide/messages.js'
+  /** 首页展示的平台运行状态；例如 { nativeRuntime: true, nativeTokenStorage: true }。 */
+  interface Props {
+    /** 是否运行于原生壳。 */
+    nativeRuntime: boolean
+    /** 是否使用原生安全凭据存储。 */
+    nativeTokenStorage: boolean
+  }
+  const { nativeRuntime, nativeTokenStorage }: Props = $props()
+</script>
+
+<section class='space-y-4 p-4 pb-6'>
+  <div class='bg-primary text-primary-content rounded-2xl p-5 shadow-sm'>
+    <p class='text-sm opacity-75'>{m.hero_eyebrow()}</p>
+    <h1 class='mt-1 text-2xl font-bold'>{m.hero_title()}</h1>
+    <p class='mt-2 text-sm opacity-80'>{m.hero_subtitle()}</p>
+  </div>
+
+  <div class='grid grid-cols-2 gap-3'>
+    <Card padding='sm' shadow='sm'>
+      <div class='flex flex-col gap-2'>
+        <span class='icon-[tabler--device-mobile-code] text-primary text-2xl'></span>
+        <span class='text-sm font-medium'>{m.feature_native_title()}</span>
+        <span class='text-base-content/60 text-xs'>{m.feature_native_desc()}</span>
+      </div>
+    </Card>
+    <Card padding='sm' shadow='sm'>
+      <div class='flex flex-col gap-2'>
+        <span class='icon-[tabler--api-app] text-primary text-2xl'></span>
+        <span class='text-sm font-medium'>{m.feature_api_title()}</span>
+        <span class='text-base-content/60 text-xs'>{m.feature_api_desc()}</span>
+      </div>
+    </Card>
+  </div>
+
+  <Card title={m.status_title()} shadow='sm'>
+    <p class='mb-3 text-xs text-base-content/50'>{appConfig.name} · {appConfig.version} · {appConfig.env}</p>
+    <div class='grid grid-cols-2 gap-3 text-sm'>
+      <div>
+        <p class='text-base-content/50'>{m.status_api_label()}</p>
+        <p class='font-medium break-all'>{resolveApiBase()}</p>
+      </div>
+      <div>
+        <p class='text-base-content/50'>{m.status_runtime_label()}</p>
+        <Badge variant={nativeRuntime ? 'success' : 'warning'} size='sm'>
+          {nativeRuntime ? m.status_runtime_native() : m.status_runtime_web()}
+        </Badge>
+      </div>
+      <div class='col-span-2'>
+        <p class='text-base-content/50'>{m.status_token_label()}</p>
+        <p class='font-medium'>{nativeTokenStorage ? m.status_token_native() : m.status_token_memory()}</p>
+      </div>
+    </div>
+  </Card>
+</section>

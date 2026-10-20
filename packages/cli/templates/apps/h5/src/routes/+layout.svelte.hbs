@@ -14,9 +14,9 @@
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime.js'
-  import { BottomNav, setGlobalLocale } from '@h-ai/ui'
+  import { AppBar, BottomNav, setGlobalLocale } from '@h-ai/ui'
 {{else}}
-  import { BottomNav } from '@h-ai/ui'
+  import { AppBar, BottomNav } from '@h-ai/ui'
 {{/if}}
   import '../app.css'
 
@@ -39,7 +39,7 @@
   ]
 
   const activeNav = $derived(navItems.find(item => item.path === page.url.pathname)?.id)
-  // 认证页面独立显示；业务页面复用框架导航和移动端安全区域样式。
+  // 所有页面共用页头页脚；仅业务页面显示底部导航。
   const isAuthPage = $derived(page.url.pathname.startsWith('/auth'))
 
   function handleNavigation(id: string) {
@@ -60,15 +60,15 @@
   <title>{page.data.appConfig.name}</title>
 </svelte:head>
 
-{#if isAuthPage}
-  {@render children()}
-{:else}
-  <div class='hai-mobile-viewport'>
-    <div class='hai-mobile-shell max-w-lg'>
-      <main class='hai-mobile-main'>
-        {@render children()}
-      </main>
+<div class='hai-mobile-viewport'>
+  <div class='hai-mobile-shell max-w-lg'>
+    <AppBar title={page.data.appConfig.name} safeArea fixed={false} />
+    <main class='hai-mobile-main'>{@render children()}</main>
+    <footer class='border-t border-base-300 bg-base-100 p-2 text-center text-xs text-base-content/60'>
+      {page.data.appConfig.name} · {page.data.appConfig.version} · {page.data.appConfig.env}
+    </footer>
+    {#if !isAuthPage}
       <BottomNav items={navItems} active={activeNav} onchange={handleNavigation} centered maxWidth='lg' safeArea />
-    </div>
+    {/if}
   </div>
-{/if}
+</div>

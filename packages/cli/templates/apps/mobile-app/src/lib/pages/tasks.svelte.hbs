@@ -1,0 +1,16 @@
+<script lang='ts'>
+  import * as m from '../paraglide/messages.js'
+</script>
+
+<section class='space-y-4 p-4 pb-6'>
+  <Card title={m.tasks_title()} shadow='sm'>
+    <div class='space-y-3'>
+      {#each [m.tasks_sync(), m.tasks_polish(), m.tasks_release()] as task (task)}
+        <div class='bg-base-200 rounded-xl flex items-center gap-3 p-3'>
+          <span class='icon-[tabler--circle-check] text-success text-xl'></span>
+          <span class='text-sm font-medium'>{task}</span>
+        </div>
+      {/each}
+    </div>
+  </Card>
+</section>

@@ -61,11 +61,33 @@ test('service rejects plaintext business requests', async ({ request }) => {
 })
 
 {{#if fullstack.e2eFrontend}}
+test('hash routing restores direct links, refresh and browser history', async ({ page }) => {
+  await page.goto('/#/roles?source=direct')
+  await login(page, 'admin', adminPassword)
+  await expect(page.getByTestId('roles-page')).toBeVisible()
+  await expect(page).toHaveURL(/#\/roles\?source=direct$/)
+  await page.reload()
+  await expect(page.getByTestId('roles-page')).toBeVisible()
+  await expect(page.locator('header')).toBeVisible()
+  await expect(page.locator('footer')).toBeVisible()
+  await page.getByTestId('nav-settings').click()
+  await expect(page).toHaveURL(/#\/settings$/)
+  await page.goBack()
+  await expect(page.getByTestId('roles-page')).toBeVisible()
+  await page.goForward()
+  await expect(page.getByTestId('profile-form')).toBeVisible()
+  await page.goto('/#/unknown-page')
+  await expect(page).toHaveURL(/#\/users$/)
+  await expect(page.getByTestId('users-page')).toBeVisible()
+})
+
 test('branded authentication, profile layout and blur validation work across screen sizes', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/')
   await expect(page.getByRole('heading', { name: configuredName, exact: true })).toBeVisible()
+  await expect(page.locator('header')).toBeVisible()
+  await expect(page.locator('footer')).toBeVisible()
   await capture(page, '{{projectName}}-login-desktop.png', testInfo.outputPath('login-desktop.png'))
   await page.getByRole('button', { name: /立即注册|Register now/, exact: true }).click()
   await expect(page.locator('.register-form')).toBeVisible()

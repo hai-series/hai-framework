@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { HashRouter } from '../src/lib/navigation/hash-router.svelte.js'
 import * as m from '../src/lib/paraglide/messages.js'
 import { ManagementStore } from '../src/lib/stores/management-store.svelte.js'
 
@@ -35,15 +36,24 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.stubGlobal('location', { hash: '#/users' })
+  vi.stubGlobal('history', { replaceState: vi.fn(), pushState: vi.fn() })
   api.iam.auth.logout.mockResolvedValue({ success: true })
   api.iam.auth.currentUser.mockResolvedValue({ success: true, data: member })
 })
+
+afterEach(() => vi.unstubAllGlobals())
+
+/** 会话测试使用真实路由状态，浏览器历史由 E2E 验证。 */
+function createStore() {
+  return new ManagementStore(new HashRouter(['../pages/users.svelte', '../pages/settings.svelte'], '/users'))
+}
 
 describe('management session and request ownership', () => {
   it('ignores a previous administrator failure after logout and another user login', async () => {
     const oldRequest = deferred<typeof forbidden>()
     api.admin.users.list.mockReturnValueOnce(oldRequest.promise)
-    const store = new ManagementStore()
+    const store = createStore()
     store.user = administrator
     const loading = store.loadUsers()
     await store.logout()
@@ -60,7 +70,7 @@ describe('management session and request ownership', () => {
   it('ignores an obsolete page failure after opening personal settings', async () => {
     const oldRequest = deferred<typeof forbidden>()
     api.admin.users.list.mockReturnValueOnce(oldRequest.promise)
-    const store = new ManagementStore()
+    const store = createStore()
     store.user = administrator
     const loading = store.loadUsers()
     await store.navigate('settings')
@@ -75,7 +85,7 @@ describe('management session and request ownership', () => {
 
   it('refreshes revoked roles once and clears administration data', async () => {
     api.admin.users.list.mockResolvedValueOnce(forbidden)
-    const store = new ManagementStore()
+    const store = createStore()
     store.user = administrator
     store.roles = [{ id: 'role-id', code: 'admin', name: 'Administrator', userCount: 1 }]
     await store.loadUsers()
@@ -90,7 +100,7 @@ describe('management session and request ownership', () => {
 
   it('reports a connection failure when loading the authenticated user', async () => {
     api.iam.auth.currentUser.mockRejectedValueOnce(new Error('Connection unavailable'))
-    const store = new ManagementStore()
+    const store = createStore()
     await store.authenticated()
     expect(store.error).toBe(m.network_error())
     expect(store.error).not.toBe(m.login_invalid())

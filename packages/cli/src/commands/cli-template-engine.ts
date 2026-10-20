@@ -1028,6 +1028,12 @@ export async function generateFromTemplates(
   await renderDynamicFiles(root, projectPath, context)
   await fse.copy(path.join(root, 'shared', 'environment-configuration.md'), path.join(projectPath, 'docs', 'environment-configuration.md'))
 
+  if (context.isSvelteOnlyApp || context.appType === 'fullstack') {
+    const navigationDir = context.appType === 'fullstack'
+      ? path.join(projectPath, 'packages', `${context.projectName}-shared`, 'src', 'lib', 'navigation')
+      : path.join(projectPath, 'src', 'lib', 'navigation')
+    await fse.copy(path.join(root, 'shared', 'hash-router.svelte.ts'), path.join(navigationDir, 'hash-router.svelte.ts'))
+  }
   // ─── ⑤ 拷贝 i18n 脚手架（project.inlang + messages） ───
   if (context.hasI18n) {
     const i18nDir = path.join(root, 'i18n')
