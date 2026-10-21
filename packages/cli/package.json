@@ -36,6 +36,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
+    "test:deploy-gates": "node tests/run-scaffold-gates.mjs --deploy",
     "test:e2e": "pnpm test:scaffold-gates",
     "test:scaffold-gates": "pnpm build && node tests/run-scaffold-gates.mjs",
     "test:watch": "vitest",
@@ -56,6 +57,7 @@
   },
   "devDependencies": {
     "@h-ai/cache": "workspace:*",
+    "@h-ai/crypto": "workspace:*",
     "@h-ai/deploy": "workspace:*",
     "@h-ai/reach": "workspace:*",
     "@h-ai/reldb": "workspace:*",

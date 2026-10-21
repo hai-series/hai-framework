@@ -500,7 +500,8 @@ async function addLocalHaiOverrides(projectPath: string): Promise<void> {
   // pnpm 12 不再读取 package.json.pnpm，且必须保留模板已有的安全版本覆盖。
   const workspacePath = path.join(projectPath, 'pnpm-workspace.yaml')
   const workspace = parse(await readFile(workspacePath, 'utf8')) as Record<string, unknown>
-  workspace.overrides = { ...(workspace.overrides as Record<string, unknown> | undefined), ...localPackageSpecifiers }
+  const overrides = JSON.parse(process.env.HAI_CLI_PACKAGE_OVERRIDES ?? '{}') as Record<string, string>
+  workspace.overrides = { ...(workspace.overrides as Record<string, unknown> | undefined), ...overrides }
   await writeFile(workspacePath, stringify(workspace))
 }
 

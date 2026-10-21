@@ -10,6 +10,9 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDirectory, '../../..')
 const archiveRoot = mkdtempSync(path.join(tmpdir(), 'hai-cli-local-packages-'))
 const vitestArgs = process.argv.slice(2)
+const deployGate = vitestArgs.includes('--deploy')
+if (deployGate)
+  vitestArgs.splice(vitestArgs.indexOf('--deploy'), 1)
 const vitestCli = path.join(path.dirname(fileURLToPath(import.meta.resolve('vitest/package.json'))), 'vitest.mjs')
 
 let result
@@ -20,15 +23,26 @@ try {
   // 顺序重建可稳定产出含 .d.ts 的完整 dist。原 './packages/*' 过滤在 shell:true 下被展开成 no-op。
   runPnpm(['-r', '--filter', '@h-ai/*', '--workspace-concurrency=1', 'build'], repoRoot)
   const packageSpecifiers = packPublicPackages(path.join(repoRoot, 'packages'), archiveRoot)
+  // 仅覆盖实际依赖边；全局覆盖会把可选 peer 变成安装依赖，污染生成项目。
+  const packageOverrides = {}
+  for (const directory of readdirSync(path.join(repoRoot, 'packages'), { withFileTypes: true }).filter(entry => entry.isDirectory())) {
+    const manifest = JSON.parse(readFileSync(path.join(repoRoot, 'packages', directory.name, 'package.json'), 'utf8'))
+    for (const name of Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies })) {
+      if (packageSpecifiers[name])
+        packageOverrides[`${manifest.name}>${name}`] = packageSpecifiers[name]
+    }
+  }
 
   result = spawnSync(
     process.execPath,
-    [vitestCli, 'run', 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000', ...vitestArgs],
+    [vitestCli, 'run', deployGate ? 'tests/deploy-docker-ssh.e2e.test.ts' : 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000', ...vitestArgs],
     {
       env: {
         ...process.env,
         HAI_CLI_PACKAGE_SPECIFIERS: JSON.stringify(packageSpecifiers),
+        HAI_CLI_PACKAGE_OVERRIDES: JSON.stringify(packageOverrides),
         HAI_CLI_RUN_SCAFFOLD_GATES: '1',
+        ...(deployGate ? { HAI_DEPLOY_E2E: '1' } : {}),
       },
       // 直接启动 Node，测试名中的空格/正则不能被 Windows shell 当成命令。
       shell: false,
