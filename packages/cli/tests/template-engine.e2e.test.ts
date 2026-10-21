@@ -176,6 +176,39 @@ it('fullstack 的原生应用名称应读取 core 配置并正确转义', async 
   expect(runInNewContext(capacitorName!)).toBe(name)
 })
 
+it.each([
+  ['web', 'app', 'desktop'],
+  ['app', 'desktop'],
+  ['desktop', 'web'],
+] as const)('fullstack E2E 应使用大写环境变量覆盖预览地址（%s）', async (...frontends) => {
+  const projectPath = path.join(tmpRoot, `preview-${frontends.join('-')}`)
+  await generateFromTemplates(projectPath, buildTemplateContext({
+    name: `preview-${frontends.join('-')}`,
+    appType: 'fullstack',
+    frontends,
+    features: [],
+    packageManager: 'pnpm',
+  }))
+  const spec = await readGenerated(projectPath, 'e2e/fullstack.spec.ts')
+  const expression = spec.match(/const additionalFrontends = ([\s\S]*?)\n\nfor \(const frontend/)?.[1]
+  expect(expression).toBeDefined()
+  const ports = { web: 4173, app: 5175, desktop: 5176 }
+  const env: Record<string, string> = {
+    HAI_E2E_WEB_URL: 'http://127.0.0.1:45173',
+    HAI_E2E_APP_URL: 'http://127.0.0.1:45175',
+    HAI_E2E_DESKTOP_URL: 'http://127.0.0.1:45176',
+  }
+  // 使用区分大小写的独立环境，在 Windows 上也能复现 Linux CI 的变量解析。
+  for (const overrides of [env, {}]) {
+    expect(runInNewContext(expression!, { process: { env: overrides } })).toEqual(
+      frontends.slice(1).map(target => ({
+        target,
+        url: overrides === env ? env[`HAI_E2E_${target.toUpperCase()}_URL`] : `http://127.0.0.1:${ports[target]}`,
+      })),
+    )
+  }
+})
+
 // =============================================================================
 // 1. Admin 应用类型
 // =============================================================================

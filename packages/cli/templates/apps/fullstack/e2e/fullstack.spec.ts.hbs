@@ -201,7 +201,7 @@ const additionalFrontends = [
 {{#each fullstack.frontendApps}}
   {
     target: '{{target}}',
-    url: process.env.HAI_E2E_{{target}}_URL || 'http://127.0.0.1:{{port}}',
+    url: process.env['HAI_E2E_{{target}}_URL'.toUpperCase()] || 'http://127.0.0.1:{{port}}',
   },
 {{/each}}
 ].filter(frontend => frontend.target !== '{{fullstack.e2eFrontend.target}}')
