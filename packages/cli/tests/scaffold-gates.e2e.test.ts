@@ -216,6 +216,18 @@ it('generated migration executes up and down with HaiResult', async () => {
         runQualityGates(projectPath, envOptions)
       }
 
+      if (scenario.title === 'fullstack' && process.env.HAI_CLI_NATIVE_BUILD === '1') {
+        if (process.platform !== 'win32')
+          throw new Error('This installer acceptance case requires a Windows runner')
+        // 根版本故意不同于桌面子包，验证 CLI 与 Tauri 产物确实跟随应用根版本。
+        const applicationManifest = path.join(projectPath, 'package.json')
+        const metadata = JSON.parse(await readFile(applicationManifest, 'utf8'))
+        await writeFile(applicationManifest, `${JSON.stringify({ ...metadata, version: '2.4.6' }, null, 2)}\n`)
+        runPnpm(projectPath, ['build', '--target', 'desktop', '--platform', 'windows', '--arch', 'x64'])
+        const installers = await readdir(path.join(projectPath, 'apps/sample-fullstack-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'))
+        expect(installers.some(file => file.includes('_2.4.6_') && file.endsWith('-setup.exe'))).toBe(true)
+      }
+
       for (const relativePath of scenario.expectedFiles) {
         expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
       }

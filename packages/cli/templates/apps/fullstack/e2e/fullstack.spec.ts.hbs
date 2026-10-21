@@ -96,6 +96,7 @@ test('branded authentication, profile layout and blur validation work across scr
   await capture(page, '{{projectName}}-register-mobile.png', testInfo.outputPath('register-mobile.png'))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.reload()
+  await expect(page.getByTestId('login-form')).toBeVisible()
   await capture(page, '{{projectName}}-login-mobile.png', testInfo.outputPath('login-mobile.png'))
   await page.setViewportSize({ width: 1440, height: 960 })
   await login(page, 'admin', adminPassword)
