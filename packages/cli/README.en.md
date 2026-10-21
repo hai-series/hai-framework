@@ -199,7 +199,7 @@ Run `hai deploy --env test` to check `.env.test` first, then choose defaults, cu
 
 Choose “deploy directly” in the wizard, or run `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`, to skip all middleware prompts, configuration writes and provisioning when your environment is complete. Missing deployment targets are guided through SSH/Vercel setup. Host, ports, key paths, remote directory and tokens are saved only in Git-ignored `.env.local` and reused on later runs. Edit `HAI_DEPLOY_PROVIDER` there to change the target; supply private key paths only.
 
-[Deployment and middleware reference](templates/skills/hai-deploy/middleware.md) · `pnpm --filter @h-ai/cli test:deploy-gates`
+Fullstack deploys only the selected API package; publish Web separately. docker-ssh builds locally, transfers an image tar, Compose, runtime environment and startup script through SCP, then loads and starts them remotely. `--skip-build` does not skip container builds. Node 20 / pnpm 9.5.0 are unsupported. See the [deploy guide](../deploy/README.en.md) for commands, offline materials and Web publishing, and the [middleware reference](templates/skills/hai-deploy/middleware.md) for connection fields. Deployment regression: `pnpm --filter @h-ai/cli test:deploy-gates`.
 
 ## Global options
 

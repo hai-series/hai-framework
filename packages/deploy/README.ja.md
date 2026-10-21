@@ -2,256 +2,201 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
-[フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
+[フレームワーク](../../README.ja.md) · [CLI](../cli/README.ja.md) · [環境とミドルウェア](../cli/templates/skills/hai-deploy/middleware.md)
 
-自動デプロイモジュールです。SvelteKit アプリをクラウド基盤の作成とともに Vercel へ展開する方式と、コンテナー化して任意の Linux ホストへ SSH で展開する方式（docker-ssh）に対応します。
+`@h-ai/cli` の `hai deploy` が利用するデプロイ SDK です。Node.js スクリプトから単独でも利用できます。
 
-## 対応デプロイ方式
+## 機能と対象範囲
 
-| Provider     | 展開先              | 説明                                                    |
-| ------------ | ------------------- | ------------------------------------------------------- |
-| `vercel`     | Vercel              | SvelteKit + adapter-vercel、クラウド Provisioner と連携 |
-| `docker-ssh` | 任意の Linux ホスト | SvelteKit + adapter-node / Node サービスを SSH で展開   |
+| デプロイ先   | アプリ                                       | 処理                                                                                   |
+| ------------ | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `docker-ssh` | Node サービス、adapter-node を使う SvelteKit | ローカルでイメージをビルドし、SSH で転送、Linux の Compose で起動、HTTP ヘルスチェック |
+| `vercel`     | adapter-vercel を使う SvelteKit              | ビルド、転送、環境変数設定、結果の待機。インターネット接続が必要                       |
 
-## 対応クラウドサービス（Provisioner）
+- 対象の `pnpm-lock.yaml` importer から実行依存と workspace link をたどり、開発依存・peer を除外します。アプリ設定でバックエンドを判定し、任意の AI peer だけで AI/CUDA を有効化しません。
+- 最初に環境を選び `.env.<mode>` を確認します。各ミドルウェアは既定設定・カスタム接続・変更しないを選択でき、設定済みなら全処理を省略できます。
+- Compose は PostgreSQL、MySQL、Redis、RustFS/MinIO、Qdrant、pgvector、Chroma、OpenLDAP、Mailpit に対応します。SQLite、memory、local、LanceDB はそれぞれのローカル保存方式を使います。Mailpit はテストメール捕捉専用です。
+- クラウド作成は Neon、Upstash、Cloudflare R2、Resend、Alibaba Cloud SMS に対応します。R2 は既存の S3 鍵、Resend は検証済み送信ドメイン、SMS は承認済み署名・テンプレートが必要です。他はカスタム接続を使います。
 
-| サービス種別 | Provisioner   | 説明                           |
-| ------------ | ------------- | ------------------------------ |
-| データベース | Neon          | PostgreSQL Serverless          |
-| キャッシュ   | Upstash       | Redis TCP + TLS                |
-| ストレージ   | Cloudflare R2 | S3 互換オブジェクトストレージ  |
-| メール       | Resend        | SMTP（検証済みドメインが必要） |
-| SMS          | Alibaba Cloud | Alibaba Cloud SMS              |
+**fullstack の API と Web は別々にデプロイします。** `hai deploy packages/my-app-serv` は API のみが対象です。ルート Dockerfile の `runtime` / `web` target で API / 静的 Web イメージをビルドできます。Web は別途転送・起動し、`PUBLIC_API_BASE` と API の CORS を設定します。同時公開コマンド、ドメイン・TLS・リバースプロキシの自動設定はありません。
 
-## クイックスタート
+## コマンドラインでの利用
 
-```typescript
-import { deploy } from '@h-ai/deploy'
+### 1. インストールと準備
 
-// 可选：从 ~/.hai/credentials.yml 注入 HAI_DEPLOY_* 环境变量
-deploy.credentials.load()
+Node は `^22.22.2 || ^24.15.0 || >=26.0.0` が必要です。生成プロジェクトは `pnpm@12.11.2` を固定します。Node 20 / pnpm 9.5.0 は非対応です。Windows PowerShell では `pnpm.cmd` を使います。
 
-// 初始化
-await deploy.init({
-  provider: { type: 'vercel', token: 'vel_xxx' },
-  services: {
-    db: { provisioner: 'neon', apiKey: 'neon_xxx' },
-    cache: { provisioner: 'upstash', email: 'a@b.com', apiKey: 'up_xxx' },
-  },
-})
+生成 workspace のルートでアプリのフレームワークに合う CLI/SDK をインストールし、lockfile を保持します。パッケージ配布元または完全なオフライン依存が必要です。
 
-// 扫描应用依赖
-const scan = await deploy.scan('./apps/my-app', { environment: 'test' })
-
-// 开通基础设施
-const provisions = await deploy.provisionAll('my-app')
-
-// 完整部署
-const result = await deploy.deployApp('./apps/my-app', { environment: 'test' })
-
-await deploy.close()
+```powershell
+pnpm.cmd add -Dw @h-ai/cli @h-ai/deploy
+pnpm.cmd exec hai --help
 ```
 
-## 環境とミドルウェア
+作成時の `--features deploy` はローカル SDK を追加しますが、グローバル `hai` のインストールは行いません。CLI をグローバル導入済みなら `hai deploy` を直接使えます。テンプレートの `pnpm run deploy` はパッケージ作成用で、このコマンドとは異なります。
 
-`hai deploy --env test` を実行するか、対話端末で最初に環境を入力します。対応する `.env.test` がなければ作成を案内して停止します。環境変数とモジュール依存を解析し、現在のバックエンド・用途・検出元を表示して、既定設定・カスタム接続・変更しないを項目ごとに選択します。変更しないは対象環境に完全な設定がある場合だけ表示され、書き込み・認証・作成を省略します。`--yes` は完全な既存設定を維持し、それ以外は現在のバックエンドの既定値を使います。`--env-dir` で環境ファイルの場所を指定できます。
+docker-ssh の前提条件：
 
-設定済みの環境ではウィザードの「直接デプロイ」、または `hai deploy packages/my-app-serv --env prod --yes --skip-middleware` ですべてのミドルウェア設定・書き込み・作成を省略し、既存サービスを維持できます。SSH/Vercel の不足する設定は対話で入力し、ホスト、ポート、鍵のパス、リモートディレクトリー、Token を `.env.local` の `HAI_DEPLOY_PROVIDER` にのみ保存して再利用します。SDK では `saveDeploymentEnvironment(snapshot, values, { private: true })` で本機設定を保存できます。秘密鍵はパスのみ指定します。
+- サーバーのアーキテクチャー向け Linux イメージをビルドできるローカル Docker/Podman エンジン。Windows は仮想化/WSL2/VM の準備・起動が必要で、クライアントだけでは不足します。`auto` は Podman 優先、Docker の明示指定も可能です。
+- ローカル `ssh` / `scp`、非対話の鍵/agent 認証、サーバーのホスト指紋。
+- Linux の Docker/Podman と対応する `compose` コマンド。SSH ユーザーのコンテナ実行・ディレクトリー書き込み権限。Windows から SSH とアプリ公開ポートへ接続できること。
+- 対象パッケージの `config/_deploy.yml` と、環境ディレクトリーの `.env.prod` / `.env.test`。環境ファイルがなければ停止します。
 
-既定設定は Compose のサービス・ボリュームまたは対応するクラウド Provisioner を作成します。未対応のクラウド接続はカスタム設定を利用します。SQLite/memory/local/disabled の動作は維持されます。公開値は対象環境ファイル、認証情報を含む JSON/URL は `.env.local` に保存し、表示はマスクします。[バックエンドと接続項目](../cli/templates/skills/hai-deploy/middleware.md)を参照してください。
+### 2. 接続先と環境の設定
 
-## 設定
-
-Git に保存できる設定は `config/_deploy.yml`、秘密情報は `~/.hai/credentials.yml` で管理します：
-
-```yaml
-# config/_deploy.yml
-provider:
-  type: vercel
-  token: ${HAI_DEPLOY_PROVIDER_TOKEN}
-
-services:
-  db:
-    provisioner: neon
-    apiKey: ${HAI_DEPLOY_SERVICES_DB_APIKEY}
-  cache:
-    provisioner: upstash
-    email: ${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
-    apiKey: ${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
-```
-
-ここでの変数は `deploy.credentials` が管理する明示的な特殊マッピングです。YAML パスから生成する
-`HAI_DEPLOY_PROVIDER_TOKEN` なども指定した場合、規約に沿う変数が優先されます。
-
-スクリプト・CLI で認証情報ファイルを明示的に管理するには `deploy.credentials.*` を使います：
-
-```typescript
-deploy.credentials.load()
-deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', 'vel_xxx')
-deploy.credentials.saveAll({
-  HAI_DEPLOY_SERVICES_DB_APIKEY: 'neon_xxx',
-})
-```
-
-> `deploy.scan()` と `deploy.credentials.*()` はローカルファイルシステムの機能で、`deploy.init()` に依存しません。
-
-`pnpm-lock.yaml` の対象 workspace importer から実行依存と workspace link のみを辿り、開発依存、peer、他アプリの未参照依存を除外します。古い設定ファイルだけではモジュールを有効化しません。lockfile、importer、ノードがなければ `pnpm install` で修復します。デプロイ先ディレクトリーを指定します。package.json、pnpm-workspace.yaml、プロジェクト構成の推測を走査に使いません。`serv` の任意 AI peer によって AI/CUDA を有効化しません。
-
-## docker-ssh デプロイ
-
-アプリをコンテナー化して SSH で任意の Linux ホストへ展開します。クラウドアカウントは不要です。
-
-### 前提条件
-
-- **ローカル**：docker または podman をインストール（`auto` は podman を優先）。
-- **リモート**：SSH 接続可能、docker/podman と compose が導入済み、ログインユーザーがコンテナーを実行可能。
-- **アプリ**：SvelteKit に `@sveltejs/adapter-node` を使用（付属 `Dockerfile` は対応済み）。不足時は `ADAPTER_MISSING`。
-
-### 使用手順
-
-1. SSH 秘密鍵のパスをリポジトリー外の認証情報ファイルに保存します。`~/.hai/credentials.yml` を編集するか API を使います：
-
-```typescript
-deploy.credentials.save('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', '~/.ssh/hai_deploy')
-```
-
-2. `config/_deploy.yml` に対象ホストを定義します：
+Docker 用の最小 `config/_deploy.yml` です。実際の接続先は `.env.local` の `HAI_DEPLOY_PROVIDER` オブジェクトで上書きします。
 
 ```yaml
 provider:
   type: docker-ssh
-  ssh:
-    host: 10.0.0.20 # 主机 IP 或 ~/.ssh/config 别名
-    port: 22
-    username: deploy
-    identityFile: ${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE} # 私钥文件路径，省略则用 ssh-agent
-  remote:
-    baseDir: /opt/hai/apps # 远程部署根目录
-    runtime: auto # 远程运行时；auto 优先 podman，其次 docker
-  expose:
-    type: port
-    containerPort: 3000 # 容器内端口（adapter-node 默认 3000）
-    hostPort: 18080 # 宿主机端口 → 访问地址 http://10.0.0.20:18080
-
 container:
-  runtime: auto # 本地构建运行时（可选）
-
-services: {} # 启用的服务会自动生成 compose sidecar，见下
+  runtime: docker
+  s3Engine: rustfs
+services: {}
 ```
 
-3. CLI または API で展開・検証します（動作は同じ）：
+ホスト、ユーザー、ポート、鍵のパスを実際の値に置き換えます。`.env.local` は Git に登録しません。
 
-```bash
-hai deploy --env test # 读取 config/_deploy.yml，输出访问地址
+```dotenv
+HAI_DEPLOY_PROVIDER='{"type":"docker-ssh","ssh":{"host":"10.0.0.20","port":22,"username":"deploy","identityFile":"C:/Users/me/.ssh/hai_deploy"},"remote":{"baseDir":"/opt/hai/apps","runtime":"docker"},"expose":{"type":"port","containerPort":3000,"hostPort":18080}}'
 ```
+
+未設定の接続先はウィザードでも入力できます。`.env.local` に保存して次回再利用し、秘密鍵はパスだけを保存します。接続先の変更は `HAI_DEPLOY_PROVIDER` を編集します。
+
+上書き順は `.env` → `.env.<mode>` → `.env.local` → プロセス環境変数です。`HAI_DB` など親 JSON が子の変数より優先されます。`.env.example` に全項目・説明・列挙値を記載し、`.env` と `.env.dev/test/prod` は Git 登録、実際の認証情報は `.env.local` に保存します。fullstack 初回起動には IAM ポリシーを満たす非公開の `HAI_ADMIN_DEFAULT_PASSWORD` も必要です。
+
+fullstack 本番は `.env.prod` に `HAI_SERV_CORS_ORIGIN=https://app.hai.internal` など明示的な Web Origin が必要です。既定の `*` では本番起動に失敗します。本番 refresh Cookie は Secure のため、Web/API に信頼済み HTTPS 入口を準備します。HTTP ポートの公開だけでログイン・セッション更新まで検証済みとは判定できません。
+
+### 3. デプロイ
+
+fullstack ルートからサービス名を置き換えて実行します。
+
+```powershell
+pnpm.cmd exec hai deploy packages/my-app-serv --env prod --env-dir .
+```
+
+ウィザードは現在のバックエンドと用途を示します。既定設定は Compose サービス/ボリュームを作成し、カスタム接続では当該コンテナを作成しません。「変更しない」は対象環境ファイルに完全な設定が明示されている場合のみ表示します。公開値は対象環境、認証情報は `.env.local` に保存し、表示をマスクします。
+
+DB・キャッシュ・ストレージ接続がすべて設定済みの場合：
+
+```powershell
+pnpm.cmd exec hai deploy packages/my-app-serv --env prod --env-dir . --yes --skip-middleware
+```
+
+`--skip-middleware`（別名 `--skip-provision`）はミドルウェアの入力・設定変更・リソース作成を省略します。アプリのビルド・デプロイは行い、停止中の外部サービスを起動しません。`--yes` 単独では完全な設定を維持し、それ以外は現在のバックエンド既定値を採用します。
+
+`--project-name <name>` で名前を指定し、環境指定時は環境サフィックスが付きます。**`--skip-build` は現在 Vercel のアプリビルドのみを省略します。docker-ssh は必ずイメージをビルドし、既存イメージを直接指定するオプションはありません。** 失敗時は非ゼロ終了コードを返します。
+
+## docker-ssh の処理とファイル
+
+1. 対象パッケージの Dockerfile を使います。なければ workspace ルートを context にする代替 Dockerfile を生成します。fullstack サービスの既定は代替で、ルートの Web target は使いません。
+2. ローカルでビルドし、`docker/podman save` で tar を作成します。
+3. SSH で遠隔エンジンと Compose を確認し、SCP で tar を転送、遠隔で `load` します。
+4. `compose.yml`、`.env.runtime`、`start-<mode>.sh` をローカル生成して個別に `<baseDir>/<projectName>-<mode>/` へ転送します。イメージとは別送で、Compose 全体の圧縮パッケージや Linux 上でのソースビルドではありません。
+5. 遠隔スクリプトが `HAI_DEPLOY_ENVIRONMENT` / `HAI_CORE_ENV` を設定し、`compose --env-file .env.runtime ... up -d` を実行します。SDK はローカルから Node の `/health` または SvelteKit の `/` を確認して成功を返します。
+
+ローカル成果物は対象パッケージの Git 対象外 `.hai/deploy/<mode>/` に保存します。遠隔 `.env.runtime` は権限 `600` です。再デプロイ用にローカル成果物を保持してください。「変更しない」は前回のローカル Compose のサービス/ボリュームを維持するもので、任意の遠隔 Compose を読み込みません。非公開環境ファイル・デプロイアーカイブはイメージに含めません。
+
+## 完全オフラインのデプロイ
+
+インターネットに接続しなくても、Windows と Linux 間の内部 SSH/HTTP 通信は必要です。Vercel・クラウド作成は利用できません。
+
+### 事前に持ち込む材料
+
+| 場所         | 必要な材料・状態                                                                                                                                                                  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Windows      | 対応 Node（条件を満たす Node 24 など）、pnpm 12.11.2、導入済み CLI/SDK と推移的依存、OpenSSH、初期化・起動済み Linux コンテナエンジン                                             |
+| プロジェクト | 完全なソース・固定 lockfile・環境設定・認証情報。オフラインで `pnpm.cmd exec hai --help` が成功すること。現場での `npx` / `pnpm dlx` ダウンロードを避ける                         |
+| Linux        | Docker CLI/Engine と Compose プラグイン（`docker compose version` 成功）、SSH 公開鍵登録、権限、公開ポート、書き込み先、ディスク容量。イメージ実行だけならホスト Node/pnpm は不要 |
+| イメージ     | Linux の CPU 構成と一致する API・Web・ミドルウェア。Compose と完全一致する名前/tag。`docker load -i <archive.tar>` で読み込む                                                     |
+| アプリ設定   | PostgreSQL DB/アカウント、Redis 接続/パスワード、RustFS 鍵/バケット、初回管理者パスワード。既存サービスは起動・到達可能にする。`localhost` はアプリコンテナ自身                   |
+
+既定は `postgres:16-alpine`、`redis:7-alpine`、`ghcr.io/rustfs/rustfs:1.0.1` です。別 tag では自動一致しません。正しいイメージの持ち込み、互換性確認済みイメージの適切な tag 設定、またはカスタム接続が必要です。SDK はミドルウェアイメージを転送しません。他の固定イメージは [Compose 実装](src/container/deploy-container-compose.ts) を参照してください。
+
+**既定のソースビルドは準備なしでオフライン動作しません。** Dockerfile は pnpm・パッケージ・SQLite バイナリーを取得し、fullstack ルートは `pnpm fetch` と外部 Dockerfile frontend も使用します。Windows の `node_modules` / pnpm store は Linux ビルド依存の代用になりません。現場でソースビルドする場合は Node ベースイメージ、frontend、Corepack/pnpm、Linux 依存・ネイティブキャッシュをローカルエンジン/ビルド環境に持ち込み、Dockerfile を調整し、外部接続を切って全ビルドを確認します。`pnpm install --offline --frozen-lockfile` はパッケージストア読み込みのみを対象とし、インストールスクリプトの追加取得は対象外です。
+
+SQLite バイナリーは better-sqlite3 版、Node ABI、CPU、libc と一致する必要があります。PostgreSQL 運用でも依存導入時に必要な場合があります。Linux ビルド環境の prebuild-install キャッシュを用意するか、`container.sqlitePrebuildMirror` を内部サーバーへ向けます。どちらもなければバイナリーまたは完成イメージを事前準備します。既定の fullstack に CUDA は不要です。
+
+### 完成イメージを SDK 経由で利用する
+
+依存が使える準備環境で、完成イメージを事前作成すると現場の手順を減らせます。例は `my-app`、Web あり、サーバーと同じビルドアーキテクチャーです。
+
+```powershell
+docker build --target runtime -t my-app-api:offline .
+docker build --target web -t my-app-web:offline .
+docker save -o my-app-images.tar my-app-api:offline my-app-web:offline
+```
+
+オフライン Windows の Linux エンジンに `docker load -i my-app-images.tar` で導入します。`packages/my-app-serv/Dockerfile` は次の一行にします。
+
+```dockerfile
+FROM my-app-api:offline
+```
+
+サービスパッケージに内容 `*` の `.dockerignore` を追加します。SDK の必須ビルドは完成 API を再利用し、パッケージを取得しません。ソース変更後は完成イメージを再作成します。接続先を設定して上記デプロイを実行してください。ミドルウェアコンテナを作成するなら `.env.prod` で `HAI_DB_TYPE=postgresql`、`HAI_CACHE_TYPE=redis`、`HAI_STORAGE_TYPE=s3` を選び、ウィザードで既定設定を使います。既存サービスはカスタム接続を設定し、完了後は `--skip-middleware` も使えます。API イメージは SDK が転送します。外部接続を切ったリハーサルで、ビルダーが通信不要であることを確認します。
+
+Web イメージは別途転送します。以下は内網 TLS 入口 `https://app.hai.internal` / `https://api.hai.internal` が準備済みで、それぞれ Web 18081 / API 18080 を代理する前提です。プロキシ設定/イメージ・証明書を持ち込み、内部 DNS/hosts とクライアントの信頼を設定してから SSH で実行します。
+
+```sh
+docker load -i /path/to/my-app-images.tar
+docker run -d --name my-app-web-prod --restart unless-stopped -p 18081:8080 -e PUBLIC_API_BASE=https://api.hai.internal my-app-web:offline
+```
+
+API URL はブラウザーから到達可能にし、API に `HAI_SERV_CORS_ORIGIN=https://app.hai.internal` を設定します。API `/health`、Web ログイン/業務、hash ページ再読み込み、セッション更新、再起動・永続化を確認します。これは材料と適応方法の説明で、オンライン試験は実際のオフライン検証の代わりにはなりません。
+
+公式資料：[Docker save](https://docs.docker.com/reference/cli/docker/image/save/) / [load](https://docs.docker.com/reference/cli/docker/image/load/)、[pnpm install](https://pnpm.io/cli/install)、[Compose プラグイン](https://docs.docker.com/compose/install/linux/)。
+
+## SDK とエラー処理
+
+スクリプト利用に CLI は不要です。解析済み設定を渡し、同じ環境解決には公開 `loadDeploymentEnvironment` / `loadDeploymentConfig` を使います。
 
 ```typescript
+import type { DeployConfigInput } from '@h-ai/deploy'
 import { deploy } from '@h-ai/deploy'
 
-deploy.credentials.load() // 注入 HAI_DEPLOY_* 环境变量
-await deploy.init(dockerSshConfig)
-const result = await deploy.deployApp('./apps/my-app', { environment: 'test' })
-if (result.success) {
-  result.data.url // http://<host>:<hostPort>
-  result.data.healthCheck // 'passed'（HTTP 探测成功）
-}
-await deploy.close()
-```
-
-### 処理の流れ
-
-docker-ssh の `deployApp()` は次の順で処理します：
-
-1. **走査**：対象 importer の `pnpm-lock.yaml` と `config/*.yml` から `@sveltejs/adapter-node`、必要なサービス、バックエンド種別を判定。
-2. **ローカルビルド**：プロジェクトの `Dockerfile` で `hai-<app>:<deploymentId>` を作成（podman は `--format docker --jobs=1` を追加）。
-3. **出力**：`docker/podman save` で tar に保存。
-4. **事前確認**：SSH 接続とリモートの `docker/podman version` / `compose version` を確認。
-5. **転送・読み込み**：`scp` で tar を転送し、リモートで `load` 後、誤った registry 取得を防ぐため `localhost/` タグを付与。
-6. **実行定義**：走査結果から `compose.yml`（app + sidecar）と `.env.runtime`（`HAI_*` 上書き・認証情報）を生成し、`<baseDir>/<app>/` に転送。`.env.runtime` は `600` に設定。
-7. **起動**：`start-<mode>.sh` が `HAI_DEPLOY_ENVIRONMENT`/`HAI_CORE_ENV` を明示して Compose を実行します。環境別のプロジェクト名とボリュームを使い、変更しないサービスは維持します。
-8. **ヘルスチェック**：SvelteKit は `/`、Node サービスは `/health` の成功応答を確認します。
-
-> イメージ、`compose.yml`、`.env.runtime` はアプリの `.hai/deploy/<mode>/` に保存し、テンプレートの `.gitignore` で除外済みです。
-
-### 機能に応じた compose sidecar
-
-`deploy.scan()` は必要なサービスと**実際のバックエンド種別**（`_db.yml` / `_vecdb.yml` などの `type`）を読み、対応する sidecar と `HAI_*` 上書き変数を生成します：
-
-| 検出サービス | バックエンド（`type`） | 追加 sidecar                             | 注入する変数                  |
-| ------------ | ---------------------- | ---------------------------------------- | ----------------------------- |
-| `db`         | `postgresql`           | `postgres:16-alpine`                     | `HAI_DB`                      |
-| `db`         | `mysql`                | `mysql:8.4`                              | `HAI_DB`                      |
-| `db`         | `sqlite`               | なし（`/app/data` ボリュームをマウント） | —                             |
-| `cache`      | `redis`                | `redis:7-alpine`                         | `HAI_CACHE`                   |
-| `storage`    | `s3`                   | RustFS / MinIO + バケット初期化          | `HAI_STORAGE`                 |
-| `vecdb`      | `qdrant`               | `qdrant/qdrant`                          | `HAI_VECDB`                   |
-| `vecdb`      | `pgvector`             | `pgvector/pgvector`                      | `HAI_VECDB`                   |
-| `vecdb`      | `chroma`               | `chromadb/chroma`                        | `HAI_VECDB`                   |
-| `ldap`       | `ldap`                 | OpenLDAP                                 | `HAI_IAM_LDAP`                |
-| `email`      | `smtp`                 | Mailpit (test capture)                   | `HAI_REACH_PROVIDERS_<index>` |
-| `vecdb`      | `lancedb`              | なし（`/app/data` ボリュームをマウント） | —                             |
-
-- memory、無効な LDAP、console は外部サービスを作成しません。local はボリュームを使います。既定 SMTP はテスト受信用です。本番配信にはカスタム SMTP/Resend を利用してください。
-- 同じサービスにクラウド Provisioner がある場合（Neon の `HAI_DB` など）、クラウドを優先し sidecar を重複作成しません。
-- パスワードは Git 対象外のローカル秘密設定とリモート `.env.runtime`（`600`）に保存し、公開環境ファイルや `compose.yml` に含めません。
-
-> セキュリティ：`identityFile` は秘密鍵の**パス**で、内容ではありません。`strictHostKeyChecking: true`（既定）は
-> accept-new を使い、初回は信頼し、鍵変更は拒否します。未知のホストには先に手動で `ssh` 接続できます。
-
-## エラー処理
-
-```typescript
-import { HaiDeployError } from '@h-ai/deploy'
-
-const result = await deploy.deployApp('./apps/my-app', { environment: 'test' })
-if (!result.success) {
-  switch (result.error.code) {
-    case HaiDeployError.AUTH_FAILED.code:
-      // Vercel Token 无效
-      break
-    case HaiDeployError.BUILD_FAILED.code:
-      // 构建失败
-      break
+/**
+ * 使用现有中间件发布生产 API，并释放部署模块。
+ * @param config - 从部署环境解析得到的配置
+ * @returns 初始化或部署的 HaiResult，由调用者检查 success
+ * @example `const result = await publish(config)`
+ */
+export async function publish(config: DeployConfigInput) {
+  const initialized = await deploy.init(config)
+  if (!initialized.success)
+    return initialized
+  try {
+    return await deploy.deployApp('./packages/my-app-serv', {
+      environment: 'prod',
+      envDir: '.',
+      skipProvision: true,
+    })
+  }
+  finally {
+    await deploy.close()
   }
 }
 ```
 
-主なエラーコード：
+`result.success` を確認してから `error.code/message` または `data.url/healthCheck` を読みます。`deploy.scan()` / `deploy.credentials.*()` は初期化不要です。`deployApp()` がリソース作成を含むため、事前の `provisionAll()` は不要です。手動作成も結果を確認します。SDK `skipProvision` は CLI のミドルウェア省略と同じ意味です。
 
-| エラーコード                      | code             | 説明                 |
-| --------------------------------- | ---------------- | -------------------- |
-| `HaiDeployError.DEPLOY_FAILED`    | `hai:deploy:001` | デプロイに失敗       |
-| `HaiDeployError.BUILD_FAILED`     | `hai:deploy:003` | ビルドに失敗         |
-| `HaiDeployError.AUTH_FAILED`      | `hai:deploy:006` | 認証に失敗           |
-| `HaiDeployError.PROVISION_FAILED` | `hai:deploy:007` | リソースの作成に失敗 |
-| `HaiDeployError.NOT_INITIALIZED`  | `hai:deploy:010` | 未初期化             |
-| `HaiDeployError.ENV_VAR_FAILED`   | `hai:deploy:011` | 環境変数の処理に失敗 |
+クラウドは `HAI_DB`、`HAI_CACHE`、`HAI_STORAGE`、`HAI_REACH_PROVIDERS` 全体を返し、アプリは対応 YAML の読み込みとモジュール初期化が必要です。`getDeployRecovery(result.error)` は段階・リソース ID を返します。`unknown` は管理画面で確認してから再試行します。同名再試行は既存リソースを再利用し、自動削除しません。型・設定・エラーコードは [公開エントリー](src/index.ts) を参照してください。
 
-docker-ssh 専用エラーコード：
+## テストと開発
 
-| エラーコード                                 | code             | 説明                               |
-| -------------------------------------------- | ---------------- | ---------------------------------- |
-| `HaiDeployError.CONTAINER_RUNTIME_NOT_FOUND` | `hai:deploy:015` | コンテナーランタイムが見つからない |
-| `HaiDeployError.CONTAINER_BUILD_FAILED`      | `hai:deploy:016` | イメージのビルドに失敗             |
-| `HaiDeployError.REMOTE_CONNECT_FAILED`       | `hai:deploy:017` | リモート接続に失敗                 |
-| `HaiDeployError.REMOTE_COMMAND_FAILED`       | `hai:deploy:018` | リモートコマンドに失敗             |
-| `HaiDeployError.IMAGE_TRANSFER_FAILED`       | `hai:deploy:019` | イメージ転送に失敗                 |
-| `HaiDeployError.HEALTH_CHECK_FAILED`         | `hai:deploy:020` | ヘルスチェックに失敗               |
+依存導入後、フレームワークルートで実行します（Windows は `pnpm.cmd`）。
 
-## テスト
-
-`pnpm --filter @h-ai/cli test:deploy-gates` validates current package archives with a generated fullstack project, Podman/SSH, the selected environment, login and repeat deployment. Logs and acceptance artifacts stay in ignored temporary directories.
-
-```bash
-pnpm --filter @h-ai/deploy test
+```powershell
+pnpm.cmd --filter @h-ai/deploy typecheck
+pnpm.cmd --filter @h-ai/deploy lint
+pnpm.cmd --filter @h-ai/deploy build
+pnpm.cmd --filter @h-ai/deploy test
+pnpm.cmd check:skills
 ```
+
+`src/deploy-scanner.ts` が lockfile 走査、`deploy-middleware.ts` が接続項目、`container/` がエンジン・SSH・Compose、`providers/` がデプロイ先、`provisioners/` がクラウド作成を担当します。CLI ウィザードは `../cli/src/commands/cli-deploy*.ts` です。バックエンド/設定変更時は利用側、環境例、テスト、[デプロイ skill](../cli/templates/skills/hai-deploy/SKILL.md) を同期します。
+
+処理変更後は CLI の typecheck/lint/build/test と `pnpm.cmd --filter @h-ai/cli test:deploy-gates` を実行します。現在のパッケージから fullstack を生成し、Podman/SSH でヘルス・環境・ログイン・再デプロイを確認します。ローカルエンジンと OpenSSH が必要で、初回はイメージ・OS/Node 依存を取得するためオフライン検証ではありません。テンプレート変更時は `pnpm.cmd --filter @h-ai/cli test:scaffold-gates` も実行します。単体テストでクラウド作成済みとは判定せず、有料操作は別途検証します。ログ・画像・報告は Git 対象外の `tmp/` / `test-results/` に保存します。
 
 ## License
 
 Apache-2.0
-
-クラウド設定の利用：Neon は HAI_DB（PostgreSQL JSON）、Upstash は HAI_CACHE（Redis rediss URL JSON）、R2 は HAI_STORAGE（フラットな S3 JSON）を出力します。メール・SMS は HAI_REACH_PROVIDERS を出力し、deployApp が両チャネルと YAML のメッセージテンプレートを統合して元の providers 配列を置換します。Core はオブジェクト・配列全体の上書きをサポートし、親ノードを末端より優先して Schema 検証を維持します。ビルド子プロセスと対象環境は同じ値を使います。R2 は既存の S3 accessKeyId/secretAccessKey、Resend は検証済みドメインの from、Alibaba Cloud は承認済み signName・テンプレートが必要です。アプリは対応する `_db.yml` / `_cache.yml` / `_storage.yml` / `_reach.yml` を起動時に読み込み、ネットワーククライアントには Node が必要です。
-
-設定の参照：[Upstash TLS](https://upstash.com/docs/redis/features/security)、[Resend SMTP](https://resend.com/docs/send-with-smtp)。決定的な検証では実際のアプリを生成して Core・各モジュールの Schema を確認します。クラウドリソースの作成やメール・SMS 送信は行わず、クラウドの読み書き検証済みとは言えません。
-
-デプロイ失敗からの復旧：`ProvisionResult.resourceStatus` は created/reused を示します。`getDeployRecovery(result.error)` で projectName、stage、platformProjectId、リソース一覧を取得し、unknown は結果不明なので先にサービス側の管理画面で確認します。失敗リソースの ID が返った場合は保持します。復旧情報に envVars・元の例外・接続認証情報は含まれず、CLI が一覧と提案を表示します。同名の再試行は既存リソースを再利用し、自動削除しません。新規作成分も未使用を人が確認した後にのみ削除します。

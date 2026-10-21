@@ -26,6 +26,8 @@ description: "使用 @h-ai/deploy 部署应用：Vercel 云平台或 docker-ssh 
 > ⚠️ **Node.js CLI / 服务端模块。** 通过 `hai deploy` CLI 命令或在 Node.js 脚本中使用。
 > docker-ssh 方式要求本地安装 docker 或 podman（`auto` 优先 podman）。
 
+当前 Node 要求 `^22.22.2 || ^24.15.0 || >=26.0.0`，生成工程固定 pnpm 12.11.2；Node 20 / pnpm 9.5.0 不受支持。Windows 必须有已启动、能构建目标 Linux 架构的容器引擎，不能把仅安装客户端或远程有 Docker 当作本地可构建。
+
 ## 适用场景
 
 - 一键部署 SvelteKit 应用到 Vercel
@@ -195,8 +197,6 @@ if (result.success) {
 
 ## 配置消费与失败恢复
 
-失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
-
 云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；构建子进程与目标运行环境使用相同开通结果。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应 _db/_cache/_storage/_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
 
 部署失败恢复：`ProvisionResult.resourceStatus` 标记 created/reused；`getDeployRecovery(result.error)` 读取 projectName、stage、platformProjectId 和资源清单，unknown 表示请求结果不确定，必须先在服务商控制台核对。失败资源已返回 ID 时保留该 ID。恢复结果不含 envVars、原始异常或连接凭证，CLI 会展示清单和建议。同名重试复用现有资源；不自动删除复用资源，新建资源仅在人工确认未被使用后清理。
@@ -240,8 +240,8 @@ hai deploy ./apps/admin-console --env test
 # 跳过基础设施开通
 hai deploy --env prod --skip-provision
 
-# 跳过构建
-hai deploy --skip-build
+# 仅 Vercel：跳过应用构建；docker-ssh 仍会构建镜像
+hai deploy --env prod --skip-build
 
 # 自定义项目名
 hai deploy --project-name my-custom-name
@@ -249,6 +249,10 @@ hai deploy --project-name my-custom-name
 
 > 部署方式由 `config/_deploy.yml` 的 `provider.type` 决定（vercel / docker-ssh），
 > CLI 命令相同。docker-ssh 成功后输出的访问地址为 `http://<host>:<hostPort>`。
+
+fullstack 需明确部署服务包；`hai deploy packages/my-app-serv --env prod` 不会发布 Web。根 Dockerfile 的 `runtime` / `web` target 分别构建 API / Web；Web 单独转移、运行，设置浏览器可访问的 `PUBLIC_API_BASE` 和 API 的 CORS。模板 `pnpm run deploy` 是打包脚本，不等于 CLI 发布。
+
+离线部署先按 [离线准备与验收](middleware.md#离线准备与验收) 检查材料。docker-ssh 在本地构建并导出镜像 tar，再分别上传镜像、Compose、运行环境和启动脚本，不在远程构建源码。当前无直接指定预构建镜像的参数；不得声称 `--skip-build` 能离线发布容器，也不得将联网部署测试作为断网证明。
 
 ## 常见模式
 

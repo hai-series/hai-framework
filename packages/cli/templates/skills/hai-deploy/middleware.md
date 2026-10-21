@@ -69,6 +69,18 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 | HTTP API | url、method（POST / PUT）、headers（JSON）、timeout |
 | 阿里云 SMS | accessKeyId、accessKeySecret、signName、endpoint |
 
+## 离线准备与验收
+
+先核对 Node、pnpm 与目标 Linux 架构。当前要求 Node `^22.22.2 || ^24.15.0 || >=26.0.0`，生成工程固定 pnpm 12.11.2。Windows 本地需已初始化的 Linux 容器引擎、OpenSSH、完整项目及已安装的 CLI/SDK 依赖；Linux 需容器引擎和 Compose、SSH 授权与权限。无互联网仍需 Windows 到 Linux 的 SSH 和应用端口可达。
+
+有 PostgreSQL/Redis/RustFS 镜像不代表有可用服务。默认配置要求 Compose 中镜像名称、tag、架构准确匹配，SDK 不传输中间件镜像；自定义连接要求服务已启动、地址从应用容器可达并提供数据库/账号、密码、S3 密钥/桶。不要用容器内 localhost 指代宿主机服务。
+
+默认 Dockerfile 会下载 Node 基础镜像、pnpm、依赖和 SQLite 预编译包，不能直接称为离线可用。源码离线构建要准备 Linux 构建环境的完整缓存和构建 frontend，调整下载步骤并断开外网演练；Windows node_modules/pnpm store 不代表 Linux 的原生依赖可用。云 Provider/Provisioner 需要外网，不用于完全离线部署。
+
+docker-ssh 始终执行本地镜像构建，`--skip-build` 仅对 Vercel 生效。预构建离线交付可在准备环境导出 API/Web 镜像，在 Windows 引擎加载 API 镜像后，为目标服务包提供仅含 `FROM <已加载的API镜像>` 的 Dockerfile 和内容 `*` 的 `.dockerignore`，让 SDK 复用成品并上传。业务代码变更后必须重制成品镜像；无匹配本地镜像时不能继续假定构建无网络。
+
+fullstack 的 Web 不在服务包 `hai deploy` 中发布，需单独加载/运行 Web 镜像并设置 PUBLIC_API_BASE、API CORS。生产禁止通配 CORS，refresh Cookie 启用 Secure；须准备 HTTPS 入口、内网证书/信任与 DNS/hosts，SDK 不自动配置 TLS/反向代理。离线验收须包含断外网构建/上传/启动、API 健康、真实 Web 登录、页面与会话刷新、重启和持久化；分别报告 API 部署、Web 发布和断网证据，不能互相替代。
+
 ## 启动与验证
 
 fullstack 创建时可通过 `--features deploy` 安装对应版本的本地部署工具。SQLite 在模板及兜底 Dockerfile 中先按驱动版本、Node ABI、架构和 libc 下载官方预编译包，最多尝试三次，加载验证后由生产依赖安装复用缓存；不预装 Python/make/C++，无匹配包或下载失败时停止构建。受限网络可预置 prebuild-install 缓存，或配置 container.sqlitePrebuildMirror（HAI_DEPLOY_CONTAINER_SQLITEPREBUILDMIRROR；自带 Dockerfile 使用 SQLITE_PREBUILD_MIRROR build arg）。镜像根地址后附 /v<驱动版本>/<匹配 ABI 的包名>，不得包含认证信息。不能把更换下载命令当成解决网络不可达，也不能用 CUDA 开关掩盖无关 AI 依赖。

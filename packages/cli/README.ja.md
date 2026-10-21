@@ -199,7 +199,7 @@ Fullstack の `.env` は選択したモジュールの実行パラメーター�
 
 設定済みの環境ではウィザードで「直接デプロイ」を選ぶか、`hai deploy packages/my-app-serv --env prod --yes --skip-middleware` を実行すると、すべてのミドルウェア設定・書き込み・リソース作成を省略できます。不足する SSH/Vercel 接続情報は対話で補完し、ホスト、ポート、鍵のパス、リモートディレクトリー、Token を Git 対象外の `.env.local` にのみ保存して再利用します。接続先は `HAI_DEPLOY_PROVIDER` で更新できます。秘密鍵は内容ではなくパスを指定します。
 
-[Deployment and middleware reference](templates/skills/hai-deploy/middleware.md) · `pnpm --filter @h-ai/cli test:deploy-gates`
+fullstack は指定 API パッケージのみをデプロイし、Web は別途公開します。docker-ssh はローカルでビルドし、イメージ tar・Compose・実行環境・起動スクリプトを SCP 転送して遠隔で読み込み・起動します。`--skip-build` はコンテナビルドを省略しません。Node 20 / pnpm 9.5.0 は非対応です。コマンド・オフライン材料・Web 公開は [deploy ガイド](../deploy/README.ja.md)、接続項目は [ミドルウェア仕様](templates/skills/hai-deploy/middleware.md) を参照してください。回帰試験は `pnpm --filter @h-ai/cli test:deploy-gates` です。
 
 ## 共通オプション
 
