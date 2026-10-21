@@ -29,7 +29,7 @@
 2. **使用自定义配置**：逐项输入所选后端的连接字段，展示变量名、字段用途与约束，校验必填项、端口、布尔和 URL；凭据用密码输入。保存配置后跳过该服务的开通与 sidecar。
 3. **保持不变**：仅在目标 `.env.<mode>` 显式声明当前后端及完整连接配置时出现；私有凭据可来自 `.env.local`/进程。选择后不修改该项、不认证其 Provisioner、不创建或移除已有中间件容器，继续下一项。只有 `.env` 或其他环境有配置不满足此条件。
 
-逐项配置前提供“环境配置已完备，直接部署”。选择后跳过全部中间件提示、变量改写、云资源与 sidecar 创建，保留已有服务；仍校验已有构建产物并执行部署及健康检查。命令行可用 `--skip-middleware`（或 `--skip-provision`）明确选择。不要因为缺少某项中间件的目标文件声明而阻止用户主动跳过。
+逐项配置前提供“环境配置已完备，直接部署”。选择后跳过全部中间件提示、变量改写、云资源与 sidecar 创建，保留已有服务；仍校验已有构建产物并执行部署及健康检查。命令行使用唯一的 `--skip-middleware`，SDK 使用 `skipMiddleware`。不要因为缺少某项中间件的目标文件声明而阻止用户主动跳过。
 
 `--yes` 用于已授权的自动化：目标环境已有完整配置时保持不变，否则使用当前后端默认配置；不支持的云后端或缺少必需凭据直接失败。自动化直接部署用 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`。跳过不作为配置完整性或连接成功的证明。
 
@@ -73,7 +73,7 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 
 构建与部署分开：先在构建机运行 `pnpm build --target docker`，将完整 `.hai/build/docker/<buildId>` 复制到部署电脑。deploy 只读取这些已校验的镜像 tar，不需要本地 Docker/Podman、基础镜像、pnpm store 或 SQLite 下载。Node/pnpm 版本以工程 engines/packageManager 为准。
 
-`pnpm run deploy --env prod --bundle-only --output release-prod.tar` 生成一个包含 app/web、compose、私有 env、校验和、README 与 start-prod.sh 的包，不连接 SSH。把 tar 手工搬到 Linux 后，创建权限 700 的目录，`tar -xf release-prod.tar -C release`，`cd release && sh start-prod.sh`。启动脚本可用 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker/podman 选择运行时；它检查全部镜像标签，缺少时停止，不尝试联网。
+`pnpm run deploy --env prod --bundle-only --output release-prod.tar` 按清单 appVersion 自动生成 release-prod-1.2.3.tar（示例版本 1.2.3），包含 app/web、docker-compose-1.2.3.yml、manifest.json、私有 env、校验和、README 与 start-prod.sh，不连接 SSH。搬到 Linux 后，创建权限 700 的目录，`tar -xf release-prod-1.2.3.tar -C release`，`cd release && sh start-prod.sh`。脚本自动指定带版本的 Compose；手工状态检查使用 `docker compose -f docker-compose-1.2.3.yml --env-file .env.runtime ps`。启动脚本可用 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker/podman 选择运行时，镜像缺少时停止，不尝试联网。
 
 Linux 需要 compose、sh、tar、sha256sum 和容器/目录/持久化磁盘权限；中间件镜像另行 docker load，名称、tag 和架构须与包内清单一致。自定义连接要求现有服务可从应用容器访问，并备好账号、数据库、S3 桶与密钥。云 Provider/Provisioner 需要网络，不能用于完全离线。
 

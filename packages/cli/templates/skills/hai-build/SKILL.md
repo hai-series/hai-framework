@@ -26,6 +26,10 @@ description: "定位 hai 应用架构、模块依赖、初始化顺序、构建�
 ## 构建与部署
 
 - `pnpm build` 默认仅编译源码（调用 compile）；`pnpm build --target docker` 根据 hai.build.json 构建并导出 app/可选 web 镜像，auto 优先可达 Podman、其次 Docker，可用 --runtime 显式指定。
+- compile 交付源码编译结果，docker 交付镜像归档，desktop 交付 Tauri 系统安装包；每次只选一种。images[].target 是 Dockerfile 阶段名，fullstack 的 app 使用 runtime、web 使用 web，不能与 CLI target 混用；参数默认值和示例必须与真实入口同步。
+- Podman 的客户端代理通过预定义构建参数传递，覆盖 Windows/macOS 远程引擎的服务端默认值；代理地址必须能从构建容器访问，--no-http-proxy 禁止此传递。不要把代理写成 Dockerfile ENV 或固化进交付镜像。
+- --network 默认沿用引擎网络；只有实际构建网络无法访问依赖/代理时才显式选择网络，pasta 仅适用于 rootless Podman。build 与 run 的主机名解析可能不同，须验证构建网络中的可达性，不默认改成 host 网络。
+- 从运行 build 的应用根 package.json.version 读取版本，不能使用 CLI/框架版本或服务子包版本代替。清单格式 version=2，appVersion 为应用版本；镜像 tar 名含版本、buildId 区分同版本构建，Tauri 也接收根版本。不要手改清单或保留无版本的交付归档。
 - 构建不区分 dev/test/prod，不加载部署环境覆盖，不注入运行期凭据；完整镜像清单含 SHA-256，全部成功才发布 latest。不要让 compile、Dockerfile 或 Tauri beforeBuildCommand 递归调用自身的原生/镜像构建。
 - Vite 的 envDir 与 SvelteKit 的 kit.env.dir 是独立加载入口，必须同时阻止构建阶段读取工程根的 .env 文件；开发/预览由 core loader 注入，运行期由 deploy 注入。用临时 .env.local 哨兵值检查输出，避免只过滤进程变量却仍把私有文件固化进产物。
 - 静态客户端通过 runtime-config.js 或原生宿主初始化脚本获取公开地址与元数据；仅投影公开白名单，禁止将完整 process.env、服务配置或密钥序列化到浏览器。预览与容器启动均须验证真实登录，不能依赖构建期 API 地址让 E2E 通过。

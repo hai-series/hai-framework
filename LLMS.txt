@@ -4,7 +4,7 @@ TypeScript monorepo：Svelte 5/SvelteKit 或 Vite 客户端，oRPC contract + se
 
 README 文档入口：[简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)。根目录与 `packages/*` 使用同目录三语 README，语言切换、模块索引和相关模块链接保持对应语言；更新用法时同步三种版本。扩展指南与 skills 仍使用各自原有语言，README 翻译不改变运行时支持的 locale。
 
-应用完整使用流程：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)，包含环境准备、创建、手工/AI first 开发、编译与打包参数、hai.build.json、SSH/手工/离线部署和 hai-framework-sync 升级。按任务从指南进入对应应用 skill。
+应用完整使用流程：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)，包含环境准备、创建、手工/AI first 开发、compile/docker/desktop 区别、参数默认值与示例、hai.build.json 阶段、S3 引擎、SSH/手工/离线部署和 hai-framework-sync。应用根 package.json.version 驱动镜像/桌面交付，清单格式 2 的 appVersion 驱动带版本的 Compose 与部署 tar；跳过中间件统一 --skip-middleware / skipMiddleware。按任务从指南进入对应应用 skill。
 
 ## 读取顺序
 

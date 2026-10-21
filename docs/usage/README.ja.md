@@ -17,7 +17,16 @@
 | Linux への自動デプロイ | ローカルの `tar`、`ssh`、`scp`。サーバーにはコンテナーエンジン、Compose、`sh`、`tar`、`sha256sum` とディレクトリー操作権限 |
 | デプロイ用パッケージの生成のみ | ローカルの `tar`、インストール済みの依存関係、完成したビルド成果物。SSH やローカルのコンテナーエンジンは不要 |
 
-Node 20 と pnpm 9.5.0 は現在の要件を満たしません。以下では `pnpm` と表記しますが、Windows PowerShell では `pnpm.cmd` を使ってください。エンジンの自動選択は Podman/Docker が利用可能かを確認するもので、インストールや起動は行いません。
+以下では `pnpm` と表記しますが、Windows PowerShell では `pnpm.cmd` を使ってください。エンジンの自動選択は Podman/Docker が利用可能かを確認するもので、インストールや起動は行いません。
+
+以下の既定値は、引数を省略したときの動作です。対話入力が必要な場合も記載します。
+
+| 共通オプション | 用途 | 既定値 | 例 |
+| --- | --- | --- | --- |
+| `-C, --cwd <path>` | 作業ディレクトリー | 現在のディレクトリー | `pnpm exec hai build --cwd ../my-app` |
+| `-v, --verbose` | 詳細出力。内容はサブコマンドによる | false | `hai create my-app --verbose` |
+| `-h, --help` | コマンドのヘルプ | false | `pnpm exec hai build --help` |
+| `-V, --version` | アプリではなく CLI の版を表示 | false | `hai --version` |
 
 ## 2. アプリを作成する
 
@@ -33,17 +42,19 @@ pnpm dev
 
 既定では依存関係のインストールと Git の初期化も行います。対話形式で選びたい場合は `hai create my-app` を使ってください。fullstack のデプロイ機能は `--features deploy` で明示的に追加します。`--no-install` を使った場合は、起動前にプロジェクト内で `pnpm install` を実行します。初回インストールには registry への接続が必要です。オフラインでの準備は後述します。
 
-| 作成オプション | 選び方 |
-| --- | --- |
-| `--type` | `fullstack`：独立 API と複数クライアント。`api`：contract + service。`admin`、`website`、`h5`：SvelteKit。`mobile-app`：Capacitor + Vite |
-| `--frontends` | fullstack の `web,app,desktop` をカンマ区切りで指定。既定では三つとも生成。`miniapp` は現時点では説明用のプレースホルダーで、公開可能なミニアプリではない |
-| `-t, --template` | `minimal`、`default`、`full`、`custom`。fullstack 以外で機能を個別指定する場合は `custom`。fullstack の業務モジュールはテンプレートで決定 |
-| `-f, --features` | fullstack 以外では `iam,db,cache,storage,deploy` などを組み合わせる。全機能は [CLI 文書](../../packages/cli/README.ja.md)を参照。fullstack では追加の `deploy` を有効化 |
-| `--examples` / `--no-examples` | サンプルコードを含めるかどうか |
-| `--no-install` / `--no-git` | 依存関係のインストールを後回しにする / Git を初期化しない |
-| `-p, --package-manager` | `pnpm`、`npm`、`yarn`。fullstack/API workspace は pnpm を使用 |
-| `--git-remote <url>` | リモートリポジトリーの URL |
-| `-y, --yes` | 対話を省略し既定値で作成 |
+| 作成オプション | 意味と値 | 既定値 | 例 |
+| --- | --- | --- | --- |
+| `[name]` | 小文字、数字、ハイフンのプロジェクト名 | 対話入力、初期値 my-app。--yes では my-app | `hai create orders-app` |
+| `--type <type>` | fullstack：API とクライアント。api：contract + service。admin/website/h5：SvelteKit。mobile-app：Capacitor + Vite | 対話選択、初期値 admin。--yes では admin | `--type fullstack` |
+| `--frontends <targets>` | fullstack の web/app/desktop をカンマ区切りで指定。miniapp は説明のみ | fullstack は web,app,desktop。それ以外では未使用 | `--frontends web,desktop` |
+| `-t, --template <template>` | minimal/default/full/custom | fullstack は custom。それ以外は対話選択、--yes では default | `--template custom` |
+| `-f, --features <features>` | fullstack 以外の個別選択は custom を使用。[CLI 一覧](../../packages/cli/README.ja.md)を参照。fullstack は追加の deploy を有効化 | 種類とテンプレートのプリセット。fullstack の deploy は無効 | `--template custom --features iam,db,deploy`。fullstack は `--features deploy` |
+| `--examples` / `--no-examples` | サンプルを含めるか | `true` | `--no-examples` |
+| `--no-install` | 依存インストールを後回しにする | インストールする | `--no-install` |
+| `--no-git` | Git 初期化を省略 | 初期化する | `--no-git` |
+| `-p, --package-manager <pm>` | pnpm/npm/yarn | fullstack/API は pnpm。それ以外は検出または対話選択 | `--package-manager pnpm` |
+| `--git-remote <url>` | リモート URL | 未設定 | `--git-remote https://git.example.com/team/my-app.git` |
+| `-y, --yes` | 対話を省略して既定値を使う | false | `hai create my-app --yes` |
 
 デスクトップ端末も必要なら `--frontends web,desktop` を指定します。既存アプリには `hai add <module>` で対応モジュールを追加できます。例えば `hai add deploy` です。fullstack の既定の実行依存はデータベース、キャッシュ、IAM、暗号化、ストレージ、監査で、AI は含みません。CUDA のインストールも不要です。
 
@@ -108,6 +119,16 @@ CLI はアプリの `.agents/skills/` に完全な skill 一式を配置しま�
 
 **ビルドは一度行い、環境はデプロイ時に選びます。** 生成プロジェクトの `pnpm build` は既定でソースをコンパイルします。イメージやデスクトップ用インストーラーは `--target` で選びます。デプロイ環境の上書き設定や実行時の秘密情報はビルドに取り込まず、`build:prod` やビルド用 `--env prod` は使いません。
 
+--target は一度に一つの値を指定します。三つを続けて指定する形式ではありません。
+
+| 対象 | 実行内容 | 出力と用途 |
+| --- | --- | --- |
+| compile | compile スクリプトで TypeScript、Svelte、共有 contract をコンパイル | dist/build など。確認、プレビュー、直接起動向け。イメージ tar、デプロイ tar、インストーラーは作らない |
+| docker | Podman/Docker が Dockerfile に従ってコンパイルし、images のイメージを作成・保存 | API/任意の Web イメージ tar とマニフェスト。後で deploy に渡す。サーバーには接続しない |
+| desktop | Tauri がフロントエンド、Rust、OS 用インストーラーを作成 | Windows NSIS exe、Linux deb/AppImage、macOS app/dmg。Compose 作成や API 公開は行わない |
+
+イメージとデスクトップのビルドには必要なコンパイルが含まれます。先に compile を実行する必要はありません。イメージ tar はイメージだけですが、後で作るデプロイ tar は環境別 Compose、実行設定、起動スクリプトも含みます。
+
 ```sh
 pnpm build
 pnpm build --target compile
@@ -121,18 +142,21 @@ pnpm build --target desktop --platform windows --arch x64
 
 ### build のオプション
 
-| オプション | 値、既定値、用途 |
-| --- | --- |
-| `--target <target>` | `compile`（既定）、`docker`、`desktop` |
-| `--runtime <runtime>` | イメージ用。`auto`（既定、利用可能な Podman を優先し、次に Docker）、`podman`、`docker` |
-| `--platform <platform>` | デスクトップ用。`windows`、`linux`、`macos`。既定は実行中の OS で、対象 OS と一致する必要がある |
-| `--arch <arch>` | デスクトップ用。`x64`、`arm64`。既定はホストのアーキテクチャー。対応する Rust target/SDK が必要 |
-| `--sqlite-prebuild-mirror <url>` | Dockerfile が対応する SQLite バイナリーのミラールート。例：`http://mirror.internal/better-sqlite3`。HTTP(S) のみで、認証情報・クエリー・フラグメントは不可 |
-| `--no-http-proxy` | Podman ビルドでホストのプロキシ設定を継承しない |
-| `-C, --cwd <path>` | CLI 共通の作業ディレクトリー。例：`pnpm exec hai build --cwd ../my-app --target docker` |
-| `-v, --verbose` | CLI 共通の詳細出力。具体的な内容はサブコマンドによる |
+| build オプション | 意味と値 | 既定値 | 例 |
+| --- | --- | --- | --- |
+| `--target <target>` | compile/docker/desktop。上表を参照 | compile | `pnpm build --target docker` |
+| `--runtime <runtime>` | イメージ専用。auto/podman/docker | auto。利用可能な Podman、次に Docker | `--target docker --runtime docker` |
+| `--network <network>` | イメージ専用。Podman は private/pasta/none/host、Docker は default/none/host。その他はエンジンが検証。pasta は rootless Podman 専用 | エンジンの既定値 | `--target docker --runtime podman --network pasta` |
+| `--platform <platform>` | デスクトップ専用。windows/linux/macos。ホストと一致させる | 現在の OS | `--target desktop --platform windows` |
+| `--arch <arch>` | デスクトップ専用。x64/arm64。対応 Rust target/SDK が必要 | ホストのアーキテクチャー | `--target desktop --arch x64` |
+| `--sqlite-prebuild-mirror <url>` | イメージ専用。対応 Dockerfile の SQLite バイナリー取得先。HTTP(S)、認証情報/クエリー/フラグメント不可 | 上流の取得先を使用 | `--target docker --sqlite-prebuild-mirror http://mirror.internal/better-sqlite3` |
+| `--no-http-proxy` | イメージ専用。Podman でホストのプロキシを継承しない。Docker エンジン向けの指定ではない | Podman は継承する | `--target docker --runtime podman --no-http-proxy` |
 
-これらは `hai build` に渡す引数です。`pnpm exec hai build --help` でも確認できます。イメージのアーキテクチャーはエンジンと Dockerfile で決まり、デスクトップ用 `--arch` は Docker のクロスビルド指定ではありません。
+これらは hai build の引数です。共通引数は第 1 節、ヘルプは `pnpm exec hai build --help` を参照してください。対象に合わない引数はエラーになります。イメージのアーキテクチャーはエンジンと Dockerfile で決まり、デスクトップの --arch は Docker のクロスビルド指定ではありません。
+
+Podman は既定でホストの `HTTP_PROXY`、`HTTPS_PROXY`、`FTP_PROXY`、`NO_PROXY` と小文字の同名変数をビルド引数で渡します。Windows/macOS のリモートエンジンにも対応します。Windows Podman の `http://host.containers.internal:10808` など、コンテナーから到達できるアドレスを使い、ホストの `127.0.0.1` をそのまま使わないでください。`--no-http-proxy` で転送を無効にし、Dockerfile の ENV にプロキシを保存しないでください。
+
+WSL/Podman の構成によっては build と run でネットワークや名前解決が異なります。ビルド中の到達性を確認し、rootless Podman では必要に応じて `--network pasta` とそのネットワークから到達できるプロキシを指定してください。変更はビルドだけに適用され、配布サービスのネットワークには影響しません。
 
 ### hai.build.json でパッケージの構成を指定する
 
@@ -148,21 +172,33 @@ pnpm build --target desktop --platform windows --arch x64
 }
 ```
 
-| 項目 | 意味と制約 |
-| --- | --- |
-| `images` | `docker` では必須。`app` がちょうど一つ、任意で `web` を一つ。役割の重複は不可 |
-| `images[].name` | `app` または `web`。アーカイブの役割を識別し、Web があれば API と同時にデプロイ |
-| `images[].context` | プロジェクトルートからの相対ビルドコンテキスト。既定は `.` |
-| `images[].dockerfile` | context からの相対 Dockerfile パス。既定は `Dockerfile` |
-| `images[].target` | 任意の Dockerfile ステージ。省略時は既定の最終ステージ |
-| `images[].containerPort` | 任意のコンテナー内待受ポート。実際のサービスと一致させる。省略時は API のポート設定、Web は 8080 を使用。サーバー公開ポートはデプロイ時に指定 |
-| `desktop` | `desktop` では必須。ルートからの相対 Tauri ディレクトリーの配列で、順番にビルド |
+| 項目 | 意味と制約 | 既定値 | 例 |
+| --- | --- | --- | --- |
+| `images` | docker で必須。app 一つ、任意で web 一つ | 未設定。ビルド前に必要 | `[{"name":"app","target":"runtime"}]` |
+| `images[].name` | app/web の役割。Web があれば API と同時に公開 | 必須、既定値なし | `"web"` |
+| `images[].context` | ルートからの相対ビルドコンテキスト | `"."` | `"../.."` |
+| `images[].dockerfile` | context からの相対 Dockerfile パス | `"Dockerfile"` | `"apps/api-service/Dockerfile"` |
+| `images[].target` | Dockerfile の実在するステージ名。CLI の三種類の target とは別 | 最終ステージ。テンプレートは runtime/web を明示 | `"runtime"` / `"web"` |
+| `images[].containerPort` | サービスと一致する内部ポート、整数 1–65535 | API はデプロイ設定のポート（既定 3000）、Web は 8080 | `3000` / `8080` |
+| `desktop` | desktop で必須。ルートからの相対 Tauri ディレクトリー、順番にビルド | 未設定。ビルド前に必要 | `["apps/my-app-desktop"]` |
+
+images[].target は「Dockerfile のどの段階を作るか」、CLI の --target は「どのビルド方式を使うか」です。fullstack の Dockerfile では次のように使います。
+
+| ステージ | 内容と用途 | 既定の選択 | 設定例 |
+| --- | --- | --- | --- |
+| runtime | API と本番依存関係。app の配布イメージ | app が使用 | `{"name":"app","target":"runtime","containerPort":3000}` |
+| web | Nginx と Web 静的ファイル。Web 生成時だけ存在 | web が使用。Web がある場合の最終段階でもある | `{"name":"web","target":"web","containerPort":8080}` |
+| build、service-build、service | コンパイラー、依存整理、runtime が継承する中間段階 | 通常は配布用に選ばない | 中間段階を調べる場合だけ `"target":"build"` |
+
+他のテンプレートには runtime-base などもあります。独自 Dockerfile は独自のステージ名を使えますが、存在しない名前はエンジンが拒否します。fullstack の app で target を省くと、Web がある場合は最終段階 web を API として扱ってしまうため、省略しないでください。
 
 リポジトリー内の `apps/*` では、monorepo のルートを使うために `context: "../.."`、`dockerfile: "apps/<name>/Dockerfile"` とする場合があります。独立して生成したプロジェクトは通常 `.` です。Dockerfile のステージを変えたら `target` も合わせてください。
 
-成功すると `.hai/build/docker/<buildId>/manifest.json`、`app.tar`、任意の `web.tar` ができます。マニフェストにはイメージ参照、ポート、SHA-256 が入り、全イメージのエクスポート完了後にだけ `latest` を更新します。移動するときはディレクトリー全体を保持し、一つの tar だけを取り出したりマニフェストを手で書き換えたりしないでください。
+版は build を実行するアプリルートの package.json.version から取得します。例は 1.2.3 で、プレリリース/ビルド情報に対応し、最大 80 文字です。fullstack はルートだけを変更し、サービス/デスクトップを個別に変更する必要はありません。出力は `.hai/build/docker/1.2.3-<時刻>-<乱数>/manifest.json`、app-1.2.3.tar、任意の web-1.2.3.tar です。マニフェストの version: 2 は形式の版で、appVersion: "1.2.3" がアプリの版です。buildId、イメージ参照、ポート、SHA-256 も記録します。タグは版と一意のビルド番号を含み、同じ版の再ビルドも区別します。全出力後に latest を更新します。ディレクトリー全体を運び、マニフェストの手動変更は避けてください。
 
-デスクトップ用は Tauri を呼び、Windows は NSIS、Linux は deb/AppImage、macOS は app/dmg を生成します。出力先は各プロジェクトの `src-tauri/target/<Rust target>/release/bundle/` です。Linux/macOS 上ではそれぞれ `--platform linux` / `--platform macos` を使います。OS ごとにビルド用マシンや runner を用意し、異なる OS へのクロスコンパイルは前提にしません。Capacitor の Android/iOS 用コマンドと SDK は生成 README を参照してください。`desktop` は APK/IPA を生成しません。
+デスクトップも同じルートの版を Tauri に渡します。Windows のインストーラー exe（例 my-app_1.2.3_x64-setup.exe）、Linux の deb/AppImage、macOS の dmg は名前に版を含みます。macOS app はアプリ名を保持し、版をメタデータに持ちます。出力は各プロジェクトの `src-tauri/target/<Rust target>/release/bundle/` です。Linux/macOS は対応ホストで --platform linux/macos を使用します。OS ごとに runner を用意し、異なる OS へのクロスコンパイルは前提にしません。Capacitor のコマンドと SDK は生成 README を参照してください。desktop は APK/IPA を作りません。
+
+fullstack の `tauri.conf.json` は `"version": "../../../package.json"` でアプリルートの版を参照します。[Tauri が対応するバージョンファイルのパス](https://v2.tauri.app/reference/config/#version)であり、`apps/<プロジェクト>-desktop/src-tauri/` から三階層上を指します。
 
 静的クライアントの API アドレスは公開用の実行時設定から取得します。ネイティブ端末では起動前に `PUBLIC_API_BASE` を設定できます。公開変数に認証情報を入れず、環境変更のためだけにイメージを作り直す必要はありません。
 
@@ -176,7 +212,9 @@ pnpm run deploy --env test
 pnpm run deploy --env prod --skip-middleware
 ```
 
-fullstack のスクリプトは `packages/my-app-serv` を対象にし、ルートのビルドマニフェストを使って API と Web を同時に公開します。API テンプレートは `apps/my-app-service`、単一パッケージは現在のディレクトリーです。明示的に指定する場合は次のようになります。
+pnpm run deploy はルート package.json に生成されたスクリプトを実行します。fullstack は `hai deploy packages/my-app-serv` です。このサービスディレクトリーはバックエンド設定と実行依存を読む入口であり、**API だけをデプロイする意味ではありません**。上位のルートにあるマニフェストから app と web を取り、同時に公開するので、Web の別デプロイは不要です。
+
+API テンプレートは contract と API だけで Web を持たず、`hai deploy apps/my-app-service` で app のみを公開します。パスはテンプレート構成の違いで、日常はどちらもルートで pnpm run deploy を実行します。単一パッケージは hai deploy です。fullstack の入口を明示する場合は次のとおりです。
 
 ```sh
 pnpm exec hai deploy packages/my-app-serv --env prod --env-dir .
@@ -194,8 +232,17 @@ provider:
   expose:
     hostPort: 18080
 container:
-  s3Engine: rustfs # rustfs | minio
+  s3Engine: ${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}
 ```
+
+container.s3Engine は任意で、全プロジェクトに追加する必要はありません。HAI_STORAGE_TYPE=s3 はプロトコルの指定であり、作成する S3 サーバーの種類は決まりません。既定設定で Compose に S3 サービスを新設するときだけ、RustFS/MinIO のイメージ、起動方法、バケット初期化を選びます。ローカル保存、既存 S3 へのカスタム接続、ミドルウェアのスキップでは新設しません。
+
+| S3 設定 | 意味と値 | 既定値 | 例 |
+| --- | --- | --- | --- |
+| container.s3Engine | 自動作成する実装 rustfs/minio | container 自体を省いても rustfs | 上記 YAML の環境変数参照 |
+| HAI_DEPLOY_CONTAINER_S3ENGINE | 選択した環境ファイルに保存する共通変数 | 未設定時は schema/YAML の rustfs | .env.prod に `HAI_DEPLOY_CONTAINER_S3ENGINE=minio` |
+
+対話で選ぶと変数を保存し、不足する YAML 参照も補うため、手で追加しなくても構いません。
 
 初回の自動デプロイでは、Linux アドレス、SSH ユーザー/ポート、秘密鍵と known_hosts のパス、リモートディレクトリー、エンジン、公開ポートを入力します。`.env.local` に保存され、次回から再利用できます。秘密鍵はパスだけを保存します。オブジェクト全体を先に設定することもできます。
 
@@ -215,19 +262,17 @@ HAI_DEPLOY_PROVIDER='{"type":"docker-ssh","ssh":{"host":"10.0.0.20","username":"
 
 ### deploy のオプション
 
-| オプション | 用途 |
-| --- | --- |
-| `[appDir]` | `hai deploy` の任意のアプリディレクトリー。既定は現在位置。生成スクリプトはサービスの場所を指定済み |
-| `--env <environment>` | `test`、`prod`、または `.env.<name>` がある独自名。省略時は対話入力 |
-| `--env-dir <path>` | 環境ファイルの場所。既定では自動検出 |
-| `-y, --yes` | 非対話で既定値を使用。対象ミドルウェアの完全な設定は保持し、残りは現在のバックエンドの既定値。環境、成果物、接続先設定は必要 |
-| `--project-name <name>` | プロジェクト名を変更。リモートディレクトリー、Compose/ボリュームの識別に関わるため更新時も統一 |
-| `--skip-middleware` | 全ミドルウェアの設定と作成をスキップ |
-| `--skip-provision` | 同じく全ミドルウェア処理をスキップ。新しいコマンドでは意味が明確な `--skip-middleware` を推奨 |
-| `--artifact-dir <path>` | `manifest.json` があるビルド先、または `latest` がある親ディレクトリー。既定はプロジェクトの `.hai/build/docker` |
-| `--bundle-only` | `docker-ssh` 専用。SSH 接続せず Compose tar を生成 |
-| `--output <path>` | デプロイ tar の出力先。省略時は生成されたパスを表示 |
-| `-C, --cwd <path>` / `-v, --verbose` | CLI 共通の作業ディレクトリー / 詳細出力 |
+| deploy オプション | 用途 | 既定値 | 例 |
+| --- | --- | --- | --- |
+| `[appDir]` | バックエンド設定と実行依存の入口。生成スクリプトは指定済み | hai 直接実行時は現在位置 | `pnpm exec hai deploy packages/my-app-serv` |
+| `--env <environment>` | test/prod、または対応ファイルがある独自名 | 固定値なし。対話入力、非対話なら必須 | `--env prod` |
+| `--env-dir <path>` | 環境ファイルの場所 | 自動検出。fullstack はルート、API は service | `--env-dir .` |
+| `-y, --yes` | 完全な既存設定またはバックエンド既定値を使う。必要ファイル/接続先は検証する | false | `--env prod --yes` |
+| `--project-name <name>` | アプリ名の上書き。後に環境名を付加し、ディレクトリー/ボリューム識別に使用 | サービスパッケージ名、なければディレクトリー名 | `--project-name orders` |
+| `--skip-middleware` | 全ミドルウェアの設定/作成を省略。SDK は skipMiddleware | false | `--skip-middleware` |
+| `--artifact-dir <path>` | マニフェスト先または latest を含む親 | 最寄りのビルド入口/lockfile ルートの .hai/build/docker | `--artifact-dir .hai/build/docker/1.2.3-<ビルド番号>` |
+| `--bundle-only` | docker-ssh の tar だけを作り SSH 接続しない | false、オンライン配布 | `--bundle-only` |
+| `--output <path>` | 出力先。-版.tar を自動付加し、同じ接尾辞は重複させない | サービス内 .hai/deploy/環境/bundle-プロジェクト-配布ID-版.tar | `--output release-prod.tar` → release-prod-1.2.3.tar |
 
 成果物がなければ停止し、暗黙のビルドは行いません。自動化では接続先を設定し、実際の buildId に置き換えて `pnpm run deploy --env prod --yes --skip-middleware --artifact-dir .hai/build/docker/<buildId>` とします。クラウドでは有料リソースが作られる場合があるため、許可されたアカウントと範囲で実行してください。
 
@@ -243,16 +288,18 @@ fullstack の公開ポートは Web と同一オリジン API プロキシを提
 pnpm run deploy --env prod --bundle-only --output release-prod.tar
 ```
 
-結果は `packaged` で、サーバーはまだ動いていません。`compose.yml`、`.env.runtime`、任意の `web.conf`、`images/`、`SHA256SUMS`、`start-prod.sh`、`README.txt` が入ります。秘密設定を含むためアクセスを制限し、Git に入れないでください。USB などで Linux に運び、パッケージの README に従って実行します。
+版が 1.2.3 なら release-prod-1.2.3.tar を生成します。結果は packaged で、サーバーはまだ起動していません。docker-compose-1.2.3.yml、manifest.json、.env.runtime、任意の web.conf、images/、SHA256SUMS、start-prod.sh、README.txt が入ります。Compose にも x-hai-version とアプリの版ラベルが入り、更新後もプロジェクト名/ボリューム名は安定しているため既存データを継続します。秘密設定を含むのでアクセスを制限し、Git に入れず Linux に運んでください。
 
 ```sh
 mkdir -p release && chmod 700 release
-tar -xf release-prod.tar -C release
+tar -xf release-prod-1.2.3.tar -C release
 cd release
 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker sh start-prod.sh
 ```
 
 Podman を使う場合は値を `podman` にし、実行可能な Compose コマンドを用意します。スクリプトはファイルを検証し、API/Web イメージを読み込み、全イメージ参照を確認し、環境識別子を設定して起動します。ミドルウェアイメージがなければ停止し、外部から取得しません。**ミドルウェアイメージは自動同梱されない**ため、README に記載された名前とタグで事前に導入してください。
+
+スクリプトは版付き Compose を自動選択します。手動の確認でも `docker compose -f docker-compose-1.2.3.yml --env-file .env.runtime ps` と指定し、ログを見る場合は ps を logs に変えます。
 
 同じプロジェクト・環境への再デプロイでは永続ボリュームを再利用します。更新前にデータをバックアップし、新しい成果物から同環境のパッケージを作って同じ手順を実行します。旧マニフェストとイメージを残しておけば旧版を再デプロイできますが、DB マイグレーションはイメージの巻き戻しでは戻りません。データ復旧は別に計画してください。
 

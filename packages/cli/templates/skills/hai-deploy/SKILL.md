@@ -21,6 +21,7 @@ description: "部署已有构建产物：配置环境与中间件，生成 Compo
 2. 选择环境，检查 `.env.<mode>`；缺失则让用户创建后再继续。六类环境文件和变量优先级见 [中间件与环境](middleware.md)。
 3. 逐项展示 lockfile 运行依赖要求的中间件、当前后端与默认用途，提供默认/自定义/完整配置时保持不变。用户表示配置齐全或传 `--skip-middleware` 时跳过全部处理，不重写连接或开通资源。
 4. 检查已有镜像清单和 SHA-256，再生成对应环境的 Compose tar。含 app/web 时一起发布，公开 Web 同源代理 API；私有 env 仅挂载 API。
+   版本以清单 appVersion 为准，不从当前源码猜测；Compose 使用 docker-compose-<版本>.yml，tar 自动补版本后缀，启动与手工 ps/logs 都显式 -f 指定。保留稳定的项目/卷身份，跨版本跳过中间件时复用上次 Compose。CLI 仅使用 --skip-middleware，SDK 仅使用 skipMiddleware。
 5. 在线模式上传一个 tar，远程解包、导入、compose up，再检查 API/Web；手工模式 `--bundle-only` 不要求 SSH 配置、不连接远端，输出准确的复制/解包/启动步骤及所需镜像标签。
 6. 失败返回非零退出码；SDK 返回 HaiResult，先检查 success。保留已创建资源的恢复信息，不擅自删除。测试资源在 finally/teardown 清理。
 
@@ -62,7 +63,7 @@ if (!initialized.success) throw new Error(initialized.error.message)
 try {
   const result = await deploy.deployApp('./packages/my-app-serv', {
     environment: 'prod', envDir: '.', bundleOnly: true,
-    artifactDir: './.hai/build/docker/<buildId>', skipProvision: true,
+    artifactDir: './.hai/build/docker/<buildId>', skipMiddleware: true,
   })
   if (!result.success) throw new Error(result.error.message)
   // bundlePath/instructions；只有在线部署才有健康检查和可访问 URL。

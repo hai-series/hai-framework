@@ -205,10 +205,14 @@ Choose “deploy directly” in the wizard, or run `hai deploy packages/my-app-s
 
 ## Global options
 
-| Option             | Description               |
-| ------------------ | ------------------------- |
-| `-v, --verbose`    | Verbose output            |
-| `-C, --cwd <path>` | Set the working directory |
+See the [usage guide](../../docs/usage/README.en.md) for build/deploy meanings, defaults, and examples. Deliverables use the application root package.json version, not the CLI version.
+
+| Option             | Description       | Default           | Example                       |
+| ------------------ | ----------------- | ----------------- | ----------------------------- |
+| `-v, --verbose`    | Verbose output    | false             | `hai create my-app --verbose` |
+| `-C, --cwd <path>` | Working directory | Current directory | `hai build --cwd ../my-app`   |
+| `-h, --help`       | Command help      | false             | `hai build --help`            |
+| `-V, --version`    | CLI version       | false             | `hai --version`               |
 
 ## Local development usage
 

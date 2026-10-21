@@ -30,7 +30,7 @@ pnpm.cmd build --target docker --runtime docker
 pnpm.cmd build --target desktop --platform windows --arch x64
 ```
 
-`hai.build.json` 指定 Dockerfile target、context 和 Tauri 工程目录。镜像构建把 API/Web 导出到 `.hai/build/docker/<buildId>/`，含 `manifest.json`、`app.tar`、可选 `web.tar` 和 SHA-256；全部成功才更新 `latest`。Tauri 安装包位于对应工程 `src-tauri/target/<Rust target>/release/bundle/`。Windows/Linux/macOS 分别在对应主机或 CI runner 构建；不会自动安装 SDK，也不承诺跨系统编译。
+`hai.build.json` 指定 Dockerfile 阶段、context 和 Tauri 目录。compile 只编译源码，docker 导出镜像，desktop 调用 Tauri，具体默认值和示例见[构建参数](../../docs/usage/README.md#build-的可选参数)。版本取应用根 package.json.version；以 1.2.3 为例，输出 `.hai/build/docker/1.2.3-<构建编号>/`，含格式版本 2 的 manifest.json（appVersion 为应用版本）、app-1.2.3.tar、可选 web-1.2.3.tar 和 SHA-256。全部成功才更新 latest。Tauri 使用相同根版本，安装包在对应工程 src-tauri/target/<Rust target>/release/bundle/。各 OS 分别准备主机/runner 与 SDK，不承诺跨系统编译。
 
 fullstack 在工程根执行：
 
@@ -54,8 +54,10 @@ provider:
   expose:
     hostPort: 18080
 container:
-  s3Engine: rustfs # rustfs | minio
+  s3Engine: ${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}
 ```
+
+container.s3Engine 可省略，默认 rustfs；仅自动创建 Compose S3 服务时区分 RustFS/MinIO 的镜像和桶初始化，既有自定义 S3 不受它影响。向导会保存选择，完整说明见[使用指南](../../docs/usage/README.md#先准备环境与部署目标)。跳过全部中间件处理使用 --skip-middleware，SDK 对应 skipMiddleware。
 
 自动 SSH 部署首次向导填写目标，写入 `.env.local` 后复用；也可直接配置：
 
@@ -67,18 +69,18 @@ HAI_DEPLOY_PROVIDER='{"type":"docker-ssh","ssh":{"host":"10.0.0.20","username":"
 
 ## tar 内容与手工启动
 
-部署 tar 包含 `compose.yml`、`.env.runtime`、可选 `web.conf`、镜像归档、`SHA256SUMS`、`start-<mode>.sh` 和 `README.txt`。它含私有凭据，权限设为 600，不提交 Git。打包结果是 `packaged`，不代表服务器已运行。自动部署上传这一个 tar，在远程解包启动；远端不接收源码、不构建镜像。
+部署 tar 默认名为 bundle-<项目>-<部署ID>-<应用版本>.tar，自定义 --output release-prod.tar 也会自动得到 release-prod-1.2.3.tar（示例版本 1.2.3）。包含 docker-compose-1.2.3.yml、manifest.json、.env.runtime、可选 web.conf、镜像归档、SHA256SUMS、start-<mode>.sh 和 README.txt。它含私有凭据，权限 600，不提交 Git。packaged 不代表服务器已运行；自动部署上传一个 tar，在远程解包启动，不传源码或构建镜像。
 
 将包搬到 Linux 后，按包内 README 操作：
 
 ```sh
 mkdir -p release && chmod 700 release
-tar -xf release-prod.tar -C release
+tar -xf release-prod-1.2.3.tar -C release
 cd release
 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker sh start-prod.sh
 ```
 
-启动脚本选择 Docker/Podman，校验文件、导入 app/web 镜像，检查全部镜像标签，导出所选环境标识后启动 Compose。中间件镜像缺少时明确停止，不尝试联网下载；数据卷按项目和环境隔离，重复部署保留数据。启动后用 compose ps/logs、Web、`/health` 验证。生产登录/刷新需要 HTTPS 入口、正确 CORS、DNS/hosts 和受信证书；本模块不配置 TLS。
+启动脚本自动 -f 选择带版本的 Compose，检查归档和镜像、导入 app/web、导出环境标识后启动。缺中间件镜像时停止，不联网下载。卷按项目和环境隔离，跨版本重复部署保留数据。手工检查使用 `docker compose -f docker-compose-1.2.3.yml --env-file .env.runtime ps`（或 logs），并验证 Web、/health。生产 HTTPS、CORS、DNS 与证书须另行配置。
 
 ## 完全离线准备（Windows → Linux）
 
@@ -109,7 +111,7 @@ try {
     envDir: '.',
     bundleOnly: true,
     artifactDir: './.hai/build/docker/<buildId>',
-    skipProvision: true,
+    skipMiddleware: true,
   })
   if (!result.success)
     throw new Error(result.error.message)
@@ -135,3 +137,9 @@ pnpm.cmd --filter @h-ai/cli test:deploy-gates
 ```
 
 最后一项使用当前源码打包生成 fullstack，显式构建一次 API/Web，再验证 SSH 上传和手工 tar 启动、真实 Web 登录/刷新。需要运行的 Podman/Docker 和 OpenSSH。测试用 finally/teardown 清理临时工程、镜像、容器、报告、截图和辅助进程，失败同样清理；验收材料不提交 Git。原生安装包需在相应系统另做真实构建及安装验收。
+
+部署门禁默认不传递本机代理。需要代理下载构建依赖时，设置测试专用 `HAI_DEPLOY_E2E_CONTAINER_PROXY`（默认不设置），例如 Windows Podman 在 PowerShell 中设置 `$env:HAI_DEPLOY_E2E_CONTAINER_PROXY='http://host.containers.internal:10808'`；地址必须能从构建容器访问，不写入应用配置或交付镜像。
+
+测试专用 `HAI_DEPLOY_E2E_CONTAINER_NETWORK` 默认不设置，指定后传给 build 的 `--network`；例如 rootless Podman 可设置 `$env:HAI_DEPLOY_E2E_CONTAINER_NETWORK='pasta'`。构建与运行的网络可能不同，应同时校对代理在构建网络中的地址。
+
+Windows runner 可设置测试开关 HAI_CLI_NATIVE_BUILD=1（默认不设置），再执行 `pnpm --filter @h-ai/cli test:scaffold-gates -t "fullstack scaffold"`，额外构建生成项目的 Tauri 安装包，检查根版本 2.4.6 进入 exe 文件名。需已安装 Rust/MSVC/Windows SDK；测试的原生输出也随临时工程自动清理。

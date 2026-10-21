@@ -199,10 +199,14 @@ SvelteKit 的服务端 layout 只下发名称、版本、环境和默认语言�
 
 ## 全局选项
 
-| 选项               | 说明         |
-| ------------------ | ------------ |
-| `-v, --verbose`    | 显示详细输出 |
-| `-C, --cwd <path>` | 指定工作目录 |
+构建和部署参数的含义、默认值与示例见[使用指南](../../docs/usage/README.md)。交付文件使用应用根 package.json 的版本，CLI 版本不会代替应用版本。
+
+| 选项               | 说明          | 默认值   | 示例                          |
+| ------------------ | ------------- | -------- | ----------------------------- |
+| `-v, --verbose`    | 显示详细输出  | false    | `hai create my-app --verbose` |
+| `-C, --cwd <path>` | 指定工作目录  | 当前目录 | `hai build --cwd ../my-app`   |
+| `-h, --help`       | 显示命令帮助  | false    | `hai build --help`            |
+| `-V, --version`    | 显示 CLI 版本 | false    | `hai --version`               |
 
 ## 开发阶段本地使用
 
