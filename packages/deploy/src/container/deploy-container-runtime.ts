@@ -7,6 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ContainerRuntime } from './deploy-container-types.js'
+import { existsSync } from 'node:fs'
 import { core, err, ok } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
@@ -55,15 +56,24 @@ export async function detectLocalRuntime(
  * @param options.contextDir - 构建上下文目录
  * @param options.dockerfilePath - Dockerfile 路径
  * @param options.imageRef - 镜像引用
+ * @param options.buildArgs - 仅供构建的公共参数，不传入密码或令牌
+ * @param options.httpProxy - Podman 构建是否继承代理，省略时遵循运行时默认值
  * @returns 构建结果
  */
 export async function buildImage(
   runtime: ContainerRuntime,
-  options: { contextDir: string, dockerfilePath: string, imageRef: string },
+  options: { contextDir: string, dockerfilePath: string, imageRef: string, buildArgs?: Record<string, string>, httpProxy?: boolean },
 ): Promise<HaiResult<void>> {
   const args = ['build', '-f', options.dockerfilePath, '-t', options.imageRef]
   if (runtime === 'podman')
     args.push('--format', 'docker', '--jobs', '1')
+  // Podman 显式使用兜底 Dockerfile 的伴随忽略文件；避免误用 workspace 根规则上传部署产物。
+  if (runtime === 'podman' && existsSync(`${options.dockerfilePath}.dockerignore`))
+    args.push('--ignorefile', `${options.dockerfilePath}.dockerignore`)
+  if (runtime === 'podman' && options.httpProxy === false)
+    args.push('--http-proxy=false')
+  for (const [key, value] of Object.entries(options.buildArgs ?? {}))
+    args.push('--build-arg', `${key}=${value}`)
   args.push(options.contextDir)
 
   logger.info('Building container image', { runtime, imageRef: options.imageRef })

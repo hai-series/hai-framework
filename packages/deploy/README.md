@@ -20,9 +20,9 @@
 | 数据库   | Neon          | PostgreSQL Serverless  |
 | 缓存     | Upstash       | Redis TCP + TLS        |
 | 存储     | Cloudflare R2 | S3 兼容对象存储        |
-| 邮件     | Resend        | SMTP（~已有已验证域名） |
+| 邮件     | Resend        | SMTP（已有已验证域名） |
 | 短信     | 阿里云        | 阿里云短信服务         |
-~
+
 ## 快速开始
 
 ```typescript
@@ -55,6 +55,8 @@ await deploy.close()
 ## 环境与中间件
 
 先运行 `hai deploy --env test`（交互调用也可先输入环境）。必须存在对应 `.env.test`；缺失时要求用户创建并停止部署。扫描会解析环境变量及模块依赖，显示当前后端、用途和来源，再逐项选择默认配置、自定义连接或保持不变。保持不变仅在目标环境文件已有完整配置时出现，跳过该项的写入、认证与开通。`--yes` 复用完整的目标配置，其余采用当前后端默认值；`--env-dir` 指定环境文件目录。
+
+环境配置已完备时，选择向导中的“直接部署”或执行 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`，跳过全部中间件提示、变量写入和资源开通，保留已有服务。部署目标缺失时引导填写 SSH/Vercel 参数；主机、端口、密钥路径、远程目录及 Token 仅保存 `.env.local` 的 `HAI_DEPLOY_PROVIDER`，下次自动复用。SDK 可用 `saveDeploymentEnvironment(snapshot, values, { private: true })` 保存本机参数；私钥只保存文件路径。
 
 默认配置在 Compose 中生成匹配服务/卷，在云平台调用已支持的 Provisioner；无云开通器的后端应使用自定义连接。SQLite/memory/local/disabled 不会被自动替换成 PostgreSQL/Redis/S3/LDAP。自定义逐项校验并写入连接配置。公共值写目标环境文件，凭据和含认证信息的 JSON/URL 写 `.env.local`；输出脱敏。配置字段、后端表、可选依赖与云能力边界见 [部署环境与中间件](../cli/templates/skills/hai-deploy/middleware.md)。
 
@@ -175,19 +177,19 @@ await deploy.close()
 
 `deploy.scan()` 会识别所需服务及其**实际后端类型**（读取 `_db.yml` / `_vecdb.yml` 等的 `type`），生成匹配的 sidecar 并注入对应 `HAI_*` 覆盖变量：
 
-| 扫描到的服务 | 后端 (`type`) | 追加的 sidecar                | 注入变量                      |
-| ------------ | ------------- | ----------------------------- | ----------------------------- |
-| `db`         | `postgresql`  | `postgres:16-alpine`          | `HAI_DB`                      |
-| `db`         | `mysql`       | `mysql:8.4`                   | `HAI_DB`                      |
-| `db`         | `sqlite`      | 无（挂载 `/app/data` 数据卷） | —                             |
-| `cache`      | `redis`       | `redis:7-alpine`              | `HAI_CACHE`                   |
-| `storage`    | `s3`          | RustFS / MinIO + 初始化 bucket       | `HAI_STORAGE`                 |
-| `vecdb`      | `qdrant`      | `qdrant/qdrant`               | `HAI_VECDB`                   |
-| `vecdb`      | `pgvector`    | `pgvector/pgvector`           | `HAI_VECDB`                   |
-| `vecdb`      | `chroma`      | `chromadb/chroma`             | `HAI_VECDB`                   |
-| `ldap`       | `ldap`        | OpenLDAP                      | `HAI_IAM_LDAP`                |
-| `email`      | `smtp`        | Mailpit (test capture)        | `HAI_REACH_PROVIDERS_<index>` |
-| `vecdb`      | `lancedb`     | 无（挂载 `/app/data` 数据卷） | —                             |
+| 扫描到的服务 | 后端 (`type`) | 追加的 sidecar                 | 注入变量                      |
+| ------------ | ------------- | ------------------------------ | ----------------------------- |
+| `db`         | `postgresql`  | `postgres:16-alpine`           | `HAI_DB`                      |
+| `db`         | `mysql`       | `mysql:8.4`                    | `HAI_DB`                      |
+| `db`         | `sqlite`      | 无（挂载 `/app/data` 数据卷）  | —                             |
+| `cache`      | `redis`       | `redis:7-alpine`               | `HAI_CACHE`                   |
+| `storage`    | `s3`          | RustFS / MinIO + 初始化 bucket | `HAI_STORAGE`                 |
+| `vecdb`      | `qdrant`      | `qdrant/qdrant`                | `HAI_VECDB`                   |
+| `vecdb`      | `pgvector`    | `pgvector/pgvector`            | `HAI_VECDB`                   |
+| `vecdb`      | `chroma`      | `chromadb/chroma`              | `HAI_VECDB`                   |
+| `ldap`       | `ldap`        | OpenLDAP                       | `HAI_IAM_LDAP`                |
+| `email`      | `smtp`        | Mailpit (test capture)         | `HAI_REACH_PROVIDERS_<index>` |
+| `vecdb`      | `lancedb`     | 无（挂载 `/app/data` 数据卷）  | —                             |
 
 - `cache=memory`、LDAP disabled、Reach console 不生成外部服务；storage local 使用数据卷。SMTP 默认容器仅捕获测试邮件，生产投递使用自定义 SMTP/Resend。
 - 若同一服务已配置云 Provisioner（如 Neon 提供 `HAI_DB`），优先用云资源，不再自建 sidecar。

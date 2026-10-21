@@ -12,6 +12,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import {
   buildRuntimeEnv,
   generateComposeFile,
@@ -45,6 +46,39 @@ function makeScan(
 }
 
 describe('buildRuntimeEnv 按功能追加 sidecar', () => {
+  it('handles SMTP providers independently and leaves kept/HTTP providers unchanged', () => {
+    const scan = makeScan(['email'], { email: 'api' })
+    scan.middlewares = ['console', 'smtp', 'smtp', 'api'].map((backend, index) => ({ service: 'email', backend, source: '@h-ai/reach', configName: 'reach', configPath: ['providers', String(index)], envPrefix: `HAI_REACH_PROVIDERS_${index}`, config: { name: `provider-${index}`, type: backend } }))
+    const { sidecar } = buildRuntimeEnv(tmpDir, 'multiple', scan, {}, 3000, { serviceModes: { HAI_REACH_PROVIDERS_0: 'keep', HAI_REACH_PROVIDERS_1: 'default', HAI_REACH_PROVIDERS_2: 'keep', HAI_REACH_PROVIDERS_3: 'custom' } })
+    expect(sidecar.services).toEqual(['email'])
+    expect(Object.keys(sidecar.env)).toEqual(['HAI_REACH_PROVIDERS_1'])
+    expect(JSON.parse(sidecar.env.HAI_REACH_PROVIDERS_1)).toMatchObject({ name: 'provider-1', type: 'smtp', host: 'email' })
+  })
+  it('respects custom/keep choices and local backend semantics', () => {
+    const { sidecar } = buildRuntimeEnv(tmpDir, 'local', makeScan(['db', 'cache', 'storage'], { db: 'postgresql', cache: 'memory', storage: 'local' }), {}, 3000, { serviceModes: { db: 'custom', storage: 'keep' } })
+    expect(sidecar.services).toEqual([])
+    expect(sidecar.composeServices).toEqual({})
+  })
+
+  it('adds LDAP/SMTP containers with matching connection configuration', () => {
+    const { env, sidecar } = buildRuntimeEnv(tmpDir, 'directory', makeScan(['ldap', 'email'], { ldap: 'ldap', email: 'smtp' }), {}, 3000)
+    expect(sidecar.services).toEqual(['ldap', 'email'])
+    expect(JSON.parse(env.HAI_IAM_LDAP)).toMatchObject({ url: 'ldap://ldap:389', bindDn: 'cn=admin,dc=example,dc=org' })
+    expect(env.LDAP_ADMIN_PASSWORD).toBeTruthy()
+    expect(JSON.parse(env.HAI_REACH_PROVIDERS_0)).toMatchObject({ type: 'smtp', host: 'email', port: 1025, secure: false })
+    const compose = generateComposeFile({ projectName: 'directory', imageRef: 'test', hostPort: 3000, containerPort: 3000, sidecar })
+    expect(compose).not.toContain(env.LDAP_ADMIN_PASSWORD)
+  })
+
+  it('preserves existing managed services and volumes when keeping a middleware unchanged', () => {
+    const initial = buildRuntimeEnv(tmpDir, 'existing', makeScan(['db'], { db: 'mysql' }), {}, 3000)
+    const previousCompose = generateComposeFile({ projectName: 'existing', imageRef: 'v1', hostPort: 3000, containerPort: 3000, sidecar: initial.sidecar })
+    const kept = buildRuntimeEnv(tmpDir, 'existing', makeScan(['db'], { db: 'mysql' }), {}, 3000, { serviceModes: { db: 'keep' } })
+    const compose = generateComposeFile({ projectName: 'existing', imageRef: 'v2', hostPort: 3000, containerPort: 3000, sidecar: kept.sidecar, previousCompose, serviceModes: { db: 'keep' } })
+    expect(compose).toContain('mysql:8.4')
+    expect(compose).toContain('existing-db-data')
+    expect(compose).toContain('image: v2')
+  })
   it('启用 db 时追加 postgres 服务并注入 HAI_DB', () => {
     const { env, sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
 
@@ -72,11 +106,11 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(haiCache.url).toBe('redis://cache:6379')
   })
 
-  it('启用 storage 时追加 minio 服务与初始化容器并注入 HAI_STORAGE', () => {
-    const { env, sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['storage']), {}, 3000)
+  it.each(['rustfs', 'minio'] as const)('启用 S3 时生成 %s 服务及幂等存储桶初始化', (engine) => {
+    const { env, sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['storage']), {}, 3000, undefined, {}, engine)
 
     expect(sidecar.services).toContain('storage')
-    expect((sidecar.composeServices.storage as { image: string }).image).toContain('minio/minio:RELEASE')
+    expect((sidecar.composeServices.storage as { image: string }).image).toContain(engine === 'rustfs' ? 'ghcr.io/rustfs/rustfs:1.0.1' : 'ghcr.io/coollabsio/minio:RELEASE')
     expect(sidecar.composeServices['storage-init']).toBeDefined()
     const haiStorage = JSON.parse(env.HAI_STORAGE) as { type: string, endpoint: string, bucket: string }
     expect(haiStorage.type).toBe('s3')
@@ -160,6 +194,16 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
 })
 
 describe('generateComposeFile', () => {
+  it('waits for bucket initialization when creating storage alongside a kept database', () => {
+    const scan = makeScan(['db', 'storage'], { db: 'postgresql', storage: 's3' })
+    const initial = buildRuntimeEnv(tmpDir, 'mixed', scan, {}, 3000)
+    const previousCompose = generateComposeFile({ projectName: 'mixed', imageRef: 'v1', hostPort: 3000, containerPort: 3000, sidecar: initial.sidecar })
+    const next = buildRuntimeEnv(tmpDir, 'mixed', scan, {}, 3000, { serviceModes: { db: 'keep', storage: 'default' } })
+    const compose = parse(generateComposeFile({ projectName: 'mixed', imageRef: 'v2', hostPort: 3000, containerPort: 3000, sidecar: next.sidecar, previousCompose, serviceModes: { db: 'keep', storage: 'default' } }))
+    expect(compose.services.app.depends_on).toMatchObject({ 'db': { condition: 'service_started' }, 'storage-init': { condition: 'service_completed_successfully' } })
+    expect(compose.services['storage-init'].image).toBe('v2')
+    expect(compose.services.db.image).toBe('postgres:16-alpine')
+  })
   it('生成 app 服务并映射端口', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3000)
     const compose = generateComposeFile({
@@ -199,7 +243,7 @@ describe('generateComposeFile', () => {
     })
     expect(env.POSTGRES_PASSWORD.length).toBeGreaterThan(0)
     expect(compose).not.toContain(env.POSTGRES_PASSWORD)
-    expect(compose).not.toContain(env.MINIO_ROOT_PASSWORD)
+    expect(compose).not.toContain(JSON.parse(env.HAI_STORAGE).secretAccessKey)
   })
 })
 

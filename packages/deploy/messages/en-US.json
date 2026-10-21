@@ -32,5 +32,22 @@
   "deploy_remoteConnectFailed": "Cannot connect to remote host {host}: {error}",
   "deploy_remoteRuntimeMissing": "Remote host missing container runtime or compose: {runtime}",
   "deploy_imageTransferFailed": "Image transfer failed: {error}",
-  "deploy_healthCheckFailed": "Health check failed, app not ready at {url}"
+  "deploy_healthCheckFailed": "Health check failed, app not ready at {url}",
+  "deploy_invalidEnvironment": "Use letters, numbers, underscores or hyphens for the environment; local/example are reserved.",
+  "deploy_environmentMissing": "Environment file missing: {path}. Create and configure it before deploying.",
+  "deploy_environmentReadFailed": "Cannot read deployment environment files; check syntax and permissions.",
+  "deploy_environmentWriteFailed": "Cannot save deployment configuration; check file syntax and permissions.",
+  "deploy_multipleApplications": "Multiple service packages found; specify the application directory.",
+  "deploy_purposeSqlite": "Local relational database persisted in a volume",
+  "deploy_purposeDatabase": "Relational database service for business data",
+  "deploy_purposeMemory": "Per-process memory cache; cleared on restart, no external service",
+  "deploy_purposeLocal": "Local filesystem storage persisted in a volume",
+  "deploy_purposeCache": "Shared cache, sessions and distributed locks",
+  "deploy_purposeStorage": "S3-compatible object storage for uploaded files",
+  "deploy_purposeVector": "Vector indexing and similarity search",
+  "deploy_purposeDisabled": "LDAP login is disabled; no directory service is created",
+  "deploy_purposeLdap": "Directory account authentication; the default directory has no business users",
+  "deploy_purposeConsole": "Messages go to application logs without delivery",
+  "deploy_purposeEmail": "Email/HTTP delivery; the default SMTP container only captures test messages",
+  "deploy_purposeSms": "SMS through Aliyun credentials; requires an existing signature and quota"
 }

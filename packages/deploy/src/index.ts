@@ -1,4 +1,6 @@
 export * from './deploy-config.js'
+export * from './deploy-environment.js'
 export * from './deploy-main.js'
+export * from './deploy-middleware.js'
 export { getDeployRecovery } from './deploy-recovery.js'
 export * from './deploy-types.js'

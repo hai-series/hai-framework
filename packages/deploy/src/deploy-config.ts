@@ -38,9 +38,9 @@ const SshConfigSchema = z.object({
 const PortExposeSchema = z.object({
   type: z.literal('port').default('port'),
   /** 容器内监听端口（adapter-node 默认 3000） */
-  containerPort: z.number().int().positive().default(3000),
+  containerPort: z.number().int().min(1).max(65535).default(3000),
   /** 宿主机映射端口 */
-  hostPort: z.number().int().positive(),
+  hostPort: z.number().int().min(1).max(65535),
 })
 
 /** 应用暴露配置（MVP 仅支持端口直出，域名网关为后续能力） */

@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { DeployAppOptions, ScanResult, ServiceType } from './deploy-types.js'
 import { execSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -15,6 +16,17 @@ import { deployM } from './deploy-i18n.js'
 import { HaiDeployError } from './deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'functions' })
+
+/**
+ * 判断同类连接中是否有默认配置项；具体变量前缀优先于服务类别，未指定时默认处理。
+ * @example `usesDefaultMiddleware(scan, 'email', { serviceModes: { HAI_REACH_PROVIDERS_0: 'keep' } })`
+ */
+export function usesDefaultMiddleware(scan: ScanResult, service: ServiceType, options?: DeployAppOptions): boolean {
+  const requirements = scan.middlewares?.filter(item => item.service === service) ?? []
+  return requirements.length
+    ? requirements.some(item => (options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.[service] ?? 'default') === 'default')
+    : (options?.serviceModes?.[service] ?? 'default') === 'default'
+}
 
 /**
  * 执行应用构建

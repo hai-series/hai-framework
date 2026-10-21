@@ -1,119 +1,139 @@
-/**
- * =============================================================================
- * @h-ai/deploy - Scanner 测试
- * =============================================================================
- */
-
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { stringify } from 'yaml'
 import { deploy } from '../src/deploy-main.js'
-import { HaiDeployError } from '../src/deploy-types.js'
-
-let tmpDir: string
-
-beforeAll(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-scan-'))
-})
-
-afterAll(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true })
-})
-
-/** 在临时目录下创建文件并写入内容 */
-function writeFile(relativePath: string, content: string): void {
-  const fullPath = path.join(tmpDir, relativePath)
-  fs.mkdirSync(path.dirname(fullPath), { recursive: true })
-  fs.writeFileSync(fullPath, content, 'utf-8')
-}
 
 describe('deploy.scan', () => {
-  it('should detect SvelteKit project with adapter-vercel', async () => {
-    writeFile('package.json', JSON.stringify({
-      name: 'test-app',
-      dependencies: {
-        '@sveltejs/kit': '^2.0.0',
-        '@sveltejs/adapter-vercel': '^5.0.0',
-      },
-      scripts: { build: 'vite build' },
-    }))
-    writeFile('svelte.config.js', 'export default {}')
-
-    const result = await deploy.scan(tmpDir)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.appName).toBe('test-app')
-      expect(result.data.isSvelteKit).toBe(true)
-      expect(result.data.adapterInstalled).toBe(true)
-      expect(result.data.buildCommand).toBe('vite build')
+  it('follows every Hai component runtime edge, including indirect AI/payment/scheduler dependencies', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-components-'))
+    try {
+      const edges: Record<string, string[]> = {
+        'ai': ['api-contract', 'core', 'datapipe', 'reldb', 'vecdb'],
+        'payment': ['audit', 'core'],
+        'scheduler': ['cache', 'core', 'reldb'],
+        'iam': ['audit', 'cache', 'core', 'crypto', 'reldb'],
+        'reach': ['cache', 'core', 'reldb'],
+        'audit': ['core', 'reldb'],
+        'api-contract': ['core'],
+        'datapipe': ['core'],
+        'reldb': ['core'],
+        'cache': ['core'],
+        'vecdb': ['core'],
+        'crypto': ['core'],
+        'core': [],
+      }
+      const snapshots = Object.fromEntries(Object.entries(edges).map(([name, dependencies]) => [`@h-ai/${name}@1`, { dependencies: Object.fromEntries(dependencies.map(dependency => [`@h-ai/${dependency}`, '1'])) }]))
+      const lock = { lockfileVersion: '9.0', importers: { '.': { dependencies: Object.fromEntries(['ai', 'payment', 'scheduler', 'iam', 'reach'].map(name => [`@h-ai/${name}`, { version: '1' }])) } }, packages: Object.fromEntries(Object.keys(snapshots).map(key => [key, {}])), snapshots }
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify(lock))
+      const result = await deploy.scan(root)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.haiModules).toEqual(Object.keys(edges).map(name => `@h-ai/${name}`).sort())
+        expect(result.data.requiredServices).toEqual(['db', 'cache', 'vecdb', 'ldap', 'email'])
+      }
     }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 
-  it('should detect required services from dependencies', async () => {
-    writeFile('package.json', JSON.stringify({
-      name: 'full-app',
-      dependencies: {
-        '@sveltejs/kit': '^2.0.0',
-        '@sveltejs/adapter-vercel': '^5.0.0',
-        '@h-ai/reldb': 'workspace:*',
-        '@h-ai/cache': 'workspace:*',
-        '@h-ai/storage': 'workspace:*',
-      },
-    }))
-
-    const result = await deploy.scan(tmpDir)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.requiredServices).toContain('db')
-      expect(result.data.requiredServices).toContain('cache')
-      expect(result.data.requiredServices).toContain('storage')
+  it('requires a lockfile and reads build adapters from its importer without project metadata', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-lock-only-'))
+    try {
+      expect((await deploy.scan(root)).success).toBe(false)
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { devDependencies: { '@sveltejs/kit': { version: '2' }, '@sveltejs/adapter-node': { version: '5' } } } }, packages: {}, snapshots: {} }))
+      expect(await deploy.scan(root)).toMatchObject({ success: true, data: { isSvelteKit: true, nodeAdapterInstalled: true, adapterInstalled: false, requiredServices: [], buildCommand: 'pnpm build' } })
     }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 
-  it('should return SCAN_FAILED for missing package.json', async () => {
-    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-empty-'))
-
-    const result = await deploy.scan(emptyDir)
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(HaiDeployError.SCAN_FAILED.code)
+  it('walks only the selected importer runtime graph, excluding peers, dev dependencies and other workspaces', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-lock-'))
+    const app = path.join(root, 'apps/service')
+    try {
+      fs.mkdirSync(path.join(app, 'config'), { recursive: true })
+      fs.writeFileSync(path.join(app, 'config/_vecdb.yml'), 'type: qdrant\nurl: http://unused:6333\n')
+      const lock = {
+        lockfileVersion: '9.0',
+        importers: {
+          'apps/service': { dependencies: { '@project/business': { version: 'link:../../packages/business' } }, devDependencies: { '@h-ai/cache': { version: '1' } } },
+          'packages/business': { dependencies: { '@h-ai/serv': { version: '1(@h-ai/ai@1)' }, '@h-ai/iam': { version: '1' } } },
+          'apps/other': { dependencies: { '@h-ai/vecdb': { version: '1' } } },
+        },
+        packages: {
+          '@h-ai/serv@1': { peerDependencies: { '@h-ai/ai': '1' }, peerDependenciesMeta: { '@h-ai/ai': { optional: true } } },
+          '@h-ai/iam@1': {},
+          '@h-ai/reldb@1': {},
+          '@h-ai/ai@1': {},
+          '@h-ai/vecdb@1': {},
+          '@h-ai/cache@1': {},
+        },
+        snapshots: {
+          '@h-ai/serv@1(@h-ai/ai@1)': { dependencies: { '@h-ai/ai': '1' } },
+          '@h-ai/iam@1': { dependencies: { '@h-ai/reldb': '1' } },
+          '@h-ai/reldb@1': {},
+          '@h-ai/ai@1': { dependencies: { '@h-ai/vecdb': '1' } },
+          '@h-ai/vecdb@1': {},
+          '@h-ai/cache@1': {},
+        },
+      }
+      // 工具链文档同样有 importer，不能误选为应用图。
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), `---\n${stringify({ lockfileVersion: '9.0', importers: { '.': {} } })}---\n${stringify(lock)}`)
+      const result = await deploy.scan(app)
+      expect(result.success).toBe(true)
+      if (result.success)
+        expect(result.data.requiredServices).toEqual(['db', 'ldap'])
+      Reflect.deleteProperty(lock.snapshots['@h-ai/iam@1'].dependencies, '@h-ai/reldb')
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify(lock))
+      const withoutDb = await deploy.scan(app)
+      expect(withoutDb.success).toBe(true)
+      if (withoutDb.success)
+        expect(withoutDb.data.requiredServices).toEqual(['ldap'])
     }
-
-    fs.rmSync(emptyDir, { recursive: true, force: true })
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 
-  it('should handle non-SvelteKit project', async () => {
-    writeFile('package.json', JSON.stringify({
-      name: 'plain-app',
-      dependencies: { express: '^4.0.0' },
-    }))
-
-    // 删除 svelte.config.js（如果存在）
-    const svelteConfig = path.join(tmpDir, 'svelte.config.js')
-    if (fs.existsSync(svelteConfig)) {
-      fs.unlinkSync(svelteConfig)
+  it('fails on an existing lockfile without the target importer instead of guessing dependencies', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-stale-lock-'))
+    try {
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  apps/other: {}\n')
+      expect((await deploy.scan(root)).success).toBe(false)
     }
-
-    const result = await deploy.scan(tmpDir)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.isSvelteKit).toBe(false)
-      expect(result.data.adapterInstalled).toBe(false)
-    }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 
-  it('should extract scoped package name correctly', async () => {
-    writeFile('package.json', JSON.stringify({
-      name: '@my-org/awesome-app',
-      dependencies: {},
-    }))
-
-    const result = await deploy.scan(tmpDir)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      // 去掉 scope 前缀
-      expect(result.data.appName).not.toContain('@')
+  it('uses the application document when pnpm 12 has two root importers', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-root-lock-'))
+    try {
+      const tools = { lockfileVersion: '9.0', importers: { '.': { packageManagerDependencies: { pnpm: { version: '12' } } } } }
+      const app = { lockfileVersion: '9.0', importers: { '.': { dependencies: { 'db-alias': { version: '@h-ai/reldb@1' } } } }, packages: { '@h-ai/reldb@1': {} }, snapshots: { '@h-ai/reldb@1': {} } }
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), `---\n${stringify(tools)}---\n${stringify(app)}`)
+      const result = await deploy.scan(root)
+      expect(result.success).toBe(true)
+      // 别名同样使用实际包名识别模块。
+      if (result.success)
+        expect(result.data.requiredServices).toContain('db')
     }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
+  })
+
+  it('resolves backend placeholders and optional IAM LDAP using the selected environment', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-selected-env-'))
+    try {
+      fs.mkdirSync(path.join(root, 'config'))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/iam': { version: '1' }, '@h-ai/reldb': { version: '1' }, '@h-ai/cache': { version: '1' } } } }, packages: { '@h-ai/iam@1': {}, '@h-ai/reldb@1': {}, '@h-ai/cache@1': {} }, snapshots: { '@h-ai/iam@1': {}, '@h-ai/reldb@1': {}, '@h-ai/cache@1': {} } }))
+      fs.writeFileSync(path.join(root, '.env.prod'), 'HAI_DB_TYPE=postgresql\nHAI_CACHE_TYPE=redis\nHAI_IAM_LOGIN_LDAP=true\n')
+      fs.writeFileSync(path.join(root, 'config/_db.yml'), `type: \${HAI_DB_TYPE:sqlite}\ndatabase: app\n`)
+      fs.writeFileSync(path.join(root, 'config/_cache.yml'), `type: \${HAI_CACHE_TYPE:memory}\n`)
+      fs.writeFileSync(path.join(root, 'config/_iam.yml'), `login:\n  ldap: \${HAI_IAM_LOGIN_LDAP:false}\nldap:\n  url: ldap://directory:389\n`)
+      const result = await deploy.scan(root, { environment: 'prod' })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.serviceBackends).toMatchObject({ db: 'postgresql', cache: 'redis', ldap: 'ldap' })
+        expect(result.data.requiredServices).toEqual(expect.arrayContaining(['db', 'cache', 'ldap']))
+        expect(result.data.middlewares?.find(item => item.service === 'ldap')).toMatchObject({ envPrefix: 'HAI_IAM_LDAP', config: { url: 'ldap://directory:389' } })
+      }
+    }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 })

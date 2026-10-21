@@ -7,22 +7,25 @@
  * @module deploy-container-compose
  */
 
-import type { ScanResult, ServiceType } from '../deploy-types.js'
+import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { stringify } from 'yaml'
+import { parse, stringify } from 'yaml'
+import { usesDefaultMiddleware } from '../deploy-functions.js'
 
 /** sidecar 镜像固定版本，避免 `:latest` 漂移导致行为变化。 */
 const IMAGES = {
   postgres: 'postgres:16-alpine',
   mysql: 'mysql:8.4',
   redis: 'redis:7-alpine',
-  minio: 'minio/minio:RELEASE.2025-09-07T16-13-09Z',
-  mc: 'minio/mc:RELEASE.2025-08-13T08-35-41Z',
+  rustfs: 'ghcr.io/rustfs/rustfs:1.0.1',
+  minio: 'ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z',
   qdrant: 'qdrant/qdrant:v1.12.4',
   pgvector: 'pgvector/pgvector:pg17',
-  chroma: 'chromadb/chroma:0.5.23',
+  chroma: 'chromadb/chroma:1.5.5',
+  ldap: 'docker.io/osixia/openldap:1.5.0',
+  smtp: 'axllent/mailpit:v1.27.4',
 } as const
 
 /** compose 服务定义（结构化对象，交由 yaml 序列化）。 */
@@ -82,6 +85,7 @@ function resolveSidecarSecrets(appDir: string, projectName: string): Record<stri
   const secrets = {
     dbPassword: generatePassword(),
     storagePassword: generatePassword(),
+    ldapPassword: generatePassword(),
   }
   mkdirSync(dirname(secretFile), { recursive: true })
   writeFileSync(secretFile, JSON.stringify(secrets), { mode: 0o600 })
@@ -151,39 +155,59 @@ function planRedisCache(plan: SidecarPlan, projectName: string, net: string[]): 
   plan.env.HAI_CACHE = JSON.stringify({ type: 'redis', url: 'redis://cache:6379' })
 }
 
-/** MinIO(S3) sidecar + 一次性 bucket 初始化。 */
-function planMinioStorage(plan: SidecarPlan, projectName: string, password: string, net: string[]): void {
+/** S3 协议与服务实现分离；RustFS/MinIO 使用相同应用契约及幂等 bucket 初始化。 */
+function planS3Storage(plan: SidecarPlan, projectName: string, password: string, net: string[], engine: 'rustfs' | 'minio'): void {
   plan.services.push('storage')
   plan.dependsOn.push('storage')
   plan.composeServices.storage = {
-    image: IMAGES.minio,
+    image: IMAGES[engine],
     container_name: `hai-${projectName}-storage`,
     restart: 'unless-stopped',
-    command: ['server', '/data'],
+    ...(engine === 'minio' ? { command: ['server', '/data'] } : {}),
     env_file: ['.env.runtime'],
     volumes: [`${projectName}-storage-data:/data`],
     networks: net,
   }
   plan.composeServices['storage-init'] = {
-    image: IMAGES.mc,
     depends_on: ['storage'],
     env_file: ['.env.runtime'],
     entrypoint: [
-      'sh',
-      '-c',
-      'until mc alias set s3 http://storage:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do sleep 1; done; mc mb -p s3/hai; exit 0',
+      'node',
+      '--input-type=module',
+      '-e',
+      // 复用应用 @h-ai/storage 已依赖的 SDK；不额外拉取失效的 mc 镜像，不把密钥拼进命令。
+      `import { S3Client, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
+const config = JSON.parse(process.env.HAI_STORAGE);
+const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: config.forcePathStyle, credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } });
+let ready = false;
+for (let attempt = 0; attempt < 120; attempt++) {
+  try {
+    try { await client.send(new HeadBucketCommand({ Bucket: config.bucket })); }
+    catch (error) {
+      if (error.$$metadata?.httpStatusCode !== 404) throw error;
+      await client.send(new CreateBucketCommand({ Bucket: config.bucket }));
+    }
+    ready = true; break;
+  } catch { await new Promise(resolve => setTimeout(resolve, 1000)); }
+}
+client.destroy();
+if (!ready) throw new Error('S3 bucket initialization failed');`,
     ],
     networks: net,
   }
   plan.volumes[`${projectName}-storage-data`] = null
-  plan.env.MINIO_ROOT_USER = 'hai'
-  plan.env.MINIO_ROOT_PASSWORD = password
+  if (engine === 'rustfs') {
+    Object.assign(plan.env, { RUSTFS_ACCESS_KEY: 'hai-storage', RUSTFS_SECRET_KEY: password, RUSTFS_ADDRESS: '0.0.0.0:9000', RUSTFS_VOLUMES: '/data', RUSTFS_CONSOLE_ENABLE: 'false' })
+  }
+  else {
+    Object.assign(plan.env, { MINIO_ROOT_USER: 'hai-storage', MINIO_ROOT_PASSWORD: password })
+  }
   plan.env.HAI_STORAGE = JSON.stringify({
     type: 's3',
     endpoint: 'http://storage:9000',
     bucket: 'hai',
     region: 'us-east-1',
-    accessKeyId: 'hai',
+    accessKeyId: 'hai-storage',
     secretAccessKey: password,
     forcePathStyle: true,
   })
@@ -258,6 +282,8 @@ export function planSidecars(
   projectName: string,
   scan: ScanResult,
   provisionEnv: Record<string, string>,
+  options?: DeployAppOptions,
+  s3Engine: 'rustfs' | 'minio' = 'rustfs',
 ): SidecarPlan {
   const plan: SidecarPlan = {
     services: [],
@@ -273,6 +299,8 @@ export function planSidecars(
   const backends = scan.serviceBackends
 
   for (const service of scan.requiredServices) {
+    if (!usesDefaultMiddleware(scan, service, options))
+      continue
     if (service === 'db' && !provisionEnv.HAI_DB) {
       const backend = backends.db ?? 'postgresql'
       if (backend === 'mysql')
@@ -283,10 +311,14 @@ export function planSidecars(
         planPostgresDb(plan, projectName, secrets.dbPassword, net)
     }
     else if (service === 'cache' && !provisionEnv.HAI_CACHE) {
-      planRedisCache(plan, projectName, net)
+      if ((backends.cache ?? 'redis') === 'redis')
+        planRedisCache(plan, projectName, net)
     }
     else if (service === 'storage' && !provisionEnv.HAI_STORAGE) {
-      planMinioStorage(plan, projectName, secrets.storagePassword, net)
+      if ((backends.storage ?? 's3') === 's3')
+        planS3Storage(plan, projectName, secrets.storagePassword, net, s3Engine)
+      else
+        addAppDataVolume(plan, projectName)
     }
     else if (service === 'vecdb' && !provisionEnv.HAI_VECDB) {
       const backend = backends.vecdb ?? 'qdrant'
@@ -298,6 +330,29 @@ export function planSidecars(
         addAppDataVolume(plan, projectName) // 嵌入式：持久化本地向量文件
       else
         planQdrantVecdb(plan, projectName, net)
+    }
+    else if (service === 'ldap' && backends.ldap === 'ldap' && !provisionEnv.HAI_IAM_LDAP) {
+      const password = secrets.ldapPassword ?? secrets.dbPassword
+      plan.services.push('ldap')
+      plan.dependsOn.push('ldap')
+      plan.composeServices.ldap = { image: IMAGES.ldap, restart: 'unless-stopped', env_file: ['.env.runtime'], networks: net, volumes: [`${projectName}-ldap-data:/var/lib/ldap`, `${projectName}-ldap-config:/etc/ldap/slapd.d`] }
+      plan.volumes[`${projectName}-ldap-data`] = null
+      plan.volumes[`${projectName}-ldap-config`] = null
+      Object.assign(plan.env, { LDAP_DOMAIN: 'example.org', LDAP_ORGANISATION: 'HAI', LDAP_ADMIN_PASSWORD: password, LDAP_TLS: 'false', HAI_IAM_LOGIN_LDAP: 'true', HAI_IAM_LDAP: JSON.stringify({ url: 'ldap://ldap:389', bindDn: 'cn=admin,dc=example,dc=org', bindPassword: password, searchBase: 'dc=example,dc=org' }) })
+      plan.secrets.push(password)
+    }
+    else if (service === 'email' && (scan.middlewares ? scan.middlewares.some(item => item.service === 'email' && item.backend === 'smtp' && (options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.email ?? 'default') === 'default') : backends.email === 'smtp') && !provisionEnv.HAI_REACH_PROVIDERS) {
+      plan.services.push('email')
+      plan.dependsOn.push('email')
+      plan.composeServices.email = { image: IMAGES.smtp, restart: 'unless-stopped', networks: net }
+      const requirements = scan.middlewares?.filter(item => item.service === 'email' && item.backend === 'smtp' && ['default', undefined].includes(options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.email))
+      if (requirements?.length) {
+        for (const requirement of requirements)
+          plan.env[requirement.envPrefix] = JSON.stringify({ name: requirement.config.name ?? 'email', type: 'smtp', host: 'email', port: 1025, secure: false, from: 'noreply@example.com' })
+      }
+      else if (!scan.middlewares) {
+        plan.env.HAI_REACH_PROVIDERS_0 = JSON.stringify({ name: 'email', type: 'smtp', host: 'email', port: 1025, secure: false, from: 'noreply@example.com' })
+      }
     }
   }
 
@@ -322,12 +377,18 @@ export function buildRuntimeEnv(
   scan: ScanResult,
   provisionEnv: Record<string, string>,
   containerPort: number,
+  options?: DeployAppOptions,
+  appEnv: Record<string, string> = {},
+  s3Engine: 'rustfs' | 'minio' = 'rustfs',
 ): RuntimeEnvPlan {
-  const sidecar = planSidecars(appDir, projectName, scan, provisionEnv)
+  const sidecar = planSidecars(appDir, projectName, scan, provisionEnv, options, s3Engine)
   const env: Record<string, string> = {
     NODE_ENV: 'production',
     HOST: '0.0.0.0',
     PORT: String(containerPort),
+    HAI_SERV_SERVER_HOST: '0.0.0.0',
+    HAI_SERV_SERVER_PORT: String(containerPort),
+    ...appEnv,
     ...sidecar.env,
     ...provisionEnv,
   }
@@ -343,6 +404,8 @@ export function buildRuntimeEnv(
  * @param options.hostPort - 宿主机映射端口
  * @param options.containerPort - 容器内端口
  * @param options.sidecar - sidecar 规划
+ * @param options.previousCompose - 需要保留服务时读取的上次编排
+ * @param options.serviceModes - 各中间件的处理选择
  * @returns compose YAML 字符串
  */
 export function generateComposeFile(options: {
@@ -351,6 +414,10 @@ export function generateComposeFile(options: {
   hostPort: number
   containerPort: number
   sidecar: SidecarPlan
+  /** 上次编排；保持不变的服务继续保留其定义与持久化卷。 */
+  previousCompose?: string
+  /** 各中间件的处理选择。 */
+  serviceModes?: DeployAppOptions['serviceModes']
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
 
@@ -369,11 +436,11 @@ export function generateComposeFile(options: {
   if (sidecar.dependsOn.length > 0)
     app.depends_on = sidecar.dependsOn
 
+  const services: Record<string, ComposeService> = { app, ...sidecar.composeServices }
+  if (services['storage-init'])
+    services['storage-init'] = { ...services['storage-init'], image: imageRef }
   const compose: Record<string, unknown> = {
-    services: {
-      app,
-      ...sidecar.composeServices,
-    },
+    services,
     networks: {
       'hai-app': { name: `hai-${projectName}` },
     },
@@ -381,13 +448,51 @@ export function generateComposeFile(options: {
   if (Object.keys(sidecar.volumes).length > 0)
     compose.volumes = sidecar.volumes
 
+  if (options.previousCompose && options.serviceModes) {
+    const previous = parse(options.previousCompose) as { services?: Record<string, ComposeService>, volumes?: Record<string, unknown> }
+    for (const [service, mode] of Object.entries(options.serviceModes)) {
+      if (mode !== 'keep')
+        continue
+      for (const name of [service, `${service}-init`]) {
+        if (previous.services?.[name]) {
+          services[name] = previous.services[name]
+          app.depends_on = [...new Set([...(app.depends_on as string[] | undefined ?? []), service])]
+        }
+      }
+    }
+    const previousMounts = previous.services?.app?.volumes
+    if (Array.isArray(previousMounts) && Object.values(options.serviceModes).includes('keep'))
+      app.volumes = [...new Set([...(app.volumes as string[] | undefined ?? []), ...previousMounts])]
+    // 保留已有卷定义不会创建/删除容器或清空卷，避免 keep 路径丢失挂载。
+    compose.volumes = { ...previous.volumes, ...sidecar.volumes }
+  }
+
+  // S3 服务启动不等于桶已创建；初始化失败必须阻止应用启动，不能只依靠 HTTP 健康检查。
+  if (services['storage-init']) {
+    app.depends_on = {
+      ...Object.fromEntries((app.depends_on as string[] | undefined ?? []).map(name => [name, { condition: 'service_started' }])),
+      'storage-init': { condition: 'service_completed_successfully' },
+    }
+  }
+
   return stringify(compose)
 }
 
 /** 将环境变量对象序列化为 .env.runtime 内容（每行 KEY=VALUE）。 */
 export function serializeEnvFile(env: Record<string, string>): string {
   return `${Object.entries(env)
-    .map(([key, value]) => `${key}=${value}`)
+    .map(([key, value]) => {
+      let literal = value
+      if (/[\s#$'"]/.test(value)) {
+        if (value.startsWith('{') || value.startsWith('['))
+          literal = `'${value.replaceAll('\'', '\\u0027')}'`
+        else if (!value.includes('\''))
+          literal = `'${value}'`
+        else
+          literal = JSON.stringify(value).replaceAll('$', '$$')
+      }
+      return `${key}=${literal}`
+    })
     .join('\n')}\n`
 }
 
@@ -409,6 +514,9 @@ export function generateDockerignore(): string {
 **/test-results
 **/playwright-report
 **/.hai/deploy
+**/.env.local
+**/.env.*.local
+**/.env.runtime
 .git
 `
 }
@@ -423,27 +531,39 @@ export function generateDockerignore(): string {
  * @param containerPort - 容器监听端口
  * @returns Dockerfile 内容
  */
-export function generateFallbackDockerfile(packageName: string, containerPort: number): string {
+export function generateFallbackDockerfile(packageName: string, containerPort: number, options: { environment?: string, entrypoint?: string } = {}): string {
+  if (!/^@?[a-z0-9][\w./-]*$/i.test(packageName) || !/^[a-z0-9][\w-]*$/i.test(options.environment ?? 'prod'))
+    throw new Error('Invalid container build target')
+  const environment = options.environment ?? 'prod'
+  const coreEnv = environment === 'prod' ? 'production' : environment === 'dev' ? 'development' : environment === 'test' ? 'test' : 'staging'
   return `# syntax=docker/dockerfile:1.7
 FROM node:24-bookworm-slim AS build
+ARG SQLITE_PREBUILD_MIRROR
+ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV CI=true
+ENV HAI_DEPLOY_ENVIRONMENT=${environment}
+ENV HAI_CORE_ENV=${coreEnv}
 WORKDIR /workspace
 RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
 COPY . .
 RUN pnpm install --frozen-lockfile --ignore-scripts
-RUN pnpm --filter ${packageName} build
+RUN pnpm --filter ${packageName}... build
+RUN if [ -d node_modules/better-sqlite3 ]; then cd node_modules/better-sqlite3; for attempt in 1 2 3; do node -e "require('node:child_process').execFileSync(process.execPath,[require.resolve('prebuild-install/bin.js'),'--verbose'],{stdio:'inherit'})" && break; [ "$attempt" = 3 ] && exit 1; sleep 3; done; fi
 RUN pnpm pm deploy --filter ${packageName} --prod /prod/app
 
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production
+ENV HAI_DEPLOY_ENVIRONMENT=${environment}
+ENV HAI_CORE_ENV=${coreEnv}
 ENV HOST=0.0.0.0
 ENV PORT=${containerPort}
 WORKDIR /app
 COPY --from=build --chown=node:node /prod/app ./
+RUN mkdir -p data && chown node:node data
 USER node
 EXPOSE ${containerPort}
-CMD ["node", "build"]
+CMD ["node", ${JSON.stringify(options.entrypoint ?? 'build')}]
 `
 }

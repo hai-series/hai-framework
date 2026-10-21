@@ -15,6 +15,7 @@ import type {
   DeployFunctions,
   DeployRecoveryInfo,
   DeployResult,
+  DeployScanOptions,
   ProvisionResult,
   ScanResult,
   ServiceType,
@@ -27,7 +28,8 @@ import {
   saveCredential,
   saveCredentials,
 } from './deploy-credentials.js'
-import { buildApp, resolveOutputDir } from './deploy-functions.js'
+import { loadDeploymentEnvironment, saveDeploymentEnvironment } from './deploy-environment.js'
+import { buildApp, resolveOutputDir, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
 import { scanApp } from './deploy-scanner.js'
@@ -141,15 +143,32 @@ function normalizeProjectName(name: string): string {
 }
 
 /** 合并 Provisioner 输出环境变量，并聚合 HAI_REACH_PROVIDERS 数组。 */
-function mergeProvisionEnv(results: ProvisionResult[]): Record<string, string> {
+function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, options?: DeployAppOptions): Record<string, string> {
   let env: Record<string, string> = {}
-  const reachProviders: unknown[] = []
+  const reachRequirements = scan?.middlewares?.filter(item => item.configName === 'reach') ?? []
+  const reachProviders: unknown[] = reachRequirements.map(item => item.config)
+  let hasReachOutput = false
   for (const prov of results) {
-    if (prov.envVars.HAI_REACH_PROVIDERS)
-      reachProviders.push(...JSON.parse(prov.envVars.HAI_REACH_PROVIDERS) as unknown[])
+    if (prov.envVars.HAI_REACH_PROVIDERS) {
+      hasReachOutput = true
+      const supplied = JSON.parse(prov.envVars.HAI_REACH_PROVIDERS) as Record<string, unknown>[]
+      for (const provider of supplied) {
+        const targets = reachRequirements.filter((item) => {
+          const mode = options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.[item.service]
+          return item.service === prov.serviceType && (!mode || mode === 'default')
+        })
+        if (targets.length) {
+          for (const target of targets)
+            reachProviders[reachRequirements.indexOf(target)] = { ...provider, name: target.config.name ?? provider.name }
+        }
+        else {
+          reachProviders.push(provider)
+        }
+      }
+    }
     env = { ...env, ...prov.envVars }
   }
-  if (reachProviders.length > 0)
+  if (hasReachOutput)
     env.HAI_REACH_PROVIDERS = JSON.stringify(reachProviders)
   return env
 }
@@ -206,7 +225,7 @@ export const deploy: DeployFunctions = {
         let provider: DeployProvider | null = null
         let containerProvider: ContainerDeployProvider | null = null
         if (parsed.provider.type === 'docker-ssh') {
-          containerProvider = createDockerSshProvider(parsed.provider, parsed.container?.runtime)
+          containerProvider = createDockerSshProvider(parsed.provider, parsed.container)
           logger.info('Container deploy provider ready', { provider: 'docker-ssh', host: parsed.provider.ssh.host })
         }
         else {
@@ -297,13 +316,13 @@ export const deploy: DeployFunctions = {
     return currentProvider !== null || currentContainerProvider !== null
   },
 
-  async scan(appDir: string): Promise<HaiResult<ScanResult>> {
+  async scan(appDir: string, options?: DeployScanOptions): Promise<HaiResult<ScanResult>> {
     // scan 仅做本地文件分析，不依赖 Provider / Provisioner 初始化状态。
     logger.debug('Scanning application', { appDir })
-    return scanApp(appDir)
+    return scanApp(appDir, options)
   },
 
-  async provisionAll(projectName: string): Promise<HaiResult<ProvisionResult[]>> {
+  async provisionAll(projectName: string, services?: ServiceType[]): Promise<HaiResult<ProvisionResult[]>> {
     if (!currentProvider && !currentContainerProvider) {
       return notInitialized.result()
     }
@@ -312,6 +331,8 @@ export const deploy: DeployFunctions = {
     const results: ProvisionResult[] = []
 
     for (const [serviceType, provisioner] of currentProvisioners) {
+      if (services && !services.includes(serviceType))
+        continue
       logger.debug('Provisioning service', { serviceType, provisioner: provisioner.name })
       const provResult = await provisioner.provision(projectName)
       if (!provResult.success) {
@@ -346,19 +367,30 @@ export const deploy: DeployFunctions = {
       return notInitialized.result()
     }
 
-    logger.info('Starting deployment', { appDir, options })
+    logger.info('Starting deployment', { appDir, environment: options?.environment, projectName: options?.projectName })
 
     // 1. 扫描应用
-    const scanResult = await scanApp(appDir)
+    const scanOptions = { ...options, environment: options?.environment ?? currentConfig?.environment }
+    const scanResult = await scanApp(appDir, scanOptions)
     if (!scanResult.success) {
       return err(scanResult.error)
     }
     const scan = scanResult.data
-    const projectName = options?.projectName ?? scan.appName
+    appDir = scan.appDir ?? appDir
+    const environment = loadDeploymentEnvironment({ environment: scanOptions.environment ?? 'prod', envDir: scan.envDir ?? appDir, requireFile: scanOptions.environment !== undefined })
+    if (!environment.success)
+      return environment
+    const appEnv = Object.fromEntries(Object.entries(environment.data.values).filter(([key]) => !key.startsWith('HAI_CLI_') && (!key.startsWith('HAI_DEPLOY_') || key === 'HAI_DEPLOY_ENVIRONMENT')))
+    const projectName = `${options?.projectName ?? scan.appName}${scanOptions.environment ? `-${environment.data.environment}` : ''}`
+    options = {
+      ...options,
+      ...(scanOptions.environment ? { environment: environment.data.environment } : {}),
+      ...(options?.skipProvision ? { serviceModes: Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])) } : {}),
+    }
 
     // 容器 Provider（docker-ssh）：走独立的容器部署编排
     if (currentContainerProvider) {
-      return deployContainerApp(currentContainerProvider, appDir, scan, projectName, options)
+      return deployContainerApp(currentContainerProvider, appDir, scan, projectName, options, appEnv)
     }
 
     // 到此必为平台 Provider（vercel）
@@ -377,15 +409,20 @@ export const deploy: DeployFunctions = {
     }
 
     // 3. 开通基础设施
-    let allEnvVars: Record<string, string> = {}
+    let allEnvVars: Record<string, string> = appEnv
     const recovery: DeployRecoveryInfo = { projectName, stage: 'provision', resources: [] }
     if (!options?.skipProvision) {
-      const provResults = await deploy.provisionAll(projectName)
+      const provResults = await deploy.provisionAll(projectName, options?.serviceModes ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options)) : undefined)
       if (!provResults.success) {
         return err(provResults.error)
       }
       recovery.resources = provResults.data.map(({ envVars: _envVars, ...resource }) => resource)
-      allEnvVars = mergeProvisionEnv(provResults.data)
+      allEnvVars = { ...allEnvVars, ...mergeProvisionEnv(provResults.data, scan, options) }
+      if (options?.environment) {
+        const saved = saveDeploymentEnvironment(environment.data, mergeProvisionEnv(provResults.data, scan, options))
+        if (!saved.success)
+          return recoveryFailure(saved.error, { ...recovery, stage: 'save-env' })
+      }
     }
 
     // 4. 创建平台项目
@@ -453,6 +490,7 @@ async function deployContainerApp(
   scan: ScanResult,
   rawProjectName: string,
   options?: DeployAppOptions,
+  appEnv: Record<string, string> = {},
 ): Promise<HaiResult<DeployResult>> {
   const projectName = normalizeProjectName(rawProjectName)
 
@@ -466,12 +504,12 @@ async function deployContainerApp(
 
   let provisionEnv: Record<string, string> = {}
   if (!options?.skipProvision) {
-    const provResults = await deploy.provisionAll(projectName)
+    const provResults = await deploy.provisionAll(projectName, options?.serviceModes ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options)) : undefined)
     if (!provResults.success) {
       return err(provResults.error)
     }
-    provisionEnv = mergeProvisionEnv(provResults.data)
+    provisionEnv = mergeProvisionEnv(provResults.data, scan, options)
   }
 
-  return provider.deploy({ appDir, projectName, scan, provisionEnv })
+  return provider.deploy({ appDir, projectName, scan, provisionEnv, appEnv, options })
 }

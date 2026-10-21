@@ -56,6 +56,8 @@ await deploy.close()
 
 `hai deploy --env test` を実行するか、対話端末で最初に環境を入力します。対応する `.env.test` がなければ作成を案内して停止します。環境変数とモジュール依存を解析し、現在のバックエンド・用途・検出元を表示して、既定設定・カスタム接続・変更しないを項目ごとに選択します。変更しないは対象環境に完全な設定がある場合だけ表示され、書き込み・認証・作成を省略します。`--yes` は完全な既存設定を維持し、それ以外は現在のバックエンドの既定値を使います。`--env-dir` で環境ファイルの場所を指定できます。
 
+設定済みの環境ではウィザードの「直接デプロイ」、または `hai deploy packages/my-app-serv --env prod --yes --skip-middleware` ですべてのミドルウェア設定・書き込み・作成を省略し、既存サービスを維持できます。SSH/Vercel の不足する設定は対話で入力し、ホスト、ポート、鍵のパス、リモートディレクトリー、Token を `.env.local` の `HAI_DEPLOY_PROVIDER` にのみ保存して再利用します。SDK では `saveDeploymentEnvironment(snapshot, values, { private: true })` で本機設定を保存できます。秘密鍵はパスのみ指定します。
+
 既定設定は Compose のサービス・ボリュームまたは対応するクラウド Provisioner を作成します。未対応のクラウド接続はカスタム設定を利用します。SQLite/memory/local/disabled の動作は維持されます。公開値は対象環境ファイル、認証情報を含む JSON/URL は `.env.local` に保存し、表示はマスクします。[バックエンドと接続項目](../cli/templates/skills/hai-deploy/middleware.md)を参照してください。
 
 ## 設定
@@ -181,7 +183,7 @@ docker-ssh の `deployApp()` は次の順で処理します：
 | `db`         | `mysql`                | `mysql:8.4`                              | `HAI_DB`                      |
 | `db`         | `sqlite`               | なし（`/app/data` ボリュームをマウント） | —                             |
 | `cache`      | `redis`                | `redis:7-alpine`                         | `HAI_CACHE`                   |
-| `storage`    | `s3`                   | RustFS / MinIO + バケット初期化                 | `HAI_STORAGE`                 |
+| `storage`    | `s3`                   | RustFS / MinIO + バケット初期化          | `HAI_STORAGE`                 |
 | `vecdb`      | `qdrant`               | `qdrant/qdrant`                          | `HAI_VECDB`                   |
 | `vecdb`      | `pgvector`             | `pgvector/pgvector`                      | `HAI_VECDB`                   |
 | `vecdb`      | `chroma`               | `chromadb/chroma`                        | `HAI_VECDB`                   |

@@ -7,7 +7,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { DeployResult, ScanResult } from '../deploy-types.js'
+import type { DeployAppOptions, DeployResult, ScanResult } from '../deploy-types.js'
 
 /** 本地/远程容器运行时 */
 export type ContainerRuntime = 'docker' | 'podman'
@@ -22,6 +22,10 @@ export interface ContainerDeployContext {
   scan: ScanResult
   /** Provisioner 开通得到的环境变量（云资源，优先于自建 sidecar） */
   provisionEnv: Record<string, string>
+  /** 已加载的应用环境，与云开通结果分开，避免误判已有配置为自动开通结果。 */
+  appEnv?: Record<string, string>
+  /** 环境标识及各中间件处理策略。 */
+  options?: DeployAppOptions
 }
 
 /**

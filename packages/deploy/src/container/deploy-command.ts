@@ -127,11 +127,12 @@ export function runCommand(
         command,
         code: exitCode,
         stderr: maskSecrets(stderr, options.secrets).slice(-500),
+        stdout: maskSecrets(stdout, options.secrets).slice(-3000),
       })
       finish(err(
         HaiDeployError.REMOTE_COMMAND_FAILED,
         deployM('deploy_commandFailed', {
-          params: { command, error: maskSecrets(stderr || `exit ${exitCode}`, options.secrets).slice(-500) },
+          params: { command, error: maskSecrets(`${stdout.slice(-2500)}\n${stderr || `exit ${exitCode}`}`, options.secrets).slice(-3000) },
         }),
       ))
     })

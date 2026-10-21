@@ -12,11 +12,12 @@ import type {
   ContainerDeployProvider,
   ContainerRuntime,
 } from '../container/deploy-container-types.js'
-import type { DockerSshProviderConfig } from '../deploy-config.js'
+import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployResult } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { parseEnv } from 'node:util'
 import { core, err, ok } from '@h-ai/core'
 import {
   buildRuntimeEnv,
@@ -27,6 +28,7 @@ import {
 } from '../container/deploy-container-compose.js'
 import { buildImage, detectLocalRuntime, saveImage } from '../container/deploy-container-runtime.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
+import { loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 
@@ -37,6 +39,11 @@ const HEALTH_POLL_INTERVAL = 3000
 
 /** 健康检查最大轮询次数 */
 const HEALTH_MAX_ATTEMPTS = 40
+
+/** 远程登录 shell 的字面参数；路径中的空格、单引号及美元符号不能作为命令解释。 */
+function shellArgument(value: string): string {
+  return `'${value.replaceAll('\'', '\'"\'"\'')}'`
+}
 
 /** 生成不可变部署 ID：`YYYYMMDD-HHmmss-<random>`。 */
 function makeDeploymentId(): string {
@@ -96,13 +103,15 @@ function resolveWorkspaceRoot(appDir: string): string {
  * 创建 docker-ssh 部署 Provider。
  *
  * @param config - docker-ssh Provider 配置
- * @param localRuntimePref - 本地构建运行时偏好（auto 优先 podman）
+ * @param container - 本地构建运行时与代理配置
  * @returns 容器部署 Provider 实例
  */
 export function createDockerSshProvider(
   config: DockerSshProviderConfig,
-  localRuntimePref: 'auto' | ContainerRuntime = 'auto',
+  container?: DeployConfig['container'],
 ): ContainerDeployProvider {
+  const localRuntimePref = container?.runtime ?? 'auto'
+  const httpProxy = container?.httpProxy ?? true
   const ssh = createSshExecutor(config.ssh)
   const baseDir = config.remote.baseDir
 
@@ -145,7 +154,7 @@ export function createDockerSshProvider(
   }
 
   const deploy = async (context: ContainerDeployContext): Promise<HaiResult<DeployResult>> => {
-    const { appDir, projectName, scan, provisionEnv } = context
+    const { appDir, projectName, scan, provisionEnv, appEnv, options } = context
     const deploymentId = makeDeploymentId()
     const containerPort = config.expose.containerPort
     const hostPort = config.expose.hostPort
@@ -158,7 +167,7 @@ export function createDockerSshProvider(
     const localRuntime = runtimeResult.data
 
     // 2. 解析构建上下文与 Dockerfile（优先复用应用自带 Dockerfile；无则按工程结构生成兜底）
-    const artifactDir = join(appDir, '.hai', 'deploy')
+    const artifactDir = join(appDir, '.hai', 'deploy', options?.environment ?? 'prod')
     mkdirSync(artifactDir, { recursive: true })
     const appDockerfile = join(appDir, 'Dockerfile')
     let dockerfilePath: string
@@ -171,26 +180,38 @@ export function createDockerSshProvider(
     else {
       // 兜底：monorepo 成员以 workspace 根为上下文，`pnpm --filter` 只构建目标应用
       dockerfilePath = join(artifactDir, 'Dockerfile')
-      writeFileSync(dockerfilePath, generateFallbackDockerfile(readPackageName(appDir), containerPort))
+      writeFileSync(dockerfilePath, generateFallbackDockerfile(readPackageName(appDir), containerPort, { environment: options?.environment, entrypoint: scan.isSvelteKit ? 'build' : 'dist/index.js' }))
       // 伴随 .dockerignore：保留 workspace 源码，覆盖仓库根可能排除 apps 的 .dockerignore
       writeFileSync(`${dockerfilePath}.dockerignore`, generateDockerignore())
       contextDir = resolveWorkspaceRoot(appDir)
       logger.info('Generated fallback Dockerfile', { dockerfilePath, contextDir })
     }
 
-    // 3. 构建镜像
+    // 3. 先保存开通结果和 sidecar 凭据，构建失败后仍可检查与复用配置。
+    const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
+    const envPath = join(artifactDir, '.env.runtime')
+    const previousEnv = existsSync(envPath) ? parseEnv(readFileSync(envPath, 'utf8')) : {}
+    Object.assign(env, { ...previousEnv, ...env })
+    writeFileSync(envPath, serializeEnvFile(env), { mode: 0o600 })
+    if (options?.environment) {
+      const environment = loadDeploymentEnvironment({ environment: options.environment, envDir: options.envDir ?? scan.envDir ?? appDir })
+      if (!environment.success)
+        return environment
+      const saved = saveDeploymentEnvironment(environment.data, { HAI_DEPLOY_ENVIRONMENT: environment.data.environment, HAI_CORE_ENV: environment.data.values.HAI_CORE_ENV, ...sidecar.env, ...provisionEnv })
+      if (!saved.success)
+        return saved
+    }
+
+    // 4. 构建只传环境标识，禁止将运行期凭据写入镜像层。
     const buildResult = await buildImage(localRuntime, {
       contextDir,
       dockerfilePath,
       imageRef: localImageTag,
+      buildArgs: { HAI_DEPLOY_ENVIRONMENT: options?.environment ?? 'prod', HAI_CORE_ENV: env.HAI_CORE_ENV ?? 'production', SQLITE_PREBUILD_MIRROR: container?.sqlitePrebuildMirror ?? '' },
+      httpProxy,
     })
     if (!buildResult.success)
       return err(buildResult.error)
-
-    // 4. 运行期环境与 sidecar 规划
-    const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort)
-    const envPath = join(artifactDir, '.env.runtime')
-    writeFileSync(envPath, serializeEnvFile(env), { mode: 0o600 })
 
     // 5. 导出镜像
     const tarPath = join(artifactDir, `${projectName}.tar`)
@@ -209,7 +230,7 @@ export function createDockerSshProvider(
 
     // 7. 准备远程目录
     const remoteDir = `${baseDir}/${projectName}`
-    const prepareResult = await ssh.exec(`mkdir -p ${remoteDir} && chmod 700 ${remoteDir}`)
+    const prepareResult = await ssh.exec(`mkdir -p -- ${shellArgument(remoteDir)} && chmod 700 -- ${shellArgument(remoteDir)}`)
     if (!prepareResult.success)
       return err(prepareResult.error)
 
@@ -218,7 +239,7 @@ export function createDockerSshProvider(
     const uploadTarResult = await ssh.upload(tarPath, remoteTar)
     if (!uploadTarResult.success)
       return err(uploadTarResult.error)
-    const loadResult = await ssh.exec(`${remoteRuntime} load -i ${remoteTar}`, { timeoutMs: 300_000 })
+    const loadResult = await ssh.exec(`${remoteRuntime} load -i ${shellArgument(remoteTar)}`, { timeoutMs: 300_000 })
     if (!loadResult.success)
       return err(loadResult.error)
     // podman load 会把无 registry 的镜像名归一化为 docker.io/library/*，compose 据此会误拉取；
@@ -226,7 +247,7 @@ export function createDockerSshProvider(
     const loadedRef = parseLoadedImageRef(loadResult.data.stdout, localImageTag)
     const remoteImageRef = remoteRuntime === 'podman' ? `localhost/${localImageTag}` : localImageTag
     if (loadedRef !== remoteImageRef) {
-      const tagResult = await ssh.exec(`${remoteRuntime} tag ${loadedRef} ${remoteImageRef}`)
+      const tagResult = await ssh.exec(`${remoteRuntime} tag ${shellArgument(loadedRef)} ${shellArgument(remoteImageRef)}`)
       if (!tagResult.success)
         return err(tagResult.error)
     }
@@ -238,6 +259,8 @@ export function createDockerSshProvider(
       hostPort,
       containerPort,
       sidecar,
+      serviceModes: options?.serviceModes,
+      previousCompose: existsSync(join(artifactDir, 'compose.yml')) ? readFileSync(join(artifactDir, 'compose.yml'), 'utf8') : undefined,
     })
     const composePath = join(artifactDir, 'compose.yml')
     writeFileSync(composePath, composeContent)
@@ -247,25 +270,32 @@ export function createDockerSshProvider(
     const uploadEnvResult = await ssh.upload(envPath, `${remoteDir}/.env.runtime`)
     if (!uploadEnvResult.success)
       return err(uploadEnvResult.error)
+    const startScript = `#!/bin/sh\nset -eu\ncd "$(dirname "$0")"\nexport HAI_DEPLOY_ENVIRONMENT=${options?.environment ?? 'prod'}\nexport HAI_CORE_ENV=${shellArgument(env.HAI_CORE_ENV ?? 'production')}\nexec ${remoteRuntime} compose --env-file .env.runtime -p hai-${projectName} up -d\n`
+    const startName = `start-${options?.environment ?? 'prod'}.sh`
+    const startPath = join(artifactDir, startName)
+    writeFileSync(startPath, startScript, { mode: 0o700 })
+    const uploadStart = await ssh.upload(startPath, `${remoteDir}/${startName}`)
+    if (!uploadStart.success)
+      return uploadStart
     const secretMask = sidecar.secrets
-    const chmodResult = await ssh.exec(`chmod 600 ${remoteDir}/.env.runtime`, { secrets: secretMask })
+    const chmodResult = await ssh.exec(`chmod 600 -- ${shellArgument(`${remoteDir}/.env.runtime`)}`, { secrets: secretMask })
     if (!chmodResult.success)
       return err(chmodResult.error)
 
     // 10. 启动
     const upResult = await ssh.exec(
-      `cd ${remoteDir} && ${remoteRuntime} compose -p hai-${projectName} up -d`,
+      `cd ${shellArgument(remoteDir)} && sh ${shellArgument(startName)}`,
       { timeoutMs: 300_000, secrets: secretMask },
     )
     if (!upResult.success)
       return err(upResult.error)
     // 清理远程镜像 tar，节省空间（失败不阻断部署）
-    await ssh.exec(`rm -f ${remoteTar}`)
+    await ssh.exec(`rm -f -- ${shellArgument(remoteTar)}`)
 
     // 11. 健康检查
     const url = `http://${config.ssh.host}:${hostPort}`
     logger.info('Running health check', { url })
-    const healthy = await healthCheck(`${url}/`)
+    const healthy = await healthCheck(`${url}${scan.isSvelteKit ? '/' : '/health'}`)
     if (!healthy) {
       return err(
         HaiDeployError.HEALTH_CHECK_FAILED,
