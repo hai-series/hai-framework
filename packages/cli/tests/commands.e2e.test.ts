@@ -1487,7 +1487,7 @@ describe('ai 支持交付与回填', () => {
     expect(await generateModuleSkillFile(dir, 'ai')).toBeNull()
   })
 
-  it('文档实施工作流回填应保留自定义入口并完整补齐任务与执行范本', async () => {
+  it('文档实施工作流回填应保留自定义入口并完整补齐任务、执行与变更资源', async () => {
     const dir = path.join(tmpRoot, 'skill-spec-implement-backfill')
     const skillRoot = '.agents/skills/hai-spec-implement'
     const customSkill = '# project-specific implementation instructions\n'
@@ -1496,7 +1496,7 @@ describe('ai 支持交付与回填', () => {
     const copied = await generateProjectAiSupport(dir, [], { overwriteSkills: false, overwriteBridgeFiles: false })
 
     expect(await readText(dir, `${skillRoot}/SKILL.md`)).toBe(customSkill)
-    for (const resource of ['workflow.md', 'templates.md']) {
+    for (const resource of ['workflow.md', 'templates.md', 'changes.md']) {
       expect(copied).toContain(`${skillRoot}/${resource}`)
       expect(await readText(dir, `${skillRoot}/${resource}`))
         .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-spec-implement', resource), 'utf8'))

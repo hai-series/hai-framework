@@ -21,7 +21,7 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 
 从需求/设计文档开始生成项目或功能前，使用 [hai-spec-review](../hai-spec-review/SKILL.md) 检查文档是否足以确定实现；修正影响行为的缺项、歧义和技术错误后再进入生成。普通小改动按本次范围确认规则，不要求重审无关文档。
 
-需要按文档规划/执行任务或返修已交付任务时，使用 [hai-spec-implement](../hai-spec-implement/SKILL.md) 管理 docs 清单、任务记录、TDD 和任务分支；本 skill 负责其中的具体应用实现，复用记录中的范围与验收。
+需要按文档规划/执行、返修或根据已提交文档差异同步实现时，使用 [hai-spec-implement](../hai-spec-implement/SKILL.md) 管理 docs 清单、任务记录、文档基线、TDD 和任务分支；本 skill 负责其中的具体应用实现，复用固定目标版本、范围与验收。
 
 需要新建项目、添加模块、补齐配置或生成代码时，先按 [CLI 安装与命令](development.md#cli-安装与命令) 全局安装 `@h-ai/cli`，再执行 `hai` 命令。
 

@@ -29,6 +29,8 @@ CLI 从 `templates/skills/` 将所选 skill 的完整目录复制到生成项目
 
 审查后的文档实施使用独立的 `hai-spec-implement`，同样交付到所有应用并由 `hai init` / `hai add` 补齐。AI 按可独立验收的功能和实际依赖决定是否拆分，默认写入 `docs/task-list.md` 与 `docs/tasks/<编号>-<slug>.md`；每项在独立 Git 分支走 TDD、门禁、本地合并，记录真实合并提交后更新清单。返修复用原任务编号、文件和分支，追加轮次并关联此前证据。流程复用 Markdown、Git 和已有开发/测试 skills，无新增运行依赖或工作流引擎。可以请求“只根据 docs/需求.md 拆分任务”“根据该文档生成代码”“执行 T003”或“T002 返修后合并”；仅规划时不实施，指定任务先核验依赖，远端操作依实际授权。
 
+需求/设计文档提交后，可以请求“我修改了 docs/需求.md、docs/设计.md，请帮我更新实现”。Skill 在原清单中区分已验收文档 SHA、固定目标文档 SHA 与已验收实现 SHA，比较完整文档集合的净差异（含增删、重命名及关联影响），更新原任务或新建任务，逐项在对应分支测试、合并。全部差异处理且整体验收通过后，才提交新的已验收基线；部分完成或中断保留旧基线。旧项目缺少可信基线时先追溯/核验，不猜测版本。详见 [文档差异与基线流程](templates/skills/hai-spec-implement/changes.md)。`hai init` / `hai add` 会补齐新增参考文件，已存在的入口、执行流程和任务范本仍须对照模板合并。
+
 日常新增、修改、修复功能由 `AGENTS.md` 引导读取 `hai-app-create/SKILL.md` 与 `development.md`：先把需求映射到框架现成功能、配置和扩展点，再依据当前安装版本的 exports/类型实现。适用能力优先复用；能力不足时说明具体缺口，不为模块覆盖率安装无关依赖。Codex 使用 `.agents/skills/`，仍需遵循项目根 `AGENTS.md` 的常驻规则。
 
 工具入口共享同一份规则与技能：Codex/Cursor 使用 AGENTS 与 `.agents/skills/`；Copilot 的 `.github/copilot-instructions.md` 只引用共享 `AGENTS.md`，不另保存各应用类型规则；OpenCode 的 opencode.json 通过 `instructions: ["AGENTS.md"]` 直接引用共享规则。Claude Code 的根 CLAUDE.md 仅包含 `@AGENTS.md`，通过共享规则的任务导航按需读取 `.agents/skills/` 正文和参考文件。CLI 不创建 `.claude/`，无需重复技能或符号链接。此模式不提供 Claude 原生技能自动发现或 `/skill` 命令；项目已有的 Claude 设置与技能保留。依据：[Claude 项目指引](https://code.claude.com/docs/en/memory)、[Claude 原生 skills](https://code.claude.com/docs/en/skills)、[Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)、[OpenCode](https://docs.opencode.ai/docs/skills/)、[Cursor](https://cursor.com/docs/skills)。

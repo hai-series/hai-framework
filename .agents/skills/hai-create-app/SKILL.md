@@ -18,7 +18,7 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 ## 使用路径
 
 - 业务以用户当前明确要求及其指定文档为准；模板规则、示例、代码与测试是初始方案，冲突时在已授权范围内适配并同步过期 AGENTS/skills/README，不要求将需求改回模板。具体判断见下方应用开发共同规则。
-- 根据需求/设计文档实施时，先使用 [hai-spec-review](../../../packages/cli/templates/skills/hai-spec-review/SKILL.md) 确认就绪，再使用 [hai-spec-implement](../../../packages/cli/templates/skills/hai-spec-implement/SKILL.md) 维护任务清单、TDD 与分支交付；仅要求规划或审查时不开始实现。
+- 根据需求/设计文档实施时，先使用 [hai-spec-review](../../../packages/cli/templates/skills/hai-spec-review/SKILL.md) 确认就绪，再使用 [hai-spec-implement](../../../packages/cli/templates/skills/hai-spec-implement/SKILL.md) 维护任务、TDD、分支交付与已验收基线；文档提交后按固定 Git 差异更新原任务或新建任务，整体验收后推进基线。仅要求规划或审查时不开始实现。
 - 需要使用脚手架、添加模块或生成代码时，先按 [CLI 安装说明](../../../packages/cli/README.md#安装-cli) 全局安装 `@h-ai/cli`，再执行 `hai` 命令；仓库内未发布模板按该 README 的本地构建与运行说明验证。
 - 先按 [应用开发共同规则](../../../packages/cli/templates/skills/hai-app-create/development.md) 将真实需求映射到框架模块、现成功能和配置，核对当前源码的 exports/类型及已有调用点；应用消费发布包时核对实际安装版本。
 - 可复用能力应直接使用；需要业务组合时保留领域服务，现有能力不足或目标端不支持时说明证据后再写应用实现，不为使用率强行安装无关模块。

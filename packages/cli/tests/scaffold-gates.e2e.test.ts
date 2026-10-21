@@ -219,7 +219,7 @@ it('generated migration executes up and down with HaiResult', async () => {
       for (const relativePath of scenario.expectedFiles) {
         expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
       }
-      for (const resource of ['SKILL.md', 'workflow.md', 'templates.md']) {
+      for (const resource of ['SKILL.md', 'workflow.md', 'templates.md', 'changes.md']) {
         // 从实际 CLI 构建生成，工作流入口及其按需范本必须完整且未被模板渲染改写。
         expect(await readFile(path.join(projectPath, '.agents/skills/hai-spec-implement', resource), 'utf8'))
           .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills/hai-spec-implement', resource), 'utf8'))
