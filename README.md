@@ -616,7 +616,7 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 
 ### 配置与环境变量
 
-应用与模板使用统一的 `HAI_<配置名>_<路径>` 环境变量；根 [`.env.example`](.env.example) 列出所有可用变量、用途、枚举和范围。分环境文件、启动命令与 Provider 切换见 [配置手册](docs/environment-configuration.md)。
+应用与模板使用统一的 `HAI_<配置名>_<路径>` 环境变量；根 [`.env.example`](.env.example) 列出所有可用变量、用途、枚举和范围。各 apps 示例的 `.env.example` 列出该应用的完整变量。
 
 环境文件按用途维护：`.env.example` 完整记录字段与约束；`.env` 是公共基础，`.env.dev` / `.env.test` / `.env.prod` 是公共环境覆盖，均提交 Git；`.env.local` 是被忽略的本机私有覆盖。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。各应用自己的 `.env.example` 包含该应用的完整参数。
 
@@ -640,6 +640,10 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 | Deploy         | `HAI_DEPLOY_*`                    | `@h-ai/deploy` / `@h-ai/cli` 的部署与基础设施凭据          |
 
 完整字段与默认值以根目录 `.env.example` 为准；在某个示例应用中工作时，再对照该应用自己的 `README.md` 与 `.env.example` 查看增量配置。
+
+修改模块公开 Schema、YAML 或直接读取的环境变量后，先构建相关模块，再执行 `pnpm generate:env`，同步根 `.env.example`、CLI 配置元数据和各示例应用 `.env.example`；执行 `pnpm check:env` 检查是否过期。生成器只读取公开源码和示例，不读取 `.env.local`，不覆盖公共基础和环境文件中的项目取值。新增变量应说明用途、类型、枚举、单位、范围和启用条件；数组索引、动态键及父级对象覆盖仍须经过模块 Schema 和运行测试。
+
+`pnpm dev` / `dev:test` / `dev:prod` 选择开发、测试和生产配置，Node 服务构建后使用 `start:test` / `start:prod`。Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles({ mode, envDir })` 结果后注入，Node 按基础、环境、本机的顺序传入 `--env-file`；`core.init` 不读取 dotenv。`development` / `production` 文件模式映射为 `dev` / `prod`。Provider 切换和旧变量迁移步骤见应用 skill 的[环境配置](packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
 
 ### 质量门禁
 

@@ -616,9 +616,13 @@ Skills are managed in `packages/cli/templates/skills/` and distributed by `@h-ai
 
 ### Configuration and environment variables
 
-Applications and templates share `HAI_<CONFIG>_<PATH>`. The root [`.env.example`](.env.example) lists available variables, descriptions, enums and bounds. See the [configuration guide](docs/environment-configuration.md) for mode files, startup commands and provider switching.
+Applications and templates share `HAI_<CONFIG>_<PATH>`. The root [`.env.example`](.env.example) lists available variables, descriptions, enums and bounds. Each example application lists its complete variables in its own `.env.example`.
 
 Track `.env.example` (complete descriptions and constraints), `.env` (shared public values), and `.env.dev` / `.env.test` / `.env.prod` (public environment overrides). Ignore `.env.local` for machine secrets. Priority: process environment > `.env.local` > environment file > `.env`. Each application example lists its complete available settings.
+
+After changing a public Schema, YAML configuration or an environment-variable reader, build the affected modules and run `pnpm generate:env` to update the root catalog, CLI metadata and example applications. Run `pnpm check:env` to detect stale output. The generator reads public source and examples, never `.env.local`, and preserves project values in base and mode files. Document each field’s purpose, type, enums, units, bounds and activation conditions; validate indexed/dynamic keys and parent-object overrides through the module Schema and runtime tests.
+
+Use `pnpm dev` / `dev:test` / `dev:prod` for the selected mode and `start:test` / `start:prod` for built Node services. Vite checks `core.config.loadEnvFiles({ mode, envDir })` before injecting values; Node loads base, mode and local files in that order with `--env-file`. `core.init` does not read dotenv. File modes map `development` / `production` to `dev` / `prod`. Provider switching and migration steps are included in the application skill’s [environment configuration](packages/cli/templates/skills/hai-app-create/development.md#环境配置).
 
 - **Naming**: `HAI_<CONFIG_NAME>_<YAML_PATH>`, levels separated by `_`, camelCase kept intact (such as `llm.apiKey` → `HAI_AI_LLM_APIKEY`).
 - **Precedence**: convention-based variables > explicit YAML `${VAR}` > YAML defaults.

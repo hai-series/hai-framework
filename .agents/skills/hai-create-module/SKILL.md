@@ -260,7 +260,7 @@ packages/xx/
 
 - 运行参数使用 `HAI_<配置名>_<字段路径>`，camelCase 不拆词；YAML 显式引用并保留本地回退，逐项同步根及项目 `.env.example` 的用途、默认值、枚举与范围。`PUBLIC_` / `VITE_` 不包含密钥。
 - `.env.example`、公共基础 `.env` 和环境覆盖 `.env.dev` / `.env.test` / `.env.prod` 提交 Git；`.env.local` 只保存本机私有覆盖并忽略。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。
-- Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles` 的结果后注入；Node 脚本按同样顺序传入环境文件。`core.init` 不读取 dotenv。连接配置支持仅改环境变量切换 Provider，文案、表名和数据结构留在代码/YAML。具体约束见 [配置手册](../../../packages/cli/templates/shared/environment-configuration.md)。
+- Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles` 的结果后注入；Node 脚本按同样顺序传入环境文件。`core.init` 不读取 dotenv。连接配置支持仅改环境变量切换 Provider，文案、表名和数据结构留在代码/YAML。具体约束见 [环境配置](../../../packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
 
 ## §5 实施步骤（套用范本）
 

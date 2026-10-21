@@ -12,7 +12,7 @@ README 文档入口：[简体中文](README.md) · [English](README.en.md) · [�
    Codex 原生读取 `AGENTS.md` 并发现 `.agents/skills/`，可用 `$hai-create-module` 等名称调用；规范按 AGENTS 的任务导航读取，不依赖 `applyTo`。Copilot 的 `.github` 指令仅桥接共享规则，OpenCode 直接引用 `AGENTS.md`。Claude Code 通过根 `CLAUDE.md` 的 `@AGENTS.md` 导入共享规则，并按导航读取同一份技能正文和参考。CLI 不生成 `.claude/` 技能副本；此模式不提供 Claude 原生技能自动发现或 `/skill` 命令。
 4. API 示例是使用片段，业务变量/schema 需结合当前应用补齐；先判断返回类型，再处理结果，不能猜测导出或初始化方式。
 
-5. 配置变量总表读取根 [.env.example](.env.example)；分环境加载与 CLI 模板入口读取 [配置手册](docs/environment-configuration.md)。
+5. 配置变量总表读取根 [.env.example](.env.example)；分环境加载与 CLI 模板入口读取 [环境配置与维护流程](README.md#配置与环境变量)。
 
 ## 生命周期与返回值
 
@@ -62,7 +62,7 @@ return result
 | @h-ai/kit | [SvelteKit hooks、guard、validate、response](packages/cli/templates/skills/hai-kit/SKILL.md) | 仅 SvelteKit 集成，不替代共享 HTTP contract |
 | @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) | Cookie/transport 与服务端一致；SSR 避免共享用户状态 |
 | @h-ai/capacitor | [原生设备、推送、安全存储](packages/cli/templates/skills/hai-capacitor/SKILL.md) | Web 与 Android/iOS 能力不同 |
-| @h-ai/deploy | [部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md) | 核对目标 Provider 和发布授权 |
+| @h-ai/deploy | [部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md) | 先选环境并检查文件，逐项配置中间件，核对 Provider 和发布授权 |
 | @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | 表单 Form/FormLayout 支持 columns、labelPosition、自动/显式 colSpan；控件与 CRUD 失焦校验、修正即时更新，错误随 UI 语言更新；认证使用 AuthPanel + IAM 公开配置、Markdown/URL 协议弹窗和表单 snippet；components 公开入口与轻量 /theme、/i18n；Tailwind 扫描路径须正确 |
 | @h-ai/ui/guide | [新手引导与帮助中心](packages/cli/templates/skills/hai-ui/guide.md) | createGuide + GuideHost；首次 Cookie 提示、手动重看、宿主导航与 data-guide；业务翻译延迟求值、显式 locale、按用户和版本记录；fullstack Web/App/Desktop 默认接入 |
 | @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 先 `pnpm add -g @h-ai/cli`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准；生成框架依赖固定为 CLI 对应版本，安装失败展示命令和原始输出 |

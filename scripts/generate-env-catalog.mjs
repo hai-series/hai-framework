@@ -410,7 +410,7 @@ const catalogFile = path.join(root, 'packages/cli/src/commands/cli-config-catalo
 const envText = [
   '# hai-framework 环境变量总表（由 scripts/generate-env-catalog.mjs 生成）',
   '# 所有变量默认注释；按应用 .env.example 选择启用，公共值放已跟踪的 .env / .env.dev / .env.test / .env.prod，私有值仅放 .env.local 或进程环境。',
-  '# 规则、加载优先级与环境命令：docs/environment-configuration.md。',
+  '# 规则、加载优先级与环境命令：README.md 的配置与环境变量章节。',
   '# HAI_<配置名>_<路径>；camelCase 不拆词；数组的 0 可替换为任意有效索引。',
   '# 对象/数组变量整体替换节点并优先于叶子；叶子覆盖要求 YAML 已声明路径。',
   '# Schema 枚举和上下界如下；Provider 的依赖与跨字段条件仍由模块校验。',

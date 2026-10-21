@@ -616,9 +616,13 @@ Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用�
 
 ### 設定・環境変数
 
-アプリとテンプレートは `HAI_<CONFIG>_<PATH>` を共用します。ルートの [`.env.example`](.env.example) に変数の用途、列挙値と範囲を掲載しています。環境ファイル、起動コマンドと Provider の切り替えは [設定ガイド](docs/environment-configuration.md) を参照してください。
+アプリとテンプレートは `HAI_<CONFIG>_<PATH>` を共用します。ルートの [`.env.example`](.env.example) に変数の用途、列挙値と範囲を掲載しています。各サンプルアプリの `.env.example` に、そのアプリで利用できる全変数を記載しています。
 
 `.env.example` は全項目の説明と制約、`.env` は共通の公開設定、`.env.dev` / `.env.test` / `.env.prod` は環境別の公開設定として Git に登録します。端末固有の秘密情報は登録対象外の `.env.local` に保存します。優先順位はプロセス環境 > `.env.local` > 環境別ファイル > `.env` です。各アプリの `.env.example` に利用できる全項目を掲載します。
+
+公開 Schema、YAML、環境変数の読み取りを変更したら、対象モジュールをビルドして `pnpm generate:env` を実行し、ルート一覧、CLI メタデータ、各サンプルの `.env.example` を更新します。`pnpm check:env` で更新漏れを確認します。生成処理は公開ソースとサンプルのみを読み、`.env.local` やプロジェクト固有の公開設定値を変更しません。用途、型、列挙値、単位、範囲、有効条件を説明し、配列・動的キー・親オブジェクトの上書きは Schema と実行テストで確認します。
+
+`pnpm dev` / `dev:test` / `dev:prod` で環境を選び、ビルド済み Node サービスは `start:test` / `start:prod` で起動します。Vite は `core.config.loadEnvFiles({ mode, envDir })` の成功を確認して注入し、Node は基本・環境・ローカルの順で `--env-file` を読み込みます。`core.init` は dotenv を読みません。ファイルモードの development / production は dev / prod に対応します。Provider 切り替えと移行手順はアプリ skill の[環境設定](packages/cli/templates/skills/hai-app-create/development.md#环境配置)にあります。
 
 - **命名**：`HAI_<CONFIG_NAME>_<YAML_PATH>`。階層を `_` で区切り、camelCase は分割しません（`llm.apiKey` → `HAI_AI_LLM_APIKEY`）。
 - **優先順位**：規約の環境変数 > YAML の明示的 `${VAR}` > YAML 既定値。

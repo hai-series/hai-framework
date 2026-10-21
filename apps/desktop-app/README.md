@@ -95,7 +95,7 @@ apps/desktop-app/
 
 ## API 调用与加密配置
 
-本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。命令和加载规则见 [配置手册](../../docs/environment-configuration.md)。
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。命令和加载规则见 [配置与环境变量](../../README.md#配置与环境变量)。
 
 桌面端通过 `PUBLIC_API_BASE` 配置完整 API 基础 URL，transport 客户端设置放在 `config/_crypto.yml`：
 
