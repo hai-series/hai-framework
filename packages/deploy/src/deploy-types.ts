@@ -62,7 +62,36 @@ export interface DeployError {
 // ─── 服务类型 ───
 
 /** 基础设施服务类型 */
-export type ServiceType = 'db' | 'cache' | 'storage' | 'email' | 'sms' | 'vecdb'
+export type ServiceType = 'db' | 'cache' | 'storage' | 'email' | 'sms' | 'vecdb' | 'ldap'
+
+/** 每项中间件的处理方式；keep 不修改配置，也不开通服务。 */
+export type MiddlewareMode = 'default' | 'custom' | 'keep'
+
+/** 扫描环境；例如 `{ environment: 'test', envDir: '/workspace/app' }`。 */
+export interface DeployScanOptions {
+  /** 环境文件模式。 */
+  environment?: string
+  /** 环境文件目录；默认自动定位到应用或 workspace 根。 */
+  envDir?: string
+}
+
+/** 依赖对应的中间件；例如 IAM 的 LDAP 位于 `iam.ldap`，可处于 disabled 状态。 */
+export interface MiddlewareRequirement {
+  /** 中间件类别。 */
+  service: ServiceType
+  /** 生效后端标识。 */
+  backend: string
+  /** 检测来源（依赖包或配置名），用于解释为何需要此项。 */
+  source: string
+  /** 模块配置名。 */
+  configName: string
+  /** 模块配置内的路径；例如 LDAP 为 ['ldap']。 */
+  configPath: string[]
+  /** 约定变量前缀。 */
+  envPrefix: string
+  /** 生效连接配置，可能含凭据，仅用于输入默认值，不得原样输出日志。 */
+  config: Record<string, unknown>
+}
 
 // ─── 扫描结果 ───
 
@@ -72,7 +101,15 @@ export type ServiceType = 'db' | 'cache' | 'storage' | 'email' | 'sms' | 'vecdb'
  * 由 scanner 分析应用目录后返回，描述应用的框架类型、依赖和部署需求。
  */
 export interface ScanResult {
-  /** 应用名称（来自 package.json name） */
+  /** 调用者指定的部署目录，对应 lockfile 中的一个 importer。 */
+  appDir?: string
+  /** 公共环境文件目录。 */
+  envDir?: string
+  /** 依赖与配置共同确定的中间件详情。 */
+  middlewares?: MiddlewareRequirement[]
+  /** 从运行依赖图识别的 Hai 模块；peer 和开发依赖不启用模块。 */
+  haiModules?: string[]
+  /** 应用名称（目录名称；可用 projectName 显式覆盖部署资源名）。 */
   appName: string
   /** 是否为 SvelteKit 项目 */
   isSvelteKit: boolean
@@ -147,7 +184,13 @@ export interface DeployRecoveryInfo {
 
 /** 部署选项 */
 export interface DeployAppOptions {
-  /** 项目名称（默认从 package.json name 提取） */
+  /** 部署环境标识；显式指定时必须存在 .env.<environment>。 */
+  environment?: string
+  /** 环境文件所在目录，默认自动定位。 */
+  envDir?: string
+  /** 按服务或变量前缀选择处理方式；如 HAI_REACH_PROVIDERS_1 可独立于另一邮件连接。 */
+  serviceModes?: Partial<Record<string, MiddlewareMode>>
+  /** 项目名称（默认使用明确指定的部署目录名称）。 */
   projectName?: string
   /** 是否跳过基础设施开通 */
   skipProvision?: boolean
@@ -217,7 +260,7 @@ export interface DeployFunctions {
    *
    * @param appDir - 应用根目录路径
    */
-  scan: (appDir: string) => Promise<HaiResult<ScanResult>>
+  scan: (appDir: string, options?: DeployScanOptions) => Promise<HaiResult<ScanResult>>
 
   /**
    * 对所有已配置的 Provisioner 执行基础设施开通
@@ -225,7 +268,7 @@ export interface DeployFunctions {
    * @param projectName - 用于资源命名的项目名
    * @returns 所有 Provisioner 的结果列表
    */
-  provisionAll: (projectName: string) => Promise<HaiResult<ProvisionResult[]>>
+  provisionAll: (projectName: string, services?: ServiceType[]) => Promise<HaiResult<ProvisionResult[]>>
 
   /**
    * 执行完整部署流程（provision → build → deploy）

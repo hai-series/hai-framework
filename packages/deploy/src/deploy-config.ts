@@ -129,11 +129,22 @@ const ServicesConfigSchema = z.object({
 
 /** 部署模块完整配置 Schema */
 export const DeployConfigSchema = z.object({
+  /** 部署环境文件模式；dev/test/prod 或自定义模式，禁止 local/example。 */
+  environment: z.string().regex(/^[a-z0-9][\w-]*$/i).refine(value => !['local', 'example'].includes(value.toLowerCase())).optional(),
   provider: ProviderConfigSchema,
   services: ServicesConfigSchema,
   /** 本地容器构建参数（docker-ssh 使用；auto 优先 podman） */
   container: z.object({
     runtime: z.enum(['auto', 'docker', 'podman']).default('auto'),
+    /** Podman 构建是否继承代理；容器不能访问宿主机 localhost 代理时设为 false。 */
+    httpProxy: z.boolean().default(true),
+    /** 自建 S3 服务实现；协议仍为 storage.type=s3。 */
+    s3Engine: z.enum(['rustfs', 'minio']).default('rustfs'),
+    /** SQLite 预编译包镜像根地址；省略时从官方 GitHub Release 下载，不允许嵌入凭据。 */
+    sqlitePrebuildMirror: z.url().refine((value) => {
+      const url = new URL(value)
+      return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash
+    }).optional(),
   }).optional(),
 })
 

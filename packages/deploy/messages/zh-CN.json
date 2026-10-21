@@ -32,5 +32,22 @@
   "deploy_remoteConnectFailed": "无法连接远程主机 {host}：{error}",
   "deploy_remoteRuntimeMissing": "远程主机缺少容器运行时或 compose：{runtime}",
   "deploy_imageTransferFailed": "镜像传输失败：{error}",
-  "deploy_healthCheckFailed": "健康检查失败，应用未在 {url} 就绪"
+  "deploy_healthCheckFailed": "健康检查失败，应用未在 {url} 就绪",
+  "deploy_invalidEnvironment": "环境名称仅允许字母、数字、下划线和连字符，且不能使用 local/example。",
+  "deploy_environmentMissing": "缺少环境配置 {path}；请先创建该文件并完成配置，再重新部署。",
+  "deploy_environmentReadFailed": "部署环境文件读取失败，请检查文件格式与权限。",
+  "deploy_environmentWriteFailed": "部署配置写入失败，请检查文件格式与权限。",
+  "deploy_multipleApplications": "发现多个服务包，请指定要部署的应用目录。",
+  "deploy_purposeSqlite": "本地文件关系数据库，使用持久化卷",
+  "deploy_purposeDatabase": "独立关系数据库服务，保存业务数据",
+  "deploy_purposeMemory": "单进程内存缓存，重启后清空，不创建外部服务",
+  "deploy_purposeLocal": "本地文件存储，使用持久化卷",
+  "deploy_purposeCache": "共享缓存、会话与分布式锁",
+  "deploy_purposeStorage": "S3 兼容对象存储，保存上传文件",
+  "deploy_purposeVector": "向量索引与相似度搜索",
+  "deploy_purposeDisabled": "LDAP 登录未启用，不创建目录服务",
+  "deploy_purposeLdap": "企业目录账号认证；默认目录不包含业务用户",
+  "deploy_purposeConsole": "消息输出到应用日志，不实际投递",
+  "deploy_purposeEmail": "邮件或 HTTP 通知投递；默认 SMTP 容器仅用于测试接收",
+  "deploy_purposeSms": "通过阿里云凭证接入短信服务，需已有签名与额度"
 }

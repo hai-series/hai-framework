@@ -27,7 +27,7 @@
     "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local build/index.js",
     "start:prod": "pnpm start",
     "check": "pnpm typecheck",
-    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "typecheck": "pnpm paraglide:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
