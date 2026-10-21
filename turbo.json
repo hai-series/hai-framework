@@ -3,6 +3,8 @@
   "ui": "tui",
   "globalDependencies": [
     "scripts/typecheck.mjs",
+    "scripts/vite-runtime-config.ts",
+    "scripts/container-runtime-config.sh",
     "packages/tsup.base.ts"
   ],
   "tasks": {
@@ -28,18 +30,15 @@
       ],
       "dependsOn": [
         "^build",
-        "paraglide:compile",
-        "build:clean"
+        "paraglide:compile"
       ],
       "outputs": [
         "dist/**",
-        ".svelte-kit/**"
+        "build/**",
+        ".svelte-kit/**",
+        ".vercel/output/**"
       ],
       "cache": true
-    },
-    "build:clean": {
-      "cache": false,
-      "outputs": []
     },
     "dev": {
       "dependsOn": [

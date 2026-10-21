@@ -17,11 +17,8 @@ const vitestCli = path.join(path.dirname(fileURLToPath(import.meta.resolve('vite
 
 let result
 try {
-  // 打包前顺序重建所有 @h-ai 包（--workspace-concurrency=1）。
-  // CI 并行构建下 tsup 的 .d.ts 生成会偶发失败（典型为 @h-ai/kit、@h-ai/capacitor），
-  // 使 tarball 缺失类型声明，生成项目 svelte-check 报 "Cannot find module … type declarations"。
-  // 顺序重建可稳定产出含 .d.ts 的完整 dist。原 './packages/*' 过滤在 shell:true 下被展开成 no-op。
-  runPnpm(['-r', '--filter', '@h-ai/*', '--workspace-concurrency=1', 'build'], repoRoot)
+  // 按真实依赖图顺序构建，复用刚通过的产物，避免重新清理共享 dist 干扰其他门禁。
+  runPnpm(['exec', 'turbo', 'run', 'build', '--filter=@h-ai/*', '--concurrency=1'], repoRoot)
   const packageSpecifiers = packPublicPackages(path.join(repoRoot, 'packages'), archiveRoot)
   // 仅覆盖实际依赖边；全局覆盖会把可选 peer 变成安装依赖，污染生成项目。
   const packageOverrides = {}
