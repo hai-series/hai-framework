@@ -6,6 +6,8 @@
 
 > hai Agent Framework CLI：対話式のプロジェクト生成とコード生成ツール。
 
+`pnpm build` はソースをコンパイルします。`pnpm build --target docker` は API/Web イメージをビルドして書き出し、Podman、Docker の順に選択します。Desktop は対応 OS 上で `pnpm build --target desktop --platform windows|linux|macos` から Tauri を実行します。ビルド時に環境は選択しません。deploy は既存成果物から Compose tar を作成して転送します。`--bundle-only --output release.tar` は SSH 接続せず手動配布用の tar のみを生成します。[利用方法とオフライン準備](../deploy/README.ja.md)を参照してください。テストの一時成果物は失敗時も finally/teardown で削除します。
+
 ## 主な機能
 
 `hai deploy` はモジュール・設定不足、認証情報読み込み、走査、初期化、デプロイ、終了処理の失敗で非ゼロの終了コードを返します。スクリプトは終了コードを確認し、デプロイ全体の成功を後続処理の条件にしてください。
@@ -191,15 +193,13 @@ SvelteKit のサーバー layout は名称、バージョン、環境、既定�
 
 葉の環境変数は YAML に存在するパスだけを上書きします。コメントの項目は先に有効にするか、`HAI_DB`、`HAI_CACHE` などでオブジェクト全体を置き換えます。camelCase は分割せず、`connectTimeout` は `HAI_CACHE_CONNECTTIMEOUT` に対応します。言語一覧は各フロントエンド/shared の `project.inlang/settings.json` で管理し、`_core.yml` は既定言語のみを指定します。
 
-Fullstack の `.env` は選択したモジュールの実行パラメーターを有効にします。YAML は同名の変数を参照し、ローカル既定値を保持します。未使用モジュールと任意フィールドはコメントとして残します。環境の切り替えは dev:test / dev:prod、build:prod、start:test / start:prod を使用します。
+Fullstack の `.env` は選択したモジュールの実行パラメーターを有効にします。YAML は同名の変数を参照し、ローカル既定値を保持します。未使用モジュールと任意フィールドはコメントとして残します。環境の切り替えは dev:test / dev:prod、start:test / start:prod を使用します。
 
 ## 環境別デプロイ
 
 `hai deploy --env test` で先に `.env.test` を確認し、各ミドルウェアに既定設定・カスタム接続・変更しないを選択します。`--yes` は完全な対象設定を維持し、それ以外は現在のバックエンド既定値を使います。`--env-dir` で保存先を指定できます。対象サービスのディレクトリーを明示します（例：hai deploy packages/my-app-serv --env test）。workspace 構成を推測せず、起動スクリプトに環境を明示します。公開接続値は対象環境、認証情報は `.env.local` に保存し、表示をマスクします。
 
 設定済みの環境ではウィザードで「直接デプロイ」を選ぶか、`hai deploy packages/my-app-serv --env prod --yes --skip-middleware` を実行すると、すべてのミドルウェア設定・書き込み・リソース作成を省略できます。不足する SSH/Vercel 接続情報は対話で補完し、ホスト、ポート、鍵のパス、リモートディレクトリー、Token を Git 対象外の `.env.local` にのみ保存して再利用します。接続先は `HAI_DEPLOY_PROVIDER` で更新できます。秘密鍵は内容ではなくパスを指定します。
-
-Web と deploy を選ぶ fullstack は生成済み `container.web` を使い、`hai deploy packages/my-app-serv --env prod` で API/Web を同時公開します。Web の公開ポートが内部 API を同一 Origin で代理します。Web 未設定時は単一サービスです。docker-ssh はローカルでビルドし、イメージ tar・Compose・実行環境・起動スクリプトを SCP 転送して遠隔で読み込み・起動します。`--skip-build` はコンテナビルドを省略しません。コマンド・オフライン材料・Web 公開は [deploy ガイド](../deploy/README.ja.md)、接続項目は [ミドルウェア仕様](templates/skills/hai-deploy/middleware.md) を参照してください。回帰試験は `pnpm --filter @h-ai/cli test:deploy-gates` です。
 
 ## 共通オプション
 

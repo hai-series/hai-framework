@@ -580,17 +580,9 @@ provider:
 #     containerPort: 3000
 #     hostPort: 18080                        # 访问地址 http://<host>:18080
 
-# 本地构建运行时（docker-ssh 使用；auto 优先 podman）
+# Compose 中间件参数；镜像构建设置在工程 hai.build.json。
 # container:
-#   runtime: auto
-#   httpProxy: true # Podman 构建继承代理；localhost 代理不可达时设为 false
-#   s3Engine: rustfs # rustfs | minio；应用始终使用 storage.type=s3
-#   sqlitePrebuildMirror: https://your-trusted-mirror.example/better-sqlite3 # 可选，不含认证信息
-#   web: # 同次发布静态 Web；fullstack 选择 Web/deploy 时自动生成此节点
-#     context: ../.. # 相对于当前服务包的构建上下文
-#     dockerfile: Dockerfile # 相对于 context
-#     target: web
-#     containerPort: 8080 # hostPort 统一公开 Web，同源代理 API
+#   s3Engine: rustfs # rustfs | minio；应用使用 storage.type=s3
 
 # 基础设施服务（按需开启）
 # services:
@@ -627,9 +619,9 @@ provider:
   #   signName: \${HAI_DEPLOY_SERVICES_SMS_SIGNNAME}
 
 # docker-ssh 说明：
-# - 应用镜像使用工程自带的 Dockerfile（adapter-node），本地构建后经 SSH 传输并 load
+# - 先 pnpm build --target docker；deploy 消费已有镜像并生成一个 Compose tar 后上传
 # - compose 按实际后端生成中间件；S3 默认 RustFS，可通过 s3Engine 选择 MinIO
-# - 配置 container.web 时同一命令构建并发布 API/Web；Web 不接收 API 的私有变量
+# - 镜像清单含 Web 时一并部署，Web 不接收 API 的私有变量；--bundle-only 可手工搬运
 # - 若同时配置了对应云 Provisioner，则优先使用云资源，不再自建 sidecar
 `
 }

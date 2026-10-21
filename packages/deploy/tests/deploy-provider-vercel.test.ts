@@ -210,6 +210,7 @@ describe('createVercelProvider', () => {
       try {
         mkdirSync(join(outputDir, 'nested'), { recursive: true })
         writeFileSync(join(outputDir, 'nested', 'file.txt'), 'hello vercel', 'utf-8')
+        writeFileSync(join(outputDir, 'config.json'), '{"version":3}')
 
         // authenticate
         mockFetch.mockResolvedValueOnce(
@@ -218,7 +219,8 @@ describe('createVercelProvider', () => {
         const provider = createVercelProvider()
         await provider.authenticate('vel_valid')
 
-        // upload file, create deployment, poll status
+        // 上传 config 与文件，创建 prebuilt 部署，再轮询状态。
+        mockFetch.mockResolvedValueOnce(mockJsonResponse({}))
         mockFetch.mockResolvedValueOnce(mockJsonResponse({}))
         mockFetch.mockResolvedValueOnce(mockJsonResponse({ id: 'dpl_123', url: 'my-app.vercel.app' }))
         mockFetch.mockResolvedValueOnce(mockJsonResponse({ readyState: 'READY' }))
@@ -226,13 +228,15 @@ describe('createVercelProvider', () => {
         const result = await provider.deploy('prj_123', outputDir)
 
         expect(result.success).toBe(true)
-        const uploadOptions = mockFetch.mock.calls[1][1] as RequestInit
+        const uploadOptions = mockFetch.mock.calls[2][1] as RequestInit
         const uploadBody = uploadOptions.body as Blob
         expect((await uploadBody.text())).toBe('hello vercel')
 
-        const deployOptions = mockFetch.mock.calls[2][1] as RequestInit
+        const deployOptions = mockFetch.mock.calls[3][1] as RequestInit
         const deployBody = JSON.parse(deployOptions.body as string) as { files: Array<{ file: string }> }
-        expect(deployBody.files[0]?.file).toBe('nested/file.txt')
+        expect(deployBody.files.map(file => file.file)).toEqual(['.vercel/output/config.json', '.vercel/output/nested/file.txt'])
+        expect(String(mockFetch.mock.calls[3][0])).toContain('?prebuilt=1')
+        expect(deployBody).toMatchObject({ version: 2, projectSettings: { framework: null, buildCommand: '', installCommand: '' } })
       }
       finally {
         rmSync(outputDir, { recursive: true, force: true })

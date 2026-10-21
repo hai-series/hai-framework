@@ -1,0 +1,179 @@
+/** `pnpm build` 的环境无关构建入口：源码、OCI 镜像或 Tauri 安装包。 */
+import type { DeploymentArtifact } from '@h-ai/deploy'
+import type { GlobalOptions } from '../cli-types.js'
+import { spawn } from 'node:child_process'
+import { createHash, randomBytes } from 'node:crypto'
+import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import process from 'node:process'
+import { core } from '@h-ai/core'
+import { cliM } from '../cli-i18n.js'
+
+/**
+ * 构建参数，不接受部署环境。
+ * @example `await buildCommand({ target: 'docker', runtime: 'auto' })`
+ */
+export interface BuildCommandOptions extends GlobalOptions {
+  /** compile 编译源码，docker 导出镜像，desktop 调用 Tauri。 */
+  target?: 'compile' | 'docker' | 'desktop'
+  /** auto 优先使用可达的 Podman。 */
+  runtime?: 'auto' | 'podman' | 'docker'
+  /** 原生安装包的目标系统，必须与构建主机相同。 */
+  platform?: 'windows' | 'linux' | 'macos'
+  /** Rust 目标架构，默认当前主机架构。 */
+  arch?: 'x64' | 'arm64'
+  /** 可信 SQLite 预编译包根地址，不包含凭据。 */
+  sqlitePrebuildMirror?: string
+  /** Podman 是否继承代理。 */
+  httpProxy?: boolean
+}
+
+/**
+ * 项目构建描述；app/web 共用 buildId。
+ * @example `{ images: [{ name: 'app', target: 'runtime' }], desktop: ['apps/desktop'] }`
+ */
+interface BuildConfig {
+  images?: Array<{ name: 'app' | 'web', context?: string, dockerfile?: string, target?: string, containerPort?: number }>
+  desktop?: string[]
+}
+
+/** 子进程不经过 shell；pnpm 通过当前运行 pnpm 的 JS 入口执行，兼容 Windows 路径。 */
+async function run(command: string, args: string[], cwd: string, quiet = false): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:HAI_|PUBLIC_|VITE_)/.test(key)))
+    env.NODE_ENV = 'production'
+    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: quiet ? 'ignore' : 'inherit', shell: false })
+    child.once('error', reject)
+    child.once('exit', code => code === 0 ? resolve() : reject(new Error(cliM('cli_build_failed', { params: { command, code: String(code) } }))))
+  })
+}
+
+/** 使用已安装的 pnpm，不通过 Corepack 下载另一套工具链。 */
+async function pnpm(args: string[], cwd: string): Promise<void> {
+  const entry = process.env.npm_execpath
+  if (entry && /pnpm(?:\.c?js)?$/i.test(entry))
+    return run(process.execPath, [entry, ...args], cwd)
+  // CLI 直接调用时从 PATH 定位 pnpm 的 JS 入口；Windows 的 .cmd 不能由无 shell spawn 执行。
+  if (process.platform === 'win32') {
+    const directories = (process.env.PATH ?? '').split(';')
+    for (const directory of directories) {
+      for (const relative of ['node_modules/pnpm/bin/pnpm.cjs', 'pnpm.cjs']) {
+        const candidate = join(directory, relative)
+        if (existsSync(candidate))
+          return run(process.execPath, [candidate, ...args], cwd)
+      }
+    }
+    throw new Error(cliM('cli_build_use_pnpm'))
+  }
+  return run('pnpm', args, cwd)
+}
+
+/**
+ * 构建已有项目；镜像清单仅在全部镜像导出成功后发布。
+ * @example `await buildCommand({ cwd: '/workspace/demo', target: 'docker', runtime: 'auto' })`
+ */
+export async function buildCommand(options: BuildCommandOptions): Promise<void> {
+  const cwd = resolve(options.cwd ?? process.cwd())
+  const target = options.target ?? 'compile'
+  if (!['compile', 'docker', 'desktop'].includes(target))
+    throw new Error(cliM('cli_build_target_invalid'))
+  if (target === 'compile') {
+    await pnpm(['run', 'compile'], cwd)
+    return
+  }
+  const config = JSON.parse(readFileSync(join(cwd, 'hai.build.json'), 'utf8')) as BuildConfig
+  if (target === 'desktop') {
+    const platforms = { win32: 'windows', linux: 'linux', darwin: 'macos' } as const
+    const host = platforms[process.platform as keyof typeof platforms]
+    const platform = options.platform ?? host
+    const arch = options.arch ?? process.arch
+    if (!platform || platform !== host || !['x64', 'arm64'].includes(arch))
+      throw new Error(cliM('cli_build_native_host'))
+    if (!config.desktop?.length)
+      throw new Error(cliM('cli_build_desktop_missing'))
+    const rustTarget = `${arch === 'x64' ? 'x86_64' : 'aarch64'}-${platform === 'windows' ? 'pc-windows-msvc' : platform === 'macos' ? 'apple-darwin' : 'unknown-linux-gnu'}`
+    const bundles = platform === 'windows' ? 'nsis' : platform === 'macos' ? 'app,dmg' : 'deb,appimage'
+    for (const directory of config.desktop)
+      await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles], resolve(cwd, directory))
+    core.logger.info(cliM('cli_build_native_ready', { params: { target: rustTarget } }))
+    return
+  }
+  if (!config.images?.length || config.images.filter(image => image.name === 'app').length !== 1 || config.images.length > 2 || new Set(config.images.map(image => image.name)).size !== config.images.length)
+    throw new Error(cliM('cli_build_images_missing'))
+  const candidates = options.runtime && options.runtime !== 'auto' ? [options.runtime] : ['podman', 'docker']
+  if (candidates.some(runtime => !['podman', 'docker'].includes(runtime)))
+    throw new Error(cliM('cli_build_runtime_missing'))
+  let runtime: string | undefined
+  for (const candidate of candidates) {
+    try {
+      await run(candidate, ['version'], cwd, true)
+      runtime = candidate
+      break
+    }
+    catch { /* 尝试下一个可达的引擎。 */ }
+  }
+  if (!runtime)
+    throw new Error(cliM('cli_build_runtime_missing'))
+  if (options.sqlitePrebuildMirror) {
+    const url = new URL(options.sqlitePrebuildMirror)
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
+      throw new Error(cliM('cli_build_mirror_invalid'))
+  }
+  const buildId = `${Date.now()}-${randomBytes(3).toString('hex')}`
+  const artifact: DeploymentArtifact = { version: 1, buildId, images: [] }
+  const parent = join(cwd, '.hai/build/docker')
+  mkdirSync(parent, { recursive: true })
+  const staging = mkdtempSync(join(parent, '.building-'))
+  const built: string[] = []
+  try {
+    for (const image of config.images) {
+      if (!['app', 'web'].includes(image.name))
+        throw new Error(cliM('cli_build_images_missing'))
+      const context = resolve(cwd, image.context ?? '.')
+      const imageRef = `localhost/hai-${basenameSafe(cwd)}-${image.name}:${buildId}`
+      const args = ['build', '-f', resolve(context, image.dockerfile ?? 'Dockerfile'), '-t', imageRef]
+      const ignore = `${resolve(context, image.dockerfile ?? 'Dockerfile')}.dockerignore`
+      if (runtime === 'podman' && existsSync(ignore))
+        args.push('--ignorefile', ignore)
+      if (runtime === 'podman')
+        args.push('--format', 'docker', '--jobs', '1', ...(options.httpProxy === false ? ['--http-proxy=false'] : []))
+      if (image.target)
+        args.push('--target', image.target)
+      if (options.sqlitePrebuildMirror)
+        args.push('--build-arg', `SQLITE_PREBUILD_MIRROR=${options.sqlitePrebuildMirror}`)
+      built.push(imageRef)
+      await run(runtime, [...args, context], cwd)
+      const file = `${image.name}.tar`
+      await run(runtime, ['save', ...(runtime === 'podman' ? ['--format', 'docker-archive'] : []), '-o', join(staging, file), imageRef], cwd)
+      const hash = createHash('sha256')
+      for await (const chunk of createReadStream(join(staging, file)))
+        hash.update(chunk)
+      artifact.images.push({ name: image.name, file, imageRef, sha256: hash.digest('hex'), ...(image.containerPort ? { containerPort: image.containerPort } : {}) })
+    }
+    // 不覆盖以前成功的构建；manifest 是一次完整构建的提交点。
+    const output = join(parent, buildId)
+    // 文件名固定于 manifest 同层；通过构建 ID 子目录中的清单消费，latest 仅存相对路径。
+    writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify(artifact, null, 2)}\n`)
+    renameSync(staging, output)
+    writeFileSync(join(parent, `latest-${buildId}`), `${buildId}\n`)
+    renameSync(join(parent, `latest-${buildId}`), join(parent, 'latest'))
+    core.logger.info(cliM('cli_build_ready', { params: { path: output, runtime } }))
+  }
+  catch (error) {
+    for (const imageRef of built) {
+      try {
+        await run(runtime, ['image', 'rm', imageRef], cwd, true)
+      }
+      catch { /* 构建失败不掩盖原始错误。 */ }
+    }
+    throw error
+  }
+  finally {
+    rmSync(staging, { recursive: true, force: true })
+  }
+}
+
+/** 将当前目录名转为安全镜像名称。 */
+function basenameSafe(directory: string): string {
+  return directory.slice(dirname(directory).length + 1).toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, '') || 'app'
+}

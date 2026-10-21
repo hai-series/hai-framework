@@ -12,6 +12,8 @@ build/
 .svelte-kit/
 .turbo/
 target/
+.hai/
+*.tar
 
 # 测试覆盖率
 coverage/

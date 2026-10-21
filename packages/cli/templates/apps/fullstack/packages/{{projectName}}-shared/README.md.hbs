@@ -39,7 +39,7 @@ The scaffold theme configuration determines the themes compiled into frontend CS
 
 ## Validation
 
-Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Shared API tests exercise real transport key exchange, encrypted request/response handling, configured core metadata and credential forwarding. Root browser tests cover administrator and ordinary-user workflows, avatar rendering, persisted preferences, password/session invalidation and narrow-screen layout. All selected Web/App/Desktop previews also exercise login, tours, help and profile navigation. Set `HAI_AUTH_EVIDENCE_DIR` to keep screenshots outside the test output directory. These browser checks do not replace native-shell or miniapp device acceptance.
+Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Shared API tests exercise real transport key exchange, encrypted request/response handling, configured core metadata and credential forwarding. Root browser tests cover administrator and ordinary-user workflows, avatar rendering, persisted preferences, password/session invalidation and narrow-screen layout. All selected Web/App/Desktop previews also exercise login, tours, help and profile navigation. Clean screenshots, reports, temporary projects, containers and helper processes in finally/teardown, including failure paths. These browser checks do not replace native-shell or miniapp device acceptance.
 
 ## IAM configuration
 

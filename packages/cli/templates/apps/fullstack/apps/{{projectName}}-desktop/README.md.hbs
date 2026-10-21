@@ -26,14 +26,11 @@ pnpm --filter {{projectName}}-desktop tauri:dev
 # 编译 WebView 前端产物到 dist/
 pnpm --filter {{projectName}}-desktop build
 
-# 打包桌面安装包
-pnpm --filter {{projectName}}-desktop package
-
-# 当前模板的 deploy 入口默认执行 package，可按发布平台替换
-pnpm --filter {{projectName}}-desktop deploy
+# 在工程根打包桌面安装包；在对应系统构建 windows / linux / macos
+pnpm build --target desktop --platform windows --arch x64
 ```
 
-打包前需要安装 Rust 工具链和 Tauri 平台依赖。生产环境部署时同步调整 `.env` 中的 `PUBLIC_API_BASE` 与 `src-tauri/tauri.conf.json` 的 `connect-src` 白名单。
+打包前需要安装 Rust 工具链和 Tauri 平台依赖。构建不读取 .env.prod/.env.local；启动已安装程序前设置进程 PUBLIC_API_BASE（HTTP(S)，不含凭据、查询和片段）。Rust 会在页面加载前注入公开地址，仅将该 Origin 加入 CSP；不需要为 test/prod 重打安装包。缺省连接 http://localhost:3000/api/v1。
 
 ## IAM 认证配置
 

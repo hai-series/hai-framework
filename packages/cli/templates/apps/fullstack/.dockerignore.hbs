@@ -1,4 +1,5 @@
 .git
+**/*.tar
 Dockerfile
 .github
 .agents
@@ -14,8 +15,6 @@ playwright-report
 test-results
 **/data
 *.log
-# 仅排除本机私有配置，与 Git 处理一致；公共 .env 与 dev/test/prod 随上下文构建。
-**/.env.local
-**/.env.*.local
-**/.env.runtime
-**/.hai/deploy
+# 仅保留公共基础 .env；分环境配置、私有覆盖及已有交付包不进入构建上下文。
+**/.env.*
+**/.hai

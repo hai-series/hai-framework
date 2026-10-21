@@ -1987,25 +1987,9 @@
     "name": "HAI_DEPLOY_CONTAINER",
     "module": "deploy",
     "path": "deploy.container",
-    "description": "本地容器构建参数（docker-ssh 使用；auto 优先 podman）",
+    "description": "Docker Compose 部署参数；构建配置位于项目 hai.build.json。",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_DEPLOY_CONTAINER_HTTPPROXY",
-    "module": "deploy",
-    "path": "deploy.container.httpProxy",
-    "description": "Podman 构建是否继承代理；容器不能访问宿主机 localhost 代理时设为 false。",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_DEPLOY_CONTAINER_RUNTIME",
-    "module": "deploy",
-    "path": "deploy.container.runtime",
-    "description": "本地或远程容器运行时，auto 按部署模块顺序探测",
-    "value": "auto",
-    "constraint": "字符串；取值：auto | docker | podman"
   },
   {
     "name": "HAI_DEPLOY_CONTAINER_S3ENGINE",
@@ -2014,54 +1998,6 @@
     "description": "自建 S3 服务实现；协议仍为 storage.type=s3。",
     "value": "rustfs",
     "constraint": "字符串；取值：rustfs | minio"
-  },
-  {
-    "name": "HAI_DEPLOY_CONTAINER_SQLITEPREBUILDMIRROR",
-    "module": "deploy",
-    "path": "deploy.container.sqlitePrebuildMirror",
-    "description": "SQLite 预编译包镜像根地址；省略时从官方 GitHub Release 下载，不允许嵌入凭据。",
-    "value": "",
-    "constraint": "字符串；格式 uri"
-  },
-  {
-    "name": "HAI_DEPLOY_CONTAINER_WEB",
-    "module": "deploy",
-    "path": "deploy.container.web",
-    "description": "一并部署的 Nginx 静态 Web 镜像；省略时只部署当前服务。",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_DEPLOY_CONTAINER_WEB_CONTAINERPORT",
-    "module": "deploy",
-    "path": "deploy.container.web.containerPort",
-    "description": "Web 容器监听端口；使用部署目标的 hostPort 对外提供同源 Web/API。",
-    "value": "8080",
-    "constraint": "整数；>= 1；<= 65535"
-  },
-  {
-    "name": "HAI_DEPLOY_CONTAINER_WEB_CONTEXT",
-    "module": "deploy",
-    "path": "deploy.container.web.context",
-    "description": "Web 构建上下文，相对于当前部署服务包，例如 fullstack 的 ../..。",
-    "value": "",
-    "constraint": "字符串；最小字符数 1"
-  },
-  {
-    "name": "HAI_DEPLOY_CONTAINER_WEB_DOCKERFILE",
-    "module": "deploy",
-    "path": "deploy.container.web.dockerfile",
-    "description": "相对于 Web 构建上下文的 Dockerfile 路径。",
-    "value": "Dockerfile",
-    "constraint": "字符串；最小字符数 1"
-  },
-  {
-    "name": "HAI_DEPLOY_CONTAINER_WEB_TARGET",
-    "module": "deploy",
-    "path": "deploy.container.web.target",
-    "description": "Web 镜像的 Dockerfile target。",
-    "value": "web",
-    "constraint": "字符串；正则 ^[a-z][\\w-]*$"
   },
   {
     "name": "HAI_DEPLOY_ENVIRONMENT",
@@ -3896,6 +3832,14 @@
     "constraint": "有效 HTTP(S) URL"
   },
   {
+    "name": "PATH",
+    "module": "runtime",
+    "path": "PATH",
+    "description": "操作系统提供的可执行程序搜索路径；CLI 用于定位已安装的 pnpm",
+    "value": "",
+    "constraint": "保留系统原值；由操作系统路径分隔符连接，不要在 .env 中置空或作为应用配置覆盖"
+  },
+  {
     "name": "POLLINATIONS_API_KEY",
     "module": "runtime",
     "path": "POLLINATIONS_API_KEY",
@@ -3940,7 +3884,7 @@
     "module": "runtime",
     "path": "PUBLIC_API_TRANSPORT",
     "description": "客户端传输加密开关，须与服务端一致",
-    "value": "on",
+    "value": "",
     "constraint": "on | off"
   },
   {
@@ -3982,14 +3926,6 @@
     "description": "SvelteKit 构建适配器",
     "value": "",
     "constraint": "node | static；未识别的值回退 node"
-  },
-  {
-    "name": "VITE_HAI_E2E_KIT_TRANSPORT_MODE",
-    "module": "runtime",
-    "path": "VITE_HAI_E2E_KIT_TRANSPORT_MODE",
-    "description": "管理后台端到端测试传输加密模式",
-    "value": "",
-    "constraint": "on | off"
   },
   {
     "name": "VITEST",

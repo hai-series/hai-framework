@@ -6,6 +6,8 @@
 
 > hai Agent Framework CLI: interactive project scaffolding and code generation.
 
+`pnpm build` / `hai build` compiles source by default. Use `pnpm build --target docker` to build/export app + optional Web images (Podman first, Docker fallback), or `pnpm build --target desktop --platform windows|linux|macos` for Tauri on the matching host. Build does not select deployment environments. `hai deploy` consumes existing artifacts and uploads one Compose tar; `--bundle-only --output release.tar` generates a manual-transfer bundle without SSH. Fullstack `pnpm deploy --env test` publishes API/Web together. See [deploy usage and offline prerequisites](../deploy/README.md). Test artifacts are cleaned in finally/teardown, including failures.
+
 ## Capabilities
 
 `hai deploy` exits nonzero on missing modules/configuration, credential loading, scanning, initialization, deployment, or closure failures. Scripts must check the exit code; only complete deployment success can unlock subsequent steps.
@@ -199,8 +201,6 @@ Run `hai deploy --env test` to check `.env.test` first, then choose defaults, cu
 
 Choose “deploy directly” in the wizard, or run `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`, to skip all middleware prompts, configuration writes and provisioning when your environment is complete. Missing deployment targets are guided through SSH/Vercel setup. Host, ports, key paths, remote directory and tokens are saved only in Git-ignored `.env.local` and reused on later runs. Edit `HAI_DEPLOY_PROVIDER` there to change the target; supply private key paths only.
 
-With Web and deploy selected, `hai deploy packages/my-app-serv --env prod` uses generated `container.web` to publish API/Web together, with a same-origin public Web endpoint proxying the internal API. Without Web configuration, it deploys only the service. docker-ssh builds locally, transfers an image tar, Compose, runtime environment and startup script through SCP, then loads and starts them remotely. `--skip-build` does not skip container builds. See the [deploy guide](../deploy/README.en.md) for commands, offline materials and Web publishing, and the [middleware reference](templates/skills/hai-deploy/middleware.md) for connection fields. Deployment regression: `pnpm --filter @h-ai/cli test:deploy-gates`.
-
 ## Global options
 
 | Option             | Description               |
@@ -293,7 +293,7 @@ Successful screenshots default to the CLI's `test-results/scaffold-evidence/`. S
 
 Failures and degraded-state messages must also be localized: website APIs use the request locale for AI fallback and email delivery status; undelivered messages must not be described as received. CLI deployment status uses cliM, and Gallery encryption limitations use bilingual messages. Verify unconfigured, failed, and successful paths in Chinese and English without paid service calls.
 
-Provisioned configuration: Neon emits HAI_DB (PostgreSQL JSON), Upstash HAI_CACHE (Redis rediss URL JSON), and R2 HAI_STORAGE (flat S3 JSON). Email/SMS emit HAI_REACH_PROVIDERS; deployApp merges both channels while preserving YAML message templates, replacing the original providers array. Core supports whole-object/array overrides, with parents preceding leaves and schema validation retained. Build subprocesses and target runtimes share provisioned values. R2 needs existing S3 accessKeyId/secretAccessKey, Resend a verified-domain from address, and Alibaba Cloud approved signName/templates. Applications need matching `_db.yml` / `_cache.yml` / `_storage.yml` / `_reach.yml` loaded at startup; network clients require Node.
+Provisioned configuration: Neon emits HAI_DB (PostgreSQL JSON), Upstash HAI_CACHE (Redis rediss URL JSON), and R2 HAI_STORAGE (flat S3 JSON). Email/SMS emit HAI_REACH_PROVIDERS; deployApp merges both channels while preserving YAML message templates, replacing the original providers array. Core supports whole-object/array overrides, with parents preceding leaves and schema validation retained. Provisioned values are runtime-only and are never passed to build subprocesses. R2 needs existing S3 accessKeyId/secretAccessKey, Resend a verified-domain from address, and Alibaba Cloud approved signName/templates. Applications need matching `_db.yml` / `_cache.yml` / `_storage.yml` / `_reach.yml` loaded at startup; network clients require Node.
 
 Deployment recovery: `ProvisionResult.resourceStatus` marks created/reused. `getDeployRecovery(result.error)` reads projectName, stage, platformProjectId, and resource lists; unknown means an uncertain request result that must first be checked in the provider console. Preserve returned IDs for failed resources. Recovery excludes envVars, raw exceptions, and credentials; the CLI shows resources and advice. Same-name retries reuse resources. Reused resources are never deleted automatically; clean up newly created resources only after manually confirming they are unused.
 

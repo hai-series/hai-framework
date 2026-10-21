@@ -14,24 +14,15 @@
 
 ## 编译、打包与部署
 
-{{#if features.deploy}}
-全栈联合发布在工程根执行 `hai deploy packages/{{projectName}}-serv --env prod --env-dir .`。生成的服务配置 `container.web` 使同一命令发布 API/Web，公开 Web 入口同源代理 API，无需另发 Web。下列 package/deploy 脚本用于本端静态产物，独立于联合发布。
-
-{{/if}}
-
 ```bash
 # 开发预览，默认端口 {{fullstack.ports.web}}
 pnpm --filter {{projectName}}-web dev
 
 # 编译 Web 前端
 pnpm --filter {{projectName}}-web build
-
-# 打包部署产物；默认等同 build，可按目标平台替换
-pnpm --filter {{projectName}}-web package
-
-# 当前模板的 deploy 入口默认执行 package，可替换为 CDN / 容器发布脚本
-pnpm --filter {{projectName}}-web deploy
 ```
+
+从工程根运行 `pnpm build --target docker` 构建并导出镜像。启用 deploy 功能后，运行根命令 `pnpm deploy --env test`，一次发布 API/Web；网络不通时用 `pnpm deploy --env prod --bundle-only`，按输出说明手工搬运 tar。部署不重新构建。
 
 ## IAM 认证配置
 

@@ -2,10 +2,6 @@
 FROM node:24-bookworm-slim AS build
 ARG SQLITE_PREBUILD_MIRROR
 ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
-ARG HAI_DEPLOY_ENVIRONMENT=prod
-ARG HAI_CORE_ENV=production
-ENV HAI_DEPLOY_ENVIRONMENT=$HAI_DEPLOY_ENVIRONMENT
-ENV HAI_CORE_ENV=$HAI_CORE_ENV
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -17,7 +13,7 @@ RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
 COPY . .
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
-RUN pnpm build
+RUN pnpm compile
 
 FROM build AS service-build
 
@@ -25,12 +21,8 @@ RUN if [ -d node_modules/better-sqlite3 ]; then cd node_modules/better-sqlite3; 
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm pm deploy --filter {{fullstack.servPackageName}} --prod /prod/service
 
 FROM node:24-bookworm-slim AS service
-ARG HAI_DEPLOY_ENVIRONMENT=prod
-ARG HAI_CORE_ENV=production
 
 ENV NODE_ENV=production
-ENV HAI_DEPLOY_ENVIRONMENT=$HAI_DEPLOY_ENVIRONMENT
-ENV HAI_CORE_ENV=$HAI_CORE_ENV
 ENV HOST=0.0.0.0
 ENV PORT=3000
 WORKDIR /app

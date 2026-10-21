@@ -15,24 +15,16 @@
     "start:prod": "pnpm --filter {{fullstack.servPackageName}} start:prod",
     "dev:test": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm --parallel --filter {{fullstack.servPackageName}}{{#each fullstack.frontendApps}} --filter {{packageName}}{{/each}} dev:test",
     "dev:prod": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm --parallel --filter {{fullstack.servPackageName}}{{#each fullstack.frontendApps}} --filter {{packageName}}{{/each}} dev:prod",
-    "build:prod": "pnpm build && pnpm -r --if-present build:prod",
-    "compile": "pnpm typecheck && pnpm build",
-    "build": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present build",
-    "docker:build": "docker build --target runtime -t {{projectName}}:latest .",
-    "docker:build:data": "docker build --target runtime-with-data --build-context embedded-data=./packages/{{projectName}}-serv/data -t {{projectName}}:latest ."{{#if fullstack.frontends.web}},
-    "docker:build:web": "docker build --target web -t {{projectName}}-web:latest ."{{/if}},
-    "podman:build": "podman build --format docker --jobs=1 --target runtime -t {{projectName}}:latest .",
-    "podman:build:data": "podman build --format docker --jobs=1 --target runtime-with-data --build-context embedded-data=./packages/{{projectName}}-serv/data -t {{projectName}}:latest ."{{#if fullstack.frontends.web}},
-    "podman:build:web": "podman build --format docker --jobs=1 --target web -t {{projectName}}-web:latest ."{{/if}},
-    "package": "pnpm build{{#if fullstack.frontends.web}} && pnpm --filter {{projectName}}-web package{{/if}}{{#if fullstack.frontends.app}} && pnpm --filter {{projectName}}-app package{{/if}}{{#if fullstack.frontends.desktop}} && pnpm --filter {{projectName}}-desktop package{{/if}}",
-    "deploy": "pnpm package",
+    "compile": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present build",
+    "build": "hai build",
+    "deploy": "hai deploy packages/{{projectName}}-serv",
     "check": "pnpm typecheck",
     "typecheck": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present typecheck",
     "lint": "eslint *.js *.ts e2e && pnpm -r --if-present lint",
     "lint:fix": "eslint *.js *.ts e2e --fix && pnpm -r --if-present lint:fix",
     "test": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present test",
     "test:watch": "pnpm -r --parallel --if-present test:watch",
-    "test:e2e": "pnpm build && playwright test",
+    "test:e2e": "pnpm compile && node scripts/run-e2e.mjs",
     "clean": "pnpm -r --if-present clean && rimraf node_modules .turbo"
   },
   "dependencies": {
@@ -41,6 +33,7 @@
     "{{fullstack.sharedPackageName}}": "workspace:*"
   },
   "devDependencies": {
+    "@h-ai/cli": "{{haiPackageSpecifier}}",
 {{#if features.deploy}}
     "@h-ai/deploy": "{{haiPackageSpecifier}}",
 {{/if}}

@@ -42,7 +42,7 @@ describe('deploy.scan', () => {
     try {
       expect((await deploy.scan(root)).success).toBe(false)
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { devDependencies: { '@sveltejs/kit': { version: '2' }, '@sveltejs/adapter-node': { version: '5' } } } }, packages: {}, snapshots: {} }))
-      expect(await deploy.scan(root)).toMatchObject({ success: true, data: { isSvelteKit: true, nodeAdapterInstalled: true, adapterInstalled: false, requiredServices: [], buildCommand: 'pnpm build' } })
+      expect(await deploy.scan(root)).toMatchObject({ success: true, data: { isSvelteKit: true, nodeAdapterInstalled: true, adapterInstalled: false, requiredServices: [] } })
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
   })

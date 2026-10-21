@@ -62,5 +62,19 @@
   "cli_deploy_middleware_plan": "是否需要配置本次部署的中间件？",
   "cli_deploy_middleware_configure": "逐项检查并配置中间件",
   "cli_deploy_middleware_skip": "环境配置已完备，直接部署",
-  "cli_deploy_middleware_skipped": "已跳过全部中间件配置与资源开通，使用当前环境配置及已有服务直接部署。"
+  "cli_deploy_middleware_skipped": "已跳过全部中间件配置与资源开通，使用当前环境配置及已有服务直接部署。",
+  "cli_build_failed": "构建命令 {command} 失败（退出码 {code}）。",
+  "cli_build_use_pnpm": "请通过 pnpm build 运行构建，确保使用当前项目的 pnpm。",
+  "cli_build_target_invalid": "target 必须为 compile、docker 或 desktop。",
+  "cli_build_native_host": "Tauri 需要在对应系统上构建（windows/linux/macos），架构为 x64 或 arm64；请先安装对应 Rust target、系统 SDK 和打包工具。",
+  "cli_build_desktop_missing": "hai.build.json 未配置 desktop 目录。请生成 desktop 前端或添加已有的 Tauri 工程。",
+  "cli_build_images_missing": "hai.build.json 必须包含一个 app 镜像和至多一个 web 镜像。",
+  "cli_build_runtime_missing": "请安装并启动 Podman 或 Docker。auto 优先选择可用的 Podman。",
+  "cli_build_mirror_invalid": "SQLite 镜像地址必须为 HTTP(S)，不能包含凭据、查询或片段。",
+  "cli_build_ready": "构建完成（{runtime}）：{path}。此镜像可用于不同部署环境。",
+  "cli_build_native_ready": "Tauri 构建完成：{target}，安装包位于对应工程 src-tauri/target/{target}/release/bundle。",
+  "cli_deploy_bundle_provider": "--bundle-only 仅适用于 docker-ssh，请选择 Compose 部署目标。",
+  "cli_deploy_bundle_local": "仅生成部署包，不连接服务器",
+  "cli_deploy_bundle_ready": "部署包已生成；服务器尚未部署。",
+  "cli_deploy_bundle_path": "部署包：{path}"
 }

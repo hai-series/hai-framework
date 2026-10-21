@@ -35,8 +35,12 @@ export interface DeployCommandOptions extends GlobalOptions {
   skipProvision?: boolean
   /** 已配置完备，跳过全部中间件处理并直接部署。 */
   skipMiddleware?: boolean
-  /** 跳过构建 */
-  skipBuild?: boolean
+  /** 已构建镜像目录。 */
+  artifactDir?: string
+  /** 只生成 tar，手工搬运。 */
+  bundleOnly?: boolean
+  /** 部署 tar 输出路径。 */
+  output?: string
 }
 
 /** 配置输入中的可选对象；不让未完成的配置绕过最终 Provider Schema。 */
@@ -48,15 +52,21 @@ function configObject(value: unknown): Record<string, unknown> {
  * 补齐部署目标，完整配置直接复用；本机 SSH 参数和平台 Token 只写 `.env.local`。
  * @example 首次输入主机和密钥路径后，下次执行 `hai deploy --env prod` 自动复用。
  */
-async function configureDeployTarget(module: typeof import('@h-ai/deploy'), config: Record<string, unknown>, environment: DeploymentEnvironment, nonInteractive?: boolean): Promise<void> {
+async function configureDeployTarget(module: typeof import('@h-ai/deploy'), config: Record<string, unknown>, environment: DeploymentEnvironment, nonInteractive?: boolean, bundleOnly?: boolean): Promise<void> {
+  if (bundleOnly) {
+    const existing = configObject(config.provider)
+    if (existing.type && existing.type !== 'docker-ssh')
+      throw new Error(cliM('cli_deploy_bundle_provider'))
+    config.provider = { type: 'docker-ssh', remote: { runtime: 'auto' }, expose: { hostPort: 3000 }, ...existing }
+  }
   const current = module.ProviderConfigSchema.safeParse(config.provider)
-  if (current.success) {
+  if (current.success && (bundleOnly || current.data.type !== 'docker-ssh' || current.data.ssh)) {
     config.provider = current.data
-    core.logger.info(cliM('cli_deploy_target_reused', { params: { target: current.data.type === 'docker-ssh' ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}` : 'Vercel' } }))
+    core.logger.info(cliM('cli_deploy_target_reused', { params: { target: current.data.type === 'docker-ssh' ? current.data.ssh ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}` : cliM('cli_deploy_bundle_local') : 'Vercel' } }))
     return
   }
   if (nonInteractive)
-    throw new Error(cliM('cli_deploy_target_missing', { params: { fields: current.error.issues.map(issue => `provider.${issue.path.join('.')}`).join(', ') } }))
+    throw new Error(cliM('cli_deploy_target_missing', { params: { fields: current.success ? 'provider.ssh' : current.error.issues.map(issue => `provider.${issue.path.join('.')}`).join(', ') } }))
 
   const original = configObject(config.provider)
   const platform = await prompts({
@@ -198,7 +208,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       throw new Error(loadedConfig.error.message)
     const deployConfig = loadedConfig.data
     spinner.succeed(cliM('cli_deploy_config_loaded'))
-    await configureDeployTarget(deployModule, deployConfig, environment.data, options.yes)
+    await configureDeployTarget(deployModule, deployConfig, environment.data, options.yes, options.bundleOnly)
 
     spinner.succeed(cliM('cli_deploy_scanned', { params: { name: scan.appName, sveltekit: String(scan.isSvelteKit), services: scan.requiredServices.join(', ') || cliM('cli_deploy_none') } }))
 
@@ -249,7 +259,9 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     const deployResult = await deploy.deployApp(appDir, {
       projectName: options.projectName,
       skipProvision: skipMiddleware,
-      skipBuild: options.skipBuild,
+      artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined,
+      bundleOnly: options.bundleOnly,
+      output: options.output ? resolve(cwd, options.output) : undefined,
       environment: environment.data.environment,
       envDir: environment.data.envDir,
       serviceModes,
@@ -264,7 +276,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       throw new Error(cliM('cli_deploy_failed', { params: { message: deployResult.error.message } }))
     }
 
-    spinner.succeed(chalk.green(cliM('cli_deploy_success')))
+    spinner.succeed(chalk.green(cliM(deployResult.data.status === 'packaged' ? 'cli_deploy_bundle_ready' : 'cli_deploy_success')))
     for (const key of Object.keys(process.env)) {
       if (originalEnv[key] === undefined)
         delete process.env[key]
@@ -281,7 +293,12 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         core.logger.info(cliM('cli_deploy_saved', { params: { name: requirement.envPrefix, value: displayDeployValue(requirement.envPrefix, value) } }))
     }
     core.logger.info('')
-    core.logger.info(chalk.cyan(cliM('cli_deploy_url', { params: { url: deployResult.data.url } })))
+    if (deployResult.data.bundlePath)
+      core.logger.info(cliM('cli_deploy_bundle_path', { params: { path: deployResult.data.bundlePath } }))
+    if (deployResult.data.status === 'packaged')
+      core.logger.info(deployResult.data.instructions ?? '')
+    else
+      core.logger.info(chalk.cyan(cliM('cli_deploy_url', { params: { url: deployResult.data.url } })))
     core.logger.info(chalk.gray(cliM('cli_deploy_id', { params: { id: deployResult.data.deploymentId } })))
     if (deployResult.data.envVarsSet.length > 0) {
       core.logger.info(chalk.gray(cliM('cli_deploy_env', { params: { names: deployResult.data.envVarsSet.join(', ') } })))

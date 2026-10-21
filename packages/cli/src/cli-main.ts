@@ -10,7 +10,7 @@ import process from 'node:process'
 import { cac } from 'cac'
 import chalk from 'chalk'
 import { getCliVersion, writeCliMessage } from './cli-utils.js'
-import { addModule, createProject, deployCommand, generate, initProject } from './commands/cli-commands.js'
+import { addModule, buildCommand, createProject, deployCommand, generate, initProject } from './commands/cli-commands.js'
 
 // CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
 const VERSION = getCliVersion()
@@ -125,6 +125,25 @@ cli
     }
   })
 
+// 构建与部署分别执行；构建不读取部署环境配置。
+cli
+  .command('build', '构建源码、Docker 镜像或 Tauri 安装包（不区分部署环境）')
+  .option('--target <target>', '产物类型：compile（默认）/ docker / desktop')
+  .option('--runtime <runtime>', '本地容器引擎：auto（优先 Podman）/ podman / docker')
+  .option('--platform <platform>', 'Tauri 目标系统：windows / linux / macos（在对应系统构建）')
+  .option('--arch <arch>', 'Tauri 目标架构：x64 / arm64')
+  .option('--sqlite-prebuild-mirror <url>', 'SQLite 预编译二进制镜像根地址')
+  .option('--no-http-proxy', 'Podman 构建不继承本机代理')
+  .action(async (options: Parameters<typeof buildCommand>[0]) => {
+    try {
+      await buildCommand(options)
+    }
+    catch (error) {
+      writeCliMessage(error instanceof Error ? error.message : String(error))
+      process.exitCode = 1
+    }
+  })
+
 // 部署命令
 cli
   .command('deploy [appDir]', '部署应用到云平台')
@@ -134,7 +153,9 @@ cli
   .option('--project-name <name>', '项目名称（默认使用应用目录名）')
   .option('--skip-provision', '配置已完备，跳过中间件配置与开通，直接部署')
   .option('--skip-middleware', '配置已完备，跳过全部中间件处理，直接部署')
-  .option('--skip-build', '跳过构建')
+  .option('--artifact-dir <path>', '已有镜像构建产物目录（含 manifest.json）')
+  .option('--bundle-only', '只生成 Compose 部署 tar，手工搬运；不连接 SSH')
+  .option('--output <path>', '部署 tar 的输出路径')
   .action(async (appDir: string | undefined, options: Record<string, unknown>) => {
     try {
       await deployCommand({
@@ -145,7 +166,9 @@ cli
         projectName: options.projectName as string,
         skipProvision: options.skipProvision as boolean,
         skipMiddleware: options.skipMiddleware as boolean,
-        skipBuild: options.skipBuild as boolean,
+        artifactDir: options.artifactDir as string,
+        bundleOnly: options.bundleOnly as boolean,
+        output: options.output as string,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,
       })

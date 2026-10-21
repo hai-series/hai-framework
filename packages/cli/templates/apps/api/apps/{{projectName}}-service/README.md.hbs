@@ -11,9 +11,9 @@ pnpm --filter {{api.servicePackageName}} test
 
 ## 容器运行
 
-- 根目录运行 `pnpm docker:build` / `pnpm podman:build`；镜像监听 `0.0.0.0:3000`。
+从工程根运行 `pnpm build --target docker` 构建并导出镜像，再运行 `pnpm deploy --env test`。deploy 只消费已构建镜像；含 Web 时一并发布 API/Web。网络不通用 `pnpm deploy --env prod --bundle-only`，按输出说明手工搬运 tar。
 - 配置默认打包自本目录 `config/`，可在运行时只读挂载到 `/app/config`，敏感值通过环境变量注入。
-- `data/` 可作为 SQLite/本地存储目录；`pnpm docker:build:data` / `pnpm podman:build:data` 会将其固化为镜像初始数据，生产写入应挂载 `/app/data` volume。
+从工程根运行 `pnpm build --target docker` 构建并导出镜像，再运行 `pnpm deploy --env test`。deploy 只消费已构建镜像；含 Web 时一并发布 API/Web。网络不通用 `pnpm deploy --env prod --bundle-only`，按输出说明手工搬运 tar。
 
 ## 关键目录
 

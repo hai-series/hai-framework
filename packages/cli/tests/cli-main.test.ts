@@ -10,6 +10,7 @@ interface RegisteredCommand {
 
 const commandMocks = vi.hoisted(() => ({
   addModule: vi.fn(),
+  buildCommand: vi.fn(),
   createProject: vi.fn(),
   deployCommand: vi.fn(),
   generate: vi.fn(),
@@ -216,7 +217,6 @@ describe('cli-main', () => {
     await getCommandAction('deploy [appDir]')('apps/demo-service', {
       cwd: 'C:/workspace',
       projectName: 'demo-service',
-      skipBuild: true,
       skipProvision: true,
       verbose: false,
     })
@@ -225,7 +225,6 @@ describe('cli-main', () => {
       appDir: 'apps/demo-service',
       cwd: 'C:/workspace',
       projectName: 'demo-service',
-      skipBuild: true,
       skipProvision: true,
       verbose: false,
     })

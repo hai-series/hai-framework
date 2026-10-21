@@ -14,7 +14,6 @@ import { core } from '@h-ai/core'
 const DeployErrorInfo = {
   DEPLOY_FAILED: '001:500',
   PROJECT_CREATE_FAILED: '002:500',
-  BUILD_FAILED: '003:500',
   UPLOAD_FAILED: '004:500',
   AUTH_REQUIRED: '005:401',
   AUTH_FAILED: '006:401',
@@ -26,8 +25,6 @@ const DeployErrorInfo = {
   UNSUPPORTED_TYPE: '012:400',
   CONFIG_ERROR: '013:500',
   CREDENTIAL_ERROR: '014:500',
-  CONTAINER_RUNTIME_NOT_FOUND: '015:500',
-  CONTAINER_BUILD_FAILED: '016:500',
   REMOTE_CONNECT_FAILED: '017:500',
   REMOTE_COMMAND_FAILED: '018:500',
   IMAGE_TRANSFER_FAILED: '019:500',
@@ -121,8 +118,6 @@ export interface ScanResult {
   requiredServices: ServiceType[]
   /** 各服务检测到的后端类型（如 db→postgresql/mysql，vecdb→qdrant），用于生成匹配的 sidecar */
   serviceBackends: Partial<Record<ServiceType, string>>
-  /** 构建命令 */
-  buildCommand: string
 }
 
 // ─── 部署结果 ───
@@ -138,7 +133,11 @@ export interface DeployResult {
   /** 部署 ID */
   deploymentId: string
   /** 部署状态 */
-  status: 'ready' | 'building' | 'error'
+  status: 'ready' | 'packaged' | 'building' | 'error'
+  /** Compose 部署 tar 的绝对路径；包含私有配置，应安全传输。 */
+  bundlePath?: string
+  /** 手工搬运和启动说明；仅打包不代表服务器已运行。 */
+  instructions?: string
   /** 已设置的环境变量名列表 */
   envVarsSet: string[]
   /** 部署 Provider 名称（如 vercel / docker-ssh），容器部署时返回 */
@@ -194,8 +193,12 @@ export interface DeployAppOptions {
   projectName?: string
   /** 是否跳过基础设施开通 */
   skipProvision?: boolean
-  /** 是否跳过构建 */
-  skipBuild?: boolean
+  /** 已构建镜像目录；默认最近构建入口/锁文件目录下的 .hai/build/docker。 */
+  artifactDir?: string
+  /** 只生成部署 tar，不连接 SSH；仅 docker-ssh 支持。 */
+  bundleOnly?: boolean
+  /** 部署 tar 输出路径；默认 .hai/deploy/<环境>/bundle-<部署ID>.tar。 */
+  output?: string
 }
 
 // ─── 凭证子功能 ───
@@ -271,7 +274,7 @@ export interface DeployFunctions {
   provisionAll: (projectName: string, services?: ServiceType[]) => Promise<HaiResult<ProvisionResult[]>>
 
   /**
-   * 执行完整部署流程（provision → build → deploy）
+   * 部署已有构建产物（环境和中间件 → 打包 → 上传/启动）；不会调用构建命令。
    *
    * @param appDir - 应用根目录路径
    * @param options - 部署选项

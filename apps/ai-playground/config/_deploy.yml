@@ -22,11 +22,10 @@ provider:
     containerPort: ${HAI_DEPLOY_PROVIDER_EXPOSE_CONTAINERPORT:3000} # 容器内端口（adapter-node 默认 3000）
     hostPort: ${HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT:18080} # 宿主机端口 → 访问地址 http://<host>:18080
 
-# 本地构建运行时（可选，默认 auto 优先 podman）
+# Compose 参数；镜像构建设置位于 hai.build.json。
 container:
-  runtime: ${HAI_DEPLOY_CONTAINER_RUNTIME:auto}
+  s3Engine: ${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}
 
-# 云 Provisioner（可选）：配置后对应服务优先用云资源，不再自建 sidecar
 services: {}
 
 # 也可切换为 Vercel：

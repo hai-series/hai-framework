@@ -29,9 +29,6 @@ pnpm --filter {{projectName}}-app package
 pnpm --filter {{projectName}}-app cap:build:android:debug
 pnpm --filter {{projectName}}-app cap:build:android:release
 pnpm --filter {{projectName}}-app cap:build:ios
-
-# 当前模板的 deploy 入口默认执行 package，可按目标商店或 CI 平台替换
-pnpm --filter {{projectName}}-app deploy
 ```
 
 部署前确认 `PUBLIC_API_BASE` 在 `.env` 中指向可访问的后端服务。Android 模拟器访问宿主机通常使用 `http://10.0.2.2:3000`。

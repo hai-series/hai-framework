@@ -50,7 +50,7 @@ const ExposeSchema = PortExposeSchema
 const DockerSshProviderConfigSchema = z.object({
   type: z.literal('docker-ssh'),
   /** SSH 连接参数 */
-  ssh: SshConfigSchema,
+  ssh: SshConfigSchema.optional(),
   /** 远程主机运行参数 */
   remote: z.object({
     /** 远程应用根目录 */
@@ -133,29 +133,10 @@ export const DeployConfigSchema = z.object({
   environment: z.string().regex(/^[a-z0-9][\w-]*$/i).refine(value => !['local', 'example'].includes(value.toLowerCase())).optional(),
   provider: ProviderConfigSchema,
   services: ServicesConfigSchema,
-  /** 本地容器构建参数（docker-ssh 使用；auto 优先 podman） */
+  /** Docker Compose 部署参数；构建配置位于项目 hai.build.json。 */
   container: z.object({
-    /** 一并部署的 Nginx 静态 Web 镜像；省略时只部署当前服务。 */
-    web: z.object({
-      /** Web 构建上下文，相对于当前部署服务包，例如 fullstack 的 ../..。 */
-      context: z.string().min(1),
-      /** 相对于 Web 构建上下文的 Dockerfile 路径。 */
-      dockerfile: z.string().min(1).default('Dockerfile'),
-      /** Web 镜像的 Dockerfile target。 */
-      target: z.string().regex(/^[a-z][\w-]*$/i).default('web'),
-      /** Web 容器监听端口；使用部署目标的 hostPort 对外提供同源 Web/API。 */
-      containerPort: z.number().int().min(1).max(65535).default(8080),
-    }).optional(),
-    runtime: z.enum(['auto', 'docker', 'podman']).default('auto'),
-    /** Podman 构建是否继承代理；容器不能访问宿主机 localhost 代理时设为 false。 */
-    httpProxy: z.boolean().default(true),
     /** 自建 S3 服务实现；协议仍为 storage.type=s3。 */
     s3Engine: z.enum(['rustfs', 'minio']).default('rustfs'),
-    /** SQLite 预编译包镜像根地址；省略时从官方 GitHub Release 下载，不允许嵌入凭据。 */
-    sqlitePrebuildMirror: z.url().refine((value) => {
-      const url = new URL(value)
-      return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash
-    }).optional(),
   }).optional(),
 })
 

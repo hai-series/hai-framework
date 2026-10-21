@@ -144,7 +144,6 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
       nodeAdapterInstalled: graph.build.has('@sveltejs/adapter-node'),
       requiredServices: [...new Set(middlewares.map(item => item.service))],
       serviceBackends: Object.fromEntries(middlewares.map(item => [item.service, item.backend])),
-      buildCommand: 'pnpm build',
     }
     logger.info('Application scanned', { appName: scan.appName, haiModules: scan.haiModules, requiredServices: scan.requiredServices, serviceBackends: scan.serviceBackends })
     return ok(scan)

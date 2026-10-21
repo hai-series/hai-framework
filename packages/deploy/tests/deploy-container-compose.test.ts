@@ -16,7 +16,6 @@ import { parse } from 'yaml'
 import {
   buildRuntimeEnv,
   generateComposeFile,
-  generateFallbackDockerfile,
   generateWebProxyConfig,
   serializeEnvFile,
 } from '../src/container/deploy-container-compose.js'
@@ -42,7 +41,6 @@ function makeScan(
     nodeAdapterInstalled: true,
     requiredServices,
     serviceBackends,
-    buildCommand: 'vite build',
   }
 }
 
@@ -273,14 +271,5 @@ describe('serializeEnvFile', () => {
     expect(content).toContain('A=1')
     expect(content).toContain('B=x=y')
     expect(content.endsWith('\n')).toBe(true)
-  })
-})
-
-describe('generateFallbackDockerfile', () => {
-  it('生成 adapter-node 运行时 Dockerfile', () => {
-    const dockerfile = generateFallbackDockerfile('demo', 3000)
-    expect(dockerfile).toContain('pnpm pm deploy --filter demo --prod /prod/app')
-    expect(dockerfile).toContain('CMD ["node", "build"]')
-    expect(dockerfile).toContain('ENV PORT=3000')
   })
 })

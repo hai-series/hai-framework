@@ -232,6 +232,10 @@ export function createVercelProvider(): DeployProvider {
 
       logger.debug('Deploying to Vercel', { projectId, outputDir })
       try {
+        // 只接受 Build Output API v3；不把普通源码交给平台重新构建。
+        const outputConfig = JSON.parse(readFileSync(join(outputDir, 'config.json'), 'utf8')) as { version?: unknown }
+        if (outputConfig.version !== 3)
+          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
         // 收集所有文件
         const filePaths = collectFiles(outputDir, outputDir)
         const files: Array<{ file: string, sha: string, size: number }> = []
@@ -244,7 +248,7 @@ export function createVercelProvider(): DeployProvider {
           const size = statSync(fullPath).size
 
           await uploadFile(token, content, sha)
-          files.push({ file: filePath, sha, size })
+          files.push({ file: `.vercel/output/${filePath}`, sha, size })
         }
 
         logger.debug('Files uploaded', { count: files.length })
@@ -252,13 +256,15 @@ export function createVercelProvider(): DeployProvider {
         // 创建部署
         const deployment = await vercelFetch<{ id: string, url: string }>(
           token,
-          '/v13/deployments',
+          '/v13/deployments?prebuilt=1',
           {
             method: 'POST',
             body: JSON.stringify({
               name: projectId,
               files,
-              projectSettings: { framework: 'sveltekit' },
+              version: 2,
+              project: projectId,
+              projectSettings: { framework: null, buildCommand: '', installCommand: '' },
             }),
           },
         )

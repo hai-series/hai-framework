@@ -20,7 +20,10 @@ import type {
   ScanResult,
   ServiceType,
 } from './deploy-types.js'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
+import { readDeploymentArtifact } from './deploy-artifact.js'
 import { DeployConfigSchema } from './deploy-config.js'
 import {
   getCredentialsPath,
@@ -29,7 +32,7 @@ import {
   saveCredentials,
 } from './deploy-credentials.js'
 import { loadDeploymentEnvironment, saveDeploymentEnvironment } from './deploy-environment.js'
-import { buildApp, resolveOutputDir, usesDefaultMiddleware } from './deploy-functions.js'
+import { resolveArtifactDirectory, resolveOutputDir, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
 import { scanApp } from './deploy-scanner.js'
@@ -226,7 +229,7 @@ export const deploy: DeployFunctions = {
         let containerProvider: ContainerDeployProvider | null = null
         if (parsed.provider.type === 'docker-ssh') {
           containerProvider = createDockerSshProvider(parsed.provider, parsed.container)
-          logger.info('Container deploy provider ready', { provider: 'docker-ssh', host: parsed.provider.ssh.host })
+          logger.info('Container deploy provider ready', { provider: 'docker-ssh', host: parsed.provider.ssh?.host })
         }
         else {
           provider = createProviderByType(parsed.provider.type)
@@ -393,6 +396,9 @@ export const deploy: DeployFunctions = {
       return deployContainerApp(currentContainerProvider, appDir, scan, projectName, options, appEnv)
     }
 
+    if (options?.bundleOnly)
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleOnlyContainer'))
+
     // 到此必为平台 Provider（vercel）
     if (!currentProvider) {
       return notInitialized.result()
@@ -407,6 +413,9 @@ export const deploy: DeployFunctions = {
         }),
       )
     }
+
+    if (!existsSync(resolveOutputDir(appDir, 'vercel')))
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
 
     // 3. 开通基础设施
     let allEnvVars: Record<string, string> = appEnv
@@ -441,14 +450,6 @@ export const deploy: DeployFunctions = {
       }
     }
 
-    // 6. 构建应用
-    if (!options?.skipBuild) {
-      const buildResult = buildApp(appDir, scan.buildCommand, allEnvVars)
-      if (!buildResult.success) {
-        return recoveryFailure(buildResult.error, { ...recovery, stage: 'build' })
-      }
-    }
-
     // 7. 部署
     const outputDir = resolveOutputDir(appDir, currentConfig?.provider.type ?? 'vercel')
     const deployResult = await currentProvider.deploy(projectId, outputDir)
@@ -476,7 +477,7 @@ export const deploy: DeployFunctions = {
  * 容器 Provider（docker-ssh）部署编排。
  *
  * 校验 adapter-node → 开通云资源（可选）→ 交由容器 Provider 完成
- * 构建 / 传输 / compose up / 健康检查。
+ * 打包 / 传输 / compose up / 健康检查。
  *
  * @param provider - 容器部署 Provider
  * @param appDir - 应用根目录
@@ -494,13 +495,22 @@ async function deployContainerApp(
 ): Promise<HaiResult<DeployResult>> {
   const projectName = normalizeProjectName(rawProjectName)
 
-  // 容器部署要求 @sveltejs/adapter-node（输出可用 node 直接运行的 build/）
-  if (scan.isSvelteKit && !scan.nodeAdapterInstalled) {
-    return err(
-      HaiDeployError.ADAPTER_MISSING,
-      deployM('deploy_adapterMissing', { params: { adapter: '@sveltejs/adapter-node' } }),
-    )
+  let artifact
+  let artifactDir = options?.artifactDir ?? resolveArtifactDirectory(appDir)
+  try {
+    if (existsSync(join(artifactDir, 'latest'))) {
+      const latest = readFileSync(join(artifactDir, 'latest'), 'utf8').trim()
+      if (!/^[\w-]+$/.test(latest))
+        throw new Error('Invalid artifact pointer')
+      artifactDir = join(artifactDir, latest)
+    }
+    artifact = await readDeploymentArtifact(artifactDir)
   }
+  catch {
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+  }
+  if (!options?.bundleOnly && currentConfig?.provider.type === 'docker-ssh' && !currentConfig.provider.ssh)
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
 
   let provisionEnv: Record<string, string> = {}
   if (!options?.skipProvision) {
@@ -511,5 +521,5 @@ async function deployContainerApp(
     provisionEnv = mergeProvisionEnv(provResults.data, scan, options)
   }
 
-  return provider.deploy({ appDir, projectName, scan, provisionEnv, appEnv, options })
+  return provider.deploy({ appDir, artifact, artifactDir, projectName, scan, provisionEnv, appEnv, options })
 }

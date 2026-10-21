@@ -7,7 +7,6 @@
   "deploy_authRequired": "请先完成认证",
   "deploy_authFailed": "认证失败：{error}",
   "deploy_projectCreateFailed": "项目创建失败：{error}",
-  "deploy_buildFailed": "应用构建失败：{error}",
   "deploy_uploadFailed": "构建产物上传失败：{error}",
   "deploy_deployFailed": "部署失败：{error}",
   "deploy_provisionFailed": "基础设施开通失败：{service} - {error}",
@@ -27,8 +26,6 @@
   "deploy_recoverySuggestion": "重试前在服务商控制台核对清单，并使用相同项目名。unknown 表示请求可能已创建资源。复用资源不会自动删除；新建资源仅在确认未被使用后人工清理。",
   "deploy_commandTimeout": "命令执行超时：{command}",
   "deploy_commandFailed": "命令执行失败（{command}）：{error}",
-  "deploy_containerRuntimeNotFound": "未找到可用的容器运行时：{runtime}",
-  "deploy_containerBuildFailed": "容器镜像构建失败：{error}",
   "deploy_remoteConnectFailed": "无法连接远程主机 {host}：{error}",
   "deploy_remoteRuntimeMissing": "远程主机缺少容器运行时或 compose：{runtime}",
   "deploy_imageTransferFailed": "镜像传输失败：{error}",
@@ -50,5 +47,9 @@
   "deploy_purposeConsole": "消息输出到应用日志，不实际投递",
   "deploy_purposeEmail": "邮件或 HTTP 通知投递；默认 SMTP 容器仅用于测试接收",
   "deploy_purposeSms": "通过阿里云凭证接入短信服务，需已有签名与额度",
-  "deploy_webProxyInvalid": "API 前缀必须是仅含字母、数字、下划线、连字符和斜杠的绝对路径。"
+  "deploy_webProxyInvalid": "API 前缀必须是仅含字母、数字、下划线、连字符和斜杠的绝对路径。",
+  "deploy_artifactInvalid": "构建产物缺失、损坏或部署打包失败。请先在工程根运行 pnpm build --target docker，并检查 --artifact-dir 指向完整的构建目录。",
+  "deploy_sshRequired": "自动部署需要 SSH 配置；无网络连接时使用 --bundle-only 生成部署包并手工搬运。",
+  "deploy_bundleInstructions": "此包包含私有配置，请安全搬运并限制访问权限。\n1. 将 {file} 复制到 Linux 服务器（U 盘、内网传输或 scp 均可）。\n2. 准备 Docker/Podman、对应 compose 命令、tar、sha256sum 和 sh；将所需中间件镜像用 docker load/podman load 导入，镜像标签须与下列清单完全一致。\n3. 新建仅部署用户可访问的目录：mkdir -p release && chmod 700 release\n4. 在包所在目录执行 tar -xf {file} -C release\n5. 执行 cd release && sh {start}；可用 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker 或 podman 显式选择运行时。\n6. 启动后用 compose ps / compose logs 检查状态并验证 Web、/health；仅打包不会执行服务器健康检查。\n所需镜像（app/web 已含在包中，中间件需另行准备）：\n{images}\n构建镜像可用于多环境；此包的环境配置仅用于本次所选环境。",
+  "deploy_bundleOnlyContainer": "仅生成 Compose tar 只支持 docker-ssh。"
 }

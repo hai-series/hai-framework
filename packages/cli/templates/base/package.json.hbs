@@ -23,8 +23,9 @@
     "dev": "vite dev",
     "dev:test": "vite dev --mode test",
     "dev:prod": "vite dev --mode prod",
-    "build": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vite build",
-    "build:prod": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vite build --mode prod",
+    "compile": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vite build",
+    "build": "hai build",
+    "deploy": "hai deploy",
 {{#unless isSvelteOnlyApp}}
     "start": "node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js",
     "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local build/index.js",
@@ -37,26 +38,20 @@
     "lint:fix": "eslint . --fix",
     "test": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "clean": "{{#if isSvelteOnlyApp}}rimraf dist build android ios .turbo src/lib/paraglide{{else}}rimraf .svelte-kit build .turbo{{/if}}",
-    "docker:build": "docker build --target runtime -t {{projectName}}:latest .",
-{{#unless isSvelteOnlyApp}}
-    "docker:build:data": "docker build --target runtime-with-data --build-context embedded-data=./data -t {{projectName}}:latest .",
-{{/unless}}
-    "podman:build": "podman build --format docker --jobs=1 --target runtime -t {{projectName}}:latest ."{{#unless isSvelteOnlyApp}},
-    "podman:build:data": "podman build --format docker --jobs=1 --target runtime-with-data --build-context embedded-data=./data -t {{projectName}}:latest ."{{/unless}}{{#if isCapacitorApp}},
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "clean": "{{#if isSvelteOnlyApp}}rimraf dist build android ios .turbo src/lib/paraglide{{else}}rimraf .svelte-kit build .turbo{{/if}}"{{#if isCapacitorApp}},
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
-    "cap:sync": "pnpm build && cap sync",
-    "cap:sync:android": "pnpm build && cap sync android",
-    "cap:sync:ios": "pnpm build && cap sync ios",
+    "cap:sync": "pnpm compile && cap sync",
+    "cap:sync:android": "pnpm compile && cap sync android",
+    "cap:sync:ios": "pnpm compile && cap sync ios",
     "cap:android": "cap open android",
     "cap:ios": "cap open ios",
     "cap:run:android": "cap run android",
     "cap:run:ios": "cap run ios",
-    "cap:build:android:debug": "pnpm build && cap sync android && cd android && gradlew.bat assembleDebug",
-    "cap:build:android:release": "pnpm build && cap sync android && cap build android --androidreleasetype APK",
-    "cap:build:ios": "pnpm build && cap sync ios && cap build ios"{{/if}}
+    "cap:build:android:debug": "pnpm compile && cap sync android && cd android && gradlew.bat assembleDebug",
+    "cap:build:android:release": "pnpm compile && cap sync android && cap build android --androidreleasetype APK",
+    "cap:build:ios": "pnpm compile && cap sync ios && cap build ios"{{/if}}
   },
   "dependencies": {
   {{#if isSvelteOnlyApp}}
@@ -88,6 +83,7 @@
 {{/if}}
   },
   "devDependencies": {
+    "@h-ai/cli": "{{haiPackageSpecifier}}",
 {{#if isSvelteOnlyApp}}
     "@h-ai/core": "{{haiPackageSpecifier}}",
 {{/if}}

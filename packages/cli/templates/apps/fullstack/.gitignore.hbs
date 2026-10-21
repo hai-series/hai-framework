@@ -22,8 +22,9 @@ playwright-report/
 # 本地数据目录
 **/data/
 
-# hai deploy 产物（compose / .env.runtime / 镜像 tar / sidecar 凭据）
+# 构建与部署产物（镜像 / Compose tar / 私有运行配置）
 .hai/
+*.tar
 
 # 本机私有配置；公共 .env 与 dev/test/prod 环境文件纳入版本控制。
 .env.local

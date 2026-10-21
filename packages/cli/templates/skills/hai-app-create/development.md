@@ -48,7 +48,7 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 
 | 入口             | 开发       | 测试环境                 | 生产环境                                      |
 | ---------------- | ---------- | ------------------------ | --------------------------------------------- |
-| Vite / SvelteKit | `pnpm dev` | `pnpm dev:test`          | `pnpm build:prod` 或 `pnpm dev:prod` 预览配置 |
+| Vite / SvelteKit | `pnpm dev` | `pnpm dev:test`          | `pnpm dev:prod` 预览；build 不选择环境 |
 | Node service     | `pnpm dev` | 构建后 `pnpm start:test` | 构建后 `pnpm start:prod`                      |
 
 所有入口优先级一致：**进程环境 > `.env.local` > `.env.<dev|test|prod>` > `.env`**。Vite 配置在 Node 阶段通过 `core.config.loadEnvFiles({ mode, envDir })` 读取，检查 `success` 后注入进程；`development`/`production` 分别映射到 `dev`/`prod`。Node 服务按 `.env`、环境文件、`.env.local` 的顺序传入 `--env-file`，后者覆盖前者，已有进程环境最高。`core.init` 只读取已注入的变量，不自行读取 dotenv。
@@ -208,6 +208,8 @@ export function pageOffset(query: PageQuery): number {
 ```
 
 ## 验证与交付
+
+所有测试临时工程、镜像、容器、辅助进程、日志、截图与报告须在 finally/teardown 自动清理，成功、失败和取消均执行；只清理本次创建的资源，不提交验收产物。
 
 - 对新增/改变行为按 [hai-app-tests](../hai-app-tests/SKILL.md) 写有意义的测试；目标用例先因行为缺失失败，既有回归保持通过。UI/路由改动覆盖真实流程、异步失败与权限路径；纯文案/文档按影响验证。
 - 从当前 `package.json` 选择实际脚本，优先 workspace filter；按 `typecheck → lint → build（构建/配置/跨包变更）→ test → 相关 E2E` 验证，PowerShell 使用 `pnpm.cmd`。不能调用框架仓库私有命令替代应用检查。

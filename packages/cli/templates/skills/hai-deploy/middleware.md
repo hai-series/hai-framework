@@ -29,7 +29,7 @@
 2. **使用自定义配置**：逐项输入所选后端的连接字段，展示变量名、字段用途与约束，校验必填项、端口、布尔和 URL；凭据用密码输入。保存配置后跳过该服务的开通与 sidecar。
 3. **保持不变**：仅在目标 `.env.<mode>` 显式声明当前后端及完整连接配置时出现；私有凭据可来自 `.env.local`/进程。选择后不修改该项、不认证其 Provisioner、不创建或移除已有中间件容器，继续下一项。只有 `.env` 或其他环境有配置不满足此条件。
 
-逐项配置前提供“环境配置已完备，直接部署”。选择后跳过全部中间件提示、变量改写、云资源与 sidecar 创建，保留已有服务；仍执行应用构建、部署及健康检查。命令行可用 `--skip-middleware`（或 `--skip-provision`）明确选择。不要因为缺少某项中间件的目标文件声明而阻止用户主动跳过。
+逐项配置前提供“环境配置已完备，直接部署”。选择后跳过全部中间件提示、变量改写、云资源与 sidecar 创建，保留已有服务；仍校验已有构建产物并执行部署及健康检查。命令行可用 `--skip-middleware`（或 `--skip-provision`）明确选择。不要因为缺少某项中间件的目标文件声明而阻止用户主动跳过。
 
 `--yes` 用于已授权的自动化：目标环境已有完整配置时保持不变，否则使用当前后端默认配置；不支持的云后端或缺少必需凭据直接失败。自动化直接部署用 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`。跳过不作为配置完整性或连接成功的证明。
 
@@ -71,24 +71,18 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 
 ## 离线准备与验收
 
-先核对 Node、pnpm 与目标 Linux 架构。当前要求 Node `^22.22.2 || ^24.15.0 || >=26.0.0`，生成工程固定 pnpm 12.11.2。Windows 本地需已初始化的 Linux 容器引擎、OpenSSH、完整项目及已安装的 CLI/SDK 依赖；Linux 需容器引擎和 Compose、SSH 授权与权限。无互联网仍需 Windows 到 Linux 的 SSH 和应用端口可达。
+构建与部署分开：先在构建机运行 `pnpm build --target docker`，将完整 `.hai/build/docker/<buildId>` 复制到部署电脑。deploy 只读取这些已校验的镜像 tar，不需要本地 Docker/Podman、基础镜像、pnpm store 或 SQLite 下载。Node/pnpm 版本以工程 engines/packageManager 为准。
 
-有 PostgreSQL/Redis/RustFS 镜像不代表有可用服务。默认配置要求 Compose 中镜像名称、tag、架构准确匹配，SDK 不传输中间件镜像；自定义连接要求服务已启动、地址从应用容器可达并提供数据库/账号、密码、S3 密钥/桶。不要用容器内 localhost 指代宿主机服务。
+`pnpm deploy --env prod --bundle-only --output release-prod.tar` 生成一个包含 app/web、compose、私有 env、校验和、README 与 start-prod.sh 的包，不连接 SSH。把 tar 手工搬到 Linux 后，创建权限 700 的目录，`tar -xf release-prod.tar -C release`，`cd release && sh start-prod.sh`。启动脚本可用 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker/podman 选择运行时；它检查全部镜像标签，缺少时停止，不尝试联网。
 
-默认 Dockerfile 会下载 Node 基础镜像、pnpm、依赖和 SQLite 预编译包，不能直接称为离线可用。源码离线构建要准备 Linux 构建环境的完整缓存和构建 frontend，调整下载步骤并断开外网演练；Windows node_modules/pnpm store 不代表 Linux 的原生依赖可用。云 Provider/Provisioner 需要外网，不用于完全离线部署。
+Linux 需要 compose、sh、tar、sha256sum 和容器/目录/持久化磁盘权限；中间件镜像另行 docker load，名称、tag 和架构须与包内清单一致。自定义连接要求现有服务可从应用容器访问，并备好账号、数据库、S3 桶与密钥。云 Provider/Provisioner 需要网络，不能用于完全离线。
 
-docker-ssh 始终执行本地镜像构建，`--skip-build` 仅对 Vercel 生效。预构建离线交付可在准备环境导出 API/Web 镜像，在 Windows 引擎加载 API 镜像后，为目标服务包提供仅含 `FROM <已加载的API镜像>` 的 Dockerfile 和内容 `*` 的 `.dockerignore`，让 SDK 复用成品并上传。Web 同样预加载成品，在 context 中提供 `FROM <已加载Web镜像> AS web` 的专用 Dockerfile（伴随忽略文件内容 `*`），通过 HAI_DEPLOY_CONTAINER_WEB_DOCKERFILE 选择，SDK 自动转移两份镜像。业务代码变更后必须重制成品镜像；无匹配本地镜像时不能继续假定构建无网络。
-
-fullstack 的 `container.web` 显式描述相对服务包的构建 context、相对 context 的 Dockerfile、target 和容器端口；选择 Web/deploy 的模板自动生成，旧项目须补齐。SDK 同次构建并上传 API/Web，生成同一 Compose 和同源 web.conf，公开端口映射 Web；自动读取服务 API 前缀、补齐缺省 CORS，保留用户的明确 Origin。API/Web 都健康才报告成功，Web 不接收私有 .env.runtime。生产 refresh Cookie 启用 Secure，须准备 HTTPS 入口、内网证书/信任与 DNS/hosts；SDK 生成内部同源代理，不自动配置 TLS。离线验收须包含断外网构建/上传/启动、API 健康、真实 Web 登录、页面与会话刷新、重启和持久化；分别报告 API/Web 联合发布和断网证据，不能互相替代。
+如连构建也需离线，构建机另准备 Linux 容器引擎、Node/Nginx 基础镜像、pnpm/Corepack、完整 Linux 依赖缓存和匹配 SQLite 驱动/Node ABI/架构/libc 的预编译包。可用构建参数 `--sqlite-prebuild-mirror <可信HTTP(S)地址>` 指定二进制根目录；失败应修复缓存/网络，不能让 deploy 下载编译环境。构建无需选择环境；Podman 代理不可达时用 `pnpm build --target docker --no-http-proxy`，不修改系统代理。
 
 ## 启动与验证
 
-fullstack 创建时可通过 `--features deploy` 安装对应版本的本地部署工具。SQLite 在模板及兜底 Dockerfile 中先按驱动版本、Node ABI、架构和 libc 下载官方预编译包，最多尝试三次，加载验证后由生产依赖安装复用缓存；不预装 Python/make/C++，无匹配包或下载失败时停止构建。受限网络可预置 prebuild-install 缓存，或配置 container.sqlitePrebuildMirror（HAI_DEPLOY_CONTAINER_SQLITEPREBUILDMIRROR；自带 Dockerfile 使用 SQLITE_PREBUILD_MIRROR build arg）。镜像根地址后附 /v<驱动版本>/<匹配 ABI 的包名>，不得包含认证信息。不能把更换下载命令当成解决网络不可达，也不能用 CUDA 开关掩盖无关 AI 依赖。
+fullstack 的 hai.build.json 含 app/web 时，两镜像共用构建 ID，部署生成一个 Compose 和同源代理。API 前缀来自当前服务配置，缺省 CORS 填公开入口，明确 Origin 保留；Web 不挂载 .env.runtime。线上成功要求 API/Web 健康，手工模式返回 packaged 并提示用户自行验收。生产登录刷新还需 HTTPS、正确 CORS、受信证书与 DNS/hosts，模块不配置 TLS。
 
-Podman 构建默认继承运行时代理。代理地址在容器内不可达时，在 `_deploy.yml` 配置 `container.httpProxy: false`（已声明该节点时也可使用 `HAI_DEPLOY_CONTAINER_HTTPPROXY=false`），不要修改用户的系统代理。`loadDeploymentEnvironment`、`loadDeploymentConfig`、`saveDeploymentEnvironment` 可用于脚本显式读取、解析和保存同一份部署配置，均返回 HaiResult。
+容器运行期 NODE_ENV=production；HAI_DEPLOY_ENVIRONMENT 保存文件模式，HAI_CORE_ENV 映射 development/test/production/staging。资源名附环境后缀，卷按环境隔离；私有 env 权限 600。构建上下文排除 .env.local、环境覆盖、.env.runtime、.hai/build、.hai/deploy 和 data，不把运行期凭据写入镜像。
 
-构建上下文必须排除 `.env.local`、`.env.*.local`、`.env.runtime` 和 `.hai/deploy`（含镜像归档与凭据）；公共环境文件仍可进入上下文。兜底 Dockerfile 使用伴随忽略文件，Podman 通过 `--ignorefile` 显式指定，避免使用 workspace 根规则后把上次部署的归档或运行配置重新打进构建层。
-
-容器运行期设置 `NODE_ENV=production`，`HAI_DEPLOY_ENVIRONMENT` 保存文件模式，`HAI_CORE_ENV` 映射为 development/test/production/staging。显式环境部署的资源名追加环境后缀，避免 test/prod 复用同一数据卷。启动脚本位于服务包 `.hai/deploy/<mode>/start-<mode>.sh`，显式导出环境并执行 compose；私有 `.env.runtime` 权限为 600。自带 Dockerfile 可读取同名 build args；不得把私有环境文件或运行凭据复制进镜像。
-
-修改此流程后执行 deploy/CLI 的 typecheck、lint、build、test，以及 `pnpm --filter @h-ai/cli test:deploy-gates`（当前源码 tarball → fullstack → Podman/SSH → 健康检查、环境标识、登录和重复部署）。模板变动另执行受影响的 scaffold gates。日志、截图、验收报告保存在 Git 忽略的临时目录，不提交仓库；付费云资源、原生客户端与远程生产部署须单独验证并说明边界。
+修改后运行 deploy/CLI typecheck、lint、build、test、scaffold gates 和 test:deploy-gates。测试应分别证明构建/环境选择、SSH 上传及手工包启动、Web 登录/刷新；断网能力另做实际断网验收。测试的临时工程、容器、镜像、日志、截图、报告与辅助进程必须 finally/teardown 自动清理，失败也清理；不得删除用户已有资源。原生客户端及付费云资源单独验收并报告边界。

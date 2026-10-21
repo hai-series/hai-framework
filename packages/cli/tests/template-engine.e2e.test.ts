@@ -41,11 +41,10 @@ it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，�
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     throw new Error(loaded.error.message)
-  const container = loaded.data.container as { web?: unknown } | undefined
-  if (target === 'web')
-    expect(container?.web).toEqual({ context: '../..', dockerfile: 'Dockerfile', target: 'web', containerPort: 8080 })
-  else
-    expect(container?.web).toBeUndefined()
+  expect(loaded.data.container).toBeUndefined()
+  const build = JSON.parse(await readGenerated(project, 'hai.build.json')) as { images: Array<{ name: string, target: string }> }
+  expect(await fileExists(project, 'scripts/run-e2e.mjs')).toBe(true)
+  expect(build.images.map(image => image.name)).toEqual(target === 'web' ? ['app', 'web'] : ['app'])
 })
 
 /**

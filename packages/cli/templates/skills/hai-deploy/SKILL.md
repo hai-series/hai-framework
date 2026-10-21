@@ -1,292 +1,81 @@
 ---
 name: hai-deploy
-description: "使用 @h-ai/deploy 部署应用：Vercel 云平台或 docker-ssh 容器化部署到任意 Linux 主机，并按需开通/生成基础设施。"
+description: "部署已有构建产物：配置环境与中间件，生成 Compose tar 并通过 SSH 或手工搬运发布；也支持 Vercel。"
 ---
 
 # hai-deploy
 
 ## 能力契约
 
-`hai deploy` 在模块/配置缺失或凭证、扫描、初始化、部署、关闭失败时返回非零退出码。自动化流程必须以退出码判断成功，不要只判断命令是否完成或是否输出日志。
-
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 使用 @h-ai/deploy 部署应用：Vercel 云平台或 docker-ssh 容器化部署到任意 Linux 主机 |
-| 适用场景 | 部署目标配置、云资源开通、SSH 主机容器部署或部署故障排查 |
-| 输入 | 项目构建产物、部署目标（vercel / docker-ssh）、环境配置与凭据引用 |
-| 输出 | 部署/资源操作结果和可验证的目标状态（含访问 URL 与健康检查） |
-| 限制 | 核对实际 provider 与应用运行时；开通收费资源、发布或删除必须在用户授权范围内，凭据不写入仓库。 |
+| 能力 | 消费已有镜像或平台产物，配置环境、中间件并部署 |
+| 适用场景 | SSH 自动部署、离线手工交付、Vercel 发布和部署故障排查 |
+| 输入 | 完整构建产物、pnpm-lock.yaml、目标环境文件、部署配置和私有凭据引用 |
+| 输出 | Compose tar 与手工说明，或已检查的在线部署结果 |
+| 限制 | deploy 不编译/构建，不提供 skip-build 兼容路径；收费开通/发布/删除须在用户授权范围内。packaged 不代表 ready。 |
 
-> `@h-ai/deploy` 提供两种部署方式：
-> 1. **vercel** — 将 SvelteKit（adapter-vercel）应用部署到 Vercel，并自动开通 Neon/Upstash/R2/Resend/阿里云等云基础设施；
-> 2. **docker-ssh** — 将原生 fullstack API 或 SvelteKit（adapter-node）应用容器化后经 SSH 部署到任意具备 docker/podman + compose 的 Linux 主机，按所选功能自动生成 compose sidecar。
+## 操作流程
 
-## 运行环境
+1. 读取当前 package.json、`hai.build.json`、构建清单和 `_deploy.yml`；构建入口见 [hai-build](../hai-build/SKILL.md)。先显式运行 `pnpm build --target docker`，缺产物不得在 deploy 中隐式补构建。
+2. 选择环境，检查 `.env.<mode>`；缺失则让用户创建后再继续。六类环境文件和变量优先级见 [中间件与环境](middleware.md)。
+3. 逐项展示 lockfile 运行依赖要求的中间件、当前后端与默认用途，提供默认/自定义/完整配置时保持不变。用户表示配置齐全或传 `--skip-middleware` 时跳过全部处理，不重写连接或开通资源。
+4. 检查已有镜像清单和 SHA-256，再生成对应环境的 Compose tar。含 app/web 时一起发布，公开 Web 同源代理 API；私有 env 仅挂载 API。
+5. 在线模式上传一个 tar，远程解包、导入、compose up，再检查 API/Web；手工模式 `--bundle-only` 不要求 SSH 配置、不连接远端，输出准确的复制/解包/启动步骤及所需镜像标签。
+6. 失败返回非零退出码；SDK 返回 HaiResult，先检查 success。保留已创建资源的恢复信息，不擅自删除。测试资源在 finally/teardown 清理。
 
-> ⚠️ **Node.js CLI / 服务端模块。** 通过 `hai deploy` CLI 命令或在 Node.js 脚本中使用。
-> docker-ssh 方式要求本地安装 docker 或 podman（`auto` 优先 podman）。
+## CLI
 
-当前 Node 要求 `^22.22.2 || ^24.15.0 || >=26.0.0`，生成工程固定 pnpm 12.11.2；Node 20 / pnpm 9.5.0 不受支持。Windows 必须有已启动、能构建目标 Linux 架构的容器引擎，不能把仅安装客户端或远程有 Docker 当作本地可构建。
-
-## 适用场景
-
-- 一键部署 SvelteKit 应用到 Vercel
-- 容器化后经 SSH 部署到自有服务器 / 云主机 / 内网虚拟机（docker-ssh）
-- 自动开通 PostgreSQL、Redis、S3 等云服务，或按功能生成自建 sidecar
-- 管理部署凭证（~/.hai/credentials.yml）
-- 扫描应用依赖，自动检测所需服务
-- CLI 部署流程（`hai deploy`）
-
-## 使用步骤
-
-部署前按 [环境与中间件向导](middleware.md) 先选择环境并检查对应文件，再逐项选择默认配置、自定义连接或保持不变。用户确认配置已完备时，可选择直接部署或传 `--skip-middleware` 跳过全部中间件处理。SSH 地址、端口、密钥路径及平台 Token 首次填写后仅保存 `.env.local`，后续自动复用。该文档列出模块依赖、后端、连接字段、云开通边界和启动验证要求。
-
-### 1. 配置
-
-```yaml
-# config/_deploy.yml
-provider:
-  type: vercel
-  token: ${HAI_DEPLOY_PROVIDER_TOKEN}
-
-services:
-  db:
-    provisioner: neon
-    apiKey: ${HAI_DEPLOY_SERVICES_DB_APIKEY}
-  cache:
-    provisioner: upstash
-    email: ${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
-    apiKey: ${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
-  storage:
-    provisioner: cloudflare-r2
-    accountId: ${HAI_DEPLOY_SERVICES_STORAGE_ACCOUNTID}
-    apiToken: ${HAI_DEPLOY_SERVICES_STORAGE_APITOKEN}
-    accessKeyId: ${HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID}
-    secretAccessKey: ${HAI_DEPLOY_SERVICES_STORAGE_SECRETACCESSKEY}
-  email:
-    provisioner: resend
-    apiKey: ${HAI_DEPLOY_SERVICES_EMAIL_APIKEY}
-    from: ${HAI_DEPLOY_SERVICES_EMAIL_FROM}
-  sms:
-    provisioner: aliyun
-    accessKeyId: ${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYID}
-    accessKeySecret: ${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYSECRET}
-    signName: ${HAI_DEPLOY_SERVICES_SMS_SIGNNAME}
+```sh
+pnpm build --target docker
+pnpm deploy --env test
+pnpm deploy --env prod --skip-middleware
+pnpm deploy --env prod --artifact-dir .hai/build/docker/<buildId>
+pnpm deploy --env prod --bundle-only --output release-prod.tar
+# fullstack 的 deploy 脚本等价于
+pnpm exec hai deploy packages/my-app-serv --env prod --env-dir .
 ```
 
-这些凭证名由 `deploy.credentials` 管理，属于显式特殊映射；若同时设置
-`HAI_DEPLOY_PROVIDER_TOKEN` 等约定变量，约定变量仍拥有最高优先级。
-
-#### docker-ssh 配置
-
-将上面的 `provider` 替换为 docker-ssh（远程主机需 SSH + docker/podman + compose）：
+API workspace 的服务目录为 apps/my-app-service。单包使用当前目录。Node/pnpm 版本以项目 engines/packageManager 为准，Windows 用 pnpm.cmd。
 
 ```yaml
-# config/_deploy.yml
+# 服务包 config/_deploy.yml
 provider:
   type: docker-ssh
-  ssh:
-    host: ${HAI_DEPLOY_PROVIDER_SSH_HOST}
-    port: 22
-    username: deploy
-    identityFile: ${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE} # 私钥文件路径，省略则用 ssh-agent
-  remote:
-    baseDir: /opt/hai/apps
-    runtime: auto # auto 优先 podman，其次 docker
   expose:
-    type: port
-    containerPort: 3000
-    hostPort: 18080 # 访问地址 http://<host>:18080
-
+    hostPort: 18080
 container:
-  runtime: auto # 本地构建运行时，可选
-
-services:
-  # 启用的服务会被加入远程 compose sidecar（postgres/redis/rustfs 或 minio）
-  # 若配置了云 Provisioner（如 neon），则优先用云资源，不再自建 sidecar
-  db:
-    provisioner: neon
-    apiKey: ${HAI_DEPLOY_SERVICES_DB_APIKEY}
+  s3Engine: rustfs # rustfs | minio
 ```
 
-docker-ssh 要点：
+SSH/平台参数可在向导输入后存入 `.env.local` 的 `HAI_DEPLOY_PROVIDER` 整体 JSON；私钥只存路径，不记录内容。仅打包可省 SSH；在线部署需要 ssh/scp、主机信任和运行权限。完整字段、可选云 Provisioner 及中间件配置见 [middleware.md](middleware.md)。
 
-- 应用镜像优先使用工程自带的 Dockerfile；SvelteKit 需要 adapter-node，原生 fullstack 服务自动生成以 `dist/index.js` 启动的镜像。
-- compose 按 `deploy.scan()` 识别的服务**及其后端类型**生成匹配 sidecar 并注入 `HAI_*` 覆盖变量：
-  - `db`：`postgresql`→postgres、`mysql`→mysql、`sqlite`→数据卷（无 sidecar）→ `HAI_DB`
-  - `cache`：`redis`→redis → `HAI_CACHE`；`storage`：`s3`→RustFS/MinIO（container.s3Engine） → `HAI_STORAGE`
-  - `vecdb`：`qdrant`/`pgvector`/`chroma`→对应 sidecar、`lancedb`→数据卷 → `HAI_VECDB`
-- 若同一服务已配置云 Provisioner（如 neon 提供 `HAI_DB`），优先用云资源，不再自建 sidecar
-- sidecar 密码写被忽略的本机私有配置及远程 `.env.runtime`（权限 600），不入公共环境文件或 `compose.yml`
-- `identityFile` 是私钥**路径**（非私钥内容）；禁止把私钥内容写进 `_deploy.yml`
+## SDK
 
-### 2. 初始化与关闭
-
-```typescript
+```ts
 import { deploy } from '@h-ai/deploy'
 
-deploy.credentials.load()
-
-await deploy.init({
-  provider: { type: 'vercel', token: 'vel_xxx' },
-  services: {
-    db: { provisioner: 'neon', apiKey: 'neon_xxx' },
-  },
-})
-
-// 使用后关闭
-await deploy.close()
-```
-
-### 3. 扫描应用
-
-```typescript
-const scanResult = await deploy.scan('./apps/my-app', { environment: 'test' })
-if (scanResult.success) {
-  const { appName, isSvelteKit, requiredServices } = scanResult.data
+const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })
+if (!initialized.success) throw new Error(initialized.error.message)
+try {
+  const result = await deploy.deployApp('./packages/my-app-serv', {
+    environment: 'prod', envDir: '.', bundleOnly: true,
+    artifactDir: './.hai/build/docker/<buildId>', skipProvision: true,
+  })
+  if (!result.success) throw new Error(result.error.message)
+  // bundlePath/instructions；只有在线部署才有健康检查和可访问 URL。
+}
+finally {
+  await deploy.close()
 }
 ```
 
-### 4. 开通基础设施
+`deploy.scan`、`deploy.credentials.getPath/load/save/saveAll` 不依赖 init。Vercel 使用 prebuilt 协议只上传 Build Output API v3 的 .vercel/output，不运行 build 命令；云认证和开通需要外网。
 
-```typescript
-const provResults = await deploy.provisionAll('my-project')
-if (provResults.success) {
-  for (const prov of provResults.data) {
-    // prov.envVars 包含需要注入的环境变量
-  }
-}
-```
+## 离线交付与验证
 
-### 5. 完整部署
+部署器不需要本地容器引擎；提前从构建机复制完整 `.hai/build/docker/<buildId>`。Linux 准备 Docker/Podman、compose、sh、tar、sha256sum、所需中间件镜像的准确标签及数据目录权限。手工包含私有配置，权限受限，不提交 Git。启动脚本校验文件、加载 app/web、检查镜像存在并导出环境标识；缺镜像时停止，不联网拉取。
 
-```typescript
-const result = await deploy.deployApp('./apps/my-app', {
-  projectName: 'my-project',
-  skipProvision: false,
-  skipBuild: false,
-})
-if (result.success) {
-  // result.data.url — 部署地址
-  // result.data.deploymentId — 部署 ID
-  // result.data.envVarsSet — 已设置的环境变量列表
-}
-```
+完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配 ABI/libc 的 SQLite 预编译包；Windows node_modules 不能替代。生产 HTTPS、CORS、证书和 DNS 另行配置。实际断网后验收登录、刷新、重启与持久化，不能将联网测试当作离线证明。
 
-## 核心 API
-
-| 方法                   | 签名                                                                       | 说明         |
-| ---------------------- | -------------------------------------------------------------------------- | ------------ |
-| `deploy.credentials.load` | `() => HaiResult<string[]>`                                             | 加载凭证到 `process.env` |
-| `deploy.credentials.save` | `(key: string, value: string) => HaiResult<void>`                        | 保存单个凭证 |
-| `deploy.credentials.saveAll` | `(entries: Record<string, string>) => HaiResult<void>`                | 批量保存凭证 |
-| `deploy.credentials.getPath` | `() => string`                                                         | 获取凭证文件路径 |
-| `deploy.init`          | `(config: DeployConfigInput) => Promise<HaiResult<void>>`        | 初始化模块   |
-| `deploy.close`         | `() => Promise<void>`                                                      | 关闭模块     |
-| `deploy.scan`          | `(appDir: string, options?: DeployScanOptions) => Promise<HaiResult<ScanResult>>` | 按环境扫描（不依赖 init） |
-| `deploy.provisionAll`  | `(projectName: string, services?: ServiceType[]) => Promise<HaiResult<ProvisionResult[]>>` | 开通指定或全部已配置服务 |
-| `deploy.deployApp`     | `(appDir: string, options?) => Promise<HaiResult<DeployResult>>` | 完整部署     |
-| `deploy.config`        | `DeployConfig \| null`                                                     | 当前配置     |
-| `deploy.isInitialized` | `boolean`                                                                  | 初始化状态   |
-
-## 凭证管理
-
-所有凭证操作都通过 `deploy.credentials.*` 访问，模块入口不再单独导出自由函数。
-
-> `deploy.credentials.*()` 与 `deploy.scan()` 都不依赖 `deploy.init()`，可用于 CLI 在读取 `_deploy.yml` 之前准备环境。
-
-## 配置消费与失败恢复
-
-云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；构建子进程与目标运行环境使用相同开通结果。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应 _db/_cache/_storage/_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
-
-部署失败恢复：`ProvisionResult.resourceStatus` 标记 created/reused；`getDeployRecovery(result.error)` 读取 projectName、stage、platformProjectId 和资源清单，unknown 表示请求结果不确定，必须先在服务商控制台核对。失败资源已返回 ID 时保留该 ID。恢复结果不含 envVars、原始异常或连接凭证，CLI 会展示清单和建议。同名重试复用现有资源；不自动删除复用资源，新建资源仅在人工确认未被使用后清理。
-
-## 错误码 — `HaiDeployError`
-
-| 错误码                                  | code               | 说明                     |
-| --------------------------------------- | ------------------ | ------------------------ |
-| `HaiDeployError.DEPLOY_FAILED`         | `hai:deploy:001`   | 部署失败（通用）         |
-| `HaiDeployError.PROJECT_CREATE_FAILED` | `hai:deploy:002`   | 平台项目创建失败         |
-| `HaiDeployError.BUILD_FAILED`          | `hai:deploy:003`   | 应用构建失败             |
-| `HaiDeployError.UPLOAD_FAILED`         | `hai:deploy:004`   | 构建产物上传失败         |
-| `HaiDeployError.AUTH_REQUIRED`         | `hai:deploy:005`   | 未认证                   |
-| `HaiDeployError.AUTH_FAILED`           | `hai:deploy:006`   | 认证失败                 |
-| `HaiDeployError.PROVISION_FAILED`      | `hai:deploy:007`   | 基础设施开通失败         |
-| `HaiDeployError.ADAPTER_MISSING`       | `hai:deploy:008`   | SvelteKit adapter 未安装 |
-| `HaiDeployError.SCAN_FAILED`           | `hai:deploy:009`   | 应用扫描失败             |
-| `HaiDeployError.NOT_INITIALIZED`       | `hai:deploy:010`   | 模块未初始化             |
-| `HaiDeployError.ENV_VAR_FAILED`        | `hai:deploy:011`   | 环境变量设置失败         |
-| `HaiDeployError.UNSUPPORTED_TYPE`      | `hai:deploy:012`   | 不支持的类型             |
-| `HaiDeployError.CONFIG_ERROR`          | `hai:deploy:013`   | 配置错误                 |
-| `HaiDeployError.CREDENTIAL_ERROR`      | `hai:deploy:014`   | 凭证读写失败             |
-| `HaiDeployError.CONTAINER_RUNTIME_NOT_FOUND` | `hai:deploy:015` | 未找到容器运行时     |
-| `HaiDeployError.CONTAINER_BUILD_FAILED` | `hai:deploy:016`  | 镜像构建失败             |
-| `HaiDeployError.REMOTE_CONNECT_FAILED` | `hai:deploy:017`   | 远程连接失败             |
-| `HaiDeployError.REMOTE_COMMAND_FAILED` | `hai:deploy:018`   | 远程命令失败             |
-| `HaiDeployError.IMAGE_TRANSFER_FAILED` | `hai:deploy:019`   | 镜像传输失败             |
-| `HaiDeployError.HEALTH_CHECK_FAILED`   | `hai:deploy:020`   | 健康检查未通过           |
-
-## CLI 命令
-
-通过 CLI 部署前，先按 [CLI 安装与命令](../hai-app-create/development.md#cli-安装与命令) 全局安装 `@h-ai/cli`，确认 `hai --version` 可运行后再执行下列命令。在 Node.js 脚本中直接使用 `@h-ai/deploy` API 时无需安装 CLI。
-
-```bash
-# 部署当前目录
-hai deploy
-
-# 部署指定应用
-hai deploy ./apps/admin-console --env test
-
-# 跳过基础设施开通
-hai deploy --env prod --skip-provision
-
-# 仅 Vercel：跳过应用构建；docker-ssh 仍会构建镜像
-hai deploy --env prod --skip-build
-
-# 自定义项目名
-hai deploy --project-name my-custom-name
-```
-
-> 部署方式由 `config/_deploy.yml` 的 `provider.type` 决定（vercel / docker-ssh），
-> CLI 命令相同。docker-ssh 成功后输出的访问地址为 `http://<host>:<hostPort>`。
-
-fullstack 选择 Web 和 deploy 时，服务配置包含 `container.web`，`hai deploy packages/my-app-serv --env prod` 一次构建并发布 API/Web；Web 公开 hostPort，同源代理内部 API，返回 URL 为 Web 入口。未配置 Web 时仍为单服务。Web 不挂载 API 私有环境；两个镜像共用部署 ID，全部构建成功才开始上传，API/Web 都通过健康检查才报告成功。模板 `pnpm run deploy` 是打包脚本，不等于 CLI 发布。
-
-离线部署先按 [离线准备与验收](middleware.md#离线准备与验收) 检查材料。docker-ssh 在本地构建并导出镜像 tar，再分别上传镜像、Compose、运行环境和启动脚本，不在远程构建源码。当前无直接指定预构建镜像的参数；不得声称 `--skip-build` 能离线发布容器，也不得将联网部署测试作为断网证明。
-
-## 常见模式
-
-### 仅部署（跳过基础设施）
-
-```typescript
-await deploy.deployApp('./apps/my-app', { skipProvision: true })
-```
-
-### 仅开通基础设施
-
-```typescript
-await deploy.init(config)
-const result = await deploy.provisionAll('my-project')
-// 手动使用 result.data 中的环境变量
-await deploy.close()
-```
-
-### 自定义部署流程
-
-```typescript
-import { deploy } from '@h-ai/deploy'
-
-// Provider 通过 init 配置自动创建，不需要手动导入
-await deploy.init({
-  provider: { type: 'vercel', token: 'vel_xxx' },
-})
-
-// 使用 deploy API 部署
-const result = await deploy.deployApp('./apps/my-app')
-```
-
-## 相关 Skills
-
-- **hai-core** — 配置加载、日志、HaiResult 类型
-- **hai-reldb** — 数据库（Neon PostgreSQL）
-- **hai-cache** — 缓存（Upstash Redis）
+改动后执行 typecheck、lint、build、test，模板执行 scaffold gates，部署流程执行 test:deploy-gates；真实 Tauri 安装包按系统单独验证。所有测试临时工程、镜像、容器、辅助进程、截图、日志和报告必须在 finally/teardown 自动清理，失败/取消同样清理。不得把验收产物提交 Git，也不得清理用户既有资源。

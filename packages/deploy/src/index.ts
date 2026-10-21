@@ -1,3 +1,4 @@
+export * from './deploy-artifact.js'
 export * from './deploy-config.js'
 export * from './deploy-environment.js'
 export * from './deploy-main.js'

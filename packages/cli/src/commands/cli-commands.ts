@@ -4,6 +4,7 @@
  */
 
 export * from './cli-add.js'
+export * from './cli-build.js'
 export * from './cli-config-templates.js'
 export * from './cli-create.js'
 export * from './cli-deploy.js'

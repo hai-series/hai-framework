@@ -143,14 +143,14 @@ describe('docker-ssh provider schema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('container.runtime 仅接受 auto/docker/podman', () => {
+  it('container.s3Engine 仅接受 rustfs/minio', () => {
     const valid = DeployConfigSchema.safeParse({
       provider: {
         type: 'docker-ssh',
         ssh: { host: '10.0.0.10', username: 'deploy' },
         expose: { type: 'port', hostPort: 18080 },
       },
-      container: { runtime: 'podman' },
+      container: { s3Engine: 'rustfs' },
     })
     expect(valid.success).toBe(true)
 
@@ -160,7 +160,7 @@ describe('docker-ssh provider schema', () => {
         ssh: { host: '10.0.0.10', username: 'deploy' },
         expose: { type: 'port', hostPort: 18080 },
       },
-      container: { runtime: 'containerd' },
+      container: { s3Engine: 'invalid' },
     })
     expect(invalid.success).toBe(false)
   })

@@ -277,8 +277,8 @@ async function scan(directory) {
     }
     if (item.name === '.env.example') {
       for (const match of content.matchAll(/^(?:#\s*)?([A-Z][A-Z0-9_]*)=(.*)$/gm)) {
-        // HAI 字段以 Schema、YAML 和运行时代码为准，避免旧生成清单把已删除别名重新引入。
-        if (match[1].startsWith('HAI_'))
+        // 框架及客户端字段以 Schema、YAML 和代码为准，避免旧清单重新引入已删除别名。
+        if (/^(?:HAI_|PUBLIC_|VITE_)/.test(match[1]))
           continue
         if (!explicit.has(match[1])) {
           const parsed = parseEnv(`${match[1]}=${match[2]}`)
@@ -296,6 +296,7 @@ await scan(path.join(root, 'scripts'))
 explicit.set('HAI_CRYPTO_TRANSPORT', { source: 'apps/desktop-app/src/lib/crypto-config-schema.ts', value: 'false' })
 
 const extraDescriptions = {
+  PATH: ['操作系统提供的可执行程序搜索路径；CLI 用于定位已安装的 pnpm', '保留系统原值；由操作系统路径分隔符连接，不要在 .env 中置空或作为应用配置覆盖'],
   NODE_ENV: ['Node/Vite 运行模式', 'development | test | production'],
   HOST: ['部署平台 HTTP 监听地址，覆盖 serv/kit server.host', '主机名或 IP'],
   PORT: ['部署平台 HTTP 监听端口，覆盖 serv/kit server.port', '整数 1–65535'],
@@ -356,7 +357,6 @@ const extraDescriptions = {
   PYTHONIOENCODING: ['本地 Python 模型进程标准输入输出编码', 'Python 支持的编码名，通常 utf-8'],
   SERVICE_BASE_URL: ['Fullstack 开发代理访问服务端的地址', '有效 HTTP(S) URL'],
   TAURI_DEV_HOST: ['Tauri 开发时 HMR 可访问的宿主机地址', '主机名或 IP，由 Tauri 开发工具注入'],
-  VITE_HAI_E2E_KIT_TRANSPORT_MODE: ['管理后台端到端测试传输加密模式', 'on | off'],
   VITEST: ['Vitest 自动注入的测试运行标记', 'true 表示运行测试；通常无需手动设置'],
 }
 for (const [name, entry] of explicit) {

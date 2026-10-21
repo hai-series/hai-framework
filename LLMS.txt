@@ -62,7 +62,7 @@ return result
 | @h-ai/kit | [SvelteKit hooks、guard、validate、response](packages/cli/templates/skills/hai-kit/SKILL.md) | 仅 SvelteKit 集成，不替代共享 HTTP contract |
 | @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) | Cookie/transport 与服务端一致；SSR 避免共享用户状态 |
 | @h-ai/capacitor | [原生设备、推送、安全存储](packages/cli/templates/skills/hai-capacitor/SKILL.md) | Web 与 Android/iOS 能力不同 |
-| @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md) | 先选环境，核对 Provider、工具链和发布授权；fullstack 通过 container.web 同时发布 API/Web，离线须准备材料并断网验收 |
+| @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md) | 先选环境，核对 Provider、工具链和发布授权；build 环境无关并导出 API/Web；deploy 只消费产物，--bundle-only 支持手工搬运，测试产物自动清理 |
 | @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | 表单 Form/FormLayout 支持 columns、labelPosition、自动/显式 colSpan；控件与 CRUD 失焦校验、修正即时更新，错误随 UI 语言更新；认证使用 AuthPanel + IAM 公开配置、Markdown/URL 协议弹窗和表单 snippet；components 公开入口与轻量 /theme、/i18n；Tailwind 扫描路径须正确 |
 | @h-ai/ui/guide | [新手引导与帮助中心](packages/cli/templates/skills/hai-ui/guide.md) | createGuide + GuideHost；首次 Cookie 提示、手动重看、宿主导航与 data-guide；业务翻译延迟求值、显式 locale、按用户和版本记录；fullstack Web/App/Desktop 默认接入 |
 | @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 先 `pnpm add -g @h-ai/cli`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准；生成框架依赖固定为 CLI 对应版本，安装失败展示命令和原始输出 |

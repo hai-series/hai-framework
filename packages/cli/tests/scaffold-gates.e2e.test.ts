@@ -6,7 +6,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { access, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -340,7 +340,20 @@ function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): 
   if (existsSync(path.join(projectPath, 'tsconfig.capabilities.json')))
     runPnpm(projectPath, ['exec', 'tsc', '--noEmit', '-p', 'tsconfig.capabilities.json'], envOptions)
   runPnpm(projectPath, ['lint'], envOptions)
+  // 注入仅属于构建机器的公开值，确认 Vite 和 Kit 都不会将 .env.local 固化进交付包。
+  const sentinel = 'hai-build-must-ignore-local-1792584600'
+  if (existsSync(path.join(projectPath, 'svelte.config.js')))
+    appendFileSync(path.join(projectPath, '.env.local'), `\nPUBLIC_BUILD_ISOLATION_PROBE='${sentinel}'\n`)
   runPnpm(projectPath, ['build'], envOptions)
+  for (const output of ['build', 'dist', '.svelte-kit/output']) {
+    const directory = path.join(projectPath, output)
+    if (!existsSync(directory))
+      continue
+    for (const file of readdirSync(directory, { recursive: true })) {
+      if (/\.(?:js|json|html|css|map)$/.test(String(file)))
+        expect(readFileSync(path.join(directory, String(file)), 'utf8'), `Build leaked .env.local into ${output}/${String(file)}`).not.toContain(sentinel)
+    }
+  }
   runPnpm(projectPath, ['test'], envOptions)
   runPnpm(projectPath, ['test:e2e'], envOptions)
 }
@@ -427,8 +440,8 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
     HAI_CORE_VERSION: '9.8.7',
     HAI_CORE_ENV: 'test',
     HAI_CORE_LOGGING_LEVEL: 'warn',
-    // 截图独立于会被清理的生成项目；调用方可为本轮验收指定目录。
-    HAI_AUTH_EVIDENCE_DIR: process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve(process.cwd(), 'test-results/scaffold-evidence'),
+    // 截图使用生成项目自己的 test-results，测试结束后自动清理。
+    HAI_AUTH_EVIDENCE_DIR: '',
   }
 }
 

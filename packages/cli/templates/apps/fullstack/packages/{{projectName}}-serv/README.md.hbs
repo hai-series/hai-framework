@@ -35,18 +35,11 @@ CLI 已生成根目录 `.env.local`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项�
 
 ## 容器运行
 
-{{#if features.deploy}}
-{{#if fullstack.frontends.web}}
-从工程根运行 `hai deploy packages/{{projectName}}-serv --env prod --env-dir .`，按 `config/_deploy.yml` 的 `container.web` 同时构建、上传并启动 API/Web。公开端口提供 Web 与同源 API，返回的 URL 可直接打开页面；已有中间件配置完整时加 `--skip-middleware`。生产 HTTPS 入口与明确 Origin 按实际环境配置，凭据保存 `.env.local`。无 Web 配置时只部署服务。
+从工程根运行 `pnpm build --target docker` 构建并导出镜像。启用 deploy 功能后，运行根命令 `pnpm deploy --env test`；含 Web 镜像时一并发布 API/Web，部署不重新构建。网络不通时用 `pnpm deploy --env prod --bundle-only`，按说明手工搬运 tar。
 
-{{/if}}
-{{/if}}
-
-- 根目录 `pnpm docker:build` / `pnpm podman:build` 直接生成本服务镜像；Web 使用独立的 `docker:build:web` / `podman:build:web` 镜像。
 - 服务镜像直接由 `@h-ai/serv` 对外监听，配置挂载点为 `/app/config`，数据目录为 `/app/data`，不包含额外转发进程。
 - Web 镜像不烘焙 API 地址；启动时使用 `-e PUBLIC_API_BASE=https://api.example.com` 注入，同一镜像可部署到不同环境。未设置时 Web 默认请求自身 origin。
 - YAML 配置使用 `${ENV_NAME:default}` 接收运行时环境变量；不要把密钥写入镜像。
-- 将 SQLite/本地存储放入本目录 `data/` 后运行 `pnpm docker:build:data` / `pnpm podman:build:data`，可生成带初始数据的镜像，持续写入仍应使用 volume。
 
 ## IAM 认证配置
 

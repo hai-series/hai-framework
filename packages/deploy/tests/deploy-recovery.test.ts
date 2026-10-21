@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -73,19 +73,21 @@ describe('deployment recovery', () => {
       expect(getDeployRecovery(result.error)?.resources).toEqual([{ serviceType: 'db', provisionerName: 'neon', resourceInfo: 'neon-project:created-without-uri', resourceStatus: 'created' }])
   })
 
-  it('returns resource and platform project information after a real failing build', async () => {
+  it('returns resource and platform project information after uploading prebuilt output fails', async () => {
     await initialize()
-    writeFileSync(join(directory, 'package.json'), JSON.stringify({ name: 'same-project', scripts: { build: 'node fail.cjs' } }))
-    writeFileSync(join(directory, 'fail.cjs'), 'process.exit(7)')
+    mkdirSync(join(directory, '.vercel/output'), { recursive: true })
+    writeFileSync(join(directory, '.vercel/output/config.json'), '{"version":3}')
+    writeFileSync(join(directory, '.vercel/output/index.html'), 'prebuilt')
     newDatabase()
     fetchMock.mockResolvedValueOnce(Response.json({ id: 'platform-existing' }))
     fetchMock.mockResolvedValueOnce(Response.json({}))
+    fetchMock.mockRejectedValueOnce(new Error('upload failure'))
     const result = await deploy.deployApp(directory)
     expect(result.success).toBe(false)
     if (result.success)
       return
     expect(getDeployRecovery(result.error)).toMatchObject({
-      stage: 'build',
+      stage: 'deploy',
       platformProjectId: 'platform-existing',
       resources: [{ resourceStatus: 'created', resourceInfo: 'neon-project:database-created' }],
     })

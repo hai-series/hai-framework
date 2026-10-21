@@ -5,8 +5,9 @@ declare const __APP_CORE_CONFIG__: Pick<CoreConfig, 'name' | 'version' | 'env' |
   logging?: Pick<NonNullable<CoreConfig['logging']>, 'level' | 'format'>
 }
 
-/** Vite 经 core 加载后注入的公开配置，修改 YAML 后重新构建客户端。 */
-export const appConfig = __APP_CORE_CONFIG__
+/** 构建包含公开默认值；预览或容器启动时的公开配置覆盖默认值，不重建静态资源。 */
+const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { core?: Partial<typeof __APP_CORE_CONFIG__> } }).__HAI_PUBLIC_CONFIG__?.core
+export const appConfig = { ...__APP_CORE_CONFIG__, ...runtime, logging: { ...__APP_CORE_CONFIG__.logging, ...runtime?.logging } }
 
 export function initClientCore(): void {
   core.init({ logging: appConfig.logging })

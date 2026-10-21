@@ -7,7 +7,6 @@
   "deploy_authRequired": "Authentication required",
   "deploy_authFailed": "Authentication failed: {error}",
   "deploy_projectCreateFailed": "Project creation failed: {error}",
-  "deploy_buildFailed": "Application build failed: {error}",
   "deploy_uploadFailed": "Build output upload failed: {error}",
   "deploy_deployFailed": "Deployment failed: {error}",
   "deploy_provisionFailed": "Service provisioning failed: {service} - {error}",
@@ -27,8 +26,6 @@
   "deploy_recoverySuggestion": "Inspect listed resources in the provider console before retrying with the same project name. Unknown means the request may have created a resource. Reused resources are never deleted automatically; remove newly created resources manually only after checking their use.",
   "deploy_commandTimeout": "Command timed out: {command}",
   "deploy_commandFailed": "Command failed ({command}): {error}",
-  "deploy_containerRuntimeNotFound": "No usable container runtime found: {runtime}",
-  "deploy_containerBuildFailed": "Container image build failed: {error}",
   "deploy_remoteConnectFailed": "Cannot connect to remote host {host}: {error}",
   "deploy_remoteRuntimeMissing": "Remote host missing container runtime or compose: {runtime}",
   "deploy_imageTransferFailed": "Image transfer failed: {error}",
@@ -50,5 +47,9 @@
   "deploy_purposeConsole": "Messages go to application logs without delivery",
   "deploy_purposeEmail": "Email/HTTP delivery; the default SMTP container only captures test messages",
   "deploy_purposeSms": "SMS through Aliyun credentials; requires an existing signature and quota",
-  "deploy_webProxyInvalid": "The API prefix must be an absolute path containing only letters, numbers, underscores, hyphens and slashes."
+  "deploy_webProxyInvalid": "The API prefix must be an absolute path containing only letters, numbers, underscores, hyphens and slashes.",
+  "deploy_artifactInvalid": "Build artifacts are missing, corrupt, or could not be packaged. Run pnpm build --target docker at the project root and point --artifact-dir to a complete build directory.",
+  "deploy_sshRequired": "Automatic deployment requires SSH settings. Use --bundle-only for manual transfer when the server is unreachable.",
+  "deploy_bundleInstructions": "This bundle contains private configuration. Transfer it securely and restrict access.\n1. Copy {file} to Linux using removable media, a private network or scp.\n2. Install Docker/Podman with compose, tar, sha256sum and sh. Load middleware images using docker load/podman load with the exact tags below.\n3. Create a private release directory: mkdir -p release && chmod 700 release\n4. From the bundle directory run tar -xf {file} -C release\n5. Run cd release && sh {start}. Set HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker or podman to select the runtime explicitly.\n6. Check compose ps / compose logs, Web and /health after startup. Bundle generation does not perform server health checks.\nRequired images (app/web are included; prepare middleware separately):\n{images}\nBuilt images can be reused across environments; this bundle contains configuration for the selected environment only.",
+  "deploy_bundleOnlyContainer": "Compose bundle generation is supported only by docker-ssh."
 }

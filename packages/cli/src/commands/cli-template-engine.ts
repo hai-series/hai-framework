@@ -142,6 +142,7 @@ const HAI_CATALOG_PACKAGE_NAMES = [
   '@h-ai/audit',
   '@h-ai/cache',
   '@h-ai/capacitor',
+  '@h-ai/cli',
   '@h-ai/core',
   '@h-ai/crypto',
   '@h-ai/datapipe',
@@ -340,6 +341,7 @@ function buildFullstackPackageSpecifiers(useCatalogProtocol: boolean): Fullstack
 function buildApiWorkspaceCatalogPackages(featureMap: Record<string, boolean>): Record<string, string> {
   const packageNames: string[] = [
     ...API_WORKSPACE_EXTERNAL_CATALOG_PACKAGE_NAMES,
+    '@h-ai/cli',
     '@h-ai/api-client',
     '@h-ai/api-contract',
     '@h-ai/core',
@@ -382,7 +384,7 @@ function buildAppHaiCatalogPackages(options: {
   isCapacitorApp: boolean
   isSvelteOnlyApp: boolean
 }): Record<string, string> {
-  const packageNames: string[] = []
+  const packageNames: string[] = ['@h-ai/cli']
 
   if (options.isSvelteOnlyApp) {
     packageNames.push('@h-ai/api-client', '@h-ai/api-contract', '@h-ai/capacitor', '@h-ai/ui')
@@ -433,6 +435,7 @@ function buildAppHaiCatalogPackages(options: {
 function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], deploy = false): Record<string, string> {
   const packageNames: string[] = [
     ...FULLSTACK_ROOT_CATALOG_PACKAGE_NAMES,
+    '@h-ai/cli',
     ...FULLSTACK_CONTRACT_CATALOG_PACKAGE_NAMES,
     ...FULLSTACK_SERV_CATALOG_PACKAGE_NAMES,
     ...FULLSTACK_SHARED_CATALOG_PACKAGE_NAMES,
@@ -1028,6 +1031,14 @@ export async function generateFromTemplates(
 
   // ─── ④ 渲染 .hbs 动态模板 ───
   await renderDynamicFiles(root, projectPath, context)
+
+  // 多包模板不继承 base；所有应用统一复制同一份 E2E 清理入口。
+  await fse.copy(path.join(root, 'shared', 'run-e2e.mjs'), path.join(projectPath, 'scripts', 'run-e2e.mjs'))
+  await fse.copy(path.join(root, 'shared', '.gitattributes'), path.join(projectPath, '.gitattributes'))
+  if (context.isSvelteOnlyApp) {
+    await fse.copy(path.join(root, 'shared', 'vite-runtime-config.ts'), path.join(projectPath, 'scripts', 'vite-runtime-config.ts'))
+    await fse.copy(path.join(root, 'shared', 'container-runtime-config.sh'), path.join(projectPath, 'docker', '19-runtime-config.sh'))
+  }
 
   if (context.isSvelteOnlyApp || context.appType === 'fullstack') {
     const navigationDir = context.appType === 'fullstack'

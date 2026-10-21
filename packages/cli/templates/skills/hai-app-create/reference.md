@@ -334,13 +334,13 @@ core.init() → crypto.init() → reldb.init() → cache.init() → iam.init() �
 
 仅涉及容器构建/部署变更时使用本节；普通功能开发无需每次启动镜像。
 
-- 保持脚手架根目录 `Dockerfile`、`.dockerignore` 与 `package.json` 中 `docker:build*` / `podman:build*` 命令同步。
+- 保持脚手架根目录 `Dockerfile`、`.dockerignore` 与 `package.json` 中 `build` / `compile` 命令与 hai.build.json同步。
 - Podman 多阶段构建保持 `--format docker --jobs=1`；前者保留 `HEALTHCHECK`，后者避免部分 Podman 5.8/Buildah 组合在并行 stage 构建时触发内部 semaphore panic。
 - 先复制 lockfile 与 workspace 配置执行 `pnpm fetch`，再复制源码并离线安装、构建；避免源码变化重复下载依赖，同时兼容新增 workspace。
 - SvelteKit 服务使用 Node adapter；纯 Vite 前端使用带 SPA fallback 的静态镜像；fullstack 的 Service 与 Web 分别交付，Service 直接监听且不增加转发进程。
 - Web 的 `PUBLIC_*` 部署配置在容器启动时生成静态运行时配置，不作为 build arg 烘焙，确保同一镜像可跨环境部署。
 - 配置文件随镜像提供，并允许只读挂载覆盖；密钥只通过环境变量或 `--env-file` 注入。
-- 普通构建不携带 `data/`；只有用户明确运行 `docker:build:data` / `podman:build:data` 时才通过 named build context 嵌入 SQLite/本地存储初始快照。
+- 普通构建不携带 `data/`；持续写入使用运行期 volume；需要预置数据时显式维护独立 Dockerfile target 和 named build context，不把本机数据加入默认镜像。
 - 数据库和本地存储的持续写入必须落到 volume，不能依赖镜像可写层。
 - 完成前实际启动镜像，验证健康端点、非 root 用户、环境变量覆盖、配置挂载和预置数据读取。
 

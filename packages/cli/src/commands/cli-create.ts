@@ -1107,7 +1107,7 @@ function generateEnvironmentReadme(): string {
 | 开发 / 测试模式 / 生产模式预览 | \`pnpm dev\` / \`dev:test\` / \`dev:prod\` |
 | 类型检查（check 为别名） | \`pnpm typecheck\` |
 | 检查 / 自动修复格式 | \`pnpm lint\` / \`lint:fix\` |
-| 构建 / 生产模式构建 | \`pnpm build\` / \`build:prod\` |
+| 源码构建 / 镜像构建 | \`pnpm build\` / \`pnpm build --target docker\` |
 | 单元测试 / 监听 / 浏览器验收 | \`pnpm test\` / \`test:watch\` / \`test:e2e\` |
 | Node 服务按环境启动（构建后） | \`pnpm start\` / \`start:test\` / \`start:prod\` |
 
@@ -1116,29 +1116,6 @@ Vite 客户端使用 \`preview\` 预览静态产物，Node 服务使用 \`start\
 
 function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn', appType: AppType): string {
   const install = getInstallCommand(pm)
-  const isStaticImage = appType === 'mobile-app'
-  const containerPort = isStaticImage ? 8080 : 3000
-  const runtimeOptions = isStaticImage
-    ? ''
-    : ` --env-file .env --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly --mount type=volume,source=${name}-data,target=/app/data`
-  const embeddedDataBuild = isStaticImage
-    ? ''
-    : `
-# 带 data/ 初始数据构建（二选一）
-${getRunCommand(pm, 'docker:build:data')}
-${getRunCommand(pm, 'podman:build:data')}`
-  const runtimeNotes = isStaticImage
-    ? '- 该模板生成静态 Web 镜像，不包含可写数据库目录。'
-    : `以上三个运行时参数均可按需删除：
-
-| 参数 | 用途 | 可选性 |
-| --- | --- | --- |
-| \`--env-file .env\` | 批量传入环境变量；也可改用多个 \`-e NAME=value\`。 | 可选；删除后使用镜像和 YAML 默认值。 |
-| \`--mount type=bind,...target=/app/config,readonly\` | 用宿主机配置目录覆盖镜像内 \`/app/config\`；必须把 \`source\` 改成真实绝对路径，\`readonly\` 防止容器修改配置。 | 可选；删除后使用镜像自带配置。 |
-| \`--mount type=volume,...target=/app/data\` | 创建或复用 named volume，持久化 SQLite 和本地存储。 | 可选但生产环境建议保留；删除后数据只写入容器层，使用 \`--rm\` 删除容器时会丢失。 |
-
-- 带数据构建会把当前 \`data/\`（例如预置 SQLite 文件）固化为镜像初始快照；运行后产生的新数据仍应写入 \`/app/data\` volume。`
-  const testPath = isStaticImage ? '/health' : '/'
   return `# ${name}
 
 基于 hai Agent Framework 构建的${appTypeLabel}应用。
@@ -1164,31 +1141,20 @@ ${getRunCommand(pm, 'i18n:compile')}
 ${getRunCommand(pm, 'preview')}
 \`\`\`
 
-## 容器运行
-
-### 构建镜像
+## 构建与部署
 
 \`\`\`bash
-# 普通构建（二选一）
-${getRunCommand(pm, 'docker:build')}
-${getRunCommand(pm, 'podman:build')}${embeddedDataBuild}
+# 默认只编译源码；不选择部署环境
+${pm} build
+# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
+${pm} build --target docker
+# 选择环境、中间件并上传一个 Compose tar；不会重新构建
+${pm} exec hai deploy . --env test
+# 无法连接服务器时只生成包，按输出说明手工搬运和启动
+${pm} exec hai deploy . --env prod --bundle-only
 \`\`\`
 
-### 运行镜像
-
-\`\`\`bash
-# Docker；使用 Podman 时将 docker 替换为 podman
-docker run --rm -d --name ${name} -p ${containerPort}:${containerPort}${runtimeOptions} ${name}:latest
-\`\`\`
-
-### 测试镜像
-
-\`\`\`bash
-curl --fail http://127.0.0.1:${containerPort}${testPath}
-docker stop ${name}
-\`\`\`
-
-${runtimeNotes}
+镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
 
 ${generateAiDevelopmentReadme()}## 文档
 
@@ -1226,50 +1192,20 @@ ${pm} test
 ${pm} test:e2e
 \`\`\`
 
-## 容器运行
-
-### 构建镜像
+## 构建与部署
 
 \`\`\`bash
-# 普通构建（二选一）
-${pm} docker:build
-${pm} podman:build
-
-# 将 apps/${name}-service/data 作为镜像初始数据构建（二选一）
-${pm} docker:build:data
-${pm} podman:build:data
+# 默认只编译源码；不选择部署环境
+${pm} build
+# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
+${pm} build --target docker
+# 选择环境、中间件并上传一个 Compose tar；不会重新构建
+${pm} exec hai deploy apps/${name}-service --env test
+# 无法连接服务器时只生成包，按输出说明手工搬运和启动
+${pm} exec hai deploy apps/${name}-service --env prod --bundle-only
 \`\`\`
 
-### 运行镜像
-
-\`\`\`bash
-# 使用 Podman 时将 docker 替换为 podman
-docker run --rm -d --name ${name} -p 3000:3000 --env-file .env \\
-  --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly \\
-  --mount type=volume,source=${name}-data,target=/app/data \\
-  ${name}:latest
-\`\`\`
-
-### 测试镜像
-
-\`\`\`bash
-curl --fail http://127.0.0.1:3000/health
-curl --fail http://127.0.0.1:3000/ready
-curl --fail --request POST http://127.0.0.1:3000/api/v1/app/info \\
-  --header "Content-Type: application/json" --data '{}'
-docker stop ${name}
-\`\`\`
-
-- 配置默认来自 \`apps/${name}-service/config\`；运行时可只读挂载到 \`/app/config\` 覆盖，并用 YAML 的 \`\${ENV_NAME:default}\` 占位符接收环境变量。
-- 带数据构建会把 \`apps/${name}-service/data\` 固化为镜像初始数据；生产写入仍建议使用 \`/app/data\` volume。
-
-以上三个运行时参数均可按需删除：
-
-| 参数 | 用途 | 可选性 |
-| --- | --- | --- |
-| \`--env-file .env\` | 批量传入环境变量；也可改用多个 \`-e NAME=value\`。 | 可选；删除后使用镜像和 YAML 默认值。 |
-| \`--mount type=bind,...target=/app/config,readonly\` | 用宿主机配置目录覆盖镜像内 \`/app/config\`；必须把 \`source\` 改成真实绝对路径，\`readonly\` 防止容器修改配置。 | 可选；删除后使用镜像自带配置。 |
-| \`--mount type=volume,...target=/app/data\` | 创建或复用 named volume，持久化 SQLite 和本地存储。 | 可选但生产环境建议保留；删除后数据只写入容器层，使用 \`--rm\` 删除容器时会丢失。 |
+镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
 
 ## 扩展建议
 
@@ -1288,26 +1224,6 @@ ${generateAiDevelopmentReadme()}## 文档
 
 function generateFullstackReadme(name: string, pm: string, frontends: FrontendTarget[]): string {
   const enabledFrontends = frontends.map(target => FRONTEND_TARGETS[target].name).join(' / ')
-  const webBuildCommands = frontends.includes('web')
-    ? `
-# Web 静态镜像（二选一）
-${pm} docker:build:web
-${pm} podman:build:web`
-    : ''
-  const webRunCommand = frontends.includes('web')
-    ? `
-
-# Web；PUBLIC_API_BASE 在容器启动时注入，不需要重新构建镜像
-docker run --rm -d --name ${name}-web -p 8080:8080 \\
-  -e PUBLIC_API_BASE=https://api.example.com \\
-  ${name}-web:latest`
-    : ''
-  const webTestCommands = frontends.includes('web')
-    ? `curl --fail http://127.0.0.1:8080/health
-curl --fail http://127.0.0.1:8080/runtime-config.js
-`
-    : ''
-  const containerNames = frontends.includes('web') ? `${name} ${name}-web` : name
   return `# ${name}
 
 基于 hai Agent Framework 构建的前后端分离多包工程。
@@ -1354,77 +1270,34 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 ${generateEnvironmentReadme()}
 
-## 开发、编译与打包
+## 开发与构建
 
 \`\`\`bash
 ${pm} install
 ${pm} dev
-
-# 一键编译：类型检查 + 全工作区构建
-${pm} compile
-
-# 一键打包：Web build、App Capacitor sync、Desktop Tauri build（按启用前端执行）
-${pm} package
-
-# 部署入口：默认执行 package，可替换为团队自己的 CI/CD 发布脚本
-${pm} deploy
+${pm} typecheck
+${pm} build
+${pm} test
+${pm} test:e2e
+${frontends.includes('desktop') ? `${pm} build --target desktop --platform windows # Windows 主机；Linux/macOS 在对应主机构建` : ''}
 \`\`\`
 
-## 容器运行
+Tauri 需要目标系统的 Rust target、SDK 和打包工具。测试产生的临时工程、截图、报告、容器、镜像与进程应在 finally/teardown 中自动清理，失败也执行。
 
-默认镜像直接运行 API Service，外部端口为 3000。
-
-### 构建镜像
+## 构建与部署
 
 \`\`\`bash
-# Service 普通构建（二选一）
-${pm} docker:build
-${pm} podman:build
-
-# 将 packages/${name}-serv/data 作为镜像初始数据构建（二选一）
-${pm} docker:build:data
-${pm} podman:build:data
-${webBuildCommands}
+# 默认只编译源码；不选择部署环境
+${pm} build
+# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
+${pm} build --target docker
+# 选择环境、中间件并上传一个 Compose tar；不会重新构建
+${pm} exec hai deploy packages/${name}-serv --env test
+# 无法连接服务器时只生成包，按输出说明手工搬运和启动
+${pm} exec hai deploy packages/${name}-serv --env prod --bundle-only
 \`\`\`
 
-### 运行镜像
-
-\`\`\`bash
-# Service；使用 Podman 时将 docker 替换为 podman
-docker run --rm -d --name ${name} -p 3000:3000 --env-file .env --env-file .env.prod --env-file .env.local \\
-  --mount type=bind,source=/absolute/path/to/config,target=/app/config,readonly \\
-  --mount type=volume,source=${name}-data,target=/app/data \\
-  ${name}:latest
-${webRunCommand}
-\`\`\`
-
-### 测试镜像
-
-\`\`\`bash
-curl --fail http://127.0.0.1:3000/health
-curl --fail http://127.0.0.1:3000/ready
-${webTestCommands}docker stop ${containerNames}
-\`\`\`
-
-- 上例按公共基础、生产环境、本机私有文件的顺序注入变量；运行前在目标机器创建 \`.env.local\` 并设置自己的管理员密码。部署平台也可直接注入同名变量。
-- 配置默认来自 \`packages/${name}-serv/config\`，也可挂载到 \`/app/config\`；YAML 中的 \`\${ENV_NAME:default}\` 可由 \`--env-file\` 或 \`-e\` 注入。
-- 带数据构建会把 \`packages/${name}-serv/data\` 固化为镜像初始数据；持久化写入仍应使用 volume。
-- Service 由 \`@h-ai/serv\` 直接对外监听，不额外启动 Web 转发层。
-${frontends.includes('web') ? `- Web 使用独立静态镜像并支持一次构建、多环境部署；构建只需运行 \`${pm} docker:build:web\`，启动容器时通过 \`-e PUBLIC_API_BASE=https://api.example.com\` 指向 Service 对外地址。未设置时默认使用 Web 页面自身 origin。` : ''}
-
-以上三个 Service 运行时参数均可按需删除：
-
-| 参数 | 用途 | 可选性 |
-| --- | --- | --- |
-| \`--env-file .env\` | 批量传入环境变量；也可改用多个 \`-e NAME=value\`。 | 可选；删除后使用镜像和 YAML 默认值。 |
-| \`--mount type=bind,...target=/app/config,readonly\` | 用宿主机配置目录覆盖镜像内 \`/app/config\`；必须把 \`source\` 改成真实绝对路径，\`readonly\` 防止容器修改配置。 | 可选；删除后使用镜像自带配置。 |
-| \`--mount type=volume,...target=/app/data\` | 创建或复用 named volume，持久化 SQLite 和本地存储。 | 可选但生产环境建议保留；删除后数据只写入容器层，使用 \`--rm\` 删除容器时会丢失。 |
-
-前端单独交付命令：
-
-- Web：\`${pm} --filter ${name}-web build\` / \`${pm} --filter ${name}-web package\`
-- App：\`${pm} --filter ${name}-app package\`，Android/iOS 可用 \`cap:build:android:debug\` / \`cap:build:android:release\` / \`cap:build:ios\`
-- Desktop：\`${pm} --filter ${name}-desktop tauri:dev\` / \`${pm} --filter ${name}-desktop package\`
+镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
 
 ## i18n 与 shared 协同
 

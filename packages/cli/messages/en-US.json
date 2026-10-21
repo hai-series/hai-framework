@@ -62,5 +62,19 @@
   "cli_deploy_middleware_plan": "Do you need to configure middleware for this deployment?",
   "cli_deploy_middleware_configure": "Review and configure each middleware service",
   "cli_deploy_middleware_skip": "Environment is complete; deploy directly",
-  "cli_deploy_middleware_skipped": "Skipped all middleware configuration and provisioning. Deploying with current environment settings and existing services."
+  "cli_deploy_middleware_skipped": "Skipped all middleware configuration and provisioning. Deploying with current environment settings and existing services.",
+  "cli_build_failed": "Build command {command} failed (exit {code}).",
+  "cli_build_use_pnpm": "Run via pnpm build to use the project pnpm executable.",
+  "cli_build_target_invalid": "target must be compile, docker or desktop.",
+  "cli_build_native_host": "Build Tauri on the matching OS (windows/linux/macos), with x64 or arm64 architecture. Install the Rust target, system SDK and packaging tools first.",
+  "cli_build_desktop_missing": "No desktop directories in hai.build.json. Generate a desktop frontend or add an existing Tauri project.",
+  "cli_build_images_missing": "hai.build.json requires one app image and at most one web image.",
+  "cli_build_runtime_missing": "Install and start Podman or Docker. auto prefers a reachable Podman engine.",
+  "cli_build_mirror_invalid": "SQLite mirror must use HTTP(S) without credentials, query or fragment.",
+  "cli_build_ready": "Build ready ({runtime}): {path}. Reuse these images across deployment environments.",
+  "cli_build_native_ready": "Tauri build ready: {target}. Installers are under src-tauri/target/{target}/release/bundle in each project.",
+  "cli_deploy_bundle_provider": "--bundle-only requires the docker-ssh Compose provider.",
+  "cli_deploy_bundle_local": "Generate bundle only; no server connection",
+  "cli_deploy_bundle_ready": "Deployment bundle ready; the server has not been deployed.",
+  "cli_deploy_bundle_path": "Deployment bundle: {path}"
 }

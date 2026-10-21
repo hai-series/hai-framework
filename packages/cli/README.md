@@ -6,6 +6,8 @@
 
 > hai Agent Framework CLI — 交互式项目脚手架与代码生成工具。
 
+`pnpm build` 默认编译源码；`pnpm build --target docker` 构建并导出 API/可选 Web 镜像，优先 Podman、其次 Docker。启用 Desktop 时用 `pnpm build --target desktop --platform windows|linux|macos` 在对应系统调用 Tauri。构建不选择部署环境。`hai deploy` 消费已有产物并上传一个 Compose tar；`--bundle-only --output release.tar` 仅生成包供手工搬运。fullstack 的 `pnpm deploy --env test` 一并发布 API/Web。见 [部署用法与离线准备](../deploy/README.md)。测试临时产物由 finally/teardown 清理，失败也执行。
+
 ## 支持的能力
 
 `hai deploy` 的缺失模块/配置、凭证加载、扫描、初始化、部署和关闭失败均以非零退出码结束；脚本必须检查退出码。只有完整部署成功才可作为后续步骤的成功条件。
@@ -189,7 +191,7 @@ Fullstack 的 `packages/<project>-serv/config/` 始终保留 13 份配置：`_co
 
 叶子环境变量只覆盖 YAML 中已有的路径；注释掉的键须先取消注释，或使用 `HAI_DB`、`HAI_CACHE` 等整体对象覆盖。camelCase 不拆词，例如 `connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。语言列表由各前端与 shared 的 `project.inlang/settings.json` 维护，`_core.yml` 只配置默认语言。
 
-Fullstack 的 `.env` 启用当前模块的运行参数；YAML 引用同名变量并保留本地回退。未启用模块的变量和可选 Schema 字段保留注释。使用 `dev:test` / `dev:prod`、`build:prod` 与服务端 `start:test` / `start:prod` 加载环境覆盖。
+Fullstack 的 `.env` 启用当前模块的运行参数；YAML 引用同名变量并保留本地回退。未启用模块的变量和可选 Schema 字段保留注释。使用 `dev:test` / `dev:prod` 与服务端 `start:test` / `start:prod` 加载环境覆盖。
 
 SvelteKit 的服务端 layout 只下发名称、版本、环境和默认语言等公开白名单。独立 mobile-app 的 Vite 配置在 Node 构建阶段通过 core 解析 YAML，再注入公开值及浏览器日志级别/格式；修改 YAML 或覆盖变量后需要重新构建。Fullstack 前端通过加密的 `app.info` 获取服务端公开元信息。任何模板都不能把完整 core/模块配置、密钥或日志脱敏上下文注入浏览器。
 
@@ -261,11 +263,9 @@ node packages/cli/dist/index.js create ../my-new-project
 
 配置已完备时可在向导中选择“直接部署”，或执行 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`，跳过全部中间件提示、配置写入和资源开通。部署目标缺失时引导填写 SSH/Vercel 参数；SSH 地址、端口、密钥路径、远程目录及 Token 只保存到被 Git 忽略的 `.env.local`，下次自动复用。可编辑其中的 `HAI_DEPLOY_PROVIDER` 更新目标；私钥只填写路径。
 
-fullstack 选择 Web 和 deploy 后，`hai deploy packages/my-app-serv --env prod` 会按生成的 `container.web` 同时发布 API/Web，公开端口通过同源代理访问内部 API；未配置 Web 时只发布当前服务。docker-ssh 在本地构建镜像，经 SCP 上传镜像 tar、Compose、运行环境和启动脚本，在远程加载启动；`--skip-build` 不跳过容器构建。具体命令、离线材料及 Web 发布步骤见 [deploy 使用说明](../deploy/README.md)，中间件字段见 [环境与中间件](templates/skills/hai-deploy/middleware.md)。部署回归执行 `pnpm --filter @h-ai/cli test:deploy-gates`。
-
 失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
 
-云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；构建子进程与目标运行环境使用相同开通结果。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应\_db/\_cache/\_storage/\_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
+云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；开通结果只进入目标运行环境，不传入构建进程。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应\_db/\_cache/\_storage/\_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
 
 部署失败恢复：`ProvisionResult.resourceStatus` 标记 created/reused；`getDeployRecovery(result.error)` 读取 projectName、stage、platformProjectId 和资源清单，unknown 表示请求结果不确定，必须先在服务商控制台核对。失败资源已返回 ID 时保留该 ID。恢复结果不含 envVars、原始异常或连接凭证，CLI 会展示清单和建议。同名重试复用现有资源；不自动删除复用资源，新建资源仅在人工确认未被使用后清理。
 

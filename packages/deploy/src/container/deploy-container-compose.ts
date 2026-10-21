@@ -498,6 +498,8 @@ export function generateComposeFile(options: {
     }
   }
 
+  for (const service of Object.values(services))
+    service.pull_policy = 'never'
   return stringify(compose)
 }
 
@@ -559,76 +561,4 @@ export function serializeEnvFile(env: Record<string, string>): string {
       return `${key}=${literal}`
     })
     .join('\n')}\n`
-}
-
-/**
- * 生成兜底 Dockerfile 的伴随 `.dockerignore`。
- *
- * 仅排除重产物，保留全部源码（monorepo 以 workspace 根为上下文时需包含 apps/packages 源码，
- * 覆盖仓库根可能存在的排除 apps 的 `.dockerignore`）。
- *
- * @returns dockerignore 内容
- */
-export function generateDockerignore(): string {
-  return `**/node_modules
-**/dist
-**/build
-**/.turbo
-**/.svelte-kit
-**/coverage
-**/test-results
-**/playwright-report
-**/.hai/deploy
-**/.env.local
-**/.env.*.local
-**/.env.runtime
-.git
-`
-}
-
-/**
- * 生成兜底 Dockerfile（应用未自带 Dockerfile 时使用）。
- *
- * 面向 SvelteKit + @sveltejs/adapter-node。`COPY .` 复制构建上下文（单应用为 appDir、
- * monorepo 为 workspace 根，由 Provider 选择），`pnpm --filter <包名>` 只构建目标应用。
- *
- * @param packageName - 应用完整包名（用于 pnpm --filter）
- * @param containerPort - 容器监听端口
- * @returns Dockerfile 内容
- */
-export function generateFallbackDockerfile(packageName: string, containerPort: number, options: { environment?: string, entrypoint?: string } = {}): string {
-  if (!/^@?[a-z0-9][\w./-]*$/i.test(packageName) || !/^[a-z0-9][\w-]*$/i.test(options.environment ?? 'prod'))
-    throw new Error('Invalid container build target')
-  const environment = options.environment ?? 'prod'
-  const coreEnv = environment === 'prod' ? 'production' : environment === 'dev' ? 'development' : environment === 'test' ? 'test' : 'staging'
-  return `# syntax=docker/dockerfile:1.7
-FROM node:24-bookworm-slim AS build
-ARG SQLITE_PREBUILD_MIRROR
-ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
-ENV CI=true
-ENV HAI_DEPLOY_ENVIRONMENT=${environment}
-ENV HAI_CORE_ENV=${coreEnv}
-WORKDIR /workspace
-RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
-COPY . .
-RUN pnpm install --frozen-lockfile --ignore-scripts
-RUN pnpm --filter ${packageName}... build
-RUN if [ -d node_modules/better-sqlite3 ]; then cd node_modules/better-sqlite3; for attempt in 1 2 3; do node -e "require('node:child_process').execFileSync(process.execPath,[require.resolve('prebuild-install/bin.js'),'--verbose'],{stdio:'inherit'})" && break; [ "$attempt" = 3 ] && exit 1; sleep 3; done; fi
-RUN pnpm pm deploy --filter ${packageName} --prod /prod/app
-
-FROM node:24-bookworm-slim AS runtime
-ENV NODE_ENV=production
-ENV HAI_DEPLOY_ENVIRONMENT=${environment}
-ENV HAI_CORE_ENV=${coreEnv}
-ENV HOST=0.0.0.0
-ENV PORT=${containerPort}
-WORKDIR /app
-COPY --from=build --chown=node:node /prod/app ./
-RUN mkdir -p data && chown node:node data
-USER node
-EXPOSE ${containerPort}
-CMD ["node", ${JSON.stringify(options.entrypoint ?? 'build')}]
-`
 }

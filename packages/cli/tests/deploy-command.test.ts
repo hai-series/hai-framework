@@ -59,7 +59,6 @@ beforeEach(() => {
       isSvelteKit: true,
       adapterInstalled: true,
       requiredServices: [],
-      buildCommand: 'pnpm build',
     },
   })
   mocks.init.mockResolvedValue({ success: true, data: undefined })
@@ -109,12 +108,11 @@ describe('deployCommand', () => {
       },
     })
 
-    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, projectName: 'my-api', skipProvision: true, skipBuild: true, verbose: false })
+    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, projectName: 'my-api', skipProvision: true, verbose: false })
 
     expect(mocks.deployApp).toHaveBeenCalledWith(appDir, {
       projectName: 'my-api',
       skipProvision: true,
-      skipBuild: true,
       environment: 'prod',
       envDir: appDir,
       serviceModes: {},
