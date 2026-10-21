@@ -42,6 +42,8 @@
 
 ## 验证与交付
 
+所有测试临时工程、镜像、容器、辅助进程、日志、截图与报告须在 finally/teardown 自动清理，成功、失败和取消均执行；只清理本次创建的资源，不提交验收产物。
+
 按影响范围使用 `pnpm --filter <workspace>`；跨包契约或根配置变更提升到根命令。Windows PowerShell 使用 `pnpm.cmd`。
 
 1. `pnpm typecheck`
