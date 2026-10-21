@@ -12,3 +12,6 @@ playwright-report
 test-results
 **/data
 *.log
+# 仅排除本机私有配置，与 Git 处理一致；公共 .env 与 dev/test/prod 随上下文构建。
+**/.env.local
+**/.env.*.local

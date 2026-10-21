@@ -309,6 +309,11 @@ describe('createProject — api 类型', () => {
     expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts'))
     expect(dockerfile).toContain('USER node')
     expect(await exists(projectPath, '.dockerignore')).toBe(true)
+    // Docker 与 Git 一致：排除本机私有文件，避免 .env.local 的密钥进入构建上下文。
+    const dockerignoreLines = (await readText(projectPath, '.dockerignore')).split('\n').map(line => line.trim())
+    expect(dockerignoreLines).toContain('**/.env.local')
+    expect(dockerignoreLines).toContain('**/.env.*.local')
+    expect(dockerignoreLines).not.toContain('.env.*')
   })
 
   it('不应有 i18n 脚手架（api 类型）', async () => {
@@ -899,8 +904,17 @@ describe('createProject — fullstack 类型', () => {
     expect(await readText(projectPath, '.env')).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
     expect(await readText(projectPath, '.env')).not.toContain(password)
     expect(await readText(projectPath, '.env.example')).not.toContain(password)
-    expect(await readText(projectPath, '.gitignore')).toContain('.env')
-    expect(await readText(projectPath, '.dockerignore')).toContain('.env')
+    const gitignoreLines = (await readText(projectPath, '.gitignore')).split('\n').map(line => line.trim())
+    expect(gitignoreLines).toContain('.env.local')
+    expect(gitignoreLines).toContain('.env.*.local')
+    expect(gitignoreLines).not.toContain('.env')
+    expect(gitignoreLines).not.toContain('.env.*')
+    // Docker 与 Git 一致：仅排除本机私有文件，公共 .env / dev / test / prod 进入构建上下文。
+    const dockerignoreLines = (await readText(projectPath, '.dockerignore')).split('\n').map(line => line.trim())
+    expect(dockerignoreLines).toContain('**/.env.local')
+    expect(dockerignoreLines).toContain('**/.env.*.local')
+    expect(dockerignoreLines).not.toContain('.env')
+    expect(dockerignoreLines).not.toContain('.env.*')
     await createProject({ name: 'proj-fullstack-env-other', appType: 'fullstack', frontends: ['web'], yes: true, install: false, git: false, cwd: tmpRoot, packageManager: 'pnpm' })
     expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.local')).not.toContain(password)
   }, 30_000)

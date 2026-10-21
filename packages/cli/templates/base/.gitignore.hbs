@@ -1,15 +1,28 @@
+# 构建产物目录
 node_modules
 {{#unless isSvelteOnlyApp}}
 .svelte-kit
 {{/unless}}
 build
 dist
+.turbo
 android
 ios
+**/src/lib/paraglide
+**/src-tauri/gen/
+**/src-tauri/target/
+**/hash-core/target/
+
+# 日志测试目录
 *.log
-.DS_Store
 test-results/
 playwright-report/
+
+
+# 系统文件
+.DS_Store
+
+# 本地数据目录
 **/data/
 
 # hai deploy 产物（compose / .env.runtime / 镜像 tar / sidecar 凭据）

@@ -11,7 +11,7 @@
 | Provider     | 展開先              | 説明                                                    |
 | ------------ | ------------------- | ------------------------------------------------------- |
 | `vercel`     | Vercel              | SvelteKit + adapter-vercel、クラウド Provisioner と連携 |
-| `docker-ssh` | 任意の Linux ホスト | SvelteKit + adapter-node、コンテナー化して SSH で展開   |
+| `docker-ssh` | 任意の Linux ホスト | SvelteKit + adapter-node / Node サービスを SSH で展開   |
 
 ## 対応クラウドサービス（Provisioner）
 
@@ -41,16 +41,22 @@ await deploy.init({
 })
 
 // 扫描应用依赖
-const scan = await deploy.scan('./apps/my-app')
+const scan = await deploy.scan('./apps/my-app', { environment: 'test' })
 
 // 开通基础设施
 const provisions = await deploy.provisionAll('my-app')
 
 // 完整部署
-const result = await deploy.deployApp('./apps/my-app')
+const result = await deploy.deployApp('./apps/my-app', { environment: 'test' })
 
 await deploy.close()
 ```
+
+## 環境とミドルウェア
+
+`hai deploy --env test` を実行するか、対話端末で最初に環境を入力します。対応する `.env.test` がなければ作成を案内して停止します。環境変数とモジュール依存を解析し、現在のバックエンド・用途・検出元を表示して、既定設定・カスタム接続・変更しないを項目ごとに選択します。変更しないは対象環境に完全な設定がある場合だけ表示され、書き込み・認証・作成を省略します。`--yes` は完全な既存設定を維持し、それ以外は現在のバックエンドの既定値を使います。`--env-dir` で環境ファイルの場所を指定できます。
+
+既定設定は Compose のサービス・ボリュームまたは対応するクラウド Provisioner を作成します。未対応のクラウド接続はカスタム設定を利用します。SQLite/memory/local/disabled の動作は維持されます。公開値は対象環境ファイル、認証情報を含む JSON/URL は `.env.local` に保存し、表示はマスクします。[バックエンドと接続項目](../cli/templates/skills/hai-deploy/middleware.md)を参照してください。
 
 ## 設定
 
@@ -86,6 +92,8 @@ deploy.credentials.saveAll({
 ```
 
 > `deploy.scan()` と `deploy.credentials.*()` はローカルファイルシステムの機能で、`deploy.init()` に依存しません。
+
+`pnpm-lock.yaml` の対象 workspace importer から実行依存と workspace link のみを辿り、開発依存、peer、他アプリの未参照依存を除外します。古い設定ファイルだけではモジュールを有効化しません。lockfile、importer、ノードがなければ `pnpm install` で修復します。デプロイ先ディレクトリーを指定します。package.json、pnpm-workspace.yaml、プロジェクト構成の推測を走査に使いません。`serv` の任意 AI peer によって AI/CUDA を有効化しません。
 
 ## docker-ssh デプロイ
 
@@ -132,7 +140,7 @@ services: {} # 启用的服务会自动生成 compose sidecar，见下
 3. CLI または API で展開・検証します（動作は同じ）：
 
 ```bash
-hai deploy            # 读取 config/_deploy.yml，输出访问地址
+hai deploy --env test # 读取 config/_deploy.yml，输出访问地址
 ```
 
 ```typescript
@@ -140,7 +148,7 @@ import { deploy } from '@h-ai/deploy'
 
 deploy.credentials.load() // 注入 HAI_DEPLOY_* 环境变量
 await deploy.init(dockerSshConfig)
-const result = await deploy.deployApp('./apps/my-app')
+const result = await deploy.deployApp('./apps/my-app', { environment: 'test' })
 if (result.success) {
   result.data.url // http://<host>:<hostPort>
   result.data.healthCheck // 'passed'（HTTP 探测成功）
@@ -152,36 +160,38 @@ await deploy.close()
 
 docker-ssh の `deployApp()` は次の順で処理します：
 
-1. **走査**：`package.json` と `config/*.yml` から `@sveltejs/adapter-node`、必要なサービス、バックエンド種別を判定。
+1. **走査**：対象 importer の `pnpm-lock.yaml` と `config/*.yml` から `@sveltejs/adapter-node`、必要なサービス、バックエンド種別を判定。
 2. **ローカルビルド**：プロジェクトの `Dockerfile` で `hai-<app>:<deploymentId>` を作成（podman は `--format docker --jobs=1` を追加）。
 3. **出力**：`docker/podman save` で tar に保存。
 4. **事前確認**：SSH 接続とリモートの `docker/podman version` / `compose version` を確認。
 5. **転送・読み込み**：`scp` で tar を転送し、リモートで `load` 後、誤った registry 取得を防ぐため `localhost/` タグを付与。
 6. **実行定義**：走査結果から `compose.yml`（app + sidecar）と `.env.runtime`（`HAI_*` 上書き・認証情報）を生成し、`<baseDir>/<app>/` に転送。`.env.runtime` は `600` に設定。
-7. **起動**：固定プロジェクト名 `hai-<app>` で `compose up -d`。再展開は冪等。
-8. **ヘルスチェック**：`http://<host>:<hostPort>/` を監視し、200 応答でのみ `ready` と判定。
+7. **起動**：`start-<mode>.sh` が `HAI_DEPLOY_ENVIRONMENT`/`HAI_CORE_ENV` を明示して Compose を実行します。環境別のプロジェクト名とボリュームを使い、変更しないサービスは維持します。
+8. **ヘルスチェック**：SvelteKit は `/`、Node サービスは `/health` の成功応答を確認します。
 
-> イメージ、`compose.yml`、`.env.runtime` はアプリの `.hai/deploy/` に保存し、テンプレートの `.gitignore` で除外済みです。
+> イメージ、`compose.yml`、`.env.runtime` はアプリの `.hai/deploy/<mode>/` に保存し、テンプレートの `.gitignore` で除外済みです。
 
 ### 機能に応じた compose sidecar
 
 `deploy.scan()` は必要なサービスと**実際のバックエンド種別**（`_db.yml` / `_vecdb.yml` などの `type`）を読み、対応する sidecar と `HAI_*` 上書き変数を生成します：
 
-| 検出サービス | バックエンド（`type`） | 追加 sidecar                             | 注入する変数  |
-| ------------ | ---------------------- | ---------------------------------------- | ------------- |
-| `db`         | `postgresql`           | `postgres:16-alpine`                     | `HAI_DB`      |
-| `db`         | `mysql`                | `mysql:8.4`                              | `HAI_DB`      |
-| `db`         | `sqlite`               | なし（`/app/data` ボリュームをマウント） | —             |
-| `cache`      | `redis`                | `redis:7-alpine`                         | `HAI_CACHE`   |
-| `storage`    | `s3`                   | `minio` + バケット初期化                 | `HAI_STORAGE` |
-| `vecdb`      | `qdrant`               | `qdrant/qdrant`                          | `HAI_VECDB`   |
-| `vecdb`      | `pgvector`             | `pgvector/pgvector`                      | `HAI_VECDB`   |
-| `vecdb`      | `chroma`               | `chromadb/chroma`                        | `HAI_VECDB`   |
-| `vecdb`      | `lancedb`              | なし（`/app/data` ボリュームをマウント） | —             |
+| 検出サービス | バックエンド（`type`） | 追加 sidecar                             | 注入する変数                  |
+| ------------ | ---------------------- | ---------------------------------------- | ----------------------------- |
+| `db`         | `postgresql`           | `postgres:16-alpine`                     | `HAI_DB`                      |
+| `db`         | `mysql`                | `mysql:8.4`                              | `HAI_DB`                      |
+| `db`         | `sqlite`               | なし（`/app/data` ボリュームをマウント） | —                             |
+| `cache`      | `redis`                | `redis:7-alpine`                         | `HAI_CACHE`                   |
+| `storage`    | `s3`                   | RustFS / MinIO + バケット初期化                 | `HAI_STORAGE`                 |
+| `vecdb`      | `qdrant`               | `qdrant/qdrant`                          | `HAI_VECDB`                   |
+| `vecdb`      | `pgvector`             | `pgvector/pgvector`                      | `HAI_VECDB`                   |
+| `vecdb`      | `chroma`               | `chromadb/chroma`                        | `HAI_VECDB`                   |
+| `ldap`       | `ldap`                 | OpenLDAP                                 | `HAI_IAM_LDAP`                |
+| `email`      | `smtp`                 | Mailpit (test capture)                   | `HAI_REACH_PROVIDERS_<index>` |
+| `vecdb`      | `lancedb`              | なし（`/app/data` ボリュームをマウント） | —                             |
 
-- `memory` の `cache` と外部 API の `reach`（メール・SMS）は sidecar を生成しません。
+- memory、無効な LDAP、console は外部サービスを作成しません。local はボリュームを使います。既定 SMTP はテスト受信用です。本番配信にはカスタム SMTP/Resend を利用してください。
 - 同じサービスにクラウド Provisioner がある場合（Neon の `HAI_DB` など）、クラウドを優先し sidecar を重複作成しません。
-- sidecar のパスワードなどはリモートの `.env.runtime`（`600`）のみに保存し、`compose.yml` には含めません。
+- パスワードは Git 対象外のローカル秘密設定とリモート `.env.runtime`（`600`）に保存し、公開環境ファイルや `compose.yml` に含めません。
 
 > セキュリティ：`identityFile` は秘密鍵の**パス**で、内容ではありません。`strictHostKeyChecking: true`（既定）は
 > accept-new を使い、初回は信頼し、鍵変更は拒否します。未知のホストには先に手動で `ssh` 接続できます。
@@ -191,7 +201,7 @@ docker-ssh の `deployApp()` は次の順で処理します：
 ```typescript
 import { HaiDeployError } from '@h-ai/deploy'
 
-const result = await deploy.deployApp('./apps/my-app')
+const result = await deploy.deployApp('./apps/my-app', { environment: 'test' })
 if (!result.success) {
   switch (result.error.code) {
     case HaiDeployError.AUTH_FAILED.code:
@@ -227,6 +237,8 @@ docker-ssh 専用エラーコード：
 | `HaiDeployError.HEALTH_CHECK_FAILED`         | `hai:deploy:020` | ヘルスチェックに失敗               |
 
 ## テスト
+
+`pnpm --filter @h-ai/cli test:deploy-gates` validates current package archives with a generated fullstack project, Podman/SSH, the selected environment, login and repeat deployment. Logs and acceptance artifacts stay in ignored temporary directories.
 
 ```bash
 pnpm --filter @h-ai/deploy test
