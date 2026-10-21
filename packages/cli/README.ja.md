@@ -4,6 +4,8 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
+作成、手作業・AI first 開発、コンパイル、パッケージ、デプロイ、更新の流れは[完全ガイド](../../docs/usage/README.ja.md)を参照してください。本ページでは CLI コマンドとテンプレートの詳細を説明します。
+
 > hai Agent Framework CLI：対話式のプロジェクト生成とコード生成ツール。
 
 `pnpm build` はソースをコンパイルします。`pnpm build --target docker` は API/Web イメージをビルドして書き出し、Podman、Docker の順に選択します。Desktop は対応 OS 上で `pnpm build --target desktop --platform windows|linux|macos` から Tauri を実行します。ビルド時に環境は選択しません。deploy は既存成果物から Compose tar を作成して転送します。`--bundle-only --output release.tar` は SSH 接続せず手動配布用の tar のみを生成します。[利用方法とオフライン準備](../deploy/README.ja.md)を参照してください。テストの一時成果物は失敗時も finally/teardown で削除します。

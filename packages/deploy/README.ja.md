@@ -4,6 +4,8 @@
 
 deploy は既存の成果物だけを配布します。ソースのコンパイルやイメージのビルドは行いません。同じイメージを複数環境へ配布できます。
 
+作成、開発、ビルド、デプロイの全体は[使用ガイド](../../docs/usage/README.ja.md)を参照してください。本ページではデプロイの準備、SDK、モジュール開発を説明します。
+
 ## Build
 
 Node `^22.22.2 || ^24.15.0 || >=26.0.0`, pnpm 12.11.2; Windows: `pnpm.cmd`. Node 20 / pnpm 9.5.0 are unsupported.
@@ -20,9 +22,9 @@ pnpm build --target desktop --platform windows --arch x64
 ## デプロイ
 
 ```sh
-pnpm deploy --env test
-pnpm deploy --env prod --artifact-dir .hai/build/docker/<buildId> --skip-middleware
-pnpm deploy --env prod --bundle-only --output release-prod.tar
+pnpm run deploy --env test
+pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId> --skip-middleware
+pnpm run deploy --env prod --bundle-only --output release-prod.tar
 # equivalent fullstack CLI invocation
 pnpm exec hai deploy packages/my-app-serv --env prod --env-dir .
 ```

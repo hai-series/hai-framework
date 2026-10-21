@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
+For creation, traditional/AI-first development, compilation, packaging, deployment, and upgrades, follow the [complete usage guide](../../docs/usage/README.en.md). This page provides detailed CLI and template references.
+
 > hai Agent Framework CLI: interactive project scaffolding and code generation.
 
-`pnpm build` / `hai build` compiles source by default. Use `pnpm build --target docker` to build/export app + optional Web images (Podman first, Docker fallback), or `pnpm build --target desktop --platform windows|linux|macos` for Tauri on the matching host. Build does not select deployment environments. `hai deploy` consumes existing artifacts and uploads one Compose tar; `--bundle-only --output release.tar` generates a manual-transfer bundle without SSH. Fullstack `pnpm deploy --env test` publishes API/Web together. See [deploy usage and offline prerequisites](../deploy/README.md). Test artifacts are cleaned in finally/teardown, including failures.
+`pnpm build` / `hai build` compiles source by default. Use `pnpm build --target docker` to build/export app + optional Web images (Podman first, Docker fallback), or `pnpm build --target desktop --platform windows|linux|macos` for Tauri on the matching host. Build does not select deployment environments. `hai deploy` consumes existing artifacts and uploads one Compose tar; `--bundle-only --output release.tar` generates a manual-transfer bundle without SSH. Fullstack `pnpm run deploy --env test` publishes API/Web together. See [deploy usage and offline prerequisites](../deploy/README.en.md). Test artifacts are cleaned in finally/teardown, including failures.
 
 ## Capabilities
 

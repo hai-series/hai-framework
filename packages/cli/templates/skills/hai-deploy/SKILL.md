@@ -26,12 +26,14 @@ description: "部署已有构建产物：配置环境与中间件，生成 Compo
 
 ## CLI
 
+使用 `pnpm run deploy` 明确执行项目脚本，避免与 pnpm 自身的 deploy 命令混淆。
+
 ```sh
 pnpm build --target docker
-pnpm deploy --env test
-pnpm deploy --env prod --skip-middleware
-pnpm deploy --env prod --artifact-dir .hai/build/docker/<buildId>
-pnpm deploy --env prod --bundle-only --output release-prod.tar
+pnpm run deploy --env test
+pnpm run deploy --env prod --skip-middleware
+pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
+pnpm run deploy --env prod --bundle-only --output release-prod.tar
 # fullstack 的 deploy 脚本等价于
 pnpm exec hai deploy packages/my-app-serv --env prod --env-dir .
 ```

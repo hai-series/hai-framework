@@ -4,6 +4,8 @@
 
 Deploy consumes existing artifacts. It never compiles source or builds images. Build once, deploy the same images to multiple environments.
 
+Follow the [usage guide](../../docs/usage/README.en.md) for the complete creation, development, build, and deployment workflow. This page focuses on deployment requirements, the SDK, and module development.
+
 ## Build
 
 Node `^22.22.2 || ^24.15.0 || >=26.0.0`, pnpm 12.11.2; Windows: `pnpm.cmd`. Node 20 / pnpm 9.5.0 are unsupported.
@@ -20,9 +22,9 @@ pnpm build --target desktop --platform windows --arch x64
 ## Deployment
 
 ```sh
-pnpm deploy --env test
-pnpm deploy --env prod --artifact-dir .hai/build/docker/<buildId> --skip-middleware
-pnpm deploy --env prod --bundle-only --output release-prod.tar
+pnpm run deploy --env test
+pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId> --skip-middleware
+pnpm run deploy --env prod --bundle-only --output release-prod.tar
 # equivalent fullstack CLI invocation
 pnpm exec hai deploy packages/my-app-serv --env prod --env-dir .
 ```

@@ -92,54 +92,47 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 
 ## はじめに
 
-### 必要環境
+環境準備、手作業・AI first 開発、コンパイル、イメージ/ネイティブパッケージ、自動・オフラインデプロイ、フレームワーク更新は完全ガイドを参照してください：[日本語](docs/usage/README.ja.md) · [简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md)。コマンド引数、`hai.build.json`、各工程で使う skills も説明しています。
 
-- Node.js 22.22.2+ / 24.15.0+ / 26+
-- pnpm ≥ 12.11.2
+プロジェクトの `engines` に合う Node.js（`^22.22.2 || ^24.15.0 || >=26.0.0`）と pnpm 12.11.2 を用意します。PowerShell では `pnpm.cmd` を使ってください。
 
 ### 新規プロジェクト作成
 
 ```bash
-# 全局安装 CLI
+# CLI をインストール
 pnpm add -g @h-ai/cli
 
-# 交互式创建项目（选择应用类型与功能模块）
-hai create my-app
+# デプロイ対応の Web + API を作成。オプション省略時は対話で選択
+hai create my-app --type fullstack --frontends web --features deploy --yes
 
-# 指定模板类型
-hai create my-app --type admin      # 管理后台
-hai create my-app --type api        # API 服务
-hai create my-app --type website    # 企业官网
-hai create my-app --type h5         # H5 移动应用
-
-# 进入项目并启动
-cd my-app && pnpm install && pnpm dev
+# 依存関係は既定でインストール済み
+cd my-app
+pnpm dev
 ```
 
 ### コード生成
 
-```bash
-hai generate page dashboard         # 生成页面
-hai generate component UserCard     # 生成组件
-hai generate api users              # 生成 API 路由
+以下の page/api 生成器は SvelteKit のファイルルート向けです。fullstack/API workspace の contract、procedure、hash ページは、生成済み構成と[使用ガイド](docs/usage/README.ja.md)に沿って開発します。
 
-# 快捷别名
+```bash
+hai generate page dashboard         # ページを生成
+hai generate component UserCard     # コンポーネントを生成
+hai generate api users              # API を生成
+
+# 短縮形
 hai g:page dashboard
 hai g:component UserCard
 ```
 
-### デプロイ
+### ビルドとデプロイ
 
 ```bash
-# hai deploy 依据 config/_deploy.yml 中的 provider 选择部署方式
-
-# 方式一：Vercel（SaaS）—— 部署并自动开通云端基础设施（Neon / Upstash / R2 …）
-hai deploy                          # 部署到 Vercel
-hai deploy --skip-provision         # 跳过基础设施自动开通
-
-# 方式二：docker-ssh —— 容器化后经 SSH 部署到自有 Linux 主机（远程需 docker/podman + compose）
-# 按所选功能（_db.yml / _cache.yml / _storage.yml …）自动生成对应 compose sidecar
-hai deploy                          # 部署到自有主机
+# 環境に依存せずビルド。auto は利用可能な Podman、次に Docker を選択
+pnpm build --target docker
+# .env.prod と接続先を設定し、既存の API/Web イメージを公開
+pnpm run deploy --env prod
+# 接続できない場合はパッケージを手で移動し、同梱 README に従って起動
+pnpm run deploy --env prod --bundle-only --output release-prod.tar
 ```
 
 ### 既存プロジェクトへの導入
@@ -612,7 +605,7 @@ my-app/
 | Codex          | `AGENTS.md` + `.agents/skills/`                                                            |
 | OpenCode       | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                          |
 
-Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用先の `.agents/skills/` へ配布します。**28 テンプレート**は 20 のモジュール Skill と 8 つの全体・作業用 Skill（`hai-build`、`hai-spec-review`、`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-ci`、`hai-framework-sync`、`hai-pr-review`）で、アプリ構築・テスト・審査・用法確認・規約同期を支援します。リポジトリー開発 Skill とアプリテンプレートは用途を分け、公開契約を同期します。影響範囲に応じて `typecheck → lint → build → test` を実行し、UI・ルート・CLI テンプレートは対応する E2E 門禁も実行します。
+Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用先の `.agents/skills/` へ配布します。モジュール用法に加え、文書確認と実装（`hai-spec-review`、`hai-spec-implement`）、機能開発と検証（`hai-app-create`、`hai-app-review`、`hai-app-tests`）、配布と保守（`hai-build`、`hai-deploy`、`hai-ci`、`hai-pr-review`、`hai-framework-sync`）を支援します。[完全ガイド](docs/usage/README.ja.md)で各工程をつなげて説明しています。リポジトリー開発 Skill とアプリテンプレートは用途を分け、公開契約を同期します。影響範囲に応じて `typecheck → lint → build → test` を実行し、UI・ルート・CLI テンプレートは対応する E2E 門禁も実行します。
 
 ### 設定・環境変数
 

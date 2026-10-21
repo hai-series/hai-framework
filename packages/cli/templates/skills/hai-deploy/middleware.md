@@ -73,7 +73,7 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 
 构建与部署分开：先在构建机运行 `pnpm build --target docker`，将完整 `.hai/build/docker/<buildId>` 复制到部署电脑。deploy 只读取这些已校验的镜像 tar，不需要本地 Docker/Podman、基础镜像、pnpm store 或 SQLite 下载。Node/pnpm 版本以工程 engines/packageManager 为准。
 
-`pnpm deploy --env prod --bundle-only --output release-prod.tar` 生成一个包含 app/web、compose、私有 env、校验和、README 与 start-prod.sh 的包，不连接 SSH。把 tar 手工搬到 Linux 后，创建权限 700 的目录，`tar -xf release-prod.tar -C release`，`cd release && sh start-prod.sh`。启动脚本可用 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker/podman 选择运行时；它检查全部镜像标签，缺少时停止，不尝试联网。
+`pnpm run deploy --env prod --bundle-only --output release-prod.tar` 生成一个包含 app/web、compose、私有 env、校验和、README 与 start-prod.sh 的包，不连接 SSH。把 tar 手工搬到 Linux 后，创建权限 700 的目录，`tar -xf release-prod.tar -C release`，`cd release && sh start-prod.sh`。启动脚本可用 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker/podman 选择运行时；它检查全部镜像标签，缺少时停止，不尝试联网。
 
 Linux 需要 compose、sh、tar、sha256sum 和容器/目录/持久化磁盘权限；中间件镜像另行 docker load，名称、tag 和架构须与包内清单一致。自定义连接要求现有服务可从应用容器访问，并备好账号、数据库、S3 桶与密钥。云 Provider/Provisioner 需要网络，不能用于完全离线。
 

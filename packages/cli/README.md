@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
+从创建、手工/AI first 开发到编译、打包、部署与升级，见[完整使用指南](../../docs/usage/README.md)。本页提供 CLI 命令与模板的详细参考。
+
 > hai Agent Framework CLI — 交互式项目脚手架与代码生成工具。
 
-`pnpm build` 默认编译源码；`pnpm build --target docker` 构建并导出 API/可选 Web 镜像，优先 Podman、其次 Docker。启用 Desktop 时用 `pnpm build --target desktop --platform windows|linux|macos` 在对应系统调用 Tauri。构建不选择部署环境。`hai deploy` 消费已有产物并上传一个 Compose tar；`--bundle-only --output release.tar` 仅生成包供手工搬运。fullstack 的 `pnpm deploy --env test` 一并发布 API/Web。见 [部署用法与离线准备](../deploy/README.md)。测试临时产物由 finally/teardown 清理，失败也执行。
+`pnpm build` 默认编译源码；`pnpm build --target docker` 构建并导出 API/可选 Web 镜像，优先 Podman、其次 Docker。启用 Desktop 时用 `pnpm build --target desktop --platform windows|linux|macos` 在对应系统调用 Tauri。构建不选择部署环境。`hai deploy` 消费已有产物并上传一个 Compose tar；`--bundle-only --output release.tar` 仅生成包供手工搬运。fullstack 的 `pnpm run deploy --env test` 一并发布 API/Web。见 [部署用法与离线准备](../deploy/README.md)。测试临时产物由 finally/teardown 清理，失败也执行。
 
 ## 支持的能力
 

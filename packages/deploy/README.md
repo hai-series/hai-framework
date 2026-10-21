@@ -4,6 +4,8 @@
 
 部署 SDK，也是 `@h-ai/cli` 的 `hai deploy` 后端。**只部署已有产物，不编译源码、不构建镜像。**
 
+完整的创建、开发、构建与部署流程见[使用指南](../../docs/usage/README.md)；下文侧重部署准备、SDK 与二次开发。
+
 ## 功能
 
 - `docker-ssh`：读取镜像清单，选择环境和中间件，生成一个 Compose tar；上传到 Linux 后解包、导入镜像、启动并检查健康状态。
@@ -33,12 +35,12 @@ pnpm.cmd build --target desktop --platform windows --arch x64
 fullstack 在工程根执行：
 
 ```powershell
-pnpm.cmd deploy --env test
-pnpm.cmd deploy --env prod --skip-middleware
+pnpm.cmd run deploy --env test
+pnpm.cmd run deploy --env prod --skip-middleware
 # 精确复用一次构建，绝不重新构建
-pnpm.cmd deploy --env prod --artifact-dir .hai/build/docker/<buildId>
+pnpm.cmd run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 # 服务器网络不通，只交付包
-pnpm.cmd deploy --env prod --bundle-only --output release-prod.tar
+pnpm.cmd run deploy --env prod --bundle-only --output release-prod.tar
 ```
 
 等价命令为 `pnpm exec hai deploy packages/my-app-serv --env prod --env-dir .`。API workspace 的服务目录为 `apps/my-app-service`。模板已安装项目 CLI；选择 deploy 功能时安装对应 SDK。旧工程需自行安装与框架版本匹配的 `@h-ai/cli`、`@h-ai/deploy`，并提供构建配置和 `_deploy.yml`。

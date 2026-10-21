@@ -92,54 +92,47 @@ This philosophy leads to these decisions:
 
 ## Getting started
 
-### Requirements
+Follow the complete guide for prerequisites, traditional or AI-first development, compilation, image/native packaging, automatic or offline deployment, and framework updates: [English](docs/usage/README.en.md) · [简体中文](docs/usage/README.md) · [日本語](docs/usage/README.ja.md). It includes command options, `hai.build.json`, and the skills used throughout the workflow.
 
-- Node.js 22.22.2+ / 24.15.0+ / 26+
-- pnpm ≥ 12.11.2
+Use Node.js matching the project's `engines` (`^22.22.2 || ^24.15.0 || >=26.0.0`) and pnpm 12.11.2. In PowerShell, use `pnpm.cmd`.
 
 ### Create a project
 
 ```bash
-# 全局安装 CLI
+# Install the CLI
 pnpm add -g @h-ai/cli
 
-# 交互式创建项目（选择应用类型与功能模块）
-hai create my-app
+# Create Web + API with deployment support; omit options for prompts
+hai create my-app --type fullstack --frontends web --features deploy --yes
 
-# 指定模板类型
-hai create my-app --type admin      # 管理后台
-hai create my-app --type api        # API 服务
-hai create my-app --type website    # 企业官网
-hai create my-app --type h5         # H5 移动应用
-
-# 进入项目并启动
-cd my-app && pnpm install && pnpm dev
+# Dependencies are installed by default
+cd my-app
+pnpm dev
 ```
 
 ### Code generation
 
-```bash
-hai generate page dashboard         # 生成页面
-hai generate component UserCard     # 生成组件
-hai generate api users              # 生成 API 路由
+The page/api generators below emit SvelteKit file routes. For fullstack/API workspace contracts, procedures, and hash pages, follow the generated structure and the [usage guide](docs/usage/README.en.md).
 
-# 快捷别名
+```bash
+hai generate page dashboard         # Generate a page
+hai generate component UserCard     # Generate a component
+hai generate api users              # Generate an API
+
+# Short aliases
 hai g:page dashboard
 hai g:component UserCard
 ```
 
-### Deploy
+### Build and deploy
 
 ```bash
-# hai deploy 依据 config/_deploy.yml 中的 provider 选择部署方式
-
-# 方式一：Vercel（SaaS）—— 部署并自动开通云端基础设施（Neon / Upstash / R2 …）
-hai deploy                          # 部署到 Vercel
-hai deploy --skip-provision         # 跳过基础设施自动开通
-
-# 方式二：docker-ssh —— 容器化后经 SSH 部署到自有 Linux 主机（远程需 docker/podman + compose）
-# 按所选功能（_db.yml / _cache.yml / _storage.yml …）自动生成对应 compose sidecar
-hai deploy                          # 部署到自有主机
+# Environment-independent build; auto prefers reachable Podman, then Docker
+pnpm build --target docker
+# Configure .env.prod and the destination, then publish existing API/Web images
+pnpm run deploy --env prod
+# Without connectivity between machines, transfer and start the bundle manually
+pnpm run deploy --env prod --bundle-only --output release-prod.tar
 ```
 
 ### Integrate into an existing project
@@ -612,7 +605,7 @@ my-app/
 | Codex          | `AGENTS.md` + `.agents/skills/`                                                                  |
 | OpenCode       | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                                |
 
-Skills are managed in `packages/cli/templates/skills/` and distributed by `@h-ai/cli` into user projects' `.agents/skills/`. The **28 built-in templates** include 20 module skills and eight overview/workflow skills (`hai-build`, `hai-spec-review`, `hai-app-create`, `hai-app-review`, `hai-app-tests`, `hai-ci`, `hai-framework-sync`, `hai-pr-review`), supporting application building, tests, reviews, module usage, and convention synchronization. Repository development skills and application templates retain their own task boundaries while sharing public contracts. Run scoped `typecheck → lint → build → test` checks, followed by the relevant E2E gates for UI, routes, or CLI templates.
+Skills are managed in `packages/cli/templates/skills/` and distributed by `@h-ai/cli` into user projects' `.agents/skills/`. Alongside module guides, workflows cover document review and implementation (`hai-spec-review`, `hai-spec-implement`), feature development and validation (`hai-app-create`, `hai-app-review`, `hai-app-tests`), and delivery and maintenance (`hai-build`, `hai-deploy`, `hai-ci`, `hai-pr-review`, `hai-framework-sync`). The [complete usage guide](docs/usage/README.en.md) connects these steps. Repository development skills and application templates retain their own task boundaries while sharing public contracts. Run scoped `typecheck → lint → build → test` checks, followed by the relevant E2E gates for UI, routes, or CLI templates.
 
 ### Configuration and environment variables
 

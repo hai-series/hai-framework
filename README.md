@@ -92,10 +92,9 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 
 ## 快速入门
 
-### 环境要求
+从环境准备、手工编码或 AI first 开发，到编译、镜像/原生打包、自动或离线部署、框架升级，见完整使用指南：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)。其中包含命令参数、`hai.build.json` 配置和实际 skills 的使用流程。
 
-- Node.js 22.22.2+ / 24.15.0+ / 26+
-- pnpm ≥ 12.11.2
+准备符合项目 `engines` 的 Node.js（`^22.22.2 || ^24.15.0 || >=26.0.0`）与 pnpm 12.11.2；PowerShell 使用 `pnpm.cmd`。
 
 ### 创建新项目
 
@@ -103,20 +102,17 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 # 全局安装 CLI
 pnpm add -g @h-ai/cli
 
-# 交互式创建项目（选择应用类型与功能模块）
-hai create my-app
+# 创建带部署能力的 Web + API；省略选项可交互选择
+hai create my-app --type fullstack --frontends web --features deploy --yes
 
-# 指定模板类型
-hai create my-app --type admin      # 管理后台
-hai create my-app --type api        # API 服务
-hai create my-app --type website    # 企业官网
-hai create my-app --type h5         # H5 移动应用
-
-# 进入项目并启动
-cd my-app && pnpm install && pnpm dev
+# 默认已安装依赖，进入工程启动
+cd my-app
+pnpm dev
 ```
 
 ### 代码生成
+
+以下 page/api 生成器面向 SvelteKit 文件路由。fullstack/API workspace 的 contract、procedure 和 hash 页面沿生成工程结构开发，见[使用指南](docs/usage/README.md)。
 
 ```bash
 hai generate page dashboard         # 生成页面
@@ -128,18 +124,15 @@ hai g:page dashboard
 hai g:component UserCard
 ```
 
-### 一键部署
+### 构建并部署
 
 ```bash
-# hai deploy 依据 config/_deploy.yml 中的 provider 选择部署方式
-
-# 方式一：Vercel（SaaS）—— 部署并自动开通云端基础设施（Neon / Upstash / R2 …）
-hai deploy                          # 部署到 Vercel
-hai deploy --skip-provision         # 跳过基础设施自动开通
-
-# 方式二：docker-ssh —— 容器化后经 SSH 部署到自有 Linux 主机（远程需 docker/podman + compose）
-# 按所选功能（_db.yml / _cache.yml / _storage.yml …）自动生成对应 compose sidecar
-hai deploy                          # 部署到自有主机
+# 构建不区分环境，auto 优先使用可达的 Podman，再尝试 Docker
+pnpm build --target docker
+# 配置 .env.prod 与部署目标后，发布已有 API/Web 镜像
+pnpm run deploy --env prod
+# 两机不通时只生成包，按包内 README 手工搬运启动
+pnpm run deploy --env prod --bundle-only --output release-prod.tar
 ```
 
 ### 在现有项目中集成
@@ -612,7 +605,7 @@ my-app/
 | Codex          | `AGENTS.md` + `.agents/skills/`                                                           |
 | OpenCode       | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                         |
 
-Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` 分发到用户项目的 `.agents/skills/`。当前内置 **28 个 Skill 模板**：20 个模块 Skill 与 8 个总览 / 工作流 Skill（`hai-build`、`hai-spec-review`、`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-ci`、`hai-framework-sync`、`hai-pr-review`），便于 AI 助手在"搭应用、补测试、做 Review、查模块用法、同步框架规范"之间切换上下文。仓库开发 skills 与应用模板分别维护，同步公共契约时保留各自的任务边界。改动后按范围执行 `typecheck → lint → build → test`，UI/路由与 CLI 模板再执行对应 E2E 门禁。
+Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` 分发到用户项目的 `.agents/skills/`。除模块用法外，工作流包括文档审查与实施（`hai-spec-review`、`hai-spec-implement`）、功能开发与验证（`hai-app-create`、`hai-app-review`、`hai-app-tests`）、交付与维护（`hai-build`、`hai-deploy`、`hai-ci`、`hai-pr-review`、`hai-framework-sync`），具体串联方式见[完整使用指南](docs/usage/README.md)。仓库开发 skills 与应用模板分别维护，同步公共契约时保留各自的任务边界。改动后按范围执行 `typecheck → lint → build → test`，UI/路由与 CLI 模板再执行对应 E2E 门禁。
 
 ### 配置与环境变量
 
