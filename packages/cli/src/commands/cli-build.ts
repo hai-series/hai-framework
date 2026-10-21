@@ -18,6 +18,8 @@ export interface BuildCommandOptions extends GlobalOptions {
   target?: 'compile' | 'docker' | 'desktop'
   /** auto 优先使用可达的 Podman。 */
   runtime?: 'auto' | 'podman' | 'docker'
+  /** 容器构建网络，默认采用引擎设置；例如 rootless Podman 的 pasta。 */
+  network?: string
   /** 原生安装包的目标系统，必须与构建主机相同。 */
   platform?: 'windows' | 'linux' | 'macos'
   /** Rust 目标架构，默认当前主机架构。 */
@@ -37,11 +39,14 @@ interface BuildConfig {
   desktop?: string[]
 }
 
-/** 子进程不经过 shell；pnpm 通过当前运行 pnpm 的 JS 入口执行，兼容 Windows 路径。 */
+/** 子进程不经过 shell；pnpm 使用当前原生或 JS 入口，兼容 Windows 路径。 */
 async function run(command: string, args: string[], cwd: string, quiet = false): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:HAI_|PUBLIC_|VITE_)/.test(key)))
     env.NODE_ENV = 'production'
+    // Tauri 的 CI 参数只接受 true/false，兼容 CI 平台常用的 1/0 写法。
+    if (env.CI === '1' || env.CI === '0')
+      env.CI = env.CI === '1' ? 'true' : 'false'
     const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: quiet ? 'ignore' : 'inherit', shell: false })
     child.once('error', reject)
     child.once('exit', code => code === 0 ? resolve() : reject(new Error(cliM('cli_build_failed', { params: { command, code: String(code) } }))))
@@ -51,12 +56,15 @@ async function run(command: string, args: string[], cwd: string, quiet = false):
 /** 使用已安装的 pnpm，不通过 Corepack 下载另一套工具链。 */
 async function pnpm(args: string[], cwd: string): Promise<void> {
   const entry = process.env.npm_execpath
-  if (entry && /pnpm(?:\.c?js)?$/i.test(entry))
-    return run(process.execPath, [entry, ...args], cwd)
-  // CLI 直接调用时从 PATH 定位 pnpm 的 JS 入口；Windows 的 .cmd 不能由无 shell spawn 执行。
+  if (entry && /(?:^|[/\\])pnpm(?:-native)?(?:\.exe|\.[cm]?js)?$/i.test(entry))
+    return /\.[cm]?js$/i.test(entry) ? run(process.execPath, [entry, ...args], cwd) : run(entry, args, cwd)
+  // CLI 直接调用时从 PATH 定位原生或 JS 入口；Windows 的 .cmd 不能由无 shell spawn 执行。
   if (process.platform === 'win32') {
     const directories = (process.env.PATH ?? '').split(';')
     for (const directory of directories) {
+      const executable = join(directory, 'pnpm.exe')
+      if (existsSync(executable))
+        return run(executable, args, cwd)
       for (const relative of ['node_modules/pnpm/bin/pnpm.cjs', 'pnpm.cjs']) {
         const candidate = join(directory, relative)
         if (existsSync(candidate))
@@ -77,10 +85,19 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const target = options.target ?? 'compile'
   if (!['compile', 'docker', 'desktop'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
+  if ((target !== 'docker' && (options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
+    || (target !== 'desktop' && (options.platform !== undefined || options.arch !== undefined))) {
+    throw new Error(cliM('cli_build_options_invalid'))
+  }
   if (target === 'compile') {
     await pnpm(['run', 'compile'], cwd)
     return
   }
+  const metadata: { version?: unknown } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
+  // 版本同时进入文件名和镜像标签；拒绝路径字符，保留预发布和构建元数据。
+  const appVersion = metadata.version
+  if (typeof appVersion !== 'string' || appVersion.length > 80 || !/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i.test(appVersion))
+    throw new Error(cliM('cli_build_version_invalid'))
   const config = JSON.parse(readFileSync(join(cwd, 'hai.build.json'), 'utf8')) as BuildConfig
   if (target === 'desktop') {
     const platforms = { win32: 'windows', linux: 'linux', darwin: 'macos' } as const
@@ -94,12 +111,14 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     const rustTarget = `${arch === 'x64' ? 'x86_64' : 'aarch64'}-${platform === 'windows' ? 'pc-windows-msvc' : platform === 'macos' ? 'apple-darwin' : 'unknown-linux-gnu'}`
     const bundles = platform === 'windows' ? 'nsis' : platform === 'macos' ? 'app,dmg' : 'deb,appimage'
     for (const directory of config.desktop)
-      await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles], resolve(cwd, directory))
+      await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, '--config', JSON.stringify({ version: appVersion })], resolve(cwd, directory))
     core.logger.info(cliM('cli_build_native_ready', { params: { target: rustTarget } }))
     return
   }
-  if (!config.images?.length || config.images.filter(image => image.name === 'app').length !== 1 || config.images.length > 2 || new Set(config.images.map(image => image.name)).size !== config.images.length)
+  if (!Array.isArray(config.images) || !config.images.length || config.images.filter(image => image.name === 'app').length !== 1 || config.images.length > 2 || new Set(config.images.map(image => image.name)).size !== config.images.length
+    || config.images.some(image => !['app', 'web'].includes(image.name) || (image.containerPort !== undefined && (!Number.isInteger(image.containerPort) || image.containerPort < 1 || image.containerPort > 65535)))) {
     throw new Error(cliM('cli_build_images_missing'))
+  }
   const candidates = options.runtime && options.runtime !== 'auto' ? [options.runtime] : ['podman', 'docker']
   if (candidates.some(runtime => !['podman', 'docker'].includes(runtime)))
     throw new Error(cliM('cli_build_runtime_missing'))
@@ -119,8 +138,8 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
       throw new Error(cliM('cli_build_mirror_invalid'))
   }
-  const buildId = `${Date.now()}-${randomBytes(3).toString('hex')}`
-  const artifact: DeploymentArtifact = { version: 1, buildId, images: [] }
+  const buildId = `${appVersion}-${Date.now()}-${randomBytes(3).toString('hex')}`
+  const artifact: DeploymentArtifact = { version: 2, appVersion, buildId, images: [] }
   const parent = join(cwd, '.hai/build/docker')
   mkdirSync(parent, { recursive: true })
   const staging = mkdtempSync(join(parent, '.building-'))
@@ -130,20 +149,30 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       if (!['app', 'web'].includes(image.name))
         throw new Error(cliM('cli_build_images_missing'))
       const context = resolve(cwd, image.context ?? '.')
-      const imageRef = `localhost/hai-${basenameSafe(cwd)}-${image.name}:${buildId}`
+      const imageRef = `localhost/hai-${basenameSafe(cwd)}-${image.name}:${buildId.toLowerCase().replaceAll('+', '_')}`
       const args = ['build', '-f', resolve(context, image.dockerfile ?? 'Dockerfile'), '-t', imageRef]
+      if (options.network !== undefined)
+        args.push('--network', options.network)
       const ignore = `${resolve(context, image.dockerfile ?? 'Dockerfile')}.dockerignore`
       if (runtime === 'podman' && existsSync(ignore))
         args.push('--ignorefile', ignore)
-      if (runtime === 'podman')
+      if (runtime === 'podman') {
         args.push('--format', 'docker', '--jobs', '1', ...(options.httpProxy === false ? ['--http-proxy=false'] : []))
+        // Windows/macOS 的远程 Podman 默认读取服务端代理；显式传递预定义构建参数。
+        if (options.httpProxy !== false) {
+          for (const key of ['HTTP_PROXY', 'HTTPS_PROXY', 'FTP_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'ftp_proxy', 'no_proxy']) {
+            if (process.env[key])
+              args.push('--build-arg', `${key}=${process.env[key]}`)
+          }
+        }
+      }
       if (image.target)
         args.push('--target', image.target)
       if (options.sqlitePrebuildMirror)
         args.push('--build-arg', `SQLITE_PREBUILD_MIRROR=${options.sqlitePrebuildMirror}`)
       built.push(imageRef)
       await run(runtime, [...args, context], cwd)
-      const file = `${image.name}.tar`
+      const file = `${image.name}-${appVersion}.tar`
       await run(runtime, ['save', ...(runtime === 'podman' ? ['--format', 'docker-archive'] : []), '-o', join(staging, file), imageRef], cwd)
       const hash = createHash('sha256')
       for await (const chunk of createReadStream(join(staging, file)))

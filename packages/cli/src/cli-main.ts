@@ -130,6 +130,7 @@ cli
   .command('build', '构建源码、Docker 镜像或 Tauri 安装包（不区分部署环境）')
   .option('--target <target>', '产物类型：compile（默认）/ docker / desktop')
   .option('--runtime <runtime>', '本地容器引擎：auto（优先 Podman）/ podman / docker')
+  .option('--network <network>', '容器构建网络（默认引擎设置），例如 rootless Podman 的 pasta')
   .option('--platform <platform>', 'Tauri 目标系统：windows / linux / macos（在对应系统构建）')
   .option('--arch <arch>', 'Tauri 目标架构：x64 / arm64')
   .option('--sqlite-prebuild-mirror <url>', 'SQLite 预编译二进制镜像根地址')
@@ -150,12 +151,11 @@ cli
   .option('--env <environment>', '部署环境（test / prod 等，必须存在对应环境文件）')
   .option('--env-dir <path>', '环境文件所在目录（默认自动查找）')
   .option('-y, --yes', '按当前后端默认配置部署，目标环境已有完整配置时保持不变')
-  .option('--project-name <name>', '项目名称（默认使用应用目录名）')
-  .option('--skip-provision', '配置已完备，跳过中间件配置与开通，直接部署')
+  .option('--project-name <name>', '项目名称（默认服务包名，缺失时为目录名；附加环境后缀）')
   .option('--skip-middleware', '配置已完备，跳过全部中间件处理，直接部署')
   .option('--artifact-dir <path>', '已有镜像构建产物目录（含 manifest.json）')
   .option('--bundle-only', '只生成 Compose 部署 tar，手工搬运；不连接 SSH')
-  .option('--output <path>', '部署 tar 的输出路径')
+  .option('--output <path>', '部署 tar 输出路径，自动补应用版本后缀')
   .action(async (appDir: string | undefined, options: Record<string, unknown>) => {
     try {
       await deployCommand({
@@ -164,7 +164,6 @@ cli
         envDir: options.envDir as string,
         yes: options.yes as boolean,
         projectName: options.projectName as string,
-        skipProvision: options.skipProvision as boolean,
         skipMiddleware: options.skipMiddleware as boolean,
         artifactDir: options.artifactDir as string,
         bundleOnly: options.bundleOnly as boolean,
@@ -204,7 +203,7 @@ cli
   })
 
 // 版本和帮助
-cli.version(VERSION)
+cli.version(VERSION, '-V, --version')
 cli.help()
 
 // 解析参数

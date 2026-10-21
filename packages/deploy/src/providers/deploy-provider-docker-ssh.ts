@@ -16,7 +16,7 @@ import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployResult } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { parseEnv } from 'node:util'
 import { core, err, ok } from '@h-ai/core'
 import { createDeploymentBundle, shellArgument } from '../container/deploy-bundle.js'
@@ -152,17 +152,22 @@ export function createDockerSshProvider(
         return saved
     }
 
+    const composeName = `docker-compose-${artifact.appVersion}.yml`
+    const latestPath = join(artifactDir, 'latest')
+    const previousName = existsSync(latestPath) ? readFileSync(latestPath, 'utf8').trim() : ''
+    const previousPath = /^[\w.+-]+\.yml$/.test(previousName) ? join(artifactDir, previousName) : undefined
     const composeContent = generateComposeFile({
       projectName,
+      appVersion: artifact.appVersion,
       imageRef: app.imageRef,
       hostPort,
       containerPort,
       sidecar,
       web: web ? { imageRef: web.imageRef, containerPort: web.containerPort ?? 8080 } : undefined,
       serviceModes: options?.serviceModes,
-      previousCompose: existsSync(join(artifactDir, 'compose.yml')) ? readFileSync(join(artifactDir, 'compose.yml'), 'utf8') : undefined,
+      previousCompose: previousPath && existsSync(previousPath) ? readFileSync(previousPath, 'utf8') : undefined,
     })
-    const composePath = join(artifactDir, 'compose.yml')
+    const composePath = join(artifactDir, composeName)
     writeFileSync(composePath, composeContent)
     if (webProxy)
       writeFileSync(join(artifactDir, 'web.conf'), webProxy)
@@ -174,8 +179,9 @@ export function createDockerSshProvider(
       environment: options?.environment ?? 'prod',
       runtime: config.remote.runtime,
       coreEnv: env.HAI_CORE_ENV ?? 'production',
-      output: options?.output ?? join(artifactDir, `bundle-${deploymentId}.tar`),
+      output: options?.output ?? join(artifactDir, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar`),
     })
+    writeFileSync(latestPath, `${composeName}\n`)
     if (options?.bundleOnly)
       return ok({ url: '', deploymentId, status: 'packaged', provider: 'docker-ssh', healthCheck: 'skipped', envVarsSet: Object.keys(env), ...bundle })
     if (!ssh)
@@ -187,7 +193,7 @@ export function createDockerSshProvider(
     if (!remoteRuntime.success)
       return remoteRuntime
     const remoteDir = `${baseDir}/${projectName}`
-    const remoteTar = `${remoteDir}/bundle-${deploymentId}.tar`
+    const remoteTar = `${remoteDir}/${basename(bundle.bundlePath)}`
     const prepared = await ssh.exec(`mkdir -p -- ${shellArgument(remoteDir)} && chmod 700 -- ${shellArgument(remoteDir)}`)
     if (!prepared.success)
       return prepared

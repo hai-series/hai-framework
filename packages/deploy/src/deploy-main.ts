@@ -388,7 +388,7 @@ export const deploy: DeployFunctions = {
     options = {
       ...options,
       ...(scanOptions.environment ? { environment: environment.data.environment } : {}),
-      ...(options?.skipProvision ? { serviceModes: Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])) } : {}),
+      ...(options?.skipMiddleware ? { serviceModes: Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])) } : {}),
     }
 
     // 容器 Provider（docker-ssh）：走独立的容器部署编排
@@ -420,7 +420,7 @@ export const deploy: DeployFunctions = {
     // 3. 开通基础设施
     let allEnvVars: Record<string, string> = appEnv
     const recovery: DeployRecoveryInfo = { projectName, stage: 'provision', resources: [] }
-    if (!options?.skipProvision) {
+    if (!options?.skipMiddleware) {
       const provResults = await deploy.provisionAll(projectName, options?.serviceModes ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options)) : undefined)
       if (!provResults.success) {
         return err(provResults.error)
@@ -500,7 +500,7 @@ async function deployContainerApp(
   try {
     if (existsSync(join(artifactDir, 'latest'))) {
       const latest = readFileSync(join(artifactDir, 'latest'), 'utf8').trim()
-      if (!/^[\w-]+$/.test(latest))
+      if (!/^[a-z0-9][\w.+-]*$/i.test(latest))
         throw new Error('Invalid artifact pointer')
       artifactDir = join(artifactDir, latest)
     }
@@ -513,7 +513,7 @@ async function deployContainerApp(
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
 
   let provisionEnv: Record<string, string> = {}
-  if (!options?.skipProvision) {
+  if (!options?.skipMiddleware) {
     const provResults = await deploy.provisionAll(projectName, options?.serviceModes ? scan.requiredServices.filter(service => usesDefaultMiddleware(scan, service, options)) : undefined)
     if (!provResults.success) {
       return err(provResults.error)

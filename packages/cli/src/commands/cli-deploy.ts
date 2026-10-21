@@ -31,8 +31,6 @@ export interface DeployCommandOptions extends GlobalOptions {
   appDir?: string
   /** 项目名称（覆盖自动检测） */
   projectName?: string
-  /** 跳过基础设施开通 */
-  skipProvision?: boolean
   /** 已配置完备，跳过全部中间件处理并直接部署。 */
   skipMiddleware?: boolean
   /** 已构建镜像目录。 */
@@ -212,7 +210,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
 
     spinner.succeed(cliM('cli_deploy_scanned', { params: { name: scan.appName, sveltekit: String(scan.isSvelteKit), services: scan.requiredServices.join(', ') || cliM('cli_deploy_none') } }))
 
-    let skipMiddleware = options.skipMiddleware || options.skipProvision
+    let skipMiddleware = options.skipMiddleware
     if (!skipMiddleware && !options.yes && scan.requiredServices.length) {
       const action = await prompts({
         type: 'select',
@@ -258,7 +256,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     spinner.start(cliM('cli_deploy_deploying'))
     const deployResult = await deploy.deployApp(appDir, {
       projectName: options.projectName,
-      skipProvision: skipMiddleware,
+      skipMiddleware,
       artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined,
       bundleOnly: options.bundleOnly,
       output: options.output ? resolve(cwd, options.output) : undefined,

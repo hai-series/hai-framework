@@ -27,7 +27,10 @@ export async function createDeploymentBundle(options: {
   output: string
 }): Promise<{ bundlePath: string, instructions: string, startName: string }> {
   const { directory, artifactDir, artifact, projectName, environment, runtime, coreEnv } = options
-  const output = resolve(options.output)
+  const stem = basename(options.output).replace(/\.tar$/i, '')
+  const versionSuffix = `-${artifact.appVersion}`
+  const output = resolve(dirname(options.output), `${stem.endsWith(versionSuffix) ? stem : `${stem}${versionSuffix}`}.tar`)
+  const composeName = `docker-compose-${artifact.appVersion}.yml`
   mkdirSync(dirname(output), { recursive: true, mode: 0o700 })
   const staging = mkdtempSync(join(directory, '.bundle-'))
   chmodSync(staging, 0o700)
@@ -37,9 +40,9 @@ export async function createDeploymentBundle(options: {
     mkdirSync(join(staging, 'images'))
     for (const image of artifact.images)
       copyFileSync(join(artifactDir, image.file), join(staging, 'images', image.file))
-    for (const file of ['compose.yml', '.env.runtime', ...(artifact.images.some(image => image.name === 'web') ? ['web.conf'] : [])])
+    for (const file of [composeName, '.env.runtime', ...(artifact.images.some(image => image.name === 'web') ? ['web.conf'] : [])])
       copyFileSync(join(directory, file), join(staging, file))
-    const compose = parse(readFileSync(join(directory, 'compose.yml'), 'utf8')) as { services: Record<string, { image?: string }> }
+    const compose = parse(readFileSync(join(directory, composeName), 'utf8')) as { services: Record<string, { image?: string }> }
     const images = [...new Set(Object.values(compose.services).flatMap(service => service.image ? [service.image] : []))]
     const start = `#!/bin/sh
 set -eu
@@ -62,14 +65,16 @@ ${artifact.images.map(image => `"$runtime" load -i ${shellArgument(`images/${ima
 for image in ${images.map(shellArgument).join(' ')}; do
   "$runtime" image inspect "$image" >/dev/null 2>&1 || { echo "Missing image: $image. Load the matching image archive before retrying." >&2; exit 1; }
 done
-exec "$runtime" compose --env-file .env.runtime -p ${shellArgument(`hai-${projectName}`)} up -d
+exec "$runtime" compose -f ${shellArgument(composeName)} --env-file .env.runtime -p ${shellArgument(`hai-${projectName}`)} up -d
 `
     writeFileSync(join(directory, startName), start, { mode: 0o700 })
     writeFileSync(join(staging, startName), start, { mode: 0o700 })
-    const instructions = deployM('deploy_bundleInstructions', { params: { file: basename(output), start: startName, images: images.join('\n') } })
-    writeFileSync(join(staging, 'README.txt'), `${instructions}\n`)
+    const instructions = deployM('deploy_bundleInstructions', { params: { file: basename(output), start: startName, images: images.join('\n'), compose: composeName } })
+    const metadata = deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, compose: composeName } })
+    writeFileSync(join(staging, 'README.txt'), `${metadata}\n${instructions}\n`)
+    copyFileSync(join(artifactDir, 'manifest.json'), join(staging, 'manifest.json'))
     const checksums: string[] = []
-    for (const file of ['compose.yml', '.env.runtime', startName, ...(artifact.images.some(image => image.name === 'web') ? ['web.conf'] : []), ...artifact.images.map(image => `images/${image.file}`)])
+    for (const file of [composeName, 'manifest.json', '.env.runtime', startName, ...(artifact.images.some(image => image.name === 'web') ? ['web.conf'] : []), ...artifact.images.map(image => `images/${image.file}`)])
       checksums.push(`${await artifactChecksum(join(staging, file))}  ${file}`)
     writeFileSync(join(staging, 'SHA256SUMS'), `${checksums.join('\n')}\n`)
     const tar = await runCommand('tar', ['-cf', temporaryTar, '-C', staging, '.'])

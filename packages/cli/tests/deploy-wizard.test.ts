@@ -38,7 +38,7 @@ it('lets a complete environment bypass every middleware prompt and preserves env
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://existing.test:8080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
   await deployCommand({ appDir: service, env: 'test' })
   expect(mocked.prompt).toHaveBeenCalledOnce()
-  expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ skipProvision: true, serviceModes: expect.objectContaining({ db: 'keep', cache: 'keep', storage: 'keep' }) }))
+  expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ skipMiddleware: true, serviceModes: expect.objectContaining({ db: 'keep', cache: 'keep', storage: 'keep' }) }))
   expect(readFileSync(join(app, '.env.test'), 'utf8')).toBe(before)
   expect(deploy.config?.services).toBeUndefined()
 }, 30_000)

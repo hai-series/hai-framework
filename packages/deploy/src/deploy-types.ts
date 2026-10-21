@@ -191,13 +191,13 @@ export interface DeployAppOptions {
   serviceModes?: Partial<Record<string, MiddlewareMode>>
   /** 项目名称（默认使用明确指定的部署目录名称）。 */
   projectName?: string
-  /** 是否跳过基础设施开通 */
-  skipProvision?: boolean
+  /** 是否跳过全部中间件配置与开通，默认 false；例如配置完备时设为 true。 */
+  skipMiddleware?: boolean
   /** 已构建镜像目录；默认最近构建入口/锁文件目录下的 .hai/build/docker。 */
   artifactDir?: string
   /** 只生成部署 tar，不连接 SSH；仅 docker-ssh 支持。 */
   bundleOnly?: boolean
-  /** 部署 tar 输出路径；默认 .hai/deploy/<环境>/bundle-<部署ID>.tar。 */
+  /** 部署 tar 输出路径；默认 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>.tar，自定义文件名自动补 -<版本>。 */
   output?: string
 }
 

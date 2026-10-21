@@ -108,11 +108,11 @@ describe('deployCommand', () => {
       },
     })
 
-    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, projectName: 'my-api', skipProvision: true, verbose: false })
+    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, projectName: 'my-api', skipMiddleware: true, verbose: false })
 
     expect(mocks.deployApp).toHaveBeenCalledWith(appDir, {
       projectName: 'my-api',
-      skipProvision: true,
+      skipMiddleware: true,
       environment: 'prod',
       envDir: appDir,
       serviceModes: {},

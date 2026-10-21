@@ -66,6 +66,8 @@
   "cli_build_failed": "构建命令 {command} 失败（退出码 {code}）。",
   "cli_build_use_pnpm": "请通过 pnpm build 运行构建，确保使用当前项目的 pnpm。",
   "cli_build_target_invalid": "target 必须为 compile、docker 或 desktop。",
+  "cli_build_options_invalid": "runtime、network、sqlite-prebuild-mirror、no-http-proxy 仅用于 docker；platform、arch 仅用于 desktop。",
+  "cli_build_version_invalid": "请在应用根 package.json 中设置有效的三段式版本（如 1.2.3 或 1.2.3-beta.1，最长 80 字符）。",
   "cli_build_native_host": "Tauri 需要在对应系统上构建（windows/linux/macos），架构为 x64 或 arm64；请先安装对应 Rust target、系统 SDK 和打包工具。",
   "cli_build_desktop_missing": "hai.build.json 未配置 desktop 目录。请生成 desktop 前端或添加已有的 Tauri 工程。",
   "cli_build_images_missing": "hai.build.json 必须包含一个 app 镜像和至多一个 web 镜像。",

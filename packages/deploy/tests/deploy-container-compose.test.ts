@@ -71,15 +71,15 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(JSON.parse(env.HAI_IAM_LDAP)).toMatchObject({ url: 'ldap://ldap:389', bindDn: 'cn=admin,dc=example,dc=org' })
     expect(env.LDAP_ADMIN_PASSWORD).toBeTruthy()
     expect(JSON.parse(env.HAI_REACH_PROVIDERS_0)).toMatchObject({ type: 'smtp', host: 'email', port: 1025, secure: false })
-    const compose = generateComposeFile({ projectName: 'directory', imageRef: 'test', hostPort: 3000, containerPort: 3000, sidecar })
+    const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'directory', imageRef: 'test', hostPort: 3000, containerPort: 3000, sidecar })
     expect(compose).not.toContain(env.LDAP_ADMIN_PASSWORD)
   })
 
   it('preserves existing managed services and volumes when keeping a middleware unchanged', () => {
     const initial = buildRuntimeEnv(tmpDir, 'existing', makeScan(['db'], { db: 'mysql' }), {}, 3000)
-    const previousCompose = generateComposeFile({ projectName: 'existing', imageRef: 'v1', hostPort: 3000, containerPort: 3000, sidecar: initial.sidecar })
+    const previousCompose = generateComposeFile({ appVersion: '1.2.3', projectName: 'existing', imageRef: 'v1', hostPort: 3000, containerPort: 3000, sidecar: initial.sidecar })
     const kept = buildRuntimeEnv(tmpDir, 'existing', makeScan(['db'], { db: 'mysql' }), {}, 3000, { serviceModes: { db: 'keep' } })
-    const compose = generateComposeFile({ projectName: 'existing', imageRef: 'v2', hostPort: 3000, containerPort: 3000, sidecar: kept.sidecar, previousCompose, serviceModes: { db: 'keep' } })
+    const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'existing', imageRef: 'v2', hostPort: 3000, containerPort: 3000, sidecar: kept.sidecar, previousCompose, serviceModes: { db: 'keep' } })
     expect(compose).toContain('mysql:8.4')
     expect(compose).toContain('existing-db-data')
     expect(compose).toContain('image: v2')
@@ -201,7 +201,7 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
 describe('generateComposeFile', () => {
   it('web 仅公开一个同源端口，不挂载 API 私有环境，代理保持自定义前缀及 SPA 刷新', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3001)
-    const compose = parse(generateComposeFile({ projectName: 'demo', imageRef: 'api:v1', hostPort: 18080, containerPort: 3001, sidecar, web: { imageRef: 'web:v1', containerPort: 8081 } }))
+    const compose = parse(generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'api:v1', hostPort: 18080, containerPort: 3001, sidecar, web: { imageRef: 'web:v1', containerPort: 8081 } }))
     expect(compose.services.app.ports).toBeUndefined()
     expect(compose.services.web.ports).toEqual(['18080:8081'])
     expect(compose.services.web.env_file).toBeUndefined()
@@ -215,22 +215,16 @@ describe('generateComposeFile', () => {
   it('waits for bucket initialization when creating storage alongside a kept database', () => {
     const scan = makeScan(['db', 'storage'], { db: 'postgresql', storage: 's3' })
     const initial = buildRuntimeEnv(tmpDir, 'mixed', scan, {}, 3000)
-    const previousCompose = generateComposeFile({ projectName: 'mixed', imageRef: 'v1', hostPort: 3000, containerPort: 3000, sidecar: initial.sidecar })
+    const previousCompose = generateComposeFile({ appVersion: '1.2.3', projectName: 'mixed', imageRef: 'v1', hostPort: 3000, containerPort: 3000, sidecar: initial.sidecar })
     const next = buildRuntimeEnv(tmpDir, 'mixed', scan, {}, 3000, { serviceModes: { db: 'keep', storage: 'default' } })
-    const compose = parse(generateComposeFile({ projectName: 'mixed', imageRef: 'v2', hostPort: 3000, containerPort: 3000, sidecar: next.sidecar, previousCompose, serviceModes: { db: 'keep', storage: 'default' } }))
+    const compose = parse(generateComposeFile({ appVersion: '1.2.3', projectName: 'mixed', imageRef: 'v2', hostPort: 3000, containerPort: 3000, sidecar: next.sidecar, previousCompose, serviceModes: { db: 'keep', storage: 'default' } }))
     expect(compose.services.app.depends_on).toMatchObject({ 'db': { condition: 'service_started' }, 'storage-init': { condition: 'service_completed_successfully' } })
     expect(compose.services['storage-init'].image).toBe('v2')
     expect(compose.services.db.image).toBe('postgres:16-alpine')
   })
   it('生成 app 服务并映射端口', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3000)
-    const compose = generateComposeFile({
-      projectName: 'demo',
-      imageRef: 'hai-demo:20260922-abc',
-      hostPort: 18080,
-      containerPort: 3000,
-      sidecar,
-    })
+    const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'hai-demo:20260922-abc', hostPort: 18080, containerPort: 3000, sidecar })
     expect(compose).toContain('image: hai-demo:20260922-abc')
     expect(compose).toContain('18080:3000')
     expect(compose).toContain('name: hai-demo')
@@ -238,13 +232,7 @@ describe('generateComposeFile', () => {
 
   it('app 服务 depends_on 包含已启用 sidecar', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db', 'cache']), {}, 3000)
-    const compose = generateComposeFile({
-      projectName: 'demo',
-      imageRef: 'hai-demo:tag',
-      hostPort: 18080,
-      containerPort: 3000,
-      sidecar,
-    })
+    const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'hai-demo:tag', hostPort: 18080, containerPort: 3000, sidecar })
     expect(compose).toContain('depends_on')
     expect(compose).toContain('postgres:16-alpine')
     expect(compose).toContain('redis:7-alpine')
@@ -252,13 +240,7 @@ describe('generateComposeFile', () => {
 
   it('compose 文件不包含敏感密码', () => {
     const { env, sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db', 'storage']), {}, 3000)
-    const compose = generateComposeFile({
-      projectName: 'demo',
-      imageRef: 'hai-demo:tag',
-      hostPort: 18080,
-      containerPort: 3000,
-      sidecar,
-    })
+    const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'hai-demo:tag', hostPort: 18080, containerPort: 3000, sidecar })
     expect(env.POSTGRES_PASSWORD.length).toBeGreaterThan(0)
     expect(compose).not.toContain(env.POSTGRES_PASSWORD)
     expect(compose).not.toContain(JSON.parse(env.HAI_STORAGE).secretAccessKey)

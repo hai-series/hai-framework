@@ -66,6 +66,8 @@
   "cli_build_failed": "Build command {command} failed (exit {code}).",
   "cli_build_use_pnpm": "Run via pnpm build to use the project pnpm executable.",
   "cli_build_target_invalid": "target must be compile, docker or desktop.",
+  "cli_build_options_invalid": "runtime, network, sqlite-prebuild-mirror and no-http-proxy require docker; platform and arch require desktop.",
+  "cli_build_version_invalid": "Set a valid three-part version in the application root package.json (for example 1.2.3 or 1.2.3-beta.1; at most 80 characters).",
   "cli_build_native_host": "Build Tauri on the matching OS (windows/linux/macos), with x64 or arm64 architecture. Install the Rust target, system SDK and packaging tools first.",
   "cli_build_desktop_missing": "No desktop directories in hai.build.json. Generate a desktop frontend or add an existing Tauri project.",
   "cli_build_images_missing": "hai.build.json requires one app image and at most one web image.",

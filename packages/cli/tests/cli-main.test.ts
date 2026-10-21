@@ -6,6 +6,7 @@ interface RegisteredCommand {
   aliases: string[]
   description: string
   name: string
+  options: string[]
 }
 
 const commandMocks = vi.hoisted(() => ({
@@ -32,11 +33,15 @@ function createCliMock() {
         aliases: [],
         description,
         name,
+        options: [],
       }
       cliState.commands.set(name, registered)
 
       const commandApi = {
-        option: vi.fn(() => commandApi),
+        option: vi.fn((option: string) => {
+          registered.options.push(option)
+          return commandApi
+        }),
         alias: vi.fn((aliasName: string) => {
           registered.aliases.push(aliasName)
           cliState.commands.set(aliasName, registered)
@@ -65,6 +70,7 @@ vi.mock('cac', () => ({
 
 vi.mock('../src/commands/cli-commands.js', () => ({
   addModule: commandMocks.addModule,
+  buildCommand: commandMocks.buildCommand,
   createProject: commandMocks.createProject,
   deployCommand: commandMocks.deployCommand,
   generate: commandMocks.generate,
@@ -102,6 +108,15 @@ afterEach(() => {
 })
 
 describe('cli-main', () => {
+  it('构建参数完整交给构建器，部署仅暴露一个跳过中间件选项', async () => {
+    const options = { cwd: 'C:/workspace', target: 'docker', runtime: 'podman', network: 'pasta', httpProxy: false, sqlitePrebuildMirror: 'http://mirror.internal/sqlite' }
+    await getCommandAction('build')(options)
+    expect(commandMocks.buildCommand).toHaveBeenCalledWith(options)
+    expect(cliState.commands.get('build')!.options).toContain('--network <network>')
+    const deployOptions = cliState.commands.get('deploy [appDir]')!.options
+    expect(deployOptions).toContain('--skip-middleware')
+    expect(deployOptions).not.toContain('--skip-provision')
+  })
   it('create 失败设置退出码并让 stderr 完成输出，不强制终止进程', async () => {
     const previousExitCode = process.exitCode
     const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
@@ -217,7 +232,7 @@ describe('cli-main', () => {
     await getCommandAction('deploy [appDir]')('apps/demo-service', {
       cwd: 'C:/workspace',
       projectName: 'demo-service',
-      skipProvision: true,
+      skipMiddleware: true,
       verbose: false,
     })
 
@@ -225,7 +240,7 @@ describe('cli-main', () => {
       appDir: 'apps/demo-service',
       cwd: 'C:/workspace',
       projectName: 'demo-service',
-      skipProvision: true,
+      skipMiddleware: true,
       verbose: false,
     })
   })

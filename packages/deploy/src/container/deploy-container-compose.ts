@@ -404,6 +404,7 @@ export function buildRuntimeEnv(
  * @param options - 生成参数
  * @param options.projectName - 项目名
  * @param options.imageRef - 应用镜像引用
+ * @param options.appVersion - 应用发布版本，例如 1.2.3；不改变持久化卷身份
  * @param options.hostPort - 宿主机映射端口
  * @param options.containerPort - 容器内端口
  * @param options.sidecar - sidecar 规划
@@ -416,6 +417,7 @@ export function buildRuntimeEnv(
  */
 export function generateComposeFile(options: {
   projectName: string
+  appVersion: string
   imageRef: string
   hostPort: number
   containerPort: number
@@ -431,6 +433,7 @@ export function generateComposeFile(options: {
 
   const app: ComposeService = {
     image: imageRef,
+    labels: { 'org.opencontainers.image.version': options.appVersion },
     container_name: `hai-${projectName}-app`,
     restart: 'unless-stopped',
     // 镜像已由 load 注入本地，禁止 compose 再从 registry 拉取
@@ -449,6 +452,7 @@ export function generateComposeFile(options: {
     delete app.ports
     services.web = {
       image: options.web.imageRef,
+      labels: { 'org.opencontainers.image.version': options.appVersion },
       container_name: `hai-${projectName}-web`,
       restart: 'unless-stopped',
       pull_policy: 'never',
@@ -463,8 +467,9 @@ export function generateComposeFile(options: {
   if (services['storage-init'])
     services['storage-init'] = { ...services['storage-init'], image: imageRef }
   const compose: Record<string, unknown> = {
+    'x-hai-version': options.appVersion,
     services,
-    networks: {
+    'networks': {
       'hai-app': { name: `hai-${projectName}` },
     },
   }
