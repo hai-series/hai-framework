@@ -21,10 +21,20 @@ export interface DeploymentEnvironment {
   targetValues: Record<string, string>
 }
 
+/** 与 Core 一致，普通字符串如 CORS 的 `*` 不能因 YAML 标量解析失败而使配置加载失败。 */
+function environmentValue(value: string): unknown {
+  try {
+    return parse(value) ?? value
+  }
+  catch {
+    return value
+  }
+}
+
 /** 在已解析的 YAML 结构上处理覆盖，避免密码中的冒号、引号、井号变成 YAML 语法。 */
 function resolveConfig(value: unknown, prefix: string, env: Record<string, string | undefined>): unknown {
   if (env[prefix] !== undefined)
-    return parse(env[prefix]) ?? env[prefix]
+    return environmentValue(env[prefix])
   if (Array.isArray(value))
     return value.map((item, index) => resolveConfig(item, `${prefix}_${index}`, env))
   if (value && typeof value === 'object')
@@ -32,7 +42,7 @@ function resolveConfig(value: unknown, prefix: string, env: Record<string, strin
   if (typeof value !== 'string')
     return value
   const resolved = value.replace(/\$\{([^:}]+)(?::([^}]*))?\}/g, (_match, name: string, fallback?: string) => env[name] ?? fallback ?? '')
-  return /^\$\{[^}]+\}$/.test(value) ? parse(resolved) ?? resolved : resolved
+  return /^\$\{[^}]+\}$/.test(value) ? environmentValue(resolved) : resolved
 }
 
 /**

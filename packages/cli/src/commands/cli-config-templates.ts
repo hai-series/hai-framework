@@ -586,6 +586,11 @@ provider:
 #   httpProxy: true # Podman 构建继承代理；localhost 代理不可达时设为 false
 #   s3Engine: rustfs # rustfs | minio；应用始终使用 storage.type=s3
 #   sqlitePrebuildMirror: https://your-trusted-mirror.example/better-sqlite3 # 可选，不含认证信息
+#   web: # 同次发布静态 Web；fullstack 选择 Web/deploy 时自动生成此节点
+#     context: ../.. # 相对于当前服务包的构建上下文
+#     dockerfile: Dockerfile # 相对于 context
+#     target: web
+#     containerPort: 8080 # hostPort 统一公开 Web，同源代理 API
 
 # 基础设施服务（按需开启）
 # services:
@@ -623,7 +628,8 @@ provider:
 
 # docker-ssh 说明：
 # - 应用镜像使用工程自带的 Dockerfile（adapter-node），本地构建后经 SSH 传输并 load
-# - compose 会按上方启用的 db/cache/storage 自动追加 postgres/redis/minio sidecar
+# - compose 按实际后端生成中间件；S3 默认 RustFS，可通过 s3Engine 选择 MinIO
+# - 配置 container.web 时同一命令构建并发布 API/Web；Web 不接收 API 的私有变量
 # - 若同时配置了对应云 Provisioner，则优先使用云资源，不再自建 sidecar
 `
 }

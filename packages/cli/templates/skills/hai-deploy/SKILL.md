@@ -250,7 +250,7 @@ hai deploy --project-name my-custom-name
 > 部署方式由 `config/_deploy.yml` 的 `provider.type` 决定（vercel / docker-ssh），
 > CLI 命令相同。docker-ssh 成功后输出的访问地址为 `http://<host>:<hostPort>`。
 
-fullstack 需明确部署服务包；`hai deploy packages/my-app-serv --env prod` 不会发布 Web。根 Dockerfile 的 `runtime` / `web` target 分别构建 API / Web；Web 单独转移、运行，设置浏览器可访问的 `PUBLIC_API_BASE` 和 API 的 CORS。模板 `pnpm run deploy` 是打包脚本，不等于 CLI 发布。
+fullstack 选择 Web 和 deploy 时，服务配置包含 `container.web`，`hai deploy packages/my-app-serv --env prod` 一次构建并发布 API/Web；Web 公开 hostPort，同源代理内部 API，返回 URL 为 Web 入口。未配置 Web 时仍为单服务。Web 不挂载 API 私有环境；两个镜像共用部署 ID，全部构建成功才开始上传，API/Web 都通过健康检查才报告成功。模板 `pnpm run deploy` 是打包脚本，不等于 CLI 发布。
 
 离线部署先按 [离线准备与验收](middleware.md#离线准备与验收) 检查材料。docker-ssh 在本地构建并导出镜像 tar，再分别上传镜像、Compose、运行环境和启动脚本，不在远程构建源码。当前无直接指定预构建镜像的参数；不得声称 `--skip-build` 能离线发布容器，也不得将联网部署测试作为断网证明。
 

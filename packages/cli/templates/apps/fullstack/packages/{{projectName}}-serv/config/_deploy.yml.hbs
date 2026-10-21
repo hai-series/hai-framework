@@ -1,1 +1,14 @@
 {{{moduleConfig 'deploy' features.deploy}}}
+{{#if features.deploy}}
+{{#if fullstack.frontends.web}}
+
+# 同一次 docker-ssh 部署发布 API + Web；Web 通过同源代理访问 API。
+container:
+  runtime: auto
+  web:
+    context: ../..
+    dockerfile: Dockerfile
+    target: web
+    containerPort: 8080
+{{/if}}
+{{/if}}

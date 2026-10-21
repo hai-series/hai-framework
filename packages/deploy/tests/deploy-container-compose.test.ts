@@ -17,6 +17,7 @@ import {
   buildRuntimeEnv,
   generateComposeFile,
   generateFallbackDockerfile,
+  generateWebProxyConfig,
   serializeEnvFile,
 } from '../src/container/deploy-container-compose.js'
 
@@ -200,6 +201,19 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
 })
 
 describe('generateComposeFile', () => {
+  it('web 仅公开一个同源端口，不挂载 API 私有环境，代理保持自定义前缀及 SPA 刷新', () => {
+    const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3001)
+    const compose = parse(generateComposeFile({ projectName: 'demo', imageRef: 'api:v1', hostPort: 18080, containerPort: 3001, sidecar, web: { imageRef: 'web:v1', containerPort: 8081 } }))
+    expect(compose.services.app.ports).toBeUndefined()
+    expect(compose.services.web.ports).toEqual(['18080:8081'])
+    expect(compose.services.web.env_file).toBeUndefined()
+    const proxy = generateWebProxyConfig(3001, '/backend/v2', 8081)
+    expect(proxy).toContain('listen 8081;')
+    expect(proxy).toContain('location /backend/v2/')
+    expect(proxy).toContain('proxy_pass http://app:3001;')
+    expect(proxy).toContain('try_files $uri $uri/ /index.html;')
+    expect(() => generateWebProxyConfig(3001, '/api; injected')).toThrow()
+  })
   it('waits for bucket initialization when creating storage alongside a kept database', () => {
     const scan = makeScan(['db', 'storage'], { db: 'postgresql', storage: 's3' })
     const initial = buildRuntimeEnv(tmpDir, 'mixed', scan, {}, 3000)

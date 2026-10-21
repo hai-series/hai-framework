@@ -58,13 +58,17 @@ export async function detectLocalRuntime(
  * @param options.imageRef - 镜像引用
  * @param options.buildArgs - 仅供构建的公共参数，不传入密码或令牌
  * @param options.httpProxy - Podman 构建是否继承代理，省略时遵循运行时默认值
+ * @param options.target - 多阶段 Dockerfile 的目标，例如 web
  * @returns 构建结果
+ * @example `await buildImage('docker', { contextDir: '.', dockerfilePath: 'Dockerfile', imageRef: 'demo-web:1', target: 'web' })`
  */
 export async function buildImage(
   runtime: ContainerRuntime,
-  options: { contextDir: string, dockerfilePath: string, imageRef: string, buildArgs?: Record<string, string>, httpProxy?: boolean },
+  options: { contextDir: string, dockerfilePath: string, imageRef: string, buildArgs?: Record<string, string>, httpProxy?: boolean, target?: string },
 ): Promise<HaiResult<void>> {
   const args = ['build', '-f', options.dockerfilePath, '-t', options.imageRef]
+  if (options.target)
+    args.push('--target', options.target)
   if (runtime === 'podman')
     args.push('--format', 'docker', '--jobs', '1')
   // Podman 显式使用兜底 Dockerfile 的伴随忽略文件；避免误用 workspace 根规则上传部署产物。

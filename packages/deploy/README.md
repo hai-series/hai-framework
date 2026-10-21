@@ -18,7 +18,7 @@
 - Compose 支持 PostgreSQL、MySQL、Redis、RustFS/MinIO、Qdrant、pgvector、Chroma、OpenLDAP、Mailpit；SQLite、memory、local、LanceDB 按各自本地存储方式处理。Mailpit 只捕获测试邮件。
 - 云开通支持 Neon、Upstash、Cloudflare R2、Resend、阿里云短信。R2 需要已有 S3 密钥，Resend 需要已验证发件域名，短信需要已审核签名与模板；其他后端使用自定义连接。
 
-**fullstack 的 API 与 Web 分开部署。** `hai deploy packages/my-app-serv` 只部署 API，不会自动部署 `apps/my-app-web`。模板根 Dockerfile 的 `runtime` 和 `web` target 分别构建 API 与静态 Web 镜像；Web 需另行上传并运行，配置 `PUBLIC_API_BASE` 和 API 的 CORS。当前没有同时发布两者的命令，也不自动配置域名、TLS 或反向代理。
+**fullstack 一次命令部署 API + Web。** 启用 deploy 且选择 Web 的模板在服务配置中生成 `container.web`，`hai deploy packages/my-app-serv` 会同时构建、上传两个镜像并纳入同一份 Compose。公开端口提供 Web，API 仅在内部网络监听；Web 同源代理 API，自动读取真实 API 前缀并保留页面刷新。未配置 Web 时仍部署单服务。域名和 TLS 入口需另行准备。
 
 ## 命令行使用
 
@@ -52,6 +52,11 @@ provider:
 container:
   runtime: docker
   s3Engine: rustfs
+  web:
+    context: ../.. # 相对于当前服务包的构建上下文
+    dockerfile: Dockerfile # 相对于 context；使用 Nginx 静态镜像
+    target: web # Web 的构建 target
+    containerPort: 8080 # hostPort 统一映射到 Web
 services: {}
 ```
 
@@ -64,7 +69,7 @@ HAI_DEPLOY_PROVIDER='{"type":"docker-ssh","ssh":{"host":"10.0.0.20","port":22,"u
 
 覆盖顺序为 `.env` → `.env.<mode>` → `.env.local` → 当前进程变量；父节点 JSON（如 `HAI_DB`）优先于叶子变量。`.env.example` 记录完整字段、说明与枚举；`.env`、`.env.dev/test/prod` 提交 Git，真实凭据只放 `.env.local`。首次启动 fullstack 需在私有配置中设置符合 IAM 策略的 `HAI_ADMIN_DEFAULT_PASSWORD`。
 
-fullstack 生产环境还必须在 `.env.prod` 设置明确的 Web Origin，例如 `HAI_SERV_CORS_ORIGIN=https://app.hai.internal`；默认 `*` 会使生产启动失败。生产 refresh Cookie 启用 Secure，Web/API 应通过已配置信任证书的 HTTPS 入口访问；只开放 HTTP 端口不足以验收完整登录与刷新会话。
+fullstack 联合部署会把缺省/通配 CORS 填为公开入口，已有明确 Origin 保留。生产 HTTPS 入口应在 `.env.prod` 设置 `HAI_SERV_CORS_ORIGIN=https://app.hai.internal`。生产 refresh Cookie 启用 Secure，Web/API 应通过已配置信任证书的 HTTPS 入口访问；只开放 HTTP 端口不足以验收完整登录与刷新会话。
 
 ### 3. 执行部署
 
@@ -88,11 +93,11 @@ pnpm.cmd exec hai deploy packages/my-app-serv --env prod --env-dir . --yes --ski
 
 ## docker-ssh 的文件与执行流程
 
-1. 本地选择目标包自己的 Dockerfile；不存在时生成兜底 Dockerfile，以 workspace 根为构建上下文。fullstack 服务包默认走兜底，不会使用根 Dockerfile 的 Web target。
-2. 本地构建应用镜像，使用 `docker/podman save` 导出 tar。
+1. API 使用目标包 Dockerfile，缺失时生成兜底；Web 按显式 `container.web` 配置选择构建上下文、Dockerfile 和 target，不扫描相邻目录猜测布局。
+2. 本地构建 API/Web 镜像，共用部署 ID，全部构建、导出成功后才上传。Web 构建失败不会触碰远端。
 3. SSH 检查远程容器引擎与 Compose；SCP 上传 tar，远程执行 `load`。
-4. 本地生成 `compose.yml`、`.env.runtime`、`start-<mode>.sh`，分别上传至 `<baseDir>/<projectName>-<mode>/`。它们与镜像归档分开传输，不打成一个 Compose 压缩包，也不把源码上传后在 Linux 构建。
-5. 远程脚本设置 `HAI_DEPLOY_ENVIRONMENT`、`HAI_CORE_ENV`，执行 `compose --env-file .env.runtime ... up -d`。SDK 从本地访问原生服务 `/health` 或 SvelteKit `/`，通过后才返回成功。
+4. 本地生成 `compose.yml`、`.env.runtime`、`start-<mode>.sh`，联合部署还生成同源代理 `web.conf`，分别上传至 `<baseDir>/<projectName>-<mode>/`。它们与镜像归档分开传输，不打成一个 Compose 压缩包，也不把源码上传后在 Linux 构建。
+5. 远程脚本设置 `HAI_DEPLOY_ENVIRONMENT`、`HAI_CORE_ENV`，执行 `compose --env-file .env.runtime ... up -d`。SDK 检查 API `/health`、Web `/_hai/web-health` 和首页，全部通过后才返回成功；单服务 SvelteKit 检查 `/`。Web 不挂载 API 的私有 `.env.runtime`。
 
 本地产物位于目标包 `.hai/deploy/<mode>/`，应忽略 Git；远程 `.env.runtime` 权限为 `600`。保留本地产物用于重复部署；“保持不变”保留本地上一份 Compose 中已有的服务/卷定义，不会自动读取服务器上任意现有 Compose。私有环境文件与部署归档不得复制进镜像。
 
@@ -132,16 +137,9 @@ docker save -o my-app-images.tar my-app-api:offline my-app-web:offline
 FROM my-app-api:offline
 ```
 
-为服务包添加 `.dockerignore`（内容 `*`），限制此专用构建上下文。配置部署目标后执行上面的 `hai deploy`：需 SDK 创建中间件容器时，先在 `.env.prod` 选择 `HAI_DB_TYPE=postgresql`、`HAI_CACHE_TYPE=redis`、`HAI_STORAGE_TYPE=s3`，再走向导默认配置；已有服务则填写自定义连接，配置完整后可用 `--skip-middleware`。API 镜像由 SDK 上传；提前在断外网条件下演练，确认构建器不会尝试联网。
+为服务包添加 `.dockerignore`（内容 `*`）。根目录另建 `Web.offline.Dockerfile`，内容 `FROM my-app-web:offline AS web`，并创建内容 `*` 的 `Web.offline.Dockerfile.dockerignore`。在 `.env.local` 设置 `HAI_DEPLOY_CONTAINER_WEB_DOCKERFILE=Web.offline.Dockerfile`，复用已生成的 Web 配置；旧项目先按上述 YAML 补齐 `container.web`。配置部署目标后执行上面的 `hai deploy`：需 SDK 创建中间件容器时，先在 `.env.prod` 选择 `HAI_DB_TYPE=postgresql`、`HAI_CACHE_TYPE=redis`、`HAI_STORAGE_TYPE=s3`，再走向导默认配置；已有服务则填写自定义连接，配置完整后可用 `--skip-middleware`。API/Web 镜像均由 SDK 上传并同时启动；提前在断外网条件下演练，确认构建器不会尝试联网。
 
-Web 镜像需另外传输到 Linux 并运行。以下假设已另行准备 `https://app.hai.internal` 与 `https://api.hai.internal` 的内网 TLS 入口，分别代理 Web 的 18081 端口与 API 的 18080 端口；需带入代理配置/镜像、证书，并配置内网 DNS/hosts 和客户端信任。SSH 登录后执行：
-
-```sh
-docker load -i /path/to/my-app-images.tar
-docker run -d --name my-app-web-prod --restart unless-stopped -p 18081:8080 -e PUBLIC_API_BASE=https://api.hai.internal my-app-web:offline
-```
-
-API 地址须能被用户浏览器访问，API 设置 `HAI_SERV_CORS_ORIGIN=https://app.hai.internal`。验收 API `/health`、Web 登录/业务请求、hash 页面刷新、会话刷新、服务重启及持久化。这里是离线材料与适配方式说明，联网部署测试不能替代实际断网验收。
+同一命令完成 API/Web 发布，返回的 URL 直接打开 Web，无需另外执行 `docker run`。生产仍需准备内网 HTTPS 入口，代理到该公开端口，并带入代理配置/镜像、证书、DNS/hosts 与客户端信任；浏览器使用同源地址，不需要单独的 API 域名。验收 API 健康、Web 登录/业务、hash 与会话刷新、服务重启及持久化。这里是离线适配说明，联网测试不能替代断网验收。
 
 镜像归档见 Docker 官方 [save](https://docs.docker.com/reference/cli/docker/image/save/) / [load](https://docs.docker.com/reference/cli/docker/image/load/)，离线包安装见 [pnpm install](https://pnpm.io/cli/install)，Compose 插件见 [安装说明](https://docs.docker.com/compose/install/linux/)。
 
@@ -194,7 +192,7 @@ pnpm.cmd check:skills
 
 `src/deploy-scanner.ts` 处理 lockfile 依赖图，`deploy-middleware.ts` 定义连接字段，`container/` 负责引擎、SSH 与 Compose，`providers/` 实现部署目标，`provisioners/` 实现云开通；CLI 向导位于 `../cli/src/commands/cli-deploy*.ts`。新增后端/配置时同步这些消费者、环境示例、测试和 [部署 skill](../cli/templates/skills/hai-deploy/SKILL.md)。
 
-修改链路后运行 CLI 的 typecheck/lint/build/test，再执行 `pnpm.cmd --filter @h-ai/cli test:deploy-gates`：使用当前包归档生成 fullstack，经过 Podman/SSH 验证健康状态、环境、登录和重复部署。门禁需要本地引擎、OpenSSH；首次准备夹具会下载镜像和系统/Node 依赖，并非离线验收。模板变更另运行 `pnpm.cmd --filter @h-ai/cli test:scaffold-gates`。单元测试不证明云资源已开通，付费云服务另行验收。日志、截图和验收报告保留在 Git 忽略的 `tmp/` / `test-results/`。
+修改链路后运行 CLI 的 typecheck/lint/build/test，再执行 `pnpm.cmd --filter @h-ai/cli test:deploy-gates`：使用当前包归档生成 fullstack，经过 Podman/SSH 同时发布 API/Web，浏览器直接访问服务器上的 Web，验证健康状态、环境、登录和重复部署，不启动本地预览。门禁需要本地引擎、OpenSSH；首次准备夹具会下载镜像和系统/Node 依赖，并非离线验收。模板变更另运行 `pnpm.cmd --filter @h-ai/cli test:scaffold-gates`。单元测试不证明云资源已开通，付费云服务另行验收。日志、截图和验收报告保留在 Git 忽略的 `tmp/` / `test-results/`。
 
 ## License
 

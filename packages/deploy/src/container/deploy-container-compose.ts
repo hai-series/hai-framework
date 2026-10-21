@@ -409,6 +409,9 @@ export function buildRuntimeEnv(
  * @param options.sidecar - sidecar 规划
  * @param options.previousCompose - 需要保留服务时读取的上次编排
  * @param options.serviceModes - 各中间件的处理选择
+ * @param options.web - 同一编排中的 Web 镜像与监听端口，独立于私有应用环境
+ * @param options.web.imageRef - Web 镜像引用
+ * @param options.web.containerPort - Web 容器监听端口
  * @returns compose YAML 字符串
  */
 export function generateComposeFile(options: {
@@ -421,6 +424,8 @@ export function generateComposeFile(options: {
   previousCompose?: string
   /** 各中间件的处理选择。 */
   serviceModes?: DeployAppOptions['serviceModes']
+  /** Web 公开入口；私有运行环境仅属于 API 服务。 */
+  web?: { imageRef: string, containerPort: number }
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
 
@@ -440,6 +445,21 @@ export function generateComposeFile(options: {
     app.depends_on = sidecar.dependsOn
 
   const services: Record<string, ComposeService> = { app, ...sidecar.composeServices }
+  if (options.web) {
+    delete app.ports
+    services.web = {
+      image: options.web.imageRef,
+      container_name: `hai-${projectName}-web`,
+      restart: 'unless-stopped',
+      pull_policy: 'never',
+      ports: [`${hostPort}:${options.web.containerPort}`],
+      environment: { PUBLIC_API_BASE: '' },
+      healthcheck: { test: ['CMD', 'wget', '-Y', 'off', '-q', '-O', '/dev/null', `http://127.0.0.1:${options.web.containerPort}/_hai/web-health`], interval: '30s', timeout: '5s', retries: 3 },
+      volumes: ['./web.conf:/etc/nginx/conf.d/default.conf:ro'],
+      depends_on: ['app'],
+      networks: ['hai-app'],
+    }
+  }
   if (services['storage-init'])
     services['storage-init'] = { ...services['storage-init'], image: imageRef }
   const compose: Record<string, unknown> = {
@@ -479,6 +499,48 @@ export function generateComposeFile(options: {
   }
 
   return stringify(compose)
+}
+
+/**
+ * 生成同源 Web/API 的 Nginx 配置，保留运行时配置及 SPA 页面刷新。
+ * @param port - API 容器监听端口
+ * @param apiPrefix - 应用实际 API 前缀，不允许向 Nginx 配置注入指令
+ * @param webPort - Web 容器监听端口
+ * @returns 仅含公开路由的 Nginx 配置
+ * @example `generateWebProxyConfig(3000, '/api/v1')`
+ */
+export function generateWebProxyConfig(port: number, apiPrefix: string, webPort = 8080): string {
+  if (!/^\/[\w/-]+$/.test(apiPrefix) || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535))
+    throw new Error('Invalid web proxy target')
+  return `server {
+  listen ${webPort};
+  server_name _;
+  root /usr/share/nginx/html;
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+  location = /runtime-config.js {
+    add_header Cache-Control "no-store";
+    default_type application/javascript;
+    return 200 'globalThis.__HAI_PUBLIC_CONFIG__={apiBase:globalThis.location.origin+"${apiPrefix}"};';
+  }
+  location = /_hai/web-health {
+    access_log off;
+    return 200 'ok';
+  }
+  location = /health {
+    proxy_pass http://app:${port};
+    proxy_set_header Host $http_host;
+  }
+  location ${apiPrefix.replace(/\/$/, '')}/ {
+    proxy_pass http://app:${port};
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;
+  }
+}
+`
 }
 
 /** 将环境变量对象序列化为 .env.runtime 内容（每行 KEY=VALUE）。 */

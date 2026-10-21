@@ -13,9 +13,9 @@ ENV CI=true
 WORKDIR /workspace
 
 RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
-COPY pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch
+# 本地 file: 归档和 workspace 文件必须先进入上下文，离线材料不能只复制 lockfile。
 COPY . .
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
 RUN pnpm build
 

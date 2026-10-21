@@ -20,6 +20,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { core } from '@h-ai/core'
+import { loadDeploymentConfig } from '@h-ai/deploy'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -32,6 +33,20 @@ import { loadConfigText } from './helpers/config.js'
 
 /** 每次运行使用独立临时目录，避免并发测试互删生成项目。 */
 let tmpRoot = ''
+
+it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，原生端不生成 Web 服务（%s）', async (target) => {
+  const project = path.join(tmpRoot, `deploy-${target}`)
+  await generateFromTemplates(project, buildTemplateContext({ name: `deploy-${target}`, appType: 'fullstack', frontends: [target], features: ['deploy'], packageManager: 'pnpm' }))
+  const loaded = loadDeploymentConfig('deploy', path.join(project, `packages/deploy-${target}-serv/config/_deploy.yml`), {})
+  expect(loaded.success).toBe(true)
+  if (!loaded.success)
+    throw new Error(loaded.error.message)
+  const container = loaded.data.container as { web?: unknown } | undefined
+  if (target === 'web')
+    expect(container?.web).toEqual({ context: '../..', dockerfile: 'Dockerfile', target: 'web', containerPort: 8080 })
+  else
+    expect(container?.web).toBeUndefined()
+})
 
 /**
  * 生成一个测试项目并返回其路径

@@ -77,9 +77,9 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 
 默认 Dockerfile 会下载 Node 基础镜像、pnpm、依赖和 SQLite 预编译包，不能直接称为离线可用。源码离线构建要准备 Linux 构建环境的完整缓存和构建 frontend，调整下载步骤并断开外网演练；Windows node_modules/pnpm store 不代表 Linux 的原生依赖可用。云 Provider/Provisioner 需要外网，不用于完全离线部署。
 
-docker-ssh 始终执行本地镜像构建，`--skip-build` 仅对 Vercel 生效。预构建离线交付可在准备环境导出 API/Web 镜像，在 Windows 引擎加载 API 镜像后，为目标服务包提供仅含 `FROM <已加载的API镜像>` 的 Dockerfile 和内容 `*` 的 `.dockerignore`，让 SDK 复用成品并上传。业务代码变更后必须重制成品镜像；无匹配本地镜像时不能继续假定构建无网络。
+docker-ssh 始终执行本地镜像构建，`--skip-build` 仅对 Vercel 生效。预构建离线交付可在准备环境导出 API/Web 镜像，在 Windows 引擎加载 API 镜像后，为目标服务包提供仅含 `FROM <已加载的API镜像>` 的 Dockerfile 和内容 `*` 的 `.dockerignore`，让 SDK 复用成品并上传。Web 同样预加载成品，在 context 中提供 `FROM <已加载Web镜像> AS web` 的专用 Dockerfile（伴随忽略文件内容 `*`），通过 HAI_DEPLOY_CONTAINER_WEB_DOCKERFILE 选择，SDK 自动转移两份镜像。业务代码变更后必须重制成品镜像；无匹配本地镜像时不能继续假定构建无网络。
 
-fullstack 的 Web 不在服务包 `hai deploy` 中发布，需单独加载/运行 Web 镜像并设置 PUBLIC_API_BASE、API CORS。生产禁止通配 CORS，refresh Cookie 启用 Secure；须准备 HTTPS 入口、内网证书/信任与 DNS/hosts，SDK 不自动配置 TLS/反向代理。离线验收须包含断外网构建/上传/启动、API 健康、真实 Web 登录、页面与会话刷新、重启和持久化；分别报告 API 部署、Web 发布和断网证据，不能互相替代。
+fullstack 的 `container.web` 显式描述相对服务包的构建 context、相对 context 的 Dockerfile、target 和容器端口；选择 Web/deploy 的模板自动生成，旧项目须补齐。SDK 同次构建并上传 API/Web，生成同一 Compose 和同源 web.conf，公开端口映射 Web；自动读取服务 API 前缀、补齐缺省 CORS，保留用户的明确 Origin。API/Web 都健康才报告成功，Web 不接收私有 .env.runtime。生产 refresh Cookie 启用 Secure，须准备 HTTPS 入口、内网证书/信任与 DNS/hosts；SDK 生成内部同源代理，不自动配置 TLS。离线验收须包含断外网构建/上传/启动、API 健康、真实 Web 登录、页面与会话刷新、重启和持久化；分别报告 API/Web 联合发布和断网证据，不能互相替代。
 
 ## 启动与验证
 

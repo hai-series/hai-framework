@@ -49,5 +49,6 @@
   "deploy_purposeLdap": "企业目录账号认证；默认目录不包含业务用户",
   "deploy_purposeConsole": "消息输出到应用日志，不实际投递",
   "deploy_purposeEmail": "邮件或 HTTP 通知投递；默认 SMTP 容器仅用于测试接收",
-  "deploy_purposeSms": "通过阿里云凭证接入短信服务，需已有签名与额度"
+  "deploy_purposeSms": "通过阿里云凭证接入短信服务，需已有签名与额度",
+  "deploy_webProxyInvalid": "API 前缀必须是仅含字母、数字、下划线、连字符和斜杠的绝对路径。"
 }

@@ -16,7 +16,7 @@ import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployResult } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { parseEnv } from 'node:util'
 import { core, err, ok } from '@h-ai/core'
 import {
@@ -24,11 +24,12 @@ import {
   generateComposeFile,
   generateDockerignore,
   generateFallbackDockerfile,
+  generateWebProxyConfig,
   serializeEnvFile,
 } from '../container/deploy-container-compose.js'
 import { buildImage, detectLocalRuntime, saveImage } from '../container/deploy-container-runtime.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
-import { loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
+import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 
@@ -159,6 +160,8 @@ export function createDockerSshProvider(
     const containerPort = config.expose.containerPort
     const hostPort = config.expose.hostPort
     const localImageTag = `hai-${projectName}:${deploymentId}`
+    const web = container?.web
+    const url = `http://${config.ssh.host}:${hostPort}`
 
     // 1. 本地运行时
     const runtimeResult = await detectLocalRuntime(localRuntimePref)
@@ -189,6 +192,21 @@ export function createDockerSshProvider(
 
     // 3. 先保存开通结果和 sidecar 凭据，构建失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
+    let webProxy: string | undefined
+    if (web) {
+      // 路由取当前服务的真实配置，不扫描相邻应用或猜测 fullstack 布局。
+      const server = loadDeploymentConfig('serv', join(appDir, 'config', '_serv.yml'), env)
+      if (!server.success)
+        return server
+      const http = server.data.http as { apiPrefix?: string } | undefined
+      const cors = server.data.cors as { origin?: string } | undefined
+      const apiPrefix = http?.apiPrefix ?? '/api/v1'
+      if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix))
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
+      webProxy = generateWebProxyConfig(containerPort, apiPrefix, web.containerPort)
+      // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
+      env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: !cors?.origin || cors.origin === '*' ? url : cors.origin } })
+    }
     const envPath = join(artifactDir, '.env.runtime')
     const previousEnv = existsSync(envPath) ? parseEnv(readFileSync(envPath, 'utf8')) : {}
     Object.assign(env, { ...previousEnv, ...env })
@@ -219,6 +237,28 @@ export function createDockerSshProvider(
     if (!saveResult.success)
       return err(saveResult.error)
 
+    // API 和 Web 共用部署 ID；全部构建/导出成功后才触碰远端。
+    const images = [{ localRef: localImageTag, tarPath, remoteRef: '' }]
+    if (web) {
+      const webContext = resolve(appDir, web.context)
+      const webRef = `hai-${projectName}-web:${deploymentId}`
+      const webBuild = await buildImage(localRuntime, {
+        contextDir: webContext,
+        dockerfilePath: resolve(webContext, web.dockerfile),
+        imageRef: webRef,
+        target: web.target,
+        buildArgs: { HAI_DEPLOY_ENVIRONMENT: options?.environment ?? 'prod', HAI_CORE_ENV: env.HAI_CORE_ENV ?? 'production' },
+        httpProxy,
+      })
+      if (!webBuild.success)
+        return webBuild
+      const webTar = join(artifactDir, `${projectName}-web.tar`)
+      const savedWeb = await saveImage(localRuntime, webRef, webTar)
+      if (!savedWeb.success)
+        return savedWeb
+      images.push({ localRef: webRef, tarPath: webTar, remoteRef: '' })
+    }
+
     // 6. 远程预检
     const pingResult = await ssh.ping()
     if (!pingResult.success)
@@ -235,30 +275,32 @@ export function createDockerSshProvider(
       return err(prepareResult.error)
 
     // 8. 传输镜像并加载
-    const remoteTar = `${remoteDir}/image.tar`
-    const uploadTarResult = await ssh.upload(tarPath, remoteTar)
-    if (!uploadTarResult.success)
-      return err(uploadTarResult.error)
-    const loadResult = await ssh.exec(`${remoteRuntime} load -i ${shellArgument(remoteTar)}`, { timeoutMs: 300_000 })
-    if (!loadResult.success)
-      return err(loadResult.error)
-    // podman load 会把无 registry 的镜像名归一化为 docker.io/library/*，compose 据此会误拉取；
-    // 统一重打为 localhost/ 本地标签（podman 永不从远端拉取 localhost/），docker 保持原名。
-    const loadedRef = parseLoadedImageRef(loadResult.data.stdout, localImageTag)
-    const remoteImageRef = remoteRuntime === 'podman' ? `localhost/${localImageTag}` : localImageTag
-    if (loadedRef !== remoteImageRef) {
-      const tagResult = await ssh.exec(`${remoteRuntime} tag ${shellArgument(loadedRef)} ${shellArgument(remoteImageRef)}`)
-      if (!tagResult.success)
-        return err(tagResult.error)
+    for (const [index, image] of images.entries()) {
+      const remoteTar = `${remoteDir}/image-${index}.tar`
+      const uploaded = await ssh.upload(image.tarPath, remoteTar)
+      if (!uploaded.success)
+        return uploaded
+      const loaded = await ssh.exec(`${remoteRuntime} load -i ${shellArgument(remoteTar)}`, { timeoutMs: 300_000 })
+      if (!loaded.success)
+        return loaded
+      // Podman 对无 registry 镜像名进行归一化，统一重标 localhost/ 以免误拉取。
+      const loadedRef = parseLoadedImageRef(loaded.data.stdout, image.localRef)
+      image.remoteRef = remoteRuntime === 'podman' ? `localhost/${image.localRef}` : image.localRef
+      if (loadedRef !== image.remoteRef) {
+        const tagged = await ssh.exec(`${remoteRuntime} tag ${shellArgument(loadedRef)} ${shellArgument(image.remoteRef)}`)
+        if (!tagged.success)
+          return tagged
+      }
     }
 
     // 9. 生成并上传 compose + 运行期环境
     const composeContent = generateComposeFile({
       projectName,
-      imageRef: remoteImageRef,
+      imageRef: images[0].remoteRef,
       hostPort,
       containerPort,
       sidecar,
+      web: web ? { imageRef: images[1].remoteRef, containerPort: web.containerPort } : undefined,
       serviceModes: options?.serviceModes,
       previousCompose: existsSync(join(artifactDir, 'compose.yml')) ? readFileSync(join(artifactDir, 'compose.yml'), 'utf8') : undefined,
     })
@@ -267,6 +309,13 @@ export function createDockerSshProvider(
     const uploadComposeResult = await ssh.upload(composePath, `${remoteDir}/compose.yml`)
     if (!uploadComposeResult.success)
       return err(uploadComposeResult.error)
+    if (webProxy) {
+      const proxyPath = join(artifactDir, 'web.conf')
+      writeFileSync(proxyPath, webProxy)
+      const uploadedProxy = await ssh.upload(proxyPath, `${remoteDir}/web.conf`)
+      if (!uploadedProxy.success)
+        return uploadedProxy
+    }
     const uploadEnvResult = await ssh.upload(envPath, `${remoteDir}/.env.runtime`)
     if (!uploadEnvResult.success)
       return err(uploadEnvResult.error)
@@ -290,12 +339,12 @@ export function createDockerSshProvider(
     if (!upResult.success)
       return err(upResult.error)
     // 清理远程镜像 tar，节省空间（失败不阻断部署）
-    await ssh.exec(`rm -f -- ${shellArgument(remoteTar)}`)
+    await ssh.exec(`rm -f -- ${images.map((_, index) => shellArgument(`${remoteDir}/image-${index}.tar`)).join(' ')}`)
 
     // 11. 健康检查
-    const url = `http://${config.ssh.host}:${hostPort}`
     logger.info('Running health check', { url })
-    const healthy = await healthCheck(`${url}${scan.isSvelteKit ? '/' : '/health'}`)
+    const healthy = await healthCheck(`${url}${!web && scan.isSvelteKit ? '/' : '/health'}`)
+      && (!web || (await healthCheck(`${url}/_hai/web-health`) && await healthCheck(`${url}/`)))
     if (!healthy) {
       return err(
         HaiDeployError.HEALTH_CHECK_FAILED,

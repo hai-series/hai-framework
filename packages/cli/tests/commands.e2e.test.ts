@@ -1093,7 +1093,8 @@ describe('createProject — fullstack 类型', () => {
     expect(dockerfile).toContain('COPY --from=embedded-data --chown=node:node / /app/data/')
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
-    expect(dockerfile.indexOf('pnpm fetch')).toBeLessThan(dockerfile.indexOf('COPY . .'))
+    // file: 包归档是离线交付材料，fetch 前必须已在构建上下文内。
+    expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
     expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts'))
     expect(dockerfile).not.toContain('ARG PUBLIC_API_BASE')
     expect(dockerfile).toContain('NGINX_ENVSUBST_OUTPUT_DIR=/tmp/hai-runtime-config')

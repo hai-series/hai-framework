@@ -2024,6 +2024,46 @@
     "constraint": "字符串；格式 uri"
   },
   {
+    "name": "HAI_DEPLOY_CONTAINER_WEB",
+    "module": "deploy",
+    "path": "deploy.container.web",
+    "description": "一并部署的 Nginx 静态 Web 镜像；省略时只部署当前服务。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_WEB_CONTAINERPORT",
+    "module": "deploy",
+    "path": "deploy.container.web.containerPort",
+    "description": "Web 容器监听端口；使用部署目标的 hostPort 对外提供同源 Web/API。",
+    "value": "8080",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_WEB_CONTEXT",
+    "module": "deploy",
+    "path": "deploy.container.web.context",
+    "description": "Web 构建上下文，相对于当前部署服务包，例如 fullstack 的 ../..。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_WEB_DOCKERFILE",
+    "module": "deploy",
+    "path": "deploy.container.web.dockerfile",
+    "description": "相对于 Web 构建上下文的 Dockerfile 路径。",
+    "value": "Dockerfile",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_WEB_TARGET",
+    "module": "deploy",
+    "path": "deploy.container.web.target",
+    "description": "Web 镜像的 Dockerfile target。",
+    "value": "web",
+    "constraint": "字符串；正则 ^[a-z][\\w-]*$"
+  },
+  {
     "name": "HAI_DEPLOY_ENVIRONMENT",
     "module": "deploy",
     "path": "deploy.environment",

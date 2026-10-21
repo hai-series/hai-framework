@@ -18,7 +18,7 @@ Deployment SDK used by the `hai deploy` command in `@h-ai/cli`. It also runs ind
 - Compose supports PostgreSQL, MySQL, Redis, RustFS/MinIO, Qdrant, pgvector, Chroma, OpenLDAP and Mailpit. SQLite, memory, local and LanceDB use their respective local storage. Mailpit captures test mail only.
 - Cloud provisioning supports Neon, Upstash, Cloudflare R2, Resend and Alibaba Cloud SMS. R2 needs existing S3 credentials, Resend a verified sender domain, and SMS approved signatures/templates. Use custom connections for other backends.
 
-**Fullstack API and Web are separate deployments.** `hai deploy packages/my-app-serv` deploys the API only. The root template Dockerfile has `runtime` and `web` targets for API and static Web images. Upload and run Web separately, setting `PUBLIC_API_BASE` and API CORS. There is no command to publish both together, nor automatic domain, TLS or reverse proxy configuration.
+**One fullstack command deploys API and Web together.** Templates with deploy and Web enabled generate `container.web` in the service configuration. `hai deploy packages/my-app-serv` builds/uploads both images into one Compose deployment. Web owns the public port and proxies the internal API on the same origin, using the actual API prefix and preserving page reloads. Without Web configuration, single-service behavior is retained. Prepare domains and TLS separately.
 
 ## Command-line deployment
 
@@ -52,6 +52,11 @@ provider:
 container:
   runtime: docker
   s3Engine: rustfs
+  web:
+    context: ../..
+    dockerfile: Dockerfile
+    target: web
+    containerPort: 8080
 services: {}
 ```
 
@@ -65,7 +70,7 @@ Alternatively, the wizard asks for missing target details, saves them in `.env.l
 
 Precedence: `.env` → `.env.<mode>` → `.env.local` → process environment. Parent JSON such as `HAI_DB` overrides child variables. `.env.example` documents all fields and enums. Commit `.env` and `.env.dev/test/prod`; keep real credentials in `.env.local`. Fullstack's first start also needs a private `HAI_ADMIN_DEFAULT_PASSWORD` satisfying the IAM password policy.
 
-Fullstack production also requires an explicit Web Origin in `.env.prod`, such as `HAI_SERV_CORS_ORIGIN=https://app.hai.internal`; the default `*` prevents production startup. Production refresh cookies use Secure, so Web/API need trusted HTTPS endpoints. Exposing HTTP ports alone does not validate complete login/session refresh.
+Joint deployment fills missing/wildcard CORS with the public origin and preserves explicit origins. For a production HTTPS endpoint, set `HAI_SERV_CORS_ORIGIN=https://app.hai.internal` in `.env.prod`. Production refresh cookies use Secure, so Web/API need trusted HTTPS endpoints. Exposing HTTP ports alone does not validate complete login/session refresh.
 
 ### 3. Deploy
 
@@ -89,11 +94,11 @@ pnpm.cmd exec hai deploy packages/my-app-serv --env prod --env-dir . --yes --ski
 
 ## docker-ssh execution and files
 
-1. Use the target package's Dockerfile, or generate a fallback with the workspace root as context. Fullstack service packages use the fallback by default, not the root Web target.
-2. Build the image locally and export a tar with `docker/podman save`.
+1. Use the API package Dockerfile or a fallback. Explicit `container.web` selects the Web context relative to the service package, Dockerfile relative to that context, target and internal port. Neighboring applications are not guessed.
+2. Build/export both images with one deployment ID before uploading anything. A Web build failure leaves the remote deployment untouched.
 3. Check the remote engine and Compose over SSH, upload the tar with SCP, then run `load` remotely.
-4. Generate `compose.yml`, `.env.runtime` and `start-<mode>.sh` locally and upload each to `<baseDir>/<projectName>-<mode>/`. These are separate from the image archive; no single Compose bundle is uploaded and no source build runs on Linux.
-5. The remote script sets `HAI_DEPLOY_ENVIRONMENT`/`HAI_CORE_ENV` and runs `compose --env-file .env.runtime ... up -d`. The SDK checks native `/health` or SvelteKit `/` from the local machine before succeeding.
+4. Generate `compose.yml`, `.env.runtime`, `start-<mode>.sh` and, for joint deployment, `web.conf` locally and upload each to `<baseDir>/<projectName>-<mode>/`. These are separate from the image archive; no single Compose bundle is uploaded and no source build runs on Linux.
+5. The remote script sets `HAI_DEPLOY_ENVIRONMENT`/`HAI_CORE_ENV` and runs `compose --env-file .env.runtime ... up -d`. Joint deployment checks API `/health`, Web `/_hai/web-health` and the home page before succeeding; standalone SvelteKit checks `/`. Web never mounts the private API `.env.runtime`.
 
 Local artifacts live in the target package's Git-ignored `.hai/deploy/<mode>/`. Remote `.env.runtime` uses mode `600`. Retain local artifacts for repeat deployment: keep unchanged preserves services/volumes from the previous local Compose, not arbitrary server-side Compose definitions. Exclude private environment files and deployment archives from image contexts.
 
@@ -133,16 +138,9 @@ Import the archive into the offline Windows Linux engine with `docker load -i my
 FROM my-app-api:offline
 ```
 
-Add a service-package `.dockerignore` containing `*`. This makes the SDK's mandatory build reuse the finished API without package installation. Rebuild the finished image after source changes. Configure the target, then run the deployment command above. To create middleware containers, select `HAI_DB_TYPE=postgresql`, `HAI_CACHE_TYPE=redis`, `HAI_STORAGE_TYPE=s3` in `.env.prod` and choose defaults in the wizard. For existing services, enter custom connections; once complete, `--skip-middleware` is available. The SDK uploads the API image. Rehearse with internet disconnected to confirm the builder needs no network.
+Add a service-package `.dockerignore` containing `*`. At the workspace root, create `Web.offline.Dockerfile` containing `FROM my-app-web:offline AS web`, plus `Web.offline.Dockerfile.dockerignore` containing `*`. Set `HAI_DEPLOY_CONTAINER_WEB_DOCKERFILE=Web.offline.Dockerfile` in `.env.local` to reuse the generated Web configuration; older projects first need the `container.web` YAML above. This makes the SDK's mandatory build reuse the finished API without package installation. Rebuild the finished image after source changes. Configure the target, then run the deployment command above. To create middleware containers, select `HAI_DB_TYPE=postgresql`, `HAI_CACHE_TYPE=redis`, `HAI_STORAGE_TYPE=s3` in `.env.prod` and choose defaults in the wizard. For existing services, enter custom connections; once complete, `--skip-middleware` is available. The SDK uploads and starts both images. Rehearse with internet disconnected to confirm the builder needs no network.
 
-Transfer the Web image separately. This example assumes separately prepared internal TLS endpoints `https://app.hai.internal` and `https://api.hai.internal`, proxying Web port 18081 and API port 18080. Bring proxy configuration/images and certificates, configure internal DNS/hosts and client certificate trust, then run over SSH:
-
-```sh
-docker load -i /path/to/my-app-images.tar
-docker run -d --name my-app-web-prod --restart unless-stopped -p 18081:8080 -e PUBLIC_API_BASE=https://api.hai.internal my-app-web:offline
-```
-
-Use a browser-reachable API URL and set API `HAI_SERV_CORS_ORIGIN=https://app.hai.internal`. Verify API `/health`, Web login/business requests, hash-route reload, session refresh, restarts and persistence. These are preparation/adaptation instructions; online deployment tests do not prove offline acceptance.
+The same command publishes API/Web and returns the Web URL; no separate `docker run` is needed. For production, prepare an internal HTTPS endpoint proxying the public port, including proxy configuration/images, certificates, DNS/hosts and client trust. Browsers use one origin without a separate API domain. Verify health, login/business flows, hash/session reload, restarts and persistence. These adaptation instructions do not replace disconnected acceptance.
 
 Official references: Docker [save](https://docs.docker.com/reference/cli/docker/image/save/) / [load](https://docs.docker.com/reference/cli/docker/image/load/), [pnpm install](https://pnpm.io/cli/install), [Compose plugin installation](https://docs.docker.com/compose/install/linux/).
 
@@ -195,7 +193,7 @@ pnpm.cmd check:skills
 
 `src/deploy-scanner.ts` handles lockfile traversal, `deploy-middleware.ts` connection fields, `container/` engines/SSH/Compose, `providers/` deployment targets and `provisioners/` cloud resources. CLI prompts live in `../cli/src/commands/cli-deploy*.ts`. Changes to backends/configuration must update consumers, environment examples, tests and the [deployment skill](../cli/templates/skills/hai-deploy/SKILL.md).
 
-For deployment changes, also run CLI typecheck/lint/build/test and `pnpm.cmd --filter @h-ai/cli test:deploy-gates`: current package archives → generated fullstack → Podman/SSH → health, environment, login and repeat deployment. This needs a local engine and OpenSSH; first fixture setup downloads images and OS/Node dependencies, so it is not an offline acceptance test. Template changes also require `pnpm.cmd --filter @h-ai/cli test:scaffold-gates`. Unit tests do not prove cloud resource creation; validate paid cloud operations separately. Keep logs/screenshots/reports in Git-ignored `tmp/` or `test-results/`.
+For deployment changes, also run CLI typecheck/lint/build/test and `pnpm.cmd --filter @h-ai/cli test:deploy-gates`: current package archives → generated fullstack → Podman/SSH → joint API/Web deployment → browser directly against remote Web → health, environment, login and repeat deployment, without a local preview. This needs a local engine and OpenSSH; first fixture setup downloads images and OS/Node dependencies, so it is not an offline acceptance test. Template changes also require `pnpm.cmd --filter @h-ai/cli test:scaffold-gates`. Unit tests do not prove cloud resource creation; validate paid cloud operations separately. Keep logs/screenshots/reports in Git-ignored `tmp/` or `test-results/`.
 
 ## License
 

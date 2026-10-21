@@ -18,7 +18,7 @@
 - Compose は PostgreSQL、MySQL、Redis、RustFS/MinIO、Qdrant、pgvector、Chroma、OpenLDAP、Mailpit に対応します。SQLite、memory、local、LanceDB はそれぞれのローカル保存方式を使います。Mailpit はテストメール捕捉専用です。
 - クラウド作成は Neon、Upstash、Cloudflare R2、Resend、Alibaba Cloud SMS に対応します。R2 は既存の S3 鍵、Resend は検証済み送信ドメイン、SMS は承認済み署名・テンプレートが必要です。他はカスタム接続を使います。
 
-**fullstack の API と Web は別々にデプロイします。** `hai deploy packages/my-app-serv` は API のみが対象です。ルート Dockerfile の `runtime` / `web` target で API / 静的 Web イメージをビルドできます。Web は別途転送・起動し、`PUBLIC_API_BASE` と API の CORS を設定します。同時公開コマンド、ドメイン・TLS・リバースプロキシの自動設定はありません。
+**fullstack は一度のコマンドで API と Web を公開します。** deploy と Web を選んだテンプレートはサービス設定に `container.web` を生成します。`hai deploy packages/my-app-serv` が両イメージをビルド・転送し、一つの Compose で起動します。公開ポートは Web に割り当て、内部 API を同一 Origin で代理し、実際の API プレフィックスとページ再読み込みに対応します。Web 未設定時は単一サービスの動作を維持します。ドメイン・TLS 入口は別途準備します。
 
 ## コマンドラインでの利用
 
@@ -52,6 +52,11 @@ provider:
 container:
   runtime: docker
   s3Engine: rustfs
+  web:
+    context: ../..
+    dockerfile: Dockerfile
+    target: web
+    containerPort: 8080
 services: {}
 ```
 
@@ -65,7 +70,7 @@ HAI_DEPLOY_PROVIDER='{"type":"docker-ssh","ssh":{"host":"10.0.0.20","port":22,"u
 
 上書き順は `.env` → `.env.<mode>` → `.env.local` → プロセス環境変数です。`HAI_DB` など親 JSON が子の変数より優先されます。`.env.example` に全項目・説明・列挙値を記載し、`.env` と `.env.dev/test/prod` は Git 登録、実際の認証情報は `.env.local` に保存します。fullstack 初回起動には IAM ポリシーを満たす非公開の `HAI_ADMIN_DEFAULT_PASSWORD` も必要です。
 
-fullstack 本番は `.env.prod` に `HAI_SERV_CORS_ORIGIN=https://app.hai.internal` など明示的な Web Origin が必要です。既定の `*` では本番起動に失敗します。本番 refresh Cookie は Secure のため、Web/API に信頼済み HTTPS 入口を準備します。HTTP ポートの公開だけでログイン・セッション更新まで検証済みとは判定できません。
+同時デプロイは未設定/ワイルドカード CORS を公開 Origin で補い、明示値は保持します。本番 HTTPS 入口は `.env.prod` に `HAI_SERV_CORS_ORIGIN=https://app.hai.internal` などを設定します。本番 refresh Cookie は Secure のため、Web/API に信頼済み HTTPS 入口を準備します。HTTP ポートの公開だけでログイン・セッション更新まで検証済みとは判定できません。
 
 ### 3. デプロイ
 
@@ -89,11 +94,11 @@ pnpm.cmd exec hai deploy packages/my-app-serv --env prod --env-dir . --yes --ski
 
 ## docker-ssh の処理とファイル
 
-1. 対象パッケージの Dockerfile を使います。なければ workspace ルートを context にする代替 Dockerfile を生成します。fullstack サービスの既定は代替で、ルートの Web target は使いません。
-2. ローカルでビルドし、`docker/podman save` で tar を作成します。
+1. API は対象パッケージの Dockerfile または代替を使います。Web は明示的な `container.web` で context（サービス基準）、Dockerfile（context 基準）、target、ポートを選び、隣接アプリを推測しません。
+2. 同じデプロイ ID で両イメージをビルド・エクスポートし、すべて成功してから転送します。Web ビルド失敗時は遠隔に触れません。
 3. SSH で遠隔エンジンと Compose を確認し、SCP で tar を転送、遠隔で `load` します。
-4. `compose.yml`、`.env.runtime`、`start-<mode>.sh` をローカル生成して個別に `<baseDir>/<projectName>-<mode>/` へ転送します。イメージとは別送で、Compose 全体の圧縮パッケージや Linux 上でのソースビルドではありません。
-5. 遠隔スクリプトが `HAI_DEPLOY_ENVIRONMENT` / `HAI_CORE_ENV` を設定し、`compose --env-file .env.runtime ... up -d` を実行します。SDK はローカルから Node の `/health` または SvelteKit の `/` を確認して成功を返します。
+4. `compose.yml`、`.env.runtime`、`start-<mode>.sh` と同時デプロイ用 `web.conf` をローカル生成して個別に `<baseDir>/<projectName>-<mode>/` へ転送します。イメージとは別送で、Compose 全体の圧縮パッケージや Linux 上でのソースビルドではありません。
+5. 遠隔スクリプトが `HAI_DEPLOY_ENVIRONMENT` / `HAI_CORE_ENV` を設定し、`compose --env-file .env.runtime ... up -d` を実行します。SDK は API `/health`、Web `/_hai/web-health` とホームを確認して成功を返します。単一 SvelteKit は `/` を確認します。Web に API の非公開 `.env.runtime` は渡しません。
 
 ローカル成果物は対象パッケージの Git 対象外 `.hai/deploy/<mode>/` に保存します。遠隔 `.env.runtime` は権限 `600` です。再デプロイ用にローカル成果物を保持してください。「変更しない」は前回のローカル Compose のサービス/ボリュームを維持するもので、任意の遠隔 Compose を読み込みません。非公開環境ファイル・デプロイアーカイブはイメージに含めません。
 
@@ -133,16 +138,9 @@ docker save -o my-app-images.tar my-app-api:offline my-app-web:offline
 FROM my-app-api:offline
 ```
 
-サービスパッケージに内容 `*` の `.dockerignore` を追加します。SDK の必須ビルドは完成 API を再利用し、パッケージを取得しません。ソース変更後は完成イメージを再作成します。接続先を設定して上記デプロイを実行してください。ミドルウェアコンテナを作成するなら `.env.prod` で `HAI_DB_TYPE=postgresql`、`HAI_CACHE_TYPE=redis`、`HAI_STORAGE_TYPE=s3` を選び、ウィザードで既定設定を使います。既存サービスはカスタム接続を設定し、完了後は `--skip-middleware` も使えます。API イメージは SDK が転送します。外部接続を切ったリハーサルで、ビルダーが通信不要であることを確認します。
+サービスパッケージに内容 `*` の `.dockerignore` を追加します。ルートに `FROM my-app-web:offline AS web` の `Web.offline.Dockerfile` と内容 `*` の `Web.offline.Dockerfile.dockerignore` を用意します。`.env.local` の `HAI_DEPLOY_CONTAINER_WEB_DOCKERFILE=Web.offline.Dockerfile` で生成済み設定を再利用します。旧プロジェクトは先に上記 `container.web` YAML を追加します。SDK の必須ビルドは完成 API を再利用し、パッケージを取得しません。ソース変更後は完成イメージを再作成します。接続先を設定して上記デプロイを実行してください。ミドルウェアコンテナを作成するなら `.env.prod` で `HAI_DB_TYPE=postgresql`、`HAI_CACHE_TYPE=redis`、`HAI_STORAGE_TYPE=s3` を選び、ウィザードで既定設定を使います。既存サービスはカスタム接続を設定し、完了後は `--skip-middleware` も使えます。API/Web 両イメージを SDK が転送・起動します。外部接続を切ったリハーサルで、ビルダーが通信不要であることを確認します。
 
-Web イメージは別途転送します。以下は内網 TLS 入口 `https://app.hai.internal` / `https://api.hai.internal` が準備済みで、それぞれ Web 18081 / API 18080 を代理する前提です。プロキシ設定/イメージ・証明書を持ち込み、内部 DNS/hosts とクライアントの信頼を設定してから SSH で実行します。
-
-```sh
-docker load -i /path/to/my-app-images.tar
-docker run -d --name my-app-web-prod --restart unless-stopped -p 18081:8080 -e PUBLIC_API_BASE=https://api.hai.internal my-app-web:offline
-```
-
-API URL はブラウザーから到達可能にし、API に `HAI_SERV_CORS_ORIGIN=https://app.hai.internal` を設定します。API `/health`、Web ログイン/業務、hash ページ再読み込み、セッション更新、再起動・永続化を確認します。これは材料と適応方法の説明で、オンライン試験は実際のオフライン検証の代わりにはなりません。
+同じコマンドが API/Web を公開し、Web URL を返します。別の `docker run` は不要です。本番には公開ポートを代理する内網 HTTPS 入口を用意し、プロキシ設定/イメージ・証明書・DNS/hosts・クライアント信頼を準備します。ブラウザーは同一 Origin を使い、別 API ドメインは不要です。ヘルス・ログイン/業務・hash/セッション更新・再起動・永続化を確認します。この説明は実際のオフライン検証の代わりにはなりません。
 
 公式資料：[Docker save](https://docs.docker.com/reference/cli/docker/image/save/) / [load](https://docs.docker.com/reference/cli/docker/image/load/)、[pnpm install](https://pnpm.io/cli/install)、[Compose プラグイン](https://docs.docker.com/compose/install/linux/)。
 
@@ -195,7 +193,7 @@ pnpm.cmd check:skills
 
 `src/deploy-scanner.ts` が lockfile 走査、`deploy-middleware.ts` が接続項目、`container/` がエンジン・SSH・Compose、`providers/` がデプロイ先、`provisioners/` がクラウド作成を担当します。CLI ウィザードは `../cli/src/commands/cli-deploy*.ts` です。バックエンド/設定変更時は利用側、環境例、テスト、[デプロイ skill](../cli/templates/skills/hai-deploy/SKILL.md) を同期します。
 
-処理変更後は CLI の typecheck/lint/build/test と `pnpm.cmd --filter @h-ai/cli test:deploy-gates` を実行します。現在のパッケージから fullstack を生成し、Podman/SSH でヘルス・環境・ログイン・再デプロイを確認します。ローカルエンジンと OpenSSH が必要で、初回はイメージ・OS/Node 依存を取得するためオフライン検証ではありません。テンプレート変更時は `pnpm.cmd --filter @h-ai/cli test:scaffold-gates` も実行します。単体テストでクラウド作成済みとは判定せず、有料操作は別途検証します。ログ・画像・報告は Git 対象外の `tmp/` / `test-results/` に保存します。
+処理変更後は CLI の typecheck/lint/build/test と `pnpm.cmd --filter @h-ai/cli test:deploy-gates` を実行します。現在のパッケージから fullstack を生成し、Podman/SSH で API/Web を同時公開し、ローカル preview を起動せず遠隔 Web でヘルス・環境・ログイン・再デプロイを確認します。ローカルエンジンと OpenSSH が必要で、初回はイメージ・OS/Node 依存を取得するためオフライン検証ではありません。テンプレート変更時は `pnpm.cmd --filter @h-ai/cli test:scaffold-gates` も実行します。単体テストでクラウド作成済みとは判定せず、有料操作は別途検証します。ログ・画像・報告は Git 対象外の `tmp/` / `test-results/` に保存します。
 
 ## License
 

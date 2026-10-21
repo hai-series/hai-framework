@@ -261,7 +261,7 @@ node packages/cli/dist/index.js create ../my-new-project
 
 配置已完备时可在向导中选择“直接部署”，或执行 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`，跳过全部中间件提示、配置写入和资源开通。部署目标缺失时引导填写 SSH/Vercel 参数；SSH 地址、端口、密钥路径、远程目录及 Token 只保存到被 Git 忽略的 `.env.local`，下次自动复用。可编辑其中的 `HAI_DEPLOY_PROVIDER` 更新目标；私钥只填写路径。
 
-fullstack 的命令只部署指定 API 包，Web 需单独发布。docker-ssh 在本地构建镜像，经 SCP 上传镜像 tar、Compose、运行环境和启动脚本，在远程加载启动；`--skip-build` 不跳过容器构建。Node 20 / pnpm 9.5.0 不受支持。具体命令、离线材料及 Web 发布步骤见 [deploy 使用说明](../deploy/README.md)，中间件字段见 [环境与中间件](templates/skills/hai-deploy/middleware.md)。部署回归执行 `pnpm --filter @h-ai/cli test:deploy-gates`。
+fullstack 选择 Web 和 deploy 后，`hai deploy packages/my-app-serv --env prod` 会按生成的 `container.web` 同时发布 API/Web，公开端口通过同源代理访问内部 API；未配置 Web 时只发布当前服务。docker-ssh 在本地构建镜像，经 SCP 上传镜像 tar、Compose、运行环境和启动脚本，在远程加载启动；`--skip-build` 不跳过容器构建。具体命令、离线材料及 Web 发布步骤见 [deploy 使用说明](../deploy/README.md)，中间件字段见 [环境与中间件](templates/skills/hai-deploy/middleware.md)。部署回归执行 `pnpm --filter @h-ai/cli test:deploy-gates`。
 
 失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
 

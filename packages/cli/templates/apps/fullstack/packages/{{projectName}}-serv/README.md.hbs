@@ -35,6 +35,13 @@ CLI 已生成根目录 `.env.local`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项�
 
 ## 容器运行
 
+{{#if features.deploy}}
+{{#if fullstack.frontends.web}}
+从工程根运行 `hai deploy packages/{{projectName}}-serv --env prod --env-dir .`，按 `config/_deploy.yml` 的 `container.web` 同时构建、上传并启动 API/Web。公开端口提供 Web 与同源 API，返回的 URL 可直接打开页面；已有中间件配置完整时加 `--skip-middleware`。生产 HTTPS 入口与明确 Origin 按实际环境配置，凭据保存 `.env.local`。无 Web 配置时只部署服务。
+
+{{/if}}
+{{/if}}
+
 - 根目录 `pnpm docker:build` / `pnpm podman:build` 直接生成本服务镜像；Web 使用独立的 `docker:build:web` / `podman:build:web` 镜像。
 - 服务镜像直接由 `@h-ai/serv` 对外监听，配置挂载点为 `/app/config`，数据目录为 `/app/data`，不包含额外转发进程。
 - Web 镜像不烘焙 API 地址；启动时使用 `-e PUBLIC_API_BASE=https://api.example.com` 注入，同一镜像可部署到不同环境。未设置时 Web 默认请求自身 origin。

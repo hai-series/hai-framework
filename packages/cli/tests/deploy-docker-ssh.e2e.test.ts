@@ -55,7 +55,7 @@ const FIXTURE_IMAGE = 'hai-deploy-e2e-fixture:latest'
 const SSH_PORT = 2222
 const HOST_PORT = 18080
 // 生成应用 Dockerfile 依赖的基础镜像（受限网络下按镜像预拉取）
-const BASE_IMAGES = ['python:3.11-slim', 'node:24-bookworm-slim']
+const BASE_IMAGES = ['python:3.11-slim', 'node:24-bookworm-slim', 'nginxinc/nginx-unprivileged:1.29-alpine']
 
 // 夹具：Debian + sshd + podman + podman-compose（嵌套 podman 运行远程 compose）；
 // nftables/iptables 供 netavark 网络；cgroupfs 与 --cgroupns=host 配合使嵌套 podman 可建 pod。
@@ -101,7 +101,7 @@ function run(command: string, args: string[], cwd?: string, env?: NodeJS.Process
   }
 }
 
-/** 在真实 SSH 部署的 API 上运行生成项目自带的浏览器业务用例；只移除本地 API 启动器。 */
+/** 浏览器直接访问 SSH 服务器上的 Web/API；不启动本地预览或本地 API。 */
 function verifyDeployedBrowser(metadata: { name: string, version: string, env: string }): void {
   const local = parseEnv(readFileSync(path.join(appDir, '.env.local'), 'utf8'))
   const evidence = path.resolve('test-results/deploy-fullstack')
@@ -112,15 +112,13 @@ function verifyDeployedBrowser(metadata: { name: string, version: string, env: s
     HAI_CORE_ENV: metadata.env,
     E2E_ADMIN_PASSWORD: local.HAI_ADMIN_DEFAULT_PASSWORD,
     SERVICE_BASE_URL: `http://127.0.0.1:${HOST_PORT}`,
-    // 使用模板自带的同源预览代理，API 仍指向真实 SSH 容器；无需放宽凭据 Cookie 的 CORS。
     PUBLIC_API_BASE: '',
-    BASE_URL: 'http://127.0.0.1:18181',
+    BASE_URL: `http://127.0.0.1:${HOST_PORT}`,
     HAI_AUTH_EVIDENCE_DIR: evidence,
   }
   const command = process.platform === 'win32' ? 'cmd.exe' : 'pnpm'
   const args = (items: string[]) => process.platform === 'win32' ? ['/d', '/s', '/c', `pnpm.cmd ${items.join(' ')}`] : items
-  run(command, args(['build']), appDir, env)
-  writeFileSync(path.join(appDir, 'playwright.deploy.config.ts'), `import config from './playwright.config.js'\nexport default { ...config, webServer: Array.isArray(config.webServer) ? config.webServer.slice(1) : [] }\n`)
+  writeFileSync(path.join(appDir, 'playwright.deploy.config.ts'), `import config from './playwright.config.js'\nexport default { ...config, webServer: [] }\n`)
   try {
     const output = run(command, args(['exec', 'playwright', 'test', '--config', 'playwright.deploy.config.ts']), appDir, env)
     writeFileSync(path.join(evidence, 'playwright.log'), output)
@@ -330,7 +328,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
     const serviceDir = path.join(appDir, 'packages/e2e-fullstack-serv')
     const deployConfig = {
       provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: SSH_PORT, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { type: 'port', containerPort: 3000, hostPort: HOST_PORT } },
-      container: { runtime, httpProxy: false, ...(SQLITE_MIRROR ? { sqlitePrebuildMirror: SQLITE_MIRROR } : {}) },
+      container: { runtime, httpProxy: false, web: { context: '../..', dockerfile: 'Dockerfile', target: 'web', containerPort: 8080 }, ...(SQLITE_MIRROR ? { sqlitePrebuildMirror: SQLITE_MIRROR } : {}) },
     }
     writeFileSync(path.join(appDir, '.env.local'), `${readFileSync(path.join(appDir, '.env.local'), 'utf8')}\nHAI_DEPLOY_PROVIDER='${JSON.stringify(deployConfig.provider)}'\n`)
     writeFileSync(path.join(serviceDir, 'config/_deploy.yml'), stringify(deployConfig))
@@ -364,6 +362,10 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       await deployCommand({ appDir: path.join(appDir, 'packages/e2e-fullstack-serv'), env: 'test', yes: true, skipMiddleware: attempt > 0 })
       const response = await fetch(`http://127.0.0.1:${HOST_PORT}/health`, { signal: AbortSignal.timeout(10_000) })
       expect(response.ok).toBe(true)
+      const web = await fetch(`http://127.0.0.1:${HOST_PORT}/`)
+      expect(web.headers.get('content-type')).toContain('text/html')
+      expect(await web.text()).toContain('runtime-config.js')
+      expect((await fetch(`http://127.0.0.1:${HOST_PORT}/_hai/web-health`)).ok).toBe(true)
       const client = crypto.transport.createClient({ keyExchangeUrl: `http://127.0.0.1:${HOST_PORT}/api/v1/_hai/key-exchange`, fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }) })
       const info = await client.encryptedFetch(`http://127.0.0.1:${HOST_PORT}/api/v1/app/info`, { method: 'POST' })
       const details = await info.json() as { success: boolean, data: { name: string, version: string, env: string } }
@@ -374,6 +376,10 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       expect(await login.json()).toMatchObject({ success: true })
       client.destroy()
       const artifactDir = path.join(appDir, 'packages/e2e-fullstack-serv/.hai/deploy/test')
+      const compose = parse(readFileSync(path.join(artifactDir, 'compose.yml'), 'utf8'))
+      expect(compose.services.app.ports).toBeUndefined()
+      expect(compose.services.web.ports).toEqual([`${HOST_PORT}:8080`])
+      expect(compose.services.web.env_file).toBeUndefined()
       expect(readFileSync(path.join(artifactDir, 'start-test.sh'), 'utf8')).toContain('HAI_DEPLOY_ENVIRONMENT=test')
       expect(readFileSync(path.join(appDir, '.env.test'), 'utf8')).not.toContain(String(local.HAI_ADMIN_DEFAULT_PASSWORD))
     }

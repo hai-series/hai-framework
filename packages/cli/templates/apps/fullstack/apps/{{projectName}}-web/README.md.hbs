@@ -14,6 +14,11 @@
 
 ## 编译、打包与部署
 
+{{#if features.deploy}}
+全栈联合发布在工程根执行 `hai deploy packages/{{projectName}}-serv --env prod --env-dir .`。生成的服务配置 `container.web` 使同一命令发布 API/Web，公开 Web 入口同源代理 API，无需另发 Web。下列 package/deploy 脚本用于本端静态产物，独立于联合发布。
+
+{{/if}}
+
 ```bash
 # 开发预览，默认端口 {{fullstack.ports.web}}
 pnpm --filter {{projectName}}-web dev

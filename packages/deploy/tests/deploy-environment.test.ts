@@ -32,6 +32,13 @@ it('resolves object overrides and special characters without interpolating raw Y
   expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER: '{"type":"docker-ssh","ssh":{"host":"host"}}' })).toMatchObject({ success: true, data: { provider: { type: 'docker-ssh', ssh: { host: 'host' } } } })
 })
 
+it('loads a wildcard CORS fallback as a literal string while retaining numeric and boolean types', () => {
+  const file = join(fixture(), '_serv.yml')
+  writeFileSync(file, `cors:\n  origin: \${HAI_SERV_CORS_ORIGIN:*}\n  credentials: \${HAI_SERV_CORS_CREDENTIALS:true}\nserver:\n  port: \${HAI_SERV_SERVER_PORT:3000}\n`)
+  expect(loadDeploymentConfig('serv', file, {})).toMatchObject({ success: true, data: { cors: { origin: '*', credentials: true }, server: { port: 3000 } } })
+  expect(loadDeploymentConfig('serv', file, { HAI_SERV_CORS_ORIGIN: '*' })).toMatchObject({ success: true, data: { cors: { origin: '*' } } })
+})
+
 it('uses process > local > selected environment > base, with an explicit deployment marker', () => {
   const envDir = fixture()
   writeFileSync(join(envDir, '.env'), 'HAI_DB_TYPE=sqlite\nHAI_CACHE_TYPE=memory\n')
