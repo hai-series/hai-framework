@@ -46,6 +46,12 @@ function makeScan(
 }
 
 describe('buildRuntimeEnv 按功能追加 sidecar', () => {
+  it('does not create middleware credentials when every service is kept unchanged', () => {
+    const scan = makeScan(['db', 'cache', 'storage'], { db: 'postgresql', cache: 'redis', storage: 's3' })
+    const { sidecar } = buildRuntimeEnv(tmpDir, 'direct', scan, {}, 3000, { serviceModes: { db: 'keep', cache: 'keep', storage: 'keep' } })
+    expect(sidecar.services).toEqual([])
+    expect(fs.existsSync(path.join(tmpDir, '.hai'))).toBe(false)
+  })
   it('handles SMTP providers independently and leaves kept/HTTP providers unchanged', () => {
     const scan = makeScan(['email'], { email: 'api' })
     scan.middlewares = ['console', 'smtp', 'smtp', 'api'].map((backend, index) => ({ service: 'email', backend, source: '@h-ai/reach', configName: 'reach', configPath: ['providers', String(index)], envPrefix: `HAI_REACH_PROVIDERS_${index}`, config: { name: `provider-${index}`, type: backend } }))

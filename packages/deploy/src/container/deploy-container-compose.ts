@@ -294,6 +294,9 @@ export function planSidecars(
     dependsOn: [],
     secrets: [],
   }
+  // 全部保持不变时，连默认中间件凭据文件也不读取或创建。
+  if (!scan.requiredServices.some(service => usesDefaultMiddleware(scan, service, options)))
+    return plan
   const secrets = resolveSidecarSecrets(appDir, projectName)
   const net = ['hai-app']
   const backends = scan.serviceBackends
