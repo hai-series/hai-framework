@@ -110,7 +110,7 @@ transport:
 桌面端初始化入口在 `src/lib/api.ts`，调用顺序为：
 
 1. 读取 `PUBLIC_API_BASE`
-2. 构建期通过 core 解析 `config/_crypto.yml` 的环境引用，仅向浏览器注入公开传输路径
+2. 构建期通过 core 解析 `config/_crypto.yml` 的公开默认值；开发与预览才读取环境文件
 3. 若启用 transport，则先 `crypto.init()`
 4. 再 `desktopApiClient.init({ baseUrl, transport, auth })`
 
@@ -133,7 +133,7 @@ pnpm --filter desktop-app build
 
 ## 原生交付与验收
 
-桌面端原生打包独立于 Web 构建：`build` 仅产出 Vite 静态资源，`tauri:build` 才生成安装包。CI 的 [`native.yml`](../../.github/workflows/native.yml) 在 Windows 上安装锁定依赖、构建共享包后执行 Tauri 构建，并按 `PUBLIC_API_BASE` 同步 CSP `connect-src` 与应用版本；打包成功不代替安装后的行为验收。
+桌面端原生打包独立于 Web 构建：`pnpm build` 默认编译资源，`pnpm build --target desktop` 调用 Tauri 生成安装包。CI 的 [`native.yml`](../../.github/workflows/native.yml) 在 Windows 上安装锁定依赖、构建共享包后调用相同入口，不接收部署环境或 API 地址。API Origin 与 CSP 在程序启动时注入；打包成功不代替安装后的行为验收。
 
 | 平台        | 必需环境                             | 构建入口                                | 产物                                               |
 | ----------- | ------------------------------------ | --------------------------------------- | -------------------------------------------------- |
@@ -158,3 +158,5 @@ Windows 可用 NSIS `/S /D=<绝对路径>` 在隔离目录静默安装。每次�
 MIT
 
 LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
+
+原生安装包不烘焙环境地址；启动前设置进程 `PUBLIC_API_BASE=https://server.example/api/v1`，Rust 校验后注入页面并将该 Origin 加入 CSP，缺省为 http://localhost:3000/api/v1。

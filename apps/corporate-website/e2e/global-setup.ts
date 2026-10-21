@@ -19,6 +19,10 @@ function getE2EDataDirs() {
 }
 
 export default function globalSetup() {
+  // 统一入口提供的是本轮新目录，webServer 已打开数据库；它由入口在服务退出后清理。
+  const managedRoot = process.env.HAI_E2E_DATA_ROOT
+  if (managedRoot && path.basename(managedRoot).startsWith('hai-browser-e2e-'))
+    return
   for (const dataDir of getE2EDataDirs()) {
     if (fs.existsSync(dataDir)) {
       try {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type ClientInitResult = { success: true, data: undefined } | { success: false, error: { code: string, message: string } }
 
@@ -45,6 +45,14 @@ describe('desktop api bootstrap', () => {
     createdClient.init.mockClear()
     createdClient.init.mockResolvedValue({ success: true, data: undefined })
     createdClient.close.mockClear()
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('原生端使用运行期注入地址，不需要为部署环境重新构建', async () => {
+    vi.stubGlobal('__HAI_PUBLIC_CONFIG__', { apiBase: 'https://runtime.example.test/custom-api' })
+    const { initApi } = await import('../src/lib/api.js')
+    await initApi()
+    expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({ baseUrl: 'https://runtime.example.test/custom-api' }))
   })
 
   it('从 config/_crypto.yml 解析默认 transport 配置', async () => {

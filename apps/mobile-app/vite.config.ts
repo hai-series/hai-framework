@@ -11,9 +11,10 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
+import { publicRuntimeConfig } from '../../scripts/vite-runtime-config.js'
 
-export default defineConfig(({ mode }) => {
-  const envResult = core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+export default defineConfig(({ mode, command }) => {
+  const envResult = command === 'build' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data
@@ -23,6 +24,7 @@ export default defineConfig(({ mode }) => {
     envDir: false,
     envPrefix: ['VITE_', 'PUBLIC_'],
     plugins: [
+      publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE, apiTransport: process.env.PUBLIC_API_TRANSPORT, apiKeyExchangePath: process.env.PUBLIC_API_KEY_EXCHANGE_PATH }),
       sveltekit(),
       tailwindcss(),
       paraglideVitePlugin({

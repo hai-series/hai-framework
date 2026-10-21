@@ -14,14 +14,15 @@ import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
+import { publicRuntimeConfig } from '../../scripts/vite-runtime-config.js'
 import { desktopBuildConfig } from './config-env.js'
 
 const host = process.env.TAURI_DEV_HOST
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode, command }) => ({
   envDir: false,
-  define: { __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig(mode) },
-  plugins: [svelte(), tailwindcss()],
+  define: { __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig(command === 'build' ? undefined : mode) },
+  plugins: [publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE }), svelte(), tailwindcss()],
 
   // Vite 选项专为 Tauri 调整
   clearScreen: false,

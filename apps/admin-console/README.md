@@ -83,7 +83,7 @@ pnpm --filter admin-console preview
 
 ## ⚙️ 配置
 
-本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod`、`build:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
 
 ### 环境变量
 
@@ -109,9 +109,8 @@ HAI_ADMIN_DEFAULT_PASSWORD=<change-me-to-a-strong-local-password>
 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，且环境变量优先于 YAML 值。
 例如 `_db.yml` 的 `database` 对应 `HAI_DB_DATABASE`，`_ai.yml` 的
 `llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`。camelCase key 不拆词。
-`config/_kit.yml` 在 Node 构建阶段加载环境引用并校验，公开的 transport 路径与开关
-同时供 `hooks.server.ts` 和浏览器 `apiFetch` 使用；浏览器不接收 server 字段。
-修改 transport 后需重启开发服务器或重新构建。
+`config/_kit.yml` 在服务启动时加载环境引用并校验，hooks 与 SSR 使用同一份 transport 配置。
+SSR 只向浏览器传递公开的路径与开关，不包含 server 字段；修改环境后重启服务即可，无需重建。
 
 ### 认证页面
 

@@ -8,9 +8,9 @@
 
 import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
-import { adminConsoleKitConfig } from '$lib/config/kit-config.js'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
+import { getAdminKitConfig } from '$lib/server/kit-config.js'
 import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -18,7 +18,7 @@ import { kit } from '@h-ai/kit'
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 let appInitPromise: Promise<void> | null = null
 
-const kitTransportConfig = adminConsoleKitConfig.transport
+const kitTransportConfig = getAdminKitConfig().transport
 const handleTransportConfig = kitTransportConfig === false
   ? false
   : {

@@ -14,6 +14,8 @@ const config = {
   compilerOptions: {
     runes: true,
   },
+  // 环境文件由 Vite 的 core loader 统一加载，构建不读取根目录私有配置。
+  kit: { env: { dir: './.svelte-kit' } },
 }
 
 export default config

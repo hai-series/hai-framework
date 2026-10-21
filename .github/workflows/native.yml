@@ -2,11 +2,6 @@ name: Native delivery
 
 on:
   workflow_dispatch:
-    inputs:
-      api_base:
-        description: HTTPS acceptance API URL including /api/v1
-        required: true
-        type: string
   pull_request:
     paths:
       - 'apps/desktop-app/**'
@@ -34,8 +29,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     env:
-      # PR 仅验证打包；example.invalid 明确不代表真实网络验收。
-      PUBLIC_API_BASE: ${{ inputs.api_base || 'https://example.invalid/api/v1' }}
       CI: true
     steps:
       - uses: actions/checkout@v6.1.0
@@ -58,14 +51,7 @@ jobs:
         shell: pwsh
         run: |
           rustup show
-          $apiOrigin = ([uri]$env:PUBLIC_API_BASE).GetLeftPart([System.UriPartial]::Authority)
-          if (-not $apiOrigin.StartsWith('https://')) { throw 'Acceptance API must use HTTPS' }
-          $config = Get-Content apps/desktop-app/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
-          $config.version = (Get-Content apps/desktop-app/package.json -Raw | ConvertFrom-Json).version
-          $config.app.security.csp = $config.app.security.csp.Replace("connect-src 'self'", "connect-src 'self' $apiOrigin")
-          New-Item -ItemType Directory -Force .cache/native | Out-Null
-          $config | ConvertTo-Json -Depth 12 | Set-Content .cache/native/tauri.json
-          pnpm --filter desktop-app exec tauri build --config "$((Resolve-Path .cache/native/tauri.json).Path)"
+          pnpm --filter desktop-app build --target desktop --platform windows --arch x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package Android debug APK
         if: matrix.platform == 'android'
@@ -99,6 +85,6 @@ jobs:
           if-no-files-found: error
           path: |
             .cache/native/result.txt
-            apps/desktop-app/src-tauri/target/release/bundle/nsis/*-setup.exe
+            apps/desktop-app/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
             apps/mobile-app/android/app/build/outputs/apk/debug/*.apk
             .cache/native/ios/Build/Products/Debug-iphonesimulator/App.app

@@ -58,7 +58,7 @@ export const mobileApiClient = apiClient.create(apiServiceContract)
 
 ## 配置
 
-本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod`、`build:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
 
 | 变量                           | 说明                                                       | 默认值                         |
 | ------------------------------ | ---------------------------------------------------------- | ------------------------------ |
@@ -72,6 +72,8 @@ Android 模拟器访问宿主机后端时通常使用：
 ```env
 PUBLIC_API_BASE=http://10.0.2.2:3000/api/v1
 ```
+
+`pnpm build` 不读取环境文件。浏览器开发/预览从 `/runtime-config.js` 读取公开 API 参数；Nginx 镜像在容器启动时生成同一文件，修改地址与传输开关无需重建。私有服务配置不会写入该文件。Capacitor 原生宿主需要在加载页面前提供相同公开配置，原生网络与安全存储仍需设备验收。
 
 ### 认证页面
 

@@ -25,16 +25,18 @@ async function createTokenStorage() {
 }
 
 function resolveApiBase(): string {
-  return import.meta.env.PUBLIC_API_BASE ?? DEFAULT_API_BASE
+  const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__
+  return runtime?.apiBase || import.meta.env.PUBLIC_API_BASE || DEFAULT_API_BASE
 }
 
 function resolveTransport() {
-  if (import.meta.env.PUBLIC_API_TRANSPORT === 'off')
+  const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiTransport?: string, apiKeyExchangePath?: string } }).__HAI_PUBLIC_CONFIG__
+  if ((runtime?.apiTransport || import.meta.env.PUBLIC_API_TRANSPORT) === 'off')
     return undefined
 
   return {
     crypto,
-    keyExchangePath: import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH ?? DEFAULT_KEY_EXCHANGE_PATH,
+    keyExchangePath: runtime?.apiKeyExchangePath || import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH || DEFAULT_KEY_EXCHANGE_PATH,
   }
 }
 

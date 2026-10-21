@@ -10,6 +10,8 @@ const config = {
     runes: true,
   },
   kit: {
+    // 环境文件由 Vite 的 core loader 统一加载；Kit 不再二次读取根目录私有配置。
+    env: { dir: './.svelte-kit' },
     adapter: adapter(),
     csrf: {
       trustedOrigins: process.env.HAI_E2E === '1'

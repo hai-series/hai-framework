@@ -607,6 +607,9 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -686,6 +689,9 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -786,6 +792,9 @@ importers:
       '@h-ai/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
@@ -857,6 +866,9 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -933,6 +945,9 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -1015,6 +1030,9 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -1118,6 +1136,9 @@ importers:
       '@capacitor/status-bar':
         specifier: 'catalog:'
         version: 8.0.4(@capacitor/core@8.5.3)
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core

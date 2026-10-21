@@ -19,8 +19,7 @@
     "dev": "vite",
     "dev:test": "vite dev --mode test",
     "dev:prod": "vite dev --mode prod",
-    "build": "vite build",
-    "build:prod": "vite build --mode prod",
+    "build": "hai build",
     "preview": "vite preview",
     "check": "pnpm typecheck",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
@@ -31,7 +30,8 @@
     "clean": "rimraf dist .turbo src-tauri/target",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "compile": "vite build"
   },
   "dependencies": {
     "@h-ai/api-client": "workspace:*",
@@ -42,6 +42,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/cli": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@iconify-json/tabler": "catalog:",
     "@iconify/tailwind4": "catalog:",

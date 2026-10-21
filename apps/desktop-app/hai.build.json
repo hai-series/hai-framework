@@ -1,0 +1,14 @@
+{
+  "images": [
+    {
+      "name": "app",
+      "context": "../..",
+      "dockerfile": "apps/desktop-app/Dockerfile",
+      "target": "runtime",
+      "containerPort": 8080
+    }
+  ],
+  "desktop": [
+    "."
+  ]
+}

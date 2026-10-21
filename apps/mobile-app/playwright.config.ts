@@ -1,3 +1,4 @@
+import path from 'node:path'
 import process from 'node:process'
 
 import { defineConfig, devices } from '@playwright/test'
@@ -7,7 +8,7 @@ const e2ePort = Number.isInteger(requestedPort) && requestedPort > 0 && requeste
 const baseURL = process.env.BASE_URL || `http://127.0.0.1:${e2ePort}`
 const servicePort = 12581
 const desktopPort = 12582
-const dataDir = `./data-e2e-iam-${Date.now()}`
+const dataDir = path.join(process.env.HAI_E2E_DATA_ROOT || '.', `data-e2e-iam-${Date.now()}`)
 const apiEnv = { PUBLIC_API_BASE: `http://127.0.0.1:${servicePort}/api/v1` }
 
 export default defineConfig({

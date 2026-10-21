@@ -1,0 +1,14 @@
+**/.env.*
+**/*.tar
+**/node_modules
+**/.hai
+**/data
+**/dist
+**/build
+**/coverage
+**/test-results
+**/playwright-report
+**/src-tauri/target
+.git
+.turbo
+tmp

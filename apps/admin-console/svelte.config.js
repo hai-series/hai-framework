@@ -17,6 +17,8 @@ const config = {
     runes: true,
   },
   kit: {
+    // 环境文件由 Vite 的 core loader 统一加载；Kit 不再二次读取根目录私有配置。
+    env: { dir: './.svelte-kit' },
     adapter: adapter(),
     // 使用 trustedOrigins 取代已弃用的 checkOrigin
     // E2E 场景允许本地测试域名

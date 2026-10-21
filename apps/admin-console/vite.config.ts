@@ -6,21 +6,25 @@
 
 import path from 'node:path'
 import process from 'node:process'
+import { core } from '@h-ai/core'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
-import { adminBuildConfig } from './config-env.js'
 
 const HAI_PACKAGE_REGEX = /@h-ai\//
 
-export default defineConfig(({ mode }) => {
-  const publicKitConfig = adminBuildConfig(mode)
+export default defineConfig(({ mode, command }) => {
+  if (command !== 'build') {
+    const env = core.config.loadEnvFiles({ mode })
+    if (!env.success)
+      throw new Error(env.error.message)
+    Object.assign(process.env, env.data)
+  }
 
   return {
     envDir: false,
-    define: { __ADMIN_KIT_CONFIG__: publicKitConfig },
     plugins: [
       sveltekit(),
       tailwindcss(),

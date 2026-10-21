@@ -27,6 +27,7 @@ describe('environment catalog', () => {
     const names = [...example.matchAll(/^# ([A-Z][A-Z0-9_]*)=/gm)].map(match => match[1])
     expect(new Set(names).size).toBe(names.length)
     expect(new Set(names)).toEqual(new Set(byName.keys()))
+    expect(byName.has('VITE_HAI_E2E_KIT_TRANSPORT_MODE')).toBe(false)
     for (const entry of catalog) {
       expect(entry.description).toBeTruthy()
       expect(entry.constraint).toBeTruthy()
@@ -75,8 +76,10 @@ describe('environment catalog', () => {
       for (const key of ['typecheck', 'lint', 'lint:fix', 'build', 'test', 'test:watch'])
         expect(manifest.scripts[key], `${app}: ${key}`).toBeTruthy()
       if (manifest.scripts['dev:test']) {
-        for (const key of ['dev:test', 'dev:prod', 'build:prod'])
+        for (const key of ['dev:test', 'dev:prod', 'compile'])
           expect(manifest.scripts[key], `${app}: ${key}`).toBeTruthy()
+        expect(manifest.scripts.build).toBe('hai build')
+        expect(manifest.scripts['build:prod']).toBeUndefined()
       }
     }
   })

@@ -4,17 +4,19 @@ import { core } from '@h-ai/core'
 import { DesktopCryptoConfigSchema } from './src/lib/crypto-config-schema.js'
 
 /**
- * 按 Vite mode 加载环境并解析公开传输配置。
- * @param mode - Vite 环境模式，例如 prod 或 test
+ * 解析公开传输配置；构建省略 mode，仅使用工程 YAML 默认值。
+ * @param mode - 开发/测试的 Vite 模式；构建不传入部署环境
  * @returns 供 Vite define 使用的 JSON 字面量
  * @throws YAML 无法加载时抛错，阻止产出错误的客户端包
- * @example define: { __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig('prod') }
+ * @example define: { __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig() }
  */
-export function desktopBuildConfig(mode: string): string {
-  const env = core.config.loadEnvFiles({ mode })
-  if (!env.success)
-    throw new Error(env.error.message)
-  Object.assign(process.env, env.data)
+export function desktopBuildConfig(mode?: string): string {
+  if (mode) {
+    const env = core.config.loadEnvFiles({ mode })
+    if (!env.success)
+      throw new Error(env.error.message)
+    Object.assign(process.env, env.data)
+  }
   const result = core.config.load('crypto', './config/_crypto.yml', DesktopCryptoConfigSchema)
   if (!result.success)
     throw new Error(result.error.message)

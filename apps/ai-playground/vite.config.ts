@@ -9,8 +9,8 @@ import { defineConfig } from 'vite'
 
 const HAI_PACKAGE_REGEX = /@h-ai\//
 
-export default defineConfig(({ mode }) => {
-  const envResult = core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+export default defineConfig(({ mode, command }) => {
+  const envResult = command === 'build' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data

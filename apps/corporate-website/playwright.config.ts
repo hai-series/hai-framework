@@ -4,7 +4,7 @@ import process from 'node:process'
 import { defineConfig } from '@playwright/test'
 
 const baseURL = process.env.BASE_URL || 'http://localhost:4175'
-const e2eDataRoot = path.join(tmpdir(), 'hai-framework-corporate-website-e2e')
+const e2eDataRoot = process.env.HAI_E2E_DATA_ROOT || path.join(tmpdir(), 'hai-framework-corporate-website-e2e')
 const testDataDir = path.join(e2eDataRoot, `data-e2e-${Date.now()}`)
 
 process.env.HAI_E2E_DATA_ROOT = e2eDataRoot

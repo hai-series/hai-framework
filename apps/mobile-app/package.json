@@ -21,8 +21,7 @@
     "dev": "vite dev --port 5175",
     "dev:test": "vite dev --mode test",
     "dev:prod": "vite dev --mode prod",
-    "build": "pnpm paraglide:compile && vite build",
-    "build:prod": "pnpm paraglide:compile && vite build --mode prod",
+    "build": "hai build",
     "preview": "vite preview --port 5175",
     "check": "pnpm typecheck",
     "typecheck": "pnpm paraglide:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -30,7 +29,7 @@
     "lint:fix": "eslint . --fix",
     "test": "pnpm paraglide:compile && svelte-kit sync && vitest run",
     "test:watch": "pnpm paraglide:compile && svelte-kit sync && vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "node ../../scripts/run-e2e.mjs",
     "clean": "rimraf .svelte-kit build .turbo",
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
@@ -43,7 +42,8 @@
     "cap:run:ios": "cap run ios",
     "cap:build:android:debug": "pnpm build && cap sync android && cd android && gradlew.bat assembleDebug",
     "cap:build:android:release": "pnpm build && cap sync android && cap build android --androidreleasetype APK",
-    "cap:build:ios": "pnpm build && cap sync ios && cap build ios"
+    "cap:build:ios": "pnpm build && cap sync ios && cap build ios",
+    "compile": "pnpm paraglide:compile && vite build"
   },
   "dependencies": {
     "@h-ai/api-client": "workspace:*",
@@ -63,6 +63,7 @@
     "@capacitor/ios": "catalog:",
     "@capacitor/preferences": "catalog:",
     "@capacitor/status-bar": "catalog:",
+    "@h-ai/cli": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@iconify-json/tabler": "catalog:",
     "@iconify/tailwind4": "catalog:",

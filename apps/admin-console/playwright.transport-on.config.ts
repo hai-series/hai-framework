@@ -1,3 +1,4 @@
+import path from 'node:path'
 import process from 'node:process'
 
 import { defineConfig } from '@playwright/test'
@@ -6,7 +7,7 @@ const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173'
 const previewUrl = new URL(baseURL)
 const previewHost = previewUrl.hostname || '127.0.0.1'
 const previewPort = Number.parseInt(previewUrl.port || '4173', 10)
-const testDataDir = `./data-e2e-transport-on-${Date.now()}`
+const testDataDir = path.join(process.env.HAI_E2E_DATA_ROOT || '.', `data-e2e-transport-on-${Date.now()}`)
 
 export default defineConfig({
   testDir: './e2e',
@@ -43,7 +44,7 @@ export default defineConfig({
       HAI_DB_DATABASE: `${testDataDir}/admin.db`,
       HAI_STORAGE_ROOT: `${testDataDir}/uploads`,
       NODE_ENV: 'test',
-      VITE_HAI_E2E_KIT_TRANSPORT_MODE: 'on',
+      HAI_KIT_TRANSPORT: JSON.stringify({ keyExchangePath: '/api/_hai/key-exchange', requireEncryption: true, encryptResponse: true, excludePaths: ['/api/storage', '/api/public', '/api/auth/profile/avatar'] }),
     },
     url: baseURL,
     reuseExistingServer: false,

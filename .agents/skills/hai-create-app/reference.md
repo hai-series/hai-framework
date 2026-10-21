@@ -446,7 +446,7 @@ export const { apiFetch } = client
 
 ## §10 容器交付
 
-- 新应用模板必须提供根目录 `Dockerfile`、`.dockerignore` 与 `pnpm docker:build` / `pnpm podman:build`，镜像构建必须使用仓库锁文件。
+- 新应用模板必须提供根目录 `Dockerfile`、`.dockerignore` 与 `pnpm build --target docker`（auto 优先 Podman，可用 --runtime 指定），镜像构建必须使用仓库锁文件。
 - Podman 多阶段构建命令使用 `--format docker --jobs=1`：保留 Dockerfile `HEALTHCHECK`，并避免 Buildah 并行 stage 在部分 Podman 5.8 环境触发内部 semaphore panic。
 - SvelteKit 服务使用 Node adapter；纯 Vite/Capacitor Web 产物使用带 SPA fallback 的静态服务器。
 - Dockerfile 必须先复制 lockfile 与 workspace 配置并执行 `pnpm fetch`，再复制源码并离线安装、构建；这样源码变化不重复下载依赖，也能兼容脚手架生成后新增的 workspace。

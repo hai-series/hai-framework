@@ -17,8 +17,7 @@
     "dev": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.dev --env-file-if-exists=.env.local dist/index.js\"",
     "dev:test": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local dist/index.js\"",
     "dev:prod": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local dist/index.js\"",
-    "build": "tsup",
-    "build:prod": "tsup",
+    "build": "hai build",
     "preview": "pnpm start",
     "start": "node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local dist/index.js",
     "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local dist/index.js",
@@ -29,7 +28,8 @@
     "lint:fix": "eslint src tests tsup.config.ts vitest.config.ts --fix",
     "test": "vitest run",
     "clean": "rimraf dist .turbo",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "compile": "tsup"
   },
   "dependencies": {
     "@h-ai/ai": "workspace:*",
@@ -48,6 +48,7 @@
   },
   "devDependencies": {
     "@h-ai/api-client": "workspace:*",
+    "@h-ai/cli": "workspace:*",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",

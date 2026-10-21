@@ -18,8 +18,7 @@
     "dev": "vite dev",
     "dev:test": "vite dev --mode test",
     "dev:prod": "vite dev --mode prod",
-    "build": "vite build",
-    "build:prod": "vite build --mode prod",
+    "build": "hai build",
     "preview": "vite preview",
     "start": "node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js",
     "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local build/index.js",
@@ -30,8 +29,9 @@
     "lint:fix": "eslint src tests e2e playwright.config.ts playwright.transport-on.config.ts svelte.config.js vite.config.ts --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test && playwright test -c playwright.transport-on.config.ts",
-    "clean": "rimraf .svelte-kit build .turbo"
+    "test:e2e": "node ../../scripts/run-e2e.mjs --next --config playwright.transport-on.config.ts",
+    "clean": "rimraf .svelte-kit build .turbo",
+    "compile": "vite build"
   },
   "dependencies": {
     "@h-ai/ai": "workspace:*",
@@ -52,6 +52,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/cli": "workspace:*",
     "@iconify-json/tabler": "catalog:",
     "@iconify/tailwind4": "catalog:",
     "@inlang/paraglide-js": "catalog:",

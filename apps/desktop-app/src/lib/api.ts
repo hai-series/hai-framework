@@ -3,7 +3,7 @@
  *
  * 初始化默认 `@h-ai/api-client` 统一入口。
  *
- * - `baseUrl` 来自 `import.meta.env.PUBLIC_API_BASE`，默认 `http://localhost:3000/api/v1`。
+ * - `baseUrl` 优先使用 Tauri 启动时注入的 PUBLIC_API_BASE，浏览器开发使用 import.meta.env.PUBLIC_API_BASE，默认 `http://localhost:3000/api/v1`。
  * - transport 加密配置来自 `config/_crypto.yml`。
  * - Token 存储：默认仅保存在内存中；生产应用应注入操作系统安全存储适配器。
  * - `onRefreshFailed`：触发跳转至 `/login`。
@@ -38,7 +38,8 @@ export async function initApi(): Promise<void> {
   if (initialized)
     return
 
-  const baseUrl = import.meta.env.PUBLIC_API_BASE ?? DEFAULT_API_BASE
+  const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__
+  const baseUrl = runtime?.apiBase ?? import.meta.env.PUBLIC_API_BASE ?? DEFAULT_API_BASE
   const transport = resolveApiTransport()
 
   if (transport) {

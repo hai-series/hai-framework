@@ -1,8 +1,9 @@
+import path from 'node:path'
 import process from 'node:process'
 import { defineConfig } from '@playwright/test'
 
 const baseURL = process.env.BASE_URL || 'http://localhost:4176'
-const testDataDir = `./data-e2e-h5-${Date.now()}`
+const testDataDir = path.join(process.env.HAI_E2E_DATA_ROOT || '.', `data-e2e-h5-${Date.now()}`)
 
 /**
  * hai H5 App - Playwright E2E 测试配置
