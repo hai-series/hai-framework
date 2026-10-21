@@ -583,6 +583,9 @@ provider:
 # 本地构建运行时（docker-ssh 使用；auto 优先 podman）
 # container:
 #   runtime: auto
+#   httpProxy: true # Podman 构建继承代理；localhost 代理不可达时设为 false
+#   s3Engine: rustfs # rustfs | minio；应用始终使用 storage.type=s3
+#   sqlitePrebuildMirror: https://your-trusted-mirror.example/better-sqlite3 # 可选，不含认证信息
 
 # 基础设施服务（按需开启）
 # services:

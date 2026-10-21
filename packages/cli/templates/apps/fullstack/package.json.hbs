@@ -41,6 +41,9 @@
     "{{fullstack.sharedPackageName}}": "workspace:*"
   },
   "devDependencies": {
+{{#if features.deploy}}
+    "@h-ai/deploy": "{{haiPackageSpecifier}}",
+{{/if}}
     "@antfu/eslint-config": "{{fullstack.packageSpecifiers.antfuEslintConfig}}",
     "@playwright/test": "{{fullstack.packageSpecifiers.playwright}}",
     "@sveltejs/vite-plugin-svelte": "{{fullstack.packageSpecifiers.sveltePlugin}}",

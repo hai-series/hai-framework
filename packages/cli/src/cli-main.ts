@@ -128,15 +128,23 @@ cli
 // 部署命令
 cli
   .command('deploy [appDir]', '部署应用到云平台')
-  .option('--project-name <name>', '项目名称（默认从 package.json 读取）')
-  .option('--skip-provision', '跳过基础设施开通')
+  .option('--env <environment>', '部署环境（test / prod 等，必须存在对应环境文件）')
+  .option('--env-dir <path>', '环境文件所在目录（默认自动查找）')
+  .option('-y, --yes', '按当前后端默认配置部署，目标环境已有完整配置时保持不变')
+  .option('--project-name <name>', '项目名称（默认使用应用目录名）')
+  .option('--skip-provision', '配置已完备，跳过中间件配置与开通，直接部署')
+  .option('--skip-middleware', '配置已完备，跳过全部中间件处理，直接部署')
   .option('--skip-build', '跳过构建')
   .action(async (appDir: string | undefined, options: Record<string, unknown>) => {
     try {
       await deployCommand({
         appDir,
+        env: options.env as string,
+        envDir: options.envDir as string,
+        yes: options.yes as boolean,
         projectName: options.projectName as string,
         skipProvision: options.skipProvision as boolean,
+        skipMiddleware: options.skipMiddleware as boolean,
         skipBuild: options.skipBuild as boolean,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,

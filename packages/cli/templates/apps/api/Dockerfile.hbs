@@ -1,5 +1,11 @@
 # syntax=docker/dockerfile:1.7
 FROM node:24-bookworm-slim AS build
+ARG SQLITE_PREBUILD_MIRROR
+ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
+ARG HAI_DEPLOY_ENVIRONMENT=prod
+ARG HAI_CORE_ENV=production
+ENV HAI_DEPLOY_ENVIRONMENT=$HAI_DEPLOY_ENVIRONMENT
+ENV HAI_CORE_ENV=$HAI_CORE_ENV
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -12,12 +18,16 @@ RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch
 COPY . .
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
 RUN pnpm build
+RUN if [ -d node_modules/better-sqlite3 ]; then cd node_modules/better-sqlite3; for attempt in 1 2 3; do node -e "require('node:child_process').execFileSync(process.execPath,[require.resolve('prebuild-install/bin.js'),'--verbose'],{stdio:'inherit'})" && break; [ "$attempt" = 3 ] && exit 1; sleep 3; done; fi
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm pm deploy --filter {{api.servicePackageName}} --prod /prod/app
 
 FROM node:24-bookworm-slim AS runtime-base
+ARG HAI_DEPLOY_ENVIRONMENT=prod
+ARG HAI_CORE_ENV=production
 
 ENV NODE_ENV=production
-ENV HAI_CORE_ENV=production
+ENV HAI_DEPLOY_ENVIRONMENT=$HAI_DEPLOY_ENVIRONMENT
+ENV HAI_CORE_ENV=$HAI_CORE_ENV
 ENV HOST=0.0.0.0
 ENV PORT=3000
 WORKDIR /app

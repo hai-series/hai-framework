@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
 }))
 
-vi.mock('@h-ai/deploy', () => ({
+vi.mock('@h-ai/deploy', async importOriginal => ({
+  ...await importOriginal<typeof import('@h-ai/deploy')>(),
   deploy: {
     credentials: { load: mocks.loadCredentials },
     init: mocks.init,
@@ -41,12 +42,14 @@ function createDeployApp(): string {
     'provider:\n  type: vercel\n  token: test-token\n',
     'utf-8',
   )
+  writeFileSync(join(appDir, '.env.prod'), 'HAI_CORE_ENV=production\n')
   return appDir
 }
 
 beforeEach(() => {
   core.i18n.setGlobalLocale('en-US')
   tmpRoot = mkdtempSync(join(tmpdir(), 'hai-cli-deploy-'))
+  writeFileSync(join(tmpRoot, '.env.prod'), 'HAI_CORE_ENV=production\n')
   vi.clearAllMocks()
   mocks.loadCredentials.mockReturnValue({ success: true, data: [] })
   mocks.scan.mockResolvedValue({
@@ -74,7 +77,7 @@ describe('deployCommand', () => {
   ])('localizes deployment failures in %s', async (locale, message) => {
     core.i18n.setGlobalLocale(locale)
     mocks.deployApp.mockResolvedValue({ success: false, error: { message: 'network unavailable' } })
-    await expect(deployCommand({ appDir: createDeployApp(), cwd: tmpRoot, verbose: false })).rejects.toThrow(message)
+    await expect(deployCommand({ env: 'prod', yes: true, appDir: createDeployApp(), cwd: tmpRoot, verbose: false })).rejects.toThrow(message)
     expect(mocks.close).toHaveBeenCalledOnce()
   })
   it.each(['credentials', 'scan', 'init'])('propagates failure from %s to the CLI entry', async (stage) => {
@@ -86,12 +89,12 @@ describe('deployCommand', () => {
       mocks.scan.mockResolvedValue(failed)
     if (stage === 'init')
       mocks.init.mockResolvedValue(failed)
-    await expect(deployCommand({ appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('stage rejected')
+    await expect(deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('stage rejected')
     expect(mocks.deployApp).not.toHaveBeenCalled()
   })
 
   it('rejects missing configuration', async () => {
-    await expect(deployCommand({ cwd: tmpRoot, verbose: false })).rejects.toThrow('Deploy config not found')
+    await expect(deployCommand({ env: 'prod', yes: true, cwd: tmpRoot, verbose: false })).rejects.toThrow('Deploy config not found')
   })
 
   it.each(['en-US', 'zh-CN'])('deploy 成功时应透传参数并关闭 deploy 模块 (%s)', async (locale) => {
@@ -106,19 +109,15 @@ describe('deployCommand', () => {
       },
     })
 
-    await deployCommand({
-      appDir,
-      cwd: tmpRoot,
-      projectName: 'my-api',
-      skipProvision: true,
-      skipBuild: true,
-      verbose: false,
-    })
+    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, projectName: 'my-api', skipProvision: true, skipBuild: true, verbose: false })
 
     expect(mocks.deployApp).toHaveBeenCalledWith(appDir, {
       projectName: 'my-api',
       skipProvision: true,
       skipBuild: true,
+      environment: 'prod',
+      envDir: appDir,
+      serviceModes: {},
     })
     expect(mocks.close).toHaveBeenCalledTimes(1)
   })
@@ -130,7 +129,7 @@ describe('deployCommand', () => {
       error: { code: 'hai:deploy:001', message: 'deploy failed' },
     })
 
-    await expect(deployCommand({ appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('Deploy failed')
+    await expect(deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('Deploy failed')
 
     expect(mocks.close).toHaveBeenCalledTimes(1)
   })
@@ -139,7 +138,7 @@ describe('deployCommand', () => {
     const appDir = createDeployApp()
     mocks.deployApp.mockRejectedValue(new Error('unexpected deploy error'))
 
-    await expect(deployCommand({ appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('unexpected deploy error')
+    await expect(deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('unexpected deploy error')
 
     expect(mocks.close).toHaveBeenCalledTimes(1)
   })

@@ -430,7 +430,7 @@ function buildAppHaiCatalogPackages(options: {
   return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)
 }
 
-function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[]): Record<string, string> {
+function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], deploy = false): Record<string, string> {
   const packageNames: string[] = [
     ...FULLSTACK_ROOT_CATALOG_PACKAGE_NAMES,
     ...FULLSTACK_CONTRACT_CATALOG_PACKAGE_NAMES,
@@ -444,6 +444,8 @@ function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[]): Re
     packageNames.push(...FULLSTACK_APP_CATALOG_PACKAGE_NAMES)
   if (frontends.includes('desktop'))
     packageNames.push(...FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES)
+  if (deploy)
+    packageNames.push('@h-ai/deploy')
 
   return pickCatalogPackages(packageNames, FULLSTACK_CATALOG_PACKAGES)
 }
@@ -772,7 +774,7 @@ export function buildTemplateContext(options: {
   const selectedFrontends = options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS
   let haiCatalogPackages: TemplateContext['haiCatalogPackages']
   if (isFullstack) {
-    haiCatalogPackages = buildFullstackCatalogPackages(selectedFrontends)
+    haiCatalogPackages = buildFullstackCatalogPackages(selectedFrontends, featureMap.deploy)
   }
   else if (isApi) {
     haiCatalogPackages = buildApiWorkspaceCatalogPackages(featureMap)
@@ -1026,7 +1028,6 @@ export async function generateFromTemplates(
 
   // ─── ④ 渲染 .hbs 动态模板 ───
   await renderDynamicFiles(root, projectPath, context)
-  await fse.copy(path.join(root, 'shared', 'environment-configuration.md'), path.join(projectPath, 'docs', 'environment-configuration.md'))
 
   if (context.isSvelteOnlyApp || context.appType === 'fullstack') {
     const navigationDir = context.appType === 'fullstack'
@@ -1034,6 +1035,7 @@ export async function generateFromTemplates(
       : path.join(projectPath, 'src', 'lib', 'navigation')
     await fse.copy(path.join(root, 'shared', 'hash-router.svelte.ts'), path.join(navigationDir, 'hash-router.svelte.ts'))
   }
+
   // ─── ⑤ 拷贝 i18n 脚手架（project.inlang + messages） ───
   if (context.hasI18n) {
     const i18nDir = path.join(root, 'i18n')

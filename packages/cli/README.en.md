@@ -158,6 +158,8 @@ pnpm.cmd install
 pnpm.cmd dev
 ```
 
+Add `--features deploy` to install a matching project-local `@h-ai/deploy` development dependency for automated deployment. Fullstack does not install AI/ONNX/CUDA by default. Image builds download the official SQLite prebuild matching the driver version, Node ABI, architecture and libc, retry and validate it, then reuse the cache. No compiler toolchain is preinstalled; missing binaries or network failures stop the build.
+
 The CLI generates a root `.env.local` with a unique random strong `HAI_ADMIN_DEFAULT_PASSWORD`, so `dev` / `start` work directly. Sign in as `admin` using that password; an environment variable with the same name overrides it. Passwords follow `_iam.yml` policy, with a default minimum of 8 characters. Startup logs include the specific validation reason and error code when a password violates the policy. Once users exist, the variable does not reset accounts or passwords. Git and container builds ignore `.env.local`, while `.env.example` contains only a placeholder. Set a separate password in each deployment environment.
 
 - Administrators can search, paginate, create, edit, enable, disable and delete users and upload avatars. The server protects the current administrator and rechecks authorization inside a mutation lock so concurrent actions cannot remove every administrator's access.
@@ -173,7 +175,7 @@ Default SQLite, local storage and memory cache suit a single-instance mini admin
 
 ## Application configuration and display
 
-Each project documents its variables, enums and bounds in `.env.example`. The [root catalog](../../.env.example) covers all modules; the [configuration guide](../../docs/environment-configuration.md) explains mode loading and common scripts.
+Each project documents its variables, enums and bounds in `.env.example`. The [root catalog](../../.env.example) covers all modules; the [environment configuration](templates/skills/hai-app-create/development.md#环境配置) explains mode loading and common scripts.
 
 Every generated `.gitignore` includes `**/data/`, covering runtime data and `.gitkeep` at every workspace depth. Runtime code creates the required directories.
 
@@ -190,6 +192,14 @@ Leaf overrides apply only to existing YAML paths: uncomment the key first, or re
 The automatically generated fullstack `.env.local` enables only the initial administrator password and `PUBLIC_API_BASE`. Module overrides remain commented so YAML supplies defaults. Explicitly uncomment environment overrides when needed, and check existing overrides when editing YAML.
 
 SvelteKit server layouts expose only whitelisted public metadata such as name, version, environment and default locale. Standalone mobile-app Vite configuration parses YAML through core in the Node build process and injects public values plus browser logging level/format; YAML or override changes require a rebuild. Fullstack frontends obtain public server metadata through encrypted `app.info`. No template exposes complete core/module configuration, secrets or log-redaction context to the browser.
+
+## Environment-specific deployment
+
+Run `hai deploy --env test` to check `.env.test` first, then choose defaults, custom connections or keep unchanged for each middleware. `--yes` keeps complete target settings and otherwise uses the current backend defaults; `--env-dir` selects the environment directory. Specify the service directory explicitly, for example `hai deploy packages/my-app-serv --env test`; workspace layouts are not guessed. Startup scripts carry the selected environment. Public connections go to the target file; credentials go to `.env.local` with redacted output.
+
+Choose “deploy directly” in the wizard, or run `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`, to skip all middleware prompts, configuration writes and provisioning when your environment is complete. Missing deployment targets are guided through SSH/Vercel setup. Host, ports, key paths, remote directory and tokens are saved only in Git-ignored `.env.local` and reused on later runs. Edit `HAI_DEPLOY_PROVIDER` there to change the target; supply private key paths only.
+
+[Deployment and middleware reference](templates/skills/hai-deploy/middleware.md) · `pnpm --filter @h-ai/cli test:deploy-gates`
 
 ## Global options
 

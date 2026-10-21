@@ -59,6 +59,8 @@ operationLog:
 
 MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoint`（通常为 9000 端口）和 `forcePathStyle: true`，并预先创建 `bucket`；不要新增 `type: minio` 或 `type: rustfs`。
 
+使用 hai-deploy 的默认自建 S3 配置时，可通过 `container.s3Engine`（`HAI_DEPLOY_CONTAINER_S3ENGINE`，`rustfs | minio`）选择实现，默认 RustFS。部署流程复用应用镜像中的 S3 SDK 幂等初始化 bucket，不依赖单独的 mc 镜像；自定义外部 S3 服务仍需确认 bucket 已存在且凭据有相应权限。
+
 `operationLog` 在 Local/S3 Provider 的真实 file/dir/presign 操作处输出日志，不要在 `storage-main.ts` 或调用方重复包装。文件内容不会写入日志，上传数据只记录字节长度；`maxLength` 用于截断序列化后的参数，`level` 默认 `debug`。
 
 ### 2. 初始化与关闭

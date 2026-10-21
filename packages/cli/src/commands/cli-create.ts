@@ -542,7 +542,8 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   const appTypeDefaults = APP_TYPES[selectedAppType].defaultFeatures
 
   if (selectedAppType === 'fullstack') {
-    selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
+    // fullstack 业务模块由模板确定；部署工具可通过显式 --features deploy 启用。
+    selectedFeatures = resolveFeatureDependencies([...appTypeDefaults, ...(options.features?.includes('deploy') ? ['deploy' as const] : [])])
   }
   else if (selectedTemplate === 'custom' && !options.features && useDefaults) {
     selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
@@ -1099,7 +1100,7 @@ Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Cla
 function generateEnvironmentReadme(): string {
   return `## 分环境配置
 
-运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程环境 > \`.env.local\` > 环境文件 > \`.env\`。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [配置手册](docs/environment-configuration.md)。
+运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程环境 > \`.env.local\` > 环境文件 > \`.env\`。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [环境配置](.agents/skills/hai-app-create/development.md#环境配置)。
 
 | 用途 | 命令 |
 | --- | --- |

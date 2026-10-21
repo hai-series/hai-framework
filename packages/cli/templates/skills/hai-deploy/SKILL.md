@@ -19,7 +19,7 @@ description: "使用 @h-ai/deploy 部署应用：Vercel 云平台或 docker-ssh 
 
 > `@h-ai/deploy` 提供两种部署方式：
 > 1. **vercel** — 将 SvelteKit（adapter-vercel）应用部署到 Vercel，并自动开通 Neon/Upstash/R2/Resend/阿里云等云基础设施；
-> 2. **docker-ssh** — 将 SvelteKit（adapter-node）应用容器化后经 SSH 部署到任意具备 docker/podman + compose 的 Linux 主机，按所选功能自动生成 compose sidecar。
+> 2. **docker-ssh** — 将原生 fullstack API 或 SvelteKit（adapter-node）应用容器化后经 SSH 部署到任意具备 docker/podman + compose 的 Linux 主机，按所选功能自动生成 compose sidecar。
 
 ## 运行环境
 
@@ -36,6 +36,8 @@ description: "使用 @h-ai/deploy 部署应用：Vercel 云平台或 docker-ssh 
 - CLI 部署流程（`hai deploy`）
 
 ## 使用步骤
+
+部署前按 [环境与中间件向导](middleware.md) 先选择环境并检查对应文件，再逐项选择默认配置、自定义连接或保持不变。用户确认配置已完备时，可选择直接部署或传 `--skip-middleware` 跳过全部中间件处理。SSH 地址、端口、密钥路径及平台 Token 首次填写后仅保存 `.env.local`，后续自动复用。该文档列出模块依赖、后端、连接字段、云开通边界和启动验证要求。
 
 ### 1. 配置
 
@@ -98,7 +100,7 @@ container:
   runtime: auto # 本地构建运行时，可选
 
 services:
-  # 启用的服务会被加入远程 compose sidecar（postgres/redis/minio）
+  # 启用的服务会被加入远程 compose sidecar（postgres/redis/rustfs 或 minio）
   # 若配置了云 Provisioner（如 neon），则优先用云资源，不再自建 sidecar
   db:
     provisioner: neon
@@ -107,13 +109,13 @@ services:
 
 docker-ssh 要点：
 
-- 应用镜像使用工程自带的 `Dockerfile`（`@sveltejs/adapter-node`），缺少 adapter-node 会返回 `ADAPTER_MISSING`
+- 应用镜像优先使用工程自带的 Dockerfile；SvelteKit 需要 adapter-node，原生 fullstack 服务自动生成以 `dist/index.js` 启动的镜像。
 - compose 按 `deploy.scan()` 识别的服务**及其后端类型**生成匹配 sidecar 并注入 `HAI_*` 覆盖变量：
   - `db`：`postgresql`→postgres、`mysql`→mysql、`sqlite`→数据卷（无 sidecar）→ `HAI_DB`
-  - `cache`：`redis`→redis → `HAI_CACHE`；`storage`：`s3`→minio → `HAI_STORAGE`
+  - `cache`：`redis`→redis → `HAI_CACHE`；`storage`：`s3`→RustFS/MinIO（container.s3Engine） → `HAI_STORAGE`
   - `vecdb`：`qdrant`/`pgvector`/`chroma`→对应 sidecar、`lancedb`→数据卷 → `HAI_VECDB`
 - 若同一服务已配置云 Provisioner（如 neon 提供 `HAI_DB`），优先用云资源，不再自建 sidecar
-- sidecar 密码等敏感值只写入远程 `.env.runtime`（权限 600），不入 `compose.yml`
+- sidecar 密码写被忽略的本机私有配置及远程 `.env.runtime`（权限 600），不入公共环境文件或 `compose.yml`
 - `identityFile` 是私钥**路径**（非私钥内容）；禁止把私钥内容写进 `_deploy.yml`
 
 ### 2. 初始化与关闭
@@ -137,7 +139,7 @@ await deploy.close()
 ### 3. 扫描应用
 
 ```typescript
-const scanResult = await deploy.scan('./apps/my-app')
+const scanResult = await deploy.scan('./apps/my-app', { environment: 'test' })
 if (scanResult.success) {
   const { appName, isSvelteKit, requiredServices } = scanResult.data
 }
@@ -179,8 +181,8 @@ if (result.success) {
 | `deploy.credentials.getPath` | `() => string`                                                         | 获取凭证文件路径 |
 | `deploy.init`          | `(config: DeployConfigInput) => Promise<HaiResult<void>>`        | 初始化模块   |
 | `deploy.close`         | `() => Promise<void>`                                                      | 关闭模块     |
-| `deploy.scan`          | `(appDir: string) => Promise<HaiResult<ScanResult>>`             | 扫描应用（不依赖 init） |
-| `deploy.provisionAll`  | `(projectName: string) => Promise<HaiResult<ProvisionResult[]>>` | 开通所有服务 |
+| `deploy.scan`          | `(appDir: string, options?: DeployScanOptions) => Promise<HaiResult<ScanResult>>` | 按环境扫描（不依赖 init） |
+| `deploy.provisionAll`  | `(projectName: string, services?: ServiceType[]) => Promise<HaiResult<ProvisionResult[]>>` | 开通指定或全部已配置服务 |
 | `deploy.deployApp`     | `(appDir: string, options?) => Promise<HaiResult<DeployResult>>` | 完整部署     |
 | `deploy.config`        | `DeployConfig \| null`                                                     | 当前配置     |
 | `deploy.isInitialized` | `boolean`                                                                  | 初始化状态   |
@@ -190,6 +192,14 @@ if (result.success) {
 所有凭证操作都通过 `deploy.credentials.*` 访问，模块入口不再单独导出自由函数。
 
 > `deploy.credentials.*()` 与 `deploy.scan()` 都不依赖 `deploy.init()`，可用于 CLI 在读取 `_deploy.yml` 之前准备环境。
+
+## 配置消费与失败恢复
+
+失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
+
+云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；构建子进程与目标运行环境使用相同开通结果。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应 _db/_cache/_storage/_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
+
+部署失败恢复：`ProvisionResult.resourceStatus` 标记 created/reused；`getDeployRecovery(result.error)` 读取 projectName、stage、platformProjectId 和资源清单，unknown 表示请求结果不确定，必须先在服务商控制台核对。失败资源已返回 ID 时保留该 ID。恢复结果不含 envVars、原始异常或连接凭证，CLI 会展示清单和建议。同名重试复用现有资源；不自动删除复用资源，新建资源仅在人工确认未被使用后清理。
 
 ## 错误码 — `HaiDeployError`
 
@@ -225,10 +235,10 @@ if (result.success) {
 hai deploy
 
 # 部署指定应用
-hai deploy ./apps/admin-console
+hai deploy ./apps/admin-console --env test
 
 # 跳过基础设施开通
-hai deploy --skip-provision
+hai deploy --env prod --skip-provision
 
 # 跳过构建
 hai deploy --skip-build
@@ -276,9 +286,3 @@ const result = await deploy.deployApp('./apps/my-app')
 - **hai-core** — 配置加载、日志、HaiResult 类型
 - **hai-reldb** — 数据库（Neon PostgreSQL）
 - **hai-cache** — 缓存（Upstash Redis）
-
-失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
-
-云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；构建子进程与目标运行环境使用相同开通结果。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应 _db/_cache/_storage/_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
-
-部署失败恢复：`ProvisionResult.resourceStatus` 标记 created/reused；`getDeployRecovery(result.error)` 读取 projectName、stage、platformProjectId 和资源清单，unknown 表示请求结果不确定，必须先在服务商控制台核对。失败资源已返回 ID 时保留该 ID。恢复结果不含 envVars、原始异常或连接凭证，CLI 会展示清单和建议。同名重试复用现有资源；不自动删除复用资源，新建资源仅在人工确认未被使用后清理。

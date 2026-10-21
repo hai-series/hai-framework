@@ -158,6 +158,8 @@ pnpm.cmd install
 pnpm.cmd dev
 ```
 
+需要自动部署时添加 `--features deploy`，在工程根安装对应版本的 `@h-ai/deploy` 开发依赖，部署命令会使用项目本地版本。fullstack 默认不安装 AI/ONNX/CUDA；SQLite 在镜像构建时下载匹配版本、Node ABI、架构和 libc 的官方预编译包，重试并加载校验后复用缓存；不预装编译工具链，缺包或网络失败时明确停止。
+
 CLI 自动生成根目录 `.env.local`，其中 `HAI_ADMIN_DEFAULT_PASSWORD` 是每个项目独立的随机强密码；直接运行 `dev` / `start` 即可。首次登录使用 `admin` 和 `.env.local` 中的密码，同名环境变量可以覆盖它。密码遵循 `_iam.yml` 策略，默认至少 8 位；不符合策略时启动日志显示具体校验原因与错误码。已有用户后，该变量不会重设账号或密码。`.env.local` 被 Git 和容器构建忽略，`.env.example` 仅保留占位；部署时设置目标环境自己的密码。
 
 - 管理员可搜索、分页、新增、编辑、启禁用、删除用户并上传头像；服务端保护当前管理员，管理写操作在锁内重新鉴权，防止并发操作使管理员全部失权。
@@ -173,7 +175,7 @@ Web/App/Desktop 复用同一个 `AdminWorkspace`、management store 和 typed cl
 
 ## 应用配置与显示
 
-配置字段使用显式 `HAI_<配置名>_<路径>` 引用。每个项目的 `.env.example` 包含已启用参数和可选字段的用途、枚举、范围；框架根 [`.env.example`](../../.env.example) 是完整总表。分环境加载和命令见 [配置手册](../../docs/environment-configuration.md)。
+配置字段使用显式 `HAI_<配置名>_<路径>` 引用。每个项目的 `.env.example` 包含已启用参数和可选字段的用途、枚举、范围；框架根 [`.env.example`](../../.env.example) 是完整总表。分环境加载和命令见 [环境配置](templates/skills/hai-app-create/development.md#环境配置)。
 
 所有生成项目的 `.gitignore` 都包含 `**/data/`，忽略根目录及嵌套 workspace 的运行数据，包括 `.gitkeep`；运行时会创建需要的数据目录。
 
@@ -253,6 +255,20 @@ monorepo 内的 `apps/*` 项目已通过 `workspace:*` 协议引用本地包，�
 node packages/cli/dist/index.js create ../my-new-project
 ```
 
+## 分环境部署
+
+运行 `hai deploy --env test`，先检查 `.env.test`，再逐项选择中间件默认配置、自定义连接或保持不变。`--yes` 保留目标环境的完整配置并为其余项采用当前后端默认值，`--env-dir` 指定环境文件目录。明确传入目标服务目录，如 `hai deploy packages/my-app-serv --env test`，不猜测 workspace 布局；容器启动脚本保留明确环境标识。公共连接项写目标环境文件，凭据写 `.env.local` 并脱敏显示。
+
+配置已完备时可在向导中选择“直接部署”，或执行 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`，跳过全部中间件提示、配置写入和资源开通。部署目标缺失时引导填写 SSH/Vercel 参数；SSH 地址、端口、密钥路径、远程目录及 Token 只保存到被 Git 忽略的 `.env.local`，下次自动复用。可编辑其中的 `HAI_DEPLOY_PROVIDER` 更新目标；私钥只填写路径。
+
+[Deployment and middleware reference](templates/skills/hai-deploy/middleware.md) · `pnpm --filter @h-ai/cli test:deploy-gates`
+
+失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
+
+云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；构建子进程与目标运行环境使用相同开通结果。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应\_db/\_cache/\_storage/\_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
+
+部署失败恢复：`ProvisionResult.resourceStatus` 标记 created/reused；`getDeployRecovery(result.error)` 读取 projectName、stage、platformProjectId 和资源清单，unknown 表示请求结果不确定，必须先在服务商控制台核对。失败资源已返回 ID 时保留该 ID。恢复结果不含 envVars、原始异常或连接凭证，CLI 会展示清单和建议。同名重试复用现有资源；不自动删除复用资源，新建资源仅在人工确认未被使用后清理。
+
 ## 配置驱动认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
@@ -280,12 +296,6 @@ pnpm --filter @h-ai/cli test:coverage
 Admin 与 fullstack 门禁还用实际安装的本地 tarball 验证公开类型和运行行为：流式文件/checksum/拒覆盖、API Key scope 与撤销、当前授权、批量用户/角色分页、Reach 模板路由和 Audit 分页元数据；fullstack 同时验证可信对端 IP。
 
 成功截图默认保存在 CLI 的 `test-results/scaffold-evidence/`，可通过 `HAI_AUTH_EVIDENCE_DIR` 指定独立目录，生成项目清理后仍保留。fullstack E2E 启动所有已选 Web/App/Desktop 浏览器预览，并验证各端的登录、导览、帮助与个人设置；小程序和原生壳仍需要对应平台验收。
-
-失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
-
-云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；构建子进程与目标运行环境使用相同开通结果。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应\_db/\_cache/\_storage/\_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
-
-部署失败恢复：`ProvisionResult.resourceStatus` 标记 created/reused；`getDeployRecovery(result.error)` 读取 projectName、stage、platformProjectId 和资源清单，unknown 表示请求结果不确定，必须先在服务商控制台核对。失败资源已返回 ID 时保留该 ID。恢复结果不含 envVars、原始异常或连接凭证，CLI 会展示清单和建议。同名重试复用现有资源；不自动删除复用资源，新建资源仅在人工确认未被使用后清理。
 
 ## 生成项目的表单布局
 

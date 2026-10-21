@@ -158,6 +158,8 @@ pnpm.cmd install
 pnpm.cmd dev
 ```
 
+自動デプロイには `--features deploy` を追加し、対応する `@h-ai/deploy` をプロジェクトの開発依存としてインストールします。fullstack は既定で AI/ONNX/CUDA をインストールしません。SQLite はドライバー版、Node ABI、アーキテクチャー、libc に一致する公式バイナリーをダウンロードし、再試行・読み込み検証後にキャッシュを再利用します。コンパイラーを事前インストールせず、対応バイナリーや通信が使えなければビルドを停止します。
+
 CLI はルート `.env.local` にプロジェクトごとに異なるランダムな強い `HAI_ADMIN_DEFAULT_PASSWORD` を生成するため、`dev` / `start` を直接実行できます。初回ログインは `admin` とそのパスワードを使います。同名の環境変数で上書きできます。パスワードは `_iam.yml` のポリシーに従い、既定では 8 文字以上です。違反すると起動ログに具体的な理由とエラーコードを表示します。ユーザーが存在する場合、この変数でアカウントやパスワードはリセットされません。`.env.local` は Git とコンテナビルドから除外され、`.env.example` はプレースホルダーのみです。デプロイ先ごとに別のパスワードを設定してください。
 
 - 管理者はユーザーの検索、ページング、作成、編集、有効・無効化、削除、アバター更新を行えます。サーバーは現在の管理者を保護し、更新ロック内で認可を再確認するため、同時操作で全管理者の権限を失うことを防ぎます。
@@ -173,7 +175,7 @@ Web/App/Desktop は同じ `AdminWorkspace`、management store、型付き client
 
 ## アプリ設定と表示
 
-各プロジェクトの `.env.example` に用途、列挙値と範囲を記載します。[全変数一覧](../../.env.example) と [環境設定ガイド](../../docs/environment-configuration.md) に読み込み順序と共通コマンドをまとめています。
+各プロジェクトの `.env.example` に用途、列挙値と範囲を記載します。[全変数一覧](../../.env.example) と [環境設定](templates/skills/hai-app-create/development.md#环境配置) に読み込み順序と共通コマンドをまとめています。
 
 生成されるすべての `.gitignore` に `**/data/` を含め、ルートと各 workspace の実行データおよび `.gitkeep` を除外します。必要なディレクトリは実行時に作成します。
 
@@ -190,6 +192,14 @@ SvelteKit のサーバー layout は名称、バージョン、環境、既定�
 葉の環境変数は YAML に存在するパスだけを上書きします。コメントの項目は先に有効にするか、`HAI_DB`、`HAI_CACHE` などでオブジェクト全体を置き換えます。camelCase は分割せず、`connectTimeout` は `HAI_CACHE_CONNECTTIMEOUT` に対応します。言語一覧は各フロントエンド/shared の `project.inlang/settings.json` で管理し、`_core.yml` は既定言語のみを指定します。
 
 Fullstack の `.env` は選択したモジュールの実行パラメーターを有効にします。YAML は同名の変数を参照し、ローカル既定値を保持します。未使用モジュールと任意フィールドはコメントとして残します。環境の切り替えは dev:test / dev:prod、build:prod、start:test / start:prod を使用します。
+
+## 環境別デプロイ
+
+`hai deploy --env test` で先に `.env.test` を確認し、各ミドルウェアに既定設定・カスタム接続・変更しないを選択します。`--yes` は完全な対象設定を維持し、それ以外は現在のバックエンド既定値を使います。`--env-dir` で保存先を指定できます。対象サービスのディレクトリーを明示します（例：hai deploy packages/my-app-serv --env test）。workspace 構成を推測せず、起動スクリプトに環境を明示します。公開接続値は対象環境、認証情報は `.env.local` に保存し、表示をマスクします。
+
+設定済みの環境ではウィザードで「直接デプロイ」を選ぶか、`hai deploy packages/my-app-serv --env prod --yes --skip-middleware` を実行すると、すべてのミドルウェア設定・書き込み・リソース作成を省略できます。不足する SSH/Vercel 接続情報は対話で補完し、ホスト、ポート、鍵のパス、リモートディレクトリー、Token を Git 対象外の `.env.local` にのみ保存して再利用します。接続先は `HAI_DEPLOY_PROVIDER` で更新できます。秘密鍵は内容ではなくパスを指定します。
+
+[Deployment and middleware reference](templates/skills/hai-deploy/middleware.md) · `pnpm --filter @h-ai/cli test:deploy-gates`
 
 ## 共通オプション
 
