@@ -31,11 +31,10 @@ export function registerClipboardHostWriter(
  * 这里统一吞掉异常并回退为 null。
  */
 export function readStoredValue(key: string): string | null {
-  if (typeof localStorage === 'undefined') {
-    return null
-  }
-
   try {
+    if (typeof localStorage === 'undefined') {
+      return null
+    }
     return localStorage.getItem(key)
   }
   catch {
@@ -49,11 +48,10 @@ export function readStoredValue(key: string): string | null {
  * 返回值显式告诉调用方持久化是否成功，方便调用方在失败时继续使用内存态而不必中断交互。
  */
 export function writeStoredValue(key: string, value: string): boolean {
-  if (typeof localStorage === 'undefined') {
-    return false
-  }
-
   try {
+    if (typeof localStorage === 'undefined') {
+      return false
+    }
     localStorage.setItem(key, value)
     return true
   }
