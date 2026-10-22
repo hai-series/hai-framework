@@ -130,6 +130,8 @@ await vecdb.init({
 
 > 行为说明：空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`；缺少可选驱动时返回 `HaiVecdbError.DRIVER_NOT_FOUND`。
 
+Qdrant 的 `insert/upsert/delete` 使用 `wait: true`，成功表示服务端已应用该操作；`vector.count` 使用精确计数，不使用集合信息的近似 points_count。多个操作之间仍不构成事务。
+
 ### 错误处理
 
 所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。

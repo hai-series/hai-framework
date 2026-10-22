@@ -174,6 +174,8 @@ await vecdb.vector.delete('docs', ['doc-1', 'doc-2'])
 
 > 空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`。Qdrant `collection.exists()` 仅在 404 时返回 `false`，网络异常会返回查询错误而不是误判不存在。
 
+Qdrant `insert/upsert/delete` 等待服务端应用完成（wait:true）才返回成功，`vector.count` 请求精确计数。多次操作之间没有事务；Knowledge 在此基础上使用共享版本清单发布与补偿。
+
 > Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。嵌入式模式（提供 `path` 且无 `url`）下 `vecdb.init` 通过 `serverCommand`（默认 `chroma`，来自可选依赖 `chromadb`）拉起本地服务，`vecdb.close` 时关闭进程；服务命令不可用或就绪超时时 `init` 返回 `HaiVecdbError.CONNECTION_FAILED`。直连模式提供 `url` 即可，不拉起进程。
 
 **VectorDocument**：

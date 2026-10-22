@@ -202,7 +202,11 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () 
 
 #### Memory / RAG / Knowledge
 
-默认 DB Store 的向量 upsert、集合查询/创建失败会向上层传播，Knowledge 入库不会把向量失败当作成功再登记文档。LanceDB 使用带持久主键的原子 merge；insert 保留已有 ID，upsert 才整体替换。向量 merge 与关系表写入不构成跨存储事务，失败需由应用按文档/向量 ID 核对和补偿。
+Knowledge 每次导入生成唯一 `revision` 和分块 ID，先完整准备分块、向量及实体，再持久化暂存清单、写入向量，最后通过共享 Store CAS 一次发布正文、实体和元数据。相同文档并发重建只允许一个写入者；失败时保留完整旧版，缩短文档不会留下可见旧尾块。检索只接受当前发布版本，并在发布穿插时重试，持续冲突返回错误供调用方重试。向量候选可能按需扩大，清理积压会增加查询成本。
+
+`ingest` 成功结果包含 `revision` 与 `cleanupPending`：后者为 true 表示新版本已经发布，但旧向量删除仍待补偿。调用 `repair({ collection, offset, limit })` 分页重试；`setup` 自动检查前 100 份清单，生产环境应定期扫描全部页。暂存期限为存储端时钟的 5 分钟，超时写入者不能发布；故障暂存的永久墓碑用于反复删除迟到的外部写入，不能随日志保留期删除。SQL 与 vecdb 不组成跨库事务，恢复依赖持久清单和持续补偿。`removeDocument` / `deleteCollection` 先撤销可见性，清理失败返回错误；集合删除保留空向量集合及代际墓碑以支持补偿，重新 setup 不显示上一代内容。
+
+默认 DB Store 传播集合查询/创建及向量写入失败。LanceDB 使用持久主键原子 merge；Qdrant 写入/删除等待应用完成，计数使用精确计数。多节点必须共享关系存储和服务端向量后端；自定义 `KnowledgeStore` 须实现相同的版本发布与补偿契约。
 
 使用 LanceDB 时，集合维度与 metric 随 Arrow schema 持久化；连接 metric 只影响新集合。重启后复用同一持久目录，embedding 维数改变时重建匹配集合；多个节点各自的本地路径不会自动共享，分布式 Knowledge 推荐服务端向量后端。
 
@@ -227,7 +231,14 @@ const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], 
 
 const setup = await ai.knowledge.setup()
 if (setup.success) {
-  await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
+  const ingested = await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
+  if (!ingested.success)
+    return ingested
+  if (ingested.data.cleanupPending) {
+    const repaired = await ai.knowledge.repair({ offset: 0, limit: 100 })
+    if (!repaired.success)
+      return repaired
+  }
 }
 ```
 

@@ -13,7 +13,7 @@ import type { KnowledgeConfig } from '../ai-config.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { Citation } from '../retrieval/ai-retrieval-types.js'
-import type { KnowledgeStore } from '../store/ai-store-types.js'
+import type { KnowledgeDocumentRevision, KnowledgeStore } from '../store/ai-store-types.js'
 import type {
   EntityDocumentResult,
   EntityListOptions,
@@ -30,6 +30,8 @@ import type {
   KnowledgeIngestInput,
   KnowledgeIngestResult,
   KnowledgeOperations,
+  KnowledgeRepairOptions,
+  KnowledgeRepairResult,
   KnowledgeRetrieveItem,
   KnowledgeRetrieveOptions,
   KnowledgeRetrieveResult,
@@ -67,6 +69,7 @@ Rules:
  * @param datapipe - datapipe 实例（必选，用于文本清洗与分块）
  * @param store - KnowledgeStore 实例（可选，未提供时 knowledge 子系统不可用）
  * @returns KnowledgeOperations 实例
+ * @example `const knowledge = createKnowledgeOperations(config, llm, embedding, datapipe, store)`
  */
 export function createKnowledgeOperations(
   config: KnowledgeConfig,
@@ -76,7 +79,7 @@ export function createKnowledgeOperations(
   store?: KnowledgeStore,
 ): KnowledgeOperations {
   /**
-   * 检查 collection 是否已就绪（cache-aside：先查进程内缓存，未命中则查 DB 注册表并回填缓存）
+   * 检查 collection 是否已就绪，每次查询共享注册表，不缓存可变发布状态。
    *
    * 支持多节点场景：其他节点完成 setup 后，本节点通过 DB 查询亦可感知。
    */
@@ -91,7 +94,7 @@ export function createKnowledgeOperations(
     /**
      * 初始化知识库（幂等，支持多次调用以初始化不同 collection）
      *
-     * 创建 vecdb 集合（已存在则跳过）和 reldb 实体索引表（DDL 幂等）。
+     * 创建 vecdb 集合（已存在则跳过）和 reldb 版本清单表（DDL 幂等），并恢复前 100 份清单。
      * **每个 collection 在使用 `ingest` / `retrieve` / `ask` 前必须先对该 collection 执行 `setup`。**
      * 多分场景下可多次调用本方法，每次传入不同 `collection` 名称。
      *
@@ -111,6 +114,7 @@ export function createKnowledgeOperations(
       try {
         await store.initialize(collection, dimension)
         await store.registerCollection(collection, dimension)
+        await store.repair(collection)
 
         logger.debug('Knowledge base setup completed', { collection })
         return ok(undefined)
@@ -125,8 +129,8 @@ export function createKnowledgeOperations(
     /**
      * 导入文档到知识库
      *
-     * 流程：清洗 → 分块 → Embedding 向量化 → 存入 vecdb；
-     * 可选地提取命名实体并建立倒排索引（实体增强相关度）。
+     * 流程：清洗 → 分块 → Embedding/完整实体准备 → 持久暂存 → vecdb → CAS 发布；
+     * 实体提取失败不发布新版本，已发布版本与待清理数据分别报告。
      *
      * @param input - 导入输入（documentId、content、可选 cleanOptions / chunkOptions / metadata 等）
      * @returns `ok(KnowledgeIngestResult)` 含导入信息；未初始化时返回 `KNOWLEDGE_NOT_SETUP`
@@ -142,10 +146,6 @@ export function createKnowledgeOperations(
      */
     async ingest(input: KnowledgeIngestInput): Promise<HaiResult<KnowledgeIngestResult>> {
       const collection = input.collection ?? config.collection
-      if (!await isCollectionReady(collection)) {
-        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
-      }
-
       const startTime = Date.now()
       const enableEntityExtraction = input.enableEntityExtraction ?? config.enableEntityExtraction
       // 合并 config 默认值与 input 覆盖选项（input 优先级更高）
@@ -161,6 +161,8 @@ export function createKnowledgeOperations(
       logger.trace('Ingesting document', { documentId: input.documentId, collection, contentLength: input.content.length })
 
       try {
+        if (!await isCollectionReady(collection))
+          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         // ① 清洗：标准化文本（去 HTML、空白规整等）
         const cleanResult = datapipe.clean(input.content, cleanOptions)
         const cleanedText = cleanResult.success ? cleanResult.data : input.content
@@ -178,9 +180,10 @@ export function createKnowledgeOperations(
           return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: 'Embedding failed' } }), embedResult.error)
         }
 
-        // ④ 存入 vecdb
+        // ④ 每次导入使用不可复用 revision，任何新旧分块都不会覆盖同一个向量 ID。
+        const revision = nanoid(32)
         const vectorDocuments = chunks.map((chunk, i) => {
-          const chunkId = `${input.documentId}:chunk-${chunk.index}`
+          const chunkId = `${revision}:chunk-${chunk.index}`
           return {
             id: chunkId,
             vector: embedResult.data[i],
@@ -193,76 +196,66 @@ export function createKnowledgeOperations(
               url: input.url,
               position: `chunk:${chunk.index}`,
               chunkIndex: chunk.index,
+              revision,
             },
           }
         })
 
-        await store!.upsertVectors(collection, vectorDocuments)
-
-        // ④.b 记录文档元数据
-        await store!.upsertDocument({
-          documentId: input.documentId,
-          collection,
-          title: input.title,
-          url: input.url,
-          chunkCount: chunks.length,
-          createdAt: Date.now(),
-        })
-
-        // ⑤ 实体提取（可选）
+        // ⑤ 完整准备实体后再开始存储；实体与命中关系随同一文档 revision 一次发布。
         const extractedEntities: KnowledgeEntity[] = []
+        const entities: KnowledgeDocumentRevision['entities'] = []
 
         if (enableEntityExtraction) {
           const chunkInputs = chunks.map(chunk => ({
             content: chunk.content,
-            chunkId: `${input.documentId}:chunk-${chunk.index}`,
+            chunkId: `${revision}:chunk-${chunk.index}`,
           }))
 
           const entityResult = await extractEntitiesBatch(llm, chunkInputs, undefined, config.entityTypes, config.systemPrompt)
           if (entityResult.success) {
-            // ⑥ 写入 reldb
             for (const entity of entityResult.data) {
               const entityId = `ent-${nanoid(12)}`
               const knowledgeEntity: KnowledgeEntity = {
                 id: entityId,
                 name: entity.name,
                 type: entity.type,
-                aliases: entity.aliases,
+                aliases: entity.aliases ?? [],
                 description: entity.description,
               }
               extractedEntities.push(knowledgeEntity)
 
-              // 插入实体
-              await store!.upsertEntity({
+              entities.push({
                 id: entityId,
                 name: entity.name,
                 type: entity.type,
-                collection,
-                aliases: entity.aliases,
+                aliases: entity.aliases ?? [],
                 description: entity.description,
+                chunkIds: entity.chunkIds.filter(chunkId => vectorDocuments.some(chunk => chunk.id === chunkId)),
               })
-
-              // 插入文档-实体关联（每个命中的 chunkId 建一条倒排记录）
-              for (const chunkId of entity.chunkIds) {
-                await store!.insertEntityDocument({
-                  entityId,
-                  documentId: input.documentId,
-                  chunkId,
-                  collection,
-                  relevance: 1.0,
-                  context: chunks.find(c => `${input.documentId}:chunk-${c.index}` === chunkId)?.content?.slice(0, 200),
-                })
-              }
             }
           }
           else {
-            logger.warn('Entity extraction failed, skipping', { error: entityResult.error })
+            // 显式要求的实体提取失败不能发布不完整的新版本。
+            return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: entityResult.error.message } }), entityResult.error)
           }
         }
+
+        const published = await store!.replaceDocument({
+          documentId: input.documentId,
+          collection,
+          revision,
+          title: input.title,
+          url: input.url,
+          createdAt: Date.now(),
+          chunks: vectorDocuments,
+          entities,
+        })
 
         const duration = Date.now() - startTime
         logger.debug('Document ingested', {
           documentId: input.documentId,
+          revision,
+          cleanupPending: published.cleanupPending,
           chunkCount: chunks.length,
           entityCount: extractedEntities.length,
           duration,
@@ -270,6 +263,8 @@ export function createKnowledgeOperations(
 
         return ok({
           documentId: input.documentId,
+          revision,
+          cleanupPending: published.cleanupPending,
           chunkCount: chunks.length,
           entities: extractedEntities,
           duration,
@@ -294,10 +289,6 @@ export function createKnowledgeOperations(
      */
     async retrieve(query: string, options?: KnowledgeRetrieveOptions): Promise<HaiResult<KnowledgeRetrieveResult>> {
       const collection = options?.collection ?? config.collection
-      if (!await isCollectionReady(collection)) {
-        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
-      }
-
       const startTime = Date.now()
       const topK = options?.topK ?? 10
       const enableEntityBoost = options?.enableEntityBoost ?? true
@@ -305,6 +296,8 @@ export function createKnowledgeOperations(
       logger.trace('Knowledge retrieval', { query: query.slice(0, 100), collection, topK })
 
       try {
+        if (!await isCollectionReady(collection))
+          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         // ① 向量化查询
         const embedResult = await embedding.embedText(query)
         if (!embedResult.success) {
@@ -375,8 +368,7 @@ export function createKnowledgeOperations(
                 const entityName = entityNameMap.get(relation.entityId) ?? ''
 
                 for (const [itemId, item] of itemMap) {
-                  const itemDocId = item.metadata?.documentId as string | undefined
-                  if (itemId === chunkKey || itemDocId === relation.documentId) {
+                  if (itemId === chunkKey) {
                     item.score += boostWeight * relation.relevance
                     if (entityName && !item.matchedEntities!.includes(entityName)) {
                       item.matchedEntities!.push(entityName)
@@ -498,11 +490,13 @@ export function createKnowledgeOperations(
     // ─── findByEntity ───
     async findByEntity(entityName: string, options?: EntityQueryOptions): Promise<HaiResult<EntityDocumentResult[]>> {
       const collection = options?.collection ?? config.collection
-      if (!store || !await isCollectionReady(collection)) {
+      if (!store) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
+        if (!await isCollectionReady(collection))
+          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         const results = await store.findByEntityName(entityName, {
           collection,
           type: options?.type,
@@ -562,26 +556,25 @@ export function createKnowledgeOperations(
     // ─── listDocuments ───
     async listDocuments(options?: KnowledgeDocumentListOptions): Promise<HaiResult<KnowledgeDocumentInfo[]>> {
       const collection = options?.collection ?? config.collection
-      if (!store || !await isCollectionReady(collection)) {
+      if (!store) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
+        if (!await isCollectionReady(collection))
+          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
         const docs = await store.listDocuments(collection, {
           offset: options?.offset,
           limit: options?.limit,
         })
 
-        // 查询每个文档的实体关联数
-        const docIds = docs.map(d => d.documentId)
-        const entityCounts = await store.listDocumentEntityCounts(docIds, collection)
-
         const result: KnowledgeDocumentInfo[] = docs.map(d => ({
           documentId: d.documentId,
+          revision: d.revision,
           title: d.title ?? undefined,
           url: d.url ?? undefined,
           chunkCount: d.chunkCount,
-          entityCount: entityCounts.get(d.documentId) ?? 0,
+          entityCount: d.entityCount,
           createdAt: d.createdAt,
         }))
 
@@ -595,42 +588,37 @@ export function createKnowledgeOperations(
     // ─── removeDocument ───
     async removeDocument(documentId: string, options?: KnowledgeDocumentRemoveOptions): Promise<HaiResult<void>> {
       const collection = options?.collection ?? config.collection
-      if (!store || !await isCollectionReady(collection)) {
+      if (!store) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
-        // ① 查询该文档的所有 chunk ID
-        const docMeta = await store.getDocument(documentId, collection)
-        const chunkCount = docMeta?.chunkCount ?? 100 // 回退到大数保证覆盖
-
-        // 生成要删除的向量 ID 列表
-        const vectorIds: string[] = []
-        for (let i = 0; i < chunkCount; i++) {
-          vectorIds.push(`${documentId}:chunk-${i}`)
-        }
-
-        // ② 删除向量
-        if (vectorIds.length > 0) {
-          try {
-            await store.removeVectors(collection, vectorIds)
-          }
-          catch (vecError) {
-            logger.warn('Failed to delete some vectors', { documentId, error: vecError })
-          }
-        }
-
-        // ③ 删除实体本体（需先于关联行删除，子查询依赖关联表）
-        await store.deleteDocumentEntities(documentId, collection)
-
-        // ④ 删除实体关联行
-        await store.removeDocumentEntityRelations(documentId, collection)
-
-        // ⑤ 删除文档元数据
+        if (!await isCollectionReady(collection))
+          return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+        // 先原子撤销完整版本，再按持久清单清理；删除失败必须报告并可用 repair 重试。
         await store.removeDocument(documentId, collection)
 
         logger.debug('Document removed', { documentId, collection })
         return ok(undefined)
+      }
+      catch (error) {
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)
+      }
+    },
+
+    /**
+     * 有界恢复过期暂存并重试旧向量清理；故障时保留持久补偿信息。
+     * @example `await ai.knowledge.repair({ collection: 'docs', offset: 0, limit: 100 })`
+     */
+    async repair(options?: KnowledgeRepairOptions): Promise<HaiResult<KnowledgeRepairResult>> {
+      if (!store)
+        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
+      if (!Number.isSafeInteger(options?.offset ?? 0) || (options?.offset ?? 0) < 0
+        || !Number.isSafeInteger(options?.limit ?? 100) || (options?.limit ?? 100) < 1 || (options?.limit ?? 100) > 1000) {
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: 'Repair offset must be nonnegative and limit must be between 1 and 1000' } }))
+      }
+      try {
+        return ok(await store.repair(options?.collection ?? config.collection, options))
       }
       catch (error) {
         return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)

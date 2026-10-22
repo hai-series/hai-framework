@@ -202,7 +202,11 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () 
 
 #### Memory / RAG / Knowledge
 
-既定 DB Store はベクトル upsert と集合の照会・作成エラーを上位に伝え、失敗した書き込みを Knowledge 文書として登録しません。LanceDB は永続主キーを持つ原子 merge を使い、insert は既存 ID を保持し、upsert は行全体を置換します。ベクトルと関係テーブルの書き込みは共通トランザクションではなく、文書・ベクトル ID による照合と補償が必要です。
+Knowledge は取り込みごとに一意の `revision` と chunk ID を生成します。全文・ベクトル・エンティティを準備し、永続ステージングマニフェストとベクトルを書いた後、共有 Store CAS で完全なスナップショットを一度に公開します。同じ文書の再構築は一つの writer に制限され、失敗時は完全な旧版を保持します。短い新版に旧末尾 chunk が混在しません。検索は未公開版を除外し、公開と競合すれば再試行します。競合が続く場合はエラーを返します。候補拡張や清掃待ちは検索負荷を増やすことがあります。
+
+成功結果の `revision` と `cleanupPending` を確認してください。後者が true の場合、新版は公開済みですが旧ベクトルの清掃が残っています。`repair({ collection, offset, limit })` で全ページを定期処理してください。setup は最初の 100 マニフェストを確認します。ステージングは保存先時計で 5 分後に失効し、旧 writer は公開できません。遅延した外部書き込みを繰り返し清掃するため、放棄版の墓碑は永久保持し、ログと共に削除しません。SQL とベクトルは共通トランザクションではありません。文書・集合の削除は先に可視性を取り消し、清掃失敗を返します。集合削除は空ベクトル集合と世代墓碑を補償用に残し、再 setup で旧世代を復元しません。
+
+DB Store は集合・ベクトルの失敗を伝播します。LanceDB は永続主キーの原子 merge を使い、Qdrant は書き込み・削除の適用を待ち、正確な件数を取得します。分散ノードは同一の関係保存先とサーバー型ベクトル基盤を共有します。独自 KnowledgeStore も同じ公開・補償契約が必要です。
 
 LanceDB の集合次元と metric は Arrow schema に永続化され、接続設定は新規集合にのみ影響します。再起動後は同じ永続ディレクトリを使い、embedding 次元を変更する場合は集合を再作成してください。別ノードのローカルパスは自動共有されないため、分散 Knowledge にはサーバー型ベクトルバックエンドを使用します。
 
@@ -227,7 +231,14 @@ const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], 
 
 const setup = await ai.knowledge.setup()
 if (setup.success) {
-  await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
+  const ingested = await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
+  if (!ingested.success)
+    return ingested
+  if (ingested.data.cleanupPending) {
+    const repaired = await ai.knowledge.repair({ offset: 0, limit: 100 })
+    if (!repaired.success)
+      return repaired
+  }
 }
 ```
 

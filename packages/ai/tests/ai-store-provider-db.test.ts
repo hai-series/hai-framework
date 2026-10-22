@@ -47,6 +47,7 @@ function createMockVecdb(): VecdbFunctions {
     init: async () => ok(undefined),
     close: async () => ok(undefined),
     config: null,
+    rawConnection: null,
     isInitialized: true,
     collection: {
       create: async () => ok(undefined),
@@ -73,12 +74,12 @@ describe('db vector writes propagate failures', () => {
     const options = { filter: { nested: { owner: 'alice' } }, topK: 3 }
     const operation = kind === 'vector'
       ? () => provider.createVectorStore('docs').search([1, 0], options)
-      : () => provider.createKnowledgeStore().searchVectors('docs', [1, 0], options)
+      : () => provider.createKnowledgeStore!().searchVectors('docs', [1, 0], options)
     await expect(operation()).rejects.toThrow('Unsupported metadata filter')
-    expect(search).toHaveBeenCalledWith('docs', [1, 0], options)
+    expect(search).toHaveBeenCalledWith('docs', [1, 0], expect.objectContaining({ filter: options.filter }))
   })
 
-  it.each(['vector', 'knowledge'] as const)('%s Store 传播 exists/create/upsert 错误，不继续伪成功', async (kind) => {
+  it('vector Store 传播 exists/create/upsert 错误，不继续伪成功', async () => {
     for (const phase of ['exists', 'create', 'upsert'] as const) {
       const database = createMockVecdb()
       const failure = { success: false as const, error: { code: 'hai:vecdb:008', message: `${phase} unavailable` } }
@@ -89,9 +90,7 @@ describe('db vector writes propagate failures', () => {
       else
         vi.spyOn(database.collection, phase).mockResolvedValue(failure)
       const provider = createDbStoreProvider({ sql: createMockSql([]), jsonOps, vecdb: database })
-      const operation = kind === 'vector'
-        ? () => provider.createVectorStore('docs').upsert('one', [1, 0])
-        : () => provider.createKnowledgeStore().upsertVectors('docs', [{ id: 'one', vector: [1, 0] }])
+      const operation = () => provider.createVectorStore('docs').upsert('one', [1, 0])
       await expect(operation()).rejects.toThrow(`${phase} unavailable`)
       if (phase !== 'upsert')
         expect(upsert).not.toHaveBeenCalled()

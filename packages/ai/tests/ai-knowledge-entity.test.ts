@@ -229,7 +229,7 @@ describe('knowledge 批量实体提取（extractEntitiesBatch）', () => {
     }
   })
 
-  it('部分 chunk 提取失败不影响整体', async () => {
+  it('部分 chunk 提取失败拒绝发布不完整实体版本', async () => {
     let callCount = 0
     const llm: LLMOperations = {
       chat: vi.fn(async () => {
@@ -265,12 +265,7 @@ describe('knowledge 批量实体提取（extractEntitiesBatch）', () => {
     ]
 
     const result = await extractEntitiesBatch(llm, chunks, undefined, undefined, undefined, 2)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      // 第一个失败，第二个成功
-      expect(result.data.length).toBe(1)
-      expect(result.data[0].name).toBe('Entity1')
-    }
+    expect(result.success).toBe(false)
   })
 
   it('更详细描述覆盖简短描述', async () => {

@@ -229,6 +229,11 @@ const ingest = await ai.knowledge.ingest({
   enableEntityExtraction: true,
 })
 if (!ingest.success) return ingest
+if (ingest.data.cleanupPending) {
+  const repair = await ai.knowledge.repair({ offset: 0, limit: 100 })
+  if (!repair.success) return repair
+  // 大集合继续分页，并将 repair 全页扫描纳入定期维护。
+}
 
 const answer = await ai.knowledge.ask('核心架构是什么？')
 ```

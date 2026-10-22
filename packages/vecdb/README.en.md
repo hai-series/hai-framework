@@ -130,6 +130,8 @@ await vecdb.init({
 
 > Behavior: empty batch `insert/upsert/delete` calls are no-ops. Writes and searches validate vector dimensions, returning `HaiVecdbError.DIMENSION_MISMATCH` on a mismatch; missing optional drivers return `HaiVecdbError.DRIVER_NOT_FOUND`.
 
+Qdrant `insert/upsert/delete` use `wait: true`, so success means the server applied that operation. `vector.count` requests an exact count rather than approximate collection statistics. Multiple operations do not form a transaction.
+
 ### Error handling
 
 All operations return `HaiResult<T>`; check `result.success` for success or failure.

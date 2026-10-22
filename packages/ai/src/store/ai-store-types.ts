@@ -286,75 +286,117 @@ export interface SessionInfo {
 // ─── Knowledge 存储抽象 ───
 
 /**
+ * 一次完整准备、尚未发布的文档版本；chunk 和实体关联必须使用本版本的唯一 ID。
+ * @example `{ documentId: 'guide', collection: 'docs', revision: crypto.randomUUID(), chunks: [], entities: [], createdAt: Date.now() }`
+ */
+export interface KnowledgeDocumentRevision {
+  /** 业务文档 ID。 */
+  documentId: string
+  /** 逻辑集合名。 */
+  collection: string
+  /** 每次导入生成的不可复用版本。 */
+  revision: string
+  /** 标题。 */
+  title?: string
+  /** 信源地址。 */
+  url?: string
+  /** 本次版本的创建时间，Unix 毫秒。 */
+  createdAt: number
+  /** 本版本全部分块；向量只在暂存阶段写入，发布快照不保留向量数组。 */
+  chunks: Array<{ id: string, vector: number[], content: string, metadata: Record<string, unknown> }>
+  /** 本版本全部实体及命中分块，不与其他文档共享可变实体行。 */
+  entities: Array<{ id: string, name: string, type: string, aliases: string[], description?: string, chunkIds: string[] }>
+}
+
+/**
+ * 有界补偿扫描的进度；调用方以 offset + processed 继续，直到覆盖 total。
+ * @example `const progress = await store.repair('docs', { offset: 0, limit: 100 })`
+ */
+export interface KnowledgeRepairProgress {
+  /** 本页检查的文档墓碑/清单数。 */
+  processed: number
+  /** 集合内清单总数，包含已删除文档的补偿墓碑。 */
+  total: number
+}
+
+/**
+ * 来自同一已发布快照的文档摘要，实体数不会与另一个 revision 拼接。
+ * @example `{ documentId: 'guide', collection: 'docs', revision: 'unique', title: null, url: null, chunkCount: 2, entityCount: 1, createdAt: Date.now() }`
+ */
+export interface KnowledgeDocumentMetadata {
+  /** 业务文档 ID。 */
+  documentId: string
+  /** 逻辑集合名。 */
+  collection: string
+  /** 当前发布版本。 */
+  revision: string
+  /** 可选标题，缺失为 null。 */
+  title: string | null
+  /** 可选信源地址，缺失为 null。 */
+  url: string | null
+  /** 同版本分块数。 */
+  chunkCount: number
+  /** 同版本实体数。 */
+  entityCount: number
+  /** 版本创建时间，Unix 毫秒。 */
+  createdAt: number
+}
+
+/**
  * Knowledge 专用存储接口
  *
  * 封装知识库的实体索引、文档元数据和向量操作。
- * 默认实现使用 reldb 归一化表 + vecdb 向量检索；
+ * 默认实现使用 reldb 单文档版本清单 CAS + vecdb 向量检索；
  * SaaS 实现可对接远端知识库 API。
  */
 export interface KnowledgeStore {
   /** 初始化存储（建表 / 建集合 / 建索引，幂等） */
   initialize: (collection: string, dimension: number) => Promise<void>
 
+  /**
+   * 先持久化暂存清单，再写向量，最后原子发布完整版本；失败保留原可见版本和补偿记录。
+   * 同一文档正在导入时拒绝并发写入。cleanupPending 表示发布成功但旧数据清理需重试。
+   * @example `await store.replaceDocument(preparedRevision)`
+   */
+  replaceDocument: (document: KnowledgeDocumentRevision) => Promise<{ cleanupPending: boolean }>
+  /**
+   * 恢复过期暂存并清理记录在案的旧向量；故障抛错，不以空结果伪装成功。
+   * 被遗弃暂存的墓碑保留，重复扫描可清理旧节点迟到的外部写入。
+   * @example `await store.repair('docs', { offset: 0, limit: 100 })`
+   */
+  repair: (collection: string, options?: { offset?: number, limit?: number }) => Promise<KnowledgeRepairProgress>
+
   // ─── 实体 CRUD ───
 
-  /** 插入或更新实体 */
-  upsertEntity: (entity: { id: string, name: string, type: string, collection: string, aliases?: string[], description?: string }) => Promise<void>
   /** 按名称模糊搜索实体（匹配 name 和 aliases，可按 collection 过滤） */
   findEntitiesByName: (keyword: string, collection?: string) => Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>>
   /** 列出实体（支持 collection / 类型 / 关键词搜索） */
   listEntities: (options?: { collection?: string, type?: string, keyword?: string, limit?: number }) => Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>>
-  /** 批量删除实体本体 */
-  deleteEntities: (entityIds: string[]) => Promise<void>
-  /**
-   * 删除指定文档在指定 collection 中的所有实体本体
-   *
-   * 使用子查询，必须在 removeDocumentEntityRelations 之前调用（关联行删除后子查询结果为空）。
-   * removeDocument 使用此方法完成实体数据闭环，无需两步查询。
-   */
-  deleteDocumentEntities: (documentId: string, collection: string) => Promise<void>
 
   // ─── 文档-实体关联 ───
 
-  /** 插入文档-实体关联 */
-  insertEntityDocument: (relation: { entityId: string, documentId: string, chunkId?: string, collection: string, relevance?: number, context?: string }) => Promise<void>
   /** 按实体 ID 列表查询关联文档 */
   findDocumentsByEntityIds: (entityIds: string[], collection?: string) => Promise<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>>
   /** 按实体名称查询实体及其关联文档 */
   findByEntityName: (entityName: string, options?: { collection?: string, type?: string }) => Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>>
-  /**
-   * 删除文档相关的实体关联行
-   *
-   * 仅删除 entity_document 关联行，不删除实体本体。
-   * 调用前应先执行 deleteDocumentEntities，否则子查询结果为空导致实体无法清理。
-   */
-  removeDocumentEntityRelations: (documentId: string, collection: string) => Promise<void>
 
   // ─── 文档元数据 ───
 
-  /** 保存文档元数据 */
-  upsertDocument: (doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number }) => Promise<void>
   /** 按 documentId + collection 获取单个文档元数据 */
-  getDocument: (documentId: string, collection: string) => Promise<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number } | undefined>
+  getDocument: (documentId: string, collection: string) => Promise<KnowledgeDocumentMetadata | undefined>
   /** 列出文档元数据 */
-  listDocuments: (collection: string, options?: { offset?: number, limit?: number }) => Promise<Array<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>>
-  /** 查询每个文档的实体关联数 */
-  listDocumentEntityCounts: (documentIds: string[], collection: string) => Promise<Map<string, number>>
-  /** 删除文档元数据 */
+  listDocuments: (collection: string, options?: { offset?: number, limit?: number }) => Promise<KnowledgeDocumentMetadata[]>
+  /** 原子撤销文档版本并删除清单中向量；清理失败抛错，持久墓碑允许 repair 重试。 */
   removeDocument: (documentId: string, collection: string) => Promise<void>
 
   // ─── 向量操作 ───
 
-  /** 批量写入向量 */
-  upsertVectors: (collection: string, vectors: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>) => Promise<void>
   /**
    * 向量相似度检索。默认 DB Store 将 filter 透传底层 Provider，校验/查询失败抛错，不当作空结果。
    * LanceDB 仅支持顶层 string/有限 number/boolean/null 的 AND 匹配，null 与字段缺失不同。
    * @example await store.searchVectors('docs', [1, 0], { filter: { tenant: 'acme' } })
    */
   searchVectors: (collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
-  /** 批量删除向量 */
-  removeVectors: (collection: string, ids: string[]) => Promise<void>
   /** 确保向量集合存在 */
   ensureCollection: (collection: string, dimension: number) => Promise<void>
 
@@ -365,8 +407,8 @@ export interface KnowledgeStore {
   /** 检查 collection 是否已在注册表中存在（跨节点/重启后仍有效） */
   collectionExists: (collection: string) => Promise<boolean>
   /**
-   * 删除整个 collection（清理 vecdb 集合 + 所有 reldb 关联数据）
-   * 幂等：collection 不存在时静默成功
+   * 撤销 collection 可见代际并清理向量，保留物理集合与补偿墓碑供迟到写入的重复清理。
+   * 内部按页清理，失败抛错后由 repair 恢复；collection 不存在时幂等成功。
    */
   deleteCollection: (collection: string) => Promise<void>
 }

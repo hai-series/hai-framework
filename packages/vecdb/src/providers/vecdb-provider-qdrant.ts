@@ -7,6 +7,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { QdrantClient as QdrantRestClient } from '@qdrant/js-client-rest'
 import type { DistanceMetric, QdrantConfig } from '../vecdb-config.js'
 import type {
   VectorSearchResult,
@@ -46,6 +47,8 @@ interface QdrantClient {
   upsert: (collection: string, params: Record<string, unknown>) => Promise<unknown>
   delete: (collection: string, params: Record<string, unknown>) => Promise<unknown>
   query: (collection: string, params: Record<string, unknown>) => Promise<{ points: Record<string, unknown>[] }>
+  /** 精确计数签名直接复用可选 SDK 类型，不加载运行时依赖。 */
+  count: QdrantRestClient['count']
 }
 
 /** Qdrant getCollection 的返回类型 */
@@ -321,7 +324,8 @@ export function createQdrantProvider(): VecdbProvider {
 
       // 限制：Qdrant API 仅提供 upsert，无原生 strict insert；
       // ID 已存在时会静默覆盖而非报错，行为等同于 upsert。
-      await client!.upsert(collection, { points })
+      // 返回成功前等待索引写入应用；上层知识版本只有此后才可发布。
+      await client!.upsert(collection, { points, wait: true })
 
       logger.info('Vectors inserted', { collection, count: documents.length })
       return ok(undefined)
@@ -353,7 +357,7 @@ export function createQdrantProvider(): VecdbProvider {
         },
       }))
 
-      await client!.upsert(collection, { points })
+      await client!.upsert(collection, { points, wait: true })
 
       logger.info('Vectors upserted', { collection, count: documents.length })
       return ok(undefined)
@@ -363,7 +367,7 @@ export function createQdrantProvider(): VecdbProvider {
       logger.debug('Deleting vectors', { collection, count: ids.length })
 
       const uuids = ids.map(hashToUuid)
-      await client!.delete(collection, { points: uuids })
+      await client!.delete(collection, { points: uuids, wait: true })
 
       logger.info('Vectors deleted', { collection, count: ids.length })
       return ok(undefined)
@@ -420,12 +424,9 @@ export function createQdrantProvider(): VecdbProvider {
     async count(collection) {
       logger.debug('Counting vectors', { collection })
 
-      const infoResult = await getCollectionInfo(collection)
-      if (!infoResult.success) {
-        return infoResult
-      }
-
-      return ok(infoResult.data.points_count ?? 0)
+      // 集合信息中的 points_count 是近似统计，不能用作版本过滤扩大候选数的终止依据。
+      const count = await client!.count(collection, { exact: true })
+      return ok(count.count)
     },
   }
 

@@ -202,7 +202,11 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () 
 
 #### Memory / RAG / Knowledge
 
-The default DB Store propagates vector upsert and collection lookup/creation failures, so Knowledge ingestion stops before recording failed vector writes as successful documents. LanceDB uses native atomic merge with persisted primary keys: insert preserves existing IDs and upsert replaces rows. Vector and relational writes do not share a transaction; reconcile and compensate by document/vector ID.
+Each Knowledge ingestion creates a unique `revision` and chunk IDs. It prepares all chunks, embeddings and entities, persists a staging manifest, writes vectors, then publishes the complete document and entity snapshot with shared Store CAS. Only one writer can rebuild a document at a time. Failure preserves the complete old version; shorter replacements cannot expose old trailing chunks. Retrieval filters unpublished revisions and retries around publication; sustained contention returns an error. Candidate expansion and cleanup backlogs can increase query cost.
+
+Successful ingestion returns `revision` and `cleanupPending`. A true flag means the new version is published but old vectors still require cleanup. Paginate `repair({ collection, offset, limit })` regularly across every manifest; setup checks the first 100. Staging expires after five minutes according to the storage clock and an expired writer cannot publish. Abandoned writes retain permanent cleanup tombstones so later scans can remove delayed external writes; do not prune these with logs. SQL and vector storage do not share a transaction. Removal hides data first and reports cleanup failures. Collection deletion retains the empty vector collection and generation tombstones for compensation; setup never revives the previous generation.
+
+The DB Store propagates collection and vector failures. LanceDB uses persistent primary-key atomic merge. Qdrant writes/deletes wait until applied and counts are exact. Multiple nodes must share relational storage and a server vector backend. Custom KnowledgeStore implementations must provide the same publication and compensation contract.
 
 With LanceDB, collection dimensions and metrics persist in the Arrow schema; connection metrics only affect new collections. Reuse the same persistent directory after restart and rebuild collections when embedding dimensions change. Local paths on separate nodes do not share data; distributed Knowledge should use a server vector backend.
 
@@ -227,7 +231,14 @@ const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], 
 
 const setup = await ai.knowledge.setup()
 if (setup.success) {
-  await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
+  const ingested = await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
+  if (!ingested.success)
+    return ingested
+  if (ingested.data.cleanupPending) {
+    const repaired = await ai.knowledge.repair({ offset: 0, limit: 100 })
+    if (!repaired.success)
+      return repaired
+  }
 }
 ```
 

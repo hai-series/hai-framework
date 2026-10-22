@@ -111,17 +111,28 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 ## Knowledge
 
-- `setup(options?)`：初始化 collection / 表 / 索引。
-- `ingest(input)`：文档入库。
-- `ingestFile(input)`：从文件导入（Node.js）。
-- `ingestBatch(inputs, onProgress?)`：批量导入。
-- `retrieve(query, options?)`：实体增强检索。
-- `ask(query, options?)`：知识库问答。
-- `findByEntity(entityName, options?)`：实体关联文档。
-- `listEntities(options?)` / `listDocuments(options?)`：列表。
-- `removeDocument(documentId, options?)`：删除文档和关联。
+| 方法 | 说明 |
+| --- | --- |
+| `setup(options?)` | 初始化 collection / 表 / 索引 |
+| `ingest(input)` | 文档入库 |
+| `ingestFile(input)` | 从文件导入（Node.js） |
+| `ingestBatch(inputs, onProgress?)` | 批量导入 |
+| `retrieve(query, options?)` | 实体增强检索 |
+| `ask(query, options?)` | 知识库问答 |
+| `findByEntity(entityName, options?)` | 实体关联文档 |
+| `listEntities(options?)` / `listDocuments(options?)` | 列表 |
+| `removeDocument(documentId, options?)` | 删除文档和关联 |
+| `repair({ collection?, offset?, limit? })` | 有界恢复过期暂存与失败清理，删除集合后也可调用 |
 
-入库链路：parse/clean → chunk → embedding → vecdb upsert → reldb metadata/entity index。
+入库链路：clean/chunk → embedding/完整实体提取 → 持久暂存清单 → vecdb upsert → 单文档 CAS 发布完整正文、实体和元数据。每次产生唯一 revision/chunk ID，相同文档并发重建只允许一个 writer；失败保留旧版，短文档重建不显示旧尾块。向量检索只保留当前发布版，切换期间重试，持续冲突或候选扩展超限返回错误。
+
+`ingest` 成功返回 `revision`、`cleanupPending`。后者为 true 表示完整新版已经发布但旧向量删除失败，须检查并安排 repair，不能当作全部清理完成。`setup` 自动扫描前 100 份清单；应用定期分页 repair（offset≥0，limit 1–1000，默认100），根据 processed/total 覆盖全部页。存储端时钟的 5 分钟暂存过期后旧 owner 不能发布；废弃写入的永久补偿墓碑用于反复清理迟到外部写入，不能随日志删除。SQL 与 vecdb 无跨库事务，故障/重启后的清理依赖持久记录及重复扫描。
+
+删除先撤销可见性，清理失败返回错误并保留补偿信息。集合删除保留物理向量集合与代际墓碑，重新 setup 不会恢复旧代数据。默认 Store 的正文/实体来自同一已发布快照；自定义 KnowledgeStore 必须实现相同发布、删除和补偿契约。Qdrant 写入/删除等待应用，候选上限使用精确计数；LanceDB 使用持久主键原子 merge。
+
+使用 LanceDB 时，集合维度与 metric 随 Arrow schema 持久化；连接 metric 只影响新集合。重启后复用同一持久目录，embedding 维数改变时重建匹配集合；多个节点各自的本地路径不会自动共享，分布式 Knowledge 推荐服务端向量后端。
+
+Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，校验/查询失败必须传播（Knowledge 为 KNOWLEDGE_RETRIEVE_FAILED，ask 为 RAG_FAILED），不能当作空成功结果。LanceDB 仅支持顶层字面量键的 string/有限 number/boolean/null AND 匹配，例如 `{ tenant: 'acme', active: true }`；null 不匹配缺失字段，对象/数组/undefined 返回错误。过滤在向量 topK 前执行；其它后端的 null/复杂值语义须独立核对。LanceDB 原生 JSON 字段保留嵌套 JSON，但旧 Utf8 metadata 集合必须重建后才能写入或过滤。
 
 ## Context
 

@@ -130,6 +130,8 @@ await vecdb.init({
 
 > 動作：空の一括 `insert/upsert/delete` は何もしません。書き込み・検索時にはベクトル次元を検証し、不一致なら `HaiVecdbError.DIMENSION_MISMATCH`、任意ドライバーの不足なら `HaiVecdbError.DRIVER_NOT_FOUND` を返します。
 
+Qdrant の `insert/upsert/delete` は `wait: true` を使用し、成功はサーバーでの適用完了を表します。`vector.count` は集合情報の近似値ではなく正確な件数を取得します。複数操作をまとめたトランザクションではありません。
+
 ### エラー処理
 
 すべての操作は `HaiResult<T>` を返し、`result.success` で成功・失敗を判定します。

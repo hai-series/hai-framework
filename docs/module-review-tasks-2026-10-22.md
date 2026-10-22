@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 40/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 41/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -408,7 +408,8 @@
 
 ### AI-02 · P1 · 让知识重建具备版本发布和清理语义
 
-- [ ] 待修正（源码确认；范围：ai）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：Knowledge 完整 revision 以共享 manifest CAS 发布，正文/实体/元数据同版切换，未发布向量不可见；5 分钟 DB 暂存期限、永久迟到写墓碑、分页 repair 与集合撤销已同步公共类型/三语文档/双份 skill/调用方。4 文件 71 项通过（含真实 SQLite+Qdrant 发布补偿 9 场景），Qdrant CRUD/搜索 18 项及驱动错误 3 项通过；AI/vecdb 类型、严格测试类型、定向 lint、fresh 构建、check:skills 通过。Qdrant wait:true 与精确 count 已启用；未声称 SQL/向量服务跨库事务或独立跨主机验收；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/ai/src/knowledge/ai-knowledge-functions.ts:183](../packages/ai/src/knowledge/ai-knowledge-functions.ts#L183)；[packages/ai/src/knowledge/ai-knowledge-functions.ts:200](../packages/ai/src/knowledge/ai-knowledge-functions.ts#L200)。
 - **证据与影响**：同 documentId 重灌按 chunk 序号 upsert，文档缩短时旧尾部 chunks 未清除；实体/关系跨存储多步写入，中途失败或并发版本没有整体发布边界。
 - **修正内容**：按文档 revision 建立可见版本，完整写入后切换，清理旧 chunks/实体关系；复用现有 store 能力并记录失败补偿，不能仅全删再插造成空窗。

@@ -250,6 +250,7 @@ export interface VectorOperations {
    * @param collection - 集合名称
    * @param documents - 文档列表
    * @returns 成功返回 ok(undefined)；LanceDB 已有 ID 保留不覆盖，同批重复 ID 返回 CONFIG_ERROR。
+   * Qdrant 成功前等待服务端应用写入。
    * @example await vecdb.vector.insert('docs', [{ id: 'doc-1', vector: [1, 0] }])
    */
   insert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
@@ -260,6 +261,7 @@ export interface VectorOperations {
    * @param collection - 集合名称
    * @param documents - 待写入文档；已有 ID 更新，不存在的 ID 插入
    * @returns 成功返回 ok(undefined)；LanceDB 缺少原子主键能力或同批重复 ID 返回 CONFIG_ERROR。
+   * Qdrant 成功前等待服务端应用写入。
    * @example await vecdb.vector.upsert('docs', [{ id: 'doc-1', vector: [1, 0], content: 'updated' }])
    */
   upsert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
@@ -270,6 +272,7 @@ export interface VectorOperations {
    * @param collection - 集合名称
    * @param ids - 文档 ID 列表
    * @returns 成功返回 ok(undefined)
+   * Qdrant 成功前等待服务端应用删除。
    */
   delete: (collection: string, ids: string[]) => Promise<HaiResult<void>>
 
@@ -293,6 +296,7 @@ export interface VectorOperations {
    *
    * @param collection - 集合名称
    * @returns 文档数量
+   * Qdrant 使用精确 count，不依赖集合信息的近似统计。
    */
   count: (collection: string) => Promise<HaiResult<number>>
 }

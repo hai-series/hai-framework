@@ -7,7 +7,7 @@
 
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
-import type { KnowledgeStore } from '../src/store/ai-store-types.js'
+import type { KnowledgeDocumentMetadata, KnowledgeDocumentRevision, KnowledgeStore } from '../src/store/ai-store-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
 import { createKnowledgeOperations } from '../src/knowledge/ai-knowledge-functions.js'
@@ -82,34 +82,27 @@ function createMockEmbedding(): EmbeddingOperations {
 
 function createMockKnowledgeStore() {
   const vectors: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }> = []
-  const documents = new Map<string, { documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>()
+  const documents = new Map<string, KnowledgeDocumentMetadata>()
   const entities = new Map<string, { id: string, name: string, type: string, aliases?: string[], description?: string }>()
   const entityDocs: Array<{ entityId: string, documentId: string, chunkId?: string, collection: string, relevance?: number, context?: string }> = []
   const registeredCollections = new Set<string>()
 
   const store: KnowledgeStore = {
     initialize: vi.fn(async () => {}),
-    upsertEntity: vi.fn(async (entity) => { entities.set(entity.id, entity) }),
+    replaceDocument: vi.fn(async (doc: KnowledgeDocumentRevision) => {
+      vectors.push(...doc.chunks)
+      documents.set(`${doc.documentId}:${doc.collection}`, { ...doc, title: doc.title ?? null, url: doc.url ?? null, chunkCount: doc.chunks.length, entityCount: doc.entities.length })
+      doc.entities.forEach(entity => entities.set(entity.id, entity))
+      return { cleanupPending: false }
+    }),
+    repair: vi.fn(async () => ({ processed: 0, total: 0 })),
     findEntitiesByName: vi.fn(async () => []),
     listEntities: vi.fn(async () => []),
-    insertEntityDocument: vi.fn(async (rel) => { entityDocs.push(rel) }),
     findDocumentsByEntityIds: vi.fn(async () => []),
     findByEntityName: vi.fn(async () => []),
-    deleteDocumentEntities: vi.fn(async (docId: string, col: string) => {
-      const idxToRemove: number[] = []
-      entityDocs.forEach((rel, i) => {
-        if (rel.documentId === docId && rel.collection === col)
-          idxToRemove.push(i)
-      })
-      idxToRemove.reverse().forEach(i => entityDocs.splice(i, 1))
-    }),
-    removeDocumentEntityRelations: vi.fn(async () => {}),
-    upsertDocument: vi.fn(async (doc) => { documents.set(`${doc.documentId}:${doc.collection}`, { ...doc, title: doc.title ?? null, url: doc.url ?? null }) }),
     getDocument: vi.fn(async (docId: string, collection: string) => documents.get(`${docId}:${collection}`) ?? undefined),
     listDocuments: vi.fn(async () => []),
-    listDocumentEntityCounts: vi.fn(async () => new Map<string, number>()),
     removeDocument: vi.fn(async (docId: string, collection: string) => { documents.delete(`${docId}:${collection}`) }),
-    upsertVectors: vi.fn(async (_collection: string, vecs: typeof vectors) => { vectors.push(...vecs) }),
     searchVectors: vi.fn(async (_collection: string, _vector: number[], options?: { topK?: number }) => {
       const topK = options?.topK ?? 10
       return vectors.slice(0, topK).map((v, i) => ({
@@ -119,10 +112,8 @@ function createMockKnowledgeStore() {
         metadata: v.metadata,
       }))
     }),
-    removeVectors: vi.fn(async () => {}),
     ensureCollection: vi.fn(async () => {}),
     registerCollection: vi.fn(async (col: string) => { registeredCollections.add(col) }),
-    deleteEntities: vi.fn(async () => {}),
     collectionExists: vi.fn(async (col: string) => registeredCollections.has(col)),
     deleteCollection: vi.fn(async (col: string) => {
       // 清除 vectors、documents、entityDocs、collection 注册
@@ -363,10 +354,8 @@ describe('knowledge ingest', () => {
     expect(datapipe!.chunk).toHaveBeenCalled()
     // embedding.embedBatch 应被调用（2 个 chunk）
     expect(embedding.embedBatch).toHaveBeenCalled()
-    // store.upsertVectors 应被调用
-    expect(store.upsertVectors).toHaveBeenCalledWith('hai_ai_knowledge1', expect.any(Array))
-    // store.upsertDocument 应被调用
-    expect(store.upsertDocument).toHaveBeenCalled()
+    // 完整版本统一交由 Store 暂存和发布。
+    expect(store.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ collection: 'hai_ai_knowledge1', chunks: expect.any(Array) }))
   })
 
   it('分块失败时退回整文本单一 chunk', async () => {
@@ -440,13 +429,12 @@ describe('knowledge ingest', () => {
       expect(result.data.entities[0].type).toBe('person')
     }
 
-    // store.upsertEntity 应被调用
-    expect(store.upsertEntity).toHaveBeenCalled()
+    expect(store.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ entities: expect.arrayContaining([expect.objectContaining({ name: 'Alice' })]) }))
   })
 
-  it('store.upsertVectors 抛出时 ingest 返回错误', async () => {
+  it('store.replaceDocument 抛出时 ingest 返回错误', async () => {
     const mockStore = createMockKnowledgeStore()
-    mockStore.store.upsertVectors = vi.fn(async () => {
+    mockStore.store.replaceDocument = vi.fn(async () => {
       throw new Error('upsert failed')
     })
 
@@ -797,12 +785,6 @@ describe('knowledge removeDocument', () => {
 
     const result = await ops.removeDocument('doc-1')
     expect(result.success).toBe(true)
-
-    // 验证 store.removeVectors 被调用
-    expect(store.removeVectors).toHaveBeenCalled()
-
-    // 验证 store.removeDocumentEntityRelations 被调用
-    expect(store.removeDocumentEntityRelations).toHaveBeenCalled()
 
     // 验证 store.removeDocument 被调用
     expect(store.removeDocument).toHaveBeenCalled()

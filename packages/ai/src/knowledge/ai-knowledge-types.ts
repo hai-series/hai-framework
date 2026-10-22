@@ -139,16 +139,45 @@ export interface KnowledgeIngestInput {
 
 /**
  * 文档导入结果
+ * @example `if (result.success && result.data.cleanupPending) await ai.knowledge.repair()`
  */
 export interface KnowledgeIngestResult {
   /** 文档 ID */
   documentId: string
+  /** 已完整发布的唯一文档版本；分块 ID 也包含此版本。 */
+  revision: string
+  /** 新版本已可见，但旧向量删除失败；调用 repair 重试，不能忽略此标志。 */
+  cleanupPending: boolean
   /** 生成的分块数量 */
   chunkCount: number
   /** 提取的实体列表（未启用实体提取时为空数组） */
   entities: KnowledgeEntity[]
   /** 处理耗时（毫秒） */
   duration: number
+}
+
+/**
+ * 分页恢复暂存和向量清理；删除集合后也允许调用。
+ * @example `{ collection: 'docs', offset: 0, limit: 100 }`
+ */
+export interface KnowledgeRepairOptions {
+  /** 集合名，默认使用 knowledge.collection。 */
+  collection?: string
+  /** 清单偏移，包含已删除文档的墓碑，默认 0。 */
+  offset?: number
+  /** 本页最多检查 1–1000 份清单，默认 100。 */
+  limit?: number
+}
+
+/**
+ * 本页补偿扫描进度；失败以 HaiResult 返回，补偿记录仍保留。
+ * @example `if (result.success) offset += result.data.processed`
+ */
+export interface KnowledgeRepairResult {
+  /** 本页检查的清单数量。 */
+  processed: number
+  /** 集合内清单总数，包含永久补偿墓碑。 */
+  total: number
 }
 
 /**
@@ -319,8 +348,11 @@ export interface KnowledgeIngestFileInput {
 
 /**
  * 文档信息（列表展示用）
+ * @example `{ documentId: 'guide', revision: 'unique', chunkCount: 2, entityCount: 1, createdAt: Date.now() }`
  */
 export interface KnowledgeDocumentInfo {
+  /** 当前完整发布版本。 */
+  revision: string
   /** 文档 ID */
   documentId: string
   /** 文档标题 */
@@ -442,7 +474,7 @@ export interface KnowledgeOperations {
   /**
    * 初始化知识库（幂等，支持多次调用以初始化不同 collection）
    *
-   * 创建向量集合和实体表。每个 collection 需独立调用本方法，
+   * 创建向量集合和文档版本清单。每个 collection 需独立调用本方法，
    * 未 setup 的 collection 执行以下操作时均会返回 `KNOWLEDGE_NOT_SETUP` 错误：
    * `ingest` / `ingestFile` / `ingestBatch` / `retrieve` / `ask` /
    * `findByEntity` / `listDocuments` / `removeDocument`。
@@ -455,7 +487,8 @@ export interface KnowledgeOperations {
   /**
    * 导入文档
    *
-   * 执行流程：clean → chunk → embed → 向量存储 → 实体提取 → 实体存储
+   * 执行流程：clean → chunk → embed/实体准备 → 持久暂存 → 写入向量 → CAS 发布完整版本。
+   * 成功包含 revision 与 cleanupPending；旧数据清理失败时检查标志并安排 repair。
    *
    * @param input - 文档导入输入
    * @returns 导入结果（分块数、实体列表等）
@@ -515,6 +548,14 @@ export interface KnowledgeOperations {
   removeDocument: (documentId: string, options?: KnowledgeDocumentRemoveOptions) => Promise<HaiResult<void>>
 
   /**
+   * 有界恢复过期暂存、重试失败的旧向量清理。setup 自动扫描前 100 份清单，大集合需定期分页调用。
+   * 暂存租约为存储端时钟的 5 分钟；过期 owner 即使恢复也不能发布。
+   * 被遗弃写入的补偿墓碑永久保留，重复扫描用于清理迟到的外部写入。
+   * @example `const progress = await ai.knowledge.repair({ collection: 'docs', offset: 0, limit: 100 })`
+   */
+  repair: (options?: KnowledgeRepairOptions) => Promise<HaiResult<KnowledgeRepairResult>>
+
+  /**
    * 从文件路径导入文档（仅 Node.js 端可用）
    *
    * 读取文件内容后自动调用 ingest() 完成导入。
@@ -541,8 +582,8 @@ export interface KnowledgeOperations {
   /**
    * 删除整个 collection（幂等）
    *
-   * 同时清除：vecdb 向量集合、实体-文档关联、文档元数据、collection 注册记录。
-   * 删除后 collection 需重新执行 `setup` 才可使用。
+   * 先撤销整个代际的可见性，再清理已登记向量，保留物理集合与补偿墓碑。
+   * 内部按页清理，失败返回错误后可用 repair 恢复；重新 setup 使用新代际。
    *
    * @param collection - 要删除的 collection 名称，默认使用 config.collection
    * @returns 成功返回 ok(undefined)；store 不可用时返回 `KNOWLEDGE_SETUP_FAILED`
