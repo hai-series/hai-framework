@@ -57,7 +57,6 @@ describe('kit transport config', () => {
       excludePaths: ['/api/public'],
       requireEncryption: true,
       encryptResponse: true,
-      maxClients: 10000,
     })
   })
 
@@ -67,7 +66,6 @@ describe('kit transport config', () => {
         keyExchangePath: '/custom/key-exchange',
         requireEncryption: false,
         encryptResponse: false,
-        maxClients: 32,
       },
     })).toEqual({
       server: DEFAULT_SERVER,
@@ -76,7 +74,6 @@ describe('kit transport config', () => {
         excludePaths: [],
         requireEncryption: false,
         encryptResponse: false,
-        maxClients: 32,
       },
     })
   })

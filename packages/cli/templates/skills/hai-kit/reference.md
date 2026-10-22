@@ -56,10 +56,14 @@ kit 不再维护本地传输加密实现；服务端和客户端都统一委托 
 ```ts
 // hooks.server.ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 export const handle = kit.createHandle({
@@ -71,6 +75,7 @@ export const handle = kit.createHandle({
   crypto: {
     crypto,
     transport: {
+      serverKeyRing,
       requireEncryption: true,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
@@ -104,7 +109,7 @@ export const { apiFetch } = kit.client.create()
 
 默认协商端点：`/api/_hai/key-exchange`。如 `keyExchangePath` 自定义，浏览器端同步设置 `keyExchangeUrl`。
 
-多节点部署时，可在 `kit.createHandle({ crypto: { transport } })` 的运行时对象里直接传 `keyStore`；推荐使用 `@h-ai/crypto` 根入口导出的 `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`。这类对象依赖不要写进 `_kit.yml`。
+启用 transport 使用 `{ serverKeyRing, keyStore, ...公开路径配置 }`，两项必填，不再接受单独的 true。serverKeyRing 通过服务端 Secret/私有 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 安全解析，不放 `_kit.yml`、PUBLIC_/VITE_ 或日志；浏览器仅需公开 transport 配置和 crypto。各节点使用同一版本化 ring 与共享 Redis/数据库 registry；仅共享客户端公钥不够。请求带协商 serverKeyId，无需 sticky session；轮换先分发新旧 ring，再切 activeKeyId 重建 manager，删除旧 ID 后客户端 destroy 并重协商。开发/测试须显式选择内存 registry；原公开 maxClients 已删除。完整轮换步骤见 hai-crypto。
 
 transport 默认保护同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求；页面文档、静态资源与 `multipart/form-data` 上传请求保持明文透传。
 
@@ -132,7 +137,6 @@ transport:
     - /api/storage
     - /api/public
     - /api/auth/profile/avatar
-  maxClients: 10000
 ```
 
 ```ts

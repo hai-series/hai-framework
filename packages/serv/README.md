@@ -19,7 +19,7 @@ hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，
 - `build()` 同步返回普通 router，可按嵌套属性选取默认 feature procedures；挂载的 contract 与所选 procedures 保持一致，未选入口不开放。
 - 缺失路由返回本地化的 HaiResult JSON 404，启用传输加密后保留 404，不误报为非 JSON 响应导致的 500。
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
-- 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
+- 可选传输加密：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 自动挂载密钥协商与请求/响应加解密
 - 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；连接建立即用一次性 ticket 鉴权（返回 `{ session, grant? }`，独立预鉴权超时），每帧运行时 Zod 校验 + 严格状态机，输入/积压/发送缓冲背压与级联取消；授权回调负责服务端确认操作、模型、音色、配额与并发占用
 
 > 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。
@@ -126,14 +126,18 @@ const app = serv.createApp({
 
 #### 传输加密（与 `@h-ai/crypto` 统一）
 
-serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。使用方只需传入顶层 `crypto` 句柄：
+serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。服务端显式注入顶层 `crypto`、受管密钥环和共享 registry：
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const app = serv.createApp({
@@ -142,9 +146,9 @@ const app = serv.createApp({
   http: { apiPrefix: '/api/v1' },
   transport: {
     crypto,
+    serverKeyRing,
     // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
     // excludePaths: ['/health'],
-    // maxClients: 10000,
     keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
@@ -177,7 +181,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 ```ts
@@ -199,20 +202,15 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
 
-> **多节点部署提示**：传输加密的会话密钥默认保存在 **服务端进程内**，多副本部署时必须满足下列条件之一才能正常工作：
->
-> - 在负载均衡层启用**会话粘性（sticky session）**，确保同一客户端命中同一节点；
-> - 或为每个客户端在每个节点首次访问时分别完成一次密钥协商；
-> - 或注入共享 `keyStore`（如 `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`）。
->
-> `keyStore` 属于运行时对象依赖，不应写入 `config/_serv.yml`；配置文件仍只保存路径、白名单和容量等静态项。
+> 服务端必须显式注入相同的受管 `serverKeyRing` 和共享 `keyStore`（Redis 或共享数据库）。仅共享客户端公钥不足以跨节点解密。没有隐式进程私钥或内存 registry 回退；开发/测试显式用 `createInMemoryKeyStore(capacity)`。服务端重启后重新加载同一密钥环即可，无需 sticky session。
 
 > **安全策略**：启用 `transport` 后，除 `excludePaths` 与密钥协商端点外，业务请求必须携带有效 `X-Client-Id`。缺失或未知 clientId 会返回 400；响应体无法加密、非 JSON 业务响应或超过单次加密上限时返回错误，不会明文透传业务数据。
 
@@ -522,9 +520,10 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
@@ -567,7 +566,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 `server`（host/port）：优先级 `HOST` / `PORT` 环境变量 > 配置文件 > 默认 `127.0.0.1:3000`；由应用把 `servConfig.server` 传给 `serv.listen`。

@@ -5,7 +5,7 @@
  * @module kit-crypto-types
  */
 
-import type { CryptoFunctions, TransportKeyStore } from '@h-ai/crypto'
+import type { CryptoFunctions, TransportKeyStore, TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 
 /**
@@ -156,6 +156,8 @@ export type {
  * 协议常量与载荷类型统一来自 `@h-ai/crypto`。
  */
 export interface TransportEncryptionConfig {
+  /** 受管服务端密钥环，仅从服务端 Secret 注入，不放公开 kit 配置。 */
+  serverKeyRing: TransportServerKeyRing
   /** 是否启用传输加密（默认 false） */
   enabled: boolean
   /** @h-ai/crypto 服务实例 */
@@ -166,10 +168,8 @@ export interface TransportEncryptionConfig {
   excludePaths?: string[]
   /** 是否加密响应（默认 true） */
   encryptResponse?: boolean
-  /** 服务端可缓存的客户端公钥数量上限（默认 10000） */
-  maxClients?: number
-  /** 共享客户端公钥存储（如 Redis / reldb）；未传时默认使用进程内内存实现。 */
-  keyStore?: TransportKeyStore
+  /** 显式客户端公钥存储；生产使用共享 Redis/reldb，内存仅供开发/测试。 */
+  keyStore: TransportKeyStore
   /**
    * 是否强制要求传输加密（默认 true）
    *

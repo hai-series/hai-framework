@@ -3080,14 +3080,6 @@
     "constraint": "字符串；以 / 开头的路径字符串"
   },
   {
-    "name": "HAI_KIT_TRANSPORT_MAXCLIENTS",
-    "module": "kit",
-    "path": "kit.transport.maxClients",
-    "description": "服务端最多保留的客户端传输密钥会话数",
-    "value": "10000",
-    "constraint": "整数；<= 9007199254740991；> 0"
-  },
-  {
     "name": "HAI_KIT_TRANSPORT_REQUIREENCRYPTION",
     "module": "kit",
     "path": "kit.transport.requireEncryption",
@@ -3742,6 +3734,14 @@
     "description": "发布检查调用 GitHub API 的认证令牌",
     "value": "",
     "constraint": "敏感字符串；权限由目标仓库与工作流决定"
+  },
+  {
+    "name": "HAI_CRYPTO_TRANSPORT_SERVERKEYRING",
+    "module": "runtime",
+    "path": "HAI_CRYPTO_TRANSPORT_SERVERKEYRING",
+    "description": "服务端受管版本化传输密钥环；仅私有环境或 Secret Manager 注入",
+    "value": "",
+    "constraint": "JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志"
   },
   {
     "name": "HF_ENDPOINT",
@@ -4406,14 +4406,6 @@
     "description": "客户端与服务端约定的密钥交换端点",
     "value": "/_hai/key-exchange",
     "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT_MAXCLIENTS",
-    "module": "serv",
-    "path": "serv.transport.maxClients",
-    "description": "服务端最多保留的客户端传输密钥会话数",
-    "value": "10000",
-    "constraint": "整数；<= 9007199254740991；> 0"
   },
   {
     "name": "HAI_STORAGE",

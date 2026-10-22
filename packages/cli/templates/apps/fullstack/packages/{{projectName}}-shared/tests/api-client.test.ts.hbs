@@ -1,6 +1,6 @@
-import type { EncryptedPayload } from '@h-ai/crypto'
+import type { EncryptedRequestPayload } from '@h-ai/crypto'
 import { HaiApiClientError } from '@h-ai/api-client'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { initializeManagementApi, managementApi, resolveAvatarUrl } from '../src/lib/api/api-client.js'
 
@@ -16,7 +16,10 @@ const runtimeInfo = {
 
 /** 使用真实 crypto 公共入口模拟对端，覆盖握手及双向加解密。 */
 function createServerFetch() {
-  const created = crypto.transport.createServer()
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  const created = crypto.transport.createServer({ serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }, keyStore: createInMemoryKeyStore() })
   if (!created.success)
     throw new Error(created.error.message)
   const server = created.data
@@ -29,7 +32,7 @@ function createServerFetch() {
     if (url.pathname.endsWith('/_hai/key-exchange')) {
       const body = await request.json() as { clientPublicKey: string }
       const clientId = await server.registerClientKey(body.clientPublicKey)
-      return Response.json({ serverPublicKey: server.getServerPublicKey(), clientId })
+      return Response.json({ serverKeyId: server.getServerKeyId(), serverPublicKey: server.getServerPublicKey(), clientId })
     }
     const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
     if (!clientId)
@@ -37,7 +40,7 @@ function createServerFetch() {
     let data: unknown = runtimeInfo
     if (url.pathname.endsWith('/app/echo')) {
       expect(request.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-      const encrypted = await request.json() as EncryptedPayload
+      const encrypted = await request.json() as EncryptedRequestPayload
       expect(JSON.stringify(encrypted)).not.toContain('private message')
       const decrypted = server.decryptRequest(encrypted)
       expect(decrypted.success).toBe(true)

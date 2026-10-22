@@ -26,9 +26,8 @@ function createClientId(counter: number): string {
 /**
  * 创建进程内 FIFO 客户端密钥存储。
  *
- * ⚠️ 进程内实现：多节点部署时需让客户端首次请求后保持「会话粘性」（sticky session），
- * 否则后续请求路由到其他节点会因找不到客户端公钥而失败。需要跨节点请改用
- * Redis / 数据库实现 {@link TransportKeyStore}。
+ * 仅供显式选择的开发/测试场景；registry 不跨进程或重启持久化。
+ * 生产须使用共享 Redis / 数据库 registry，并在各节点加载相同受管服务端密钥环。
  *
  * @param maxClients - 最大客户端数（默认 10000），超过后按注册顺序淘汰最早条目。
  */

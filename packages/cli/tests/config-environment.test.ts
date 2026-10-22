@@ -3,13 +3,17 @@ import { CacheConfigSchema } from '@h-ai/cache'
 import { ReldbConfigSchema } from '@h-ai/reldb'
 import { StorageConfigSchema } from '@h-ai/storage'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { configEnvironmentVariables, parameterizeConfig, renderEnvironment } from '../src/commands/cli-config-environment.js'
+import { configEnvironmentVariables, moduleEnvironmentVariables, parameterizeConfig, renderEnvironment, runtimeEnvironmentVariables } from '../src/commands/cli-config-environment.js'
 import { generateConfigFile, generateEnvExample } from '../src/commands/cli-config-templates.js'
 import { loadConfigText } from './helpers/config.js'
 
 afterEach(() => vi.unstubAllEnvs())
 
 describe('environment configuration', () => {
+  it('服务端密钥环仅出现在实际服务端入口，不能随客户端 crypto 配置推荐', () => {
+    expect(moduleEnvironmentVariables('crypto').some(variable => variable.name === 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING')).toBe(false)
+    expect(runtimeEnvironmentVariables('const ring = process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING')).toMatchObject([{ name: 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING' }])
+  })
   it('同一份数据库 YAML 仅通过环境变量即可切换三种 Provider，并拒绝非法类型/端口', () => {
     const yaml = generateConfigFile('db')
     expect(yaml).toContain('type: $' + '{HAI_DB_TYPE:sqlite}')

@@ -59,6 +59,8 @@
 
 #### 安装与启动
 
+默认 transport 必须从服务端私有环境或 `apps/admin-console/.env.local` 注入 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`；运行时不隐式生成。客户端公钥 registry 复用 reldb，多节点使用相同受管 ring 和共享数据库，不需要粘性路由。私钥不放公开 `_kit.yml`、PUBLIC_/VITE_、日志或浏览器配置。密钥由 Secret Manager/受管配置提供，轮换与撤销步骤见 [Crypto 传输说明](../../packages/crypto/README.md)。
+
 ```bash
 # 在 hai-framework monorepo 根目录
 pnpm install

@@ -38,6 +38,8 @@ export interface KeyExchangeRequest {
  * 密钥协商响应体（服务端 → 客户端）。
  */
 export interface KeyExchangeResponse {
+  /** 服务端当前加密密钥版本；业务请求必须带回该值。 */
+  readonly serverKeyId: string
   readonly serverPublicKey: string
   readonly clientId: string
 }
@@ -60,6 +62,39 @@ export interface EncryptedPayload {
   readonly encryptedKey: string
   readonly ciphertext: string
   readonly iv: string
+}
+
+/**
+ * 发往服务端的密文，显式指定协商时取得的服务端密钥版本。
+ * @example
+ * ```ts
+ * const payload: EncryptedRequestPayload = { serverKeyId: '2026-10', encryptedKey, ciphertext, iv }
+ * ```
+ */
+export interface EncryptedRequestPayload extends EncryptedPayload {
+  /** 协商返回的服务端密钥 ID；未知或已撤销 ID 必须拒绝。 */
+  readonly serverKeyId: string
+}
+
+/**
+ * 由 Secret Manager 或服务端私有环境注入的版本化密钥环。
+ *
+ * 各节点使用同一组 keys；activeKeyId 只控制新协商，保留的旧版本仍可解密。
+ * 轮换先向所有节点分发新旧版本，再切换 activeKeyId；删除旧版本即撤销。
+ * 禁止放入公开 YAML、PUBLIC_/VITE_ 环境变量或日志。
+ * @example
+ * ```ts
+ * const ring: TransportServerKeyRing = {
+ *   activeKeyId: '2026-10',
+ *   keys: { '2026-10': managedKeyPair, '2026-09': previousManagedKeyPair },
+ * }
+ * ```
+ */
+export interface TransportServerKeyRing {
+  /** 新协商使用的版本；1–64 个字母、数字、下划线或连字符。 */
+  readonly activeKeyId: string
+  /** ID 与密钥对；仅供服务端保管，所有节点必须分发相同版本的相同密钥。 */
+  readonly keys: Readonly<Record<string, TransportKeyPair>>
 }
 
 // ─── 注入式服务接口 ───
@@ -88,8 +123,7 @@ export interface TransportCryptoServiceLike {
 /**
  * 客户端公钥存储抽象。
  *
- * 默认实现为进程内 Map（{@link createInMemoryKeyStore}），多节点部署时建议
- * 接入 Redis / 数据库实现以保证跨节点一致性。
+ * 生产显式接入共享 Redis / 数据库；开发和测试可显式创建 createInMemoryKeyStore。
  *
  * 设计原则：方法均为异步签名，避免后续替换为分布式实现时大改接口；
  * 内存实现以 `Promise.resolve` 包裹即可。
@@ -108,14 +142,14 @@ export interface TransportKeyStore {
 /**
  * 创建服务端传输加密管理器的配置。
  *
- * `keyStore` 未传时，默认使用 {@link createInMemoryKeyStore}；此时可通过 `maxClients`
- * 控制进程内 FIFO 容量。若传入共享 `keyStore`，则 `maxClients` 不再生效。
+ * 必须同时显式提供服务端密钥环和客户端 registry；生产使用共享 Redis/数据库。
+ * 开发/测试可显式传入 createInMemoryKeyStore(capacity)。
  */
 export interface TransportCreateServerOptions {
-  /** 客户端公钥存储；多节点部署时建议注入共享实现。 */
-  readonly keyStore?: TransportKeyStore
-  /** 默认内存 keyStore 的最大容量（仅当 `keyStore` 未提供时生效）。 */
-  readonly maxClients?: number
+  /** 必填受管服务端密钥环；没有隐式随机生成或进程密钥回退。 */
+  readonly serverKeyRing: TransportServerKeyRing
+  /** 客户端公钥存储；生产必须注入跨节点共享实现。 */
+  readonly keyStore: TransportKeyStore
 }
 
 // ─── 管理器与客户端公开接口 ───
@@ -136,11 +170,19 @@ export interface TransportCreateServerOptions {
  * 5. `close()`：服务关闭时释放底层 keyStore 资源。
  */
 export interface TransportEncryptionManager {
+  /** 当前新协商使用的服务端密钥 ID。 */
+  getServerKeyId: () => string
   getServerPublicKey: () => string
+  /**
+   * 向显式 registry 注册公钥。
+   * @throws registry 写入失败；HTTP 协商适配器负责转换成失败响应。
+   */
   registerClientKey: (clientPublicKey: string) => Promise<string>
+  /** 查询客户端公钥；registry 读取故障会 reject，不作为未注册处理。 */
   getClientPublicKey: (clientId: string) => Promise<string | undefined>
+  /** 加密响应；registry 读取及加密故障均返回失败 HaiResult，不抛业务异常。 */
   encryptResponse: (clientId: string, data: string) => Promise<HaiResult<EncryptedPayload>>
-  decryptRequest: (payload: EncryptedPayload) => HaiResult<string>
+  decryptRequest: (payload: EncryptedRequestPayload) => HaiResult<string>
   /** 关闭：释放 keyStore 资源。 */
   close: () => Promise<void>
 }

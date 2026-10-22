@@ -164,23 +164,23 @@ if (hashed.success) {
 
 常规应用优先让上层封装代接：
 
-- 服务端：`serv.createApp({ transport: { crypto } })` 或 `kit.createHandle({ crypto: { crypto, transport: true } })`
+- 服务端：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 或 `kit.createHandle({ crypto: { crypto, transport: { serverKeyRing, keyStore } } })`
 - 客户端：`apiClient.init({ transport: { crypto } })` 或 `kit.client.create({ transport: { crypto } })`
 
-只有在自定义运行时、测试或你确实要自己接 HTTP 协商端点时，才建议直接调用 `crypto.transport.createServer()` / `createClient()`。
+只有在自定义运行时、测试或你确实要自己接 HTTP 协商端点时，才建议直接调用 `crypto.transport.createServer({ serverKeyRing, keyStore })` / `createClient()`。
 
 ##### 使用流程
 
 1. 先 `await crypto.init()`，确保 `crypto.asymmetric` 与 `crypto.symmetric` 已初始化。
-2. 服务端调用 `crypto.transport.createServer()` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。多节点部署时可注入共享 `keyStore`。
-3. 服务端提供一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端，再返回 `{ serverPublicKey: manager.getServerPublicKey(), clientId }`。
+2. 服务端调用 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。多节点部署时可注入共享 `keyStore`。
+3. 服务端提供一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端，再返回 `{ serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), clientId }`。
 4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成这次协商。
-5. 协商完成后，客户端请求会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ encryptedKey, ciphertext, iv }`，并带上 `X-Encrypted: true`。无 body 的请求只附带 `X-Client-Id`，不会额外生成密文 body。
+5. 协商完成后，客户端请求会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ serverKeyId, encryptedKey, ciphertext, iv }`，并带上 `X-Encrypted: true`。无 body 的请求只附带 `X-Client-Id`，不会额外生成密文 body。
 6. 服务端根据 `clientId` 找到客户端公钥，先 `manager.decryptRequest()` 解密请求体，再执行业务逻辑。
 7. 服务端返回 JSON 响应前，用 `manager.encryptResponse(clientId, data)` 重新加密，并设置 `X-Encrypted: true`；客户端收到后会自动解密。
 8. 客户端调用 `client.destroy()` 可清空当前会话；服务端调用 `manager.close()`，或在模块级调用 `await crypto.close()`，用于释放资源。
 
-> 默认 `keyStore` 是进程内 FIFO 内存实现，超过 `maxClients` 会淘汰最早注册的客户端。多节点部署时，需要会话粘性（sticky session），或改用共享的 `TransportKeyStore` 实现来保存客户端公钥。
+> 服务端必须显式注入相同的受管 `serverKeyRing` 和共享 `keyStore`（Redis 或共享数据库）。仅共享客户端公钥不足以跨节点解密。没有隐式进程私钥或内存 registry 回退；开发/测试显式用 `createInMemoryKeyStore(capacity)`。服务端重启后重新加载同一密钥环即可，无需 sticky session。
 
 共享存储可直接复用 `@h-ai/crypto` 根入口导出的 provider 工厂：
 
@@ -189,8 +189,8 @@ if (hashed.success) {
 - `createReldbTransportKeyStore({ reldb, ttlSeconds? })`：复用 `@h-ai/reldb`，自动建表 `hai_crypto_transport_client_keys`
 
 ```ts
-// 服务端：通常由 serv.createApp({ transport: { crypto } }) 或 kit.createHandle({ crypto }) 内部调用
-const server = crypto.transport.createServer({ maxClients: 10000 })
+// 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 if (!server.success)
   throw new Error(server.error.message)
 
@@ -213,6 +213,7 @@ await crypto.init()
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const server = crypto.transport.createServer({
+  serverKeyRing,
   keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
 })
 if (!server.success)
@@ -222,6 +223,20 @@ if (!server.success)
 `encryptedFetch()` 的语义与原生 `fetch` 一致：网络失败、密钥协商失败、请求加密失败或响应解密失败时会 reject；业务层应在调用处按 fetch 错误处理策略统一捕获。
 
 协议常量通过 `crypto.transport.protocol`（或 `TRANSPORT_PROTOCOL`）访问：`X-Client-Id`、`X-Encrypted`、默认 `/_hai/key-exchange`。
+
+服务端 `createServer({ serverKeyRing, keyStore })` 两项均必填。密钥环为 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`；ID 为 1–64 个字母、数字、下划线或连字符。创建时验证公私钥配对并捕获快照，缺失/无效配置返回脱敏的 HaiResult 错误。以下示例的 `keyStore` 为已连接的 Redis/共享数据库 registry；内存仅显式用于开发或测试。
+
+```ts
+import { parseTransportServerKeyRing } from '@h-ai/crypto'
+
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
+```
+
+握手返回 `{ serverKeyId, serverPublicKey, clientId }`；请求密文携带 `serverKeyId`，服务端按 ID 选择私钥，未知或撤销 ID 直接拒绝，不尝试其它密钥。响应仍用客户端公钥加密。轮换先向所有节点分发包含新旧版本的 ring，再切换 `activeKeyId` 并滚动重建 manager；过渡期保留旧版本，结束后删除旧 ID 并更新所有节点。旧客户端此后须 `destroy()` 后重新协商；不要自动重试非幂等业务。部署通过 Secret Manager 或服务端私有环境分发同一 ring，禁止写入普通 YAML、PUBLIC_/VITE_、日志或公开响应。CLI 只在创建服务端项目时向被忽略的 `.env.local` 生成一次独立开发密钥环，运行时不生成，部署应使用目标环境自己的受管密钥。
 
 serv、kit 与客户端共享 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 4 KiB，均按实际 UTF-8 字节计算。客户端握手最多等待 30 秒；超限、无效 UTF-8 或取消会终止读取并释放 reader，不克隆/tee 原始正文。发送时保留调用方 signal；单个请求取消不会取消其它请求共享的握手。带加密标记的异常响应会 reject，不返回原始密文。
 

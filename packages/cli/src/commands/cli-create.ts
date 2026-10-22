@@ -14,7 +14,7 @@ import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, Front
 import type { ConfigEnvironmentVariable } from './cli-config-environment.js'
 import { Buffer } from 'node:buffer'
 import { execFileSync, execSync } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
+import { createECDH, randomBytes } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import chalk from 'chalk'
@@ -375,14 +375,21 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       for (const [mode, environment] of [['dev', 'development'], ['test', 'test'], ['prod', 'production']] as const) {
         await writeFile(path.join(envDirectory, `.env.${mode}`), `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_DEBUG=false\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : mode === 'dev' ? 'debug' : 'info'}\n`)
       }
+      const privateEntries: string[] = []
       if (isFullstack) {
         // 每个项目使用独立随机密码，保证四类字符；真实凭据只写入被忽略的本地文件。
         const password = `Aa1!${randomBytes(24).toString('base64url')}`
-        await fse.writeFile(path.join(projectPath, '.env.local'), `# 本机私有配置，不提交 Git。\nHAI_ADMIN_DEFAULT_PASSWORD=${password}\n`, { mode: 0o600 })
+        privateEntries.push(`HAI_ADMIN_DEFAULT_PASSWORD=${password}`)
       }
-      else {
-        await writeFile(path.join(envDirectory, '.env.local'), '# 本机私有配置，不提交 Git；覆盖公共基础和环境配置。\n')
+      if (isFullstack || (isApiWorkspace && resolvedOptions.features.includes('crypto'))) {
+        // 仅在项目创建时生成一次本机开发 Secret；运行时禁止隐式生成，部署时由 Secret Manager 分发。
+        const key = createECDH('SM2')
+        key.generateKeys()
+        const id = `bootstrap-${randomBytes(6).toString('hex')}`
+        const ring = { activeKeyId: id, keys: { [id]: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } }
+        privateEntries.push(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'`)
       }
+      await fse.writeFile(path.join(envDirectory, '.env.local'), `# 本机私有配置，不提交 Git；部署凭据由目标环境单独提供。\n${privateEntries.join('\n')}\n`, { mode: 0o600 })
     }
 
     // 生成 Skill 文件
@@ -1309,9 +1316,11 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
+服务端版本化传输密钥环在创建时一次性写入被忽略的 \`.env.local\`，变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`；运行时不生成密钥。部署由 Secret Manager 向所有节点分发同一受管 ring，配合共享 registry。私钥不进入公开配置、PUBLIC_/VITE_ 或日志。
+
 所有业务 JSON 请求和响应默认通过 \`@h-ai/crypto\` transport 双向加密（含登录、刷新、头像上传）；前端统一使用共享 typed API client。Web 访问令牌仅存内存、刷新令牌由 HttpOnly Cookie 保存；受信原生端使用平台安全存储或内存。头像为随机路径只读图片资源，支持 PNG/JPEG/WebP，最大 512 KiB。健康检查和只读头像图片可直接访问。
 
-应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。默认 SQLite、本地存储与内存缓存适合单实例，管理写入仅支持单写实例；多实例读取可使用共享数据库、Redis cache 和 S3 存储，但管理写请求须统一路由到同一写实例。另需会话粘性路由使请求命中同一进程内传输私钥，服务重启后客户端重新协商。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
+应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。默认 SQLite、本地存储与内存缓存适合单实例，管理写入仅支持单写实例；多实例读取可使用共享数据库、Redis cache 和 S3 存储，但管理写请求须统一路由到同一写实例。传输必须在所有节点注入相同受管版本化密钥环与共享 registry，无需会话粘性；重启读取原 ring，轮换先分发新旧版本再切 activeKeyId。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
 
 ### 配置扩展
 

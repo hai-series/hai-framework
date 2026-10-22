@@ -5,7 +5,7 @@
  * @module kit-types
  */
 
-import type { CryptoFunctions, TransportKeyStore } from '@h-ai/crypto'
+import type { CryptoFunctions, TransportKeyStore, TransportServerKeyRing } from '@h-ai/crypto'
 import type { AuthnOperations } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { RateLimitStore } from './middleware/kit-ratelimit.js'
@@ -250,7 +250,7 @@ export interface HandleAuthConfig {
  *     publicPaths: ['/api/auth/*'],
  *   },
  *   rateLimit: { maxRequests: 100 },
- *   crypto: { crypto, transport: true },
+ *   crypto: { crypto, transport: { serverKeyRing, keyStore } },
  * })
  * ```
  */
@@ -355,6 +355,8 @@ export interface HandleA2AConfig {
  * 传输加密详细配置
  */
 export interface TransportEncryptionOptions {
+  /** 受管服务端版本化密钥环，不进入公开 YAML/客户端配置。 */
+  serverKeyRing: TransportServerKeyRing
   /** 密钥交换端点路径（默认 `'/api/_hai/key-exchange'`） */
   keyExchangePath?: string
   /** 排除路径（不加密），支持精确匹配和前缀匹配 */
@@ -368,10 +370,8 @@ export interface TransportEncryptionOptions {
   requireEncryption?: boolean
   /** 是否加密响应体（默认 `true`） */
   encryptResponse?: boolean
-  /** 服务端可缓存的客户端公钥数量上限（默认 `10000`） */
-  maxClients?: number
   /** 共享客户端公钥存储；适用于多节点部署。 */
-  keyStore?: TransportKeyStore
+  keyStore: TransportKeyStore
 }
 
 /**
@@ -384,7 +384,7 @@ export interface TransportEncryptionOptions {
  * kit.createHandle({
  *   crypto: {
  *     crypto: cryptoInstance,
- *     transport: true,
+ *     transport: { serverKeyRing, keyStore },
  *     encryptedCookies: ['hai_session'],
  *     cookieEncryptionKey: process.env.HAI_KIT_COOKIE_KEY,
  *   },
@@ -396,10 +396,10 @@ export interface HookCryptoConfig {
   crypto: CryptoFunctions
   /**
    * 启用传输加密。
-   * - `true`：使用默认配置
-   * - 对象：自定义配置
+   * - `false` 或省略：关闭
+   * - 对象：必填受管 serverKeyRing / keyStore，可附加公开路径配置
    */
-  transport?: boolean | TransportEncryptionOptions
+  transport?: false | TransportEncryptionOptions
   /**
    * 需要加密的 Cookie 名称列表
    *

@@ -335,21 +335,22 @@ export interface PasswordOperations {
  * 使用流程（直接使用底层 transport 工厂时）：
  *
  * 1. 先 `await crypto.init()`，确保 `crypto.asymmetric` / `crypto.symmetric` 已就绪。
- * 2. 服务端调用 `crypto.transport.createServer()` 创建 `TransportEncryptionManager`；该管理器负责持有服务端密钥对，并管理客户端公钥。多节点部署时可通过 `options.keyStore` 注入共享存储。
- * 3. 服务端暴露一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端公钥，再返回 `{ serverPublicKey: manager.getServerPublicKey(), clientId }`。
+ * 2. 服务端调用 `crypto.transport.createServer({ serverKeyRing, keyStore })`，显式注入受管密钥环及共享客户端 registry。
+ * 3. 协商端点接收客户端公钥，返回 `{ serverKeyId, serverPublicKey, clientId }`。
  * 4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成密钥协商。
- * 5. 协商完成后，客户端每次请求都会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ encryptedKey, ciphertext, iv }`，并设置 `X-Encrypted: true`。
+ * 5. 请求附带 X-Client-Id；有正文时包装为 `{ serverKeyId, encryptedKey, ciphertext, iv }` 并声明 X-Encrypted。
  * 6. 服务端在业务逻辑前调用 `manager.decryptRequest()` 解密请求体，在返回前调用 `manager.encryptResponse(clientId, data)` 为当前客户端重新加密响应。
  * 7. 客户端收到 `X-Encrypted: true` 的响应后会自动解密；调用 `client.destroy()` 可清空当前会话，下次请求会重新协商。
  *
  * 常规应用优先使用上层封装，而不是手写 HTTP 协商细节：
- * - `serv.createApp({ transport: { crypto } })`
- * - `kit.createHandle({ crypto: { crypto, transport: true } })`
+ * - `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`
+ * - `kit.createHandle({ crypto: { crypto, transport: { serverKeyRing, keyStore } } })`
  * - `apiClient.init({ transport: { crypto } })`
  *
  * @example 服务端
  * ```ts
  * const result = crypto.transport.createServer({
+ *   serverKeyRing,
  *   keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
  * })
  * if (!result.success) throw result.error
@@ -370,14 +371,13 @@ export interface TransportOperations {
   /**
    * 创建服务端传输加密管理器。
    *
-   * options.keyStore：注入共享客户端公钥存储。
-   * options.maxClients：默认内存 keyStore 的最大客户端数（默认 10000，仅在未传 keyStore 时生效）。
-   * 成功返回 manager；密钥生成失败返回 `HaiCommonError.INTERNAL_ERROR`。
+   * serverKeyRing/keyStore 均必填；生产使用相同受管密钥环与共享 registry。
+   * 成功返回 manager；缺失、格式错误或公私钥错配返回脱敏 HaiResult 错误。
    *
    * @remarks
    * 通常在服务启动阶段创建一次，并交给 HTTP 中间件 / 路由处理器复用。
    */
-  createServer: (options?: TransportCreateServerOptions) => HaiResult<TransportEncryptionManager>
+  createServer: (options: TransportCreateServerOptions) => HaiResult<TransportEncryptionManager>
   /**
    * 创建客户端传输加密会话。
    *

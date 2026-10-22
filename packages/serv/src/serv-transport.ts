@@ -16,7 +16,7 @@
  * @module serv-transport
  */
 
-import type { CryptoFunctions, EncryptedPayload, TransportEncryptionManager, TransportKeyStore } from '@h-ai/crypto'
+import type { CryptoFunctions, EncryptedRequestPayload, TransportEncryptionManager, TransportKeyStore, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core } from '@h-ai/core'
 import { readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
@@ -28,6 +28,8 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json']
 
 /** {@link createApp} 的 `transport` 配置项。 */
 export interface ServTransportConfig {
+  /** 受管服务端密钥环，仅运行时从私有 Secret 注入。 */
+  readonly serverKeyRing: TransportServerKeyRing
   /**
    * crypto 服务实例。serv 通过 `crypto.transport.createServer()` 创建
    * 传输加密管理器，并使用 `crypto.transport.protocol` 中的协议常量。
@@ -43,9 +45,7 @@ export interface ServTransportConfig {
    */
   readonly excludePaths?: readonly string[]
   /** 共享客户端公钥存储；适用于多节点部署。 */
-  readonly keyStore?: TransportKeyStore
-  /** 服务端可缓存的客户端公钥数量上限。默认 10000。 */
-  readonly maxClients?: number
+  readonly keyStore: TransportKeyStore
 }
 
 /**
@@ -177,7 +177,7 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
     if (new TextEncoder().encode(serverPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
       return jsonError(servM('serv_transportKeyExchangeFailed'), 500)
     const clientId = await manager.registerClientKey(body.clientPublicKey)
-    return new Response(JSON.stringify({ serverPublicKey, clientId }), {
+    return new Response(JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId }), {
       status: 200,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
     })
@@ -283,9 +283,10 @@ function jsonError(message: string, status: number): Response {
   })
 }
 
-function isEncryptedPayloadShape(value: unknown): value is EncryptedPayload {
+function isEncryptedPayloadShape(value: unknown): value is EncryptedRequestPayload {
   if (!value || typeof value !== 'object')
     return false
   const p = value as Record<string, unknown>
-  return typeof p.encryptedKey === 'string' && typeof p.ciphertext === 'string' && typeof p.iv === 'string'
+  return typeof p.serverKeyId === 'string' && /^[\w-]{1,64}$/.test(p.serverKeyId)
+    && typeof p.encryptedKey === 'string' && typeof p.ciphertext === 'string' && typeof p.iv === 'string'
 }

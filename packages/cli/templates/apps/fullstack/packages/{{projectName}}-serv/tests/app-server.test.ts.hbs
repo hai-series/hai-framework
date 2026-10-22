@@ -46,6 +46,10 @@ beforeAll(async () => {
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', TEST_PASSWORD)
   core.init({ configDir: './config' })
   await initializeModules()
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  vi.stubEnv('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', JSON.stringify({ activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }))
   app = createServerApp()
   transport = crypto.transport.createClient({
     keyExchangeUrl: `http://localhost${PREFIX}/_hai/key-exchange`,

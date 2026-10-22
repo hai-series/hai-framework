@@ -10,4 +10,3 @@ transport:
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_0:/api/storage}
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_1:/api/public}
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_2:/api/auth/profile/avatar}
-  maxClients: ${HAI_KIT_TRANSPORT_MAXCLIENTS:10000}

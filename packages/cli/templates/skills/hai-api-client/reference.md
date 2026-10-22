@@ -151,7 +151,7 @@ if (login.success) {
 | `transport.crypto` | 已初始化的 `@h-ai/crypto` 实例 |
 | `transport.keyExchangePath` | 相对于 `baseUrl` 的协商子路径，默认 `/_hai/key-exchange` |
 
-服务端必须对应启用 `serv.createApp({ transport: { crypto } })`。
+服务端必须对应启用 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`。serverKeyRing 与 keyStore 仅服务端注入，生产各节点共用受管版本化 ring 和共享 registry；客户端只接收 serverKeyId/公钥并在请求密文带回版本，不得接收私钥。旧版本撤销后需销毁客户端会话并重协商，不自动重放非幂等请求。
 自动刷新会沿用 `transport.encryptedFetch`，并在 httpOnly cookie 模式下发送空请求体 + `credentials: 'include'`，由服务端从 cookie 读取 refresh token。
 
 ## 常见模式

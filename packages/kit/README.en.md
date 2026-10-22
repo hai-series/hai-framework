@@ -141,16 +141,20 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 #### Same-origin transport encryption
 
-kit delegates transport encryption to `@h-ai/crypto`. The server creates a manager with `crypto.transport.createServer()`; the browser installs a same-origin fetch wrapper with one call to `kit.client.installBrowserTransport(kitConfig, { crypto })`. Applications only configure the top-level `crypto` handle.
+kit delegates transport encryption to `@h-ai/crypto`. The server creates a manager with `crypto.transport.createServer({ serverKeyRing, keyStore })`; the browser installs a same-origin fetch wrapper with one call to `kit.client.installBrowserTransport(kitConfig, { crypto })`. Servers must also inject a managed key ring and shared registry.
 
 **src/hooks.server.ts**：
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 export const handle = kit.createHandle({
@@ -162,6 +166,7 @@ export const handle = kit.createHandle({
   crypto: {
     crypto,
     transport: {
+      serverKeyRing,
       requireEncryption: true,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
@@ -197,7 +202,7 @@ export const { apiFetch } = kit.client.create()
 
 The default key exchange path is `/api/_hai/key-exchange`. If the server customizes `transport.keyExchangePath`, update the client's `transport.keyExchangeUrl` accordingly.
 
-For shared client public keys across nodes, inject `createRedisTransportKeyStore()` or `createReldbTransportKeyStore()` through `kit.createHandle({ crypto: { transport: { keyStore } } })` at runtime. These object dependencies **must not** go in `_kit.yml`; configuration files contain only public paths and switches.
+Servers must explicitly inject the same managed `serverKeyRing` and a shared `keyStore` (Redis or a shared database). Sharing client public keys alone cannot enable cross-node decryption. There is no implicit process key or memory-registry fallback; development/tests may explicitly use `createInMemoryKeyStore(capacity)`. Reload the same ring after restart; sticky sessions are unnecessary.
 
 Transport applies by default to same-origin `/api/*` endpoints, SvelteKit `__data.json` page data, and key exchange itself. Page documents and static assets remain plaintext and do not require `X-Client-Id`. `multipart/form-data` requests such as uploads are sent unchanged; explicitly allow their paths through server `excludePaths`.
 
@@ -225,7 +230,6 @@ transport:
     - /api/storage
     - /api/public
     - /api/auth/profile/avatar
-  maxClients: 10000
 ```
 
 ```ts

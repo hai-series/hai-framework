@@ -53,7 +53,9 @@ await apiClient.close()
 
 #### 通信暗号化の有効化
 
-サーバーで先に `serv.createApp({ transport: { crypto } })` を有効にします。クライアントには同じ `@h-ai/crypto` サービスのインスタンスを渡すだけで、鍵交換コードの実装は不要です。
+サーバーで先に `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` を有効にします。クライアントには同じ `@h-ai/crypto` サービスのインスタンスを渡すだけで、鍵交換コードの実装は不要です。
+
+サーバーには管理済み serverKeyRing と共有 registry を渡します。クライアントは serverKeyId と公開鍵だけを受け取り、暗号文リクエストに鍵の版を付けます。秘密鍵・鍵環をクライアント設定に含めません。版の失効後は transport セッションを破棄して再交渉し、非冪等処理を自動再送しません。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'

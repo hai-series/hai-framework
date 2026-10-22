@@ -331,7 +331,7 @@ const app = serv.createApp({
 
 启用后，serv 会在内部：
 
-1. 调 `crypto.transport.createServer()` 创建服务端管理器。
+1. 调 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建服务端管理器。
 2. 挂载密钥协商端点。
 3. 在业务请求进入前尝试解密。
 4. 在业务响应返回后尝试加密。
@@ -345,7 +345,7 @@ const app = serv.createApp({
 1. 通过共享 `readTransportBody` 逐块读取原始请求流，握手 JSON 最多 16 KiB（UTF-8 字节）；超限立即取消并返回 413。
 2. 要求携带非空 `clientPublicKey`，公钥最多 4 KiB，否则返回 400；不接受 null 等错误 JSON 结构。
 3. 确认服务端公钥不超过同一预算后，调 `manager.registerClientKey(clientPublicKey)`。
-4. 返回 `clientId` 和 `serverPublicKey`。客户端在 30 秒握手超时内按相同预算有界读取响应。
+4. 返回 `clientId`、`serverPublicKey` 与 `serverKeyId`；客户端请求密文携带此版本，任意节点仅按 ID 选择私钥。客户端在 30 秒握手超时内按相同预算有界读取响应。
 
 后续客户端要用这个 `clientId` 放到请求头里。
 
@@ -407,13 +407,11 @@ const app = serv.createApp({
 
 ### 多节点部署注意事项
 
-服务端会把协商得到的客户端密钥信息保存在**进程内**的传输管理器中，因此多副本部署时需要额外保证：
+服务端必须同时注入相同的受管 `serverKeyRing` 和共享 `keyStore`（Redis 或共享数据库），两项均无隐式默认值。只共享客户端公钥无法跨节点解密；正确装配不需要 sticky session，重启重新加载同一密钥环与 registry 即可。
 
-- 使用 sticky session
-- 每个节点都各自做一轮密钥协商
-- 后续引入分布式密钥存储
+密钥环 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }` 仅从 Secret Manager 或服务端私有环境装配，不放公开 `_serv.yml`。示例应用读取 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，用根入口 `parseTransportServerKeyRing()` 安全解析；错误不含原始 JSON/私钥片段。工厂校验公私钥配对并捕获快照。
 
-否则客户端在 A 节点协商成功、下一次请求打到 B 节点时，B 节点可能找不到该 `clientId` 对应的密钥。
+轮换先把含新旧版本的 ring 分发到所有节点，再切换 activeKeyId 并滚动重建 manager；过渡期保留旧版本，删除旧 ID 并更新所有节点即撤销。未知/撤销 ID 不尝试其它密钥。旧客户端需要 destroy 后重协商，非幂等业务不得自动重放。开发/测试内存 registry 必须显式 `createInMemoryKeyStore(capacity)`，原 YAML maxClients 已移除。
 
 ## Refresh Cookie 逻辑（补充）
 

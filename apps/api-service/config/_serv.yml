@@ -41,4 +41,3 @@ transport:
     - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_2:/openapi.json}
     - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_3:/docs}
     - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_4:/_hai/scalar.js}
-  maxClients: ${HAI_SERV_TRANSPORT_MAXCLIENTS:10000}

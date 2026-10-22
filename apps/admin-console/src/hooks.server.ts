@@ -6,14 +6,16 @@
  * =============================================================================
  */
 
+import type { TransportEncryptionOptions } from '@h-ai/kit'
 import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { getAdminKitConfig } from '$lib/server/kit-config.js'
-import { crypto } from '@h-ai/crypto'
+import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+import { reldb } from '@h-ai/reldb'
 
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 let appInitPromise: Promise<void> | null = null
@@ -26,7 +28,6 @@ const handleTransportConfig = kitTransportConfig === false
       excludePaths: [...kitTransportConfig.excludePaths],
       requireEncryption: kitTransportConfig.requireEncryption,
       encryptResponse: kitTransportConfig.encryptResponse,
-      maxClients: kitTransportConfig.maxClients,
     }
 const transportPublicPaths = kitTransportConfig === false
   ? []
@@ -144,11 +145,16 @@ async function validateSession(token: string) {
  * 因此必须先等待 `crypto.init()` 完成，再构建 handle。
  */
 async function createHaiHandle(): Promise<Handle> {
+  let managedTransport: TransportEncryptionOptions | undefined
   if (handleTransportConfig !== false) {
     const initResult = await crypto.init()
     if (!initResult.success) {
       throw new Error(initResult.error.message)
     }
+    const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    if (!ring.success)
+      throw new Error(ring.error.message)
+    managedTransport = { ...handleTransportConfig, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb }) }
   }
 
   return kit.createHandle({
@@ -172,11 +178,11 @@ async function createHaiHandle(): Promise<Handle> {
       windowMs: 60000,
       maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100,
     },
-    crypto: handleTransportConfig === false
+    crypto: managedTransport === undefined
       ? undefined
       : {
           crypto,
-          transport: handleTransportConfig,
+          transport: managedTransport,
         },
   })
 }

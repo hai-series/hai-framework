@@ -19,7 +19,7 @@ hai-framework's API service runtime: a stable public HTTP App abstraction that m
 - `build()` synchronously returns a plain router, so nested default feature procedures can be selected directly. Match the mounted contract to the selected procedures; unselected routes stay unavailable.
 - Missing routes return localized HaiResult JSON with HTTP 404. Transport encryption preserves that status instead of producing a 500 for a non-JSON response.
 - Built-in security headers and health checks; optional OpenAPI JSON, Scalar docs, and internal RPC endpoints.
-- Optional transport encryption: `serv.createApp({ transport: { crypto } })` mounts key exchange and request/response encryption automatically.
+- Optional transport encryption: `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` mounts key exchange and request/response encryption automatically.
 - Optional audio: `serv.createApp({ audio: { ai, verifyTicket, authorize } })` mounts a unified audio WebSocket. Connections authenticate immediately with one-time tickets (`{ session, grant? }`, separate pre-auth timeout). Every frame uses runtime Zod validation and a strict state machine, with input/queue/send-buffer backpressure and cascading cancellation. Authorization verifies operations, models, voices, quotas, and concurrency on the server.
 
 > Lifecycle: `@h-ai/serv` is a stateless HTTP App assembler and needs no `init()` / `close()`. Initialize `iam` / `storage` / `ai` / `crypto` before app creation, then release them in reverse order through `serv.listen(..., { onClose })`. `serv.createApp()` throws immediately on startup configuration errors such as transport manager creation failure.
@@ -130,10 +130,14 @@ serv does not expose its own encryption factory; the server manager comes from `
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const app = serv.createApp({
@@ -142,9 +146,9 @@ const app = serv.createApp({
   http: { apiPrefix: '/api/v1' },
   transport: {
     crypto,
+    serverKeyRing,
     // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
     // excludePaths: ['/health'],
-    // maxClients: 10000,
     keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
@@ -177,7 +181,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 ```ts
@@ -199,20 +202,15 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
 
-> **Multi-node deployments**: transport session keys are stored **in the server process** by default. Replicas require one of these:
->
-> - Enable **sticky sessions** in the load balancer so each client reaches the same node.
-> - Perform a separate initial key exchange for each client on each node.
-> - Inject a shared `keyStore`, such as `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`.
->
-> `keyStore` is a runtime object dependency and must not go in `config/_serv.yml`; configuration contains only static paths, allowlists, and capacities.
+> Servers must explicitly inject the same managed `serverKeyRing` and a shared `keyStore` (Redis or a shared database). Sharing client public keys alone cannot enable cross-node decryption. There is no implicit process key or memory-registry fallback; development/tests may explicitly use `createInMemoryKeyStore(capacity)`. Reload the same ring after restart; sticky sessions are unnecessary.
 
 > **Security**: with `transport` enabled, business requests need valid `X-Client-Id` except `excludePaths` and key exchange. Missing/unknown clientId returns 400. Unencryptable bodies, non-JSON responses, or encryption size limits return errors rather than forwarding plaintext business data.
 
@@ -522,9 +520,10 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
@@ -567,7 +566,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 `server` (host/port): `HOST` / `PORT` environment variables > configuration > `127.0.0.1:3000`. Applications pass `servConfig.server` to `serv.listen`.

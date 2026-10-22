@@ -1,9 +1,11 @@
-import type { CryptoFunctions, TransportEncryptionManager } from '@h-ai/crypto'
+import type { CryptoFunctions, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
 import type { Handle, RequestEvent } from '@sveltejs/kit'
 import { err, ok } from '@h-ai/core'
 import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
+
+let serverKeyRing: TransportServerKeyRing
 
 const KEY_EXCHANGE_PATH = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
 
@@ -66,6 +68,7 @@ function createCryptoWithTransportServer(
 
 function createFailingEncryptManager(): TransportEncryptionManager {
   return {
+    getServerKeyId: () => 'test-v1',
     getServerPublicKey: () => 'server-public-key',
     registerClientKey: async () => 'client-id',
     getClientPublicKey: async () => 'client-public-key',
@@ -78,6 +81,10 @@ function createFailingEncryptManager(): TransportEncryptionManager {
 describe('kit.createHandle({ crypto: { transport } })', () => {
   beforeAll(async () => {
     await crypto.init()
+    const key = crypto.asymmetric.generateKeyPair()
+    if (!key.success)
+      throw new Error(key.error.message)
+    serverKeyRing = { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }
   })
 
   afterAll(async () => {
@@ -92,7 +99,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     { name: '自定义方法的非空流', stream: true, headers: { 'Content-Type': 'application/json' }, method: 'PROPFIND' },
   ])('实际非空请求必须加密：$name', async ({ stream, headers, method }) => {
     const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
-    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const resolve = vi.fn(() => new Response(null, { status: 204 }))
     const bytes = new TextEncoder().encode('{"amount":90000}')
     const body = stream
@@ -116,7 +123,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('真实零字节请求流按空 POST 处理', async () => {
     const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
-    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const resolve = vi.fn(async (event: RequestEvent) => {
       expect(await event.request.text()).toBe('')
       return new Response(null, { status: 204 })
@@ -134,7 +141,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('响应伪造 Content-Length=0 也不能跳过加密', async () => {
     const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
-    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const response = await dispatch(handle, new Request('http://localhost/api/data', {
       headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
     }), () => new Response('{"secret":"private"}', {
@@ -151,7 +158,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const manager = createFailingEncryptManager()
     const register = vi.spyOn(manager, 'registerClientKey')
     const decrypt = vi.spyOn(manager, 'decryptRequest')
-    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const cancel = vi.fn()
     let pulled = 0
     const body = new ReadableStream<Uint8Array>({
@@ -185,7 +192,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   it.each([null, { clientPublicKey: '你'.repeat(1366) }])('拒绝握手内无效或公钥字段超限的输入：%j', async (body) => {
     const manager = createFailingEncryptManager()
     const register = vi.spyOn(manager, 'registerClientKey')
-    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const request = new Request(`http://localhost${KEY_EXCHANGE_PATH}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -197,7 +204,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('读取请求期间取消会停止原流并释放 reader', async () => {
     const manager = createFailingEncryptManager()
-    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const controller = new AbortController()
     const cancel = vi.fn()
     const body = new ReadableStream<Uint8Array>({ cancel })
@@ -223,7 +230,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const manager = createFailingEncryptManager()
     vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(TRANSPORT_BODY_LIMITS.publicKeyBytes + 1))
     const register = vi.spyOn(manager, 'registerClientKey')
-    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const request = new Request(`http://localhost${KEY_EXCHANGE_PATH}`, { method: 'POST', body: '{"clientPublicKey":"key"}' })
     expect((await dispatch(handle, request, () => new Response(null, { status: 204 }))).status).toBe(500)
     expect(register).not.toHaveBeenCalled()
@@ -232,7 +239,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   it('响应超过 UTF-8 字节上限时提前取消且不泄漏明文', async () => {
     const manager = createFailingEncryptManager()
     const encrypt = vi.spyOn(manager, 'encryptResponse')
-    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const cancel = vi.fn()
     const bytes = new TextEncoder().encode('你'.repeat(400_000))
     const body = new ReadableStream<Uint8Array>({ start: controller => controller.enqueue(bytes), cancel })
@@ -246,8 +253,8 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('允许精确 UTF-8 边界的响应并清除旧编码与长度头', async () => {
     const manager = createFailingEncryptManager()
-    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok({ encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }))
-    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: true } })
+    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok({ serverKeyId: 'test-v1', encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }))
+    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const payloadSize = TRANSPORT_BODY_LIMITS.plaintextBytes - 8
     const text = `{"x":"${'你'.repeat(Math.floor(payloadSize / 3))}${'a'.repeat(payloadSize % 3)}"}`
     const response = await dispatch(handle, new Request('http://localhost/api/data', { headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' } }), () => new Response(text, { headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } }))
@@ -260,7 +267,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   it('解密后明文超限时不进入业务，正常请求会重建可读取的 Request', async () => {
     const manager = createFailingEncryptManager()
     const decrypt = vi.spyOn(manager, 'decryptRequest').mockReturnValue(ok('你'.repeat(400_000)))
-    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const resolve = vi.fn(async (event: RequestEvent) => {
       expect(await event.request.json()).toEqual({ ok: true })
       return new Response(null, { status: 204 })
@@ -268,7 +275,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const makeRequest = () => new Request('http://localhost/api/raw-body', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
-      body: JSON.stringify({ encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }),
+      body: JSON.stringify({ serverKeyId: 'test-v1', encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }),
     })
     expect((await dispatch(handle, makeRequest(), resolve)).status).toBe(413)
     expect(resolve).not.toHaveBeenCalled()
@@ -278,7 +285,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('暴露统一密钥协商端点', async () => {
-    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const keyPair = crypto.asymmetric.generateKeyPair()
     expect(keyPair.success).toBe(true)
     if (!keyPair.success)
@@ -301,7 +308,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('强制加密时拒绝缺少 clientId 的业务请求', async () => {
-    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const request = new Request('http://localhost/api/data')
     const resolve = vi.fn(() => new Response('should not run'))
 
@@ -314,7 +321,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('transport 管理器不可用时受保护路由 fail-closed', async () => {
     const failingCrypto = createCryptoWithTransportServer(() => err(new Error('server unavailable')))
-    const handle = kit.createHandle({ crypto: { crypto: failingCrypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: failingCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const resolve = vi.fn(() => new Response('should not run'))
 
     const response = await dispatch(handle, new Request('http://localhost/api/data'), resolve)
@@ -331,16 +338,16 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     kit.createHandle({
       crypto: {
         crypto: forwardingCrypto,
-        transport: { keyStore, maxClients: 8 },
+        transport: { serverKeyRing, keyStore },
       },
     })
 
     expect(createServer).toHaveBeenCalledOnce()
-    expect(createServer).toHaveBeenCalledWith(expect.objectContaining({ keyStore, maxClients: 8 }))
+    expect(createServer).toHaveBeenCalledWith(expect.objectContaining({ keyStore }))
   })
 
   it('页面文档请求仍然透传，不会要求 X-Client-Id', async () => {
-    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const resolve = vi.fn(() => new Response('<html>ok</html>', {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     }))
@@ -368,7 +375,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('默认也保护 SvelteKit __data.json 请求', async () => {
-    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const resolve = vi.fn(() => new Response('should not run'))
 
     const response = await dispatch(
@@ -389,7 +396,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
         loginUrl: '/auth/login',
         protectedPaths: ['/admin/*'],
       },
-      crypto: { crypto, transport: true },
+      crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } },
     })
     const resolve = vi.fn(() => new Response('should not run'))
 
@@ -413,7 +420,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
         loginUrl: '/auth/login',
         protectedPaths: ['/admin/*'],
       },
-      crypto: { crypto, transport: true },
+      crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } },
     })
     const resolve = vi.fn(() => new Response('should not run'))
     const request = new Request('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=001')
@@ -439,7 +446,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       success: true,
       data: createFailingEncryptManager(),
     }))
-    const handle = kit.createHandle({ crypto: { crypto: failingCrypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto: failingCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
 
     const response = await dispatch(
       handle,
@@ -458,7 +465,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('requireEncryption=false 时允许明文上传请求透传', async () => {
     const handle = kit.createHandle({
-      crypto: { crypto, transport: { requireEncryption: false, encryptResponse: false } },
+      crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, requireEncryption: false, encryptResponse: false } },
     })
     const body = '--boundary\r\nContent-Disposition: form-data; name="file"\r\n\r\navatar\r\n--boundary--'
     const request = new Request('http://localhost/api/upload', {
@@ -477,7 +484,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('通过 crypto.transport.createClient 完成端到端加解密', async () => {
-    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const request = input instanceof Request
         ? input
@@ -506,7 +513,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('已协商客户端的空 POST 不要求 X-Encrypted 请求体', async () => {
-    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const request = input instanceof Request
         ? input
@@ -532,7 +539,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('svelteKit __data.json 响应使用 text/sveltekit-data 时也会被加密', async () => {
-    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const rawDataResponses: Response[] = []
     const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const request = input instanceof Request
@@ -569,7 +576,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('支持自定义 keyExchangePath', async () => {
     const handle = kit.createHandle({
-      crypto: { crypto, transport: { keyExchangePath: '/custom/exchange' } },
+      crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, keyExchangePath: '/custom/exchange' } },
     })
     const keyPair = crypto.asymmetric.generateKeyPair()
     expect(keyPair.success).toBe(true)

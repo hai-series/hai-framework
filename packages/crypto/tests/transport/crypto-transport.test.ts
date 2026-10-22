@@ -1,5 +1,8 @@
+import type { TransportServerKeyRing } from '../../src/index.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS } from '../../src/index.js'
+
+let serverKeyRing: TransportServerKeyRing
 
 const KEY_EXCHANGE_URL = 'https://api.test/_hai/key-exchange'
 
@@ -22,12 +25,13 @@ function makeRoundTripFetch(
       const clientId = await manager.registerClientKey(body.clientPublicKey)
       return new Response(JSON.stringify({
         serverPublicKey: manager.getServerPublicKey(),
+        serverKeyId: manager.getServerKeyId(),
         clientId,
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }
 
     // echo endpoint：解密 → 回显 → 加密
-    const payload = await req.clone().json() as { encryptedKey: string, ciphertext: string, iv: string }
+    const payload = await req.clone().json() as { serverKeyId: string, encryptedKey: string, ciphertext: string, iv: string }
     const dec = manager.decryptRequest(payload)
     if (!dec.success)
       throw new Error(dec.error.message)
@@ -49,6 +53,10 @@ function makeRoundTripFetch(
 describe('crypto.transport', () => {
   beforeEach(async () => {
     await crypto.init()
+    const key = crypto.asymmetric.generateKeyPair()
+    if (!key.success)
+      throw new Error(key.error.message)
+    serverKeyRing = { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }
   })
   afterEach(async () => {
     vi.useRealTimers()
@@ -62,12 +70,12 @@ describe('crypto.transport', () => {
 
   it('createServer fails when crypto not initialized', async () => {
     await crypto.close()
-    const result = crypto.transport.createServer()
+    const result = crypto.transport.createServer({ serverKeyRing, keyStore: createInMemoryKeyStore() })
     expect(result.success).toBe(false)
   })
 
   it('round-trips request/response through encrypted fetch', async () => {
-    const serverResult = crypto.transport.createServer()
+    const serverResult = crypto.transport.createServer({ serverKeyRing, keyStore: createInMemoryKeyStore() })
     expect(serverResult.success).toBe(true)
     if (!serverResult.success)
       return
@@ -104,6 +112,7 @@ describe('crypto.transport', () => {
 
   it('round-trips through an injected keyStore', async () => {
     const serverResult = crypto.transport.createServer({
+      serverKeyRing,
       keyStore: createInMemoryKeyStore(32),
     })
     expect(serverResult.success).toBe(true)
@@ -134,7 +143,7 @@ describe('crypto.transport', () => {
   })
 
   it('reads body from Request when init.body is absent (oRPC compat)', async () => {
-    const serverResult = crypto.transport.createServer()
+    const serverResult = crypto.transport.createServer({ serverKeyRing, keyStore: createInMemoryKeyStore() })
     if (!serverResult.success)
       throw new Error('createServer failed')
 
@@ -151,7 +160,7 @@ describe('crypto.transport', () => {
   })
 
   it('destroy() clears session state', async () => {
-    const serverResult = crypto.transport.createServer()
+    const serverResult = crypto.transport.createServer({ serverKeyRing, keyStore: createInMemoryKeyStore() })
     if (!serverResult.success)
       throw new Error('createServer failed')
     const client = crypto.transport.createClient({
@@ -176,7 +185,7 @@ describe('crypto.transport', () => {
     })
     const fetch = vi.fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(new Response(stream))
-      .mockResolvedValueOnce(Response.json({ serverPublicKey: 'server-key', clientId: 'client-id' }))
+      .mockResolvedValueOnce(Response.json({ serverKeyId: 'test-v1', serverPublicKey: 'server-key', clientId: 'client-id' }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     expect((await client.init()).success).toBe(false)
     expect(cancel).toHaveBeenCalledOnce()
@@ -185,7 +194,7 @@ describe('crypto.transport', () => {
     expect((await client.init()).success).toBe(true)
   })
 
-  it.each([null, { serverPublicKey: '你'.repeat(1366), clientId: 'id' }])('拒绝无效或超限服务端公钥：%j', async (body) => {
+  it.each([null, { serverKeyId: 'test-v1', serverPublicKey: '你'.repeat(1366), clientId: 'id' }])('拒绝无效或超限服务端公钥：%j', async (body) => {
     const client = crypto.transport.createClient({
       keyExchangeUrl: KEY_EXCHANGE_URL,
       fetch: async () => Response.json(body),
@@ -220,7 +229,7 @@ describe('crypto.transport', () => {
       },
       cancel,
     })
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ serverPublicKey: 'key', clientId: 'id' }))
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ serverKeyId: 'test-v1', serverPublicKey: 'key', clientId: 'id' }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     await expect(client.encryptedFetch('https://api.test/echo', { method: 'POST', body: stream })).rejects.toBeInstanceOf(RangeError)
     expect(fetch).toHaveBeenCalledOnce()
@@ -240,7 +249,7 @@ describe('crypto.transport', () => {
       cancel,
     })
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(Response.json({ serverPublicKey: 'key', clientId: 'id' }))
+      .mockResolvedValueOnce(Response.json({ serverKeyId: 'test-v1', serverPublicKey: 'key', clientId: 'id' }))
       .mockResolvedValueOnce(new Response(stream, { headers: { 'X-Encrypted': 'true' } }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     await expect(client.encryptedFetch('https://api.test/echo')).rejects.toThrow()
@@ -251,14 +260,14 @@ describe('crypto.transport', () => {
 
   it.each(['invalid json', '{}'])('异常加密响应不回退到原密文：%s', async (body) => {
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(Response.json({ serverPublicKey: 'key', clientId: 'id' }))
+      .mockResolvedValueOnce(Response.json({ serverKeyId: 'test-v1', serverPublicKey: 'key', clientId: 'id' }))
       .mockResolvedValueOnce(new Response(body, { headers: { 'X-Encrypted': 'true' } }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     await expect(client.encryptedFetch('https://api.test/echo')).rejects.toThrow()
   })
 
   it('发送 ArrayBufferView 只读取有效切片并清除原正文的长度与编码头', async () => {
-    const server = crypto.transport.createServer()
+    const server = crypto.transport.createServer({ serverKeyRing, keyStore: createInMemoryKeyStore() })
     if (!server.success)
       throw new Error('createServer failed')
     const roundTrip = makeRoundTripFetch(server.data, text => text)
@@ -290,7 +299,7 @@ describe('crypto.transport', () => {
     const second = client.encryptedFetch('https://api.test/echo')
     controller.abort()
     await expect(first).rejects.toMatchObject({ name: 'AbortError' })
-    finishHandshake?.(Response.json({ serverPublicKey: 'key', clientId: 'id' }))
+    finishHandshake?.(Response.json({ serverKeyId: 'test-v1', serverPublicKey: 'key', clientId: 'id' }))
     expect(await (await second).text()).toBe('ok')
     expect(fetch).toHaveBeenCalledTimes(2)
     expect(fetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(false)
@@ -300,7 +309,7 @@ describe('crypto.transport', () => {
     const cancel = vi.fn()
     const stream = new ReadableStream<Uint8Array>({ cancel })
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(Response.json({ serverPublicKey: 'key', clientId: 'id' }))
+      .mockResolvedValueOnce(Response.json({ serverKeyId: 'test-v1', serverPublicKey: 'key', clientId: 'id' }))
       .mockResolvedValueOnce(new Response(stream, { headers: { 'X-Encrypted': 'true' } }))
     const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch })
     expect((await client.init()).success).toBe(true)

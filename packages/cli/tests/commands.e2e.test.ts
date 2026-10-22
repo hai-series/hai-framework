@@ -21,6 +21,8 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseEnv } from 'node:util'
+import { createInMemoryKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -205,6 +207,23 @@ describe('createProject — api 类型', () => {
 
   it('应创建项目目录', async () => {
     expect(await exists(projectPath, '.')).toBe(true)
+  })
+
+  it('aPI仅选crypto时生成私有密钥环，并限制内存registry为开发测试', async () => {
+    const name = 'proj-api-crypto-only'
+    const directory = path.join(tmpRoot, name)
+    await createProject({ name, appType: 'api', template: 'custom', features: ['crypto'], moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
+    const prefix = `apps/${name}-service`
+    const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.local`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    expect(ring.success).toBe(true)
+    if (!ring.success)
+      throw new Error(ring.error.message)
+    const source = await readText(directory, `${prefix}/src/app.ts`)
+    expect(source).toContain('keyStore: createInMemoryKeyStore()')
+    expect(source).toContain('coreConfig.env !== \'development\' && coreConfig.env !== \'test\'')
+    expect(source).not.toContain('from \'@h-ai/reldb\'')
+    expect(await readText(directory, `${prefix}/.env.example`)).toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
+    expect(await readText(directory, `${prefix}/.env`)).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
   })
 
   it('package.json 名称正确', async () => {
@@ -874,6 +893,20 @@ describe('createProject — fullstack 类型', () => {
     expect(await readText(projectPath, '.env')).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
     expect(await readText(projectPath, '.env')).not.toContain(password)
     expect(await readText(projectPath, '.env.example')).not.toContain(password)
+    const serializedRing = parseEnv(env).HAI_CRYPTO_TRANSPORT_SERVERKEYRING
+    const ring = parseTransportServerKeyRing(serializedRing)
+    expect(ring.success).toBe(true)
+    if (!ring.success)
+      throw new Error(ring.error.message)
+    expect(await readText(projectPath, '.env')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
+    expect(await readText(projectPath, '.env.example')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
+    try {
+      expect((await crypto.init()).success).toBe(true)
+      expect(crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: createInMemoryKeyStore() }).success).toBe(true)
+    }
+    finally {
+      await crypto.close()
+    }
     const gitignoreLines = (await readText(projectPath, '.gitignore')).split('\n').map(line => line.trim())
     expect(gitignoreLines).toContain('.env.local')
     expect(gitignoreLines).toContain('.env.*.local')
@@ -887,6 +920,7 @@ describe('createProject — fullstack 类型', () => {
     expect(dockerignoreLines).not.toContain('.env.*')
     await createProject({ name: 'proj-fullstack-env-other', appType: 'fullstack', frontends: ['web'], yes: true, install: false, git: false, cwd: tmpRoot, packageManager: 'pnpm' })
     expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.local')).not.toContain(password)
+    expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.local')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
   }, 30_000)
 
   it('应生成 pnpm workspace 多包工程', async () => {

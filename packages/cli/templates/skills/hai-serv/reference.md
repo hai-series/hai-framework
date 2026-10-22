@@ -20,7 +20,7 @@
 - 生成 OpenAPI 3.1 文档供外部工具消费
 - 通过 `config/_serv.yml` 管理 API 前缀、OpenAPI、docs、health、rpc 等 HTTP 挂载配置
 - 通过 `serv.createRuntimeSecurityPolicy(...)` 对生产 CORS Origin、原生 WebView Origin、Secure Cookie 与 API 文档暴露执行 fail-closed 策略
-- 启用传输加密：`serv.createApp({ transport: { crypto } })`
+- 启用传输加密：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`
 - 高级场景通过 `createApp({ middlewares })` 自定义 HTTP middleware，通过 `createContext` 注入请求级业务字段
 - 公开只读文件通过 `serv.storageAssets(...)` 统一处理安全 key、MIME 白名单、GET/HEAD、ETag 与缓存头
 - 为 Audio WebSocket 配置一次性 ticket 校验、IAM/模型/配额授权与并发释放钩子
@@ -248,9 +248,10 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
@@ -281,7 +282,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 ## 核心 API
@@ -297,9 +297,9 @@ export function createServerApp() {
   procedures,     // Router<AnyContractRouter, ServContext> — procedure 实现
   http?,          // ServHttpConfigInput — HTTP 端点配置（见下方配置节）
   middlewares?,   // readonly ServMiddlewareMount[] — 自定义 HTTP middleware（日志/CORS/限流/租户头校验）
+  transport?,     // { crypto, serverKeyRing, keyStore, keyExchangePath?, excludePaths? } — 必填受管密钥环和客户端 registry
   iam?,           // ServIam — 顶层 IAM 句柄，同时驱动 access token 校验与 refresh cookie【推荐】
   refreshCookie?, // RefreshCookieConfig — 浏览器 cookie / 受信原生 body 的 refresh token 通道
-  transport?,     // { crypto, keyExchangePath?, excludePaths?, maxClients? } — 统一传输加密
   verifyToken?,   // (token) => Promise<HaiResult<ServSession>> — 逃脱口：不使用 iam 时提供自定义校验
   createContext?, // CreateServContext — 高级：完全接管上下文构造（设置后 serv 不再自动填充 session）
   })
@@ -330,7 +330,7 @@ const procedures = serv
 
 ### 传输加密
 
-serv 不暴露本地传输加密工厂；内部统一调用 `crypto.transport.createServer()`。客户端用 `@h-ai/api-client` 的 `transport` 配置自动协商。
+serv 不暴露本地传输加密工厂；内部统一调用 `crypto.transport.createServer({ serverKeyRing, keyStore })`。客户端用 `@h-ai/api-client` 的 `transport` 配置自动协商。
 
 正文统一使用 `@h-ai/crypto` 根入口的 `TRANSPORT_BODY_LIMITS` / `readTransportBody` 有界读取原始流：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB，均按 UTF-8 字节计数。无 Content-Length 时也逐块检查，超限或取消立即停止、取消原流并释放 reader，不 clone/tee 后完整缓冲。请求超限返回 413，响应超限返回 500，无效公钥返回 400。明文 Request 保留 signal 并清空 Hono 正文缓存；重建请求/响应时移除旧 Content-Length/Content-Encoding。预算为固定协议常量，不属于 `_serv.yml` 或环境变量。
 
@@ -346,9 +346,9 @@ const app = serv.createApp({
   http: { apiPrefix: '/api/v1' },
   transport: {
     crypto,
+    serverKeyRing,
     // keyExchangePath 默认 '/_hai/key-exchange'
-    // maxClients: 10000,
-    // keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+    keyStore, // 已连接的共享 Redis/数据库 registry。
   },
 })
 ```
@@ -374,9 +374,9 @@ await apiClient.init({
 })
 ```
 
-> 不要导入或暴露子目录内部 transport 工厂；公共装配点只有 `serv.createApp({ transport: { crypto } })`。
+> 不要导入或暴露子目录内部 transport 工厂；公共装配点只有 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`。
 
-多节点部署时，直接在 `serv.createApp({ transport })` 的运行时对象里注入 `keyStore` 即可；推荐从 `@h-ai/crypto` 根入口导入 `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`。`keyStore` 不属于 `_serv.yml` 配置项，配置文件仍只保留静态路径和白名单。
+启用 transport 必须显式注入 `serverKeyRing` 与 `keyStore`；多节点使用相同受管 ring 和共享 Redis/数据库 registry，仅共享客户端公钥不足以跨节点解密。通过根入口 `parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)` 解析并检查 HaiResult，私钥不放 `_serv.yml`、PUBLIC_/VITE_、日志或响应。请求带协商 serverKeyId，未知/撤销 ID 拒绝。轮换先分发新旧 ring，再切 activeKeyId 并滚动重建；删除旧版本后客户端须 destroy 并重协商，不自动重放非幂等业务。默认 YAML maxClients 已删除；开发/测试显式 `createInMemoryKeyStore(capacity)`。无需 sticky session，详见 hai-crypto 的密钥轮换说明。
 
 **上下文工厂优先级**（`context.session` 填充来源）：
 
@@ -728,7 +728,7 @@ route 实现器内置以下错误：
 原生客户端匹配 `nativeTokenTransport.isRequest` 后，登录/注册/刷新响应保留轮换后的
 `refreshToken`，刷新请求从 `{ refreshToken }` body 读取，且不读写浏览器 Cookie。
 
-若同时启用 `transport: { crypto }`，`/auth/refresh` 也必须走加密链路；cookie-only 刷新请求允许空 body，服务端不要把 `Request.body === null` 误判为需要解密的请求体。
+若同时启用 `transport: { crypto, serverKeyRing, keyStore }`，`/auth/refresh` 也必须走加密链路；cookie-only 刷新请求允许空 body，服务端不要把 `Request.body === null` 误判为需要解密的请求体。
 
 ### 配置
 

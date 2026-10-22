@@ -19,7 +19,7 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 - `build()` は通常の router を同期的に返すため、標準 feature のネストした procedures を直接選択できます。接続する contract と procedures を一致させ、未選択の入口は公開しません。
 - 存在しないルートは翻訳された HaiResult JSON と HTTP 404 を返します。通信暗号化でも 404 を保ち、非 JSON 応答による 500 にしません。
 - 安全な応答ヘッダー・ヘルスチェックを内蔵し、OpenAPI JSON・Scalar 文書・内部 RPC endpoint は任意。
-- 任意の通信暗号化：`serv.createApp({ transport: { crypto } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
+- 任意の通信暗号化：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
 - 任意の音声入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` が共通 WebSocket を接続します。接続直後に単回 ticket で認証（`{ session, grant? }`、独立した事前認証 timeout）。各フレームを Zod と厳密な状態機械で検証し、入力・キュー・送信バッファの背圧と連鎖キャンセルを管理します。サーバーの認可処理で操作・モデル・声・割当量・同時使用数を確認します。
 
 > ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。
@@ -130,10 +130,14 @@ serv 独自の暗号化ファクトリーはなく、`crypto.transport` から�
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const app = serv.createApp({
@@ -142,9 +146,9 @@ const app = serv.createApp({
   http: { apiPrefix: '/api/v1' },
   transport: {
     crypto,
+    serverKeyRing,
     // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
     // excludePaths: ['/health'],
-    // maxClients: 10000,
     keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
@@ -177,7 +181,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 ```ts
@@ -199,20 +202,15 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
 
-> **複数ノード**：通信セッション鍵は既定で**サーバープロセス内**に保存します。複数レプリカでは次のいずれかが必要です：
->
-> - ロードバランサーで **sticky session** を有効化し、同じクライアントを同じノードへ接続。
-> - 各クライアントが各ノードへの初回接続時に個別に鍵交換。
-> - `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()` などの共有 `keyStore` を注入。
->
-> `keyStore` は実行時オブジェクトの依存で、`config/_serv.yml` に保存しません。設定にはパス・許可リスト・容量などの静的項目のみを記載します。
+> サーバーには同じ管理済み `serverKeyRing` と共有 `keyStore`（Redis または共有 DB）を明示的に渡します。クライアント公開鍵の共有だけではノード間で復号できません。暗黙のプロセス鍵・メモリー registry はなく、開発・テストでは `createInMemoryKeyStore(capacity)` を明示します。再起動後は同じ鍵環を読み込み、sticky session は不要です。
 
 > **安全方針**：`transport` 有効時は `excludePaths` と鍵交換以外で有効な `X-Client-Id` が必要です。不足・未知の clientId は 400、暗号化不能・非 JSON 応答・上限超過はエラーになり、平文の業務データは渡しません。
 
@@ -522,9 +520,10 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
@@ -567,7 +566,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 `server`（host/port）：`HOST` / `PORT` 環境変数 > 設定ファイル > `127.0.0.1:3000`。アプリが `servConfig.server` を `serv.listen` に渡します。

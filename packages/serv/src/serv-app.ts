@@ -132,13 +132,13 @@ export interface CreateServAppOptions<
   readonly createContext?: CreateServContext
   /**
    * 启用传输加密（opt-in）。提供后 serv 自动：
-   * 1. 调用 `crypto.transport.createServer()` 创建管理器
+   * 1. 使用显式 serverKeyRing / keyStore 创建受管传输管理器
    * 2. 在 oRPC 路由之前挂载中间件，自动解密请求 / 加密响应
    * 3. 在 `${apiPrefix}${keyExchangePath}` 暴露 POST 密钥协商端点
    *
    * @example
    * ```ts
-   * serv.createApp({ contract, procedures, transport: { crypto } })
+   * serv.createApp({ contract, procedures, transport: { crypto, serverKeyRing, keyStore } })
    * ```
    */
   readonly transport?: ServTransportConfig
@@ -314,8 +314,8 @@ export function createApp<
   // - 在下游响应返回后加密
   if (options.transport) {
     const mgr = options.transport.crypto.transport.createServer({
+      serverKeyRing: options.transport.serverKeyRing,
       keyStore: options.transport.keyStore,
-      maxClients: options.transport.maxClients,
     })
     if (!mgr.success) {
       // 直接抛已存在的 HaiError 实例，保留 code/system/module/cause，便于上层定位到

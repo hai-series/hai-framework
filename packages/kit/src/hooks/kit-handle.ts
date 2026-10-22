@@ -67,7 +67,7 @@ function applyDefaultSecurityHeaders(response: Response): void {
  *     publicPaths: ['/api/auth/*', '/api/public/*'],
  *   },
  *   rateLimit: { maxRequests: 100 },
- *   crypto: { crypto, transport: true },
+ *   crypto: { crypto, transport: { serverKeyRing, keyStore } },
  * })
  * ```
  */
@@ -365,16 +365,16 @@ function buildTransportMiddleware(
   if (!cryptoConfig?.transport)
     return null
 
-  const transportOpts = typeof cryptoConfig.transport === 'object' ? cryptoConfig.transport : {}
+  const transportOpts = cryptoConfig.transport
 
   return transportEncryptionMiddleware({
     enabled: true,
     crypto: cryptoConfig.crypto,
+    serverKeyRing: transportOpts.serverKeyRing,
     keyExchangePath: transportOpts.keyExchangePath,
     excludePaths: transportOpts.excludePaths,
     encryptResponse: transportOpts.encryptResponse,
     keyStore: transportOpts.keyStore,
-    maxClients: transportOpts.maxClients,
     requireEncryption: transportOpts.requireEncryption,
   })
 }

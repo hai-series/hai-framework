@@ -5,7 +5,7 @@
  * @module kit-transport-middleware
  */
 
-import type { EncryptedPayload, TransportEncryptionManager } from '@h-ai/crypto'
+import type { EncryptedRequestPayload, TransportEncryptionManager } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
 import { readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
@@ -27,7 +27,7 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-
  *
  * // 传输加密通过 createHandle 的 crypto 配置自动启用：
  * export const handle = kit.createHandle({
- *   crypto: { crypto, transport: true },
+ *   crypto: { crypto, transport: { serverKeyRing, keyStore } },
  * })
  * ```
  */
@@ -44,8 +44,8 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
 
   // 初始化传输加密管理器
   const result = config.crypto.transport.createServer({
+    serverKeyRing: config.serverKeyRing,
     keyStore: config.keyStore,
-    maxClients: config.maxClients,
   })
   if (!result.success) {
     // 安全策略：transport 已启用但服务端管理器不可用时，受保护路由必须 fail-closed，禁止明文透传。
@@ -224,7 +224,7 @@ async function handleKeyExchange(
     const clientId = await manager.registerClientKey(body.clientPublicKey)
 
     return new Response(
-      JSON.stringify({ serverPublicKey, clientId }),
+      JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     )
   }
@@ -338,9 +338,10 @@ async function decryptRequestBody(
   return null
 }
 
-function isEncryptedPayloadShape(payload: unknown): payload is EncryptedPayload {
+function isEncryptedPayloadShape(payload: unknown): payload is EncryptedRequestPayload {
   if (!payload || typeof payload !== 'object')
     return false
   const p = payload as Record<string, unknown>
-  return typeof p.encryptedKey === 'string' && typeof p.ciphertext === 'string' && typeof p.iv === 'string'
+  return typeof p.serverKeyId === 'string' && /^[\w-]{1,64}$/.test(p.serverKeyId)
+    && typeof p.encryptedKey === 'string' && typeof p.ciphertext === 'string' && typeof p.iv === 'string'
 }

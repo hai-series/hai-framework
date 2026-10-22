@@ -58,7 +58,6 @@ export interface ServRpcHttpConfig {
 export interface ServTransportRuntimeConfig {
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
-  readonly maxClients: number
 }
 
 /** `config/_serv.yml` 中可序列化的跨端 CORS 配置。 */
@@ -96,7 +95,6 @@ export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
 export type ServTransportRuntimeConfigInput = Partial<{
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
-  readonly maxClients: number
 }>
 
 /** `serv.createApp` 接受的 HTTP 配置入参类型。 */
@@ -153,7 +151,6 @@ const TransportRuntimeConfigInputSchema = z.union([
   z.object({
     keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
     excludePaths: z.array(AbsolutePathSchema).default([]),
-    maxClients: z.number().int().positive().default(10000),
   }),
 ])
 

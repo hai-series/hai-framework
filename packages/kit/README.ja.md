@@ -147,16 +147,20 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 #### 同一オリジンの通信暗号化
 
-kit の通信暗号化は `@h-ai/crypto` に委譲します。サーバーは `crypto.transport.createServer()` で管理器を作成し、ブラウザーは `kit.client.installBrowserTransport(kitConfig, { crypto })` の 1 行で同一オリジンの fetch ラッパーを導入します。アプリ側はトップレベルの `crypto` のみを設定します。
+kit の通信暗号化は `@h-ai/crypto` に委譲します。サーバーは `crypto.transport.createServer({ serverKeyRing, keyStore })` で管理器を作成し、ブラウザーは `kit.client.installBrowserTransport(kitConfig, { crypto })` の 1 行で同一オリジンの fetch ラッパーを導入します。サーバーには管理済み鍵環と共有 registry も渡します。
 
 **src/hooks.server.ts**：
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 export const handle = kit.createHandle({
@@ -168,6 +172,7 @@ export const handle = kit.createHandle({
   crypto: {
     crypto,
     transport: {
+      serverKeyRing,
       requireEncryption: true,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
@@ -203,7 +208,7 @@ export const { apiFetch } = kit.client.create()
 
 既定の鍵交換パスは `/api/_hai/key-exchange` です。サーバーで `transport.keyExchangePath` を変更した場合、クライアントの `transport.keyExchangeUrl` も合わせて設定してください。
 
-ノード間でクライアント公開鍵を共有するには、実行時に `kit.createHandle({ crypto: { transport: { keyStore } } })` へ `createRedisTransportKeyStore()` または `createReldbTransportKeyStore()` を渡します。このようなオブジェクト依存を `_kit.yml` に**書いてはいけません**。設定ファイルは公開パスとスイッチのみを保持します。
+サーバーには同じ管理済み `serverKeyRing` と共有 `keyStore`（Redis または共有 DB）を明示的に渡します。クライアント公開鍵の共有だけではノード間で復号できません。暗黙のプロセス鍵・メモリー registry はなく、開発・テストでは `createInMemoryKeyStore(capacity)` を明示します。再起動後は同じ鍵環を読み込み、sticky session は不要です。
 
 transport は既定で同一オリジンの `/api/*`、SvelteKit の `__data.json`、鍵交換 endpoint に適用します。ページ文書・静的ファイルは平文で `X-Client-Id` は不要です。アップロードなどの `multipart/form-data` はそのまま送信し、サーバーの `excludePaths` で明示的に許可してください。
 
@@ -231,7 +236,6 @@ transport:
     - /api/storage
     - /api/public
     - /api/auth/profile/avatar
-  maxClients: 10000
 ```
 
 ```ts

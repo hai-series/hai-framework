@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 21/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 22/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -169,7 +169,8 @@
 
 ### CRYPTO-01 · P1 · 共享服务端传输密钥，支持轮换与跨节点解密
 
-- [ ] 待修正（源码确认；范围：crypto）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：服务端强制显式版本化serverKeyRing及keyStore，删除隐式进程密钥/内存回退与失效maxClients配置；握手和请求携带serverKeyId，校验密钥配对并复制不可变快照，未知版本拒绝。两真实manager与SQLite共享registry验证跨节点解密、数据库重启、分阶段轮换/撤销；registry读取失败结构化返回。serv/kit/api-client、应用、CLI私密开发密钥生成/配置/模板、三语文档/skill/env同步。定向139项、相关typecheck/build/渲染lint/skills/env589通过；scaffold为5过3失败，API import已修，锁结果收窄由IAM02同模板修复后复验；未执行真实SecretManager部署、根全量或真实跨进程传输；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/crypto/src/transport/crypto-transport-server.ts:45](../packages/crypto/src/transport/crypto-transport-server.ts#L45)；[packages/serv/src/serv-transport.ts:48](../packages/serv/src/serv-transport.ts#L48)。
 - **证据与影响**：每个 manager 启动时生成不同服务端密钥；共享 keyStore 只保存客户端公钥。A 协商后的请求交给 B 仍不能解密，重启同样失效，和共享 keyStore 足够支持多节点的说明不符。
 - **修正内容**：注入受管服务端密钥/版本化 key ring，协议携带 key id；共享客户端 registry，定义轮换、撤销与密钥保管，不把私钥写普通日志或公开配置。

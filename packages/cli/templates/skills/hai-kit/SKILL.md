@@ -22,6 +22,8 @@ description: "在 SvelteKit 中接入 hooks、认证守卫、输入校验、响�
 3. 区分返回 HaiResult 的业务操作与抛 Response/redirect/error 的框架控制流，不吞掉控制流。
 4. 对齐 Cookie/CSRF/transport 与服务端配置，验证匿名、登录、权限拒绝和表单失败。
 
+服务端 transport 使用含受管 serverKeyRing、共享 keyStore 的对象，不再接受单独 true。公开 _kit.yml 只保留路径/开关，不放私钥；浏览器无 ring。请求携带协商 serverKeyId，各节点同 ring + registry，不依赖粘性路由；轮换见 hai-crypto。
+
 传输加密按实际请求/响应 body 判断空正文，不信任 Content-Type/Length；非空明文不能借缺头、chunked 或伪造零长度旁路，实际空流保留无 input POST 行为。
 
 transport 与 serv/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB。直接有界读取原流，超限/取消停止读取、取消流并释放 reader；请求超限 413、响应超限 500。重建 Request 保留 signal，重建正文移除旧长度/编码头；预算不属于 `_kit.yml` 或环境变量。

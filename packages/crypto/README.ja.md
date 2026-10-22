@@ -164,23 +164,23 @@ if (hashed.success) {
 
 通常のアプリケーションでは、上位モジュールの統合機能を優先してください：
 
-- サーバー：`serv.createApp({ transport: { crypto } })` または `kit.createHandle({ crypto: { crypto, transport: true } })`。
+- サーバー：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` または `kit.createHandle({ crypto: { crypto, transport: { serverKeyRing, keyStore } } })`。
 - クライアント：`apiClient.init({ transport: { crypto } })` または `kit.client.create({ transport: { crypto } })`。
 
-`crypto.transport.createServer()` / `createClient()` の直接呼び出しは、独自ランタイム、テスト、HTTP 鍵交換 endpoint を自分で接続する場合に限って推奨します。
+`crypto.transport.createServer({ serverKeyRing, keyStore })` / `createClient()` の直接呼び出しは、独自ランタイム、テスト、HTTP 鍵交換 endpoint を自分で接続する場合に限って推奨します。
 
 ##### 使用手順
 
 1. `await crypto.init()` を呼び、`crypto.asymmetric` と `crypto.symmetric` を初期化します。
-2. サーバーで `crypto.transport.createServer()` を呼び、`manager` を作成します。サーバー鍵ペアとクライアント公開鍵を管理します。複数ノードでは共有 `keyStore` を注入できます。
-3. POST の鍵交換 endpoint を用意します。`{ clientPublicKey }` を受け取り、`manager.registerClientKey()` で登録し、`{ serverPublicKey: manager.getServerPublicKey(), clientId }` を返します。
+2. サーバーで `crypto.transport.createServer({ serverKeyRing, keyStore })` を呼び、`manager` を作成します。サーバー鍵ペアとクライアント公開鍵を管理します。複数ノードでは共有 `keyStore` を注入できます。
+3. POST の鍵交換 endpoint を用意します。`{ clientPublicKey }` を受け取り、`manager.registerClientKey()` で登録し、`{ serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), clientId }` を返します。
 4. クライアントで `crypto.transport.createClient({ keyExchangeUrl })` によりセッションを作成します。最初の `client.init()` または `client.encryptedFetch()` で鍵交換が自動実行されます。
-5. 鍵交換後、リクエストに `X-Client-Id` を付与します。body がある場合は `{ encryptedKey, ciphertext, iv }` に変換し、`X-Encrypted: true` を付けます。body のないリクエストでは `X-Client-Id` のみを付与し、暗号文 body は作成しません。
+5. 鍵交換後、リクエストに `X-Client-Id` を付与します。body がある場合は `{ serverKeyId, encryptedKey, ciphertext, iv }` に変換し、`X-Encrypted: true` を付けます。body のないリクエストでは `X-Client-Id` のみを付与し、暗号文 body は作成しません。
 6. サーバーは `clientId` でクライアント公開鍵を取得し、`manager.decryptRequest()` でリクエスト本文を復号してから業務処理を実行します。
 7. JSON 応答を返す前に `manager.encryptResponse(clientId, data)` で暗号化し、`X-Encrypted: true` を付けます。クライアントは応答を自動的に復号します。
 8. `client.destroy()` でクライアントセッションを消去します。サーバー側のリソースは `manager.close()` またはモジュール単位の `await crypto.close()` で解放します。
 
-> 既定の `keyStore` はプロセス内の FIFO メモリーストアです。`maxClients` を超えると最初に登録されたクライアントを削除します。複数ノードでは sticky session、またはクライアント公開鍵を共有する `TransportKeyStore` 実装が必要です。
+> サーバーには同じ管理済み `serverKeyRing` と共有 `keyStore`（Redis または共有 DB）を明示的に渡します。クライアント公開鍵の共有だけではノード間で復号できません。暗黙のプロセス鍵・メモリー registry はなく、開発・テストでは `createInMemoryKeyStore(capacity)` を明示します。再起動後は同じ鍵環を読み込み、sticky session は不要です。
 
 共有ストレージには、`@h-ai/crypto` のルート入口からエクスポートされる Provider ファクトリーを再利用できます：
 
@@ -189,8 +189,8 @@ if (hashed.success) {
 - `createReldbTransportKeyStore({ reldb, ttlSeconds? })`：`@h-ai/reldb` を再利用し、`hai_crypto_transport_client_keys` テーブルを自動作成。
 
 ```ts
-// 服务端：通常由 serv.createApp({ transport: { crypto } }) 或 kit.createHandle({ crypto }) 内部调用
-const server = crypto.transport.createServer({ maxClients: 10000 })
+// 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 if (!server.success)
   throw new Error(server.error.message)
 
@@ -213,6 +213,7 @@ await crypto.init()
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const server = crypto.transport.createServer({
+  serverKeyRing,
   keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
 })
 if (!server.success)
@@ -222,6 +223,20 @@ if (!server.success)
 `encryptedFetch()` は標準の `fetch` と同じエラー規則に従います。ネットワーク、鍵交換、リクエスト暗号化、レスポンス復号に失敗すると reject します。呼び出し元でアプリケーションの fetch エラー処理に沿って捕捉してください。
 
 プロトコル定数は `crypto.transport.protocol`（または `TRANSPORT_PROTOCOL`）で取得できます：`X-Client-Id`、`X-Encrypted`、既定の `/_hai/key-exchange`。
+
+`createServer({ serverKeyRing, keyStore })` は両方とも必須です。鍵環は `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }` で、ID は英数字・下線・ハイフンの 1–64 文字です。作成時に鍵の組を検証しスナップショットを保持します。不正・未設定の値は機密情報を含まない HaiResult エラーになります。例の `keyStore` は接続済み Redis/共有 DB の registry です。メモリーは開発・テストで明示的に使用します。
+
+```ts
+import { parseTransportServerKeyRing } from '@h-ai/crypto'
+
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
+```
+
+鍵交換は `{ serverKeyId, serverPublicKey, clientId }` を返し、暗号化リクエストは `serverKeyId` を送ります。サーバーは指定した秘密鍵だけを選び、不明・失効 ID は他の鍵を試さず拒否します。応答はクライアント公開鍵で暗号化します。更新時は全ノードに新旧の鍵を先に配布し、続いて `activeKeyId` を切り替えて manager を順次再構築します。移行期間後に古い ID を全ノードから削除します。旧クライアントは `destroy()` 後に再交渉し、非冪等処理を自動再送しません。同じ鍵環を Secret Manager またはサーバー専用の非公開環境から配布し、通常の YAML、PUBLIC_/VITE_、ログ、公開応答には含めないでください。CLI はプロジェクト作成時だけ独立した開発用鍵環を Git 対象外の `.env.local` に作成します。実行時には生成せず、本番には対象環境で管理する鍵を配布します。
 
 serv、kit、クライアントは `TRANSPORT_BODY_LIMITS` を共有します。鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 4 KiB です。すべて実際の UTF-8 バイト数で計算します。クライアントの鍵交換は最大 30 秒です。超過、不正 UTF-8、キャンセル時は元のストリームを停止して reader を解放し、clone/tee は作りません。呼び出し元の signal を維持し、1 件のキャンセルは他のリクエストと共有する鍵交換に影響しません。不正な暗号化応答は生の暗号文を返さず reject します。
 

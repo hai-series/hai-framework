@@ -28,7 +28,6 @@ export interface KitTransportConfig {
   readonly excludePaths: readonly `/${string}`[]
   readonly requireEncryption: boolean
   readonly encryptResponse: boolean
-  readonly maxClients: number
 }
 
 /** `config/_kit.yml` 的顶层配置结构。 */
@@ -43,7 +42,6 @@ export type KitTransportConfigInput = Partial<{
   readonly excludePaths: readonly `/${string}`[]
   readonly requireEncryption: boolean
   readonly encryptResponse: boolean
-  readonly maxClients: number
 }>
 
 /** `config/_kit.yml` 的顶层输入类型。 */
@@ -59,7 +57,6 @@ const KitTransportConfigInputSchema = z.union([
     excludePaths: z.array(AbsolutePathSchema).default([]),
     requireEncryption: z.boolean().default(true),
     encryptResponse: z.boolean().default(true),
-    maxClients: z.number().int().positive().default(10000),
   }),
 ])
 

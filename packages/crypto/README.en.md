@@ -164,23 +164,23 @@ The `crypto.transport` namespace provides transport encryption, allowing `@h-ai/
 
 For typical applications, use the higher-level integrations:
 
-- Server: `serv.createApp({ transport: { crypto } })` or `kit.createHandle({ crypto: { crypto, transport: true } })`.
+- Server: `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` or `kit.createHandle({ crypto: { crypto, transport: { serverKeyRing, keyStore } } })`.
 - Client: `apiClient.init({ transport: { crypto } })` or `kit.client.create({ transport: { crypto } })`.
 
-Call `crypto.transport.createServer()` / `createClient()` directly only for custom runtimes, tests, or manually integrated HTTP key exchange endpoints.
+Call `crypto.transport.createServer({ serverKeyRing, keyStore })` / `createClient()` directly only for custom runtimes, tests, or manually integrated HTTP key exchange endpoints.
 
 ##### Workflow
 
 1. Call `await crypto.init()` to initialize `crypto.asymmetric` and `crypto.symmetric`.
-2. On the server, create a `manager` with `crypto.transport.createServer()`. It holds the server key pair and stores client public keys. Inject a shared `keyStore` for multi-node deployments.
-3. Expose a POST key exchange endpoint: accept `{ clientPublicKey }`, register it with `manager.registerClientKey()`, and return `{ serverPublicKey: manager.getServerPublicKey(), clientId }`.
+2. On the server, create a `manager` with `crypto.transport.createServer({ serverKeyRing, keyStore })`. It holds the server key pair and stores client public keys. Inject a shared `keyStore` for multi-node deployments.
+3. Expose a POST key exchange endpoint: accept `{ clientPublicKey }`, register it with `manager.registerClientKey()`, and return `{ serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), clientId }`.
 4. On the client, create a session with `crypto.transport.createClient({ keyExchangeUrl })`. The first `client.init()` or `client.encryptedFetch()` automatically performs key exchange.
-5. After key exchange, requests include `X-Client-Id`. A request body is wrapped as `{ encryptedKey, ciphertext, iv }` with `X-Encrypted: true`. Bodyless requests include only `X-Client-Id` and do not create an encrypted body.
+5. After key exchange, requests include `X-Client-Id`. A request body is wrapped as `{ serverKeyId, encryptedKey, ciphertext, iv }` with `X-Encrypted: true`. Bodyless requests include only `X-Client-Id` and do not create an encrypted body.
 6. The server looks up the client public key by `clientId`, decrypts the body with `manager.decryptRequest()`, then runs the business logic.
 7. Before returning JSON, encrypt it with `manager.encryptResponse(clientId, data)` and set `X-Encrypted: true`. The client decrypts the response automatically.
 8. Clear a client session with `client.destroy()`. Release server resources with `manager.close()` or module-level `await crypto.close()`.
 
-> The default `keyStore` is an in-process FIFO store; exceeding `maxClients` evicts the earliest registered client. Multi-node deployments need sticky sessions or a shared `TransportKeyStore` implementation for client public keys.
+> Servers must explicitly inject the same managed `serverKeyRing` and a shared `keyStore` (Redis or a shared database). Sharing client public keys alone cannot enable cross-node decryption. There is no implicit process key or memory-registry fallback; development/tests may explicitly use `createInMemoryKeyStore(capacity)`. Reload the same ring after restart; sticky sessions are unnecessary.
 
 For shared storage, reuse the provider factories exported from the `@h-ai/crypto` root entry:
 
@@ -189,8 +189,8 @@ For shared storage, reuse the provider factories exported from the `@h-ai/crypto
 - `createReldbTransportKeyStore({ reldb, ttlSeconds? })`: reuse `@h-ai/reldb`, automatically creating `hai_crypto_transport_client_keys`.
 
 ```ts
-// 服务端：通常由 serv.createApp({ transport: { crypto } }) 或 kit.createHandle({ crypto }) 内部调用
-const server = crypto.transport.createServer({ maxClients: 10000 })
+// 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 if (!server.success)
   throw new Error(server.error.message)
 
@@ -213,6 +213,7 @@ await crypto.init()
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const server = crypto.transport.createServer({
+  serverKeyRing,
   keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
 })
 if (!server.success)
@@ -222,6 +223,20 @@ if (!server.success)
 `encryptedFetch()` follows native `fetch` semantics: it rejects on network, key exchange, request encryption, or response decryption failures. Catch these at the call site using the application's fetch error strategy.
 
 Access protocol constants through `crypto.transport.protocol` (or `TRANSPORT_PROTOCOL`): `X-Client-Id`, `X-Encrypted`, and the default `/_hai/key-exchange`.
+
+Both `serverKeyRing` and `keyStore` are required by `createServer({ serverKeyRing, keyStore })`. A ring is `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`; IDs contain 1–64 letters, digits, underscores or hyphens. Creation verifies key pairing and captures a snapshot; invalid/missing configuration returns a sanitized HaiResult error. In these examples, `keyStore` is a connected Redis/shared-database registry; memory is an explicit development/test choice.
+
+```ts
+import { parseTransportServerKeyRing } from '@h-ai/crypto'
+
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
+```
+
+Key exchange returns `{ serverKeyId, serverPublicKey, clientId }`. Encrypted requests carry `serverKeyId`; the server selects that private key and rejects unknown/revoked IDs without trying other keys. Responses use the client's public key. Rotate by distributing both old and new versions to every node, then switching `activeKeyId` and rebuilding managers during rollout. Retain the old version through the transition, then remove it from every node. Old clients must call `destroy()` and negotiate again; do not automatically replay non-idempotent operations. Distribute the same ring through a Secret Manager or server-only private environment. Never put it in ordinary YAML, PUBLIC_/VITE_ variables, logs or public responses. CLI project creation provisions one independent development ring in ignored `.env.local`; runtime does not generate keys. Deploy with target-managed secrets.
 
 serv, kit and the client share `TRANSPORT_BODY_LIMITS`: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 4 KiB encrypted JSON. All limits count actual UTF-8 bytes. Client key exchange has a 30-second timeout. Exceeding a limit, invalid UTF-8 or cancellation stops the original stream and releases its reader without cloning/teeing it. Caller signals remain active; cancelling one request does not cancel another request's shared handshake. Invalid encrypted responses reject instead of returning raw ciphertext.
 

@@ -145,7 +145,7 @@ if (hashed.success) {
 
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
-| `createServer` | `(options?) => HaiResult<TransportEncryptionManager>` | 创建服务端传输加密管理器 |
+| `createServer` | `({ serverKeyRing, keyStore }) => HaiResult<TransportEncryptionManager>` | 校验受管密钥环并创建管理器，两项必填 |
 | `createClient` | `({ keyExchangeUrl, fetch? }) => TransportClient` | 创建客户端 encryptedFetch 会话 |
 | `protocol` | `TRANSPORT_PROTOCOL` | 协议常量：`X-Client-Id`、`X-Encrypted`、默认协商路径 |
 
@@ -158,7 +158,7 @@ if (hashed.success) {
 | `createReldbTransportKeyStore` | `({ reldb, ttlSeconds? }) => TransportKeyStore` | 基于 `@h-ai/reldb` 的共享实现，自动建表 |
 
 ```typescript
-const server = crypto.transport.createServer({ maxClients: 10000 })
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 if (!server.success)
   return server
 
@@ -179,19 +179,37 @@ import { cache } from '@h-ai/cache'
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const sharedServer = crypto.transport.createServer({
+  serverKeyRing,
   keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
 })
 ```
 
 使用流程：
 1. 先 `await crypto.init()`。
-2. 服务端 `createServer()` 后暴露一个 POST 密钥协商端点：接收 `clientPublicKey`，返回 `serverPublicKey + clientId`。
+2. 服务端显式传入受管 serverKeyRing 和共享 keyStore，协商返回 `serverKeyId + serverPublicKey + clientId`。
 3. 客户端 `createClient({ keyExchangeUrl })` 后，首次 `init()` / `encryptedFetch()` 会自动做密钥协商。
-4. 协商完成后，请求附带 `X-Client-Id`；若请求有 body，则自动包装成 `{ encryptedKey, ciphertext, iv }`。
+4. 协商完成后，请求附带 `X-Client-Id`；若请求有 body，则自动包装成 `{ serverKeyId, encryptedKey, ciphertext, iv }`。
 5. 服务端先 `decryptRequest()`，业务处理后再 `encryptResponse(clientId, data)`。
 6. 客户端收到 `X-Encrypted: true` 的响应后自动解密；`destroy()` 可清空当前会话。
 
 `encryptedFetch()` 与原生 fetch 一样会 reject：网络错误、密钥协商失败、请求加密失败或响应解密失败都应在调用方按 fetch 错误处理策略捕获。
+
+### 受管服务端密钥与轮换
+
+`serverKeyRing` 为 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`，ID 为 1–64 个字母、数字、下划线或连字符。根入口 `parseTransportServerKeyRing(secret)` 接受服务端 Secret JSON 或配置对象，返回 HaiResult，错误不附带原始 Secret 或解析片段。工厂验证每对公私钥并捕获快照；没有隐式随机私钥或 memory registry 回退。`keyStore` 也必填，生产用共享 Redis/数据库；开发/测试可显式 `createInMemoryKeyStore(capacity)`。
+
+示例服务端读取 `process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，检查解析结果后仅传给服务端工厂；禁止写入普通 YAML、PUBLIC_/VITE_、日志或响应。CLI 仅在创建服务端项目时向忽略的 `.env.local` 生成一次本机开发 ring，生产由 Secret Manager 分发同一受管 ring。
+
+请求密文 `EncryptedRequestPayload` 携带协商的 `serverKeyId`；服务端只按 ID 选择私钥，未知/撤销 ID 拒绝，不尝试其它 key。轮换先向所有节点分发包含新旧版本的 ring，再切 activeKeyId 并滚动重建 manager；过渡期后删除旧 ID 并更新所有节点。旧客户端 destroy 后重协商；禁止自动重放非幂等请求。共享 ring + registry 支持跨节点与重启，不依赖 sticky session。
+
+```ts
+import { parseTransportServerKeyRing } from '@h-ai/crypto'
+
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const manager = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: sharedRegistry })
+```
 
 ### 传输正文预算与自定义适配器
 
@@ -210,8 +228,8 @@ const payload: unknown = JSON.parse(text)
 ```
 
 常规应用优先使用上层封装：
-- serv：`serv.createApp({ transport: { crypto } })`
-- kit：`kit.createHandle({ crypto: { crypto, transport: true } })` + `kit.client.create({ transport: { crypto } })`
+- serv：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`
+- kit：`kit.createHandle({ crypto: { crypto, transport: { serverKeyRing, keyStore } } })` + `kit.client.create({ transport: { crypto } })`
 - api-client：`apiClient.init({ transport: { crypto } })`
 
 ## 错误码 — `HaiCryptoError`

@@ -78,7 +78,6 @@ function fieldDescription(module, segments) {
     transport: '传输加密开关或密钥协商配置',
     encryptResponse: '是否加密服务端业务响应',
     requireEncryption: '是否要求业务请求使用传输加密',
-    maxClients: '服务端最多保留的客户端传输密钥会话数',
     keyExchangePath: '客户端与服务端约定的密钥交换端点',
     excludePaths: '不进入传输加密管道的路径',
     path: '当前 HTTP 功能的端点路径',
@@ -304,6 +303,7 @@ const extraDescriptions = {
   PUBLIC_API_TRANSPORT: ['客户端传输加密开关，须与服务端一致', 'on | off'],
   PUBLIC_API_KEY_EXCHANGE_PATH: ['公开密钥交换端点，须与服务端一致', '以 / 开头的路径'],
   HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH: ['桌面示例公开密钥交换端点，构建期插值', '以 / 开头的路径'],
+  HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ['服务端受管版本化传输密钥环；仅私有环境或 Secret Manager 注入', 'JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志'],
   HAI_CRYPTO_TRANSPORT: ['桌面示例公开传输配置；在构建阶段与浏览器使用同一 Schema 校验', 'false 关闭；或 JSON/YAML 对象，keyExchangePath 须以 / 开头；不接受 true'],
   VITE_ADAPTER: ['SvelteKit 构建适配器', 'node | static；未识别的值回退 node'],
   HAI_ADMIN_DEFAULT_PASSWORD: ['首次创建管理员的密码', '满足 IAM 密码策略；敏感值仅在本地或目标进程注入'],
@@ -382,7 +382,8 @@ for (const [name, entry] of explicit) {
         ? '有效 URL；不得包含凭据'
         : '字符串；按使用位置的校验规则填写'
   add(name, {
-    module: name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
+    // 该 Secret 只属于服务端实际读取入口，不能随桌面端公开 crypto 配置自动推荐。
+    module: name === 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING' ? 'runtime' : name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
     path: name,
     description: meta?.[0] ?? `${sensitive ? '凭据输入' : '环境入口'}；使用位置 ${entry.source}`,
     constraints: [meta?.[1] ?? (sensitive ? '敏感字符串；启用相应功能时必填，不得提交真实值' : inferred)],

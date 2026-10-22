@@ -54,8 +54,7 @@ const notInitializedSymmetric = notInitialized.proxy<SymmetricOperations>('sync'
 const notInitializedPassword = notInitialized.proxy<PasswordOperations>('sync')
 
 // ─── 传输加密 ───
-// 直接复用顶层 `crypto`：未初始化时 asymmetric/symmetric 会自动返回
-// NOT_INITIALIZED 错误，无需额外 proxy。
+// 直接复用顶层 crypto；服务端工厂先检查初始化，不为传输另建单例。
 
 // 通过函数声明（hoisted）延迟引用 `crypto`，避免 use-before-define 报错；
 // 实际调用发生在 init 之后，闭包持有的引用是安全的。
@@ -64,7 +63,7 @@ function getCrypto(): CryptoFunctions {
   return crypto
 }
 const transportOperations: TransportOperations = {
-  createServer: options => createTransportEncryption(getCrypto(), options),
+  createServer: options => getCrypto().isInitialized ? createTransportEncryption(getCrypto(), options) : notInitialized.result(),
   createClient: options => createTransportClient({ crypto: getCrypto(), ...options }),
   protocol: TRANSPORT_PROTOCOL,
 }
@@ -158,8 +157,7 @@ export const crypto: CryptoFunctions = {
   /**
    * 传输加密操作（端到端混合加密）
    *
-   * createServer 内部直接复用 asymmetric/symmetric，因此未初始化时
-   * 自动通过 asymmetric proxy 返回 NOT_INITIALIZED 错误。
+   * createServer 检查初始化后复用 asymmetric/symmetric；未初始化返回 NOT_INITIALIZED。
    */
   transport: transportOperations,
   /** 是否已初始化 */

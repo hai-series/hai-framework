@@ -53,7 +53,9 @@ await apiClient.close()
 
 #### 启用传输加密
 
-服务端需先启用 `serv.createApp({ transport: { crypto } })`；客户端只注入同一个 `@h-ai/crypto` 服务实例，无需手写密钥协商代码。
+服务端需先启用 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`；客户端只注入同一个 `@h-ai/crypto` 服务实例，无需手写密钥协商代码。
+
+服务端必须注入受管 serverKeyRing 和共享 registry；客户端只接收 serverKeyId/公钥，并在密文请求带回版本。密钥环/私钥不进入客户端配置。旧版本撤销后，销毁 transport 会话并重新协商；不要自动重放非幂等业务。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'

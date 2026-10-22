@@ -53,7 +53,9 @@ await apiClient.close()
 
 #### Enable transport encryption
 
-First enable `serv.createApp({ transport: { crypto } })` on the server. The client only needs the same `@h-ai/crypto` service instance; no manual key exchange code is required.
+First enable `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` on the server. The client only needs the same `@h-ai/crypto` service instance; no manual key exchange code is required.
+
+The server injects a managed serverKeyRing and shared registry. Clients receive only serverKeyId/public keys and include the negotiated version in encrypted requests; private keys never enter client configuration. After retirement of a key version, destroy the transport session and negotiate again; do not automatically replay non-idempotent operations.
 
 ```ts
 import { apiClient } from '@h-ai/api-client'

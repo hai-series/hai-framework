@@ -124,7 +124,6 @@ transport: false
 # transport:
 #   keyExchangePath: /_hai/key-exchange
 #   excludePaths: [/health, /ready]
-#   maxClients: 10000
 `
 }
 

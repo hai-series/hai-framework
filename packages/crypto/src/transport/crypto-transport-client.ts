@@ -14,6 +14,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type {
   EncryptedPayload,
+  EncryptedRequestPayload,
   KeyExchangeResponse,
   TransportClient,
   TransportCryptoServiceLike,
@@ -50,8 +51,8 @@ export interface CreateTransportClientOptions {
  * 1. `createTransportClient()` 只创建本地会话状态，不会立刻发起网络请求。
  * 2. 首次 `init()` / `encryptedFetch()` 会进入 `ensureReady()`；同一时刻只允许一个协商 Promise，避免并发重复协商。
  * 3. `doInit()` 会生成客户端非对称密钥对，并向 `keyExchangeUrl` POST `{ clientPublicKey }`。
- * 4. 服务端返回 `{ serverPublicKey, clientId }` 后，会话进入 ready 状态；后续请求复用这组协商结果。
- * 5. `encryptedFetch()` 对普通业务请求附加 `X-Client-Id`；只有请求存在 body 时，才会把 body 加密成 `{ encryptedKey, ciphertext, iv }`。
+ * 4. 服务端返回 `{ serverKeyId, serverPublicKey, clientId }` 后，会话进入 ready 状态。
+ * 5. 普通业务请求附加 X-Client-Id；正文密文携带协商版本 serverKeyId，供任意节点按 ID 选择私钥。
  * 6. 响应带 `X-Encrypted: true` 时自动解密；不带该标记时直接透传，便于与未启用 transport 的接口共存。
  * 7. 握手最多等待 30 秒；正文预算统一使用 TRANSPORT_BODY_LIMITS，读取超限会取消原流。
  *
@@ -65,6 +66,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   const baseFetch = options.fetch ?? fetch
   let keyPair: TransportKeyPair | null = null
   let serverPublicKey: string | null = null
+  let serverKeyId: string | null = null
   let clientId: string | null = null
   /** 进行中的协商 Promise；用于并发去重。 */
   let initPromise: Promise<HaiResult<void>> | null = null
@@ -114,6 +116,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
       keyPair = localKeyPair
       serverPublicKey = body.serverPublicKey
+      serverKeyId = body.serverKeyId
       clientId = body.clientId
       return ok(undefined)
     }
@@ -136,8 +139,8 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     return initPromise
   }
 
-  function encryptBody(plaintext: string): HaiResult<EncryptedPayload> {
-    if (!serverPublicKey)
+  function encryptBody(plaintext: string): HaiResult<EncryptedRequestPayload> {
+    if (!serverPublicKey || !serverKeyId)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
     const symKey = options.crypto.symmetric.generateKey()
     const encResult = options.crypto.symmetric.encryptWithIV(plaintext, symKey)
@@ -147,6 +150,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (!keyEncResult.success)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyEncryptFailed'), keyEncResult.error)
     return ok({
+      serverKeyId,
       encryptedKey: keyEncResult.data,
       ciphertext: encResult.data.ciphertext,
       iv: encResult.data.iv,
@@ -288,6 +292,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     destroy() {
       keyPair = null
       serverPublicKey = null
+      serverKeyId = null
       clientId = null
       initPromise = null
     },
@@ -320,4 +325,5 @@ function isKeyExchangeResponse(body: unknown): body is KeyExchangeResponse {
   return typeof fields.serverPublicKey === 'string' && fields.serverPublicKey.length > 0
     && new TextEncoder().encode(fields.serverPublicKey).byteLength <= TRANSPORT_BODY_LIMITS.publicKeyBytes
     && typeof fields.clientId === 'string' && fields.clientId.length > 0
+    && typeof fields.serverKeyId === 'string' && /^[\w-]{1,64}$/.test(fields.serverKeyId)
 }

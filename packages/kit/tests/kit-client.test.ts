@@ -1,5 +1,5 @@
 import type { TransportEncryptionManager } from '@h-ai/crypto'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createKitClient, installBrowserTransportFetch } from '../src/client/kit-client.js'
 import { kit } from '../src/kit-main.js'
@@ -66,7 +66,10 @@ function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
 }
 
 function createTransportFetch(options: { encryptedResponseBody?: string } = {}) {
-  const manager = expectManager(crypto.transport.createServer())
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  const manager = expectManager(crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } }))
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = toRequest(input, init)
     const url = new URL(request.url)
@@ -74,7 +77,7 @@ function createTransportFetch(options: { encryptedResponseBody?: string } = {}) 
     if (url.pathname === KEY_EXCHANGE_URL || url.pathname === '/my/exchange') {
       const body = await request.json() as { clientPublicKey: string }
       const clientId = await manager.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: manager.getServerPublicKey(), clientId }), {
+      return new Response(JSON.stringify({ serverPublicKey: manager.getServerPublicKey(), serverKeyId: manager.getServerKeyId(), clientId }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })

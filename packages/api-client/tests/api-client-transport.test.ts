@@ -1,5 +1,5 @@
 import { apiContract } from '@h-ai/api-contract'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { apiClient } from '../src/index.js'
@@ -22,7 +22,10 @@ const protectedContract = {
  * 直接用 crypto.transport.createServer 复用真实加解密路径。
  */
 function makeServerFetch(): typeof fetch {
-  const mgrResult = crypto.transport.createServer()
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  const mgrResult = crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } })
   if (!mgrResult.success)
     throw new Error('createServer failed')
   const mgr = mgrResult.data
@@ -34,7 +37,7 @@ function makeServerFetch(): typeof fetch {
     if (url.pathname === '/api/v1/_hai/key-exchange') {
       const body = await req.json() as { clientPublicKey: string }
       const clientId = await mgr.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), clientId }), {
+      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), serverKeyId: mgr.getServerKeyId(), clientId }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -43,7 +46,7 @@ function makeServerFetch(): typeof fetch {
     // 解密 → 业务回显 → 加密
     const clientId = req.headers.get('X-Client-Id')
     expect(clientId).toBeTruthy()
-    const payload = await req.json() as { encryptedKey: string, ciphertext: string, iv: string }
+    const payload = await req.json() as { serverKeyId: string, encryptedKey: string, ciphertext: string, iv: string }
     const dec = mgr.decryptRequest(payload)
     if (!dec.success)
       throw new Error(dec.error.message)
@@ -60,7 +63,10 @@ function makeServerFetch(): typeof fetch {
 }
 
 function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fetch, calls: string[] } {
-  const mgrResult = crypto.transport.createServer()
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  const mgrResult = crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } })
   if (!mgrResult.success)
     throw new Error('createServer failed')
   const mgr = mgrResult.data
@@ -87,7 +93,7 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
     if (url.pathname === '/api/v1/_hai/key-exchange') {
       const body = await req.json() as { clientPublicKey: string }
       const clientId = await mgr.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), clientId }), {
+      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), serverKeyId: mgr.getServerKeyId(), clientId }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })

@@ -23,6 +23,7 @@ description: "为独立 API 服务装配 contract/procedures、认证守卫、No
 - 认证绑定 route 的 auth/permission/role；启动配置错误与正常请求领域错误分别处理。
 - 普通 procedure 的失败 HaiResult 默认通过 HTTP 200 返回，必须检查 success 与 error.code；error.httpStatus 是领域错误元数据。contract 输入校验失败为 HTTP 400，HTTP middleware、刷新 cookie 等响应另按自身契约处理，不能混为同一种状态映射。
 - 浏览器 Cookie、CORS、apiPrefix、transport 须与 api-client 同步；语音 ticket 单独核验。
+- transport 服务端显式注入受管 serverKeyRing 和共享 keyStore；请求带协商 serverKeyId。私钥只从 Secret/私有环境加载，不放公开配置；轮换、重启与跨节点要求见 hai-crypto。
 - 缺失路由返回本地化 HaiResult JSON 404；加密传输保留该状态。默认 feature 可按需选用，contract 与挂载的 procedures 保持一致。
 
 传输加密按实际请求/响应 body 判断空正文，不信任 Content-Type/Length；非空明文不能借缺头、chunked 或伪造零长度旁路，实际空流保留无 input POST 行为。

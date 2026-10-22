@@ -56,7 +56,7 @@ Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test
 
 ### IAM configuration
 
-The service's `config/_iam.yml` controls login methods, registration, password reset, agreements and `ui` branding. Email and SMS use providers/templates in `_reach.yml` or custom callbacks. `AuthPanel` uses the public configuration and framework auth actions to manage tokens, resend countdowns and errors. A single process can use memory cache. Multiple instances need shared database/cache, write routing and transport session affinity as described in the project README.
+The service's `config/_iam.yml` controls login methods, registration, password reset, agreements and `ui` branding. Email and SMS use providers/templates in `_reach.yml` or custom callbacks. `AuthPanel` uses the public configuration and framework auth actions to manage tokens, resend countdowns and errors. A single process can use memory cache. Multiple instances need shared database/cache, write routing and a shared managed transport key ring and registry as described in the project README.
 
 Authentication defaults to a split layout. Set `ui.variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `logoUrl` and `illustrationUrl` to customize login and registration. Without a `brandTitle`, the displayed application name comes from `app.info` and follows `core` configuration.
 

@@ -147,16 +147,20 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 #### 同源传输加密
 
-kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer()` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。应用层只配置顶层 `crypto` 句柄。
+kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。服务端还须注入受管密钥环和共享 registry。
 
 **src/hooks.server.ts**：
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 export const handle = kit.createHandle({
@@ -168,6 +172,7 @@ export const handle = kit.createHandle({
   crypto: {
     crypto,
     transport: {
+      serverKeyRing,
       requireEncryption: true,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
@@ -203,7 +208,7 @@ export const { apiFetch } = kit.client.create()
 
 默认密钥协商路径为 `/api/_hai/key-exchange`。如服务端自定义 `transport.keyExchangePath`，客户端需同步配置 `transport.keyExchangeUrl`。
 
-如需多节点共享客户端公钥，可在运行时为 `kit.createHandle({ crypto: { transport: { keyStore } } })` 注入 `createRedisTransportKeyStore()` 或 `createReldbTransportKeyStore()`；这类对象型依赖**不应**写入 `_kit.yml`，配置文件仍只保存公开路径与开关。
+服务端必须显式注入相同的受管 `serverKeyRing` 和共享 `keyStore`（Redis 或共享数据库）。仅共享客户端公钥不足以跨节点解密。没有隐式进程私钥或内存 registry 回退；开发/测试显式用 `createInMemoryKeyStore(capacity)`。服务端重启后重新加载同一密钥环即可，无需 sticky session。
 
 transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求（以及密钥协商端点本身）；页面文档与静态资源仍保持明文，不要求携带 `X-Client-Id`。文件上传等 `multipart/form-data` 请求会保持原样发送，需在服务端 `excludePaths` 中显式放行对应上传路径。
 
@@ -231,7 +236,6 @@ transport:
     - /api/storage
     - /api/public
     - /api/auth/profile/avatar
-  maxClients: 10000
 ```
 
 ```ts
