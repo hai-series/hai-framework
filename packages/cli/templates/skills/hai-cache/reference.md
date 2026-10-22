@@ -185,3 +185,5 @@ else {
 - `hai-scheduler`：定时任务分布式锁（底层使用 cache.lock）
 - `hai-reach`：消息发送互斥锁（底层使用 cache.lock）
 - `hai-kit`：SvelteKit 集成层
+
+Cluster 与 Sentinel 数据节点认证使用 `password`，Cluster 发现的新节点继承同一鉴权配置。`url` 模式只使用 URL 内凭据，单独 password 不覆盖 URL。

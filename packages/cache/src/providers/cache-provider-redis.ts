@@ -661,6 +661,7 @@ export function createRedisProvider(): CacheProvider {
 
       try {
         const redisOptions: RedisOptions = {
+          ...(!config.url && config.password !== undefined ? { password: config.password } : {}),
           connectTimeout: config.connectTimeout,
           commandTimeout: config.commandTimeout,
           keyPrefix: config.keyPrefix,
@@ -683,6 +684,8 @@ export function createRedisProvider(): CacheProvider {
         }
         else if (config.cluster && config.cluster.length > 0) {
           const clusterOptions: ClusterOptions = {
+            // Cluster 自身也必须延迟连接，避免构造时与下方显式 connect 竞争。
+            lazyConnect: true,
             redisOptions,
             clusterRetryStrategy: (times) => {
               if (times > config.maxRetries)
@@ -697,7 +700,6 @@ export function createRedisProvider(): CacheProvider {
             ...redisOptions,
             sentinels: config.sentinel.sentinels,
             name: config.sentinel.name,
-            password: config.password,
             db: config.db,
           })
         }
@@ -706,11 +708,11 @@ export function createRedisProvider(): CacheProvider {
             ...redisOptions,
             host: config.host,
             port: config.port,
-            password: config.password,
             db: config.db,
           })
         }
 
+        client.on('error', () => logger.warn('Redis client connection error'))
         await client.connect()
         await client.ping()
 

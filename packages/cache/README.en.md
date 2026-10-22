@@ -162,3 +162,5 @@ pnpm --filter @h-ai/cache test
 ## License
 
 Apache-2.0
+
+`password` authenticates standalone, Cluster, and Sentinel data nodes, including discovered/redirected Cluster connections. In `url` mode the credentials in the URL take precedence; the separate password field does not override them.

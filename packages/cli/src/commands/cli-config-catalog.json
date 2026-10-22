@@ -1443,7 +1443,7 @@
     "name": "HAI_CACHE_PASSWORD",
     "module": "cache",
     "path": "cache.password",
-    "description": "认证密码",
+    "description": "单机、Cluster 和 Sentinel 数据节点的认证密码；url 模式使用 URL 内凭据。",
     "value": "",
     "constraint": "字符串"
   },

@@ -162,3 +162,5 @@ pnpm --filter @h-ai/cache test
 ## 许可证
 
 Apache-2.0
+
+`password` 用于单机、Cluster 与 Sentinel 数据节点；Cluster 发现和重定向后的节点连接也携带密码。配置 `url` 时采用 URL 自身的认证信息，独立 password 字段不覆盖它。

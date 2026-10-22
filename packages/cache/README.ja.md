@@ -162,3 +162,5 @@ pnpm --filter @h-ai/cache test
 ## ライセンス
 
 Apache-2.0
+
+`password` は単独・Cluster・Sentinel のデータノードに使用され、発見・リダイレクト後の接続にも適用します。`url` 指定時は URL 内の認証情報を使用し、独立した password フィールドでは上書きしません。

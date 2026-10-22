@@ -82,7 +82,8 @@
 
 ### CACHE-02 · P1 · 把鉴权配置传入 Redis Cluster
 
-- [ ] 待修正（源码确认；范围：cache）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：共享redisOptions传入password，URL凭据优先；修复Cluster自身lazyConnect位置导致显式connect竞争，统一error事件日志。源码/config/envcatalog/README三语/skill同步。cache typecheck、定向ESLint和真实密码Redis Cluster定向测试通过（发现节点写读、错误密码拒绝、URL密码优先）。首轮Podman exec超时及IPv6不可达已定位为fixture并改真实IPv4网络配置/完成清理；check:skills通过，完整env生成留PAY03配置稳定后复验；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/cache/src/providers/cache-provider-redis.ts:684](../packages/cache/src/providers/cache-provider-redis.ts#L684)；[packages/cache/src/providers/cache-provider-redis.ts:714](../packages/cache/src/providers/cache-provider-redis.ts#L714)。
 - **证据与影响**：公共 redisOptions 未包含 password，cluster 分支仅转发该对象；单机/sentinel 分支另行配置 password。声明的密码配置在 Cluster 下失效。
 - **修正内容**：按支持的部署模式统一构造鉴权/TLS 配置，明确 URL 与字段配置优先级；不在日志输出凭据。

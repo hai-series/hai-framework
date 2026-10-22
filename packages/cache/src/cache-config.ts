@@ -51,7 +51,7 @@ export const RedisConfigSchema = z.object({
   host: z.string().default('localhost'),
   /** 端口号；默认 6379 */
   port: z.number().int().min(1).max(65535).default(6379),
-  /** 认证密码 */
+  /** 单机、Cluster 和 Sentinel 数据节点的认证密码；url 模式使用 URL 内凭据。 */
   password: z.string().optional(),
   /** 数据库编号（0~15）；默认 0 */
   db: z.number().int().min(0).max(15).default(0),
