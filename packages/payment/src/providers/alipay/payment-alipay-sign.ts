@@ -14,6 +14,15 @@ import { createSign, createVerify } from 'node:crypto'
  * @param privateKey - 应用私钥 PEM
  * @param signType - 签名类型（默认 RSA2）
  * @returns Base64 编码的签名
+ * @throws 私钥格式或签名参数不受 Node Crypto 支持时抛错，由 Provider 转为 HaiResult 失败。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function signForm(params: Record<string, string>, privateKeyPem: string): string {
+ *   // params 尚不包含 sign；私钥由受信商户配置注入，不写入日志或客户端。
+ *   return signAlipayParams(params, privateKeyPem, 'RSA2')
+ * }
+ * ```
  */
 export function signAlipayParams(
   params: Record<string, string>,
@@ -39,6 +48,16 @@ export function signAlipayParams(
  * @param params - 回调参数（含 sign 和 sign_type）
  * @param alipayPublicKey - 支付宝公钥 PEM
  * @returns 验签是否通过
+ * @throws 受信公钥格式非法或 Crypto 验签异常时抛错，由 Provider 通知边界转为失败。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function verifyForm(rawForm: string, trustedAlipayPublicKey: string): boolean {
+ *   const params = Object.fromEntries(new URLSearchParams(rawForm))
+ *   return verifyAlipayNotify(params, trustedAlipayPublicKey)
+ *   // 该 helper 只验签；商户身份、字段、金额和真实日历校验仍由 Provider 完成。
+ * }
+ * ```
  */
 export function verifyAlipayNotify(
   params: Record<string, string>,

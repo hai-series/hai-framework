@@ -8,11 +8,12 @@ const SAFE_RETRY_SECONDS = 23 * 60 * 60
 
 /**
  * 数据库中的幂等操作记录。
- *
- * @example
+ * @internal
+ * @example 模块内部上下文
  * ```ts
- * const record: StripeOperationRecord = {
- *   requestHash: 'request-digest', result: null, paymentIntent: null, canRetry: true,
+ * function mayRetryUnknown(record: StripeOperationRecord): boolean {
+ *   return record.result === null && record.canRetry
+ *   // result=null 是结果未知，不能据此创建新幂等键；超窗必须人工核对渠道。
  * }
  * ```
  */
@@ -27,7 +28,18 @@ export interface StripeOperationRecord {
   canRetry: boolean
 }
 
-/** SQL 读取结果；驱动可能将 JSON 返回对象或字符串。 */
+/**
+ * SQL 读取结果；驱动可能将 JSON 返回对象或字符串。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const row: StripeOperationRow = {
+ *   request_hash: 'canonical-request-digest', result_json: null,
+ *   payment_intent: null, can_retry: 1,
+ * }
+ * const retryWindowOpen = row.can_retry === true || row.can_retry === 1 || row.can_retry === '1'
+ * ```
+ */
 interface StripeOperationRow {
   request_hash: string
   result_json: unknown | null
@@ -39,13 +51,16 @@ interface StripeOperationRow {
  * Stripe 幂等操作仓库，使用数据库主键预留和条件更新协调节点。
  *
  * @remarks 内部 helper 可抛错，最近的 Provider 边界负责转换为 HaiResult。
- * @example
+ * @internal
+ * @example 模块内部上下文
  * ```ts
- * const repository = new StripeOperationRepository(reldb)
- * const initialized = await repository.initialize()
- * if (initialized.success) {
- *   const operation = await repository.reserve('hashed-operation-id', 'request-hash')
- *   // operation.result 为 null 时仍可能已在 Stripe 执行，必须沿用同一幂等键。
+ * async function initializeOperations(db: ReldbFunctions) {
+ *   const repository = new StripeOperationRepository(db)
+ *   const initialized = await repository.initialize()
+ *   if (!initialized.success) throw new Error(initialized.error.message)
+ *   const operation = await repository.reserve('stable-account-mode-order-digest', 'canonical-request-digest')
+ *   // 未确认结果保留预留；只能沿用原幂等键，不删除记录后盲重试。
+ *   return { repository, operation }
  * }
  * ```
  */
@@ -73,7 +88,22 @@ export class StripeOperationRepository {
     }
   }
 
-  /** 读取可信映射，不根据 metadata 列表猜测订单。 */
+  /**
+   * 读取持久操作记录，以共享数据库时间计算安全重试窗口，不根据渠道 metadata 列表猜订单。
+   * @param id - 按账户、模式、操作类型和业务标识生成的稳定摘要 ID。
+   * @returns 已保留的记录；无记录时为 null，result 为 null 仅代表结果未知。
+   * @throws 查询失败或持久结果 JSON 非法时抛错，由最近的 Provider 边界转为 HaiResult。
+   * @example 模块内部上下文
+   * ```ts
+   * async function lookup(repository: StripeOperationRepository, operationId: string) {
+   *   const record = await repository.load(operationId)
+   *   if (record?.result === null && !record.canRetry) {
+   *     throw new Error('Reconcile the channel outcome before retrying')
+   *   }
+   *   return record
+   * }
+   * ```
+   */
   async load(id: string): Promise<StripeOperationRecord | null> {
     const result = await this.db.sql.get<StripeOperationRow>(
       `SELECT request_hash, result_json, payment_intent,
@@ -94,7 +124,22 @@ export class StripeOperationRepository {
     }
   }
 
-  /** 原子预留；并发冲突只接受相同请求摘要，失败不删除未知操作。 */
+  /**
+   * 通过主键插入原子预留；并发节点只接受相同请求摘要，不覆盖已有参数或删除未知操作。
+   * @param id - 所有节点复用的稳定操作 ID，也是渠道幂等键。
+   * @param requestHash - 路径和排序后表单参数的规范摘要。
+   * @returns 数据库中唯一的操作记录；已有 result 必须复用而非重新请求渠道。
+   * @throws 预留/读取失败或同标识复用不同参数时抛错，由 Provider 转为操作失败。
+   * @example 模块内部上下文
+   * ```ts
+   * async function reserveOnce(repository: StripeOperationRepository, id: string, requestHash: string) {
+   *   const record = await repository.reserve(id, requestHash)
+   *   // result=null 可能是渠道执行后回执丢失；重试仍须原 id 且 canRetry=true。
+   *   if (record.result === null && !record.canRetry) throw new Error('Channel reconciliation required')
+   *   return record
+   * }
+   * ```
+   */
   async reserve(id: string, requestHash: string): Promise<StripeOperationRecord> {
     let record = await this.load(id)
     if (!record) {
@@ -111,7 +156,22 @@ export class StripeOperationRepository {
     return record
   }
 
-  /** CAS 发布结果；并发完成者必须读取数据库中唯一的最终结果。 */
+  /**
+   * 以请求摘要和未完成状态作 CAS 发布渠道结果，再读取已持久化的唯一结果。
+   * @param id - 已成功预留的稳定操作 ID。
+   * @param requestHash - 与预留完全一致的规范请求摘要。
+   * @param result - 已经由渠道结果 Schema 校验、允许持久化的最小结果。
+   * @param paymentIntent - 已核对身份的 PaymentIntent；创建时尚未知可省略。
+   * @returns 数据库确认的结果，可能由并发完成者先写入；调用者须再按结果 Schema 解析。
+   * @throws 更新、重读或持久状态核对失败时抛错；不将未知状态伪装为成功。
+   * @example 模块内部上下文
+   * ```ts
+   * async function persistConfirmed(repository: StripeOperationRepository, id: string, digest: string, confirmedMapping: unknown) {
+   *   // 调用前渠道响应已校验；digest 来自首次预留，不能以新参数覆盖旧操作。
+   *   return repository.complete(id, digest, confirmedMapping)
+   * }
+   * ```
+   */
   async complete(id: string, requestHash: string, result: unknown, paymentIntent?: string | null): Promise<unknown> {
     const updated = await this.db.sql.execute(
       `UPDATE ${STRIPE_OPERATION_TABLE} SET result_json = ?, payment_intent = ?
@@ -126,7 +186,19 @@ export class StripeOperationRepository {
     return persisted.result
   }
 
-  /** 只允许首次补全或幂等确认同一个 PaymentIntent，禁止迟到写覆盖渠道身份。 */
+  /**
+   * 只在订单映射已完成时首次补全或幂等确认同一 PaymentIntent，禁止迟到写覆盖渠道身份。
+   * @param id - 已确认 Checkout Session 映射的订单操作 ID。
+   * @param paymentIntent - 从该 Session 读取且通过订单/金额/币种核对的渠道标识。
+   * @throws 写入失败、订单未完成或已绑定不同 PaymentIntent 时抛错，由 Provider 转为失败。
+   * @example 模块内部上下文
+   * ```ts
+   * async function bindVerifiedIntent(repository: StripeOperationRepository, orderOperationId: string, verifiedIntentId: string) {
+   *   await repository.rememberPaymentIntent(orderOperationId, verifiedIntentId)
+   *   // 仅确认渠道身份映射，不代表宿主业务已履约。
+   * }
+   * ```
+   */
   async rememberPaymentIntent(id: string, paymentIntent: string): Promise<void> {
     const result = await this.db.sql.execute(
       `UPDATE ${STRIPE_OPERATION_TABLE} SET payment_intent = ?

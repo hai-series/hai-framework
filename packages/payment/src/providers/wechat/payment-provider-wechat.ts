@@ -33,32 +33,30 @@ const WECHAT_API_BASE = 'https://api.mch.weixin.qq.com'
  *
  * @param config - 微信支付配置
  * @returns PaymentProvider 实例
- *
- * @example
+ * @internal
+ * @example 模块内部上下文
  * ```ts
- * const wechatPay = createWechatPayProvider({
- *   mchId: 'your-mch-id',
- *   apiV3Key: 'your-api-v3-key',
- *   serialNo: 'your-serial-no',
- *   privateKey: fs.readFileSync('apiclient_key.pem', 'utf-8'),
- *   appId: 'your-app-id',
- *   platformKeys: { PUB_KEY_ID_123: platformPublicKeyPem },
- * })
- *
- * const result = await wechatPay.createOrder({
- *   orderNo: 'ORD20240101001',
- *   amount: 100, // 1 元
- *   description: '测试商品',
- *   tradeType: 'jsapi',
- *   userId: 'openid-xxx',
- *   notifyUrl: 'https://api.example.com/payment/notify/wechat',
- * })
+ * function createFromTrustedConfig(config: WechatPayConfig) {
+ *   // 配置已经由渠道 Schema 解析；真实密钥、商户身份与通知端点由部署提供。
+ *   const provider = createWechatPayProvider(config)
+ *   const name = provider.name // 'wechat'
+ *   return provider
+ * }
  * ```
  */
 export function createWechatPayProvider(config: WechatPayConfig): PaymentProvider {
   /**
    * 精确选择受信平台密钥，并校验签名时间和证书有效期。
    * 不联网信任通知携带的未知 serial；配置轮换由宿主受信配置完成。
+   * @param request - 保留原始 body 和协议头的通知请求。
+   * @returns 唯一协议头、当前时间容差、受信 serial/证书及原始体签名均通过时为 true。
+   * @example 模块内部上下文
+   * ```ts
+   * function authenticateNotification(request: PaymentNotifyRequest): boolean {
+   *   return verifyNotification(request)
+   *   // 成功后才允许解密资源，随后仍需核对 appId、mchId、订单、金额及持久去重。
+   * }
+   * ```
    */
   function verifyNotification(request: PaymentNotifyRequest): boolean {
     try {

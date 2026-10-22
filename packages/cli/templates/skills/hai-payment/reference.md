@@ -2,6 +2,8 @@
 
 > `@h-ai/payment` 是 hai-framework 的统一支付模块，通过 Provider 模式支持微信支付、支付宝、Stripe。服务端处理订单和回调，客户端调起支付。
 
+公开类型示例按实际包入口校验：初始化输入为 `PaymentConfigInput`，配置 Schema 输出为 `PaymentConfig`；`HaiPaymentError` 的单个成员是错误定义，比较 `result.error.code` 时使用其 `.code`。私有协议、签名、操作仓库不属于应用导入入口。JSDoc 的类型校验不会执行渠道支付或业务履约。
+
 ## 运行环境
 
 > **服务端 + 浏览器分工模块。** `payment.createOrder` / `payment.handleNotify` / `payment.refund` 等操作在 Node.js 端执行。浏览器端使用 `invokePayment()`（从 `@h-ai/payment/client` 导入）调起支付。

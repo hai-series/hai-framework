@@ -15,7 +15,12 @@ const beijingFormatter = new Intl.DateTimeFormat('en-CA', {
  * 格式化为支付宝要求的北京时间，不依赖当前节点的 TZ。
  * @param date - 待格式化的有效时间
  * @returns yyyy-MM-dd HH:mm:ss 格式的北京时间
- * @example formatAlipayTime(new Date('2026-10-22T00:00:00Z')) // '2026-10-22 08:00:00'
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const beijingTime = formatAlipayTime(new Date('2026-10-22T00:00:00Z'))
+ * // '2026-10-22 08:00:00'；节点 TZ 为 UTC 时结果相同。
+ * ```
  */
 export function formatAlipayTime(date: Date): string {
   const parts = Object.fromEntries(beijingFormatter.formatToParts(date).map(part => [part.type, part.value]))
@@ -26,7 +31,12 @@ export function formatAlipayTime(date: Date): string {
  * 严格解析北京时间；回读校验拒绝 2 月 30 日等会被 Date 自动归一化的值。
  * @param value - 支付宝协议的北京时间字符串
  * @returns 对应的绝对时间；格式或日历非法时为 undefined
- * @example parseAlipayTime('2026-10-22 08:00:00')?.toISOString() // '2026-10-22T00:00:00.000Z'
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const valid = parseAlipayTime('2026-10-22 08:00:00')?.toISOString()
+ * const invalid = parseAlipayTime('2026-02-30 08:00:00') // undefined，不接受自动归一化日期。
+ * ```
  */
 export function parseAlipayTime(value: string): Date | undefined {
   if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value))

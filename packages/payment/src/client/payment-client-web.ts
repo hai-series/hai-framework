@@ -12,7 +12,18 @@ import { err, ok } from '@h-ai/core'
 import { paymentM } from '../payment-i18n.js'
 import { HaiPaymentError } from '../payment-types.js'
 
-/** 微信内置浏览器注入的公众号支付桥接对象。 */
+/**
+ * 微信内置浏览器注入的公众号支付桥接对象。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function submit(bridge: WechatPaymentBridge, params: Record<string, unknown>) {
+ *   bridge.invoke('getBrandWCPayRequest', params, response => {
+ *     const clientMessage = response.err_msg // 仅用于客户端反馈，不能触发发货。
+ *   })
+ * }
+ * ```
+ */
 interface WechatPaymentBridge {
   invoke: (api: string, params: Record<string, unknown>, callback: (response: { err_msg: string }) => void) => void
 }
@@ -106,14 +117,13 @@ function invokeStripeCheckout(clientParams: Record<string, unknown>): InvokePaym
  * ```ts
  * import { invokePayment } from '@h-ai/payment/client'
  * import type { PaymentOrder } from '@h-ai/payment'
- *
- * const order: PaymentOrder = {
- *   provider: 'stripe', tradeType: 'h5',
- *   clientParams: { checkoutUrl: 'https://checkout.stripe.com/pay/server-session' },
+ * async function pay(orderFromServer: PaymentOrder) {
+ *   // 浏览器环境；微信先等待 WeixinJSBridgeReady。参数来自受信服务端创建订单接口。
+ *   const result = await invokePayment(orderFromServer)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   if (!result.data.invoked) throw new Error(result.data.message)
+ *   // 继续等待服务端查询/通知确认，不能依据 invoked、页面跳转或用户返回就发货。
  * }
- * const result = await invokePayment(order)
- * if (!result.success) throw new Error(result.error.message)
- * if (!result.data.invoked) throw new Error(result.data.message)
  * ```
  */
 export async function invokePayment(order: PaymentOrder): Promise<HaiResult<InvokePaymentResult>> {

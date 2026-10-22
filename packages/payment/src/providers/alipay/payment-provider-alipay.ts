@@ -59,16 +59,33 @@ function parseAlipayNotifyParams(body: string): AlipayNotifyParams {
  *
  * @param config - 支付宝配置
  * @returns PaymentProvider 实例
- * @example
- * const provider = createAlipayProvider(config)
- * const result = await provider.queryOrder('ORDER_1')
- * if (result.success && result.data.status === 'paid') await fulfillOrder(result.data)
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function createFromTrustedConfig(config: AlipayConfig) {
+ *   // 配置已经由渠道 Schema 解析；真实密钥、商户身份与通知端点由部署提供。
+ *   const provider = createAlipayProvider(config)
+ *   const name = provider.name // 'alipay'
+ *   return provider
+ * }
+ * ```
  */
 export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
   const gateway = config.sandbox ? ALIPAY_SANDBOX_GATEWAY : ALIPAY_GATEWAY
   const signType = config.signType ?? 'RSA2'
 
-  /** 构建公共参数 */
+  /**
+   * 由受信商户配置构建公共参数，时间固定按 Asia/Shanghai，不依赖节点 TZ。
+   * @param method - 当前操作对应的支付宝固定方法名。
+   * @param notifyUrl - 服务端配置的通知端点；不从任意客户端字段直接信任。
+   * @returns 尚未包含 sign/biz_content 的公共协议字段；签名后只能作为 POST 表单发送。
+   * @example 模块内部上下文
+   * ```ts
+   * const params = buildCommonParams('alipay.trade.wap.pay', 'https://api.example.com/payment/notify/alipay')
+   * const beijingTimestamp = params.timestamp
+   * // 页面支付随后补 return_url/biz_content 并签名，不请求服务端 JSON envelope。
+   * ```
+   */
   function buildCommonParams(method: string, notifyUrl: string): Record<string, string> {
     return {
       app_id: config.appId,
@@ -86,7 +103,22 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
    * 发送请求并核验对应方法的业务响应，再解析操作所需字段。
    *
    * HTTP 200 不代表业务成功；禁止把错误对象、原始响应或 Zod 输入放入 cause。
-   * @example await alipayRequest(params, AlipayCloseResponseSchema)
+   * @param params - 已固定 method 和 biz_content 的未签名公共参数。
+   * @param schema - 对应该方法所需字段的响应 Schema。
+   * @returns HTTP、方法 envelope、10000 业务码与字段校验均通过的结果。
+   * @throws 超时、网络、业务码或字段校验失败时抛错，由对应公共操作转为 HaiResult。
+   * @example 模块内部上下文
+   * ```ts
+   * async function closeKnownOrder(orderNo: string) {
+   *   const params = {
+   *     ...buildCommonParams('alipay.trade.close', ''),
+   *     biz_content: JSON.stringify({ out_trade_no: orderNo }),
+   *   }
+   *   const response = await alipayRequest(params, AlipayCloseResponseSchema)
+   *   if (response.out_trade_no !== orderNo) throw new Error('Order identity mismatch')
+   *   return response
+   * }
+   * ```
    */
   async function alipayRequest<T>(params: Record<string, string>, schema: ZodType<T>): Promise<T> {
     const sign = signAlipayParams(params, config.privateKey, signType)

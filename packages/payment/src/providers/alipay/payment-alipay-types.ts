@@ -13,13 +13,25 @@ const AlipayTimeSchema = z.string().refine(value => parseAlipayTime(value) !== u
 
 /**
  * 支付宝响应根对象；仅允许 JSON 对象，按请求方法读取对应 envelope。
- * @example AlipayResponseRootSchema.parse({ alipay_trade_close_response: { code: '10000' } })
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = AlipayResponseRootSchema.safeParse({ alipay_trade_close_response: { code: '10000' } })
+ * if (!parsed.success) throw new Error('Invalid Alipay response')
+ * const response = parsed.data // Schema 只校验结构；业务成功码与请求身份仍由 Provider 核对。
+ * ```
  */
 export const AlipayResponseRootSchema = z.record(z.string(), z.unknown())
 
 /**
  * 支付宝公共响应；错误描述不进入上层错误，避免泄漏原始业务数据。
- * @example AlipayResponseSchema.parse({ code: '40004', sub_code: 'ACQ.TRADE_NOT_EXIST' })
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = AlipayResponseSchema.safeParse({ code: '40004', sub_code: 'ACQ.TRADE_NOT_EXIST' })
+ * if (!parsed.success) throw new Error('Invalid Alipay response')
+ * const response = parsed.data // Schema 只校验结构；业务成功码与请求身份仍由 Provider 核对。
+ * ```
  */
 export const AlipayResponseSchema = z.object({
   code: z.string().regex(/^\d{5}$/),
@@ -31,7 +43,13 @@ const AlipayAmountSchema = z.string().regex(/^\d+(?:\.\d{1,2})?$/)
 
 /**
  * 查单成功字段；未知交易状态和缺失金额均拒绝，不能默认成 pending 或零金额。
- * @example AlipayQueryResponseSchema.parse({ out_trade_no: 'ORDER_1', trade_no: 'ALI_1', trade_status: 'TRADE_SUCCESS', total_amount: '1.00' })
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = AlipayQueryResponseSchema.safeParse({ out_trade_no: 'ORDER_1', trade_no: 'ALI_1', trade_status: 'TRADE_SUCCESS', total_amount: '1.00', send_pay_date: '2026-10-22 08:00:00' })
+ * if (!parsed.success) throw new Error('Invalid Alipay response')
+ * const response = parsed.data // Schema 只校验结构；业务成功码与请求身份仍由 Provider 核对。
+ * ```
  */
 export const AlipayQueryResponseSchema = z.object({
   out_trade_no: z.string().min(1),
@@ -43,7 +61,13 @@ export const AlipayQueryResponseSchema = z.object({
 
 /**
  * 退款受理成功字段；fund_change 缺失或 N 不能证明退款到账。
- * @example AlipayRefundResponseSchema.parse({ out_trade_no: 'ORDER_1', trade_no: 'ALI_1', refund_fee: '1.00', fund_change: 'Y' })
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = AlipayRefundResponseSchema.safeParse({ out_trade_no: 'ORDER_1', trade_no: 'ALI_1', refund_fee: '1.00', fund_change: 'Y' })
+ * if (!parsed.success) throw new Error('Invalid Alipay response')
+ * const response = parsed.data // Schema 只校验结构；业务成功码与请求身份仍由 Provider 核对。
+ * ```
  */
 export const AlipayRefundResponseSchema = z.object({
   out_trade_no: z.string().min(1),
@@ -54,7 +78,13 @@ export const AlipayRefundResponseSchema = z.object({
 
 /**
  * 关单成功必须返回可核对的商户订单号和支付宝交易号。
- * @example AlipayCloseResponseSchema.parse({ out_trade_no: 'ORDER_1', trade_no: 'ALI_1' })
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = AlipayCloseResponseSchema.safeParse({ out_trade_no: 'ORDER_1', trade_no: 'ALI_1' })
+ * if (!parsed.success) throw new Error('Invalid Alipay response')
+ * const response = parsed.data // Schema 只校验结构；业务成功码与请求身份仍由 Provider 核对。
+ * ```
  */
 export const AlipayCloseResponseSchema = z.object({
   out_trade_no: z.string().min(1),
@@ -63,7 +93,19 @@ export const AlipayCloseResponseSchema = z.object({
 
 /**
  * 支付宝交易通知参数；身份字段、通知 ID 和北京时间不可缺失。
- * @example AlipayNotifyParamsSchema.safeParse(Object.fromEntries(new URLSearchParams(request.body)))
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = AlipayNotifyParamsSchema.safeParse({
+ *   app_id: 'app-1', seller_id: 'seller-1', notify_id: 'notify-1',
+ *   notify_type: 'trade_status_sync', notify_time: '2026-10-22 08:00:00',
+ *   sign_type: 'RSA2', sign: 'signature-from-channel', out_trade_no: 'ORDER_1',
+ *   trade_no: 'ALI_1', trade_status: 'TRADE_SUCCESS', total_amount: '1.00',
+ *   gmt_payment: '2026-10-22 07:59:00',
+ * })
+ * if (!parsed.success) throw new Error('Invalid Alipay notification')
+ * const value = parsed.data // 结构通过并不代表该占位签名可信；还必须验签并核对 appId/sellerId。
+ * ```
  */
 export const AlipayNotifyParamsSchema = z.object({
   app_id: z.string().min(1),
@@ -82,6 +124,19 @@ export const AlipayNotifyParamsSchema = z.object({
 
 /**
  * 已通过结构校验的支付宝通知；身份与签名由 Provider 继续校验。
- * @example const params: AlipayNotifyParams = AlipayNotifyParamsSchema.parse(rawParams)
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = AlipayNotifyParamsSchema.safeParse({
+ *   app_id: 'app-1', seller_id: 'seller-1', notify_id: 'notify-1',
+ *   notify_type: 'trade_status_sync', notify_time: '2026-10-22 08:00:00',
+ *   sign_type: 'RSA2', sign: 'signature-from-channel', out_trade_no: 'ORDER_1',
+ *   trade_no: 'ALI_1', trade_status: 'TRADE_SUCCESS', total_amount: '1.00',
+ *   gmt_payment: '2026-10-22 07:59:00',
+ * })
+ * if (!parsed.success) throw new Error('Invalid Alipay notification')
+ * const notification: AlipayNotifyParams = parsed.data
+ * const businessOrderNo = notification.out_trade_no
+ * ```
  */
 export type AlipayNotifyParams = z.infer<typeof AlipayNotifyParamsSchema>

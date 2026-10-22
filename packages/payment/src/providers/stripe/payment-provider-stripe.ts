@@ -100,6 +100,17 @@ const StripeCheckoutEventSchema = z.object({
  * @param config - Stripe 配置
  * @param repository - 已初始化的内部渠道操作仓库，由 payment.init 创建。
  * @returns PaymentProvider 实例
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function createFromTrustedConfig(config: StripeConfig) {
+ *   // reldb 已初始化为共享数据库；先等待持久操作表就绪再发布 Provider。
+ *   const repository = new StripeOperationRepository(reldb)
+ *   const initialized = await repository.initialize()
+ *   if (!initialized.success) throw new Error(initialized.error.message)
+ *   return createStripeProvider(config, repository)
+ * }
+ * ```
  */
 export function createStripeProvider(
   config: StripeConfig,
@@ -150,13 +161,47 @@ export function createStripeProvider(
     return accountScopePromise
   }
 
-  /** 不含秘密/个人标识的稳定幂等键；所有节点依据同一业务身份计算。 */
+  /**
+   * 按账户、test/live 模式、操作类型和业务标识生成所有节点一致的幂等键。
+   * 输出仅包含摘要，不携带明文密钥或业务标识；账户读取失败必须传播，不能临时换键。
+   * @param kind - 创建订单、退款或主动关单的操作类型。
+   * @param businessId - 持久化的 orderNo 或 refundNo；同一业务操作重试必须保持不变。
+   * @returns 适合 Stripe Idempotency-Key 的稳定摘要字符串。
+   * @example 模块内部上下文
+   * ```ts
+   * const first = await operationId('refund', 'REFUND_1')
+   * const retry = await operationId('refund', 'REFUND_1')
+   * if (first !== retry) throw new Error('Idempotency identity changed')
+   * ```
+   */
   async function operationId(kind: 'order' | 'refund' | 'close', businessId: string): Promise<string> {
     const digest = createHash('sha256').update(JSON.stringify([await accountScope(), kind, businessId])).digest('hex')
     return `hai-payment-${kind}-${digest}`
   }
 
-  /** 参数顺序规范化后绑定到预留；未知结果只在安全窗口内沿用同一键重试。 */
+  /**
+   * 规范化参数并绑定数据库预留；仅对安全窗口内的未知结果沿用同一渠道幂等键请求。
+   * 已持久化结果先经结果 Schema 解析后复用；渠道回执或数据库确认缺失时保留预留并失败。
+   * @param options - 稳定 ID、固定渠道路径、表单参数及最小结果解析器。
+   * @param options.id - 已包含账户、模式与业务标识的稳定操作 ID，复用作渠道幂等键。
+   * @param options.path - 当前操作使用的固定 Stripe API 路径。
+   * @param options.body - 与首次预留参数一致的渠道表单字段。
+   * @param options.resultSchema - 持久化和返回值复用时都必须通过的最小结果 Schema。
+   * @param options.execute - 将渠道原始响应转换为经过校验的最小结果，不承担外部履约。
+   * @param options.paymentIntent - 从已校验结果提取 PaymentIntent 的可选函数。
+   * @returns 经 Schema 校验并由数据库确认的单次操作结果。
+   * @throws 参数冲突、过窗未知结果、渠道错误或持久化失败时抛错，由公共操作边界转换。
+   * @example 模块内部上下文
+   * ```ts
+   * async function repeatKnownRefund(refundNo: string, body: Record<string, string>) {
+   *   return executeOperation({
+   *     id: await operationId('refund', refundNo), path: '/refunds', body,
+   *     resultSchema: StripeRefundSchema, execute: raw => StripeRefundSchema.parse(raw),
+   *   })
+   *   // body 必须与首次预留完全一致；不能借重试更改金额或 PaymentIntent。
+   * }
+   * ```
+   */
   async function executeOperation<T>(options: {
     id: string
     path: string
@@ -178,7 +223,18 @@ export function createStripeProvider(
     return options.resultSchema.parse(await repository.complete(options.id, requestHash, result, options.paymentIntent?.(result)))
   }
 
-  /** 只从持久 Session ID 查指定订单，并核对金额/币种及 PaymentIntent。 */
+  /**
+   * 只按持久化 Session ID 查指定订单，核对订单号、金额、币种后原子补全 PaymentIntent。
+   * @param orderNo - 由业务持久化、并已经创建过渠道映射的商户订单号。
+   * @returns 与本账户/模式/订单映射一致的 Session；不会搜索 metadata 列表猜测订单。
+   * @throws 无确认映射、渠道失败、字段非法或身份不一致时抛错，由操作边界转为失败。
+   * @example 模块内部上下文
+   * ```ts
+   * const session = await retrieveOrder('ORDER_1')
+   * const canExpire = session.status === 'open' && session.payment_status === 'unpaid'
+   * // 只有渠道 expire 后再次确认 expired，才能把关单作为成功结果。
+   * ```
+   */
   async function retrieveOrder(orderNo: string) {
     const id = await operationId('order', orderNo)
     const operation = await repository.load(id)
@@ -199,7 +255,18 @@ export function createStripeProvider(
   /** Stripe Webhook 签名容忍时间窗口（秒） */
   const TIMESTAMP_TOLERANCE = config.webhookToleranceSeconds ?? 300
 
-  /** 验证 Stripe Webhook 签名 */
+  /**
+   * 对原始通知 body 校验唯一时间戳、时间容差及任一有效 v1 签名，支持受信密钥轮换。
+   * @param payload - 未重序列化的原始请求体。
+   * @param signature - 唯一 Stripe-Signature 头值；重复头由外层拒绝。
+   * @returns 签名和时钟同时可信时为 true；不代替 Session 事件、商户身份或持久业务去重。
+   * @example 模块内部上下文
+   * ```ts
+   * function verifyRawBody(body: string, signatureHeader: string): boolean {
+   *   return verifyWebhookSignature(body, signatureHeader)
+   * }
+   * ```
+   */
   function verifyWebhookSignature(payload: string, signature: string): boolean {
     const parts = signature.split(',').map(part => part.trim())
     const timestamps = parts.filter(p => p.startsWith('t='))

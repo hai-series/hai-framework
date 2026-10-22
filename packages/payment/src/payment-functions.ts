@@ -67,6 +67,14 @@ function validateRefundInput(input: RefundInput): HaiResult<void> {
  * 注册支付 Provider
  *
  * @param provider - PaymentProvider 实例
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function registerCustomProvider(provider: PaymentProvider) {
+ *   registerProvider(provider)
+ *   return getProvider(provider.name)
+ * }
+ * ```
  */
 export function registerProvider(provider: PaymentProvider): void {
   providers.set(provider.name, provider)
@@ -77,6 +85,15 @@ export function registerProvider(provider: PaymentProvider): void {
  *
  * @param name - Provider 名称
  * @returns Provider 实例（不存在返回 undefined）
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = getProvider('stripe')
+ * if (provider) {
+ *   const result = await provider.queryOrder('ORDER_1')
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * ```
  */
 export function getProvider(name: string): PaymentProvider | undefined {
   return providers.get(name)
@@ -101,6 +118,18 @@ function requireProvider(name: string): HaiResult<PaymentProvider> {
  *
  * @param providerName - Provider 名称（'wechat' | 'alipay' | 'stripe'）
  * @param input - 创建订单入参
+ * @returns 成功返回客户端调起所需的订单参数；失败不代表渠道绝对没有执行，需遵循对应渠道幂等与核对规则。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 生命周期已注册目标 Provider；业务订单及退款标识已经持久化。
+ * const result = await createOrder('stripe', {
+ *   orderNo: 'ORDER_1', amount: 100, currency: 'CNY', description: '测试商品',
+ *   tradeType: 'h5', notifyUrl: 'https://api.example.com/payment/notify/stripe',
+ * })
+ * if (!result.success) return result
+ * return result
+ * ```
  */
 export async function createOrder(
   providerName: string,
@@ -132,12 +161,16 @@ export async function createOrder(
  * @param providerName - Provider 名称
  * @param request - 原始 HTTP 请求数据
  * @returns 验签及解析结果；仅 status=paid 表示已付款，宿主仍需持久核对和幂等履约。
- *
- * @example
+ * @internal
+ * @example 模块内部上下文
  * ```ts
- * const result = await payment.handleNotify('stripe', request)
- * if (result.success && result.data.status === 'paid') {
- *   // 在业务数据库事务中核对金额/币种，按 eventId 去重后更新订单。
+ * async function verifyStripeNotification(request: PaymentNotifyRequest) {
+ *   const result = await handleNotify('stripe', request)
+ *   if (!result.success) return result
+ *   if (result.data.status === 'paid') {
+ *     // 仅将验签结果交给宿主的共享事务履约；必须核对订单/金额/币种并持久去重。
+ *   }
+ *   return result
  * }
  * ```
  */
@@ -165,6 +198,15 @@ export async function handleNotify(
  *
  * @param providerName - Provider 名称
  * @param orderNo - 商户订单号
+ * @returns 成功返回渠道确认的订单状态；未知订单或渠道错误返回失败，不能默认为 pending。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 生命周期已注册目标 Provider；业务订单及退款标识已经持久化。
+ * const result = await queryOrder('stripe', 'ORDER_1')
+ * if (!result.success) return result
+ * return result
+ * ```
  */
 export async function queryOrder(
   providerName: string,
@@ -181,6 +223,15 @@ export async function queryOrder(
  *
  * @param providerName - Provider 名称
  * @param input - 退款入参
+ * @returns 成功返回本次退款受理状态；processing 不能视作退款完成。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 生命周期已注册目标 Provider；业务订单及退款标识已经持久化。
+ * const result = await refund('stripe', { orderNo: 'ORDER_1', refundNo: 'REFUND_1', amount: 50 })
+ * if (!result.success) return result
+ * return result
+ * ```
  */
 export async function refund(
   providerName: string,
@@ -211,6 +262,15 @@ export async function refund(
  *
  * @param providerName - Provider 名称
  * @param orderNo - 商户订单号
+ * @returns 只有渠道确认订单已关闭或过期才成功；已支付、未知状态或渠道错误返回失败。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 生命周期已注册目标 Provider；业务订单及退款标识已经持久化。
+ * const result = await closeOrder('stripe', 'ORDER_1')
+ * if (!result.success) return result
+ * return result
+ * ```
  */
 export async function closeOrder(
   providerName: string,
@@ -232,7 +292,14 @@ export async function closeOrder(
 }
 
 /**
- * 清空所有已注册 Provider（测试用）
+ * 清空本进程的 Provider 调度注册表；生命周期关闭及隔离测试使用，不删除共享幂等记录。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 仅在停止接收支付调用之后，由 payment.close 清理当前进程的调度注册表。
+ * clearProviders()
+ * const unavailable = getProvider('stripe') // undefined；共享渠道操作记录不会被删除。
+ * ```
  */
 export function clearProviders(): void {
   providers.clear()

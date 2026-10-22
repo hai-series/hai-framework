@@ -32,28 +32,35 @@ Protocol references: [WeChat JSAPI creation](https://pay.wechatpay.cn/doc/v3/mer
 #### Node.js server
 
 ```typescript
+import type { PaymentConfigInput } from '@h-ai/payment'
 import { payment } from '@h-ai/payment'
 
-// 初始化（会自动注册可用的 Provider）
-await payment.init({
-  wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...', platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM' } },
-  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...', returnUrl: 'https://app.example/payment/return' },
-})
-
-// 创建订单
-const result = await payment.createOrder('wechat', {
-  orderNo: 'ORD001',
-  amount: 100,
-  description: '测试商品',
-  tradeType: 'jsapi',
-  userId: 'openid-xxx',
-  notifyUrl: 'https://api.example.com/payment/notify/wechat',
-})
-
-// 查询订单
-const query = await payment.queryOrder('wechat', 'ORD001')
-
-await payment.close()
+async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
+  // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
+  // 如启用 Stripe，宿主已先初始化共享 reldb 并检查 success。
+  const initialized = await payment.init(trustedConfig)
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+  try {
+    const created = await payment.createOrder('wechat', {
+      orderNo: 'ORD001',
+      amount: 100,
+      description: '测试商品',
+      tradeType: 'jsapi',
+      userId: trustedOpenid,
+      notifyUrl: 'https://api.example.com/payment/notify/wechat',
+    })
+    if (!created.success)
+      throw new Error(created.error.message)
+    const query = await payment.queryOrder('wechat', 'ORD001')
+    if (!query.success)
+      throw new Error(query.error.message)
+    return { order: created.data, status: query.data.status }
+  }
+  finally {
+    await payment.close() // 宿主随后才关闭其 reldb。
+  }
+}
 ```
 
 #### Browser client
@@ -86,7 +93,11 @@ const order = await api.payment.orders.create({
 ### Configuration
 
 ```typescript
-await payment.init({
+import type { PaymentConfigInput } from '@h-ai/payment'
+import { PaymentConfigSchema } from '@h-ai/payment'
+
+// 仅为配置字段示意；真实密钥、证书和商户身份由私有部署注入。
+const input: PaymentConfigInput = {
   wechat: {
     mchId: '商户号',
     apiV3Key: 'API v3 密钥',
@@ -111,7 +122,11 @@ await payment.init({
     cancelUrl: 'https://app.example/payment/cancel', // Optional
     webhookToleranceSeconds: 300, // 可选，默认 300 秒
   },
-})
+}
+const parsed = PaymentConfigSchema.safeParse(input)
+if (!parsed.success)
+  throw new Error('Payment configuration is invalid')
+// 使用 parsed.data；启用 Stripe 前须先初始化共享 reldb。
 ```
 
 Configure only the providers you need; unconfigured providers are not registered.
@@ -185,13 +200,13 @@ Successful key payment operations automatically write audit logs through `@h-ai/
 const result = await payment.createOrder('wechat', orderInput)
 if (!result.success) {
   switch (result.error.code) {
-    case HaiPaymentError.INVALID_AMOUNT:
+    case HaiPaymentError.INVALID_AMOUNT.code:
       // 金额不是正整数，或 refund.totalAmount < amount
       break
-    case HaiPaymentError.PROVIDER_NOT_FOUND:
+    case HaiPaymentError.PROVIDER_NOT_FOUND.code:
       // Provider 未注册
       break
-    case HaiPaymentError.CREATE_ORDER_FAILED:
+    case HaiPaymentError.CREATE_ORDER_FAILED.code:
       // 创建订单失败
       break
   }
@@ -214,9 +229,15 @@ Common error codes:
 ## Development and testing
 
 ```bash
+pnpm --filter @h-ai/payment typecheck
+pnpm --filter @h-ai/payment lint
+pnpm --filter @h-ai/payment build
 pnpm --filter @h-ai/payment test
+node scripts/check-module-jsdoc.mjs --package payment
 pnpm --filter @h-ai/payment exec vitest run tests/payment-provider-alipay.test.ts tests/payment-provider-wechat.test.ts tests/payment-provider-stripe.test.ts
 ```
+
+Declaration examples use the actual `@h-ai/payment` / `@h-ai/payment/client` entries and distinguish configuration input from parsed output, and `HaiResult.success` from confirmed payment or refund status. Signing, protocol parsing, and durable operation helpers are marked as internal context and are not application deep-import APIs. Run `node scripts/check-module-jsdoc.mjs --package payment` to check coverage and example types. It does not execute real payments, network calls, device bridges, or fulfillment; verify those integrations separately. See the [module JSDoc guide](../../docs/module-jsdoc.md).
 
 ## License
 

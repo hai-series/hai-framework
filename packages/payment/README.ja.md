@@ -32,28 +32,35 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 #### Node.js サーバー
 
 ```typescript
+import type { PaymentConfigInput } from '@h-ai/payment'
 import { payment } from '@h-ai/payment'
 
-// 初始化（会自动注册可用的 Provider）
-await payment.init({
-  wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...', platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM' } },
-  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...', returnUrl: 'https://app.example/payment/return' },
-})
-
-// 创建订单
-const result = await payment.createOrder('wechat', {
-  orderNo: 'ORD001',
-  amount: 100,
-  description: '测试商品',
-  tradeType: 'jsapi',
-  userId: 'openid-xxx',
-  notifyUrl: 'https://api.example.com/payment/notify/wechat',
-})
-
-// 查询订单
-const query = await payment.queryOrder('wechat', 'ORD001')
-
-await payment.close()
+async function paymentExample(trustedConfig: PaymentConfigInput, trustedOpenid: string) {
+  // 常驻服务在启动/停机时分别 init/close；此函数演示完整生命周期。
+  // 如启用 Stripe，宿主已先初始化共享 reldb 并检查 success。
+  const initialized = await payment.init(trustedConfig)
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+  try {
+    const created = await payment.createOrder('wechat', {
+      orderNo: 'ORD001',
+      amount: 100,
+      description: '测试商品',
+      tradeType: 'jsapi',
+      userId: trustedOpenid,
+      notifyUrl: 'https://api.example.com/payment/notify/wechat',
+    })
+    if (!created.success)
+      throw new Error(created.error.message)
+    const query = await payment.queryOrder('wechat', 'ORD001')
+    if (!query.success)
+      throw new Error(query.error.message)
+    return { order: created.data, status: query.data.status }
+  }
+  finally {
+    await payment.close() // 宿主随后才关闭其 reldb。
+  }
+}
 ```
 
 #### ブラウザークライアント
@@ -86,7 +93,11 @@ const order = await api.payment.orders.create({
 ### 設定
 
 ```typescript
-await payment.init({
+import type { PaymentConfigInput } from '@h-ai/payment'
+import { PaymentConfigSchema } from '@h-ai/payment'
+
+// 仅为配置字段示意；真实密钥、证书和商户身份由私有部署注入。
+const input: PaymentConfigInput = {
   wechat: {
     mchId: '商户号',
     apiV3Key: 'API v3 密钥',
@@ -111,7 +122,11 @@ await payment.init({
     cancelUrl: 'https://app.example/payment/cancel', // 任意
     webhookToleranceSeconds: 300, // 可选，默认 300 秒
   },
-})
+}
+const parsed = PaymentConfigSchema.safeParse(input)
+if (!parsed.success)
+  throw new Error('Payment configuration is invalid')
+// 使用 parsed.data；启用 Stripe 前须先初始化共享 reldb。
 ```
 
 必要な Provider のみ設定してください。未設定の Provider は登録されません。
@@ -185,13 +200,13 @@ Stripe を有効にする前に reldb を初期化して success を確認し、
 const result = await payment.createOrder('wechat', orderInput)
 if (!result.success) {
   switch (result.error.code) {
-    case HaiPaymentError.INVALID_AMOUNT:
+    case HaiPaymentError.INVALID_AMOUNT.code:
       // 金额不是正整数，或 refund.totalAmount < amount
       break
-    case HaiPaymentError.PROVIDER_NOT_FOUND:
+    case HaiPaymentError.PROVIDER_NOT_FOUND.code:
       // Provider 未注册
       break
-    case HaiPaymentError.CREATE_ORDER_FAILED:
+    case HaiPaymentError.CREATE_ORDER_FAILED.code:
       // 创建订单失败
       break
   }
@@ -214,9 +229,15 @@ if (!result.success) {
 ## 開発とテスト
 
 ```bash
+pnpm --filter @h-ai/payment typecheck
+pnpm --filter @h-ai/payment lint
+pnpm --filter @h-ai/payment build
 pnpm --filter @h-ai/payment test
+node scripts/check-module-jsdoc.mjs --package payment
 pnpm --filter @h-ai/payment exec vitest run tests/payment-provider-alipay.test.ts tests/payment-provider-wechat.test.ts tests/payment-provider-stripe.test.ts
 ```
+
+宣言の例は実際の `@h-ai/payment` / `@h-ai/payment/client` を使い、設定入力と解析済み出力、`HaiResult.success` と決済・返金の確定状態を区別します。署名、プロトコル解析、永続操作の内部ヘルパーには「模块内部上下文」と明記し、アプリからの深い import の入口にはしません。`node scripts/check-module-jsdoc.mjs --package payment` で網羅性と例の型を確認できます。実決済、ネットワーク通信、端末ブリッジ、履行は実行しないため、別途統合検証が必要です。[モジュール JSDoc 規約](../../docs/module-jsdoc.md)も参照してください。
 
 ## ライセンス
 
