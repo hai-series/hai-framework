@@ -2,9 +2,9 @@
 
 审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08，共 80 个，另有 21 个按模块拆分的 JSDoc 任务，共 101 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03，共 82 个，另有 21 个按模块拆分的 JSDoc 任务，共 103 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 47/52（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 48/54（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -37,7 +37,7 @@
 | reach | 13 | 51 | 1 | 42 | REACH-01、REACH-02、REACH-03、REACH-04 | JSDOC-15 |
 | reldb | 17 | 84 | 4 | 57 | RELDB-01、RELDB-02、RELDB-03 | JSDOC-16 |
 | scheduler | 14 | 71 | 38 | 67 | SCHED-01、SCHED-02、SCHED-03 | JSDOC-17 |
-| serv | 28 | 106 | 3 | 98 | SERV-01、SERV-02、SERV-03、SERV-04、SERV-05 | JSDOC-18 |
+| serv | 28 | 106 | 3 | 98 | SERV-01、SERV-02、SERV-03、SERV-04、SERV-05、SERV-06 | JSDOC-18 |
 | storage | 14 | 49 | 5 | 38 | STORAGE-01、STORAGE-02、STORAGE-03、STORAGE-04 | JSDOC-19 |
 | ui | 162 | 297 | 63 | 284 | UI-01、UI-02 | JSDOC-20 |
 | vecdb | 10 | 35 | 3 | 26 | VECDB-01、VECDB-02、VECDB-03、VECDB-04、VECDB-05 | JSDOC-21 |
@@ -770,7 +770,7 @@
 - [ ] **JSDOC-14 / payment / P2**：核对 50 个 TS 顶层导出声明，修正 8 个无 JSDoc、47 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 - [ ] **JSDOC-15 / reach / P2**：核对 51 个 TS 顶层导出声明，修正 1 个无 JSDoc、42 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 - [x] **JSDOC-16 / reldb / P2**：核对 84 个 TS 顶层导出声明，修正 4 个无 JSDoc、57 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：17源码94声明94真实例子及39个额外方法示例全部类型检查；生命周期/CRUD/事务例先检查HaiResult，明确tx.wrap仅抛错触发回滚、返回失败结果不会自动展开；修正DDL hasTable返回值、标识符长度并非各DB上限、JSON简单路径与原生insert/set差异。完整去注释TS AST对RELDB03后HEAD 17/17一致，无运行/类型/配置变化。source类型、fresh ESM/DTS含SQLite worker、定向lint零警告、94+39示例编译通过；三语README导航和许可证位置同步，JSON运行逻辑已在RELDB03独立提交；全量回归在全部任务实施后执行。
-- [ ] **JSDOC-17 / scheduler / P2**：核对 71 个 TS 顶层导出声明，修正 38 个无 JSDoc、67 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [x] **JSDOC-17 / scheduler / P2**：核对 71 个 TS 顶层导出声明，修正 38 个无 JSDoc、67 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：13源码85声明85例从fresh发布入口或原内部作用域编译；区分业务status与日志persistence、unknown效果不得重放、pending只repair、API响应原文与JS/Hook可序列化结果、取消reject和void close。完整TS类型/运行token与SCHED03基线13/13一致，无行为/配置/调用方变化。source类型、lint、fresh ESM/DTS、85例编译、skills/env595/API21均0；三语README/模板skill/reference、workspace创建审查规范及LLMS同步，不重复已由SCHED03证明的真实DB与双进程测试；全量回归在全部任务实施后执行。
 - [ ] **JSDOC-18 / serv / P2**：核对 106 个 TS 顶层导出声明，修正 3 个无 JSDoc、98 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 - [x] **JSDOC-19 / storage / P2**：核对 49 个 TS 顶层导出声明，修正 5 个无 JSDoc、38 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：14源码64声明64实际入口/内部作用域示例，17个额外方法例均编译；明确Node无状态checksum无需init、getStream迭代仍可能抛I/O/取消、Provider close为void而模块close返回HaiResult、删除部分进度与S3-only预签名，修正扩展名与默认字段说明。完整去注释TS AST对HEAD14/14一致；source类型、fresh全部入口/声明、lint零警告、64+17示例验证通过；三语README统一规范导航/许可证同步，无运行/API/类型/配置变化，浏览器XHR实际取消缺陷留STORAGE04独立提交；全量回归在全部任务实施后执行。
 - [x] **JSDOC-20 / ui / P2**：核对 297 个 TS 顶层导出声明，修正 63 个无 JSDoc、284 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：142个文件仅修改注释，376声明全部配有示例，并覆盖95个公开组件头部和24个方法/重导出/模块说明，共495个实际类型编译示例；修正Accordion普通content、MessageBox真实默认值和clipboard权限说明。TS与Svelte去注释执行语义142/142等价（UI02两处独立运行修正已单独提交）；UI类型与svelte-check零错误零警告、lint142文件、fresh svelte-package、skills及示例编译均通过。公开入口/配置/调用方契约未变，无额外运行时代码影响；全量回归在全部任务实施后执行。
@@ -918,3 +918,19 @@
 - **证据与影响**：全仓仅有 rememberMe 类型/Schema/转发和 checkbox，无任何认证、期限或持久化消费；独立 LoginForm 默认展示该未实现选项，AuthPanel 又显式关闭，接口与可见承诺不一致。
 - **修正内容**：直接移除 rememberMe、showRememberMe 及对应选择框、空转发、无消费文案/示例；不新增会话期限或客户端持久化机制。同步三语 README、skills、应用、模板与实际公开类型。
 - **验收标准**：全仓生产引用无遗留，真实表单无虚假选项且提交不包含该字段，密码/OTP 其余流程通过；相关 types/build/JSDoc 与调用方验证。
+
+### SERV-06 · P2 · Fetch 适配器遵循 RequestInit 与取消契约
+
+- [ ] 待修正。
+- **位置**：`packages/serv/src/serv-functions.ts` toFetch 与对应公开使用说明。
+- **证据与影响**：真实已发布适配器复现 Request(GET /health)+init.method=POST 仍返回GET 200，标准 new Request(input,init) 会使用POST并返回404；现分支直接复用Request，忽略method/headers/body/signal，违反typeof fetch入口契约。
+- **修正内容**：标准Request构造统一应用RequestInit，验证Request复用/已消费body与取消行为；传递取消，不承诺撤销已发生的业务副作用。
+- **验收标准**：实际公开适配器与标准Request行为对照，method/headers/body/signal、预取消/进行中取消、body消费与错误分支有回归；类型、build、JSDoc、文档/skill同步。
+
+### DOC-03 · P2 · 应用模板使用自身验证入口并统一模块README章节
+
+- [ ] 待修正。
+- **位置**：CLI应用skills的JSDoc导航及21模块三语README。
+- **证据与影响**：新增模板引用含框架私有scripts/check-module-jsdoc路径或仅框架根存在的check:jsdoc命令；部分修正说明追加在许可证之后，和共享README规范不一致。
+- **修正内容**：框架维护命令留在框架入口，生成应用只按安装版本的真实公开声明与应用自身类型门禁验证；归并README许可证到末尾，保留正文和已有验证边界。
+- **验收标准**：模板无误导的框架私有验证路径，三语README许可证位置一致，本地链接、skills和相应Markdown检查通过；不改运行时代码，完整scaffold留全部实施后执行。

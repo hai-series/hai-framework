@@ -6,7 +6,7 @@
  * - 实现任务注册 / 注销 / 更新 / 批量加载等业务逻辑
  * - 实现执行日志分页查询
  *
- * 此文件不感知定时器、分布式锁、执行并发等调度运行细节，那些由 scheduler-runner.ts 负责。
+ * 此文件不感知定时器、执行租约、执行并发等调度运行细节，那些由 scheduler-runner.ts 负责。
  * @module scheduler-functions
  */
 
@@ -41,23 +41,77 @@ let currentHooks: SchedulerTaskHooks = {}
 
 // ─── 任务注册表访问器 ───
 
+/**
+ * 读取本节点已校验的任务投影；共享定义由刷新流程更新。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const enabled = [...getTaskRegistry().values()].filter(task => task.enabled !== false)
+ * ```
+ */
 export function getTaskRegistry(): ReadonlyMap<string, TaskDefinition> {
   return taskRegistry
 }
 
+/**
+ * 按任务 ID 读取本地只读投影，不访问数据库。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task = getTask('daily-report')
+ * if (task) {
+ *   const cronExpression = task.cron
+ * }
+ * ```
+ */
 export function getTask(taskId: string): TaskDefinition | undefined {
   return taskRegistry.get(taskId)
 }
 
+/**
+ * 检查当前投影是否含任务；不代替共享数据库的唯一约束。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * if (!hasTask('daily-report')) {
+ *   const registered = await registerTask({ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' })
+ *   if (!registered.success) return registered
+ * }
+ * return getTask('daily-report')
+ * ```
+ */
 export function hasTask(taskId: string): boolean {
   return taskRegistry.has(taskId)
 }
 
+/**
+ * 发布已校验且已持久化的任务投影，并推进本地快照代际。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * setTask(task.id, task)
+ * ```
+ */
 export function setTask(taskId: string, task: TaskDefinition): void {
   definitionEpoch++
   taskRegistry.set(taskId, task)
 }
 
+/**
+ * 删除本地投影并推进代际；公共注销先确认数据库删除成功。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * deleteTask('daily-report')
+ * deleteCron('daily-report')
+ * ```
+ */
 export function deleteTask(taskId: string): void {
   definitionEpoch++
   taskRegistry.delete(taskId)
@@ -65,34 +119,107 @@ export function deleteTask(taskId: string): void {
 
 // ─── Cron 缓存访问器 ───
 
+/**
+ * 读取任务已解析的 cron；时区由任务定义明确或默认 UTC。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const cron = getCron('daily-report')
+ * const due = cron?.match(new Date('2026-10-23T02:00:00Z')) ?? false
+ * ```
+ */
 export function getCron(taskId: string): Cron | undefined {
   return cronCache.get(taskId)
 }
 
+/**
+ * 缓存已成功解析的 cron 实例。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const parsed = parseCronExpression('0 2 * * *', 'UTC')
+ * if (!parsed.success) return parsed
+ * setCron('daily-report', parsed.data)
+ * return parsed.data
+ * ```
+ */
 export function setCron(taskId: string, cron: Cron): void {
   cronCache.set(taskId, cron)
 }
 
+/**
+ * 移除任务的 cron 缓存；不删除持久定义。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * deleteCron('daily-report')
+ * ```
+ */
 export function deleteCron(taskId: string): void {
   cronCache.delete(taskId)
 }
 
 // ─── 生命周期回调访问器 ───
 
+/**
+ * 复制宿主回调配置；副作用的幂等与协作取消由宿主实现。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * setHooks({ onTaskExecute: ({ context, signal }) => {
+ *   signal.throwIfAborted()
+ *   return { taskId: context.taskId }
+ * } })
+ * ```
+ */
 export function setHooks(hooks: SchedulerTaskHooks): void {
   currentHooks = { ...hooks }
 }
 
+/**
+ * 清空当前宿主回调，不能撤销已经开始的外部操作。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * clearHooks()
+ * const remaining = getHooks().onTaskExecute
+ * ```
+ */
 export function clearHooks(): void {
   currentHooks = {}
 }
 
+/**
+ * 读取当前宿主回调的只读视图。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const hooks = getHooks()
+ * const usesHostHandler = hooks.onTaskExecute !== undefined
+ * ```
+ */
 export function getHooks(): Readonly<SchedulerTaskHooks> {
   return currentHooks
 }
 
 // ─── 重置（供 close() 调用） ───
 
+/**
+ * 关闭时使旧刷新快照失效并清空任务、cron 和宿主回调。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * // 关闭流程已排空 runner 后再丢弃所有投影与在途刷新句柄。
+ * resetTaskState()
+ * ```
+ */
 export function resetTaskState(): void {
   definitionEpoch++
   activeRefresh = undefined
@@ -136,7 +263,19 @@ function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<
 
 // ─── 业务函数 ───
 
-/** 合并同一任务仓库的在途刷新；配置写入或关闭后不复用旧快照。 */
+/**
+ * 合并同一任务仓库的在途刷新；配置写入或关闭后不复用旧快照。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function refresh(repository: SchedulerTaskRepository) {
+ *   const result = await loadPersistedTasks(repository)
+ *   if (!result.success) return result
+ *   return [...getTaskRegistry().values()]
+ * }
+ * ```
+ */
 export async function loadPersistedTasks(taskRepo: SchedulerTaskRepository | null): Promise<HaiResult<void>> {
   if (!taskRepo)
     return ok(undefined)
@@ -191,6 +330,17 @@ async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: n
   return ok(undefined)
 }
 
+/**
+ * 顺序校验并加载初始化配置的本地投影；公共初始化随后按真实生命周期接入仓库。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const loaded = await loadConfigTasks([{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }])
+ * if (!loaded.success) return loaded
+ * return [...getTaskRegistry().values()]
+ * ```
+ */
 export async function loadConfigTasks(tasks: TaskDefinition[]): Promise<HaiResult<void>> {
   for (const task of tasks) {
     const registerResult = await registerTask(task)
@@ -200,6 +350,19 @@ export async function loadConfigTasks(tasks: TaskDefinition[]): Promise<HaiResul
   return ok(undefined)
 }
 
+/**
+ * 校验完整定义并先持久化再开放本地调度；失败不发布半成品。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function register(repository: SchedulerTaskRepository) {
+ *   const result = await registerTask({ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }, repository)
+ *   if (!result.success) return result
+ *   return getTask('daily-report')
+ * }
+ * ```
+ */
 export async function registerTask(
   task: TaskDefinition,
   taskRepo?: SchedulerTaskRepository | null,
@@ -261,6 +424,19 @@ export async function registerTask(
   return ok(undefined)
 }
 
+/**
+ * 先条件删除共享定义，再清除本地任务和 cron；失败保留原投影。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function unregister(repository: SchedulerTaskRepository) {
+ *   const result = await unregisterTask('daily-report', repository)
+ *   if (!result.success) return result
+ *   return result
+ * }
+ * ```
+ */
 export async function unregisterTask(
   taskId: string,
   taskRepo?: SchedulerTaskRepository | null,
@@ -295,6 +471,19 @@ export async function unregisterTask(
   return ok(undefined)
 }
 
+/**
+ * 校验整个更新并先落库再替换投影；任何字段失败都不提前替换 cron。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function disable(repository: SchedulerTaskRepository) {
+ *   const result = await updateRegisteredTask('daily-report', { enabled: false }, repository)
+ *   if (!result.success) return result
+ *   return result
+ * }
+ * ```
+ */
 export async function updateRegisteredTask(
   taskId: string,
   updates: TaskUpdateInput,
@@ -383,6 +572,19 @@ export async function updateRegisteredTask(
   return ok(undefined)
 }
 
+/**
+ * 按过滤和分页读取持久日志；没有仓库返回失败，不伪造空结果。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function inspect(repository: SchedulerLogRepository) {
+ *   const logs = await queryTaskLogs(repository, { taskId: 'daily-report', pagination: { page: 1, pageSize: 20 } })
+ *   if (!logs.success) return logs
+ *   return logs.data.items
+ * }
+ * ```
+ */
 export async function queryTaskLogs(
   logRepo: SchedulerLogRepository | null,
   options?: LogQueryOptions,

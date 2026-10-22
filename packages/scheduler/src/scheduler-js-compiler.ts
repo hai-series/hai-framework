@@ -26,10 +26,41 @@ function createCacheKey(config: JsTaskConfig): string {
   return createHash('sha256').update(keySource).digest('hex')
 }
 
+/**
+ * 清除本地编译闭包缓存；不终止已经启动的工作线程。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * // 调度器关闭并排空工作线程后，释放只含编译闭包的本地缓存。
+ * clearJsTaskHandlerCache()
+ * ```
+ */
 export function clearJsTaskHandlerCache(): void {
   compiledHandlerCache.clear()
 }
 
+/**
+ * 校验受信任的 JS 函数表达式并返回独立工作线程执行器；不是安全沙箱。
+ *
+ * @param config - 受信任源码和含线程启动的总期限
+ * @returns 编译结果；返回的 handler 在运行失败或取消时可 reject。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const compiled = compileJsTaskHandler({ kind: 'js', code: '(context) => ({ taskId: context.taskId })', timeout: 1000 })
+ * if (!compiled.success) return compiled
+ * const task: Parameters<JsTaskHandler>[0]['task'] = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * const controller = new AbortController()
+ * try {
+ *   return await compiled.data({ task, taskId: task.id, params: {}, trigger: { type: 'manual', source: null } }, controller.signal)
+ * } catch (error) {
+ *   // 返回的 handler 可 reject；此调用边界转换为领域结果。
+ *   return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_executionStateFailed'), error)
+ * }
+ * ```
+ */
 export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHandler> {
   const cacheKey = createCacheKey(config)
   const cachedHandler = compiledHandlerCache.get(cacheKey)

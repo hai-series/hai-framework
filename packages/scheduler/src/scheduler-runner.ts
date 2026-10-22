@@ -29,7 +29,16 @@ let currentExecutionRepo: SchedulerExecutionRepository | null = null
 let currentLogRepo: SchedulerLogRepository | null = null
 let currentCleanupPolicy: SchedulerLogCleanupPolicy = {}
 
-/** 绑定调用方拥有的日志仓库；关闭后不可由旧执行写入新实例。@example setLogRepository(repo, { maxLogs: 500 }) */
+/**
+ * 绑定调用方拥有的日志仓库；关闭后不可由旧执行写入新实例。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * // 本轮实例拥有的仓库通过生命周期装配，不从后续 init 动态借用。
+ * setLogRepository(null)
+ * ```
+ */
 export function setLogRepository(repo: SchedulerLogRepository | null, policy: SchedulerLogCleanupPolicy = {}): void {
   currentLogRepo = repo
   currentCleanupPolicy = { ...policy }
@@ -54,7 +63,16 @@ const publishedLogSchema = z.object({
 
 /**
  * 只投影已通过 owner/lease 条件提交的完整尝试快照；补写不调用 handler 或业务 Hook。
- * @example await repairExecutionLogs(occurrenceId)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const occurrenceId = 'a'.repeat(64)
+ * const result = await repairExecutionLogs(occurrenceId)
+ * if (!result.success) return result
+ * // 成功仅表示已发布终态的日志投影已确认，未调用 handler。
+ * return result.data
+ * ```
  */
 export function repairExecutionLogs(id: string): Promise<HaiResult<void>> {
   const operation = projectExecutionLogs(id)
@@ -98,24 +116,60 @@ async function projectExecutionLogs(id: string): Promise<HaiResult<void>> {
   }
 }
 
-/** 配置共享执行仓库和续租周期。@example configureExecution(repo, nodeId, 300_000) */
+/**
+ * 配置共享执行仓库和续租周期。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * // 关闭流程排空后解除旧执行仓库绑定。
+ * configureExecution(null)
+ * ```
+ */
 export function configureExecution(repo: SchedulerExecutionRepository | null, nodeId = '', leaseMs = 300_000): void {
   currentExecutionRepo = repo
   currentNodeId = nodeId
   currentLeaseMs = leaseMs
 }
 
-/** 指定共享任务定义仓库。@example setTaskRepository(repo) */
+/**
+ * 指定共享任务定义仓库。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * // init/close 装配共享仓库；null 只供关闭解除绑定。
+ * setTaskRepository(null)
+ * ```
+ */
 export function setTaskRepository(repo: SchedulerTaskRepository | null): void {
   currentTaskRepo = repo
 }
 
-/** 检查本实例计时器状态。@example isTimerRunning() */
+/**
+ * 检查本实例计时器状态。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const wasRunning = isTimerRunning()
+ * if (wasRunning) stopTimer()
+ * ```
+ */
 export function isTimerRunning(): boolean {
   return tickTimer !== null
 }
 
-/** 完全排空执行链后重置实例状态。@example resetRunner() */
+/**
+ * 完全排空执行链后重置实例状态。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * await drainRunner()
+ * resetRunner()
+ * ```
+ */
 export function resetRunner(): void {
   runningTasks.clear()
   stopTimer()
@@ -139,7 +193,16 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-/** 停止领取并等待取消链退出；取消不表示已撤销外部副作用。@example await drainRunner() */
+/**
+ * 停止领取并等待取消链退出；取消不表示已撤销外部副作用。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * // signal 取消不会抹除未知外部效果；等待执行与补写释放当前实例依赖。
+ * await drainRunner()
+ * ```
+ */
 export async function drainRunner(): Promise<void> {
   stopTimer()
   for (const controller of activeRuns.values())
@@ -205,7 +268,19 @@ function scheduleDueTasks(databaseNow: number): void {
 
 /**
  * cron/manual/recovery 共用唯一任务串行槽与 occurrence 领取协议。
- * @example await runTask(task, minute, { type: 'scheduled', source: null })
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * const log = await runTask(task, undefined, { type: 'manual', source: 'console' }, { idempotencyKey: 'report-2026-10-23' })
+ * // 业务成功仍可能等待日志补写；unknown 交可信核对，不能换键重试。
+ * if (log.persistence.status === 'pending' && log.occurrenceId) {
+ *   const repaired = await repairExecutionLogs(log.occurrenceId)
+ *   if (!repaired.success) return repaired
+ * }
+ * return log
+ * ```
  */
 export function runTask(task: TaskDefinition, minuteTimestamp?: number, trigger: TaskTriggerInfo = { type: 'manual', source: null }, options?: TriggerTaskInput, recovery?: StoredExecution): Promise<TaskExecutionLog> {
   const controller = new AbortController()
@@ -371,13 +446,32 @@ async function runTaskExecution(task: TaskDefinition, minute: number | undefined
   }
 }
 
-/** 启动本实例扫描器，任务正确性不依赖扫描器时间槽。@example startTimer(1000) */
+/**
+ * 启动本节点扫描器；每轮从 DB 时间选定分钟，租约授权仍由最终 SQL 原子条件决定。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * // 生命周期已绑定任务、执行和日志仓库后才启动扫描。
+ * startTimer(1000)
+ * stopTimer()
+ * ```
+ */
 export function startTimer(tickInterval: number): void {
   lastTickMinute = -1
   tickTimer = setInterval(tick, tickInterval)
 }
 
-/** 停止新领取，已经开始的任务由 drainRunner 处理。@example stopTimer() */
+/**
+ * 停止新领取，已经开始的任务由 drainRunner 处理。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * stopTimer()
+ * await drainRunner()
+ * ```
+ */
 export function stopTimer(): void {
   if (tickTimer)
     clearInterval(tickTimer)

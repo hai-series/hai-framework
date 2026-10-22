@@ -20,6 +20,17 @@ const logger = core.logger.child({ module: 'scheduler', scope: 'log-repository' 
 
 const SCHEDULER_LOG_TABLE = 'hai_scheduler_logs'
 
+/**
+ * 内部持久日志行；UUID 是幂等主键，完整 payload 使用 JSON 保存而不截断结果。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function persistedRow(payload: TaskExecutionLog): LogRow {
+ *   return { id: payload.id, occurrenceId: payload.occurrenceId, taskId: payload.taskId, taskName: payload.taskName, taskType: payload.taskType, triggerType: payload.triggerType, triggerSource: payload.triggerSource, status: payload.status, payload, startedAt: payload.startedAt, finishedAt: payload.finishedAt, duration: payload.duration }
+ * }
+ * ```
+ */
 interface LogRow {
   id: string
   occurrenceId?: string
@@ -35,6 +46,20 @@ interface LogRow {
   duration: number
 }
 
+/**
+ * 内部日志投影仓库；固定 UUID 与完整内容比对处理提交后回执丢失，不能因日志失败重跑业务。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function inspect(db: ReldbFunctions) {
+ *   const repository = new SchedulerLogRepository(db)
+ *   const logs = await repository.queryLogs({ taskId: 'daily-report', pagination: { page: 1, pageSize: 20 } })
+ *   if (!logs.success) return logs
+ *   return logs.data.items
+ * }
+ * ```
+ */
 export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
   constructor(db: ReldbFunctions) {
     super(db, {

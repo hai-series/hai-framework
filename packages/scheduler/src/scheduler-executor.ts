@@ -104,7 +104,18 @@ function createExecutionLog(
   return log
 }
 
-/** 构造本地中断观测；不代表已确认业务终态。@example await createInterruptedTaskLog(task, trigger, reason, 'hook', start, end) */
+/**
+ * 构造本地中断观测；不代表已确认业务终态。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * const now = Date.now()
+ * const log = await createInterruptedTaskLog(task, { type: 'manual', source: 'console' }, 'Stopped by host', 'hook', now, now)
+ * // 这只是观测，persistence 为 unconfirmed，不能补写成已提交业务成功。
+ * ```
+ */
 export async function createInterruptedTaskLog(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
@@ -116,6 +127,17 @@ export async function createInterruptedTaskLog(
   return createExecutionLog(task, trigger, taskType, 'interrupted', startedAt, finishedAt, null, reason)
 }
 
+/**
+ * 生成中断观测并调用开始/中断回调；不领取执行、不调用业务处理器、不发布共享终态。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * const log = await interruptTask(task, { type: 'manual', source: 'console' }, 'Stopped by host', {})
+ * const interrupted = log.status === 'interrupted'
+ * ```
+ */
 export async function interruptTask(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
@@ -143,6 +165,19 @@ export async function interruptTask(
   return interruptedLog
 }
 
+/**
+ * 在可终止工作线程中执行受信任 JS；编译、执行和取消异常转换为 HaiResult。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { ...{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }, handler: { kind: 'js', code: '(context) => context.params.batch', timeout: 1000 } }
+ * const result = await executeJsTask(task, { task, taskId: task.id, params: { batch: '2026-10' }, trigger: { type: 'manual', source: null } })
+ * if (!result.success) return result
+ * const serialized = result.data
+ * return serialized
+ * ```
+ */
 export async function executeJsTask(
   task: TaskDefinition,
   context: SchedulerTaskContext,
@@ -175,6 +210,19 @@ export async function executeJsTask(
   }
 }
 
+/**
+ * 执行 API 请求并有界读取完整响应；超时覆盖响应体，context 中的持久身份传给接收端去重。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { ...{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }, handler: { kind: 'api', url: 'https://example.com/health', timeout: 1000, maxResponseBytes: 4096 } }
+ * const result = await executeApiTask(task, { task, taskId: task.id, params: {}, trigger: { type: 'manual', source: null } })
+ * if (!result.success) return result
+ * const body = result.data
+ * return body
+ * ```
+ */
 export async function executeApiTask(
   task: TaskDefinition,
   context: SchedulerTaskContext,
@@ -303,6 +351,21 @@ async function executeHookTask(
   }
 }
 
+/**
+ * 执行一次 API/JS/Hook 尝试并返回本地日志；共享 owner 和最终提交由 runner 负责，未知副作用不据此自动重放。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * const log = await executeTask(task, { type: 'manual', source: 'console' }, { onTaskExecute: ({ context, signal }) => {
+ *   signal.throwIfAborted()
+ *   return { taskId: context.taskId }
+ * } })
+ * // executeTask 只生成尝试日志；runner 另以有效 owner/DB deadline 确认终态。
+ * const observedStatus = log.status
+ * ```
+ */
 export async function executeTask(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,

@@ -13,7 +13,20 @@ import { HaiSchedulerError } from '../scheduler-types.js'
 
 const TABLE = 'hai_scheduler_executions'
 
-/** 内部持久执行记录；owner 不对运维查询输出。@example const rows = await repository.expired() */
+/**
+ * 内部持久执行记录；owner 不对运维查询输出。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function inspect(repository: SchedulerExecutionRepository) {
+ *   const result = await repository.expired()
+ *   if (!result.success) return result
+ *   const records: StoredExecution[] = result.data
+ *   return records.map(executionEntry)
+ * }
+ * ```
+ */
 export interface StoredExecution {
   /** 全局递增的数据库序号。 */
   sequence: number
@@ -51,12 +64,33 @@ export interface StoredExecution {
   createdAt: number
 }
 
-/** 稳定 occurrence 包含 taskId，避免不同任务的相同业务键冲突。@example executionId(task.id, 'scheduled', String(minute)) */
+/**
+ * 稳定 occurrence 包含 taskId，避免不同任务的相同业务键冲突。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const scheduledId = executionId('daily-report', 'scheduled', String(Math.floor(1792705800000 / 60000)))
+ * const manualId = executionId('daily-report', 'manual', 'report-2026-10-23')
+ * ```
+ */
 export function executionId(taskId: string, type: string, key: string): string {
   return createHash('sha256').update(JSON.stringify([taskId, type, key])).digest('hex')
 }
 
-/** 公共状态投影只保留运维元数据。@example executionEntry(record) */
+/**
+ * 公共状态投影只保留运维元数据。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function read(repository: SchedulerExecutionRepository, id: string) {
+ *   const found = await repository.byOccurrence(id)
+ *   if (!found.success) return found
+ *   return found.data ? executionEntry(found.data) : null
+ * }
+ * ```
+ */
 export function executionEntry(row: StoredExecution): SchedulerExecutionEntry {
   return { occurrenceId: row.occurrenceId, taskId: row.taskId, status: row.status, sequence: row.sequence, attemptCount: row.attemptCount, updatedAt: row.updatedAt, logPersistence: row.logPersistence }
 }
@@ -68,7 +102,21 @@ function failed(cause?: unknown) {
 
 /**
  * 执行仓库；active_task 唯一列直到已确认的终态才释放，覆盖 cron/manual/跨分钟。
- * @example const repository = new SchedulerExecutionRepository(reldb)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function claimOnce(db: ReldbFunctions) {
+ *   const repository = new SchedulerExecutionRepository(db)
+ *   const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ *   const id = executionId(task.id, 'manual', 'report-2026-10-23')
+ *   const claimed = await repository.claim(task, id, { type: 'manual', source: null }, 'node-report', 60000)
+ *   if (!claimed.success || !claimed.data) return claimed
+ *   const begun = await repository.begin(claimed.data, 60000)
+ *   if (!begun.success) return begun
+ *   return executionEntry(claimed.data)
+ * }
+ * ```
  */
 export class SchedulerExecutionRepository extends BaseReldbCrudRepository<StoredExecution> {
   constructor(db: ReldbFunctions) {

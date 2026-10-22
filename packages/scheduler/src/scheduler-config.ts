@@ -16,10 +16,12 @@ import { z } from 'zod'
  *
  * @example
  * ```ts
- * const config = SchedulerConfigSchema.parse({
- *   enableDb: true,
- *   tickInterval: 1000,
- * })
+ * import { SchedulerConfigSchema } from '@h-ai/scheduler'
+ *
+ * const parsed = SchedulerConfigSchema.safeParse({ enableDb: true, tickInterval: 1000, leaseMs: 300000 })
+ * if (parsed.success) {
+ *   const renewalPeriod = Math.floor(parsed.data.leaseMs / 3)
+ * }
  * ```
  */
 export const SchedulerConfigSchema = z.object({
@@ -37,20 +39,73 @@ export const SchedulerConfigSchema = z.object({
   retentionDays: z.number().int().min(1).optional(),
 })
 
-/** 手动触发边界，重复使用同一幂等键会命中同一个执行记录。@example TriggerTaskSchema.parse({ idempotencyKey: 'billing-2026-10' }) */
+/**
+ * 手动触发边界，重复使用同一幂等键会命中同一个执行记录。
+ *
+ * @example
+ * ```ts
+ * import { TriggerTaskSchema } from '@h-ai/scheduler'
+ *
+ * const parsed = TriggerTaskSchema.safeParse({ source: 'billing-console', idempotencyKey: 'billing-2026-10' })
+ * if (parsed.success) {
+ *   const sameOccurrenceKey = parsed.data.idempotencyKey
+ * }
+ * ```
+ */
 export const TriggerTaskSchema = z.object({
   source: z.string().max(255).optional(),
   idempotencyKey: z.string().min(1).max(128).optional(),
 })
 
-/** 可信服务端人工核对结果；必须先停止旧 runner，不能将未知执行直接重排。@example ExecutionResolutionSchema.parse({ status: 'discarded', expectedUpdatedAt: Date.now() }) */
+/**
+ * 可信服务端人工核对结果；必须先停止旧 runner，不能将未知执行直接重排。
+ *
+ * @example
+ * ```ts
+ * import { ExecutionResolutionSchema, scheduler } from '@h-ai/scheduler'
+ *
+ * // 可信运维流程已停止旧 runner 并核对实际外部结果。
+ * const pending = await scheduler.execution.listUnknown({ limit: 10 })
+ * if (!pending.success) throw new Error(pending.error.message)
+ * const entry = pending.data[0]
+ * if (entry) {
+ *   const resolution = ExecutionResolutionSchema.parse({ status: 'discarded', expectedUpdatedAt: entry.updatedAt })
+ *   const resolved = await scheduler.execution.resolveUnknown(entry.occurrenceId, resolution)
+ *   if (!resolved.success) throw new Error(resolved.error.message)
+ * }
+ * ```
+ */
 export const ExecutionResolutionSchema = z.object({
   status: z.enum(['success', 'discarded']),
   expectedUpdatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1),
 })
 
-/** 调度器配置类型 */
+/**
+ * 调度器配置类型
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerConfig } from '@h-ai/scheduler'
+ * import { SchedulerConfigSchema } from '@h-ai/scheduler'
+ *
+ * const config: SchedulerConfig = SchedulerConfigSchema.parse({ leaseMs: 60000 })
+ * const renewalInterval = config.leaseMs / 3
+ * ```
+ */
 export type SchedulerConfig = z.infer<typeof SchedulerConfigSchema>
 
-/** 调度器配置输入类型 */
+/**
+ * 调度器配置输入类型
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerConfigInput } from '@h-ai/scheduler'
+ * import { scheduler } from '@h-ai/scheduler'
+ *
+ * // 宿主已成功初始化共享 reldb。
+ * const config: SchedulerConfigInput = { leaseMs: 60000, retentionDays: 30 }
+ * const initialized = await scheduler.init(config)
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * ```
+ */
 export type SchedulerConfigInput = z.input<typeof SchedulerConfigSchema>

@@ -70,6 +70,38 @@ function normalizeTriggerInput(options?: TriggerTaskInput): { type: 'manual', so
   }
 }
 
+/**
+ * 定时任务公共入口；先初始化共享 RelDB，再注册/触发/启动；关闭会排空任务和日志修复，宿主最后关闭数据库。
+ *
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * import { reldb } from '@h-ai/reldb'
+ * import { scheduler } from '@h-ai/scheduler'
+ *
+ * // 本地开发示例；生产使用所有节点共同连接的 PostgreSQL/MySQL。
+ * const database = await reldb.init({ type: 'sqlite', database: ':memory:' })
+ * if (!database.success) throw new Error(database.error.message)
+ * try {
+ *   const initialized = await scheduler.init({ hooks: { onTaskExecute: ({ context }) => ({ taskId: context.taskId }) } })
+ *   if (!initialized.success) throw new Error(initialized.error.message)
+ *   const registered = await scheduler.register({ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' })
+ *   if (!registered.success) throw new Error(registered.error.message)
+ *   const executed = await scheduler.trigger('daily-report', { idempotencyKey: 'report-2026-10-23' })
+ *   if (!executed.success) throw new Error(executed.error.message)
+ *   // 业务 status 与 persistence 分开判断；pending 只补日志，不重跑业务。
+ *   const status = executed.data.status
+ *   const persistence = executed.data.persistence.status
+ * } finally {
+ *   await scheduler.close()
+ *   const closed = await reldb.close()
+ *   if (!closed.success) {
+ *     core.logger.error('Database cleanup failed', { errorCode: closed.error.code })
+ *     process.exitCode = 1
+ *   }
+ * }
+ * ```
+ */
 export const scheduler: SchedulerFunctions = {
   execution: {
     async get(id) {

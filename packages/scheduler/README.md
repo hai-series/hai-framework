@@ -263,3 +263,5 @@ pnpm --filter @h-ai/scheduler test
 Apache-2.0
 
 共享租约的首次领取、开始、续租、完成、过期扫描和隔离，均在同一条数据库 SQL 内计算或核验存储端时间。PostgreSQL 使用 clock_timestamp、MySQL 使用 SYSDATE(3)、SQLite 使用存储端 now；先查时间再写入不能替代最终 deadline 条件。cron 也读取 DB 时间选定分钟 occurrence 并匹配表达式，省略 timezone 时固定 UTC；显式 IANA 时区仅改变 cron 的墙上时间解释，节点 TZ 不改变身份或匹配。节点 Date.now 仅用于耗时诊断，不授权 owner；两个节点相差数小时也不会提前接管或延长过期凭据。行锁等待结束后仍须通过期限条件，失租结果不能投影成功日志。数据库服务自身的时间须由运维保持可信；未知外部副作用仍须核对，不能自动重放。
+
+声明旁的 JSDoc 示例从真实公开入口导入，内部仓库、runner、编译器和 cron 工具则明确标注“模块内部上下文”，不代表可从包根导入。示例区分 HaiResult、显式取消异常和 close 的 Promise<void>，并检查业务 status 与日志 persistence；补写日志不会重做业务。维护时运行 `node scripts/check-module-jsdoc.mjs --package scheduler`，同时校验声明覆盖与真实类型；示例编译不代替共享数据库/独立进程验收。

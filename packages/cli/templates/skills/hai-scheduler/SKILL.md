@@ -24,6 +24,8 @@ description: "注册或排查 cron/API/JS/Hook 任务、手工触发、执行日
 5. 验证手动/定时、跨周期租约、手动/cron竞争及暂停接管、失败重试、取消与定义更新；共享租约必须在 SQL 内用存储时钟原子检查，cron 分钟身份也取 DB 时间且默认 UTC；补上节点 ±2h、不同 TZ 与真实行锁跨期限的多进程用例。
 6. 检查业务 status 与独立 persistence.status；pending 通过 execution.listLogFailures/repairLog 从已发布 journal 补写，不能重新触发业务。失租 unconfirmed 不能作为成功证据；验证丢回执和双节点并发补写。
 
+7. 核对 JSDoc 示例的真实入口与返回值：HaiResult 先分支，close 直接 await；标注“模块内部上下文”的仓库/runner 不属于根 API。示例编译与共享 DB/进程行为验证分别记录。
+
 ## 按需参考
 
 按本次操作读取对应小节；以已安装版本的公开类型核验签名，示例中的业务变量由应用提供。

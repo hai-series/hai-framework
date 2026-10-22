@@ -39,9 +39,30 @@ const JsTaskConfigSchema = z.object({
   code: z.string().min(1),
   timeout: z.number().int().positive().optional(),
 })
-/** 注册与持久读取共用的处理器校验，拒绝未开始发送就可以识别的非法配置。 */
+/**
+ * 注册与持久读取共用的处理器校验，拒绝未开始发送就可以识别的非法配置。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const parsed = TaskHandlerConfigSchema.safeParse({ kind: 'api', url: 'https://example.com/health', timeout: 1000, maxResponseBytes: 4096 })
+ * if (!parsed.success) throw new Error('Invalid handler configuration')
+ * const kind = parsed.data.kind
+ * ```
+ */
 export const TaskHandlerConfigSchema = z.discriminatedUnion('kind', [ApiTaskConfigSchema, JsTaskConfigSchema])
 
+/**
+ * 内部任务持久行；JSON 字段读取后重新校验，null 时区表示默认 UTC。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const now = new Date()
+ * const row: TaskRow = { id: 1, taskId: 'daily-report', taskName: '每日报表', description: null, cron: '0 2 * * *', timezone: null, enabled: true, idempotent: false, deleteAfterRun: false, retry: null, params: {}, handler: null, createdAt: now, updatedAt: now }
+ * // timezone null 由任务装载流程恢复为 UTC 默认；JSON 字段仍须运行时校验。
+ * ```
+ */
 interface TaskRow {
   id: number
   taskId: string
@@ -59,6 +80,20 @@ interface TaskRow {
   updatedAt: Date
 }
 
+/**
+ * 共享任务定义仓库；成功落库后才发布本地投影，一次性任务删除核对实际执行的定义快照。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function save(db: ReldbFunctions) {
+ *   const repository = new SchedulerTaskRepository(db)
+ *   const result = await repository.saveTask({ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' })
+ *   if (!result.success) return result
+ *   return repository.loadTasks()
+ * }
+ * ```
+ */
 export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
   constructor(db: ReldbFunctions) {
     super(db, {
