@@ -126,7 +126,7 @@ const app = serv.createApp({
 - Each frame is validated with Zod and a strict state machine: transcription accepts audio, synthesis accepts text, `start`/`done` occur once, and `segmentId` is unique per session. Input, pending-message, and send buffers are bounded; limits or cancellation close with domain errors and abort upstream work.
 - Tunables: `preAuthTimeoutMs` (5000), `maxPendingMessages` (256), `maxSendBufferBytes` (8 MiB), and `maxMessageBytes` / `maxBufferedBytes` / `maxTextBytes` / `maxSessionMs`.
 - `onSessionEnd` runs at most once after success, failure, or disconnection to release concurrency slots.
-- Browser `createAIClient({ audio: { url, getTicket } })` puts only one-time `ticket` in the WebSocket URL. `getTicket(request)` receives the operation summary (`operation` / `model`) for a tightly bound ticket. Never pass ordinary IAM access tokens.
+- Browser `createAudioClient({ url, getTicket })` puts only one-time `ticket` in the WebSocket URL. `getTicket(request)` receives the operation summary (`operation` / `model`) for a tightly bound ticket. Never pass ordinary IAM access tokens.
 
 #### Transport encryption (shared with `@h-ai/crypto`)
 

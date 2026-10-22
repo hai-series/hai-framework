@@ -371,7 +371,7 @@ if (!playable.success)
 - 流式方法是 `AsyncIterable`，迭代期间的连接/协议/上游错误会终止迭代（抛出），不返回 `HaiResult`。
 - `segment_started` 携带服务端解析 Provider 后的真实输出参数（`format` / `sampleRate?` / `channels?`）；播放器据此解码，不按请求参数猜测格式。
 - 平台不支持的输入方式（如 OpenAI/MiMo 的持续音频输入）会抛 `AUDIO_UNSUPPORTED_INPUT`，不伪装成实时。
-- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`@h-ai/ai/client` 通过 `audio.getTicket` 建连，不把 IAM access token 放入 URL。浏览器客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`）；服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
+- 浏览器/移动端经 `@h-ai/serv` 统一语音 WebSocket 入口访问；客户端用已登录 HTTP 请求获取短期一次性 ticket，`createAudioClient({ url, getTicket })` 通过独立配置的 `getTicket` 建连，不把 IAM access token 放入 URL。浏览器客户端区分正常结束、取消（`AUDIO_CANCELLED`）与 `end` 前异常断连（`AUDIO_CONNECTION_FAILED`）；服务端 error 帧保留领域错误码，`synthesize` 不返回未完成的部分音频。
 
 ### 本地 CPU 模型服务
 
@@ -434,4 +434,5 @@ export const POST = kit.handler(async ({ request }) => {
 - 文件解析/OCR 失败按 `HaiAIError.FILE_*` 返回，不抛业务异常。
 - A2A 认证失败返回 `A2A_AUTH_FAILED`；`callRemoteAgent` 只依赖 `ai.init()`，无需注册本地 executor。远端 URL 仅接受 HTTP(S) 且不得内嵌凭据，应用仍须配置 origin 白名单与出口网络策略。不要记录 token、apiKey、私钥、完整 headers 或带 query 的 URL。
 - A2A 入站日志保存并重验租约后才执行业务，出站日志在已有有界队列内完成后才发布；日志失败产生 failed/interrupted Task，不重放相同 receipt。日志不是交付回执，按 requiresEffectReconciliation 核对可能已执行的效果；listMessages 失败为安全的 A2A_LIST_MESSAGES_FAILED（984）。
+- A2A 任务与事件只有共享 journal 一套权威，不装配旧 TaskStore；push notification 配置和 authenticated extended card RPC 返回 SDK 标准不支持/未配置错误。应用通过公开 executor 接口接入，不导入内部 handler/Store 装配类型。
 - Context 的 flush 会报告本节点后台提取异常及失败 HaiResult；同轮并发调用共享一次报告，返回即确认该批，后续只观察新任务。save/reset(waitForMemoryTasks)/consolidate 传播失败并停止后续写入，pendingMemoryTasks=0 不代表成功，不自动重试未知副作用。

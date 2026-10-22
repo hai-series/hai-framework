@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08，共 75 个，另有 21 个按模块拆分的 JSDoc 任务，共 96 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 47/47；P2 34/49（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 47/47；P2 35/49（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -840,7 +840,8 @@
 
 ### AI-07 · P2 · 移除无消费且协议失配的遗留 AI 客户端
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：全仓确认旧AIClient/A2AClient、路径适配器与重复不完整SSE helper仅自测/示例消费后移除，保留独立createAudioClient及真实协议；浏览器不导出Node ai单例，HTTP使用api-client typed契约。同步AI/serv三语README、双AI skill/reference/guide、LLMS、公开API清单与删除声明附件；API清单仅移除本任务11符号，TaskStore/audit工厂留STYLE02。4文件29测试通过含真实TCP/标准WebSocket4场景与删除出口负例，严格测试类型、AI类型/fresh ESM+DTS、21 Node导入/29完整浏览器bundle与DTS正负例、lint/API/skills通过。未验证物理麦克风或商业语音供应商，真实LLM SSE解码另在AI08修正；全量回归按用户要求在全部任务实施后执行。
 - **位置**：`packages/ai/src/client/ai-client.ts`、`ai-a2a-client.ts` 及浏览器入口。
 - **证据与影响**：旧SSE helper不完整处理多行事件、尾部缓冲及取消；旧AIApiAdapter声称兼容api-client，但后者现仅公开typed oRPC，无post/stream接口。遗留客户端目前仅由本包自测和示例消费，端点与serv契约不同。
 - **修正内容**：确认全仓消费者后删除无实际业务消费的遗留客户端和重复SSE helper，保留真实AudioClient及其必要协议；同步导出、测试、文档、skills与API门禁。

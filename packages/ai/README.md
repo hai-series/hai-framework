@@ -24,7 +24,27 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 - `ai.audio`：语音识别（ASR）与语音合成（TTS），支持完整与流式调用，覆盖 OpenAI / MiMo / Qwen / 豆包平台。
 - `ai.image`：文生图，覆盖 OpenAI GPT Image、Google Gemini Image / Nano Banana、Qwen-Image 2.0/3.0、Seedream 4.x/5.x 与 Pollinations 免费额度模型。
 - `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
-- `@h-ai/ai/client`：前端轻量客户端（配合 API 服务）。
+- `@h-ai/ai/client`：独立浏览器 Audio WebSocket 客户端。
+
+`@h-ai/ai/client` 仅提供 `createAudioClient({ url, getTicket })` 与 Audio 客户端类型。HTTP 使用 `@h-ai/api-client` 的 typed 领域方法；默认聊天补全非流式，流与 A2A 使用应用自行绑定的 contract。旧字符串路径客户端和重复 SSE helper 已删除，浏览器不导出 Node 单例 `ai`。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+const ready = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
+if (!ready.success)
+  throw new Error(ready.error.message)
+try {
+  const response = await apiClient.ai.chats.createCompletion({ messages: [{ role: 'user', content: '你好' }] })
+  if (!response.success)
+    throw new Error(response.error.message)
+  const reply = response.data.choices[0]?.message.content
+}
+finally {
+  await apiClient.close()
+}
+```
+
 - `AIStoreProvider`：统一存储抽象；生产要求 `stateScope: 'shared'`，内置实现须先初始化 PostgreSQL/MySQL 与网络 vecdb。开发/显式测试无数据库时使用临时 Store。
 
 更完整的方法清单、错误码与长示例见 [REFERENCE.md](./REFERENCE.md)。

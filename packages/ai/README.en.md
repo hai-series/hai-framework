@@ -24,7 +24,10 @@ AI capabilities through a unified `ai` service: LLM chat, image generation, tool
 - `ai.audio`: ASR and TTS with full and streaming calls for OpenAI / MiMo / Qwen / Doubao.
 - `ai.image`: OpenAI GPT Image, Google Gemini Image / Nano Banana, Qwen-Image 2.0/3.0, Seedream 4.x/5.x, and Pollinations free-quota models.
 - `ai.a2a`: Agent-to-Agent request handling and remote calls.
-- `@h-ai/ai/client`: lightweight frontend client for API services.
+- `@h-ai/ai/client`: standalone browser Audio WebSocket client.
+
+`@h-ai/ai/client` exports only `createAudioClient({ url, getTicket })` and Audio client types. Use typed domain methods from `@h-ai/api-client` for HTTP. Default chat completions are non-streaming; bind application contracts for streaming and A2A. Redundant string-path clients and SSE helpers have been removed. The browser does not export the Node `ai` singleton.
+
 - `AIStoreProvider`: storage abstraction. Production requires `stateScope: 'shared'`; the built-in provider needs initialized PostgreSQL/MySQL and a network vecdb. Development/explicit tests may use a temporary store.
 
 For the full method list, error codes, and longer examples, see [REFERENCE.md (Chinese)](./REFERENCE.md).

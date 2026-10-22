@@ -24,7 +24,10 @@
 - `ai.audio`：通常・ストリーミングの音声認識（ASR）と音声合成（TTS）。OpenAI / MiMo / Qwen / Doubao に対応。
 - `ai.image`：OpenAI GPT Image、Google Gemini Image / Nano Banana、Qwen-Image 2.0/3.0、Seedream 4.x/5.x、Pollinations の無料枠モデルによる画像生成。
 - `ai.a2a`：Agent-to-Agent のリクエスト処理とリモート呼び出し。
-- `@h-ai/ai/client`：API サービスと連携する軽量フロントエンドクライアント。
+- `@h-ai/ai/client`：独立したブラウザー Audio WebSocket クライアント。
+
+`@h-ai/ai/client` は `createAudioClient({ url, getTicket })` と Audio クライアント型のみを公開します。HTTP は `@h-ai/api-client` の型付きドメインメソッドを使います。既定のチャット補完は非ストリーミングで、ストリームと A2A はアプリ独自の contract に結び付けます。文字列パスの旧クライアントと重複 SSE helper は削除しました。ブラウザーには Node の `ai` シングルトンを公開しません。
+
 - `AIStoreProvider`：ストレージ抽象。本番は `stateScope: 'shared'` が必須で、組み込み実装は PostgreSQL/MySQL とネットワーク vecdb の初期化を必要とします。開発・明示的テストでは一時 Store を利用できます。
 
 詳しいメソッド一覧・エラーコード・長い例は [REFERENCE.md（中国語）](./REFERENCE.md) を参照してください。

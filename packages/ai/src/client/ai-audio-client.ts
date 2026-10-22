@@ -386,14 +386,3 @@ function isSynthesisTextSegment(value: SynthesisStreamRequest['text']): value is
 async function* singleSegment(segment: SynthesisTextSegment): AsyncIterable<SynthesisTextSegment> {
   yield segment
 }
-
-/** 未配置语音入口时的占位实现（调用即抛出，提示需配置 audio） */
-export function createUnconfiguredAudioClient(): AudioClientOperations {
-  const message = 'Audio client not configured. Provide `audio` in createAIClient() config.'
-  return {
-    transcribe: () => Promise.reject(new Error(message)),
-    async* transcribeStream() { throw new Error(message) },
-    synthesize: () => Promise.reject(new Error(message)),
-    async* synthesizeStream() { throw new Error(message) },
-  }
-}

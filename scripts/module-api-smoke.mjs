@@ -47,6 +47,11 @@ function typeSmoke(directories, suffix, browser, generated) {
       source.push('// @ts-expect-error Internal binding is not a public import', `import type { ${name} } from '${manifest.name}'`)
     if (directory === 'ai')
       source.push('import type { AIStoreProvider, AskOptions, ChatHistoryOptions, ChatRecord } from \'@h-ai/ai\'', 'export type Extensions = [AIStoreProvider, AskOptions, ChatHistoryOptions, ChatRecord]')
+    if (directory === 'ai') {
+      source.push('import { createAudioClient } from \'@h-ai/ai/client\'', 'export type AudioFactory = typeof createAudioClient')
+      for (const name of ['AIClient', 'AIClientConfig', 'AIApiAdapter', 'A2AClientOperations', 'StreamProgress', 'StreamOptions', 'createAIClient', 'createA2AClient', 'parseSSE', 'collectStreamContent', 'createUnconfiguredAudioClient'])
+        source.push('// @ts-expect-error Removed redundant legacy client binding', `import type { ${name} } from '@h-ai/ai/client'`)
+    }
     if (directory === 'payment')
       source.push('import type { PaymentProvider } from \'@h-ai/payment\'', 'export type Extension = PaymentProvider')
     if (directory === 'kit') {

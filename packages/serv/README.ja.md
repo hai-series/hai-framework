@@ -126,7 +126,7 @@ const app = serv.createApp({
 - 各フレームを Zod と厳密な状態機械で検証します。認識は音声、合成はテキストのみ、`start`/`done` は各 1 回、`segmentId` はセッション内で一意です。入力・滞留メッセージ・送信バッファを制限し、超過・キャンセル時はドメインエラーで閉じて上流も中止します。
 - 調整項目：`preAuthTimeoutMs`（既定 5000）、`maxPendingMessages`（256）、`maxSendBufferBytes`（8 MiB）、`maxMessageBytes` / `maxBufferedBytes` / `maxTextBytes` / `maxSessionMs`。
 - `onSessionEnd` は成功・失敗・切断後に最大 1 回呼び、同時実行枠の解放に使用。
-- ブラウザーの `createAIClient({ audio: { url, getTicket } })` は単回 `ticket` のみを URL に付けます。`getTicket(request)` は `operation` / `model` の概要から今回の操作専用 ticket を発行できます。通常の IAM access token は渡さないでください。
+- ブラウザーの `createAudioClient({ url, getTicket })` は単回 `ticket` のみを URL に付けます。`getTicket(request)` は `operation` / `model` の概要から今回の操作専用 ticket を発行できます。通常の IAM access token は渡さないでください。
 
 #### 通信暗号化（`@h-ai/crypto` と共通）
 

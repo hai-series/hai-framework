@@ -272,7 +272,7 @@ A2A journal、context 归属和消息表在 `ai.init()` 阶段初始化；可信
 
 ## 浏览器端
 
-浏览器端通过 `@h-ai/api-client` 或自定义 endpoint 访问服务端 AI 能力。使用 serv 默认 AI feature 时，objectId 从可信认证 session 绑定，客户端可省略；其它主体默认拒绝，跨用户管理必须由服务端显式 authorizeObject。聊天/消息写入、历史、会话和记忆均按该主体隔离，sessionId 是主体内的会话标识。`ai.stream` 可在浏览器直接用于解析服务端流式 chunk。
+浏览器端通过 `@h-ai/api-client` 或自定义 endpoint 访问服务端 AI 能力。使用 serv 默认 AI feature 时，objectId 从可信认证 session 绑定，客户端可省略；其它主体默认拒绝，跨用户管理必须由服务端显式 authorizeObject。聊天/消息写入、历史、会话和记忆均按该主体隔离，sessionId 是主体内的会话标识。浏览器入口不提供 Node 端 `ai` 实例或 `ai.stream`；流式与 A2A 使用应用实际声明的独立契约。
 
 默认 `chats.createCompletion`（`POST /ai/chats/completions`）只返回非流式 `HaiResult<AiChatCompletionData>`，未声明字段（含 `stream: true/false`）在 HTTP 边界拒绝。function `tools` 保留完整嵌套 JSON Schema 与 `strict`，`tool_choice` 支持 auto/none/required/本次定义的函数名。消息按角色校验并保留 name、用户图片、助手 tool_calls；工具结果必须带非空 tool_call_id。应用自行授权执行工具后，将助手调用与对应结果回传。需要流式时定义与 `ai.llm.chatStream()` 匹配的独立 endpoint，不把 stream 填入默认补全请求。
 
@@ -281,6 +281,6 @@ const response = await apiClient.ai.chats.createCompletion({ messages })
 const memories = await apiClient.ai.memories.recall({ query: '偏好', topK: 5 })
 ```
 
-语音：`@h-ai/ai/client` 的 `createAIClient({ api, audio: { url, getTicket } })` 提供 `client.audio.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket(request)` 接收本次操作摘要（`operation` / `model`），应通过已登录 HTTP 请求签发与本次操作严格绑定的短期、一次性 Audio ticket（推荐 `iam.ticket.issue({ grant })`）；IAM access token 不进入 WebSocket URL。
+语音：`@h-ai/ai/client` 的 `createAudioClient({ url, getTicket })` 提供 `client.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket(request)` 接收本次操作摘要（`operation` / `model`），应通过已登录 HTTP 请求签发与本次操作严格绑定的短期、一次性 Audio ticket（推荐 `iam.ticket.issue({ grant })`）；IAM access token 不进入 WebSocket URL。
 
 Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。

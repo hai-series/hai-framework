@@ -49,12 +49,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "A2AClientOperations",
-              "kind": "type",
-              "declaration": "A2AClientOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "A2AConfig",
               "kind": "type",
               "declaration": "A2AConfig",
@@ -142,24 +136,6 @@
               "name": "AgentSkill",
               "kind": "type",
               "declaration": "AgentSkill",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIApiAdapter",
-              "kind": "type",
-              "declaration": "AIApiAdapter",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIClient",
-              "kind": "type",
-              "declaration": "AIClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIClientConfig",
-              "kind": "type",
-              "declaration": "AIClientConfig",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -535,12 +511,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "collectStreamContent",
-              "kind": "value",
-              "declaration": "collectStreamContent",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CommitTurnInput",
               "kind": "type",
               "declaration": "CommitTurnInput",
@@ -655,27 +625,9 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "createA2AClient",
-              "kind": "value",
-              "declaration": "createA2AClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createAIClient",
-              "kind": "value",
-              "declaration": "createAIClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createUnconfiguredAudioClient",
-              "kind": "value",
-              "declaration": "createUnconfiguredAudioClient",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -1369,12 +1321,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "parseSSE",
-              "kind": "value",
-              "declaration": "parseSSE",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "Part",
               "kind": "type",
               "declaration": "Part",
@@ -1693,21 +1639,9 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "StreamOptions",
-              "kind": "type",
-              "declaration": "StreamOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "StreamProcessor",
               "kind": "type",
               "declaration": "StreamProcessor",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "StreamProgress",
-              "kind": "type",
-              "declaration": "StreamProgress",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -2064,12 +1998,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "A2AClientOperations",
-              "kind": "type",
-              "declaration": "A2AClientOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "A2AConfig",
               "kind": "type",
               "declaration": "A2AConfig",
@@ -2157,24 +2085,6 @@
               "name": "AgentSkill",
               "kind": "type",
               "declaration": "AgentSkill",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIApiAdapter",
-              "kind": "type",
-              "declaration": "AIApiAdapter",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIClient",
-              "kind": "type",
-              "declaration": "AIClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIClientConfig",
-              "kind": "type",
-              "declaration": "AIClientConfig",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -2550,12 +2460,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "collectStreamContent",
-              "kind": "value",
-              "declaration": "collectStreamContent",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CommitTurnInput",
               "kind": "type",
               "declaration": "CommitTurnInput",
@@ -2670,27 +2574,9 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "createA2AClient",
-              "kind": "value",
-              "declaration": "createA2AClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createAIClient",
-              "kind": "value",
-              "declaration": "createAIClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createUnconfiguredAudioClient",
-              "kind": "value",
-              "declaration": "createUnconfiguredAudioClient",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -3384,12 +3270,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "parseSSE",
-              "kind": "value",
-              "declaration": "parseSSE",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "Part",
               "kind": "type",
               "declaration": "Part",
@@ -3708,21 +3588,9 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "StreamOptions",
-              "kind": "type",
-              "declaration": "StreamOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "StreamProcessor",
               "kind": "type",
               "declaration": "StreamProcessor",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "StreamProgress",
-              "kind": "type",
-              "declaration": "StreamProgress",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -9958,30 +9826,6 @@
           "exists": true,
           "symbols": [
             {
-              "name": "A2AClientOperations",
-              "kind": "type",
-              "declaration": "A2AClientOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIApiAdapter",
-              "kind": "type",
-              "declaration": "AIApiAdapter",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIClient",
-              "kind": "type",
-              "declaration": "AIClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIClientConfig",
-              "kind": "type",
-              "declaration": "AIClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "AudioClientConfig",
               "kind": "type",
               "declaration": "AudioClientConfig",
@@ -10000,52 +9844,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "collectStreamContent",
-              "kind": "value",
-              "declaration": "collectStreamContent",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createA2AClient",
-              "kind": "value",
-              "declaration": "createA2AClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createAIClient",
-              "kind": "value",
-              "declaration": "createAIClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createUnconfiguredAudioClient",
-              "kind": "value",
-              "declaration": "createUnconfiguredAudioClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "parseSSE",
-              "kind": "value",
-              "declaration": "parseSSE",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "StreamOptions",
-              "kind": "type",
-              "declaration": "StreamOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "StreamProgress",
-              "kind": "type",
-              "declaration": "StreamProgress",
-              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -10058,30 +9860,6 @@
           "exists": true,
           "symbols": [
             {
-              "name": "A2AClientOperations",
-              "kind": "type",
-              "declaration": "A2AClientOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIApiAdapter",
-              "kind": "type",
-              "declaration": "AIApiAdapter",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIClient",
-              "kind": "type",
-              "declaration": "AIClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AIClientConfig",
-              "kind": "type",
-              "declaration": "AIClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "AudioClientConfig",
               "kind": "type",
               "declaration": "AudioClientConfig",
@@ -10100,52 +9878,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "collectStreamContent",
-              "kind": "value",
-              "declaration": "collectStreamContent",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createA2AClient",
-              "kind": "value",
-              "declaration": "createA2AClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createAIClient",
-              "kind": "value",
-              "declaration": "createAIClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "createAudioClient",
               "kind": "value",
               "declaration": "createAudioClient",
               "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "createUnconfiguredAudioClient",
-              "kind": "value",
-              "declaration": "createUnconfiguredAudioClient",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "parseSSE",
-              "kind": "value",
-              "declaration": "parseSSE",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
-              "name": "StreamOptions",
-              "kind": "type",
-              "declaration": "StreamOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "StreamProgress",
-              "kind": "type",
-              "declaration": "StreamProgress",
-              "declarationKind": "InterfaceDeclaration"
             }
           ]
         }
