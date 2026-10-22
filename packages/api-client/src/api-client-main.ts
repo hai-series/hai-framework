@@ -19,9 +19,14 @@
  * ```ts
  * import { apiClient } from '@h-ai/api-client'
  *
- * await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
- * const me = await apiClient.iam.auth.currentUser()
- * await apiClient.close()
+ * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const me = await apiClient.iam.auth.currentUser()
+ *   if (!me.success) throw new Error(me.error.message)
+ *   const userId = me.data.id
+ * }
+ * finally { await apiClient.close() }
  * ```
  *
  * @example 自定义 contract
@@ -30,8 +35,13 @@
  * import { apiContract } from '@h-ai/api-contract'
  *
  * const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
- * await client.init({ baseUrl: 'https://api.example.com/api/v1' })
- * const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
+ * const initialized = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await client.iam.auth.publicConfig()
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * finally { await client.close() }
  * ```
  *
  * @module api-client-main
@@ -85,36 +95,26 @@ const tokenStorage = {
 // ─── 工厂 ─────────────────────────────────────────────────────────────────────
 
 /**
- * 根据 oRPC contract 创建 typed API client。
+ * 按真实 oRPC 契约创建独立 typed client；公开调用入口为 apiClient.create(contract)。
+ * init 返回 HaiResult，成功后才调用 procedure；已初始化实例必须先 close 再换配置。
+ * procedure 将传输异常转换为 HaiResult；auth.setTokens/clear 的安全存储失败仍会拒绝 Promise。
+ * SSR 应为每个请求创建客户端和内存存储；不共享默认单例中的用户凭据。
+ * @param contract - 已定义的嵌套 oRPC contract；顶层命名不能与生命周期成员冲突。
+ * @returns 生命周期、认证辅助操作与契约推导出的 procedure 代理。
  *
- * 返回对象同时具备：
- * - **生命周期能力**：`init` / `close` / `config` / `isInitialized` / `auth`
- * - **contract procedure**：按 contract 嵌套结构调用，例如 `client.iam.auth.login(input)`
- *
- * @example 基础用法
+ * @example
  * ```ts
  * import { apiClient } from '@h-ai/api-client'
  * import { apiContract } from '@h-ai/api-contract'
- *
  * const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
- * await client.init({ baseUrl: 'https://api.example.com/api/v1' })
- *
- * const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
- * if (result.success) {
- *   await client.auth.setTokens(result.data.tokens)
+ * const initialized = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: { storage: apiClient.tokenStorage.memory() }, timeout: 10000 })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await client.iam.auth.currentUser()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   const userId = result.data.id
  * }
- *
- * await client.close()
- * ```
- *
- * @example 自定义 fetch / 超时
- * ```ts
- * const client = apiClient.create(contract)
- * await client.init({
- *   baseUrl: 'https://api.example.com/api/v1',
- *   fetch: customFetch,
- *   timeout: 10_000,
- * })
+ * finally { await client.close() }
  * ```
  */
 export function createApiClient<const TContract extends AnyContractRouter>(
@@ -202,34 +202,8 @@ export function createApiClient<const TContract extends AnyContractRouter>(
     auth,
   }
 
-  /**
-   * 顶层 Proxy：把“一个对象同时扮演两种角色”的需求揉到一起。
-   *
-   * 这个 client 既要像一个普通服务对象，暴露生命周期方法：
-   * - `client.init()`
-   * - `client.close()`
-   * - `client.config`
-   * - `client.isInitialized`
-   * - `client.auth`
-   *
-   * 又要像一个按 contract 动态展开的 oRPC client，支持：
-   * - `client.iam.auth.login(input)`
-   * - `client.storage.object.put(input)`
-   * - `client.ai.chat.send(input)`
-   *
-   * 由于第二类 API 的层级结构是“运行时按属性链逐步访问”的，无法靠写死对象字面量覆盖所有路径，
-   * 所以这里使用 Proxy：
-   * - 先拦截顶层属性访问；
-   * - 如果访问的是生命周期字段，就直接返回 lifecycle 中的真实成员；
-   * - 否则把这个属性当成 contract 路径的第一段，继续交给 `createProcedureProxy()` 处理。
-   *
-   * 换句话说：
-   * - `client.init`      → 返回 lifecycle.init
-   * - `client.auth`      → 返回 lifecycle.auth
-   * - `client.iam`       → 返回一个新的嵌套 Proxy，继续等待 `.auth.login(...)`
-   *
-   * 注意：如果将来 contract 顶层字段和 lifecycle 字段重名，这里会“优先返回 lifecycle”。
-   */
+  // 生命周期成员优先，其余属性只记录真实契约路径，末端调用才交给 rawClient。
+  // 契约顶层不能与 init/close/config/isInitialized/auth 重名；此处不提供额外路由注册。
   return new Proxy({}, {
     get(_target, property) {
       // Proxy 的属性键不一定是 string，也可能是 Symbol（例如某些运行时内部探测）。
@@ -271,24 +245,58 @@ export function createApiClient<const TContract extends AnyContractRouter>(
  * ```ts
  * import { apiClient } from '@h-ai/api-client'
  *
- * await apiClient.init({
+ * const initialized = await apiClient.init({
  *   baseUrl: 'http://localhost:3000/api/v1',
  *   auth: { refreshPath: '/auth/refresh' },
  * })
- * const result = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
- * await apiClient.close()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await apiClient.iam.auth.currentUser()
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * finally { await apiClient.close() }
  * ```
  */
 const defaultApiContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
-/** `apiClient` 默认单例 + 工厂命名空间的统一对外类型。 */
+/**
+ * 默认 iam/storage/ai typed client 与 create、tokenStorage、createAuthActions 命名空间的交叉类型。
+ * 具体项目契约使用 apiClient.create 的返回类型，不给默认单例附加未知 procedure。
+ *
+ * @example
+ * ```ts
+ * import { apiClient, type DefaultApiClient } from '@h-ai/api-client'
+ * const client: DefaultApiClient = apiClient
+ * const initialized = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try { const actions = client.createAuthActions(client); const result = await actions.publicConfig(); if (!result.success) throw new Error(result.error.message) }
+ * finally { await client.close() }
+ * ```
+ */
 export type DefaultApiClient = ApiClient<typeof defaultApiContract> & {
   readonly create: typeof createApiClient
   readonly tokenStorage: typeof tokenStorage
   readonly createAuthActions: typeof createIamAuthActions
 }
 
-/** hai-framework API client 统一入口（默认单例 + `create` + `tokenStorage`）。 */
+/**
+ * API Client 公开入口：默认 iam/storage/ai 单例，以及独立实例、安全存储和认证动作工厂。
+ * 未启用 auth 时不注入或刷新 Token；浏览器 auth: {} 使用 httpOnly Cookie 方案。
+ * close 释放客户端运行状态/加密会话，不能替代服务端退出或 auth.clear。
+ *
+ * @example
+ * ```ts
+ * import { apiClient } from '@h-ai/api-client'
+ * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await apiClient.iam.auth.currentUser()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   const permissions = result.data.permissions
+ * }
+ * finally { await apiClient.close() }
+ * ```
+ */
 export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiClient<typeof defaultApiContract>, {
   get(target, property, receiver) {
     if (property === 'create')
@@ -304,11 +312,16 @@ export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiCli
 // ─── 内部：procedure 代理 ─────────────────────────────────────────────────────
 
 /**
- * 构造嵌套 procedure 代理。
+ * 构造只记录属性路径的内部代理，末端调用交给 callProcedure；不在访问属性时发送请求。
+ * @param state - 当前 rawClient，可在 close 后变为 null。
+ * @param path - 已访问的 contract 属性路径。
+ * @returns 动态代理；由契约公开类型约束调用路径，不对外承诺任意字符串 API。
  *
- * oRPC client 接口是任意层嵌套的属性 + 末端调用（如 `client.iam.auth.login(input)`）。
- * 这里用统一的 Proxy 透传所有路径，叶子节点（被 apply 时）映射到
- * `state.rawClient[a][b][c](input)` 并把错误标准化为 `HaiResult`。
+ * @example 模块内部上下文
+ * ```ts
+ * const proxy = createProcedureProxy({ rawClient: null }, ['iam'])
+ * // 直到 apply 才调用 callProcedure；未初始化返回失败 HaiResult。
+ * ```
  */
 function createProcedureProxy<TContract extends AnyContractRouter>(
   state: { rawClient: JsonifiedClient<ContractRouterClient<TContract>> | null },
@@ -326,6 +339,19 @@ function createProcedureProxy<TContract extends AnyContractRouter>(
   })
 }
 
+/**
+ * 解析真实 rawClient 中的 procedure 并调用，将调用异常映射为标准 HaiResult 失败。
+ * @param rawClient - 已构建的 oRPC client；缺省时返回 NOT_INITIALIZED。
+ * @param path - 契约层级路径。
+ * @param args - 原始 procedure 参数。
+ * @returns 原契约结果或客户端失败，不把失败改成成功。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const result = await callProcedure(null, ['iam', 'auth', 'currentUser'], [])
+ * // 实际得到 NOT_INITIALIZED；返回值为 unknown，外部类型来自真实契约。
+ * ```
+ */
 async function callProcedure(
   rawClient: unknown,
   path: string[],
@@ -357,7 +383,18 @@ async function callProcedure(
 
 // ─── 内部：构建 raw client 与 token manager ──────────────────────────────────
 
-/** 根据 `auth` 配置决定是否创建 TokenManager。 */
+/**
+ * 仅 auth 存在时创建 TokenManager；刷新沿用自定义头、客户端标识与同一加密 fetch。
+ * @param config - 已选定的客户端配置。
+ * @param transport - 可选已创建的加密会话。
+ * @returns 本实例管理器；没有 auth 时为 undefined，不自行启用认证。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const manager = buildTokenManager({ baseUrl: 'https://api.example.com/api/v1', auth: { storage: createMemoryTokenStorage() }, headers: { 'x-app-channel': 'web' } }, undefined)
+ * await manager?.clear()
+ * ```
+ */
 function buildTokenManager(config: ApiClientConfig, transport: TransportClient | undefined): TokenManager | undefined {
   if (!config.auth)
     return undefined
@@ -386,7 +423,18 @@ function buildTokenManager(config: ApiClientConfig, transport: TransportClient |
   return manager
 }
 
-/** 根据 `transport` 配置创建传输加密会话。 */
+/**
+ * 根据显式 transport 配置创建会话；首次 encryptedFetch 才进行实际密钥协商。
+ * @param config - 客户端配置及已初始化 crypto。
+ * @returns 新会话或 undefined；调用方在失败/close 时 destroy。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const session = buildTransportSession({ baseUrl: 'https://api.example.com/api/v1' })
+ * // 未配置 transport 时不产生会话；正常明文请求仍由实际 fetch 发送。
+ * session?.destroy()
+ * ```
+ */
 function buildTransportSession(config: ApiClientConfig): TransportClient | undefined {
   if (!config.transport)
     return undefined
@@ -397,7 +445,21 @@ function buildTransportSession(config: ApiClientConfig): TransportClient | undef
   return config.transport.crypto.transport.createClient({ keyExchangeUrl, fetch: baseFetch })
 }
 
-/** 构造 oRPC OpenAPILink + raw client。 */
+/**
+ * 以同一 contract 构造 OpenAPILink 与 JSON typed client，统一头组装、超时和认证重试。
+ * @param contract - 实际 procedure 契约。
+ * @param config - 目标地址与平台 fetch。
+ * @param tokenManager - 可选 Token 管理器。
+ * @param transport - 可选加密会话。
+ * @returns oRPC JSON client；模块外层代理将调用异常映射为失败 HaiResult。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const contract = apiContract.create({ iam: apiContract.iam })
+ * const raw = buildRawClient(contract, { baseUrl: 'https://api.example.com/api/v1' }, undefined, undefined)
+ * // 构造不发送请求；业务调用通过外层 ApiClient 代理。
+ * ```
+ */
 function buildRawClient<TContract extends AnyContractRouter>(
   contract: TContract,
   config: ApiClientConfig,
@@ -412,7 +474,18 @@ function buildRawClient<TContract extends AnyContractRouter>(
   return createORPCClient<JsonifiedClient<ContractRouterClient<TContract>>>(link)
 }
 
-/** 组装请求头：用户配置 + 客户端标识 + Bearer Token。 */
+/**
+ * 合并静态/动态配置头与客户端标识，读取可用 access token 后设置 Bearer 头。
+ * @param config - 用户请求头与客户端标识。
+ * @param tokenManager - 可选管理器；读取安全存储失败向上游传播。
+ * @returns 单次请求的头快照，不改变调用方配置对象。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const headers = await buildHeaders({ baseUrl: 'https://api.example.com/api/v1', clientName: 'orders-web', headers: () => ({ 'x-app-channel': 'web' }) }, undefined)
+ * const channel = headers['x-app-channel']
+ * ```
+ */
 async function buildHeaders(
   config: ApiClientConfig,
   tokenManager: TokenManager | undefined,
@@ -426,7 +499,23 @@ async function buildHeaders(
   }
 }
 
-/** HTTP / HaiResult 认证失效时自动 refresh 并重试一次。 */
+/**
+ * 发送前克隆一次性请求体；HTTP 401 或有效失败包络的 401 才尝试刷新并最多重试一次。
+ * 登录/注册/找回密码与 refresh 入口保留原始失败，不递归刷新；重试保留 body 并替换 Bearer 头。
+ * @param request - 尚未消费的 Request。
+ * @param init - oRPC 提供的重定向选项。
+ * @param config - 请求与刷新配置。
+ * @param tokenManager - 缺省时直接返回首次响应。
+ * @param transport - 刷新与重试共用的可选加密会话。
+ * @returns 最终 HTTP Response；不保证远端非幂等副作用没有发生。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const config: ApiClientConfig = { baseUrl: 'https://api.example.com/api/v1', fetch: async () => Response.json({ success: true, data: {} }) }
+ * const response = await fetchWithRefresh(new Request('https://api.example.com/api/v1/auth/me'), {}, config, undefined, undefined)
+ * const status = response.status
+ * ```
+ */
 async function fetchWithRefresh(
   request: Request,
   init: { redirect?: Request['redirect'] },
@@ -459,7 +548,19 @@ async function fetchWithRefresh(
   return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport)
 }
 
-/** serv 领域失败保留 HTTP 200；克隆响应读取元数据，原响应仍交给 oRPC 消费。 */
+/**
+ * 只从 HTTP 200 JSON 的有效失败 HaiResult 识别 httpStatus=401；克隆响应避免消费原正文。
+ * @param response - 原始 HTTP 响应。
+ * @returns 是否满足认证失效包络；非法 JSON/字段缺失留给原解析路径处理。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const response = Response.json({ success: false, error: { code: 'hai:iam:001', message: 'Session expired', httpStatus: 401 } })
+ * const unauthorized = await isUnauthorizedResult(response)
+ * const originalBody = await response.json()
+ * // 克隆检查没有消耗原响应正文。
+ * ```
+ */
 async function isUnauthorizedResult(response: Response): Promise<boolean> {
   if (response.status !== 200 || !response.headers.get('content-type')?.includes('application/json'))
     return false
@@ -479,7 +580,21 @@ async function isUnauthorizedResult(response: Response): Promise<boolean> {
   }
 }
 
-/** fetch + AbortController 超时控制（联动调用方原始 signal）。 */
+/**
+ * 把请求超时和调用方 signal 连接到本次 fetch；finally 清除本次超时计时器。
+ * @param request - 含调用方取消信号的 Request。
+ * @param init - oRPC 重定向设置。
+ * @param config - 超时与 fetch 配置。
+ * @param transport - 可选加密 fetch，优先于原始 fetch。
+ * @returns HTTP 响应；超时/取消异常由外层 procedure 映射，不能视为远端回滚。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const request = new Request('https://api.example.com/api/v1/auth/me')
+ * const response = await fetchWithTimeout(request, {}, { baseUrl: 'https://api.example.com/api/v1', timeout: 1000, fetch: async () => new Response(null, { status: 204 }) }, undefined)
+ * const status = response.status
+ * ```
+ */
 async function fetchWithTimeout(
   request: Request,
   init: { redirect?: Request['redirect'] },
@@ -510,7 +625,17 @@ async function fetchWithTimeout(
   }
 }
 
-/** ORPCError / AbortError / 其他异常 → 标准化 HaiResult 错误。 */
+/**
+ * 将 oRPC 状态、AbortError 与其它传输异常映射为稳定客户端错误；保留 oRPC code/status/data 详情。
+ * @param error - procedure 抛出的未知异常。
+ * @returns 失败 HaiResult，不包含虚构的成功数据。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const result = mapClientError(new DOMException('Request aborted', 'AbortError'))
+ * if (!result.success) { const code = result.error.code }
+ * ```
+ */
 function mapClientError(error: unknown) {
   if (error instanceof ORPCError) {
     // 保留 ORPCError 的原始 code / status / data，供上层区分具体业务异常（不仅是 HTTP 状态码）。
