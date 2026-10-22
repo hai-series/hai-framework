@@ -46,18 +46,6 @@ export interface EmbeddingResponse {
   }
 }
 
-// ─── Embedding Provider ───
-
-/**
- * Embedding Provider 接口
- *
- * 底层嵌入 API 适配层。
- */
-export interface EmbeddingProvider {
-  /** 生成向量嵌入 */
-  embed: (request: EmbeddingRequest) => Promise<HaiResult<EmbeddingResponse>>
-}
-
 // ─── Embedding 操作接口 ───
 
 /**

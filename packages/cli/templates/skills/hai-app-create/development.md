@@ -222,3 +222,5 @@ export function pageOffset(query: PageQuery): number {
 - 完成说明：实际复用能力与自定义缺口、修改路径、已执行命令/行为结果、同步的 contract/调用方/配置/i18n/文档、未验证项及原因。无需无关模块的“覆盖率”清单。
 
 `_core.yml` 只接受 name/version/env/defaultLocale 元数据与 logging；不提供 debug、全局ID设置、features或supportedLocales。业务开关放app.yml并用业务Schema校验；语言列表按实际翻译工程维护，日志用logging.level。core默认语言字段不会自动注册翻译。Logger导入保留LANG/LC_ALL/PYTHONIOENCODING，终端语言优先级不能被编码初始化覆盖。
+
+公开导入以安装版本的 package.json.exports 为准：只使用已声明且有真实产物的根/子路径，不导入 src/dist 或内部 Provider/Deps。条件入口可以只提供配置和类型；IAM 浏览器入口不含服务端 iam 对象。Svelte 默认组件和明确的 selective/type-only 导出均合法，不能为形式统一扩大公共 API。

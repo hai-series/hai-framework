@@ -9,7 +9,6 @@
  * - 目录操作接口（DirOperations）
  * - 签名 URL 操作接口（PresignOperations）
  * - 函数接口（StorageFunctions）
- * - Provider 接口（StorageProvider）
  * @module storage-types
  */
 
@@ -468,40 +467,5 @@ export interface StorageFunctions {
   readonly dir: DirOperations
 
   /** 签名 URL 操作接口（getUrl / putUrl / publicUrl） */
-  readonly presign: PresignOperations
-}
-
-// ─── Provider 接口 ───
-
-/**
- * 存储 Provider 接口
- *
- * 由各具体存储实现（S3、Local）实现此接口。
- */
-export interface StorageProvider {
-  /** Provider 名称标识（如 's3'、'local'） */
-  readonly name: string
-
-  /**
-   * 建立与存储服务的连接
-   *
-   * @param config - 经 Schema 校验后的完整配置
-   * @returns 连接结果
-   */
-  connect: (config: StorageConfig) => Promise<HaiResult<void>>
-
-  /** 关闭连接并释放资源 */
-  close: () => Promise<void>
-
-  /** 检查是否已连接 */
-  isConnected: () => boolean
-
-  /** 文件操作接口 */
-  readonly file: FileOperations
-
-  /** 目录操作接口 */
-  readonly dir: DirOperations
-
-  /** 签名 URL 操作接口 */
   readonly presign: PresignOperations
 }

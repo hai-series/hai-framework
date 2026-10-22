@@ -909,6 +909,8 @@ pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
 
+组件子路径只开放 package.exports 明确列出的 barrel，例如 `@h-ai/ui/components/primitives/index`；不开放任意组件实现或内部存储辅助函数。宿主剪贴板注册仍是公开能力。
+
 ## 许可证
 
 Apache-2.0

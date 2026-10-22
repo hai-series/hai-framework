@@ -659,28 +659,3 @@ export interface ReldbFunctions {
    */
   close: () => Promise<HaiResult<void>>
 }
-
-// ─── Provider 接口 ───
-
-/**
- * 数据库 Provider 接口
- *
- * 内部使用，定义各数据库驱动需要实现的接口。
- * 每个数据库类型（SQLite、PostgreSQL、MySQL）都有对应的 Provider 实现。
- */
-export interface ReldbProvider {
-  /** DDL 操作（表结构管理） */
-  readonly ddl: DdlOperations
-  /** SQL 操作（数据查询和修改） */
-  readonly sql: DmlOperations
-  /** CRUD 管理器 */
-  readonly crud: CrudManager
-  /** 事务管理器 */
-  readonly tx: TxManager
-  /** 连接数据库 */
-  connect: (config: ReldbConfig) => Promise<HaiResult<void>>
-  /** 关闭连接 */
-  close: () => Promise<HaiResult<void>>
-  /** 是否已连接 */
-  isConnected: () => boolean
-}

@@ -65,7 +65,13 @@ export interface XxFunctions {
   readonly zz: ZzOperations
 }
 
-// 仅无子功能 + 需多后端时
+
+```
+
+内置 Provider 另放在实现边界：
+
+```ts
+// providers/xx-provider-types.ts —— 内置后端契约，不由公共 index 转发
 export interface XxProvider {
   readonly name: string
   connect: (config: XxConfig) => Promise<HaiResult<void>>
@@ -74,6 +80,8 @@ export interface XxProvider {
   readonly zz: ZzOperations
 }
 ```
+
+若公共 API 支持调用方注册实现（如 PaymentProvider）或注入 Store（如 AIStoreProvider），其接口是扩展契约，仍从真实公开入口导出。入口可选择性转发；禁止为满足形式统一而暴露全部内部函数。构建后使用 generate:api/check:api/test:api 核对 package.exports 与声明产物。
 
 ## R3 生命周期与 Provider 范本
 
@@ -288,11 +296,18 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 ```jsonc
 {
   "exports": {
-    ".": { "types": "...", "browser": "...", "import": "...", "default": "..." },
+    ".": {
+      "browser": { "types": "./dist/browser.d.ts", "default": "./dist/browser.js" },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
     "./client": { "types": "...", "import": "..." }
   }
 }
 ```
+
+browser 分支必须在 Node types 之前，TypeScript customConditions=browser 才会选择对应声明。构建后的 d.ts 必须与实际 JS 同时消费验证；若声明打包器丢弃 type-only 星号转发语义，改为明确的类型列表，不把服务器实例/函数/构造器写成浏览器可调用能力。
 
 ### `tsconfig.json`
 

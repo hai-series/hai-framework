@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 20/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 21/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -674,7 +674,8 @@
 
 ### STYLE-01 · P2 · 统一公开入口和内部导出规则
 
-- [ ] 待修正（按本次要求补强；范围：cross）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：建立21包真实exports/构建声明清单、生成检查及实际消费冒烟；内置Provider/Deps迁回实现边界，保留真实Payment/AI扩展点；修复IAM缺失browser产物、Kit不存在vite入口、UI任意内部通配路径，Node/browser分别提供真实声明并显式类型转发以避免打包器伪造运行时出口。21包实际导入、Node/Browser公开d.ts正负消费与29浏览器完整打包通过，7包及最新AI/Kit fresh build、Reach52例/测试类型、inventory3例、lint/skills及5调用方类型检查通过；admin由DOC01另验证通过；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[.agents/instructions/module-conventions.md:9](../.agents/instructions/module-conventions.md#L9)；[packages/kit/src/index.ts:13](../packages/kit/src/index.ts#L13)；[packages/cache/src/cache-types.ts:398](../packages/cache/src/cache-types.ts#L398)；[packages/storage/src/storage-types.ts:424](../packages/storage/src/storage-types.ts#L424)；[packages/payment/src/payment-types.ts:150](../packages/payment/src/payment-types.ts#L150)。
 - **证据与影响**：规范中的 barrel 导出要求与 kit 显式导出、UI Svelte 默认组件导出存在不同实践；多个内部 Provider 类型放在公共 types 并随入口暴露。不能为形式统一把所有内部函数公开。
 - **修正内容**：明确包入口/子路径/内部文件三层规则，给 Svelte 和 client/server 隔离保留必要例外；内部 Provider 类型迁回真实实现边界，删除无消费者的公开符号和纯转发层。

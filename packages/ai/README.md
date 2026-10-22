@@ -64,40 +64,37 @@ import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
 // 开发/测试使用本地后端；生产改为共享 PostgreSQL/MySQL 与网络 vecdb。
+const failures: unknown[] = []
 try {
   const database = await reldb.init({ type: 'sqlite', database: './ai.db' })
   if (!database.success)
-    return database
-  try {
-    const vectors = await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
-    if (!vectors.success)
-      return vectors
-    try {
-      const init = await ai.init({
-        llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY },
-      })
-      if (!init.success)
-        return init
-      const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好！' }] })
-      if (!result.success)
-        return result
-      const reply = result.data.choices[0]?.message.content ?? ''
-    }
-    finally {
-      await ai.close()
-    }
-  }
-  finally {
-    const closed = await vecdb.close()
-    if (!closed.success)
-      throw new Error(closed.error.message)
-  }
+    throw new Error(database.error.message)
+  const vectors = await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
+  if (!vectors.success)
+    throw new Error(vectors.error.message)
+  const initialized = await ai.init({
+    llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY },
+  })
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+  const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'Hello!' }] })
+  if (!result.success)
+    throw new Error(result.error.message)
+  const reply = result.data.choices[0]?.message.content ?? ''
+}
+catch (error) {
+  failures.push(error)
 }
 finally {
-  const closed = await reldb.close()
-  if (!closed.success)
-    throw new Error(closed.error.message)
+  await ai.close()
+  for (const service of [vecdb, reldb]) {
+    const closed = await service.close()
+    if (!closed.success)
+      failures.push(new Error(closed.error.message))
+  }
 }
+if (failures.length)
+  throw new AggregateError(failures, 'AI operation or cleanup failed')
 ```
 
 MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
@@ -425,7 +422,8 @@ const manager = ai.context.createManager({
 if (manager.success) {
   const reply = await manager.data.chat('你好')
   const saved = await manager.data.save()
-  if (!saved.success) return saved
+  if (!saved.success)
+    return saved
   // reset 生命周期完整：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词
   await manager.data.reset() // 可传 { preserveSystemPrompt, cancelActiveTurn, waitForMemoryTasks }
 }
@@ -443,7 +441,8 @@ if (manager.success) {
 
 ```ts
 const created = ai.context.createManager({ scope: { objectId: 'user-001', sessionId: 'sess-001' }, turnCommit: 'manual' })
-if (!created.success) return created
+if (!created.success)
+  return created
 const m = created.data
 const controller = new AbortController()
 
@@ -625,6 +624,8 @@ pnpm --filter @h-ai/ai lint
 pnpm --filter @h-ai/ai test
 pnpm --filter @h-ai/ai build
 ```
+
+公共扩展通过 AIStoreProvider 注入 Store；内置 LLM Provider/工厂依赖与 Context 内部依赖不属于公开 API。模型接入使用配置，历史查询、AskOptions 和 ChatRecord 保持公开。
 
 ## 许可证
 

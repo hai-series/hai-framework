@@ -17,7 +17,8 @@ const closed = await cache.close()
 if (!closed.success) {
   // 障害への対処後に一度再試行し、再失敗はアプリへ報告します。
   const retried = await cache.close()
-  if (!retried.success) throw new Error(retried.error.message)
+  if (!retried.success)
+    throw new Error(retried.error.message)
 }
 ```
 
@@ -66,7 +67,8 @@ if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
 }
 
 const closeResult = await cache.close()
-if (!closeResult.success) throw new Error(closeResult.error.message)
+if (!closeResult.success)
+  throw new Error(closeResult.error.message)
 ```
 
 `cache.config` は**機密情報をマスクした設定スナップショット**を返します。Redis の `password` / `url` などの認証情報は自動処理されるため、元の秘密情報を書き戻す用途には使わないでください。
@@ -119,7 +121,6 @@ await cache.init({
 - `cache.set_`：集合（`sadd/smembers/sismember/...`）。
 - `cache.zset`：ソート済み集合（`zadd/zrange/zrevrange/...`）。
 - `cache.lock`：分散ロック（`acquire/release/isLocked/extend`）。
-- `CacheProvider`：高度な統合や独自バックエンド用の公開 Provider 契約。
 
 ### Cluster の複数キー操作と走査
 
@@ -182,6 +183,8 @@ pnpm --filter @h-ai/cache test
 ## 本番の共有状態
 
 本番は Redis（Cluster を含む）が必須です。memory は開発・明示的テスト用であり、Redis 障害時もローカルへフォールバックしません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
+
+`cache.init(config)` は組み込み memory/redis を選択します。Provider は内部契約であり、独自バックエンドの登録 API はありません。
 
 ## ライセンス
 

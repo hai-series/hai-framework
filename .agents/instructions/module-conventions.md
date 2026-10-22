@@ -18,9 +18,13 @@
 
 ## 导出规则
 
-- `index.ts` 仅做 `export *` 聚合，禁止选择性导出/重命名
-- 在源文件中控制导出边界
-- 任何 API 变更必须同步 README / Skill 模板 / 测试
+- 分清三层：`package.json.exports` 声明可导入的公开入口；入口文件选择公共符号；普通源文件的 `export` 只供模块内部跨文件复用，不自动成为包 API。
+- 入口保持转发，不放业务逻辑；仅在源文件全部导出都属于公共契约时使用 `export *`。允许选择性导出、`export type`、明确别名和 Svelte 组件默认导出的转发，保留 client/server 条件入口。CLI 命令启动入口按命令契约处理。
+- 内置 Provider、Repository、工厂依赖等类型放在实际实现边界，不经公共 barrel 转出。公开签名需要的扩展接口必须保留，例如 `PaymentProvider` 和 `AIStoreProvider`；不能只因仓库内调用少就删掉真实扩展能力。
+- browser 分支先于 Node types，分别声明真实 types/default；声明打包后再次检查 type-only 语义，必要时改为明确类型列表，不能让不存在的运行时函数出现在可调用声明中。
+- `exports` 的每个条件/子路径必须有真实构建文件与配套声明；不声明空实现或将目录通配当作任意内部文件的公开许可。
+- 变更后构建受影响包，执行 `pnpm generate:api`、`pnpm check:api` 与 `pnpm test:api`，核对 [公开 API 清单](../../docs/module-api-inventory.md)。浏览器入口完整打包不得引入 Node 内建模块，Svelte 组件由真实编译器验证。
+- 任何 API 变更必须同步实现、消费者、README、Skill 模板、LLMS 与测试。
 
 ## 错误处理
 
@@ -63,7 +67,7 @@ function register(tool: Tool): HaiResult<void> {
 
 - 初始化统一 `<模块>.init(config)` / `<模块>.close()`
 - `init()` 使用 `initInProgress` 防并发；并发调用返回 HaiResult 错误，`try/finally` 释放标记，禁止抛异常或泄漏连接
-- Node 与 Browser 的 API 形态必须一致，浏览器端不暴露独立 init 函数
+- 同一项跨端能力保持一致调用形态；Node 专属服务不伪造浏览器实现。浏览器纯配置/类型入口可显式收窄导出，文档须说明条件差异，不暴露独立 init 函数。
 - 使用 NotInitializedKit 模式防止未初始化调用：
   - `core.module.createNotInitializedKit(HaiXxError.NOT_INITIALIZED, () => xxM('xx_notInitialized'))`
   - 每个子操作接口都有对应 `notInitialized.proxy<T>()` 占位
@@ -91,7 +95,7 @@ function register(tool: Tool): HaiResult<void> {
 ## 命名一致性
 
 - 类名、文件名、变量名三者一致
-- 接口名与实现工厂对应（例如 `StorageProvider` ↔ `createS3StorageProvider`）
+- 接口名与实现工厂对应（例如 `StorageProvider` ↔ `createS3Provider`）
 - 重命名必须同步更新：引用点、测试、注释、文档
 - 禁止含糊命名（如 data / info / handle / process）
 - 服务对象：小写模块名（`export const storage`）

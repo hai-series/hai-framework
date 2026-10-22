@@ -7,7 +7,8 @@
 
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { LocalConfig, StorageConfig } from '../storage-config.js'
-import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteResult, StorageDeleteSummary, StorageProvider } from '../storage-types.js'
+import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteResult, StorageDeleteSummary } from '../storage-types.js'
+import type { StorageProvider } from './storage-provider-types.js'
 import { Buffer } from 'node:buffer'
 import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'

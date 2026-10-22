@@ -3,7 +3,8 @@
  * @module reach-delivery
  */
 import type { HaiResult } from '@h-ai/core'
-import type { ReachMessage, ReachProvider, SendResult } from './reach-types.js'
+import type { ReachProvider } from './providers/reach-provider-types.js'
+import type { ReachMessage, SendResult } from './reach-types.js'
 import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
 import { core, err } from '@h-ai/core'
 import { reachM } from './reach-i18n.js'

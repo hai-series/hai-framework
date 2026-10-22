@@ -6,8 +6,9 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ReachProvider } from './providers/reach-provider-types.js'
 import type { DndConfig, ReachQueueConfig } from './reach-config.js'
-import type { ReachMessage, ReachProvider, ReachTemplateRegistry, SendResult } from './reach-types.js'
+import type { ReachMessage, ReachTemplateRegistry, SendResult } from './reach-types.js'
 
 import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 import { cache } from '@h-ai/cache'

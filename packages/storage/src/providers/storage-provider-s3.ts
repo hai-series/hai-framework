@@ -9,7 +9,8 @@
 import type { S3ClientConfig } from '@aws-sdk/client-s3'
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
-import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary, StorageProvider } from '../storage-types.js'
+import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary } from '../storage-types.js'
+import type { StorageProvider } from './storage-provider-types.js'
 import { Buffer } from 'node:buffer'
 import { Readable } from 'node:stream'
 import {

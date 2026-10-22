@@ -7,7 +7,8 @@
  * @module ai-llm-provider-router
  */
 
-import type { AILLMFunctionsDeps, ChatCompletionChunk, ChatCompletionRequest, LLMProvider } from '../ai-llm-types.js'
+import type { ChatCompletionChunk, ChatCompletionRequest } from '../ai-llm-types.js'
+import type { AILLMFunctionsDeps, LLMProvider } from './ai-llm-provider-types.js'
 
 import { resolveModelApi } from '../../ai-config.js'
 import { createAnthropicProvider } from './ai-llm-provider-anthropic.js'

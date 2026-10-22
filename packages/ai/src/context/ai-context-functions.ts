@@ -11,9 +11,12 @@ import type { HaiResult } from '@h-ai/core'
 import type { CompressConfig } from '../ai-config.js'
 
 import type { CompressOperations } from '../compress/ai-compress-types.js'
-import type { ChatMessage } from '../llm/ai-llm-types.js'
+import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
+import type { MemoryOperations } from '../memory/ai-memory-types.js'
+import type { RagOperations } from '../rag/ai-rag-types.js'
+import type { ReasoningOperations } from '../reasoning/ai-reasoning-types.js'
 import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
-import type { SummaryResult } from '../summary/ai-summary-types.js'
+import type { SummaryOperations, SummaryResult } from '../summary/ai-summary-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
 import type { ContextGeneration, PersistedContextState } from './ai-context-state.js'
 
@@ -23,7 +26,6 @@ import type {
   ConsolidateResult,
   ContextChatOptions,
   ContextChatResult,
-  ContextDeps,
   ContextManager,
   ContextManagerOptions,
   ContextOperations,
@@ -38,6 +40,35 @@ import { createStreamProcessor } from '../llm/ai-llm-stream.js'
 import { sessionStoreKey } from '../store/ai-store-key.js'
 import { updateSessionInfo } from '../store/ai-store-session.js'
 import { ContextStateError, createContextStateAccess } from './ai-context-state.js'
+
+// ─── Context 子功能可选依赖 ───
+
+/**
+ * Context 子功能可选依赖
+ *
+ * 传入后 ContextManager 可提供 chat/chatStream 等高层编排能力。
+ * 各依赖按需传入，未传入的能力不可用。
+ * @internal
+ * @example
+ * ```ts
+ * // 模块内部上下文：复用已经构造的 LLM，Context 不另建模型连接。
+ * function bindLlm(llm: LLMOperations): ContextDeps {
+ *   return { llm }
+ * }
+ * ```
+ */
+interface ContextDeps {
+  /** LLM 操作（chat/chatStream 必需） */
+  llm?: LLMOperations
+  /** Memory 操作（记忆注入/提取需要） */
+  memory?: MemoryOperations
+  /** RAG 操作（检索增强生成需要） */
+  rag?: RagOperations
+  /** Reasoning 操作（推理引擎需要） */
+  reasoning?: ReasoningOperations
+  /** Summary 操作（会话固化 consolidate 需要） */
+  summary?: SummaryOperations
+}
 
 const logger = core.logger.child({ module: 'ai', scope: 'context' })
 

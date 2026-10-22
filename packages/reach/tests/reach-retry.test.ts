@@ -1,4 +1,4 @@
-import type { ReachProvider } from '../src/reach-types.js'
+import type { ReachProvider } from '../src/providers/reach-provider-types.js'
 import type { SendLogRepository, StoredSendLog } from '../src/repositories/reach-repository-send-log.js'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'

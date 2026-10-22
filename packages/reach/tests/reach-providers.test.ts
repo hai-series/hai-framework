@@ -6,8 +6,9 @@
  * 覆盖所有 Provider 的初始化、发送、关闭等核心逻辑。
  */
 
+import type { ReachProvider } from '../src/providers/reach-provider-types.js'
 import type { ProviderConfig } from '../src/reach-config.js'
-import type { ReachMessage, ReachProvider } from '../src/reach-types.js'
+import type { ReachMessage } from '../src/reach-types.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAliyunSmsProvider } from '../src/providers/reach-provider-aliyun-sms.js'
 import { createApiProvider } from '../src/providers/reach-provider-api.js'

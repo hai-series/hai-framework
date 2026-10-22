@@ -6,7 +6,7 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
-import type { ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
+import type { ReachConfig, ReachConfigInput } from './reach-config.js'
 import { core } from '@h-ai/core'
 
 // ─── 错误定义（照 @h-ai/core 范式） ───
@@ -333,26 +333,4 @@ export interface ReachFunctions extends SendOperations {
   readonly template: ReachTemplateRegistry
   /** 关闭连接并释放资源 */
   close: () => Promise<void>
-}
-
-// ─── Provider 接口 ───
-
-/**
- * 触达 Provider 接口
- *
- * 由具体实现（console / smtp / aliyun-sms / api）提供。
- */
-export interface ReachProvider {
-  /** Provider 名称 */
-  readonly name: string
-  /** 是否具备接收端幂等保障；true 时必须按 message.idempotencyKey 对副作用持久化去重。 */
-  readonly supportsIdempotency: boolean
-  /** 连接/初始化 Provider */
-  connect: (config: ProviderConfig) => Promise<HaiResult<void>>
-  /** 发送消息 */
-  send: (message: ReachMessage) => Promise<HaiResult<SendResult>>
-  /** 关闭连接 */
-  close: () => Promise<void>
-  /** 是否已连接 */
-  isConnected: () => boolean
 }

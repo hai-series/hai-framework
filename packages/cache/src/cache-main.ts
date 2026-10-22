@@ -7,7 +7,8 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { CacheConfig, CacheConfigInput } from './cache-config.js'
-import type { CacheFunctions, CacheProvider, HashOperations, KvOperations, ListOperations, LockOperations, SetOperations, ZSetOperations } from './cache-types.js'
+import type { CacheFunctions, HashOperations, KvOperations, ListOperations, LockOperations, SetOperations, ZSetOperations } from './cache-types.js'
+import type { CacheProvider } from './providers/cache-provider-types.js'
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 

@@ -7,8 +7,9 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
+import type { ReachProvider } from './providers/reach-provider-types.js'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
-import type { ReachFunctions, ReachMessage, ReachProvider, ReachQueueEntry, ReachTemplateRegistry, SendResult } from './reach-types.js'
+import type { ReachFunctions, ReachMessage, ReachQueueEntry, ReachTemplateRegistry, SendResult } from './reach-types.js'
 import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
 import process from 'node:process'

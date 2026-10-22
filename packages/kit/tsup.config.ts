@@ -9,7 +9,6 @@ export default defineConfig({
     'src/client/index.ts',
     'src/modules/crypto/index.ts',
     'src/modules/a2a/index.ts',
-    'src/vite/index.ts',
     'src/adapter/index.ts',
   ],
   external: ['@sveltejs/kit', '@sveltejs/adapter-node', '@sveltejs/adapter-static', '@h-ai/core', '@h-ai/crypto', '@h-ai/api-contract', 'zod', '$app/navigation', '$app/state'],

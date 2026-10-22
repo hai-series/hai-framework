@@ -11,7 +11,8 @@
 
 import type { HaiErrorDef, HaiResult } from '@h-ai/core'
 
-import type { AILLMFunctionsDeps, ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, LLMProvider, TempModelConfig, ToolCall, ToolDefinition } from '../ai-llm-types.js'
+import type { ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, TempModelConfig, ToolCall, ToolDefinition } from '../ai-llm-types.js'
+import type { AILLMFunctionsDeps, LLMProvider } from './ai-llm-provider-types.js'
 
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'

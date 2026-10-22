@@ -32,7 +32,10 @@
     "format": "eslint --fix .",
     "prepare": "husky || true",
     "generate:env": "node scripts/generate-env-catalog.mjs && node scripts/generate-app-env.mjs",
-    "check:env": "node scripts/generate-env-catalog.mjs --check && node scripts/generate-app-env.mjs --check"
+    "check:env": "node scripts/generate-env-catalog.mjs --check && node scripts/generate-app-env.mjs --check",
+    "generate:api": "node scripts/module-api-inventory.mjs",
+    "check:api": "node scripts/module-api-inventory.mjs --check",
+    "test:api": "node scripts/module-api-smoke.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",

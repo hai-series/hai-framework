@@ -234,14 +234,14 @@ iam.init()
 
 #### 数据存储分布
 
-| 数据类型                                          | 存储位置                           | 说明                                                                                                                          |
-| ------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 用户、角色、权限、关联关系、API Key               | DB（基础 5 张，可选 API Key 1 张） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
-| 会话（accessToken → Session）                     | 缓存                               | 有 TTL，滑动续期可选                                                                                                          |
-| Refresh 消费状态 | 缓存的用户分区 | 与 session/索引在单键 CAS 中提交 |
-| OTP 验证码                                        | 缓存                               | 有 TTL + 尝试次数限制                                                                                                         |
-| 密码重置令牌 | 用户数据库行 | SM3 摘要、数据库有效期、尝试次数及最终条件提交 |
-| API Key                                           | DB                                 | `hai_iam_api_keys`，明文不落库，仅存 hash；前缀用于候选检索                                                                   |
+| 数据类型                            | 存储位置                           | 说明                                                                                                                          |
+| ----------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 用户、角色、权限、关联关系、API Key | DB（基础 5 张，可选 API Key 1 张） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
+| 会话（accessToken → Session）       | 缓存                               | 有 TTL，滑动续期可选                                                                                                          |
+| Refresh 消费状态                    | 缓存的用户分区                     | 与 session/索引在单键 CAS 中提交                                                                                              |
+| OTP 验证码                          | 缓存                               | 有 TTL + 尝试次数限制                                                                                                         |
+| 密码重置令牌                        | 用户数据库行                       | SM3 摘要、数据库有效期、尝试次数及最终条件提交                                                                                |
+| API Key                             | DB                                 | `hai_iam_api_keys`，明文不落库，仅存 hash；前缀用于候选检索                                                                   |
 
 ---
 
@@ -870,7 +870,6 @@ if (!result.success) {
 }
 ```
 
-
 会话与 refresh 消费记录统一保存在 `hai:iam:sessions:{SHA256(userId)}` 版本化文档，不再使用独立 token 映射/索引。Bearer token 携带不可作为凭据的分区提示和 256 位随机值；客户端必须视为不透明字符串。`Session.version` 用于轮换提交校验。Memory 仅用于单进程测试，生产所有节点共享 Redis（含 Cluster）。并发冲突从最新文档重试，耗尽返回 CONFLICT；旧 refresh 不会产生第二个后继。若响应丢失后结果不明，调用方按失败关闭并重新登录，不假定旧凭据仍有效；全部会话仍受同一用户状态索引管理。
 
 `iam.session.update(token, patch, expectedVersion)` 必须传入读取到的 Session.version。旧版本返回 CONFLICT，已撤销 token 返回 SESSION_NOT_FOUND；不会将旧内容重新写回或覆盖新会话。仅滑动时间戳更新不改变内容版本，允许正常并行请求。批量权限更新绑定首次读取的 token/版本集合，不将迟到数据应用到后续登录；遇到较新内容版本失败，调用方重新查询授权后再提交。
@@ -881,7 +880,6 @@ if (!result.success) {
 pnpm test
 ```
 
-
 `create({ maxAge })` 可覆盖配置默认时长（正安全整数秒），该值持久化为 `Session.maxAge`；签发和刷新返回的 `expiresIn` 均使用它。滑动续期按该时长延长 access，返回已成功提交的 `lastActiveAt/expiresAt`；迟到请求只延长时间，不缩短较新续期。显式 `update` 的有效日期补丁完整生效并产生新内容版本。客户端根据本次返回的 `expiresIn` 安排刷新，不能硬编码配置默认值。
 
 access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的最晚有效期，但 access 认证只检查自己的 `expiresAt`。access 过期仍可凭未过期、未撤销的 refresh 轮换；每次轮换从新签发时刻重新计算 `refreshTokenMaxAge`，旧 access/refresh 同时失效。删除 access、logoutAll、单设备替换均撤销待刷新记录；仅 revokeRefresh 保留仍有效的 access。刷新路由只校验 refresh，不能先要求旧 access 认证成功。
@@ -891,6 +889,8 @@ access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的
 缓存清理失败可能返回失败，但已提交的新密码与凭据代际不会回滚；重新登录，不用旧凭据自动重试。
 
 Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、启用的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
+
+浏览器条件入口仅导出配置 Schema、类型和 HaiIamError，不包含服务端 `iam` 实例；认证通过 HTTP/typed client 调用服务端。
 
 ## 许可证
 

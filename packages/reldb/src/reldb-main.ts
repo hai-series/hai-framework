@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ReldbProvider } from './providers/reldb-provider-types.js'
 import type { ReldbConfig, ReldbConfigInput } from './reldb-config.js'
 import type {
   CrudManager,
@@ -13,7 +14,6 @@ import type {
   DmlOperations,
   ReldbFunctions,
   ReldbJsonOps,
-  ReldbProvider,
   TxManager,
 } from './reldb-types.js'
 

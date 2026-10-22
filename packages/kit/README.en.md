@@ -208,8 +208,6 @@ Servers must explicitly inject the same managed `serverKeyRing` and a shared `ke
 
 Transport applies by default to same-origin `/api/*` endpoints, SvelteKit `__data.json` page data, and key exchange itself. Page documents and static assets remain plaintext and do not require `X-Client-Id`. `multipart/form-data` requests such as uploads are sent unchanged; explicitly allow their paths through server `excludePaths`.
 
-
-
 Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. Requests have a five-minute lifetime and at most 30 seconds of future clock skew. The shared registry atomically consumes (clientId, requestId), retaining it until at least issuedAt plus six minutes to cover node skew; storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
 
 Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Exclude plaintext endpoints explicitly with excludePaths. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
@@ -265,10 +263,11 @@ With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HA
 
 ### Export paths
 
+Use runtime methods through the `kit` namespace or explicit subpaths; types are exported separately. Browser declarations do not expose server factories. Vite configuration uses `@sveltejs/kit/vite`; there is no `@h-ai/kit/vite` plugin.
+
 - `@h-ai/kit`: main entry, with the `kit` namespace and types.
 - `@h-ai/kit/client`: browser client.
 - `@h-ai/kit/adapter`: dual build adapter (`createAdapter()`).
-- `@h-ai/kit/vite`: Vite plugin.
 - `@h-ai/kit/a2a`: A2A integration.
 - `@h-ai/kit/crypto`: crypto integration.
 
@@ -297,7 +296,6 @@ Declarative CRUD fields support `colSpan: 'auto' | 1 | 2` for UI form widths. `v
 - `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
 
 > Shared cross-platform HTTP contracts belong in `@h-ai/api-contract`, are mounted by `@h-ai/serv`, and are called through the `@h-ai/api-client` typed client. `@h-ai/kit` does not define or host business API contracts.
-
 
 ### Request locale isolation
 

@@ -17,7 +17,8 @@ const closed = await cache.close()
 if (!closed.success) {
   // 处理清理故障后有限重试；再次失败应向应用报告。
   const retried = await cache.close()
-  if (!retried.success) throw new Error(retried.error.message)
+  if (!retried.success)
+    throw new Error(retried.error.message)
 }
 ```
 
@@ -66,7 +67,8 @@ if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
 }
 
 const closeResult = await cache.close()
-if (!closeResult.success) throw new Error(closeResult.error.message)
+if (!closeResult.success)
+  throw new Error(closeResult.error.message)
 ```
 
 `cache.config` 返回的是**脱敏后的配置快照**：如后续接入 Redis `password` / `url` 等凭证字段，会自动做安全处理，不应用作回写原始密钥。
@@ -119,7 +121,6 @@ await cache.init({
 - `cache.set_`: 集合结构（`sadd/smembers/sismember/...`）
 - `cache.zset`: 有序集合（`zadd/zrange/zrevrange/...`）
 - `cache.lock`: 分布式锁（`acquire/release/isLocked/extend`）
-- `CacheProvider`: 公开的 Provider 契约，供高级集成或自定义后端实现复用
 
 ### Cluster 多键与扫描
 
@@ -193,6 +194,8 @@ pnpm --filter @h-ai/cache test
 ## 生产共享状态
 
 生产仅使用 Redis（含 Cluster）；memory 只用于开发/明确测试。Redis 故障返回失败，不回退本机缓存。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
+
+内置后端由 `cache.init(config)` 选择 memory/redis；Provider 实现是内部契约，不提供自定义后端注册入口。
 
 ## 许可证
 

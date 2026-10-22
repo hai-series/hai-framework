@@ -18,7 +18,7 @@
 ### 最小知识（Law of Demeter）
 
 - 调用方只需要知道公共服务对象、必要配置、业务返回值。
-- 若 API/类型/README 迫使使用方理解 Provider、Repository、目录结构、DB 行、中间态或转发链，判为问题。
+- 若普通业务调用被迫理解内置 Provider、Repository、目录结构、DB 行、中间态或转发链，判为问题。已明确支持的 Provider/Store 注入扩展按真实公开契约保留，不与内部实现混为一谈。
 - 上游能力顶层注入一次，模块内部派生回调；禁止要求使用方写 `{ verifyToken: t => iam.auth.verifyToken(t) }` 这类样板。
 
 ### 反过度设计（YAGNI）
@@ -26,7 +26,7 @@
 - 没有 ≥2 个真实实现：不加 Provider / Strategy / Factory / Base。
 - 没有真实调用点：不加配置项、开关、扩展点、兼容层。
 - 没有跨文件复用：不拆 utils / constants / helper。
-- 没有外部消费者：不 export。
+- 没有实际消费或扩展契约：不增加公共导出；普通源文件可为内部跨文件复用 export，但包入口不能顺带转发全部实现。
 
 ### 简单与整洁
 
@@ -41,7 +41,8 @@
 - [ ] 模块类型正确（生命周期单例 / 工厂 / 纯函数 / 基础设施）
 - [ ] API 风格统一（扁平方法 vs 子操作对象），无混用
 - [ ] `xx-main.ts` 仅生命周期管理 + API 编排，不写具体业务逻辑
-- [ ] `index.ts` 仅 `export *` 聚合，源文件控制导出边界
+- [ ] package.exports/公开 barrel/内部实现三层边界清晰；允许有依据的 selective/type-only/别名、Svelte 默认组件和 client/server 分隔
+- [ ] 所有 exports 条件/子路径有真实构建文件与声明；generate:api/check:api/test:api 验证通过，浏览器不含 Node 依赖
 - [ ] 目录结构符合基础 / 子功能 / Client / API 契约约定
 - [ ] 常见操作不需要调用方跨多层对象、内部目录或中间态
 - [ ] 没有单实现 Provider / 单子类 Base / 单用途 Factory / 未来预留配置

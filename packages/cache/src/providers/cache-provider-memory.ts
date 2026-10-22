@@ -6,7 +6,8 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { CacheConfig, CacheProvider, CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
+import type { CacheConfig, CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
+import type { CacheProvider } from './cache-provider-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { cacheM } from '../cache-i18n.js'
 import { HaiCacheError } from '../cache-types.js'

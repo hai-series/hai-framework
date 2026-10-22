@@ -8,7 +8,8 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ProviderConfig } from '../reach-config.js'
 
-import type { ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
+import type { ReachMessage, SendResult } from '../reach-types.js'
+import type { ReachProvider } from './reach-provider-types.js'
 import { core, ok } from '@h-ai/core'
 
 const logger = core.logger.child({ module: 'reach', scope: 'provider-console' })

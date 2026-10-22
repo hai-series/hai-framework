@@ -234,14 +234,14 @@ Before initialization, every subsystem method returns `NOT_INITIALIZED` through 
 
 #### Data storage
 
-| Data                                                | Storage                                      | Description                                                                                                                   |
-| --------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Users, roles, permissions, associations, API keys   | DB (5 base tables, 1 optional API Key table) | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
-| Sessions (accessToken → Session)                    | Cache                                        | TTL, optional sliding renewal                                                                                                 |
-| Refresh state | Redis user partition | Atomic with session/index |
-| OTP codes                                           | Cache                                        | TTL + attempt limit                                                                                                           |
-| Password reset tokens | User database row | SM3 hash, DB expiry, attempts and conditional password commit |
-| API Key                                             | DB                                           | `hai_iam_api_keys`; store hashes only, never plaintext; prefix narrows candidates                                             |
+| Data                                              | Storage                                      | Description                                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Users, roles, permissions, associations, API keys | DB (5 base tables, 1 optional API Key table) | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
+| Sessions (accessToken → Session)                  | Cache                                        | TTL, optional sliding renewal                                                                                                 |
+| Refresh state                                     | Redis user partition                         | Atomic with session/index                                                                                                     |
+| OTP codes                                         | Cache                                        | TTL + attempt limit                                                                                                           |
+| Password reset tokens                             | User database row                            | SM3 hash, DB expiry, attempts and conditional password commit                                                                 |
+| API Key                                           | DB                                           | `hai_iam_api_keys`; store hashes only, never plaintext; prefix narrows candidates                                             |
 
 ---
 
@@ -861,7 +861,6 @@ if (!result.success) {
 
 Role lists aggregate actual member counts for the current page with one `iam.authz.getRoleUserCounts(roleIds)` call, returning `HaiResult<Map<string, number>>`. Unassigned roles get 0; failed queries show loading errors rather than fabricated zero counts.
 
-
 Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(userId)}` document, replacing separate mappings/indexes. Bearer tokens contain an untrusted routing hint plus 256 random bits; clients must treat them as opaque strings. Rotation checks `Session.version` at commit. Memory is for single-process tests; production nodes share Redis, including Cluster. Conflicts retry from the latest state and return CONFLICT when exhausted; one refresh cannot publish two successors. An ambiguous lost response requires failing closed and signing in again, without assuming the old token remains valid. All records remain covered by the same user index.
 
 `iam.session.update(token, patch, expectedVersion)` requires the Session.version from the read. Stale versions return CONFLICT; revoked tokens return SESSION_NOT_FOUND. Timestamp-only sliding updates keep the content version, allowing normal parallel requests. Batch permission updates bind the initial token/version set and never apply delayed snapshots to later sign-ins; newer content versions require re-reading authorization before retry.
@@ -872,7 +871,6 @@ Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(u
 pnpm test
 ```
 
-
 `create({ maxAge })` overrides the configured default with a positive safe integer in seconds, persisted as `Session.maxAge`. Issuance and refresh return that duration in `expiresIn`. Sliding renewal uses this duration and returns committed `lastActiveAt/expiresAt`; delayed requests cannot shorten a newer renewal. Explicit `update` applies valid date patches and creates a new content version. Clients schedule refresh from the returned `expiresIn` rather than a hardcoded default.
 
 Access and refresh expire independently. The user partition remains until the latest live access/refresh deadline, while access authentication checks only its own `expiresAt`. An expired access token can still be rotated with a live refresh token. Each rotation starts a new `refreshTokenMaxAge` period and invalidates both old credentials. Access deletion, logoutAll and single-device replacement also revoke refresh-only records; revokeRefresh preserves a still-live access token. Refresh routes validate refresh credentials without requiring a live access token first.
@@ -882,6 +880,8 @@ Session cache read/commit failures return failed HaiResult values, never absence
 Cache cleanup may return a failure after the new password and credential generation have committed; they are not rolled back. Sign in again instead of automatically retrying with old credentials.
 
 Session.credentialVersion binds the database credential generation at creation. Only trusted authenticated strategies supply CreateSessionOptions.expectedCredentialVersion, and stale generations fail. Low-level create without that option still reads a real enabled local user and binds its current generation; it cannot create an authenticated identity without a database record.
+
+The browser entry exports configuration schemas, types and HaiIamError, without the server `iam` instance. Authenticate through the HTTP/typed client.
 
 ## License
 

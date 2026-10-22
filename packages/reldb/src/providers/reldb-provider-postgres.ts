@@ -15,9 +15,9 @@ import type {
   ExecuteResult,
   PaginationQueryOptions,
   ReldbColumnDef,
-  ReldbProvider,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
+import type { ReldbProvider } from './reldb-provider-types.js'
 
 import { createRequire } from 'node:module'
 import { core, err, ok } from '@h-ai/core'

@@ -214,8 +214,6 @@ export const { apiFetch } = kit.client.create()
 
 transport は既定で同一オリジンの `/api/*`、SvelteKit の `__data.json`、鍵交換 endpoint に適用します。ページ文書・静的ファイルは平文で `X-Client-Id` は不要です。アップロードなどの `multipart/form-data` はそのまま送信し、サーバーの `excludePaths` で明示的に許可してください。
 
-
-
 認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
 
 空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
@@ -271,10 +269,11 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 
 ### エクスポートパス
 
+実行時メソッドは `kit` 名前空間または明示したサブパスを使用し、型は個別に公開します。browser 宣言はサーバーファクトリを公開しません。Vite 設定には `@sveltejs/kit/vite` を使い、`@h-ai/kit/vite` プラグインはありません。
+
 - `@h-ai/kit`：主入口。`kit` 名前空間と型を提供。
 - `@h-ai/kit/client`：ブラウザークライアント。
 - `@h-ai/kit/adapter`：2 モードのビルド adapter（`createAdapter()`）。
-- `@h-ai/kit/vite`：Vite プラグイン。
 - `@h-ai/kit/a2a`：A2A 統合。
 - `@h-ai/kit/crypto`：暗号モジュール統合。
 
@@ -295,7 +294,6 @@ kit.auth.createApi(iam) の標準 handler と kit.auth.publicPaths を使用し�
 ### CRUD fields
 
 宣言型 CRUD 項目は UI フォームの幅を指定する `colSpan: 'auto' | 1 | 2` に対応します。`validation.message` は文字列または `() => string` を受け取り、現在の言語で表示できます。レイアウトは `CrudPage.form` で設定し、サーバーでも検証してください。
-
 
 ### リクエスト言語の分離
 

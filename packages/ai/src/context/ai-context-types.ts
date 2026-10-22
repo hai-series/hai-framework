@@ -10,37 +10,16 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { CompressOptions } from '../compress/ai-compress-types.js'
-import type { ChatMessage, LLMOperations, ToolRegistryOperations } from '../llm/ai-llm-types.js'
-import type { MemoryEntry, MemoryOperations, MemoryType } from '../memory/ai-memory-types.js'
-import type { RagOperations, RagOptions } from '../rag/ai-rag-types.js'
-import type { ReasoningOperations, ReasoningOptions } from '../reasoning/ai-reasoning-types.js'
+import type { ChatMessage, ToolRegistryOperations } from '../llm/ai-llm-types.js'
+import type { MemoryEntry, MemoryType } from '../memory/ai-memory-types.js'
+import type { RagOptions } from '../rag/ai-rag-types.js'
+import type { ReasoningOptions } from '../reasoning/ai-reasoning-types.js'
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
-import type { SummaryOperations, SummaryResult } from '../summary/ai-summary-types.js'
+import type { SummaryResult } from '../summary/ai-summary-types.js'
 
 // 从子模块 re-export，便于 context 消费者一站式引入
 export type { CompressionStrategy } from '../compress/ai-compress-types.js'
 export { CompressionStrategySchema } from '../compress/ai-compress-types.js'
-
-// ─── Context 子功能可选依赖 ───
-
-/**
- * Context 子功能可选依赖
- *
- * 传入后 ContextManager 可提供 chat/chatStream 等高层编排能力。
- * 各依赖按需传入，未传入的能力不可用。
- */
-export interface ContextDeps {
-  /** LLM 操作（chat/chatStream 必需） */
-  llm?: LLMOperations
-  /** Memory 操作（记忆注入/提取需要） */
-  memory?: MemoryOperations
-  /** RAG 操作（检索增强生成需要） */
-  rag?: RagOperations
-  /** Reasoning 操作（推理引擎需要） */
-  reasoning?: ReasoningOperations
-  /** Summary 操作（会话固化 consolidate 需要） */
-  summary?: SummaryOperations
-}
 
 // ─── Memory 生命周期（会话固化） ───
 

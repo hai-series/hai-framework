@@ -906,6 +906,8 @@ pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
 
+コンポーネントのサブパスは package.exports に明記した barrel（例: `@h-ai/ui/components/primitives/index`）に限定します。内部実装やストレージ補助関数は非公開で、ホストのクリップボード登録は引き続き公開します。
+
 ## ライセンス
 
 Apache-2.0

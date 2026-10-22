@@ -9,7 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type OpenAI from 'openai'
 import type { ZodType } from 'zod'
 
-import type { AIConfig, ApiType } from '../ai-config.js'
+import type { ApiType } from '../ai-config.js'
 
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 
@@ -373,8 +373,6 @@ export interface ToolsOperations {
   createRegistry: (options?: ToolRegistryOptions) => ToolRegistryOperations
 }
 
-// ─── LLM Provider 接口 ───
-
 // ─── 对话记录 ───
 
 /** 对话记录查询选项 */
@@ -435,22 +433,6 @@ export interface ChatRecord {
   createdAt: number
   /** 耗时（毫秒） */
   duration: number
-}
-
-// ─── LLM Provider 接口 ───
-
-/**
- * LLM Provider 接口
- *
- * 底层 API 适配层，当前内置 OpenAI 兼容实现。
- */
-export interface LLMProvider {
-  /** 发送聊天请求并获取完整响应 */
-  chat: (request: ChatCompletionRequest) => Promise<HaiResult<ChatCompletionResponse>>
-  /** 发送聊天请求并获取流式响应（逐 chunk 产出） */
-  chatStream: (request: ChatCompletionRequest) => AsyncIterable<ChatCompletionChunk>
-  /** 获取可用模型列表 */
-  listModels: () => Promise<HaiResult<string[]>>
 }
 
 // ─── LLM 操作接口 ───
@@ -528,12 +510,4 @@ export interface LLMOperations {
    * @returns 符合 schema 的对象；多次重试仍无法解析时返回 `INVALID_REQUEST`
    */
   generateObject: <T>(request: GenerateObjectRequest<T>) => Promise<HaiResult<T>>
-}
-
-// ─── LLM 工厂依赖 ───
-
-/** LLM 子功能工厂依赖（内部使用） */
-export interface AILLMFunctionsDeps {
-  /** 校验后的 AI 配置 */
-  config: AIConfig
 }

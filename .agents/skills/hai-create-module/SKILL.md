@@ -37,7 +37,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 - 没有第二个真实实现 → **不引入 Provider / 抽象接口 / 策略层**
 - 操作域划分不能降低使用成本 → 保留简单 API，不机械拆分
 - 没有跨文件复用 → **不提前提取 utils / helper / constants**
-- 没有真实 consumer → **不导出类型、函数、配置项**
+- 没有真实消费或扩展契约 → **不增加公共类型、函数、配置项**；内部跨文件复用可 export，但不自动经包入口公开。
 - 只是转发上游能力 → **不要求使用方手写样板转发**
 
 ### 问题 1：是否有子功能？
@@ -137,7 +137,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 8. **Provider 实现**（如需）→ R4.2
 9. **Repository 实现**（如需）→ R4.3
 10. **`xx-main.ts`** → R3.1/R3.2/R3.3
-11. **`index.ts`** → 仅 `export * from './xx-main.js'` + `export * from './xx-types.js'`
+11. **公开入口** → 根据 package.exports 选择公共符号；全量源文件确为公共契约时才 export *，允许 selective/type-only/Svelte 默认转发与 client/server 条件分隔。内部 Provider/Deps 不经公共 barrel；保留真实扩展接口。
 12. **Client / API 契约**（如有）→ R4.5/R4.6
 13. **公共 API JSDoc** → R6
 14. **测试** → R7
@@ -160,4 +160,5 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
 - [ ] 测试覆盖正常 / 边界 / 多实现
 - [ ] README + 对应 CLI Skill 模板（如存在）同步
+- [ ] 构建后 generate:api/check:api/test:api 验证真实入口、声明及浏览器隔离；公开变化已核对全部消费者
 - [ ] 按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集 typecheck/lint/build/test 及适用 E2E，汇总后集中修复；最终必需门禁对最终代码均有效通过

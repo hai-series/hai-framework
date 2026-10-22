@@ -651,7 +651,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 | `@h-ai/ui/theme`           | 轻量主题元数据与工具，不经过组件根入口 |
 | `@h-ai/ui/i18n`            | 轻量语言工具，供状态层使用，不加载组件或引导 CSS |
 | `@h-ai/ui/auto-import`     | Svelte 预处理器：组件自动导入          |
-| `@h-ai/ui/components/*`    | 公开组件目录的 JS 入口，按实际 exports/产物选择 |
+| `@h-ai/ui/components/primitives/index` 等明确 barrel | 仅 package.exports 列出的组件目录；组件默认导出经 barrel 转发 |
 | `@h-ai/ui/components/primitives/index` | 公开原子组件目录入口，如 Button/Input |
 | `@h-ai/ui/styles/global.css`       | 全局基础样式（重置/滚动条/焦点）       |
 | `@h-ai/ui/styles/theme.css`        | Tailwind v4 `@theme` Token            |

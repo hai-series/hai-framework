@@ -6,8 +6,9 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { StorageProvider } from './providers/storage-provider-types.js'
 import type { StorageConfig, StorageConfigInput } from './storage-config.js'
-import type { DirOperations, FileOperations, PresignOperations, StorageFunctions, StorageProvider } from './storage-types.js'
+import type { DirOperations, FileOperations, PresignOperations, StorageFunctions } from './storage-types.js'
 
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'

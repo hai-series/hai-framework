@@ -234,14 +234,14 @@ iam.init()
 
 #### データの保存先
 
-| データ種別                                        | 保存先                                  | 説明                                                                                                                          |
-| ------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| ユーザー、ロール、権限、関連付け、API Key         | DB（基本 5、任意の API Key 1 テーブル） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
-| セッション（accessToken → Session）               | キャッシュ                              | TTL 付き、任意の自動延長                                                                                                      |
-| Refresh 消費状態 | Redis ユーザー分区 | セッション・索引と単一キー CAS で更新 |
-| OTP コード                                        | キャッシュ                              | TTL + 試行回数制限                                                                                                            |
-| パスワードリセット Token | ユーザー DB 行 | SM3 hash・DB 期限・試行回数・条件付き改密 |
-| API Key                                           | DB                                      | `hai_iam_api_keys`。平文は保存せず hash のみ。接頭辞で候補検索                                                                |
+| データ種別                                | 保存先                                  | 説明                                                                                                                          |
+| ----------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ユーザー、ロール、権限、関連付け、API Key | DB（基本 5、任意の API Key 1 テーブル） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
+| セッション（accessToken → Session）       | キャッシュ                              | TTL 付き、任意の自動延長                                                                                                      |
+| Refresh 消費状態                          | Redis ユーザー分区                      | セッション・索引と単一キー CAS で更新                                                                                         |
+| OTP コード                                | キャッシュ                              | TTL + 試行回数制限                                                                                                            |
+| パスワードリセット Token                  | ユーザー DB 行                          | SM3 hash・DB 期限・試行回数・条件付き改密                                                                                     |
+| API Key                                   | DB                                      | `hai_iam_api_keys`。平文は保存せず hash のみ。接頭辞で候補検索                                                                |
 
 ---
 
@@ -857,7 +857,6 @@ if (!result.success) {
 }
 ```
 
-
 会話と refresh 消費状態を `hai:iam:sessions:{SHA256(userId)}` のバージョン付き文書にまとめ、独立した対応キーと索引を廃止します。Bearer Token は認証には使えない分区ヒントと256ビットの乱数を含み、クライアントは不透明な文字列として扱います。更新時は Session.version を再検証します。Memory は単一プロセスのテスト用で、本番は全ノードが Redis（Cluster 対応）を共有します。競合は最新状態から再試行し、上限で CONFLICT を返します。応答喪失で結果が不明なら認証を拒否し再ログインします。すべての会話は同じユーザー索引で管理されます。
 
 `iam.session.update(token, patch, expectedVersion)` は読み取った Session.version が必須です。旧版は CONFLICT、失効 Token は SESSION_NOT_FOUND を返し、新しい状態を上書きしません。自動延長の時刻だけの更新は内容版を変更せず、通常の並行リクエストを許容します。権限一括更新は最初の Token/版集合に限定し、後続ログインに古い値を適用しません。
@@ -868,7 +867,6 @@ if (!result.success) {
 pnpm test
 ```
 
-
 `create({ maxAge })` は設定の既定値を正の安全な整数秒で上書きし、`Session.maxAge` に保存します。発行と更新の `expiresIn` はこの値を使います。自動延長は同じ期間を使い、確定済みの `lastActiveAt/expiresAt` を返し、遅いリクエストが新しい延長を短縮しません。明示的な `update` は有効な日時を反映して内容版を更新します。クライアントは返された `expiresIn` から更新時刻を決めます。
 
 access と refresh は独立して期限切れになります。ユーザー文書は両期限の最大まで保持しますが、access 認証は自身の expiresAt のみを確認します。access 期限後も有効な refresh で更新でき、更新ごとに新しい refreshTokenMaxAge を開始して旧資格情報を失効させます。access 削除・全ログアウト・単一端末置換は更新待ち記録も取り消し、revokeRefresh は有効な access を残します。更新経路で旧 access の認証成功を前提にしません。
@@ -878,6 +876,8 @@ access と refresh は独立して期限切れになります。ユーザー文�
 キャッシュ削除が失敗を返しても、確定した新パスワードと資格情報世代は巻き戻しません。旧資格情報で自動再試行せず、再ログインしてください。
 
 Session.credentialVersion は作成時の DB 資格情報世代に結び付けます。CreateSessionOptions.expectedCredentialVersion は検証済みの信頼する戦略だけが指定し、旧世代は拒否します。省略した低レベル create でも実在する有効なローカルユーザーを DB から読み、現世代に結び付けるため、DB 記録のない認証済み ID は作れません。
+
+browser 条件の入口は設定 Schema、型、HaiIamError のみを公開し、サーバーの `iam` インスタンスは含みません。認証には HTTP/typed client を使用します。
 
 ## ライセンス
 

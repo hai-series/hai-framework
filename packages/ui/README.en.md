@@ -906,6 +906,8 @@ pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
 
+Component subpaths expose only explicit barrels in package.exports, such as `@h-ai/ui/components/primitives/index`. Component internals and storage helpers stay private; host clipboard registration remains public.
+
 ## License
 
 Apache-2.0

@@ -1,5 +1,5 @@
 import type { RequestListener, Server } from 'node:http'
-import type { ReachProvider } from '../src/reach-types.js'
+import type { ReachProvider } from '../src/providers/reach-provider-types.js'
 import type { SendLogRepository, StoredSendLog } from '../src/repositories/reach-repository-send-log.js'
 import { once } from 'node:events'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'

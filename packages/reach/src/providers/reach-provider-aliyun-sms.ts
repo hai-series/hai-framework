@@ -8,7 +8,8 @@
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { AliyunSmsProviderConfig, ProviderConfig } from '../reach-config.js'
 
-import type { ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
+import type { ReachMessage, SendResult } from '../reach-types.js'
+import type { ReachProvider } from './reach-provider-types.js'
 import { createHmac, randomUUID } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 

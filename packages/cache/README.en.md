@@ -17,7 +17,8 @@ const closed = await cache.close()
 if (!closed.success) {
   // Retry once after addressing the cleanup failure; report another failure.
   const retried = await cache.close()
-  if (!retried.success) throw new Error(retried.error.message)
+  if (!retried.success)
+    throw new Error(retried.error.message)
 }
 ```
 
@@ -66,7 +67,8 @@ if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
 }
 
 const closeResult = await cache.close()
-if (!closeResult.success) throw new Error(closeResult.error.message)
+if (!closeResult.success)
+  throw new Error(closeResult.error.message)
 ```
 
 `cache.config` returns a **redacted configuration snapshot**. Redis credential fields such as `password` / `url` are sanitized automatically; do not use the snapshot to write back original secrets.
@@ -119,7 +121,6 @@ await cache.init({
 - `cache.set_`: sets (`sadd/smembers/sismember/...`).
 - `cache.zset`: sorted sets (`zadd/zrange/zrevrange/...`).
 - `cache.lock`: distributed locks (`acquire/release/isLocked/extend`).
-- `CacheProvider`: a public provider contract for advanced integrations and custom backends.
 
 ### Cluster multi-key operations and scanning
 
@@ -182,6 +183,8 @@ pnpm --filter @h-ai/cache test
 ## Production shared state
 
 Production requires Redis (including Cluster); memory is for development/explicit tests. Redis errors fail rather than falling back locally. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
+`cache.init(config)` selects the built-in memory/redis backend. Provider implementations are internal; there is no custom backend registration API.
 
 ## License
 
