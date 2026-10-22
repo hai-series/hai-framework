@@ -692,10 +692,6 @@ pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
 
-## ライセンス
-
-Apache-2.0
-
 ## 入力制約と HTTP 機能
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../../docs/storage-api-capabilities.md)を参照してください。
@@ -705,3 +701,7 @@ Apache-2.0
 宣言の JSDoc 例は実在する `@h-ai/serv` または公開 features サブパスから import します。内部 Hono・guard・router・transport は「模块内部上下文」と明記し、ルート API として扱いません。起動設定の例外、業務 HaiResult、HTTP middleware の status、listener の Promise<void> 終了を区別し、既定の AI completion は非ストリーミング JSON のままです。保守時は `node scripts/check-module-jsdoc.mjs --package serv` で実際の宣言と内部スコープに対して例をコンパイルします。実 HTTP、認可、共有リプレイ防止の検証を代替しません。
 
 toFetch は Request・URL・文字列を標準 Request(input, init) で構築し、入力フィールドを変更せず method・headers・body・signal などを上書きします。消費済み・ロック中の本文や不正な本文指定は返却 Promise を reject します。派発前の取消しは handler を呼ばず、実行中の取消しは呼出側の待機を終了し、有効な signal をアプリへ伝えます。終了・失敗・取消しで listener を外し、取消し後に遅れて返る本文も cancel します。開始済みの外部効果は巻き戻せず、Response 返却後のストリーム終了はアプリが request.signal を消費して管理します。
+
+## ライセンス
+
+Apache-2.0

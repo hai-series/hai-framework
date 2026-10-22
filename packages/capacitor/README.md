@@ -154,10 +154,10 @@ pnpm --filter @h-ai/capacitor test
 
 > 由于原生插件依赖，测试中需 mock `@capacitor/*` 模块。
 
-## 许可证
-
-Apache-2.0
-
 推送仅在实际原生平台调用插件。`push.register({ signal? })` 与 `push.listen(callbacks, { signal? })` 的设置阶段限时 30 秒（包含权限和监听器挂载）；失败、超时、取消及 `capacitor.close()` 都会停止回调并移除本次拥有的句柄，迟到的句柄在完成后立即移除，不调用影响其他消费者的 removeAllListeners。listen 成功后信号仍有效，也可调用返回的 cleanup。cleanup 与 close 均返回 `HaiResult<void>`；原生 remove 失败返回 `PUSH_CLEANUP_FAILED`（`capacitor:032`），失败句柄保留供再次调用重试，成功移除的句柄不重复操作。模块关闭后立即不可用；重新初始化前先重试遗留清理。自动化验证控制插件时序，不能代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。
 
 公开操作、内部资源作用域与类型均提供可类型检查的示例；见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。推送示例的类型检查不证明设备权限或 FCM/APNs 实际可用。
+
+## 许可证
+
+Apache-2.0

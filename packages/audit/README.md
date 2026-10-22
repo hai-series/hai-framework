@@ -132,8 +132,8 @@ await audit.init({
 pnpm --filter @h-ai/audit test
 ```
 
+审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
+
 ## 许可证
 
 Apache-2.0
-
-审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。

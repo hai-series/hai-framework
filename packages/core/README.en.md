@@ -567,10 +567,6 @@ Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During 
 pnpm --filter @h-ai/core test
 ```
 
-## License
-
-Apache-2.0
-
 ## Configuration consumption
 
 `_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../docs/configuration-map.md).
@@ -580,3 +576,7 @@ See the [module JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for dec
 The Node entry uses node:crypto.timingSafeEqual over equal-length UTF-16LE code units. Different lengths return false; length is not hidden. The browser implementation avoids content-based early returns but has no JavaScript-engine timing guarantee and is not a server credential boundary. Surrounding branches, encoding and request handling are not made timing-safe by this helper.
 
 UUID generation requires cryptographic randomUUID/getRandomValues and throws if neither is available; it never falls back to Math.random.
+
+## License
+
+Apache-2.0

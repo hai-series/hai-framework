@@ -213,4 +213,4 @@ if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
 
 数据库是共享租约的时间权威：claim/begin/renew/finish/expired/isolate 均在执行 SQL 内取存储端时钟并原子核验期限，不用节点 Date.now 或“先查 now 再写”的结果授权。PostgreSQL clock_timestamp、MySQL SYSDATE(3)、SQLite now 在真实锁等待后仍拒绝过期提交；updatedAt 条件版本使用同一数据库时钟并单调推进。cron 从 DB 时间生成分钟身份并匹配；默认 timezone 为 UTC，显式 IANA 时区只改变墙上时间解释，不读取节点 TZ。节点偏差 ±2h、不同 TZ 下同一分钟身份、过期但未接管、接管后的旧 owner 和行锁跨期限均须真实多进程验证。应用仍维护 DB 时钟与外部接收端的持久幂等/fence；未知效果不能靠补写日志或重新 trigger 重做。
 
-公开使用以 @h-ai/scheduler 的实际入口与声明为准。声明 JSDoc 的公开示例检查 HaiResult，关闭调用使用 await scheduler.close()（返回 Promise<void>）；内部 repository/runner/compiler/cron 示例标注“模块内部上下文”，不能照抄为根导入。业务 status 与 persistence 分开，pending 补写不会重跑业务；unknown/unconfirmed 先核对共享 journal 与外部效果。框架仓库可运行 `node scripts/check-module-jsdoc.mjs --package scheduler` 验证类型和覆盖，生成应用仍按安装版本的公开类型编译。
+公开使用以 @h-ai/scheduler 的实际入口与声明为准。声明 JSDoc 的公开示例检查 HaiResult，关闭调用使用 await scheduler.close()（返回 Promise<void>）；内部 repository/runner/compiler/cron 示例标注“模块内部上下文”，不能照抄为根导入。业务 status 与 persistence 分开，pending 补写不会重跑业务；unknown/unconfirmed 先核对共享 journal 与外部效果。应用使用所安装版本的公开类型，并通过本应用已有的类型检查验证使用示例。

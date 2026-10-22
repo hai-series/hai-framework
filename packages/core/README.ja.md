@@ -567,10 +567,6 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 pnpm --filter @h-ai/core test
 ```
 
-## ライセンス
-
-Apache-2.0
-
 ## 設定の消費範囲
 
 `_core.yml` は name/version/env/defaultLocale のメタデータと logging のみを受け付け、不明なフィールドでは読み込みに失敗します。グローバルな debug、ID 長/接頭辞、業務 features、言語登録リストは提供しません。logging.level、core.id の呼び出し引数、独自 Schema で検証する app.yml を使用してください。defaultLocale はメタデータであり、翻訳登録や Paraglide の切り替えを自動実行しません。Logger の import は Windows TTY でも LANG、LC_ALL、PYTHONIOENCODING を変更しません。[設定と消費点の対応表（中国語）](../../docs/configuration-map.md)を参照してください。
@@ -580,3 +576,7 @@ Apache-2.0
 Node 入口は元の UTF-16 コード単位を UTF-16LE に変換し、同じバイト長を node:crypto.timingSafeEqual で比較します。長さが違えば false となり、長さ自体は隠しません。ブラウザー実装には JavaScript エンジンの定時間保証がなく、サーバーの認証境界には使用しません。周辺の分岐・変換・リクエスト処理まで定時間になるわけではありません。
 
 UUID は暗号学的乱数の randomUUID/getRandomValues のみを使用し、どちらも利用できない場合は例外を送出します。Math.random にはフォールバックしません。
+
+## ライセンス
+
+Apache-2.0

@@ -132,8 +132,8 @@ All operations return `HaiResult<T>`. Common error codes:
 pnpm --filter @h-ai/audit test
 ```
 
+Source examples initialize RelDB first, check audit results, and check cleanup in reverse dependency order; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).
+
 ## License
 
 Apache-2.0
-
-Source examples initialize RelDB first, check audit results, and check cleanup in reverse dependency order; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).

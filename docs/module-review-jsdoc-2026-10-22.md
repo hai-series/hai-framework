@@ -6,6 +6,8 @@
 
 统计排除 Paraglide 生成文件，原始扫描包括内部导出。执行 STYLE-01 后先删除无用 export，再补保留 API 注释。Svelte script 中的结构体另列；组件 props、事件、slots/snippets 与函数方法需按下列补充规则人工核验。
 
+下列 J/E 标记、声明名称、行号和数量保留原审查基线，不能据此推断当前源码仍缺注释或旧 API 仍存在；复选状态已按主清单的实际实施与定向验证同步。被删除位置明确标记历史边界并转到当前实现，完整回归状态仍以主清单为准。
+
 ## 通用关闭标准
 
 1. 所有保留的 export 函数、type/interface 和关键逻辑具备规范 JSDoc、有效示例。结构字段说明单位、默认值、可选性和约束；非公开类型也不能遗漏。
@@ -16,7 +18,7 @@
 
 ## JSDOC-01 · @h-ai/ai
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 422，缺 JSDoc 0，缺示例 372。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 422，缺 JSDoc 0，缺示例 372。
 
 ### 顶层导出定位
 
@@ -120,7 +122,7 @@
 
 ## JSDOC-02 · @h-ai/api-client
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 20，缺 JSDoc 0，缺示例 14。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 20，缺 JSDoc 0，缺示例 14。
 
 ### 顶层导出定位
 
@@ -139,7 +141,7 @@
 
 ## JSDOC-03 · @h-ai/api-contract
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 145，缺 JSDoc 49，缺示例 141。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 145，缺 JSDoc 49，缺示例 141。
 
 ### 顶层导出定位
 
@@ -166,7 +168,7 @@
 
 ## JSDOC-04 · @h-ai/audit
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 16，缺 JSDoc 1，缺示例 11。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 16，缺 JSDoc 1，缺示例 11。
 
 ### 顶层导出定位
 
@@ -184,7 +186,7 @@
 
 ## JSDOC-05 · @h-ai/cache
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 28，缺 JSDoc 1，缺示例 20。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 28，缺 JSDoc 1，缺示例 20。
 
 ### 顶层导出定位
 
@@ -203,7 +205,7 @@
 
 ## JSDOC-06 · @h-ai/capacitor
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 31，缺 JSDoc 1，缺示例 18。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 31，缺 JSDoc 1，缺示例 18。
 
 ### 顶层导出定位
 
@@ -219,7 +221,7 @@
 
 ## JSDOC-07 · @h-ai/cli
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 75，缺 JSDoc 7，缺示例 63。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 75，缺 JSDoc 7，缺示例 63。
 
 ### 顶层导出定位
 
@@ -246,7 +248,7 @@
 
 ## JSDOC-08 · @h-ai/core
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 85，缺 JSDoc 21，缺示例 47。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 85，缺 JSDoc 21，缺示例 47。
 
 ### 顶层导出定位
 
@@ -277,7 +279,7 @@
 
 ## JSDOC-09 · @h-ai/crypto
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 48，缺 JSDoc 1，缺示例 44。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 48，缺 JSDoc 1，缺示例 44。
 
 ### 顶层导出定位
 
@@ -304,7 +306,7 @@
 
 ## JSDOC-10 · @h-ai/datapipe
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 23，缺 JSDoc 0，缺示例 14。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 23，缺 JSDoc 0，缺示例 14。
 
 ### 顶层导出定位
 
@@ -320,7 +322,7 @@
 
 ## JSDOC-11 · @h-ai/deploy
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 75，缺 JSDoc 1，缺示例 55。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 75，缺 JSDoc 1，缺示例 55。
 
 ### 顶层导出定位
 
@@ -356,7 +358,7 @@
 
 ## JSDOC-12 · @h-ai/iam
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 151，缺 JSDoc 9，缺示例 150。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 151，缺 JSDoc 9，缺示例 150。
 
 ### 顶层导出定位
 
@@ -383,7 +385,7 @@
 - [packages/iam/src/iam-main.ts](../packages/iam/src/iam-main.ts)：`iam`（L87，J/E）。
 - [packages/iam/src/iam-notifications.ts](../packages/iam/src/iam-notifications.ts)：`resolveIamNotifications`（L6，E）。
 - [packages/iam/src/iam-public-config.ts](../packages/iam/src/iam-public-config.ts)：`IamPublicConfig`（L6，J/E）；`buildIamPublicConfig`（L21，E）。
-- [packages/iam/src/iam-security.ts](../packages/iam/src/iam-security.ts)：`withIamLock`（L10，E）。
+- 原基线 `packages/iam/src/iam-security.ts`：`withIamLock`（L10，E）。此位置及租约包装已由 IAM-06 删除，保留原扫描证据；当前 OTP 发布/计次/消费使用[共享单键 CAS 仓储](../packages/iam/src/authn/otp/iam-authn-otp-repository-otp.ts)，密码最终提交使用[用户行代际条件](../packages/iam/src/user/iam-user-repository-user.ts)，不再导出或调用 `withIamLock`。
 - [packages/iam/src/iam-seed.ts](../packages/iam/src/iam-seed.ts)：`seedIamData`（L89，E）。
 - [packages/iam/src/iam-types.ts](../packages/iam/src/iam-types.ts)：`HaiIamError`（L87，J/E）；`IamConfigInput`（L97，E）；`IamFunctions`（L154，E）。
 - [packages/iam/src/session/iam-session-functions.ts](../packages/iam/src/session/iam-session-functions.ts)：`SessionOperationsDeps`（L44，E）；`createSessionOperations`（L53，E）。
@@ -393,7 +395,7 @@
 - [packages/iam/src/ticket/iam-ticket-functions.ts](../packages/iam/src/ticket/iam-ticket-functions.ts)：`createTicketOperations`（L50，E）。
 - [packages/iam/src/ticket/iam-ticket-types.ts](../packages/iam/src/ticket/iam-ticket-types.ts)：`TicketGrant`（L18，E）；`IssueTicketOptions`（L32，E）；`IssuedTicket`（L46，E）；`ConsumeTicketOptions`（L56，E）；`ConsumedTicket`（L64，E）；`TicketOperations`（L78，E）。
 - [packages/iam/src/user/iam-user-functions.ts](../packages/iam/src/user/iam-user-functions.ts)：`UserOperationsDeps`（L63，E）；`createUserOperations`（L77，E）。
-- [packages/iam/src/user/iam-user-repository-reset-token.ts](../packages/iam/src/user/iam-user-repository-reset-token.ts)：`hashResetToken`（L30，E）；`ResetTokenRepository`（L45，E）；`resetResetTokenRepoSingleton`（L120，E）；`createCacheResetTokenRepository`（L131，E）。
+- 原基线 `packages/iam/src/user/iam-user-repository-reset-token.ts`：`hashResetToken`（L30，E）；`ResetTokenRepository`（L45，E）；`resetResetTokenRepoSingleton`（L120，E）；`createCacheResetTokenRepository`（L131，E）。此独立缓存仓储已由 IAM-06 删除，保留原扫描证据；当前[密码重置流程](../packages/iam/src/user/iam-user-functions.ts)调用[用户数据库仓储](../packages/iam/src/user/iam-user-repository-user.ts)的 `publishPasswordReset` / `claimPasswordReset` / `commitPasswordReset`，令牌消费与密码代际最终写入按同一用户行条件提交；这些旧工厂不是现存 API。
 - [packages/iam/src/user/iam-user-repository-user.ts](../packages/iam/src/user/iam-user-repository-user.ts)：`UserRepository`（L21，E）；`resetUserRepoSingleton`（L216，E）；`createDbUserRepository`（L229，E）。
 - [packages/iam/src/user/iam-user-types.ts](../packages/iam/src/user/iam-user-types.ts)：`UserSortField`（L14，E）；`UserSortDirection`（L17，E）；`ListUsersOptions`（L22，E）；`User`（L42，E）；`AgreementDisplay`（L76，E）；`StoredUser`（L94，E）；`RegisterOptions`（L112，E）；`RegisterResult`（L130，E）；`UpdateCurrentUserInput`（L144，E）；`UserOperations`（L164，E）。
 - [packages/iam/src/user/iam-user-utils.ts](../packages/iam/src/user/iam-user-utils.ts)：`toUser`（L19，E）。
@@ -411,7 +413,7 @@
 
 ## JSDOC-13 · @h-ai/kit
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 151，缺 JSDoc 3，缺示例 91。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 151，缺 JSDoc 3，缺示例 91。
 
 ### 顶层导出定位
 
@@ -454,7 +456,7 @@
 
 ## JSDOC-14 · @h-ai/payment
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 50，缺 JSDoc 8，缺示例 47。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 50，缺 JSDoc 8，缺示例 47。
 
 ### 顶层导出定位
 
@@ -479,7 +481,7 @@
 
 ## JSDOC-15 · @h-ai/reach
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 51，缺 JSDoc 1，缺示例 42。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 51，缺 JSDoc 1，缺示例 42。
 
 ### 顶层导出定位
 
@@ -503,7 +505,7 @@
 
 ## JSDOC-16 · @h-ai/reldb
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 84，缺 JSDoc 4，缺示例 57。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 84，缺 JSDoc 4，缺示例 57。
 
 ### 顶层导出定位
 
@@ -531,7 +533,7 @@
 
 ## JSDOC-17 · @h-ai/scheduler
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 71，缺 JSDoc 38，缺示例 67。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 71，缺 JSDoc 38，缺示例 67。
 
 ### 顶层导出定位
 
@@ -557,7 +559,7 @@
 
 ## JSDOC-18 · @h-ai/serv
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 106，缺 JSDoc 3，缺示例 98。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 106，缺 JSDoc 3，缺示例 98。
 
 ### 顶层导出定位
 
@@ -602,7 +604,7 @@
 
 ## JSDOC-19 · @h-ai/storage
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 49，缺 JSDoc 5，缺示例 38。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 49，缺 JSDoc 5，缺示例 38。
 
 ### 顶层导出定位
 
@@ -625,7 +627,7 @@
 
 ## JSDOC-20 · @h-ai/ui
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 297，缺 JSDoc 63，缺示例 284。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 297，缺 JSDoc 63，缺示例 284。
 
 ### 顶层导出定位
 
@@ -729,7 +731,7 @@
 
 ## JSDOC-21 · @h-ai/vecdb
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 35，缺 JSDoc 3，缺示例 26。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 35，缺 JSDoc 3，缺示例 26。
 
 ### 顶层导出定位
 

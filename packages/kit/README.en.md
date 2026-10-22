@@ -312,12 +312,12 @@ Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During 
 pnpm --filter @h-ai/kit test
 ```
 
-## License
-
-Apache-2.0
-
 Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
 
 Kit has no module-wide init/close. The application initializes and closes shared cache, IAM and crypto dependencies. See the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for typechecked public examples. Authenticate requests with iam.auth.verifyToken; a nonempty token is not proof of identity.
 
 `kit.auth.logout(cookies, accessToken)` returns `Promise<HaiResult<void>>`. Without a token it only clears cookies and succeeds; with a token but no configured auth operations it fails. Local cookies are cleared for every server outcome. Callers must preserve failed results in their HTTP response or UI; local clearing does not confirm server revocation. Underlying control-flow exceptions still propagate.
+
+## License
+
+Apache-2.0

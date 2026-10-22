@@ -124,12 +124,12 @@ pnpm --filter @h-ai/api-contract test
 pnpm --filter @h-ai/api-contract typecheck
 ```
 
-## ライセンス
-
-Apache-2.0
-
 ## 入力制約と HTTP 機能
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../../docs/storage-api-capabilities.md)を参照してください。
 
 Schema、推論型と組合せツールには型検査できる例があります。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。Schema のローカル例は provider の実行証明ではありません。
+
+## ライセンス
+
+Apache-2.0

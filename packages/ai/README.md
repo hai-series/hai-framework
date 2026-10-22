@@ -657,10 +657,10 @@ pnpm --filter @h-ai/ai build
 
 源码 JSDoc 的公开示例从实际包入口导入，内部工厂示例标记“模块内部上下文”，分别按真实声明编译。根目录执行 `pnpm check:jsdoc --package ai` 核验覆盖与示例类型；普通业务方法检查 HaiResult，流式与浏览器 AudioClient 保留显式抛错契约。
 
-## 许可证
-
-Apache-2.0
-
 Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。
 
 SSE 文本解码遵循 [WHATWG 事件流规则](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)：LF/CRLF/CR 跨片、多行 data、仅去冒号后一个空格、继承有效 id/retry；空或缺省 event 按 message，EOF 不补空行派发残余事件。encodeSSE 规范化 data 换行，并对 id/event 换行、id 的 NUL 或无效 retry 显式抛错。Anthropic/MiMo 共用内部 UTF-8 流读取；消费方退出、取消、协议结束和失败均取消正文并释放 reader，不自动重连或重放业务。Anthropic timeout 覆盖正文，MiMo 保留每个 HTTP 请求的独立 timeout。
+
+## 许可证
+
+Apache-2.0

@@ -154,10 +154,10 @@ pnpm --filter @h-ai/capacitor test
 
 > ネイティブプラグインへの依存があるため、テストでは `@capacitor/*` モジュールを mock する必要があります。
 
-## ライセンス
-
-Apache-2.0
-
 Push は実際のネイティブ環境が必要です。`push.register({ signal? })` と `push.listen(callbacks, { signal? })` の設定段階は権限要求とリスナー登録を含め30秒で終了します。失敗、タイムアウト、中止、`capacitor.close()` はコールバックを停止し、所有するハンドルを除去します。遅延したハンドルも到着時に除去し、removeAllListeners で他の利用者を巻き込みません。listen 成功後も signal と cleanup が有効です。cleanup と close は `HaiResult<void>` を返し、ネイティブ除去失敗は `PUSH_CLEANUP_FAILED`（`capacitor:032`）です。失敗したハンドルを保持して再試行し、成功済みの除去は繰り返しません。終了直後にモジュールを無効化し、再初期化前に残存ハンドルを処理します。制御したプラグイン試験は Android/iOS 実機の権限、FCM/APNs、反復登録試験を代替しません。
 
 公開操作、内部リソースと型には型検査できる例があります。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。型検査は端末権限や FCM/APNs の実配信を保証しません。
+
+## ライセンス
+
+Apache-2.0

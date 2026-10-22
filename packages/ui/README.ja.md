@@ -910,12 +910,12 @@ pnpm --filter @h-ai/ui test
 
 コンポーネントのサブパスは package.exports に明記した barrel（例: `@h-ai/ui/components/primitives/index`）に限定します。内部実装やストレージ補助関数は非公開で、ホストのクリップボード登録は引き続き公開します。
 
-## ライセンス
-
-Apache-2.0
-
 `@h-ai/ui/i18n` の createLocaleStore は、解決できる保存値、navigator.languages 全体（その後 navigator.language）、defaultLocale、対応一覧の先頭の順で選択します。未対応の最初の候補で既定値に戻しません。大小文字、言語略称、地域・スクリプトの段階的フォールバックを照合し、設定済みのコードを返します。同じ言語の複数候補は supportedLocales 順です。実際の一致がなければ detectBrowserLocale は null、空の対応一覧では最終的に呼出側の既定値を返します。SSR はブラウザー候補を読まず全体の言語を変更しません。Paraglide アプリは独自の setLocale 同期が必要で、対応一覧の追加だけでは UI 内蔵辞書は増えません。
 
 ## 入力制約と HTTP 機能
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../../docs/storage-api-capabilities.md)を参照してください。
+
+## ライセンス
+
+Apache-2.0

@@ -174,10 +174,6 @@ Production requires Redis (including Cluster); memory is for development/explici
 
 `cache.init(config)` selects the built-in memory/redis backend. Provider implementations are internal; there is no custom backend registration API.
 
-## License
-
-Apache-2.0
-
 `password` authenticates standalone, Cluster, and Sentinel data nodes, including discovered/redirected Cluster connections. In `url` mode the credentials in the URL take precedence; the separate password field does not override them.
 
 compareAndSwap atomically compares one JSON value and replaces/deletes it, returning boolean applied. Undefined expected means absent; undefined value deletes; null is a JSON value. px is a positive integer and excludes keepTtl. Omitting expiry persists the replacement; a comparison miss preserves TTL. Use it for shared versioned commits.
@@ -187,3 +183,7 @@ The owner token only protects lease renewal and release; it is not a resource fe
 `kv.set` returns `HaiResult<boolean>`: `data=true` means the write applied. An NX/XX miss returns `success=true,data=false` without changing the value or TTL. Check both fields before issuing tickets, sessions or key registrations. `ex/px/exat/pxat` use seconds, milliseconds, Unix seconds and Unix milliseconds; choose one positive safe integer, excluding `keepTtl=true`. NX and XX are mutually exclusive. Zero, negative, fractional, non-finite or overflowing values return `INVALID_SET_OPTIONS` (`cache:016`) without creating a permanent key. A positive absolute deadline in the past expires immediately. Omitting expiry removes an existing TTL; `keepTtl` retains it and leaves new keys permanent. Both providers store JSON snapshots.
 
 Public contracts and internal structures include typechecked examples; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).
+
+## License
+
+Apache-2.0

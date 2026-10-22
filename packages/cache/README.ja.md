@@ -174,10 +174,6 @@ pnpm --filter @h-ai/cache test
 
 `cache.init(config)` は組み込み memory/redis を選択します。Provider は内部契約であり、独自バックエンドの登録 API はありません。
 
-## ライセンス
-
-Apache-2.0
-
 `password` は単独・Cluster・Sentinel のデータノードに使用され、発見・リダイレクト後の接続にも適用します。`url` 指定時は URL 内の認証情報を使用し、独立した password フィールドでは上書きしません。
 
 compareAndSwap は単一キーの JSON 値を原子的に比較・置換/削除し、適用有無を返します。expected の undefined は不存在、value の undefined は削除、null は JSON 値です。px は正の整数で keepTtl と排他です。期限省略時は永続保存し、不一致なら TTL を変更しません。
@@ -187,3 +183,7 @@ owner はリース延長・解除の所有権であり、リソースの fencing
 `kv.set` は `HaiResult<boolean>` を返し、`data=true` は書き込みの適用を表します。NX/XX が不成立なら `success=true,data=false` となり、値と TTL を変更しません。チケット、セッション、公鍵登録の発行前に両方を確認してください。`ex/px/exat/pxat` の単位は秒、ミリ秒、Unix 秒、Unix ミリ秒です。正の安全な整数を一つだけ指定し、`keepTtl=true` と併用できません。NX と XX も排他です。ゼロ、負数、小数、非有限値、オーバーフローは `INVALID_SET_OPTIONS`（`cache:016`）となり、永続キーを作成しません。過去の正の絶対期限は即時失効します。期限を省略すると既存 TTL は削除され、`keepTtl` は既存 TTL を維持します。新規キーは期限なしです。両 provider は JSON スナップショットを保存します。
 
 公開契約と内部構造には型検査できる例を用意しています。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。
+
+## ライセンス
+
+Apache-2.0
