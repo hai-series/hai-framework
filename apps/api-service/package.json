@@ -29,7 +29,9 @@
     "test": "vitest run",
     "clean": "rimraf dist .turbo",
     "test:watch": "vitest",
-    "compile": "tsup"
+    "compile": "tsup",
+    "build:images": "hai build --target docker",
+    "deploy": "hai deploy"
   },
   "dependencies": {
     "@h-ai/ai": "workspace:*",
@@ -49,6 +51,7 @@
   "devDependencies": {
     "@h-ai/api-client": "workspace:*",
     "@h-ai/cli": "workspace:*",
+    "@h-ai/deploy": "workspace:*",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",

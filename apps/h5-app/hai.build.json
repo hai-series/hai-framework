@@ -3,8 +3,7 @@
     {
       "name": "app",
       "context": "../..",
-      "dockerfile": "apps/h5-app/Dockerfile",
-      "target": "runtime",
+      "dockerfile": "images/app.Dockerfile",
       "containerPort": 3000
     }
   ]

@@ -1,7 +1,7 @@
 {
   "images": [
-    { "name": "app", "target": "runtime", "containerPort": 3000 }{{#if fullstack.frontends.web}},
-    { "name": "web", "target": "web", "containerPort": 8080 }{{/if}}
+    { "name": "app", "dockerfile": "images/app.Dockerfile", "containerPort": 3000 }{{#if fullstack.frontends.web}},
+    { "name": "web", "dockerfile": "images/web.Dockerfile", "containerPort": 8080 }{{/if}}
   ]{{#if fullstack.frontends.desktop}},
   "desktop": ["apps/{{projectName}}-desktop"]{{/if}}
 }

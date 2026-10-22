@@ -61,6 +61,9 @@ describe('buildSshExecArgs', () => {
 })
 
 describe('buildScpUploadArgs', () => {
+  it('ipv6 上传地址使用方括号区分主机与远程路径', () => {
+    expect(buildScpUploadArgs(makeSshConfig({ host: '2001:db8::1' }), '/local/image.tar', '/opt/image.tar')).toContain('deploy@[2001:db8::1]:/opt/image.tar')
+  })
   it('使用大写 -P 指定端口并拼接远程目标', () => {
     const args = buildScpUploadArgs(makeSshConfig({ port: 2222 }), '/local/image.tar', '/opt/hai/apps/demo/image.tar')
     expect(args).toContain('-P')

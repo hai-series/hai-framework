@@ -77,14 +77,6 @@ vi.mock('../src/commands/cli-commands.js', () => ({
   initProject: commandMocks.initProject,
 }))
 
-vi.mock('@h-ai/core', () => ({
-  core: {
-    logger: {
-      info: vi.fn(),
-    },
-  },
-}))
-
 async function loadCliMain() {
   vi.resetModules()
   cliState.commands.clear()

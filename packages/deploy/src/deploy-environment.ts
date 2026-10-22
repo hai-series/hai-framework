@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { core, err, ok } from '@h-ai/core'
-import { parse } from 'yaml'
+import { LineCounter, parse, parseDocument } from 'yaml'
 import { deployM } from './deploy-i18n.js'
 import { HaiDeployError } from './deploy-types.js'
 
@@ -56,11 +56,17 @@ function resolveConfig(value: unknown, prefix: string, env: Record<string, strin
  */
 export function loadDeploymentConfig(name: string, path: string, values: Record<string, string | undefined>): HaiResult<Record<string, unknown>> {
   try {
-    const config = resolveConfig(parse(readFileSync(path, 'utf8')), `HAI_${name.toUpperCase()}`, values)
+    const lineCounter = new LineCounter()
+    const document = parseDocument(readFileSync(path, 'utf8'), { lineCounter, prettyErrors: false })
+    if (document.errors.length)
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line) } }))
+    const config = resolveConfig(document.toJS(), `HAI_${name.toUpperCase()}`, values)
+    if (config !== null && (typeof config !== 'object' || Array.isArray(config)))
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
     return ok(config && typeof config === 'object' && !Array.isArray(config) ? config as Record<string, unknown> : {})
   }
   catch {
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentReadFailed'))
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileUnreadable', { params: { path } }))
   }
 }
 

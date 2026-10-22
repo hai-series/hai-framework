@@ -36,13 +36,13 @@ let tmpRoot = ''
 
 it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，原生端不生成 Web 服务（%s）', async (target) => {
   const project = path.join(tmpRoot, `deploy-${target}`)
-  await generateFromTemplates(project, buildTemplateContext({ name: `deploy-${target}`, appType: 'fullstack', frontends: [target], features: ['deploy'], packageManager: 'pnpm' }))
+  await generateFromTemplates(project, buildTemplateContext({ name: `deploy-${target}`, appType: 'fullstack', frontends: [target], features: [], packageManager: 'pnpm' }))
   const loaded = loadDeploymentConfig('deploy', path.join(project, `packages/deploy-${target}-serv/config/_deploy.yml`), {})
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     throw new Error(loaded.error.message)
-  expect(loaded.data.container).toBeUndefined()
-  const build = JSON.parse(await readGenerated(project, 'hai.build.json')) as { images: Array<{ name: string, target: string }> }
+  expect(loaded.data.container).toEqual({ s3Engine: 'rustfs' })
+  const build = JSON.parse(await readGenerated(project, 'hai.build.json')) as { images: Array<{ name: string, dockerfile: string }> }
   expect(await fileExists(project, 'scripts/run-e2e.mjs')).toBe(true)
   expect(build.images.map(image => image.name)).toEqual(target === 'web' ? ['app', 'web'] : ['app'])
 })
@@ -92,12 +92,24 @@ beforeAll(async () => {
   tmpRoot = await mkdtemp(path.join(process.cwd(), '.tmp-e2e-test-'))
 })
 
+it('默认提供开发期部署工具，关闭时移除入口，并忽略任意深度的依赖快照', async () => {
+  for (const enabled of [true, false]) {
+    const project = path.join(tmpRoot, `deployment-${enabled}`)
+    await generateFromTemplates(project, buildTemplateContext({ name: `deployment-${enabled}`, appType: 'fullstack', features: [], deploy: enabled, packageManager: 'pnpm' }))
+    const manifest = JSON.parse(await readGenerated(project, 'package.json'))
+    expect(manifest.dependencies['@h-ai/deploy']).toBeUndefined()
+    expect(manifest.devDependencies['@h-ai/deploy']).toBe(enabled ? 'catalog:' : undefined)
+    expect(manifest.scripts.deploy).toBe(enabled ? `hai deploy packages/deployment-${enabled}-serv` : undefined)
+    expect(await readGenerated(project, '.gitignore')).toContain('**/images/dependencies/')
+  }
+})
+
 afterAll(async () => {
   if (tmpRoot)
     await rm(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 })
 
-it.each<AppType>(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'])('%s 应忽略所有层级的数据目录，包括占位文件', async (appType) => {
+it.each<AppType>(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'])('%s 忽略所有层级的数据目录，容器文件使用 LF 并由 Git 保留', async (appType) => {
   const projectPath = await generateProject({ name: `ignore-data-${appType}`, appType })
   const dataPaths = ['data/app.db', 'data/.gitkeep', 'packages/service/data/uploads/avatar.png', 'apps/web/data/.gitkeep']
   for (const dataPath of dataPaths)
@@ -108,6 +120,14 @@ it.each<AppType>(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'])('
     encoding: 'utf-8',
   }).trim().split(/\r?\n/)
   expect(ignored).toEqual(dataPaths)
+  const containerFiles = ['.dockerignore', 'images/app.Dockerfile', 'images/web.Dockerfile', 'images/web/19-runtime-config.envsh', 'images/web/19-runtime-config.sh']
+  for (const file of containerFiles) {
+    if (!await fileExists(projectPath, file))
+      continue
+    expect(await readGenerated(projectPath, file), file).not.toContain('\r')
+    const attribute = execFileSync('git', ['-C', projectPath, 'check-attr', 'eol', '--', file], { encoding: 'utf8' }).trim()
+    expect(attribute, file).toBe(`${file}: eol: lf`)
+  }
 })
 
 it('fullstack 应保留完整配置文件、用户选择和未启用模块的注释示例', async () => {
@@ -132,7 +152,7 @@ it('fullstack 应保留完整配置文件、用户选择和未启用模块的注
   expect(db).toMatchObject({ type: 'postgresql', host: 'db.internal', port: 5433, database: 'app: primary' })
   expect(cache).toMatchObject({ type: 'redis', host: 'cache.internal', port: 6380 })
   expect(iam).toMatchObject({ login: { otp: true }, seedDefaultData: false })
-  for (const moduleKey of ['ai', 'vecdb', 'payment', 'scheduler', 'deploy']) {
+  for (const moduleKey of ['ai', 'vecdb', 'payment', 'scheduler']) {
     const content = await readGenerated(projectPath, `${configDir}/_${moduleKey}.yml`)
     // 注释文件解析为空，不会触发可选模块，也不会读取其凭据占位符。
     expect(parse(content)).toBeNull()

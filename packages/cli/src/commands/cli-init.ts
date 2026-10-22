@@ -7,10 +7,9 @@
 
 import type { GlobalOptions, ProjectInfo } from '../cli-types.js'
 import path from 'node:path'
-import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import ora from 'ora'
-import { fileExists, writeFile } from '../cli-utils.js'
+import { fileExists, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
 import { generateConfigFile } from './cli-config-templates.js'
 import { detectProject } from './cli-create.js'
 
@@ -110,41 +109,41 @@ export async function initProject(options: InitOptions): Promise<void> {
         overwriteBridgeFiles: false,
       })
       for (const generatedFile of generatedFiles) {
-        core.logger.info(chalk.gray(`  + ${generatedFile}`))
+        writeCliMessage(chalk.gray(`  + ${generatedFile}`))
       }
     }
 
     // 显示项目状态
-    core.logger.info('')
-    core.logger.info(chalk.bold('项目状态:'))
-    core.logger.info(`  名称: ${chalk.cyan(project.name)}`)
-    core.logger.info(`  版本: ${project.version}`)
-    core.logger.info(`  已安装模块: ${project.haiPackages.length > 0 ? project.haiPackages.map(p => chalk.cyan(p)).join(', ') : chalk.gray('无')}`)
-    core.logger.info('')
+    writeCliMessage('')
+    writeCliMessage(chalk.bold('项目状态:'))
+    writeCliMessage(`  名称: ${chalk.cyan(project.name)}`)
+    writeCliMessage(`  版本: ${project.version}`)
+    writeCliMessage(`  已安装模块: ${project.haiPackages.length > 0 ? project.haiPackages.map(p => chalk.cyan(p)).join(', ') : chalk.gray('无')}`)
+    writeCliMessage('')
 
     // 显示配置状态
     if (existing.length > 0) {
-      core.logger.info(chalk.bold('已有配置:'))
+      writeCliMessage(chalk.bold('已有配置:'))
       for (const key of existing) {
-        core.logger.info(chalk.green(`  ✔ config/_${key}.yml`))
+        writeCliMessage(chalk.green(`  ✔ config/_${key}.yml`))
       }
     }
 
     // 无缺失配置
     if (missing.length === 0 && !options.force) {
-      core.logger.info('')
-      core.logger.info(chalk.green('✔ 所有配置文件已就绪！'))
+      writeCliMessage('')
+      writeCliMessage(chalk.green('✔ 所有配置文件已就绪！'))
       return
     }
 
     // 补全缺失配置
     if (missing.length > 0) {
-      core.logger.info('')
-      core.logger.info(chalk.bold('缺失配置:'))
+      writeCliMessage('')
+      writeCliMessage(chalk.bold('缺失配置:'))
       for (const item of missing) {
-        core.logger.info(chalk.yellow(`  ✘ config/_${item.configKey}.yml (${item.label})`))
+        writeCliMessage(chalk.yellow(`  ✘ config/_${item.configKey}.yml (${item.label})`))
       }
-      core.logger.info('')
+      writeCliMessage('')
 
       spinner.start('生成缺失配置文件...')
       let generated = 0
@@ -159,7 +158,7 @@ export async function initProject(options: InitOptions): Promise<void> {
 
     // 强制模式：重新生成所有配置
     if (options.force && existing.length > 0) {
-      core.logger.info('')
+      writeCliMessage('')
       spinner.start('强制重新生成所有配置文件...')
       let regenerated = 0
       for (const pkg of project.haiPackages) {
@@ -183,17 +182,17 @@ export async function initProject(options: InitOptions): Promise<void> {
       spinner.succeed()
     }
 
-    core.logger.info('')
-    core.logger.info(chalk.green('✔ 项目配置初始化完成！'))
-    core.logger.info('')
-    core.logger.info(chalk.gray('下一步:'))
-    core.logger.info(chalk.gray('  1. 编辑 config/ 中的配置文件'))
-    core.logger.info(chalk.gray('  2. 运行 pnpm dev 启动开发服务'))
-    core.logger.info('')
+    writeCliMessage('')
+    writeCliMessage(chalk.green('✔ 项目配置初始化完成！'))
+    writeCliMessage('')
+    writeCliMessage(chalk.gray('下一步:'))
+    writeCliMessage(chalk.gray('  1. 编辑 config/ 中的配置文件'))
+    writeCliMessage(chalk.gray('  2. 运行 pnpm dev 启动开发服务'))
+    writeCliMessage('')
   }
   catch (error) {
     spinner.fail()
-    core.logger.error(chalk.red('初始化失败:'), { error })
+    writeCliError(chalk.red('初始化失败:'), { error })
     throw error
   }
 }

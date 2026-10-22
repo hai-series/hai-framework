@@ -3,11 +3,11 @@ import type { DeploymentArtifact } from '@h-ai/deploy'
 import type { GlobalOptions } from '../cli-types.js'
 import { spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { core } from '@h-ai/core'
 import { cliM } from '../cli-i18n.js'
+import { writeCliMessage } from '../cli-utils.js'
 
 /**
  * 构建参数，不接受部署环境。
@@ -16,6 +16,8 @@ import { cliM } from '../cli-i18n.js'
 export interface BuildCommandOptions extends GlobalOptions {
   /** compile 编译源码，docker 导出镜像，desktop 调用 Tauri。 */
   target?: 'compile' | 'docker' | 'desktop'
+  /** 逗号分隔的应用镜像名；省略时构建全部。 */
+  images?: string
   /** auto 优先使用可达的 Podman。 */
   runtime?: 'auto' | 'podman' | 'docker'
   /** 容器构建网络，默认采用引擎设置；例如 rootless Podman 的 pasta。 */
@@ -32,10 +34,10 @@ export interface BuildCommandOptions extends GlobalOptions {
 
 /**
  * 项目构建描述；app/web 共用 buildId。
- * @example `{ images: [{ name: 'app', target: 'runtime' }], desktop: ['apps/desktop'] }`
+ * @example `{ images: [{ name: 'app', dockerfile: 'images/app.Dockerfile' }], desktop: ['apps/desktop'] }`
  */
 interface BuildConfig {
-  images?: Array<{ name: 'app' | 'web', context?: string, dockerfile?: string, target?: string, containerPort?: number }>
+  images?: Array<{ name: 'app' | 'web', context?: string, dockerfile: string, containerPort?: number }>
   desktop?: string[]
 }
 
@@ -85,7 +87,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const target = options.target ?? 'compile'
   if (!['compile', 'docker', 'desktop'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
-  if ((target !== 'docker' && (options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
+  if ((target !== 'docker' && (options.images !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
     || (target !== 'desktop' && (options.platform !== undefined || options.arch !== undefined))) {
     throw new Error(cliM('cli_build_options_invalid'))
   }
@@ -112,12 +114,20 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     const bundles = platform === 'windows' ? 'nsis' : platform === 'macos' ? 'app,dmg' : 'deb,appimage'
     for (const directory of config.desktop)
       await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, '--config', JSON.stringify({ version: appVersion })], resolve(cwd, directory))
-    core.logger.info(cliM('cli_build_native_ready', { params: { target: rustTarget } }))
+    writeCliMessage(cliM('cli_build_native_ready', { params: { target: rustTarget } }))
     return
   }
-  if (!Array.isArray(config.images) || !config.images.length || config.images.filter(image => image.name === 'app').length !== 1 || config.images.length > 2 || new Set(config.images.map(image => image.name)).size !== config.images.length
-    || config.images.some(image => !['app', 'web'].includes(image.name) || (image.containerPort !== undefined && (!Number.isInteger(image.containerPort) || image.containerPort < 1 || image.containerPort > 65535)))) {
+  if (!Array.isArray(config.images) || !config.images.length || config.images.some(image => !image || typeof image !== 'object') || config.images.filter(image => image.name === 'app').length !== 1 || config.images.length > 2 || new Set(config.images.map(image => image.name)).size !== config.images.length
+    || config.images.some(image => !['app', 'web'].includes(image.name) || typeof image.dockerfile !== 'string' || !image.dockerfile || 'target' in image || (image.containerPort !== undefined && (!Number.isInteger(image.containerPort) || image.containerPort < 1 || image.containerPort > 65535)))) {
     throw new Error(cliM('cli_build_images_missing'))
+  }
+  const selected = options.images?.split(',').map(name => name.trim())
+  if (selected && (selected.some(name => !config.images!.some(image => image.name === name)) || new Set(selected).size !== selected.length))
+    throw new Error(cliM('cli_build_selection_invalid'))
+  const images = config.images.filter(image => !selected || selected.includes(image.name))
+  for (const image of images) {
+    if (!existsSync(resolve(cwd, image.dockerfile)))
+      throw new Error(cliM('cli_build_dockerfile_missing', { params: { path: image.dockerfile } }))
   }
   const candidates = options.runtime && options.runtime !== 'auto' ? [options.runtime] : ['podman', 'docker']
   if (candidates.some(runtime => !['podman', 'docker'].includes(runtime)))
@@ -139,21 +149,28 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       throw new Error(cliM('cli_build_mirror_invalid'))
   }
   const buildId = `${appVersion}-${Date.now()}-${randomBytes(3).toString('hex')}`
-  const artifact: DeploymentArtifact = { version: 2, appVersion, buildId, images: [] }
+  const artifact: DeploymentArtifact = { version: 3, appVersion, buildId, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
+  // 部分构建仍保留工程显式声明的端口，不用构建默认值覆盖部署配置。
+  for (const image of config.images) {
+    if (image.containerPort !== undefined)
+      artifact[image.name === 'app' ? 'appContainerPort' : 'webContainerPort'] = image.containerPort
+  }
   const parent = join(cwd, '.hai/build/docker')
   mkdirSync(parent, { recursive: true })
   const staging = mkdtempSync(join(parent, '.building-'))
   const built: string[] = []
   try {
-    for (const image of config.images) {
+    for (const context of new Set(images.map(image => resolve(cwd, image.context ?? '.'))))
+      prepareDependencyInputs(context)
+    for (const image of images) {
       if (!['app', 'web'].includes(image.name))
         throw new Error(cliM('cli_build_images_missing'))
       const context = resolve(cwd, image.context ?? '.')
       const imageRef = `localhost/hai-${basenameSafe(cwd)}-${image.name}:${buildId.toLowerCase().replaceAll('+', '_')}`
-      const args = ['build', '-f', resolve(context, image.dockerfile ?? 'Dockerfile'), '-t', imageRef]
+      const args = ['build', '-f', resolve(cwd, image.dockerfile), '-t', imageRef]
       if (options.network !== undefined)
         args.push('--network', options.network)
-      const ignore = `${resolve(context, image.dockerfile ?? 'Dockerfile')}.dockerignore`
+      const ignore = `${resolve(cwd, image.dockerfile)}.dockerignore`
       if (runtime === 'podman' && existsSync(ignore))
         args.push('--ignorefile', ignore)
       if (runtime === 'podman') {
@@ -166,8 +183,6 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
           }
         }
       }
-      if (image.target)
-        args.push('--target', image.target)
       if (options.sqlitePrebuildMirror)
         args.push('--build-arg', `SQLITE_PREBUILD_MIRROR=${options.sqlitePrebuildMirror}`)
       built.push(imageRef)
@@ -186,7 +201,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     renameSync(staging, output)
     writeFileSync(join(parent, `latest-${buildId}`), `${buildId}\n`)
     renameSync(join(parent, `latest-${buildId}`), join(parent, 'latest'))
-    core.logger.info(cliM('cli_build_ready', { params: { path: output, runtime } }))
+    writeCliMessage(cliM('cli_build_ready', { params: { path: output, runtime } }))
   }
   catch (error) {
     for (const imageRef of built) {
@@ -200,6 +215,43 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   finally {
     rmSync(staging, { recursive: true, force: true })
   }
+}
+
+/** 生成稳定的依赖上下文；包配置、补丁和本地归档改变才使下载层失效。 */
+function prepareDependencyInputs(cwd: string): void {
+  const destination = join(cwd, 'images', 'dependencies')
+  mkdirSync(destination, { recursive: true })
+  const tracking = join(destination, '.managed.json')
+  const previous: string[] = existsSync(tracking) ? JSON.parse(readFileSync(tracking, 'utf8')) : []
+  const files: string[] = []
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const source = join(directory, entry.name)
+      if (source === destination || ['node_modules', '.git', '.hai', '.turbo', '.svelte-kit', '.pnpm-store', '.cache', 'dist', 'build', 'data', 'tmp', 'test-results', 'playwright-report'].includes(entry.name))
+        continue
+      if (entry.isDirectory()) {
+        walk(source)
+        continue
+      }
+      if (!entry.isFile() || !(entry.name === 'package.json' || entry.name === '.pnpmfile.cjs' || /\.(?:tgz|patch)$/.test(entry.name)))
+        continue
+      const file = relative(cwd, source)
+      mkdirSync(dirname(join(destination, file)), { recursive: true })
+      const target = join(destination, file)
+      if (!existsSync(target) || !readFileSync(source).equals(readFileSync(target)))
+        copyFileSync(source, target)
+      files.push(file)
+    }
+  }
+  walk(cwd)
+  for (const file of previous) {
+    const target = resolve(destination, file)
+    if (!files.includes(file) && !relative(destination, target).startsWith('..'))
+      rmSync(target, { force: true })
+  }
+  const content = `${JSON.stringify(files)}\n`
+  if (!existsSync(tracking) || readFileSync(tracking, 'utf8') !== content)
+    writeFileSync(tracking, content)
 }
 
 /** 将当前目录名转为安全镜像名称。 */

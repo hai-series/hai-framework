@@ -390,6 +390,12 @@ export const deploy: DeployFunctions = {
       ...(scanOptions.environment ? { environment: environment.data.environment } : {}),
       ...(options?.skipMiddleware ? { serviceModes: Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])) } : {}),
     }
+    if (options.selectedServices) {
+      options.serviceModes = {
+        ...options.serviceModes,
+        ...Object.fromEntries(scan.requiredServices.filter(service => !options.selectedServices!.includes(service)).map(service => [service, 'keep' as const])),
+      }
+    }
 
     // 容器 Provider（docker-ssh）：走独立的容器部署编排
     if (currentContainerProvider) {
@@ -398,6 +404,8 @@ export const deploy: DeployFunctions = {
 
     if (options?.bundleOnly)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleOnlyContainer'))
+    if (options.selectedServices)
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectedContainerOnly'))
 
     // 到此必为平台 Provider（vercel）
     if (!currentProvider) {
@@ -508,6 +516,17 @@ async function deployContainerApp(
   }
   catch {
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+  }
+  if (artifact.partial && !options?.selectedServices) {
+    const selectedServices = artifact.images.map(image => image.name)
+    options = {
+      ...options,
+      selectedServices,
+      serviceModes: {
+        ...options?.serviceModes,
+        ...Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])),
+      },
+    }
   }
   if (!options?.bundleOnly && currentConfig?.provider.type === 'docker-ssh' && !currentConfig.provider.ssh)
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))

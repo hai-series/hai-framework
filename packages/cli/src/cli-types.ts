@@ -177,6 +177,8 @@ export interface AiModuleConfig {
  * 项目创建选项
  */
 export interface CreateProjectOptions extends GlobalOptions {
+  /** 默认包含部署工具；false 明确关闭。 */
+  deploy?: boolean
   /** 项目名称 */
   name: string
   /** 应用类型 */

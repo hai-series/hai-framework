@@ -5,13 +5,12 @@
 
 import type { GenerateOptions, GeneratorType, TemplateContext } from '../cli-types.js'
 import path from 'node:path'
-import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
 import { cliM } from '../cli-i18n.js'
-import { createTemplateContext } from '../cli-utils.js'
+import { createTemplateContext, writeCliError, writeCliMessage } from '../cli-utils.js'
 import { detectProject } from './cli-create.js'
 
 /**
@@ -61,7 +60,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     const project = await detectProject(cwd)
 
     if (!project?.isHaiProject) {
-      core.logger.warn(chalk.yellow('警告: 当前目录不是 hai 项目'))
+      writeCliMessage(chalk.yellow('警告: 当前目录不是 hai 项目'))
     }
 
     // 交互式获取选项
@@ -111,18 +110,18 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
     spinner.succeed()
 
-    core.logger.info('', {})
-    core.logger.info(chalk.green('✔ 生成完成！'))
-    core.logger.info('', {})
-    core.logger.info('创建的文件:')
+    writeCliMessage('')
+    writeCliMessage(chalk.green('✔ 生成完成！'))
+    writeCliMessage('')
+    writeCliMessage('创建的文件:')
     files.forEach((file) => {
-      core.logger.info(chalk.cyan(`  ${path.relative(cwd, file.path)}`))
+      writeCliMessage(chalk.cyan(`  ${path.relative(cwd, file.path)}`))
     })
-    core.logger.info('', {})
+    writeCliMessage('')
   }
   catch (error) {
     spinner.fail()
-    core.logger.error(chalk.red('生成失败:'), { error })
+    writeCliError(chalk.red('生成失败:'), { error })
     throw error
   }
 }

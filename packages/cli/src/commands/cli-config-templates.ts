@@ -546,83 +546,26 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
 }
 
 function generateDeployConfig(): string {
-  return `# =============================================================================
-# 部署配置 (@h-ai/deploy)
-# =============================================================================
-# 部署平台凭证通过 ~/.hai/credentials.yml 管理
-# 环境变量引用格式: \${VAR_NAME:default_value}
-
-# 部署平台
+  return `# 部署已有镜像；运行 pnpm run deploy --build 可先构建再发布。
+# SSH 参数由向导保存在本机 .env.local；离线打包不要求 SSH。
 provider:
-  type: vercel
-  token: \${HAI_DEPLOY_PROVIDER_TOKEN}
+  type: docker-ssh
+  remote:
+    baseDir: /opt/hai/apps
+    runtime: auto # 优先 Podman，其次 Docker
+  expose:
+    hostPort: 18080
+    containerPort: 3000
 
-# ---------------------------------------------------------------------------
-# 方式二：docker-ssh — 将应用容器化后通过 SSH 部署到任意 Linux 主机
-# 远程主机只需具备 SSH + docker/podman + compose，本地需 docker 或 podman
-# 切换时用下方 provider 替换上面的 vercel provider
-# ---------------------------------------------------------------------------
+container:
+  s3Engine: \${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs} # rustfs | minio
+
+# 完整包包含自建中间件镜像，服务器启动禁止拉取。
+# 外部数据库/存储等连接在对应模块配置和环境文件中设置。
+# Vercel 仅消费已有 .vercel/output，云 Provider/Provisioner 不适用于完全离线。
 # provider:
-#   type: docker-ssh
-#   ssh:
-#     host: \${HAI_DEPLOY_PROVIDER_SSH_HOST}
-#     port: 22
-#     username: deploy
-#     identityFile: \${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE}   # 私钥文件路径（省略则用 ssh-agent）
-#     knownHostsFile: \${HAI_DEPLOY_PROVIDER_SSH_KNOWNHOSTSFILE}
-#     strictHostKeyChecking: true
-#     connectTimeoutSeconds: 10
-#   remote:
-#     baseDir: /opt/hai/apps
-#     runtime: auto                          # auto 优先 podman，其次 docker
-#   expose:
-#     type: port
-#     containerPort: 3000
-#     hostPort: 18080                        # 访问地址 http://<host>:18080
-
-# Compose 中间件参数；镜像构建设置在工程 hai.build.json。
-# container:
-#   s3Engine: rustfs # rustfs | minio；应用使用 storage.type=s3
-
-# 基础设施服务（按需开启）
-# services:
-  # PostgreSQL 数据库 (Neon)
-  # db:
-  #   provisioner: neon
-  #   apiKey: \${HAI_DEPLOY_SERVICES_DB_APIKEY}
-
-  # Redis 缓存 (Upstash)
-  # cache:
-  #   provisioner: upstash
-  #   email: \${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
-  #   apiKey: \${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
-
-  # S3 存储 (Cloudflare R2)
-  # storage:
-  #   provisioner: cloudflare-r2
-  #   accountId: \${HAI_DEPLOY_SERVICES_STORAGE_ACCOUNTID}
-  #   apiToken: \${HAI_DEPLOY_SERVICES_STORAGE_APITOKEN}
-  #   accessKeyId: \${HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID}
-  #   secretAccessKey: \${HAI_DEPLOY_SERVICES_STORAGE_SECRETACCESSKEY}
-
-  # 邮件 (Resend)
-  # email:
-  #   provisioner: resend
-  #   apiKey: \${HAI_DEPLOY_SERVICES_EMAIL_APIKEY}
-  #   from: \${HAI_DEPLOY_SERVICES_EMAIL_FROM}
-
-  # 短信 (阿里云)
-  # sms:
-  #   provisioner: aliyun
-  #   accessKeyId: \${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYID}
-  #   accessKeySecret: \${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYSECRET}
-  #   signName: \${HAI_DEPLOY_SERVICES_SMS_SIGNNAME}
-
-# docker-ssh 说明：
-# - 先 pnpm build --target docker；deploy 消费已有镜像并生成一个 Compose tar 后上传
-# - compose 按实际后端生成中间件；S3 默认 RustFS，可通过 s3Engine 选择 MinIO
-# - 镜像清单含 Web 时一并部署，Web 不接收 API 的私有变量；--bundle-only 可手工搬运
-# - 若同时配置了对应云 Provisioner，则优先使用云资源，不再自建 sidecar
+#   type: vercel
+#   token: \${HAI_DEPLOY_PROVIDER_TOKEN}
 `
 }
 

@@ -58,56 +58,56 @@ const CAPACITOR_SKIPPED_SERVER_FILES = new Set([
 // 以下版本号与生成项目的 pnpm-workspace.yaml catalog 保持一致；
 // 单包脚手架直接写具体版本，pnpm fullstack workspace 会通过 catalog: 引用这些版本。
 const VERSIONS = {
-  antfuEslintConfig: '^9.5.1',
-  capacitorSecureStorage: '^8.0.1',
+  antfuEslintConfig: '9.5.1',
+  capacitorSecureStorage: '8.0.1',
   // UI / Icon
-  bitsUi: '^2.19.5',
-  iconifyJsonTabler: '^1.2.42',
-  iconifyTailwind: '^1.2.3',
+  bitsUi: '2.19.5',
+  iconifyJsonTabler: '1.2.42',
+  iconifyTailwind: '1.2.3',
   // Capacitor
-  capacitorAndroid: '^8.5.3',
-  capacitorApp: '^8.1.2',
-  capacitorCamera: '^8.2.5',
-  capacitorCli: '^8.5.3',
-  capacitorCore: '^8.5.3',
-  capacitorDevice: '^8.0.3',
-  capacitorIos: '^8.5.3',
-  capacitorPreferences: '^8.0.1',
-  capacitorPushNotifications: '^8.1.3',
-  capacitorStatusBar: '^8.0.4',
+  capacitorAndroid: '8.5.3',
+  capacitorApp: '8.1.2',
+  capacitorCamera: '8.2.5',
+  capacitorCli: '8.5.3',
+  capacitorCore: '8.5.3',
+  capacitorDevice: '8.0.3',
+  capacitorIos: '8.5.3',
+  capacitorPreferences: '8.0.1',
+  capacitorPushNotifications: '8.1.3',
+  capacitorStatusBar: '8.0.4',
   // Tailwind / DaisyUI
-  daisyui: '^5.7.47',
-  tailwindcss: '^4.3.3',
-  tailwindcssVite: '^4.3.3',
+  daisyui: '5.7.47',
+  tailwindcss: '4.3.3',
+  tailwindcssVite: '4.3.3',
   // i18n
-  inlangParaglide: '^2.27.0',
-  inlangMessageFormat: '^4.5.0',
+  inlangParaglide: '2.27.0',
+  inlangMessageFormat: '4.5.0',
   // Svelte / Vite
-  svelte: '^5.57.2',
-  svelteKit: '^2.70.3',
-  svelteAdapterNode: '^5.5.7',
-  svelteCheck: '^4.7.6',
-  sveltePlugin: '^7.3.1',
+  svelte: '5.57.2',
+  svelteKit: '2.70.3',
+  svelteAdapterNode: '5.5.7',
+  svelteCheck: '4.7.6',
+  sveltePlugin: '7.3.1',
   // Build / Test
-  vite: '^8.3.4',
-  vitest: '^4.1.11',
-  tsup: '^8.5.1',
-  rimraf: '^6.1.3',
+  vite: '8.3.4',
+  vitest: '4.1.11',
+  tsup: '8.5.1',
+  rimraf: '6.1.3',
   // ESLint
-  eslint: '^10.12.0',
-  eslintPluginFormat: '^2.0.1',
-  eslintPluginSvelte: '^3.23.1',
-  svelteEslintParser: '^1.9.0',
+  eslint: '10.12.0',
+  eslintPluginFormat: '2.0.1',
+  eslintPluginSvelte: '3.23.1',
+  svelteEslintParser: '1.9.0',
   // Node / TS
-  nodeTypes: '^26.6.5',
+  nodeTypes: '26.6.5',
   // Svelte / ESLint / tsup 继续使用稳定的 JavaScript 编译 API。
-  typescript: '^6.0.3',
+  typescript: '6.0.3',
   // E2E
-  playwright: '^1.64.0',
+  playwright: '1.64.0',
   // Validation
-  zod: '^4.6.5',
+  zod: '4.6.5',
   // Tauri
-  tauriCli: '^2.12.1',
+  tauriCli: '2.12.1',
 } as const
 
 type ImplementedFrontendTarget = Exclude<FrontendTarget, 'miniapp'>
@@ -745,11 +745,13 @@ export function buildTemplateContext(options: {
   frontends?: readonly FrontendTarget[]
   moduleConfigs?: ModuleConfigs
   packageManager: string
+  deploy?: boolean
 }): TemplateContext {
   const featureMap: Record<string, boolean> = {}
   for (const f of options.features) {
     featureMap[f] = true
   }
+  featureMap.deploy = options.deploy !== false
 
   // fullstack 默认交付完整 mini 管理功能，不能移除其必需模块。
   if (options.appType === 'fullstack') {
@@ -1034,10 +1036,12 @@ export async function generateFromTemplates(
 
   // 多包模板不继承 base；所有应用统一复制同一份 E2E 清理入口。
   await fse.copy(path.join(root, 'shared', 'run-e2e.mjs'), path.join(projectPath, 'scripts', 'run-e2e.mjs'))
+  await fse.ensureDir(path.join(projectPath, 'images', 'dependencies'))
+  await fse.writeFile(path.join(projectPath, 'images', 'dependencies', '.gitkeep'), '')
   await fse.copy(path.join(root, 'shared', '.gitattributes'), path.join(projectPath, '.gitattributes'))
   if (context.isSvelteOnlyApp) {
     await fse.copy(path.join(root, 'shared', 'vite-runtime-config.ts'), path.join(projectPath, 'scripts', 'vite-runtime-config.ts'))
-    await fse.copy(path.join(root, 'shared', 'container-runtime-config.sh'), path.join(projectPath, 'docker', '19-runtime-config.sh'))
+    await fse.copy(path.join(root, 'shared', 'container-runtime-config.sh'), path.join(projectPath, 'images', 'web', '19-runtime-config.sh'))
   }
 
   if (context.isSvelteOnlyApp || context.appType === 'fullstack') {

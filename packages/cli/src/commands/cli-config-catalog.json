@@ -2061,7 +2061,7 @@
     "path": "deploy.provider.remote.baseDir",
     "description": "远程应用根目录",
     "value": "/opt/hai/apps",
-    "constraint": "字符串；最小字符数 1"
+    "constraint": "字符串；正则 ^\\/[\\w/. -]+$"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME",
@@ -2093,7 +2093,7 @@
     "path": "deploy.provider.ssh.host",
     "description": "远程主机地址或 ~/.ssh/config 中的 Host 别名",
     "value": "",
-    "constraint": "字符串；最小字符数 1"
+    "constraint": "字符串；正则 ^[a-z0-9][a-z0-9.:-]*$"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE",
@@ -2133,7 +2133,7 @@
     "path": "deploy.provider.ssh.username",
     "description": "SSH 用户名",
     "value": "deploy",
-    "constraint": "字符串；最小字符数 1"
+    "constraint": "字符串；正则 ^[a-z_][\\w-]*$"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_TOKEN",

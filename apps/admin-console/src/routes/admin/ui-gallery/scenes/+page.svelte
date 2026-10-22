@@ -122,8 +122,8 @@ def create_app(config: Config) -> "App":
 echo "开始部署..."
 pnpm install --frozen-lockfile
 pnpm build
-docker build -t myapp:latest .
-docker push myapp:latest
+docker build -t myapp:1.0.0 .
+docker push myapp:1.0.0
 echo "部署完成 ✅"
 \`\`\`
 

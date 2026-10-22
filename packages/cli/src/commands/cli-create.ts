@@ -199,7 +199,6 @@ const SELECTABLE_FEATURES: FeatureId[] = [
   'vecdb',
   'datapipe',
   'scheduler',
-  'deploy',
   'api-client',
   'capacitor',
 ]
@@ -299,6 +298,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       name: resolvedOptions.name,
       appType: resolvedOptions.appType,
       features: resolvedOptions.features,
+      deploy: resolvedOptions.deploy,
       frontends: resolvedOptions.frontends,
       moduleConfigs: resolvedOptions.moduleConfigs,
       packageManager: resolvedOptions.packageManager!,
@@ -403,7 +403,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         : generateReadme(resolvedOptions.name, appTypeLabel, resolvedOptions.packageManager!, resolvedOptions.appType)
     await writeFile(
       path.join(projectPath, 'README.md'),
-      readmeContent,
+      resolvedOptions.deploy === false
+        ? readmeContent.replace(/### 构建与部署[\s\S]*?(?=\n#{2,3} |$)/, '### 构建\n\npnpm build\npnpm build --target docker\n\n本项目创建时关闭了部署工具。\n')
+        : readmeContent,
     )
 
     spinner.succeed()
@@ -542,8 +544,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   const appTypeDefaults = APP_TYPES[selectedAppType].defaultFeatures
 
   if (selectedAppType === 'fullstack') {
-    // fullstack 业务模块由模板确定；部署工具可通过显式 --features deploy 启用。
-    selectedFeatures = resolveFeatureDependencies([...appTypeDefaults, ...(options.features?.includes('deploy') ? ['deploy' as const] : [])])
+    selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
   }
   else if (selectedTemplate === 'custom' && !options.features && useDefaults) {
     selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
@@ -576,6 +577,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     const merged = new Set([...templateFeatures, ...appTypeDefaults])
     selectedFeatures = resolveFeatureDependencies(Array.from(merged))
   }
+
+  selectedFeatures = selectedFeatures.filter(feature => feature !== 'deploy')
+  if (options.deploy !== false)
+    selectedFeatures.push('deploy')
 
   // 模块配置
   const moduleConfigs = selectedAppType === 'fullstack'
@@ -680,6 +685,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     frontends: selectedFrontends,
     template: (selectedTemplate ?? 'default') as 'default' | 'minimal' | 'full' | 'custom',
     features: selectedFeatures,
+    deploy: options.deploy !== false,
     moduleConfigs,
     examples: addExamples ?? true,
     install: install ?? true,
@@ -1074,31 +1080,24 @@ function normalizeChildOutput(output: unknown): string {
   return ''
 }
 
-/**
- * 生成 README
- */
 /** 生成各类项目共用的 AI 开发入口说明。 */
 function generateAiDevelopmentReadme(): string {
-  return `## AI 辅助开发
+  return `### AI 辅助开发
 
 从本项目根目录打开所用编码工具，先读取 [AGENTS.md](./AGENTS.md)。Claude Code 通过 [CLAUDE.md](./CLAUDE.md) 加载项目规则；GitHub Copilot 使用 [.github/copilot-instructions.md](./.github/copilot-instructions.md)，OpenCode 使用 AGENTS.md 和 [opencode.json](./opencode.json)。
 
-业务以用户当前明确要求及其指定的需求/设计文档为准。模板 AGENTS、README、skills、生成代码与测试中的角色/权限、流程、限额和架构是可调整的初始方案；审查将差异列为模板适配项，实施按授权同步冲突代码、测试与过期规则，不要求把需求改回模板。框架 API 以当前安装版本公开契约为准，服务端授权、资源隔离、输入校验和凭据保护仍需落实。
+生成的页面和业务规则是起点，可以按需求调整。把功能、权限和验收条件告诉 AI，再让它读取对应技能与当前安装版本的 API。
 
-Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 通过 CLAUDE.md 引用 AGENTS.md，并按项目指引读取 .agents/skills/ 的同一份正文。需求或设计文档在生成前使用 [文档审查 Skill](./.agents/skills/hai-spec-review/SKILL.md) 严格检查完备性、歧义、技术正确性和命名一致性，问题解决后再生成。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
+普通功能开发使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md)。需求文档较多时，先用 [文档审查 Skill](./.agents/skills/hai-spec-review/SKILL.md) 找出缺失和矛盾，再用 [文档实施 Skill](./.agents/skills/hai-spec-implement/SKILL.md) 维护 docs/task-list.md 与 docs/tasks/，逐项实现、测试和交付。
 
-根据文档规划、实施、返修或按已提交文档差异同步实现时，使用 [文档实施 Skill](./.agents/skills/hai-spec-implement/SKILL.md)：维护 docs/task-list.md 与 docs/tasks/，记录已验收文档和实现的 Git SHA，比较固定目标版本后更新原任务或新建任务，每项独立分支 TDD、验证并本地合并；全部差异与整体验收通过后才推进基线。返修沿用原任务与分支。仅规划不开始实现，指定任务先核验依赖。
-
-优先复用适用的 hai-framework 公开 API 与已有业务实现。完成时说明复用的能力、相关能力未采用的原因，以及安全边界和类型、配置、文案、调用方的同步情况。质量验证按当前 package.json 执行 typecheck → lint → build → test；UI、路由与端到端流程另运行 test:e2e，未运行项说明原因。安全与质量规则既要按规范审查，也要运行门禁验证。
-
-已有 hai 项目可运行 hai init 补齐缺失的 AI 支持文件与参考资源；已有 AGENTS.md、Skill 和自定义规则会保留，升级时需将上述需求优先规则、普通开发入口与规范显式合并到旧指引，并修正已被需求替代的模板约束。
+已有项目可运行 hai init 补齐缺失的 AI 入口；它保留已有自定义内容。升级框架使用 [框架升级 Skill](./.agents/skills/hai-framework-sync/SKILL.md)，同时核对依赖、配置、代码和技能。
 
 `
 }
 
 /** 生成各类工程共用的配置与命令说明，放在开发/部署章节之间。 */
 function generateEnvironmentReadme(): string {
-  return `## 分环境配置
+  return `### 分环境配置
 
 运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程环境 > \`.env.local\` > 环境文件 > \`.env\`。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [环境配置](.agents/skills/hai-app-create/development.md#环境配置)。
 
@@ -1114,17 +1113,59 @@ function generateEnvironmentReadme(): string {
 Vite 客户端使用 \`preview\` 预览静态产物，Node 服务使用 \`start\`；纯 contract/shared 库只提供适用的构建和质量命令。API workspace 的环境文件位于 \`apps/<name>-service\`，fullstack 位于工程根。`
 }
 
+/** 生成与项目脚本一致的构建、离线交付和增量更新说明。 */
+function generateBuildDeploymentReadme(pm: string, appDir: string): string {
+  return `### 构建与部署
+
+创建时默认包含部署工具；不需要时使用 hai create --no-deploy。
+每个镜像对应 images/ 中一个 Dockerfile，hai.build.json 用 dockerfile 指定文件。
+下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，避免重复下载。
+默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库；需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
+
+\`\`\`sh
+${pm} build
+${pm} build --target docker
+# 构建和部署一次完成
+${pm} exec hai deploy ${appDir} --env test --build
+# 复用已有镜像；只生成完整离线包及跨平台部署脚本
+${pm} exec hai deploy ${appDir} --env prod --bundle-only
+# 只更新前端（工程存在 web 镜像时）
+${pm} build --target docker --images web
+${pm} exec hai deploy ${appDir} --env prod --services web
+\`\`\`
+
+构建不读取部署环境；产物位于 .hai/build/docker/<buildId>，用 --artifact-dir 精确选择。
+应用根 package.json.version 驱动版本，同版本允许重新构建和发布；清单记录独立构建编号与校验和。
+完整离线包自动携带自建中间件镜像；准备中间件镜像需要构建机有可用 Podman/Docker，缺镜像时在打包阶段拉取。
+服务器需要 Linux、Docker/Podman、Docker Compose v2 或 podman-compose 1.6.0 及以上、sh、tar、sha256sum、awk、curl，启动阶段不联网拉取。
+tar 旁的部署目录提供 deploy.ps1（Windows）和 deploy.sh（Linux/macOS），按已保存的 SSH 参数上传、导入、启动并验证 HTTP。
+完全隔离时手工搬运 tar，独立目录解包后执行 sh apply.sh，或传入部署目录覆盖默认位置。
+部分更新要求已有成功的完整部署，保留未选服务及数据卷；失败返回非零退出码，已有部署尝试恢复选中服务。
+中间件连接齐全时使用 --skip-middleware 跳过配置向导。包中包含私有配置，不提交 Git。
+`
+}
+
 function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn', appType: AppType): string {
   const install = getInstallCommand(pm)
   return `# ${name}
 
+## 简介
+
 基于 hai Agent Framework 构建的${appTypeLabel}应用。
 
-## 页面布局与路由
+## 核心功能清单
+
+- 开发服务器、源码编译与浏览器测试。
+- 按所选模块提供页面和服务配置。
+- 独立 Dockerfile 与镜像归档，便于交付。
+
+## 使用入门
+
+### 页面布局与路由
 
 页面统一继承根布局的 header/footer。${appType === 'mobile-app' ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。' : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}
 
-## 开发
+### 开发
 
 \`\`\`bash
 ${install}
@@ -1133,47 +1174,58 @@ ${getRunCommand(pm, 'dev')}
 
 ${generateEnvironmentReadme()}
 
-## 构建
+### 构建
 
 \`\`\`bash
 ${getRunCommand(pm, 'build')}
-${getRunCommand(pm, 'i18n:compile')}
+${getRunCommand(pm, 'paraglide:compile')}
 ${getRunCommand(pm, 'preview')}
 \`\`\`
 
-## 构建与部署
+${generateBuildDeploymentReadme(pm, `.`)}
 
-\`\`\`bash
-# 默认只编译源码；不选择部署环境
-${pm} build
-# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
-${pm} build --target docker
-# 选择环境、中间件并上传一个 Compose tar；不会重新构建
-${pm} exec hai deploy . --env test
-# 无法连接服务器时只生成包，按输出说明手工搬运和启动
-${pm} exec hai deploy . --env prod --bundle-only
-\`\`\`
-
-镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
-
-${generateAiDevelopmentReadme()}## 文档
+${generateAiDevelopmentReadme()}### 文档
 
 - [hai Agent Framework](https://github.com/hai-series/hai-framework)
 - [Svelte 5](https://svelte.dev/)
+
+## 开发测试
+
+\`\`\`sh
+${getRunCommand(pm, 'typecheck')}
+${getRunCommand(pm, 'lint')}
+${getRunCommand(pm, 'build')}
+${getRunCommand(pm, 'test')}
+${getRunCommand(pm, 'test:e2e')}
+\`\`\`
+
+## 许可证
+
+Apache-2.0
 `
 }
 
 function generateApiWorkspaceReadme(name: string, pm: 'pnpm' | 'npm' | 'yarn'): string {
   return `# ${name}
 
-基于 hai Agent Framework 构建的 typed API workspace。
+## 简介
 
-## 工程结构
+后端 API 工程，接口定义与服务实现分包维护，客户端可复用同一份接口类型。
+
+## 核心功能清单
+
+- 共享 contract、输入输出校验与服务 procedures。
+- 模块配置、健康检查和 HTTP 服务。
+- 独立镜像构建与离线交付。
+
+## 使用入门
+
+### 工程结构
 
 - \`apps/${name}-contract\`：共享 API contract、Zod schema 与类型
 - \`apps/${name}-service\`：后端 API service，基于 \`@h-ai/serv\` 暴露 HTTP 应用
 
-## 开发
+### 开发
 
 \`\`\`bash
 ${pm} install
@@ -1182,7 +1234,23 @@ ${pm} dev
 
 ${generateEnvironmentReadme()}
 
-## 质量门禁
+
+${generateBuildDeploymentReadme(pm, `apps/${name}-service`)}
+
+### 扩展建议
+
+- 在 \`${name}-contract\` 中维护应用级 contract，前后端共用同一份类型与路径定义。
+- 在 \`${name}-service\` 中扩展 procedures、模块初始化与配置。
+- 需要 IAM / storage / ai 时，优先复用 \`@h-ai/api-contract\` 与 \`@h-ai/serv/features/*\`。
+
+${generateAiDevelopmentReadme()}### 文档
+
+- [hai Agent Framework](https://github.com/hai-series/hai-framework)
+- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
+- [@h-ai/api-contract](./.agents/skills/hai-api-contract/SKILL.md)
+- [@h-ai/api-client](./.agents/skills/hai-api-client/SKILL.md)
+
+## 开发测试
 
 \`\`\`bash
 ${pm} typecheck
@@ -1192,33 +1260,9 @@ ${pm} test
 ${pm} test:e2e
 \`\`\`
 
-## 构建与部署
+## 许可证
 
-\`\`\`bash
-# 默认只编译源码；不选择部署环境
-${pm} build
-# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
-${pm} build --target docker
-# 选择环境、中间件并上传一个 Compose tar；不会重新构建
-${pm} exec hai deploy apps/${name}-service --env test
-# 无法连接服务器时只生成包，按输出说明手工搬运和启动
-${pm} exec hai deploy apps/${name}-service --env prod --bundle-only
-\`\`\`
-
-镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
-
-## 扩展建议
-
-- 在 \`${name}-contract\` 中维护应用级 contract，前后端共用同一份类型与路径定义。
-- 在 \`${name}-service\` 中扩展 procedures、模块初始化与配置。
-- 需要 IAM / storage / ai 时，优先复用 \`@h-ai/api-contract\` 与 \`@h-ai/serv/features/*\`。
-
-${generateAiDevelopmentReadme()}## 文档
-
-- [hai Agent Framework](https://github.com/hai-series/hai-framework)
-- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
-- [@h-ai/api-contract](./.agents/skills/hai-api-contract/SKILL.md)
-- [@h-ai/api-client](./.agents/skills/hai-api-client/SKILL.md)
+Apache-2.0
 `
 }
 
@@ -1226,9 +1270,20 @@ function generateFullstackReadme(name: string, pm: string, frontends: FrontendTa
   const enabledFrontends = frontends.map(target => FRONTEND_TARGETS[target].name).join(' / ')
   return `# ${name}
 
-基于 hai Agent Framework 构建的前后端分离多包工程。
+## 简介
 
-## 工程结构
+前后端分离工程，API 与 Web、移动端、桌面端共享接口类型和管理界面，可按实际业务调整。
+
+## 核心功能清单
+
+- API 服务、共享界面与按需生成的客户端。
+- 用户管理、角色、审计和个人设置示例。
+- 登录、主题、语言、新手引导和帮助中心。
+- API/Web 独立 Dockerfile 与镜像归档。
+
+## 使用入门
+
+### 工程结构
 
 - \`packages/${name}-contract\`：前后端共享 API 契约、Zod Schema 与类型
 - \`packages/${name}-serv\`：后端 API Service（通过 \`@h-ai/serv\` 暴露最小 HTTP App 抽象，不直接暴露 Hono）
@@ -1240,11 +1295,11 @@ function generateFullstackReadme(name: string, pm: string, frontends: FrontendTa
 
 已启用前端：${enabledFrontends || 'Web / App / Desktop'}
 
-## 页面布局与路由
+### 页面布局与路由
 
 Web/App/Desktop 共享 AppShell 的 header/footer。新增页面放 shared/src/lib/pages/**/*.svelte，由 HashRouter 自动发现并按需加载；菜单只维护入口。地址使用 #/页面路径，支持刷新、查询串与浏览器前进后退；API 权限仍由服务端校验。
 
-## 默认管理功能
+### 默认管理功能
 
 以下描述可运行示例的初始业务，可按实际需求调整或移除，并同步代码、数据、鉴权、界面、测试和文档。
 
@@ -1258,7 +1313,7 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。默认 SQLite、本地存储与内存缓存适合单实例，管理写入仅支持单写实例；多实例读取可使用共享数据库、Redis cache 和 S3 存储，但管理写请求须统一路由到同一写实例。另需会话粘性路由使请求命中同一进程内传输私钥，服务重启后客户端重新协商。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
 
-## 配置扩展
+### 配置扩展
 
 服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
 
@@ -1270,7 +1325,7 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 ${generateEnvironmentReadme()}
 
-## 开发与构建
+### 开发与构建
 
 \`\`\`bash
 ${pm} install
@@ -1284,22 +1339,9 @@ ${frontends.includes('desktop') ? `${pm} build --target desktop --platform windo
 
 Tauri 需要目标系统的 Rust target、SDK 和打包工具。测试产生的临时工程、截图、报告、容器、镜像与进程应在 finally/teardown 中自动清理，失败也执行。
 
-## 构建与部署
+${generateBuildDeploymentReadme(pm, `packages/${name}-serv`)}
 
-\`\`\`bash
-# 默认只编译源码；不选择部署环境
-${pm} build
-# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
-${pm} build --target docker
-# 选择环境、中间件并上传一个 Compose tar；不会重新构建
-${pm} exec hai deploy packages/${name}-serv --env test
-# 无法连接服务器时只生成包，按输出说明手工搬运和启动
-${pm} exec hai deploy packages/${name}-serv --env prod --bundle-only
-\`\`\`
-
-镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
-
-## i18n 与 shared 协同
+### i18n 与 shared 协同
 
 - shared：\`packages/${name}-shared/project.inlang\` + \`messages/\`，只放跨端共享组件文案。
 - web/app/desktop：每个应用都有自己的 \`project.inlang\` + \`messages/\`，用于本端页面与产品文案。
@@ -1307,13 +1349,20 @@ ${pm} exec hai deploy packages/${name}-serv --env prod --bundle-only
 - 新增 locale 时，shared 与所有启用前端的 \`locales\` 必须同步；语言切换器会同时更新 shared runtime 与宿主应用 runtime。
 - \`${pm} i18n:compile\` 会统一编译 shared 与每个启用前端的 Paraglide 输出；各前端也可单独运行 \`${pm} --filter ${name}-web paraglide:compile\` 等命令。
 
-## 自定义建议
+### 自定义建议
 
 - 改全局 Shell/主题/语言切换：编辑 \`packages/${name}-shared\`。
-- 改某个前端页面和文案：编辑对应 \`apps/${name}-*/src/routes\` 与 \`apps/${name}-*/messages\`。
+- 改某个前端页面和文案：编辑共享 \`packages/${name}-shared/src/lib/pages\`、本端入口与 \`apps/${name}-*/messages\`。
 - 改主题列表：调整脚手架配置中的 \`fullstack.theme.themes\`，或直接编辑各端 \`src/app.css\` 的 daisyUI \`themes\`。
 
-## 质量门禁
+
+${generateAiDevelopmentReadme()}### 文档
+
+- [hai Agent Framework](https://github.com/hai-series/hai-framework)
+- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
+- [@h-ai/ui](./.agents/skills/hai-ui/SKILL.md)
+
+## 开发测试
 
 \`\`\`bash
 ${pm} typecheck
@@ -1323,11 +1372,9 @@ ${pm} test
 ${pm} test:e2e
 \`\`\`
 
-${generateAiDevelopmentReadme()}## 文档
+## 许可证
 
-- [hai Agent Framework](https://github.com/hai-series/hai-framework)
-- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
-- [@h-ai/ui](./.agents/skills/hai-ui/SKILL.md)
+Apache-2.0
 `
 }
 

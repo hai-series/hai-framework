@@ -22,6 +22,8 @@ export function writeCliMessage(message: string): void {
 /** 显示异常的 message，保留子命令输出；Error 的不可枚举属性不能依赖 JSON 序列化。 */
 export function writeCliError(message: string, error?: unknown): void {
   process.stderr.write(`${message}\n`)
+  if (error && typeof error === 'object' && 'error' in error)
+    error = error.error
   if (error !== undefined)
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
 }

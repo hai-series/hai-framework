@@ -23,6 +23,19 @@ it('requires the selected mode file and rejects path traversal/reserved private 
     expect(loadDeploymentEnvironment({ environment, envDir }).success).toBe(false)
 })
 
+it('reports malformed YAML with its file and line and rejects non-object configuration', () => {
+  const file = join(fixture(), '_deploy.yml')
+  for (const content of ['provider:\n  type: [docker-ssh\n', '- provider\n', 'invalid\n']) {
+    writeFileSync(file, content)
+    const result = loadDeploymentConfig('deploy', file, {})
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.message).toContain(file)
+      expect(result.error.message).toMatch(/\d/)
+    }
+  }
+})
+
 it('resolves object overrides and special characters without interpolating raw YAML syntax', () => {
   const root = fixture()
   const file = join(root, '_deploy.yml')

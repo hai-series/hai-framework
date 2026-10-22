@@ -31,7 +31,9 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "compile": "vite build"
+    "compile": "vite build",
+    "build:images": "hai build --target docker",
+    "deploy": "hai deploy"
   },
   "dependencies": {
     "@h-ai/api-client": "workspace:*",
@@ -44,6 +46,7 @@
   "devDependencies": {
     "@h-ai/cli": "workspace:*",
     "@h-ai/core": "workspace:*",
+    "@h-ai/deploy": "workspace:*",
     "@iconify-json/tabler": "catalog:",
     "@iconify/tailwind4": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",

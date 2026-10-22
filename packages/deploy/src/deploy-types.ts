@@ -183,6 +183,12 @@ export interface DeployRecoveryInfo {
 
 /** 部署选项 */
 export interface DeployAppOptions {
+  /** 接收实际执行阶段，用于终端进度显示；不包含凭据或配置原文。 */
+  onProgress?: (stage: 'packaging' | 'preflight' | 'images' | 'dependencies' | 'start' | 'health' | 'complete') => void
+  /** 只更新指定的 Compose 服务；省略时完整制品部署全部，部分制品只部署其镜像。 */
+  selectedServices?: string[]
+  /** 打包中间件镜像所用的本地引擎，auto 优先 Podman。 */
+  runtime?: 'auto' | 'podman' | 'docker'
   /** 部署环境标识；显式指定时必须存在 .env.<environment>。 */
   environment?: string
   /** 环境文件所在目录，默认自动定位。 */

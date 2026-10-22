@@ -3,3 +3,11 @@
 *.sh.hbs text eol=lf
 *.envsh text eol=lf
 *.envsh.hbs text eol=lf
+
+# 容器构建文件统一行尾，保持跨平台维护一致。
+.dockerignore text eol=lf
+*.dockerignore text eol=lf
+*.dockerignore.hbs text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+*.Dockerfile.hbs text eol=lf

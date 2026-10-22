@@ -7,12 +7,11 @@
 
 import type { FeatureId, GlobalOptions } from '../cli-types.js'
 import path from 'node:path'
-import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
-import { detectPackageManager, fileExists, getCliVersion, writeFile } from '../cli-utils.js'
+import { detectPackageManager, fileExists, getCliVersion, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
 import { generateConfigFile } from './cli-config-templates.js'
 import { detectProject } from './cli-create.js'
 
@@ -61,7 +60,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     // 检测项目
     const project = await detectProject(cwd)
     if (!project) {
-      core.logger.error(chalk.red('未检测到项目（找不到 package.json）'))
+      writeCliError(chalk.red('未检测到项目（找不到 package.json）'))
       return
     }
 
@@ -78,7 +77,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
         }))
 
       if (choices.length === 0) {
-        core.logger.info(chalk.green('所有模块已安装！'))
+        writeCliMessage(chalk.green('所有模块已安装！'))
         return
       }
 
@@ -96,8 +95,8 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
 
     const moduleDef = MODULE_MAP[moduleName]
     if (!moduleDef) {
-      core.logger.error(chalk.red(`未知模块: ${moduleName}`))
-      core.logger.info(`可用模块: ${Object.keys(MODULE_MAP).join(', ')}`)
+      writeCliError(chalk.red(`未知模块: ${moduleName}`))
+      writeCliMessage(`可用模块: ${Object.keys(MODULE_MAP).join(', ')}`)
       return
     }
 
@@ -114,13 +113,13 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
         },
       )
       if (generatedFiles.length > 0) {
-        core.logger.info(chalk.yellow(`模块 ${moduleName} 已安装，已补全 AI 支持文件`))
+        writeCliMessage(chalk.yellow(`模块 ${moduleName} 已安装，已补全 AI 支持文件`))
         for (const generatedFile of generatedFiles) {
-          core.logger.info(chalk.gray(`  + ${generatedFile} (AI support)`))
+          writeCliMessage(chalk.gray(`  + ${generatedFile} (AI support)`))
         }
       }
       else {
-        core.logger.info(chalk.yellow(`模块 ${moduleName} 已安装`))
+        writeCliMessage(chalk.yellow(`模块 ${moduleName} 已安装`))
       }
       return
     }
@@ -152,7 +151,11 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     const depVersion = existingHaiSpecifier === 'catalog:' ? 'catalog:' : getCliVersion()
 
     for (const pkgName of allPackages) {
-      if (!pkg.dependencies[pkgName]) {
+      if (pkgName === '@h-ai/deploy') {
+        pkg.devDependencies ??= {}
+        pkg.devDependencies[pkgName] ??= depVersion
+      }
+      else if (!pkg.dependencies[pkgName]) {
         pkg.dependencies[pkgName] = depVersion
       }
     }
@@ -170,7 +173,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
         spinner.succeed()
       }
       else {
-        core.logger.info(chalk.gray(`配置文件已存在: config/_${moduleDef.configKey}.yml`))
+        writeCliMessage(chalk.gray(`配置文件已存在: config/_${moduleDef.configKey}.yml`))
       }
     }
 
@@ -183,7 +186,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
           if (!(await fileExists(depConfigPath))) {
             const content = generateConfigFile(depDef.configKey)
             await writeFile(depConfigPath, content)
-            core.logger.info(chalk.gray(`  + config/_${depDef.configKey}.yml (依赖)`))
+            writeCliMessage(chalk.gray(`  + config/_${depDef.configKey}.yml (依赖)`))
           }
         }
       }
@@ -200,7 +203,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     )
     if (generatedFiles.length > 0) {
       for (const generatedFile of generatedFiles) {
-        core.logger.info(chalk.gray(`  + ${generatedFile} (AI support)`))
+        writeCliMessage(chalk.gray(`  + ${generatedFile} (AI support)`))
       }
     }
 
@@ -214,18 +217,18 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
       spinner.succeed()
     }
 
-    core.logger.info('')
-    core.logger.info(chalk.green(`✔ 模块 ${moduleName} 添加成功！`))
-    core.logger.info('')
-    core.logger.info('已添加的包:')
+    writeCliMessage('')
+    writeCliMessage(chalk.green(`✔ 模块 ${moduleName} 添加成功！`))
+    writeCliMessage('')
+    writeCliMessage('已添加的包:')
     for (const pkg of allPackages) {
-      core.logger.info(chalk.cyan(`  ${pkg}`))
+      writeCliMessage(chalk.cyan(`  ${pkg}`))
     }
-    core.logger.info('')
+    writeCliMessage('')
   }
   catch (error) {
     spinner.fail()
-    core.logger.error(chalk.red('添加模块失败:'), { error })
+    writeCliError(chalk.red('添加模块失败:'), { error })
     throw error
   }
 }

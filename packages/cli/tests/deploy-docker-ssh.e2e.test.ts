@@ -3,16 +3,16 @@
  * @h-ai/cli - docker-ssh 部署端到端测试
  * =============================================================================
  *
- * 完整链路：启动带 sshd + node + podman 的容器（优先 podman）→ 用 CLI 生成项目 →
- * 通过 @h-ai/deploy 的 docker-ssh Provider 将其容器化并部署进该容器 → 访问页面。
+ * 完整链路：启动带 sshd + podman 的隔离 Linux 服务器 → CLI 生成项目、构建镜像和离线包 →
+ * 通过 SSH 上传、加载并启动 Compose → 用真实浏览器验证页面与认证。
  *
- * 该测试较重且依赖容器运行时，默认跳过；设置环境变量 HAI_DEPLOY_E2E=1 且本机具备
- * podman 或 docker 时才执行：
+ * 该测试较重且依赖可连接的 Podman/Docker，默认跳过。使用门禁入口打包当前源码并设置验收环境：
  *
- *   HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/cli test deploy-docker-ssh
+ *   pnpm --filter @h-ai/cli test:deploy-gates
  */
 
 import type { DeploymentArtifact } from '@h-ai/deploy'
+import type { AppType } from '../src/cli-types.js'
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -54,24 +54,27 @@ const SQLITE_MIRROR = process.env.HAI_DEPLOY_E2E_SQLITE_MIRROR
 const CONTAINER_PROXY = process.env.HAI_DEPLOY_E2E_CONTAINER_PROXY
 const CONTAINER_NETWORK = process.env.HAI_DEPLOY_E2E_CONTAINER_NETWORK
 
-// 固定资源命名，便于失败后手动清理
+// 使用本次验收专用名称，最终由 afterAll 统一清理。
 const FIXTURE_NAME = 'hai-deploy-e2e-sshd'
-const FIXTURE_IMAGE = 'hai-deploy-e2e-fixture:latest'
+const FIXTURE_IMAGE = 'hai-deploy-e2e-fixture:1'
 const SSH_PORT = 2222
 const HOST_PORT = 18080
+const API_PORT = 18081
 const APPLICATION_VERSION = '2.4.6'
 // 生成应用 Dockerfile 依赖的基础镜像（受限网络下按镜像预拉取）
-const BASE_IMAGES = ['python:3.11-slim', 'node:24-bookworm-slim', 'nginxinc/nginx-unprivileged:1.29-alpine']
+const BASE_IMAGES = ['python:3.11.17-slim-trixie', 'node:24.22.1-bookworm-slim', 'nginxinc/nginx-unprivileged:1.29.8-alpine']
 
 // 夹具：Debian + sshd + podman + podman-compose（嵌套 podman 运行远程 compose）；
 // nftables/iptables 供 netavark 网络；cgroupfs 与 --cgroupns=host 配合使嵌套 podman 可建 pod。
 const APT_SOURCES_FIX = APT_MIRROR
   ? `sed -i 's#deb.debian.org#${APT_MIRROR}#g' /etc/apt/sources.list.d/debian.sources && `
   : ''
-const CONTAINERFILE = `FROM python:3.11-slim
-RUN ${APT_SOURCES_FIX}apt-get -o Acquire::Retries=10 update \\
-  && apt-get -o Acquire::Retries=10 install -y --no-install-recommends openssh-server podman podman-compose uidmap fuse-overlayfs nftables iptables aardvark-dns \\
+const CONTAINERFILE = `FROM python:3.11.17-slim-trixie
+RUN ${APT_SOURCES_FIX}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources \\
+  && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=20 update \\
+  && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=20 install -y --no-install-recommends curl openssh-server podman uidmap fuse-overlayfs nftables iptables aardvark-dns \\
   && rm -rf /var/lib/apt/lists/* && ssh-keygen -A && mkdir -p /root/.ssh && chmod 700 /root/.ssh
+RUN pip install --no-cache-dir podman-compose==1.6.0
 RUN mkdir -p /etc/containers && printf '[containers]\\ncgroups = "disabled"\\n[engine]\\ncgroup_manager = "cgroupfs"\\nevents_logger = "file"\\n' > /etc/containers/containers.conf
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
@@ -93,17 +96,20 @@ let workDir: string
 let keyPath: string
 let knownHostsPath: string
 let appDir: string
+const testImages = new Set<string>()
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'] as const
 const originalProxies = new Map<string, string | undefined>()
 
 function run(command: string, args: string[], cwd?: string, env?: NodeJS.ProcessEnv): string {
   try {
-    return execFileSync(command, args, { cwd, env: env ? { ...process.env, ...env } : undefined, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 })
+    return execFileSync(command, args, { cwd, env: env ? { ...process.env, ...env } : undefined, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024, timeout: 900_000, windowsHide: true })
   }
   catch (error) {
     // 构建器把 apt/pnpm 错误写在 stdout，保留有界输出才能定位真实失败阶段。
     const output = error && typeof error === 'object' && 'stdout' in error ? String(error.stdout).slice(-6000) : ''
-    throw new Error(`${command} ${args[0]} failed: ${output}`, { cause: error })
+    const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr).slice(-6000) : ''
+    const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)
+    throw new Error(`${command} ${args[0]} failed: ${reason}\n${output}\n${stderr}`)
   }
 }
 
@@ -116,8 +122,8 @@ function runPnpm(args: string[], cwd: string, env?: NodeJS.ProcessEnv): string {
 }
 
 /** 浏览器直接访问 SSH 服务器上的 Web/API；不启动本地预览或本地 API。 */
-function verifyDeployedBrowser(metadata: { name: string, version: string, env: string }): void {
-  const local = parseEnv(readFileSync(path.join(appDir, '.env.local'), 'utf8'))
+function verifyDeployedBrowser(metadata: { name: string, version: string, env: string }, project = appDir): void {
+  const local = parseEnv(readFileSync(path.join(project, '.env.local'), 'utf8'))
   const evidence = path.join(workDir, 'browser-evidence')
   mkdirSync(evidence, { recursive: true })
   const env = {
@@ -132,13 +138,13 @@ function verifyDeployedBrowser(metadata: { name: string, version: string, env: s
   }
   const command = process.platform === 'win32' ? 'cmd.exe' : 'pnpm'
   const args = (items: string[]) => process.platform === 'win32' ? ['/d', '/s', '/c', `pnpm.cmd ${items.join(' ')}`] : items
-  writeFileSync(path.join(appDir, 'playwright.deploy.config.ts'), `import config from './playwright.config.js'\nexport default { ...config, webServer: [] }\n`)
+  writeFileSync(path.join(project, 'playwright.deploy.config.ts'), `import config from './playwright.config.js'\nexport default { ...config, webServer: [] }\n`)
   try {
-    const output = run(command, args(['exec', 'playwright', 'test', '--config', 'playwright.deploy.config.ts']), appDir, env)
+    const output = run(command, args(['exec', 'playwright', 'test', '--config', 'playwright.deploy.config.ts']), project, env)
     writeFileSync(path.join(evidence, 'playwright.log'), output)
   }
   finally {
-    rmSync(path.join(appDir, 'playwright.deploy.config.ts'), { force: true })
+    rmSync(path.join(project, 'playwright.deploy.config.ts'), { force: true })
   }
 }
 
@@ -274,6 +280,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
     }
     run(rt, [
       'run',
+      ...(rt === 'podman' ? ['--http-proxy=false'] : []),
       '-d',
       '--name',
       FIXTURE_NAME,
@@ -285,6 +292,8 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       `${SSH_PORT}:22`,
       '-p',
       `${HOST_PORT}:${HOST_PORT}`,
+      '-p',
+      `${API_PORT}:${API_PORT}`,
       '-e',
       `AUTHORIZED_KEY=${publicKey}`,
       FIXTURE_IMAGE,
@@ -292,71 +301,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
 
     // 4. 等待 sshd 就绪
     await waitForSsh()
-
-    // 5. 用实际 fullstack 模板及本次源码包验证环境选择、配置写入、服务启动与重复部署。
-    if (NPM_MIRROR)
-      process.env.pnpm_config_registry = NPM_MIRROR
-    await createProject({
-      name: 'e2e-fullstack',
-      appType: 'fullstack',
-      frontends: ['web'],
-      template: 'default',
-      features: ['db', 'cache', 'storage', 'iam', 'deploy'],
-      examples: false,
-      install: false,
-      packageManager: 'pnpm', // 生成 pnpm-lock.yaml，供容器 Dockerfile 的 pnpm fetch 使用
-      git: false,
-      yes: true,
-      cwd: workDir,
-    })
-    appDir = path.join(workDir, 'e2e-fullstack')
-    useLocalPackages(appDir)
-    const applicationManifest = path.join(appDir, 'package.json')
-    writeFileSync(applicationManifest, `${JSON.stringify({ ...JSON.parse(readFileSync(applicationManifest, 'utf8')), version: APPLICATION_VERSION }, null, 2)}\n`)
-    if (NPM_MIRROR) {
-      const npmrc = path.join(appDir, '.npmrc')
-      writeFileSync(npmrc, `${readFileSync(npmrc, 'utf8')}\nregistry=${NPM_MIRROR}\n`)
-    }
-    // 容器构建时检查真实上下文，避免私有配置或上次部署归档被 COPY 到构建层。
-    const guard = path.join(appDir, 'scripts/verify-deploy-context.mjs')
-    mkdirSync(path.dirname(guard), { recursive: true })
-    writeFileSync(guard, `import { existsSync } from 'node:fs'\nif (existsSync('../../.hai/deploy') || existsSync('../../.env.local')) throw new Error('Private deployment artifacts entered the build context')\n`)
-    const manifestPath = path.join(appDir, 'packages/e2e-fullstack-serv/package.json')
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { scripts: Record<string, string> }
-    manifest.scripts.build = `node ../../scripts/verify-deploy-context.mjs && ${manifest.scripts.build}`
-    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
-    run(process.platform === 'win32' ? 'cmd.exe' : 'pnpm', process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm.cmd install'] : ['install'], appDir)
-    // 浏览器测试的 Node 侧导入应用 contract；只编译测试客户端契约，不启动本地 API/Web。
-    run(process.platform === 'win32' ? 'cmd.exe' : 'pnpm', process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm.cmd --filter e2e-fullstack-contract build'] : ['--filter', 'e2e-fullstack-contract', 'build'], appDir)
-    expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).not.toContain('ai')
-    expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).toContain('deploy')
-    expect(readdirSync(path.join(appDir, 'node_modules'))).not.toContain('onnxruntime-node')
-    // 受限网络：调整生成应用的 Dockerfile —— 去掉 syntax 指令（避免 BuildKit 从 docker.io
-    // 拉取前端镜像；内置 frontend 已支持 RUN --mount=type=cache），并在构建阶段注入 npm 镜像
-    // （.npmrc 在 pnpm fetch 前尚未 COPY，故用 ENV pnpm_config_registry）
-    const dfPath = path.join(appDir, 'Dockerfile')
-    let dockerfile = readFileSync(dfPath, 'utf-8')
-    if (REGISTRY_MIRROR)
-      dockerfile = dockerfile.replace(/^# syntax=.*\r?\n/m, '')
-    if (NPM_MIRROR)
-      dockerfile = dockerfile.replace(/(FROM [^\n]+ AS build\r?\n)/g, `$1ENV pnpm_config_registry=${NPM_MIRROR}\n`)
-    writeFileSync(dfPath, dockerfile)
-    const serviceDir = path.join(appDir, 'packages/e2e-fullstack-serv')
-    const deployConfig = {
-      provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: SSH_PORT, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { type: 'port', containerPort: 3000, hostPort: HOST_PORT } },
-      container: { s3Engine: 'rustfs' },
-    }
-    writeFileSync(path.join(appDir, '.env.local'), `${readFileSync(path.join(appDir, '.env.local'), 'utf8')}\nHAI_DEPLOY_PROVIDER='${JSON.stringify(deployConfig.provider)}'\n`)
-    writeFileSync(path.join(serviceDir, 'config/_deploy.yml'), stringify(deployConfig))
-    runPnpm(['run', 'build', '--target', 'docker', '--runtime', runtime ?? 'auto', ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
-    const buildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
-    const artifact = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', buildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
-    expect(artifact).toMatchObject({ version: 2, appVersion: APPLICATION_VERSION })
-    expect(artifact.images.map(image => image.file)).toEqual([`app-${APPLICATION_VERSION}.tar`, `web-${APPLICATION_VERSION}.tar`])
-    for (const image of artifact.images) {
-      const imageEnv = JSON.parse(run(rt, ['image', 'inspect', '--format', '{{json .Config.Env}}', image.imageRef])) as string[]
-      expect(imageEnv.some(value => /^(?:https?|ftp)_proxy=/i.test(value))).toBe(false)
-    }
+    run(rt, ['exec', FIXTURE_NAME, 'sh', '-c', 'mkdir -p /etc/containers/registries.conf.d && printf \'[[registry]]\\nprefix = "docker.io"\\nblocked = true\\n[[registry]]\\nprefix = "ghcr.io"\\nblocked = true\\n\' > /etc/containers/registries.conf.d/offline.conf'])
   }, 900_000)
 
   afterAll(async () => {
@@ -369,7 +314,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       catch {
         // 容器清理失败后仍继续清理本次镜像和临时工程。
       }
-      const images = [FIXTURE_IMAGE]
+      const images = [FIXTURE_IMAGE, ...testImages]
       if (appDir && existsSync(path.join(appDir, '.hai/build/docker/latest'))) {
         const latest = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
         const artifact = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', latest, 'manifest.json'), 'utf8')) as DeploymentArtifact
@@ -391,54 +336,242 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
     }
   }, 600_000)
 
-  it('fullstack CLI 环境部署、登录和保持不变的重复部署均可用', async () => {
-    expect((await crypto.init()).success).toBe(true)
-    let metadata: { name: string, version: string, env: string } | undefined
-    for (let attempt = 0; attempt < 3; attempt++) {
-      runPnpm(['run', 'deploy', '--env', 'test', '--yes', ...(attempt > 0 ? ['--skip-middleware'] : []), ...(attempt === 1 ? ['--bundle-only', '--output', path.join(workDir, 'manual-test.tar')] : [])], appDir)
-      if (attempt === 1) {
-        // 模拟无 SSH 的手工搬运：将一个 tar 复制到 Linux，再执行包内脚本。
-        const manualArchive = `manual-test-${APPLICATION_VERSION}.tar`
-        expect(existsSync(path.join(workDir, manualArchive))).toBe(true)
-        run(runtime!, ['cp', path.join(workDir, manualArchive), `${FIXTURE_NAME}:/tmp/${manualArchive}`])
-        run(runtime!, ['exec', FIXTURE_NAME, 'sh', '-c', `mkdir -p /opt/manual-release && chmod 700 /opt/manual-release && tar -xf /tmp/${manualArchive} -C /opt/manual-release && cd /opt/manual-release && HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=podman sh start-test.sh`])
-        for (let probe = 0; probe < 40; probe++) {
-          if ((await fetch(`http://127.0.0.1:${HOST_PORT}/health`).catch(() => null))?.ok)
-            break
-          await sleep(3000)
-        }
+  describe('fullstack', () => {
+    beforeAll(async () => {
+      const rt = runtime as 'podman' | 'docker'
+      // 5. 用实际 fullstack 模板及本次源码包验证环境选择、配置写入、服务启动与重复部署。
+      if (NPM_MIRROR)
+        process.env.pnpm_config_registry = NPM_MIRROR
+      await createProject({
+        name: 'e2e-fullstack',
+        appType: 'fullstack',
+        frontends: ['web'],
+        template: 'default',
+        features: ['db', 'cache', 'storage', 'iam'],
+        examples: false,
+        install: false,
+        packageManager: 'pnpm', // 生成 pnpm-lock.yaml，供容器 Dockerfile 的 pnpm fetch 使用
+        git: false,
+        yes: true,
+        cwd: workDir,
+      })
+      appDir = path.join(workDir, 'e2e-fullstack')
+      useLocalPackages(appDir)
+      const applicationManifest = path.join(appDir, 'package.json')
+      writeFileSync(applicationManifest, `${JSON.stringify({ ...JSON.parse(readFileSync(applicationManifest, 'utf8')), version: APPLICATION_VERSION }, null, 2)}\n`)
+      if (NPM_MIRROR) {
+        const npmrc = path.join(appDir, '.npmrc')
+        writeFileSync(npmrc, `${readFileSync(npmrc, 'utf8')}\nregistry=${NPM_MIRROR}\n`)
       }
-      const response = await fetch(`http://127.0.0.1:${HOST_PORT}/health`, { signal: AbortSignal.timeout(10_000) })
-      expect(response.ok).toBe(true)
-      const web = await fetch(`http://127.0.0.1:${HOST_PORT}/`)
-      expect(web.headers.get('content-type')).toContain('text/html')
-      expect(await web.text()).toContain('runtime-config.js')
-      expect((await fetch(`http://127.0.0.1:${HOST_PORT}/_hai/web-health`)).ok).toBe(true)
-      const client = crypto.transport.createClient({ keyExchangeUrl: `http://127.0.0.1:${HOST_PORT}/api/v1/_hai/key-exchange`, fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }) })
-      const info = await client.encryptedFetch(`http://127.0.0.1:${HOST_PORT}/api/v1/app/info`, { method: 'POST' })
-      const details = await info.json() as { success: boolean, data: { name: string, version: string, env: string } }
-      expect(details).toMatchObject({ success: true, data: { env: 'test' } })
-      metadata = details.data
-      const local = parseEnv(readFileSync(path.join(appDir, '.env.local'), 'utf8'))
-      const login = await client.encryptedFetch(`http://127.0.0.1:${HOST_PORT}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: 'admin', password: local.HAI_ADMIN_DEFAULT_PASSWORD }) })
-      expect(await login.json()).toMatchObject({ success: true })
-      client.destroy()
-      const artifactDir = path.join(appDir, 'packages/e2e-fullstack-serv/.hai/deploy/test')
-      const compose = parse(readFileSync(path.join(artifactDir, `docker-compose-${APPLICATION_VERSION}.yml`), 'utf8'))
-      expect(compose['x-hai-version']).toBe(APPLICATION_VERSION)
-      expect(compose.services.app.ports).toBeUndefined()
-      expect(compose.services.web.ports).toEqual([`${HOST_PORT}:8080`])
-      expect(compose.services.web.env_file).toBeUndefined()
-      expect(readFileSync(path.join(artifactDir, 'start-test.sh'), 'utf8')).toContain('HAI_DEPLOY_ENVIRONMENT=\'test\'')
-      expect(readFileSync(path.join(appDir, '.env.test'), 'utf8')).not.toContain(String(local.HAI_ADMIN_DEFAULT_PASSWORD))
+      // 容器构建时检查真实上下文，避免私有配置或上次部署归档被 COPY 到构建层。
+      const guard = path.join(appDir, 'scripts/verify-deploy-context.mjs')
+      mkdirSync(path.dirname(guard), { recursive: true })
+      writeFileSync(guard, `import { existsSync } from 'node:fs'\nif (existsSync('../../.hai/deploy') || existsSync('../../.env.local')) throw new Error('Private deployment artifacts entered the build context')\n`)
+      const manifestPath = path.join(appDir, 'packages/e2e-fullstack-serv/package.json')
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { scripts: Record<string, string> }
+      manifest.scripts.build = `node ../../scripts/verify-deploy-context.mjs && ${manifest.scripts.build}`
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+      run(process.platform === 'win32' ? 'cmd.exe' : 'pnpm', process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm.cmd install'] : ['install'], appDir)
+      // 浏览器测试的 Node 侧导入应用 contract；只编译测试客户端契约，不启动本地 API/Web。
+      run(process.platform === 'win32' ? 'cmd.exe' : 'pnpm', process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm.cmd --filter e2e-fullstack-contract build'] : ['--filter', 'e2e-fullstack-contract', 'build'], appDir)
+      expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).not.toContain('ai')
+      expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).toContain('deploy')
+      expect(readdirSync(path.join(appDir, 'node_modules'))).not.toContain('onnxruntime-node')
+      // 受限网络：调整生成应用的 Dockerfile —— 去掉 syntax 指令（避免 BuildKit 从 docker.io
+      // 拉取前端镜像；内置 frontend 已支持 RUN --mount=type=cache），并在构建阶段注入 npm 镜像
+      // （.npmrc 在 pnpm fetch 前尚未 COPY，故用 ENV pnpm_config_registry）
+      for (const name of ['app', 'web']) {
+        const dfPath = path.join(appDir, `images/${name}.Dockerfile`)
+        let dockerfile = readFileSync(dfPath, 'utf-8')
+        if (NPM_MIRROR)
+          dockerfile = dockerfile.replace(/(FROM [^\n]+ AS build\r?\n)/g, `$1ENV pnpm_config_registry=${NPM_MIRROR}\n`)
+        writeFileSync(dfPath, dockerfile)
+      }
+      const serviceDir = path.join(appDir, 'packages/e2e-fullstack-serv')
+      writeFileSync(path.join(serviceDir, 'config/_cache.yml'), 'type: redis\n')
+      writeFileSync(path.join(serviceDir, 'config/_storage.yml'), 'type: s3\n')
+      writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
+      const deployConfig = {
+        provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: SSH_PORT, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { type: 'port', containerPort: 3000, hostPort: HOST_PORT } },
+        container: { s3Engine: 'rustfs' },
+      }
+      writeFileSync(path.join(appDir, '.env.local'), `${readFileSync(path.join(appDir, '.env.local'), 'utf8')}\nHAI_DEPLOY_PROVIDER='${JSON.stringify(deployConfig.provider)}'\n`)
+      writeFileSync(path.join(serviceDir, 'config/_deploy.yml'), stringify(deployConfig))
+      runPnpm(['run', 'build', '--target', 'docker', '--runtime', runtime ?? 'auto', ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+      const buildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
+      const artifact = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', buildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
+      expect(artifact).toMatchObject({ version: 3, appVersion: APPLICATION_VERSION })
+      expect(artifact.images.map(image => image.file)).toEqual([`app-${APPLICATION_VERSION}.tar`, `web-${APPLICATION_VERSION}.tar`])
+      for (const image of artifact.images) {
+        testImages.add(image.imageRef)
+        const imageEnv = JSON.parse(run(rt, ['image', 'inspect', '--format', '{{json .Config.Env}}', image.imageRef])) as string[]
+        expect(imageEnv.some(value => /^(?:https?|ftp)_proxy=/i.test(value))).toBe(false)
+      }
+    }, 900_000)
+
+    it('fullstack CLI 环境部署、登录和保持不变的重复部署均可用', async () => {
+      expect((await crypto.init()).success).toBe(true)
+      let metadata: { name: string, version: string, env: string } | undefined
+      for (let attempt = 0; attempt < 3; attempt++) {
+        runPnpm(['run', 'deploy', '--env', 'test', '--yes', ...(attempt > 0 ? ['--skip-middleware'] : []), ...(attempt === 1 ? ['--bundle-only', '--output', path.join(workDir, 'manual-test.tar')] : [])], appDir)
+        if (attempt === 1) {
+          // 模拟无 SSH 的手工搬运：将一个 tar 复制到 Linux，再执行包内脚本。
+          const manualArchive = `manual-test-${APPLICATION_VERSION}.tar`
+          expect(existsSync(path.join(workDir, manualArchive))).toBe(true)
+          run(runtime!, ['cp', path.join(workDir, manualArchive), `${FIXTURE_NAME}:/tmp/${manualArchive}`])
+          run(runtime!, ['exec', FIXTURE_NAME, 'sh', '-c', `mkdir -p /opt/manual-release && chmod 700 /opt/manual-release && tar -xf /tmp/${manualArchive} -C /opt/manual-release && cd /opt/manual-release && sh apply.sh '/opt/hai/apps with spaces/e2e-fullstack-serv-test'`])
+          const second = path.join(workDir, 'script-test.tar')
+          runPnpm(['run', 'deploy', '--env', 'test', '--yes', '--skip-middleware', '--bundle-only', '--output', second], appDir)
+          if (process.platform === 'win32')
+            run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(workDir, `script-test-${APPLICATION_VERSION}-deploy/deploy.ps1`)])
+          const shellPackage = 'shell-script-test'
+          runPnpm(['run', 'deploy', '--env', 'test', '--yes', '--skip-middleware', '--bundle-only', '--output', path.join(workDir, `${shellPackage}.tar`)], appDir)
+          run(runtime!, ['cp', path.join(workDir, `${shellPackage}-${APPLICATION_VERSION}.tar`), `${FIXTURE_NAME}:/tmp/`])
+          run(runtime!, ['cp', path.join(workDir, `${shellPackage}-${APPLICATION_VERSION}-deploy`), `${FIXTURE_NAME}:/tmp/`])
+          run(runtime!, ['cp', keyPath, `${FIXTURE_NAME}:/tmp/hai-script-key`])
+          run(runtime!, ['exec', FIXTURE_NAME, 'sh', '-c', `chmod 600 /tmp/hai-script-key && HAI_DEPLOY_IDENTITY_FILE=/tmp/hai-script-key HAI_DEPLOY_KNOWN_HOSTS_FILE=/dev/null sh '/tmp/${shellPackage}-${APPLICATION_VERSION}-deploy/deploy.sh' 127.0.0.1 22 root`])
+          for (let probe = 0; probe < 40; probe++) {
+            if ((await fetch(`http://127.0.0.1:${HOST_PORT}/health`).catch(() => null))?.ok)
+              break
+            await sleep(3000)
+          }
+        }
+        const response = await fetch(`http://127.0.0.1:${HOST_PORT}/health`, { signal: AbortSignal.timeout(10_000) })
+        expect(response.ok).toBe(true)
+        const web = await fetch(`http://127.0.0.1:${HOST_PORT}/`)
+        expect(web.headers.get('content-type')).toContain('text/html')
+        expect(await web.text()).toContain('runtime-config.js')
+        expect((await fetch(`http://127.0.0.1:${HOST_PORT}/_hai/web-health`)).ok).toBe(true)
+        const client = crypto.transport.createClient({ keyExchangeUrl: `http://127.0.0.1:${HOST_PORT}/api/v1/_hai/key-exchange`, fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }) })
+        const info = await client.encryptedFetch(`http://127.0.0.1:${HOST_PORT}/api/v1/app/info`, { method: 'POST' })
+        const details = await info.json() as { success: boolean, data: { name: string, version: string, env: string } }
+        expect(details).toMatchObject({ success: true, data: { env: 'test' } })
+        metadata = details.data
+        const local = parseEnv(readFileSync(path.join(appDir, '.env.local'), 'utf8'))
+        const login = await client.encryptedFetch(`http://127.0.0.1:${HOST_PORT}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: 'admin', password: local.HAI_ADMIN_DEFAULT_PASSWORD }) })
+        expect(await login.json()).toMatchObject({ success: true })
+        client.destroy()
+        const artifactDir = path.join(appDir, 'packages/e2e-fullstack-serv/.hai/deploy/test')
+        const compose = parse(readFileSync(path.join(artifactDir, `docker-compose-${APPLICATION_VERSION}.yml`), 'utf8'))
+        expect(compose['x-hai-version']).toBe(APPLICATION_VERSION)
+        expect(compose.services.app.ports).toBeUndefined()
+        expect(compose.services.web.ports).toEqual([`${HOST_PORT}:8080`])
+        expect(compose.services.web.env_file).toBeUndefined()
+        expect(readFileSync(path.join(appDir, '.env.test'), 'utf8')).not.toContain(String(local.HAI_ADMIN_DEFAULT_PASSWORD))
+      }
+      expect(metadata).toBeDefined()
+      if (metadata)
+        verifyDeployedBrowser(metadata)
+      // 可选的短暂人工视觉复核窗口；随后仍由 afterAll 自动清理全部截图。
+      if (process.env.HAI_DEPLOY_E2E_REVIEW === '1') {
+        process.stdout.write(`Review screenshots: ${path.join(workDir, 'browser-evidence')}\n`)
+        await sleep(60_000)
+      }
+    }, 1_200_000)
+
+    it('同版本 Web/API/storage 增量更新保留未选容器，损坏制品不部署，启动失败恢复上一成功版本', async () => {
+      const before = run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-app']).trim()
+      writeFileSync(path.join(appDir, 'apps/e2e-fullstack-web/public/deployment-marker.txt'), 'incremental-web')
+      runPnpm(['run', 'build', '--target', 'docker', '--images', 'web', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy'])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+      const buildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
+      const artifacts = path.join(appDir, '.hai/build/docker', buildId)
+      const manifest = JSON.parse(readFileSync(path.join(artifacts, 'manifest.json'), 'utf8')) as DeploymentArtifact
+      expect(manifest).toMatchObject({ appVersion: APPLICATION_VERSION, partial: true, hasWeb: true, images: [{ name: 'web' }] })
+      for (const image of manifest.images) testImages.add(image.imageRef)
+      runPnpm(['run', 'deploy', '--env', 'test', '--services', 'web', '--yes'], appDir)
+      expect(await (await fetch(`http://127.0.0.1:${HOST_PORT}/deployment-marker.txt`)).text()).toBe('incremental-web')
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-app']).trim()).toBe(before)
+      writeFileSync(path.join(artifacts, manifest.images[0]!.file), 'damaged archive')
+      expect(() => runPnpm(['run', 'deploy', '--env', 'test', '--services', 'web', '--yes'], appDir)).toThrow()
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-app']).trim()).toBe(before)
+      // API 单独更新后 Nginx 必须重新解析后端地址，同时保持 Web 容器和页面不变。
+      const webBefore = run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-web']).trim()
+      runPnpm(['run', 'build', '--target', 'docker', '--images', 'app', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+      const apiBuildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
+      const apiManifest = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', apiBuildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
+      expect(apiManifest).toMatchObject({ appVersion: APPLICATION_VERSION, partial: true, hasWeb: true, images: [{ name: 'app' }] })
+      for (const image of apiManifest.images) testImages.add(image.imageRef)
+      runPnpm(['run', 'deploy', '--env', 'test', '--services', 'app', '--yes'], appDir)
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-app']).trim()).not.toBe(before)
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-web']).trim()).toBe(webBefore)
+      expect((await fetch(`http://127.0.0.1:${HOST_PORT}/health`)).ok).toBe(true)
+      expect(await (await fetch(`http://127.0.0.1:${HOST_PORT}/deployment-marker.txt`)).text()).toBe('incremental-web')
+      const appBeforeStorage = run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-app']).trim()
+      runPnpm(['run', 'deploy', '--env', 'test', '--services', 'storage', '--yes'], appDir)
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-app']).trim()).toBe(appBeforeStorage)
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-web']).trim()).toBe(webBefore)
+      expect((await fetch(`http://127.0.0.1:${HOST_PORT}/health`)).ok).toBe(true)
+
+      // 故意交付无法启动的同版本 Web，验证服务器真正恢复镜像与上一次成功状态。
+      const deploymentDirectory = '/opt/hai/apps with spaces/e2e-fullstack-serv-test'
+      const successfulRelease = run(runtime!, ['exec', FIXTURE_NAME, 'cat', `${deploymentDirectory}/current`]).trim()
+      const successfulWebImage = run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Image}}', 'hai-e2e-fullstack-serv-test-web']).trim()
+      const webDockerfile = path.join(appDir, 'images/web.Dockerfile')
+      writeFileSync(webDockerfile, `${readFileSync(webDockerfile, 'utf8')}\nCMD ["sh", "-c", "exit 1"]\n`)
+      runPnpm(['run', 'build', '--target', 'docker', '--images', 'web', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy'])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+      const failedBuildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
+      const failedManifest = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', failedBuildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
+      expect(failedManifest).toMatchObject({ appVersion: APPLICATION_VERSION, partial: true, images: [{ name: 'web' }] })
+      for (const image of failedManifest.images) testImages.add(image.imageRef)
+      expect(() => runPnpm(['run', 'deploy', '--env', 'test', '--services', 'web', '--yes'], appDir)).toThrow()
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'cat', `${deploymentDirectory}/current`]).trim()).toBe(successfulRelease)
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Image}}', 'hai-e2e-fullstack-serv-test-web']).trim()).toBe(successfulWebImage)
+      expect(run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-serv-test-app']).trim()).toBe(appBeforeStorage)
+      const results = run(runtime!, ['exec', FIXTURE_NAME, 'sh', '-c', `cat '${deploymentDirectory}'/result-*.json`]).trim().split('\n').map(line => JSON.parse(line) as { stage: string, exitCode: number })
+      expect(results).toContainEqual(expect.objectContaining({ stage: 'health', exitCode: 1 }))
+      for (let attempt = 0; attempt < 40; attempt++) {
+        if ((await fetch(`http://127.0.0.1:${HOST_PORT}/health`).catch(() => null))?.ok)
+          break
+        await sleep(1000)
+      }
+      expect((await fetch(`http://127.0.0.1:${HOST_PORT}/health`)).ok).toBe(true)
+      expect(await (await fetch(`http://127.0.0.1:${HOST_PORT}/deployment-marker.txt`)).text()).toBe('incremental-web')
+    }, 900_000)
+  })
+
+  it.each<AppType>(['api', 'admin', 'website', 'h5', 'mobile-app'])('%s 模板能真实构建、生成离线包并在隔离服务器启动', async (appType) => {
+    // 只操作本轮创建的独立 SSH 夹具，释放前一场景的公开端口。
+    run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'rm', '-af'])
+    const name = `delivery-${appType}`
+    await createProject({ name, appType, yes: true, install: false, git: false, examples: false, packageManager: 'pnpm', cwd: workDir })
+    const project = path.join(workDir, name)
+    useLocalPackages(project)
+    runPnpm(['install', '--prefer-offline'], project)
+    const dockerfilePath = path.join(project, 'images/app.Dockerfile')
+    if (NPM_MIRROR)
+      writeFileSync(dockerfilePath, readFileSync(dockerfilePath, 'utf8').replace(/(FROM [^\n]+ AS build\r?\n)/g, `$1ENV pnpm_config_registry=${NPM_MIRROR}\n`))
+    runPnpm([...(appType === 'api' ? ['run', 'deploy', '--env', 'test', '--yes', '--build', '--bundle-only'] : ['run', 'build', '--target', 'docker']), '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], project, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+    const buildId = readFileSync(path.join(project, '.hai/build/docker/latest'), 'utf8').trim()
+    const artifactDir = path.join(project, '.hai/build/docker', buildId)
+    const artifact = JSON.parse(readFileSync(path.join(artifactDir, 'manifest.json'), 'utf8')) as DeploymentArtifact
+    for (const image of artifact.images) testImages.add(image.imageRef)
+    if (appType === 'mobile-app') {
+      // 独立移动前端使用同一隔离服务器上的真实 API；复用前面构建的 API 镜像。
+      const apiProject = path.join(workDir, 'delivery-api')
+      const apiService = path.join(apiProject, 'apps/delivery-api-service')
+      const apiEnvironment = path.join(apiService, '.env.test')
+      writeFileSync(apiEnvironment, `${readFileSync(apiEnvironment, 'utf8')}\nHAI_SERV_TRANSPORT=false\nHAI_SERV_CORS_ORIGIN=http://127.0.0.1:${HOST_PORT}\n`)
+      const apiBuildId = readFileSync(path.join(apiProject, '.hai/build/docker/latest'), 'utf8').trim()
+      await deploy.close()
+      expect(await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: SSH_PORT, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { hostPort: API_PORT } } })).toMatchObject({ success: true })
+      expect(await deploy.deployApp(apiService, { environment: 'test', artifactDir: path.join(apiProject, '.hai/build/docker', apiBuildId), runtime: runtime! })).toMatchObject({ success: true, data: { healthCheck: 'passed' } })
+      const environment = path.join(project, '.env.test')
+      writeFileSync(environment, `${readFileSync(environment, 'utf8')}\nPUBLIC_API_BASE=http://127.0.0.1:${API_PORT}/api/v1\n`)
     }
-    expect(metadata).toBeDefined()
-    if (metadata)
-      verifyDeployedBrowser(metadata)
-    // 可选的短暂人工视觉复核窗口；随后仍由 afterAll 自动清理全部截图。
-    if (process.env.HAI_DEPLOY_E2E_REVIEW === '1') {
-      process.stdout.write(`Review screenshots: ${path.join(workDir, 'browser-evidence')}\n`)
-      await sleep(60_000)
+    await deploy.close()
+    const initialized = await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: SSH_PORT, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { hostPort: HOST_PORT } } })
+    expect(initialized.success).toBe(true)
+    const service = appType === 'api' ? path.join(project, `apps/${name}-service`) : project
+    const result = await deploy.deployApp(service, { environment: 'test', artifactDir, runtime: runtime! })
+    if (!result.success) {
+      const diagnostics = run(runtime!, ['exec', FIXTURE_NAME, 'podman', 'logs', '--tail', '80', `hai-${name}${appType === 'api' ? '-service' : ''}-test-app`])
+      throw new Error(`${result.error.message}\nContainer diagnostics:\n${diagnostics}`)
     }
+    expect(result.success).toBe(true)
+    expect(result.success && result.data.healthCheck).toBe('passed')
+    const response = await fetch(`http://127.0.0.1:${HOST_PORT}${appType === 'api' ? '/health' : '/'}`)
+    expect(response.ok).toBe(true)
+    if (appType !== 'api')
+      verifyDeployedBrowser({ name, version: artifact.appVersion, env: 'test' }, project)
   }, 1_200_000)
 })

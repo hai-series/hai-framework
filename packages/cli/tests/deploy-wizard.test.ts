@@ -1,14 +1,17 @@
-import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { core } from '@h-ai/core'
 import { deploy, loadDeploymentEnvironment } from '@h-ai/deploy'
+import * as deployModule from '@h-ai/deploy'
 import { ReldbConfigSchema } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
+import { cliM } from '../src/cli-i18n.js'
+import { moduleEnvironmentVariables } from '../src/commands/cli-config-environment.js'
 import { createProject } from '../src/commands/cli-create.js'
-import { displayDeployValue } from '../src/commands/cli-deploy-middleware.js'
+import { configureDeployMiddleware, displayDeployValue } from '../src/commands/cli-deploy-middleware.js'
 import { deployCommand } from '../src/commands/cli-deploy.js'
 
 const mocked = vi.hoisted(() => ({ prompt: vi.fn() }))
@@ -22,6 +25,28 @@ it('redacts API headers and access key identifiers in connection previews', () =
   expect(preview).not.toContain('test-private-access-id')
 })
 
+it.each(['container:\n', 'container: null\n', 'container: invalid\n'])('handles S3 engine configuration with YAML %s', async (node) => {
+  const { app, service } = await fullstackFixture()
+  const file = join(service, 'config/_deploy.yml')
+  writeFileSync(file, `provider:\n  type: docker-ssh\n${node}`)
+  writeFileSync(join(service, 'config/_storage.yml'), 'type: s3\n')
+  writeFileSync(join(app, '.env.test'), 'HAI_STORAGE=\'{"type":"s3"}\'\n')
+  const scan = await deploy.scan(service, { environment: 'test', envDir: app })
+  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  expect(scan.success && environment.success).toBe(true)
+  if (!scan.success || !environment.success)
+    return
+  const operation = configureDeployMiddleware(deployModule, { ...scan.data, middlewares: scan.data.middlewares?.filter(item => item.service === 'storage') }, environment.data, { provider: { type: 'docker-ssh' } }, true)
+  if (node.includes('invalid')) {
+    await expect(operation).rejects.toThrow(file)
+    expect(readFileSync(file, 'utf8')).toContain('container: invalid')
+  }
+  else {
+    await expect(operation).resolves.toMatchObject({ storage: 'default' })
+    expect(readFileSync(file, 'utf8')).toContain('s3Engine:')
+  }
+}, 30_000)
+
 beforeEach(() => {
   core.i18n.setGlobalLocale('en-US')
   stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
@@ -34,17 +59,34 @@ it('lets a complete environment bypass every middleware prompt and preserves env
   const { app, service } = await fullstackFixture()
   writeFileSync(join(app, '.env.test'), 'HAI_DEPLOY_PROVIDER=\'{"type":"docker-ssh","ssh":{"host":"existing.test","username":"deploy"},"expose":{"hostPort":8080}}\'\nHAI_DB_TYPE=sqlite\n')
   const before = readFileSync(join(app, '.env.test'), 'utf8')
-  mocked.prompt.mockResolvedValue({ value: 'skip' })
+  mocked.prompt.mockImplementation(async question => ({ value: question.type === 'multiselect' ? question.choices.map((item: { value: string }) => item.value) : 'skip' }))
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://existing.test:8080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
   await deployCommand({ appDir: service, env: 'test' })
-  expect(mocked.prompt).toHaveBeenCalledOnce()
+  expect(mocked.prompt).toHaveBeenCalledTimes(2)
   expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ skipMiddleware: true, serviceModes: expect.objectContaining({ db: 'keep', cache: 'keep', storage: 'keep' }) }))
   expect(readFileSync(join(app, '.env.test'), 'utf8')).toBe(before)
   expect(deploy.config?.services).toBeUndefined()
 }, 30_000)
 
+it('infers Web selection from a partial artifact before configuring middleware', async () => {
+  const { app, service } = await fullstackFixture()
+  const artifacts = join(app, '.hai/build/docker/partial')
+  mkdirSync(artifacts, { recursive: true })
+  writeFileSync(join(app, '.hai/build/docker/latest'), 'partial\n')
+  const file = 'web-1.2.3.tar'
+  writeFileSync(join(artifacts, file), 'prebuilt-web')
+  writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'partial', partial: true, hasWeb: true, images: [{ name: 'web', file, imageRef: 'localhost/test-web:1.2.3', sha256: await deployModule.artifactChecksum(join(artifacts, file)) }] }))
+  writeFileSync(join(app, '.env.test'), '\n')
+  const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://example.test:18080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
+  await deployCommand({ appDir: service, env: 'test', yes: true })
+  expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ selectedServices: ['web'], skipMiddleware: true }))
+  expect(mocked.prompt).not.toHaveBeenCalled()
+  expect(readFileSync(join(app, '.env.test'), 'utf8')).toBe('\n')
+}, 30_000)
+
 it('guides SSH setup once, saves parameters privately and reuses them without prompts', async () => {
   const { app, service } = await fullstackFixture()
+  writeFileSync(join(service, 'config/_deploy.yml'), 'provider:\n  type: docker-ssh\n  expose:\n    hostPort: 8080\n')
   const inputs: Record<string, string> = {
     HAI_DEPLOY_PROVIDER_SSH_HOST: 'server.internal',
     HAI_DEPLOY_PROVIDER_SSH_PORT: '2202',
@@ -56,9 +98,11 @@ it('guides SSH setup once, saves parameters privately and reuses them without pr
     HAI_DEPLOY_PROVIDER_EXPOSE_CONTAINERPORT: '3000',
   }
   mocked.prompt.mockImplementation(async (question) => {
+    if (question.type === 'multiselect')
+      return { value: question.choices.map((item: { value: string }) => item.value) }
     if (question.choices)
       return { value: question.choices[0].value }
-    const name = /^HAI_[A-Z0-9_]+/.exec(question.message)?.[0]
+    const name = Object.keys(inputs).find(key => question.message === cliM(`cli_deploy_input${key.split('_').at(-1)}` as Parameters<typeof cliM>[0]))
     return { value: name ? inputs[name] : question.initial }
   })
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://server.internal:8080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
@@ -119,6 +163,8 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
     HAI_DB_SSL: 'true',
   }
   mocked.prompt.mockImplementation(async (question) => {
+    if (question.type === 'multiselect')
+      return { value: question.choices.map((item: { value: string }) => item.value) }
     questions.push(question.message)
     if (question.name === 'environment')
       return { environment: 'test' }
@@ -134,7 +180,7 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
       return { value: 'mysql' }
     if (question.type === 'select')
       return { value: question.choices[question.initial ?? 0].value }
-    const name = /^HAI_[A-Z0-9_]+/.exec(question.message)?.[0]
+    const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
     if (name === 'HAI_DB_PORT')
       expect(question.validate('70000')).not.toBe(true)
     return { value: name ? inputValues[name] ?? question.initial : question.initial }

@@ -18,6 +18,8 @@ const logger = core.logger.child({ module: 'deploy', scope: 'command' })
 
 /** 命令执行选项 */
 export interface CommandOptions {
+  /** 实时标准输出，调用方负责筛选可展示的进度行。 */
+  onOutput?: (output: string) => void
   /** 工作目录 */
   cwd?: string
   /** 追加的环境变量 */
@@ -69,6 +71,7 @@ export function runCommand(
 ): Promise<HaiResult<CommandResult>> {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
+      windowsHide: true,
       cwd: options.cwd,
       env: options.env ? { ...process.env, ...options.env } : process.env,
       shell: false,
@@ -101,6 +104,7 @@ export function runCommand(
 
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf-8')
+      options.onOutput?.(maskSecrets(chunk.toString('utf-8'), options.secrets))
     })
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf-8')

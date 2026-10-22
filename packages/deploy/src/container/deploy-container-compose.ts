@@ -11,21 +11,22 @@ import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { parse, stringify } from 'yaml'
+import { stringify } from 'yaml'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
+import { deployM } from '../deploy-i18n.js'
 
 /** sidecar 镜像固定版本，避免 `:latest` 漂移导致行为变化。 */
 const IMAGES = {
-  postgres: 'postgres:16-alpine',
-  mysql: 'mysql:8.4',
-  redis: 'redis:7-alpine',
+  postgres: 'docker.io/library/postgres:16.15-alpine',
+  mysql: 'docker.io/library/mysql:8.4.11',
+  redis: 'docker.io/library/redis:7.4.11-alpine',
   rustfs: 'ghcr.io/rustfs/rustfs:1.0.1',
   minio: 'ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z',
-  qdrant: 'qdrant/qdrant:v1.12.4',
-  pgvector: 'pgvector/pgvector:pg17',
-  chroma: 'chromadb/chroma:1.5.5',
+  qdrant: 'docker.io/qdrant/qdrant:v1.19.2',
+  pgvector: 'docker.io/pgvector/pgvector:0.8.0-pg17',
+  chroma: 'docker.io/chromadb/chroma:1.5.5',
   ldap: 'docker.io/osixia/openldap:1.5.0',
-  smtp: 'axllent/mailpit:v1.27.4',
+  smtp: 'docker.io/axllent/mailpit:v1.27.4',
 } as const
 
 /** compose 服务定义（结构化对象，交由 yaml 序列化）。 */
@@ -76,10 +77,13 @@ function resolveSidecarSecrets(appDir: string, projectName: string): Record<stri
   const secretFile = join(appDir, '.hai', 'deploy', 'runtime', `${projectName}.secrets.json`)
   if (existsSync(secretFile)) {
     try {
-      return JSON.parse(readFileSync(secretFile, 'utf-8')) as Record<string, string>
+      const saved = JSON.parse(readFileSync(secretFile, 'utf-8')) as Record<string, string>
+      if (!saved || !['dbPassword', 'storagePassword', 'ldapPassword'].every(key => typeof saved[key] === 'string' && saved[key].length > 0))
+        throw new Error('Invalid credentials')
+      return saved
     }
     catch {
-      // 损坏则重建
+      throw new Error(deployM('deploy_secretsInvalid', { params: { path: secretFile } }))
     }
   }
   const secrets = {
@@ -285,6 +289,30 @@ export function planSidecars(
   options?: DeployAppOptions,
   s3Engine: 'rustfs' | 'minio' = 'rustfs',
 ): SidecarPlan {
+  // 保持配置不变仍需交付自建服务镜像；已保存的容器服务地址可明确区分外部连接。
+  const serviceModes = { ...options?.serviceModes }
+  for (const requirement of scan.middlewares ?? []) {
+    if (options?.selectedServices && !options.selectedServices.includes(requirement.service))
+      continue
+    const mode = serviceModes[requirement.envPrefix] ?? serviceModes[requirement.service]
+    if (mode !== 'keep')
+      continue
+    const endpoint = requirement.config.url ?? requirement.config.endpoint
+    let host = requirement.config.host
+    if (typeof endpoint === 'string') {
+      try {
+        host = new URL(endpoint).hostname
+      }
+      catch {
+        continue
+      }
+    }
+    if (host === requirement.service || ['sqlite', 'local', 'memory', 'lancedb'].includes(requirement.backend)) {
+      serviceModes[requirement.envPrefix] = 'default'
+      serviceModes[requirement.service] = 'default'
+    }
+  }
+  options = { ...options, serviceModes }
   const plan: SidecarPlan = {
     services: [],
     composeServices: {},
@@ -408,8 +436,6 @@ export function buildRuntimeEnv(
  * @param options.hostPort - 宿主机映射端口
  * @param options.containerPort - 容器内端口
  * @param options.sidecar - sidecar 规划
- * @param options.previousCompose - 需要保留服务时读取的上次编排
- * @param options.serviceModes - 各中间件的处理选择
  * @param options.web - 同一编排中的 Web 镜像与监听端口，独立于私有应用环境
  * @param options.web.imageRef - Web 镜像引用
  * @param options.web.containerPort - Web 容器监听端口
@@ -422,10 +448,6 @@ export function generateComposeFile(options: {
   hostPort: number
   containerPort: number
   sidecar: SidecarPlan
-  /** 上次编排；保持不变的服务继续保留其定义与持久化卷。 */
-  previousCompose?: string
-  /** 各中间件的处理选择。 */
-  serviceModes?: DeployAppOptions['serviceModes']
   /** Web 公开入口；私有运行环境仅属于 API 服务。 */
   web?: { imageRef: string, containerPort: number }
 }): string {
@@ -475,25 +497,6 @@ export function generateComposeFile(options: {
   }
   if (Object.keys(sidecar.volumes).length > 0)
     compose.volumes = sidecar.volumes
-
-  if (options.previousCompose && options.serviceModes) {
-    const previous = parse(options.previousCompose) as { services?: Record<string, ComposeService>, volumes?: Record<string, unknown> }
-    for (const [service, mode] of Object.entries(options.serviceModes)) {
-      if (mode !== 'keep')
-        continue
-      for (const name of [service, `${service}-init`]) {
-        if (previous.services?.[name]) {
-          services[name] = previous.services[name]
-          app.depends_on = [...new Set([...(app.depends_on as string[] | undefined ?? []), service])]
-        }
-      }
-    }
-    const previousMounts = previous.services?.app?.volumes
-    if (Array.isArray(previousMounts) && Object.values(options.serviceModes).includes('keep'))
-      app.volumes = [...new Set([...(app.volumes as string[] | undefined ?? []), ...previousMounts])]
-    // 保留已有卷定义不会创建/删除容器或清空卷，避免 keep 路径丢失挂载。
-    compose.volumes = { ...previous.volumes, ...sidecar.volumes }
-  }
 
   // S3 服务启动不等于桶已创建；初始化失败必须阻止应用启动，不能只依靠 HTTP 健康检查。
   if (services['storage-init']) {

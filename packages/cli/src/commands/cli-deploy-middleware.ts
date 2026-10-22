@@ -2,10 +2,10 @@
 import type { DeploymentEnvironment, MiddlewareBackend, MiddlewareField, MiddlewareMode, MiddlewareRequirement, ScanResult } from '@h-ai/deploy'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { core } from '@h-ai/core'
 import prompts from 'prompts'
-import { parseDocument } from 'yaml'
+import { isMap, isScalar, parseDocument } from 'yaml'
 import { cliM } from '../cli-i18n.js'
+import { writeCliMessage } from '../cli-utils.js'
 import { moduleEnvironmentVariables } from './cli-config-environment.js'
 
 type DeployModule = typeof import('@h-ai/deploy')
@@ -151,10 +151,10 @@ function ensureConfigNode(appDir: string, requirement: MiddlewareRequirement, ba
   if (document.errors.length)
     throw new Error(cliM('cli_deploy_invalid_value'))
   if (requirement.configPath.length && !document.hasIn(requirement.configPath))
-    document.setIn(requirement.configPath, requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service, type: backend } : {})
+    document.setIn(requirement.configPath, document.createNode(requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service, type: backend } : {}))
   if (requirement.service === 'ldap') {
     if (!document.hasIn(['login']))
-      document.setIn(['login'], {})
+      document.set('login', document.createNode({}))
     if (!document.hasIn(['login', 'ldap']))
       document.setIn(['login', 'ldap'], `\${HAI_IAM_LOGIN_LDAP:false}`)
   }
@@ -184,7 +184,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
     const current = choices.find(item => item.backend === requirement.backend)
     if (!current)
       throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: requirement.backend } }))
-    core.logger.info(cliM('cli_deploy_middleware', { params: { service: requirement.service, backend: current.label, purpose: module.describeMiddlewareBackend(current), source: requirement.source } }))
+    writeCliMessage(cliM('cli_deploy_middleware', { params: { service: requirement.service, backend: current.label, purpose: module.describeMiddlewareBackend(current), source: requirement.source } }))
     const canKeep = canKeepMiddleware(requirement, current, environment)
     const mode = yes
       ? canKeep ? 'keep' : 'default'
@@ -226,8 +226,11 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       if (deployment.errors.length)
         throw new Error(cliM('cli_deploy_invalid_value'))
       if (!deployment.hasIn(['container', 's3Engine'])) {
-        if (!deployment.hasIn(['container']))
-          deployment.setIn(['container'], {})
+        const node = deployment.get('container', true)
+        if (node === undefined || (isScalar(node) && node.value === null))
+          deployment.set('container', deployment.createNode({}))
+        else if (!isMap(node))
+          throw new Error(cliM('cli_deploy_yaml_node', { params: { path: deploymentFile, field: 'container' } }))
         deployment.setIn(['container', 's3Engine'], `\${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}`)
         writeFileSync(deploymentFile, deployment.toString())
       }
@@ -241,9 +244,10 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       for (const name of CLOUD_FIELDS[backend.provisioner]) {
         const key = `HAI_DEPLOY_SERVICES_${requirement.service.toUpperCase()}_${name.toUpperCase()}`
         const initial = String(priorConfig[name] ?? environment.values[key] ?? '')
-        const value = yes ? initial : String(await ask({ type: /key|token|secret/i.test(name) ? 'password' : 'text', name: 'value', message: key, initial, validate: input => Boolean(input) || cliM('cli_deploy_required') }))
+        const label = `${backend.label} — ${cliM(`cli_deploy_cloud_input_${name}` as Parameters<typeof cliM>[0])}`
+        const value = yes ? initial : String(await ask({ type: /key|token|secret/i.test(name) ? 'password' : 'text', name: 'value', message: label, initial, validate: input => Boolean(input) || cliM('cli_deploy_required') }))
         if (!value)
-          throw new Error(`${key}: ${cliM('cli_deploy_required')}`)
+          throw new Error(`${label}: ${cliM('cli_deploy_required')}`)
         cloud[name] = value
         updates[key] = value
       }
@@ -274,7 +278,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
     if (!saved.success)
       throw new Error(saved.error.message)
     for (const [name, value] of Object.entries(updates)) {
-      core.logger.info(cliM('cli_deploy_saved', { params: { name, value: displayDeployValue(name, value) } }))
+      writeCliMessage(cliM('cli_deploy_saved', { params: { name, value: displayDeployValue(name, value) } }))
     }
   }
   // 仅默认选项对应的云服务参与初始化/开通；custom/keep 不认证、不创建。

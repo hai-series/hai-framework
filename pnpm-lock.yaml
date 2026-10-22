@@ -600,6 +600,9 @@ importers:
       d3-shape:
         specifier: 'catalog:'
         version: 3.2.0
+      sm-crypto:
+        specifier: 'catalog:'
+        version: 0.5.7
       yaml:
         specifier: 'catalog:'
         version: 2.9.1
@@ -610,6 +613,9 @@ importers:
       '@h-ai/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@h-ai/deploy':
+        specifier: workspace:*
+        version: link:../../packages/deploy
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -685,6 +691,9 @@ importers:
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      sm-crypto:
+        specifier: 'catalog:'
+        version: 0.5.7
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -692,6 +701,9 @@ importers:
       '@h-ai/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@h-ai/deploy':
+        specifier: workspace:*
+        version: link:../../packages/deploy
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -795,6 +807,9 @@ importers:
       '@h-ai/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@h-ai/deploy':
+        specifier: workspace:*
+        version: link:../../packages/deploy
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
@@ -862,6 +877,9 @@ importers:
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      sm-crypto:
+        specifier: 'catalog:'
+        version: 0.5.7
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -869,6 +887,9 @@ importers:
       '@h-ai/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@h-ai/deploy':
+        specifier: workspace:*
+        version: link:../../packages/deploy
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -951,6 +972,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@h-ai/deploy':
+        specifier: workspace:*
+        version: link:../../packages/deploy
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -1026,6 +1050,9 @@ importers:
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      sm-crypto:
+        specifier: 'catalog:'
+        version: 0.5.7
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -1033,6 +1060,9 @@ importers:
       '@h-ai/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@h-ai/deploy':
+        specifier: workspace:*
+        version: link:../../packages/deploy
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -1142,6 +1172,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@h-ai/deploy':
+        specifier: workspace:*
+        version: link:../../packages/deploy
       '@iconify-json/tabler':
         specifier: 'catalog:'
         version: 1.2.42
@@ -1157,6 +1190,12 @@ importers:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.64.0
+      '@sveltejs/adapter-static':
+        specifier: 'catalog:'
+        version: 3.0.10(@sveltejs/kit@2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))
+      '@sveltejs/kit':
+        specifier: 'catalog:'
+        version: 2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
       '@sveltejs/vite-plugin-svelte':
         specifier: 'catalog:'
         version: 7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))

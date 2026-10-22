@@ -80,7 +80,9 @@ export default defineConfig(({ mode, command }) => {
 {{/if}}
 {{#unless isSvelteOnlyApp}}
     ssr: {
-      noExternal: [/@h-ai\//],
+      noExternal: ['@h-ai/ui', '@h-ai/kit'],
+      // sm-crypto 同时列入生产依赖，避免 adapter-node 再次打包其动态 require。
+      external: ['@h-ai/core', 'sm-crypto'],
     },
 {{/unless}}
     server: {

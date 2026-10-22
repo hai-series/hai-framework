@@ -57,3 +57,6 @@ test-data/
 .leak-words.json
 
 !apps/admin-console/src/routes/admin/logs
+
+# 构建器生成的依赖输入快照
+**/images/dependencies/

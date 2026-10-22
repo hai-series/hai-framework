@@ -3,3 +3,9 @@
 *.sh.hbs text eol=lf
 *.envsh text eol=lf
 *.envsh.hbs text eol=lf
+
+# Linux 容器引擎读取忽略规则和构建文件时统一使用 LF。
+.dockerignore text eol=lf
+*.dockerignore text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf

@@ -48,9 +48,19 @@
   "deploy_purposeEmail": "Email/HTTP delivery; the default SMTP container only captures test messages",
   "deploy_purposeSms": "SMS through Aliyun credentials; requires an existing signature and quota",
   "deploy_webProxyInvalid": "The API prefix must be an absolute path containing only letters, numbers, underscores, hyphens and slashes.",
-  "deploy_artifactInvalid": "Build artifacts are missing, corrupt, or could not be packaged. Run pnpm build --target docker at the project root and point --artifact-dir to a complete build directory.",
+  "deploy_artifactInvalid": "Image artifacts are missing or invalid. Run pnpm build --target docker, select valid --artifact-dir, or use pnpm run deploy --build.",
   "deploy_sshRequired": "Automatic deployment requires SSH settings. Use --bundle-only for manual transfer when the server is unreachable.",
-  "deploy_bundleInstructions": "This bundle contains private configuration. Transfer it securely and restrict access.\n1. Copy {file} to Linux using removable media, a private network or scp.\n2. Install Docker/Podman with compose, tar, sha256sum and sh. Load middleware images using docker load/podman load with the exact tags below.\n3. Create a private release directory: mkdir -p release && chmod 700 release\n4. From the bundle directory run tar -xf {file} -C release\n5. Run cd release && sh {start}. Set HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker or podman to select the runtime explicitly.\n6. Check docker compose -f {compose} --env-file .env.runtime ps (or logs; use podman instead of docker for Podman), Web and /health after startup. Bundle generation does not perform server health checks.\nRequired images (app/web are included; prepare middleware separately):\n{images}\nBuilt images can be reused across environments; this bundle contains configuration for the selected environment only.",
+  "deploy_bundleInstructions": "Bundle: {file}\nIncludes all images needed by selected services, including self-hosted middleware.\nWith SSH access, run deploy.ps1 (Windows) or deploy.sh (Linux/macOS) from the adjacent deployment directory.\nFor isolated servers, copy and extract the tar into a separate directory, then run sh apply.sh /opt/hai/apps/project-environment.\nLinux requires Docker/Podman, Compose, sh, tar, sha256sum, awk, curl and filesystem/container permissions.\nPartial updates require a successful full installation with matching ports/layout. Steps return nonzero on failure; result-DEPLOYMENT_ID.json records the outcome.\nThe bundle contains private runtime configuration; transfer it securely.\nIncluded images:\n{images}",
   "deploy_bundleMetadata": "Application version: {version}\nBuild ID: {buildId}\nCompose file: {compose}",
-  "deploy_bundleOnlyContainer": "Compose bundle generation is supported only by docker-ssh."
+  "deploy_bundleOnlyContainer": "Compose bundle generation is supported only by docker-ssh.",
+  "deploy_selectedContainerOnly": "Selected-service deployment requires a docker-ssh Compose destination.",
+  "deploy_selectionInvalid": "Cannot deploy {service}: check the service name and build its image first.",
+  "deploy_imageVersionRequired": "Specify an image version; latest is not allowed: {image}",
+  "deploy_bundleRuntimeRequired": "Start local Podman/Docker to export middleware images, or prepare this complete offline bundle on the build machine.",
+  "deploy_bundleFailed": "Package preparation or deployment failed: {reason}",
+  "deploy_configFileInvalid": "Invalid YAML in {path}, line {line}. Check indentation, colons and quotes.",
+  "deploy_configFileUnreadable": "Cannot read configuration file {path}. Check its path and permissions.",
+  "deploy_bundleNameInvalid": "Bundle filenames may contain letters, numbers, dots, plus signs, hyphens and underscores; parent directories may contain spaces.",
+  "deploy_secretsInvalid": "Middleware credentials are damaged or incomplete: {path}. Restore a backup; passwords are not regenerated because existing data may become inaccessible.",
+  "deploy_storageArtifactRequired": "Storage initialization requires the application image. Select a complete artifact containing app with --artifact-dir, or run pnpm build --target docker --images app first."
 }

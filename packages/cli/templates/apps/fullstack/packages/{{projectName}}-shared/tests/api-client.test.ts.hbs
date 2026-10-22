@@ -75,11 +75,11 @@ describe('shared API transport', () => {
     expect(server.requests.at(-1)?.headers.get('x-request-client')).toBe('configured-client')
   })
 
-  it('uses the API origin injected at container startup', async () => {
+  it.each([false, true])('uses the injected API origin when native configuration is required: %s', async (requireApiBase) => {
     Object.assign(globalThis, { __HAI_PUBLIC_CONFIG__: { apiBase: 'https://runtime.example.com' } })
     const server = createServerFetch()
     try {
-      expect((await initializeManagementApi({ fetchFn: server.fetchFn })).success).toBe(true)
+      expect((await initializeManagementApi({ fetchFn: server.fetchFn, requireApiBase })).success).toBe(true)
       expect((await managementApi.app.info()).success).toBe(true)
       expect(server.requests.every(request => request.url.startsWith('https://runtime.example.com/api/v1/'))).toBe(true)
     }

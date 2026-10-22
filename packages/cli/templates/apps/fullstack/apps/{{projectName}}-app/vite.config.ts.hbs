@@ -51,7 +51,7 @@ export default defineConfig(({ mode, command }) => {
     },
     envPrefix: ['VITE_', 'PUBLIC_'],
     ssr: {
-      noExternal: [/@h-ai\//, /{{fullstack.sharedPackageName}}/],
+      noExternal: ['@h-ai/ui', /{{fullstack.sharedPackageName}}/],
     },
     test: {
       environment: 'node',

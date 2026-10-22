@@ -19,11 +19,11 @@ const VercelProviderConfigSchema = z.object({
 /** SSH 连接配置（docker-ssh Provider 使用 OpenSSH 客户端连接远程主机） */
 const SshConfigSchema = z.object({
   /** 远程主机地址或 ~/.ssh/config 中的 Host 别名 */
-  host: z.string().min(1),
+  host: z.string().regex(/^[a-z0-9][a-z0-9.:-]*$/i),
   /** SSH 端口 */
   port: z.number().int().min(1).max(65535).default(22),
   /** SSH 用户名 */
-  username: z.string().min(1),
+  username: z.string().regex(/^[a-z_][\w-]*$/i),
   /** 私钥文件路径（省略时使用 ssh-agent 或 ~/.ssh 默认密钥） */
   identityFile: z.string().min(1).optional(),
   /** known_hosts 文件路径（省略时使用默认；配合 CI/临时环境隔离主机指纹） */
@@ -54,7 +54,7 @@ const DockerSshProviderConfigSchema = z.object({
   /** 远程主机运行参数 */
   remote: z.object({
     /** 远程应用根目录 */
-    baseDir: z.string().min(1).default('/opt/hai/apps'),
+    baseDir: z.string().regex(/^\/[\w/. -]+$/).refine(value => !value.split('/').includes('..')).default('/opt/hai/apps'),
     /** 远程容器运行时（auto 优先 podman） */
     runtime: z.enum(['auto', 'docker', 'podman']).default('auto'),
   }).default({ baseDir: '/opt/hai/apps', runtime: 'auto' }),
