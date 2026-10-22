@@ -8,6 +8,19 @@
 
 对象存储模块，提供统一 `storage` 访问入口，支持 S3 兼容存储与本地文件系统。
 
+初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`storage.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+
+```ts
+const closed = await storage.close()
+if (!closed.success) {
+  // 处理清理故障后有限重试；再次失败应向应用报告。
+  const retried = await storage.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+S3 普通请求客户端与禁用请求重试的批量删除客户端分别释放；一个失败不阻止另一个清理，已释放的客户端不会重复释放。
+
 ## 核心功能清单
 
 - S3 协议（AWS S3 / MinIO / RustFS / OSS 等）

@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 41/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 42/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -523,7 +523,8 @@
 
 ### LIFE-01 · P1 · 统一清理初始化失败时已创建的客户端和连接池
 
-- [ ] 待修正（源码确认；范围：cross）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：候选客户端健康检查后才发布，失败清理保留唯一资源所有权，close 等待初始化并合并并发，清理失败可重试且禁止创建替代连接；Redis fallback disconnect、PG/MySQL 在途事务排空、SQLite pragma/worker 握手两阶段和 S3 双 client 独立清理已落实。cache.close 改为 HaiResult 并同步调用方/API 模板/三语 README/skills。165 项定向测试通过，覆盖真实 Redis/PG/MySQL/SQLite/MinIO；独立 Node 真实 pg_terminate_backend 红绿证明空闲池故障不再退出且下次查询恢复。3 模块和 API/CLI 类型、fresh 构建、定向 lint、skills 通过；未声称云托管服务或外部 AWS 验收；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/reldb/src/providers/reldb-provider-postgres.ts:420](../packages/reldb/src/providers/reldb-provider-postgres.ts#L420)；[packages/reldb/src/providers/reldb-provider-mysql.ts:384](../packages/reldb/src/providers/reldb-provider-mysql.ts#L384)；[packages/storage/src/providers/storage-provider-s3.ts:616](../packages/storage/src/providers/storage-provider-s3.ts#L616)；[packages/cache/src/providers/cache-provider-redis.ts:736](../packages/cache/src/providers/cache-provider-redis.ts#L736)。
 - **证据与影响**：连接池/SDK 客户端先创建、随后健康检查可能失败；若 catch 丢引用或外层 init 直接返回，未成功发布的资源缺少 end/destroy/disconnect 清理。
 - **修正内容**：在局部 candidate 成功后才发布到模块状态，失败路径完整清理；close 幂等并在关闭失败时保留可诊断状态，避免失败重试累积连接。

@@ -150,13 +150,15 @@ const db = await reldb.init(dbConfig.data)
 if (!db.success) return db
 const cached = await cache.init(cacheConfig.data)
 if (!cached.success) {
-  await reldb.close()
-  return cached
+  const cleanup = await reldb.close()
+  return cleanup.success ? cached : cleanup
 }
 const identity = await iam.init(iamConfig.data)
 if (!identity.success) {
-  await cache.close()
-  await reldb.close()
+  const cacheCleanup = await cache.close()
+  const dbCleanup = await reldb.close()
+  if (!cacheCleanup.success) return cacheCleanup
+  if (!dbCleanup.success) return dbCleanup
   return identity
 }
 // 应用结束时 await iam.close()、cache.close()、reldb.close()；

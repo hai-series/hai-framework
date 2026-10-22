@@ -8,6 +8,19 @@
 
 共通の `storage` 入口で S3 互換ストレージとローカルファイルシステムを操作するオブジェクトストレージモジュールです。
 
+接続はヘルスチェック成功後に公開します。初期化失敗時は候補リソースを解放し、解放にも失敗した場合は初期化エラーの `error.ext.cleanupPending` が `true` になります。`storage.close()` は `Promise<HaiResult<void>>` を返し、初期化を待機して並行する終了処理をまとめます。解放開始後は `isInitialized` が `false` となり、設定と操作は利用できません。解放に失敗したリソースは保持され、次の `close()` または `init()` で再試行します。解放が成功するまで代替接続は作成しません。終了結果を必ず確認してください。
+
+```ts
+const closed = await storage.close()
+if (!closed.success) {
+  // 障害への対処後に一度再試行し、再失敗はアプリへ報告します。
+  const retried = await storage.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+S3 の通常クライアントと、リクエスト再試行を無効化した一括削除クライアントは個別に解放します。一方の失敗でも他方は解放し、解放済みクライアントは再度破棄しません。
+
 ## 主な機能
 
 - S3 プロトコル（AWS S3 / MinIO / RustFS / OSS など）

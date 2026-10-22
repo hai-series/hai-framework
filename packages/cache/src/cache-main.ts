@@ -32,6 +32,49 @@ let currentConfig: CacheConfig | null = null
 /** 并发初始化防护标志；防止多次 init() 同时执行导致资源泄漏 */
 let initInProgress = false
 
+/** 尚未释放的候选/旧 Provider；绝不用于业务操作，清理成功后才能替换。 */
+let pendingProvider: CacheProvider | null = null
+/** 初始化完成屏障，供 close 等待候选资源归属确定。 */
+let initCompletion: Promise<void> | null = null
+/** 合并并发关闭，避免同一连接重复释放。 */
+let closingPromise: Promise<HaiResult<void>> | null = null
+
+/** 停止发布资源并重试清理；失败时保留唯一所有权供下一次 close/init 重试。 */
+async function closeOwnedProvider(): Promise<HaiResult<void>> {
+  if (currentProvider) {
+    pendingProvider = currentProvider
+    currentProvider = null
+  }
+  currentConfig = null
+  if (!pendingProvider)
+    return ok(undefined)
+  try {
+    await pendingProvider.close()
+    pendingProvider = null
+    return ok(undefined)
+  }
+  catch (error) {
+    logger.error('Provider cleanup failed; retaining resource for retry', { error })
+    return err({ ...HaiCacheError.CONNECTION_FAILED, message: cacheM('cache_operationFailed', {
+      params: { error: error instanceof Error ? error.message : String(error) },
+    }), cause: error, ext: { cleanupPending: true } })
+  }
+}
+
+/** 初始化失败后释放候选；保留原始错误，并明确指出清理尚未完成。 */
+async function failInitialization(result: HaiResult<void>): Promise<HaiResult<void>> {
+  const cleanup = await closeOwnedProvider()
+  if (result.success)
+    return result
+  if (cleanup.success) {
+    const ext = { ...result.error.ext }
+    delete ext.cleanupPending
+    delete ext.cleanupError
+    return err({ ...result.error, ext: Object.keys(ext).length > 0 ? ext : undefined })
+  }
+  return err({ ...result.error, ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error } })
+}
+
 // ─── Provider 工厂 ───
 
 /**
@@ -109,7 +152,7 @@ export const cache: CacheFunctions = {
    */
   async init(config: CacheConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
-    if (initInProgress) {
+    if (initInProgress || closingPromise) {
       logger.warn('Cache init already in progress, skipping concurrent call')
       return err(
         HaiCacheError.OPERATION_FAILED,
@@ -117,12 +160,15 @@ export const cache: CacheFunctions = {
       )
     }
     initInProgress = true
+    let resolveInit!: () => void
+    initCompletion = new Promise<void>((resolve) => {
+      resolveInit = resolve
+    })
 
     try {
-      if (currentProvider) {
-        logger.warn('Cache module is already initialized, reinitializing')
-        await cache.close()
-      }
+      const cleanup = await closeOwnedProvider()
+      if (!cleanup.success)
+        return cleanup
 
       logger.info('Initializing cache module')
 
@@ -143,14 +189,16 @@ export const cache: CacheFunctions = {
           return err(providerResult.error)
 
         const provider = providerResult.data
+        pendingProvider = provider
         const connectResult = await provider.connect(parsed)
         if (!connectResult.success) {
           logger.error('Cache module initialization failed', {
             code: connectResult.error.code,
             message: connectResult.error.message,
           })
-          return connectResult
+          return await failInitialization(connectResult)
         }
+        pendingProvider = null
         currentProvider = provider
         currentConfig = parsed
         logger.info('Cache module initialized', { type: parsed.type })
@@ -158,17 +206,19 @@ export const cache: CacheFunctions = {
       }
       catch (error) {
         logger.error('Cache module initialization failed', { error })
-        return err(
+        return await failInitialization(err(
           HaiCacheError.CONNECTION_FAILED,
           cacheM('cache_initFailed', {
             params: { error: error instanceof Error ? error.message : String(error) },
           }),
           error,
-        )
+        ))
       }
     }
     finally {
       initInProgress = false
+      initCompletion = null
+      resolveInit()
     }
   },
 
@@ -198,26 +248,21 @@ export const cache: CacheFunctions = {
     return currentProvider?.ping() ?? Promise.resolve(notInitialized.result())
   },
 
-  /** 关闭缓存连接并释放资源；未初始化时调用安全无副作用 */
-  async close(): Promise<void> {
-    if (!currentProvider) {
-      currentConfig = null
-      logger.info('Cache module already closed, skipping')
-      return
+  /**
+   * 停止提供缓存操作并释放资源；等待正在进行的初始化，并合并并发关闭。
+   * @returns 清理失败返回错误并保留资源，后续 close/init 先重试同一资源。
+   * @example
+   * const closed = await cache.close()
+   * if (!closed.success) await cache.close()
+   */
+  async close(): Promise<HaiResult<void>> {
+    if (!closingPromise) {
+      closingPromise = (async () => {
+        if (initCompletion)
+          await initCompletion
+        return await closeOwnedProvider()
+      })().finally(() => { closingPromise = null })
     }
-
-    logger.info('Closing cache module')
-
-    try {
-      await currentProvider.close()
-      logger.info('Cache module closed')
-    }
-    catch (error) {
-      logger.error('Cache module close failed', { error })
-    }
-    finally {
-      currentProvider = null
-      currentConfig = null
-    }
+    return await closingPromise
   },
 }

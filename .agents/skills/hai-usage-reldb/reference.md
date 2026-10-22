@@ -34,6 +34,20 @@ YAML 写可审查的默认值；`HAI_DB_TYPE`、`HAI_DB_DATABASE`、
 
 ### 初始化与关闭
 
+PostgreSQL 空闲连接错误已监听，由池移除并在下一次查询替换；日志仅含固定说明与安全 code/name，不记录驱动错误原文。关闭会等待已借出事务完成，应用必须提交/回滚并释放句柄。
+
+初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+
+```ts
+const closed = await reldb.close()
+if (!closed.success) {
+  // 处理清理故障后有限重试；再次失败应向应用报告。
+  const retried = await reldb.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+
 ```typescript
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'

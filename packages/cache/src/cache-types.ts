@@ -418,8 +418,14 @@ export interface CacheFunctions extends CacheCompositeOperations {
   readonly config: CacheConfig | null
   /** 是否已初始化并连接 */
   readonly isInitialized: boolean
-  /** 关闭连接并清理资源；未初始化时调用安全无副作用 */
-  close: () => Promise<void>
+  /**
+   * 关闭连接并清理资源；失败时停止提供业务操作并保留资源，可再次 close/init 重试。
+   * @returns 资源全部释放时成功；释放失败时返回 CONNECTION_FAILED。
+   * @example
+   * const result = await cache.close()
+   * if (!result.success) await cache.close()
+   */
+  close: () => Promise<HaiResult<void>>
 }
 
 // ─── Provider 接口 ───

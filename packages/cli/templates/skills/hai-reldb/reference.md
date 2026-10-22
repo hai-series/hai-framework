@@ -46,14 +46,30 @@ operationLog:
 
 ### 2. 初始化与关闭
 
+PostgreSQL 空闲连接错误已监听，由池移除并在下一次查询替换；日志仅含固定说明与安全 code/name，不记录驱动错误原文。关闭会等待已借出事务完成，应用必须提交/回滚并释放句柄。
+
 ```typescript
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
 await reldb.init(core.config.get('db'))
 // ... 使用数据库
-await reldb.close()
+const closed = await reldb.close()
+if (!closed.success) throw new Error(closed.error.message)
 ```
+
+
+初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+
+```ts
+const closed = await reldb.close()
+if (!closed.success) {
+  // 处理清理故障后有限重试；再次失败应向应用报告。
+  const retried = await reldb.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
 
 `reldb.config` 返回的是脱敏后的配置快照；数据库密码与 URL 内嵌凭证会自动隐藏。
 
@@ -362,7 +378,7 @@ interface PaginatedResult<T> {
 
 通过 `reldb.json` 构建跨数据库统一的 JSON 路径操作 SQL 表达式，返回 `{ sql, params }` 可直接嵌入 `reldb.sql.*`。
 
-路径格式遵循 SQL/JSON Path 标准，以 `$` 开头（如 `$.key`、`$.key.subkey`、`$[0]`）。
+路径格式遵循 SQL/JSON Path 标准，以 ` 开头（如 `$.key`、`$.key.subkey`、`$[0]`）。
 
 | 操作      | SQLite             | PostgreSQL               | MySQL                  |
 | --------- | ------------------ | ------------------------ | ---------------------- |

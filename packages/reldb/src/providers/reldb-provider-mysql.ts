@@ -68,12 +68,53 @@ interface MysqlResult {
 export function createMysqlProvider(): ReldbProvider {
   /** 连接池实例 */
   let pool: MysqlPool | null = null
+  /** 只有健康检查完成的连接才可供业务使用；清理失败仍保留底层资源。 */
+  let ready = false
+  let closing: Promise<HaiResult<void>> | null = null
+  let activeTransactions = 0
+  let transactionsDrained: Promise<void> = Promise.resolve()
+  let resolveTransactions: (() => void) | null = null
+
+  /** 在获取连接前登记事务，关闭时等待其提交/回滚并归还连接。 */
+  function retainTransaction(): () => void {
+    if (activeTransactions++ === 0)
+      transactionsDrained = new Promise<void>((resolve) => { resolveTransactions = resolve })
+    return () => {
+      if (--activeTransactions === 0) {
+        resolveTransactions?.()
+        resolveTransactions = null
+      }
+    }
+  }
   let currentConfig: ReldbConfig | null = null
+
+  /** 保留所有权直到释放成功；合并并发关闭且立即阻止新操作。 */
+  function closeResource(): Promise<HaiResult<void>> {
+    ready = false
+    currentConfig = null
+    if (closing)
+      return closing
+    const owned = pool
+    if (!owned)
+      return Promise.resolve(ok(undefined))
+    closing = (async (): Promise<HaiResult<void>> => {
+      try {
+        await transactionsDrained
+        await owned.end()
+        pool = null
+        return ok(undefined)
+      }
+      catch (error) {
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error)
+      }
+    })().finally(() => { closing = null })
+    return closing
+  }
 
   // ─── 操作上下文 ───
 
   const ctx: ReldbOpsContext = {
-    isConnected: () => pool !== null,
+    isConnected: () => ready && pool !== null,
     logger,
     operationLog: () => currentConfig?.operationLog,
   }
@@ -347,23 +388,33 @@ export function createMysqlProvider(): ReldbProvider {
   async function beginTx(): Promise<HaiResult<DmlWithTxOperations>> {
     let connection: MysqlConnection | null = null
 
+    const releaseOwnership = retainTransaction()
     try {
       connection = await pool!.getConnection()
       await connection.beginTransaction()
     }
     catch (error) {
-      if (connection) {
-        connection.release()
+      try {
+        connection?.release()
       }
+      finally { releaseOwnership() }
       return err(HaiReldbError.TRANSACTION_FAILED, mysqlTxErrorMessage(String(error)), error)
     }
 
     const txDmlOps = createMysqlTxDmlOps(connection)
-    const guardedTxDmlOps = createBaseDmlOps(ctx, txDmlOps)
+    const guardedTxDmlOps = createBaseDmlOps({ ...ctx, isConnected: () => connection !== null }, txDmlOps)
     return ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await connection!.commit() },
       rollback: async () => { await connection!.rollback() },
-      release: () => connection!.release(),
+      release: () => {
+        try {
+          connection!.release()
+        }
+        finally {
+          connection = null
+          releaseOwnership()
+        }
+      },
       errorMessage: mysqlTxErrorMessage,
     }))
   }
@@ -377,6 +428,9 @@ export function createMysqlProvider(): ReldbProvider {
       if (config.type !== 'mysql') {
         return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_mysqlOnlyMysql'))
       }
+      const previousCleanup = await closeResource()
+      if (!previousCleanup.success)
+        return previousCleanup
       try {
         // Node ESM 按需加载驱动，避免构建器生成无法执行的动态 require。
         const mysql = createRequire(import.meta.url)('mysql2/promise')
@@ -398,33 +452,19 @@ export function createMysqlProvider(): ReldbProvider {
         // 验证连接可用性
         await pool.query('SELECT 1')
 
+        ready = true
         currentConfig = config
         logger.info('Connected to MySQL', { host: config.host, port: config.port, database: config.database })
         return ok(undefined)
       }
       catch (error) {
-        currentConfig = null
-        pool = null
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error)
+        const cleanup = await closeResource()
+        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error)
+        return cleanup.success || result.success ? result : err({ ...result.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
       }
     },
 
-    async close(): Promise<HaiResult<void>> {
-      if (pool) {
-        try {
-          await pool.end()
-        }
-        catch (error) {
-          currentConfig = null
-          pool = null
-          return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error)
-        }
-        currentConfig = null
-        pool = null
-        logger.info('Disconnected from MySQL')
-      }
-      return ok(undefined)
-    },
+    close: closeResource,
 
     isConnected: () => ctx.isConnected(),
     ddl: createBaseDdlOps(ctx, rawDdl),

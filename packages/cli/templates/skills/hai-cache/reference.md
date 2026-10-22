@@ -42,8 +42,22 @@ import { cache } from '@h-ai/cache'
 
 await cache.init(core.config.get('cache'))
 // 使用后关闭
-await cache.close()
+const closed = await cache.close()
+if (!closed.success) throw new Error(closed.error.message)
 ```
+
+
+初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`cache.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+
+```ts
+const closed = await cache.close()
+if (!closed.success) {
+  // 处理清理故障后有限重试；再次失败应向应用报告。
+  const retried = await cache.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
 
 `cache.config` 返回的是脱敏后的配置快照；Redis `password` / `url` 等敏感值不会原样暴露给日志或调试输出。
 

@@ -10,6 +10,19 @@
 
 内存 KV 在到期时间点即视为失效；`incr/decr/incrBy/decrBy` 只接受安全整数数值或整数字符串，非法增量和溢出返回 `OPERATION_FAILED` 并保留原值。Hash 的 `__proto__` / `constructor` 等名称按普通字段保留，不修改返回对象原型。
 
+初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`cache.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+
+```ts
+const closed = await cache.close()
+if (!closed.success) {
+  // 处理清理故障后有限重试；再次失败应向应用报告。
+  const retried = await cache.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+Redis 的 QUIT 失败后会强制 disconnect；只有实际释放成功才报告关闭成功。
+
 ## 核心功能清单
 
 - 开发/测试场景下的内存缓存
@@ -52,7 +65,8 @@ if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
   // 请先调用 cache.init()
 }
 
-await cache.close()
+const closeResult = await cache.close()
+if (!closeResult.success) throw new Error(closeResult.error.message)
 ```
 
 `cache.config` 返回的是**脱敏后的配置快照**：如后续接入 Redis `password` / `url` 等凭证字段，会自动做安全处理，不应用作回写原始密钥。

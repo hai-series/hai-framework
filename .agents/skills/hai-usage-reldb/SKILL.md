@@ -19,6 +19,7 @@ description: "使用 @h-ai/reldb 访问 SQLite/PostgreSQL/MySQL，编写 SQL、C
 
 - `_db.yml` 对应 core.config 的 db；先校验 ReldbConfigSchema，再 init 并检查 success。
 - `reldb.crud.table` / `tx.crud.table` 的 `dbType` 必填并与实际后端一致；`BaseReldbCrudRepository` 自动读取已初始化的配置。
+- init 失败会清理候选；close 返回 HaiResult，清理失败后停止业务操作并保留资源，后续 close/init 先重试清理。关闭等待在途事务，应用必须先提交/回滚并释放句柄。
 - 事务每步检查结果，避免把失败当普通返回值提交；同一事务操作须共享 tx。
 - SQL 值参数化；where/orderBy/json 列名不是任意用户输入。分页使用 PaginatedResult。
 

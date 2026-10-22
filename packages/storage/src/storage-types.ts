@@ -431,7 +431,11 @@ export interface StorageFunctions {
   /**
    * 关闭存储连接并释放资源
    *
-   * 重复调用不会报错。
+   * 等待初始化并合并并发关闭；失败时操作不可用，资源保留供 close/init 重试。
+   * @returns 所有资源释放成功才返回成功；未初始化时同样成功。
+   * @example
+   * const closed = await storage.close()
+   * if (!closed.success) await storage.close()
    */
   close: () => Promise<HaiResult<void>>
 

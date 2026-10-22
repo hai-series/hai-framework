@@ -21,19 +21,30 @@
 
 let initialized = false
 let initPromise: Promise<void> | null = null
+/** 记录启动/关闭后未确认释放的资源，使失败清理可以重试。 */
+let cleanupPending = false
+let closePromise: Promise<void> | null = null
 {{#if features.crypto}}let cryptoInitialized = false
 {{/if}}
 
 export async function initApp(): Promise<void> {
+  if (closePromise)
+    await closePromise
   if (initialized)
     return
   if (initPromise)
     return initPromise
+  if (cleanupPending) {
+    await closeApp()
+    return await initApp()
+  }
 
+  cleanupPending = true
   initPromise = doInit()
   try {
     await initPromise
     initialized = true
+    cleanupPending = false
   }
   finally {
     initPromise = null
@@ -160,10 +171,27 @@ async function doInit(): Promise<void> {
   core.logger.info('API service initialized')
 }
 
+/**
+ * 等待启动并关闭所有模块；失败时保留重试入口。
+ * @throws AggregateError - 任一资源未确认释放。
+ * @example
+ * await closeApp()
+ */
 export async function closeApp(): Promise<void> {
-  if (!initialized && !initPromise)
+  closePromise ??= doCloseApp().finally(() => {
+    closePromise = null
+  })
+  return await closePromise
+}
+
+/** 等待启动结束后逐一释放；HaiResult 失败与异常都会聚合报告并保留重试入口。 */
+async function doCloseApp(): Promise<void> {
+  if (!initialized && !initPromise && !cleanupPending)
     return
 
+  if (initPromise)
+    await initPromise.catch(() => undefined)
+  const failures: unknown[] = []
   const closers: Array<readonly [string, () => unknown]> = [
 {{#if features.ai}}    ['ai', () => ai.close()],
 {{/if}}{{#if features.storage}}    ['storage', () => storage.close()],
@@ -180,14 +208,25 @@ export async function closeApp(): Promise<void> {
 
   for (const [name, close] of closers) {
     try {
-      await close()
+      const result = await close()
+      if (result && typeof result === 'object' && 'success' in result && result.success === false) {
+        failures.push('error' in result ? result.error : new Error('Module close failed'))
+        core.logger.warn(`Module close failed: ${name}`)
+        continue
+      }
+{{#if features.crypto}}      if (name === 'crypto')
+        cryptoInitialized = false
+{{/if}}
     }
     catch (error) {
+      failures.push(error)
       core.logger.warn(`Module close failed: ${name}`, { error })
     }
   }
 
   initialized = false
-{{#if features.crypto}}  cryptoInitialized = false
-{{/if}}  core.logger.info('API service closed')
+  cleanupPending = failures.length > 0
+  if (cleanupPending)
+    throw new AggregateError(failures, 'Application resource cleanup failed; retry closeApp()')
+  core.logger.info('API service closed')
 }

@@ -8,6 +8,19 @@
 
 共通の `reldb` オブジェクトで SQLite、PostgreSQL、MySQL を操作するリレーショナルデータベースモジュールです。
 
+接続はヘルスチェック成功後に公開します。初期化失敗時は候補リソースを解放し、解放にも失敗した場合は初期化エラーの `error.ext.cleanupPending` が `true` になります。`reldb.close()` は `Promise<HaiResult<void>>` を返し、初期化を待機して並行する終了処理をまとめます。解放開始後は `isInitialized` が `false` となり、設定と操作は利用できません。解放に失敗したリソースは保持され、次の `close()` または `init()` で再試行します。解放が成功するまで代替接続は作成しません。終了結果を必ず確認してください。
+
+```ts
+const closed = await reldb.close()
+if (!closed.success) {
+  // 障害への対処後に一度再試行し、再失敗はアプリへ報告します。
+  const retried = await reldb.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+終了処理は既存トランザクションのコミット/ロールバックと解放を待ちます。アプリはトランザクションを終了させてください。SQLite の WAL 設定と worker のハンドシェイクも初期化リソースとして管理します。PostgreSQL の切断済みアイドル接続はプールが除去し、次のクエリで置き換えます。プロセスは終了せず、ログには安全なエラー識別子のみを記録します。
+
 ## 主な機能
 
 - 共通 API で SQLite・PostgreSQL・MySQL に接続。

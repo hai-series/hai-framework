@@ -10,6 +10,19 @@ A unified cache module. The `cache` object provides KV / Hash / List / Set / ZSe
 
 Memory KV entries expire at their expiration time. `incr/decr/incrBy/decrBy` accept only safe integers or integer strings; invalid increments and overflow return `OPERATION_FAILED` without changing the original value. Hash names such as `__proto__` / `constructor` remain ordinary fields and do not change the returned object's prototype.
 
+Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `cache.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.
+
+```ts
+const closed = await cache.close()
+if (!closed.success) {
+  // Retry once after addressing the cleanup failure; report another failure.
+  const retried = await cache.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+Redis falls back to disconnect when QUIT fails, and reports success only after releasing the client.
+
 ## Core features
 
 - In-memory caching for development and tests
@@ -52,7 +65,8 @@ if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
   // 请先调用 cache.init()
 }
 
-await cache.close()
+const closeResult = await cache.close()
+if (!closeResult.success) throw new Error(closeResult.error.message)
 ```
 
 `cache.config` returns a **redacted configuration snapshot**. Redis credential fields such as `password` / `url` are sanitized automatically; do not use the snapshot to write back original secrets.

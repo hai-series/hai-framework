@@ -61,6 +61,19 @@ if (!closeResult.success) {
 }
 ```
 
+
+初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`storage.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+
+```ts
+const closed = await storage.close()
+if (!closed.success) {
+  // 处理清理故障后有限重试；再次失败应向应用报告。
+  const retried = await storage.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+
 > `storage.config` 返回的是**脱敏配置快照**；S3 的 `accessKeyId` / `secretAccessKey` 等敏感字段会被替换为 `[REDACTED]`。
 
 ## 核心 API

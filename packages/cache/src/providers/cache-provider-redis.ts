@@ -70,6 +70,31 @@ const EXTEND_LOCK_SCRIPT = `
 export function createRedisProvider(): CacheProvider {
   /** ioredis 客户端实例；connect 后赋值，close 后置 null */
   let client: Redis | Cluster | null = null
+  let ready = false
+  let closing: Promise<void> | null = null
+
+  /** 停止接收业务操作；QUIT 失败时强制断开，只有实际释放成功才丢弃引用。 */
+  function closeClient(): Promise<void> {
+    const graceful = ready && client?.status === 'ready'
+    ready = false
+    if (closing)
+      return closing
+    const owned = client
+    if (!owned)
+      return Promise.resolve()
+    closing = (async () => {
+      try {
+        if (graceful)
+          await owned.quit()
+      }
+      catch (error) {
+        logger.warn('Redis graceful shutdown failed; disconnecting client', { error })
+      }
+      owned.disconnect()
+      client = null
+    })().finally(() => { closing = null })
+    return closing
+  }
 
   // ─── 辅助函数 ───
 
@@ -116,7 +141,7 @@ export function createRedisProvider(): CacheProvider {
    * @returns HaiResult 包装的操作结果
    */
   async function wrapOperation<T>(operation: () => Promise<T>): Promise<HaiResult<T>> {
-    if (!client) {
+    if (!ready || !client) {
       return err(
         HaiCacheError.NOT_INITIALIZED,
         cacheM('cache_notInitialized'),
@@ -708,6 +733,7 @@ export function createRedisProvider(): CacheProvider {
       }
 
       try {
+        await closeClient()
         const redisOptions: RedisOptions = {
           ...(!config.url && config.password !== undefined ? { password: config.password } : {}),
           connectTimeout: config.connectTimeout,
@@ -764,30 +790,37 @@ export function createRedisProvider(): CacheProvider {
         await client.connect()
         await client.ping()
 
+        ready = true
         const address = config.url ? core.sanitize.sanitizeUrl(config.url) : `${config.host}:${config.port}`
         logger.info('Redis connected', { address })
 
         return ok(undefined)
       }
       catch (error) {
-        return err(
+        ready = false
+        let cleanupError: unknown
+        try {
+          // 连接/健康检查失败时不能向离线队列发送 QUIT；直接停止重连并释放套接字。
+          client?.disconnect()
+          client = null
+        }
+        catch (failure) {
+          cleanupError = failure
+        }
+        const result = err(
           HaiCacheError.CONNECTION_FAILED,
           cacheM('cache_redisConnectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           error,
         )
+        if (cleanupError !== undefined && !result.success)
+          return err({ ...result.error, ext: { cleanupPending: true, cleanupError } })
+        return result
       }
     },
 
-    async close(): Promise<void> {
-      if (client) {
-        logger.info('Disconnecting Redis')
-        await client.quit()
-        client = null
-        logger.info('Redis disconnected')
-      }
-    },
+    close: closeClient,
 
-    isConnected: () => client !== null,
+    isConnected: () => ready && client !== null && client.status === 'ready',
 
     kv,
     hash,

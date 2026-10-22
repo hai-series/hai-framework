@@ -8,6 +8,19 @@
 
 An object storage module with a unified `storage` entry point for S3-compatible storage and local filesystems.
 
+Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `storage.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.
+
+```ts
+const closed = await storage.close()
+if (!closed.success) {
+  // Retry once after addressing the cleanup failure; report another failure.
+  const retried = await storage.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+S3 disposes its normal client and its separate batch-delete client (SDK request retries disabled) independently. One failure does not prevent the other cleanup; successfully disposed clients are not destroyed again.
+
 ## Core features
 
 - S3 protocol (AWS S3 / MinIO / RustFS / OSS, etc.)

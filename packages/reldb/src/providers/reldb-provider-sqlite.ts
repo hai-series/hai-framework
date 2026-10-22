@@ -47,9 +47,36 @@ const logger = core.logger.child({ module: 'reldb', scope: 'sqlite' })
 export function createSqliteProvider(): ReldbProvider {
   /** SQLite 执行引擎（同步或 worker） */
   let engine: SqliteEngine | null = null
-  let currentConfig: ReldbConfig | null = null
-  /** 串行化 SQLite 事务，避免并发 BEGIN 导致 "cannot start a transaction within a transaction" */
+  /** 只有健康检查完成的连接才可供业务使用；清理失败仍保留底层资源。 */
+  let ready = false
+  let closing: Promise<HaiResult<void>> | null = null
+  /** 串行化 SQLite 事务，关闭前等待所有借出事务归还。 */
   let txChain: Promise<void> = Promise.resolve()
+  let currentConfig: ReldbConfig | null = null
+
+  /** 保留所有权直到释放成功；合并并发关闭且立即阻止新操作。 */
+  function closeResource(): Promise<HaiResult<void>> {
+    ready = false
+    currentConfig = null
+    if (closing)
+      return closing
+    const owned = engine
+    if (!owned)
+      return Promise.resolve(ok(undefined))
+    closing = (async (): Promise<HaiResult<void>> => {
+      try {
+        // 在途事务拥有独立上下文；先等待释放，再关闭唯一引擎。
+        await txChain.catch(() => undefined)
+        await owned.close()
+        engine = null
+        return ok(undefined)
+      }
+      catch (error) {
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
+      }
+    })().finally(() => { closing = null })
+    return closing
+  }
 
   /** 事务锁获取超时（毫秒），防止永久阻塞 */
   const TX_LOCK_TIMEOUT_MS = 30_000
@@ -92,7 +119,7 @@ export function createSqliteProvider(): ReldbProvider {
   // ─── 操作上下文 ───
 
   const ctx: ReldbOpsContext = {
-    isConnected: () => engine !== null && engine.isOpen(),
+    isConnected: () => ready && engine !== null && engine.isOpen(),
     logger,
     operationLog: () => currentConfig?.operationLog,
   }
@@ -273,7 +300,7 @@ export function createSqliteProvider(): ReldbProvider {
     }
 
     const txDmlOps = createSqliteTxDmlOps(txEngine)
-    const guardedTxDmlOps = createBaseDmlOps(ctx, txDmlOps)
+    const guardedTxDmlOps = createBaseDmlOps({ ...ctx, isConnected: () => txEngine.isOpen() }, txDmlOps)
     return ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await txEngine.exec('COMMIT') },
       rollback: async () => { await txEngine.exec('ROLLBACK') },
@@ -296,6 +323,9 @@ export function createSqliteProvider(): ReldbProvider {
         return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sqliteNeedPath'))
       }
 
+      const previousCleanup = await closeResource()
+      if (!previousCleanup.success)
+        return previousCleanup
       try {
         const sqliteOptions = {
           walMode: true,
@@ -312,42 +342,23 @@ export function createSqliteProvider(): ReldbProvider {
 
         // worker 执行方式把同步查询移出主线程事件循环；sync 为默认保持历史行为。
         engine = sqliteOptions.executor === 'worker'
-          ? await createWorkerSqliteEngine(engineOptions, sqliteOptions.workerConnectTimeoutMs ?? 10_000)
+          ? createWorkerSqliteEngine(engineOptions, sqliteOptions.workerConnectTimeoutMs ?? 10_000)
           : createSyncSqliteEngine(engineOptions)
+        await engine.initialize()
 
+        ready = true
         currentConfig = config
         logger.info('Connected to SQLite', { database: config.database, executor: sqliteOptions.executor })
         return ok(undefined)
       }
       catch (error) {
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
+        const cleanup = await closeResource()
+        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
+        return cleanup.success || result.success ? result : err({ ...result.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
       }
     },
 
-    async close(): Promise<HaiResult<void>> {
-      if (engine) {
-        try {
-          // 等待当前事务链清空，避免在事务进行中强制关闭连接导致
-          // "database is locked" 或丢失的事务拒绝
-          try {
-            await txChain
-          }
-          catch {
-            // 事务已失败的情况下忽略其拒绝，关闭仍需进行
-          }
-          await engine.close()
-        }
-        catch (error) {
-          currentConfig = null
-          engine = null
-          return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
-        }
-        currentConfig = null
-        engine = null
-        logger.info('Disconnected from SQLite')
-      }
-      return ok(undefined)
-    },
+    close: closeResource,
 
     isConnected: () => ctx.isConnected(),
     ddl: createBaseDdlOps(ctx, rawDdl),

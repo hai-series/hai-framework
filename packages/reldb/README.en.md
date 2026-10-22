@@ -8,6 +8,19 @@
 
 A relational database module with a unified `reldb` object for SQLite, PostgreSQL, and MySQL.
 
+Connections become available only after a successful health check. Failed initialization disposes its candidate; `error.ext.cleanupPending === true` identifies cleanup that still needs retry. `reldb.close()` returns `Promise<HaiResult<void>>`, waits for initialization, and coalesces concurrent close calls. Once cleanup starts, `isInitialized` is false and configuration/operations are unavailable. A failed cleanup retains the resource: the next `close()` or `init()` retries disposal before allocating a replacement. Always inspect the close result.
+
+```ts
+const closed = await reldb.close()
+if (!closed.success) {
+  // Retry once after addressing the cleanup failure; report another failure.
+  const retried = await reldb.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+Close waits for borrowed transactions to commit/roll back and release their handles; applications must finish transactions for shutdown to complete. SQLite WAL setup and worker handshakes are part of the owned initialization chain. PostgreSQL removes disconnected idle clients and replaces them on later queries without terminating the process; logs contain safe error identifiers rather than raw driver errors.
+
 ## Core features
 
 - Connect to SQLite, PostgreSQL and MySQL through one API.

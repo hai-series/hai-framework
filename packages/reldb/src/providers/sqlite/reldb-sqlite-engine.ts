@@ -33,6 +33,12 @@ export interface SqliteStatement {
  * 所有方法均为异步：同步引擎内部仍是阻塞调用（签名异步保持一致），worker 引擎为真正的跨线程异步。
  */
 export interface SqliteEngine {
+  /**
+   * 完成 WAL/worker 握手；必须先保存引擎引用，失败后仍通过 close 释放资源。
+   * @example
+   * try { await engine.initialize() } finally { await engine.close() }
+   */
+  initialize: () => Promise<void>
   /** 查询多行。 */
   all: (sql: string, params?: unknown[]) => Promise<unknown[]>
   /** 查询单行（无结果返回 null）。 */
@@ -63,17 +69,22 @@ export interface SqliteEngineOptions {
  * 创建同步引擎：主线程直接持有连接（默认执行方式）。
  *
  * @param options - 打开选项。
- * @returns 同步 SQLite 引擎。
+ * @returns 已拥有连接的引擎；调用 initialize 后才可执行 SQL。
+ * @example
+ * const engine = createSyncSqliteEngine(options)
+ * try { await engine.initialize() } finally { await engine.close() }
  */
 export function createSyncSqliteEngine(options: SqliteEngineOptions): SqliteEngine {
   const Database = require('better-sqlite3')
   const db = new Database(options.database, { readonly: options.readonly }) as BetterSqlite3.Database
-  if (options.walMode !== false) {
-    db.pragma('journal_mode = WAL')
-  }
-  let open = true
+  let initialized = false
 
   return {
+    async initialize() {
+      if (!initialized && options.walMode !== false)
+        db.pragma('journal_mode = WAL')
+      initialized = true
+    },
     async all(sql, params) {
       const stmt = db.prepare(sql)
       return params ? stmt.all(...params) : stmt.all()
@@ -102,12 +113,12 @@ export function createSyncSqliteEngine(options: SqliteEngineOptions): SqliteEngi
       tx(statements)
     },
     async close() {
-      if (open) {
+      initialized = false
+      if (db.open) {
         db.close()
-        open = false
       }
     },
-    isOpen: () => open,
+    isOpen: () => initialized && db.open,
   }
 }
 
@@ -140,18 +151,23 @@ interface WorkerResponse {
  *
  * @param options - 打开选项。
  * @param connectTimeoutMs - 等待 worker 打开数据库的超时时间。
- * @returns 已就绪的 worker SQLite 引擎；worker 初始化失败或超时时 reject。
+ * @returns 已拥有 worker 的引擎；initialize 在握手失败或超时时 reject。
+ * @example
+ * const engine = createWorkerSqliteEngine(options, 10_000)
+ * try { await engine.initialize() } finally { await engine.close() }
  */
-export async function createWorkerSqliteEngine(
+export function createWorkerSqliteEngine(
   options: SqliteEngineOptions,
   connectTimeoutMs: number,
-): Promise<SqliteEngine> {
+): SqliteEngine {
   const worker = new Worker(resolveWorkerUrl(), {
     workerData: { database: options.database, readonly: options.readonly, walMode: options.walMode },
   })
 
   let seq = 0
-  let open = true
+  let open = false
+  let exited = false
+  let closing: Promise<void> | null = null
   const pending = new Map<number, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
 
   /** 连接失效时统一拒绝所有在途请求，避免 Promise 永久挂起。 */
@@ -178,33 +194,54 @@ export async function createWorkerSqliteEngine(
     rejectAll(error instanceof Error ? error : new Error(String(error)))
   })
   worker.on('exit', (code) => {
+    exited = true
     open = false
     if (pending.size > 0)
       rejectAll(new Error(`sqlite worker exited unexpectedly with code ${code}`))
   })
 
-  // 等待 worker 完成数据库打开握手；失败或超时视为连接失败。
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      worker.off('message', onHandshake)
-      reject(new Error(`sqlite worker init timed out after ${connectTimeoutMs}ms`))
-    }, connectTimeoutMs)
+  /** 等待握手时同步处理 error/exit，并在所有完成路径释放定时器和临时监听器。 */
+  function initialize(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        finish(new Error(`sqlite worker init timed out after ${connectTimeoutMs}ms`))
+      }, connectTimeoutMs)
 
-    function onHandshake(msg: { type?: string }): void {
-      if (msg?.type === 'ready') {
+      function finish(error?: Error): void {
         clearTimeout(timer)
         worker.off('message', onHandshake)
-        resolve()
+        worker.off('error', onError)
+        worker.off('exit', onExit)
+        if (error) {
+          reject(error)
+        }
+        else {
+          open = true
+          resolve()
+        }
       }
-      else if (msg?.type === 'init-error') {
-        clearTimeout(timer)
-        worker.off('message', onHandshake)
-        reject(new Error((msg as { error?: { message: string } }).error?.message ?? 'sqlite worker init failed'))
+      function onError(error: Error): void {
+        finish(error)
       }
-    }
+      function onExit(code: number): void {
+        finish(new Error(`sqlite worker exited before ready with code ${code}`))
+      }
+      function onHandshake(msg: { type?: string }): void {
+        if (msg?.type === 'ready') {
+          finish()
+        }
+        else if (msg?.type === 'init-error') {
+          finish(new Error((msg as { error?: { message: string } }).error?.message ?? 'sqlite worker init failed'))
+        }
+      }
 
-    worker.on('message', onHandshake)
-  })
+      worker.on('message', onHandshake)
+      worker.once('error', onError)
+      worker.once('exit', onExit)
+      if (exited)
+        finish(new Error('sqlite worker exited before initialization'))
+    })
+  }
 
   /** 发送一条请求并等待响应。 */
   function post(op: string, payload: { sql?: string, params?: unknown[], statements?: SqliteStatement[] }): Promise<unknown> {
@@ -218,6 +255,7 @@ export async function createWorkerSqliteEngine(
   }
 
   return {
+    initialize,
     // 边界反序列化：worker 通过结构化克隆回传，行/结果类型在此断言。
     async all(sql, params) {
       return (await post('all', { sql, params })) as unknown[]
@@ -234,17 +272,19 @@ export async function createWorkerSqliteEngine(
     async batch(statements) {
       await post('batch', { statements })
     },
-    async close() {
-      if (!open)
-        return
-      try {
-        await post('close', {})
-      }
-      catch {
-        // worker 已退出等情况忽略，仍需终止线程。
-      }
+    close() {
+      if (closing)
+        return closing
+      const wasOpen = open
+      const gracefulClose = wasOpen ? post('close', {}) : Promise.resolve()
       open = false
-      await worker.terminate()
+      closing = (async () => {
+        // 握手失败时也必须终止线程；终止失败保留所有权，下一次 close 再试。
+        await gracefulClose.catch(() => undefined)
+        if (!exited)
+          await worker.terminate()
+      })().finally(() => { closing = null })
+      return closing
     },
     isOpen: () => open,
   }

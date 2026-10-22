@@ -10,6 +10,19 @@
 
 メモリー KV は有効期限に達した時点で無効になります。`incr/decr/incrBy/decrBy` は安全な整数値または整数文字列のみを受け付け、不正な増分やオーバーフローでは元の値を保持して `OPERATION_FAILED` を返します。Hash の `__proto__` / `constructor` などは通常のフィールドとして保持され、戻り値のオブジェクトのプロトタイプを変更しません。
 
+接続はヘルスチェック成功後に公開します。初期化失敗時は候補リソースを解放し、解放にも失敗した場合は初期化エラーの `error.ext.cleanupPending` が `true` になります。`cache.close()` は `Promise<HaiResult<void>>` を返し、初期化を待機して並行する終了処理をまとめます。解放開始後は `isInitialized` が `false` となり、設定と操作は利用できません。解放に失敗したリソースは保持され、次の `close()` または `init()` で再試行します。解放が成功するまで代替接続は作成しません。終了結果を必ず確認してください。
+
+```ts
+const closed = await cache.close()
+if (!closed.success) {
+  // 障害への対処後に一度再試行し、再失敗はアプリへ報告します。
+  const retried = await cache.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
+Redis の QUIT が失敗した場合は disconnect で切断し、解放が完了した場合のみ成功を返します。
+
 ## 主な機能
 
 - 開発・テスト用のメモリーキャッシュ
@@ -52,7 +65,8 @@ if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
   // 请先调用 cache.init()
 }
 
-await cache.close()
+const closeResult = await cache.close()
+if (!closeResult.success) throw new Error(closeResult.error.message)
 ```
 
 `cache.config` は**機密情報をマスクした設定スナップショット**を返します。Redis の `password` / `url` などの認証情報は自動処理されるため、元の秘密情報を書き戻す用途には使わないでください。

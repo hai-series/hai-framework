@@ -159,6 +159,36 @@ export function createS3Provider(): StorageProvider {
   let client: S3Client | null = null
   let deleteClient: S3Client | null = null
   let config: S3Config | null = null
+  let ready = false
+  let closing: Promise<void> | null = null
+
+  /** 两个客户端独立释放；失败的客户端保留供重试，成功的客户端不重复释放。 */
+  function closeClients(): Promise<void> {
+    ready = false
+    config = null
+    if (closing)
+      return closing
+    closing = Promise.resolve().then(() => {
+      const failures: unknown[] = []
+      for (const kind of ['normal', 'delete'] as const) {
+        const owned = kind === 'normal' ? client : deleteClient
+        if (!owned)
+          continue
+        try {
+          owned.destroy()
+          if (kind === 'normal')
+            client = null
+          else deleteClient = null
+        }
+        catch (error) {
+          failures.push(error)
+        }
+      }
+      if (failures.length > 0)
+        throw new AggregateError(failures, 'S3 client cleanup failed')
+    }).finally(() => { closing = null })
+    return closing
+  }
 
   // -------------------------------------------------------------------------
   // 内部辅助
@@ -167,7 +197,7 @@ export function createS3Provider(): StorageProvider {
   /** 获取当前 S3Client；批量删除使用禁用 SDK 请求重试的独立客户端。 */
   function getClient(operation?: 'deleteMany'): S3Client {
     const selected = operation === 'deleteMany' ? deleteClient : client
-    if (!selected) {
+    if (!ready || !selected) {
       throw new Error(storageM('storage_s3ClientNotInitialized'))
     }
     return selected
@@ -175,7 +205,7 @@ export function createS3Provider(): StorageProvider {
 
   /** 获取当前 S3 配置，未初始化时抛异常 */
   function getConfig(): S3Config {
-    if (!config) {
+    if (!ready || !config) {
       throw new Error(storageM('storage_s3ConfigNotInitialized'))
     }
     return config
@@ -642,6 +672,8 @@ export function createS3Provider(): StorageProvider {
       }
 
       try {
+        await closeClients()
+
         config = cfg
         logger.info('Connecting S3 provider', {
           bucket: cfg.bucket,
@@ -671,33 +703,28 @@ export function createS3Provider(): StorageProvider {
           MaxKeys: 1,
         }))
 
+        config = cfg
+        ready = true
         logger.info('S3 provider connected', { bucket: cfg.bucket })
         return ok(undefined)
       }
       catch (error) {
         logger.error('S3 provider connect failed', { error })
-        client?.destroy()
-        deleteClient?.destroy()
-        config = null
-        client = null
-        deleteClient = null
-        return err(toStorageError(error))
+        const original = toStorageError(error)
+        try {
+          await closeClients()
+          return err(original)
+        }
+        catch (cleanupError) {
+          return err({ ...original, ext: { ...original.ext, cleanupPending: true, cleanupError } })
+        }
       }
     },
 
-    async close(): Promise<void> {
-      if (client) {
-        client.destroy()
-        deleteClient?.destroy()
-        client = null
-        deleteClient = null
-        config = null
-        logger.info('S3 provider disconnected')
-      }
-    },
+    close: closeClients,
 
     isConnected(): boolean {
-      return client !== null && config !== null
+      return ready && client !== null && deleteClient !== null && config !== null
     },
   }
 }

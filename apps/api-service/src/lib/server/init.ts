@@ -41,18 +41,29 @@ type VecdbConfigInput = Parameters<typeof vecdb.init>[0]
 let initialized = false
 // 防止并发 init() 调用导致重复初始化：在途的 Promise 复用同一个结果。
 let initPromise: Promise<void> | null = null
+/** 记录启动/关闭后未确认释放的资源，使失败清理可以重试。 */
+let cleanupPending = false
+let closePromise: Promise<void> | null = null
 let cryptoInitialized = false
 
 export async function initApp(): Promise<void> {
+  if (closePromise)
+    await closePromise
   if (initialized)
     return
   if (initPromise)
     return initPromise
+  if (cleanupPending) {
+    await closeApp()
+    return await initApp()
+  }
 
+  cleanupPending = true
   initPromise = doInit()
   try {
     await initPromise
     initialized = true
+    cleanupPending = false
   }
   finally {
     initPromise = null
@@ -184,11 +195,25 @@ async function doInit(): Promise<void> {
  *
  * - 单个模块关闭失败不会阻断其他模块。
  * - 完成后允许重新 `initApp()`（适合测试场景）。
+ * @throws AggregateError - 任一资源未确认释放；再次 closeApp 或 initApp 会先重试清理。
+ * @example
+ * await closeApp()
  */
 export async function closeApp(): Promise<void> {
-  if (!initialized && !initPromise)
+  closePromise ??= doCloseApp().finally(() => {
+    closePromise = null
+  })
+  return await closePromise
+}
+
+/** 等待启动结束后逐一释放；HaiResult 失败与异常都会聚合报告并保留重试入口。 */
+async function doCloseApp(): Promise<void> {
+  if (!initialized && !initPromise && !cleanupPending)
     return
   // 反向顺序：ai → storage → iam → vecdb → cache → reldb
+  if (initPromise)
+    await initPromise.catch(() => undefined)
+  const failures: unknown[] = []
   const closers: Array<readonly [string, () => unknown]> = [
     ['ai', () => ai.close()],
     ['storage', () => storage.close()],
@@ -202,13 +227,23 @@ export async function closeApp(): Promise<void> {
     closers.push(['crypto', () => crypto.close()])
   for (const [name, close] of closers) {
     try {
-      await close()
+      const result = await close()
+      if (result && typeof result === 'object' && 'success' in result && result.success === false) {
+        failures.push('error' in result ? result.error : new Error('Module close failed'))
+        core.logger.warn(`Module close failed: ${name}`)
+        continue
+      }
+      if (name === 'crypto')
+        cryptoInitialized = false
     }
     catch (error) {
+      failures.push(error)
       core.logger.warn(`Module close failed: ${name}`, { error })
     }
   }
   initialized = false
-  cryptoInitialized = false
+  cleanupPending = failures.length > 0
+  if (cleanupPending)
+    throw new AggregateError(failures, 'Application resource cleanup failed; retry closeApp()')
   core.logger.info('API Service closed.')
 }

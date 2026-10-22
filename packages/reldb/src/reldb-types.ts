@@ -650,7 +650,13 @@ export interface ReldbFunctions {
    */
   readonly json: ReldbJsonOps
 
-  /** 关闭数据库连接 */
+  /**
+   * 等待初始化/在途事务并关闭连接；清理失败后操作不可用，资源保留供重试。
+   * @returns 资源全部释放时成功；未初始化时同样成功。
+   * @example
+   * const closed = await reldb.close()
+   * if (!closed.success) await reldb.close()
+   */
   close: () => Promise<HaiResult<void>>
 }
 
