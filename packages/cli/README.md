@@ -77,7 +77,9 @@ hai generate migration add-orders
 
 page 只支持 SvelteKit 文件路由；api 会按目标应用选择 SvelteKit 文件路由或 serv 的共享 contract/procedure。API/fullstack 根目录可自动选择唯一后端；多应用用 `--workspace <包名或相对路径>`，也可进入目标 workspace。纯 Vite 的 page/api 组合明确拒绝；serv 不接受 `--output`，SvelteKit 路由输出须位于 `src/routes` 内，定制 `kit.files` 时明确拒绝猜测；API 目标须已安装 `@h-ai/kit` 与 `zod`。serv 只改写带 `@hai-generator` 标记的既有聚合入口，未知结构要求手动扩展，不创建平行路由。名称不能包含路径；默认拒绝覆盖，`--force` 只替换生成文件，不覆盖已有业务领域注册。整批预检，写入失败回滚本次修改。迁移只生成 up/down 函数，不自动执行；运行前确认数据影响。
 
-CLI 消息支持中文和英文，优先使用 `HAI_CORE_DEFAULTLOCALE`，再按 `LC_ALL` → `LC_MESSAGES` → `LANG` 选择非空终端语言；`en`/`zh` 地区变体映射到现有字典，`C`/`POSIX` 使用英文。未知语言保留 core 当前语言（默认中文）。例如 PowerShell 先执行 `$env:HAI_CORE_DEFAULTLOCALE='en-US'`，再执行 `hai generate`。直接调用包内 API 时可通过 `core.i18n.setGlobalLocale('en-US')` 切换语言；省略类型或名称会交互，取消后不写文件。生成源码的中文注释和用户指定名称保留原样。
+CLI 消息支持中文和英文，优先使用 `HAI_CORE_DEFAULTLOCALE`，再按 `LC_ALL` → `LC_MESSAGES` → `LANG` 选择非空终端语言；`en`/`zh` 地区变体映射到现有字典，`C`/`POSIX` 使用英文。未知语言保留 core 当前语言（默认中文）。例如 PowerShell 先执行 `$env:HAI_CORE_DEFAULTLOCALE='en-US'`，再执行 `hai generate`。CLI 内部命令也响应 `core.i18n.setGlobalLocale('en-US')` 的同进程语言切换；省略类型或名称会交互，取消后不写文件。生成源码的中文注释和用户指定名称保留原样。
+
+`create`、`add`、`init` 与 `generate` 的提示、校验、模块/模板名称、描述和完成信息均使用当前 CLI 语言。静态选择目录在读取时翻译，同一进程切换 locale 也会生效。CLI 语言与生成应用的 `core.defaultLocale` 分开配置；生成的中文 README、配置/源码注释、用户输入和外部工具原始诊断保留原样。
 
 ### 构建与部署
 

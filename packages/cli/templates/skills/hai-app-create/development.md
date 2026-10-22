@@ -126,7 +126,9 @@ hai create my-app
 
 `hai generate page` 只写 SvelteKit 文件路由；`api` 按目标应用生成 SvelteKit 端点或 serv 的共享 contract/procedure 并接入已有聚合入口。API/fullstack 根自动选择唯一后端，多个候选用 `--workspace <包名或相对路径>`，也可进入目标 workspace。纯 Vite 不生成虚假文件路由；serv 不接受 `--output`，SvelteKit 输出限定 `src/routes` 内，定制 `kit.files` 时拒绝猜测；SvelteKit API 目标须已安装 `@h-ai/kit` 与 `zod`。不要删除模板 `@hai-generator` 聚合标记；自定义入口没有标记时手动沿现有架构接入。生成前统一校验路径和覆盖冲突，失败回滚本次修改；`--force` 不能覆盖已有业务领域注册。
 
-CLI 用户消息通过现有中英字典输出。初始语言按非空的 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择，`en`/`zh` 地区变体映射到现有语言，`C`/`POSIX` 为英文；未知语言保留 core 当前语言（默认中文）。API 调用可用 `core.i18n.setGlobalLocale('en-US')` 切换。`hai generate` 省略类型/名称会交互，取消不写文件；生成源码的中文注释与用户名称不翻译。
+CLI 用户消息通过现有中英字典输出。初始语言按非空的 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择，`en`/`zh` 地区变体映射到现有语言，`C`/`POSIX` 为英文；未知语言保留 core 当前语言（默认中文）。CLI 内部命令响应 `core.i18n.setGlobalLocale('en-US')` 的同进程切换；包入口仍为命令行入口，不提供库调用 API。`hai generate` 省略类型/名称会交互，取消不写文件；生成源码的中文注释与用户名称不翻译。
+
+`create` / `add` / `init` 的校验、选择项、模块/模板名称与描述、错误前缀及完成提示也使用当前 CLI locale；目录标签延迟求值。CLI 语言不修改生成应用的 `core.defaultLocale`。生成的中文 README、YAML/源码注释与外部工具原始错误保留原样；不要把这些正文机械替换成终端翻译。
 
 ## 将需求映射到现有能力
 

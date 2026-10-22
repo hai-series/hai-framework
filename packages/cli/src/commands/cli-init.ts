@@ -9,6 +9,7 @@ import type { GlobalOptions, ProjectInfo } from '../cli-types.js'
 import path from 'node:path'
 import chalk from 'chalk'
 import ora from 'ora'
+import { cliM } from '../cli-i18n.js'
 import { fileExists, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
 import { generateConfigFile } from './cli-config-templates.js'
 import { detectProject } from './cli-create.js'
@@ -29,19 +30,19 @@ export interface InitOptions extends GlobalOptions {
  * 模块到配置文件的映射
  */
 const MODULE_CONFIG_MAP: Record<string, { configKey: string, label: string }> = {
-  '@h-ai/core': { configKey: 'core', label: 'Core' },
-  '@h-ai/serv': { configKey: 'serv', label: 'Service' },
-  '@h-ai/reldb': { configKey: 'db', label: 'Database' },
-  '@h-ai/cache': { configKey: 'cache', label: 'Cache' },
-  '@h-ai/iam': { configKey: 'iam', label: 'IAM' },
-  '@h-ai/storage': { configKey: 'storage', label: 'Storage' },
-  '@h-ai/ai': { configKey: 'ai', label: 'AI' },
-  '@h-ai/vecdb': { configKey: 'vecdb', label: 'VecDB' },
-  '@h-ai/reach': { configKey: 'reach', label: 'Reach' },
-  '@h-ai/scheduler': { configKey: 'scheduler', label: 'Scheduler' },
-  '@h-ai/audit': { configKey: 'audit', label: 'Audit' },
-  '@h-ai/payment': { configKey: 'payment', label: 'Payment' },
-  '@h-ai/deploy': { configKey: 'deploy', label: 'Deploy' },
+  '@h-ai/core': { configKey: 'core', get label() { return cliM('cli_coreLabel') } },
+  '@h-ai/serv': { configKey: 'serv', get label() { return cliM('cli_serviceLabel') } },
+  '@h-ai/reldb': { configKey: 'db', get label() { return cliM('cli_featureDbName') } },
+  '@h-ai/cache': { configKey: 'cache', get label() { return cliM('cli_featureCacheName') } },
+  '@h-ai/iam': { configKey: 'iam', get label() { return cliM('cli_featureIamName') } },
+  '@h-ai/storage': { configKey: 'storage', get label() { return cliM('cli_featureStorageName') } },
+  '@h-ai/ai': { configKey: 'ai', get label() { return cliM('cli_featureAiName') } },
+  '@h-ai/vecdb': { configKey: 'vecdb', get label() { return cliM('cli_featureVecdbName') } },
+  '@h-ai/reach': { configKey: 'reach', get label() { return cliM('cli_featureReachName') } },
+  '@h-ai/scheduler': { configKey: 'scheduler', get label() { return cliM('cli_featureSchedulerName') } },
+  '@h-ai/audit': { configKey: 'audit', get label() { return cliM('cli_featureAuditName') } },
+  '@h-ai/payment': { configKey: 'payment', get label() { return cliM('cli_featurePaymentName') } },
+  '@h-ai/deploy': { configKey: 'deploy', get label() { return cliM('cli_featureDeployName') } },
 }
 
 /**
@@ -107,16 +108,16 @@ export async function initProject(options: InitOptions): Promise<void> {
 
   try {
     // 检测项目
-    spinner.start('检测项目...')
+    spinner.start(cliM('cli_initDetecting'))
     const result = await validateProject(cwd)
 
     if (!result) {
-      spinner.fail(chalk.red('未检测到项目（找不到 package.json）'))
+      spinner.fail(chalk.red(cliM('cli_projectNotFound')))
       return
     }
 
     const { project, existing, missing } = result
-    spinner.succeed(`检测到项目: ${chalk.cyan(project.name)}`)
+    spinner.succeed(cliM('cli_initDetected', { params: { name: chalk.cyan(project.name) } }))
 
     // 即使配置齐备，也补全新增 AI 参考资源；已有项目规则与 Skill 不覆盖。
     if (project.isHaiProject) {
@@ -132,15 +133,15 @@ export async function initProject(options: InitOptions): Promise<void> {
 
     // 显示项目状态
     writeCliMessage('')
-    writeCliMessage(chalk.bold('项目状态:'))
-    writeCliMessage(`  名称: ${chalk.cyan(project.name)}`)
-    writeCliMessage(`  版本: ${project.version}`)
-    writeCliMessage(`  已安装模块: ${project.haiPackages.length > 0 ? project.haiPackages.map(p => chalk.cyan(p)).join(', ') : chalk.gray('无')}`)
+    writeCliMessage(chalk.bold(cliM('cli_initStatus')))
+    writeCliMessage(cliM('cli_initName', { params: { name: chalk.cyan(project.name) } }))
+    writeCliMessage(cliM('cli_initVersion', { params: { version: project.version } }))
+    writeCliMessage(cliM('cli_initModules', { params: { modules: project.haiPackages.length > 0 ? project.haiPackages.map(p => chalk.cyan(p)).join(', ') : chalk.gray(cliM('cli_none')) } }))
     writeCliMessage('')
 
     // 显示配置状态
     if (existing.length > 0) {
-      writeCliMessage(chalk.bold('已有配置:'))
+      writeCliMessage(chalk.bold(cliM('cli_initExisting')))
       for (const key of existing) {
         writeCliMessage(chalk.green(`  ✔ config/_${key}.yml`))
       }
@@ -149,20 +150,20 @@ export async function initProject(options: InitOptions): Promise<void> {
     // 无缺失配置
     if (missing.length === 0 && !options.force) {
       writeCliMessage('')
-      writeCliMessage(chalk.green('✔ 所有配置文件已就绪！'))
+      writeCliMessage(chalk.green(cliM('cli_initReady')))
       return
     }
 
     // 补全缺失配置
     if (missing.length > 0) {
       writeCliMessage('')
-      writeCliMessage(chalk.bold('缺失配置:'))
+      writeCliMessage(chalk.bold(cliM('cli_initMissing')))
       for (const item of missing) {
         writeCliMessage(chalk.yellow(`  ✘ config/_${item.configKey}.yml (${item.label})`))
       }
       writeCliMessage('')
 
-      spinner.start('生成缺失配置文件...')
+      spinner.start(cliM('cli_initGenerating'))
       let generated = 0
       for (const item of missing) {
         const configPath = path.join(cwd, 'config', `_${item.configKey}.yml`)
@@ -170,13 +171,13 @@ export async function initProject(options: InitOptions): Promise<void> {
         await writeFile(configPath, content)
         generated++
       }
-      spinner.succeed(`已生成 ${generated} 个配置文件`)
+      spinner.succeed(cliM('cli_initGenerated', { params: { count: generated } }))
     }
 
     // 强制模式：重新生成所有配置
     if (options.force && existing.length > 0) {
       writeCliMessage('')
-      spinner.start('强制重新生成所有配置文件...')
+      spinner.start(cliM('cli_initRegenerating'))
       let regenerated = 0
       for (const pkg of project.haiPackages) {
         const mapping = MODULE_CONFIG_MAP[pkg]
@@ -187,29 +188,29 @@ export async function initProject(options: InitOptions): Promise<void> {
         await writeFile(configPath, content)
         regenerated++
       }
-      spinner.succeed(`已重新生成 ${regenerated} 个配置文件`)
+      spinner.succeed(cliM('cli_initRegenerated', { params: { count: regenerated } }))
     }
 
     // 检查 core 配置（始终需要）
     const coreConfigPath = path.join(cwd, 'config', '_core.yml')
     if (!(await fileExists(coreConfigPath))) {
-      spinner.start('生成核心配置 config/_core.yml...')
+      spinner.start(cliM('cli_initCore'))
       const content = generateConfigFile('core')
       await writeFile(coreConfigPath, content)
       spinner.succeed()
     }
 
     writeCliMessage('')
-    writeCliMessage(chalk.green('✔ 项目配置初始化完成！'))
+    writeCliMessage(chalk.green(cliM('cli_initSuccess')))
     writeCliMessage('')
-    writeCliMessage(chalk.gray('下一步:'))
-    writeCliMessage(chalk.gray('  1. 编辑 config/ 中的配置文件'))
-    writeCliMessage(chalk.gray('  2. 运行 pnpm dev 启动开发服务'))
+    writeCliMessage(chalk.gray(cliM('cli_nextSteps')))
+    writeCliMessage(chalk.gray(cliM('cli_initEditConfig')))
+    writeCliMessage(chalk.gray(cliM('cli_initStartDev')))
     writeCliMessage('')
   }
   catch (error) {
     spinner.fail()
-    writeCliError(chalk.red('初始化失败:'), { error })
+    writeCliError(chalk.red(cliM('cli_initFailed')), { error })
     throw error
   }
 }

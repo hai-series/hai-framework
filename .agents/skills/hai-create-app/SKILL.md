@@ -5,6 +5,8 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 
 # hai-create-app
 
+CLI 创建/补模块/初始化提示使用现有中英 locale；终端语言不改变目标应用默认语言。完整语言优先级与产物边界见 [应用环境与 CLI 开发](../../../packages/cli/templates/skills/hai-app-create/development.md)。
+
 ## 能力契约
 
 | 项目 | 契约 |
