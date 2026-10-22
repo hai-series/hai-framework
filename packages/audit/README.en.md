@@ -122,6 +122,9 @@ All operations return `HaiResult<T>`. Common error codes:
 
 > Note: `audit.close()` also returns `HaiResult<void>`. `audit.helper.passwordResetRequest()` records the original email address without additional masking by default.
 
+
+`audit.init()` awaits automatic table creation and repository readiness before success. DDL failures leave `isInitialized=false`; correct the database and retry. Custom joins, statistics and cleanup share the same barrier. Closing during initialization invalidates late publication. Check the init HaiResult before recording or querying. Audit does not own the shared RelDB connection; close audit before the database.
+
 ## Development and testing
 
 ```bash

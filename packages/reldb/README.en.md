@@ -515,6 +515,9 @@ Common error codes:
 | `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL operation failed  |
 | `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | Invalid configuration |
 
+
+Custom SQL methods in `BaseReldbCrudRepository` subclasses must check `await this.ensureReady()`. Construction starts table creation; service init must await candidate readiness before publication. PostgreSQL concurrent first `CREATE TABLE IF NOT EXISTS` retries the same DDL once only for `23505/pg_type_typname_nsp_index` catalog contention; other errors remain failures.
+
 ## Development and testing
 
 ```bash

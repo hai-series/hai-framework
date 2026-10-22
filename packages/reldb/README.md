@@ -515,6 +515,9 @@ if (!result.success) {
 | `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作失败 |
 | `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 配置错误     |
 
+
+派生 `BaseReldbCrudRepository` 的自定义 SQL 方法先检查 `await this.ensureReady()`；构造函数启动自动建表不等于仓库就绪，服务 init 必须等待候选仓库的就绪入口再发布。PostgreSQL 并发首次 `CREATE TABLE IF NOT EXISTS` 的 `23505/pg_type_typname_nsp_index` 目录冲突仅重执行相同 DDL 一次，其他错误继续失败。
+
 ## 开发测试
 
 ```bash

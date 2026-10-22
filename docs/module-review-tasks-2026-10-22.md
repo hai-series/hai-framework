@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 36/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 37/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -528,7 +528,8 @@
 
 ### AUDIT-01 · P1 · 等待审计仓库真正就绪后再宣布初始化成功
 
-- [ ] 待修正（源码确认；范围：audit）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：audit.init等待候选仓库DDL就绪才发布，自定义JOIN/统计/清理共享屏障，close使迟到初始化失效；补实际发现的PostgreSQL并发首次建表catalog冲突，仅指定23505目录冲突重执行原IF NOT EXISTS一次。三语README、RelDB规范参考及audit skill同步；typecheck/lint/build、审计48项、三库双独立Node各3轮首次启动3项、RelDB三库DDL33项、skills及offline frozen install通过；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/audit/src/audit-main.ts:198](../packages/audit/src/audit-main.ts#L198)；[packages/audit/src/audit-repository-log.ts:166](../packages/audit/src/audit-repository-log.ts#L166)。
 - **证据与影响**：init 构造 BaseReldbCrudRepository 后立即发布 currentRepo/返回成功；基类建表是异步流程，自定义查询也未统一等待 ready。首次查询可能早于建表，建表失败时 isInitialized 仍为 true。
 - **修正内容**：暴露/复用仓库 readiness，init await 成功后发布；所有自定义查询遵守相同前置，失败清理 candidate 并准确返回。

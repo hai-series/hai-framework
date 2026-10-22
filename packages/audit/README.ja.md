@@ -122,6 +122,9 @@ await audit.init({
 
 > 注：`audit.close()` も `HaiResult<void>` を返します。`audit.helper.passwordResetRequest()` は既定でメールアドレスを追加マスクせず、そのまま記録します。
 
+
+`audit.init()` は自動建表とリポジトリーの準備完了を待って成功します。DDL 失敗時は `isInitialized=false` のままで、DB を修正後に再試行できます。独自 JOIN・統計・削除も同じ準備完了を待ちます。初期化中の close は遅れた公開を無効化します。init の HaiResult を確認後に記録・検索し、共有 DB の接続は所有しないため audit の終了後に DB を終了します。
+
 ## 開発とテスト
 
 ```bash

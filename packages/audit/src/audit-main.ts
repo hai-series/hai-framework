@@ -83,6 +83,9 @@ let currentHelper: AuditHelper | null = null
 /** 并发初始化防护标志 */
 let initInProgress = false
 
+/** close使尚未完成DDL的初始化失效，防止迟到发布。 */
+let lifecycleGeneration = 0
+
 // ─── 未初始化占位 ───
 
 /**
@@ -138,7 +141,7 @@ export const audit: AuditFunctions = {
    * 初始化审计模块
    *
    * 会先关闭已有实例（如已初始化），再用新配置重新初始化。
-   * 内部创建 AuditLogRepository 实例（BaseReldbCrudRepository 自动建表）。
+   * 等待 AuditLogRepository / BaseReldbCrudRepository 完成建表后才发布实例。
    * 依赖 @h-ai/reldb 已初始化。
    *
    * @param config - 初始化配置（可选，所有字段均有默认值）
@@ -162,14 +165,13 @@ export const audit: AuditFunctions = {
       )
     }
     initInProgress = true
+    const generation = ++lifecycleGeneration
 
     try {
       if (currentRepo) {
         logger.warn('Audit module is already initialized, reinitializing')
-        const closeResult = await audit.close()
-        if (!closeResult.success) {
-          return closeResult
-        }
+        currentRepo = null
+        currentHelper = null
       }
 
       logger.info('Initializing audit module')
@@ -195,11 +197,19 @@ export const audit: AuditFunctions = {
         )
       }
 
-      currentRepo = new AuditLogRepository({
+      const candidate = new AuditLogRepository({
         userTable: parsed.userTable,
         userIdColumn: parsed.userIdColumn,
         userNameColumn: parsed.userNameColumn,
       })
+      const ready = await candidate.ready()
+      if (!ready.success) {
+        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_initFailed', { params: { error: ready.error.message } }), ready.error)
+      }
+      if (generation !== lifecycleGeneration)
+        return err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized'))
+      // 候选仓库只拥有schema就绪Promise，不拥有共享reldb连接；成功屏障后才发布。
+      currentRepo = candidate
       currentHelper = createHelper(input => audit.log(input))
 
       logger.info('Audit module initialized')
@@ -364,6 +374,7 @@ export const audit: AuditFunctions = {
    * 关闭审计模块，释放内部状态
    */
   async close(): Promise<HaiResult<void>> {
+    lifecycleGeneration++
     if (!currentRepo) {
       logger.info('Audit module already closed, skipping')
       return ok(undefined)

@@ -256,7 +256,18 @@ export function createPostgresProvider(): ReldbProvider {
     async createTable(name, columns, ifNotExists = true) {
       const quotedTable = quoteIdentifier(name)
       const sql = buildDefaultCreateTableSql(pgBuildColumnSql, quotedTable, columns, ifNotExists)
-      await pool!.query(sql)
+      try {
+        await pool!.query(sql)
+      }
+      catch (error) {
+        // PostgreSQL并发首次创建同表可能在IF NOT EXISTS生效前竞争pg_type唯一索引。
+        // 仅该已确认的系统目录竞态重执行原DDL；其它约束/权限/定义错误仍原样失败。
+        if (!ifNotExists || typeof error !== 'object' || error === null || !('code' in error) || error.code !== '23505'
+          || !('constraint' in error) || error.constraint !== 'pg_type_typname_nsp_index') {
+          throw error
+        }
+        await pool!.query(sql)
+      }
       return ok(undefined)
     },
     async dropTable(name, ifExists) {

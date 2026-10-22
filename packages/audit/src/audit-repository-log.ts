@@ -72,6 +72,15 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
   }
 
   /**
+   * 等待基类完成建表及字段校验；init和自定义SQL共享此屏障，失败不发布仓库。
+   * @returns 建表结果，失败由调用方映射到对应审计错误
+   * @example const ready = await repository.ready(); if (!ready.success) return ready
+   */
+  ready(): Promise<HaiResult<void>> {
+    return this.ensureReady()
+  }
+
+  /**
    * 将 Date 转为适合当前数据库类型的 SQL 参数
    *
    * SQLite 存储 TIMESTAMP 为毫秒时间戳，其他数据库使用 ISO 字符串。
@@ -164,6 +173,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；失败时返回 QUERY_FAILED
    */
   async listWithUser(options: ListAuditLogsOptions = {}): Promise<HaiResult<PaginatedResult<AuditLogWithUser>>> {
+    const ready = await this.ready()
+    if (!ready.success)
+      return ready
     logger.debug('Querying audit logs', { userId: options.userId, action: options.action, resource: options.resource })
 
     const conditions: string[] = []
@@ -272,6 +284,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @returns 成功时返回删除的记录数；失败时返回 CLEANUP_FAILED
    */
   async cleanupOld(olderThanDays = 90): Promise<HaiResult<number>> {
+    const ready = await this.ready()
+    if (!ready.success)
+      return ready
     logger.debug('Cleaning up old audit logs', { olderThanDays })
 
     const cutoff = new Date()
@@ -313,6 +328,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @returns 成功时返回 AuditStatItem 数组（按 count 倒序）；失败时返回 STATS_FAILED
    */
   async getStats(days = 7): Promise<HaiResult<AuditStatItem[]>> {
+    const ready = await this.ready()
+    if (!ready.success)
+      return ready
     logger.debug('Getting audit statistics', { days })
 
     const cutoff = new Date()

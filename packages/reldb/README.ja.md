@@ -515,6 +515,9 @@ if (!result.success) {
 | `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作に失敗         |
 | `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 設定エラー             |
 
+
+`BaseReldbCrudRepository` の派生クラスで独自 SQL を実行する前に `await this.ensureReady()` を確認します。構築時に建表を開始するだけなので、サービス init は候補の準備完了後に公開します。PostgreSQL の並行初回 `CREATE TABLE IF NOT EXISTS` は `23505/pg_type_typname_nsp_index` の競合だけ同じ DDL を一度再実行し、他のエラーは失敗のままです。
+
 ## 開発とテスト
 
 ```bash
