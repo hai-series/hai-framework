@@ -28,6 +28,7 @@ providers:
   #   headers:
   #     Authorization: '${HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION}'
   #   timeout: 10000
+  #   idempotent: ${HAI_REACH_PROVIDERS_0_IDEMPOTENT:false} # 仅接收端具备原子持久去重时启用；默认在途不明结果转 unknown
 templates:
   - name: otp_email
     provider: email

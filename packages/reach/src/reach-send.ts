@@ -13,6 +13,7 @@ import type { SendLogRepository } from './repositories/reach-repository-send-log
 import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 
+import { deliverClaimedMessage } from './reach-delivery.js'
 import { reachM } from './reach-i18n.js'
 import {
   HaiReachError,
@@ -183,14 +184,17 @@ export function startDndScheduler(
   }
 
   schedulerContext = { dndConfig, providers, repo }
+  const context = schedulerContext
 
   // 如果当前不在 DND 时段，不需要启动定时器
   if (!isDndBlocked(dndConfig)) {
     // 但仍然尝试 flush 一次（可能上次 DND 结束后有残留 pending）
     flushPendingMessages(providers, repo).catch((error) => {
       logger.warn('Failed to flush pending messages on init', { error })
+    }).finally(() => {
+      if (schedulerContext === context)
+        scheduleDndCheck()
     })
-    scheduleDndCheck()
     return
   }
 
@@ -203,12 +207,15 @@ export function startDndScheduler(
 function scheduleFlushAtDndEnd(): void {
   if (!schedulerContext)
     return
-  const { dndConfig, providers, repo } = schedulerContext
+  const context = schedulerContext
+  const { dndConfig, providers, repo } = context
 
   const delayMs = msUntilDndEnd(dndConfig)
   logger.info('DND scheduler started', { delayMs, dndEnd: dndConfig.end })
 
   dndTimer = setTimeout(() => {
+    if (schedulerContext !== context)
+      return
     logger.info('DND period ended, flushing pending messages')
     flushPendingMessages(providers, repo)
       .catch((error) => {
@@ -216,7 +223,8 @@ function scheduleFlushAtDndEnd(): void {
       })
       .finally(() => {
         // 重新调度：等待下一个 DND 周期
-        scheduleDndCheck()
+        if (schedulerContext === context)
+          scheduleDndCheck()
       })
   }, delayMs)
 }
@@ -227,18 +235,25 @@ function scheduleFlushAtDndEnd(): void {
 function scheduleDndCheck(): void {
   if (!schedulerContext)
     return
-  const { dndConfig } = schedulerContext
+  const context = schedulerContext
+  const { dndConfig, providers, repo } = context
 
   // 每分钟检查一次是否进入 DND
   const CHECK_INTERVAL = 60 * 1000
   dndTimer = setTimeout(() => {
-    if (!schedulerContext)
+    if (schedulerContext !== context)
       return
     if (isDndBlocked(dndConfig)) {
       scheduleFlushAtDndEnd()
     }
     else {
-      scheduleDndCheck()
+      // DND 时段外持续恢复遗留任务，避免节点启动时租约未过期就要等到下一天。
+      flushPendingMessages(providers, repo)
+        .catch(error => logger.warn('Failed to recover pending messages', { error }))
+        .finally(() => {
+          if (schedulerContext === context)
+            scheduleDndCheck()
+        })
     }
   }, CHECK_INTERVAL)
 }
@@ -264,8 +279,8 @@ export function resetSendState(): void {
 /**
  * 从数据库分批 claim pending 记录并逐条发送
  *
- * 多节点部署时通过分布式锁确保同一时刻只有一个节点执行 flush。
- * 分布式锁基于 @h-ai/cache 模块实现，运行时通过 cache.isInitialized 动态检测可用性。
+ * 分布式锁仅减少重复扫描；投递权由逐条领取、sending 门闩及有效 owner 约束。
+ * 外部副作用依赖接收端幂等；不支持幂等的在途请求不会自动接管重发。
  */
 async function flushPendingMessages(
   providers: Map<string, ReachProvider>,
@@ -280,7 +295,7 @@ async function flushPendingMessages(
   let lockOwner: string | null = null
   // flushOwner 是本轮 flush 的短期 lease owner。
   // 同一进程后续再次 flush 会生成新的 owner，避免旧批次在 lease 失效后误释放/误提交新批次的记录。
-  const flushOwner = `${reachNodeId}:${Date.now()}`
+  const flushOwner = `${reachNodeId}:${crypto.randomUUID()}`
   if (cache.isInitialized) {
     const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL })
     if (!lockResult.success) {
@@ -296,13 +311,10 @@ async function flushPendingMessages(
   }
 
   try {
-    while (true) {
-      // 每轮只 claim 一小批：
-      // 1) 控制单次 flush 持有的数据量
-      // 2) 让其它节点能尽快接手未处理的记录
-      // 3) 避免一次性拉全表 pending 造成长事务和大扫描
+    for (let processed = 0; processed < FLUSH_BATCH_SIZE; processed += 1) {
+      // 按实际执行逐条领取，避免后排消息排队等待时耗尽租约；单轮处理数量有界。
       const claimResult = await repo.claimPendingBatch(flushOwner, {
-        limit: FLUSH_BATCH_SIZE,
+        limit: 1,
         lockMs: FLUSH_CLAIM_LOCK_MS,
       })
       if (!claimResult.success) {
@@ -328,58 +340,9 @@ async function flushPendingMessages(
           continue
         }
 
-        let vars: Record<string, string> | undefined
-        let extra: Record<string, unknown> | undefined
-        try {
-          // JSON 解析失败时同样不吞掉记录，而是把它重新放回 pending，交给后续人工修复/补偿。
-          vars = row.varsJson ? JSON.parse(row.varsJson) as Record<string, string> : undefined
-          extra = row.extraJson ? JSON.parse(row.extraJson) as Record<string, unknown> : undefined
-        }
-        catch {
-          logger.warn('Failed to parse pending message JSON, releasing claim', { id: row.id })
-          const releaseResult = await repo.releaseClaim(row.id, flushOwner)
-          if (!releaseResult.success) {
-            logger.warn('Failed to release pending message claim', { id: row.id, error: releaseResult.error.message })
-          }
-          continue
-        }
-
-        const message: ReachMessage = {
-          provider: row.provider,
-          to: row.toAddr,
-          subject: row.subject ?? undefined,
-          body: row.body ?? undefined,
-          template: row.template ?? undefined,
-          vars,
-          extra,
-        }
-
-        // 外部 provider.send 不能放进数据库事务里：
-        // - 否则会把行锁/事务持有到网络调用结束，影响吞吐和故障恢复
-        // - 因此这里使用“先 claim lease，再按 owner 提交结果”的模式
-        // - 若 lease 已失效，markSent/releaseClaim 会因 owner 不匹配而失败，避免旧节点覆盖新节点状态
-        const sendResult = await provider.send(message)
-        if (sendResult.success) {
-          // markSent 带 owner 条件：只有当前 lease owner 才能把记录提交为 sent。
-          const markResult = await repo.markSent(row.id, sendResult.data.messageId, undefined, flushOwner)
-          if (!markResult.success) {
-            logger.warn('Failed to mark pending message as sent', { id: row.id, error: markResult.error.message })
-            continue
-          }
-          logger.debug('Pending message sent', { id: row.id, to: row.toAddr, provider: row.provider })
-          continue
-        }
-
-        // 发送失败时只释放当前 owner 的 claim；如果 lease 已被别的节点接管，这里会显式失败并打日志。
-        const releaseResult = await repo.releaseClaim(row.id, flushOwner)
-        if (!releaseResult.success) {
-          logger.warn('Failed to release pending message claim after send failure', { id: row.id, error: releaseResult.error.message })
-        }
-        logger.warn('Pending message send failed', { id: row.id, to: row.toAddr, error: sendResult.error.code })
-      }
-
-      if (claimResult.data.length < FLUSH_BATCH_SIZE) {
-        return
+        const sent = await deliverClaimedMessage(row, flushOwner, provider, repo, FLUSH_CLAIM_LOCK_MS)
+        if (!sent.success)
+          logger.warn('Pending message delivery did not commit', { id: row.id, code: sent.error.code })
       }
     }
   }

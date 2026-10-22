@@ -99,14 +99,15 @@ const config = { name: 'dev', type: 'console' }
 
 #### API 通知
 
-| フィールド | 型                       | 必須 | 既定値  | 説明                     |
-| ---------- | ------------------------ | ---- | ------- | ------------------------ |
-| `name`     | `string`                 | ✅   | —       | Provider 名              |
-| `type`     | `string`                 | ✅   | —       | 固定値 `'api'`           |
-| `url`      | `string`                 | ✅   | —       | HTTP(S) 通知 URL         |
-| `method`   | `'POST' \| 'PUT'`        | —    | `POST`  | HTTP メソッド            |
-| `headers`  | `Record<string, string>` | —    | —       | 独自のリクエストヘッダー |
-| `timeout`  | `number`                 | —    | `10000` | タイムアウト（ミリ秒）   |
+| フィールド   | 型                       | 必須 | 既定値  | 説明                                                       |
+| ------------ | ------------------------ | ---- | ------- | ---------------------------------------------------------- |
+| `name`       | `string`                 | ✅   | —       | Provider 名                                                |
+| `type`       | `string`                 | ✅   | —       | 固定値 `'api'`                                             |
+| `url`        | `string`                 | ✅   | —       | HTTP(S) 通知 URL                                           |
+| `method`     | `'POST' \| 'PUT'`        | —    | `POST`  | HTTP メソッド                                              |
+| `headers`    | `Record<string, string>` | —    | —       | 独自のリクエストヘッダー                                   |
+| `timeout`    | `number`                 | —    | `10000` | タイムアウト（ミリ秒）                                     |
+| `idempotent` | `boolean`                | —    | `false` | 受信側が副作用と重複排除を原子的に永続化する場合のみ有効化 |
 
 API 通知先は信頼できるサーバー設定です。ログには origin のみを記録し、URL 認証情報、クエリ、宛先、外部の失敗応答本文は残しません。テナント・ユーザー入力の URL にはアプリでドメインの allowlist を設け、企業環境では出口プロキシやネットワーク方針でも内部メタデータへの接続を防いでください。
 
@@ -119,7 +120,7 @@ API 通知先は信頼できるサーバー設定です。ログには origin �
 | `start`    | `string`               | —    | `00:00`   | 開始時刻（HH:mm）                       |
 | `end`      | `string`               | —    | `00:00`   | 終了時刻（HH:mm）                       |
 
-`delay` はデータベースへの挿入成功を確認した後だけ、`{ success: true, deferred: true, queueId }` を含む成功 `HaiResult` を返します。これはキューへの保存完了を表し、配信はまだ完了していません。受付 UUID は `hai_reach_send_log.queue_id` に保存され、同じ行の `status`（`pending` / `processing` / `sent`）で追跡できます。ストレージ未準備、切断、挿入失敗では deferred 成功を返さず、キューへの保存失敗は `SEND_FAILED` です。再起動後、同じデータベースに接続して同名 Provider を設定した別ノードが DND 時間外に配信を再開できます。即時送信後の任意ログの失敗によって、配信済みメッセージを失敗扱いにはしません。
+`delay` はデータベースへの挿入成功を確認した後だけ、`{ success: true, deferred: true, queueId }` を含む成功 `HaiResult` を返します。これはキューへの保存完了を表し、配信はまだ完了していません。受付 UUID は `hai_reach_send_log.queue_id` に保存され、同じ行の `status`（`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded`）で追跡できます。ストレージ未準備、切断、挿入失敗では deferred 成功を返さず、キューへの保存失敗は `SEND_FAILED` です。再起動後、同じデータベースに接続して同名 Provider を設定した別ノードが DND 時間外に配信を再開できます。即時送信後の任意ログの失敗によって、配信済みメッセージを失敗扱いにはしません。
 
 ```ts
 const result = await reach.send(message)
@@ -158,12 +159,23 @@ if (!result.success) {
 
 ### 分散ロック
 
-複数ノードでは DND delay の保留メッセージの flush を `@h-ai/cache` の分散ロックで保護し、同時に 1 ノードのみが実行します。
+任意のキャッシュロックは重複走査を減らすためのもので、300 秒後には複数ノードが走査できます。正しさはデータベースの配信状態で保証します。1 回に最大 100 件を 1 件ずつ取得し、外部呼び出し前に有効な owner/lease を原子的に確認して sending を保存します。配信中はリース期間の 3 分の 1 ごとに更新し、期限切れ owner の復活・再送・結果確定を拒否します。DND 時間外は毎分復旧を試みます。
 
-- `cache.lock.acquire('reach:flush-pending')` を使用し、TTL は 300 秒。
-- 保留レコードを一括で claim します。処理中レコードには期限があり、ノード異常終了後にほかのノードが引き継いで重複送信のリスクを抑えます。
-- `@h-ai/cache` が未初期化なら分散ロックは自動無効化し、単一ノードで動作します。
-- 安定したプロセス単位の owner 識別子で、ほかの所有者のロックの誤解除を防ぎます。
+- 状態は `pending → processing → sending → sent`。期限切れ processing は安全に再取得できます。
+- `idempotent: true` の API のみ配信中リクエストを自動再試行します。これは受信側の能力宣言です。各試行の `Idempotency-Key` ヘッダーと `idempotencyKey` 本文は永続化された queueId を使い、受信側が重複排除と副作用を原子的に確定する必要があります。古い worker の遅延復帰も保持期間に含め、最大遅延を限定できない場合は重複排除レコードを失効させないでください。同名 Provider は同じ送信先と重複排除ストアを使います。
+- SMTP、Aliyun SMS、既定の API には外部冪等性の保証がありません。sending 開始後の失敗・例外・リース喪失は結果不明として扱い、期限切れは unknown に隔離して自動再送しません。未接続 Provider や JSON 解析失敗など、外部呼び出し前の明確な失敗は pending に戻せます。Console は開発用メタデータのみを出力します。
+- リース更新、owner 条件、キャンセルでは既に開始した外部副作用を取り消せません。汎用の exactly-once は保証しません。
+
+### 結果不明の手動確認
+
+信頼されたサーバー管理処理で `reach.queue.get(queueId)` を使い、宛先や本文を含まない `pending / processing / sending / unknown / sent / discarded` 状態を確認します。unknown は古い worker を停止・隔離し、外部の配信記録と照合してから sent または discarded に裁定します。UUID・状態の検証と条件付き更新により並行裁定は 1 件だけ成功し、再送はしません。discarded は開始済みリクエストを取り消しません。補充送信は古いリクエストが今後作用しないことを確認した後だけ行ってください。
+
+```ts
+const state = await reach.queue.get(queueId)
+const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
+if (!resolved.success)
+  throw new Error(resolved.error.message)
+```
 
 ## 開発とテスト
 

@@ -70,6 +70,7 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
 
     async function insertPending() {
       const created = await repository.create({
+        queueId: crypto.randomUUID(),
         provider: 'test',
         toAddr: 'epoch-test',
         status: 'pending',
@@ -148,8 +149,9 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
         expect(record).toMatchObject({ success: true, data: { status: 'pending', updatedAt: milliseconds + 123 } })
         const reclaimed = await repository.claimPendingBatch('node-b', { now: milliseconds + 124, lockMs: leaseMs })
         expect(reclaimed.success).toBe(true)
+        expect((await repository.beginDelivery(id, 'node-b', true, leaseMs)).success).toBe(true)
         now.mockReturnValue(milliseconds + 125)
-        const sent = await repository.markSent(id, 'delivered', undefined, 'node-b')
+        const sent = await repository.markSent(id, 'node-b', 'delivered')
         expect(sent.success).toBe(true)
         expect(await repository.findById(id)).toMatchObject({
           success: true,
@@ -176,6 +178,38 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
         expect(result.success).toBe(false)
         if (!result.success)
           expect(result.error.code).toBe(HaiReachError.SEND_FAILED.code)
+      }
+    })
+
+    it.each([false, true])('在途记录过期按 retrySafe=%s 恢复，旧 owner 不能再次投递或确认', async (retrySafe) => {
+      const id = await insertPending()
+      const now = vi.spyOn(Date, 'now').mockReturnValue(milliseconds)
+      try {
+        expect((await repository.claimPendingBatch('old', { lockMs: leaseMs })).success).toBe(true)
+        expect((await repository.beginDelivery(id, 'old', retrySafe, leaseMs)).success).toBe(true)
+        now.mockReturnValue(milliseconds + 500)
+        expect((await repository.renewClaim(id, 'old', leaseMs)).success).toBe(true)
+        now.mockReturnValue(milliseconds + leaseMs + 1)
+        expect(await repository.claimPendingBatch('other')).toMatchObject({ success: true, data: [] })
+        now.mockReturnValue(milliseconds + 500 + leaseMs + 1)
+        const recovered = await repository.claimPendingBatch('new', { lockMs: leaseMs })
+        expect(recovered.success).toBe(true)
+        if (recovered.success)
+          expect(recovered.data).toHaveLength(retrySafe ? 1 : 0)
+        expect((await repository.beginDelivery(id, 'old', retrySafe)).success).toBe(false)
+        expect((await repository.renewClaim(id, 'old')).success).toBe(false)
+        expect((await repository.markSent(id, 'old')).success).toBe(false)
+        expect((await repository.releaseClaim(id, 'old')).success).toBe(false)
+        if (retrySafe) {
+          expect((await repository.beginDelivery(id, 'new', true)).success).toBe(true)
+          expect((await repository.markSent(id, 'new', 'new-result')).success).toBe(true)
+        }
+        else {
+          expect(await repository.findById(id)).toMatchObject({ success: true, data: { status: 'unknown' } })
+        }
+      }
+      finally {
+        now.mockRestore()
       }
     })
   })

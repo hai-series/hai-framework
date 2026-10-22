@@ -41,6 +41,7 @@ export function createSmtpProvider(): ReachProvider {
 
   return {
     name: 'smtp',
+    supportsIdempotency: false,
 
     async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'smtp') {

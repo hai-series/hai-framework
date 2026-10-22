@@ -228,6 +228,8 @@ API task `timeout` (default 30000 ms) covers the request and full response body 
 
 ### Optional integrations
 
+When a scheduled task sends Reach notifications, a scheduler lock or task completion does not guarantee one external delivery. Follow [Reach queue semantics](../reach/README.en.md) with persistent queueId keys. HTTP receivers must atomically persist deduplication with their side effects. Review unknown in-flight SMTP/SMS outcomes manually; scheduler retries must not blindly send them again.
+
 Cron is matched by minute, and distributed lock keys use that same minute. Startup or ticks delayed beyond second zero still check the current minute; a running scheduler does not reschedule it on every tick.
 
 ## Development and testing

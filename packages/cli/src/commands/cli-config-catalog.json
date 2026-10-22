@@ -3456,6 +3456,14 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
+    "name": "HAI_REACH_PROVIDERS_0_IDEMPOTENT",
+    "module": "reach",
+    "path": "reach.providers.0.idempotent",
+    "description": "接收端按 Idempotency-Key 原子持久去重，且覆盖所有重试与旧节点迟到请求时才启用；默认 false。",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
     "name": "HAI_REACH_PROVIDERS_0_METHOD",
     "module": "reach",
     "path": "reach.providers.0.method",

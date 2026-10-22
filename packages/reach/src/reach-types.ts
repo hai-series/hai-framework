@@ -75,6 +75,8 @@ export interface ReachMessage {
   vars?: Record<string, string>
   /** Provider 扩展参数（如短信 Provider 的模板编码、签名等） */
   extra?: Record<string, unknown>
+  /** API 接收端幂等键；直接发送可指定，队列投递固定使用持久化 queueId。 */
+  idempotencyKey?: string
 }
 
 /**
@@ -88,15 +90,71 @@ export interface ReachMessage {
  * }
  * ```
  */
-export interface SendResult {
+export type SendResult = {
   /** 是否已完成 Provider 发送或可靠入队；具体状态同时检查 deferred。 */
   success: boolean
   /** Provider 返回的消息 ID（如有） */
   messageId?: string
-  /** 是否已成功持久化到 DND 队列；true 表示尚未投递，必须同时有 queueId。 */
-  deferred?: boolean
-  /** 持久化入队回执 UUID，对应 hai_reach_send_log.queue_id；与 Provider 的 messageId 区分。 */
-  queueId?: string
+} & ({
+  /** 已可靠入队，尚未投递。 */
+  deferred: true
+  /** 持久化回执 UUID，对应 hai_reach_send_log.queue_id。 */
+  queueId: string
+} | {
+  /** Provider 即时发送结果，不含入队回执。 */
+  deferred?: false
+  queueId?: never
+})
+
+/**
+ * 队列状态；unknown 表示外部投递可能已经生效，禁止自动重发。
+ * @example const status: ReachQueueStatus = 'unknown'
+ */
+export type ReachQueueStatus = 'pending' | 'processing' | 'sending' | 'unknown' | 'sent' | 'discarded'
+
+/**
+ * 不包含收件人与正文的队列查询结果。
+ * @example const result = await reach.queue.get(queueId)
+ */
+export interface ReachQueueEntry {
+  /** 持久化入队回执。 */
+  queueId: string
+  /** Provider 配置名称。 */
+  provider: string
+  /** 当前处理状态。 */
+  status: ReachQueueStatus
+  /** 最近更新时间（Unix 毫秒）。 */
+  updatedAt?: number
+  /** 外部 Provider 确认的消息编号。 */
+  messageId?: string
+}
+
+/**
+ * 对未知投递结果的人工裁定；不提供自动重发选项。
+ * @example await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedId })
+ */
+export interface ReachUnknownResolution {
+  /** 经外部核对确认已投递，或终止后续处理。discarded 不撤销已经开始的外部请求。 */
+  status: 'sent' | 'discarded'
+  /** 确认已投递时，可记录 Provider 消息编号，最多 255 个字符。 */
+  messageId?: string
+}
+
+/**
+ * 队列运维操作；应用应在受权限保护的服务端流程中调用。
+ * @example const state = await reach.queue.get(queueId)
+ */
+export interface ReachQueueOperations {
+  /**
+   * 按回执查询队列状态。
+   * @example const result = await reach.queue.get(queueId)
+   */
+  get: (queueId: string) => Promise<HaiResult<ReachQueueEntry | null>>
+  /**
+   * 停止/隔离旧 worker 并核对外部投递记录后，裁定 unknown；不重新发送。
+   * @example await reach.queue.resolveUnknown(queueId, { status: 'discarded' })
+   */
+  resolveUnknown: (queueId: string, resolution: ReachUnknownResolution) => Promise<HaiResult<void>>
 }
 
 /**
@@ -216,6 +274,8 @@ export interface ReachTemplateRegistry {
  * ```
  */
 export interface ReachFunctions extends SendOperations {
+  /** 持久化队列查询与未知结果人工裁定。 */
+  readonly queue: ReachQueueOperations
   /** 初始化触达模块（注册多个 Provider） */
   init: (config: ReachConfigInput) => Promise<HaiResult<void>>
   /** 当前脱敏后的配置快照（未初始化时为 null） */
@@ -238,6 +298,8 @@ export interface ReachFunctions extends SendOperations {
 export interface ReachProvider {
   /** Provider 名称 */
   readonly name: string
+  /** 是否具备接收端幂等保障；true 时必须按 message.idempotencyKey 对副作用持久化去重。 */
+  readonly supportsIdempotency: boolean
   /** 连接/初始化 Provider */
   connect: (config: ProviderConfig) => Promise<HaiResult<void>>
   /** 发送消息 */

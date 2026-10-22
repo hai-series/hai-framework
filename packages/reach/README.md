@@ -99,14 +99,15 @@ const config = { name: 'dev', type: 'console' }
 
 #### API 回调
 
-| 字段      | 类型                     | 必填 | 默认值  | 说明             |
-| --------- | ------------------------ | ---- | ------- | ---------------- |
-| `name`    | `string`                 | ✅   | —       | Provider 名称    |
-| `type`    | `string`                 | ✅   | —       | 固定 `'api'`     |
-| `url`     | `string`                 | ✅   | —       | HTTP(S) 回调 URL |
-| `method`  | `'POST' \| 'PUT'`        | —    | `POST`  | HTTP 方法        |
-| `headers` | `Record<string, string>` | —    | —       | 自定义请求头     |
-| `timeout` | `number`                 | —    | `10000` | 超时毫秒数       |
+| 字段         | 类型                     | 必填 | 默认值  | 说明                                         |
+| ------------ | ------------------------ | ---- | ------- | -------------------------------------------- |
+| `name`       | `string`                 | ✅   | —       | Provider 名称                                |
+| `type`       | `string`                 | ✅   | —       | 固定 `'api'`                                 |
+| `url`        | `string`                 | ✅   | —       | HTTP(S) 回调 URL                             |
+| `method`     | `'POST' \| 'PUT'`        | —    | `POST`  | HTTP 方法                                    |
+| `headers`    | `Record<string, string>` | —    | —       | 自定义请求头                                 |
+| `timeout`    | `number`                 | —    | `10000` | 超时毫秒数                                   |
+| `idempotent` | `boolean`                | —    | `false` | 接收端具有持久化、原子副作用去重能力时才启用 |
 
 API 回调地址属于服务端可信配置。日志只记录回调 origin，不记录 URL 凭据、查询参数、收件人或第三方失败响应体。若回调地址来自租户/用户输入，应用层必须配置域名 allowlist；企业部署还应通过出口代理或网络策略阻止访问内网元数据地址。
 
@@ -119,7 +120,7 @@ API 回调地址属于服务端可信配置。日志只记录回调 origin，不
 | `start`    | `string`               | —    | `00:00`   | 开始时间（HH:mm 格式）                  |
 | `end`      | `string`               | —    | `00:00`   | 结束时间（HH:mm 格式）                  |
 
-`delay` 仅在消息写入数据库并确认成功后返回 `HaiResult` 成功，结果为 `{ success: true, deferred: true, queueId }`；这表示已入队、尚未投递。`queueId` 是持久化回执 UUID，对应 `hai_reach_send_log.queue_id`，可查询该记录的 `status`（`pending` / `processing` / `sent`）。缺少数据库、断连、插入失败均不会返回 deferred 成功，发送时返回 `SEND_FAILED`。节点重启后，只要连接同一数据库、配置同名 Provider，便可在 DND 时段外恢复投递。即时发送成功后的普通日志保存仍为可选，不会因日志失败把已投递的消息报告为失败。
+`delay` 仅在消息写入数据库并确认成功后返回 `HaiResult` 成功，结果为 `{ success: true, deferred: true, queueId }`；这表示已入队、尚未投递。`queueId` 是持久化回执 UUID，对应 `hai_reach_send_log.queue_id`，可查询该记录的 `status`（`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded`）。缺少数据库、断连、插入失败均不会返回 deferred 成功，发送时返回 `SEND_FAILED`。节点重启后，只要连接同一数据库、配置同名 Provider，便可在 DND 时段外恢复投递。即时发送成功后的普通日志保存仍为可选，不会因日志失败把已投递的消息报告为失败。
 
 ```ts
 const result = await reach.send(message)
@@ -158,12 +159,23 @@ if (!result.success) {
 
 ### 分布式锁
 
-多节点部署时，DND（delay 策略）的 pending 消息 flush 操作通过 `@h-ai/cache` 分布式锁保护，确保同一时刻只有一个节点执行 flush。
+缓存锁只减少重复扫描，300 秒后可能有多个节点同时扫描；正确性由数据库投递状态保证。每轮最多逐条领取 100 条，实际发送前原子校验有效 owner 并写入 `sending`，在途每隔租约的三分之一续租。过期 owner 不能复活租约、开始新投递或提交结果。DND 时段外每分钟继续恢复遗留队列。
 
-- 锁基于 `cache.lock.acquire('reach:flush-pending')`，TTL 300 秒
-- flush 会按批 claim pending 记录；处理中的记录带有过期时间，节点异常退出后可由后续节点接管，降低重复发送风险
-- 若 `@h-ai/cache` 未初始化，分布式锁自动禁用，不影响单节点运行
-- 使用稳定的进程级 owner 标识，防止误释放他人锁
+- 状态为 `pending → processing → sending → sent`；`processing` 过期可安全重领。
+- API 只有配置 `idempotent: true` 才允许重领在途消息。这是对接收端能力的声明，不会凭空实现幂等。每次请求的 `Idempotency-Key` 请求头和 `idempotencyKey` 正文字段均固定为持久化 `queueId`；接收端必须把去重记录和副作用原子提交。去重记录必须覆盖所有迟到请求，包括暂停后恢复的旧节点；无法界定最长迟到时间时不能过期删除。各节点同名 Provider 必须连接同一目标和幂等存储。
+- SMTP、阿里云短信、默认 API 没有外部幂等保证。已经进入 `sending` 后的失败、异常或租约丢失按未知结果处理，过期后转为 `unknown`，新消费者不会自动重发。未连接 Provider、发送前解析失败等明确未开始的情况可回到 pending。Console 仅输出开发元数据，不产生真实投递。
+- 续租、数据库 owner 条件和取消信号都不能撤销已发出的邮件、短信或 HTTP 副作用；模块不提供通用 exactly-once 保证。
+
+### 未知结果人工核对
+
+可信服务端管理流程使用 `reach.queue.get(queueId)` 查询 `pending / processing / sending / unknown / sent / discarded`；结果不含正文或收件人。出现 unknown 时先停止或隔离旧 worker，按 queueId、Provider 日志和第三方投递记录核对，再调用以下裁定接口。接口校验 UUID 和状态，只能把 unknown 条件更新为 sent 或 discarded，并发裁定仅一个成功；不会重新发送。discarded 只终止后续处理，不能撤销已经开始的请求。如需补发，须先确认旧请求不可能继续生效，再显式创建新消息。
+
+```ts
+const state = await reach.queue.get(queueId)
+const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
+if (!resolved.success)
+  throw new Error(resolved.error.message)
+```
 
 ## 开发测试
 

@@ -19,6 +19,7 @@ description: "接入邮件、短信、API 通知与模板，处理发送结果�
 
 - 先配置并注册 Provider，再保存绑定 Provider 的模板；模板发送只传 template/to/vars 即可，显式 provider 可覆盖；直接发送须提供 provider。启用 DND delay 必须先初始化 reldb 并确保队列表可用；成功时 `deferred: true` 与 `queueId` 表示可靠入队，尚未投递；缺库、断连或插入失败须按 HaiResult 失败处理。即时投递与排队状态须区分。
 - 验证模板替换和错误分支时使用隔离测试收件人；真实通知须在用户授权范围内。
+- 缓存锁只减少扫描，按实际执行逐条领取并在途续租。API 只有接收端真正具备原子持久去重时才能声明 idempotent=true，全部请求固定用 queueId 作为 Idempotency-Key；旧节点迟到请求也必须去重。SMTP/短信/默认 API 的在途失败或过期转 unknown，禁止自动重发；可信服务端用 queue.get/resolveUnknown 在人工隔离旧 worker、核对外部记录后裁定 sent/discarded。
 
 ## 按需参考
 
@@ -31,6 +32,7 @@ description: "接入邮件、短信、API 通知与模板，处理发送结果�
 - 核心 API
 - 错误码
 - 常见模式
+- 租约、接收端幂等与未知结果
 - 相关 Skills
 
 IAM 通知使用 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 标准模板；将已初始化的 `reach` 传入 `iam.init`。Console Provider 只记录元数据，不输出验证码/令牌，不代替实际邮件/短信发送。

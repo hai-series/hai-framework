@@ -72,6 +72,7 @@ export function createAliyunSmsProvider(): ReachProvider {
 
   return {
     name: 'aliyun-sms',
+    supportsIdempotency: false,
 
     async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'aliyun-sms') {

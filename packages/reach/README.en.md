@@ -99,14 +99,15 @@ const config = { name: 'dev', type: 'console' }
 
 #### API callbacks
 
-| Field     | Type                     | Required | Default | Description             |
-| --------- | ------------------------ | -------- | ------- | ----------------------- |
-| `name`    | `string`                 | ✅       | —       | Provider name           |
-| `type`    | `string`                 | ✅       | —       | Fixed `'api'`           |
-| `url`     | `string`                 | ✅       | —       | HTTP(S) callback URL    |
-| `method`  | `'POST' \| 'PUT'`        | —        | `POST`  | HTTP method             |
-| `headers` | `Record<string, string>` | —        | —       | Custom request headers  |
-| `timeout` | `number`                 | —        | `10000` | Timeout in milliseconds |
+| Field        | Type                     | Required | Default | Description                                                                          |
+| ------------ | ------------------------ | -------- | ------- | ------------------------------------------------------------------------------------ |
+| `name`       | `string`                 | ✅       | —       | Provider name                                                                        |
+| `type`       | `string`                 | ✅       | —       | Fixed `'api'`                                                                        |
+| `url`        | `string`                 | ✅       | —       | HTTP(S) callback URL                                                                 |
+| `method`     | `'POST' \| 'PUT'`        | —        | `POST`  | HTTP method                                                                          |
+| `headers`    | `Record<string, string>` | —        | —       | Custom request headers                                                               |
+| `timeout`    | `number`                 | —        | `10000` | Timeout in milliseconds                                                              |
+| `idempotent` | `boolean`                | —        | `false` | Enable only when the receiver atomically persists deduplication with its side effect |
 
 API callback addresses are trusted server configuration. Logs contain only the callback origin, not URL credentials, query parameters, recipients, or third-party failure bodies. For tenant/user-supplied addresses, applications must enforce a domain allowlist; enterprise deployments should also block internal metadata access through egress proxies or network policies.
 
@@ -119,7 +120,7 @@ API callback addresses are trusted server configuration. Logs contain only the c
 | `start`    | `string`               | —        | `00:00`   | Start time (HH:mm)                    |
 | `end`      | `string`               | —        | `00:00`   | End time (HH:mm)                      |
 
-`delay` returns a successful `HaiResult` containing `{ success: true, deferred: true, queueId }` only after the database confirms the insert. This means queued, awaiting delivery. The receipt UUID is stored in `hai_reach_send_log.queue_id`; its row tracks `status` (`pending` / `processing` / `sent`). Missing storage, disconnection, or insertion failure never produces deferred success; enqueue failures return `SEND_FAILED`. After restart, another node connected to the same database with the same Provider name can resume delivery outside DND. Optional log failures after an immediate send do not report an already delivered message as failed.
+`delay` returns a successful `HaiResult` containing `{ success: true, deferred: true, queueId }` only after the database confirms the insert. This means queued, awaiting delivery. The receipt UUID is stored in `hai_reach_send_log.queue_id`; its row tracks `status` (`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded`). Missing storage, disconnection, or insertion failure never produces deferred success; enqueue failures return `SEND_FAILED`. After restart, another node connected to the same database with the same Provider name can resume delivery outside DND. Optional log failures after an immediate send do not report an already delivered message as failed.
 
 ```ts
 const result = await reach.send(message)
@@ -158,12 +159,23 @@ if (!result.success) {
 
 ### Distributed locks
 
-Across nodes, flushing pending DND-delay messages is protected by `@h-ai/cache` distributed locks, allowing only one node to flush at a time.
+The optional cache lock reduces duplicate scans; nodes can scan concurrently after its 300-second TTL. Database delivery states provide correctness. A round claims at most 100 messages, one immediately before each delivery. An atomic owner/lease check persists `sending` before the external call; in-flight leases renew every third of their duration. Expired owners cannot revive leases, start another delivery, or commit results. Recovery continues every minute outside DND.
 
-- Uses `cache.lock.acquire('reach:flush-pending')` with a 300-second TTL.
-- Claims pending records in batches. In-progress records expire, allowing another node to take over after failure and reducing duplicate delivery risk.
-- Without initialized `@h-ai/cache`, distributed locking is disabled automatically; single-node operation continues.
-- A stable process-level owner identifier prevents releasing another owner's lock.
+- States follow `pending → processing → sending → sent`. Expired processing records can be claimed safely.
+- Only API providers configured with `idempotent: true` can automatically retry in-flight requests. This declares receiver capability. Every attempt uses the persistent queueId as both the `Idempotency-Key` header and `idempotencyKey` payload field. The receiver must atomically commit deduplication and side effects. Retention must cover late requests from resumed old workers; if lateness is unbounded, deduplication records must not expire. The same Provider name across nodes must use the same target and deduplication store.
+- SMTP, Aliyun SMS, and default API providers have no external idempotency guarantee. Failure, exceptions, or lease loss after sending begins produce an unknown outcome. Expired non-idempotent sends become `unknown` and are never automatically resent. Failures known to precede the external call, such as disconnected providers or JSON parsing failures, can return to pending. Console produces development metadata only.
+- Lease renewal, owner checks, and cancellation cannot undo an email, SMS, or HTTP side effect. The module provides no general exactly-once guarantee.
+
+### Reviewing unknown outcomes
+
+Trusted server administration can call `reach.queue.get(queueId)` to inspect `pending / processing / sending / unknown / sent / discarded` without recipient or body data. For unknown outcomes, stop or isolate the old worker and verify Provider delivery records first. Then resolve to sent or discarded. UUID/status validation and a conditional update allow only one concurrent resolution; this never sends again. Discarding cannot cancel requests already started. Create a replacement only after confirming the old request can no longer take effect.
+
+```ts
+const state = await reach.queue.get(queueId)
+const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
+if (!resolved.success)
+  throw new Error(resolved.error.message)
+```
 
 ## Development and testing
 

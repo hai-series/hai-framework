@@ -7,6 +7,7 @@
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { CrudPageOptions, CrudQueryOptions, DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
+import type { ReachQueueStatus, ReachUnknownResolution } from '../reach-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
@@ -16,7 +17,7 @@ import { HaiReachError } from '../reach-types.js'
 // ─── 发送日志实体类型 ───
 
 /** 发送日志状态 */
-export type SendLogStatus = 'sent' | 'pending' | 'processing'
+export type SendLogStatus = ReachQueueStatus
 
 /** claim 待发送记录时的批处理参数 */
 export interface SendLogClaimOptions {
@@ -52,6 +53,8 @@ export interface StoredSendLog {
   extraJson: string | null
   /** 发送状态 */
   status: SendLogStatus
+  /** 已开始的投递是否可由接收端持久幂等保护；用于崩溃恢复决策。 */
+  retrySafe?: boolean
   /** Provider 返回的消息 ID */
   messageId: string | null
   /** 当前 claim owner（处理中时存在） */
@@ -77,7 +80,7 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
 
   /**
    * 按创建时间顺序 claim 一批待发送记录。
-   * 同时允许接管已过期的 processing 记录，避免节点异常退出后消息永久卡死。
+   * 可接管已过期 processing 和接收端幂等的 sending；非幂等 sending 过期后隔离为 unknown。
    * PostgreSQL / MySQL 优先使用行锁 + `SKIP LOCKED` 降低多节点争抢；
    * SQLite 不支持该能力时退回条件更新（compare-and-set）模式。
    */
@@ -85,15 +88,24 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
 
   /**
    * 释放一条已 claim 的记录，使其回到 pending 状态，供后续重试。
-   * 仅当前 owner 可以释放，避免过期节点覆盖新 owner 的处理状态。
+   * 仅有效 owner 可以释放 processing 或可安全重试的 sending；未知外部副作用不能重排队。
    */
   releaseClaim: (id: number, owner: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
+  /** 发送前原子校验有效 owner 并持久化 sending；失败时绝不能调用外部 Provider。 */
+  beginDelivery: (id: number, owner: string, retrySafe: boolean, lockMs?: number) => Promise<HaiResult<void>>
+  /** 仅续租尚未到期且仍由该 owner 持有的记录；过期后不得复活旧 owner。 */
+  renewClaim: (id: number, owner: string, lockMs?: number) => Promise<HaiResult<void>>
+  /** 标记无法确定外部结果的记录，停止自动投递；仅当前 owner 可以提交。 */
+  markUnknown: (id: number, owner: string) => Promise<HaiResult<void>>
+  /** 人工核对并隔离旧 worker 后裁定 unknown；条件提交阻止并发覆盖。 */
+  resolveUnknown: (queueId: string, resolution: ReachUnknownResolution) => Promise<HaiResult<void>>
+
   /**
    * 将记录标记为已发送。
-   * 指定 owner 时仅允许当前 owner 提交发送结果，避免旧节点在 lease 失效后误覆盖新节点状态。
+   * 仅持有 sending 有效租约的 owner 可以提交；过期 owner 不能覆盖新节点状态。
    */
-  markSent: (id: number, messageId?: string, tx?: DmlWithTxOperations, owner?: string) => Promise<HaiResult<void>>
+  markSent: (id: number, owner: string, messageId?: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 }
 
 // ─── 发送日志存储实现 ───
@@ -102,7 +114,12 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
 const TABLE_NAME = 'hai_reach_send_log'
 const DEFAULT_CLAIM_BATCH_SIZE = 100
 const DEFAULT_CLAIM_LOCK_MS = 10 * 60 * 1000
-const CLAIMABLE_STATUS_WHERE = '(status = ? OR (status = ? AND (locked_until IS NULL OR locked_until < ?)))'
+const CLAIMABLE_STATUS_WHERE = '(status = ? OR (status = ? AND (locked_until IS NULL OR locked_until <= ?)) OR (status = ? AND retry_safe = TRUE AND locked_until <= ?))'
+
+/** 只允许安全重领：未开始投递，或接收端承诺幂等的在途请求。 */
+function claimableParams(now: number): unknown[] {
+  return ['pending', 'processing', now, 'sending', now]
+}
 
 function buildSendLogError<T>(detail: string, cause?: unknown): HaiResult<T> {
   return err(
@@ -143,6 +160,14 @@ function normalizeSendLogs(rows: StoredSendLog[]): HaiResult<StoredSendLog[]> {
 
 /** 字段定义 */
 const SEND_LOG_FIELDS: ReldbCrudFieldDefinition[] = [
+  {
+    fieldName: 'retrySafe',
+    columnName: 'retry_safe',
+    def: { type: 'BOOLEAN' as const, notNull: true, defaultValue: false },
+    select: true,
+    create: true,
+    update: true,
+  },
   {
     fieldName: 'queueId',
     columnName: 'queue_id',
@@ -381,7 +406,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
        ORDER BY created_at ASC
        LIMIT ?
        FOR UPDATE SKIP LOCKED`,
-      ['pending', 'processing', now, limit],
+      [...claimableParams(now), limit],
     )
     if (!lockedRowsResult.success) {
       throw lockedRowsResult.error
@@ -428,7 +453,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   ): Promise<number[]> {
     const candidatesResult = await this.findAll({
       where: CLAIMABLE_STATUS_WHERE,
-      params: ['pending', 'processing', now],
+      params: claimableParams(now),
       orderBy: 'created_at ASC',
       limit,
     }, tx)
@@ -442,7 +467,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
         `UPDATE ${TABLE_NAME}
          SET status = ?, processing_owner = ?, locked_until = ?, updated_at = ?
          WHERE id = ? AND ${CLAIMABLE_STATUS_WHERE}`,
-        ['processing', owner, lockedUntil, now, row.id, 'pending', 'processing', now],
+        ['processing', owner, lockedUntil, now, row.id, ...claimableParams(now)],
       )
       if (!updateResult.success) {
         throw updateResult.error
@@ -485,6 +510,14 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const tx = txResult.data
 
     try {
+      // 可能已产生不可去重的外部副作用：租约过期只能转 unknown，不能被新节点自动重发。
+      const unknown = await tx.execute(
+        `UPDATE ${TABLE_NAME} SET status = ?, processing_owner = NULL, locked_until = NULL, updated_at = ?
+         WHERE status = ? AND retry_safe = FALSE AND (locked_until IS NULL OR locked_until <= ?)`,
+        ['unknown', now, 'sending', now],
+      )
+      if (!unknown.success)
+        throw unknown.error
       const claimedIds = dbType === 'postgresql' || dbType === 'mysql'
         ? await this.claimPendingIdsWithRowLocks(tx, owner, now, lockedUntil, limit)
         : await this.claimPendingIdsWithConditionalUpdates(tx, owner, now, lockedUntil, limit)
@@ -518,40 +551,75 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const result = await this.sql(tx).execute(
       `UPDATE ${TABLE_NAME}
        SET status = ?, processing_owner = NULL, locked_until = NULL, updated_at = ?
-       WHERE id = ? AND status = ? AND processing_owner = ?`,
-      ['pending', now, id, 'processing', owner],
+       WHERE id = ? AND processing_owner = ? AND locked_until > ?
+         AND (status = ? OR (status = ? AND retry_safe = TRUE))`,
+      ['pending', now, id, owner, now, 'processing', 'sending'],
     )
     if (!result.success) {
       return buildSendLogError(result.error.message, result.error)
     }
     if (result.data.changes === 0) {
-      return buildSendLogError(`Send log ${id} claim is no longer owned by ${owner}`)
+      return buildSendLogError(reachM('reach_claimLost'))
     }
     return ok(undefined)
   }
 
-  /** 将记录标记为已发送 */
-  async markSent(id: number, messageId?: string, tx?: DmlWithTxOperations, owner?: string): Promise<HaiResult<void>> {
+  /** 发送前持久化门闩；仅有效租约可从 processing 进入 sending。 */
+  async beginDelivery(id: number, owner: string, retrySafe: boolean, lockMs = DEFAULT_CLAIM_LOCK_MS): Promise<HaiResult<void>> {
     const now = Date.now()
-    const params: unknown[] = ['sent', messageId ?? null, now, id]
-    let whereClause = 'id = ?'
+    const flag = this.db.config?.type === 'postgresql' ? retrySafe : Number(retrySafe)
+    const result = await this.sql().execute(
+      `UPDATE ${TABLE_NAME} SET status = ?, retry_safe = ?, locked_until = ?, updated_at = ?
+       WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ?`,
+      ['sending', flag, now + lockMs, now, id, 'processing', owner, now],
+    )
+    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
+  }
 
-    if (owner) {
-      whereClause += ' AND status = ? AND processing_owner = ?'
-      params.push('processing', owner)
-    }
+  /** 续租不接受已经过期的 owner，防止暂停的旧进程恢复后重新取得发送权。 */
+  async renewClaim(id: number, owner: string, lockMs = DEFAULT_CLAIM_LOCK_MS): Promise<HaiResult<void>> {
+    const now = Date.now()
+    const result = await this.sql().execute(
+      `UPDATE ${TABLE_NAME} SET locked_until = ?, updated_at = ?
+       WHERE id = ? AND processing_owner = ? AND status IN (?, ?) AND locked_until > ?`,
+      [now + lockMs, now, id, owner, 'processing', 'sending', now],
+    )
+    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
+  }
 
+  /** 未知结果只能停止自动处理，不推断外部副作用已撤销。 */
+  async markUnknown(id: number, owner: string): Promise<HaiResult<void>> {
+    const result = await this.sql().execute(
+      `UPDATE ${TABLE_NAME} SET status = ?, processing_owner = NULL, locked_until = NULL, updated_at = ?
+       WHERE id = ? AND processing_owner = ? AND status IN (?, ?)`,
+      ['unknown', Date.now(), id, owner, 'processing', 'sending'],
+    )
+    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
+  }
+
+  /** 人工裁定的条件提交，不提供重新排队或重新发送操作。 */
+  async resolveUnknown(queueId: string, resolution: ReachUnknownResolution): Promise<HaiResult<void>> {
+    const result = await this.sql().execute(
+      `UPDATE ${TABLE_NAME} SET status = ?, message_id = ?, updated_at = ? WHERE queue_id = ? AND status = ?`,
+      [resolution.status, resolution.messageId ?? null, Date.now(), queueId, 'unknown'],
+    )
+    return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_unknownResolutionFailed'))
+  }
+
+  /** 只有仍持有 sending 有效租约的 owner 可以确认投递。 */
+  async markSent(id: number, owner: string, messageId?: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
+    const now = Date.now()
     const result = await this.sql(tx).execute(
       `UPDATE ${TABLE_NAME}
        SET status = ?, message_id = ?, processing_owner = NULL, locked_until = NULL, updated_at = ?
-       WHERE ${whereClause}`,
-      params,
+       WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ?`,
+      ['sent', messageId ?? null, now, id, 'sending', owner, now],
     )
     if (!result.success) {
       return buildSendLogError(result.error.message, result.error)
     }
-    if (owner && result.data.changes === 0) {
-      return buildSendLogError(`Send log ${id} claim is no longer owned by ${owner}`)
+    if (result.data.changes === 0) {
+      return buildSendLogError(reachM('reach_claimLost'))
     }
     return ok(undefined)
   }

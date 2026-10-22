@@ -19,7 +19,7 @@ import { createAliyunSmsProvider } from './providers/reach-provider-aliyun-sms.j
 import { createApiProvider } from './providers/reach-provider-api.js'
 import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
-import { ReachConfigSchema } from './reach-config.js'
+import { ReachConfigSchema, ReachQueueIdSchema, ReachUnknownResolutionSchema } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
 import { executeSend, resetSendState, startDndScheduler } from './reach-send.js'
 import { createTemplateRegistry } from './reach-template.js'
@@ -281,6 +281,31 @@ async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
  * 统一的用户触达入口，支持同时使用邮件、短信、API 回调等多种 Provider。
  */
 export const reach: ReachFunctions = {
+  queue: {
+    async get(queueId) {
+      if (providers.size === 0)
+        return notInitialized.result()
+      if (!sendLogRepo)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+      if (!ReachQueueIdSchema.safeParse(queueId).success)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
+      const rows = await sendLogRepo.findAll({ where: 'queue_id = ?', params: [queueId], limit: 1 })
+      if (!rows.success)
+        return rows
+      const row = rows.data[0]
+      return ok(row ? { queueId, provider: row.provider, status: row.status, updatedAt: row.updatedAt, messageId: row.messageId ?? undefined } : null)
+    },
+    async resolveUnknown(queueId, resolution) {
+      if (providers.size === 0)
+        return notInitialized.result()
+      if (!sendLogRepo)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+      const parsed = ReachUnknownResolutionSchema.safeParse(resolution)
+      if (!ReachQueueIdSchema.safeParse(queueId).success || !parsed.success)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
+      return sendLogRepo.resolveUnknown(queueId, parsed.data)
+    },
+  },
   async init(config: ReachConfigInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Reach module init already in progress, skipping')

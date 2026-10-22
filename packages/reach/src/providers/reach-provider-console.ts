@@ -23,6 +23,7 @@ export function createConsoleProvider(): ReachProvider {
 
   return {
     name: 'console',
+    supportsIdempotency: true,
 
     async connect(_config: ProviderConfig): Promise<HaiResult<void>> {
       connected = true

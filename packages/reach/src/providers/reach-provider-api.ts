@@ -51,6 +51,9 @@ export function createApiProvider(): ReachProvider {
 
   return {
     name: 'api',
+    get supportsIdempotency() {
+      return apiConfig?.idempotent === true
+    },
 
     async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'api') {
@@ -92,18 +95,19 @@ export function createApiProvider(): ReachProvider {
           template: message.template,
           vars: message.vars,
           extra: message.extra,
+          idempotencyKey: message.idempotencyKey,
         }
 
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), apiConfig.timeout)
 
         try {
+          const headers = new Headers({ 'Content-Type': 'application/json', ...apiConfig.headers })
+          if (message.idempotencyKey)
+            headers.set('Idempotency-Key', message.idempotencyKey)
           const response = await fetch(apiConfig.url, {
             method: apiConfig.method,
-            headers: {
-              'Content-Type': 'application/json',
-              ...apiConfig.headers,
-            },
+            headers,
             body: JSON.stringify(payload),
             signal: controller.signal,
           })

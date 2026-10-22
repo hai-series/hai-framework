@@ -13,6 +13,7 @@ import { createAliyunSmsProvider } from '../src/providers/reach-provider-aliyun-
 import { createApiProvider } from '../src/providers/reach-provider-api.js'
 import { createConsoleProvider } from '../src/providers/reach-provider-console.js'
 import { createSmtpProvider } from '../src/providers/reach-provider-smtp.js'
+import { ApiProviderConfigSchema } from '../src/reach-config.js'
 import { HaiReachError } from '../src/reach-types.js'
 
 // =============================================================================
@@ -303,6 +304,15 @@ describe('api provider', () => {
     await provider.close()
   })
 
+  it('只有显式声明接收端持久幂等能力时才允许在途重试', async () => {
+    expect(provider.supportsIdempotency).toBe(false)
+    const parsed = ApiProviderConfigSchema.parse({ name: 'api', type: 'api', url: 'https://example.invalid', idempotent: true })
+    expect((await provider.connect(parsed)).success).toBe(true)
+    expect(provider.supportsIdempotency).toBe(true)
+    await provider.close()
+    expect(provider.supportsIdempotency).toBe(false)
+  })
+
   it('connect 传入非 api 类型应返回 CONFIG_ERROR', async () => {
     const result = await provider.connect({ name: 'wrong', type: 'console' })
     expect(result.success).toBe(false)
@@ -314,26 +324,26 @@ describe('api provider', () => {
   it('connect 成功后应处于已连接状态', async () => {
     expect(provider.isConnected()).toBe(false)
 
-    const result = await provider.connect({
+    const result = await provider.connect(ApiProviderConfigSchema.parse({
       name: 'webhook',
       type: 'api',
       url: 'https://api.example.com/notify',
       method: 'POST',
       timeout: 10000,
-    } as ProviderConfig)
+    }))
 
     expect(result.success).toBe(true)
     expect(provider.isConnected()).toBe(true)
   })
 
   it('close 后应处于未连接状态', async () => {
-    await provider.connect({
+    await provider.connect(ApiProviderConfigSchema.parse({
       name: 'webhook',
       type: 'api',
       url: 'https://api.example.com/notify',
       method: 'POST',
       timeout: 10000,
-    } as ProviderConfig)
+    }))
 
     await provider.close()
     expect(provider.isConnected()).toBe(false)
@@ -353,13 +363,13 @@ describe('api provider', () => {
   })
 
   it('send 成功应返回正确结果', async () => {
-    await provider.connect({
+    await provider.connect(ApiProviderConfigSchema.parse({
       name: 'webhook',
       type: 'api',
       url: 'https://api.example.com/notify',
       method: 'POST',
       timeout: 10000,
-    } as ProviderConfig)
+    }))
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify({ messageId: 'api-msg-001' }), {
@@ -384,23 +394,23 @@ describe('api provider', () => {
   })
 
   it('send 应发送正确的 JSON payload', async () => {
-    await provider.connect({
+    await provider.connect(ApiProviderConfigSchema.parse({
       name: 'webhook',
       type: 'api',
       url: 'https://api.example.com/notify',
       method: 'POST',
-      headers: { Authorization: 'Bearer test-token' },
+      headers: { 'Authorization': 'Bearer test-token', 'idempotency-key': 'must-be-overridden' },
       timeout: 5000,
-    } as ProviderConfig)
+    }))
 
     let capturedBody: unknown
-    let capturedHeaders: Record<string, string> = {}
+    let capturedHeaders = new Headers()
     let capturedMethod: string = ''
 
     vi.spyOn(globalThis, 'fetch').mockImplementationOnce(async (_url, init) => {
       capturedBody = JSON.parse(init!.body as string)
       capturedMethod = init!.method as string
-      capturedHeaders = init!.headers as Record<string, string>
+      capturedHeaders = new Headers(init!.headers)
       return new Response(JSON.stringify({ messageId: 'test-msg' }), { status: 200 })
     })
 
@@ -412,11 +422,13 @@ describe('api provider', () => {
       template: 'tpl1',
       vars: { key: 'value' },
       extra: { custom: true },
+      idempotencyKey: 'stable-queue-receipt',
     })
 
     expect(capturedMethod).toBe('POST')
-    expect(capturedHeaders).toHaveProperty('Authorization', 'Bearer test-token')
-    expect(capturedHeaders).toHaveProperty('Content-Type', 'application/json')
+    expect(capturedHeaders.get('Authorization')).toBe('Bearer test-token')
+    expect(capturedHeaders.get('Content-Type')).toBe('application/json')
+    expect(capturedHeaders.get('Idempotency-Key')).toBe('stable-queue-receipt')
     expect(capturedBody).toEqual({
       to: 'user@example.com',
       subject: '主题',
@@ -424,17 +436,18 @@ describe('api provider', () => {
       template: 'tpl1',
       vars: { key: 'value' },
       extra: { custom: true },
+      idempotencyKey: 'stable-queue-receipt',
     })
   })
 
   it('send HTTP 非 200 应返回 SEND_FAILED', async () => {
-    await provider.connect({
+    await provider.connect(ApiProviderConfigSchema.parse({
       name: 'webhook',
       type: 'api',
       url: 'https://api.example.com/notify',
       method: 'POST',
       timeout: 10000,
-    } as ProviderConfig)
+    }))
 
     const response = new Response('Internal Server Error', { status: 500 })
     const readBody = vi.spyOn(response, 'text')
@@ -455,13 +468,13 @@ describe('api provider', () => {
   })
 
   it('send 网络错误应返回 SEND_FAILED', async () => {
-    await provider.connect({
+    await provider.connect(ApiProviderConfigSchema.parse({
       name: 'webhook',
       type: 'api',
       url: 'https://api.example.com/notify',
       method: 'POST',
       timeout: 10000,
-    } as ProviderConfig)
+    }))
 
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'))
 

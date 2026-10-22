@@ -48,6 +48,7 @@ providers:
   - name: webhook
     type: api
     url: ${HAI_REACH_WEBHOOK_URL:}
+    idempotent: false # 只有接收端按 Idempotency-Key 原子、持久化去重时才能设 true
 
 # 模板（可选，也可通过代码注册）
 templates:
@@ -164,6 +165,8 @@ await reach.send({
 | --------------------- | -------------------------------------------------------- | ---------------------------------- |
 | `reach.init`          | `(config: ReachConfigInput) => Promise<HaiResult<void>>`    | 初始化（注册多个 Provider）        |
 | `reach.send`          | `(message: ReachMessage) => Promise<HaiResult<SendResult>>` | 发送消息（通过 provider 字段路由） |
+| `reach.queue.get` | `(queueId: string) => Promise<HaiResult<ReachQueueEntry \| null>>` | 不含正文/收件人的队列状态 |
+| `reach.queue.resolveUnknown` | `(queueId: string, resolution: ReachUnknownResolution) => Promise<HaiResult<void>>` | 人工核对后将 unknown 裁定为 sent/discarded，不发送 |
 | `reach.template`      | `ReachTemplateRegistry`                                  | 模板注册表                         |
 | `reach.config`        | `ReachConfig \| null`                                    | 当前脱敏配置快照                   |
 | `reach.isInitialized` | `boolean`                                                | 是否已初始化                       |
@@ -195,6 +198,7 @@ interface ReachConfigInput {
 | `template` | `string`                  | —    | 模板名称（模板发送时）              |
 | `vars`     | `Record<string, string>`  | —    | 模板变量                            |
 | `extra`    | `Record<string, unknown>` | —    | Provider 扩展参数（如短信模板编码） |
+| `idempotencyKey` | `string` | — | 直接 API 请求可指定；队列投递由框架固定为 queueId |
 
 ### ReachTemplate（模板绑定 Provider）
 
@@ -223,11 +227,28 @@ interface ReachConfigInput {
 
 ### 可靠延迟入队
 
-启用 delay 后，只有数据库确认插入一条 pending 记录才返回 `deferred: true` 和 `queueId`。缺库、断连、插入失败返回失败 HaiResult，不能向用户报告已入队。`queueId` 对应 `hai_reach_send_log.queue_id`，同一行的 `status` 为 pending / processing / sent。节点重启后连接同一数据库、配置同名 Provider，可在 DND 时段外恢复投递。即时发送后的普通日志仍为可选，日志失败不会使已发送消息返回失败。
+启用 delay 后，只有数据库确认插入一条 pending 记录才返回 `deferred: true` 和 `queueId`。缺库、断连、插入失败返回失败 HaiResult，不能向用户报告已入队。`queueId` 对应 `hai_reach_send_log.queue_id`，同一行的 `status` 为 pending / processing / sending / unknown / sent / discarded。节点重启后连接同一数据库、配置同名 Provider，可在 DND 时段外恢复投递。即时发送后的普通日志仍为可选，日志失败不会使已发送消息返回失败。
 
 验证码和密码重置等有时效的通知应明确选择 DND 策略；可靠入队成功不代表用户已收到验证码。
 
 队列 `created_at` / `updated_at` / `locked_until` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。已有表须在部署时同步列结构，模块不自动迁移旧表；跨库验收必须运行 PostgreSQL/MySQL 用例，SQLite 无法证明 32 位溢出已经消除。
+
+### 租约、接收端幂等与未知结果
+
+每轮最多 100 条，逐条 claim，发送前原子写入 sending 并在途续租；过期 owner 的开始、续租、确认和释放均被拒绝。DND 时段外每分钟恢复遗留任务。cache 锁只是扫描优化，不能提供外部副作用的 exactly-once。
+
+API `idempotent: true` 是接收端能力声明：接收方必须把 queueId 对应的去重记录与业务副作用原子、持久化提交。所有尝试用相同 `Idempotency-Key` 头和 `idempotencyKey` 正文，覆盖响应丢失和旧节点恢复；去重记录须覆盖所有迟到请求，迟到无上界时不能过期。同名 Provider 的目标与幂等存储保持一致。只有此模式能自动接管已开始的 API 投递。
+
+SMTP、短信和默认 API 一旦开始投递，失败或过期转 unknown，不自动重发。未连接、发送前解析失败等明确未开始的情况可以回到 pending。unknown 必须在可信服务端管理流程里，先停止/隔离旧 worker 并核对第三方投递记录，再执行以下二选一裁定；discarded 不撤销已开始请求。需要补发时，先确保旧请求不可能继续生效，再创建新消息。
+
+```ts
+const state = await reach.queue.get(queueId)
+const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
+if (!resolved.success)
+  throw new Error(resolved.error.message)
+```
+
+管理入口校验回执 UUID、status 与 messageId 长度，只能从 unknown 条件更新为 sent/discarded；不提供重排队选项，并发裁定仅一个成功。
 
 ### 多渠道验证码发送
 

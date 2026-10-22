@@ -114,6 +114,8 @@ export const ApiProviderConfigSchema = z.object({
   headers: z.record(z.string(), z.string()).optional(),
   /** 请求超时毫秒数（默认 10000） */
   timeout: z.number().int().min(0).default(10000),
+  /** 接收端按 Idempotency-Key 原子持久去重，且覆盖所有重试与旧节点迟到请求时才启用；默认 false。 */
+  idempotent: z.boolean().default(false),
 })
 
 /**
@@ -140,6 +142,21 @@ export type AliyunSmsProviderConfig = z.infer<typeof AliyunSmsProviderConfigSche
 
 /** API 回调配置类型 */
 export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
+
+/**
+ * 人工裁定 unknown 的输入限制；不允许重新排队。
+ * @example ReachUnknownResolutionSchema.parse({ status: 'discarded' })
+ */
+export const ReachUnknownResolutionSchema = z.object({
+  status: z.enum(['sent', 'discarded']),
+  messageId: z.string().max(255).optional(),
+})
+
+/**
+ * 持久化入队回执格式。
+ * @example ReachQueueIdSchema.safeParse(queueId)
+ */
+export const ReachQueueIdSchema = z.string().uuid()
 
 // ─── DND（免打扰）配置 Schema ───
 
