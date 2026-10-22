@@ -13,7 +13,7 @@ import { core, err, ok } from '@h-ai/core'
 import { takePhoto } from './capacitor-camera.js'
 import { getAppVersion, getDeviceInfo } from './capacitor-device.js'
 import { capacitorM } from './capacitor-i18n.js'
-import { listenPush, registerPush } from './capacitor-push.js'
+import { closePushListeners, listenPush, registerPush } from './capacitor-push.js'
 import { configureStatusBar, hideStatusBar, showStatusBar } from './capacitor-status-bar.js'
 import { safeGetPreference, safeRemovePreference, safeSetPreference } from './capacitor-token-storage.js'
 import { HaiCapacitorError } from './capacitor-types.js'
@@ -114,8 +114,14 @@ export const capacitor: CapacitorFunctions = {
     try {
       if (initialized) {
         logger.warn('Capacitor module is already initialized, reinitializing')
-        await capacitor.close()
+        const closed = await capacitor.close()
+        if (!closed.success)
+          return closed
       }
+      // 先重试上次关闭未释放的句柄，不把资源清理失败隐藏成新的初始化成功。
+      const cleaned = await closePushListeners()
+      if (!cleaned.success)
+        return cleaned
 
       logger.info('Initializing capacitor module')
 
@@ -157,14 +163,14 @@ export const capacitor: CapacitorFunctions = {
   },
 
   async close() {
-    if (!initialized) {
-      logger.info('Capacitor module is already closed, skipping')
-      return
-    }
     logger.info('Closing capacitor module')
     initialized = false
     cachedPlatform = null
+    const cleaned = await closePushListeners()
+    if (!cleaned.success)
+      return cleaned
     logger.info('Capacitor module closed')
+    return ok(undefined)
   },
 
   getPlatform(): string {

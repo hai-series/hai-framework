@@ -3,6 +3,7 @@
 <script lang="ts">
   import type { ManagementApiOptions } from '{{fullstack.sharedPackageName}}'
   import { capacitor, createCapacitorTokenStorage } from '@h-ai/capacitor'
+  import { core } from '@h-ai/core'
   import { Alert } from '@h-ai/ui/components/compounds/index'
   import { Button, Spinner } from '@h-ai/ui/components/primitives/index'
   import { onMount } from 'svelte'
@@ -29,7 +30,11 @@
   }
   onMount(() => {
     void initialize()
-    return () => void capacitor.close()
+    return () => {
+      void capacitor.close().then((closed) => {
+        if (!closed.success) core.logger.warn('Native listener cleanup failed; retry on next initialization')
+      })
+    }
   })
 </script>
 

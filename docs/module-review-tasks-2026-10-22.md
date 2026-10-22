@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 4/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 5/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -577,7 +577,8 @@
 
 ### CAP-02 · P2 · 清理 push 部分注册失败和超时后的监听器
 
-- [ ] 待修正（源码确认；范围：capacitor）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：以受管 scope 逐个记录推送句柄，权限/挂载/注册30秒总超时、AbortSignal与模块关闭立即停止旧回调并回收已知/迟到句柄；不使用 removeAllListeners。cleanup/close 返回 HaiResult，remove失败保留句柄重试且不重复移除成功项，初始化先处理遗留清理；同步类型、三语README/skills/LLMS和fullstack卸载调用。红测复现泄漏，39项控制时序回归、source/严格test类型、lint/build/skills及模板Svelte编译0warning通过，证据tmp/module-repair-20261022/CAP-02；无Android/iOS真机与FCM/APNs凭据，原生硬件验收未执行；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/capacitor/src/capacitor-push.ts:78](../packages/capacitor/src/capacitor-push.ts#L78)。
 - **证据与影响**：registerPush 并行 addListener 后统一保存 handles，部分失败或超时早于完成时可能丢失已注册 handle；listenPush 后续监听注册失败也需处理前一个成功 handle。
 - **修正内容**：逐项记录成功 handle，失败/超时/取消/关闭统一回收；迟到的注册完成也立即清理，返回 cleanup 幂等。

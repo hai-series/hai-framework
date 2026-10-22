@@ -12,5 +12,7 @@
   "capacitor_pushListenFailed": "监听推送通知失败",
   "capacitor_cameraFailed": "访问相机失败",
   "capacitor_statusBarFailed": "配置状态栏失败",
-  "capacitor_notInitialized": "Capacitor 模块未初始化"
+  "capacitor_notInitialized": "Capacitor 模块未初始化",
+  "capacitor_pushCancelled": "推送操作已取消、超时或模块已关闭",
+  "capacitor_pushCleanupFailed": "推送监听器未完全移除，请重试清理或关闭模块"
 }

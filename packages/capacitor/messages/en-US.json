@@ -12,5 +12,7 @@
   "capacitor_pushListenFailed": "Failed to listen for push notifications",
   "capacitor_cameraFailed": "Failed to access camera",
   "capacitor_statusBarFailed": "Failed to configure status bar",
-  "capacitor_notInitialized": "Capacitor module is not initialized"
+  "capacitor_notInitialized": "Capacitor module is not initialized",
+  "capacitor_pushCancelled": "The push operation was cancelled, timed out or the module was closed",
+  "capacitor_pushCleanupFailed": "Push listeners could not be fully removed; retry cleanup or close the module"
 }

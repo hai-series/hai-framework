@@ -169,7 +169,7 @@ await capacitor.statusBar.show()
 | API | 用途 | 返回值 |
 | --- | --- | --- |
 | `capacitor.init()` | 初始化模块（检测环境） | `HaiResult<void>` |
-| `capacitor.close()` | 关闭模块，重置状态 | `Promise<void>` |
+| `capacitor.close()` | 关闭模块并回收推送，失败可重试 | `Promise<HaiResult<void>>` |
 | `capacitor.getPlatform()` | 获取当前平台 | `'android' \| 'ios' \| 'web'` |
 | `capacitor.isNative()` | 是否为原生环境 | `boolean` |
 | `capacitor.isInitialized` | 是否已初始化 | `boolean` |
@@ -180,7 +180,7 @@ await capacitor.statusBar.show()
 | `capacitor.device.getInfo()` | 设备信息 | `HaiResult<DeviceInfo>` |
 | `capacitor.device.getAppVersion()` | 应用版本 | `HaiResult<{ version, build }>` |
 | `capacitor.push.register()` | 注册推送 | `HaiResult<PushRegistration>` |
-| `capacitor.push.listen(callbacks)` | 监听推送事件 | `HaiResult<() => Promise<void>>`（async 清理函数） |
+| `capacitor.push.listen(callbacks)` | 监听推送事件 | `HaiResult<PushCleanup>`（cleanup 返回 `Promise<HaiResult<void>>`） |
 | `capacitor.camera.takePhoto(options?)` | 拍照 / 选取图片 | `HaiResult<PhotoResult>` |
 | `capacitor.statusBar.configure(config)` | 配置状态栏 | `HaiResult<void>` |
 | `capacitor.statusBar.show()` | 显示状态栏 | `HaiResult<void>` |
@@ -354,3 +354,5 @@ async function captureAndUpload() {
 - `hai-ui`：移动端 UI 组件（SafeArea、BottomNav 等）
 
 原生交付必须单独执行 Tauri/Gradle/Xcode 打包，并在目标 OS/设备验证安装启动、登录/退出、重启会话、安全 TokenStore、真实 API 域名与覆盖升级。Web 构建/E2E 不代替原生验收。保存提交、包 hash、平台/工具链及逐项结果；缺平台写未验证，禁止静默 skip。hai-framework 仓库参考 `.github/workflows/native.yml` 与 desktop-app / mobile-app README 的「原生交付与验收」章节。
+
+推送仅在实际原生平台调用插件。`push.register({ signal? })` 与 `push.listen(callbacks, { signal? })` 的设置阶段限时 30 秒（包含权限和监听器挂载）；失败、超时、取消及 `capacitor.close()` 都会停止回调并移除本次拥有的句柄，迟到的句柄在完成后立即移除，不调用影响其他消费者的 removeAllListeners。listen 成功后信号仍有效，也可调用返回的 cleanup。cleanup 与 close 均返回 `HaiResult<void>`；原生 remove 失败返回 `PUSH_CLEANUP_FAILED`（`capacitor:032`），失败句柄保留供再次调用重试，成功移除的句柄不重复操作。模块关闭后立即不可用；重新初始化前先重试遗留清理。自动化验证控制插件时序，不能代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。

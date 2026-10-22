@@ -66,10 +66,8 @@ describe('capacitor.push', () => {
     expect(register).toHaveBeenCalledOnce()
   })
 
-  it('listen 返回的 cleanup 在部分 remove 失败时仍然 resolve', async () => {
-    const removeFailed = vi.fn(async () => {
-      throw new Error('remove failed')
-    })
+  it('listen cleanup 部分 remove 失败时报告错误且继续清理其他句柄', async () => {
+    const removeFailed = vi.fn().mockRejectedValueOnce(new Error('remove failed')).mockResolvedValue(undefined)
     const removeOk = vi.fn(async () => {})
 
     vi.doMock('@capacitor/push-notifications', () => ({
@@ -90,7 +88,8 @@ describe('capacitor.push', () => {
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      await expect(result.data()).resolves.toBeUndefined()
+      await expect(result.data()).resolves.toMatchObject({ success: false })
+      expect(removeOk).toHaveBeenCalledOnce()
     }
   })
 })

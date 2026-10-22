@@ -20,6 +20,7 @@ const CapacitorErrorInfo = {
   APP_VERSION_FAILED: '021:500',
   PUSH_REGISTER_FAILED: '030:500',
   PUSH_LISTEN_FAILED: '031:500',
+  PUSH_CLEANUP_FAILED: '032:500',
   CAMERA_FAILED: '040:500',
   STATUS_BAR_FAILED: '050:500',
 } as const satisfies ErrorInfo
@@ -44,10 +45,10 @@ export interface CameraOperations {
 
 /** 推送通知操作 */
 export interface PushOperations {
-  /** 注册推送通知，返回设备 Token */
-  register: () => Promise<HaiResult<PushRegistration>>
-  /** 监听推送通知事件，返回清理函数 */
-  listen: (callbacks: PushNotificationCallbacks) => Promise<HaiResult<() => Promise<void>>>
+  /** 注册原生 Token；30 秒总超时，可取消，结束时回收监听器。 */
+  register: (options?: PushOptions) => Promise<HaiResult<PushRegistration>>
+  /** 监听原生事件；设置阶段限时 30 秒，成功后由 cleanup/信号/模块关闭释放。 */
+  listen: (callbacks: PushNotificationCallbacks, options?: PushOptions) => Promise<HaiResult<PushCleanup>>
 }
 
 /** 状态栏操作 */
@@ -76,8 +77,8 @@ export interface PreferencesOperations {
 export interface CapacitorFunctions {
   /** 初始化 Capacitor 模块 */
   init: () => Promise<HaiResult<void>>
-  /** 关闭模块，重置状态 */
-  close: () => Promise<void>
+  /** 关闭模块并回收推送监听；失败时保持不可用，保留句柄供再次 close 重试。 */
+  close: () => Promise<HaiResult<void>>
   /** 获取当前平台 */
   getPlatform: () => string
   /** 是否运行在原生 App 中 */
@@ -121,6 +122,21 @@ export interface DeviceInfo {
 }
 
 // ─── 推送通知 ───
+
+/**
+ * 推送流程的取消选项；listen 成功后信号仍可终止监听。
+ * @example const options: PushOptions = { signal: new AbortController().signal }
+ */
+export interface PushOptions {
+  /** 取消当前注册或监听，不影响其他消费者拥有的句柄。 */
+  signal?: AbortSignal
+}
+
+/**
+ * 幂等推送清理函数；原生 remove 失败返回错误，调用同一函数可重试。
+ * @example const cleaned = await cleanup(); if (!cleaned.success) await cleanup()
+ */
+export type PushCleanup = () => Promise<HaiResult<void>>
 
 /** 推送通知数据 */
 export interface PushNotification {
