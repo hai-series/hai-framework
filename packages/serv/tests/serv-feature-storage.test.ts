@@ -37,7 +37,7 @@ function createStorageMock(): StorageFunctions {
       head: async key => ok({ ...baseFileMetadata, key }),
       exists: async () => ok(true),
       delete: async () => ok(undefined),
-      deleteMany: async () => ok(undefined),
+      deleteMany: async keys => ok({ deletedKeys: keys, failures: [] }),
       copy: async (_sourceKey, destKey) => ok({ ...baseFileMetadata, key: destKey }),
     },
     dir: {
@@ -114,6 +114,30 @@ describe('serv feature storage', () => {
     expect(body.error.cause).toEqual([
       { field: 'keys.1', message: '存储 key 不能包含 . 或 .. 路径段' },
     ])
+  })
+
+  it('deleteMany 的 HTTP 契约保留部分成功与逐项失败进度', async () => {
+    const storage = createStorageMock()
+    const summary = {
+      deletedKeys: ['users/user-1/a.txt'],
+      failures: [{ key: 'users/user-1/b.txt', code: 'AccessDenied', retryable: false, outcome: 'failed' as const }],
+    }
+    vi.spyOn(storage.file, 'deleteMany').mockResolvedValue({
+      success: false,
+      error: { code: 'hai:storage:002', message: 'Delete failed', ext: { deleteMany: summary } },
+    })
+    const app = serv.createApp({
+      contract: apiContract.storage,
+      procedures: createStorageProcedures({ storage, authorize: authorizeUserKeys }),
+      createContext: createContext('en-US'),
+    })
+    const response = await app.request('/api/v1/storage/files/delete-many', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: ['users/user-1/a.txt', 'users/user-1/b.txt'] }),
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ success: false, error: { code: 'hai:storage:002', ext: { deleteMany: summary } } })
   })
 
   it.each([

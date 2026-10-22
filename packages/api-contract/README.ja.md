@@ -91,6 +91,9 @@ const app = serv.createApp({
 - `apiContract.haiResultSchema(dataSchema)` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema(itemSchema)`：共通 DTO Schema のファクトリー。
 - `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：複数の API・層で再利用する入力とデータ構造。
 
+`storage.files.deleteMany` の成功データは `{ deletedKeys, failures: [] }` です。失敗進捗は `error.ext.deleteMany`（`failed / unknown / notAttempted`）にあり、HTTP 200 だけで完了と判断しません。[Storage の一括削除](../storage/README.ja.md#api-一覧)を参照してください。
+
+
 業務 path は対応する `*-contract.ts` に直接記述します。一度しか使わない出力 Schema は `.output(...)` にインラインで定義します。同じ contract ファイル内で再利用する場合は非公開の定数にできますが、schemas からエクスポートしてはいけません。
 
 ### 設定

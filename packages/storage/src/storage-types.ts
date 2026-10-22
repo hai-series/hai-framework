@@ -13,7 +13,7 @@
  * @module storage-types
  */
 
-import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { ErrorInfo, HaiError, HaiResult } from '@h-ai/core'
 import type { Buffer } from 'node:buffer'
 import type { PresignOptions, PresignUploadOptions, StorageConfig, StorageConfigInput } from './storage-config.js'
 import { core } from '@h-ai/core'
@@ -41,6 +41,42 @@ const StorageErrorInfo = {
 } as const satisfies ErrorInfo
 
 export const HaiStorageError = core.error.buildHaiErrorsDef('storage', StorageErrorInfo)
+
+/**
+ * 批量删除中未确认完成的一项；key 始终使用调用方视角，不含 Provider prefix。
+ * @example const failure: StorageDeleteFailure = { key: 'private.txt', code: 'AccessDenied', retryable: false, outcome: 'failed' }
+ */
+export interface StorageDeleteFailure {
+  /** 调用方提交的文件键。 */
+  key: string
+  /** 渠道/框架错误标识，不包含渠道原始 Message。 */
+  code: string
+  /** 是否属于可重试的瞬时故障；未知结果重试前仍需考虑并发上传/版本语义。 */
+  retryable: boolean
+  /** failed 为已知失败，unknown 为已发送但结果未知，notAttempted 为尚未发送。 */
+  outcome: 'failed' | 'unknown' | 'notAttempted'
+}
+
+/**
+ * 批量删除进度；任一失败不能宣称全部删除完成。
+ * @example const summary: StorageDeleteSummary = { deletedKeys: ['a.txt'], failures: [] }
+ */
+export interface StorageDeleteSummary {
+  /** 已确认删除或本来就不存在的唯一文件键。 */
+  deletedKeys: string[]
+  /** 失败、未知及尚未尝试的唯一文件键。 */
+  failures: StorageDeleteFailure[]
+}
+
+/**
+ * 批量删除结果；失败仍遵守 HaiResult，部分进度置于 error.ext.deleteMany。
+ * @example
+ * const result = await storage.file.deleteMany(['a.txt', 'b.txt'])
+ * const summary = result.success ? result.data : result.error.ext?.deleteMany
+ */
+export type StorageDeleteResult
+  = | { success: true, data: StorageDeleteSummary }
+    | { success: false, error: HaiError & { ext?: Record<string, unknown> & { deleteMany?: StorageDeleteSummary } } }
 
 // ─── 文件元数据 ───
 
@@ -262,13 +298,14 @@ export interface FileOperations {
    * 批量删除文件
    *
    * @param keys - 文件键/路径列表
-   * @returns 删除结果
+   * @returns 全部成功时返回进度；任一失败时 success=false，进度在 error.ext.deleteMany
    * @example
    * ```ts
-   * await storage.file.deleteMany(['a.txt', 'b.txt'])
+   * const result = await storage.file.deleteMany(['a.txt', 'b.txt'])
+   * const progress = result.success ? result.data : result.error.ext?.deleteMany
    * ```
    */
-  deleteMany: (keys: string[]) => Promise<HaiResult<void>>
+  deleteMany: (keys: string[]) => Promise<StorageDeleteResult>
 
   /**
    * 复制文件

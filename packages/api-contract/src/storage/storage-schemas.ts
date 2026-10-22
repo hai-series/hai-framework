@@ -66,6 +66,20 @@ export const StorageDeleteFilesInputSchema = z.object({
   keys: z.array(z.string().min(1)).min(1),
 })
 
+/**
+ * 批量删除的安全进度；响应失败时通过 error.ext.deleteMany 返回同一结构。
+ * @example StorageDeleteSummarySchema.parse({ deletedKeys: ['a.txt'], failures: [] })
+ */
+export const StorageDeleteSummarySchema = z.object({
+  deletedKeys: z.array(z.string()),
+  failures: z.array(z.object({
+    key: z.string(),
+    code: z.string(),
+    retryable: z.boolean(),
+    outcome: z.enum(['failed', 'unknown', 'notAttempted']),
+  })),
+})
+
 export type StoragePresignDownloadInput = z.infer<typeof StoragePresignDownloadInputSchema>
 export type StoragePresignUploadInput = z.infer<typeof StoragePresignUploadInputSchema>
 export type StoragePresignedUrlOutput = HaiResult<z.infer<typeof StoragePresignedUrlSchema>>

@@ -7,7 +7,7 @@
 
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { LocalConfig, StorageConfig } from '../storage-config.js'
-import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageProvider } from '../storage-types.js'
+import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteResult, StorageDeleteSummary, StorageProvider } from '../storage-types.js'
 import { Buffer } from 'node:buffer'
 import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
@@ -18,6 +18,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { core, err, ok } from '@h-ai/core'
 
+import { toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
 import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
 import { toByteStream } from '../storage-stream.js'
@@ -439,27 +440,25 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
-    async deleteMany(keys): Promise<HaiResult<void>> {
+    async deleteMany(keys): Promise<StorageDeleteResult> {
       logOperation('write', 'file.deleteMany', { count: keys.length, keys })
-      // 并行删除，避免 await-in-loop（N+1）
-      const results = await Promise.allSettled(keys.map(key => file.delete(key)))
-
-      const errors: HaiError[] = []
-      for (const result of results) {
-        if (result.status === 'fulfilled' && !result.value.success) {
-          errors.push(result.value.error)
+      const summary: StorageDeleteSummary = { deletedKeys: [], failures: [] }
+      const uniqueKeys = [...new Set(keys)]
+      // 有界并行；reject 也必须形成失败项，不能被 Promise.allSettled 静默丢弃。
+      for (let offset = 0; offset < uniqueKeys.length; offset += 32) {
+        const batch = uniqueKeys.slice(offset, offset + 32)
+        const results = await Promise.allSettled(batch.map(key => file.delete(key)))
+        for (const [index, result] of results.entries()) {
+          const key = batch[index]
+          if (result.status === 'rejected')
+            summary.failures.push({ key, code: 'UnexpectedDeleteFailure', retryable: false, outcome: 'failed' })
+          else if (!result.value.success)
+            summary.failures.push({ key, code: String(result.value.error.code), retryable: false, outcome: 'failed' })
+          else
+            summary.deletedKeys.push(key)
         }
       }
-
-      if (errors.length > 0) {
-        return err(
-          HaiStorageError.OPERATION_FAILED,
-          storageM('storage_deleteManyFailed', { params: { count: errors.length } }),
-          errors,
-        )
-      }
-
-      return ok(undefined)
+      return toStorageDeleteResult(summary)
     },
 
     async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {

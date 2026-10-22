@@ -64,7 +64,7 @@ await uploadWithPresignedUrl(uploadUrl, file)
 
 ### HTTP API contracts
 
-Public HTTP contracts come from `@h-ai/api-contract`; `createStorageProcedures({ storage })` in `@h-ai/serv` binds them to this module.
+Public HTTP contracts come from `@h-ai/api-contract`; `createStorageProcedures({ storage, authorize })` in `@h-ai/serv` binds them to this module.
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -86,6 +86,21 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 `file.put()` accepts Buffer, Uint8Array, strings and `AsyncIterable<Uint8Array>` (including Node Readable), with bounded S3 multipart uploads for streams. `getStream()` returns a byte stream with Range and `signal` cancellation. Initial failures return HaiResult; consumers handle I/O/cancellation errors during iteration. `get()` still buffers the complete file and is intended for small files.
 
 `{ ifNoneMatch: '*' }` uses standard S3 conditional writes or atomic local publication to reject overwrites with `ALREADY_EXISTS`. Unsupported S3 conditions fail without falling back to an overwrite. Failed/cancelled uploads clean temporary files or unfinished parts; cancellation cannot undo an already published object.
+
+`file.deleteMany(keys)` returns `StorageDeleteResult`. Success data is `{ deletedKeys, failures: [] }`; any unconfirmed deletion returns `OPERATION_FAILED` with progress in `error.ext?.deleteMany` (precondition errors such as uninitialized storage may omit progress). Duplicate inputs are processed once, and returned keys exclude the configured prefix. S3 batches contain at most 1000 keys and verify every `Deleted`/`Errors` receipt. HTTP 200 alone is insufficient; missing, duplicate or unknown receipts produce `unknown` outcomes. Local deletion uses at most 32 concurrent operations.
+
+Only explicit `InternalError / ServiceUnavailable / SlowDown / RequestTimeout` items receive up to three attempts. Confirmed successes and permission failures are not resent. A dedicated `DeleteObjects` client disables SDK request retries. Network interruption immediately produces `unknown`; later unsent batches are `notAttempted`, without replaying unknown outcomes. `retryable` describes the fault category; callers must reconcile unknown results and concurrent writes before retrying. `dir.delete()` propagates failures but cannot prevent concurrent new objects. S3 deletes omit VersionId and may create delete markers in versioned buckets; historical versions are not purged.
+
+`@h-ai/serv` / `@h-ai/api-client` expose the same success data and failure progress through `storage.files.deleteMany`.
+
+```ts
+const result = await storage.file.deleteMany(['a.txt', 'b.txt'])
+if (!result.success) {
+  const progress = result.error.ext?.deleteMany
+  // Reconcile unknown outcomes with application writes before compensating.
+  const knownFailures = progress?.failures.filter(item => item.outcome === 'failed' && item.retryable) ?? []
+}
+```
 
 `checksum` is a stateless Node tool requiring no initialization. It generates/verifies the actual input bytes and consumes streams once. Defaults: SHA-256, lowercase hex. Options: `algorithm: 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'`, `encoding: 'hex' | 'base64'`, and `signal`. Mismatches return `ok(false)`; invalid format/algorithm and read failures return errors. MD5/SHA-1 are for compatibility integrity checks, not security authentication. ETags and S3 multipart composite checksums are not whole-file digests. The tool does not require compatible services to implement AWS checksum extensions.
 

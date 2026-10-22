@@ -91,6 +91,9 @@ const app = serv.createApp({
 - `apiContract.haiResultSchema(dataSchema)` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema(itemSchema)`: shared DTO schema factories.
 - `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`: inputs and data structures reused across APIs and layers.
 
+Batch deletion via `storage.files.deleteMany` returns `{ deletedKeys, failures: [] }` on success. Failures preserve progress in `error.ext.deleteMany` (`failed / unknown / notAttempted`); HTTP 200 alone does not mean completion. See [Storage batch deletion](../storage/README.en.md#api-overview).
+
+
 Write each business path directly in its `*-contract.ts` file. Inline output schemas used only once in `.output(...)`; schemas reused within the same contract file may be private constants, but must not be exported from schemas.
 
 ### Configuration

@@ -12,7 +12,7 @@ description: "实现本地/S3 文件与目录操作、流式读写、checksum �
 | 能力 | 使用 @h-ai/storage 访问本地/S3 文件、目录和预签名上传下载 |
 | 适用场景 | 文件接口、目录操作或浏览器直传 |
 | 输入 | StorageConfigInput、文件 key、内容、presign 选项 |
-| 输出 | file/dir/presign 操作的 HaiResult；checksum 生成字符串或校验结果 |
+| 输出 | file/dir/presign 操作的 HaiResult；deleteMany 的成功 data/失败 error.ext.deleteMany 保留逐项进度；checksum 生成字符串或校验结果 |
 | 限制 | 仅服务端；浏览器经 API/预签名 URL。Local list 非真分页；putUrl 不提供 maxSize 强制约束，上传大小须服务端验证。 |
 
 ## 使用路径
@@ -21,6 +21,7 @@ description: "实现本地/S3 文件与目录操作、流式读写、checksum �
 2. 从 file/dir/presign 选择操作，检查 HaiResult。流与 checksum 按真实签名处理，checksum 在 Node 无需 init。
 3. 客户端经受保护 API 或预签名 URL，服务端校验路径、内容、大小及资源权限；putUrl 不强制 maxSize。
 4. 不覆盖上传使用 ifNoneMatch；冲突/checksum 失败不能伪装成功。验证取消、流错误和文件清理，最后 close。
+5. 批量删除核对逐项进度，S3 每批最多 1000 项；HTTP 200 不能代替成功判断。unknown 结果先核对业务状态，避免重删并发新对象；dir.delete 不保证隔离并发写入或清除 S3 历史版本。
 
 ## 按需参考
 

@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 26/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 27/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -437,7 +437,8 @@
 
 ### STORAGE-01 · P1 · 检查 S3 批量删除的逐项错误并分批
 
-- [ ] 待修正（源码确认；范围：storage）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：S3每批最多1000键，逐项核验完整Deleted/Errors回执，仅明确瞬时错误有界重试；专属DeleteObjects客户端maxAttempts=1防SDK隐式重放。返回确认进度及error.ext.deleteMany（failed/unknown/notAttempted），目录删除传播失败，本地并发32且不吞rejection。同步契约/HTTP调用测试、三包三语README及storage skill/LLMS。新增16项、既有定向7项、serv19项和契约12项通过；四包typecheck、三包build、scoped ESLint/skills通过。真实MinIO/RustFS各1001键及回执中断证明unknown和请求恰好一次；权限部分失败为SDK模拟，未宣称并发上传隔离/历史版本清理；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/storage/src/providers/storage-provider-s3.ts:392](../packages/storage/src/providers/storage-provider-s3.ts#L392)。
 - **证据与影响**：DeleteObjects 响应被忽略，HTTP 成功但部分 key 删除失败仍整体 ok；直接提交任意 keys 数量也超过服务端单请求上限的可能。
 - **修正内容**：读取 Errors 并返回失败项/部分成功的明确结果；按上限有界分批，目录删除只在所有必要项完成后成功，重试仅处理可重试失败。

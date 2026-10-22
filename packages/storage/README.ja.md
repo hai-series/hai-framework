@@ -64,7 +64,7 @@ await uploadWithPresignedUrl(uploadUrl, file)
 
 ### HTTP API 契約
 
-公開 HTTP API は `@h-ai/api-contract` で定義し、`@h-ai/serv` の `createStorageProcedures({ storage })` で本モジュールの機能に接続します。
+公開 HTTP API は `@h-ai/api-contract` で定義し、`@h-ai/serv` の `createStorageProcedures({ storage, authorize })` で本モジュールの機能に接続します。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -86,6 +86,21 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 `file.put()` は Buffer、Uint8Array、文字列と `AsyncIterable<Uint8Array>`（Node Readable 等）を受け付け、ストリームはバッファ量を制限した S3 multipart で送信します。`getStream()` は Range と `signal` による中止に対応するバイトストリームを返します。初期エラーは HaiResult、反復中の I/O・中止エラーは呼び出し側で処理します。`get()` は従来どおり全体を Buffer に読み込み、小さいファイル向けです。
 
 `{ ifNoneMatch: '*' }` は標準 S3 条件付き書き込み、またはローカルの原子的公開で上書きを拒否し、競合時に `ALREADY_EXISTS` を返します。非対応の S3 サービスではエラーとし、上書きに切り替えません。失敗・中止時は一時ファイルや未完了パートを削除しますが、公開済みオブジェクトは中止で取り消せません。
+
+`file.deleteMany(keys)` は `StorageDeleteResult` を返します。成功時の data は `{ deletedKeys, failures: [] }`、削除未完了の項目がある場合は `OPERATION_FAILED` と `error.ext?.deleteMany` に進捗を返します（未初期化などの事前エラーには進捗がない場合があります）。重複入力は一度だけ処理し、返す key に設定 prefix を含めません。S3 は最大 1000 件ずつ送信し、すべての `Deleted` / `Errors` を照合します。HTTP 200 でも全件成功とは限らず、欠落・重複・不明な応答は `unknown` になります。ローカル削除の並行数は最大 32 件です。
+
+明示的な `InternalError / ServiceUnavailable / SlowDown / RequestTimeout` の項目だけ最大 3 回試行し、成功済み・権限エラーは再送しません。`DeleteObjects` 専用クライアントは SDK のリクエスト再試行を無効化します。通信が中断した項目は直ちに `unknown`、後続の未送信バッチは `notAttempted` とし、不明な結果を再送しません。`retryable` は障害の分類であり、再試行前に不明な結果と並行書き込みを確認してください。`dir.delete()` は削除エラーを伝播しますが、並行して追加されるオブジェクトは防げません。S3 の削除は VersionId を指定しないため、バージョニングが有効な場合は削除マーカーを作成することがあり、過去のバージョンは消去しません。
+
+`@h-ai/serv` / `@h-ai/api-client` の `storage.files.deleteMany` も同じ成功データと失敗進捗を返します。
+
+```ts
+const result = await storage.file.deleteMany(['a.txt', 'b.txt'])
+if (!result.success) {
+  const progress = result.error.ext?.deleteMany
+  // 不明な結果と業務上の書き込みを確認してから補償する。
+  const knownFailures = progress?.failures.filter(item => item.outcome === 'failed' && item.retryable) ?? []
+}
+```
 
 `checksum` は初期化不要の Node 専用ツールです。実際の入力バイトを生成・検証し、ストリームは一度だけ消費します。既定値は SHA-256、小文字 hex。`algorithm: 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'`、`encoding: 'hex' | 'base64'`、`signal` を指定できます。不一致は `ok(false)`、不正形式・アルゴリズムや読み取り失敗はエラーです。MD5/SHA-1 は互換性確認のみで、認証用ではありません。ETag と multipart の複合 checksum はファイル全体の摘要と異なり、AWS checksum 拡張の実装は強制しません。
 

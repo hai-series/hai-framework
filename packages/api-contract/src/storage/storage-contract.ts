@@ -7,10 +7,12 @@
  * @module storage-contract
  */
 
-import { haiResultSchema, HaiVoidResultSchema } from '../common/result-schemas.js'
+import { z } from 'zod'
+import { HaiErrorSchema, haiResultSchema, HaiVoidResultSchema } from '../common/result-schemas.js'
 import { route } from '../common/route.js'
 import {
   StorageDeleteFilesInputSchema,
+  StorageDeleteSummarySchema,
   StorageFileKeyInputSchema,
   StorageFileMetadataSchema,
   StorageListFilesDataSchema,
@@ -45,7 +47,13 @@ export const storageContract = {
       .output(HaiVoidResultSchema),
     deleteMany: route({ method: 'POST', path: '/storage/files/delete-many', operationId: 'storage.files.deleteMany', summary: 'Delete files', tags: ['storage'] })
       .input(StorageDeleteFilesInputSchema)
-      .output(HaiVoidResultSchema),
+      .output(z.discriminatedUnion('success', [
+        z.object({ success: z.literal(true), data: StorageDeleteSummarySchema }),
+        z.object({
+          success: z.literal(false),
+          error: HaiErrorSchema.extend({ ext: z.object({ deleteMany: StorageDeleteSummarySchema.optional() }).catchall(z.unknown()).optional() }),
+        }),
+      ])),
   },
 }
 
