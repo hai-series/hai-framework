@@ -87,7 +87,7 @@ interface TaskDefinition {
   name: string
   description?: string
   cron: string
-  timezone?: string // IANA 时区，例如 Asia/Shanghai；按该时区解释 cron 墙上时间
+  timezone?: string // IANA 时区，例如 Asia/Shanghai；省略时为 UTC，不读取节点 TZ
   enabled?: boolean
   deleteAfterRun?: boolean
   idempotent?: boolean
@@ -190,23 +190,23 @@ All public APIs except `close()` return `HaiResult<T>`.
 
 Common error codes:
 
-| Error code                                | code                | Description             |
-| ----------------------------------------- | ------------------- | ----------------------- |
-| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | Not initialized         |
-| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | Initialization failed   |
-| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | Invalid configuration   |
-| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | Task not found          |
-| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | Task already exists     |
-| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | Invalid cron expression |
-| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | Execution failed        |
-| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS execution failed     |
-| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API execution failed    |
-| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | Database save failed    |
-| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | Already running         |
-| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | Not running             |
-| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS compilation failed   |
-| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook execution failed   |
-| `HaiSchedulerError.LOG_PERSIST_FAILED` | `hai:scheduler:032` | Log persistence not confirmed |
+| Error code                                | code                | Description                   |
+| ----------------------------------------- | ------------------- | ----------------------------- |
+| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | Not initialized               |
+| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | Initialization failed         |
+| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | Invalid configuration         |
+| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | Task not found                |
+| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | Task already exists           |
+| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | Invalid cron expression       |
+| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | Execution failed              |
+| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS execution failed           |
+| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API execution failed          |
+| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | Database save failed          |
+| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | Already running               |
+| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | Not running                   |
+| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS compilation failed         |
+| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook execution failed         |
+| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | Log persistence not confirmed |
 
 ### Runtime behavior and limits
 
@@ -261,3 +261,5 @@ pnpm --filter @h-ai/scheduler test
 ## License
 
 Apache-2.0
+
+Claim, begin, renewal, completion, expiration scans and isolation calculate/check lease deadlines inside the database statement using its clock: PostgreSQL clock_timestamp, MySQL SYSDATE(3), or SQLite now. Reading a time first cannot replace the final atomic deadline condition. Cron uses DB time for both the minute occurrence and expression matching. An omitted timezone means UTC; an explicit IANA timezone changes only wall-time interpretation, while node TZ does not change matching or identity. Node Date.now is diagnostic only; opposing node clocks cannot take over early or revive expired ownership. A write waiting on a row lock must still pass its deadline before publishing success. Keep the database service clock trustworthy; unknown external effects still require reconciliation rather than automatic replay.

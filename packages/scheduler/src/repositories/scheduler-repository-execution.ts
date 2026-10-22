@@ -1,6 +1,6 @@
 /**
  * 跨节点执行日志与任务串行槽；唯一约束和 owner 条件是调度正确性的依据。
- * @module scheduler-execution-repository
+ * @module scheduler-repository-execution
  */
 import type { HaiResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
@@ -116,6 +116,40 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     })
   }
 
+  /**
+   * 只按已初始化的数据库类型选择存储端毫秒时钟。
+   * PostgreSQL/MySQL 使用执行时钟，不能使用固定在事务/语句开始处的时间快照。
+   * 期限表达式直接进入有 owner 条件的 SQL；先 SELECT 时间再写入仍有等待窗口。
+   *
+   * @example
+   * ```ts
+   * // 模块内部上下文：当前仓库实例仅生成固定白名单 SQL，不接收调用方表达式。
+   * const deadlinePredicate = `leased_until > ${this.databaseClock()}`
+   * ```
+   */
+  private databaseClock(): string {
+    if (this.db.config?.type === 'postgresql')
+      return 'CAST(FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000) AS BIGINT)'
+    if (this.db.config?.type === 'mysql')
+      return 'CAST(UNIX_TIMESTAMP(SYSDATE(3)) * 1000 AS UNSIGNED)'
+    return 'CAST((julianday(\'now\') - 2440587.5) * 86400000 AS INTEGER)'
+  }
+
+  /** 同毫秒内的持久状态版本仍单调增加，日志确认/人工裁定不依赖节点墙钟。 */
+  private nextUpdatedAt(): string {
+    const clock = this.databaseClock()
+    return `CASE WHEN updated_at >= ${clock} THEN updated_at + 1 ELSE ${clock} END`
+  }
+
+  /** 存储端毫秒时钟供 cron 计算共享分钟身份；读取失败停止本轮调度，不回退节点时钟。 */
+  async currentTime(): Promise<HaiResult<number>> {
+    const result = await this.db.sql.get<{ now: number | string }>(`SELECT ${this.databaseClock()} AS now`)
+    if (!result.success)
+      return failed(result.error)
+    const now = Number(result.data?.now)
+    return Number.isSafeInteger(now) && now >= 0 ? ok(now) : failed()
+  }
+
   /** 读取统一校验 BIGINT，不能把 PG 字符串时间或舍入的序号用于 owner 判断。 */
   private normalize(row: StoredExecution): HaiResult<StoredExecution> {
     const value = { ...row }
@@ -143,16 +177,15 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
 
   /** 有界读取过期执行，跨分钟恢复原 occurrence，而不是创建新的副作用身份。@example await repository.expired() */
   async expired(): Promise<HaiResult<StoredExecution[]>> {
-    return this.rows('status IN (?, ?) AND leased_until <= ?', ['claimed', 'running', Date.now()], 100, 0)
+    return this.rows(`status IN (?, ?) AND leased_until <= ${this.databaseClock()}`, ['claimed', 'running'], 100, 0)
   }
 
   /** 任务被删除或触发元数据损坏时，过期记录隔离为 unknown，允许可信人工核对而非永久悬挂。 */
   async isolateExpired(row: StoredExecution): Promise<HaiResult<void>> {
-    const now = Date.now()
     const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, owner = NULL, leased_until = 0, updated_at = ?
-       WHERE occurrence_id = ? AND owner = ? AND leased_until <= ? AND status IN (?, ?)`,
-      ['unknown', now, row.occurrenceId, row.owner, now, 'claimed', 'running'],
+      `UPDATE ${TABLE} SET status = ?, owner = NULL, leased_until = 0, updated_at = ${this.nextUpdatedAt()}
+       WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${this.databaseClock()} AND status IN (?, ?)`,
+      ['unknown', row.occurrenceId, row.owner, 'claimed', 'running'],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : failed()
   }
@@ -175,11 +208,10 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     if (!row.logJson || !row.logsJson)
       return failed()
     const log = JSON.parse(row.logJson) as TaskExecutionLog
-    const now = Date.now()
     const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET log_persistence = ?, log_json = ?, updated_at = CASE WHEN updated_at >= ? THEN updated_at + 1 ELSE ? END
+      `UPDATE ${TABLE} SET log_persistence = ?, log_json = ?, updated_at = ${this.nextUpdatedAt()}
        WHERE occurrence_id = ? AND updated_at = ? AND log_persistence = ? AND status NOT IN (?, ?)`,
-      ['persisted', JSON.stringify({ ...log, persistence: { status: 'persisted' } }), now, now, row.occurrenceId, row.updatedAt, 'pending', 'claimed', 'running'],
+      ['persisted', JSON.stringify({ ...log, persistence: { status: 'persisted' } }), row.occurrenceId, row.updatedAt, 'pending', 'claimed', 'running'],
     )
     if (result.success && result.data.changes === 1)
       return ok(undefined)
@@ -206,26 +238,19 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
    * @example await repository.claim(task, id, trigger, nodeId, leaseMs)
    */
   async claim(task: TaskDefinition, id: string, trigger: TaskTriggerInfo, nodeId: string, leaseMs: number): Promise<HaiResult<StoredExecution | null>> {
-    const now = Date.now()
+    const ready = await this.ensureReady()
+    if (!ready.success)
+      return failed(ready.error)
+    const clock = this.databaseClock()
     const owner = `${nodeId}:${randomUUID()}`
     let created: HaiResult<unknown>
     try {
-      created = await this.create({
-        occurrenceId: id,
-        taskId: task.id,
-        activeTask: task.id,
-        status: 'claimed',
-        owner,
-        leasedUntil: now + leaseMs,
-        attemptCount: 0,
-        maxAttempts: task.retry?.maxAttempts ?? 1,
-        idempotent: task.idempotent === true,
-        snapshot: JSON.stringify(task),
-        triggerJson: JSON.stringify(trigger),
-        logPersistence: 'unconfirmed',
-        updatedAt: now,
-        createdAt: now,
-      })
+      // INSERT 的期限和初始时间与存储端同一语句计算，不接受本机 Date.now() 授权。
+      created = await this.db.sql.execute(
+        `INSERT INTO ${TABLE} (occurrence_id, task_id, active_task, status, owner, leased_until, attempt_count, max_attempts, idempotent, snapshot, trigger_json, log_persistence, updated_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ${clock} + ?, 0, ?, ?, ?, ?, ?, ${clock}, ${clock})`,
+        [id, task.id, task.id, 'claimed', owner, leaseMs, task.retry?.maxAttempts ?? 1, this.db.config?.type === 'postgresql' ? task.idempotent === true : Number(task.idempotent === true), JSON.stringify(task), JSON.stringify(trigger), 'unconfirmed'],
+      )
     }
     catch (cause) {
       return failed(cause)
@@ -241,20 +266,21 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
     const row = existing.data
     if (created.success || ['success', 'failed', 'interrupted', 'discarded'].includes(row.status))
       return ok(row)
-    if (row.status === 'unknown' || row.leasedUntil > now)
+    if (row.status === 'unknown')
       return ok(null)
+    // 是否过期只在下方写语句里判断，不能先用某个节点的墙钟决定接管或隔离。
     if (row.status === 'running' && (!row.idempotent || row.attemptCount >= row.maxAttempts)) {
       const isolated = await this.db.sql.execute(
-        `UPDATE ${TABLE} SET status = ?, owner = NULL, leased_until = 0, updated_at = ?
-         WHERE occurrence_id = ? AND owner = ? AND leased_until <= ? AND status = ?`,
-        ['unknown', now, id, row.owner, now, 'running'],
+        `UPDATE ${TABLE} SET status = ?, owner = NULL, leased_until = 0, updated_at = ${this.nextUpdatedAt()}
+         WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${clock} AND status = ?`,
+        ['unknown', id, row.owner, 'running'],
       )
       return isolated.success ? ok(null) : failed(isolated.error)
     }
     const recovered = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, owner = ?, leased_until = ?, updated_at = ?
-       WHERE occurrence_id = ? AND owner = ? AND leased_until <= ? AND status IN (?, ?)`,
-      ['claimed', owner, now + leaseMs, now, id, row.owner, now, 'claimed', 'running'],
+      `UPDATE ${TABLE} SET status = ?, owner = ?, leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
+       WHERE occurrence_id = ? AND owner = ? AND leased_until <= ${clock} AND status IN (?, ?)`,
+      ['claimed', owner, leaseMs, id, row.owner, 'claimed', 'running'],
     )
     if (!recovered.success)
       return failed(recovered.error)
@@ -263,11 +289,11 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
 
   /** 外部副作用前的条件门闩，并原子递增持久尝试次数。@example await repository.begin(row, leaseMs) */
   async begin(row: StoredExecution, leaseMs: number): Promise<HaiResult<void>> {
-    const now = Date.now()
+    const clock = this.databaseClock()
     const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, attempt_count = attempt_count + 1, leased_until = ?, updated_at = ?
-       WHERE occurrence_id = ? AND owner = ? AND leased_until > ? AND status IN (?, ?) AND attempt_count < max_attempts`,
-      ['running', now + leaseMs, now, row.occurrenceId, row.owner, now, 'claimed', 'running'],
+      `UPDATE ${TABLE} SET status = ?, attempt_count = attempt_count + 1, leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()}
+       WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?) AND attempt_count < max_attempts`,
+      ['running', leaseMs, row.occurrenceId, row.owner, 'claimed', 'running'],
     )
     if (!result.success || result.data.changes !== 1)
       return failed(result.success ? undefined : result.error)
@@ -278,21 +304,21 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
 
   /** 只续租仍然有效的 owner；过期凭据不能复活。@example await repository.renew(row, leaseMs) */
   async renew(row: StoredExecution, leaseMs: number): Promise<HaiResult<void>> {
-    const now = Date.now()
+    const clock = this.databaseClock()
     const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET leased_until = ?, updated_at = ? WHERE occurrence_id = ? AND owner = ? AND leased_until > ? AND status IN (?, ?)`,
-      [now + leaseMs, now, row.occurrenceId, row.owner, now, 'claimed', 'running'],
+      `UPDATE ${TABLE} SET leased_until = ${clock} + ?, updated_at = ${this.nextUpdatedAt()} WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)`,
+      [leaseMs, row.occurrenceId, row.owner, 'claimed', 'running'],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : failed()
   }
 
   /** 有效 owner 确认终态；unknown 保留串行槽，阻止下一 cron/manual 与旧副作用并行。@example await repository.finish(row, log) */
   async finish(row: StoredExecution, log: TaskExecutionLog, logs: TaskExecutionLog[] = [log]): Promise<HaiResult<void>> {
-    const now = Date.now()
+    const clock = this.databaseClock()
     const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, active_task = ?, owner = NULL, leased_until = 0, log_json = ?, logs_json = ?, log_persistence = ?, updated_at = ?
-       WHERE occurrence_id = ? AND owner = ? AND leased_until > ? AND status IN (?, ?)`,
-      [log.status, log.status === 'unknown' ? row.taskId : null, JSON.stringify(log), JSON.stringify(logs), 'pending', now, row.occurrenceId, row.owner, now, 'claimed', 'running'],
+      `UPDATE ${TABLE} SET status = ?, active_task = ?, owner = NULL, leased_until = 0, log_json = ?, logs_json = ?, log_persistence = ?, updated_at = ${this.nextUpdatedAt()}
+       WHERE occurrence_id = ? AND owner = ? AND leased_until > ${clock} AND status IN (?, ?)`,
+      [log.status, log.status === 'unknown' ? row.taskId : null, JSON.stringify(log), JSON.stringify(logs), 'pending', row.occurrenceId, row.owner, 'claimed', 'running'],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : failed()
   }
@@ -300,8 +326,8 @@ export class SchedulerExecutionRepository extends BaseReldbCrudRepository<Stored
   /** 人工隔离旧 runner 后条件裁定；不重排旧 occurrence，只有成功裁定才释放任务槽。@example await repository.resolve(id, 'discarded', updatedAt) */
   async resolve(id: string, status: 'success' | 'discarded', expectedUpdatedAt: number): Promise<HaiResult<void>> {
     const result = await this.db.sql.execute(
-      `UPDATE ${TABLE} SET status = ?, active_task = NULL, updated_at = ? WHERE occurrence_id = ? AND status = ? AND updated_at = ?`,
-      [status, Math.max(Date.now(), expectedUpdatedAt + 1), id, 'unknown', expectedUpdatedAt],
+      `UPDATE ${TABLE} SET status = ?, active_task = NULL, updated_at = ${this.nextUpdatedAt()} WHERE occurrence_id = ? AND status = ? AND updated_at = ?`,
+      [status, id, 'unknown', expectedUpdatedAt],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : failed()
   }

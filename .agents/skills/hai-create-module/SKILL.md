@@ -158,6 +158,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 - [ ] 所有公共 API JSDoc 含 `@example`
 - [ ] 公共方法返回 `HaiResult<T>`，未使用 `throw`（合规场景除外）
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
+- [ ] 数据库租约使用同条条件 SQL 的存储端执行时钟；验证节点墙钟偏差与真实锁等待后仍拒绝过期提交，不能只续租或先读取时间
 - [ ] 测试覆盖正常 / 边界 / 多实现
 - [ ] README + 对应 CLI Skill 模板（如存在）同步
 - [ ] 构建后 generate:api/check:api/test:api 验证真实入口、声明及浏览器隔离；公开变化已核对全部消费者

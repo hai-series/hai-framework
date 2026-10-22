@@ -3,7 +3,7 @@ import type { StartedTestContainer } from 'testcontainers'
 import type { TaskDefinition, TaskExecutionLog } from '../src/index.js'
 import { reldb } from '@h-ai/reldb'
 import { GenericContainer, Wait } from 'testcontainers'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { executionId, SchedulerExecutionRepository } from '../src/repositories/index.js'
 
 const task: TaskDefinition = { id: 'database-task', name: 'database-task', cron: '* * * * *', retry: { maxAttempts: 3 } }
@@ -12,6 +12,11 @@ const table = 'hai_scheduler_executions'
 
 function successLog(now: number): TaskExecutionLog {
   return { id: crypto.randomUUID(), persistence: { status: 'pending' as const }, taskId: task.id, taskName: task.name, taskType: 'hook', triggerType: 'manual', triggerSource: null, status: 'success', result: 'committed', error: null, startedAt: now, finishedAt: now, duration: 0 }
+}
+
+/** 构造真实持久过期状态；节点墙钟不是租约测试的时间控制入口。 */
+async function expire(id: string): Promise<void> {
+  expect((await reldb.sql.execute(`UPDATE ${table} SET leased_until = 0 WHERE occurrence_id = ?`, [id])).success).toBe(true)
 }
 
 for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
@@ -42,11 +47,8 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       expect((await reldb.ddl.dropTable(table, true)).success).toBe(true)
       repo = new SchedulerExecutionRepository(reldb)
       expect((await repo.count()).success).toBe(true)
-      now = 1_789_009_309_123
-      vi.spyOn(Date, 'now').mockImplementation(() => now)
+      now = Date.now()
     })
-
-    afterEach(() => vi.restoreAllMocks())
 
     afterAll(async () => {
       try {
@@ -63,9 +65,10 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       if (!first.success || !first.data)
         throw new Error('Initial claim failed')
       expect(first.data.sequence).toBeTypeOf('number')
-      expect(first.data.leasedUntil).toBe(now + 1000)
+      expect(first.data.leasedUntil - first.data.createdAt).toBeGreaterThanOrEqual(900)
+      expect(first.data.leasedUntil - first.data.createdAt).toBeLessThanOrEqual(1100)
       expect(await repo.claim(task, executionId(task.id, 'scheduled', 'next-minute'), trigger, 'b', 1000)).toMatchObject({ success: true, data: null })
-      now += 1001
+      await expire(id)
       const recovered = await repo.claim(task, id, trigger, 'b', 1000)
       if (!recovered.success || !recovered.data)
         throw new Error('Recovery claim failed')
@@ -85,7 +88,7 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       if (!first.success || !first.data)
         throw new Error('Initial claim failed')
       expect((await repo.begin(first.data, 1000)).success).toBe(true)
-      now += 1001
+      await expire(id)
       const next = await repo.claim(definition, id, trigger, 'new', 1000)
       expect(next.success).toBe(true)
       expect((await repo.begin(first.data, 1000)).success).toBe(false)

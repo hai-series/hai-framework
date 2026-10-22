@@ -1,7 +1,7 @@
 import type { SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskStartEvent, TaskDefinition } from '../src/index.js'
 import type { SchedulerExecutionRepository as ExecutionRepository, StoredExecution } from '../src/repositories/index.js'
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { scheduler, SchedulerConfigSchema } from '../src/index.js'
 import { executionId, SchedulerExecutionRepository } from '../src/repositories/index.js'
 
@@ -17,9 +17,13 @@ async function claim(key: string): Promise<StoredExecution> {
   return result.data
 }
 
+/** 直接构造已过期的持久期限；修改节点 Date.now 已不能伪造存储端时间。 */
+async function expire(row: StoredExecution): Promise<void> {
+  expect((await reldb.sql.execute('UPDATE hai_scheduler_executions SET leased_until = 0 WHERE occurrence_id = ?', [row.occurrenceId])).success).toBe(true)
+}
+
 beforeEach(async () => {
   now = Date.now()
-  vi.spyOn(Date, 'now').mockImplementation(() => now)
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   repo = new SchedulerExecutionRepository(reldb)
   expect((await repo.count()).success).toBe(true)
@@ -28,13 +32,12 @@ beforeEach(async () => {
 afterEach(async () => {
   await scheduler.close()
   await reldb.close()
-  vi.restoreAllMocks()
 })
 
 describe('shared execution gates', () => {
   it('已过期但尚未开始的领取可以恢复，旧owner不能开始、续租或提交', async () => {
     const old = await claim('same')
-    now += 1001
+    await expire(old)
     const next = await claim('same')
     expect(next.owner).not.toBe(old.owner)
     expect((await repo.begin(old, 1000)).success).toBe(false)
@@ -49,7 +52,7 @@ describe('shared execution gates', () => {
   it('跨 occurrence 串行槽不可绕过；unknown在人工条件裁定前仍占槽', async () => {
     const row = await claim('first')
     expect((await repo.begin(row, 1000)).success).toBe(true)
-    now += 1001
+    await expire(row)
     expect(await repo.claim(task, row.occurrenceId, trigger, 'new', 1000)).toMatchObject({ success: true, data: null })
     expect(await repo.byOccurrence(row.occurrenceId)).toMatchObject({ success: true, data: { status: 'unknown' } })
     expect(await repo.claim(task, executionId(task.id, 'scheduled', 'new-minute'), trigger, 'new', 1000)).toMatchObject({ success: true, data: null })
@@ -70,7 +73,7 @@ describe('shared execution gates', () => {
     if (!claimed.success || !claimed.data)
       throw new Error('Claim failed')
     expect((await repo.begin(claimed.data, 1000)).success).toBe(true)
-    now += 1001
+    await expire(claimed.data)
     expect(await repo.claim(safe, id, trigger, 'second', 1000)).toMatchObject({ success: true, data: null })
     expect(await repo.byOccurrence(id)).toMatchObject({ success: true, data: { status: 'unknown', attemptCount: 1 } })
   })

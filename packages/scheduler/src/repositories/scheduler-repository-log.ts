@@ -2,7 +2,7 @@
  * @h-ai/scheduler — 执行日志仓库
  *
  * 基于 @h-ai/reldb BaseReldbCrudRepository 实现执行日志的持久化与查询。
- * @module scheduler-log-repository
+ * @module scheduler-repository-log
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'

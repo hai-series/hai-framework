@@ -17,7 +17,7 @@ import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecution
 
 import { core, err, ok } from '@h-ai/core'
 
-import { TaskHandlerConfigSchema } from './repositories/scheduler-task-repository.js'
+import { TaskHandlerConfigSchema } from './repositories/scheduler-repository-task.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { HaiSchedulerError } from './scheduler-types.js'

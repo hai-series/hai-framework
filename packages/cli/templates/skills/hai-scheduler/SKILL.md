@@ -21,7 +21,7 @@ description: "注册或排查 cron/API/JS/Hook 任务、手工触发、执行日
 2. 动态共享任务通过 register 管理，不与 init.tasks 重复声明；读取失败、禁用、删除或改期时不得继续旧任务。
 3. 根据可信逻辑选择 API/JS/Hook。Worker/vm 不是安全沙箱；Hook 监听 signal，业务以 occurrenceId 原子持久去重，只有实际满足该约束才设 idempotent:true；API 自动覆盖幂等头。
 4. 明确 timeout、响应大小、重试与执行状态；关闭时 await scheduler.close，再关闭数据库；unknown须先确认旧runner终止并核对副作用，按版本人工resolveUnknown，禁止直接重排。
-5. 验证手动/定时、跨周期租约、手动/cron竞争及暂停接管、失败重试、取消与定义更新。
+5. 验证手动/定时、跨周期租约、手动/cron竞争及暂停接管、失败重试、取消与定义更新；共享租约必须在 SQL 内用存储时钟原子检查，cron 分钟身份也取 DB 时间且默认 UTC；补上节点 ±2h、不同 TZ 与真实行锁跨期限的多进程用例。
 6. 检查业务 status 与独立 persistence.status；pending 通过 execution.listLogFailures/repairLog 从已发布 journal 补写，不能重新触发业务。失租 unconfirmed 不能作为成功证据；验证丢回执和双节点并发补写。
 
 ## 按需参考

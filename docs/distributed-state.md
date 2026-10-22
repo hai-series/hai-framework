@@ -41,7 +41,7 @@ CLI 的 AI 特性依赖 db 与 vecdb。开发配置可使用 SQLite/LanceDB；�
 | ai | context/会话目录/A2A journal/知识 manifest 在共享 RelDB；向量在共享 vecdb | Context 用 scope、owner、epoch、turn 和版本 CAS，每个生成增量先持久化再交付；manual commit 按 turn ID 幂等。reset/delete 留代际或墓碑以拒绝旧 owner。知识以版本 manifest 发布，当前正文/实体/元数据一次切换；未发布/旧版本向量不能参与可见结果，垃圾可重试清理。模型、工具与外部系统不因 CAS 获得 exactly-once。A2A 详见下文。 |
 | audit | 共享 RelDB 的审计行与索引 | ready 包括建表/索引完成后才发布模块状态；多节点并发 DDL 使用数据库约束处理。写失败返回失败，审计不补成成功。业务事务与审计若分开提交，不承诺共同原子性。 |
 | reach | 共享 RelDB 的队列、发送日志、模板；各节点不可变代码模板 | delay 只有可靠入队后成功。claim token/代际约束回写；有界重试、死信和 unknown 状态禁止无限自旋。API 只有接收端按稳定 Idempotency-Key 原子持久去重才可声明 idempotent；邮件/普通短信未知结果须人工核对，不能自动重发证明 exactly-once。本机扫描锁仅减轻争用。 |
-| scheduler | 共享 RelDB 的 occurrence、active task gate 与 execution journal | cron 和手动使用同一任务槽位；稳定 occurrence/手动 idempotencyKey、owner、sequence 与 DB 租约约束领取/完成。非幂等过期执行留 unknown 并占槽，先停止旧执行、核对效果再人工裁定；幂等任务只在接收端真实去重且未耗尽总尝试预算时重试。 |
+| scheduler    | 共享 RelDB 的 occurrence、active task gate 与 execution journal              | 领取/开始/续租/完成/过期隔离以 SQL 内 DB 执行时钟核验，节点 Date.now 不授权，真实行锁等待后仍判截止；cron 身份/匹配读取 DB 时间，默认 UTC/显式 IANA 不依赖节点 TZ；cron 和手动使用同一任务槽位；稳定 occurrence/手动 idempotencyKey、owner、sequence 与 DB 租约约束领取/完成。非幂等过期执行留 unknown 并占槽，先停止旧执行、核对效果再人工裁定；幂等任务只在接收端真实去重且未耗尽总尝试预算时重试。 |
 | payment | 共享 RelDB 的业务订单、Stripe 映射与外部请求幂等记录；平台订单为外部权威 | 创建/退款使用稳定业务键与平台幂等键；超时后查记录/平台结果。回调校验签名和商户身份，应用须事务性去重业务订单状态转换、处理乱序。接收回调与履约不是跨平台分布式事务。 |
 | datapipe | 当前调用的输入、分块和转换结果 | 纯转换无需共享锁；并行任务的结果由调用方按输入标识/版本持久化。外部读取器及 sink 的重试、权限、事务由对应适配层负责。 |
 | deploy | 部署控制进程、工作目录、目标平台资源 | 部署锁协调同一控制目录；不把本机文件锁当跨主机选主。多控制节点应使用外部 CI/平台共享互斥与稳定部署 ID。中断后检查远端实际状态，不能仅依据本地进程结果认定发布成功。 |

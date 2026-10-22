@@ -2,9 +2,9 @@
 
 审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08，共 75 个，另有 21 个按模块拆分的 JSDoc 任务，共 96 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03，共 78 个，另有 21 个按模块拆分的 JSDoc 任务，共 99 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 47/47；P2 35/49（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 48/49；P2 35/50（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -31,12 +31,12 @@
 | crypto | 15 | 48 | 1 | 44 | CRYPTO-01、CRYPTO-02、CRYPTO-03、CRYPTO-04 | JSDOC-09 |
 | datapipe | 8 | 23 | 0 | 14 | PIPE-01 | JSDOC-10 |
 | deploy | 26 | 75 | 1 | 55 | DEPLOY-01、DEPLOY-02、DEPLOY-03 | JSDOC-11 |
-| iam | 38 | 151 | 9 | 150 | IAM-01、IAM-02、IAM-03、IAM-04、IAM-05、IAM-06 | JSDOC-12 |
+| iam | 38 | 151 | 9 | 150 | IAM-01、IAM-02、IAM-03、IAM-04、IAM-05、IAM-06、IAM-07 | JSDOC-12 |
 | kit | 44 | 151 | 3 | 91 | KIT-01、KIT-02 | JSDOC-13 |
 | payment | 18 | 50 | 8 | 47 | PAY-01、PAY-02、PAY-03、PAY-04、PAY-05、PAY-06 | JSDOC-14 |
 | reach | 13 | 51 | 1 | 42 | REACH-01、REACH-02、REACH-03、REACH-04 | JSDOC-15 |
-| reldb | 17 | 84 | 4 | 57 | RELDB-01、RELDB-02 | JSDOC-16 |
-| scheduler | 14 | 71 | 38 | 67 | SCHED-01、SCHED-02 | JSDOC-17 |
+| reldb | 17 | 84 | 4 | 57 | RELDB-01、RELDB-02、RELDB-03 | JSDOC-16 |
+| scheduler | 14 | 71 | 38 | 67 | SCHED-01、SCHED-02、SCHED-03 | JSDOC-17 |
 | serv | 28 | 106 | 3 | 98 | SERV-01、SERV-02、SERV-03、SERV-04、SERV-05 | JSDOC-18 |
 | storage | 14 | 49 | 5 | 38 | STORAGE-01、STORAGE-02、STORAGE-03 | JSDOC-19 |
 | ui | 162 | 297 | 63 | 284 | UI-01、UI-02 | JSDOC-20 |
@@ -397,7 +397,7 @@
 
 - [x] 已修正并通过定向验证（2026-10-23）。
 - **实施与验证**：日志改稳定UUID及完整JSON载荷，persistence独立于业务status；共享journal终态通过owner/lease最终条件后才投影全部attempt，listLogFailures/repairLog可观测并发幂等补写且不重跑handler/业务Hook。真实提交后丢回执须重读内容一致才确认，无法确认保留pending/unknown；关闭拒绝新补写并等待在途释放。同步三语README、scheduler SKILL/reference与LLMS，调用测试改UUID。11指定文件69项通过，含真实SQLite/PG/MySQL独立多Node、原节点退出/双repair、业务账本计数1、大结果/3attempt、失租无成功投影及SCHED01回归；源/严格全scheduler测试类型、12文件lint、fresh ESM/DTS构建和skills通过，证据tmp/sched02-files.json；无旧表迁移，未宣称DB故障时外部效果自动可恢复；全量回归按用户要求在全部任务实施后执行。
-- **位置**：[packages/scheduler/src/repositories/scheduler-log-repository.ts:59](../packages/scheduler/src/repositories/scheduler-log-repository.ts#L59)。
+- **位置**：[packages/scheduler/src/repositories/scheduler-repository-log.ts:59](../packages/scheduler/src/repositories/scheduler-repository-log.ts#L59)。
 - **证据与影响**：saveLog 捕获错误后仅记录日志，不把失败交给 runner，业务执行成功与执行记录已持久化无法区分，影响故障恢复/审计。
 - **修正内容**：返回可观察的持久化结果，独立记录业务执行状态与记录提交状态；禁止因为补写日志失败就盲目重复业务任务。
 - **验收标准**：日志 DB 失败可被调用方/监控识别，恢复后可补偿；不会因记录重试再次执行已完成业务副作用。
@@ -686,7 +686,7 @@
 ### STYLE-02 · P2 · 统一文件命名并删除重复/过时实现
 
 - [ ] 待修正（按本次要求补强；范围：cross）。
-- **位置**：[packages/payment/src/providers/wechat/wechat-pay-provider.ts:5](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L5)；[packages/scheduler/src/repositories/scheduler-log-repository.ts:5](../packages/scheduler/src/repositories/scheduler-log-repository.ts#L5)；[packages/iam/src/session/iam-session-repository-cache.ts:9](../packages/iam/src/session/iam-session-repository-cache.ts#L9)；[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:33](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L33)。
+- **位置**：[packages/payment/src/providers/wechat/wechat-pay-provider.ts:5](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L5)；[packages/scheduler/src/repositories/scheduler-repository-log.ts:5](../packages/scheduler/src/repositories/scheduler-repository-log.ts#L5)；[packages/iam/src/session/iam-session-repository-cache.ts:9](../packages/iam/src/session/iam-session-repository-cache.ts#L9)；[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:33](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L33)。
 - **证据与影响**：wechat-pay、scheduler-*-repository、iam-*-repository-* 等命名顺序不同；LanceDB 本地仿造接口与兼容回退、多个 URL sanitizer 是已定位的精简入口。
 - **修正内容**：建立模块前缀/职责后缀规则并保留框架固定文件名例外；统一 repository/provider 命名。先查全仓消费者，再删除无用 export、deprecated API、重复包装，不为拆文件新增抽象。
 - **验收标准**：大小写敏感环境构建/导入通过，package exports 和模板引用无旧路径；删掉的分支有来源/无使用证据，保留行为回归通过。
@@ -871,3 +871,28 @@
 - **证据与影响**：以双LF分段无法处理标准CRLF事件；data.trim丢失有意义空格，多行data与id/retry状态不符合流协议。CRLF单事件已确认返回空数组。与AI07删除的无消费legacy客户端不是同一代码。
 - **修正内容**：维护实际共享解码器，正确处理流式换行、data拼接及事件状态；同步真实provider调用与示例。
 - **验收标准**：CRLF/LF/CR、多行与空格、UTF8和网络分片、尾部/取消均有定向回归，真实HTTP传输验证；公共/内部契约和文档一致。
+
+### IAM-07 · P1 · 登出原子撤销会话并传播失败到真实调用方
+
+- [ ] 待修正。
+- **位置**：`packages/iam/src/authn/iam-authn-functions.ts` logout、kit/serv 适配器、应用与 CLI 模板调用方。
+- **证据与影响**：真实 Redis GET/EVAL 被 ACL 拒绝时旧 logout 仍报告成功；access 已过期但 refresh 有效时先 get 返回 null，旧 logout 跳过撤销，refresh 实际仍成功。kit/部分应用还吞掉服务端失败，serv 的有效 access 守卫使过期 token 无法进入撤销路径。
+- **修正内容**：直接按所持 opaque access token 原子删除整个共享会话；不存在时幂等成功，存储故障返回失败。同步 kit HaiResult 契约、serv 入口以及应用/模板错误处理，不能将本地清凭据视为服务端已撤销。
+- **验收标准**：真实 Redis 读/CAS故障后恢复重试、过期 access/有效 refresh 撤销、重复与非法 token、HTTP 调用链均通过；三语 README、skills、类型、配置与消费者一致。
+
+### SCHED-03 · P1 · 调度租约在数据库原子语句内判定存储端时间
+
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：所有领取/开始/续租/终态/过期隔离在最终条件SQL内使用存储端执行时钟，cron发生分钟也取共享DB时间，省略时区统一UTC并保留显式IANA；Date.now只作诊断，不重放未知效果。吸收本任务必须的scheduler六源命名迁移并更新引用。旧实现三后端±2h先红；最终SQLite/PostgreSQL/MySQL各五类真实双Node场景15/15通过，含Honolulu/Tokyo、行锁越截止、实际公开Hook计数严格一次；7文件51与3文件44回归、源码及8测试严格类型、定向lint、fresh ESM/DTS、skills/env/API检查均0，三语README/双skill/矩阵/LLMS同步。证明同宿主独立进程与真实DB，不宣称跨主机分区或外部系统恰好一次；全量回归按用户要求在全部任务实施后执行。
+- **位置**：`packages/scheduler/src/repositories/scheduler-repository-execution.ts` 与租约生命周期调用。
+- **证据与影响**：claim、begin、renew、finish、expired 等仍通过 Date.now 生成期限与判定参数，快钟可提前接管，慢钟 owner 可在真实期限过后续租或提交，原 SCHED01 文档中的共享时钟说明尚未兑现。
+- **修正内容**：所有租约授权判断和新 deadline 在数据库原子 SQL 内读取实际存储时钟，覆盖等待行锁后越过租期的情况；不依赖主机时钟同步掩盖问题。
+- **验收标准**：SQLite/PostgreSQL/MySQL 真实时钟偏差与独立 Node 进程、锁等待越期限、旧 owner 续租和提交均有回归；说明、skill、状态矩阵与实现一致。
+
+### RELDB-03 · P2 · PostgreSQL JSON merge 实现递归对象补丁
+
+- [ ] 待修正。
+- **位置**：`packages/reldb/src/reldb-json.ts` createPostgresJsonOps.merge。
+- **证据与影响**：公开接口承诺 RFC 7396，但旧 PostgreSQL 使用 || 浅拼接；实际数据库 10 场景中 7 项失败，包括 null 不删除、嵌套兄弟字段丢失、标量/数组未转对象。SQLite/MySQL 使用原生 Merge Patch。
+- **修正内容**：以一次参数化数据库表达式执行对象节点和叶值补丁，不在应用先读再写；保留未变字段，null 仅删除指定键，数组整体替换。
+- **验收标准**：三种真实数据库运行相同对象补丁与并发更新，参数内保留特殊/原型字段名，类型/构建/现有JSON测试及文档/skill同步；记录对象补丁范围，不声称支持任意 JSON 作为补丁根。

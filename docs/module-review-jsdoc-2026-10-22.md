@@ -535,8 +535,8 @@
 
 ### 顶层导出定位
 
-- [packages/scheduler/src/repositories/scheduler-log-repository.ts](../packages/scheduler/src/repositories/scheduler-log-repository.ts)：`SchedulerLogRepository`（L37，J/E）。
-- [packages/scheduler/src/repositories/scheduler-task-repository.ts](../packages/scheduler/src/repositories/scheduler-task-repository.ts)：`SchedulerTaskRepository`（L59，J/E）。
+- [packages/scheduler/src/repositories/scheduler-repository-log.ts](../packages/scheduler/src/repositories/scheduler-repository-log.ts)：`SchedulerLogRepository`（L37，J/E）。
+- [packages/scheduler/src/repositories/scheduler-repository-task.ts](../packages/scheduler/src/repositories/scheduler-repository-task.ts)：`SchedulerTaskRepository`（L59，J/E）。
 - [packages/scheduler/src/scheduler-cancellation.ts](../packages/scheduler/src/scheduler-cancellation.ts)：`waitWithSignal`（L2，E）。
 - [packages/scheduler/src/scheduler-config.ts](../packages/scheduler/src/scheduler-config.ts)：`SchedulerConfig`（L41，E）；`SchedulerConfigInput`（L44，E）。
 - [packages/scheduler/src/scheduler-cron.ts](../packages/scheduler/src/scheduler-cron.ts)：`matchesCron`（L56，E）。
@@ -549,8 +549,8 @@
 
 ### 内部结构体补充定位
 
-- [packages/scheduler/src/repositories/scheduler-log-repository.ts](../packages/scheduler/src/repositories/scheduler-log-repository.ts)：`LogRow`（L22，J/E）。
-- [packages/scheduler/src/repositories/scheduler-task-repository.ts](../packages/scheduler/src/repositories/scheduler-task-repository.ts)：`TaskRow`（L43，J/E）。
+- [packages/scheduler/src/repositories/scheduler-repository-log.ts](../packages/scheduler/src/repositories/scheduler-repository-log.ts)：`LogRow`（L22，J/E）。
+- [packages/scheduler/src/repositories/scheduler-repository-task.ts](../packages/scheduler/src/repositories/scheduler-repository-task.ts)：`TaskRow`（L43，J/E）。
 - [packages/scheduler/src/scheduler-i18n.ts](../packages/scheduler/src/scheduler-i18n.ts)：`SchedulerMessageKey`（L17，E）。
 
 补充扫描定位 3 个内部结构声明。关键逻辑与示例验收须结合主清单该模块任务执行。

@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { core, err, ok } from '@h-ai/core'
 import { z } from 'zod'
-import { executionId } from './repositories/scheduler-execution-repository.js'
+import { executionId } from './repositories/scheduler-repository-execution.js'
 import { executeTask, interruptTask } from './scheduler-executor.js'
 import { getCron, getHooks, getTask, getTaskRegistry, loadPersistedTasks, unregisterTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
@@ -179,15 +179,18 @@ async function tick(): Promise<void> {
         }
       }
     }
-    scheduleDueTasks()
+    const now = await currentExecutionRepo?.currentTime()
+    if (now?.success)
+      scheduleDueTasks(now.data)
   }
   finally {
     tickInProgress = false
   }
 }
 
-function scheduleDueTasks(): void {
-  const currentMinute = Math.floor(Date.now() / 60_000)
+function scheduleDueTasks(databaseNow: number): void {
+  // 同一现实分钟的身份与 cron 匹配都来自共享 DB，不能由各节点本机时钟选定。
+  const currentMinute = Math.floor(databaseNow / 60_000)
   if (currentMinute === lastTickMinute)
     return
   lastTickMinute = currentMinute

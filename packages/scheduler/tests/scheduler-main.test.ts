@@ -5,8 +5,10 @@ import type { SchedulerTaskExecuteEvent } from '../src/scheduler-types.js'
  * =============================================================================
  */
 
+import { err } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SchedulerExecutionRepository } from '../src/repositories/scheduler-repository-execution.js'
 import { scheduler } from '../src/scheduler-main.js'
 import { HaiSchedulerError } from '../src/scheduler-types.js'
 import './helpers/sqlite-lifecycle.js'
@@ -15,6 +17,7 @@ describe('scheduler', () => {
   afterEach(async () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
     await scheduler.close()
     await reldb.close()
   })
@@ -50,9 +53,27 @@ describe('scheduler', () => {
   })
 
   describe('register / trigger', () => {
+    it('共享时间读取失败时不回退本机分钟，恢复后仍能在同一分钟调度', async () => {
+      vi.useFakeTimers()
+      const clock = vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime')
+        .mockResolvedValue(err(HaiSchedulerError.DB_SAVE_FAILED, 'Clock unavailable'))
+      const onTaskExecute = vi.fn(() => 'done')
+      expect((await scheduler.init({ tickInterval: 100, hooks: { onTaskExecute } })).success).toBe(true)
+      expect((await scheduler.register({ id: 'clock-read-failure', name: '共享时间恢复', cron: '* * * * *' })).success).toBe(true)
+      expect(scheduler.start().success).toBe(true)
+      await vi.advanceTimersByTimeAsync(200)
+      expect(onTaskExecute).not.toHaveBeenCalled()
+      clock.mockResolvedValue({ success: true, data: Date.UTC(2026, 4, 25, 4, 5, 39) })
+      await vi.advanceTimersByTimeAsync(200)
+      expect(onTaskExecute).toHaveBeenCalledTimes(1)
+      scheduler.stop()
+    })
+
     it.each([0, 39])('应按任务 timezone 匹配定时触发，启动秒数为 %i', async (second) => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date(Date.UTC(2026, 4, 25, 4, 5, second)))
+      // 此单测只验证任务时区匹配；租约与 DB 时钟由真实双进程用例验证。
+      vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime').mockResolvedValue({ success: true, data: Date.UTC(2026, 4, 25, 4, 5, second) })
       const onTaskExecute = vi.fn((event: SchedulerTaskExecuteEvent) => ({ taskId: event.task.id }))
 
       await scheduler.init({ enableDb: true, tickInterval: 100, hooks: { onTaskExecute } })

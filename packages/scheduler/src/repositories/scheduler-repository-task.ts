@@ -2,7 +2,7 @@
  * @h-ai/scheduler — 任务定义仓库
  *
  * 基于 @h-ai/reldb BaseReldbCrudRepository 实现统一任务定义的持久化与查询。
- * @module scheduler-task-repository
+ * @module scheduler-repository-task
  */
 
 import type { HaiResult } from '@h-ai/core'

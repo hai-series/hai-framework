@@ -87,7 +87,7 @@ interface TaskDefinition {
   name: string
   description?: string
   cron: string
-  timezone?: string // IANA 时区，例如 Asia/Shanghai；按该时区解释 cron 墙上时间
+  timezone?: string // IANA 时区，例如 Asia/Shanghai；省略时为 UTC，不读取节点 TZ
   enabled?: boolean
   deleteAfterRun?: boolean
   idempotent?: boolean
@@ -206,7 +206,7 @@ const logs = await scheduler.getLogs({
 | `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 実行していない       |
 | `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS コンパイルに失敗  |
 | `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 実行に失敗      |
-| `HaiSchedulerError.LOG_PERSIST_FAILED` | `hai:scheduler:032` | ログ保存未確認 |
+| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | ログ保存未確認       |
 
 ### 実行時の動作と制約
 
@@ -261,3 +261,5 @@ pnpm --filter @h-ai/scheduler test
 ## ライセンス
 
 Apache-2.0
+
+取得・開始・更新・完了・期限切れ検索・隔離の期限は、同じ SQL 文内でデータベース時刻から計算・検証します。PostgreSQL は clock_timestamp、MySQL は SYSDATE(3)、SQLite はストレージ側 now を使用し、先に時刻を読むだけでは最終条件を代替できません。cron の分 occurrence と式の照合も DB 時刻を使用します。timezone の省略時は UTC、明示した IANA 時区は壁時計の解釈だけを変更し、ノードの TZ は識別子や照合を変えません。Node の Date.now は診断専用です。ノード間で数時間の差があっても早期引継ぎや失効 owner の復活を許可せず、行ロック待機後も期限を検証します。DB 自体の時刻は運用側で信頼性を保ち、外部効果が不明な場合は自動再実行せず照合してください。
