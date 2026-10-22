@@ -52,7 +52,7 @@
 
 1. 参照 `hai-app-review` 技能审查代码规范
 2. 重构后执行受影响测试与必要回归，确认已有行为保持通过
-3. 从当前 scripts 选择门禁，按 `typecheck → lint → build（构建/配置/跨包变更）→ test → 相关 E2E` 执行；PowerShell 使用 `pnpm.cmd`
+3. 多项门禁按 [分轮验证与集中修复](validation.md) 收集一轮结果，汇总后修复、再验证；不要把目标用例的小范围 TDD 扩大为每修一处就从头运行全量门禁。PowerShell 使用 `pnpm.cmd`
 
 ## 测试目录约定
 
@@ -436,7 +436,7 @@ await expect(page).toHaveURL('/admin/articles')
 
 ## 质量门禁
 
-从当前 package.json 确认实际脚本和 workspace 名称，按变更影响选择；不要为格式/文档改动运行无关 provider 或新增镜像测试。记录执行范围、mock/真实环境、退出结果与未验证原因。
+从当前 package.json 确认实际脚本和 workspace 名称，按 [分轮验证与集中修复](validation.md) 组织以下适用检查；不要为格式/文档改动运行无关 provider 或新增镜像测试。逐轮记录范围、状态/退出码、日志、mock/真实环境与未验证原因，完整日志按需读取。
 
 ```bash
 # 运行单元测试

@@ -46,4 +46,4 @@ deploy.init 后检查 HaiResult.success，deploy.deployApp 接收 artifactDir、
 
 Linux 预备 Docker/Podman、支持 --pull never 的 Compose（Docker Compose v2 或 podman-compose 1.6.0 及以上）、sh、tar、sha256sum、awk、curl 及目录/容器权限。完整 tar 包含全部自建中间件归档；目标架构须匹配。包中有私有配置，安全搬运，不提交 Git。离线构建额外准备基础镜像、Linux 依赖缓存、工具链与原生预编译包；Windows node_modules 不能替代。
 
-执行 typecheck、lint、build、test、scaffold gates 和 test:deploy-gates。实际验证无 registry 网络的首次部署、登录刷新、同版本重发、只更新 Web/API、损坏归档、缺基线、健康失败与恢复。Windows/Linux/macOS 上传入口分别执行验收；原生安装包在对应 OS 验证。测试临时工程、容器、镜像、日志、截图和进程在 finally/teardown 清理，只清理测试拥有的资源。
+按 [分轮验证与集中修复](../hai-app-tests/validation.md) 收集适用的 typecheck、lint、build、test、scaffold gates 和 test:deploy-gates，汇总后集中修复、再验证。实际验证无 registry 网络的首次部署、登录刷新、同版本重发、只更新 Web/API、损坏归档、缺基线、健康失败与恢复。Windows/Linux/macOS 上传入口分别执行验收；原生安装包在对应 OS 验证。测试临时工程、容器、镜像、数据和进程在 finally/teardown 清理，只清理测试拥有的资源；日志、截图和报告保留到分析和交付结束再清理。

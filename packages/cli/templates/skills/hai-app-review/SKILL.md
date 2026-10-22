@@ -72,7 +72,7 @@ typecheck/lint 不能证明越权、租户隔离、事务、错误状态或资�
 
 ## 门禁与输出
 
-从当前 package.json 选择实际 scripts，优先 workspace filter；PowerShell 使用 `pnpm.cmd`。按 typecheck → lint → build（构建/配置/跨包变更）→ test → 相关 E2E 执行。浏览器、真实 provider、容器和原生交付各自报告实际结果。
+从当前 package.json 选择实际 scripts，优先 workspace filter；PowerShell 使用 `pnpm.cmd`。按 [分轮验证与集中修复](../hai-app-tests/validation.md) 先收集全部可执行门禁及日志，再归并根因、集中修复、验证失败及受影响项；普通失败不中断独立检查。浏览器、真实 provider、容器和原生交付各自报告实际结果。
 
 交付说明需求/范围、带路径与影响的发现、已复用能力和必要缺口、已修正项、已执行门禁/行为证据、同步的 contract/调用方/i18n/配置/文档，以及未验证项和原因。只读审查报告问题与验证建议；不能凭审查清单宣称所有测试通过。
 

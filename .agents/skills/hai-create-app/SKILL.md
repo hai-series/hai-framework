@@ -27,6 +27,7 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 - 名称、版本、环境、语言与日志复用 `_core.yml` 和 core.config/core.logger；SvelteKit layout 与 fullstack app.info 只公开元信息白名单。独立 Vite 客户端经 Node 解析构建默认值，Web 部署可通过 runtime-config.js 覆盖公开地址和元数据，无需重建镜像；原生包在复制静态资源前设置公开配置。不能硬编码显示副本或把完整配置交给浏览器。
 - 环境配置遵守 [六类文件与加载约定](../../../packages/cli/templates/skills/hai-app-create/development.md#环境配置)：公共基础和环境文件提交 Git，本机私有值只写 `.env.local`；完整示例逐项说明字段与约束。新增或修改变量时同步应用、模板、模块说明和根 `.env.example`。
 - 对新增行为先写有意义的目标用例，仍适用的回归保持通过；被明确新需求替代的模板断言同步更新并记录依据，同步 i18n、README 和调用方。
+- 多项门禁按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集、集中修复、再验证；普通失败不打断独立检查，不在每修一处后从头重跑全量门禁。
 
 ## 按需参考
 

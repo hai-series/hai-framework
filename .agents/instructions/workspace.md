@@ -42,15 +42,23 @@
 
 ## 验证与交付
 
-所有测试临时工程、镜像、容器、辅助进程、日志、截图与报告须在 finally/teardown 自动清理，成功、失败和取消均执行；只清理本次创建的资源，不提交验收产物。
+测试临时工程、镜像、容器、辅助进程和数据须在 finally/teardown 自动清理，成功、失败和取消均执行；只清理本次创建的资源。日志、截图与报告保留到分析和交付结束再清理，不提交验收产物。
 
 按影响范围使用 `pnpm --filter <workspace>`；跨包契约或根配置变更提升到根命令。Windows PowerShell 使用 `pnpm.cmd`。
+
+执行多项门禁必须先读 [分轮验证与集中修复](../../packages/cli/templates/skills/hai-app-tests/validation.md)。默认先收集一轮全部可执行结果，再归并根因、集中修复、开启下一轮；普通失败不立即修改并从头重跑。以下是默认调度顺序，不是遇错即停的链条：
 
 1. `pnpm typecheck`
 2. `pnpm lint`（根命令包含 `pnpm check:skills`）
 3. `pnpm build`（涉及构建、模板、发布或跨包契约）
 4. `pnpm test`
 5. `pnpm --filter <workspace> test:e2e` 或根 `pnpm e2e`（UI、路由、端到端流程）；CLI 模板交付用 `pnpm --filter @h-ai/cli test:scaffold-gates`。
+
+收集阶段使用一次脚本化调度，逐项保存退出码、耗时与日志，只读取汇总和必要失败片段。本仓库另须注意：
+
+- 根 `lint`、`build`、`test` 内含 `check:skills`、lint 或 `test:scripts` 等 `&&` 前置；前置失败不代表后面的 Turbo 任务已执行。需要继续收集时分别记录前置检查，再调度对应 Turbo 图；不能漏掉前置或把子任务结果冒充完整根门禁。修复后执行适用的原门禁确认最终结果。
+- 使用本地 Turbo 的 `--continue=dependencies-successful` 继续独立任务；依赖失败的任务记为阻塞，不用 `--continue=always` 读取旧 `dist` 验收。容器测试保留现有 `--concurrency=1`；typecheck 也可能触发依赖构建，不与清理/重写相同产物的任务并行。
+- 需要强制实际执行时使用 `--force`；本地 Turbo 的 `--no-cache` 仍可能读缓存，不能据此宣称已重新运行。复用结果须符合分轮规范的输入未变条件；真实运行验收不能由缓存代替。
 
 测试验证可观察行为，避免为措辞、纯格式修改新增镜像测试。TDD 的 Red 阶段要求新增目标用例因目标行为缺失而失败，既有回归应保持通过。
 

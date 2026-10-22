@@ -40,7 +40,7 @@
 ### Step 4：重构与验证（Refactor 阶段）
 
 1. 参照 `hai-app-review` 审查代码规范
-2. 依当前 scripts 顺序执行 `typecheck → lint → build（构建/配置/跨包变更）→ test`，优先 workspace filter，PowerShell 使用 `pnpm.cmd`
+2. 按 [分轮验证与集中修复](../hai-app-tests/validation.md) 收集适用门禁，普通失败不中断独立检查，汇总后集中修复、再验证；优先 workspace filter，PowerShell 使用 `pnpm.cmd`
 3. UI/路由/端到端改动执行相应 E2E；报告失败路径与安全验收结果，未运行的边界说明原因
 
 ## 目录结构约定

@@ -101,4 +101,4 @@ return result
 
 `packages/<module>/package.json` 的 exports 确定入口；`src/*-types.ts`、`*-config.ts` 和公共实现确定签名、Schema 与错误码。错误由 `buildHaiErrorsDef` 生成 `hai:<namespace>:<三位码>`，不要自行猜数字或把错误定义对象当 code 字符串。
 
-优先定向运行 `pnpm --filter <workspace> typecheck/lint/build/test`（分别执行），UI/路由再跑对应 test:e2e。根 lint 包含 check:skills；CLI 模板交付用 `pnpm --filter @h-ai/cli test:scaffold-gates`。详见 [工作规范](.agents/instructions/workspace.md)。未运行、mock、真实外部服务和实际部署的结果必须分别报告。
+按 [工作规范](.agents/instructions/workspace.md#验证与交付) 分轮验证：先脚本化收集可执行门禁与日志，汇总问题后集中修复，再验证失败及受影响项；普通失败不立即从头重跑。优先定向运行 `pnpm --filter <workspace> typecheck/lint/build/test`，UI/路由加相应 E2E。根 lint 包含 check:skills；CLI 模板交付用 `pnpm --filter @h-ai/cli test:scaffold-gates`。未运行、mock、真实外部服务和实际部署的结果必须分别报告。

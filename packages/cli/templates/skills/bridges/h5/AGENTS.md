@@ -60,7 +60,7 @@
 
 ## 质量门禁
 
-先核对 package.json，按影响范围执行已有脚本；文档检查引用，UI/路由变更再运行 E2E。未运行项说明原因。
+先核对 package.json，按 [分轮验证与集中修复](.agents/skills/hai-app-tests/validation.md) 收集适用检查与日志，再归并修复、复测失败及受影响项；普通失败不中断独立检查，真实前置阻塞才暂停依赖项。文档检查引用，UI/路由变更加 E2E，未运行项说明原因。
 
 ```bash
 pnpm typecheck

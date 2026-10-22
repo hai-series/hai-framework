@@ -22,6 +22,7 @@ description: "构建或排查 hai 应用的源码、容器镜像和桌面产物�
 - 功能开发先用 [development.md](../hai-app-create/development.md) 把需求匹配到当前版本的框架能力与配置；再读取所选模块 skill 和公开类型。
 - 有生命周期的模块按真实依赖初始化、检查结果并反序清理；core、纯函数和工厂不套用相同生命周期。
 - 构建任务检查当前 engines、适配器、缓存与目标产物，不能照搬框架仓库私有构建命令。
+- 多项门禁按 [分轮验证与集中修复](../hai-app-tests/validation.md) 先收集结果再集中修复；遵守产物依赖与资源隔离，不并行清理/重建同一输出目录，不用旧产物补成通过。
 
 ## 构建与部署
 
@@ -40,7 +41,7 @@ description: "构建或排查 hai 应用的源码、容器镜像和桌面产物�
 - Fullstack Capacitor App 在 `public/runtime-config.js` 提供公开 API 地址，再编译并同步原生资源；Tauri 从启动进程的 PUBLIC_API_BASE 注入。不能把开发代理的 .env 配置当作已安装原生包的运行配置。
 - `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64` 调用对应工程的 Tauri build。要求在目标系统准备 Rust target、SDK 和打包工具，不假定跨系统编译。原生安装包必须按目标系统实测。
 - deploy 默认消费已有产物，--build 显式先构建，详见 [hai-deploy](../hai-deploy/SKILL.md)。网络不通时 --bundle-only 生成 tar，按说明手工搬运；packaged 不代表部署已运行。
-- 测试临时工程、镜像、容器、辅助进程、日志、截图和报告必须在 finally/teardown 自动清理，失败/取消也清理；不得提交测试产物或删除用户既有资源。
+- 测试临时工程、镜像、容器、辅助进程和数据必须在 finally/teardown 自动清理，失败/取消也清理；日志、截图和报告保留到分析和交付结束再清理，不得提交测试产物或删除用户既有资源。
 - 浏览器测试的数据放入本轮独立临时目录；Windows 等子进程与服务退出后再删除数据库和上传文件，不依赖下一轮测试补清理。
 
 ## 按需参考

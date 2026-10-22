@@ -146,7 +146,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 
 ## §6 创建检查清单
 
-所有测试临时工程、镜像、容器、辅助进程、日志、截图与报告须在 finally/teardown 自动清理，成功、失败和取消均执行；只清理本次创建的资源，不提交验收产物。
+测试临时工程、镜像、容器、辅助进程与数据须在 finally/teardown 自动清理，成功、失败和取消均执行；只清理本次创建的资源。日志、截图与报告保留到分析和交付结束再清理，不提交验收产物。
 
 - [ ] 已答 §0 创建前四问
 - [ ] 已通过 §1 决策红线检查（无单实现 Provider / 无单组子操作）
@@ -160,4 +160,4 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
 - [ ] 测试覆盖正常 / 边界 / 多实现
 - [ ] README + 对应 CLI Skill 模板（如存在）同步
-- [ ] `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` 全部通过
+- [ ] 按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集 typecheck/lint/build/test 及适用 E2E，汇总后集中修复；最终必需门禁对最终代码均有效通过
