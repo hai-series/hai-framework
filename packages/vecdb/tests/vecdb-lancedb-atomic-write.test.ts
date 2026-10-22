@@ -121,6 +121,7 @@ describe('lancedb atomic writes', () => {
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({ id: 'one', content: 'original', metadata: '{"saved":true}' })
       expect(Array.from(rows[0].vector)).toEqual([1, 0])
+      expect(await vecdb.vector.search('docs', [1, 0], { filter: { saved: true } })).toMatchObject({ success: true, data: [{ id: 'one', metadata: { saved: true } }] })
     }
     finally {
       fixture.close()
@@ -130,7 +131,9 @@ describe('lancedb atomic writes', () => {
   it('缺少持久主键的旧表拒绝所有新增写入，不尝试自动迁移或清空', async () => {
     const database = path.join(directory, 'legacy')
     const connection = await driver.connect(database, { readConsistencyInterval: 0 })
-    const data = driver.makeArrowTable([{ id: 'one', vector: [1, 0], content: 'original', metadata: '{}' }], {}, new Map([['hai.vecdb.metric', 'cosine']]))
+    const records = [{ id: 'one', vector: [1, 0], content: 'original', metadata: '{}' }]
+    const schema = driver.makeArrowTable(records, {}, new Map([['hai.vecdb.metric', 'cosine']])).schema.assign([driver.makeJsonField('metadata', false)])
+    const data = driver.makeArrowTable(records, { schema })
     const table = await connection.createTable('docs', data)
     try {
       expect((await vecdb.init({ type: 'lancedb', path: database })).success).toBe(true)
@@ -152,11 +155,11 @@ describe('lancedb atomic writes', () => {
     const metadata = new Map([['lance-schema:unenforced-primary-key:position', '1']])
     if (flag !== undefined)
       metadata.set('lance-schema:unenforced-primary-key', flag)
-    const schema = inferred.assign(inferred.fields.map(field => field.name === 'id' ? field.clone({ nullable: false, metadata }) : field))
+    const schema = inferred.assign(inferred.fields.map(field => field.name === 'id' ? field.clone({ nullable: false, metadata }) : field.name === 'metadata' ? driver.makeJsonField('metadata', false) : field))
     const table = await connection.createEmptyTable('docs', schema)
     try {
       // 使用原生 add 构造不满足框架写契约的真实外部表，生产路径不可用它绕过检查。
-      await table.add([{ id: 'one', vector: [1, 0], content: 'original', metadata: '{"saved":true}' }])
+      await table.add(driver.makeArrowTable([{ id: 'one', vector: [1, 0], content: 'original', metadata: '{"saved":true}' }], { schema }))
       const id = (await table.schema()).fields.find(field => field.name === 'id')
       expect(id?.nullable).toBe(false)
       expect(id?.metadata.get('lance-schema:unenforced-primary-key')).toBe(flag)

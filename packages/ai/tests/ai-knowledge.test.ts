@@ -533,6 +533,22 @@ describe('knowledge retrieve', () => {
     }
   })
 
+  it('过滤查询失败转换为检索错误，不作为空的成功结果继续', async () => {
+    const { ops, store } = await setupWithData()
+    const failure = new Error('Unsupported metadata filter')
+    store.searchVectors = vi.fn(async () => {
+      throw failure
+    })
+    const filter = { owner: { name: 'alice' } }
+    const result = await ops.retrieve('AI', { filter, topK: 1 })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED.code)
+      expect(result.error.cause).toBe(failure)
+    }
+    expect(store.searchVectors).toHaveBeenCalledWith('hai_ai_knowledge1', expect.any(Array), expect.objectContaining({ filter, topK: 2 }))
+  })
+
   it('检索结果包含文档元数据', async () => {
     const { ops } = await setupWithData()
 

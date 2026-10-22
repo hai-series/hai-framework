@@ -82,7 +82,13 @@ export interface VectorDocument {
 export interface VectorSearchOptions {
   /** 返回的最大结果数（默认 10） */
   topK?: number
-  /** 元数据过滤条件（键值对，精确匹配） */
+  /**
+   * 元数据过滤，具体能力以 Provider 为准。
+   * LanceDB：顶层字面量键的 AND 精确匹配，仅支持 string、有限 number、boolean、null；
+   * 类型严格区分，null 不匹配缺失字段；空对象不筛选，不支持对象/数组/undefined。
+   * 条件在 topK 前执行，不支持的值返回 CONFIG_ERROR。其它后端不保证相同 null/复杂值语义。
+   * @example { tenant: 'acme', active: true, page: 1, removedAt: null }
+   */
   filter?: Record<string, unknown>
   /** 最低相似度阈值（0-1，低于此值的结果将被过滤） */
   minScore?: number
@@ -274,6 +280,7 @@ export interface VectorOperations {
    * @param vector - 查询向量
    * @param options - 搜索选项
    * @returns 搜索结果列表（按相似度降序排列）
+   * @example await vecdb.vector.search('docs', [1, 0], { topK: 5, filter: { tenant: 'acme', active: true } })
    */
   search: (
     collection: string,

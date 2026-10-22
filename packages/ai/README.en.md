@@ -206,6 +206,8 @@ The default DB Store propagates vector upsert and collection lookup/creation fai
 
 With LanceDB, collection dimensions and metrics persist in the Arrow schema; connection metrics only affect new collections. Reuse the same persistent directory after restart and rebuild collections when embedding dimensions change. Local paths on separate nodes do not share data; distributed Knowledge should use a server vector backend.
 
+Knowledge `retrieve/ask` and the default DB Store forward `filter` to the vector provider and propagate validation/query failures. Knowledge returns `KNOWLEDGE_RETRIEVE_FAILED` (`RAG_FAILED` from ask), without disguising failure as empty results. LanceDB supports AND equality on literal top-level keys with string, finite number, boolean, or null values, such as `{ tenant: 'acme', active: true }`. Null never matches missing keys; objects, arrays, and undefined are unsupported. Filtering precedes vector topK. Check null/complex-value semantics separately for other backends. LanceDB metadata now uses native JSON fields and retains nested JSON; rebuild legacy string-metadata collections before writing or filtering.
+
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
 if (!enriched.success) {

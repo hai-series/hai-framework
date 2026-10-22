@@ -94,6 +94,10 @@ LanceDB 原子写入的验证基线为 `@lancedb/lancedb 0.40.0 / Lance 13`。�
 
 LanceDB 的 `insert` 仅插入新 ID，已有 ID 保留不覆盖；`upsert` 新增或整体替换。同批重复 ID、缺失 merge 能力/持久主键均返回 `CONFIG_ERROR`，不执行写入。旧表需重建，不自动迁移或清空。每个 merge 独立原子提交；并发胜者由提交顺序决定，不提供多个 merge 或 reldb/vecdb 间的共同事务。框架不会回退到 delete/add；写入结果不明时按 ID 核对。直接使用原生 add 的外部写入会绕过该保护，不属于本接口保证。
 
+LanceDB 的 `metadata` 使用原生 JSON 字段，仍可存储嵌套 JSON 对象，搜索结果还原为对象。写入时显式使用 Arrow JSON schema，确保 insert/upsert 都经过 JSONB 编码；旧 Utf8 metadata 表写入或过滤返回 `CONFIG_ERROR`，须重建，不自动迁移。
+
+LanceDB 的 `filter` 仅支持顶层键的 AND 精确匹配，例如 `{ tenant: 'acme', page: 1, active: true, removedAt: null }`。值支持字符串、有限数值、布尔和 null，严格区分 `1`/`'1'`、`true`/`'true'`；null 只匹配显式 JSON null，不匹配缺失字段。键是字面量，点号/括号不代表嵌套路径，引号、反斜线、`%`、`_` 均无 SQL/通配符含义。空对象不筛选；对象、数组、undefined、非有限数值返回 `CONFIG_ERROR`，不会执行无过滤查询。过滤在向量 topK 选取前执行，随后应用 minScore。其它 Provider 沿用各自原生过滤约束，不保证相同 null、复杂值或路径语义；跨后端时须核对实际能力。JSON 查询依据：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts)。
+
 #### 操作日志
 
 可在向量数据库配置中通过 `operationLog` 开启操作日志。日志在集合/向量操作进入真实 Provider 前输出，不在 `vecdb-main.ts` 中做统一包装。

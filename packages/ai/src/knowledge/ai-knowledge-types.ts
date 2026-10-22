@@ -163,7 +163,11 @@ export interface KnowledgeRetrieveOptions {
   minScore?: number
   /** 是否启用实体增强检索（默认 true） */
   enableEntityBoost?: boolean
-  /** 元数据过滤条件 */
+  /**
+   * 透传给向量 Provider 的元数据过滤条件；LanceDB 仅支持顶层 string/有限 number/boolean/null 的 AND 匹配，null 不匹配缺失字段。
+   * 对象、数组及 undefined 不受 LanceDB 支持，过滤失败返回 KNOWLEDGE_RETRIEVE_FAILED；其它后端语义须单独核对。
+   * @example { tenant: 'acme', active: true }
+   */
   filter?: Record<string, unknown>
 }
 

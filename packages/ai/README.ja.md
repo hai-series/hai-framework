@@ -206,6 +206,8 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () 
 
 LanceDB の集合次元と metric は Arrow schema に永続化され、接続設定は新規集合にのみ影響します。再起動後は同じ永続ディレクトリを使い、embedding 次元を変更する場合は集合を再作成してください。別ノードのローカルパスは自動共有されないため、分散 Knowledge にはサーバー型ベクトルバックエンドを使用します。
 
+Knowledge の `retrieve/ask` と既定 DB Store は `filter` をベクトル Provider に渡し、検証・検索エラーを上位に伝えます。Knowledge は空結果に偽装せず `KNOWLEDGE_RETRIEVE_FAILED`（ask は `RAG_FAILED`）を返します。LanceDB は最上位のリテラルキーについて string・有限 number・boolean・null の AND 完全一致のみを支援します。例：`{ tenant: 'acme', active: true }`。null は欠落キーに一致せず、オブジェクト・配列・undefined は非対応です。フィルターはベクトル topK の前に適用します。他バックエンドの null・複合値の意味は個別に確認してください。LanceDB metadata は入れ子 JSON も保存できるネイティブ JSON フィールドになり、旧文字列形式は書き込み・フィルター前に再作成が必要です。
+
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
 if (!enriched.success) {

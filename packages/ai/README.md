@@ -206,6 +206,8 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () 
 
 使用 LanceDB 时，集合维度与 metric 随 Arrow schema 持久化；连接 metric 只影响新集合。重启后复用同一持久目录，embedding 维数改变时重建匹配集合；多个节点各自的本地路径不会自动共享，分布式 Knowledge 推荐服务端向量后端。
 
+Knowledge 的 `retrieve/ask` 及默认 DB Store 会将 `filter` 传给向量 Provider，过滤校验/查询失败会向上传播；Knowledge 返回 `KNOWLEDGE_RETRIEVE_FAILED`（ask 包装为 `RAG_FAILED`），不会伪装成空结果。LanceDB 的过滤只支持顶层键的 string/有限 number/boolean/null AND 精确匹配，例如 `{ tenant: 'acme', active: true }`；null 不匹配缺失字段，不支持对象/数组/undefined。条件在向量 topK 前执行；其它后端的 null/复杂值语义须单独核对。LanceDB 元数据改用原生 JSON 字段，仍可保存嵌套 JSON；旧字符串元数据集合须重建后才能写入或过滤。
+
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
 if (!enriched.success) {

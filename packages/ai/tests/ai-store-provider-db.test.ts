@@ -66,6 +66,18 @@ function createMockVecdb(): VecdbFunctions {
 }
 
 describe('db vector writes propagate failures', () => {
+  it.each(['vector', 'knowledge'] as const)('%s Store 原样传递 filter，过滤失败向上传播', async (kind) => {
+    const database = createMockVecdb()
+    const search = vi.spyOn(database.vector, 'search').mockResolvedValue({ success: false, error: { code: 'hai:vecdb:011', message: 'Unsupported metadata filter' } })
+    const provider = createDbStoreProvider({ sql: createMockSql([]), jsonOps, vecdb: database })
+    const options = { filter: { nested: { owner: 'alice' } }, topK: 3 }
+    const operation = kind === 'vector'
+      ? () => provider.createVectorStore('docs').search([1, 0], options)
+      : () => provider.createKnowledgeStore().searchVectors('docs', [1, 0], options)
+    await expect(operation()).rejects.toThrow('Unsupported metadata filter')
+    expect(search).toHaveBeenCalledWith('docs', [1, 0], options)
+  })
+
   it.each(['vector', 'knowledge'] as const)('%s Store 传播 exists/create/upsert 错误，不继续伪成功', async (kind) => {
     for (const phase of ['exists', 'create', 'upsert'] as const) {
       const database = createMockVecdb()

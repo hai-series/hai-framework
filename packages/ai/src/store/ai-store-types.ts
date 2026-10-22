@@ -185,7 +185,11 @@ export interface AIRelStore<T> {
 export interface AIVectorStore {
   /** 存储向量 */
   upsert: (id: string, vector: number[], metadata?: Record<string, unknown>) => Promise<void>
-  /** 向量相似度检索 */
+  /**
+   * 向量相似度检索。默认 DB Store 的 filter 透传底层 Provider，失败抛错，由领域 API 转为 HaiResult。
+   * LanceDB 只支持顶层 string/有限 number/boolean/null 的 AND 匹配，不支持嵌套结构。
+   * @example await store.search([1, 0], { filter: { tenant: 'acme', active: true } })
+   */
   search: (vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
   /** 删除向量 */
   remove: (id: string) => Promise<void>
@@ -299,7 +303,11 @@ export interface KnowledgeStore {
 
   /** 批量写入向量 */
   upsertVectors: (collection: string, vectors: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>) => Promise<void>
-  /** 向量相似度检索 */
+  /**
+   * 向量相似度检索。默认 DB Store 将 filter 透传底层 Provider，校验/查询失败抛错，不当作空结果。
+   * LanceDB 仅支持顶层 string/有限 number/boolean/null 的 AND 匹配，null 与字段缺失不同。
+   * @example await store.searchVectors('docs', [1, 0], { filter: { tenant: 'acme' } })
+   */
   searchVectors: (collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
   /** 批量删除向量 */
   removeVectors: (collection: string, ids: string[]) => Promise<void>

@@ -151,6 +151,8 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 使用 LanceDB 时，集合维度与 metric 随 Arrow schema 持久化；连接 metric 只影响新集合。重启后复用同一持久目录，embedding 维数改变时重建匹配集合；多个节点各自的本地路径不会自动共享，分布式 Knowledge 推荐服务端向量后端。
 
+Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，校验/查询失败必须传播（Knowledge 为 KNOWLEDGE_RETRIEVE_FAILED，ask 为 RAG_FAILED），不能当作空成功结果。LanceDB 仅支持顶层字面量键的 string/有限 number/boolean/null AND 匹配，例如 `{ tenant: 'acme', active: true }`；null 不匹配缺失字段，对象/数组/undefined 返回错误。过滤在向量 topK 前执行；其它后端的 null/复杂值语义须独立核对。LanceDB 原生 JSON 字段保留嵌套 JSON，但旧 Utf8 metadata 集合必须重建后才能写入或过滤。
+
 ## Context
 
 `ai.context.createManager(options)` 返回有状态管理器，适合多轮对话。

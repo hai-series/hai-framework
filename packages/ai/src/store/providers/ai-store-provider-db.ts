@@ -517,8 +517,8 @@ class VecdbAIVectorStore implements AIVectorStore {
   }
 
   async search(vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>> {
-    const result = await this.vecdb.vector.search(this.collection, vector, options)
-    return result.success ? result.data : []
+    // 过滤校验/执行失败必须向上层传播，不能伪装成空的合法检索结果。
+    return requireVecdbSuccess(await this.vecdb.vector.search(this.collection, vector, options))
   }
 
   async remove(id: string): Promise<void> {
@@ -843,8 +843,7 @@ class DbKnowledgeStore implements KnowledgeStore {
   }
 
   async searchVectors(collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>> {
-    const result = await this.vecdb.vector.search(collection, vector, options)
-    return result.success ? result.data : []
+    return requireVecdbSuccess(await this.vecdb.vector.search(collection, vector, options))
   }
 
   async removeVectors(collection: string, ids: string[]): Promise<void> {

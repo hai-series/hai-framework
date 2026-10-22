@@ -34,18 +34,33 @@ const COLLECTION_METRIC_KEY = 'hai.vecdb.metric'
 const PRIMARY_KEY_FLAG = 'lance-schema:unenforced-primary-key'
 const PRIMARY_KEY_POSITION = 'lance-schema:unenforced-primary-key:position'
 
-/** 转义 LanceDB filter 表达式中的字符串值（防注入 + LIKE 通配符） */
-function escapeLanceFilterValue(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_')
-}
-
 /** SQL 字符串字面量使用单引号，ID 中的引号按标准 SQL 转义，保留其他字符。 */
 function escapeLanceSqlValue(value: string): string {
   return value.replace(/'/g, '\'\'')
+}
+
+/** 仅支持顶层 JSON 标量的 AND 精确匹配；未知类型不能静默丢弃过滤条件。 */
+function buildMetadataPredicate(filter: Record<string, unknown>): HaiResult<string> {
+  if (typeof filter !== 'object' || filter === null || Array.isArray(filter)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(filter))
+    || Reflect.ownKeys(filter).some(key => typeof key !== 'string')) {
+    return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidMetadataFilter'))
+  }
+  const predicates: string[] = []
+  for (const [key, value] of Object.entries(filter)) {
+    if (value !== null && typeof value !== 'string' && typeof value !== 'boolean'
+      && !(typeof value === 'number' && Number.isFinite(value))) {
+      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidMetadataFilter'))
+    }
+    // json_get 只接受字面量顶层键（包括空键）；不把用户键解释为 JSONPath。
+    const extracted = `json_extract(json_get(metadata, '${escapeLanceSqlValue(key)}'), '$')`
+    // JSON 字符串仍含引号，TRY_CAST 不会把字符串/布尔/null 强转成数字。
+    // 两侧均按 JS number 的 IEEE-754 比较，避免 JSON 指数/小数文本规范化造成误拒。
+    predicates.push(typeof value === 'number'
+      ? `TRY_CAST(${extracted} AS DOUBLE) = CAST(${value} AS DOUBLE)`
+      : `${extracted} = '${escapeLanceSqlValue(JSON.stringify(value))}'`)
+  }
+  return ok(predicates.join(' AND '))
 }
 
 /**
@@ -58,6 +73,8 @@ interface CollectionMeta {
   metric: DistanceMetric
   /** id 必须是不可空的唯一主键字段，且引擎支持原子 merge。 */
   atomicWrites: boolean
+  /** 原生 JSONB 需以 Arrow JSON 文本 schema 输入，不能把字符串按二进制原样写入。 */
+  inputSchema?: Awaited<ReturnType<Table['schema']>>
 }
 
 /**
@@ -110,7 +127,12 @@ export function createLancedbProvider(): VecdbProvider {
       const atomicWrites = primaryKeys.length === 1 && idField.name === 'id' && !idField.nullable
         && ['true', '1', 'yes'].includes(idField.metadata.get(PRIMARY_KEY_FLAG)?.toLowerCase() ?? '')
         && idField.metadata.get(PRIMARY_KEY_POSITION) === '1' && typeof table.mergeInsert === 'function'
-      return await action(table, { dimension: vectorType.listSize, metric: metric.data, atomicWrites })
+      const driver = loadLancedb()
+      if (!driver.success)
+        return driver
+      const jsonMetadata = schema.fields.find(field => field.name === 'metadata')?.metadata.get('ARROW:extension:name') === 'lance.json'
+      const inputSchema = jsonMetadata ? schema.assign([driver.data.makeJsonField('metadata', false)]) : undefined
+      return await action(table, { dimension: vectorType.listSize, metric: metric.data, atomicWrites, inputSchema })
     }
     finally {
       table.close()
@@ -149,6 +171,8 @@ export function createLancedbProvider(): VecdbProvider {
 
   /** 所有新增写入都参与原生主键冲突检测；源批内重复 ID 的 merge 语义未定义，必须先拒绝。 */
   function validateAtomicWrite(meta: CollectionMeta, documents: VectorDocument[]): HaiResult<void> | null {
+    if (!meta.inputSchema)
+      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_jsonMetadataRequired'))
     if (!meta.atomicWrites)
       return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_atomicUpsertUnavailable'))
     if (new Set(documents.map(document => document.id)).size !== documents.length)
@@ -189,7 +213,7 @@ export function createLancedbProvider(): VecdbProvider {
       // 官方 Arrow 字段 metadata 可在初始 manifest 声明主键，避免 create/setPK 的可见窗口。
       const schema = inferred.assign(inferred.fields.map(field => field.name === 'id'
         ? field.clone({ nullable: false, metadata: new Map([...field.metadata, [PRIMARY_KEY_FLAG, 'true'], [PRIMARY_KEY_POSITION, '1']]) })
-        : field))
+        : field.name === 'metadata' ? driver.data.makeJsonField('metadata', false) : field))
       const table = await connection!.createEmptyTable(name, schema)
       table.close()
 
@@ -255,7 +279,10 @@ export function createLancedbProvider(): VecdbProvider {
         }))
 
         // insert 保留已有 ID，不覆盖；不得用 add 绕过并发键冲突检测。
-        await table.mergeInsert('id').whenNotMatchedInsertAll().execute(records)
+        const driver = loadLancedb()
+        if (!driver.success)
+          return driver
+        await table.mergeInsert('id').whenNotMatchedInsertAll().execute(driver.data.makeArrowTable(records, { schema: meta.inputSchema }))
 
         logger.info('Vectors inserted', { collection, count: documents.length })
         return ok(undefined)
@@ -281,11 +308,14 @@ export function createLancedbProvider(): VecdbProvider {
           metadata: JSON.stringify(doc.metadata ?? {}),
         }))
 
+        const driver = loadLancedb()
+        if (!driver.success)
+          return driver
         await table
           .mergeInsert('id')
           .whenMatchedUpdateAll()
           .whenNotMatchedInsertAll()
-          .execute(records)
+          .execute(driver.data.makeArrowTable(records, { schema: meta.inputSchema }))
 
         logger.info('Vectors upserted', { collection, count: documents.length })
         return ok(undefined)
@@ -318,16 +348,15 @@ export function createLancedbProvider(): VecdbProvider {
 
         let query = table.vectorSearch(vector).distanceType(meta.metric === 'euclidean' ? 'l2' : meta.metric).limit(topK)
 
-        // 应用元数据过滤
-        if (options?.filter) {
-          const filterParts: string[] = []
-          for (const [key, value] of Object.entries(options.filter)) {
-            // LanceDB 过滤基于 SQL WHERE 子句（metadata 为 JSON 字符串）
-            filterParts.push(`metadata LIKE '%"${escapeLanceFilterValue(key)}":"${escapeLanceFilterValue(String(value))}"%'`)
-          }
-          if (filterParts.length > 0) {
-            query = query.where(filterParts.join(' AND '))
-          }
+        if (options?.filter !== undefined) {
+          if (!meta.inputSchema)
+            return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_jsonMetadataRequired'))
+          const predicate = buildMetadataPredicate(options.filter)
+          if (!predicate.success)
+            return predicate
+          // LanceDB 默认 prefilter：先限定候选集合，再求 topK，禁止改成后过滤。
+          if (predicate.data)
+            query = query.where(predicate.data)
         }
 
         const results = await query.toArray()

@@ -94,6 +94,10 @@ LanceDB はローカルファイルを使う組み込みバックエンドです
 
 LanceDB の `insert` は既存 ID を上書きせず、`upsert` は追加または行全体を置換します。バッチ内の重複 ID、merge 能力・永続主キーの欠落は書き込み前に `CONFIG_ERROR` を返します。旧形式の集合は再作成が必要で、自動移行や削除はしません。原子性は各 merge に限られ、並行処理の勝者はコミット順で決まります。複数 merge や reldb/vecdb 間の共通トランザクションはありません。delete/add への切り替えはなく、不明な結果は ID で照合します。外部の原生 add はこの保護を迂回します。
 
+LanceDB の `metadata` はネイティブ JSON フィールドです。入れ子の JSON を保存でき、検索結果ではオブジェクトに復元します。insert/upsert とも明示的な Arrow JSON schema で JSONB に変換します。旧 Utf8 metadata テーブルへの書き込み・フィルターは `CONFIG_ERROR` を返し、再作成が必要です。自動移行はしません。
+
+LanceDB の `filter` は最上位のリテラルキーを AND で完全一致させます。例：`{ tenant: 'acme', page: 1, active: true, removedAt: null }`。値は文字列・有限数値・真偽値・null のみで、`1` と `'1'`、`true` と `'true'` を区別します。null は明示的な JSON null のみに一致し、欠落キーには一致しません。点や括弧はパスではなくキー文字です。引用符・バックスラッシュ・`%`・`_` に SQL/ワイルドカードの意味はありません。空オブジェクトは制限なしです。オブジェクト・配列・undefined・非有限数値は `CONFIG_ERROR` を返し、無条件検索に変更しません。フィルターはベクトル topK の前、minScore はその後に適用します。他の Provider の null・複合値・パスの意味は同一とは保証しません。バックエンド変更時は固有の制約を確認してください。根拠：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts)。
+
 #### 操作ログ
 
 ベクトルデータベース設定の `operationLog` で操作ログを有効にできます。ログはコレクション・ベクトル操作が実際の Provider に渡る前に出力され、`vecdb-main.ts` で一括ラップはしません。

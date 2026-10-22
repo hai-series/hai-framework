@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 33/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 34/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -489,7 +489,8 @@
 
 ### VECDB-03 · P1 · 修复 LanceDB 过滤表达式注入及类型匹配
 
-- [ ] 待修正（实施复核发现，真实LanceDB 0.40.0复现；范围：vecdb）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：LanceDB使用原生JSON字段及字面量顶层标量预过滤，修复注入/数值类型/缺失与null；旧表与不支持值失败关闭；AI Store传播搜索失败，三语README/skill同步。vecdb与AI typecheck/build、9文件lint、真实native42项（含双进程原子写与重启）、AI50项、check:skills通过；其它provider52项未在本轮执行；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/vecdb/src/providers/vecdb-provider-lancedb.ts](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts)，escapeLanceFilterValue及metadata过滤构造。
 - **证据与影响**：owner=alice正常仅返回alice；owner值为 `alice' OR TRUE --` 时返回alice和bob，单引号逃逸可绕过资源范围。数字page=1、布尔active=true被转换为字符串LIKE，均错误返回空。
 - **修正内容**：使用安全的表达式/类型化精确匹配，禁止用户值拼接逃逸SQL字面量；明确JSON字段匹配和缺失/null语义，不能用后过滤漏检替代正确topK约束。

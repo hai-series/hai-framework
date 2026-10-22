@@ -128,6 +128,10 @@ LanceDB 原子写入的验证基线为 `@lancedb/lancedb 0.40.0 / Lance 13`。�
 
 LanceDB 的 `insert` 仅插入新 ID，已有 ID 保留不覆盖；`upsert` 新增或整体替换。同批重复 ID、缺失 merge 能力/持久主键均返回 `CONFIG_ERROR`，不执行写入。旧表需重建，不自动迁移或清空。每个 merge 独立原子提交；并发胜者由提交顺序决定，不提供多个 merge 或 reldb/vecdb 间的共同事务。框架不会回退到 delete/add；写入结果不明时按 ID 核对。直接使用原生 add 的外部写入会绕过该保护，不属于本接口保证。
 
+LanceDB metadata 使用原生 JSON 字段，仍可保存嵌套 JSON 对象，搜索结果还原为对象；insert/upsert 明确使用 Arrow JSON schema 完成 JSONB 编码。旧 Utf8 metadata 表写入或过滤返回 CONFIG_ERROR，需要重建，不自动迁移。依据：[Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs)、[Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts)。
+
+LanceDB filter 只支持顶层字面量键的 AND 精确匹配，值为 string/有限 number/boolean/null；例如 `{ tenant: 'acme', page: 1, active: true, removedAt: null }`。数字/布尔不匹配同形字符串；null 只匹配显式 JSON null，不匹配缺失键。引号、反斜线、百分号、下划线均为字面量，点/括号不解释为嵌套路径。空对象不筛选；对象、数组、undefined、非有限数值返回 CONFIG_ERROR，不能忽略条件重试。过滤在向量 topK 前执行，随后应用 minScore；其它 Provider 沿用原生约束，不保证同样的 null、复杂值和路径语义。
+
 ### 向量操作 — `vecdb.vector`
 
 | 方法     | 签名                                                          | 说明          |
@@ -188,7 +192,7 @@ interface VectorDocument {
 ```typescript
 interface VectorSearchOptions {
   topK?: number // 返回数量（默认 10）
-  filter?: Record<string, unknown> // 元数据过滤（键值精确匹配）
+  filter?: Record<string, unknown> // Provider 原生约束；LanceDB 仅支持上述顶层标量 AND 匹配
   minScore?: number // 最低相似度阈值（0-1）
 }
 ```
