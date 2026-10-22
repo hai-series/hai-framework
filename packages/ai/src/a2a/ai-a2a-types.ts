@@ -168,7 +168,9 @@ export interface A2AOperations {
    * 查询 A2A 消息列表（服务端管理接口，不自动推断调用方权限）
    *
    * @param filter - 查询过滤器
-   * @returns 分页的消息记录列表
+   * @returns 分页消息；存储失败返回 A2A_LIST_MESSAGES_FAILED，不暴露原始连接错误。
+   * 日志不是交付回执，业务结果须结合 Task 的 requiresEffectReconciliation 判断。
+   * @example `const page = await ai.a2a.listMessages({ callerId: 'agent-1', limit: 20 }); if (!page.success) return page`
    */
   listMessages: (filter: A2ATaskFilter) => Promise<HaiResult<StorePage<A2AMessageRecord>>>
 

@@ -140,7 +140,9 @@ export function createContextOperations(
 
     // 后台记忆提取任务集合：chat/chatStream 的自动提取是即发即忘，flush() 统一等待，
     // 避免「AI 回答结束→下一轮召回/生成总结→上一轮记忆仍未写完」的时序问题。
-    const pendingMemoryTasks = new Set<Promise<unknown>>()
+    const pendingMemoryTasks = new Set<Promise<void>>()
+    let failedMemoryTasks = 0
+    let memoryFlush: Promise<HaiResult<void>> | undefined
 
     // 记忆注入选项：将 scope / types / minImportance / 位置等完整透传给 Memory
     function memoryInjectionOptions() {
@@ -157,21 +159,33 @@ export function createContextOperations(
 
     // 触发一次后台记忆提取并纳入 pending 集合（scope / types / 模型 / systemPrompt 完整透传）
     function enqueueMemoryExtract(userMessage: string, reply: string): void {
-      if (!options.memory?.enableExtract || !deps?.memory)
+      const memory = deps?.memory
+      const memoryOptions = options.memory
+      if (!memoryOptions?.enableExtract || !memory)
         return
       const recentMessages: ChatMessage[] = [
         { role: 'user', content: userMessage },
         { role: 'assistant', content: reply },
       ]
-      const task = deps.memory
-        .extract(recentMessages, {
+      // 将同步抛错、rejection 和失败 HaiResult 统一纳入本地观察批次；不重试未知副作用。
+      const task = Promise.resolve()
+        .then(() => memory.extract(recentMessages, {
           objectId: scope?.objectId,
-          scope: options.memory.scope,
-          types: options.memory.types,
-          model: options.memory.extractionModel,
-          systemPrompt: options.memory.extractionSystemPrompt,
+          scope: memoryOptions.scope,
+          types: memoryOptions.types,
+          model: memoryOptions.extractionModel,
+          systemPrompt: memoryOptions.extractionSystemPrompt,
+        }))
+        .then((result) => {
+          if (!result.success) {
+            failedMemoryTasks++
+            logger.warn('Background memory extraction failed', { source: 'result' })
+          }
         })
-        .catch((e: unknown) => logger.warn('Memory extract failed', { error: e }))
+        .catch(() => {
+          failedMemoryTasks++
+          logger.warn('Background memory extraction failed', { source: 'exception' })
+        })
         .finally(() => {
           pendingMemoryTasks.delete(task)
         })
@@ -370,7 +384,9 @@ export function createContextOperations(
       },
 
       async save(): Promise<HaiResult<void>> {
-        await manager.flush()
+        const flushed = await manager.flush()
+        if (!flushed.success)
+          return flushed
         try {
           // 消息即时 CAS；save 仅同步共享快照和目录，绝不覆盖远端新版本。
           await access.mutate(() => ({ value: undefined }))
@@ -380,8 +396,11 @@ export function createContextOperations(
         catch (error) { return contextFailure(error) }
       },
       async reset(resetOpts?): Promise<HaiResult<void>> {
-        if (resetOpts?.waitForMemoryTasks)
-          await manager.flush()
+        if (resetOpts?.waitForMemoryTasks) {
+          const flushed = await manager.flush()
+          if (!flushed.success)
+            return flushed
+        }
         try {
           await access.mutate((candidate) => {
             candidate.epoch = crypto.randomUUID()
@@ -437,7 +456,9 @@ export function createContextOperations(
         }
 
         // 先等待后台记忆提取完成，避免固化时短期记忆尚未落库
-        await manager.flush()
+        const flushed = await manager.flush()
+        if (!flushed.success)
+          return flushed
 
         try {
           await access.read()
@@ -482,12 +503,18 @@ export function createContextOperations(
         return pendingMemoryTasks.size
       },
 
-      async flush(): Promise<HaiResult<void>> {
-        // 快照当前任务集合后等待；提取任务失败已在 enqueue 处降级为 warn，不影响 flush 成功
-        while (pendingMemoryTasks.size > 0) {
-          await Promise.allSettled([...pendingMemoryTasks])
-        }
-        return ok(undefined)
+      flush(): Promise<HaiResult<void>> {
+        // 同轮观察者共享结果；报告后确认该批失败，下一次 flush 不重放已经执行的提取。
+        memoryFlush ??= (async () => {
+          while (pendingMemoryTasks.size > 0)
+            await Promise.allSettled([...pendingMemoryTasks])
+          const failed = failedMemoryTasks
+          failedMemoryTasks = 0
+          return failed > 0
+            ? err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_contextMemoryTasksFailed', { params: { count: failed } }))
+            : ok(undefined)
+        })().finally(() => { memoryFlush = undefined })
+        return memoryFlush
       },
 
       // ─── chat/chatStream 编排 ───
@@ -958,9 +985,12 @@ export function createContextOperations(
 
   return {
     createManager(options: ContextManagerOptions): HaiResult<ContextManager> {
-      if (!validScope(options?.scope))
-        return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_contextScopeRequired'))
-      return ok(buildManager(options))
+      try {
+        if (!validScope(options?.scope))
+          return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_contextScopeRequired'))
+        return ok(buildManager(options))
+      }
+      catch (error) { return contextFailure(error) }
     },
     async restoreManager(scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>): Promise<HaiResult<ContextManager>> {
       try {

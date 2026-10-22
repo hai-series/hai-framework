@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 6/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 7/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -423,7 +423,8 @@
 
 ### AI-03 · P2 · 统一返回 HaiResult 的异常及后台失败处理
 
-- [ ] 待修正（源码确认；范围：ai）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：Context收集同步异常/reject/失败HaiResult，flush同轮共享并报告后确认，save/reset(wait)/consolidate传播失败且不自动重试；A2A入站日志等待后重验共享代际/期限/取消，出站日志复用有界队列先持久化再发布，失败任务标需核对未知效果且同receipt不重执，查询固定984；IndexTTS统一同版本Undici fetch/Agent/FormData。同步三语README/REFERENCE/双AI skills/LLMS；130项定向（含6个实际受控Node HTTP）与三库真实双Node3项、source/严格test类型、freshAI构建、相关包类型/lint/skills通过，见tmp/ai03-files.json；无真实TTS模型推理或付费provider调用；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/ai/src/context/ai-context-functions.ts:1016](../packages/ai/src/context/ai-context-functions.ts#L1016)；[packages/ai/src/knowledge/ai-knowledge-functions.ts:145](../packages/ai/src/knowledge/ai-knowledge-functions.ts#L145)；[packages/ai/src/context/ai-context-functions.ts:127](../packages/ai/src/context/ai-context-functions.ts#L127)。
 - **证据与影响**：restoreManager 的 store.get、knowledge 的就绪检查处在对应异常转换之外；memory extract 队列只处理 rejected Promise，业务 HaiResult 失败缺少同等处理。
 - **修正内容**：按实际 API 契约补齐异常转换和 success 判断；后台任务提供可观察失败/flush 结果，流式 API 的抛错边界另行保留。

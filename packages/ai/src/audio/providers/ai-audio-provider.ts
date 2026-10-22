@@ -378,7 +378,7 @@ export function combineSignal(signal: AbortSignal | undefined, timeout: number):
 }
 
 /** 读取 HTTP 错误响应摘要（截断，避免泄露过长响应体） */
-export async function describeHttpError(response: Response): Promise<string> {
+export async function describeHttpError(response: Pick<Response, 'status' | 'text'>): Promise<string> {
   const text = await response.text().catch(() => '')
   return `HTTP ${response.status} ${text.slice(0, 200)}`.trim()
 }

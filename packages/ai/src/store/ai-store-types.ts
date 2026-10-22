@@ -177,8 +177,11 @@ export interface AIRelStoreCompareAndSwap<T> {
  * AI 关系存储适配器
  *
  * 提供统一的 KV 式 CRUD + 查询能力，由 AIStoreProvider 创建具体实现。
+ * 这是内部适配边界：读取/写入故障抛错，不能伪装为缺失、空结果或完成；
+ * 最近的非流式业务 API 负责转换为失败 HaiResult，流迭代保留抛错契约。
  *
  * @typeParam T - 记录类型
+ * @example `const page = await store.queryPage({ objectId: 'user-1' }, { limit: 20 })`
  */
 export interface AIRelStore<T> {
   /**

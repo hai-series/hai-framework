@@ -182,6 +182,8 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 A2A journal, context ownership and message tables initialize during `ai.init()`. Tasks use trusted `agentId` scopes for get/cancel/continuation. Anonymous requests share one principal; authenticate at the trusted transport boundary in production. `listMessages` is a server administration API with `callerId`, `contextId`, and `since`; never expose it to unauthorized clients.
 
+Inbound messages must persist before the executor starts, with shared generation/deadline checks repeated after that wait. Agent messages await logging inside the existing bounded event queue before journal publication. Logging failure produces a failed/interrupted Task rather than a false success; retrying the same message does not rerun business effects. Logs and the journal are separate records: a log is not proof of delivery. Reconcile possible effects using the Task's `requiresEffectReconciliation` marker. Query failures return `A2A_LIST_MESSAGES_FAILED` (984) without raw SQL or connection details.
+
 Task and events publish in one CAS, so any node can subscribe. A retry with identical message ID/content reuses the current result; changed content or an older round fails. Cross-node cancellation invokes the real execution owner's executor.cancelTask. Pending cancellation blocks new messages on the same Task so a late callback cannot affect a later execution. Input-required tasks can continue after node restart. Expired leases, absolute deadlines, or an executor returning only working become failed/interrupted with `metadata.haiExecution.requiresEffectReconciliation=true`; late owners cannot write and unknown external effects are never replayed automatically. `a2a.execution` defaults to `leaseMs: 30000`, `pollIntervalMs: 250`, `maxExecutionMs: 300000`. Limits are 1 MiB/message, 8 MiB/journal, 2048 events/round, 256 receipts/Task and 32 reference tasks. Use stable business idempotency keys and reconcile unknown effects. See the [state/deployment matrix (Chinese)](../../docs/distributed-state.md) for guarantees and validation boundaries.
 
 #### MCP Server
@@ -351,6 +353,8 @@ Cancellation, timeout, and connection problems become domain errors: `AbortSigna
 
 Browsers/mobile clients use the unified audio WebSocket exposed by `@h-ai/serv`. `@h-ai/ai/client` offers the same `audio.*` API as Node, hiding transport details. Browser clients distinguish completion, cancellation (`AUDIO_CANCELLED`), and abnormal disconnect (`AUDIO_CONNECTION_FAILED`); cancellation or disconnect before `end` throws the domain code. `synthesize` never treats incomplete audio as success.
 
+IndexTTS pairs the same Undici version's fetch, Agent, and multipart types on Node. Model `timeout` covers response-header and body waits; user cancellation returns `AUDIO_CANCELLED`, and deadlines return `AUDIO_TIMEOUT`. Dedicated connections close after success, failure, or cancellation. Segmented streaming fallback retains errors during iteration.
+
 > For self-hosted CPU/GPU model services (faster-whisper / IndexTTS / Qwen3-4B), weight downloads, and offline bundles, see [models/ (Chinese)](./models/README.md). Images and weights prefer ModelScope, with automatic HuggingFace mirror fallback.
 
 #### Image generation
@@ -389,6 +393,8 @@ Downloads require public HTTPS on default port 443 without URL credentials. Sock
 
 #### Context manager
 
+Automatic memory extraction runs locally in the background; `pendingMemoryTasks=0` does not imply success. `flush()` waits for the batch and returns `MEMORY_EXTRACT_FAILED` with a count for thrown errors or failed HaiResults. Concurrent observers share that result. Returning acknowledges the report; later flushes observe new tasks without replaying partially completed effects. `save()`, `reset({ waitForMemoryTasks: true })`, and `consolidate()` return that failure before subsequent writes. Reconcile external effects after a process crash.
+
 ```ts
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'sess-001' },
@@ -398,7 +404,8 @@ const manager = ai.context.createManager({
 })
 if (manager.success) {
   const reply = await manager.data.chat('你好')
-  await manager.data.save()
+  const saved = await manager.data.save()
+  if (!saved.success) return saved
   // reset 生命周期完整：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词
   await manager.data.reset() // 可传 { preserveSystemPrompt, cancelActiveTurn, waitForMemoryTasks }
 }

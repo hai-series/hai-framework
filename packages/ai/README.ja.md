@@ -182,6 +182,8 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 A2A の journal・context 所有者・メッセージテーブルは `ai.init()` で初期化します。取得・キャンセル・継続は信頼された `agentId` で分離します。匿名は共通主体のため、本番は信頼された伝送層で認証してください。`listMessages` は `callerId`・`contextId`・`since` を持つ管理 API であり、未認可クライアントへ公開しません。
 
+入力メッセージの永続化後、共有実行世代と期限を再確認してから executor を開始します。agent メッセージは既存の有界イベントキューでログ保存を待ち、journal に公開します。保存失敗は failed/interrupted Task となり、成功を偽装せず、同じメッセージの再送で業務を再実行しません。ログと journal は別レコードなので、ログの存在だけで配信成功と判断せず、Task の `requiresEffectReconciliation` に従って副作用を確認します。照会失敗は SQL・接続情報を含まない `A2A_LIST_MESSAGES_FAILED`（984）です。
+
 Task とイベントは同じ CAS で保存し、任意ノードで購読できます。同一 message ID/内容の再試行は同じ結果を返し、内容変更や古いラウンドは拒否します。別ノードからのキャンセルは実行 owner の executor.cancelTask を呼び、確認待ちの間は同じ Task の新規メッセージを拒否して古いコールバックの影響を防ぎます。input-required は再起動後も継続できます。租約切れ・実行期限・working のまま終了した実行器は failed/interrupted となり、`metadata.haiExecution.requiresEffectReconciliation=true` を付けます。古い owner の書き込みと未知の外部効果の自動再実行を禁止します。`a2a.execution` の既定値は `leaseMs: 30000`、`pollIntervalMs: 250`、`maxExecutionMs: 300000`。上限はメッセージ 1 MiB、journal 8 MiB、1 ラウンド 2048 イベント、Task 256 回执、reference tasks 32 件です。安定した業務冪等キーと外部効果の照合が必要です。[共有状態表（中国語）](../../docs/distributed-state.md)に保証と検証範囲を記載しています。
 
 #### MCP Server
@@ -351,6 +353,8 @@ return playable.data
 
 ブラウザー・モバイルは `@h-ai/serv` の共通音声 WebSocket を使用します。`@h-ai/ai/client` は通信詳細を隠して Node と同じ `audio.*` API を提供します。クライアントは正常終了・キャンセル（`AUDIO_CANCELLED`）・異常切断（`AUDIO_CONNECTION_FAILED`）を区別し、キャンセルや `end` 前の切断で対応コードを throw します。`synthesize` は未完了の部分音声を成功として返しません。
 
+Node の IndexTTS は同じ Undici バージョンの fetch・Agent・multipart 型を組み合わせます。モデル `timeout` は応答ヘッダーと本文の待機に適用し、利用者の取消は `AUDIO_CANCELLED`、期限超過は `AUDIO_TIMEOUT` です。成功・失敗・取消のいずれも専用接続を閉じ、区間単位ストリーミングのエラーは反復中に送出します。
+
 > 自前の CPU/GPU モデルサービス（faster-whisper / IndexTTS / Qwen3-4B）、重み取得、オフライン化は [models/（中国語）](./models/README.md) を参照してください。イメージ・重みは ModelScope を優先し、HuggingFace ミラーへ自動フォールバックします。
 
 #### 画像生成（Image）
@@ -389,6 +393,8 @@ if (result.success) {
 
 #### Context 管理
 
+自動記憶抽出は現在のノードのバックグラウンドで動作し、`pendingMemoryTasks=0` だけでは成功を示しません。`flush()` は当該バッチを待ち、例外と失敗 HaiResult を件数付き `MEMORY_EXTRACT_FAILED` として返します。同時の観測者は同じ結果を受け取り、戻り時点で報告を確認済みとし、次回は新規タスクだけを観測します。部分実行の可能性がある処理を自動再実行しません。`save()`・`reset({ waitForMemoryTasks: true })`・`consolidate()` は失敗時に後続の書き込みへ進まず、プロセス停止後の外部効果は別途確認します。
+
 ```ts
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'sess-001' },
@@ -398,7 +404,8 @@ const manager = ai.context.createManager({
 })
 if (manager.success) {
   const reply = await manager.data.chat('你好')
-  await manager.data.save()
+  const saved = await manager.data.save()
+  if (!saved.success) return saved
   // reset 生命周期完整：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词
   await manager.data.reset() // 可传 { preserveSystemPrompt, cancelActiveTurn, waitForMemoryTasks }
 }

@@ -5,10 +5,12 @@
 import type { AgentCard, Message, MessageSendParams, Task, TaskIdParams, TaskQueryParams } from '@a2a-js/sdk'
 import type { AgentExecutionEvent, AgentExecutor, ExecutionEventBus, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
 import type { AIRelStore, AIVersionedRecord } from '../store/ai-store-types.js'
+import type { A2AMessageRecord } from './ai-a2a-types.js'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { A2AError, DefaultExecutionEventBus, DefaultRequestHandler, RequestContext, ResultManager } from '@a2a-js/sdk/server'
+import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 
 /**
@@ -44,6 +46,7 @@ const FINAL_STATES = new Set(['completed', 'failed', 'canceled', 'rejected'])
 const MAX_JOURNAL_BYTES = 8 * 1024 * 1024
 const MAX_EVENTS = 2048
 const MAX_RECEIPTS = 256
+const logger = core.logger.child({ module: 'ai', scope: 'a2a-runtime' })
 
 /** 存储异常只输出固定协议错误，避免SDK把驱动连接串或SQL直接写入响应及流日志。 */
 function safeState<T>(store: AIRelStore<T>): Pick<AIRelStore<T>, 'readVersioned' | 'compareAndSwap' | 'currentTime'> {
@@ -77,10 +80,34 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
   private readonly journal: ReturnType<typeof safeState<A2AJournal>>
   private readonly contexts: ReturnType<typeof safeState<{ owner: string }>>
 
-  constructor(card: AgentCard, taskStore: TaskStore, private readonly executor: AgentExecutor, journal: AIRelStore<A2AJournal>, contexts: AIRelStore<{ owner: string }>, private readonly options: A2ARuntimeOptions) {
+  constructor(card: AgentCard, taskStore: TaskStore, private readonly executor: AgentExecutor, journal: AIRelStore<A2AJournal>, contexts: AIRelStore<{ owner: string }>, private readonly messages: AIRelStore<A2AMessageRecord>, private readonly options: A2ARuntimeOptions) {
     super(card, taskStore, executor)
     this.journal = safeState(journal)
     this.contexts = safeState(contexts)
+  }
+
+  /**
+   * 消息持久化必须被执行流程等待；稳定键使同一执行的写入不产生重复日志。
+   * 此日志不是 journal 的发布回执：之后 CAS 失租时，仍须以 Task 的未知效果标记核对业务。
+   */
+  private async saveMessage(request: RequestContext, executionId: string, message: Message): Promise<void> {
+    try {
+      const callerId = request.context?.user?.isAuthenticated ? request.context.user.userName : undefined
+      const record: A2AMessageRecord = {
+        id: `msg_${createHash('sha256').update(JSON.stringify([request.taskId, executionId, message.role, message.messageId])).digest('hex')}`,
+        taskId: request.taskId,
+        contextId: request.contextId,
+        role: message.role,
+        parts: structuredClone(message.parts),
+        createdAt: await this.journal.currentTime(),
+        ...(callerId ? { caller: { agentId: callerId } } : {}),
+      }
+      await this.messages.save(record.id, record, { objectId: callerId, status: record.role })
+    }
+    catch {
+      logger.warn('A2A message persistence failed', { direction: message.role })
+      throw A2AError.internalError(aiM('ai_a2aMessageStoreFailed'))
+    }
   }
 
   /** 只读取对应调用方的共享权威状态；DB故障向上失败。 */
@@ -258,6 +285,9 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
         // 任一事件失败后，已排队事件也不得继续持久化或通知，避免发布虚假的 completed。
         if (failed)
           return
+        // 复用已有有界发布队列；日志失败后不发布该消息，也不发布后续虚假的完成事件。
+        if (copy.kind === 'message' && copy.role === 'agent')
+          await this.saveMessage(request, initial.executionId, copy)
         await this.publish(initial.task.id, initial.owner, initial.executionId, copy)
         pending--
         local.publish(copy)
@@ -284,6 +314,7 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
       },
     }
     let cancelled = false
+    let executorStarted = false
     const heartbeat = (async () => {
       while (!signal.aborted) {
         try {
@@ -292,7 +323,7 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
             value.leasedUntil = await this.journal.currentTime() + this.options.leaseMs
             return value
           }, initial.executionId)
-          if (renewed.cancelRequested && !cancelled) {
+          if (renewed.cancelRequested && !cancelled && executorStarted) {
             cancelled = true
             await this.executor.cancelTask(initial.task.id, bus)
           }
@@ -306,9 +337,26 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
     })()
     try {
       // 领取响应本身也可能延迟；按共享时钟拒绝已知过期或关闭后才恢复的业务入口。
+      await this.saveMessage(request, initial.executionId, request.userMessage)
+      // 日志写入也可能暂停跨过租约/期限；业务入口必须重新核验共享代际和存储时钟。
+      const current = await this.read(initial.task.id, initial.owner)
       const now = await this.journal.currentTime()
-      if (this.closed || signal.aborted || now >= Math.min(initial.leasedUntil, initial.deadline))
+      if (this.closed || signal.aborted || failed || current.data.executionId !== initial.executionId || current.data.finished || current.data.interrupted
+        || now >= Math.min(current.data.leasedUntil, current.data.deadline)) {
         throw A2AError.internalError(aiM('ai_a2aExecutionInterrupted'))
+      }
+      if (current.data.cancelRequested) {
+        // 等待入站持久化时尚未进入业务，owner 可确认取消而不调用未启动执行器的取消副作用。
+        await this.mutate(initial.task.id, initial.owner, (value) => {
+          value.task.status = { state: 'canceled' }
+          value.finished = true
+          value.result = value.task
+          value.events.push({ kind: 'status-update', taskId: value.task.id, contextId: value.task.contextId, status: value.task.status, final: true })
+          return value
+        }, initial.executionId)
+        return
+      }
+      executorStarted = true
       await this.executor.execute(request, bus)
       await queue
       if (failed || signal.aborted)

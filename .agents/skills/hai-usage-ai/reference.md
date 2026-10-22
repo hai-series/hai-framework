@@ -177,6 +177,8 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 
 常用方法：`addMessage`、`getMessages`、`getTokenUsage`、`chat`、`chatStream`、`save`、`reset`、`flush`（等待后台记忆提取完成，`save` 前自动调用）、`pendingMemoryTasks`（挂起提取任务数）。`chat/chatStream` 支持 `signal` 取消。
 
+flush 对本节点后台提取的异常和失败 HaiResult 返回 MEMORY_EXTRACT_FAILED（含失败数量）；pendingMemoryTasks=0 不保证成功。同轮并发观察者共享结果，返回即确认本批报告，后续只观察新任务，不自动重放未知副作用。save、reset({ waitForMemoryTasks: true })、consolidate 会传播失败并停止后续写入，调用方必须检查 success。
+
 ## File / Rerank / Reasoning
 
 - `ai.file.parse({ content, filename, options })`：text/html/pdf/docx/ocr 解析。
@@ -185,6 +187,8 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 - `ai.reasoning.run(query, options?)` / `runStream(query, options?)`：`react`、`cot`、`plan-execute`。
 
 ## Audio
+
+IndexTTS 的 Node HTTP 请求使用同版本 Undici fetch/Agent/FormData；模型 timeout 覆盖响应头与正文等待，主动取消为 AUDIO_CANCELLED、超时为 AUDIO_TIMEOUT，结束后释放独立连接。完整调用返回 HaiResult，流式降级保留迭代抛错。
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |

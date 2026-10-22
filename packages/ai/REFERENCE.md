@@ -136,6 +136,8 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 
 ## Context
 
+本节点后台记忆提取的异常和失败 HaiResult 均由 flush 返回 MEMORY_EXTRACT_FAILED（含数量）；pendingMemoryTasks=0 不保证成功。同轮并发 flush 共享结果，返回即确认本批报告，下一批独立观察，不自动重放副作用。save/reset(waitForMemoryTasks)/consolidate 必须检查并传播该失败，失败时不进行后续状态/记忆写入。
+
 `scope` 必填；共享 scope 用版本化聚合记录保存消息、摘要、owner、轮次和 pending。所有消息、对外 delta 与提交即时持久化。同步 getters 仅返回本管理器最近一次成功读写的独立快照，读取其他节点修改前调用 `await manager.reload()` 或 `restoreManager()`。`save()` 等待本节点记忆提取、刷新快照并同步目录，不能覆盖远端版本。`markTurnSpeaking` 为异步持久化方法。
 
 共享单活动生成租约为存储端时钟30秒，每10秒续租，最终 CAS 同时检查版本、owner 和截止时间。过期生成仅 interrupted，不自动重放 LLM/工具/记忆；manual pending 持久保存，可跨节点/重启按 turnId 提交。相同终态与真实文本重复提交幂等，内容冲突失败。queue 可取消轮询，不保证FIFO。reset 更换共享纪元，删除保留永久墓碑且 scope 不复用。外部 LLM/工具/本地后台记忆不与上下文跨系统原子提交；崩溃后的未知副作用必须由应用核对。
@@ -165,6 +167,8 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 - `ai.reasoning.run(query, options?)` / `runStream(query, options?)`：`react`、`cot`、`plan-execute`。
 
 ## Audio
+
+IndexTTS 在 Node 使用同版本 Undici fetch/Agent/FormData，模型 timeout 覆盖响应头与正文等待；主动取消为 AUDIO_CANCELLED，超时为 AUDIO_TIMEOUT，成功/失败/取消均关闭连接。完整调用返回 HaiResult，按段流式降级仍在迭代中抛错。
 
 - `transcribe(request)`：完整音频 → `HaiResult<TranscriptionResult>`（`text`，可选 `language` / `durationMs` / `segments[]`，词级时间戳存于 `segments[].words`，毫秒整数）。
 - `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<TranscriptionEvent>`。事件为 `speech_started` / `{ type: 'transcript', text, final, startMs?, endMs?, words? }` / `speech_stopped`（支持服务端 VAD 的平台产出语音起止事件，可据此即时反应）。无原生流式的平台（如 whisper）：完整音频降级为最终结果，持续音频输入 → `AUDIO_UNSUPPORTED_INPUT`。
@@ -202,6 +206,8 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 Pollinations 提供免费额度的开发者 API Key，额度与可用模型以其控制台为准；它不是无限量或无认证服务。其社区文生图模型可能只支持纯文本，参考图必须选择支持 edits 的模型（如文档列出的 `nanobanana`、`seedream`、`klein` 等）。OpenAI API 的 Free tier 不支持 GPT Image。各厂商计费、模型名和预览状态会变化，生产配置应锁定已验证的模型 ID。
 
 ## A2A
+
+入站日志落库后重验执行代际/期限才启动 executor，出站 agent 日志在已有有界事件队列中等待成功后才发布 journal。日志失败会使 Task failed/interrupted，重复 receipt 不重执；日志与 journal 无跨记录原子性，已有日志不是交付回执，须核对 requiresEffectReconciliation。listMessages 的存储失败返回安全的 A2A_LIST_MESSAGES_FAILED（984）。
 
 - `registerExecutor(executor)`：注册 Agent executor。
 - `getAgentCard()`：获取完整 A2A 0.3 Agent Card，含 streaming/MIME/securitySchemes；默认发现路径为 `/.well-known/agent-card.json`。

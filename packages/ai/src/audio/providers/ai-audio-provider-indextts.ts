@@ -10,14 +10,13 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { Dispatcher } from 'undici'
+import type { Headers } from 'undici'
 
 import type { AudioFormat, AudioModelCapabilities, AudioReference, SynthesisResult } from '../ai-audio-types.js'
 
 import type { AudioProvider, ProviderSynthesisRequest, SynthesisOutputMeta } from './ai-audio-provider.js'
-import process from 'node:process'
-
 import { core, err, ok } from '@h-ai/core'
+import { Agent, fetch as fetchAudio, FormData } from 'undici'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
 import { combineSignal, describeHttpError, errorMessage, toAudioBlob, toAudioErrorResult, toAudioUploadPart } from './ai-audio-provider.js'
@@ -62,6 +61,7 @@ export function createIndexTtsAudioProvider(): AudioProvider {
       return err(HaiAIError.AUDIO_INVALID_REQUEST, aiM('ai_audioInvalidRequest', { params: { reason: 'speaker_reference is required' } }))
 
     const out = resolveSynthesisOutput({ format, sampleRate })
+    let requestSignal = signal
     try {
       const form = new FormData()
       form.append('text', text)
@@ -88,16 +88,21 @@ export function createIndexTtsAudioProvider(): AudioProvider {
       if (model.apiKey)
         headers.Authorization = `Bearer ${model.apiKey}`
 
-      const dispatcher = await createNodeDispatcher(model.timeout)
+      requestSignal = combineSignal(signal, model.timeout)
+      // Agent 与 fetch 来自同一 Undici 版本，避免与 Node 内置 fetch 的 dispatcher 协议混用。
+      const dispatcher = new Agent({
+        connectTimeout: Math.min(model.timeout, 30_000),
+        headersTimeout: model.timeout,
+        bodyTimeout: model.timeout,
+      })
       try {
-        const requestInit: RequestInit & { dispatcher?: Dispatcher } = {
+        const response = await fetchAudio(`${model.baseUrl.replace(/\/$/, '')}/audio/speech`, {
           method: 'POST',
           headers,
           body: form,
-          signal: combineSignal(signal, model.timeout),
-          ...(dispatcher ? { dispatcher } : {}),
-        }
-        const response = await fetch(`${model.baseUrl.replace(/\/$/, '')}/audio/speech`, requestInit)
+          signal: requestSignal,
+          dispatcher,
+        })
         if (!response.ok)
           return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
 
@@ -105,12 +110,12 @@ export function createIndexTtsAudioProvider(): AudioProvider {
         return ok(buildSynthesisResult(data, out, response.headers))
       }
       finally {
-        await dispatcher?.close()
+        await dispatcher.close()
       }
     }
     catch (error) {
       logger.debug('IndexTTS synthesize failed', { error: errorMessage(error) })
-      return toAudioErrorResult(error, signal)
+      return toAudioErrorResult(error, requestSignal)
     }
   }
 
@@ -118,22 +123,6 @@ export function createIndexTtsAudioProvider(): AudioProvider {
     synthesis: { synthesize, resolveSynthesisOutput },
     getCapabilities: () => INDEX_TTS_CAPABILITIES,
   }
-}
-
-/**
- * Node 内置 fetch 的响应头等待上限可能早于模型配置超时；CPU TTS 首次推理尤其容易触发。
- * 仅在 Node 环境创建独立调度器，使连接、响应头和响应体超时都服从模型 timeout。
- */
-async function createNodeDispatcher(timeout: number): Promise<Dispatcher | undefined> {
-  if (typeof process === 'undefined' || !process.versions?.node)
-    return undefined
-
-  const { Agent } = await import('undici')
-  return new Agent({
-    connectTimeout: Math.min(timeout, 30_000),
-    headersTimeout: timeout,
-    bodyTimeout: timeout,
-  })
 }
 
 /** IndexTTS 未指定格式时默认 wav；pcm16 时补默认采样率 24000。 */

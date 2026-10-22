@@ -257,7 +257,8 @@ const managerResult = ai.context.createManager({
 if (!managerResult.success) return managerResult
 
 const reply = await managerResult.data.chat('你好')
-await managerResult.data.save()
+const saved = await managerResult.data.save()
+if (!saved.success) return saved
 ```
 
 ### 真实对话状态（Conversation Commit Layer）
@@ -395,3 +396,5 @@ export const POST = kit.handler(async ({ request }) => {
 - 批量导入、批量 embedding 用批量 API，避免 await-in-loop。
 - 文件解析/OCR 失败按 `HaiAIError.FILE_*` 返回，不抛业务异常。
 - A2A 认证失败返回 `A2A_AUTH_FAILED`；`callRemoteAgent` 只依赖 `ai.init()`，无需注册本地 executor。远端 URL 仅接受 HTTP(S) 且不得内嵌凭据，应用仍须配置 origin 白名单与出口网络策略。不要记录 token、apiKey、私钥、完整 headers 或带 query 的 URL。
+- A2A 入站日志保存并重验租约后才执行业务，出站日志在已有有界队列内完成后才发布；日志失败产生 failed/interrupted Task，不重放相同 receipt。日志不是交付回执，按 requiresEffectReconciliation 核对可能已执行的效果；listMessages 失败为安全的 A2A_LIST_MESSAGES_FAILED（984）。
+- Context 的 flush 会报告本节点后台提取异常及失败 HaiResult；同轮并发调用共享一次报告，返回即确认该批，后续只观察新任务。save/reset(waitForMemoryTasks)/consolidate 传播失败并停止后续写入，pendingMemoryTasks=0 不代表成功，不自动重试未知副作用。

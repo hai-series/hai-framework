@@ -7,7 +7,7 @@
  */
 
 import type { Message, Task } from '@a2a-js/sdk'
-import type { AgentExecutor, ExecutionEventBus, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
+import type { AgentExecutor, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
 import type { HaiResult } from '@h-ai/core'
 
 import type { A2AConfig } from '../ai-config.js'
@@ -63,11 +63,6 @@ function validateRemoteUrl(remoteUrl: string): ValidatedRemoteUrl {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? value as Record<string, unknown> : undefined
-}
-
-function isAgentMessageEvent(event: unknown): event is { role: 'agent', parts?: unknown[] } {
-  const record = asRecord(event)
-  return record?.role === 'agent' && (record.parts === undefined || Array.isArray(record.parts))
 }
 
 function isTaskResult(value: unknown): value is Task {
@@ -187,69 +182,6 @@ export class ReldbA2ATaskStore implements TaskStore {
   }
 }
 
-// ─── A2A 消息日志拦截器 ───
-
-/**
- * 创建带消息日志的 AgentExecutor 包装器
- *
- * 在真实 AgentExecutor.execute 前后记录入站消息和出站响应到 messageStore。
- */
-function wrapExecutorWithLogging(
-  executor: AgentExecutor,
-  messageStore: AIRelStore<A2AMessageRecord>,
-): AgentExecutor {
-  return {
-    async execute(requestContext, eventBus) {
-      // 记录入站消息
-      const inboundRecord: A2AMessageRecord = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-        taskId: requestContext.taskId,
-        contextId: requestContext.contextId,
-        role: 'user',
-        parts: requestContext.userMessage.parts ?? [],
-        createdAt: Date.now(),
-      }
-      const callerId = requestContext.context?.user?.isAuthenticated ? requestContext.context.user.userName : undefined
-      if (callerId)
-        inboundRecord.caller = { agentId: callerId }
-      messageStore.save(inboundRecord.id, inboundRecord, { objectId: callerId, status: 'user' })
-        .catch(e => logger.warn('Failed to save inbound A2A message', { error: e }))
-
-      // 监听出站事件并记录
-      const originalPublish = eventBus.publish.bind(eventBus)
-      // SDK event bus 继承原生 EventTarget，不能用 Object.create 伪造 receiver。
-      const wrappedBus: ExecutionEventBus = {
-        on: eventBus.on.bind(eventBus),
-        off: eventBus.off.bind(eventBus),
-        once: eventBus.once.bind(eventBus),
-        removeAllListeners: eventBus.removeAllListeners.bind(eventBus),
-        finished: eventBus.finished.bind(eventBus),
-        publish(event) {
-        // SDK 未提供 ExecutionEvent 的类型守卫；先做最小运行时判别，再记录 agent 消息。
-          if (isAgentMessageEvent(event)) {
-            const outboundRecord: A2AMessageRecord = {
-              id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-              taskId: requestContext.taskId,
-              contextId: requestContext.contextId,
-              role: 'agent',
-              parts: event.parts ?? [],
-              createdAt: Date.now(),
-            }
-            messageStore.save(outboundRecord.id, outboundRecord, { objectId: callerId, status: 'agent' })
-              .catch(e => logger.warn('Failed to save outbound A2A message', { error: e }))
-          }
-          originalPublish(event)
-        },
-      }
-
-      await executor.execute(requestContext, wrappedBus)
-    },
-    async cancelTask(taskId, eventBus) {
-      await executor.cancelTask(taskId, eventBus)
-    },
-  }
-}
-
 // ─── 工厂函数 ───
 
 /** A2A 子功能组装依赖 */
@@ -304,8 +236,7 @@ export function createA2AOperations(
   // 构建 SDK 层
   const agentCard = buildAgentCard(agentCardConfig)
   const a2aTaskStore = new ReldbA2ATaskStore(taskStore)
-  const wrappedExecutor = wrapExecutorWithLogging(options.executor, messageStore)
-  const requestHandler = new SharedA2ARequestHandler(agentCard, a2aTaskStore, wrappedExecutor, journalStore, contextStore, { leaseMs: 30000, pollIntervalMs: 250, maxExecutionMs: 300000, ...options.runtime })
+  const requestHandler = new SharedA2ARequestHandler(agentCard, a2aTaskStore, options.executor, journalStore, contextStore, messageStore, { leaseMs: 30000, pollIntervalMs: 250, maxExecutionMs: 300000, ...options.runtime })
   const transportHandler = new JsonRpcTransportHandler(requestHandler)
 
   return {
@@ -358,8 +289,8 @@ export function createA2AOperations(
         )
         return ok(page)
       }
-      catch (error) {
-        return err(HaiAIError.STORE_FAILED, aiM('ai_a2aListMessagesFailed', { params: { error: String(error) } }), error)
+      catch {
+        return err(HaiAIError.A2A_LIST_MESSAGES_FAILED, aiM('ai_a2aListMessagesFailed'))
       }
     },
 

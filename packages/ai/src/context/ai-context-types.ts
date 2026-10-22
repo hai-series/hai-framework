@@ -267,8 +267,8 @@ export interface ContextResetOptions {
   /**
    * 是否等待后台记忆提取任务完成后再清空（默认 `false`）
    *
-   * 为 `true` 时先 `flush()` 等待正在运行的记忆提取写入完成；否则不等待
-   * （已在途的提取任务仍会自行写入记忆后端，但其结果不再影响本管理器状态）。
+   * 为 `true` 时先 `flush()`，失败即返回且不清空上下文；否则不等待。
+   * 已在途提取仍可能写入外部记忆，异常/失败仍由之后的 flush 报告，不自动重放。
    */
   waitForMemoryTasks?: boolean
 }
@@ -417,14 +417,19 @@ export interface ContextManager {
    * chat/chatStream 的自动记忆提取是「即发即忘」的后台任务；在开始下一轮召回、
    * 生成总结或关闭前调用 `flush()`，可避免「上一轮记忆尚未写完」的时序问题（issue #14）。
    *
-   * @returns 全部任务完成返回 ok(undefined)
+   * 同轮并发调用共享结果；异常或失败 HaiResult 均返回 MEMORY_EXTRACT_FAILED（含失败数量）。
+   * 返回即确认本批报告，后续 flush 只观察新任务；不会自动重放可能已部分执行的副作用。
+   * 只等待当前管理器所在节点的任务，不是分布式队列或跨系统事务。
+   *
+   * @returns 本批全部成功返回 ok(undefined)；失败须由调用方核对实际记忆状态。
+   * @example `const flushed = await manager.flush(); if (!flushed.success) reportFailure(flushed.error)`
    */
   flush: () => Promise<HaiResult<void>>
 
   /**
    * 当前挂起的后台记忆提取任务数量
    *
-   * 供应用侧观测；为 0 表示无待写入的记忆任务。
+   * 供应用侧观测；为 0 只表示没有在途任务，历史失败仍需通过 flush() 观察。
    */
   readonly pendingMemoryTasks: number
 
