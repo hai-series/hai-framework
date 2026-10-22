@@ -78,6 +78,7 @@ apps/{app-name}/
 import type { Handle } from '@sveltejs/kit'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
+import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -123,7 +124,7 @@ const haiHandle = kit.createHandle({
     publicPaths: ['/api/auth/*', '/api/public/*'],
     operations: () => iam.auth,
   },
-  rateLimit: { windowMs: 60000, maxRequests: 100 },
+  rateLimit: { windowMs: 60000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
 })
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)
@@ -500,3 +501,5 @@ export const { apiFetch } = client
 - [ ] 响应用 `kit.response.*`
 - [ ] HaiResult 错误用 `kit.response.fromError` 转换
 - [ ] 无依赖数据用 `Promise.all` 并行加载
+
+生产限流必须先初始化共享 Redis，并显式传入原子 store；createCacheRateLimitStore 以单键 CAS 和首次提交 TTL 实现固定窗口（非滑动窗口），不支持非原子 get+set 回退。缓存故障/冲突耗尽返回503，超限429。内存仅开发/显式端到端测试可选；代理须由可信 SvelteKit adapter 配置 getClientAddress，不在应用中直接信任 X-Forwarded-For。未选择 cache 的 CLI 应用默认不启用限流，启用前应新增共享后端。

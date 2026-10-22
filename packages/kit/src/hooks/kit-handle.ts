@@ -66,7 +66,7 @@ function applyDefaultSecurityHeaders(response: Response): void {
  *     protectedPaths: ['/admin/*', '/api/*'],
  *     publicPaths: ['/api/auth/*', '/api/public/*'],
  *   },
- *   rateLimit: { maxRequests: 100 },
+ *   rateLimit: { maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
  *   crypto: { crypto, transport: { serverKeyRing, keyStore } },
  * })
  * ```
@@ -110,6 +110,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
   }
   if (rateLimitConfig) {
     builtinMiddleware.push(rateLimitMiddlewareFn({
+      ...rateLimitConfig,
       windowMs: rateLimitConfig.windowMs ?? 60000,
       maxRequests: rateLimitConfig.maxRequests ?? 100,
     }))

@@ -27,6 +27,7 @@ import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
 import { IdParamSchema, PaginationQuerySchema, validateFormOrFail, validateParamsOrFail, validateQueryOrFail } from './kit-validation.js'
+import { createCacheRateLimitStore, createMemoryRateLimitStore, rateLimitMiddleware } from './middleware/kit-ratelimit.js'
 
 export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
 
@@ -37,6 +38,13 @@ export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
  * 所有功能均为无状态工厂函数或工具函数。
  */
 export const kit = {
+  /** 原子限流工厂；共享store生命周期由应用管理。 */
+  middleware: {
+    rateLimit: rateLimitMiddleware,
+    createCacheRateLimitStore,
+    createMemoryRateLimitStore,
+  },
+
   // ─── Handle Hook ───
 
   /** 创建 SvelteKit Handle Hook（含 auth / logging / rateLimit 内置配置） */

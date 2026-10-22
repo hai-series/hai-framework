@@ -249,7 +249,7 @@ export interface HandleAuthConfig {
  *     protectedPaths: ['/admin/*', '/api/*'],
  *     publicPaths: ['/api/auth/*'],
  *   },
- *   rateLimit: { maxRequests: 100 },
+ *   rateLimit: { maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
  *   crypto: { crypto, transport: { serverKeyRing, keyStore } },
  * })
  * ```
@@ -268,7 +268,7 @@ export interface HandleConfig {
    * 提供对象启用速率限制；设为 `false` 显式禁用。
    * 不提供则不开启速率限制。
    */
-  rateLimit?: { windowMs?: number, maxRequests?: number } | false
+  rateLimit?: Omit<RateLimitConfig, 'windowMs' | 'maxRequests'> & { windowMs?: number, maxRequests?: number } | false
   /**
    * 请求日志配置
    *
@@ -482,14 +482,15 @@ export interface FormValidationResult<T> {
 /**
  * 速率限制配置
  *
- * 基于可插拔存储的滑动窗口限流。超限后返回 429 状态码与 `Retry-After` 响应头。
- * 默认使用内存存储（单进程），多实例部署请传入分布式 `store` 实现。
+ * 基于可插拔原子存储的固定窗口限流。超限后返回 429 状态码与 `Retry-After` 响应头。
+ * 必须显式传入 store；生产使用共享计数器，故障返回503。
  *
  * @example
  * ```ts
  * kit.middleware.rateLimit({
  *   windowMs: 60_000,   // 1 分钟
  *   maxRequests: 100,   // 最多 100 次
+ *   store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' }),
  * })
  * ```
  */
@@ -505,10 +506,9 @@ export interface RateLimitConfig {
   /**
    * 自定义存储实现
    *
-   * 默认使用 `MemoryRateLimitStore`（单进程）。
-   * 多实例部署时传入基于 Redis / @h-ai/cache 的分布式 Store。
+   * 必须提供原子 increment；不支持 get+set 回退。共享缓存由调用方初始化和关闭。
    */
-  store?: RateLimitStore
+  store: RateLimitStore
 }
 
 /**

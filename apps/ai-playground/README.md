@@ -120,3 +120,5 @@ HAI_E2E_LIVE=1 pnpm --filter ai-playground exec playwright test live-ai.spec.ts
 ## 许可证
 
 Apache-2.0
+
+服务端限流使用 @h-ai/cache：开发默认memory，生产必须配置共享Redis（HAI_CACHE_TYPE=redis及连接参数），并确保所有实例使用相同namespace和窗口。缓存不可用时503，超限429；HAI_E2E_MOCK仅用于测试，不得用于部署。初始化由hooks保证，AI和限流使用同一config目录。

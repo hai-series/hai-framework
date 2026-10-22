@@ -5,10 +5,16 @@
  */
 
 import type { Handle } from '@sveltejs/kit'
+{{#if features.cache}}
+import process from 'node:process'
+{{/if}}
 {{#if hasI18n}}
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 {{/if}}
 import { initApp } from '$lib/server/init.js'
+{{#if features.cache}}
+import { cache } from '@h-ai/cache'
+{{/if}}
 import { core } from '@h-ai/core'
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
@@ -93,7 +99,12 @@ const haiHandle = kit.createHandle({
     operations: () => iam.auth,
   },
 {{/if}}
-  rateLimit: { windowMs: 60000, maxRequests: 200 },
+{{#if features.cache}}
+  rateLimit: { windowMs: 60000, maxRequests: 200, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: '{{projectName}}', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' }) },
+{{else}}
+  // 未选择cache能力时不启用限流；启用前须接入共享原子store。
+  rateLimit: false,
+{{/if}}
   logging: { logBody: false },
   onError: (error: unknown, _event) => {
     core.logger.error('Request error:', { error })

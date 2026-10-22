@@ -76,6 +76,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/cache": "workspace:*",
     "@sveltejs/kit": "catalog:",
     "@types/node": "catalog:",
     "rimraf": "catalog:",

@@ -80,6 +80,7 @@ When using Crypto or Kit/IAM, include `sm-crypto@0.5.7` in application productio
 
 ```typescript
 import type { Handle } from '@sveltejs/kit'
+import { cache } from '@h-ai/cache'
 import { kit } from '@h-ai/kit'
 
 const haiHandle = kit.createHandle({
@@ -91,12 +92,14 @@ const haiHandle = kit.createHandle({
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/api/auth/*', '/api/public/*'],
   },
-  rateLimit: { windowMs: 60_000, maxRequests: 100 },
+  rateLimit: { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
   logging: true,
 })
 
 export const handle: Handle = haiHandle
 ```
+
+Rate limits use fixed windows beginning at the first successful commit; later requests preserve the TTL. A store is required. Initialize shared Redis and check its result before serving; all nodes use the same namespace/windowMs/maxRequests. Cache read/commit failure or exhausted contention returns 503, while exceeding the limit returns 429, without get+set or local fallback. createMemoryRateLimitStore is for development or explicit HAI_E2E/HAI_E2E_MOCK tests; its creator calls stopCleanup. Never enable test flags in production. Reset headers estimate node time; Redis TTL controls the actual window, so synchronize clocks. The default key uses the trusted adapter getClientAddress, normalizes equivalent IPv6/mapped IPv4 addresses and ignores raw forwarded headers; configure proxy trust in the deployment adapter.
 
 #### API endpoints
 

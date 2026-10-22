@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 31/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 32/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -210,7 +210,8 @@
 
 ### KIT-01 · P1 · 把生产限流改为共享原子操作
 
-- [ ] 待修正（源码探针已复现；范围：kit）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：限流强制显式原子store，删除get+set回退和隐式内存默认；共享Redis单键CAS计数且保留首次TTL，仅键实际到期可新建窗口，节点时钟差不提前清零。开发/显式E2E可选内存，生产失败关闭503；规范化IPv6/映射IPv4且不采信原始代理头。同步Handle参数/公开工厂、4应用与AI示例共享cache初始化/依赖、CLI有cache及无cache分支、三语README/skills/LLMS/环境示例。4文件29项最终通过，含真实两个HTTP Node+Redis 40次总放行5次（节点时钟差2小时）、窗口TTL/故障/代理/测试例外；4应用typecheck0错误警告，kit typecheck/build、75模板定向及2个实际hooks生成lint、ESLint/skills通过；offline首次缺跨平台metadata后online frozen及再次offline frozen安装通过，未变依赖版本。内存清理进一步简化留KIT02；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/kit/src/middleware/kit-ratelimit.ts:188](../packages/kit/src/middleware/kit-ratelimit.ts#L188)；[packages/kit/src/middleware/kit-ratelimit.ts:176](../packages/kit/src/middleware/kit-ratelimit.ts#L176)。
 - **证据与影响**：默认 store 为进程内存，支持异步 get/set 的共享 store 在无 increment 时仍走读改写。探针在 maxRequests=1 下并发 10 次全部通过，最终计数为 1。
 - **修正内容**：生产多实例必须选择原子共享计数器，移除不安全 get+set 回退；保留显式开发/测试 memory 模式。明确当前固定窗口与文档所称滑动窗口的区别并统一实现/说明。

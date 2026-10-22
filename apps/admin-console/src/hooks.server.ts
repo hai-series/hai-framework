@@ -12,6 +12,7 @@ import process from 'node:process'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { getAdminKitConfig } from '$lib/server/kit-config.js'
+import { cache } from '@h-ai/cache'
 import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -175,6 +176,7 @@ async function createHaiHandle(): Promise<Handle> {
       operations: () => iam.auth,
     },
     rateLimit: {
+      store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'admin-console', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }),
       windowMs: 60000,
       maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100,
     },

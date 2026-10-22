@@ -86,6 +86,7 @@ Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypt
 
 ```typescript
 import type { Handle } from '@sveltejs/kit'
+import { cache } from '@h-ai/cache'
 import { kit } from '@h-ai/kit'
 
 const haiHandle = kit.createHandle({
@@ -97,12 +98,14 @@ const haiHandle = kit.createHandle({
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/api/auth/*', '/api/public/*'],
   },
-  rateLimit: { windowMs: 60_000, maxRequests: 100 },
+  rateLimit: { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
   logging: true,
 })
 
 export const handle: Handle = haiHandle
 ```
+
+最初の確定時点から固定ウィンドウを開始し、後続リクエストはTTLを延長しません。storeは必須です。共有Redisの初期化成功を確認し、全ノードのnamespace/windowMs/maxRequestsを一致させます。キャッシュ障害や競合上限は503、超過は429で、get+setやローカル計数へフォールバックしません。createMemoryRateLimitStoreは開発または明示HAI_E2E/HAI_E2E_MOCKテスト用で、作成者がstopCleanupを呼びます。本番でテスト変数を設定しません。ヘッダー時刻は推定、実際の期間はRedis TTLで制御するため時計を同期します。キーは信頼済みadapterのgetClientAddressのみ使い、等価IPv6/IPv4表記を正規化します。生の転送ヘッダーを信頼せず、代理信頼はadapterで設定します。
 
 #### API endpoint
 
