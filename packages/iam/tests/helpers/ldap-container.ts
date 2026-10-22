@@ -53,7 +53,7 @@ export async function acquireLdapContainer(): Promise<LdapContainerLease> {
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('osixia/openldap:latest')
+    containerPromise = new GenericContainer('docker.io/osixia/openldap:1.5.0')
       .withExposedPorts(389)
       .withEnvironment({
         LDAP_ORGANISATION: 'Example Inc',

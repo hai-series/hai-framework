@@ -32,7 +32,7 @@ export async function acquireQdrantContainer(): Promise<QdrantContainerLease> {
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('qdrant/qdrant:latest')
+    containerPromise = new GenericContainer('docker.io/qdrant/qdrant:v1.19.2')
       .withExposedPorts(6333, 6334)
       .withWaitStrategy(Wait.forLogMessage('Qdrant HTTP listening'))
       .start()

@@ -41,7 +41,7 @@ const server = createServer(async (request, response) => {
 })
 async function start() {
   if (process.env.IAM_FIXTURE_LDAP === '1') {
-    ldap = await new GenericContainer('osixia/openldap:latest')
+    ldap = await new GenericContainer('docker.io/osixia/openldap:1.5.0')
       .withExposedPorts({ container: 389, host: 12583 })
       .withEnvironment({ LDAP_ORGANISATION: 'IAM UI Test', LDAP_DOMAIN: 'example.org', LDAP_ADMIN_PASSWORD: 'admin' })
       .withWaitStrategy(Wait.forLogMessage('slapd starting'))

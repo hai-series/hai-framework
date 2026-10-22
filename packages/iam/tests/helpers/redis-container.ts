@@ -22,7 +22,7 @@ export async function acquireRedisContainer(): Promise<RedisContainerLease> {
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('redis:alpine')
+    containerPromise = new GenericContainer('docker.io/library/redis:7.4.11-alpine')
       .withExposedPorts(6379)
       // 就绪后仍由 cache.init 建立真实连接；避免 Podman 内部端口 exec 探测挂起。
       .withWaitStrategy(Wait.forLogMessage(/Ready to accept connections/))

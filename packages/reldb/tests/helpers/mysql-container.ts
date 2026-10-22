@@ -28,7 +28,7 @@ export async function acquireMysqlContainer(): Promise<MysqlContainerLease> {
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('mysql:8')
+    containerPromise = new GenericContainer('docker.io/library/mysql:8.4.11')
       .withExposedPorts(3306)
       .withEnvironment({
         MYSQL_DATABASE,

@@ -40,6 +40,39 @@ export interface IamTestEnv {
   cleanup: () => Promise<void>
 }
 
+/** 逐项记录测试租约；清理后才完成的启动也必须释放，不让部分失败遗漏容器。 */
+function createLeaseCleanup() {
+  const leases = new Set<{ release: () => Promise<void> }>()
+  let closed = false
+  let cleanupPromise: Promise<void> | undefined
+  return {
+    async track<T extends { release: () => Promise<void> }>(pending: Promise<T>): Promise<T> {
+      const lease = await pending
+      if (closed) {
+        await lease.release()
+        throw new Error('Test environment was cleaned up during startup')
+      }
+      leases.add(lease)
+      return lease
+    },
+    cleanup(closeModules: () => Promise<void>): Promise<void> {
+      // 先禁止晚到的租约继续初始化，再按依赖顺序关闭模块、释放已有租约。
+      closed = true
+      cleanupPromise ??= (async () => {
+        try {
+          await closeModules()
+        }
+        finally {
+          const acquired = [...leases]
+          leases.clear()
+          await Promise.all(acquired.map(lease => lease.release()))
+        }
+      })()
+      return cleanupPromise
+    },
+  }
+}
+
 /**
  * SQLite 内存 + 内存缓存（快速，无 Docker 依赖）
  */
@@ -76,6 +109,7 @@ async function waitForDbReady(maxAttempts = 10, intervalMs = 1000): Promise<void
  * PostgreSQL + Redis（真实外部服务，需 Docker）
  */
 export async function postgresRedisEnv(): Promise<IamTestEnv> {
+  const leases = createLeaseCleanup()
   let pgLease: PostgresContainerLease | null = null
   let redisLease: RedisContainerLease | null = null
 
@@ -83,8 +117,8 @@ export async function postgresRedisEnv(): Promise<IamTestEnv> {
     label: 'postgres+redis',
     async setup() {
       ;[pgLease, redisLease] = await Promise.all([
-        acquirePostgresContainer(),
-        acquireRedisContainer(),
+        leases.track(acquirePostgresContainer()),
+        leases.track(acquireRedisContainer()),
       ])
 
       if (!reldb.isInitialized) {
@@ -107,11 +141,11 @@ export async function postgresRedisEnv(): Promise<IamTestEnv> {
         })
       }
     },
-    async cleanup() {
-      await cache.close()
-      await reldb.close()
-      await pgLease?.release()
-      await redisLease?.release()
+    cleanup() {
+      return leases.cleanup(async () => {
+        await cache.close()
+        await reldb.close()
+      })
     },
   }
 }
@@ -120,6 +154,7 @@ export async function postgresRedisEnv(): Promise<IamTestEnv> {
  * PostgreSQL + Redis + OpenLDAP（完整集成环境）
  */
 export async function fullIntegrationEnv(): Promise<IamTestEnv & { ldapLease: LdapContainerLease }> {
+  const leases = createLeaseCleanup()
   let pgLease: PostgresContainerLease | null = null
   let redisLease: RedisContainerLease | null = null
   let ldapLease: LdapContainerLease | null = null
@@ -134,9 +169,9 @@ export async function fullIntegrationEnv(): Promise<IamTestEnv & { ldapLease: Ld
     async setup() {
       // 并行启动所有容器
       ;[pgLease, redisLease, ldapLease] = await Promise.all([
-        acquirePostgresContainer(),
-        acquireRedisContainer(),
-        acquireLdapContainer(),
+        leases.track(acquirePostgresContainer()),
+        leases.track(acquireRedisContainer()),
+        leases.track(acquireLdapContainer()),
       ])
 
       if (!reldb.isInitialized) {
@@ -159,12 +194,11 @@ export async function fullIntegrationEnv(): Promise<IamTestEnv & { ldapLease: Ld
         })
       }
     },
-    async cleanup() {
-      await cache.close()
-      await reldb.close()
-      await pgLease?.release()
-      await redisLease?.release()
-      await ldapLease?.release()
+    cleanup() {
+      return leases.cleanup(async () => {
+        await cache.close()
+        await reldb.close()
+      })
     },
   }
 
