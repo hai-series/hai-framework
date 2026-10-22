@@ -105,6 +105,7 @@ describe('payment.init', () => {
         privateKey: 'test-private-key',
         sellerId: '2088_test',
         alipayPublicKey: 'test-public-key',
+        returnUrl: 'https://example.invalid/payment/return',
       },
     })
 
@@ -158,6 +159,7 @@ describe('payment.init', () => {
         privateKey: 'pk',
         sellerId: '2088_test',
         alipayPublicKey: 'pub',
+        returnUrl: 'https://example.invalid/payment/return',
       },
       stripe: {
         successUrl: 'https://example.invalid/payment/success',
@@ -186,6 +188,7 @@ describe('payment.init', () => {
         privateKey: 'pk',
         sellerId: '2088_test',
         alipayPublicKey: 'pub',
+        returnUrl: 'https://example.invalid/payment/return',
       },
     })
     expect(payment.getProvider('wechat')).toBeDefined()

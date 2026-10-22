@@ -6,15 +6,19 @@
 
 ## 简介
 
-统一支付模块，支持微信支付、支付宝和 Stripe，提供 Provider 模式的后端支付处理与多端客户端调起能力。
+统一支付模块，支持微信支付、支付宝和 Stripe，提供 Provider 模式的后端支付处理与浏览器支付调起能力。
 
 ## 核心功能清单
 
 | Provider | 支付场景                               |
 | -------- | -------------------------------------- |
-| 微信支付 | JSAPI / H5 / App / Native (扫码)       |
-| 支付宝   | JSAPI / H5 / App / Native              |
+| 微信支付 | `jsapi`：微信公众号内置浏览器          |
+| 支付宝   | `h5`：WAP 签名表单 POST                |
 | Stripe   | h5：托管 Checkout 页面跳转（国际支付） |
+
+内置创建模式仅保留上表组合；公开 `TradeType` 为 `jsapi | h5`，App、Native、小程序及其它组合均在请求渠道前返回 `UNSUPPORTED_TRADE_TYPE`。微信 JSAPI 必须提供当前公众号的 `userId`（openid），微信与支付宝仅接受 CNY。微信下单缺失有效 `prepay_id` 时失败。支付宝 `createOrder` 只生成已签名的页面请求参数，不表示渠道已受理或已付款；返回 `{ gateway, fields }`，浏览器向固定正式/沙箱网关 POST 全部签名字段，不解析 HTML，也不接收任意 action。配置 `alipay.returnUrl` 必填且为 HTTPS，`HAI_PAYMENT_ALIPAY_RETURNURL` 可覆盖；回跳不代表付款成功。客户端先检查 `success`，再检查 `data.invoked`；微信桥接对象未就绪时 `invoked=false`，已调起后的取消回调也不代表付款。
+
+协议依据：[微信 JSAPI 下单](https://pay.wechatpay.cn/doc/v3/merchant/4012791897)、[JSAPI 调起](https://pay.wechatpay.cn/doc/v3/merchant/4012791857)、[支付宝官方 Node SDK pageExecute](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码)。定向测试验证请求/签名形状、真实 RSA 验签、jsdom 表单消费及 Chrome 实际 POST（网关请求由测试拦截）；未使用真实商户凭据、渠道沙箱账户或手机设备，不能据此宣称已完成真实支付验收。
 
 ## 使用入门
 
@@ -33,7 +37,7 @@ import { payment } from '@h-ai/payment'
 // 初始化（会自动注册可用的 Provider）
 await payment.init({
   wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...', platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM' } },
-  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...' },
+  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...', returnUrl: 'https://app.example/payment/return' },
 })
 
 // 创建订单
@@ -58,7 +62,11 @@ await payment.close()
 import { invokePayment } from '@h-ai/payment/client'
 
 // 使用服务端返回的订单数据调起支付
-await invokePayment(orderData)
+const invoked = await invokePayment(orderData)
+if (!invoked.success)
+  throw new Error(invoked.error.message)
+if (!invoked.data.invoked)
+  throw new Error(invoked.data.message)
 ```
 
 ### HTTP API 契约
@@ -71,6 +79,7 @@ const order = await api.payment.orders.create({
   amount: 100,
   description: '商品',
   tradeType: 'jsapi',
+  userId: 'trusted-public-account-openid',
 })
 ```
 
@@ -91,6 +100,7 @@ await payment.init({
     sellerId: '卖家支付宝用户 ID',
     privateKey: '私钥',
     alipayPublicKey: '支付宝公钥',
+    returnUrl: 'https://app.example/payment/return', // 必填 HTTPS
     signType: 'RSA2', // 可选，默认 RSA2
     sandbox: false, // 可选，默认 false
   },
@@ -124,7 +134,7 @@ await payment.init({
 
 ### 支付宝业务响应与退款状态
 
-下单、查单、退款和关单均校验对应方法的响应 envelope、字符串 `code=10000`、关键字段及返回订单号。HTTP 200、缺失 envelope 或只有成功码均不能当作业务成功。交易不存在、权限/余额不足等业务错误返回对应 `CREATE_ORDER_FAILED` / `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED`；错误 cause 只保留有界的渠道错误标识，不透传原始响应和 `msg/sub_msg`。查单拒绝未知状态及非法金额，不能伪造 pending 或零金额。
+查单、退款和关单均校验对应方法的响应 envelope、字符串 `code=10000`、关键字段及返回订单号。HTTP 200、缺失 envelope 或只有成功码均不能当作业务成功。交易不存在、权限/余额不足等业务错误返回对应 `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED`；错误 cause 只保留有界的渠道错误标识，不透传原始响应和 `msg/sub_msg`。查单拒绝未知状态及非法金额，不能伪造 pending 或零金额。
 
 退款返回 `success: true` 仍需检查 `data.status`：只有 `fund_change=Y` 为 `success`；`N` 或缺失为 `processing`，需通过支付宝退款查询核实（本模块尚未提供退款查询 API）。`refund_fee` 为累计退款额，不能与本次退款金额直接比较。支付宝 `refundId` 是原交易号，本次退款以 `refundNo` 区分，重试必须保留相同退款号和参数。
 

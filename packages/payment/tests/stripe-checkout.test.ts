@@ -36,6 +36,7 @@ describe('stripe hosted Checkout', () => {
       orderNo: 'ORDER-1',
       amount: 100,
       description: 'Test',
+      // @ts-expect-error 刻意验证运行时拒绝已删除的模式。
       tradeType,
       notifyUrl: 'https://app.example/notify',
     })
@@ -56,7 +57,9 @@ describe('stripe hosted Checkout', () => {
   it('客户端拒绝 app 模式，不假装已调起', async () => {
     const location = { href: '' }
     vi.stubGlobal('window', { location })
-    const result = await invokePayment({ provider: 'stripe', tradeType: 'app', clientParams: { checkoutUrl: 'https://checkout.stripe.com/pay/cs_test' } })
+    const order = { provider: 'stripe', tradeType: 'h5' as const, clientParams: { checkoutUrl: 'https://checkout.stripe.com/pay/cs_test' } }
+    Reflect.set(order, 'tradeType', 'app')
+    const result = await invokePayment(order)
     expect(result.success).toBe(false)
     expect(location.href).toBe('')
   })

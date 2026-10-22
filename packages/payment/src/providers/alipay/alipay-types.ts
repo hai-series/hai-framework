@@ -30,16 +30,6 @@ export const AlipayResponseSchema = z.object({
 const AlipayAmountSchema = z.string().regex(/^\d+(?:\.\d{1,2})?$/)
 
 /**
- * JSON 下单响应字段；预创建必须另行检查 qr_code，其余创建操作检查 trade_no。
- * @example AlipayCreateResponseSchema.parse({ out_trade_no: 'ORDER_1', trade_no: 'ALI_1' })
- */
-export const AlipayCreateResponseSchema = z.object({
-  out_trade_no: z.string().min(1),
-  trade_no: z.string().min(1).optional(),
-  qr_code: z.string().min(1).optional(),
-})
-
-/**
  * 查单成功字段；未知交易状态和缺失金额均拒绝，不能默认成 pending 或零金额。
  * @example AlipayQueryResponseSchema.parse({ out_trade_no: 'ORDER_1', trade_no: 'ALI_1', trade_status: 'TRADE_SUCCESS', total_amount: '1.00' })
  */

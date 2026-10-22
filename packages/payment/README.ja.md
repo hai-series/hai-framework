@@ -12,9 +12,13 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 
 | Provider   | 決済方式                                         |
 | ---------- | ------------------------------------------------ |
-| WeChat Pay | JSAPI / H5 / App / Native（QR コード）           |
-| Alipay     | JSAPI / H5 / App / Native                        |
+| WeChat Pay | `jsapi`：WeChat 公式アカウント内ブラウザー       |
+| Alipay     | `h5`：署名済み WAP フォーム POST                 |
 | Stripe     | h5：ホスト型 Checkout ページへの遷移（国際決済） |
+
+組み込み作成処理は上記の組み合わせに限定されます。公開 `TradeType` は `jsapi | h5` で、App・Native・ミニプログラムなどは通信前に `UNSUPPORTED_TRADE_TYPE` を返します。WeChat の `userId` は現在の公式アカウントの openid が必須で、WeChat/Alipay は CNY のみ受け付けます。有効な `prepay_id` の欠落もエラーです。Alipay の `createOrder` は署名済みページパラメーターを生成する処理で、チャネル受付や支払い完了を意味しません。返された `{ gateway, fields }` の全署名フィールドを固定の本番/サンドボックスゲートウェイへ POST します。HTML の解析や任意 action は許可しません。信頼する HTTPS の `alipay.returnUrl` が必須で、`HAI_PAYMENT_ALIPAY_RETURNURL` でも設定できます。戻り先への遷移は支払証明になりません。`success` と `data.invoked` の両方を確認してください。WeChat ブリッジの準備を待ち、キャンセルのクライアント応答を支払いと解釈しないでください。
+
+仕様：[WeChat JSAPI 注文](https://pay.wechatpay.cn/doc/v3/merchant/4012791897)、[クライアント呼び出し](https://pay.wechatpay.cn/doc/v3/merchant/4012791857)、[Alipay 公式 Node SDK pageExecute](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码)。定向テストはプロトコル形状、実際の RSA 検証、jsdom 処理、テストで通信を遮断した Chrome の POSTを確認します。実加盟店の認証情報、チャネルのサンドボックスアカウント、実端末を使った決済検証は行っていません。
 
 ## 使い始める
 
@@ -33,7 +37,7 @@ import { payment } from '@h-ai/payment'
 // 初始化（会自动注册可用的 Provider）
 await payment.init({
   wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...', platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM' } },
-  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...' },
+  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...', returnUrl: 'https://app.example/payment/return' },
 })
 
 // 创建订单
@@ -58,7 +62,11 @@ await payment.close()
 import { invokePayment } from '@h-ai/payment/client'
 
 // 使用服务端返回的订单数据调起支付
-await invokePayment(orderData)
+const invoked = await invokePayment(orderData)
+if (!invoked.success)
+  throw new Error(invoked.error.message)
+if (!invoked.data.invoked)
+  throw new Error(invoked.data.message)
 ```
 
 ### HTTP API 契約
@@ -71,6 +79,7 @@ const order = await api.payment.orders.create({
   amount: 100,
   description: '商品',
   tradeType: 'jsapi',
+  userId: 'trusted-public-account-openid',
 })
 ```
 
@@ -91,6 +100,7 @@ await payment.init({
     sellerId: '卖家支付宝用户 ID',
     privateKey: '私钥',
     alipayPublicKey: '支付宝公钥',
+    returnUrl: 'https://app.example/payment/return', // 必填 HTTPS
     signType: 'RSA2', // 可选，默认 RSA2
     sandbox: false, // 可选，默认 false
   },
@@ -122,7 +132,7 @@ Alipay は `sellerId` を必須とし、署名検証後に `app_id/seller_id` �
 
 ### Alipay の業務レスポンスと返金状態
 
-注文作成・照会・返金・終了は、メソッドごとの応答 envelope、文字列の `code=10000`、必須フィールド、返却注文番号を検証します。HTTP 200、envelope の欠落、成功コードだけでは成功としません。取引不存在・権限不足・残高不足などは対応する `CREATE_ORDER_FAILED` / `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED` を返します。cause には長さを制限したエラー識別子だけを残し、生レスポンスと `msg/sub_msg` を公開しません。不明な状態や不正な金額を pending・ゼロ金額に置き換えません。
+照会・返金・終了は、メソッドごとの応答 envelope、文字列の `code=10000`、必須フィールド、返却注文番号を検証します。HTTP 200、envelope の欠落、成功コードだけでは成功としません。取引不存在・権限不足・残高不足などは対応する `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED` を返します。cause には長さを制限したエラー識別子だけを残し、生レスポンスと `msg/sub_msg` を公開しません。不明な状態や不正な金額を pending・ゼロ金額に置き換えません。
 
 返金は `success: true` でも `data.status` を確認してください。`fund_change=Y` のみ `success`、`N` または欠落は `processing` とし、Alipay の返金照会で確認が必要です（本モジュールには返金照会 API はありません）。`refund_fee` は累計返金額のため今回の返金額と直接比較できません。Alipay の `refundId` は元取引番号であり、個々の返金は `refundNo` で識別し、再試行でも番号とパラメータを保持してください。業務注文の更新前に `closeOrder` の成功と返金状態を確認します。
 

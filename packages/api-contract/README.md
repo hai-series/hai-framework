@@ -19,6 +19,8 @@ hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后
 - IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
 - IAM `auth.currentUser` 返回用户资料以及服务端当前会话的 `roles` / `permissions`，客户端恢复会话时无需持久化权限快照。
 
+支付创建输入和输出仅接受微信 `jsapi`、支付宝 `h5`、Stripe `h5`；微信输入必填 `userId`（openid）。App、Native、小程序与其它组合会在输入校验时失败。支付宝输出是 `{ gateway, fields }` 页面参数，创建成功不代表支付完成；客户端处理见 [Payment](../payment/README.md)。
+
 ## 使用入门
 
 ### 快速开始

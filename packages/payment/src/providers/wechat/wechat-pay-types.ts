@@ -42,7 +42,7 @@ export const WechatNotifyResourceSchema = z.object({
   success_time: z.iso.datetime({ offset: true }),
 }).passthrough()
 
-/** 微信统一下单请求（JSAPI / H5 / App / Native） */
+/** 微信 JSAPI 下单请求；本模块仅保留公众号网页的完整调起契约。 */
 export interface WechatOrderRequest {
   appid: string
   mchid: string
@@ -53,14 +53,8 @@ export interface WechatOrderRequest {
     total: number
     currency: string
   }
-  payer?: {
+  payer: {
     openid: string
-  }
-  scene_info?: {
-    payer_client_ip: string
-    h5_info?: {
-      type: string
-    }
   }
   attach?: string
 }

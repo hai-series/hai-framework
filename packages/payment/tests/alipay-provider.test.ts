@@ -7,6 +7,7 @@
 import type { PaymentProvider } from '../src/payment-types'
 import { createSign, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AlipayConfigSchema } from '../src/payment-config'
 import { HaiPaymentError } from '../src/payment-types'
 import { createAlipayProvider } from '../src/providers/alipay/alipay-provider'
 import { formatAlipayTime } from '../src/providers/alipay/alipay-time'
@@ -18,12 +19,13 @@ const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 })
 
-const testConfig = {
+const testConfig = AlipayConfigSchema.parse({
   appId: '2021000000000001',
   sellerId: '2088_test',
   privateKey,
   alipayPublicKey: publicKey,
-}
+  returnUrl: 'https://example.invalid/payment/return',
+})
 
 /** 辅助：用私钥为回调参数签名 */
 function signNotifyParams(params: Record<string, string>): string {
@@ -76,190 +78,57 @@ describe('alipay-provider', () => {
   })
 
   describe('createOrder', () => {
-    it('h5 下单成功', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_wap_pay_response: {
-            code: '10000',
-            trade_no: 'ALI_TXN_001',
-            out_trade_no: 'ORD001',
-          },
-        }),
-      })
-
-      const provider = createAlipayProvider(testConfig)
-      const result = await provider.createOrder({
+    it('h5 返回页面协议参数，不向支付网关发送 JSON 下单请求', async () => {
+      const result = await createAlipayProvider(testConfig).createOrder({
         orderNo: 'ORD001',
-        amount: 1000, // 10 元
+        amount: 150,
         description: 'H5 测试订单',
         tradeType: 'h5',
-        notifyUrl: 'https://example.com/notify/alipay',
-      })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.provider).toBe('alipay')
-        expect(result.data.tradeType).toBe('h5')
-        expect(result.data.prepayId).toBe('ALI_TXN_001')
-      }
-
-      // 验证 fetch 调用正确的网关（非沙箱）
-      const [url, options] = fetchSpy.mock.calls[0]
-      expect(url).toContain('openapi.alipay.com')
-      expect(new URL(url).search).toBe('')
-      expect(new URLSearchParams(options.body).get('sign')).toBeTruthy()
-      expect(options.signal).toBeDefined()
-    })
-
-    it('jSAPI 下单使用 alipay.trade.create 方法', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_create_response: { code: '10000', out_trade_no: 'ORD002', trade_no: 'ALI_TXN_002' },
-        }),
-      })
-
-      const provider = createAlipayProvider(testConfig)
-      const result = await provider.createOrder({
-        orderNo: 'ORD002',
-        amount: 500,
-        description: 'JSAPI 测试',
-        tradeType: 'jsapi',
         notifyUrl: 'https://example.com/notify',
       })
-
-      const [, options] = fetchSpy.mock.calls[0]
       expect(result.success).toBe(true)
-      expect(new URLSearchParams(options.body).get('method')).toBe('alipay.trade.create')
+      if (!result.success)
+        return
+      expect(result.data.prepayId).toBeUndefined()
+      expect(result.data.clientParams.gateway).toBe('https://openapi.alipay.com/gateway.do')
+      expect(result.data.clientParams.fields).toMatchObject({
+        method: 'alipay.trade.wap.pay',
+        return_url: testConfig.returnUrl,
+        sign_type: 'RSA2',
+      })
+      expect(JSON.stringify(result.data.clientParams.fields)).toContain('1.50')
+      expect(fetchSpy).not.toHaveBeenCalled()
     })
 
-    it('app 下单使用 alipay.trade.app.pay 方法', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_app_pay_response: { code: '10000', out_trade_no: 'ORD003', trade_no: 'ALI_TXN_003' },
-        }),
-      })
+    it.each(['jsapi', 'native', 'app', 'mini_program', 'unknown'])('拒绝未实现的 %s 且不请求网关', async (tradeType) => {
+      const input = { orderNo: 'ORD002', amount: 100, description: '不支持的模式', tradeType: 'h5' as const, notifyUrl: 'https://example.com/notify' }
+      Reflect.set(input, 'tradeType', tradeType)
+      const result = await createAlipayProvider(testConfig).createOrder(input)
+      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.UNSUPPORTED_TRADE_TYPE.code } })
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
 
-      const provider = createAlipayProvider(testConfig)
-      const result = await provider.createOrder({
+    it('沙箱模式返回固定沙箱网关', async () => {
+      const result = await createAlipayProvider({ ...testConfig, sandbox: true }).createOrder({
         orderNo: 'ORD003',
         amount: 100,
-        description: 'App 测试',
-        tradeType: 'app',
+        description: '沙箱',
+        tradeType: 'h5',
         notifyUrl: 'https://example.com/notify',
       })
-
-      const [, options] = fetchSpy.mock.calls[0]
-      expect(result.success).toBe(true)
-      expect(new URLSearchParams(options.body).get('method')).toBe('alipay.trade.app.pay')
+      expect(result.success && result.data.clientParams.gateway).toBe('https://openapi-sandbox.dl.alipaydev.com/gateway.do')
+      expect(fetchSpy).not.toHaveBeenCalled()
     })
 
-    it('native 下单使用 alipay.trade.precreate 方法', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_precreate_response: { code: '10000', out_trade_no: 'ORD004', qr_code: 'https://qr.alipay.com/test-order' },
-        }),
-      })
-
-      const provider = createAlipayProvider(testConfig)
-      const result = await provider.createOrder({
+    it('签名失败返回 CREATE_ORDER_FAILED', async () => {
+      const result = await createAlipayProvider({ ...testConfig, privateKey: 'invalid-key' }).createOrder({
         orderNo: 'ORD004',
         amount: 100,
-        description: 'Native 测试',
-        tradeType: 'native',
-        notifyUrl: 'https://example.com/notify',
-      })
-
-      const [, options] = fetchSpy.mock.calls[0]
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data.clientParams.qr_code).toBe('https://qr.alipay.com/test-order')
-      expect(new URLSearchParams(options.body).get('method')).toBe('alipay.trade.precreate')
-    })
-
-    it('金额从分转换为元（100 分 → 1.00 元）', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          alipay_trade_wap_pay_response: { code: '10000', out_trade_no: 'ORD-AMOUNT', trade_no: 'ALI_AMOUNT' },
-        }),
-      })
-
-      const provider = createAlipayProvider(testConfig)
-      await provider.createOrder({
-        orderNo: 'ORD-AMOUNT',
-        amount: 150, // 1.50 元
-        description: '金额测试',
+        description: '签名失败',
         tradeType: 'h5',
         notifyUrl: 'https://example.com/notify',
       })
-
-      const [, options] = fetchSpy.mock.calls[0]
-      // biz_content 中包含 total_amount 1.50
-      expect(new URLSearchParams(options.body).get('biz_content')).toContain('1.50')
-    })
-
-    it('沙箱模式使用沙箱网关', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ alipay_trade_wap_pay_response: { code: '10000', out_trade_no: 'ORD-SANDBOX', trade_no: 'ALI_SANDBOX' } }),
-      })
-
-      const sandboxConfig = { ...testConfig, sandbox: true }
-      const provider = createAlipayProvider(sandboxConfig)
-      await provider.createOrder({
-        orderNo: 'ORD-SANDBOX',
-        amount: 100,
-        description: '沙箱测试',
-        tradeType: 'h5',
-        notifyUrl: 'https://example.com/notify',
-      })
-
-      const [url] = fetchSpy.mock.calls[0]
-      expect(url).toContain('openapi-sandbox')
-    })
-
-    it('fetch 失败返回 CREATE_ORDER_FAILED', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: async () => 'Server Error',
-      })
-
-      const provider = createAlipayProvider(testConfig)
-      const result = await provider.createOrder({
-        orderNo: 'ORD-FAIL',
-        amount: 100,
-        description: '失败测试',
-        tradeType: 'h5',
-        notifyUrl: 'https://example.com/notify',
-      })
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiPaymentError.CREATE_ORDER_FAILED.code)
-      }
-    })
-
-    it('网络异常返回 CREATE_ORDER_FAILED', async () => {
-      fetchSpy.mockRejectedValueOnce(new Error('DNS resolution failed'))
-
-      const provider = createAlipayProvider(testConfig)
-      const result = await provider.createOrder({
-        orderNo: 'ORD-NET',
-        amount: 100,
-        description: '网络异常',
-        tradeType: 'h5',
-        notifyUrl: 'https://example.com/notify',
-      })
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiPaymentError.CREATE_ORDER_FAILED.code)
-      }
+      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.CREATE_ORDER_FAILED.code } })
     })
   })
 
@@ -569,18 +438,6 @@ describe('alipay-provider', () => {
   describe('支付宝业务响应校验', () => {
     const operations = [
       {
-        method: 'alipay.trade.create',
-        errorCode: HaiPaymentError.CREATE_ORDER_FAILED.code,
-        fields: { out_trade_no: 'ORDER_CHECK', trade_no: 'ALI_CHECK' },
-        run: (provider: PaymentProvider) => provider.createOrder({
-          orderNo: 'ORDER_CHECK',
-          amount: 100,
-          description: '业务响应校验',
-          tradeType: 'jsapi',
-          notifyUrl: 'https://example.com/notify',
-        }),
-      },
-      {
         method: 'alipay.trade.query',
         errorCode: HaiPaymentError.QUERY_ORDER_FAILED.code,
         fields: { out_trade_no: 'ORDER_CHECK', trade_no: 'ALI_CHECK', trade_status: 'TRADE_SUCCESS', total_amount: '1.00' },
@@ -722,21 +579,6 @@ describe('alipay-provider', () => {
         expect(result.error.cause.message).toBe('Alipay business request failed (code=40004)')
     })
 
-    it('预创建缺少 qr_code 时失败，不能返回无法支付的订单', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ alipay_trade_precreate_response: { code: '10000', out_trade_no: 'ORDER_CHECK', trade_no: 'ALI_CHECK' } }),
-      })
-      const result = await createAlipayProvider(testConfig).createOrder({
-        orderNo: 'ORDER_CHECK',
-        amount: 100,
-        description: '缺失二维码',
-        tradeType: 'native',
-        notifyUrl: 'https://example.com/notify',
-      })
-      expect(result.success).toBe(false)
-    })
-
     it.each([{ refund_fee: 'bad-amount' }, { refund_fee: '90071992547409.92' }, { fund_change: 'UNKNOWN' }])(
       '退款拒绝非法业务字段：%j',
       async (fields) => {
@@ -780,43 +622,16 @@ describe('alipay-provider', () => {
   })
 
   describe('signType 配置', () => {
-    it('默认使用 RSA2', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ alipay_trade_wap_pay_response: { code: '10000', out_trade_no: 'ORD-ST', trade_no: 'ALI_ST' } }),
-      })
-
-      const provider = createAlipayProvider(testConfig)
-      await provider.createOrder({
+    it.each(['RSA2', 'RSA'] as const)('%s 进入完整签名表单参数', async (signType) => {
+      const result = await createAlipayProvider({ ...testConfig, signType }).createOrder({
         orderNo: 'ORD-ST',
         amount: 100,
-        description: 'signType 测试',
+        description: '签名类型',
         tradeType: 'h5',
         notifyUrl: 'https://example.com/notify',
       })
-
-      const [, options] = fetchSpy.mock.calls[0]
-      expect(new URLSearchParams(options.body).get('sign_type')).toBe('RSA2')
-    })
-
-    it('可配置 RSA 签名类型', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ alipay_trade_wap_pay_response: { code: '10000', out_trade_no: 'ORD-RSA', trade_no: 'ALI_RSA' } }),
-      })
-
-      const rsaConfig = { ...testConfig, signType: 'RSA' as const }
-      const provider = createAlipayProvider(rsaConfig)
-      await provider.createOrder({
-        orderNo: 'ORD-RSA',
-        amount: 100,
-        description: 'RSA 签名测试',
-        tradeType: 'h5',
-        notifyUrl: 'https://example.com/notify',
-      })
-
-      const [, options] = fetchSpy.mock.calls[0]
-      expect(new URLSearchParams(options.body).get('sign_type')).toBe('RSA')
+      expect(result.success && result.data.clientParams.fields).toMatchObject({ sign_type: signType })
+      expect(fetchSpy).not.toHaveBeenCalled()
     })
   })
 })

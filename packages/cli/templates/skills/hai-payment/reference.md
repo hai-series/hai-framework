@@ -8,19 +8,19 @@
 
 ## 依赖
 
-| 模块 | 用途 | 是否必需 | 初始化要求 |
-| --- | --- | --- | --- |
-| `@h-ai/audit` | 审计日志（支付操作自动审计） | 可选 | 已初始化时自动写入审计日志 |
+| 模块          | 用途                                | 是否必需           | 初始化要求                               |
+| ------------- | ----------------------------------- | ------------------ | ---------------------------------------- |
+| `@h-ai/audit` | 审计日志（支付操作自动审计）        | 可选               | 已初始化时自动写入审计日志               |
 | `@h-ai/reldb` | Stripe 渠道映射、操作预留与幂等结果 | 启用 Stripe 时必需 | 先初始化共享 DB；payment 关闭后再关闭 DB |
 
 ## 适用场景
 
-- 接入微信支付（JSAPI / H5 / Native / App）
-- 接入支付宝（H5 / App / PC）
+- 接入微信公众号 JSAPI 支付（需 openid/WeixinJSBridge）
+- 接入支付宝 H5（WAP 离线签名表单）
 - 接入 Stripe（Checkout Session）
 - 支付回调验签与通知处理
 - 订单查询与退款
-- 客户端调起支付（Web / H5 / App）
+- 客户端调起支付（微信内置浏览器 / H5 跳转）
 
 ## 使用步骤
 
@@ -42,18 +42,23 @@ alipay:
   sellerId: '' # 必填，验签后核对 seller_id
   privateKey: ''
   alipayPublicKey: ''
-  signType: RSA2  # 可选，默认 RSA2
-  sandbox: false   # 可选，默认 false
+  returnUrl: 'https://app.example/payment/return' # 必填 HTTPS，不能作为付款证明
+  signType: RSA2 # 可选，默认 RSA2
+  sandbox: false # 可选，默认 false
 
 stripe:
   secretKey: ''
   webhookSecret: ''
-  successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}'  # 必填
-  cancelUrl: 'https://app.example/payment/cancel'  # 可选
-  webhookToleranceSeconds: 300  # 可选，默认 300 秒
+  successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}' # 必填
+  cancelUrl: 'https://app.example/payment/cancel' # 可选
+  webhookToleranceSeconds: 300 # 可选，默认 300 秒
 ```
 
 Stripe 的 secretKey 必须为 sk/rk 的 test/live 服务端密钥；受限密钥须允许读取账户。只实现 payment + hosted_page + tradeType=h5，必填 successUrl、可选 cancelUrl 均来自服务端配置且必须为 HTTP(S)。不支持 embedded/elements 或 App/JSAPI/Native 等支付场景，不向客户端提供改变模式/跳转地址的接口。API 固定为 2026-09-30.endive；启用前初始化共享 reldb，不能给不同节点配置各自的 SQLite 文件。
+
+内置创建模式仅保留上表组合；公开 `TradeType` 为 `jsapi | h5`，App、Native、小程序及其它组合均在请求渠道前返回 `UNSUPPORTED_TRADE_TYPE`。微信 JSAPI 必须提供当前公众号的 `userId`（openid），微信与支付宝仅接受 CNY。微信下单缺失有效 `prepay_id` 时失败。支付宝 `createOrder` 只生成已签名的页面请求参数，不表示渠道已受理或已付款；返回 `{ gateway, fields }`，浏览器向固定正式/沙箱网关 POST 全部签名字段，不解析 HTML，也不接收任意 action。配置 `alipay.returnUrl` 必填且为 HTTPS，`HAI_PAYMENT_ALIPAY_RETURNURL` 可覆盖；回跳不代表付款成功。客户端先检查 `success`，再检查 `data.invoked`；微信桥接对象未就绪时 `invoked=false`，已调起后的取消回调也不代表付款。
+
+协议依据：[微信 JSAPI 下单](https://pay.wechatpay.cn/doc/v3/merchant/4012791897)、[JSAPI 调起](https://pay.wechatpay.cn/doc/v3/merchant/4012791857)、[支付宝官方 Node SDK pageExecute](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码)。定向测试验证请求/签名形状、真实 RSA 验签和 jsdom 表单提交；未使用真实商户凭据、渠道沙箱账户或手机设备，不能据此宣称已完成真实支付验收。
 
 约定环境变量优先于 YAML，例如 `HAI_PAYMENT_WECHAT_APIV3KEY`、
 `HAI_PAYMENT_STRIPE_WEBHOOKSECRET`。生产密钥只放环境或密钥管理器。
@@ -77,6 +82,7 @@ const initResult = await payment.init({
     sellerId: '2088000000000000',
     privateKey: '-----BEGIN RSA PRIVATE KEY-----...',
     alipayPublicKey: '-----BEGIN PUBLIC KEY-----...',
+    returnUrl: 'https://app.example/payment/return',
   },
 })
 if (!initResult.success) {
@@ -145,7 +151,7 @@ if (result.success) {
 
 ### 6. 退款
 
-支付宝下单/查单/退款/关单会验证方法对应的 envelope、字符串 code=10000、关键字段和订单号；HTTP 200 业务错误返回对应操作的 HaiResult 失败。错误 cause 不含原始响应或 msg/sub_msg。退款 `success: true` 表示请求受理，仍须检查 data.status：fund_change=Y 才为 success，N/缺失为 processing，需自行通过渠道退款查询确认（本模块没有退款查询 API）。refund_fee 是累计退款额，refundId 是原交易号，以 refundNo 区分本次退款且重试保持参数不变。关单先检查 result.success 再更新业务订单。
+支付宝查单/退款/关单会验证方法对应的 envelope、字符串 code=10000、关键字段和订单号；HTTP 200 业务错误返回对应操作的 HaiResult 失败。错误 cause 不含原始响应或 msg/sub_msg。退款 `success: true` 表示请求受理，仍须检查 data.status：fund_change=Y 才为 success，N/缺失为 processing，需自行通过渠道退款查询确认（本模块没有退款查询 API）。refund_fee 是累计退款额，refundId 是原交易号，以 refundNo 区分本次退款且重试保持参数不变。关单先检查 result.success 再更新业务订单。
 
 ```typescript
 const result = await payment.refund('wechat', {
@@ -163,46 +169,53 @@ const result = await payment.refund('wechat', {
 import { invokePayment } from '@h-ai/payment/client'
 
 // 前端拿到服务端返回的 PaymentOrder 后调起支付
+if (!orderResult.success)
+  throw new Error(orderResult.error.message)
 const payResult = await invokePayment(orderResult.data)
+if (!payResult.success)
+  throw new Error(payResult.error.message)
+if (!payResult.data.invoked)
+  throw new Error(payResult.data.message)
 ```
 
 ## 核心 API（服务端）
 
-| API                                              | 用途     | 返回值                        |
-| ------------------------------------------------ | -------- | ----------------------------- |
-| `payment.init(config)`                           | 初始化   | `HaiResult<void>`                |
-| `payment.close()`                                | 关闭     | `void`                        |
-| `payment.createOrder(providerName, input)`       | 创建订单 | `HaiResult<PaymentOrder>`        |
-| `payment.handleNotify(providerName, request)`    | 处理回调 | `HaiResult<PaymentNotifyResult>` |
-| `payment.queryOrder(providerName, orderNo)`      | 查询订单 | `HaiResult<OrderStatus>`         |
-| `payment.refund(providerName, input)`            | 退款     | `HaiResult<RefundResult>`        |
-| `payment.closeOrder(providerName, orderNo)`      | 关闭订单 | `HaiResult<void>`                |
-| `payment.getProvider(name)`                      | 获取 Provider | `PaymentProvider \| undefined` |
-| `payment.registerProvider(provider)`             | 注册自定义 Provider | `void`              |
+| API                                           | 用途                | 返回值                           |
+| --------------------------------------------- | ------------------- | -------------------------------- |
+| `payment.init(config)`                        | 初始化              | `HaiResult<void>`                |
+| `payment.close()`                             | 关闭                | `void`                           |
+| `payment.createOrder(providerName, input)`    | 创建订单            | `HaiResult<PaymentOrder>`        |
+| `payment.handleNotify(providerName, request)` | 处理回调            | `HaiResult<PaymentNotifyResult>` |
+| `payment.queryOrder(providerName, orderNo)`   | 查询订单            | `HaiResult<OrderStatus>`         |
+| `payment.refund(providerName, input)`         | 退款                | `HaiResult<RefundResult>`        |
+| `payment.closeOrder(providerName, orderNo)`   | 关闭订单            | `HaiResult<void>`                |
+| `payment.getProvider(name)`                   | 获取 Provider       | `PaymentProvider \| undefined`   |
+| `payment.registerProvider(provider)`          | 注册自定义 Provider | `void`                           |
 
 ## 客户端 API
 
-| API                      | 用途     | 返回值                        |
-| ------------------------ | -------- | ----------------------------- |
+| API                      | 用途     | 返回值                           |
+| ------------------------ | -------- | -------------------------------- |
 | `invokePayment(options)` | 调起支付 | `HaiResult<InvokePaymentResult>` |
 
 ## 错误码 — `HaiPaymentError`
 
-| 错误码 | code | 说明 |
-|--------|------|------|
-| `HaiPaymentError.CREATE_ORDER_FAILED` | `hai:payment:001` | 创建订单失败 |
-| `HaiPaymentError.QUERY_ORDER_FAILED` | `hai:payment:002` | 查询订单失败 |
-| `HaiPaymentError.REFUND_FAILED` | `hai:payment:003` | 退款失败 |
-| `HaiPaymentError.CLOSE_ORDER_FAILED` | `hai:payment:004` | 关闭订单失败 |
-| `HaiPaymentError.NOT_INITIALIZED` | `hai:payment:010` | 模块未初始化 |
-| `HaiPaymentError.SIGN_FAILED` | `hai:payment:020` | 签名失败 |
-| `HaiPaymentError.PROVIDER_NOT_FOUND` | `hai:payment:030` | Provider 未注册 |
-| `HaiPaymentError.INVALID_AMOUNT` | `hai:payment:040` | 金额无效 |
-| `HaiPaymentError.NOTIFY_VERIFY_FAILED` | `hai:payment:050` | 回调验签失败 |
-| `HaiPaymentError.NOTIFY_PARSE_FAILED` | `hai:payment:051` | 回调解析失败 |
-| `HaiPaymentError.INVOKE_WEB_FAILED` | `hai:payment:060` | Web 端调起支付失败 |
-| `HaiPaymentError.INVOKE_APP_FAILED` | `hai:payment:061` | App 端调起支付失败 |
-| `HaiPaymentError.CONFIG_ERROR` | `hai:payment:070` | 配置无效 |
+| 错误码                                   | code              | 说明                      |
+| ---------------------------------------- | ----------------- | ------------------------- |
+| `HaiPaymentError.CREATE_ORDER_FAILED`    | `hai:payment:001` | 创建订单失败              |
+| `HaiPaymentError.QUERY_ORDER_FAILED`     | `hai:payment:002` | 查询订单失败              |
+| `HaiPaymentError.REFUND_FAILED`          | `hai:payment:003` | 退款失败                  |
+| `HaiPaymentError.CLOSE_ORDER_FAILED`     | `hai:payment:004` | 关闭订单失败              |
+| `HaiPaymentError.NOT_INITIALIZED`        | `hai:payment:010` | 模块未初始化              |
+| `HaiPaymentError.SIGN_FAILED`            | `hai:payment:020` | 签名失败                  |
+| `HaiPaymentError.PROVIDER_NOT_FOUND`     | `hai:payment:030` | Provider 未注册           |
+| `HaiPaymentError.INVALID_AMOUNT`         | `hai:payment:040` | 金额无效                  |
+| `HaiPaymentError.UNSUPPORTED_TRADE_TYPE` | `hai:payment:041` | 渠道不支持该模式          |
+| `HaiPaymentError.INVALID_INPUT`          | `hai:payment:042` | openid/币种等下单参数无效 |
+| `HaiPaymentError.NOTIFY_VERIFY_FAILED`   | `hai:payment:050` | 回调验签失败              |
+| `HaiPaymentError.NOTIFY_PARSE_FAILED`    | `hai:payment:051` | 回调解析失败              |
+| `HaiPaymentError.INVOKE_WEB_FAILED`      | `hai:payment:060` | Web 端调起支付失败        |
+| `HaiPaymentError.CONFIG_ERROR`           | `hai:payment:070` | 配置无效                  |
 
 ## Provider 模式
 

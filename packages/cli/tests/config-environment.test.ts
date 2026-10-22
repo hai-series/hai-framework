@@ -1,5 +1,6 @@
 import { parseEnv } from 'node:util'
 import { CacheConfigSchema } from '@h-ai/cache'
+import { AlipayConfigSchema } from '@h-ai/payment'
 import { ReldbConfigSchema } from '@h-ai/reldb'
 import { StorageConfigSchema } from '@h-ai/storage'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +11,24 @@ import { loadConfigText } from './helpers/config.js'
 afterEach(() => vi.unstubAllEnvs())
 
 describe('environment configuration', () => {
+  it('支付宝 H5 returnUrl 经生成 YAML 和真实环境插值后由渠道 Schema 校验', () => {
+    const generated = generateConfigFile('payment')
+    const alipayExample = generated.match(/^# alipay:\n(?:# {3}.*\n)+/m)?.[0]
+    if (!alipayExample)
+      throw new Error('Missing Alipay configuration example')
+    // 示例渠道默认注释关闭；用户启用后由真实参数化入口生成对应环境引用。
+    const yaml = parameterizeConfig('payment', alipayExample.replace(/^# ?/gm, ''))
+    expect(yaml).toContain('HAI_PAYMENT_ALIPAY_RETURNURL')
+    vi.stubEnv('HAI_PAYMENT_ALIPAY_APPID', 'test-app')
+    vi.stubEnv('HAI_PAYMENT_ALIPAY_SELLERID', 'test-seller')
+    vi.stubEnv('HAI_PAYMENT_ALIPAY_PRIVATEKEY', 'test-private-key')
+    vi.stubEnv('HAI_PAYMENT_ALIPAY_ALIPAYPUBLICKEY', 'test-public-key')
+    vi.stubEnv('HAI_PAYMENT_ALIPAY_RETURNURL', 'https://shop.example/payment/return')
+    const config = loadConfigText<{ alipay: unknown }>('payment', yaml)
+    expect(AlipayConfigSchema.parse(config.alipay).returnUrl).toBe('https://shop.example/payment/return')
+    vi.stubEnv('HAI_PAYMENT_ALIPAY_RETURNURL', 'http://shop.example/payment/return')
+    expect(AlipayConfigSchema.safeParse(loadConfigText<{ alipay: unknown }>('payment', yaml).alipay).success).toBe(false)
+  })
   it('服务端密钥环仅出现在实际服务端入口，不能随客户端 crypto 配置推荐', () => {
     expect(moduleEnvironmentVariables('crypto').some(variable => variable.name === 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING')).toBe(false)
     expect(runtimeEnvironmentVariables('const ring = process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING')).toMatchObject([{ name: 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING' }])

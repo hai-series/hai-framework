@@ -28,6 +28,8 @@ export const AlipayConfigSchema = z.object({
   sellerId: z.string().min(1, paymentM('payment_configFieldRequired')),
   privateKey: z.string().min(1, paymentM('payment_configFieldRequired')),
   alipayPublicKey: z.string().min(1, paymentM('payment_configFieldRequired')),
+  /** 手机网站支付完成后返回的可信 HTTPS 地址；仅用于页面导航，不能证明付款。 */
+  returnUrl: z.url({ protocol: /^https$/ }),
   signType: z.enum(['RSA2', 'RSA']).default('RSA2'),
   sandbox: z.boolean().default(false),
 })

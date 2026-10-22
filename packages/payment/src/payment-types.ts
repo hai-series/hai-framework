@@ -21,10 +21,10 @@ const PaymentErrorInfo = {
   PROVIDER_NOT_FOUND: '030:404',
   INVALID_AMOUNT: '040:400',
   UNSUPPORTED_TRADE_TYPE: '041:400',
+  INVALID_INPUT: '042:400',
   NOTIFY_VERIFY_FAILED: '050:400',
   NOTIFY_PARSE_FAILED: '051:400',
   INVOKE_WEB_FAILED: '060:500',
-  INVOKE_APP_FAILED: '061:500',
   CONFIG_ERROR: '070:500',
 } as const satisfies ErrorInfo
 
@@ -32,8 +32,8 @@ export const HaiPaymentError = core.error.buildHaiErrorsDef('payment', PaymentEr
 
 // ─── 支付场景 ───
 
-/** 支付场景（tradeType） */
-export type TradeType = 'jsapi' | 'h5' | 'app' | 'native' | 'mini_program'
+/** 已实现的支付场景：微信 jsapi，支付宝/Stripe h5；各 Provider 不接受其它组合。 */
+export type TradeType = 'jsapi' | 'h5'
 
 /** 订单状态 */
 export type OrderStatusValue = 'pending' | 'paid' | 'closed' | 'refunded' | 'failed'
@@ -50,9 +50,9 @@ export interface CreateOrderInput {
   currency?: string
   /** 商品描述 */
   description: string
-  /** 支付场景；Stripe 仅支持 h5（托管 Checkout 页面跳转）。 */
+  /** 支付场景：微信仅 jsapi，支付宝仅 h5，Stripe 仅 h5（托管 Checkout 页面）。 */
   tradeType: TradeType
-  /** 用户标识（微信 openid 等，jsapi 必填） */
+  /** 微信公众号 openid，微信 jsapi 必填；必须属于服务端配置的 appId。 */
   userId?: string
   /** 异步通知 URL */
   notifyUrl: string
@@ -66,7 +66,7 @@ export interface PaymentOrder {
   provider: string
   /** 支付场景 */
   tradeType: TradeType
-  /** 客户端调起参数（各平台差异） */
+  /** 微信 JSAPI 签名字段、支付宝 { gateway, fields } POST 参数或 Stripe { checkoutUrl }；不含 HTML。 */
   clientParams: Record<string, unknown>
   /** 预支付 ID（如微信 prepay_id） */
   prepayId?: string

@@ -76,7 +76,7 @@ it('notify 双节点与重启后重复到达不重复履约，校验失败和事
       external: ['@h-ai/core', '@h-ai/reldb', '@h-ai/audit', 'zod'],
     })
     await writeFile(path.join(directory, 'fixtures.json'), JSON.stringify({
-      config: { alipay: { appId: 'app_notify_process', sellerId: 'seller_notify_process', privateKey, alipayPublicKey: publicKey } },
+      config: { alipay: { appId: 'app_notify_process', sellerId: 'seller_notify_process', privateKey, alipayPublicKey: publicKey, returnUrl: 'https://example.invalid/payment/return' } },
       notifications: {
         valid: signedNotification(),
         pending: signedNotification({ trade_status: 'WAIT_BUYER_PAY', notify_id: 'notify_pending' }),

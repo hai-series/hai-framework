@@ -12,9 +12,13 @@ A unified payment module for WeChat Pay, Alipay, and Stripe, with provider-based
 
 | Provider   | Payment scenarios                                          |
 | ---------- | ---------------------------------------------------------- |
-| WeChat Pay | JSAPI / H5 / App / Native (QR code)                        |
-| Alipay     | JSAPI / H5 / App / Native                                  |
+| WeChat Pay | `jsapi`: WeChat public-account browser                     |
+| Alipay     | `h5`: signed WAP form POST                                 |
 | Stripe     | h5: hosted Checkout page redirect (international payments) |
+
+Built-in creation accepts only the combinations above. Public `TradeType` is `jsapi | h5`; App, Native, mini-program, and other combinations fail with `UNSUPPORTED_TRADE_TYPE` before contacting the channel. WeChat requires the current public account’s openid in `userId`; WeChat and Alipay accept CNY only. Missing WeChat `prepay_id` is a failure. Alipay `createOrder` creates signed page parameters, without claiming channel acceptance or payment. Its `{ gateway, fields }` payload is submitted as a complete POST form to the fixed production/sandbox gateway. The client never parses HTML or accepts arbitrary actions. Required `alipay.returnUrl` is a trusted HTTPS URL, configurable through `HAI_PAYMENT_ALIPAY_RETURNURL`; returning there is not payment proof. Check both `success` and `data.invoked`. Wait for the WeChat bridge before invoking; even a cancellation callback can follow a successful invocation.
+
+Protocol references: [WeChat JSAPI creation](https://pay.wechatpay.cn/doc/v3/merchant/4012791897), [client invocation](https://pay.wechatpay.cn/doc/v3/merchant/4012791857), and the [official Alipay Node SDK pageExecute contract](https://github.com/alipay/alipay-sdk-nodejs-all#pageexecute-示例代码). Targeted checks cover protocol shapes, actual RSA verification, jsdom consumption, and a real Chrome POST intercepted by the test. Merchant credentials, channel sandbox accounts, and phone devices were unavailable; these checks do not establish real payment acceptance.
 
 ## Getting started
 
@@ -33,7 +37,7 @@ import { payment } from '@h-ai/payment'
 // 初始化（会自动注册可用的 Provider）
 await payment.init({
   wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...', platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM' } },
-  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...' },
+  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...', returnUrl: 'https://app.example/payment/return' },
 })
 
 // 创建订单
@@ -58,7 +62,11 @@ await payment.close()
 import { invokePayment } from '@h-ai/payment/client'
 
 // 使用服务端返回的订单数据调起支付
-await invokePayment(orderData)
+const invoked = await invokePayment(orderData)
+if (!invoked.success)
+  throw new Error(invoked.error.message)
+if (!invoked.data.invoked)
+  throw new Error(invoked.data.message)
 ```
 
 ### HTTP API contracts
@@ -71,6 +79,7 @@ const order = await api.payment.orders.create({
   amount: 100,
   description: '商品',
   tradeType: 'jsapi',
+  userId: 'trusted-public-account-openid',
 })
 ```
 
@@ -91,6 +100,7 @@ await payment.init({
     sellerId: '卖家支付宝用户 ID',
     privateKey: '私钥',
     alipayPublicKey: '支付宝公钥',
+    returnUrl: 'https://app.example/payment/return', // 必填 HTTPS
     signType: 'RSA2', // 可选，默认 RSA2
     sandbox: false, // 可选，默认 false
   },
@@ -122,7 +132,7 @@ References: [WeChat certificate and timestamp rules](https://pay.wechatpay.cn/do
 
 ### Alipay business responses and refund states
 
-Creation, queries, refunds, and closing validate the operation-specific response envelope, string `code=10000`, required fields, and returned order number. HTTP 200, a missing envelope, or a success code without business fields is insufficient. Missing trades, permission/balance errors, and other business failures return the matching `CREATE_ORDER_FAILED` / `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED`. Error causes retain bounded provider error identifiers, excluding raw responses and `msg/sub_msg`. Queries reject unknown states and invalid amounts instead of inventing pending orders or zero amounts.
+Queries, refunds, and closing validate the operation-specific response envelope, string `code=10000`, required fields, and returned order number. HTTP 200, a missing envelope, or a success code without business fields is insufficient. Missing trades, permission/balance errors, and other business failures return the matching `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED`. Error causes retain bounded provider error identifiers, excluding raw responses and `msg/sub_msg`. Queries reject unknown states and invalid amounts instead of inventing pending orders or zero amounts.
 
 For refunds, check `data.status` even when `success` is true. Only `fund_change=Y` means `success`; `N` or an absent value returns `processing` and requires confirmation through Alipay refund queries (this module has no refund-query API yet). `refund_fee` is cumulative and must not be compared with this individual refund amount. Alipay `refundId` identifies the original trade; use `refundNo` for each refund and preserve its parameters when retrying. Update business orders only after checking `closeOrder` success and the refund status.
 

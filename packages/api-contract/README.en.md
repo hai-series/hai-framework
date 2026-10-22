@@ -19,6 +19,8 @@ Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the sin
 - IAM token DTOs support httpOnly cookies: `refreshToken` may be absent from the response body and managed by the server through `Set-Cookie`.
 - IAM `auth.currentUser` returns the user profile and the current server session's `roles` / `permissions`; clients need not persist a permission snapshot to restore a session.
 
+Payment creation inputs and outputs accept WeChat `jsapi`, Alipay `h5`, and Stripe `h5` only; WeChat requires `userId` (openid). App, Native, mini-program, and other combinations fail validation. Alipay returns `{ gateway, fields }` page parameters; creation success does not establish payment. See [Payment](../payment/README.en.md) for client handling.
+
 ## Getting started
 
 ### Quick start

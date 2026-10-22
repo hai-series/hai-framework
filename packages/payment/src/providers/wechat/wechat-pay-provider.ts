@@ -121,21 +121,17 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
     return response.json() as T
   }
 
-  /** 根据 tradeType 映射到微信 API 路径 */
-  function getOrderPath(tradeType: string): string {
-    const map: Record<string, string> = {
-      jsapi: '/v3/pay/transactions/jsapi',
-      h5: '/v3/pay/transactions/h5',
-      app: '/v3/pay/transactions/app',
-      native: '/v3/pay/transactions/native',
-    }
-    return map[tradeType] ?? '/v3/pay/transactions/jsapi'
-  }
-
   return {
     name: 'wechat',
 
     async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
+      if (input.tradeType !== 'jsapi')
+        return err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
+      if (typeof input.userId !== 'string' || !input.userId.trim() || input.userId.length > 128
+        || (input.currency !== undefined && input.currency !== 'CNY')) {
+        return err(HaiPaymentError.INVALID_INPUT, paymentM('payment_invalidCreateOrderInput'))
+      }
+
       try {
         const requestBody: WechatOrderRequest = {
           appid: config.appId,
@@ -145,44 +141,28 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
           notify_url: input.notifyUrl,
           amount: {
             total: input.amount,
-            currency: input.currency ?? 'CNY',
+            currency: 'CNY',
           },
-        }
-
-        // JSAPI 需要 payer.openid
-        if (input.tradeType === 'jsapi' && input.userId) {
-          requestBody.payer = { openid: input.userId }
+          payer: { openid: input.userId },
         }
 
         if (input.metadata) {
           requestBody.attach = JSON.stringify(input.metadata)
         }
 
-        const path = getOrderPath(input.tradeType)
-        const response = await wechatRequest<{ prepay_id?: string, h5_url?: string, code_url?: string }>('POST', path, requestBody)
+        const response = await wechatRequest<{ prepay_id?: unknown }>('POST', '/v3/pay/transactions/jsapi', requestBody)
+        if (typeof response.prepay_id !== 'string' || !response.prepay_id.trim())
+          throw new Error('Invalid Wechat JSAPI prepay response')
 
-        // 构建客户端调起参数
-        let clientParams: Record<string, unknown> = {}
-
-        if (input.tradeType === 'jsapi') {
-          const timestamp = getTimestamp()
-          const nonce = generateNonce()
-          const paySign = signJsapi(config.appId, timestamp, nonce, response.prepay_id!, config.privateKey)
-
-          clientParams = {
-            appId: config.appId,
-            timeStamp: timestamp,
-            nonceStr: nonce,
-            package: `prepay_id=${response.prepay_id}`,
-            signType: 'RSA',
-            paySign,
-          }
-        }
-        else if (input.tradeType === 'h5') {
-          clientParams = { h5Url: response.h5_url }
-        }
-        else if (input.tradeType === 'native') {
-          clientParams = { codeUrl: response.code_url }
+        const timestamp = getTimestamp()
+        const nonce = generateNonce()
+        const clientParams = {
+          appId: config.appId,
+          timeStamp: timestamp,
+          nonceStr: nonce,
+          package: `prepay_id=${response.prepay_id}`,
+          signType: 'RSA',
+          paySign: signJsapi(config.appId, timestamp, nonce, response.prepay_id, config.privateKey),
         }
 
         return ok({

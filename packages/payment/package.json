@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "jsdom": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

@@ -2,6 +2,7 @@
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createHmac, createPublicKey, createSign, generateKeyPairSync, X509Certificate } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AlipayConfigSchema, StripeConfigSchema } from '../src/payment-config'
 import { HaiPaymentError } from '../src/payment-types'
 import { createAlipayProvider } from '../src/providers/alipay/alipay-provider'
 import { formatAlipayTime } from '../src/providers/alipay/alipay-time'
@@ -19,7 +20,7 @@ const rotatedPair = generateKeyPairSync('rsa', {
   publicKeyEncoding: { type: 'spki', format: 'pem' },
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 })
-const alipayConfig = { appId: 'app_security', sellerId: 'seller_security', privateKey: pair.privateKey, alipayPublicKey: pair.publicKey }
+const alipayConfig = AlipayConfigSchema.parse({ appId: 'app_security', sellerId: 'seller_security', privateKey: pair.privateKey, alipayPublicKey: pair.publicKey, returnUrl: 'https://example.invalid/payment/return' })
 const wechatConfig = {
   appId: 'wx_security',
   mchId: 'mch_security',
@@ -123,12 +124,12 @@ afterEach(() => {
 })
 
 describe('alipay notification security', () => {
-  it.each([{ app_id: 'OTHER_APP' }, { seller_id: 'OTHER_SELLER' }, { sign_type: 'RSA' }])('有效签名但身份或算法错误时拒绝：%j', async (fields) => {
+  it.each<Record<string, string>>([{ app_id: 'OTHER_APP' }, { seller_id: 'OTHER_SELLER' }, { sign_type: 'RSA' }])('有效签名但身份或算法错误时拒绝：%j', async (fields) => {
     const result = await createAlipayProvider(alipayConfig).handleNotify(alipayRequest(fields))
     expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.NOTIFY_VERIFY_FAILED.code } })
   })
 
-  it.each([
+  it.each<Record<string, string>>([
     { notify_time: '2026-02-30 10:00:00' },
     { notify_time: '2026-10-22T08:00:00' },
     { notify_time: '2026-10-22 09:00:00' },
@@ -155,16 +156,10 @@ describe('alipay notification security', () => {
   it('uTC 节点使用北京时间签名，并将订单和签名放在 form body 而非 URL', async () => {
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ alipay_trade_create_response: { code: '10000', out_trade_no: 'ORDER_PRIVATE', trade_no: 'ALI_PRIVATE' } }),
+      json: async () => ({ alipay_trade_query_response: { code: '10000', out_trade_no: 'ORDER_PRIVATE', trade_no: 'ALI_PRIVATE', trade_status: 'WAIT_BUYER_PAY', total_amount: '1.00' } }),
     })
     vi.stubGlobal('fetch', fetchSpy)
-    const result = await createAlipayProvider(alipayConfig).createOrder({
-      orderNo: 'ORDER_PRIVATE',
-      amount: 100,
-      description: 'private buyer description',
-      tradeType: 'jsapi',
-      notifyUrl: 'https://example.invalid/private/notify',
-    })
+    const result = await createAlipayProvider(alipayConfig).queryOrder('ORDER_PRIVATE')
     expect(result.success).toBe(true)
     const [url, options] = fetchSpy.mock.calls[0]
     expect(url).toBe('https://openapi.alipay.com/gateway.do')
@@ -241,7 +236,7 @@ describe('wechat notification security', () => {
 })
 
 describe('stripe notification security', () => {
-  const config = { secretKey: 'sk_test_notify_security', webhookSecret: 'whsec_security', successUrl: 'https://example.invalid/success' }
+  const config = StripeConfigSchema.parse({ secretKey: 'sk_test_notify_security', webhookSecret: 'whsec_security', successUrl: 'https://example.invalid/success' })
   const event = {
     id: 'evt_security',
     created: 1_700_000_000,

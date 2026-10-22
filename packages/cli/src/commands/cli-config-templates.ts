@@ -771,7 +771,7 @@ function generatePaymentConfig(): string {
 # 支付配置 (@h-ai/payment)
 # =============================================================================
 
-# 微信支付（按需开启）
+# 微信支付（仅公众号 JSAPI，需当前 appId 的 openid）
 # wechat:
 #   mchId: ''
 #   apiV3Key: ''
@@ -781,12 +781,13 @@ function generatePaymentConfig(): string {
 #     PUB_KEY_ID_123: '' # 平台公钥 PEM；证书则以其真实序列号作为 key
 #   appId: ''
 
-# 支付宝（按需开启）
+# 支付宝（仅 H5/WAP，浏览器 POST 签名字段）
 # alipay:
 #   appId: ''
 #   sellerId: '' # 必填；回调 seller_id 必须与此一致
 #   privateKey: ''
 #   alipayPublicKey: ''
+#   returnUrl: 'https://app.example/payment/return' # 必填 HTTPS；回跳不代表已付款
 #   signType: RSA2
 #   sandbox: false
 

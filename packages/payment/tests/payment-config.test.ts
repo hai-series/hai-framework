@@ -100,6 +100,7 @@ describe('alipayConfigSchema', () => {
       sellerId,
       privateKey: 'pk',
       alipayPublicKey: 'pub',
+      returnUrl: 'https://example.invalid/payment/return',
     })
     expect(result.success).toBe(false)
   })
@@ -110,6 +111,7 @@ describe('alipayConfigSchema', () => {
       privateKey: 'pk',
       sellerId: '2088_test',
       alipayPublicKey: 'pub',
+      returnUrl: 'https://example.invalid/payment/return',
     })
     expect(result.success).toBe(true)
     if (result.success) {
@@ -124,6 +126,7 @@ describe('alipayConfigSchema', () => {
       privateKey: 'pk',
       sellerId: '2088_test',
       alipayPublicKey: 'pub',
+      returnUrl: 'https://example.invalid/payment/return',
       signType: 'RSA',
     })
     expect(result.success).toBe(true)
@@ -138,6 +141,7 @@ describe('alipayConfigSchema', () => {
       privateKey: 'pk',
       sellerId: '2088_test',
       alipayPublicKey: 'pub',
+      returnUrl: 'https://example.invalid/payment/return',
       sandbox: true,
     })
     expect(result.success).toBe(true)
@@ -152,6 +156,7 @@ describe('alipayConfigSchema', () => {
       privateKey: 'pk',
       sellerId: '2088_test',
       alipayPublicKey: 'pub',
+      returnUrl: 'https://example.invalid/payment/return',
       signType: 'MD5',
     })
     expect(result.success).toBe(false)
@@ -162,6 +167,7 @@ describe('alipayConfigSchema', () => {
       privateKey: 'pk',
       sellerId: '2088_test',
       alipayPublicKey: 'pub',
+      returnUrl: 'https://example.invalid/payment/return',
     })
     expect(result.success).toBe(false)
   })
@@ -171,6 +177,7 @@ describe('alipayConfigSchema', () => {
       appId: 'ali-app',
       sellerId: '2088_test',
       alipayPublicKey: 'pub',
+      returnUrl: 'https://example.invalid/payment/return',
     })
     expect(result.success).toBe(false)
   })
@@ -181,6 +188,7 @@ describe('alipayConfigSchema', () => {
       privateKey: 'pk',
       sellerId: '2088_test',
       alipayPublicKey: '',
+      returnUrl: 'https://example.invalid/payment/return',
     })
     expect(result.success).toBe(false)
   })
@@ -283,6 +291,7 @@ describe('paymentConfigSchema（顶层）', () => {
         privateKey: 'pk',
         sellerId: '2088_test',
         alipayPublicKey: 'pub',
+        returnUrl: 'https://example.invalid/payment/return',
       },
       stripe: {
         successUrl: 'https://example.invalid/payment/success',

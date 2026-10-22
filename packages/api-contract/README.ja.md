@@ -19,6 +19,8 @@ hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を
 - IAM Token DTO は httpOnly cookie に対応。レスポンス本文に `refreshToken` が含まれない場合は、サーバーが `Set-Cookie` で管理します。
 - IAM の `auth.currentUser` はユーザー情報と現在のサーバーセッションの `roles` / `permissions` を返します。セッション復元のためにクライアントが権限のスナップショットを永続化する必要はありません。
 
+支払い作成の入出力は WeChat `jsapi`・Alipay `h5`・Stripe `h5` のみ受け付け、WeChat は `userId`（openid）が必須です。App・Native・ミニプログラムなどは検証で拒否します。Alipay は `{ gateway, fields }` のページパラメーターを返し、作成成功は支払い完了を意味しません。クライアント処理は [Payment](../payment/README.ja.md) を参照してください。
+
 ## 使い始める
 
 ### クイックスタート

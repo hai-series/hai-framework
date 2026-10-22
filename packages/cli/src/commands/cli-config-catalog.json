@@ -3192,6 +3192,14 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
+    "name": "HAI_PAYMENT_ALIPAY_RETURNURL",
+    "module": "payment",
+    "path": "payment.alipay.returnUrl",
+    "description": "手机网站支付完成后返回的可信 HTTPS 地址；仅用于页面导航，不能证明付款。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
     "name": "HAI_PAYMENT_ALIPAY_SANDBOX",
     "module": "payment",
     "path": "payment.alipay.sandbox",

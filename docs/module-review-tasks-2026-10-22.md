@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03，共 71 个，另有 21 个按模块拆分的 JSDoc 任务，共 92 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 46/46；P2 21/46（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 46/46；P2 22/46（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -335,7 +335,8 @@
 
 ### PAY-06 · P2 · 按平台实现 tradeType，删除表面支持的分支
 
-- [ ] 待修正（源码确认；范围：payment）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：内置渠道收敛为微信JSAPI、支付宝H5/WAP和StripeH5；微信强制openid/CNY并校验prepay_id再签完整桥参数，支付宝按官方SDK离线签名11字段并由浏览器POST固定网关、引入可信HTTPS returnUrl，移除未实现模式/伪预付ID/无效错误码。同步client安全检查、HTTP/CLI生成调用方、API契约、env、三语README/skill/LLMS。307支付与真实模板测试、31契约测试、6配置回归通过；Chrome真实表单提交拦截验证11字段和独立RSA校验，双Node通知消费者通过；严格类型、fresh payment/contract/CLI build、定向lint、skills/API/env门禁通过。未使用商户凭据、支付沙箱或手机，不声称真实渠道付款成功；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/payment/src/providers/wechat/wechat-pay-provider.ts:145](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L145)；[packages/payment/src/providers/alipay/alipay-provider.ts:108](../packages/payment/src/providers/alipay/alipay-provider.ts#L108)。
 - **证据与影响**：微信 app 分支没有构造调起参数、h5 请求没有表达 scene_info；支付宝把 app/wap 等模式都送入相同 JSON 请求解析，且 JSAPI input.userId 未进入 buyer 参数。公开枚举超过实际完整实现。
 - **修正内容**：逐平台列出支持矩阵并实现模式专属请求/响应；未实现模式明确 UNSUPPORTED，而不是回落到另一种模式或空 clientParams。

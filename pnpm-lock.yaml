@@ -1798,6 +1798,9 @@ importers:
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.1.2
       rimraf:
         specifier: 'catalog:'
         version: 6.1.3

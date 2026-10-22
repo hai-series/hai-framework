@@ -101,72 +101,39 @@ describe('wechat-pay-provider', () => {
       expect(body.payer.openid).toBe('openid-user-001')
     })
 
-    it('h5 下单成功', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ h5_url: 'https://wx.tenpay.com/cgi-bin/mmpayweb-bin/checkmweb?xxx' }),
-      })
-
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.createOrder({
-        orderNo: 'ORD002',
-        amount: 200,
-        description: 'H5 测试订单',
-        tradeType: 'h5',
-        notifyUrl: 'https://example.com/notify/wechat',
-      })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.tradeType).toBe('h5')
-        expect(result.data.clientParams.h5Url).toContain('tenpay.com')
-      }
-
-      const [url] = fetchSpy.mock.calls[0]
-      expect(url).toContain('/v3/pay/transactions/h5')
+    it.each(['h5', 'native', 'app', 'mini_program', 'unknown'])('拒绝未实现的 %s，不能回落到 JSAPI', async (tradeType) => {
+      const input = { orderNo: 'ORD002', amount: 100, description: '不支持的模式', tradeType: 'jsapi' as const, userId: 'openid-test', notifyUrl: 'https://example.com/notify' }
+      // 模拟越过 TypeScript 的运行时输入，公共类型已经删除这些模式。
+      Reflect.set(input, 'tradeType', tradeType)
+      const result = await createWechatPayProvider(testConfig).createOrder(input)
+      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.UNSUPPORTED_TRADE_TYPE.code } })
+      expect(fetchSpy).not.toHaveBeenCalled()
     })
 
-    it('native 下单成功', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ code_url: 'weixin://wxpay/bizpayurl?xxx' }),
-      })
-
-      const provider = createWechatPayProvider(testConfig)
-      const result = await provider.createOrder({
-        orderNo: 'ORD003',
-        amount: 300,
-        description: 'Native 测试订单',
-        tradeType: 'native',
-        notifyUrl: 'https://example.com/notify/wechat',
-      })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.clientParams.codeUrl).toContain('wxpay')
-      }
-
-      const [url] = fetchSpy.mock.calls[0]
-      expect(url).toContain('/v3/pay/transactions/native')
-    })
-
-    it('app 下单调用正确路径', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ prepay_id: 'app_prepay_001' }),
-      })
-
-      const provider = createWechatPayProvider(testConfig)
-      await provider.createOrder({
-        orderNo: 'ORD004',
-        amount: 400,
-        description: 'App 测试',
-        tradeType: 'app',
+    it.each([undefined, '', '  '])('缺少有效 openid=%s 时在联网前拒绝', async (userId) => {
+      const result = await createWechatPayProvider(testConfig).createOrder({
+        orderNo: 'ORD-OPENID',
+        amount: 100,
+        description: '缺少身份',
+        tradeType: 'jsapi',
+        userId,
         notifyUrl: 'https://example.com/notify',
       })
+      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.INVALID_INPUT.code } })
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
 
-      const [url] = fetchSpy.mock.calls[0]
-      expect(url).toContain('/v3/pay/transactions/app')
+    it.each([{}, { prepay_id: '' }, { prepay_id: 42 }, { h5_url: 'https://example.com' }])('拒绝不能调起的预支付响应 %j', async (response) => {
+      fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => response })
+      const result = await createWechatPayProvider(testConfig).createOrder({
+        orderNo: 'ORD-PREPAY',
+        amount: 100,
+        description: '协议校验',
+        tradeType: 'jsapi',
+        userId: 'openid-test',
+        notifyUrl: 'https://example.com/notify',
+      })
+      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.CREATE_ORDER_FAILED.code } })
     })
 
     it('附带 metadata 会包含在请求 body 中', async () => {
@@ -192,25 +159,18 @@ describe('wechat-pay-provider', () => {
       expect(attach.campaign).toBe('spring')
     })
 
-    it('指定 currency 传递到请求体', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ prepay_id: 'test' }),
-      })
-
-      const provider = createWechatPayProvider(testConfig)
-      await provider.createOrder({
-        orderNo: 'ORD006',
+    it('拒绝 JSAPI 不支持的币种，不忽略用户输入', async () => {
+      const result = await createWechatPayProvider(testConfig).createOrder({
+        orderNo: 'ORD-CURRENCY',
         amount: 100,
-        description: '指定币种',
+        description: '币种',
         tradeType: 'jsapi',
-        userId: 'openid-xxx',
+        userId: 'openid-test',
         currency: 'USD',
         notifyUrl: 'https://example.com/notify',
       })
-
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body)
-      expect(body.amount.currency).toBe('USD')
+      expect(result).toMatchObject({ success: false, error: { code: HaiPaymentError.INVALID_INPUT.code } })
+      expect(fetchSpy).not.toHaveBeenCalled()
     })
 
     it('fetch 失败返回 CREATE_ORDER_FAILED', async () => {
@@ -225,6 +185,7 @@ describe('wechat-pay-provider', () => {
         orderNo: 'ORD-FAIL',
         amount: 100,
         description: '失败测试',
+        userId: 'openid-test',
         tradeType: 'jsapi',
         notifyUrl: 'https://example.com/notify',
       })
@@ -244,7 +205,8 @@ describe('wechat-pay-provider', () => {
         orderNo: 'ORD-NET-ERR',
         amount: 100,
         description: '网络异常',
-        tradeType: 'h5',
+        userId: 'openid-test',
+        tradeType: 'jsapi',
         notifyUrl: 'https://example.com/notify',
       })
 

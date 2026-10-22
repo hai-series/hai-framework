@@ -4,8 +4,8 @@ import { z } from 'zod'
 /** 支付渠道 Schema。 */
 export const PaymentProviderSchema = z.enum(['wechat', 'alipay', 'stripe'])
 
-/** 支付交易类型 Schema。 */
-export const PaymentTradeTypeSchema = z.enum(['jsapi', 'h5', 'app', 'native', 'mini_program'])
+/** 完整实现的支付类型：微信 jsapi，支付宝/Stripe h5。 */
+export const PaymentTradeTypeSchema = z.enum(['jsapi', 'h5'])
 
 /** 创建支付订单入参 Schema。 */
 export const PaymentCreateOrderInputSchema = z.object({
@@ -13,9 +13,9 @@ export const PaymentCreateOrderInputSchema = z.object({
   amount: z.number().int().min(1),
   description: z.string().min(1),
   tradeType: PaymentTradeTypeSchema,
-  userId: z.string().optional(),
+  userId: z.string().trim().min(1).max(128).optional(),
   metadata: z.record(z.string(), z.string()).optional(),
-}).strict().refine(input => input.provider !== 'stripe' || input.tradeType === 'h5', { path: ['tradeType'] })
+}).strict().refine(input => input.tradeType === (input.provider === 'wechat' ? 'jsapi' : 'h5'), { path: ['tradeType'] }).refine(input => input.provider !== 'wechat' || input.userId !== undefined, { path: ['userId'] })
 
 /** 创建支付订单业务数据 Schema。 */
 export const PaymentCreateOrderDataSchema = z.object({
@@ -23,7 +23,7 @@ export const PaymentCreateOrderDataSchema = z.object({
   tradeType: PaymentTradeTypeSchema,
   clientParams: z.record(z.string(), z.unknown()),
   prepayId: z.string().optional(),
-})
+}).refine(order => order.tradeType === (order.provider === 'wechat' ? 'jsapi' : 'h5'), { path: ['tradeType'] })
 
 /** 查询支付订单入参 Schema。 */
 export const PaymentQueryOrderInputSchema = z.object({

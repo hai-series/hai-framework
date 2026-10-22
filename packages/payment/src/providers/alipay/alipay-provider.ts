@@ -16,7 +16,7 @@ import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
 import { signAlipayParams, verifyAlipayNotify } from './alipay-sign.js'
 import { formatAlipayTime, parseAlipayTime } from './alipay-time.js'
-import { AlipayCloseResponseSchema, AlipayCreateResponseSchema, AlipayNotifyParamsSchema, AlipayQueryResponseSchema, AlipayRefundResponseSchema, AlipayResponseRootSchema, AlipayResponseSchema } from './alipay-types.js'
+import { AlipayCloseResponseSchema, AlipayNotifyParamsSchema, AlipayQueryResponseSchema, AlipayRefundResponseSchema, AlipayResponseRootSchema, AlipayResponseSchema } from './alipay-types.js'
 
 /** 支付宝网关地址 */
 const ALIPAY_GATEWAY = 'https://openapi.alipay.com/gateway.do'
@@ -73,23 +73,13 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
     return {
       app_id: config.appId,
       method,
+      format: 'JSON',
       charset: 'utf-8',
       sign_type: signType,
       timestamp: formatAlipayTime(new Date()),
       version: '1.0',
       notify_url: notifyUrl,
     }
-  }
-
-  /** 根据 tradeType 映射到产品码和 API */
-  function getTradeConfig(tradeType: string): { method: string, productCode: string } {
-    const map: Record<string, { method: string, productCode: string }> = {
-      jsapi: { method: 'alipay.trade.create', productCode: 'JSAPI_PAY' },
-      h5: { method: 'alipay.trade.wap.pay', productCode: 'QUICK_WAP_WAY' },
-      app: { method: 'alipay.trade.app.pay', productCode: 'QUICK_MSECURITY_PAY' },
-      native: { method: 'alipay.trade.precreate', productCode: 'FACE_TO_FACE_PAYMENT' },
-    }
-    return map[tradeType] ?? map.h5
   }
 
   /**
@@ -149,33 +139,30 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
     name: 'alipay',
 
     async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
+      if (input.tradeType !== 'h5')
+        return err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
+      if (input.currency !== undefined && input.currency !== 'CNY')
+        return err(HaiPaymentError.INVALID_INPUT, paymentM('payment_invalidCreateOrderInput'))
       try {
-        const { method, productCode } = getTradeConfig(input.tradeType)
-
-        const bizContent = JSON.stringify({
-          out_trade_no: input.orderNo,
-          total_amount: formatFenAmount(input.amount),
-          subject: input.description,
-          product_code: productCode,
-          passback_params: input.metadata ? JSON.stringify(input.metadata) : undefined,
-        })
-
-        const params = {
-          ...buildCommonParams(method, input.notifyUrl),
-          biz_content: bizContent,
+        // WAP 是页面支付 API：离线签名后由浏览器 POST，不能当作服务端 JSON 请求。
+        const fields = {
+          ...buildCommonParams('alipay.trade.wap.pay', input.notifyUrl),
+          return_url: config.returnUrl,
+          biz_content: JSON.stringify({
+            out_trade_no: input.orderNo,
+            total_amount: formatFenAmount(input.amount),
+            subject: input.description,
+            product_code: 'QUICK_WAP_WAY',
+            passback_params: input.metadata ? encodeURIComponent(JSON.stringify(input.metadata)) : undefined,
+          }),
         }
-
-        const data = await alipayRequest(params, AlipayCreateResponseSchema)
-        if (data.out_trade_no !== input.orderNo
-          || (method === 'alipay.trade.precreate' ? !data.qr_code : !data.trade_no)) {
-          throw new Error('Invalid Alipay create response')
-        }
-
         return ok({
           provider: 'alipay',
-          tradeType: input.tradeType,
-          clientParams: data,
-          prepayId: data.trade_no,
+          tradeType: 'h5',
+          clientParams: {
+            gateway,
+            fields: { ...fields, sign: signAlipayParams(fields, config.privateKey, signType) },
+          },
         })
       }
       catch (cause) {
