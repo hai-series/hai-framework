@@ -7,7 +7,8 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import type { ReldbConfig } from '../reldb-config.js'
+import type { PoolConnection as MysqlConnection, Pool as MysqlPool, ResultSetHeader } from 'mysql2/promise'
+import type { MysqlPoolConfig, ReldbConfig } from '../reldb-config.js'
 import type {
   DdlOperations,
   DmlOperations,
@@ -20,7 +21,10 @@ import type {
 import type { ReldbOpsContext } from './reldb-provider-base.js'
 
 import { createRequire } from 'node:module'
+import { isIP } from 'node:net'
+import { performance } from 'node:perf_hooks'
 import { core, err, ok } from '@h-ai/core'
+import { MysqlPoolConfigSchema } from '../reldb-config.js'
 import { reldbM } from '../reldb-i18n.js'
 import { HaiReldbError } from '../reldb-types.js'
 
@@ -32,30 +36,17 @@ import { createTxHandle } from './reldb-tx-assembler.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'mysql' })
 
-// ─── mysql2 类型定义（避免强依赖） ───
-
-/** MySQL 连接池接口 */
-interface MysqlPool {
-  query: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>
-  execute: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>
-  getConnection: () => Promise<MysqlConnection>
-  end: () => Promise<void>
-}
-
-/** MySQL 连接接口 */
-interface MysqlConnection {
-  query: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>
-  execute: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>
-  beginTransaction: () => Promise<void>
-  commit: () => Promise<void>
-  rollback: () => Promise<void>
+/** 借用真实驱动连接及其容量槽位；超时只约束借用完成前，不中止已启动 SQL。 */
+interface MysqlConnectionLease {
+  connection: MysqlConnection
+  deadline: number
   release: () => void
 }
 
-/** MySQL 执行结果 */
-interface MysqlResult {
-  affectedRows: number
-  insertId: number
+/** 可取消的 FIFO 排队项；进入驱动前可直接移除，绝不留在 mysql2 内部队列。 */
+interface MysqlConnectionWaiter {
+  start: () => void
+  cancel: () => void
 }
 
 // ─── MySQL Provider 实现 ───
@@ -71,27 +62,134 @@ export function createMysqlProvider(): ReldbProvider {
   /** 只有健康检查完成的连接才可供业务使用；清理失败仍保留底层资源。 */
   let ready = false
   let closing: Promise<HaiResult<void>> | null = null
-  let activeTransactions = 0
-  let transactionsDrained: Promise<void> = Promise.resolve()
-  let resolveTransactions: (() => void) | null = null
+  let poolConfig: MysqlPoolConfig | null = null
+  let activeSlots = 0
+  let slotsDrained: Promise<void> = Promise.resolve()
+  let resolveSlots: (() => void) | null = null
+  const waiters: MysqlConnectionWaiter[] = []
+  let currentConfig: ReldbConfig | null = null
 
-  /** 在获取连接前登记事务，关闭时等待其提交/回滚并归还连接。 */
-  function retainTransaction(): () => void {
-    if (activeTransactions++ === 0)
-      transactionsDrained = new Promise<void>((resolve) => { resolveTransactions = resolve })
-    return () => {
-      if (--activeTransactions === 0) {
-        resolveTransactions?.()
-        resolveTransactions = null
+  /** 归还槽位后只启动未取消的队首请求；在途建连即使已超时也须结算后才能腾出槽位。 */
+  function releaseSlot(): void {
+    activeSlots--
+    if (ready && poolConfig) {
+      const maximum = poolConfig.max
+      while (waiters.length > 0) {
+        if (activeSlots >= maximum)
+          break
+        waiters.shift()!.start()
       }
     }
+    if (activeSlots === 0) {
+      resolveSlots?.()
+      resolveSlots = null
+    }
   }
-  let currentConfig: ReldbConfig | null = null
+
+  /**
+   * 在唯一截止期限内借用连接；SDK 不排队，超时排队项立即删除，迟到连接只释放而不执行 SQL。
+   *
+   * 已进入驱动的建连不能由 mysql2 Promise API 取消，因此保留槽位直到它完成/失败。
+   * close 等待这些有限建连结算，驱动 connectTimeout 与 acquireTimeout 相同。
+   */
+  function acquireConnection(): Promise<HaiResult<MysqlConnectionLease>> {
+    const owned = pool
+    const limits = poolConfig
+    if (!ready || !owned || !limits)
+      return Promise.resolve(err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
+    if (activeSlots >= limits.max && waiters.length >= limits.queueLimit)
+      return Promise.resolve(err(HaiReldbError.POOL_EXHAUSTED, reldbM('reldb_mysqlPoolQueueFull')))
+
+    const deadline = performance.now() + limits.acquireTimeout
+    return new Promise((resolve) => {
+      let completed = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeoutResult = () => err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
+      const finish = (result: HaiResult<MysqlConnectionLease>) => {
+        if (completed)
+          return
+        completed = true
+        clearTimeout(timer)
+        resolve(result)
+      }
+      const waiter: MysqlConnectionWaiter = {
+        cancel: () => finish(err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))),
+        start: () => {
+          if (!ready || performance.now() >= deadline) {
+            finish(ready ? timeoutResult() : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
+            return
+          }
+          if (activeSlots++ === 0)
+            slotsDrained = new Promise<void>((resolve) => { resolveSlots = resolve })
+          // 独立处理失败分支，避免 Promise.race 遗留一个会在后台继续执行的连接借用。
+          void Promise.resolve().then(() => owned.getConnection()).then((connection) => {
+            if (completed || !ready || performance.now() >= deadline) {
+              try {
+                connection.release()
+              }
+              finally { releaseSlot() }
+              finish(ready ? timeoutResult() : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized')))
+              return
+            }
+            let released = false
+            finish(ok({
+              connection,
+              deadline,
+              release: () => {
+                if (released)
+                  return
+                released = true
+                try {
+                  connection.release()
+                }
+                finally { releaseSlot() }
+              },
+            }))
+          }, (error) => {
+            releaseSlot()
+            finish(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error))
+          }).catch((error) => {
+            // 迟到连接清理异常时停止新业务，保留池供 close 重试，不泄露驱动错误。
+            ready = false
+            finish(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: reldbM('reldb_mysqlPoolReleaseFailed') } }), error))
+            logger.warn('MySQL connection release failed; pool requires cleanup')
+          })
+        },
+      }
+      timer = setTimeout(() => {
+        const index = waiters.indexOf(waiter)
+        if (index >= 0)
+          waiters.splice(index, 1)
+        finish(timeoutResult())
+      }, limits.acquireTimeout)
+      if (activeSlots < limits.max)
+        waiter.start()
+      else
+        waiters.push(waiter)
+    })
+  }
+
+  /** 所有池级 SQL/DDL 都先借用并归还连接，不能绕过获取超时或容量限制。 */
+  async function withConnection<T>(fn: (connection: MysqlConnection) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    const acquired = await acquireConnection()
+    if (!acquired.success)
+      return acquired
+    try {
+      if (!ready)
+        return err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
+      if (performance.now() >= acquired.data.deadline)
+        return err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
+      return await fn(acquired.data.connection)
+    }
+    finally { acquired.data.release() }
+  }
 
   /** 保留所有权直到释放成功；合并并发关闭且立即阻止新操作。 */
   function closeResource(): Promise<HaiResult<void>> {
     ready = false
     currentConfig = null
+    for (const waiter of waiters.splice(0))
+      waiter.cancel()
     if (closing)
       return closing
     const owned = pool
@@ -99,9 +197,10 @@ export function createMysqlProvider(): ReldbProvider {
       return Promise.resolve(ok(undefined))
     closing = (async (): Promise<HaiResult<void>> => {
       try {
-        await transactionsDrained
+        await slotsDrained
         await owned.end()
         pool = null
+        poolConfig = null
         return ok(undefined)
       }
       catch (error) {
@@ -138,20 +237,16 @@ export function createMysqlProvider(): ReldbProvider {
    * 在当前数据库中查找索引所属表。
    */
   async function findIndexTableName(
-    queryFn: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
     indexName: string,
   ): Promise<HaiResult<string | null>> {
-    try {
-      const [rows] = await queryFn(
+    return withConnection(async (connection) => {
+      const [rows] = await connection.query(
         'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME = ? LIMIT 1',
         [indexName],
       )
       const data = rows as Array<{ name: string }>
       return ok(data[0]?.name ?? null)
-    }
-    catch (error) {
-      return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_queryFailed', { params: { error: String(error) } }), error)
-    }
+    })
   }
 
   // ─── MySQL 方言辅助 ───
@@ -248,39 +343,41 @@ export function createMysqlProvider(): ReldbProvider {
 
   // ─── DDL 操作 ───
 
+  /** 单条 DDL 共享池借用边界，释放在 finally 内完成。 */
+  function executeDdl(sql: string): Promise<HaiResult<void>> {
+    return withConnection(async (connection) => {
+      await connection.query(sql)
+      return ok(undefined)
+    })
+  }
+
   const rawDdl: DdlOperations = {
     async createTable(name, columns, ifNotExists = true) {
       const quotedTable = mysqlQuoteId(name)
       const sql = mysqlBuildCreateTableSql(quotedTable, columns, ifNotExists)
-      await pool!.query(sql)
-      return ok(undefined)
+      return executeDdl(sql)
     },
     async dropTable(name, ifExists) {
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      await pool!.query(`DROP TABLE ${ifExistsClause}${mysqlQuoteId(name)}`)
-      return ok(undefined)
+      return executeDdl(`DROP TABLE ${ifExistsClause}${mysqlQuoteId(name)}`)
     },
     async addColumn(table, column, def) {
       const colSql = mysqlBuildColumnSql(column, def)
-      await pool!.query(`ALTER TABLE ${mysqlQuoteId(table)} ADD COLUMN ${colSql}`)
-      return ok(undefined)
+      return executeDdl(`ALTER TABLE ${mysqlQuoteId(table)} ADD COLUMN ${colSql}`)
     },
     async dropColumn(table, column) {
-      await pool!.query(`ALTER TABLE ${mysqlQuoteId(table)} DROP COLUMN ${mysqlQuoteId(column)}`)
-      return ok(undefined)
+      return executeDdl(`ALTER TABLE ${mysqlQuoteId(table)} DROP COLUMN ${mysqlQuoteId(column)}`)
     },
     async renameTable(oldName, newName) {
-      await pool!.query(`RENAME TABLE ${mysqlQuoteId(oldName)} TO ${mysqlQuoteId(newName)}`)
-      return ok(undefined)
+      return executeDdl(`RENAME TABLE ${mysqlQuoteId(oldName)} TO ${mysqlQuoteId(newName)}`)
     },
     async createIndex(table, index, def) {
       const uniqueClause = def.unique ? 'UNIQUE ' : ''
       const columns = def.columns.map(c => mysqlQuoteId(c)).join(', ')
-      await pool!.query(`CREATE ${uniqueClause}INDEX ${mysqlQuoteId(index)} ON ${mysqlQuoteId(table)} (${columns})`)
-      return ok(undefined)
+      return executeDdl(`CREATE ${uniqueClause}INDEX ${mysqlQuoteId(index)} ON ${mysqlQuoteId(table)} (${columns})`)
     },
     async dropIndex(index, ifExists) {
-      const tableResult = await findIndexTableName((s, v) => pool!.query(s, v), index)
+      const tableResult = await findIndexTableName(index)
       if (!tableResult.success)
         return tableResult
 
@@ -290,12 +387,10 @@ export function createMysqlProvider(): ReldbProvider {
         return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed', { params: { error: `index not found: ${index}` } }))
       }
 
-      await pool!.query(`DROP INDEX ${mysqlQuoteId(index)} ON ${mysqlQuoteId(tableResult.data)}`)
-      return ok(undefined)
+      return executeDdl(`DROP INDEX ${mysqlQuoteId(index)} ON ${mysqlQuoteId(tableResult.data)}`)
     },
     async raw(sql) {
-      await pool!.query(sql)
-      return ok(undefined)
+      return executeDdl(sql)
     },
   }
 
@@ -303,49 +398,50 @@ export function createMysqlProvider(): ReldbProvider {
 
   const rawDml: DmlOperations = {
     async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
-      const [rows] = await pool!.query(sql, params)
-      return ok(rows as T[])
+      return withConnection(async (connection) => {
+        const [rows]: [unknown, unknown] = await connection.query(sql, params)
+        return ok(rows as T[])
+      })
     },
     async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
-      const [rows] = await pool!.query(sql, params)
-      return ok(((rows as unknown[])[0] as T) ?? null)
+      return withConnection(async (connection) => {
+        const [rows]: [unknown, unknown] = await connection.query(sql, params)
+        return ok(((rows as unknown[])[0] as T) ?? null)
+      })
     },
     async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-      const [result] = await pool!.execute(sql, params)
-      return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
+      return withConnection(async (connection) => {
+        const [result] = await connection.execute<ResultSetHeader>({ sql, values: params })
+        return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
+      })
     },
     async batch(statements) {
-      let connection: MysqlConnection | null = null
-      try {
-        connection = await pool!.getConnection()
-        await connection.beginTransaction()
-        for (const { sql: s, params } of statements) {
-          await connection.execute(s, params)
+      return withConnection(async (connection) => {
+        try {
+          await connection.beginTransaction()
+          for (const { sql: s, params } of statements) {
+            await connection.execute({ sql: s, values: params })
+          }
+          await connection.commit()
+          return ok(undefined)
         }
-        await connection.commit()
-        return ok(undefined)
-      }
-      catch (error) {
-        if (connection) {
+        catch (error) {
           await connection.rollback().catch(() => { })
+          return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', { params: { error: String(error) } }), error)
         }
-        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', { params: { error: String(error) } }), error)
-      }
-      finally {
-        if (connection) {
-          connection.release()
-        }
-      }
+      })
     },
     async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
-      const result = await queryPageAsync<T>(
-        async (sql, params) => {
-          const [rows] = await pool!.query(sql, params)
-          return rows as unknown[]
-        },
-        options,
-      )
-      return ok(result)
+      return withConnection(async (connection) => {
+        const result = await queryPageAsync<T>(
+          async (sql, params) => {
+            const [rows] = await connection.query(sql, params)
+            return rows as unknown[]
+          },
+          options,
+        )
+        return ok(result)
+      })
     },
   }
 
@@ -355,20 +451,20 @@ export function createMysqlProvider(): ReldbProvider {
   function createMysqlTxDmlOps(conn: MysqlConnection): DmlOperations {
     return {
       async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
-        const [rows] = await conn.query(sql, params)
+        const [rows]: [unknown, unknown] = await conn.query(sql, params)
         return ok(rows as T[])
       },
       async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
-        const [rows] = await conn.query(sql, params)
+        const [rows]: [unknown, unknown] = await conn.query(sql, params)
         return ok(((rows as unknown[])[0] as T) ?? null)
       },
       async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-        const [result] = await conn.execute(sql, params)
+        const [result] = await conn.execute<ResultSetHeader>({ sql, values: params })
         return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
       },
       async batch(statements) {
         for (const { sql: s, params } of statements) {
-          await conn.execute(s, params)
+          await conn.execute({ sql: s, values: params })
         }
         return ok(undefined)
       },
@@ -386,18 +482,21 @@ export function createMysqlProvider(): ReldbProvider {
   }
 
   async function beginTx(): Promise<HaiResult<DmlWithTxOperations>> {
-    let connection: MysqlConnection | null = null
-
-    const releaseOwnership = retainTransaction()
+    const acquired = await acquireConnection()
+    if (!acquired.success)
+      return acquired
+    let connection: MysqlConnection | null = acquired.data.connection
     try {
-      connection = await pool!.getConnection()
+      if (!ready || performance.now() >= acquired.data.deadline) {
+        acquired.data.release()
+        return ready
+          ? err(HaiReldbError.TIMEOUT, reldbM('reldb_mysqlPoolAcquireTimeout'))
+          : err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
+      }
       await connection.beginTransaction()
     }
     catch (error) {
-      try {
-        connection?.release()
-      }
-      finally { releaseOwnership() }
+      acquired.data.release()
       return err(HaiReldbError.TRANSACTION_FAILED, mysqlTxErrorMessage(String(error)), error)
     }
 
@@ -408,11 +507,10 @@ export function createMysqlProvider(): ReldbProvider {
       rollback: async () => { await connection!.rollback() },
       release: () => {
         try {
-          connection!.release()
+          acquired.data.release()
         }
         finally {
           connection = null
-          releaseOwnership()
         }
       },
       errorMessage: mysqlTxErrorMessage,
@@ -431,21 +529,31 @@ export function createMysqlProvider(): ReldbProvider {
       const previousCleanup = await closeResource()
       if (!previousCleanup.success)
         return previousCleanup
+      const host = config.url ? new URL(config.url).hostname : config.host
+      if (config.ssl && config.ssl.rejectUnauthorized && config.ssl.verifyIdentity && isIP(host.replace(/^\[|\]$/g, ''))) {
+        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_mysqlTlsDnsRequired'))
+      }
+      if (config.ssl && (!config.ssl.rejectUnauthorized || !config.ssl.verifyIdentity)) {
+        logger.warn('MySQL TLS server verification is explicitly disabled', {
+          certificateVerification: config.ssl.rejectUnauthorized,
+          hostnameVerification: config.ssl.rejectUnauthorized && config.ssl.verifyIdentity,
+        })
+      }
       try {
         // Node ESM 按需加载驱动，避免构建器生成无法执行的动态 require。
         const mysql = createRequire(import.meta.url)('mysql2/promise')
 
+        poolConfig = config.pool ?? MysqlPoolConfigSchema.parse({})
         pool = mysql.createPool({
-          uri: config.url,
-          host: config.host,
-          port: config.port,
-          database: config.database,
-          user: config.user,
-          password: config.password,
+          // mysql2 会用非空的分字段覆盖 URI；URL 模式不能传 schema 默认 host 或冲突字段。
+          ...(config.url
+            ? { uri: config.url }
+            : { host: config.host, port: config.port, database: config.database, user: config.user, password: config.password }),
           ssl: config.ssl,
-          connectionLimit: config.pool?.max ?? 10,
-          waitForConnections: true,
-          queueLimit: 0,
+          connectionLimit: poolConfig.max,
+          // 排队由本 Provider 管理，超时项可直接移除；驱动绝不保留取消后的等待者。
+          waitForConnections: false,
+          connectTimeout: poolConfig.acquireTimeout,
           charset: config.mysql?.charset ?? 'utf8mb4',
         }) as MysqlPool
 
@@ -454,7 +562,9 @@ export function createMysqlProvider(): ReldbProvider {
 
         ready = true
         currentConfig = config
-        logger.info('Connected to MySQL', { host: config.host, port: config.port, database: config.database })
+        logger.info('Connected to MySQL', config.url
+          ? { target: core.sanitize.sanitizeUrl(config.url) }
+          : { host: config.host, port: config.port, database: config.database })
         return ok(undefined)
       }
       catch (error) {

@@ -1819,9 +1819,9 @@
     "name": "HAI_DB_DATABASE",
     "module": "db",
     "path": "db.database",
-    "description": "数据库名称",
+    "description": "数据库：SQLite文件路径或:memory:；PostgreSQL必填名称；MySQL无URL时必填，URL模式从URL读取",
     "value": "./data/admin.db",
-    "constraint": "字符串"
+    "constraint": "字符串；最小字符数 1"
   },
   {
     "name": "HAI_DB_HOST",
@@ -1845,14 +1845,6 @@
     "path": "db.mysql.charset",
     "description": "字符集（默认 utf8mb4），推荐使用 utf8mb4 支持完整 Unicode",
     "value": "utf8mb4",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_DB_MYSQL_TIMEZONE",
-    "module": "db",
-    "path": "db.mysql.timezone",
-    "description": "时区设置，如 '+08:00'",
-    "value": "",
     "constraint": "字符串"
   },
   {
@@ -1907,7 +1899,7 @@
     "name": "HAI_DB_POOL",
     "module": "db",
     "path": "db.pool",
-    "description": "连接池配置",
+    "description": "连接池配置：PostgreSQL支持min/idleTimeout；MySQL仅max/acquireTimeout/queueLimit，拒绝其他字段",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
@@ -1915,15 +1907,15 @@
     "name": "HAI_DB_POOL_ACQUIRETIMEOUT",
     "module": "db",
     "path": "db.pool.acquireTimeout",
-    "description": "获取连接超时时间，单位毫秒（默认 10000）",
+    "description": "获取连接超时，毫秒（默认10000）；PostgreSQL >=0，0禁用；MySQL排队+建连总期限为1–2147483647",
     "value": "10000",
-    "constraint": "整数；>= 0；<= 9007199254740991"
+    "constraint": "整数；PostgreSQL >=0（0禁用）；MySQL 1–2147483647"
   },
   {
     "name": "HAI_DB_POOL_IDLETIMEOUT",
     "module": "db",
     "path": "db.pool.idleTimeout",
-    "description": "空闲连接超时时间，单位毫秒（默认 30000）",
+    "description": "PostgreSQL 空闲连接超时，毫秒（默认 30000；0 禁用）",
     "value": "30000",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },
@@ -1939,9 +1931,17 @@
     "name": "HAI_DB_POOL_MIN",
     "module": "db",
     "path": "db.pool.min",
-    "description": "最小连接数（默认 1）",
+    "description": "PostgreSQL 已建立连接的最小保留数（默认 1，不主动预建）",
     "value": "1",
     "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_DB_POOL_QUEUELIMIT",
+    "module": "db",
+    "path": "db.pool.queueLimit",
+    "description": "MySQL 等待队列最大请求数（默认 1000；正整数，不支持无限队列）",
+    "value": "1000",
+    "constraint": "整数；>= 1；<= 9007199254740991"
   },
   {
     "name": "HAI_DB_PORT",
@@ -1995,9 +1995,49 @@
     "name": "HAI_DB_SSL",
     "module": "db",
     "path": "db.ssl",
-    "description": "SSL/TLS 连接配置",
+    "description": "TLS：PostgreSQL使用其模式；MySQL仅false或严格对象，空对象默认校验证书链和DNS身份",
     "value": "false",
-    "constraint": "true | false；字符串；JSON 对象；整体覆盖时替换该节点；取值：require | prefer | allow | disable"
+    "constraint": "true | false；字符串；JSON 对象；整体覆盖时替换该节点；取值：require | prefer | allow | disable | false"
+  },
+  {
+    "name": "HAI_DB_SSL_CA",
+    "module": "db",
+    "path": "db.ssl.ca",
+    "description": "MySQL 信任的 CA，PEM 内容；省略时使用 Node 信任库",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DB_SSL_CERT",
+    "module": "db",
+    "path": "db.ssl.cert",
+    "description": "MySQL 客户端证书，PEM 内容；必须同时提供 key",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DB_SSL_KEY",
+    "module": "db",
+    "path": "db.ssl.key",
+    "description": "MySQL 客户端私钥，PEM 内容；必须同时提供 cert",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DB_SSL_REJECTUNAUTHORIZED",
+    "module": "db",
+    "path": "db.ssl.rejectUnauthorized",
+    "description": "MySQL 是否校验证书链（默认 true）；false 明确放弃服务端认证",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_DB_SSL_VERIFYIDENTITY",
+    "module": "db",
+    "path": "db.ssl.verifyIdentity",
+    "description": "MySQL 是否验证 DNS 主机身份（默认 true）；仅证书链验证开启时有效",
+    "value": "true",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_DB_TYPE",
@@ -2011,9 +2051,9 @@
     "name": "HAI_DB_URL",
     "module": "db",
     "path": "db.url",
-    "description": "连接字符串（可选） 如果提供 url，将优先使用，忽略 host/port 等字段",
+    "description": "网络数据库URL；MySQL仅mysql://连接地址，拒绝query/fragment，优先于host/port/database/user/password",
     "value": "",
-    "constraint": "字符串"
+    "constraint": "字符串；格式 uri"
   },
   {
     "name": "HAI_DB_USER",

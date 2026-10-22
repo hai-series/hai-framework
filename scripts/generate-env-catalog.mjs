@@ -145,7 +145,7 @@ function schemaDocumentation(sources, exported) {
     }
     else if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const method = node.expression.name.text
-      if (method === 'object') {
+      if (['object', 'strictObject', 'looseObject'].includes(method)) {
         visit(node.arguments[0], segments, seen)
       }
       else if (method === 'array') {
@@ -190,6 +190,10 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
   for (const [key, label] of [['minimum', '>='], ['maximum', '<='], ['exclusiveMinimum', '>'], ['exclusiveMaximum', '<'], ['minLength', '最小字符数'], ['maxLength', '最大字符数'], ['minItems', '最少项数'], ['maxItems', '最多项数'], ['format', '格式'], ['pattern', '正则']]) {
     if (key in node)
       constraints.push(`${label} ${node[key]}`)
+  }
+  // 同名字段在两个 Provider 的合法范围不同，不能把分支边界合并成同时成立的条件。
+  if (context.name === 'db' && segments.join('.') === 'pool.acquireTimeout') {
+    constraints.splice(0, constraints.length, '整数；PostgreSQL >=0（0禁用）；MySQL 1–2147483647')
   }
   if (!constraints.length && !enums.length && effectiveDefault !== undefined) {
     const type = typeof effectiveDefault

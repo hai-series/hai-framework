@@ -34,7 +34,19 @@ YAML 写可审查的默认值；`HAI_DB_TYPE`、`HAI_DB_DATABASE`、
 
 ### 初始化与关闭
 
+MySQL `pool` 仅支持 `{ max: 10, acquireTimeout: 10000, queueLimit: 1000 }`（也是省略时默认值）。`acquireTimeout` 为 1–2147483647 毫秒的整数，涵盖排队和建立连接；`queueLimit` 为正整数，禁止无限队列。SQL/DDL/CRUD/batch/tx 共用有限 FIFO：排队超时移除并返回 `TIMEOUT`，满额返回 `POOL_EXHAUSTED`；迟到连接只释放，不执行 SQL，原建连结算前仍占槽位。关闭取消排队，等待借用/事务和驱动有界建连结算，不中止已开始的 SQL。MySQL 的 `min` / `idleTimeout` / `mysql.timezone` 明确拒绝，不承诺最小空闲保留或回收期限；PostgreSQL 保留自己的 min/idleTimeout/允许 acquireTimeout=0 契约，min 不会预建连接。
+
+MySQL 可仅传 `mysql://` URL，优先于 host/port/database/user/password；无 URL 时 database 必填。URL 禁止 query/fragment；pool、mysql.charset、ssl 和 operationLog 独立适用。`ssl` 仅 false 或严格对象，空对象默认校验证书链和 DNS 身份；ca/cert/key 使用 PEM 内容，cert/key 成对。当前驱动不能验证 IP 身份，验证开启的 IP 目标返回 CONFIG_ERROR；关闭验证会记录风险日志，不能把加密等同于服务端认证。环境变量使用 `HAI_DB_POOL_*` / `HAI_DB_SSL_*`，min/idleTimeout 仅适用 PostgreSQL，queueLimit/verifyIdentity 仅适用 MySQL。
+
+```ts
+// trustedCaPem 来自部署信任配置；业务变量由应用提供。
+const result = await reldb.init({ type: 'mysql', host: 'db.example.com', database: 'app', pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }, ssl: { ca: trustedCaPem } })
+if (!result.success) return result
+```
+
 PostgreSQL 空闲连接错误已监听，由池移除并在下一次查询替换；日志仅含固定说明与安全 code/name，不记录驱动错误原文。关闭会等待已借出事务完成，应用必须提交/回滚并释放句柄。
+
+`reldb.config` 是脱敏快照，数据库密码、URL 凭证和 TLS 私钥 `ssl.key` 均隐藏，不能用于回放连接配置。
 
 初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`reldb.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
 
@@ -367,3 +379,5 @@ const result = await reldb.tx.wrap(async (tx) => {
 
 - 所有 SQL 必须参数化（`?` 占位符），禁止字符串拼接/模板字面量
 - `reldb.json` 的 `column` 参数禁止传入用户输入
+
+MySQL 空 url（含空环境变量占位）按未配置处理，使用分字段；非空仍严格校验。

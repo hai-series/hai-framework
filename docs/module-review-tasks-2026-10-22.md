@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 17/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 18/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -524,7 +524,8 @@
 
 ### RELDB-02 · P2 · 落实 MySQL 连接池配置语义
 
-- [ ] 待修正（源码确认；范围：reldb）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：MySQL连接池改为有界可取消FIFO，排队及建连共同受期限约束，迟到连接释放而不执行SQL；删除无消费timezone及min/idleTimeout，修正URL优先级和严格TLS实际参数，配置快照遮蔽TLS私钥。真实MySQL池/URI/TLS/生命周期54例、MySQL业务60例和最终mTLS6例通过，源码/测试类型、lint、fresh build、skills及594环境目录检查通过；SQL执行期限不在连接获取超时范围内；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/reldb/src/providers/reldb-provider-mysql.ts:384](../packages/reldb/src/providers/reldb-provider-mysql.ts#L384)。
 - **证据与影响**：公共 pool 配置存在 min/idleTimeout/acquireTimeout 等，但 MySQL 创建 pool 主要转发 max，等待策略与其他 provider 不一致。
 - **修正内容**：逐项映射当前驱动真正支持的配置；无对应语义的字段明确拒绝或从该 provider schema 删除，设置可控的等待上限。

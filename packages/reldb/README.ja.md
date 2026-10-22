@@ -15,7 +15,8 @@ const closed = await reldb.close()
 if (!closed.success) {
   // 障害への対処後に一度再試行し、再失敗はアプリへ報告します。
   const retried = await reldb.close()
-  if (!retried.success) throw new Error(retried.error.message)
+  if (!retried.success)
+    throw new Error(retried.error.message)
 }
 ```
 
@@ -72,7 +73,7 @@ const user = await userCrud.findById(1)
 await reldb.close()
 ```
 
-`reldb.config` は**機密情報をマスクした設定スナップショット**を返します。DB の `password` と URL 内の認証情報は自動的に非表示になります。状態確認用であり、元の接続情報の再利用には使わないでください。
+`reldb.config` は**機密情報をマスクした設定スナップショット**を返します。DB の `password`、URL 内の認証情報、TLS クライアント秘密鍵 `ssl.key` を非表示にします。状態確認用であり、元の接続情報の再利用には使わないでください。
 
 ### 設定
 
@@ -83,7 +84,7 @@ await reldb.close()
 await reldb.init({ type: 'sqlite', database: './data.db' })
 
 // PostgreSQL
-await reldb.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb' })
+await reldb.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb', database: 'mydb' })
 
 // MySQL
 await reldb.init({
@@ -94,8 +95,48 @@ await reldb.init({
   user: 'admin',
   password: 'secret',
   mysql: { charset: 'utf8mb4' },
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 },
 })
 ```
+
+#### 接続プールと MySQL URL
+
+MySQL の `pool` は `max`、`acquireTimeout`、`queueLimit` のみを受け付け、省略時もそれぞれ 10、10000 ミリ秒、1000 を使用します。`min`、`idleTimeout` などの未対応フィールドと未実装の `mysql.timezone` は設定検証で拒否します。アイドル接続は mysql2/サーバーによる切断または `close()` で解放し、最小保持数や設定可能なアイドル回収期限は保証しません。[mysql2 3.24.5 の設定](https://github.com/sidorares/node-mysql2/blob/v3.24.5/typings/mysql/lib/Pool.d.ts)は PostgreSQL と異なります。
+
+| フィールド       | PostgreSQL（`pool` 指定時の既定値） | MySQL                                  |
+| ---------------- | ----------------------------------- | -------------------------------------- |
+| `max`            | 10                                  | 10、借用中と接続確立中の合計上限       |
+| `min`            | 1、既存接続の保持下限。事前作成なし | 未対応、拒否                           |
+| `idleTimeout`    | 30000 ミリ秒、0 は無効化            | 未対応、拒否                           |
+| `acquireTimeout` | 10000 ミリ秒、0 は無効化            | 10000 ミリ秒、1–2147483647 の整数      |
+| `queueLimit`     | 未対応                              | 1000、待機リクエスト数の上限、正の整数 |
+
+PostgreSQL で `pool` を省略した場合は pg の既定値を使用します。保持と回収の仕様は [pg.Pool](https://node-postgres.com/apis/pool) を参照してください。MySQL の SQL、DDL、CRUD、バッチ、トランザクションは共通の有限 FIFO 待機キューを使います。待機と接続確立に一つの期限を適用し、超過時は `TIMEOUT`、満杯時は `POOL_EXHAUSTED` を返します。期限切れ項目は削除し、遅れて取得した接続は SQL を実行せず解放します。確立処理が完了するまで容量枠を保持します。受領時と処理開始前にも期限を確認しますが、開始済み SQL/トランザクションの実行時間は制限しません。
+
+MySQL の `close()` は新規・待機リクエストを直ちに拒否し、借用接続、トランザクション、接続確立の完了後にプールを閉じます。`connectTimeout` にも同じ値を使うため、その期限や既存処理を待つ場合があります。アプリはトランザクションを終了してください。環境変数は `HAI_DB_POOL_*` です。`MIN` / `IDLETIMEOUT` は PostgreSQL 専用で、MySQL の `QUEUELIMIT` は待機総数を制限します。
+
+MySQL は `mysql://` の `url` だけでも接続でき、URL がなければ `database` が必須です。URL の host/port/database/user/password を優先し、競合する個別フィールドは接続に使用しません。`pool`、`mysql.charset`、`ssl`、`operationLog` は独立して適用します。query/fragment は拒否し、URL 内の隠れた設定で TLS やプールを変更できません。接続ログの URL は機密情報を伏せます。以下は `HAI_DB_URL` の設定を前提とします：
+
+```ts
+const initialized = await reldb.init({ type: 'mysql', url: process.env.HAI_DB_URL, pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 } })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
+#### MySQL TLS
+
+`ssl` を省略するか `false` にすると TLS を使用しません。有効化には厳密なオブジェクトを指定し、空オブジェクトの既定値は `{ rejectUnauthorized: true, verifyIdentity: true }` です。`ca` は信頼する CA の PEM 内容で、省略時は Node の信頼ストアを使います。任意のクライアント `cert` / `key` も PEM 内容で、必ず対で指定します。未知の TLS フィールド、`true`、PostgreSQL の文字列モードは拒否し、任意の設定やコールバックは透過しません。
+
+[mysql2 3.24.5 の主機名検証](https://github.com/sidorares/node-mysql2/blob/v3.24.5/lib/base/connection.js)は DNS servername に依存します。証明書と名前の両方を検証する場合、IP 接続先は `CONFIG_ERROR` とし、証明書の DNS SAN に一致するホスト名を使います。明示的な `verifyIdentity: false` は証明書チェーンのみを検証します。`rejectUnauthorized: false` はサーバー認証を放棄し、暗号化だけでは相手の身元を確認できません。どちらかの検証を無効にすると固定のリスク警告を記録し、安全な構成とは扱いません。
+
+```ts
+// trustedCaPem は配置時の信頼設定から供給し、任意の接続先証明書をそのまま信頼しません。
+const initialized = await reldb.init({ type: 'mysql', host: 'db.example.com', database: 'app', ssl: { ca: trustedCaPem } })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
+TLS テストには OpenSSL（Windows は Git 同梱版も可）とローカルのコンテナー転送が必要です。各実行で CA/秘密鍵を生成・削除し、信頼済み DNS、誤った CA/主機名の拒否、`REQUIRE X509` 認証、実際の `Ssl_cipher` を検証します。検証無効の接続を認証済み TLS の証拠にはしません。
 
 #### SQLite の実行方式（非同期 worker）
 
@@ -518,16 +559,17 @@ if (!result.success) {
 
 主なエラーコード：
 
-| エラーコード                         | code            | 説明                   |
-| ------------------------------------ | --------------- | ---------------------- |
-| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:010` | 未初期化               |
-| `HaiReldbError.CONNECTION_FAILED`    | `hai:reldb:001` | 接続に失敗             |
-| `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002` | 検索に失敗             |
-| `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003` | 制約違反               |
-| `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004` | トランザクションに失敗 |
-| `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作に失敗         |
-| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 設定エラー             |
-
+| エラーコード                         | code            | 説明                       |
+| ------------------------------------ | --------------- | -------------------------- |
+| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:010` | 未初期化                   |
+| `HaiReldbError.CONNECTION_FAILED`    | `hai:reldb:001` | 接続に失敗                 |
+| `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002` | 検索に失敗                 |
+| `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003` | 制約違反                   |
+| `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004` | トランザクションに失敗     |
+| `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作に失敗             |
+| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 設定エラー                 |
+| `HaiReldbError.TIMEOUT`              | `hai:reldb:009` | MySQL 接続取得の期限超過   |
+| `HaiReldbError.POOL_EXHAUSTED`       | `hai:reldb:011` | MySQL 接続待機キューが満杯 |
 
 `BaseReldbCrudRepository` の派生クラスで独自 SQL を実行する前に `await this.ensureReady()` を確認します。構築時に建表を開始するだけなので、サービス init は候補の準備完了後に公開します。PostgreSQL の並行初回 `CREATE TABLE IF NOT EXISTS` は `23505/pg_type_typname_nsp_index` の競合だけ同じ DDL を一度再実行し、他のエラーは失敗のままです。
 
@@ -548,3 +590,5 @@ pnpm --filter @h-ai/reldb test
 Apache-2.0
 
 操作ログには固定の操作名とSQL長・パラメータ数・バッチ数のみを記録します。SQL本文、値、ドライバーのエラー内容は失敗時も出力しません。
+
+MySQL の空 `url`（空の環境変数を含む）は host/port/database/user/password を使用します。空でない URL は厳密に検証します。

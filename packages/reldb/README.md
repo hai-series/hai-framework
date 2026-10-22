@@ -15,7 +15,8 @@ const closed = await reldb.close()
 if (!closed.success) {
   // 处理清理故障后有限重试；再次失败应向应用报告。
   const retried = await reldb.close()
-  if (!retried.success) throw new Error(retried.error.message)
+  if (!retried.success)
+    throw new Error(retried.error.message)
 }
 ```
 
@@ -72,7 +73,7 @@ const user = await userCrud.findById(1)
 await reldb.close()
 ```
 
-`reldb.config` 返回的是**脱敏后的配置快照**：数据库 `password` 与 URL 内嵌凭证会自动隐藏，便于排查状态但不应用于回放原始连接信息。
+`reldb.config` 返回的是**脱敏后的配置快照**：数据库 `password`、URL 内嵌凭证和 TLS 客户端私钥 `ssl.key` 会自动隐藏，便于排查状态但不应用于回放原始连接信息。
 
 ### 配置
 
@@ -83,7 +84,7 @@ await reldb.close()
 await reldb.init({ type: 'sqlite', database: './data.db' })
 
 // PostgreSQL
-await reldb.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb' })
+await reldb.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb', database: 'mydb' })
 
 // MySQL
 await reldb.init({
@@ -94,8 +95,48 @@ await reldb.init({
   user: 'admin',
   password: 'secret',
   mysql: { charset: 'utf8mb4' },
+  pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 },
 })
 ```
+
+#### 连接池与 MySQL URL
+
+MySQL 的 `pool` 只接受 `max`、`acquireTimeout`、`queueLimit`，省略时默认分别为 10、10000 毫秒、1000。其他池字段（包括 `min`、`idleTimeout`）以及未实现的 `mysql.timezone` 会在配置校验时失败。空闲连接由 mysql2/服务端断开或 `close()` 释放，本模块不承诺 MySQL 的最小保留数或可配置的空闲回收期限；[mysql2 3.24.5 的真实选项](https://github.com/sidorares/node-mysql2/blob/v3.24.5/typings/mysql/lib/Pool.d.ts)与 PostgreSQL 不同。
+
+| 字段             | PostgreSQL（显式提供 `pool` 时的默认值） | MySQL                                  |
+| ---------------- | ---------------------------------------- | -------------------------------------- |
+| `max`            | 10                                       | 10，借用和正在建连合计不超过此值       |
+| `min`            | 1，已建立连接的保留下限，不主动预建      | 不支持，明确拒绝                       |
+| `idleTimeout`    | 30000 毫秒，0 禁用                       | 不支持，明确拒绝                       |
+| `acquireTimeout` | 10000 毫秒，0 禁用                       | 10000 毫秒，必须为 1–2147483647 的整数 |
+| `queueLimit`     | 不支持                                   | 1000，等待请求上限，必须为正整数       |
+
+PostgreSQL 未提供 `pool` 时沿用 pg 驱动默认值；保留与空闲回收语义见 [pg.Pool](https://node-postgres.com/apis/pool)。MySQL 所有 SQL、DDL、CRUD、批量和事务入口共用有界 FIFO 借用队列：排队与建立连接共用一个 `acquireTimeout` 截止期限，超时返回 `TIMEOUT`，队列满返回 `POOL_EXHAUSTED`。超时排队请求会移除；已开始但迟到的建连只释放连接，不启动 SQL，结算前仍占容量槽位。取得连接及业务执行前再次校验期限；它不限制已启动 SQL 或事务的执行时长。
+
+MySQL `close()` 立即拒绝新请求并结束排队等待，随后等待已借出连接、事务及在途建连结算再关闭池。驱动 `connectTimeout` 使用相同超时值；关闭可能等到该建连时限或现有 SQL/事务结束，应用仍须主动结束事务。环境变量使用 `HAI_DB_POOL_*`，`HAI_DB_POOL_MIN` / `HAI_DB_POOL_IDLETIMEOUT` 仅用于 PostgreSQL，MySQL 的 `HAI_DB_POOL_QUEUELIMIT` 控制等待总量。
+
+MySQL 支持仅传 `url`（`mysql://`），未给 URL 时 `database` 必填。URL 中的 host/port/database/user/password 优先，冲突的分字段不参与连接；`pool`、`mysql.charset`、`ssl` 和 `operationLog` 独立适用。URL 仅接受连接地址，query/fragment 会被拒绝，不能用隐藏 URL 参数改变 TLS 或池策略。URL 模式的连接日志会脱敏。以下示例假定已设置 `HAI_DB_URL`：
+
+```ts
+const initialized = await reldb.init({ type: 'mysql', url: process.env.HAI_DB_URL, pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 } })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
+#### MySQL TLS
+
+`ssl` 省略或为 `false` 时不启用 TLS；启用时只能传严格对象，空对象默认 `{ rejectUnauthorized: true, verifyIdentity: true }`。`ca` 是受信 CA 的 PEM 内容，省略时使用 Node 信任库；可选客户端 `cert` / `key` 也必须是 PEM 内容且成对提供。未知 TLS 字段、`true` 和 PostgreSQL 字符串模式明确拒绝，不提供任意参数/回调透传。
+
+当前 [mysql2 3.24.5 的主机身份校验](https://github.com/sidorares/node-mysql2/blob/v3.24.5/lib/base/connection.js)依赖 DNS servername。因此在证书链及身份校验均开启时，IP 目标返回 `CONFIG_ERROR`，须使用与证书 DNS SAN 匹配的主机名。显式 `verifyIdentity: false` 只保留证书链校验；`rejectUnauthorized: false` 放弃服务端认证，即使存在加密也不能确认服务端身份。关闭任一验证会输出固定风险日志，不会称为安全连接。
+
+```ts
+// trustedCaPem 由部署时的受信 CA 提供，不是任意远端返回的证书。
+const initialized = await reldb.init({ type: 'mysql', host: 'db.example.com', database: 'app', ssl: { ca: trustedCaPem } })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+```
+
+TLS 定向测试需要 OpenSSL（Windows 可使用 Git 附带版本）及本机容器端口转发；每轮生成并销毁 CA/私钥，通过真实 MySQL 验证受信 DNS、错误 CA/主机名拒绝、`REQUIRE X509` 客户端认证和会话 `Ssl_cipher`，不使用关闭验证替代认证成功证据。
 
 #### SQLite 执行方式（worker 异步）
 
@@ -518,16 +559,17 @@ if (!result.success) {
 
 常用错误码：
 
-| 错误码                               | code            | 说明         |
-| ------------------------------------ | --------------- | ------------ |
-| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:010` | 未初始化     |
-| `HaiReldbError.CONNECTION_FAILED`    | `hai:reldb:001` | 连接失败     |
-| `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002` | 查询失败     |
-| `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003` | 约束违反     |
-| `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004` | 事务失败     |
-| `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作失败 |
-| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 配置错误     |
-
+| 错误码                               | code            | 说明                       |
+| ------------------------------------ | --------------- | -------------------------- |
+| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:010` | 未初始化                   |
+| `HaiReldbError.CONNECTION_FAILED`    | `hai:reldb:001` | 连接失败                   |
+| `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002` | 查询失败                   |
+| `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003` | 约束违反                   |
+| `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004` | 事务失败                   |
+| `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作失败               |
+| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 配置错误                   |
+| `HaiReldbError.TIMEOUT`              | `hai:reldb:009` | MySQL 连接获取超过截止期限 |
+| `HaiReldbError.POOL_EXHAUSTED`       | `hai:reldb:011` | MySQL 连接等待队列已满     |
 
 派生 `BaseReldbCrudRepository` 的自定义 SQL 方法先检查 `await this.ensureReady()`；构造函数启动自动建表不等于仓库就绪，服务 init 必须等待候选仓库的就绪入口再发布。PostgreSQL 并发首次 `CREATE TABLE IF NOT EXISTS` 的 `23505/pg_type_typname_nsp_index` 目录冲突仅重执行相同 DDL 一次，其他错误继续失败。
 
@@ -548,3 +590,5 @@ pnpm --filter @h-ai/reldb test
 Apache-2.0
 
 操作日志仅包含固定操作名和SQL长度、参数数量、批量数量等安全摘要；失败路径也不记录SQL原文、值或驱动错误内容。
+
+MySQL 的空 `url`（例如空环境变量占位）表示使用 host/port/database/user/password；非空 URL 仍严格校验。

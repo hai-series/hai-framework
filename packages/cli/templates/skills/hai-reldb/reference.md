@@ -46,6 +46,16 @@ operationLog:
 
 ### 2. 初始化与关闭
 
+MySQL `pool` 仅支持 `{ max: 10, acquireTimeout: 10000, queueLimit: 1000 }`（也是省略时默认值）。`acquireTimeout` 为 1–2147483647 毫秒的整数，覆盖排队和建连；queueLimit 为正整数。SQL/DDL/CRUD/batch/tx 共用有界 FIFO，超时移除并返回 `TIMEOUT`，满额返回 `POOL_EXHAUSTED`；迟到建连结算前仍占槽位，只归还连接，不执行 SQL。close 立即取消排队，再等待借用/事务和驱动有界建连完成，不中止已启动 SQL。min/idleTimeout/mysql.timezone 明确拒绝，不承诺 MySQL 最小保留或可配置空闲回收；PostgreSQL 保留自己的 min/idleTimeout/acquireTimeout=0 契约，min 不会预建连接。
+
+MySQL 仅传 mysql:// URL 即可连接，优先于 host/port/database/user/password；无 URL 时 database 必填。禁止 URL query/fragment，pool/mysql.charset/ssl/operationLog 仍独立适用。ssl 仅 false 或严格对象，空对象默认校验证书链和 DNS 身份；ca/cert/key 为 PEM 内容，cert/key 必须成对。当前驱动不验证 IP 身份，验证开启的 IP 目标返回 CONFIG_ERROR；关闭验证有固定风险日志，加密不代表身份认证。环境变量为 HAI_DB_POOL_* / HAI_DB_SSL_*，min/idleTimeout 仅适用 PostgreSQL，queueLimit/verifyIdentity 仅适用 MySQL。
+
+```ts
+// trustedCaPem 从部署信任配置提供。
+const result = await reldb.init({ type: 'mysql', host: 'db.example.com', database: 'app', pool: { max: 10, acquireTimeout: 5000, queueLimit: 100 }, ssl: { ca: trustedCaPem } })
+if (!result.success) return result
+```
+
 PostgreSQL 空闲连接错误已监听，由池移除并在下一次查询替换；日志仅含固定说明与安全 code/name，不记录驱动错误原文。关闭会等待已借出事务完成，应用必须提交/回滚并释放句柄。
 
 ```typescript
@@ -71,7 +81,7 @@ if (!closed.success) {
 ```
 
 
-`reldb.config` 返回的是脱敏后的配置快照；数据库密码与 URL 内嵌凭证会自动隐藏。
+`reldb.config` 返回脱敏后的配置快照；数据库密码、URL 内嵌凭证和 TLS 私钥 `ssl.key` 会隐藏，不能用快照回放原始连接配置。
 
 ### 3. 选择操作接口
 
@@ -479,3 +489,5 @@ const result = await reldb.tx.wrap(async (tx) => {
 ## 生产共享状态
 
 生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。
+
+MySQL 空 url（含空环境变量占位）按未配置处理，使用分字段；非空仍严格校验。
