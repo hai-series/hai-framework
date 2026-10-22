@@ -119,21 +119,27 @@ const notInitializedHelper = notInitialized.proxy<AuditHelper>()
  * - `audit.getStats()` — 获取统计数据
  * - `audit.helper` — 便捷记录器
  * - `audit.isInitialized` — 初始化状态
- *
  * @example
  * ```ts
  * import { audit } from '@h-ai/audit'
- * import { reldb } from '@h-ai/reldb'
- *
- * await reldb.init({ type: 'sqlite', database: ':memory:' })
- * const result = await audit.init()
- * if (!result.success) {
- *   // 处理初始化错误
+ * import { core } from '@h-ai/core'
+ * import { reldb, type ReldbConfigInput } from '@h-ai/reldb'
+ * async function recordCreation(config: ReldbConfigInput) {
+ *   const database = await reldb.init(config)
+ *   if (!database.success) return database
+ *   try {
+ *     const initialized = await audit.init()
+ *     if (!initialized.success) return initialized
+ *     const logged = await audit.log({ action: 'create', resource: 'orders', resourceId: 'order_1' })
+ *     if (logged.success) core.logger.info('Audit recorded', { id: logged.data.id })
+ *     return logged
+ *   } finally {
+ *     const auditClosed = await audit.close()
+ *     if (!auditClosed.success) return auditClosed // 保留依赖连接，修复后重试关闭。
+ *     const databaseClosed = await reldb.close()
+ *     if (!databaseClosed.success) return databaseClosed
+ *   }
  * }
- *
- * await audit.helper.login('user_1', '127.0.0.1')
- * const logs = await audit.list({ pageSize: 10 })
- * await audit.close()
  * ```
  */
 export const audit: AuditFunctions = {

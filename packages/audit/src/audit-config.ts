@@ -13,20 +13,11 @@ import { z } from 'zod'
  * 审计模块初始化配置 Schema（Zod）
  *
  * 所有字段均有默认值，可直接调用 `audit.init()` 无需传参。
- *
  * @example
  * ```ts
- * import { audit } from '@h-ai/audit'
- * import { reldb } from '@h-ai/reldb'
- *
- * await audit.init()
- *
- * // 自定义用户表映射
- * await audit.init({
- *   userTable: 'sys_users',
- *   userIdColumn: 'user_id',
- *   userNameColumn: 'name',
- * })
+ * import { AuditInitConfigSchema } from '@h-ai/audit'
+ * const config = AuditInitConfigSchema.parse({ userTable: 'app_users' })
+ * // 这里只校验字段映射；实际初始化前必须已有可用的 RelDB。
  * ```
  */
 export const AuditInitConfigSchema = z.object({
@@ -38,8 +29,22 @@ export const AuditInitConfigSchema = z.object({
   userNameColumn: z.string().default('username'),
 })
 
-/** 审计模块初始化配置（解析后） */
+/**
+ * 审计模块初始化配置（解析后）
+ * @example
+ * ```ts
+ * import { AuditInitConfigSchema, type AuditInitConfig } from '@h-ai/audit'
+ * const config: AuditInitConfig = AuditInitConfigSchema.parse({ userTable: 'app_users' })
+ * ```
+ */
 export type AuditInitConfig = z.output<typeof AuditInitConfigSchema>
 
-/** 审计模块初始化配置（传入参数） */
+/**
+ * 审计模块初始化配置（传入参数）
+ * @example
+ * ```ts
+ * import type { AuditInitConfigInput } from '@h-ai/audit'
+ * const record: AuditInitConfigInput = { userTable: 'app_users', userIdColumn: 'id', userNameColumn: 'username' }
+ * ```
+ */
 export type AuditInitConfigInput = z.input<typeof AuditInitConfigSchema>

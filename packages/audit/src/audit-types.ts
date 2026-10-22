@@ -21,6 +21,16 @@ const AuditErrorInfo = {
   CONFIG_ERROR: '012:500',
 } as const satisfies ErrorInfo
 
+/**
+ * 审计初始化、写入、查询和清理失败的稳定错误定义。
+ * @example
+ * ```ts
+ * import { HaiAuditError } from '@h-ai/audit'
+ * import { err } from '@h-ai/core'
+ * const failed = err(HaiAuditError.NOT_INITIALIZED, 'Audit is not initialized')
+ * if (!failed.success) failed.error.code
+ * ```
+ */
 export const HaiAuditError = core.error.buildHaiErrorsDef('audit', AuditErrorInfo)
 
 // ─── 实体类型 ───
@@ -29,6 +39,11 @@ export const HaiAuditError = core.error.buildHaiErrorsDef('audit', AuditErrorInf
  * 审计日志记录
  *
  * 表示一条已持久化的审计日志条目。
+ * @example
+ * ```ts
+ * import type { AuditLog } from '@h-ai/audit'
+ * const record: AuditLog = { id: 'audit_example', userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: null, ipAddress: null, userAgent: null, createdAt: new Date() }
+ * ```
  */
 export interface AuditLog {
   /** 审计日志 ID，格式为 `audit_` 前缀 + 随机串 */
@@ -55,6 +70,11 @@ export interface AuditLog {
  * 审计日志记录（含用户名）
  *
  * 通过 LEFT JOIN 用户表获取 username 字段，用于列表展示。
+ * @example
+ * ```ts
+ * import type { AuditLogWithUser } from '@h-ai/audit'
+ * const record: AuditLogWithUser = { id: 'audit_example', userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: null, ipAddress: null, userAgent: null, createdAt: new Date() , username: 'alice' }
+ * ```
  */
 export interface AuditLogWithUser extends AuditLog {
   /** 操作用户的用户名；用户不存在或系统操作时为 null */
@@ -66,6 +86,11 @@ export interface AuditLogWithUser extends AuditLog {
  *
  * 调用 {@link AuditFunctions.log} 时传入的参数。
  * 仅 `action` 和 `resource` 为必填。
+ * @example
+ * ```ts
+ * import type { CreateAuditLogInput } from '@h-ai/audit'
+ * const record: CreateAuditLogInput = { userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: { status: 'pending' } }
+ * ```
  */
 export interface CreateAuditLogInput {
   /** 操作用户 ID；系统操作可省略 */
@@ -88,6 +113,11 @@ export interface CreateAuditLogInput {
  * 审计日志列表查询选项
  *
  * 所有字段均为可选，不传则不过滤。
+ * @example
+ * ```ts
+ * import type { ListAuditLogsOptions } from '@h-ai/audit'
+ * const record: ListAuditLogsOptions = { action: 'create', resource: 'orders', page: 1, pageSize: 20 }
+ * ```
  */
 export interface ListAuditLogsOptions extends PaginationOptionsInput {
   /** 按用户 ID 过滤 */
@@ -106,6 +136,11 @@ export interface ListAuditLogsOptions extends PaginationOptionsInput {
  * 审计统计结果项
  *
  * 按操作类型（action）分组的统计条目。
+ * @example
+ * ```ts
+ * import type { AuditStatItem } from '@h-ai/audit'
+ * const record: AuditStatItem = { action: 'create', count: 12 }
+ * ```
  */
 export interface AuditStatItem {
   /** 操作类型 */
@@ -118,6 +153,11 @@ export interface AuditStatItem {
  * CRUD 审计操作输入
  *
  * 调用 {@link AuditHelper.crud} 时传入的参数。
+ * @example
+ * ```ts
+ * import type { CrudAuditInput } from '@h-ai/audit'
+ * const record: CrudAuditInput = { userId: 'user_1', action: 'update', resource: 'orders', resourceId: 'order_1', details: { status: 'paid' } }
+ * ```
  */
 export interface CrudAuditInput {
   /** 操作用户 ID（系统操作传 null） */
@@ -143,11 +183,14 @@ export interface CrudAuditInput {
  *
  * 封装常见审计场景（认证、CRUD），简化调用方代码。
  * 通过 {@link AuditFunctions.helper} 访问。
- *
  * @example
  * ```ts
- * await audit.helper.login('user_1', '127.0.0.1', 'Mozilla/5.0')
- * await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2' })
+ * import type { AuditHelper } from '@h-ai/audit'
+ * // helper 来自已初始化的 audit；数据库生命周期归调用方。
+ * async function recordLogin(helper: AuditHelper) {
+ *   const result = await helper.login('user_1', '127.0.0.1')
+ *   return result.success ? 'recorded' : result.error.message
+ * }
  * ```
  */
 export interface AuditHelper {
@@ -210,18 +253,27 @@ export interface AuditHelper {
  * 审计模块函数接口
  *
  * 统一的审计日志访问入口。
- *
  * @example
  * ```ts
  * import { audit } from '@h-ai/audit'
- * import { reldb } from '@h-ai/reldb'
- *
- * await reldb.init({ type: 'sqlite', database: './data.db' })
- * await audit.init()
- *
- * await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
- * const logs = await audit.list({ pageSize: 10 })
- * await audit.close()
+ * import { core } from '@h-ai/core'
+ * import { reldb, type ReldbConfigInput } from '@h-ai/reldb'
+ * async function recordCreation(config: ReldbConfigInput) {
+ *   const database = await reldb.init(config)
+ *   if (!database.success) return database
+ *   try {
+ *     const initialized = await audit.init()
+ *     if (!initialized.success) return initialized
+ *     const logged = await audit.log({ action: 'create', resource: 'orders', resourceId: 'order_1' })
+ *     if (logged.success) core.logger.info('Audit recorded', { id: logged.data.id })
+ *     return logged
+ *   } finally {
+ *     const auditClosed = await audit.close()
+ *     if (!auditClosed.success) return auditClosed // 保留依赖连接，修复后重试关闭。
+ *     const databaseClosed = await reldb.close()
+ *     if (!databaseClosed.success) return databaseClosed
+ *   }
+ * }
  * ```
  */
 export interface AuditFunctions {

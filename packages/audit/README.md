@@ -122,7 +122,6 @@ await audit.init({
 
 > 说明：`audit.close()` 也返回 `HaiResult<void>`；`audit.helper.passwordResetRequest()` 会记录原始邮箱，默认不会额外掩码。
 
-
 `audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。自定义 JOIN、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
 
 ## 开发测试
@@ -134,3 +133,5 @@ pnpm --filter @h-ai/audit test
 ## 许可证
 
 Apache-2.0
+
+审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
