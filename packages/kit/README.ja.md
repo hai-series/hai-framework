@@ -105,7 +105,7 @@ const haiHandle = kit.createHandle({
 export const handle: Handle = haiHandle
 ```
 
-最初の確定時点から固定ウィンドウを開始し、後続リクエストはTTLを延長しません。storeは必須です。共有Redisの初期化成功を確認し、全ノードのnamespace/windowMs/maxRequestsを一致させます。キャッシュ障害や競合上限は503、超過は429で、get+setやローカル計数へフォールバックしません。createMemoryRateLimitStoreは開発または明示HAI_E2E/HAI_E2E_MOCKテスト用で、作成者がstopCleanupを呼びます。本番でテスト変数を設定しません。ヘッダー時刻は推定、実際の期間はRedis TTLで制御するため時計を同期します。キーは信頼済みadapterのgetClientAddressのみ使い、等価IPv6/IPv4表記を正規化します。生の転送ヘッダーを信頼せず、代理信頼はadapterで設定します。
+最初の確定時点から固定ウィンドウを開始し、後続リクエストはTTLを延長しません。storeは必須です。共有Redisの初期化成功を確認し、全ノードのnamespace/windowMs/maxRequestsを一致させます。キャッシュ障害や競合上限は503、超過は429で、get+setやローカル計数へフォールバックしません。createMemoryRateLimitStoreは開発または明示HAI_E2E/HAI_E2E_MOCKテスト用で、常駐タイマーを使わず参照解放で回収されます。1リクエスト最大64項目を遅延走査し、上限10000ウィンドウです。満杯時は有効な計数を追い出さず新キーを503にし、外部storeのライフサイクルは作成者が管理します。本番でテスト変数を設定しません。ヘッダー時刻は推定、実際の期間はRedis TTLで制御するため時計を同期します。キーは信頼済みadapterのgetClientAddressのみ使い、等価IPv6/IPv4表記を正規化します。生の転送ヘッダーを信頼せず、代理信頼はadapterで設定します。
 
 #### API endpoint
 

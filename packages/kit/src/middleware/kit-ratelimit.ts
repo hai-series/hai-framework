@@ -93,15 +93,14 @@ export function createCacheRateLimitStore(backend: RateLimitCache, options: { na
 }
 
 /**
- * 创建显式开发/测试计数器；生产环境拒绝内存模式。
+ * 创建显式开发/测试计数器；无定时器，最多保存 10000 个窗口，生产拒绝内存模式。
+ * @returns 由调用者持有的计数器；丢弃引用即可回收，无需关闭，也不接管外部 store。
  * @example const store = kit.middleware.createMemoryRateLimitStore()
  */
 export function createMemoryRateLimitStore(): MemoryRateLimitStore {
   if (!permitsMemory())
     throw new Error('Memory rate limiting is restricted to development and tests')
-  const store = new MemoryRateLimitStore()
-  store.startCleanup(60000)
-  return store
+  return new MemoryRateLimitStore()
 }
 
 /** 将等价IPv6写法与IPv4映射地址归一化；代理头由可信adapter配置解析，此处不读取任意转发头。 */
@@ -119,59 +118,31 @@ function clientKey(address: string): string {
 /**
  * 内存速率限制存储
  *
- * 基于 Map 实现，适合单进程/开发环境。
- * 多实例部署时限流上限会乘以实例数，建议使用分布式 Store。
+ * 基于 Map 实现，仅用于单进程开发/测试；每次请求最多扫描 64 项过期窗口，
+ * 不持有定时器。最多 10000 项，容量耗尽时拒绝新 key，不驱逐有效计数以免绕过限流。
+ * @example const store = kit.middleware.createMemoryRateLimitStore(); store.increment('client', 1000)
  */
 export class MemoryRateLimitStore implements RateLimitStore {
   readonly scope = 'memory' as const
   private store = new Map<string, RateLimitEntry>()
-  private cleanupTimer: ReturnType<typeof setInterval> | null = null
+  private cleanupCursor: MapIterator<[string, RateLimitEntry]> | undefined
 
   /**
-   * 启动定期清理过期条目
-   *
-   * @param intervalMs - 清理间隔（毫秒）
+   * 有界惰性回收；保留迭代位置，避免每次从头扫描使尾部过期项永久滞留。
+   * @param now - 当前请求时间，等于 resetAt 时窗口已经失效。
    */
-  startCleanup(intervalMs: number): void {
-    if (this.cleanupTimer)
-      return
-    this.cleanupTimer = setInterval(() => {
-      const now = Date.now()
-      for (const [key, entry] of this.store) {
-        if (entry.resetAt <= now) {
-          this.store.delete(key)
-        }
+  private prune(now: number): void {
+    this.cleanupCursor ??= this.store.entries()
+    for (let index = 0; index < 64; index++) {
+      const next = this.cleanupCursor.next()
+      if (next.done) {
+        this.cleanupCursor = undefined
+        break
       }
-    }, intervalMs)
-    // 允许进程正常退出
-    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
-      this.cleanupTimer.unref()
+      const [key, entry] = next.value
+      if (entry.resetAt <= now)
+        this.store.delete(key)
     }
-  }
-
-  /**
-   * 停止定期清理并释放定时器资源
-   *
-   * 调用后可再次 startCleanup 重启。进程退出 / 热重载 / 测试拆装场景必须调用以
-   * 避免资源泄漏。
-   */
-  stopCleanup(): void {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer)
-      this.cleanupTimer = null
-    }
-  }
-
-  get(key: string): RateLimitEntry | undefined {
-    return this.store.get(key)
-  }
-
-  set(key: string, entry: RateLimitEntry): void {
-    this.store.set(key, entry)
-  }
-
-  delete(key: string): void {
-    this.store.delete(key)
   }
 
   /**
@@ -179,19 +150,23 @@ export class MemoryRateLimitStore implements RateLimitStore {
    *
    * @param key - 限流键
    * @param windowMs - 窗口时长
-   * @returns 自增后的条目
+   * @returns 自增后的快照，修改返回对象不会改变已保存的计数。
+   * @throws 新 key 超出容量或期限非法；中间件将其转换为 503。
+   * @example store.increment('client', 60_000)
    */
   increment(key: string, windowMs: number): RateLimitEntry {
     const now = Date.now()
-    let entry = this.store.get(key)
-    if (!entry || entry.resetAt <= now) {
-      entry = { count: 1, resetAt: now + windowMs }
-    }
-    else {
-      entry.count++
-    }
+    if (!Number.isSafeInteger(windowMs) || windowMs <= 0 || windowMs > 2147483647)
+      throw new TypeError(kitM('kit_rateLimitWindowInvalid'))
+    this.prune(now)
+    const current = this.store.get(key)
+    if (!current && this.store.size >= 10000)
+      throw new Error(kitM('kit_rateLimitMemoryCapacity'))
+    const entry = !current || current.resetAt <= now
+      ? { count: 1, resetAt: now + windowMs }
+      : { count: current.count + 1, resetAt: current.resetAt }
     this.store.set(key, entry)
-    return entry
+    return { ...entry }
   }
 }
 
