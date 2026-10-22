@@ -32,17 +32,37 @@ function authenticatedText(payload: Omit<EncryptedPayload, 'tag' | 'signature'>)
 }
 
 /**
- * 所有认证失败使用同一脱敏错误，不向对端区分验签、MAC、密钥或 CBC 失败。
- * @example `if (!verified) return transportAuthenticationFailure()`
+ * 内部统一认证失败，避免向对端区分签名、MAC、密钥或CBC错误。
+ * @returns 脱敏失败HaiResult，不附明文/密钥/密文。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const failure = transportAuthenticationFailure()
+ * if (!failure.success) { const code = failure.error.code }
+ * ```
  */
 export function transportAuthenticationFailure(): HaiResult<never> {
   return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportAuthenticationFailed'))
 }
 
 /**
- * 对实际 pathname + 原始 search 计算 SM3 摘要，绑定完整路径而不在 JSON/头中重复长 URL。
- * 输入最多 8192 个 UTF-8 字节；调用方不得重排或解码 URL。
- * @example `hashTransportPath(crypto, url.pathname + url.search)`
+ * 内部计算实际pathname+原始search的SM3绑定摘要；不解码、重排查询参数，UTF-8最多8192字节。
+ * @param service - SM3能力实现。
+ * @param path - 实际pathname与原始search拼接值。
+ * @returns SM3摘要或统一失败。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const { crypto } = await import('@h-ai/crypto')
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const url = new URL('https://api.example.com/api/v1/orders?sort=created')
+ *   const digest = hashTransportPath(crypto, url.pathname + url.search)
+ *   if (!digest.success) throw new Error(digest.error.message)
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export function hashTransportPath(service: TransportCryptoServiceLike, path: string): HaiResult<string> {
   try {
@@ -57,9 +77,34 @@ export function hashTransportPath(service: TransportCryptoServiceLike, path: str
 }
 
 /**
- * 创建认证封装；请求由客户端签名，响应由当前请求选定的服务端版本签名。
- * 密钥通过已初始化的服务生成，调用方提供可信 recipient 公钥及自己的私钥。
- * @example `sealTransportPayload(crypto, text, context, 'request', 0, serverPublicKey, clientPrivateKey)`
+ * 内部生成独立SM4/MAC密钥，以SM2封装并签名完整认证字段；调用方另维护可信HTTP上下文。
+ * @param service - 已初始化的SM2/SM3/SM4能力。
+ * @param plaintext - 已按协议限制字节预算的明文。
+ * @param context - 本次可信绑定上下文。
+ * @param direction - request或response认证方向。
+ * @param status - 请求0；响应实际HTTP状态。
+ * @param recipientPublicKey - 可信接收方公钥。
+ * @param senderPrivateKey - 仅本方持有的私钥。
+ * @returns 完整认证封装或统一失败；不代替服务端nonce原子消费。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const { crypto } = await import('@h-ai/crypto')
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const generated = crypto.asymmetric.generateKeyPair()
+ *   if (!generated.success) throw new Error(generated.error.message)
+ *   const pair = generated.data
+ *   const digest = crypto.hash.hash('/api/v1/orders?sort=created')
+ *   if (!digest.success) throw new Error(digest.error.message)
+ *   const context: TransportMessageContext = { version: 2, serverKeyId: 'v1', clientId: 'client-test', requestId: globalThis.crypto.randomUUID().replaceAll('-', ''), issuedAt: Date.now(), method: 'POST', pathHash: digest.data }
+ *   const sealed = sealTransportPayload(crypto, 'hello', context, 'request', 0, pair.publicKey, pair.privateKey)
+ *   if (!sealed.success) throw new Error(sealed.error.message)
+ *   const payload = sealed.data
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export function sealTransportPayload(
   service: TransportCryptoServiceLike,
@@ -95,9 +140,32 @@ export function sealTransportPayload(
 }
 
 /**
- * 验签 → 解封密钥 → 常量时间验证 MAC → CBC 解密；未认证数据绝不进入 CBC。
- * 调用方另外校验预期 HTTP 上下文；服务端还须原子消费 nonce，不能以本函数替代管理器。
- * @example `openTransportPayload(crypto, payload, clientPrivateKey, serverPublicKey)`
+ * 内部按验签→解封密钥→常量时间MAC校验→CBC解密处理；未认证数据不进入CBC。
+ * @param service - 已初始化的SM2/SM3/SM4能力。
+ * @param payload - 待校验封装。
+ * @param recipientPrivateKey - 本方私钥。
+ * @param senderPublicKey - 已认证绑定的发送方公钥。
+ * @returns 明文或统一失败；HTTP绑定/时效/nonce还须由外层管理器检查。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const { crypto } = await import('@h-ai/crypto')
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const generated = crypto.asymmetric.generateKeyPair()
+ *   if (!generated.success) throw new Error(generated.error.message)
+ *   const pair = generated.data
+ *   const digest = crypto.hash.hash('/api/v1/orders?sort=created')
+ *   if (!digest.success) throw new Error(digest.error.message)
+ *   const context: TransportMessageContext = { version: 2, serverKeyId: 'v1', clientId: 'client-test', requestId: globalThis.crypto.randomUUID().replaceAll('-', ''), issuedAt: Date.now(), method: 'POST', pathHash: digest.data }
+ *   const sealed = sealTransportPayload(crypto, 'hello', context, 'request', 0, pair.publicKey, pair.privateKey)
+ *   if (!sealed.success) throw new Error(sealed.error.message)
+ *   const opened = openTransportPayload(crypto, sealed.data, pair.privateKey, pair.publicKey)
+ * if (!opened.success) throw new Error(opened.error.message)
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export function openTransportPayload(
   service: TransportCryptoServiceLike,
@@ -135,10 +203,27 @@ export function openTransportPayload(
 }
 
 /**
- * 校验唯一受支持的认证传输格式；不接受旧版或超出预算的字段。
- * @example
+ * 内部格式守卫，只接受v2精确字段与预算；形状合法不代表签名/MAC/时效/nonce有效。
+ * @param value - 未知JSON值。
+ * @returns 是否可继续执行认证校验，不能据此执行业务。
+ *
+ * @example 模块内部上下文
  * ```ts
- * if (!isValidEncryptedPayload(JSON.parse(body))) return new Response(null, { status: 400 })
+ * const { crypto } = await import('@h-ai/crypto')
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const generated = crypto.asymmetric.generateKeyPair()
+ *   if (!generated.success) throw new Error(generated.error.message)
+ *   const pair = generated.data
+ *   const digest = crypto.hash.hash('/api/v1/orders?sort=created')
+ *   if (!digest.success) throw new Error(digest.error.message)
+ *   const context: TransportMessageContext = { version: 2, serverKeyId: 'v1', clientId: 'client-test', requestId: globalThis.crypto.randomUUID().replaceAll('-', ''), issuedAt: Date.now(), method: 'POST', pathHash: digest.data }
+ *   const sealed = sealTransportPayload(crypto, 'hello', context, 'request', 0, pair.publicKey, pair.privateKey)
+ *   if (!sealed.success) throw new Error(sealed.error.message)
+ *   const validShape = isValidEncryptedPayload(sealed.data)
+ * }
+ * finally { await crypto.close() }
  * ```
  */
 export function isValidEncryptedPayload(value: unknown): value is EncryptedPayload {
@@ -164,8 +249,24 @@ export function isValidEncryptedPayload(value: unknown): value is EncryptedPaylo
 }
 
 /**
- * 逐字段关联响应与本次请求，避免并发响应互换及上下文混淆。
- * @example `if (!sameTransportContext(response.context, pendingRequest)) return transportAuthenticationFailure()`
+ * 内部逐字段关联响应与待处理请求；上下文相同仍须验证签名、MAC和状态。
+ * @param a - 响应认证上下文。
+ * @param b - 本次原始请求上下文。
+ * @returns 全字段是否相同，不以引用相等代替关联。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const { crypto } = await import('@h-ai/crypto')
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const digest = crypto.hash.hash('/api/v1/orders?sort=created')
+ *   if (!digest.success) throw new Error(digest.error.message)
+ *   const context: TransportMessageContext = { version: 2, serverKeyId: 'v1', clientId: 'client-test', requestId: globalThis.crypto.randomUUID().replaceAll('-', ''), issuedAt: Date.now(), method: 'POST', pathHash: digest.data }
+ *   const matches = sameTransportContext(context, { ...context })
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export function sameTransportContext(a: TransportMessageContext, b: TransportMessageContext): boolean {
   return a.version === b.version && a.serverKeyId === b.serverKeyId && a.clientId === b.clientId

@@ -12,10 +12,15 @@ import type { HaiResult } from '@h-ai/core'
 // ─── 协议常量（kit / serv / api-client 必须严格一致） ───
 
 /**
- * 传输加密协议常量。
+ * 认证传输v2的头名、窗口与默认协商子路径；各HTTP适配器共用，不手写漂移常量。
  *
- * 所有使用端必须复用这组常量，避免「header 名拼写漂移导致两端协议错配」。
- * @example `headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)`
+ * @example
+ * ```ts
+ * import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+ * const headers = new Headers()
+ * headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+ * const keyExchangePath = TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH
+ * ```
  */
 export const TRANSPORT_PROTOCOL = {
   /** 客户端 ID 请求头名。 */
@@ -37,16 +42,38 @@ export const TRANSPORT_PROTOCOL = {
 } as const
 
 /**
- * 密钥协商请求体（客户端 → 服务端）。
- * @example `const body: KeyExchangeRequest = { clientPublicKey: keyPair.publicKey }`
+ * 密钥协商请求；只发送客户端公钥，私钥始终留在客户端，注册仍验证曲线点。
+ *
+ * @example
+ * ```ts
+ * import { crypto, type KeyExchangeRequest } from '@h-ai/crypto'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const generated = crypto.asymmetric.generateKeyPair()
+ *   if (!generated.success) throw new Error(generated.error.message)
+ *   const pair = generated.data
+ *   const body: KeyExchangeRequest = { clientPublicKey: pair.publicKey }
+ *   const serialized = JSON.stringify(body)
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export interface KeyExchangeRequest {
   readonly clientPublicKey: string
 }
 
 /**
- * 密钥协商响应体（服务端 → 客户端）。
- * @example `const body: KeyExchangeResponse = { clientId, serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey() }`
+ * TLS协商响应，公开服务端版本、公钥和registry生成的clientId；不含服务端私钥。
+ *
+ * @example
+ * ```ts
+ * import type { KeyExchangeRequest, KeyExchangeResponse, TransportEncryptionManager } from '@h-ai/crypto'
+ * async function exchange(manager: TransportEncryptionManager, body: KeyExchangeRequest): Promise<KeyExchangeResponse> {
+ *   const clientId = await manager.registerClientKey(body.clientPublicKey)
+ *   return { clientId, serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey() }
+ * }
+ * ```
  */
 export interface KeyExchangeResponse {
   /** 服务端当前加密密钥版本；业务请求必须带回该值。 */
@@ -58,8 +85,22 @@ export interface KeyExchangeResponse {
 // ─── 加解密载荷 ───
 
 /**
- * 非对称密钥对；私钥不得写入公开配置、日志或响应。
- * @example `const pair: TransportKeyPair = managedServerKeyPair`
+ * 传输使用的SM2公私钥对；服务端版本从私有Secret注入，客户端可本地生成独立会话密钥。
+ *
+ * @example
+ * ```ts
+ * import { crypto, type TransportKeyPair } from '@h-ai/crypto'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const generated = crypto.asymmetric.generateKeyPair()
+ *   if (!generated.success) throw new Error(generated.error.message)
+ *   const pair = generated.data
+ *   const clientPair: TransportKeyPair = pair
+ *   const publicKey = clientPair.publicKey
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export interface TransportKeyPair {
   readonly publicKey: string
@@ -67,14 +108,19 @@ export interface TransportKeyPair {
 }
 
 /**
- * 端到端传输的加密载荷格式。
+ * 完整v2认证封装；encryptedKey含独立SM4/HMAC密钥，signature覆盖认证字段和MAC。
+ * HTTP适配器只用成功认证得到的上下文生成响应，不自行拼接示例密文。
  *
- * encryptedKey 封装独立的 SM4/HMAC 密钥；签名覆盖全部认证字段和 MAC。
- * 接收方必须先验证发送方及 MAC，再解密，不能仅凭 X-Encrypted 布尔标记信任正文。
  * @example
  * ```ts
- * const result = await manager.encryptResponse(verifiedContext, JSON.stringify(data), 200)
- * if (result.success) return Response.json(result.data)
+ * import { authenticateTransportRequest, type EncryptedPayload, type TransportEncryptionManager } from '@h-ai/crypto'
+ * async function sealResponse(manager: TransportEncryptionManager, request: Request): Promise<EncryptedPayload> {
+ *   const verified = await authenticateTransportRequest(manager, request)
+ *   if (!verified.success) throw new Error(verified.error.message)
+ *   const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ accepted: true }), 200)
+ *   if (!encrypted.success) throw new Error(encrypted.error.message)
+ *   return encrypted.data
+ * }
  * ```
  */
 export interface EncryptedPayload {
@@ -97,14 +143,16 @@ export interface EncryptedPayload {
 }
 
 /**
- * 与一次 HTTP 请求绑定的认证上下文。
- * requestId 是 128 位随机 nonce；共享 registry 在有效窗口内只允许消费一次。
- * pathHash 为实际 URL 的 pathname + search 的 SM3 摘要，不解码或重排查询参数。
+ * 认证的单次HTTP上下文；128位nonce、版本、客户端、时间、方法和实际路径SM3摘要共同绑定。
+ * 服务端共享registry只允许消费一次nonce；响应必须关联成功认证后的同一上下文。
+ *
  * @example
  * ```ts
- * const context: TransportMessageContext = {
- *   version: 2, serverKeyId: '2026-10', clientId, requestId,
- *   issuedAt: Date.now(), method: 'POST', pathHash: actualPathSm3,
+ * import { authenticateTransportRequest, type TransportEncryptionManager, type TransportMessageContext } from '@h-ai/crypto'
+ * async function contextOf(manager: TransportEncryptionManager, request: Request): Promise<TransportMessageContext> {
+ *   const verified = await authenticateTransportRequest(manager, request)
+ *   if (!verified.success) throw new Error(verified.error.message)
+ *   return verified.data.context
  * }
  * ```
  */
@@ -126,11 +174,17 @@ export interface TransportMessageContext {
 }
 
 /**
- * HTTP 适配器从实际 Request 提取的可信上下文，禁止从密文封装直接复制。
+ * 从实际HTTP Request提取的可信绑定输入；不能直接复制密文的自报方法、路径或客户端。
+ *
  * @example
  * ```ts
- * const expected = { clientId, method: request.method, path: url.pathname + url.search }
- * const result = await manager.decryptRequest(payload, expected)
+ * import type { TransportRequestContext } from '@h-ai/crypto'
+ * function expectedContext(request: Request): TransportRequestContext {
+ *   const clientId = request.headers.get('X-Client-Id')
+ *   if (!clientId) throw new Error('Missing client ID')
+ *   const url = new URL(request.url)
+ *   return { clientId, method: request.method, path: url.pathname + url.search }
+ * }
  * ```
  */
 export interface TransportRequestContext {
@@ -143,11 +197,19 @@ export interface TransportRequestContext {
 }
 
 /**
- * 发往服务端的密文，显式指定协商时取得的服务端密钥版本。
+ * 客户端发出的完整请求封装，direction=request且status=0；结构类型不构成认证证明。
+ *
  * @example
  * ```ts
- * // authenticated 为客户端生成的完整认证封装，不手写密钥或标记来模拟认证。
- * const payload: EncryptedRequestPayload = { ...authenticated, direction: 'request', status: 0 }
+ * import type { EncryptedRequestPayload, TransportEncryptionManager } from '@h-ai/crypto'
+ * async function decrypt(manager: TransportEncryptionManager, request: Request, payload: EncryptedRequestPayload): Promise<string> {
+ *   const clientId = request.headers.get('X-Client-Id')
+ *   if (!clientId) throw new Error('Missing client ID')
+ *   const url = new URL(request.url)
+ *   const result = await manager.decryptRequest(payload, { clientId, method: request.method, path: url.pathname + url.search })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
  * ```
  */
 export interface EncryptedRequestPayload extends EncryptedPayload {
@@ -156,17 +218,15 @@ export interface EncryptedRequestPayload extends EncryptedPayload {
 }
 
 /**
- * 由 Secret Manager 或服务端私有环境注入的版本化密钥环。
+ * 服务端受管版本密钥环；所有节点同版本对应同密钥，新协商选activeKeyId，旧版本保留到撤销。
+ * 先分发新旧版本再切活动ID；删除旧版本即撤销，私钥不进入PUBLIC_/VITE_/日志。
  *
- * 各节点使用同一组 keys；activeKeyId 只控制新协商，保留的旧版本仍可解密。
- * 轮换先向所有节点分发新旧版本，再切换 activeKeyId；删除旧版本即撤销。
- * 禁止放入公开 YAML、PUBLIC_/VITE_ 环境变量或日志。
  * @example
  * ```ts
- * const ring: TransportServerKeyRing = {
- *   activeKeyId: '2026-10',
- *   keys: { '2026-10': managedKeyPair, '2026-09': previousManagedKeyPair },
- * }
+ * import { parseTransportServerKeyRing, type TransportServerKeyRing } from '@h-ai/crypto'
+ * const parsed = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ * if (!parsed.success) throw new Error(parsed.error.message)
+ * const ring: TransportServerKeyRing = parsed.data
  * ```
  */
 export interface TransportServerKeyRing {
@@ -179,11 +239,20 @@ export interface TransportServerKeyRing {
 // ─── 注入式服务接口 ───
 
 /**
- * 传输加密所需的非对称 + 对称能力子集。
+ * 传输协议实际需要的SM2/SM3/HMAC/SM4能力；可结构化注入真实crypto，不仿造另一套算法。
  *
- * 不直接依赖 `@h-ai/crypto` 的具体实现，便于测试时注入 mock；
- * 实际使用时 `crypto` 模块的实例本身即可结构兼容。
- * @example `const service: TransportCryptoServiceLike = crypto`
+ * @example
+ * ```ts
+ * import { crypto, type TransportCryptoServiceLike } from '@h-ai/crypto'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const service: TransportCryptoServiceLike = crypto
+ *   const digest = service.hash.hash('/api/v1/orders')
+ *   if (!digest.success) throw new Error(digest.error.message)
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export interface TransportCryptoServiceLike {
   asymmetric: {
@@ -208,13 +277,28 @@ export interface TransportCryptoServiceLike {
 // ─── 客户端密钥存储（可插拔，支持分布式） ───
 
 /**
- * 客户端公钥存储抽象。
+ * 客户端公钥与nonce存储契约；生产显式共享Redis/数据库，真实共享与原子性由提供者保证。
+ * get的故障不能当未注册，claimRequest故障不能当成功；有效nonce不得在expiresAt前驱逐。
  *
- * 生产显式接入共享 Redis / 数据库；开发和测试可显式创建 createInMemoryKeyStore。
- *
- * 设计原则：方法均为异步签名，避免后续替换为分布式实现时大改接口；
- * 内存实现以 `Promise.resolve` 包裹即可。
- * @example `const registry: TransportKeyStore = createRedisTransportKeyStore({ cache })`
+ * @example
+ * ```ts
+ * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { cache } from '@h-ai/cache'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
+ *   if (!connected.success) throw new Error(connected.error.message)
+ *   try {
+ *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const store: import('@h-ai/crypto').TransportKeyStore = registry
+ *     const scope = store.stateScope
+ *     // Redis部署须noeviction/可靠持久化，并同步各节点时钟。
+ *   }
+ *   finally { await cache.close() }
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export interface TransportKeyStore {
   /** 公钥与nonce状态的真实共享能力；生产只接受shared。 */
@@ -222,29 +306,147 @@ export interface TransportKeyStore {
   /**
    * 注册有效 SM2 公钥，返回服务端生成的 clientId；格式/曲线点无效或存储故障必须 reject。
    * 容量策略见具体工厂契约：数据库满容量拒绝，开发/测试内存实现允许 FIFO 淘汰公钥。
-   * @example `const clientId = await registry.register(clientPublicKey)`
+   * @param publicKey - 实际调用输入，按该方法约束验证。
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const generated = crypto.asymmetric.generateKeyPair()
+   *   if (!generated.success) throw new Error(generated.error.message)
+   *   const pair = generated.data
+   *   const { createInMemoryKeyStore } = await import('@h-ai/crypto')
+   *   const registry = createInMemoryKeyStore(100)
+   *   try { const clientId = await registry.register(pair.publicKey) }
+   *   finally { await registry.close?.() }
+   *   // 本例仅开发/测试；生产替换为共享Redis/数据库registry。
+   * }
+   * finally { await crypto.close() }
+   * ```
    */
   register: (publicKey: string) => Promise<string>
-  /** 查询已注册客户端公钥。 */
+  /**
+   * 读取已注册有效公钥；缺失返回undefined，存储失败拒绝，不能伪装未注册。
+   * @param clientId - registry生成的客户端标识。
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const generated = crypto.asymmetric.generateKeyPair()
+   *   if (!generated.success) throw new Error(generated.error.message)
+   *   const pair = generated.data
+   *   const { createInMemoryKeyStore } = await import('@h-ai/crypto')
+   *   const registry = createInMemoryKeyStore(100)
+   *   try { const clientId = await registry.register(pair.publicKey); const publicKey = await registry.get(clientId) }
+   *   finally { await registry.close?.() }
+   * }
+   * finally { await crypto.close() }
+   * ```
+   */
   get: (clientId: string) => Promise<string | undefined>
   /**
    * 原子消费客户端 requestId nonce；成功返回 true，重放返回 false。
    * 必须跨节点共享且在 expiresAt（Unix 毫秒）前不驱逐；存储故障必须 reject，禁止当作成功。
-   * @example `const accepted = await store.claimRequest(clientId, requestId, issuedAt + 360_000)`
+   * @param clientId - registry生成的客户端标识。
+   * @param requestId - 本次128位随机nonce。
+   * @param expiresAt - nonce至少保留到的Unix毫秒期限。
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const generated = crypto.asymmetric.generateKeyPair()
+   *   if (!generated.success) throw new Error(generated.error.message)
+   *   const pair = generated.data
+   *   const { createInMemoryKeyStore } = await import('@h-ai/crypto')
+   *   const registry = createInMemoryKeyStore(100)
+   *   try {
+   *     const clientId = await registry.register(pair.publicKey)
+   *     const requestId = globalThis.crypto.randomUUID().replaceAll('-', '')
+   *     const expiresAt = Date.now() + 360000
+   *     const first = await registry.claimRequest(clientId, requestId, expiresAt)
+   *     const replay = await registry.claimRequest(clientId, requestId, expiresAt)
+   *     // 单进程测试预期true/false；生产需要跨节点共享原子消费且有效期间不驱逐。
+   *   }
+   *   finally { await registry.close?.() }
+   * }
+   * finally { await crypto.close() }
+   * ```
    */
   claimRequest: (clientId: string, requestId: string, expiresAt: number) => Promise<boolean>
-  /** 主动删除（可选，便于客户端登出时清理）。 */
+  /**
+   * 主动删除（可选，便于客户端登出时清理）。
+   * @param clientId - registry生成的客户端标识。
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const generated = crypto.asymmetric.generateKeyPair()
+   *   if (!generated.success) throw new Error(generated.error.message)
+   *   const pair = generated.data
+   *   const { createInMemoryKeyStore } = await import('@h-ai/crypto')
+   *   const registry = createInMemoryKeyStore(100)
+   *   try { const clientId = await registry.register(pair.publicKey); await registry.delete?.(clientId) }
+   *   finally { await registry.close?.() }
+   * }
+   * finally { await crypto.close() }
+   * ```
+   */
   delete?: (clientId: string) => Promise<void>
-  /** 释放底层资源（关闭连接、清理定时器等）。 */
+  /**
+   * 可选释放registry自有资源；借用的cache/reldb不由registry关闭。
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import { createInMemoryKeyStore } from '@h-ai/crypto'
+   * const registry = createInMemoryKeyStore(100)
+   * await registry.close?.()
+   * // 共享registry借用的cache/reldb仍由应用反序关闭。
+   * ```
+   */
   close?: () => Promise<void>
 }
 
 /**
- * 创建服务端传输加密管理器的配置。
+ * 服务端创建配置；受管密钥环和共享registry均必填，没有进程随机密钥回退。
  *
- * 必须同时显式提供服务端密钥环和客户端 registry；生产使用共享 Redis/数据库。
- * 开发/测试可显式传入 createInMemoryKeyStore(capacity)。
- * @example `const options: TransportCreateServerOptions = { serverKeyRing: managedRing, keyStore: sharedRegistry }`
+ * @example
+ * ```ts
+ * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { cache } from '@h-ai/cache'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
+ *   if (!connected.success) throw new Error(connected.error.message)
+ *   try {
+ *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const parsed = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ *     if (!parsed.success) throw new Error(parsed.error.message)
+ *     const options: import('@h-ai/crypto').TransportCreateServerOptions = { serverKeyRing: parsed.data, keyStore: registry }
+ *     const created = crypto.transport.createServer(options)
+ *     if (!created.success) throw new Error(created.error.message)
+ *     await created.data.close()
+ *   }
+ *   finally { await cache.close() }
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export interface TransportCreateServerOptions {
   /** 必填受管服务端密钥环；没有隐式随机生成或进程密钥回退。 */
@@ -256,63 +458,186 @@ export interface TransportCreateServerOptions {
 // ─── 管理器与客户端公开接口 ───
 
 /**
- * 服务端传输加密管理器。
+ * 服务端认证传输管理器；注册公钥，按真实HTTP上下文验签/MAC/时效并消费nonce，随后才返回明文。
+ * 优先使用authenticateTransportRequest；响应只用已认证上下文。close释放registry自有资源，不关闭借用的cache/reldb。
  *
- * 由 {@link createTransportEncryption} 创建；负责服务端密钥对持有、客户端密钥
- * 注册与请求/响应的加解密。
- * @example `const result = await manager.decryptRequest(payload, actualHttpContext)`
- *
- * @remarks
- * 典型调用顺序：
- *
- * 1. `registerClientKey(clientPublicKey)`：在密钥协商端点中保存客户端公钥，并生成 `clientId`。
- * 2. `getServerPublicKey()`：把服务端公钥返回给客户端，供后续请求加密会话密钥。
- * 3. `await decryptRequest(payload, actualHttpContext)`：认证、验证时效并原子消费 nonce 后返回明文。
- * 4. `await encryptResponse(payload.context, data, status)`：业务完成后绑定原请求和 HTTP 状态加密响应。
- * 5. `close()`：服务关闭时释放底层 keyStore 资源。
+ * @example
+ * ```ts
+ * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { cache } from '@h-ai/cache'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
+ *   if (!connected.success) throw new Error(connected.error.message)
+ *   try {
+ *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ *     if (!ring.success) throw new Error(ring.error.message)
+ *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
+ *     if (!created.success) throw new Error(created.error.message)
+ *     const manager = created.data
+ *     try {
+ *       const currentVersion = manager.getServerKeyId()
+ *       const publicKey = manager.getServerPublicKey()
+ *     }
+ *     finally { await manager.close() }
+ *   }
+ *   finally { await cache.close() }
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export interface TransportEncryptionManager {
-  /** 当前新协商使用的服务端密钥 ID。 */
+  /**
+   * 当前新协商使用的服务端密钥 ID。
+   * @returns 直接返回值，使用前先初始化模块。
+   *
+   * @example
+   * ```ts
+   * import type { TransportEncryptionManager } from '@h-ai/crypto'
+   * function activeVersion(manager: TransportEncryptionManager): string { return manager.getServerKeyId() }
+   * ```
+   */
   getServerKeyId: () => string
+  /**
+   * 返回当前活动版本的公开公钥，只用于可信TLS协商，不含私钥。
+   * @returns 直接返回值，使用前先初始化模块。
+   *
+   * @example
+   * ```ts
+   * import type { TransportEncryptionManager } from '@h-ai/crypto'
+   * function activePublicKey(manager: TransportEncryptionManager): string { return manager.getServerPublicKey() }
+   * ```
+   */
   getServerPublicKey: () => string
   /**
    * 验证 SM2 公钥编码和曲线点后向显式 registry 注册。
    * @throws 公钥无效或 registry 写入失败；HTTP 协商适配器负责转换成失败响应。
-   * @example `const clientId = await manager.registerClientKey(clientPublicKey)`
+   * @param clientPublicKey - 实际调用输入，按该方法约束验证。
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import type { TransportEncryptionManager } from '@h-ai/crypto'
+   * async function register(manager: TransportEncryptionManager, clientPublicKey: string): Promise<string> {
+   *   // 方法校验编码/曲线点后写入共享registry；异常由HTTP协商适配器转成失败响应。
+   *   return manager.registerClientKey(clientPublicKey)
+   * }
+   * ```
    */
   registerClientKey: (clientPublicKey: string) => Promise<string>
-  /** 查询客户端公钥；registry 读取故障会 reject，不作为未注册处理。 */
+  /**
+   * 查询客户端公钥；registry 读取故障会 reject，不作为未注册处理。
+   * @param clientId - registry生成的客户端标识。
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import type { TransportEncryptionManager } from '@h-ai/crypto'
+   * async function lookup(manager: TransportEncryptionManager, clientId: string): Promise<string | undefined> {
+   *   return manager.getClientPublicKey(clientId)
+   * }
+   * ```
+   */
   getClientPublicKey: (clientId: string) => Promise<string | undefined>
   /**
    * 按已认证请求上下文加密、MAC 并签名响应，绑定实际 HTTP 状态。
    * registry 及加密故障均返回失败 HaiResult；上下文只能来自成功的请求认证。
-   * @example `await manager.encryptResponse(verified.data.context, json, 200)`
+   * @param request - 实际调用输入，按该方法约束验证。
+   * @param data - 实际调用输入，按该方法约束验证。
+   * @param status - 实际调用输入，按该方法约束验证。
+   * @returns HaiResult，先检查success再读取data。
+   *
+   * @example
+   * ```ts
+   * import { authenticateTransportRequest, type EncryptedPayload, type TransportEncryptionManager } from '@h-ai/crypto'
+   * async function sealResponse(manager: TransportEncryptionManager, request: Request): Promise<EncryptedPayload> {
+   *   const verified = await authenticateTransportRequest(manager, request)
+   *   if (!verified.success) throw new Error(verified.error.message)
+   *   const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ accepted: true }), 200)
+   *   if (!encrypted.success) throw new Error(encrypted.error.message)
+   *   return encrypted.data
+   * }
+   * ```
    */
   encryptResponse: (request: TransportMessageContext, data: string, status: number) => Promise<HaiResult<EncryptedPayload>>
   /**
    * 验证发送方、MAC、HTTP 绑定和时效，原子消费 nonce 后才返回明文；错误不含密文或 Secret。
    * expected 须从实际 Request 提取，不从 payload 复制。HTTP 优先用 authenticateTransportRequest。
-   * @example `await manager.decryptRequest(payload, { clientId, method: request.method, path: url.pathname + url.search })`
+   * @param payload - 实际调用输入，按该方法约束验证。
+   * @param expected - 实际调用输入，按该方法约束验证。
+   * @returns HaiResult，先检查success再读取data。
+   *
+   * @example
+   * ```ts
+   * import type { EncryptedRequestPayload, TransportEncryptionManager } from '@h-ai/crypto'
+   * async function decrypt(manager: TransportEncryptionManager, request: Request, payload: EncryptedRequestPayload): Promise<string> {
+   *   const clientId = request.headers.get('X-Client-Id')
+   *   if (!clientId) throw new Error('Missing client ID')
+   *   const url = new URL(request.url)
+   *   const result = await manager.decryptRequest(payload, { clientId, method: request.method, path: url.pathname + url.search })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * ```
    */
   decryptRequest: (payload: EncryptedRequestPayload, expected: TransportRequestContext) => Promise<HaiResult<string>>
-  /** 关闭：释放 keyStore 资源。 */
+  /**
+   * 释放registry自有资源；应用仍负责借用cache/reldb的关闭。
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+   * import { cache } from '@h-ai/cache'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
+   *   if (!connected.success) throw new Error(connected.error.message)
+   *   try {
+   *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+   *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+   *     if (!ring.success) throw new Error(ring.error.message)
+   *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
+   *     if (!created.success) throw new Error(created.error.message)
+   *     const manager = created.data
+   *     try {
+   *       const currentVersion = manager.getServerKeyId()
+   *       const publicKey = manager.getServerPublicKey()
+   *     }
+   *     finally { await manager.close() }
+   *   }
+   *   finally { await cache.close() }
+   * }
+   * finally { await crypto.close() }
+   * ```
+   */
   close: () => Promise<void>
 }
 
 /**
- * 客户端传输加密会话。
+ * 客户端单会话；首次调用自动协商，后续请求生成随机nonce并认证响应关联/签名/MAC。
+ * init返回HaiResult；encryptedFetch按fetch契约reject；destroy清本地会话，不代表撤销服务端registry。
  *
- * 由 {@link createTransportClient} 创建；包装宿主 `fetch`，
- * 自动完成首次密钥协商并对后续请求自动加解密。
- * @example `const response = await client.encryptedFetch('/api/orders', { method: 'POST', body: '{}' })`
- *
- * @remarks
- * 典型调用顺序：
- *
- * 1. `init()`（可选）：预先完成一次密钥协商。
- * 2. `encryptedFetch()`：业务请求统一走这里；若当前会话尚未 ready，会先自动执行 `init()`。
- * 3. `ready()`：查看当前会话是否已经拿到 `clientId` 与服务端公钥。
- * 4. `destroy()`：登出、切租户或切环境时清空会话；下一次请求会重新协商。
+ * @example
+ * ```ts
+ * import { crypto } from '@h-ai/crypto'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const client = crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange' })
+ *   try {
+ *     const ready = await client.init()
+ *     if (!ready.success) throw new Error(ready.error.message)
+ *     const response = await client.encryptedFetch('https://api.example.com/api/v1/orders')
+ *     if (!response.ok) throw new Error('HTTP request failed')
+ *   }
+ *   finally { client.destroy() }
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export interface TransportClient {
   /**
@@ -320,6 +645,25 @@ export interface TransportClient {
    *
    * 通常无需手动调用：`encryptedFetch` 在首次请求前会自动 `init()`。
    * 协商在 30 秒内完成，握手 JSON 与单个公钥分别受 TRANSPORT_BODY_LIMITS 限制。
+   * @returns HaiResult，先检查success再读取data。
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const client = crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange' })
+   *   try {
+   *     const ready = await client.init()
+   *     if (!ready.success) throw new Error(ready.error.message)
+   *     const response = await client.encryptedFetch('https://api.example.com/api/v1/orders')
+   *     if (!response.ok) throw new Error('HTTP request failed')
+   *   }
+   *   finally { client.destroy() }
+   * }
+   * finally { await crypto.close() }
+   * ```
    */
   init: () => Promise<HaiResult<void>>
   /**
@@ -328,10 +672,60 @@ export interface TransportClient {
    * 仅接受关联同一请求上下文与 HTTP status 的认证响应；缺标记也拒绝，不回退明文或密文。
    *
    * @throws 与原生 fetch 一样，网络错误、密钥协商失败、加密失败或解密失败会 reject。
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const client = crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange' })
+   *   try {
+   *     const ready = await client.init()
+   *     if (!ready.success) throw new Error(ready.error.message)
+   *     const response = await client.encryptedFetch('https://api.example.com/api/v1/orders')
+   *     if (!response.ok) throw new Error('HTTP request failed')
+   *   }
+   *   finally { client.destroy() }
+   * }
+   * finally { await crypto.close() }
+   * ```
    */
   encryptedFetch: typeof fetch
-  /** 是否已完成密钥协商。 */
+  /**
+   * 是否已完成密钥协商。
+   * @returns 直接boolean，false表示不匹配/未就绪。
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const client = crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange' })
+   *   try { const ready = client.ready() }
+   *   finally { client.destroy() }
+   * }
+   * finally { await crypto.close() }
+   * ```
+   */
   ready: () => boolean
-  /** 销毁会话（清空客户端密钥）。 */
+  /**
+   * 清空本地客户端密钥与协商状态；下次请求重新协商，不撤销服务端身份或业务效果。
+   * @returns 直接返回值，使用前先初始化模块。
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const initialized = await crypto.init()
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const client = crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange' })
+   *   client.destroy()
+   *   // 只清本地会话；不撤销服务端registry或业务会话。
+   * }
+   * finally { await crypto.close() }
+   * ```
+   */
   destroy: () => void
 }

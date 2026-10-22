@@ -33,13 +33,19 @@ const SM4_HEX_32_REGEX = /^[0-9a-f]{32}$/i
 // ─── SM4 算法实现 ───
 
 /**
- * 创建 SM4 算法操作实例
+ * 创建模块内部 SM4 原语，默认 CBC、随机 IV、PKCS#7 填充，返回结构化密文。
+ * CBC/ECB 本身没有完整性认证；HTTP 必须使用 transport 先验签/MAC 再解密。
+ * @returns 对称操作；解密需要完整 mode/encoding/iv，不猜测裸字符串。
  *
- * 基于 sm-crypto 库实现 SM4 对称加密/解密。
- * 支持 CBC（默认）和 ECB 两种模式，使用 PKCS#7 填充。
- * 密文以结构化字段返回，解密时不猜测字符串格式。
- *
- * @returns SymmetricOperations 接口实现
+ * @example 模块内部上下文
+ * ```ts
+ * const symmetric = createSM4()
+ * const key = symmetric.generateKey()
+ * const encrypted = symmetric.encrypt('hello', key)
+ * if (!encrypted.success) throw new Error(encrypted.error.message)
+ * const decrypted = symmetric.decrypt(encrypted.data, key)
+ * if (!decrypted.success) throw new Error(decrypted.error.message)
+ * ```
  */
 export function createSM4(): SymmetricOperations {
   return {
@@ -59,7 +65,7 @@ export function createSM4(): SymmetricOperations {
      * 默认使用 CBC 并自动生成随机 IV，返回结构化字段。
      *
      * ⚠️ 安全警告：ECB 模式会让相同明文块产生相同密文块，泄漏结构信息。
-     * 生产场景请使用默认 CBC，或显式传入 `{ mode: 'cbc', iv }`。
+     * 新数据使用默认 CBC，或每次显式传入新的随机 IV；CBC 仍需独立完整性认证，HTTP 使用 transport。
      *
      * @param data - 待加密明文
      * @param key - 密钥（32 字符十六进制）
@@ -195,7 +201,7 @@ export function createSM4(): SymmetricOperations {
      *
      * @param data - 待加密明文
      * @param key - 密钥（32 字符十六进制）
-     * @returns 成功时返回 { ciphertext, iv }；失败时同 encrypt
+     * @returns 成功时返回完整 { mode, ciphertext, iv, encoding }；失败时同 encrypt
      */
     encryptWithIV(
       data: string,
@@ -249,12 +255,15 @@ export function createSM4(): SymmetricOperations {
 // ─── 辅助函数 ───
 
 /**
- * 生成加密安全的随机十六进制字符串
+ * 使用宿主Web Crypto生成随机字节并编码为小写Hex，密钥/IV分别调用以保持独立。
+ * @param byteLength - 需要的字节数。
+ * @returns 长度为byteLength两倍的Hex。
  *
- * 使用 Web Crypto API（crypto.getRandomValues），前后端通用。
- *
- * @param byteLength - 字节数（输出字符数为 byteLength × 2）
- * @returns 小写十六进制字符串
+ * @example 模块内部上下文
+ * ```ts
+ * const key = generateRandomHex(16)
+ * const iv = generateRandomHex(16)
+ * ```
  */
 function generateRandomHex(byteLength: number): string {
   const bytes = new Uint8Array(byteLength)
@@ -270,7 +279,18 @@ function encodeCiphertext(ciphertext: string, encoding: SymmetricCiphertextEncod
   return encoding === 'base64' ? hexToBase64(ciphertext) : ciphertext
 }
 
-/** 将结构化密文转换为 sm-crypto 需要的 hex 输入。 */
+/**
+ * 按已校验结构的encoding解码密文，不猜测裸字符串或丢弃IV。
+ * @param payload - 完整结构化密文。
+ * @returns SM4底层所需Hex字节文本。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const payload: SymmetricDecryptInput = { mode: 'ecb', ciphertext: 'aGk=', encoding: 'base64' }
+ * const bytes = decodeCiphertext(payload)
+ * // 此例只演示编码转换，不执行ECB加解密，也不是有效的认证封装。
+ * ```
+ */
 function decodeCiphertext(payload: SymmetricDecryptInput): string {
   return payload.encoding === 'base64' ? base64ToHex(payload.ciphertext) : payload.ciphertext
 }

@@ -14,8 +14,28 @@ import { isValidSM2PublicKey } from '../../crypto-public-key.js'
 const TRANSPORT_KEY_CACHE_PREFIX = 'hai:crypto:transport:client'
 
 /**
- * Redis registry 配置；连接由应用持有和关闭。
- * @example `createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })`
+ * 借用已初始化cache的registry配置；只有Redis provider报告shared，内存cache不能满足生产。
+ * TTL是客户端公钥寿命，nonce另按认证窗口持有；连接由应用关闭。
+ *
+ * @example
+ * ```ts
+ * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { cache } from '@h-ai/cache'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
+ *   if (!connected.success) throw new Error(connected.error.message)
+ *   try {
+ *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const options: import('@h-ai/crypto').CreateRedisTransportKeyStoreOptions = { cache, ttlSeconds: 3600 }
+ *     const secondView = createRedisTransportKeyStore(options)
+ *     const scope = secondView.stateScope
+ *   }
+ *   finally { await cache.close() }
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export interface CreateRedisTransportKeyStoreOptions {
   /** 已初始化的 `@h-ai/cache` 实例；生产环境通常应使用 Redis provider。 */
@@ -52,15 +72,28 @@ function unwrapResult<T>(operation: string, result: HaiResult<T>): T {
 }
 
 /**
- * 创建基于 `@h-ai/cache` 的传输 key store。
+ * 创建借用cache的公钥/nonce registry；生产必须Redis共享provider，nonce用单key原子CAS。
+ * 公钥TTL省略则不过期，nonce有效期间禁止驱逐；容量由Redis部署预算管理，不提供DB maxClients。
+ * @param options - 已初始化cache与可选正整数TTL秒，最大2147483647。
+ * @returns registry；非法TTL同步TypeError，读写/公钥错误拒绝Promise，不关闭cache。
  *
- * 说明：本实现依赖 cache 模块的 KV 语义；若要获得跨节点共享能力，应传入
- * 已连接 Redis 的 `cache` 实例，而不是内存 provider。
- * 注册前验证 SM2 曲线点；TTL 省略表示不过期，有限 TTL 由 Redis 原生维护。
- * 不提供数据库 registry 的 maxClients 限制，容量由 Redis 部署预算管理；不得提前驱逐有效 nonce。
- * @param options - 已初始化缓存与可选正整数 TTL 秒。
- * @returns registry；TTL 无效同步抛出 TypeError，存储或公钥注册故障会 reject。
- * @example `const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })`
+ * @example
+ * ```ts
+ * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { cache } from '@h-ai/cache'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
+ *   if (!connected.success) throw new Error(connected.error.message)
+ *   try {
+ *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const scope = registry.stateScope
+ *   }
+ *   finally { await cache.close() }
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export function createRedisTransportKeyStore(options: CreateRedisTransportKeyStoreOptions): TransportKeyStore {
   const ttlSeconds = normalizeTtlSeconds(options.ttlSeconds)

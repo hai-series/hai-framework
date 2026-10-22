@@ -10,17 +10,23 @@ import { isValidEncryptedPayload, transportAuthenticationFailure } from './crypt
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /**
- * 有界读取并认证实际 HTTP 请求；包括 GET/HEAD，拒绝缺少认证或重复承载封装。
- * 方法、路径、查询串和客户端 ID 从 Request 提取，不能由 payload 自证。
- * @param manager - 使用共享原子防重放 registry 的服务端管理器。
- * @param request - 未消费正文的实际 HTTP 请求。
- * @returns 认证后的明文和供响应关联使用的上下文；失败无明文。
- * @throws 正文或头封装超限抛 RangeError；读取取消和网络流错误沿用原始流异常。
+ * 从实际HTTP请求提取可信方法/路径/查询/客户端ID并有界认证；成功后才执行业务。
+ * 拒绝缺少认证及头/正文重复承载，空请求也认证；不会由payload自证HTTP上下文。
+ * @param manager - 使用共享原子nonce registry的已创建管理器。
+ * @param request - 未消费正文的真实Request。
+ * @returns 明文和响应关联上下文；认证失败无明文。
+ * @throws RangeError超限；流读取/取消沿用原异常，HTTP适配器负责转响应。
+ *
  * @example
  * ```ts
- * const verified = await authenticateTransportRequest(manager, request)
- * if (!verified.success) return new Response(null, { status: 400 })
- * const response = await manager.encryptResponse(verified.data.context, json, 200)
+ * import { authenticateTransportRequest, TRANSPORT_PROTOCOL, type TransportEncryptionManager } from '@h-ai/crypto'
+ * async function handle(manager: TransportEncryptionManager, request: Request): Promise<Response> {
+ *   const verified = await authenticateTransportRequest(manager, request)
+ *   if (!verified.success) return new Response(null, { status: 400 })
+ *   const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ accepted: true }), 200)
+ *   if (!encrypted.success) return new Response(null, { status: 500 })
+ *   return Response.json(encrypted.data, { headers: { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE } })
+ * }
  * ```
  */
 export async function authenticateTransportRequest(

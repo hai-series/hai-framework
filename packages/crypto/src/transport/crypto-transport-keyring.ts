@@ -11,17 +11,17 @@ import { HaiCryptoError } from '../crypto-types.js'
 import { TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
 
 /**
- * 解析服务端 Secret 中的 JSON 密钥环，不读取环境、不初始化 crypto。
+ * 解析服务端私有JSON或受管对象，不读取环境或初始化模块；实际密钥配对由createServer验证。
+ * @param serialized - Secret Manager提供的JSON字符串或对象。
+ * @returns 结构有效的密钥环或脱敏INVALID_KEY，不回显私钥/原始输入。
  *
- * 返回错误不包含原始 JSON、私钥或解析异常片段；实际密钥配对在 createServer 时验证。
- * @param serialized - 来自 Secret Manager 的 JSON 或受管配置对象。
- * @returns 有效的版本化密钥环；缺失或结构错误返回 INVALID_KEY。
  * @example
  * ```ts
- * const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
- * if (!ring.success)
- *   throw new Error(ring.error.message)
- * const server = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: sharedRegistry })
+ * import { parseTransportServerKeyRing, type TransportServerKeyRing } from '@h-ai/crypto'
+ * const parsed = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ * if (!parsed.success) throw new Error(parsed.error.message)
+ * const ring: TransportServerKeyRing = parsed.data
+ * // 仅服务端使用；createServer还会校验每个版本的公私钥配对。
  * ```
  */
 export function parseTransportServerKeyRing(serialized: unknown): HaiResult<TransportServerKeyRing> {
@@ -34,7 +34,17 @@ export function parseTransportServerKeyRing(serialized: unknown): HaiResult<Tran
   return err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
 }
 
-/** 内部配置边界：限制版本 ID 与公钥长度，不把配置值带入错误上下文。 */
+/**
+ * 内部结构守卫，限制版本ID、公钥/私钥文本长度，不把配置值带入错误。
+ * @param value - 未知Secret解析结果。
+ * @returns 是否满足密钥环结构；真实密钥配对仍由服务端工厂校验。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const valid = isTransportServerKeyRing({ activeKeyId: 'v1', keys: {} })
+ * // 缺少活动版本的密钥对，结构校验返回false。
+ * ```
+ */
 function isTransportServerKeyRing(value: unknown): value is TransportServerKeyRing {
   if (!value || typeof value !== 'object')
     return false

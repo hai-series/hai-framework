@@ -27,13 +27,20 @@ const SM2_PRIVATE_KEY_REGEX = /^[0-9a-f]{64}$/i
 // ─── SM2 算法实现 ───
 
 /**
- * 创建 SM2 算法操作实例
+ * 创建模块内部 SM2 原语；支持匹配的密文模式与 hex/base64 编码，公钥验证实际曲线点。
+ * 包用户通过初始化后的 crypto.asymmetric 访问。
+ * @returns 非对称操作；加密与签名使用不同方法，不能用加密代替发送方认证。
  *
- * 基于 sm-crypto 库实现 SM2 非对称加密、签名与验签。
- * 公钥支持带/不带 04 前缀两种格式（内部统一补齐）。
- * 密文支持 hex/base64 两种格式（解密时自动检测）。
- *
- * @returns AsymmetricOperations 接口实现
+ * @example 模块内部上下文
+ * ```ts
+ * const asymmetric = createSM2()
+ * const generated = asymmetric.generateKeyPair()
+ * if (!generated.success) throw new Error(generated.error.message)
+ * const encrypted = asymmetric.encrypt('hello', generated.data.publicKey)
+ * if (!encrypted.success) throw new Error(encrypted.error.message)
+ * const decrypted = asymmetric.decrypt(encrypted.data, generated.data.privateKey)
+ * if (!decrypted.success) throw new Error(decrypted.error.message)
+ * ```
  */
 export function createSM2(): AsymmetricOperations {
   return {

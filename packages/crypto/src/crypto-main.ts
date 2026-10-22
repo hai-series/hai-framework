@@ -71,19 +71,23 @@ const transportOperations: TransportOperations = {
 // ─── 服务对象 ───
 
 /**
- * 加密模块服务对象（统一入口）
- *
- * 使用前必须调用 `crypto.init()` 进行初始化。
- * 未初始化时访问 asymmetric/hash/symmetric/password 的任何方法均返回 NOT_INITIALIZED 错误。
+ * 加密模块公开服务对象；先检查 init 的 HaiResult，再使用各操作域，最后 close。
+ * SM2/SM3/SM4 原语不等于认证传输；HTTP 使用 transport 的签名、MAC、上下文和共享 nonce 校验。
  *
  * @example
  * ```ts
  * import { crypto } from '@h-ai/crypto'
- *
- * await crypto.init()
- * const hash = crypto.hash.hash('hello')
- * const keyPair = crypto.asymmetric.generateKeyPair()
- * await crypto.close()
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const generated = crypto.asymmetric.generateKeyPair()
+ *   if (!generated.success) throw new Error(generated.error.message)
+ *   const pair = generated.data
+ *   const digest = crypto.hash.hash('hello')
+ *   if (!digest.success) throw new Error(digest.error.message)
+ *   const publicKeyValid = crypto.asymmetric.isValidPublicKey(pair.publicKey)
+ * }
+ * finally { await crypto.close() }
  * ```
  */
 export const crypto: CryptoFunctions = {

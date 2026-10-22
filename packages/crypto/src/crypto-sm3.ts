@@ -23,13 +23,17 @@ const { sm3 } = smCrypto
 // ─── SM3 算法实现 ───
 
 /**
- * 创建 SM3 算法操作实例
+ * 创建模块内部 SM3 摘要/HMAC 操作；HMAC 使用 SM3，不是 HMAC-SHA256。
+ * @returns 同步 HaiResult 操作；调用方判断 success 后读取摘要或匹配结果。
  *
- * 基于 sm-crypto 库实现 SM3 哈希、HMAC 与哈希验证。
- * 支持字符串（UTF-8/Hex）和 Uint8Array 输入。
- * HMAC 实现遵循 RFC 2104 标准。
- *
- * @returns HashOperations 接口实现
+ * @example 模块内部上下文
+ * ```ts
+ * const hash = createSM3()
+ * const digest = hash.hash(new Uint8Array([104, 105]))
+ * if (!digest.success) throw new Error(digest.error.message)
+ * const verified = hash.verify('hi', digest.data)
+ * if (!verified.success) throw new Error(verified.error.message)
+ * ```
  */
 export function createSM3(): HashOperations {
   return {
@@ -165,10 +169,14 @@ export function createSM3(): HashOperations {
 // ─── 辅助函数 ───
 
 /**
- * 十六进制字符串转字节数组
+ * 内部Hex字节转换，不执行输入校验；上游输入编码约束应在业务边界处理。
+ * @param hex - 偶数长度Hex字节文本。
+ * @returns 数字字节数组。
  *
- * @param hex - 十六进制字符串（长度必须为偶数）
- * @returns 字节数组
+ * @example 模块内部上下文
+ * ```ts
+ * const bytes = hexToBytes('6869')
+ * ```
  */
 function hexToBytes(hex: string): number[] {
   const bytes: number[] = []

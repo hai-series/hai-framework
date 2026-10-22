@@ -25,7 +25,23 @@ const MAX_SALT_LENGTH = 128
 
 // ─── 依赖接口 ───
 
-/** createPasswordFunctions 所需的外部依赖 */
+/**
+ * 内部密码工厂依赖；复用实际 HashOperations，不替换为另一个摘要协议。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const { crypto } = await import('@h-ai/crypto')
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const deps: PasswordDeps = { hash: crypto.hash }
+ *   const operations = createPasswordFunctions(deps)
+ *   const hashed = operations.hash('test-password', { iterations: 10000, saltLength: 16 })
+ *   if (!hashed.success) throw new Error(hashed.error.message)
+ * }
+ * finally { await crypto.close() }
+ * ```
+ */
 interface PasswordDeps {
   /** 哈希操作实例，用于迭代哈希计算 */
   hash: HashOperations
@@ -34,12 +50,14 @@ interface PasswordDeps {
 // ─── 工具函数 ───
 
 /**
- * 生成加密安全的随机盐值
+ * 用Web Crypto随机字节生成当前密码格式的字母数字盐；本函数按字节取模映射，不承诺字符分布完全均匀。
+ * @param length - 已由密码配置校验的盐字符数。
+ * @returns 新盐文本，不与不同密码记录共用。
  *
- * 使用 Web Crypto API（crypto.getRandomValues）从大小写字母和数字中随机选取字符。
- *
- * @param length - 盐值长度（字符数）
- * @returns 随机盐值字符串
+ * @example 模块内部上下文
+ * ```ts
+ * const salt = generateSalt(16)
+ * ```
  */
 function generateSalt(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -53,16 +71,24 @@ function generateSalt(length: number): string {
 }
 
 /**
- * 对数据进行多次迭代哈希（密钥拉伸）
+ * 迭代SM3进行当前密码格式的密钥拉伸；任一轮失败立即返回，不继续使用失败结果。
+ * @param hash - 实际HashOperations。
+ * @param data - 密码输入。
+ * @param salt - 当前记录的独立盐。
+ * @param iterations - 已校验的正整数轮数。
+ * @returns 最终SM3或原失败HaiResult。
  *
- * 首次输入为 salt + data，后续每次用前一轮的哈希结果作为输入。
- * 任一轮哈希计算失败则立即返回错误。
- *
- * @param hash - 哈希操作实例
- * @param data - 原始数据（通常为密码）
- * @param salt - 盐值
- * @param iterations - 迭代次数
- * @returns 成功时返回最终哈希值（64 字符十六进制）
+ * @example 模块内部上下文
+ * ```ts
+ * const { crypto } = await import('@h-ai/crypto')
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = iterateHash(crypto.hash, 'test-password', generateSalt(16), 10000)
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 function iterateHash(
   hash: HashOperations,
@@ -84,12 +110,25 @@ function iterateHash(
 // ─── 密码操作工厂 ───
 
 /**
- * 创建密码哈希操作实例
+ * 创建模块内部迭代 SM3 加盐密码操作，格式为 $hai$iterations$salt$hash；包用户使用 crypto.password。
+ * @param deps - 实际哈希操作。
+ * @returns 密码哈希/校验操作，业务失败返回 HaiResult。
  *
- * 内部使用迭代加盐的方式生成密码哈希，格式为 `$hai$<iterations>$<salt>$<hash>`。
- *
- * @param deps - 依赖（需要注入哈希操作实例）
- * @returns PasswordOperations 接口实现
+ * @example 模块内部上下文
+ * ```ts
+ * const { crypto } = await import('@h-ai/crypto')
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const password = createPasswordFunctions({ hash: crypto.hash })
+ *   const hashed = password.hash('test-password')
+ *   if (!hashed.success) throw new Error(hashed.error.message)
+ *   const verified = password.verify('test-password', hashed.data)
+ *   if (!verified.success) throw new Error(verified.error.message)
+ *   const matches = verified.data
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations {
   const { hash: hashOps } = deps

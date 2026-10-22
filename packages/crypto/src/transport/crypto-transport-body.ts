@@ -6,15 +6,13 @@
  */
 
 /**
- * 传输协议的固定字节上限。
+ * 协议固定UTF-8字节预算；按实际流读取，不依赖Content-Length，非字符串字符数限制。
  *
- * 密文预算包含 1 MiB 明文经十六进制编码的扩张、PKCS#7 填充及 32 KiB 认证封装余量。
  * @example
  * ```ts
- * const text = await readTransportBody(request.body, {
- *   maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
- *   signal: request.signal,
- * })
+ * import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+ * const request = new Request('https://api.example.com/api/v1/orders', { method: 'POST', body: JSON.stringify({ message: 'hello' }) })
+ * const text = await readTransportBody(request.body, { maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes, signal: request.signal })
  * ```
  */
 export const TRANSPORT_BODY_LIMITS = {
@@ -31,11 +29,14 @@ export const TRANSPORT_BODY_LIMITS = {
 } as const
 
 /**
- * 有界读取选项；maxBytes 按输入 UTF-8 字节计算，不是字符数。
+ * 有界原流读取选项；maxBytes是非负安全整数，signal取消等待和底层流。
  *
  * @example
  * ```ts
- * const options: ReadTransportBodyOptions = { maxBytes: 16_384, signal: request.signal }
+ * import { readTransportBody, type ReadTransportBodyOptions } from '@h-ai/crypto'
+ * const request = new Request('https://api.example.com/api/v1/orders', { method: 'POST', body: 'hello' })
+ * const options: ReadTransportBodyOptions = { maxBytes: 1024, signal: request.signal }
+ * const text = await readTransportBody(request.body, options)
  * ```
  */
 export interface ReadTransportBodyOptions {
@@ -46,24 +47,18 @@ export interface ReadTransportBodyOptions {
 }
 
 /**
- * 逐块消费正文，在超出字节预算时立即停止并取消流。
+ * 逐块读取原始字节流并严格UTF-8解码；超限/取消后取消流并释放reader，清理失败不覆盖原异常。
+ * 不要传入clone/tee分支，否则另一分支仍可能保留数据。
+ * @param stream - 原始流；null返回空串但仍检查取消。
+ * @param options - 字节预算与取消信号。
+ * @returns 解码文本。
+ * @throws RangeError预算无效或超限；非法UTF-8、流异常和signal.reason继续抛出。
  *
- * 直接消费传入流；调用方成功后须用解密/加密结果重建 Request/Response，
- * 不应传入 clone/tee 分支，否则无法保证另一分支不会保留正文。
- *
- * @param stream - 原始请求或响应的字节流；null 返回空字符串。
- * @param options - 字节预算与可选的取消信号。
- * @returns 严格 UTF-8 解码后的正文。
- * @throws RangeError - 预算无效或实际字节超限。
- * @throws TypeError - 非法 UTF-8 或无法取得流 reader。
- * @throws 读取异常或 signal.reason；取消清理的异常不会覆盖原始失败。
  * @example
  * ```ts
- * const text = await readTransportBody(request.body, {
- *   maxBytes: TRANSPORT_BODY_LIMITS.encryptedPayloadBytes,
- *   signal: request.signal,
- * })
- * const payload: unknown = JSON.parse(text)
+ * import { readTransportBody } from '@h-ai/crypto'
+ * const request = new Request('https://api.example.com/api/v1/orders', { method: 'POST', body: 'hello' })
+ * const text = await readTransportBody(request.body, { maxBytes: 1024, signal: request.signal })
  * ```
  */
 export async function readTransportBody(

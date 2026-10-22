@@ -9,17 +9,24 @@ import smCrypto from 'sm-crypto'
 const SM2_PUBLIC_KEY_REGEX = /^(?:04)?[0-9a-f]{128}$/i
 
 /**
- * 校验 SM2 非压缩公钥的编码和曲线点，不初始化 crypto 或访问 registry。
+ * 纯函数校验 SM2 公钥的编码及曲线点，不初始化模块或访问 registry。
+ * 仅接受128字符无前缀或130字符04前缀的十六进制非压缩点；拒绝曲线外点及其它编码。
+ * @param publicKey - 不可信的输入。
+ * @returns 有效字符串时为 true，并收窄类型；不证明密钥所有权，注册后仍须验签。
  *
- * 仅接受 128 个十六进制字符，或带 04 前缀的 130 字符编码；拒绝压缩点、无穷远点及曲线外点。
- * 先限制长度再调用当前 sm-crypto 的 verifyPublicKey，避免把任意长度输入交给大整数解析。
- * @param publicKey - 不可信的公钥输入。
- * @returns 编码和曲线点均有效时返回 true。
  * @example
  * ```ts
- * if (!isValidSM2PublicKey(body.clientPublicKey))
- *   return new Response(null, { status: 400 })
- * const clientId = await registry.register(body.clientPublicKey)
+ * import { crypto, isValidSM2PublicKey } from '@h-ai/crypto'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const generated = crypto.asymmetric.generateKeyPair()
+ *   if (!generated.success) throw new Error(generated.error.message)
+ *   const pair = generated.data
+ *   const valid = isValidSM2PublicKey(pair.publicKey)
+ *   const invalid = isValidSM2PublicKey('not-a-public-key')
+ * }
+ * finally { await crypto.close() }
  * ```
  */
 export function isValidSM2PublicKey(publicKey: unknown): publicKey is string {

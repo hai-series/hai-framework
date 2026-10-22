@@ -22,29 +22,36 @@ import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /**
- * 创建传输加密管理器。
+ * 内部服务端工厂；创建时校验并捕获受管密钥环快照，不随机回退生成服务端密钥。
+ * 生产要求共享registry；先认证实际HTTP绑定/签名/MAC/nonce，再交给业务，响应关联原上下文与实际状态。
+ * @param cryptoService - 已初始化SM2/SM3/SM4能力。
+ * @param options - 必填受管密钥环和客户端registry。
+ * @returns 管理器或脱敏HaiResult失败；应用持有底层cache/reldb并负责关闭。
  *
- * 启动时校验并捕获受管版本化密钥环，所有客户端公钥由显式 `keyStore` 管理。
- *
- * @param cryptoService - 注入的非对称 + 对称加密实现（通常直接传入 `crypto` 实例）。
- * @param options - 必填的受管密钥环及客户端公钥存储。
- * @returns 成功返回管理器；配置或密钥配对无效返回脱敏错误。
- *
- * @remarks
- * 内部流程：
- *
- * 1. 创建时校验服务端受管密钥环及每对公私钥，捕获不可变快照，不隐式生成密钥。
- * 2. 协商端点保存客户端公钥，返回 getServerKeyId()、getServerPublicKey() 与 clientId。
- * 3. HTTP 适配器用 authenticateTransportRequest 从实际 Request 提取绑定上下文；认证和共享 nonce 消费成功后才交给业务。
- * 4. 业务完成后，encryptResponse(verifiedContext, data, status) 生成关联原请求的认证响应。
- * 5. `close()` 负责清理 `keyStore` 等底层资源。
- *
- * 若使用 `@h-ai/serv` / `@h-ai/kit`，上述 HTTP 协商与请求包装流程通常已由上层封装完成。
  * @example
  * ```ts
- * const server = createTransportEncryption(crypto, { serverKeyRing, keyStore: sharedRegistry })
- * if (!server.success)
- *   throw new Error(server.error.message)
+ * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { cache } from '@h-ai/cache'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
+ *   if (!connected.success) throw new Error(connected.error.message)
+ *   try {
+ *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ *     if (!ring.success) throw new Error(ring.error.message)
+ *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
+ *     if (!created.success) throw new Error(created.error.message)
+ *     const manager = created.data
+ *     try {
+ *       const activeKeyId = manager.getServerKeyId()
+ *     }
+ *     finally { await manager.close() }
+ *   }
+ *   finally { await cache.close() }
+ * }
+ * finally { await crypto.close() }
  * ```
  */
 export function createTransportEncryption(

@@ -17,8 +17,23 @@ const TRANSPORT_CAPACITY_TABLE = 'hai_crypto_transport_capacity'
 const PRUNE_BATCH_SIZE = 100
 
 /**
- * 关系数据库 registry 配置；连接由应用持有和关闭。
- * @example `createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })`
+ * 借用已初始化数据库的registry配置；TTL与共享maxClients各节点必须一致。
+ * 生产使用PostgreSQL/MySQL，DB时钟维护期限；连接由应用关闭。
+ *
+ * @example
+ * ```ts
+ * import { createReldbTransportKeyStore } from '@h-ai/crypto'
+ * import { reldb } from '@h-ai/reldb'
+ * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try {
+ *   const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+ *   const options: import('@h-ai/crypto').CreateReldbTransportKeyStoreOptions = { reldb, ttlSeconds: 3600, maxClients: 10000 }
+ *   const secondView = createReldbTransportKeyStore(options)
+ *   const removed = await secondView.pruneExpired()
+ * }
+ * finally { await reldb.close() }
+ * ```
  */
 export interface CreateReldbTransportKeyStoreOptions {
   /** 已初始化的 `@h-ai/reldb` 实例。 */
@@ -30,14 +45,40 @@ export interface CreateReldbTransportKeyStoreOptions {
 }
 
 /**
- * 带有界过期维护入口的数据库 registry。
- * @example `const removed = await registry.pruneExpired()`
+ * 数据库registry及有界过期维护；注册自动维护，无流量时应用应定期调度pruneExpired。
+ * 不淘汰有效公钥/nonce，不创建后台计时器；维护失败拒绝并可重试。
+ *
+ * @example
+ * ```ts
+ * import { createReldbTransportKeyStore } from '@h-ai/crypto'
+ * import { reldb } from '@h-ai/reldb'
+ * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try {
+ *   const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+ *   const removed = await registry.pruneExpired()
+ * }
+ * finally { await reldb.close() }
+ * ```
  */
 export interface ReldbTransportKeyStore extends TransportKeyStore {
   /**
    * 按数据库时钟最多删除 100 条过期公钥和 100 条过期 nonce，返回实际删除总数。
    * 不驱逐有效记录；建表或维护故障会 reject，之后允许重新调用。应用可以定期调度本方法。
-   * @example `await registry.pruneExpired()`
+   * @returns 异步操作结果；存储或网络故障按方法契约拒绝。
+   *
+   * @example
+   * ```ts
+   * import { createReldbTransportKeyStore } from '@h-ai/crypto'
+   * import { reldb } from '@h-ai/reldb'
+   * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
+   * if (!connected.success) throw new Error(connected.error.message)
+   * try {
+   *   const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+   *   const removed = await registry.pruneExpired()
+   * }
+   * finally { await reldb.close() }
+   * ```
    */
   pruneExpired: () => Promise<number>
 }
@@ -54,18 +95,22 @@ function unwrapResult<T>(operation: string, result: HaiResult<T>): T {
 }
 
 /**
- * 创建基于 `@h-ai/reldb` 的传输 key store。
+ * 创建共享数据库registry；首次操作惰性建表，失败可重试，事务锁住持久容量行后注册。
+ * 每次注册有界维护；公钥TTL与过期维护使用数据库epoch毫秒，传输窗口仍要求节点时钟同步，不能提前删除有效nonce。
+ * @param options - 已初始化数据库、公钥TTL和各节点一致的正安全整数maxClients，默认10000。
+ * @returns registry；非法配置同步TypeError，操作故障拒绝Promise；不关闭借用数据库。
  *
- * 首次操作惰性建表，失败后可重试。注册在事务中锁定持久容量行再计数、写入，跨节点不会超额。
- * 每次注册自动清理一批过期数据；无注册流量时应用须定期调用 pruneExpired。时间使用数据库 epoch 毫秒。
- * 不关闭注入的数据库，不创建后台计时器。旧 timestamp 表需要停机迁移，不能提前删除有效 nonce。
- * @param options - 已初始化数据库、可选 TTL 和共享容量。
- * @returns registry；配置非法时同步抛出 TypeError，数据库操作故障通过对应 Promise reject。
  * @example
  * ```ts
- * const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
- * const clientId = await registry.register(clientPublicKey)
- * await registry.pruneExpired()
+ * import { createReldbTransportKeyStore } from '@h-ai/crypto'
+ * import { reldb } from '@h-ai/reldb'
+ * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try {
+ *   const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+ *   const removed = await registry.pruneExpired()
+ * }
+ * finally { await reldb.close() }
  * ```
  */
 export function createReldbTransportKeyStore(options: CreateReldbTransportKeyStoreOptions): ReldbTransportKeyStore {
@@ -77,6 +122,15 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
     throw new TypeError(cryptoM('crypto_transportKeyStoreCapacityInvalid'))
   let ensureTablePromise: Promise<void> | null = null
 
+  /**
+   * 选择当前数据库原生Unix毫秒表达式；仅来自Provider白名单，不拼接外部输入。
+   * @returns 用于公钥TTL与过期维护的数据库时钟SQL；传输认证窗口仍要求节点时钟同步。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const databaseEpochMilliseconds = nowSql()
+   * ```
+   */
   function nowSql(): string {
     switch (options.reldb.config?.type) {
       case 'postgresql': return 'CAST(FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000) AS BIGINT)'
@@ -91,6 +145,16 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
       : `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) ON CONFLICT (${key}) DO NOTHING`
   }
 
+  /**
+   * 首次真实操作共享惰性建表Promise，验证持久容量配置；失败仅重置自身Promise供后续重试。
+   * @returns 表及共享容量行就绪；存储故障拒绝，不降级为空registry。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * await ensureTable()
+   * // 模块内部上下文：options.reldb必须已经初始化。
+   * ```
+   */
   async function ensureTable(): Promise<void> {
     if (!ensureTablePromise) {
       const initialization = (async () => {
@@ -148,6 +212,18 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
     )
   }
 
+  /**
+   * 注册与维护共用数据库持久容量行锁；操作抛错使事务回滚，防跨节点超额和MySQL清理死锁。
+   * @param operation - 在同一事务中执行的有界业务。
+   * @returns 事务结果；失败HaiResult转换为异常再交上层HTTP边界处理。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const removed = await withCapacityLock(async (tx) => {
+   *   return pruneRows(tx)
+   * })
+   * ```
+   */
   async function withCapacityLock<T>(operation: (tx: DmlWithTxOperations) => Promise<T>): Promise<T> {
     await ensureTable()
     const result = await options.reldb.tx.wrap(async (tx) => {
@@ -163,6 +239,17 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
     return unwrapResult('reldb.tx.wrap', result)
   }
 
+  /**
+   * 持有容量锁时按数据库时钟有界删除过期公钥/nonce，内外两层都检查过期，不能按旧快照删有效行。
+   * @param tx - 已持有容量行锁的事务操作。
+   * @returns 两张表实际删除数之和，每张表最多100条。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const removed = await withCapacityLock(pruneRows)
+   * // 不直接脱离容量锁调用，避免并发维护争用。
+   * ```
+   */
   async function pruneRows(tx: DmlWithTxOperations): Promise<number> {
     let removed = 0
     for (const [table, id, expiry] of [[TRANSPORT_KEY_TABLE, 'client_id', 'expires_at_ms'], [TRANSPORT_REQUEST_TABLE, 'request_key', 'expires_at']]) {
@@ -174,6 +261,15 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
     return removed
   }
 
+  /**
+   * 显式有界维护入口，与注册持有同一容量行锁；不创建计时器，不关闭借用连接。
+   * @returns 实际删除记录数；故障拒绝，可由应用调度后重试。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const removed = await pruneExpired()
+   * ```
+   */
   async function pruneExpired(): Promise<number> {
     return withCapacityLock(pruneRows)
   }
