@@ -1,5 +1,6 @@
 export * from './crypto-main.js'
 export * from './crypto-types.js'
+export * from './transport/crypto-transport-body.js'
 export * from './transport/crypto-transport-types.js'
 export * from './transport/store-provider/crypto-transport-store-memory.js'
 export * from './transport/store-provider/crypto-transport-store-redis.js'

@@ -218,6 +218,8 @@ const app = serv.createApp({
 
 保護対象のリクエストは実際の本文で空かどうかを判定します。Content-Type/Content-Length の省略、chunked、偽の Content-Length=0 で空でない平文の暗号化検証を回避できません。本文なし、または実際にゼロバイトのストリームは入力不要の POST として扱います。応答も Content-Length=0 を空とみなす根拠にせず、本文があれば暗号化します。
 
+固定上限は `@h-ai/crypto` の `TRANSPORT_BODY_LIMITS` を共有し、鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 4 KiB です。実際の UTF-8 バイトを元のストリームから逐次読み取り、超過・キャンセル時は停止・キャンセルして reader を解放します。clone して全量を読み取る処理は行いません。リクエスト超過は 413、応答超過は 500、不正な公開鍵は 400 です。再構築したリクエストは signal を維持して Hono の本文キャッシュを消去し、リクエスト・応答の古い Content-Length/Content-Encoding を削除します。上限はプロトコル定数であり、YAML・環境変数では設定しません。
+
 #### Token 認証（`iam` / `refreshCookie`）
 
 `serv.createApp` にトップレベルの `iam` を渡すと、次を自動構成します：

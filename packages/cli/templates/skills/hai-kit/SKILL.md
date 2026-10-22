@@ -24,6 +24,8 @@ description: "在 SvelteKit 中接入 hooks、认证守卫、输入校验、响�
 
 传输加密按实际请求/响应 body 判断空正文，不信任 Content-Type/Length；非空明文不能借缺头、chunked 或伪造零长度旁路，实际空流保留无 input POST 行为。
 
+transport 与 serv/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB。直接有界读取原流，超限/取消停止读取、取消流并释放 reader；请求超限 413、响应超限 500。重建 Request 保留 signal，重建正文移除旧长度/编码头；预算不属于 `_kit.yml` 或环境变量。
+
 ## 按需参考
 
 按本次操作读取对应小节；以已安装版本的公开类型核验签名，示例中的业务变量由应用提供。

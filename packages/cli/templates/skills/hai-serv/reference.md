@@ -332,6 +332,8 @@ const procedures = serv
 
 serv 不暴露本地传输加密工厂；内部统一调用 `crypto.transport.createServer()`。客户端用 `@h-ai/api-client` 的 `transport` 配置自动协商。
 
+正文统一使用 `@h-ai/crypto` 根入口的 `TRANSPORT_BODY_LIMITS` / `readTransportBody` 有界读取原始流：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB，均按 UTF-8 字节计数。无 Content-Length 时也逐块检查，超限或取消立即停止、取消原流并释放 reader，不 clone/tee 后完整缓冲。请求超限返回 413，响应超限返回 500，无效公钥返回 400。明文 Request 保留 signal 并清空 Hono 正文缓存；重建请求/响应时移除旧 Content-Length/Content-Encoding。预算为固定协议常量，不属于 `_serv.yml` 或环境变量。
+
 ```typescript
 import { crypto } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'

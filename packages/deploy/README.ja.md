@@ -37,6 +37,8 @@ pnpm build --target desktop --platform windows --arch x64
 
 各イメージに独立した Dockerfile を用意します。Web 用設定は images/web/ に置きます。Dockerfile 内の構築・実行段階は維持しますが、設定から段階を選びません。不要なイメージ項目は削除し、desktop ディレクトリは対象プロジェクトのみ設定します。
 
+生成する `web.conf` は API location に `client_max_body_size 2101248`（2 MiB + 4 KiB）を設定し、`proxy_request_buffering` / `proxy_buffering` を無効にします。transport の平文 1 MiB を暗号化した JSON を通過させ、アプリ側では鍵交換 16 KiB、公開鍵 4 KiB、平文 1 MiB の制限を逐次検証します。独自プロキシでも暗号文の上限を許可し、キャンセルを伝播してください。プロキシ上限の変更だけでは serv/kit の有界読み取りを代替できません。大容量アップロードは専用パスと容量ポリシーを用意します。
+
 構築器はパッケージ情報、ローカルアーカイブとパッチを images/dependencies/ に準備し、pnpm store と依存レイヤーをキャッシュします。通常のソース変更で全依存を再ダウンロードしない構成です。キャッシュが空でもオンライン構築できます。Windows の node_modules は Linux のネイティブ依存を代替できません。完全オフライン構築には基底イメージ、ツールと一致する ABI・アーキテクチャ・libc のバイナリも準備します。
 
 アプリの版はルート package.json.version で管理します。`.hai/build/docker/<buildId>/` に形式 3 の manifest.json、選択イメージの tar と SHA-256 を出力します。partial は部分構築、hasWeb は構成を記録します。appContainerPort と webContainerPort は明示した app/web の待受ポートを保持し、部分構築で選ばなかったイメージのポートも失いません。未指定のポートにはデプロイ時の既定値を使います。同じアプリ版でも再構築可能で、構築 ID とイメージ参照で内容を区別します。全出力に成功してからローカルの構築参照を更新します。基底・ミドルウェア・ツールは版を固定し、latest を使いません。

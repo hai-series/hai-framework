@@ -21,6 +21,7 @@ import type {
 } from './crypto-transport-types.js'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
+import { readTransportBody, TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /** {@link createTransportClient} 的配置项。 */
@@ -52,6 +53,13 @@ export interface CreateTransportClientOptions {
  * 4. 服务端返回 `{ serverPublicKey, clientId }` 后，会话进入 ready 状态；后续请求复用这组协商结果。
  * 5. `encryptedFetch()` 对普通业务请求附加 `X-Client-Id`；只有请求存在 body 时，才会把 body 加密成 `{ encryptedKey, ciphertext, iv }`。
  * 6. 响应带 `X-Encrypted: true` 时自动解密；不带该标记时直接透传，便于与未启用 transport 的接口共存。
+ * 7. 握手最多等待 30 秒；正文预算统一使用 TRANSPORT_BODY_LIMITS，读取超限会取消原流。
+ *
+ * @example
+ * ```ts
+ * const client = createTransportClient({ crypto, keyExchangeUrl: '/_hai/key-exchange' })
+ * const response = await client.encryptedFetch('/api/info')
+ * ```
  */
 export function createTransportClient(options: CreateTransportClientOptions): TransportClient {
   const baseFetch = options.fetch ?? fetch
@@ -66,36 +74,52 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (!kpResult.success)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'), kpResult.error)
     const localKeyPair = kpResult.data
+    if (new TextEncoder().encode(localKeyPair.publicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
+      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'))
 
-    let response: Response
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(new DOMException('Key exchange timed out', 'TimeoutError')), 30_000)
     try {
-      response = await baseFetch(options.keyExchangeUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientPublicKey: localKeyPair.publicKey }),
-      })
-    }
-    catch (cause) {
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeRequestFailed'), cause)
-    }
+      let response: Response
+      try {
+        response = await baseFetch(options.keyExchangeUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientPublicKey: localKeyPair.publicKey }),
+          signal: controller.signal,
+        })
+      }
+      catch (cause) {
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeRequestFailed'), cause)
+      }
 
-    if (!response.ok)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeHttpFailed', { params: { status: response.status } }))
+      if (!response.ok) {
+        void response.body?.cancel().catch(() => {})
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeHttpFailed', { params: { status: response.status } }))
+      }
 
-    let body: KeyExchangeResponse
-    try {
-      body = await response.json() as KeyExchangeResponse
-    }
-    catch (cause) {
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeInvalidJson'), cause)
-    }
-    if (!body.serverPublicKey || !body.clientId)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeMissingFields'))
+      let body: unknown
+      try {
+        body = JSON.parse(await readTransportBody(response.body, {
+          maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+          signal: controller.signal,
+        }))
+      }
+      catch (cause) {
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeInvalidJson'), cause)
+      }
+      if (!isKeyExchangeResponse(body)) {
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeMissingFields'))
+      }
 
-    keyPair = localKeyPair
-    serverPublicKey = body.serverPublicKey
-    clientId = body.clientId
-    return ok(undefined)
+      keyPair = localKeyPair
+      serverPublicKey = body.serverPublicKey
+      clientId = body.clientId
+      return ok(undefined)
+    }
+    finally {
+      clearTimeout(timeout)
+    }
   }
 
   async function ensureReady(): Promise<HaiResult<void>> {
@@ -143,6 +167,8 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
   const encryptedFetch: typeof fetch = async (input, init) => {
     const requestInput = isRequestLike(input) ? input : undefined
+    const signal = init?.signal ?? requestInput?.signal ?? undefined
+    signal?.throwIfAborted()
     // 密钥协商请求本身不加密，避免无限递归。
     const targetUrl = typeof input === 'string'
       ? input
@@ -152,7 +178,26 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (targetUrl === options.keyExchangeUrl)
       return baseFetch(input, init)
 
-    const ready = await ensureReady()
+    // 单个请求取消只停止自己的等待；共享握手由独立的有界超时管理，避免取消其它调用。
+    let onAbort: (() => void) | undefined
+    let ready: HaiResult<void>
+    try {
+      ready = await (signal
+        ? Promise.race([
+            ensureReady(),
+            new Promise<never>((_resolve, reject) => {
+              onAbort = () => reject(signal.reason)
+              signal.addEventListener('abort', onAbort, { once: true })
+              if (signal.aborted)
+                onAbort()
+            }),
+          ])
+        : ensureReady())
+    }
+    finally {
+      if (onAbort)
+        signal?.removeEventListener('abort', onAbort)
+    }
     if (!ready.success)
       throw new Error(ready.error.message)
 
@@ -165,7 +210,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (rawBody == null && requestInput) {
       const method = (init?.method ?? requestInput.method).toUpperCase()
       if (method !== 'GET' && method !== 'HEAD') {
-        const text = await requestInput.clone().text()
+        const text = await readTransportBody(requestInput.body, { maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes, signal })
         if (text)
           rawBody = text
       }
@@ -173,13 +218,15 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
     let nextBody: BodyInit | null | undefined = rawBody
     if (rawBody != null) {
-      const plaintext = await bodyToText(rawBody)
+      const plaintext = await readTransportBody(new Response(rawBody).body, { maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes, signal })
       const encResult = encryptBody(plaintext)
       if (!encResult.success)
         throw new Error(encResult.error.message)
       nextBody = JSON.stringify(encResult.data)
       headers.set('Content-Type', 'application/json')
       headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+      headers.delete('Content-Length')
+      headers.delete('Content-Encoding')
     }
 
     // 当 input 是已带 body 的 Request 时，必须改用 URL 字符串作为 input，
@@ -206,25 +253,27 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) !== TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
       return response
 
-    const cloned = response.clone()
     let payload: unknown
     try {
-      payload = await cloned.json()
+      payload = JSON.parse(await readTransportBody(response.body, { maxBytes: TRANSPORT_BODY_LIMITS.encryptedPayloadBytes, signal }))
     }
-    catch {
-      return response
+    catch (cause) {
+      throw new Error(cryptoM('crypto_transportResponseDecryptFailed'), { cause })
     }
     if (!isEncryptedPayload(payload))
-      return response
+      throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))
 
     const decResult = decryptPayload(payload)
     if (!decResult.success)
       throw new Error(decResult.error.message)
+    if (new TextEncoder().encode(decResult.data).byteLength > TRANSPORT_BODY_LIMITS.plaintextBytes)
+      throw new RangeError('Transport response plaintext byte limit exceeded')
 
     // 透传原响应头但去掉加密标记；Content-Type 还原为下游可能期望的 JSON。
     const respHeaders = new Headers(response.headers)
     respHeaders.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
     respHeaders.delete('Content-Length')
+    respHeaders.delete('Content-Encoding')
     return new Response(decResult.data, {
       status: response.status,
       statusText: response.statusText,
@@ -245,22 +294,6 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   }
 }
 
-/** 把任意 `BodyInit` 转为字符串明文，便于统一加密。 */
-async function bodyToText(body: BodyInit): Promise<string> {
-  if (typeof body === 'string')
-    return body
-  if (body instanceof URLSearchParams)
-    return body.toString()
-  if (body instanceof Blob)
-    return body.text()
-  if (body instanceof ArrayBuffer)
-    return new TextDecoder().decode(body)
-  if (ArrayBuffer.isView(body))
-    return new TextDecoder().decode(body.buffer as ArrayBuffer)
-  // FormData / ReadableStream：转为 Response 再读 text，由运行时序列化。
-  return new Response(body as BodyInit).text()
-}
-
 function isRequestLike(input: RequestInfo | URL): input is Request {
   if (typeof input !== 'object' || input === null)
     return false
@@ -278,4 +311,13 @@ function isEncryptedPayload(payload: unknown): payload is EncryptedPayload {
     return false
   const p = payload as Record<string, unknown>
   return typeof p.encryptedKey === 'string' && typeof p.ciphertext === 'string' && typeof p.iv === 'string'
+}
+
+function isKeyExchangeResponse(body: unknown): body is KeyExchangeResponse {
+  if (!body || typeof body !== 'object')
+    return false
+  const fields = body as Record<string, unknown>
+  return typeof fields.serverPublicKey === 'string' && fields.serverPublicKey.length > 0
+    && new TextEncoder().encode(fields.serverPublicKey).byteLength <= TRANSPORT_BODY_LIMITS.publicKeyBytes
+    && typeof fields.clientId === 'string' && fields.clientId.length > 0
 }

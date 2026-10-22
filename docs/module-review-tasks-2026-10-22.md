@@ -249,7 +249,8 @@
 
 ### SERV-04 · P1 · 在读取前限制传输请求和响应大小
 
-- [ ] 待修正（源码确认；范围：serv）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：抽取真实流有界读取，serv/kit/client 统一 UTF-8 字节限额（握手16KiB、公钥4KiB、明文1MiB、密文2MiB+4KiB），超限/取消释放流且清理异常不覆盖原因；保留 signal、重建缓存、移除过期长度与编码头。客户端握手30秒超时，独立调用取消不影响共享等待者；deploy API反代同步2101248字节和禁用请求缓冲。三语README/skill/LLMS/调用方同步，crypto26+serv23+kit31+deploy23定向103项、四包typecheck/build、ESLint和check:skills通过；未执行真实Nginx部署/浏览器网络或全量测试；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/serv/src/serv-transport.ts:161](../packages/serv/src/serv-transport.ts#L161)；[packages/serv/src/serv-transport.ts:119](../packages/serv/src/serv-transport.ts#L119)。
 - **证据与影响**：握手/request.json 与密文 clone.json 没有流式大小限制；响应先完整读取再检查 string.length，既不能限制峰值内存，也不是 UTF-8 字节上限。
 - **修正内容**：在解码/解密前按字节有界读取，限制握手、公钥、密文和响应；传播取消并释放 reader。统一边界配置，确认 app 与 adapter 的顺序。

@@ -193,6 +193,22 @@ const sharedServer = crypto.transport.createServer({
 
 `encryptedFetch()` 与原生 fetch 一样会 reject：网络错误、密钥协商失败、请求加密失败或响应解密失败都应在调用方按 fetch 错误处理策略捕获。
 
+### 传输正文预算与自定义适配器
+
+serv、kit 和客户端统一从根入口导入 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB、单个公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB，均为实际 UTF-8 字节上限，不使用 Content-Length 判定。客户端共享握手最多等待 30 秒；单个业务请求取消只中断自己的等待，其 signal 继续用于请求及响应读取。异常加密响应会 reject，不返回原密文。
+
+根入口纯函数 `readTransportBody(stream, { maxBytes, signal? })` 无需 init，直接消费原始流；超限抛 RangeError，无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason。超限/取消会立即取消流并释放 reader，清理失败不覆盖原异常。不要把 clone/tee 分支交给它，否则另一分支仍可能缓冲正文。成功读取后重建 Request/Response，清除旧 Content-Length/Content-Encoding 并保留 signal。
+
+```ts
+import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+
+const text = await readTransportBody(request.body, {
+  maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+  signal: request.signal,
+})
+const payload: unknown = JSON.parse(text)
+```
+
 常规应用优先使用上层封装：
 - serv：`serv.createApp({ transport: { crypto } })`
 - kit：`kit.createHandle({ crypto: { crypto, transport: true } })` + `kit.client.create({ transport: { crypto } })`

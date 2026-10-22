@@ -208,6 +208,8 @@ describe('generateComposeFile', () => {
     expect(proxy).toContain('listen 8081;')
     expect(proxy).toContain('location /backend/v2/')
     expect(proxy).toContain('proxy_pass http://app:3001;')
+    expect(proxy).toContain('client_max_body_size 2101248;')
+    expect(proxy).toContain('proxy_request_buffering off;')
     expect(proxy).toContain('try_files $uri $uri/ /index.html;')
     expect(() => generateWebProxyConfig(3001, '/api; injected')).toThrow()
   })

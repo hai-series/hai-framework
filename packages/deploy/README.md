@@ -53,6 +53,8 @@ pnpm build --target desktop --platform windows --arch x64
 
 每个镜像独立 Dockerfile；web 的 Nginx 配置与启动资源放 `images/web/`。Dockerfile 内保留编译/运行阶段，配置不再选择阶段。没有 Web 或 desktop 时删除相应项。
 
+部署生成的 `web.conf` 在 API location 设置 `client_max_body_size 2101248`（2 MiB + 4 KiB），并关闭 `proxy_request_buffering` / `proxy_buffering`。这允许 transport 的 1 MiB 明文经编码形成密文后通过，应用仍逐块执行更细的握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB 预算。自有反向代理须允许该密文预算并传递取消，不能用增大代理上限代替 serv/kit 的有界读取；大文件上传走明确的独立路径和体积策略。
+
 构建器将锁文件、包配置、本地归档和补丁准备为 `images/dependencies/` 输入，结合 pnpm store 缓存与 Docker 分层复用下载。源码修改不应重新下载全部依赖；缓存为空仍能联网构建。Windows node_modules 不用于 Linux 镜像。完全离线构建还需预先准备基础镜像、工具链和匹配 ABI/架构/libc 的原生预编译包。
 
 版本来自应用根 package.json.version。制品位于 `.hai/build/docker/<buildId>/`，包括格式版本 3 的 manifest.json、所选镜像 tar 和 SHA-256；partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 app/web 容器端口（appContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。

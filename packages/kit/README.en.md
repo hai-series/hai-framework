@@ -205,6 +205,8 @@ Security defaults to fail-closed: with `requireEncryption: true`, protected path
 
 Protected requests determine emptiness from the actual body: missing Content-Type/Content-Length, chunked transfer, or a forged Content-Length=0 cannot bypass encryption checks for nonempty plaintext. Requests with no body or a genuinely zero-byte stream remain valid for inputless POST calls. A nonempty response must also be encrypted even if its Content-Length claims zero.
 
+Fixed budgets share `@h-ai/crypto`'s `TRANSPORT_BODY_LIMITS` with serv and the client: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 4 KiB encrypted JSON, counting actual UTF-8 bytes. Incremental reads consume the original stream; exceeding limits or cancellation stops/cancels it and releases its reader without cloning and fully buffering it. Oversized requests return 413, oversized responses return 500, and invalid public keys return 400. Rebuilt requests preserve signals; rebuilt requests/responses remove stale Content-Length/Content-Encoding. These budgets are not `_kit.yml` or environment settings.
+
 #### Shared transport configuration with `_kit.yml`
 
 `@h-ai/kit` provides `KitConfigSchema` / `resolveKitConfig()` so a single `_kit.yml`

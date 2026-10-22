@@ -342,10 +342,10 @@ const app = serv.createApp({
 
 服务端处理逻辑在 `src/serv-transport.ts#handleKeyExchange()`：
 
-1. 读取请求体 JSON。
-2. 要求携带 `clientPublicKey`。
-3. 调 `manager.registerClientKey(clientPublicKey)`。
-4. 生成并返回 `clientId` 和 `serverPublicKey`。
+1. 通过共享 `readTransportBody` 逐块读取原始请求流，握手 JSON 最多 16 KiB（UTF-8 字节）；超限立即取消并返回 413。
+2. 要求携带非空 `clientPublicKey`，公钥最多 4 KiB，否则返回 400；不接受 null 等错误 JSON 结构。
+3. 确认服务端公钥不超过同一预算后，调 `manager.registerClientKey(clientPublicKey)`。
+4. 返回 `clientId` 和 `serverPublicKey`。客户端在 30 秒握手超时内按相同预算有界读取响应。
 
 后续客户端要用这个 `clientId` 放到请求头里。
 
@@ -365,13 +365,16 @@ const app = serv.createApp({
    - 处理所有实际携带 body 的请求，不按 HTTP 方法白名单跳过正文。
    - 无正文流时跳过；存在流时按实际读取结果识别空正文，不以 Content-Type/Content-Length 判空。
    - 非空正文必须有加密标记；缺失头、chunked 或伪造 Content-Length=0 均不能跳过验证。
+   - 逐块读取原始流，密文 JSON 上限为 2 MiB + 4 KiB；超限取消流并返回 413，不使用 clone/tee 全量缓冲。
    - 解析已读取的非空 JSON payload。
    - 校验 payload 是否符合 `EncryptedPayload` 结构。
    - 调 `manager.decryptRequest(payload)` 解密。
+   - 解密后明文按 UTF-8 字节最多 1 MiB，超限返回 413，不执行下游业务。
 
 4. **把明文 request 塞回 Hono 上下文**
    - `decryptRequestInPlace()` 会重建一个新的 `Request`。
    - 它会把明文 JSON body 与修正后的 headers 写回 `c.req.raw`。
+   - 保留原 signal、清空 `c.req.bodyCache`，并删除失效的 Content-Length/Content-Encoding。
    - 这样下游 handler 不需要知道“上游其实传来的是密文”。
 
 ### 响应加密流程
@@ -379,16 +382,16 @@ const app = serv.createApp({
 下游业务逻辑执行完后，middleware 会继续尝试加密响应：
 
 1. 仅无 body 的响应及协议规定的 204/304 直接返回；不以 Content-Length=0 判断响应为空。只允许 `application/json` 响应进入加密流程；非 JSON 业务响应会返回加密失败错误。
-2. 若 `Content-Length` 明确大于 `1 MiB`，直接返回加密失败错误。
-3. 若没有 `Content-Length`，会克隆响应并读取 body，再做一次体积判断。
+2. 逐块读取原始响应流，按实际 UTF-8 字节限制为 `1 MiB`，不信任 Content-Length，也不创建 clone/tee。
+3. 超限、读取失败或请求取消时停止并取消流、释放 reader，返回 500。取消清理失败不覆盖原异常。实际空流须重建空响应。
 4. 调 `manager.encryptResponse(clientId, bodyText)` 加密。
-5. 写回新的 `Response`，并设置加密标记 header。
+5. 写回新的 `Response`，设置加密标记 header，并清理旧 Content-Length/Content-Encoding；Hono 上下文旧头也同步清除，避免 setter 合并回旧值。
 
 ### 为什么超过 `1 MiB` 会 fail-closed
 
 这是有意的保护策略，原因很朴素：
 
-- 响应加密需要先把 JSON body 读到内存里
+- 响应加密需要在固定字节预算内把 JSON body 读到内存里
 - 大 body 会带来额外内存放大
 - 因此超过上限时返回加密失败错误，既保证服务稳定性，也避免明文业务数据泄露
 
@@ -400,7 +403,7 @@ const app = serv.createApp({
 - `excludePaths` 命中的路径
 - 空响应体
 
-非 JSON 业务响应、响应体超过 1 MiB 或 `encryptResponse()` 失败都会返回错误。
+非 JSON 业务响应、响应体超过 1 MiB UTF-8 字节或 `encryptResponse()` 失败都会返回错误。预算统一来自 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`，不是 YAML 或环境变量配置。
 
 ### 多节点部署注意事项
 
@@ -444,7 +447,7 @@ const app = serv.createApp({
 当前仓库里，下面这些测试最能说明 `serv` 的行为边界：
 
 - `tests/serv-app.test.ts`：健康检查、安全头、受保护 docs 页面、Scalar 脚本挂载
-- `tests/serv-transport.test.ts`：密钥协商、端到端加密 roundtrip、大响应体跳过加密
+- `tests/serv-transport.test.ts`：密钥协商、端到端加密 roundtrip、超限流提前取消、UTF-8 边界、空正文及明文拒绝回归
 - `tests/pipeline-orpc.test.ts`：内部异常映射 helper 行为
 - `tests/serv-router.test.ts`：route 推导、完整性约束、认证授权与异常映射
 

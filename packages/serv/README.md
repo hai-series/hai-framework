@@ -218,6 +218,8 @@ const app = serv.createApp({
 
 受保护请求按实际正文判空：省略 Content-Type/Content-Length、使用 chunked 或伪造 Content-Length=0 均不能让非空明文跳过加密标记验证。真正没有正文或实际零字节流的无 input POST 可以继续；响应是否为空也不信任 Content-Length=0，非空业务响应仍须加密。
 
+固定协议预算统一来自 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 4 KiB，均按 UTF-8 字节计数。原始流逐块有界读取，超限或取消会停止读取、取消流并释放 reader，不克隆后完整缓冲。请求正文超限返回 413，响应超限返回 500；无效公钥返回 400。重建请求时保留 signal、清空 Hono 正文缓存；重建请求/响应时清除旧 Content-Length/Content-Encoding。这些预算是协议常量，不是 YAML 或环境变量配置。
+
 #### Token 认证（`iam` / `refreshCookie`）
 
 `serv.createApp` 推荐直接传入顶层 `iam` 句柄，自动派生两件事：

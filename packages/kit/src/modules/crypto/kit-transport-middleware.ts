@@ -8,11 +8,10 @@
 import type { EncryptedPayload, TransportEncryptionManager } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
-import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
-const MAX_ENCRYPTED_BODY = 1_048_576
 const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-data']
 
 /**
@@ -115,26 +114,27 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
 
     const contentType = response.headers.get('Content-Type') ?? ''
     if (!canEncryptResponseContentType(contentType)) {
+      void response.body?.cancel().catch(() => {})
       return jsonError(kitM('kit_transportEncryptFailed'), 500)
     }
-    const contentLength = response.headers.get('Content-Length')
-    if (contentLength && Number.parseInt(contentLength, 10) > MAX_ENCRYPTED_BODY) {
-      return jsonError(kitM('kit_transportEncryptFailed'), 500)
-    }
-
     try {
-      const responseBody = await response.clone().text()
+      const responseBody = await readTransportBody(response.body, {
+        maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+        signal: event.request.signal,
+      })
+      const headers = new Headers(response.headers)
+      headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+      headers.delete('Content-Length')
+      headers.delete('Content-Encoding')
       if (!responseBody) {
-        return response
+        return new Response(null, { status: response.status, statusText: response.statusText, headers })
       }
 
       const encryptedPayload = await manager.encryptResponse(clientId, responseBody)
       if (!encryptedPayload.success) {
         return jsonError(kitM('kit_transportEncryptFailed'), 500)
       }
-      const headers = new Headers(response.headers)
       headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-      headers.delete('Content-Length')
       return new Response(JSON.stringify(encryptedPayload.data), {
         status: response.status,
         statusText: response.statusText,
@@ -201,15 +201,27 @@ async function handleKeyExchange(
   manager: TransportEncryptionManager,
   request: Request,
 ): Promise<Response> {
+  let body: unknown
   try {
-    const body = await request.json() as { clientPublicKey?: string }
+    body = JSON.parse(await readTransportBody(request.body, {
+      maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+      signal: request.signal,
+    }))
+  }
+  catch (error) {
+    return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
+  }
+  if (!body || typeof body !== 'object' || !('clientPublicKey' in body)
+    || typeof body.clientPublicKey !== 'string' || body.clientPublicKey.length === 0
+    || new TextEncoder().encode(body.clientPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes) {
+    return jsonError(kitM('kit_transportInvalidPayload'), 400)
+  }
 
-    if (!body.clientPublicKey || typeof body.clientPublicKey !== 'string') {
-      return jsonError(kitM('kit_transportInvalidPayload'), 400)
-    }
-
-    const clientId = await manager.registerClientKey(body.clientPublicKey)
+  try {
     const serverPublicKey = manager.getServerPublicKey()
+    if (new TextEncoder().encode(serverPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
+      return jsonError(kitM('kit_transportKeyExchangeFailed'), 500)
+    const clientId = await manager.registerClientKey(body.clientPublicKey)
 
     return new Response(
       JSON.stringify({ serverPublicKey, clientId }),
@@ -228,7 +240,7 @@ interface RequestHolder {
 /**
  * 重建 SvelteKit 事件中的 Request。
  *
- * `request.text()` 会消费 body；当请求不是加密载荷但允许明文透传时，必须把
+ * 有界读取会消费 body；当请求不是加密载荷但允许明文透传时，必须把
  * 原始 body 放回去，避免后续端点再读取时得到空内容。
  *
  * @param event SvelteKit 请求事件
@@ -238,11 +250,13 @@ function replaceRequestBody(event: RequestHolder, body: string): void {
   const headers = new Headers(event.request.headers)
   headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
   headers.delete('Content-Length')
+  headers.delete('Content-Encoding')
   headers.set('Content-Type', 'application/json; charset=utf-8')
   const newRequest = new Request(event.request.url, {
     method: event.request.method,
     headers,
     body,
+    signal: event.request.signal,
   })
   Object.defineProperty(event, 'request', {
     value: newRequest,
@@ -278,10 +292,13 @@ async function decryptRequestBody(
 
   let bodyText: string
   try {
-    bodyText = await event.request.text()
+    bodyText = await readTransportBody(event.request.body, {
+      maxBytes: TRANSPORT_BODY_LIMITS.encryptedPayloadBytes,
+      signal: event.request.signal,
+    })
   }
-  catch {
-    return jsonError(kitM('kit_transportInvalidPayload'), 400)
+  catch (error) {
+    return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
   }
   if (!bodyText) {
     // 实际空流允许无 input POST；恢复请求，保证下游仍可读取空 body。
@@ -315,6 +332,8 @@ async function decryptRequestBody(
   if (!plaintext.success) {
     return jsonError(kitM('kit_transportDecryptFailed'), 400)
   }
+  if (new TextEncoder().encode(plaintext.data).byteLength > TRANSPORT_BODY_LIMITS.plaintextBytes)
+    return jsonError(kitM('kit_transportInvalidPayload'), 413)
   replaceRequestBody(event, plaintext.data)
   return null
 }

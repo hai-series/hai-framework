@@ -211,6 +211,8 @@ transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` �
 
 受保护请求按实际正文判空：省略 Content-Type/Content-Length、使用 chunked 或伪造 Content-Length=0 均不能让非空明文跳过加密标记验证。真正没有正文或实际零字节流的无 input POST 可以继续；响应是否为空也不信任 Content-Length=0，非空业务响应仍须加密。
 
+固定预算与 serv/客户端共享 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 4 KiB，均按实际 UTF-8 字节计数。逐块读取原始流，超限/取消立即停止、取消流并释放 reader，不克隆后完整缓冲。请求正文超限返回 413，响应超限返回 500，无效公钥返回 400。重建 Request 时保留 signal，重建请求/响应时移除旧 Content-Length/Content-Encoding。预算不属于 `_kit.yml` 或环境变量配置。
+
 #### 使用 `_kit.yml` 统一 transport 配置
 
 `@h-ai/kit` 提供 `KitConfigSchema` / `resolveKitConfig()`，方便应用用同一份 `_kit.yml`

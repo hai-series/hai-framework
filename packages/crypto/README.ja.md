@@ -223,6 +223,20 @@ if (!server.success)
 
 プロトコル定数は `crypto.transport.protocol`（または `TRANSPORT_PROTOCOL`）で取得できます：`X-Client-Id`、`X-Encrypted`、既定の `/_hai/key-exchange`。
 
+serv、kit、クライアントは `TRANSPORT_BODY_LIMITS` を共有します。鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 4 KiB です。すべて実際の UTF-8 バイト数で計算します。クライアントの鍵交換は最大 30 秒です。超過、不正 UTF-8、キャンセル時は元のストリームを停止して reader を解放し、clone/tee は作りません。呼び出し元の signal を維持し、1 件のキャンセルは他のリクエストと共有する鍵交換に影響しません。不正な暗号化応答は生の暗号文を返さず reject します。
+
+独自 HTTP アダプターではルート入口の純粋関数 `readTransportBody(stream, { maxBytes, signal? })` を `crypto.init()` なしで利用できます。元のストリームを渡し、読み取り後は Request/Response を再構築して古い Content-Length/Content-Encoding を削除してください。上限超過は RangeError、不正 UTF-8 は TypeError、読み取り例外・signal.reason は元の理由で拒否します。ストリームのキャンセル処理が失敗しても元の例外を維持します。
+
+```ts
+import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+
+const text = await readTransportBody(request.body, {
+  maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+  signal: request.signal,
+})
+const payload: unknown = JSON.parse(text)
+```
+
 #### モジュールの終了
 
 ```ts

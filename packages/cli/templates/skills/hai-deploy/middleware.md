@@ -79,4 +79,6 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 
 服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、持久化磁盘和容器/目录权限。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
 
+生成的 `web.conf` 在 API location 设 `client_max_body_size 2101248`（2 MiB + 4 KiB），并关闭请求/响应 proxy buffering；这与 transport 密文预算一致，避免 Nginx 默认上限拦截合法的 1 MiB 明文编码结果。应用仍执行握手 16 KiB、公钥 4 KiB、明文 1 MiB 的有界读取。自有反向代理须允许相同密文预算并传播取消，不替代应用字节限制；大文件上传使用独立路径和明确预算。
+
 完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。构建可用 --sqlite-prebuild-mirror，Podman 代理不可达可用 --no-http-proxy；不要改系统代理或让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。

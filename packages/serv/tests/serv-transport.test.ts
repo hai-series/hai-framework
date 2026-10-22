@@ -1,8 +1,8 @@
 import type { CryptoFunctions, TransportEncryptionManager } from '@h-ai/crypto'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
-import { err } from '@h-ai/core'
-import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { err, ok } from '@h-ai/core'
+import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
@@ -292,6 +292,150 @@ describe('serv.createApp({ transport })', () => {
     })
     expect(response.status).toBe(500)
     expect(await response.text()).not.toContain('private')
+  })
+
+  it.each([
+    { path: '/api/v1/_hai/key-exchange', encrypted: false },
+    { path: '/api/v1/raw-body', encrypted: true },
+  ])('对无长度头的超限输入流提前取消：$path', async ({ path, encrypted }) => {
+    const manager = createFailingEncryptManager()
+    const register = vi.spyOn(manager, 'registerClientKey')
+    const decrypt = vi.spyOn(manager, 'decryptRequest')
+    const transportCrypto = createCryptoWithTransportServer(() => ok(manager))
+    const app = serv.createApp({ contract, procedures, transport: { crypto: transportCrypto } })
+    const cancel = vi.fn()
+    let pulled = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++
+        controller.enqueue(new Uint8Array(65_536).fill(0x61))
+      },
+      cancel,
+    })
+    const request = new Request(`http://localhost${path}`, {
+      method: 'POST',
+      body,
+      headers: {
+        'Content-Type': 'application/json',
+        [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id',
+        ...(encrypted ? { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE } : {}),
+      },
+      // @ts-expect-error Node fetch 的流式请求需要 duplex。
+      duplex: 'half',
+    })
+    expect((await app.fetch(request)).status).toBe(413)
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(pulled).toBeLessThan(36)
+    expect(body.locked).toBe(false)
+    expect(register).not.toHaveBeenCalled()
+    expect(decrypt).not.toHaveBeenCalled()
+  })
+
+  it.each([null, { clientPublicKey: '你'.repeat(1366) }])('拒绝握手内无效或公钥字段超限的输入：%j', async (body) => {
+    const manager = createFailingEncryptManager()
+    const register = vi.spyOn(manager, 'registerClientKey')
+    const app = serv.createApp({ contract, procedures, transport: { crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const response = await app.request('/api/v1/_hai/key-exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    expect(response.status).toBe(400)
+    expect(register).not.toHaveBeenCalled()
+  })
+
+  it('读取请求期间取消会停止原流并释放 reader', async () => {
+    const manager = createFailingEncryptManager()
+    const app = serv.createApp({ contract, procedures, transport: { crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const controller = new AbortController()
+    const cancel = vi.fn()
+    const body = new ReadableStream<Uint8Array>({ cancel })
+    const request = new Request('http://localhost/api/v1/raw-body', {
+      method: 'POST',
+      body,
+      signal: controller.signal,
+      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+      // @ts-expect-error Node fetch 的流式请求需要 duplex。
+      duplex: 'half',
+    })
+    const response = app.fetch(request)
+    await vi.waitFor(() => expect(body.locked).toBe(true))
+    controller.abort()
+    expect((await response).status).toBe(400)
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(body.locked).toBe(false)
+  })
+
+  it('服务端公钥超限时不注册客户端', async () => {
+    const manager = createFailingEncryptManager()
+    vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(TRANSPORT_BODY_LIMITS.publicKeyBytes + 1))
+    const register = vi.spyOn(manager, 'registerClientKey')
+    const app = serv.createApp({ contract, procedures, transport: { crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const response = await app.request('/api/v1/_hai/key-exchange', { method: 'POST', body: '{"clientPublicKey":"key"}' })
+    expect(response.status).toBe(500)
+    expect(register).not.toHaveBeenCalled()
+  })
+
+  it('响应超过 UTF-8 字节上限时提前取消且不泄漏明文', async () => {
+    const manager = createFailingEncryptManager()
+    const encrypt = vi.spyOn(manager, 'encryptResponse')
+    const app = serv.createApp({ contract, procedures, transport: { crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const cancel = vi.fn()
+    const bytes = new TextEncoder().encode('你'.repeat(400_000))
+    const body = new ReadableStream<Uint8Array>({ start: controller => controller.enqueue(bytes), cancel })
+    app.get('/api/v1/raw-response', () => new Response(body, { headers: { 'Content-Type': 'application/json', 'Content-Length': '1' } }))
+    const response = await app.request('/api/v1/raw-response', { headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' } })
+    expect(response.status).toBe(500)
+    expect(await response.text()).not.toContain('你')
+    expect(encrypt).not.toHaveBeenCalled()
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(body.locked).toBe(false)
+  })
+
+  it('允许精确 UTF-8 边界的响应并清除旧编码与长度头', async () => {
+    const manager = createFailingEncryptManager()
+    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok({ encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }))
+    const app = serv.createApp({ contract, procedures, transport: { crypto: createCryptoWithTransportServer(() => ok(manager)) } })
+    const payloadSize = TRANSPORT_BODY_LIMITS.plaintextBytes - 8
+    const text = `{"x":"${'你'.repeat(Math.floor(payloadSize / 3))}${'a'.repeat(payloadSize % 3)}"}`
+    app.get('/api/v1/raw-response', () => new Response(text, { headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } }))
+    const response = await app.request('/api/v1/raw-response', { headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' } })
+    expect(response.status).toBe(200)
+    expect(encrypt).toHaveBeenCalledWith('client-id', text)
+    expect(response.headers.get('Content-Length')).toBeNull()
+    expect(response.headers.get('Content-Encoding')).toBeNull()
+  })
+
+  it('解密后明文超限时不进入 handler，正常请求会重建 Hono 正文缓存', async () => {
+    const manager = createFailingEncryptManager()
+    const decrypt = vi.spyOn(manager, 'decryptRequest').mockReturnValue(ok('你'.repeat(400_000)))
+    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok({ encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }))
+    const app = serv.createApp({
+      contract,
+      procedures,
+      transport: { crypto: createCryptoWithTransportServer(() => ok(manager)) },
+      middlewares: [{ middleware: (c, next) => {
+        c.req.bodyCache = { text: 'stale encrypted cache' }
+        return next()
+      } }],
+    })
+    const handler = vi.fn()
+    app.post('/api/v1/raw-body', async (c) => {
+      handler()
+      expect(c.req.bodyCache).toEqual({})
+      expect(await c.req.json()).toEqual({ ok: true })
+      return c.json({ ok: true })
+    })
+    const init = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
+      body: JSON.stringify({ encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }),
+    }
+    expect((await app.request('/api/v1/raw-body', init)).status).toBe(413)
+    expect(handler).not.toHaveBeenCalled()
+    decrypt.mockReturnValue(ok('{"ok":true}'))
+    expect((await app.request('/api/v1/raw-body', init)).status).toBe(200)
+    expect(handler).toHaveBeenCalledOnce()
   })
 
   it('chunked 响应体超过 1 MiB 上限时 fail-closed', async () => {

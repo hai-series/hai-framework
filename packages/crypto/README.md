@@ -223,6 +223,20 @@ if (!server.success)
 
 协议常量通过 `crypto.transport.protocol`（或 `TRANSPORT_PROTOCOL`）访问：`X-Client-Id`、`X-Encrypted`、默认 `/_hai/key-exchange`。
 
+serv、kit 与客户端共享 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 4 KiB，均按实际 UTF-8 字节计算。客户端握手最多等待 30 秒；超限、无效 UTF-8 或取消会终止读取并释放 reader，不克隆/tee 原始正文。发送时保留调用方 signal；单个请求取消不会取消其它请求共享的握手。带加密标记的异常响应会 reject，不返回原始密文。
+
+自定义 HTTP 适配器可从根入口使用纯工具 `readTransportBody(stream, { maxBytes, signal? })`，无需 `crypto.init()`。必须传入原始流；读取成功后重建 Request/Response，并清理旧 Content-Length/Content-Encoding。此工具对超限抛 RangeError，对无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason；流取消清理失败不覆盖原异常。
+
+```ts
+import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+
+const text = await readTransportBody(request.body, {
+  maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+  signal: request.signal,
+})
+const payload: unknown = JSON.parse(text)
+```
+
 #### 关闭模块
 
 ```ts

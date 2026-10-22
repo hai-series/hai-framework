@@ -164,10 +164,13 @@ export interface TransportClient {
    * 完成密钥协商；多次调用幂等（同一会话只协商一次）。
    *
    * 通常无需手动调用：`encryptedFetch` 在首次请求前会自动 `init()`。
+   * 协商在 30 秒内完成，握手 JSON 与单个公钥分别受 TRANSPORT_BODY_LIMITS 限制。
    */
   init: () => Promise<HaiResult<void>>
   /**
    * 包装后的 fetch；签名与全局 `fetch` 一致，请求/响应自动加解密。
+   * 明文/密文按 TRANSPORT_BODY_LIMITS 有界读取原流；超限或取消释放 reader，保留调用方 signal。
+   * 带加密标记的无效响应拒绝返回，不回退为原始密文。
    *
    * @throws 与原生 fetch 一样，网络错误、密钥协商失败、加密失败或解密失败会 reject。
    */

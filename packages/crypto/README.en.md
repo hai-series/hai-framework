@@ -223,6 +223,20 @@ if (!server.success)
 
 Access protocol constants through `crypto.transport.protocol` (or `TRANSPORT_PROTOCOL`): `X-Client-Id`, `X-Encrypted`, and the default `/_hai/key-exchange`.
 
+serv, kit and the client share `TRANSPORT_BODY_LIMITS`: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 4 KiB encrypted JSON. All limits count actual UTF-8 bytes. Client key exchange has a 30-second timeout. Exceeding a limit, invalid UTF-8 or cancellation stops the original stream and releases its reader without cloning/teeing it. Caller signals remain active; cancelling one request does not cancel another request's shared handshake. Invalid encrypted responses reject instead of returning raw ciphertext.
+
+Custom HTTP adapters can import the pure `readTransportBody(stream, { maxBytes, signal? })` helper from the root entry without `crypto.init()`. Pass the original stream, rebuild Request/Response after reading, and clear stale Content-Length/Content-Encoding. The helper throws RangeError for byte limits, TypeError for invalid UTF-8, and preserves the original read/abort failure.
+
+```ts
+import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+
+const text = await readTransportBody(request.body, {
+  maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+  signal: request.signal,
+})
+const payload: unknown = JSON.parse(text)
+```
+
 #### Close the module
 
 ```ts
