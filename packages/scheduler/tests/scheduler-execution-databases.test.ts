@@ -11,7 +11,7 @@ const trigger = { type: 'manual', source: null } as const
 const table = 'hai_scheduler_executions'
 
 function successLog(now: number): TaskExecutionLog {
-  return { id: 0, taskId: task.id, taskName: task.name, taskType: 'hook', triggerType: 'manual', triggerSource: null, status: 'success', result: 'committed', error: null, startedAt: now, finishedAt: now, duration: 0 }
+  return { id: crypto.randomUUID(), persistence: { status: 'pending' as const }, taskId: task.id, taskName: task.name, taskType: 'hook', triggerType: 'manual', triggerSource: null, status: 'success', result: 'committed', error: null, startedAt: now, finishedAt: now, duration: 0 }
 }
 
 for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {

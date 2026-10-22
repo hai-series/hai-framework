@@ -31,5 +31,6 @@
   "scheduler_executionUnknown": "Execution outcome is unknown; stop the old runner and verify external effects before resolving",
   "scheduler_executionStateFailed": "Shared execution state unavailable or owner lease lost",
   "scheduler_executionInputInvalid": "Invalid execution identifier or administration input",
-  "scheduler_occurrenceHandled": "Occurrence already handled for task: {taskId}"
+  "scheduler_occurrenceHandled": "Occurrence already handled for task: {taskId}",
+  "scheduler_logPersistFailed": "Execution log persistence is not confirmed. Repair it by receipt without rerunning the business task"
 }

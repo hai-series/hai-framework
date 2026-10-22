@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 16/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 17/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -394,7 +394,8 @@
 
 ### SCHED-02 · P2 · 公开调度执行记录的持久化失败
 
-- [ ] 待修正（源码确认；范围：scheduler）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：日志改稳定UUID及完整JSON载荷，persistence独立于业务status；共享journal终态通过owner/lease最终条件后才投影全部attempt，listLogFailures/repairLog可观测并发幂等补写且不重跑handler/业务Hook。真实提交后丢回执须重读内容一致才确认，无法确认保留pending/unknown；关闭拒绝新补写并等待在途释放。同步三语README、scheduler SKILL/reference与LLMS，调用测试改UUID。11指定文件69项通过，含真实SQLite/PG/MySQL独立多Node、原节点退出/双repair、业务账本计数1、大结果/3attempt、失租无成功投影及SCHED01回归；源/严格全scheduler测试类型、12文件lint、fresh ESM/DTS构建和skills通过，证据tmp/sched02-files.json；无旧表迁移，未宣称DB故障时外部效果自动可恢复；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/scheduler/src/repositories/scheduler-log-repository.ts:59](../packages/scheduler/src/repositories/scheduler-log-repository.ts#L59)。
 - **证据与影响**：saveLog 捕获错误后仅记录日志，不把失败交给 runner，业务执行成功与执行记录已持久化无法区分，影响故障恢复/审计。
 - **修正内容**：返回可观察的持久化结果，独立记录业务执行状态与记录提交状态；禁止因为补写日志失败就盲目重复业务任务。

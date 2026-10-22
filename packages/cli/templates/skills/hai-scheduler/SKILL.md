@@ -22,6 +22,7 @@ description: "注册或排查 cron/API/JS/Hook 任务、手工触发、执行日
 3. 根据可信逻辑选择 API/JS/Hook。Worker/vm 不是安全沙箱；Hook 监听 signal，业务以 occurrenceId 原子持久去重，只有实际满足该约束才设 idempotent:true；API 自动覆盖幂等头。
 4. 明确 timeout、响应大小、重试与执行状态；关闭时 await scheduler.close，再关闭数据库；unknown须先确认旧runner终止并核对副作用，按版本人工resolveUnknown，禁止直接重排。
 5. 验证手动/定时、跨周期租约、手动/cron竞争及暂停接管、失败重试、取消与定义更新。
+6. 检查业务 status 与独立 persistence.status；pending 通过 execution.listLogFailures/repairLog 从已发布 journal 补写，不能重新触发业务。失租 unconfirmed 不能作为成功证据；验证丢回执和双节点并发补写。
 
 ## 按需参考
 

@@ -178,6 +178,7 @@ const logs = await scheduler.getLogs({
 - `start()` / `stop()`
 - `trigger(taskId, { source?, idempotencyKey? })`
 - `getLogs(options?)`
+- `execution.listLogFailures(options?)` / `execution.repairLog(occurrenceId)`
 - `execution.get(occurrenceId)` / `execution.listUnknown(options?)` / `execution.resolveUnknown(occurrenceId, input)`
 - `setHooks(hooks)` / `clearHooks()`
 - `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
@@ -205,6 +206,7 @@ const logs = await scheduler.getLogs({
 | `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 未在运行        |
 | `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS 编译失败     |
 | `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 执行失败   |
+| `HaiSchedulerError.LOG_PERSIST_FAILED` | `hai:scheduler:032` | 日志持久化未确认 |
 
 ### 运行行为与边界
 
@@ -215,6 +217,26 @@ const logs = await scheduler.getLogs({
 `idempotent` 默认为 false；只有接收端已将幂等账本和全部副作用原子持久提交，才声明 true。租约过期的已执行任务仅在 true 时以同 occurrenceId 接管；非幂等或耗尽本 occurrence 保存的 retry.maxAttempts（默认 1，范围 1–100，包含首次执行及恢复）时进入 `unknown` 并继续占住任务槽。租约无法强制撤销暂停进程已发出的外部操作，单有 HTTP 头不构成去重实现。重试同样受幂等声明约束。
 
 `scheduler.execution.get(occurrenceId)` 查询权威状态；`listUnknown({ limit, offset })` 分页获取未知结果，limit 为 1～100，offset 为 0～1000000。可信人工先核实外部效果、确认旧 runner 已终止，再按 `expectedUpdatedAt` CAS 调用 `resolveUnknown(id, { status: 'success' | 'discarded', expectedUpdatedAt })` 释放占位；不能直接把 unknown 重排。`log.occurrenceId` 可作查询回执；`getLogs` 仅为尝试观测日志，日志保留策略不删除 journal/幂等历史。
+
+日志的 `id` 是每次尝试固定的 UUID，`persistence.status` 与业务 `status` 独立：`persisted` 表示日志及确认回执已持久化；`pending` 表示业务终态已提交但日志待补写；`unconfirmed` 表示没有已确认的业务终态，不能据此补写成功。只有 owner 与有效租约条件提交的终态会发布完整尝试列表，随后才投影日志；失租节点不能投影成功。日志失败不会把业务成功改成失败，也不会因此重跑业务。
+
+补写会缩小 pending 列表；批量补写应反复读取 offset=0，避免一边补写一边增加 offset 跳过记录。
+
+可信服务端用 `execution.listLogFailures({ limit, offset })` 监控 pending（范围与 listUnknown 相同），用 `execution.repairLog(occurrenceId)` 从共享 journal 幂等补写；可跨节点、重启及并发调用。写入已提交但回执丢失时通过固定主键和完整内容核对去重。补写返回 `LOG_PERSIST_FAILED`（032）时继续保留 pending，并输出安全告警；全部数据库不可用且终态未提交时仍按 unknown 核对外部效果，不能假定存在可恢复结果。补写与日志保留均不调用业务 Hook。保留策略失败仅告警，不撤销已保存日志。`onTaskFinish` 是本地业务完成通知，其 unconfirmed 状态不是持久化确认；以 trigger 返回值及 execution.get 的 logPersistence 为准。
+
+领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；新 schema 不自动迁移旧日志/执行表。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
+
+```ts
+const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
+if (!result.success)
+  return result
+if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
+  const repaired = await scheduler.execution.repairLog(result.data.occurrenceId)
+  if (!repaired.success)
+    return repaired
+}
+// 不用日志补写失败重新 trigger 业务；定期按页扫描 listLogFailures。
+```
 
 `await scheduler.close()` 停止接收并取消 HTTP、JS Worker 与重试等待，再等待执行链退出后清理状态。重新初始化等待关闭完成。所有生命周期事件提供 `signal`；Hook 必须监听取消并停止自己的外部副作用（框架无法强制终止同一线程中的业务代码），不要在 Hook 中阻塞事件循环。取消后的旧执行不再重试、不自动删除任务，也不会调用新实例的 Hook。关闭期间保持数据库可用，待 scheduler 关闭后再关闭依赖。
 

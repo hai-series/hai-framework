@@ -120,6 +120,7 @@ const logs = await scheduler.getLogs({
 | `refreshTasks` | `() => Promise<HaiResult<void>>` | 主动刷新共享定义，不执行任务 |
 | `register` 扩展字段 | `description / deleteAfterRun / retry / idempotent` | 支持任务描述、一次性任务、失败重试策略 |
 | `trigger` | `(taskId, { source?, idempotencyKey? }) => Promise<HaiResult<TaskExecutionLog>>` | 手工触发并记录来源 |
+| `execution.listLogFailures / repairLog` | `(options?) / (occurrenceId)` | 有界监控并幂等补写已发布 journal，不重执行业务 |
 | `getLogs` | `(options?) => Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | 支持按 trigger + startedAfter/startedBefore 过滤日志 |
 | `setHooks` | `(hooks) => HaiResult<void>` | 设置全局生命周期回调 |
 | `clearHooks` | `() => HaiResult<void>` | 清空全局生命周期回调 |
@@ -166,6 +167,28 @@ await scheduler.init({
 })
 ```
 
+### 日志失败与补写
+
+日志的 `id` 是每次尝试固定的 UUID，`persistence.status` 与业务 `status` 独立：`persisted` 表示日志及确认回执已持久化；`pending` 表示业务终态已提交但日志待补写；`unconfirmed` 表示没有已确认的业务终态，不能据此补写成功。只有 owner 与有效租约条件提交的终态会发布完整尝试列表，随后才投影日志；失租节点不能投影成功。日志失败不会把业务成功改成失败，也不会因此重跑业务。
+
+补写会缩小 pending 列表；批量补写应反复读取 offset=0，避免一边补写一边增加 offset 跳过记录。
+
+可信服务端用 `execution.listLogFailures({ limit, offset })` 监控 pending（范围与 listUnknown 相同），用 `execution.repairLog(occurrenceId)` 从共享 journal 幂等补写；可跨节点、重启及并发调用。写入已提交但回执丢失时通过固定主键和完整内容核对去重。补写返回 `LOG_PERSIST_FAILED`（032）时继续保留 pending，并输出安全告警；全部数据库不可用且终态未提交时仍按 unknown 核对外部效果，不能假定存在可恢复结果。补写与日志保留均不调用业务 Hook。保留策略失败仅告警，不撤销已保存日志。`onTaskFinish` 是本地业务完成通知，其 unconfirmed 状态不是持久化确认；以 trigger 返回值及 execution.get 的 logPersistence 为准。
+
+领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；新 schema 不自动迁移旧日志/执行表。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
+
+```ts
+const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
+if (!result.success)
+  return result
+if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
+  const repaired = await scheduler.execution.repairLog(result.data.occurrenceId)
+  if (!repaired.success)
+    return repaired
+}
+// 不用日志补写失败重新 trigger 业务；定期按页扫描 listLogFailures。
+```
+
 ## 错误码 — `HaiSchedulerError`
 
 | 错误码 | code | 说明 |
@@ -184,5 +207,6 @@ await scheduler.init({
 | `HaiSchedulerError.NOT_RUNNING` | `hai:scheduler:028` | 未在运行 |
 | `HaiSchedulerError.JS_COMPILE_FAILED` | `hai:scheduler:030` | JS 编译失败 |
 | `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 执行失败 |
+| `HaiSchedulerError.LOG_PERSIST_FAILED` | `hai:scheduler:032` | 日志持久化未确认 |
 
 调度循环按分钟匹配 cron，同一分生成稳定的持久 occurrenceId。

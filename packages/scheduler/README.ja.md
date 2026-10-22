@@ -178,6 +178,7 @@ const logs = await scheduler.getLogs({
 - `start()` / `stop()`
 - `trigger(taskId, { source?, idempotencyKey? })`
 - `getLogs(options?)`
+- `execution.listLogFailures(options?)` / `execution.repairLog(occurrenceId)`
 - `execution.get(occurrenceId)` / `execution.listUnknown(options?)` / `execution.resolveUnknown(occurrenceId, input)`
 - `setHooks(hooks)` / `clearHooks()`
 - `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
@@ -205,6 +206,7 @@ const logs = await scheduler.getLogs({
 | `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 実行していない       |
 | `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS コンパイルに失敗  |
 | `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 実行に失敗      |
+| `HaiSchedulerError.LOG_PERSIST_FAILED` | `hai:scheduler:032` | ログ保存未確認 |
 
 ### 実行時の動作と制約
 
@@ -215,6 +217,26 @@ const logs = await scheduler.getLogs({
 `idempotent` の既定は false。受信側が排除台帳と全副作用をアトミックに永続化する場合だけ true にします。期限切れ実行は true のとき同 occurrenceId で引継ぎ、非冪等実行、または保存済み retry.maxAttempts（既定 1、範囲 1–100、初回と復旧を含む）の予算を使い切った場合は `unknown` となりタスク枠を保持します。停止中の旧プロセスが送った外部操作をリースで撤回できず、ヘッダーだけでは排除できません。再試行もこの宣言に従います。
 
 正規状態は `scheduler.execution.get(occurrenceId)`、不明一覧は `listUnknown({ limit, offset })`（limit 1～100、offset 0～1000000）で確認します。信頼された担当者が外部効果を照合し旧 runner の終了を確認してから、`resolveUnknown(id, { status: 'success' | 'discarded', expectedUpdatedAt })` の CAS で枠を解放します。不明実行を直接再投入しないでください。`log.occurrenceId` が照会用受領記録で、`getLogs` は試行の観測ログです。ログ保持は journal と排除履歴を削除しません。
+
+各試行のログ `id` は固定 UUID です。`persistence.status` は業務 `status` と独立し、`persisted` はログと確認記録の保存済み、`pending` は業務終態の確定後にログ補完待ち、`unconfirmed` は確定済み業務結果を前提にできない状態です。有効な owner とリースの条件で終態と全試行を保存してからログへ投影し、失効ノードは成功を投影できません。ログ失敗を理由に業務成功を失敗へ変更したり、業務を再実行したりしません。
+
+補完後は pending 一覧が縮小するため、処理中に offset を進めず、offset=0 のバッチを繰り返し取得してください。
+
+信頼されたサーバーは `execution.listLogFailures({ limit, offset })`（listUnknown と同じ上限）で pending を監視し、`execution.repairLog(occurrenceId)` で共有 journal から補完します。別ノード・再起動後・同時呼び出しも可能で、固定主キーと全内容の照合によりコミット後の応答消失を排除します。`LOG_PERSIST_FAILED`（032）は pending を維持して安全な警告を出します。終態の保存前に DB 全体が停止した場合は unknown の外部効果を照合し、復元可能な結果があると仮定しないでください。補完と保持処理は業務 Hook を呼ばず、保持失敗は警告のみです。`onTaskFinish` は未確定のローカル業務終了通知で、保存確認は trigger の戻り値と execution.get.logPersistence を使います。
+
+取得前の競合・スキップの interrupted は観測ログで、補完できる確定終態はありません。応答が確認できなければ unconfirmed です。JSON 列で MySQL の 255 文字制限を避け、完全な結果と全再試行を保持します。旧ログ・実行テーブルの自動移行はしません。終了は補完処理を待つため、DB より先に scheduler を終了してください。
+
+```ts
+const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
+if (!result.success)
+  return result
+if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
+  const repaired = await scheduler.execution.repairLog(result.data.occurrenceId)
+  if (!repaired.success)
+    return repaired
+}
+// 不用日志补写失败重新 trigger 业务；定期按页扫描 listLogFailures。
+```
 
 `await scheduler.close()` は受付を止め、HTTP、JS Worker、再試行待機をキャンセルし、実行チェーンの終了後に状態を解放します。再初期化は終了完了を待ちます。すべてのイベントが `signal` を提供し、Hook はキャンセルを監視して外部への副作用を停止する必要があります。同じスレッドの業務コードは強制終了できないため、Hook でイベントループをブロックしないでください。キャンセルされた旧実行は再試行・自動削除・新インスタンスの Hook 呼び出しを行いません。scheduler の終了完了まで DB を維持し、その後に依存モジュールを終了します。
 

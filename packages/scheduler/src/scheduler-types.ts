@@ -26,6 +26,7 @@ const SchedulerErrorInfo = {
   NOT_RUNNING: '028:400',
   JS_COMPILE_FAILED: '030:500',
   HOOK_EXECUTION_FAILED: '031:500',
+  LOG_PERSIST_FAILED: '032:500',
 } as const satisfies ErrorInfo
 
 export const HaiSchedulerError = core.error.buildHaiErrorsDef('scheduler', SchedulerErrorInfo)
@@ -245,13 +246,26 @@ export interface SchedulerTaskHooks {
 export type ExecutionStatus = 'success' | 'failed' | 'interrupted' | 'unknown'
 
 /**
+ * 日志投影状态，与业务 status 独立；unconfirmed 表示没有可补写的已确认终态。
+ * @example `{ status: 'pending', error: { code: 'hai:scheduler:032', message: '...' } }`
+ */
+export interface TaskLogPersistence {
+  /** pending 可由已发布 journal 补写；persisted 已确认日志和回执；unconfirmed 不能推断业务结果。 */
+  status: 'pending' | 'persisted' | 'unconfirmed'
+  /** 安全的公开错误，不包含 SQL、驱动 cause 或连接参数。 */
+  error?: { code: string, message: string }
+}
+
+/**
  * 任务执行日志
  */
 export interface TaskExecutionLog {
   /** 持久执行回执；相同定时 occurrence 或手动幂等键共用。 */
   occurrenceId?: string
-  /** 日志 ID */
-  id: number
+  /** 每次尝试固定的 UUID 主键；未知写入回执或并发补写均复用。 */
+  id: string
+  /** 独立持久化状态；业务成功不等于日志保存成功。 */
+  persistence: TaskLogPersistence
   /** 任务 ID */
   taskId: string
   /** 任务名称 */
@@ -368,6 +382,8 @@ export interface SchedulerExecutionEntry {
   attemptCount: number
   /** 最近状态版本（Unix 毫秒），用于人工裁定条件。 */
   updatedAt: number
+  /** 日志投影独立状态；pending 不会重新排队业务。 */
+  logPersistence: TaskLogPersistence['status']
 }
 
 /**
@@ -379,6 +395,10 @@ export interface SchedulerExecutionOperations {
   get: (occurrenceId: string) => Promise<HaiResult<SchedulerExecutionEntry | null>>
   /** 有界查询待核对的 unknown；每页 1–100 条。@example await scheduler.execution.listUnknown({ limit: 50, offset: 0 }) */
   listUnknown: (options?: { limit?: number, offset?: number }) => Promise<HaiResult<SchedulerExecutionEntry[]>>
+  /** 分页查询已有终态但日志尚待补写的回执，不含业务载荷。@example await scheduler.execution.listLogFailures({ limit: 50 }) */
+  listLogFailures: (options?: { limit?: number, offset?: number }) => Promise<HaiResult<SchedulerExecutionEntry[]>>
+  /** 只从已发布 journal 幂等补写日志，不执行业务；并发调用安全。@example await scheduler.execution.repairLog(occurrenceId) */
+  repairLog: (occurrenceId: string) => Promise<HaiResult<void>>
   /** 先终止旧 runner 并核对外部结果，再条件裁定；不能重新排队。@example await scheduler.execution.resolveUnknown(id, { status: 'discarded', expectedUpdatedAt: entry.updatedAt }) */
   resolveUnknown: (occurrenceId: string, resolution: { status: 'success' | 'discarded', expectedUpdatedAt: number }) => Promise<HaiResult<void>>
 }

@@ -16,11 +16,10 @@ import { z } from 'zod'
 
 import { executionEntry, SchedulerExecutionRepository, SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 import { ExecutionResolutionSchema, SchedulerConfigSchema, TriggerTaskSchema } from './scheduler-config.js'
-import { setLogRepository } from './scheduler-executor.js'
 import { clearHooks, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { clearJsTaskHandlerCache } from './scheduler-js-compiler.js'
-import { configureExecution, drainRunner, isTimerRunning, resetRunner, runTask, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
+import { configureExecution, drainRunner, isTimerRunning, repairExecutionLogs, resetRunner, runTask, setLogRepository, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
 import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
@@ -89,6 +88,22 @@ export const scheduler: SchedulerFunctions = {
         return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
       const rows = await executionRepo.unknown(parsed.data.limit, parsed.data.offset)
       return rows.success ? ok(rows.data.map(executionEntry)) : rows
+    },
+    async listLogFailures(options) {
+      if (!currentConfig || !executionRepo)
+        return notInitialized.result()
+      const parsed = executionListSchema.safeParse(options ?? {})
+      if (!parsed.success)
+        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+      const rows = await executionRepo.pendingLogs(parsed.data.limit, parsed.data.offset)
+      return rows.success ? ok(rows.data.map(executionEntry)) : rows
+    },
+    async repairLog(id) {
+      if (!currentConfig || !executionRepo || closeInProgress)
+        return notInitialized.result()
+      if (!executionIdSchema.safeParse(id).success)
+        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+      return repairExecutionLogs(id)
     },
     async resolveUnknown(id, resolution) {
       if (!currentConfig || !executionRepo)

@@ -31,5 +31,6 @@
   "scheduler_executionUnknown": "执行结果未知；请先终止旧 runner 并核对外部副作用后裁定",
   "scheduler_executionStateFailed": "共享执行状态不可用或 owner 租约已失效",
   "scheduler_executionInputInvalid": "执行标识或运维输入不合法",
-  "scheduler_occurrenceHandled": "本次调度已处理: {taskId}"
+  "scheduler_occurrenceHandled": "本次调度已处理: {taskId}",
+  "scheduler_logPersistFailed": "执行日志尚未确认持久化，请按执行回执补写；不要重新执行业务"
 }

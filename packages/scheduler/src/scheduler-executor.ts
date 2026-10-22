@@ -6,8 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { SchedulerLogRepository } from './repositories/index.js'
-import type { ExecutionStatus, SchedulerLogCleanupPolicy, SchedulerTaskContext, SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskHooks, SchedulerTaskInterruptedEvent, SchedulerTaskStartEvent, TaskDefinition, TaskExecutionLog, TaskExecutionTargetType, TaskTriggerInfo } from './scheduler-types.js'
+import type { ExecutionStatus, SchedulerTaskContext, SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskHooks, SchedulerTaskInterruptedEvent, SchedulerTaskStartEvent, TaskDefinition, TaskExecutionLog, TaskExecutionTargetType, TaskTriggerInfo } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -17,14 +16,6 @@ import { compileJsTaskHandler } from './scheduler-js-compiler.js'
 import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'executor' })
-
-let currentLogRepo: SchedulerLogRepository | null = null
-let currentCleanupPolicy: SchedulerLogCleanupPolicy = {}
-
-export function setLogRepository(repo: SchedulerLogRepository | null, cleanupPolicy: SchedulerLogCleanupPolicy = {}): void {
-  currentLogRepo = repo
-  currentCleanupPolicy = { ...cleanupPolicy }
-}
 
 function resolveTaskType(task: TaskDefinition, hooks: Readonly<SchedulerTaskHooks>): TaskExecutionTargetType {
   if (task.handler)
@@ -82,7 +73,7 @@ async function notifyTaskFinish(hooks: Readonly<SchedulerTaskHooks>, event: Sche
   }
 }
 
-async function saveExecutionLog(
+function createExecutionLog(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
   taskType: TaskExecutionTargetType,
@@ -92,9 +83,10 @@ async function saveExecutionLog(
   result: string | null,
   error: string | null,
   occurrenceId?: string,
-): Promise<TaskExecutionLog> {
+): TaskExecutionLog {
   const log: TaskExecutionLog = {
-    id: 0,
+    id: crypto.randomUUID(),
+    persistence: { status: 'unconfirmed' },
     taskId: task.id,
     taskName: task.name,
     taskType,
@@ -109,25 +101,11 @@ async function saveExecutionLog(
     ...(occurrenceId ? { occurrenceId } : {}),
   }
 
-  if (!currentLogRepo)
-    return log
-
-  await currentLogRepo.saveLog(log)
-
-  const cleanupResult = await currentLogRepo.cleanupLogs(currentCleanupPolicy)
-  if (!cleanupResult.success) {
-    logger.warn('Failed to cleanup execution logs', {
-      taskId: task.id,
-      error: cleanupResult.error.message,
-      maxLogs: currentCleanupPolicy.maxLogs,
-      retentionDays: currentCleanupPolicy.retentionDays,
-    })
-  }
-
   return log
 }
 
-export async function saveInterruptedTaskLog(
+/** 构造本地中断观测；不代表已确认业务终态。@example await createInterruptedTaskLog(task, trigger, reason, 'hook', start, end) */
+export async function createInterruptedTaskLog(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
   reason: string,
@@ -135,7 +113,7 @@ export async function saveInterruptedTaskLog(
   startedAt: number,
   finishedAt: number,
 ): Promise<TaskExecutionLog> {
-  return saveExecutionLog(task, trigger, taskType, 'interrupted', startedAt, finishedAt, null, reason)
+  return createExecutionLog(task, trigger, taskType, 'interrupted', startedAt, finishedAt, null, reason)
 }
 
 export async function interruptTask(
@@ -151,7 +129,7 @@ export async function interruptTask(
   await notifyTaskStart(hooks, { task, trigger, startedAt, signal })
 
   const finishedAt = Date.now()
-  const interruptedLog = await saveInterruptedTaskLog(task, trigger, reason, taskType, startedAt, finishedAt)
+  const interruptedLog = await createInterruptedTaskLog(task, trigger, reason, taskType, startedAt, finishedAt)
 
   await notifyTaskInterrupted(hooks, {
     task,
@@ -364,7 +342,7 @@ export async function executeTask(
   // 分布式执行已经进入持久 running；缺少外部幂等保障时，失败/取消都不能推断副作用未发生。
   if (execution?.executionToken && !task.idempotent && !executionResult.success)
     status = 'unknown'
-  const log = await saveExecutionLog(
+  const log = createExecutionLog(
     task,
     trigger,
     taskType,

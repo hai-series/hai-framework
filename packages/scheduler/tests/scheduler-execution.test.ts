@@ -41,7 +41,7 @@ describe('shared execution gates', () => {
     expect((await repo.renew(old, 1000)).success).toBe(false)
     expect((await repo.begin(next, 1000)).success).toBe(true)
     expect(next.attemptCount).toBe(1)
-    const log = { id: 0, taskId: task.id, taskName: task.name, taskType: 'hook', triggerType: 'manual', triggerSource: null, status: 'success', result: null, error: null, startedAt: now, finishedAt: now, duration: 0 } as const
+    const log = { id: crypto.randomUUID(), persistence: { status: 'pending' as const }, taskId: task.id, taskName: task.name, taskType: 'hook', triggerType: 'manual', triggerSource: null, status: 'success', result: null, error: null, startedAt: now, finishedAt: now, duration: 0 } as const
     expect((await repo.finish(old, log)).success).toBe(false)
     expect((await repo.finish(next, log)).success).toBe(true)
   })

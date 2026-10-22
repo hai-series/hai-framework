@@ -178,6 +178,7 @@ Execution logs support automatic cleanup policies configured at initialization:
 - `start()` / `stop()`
 - `trigger(taskId, { source?, idempotencyKey? })`
 - `getLogs(options?)`
+- `execution.listLogFailures(options?)` / `execution.repairLog(occurrenceId)`
 - `execution.get(occurrenceId)` / `execution.listUnknown(options?)` / `execution.resolveUnknown(occurrenceId, input)`
 - `setHooks(hooks)` / `clearHooks()`
 - `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
@@ -205,6 +206,7 @@ Common error codes:
 | `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | Not running             |
 | `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS compilation failed   |
 | `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook execution failed   |
+| `HaiSchedulerError.LOG_PERSIST_FAILED` | `hai:scheduler:032` | Log persistence not confirmed |
 
 ### Runtime behavior and limits
 
@@ -215,6 +217,26 @@ All nodes must initialize the same shared RelDB first (PostgreSQL/MySQL for prod
 `idempotent` defaults to false. Set true only when the receiver atomically persists its deduplication ledger with every side effect. Expired running executions can be recovered with the same occurrenceId only under this declaration; non-idempotent jobs or executions that exhaust the stored retry.maxAttempts budget (default 1, range 1–100 including initial attempts and recovery) become `unknown` and retain the active task slot. A lease cannot revoke an external request already sent by a paused process; headers alone do not implement deduplication. Retries also follow this declaration.
 
 Use `scheduler.execution.get(occurrenceId)` for authoritative state and `listUnknown({ limit, offset })` with limit 1–100 and offset 0–1000000. Trusted operators must confirm external effects and terminate the old runner before releasing its slot through `resolveUnknown(id, { status: 'success' | 'discarded', expectedUpdatedAt })`, which uses CAS. Never requeue unknown executions directly. `log.occurrenceId` is the receipt; `getLogs` contains observational attempt logs. Log retention does not delete the journal or idempotency history.
+
+Each attempt has a stable UUID log `id`. `persistence.status` is independent of business `status`: `persisted` confirms both log storage and its receipt, `pending` means a committed business outcome still needs log projection, and `unconfirmed` means no committed outcome can be assumed. Only an owner with a valid lease can publish the terminal outcome and all attempt logs before projection. A stale owner cannot project success. Log failure never turns business success into failure or reruns the task.
+
+Repair shrinks the pending list. Drain batches repeatedly at offset=0 instead of advancing the offset while repairing.
+
+Trusted server operators monitor `execution.listLogFailures({ limit, offset })` with the same bounds as listUnknown and call `execution.repairLog(occurrenceId)` to replay logs from the shared journal across nodes, restarts, or concurrent calls. Stable primary keys and complete payload comparison handle committed writes with lost acknowledgements. `LOG_PERSIST_FAILED` (032) retains pending state and emits a safe warning. If the entire database is unavailable before the terminal commit, reconcile unknown effects; do not assume a recoverable outcome exists. Repair and retention never call business hooks. Retention failure only warns. `onTaskFinish` reports local business completion with unconfirmed persistence; use the trigger result and execution.get.logPersistence for confirmation.
+
+Pre-claim interrupted events are observational logs without a committed outcome to repair; unacknowledged writes remain unconfirmed. JSON payloads preserve full results and all retries beyond MySQL's 255-character text mapping. Old log/execution tables are not migrated automatically. Closing waits for in-flight repairs; close scheduler before the database.
+
+```ts
+const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
+if (!result.success)
+  return result
+if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
+  const repaired = await scheduler.execution.repairLog(result.data.occurrenceId)
+  if (!repaired.success)
+    return repaired
+}
+// 不用日志补写失败重新 trigger 业务；定期按页扫描 listLogFailures。
+```
 
 `await scheduler.close()` stops intake, cancels HTTP, JS workers, and retry waits, then awaits execution chain exit before clearing state. Reinitialization waits for closure. All lifecycle events expose `signal`; hooks must observe cancellation and stop external side effects. The framework cannot terminate business code on the same thread; do not block the event loop in hooks. Cancelled old executions no longer retry, delete tasks, or call new-instance hooks. Keep the database available until scheduler closure completes, then close dependencies.
 
