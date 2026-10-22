@@ -105,6 +105,16 @@ await payment.init({
 
 すべての組み込み Provider の HTTP リクエストには既定で 15 秒のタイムアウトがあり、ネットワーク障害による長時間の待機を防ぎます。
 
+### Stripe 通知の状態
+
+Stripe Provider は `mode=payment` の `checkout.session.completed`、`checkout.session.async_payment_succeeded`、`checkout.session.async_payment_failed`、`checkout.session.expired` のみ処理します。Webhook はこれらのイベントのみ購読してください。他のリソースイベントや不完全な Session は `NOTIFY_PARSE_FAILED` となり、仮の pending 注文を生成しません。
+
+`completed` でも `payment_status=unpaid` なら `pending` であり、履行できません。`paid` / `no_payment_required` のみ `paid`、非同期決済失敗は `failed`、期限切れは `closed` です。`paidAt` は paid の場合のみ返り、成功イベントの `created` を使用するため再配信でも変わりません。
+
+結果には `eventId` と大文字の `currency` が含まれ、`transactionId` は Checkout Session ID です。アプリケーションは共有データベースで注文・金額・通貨を照合し、通知の重複排除と状態の逆戻り防止を行う必要があります。署名検証と解析は業務トランザクションの代わりにはなりません。`success` だけでなく `status === 'paid'` を確認して履行してください。
+
+参照：[Stripe イベント種類](https://docs.stripe.com/api/events/types)、[Checkout Session のフィールド](https://docs.stripe.com/api/checkout/sessions/object)。
+
 ### 監査ログ
 
 主要な決済操作が成功すると、追加設定なしで `@h-ai/audit` に監査ログを自動記録します。監査記録の失敗は warn ログのみを出力し、決済操作に影響しません。

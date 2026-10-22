@@ -81,17 +81,33 @@ export interface PaymentNotifyRequest {
   headers: Record<string, string>
 }
 
-/** 回调解析结果 */
+/**
+ * 回调解析结果；验签与解析成功不等于已付款，履约前必须检查 status。
+ *
+ * 宿主需用共享持久存储核对订单、金额、币种并去重，阻止乱序事件倒退已完成状态。
+ *
+ * @example
+ * ```ts
+ * const result = await payment.handleNotify('stripe', request)
+ * if (result.success && result.data.status === 'paid') {
+ *   // 在数据库事务中核对订单，按 eventId/transactionId 去重并履约。
+ * }
+ * ```
+ */
 export interface PaymentNotifyResult {
   /** 商户订单号 */
   orderNo: string
   /** 支付渠道交易号 */
   transactionId: string
+  /** 渠道通知事件 ID（Stripe 提供），供宿主做持久去重。 */
+  eventId?: string
   /** 支付金额（分） */
   amount: number
+  /** ISO 4217 大写币种；Stripe 提供，宿主必须与订单核对。 */
+  currency?: string
   /** 支付状态 */
   status: OrderStatusValue
-  /** 支付时间 */
+  /** 渠道支付时间；Stripe 为支付成功事件的创建时间，非本次通知接收时间。 */
   paidAt?: Date
   /** 原始数据 */
   raw?: Record<string, unknown>

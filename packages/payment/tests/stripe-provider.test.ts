@@ -176,12 +176,17 @@ describe('stripe-provider', () => {
   describe('handleNotify', () => {
     it('合法 Webhook 验签通过并解析 checkout.session.completed', async () => {
       const event = {
+        id: 'evt_completed_001',
+        created: 1_700_000_000,
         type: 'checkout.session.completed',
         data: {
           object: {
+            object: 'checkout.session',
+            mode: 'payment',
             id: 'cs_completed_001',
             metadata: { orderNo: 'ORD001' },
             amount_total: 2000,
+            currency: 'usd',
             payment_status: 'paid',
           },
         },
@@ -205,14 +210,20 @@ describe('stripe-provider', () => {
       }
     })
 
-    it('payment_intent.payment_failed 事件映射为 failed', async () => {
+    it('checkout.session.async_payment_failed 事件映射为 failed', async () => {
       const event = {
-        type: 'payment_intent.payment_failed',
+        id: 'evt_failed_001',
+        created: 1_700_000_000,
+        type: 'checkout.session.async_payment_failed',
         data: {
           object: {
-            id: 'pi_failed_001',
+            object: 'checkout.session',
+            mode: 'payment',
+            id: 'cs_failed_001',
             metadata: { orderNo: 'ORD-FAIL' },
             amount_total: 1000,
+            currency: 'usd',
+            payment_status: 'unpaid',
           },
         },
       }
@@ -231,7 +242,7 @@ describe('stripe-provider', () => {
       }
     })
 
-    it('未知事件类型映射为 pending', async () => {
+    it('未知事件类型返回 NOTIFY_PARSE_FAILED', async () => {
       const event = {
         type: 'charge.succeeded',
         data: {
@@ -251,13 +262,13 @@ describe('stripe-provider', () => {
         headers: { 'stripe-signature': signature },
       })
 
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.status).toBe('pending')
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_PARSE_FAILED.code)
       }
     })
 
-    it('无 metadata.orderNo 时返回空字符串', async () => {
+    it('无 metadata.orderNo 时拒绝通知', async () => {
       const event = {
         type: 'checkout.session.completed',
         data: {
@@ -276,9 +287,9 @@ describe('stripe-provider', () => {
         headers: { 'stripe-signature': signature },
       })
 
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.orderNo).toBe('')
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_PARSE_FAILED.code)
       }
     })
 
@@ -330,12 +341,18 @@ describe('stripe-provider', () => {
 
     it('可通过 webhookToleranceSeconds 放宽验签时间窗口', async () => {
       const event = {
+        id: 'evt_old_sig',
+        created: 1_700_000_000,
         type: 'checkout.session.completed',
         data: {
           object: {
+            object: 'checkout.session',
+            mode: 'payment',
             id: 'cs_old_sig',
             metadata: { orderNo: 'ORD-TOLERANCE' },
             amount_total: 500,
+            currency: 'usd',
+            payment_status: 'paid',
           },
         },
       }

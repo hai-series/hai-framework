@@ -105,6 +105,16 @@ Amounts use minor currency units (cents) and must be positive integers. `amount`
 
 All built-in provider HTTP requests have a default 15-second timeout to avoid long hangs on network failures.
 
+### Stripe webhook states
+
+The Stripe provider handles payment-mode `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired` events. Subscribe the endpoint to these events only. Other resource events or incomplete Sessions return `NOTIFY_PARSE_FAILED` instead of producing a pending order.
+
+A completed Session with `payment_status=unpaid` returns `pending`; only `paid` / `no_payment_required` returns `paid`. Asynchronous failure returns `failed`, and expiration returns `closed`. Only paid results contain `paidAt`, derived from the successful payment event's `created` timestamp so repeated delivery keeps the same value.
+
+Results include `eventId` and uppercase `currency`; `transactionId` is the Checkout Session ID. The application must verify the order, amount, and currency in a shared database, persist deduplication, and prevent out-of-order events from reverting paid/refunded orders. Signature verification and parsing do not replace that business transaction. Check `status === 'paid'` before fulfillment, even when `success` is true.
+
+References: [Stripe event types](https://docs.stripe.com/api/events/types), [Checkout Session fields](https://docs.stripe.com/api/checkout/sessions/object).
+
 ### Audit logging
 
 Successful key payment operations automatically write audit logs through `@h-ai/audit`, without extra configuration. Audit failures produce warn logs and do not affect payment operations.

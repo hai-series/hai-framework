@@ -131,6 +131,15 @@ export async function createOrder(
  *
  * @param providerName - Provider 名称
  * @param request - 原始 HTTP 请求数据
+ * @returns 验签及解析结果；仅 status=paid 表示已付款，宿主仍需持久核对和幂等履约。
+ *
+ * @example
+ * ```ts
+ * const result = await payment.handleNotify('stripe', request)
+ * if (result.success && result.data.status === 'paid') {
+ *   // 在业务数据库事务中核对金额/币种，按 eventId 去重后更新订单。
+ * }
+ * ```
  */
 export async function handleNotify(
   providerName: string,
@@ -145,7 +154,7 @@ export async function handleNotify(
       action: 'payment_notify',
       resource: 'payment',
       resourceId: notifyResult.data.orderNo,
-      details: { provider: providerName, transactionId: notifyResult.data.transactionId, status: notifyResult.data.status, amount: notifyResult.data.amount },
+      details: { provider: providerName, transactionId: notifyResult.data.transactionId, eventId: notifyResult.data.eventId, status: notifyResult.data.status, amount: notifyResult.data.amount, currency: notifyResult.data.currency },
     })
   }
   return notifyResult

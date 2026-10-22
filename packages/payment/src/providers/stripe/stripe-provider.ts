@@ -11,12 +11,47 @@ import type { StripeConfig } from '../../payment-config.js'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
 import { createHmac } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
+import { z } from 'zod'
 import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
 
 /** Stripe API 基地址 */
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
+
+/**
+ * Stripe Checkout 通知快照；只接受本 Provider 实际消费的 Session 事件。
+ *
+ * 保留原始扩展字段用于业务核对；不同资源类型不可套用 Session 金额字段。
+ */
+const StripeCheckoutEventSchema = z.object({
+  id: z.string().min(1),
+  created: z.number().int().nonnegative().max(8_640_000_000_000),
+  type: z.enum([
+    'checkout.session.completed',
+    'checkout.session.async_payment_succeeded',
+    'checkout.session.async_payment_failed',
+    'checkout.session.expired',
+  ]),
+  data: z.object({
+    object: z.object({
+      object: z.literal('checkout.session'),
+      id: z.string().min(1),
+      mode: z.literal('payment'),
+      metadata: z.object({ orderNo: z.string().min(1).regex(/\S/) }).passthrough(),
+      amount_total: z.number().int().nonnegative(),
+      currency: z.string().regex(/^[a-z]{3}$/i),
+      payment_status: z.enum(['paid', 'unpaid', 'no_payment_required']),
+    }).passthrough(),
+  }).passthrough(),
+}).passthrough().refine((event) => {
+  const paid = event.data.object.payment_status !== 'unpaid'
+  if (event.type === 'checkout.session.async_payment_succeeded')
+    return paid
+  if (event.type === 'checkout.session.async_payment_failed' || event.type === 'checkout.session.expired')
+    return !paid
+  return true
+}, { message: 'Checkout event type contradicts payment status' })
 
 /**
  * 创建 Stripe Provider
@@ -133,34 +168,25 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
           )
         }
 
-        const event = JSON.parse(request.body) as {
-          type: string
-          data: {
-            object: {
-              id: string
-              metadata?: Record<string, string>
-              amount_total?: number
-              payment_status?: string
-            }
-          }
-        }
-
+        const event = StripeCheckoutEventSchema.parse(JSON.parse(request.body))
         const obj = event.data.object
-        const orderNo = obj.metadata?.orderNo ?? ''
-
-        const statusMap: Record<string, PaymentNotifyResult['status']> = {
-          'checkout.session.completed': 'paid',
-          'payment_intent.payment_failed': 'failed',
-        }
+        // completed 只表示 Checkout 已完成；延迟付款仍可能处于 unpaid。
+        const status: PaymentNotifyResult['status'] = event.type === 'checkout.session.expired'
+          ? 'closed'
+          : event.type === 'checkout.session.async_payment_failed'
+            ? 'failed'
+            : obj.payment_status === 'unpaid' ? 'pending' : 'paid'
 
         return ok({
-          orderNo,
+          orderNo: obj.metadata.orderNo,
           transactionId: obj.id,
-          amount: obj.amount_total ?? 0,
-          status: statusMap[event.type] ?? 'pending',
-          paidAt: new Date(),
-          // Stripe SDK 的 Event 是强类型对象，此处统一以 Record 暴露给上层做调试/审计
-          raw: event as unknown as Record<string, unknown>,
+          eventId: event.id,
+          amount: obj.amount_total,
+          currency: obj.currency.toUpperCase(),
+          status,
+          // 使用支付成功事件的时间，使重复通知不会改变 paidAt；pending/failed/closed 不宣称已支付。
+          paidAt: status === 'paid' ? new Date(event.created * 1000) : undefined,
+          raw: event,
         })
       }
       catch (cause) {

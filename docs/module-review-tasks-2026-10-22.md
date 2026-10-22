@@ -261,7 +261,8 @@
 
 ### PAY-01 · P1 · 修正 Stripe 回调支付状态与事件类型
 
-- [ ] 待修正（源码探针已复现；范围：payment）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：Stripe通知严格按Checkout事件解析，unpaid completed为pending，异步成功/失败/过期正确映射，付费时间取稳定事件时间；公开eventId/currency并同步审计、三语文档和模板。新通知18/18、相关3文件70/70、payment typecheck和定向ESLint通过。真实Stripe交易未执行；宿主订单核验/持久幂等职责已明确；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:152](../packages/payment/src/providers/stripe/stripe-provider.ts#L152)。
 - **证据与影响**：已签名的 checkout.session.completed 即使 payment_status=unpaid 仍映射 paid；不同事件对象共用 amount_total/metadata，可能得到空订单号/0 金额。探针已复现 unpaid→paid。
 - **修正内容**：按事件 discriminated schema 解析并核验支付状态；处理异步成功/失败，拒绝或忽略无关事件；仅在实际支付成功时设置 paidAt。回调重复/乱序不应倒退订单状态。

@@ -106,10 +106,13 @@ const result = await payment.handleNotify('wechat', {
 })
 
 if (result.success) {
-  // result.data: { orderNo, transactionId, amount, status, paidAt? }
-  // 更新订单状态...
+  // success 仅表示验签解析成功；Stripe completed/unpaid 仍是 pending。
+  // 在共享数据库事务中核对订单、amount、currency，按 eventId/transactionId 去重。
+  // 仅 status=paid 可履约；乱序 pending/failed 不得回退已支付/已退款订单。
 }
 ```
+
+Stripe 只消费 payment-mode Checkout Session 的 `completed`、`async_payment_succeeded`、`async_payment_failed`、`expired` 事件，其它事件或缺失订单号/金额/币种返回 `NOTIFY_PARSE_FAILED`。结果的 `eventId` 用于持久去重，`currency` 为大写，`transactionId` 为 Session ID。只有 paid 结果返回 `paidAt`，取成功事件的 created 时间；Provider 不维护业务订单或进程内去重集合。
 
 ### 5. 查询订单
 
