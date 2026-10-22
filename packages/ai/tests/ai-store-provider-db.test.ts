@@ -65,6 +65,43 @@ function createMockVecdb(): VecdbFunctions {
   }
 }
 
+describe('db vector writes propagate failures', () => {
+  it.each(['vector', 'knowledge'] as const)('%s Store 传播 exists/create/upsert 错误，不继续伪成功', async (kind) => {
+    for (const phase of ['exists', 'create', 'upsert'] as const) {
+      const database = createMockVecdb()
+      const failure = { success: false as const, error: { code: 'hai:vecdb:008', message: `${phase} unavailable` } }
+      const create = vi.spyOn(database.collection, 'create')
+      const upsert = vi.spyOn(database.vector, 'upsert')
+      if (phase === 'upsert')
+        upsert.mockResolvedValue(failure)
+      else
+        vi.spyOn(database.collection, phase).mockResolvedValue(failure)
+      const provider = createDbStoreProvider({ sql: createMockSql([]), jsonOps, vecdb: database })
+      const operation = kind === 'vector'
+        ? () => provider.createVectorStore('docs').upsert('one', [1, 0])
+        : () => provider.createKnowledgeStore().upsertVectors('docs', [{ id: 'one', vector: [1, 0] }])
+      await expect(operation()).rejects.toThrow(`${phase} unavailable`)
+      if (phase !== 'upsert')
+        expect(upsert).not.toHaveBeenCalled()
+      if (phase === 'exists')
+        expect(create).not.toHaveBeenCalled()
+    }
+  })
+
+  it('并发创建已存在可继续写入，其它创建错误不能忽略；不缓存本进程的集合存在状态', async () => {
+    const database = createMockVecdb()
+    vi.spyOn(database.collection, 'create').mockResolvedValue({ success: false, error: { code: 'hai:vecdb:004', message: 'already exists' } })
+    const exists = vi.spyOn(database.collection, 'exists')
+    const upsert = vi.spyOn(database.vector, 'upsert')
+    const provider = createDbStoreProvider({ sql: createMockSql([]), jsonOps, vecdb: database })
+    const store = provider.createVectorStore('docs')
+    await store.upsert('one', [1, 0])
+    await store.upsert('two', [0, 1])
+    expect(exists).toHaveBeenCalledTimes(2)
+    expect(upsert).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('db store provider saveMany', () => {
   it('mysql 索引创建使用合法语法并跳过已有索引', async () => {
     const calls: ExecuteCall[] = []

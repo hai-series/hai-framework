@@ -90,6 +90,10 @@ LanceDB is an embedded local-file backend. Processes share data only when they a
 
 Search uses the persisted collection metric, mapping `euclidean` to LanceDB's `l2`. Scores follow the public 0–1, higher-is-more-similar contract: cosine uses `clamp(1 - distance / 2, 0, 1)`, euclidean uses `1 / (1 + squaredL2)`, and dot uses `sigmoid(dotProduct)` to preserve ranking, not to estimate probabilities. `minScore` filters converted scores; thresholds are not universally calibrated across metrics or backends.
 
+Atomic LanceDB writes are verified against `@lancedb/lancedb 0.40.0 / Lance 13`. New tables declare a non-null id primary key in their initial Arrow schema. Both insert and upsert use native merge on id for strict key conflict detection. Sources: [Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key), [Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto), [Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts).
+
+LanceDB `insert` preserves existing IDs; `upsert` inserts or replaces complete rows. Duplicate IDs within a batch, missing merge support, or missing persisted primary keys return `CONFIG_ERROR` before writing. Rebuild old tables; no automatic migration or cleanup occurs. Each merge commits atomically, with concurrent winners determined by commit order. Multiple merges and reldb/vecdb operations do not share a transaction. No delete/add fallback is used. Reconcile unknown outcomes by ID. External native add calls bypass these safeguards.
+
 #### Operation logging
 
 Enable operation logging with `operationLog` in the vector database configuration. Logs are emitted before collection/vector operations reach the real provider, without a shared wrapper in `vecdb-main.ts`.

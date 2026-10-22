@@ -90,6 +90,10 @@ LanceDB はローカルファイルを使う組み込みバックエンドです
 
 検索は集合の metric を使い、`euclidean` を LanceDB の `l2` に対応させます。score は公開 API の 0–1、高いほど類似する契約に従い、cosine は `clamp(1 - distance / 2, 0, 1)`、euclidean は `1 / (1 + squaredL2)`、dot は順位を保つ `sigmoid(dotProduct)` を使います（確率ではありません）。`minScore` は変換後に適用し、異なる metric・バックエンド間で閾値が共通に校正されているとは扱いません。
 
+原子書き込みの検証対象は `@lancedb/lancedb 0.40.0 / Lance 13` です。新規集合は初期 Arrow schema で id を非 null 主キーにし、insert/upsert は id を使う原生 merge の厳密なキー競合検出を使用します。根拠：[Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key)、[Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto)、[Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts)。
+
+LanceDB の `insert` は既存 ID を上書きせず、`upsert` は追加または行全体を置換します。バッチ内の重複 ID、merge 能力・永続主キーの欠落は書き込み前に `CONFIG_ERROR` を返します。旧形式の集合は再作成が必要で、自動移行や削除はしません。原子性は各 merge に限られ、並行処理の勝者はコミット順で決まります。複数 merge や reldb/vecdb 間の共通トランザクションはありません。delete/add への切り替えはなく、不明な結果は ID で照合します。外部の原生 add はこの保護を迂回します。
+
 #### 操作ログ
 
 ベクトルデータベース設定の `operationLog` で操作ログを有効にできます。ログはコレクション・ベクトル操作が実際の Provider に渡る前に出力され、`vecdb-main.ts` で一括ラップはしません。

@@ -1,18 +1,16 @@
 /** 使用真实原生驱动验证持久集合定义、独立进程及外部重建后的读取。 */
 import type { VectorDocument } from '../src/index'
-import { fork } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
-import { build } from 'tsup'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { HaiVecdbError, vecdb } from '../src/index'
+import { createLancedbNodeFactory } from './helpers/lancedb-test-node'
 
 const require = createRequire(import.meta.url)
 const temporaryRoot = path.resolve(import.meta.dirname, '../tmp')
 let directory: string
-let workerFile: string
+let independentNode: Awaited<ReturnType<typeof createLancedbNodeFactory>>
 
 const cases = [
   { name: 'cosine', dimension: 2, metric: 'cosine', order: ['aligned', 'near', 'large'] },
@@ -29,101 +27,12 @@ function documents(dimension: number): VectorDocument[] {
   ].map(doc => ({ ...doc, vector: [...doc.vector, ...Array.from({ length: dimension - 2 }).fill(0) as number[]], content: doc.id, metadata: { source: 'wiki', nested: { page: 1 } } }))
 }
 
-/** 启动持有独立公开 vecdb 单例的真实 Node 进程，通过 IPC 顺序执行操作。 */
-async function independentNode(database: string) {
-  const child = fork(workerFile, [database], { windowsHide: true, silent: true })
-  child.stdout?.resume()
-  let stderr = ''
-  child.stderr?.on('data', chunk => stderr += chunk.toString())
-  let requestId = 0
-  const pending = new Map<number, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
-  let readyResolve: () => void
-  let readyReject: (error: Error) => void
-  const ready = new Promise<void>((resolve, reject) => {
-    readyResolve = resolve
-    readyReject = reject
-  })
-  const closed = new Promise<number | null>(resolve => child.once('close', resolve))
-  const timer = setTimeout(() => child.kill(), 20_000)
-  child.on('message', (message) => {
-    if (!message || typeof message !== 'object')
-      return
-    if ('ready' in message)
-      readyResolve()
-    if ('requestId' in message && typeof message.requestId === 'number' && 'result' in message) {
-      pending.get(message.requestId)?.resolve(message.result)
-      pending.delete(message.requestId)
-    }
-  })
-  child.once('error', error => readyReject(error))
-  child.once('close', (code) => {
-    clearTimeout(timer)
-    const error = new Error(`LanceDB worker closed: ${code}; ${stderr}`)
-    readyReject(error)
-    for (const request of pending.values())
-      request.reject(error)
-    pending.clear()
-  })
-  await ready
-  return {
-    pid: child.pid,
-    invoke(action: string, input: Record<string, unknown>) {
-      const id = ++requestId
-      return new Promise<unknown>((resolve, reject) => {
-        pending.set(id, { resolve, reject })
-        child.send({ requestId: id, action, ...input }, (error) => {
-          if (error) {
-            pending.delete(id)
-            reject(error)
-          }
-        })
-      })
-    },
-    async close() {
-      if (child.connected)
-        child.send({ action: 'close' })
-      const code = await closed
-      if (code !== 0)
-        throw new Error(`LanceDB worker failed: ${code}; ${stderr}`)
-    },
-  }
-}
-
 beforeAll(async () => {
   await mkdir(temporaryRoot, { recursive: true })
   directory = await mkdtemp(path.join(temporaryRoot, 'lance-metadata-'))
   if (!directory.startsWith(`${temporaryRoot}${path.sep}`))
     throw new Error('Unexpected LanceDB test directory')
-  // 子进程使用本轮源码构建的独立产物，不依赖仓库既有 dist。
-  const output = path.join(directory, 'bundle')
-  await build({
-    config: false,
-    entry: { index: path.resolve(import.meta.dirname, '../src/index.ts') },
-    outDir: output,
-    format: ['esm'],
-    platform: 'node',
-    external: ['@h-ai/core', '@lancedb/lancedb', '@qdrant/js-client-rest', 'chromadb', 'pg', 'zod'],
-    silent: true,
-  })
-  workerFile = path.join(directory, 'worker.mjs')
-  await writeFile(workerFile, `
-import process from 'node:process'
-import { vecdb } from ${JSON.stringify(pathToFileURL(path.join(output, 'index.js')).href)}
-const initialized = await vecdb.init({ type: 'lancedb', path: process.argv[2], metric: 'dot' })
-if (!initialized.success) throw new Error(JSON.stringify(initialized.error))
-process.on('message', async message => {
-  if (message.action === 'close') {
-    await vecdb.close()
-    process.disconnect()
-    return
-  }
-  const result = message.action === 'insert'
-    ? await vecdb.vector.insert(message.name, message.documents)
-    : { info: await vecdb.collection.info(message.name), search: await vecdb.vector.search(message.name, message.vector, { topK: 3 }) }
-  process.send({ requestId: message.requestId, result })
-})
-process.send({ ready: true })
-`)
+  independentNode = await createLancedbNodeFactory(directory)
 }, 30_000)
 
 afterEach(async () => {

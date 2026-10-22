@@ -11,6 +11,8 @@
   "vecdb_collectionNotFound": "集合不存在: {name}",
   "vecdb_collectionAlreadyExists": "集合已存在: {name}",
   "vecdb_invalidCollectionSchema": "集合缺少有效的持久化向量维度或距离度量定义: {name}",
+  "vecdb_atomicUpsertUnavailable": "LanceDB 集合或驱动缺少安全的原子 merge 主键能力，未执行写入，请重建集合或使用受支持的驱动",
+  "vecdb_duplicateDocumentIds": "同一批向量文档的 ID 不得重复，未执行写入",
   "vecdb_dimensionMismatch": "向量维度不匹配: 期望 {expected}，实际 {actual}",
   "vecdb_insertFailed": "插入向量失败: {error}",
   "vecdb_deleteFailed": "删除向量失败: {error}",

@@ -30,6 +30,9 @@ const logger = core.logger.child({ module: 'vecdb', scope: 'lancedb' })
 
 /** 集合 metric 与 Arrow schema 原子持久化；禁止按连接默认值猜测已有集合。 */
 const COLLECTION_METRIC_KEY = 'hai.vecdb.metric'
+/** Lance 13 公布的主键字段 metadata；merge 的 ON 字段匹配主键时启用严格键冲突检测。 */
+const PRIMARY_KEY_FLAG = 'lance-schema:unenforced-primary-key'
+const PRIMARY_KEY_POSITION = 'lance-schema:unenforced-primary-key:position'
 
 /** 转义 LanceDB filter 表达式中的字符串值（防注入 + LIKE 通配符） */
 function escapeLanceFilterValue(value: string): string {
@@ -53,6 +56,8 @@ interface CollectionMeta {
   dimension: number
   /** 距离度量 */
   metric: DistanceMetric
+  /** id 必须是不可空的唯一主键字段，且引擎支持原子 merge。 */
+  atomicWrites: boolean
 }
 
 /**
@@ -98,7 +103,14 @@ export function createLancedbProvider(): VecdbProvider {
         || !Number.isInteger(vectorType.listSize) || vectorType.listSize <= 0 || !metric.success) {
         return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', { params: { name } }))
       }
-      return await action(table, { dimension: vectorType.listSize, metric: metric.data })
+      const primaryKeys = schema.fields.filter(field => field.metadata.has(PRIMARY_KEY_POSITION)
+        || ['true', '1', 'yes'].includes(field.metadata.get(PRIMARY_KEY_FLAG)?.toLowerCase() ?? ''))
+      const idField = primaryKeys[0]
+      // position 只表示排序，不能替代官方的主键参与标志；缺失/false 必须失败关闭。
+      const atomicWrites = primaryKeys.length === 1 && idField.name === 'id' && !idField.nullable
+        && ['true', '1', 'yes'].includes(idField.metadata.get(PRIMARY_KEY_FLAG)?.toLowerCase() ?? '')
+        && idField.metadata.get(PRIMARY_KEY_POSITION) === '1' && typeof table.mergeInsert === 'function'
+      return await action(table, { dimension: vectorType.listSize, metric: metric.data, atomicWrites })
     }
     finally {
       table.close()
@@ -135,6 +147,15 @@ export function createLancedbProvider(): VecdbProvider {
     return null
   }
 
+  /** 所有新增写入都参与原生主键冲突检测；源批内重复 ID 的 merge 语义未定义，必须先拒绝。 */
+  function validateAtomicWrite(meta: CollectionMeta, documents: VectorDocument[]): HaiResult<void> | null {
+    if (!meta.atomicWrites)
+      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_atomicUpsertUnavailable'))
+    if (new Set(documents.map(document => document.id)).size !== documents.length)
+      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_duplicateDocumentIds'))
+    return null
+  }
+
   // ─── 操作上下文 ───
 
   const ctx = { isConnected: () => connection !== null, logger, operationLog: () => config?.operationLog }
@@ -159,12 +180,16 @@ export function createLancedbProvider(): VecdbProvider {
       if (!driver.success)
         return driver
       // 仅在内存推导 Arrow 字段；空表与 metric 一次创建，没有占位记录可见窗口。
-      const schema = driver.data.makeArrowTable([{
+      const inferred = driver.data.makeArrowTable([{
         id: '',
         vector: Array.from({ length: dimension }).fill(0),
         content: '',
         metadata: '{}',
       }], {}, new Map([[COLLECTION_METRIC_KEY, metric]])).schema
+      // 官方 Arrow 字段 metadata 可在初始 manifest 声明主键，避免 create/setPK 的可见窗口。
+      const schema = inferred.assign(inferred.fields.map(field => field.name === 'id'
+        ? field.clone({ nullable: false, metadata: new Map([...field.metadata, [PRIMARY_KEY_FLAG, 'true'], [PRIMARY_KEY_POSITION, '1']]) })
+        : field))
       const table = await connection!.createEmptyTable(name, schema)
       table.close()
 
@@ -196,7 +221,7 @@ export function createLancedbProvider(): VecdbProvider {
     async info(name) {
       logger.debug('Getting collection info', { name })
 
-      return withCollection(name, async (table, meta) => ok({ name, ...meta, count: await table.countRows() }))
+      return withCollection(name, async (table, meta) => ok({ name, dimension: meta.dimension, metric: meta.metric, count: await table.countRows() }))
     },
 
     async list() {
@@ -214,6 +239,9 @@ export function createLancedbProvider(): VecdbProvider {
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
       return withCollection(collection, async (table, meta) => {
+        const atomicValidation = validateAtomicWrite(meta, documents)
+        if (atomicValidation)
+          return atomicValidation
         const dimensionValidation = validateDocumentsDimension(meta.dimension, documents)
         if (dimensionValidation) {
           return dimensionValidation
@@ -226,7 +254,8 @@ export function createLancedbProvider(): VecdbProvider {
           metadata: JSON.stringify(doc.metadata ?? {}),
         }))
 
-        await table.add(records)
+        // insert 保留已有 ID，不覆盖；不得用 add 绕过并发键冲突检测。
+        await table.mergeInsert('id').whenNotMatchedInsertAll().execute(records)
 
         logger.info('Vectors inserted', { collection, count: documents.length })
         return ok(undefined)
@@ -237,6 +266,9 @@ export function createLancedbProvider(): VecdbProvider {
       logger.debug('Upserting vectors', { collection, count: documents.length })
 
       return withCollection(collection, async (table, meta) => {
+        const atomicValidation = validateAtomicWrite(meta, documents)
+        if (atomicValidation)
+          return atomicValidation
         const dimensionValidation = validateDocumentsDimension(meta.dimension, documents)
         if (dimensionValidation) {
           return dimensionValidation
@@ -249,19 +281,11 @@ export function createLancedbProvider(): VecdbProvider {
           metadata: JSON.stringify(doc.metadata ?? {}),
         }))
 
-        if (typeof table.mergeInsert === 'function') {
-          await table
-            .mergeInsert('id')
-            .whenMatchedUpdateAll()
-            .whenNotMatchedInsertAll()
-            .execute(records)
-        }
-        else {
-          logger.warn('LanceDB mergeInsert is unavailable, falling back to delete/add upsert')
-          const ids = documents.map(d => `'${escapeLanceSqlValue(d.id)}'`).join(', ')
-          await table.delete(`id IN (${ids})`)
-          await table.add(records)
-        }
+        await table
+          .mergeInsert('id')
+          .whenMatchedUpdateAll()
+          .whenNotMatchedInsertAll()
+          .execute(records)
 
         logger.info('Vectors upserted', { collection, count: documents.length })
         return ok(undefined)

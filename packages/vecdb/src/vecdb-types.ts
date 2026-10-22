@@ -243,16 +243,18 @@ export interface VectorOperations {
    *
    * @param collection - 集合名称
    * @param documents - 文档列表
-   * @returns 成功返回 ok(undefined)
+   * @returns 成功返回 ok(undefined)；LanceDB 已有 ID 保留不覆盖，同批重复 ID 返回 CONFIG_ERROR。
+   * @example await vecdb.vector.insert('docs', [{ id: 'doc-1', vector: [1, 0] }])
    */
   insert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
 
   /**
-   * 更新向量文档（按 id 匹配，整体替换）
+   * 插入或更新向量文档（按 id 匹配，整体替换）
    *
    * @param collection - 集合名称
-   * @param documents - 待更新的文档（id 必须已存在）
-   * @returns 成功返回 ok(undefined)
+   * @param documents - 待写入文档；已有 ID 更新，不存在的 ID 插入
+   * @returns 成功返回 ok(undefined)；LanceDB 缺少原子主键能力或同批重复 ID 返回 CONFIG_ERROR。
+   * @example await vecdb.vector.upsert('docs', [{ id: 'doc-1', vector: [1, 0], content: 'updated' }])
    */
   upsert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
 

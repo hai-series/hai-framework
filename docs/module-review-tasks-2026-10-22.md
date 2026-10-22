@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 30/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 31/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -477,7 +477,8 @@
 
 ### VECDB-02 · P1 · 删除 LanceDB 先删后增的 upsert 回退
 
-- [ ] 待修正（源码确认；范围：vecdb）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：删除delete/add回退；初始Arrow schema原子声明非空id主键，所有insert/upsert走原生严格键冲突merge，insert不覆盖已有id；每次写入校验主键flag/position/非空、merge能力及批内重复，缺失CONFIG_ERROR且无写入。同步AI持久Store的exists/create/upsert错误传播，删除进程维数提示。LanceDB38项及补严10项、AI12+1项通过；真实双Node4轮全新id唯一、混合insert/upsert和有序更新完整，真实引擎运行时CAST失败后manifest与旧数据不变、新id未发布；缺flag/false/缺能力均失败保留原数据。两包typecheck/build、ESLint/skills通过，三语文档/类型/双侧skills/LLMS同步并引用固定Lance13/SDK0.40.0官方契约；不声称跨多个merge或关系/向量分布式事务；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:319](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L319)。
 - **证据与影响**：mergeInsert 不存在时先 delete 再 add，第二步失败会丢旧数据，读者也能看到中间空窗。该兼容分支与本次不考虑兼容性要求冲突。
 - **修正内容**：使用当前支持版本的原子 upsert/merge，缺能力时初始化或操作明确失败；删除本地仿造接口的过时兼容分支，采用上游类型。

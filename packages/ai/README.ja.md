@@ -202,6 +202,8 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () 
 
 #### Memory / RAG / Knowledge
 
+既定 DB Store はベクトル upsert と集合の照会・作成エラーを上位に伝え、失敗した書き込みを Knowledge 文書として登録しません。LanceDB は永続主キーを持つ原子 merge を使い、insert は既存 ID を保持し、upsert は行全体を置換します。ベクトルと関係テーブルの書き込みは共通トランザクションではなく、文書・ベクトル ID による照合と補償が必要です。
+
 LanceDB の集合次元と metric は Arrow schema に永続化され、接続設定は新規集合にのみ影響します。再起動後は同じ永続ディレクトリを使い、embedding 次元を変更する場合は集合を再作成してください。別ノードのローカルパスは自動共有されないため、分散 Knowledge にはサーバー型ベクトルバックエンドを使用します。
 
 ```ts

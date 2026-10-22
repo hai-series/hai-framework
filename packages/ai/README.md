@@ -202,6 +202,8 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () 
 
 #### Memory / RAG / Knowledge
 
+默认 DB Store 的向量 upsert、集合查询/创建失败会向上层传播，Knowledge 入库不会把向量失败当作成功再登记文档。LanceDB 使用带持久主键的原子 merge；insert 保留已有 ID，upsert 才整体替换。向量 merge 与关系表写入不构成跨存储事务，失败需由应用按文档/向量 ID 核对和补偿。
+
 使用 LanceDB 时，集合维度与 metric 随 Arrow schema 持久化；连接 metric 只影响新集合。重启后复用同一持久目录，embedding 维数改变时重建匹配集合；多个节点各自的本地路径不会自动共享，分布式 Knowledge 推荐服务端向量后端。
 
 ```ts

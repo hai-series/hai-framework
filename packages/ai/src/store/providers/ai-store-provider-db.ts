@@ -13,7 +13,7 @@ import type { AIRelStore, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, A
 
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { vecdb } from '@h-ai/vecdb'
+import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
 const logger = core.logger.child({ module: 'ai', scope: 'store-provider-db' })
 
@@ -479,6 +479,23 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
 // ─── VecdbAIVectorStore 实现 ───
 
+/** 内部 Store 使用显式异常通知调用方，向量写入失败不能继续登记为成功。 */
+function requireVecdbSuccess<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+
+/** 以共享后端为准懒建集合；并发创建的 already-exists 可继续，其它错误必须传播。 */
+async function ensureVecdbCollection(database: VecdbFunctions, name: string, dimension: number): Promise<void> {
+  const exists = requireVecdbSuccess(await database.collection.exists(name))
+  if (exists)
+    return
+  const created = await database.collection.create(name, { dimension })
+  if (!created.success && created.error.code !== HaiVecdbError.COLLECTION_ALREADY_EXISTS.code)
+    requireVecdbSuccess(created)
+}
+
 /**
  * 基于 vecdb 的持久化向量存储实现
  *
@@ -488,25 +505,15 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 class VecdbAIVectorStore implements AIVectorStore {
   private readonly vecdb: VecdbFunctions
   private readonly collection: string
-  private collectionDimension: number | null = null
 
   constructor(vecdb: VecdbFunctions, collection: string) {
     this.vecdb = vecdb
     this.collection = collection
   }
 
-  private async ensureCollection(dimension: number): Promise<void> {
-    if (this.collectionDimension === dimension)
-      return
-    const exists = await this.vecdb.collection.exists(this.collection)
-    if (exists.success && !exists.data)
-      await this.vecdb.collection.create(this.collection, { dimension })
-    this.collectionDimension = dimension
-  }
-
   async upsert(id: string, vector: number[], metadata?: Record<string, unknown>): Promise<void> {
-    await this.ensureCollection(vector.length)
-    await this.vecdb.vector.upsert(this.collection, [{ id, vector, metadata }])
+    await ensureVecdbCollection(this.vecdb, this.collection, vector.length)
+    requireVecdbSuccess(await this.vecdb.vector.upsert(this.collection, [{ id, vector, metadata }]))
   }
 
   async search(vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>> {
@@ -522,7 +529,6 @@ class VecdbAIVectorStore implements AIVectorStore {
     const exists = await this.vecdb.collection.exists(this.collection)
     if (exists.success && exists.data) {
       await this.vecdb.collection.drop(this.collection)
-      this.collectionDimension = null
     }
   }
 }
@@ -597,9 +603,7 @@ class DbKnowledgeStore implements KnowledgeStore {
 
   async initialize(collection: string, dimension: number): Promise<void> {
     // 创建 vecdb 集合
-    const exists = await this.vecdb.collection.exists(collection)
-    if (exists.success && !exists.data)
-      await this.vecdb.collection.create(collection, { dimension })
+    await this.ensureCollection(collection, dimension)
 
     // 创建 reldb 表
     const statements = buildKnowledgeSchemaStatements(this.dbType)
@@ -833,12 +837,9 @@ class DbKnowledgeStore implements KnowledgeStore {
 
   async upsertVectors(collection: string, vectors: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>): Promise<void> {
     // 确保集合存在
-    if (vectors.length > 0) {
-      const exists = await this.vecdb.collection.exists(collection)
-      if (exists.success && !exists.data)
-        await this.vecdb.collection.create(collection, { dimension: vectors[0].vector.length })
-    }
-    await this.vecdb.vector.upsert(collection, vectors)
+    if (vectors.length > 0)
+      await this.ensureCollection(collection, vectors[0].vector.length)
+    requireVecdbSuccess(await this.vecdb.vector.upsert(collection, vectors))
   }
 
   async searchVectors(collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>> {
@@ -851,9 +852,7 @@ class DbKnowledgeStore implements KnowledgeStore {
   }
 
   async ensureCollection(collection: string, dimension: number): Promise<void> {
-    const exists = await this.vecdb.collection.exists(collection)
-    if (exists.success && !exists.data)
-      await this.vecdb.collection.create(collection, { dimension })
+    await ensureVecdbCollection(this.vecdb, collection, dimension)
   }
 
   async registerCollection(collection: string, dimension: number): Promise<void> {
