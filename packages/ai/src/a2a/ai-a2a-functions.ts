@@ -11,8 +11,9 @@ import type { AgentExecutor, ExecutionEventBus, ServerCallContext, TaskStore } f
 import type { HaiResult } from '@h-ai/core'
 
 import type { A2AConfig } from '../ai-config.js'
-
 import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
+
+import type { A2AJournal, A2ARuntimeOptions } from './ai-a2a-runtime.js'
 import type {
   A2AAgentCardConfig,
   A2ACallOptions,
@@ -24,11 +25,12 @@ import type {
 } from './ai-a2a-types.js'
 
 import { A2AClient } from '@a2a-js/sdk/client'
-import { DefaultExecutionEventBusManager, DefaultRequestHandler, JsonRpcTransportHandler, ServerCallContext as ServerCallContextImpl } from '@a2a-js/sdk/server'
+import { JsonRpcTransportHandler, ServerCallContext as ServerCallContextImpl } from '@a2a-js/sdk/server'
 import { core, err, ok } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
+import { SharedA2ARequestHandler } from './ai-a2a-runtime.js'
 import { buildAgentCard } from './ai-a2a-server.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
@@ -252,6 +254,10 @@ function wrapExecutorWithLogging(
 
 /** A2A 子功能组装依赖 */
 export interface A2ADeps {
+  /** Task和事件同文档CAS权威状态。 */
+  journalStore: AIRelStore<A2AJournal>
+  /** context身份归属持久CAS登记。 */
+  contextStore: AIRelStore<{ owner: string }>
   /** 初始化阶段已创建的任务存储 */
   taskStore: AIRelStore<Task>
   /** 初始化阶段已创建的消息存储 */
@@ -261,6 +267,8 @@ export interface A2ADeps {
 /** 在 StoreProvider.initialize 前创建 A2A 表，避免延迟注册 executor 时漏建表。 */
 export function createA2AStores(storeProvider: AIStoreProvider): A2ADeps {
   return {
+    journalStore: storeProvider.createRelStore<A2AJournal>('hai_ai_a2a_journal', { hasObjectId: true, hasRefId: true }),
+    contextStore: storeProvider.createRelStore<{ owner: string }>('hai_ai_a2a_contexts'),
     taskStore: storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', { hasObjectId: true, hasStatus: true, hasRefId: true }),
     messageStore: storeProvider.createRelStore<A2AMessageRecord>('hai_ai_a2a_messages', { hasObjectId: true, hasStatus: true }),
   }
@@ -272,6 +280,13 @@ export interface A2ACreateOptions {
   agentCard: A2AAgentCardConfig
   /** Agent 执行器（由应用层实现） */
   executor: AgentExecutor
+  /** 内部可注入的执行预算；公开默认30秒租约、250毫秒轮询、5分钟执行期限。 */
+  runtime?: Partial<A2ARuntimeOptions>
+}
+
+/** AI生命周期内部持有的实现；关闭先停止A2A执行再关闭共享Store。 */
+export interface A2AImplementation extends A2AOperations {
+  close: () => Promise<void>
 }
 
 /**
@@ -282,19 +297,19 @@ export interface A2ACreateOptions {
 export function createA2AOperations(
   options: A2ACreateOptions,
   deps: A2ADeps,
-): A2AOperations {
-  const { taskStore, messageStore } = deps
+): A2AImplementation {
+  const { taskStore, messageStore, journalStore, contextStore } = deps
   const agentCardConfig = options.agentCard
 
   // 构建 SDK 层
   const agentCard = buildAgentCard(agentCardConfig)
   const a2aTaskStore = new ReldbA2ATaskStore(taskStore)
   const wrappedExecutor = wrapExecutorWithLogging(options.executor, messageStore)
-  const eventBusManager = new DefaultExecutionEventBusManager()
-  const requestHandler = new DefaultRequestHandler(agentCard, a2aTaskStore, wrappedExecutor, eventBusManager)
+  const requestHandler = new SharedA2ARequestHandler(agentCard, a2aTaskStore, wrappedExecutor, journalStore, contextStore, { leaseMs: 30000, pollIntervalMs: 250, maxExecutionMs: 300000, ...options.runtime })
   const transportHandler = new JsonRpcTransportHandler(requestHandler)
 
   return {
+    close: () => requestHandler.close(),
     registerExecutor() {
       logger.warn('A2A executor already registered, ignoring duplicate registerExecutor call')
       return ok(undefined)
@@ -363,9 +378,9 @@ export interface A2ALazyProxyDeps {
   /** 获取 A2A 配置（config.a2a） */
   getA2AConfig: () => A2AConfig | null
   /** 获取当前 A2A 实现（registerExecutor 后才有值） */
-  getA2AImpl: () => A2AOperations | null
+  getA2AImpl: () => A2AImplementation | null
   /** 保存 A2A 实现引用 */
-  setA2AImpl: (impl: A2AOperations) => void
+  setA2AImpl: (impl: A2AImplementation) => void
   /** 获取初始化阶段已建表的 A2A 存储 */
   getStores: () => A2ADeps | null
   /** 未初始化错误工厂 */
@@ -392,7 +407,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
       }
       if (deps.getA2AImpl()) {
-        logger.warn('A2A executor already registered, re-registering')
+        return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_a2aExecutorAlreadyRegistered'))
       }
       const stores = deps.getStores()
       if (!stores) {
@@ -400,7 +415,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       }
       const agentCardWithSecurity = { ...a2aConfig.agentCard, security: a2aConfig.security }
       const impl = createA2AOperations(
-        { agentCard: agentCardWithSecurity, executor },
+        { agentCard: agentCardWithSecurity, executor, runtime: a2aConfig.execution },
         stores,
       )
       deps.setA2AImpl(impl)

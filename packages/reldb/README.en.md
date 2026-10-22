@@ -539,6 +539,10 @@ pnpm --filter @h-ai/reldb test
 
 > MySQL/PostgreSQL tests require Docker.
 
+## Production shared state
+
+Production requires PostgreSQL/MySQL. SQLite, including disk files, is for development/explicit tests and does not provide cross-host shared state. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
 ## License
 
 Apache-2.0

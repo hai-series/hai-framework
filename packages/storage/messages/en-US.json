@@ -37,5 +37,6 @@
   "storage_fileAlreadyExists": "File already exists: {key}",
   "storage_checksumFailed": "Failed to calculate checksum",
   "storage_checksumInvalid": "Invalid checksum or algorithm",
-  "storage_streamInvalidChunk": "File stream must contain byte chunks"
+  "storage_streamInvalidChunk": "File stream must contain byte chunks",
+  "storage_sharedBackendRequired": "Production mode requires a shared backend; local files and memory backends are for development or explicit end-to-end tests."
 }

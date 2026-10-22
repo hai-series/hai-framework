@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 42/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -682,7 +682,8 @@
 
 ### DIST-01 · P1 · 明确所有生产共享状态及 provider 部署能力
 
-- [ ] 待修正（按本次要求补强；范围：cross）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：新增21包状态/持久化/并发/幂等/恢复矩阵，生产拒绝实际本机后端和console假投递，CLI crypto→db、AI→db+vecdb依赖、生产共享配置与实际应用/模板启动回滚已同步。A2A使用共享journal/context CAS、DB时钟与最终领取/写入期限，跨节点订阅、真实owner取消、续接和未知效果中断；未确认取消禁止下一代，事件写失败停止后续发布，流显式交付失败Task。AI源码5文件48项、生产原语guard20项通过；fresh bundle独立双Node在SQLite/LanceDB、真实PG/Qdrant、MySQL/Qdrant三组通过（后两组production且无测试豁免）。CLI6文件287项及生产生成12项、实际API3项、Playground22项、h5/corporate各13项与相关类型/构建/lint通过；清洁环境已复验API/CLI编译和源码解析。check:skills37/318、check:env600、355本地文档链接通过。全部P1完成后继续P2，不把同宿主容器证明扩展为跨地域HA、真实支付/邮件或外部效果exactly-once；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[.agents/instructions/workspace.md:30](../.agents/instructions/workspace.md#L30)；[packages/ai/src/context/ai-context-functions.ts:154](../packages/ai/src/context/ai-context-functions.ts#L154)；[packages/kit/src/middleware/kit-ratelimit.ts:176](../packages/kit/src/middleware/kit-ratelimit.ts#L176)。
 - **证据与影响**：不能仅凭接入 Redis/DB 声称支持分布式。本报告已定位会话、传输密钥、限流、队列、任务领取、context 和集合元数据的不同状态问题；测试替身、不可变配置和连接池无需远程化。
 - **修正内容**：为所有模块记录状态所有者、持久化位置、并发控制、失效策略、幂等键和故障恢复。补验 AI A2A 默认 event bus 下的跨节点订阅/取消与任务续接，任务入 DB 不等于执行中状态可迁移。生产配置拒绝将 memory、本地文件/SQLite/LanceDB 单节点能力误当跨主机共享保障；允许明确的单机开发/测试模式。

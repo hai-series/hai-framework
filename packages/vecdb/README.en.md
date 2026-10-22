@@ -161,6 +161,10 @@ pnpm --filter @h-ai/vecdb test
 
 > pgvector / Qdrant tests require Docker.
 
+## Production shared state
+
+Production uses Qdrant, pgvector or remote Chroma. LanceDB and embedded Chroma are for development/explicit tests. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
 ## License
 
 Apache-2.0

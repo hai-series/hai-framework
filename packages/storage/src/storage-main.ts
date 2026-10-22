@@ -9,6 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { StorageConfig, StorageConfigInput } from './storage-config.js'
 import type { DirOperations, FileOperations, PresignOperations, StorageFunctions, StorageProvider } from './storage-types.js'
 
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
 import { createLocalProvider } from './providers/storage-provider-local.js'
@@ -193,6 +194,8 @@ export const storage: StorageFunctions = {
         )
       }
       const parsed = parseResult.data
+      if (core.module.requiresSharedState(process.env) && (parsed.type === 'local'))
+        return err(HaiStorageError.CONFIG_ERROR, storageM('storage_sharedBackendRequired'))
 
       const provider = createProvider(parsed)
       pendingProvider = provider

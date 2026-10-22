@@ -128,6 +128,38 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_AI_A2A_EXECUTION",
+    "module": "ai",
+    "path": "ai.a2a.execution",
+    "description": "共享执行预算；最终提交同时受数据库租约与绝对执行期限约束。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_A2A_EXECUTION_LEASEMS",
+    "module": "ai",
+    "path": "ai.a2a.execution.leaseMs",
+    "description": "活跃执行租约毫秒数，默认30秒，范围1秒至1天。",
+    "value": "30000",
+    "constraint": "整数；>= 1000；<= 86400000"
+  },
+  {
+    "name": "HAI_AI_A2A_EXECUTION_MAXEXECUTIONMS",
+    "module": "ai",
+    "path": "ai.a2a.execution.maxExecutionMs",
+    "description": "单次执行绝对上限毫秒数，默认5分钟；超时标中断，不自动重放。",
+    "value": "300000",
+    "constraint": "整数；>= 1000；<= 86400000"
+  },
+  {
+    "name": "HAI_AI_A2A_EXECUTION_POLLINTERVALMS",
+    "module": "ai",
+    "path": "ai.a2a.execution.pollIntervalMs",
+    "description": "共享事件/状态订阅轮询间隔毫秒数，默认250。",
+    "value": "250",
+    "constraint": "整数；>= 10；<= 5000"
+  },
+  {
     "name": "HAI_AI_A2A_SECURITY",
     "module": "ai",
     "path": "ai.a2a.security",
@@ -4500,7 +4532,7 @@
     "module": "storage",
     "path": "storage.endpoint",
     "description": "自定义端点（用于 MinIO、RustFS、阿里云 OSS 等）",
-    "value": "",
+    "value": "https://s3.amazonaws.com",
     "constraint": "字符串；格式 uri"
   },
   {
@@ -4756,7 +4788,7 @@
     "module": "vecdb",
     "path": "vecdb.url",
     "description": "已有 Chroma 服务 URL（提供时直连，不自动拉起进程）",
-    "value": "",
+    "value": "http://localhost:6333",
     "constraint": "字符串；格式 uri"
   },
   {

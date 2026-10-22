@@ -691,9 +691,15 @@ importers:
       '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../../packages/reldb
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@h-ai/vecdb':
+        specifier: workspace:*
+        version: link:../../packages/vecdb
       sm-crypto:
         specifier: 'catalog:'
         version: 0.5.7
@@ -880,6 +886,9 @@ importers:
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@h-ai/vecdb':
+        specifier: workspace:*
+        version: link:../../packages/vecdb
       sm-crypto:
         specifier: 'catalog:'
         version: 0.5.7
@@ -1053,6 +1062,9 @@ importers:
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@h-ai/vecdb':
+        specifier: workspace:*
+        version: link:../../packages/vecdb
       sm-crypto:
         specifier: 'catalog:'
         version: 0.5.7

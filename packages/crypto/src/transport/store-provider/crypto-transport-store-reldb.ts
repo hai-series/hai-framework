@@ -92,6 +92,7 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
   }
 
   return {
+    get stateScope() { return options.reldb.config?.type && options.reldb.config.type !== 'sqlite' ? 'shared' : 'local' },
     async register(publicKey) {
       await ensureTable()
 

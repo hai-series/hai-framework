@@ -25,7 +25,7 @@
 - `ai.image`：OpenAI GPT Image、Google Gemini Image / Nano Banana、Qwen-Image 2.0/3.0、Seedream 4.x/5.x、Pollinations の無料枠モデルによる画像生成。
 - `ai.a2a`：Agent-to-Agent のリクエスト処理とリモート呼び出し。
 - `@h-ai/ai/client`：API サービスと連携する軽量フロントエンドクライアント。
-- `AIStoreProvider`：共通のストレージ抽象。DB がなければプロセス内の一時 Store、reldb + vecdb が初期化済みなら永続 DB Provider を自動使用。
+- `AIStoreProvider`：ストレージ抽象。本番は `stateScope: 'shared'` が必須で、組み込み実装は PostgreSQL/MySQL とネットワーク vecdb の初期化を必要とします。開発・明示的テストでは一時 Store を利用できます。
 
 詳しいメソッド一覧・エラーコード・長い例は [REFERENCE.md（中国語）](./REFERENCE.md) を参照してください。
 
@@ -33,7 +33,7 @@
 
 ### クイックスタート
 
-#### LLM のみ（DB 依存なし）
+#### 開発用 LLM のみ（DB 依存なし）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -54,7 +54,7 @@ const result = await ai.llm.chat({
 await ai.close()
 ```
 
-reldb/vecdb が未初期化の場合、AI はセッションなどの状態をプロセス内の一時 Store に保存します。`ai.close()`、プロセス終了、インスタンス切り替え後は保持されません。Memory、Context、Persona、セッションを再起動後も保持する場合は以下の DB Provider を使います。
+開発・明示的テストで reldb/vecdb が未初期化の場合、一時 Store を使い、終了やインスタンス切り替えで失われます。`NODE_ENV` または `HAI_CORE_ENV` が production の場合、一時 Store・SQLite・ローカル vecdb は初期化に失敗します。共有 RelDB とネットワーク vecdb を先に初期化するか、同等の原子的契約を満たす共有 Provider を指定してください。
 
 #### 永続 DB Provider（reldb + vecdb）
 
@@ -110,7 +110,7 @@ await ai.close()
 - ライフサイクルは `await ai.init(config, options?)` / `await ai.close()`。終了時は独自 `AIStoreProvider.close()` を待ちます。
 - ドメイン操作は `HaiResult<T>` または `Promise<HaiResult<T>>` を返し、`result.success === false` と `result.error.code` で失敗を表します。`AsyncIterable`、クライアント通信、外部コールバックは開始・反復時に例外を投げる場合があります。
 - `ai.tools` と `ai.stream` は純粋関数で、初期化せず使用できます。
-- reldb/vecdb がなければプロセス内の一時 Store、両方が初期化済みなら DB Provider を自動使用します。独自 Provider はほかの保存先を隠蔽できます。
+- 開発・テストで reldb/vecdb がなければ一時 Store、両方が初期化済みなら DB Provider を使います。本番では実際の DB/vecdb 共有能力を検証し、独自 Provider も正確な `stateScope` を宣言する必要があります。
 
 ### API 一覧
 
@@ -180,7 +180,9 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 `ai.a2a.getAgentCard()` は `protocolVersion`、MIME、streaming 機能を含む完全な A2A 0.3 Agent Card を返します。Kit の既定検出パスは `/.well-known/agent-card.json`。`handleRequest()` は常に JSON-RPC/SSE の結果を返し、未初期化時は JSON-RPC エラーです。信頼された HTTP の `agentId` を executor の `context.user.userName` に対応付けます。JSON-RPC/SSE に対応し、push notifications・gRPC・REST 対応は宣言しません。業務リソースの認可はアプリの責任です。
 
-A2A のタスク・メッセージテーブルは `ai.init()` で初期化します。取得・キャンセル・継続を含め、タスクは信頼された `agentId` で分離します。匿名は共通 scope なので、分離が必要な環境は認証を有効にしてください。`listMessages` はサーバー管理 API で `callerId`・`contextId`・`since` を使えますが、未認可クライアントへ公開しません。旧タスクの主体は信頼できず、更新時に所有者の推定や自動削除はしません。アプリ側の審査後に `object_id` を `user:<agentId>`（匿名は `anonymous`）へ移行します。主体・context を持たない旧メッセージは対応フィルターに一致しません。
+A2A の journal・context 所有者・メッセージテーブルは `ai.init()` で初期化します。取得・キャンセル・継続は信頼された `agentId` で分離します。匿名は共通主体のため、本番は信頼された伝送層で認証してください。`listMessages` は `callerId`・`contextId`・`since` を持つ管理 API であり、未認可クライアントへ公開しません。
+
+Task とイベントは同じ CAS で保存し、任意ノードで購読できます。同一 message ID/内容の再試行は同じ結果を返し、内容変更や古いラウンドは拒否します。別ノードからのキャンセルは実行 owner の executor.cancelTask を呼び、確認待ちの間は同じ Task の新規メッセージを拒否して古いコールバックの影響を防ぎます。input-required は再起動後も継続できます。租約切れ・実行期限・working のまま終了した実行器は failed/interrupted となり、`metadata.haiExecution.requiresEffectReconciliation=true` を付けます。古い owner の書き込みと未知の外部効果の自動再実行を禁止します。`a2a.execution` の既定値は `leaseMs: 30000`、`pollIntervalMs: 250`、`maxExecutionMs: 300000`。上限はメッセージ 1 MiB、journal 8 MiB、1 ラウンド 2048 イベント、Task 256 回执、reference tasks 32 件です。安定した業務冪等キーと外部効果の照合が必要です。[共有状態表（中国語）](../../docs/distributed-state.md)に保証と検証範囲を記載しています。
 
 #### MCP Server
 

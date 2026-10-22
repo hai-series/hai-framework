@@ -25,7 +25,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 - `ai.image`：文生图，覆盖 OpenAI GPT Image、Google Gemini Image / Nano Banana、Qwen-Image 2.0/3.0、Seedream 4.x/5.x 与 Pollinations 免费额度模型。
 - `ai.a2a`：Agent-to-Agent 请求处理与远端调用。
 - `@h-ai/ai/client`：前端轻量客户端（配合 API 服务）。
-- `AIStoreProvider`：统一存储抽象；无数据库时默认使用进程内临时 Store，已初始化 reldb + vecdb 时自动使用持久化 DB Provider。
+- `AIStoreProvider`：统一存储抽象；生产要求 `stateScope: 'shared'`，内置实现须先初始化 PostgreSQL/MySQL 与网络 vecdb。开发/显式测试无数据库时使用临时 Store。
 
 更完整的方法清单、错误码与长示例见 [REFERENCE.md](./REFERENCE.md)。
 
@@ -33,7 +33,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 
 ### 快速开始
 
-#### LLM-only（零数据库依赖）
+#### 开发 LLM-only（零数据库依赖）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -54,7 +54,7 @@ const result = await ai.llm.chat({
 await ai.close()
 ```
 
-未初始化 reldb/vecdb 时，AI 使用进程内临时 Store 保存会话等运行时状态；`ai.close()`、进程退出或多实例切换后数据不会保留。需要 Memory、Context、Persona 或会话跨重启持久化时，使用下面的 DB Provider。
+开发/显式测试未初始化 reldb/vecdb 时，AI 使用进程内临时 Store；关闭、退出或切换实例后不保留。`NODE_ENV` 或 `HAI_CORE_ENV` 为 production 时，临时 Store、SQLite 或本地向量后端会使初始化失败。生产必须先初始化共享 RelDB 与网络 vecdb，或传入满足同等原子契约的共享 Provider。
 
 #### 持久化 DB Provider（reldb + vecdb）
 
@@ -110,7 +110,7 @@ await ai.close()
 - 生命周期为 `await ai.init(config, options?)` / `await ai.close()`；关闭会等待自定义 `AIStoreProvider.close()`。
 - 领域方法返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`；业务失败通过 `result.success === false` 和 `result.error.code` 表达。流式 `AsyncIterable`、客户端传输和第三方回调在建立或迭代期间可能抛异常。
 - `ai.tools` 与 `ai.stream` 是纯函数子系统，无需初始化即可使用。
-- 未初始化 reldb/vecdb 时默认使用进程内临时 Store；两者均已初始化时自动使用 DB Provider。自定义 Provider 可隐藏其他存储后端。
+- 开发/测试缺少 reldb/vecdb 时使用临时 Store；两者均已初始化时自动使用 DB Provider。生产校验真实数据库与向量后端共享能力，自定义 Provider 必须如实声明 `stateScope`。
 
 ### API 概览
 
@@ -180,7 +180,9 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 `ai.a2a.getAgentCard()` 返回完整 A2A 0.3 Agent Card，含 `protocolVersion`、MIME 和 streaming 能力；Kit 默认发现路径为 `/.well-known/agent-card.json`。`handleRequest()` 始终返回 JSON-RPC/SSE 处理结果，未初始化返回 JSON-RPC 错误。可信 HTTP 认证上下文的 `agentId` 映射为 executor 的 `context.user.userName`。当前支持 JSON-RPC/SSE，不声明 push notifications、gRPC 或 REST 支持；业务资源授权仍由应用负责。
 
-A2A 的任务表和消息表在 `ai.init()` 阶段初始化。任务按可信 `agentId` 隔离读取（含获取、取消和继续消息）；匿名请求共享匿名作用域，需隔离的部署必须开启认证。`listMessages` 是服务端管理接口，支持 `callerId`、`contextId`、`since` 过滤，不能直接向未授权客户端暴露。旧版任务记录没有可靠主体信息，升级后不会自动推断归属或删除数据，需由应用审核后迁移 `object_id` 为 `user:<agentId>`（匿名为 `anonymous`）。旧消息缺少主体/上下文字段时不会匹配相应过滤条件。
+A2A 的 journal、context 归属与消息表在 `ai.init()` 阶段初始化。任务按可信 `agentId` 隔离（含获取、取消和续接）；匿名请求共享匿名主体，生产应在可信传输层认证。`listMessages` 是服务端管理接口，支持 `callerId`、`contextId`、`since`，不能向未授权客户端暴露。
+
+Task 与事件一次 CAS 持久化，任意节点可订阅；相同 message ID/内容重试仅返回同一轮结果，改变内容或重复旧轮消息失败。跨节点取消由真实执行 owner 调用 executor.cancelTask，取消未确认期间同一 Task 不接受新消息，避免迟到取消作用于新执行；input-required 可在节点重启后续接。DB 租约过期、绝对期限到达或执行器只返回 working 时标记 failed/interrupted，并设置 `metadata.haiExecution.requiresEffectReconciliation=true`；旧节点恢复不能写入，不自动重放未知外部效果。`a2a.execution` 默认 `leaseMs: 30000`、`pollIntervalMs: 250`、`maxExecutionMs: 300000`。单消息 1 MiB、journal 8 MiB、单轮 2048 事件、Task 256 回执、32 个 reference tasks，超限明确失败。外部副作用须使用稳定业务幂等键并核对未知结果；详细部署/验证边界见[共享状态能力表](../../docs/distributed-state.md)。
 
 #### MCP Server
 

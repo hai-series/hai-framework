@@ -378,7 +378,7 @@ interface PaginatedResult<T> {
 
 通过 `reldb.json` 构建跨数据库统一的 JSON 路径操作 SQL 表达式，返回 `{ sql, params }` 可直接嵌入 `reldb.sql.*`。
 
-路径格式遵循 SQL/JSON Path 标准，以 ` 开头（如 `$.key`、`$.key.subkey`、`$[0]`）。
+路径格式遵循 SQL/JSON Path 标准，以 `$` 开头（如 `$.key`、`$.key.subkey`、`$[0]`）。
 
 | 操作      | SQLite             | PostgreSQL               | MySQL                  |
 | --------- | ------------------ | ------------------------ | ---------------------- |
@@ -475,3 +475,7 @@ const result = await reldb.tx.wrap(async (tx) => {
 - `hai-core`：配置管理、HaiResult 模型
 - `hai-iam`：IAM 模块内部使用 reldb 进行用户/角色/权限存储
 - `hai-cache`：缓存穿透保护中配合 reldb 使用
+
+## 生产共享状态
+
+生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。

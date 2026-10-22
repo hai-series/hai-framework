@@ -224,6 +224,10 @@ S3 integration tests require Docker or a compatible runtime. The same initializa
 
 Containers use temporary test credentials. Buckets are created through the S3 API after service readiness; containers and anonymous volumes are removed when the final lease is released.
 
+## Production shared state
+
+Production requires shared S3 or a compatible service; local is for development/explicit tests. Applications own object authorization and conditional read-modify-write commits. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
 ## License
 
 Apache-2.0

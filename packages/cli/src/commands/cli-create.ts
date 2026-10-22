@@ -111,6 +111,7 @@ const FEATURES: Record<string, FeatureDefinition> = {
     name: 'AI 集成',
     description: 'LLM 适配器、MCP 协议、技能系统、流式响应',
     packages: ['@h-ai/ai'],
+    dependencies: ['db', 'vecdb'],
   },
   'storage': {
     id: 'storage',
@@ -123,6 +124,7 @@ const FEATURES: Record<string, FeatureDefinition> = {
     name: '加密模块',
     description: '国密 SM2/SM3/SM4、Argon2 密码哈希',
     packages: ['@h-ai/crypto'],
+    dependencies: ['db'],
   },
   'audit': {
     id: 'audit',
@@ -309,7 +311,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     {
       // 生成配置文件（config/*.yml）
-      const { generateConfigFile, generateEnvExample } = await import('./cli-config-templates.js')
+      const { generateConfigFile, generateEnvExample, generateProductionEnvironment } = await import('./cli-config-templates.js')
       const configs = resolvedOptions.moduleConfigs
       const isApiWorkspace = resolvedOptions.appType === 'api'
       const isFullstack = resolvedOptions.appType === 'fullstack'
@@ -346,7 +348,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         if (/^_.*\.yml$/.test(file))
           configContents[file.slice(1, -4)] = await fse.readFile(path.join(configDir, file), 'utf8')
       }
-      const envFeatures: FeatureId[] = resolvedOptions.features
+      const envFeatures: FeatureId[] = isFullstack ? [...new Set<FeatureId>([...resolvedOptions.features, 'reach'])] : resolvedOptions.features
       const envContents = generateEnvExample(envFeatures, configs, isFullstack, configContents)
       let envExample = isApiWorkspace
         ? envContents
@@ -373,7 +375,10 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       const sharedVariables = envExample.split('\n').filter(line => /^[A-Z][A-Z0-9_]*=/.test(line))
       await writeFile(path.join(envDirectory, '.env'), `# 公共基础配置（可提交）；完整字段说明见 .env.example。\n${sharedVariables.join('\n')}\n`)
       for (const [mode, environment] of [['dev', 'development'], ['test', 'test'], ['prod', 'production']] as const) {
-        await writeFile(path.join(envDirectory, `.env.${mode}`), `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_DEBUG=false\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : mode === 'dev' ? 'debug' : 'info'}\n`)
+        const values = mode === 'prod'
+          ? generateProductionEnvironment(envFeatures, configs)
+          : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_DEBUG=false\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : 'debug'}\n`
+        await writeFile(path.join(envDirectory, `.env.${mode}`), values)
       }
       const privateEntries: string[] = []
       if (isFullstack) {
@@ -551,7 +556,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   const appTypeDefaults = APP_TYPES[selectedAppType].defaultFeatures
 
   if (selectedAppType === 'fullstack') {
-    selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
+    selectedFeatures = resolveFeatureDependencies([...appTypeDefaults, ...(options.features ?? [])])
+  }
+  else if (options.features) {
+    selectedFeatures = resolveFeatureDependencies(options.features)
   }
   else if (selectedTemplate === 'custom' && !options.features && useDefaults) {
     selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
@@ -575,9 +583,6 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
 
     selectedFeatures = features || []
     selectedFeatures = resolveFeatureDependencies(selectedFeatures)
-  }
-  else if (selectedTemplate === 'custom' && options.features) {
-    selectedFeatures = resolveFeatureDependencies(options.features)
   }
   else {
     const templateFeatures = PROJECT_TEMPLATES[selectedTemplate as keyof typeof PROJECT_TEMPLATES]?.features || []
@@ -1108,6 +1113,8 @@ function generateEnvironmentReadme(): string {
 
 运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程环境 > \`.env.local\` > 环境文件 > \`.env\`。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [环境配置](.agents/skills/hai-app-create/development.md#环境配置)。
 
+生产 .env.prod 按已启用模块选择共享 PostgreSQL（明确选择 MySQL 时保留）、Redis、S3、Qdrant，默认使用 Compose 内部服务名 db/cache/storage/vecdb。密码、S3 凭据、模型 Key 与受保护 Qdrant 的 Key 只由私有环境注入；容器外运行覆盖内部连接地址。生产 Reach 必须注入真实 HAI_REACH_PROVIDERS JSON，公共空数组会拒绝启动。AI 自动补全 db+vecdb 依赖，并在二者就绪后初始化，失败逆序清理。
+
 | 用途 | 命令 |
 | --- | --- |
 | 开发 / 测试模式 / 生产模式预览 | \`pnpm dev\` / \`dev:test\` / \`dev:prod\` |
@@ -1320,7 +1327,7 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 所有业务 JSON 请求和响应默认通过 \`@h-ai/crypto\` transport 双向加密（含登录、刷新、头像上传）；前端统一使用共享 typed API client。Web 访问令牌仅存内存、刷新令牌由 HttpOnly Cookie 保存；受信原生端使用平台安全存储或内存。头像为随机路径只读图片资源，支持 PNG/JPEG/WebP，最大 512 KiB。健康检查和只读头像图片可直接访问。
 
-应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。默认 SQLite、本地存储与内存缓存适合单实例，管理写入仅支持单写实例；多实例读取可使用共享数据库、Redis cache 和 S3 存储，但管理写请求须统一路由到同一写实例。传输必须在所有节点注入相同受管版本化密钥环与共享 registry，无需会话粘性；重启读取原 ring，轮换先分发新旧版本再切 activeKeyId。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
+应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。开发默认 SQLite、本地存储与内存缓存；生产启动拒绝这些本地 Provider，必须将所有节点连接到同一共享数据库、Redis 与 S3。传输必须在所有节点注入相同受管版本化密钥环与共享 registry，无需会话粘性；重启读取原 ring，轮换先分发新旧版本再切 activeKeyId。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
 
 ### 配置扩展
 

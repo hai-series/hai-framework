@@ -72,6 +72,8 @@ function register(tool: Tool): HaiResult<void> {
 
 ## 配置校验
 
+生产共享状态要求以 `core.module.requiresSharedState(process.env)` 为准：`NODE_ENV` 或 `HAI_CORE_ENV` 为 production 时拒绝本机业务状态后端，显式 E2E 测试除外。初始化依赖、Provider 能力与故障恢复见[生产共享状态表](../../docs/distributed-state.md)。公开初始化结果失败时不能继续启动依赖模块；自定义 Store 的 `stateScope` 必须反映真实持久化/原子能力，不能仅按工厂名称声明共享。
+
 环境文件采用六类：`.env.example` 完整列出字段用途、默认值、枚举和范围；`.env` 为公共基础；`.env.dev`、`.env.test`、`.env.prod` 为公共环境覆盖，这五类均提交 Git。`.env.local` 为本机私有配置，不提交 Git。优先级为进程环境 > `.env.local` > 环境文件 > `.env`；Vite 在 Node 配置阶段调用 `core.config.loadEnvFiles({ mode, envDir })` 并检查 success 后注入进程，Node 脚本按相同顺序传入 `--env-file`。`core.init` 不自行读取 dotenv。
 
 - 应用从 YAML 加载配置时使用 `core.config.validate(name, schema)` 后检查结果；模块 init 自身仍须用模块 schema 校验直接传入的配置

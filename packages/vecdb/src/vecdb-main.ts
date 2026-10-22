@@ -15,6 +15,7 @@ import type {
   VectorOperations,
 } from './vecdb-types.js'
 
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
 import { createChromaProvider } from './providers/vecdb-provider-chroma.js'
@@ -140,6 +141,8 @@ export const vecdb: VecdbFunctions = {
         return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_configError', { params: { error: parseResult.error.message } }), parseResult.error)
       }
       const parsed = parseResult.data
+      if (core.module.requiresSharedState(process.env) && (parsed.type === 'lancedb' || (parsed.type === 'chroma' && !!parsed.path && !parsed.url)))
+        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_sharedBackendRequired'))
 
       try {
         const provider = createProvider(parsed)

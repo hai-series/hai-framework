@@ -576,6 +576,11 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
 
   return {
     name: 'db',
+    get stateScope(): 'local' | 'shared' {
+      const vector = vecdbDep.config
+      const sharedVector = vector?.type === 'qdrant' || vector?.type === 'pgvector' || (vector?.type === 'chroma' && (!vector.path || Boolean(vector.url)))
+      return dbType !== 'sqlite' && sharedVector ? 'shared' : 'local'
+    },
 
     createRelStore<T>(name: string, options?: AIRelStoreOptions): AIRelStore<T> {
       const store = new ReldbAIRelStore<T>(sql, name, jsonOps, dbType, options)

@@ -24,5 +24,6 @@
   "vecdb_serializationFailed": "序列化/反序列化失败: {error}",
   "vecdb_invalidDimension": "无效的向量维度: {dimension}，必须为正整数",
   "vecdb_configPathRequired": "数据库存储路径不能为空",
-  "vecdb_configDatabaseRequired": "数据库名称不能为空"
+  "vecdb_configDatabaseRequired": "数据库名称不能为空",
+  "vecdb_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。"
 }

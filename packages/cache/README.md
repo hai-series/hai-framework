@@ -190,6 +190,10 @@ pnpm --filter @h-ai/cache test
 
 > Redis 相关测试需要 Docker 环境。
 
+## 生产共享状态
+
+生产仅使用 Redis（含 Cluster）；memory 只用于开发/明确测试。Redis 故障返回失败，不回退本机缓存。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
+
 ## 许可证
 
 Apache-2.0

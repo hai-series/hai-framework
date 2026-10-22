@@ -17,6 +17,7 @@ import type {
   TxManager,
 } from './reldb-types.js'
 
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
 import { createBaseCrudManager } from './providers/reldb-provider-base.js'
@@ -211,6 +212,8 @@ export const reldb: ReldbFunctions = {
         return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', { params: { error: parseResult.error.message } }), parseResult.error)
       }
       const parsed = parseResult.data
+      if (core.module.requiresSharedState(process.env) && (parsed.type === 'sqlite'))
+        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sharedBackendRequired'))
 
       try {
         const provider = createProvider(parsed)

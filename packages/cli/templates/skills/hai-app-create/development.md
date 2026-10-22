@@ -36,6 +36,8 @@
 
 YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时的本地默认值。应用仍通过 `core.config.validate(name, ModuleConfigSchema)` 和模块初始化校验类型、枚举、范围和必填项；插值本身不能代替校验。只开启实际使用的模块，未启用模块的整份 YAML 保留注释。
 
+生产禁止使用进程内或节点本地状态。CLI 的 `.env.prod` 按已启用模块选择 PostgreSQL（保留明确选择的 MySQL）、Redis、S3、Qdrant，默认 Compose DNS 为 `db/cache/storage/vecdb`，容器外运行用私有环境覆盖连接地址。必须私有注入密码、S3/模型凭据及受保护 Qdrant 的 API Key。AI 硬依赖 reldb+vecdb，按数据库→向量库→AI 初始化，失败逆序释放并检查关闭结果，清理失败保留重试义务。生产 Reach 必须私有注入真实 `HAI_REACH_PROVIDERS` JSON；公共空数组有意拒绝启动，不能沿用 console。`hai add ai` 补包与配置，但现有业务入口仍须接入相同生命周期。
+
 #### 命名和类型
 
 - `HAI_<配置名>_<字段路径>`：`_db.yml` 的 `type` 对应 `HAI_DB_TYPE`；`_ai.yml` 的 `llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`。camelCase 不拆词，数组使用从零开始的索引，如 `HAI_AI_AUDIO_MODELS_0_BASEURL`。

@@ -4,7 +4,7 @@
 
 ## 初始化与依赖
 
-未初始化 reldb/vecdb 时，`ai.init()` 自动使用进程内临时 Store；两者均已初始化时使用持久化 DB Provider。需要跨进程持久化时必须使用 DB 或自定义 Provider。
+开发/显式测试未初始化 reldb/vecdb 时使用临时 Store；两者就绪时使用 DB Provider。`NODE_ENV` 或 `HAI_CORE_ENV=production` 要求 stateScope 为 shared，内置实现必须为 PostgreSQL/MySQL + 网络 vecdb；本地后端初始化失败，自定义 Provider 必须兑现存储时钟、CAS 与最终截止条件。
 
 | 能力 | 是否需要 `ai.init()` | 依赖 |
 | --- | --- | --- |
@@ -234,7 +234,7 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 
 A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端调用不依赖服务端配置。getAgentCard 返回完整 A2A 0.3 Card（MIME、streaming、安全方案）；Kit 默认发现路径为 `/.well-known/agent-card.json`。handleRequest 在未初始化时也返回 JSON-RPC 错误；可信 context.agentId 映射 SDK user.userName。Kit 配置 authenticate 后空身份返回 401；不声明 push notifications、gRPC、REST 支持。
 
-A2A 的任务表和消息表在 `ai.init()` 阶段初始化。任务按可信 `agentId` 隔离读取（含获取、取消和继续消息）；匿名请求共享匿名作用域，需隔离的部署必须开启认证。`listMessages` 是服务端管理接口，支持 `callerId`、`contextId`、`since` 过滤，不能直接向未授权客户端暴露。旧版任务记录没有可靠主体信息，升级后不会自动推断归属或删除数据，需由应用审核后迁移 `object_id` 为 `user:<agentId>`（匿名为 `anonymous`）。旧消息缺少主体/上下文字段时不会匹配相应过滤条件。
+A2A journal、context 归属和消息表在 `ai.init()` 阶段初始化；可信 agentId 是身份来源，匿名共用主体，生产须认证。Task 与事件一次 CAS 发布，支持任意节点订阅、真实 owner 取消和 input-required 跨节点续接。同 message ID/内容重试复用同一轮，内容改变或旧轮重试拒绝；取消未确认时同一 Task 拒绝新消息，防止迟到回调影响新一代；失租、绝对期限或 working 状态退出标记 failed/interrupted 与 metadata.haiExecution.requiresEffectReconciliation=true，不自动重放未知副作用。a2a.execution 默认 leaseMs=30000、pollIntervalMs=250、maxExecutionMs=300000；单消息1MiB、journal8MiB、每轮2048事件、每Task256回执、32个reference tasks。listMessages 是服务端管理接口，callerId/contextId/since 不能替代调用授权。外部工具须使用稳定业务幂等键并核对未知结果，SDK异常不向用户暴露驱动凭据。
 
 `callRemoteAgent` 只接受 HTTP(S) 且拒绝 URL 内嵌凭据。该校验不是完整 SSRF 防护：remote URL 若来自外部输入，应用必须先按 origin 白名单过滤，并通过出口代理限制 DNS 重绑定、重定向到私网与云元数据地址。
 

@@ -179,6 +179,10 @@ pnpm --filter @h-ai/cache test
 
 > Redis 関連のテストには Docker が必要です。
 
+## 本番の共有状態
+
+本番は Redis（Cluster を含む）が必須です。memory は開発・明示的テスト用であり、Redis 障害時もローカルへフォールバックしません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
+
 ## ライセンス
 
 Apache-2.0

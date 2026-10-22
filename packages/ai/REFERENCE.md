@@ -4,7 +4,7 @@
 
 ## 初始化与依赖
 
-未初始化 reldb/vecdb 时，`ai.init()` 自动使用进程内临时 Store；两者均已初始化时使用持久化 DB Provider。Memory、Context、Persona、Knowledge 等需要跨进程持久化的生产场景必须使用 DB 或自定义 Provider。
+开发/显式测试未初始化 reldb/vecdb 时，`ai.init()` 使用临时 Store；两者就绪时使用 DB Provider。生产标记 `NODE_ENV` 或 `HAI_CORE_ENV=production` 要求 `stateScope: 'shared'`，内置实现须为 PostgreSQL/MySQL + 网络 vecdb；本地后端会初始化失败。自定义 Provider 必须兑现存储时钟、版本 CAS 与最终截止条件。
 
 - `ai.tools`：无需 `ai.init()`；无外部依赖。
 - `ai.stream`：无需 `ai.init()`；无外部依赖。
@@ -111,18 +111,18 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 ## Knowledge
 
-| 方法 | 说明 |
-| --- | --- |
-| `setup(options?)` | 初始化 collection / 表 / 索引 |
-| `ingest(input)` | 文档入库 |
-| `ingestFile(input)` | 从文件导入（Node.js） |
-| `ingestBatch(inputs, onProgress?)` | 批量导入 |
-| `retrieve(query, options?)` | 实体增强检索 |
-| `ask(query, options?)` | 知识库问答 |
-| `findByEntity(entityName, options?)` | 实体关联文档 |
-| `listEntities(options?)` / `listDocuments(options?)` | 列表 |
-| `removeDocument(documentId, options?)` | 删除文档和关联 |
-| `repair({ collection?, offset?, limit? })` | 有界恢复过期暂存与失败清理，删除集合后也可调用 |
+| 方法                                                 | 说明                                           |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| `setup(options?)`                                    | 初始化 collection / 表 / 索引                  |
+| `ingest(input)`                                      | 文档入库                                       |
+| `ingestFile(input)`                                  | 从文件导入（Node.js）                          |
+| `ingestBatch(inputs, onProgress?)`                   | 批量导入                                       |
+| `retrieve(query, options?)`                          | 实体增强检索                                   |
+| `ask(query, options?)`                               | 知识库问答                                     |
+| `findByEntity(entityName, options?)`                 | 实体关联文档                                   |
+| `listEntities(options?)` / `listDocuments(options?)` | 列表                                           |
+| `removeDocument(documentId, options?)`               | 删除文档和关联                                 |
+| `repair({ collection?, offset?, limit? })`           | 有界恢复过期暂存与失败清理，删除集合后也可调用 |
 
 入库链路：clean/chunk → embedding/完整实体提取 → 持久暂存清单 → vecdb upsert → 单文档 CAS 发布完整正文、实体和元数据。每次产生唯一 revision/chunk ID，相同文档并发重建只允许一个 writer；失败保留旧版，短文档重建不显示旧尾块。向量检索只保留当前发布版，切换期间重试，持续冲突或候选扩展超限返回错误。
 
@@ -209,7 +209,7 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 - `listMessages(filter)`：管理接口，按 callerId/contextId/since/status（消息角色）查询；调用方负责授权。
 - `callRemoteAgent(remoteUrl, message, options?)`：调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor。
 
-任务与消息存储在 `ai.init()` 中初始化。任务读取使用可信 `context.agentId` 的主体作用域；匿名请求共享匿名作用域，需要隔离时必须开启认证。历史任务不自动推断主体，升级迁移要求见 README 的 A2A 协议边界。内部 RelStore 遇到 SQL 错误会抛给上层转换为 HaiResult/协议错误，不将故障解释为查询无数据。
+任务 journal、context 归属与消息存储在 `ai.init()` 中初始化。可信 `context.agentId` 是主体来源，匿名共用一个主体，生产须在传输层认证。Task/事件一次 CAS 持久化；跨节点订阅与真实 owner 取消、input-required 续接无需粘性路由。同 message ID/内容重试复用同一轮结果，旧消息或内容变化拒绝；取消确认前同一 Task 不接受新消息，以隔离迟到取消回调。失租/期限/未完成退出标记 failed/interrupted 与 `metadata.haiExecution.requiresEffectReconciliation=true`，不自动重放未知副作用。内部 RelStore 故障转换固定协议错误，不当作无数据。`a2a.execution` 默认 leaseMs=30000、pollIntervalMs=250、maxExecutionMs=300000；完整限制见[共享状态能力表](../../docs/distributed-state.md)。
 
 ## 错误码速查
 

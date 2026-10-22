@@ -269,3 +269,7 @@ if (result.success) {
 - `hai-core`：配置与 HaiResult 模型
 - `hai-kit`：SvelteKit API 端点集成（`kit.handler` + `kit.guard`）
 - `hai-ui`：Storage 场景组件（FileUpload/ImageUpload/AvatarUpload）
+
+## 生产共享状态
+
+生产使用共享 S3 或兼容服务；local 只用于开发/明确测试。对象业务授权和读改写的条件提交由应用负责。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。

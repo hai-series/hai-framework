@@ -215,6 +215,10 @@ pnpm --filter @h-ai/reach test
 
 `tests/reach-repository-send-log-databases.test.ts` starts isolated PostgreSQL 16.15 / MySQL 8.4.11 containers through Testcontainers and removes them afterward. A reachable Docker API is required. For Podman, point `DOCKER_HOST` at its compatible socket; rootless environments can set `TESTCONTAINERS_RYUK_DISABLED=true` as required by Testcontainers.
 
+## Production shared state
+
+Production rejects console providers and requires SMTP, SMS or an actual API service. A log write is not a delivery receipt. Reconcile unknown outcomes from non-idempotent providers rather than claiming exactly-once delivery. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
 ## License
 
 Apache-2.0

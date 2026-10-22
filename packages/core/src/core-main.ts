@@ -12,7 +12,7 @@ import { i18n } from './i18n/core-i18n-utils.js'
 import { zodValidation } from './i18n/core-zod-mapper.js'
 import { array as arrayUtils } from './utils/core-util-array.js'
 import { async as asyncUtils } from './utils/core-util-async.js'
-import { createNotInitializedKit } from './utils/core-util-module.js'
+import { createNotInitializedKit, requiresSharedState } from './utils/core-util-module.js'
 import { object as objectUtils } from './utils/core-util-object.js'
 import { sanitize as sanitizeUtils } from './utils/core-util-sanitize.js'
 
@@ -246,6 +246,7 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
      */
     module: {
       createNotInitializedKit,
+      requiresSharedState,
     },
   }
 }

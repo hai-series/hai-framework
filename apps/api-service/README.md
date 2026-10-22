@@ -33,6 +33,8 @@ pnpm --filter api-service build
 pnpm --filter api-service preview
 ```
 
+`.env.prod` 使用共享 PostgreSQL、Redis、S3、Qdrant，默认服务地址对应 Compose 的 `db/cache/storage/vecdb`。容器外运行需私有覆盖地址，并注入数据库/缓存密码、S3/模型凭据、受保护向量库的 API Key 和真实 `HAI_REACH_PROVIDERS` JSON。公开空 Provider 数组会拒绝生产启动。数据库、向量库先于 AI 初始化；初始化或后续 transport/app 构造失败均等待逆序清理，关闭失败保留具体错误并允许重试，不能视为资源已释放。
+
 ### API 契约
 
 本服务与桌面端共用的应用级 contract 已独立为 `@h-ai/api-service-contract`，禁止从 `apps/api-service/src` 跨应用导入。

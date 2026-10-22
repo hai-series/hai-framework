@@ -293,3 +293,7 @@ if (verifyResult.success && verifyResult.data) {
 - `hai-serv` / `hai-api-client`：跨域 HTTP API 的透明传输加密
 
 管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。
+
+## 生产共享状态
+
+生产传输 registry 必须声明 stateScope=shared 并实际使用 Redis 或 PostgreSQL/MySQL。memory、包装 memory 的 Redis 工厂、包装 SQLite 的 RelDB 工厂会被拒绝；各节点加载相同受管版本化密钥环。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。

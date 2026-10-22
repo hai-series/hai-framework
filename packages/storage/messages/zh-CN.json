@@ -37,5 +37,6 @@
   "storage_fileAlreadyExists": "文件已存在：{key}",
   "storage_checksumFailed": "计算校验和失败",
   "storage_checksumInvalid": "校验和或算法不合法",
-  "storage_streamInvalidChunk": "文件流必须包含字节块"
+  "storage_streamInvalidChunk": "文件流必须包含字节块",
+  "storage_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。"
 }

@@ -4,6 +4,8 @@
 
 > Currently in the `0.1.0-alpha` stage: public contracts are still evolving. Pin versions and validate security and capacity for your own use cases before production adoption.
 
+For production deployments with multiple instances, review the [21-package shared-state and recovery matrix (Chinese)](docs/distributed-state.md). Use PostgreSQL/MySQL, Redis, and shared object/vector services; initialization rejects local state backends. The matrix documents CAS/leases, idempotency, unknown external effects and validation boundaries.
+
 <p align="center">
   <strong>AI Runtime · Enterprise full-stack modules · Agent Skills · End-to-end type safety</strong>
 </p>

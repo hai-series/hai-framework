@@ -432,7 +432,7 @@ function buildAppHaiCatalogPackages(options: {
   return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)
 }
 
-function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], deploy = false): Record<string, string> {
+function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], deploy = false, features: Record<string, boolean> = {}): Record<string, string> {
   const packageNames: string[] = [
     ...FULLSTACK_ROOT_CATALOG_PACKAGE_NAMES,
     '@h-ai/cli',
@@ -449,6 +449,10 @@ function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], dep
     packageNames.push(...FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES)
   if (deploy)
     packageNames.push('@h-ai/deploy')
+  if (features.ai)
+    packageNames.push('@h-ai/ai')
+  if (features.vecdb)
+    packageNames.push('@h-ai/vecdb')
 
   return pickCatalogPackages(packageNames, FULLSTACK_CATALOG_PACKAGES)
 }
@@ -766,8 +770,13 @@ export function buildTemplateContext(options: {
     featureMap.crypto = true
   }
   // audit / scheduler / payment 依赖 reldb
-  if (featureMap.audit || featureMap.scheduler || featureMap.payment) {
+  if (featureMap.audit || featureMap.scheduler || featureMap.payment || featureMap.crypto) {
     featureMap.db = true
+  }
+  // AI 的共享会话、记忆和知识依赖持久关系库与向量库。
+  if (featureMap.ai) {
+    featureMap.db = true
+    featureMap.vecdb = true
   }
 
   const isApi = options.appType === 'api'
@@ -779,7 +788,7 @@ export function buildTemplateContext(options: {
   const selectedFrontends = options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS
   let haiCatalogPackages: TemplateContext['haiCatalogPackages']
   if (isFullstack) {
-    haiCatalogPackages = buildFullstackCatalogPackages(selectedFrontends, featureMap.deploy)
+    haiCatalogPackages = buildFullstackCatalogPackages(selectedFrontends, featureMap.deploy, featureMap)
   }
   else if (isApi) {
     haiCatalogPackages = buildApiWorkspaceCatalogPackages(featureMap)

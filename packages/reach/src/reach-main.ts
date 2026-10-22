@@ -11,6 +11,7 @@ import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from '.
 import type { ReachFunctions, ReachMessage, ReachProvider, ReachQueueEntry, ReachTemplateRegistry, SendResult } from './reach-types.js'
 import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
+import process from 'node:process'
 
 import { core, err, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
@@ -192,6 +193,9 @@ async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
     )
   }
   const parsed = parseResult.data
+  // Console只证明本机日志调用；生产环境不能把它当作真实触达成功。
+  if (core.module.requiresSharedState(process.env) && parsed.providers.some(provider => provider.type === 'console'))
+    return err(HaiReachError.CONFIG_ERROR, reachM('reach_productionProviderRequired'))
 
   try {
     // delay 队列是可靠发送前置；连接任何 Provider、发布模块状态前先确认表已就绪。

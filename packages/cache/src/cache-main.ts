@@ -8,6 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { CacheConfig, CacheConfigInput } from './cache-config.js'
 import type { CacheFunctions, CacheProvider, HashOperations, KvOperations, ListOperations, LockOperations, SetOperations, ZSetOperations } from './cache-types.js'
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
 import { CacheConfigSchema } from './cache-config.js'
@@ -182,6 +183,8 @@ export const cache: CacheFunctions = {
         )
       }
       const parsed = parseResult.data
+      if (core.module.requiresSharedState(process.env) && (parsed.type === 'memory'))
+        return err(HaiCacheError.CONFIG_ERROR, cacheM('cache_sharedBackendRequired'))
 
       try {
         const providerResult = createProvider(parsed)

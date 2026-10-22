@@ -38,5 +38,6 @@
   "reach_templateSaveFailed": "Template save failed: {error}",
   "reach_templateDeleteFailed": "Template delete failed: {error}",
   "reach_queueRetryInvalid": "maxRetryDelayMs must be at least retryDelayMs",
-  "reach_deadRequeueFailed": "Dead message changed or does not exist; reload its state before restoring"
+  "reach_deadRequeueFailed": "Dead message changed or does not exist; reload its state before restoring",
+  "reach_productionProviderRequired": "Production requires a delivery provider; console is available only in development or explicit test mode"
 }

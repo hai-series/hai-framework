@@ -12,5 +12,6 @@
   "cache_invalidHashSetInput": "Hash hset 参数无效：请传入字段和值，或传入字段对象",
   "cache_invalidScan": "扫描游标或参数无效",
   "cache_scanTopologyChanged": "扫描拓扑或匹配规则已改变，请从0重新开始",
-  "cache_crossSlot": "此操作要求所有键位于同一Redis Cluster slot，请使用共同hash tag"
+  "cache_crossSlot": "此操作要求所有键位于同一Redis Cluster slot，请使用共同hash tag",
+  "cache_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。"
 }

@@ -46,6 +46,12 @@ let cleanupPending = false
 let closePromise: Promise<void> | null = null
 let cryptoInitialized = false
 
+/**
+ * 合并并发启动；任一步失败先逆序清理，未释放的资源会在下次启动前重试。
+ * @throws Error | AggregateError - 启动失败，或启动与资源清理同时失败。
+ * @example
+ * await initApp()
+ */
 export async function initApp(): Promise<void> {
   if (closePromise)
     await closePromise
@@ -59,15 +65,22 @@ export async function initApp(): Promise<void> {
   }
 
   cleanupPending = true
-  initPromise = doInit()
-  try {
-    await initPromise
+  initPromise = doInit().then(() => {
     initialized = true
     cleanupPending = false
-  }
-  finally {
+  }).catch(async (error: unknown) => {
+    // 私有清理不等待 initPromise，避免启动失败时等待自身。
+    try {
+      await cleanupModules()
+    }
+    catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Application startup and cleanup failed')
+    }
+    throw error
+  }).finally(() => {
     initPromise = null
-  }
+  })
+  return await initPromise
 }
 
 async function doInit(): Promise<void> {
@@ -213,6 +226,11 @@ async function doCloseApp(): Promise<void> {
   // 反向顺序：ai → storage → iam → vecdb → cache → reldb
   if (initPromise)
     await initPromise.catch(() => undefined)
+  await cleanupModules()
+}
+
+/** 不等待启动屏障，供启动失败与显式关闭共用的逆序清理。 */
+async function cleanupModules(): Promise<void> {
   const failures: unknown[] = []
   const closers: Array<readonly [string, () => unknown]> = [
     ['ai', () => ai.close()],

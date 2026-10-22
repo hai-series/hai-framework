@@ -4,3 +4,6 @@
 
 type: ${HAI_VECDB_TYPE:lancedb}
 path: ${HAI_VECDB_PATH:./data/vecdb}
+
+url: ${HAI_VECDB_URL:http://localhost:6333}
+apiKey: ${HAI_VECDB_APIKEY:}

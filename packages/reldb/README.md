@@ -539,6 +539,10 @@ pnpm --filter @h-ai/reldb test
 
 > MySQL/PostgreSQL 测试需要 Docker。
 
+## 生产共享状态
+
+生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
+
 ## 许可证
 
 Apache-2.0

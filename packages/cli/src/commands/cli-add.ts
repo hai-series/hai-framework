@@ -7,12 +7,13 @@
 
 import type { FeatureId, GlobalOptions } from '../cli-types.js'
 import path from 'node:path'
+import { parseEnv } from 'node:util'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
 import { detectPackageManager, fileExists, getCliVersion, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
-import { generateConfigFile } from './cli-config-templates.js'
+import { generateConfigFile, generateProductionEnvironment } from './cli-config-templates.js'
 import { detectProject } from './cli-create.js'
 
 /**
@@ -33,9 +34,9 @@ const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKe
   'db': { packages: ['@h-ai/reldb'], configKey: 'db', description: '数据库' },
   'reldb': { packages: ['@h-ai/reldb'], configKey: 'db', description: '数据库' },
   'cache': { packages: ['@h-ai/cache'], configKey: 'cache', description: '缓存' },
-  'ai': { packages: ['@h-ai/ai'], configKey: 'ai', description: 'AI 集成' },
+  'ai': { packages: ['@h-ai/ai'], deps: ['db', 'vecdb'], configKey: 'ai', description: 'AI 集成' },
   'storage': { packages: ['@h-ai/storage'], configKey: 'storage', description: '文件存储' },
-  'crypto': { packages: ['@h-ai/crypto'], description: '加密模块' },
+  'crypto': { packages: ['@h-ai/crypto'], deps: ['db'], description: '加密模块' },
   'kit': { packages: ['@h-ai/kit'], description: 'SvelteKit 集成工具' },
   'ui': { packages: ['@h-ai/ui'], description: 'UI 组件库' },
   'deploy': { packages: ['@h-ai/deploy'], configKey: 'deploy', description: '自动化部署' },
@@ -208,6 +209,15 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     }
 
     // 安装依赖
+    const productionPath = path.join(cwd, '.env.prod')
+    const previousProduction = await fileExists(productionPath) ? await fse.readFile(productionPath, 'utf8') : ''
+    const configured = new Set([...previousProduction.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map(match => match[1]))
+    const previousValues = parseEnv(previousProduction)
+    const production = generateProductionEnvironment([moduleName, ...(moduleDef.deps ?? [])] as FeatureId[], previousValues.HAI_DB_TYPE === 'mysql' ? { db: { type: 'mysql', database: previousValues.HAI_DB_DATABASE } } : undefined)
+      .split('\n')
+      .filter(line => !/^[A-Z][A-Z0-9_]*=/.test(line) || !configured.has(line.split('=')[0]))
+    await writeFile(productionPath, `${previousProduction.trimEnd()}\n\n${production.join('\n')}`)
+
     const doInstall = options.install !== false
     if (doInstall) {
       spinner.start('安装依赖...')

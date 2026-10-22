@@ -217,6 +217,8 @@ export interface TransportCryptoServiceLike {
  * @example `const registry: TransportKeyStore = createRedisTransportKeyStore({ cache })`
  */
 export interface TransportKeyStore {
+  /** 公钥与nonce状态的真实共享能力；生产只接受shared。 */
+  readonly stateScope: 'local' | 'shared'
   /** 注册新客户端，返回服务端生成的 `clientId`。 */
   register: (publicKey: string) => Promise<string>
   /** 查询已注册客户端公钥。 */

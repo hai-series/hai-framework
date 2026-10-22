@@ -179,6 +179,10 @@ pnpm --filter @h-ai/cache test
 
 > Redis tests require Docker.
 
+## Production shared state
+
+Production requires Redis (including Cluster); memory is for development/explicit tests. Redis errors fail rather than falling back locally. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
 ## License
 
 Apache-2.0

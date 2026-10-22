@@ -13,7 +13,7 @@ description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像
 | 适用场景 | AI 应用服务端集成或浏览器代理接入 |
 | 输入 | AIConfigInput、消息/音频/图片、scope、AbortSignal |
 | 输出 | 领域操作为 HaiResult；流为 AsyncIterable，迭代可抛错 |
-| 限制 | tools/stream 无需 init；其他领域先初始化。持久化需先初始化 reldb + vecdb 或传 storeProvider；临时 Store 关闭后丢失。工具调用仍需业务授权。 |
+| 限制 | tools/stream 无需 init；其他领域先初始化。生产须先初始化共享 PostgreSQL/MySQL + 网络 vecdb 或传 stateScope=shared 的 Provider；临时 Store 仅开发/测试，关闭后丢失。工具调用仍需业务授权。 |
 
 ## 使用路径
 

@@ -4,6 +4,8 @@
 
 > 当前处于 `0.1.0-alpha` 阶段：公共契约仍在演进。生产采用前请锁定版本，并针对自身场景完成安全与容量验证。
 
+生产多实例部署请先核对[21 包共享状态与恢复能力表](docs/distributed-state.md)：数据库使用 PostgreSQL/MySQL，缓存使用 Redis，对象与向量使用共享服务；模块启动会拒绝本机后端。文档分别说明 CAS/租约、幂等、未知外部效果及已验证边界。
+
 <p align="center">
   <strong>AI Runtime · 企业级全栈模块 · Agent Skills · 端到端类型安全</strong>
 </p>

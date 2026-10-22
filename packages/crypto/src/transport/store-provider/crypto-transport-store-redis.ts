@@ -58,6 +58,7 @@ export function createRedisTransportKeyStore(options: CreateRedisTransportKeySto
   }
 
   return {
+    get stateScope() { return options.cache.config?.type === 'redis' ? 'shared' : 'local' },
     async register(publicKey) {
       const clientId = createClientId()
       unwrapResult(

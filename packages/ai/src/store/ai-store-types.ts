@@ -457,6 +457,8 @@ export interface AIVectorBackend {
  * ```
  */
 export interface AIStoreProvider {
+  /** 关系状态与向量后端是否跨主机共享；自定义Provider必须如实声明，生产拒绝local。 */
+  readonly stateScope: 'local' | 'shared'
   /** Provider 名称（如 'db'、'api'） */
   readonly name: string
 

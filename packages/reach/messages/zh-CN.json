@@ -38,5 +38,6 @@
   "reach_templateSaveFailed": "模板保存失败: {error}",
   "reach_templateDeleteFailed": "模板删除失败: {error}",
   "reach_queueRetryInvalid": "maxRetryDelayMs 不能小于 retryDelayMs",
-  "reach_deadRequeueFailed": "死信已变化或不存在，请重新查询后恢复"
+  "reach_deadRequeueFailed": "死信已变化或不存在，请重新查询后恢复",
+  "reach_productionProviderRequired": "生产环境必须配置真实触达服务；console 仅可用于开发或显式测试模式"
 }

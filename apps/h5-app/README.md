@@ -72,12 +72,20 @@ pnpm --filter h5-app preview
 - `config/_cache.yml`：缓存类型及连接参数（memory / Redis）
 - `config/_iam.yml`：认证策略、密码策略、JWT
 - `config/_storage.yml`：存储类型及参数（local / S3）
+- `config/_vecdb.yml`：向量存储（开发 LanceDB，生产共享 Qdrant；URL/API Key 仅服务端）
 - `config/_ai.yml`：AI 模型配置（多模态识别）
 
 每个 YAML 叶子项都可由 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，
 且环境变量优先于 YAML 值；camelCase key 不拆词。
 
 #### 环境变量
+
+配置 `HAI_AI_LLM_APIKEY`（或模型条目的 API Key）才启用 AI；未配置时跳过 AI 与向量连接。启用后顺序为关系库 → 向量库 → AI，向量配置/连接或 AI 初始化失败会中止启动并逆序释放本次创建的资源，保留调用方已有实例；清理失败在下次启动前继续重试。生产 AI 要求共享 PostgreSQL/MySQL 与 Qdrant/pgvector/远端 Chroma，不能使用 SQLite/本地 LanceDB 或临时内存 Store。默认 `.env.prod` 使用 PostgreSQL、Redis 和 Qdrant；启动前配置服务端连接及私有 Key。
+
+- `HAI_VECDB_TYPE`：开发默认 `lancedb`，生产默认 `qdrant`。
+- `HAI_VECDB_PATH`：开发 LanceDB 目录，默认 `./data/vecdb`。
+- `HAI_VECDB_URL`：共享向量服务地址（Qdrant 示例 `http://qdrant:6333`）。
+- `HAI_VECDB_APIKEY`：向量服务私有凭据，不能使用 PUBLIC_/VITE_ 前缀。
 
 | 变量名               | 说明                          | 默认值                      |
 | -------------------- | ----------------------------- | --------------------------- |

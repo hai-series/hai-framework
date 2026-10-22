@@ -309,3 +309,7 @@ if (!result.success) {
 - `hai-datapipe`：文本清洗与分块
 - `hai-reldb`：关系型数据库（知识库需要同时使用 reldb 存储结构化数据）
 - `hai-core`：配置管理、HaiResult 模型
+
+## 生产共享状态
+
+生产使用 Qdrant、pgvector 或远端 Chroma；LanceDB 和嵌入式 Chroma 只用于开发/明确测试。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。

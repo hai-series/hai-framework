@@ -8,8 +8,8 @@
 
 - `ai.tools`、`ai.stream` 是纯函数能力，无需 `ai.init()`。
 - `ai.llm`、`ai.embedding`、`ai.memory`、`ai.retrieval`、`ai.rag`、`ai.knowledge`、`ai.context`、`ai.image`、`ai.audio`、`ai.a2a` 需要先 `await ai.init(...)`。
-- 未初始化 reldb/vecdb 时，`ai.init()` 使用进程内临时 Store，适合 LLM-only 与本地原型；数据在 `ai.close()` 或进程退出后丢失。
-- reldb 与 vecdb 均已初始化时自动使用持久化 DB Provider；生产 Memory/Context/Persona/Knowledge 应使用该路径或自定义 `AIStoreProvider`。
+- 开发/显式测试未初始化 reldb/vecdb 时，`ai.init()` 使用临时 Store；关闭/进程退出后丢失。
+- `NODE_ENV` 或 `HAI_CORE_ENV=production` 要求共享 Store，内置实现先初始化 PostgreSQL/MySQL 与网络 vecdb；自定义 `AIStoreProvider` 必须如实声明 stateScope=shared，不能把本机后端作为生产共享状态。
 - 浏览器端不要直接调用 Node-only 能力；通过 `@h-ai/api-client` 或应用自定义 API/SSE endpoint 代理。
 - 公共 API 返回 `HaiResult<T>` 时按 `if (!result.success) return result` 处理；不要用 `try/catch` 包裹正常业务错误。
 
@@ -244,7 +244,7 @@ const answer = await ai.knowledge.ask('核心架构是什么？')
 
 共享单活动生成租约为存储端时钟30秒，每10秒续租，最终 CAS 同时检查版本、owner 和截止时间。过期生成仅 interrupted，不自动重放 LLM/工具/记忆；manual pending 持久保存，可跨节点/重启按 turnId 提交。相同终态与真实文本重复提交幂等，内容冲突失败。queue 可取消轮询，不保证FIFO。reset 更换共享纪元，删除保留永久墓碑且 scope 不复用。外部 LLM/工具/本地后台记忆不与上下文跨系统原子提交；崩溃后的未知副作用必须由应用核对。
 
-自定义 `AIRelStore` 必须提供版本化读取、原子 CAS 和存储端 `currentTime()`；普通 save/saveMany 也推进版本。CAS 缺失版本只允许创建，notAfter 在最终持久化时严格检查，存储故障抛错不能当空数据；业务 HaiResult 边界负责转失败。默认 DB schema 含 version 列，不自动迁移旧表；多节点优先 PostgreSQL/MySQL，SQLite 文件仅在实际一致共享文件系统中可共享。
+自定义 `AIRelStore` 必须提供版本化读取、原子 CAS 和存储端 `currentTime()`；普通 save/saveMany 也推进版本。CAS 缺失版本只允许创建，notAfter 在最终持久化时严格检查，存储故障抛错不能当空数据；业务 HaiResult 边界负责转失败。默认 DB schema 含 version 列，不自动迁移旧表；SQLite 仅用于开发/测试，生产使用 PostgreSQL/MySQL。
 
 
 ```ts

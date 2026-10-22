@@ -110,4 +110,22 @@ export interface CreateNotInitializedKitFn {
   <E extends HaiError>(codeOrDef: E['code'], messageFn: () => string): NotInitializedKit<E>
 }
 
-export interface ModuleFn { createNotInitializedKit: CreateNotInitializedKitFn }
+/**
+ * 生产进程默认要求跨主机共享状态；显式E2E测试可使用测试替身。
+ * @param environment - 服务端实际进程环境，不接受请求参数
+ * @param environment.NODE_ENV - 实际运行环境
+ * @param environment.HAI_CORE_ENV - 框架环境文件声明的运行环境
+ * @param environment.HAI_E2E - 显式真实端到端测试标记
+ * @param environment.HAI_E2E_MOCK - 显式模拟端到端测试标记
+ * @returns 是否拒绝仅本机/进程有效的状态后端
+ * @example core.module.requiresSharedState({ NODE_ENV: 'production' }) // true
+ */
+export function requiresSharedState(environment: { NODE_ENV?: string, HAI_CORE_ENV?: string, HAI_E2E?: string, HAI_E2E_MOCK?: string }): boolean {
+  return (environment.NODE_ENV === 'production' || environment.HAI_CORE_ENV === 'production') && environment.HAI_E2E !== '1' && environment.HAI_E2E_MOCK !== '1'
+}
+
+export interface ModuleFn {
+  createNotInitializedKit: CreateNotInitializedKitFn
+  /** 生产共享状态要求；浏览器工具为纯函数，不隐式读取进程环境。 */
+  requiresSharedState: typeof requiresSharedState
+}

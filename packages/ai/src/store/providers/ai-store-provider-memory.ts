@@ -233,6 +233,7 @@ export function createMemoryStoreProvider(): AIStoreProvider {
 
   return {
     name: 'memory',
+    stateScope: 'local',
     createRelStore<T>(name: string): AIRelStore<T> {
       let records = relStores.get(name)
       if (!records) {

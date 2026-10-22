@@ -25,7 +25,7 @@ AI capabilities through a unified `ai` service: LLM chat, image generation, tool
 - `ai.image`: OpenAI GPT Image, Google Gemini Image / Nano Banana, Qwen-Image 2.0/3.0, Seedream 4.x/5.x, and Pollinations free-quota models.
 - `ai.a2a`: Agent-to-Agent request handling and remote calls.
 - `@h-ai/ai/client`: lightweight frontend client for API services.
-- `AIStoreProvider`: shared storage abstraction. Defaults to a temporary in-process store without databases; automatically uses persistent DB storage when reldb + vecdb are initialized.
+- `AIStoreProvider`: storage abstraction. Production requires `stateScope: 'shared'`; the built-in provider needs initialized PostgreSQL/MySQL and a network vecdb. Development/explicit tests may use a temporary store.
 
 For the full method list, error codes, and longer examples, see [REFERENCE.md (Chinese)](./REFERENCE.md).
 
@@ -33,7 +33,7 @@ For the full method list, error codes, and longer examples, see [REFERENCE.md (C
 
 ### Quick start
 
-#### LLM-only (no database dependencies)
+#### Development LLM-only (no database dependencies)
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -54,7 +54,7 @@ const result = await ai.llm.chat({
 await ai.close()
 ```
 
-Without initialized reldb/vecdb, AI stores session/runtime state in a temporary in-process store. Data does not survive `ai.close()`, process exit, or instance switching. Use the DB provider below for persistent Memory, Context, Persona, or sessions across restarts.
+Development/explicit tests without initialized reldb/vecdb use a temporary process store, lost on close, exit, or instance switching. When either `NODE_ENV` or `HAI_CORE_ENV` is production, temporary stores, SQLite and local vector backends fail initialization. Initialize shared RelDB and network vecdb first, or supply a shared provider with equivalent atomic guarantees.
 
 #### Persistent DB provider (reldb + vecdb)
 
@@ -110,7 +110,7 @@ await ai.close()
 - Lifecycle: `await ai.init(config, options?)` / `await ai.close()`; closure waits for custom `AIStoreProvider.close()`.
 - Domain methods return `HaiResult<T>` or `Promise<HaiResult<T>>`, with failures expressed by `result.success === false` and `result.error.code`. Streaming `AsyncIterable`, client transports, and third-party callbacks can throw during establishment or iteration.
 - `ai.tools` and `ai.stream` are pure-function subsystems usable without initialization.
-- Without reldb/vecdb, storage is temporary and in-process; with both initialized, DB storage is automatic. Custom providers can encapsulate other backends.
+- Development/tests without reldb/vecdb use temporary storage; both initialized selects DB storage. Production validates the real database/vector backend capability. Custom providers must accurately declare `stateScope`.
 
 ### API overview
 
@@ -180,7 +180,9 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 `ai.a2a.getAgentCard()` returns a complete A2A 0.3 Agent Card with `protocolVersion`, MIME, and streaming capabilities. Kit discovery defaults to `/.well-known/agent-card.json`. `handleRequest()` always returns JSON-RPC/SSE results; uninitialized calls return JSON-RPC errors. Trusted HTTP `agentId` maps to executor `context.user.userName`. JSON-RPC/SSE are supported; push notifications, gRPC, and REST are not claimed. Applications remain responsible for business resource authorization.
 
-A2A task/message tables initialize during `ai.init()`. Tasks are read in trusted `agentId` scopes, including get/cancel/continuation. Anonymous requests share one scope, so deployments requiring isolation must enable authentication. `listMessages` is a server administration API with `callerId`, `contextId`, and `since` filters; never expose it to unauthorized clients. Legacy tasks lack reliable subjects; upgrades neither infer ownership nor delete data. After review, applications must migrate `object_id` to `user:<agentId>` (`anonymous` for anonymous records). Legacy messages lacking subject/context fields do not match corresponding filters.
+A2A journal, context ownership and message tables initialize during `ai.init()`. Tasks use trusted `agentId` scopes for get/cancel/continuation. Anonymous requests share one principal; authenticate at the trusted transport boundary in production. `listMessages` is a server administration API with `callerId`, `contextId`, and `since`; never expose it to unauthorized clients.
+
+Task and events publish in one CAS, so any node can subscribe. A retry with identical message ID/content reuses the current result; changed content or an older round fails. Cross-node cancellation invokes the real execution owner's executor.cancelTask. Pending cancellation blocks new messages on the same Task so a late callback cannot affect a later execution. Input-required tasks can continue after node restart. Expired leases, absolute deadlines, or an executor returning only working become failed/interrupted with `metadata.haiExecution.requiresEffectReconciliation=true`; late owners cannot write and unknown external effects are never replayed automatically. `a2a.execution` defaults to `leaseMs: 30000`, `pollIntervalMs: 250`, `maxExecutionMs: 300000`. Limits are 1 MiB/message, 8 MiB/journal, 2048 events/round, 256 receipts/Task and 32 reference tasks. Use stable business idempotency keys and reconcile unknown effects. See the [state/deployment matrix (Chinese)](../../docs/distributed-state.md) for guarantees and validation boundaries.
 
 #### MCP Server
 

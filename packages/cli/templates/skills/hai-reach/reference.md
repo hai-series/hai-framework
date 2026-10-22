@@ -357,3 +357,7 @@ if (!result.success) {
 - `hai-core` — 配置加载、日志、HaiResult 模式
 - `hai-reldb` — 数据库操作（存储发送记录等）
 - `hai-cache` — 缓存操作、分布式锁（DND flush 互斥）
+
+## 生产共享状态
+
+生产拒绝 console Provider，须配置真实 SMTP/短信/API 服务。console 的日志成功不是外部投递成功；非幂等服务的未知结果必须核对，不能自动重发证明 exactly-once。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。

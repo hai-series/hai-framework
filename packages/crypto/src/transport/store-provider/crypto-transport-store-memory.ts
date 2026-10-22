@@ -38,6 +38,7 @@ export function createInMemoryKeyStore(maxClients = DEFAULT_MAX_CLIENTS): Transp
   let counter = 0
 
   return {
+    get stateScope(): 'local' { return 'local' },
     async register(publicKey) {
       counter++
       const clientId = createClientId(counter)

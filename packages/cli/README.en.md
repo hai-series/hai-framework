@@ -60,6 +60,8 @@ See `.env.example` for settings. Commit shared `.env` and `.env.dev/.env.test/.e
 
 ### Existing projects and code generation
 
+Creating or adding AI also installs reldb and vecdb. Generated startup initializes database → vector store → AI and checks reverse cleanup failures. Production profiles select PostgreSQL (or the chosen MySQL), Redis, S3 and Qdrant for enabled modules, using Compose DNS names `db/cache/storage/vecdb`. Inject database/cache passwords, S3 credentials, model keys and protected Qdrant keys privately. Override internal addresses when running outside Compose. Production Reach intentionally rejects an empty provider array until a real `HAI_REACH_PROVIDERS` JSON secret is supplied. `hai add` preserves configured production values, adds missing fields, and requires integration into the existing application entry point.
+
 ```sh
 hai add storage
 hai init

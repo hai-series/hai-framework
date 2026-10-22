@@ -322,8 +322,8 @@ function generateStorageConfig(cfg?: StorageModuleConfig): string {
 region: us-east-1
 accessKeyId: ''
 secretAccessKey: ''
-# endpoint: https://s3.amazonaws.com
-# forcePathStyle: false
+endpoint: \${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
+forcePathStyle: false
 # prefix: ''
 # publicUrl: https://cdn.example.com`
   return `# 存储配置；HAI_STORAGE 可整体替换连接配置。
@@ -332,7 +332,7 @@ ${local}
 ${s3}
 
 # type 选择 Provider；未选分支字段由模块 Schema 忽略。
-# endpoint / publicUrl 为可选 URL，启用时取消对应字段注释并通过环境变量提供。
+# S3 兼容服务由环境注入 endpoint / forcePathStyle；默认端点用于 us-east-1。
 
 # operationLog:
 #   read: false
@@ -395,7 +395,7 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
   #   fast: fast
   # embedding / rerank / vision 须在 models 中声明对应厂商模型，不能只填写场景 ID。
 
-# 可选子模块：只取消需要的块的注释，模型、向量库与数据库依赖按使用场景初始化。
+# 可选子模块只取消需要的块；生产环境先初始化共享数据库与网络向量库，再初始化 AI。
 # mcp:
 #   server:
 #     name: my-app
@@ -476,6 +476,10 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
 #     apiKey:
 #       in: header # header | query
 #       name: x-api-key
+#   execution:
+#     leaseMs: 30000
+#     pollIntervalMs: 250
+#     maxExecutionMs: 300000
 # audio:
 #   inheritLlmApiKey: false
 #   transcribeModel: asr
@@ -546,6 +550,43 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
   return `${sections.join('\n\n')}\n`
 }
 
+/**
+ * 为启用模块生成共享生产后端配置；凭据只列出必需入口，由私有环境注入。
+ * @example `generateProductionEnvironment(['ai', 'db', 'vecdb'])`
+ */
+export function generateProductionEnvironment(features: FeatureId[], configs?: ModuleConfigs): string {
+  const enabled = new Set(features)
+  if (enabled.has('ai')) {
+    enabled.add('db')
+    enabled.add('vecdb')
+  }
+  const sections = [
+    '# 生产环境必须使用共享后端；以下服务名对应 Compose 内部 DNS。',
+    '# 凭据通过部署 Secret / 进程环境或被忽略的 .env.local 注入，禁止提交真实值。',
+    'HAI_CORE_ENV=production',
+    'HAI_CORE_DEBUG=false',
+    'HAI_CORE_LOGGING_LEVEL=info',
+  ]
+  if (enabled.has('db')) {
+    const mysql = configs?.db?.type === 'mysql'
+    const database = configs?.db?.type !== 'sqlite' && configs?.db?.database ? configs.db.database : 'hai'
+    sections.push('', '# 必须私有注入 HAI_DB_PASSWORD；外部数据库可覆盖下列连接字段。', `HAI_DB_TYPE=${mysql ? 'mysql' : 'postgresql'}`, 'HAI_DB_HOST=db', `HAI_DB_PORT=${mysql ? 3306 : 5432}`, renderEnvironment([{ name: 'HAI_DB_DATABASE', path: 'db.database', value: database, constraint: '生产数据库名' }]), `HAI_DB_USER=${mysql ? 'root' : 'postgres'}`)
+  }
+  if (enabled.has('cache'))
+    sections.push('', '# 必须私有注入 HAI_CACHE_PASSWORD。', 'HAI_CACHE_TYPE=redis', 'HAI_CACHE_HOST=cache', 'HAI_CACHE_PORT=6379')
+  if (enabled.has('storage')) {
+    sections.push('', '# 必须私有注入 HAI_STORAGE_ACCESSKEYID / HAI_STORAGE_SECRETACCESSKEY。', 'HAI_STORAGE_TYPE=s3', 'HAI_STORAGE_BUCKET=hai', 'HAI_STORAGE_REGION=us-east-1', 'HAI_STORAGE_ENDPOINT=http://storage:9000', 'HAI_STORAGE_FORCEPATHSTYLE=true')
+  }
+  if (enabled.has('vecdb'))
+    sections.push('', '# 受保护的 Qdrant 必须私有注入 HAI_VECDB_APIKEY。', 'HAI_VECDB_TYPE=qdrant', 'HAI_VECDB_URL=http://vecdb:6333')
+  if (enabled.has('ai'))
+    sections.push('', '# 必须私有注入 HAI_AI_LLM_APIKEY 及所选模型的其它凭据；AI 自动复用已初始化的共享 db/vecdb。')
+  if (enabled.has('reach')) {
+    sections.push('', '# 必须私有注入 HAI_REACH_PROVIDERS 的真实 SMTP/SMS/API JSON（包含凭据）。', '# 空数组有意让配置校验拒绝启动，生产不得沿用开发 console Provider。', 'HAI_REACH_PROVIDERS=\'[]\'')
+  }
+  return `${sections.join('\n')}\n`
+}
+
 function generateDeployConfig(): string {
   return `# 部署已有镜像；运行 pnpm run deploy --build 可先构建再发布。
 # SSH 参数由向导保存在本机 .env.local；离线打包不要求 SSH。
@@ -580,6 +621,8 @@ type: lancedb
 
 # LanceDB 数据目录
 path: ./data/vecdb
+url: \${HAI_VECDB_URL:http://localhost:6333}
+apiKey: \${HAI_VECDB_APIKEY:}
 
 # 距离度量: cosine | euclidean | dot
 # metric: cosine

@@ -35,6 +35,9 @@
     "start:prod": "pnpm start"
   },
   "dependencies": {
+{{#if features.ai}}
+    "@h-ai/ai": "{{haiPackageSpecifier}}",
+{{/if}}
     "@h-ai/audit": "{{haiPackageSpecifier}}",
     "@h-ai/cache": "{{haiPackageSpecifier}}",
     "@h-ai/core": "{{haiPackageSpecifier}}",
@@ -44,6 +47,9 @@
     "@h-ai/reldb": "{{haiPackageSpecifier}}",
     "@h-ai/serv": "{{haiPackageSpecifier}}",
     "@h-ai/storage": "{{haiPackageSpecifier}}",
+{{#if features.vecdb}}
+    "@h-ai/vecdb": "{{haiPackageSpecifier}}",
+{{/if}}
     "zod": "{{fullstack.packageSpecifiers.zod}}",
     "{{fullstack.contractPackageName}}": "workspace:*"
   }

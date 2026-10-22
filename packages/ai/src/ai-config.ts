@@ -646,6 +646,15 @@ export const A2ASkillConfigSchema = z.object({
  * ```
  */
 export const A2AConfigSchema = z.object({
+  /** 共享执行预算；最终提交同时受数据库租约与绝对执行期限约束。 */
+  execution: z.object({
+    /** 活跃执行租约毫秒数，默认30秒，范围1秒至1天。 */
+    leaseMs: z.number().int().min(1000).max(86_400_000).default(30000),
+    /** 共享事件/状态订阅轮询间隔毫秒数，默认250。 */
+    pollIntervalMs: z.number().int().min(10).max(5000).default(250),
+    /** 单次执行绝对上限毫秒数，默认5分钟；超时标中断，不自动重放。 */
+    maxExecutionMs: z.number().int().min(1000).max(86_400_000).default(300000),
+  }).prefault({}),
   /** Agent Card 配置 */
   agentCard: z.object({
     /** Agent 名称 */
