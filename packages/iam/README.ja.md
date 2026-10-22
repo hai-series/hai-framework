@@ -860,6 +860,8 @@ if (!result.success) {
 
 会話と refresh 消費状態を `hai:iam:sessions:{SHA256(userId)}` のバージョン付き文書にまとめ、独立した対応キーと索引を廃止します。Bearer Token は認証には使えない分区ヒントと256ビットの乱数を含み、クライアントは不透明な文字列として扱います。更新時は Session.version を再検証します。Memory は単一プロセスのテスト用で、本番は全ノードが Redis（Cluster 対応）を共有します。競合は最新状態から再試行し、上限で CONFLICT を返します。応答喪失で結果が不明なら認証を拒否し再ログインします。すべての会話は同じユーザー索引で管理されます。
 
+`iam.session.update(token, patch, expectedVersion)` は読み取った Session.version が必須です。旧版は CONFLICT、失効 Token は SESSION_NOT_FOUND を返し、新しい状態を上書きしません。自動延長の時刻だけの更新は内容版を変更せず、通常の並行リクエストを許容します。権限一括更新は最初の Token/版集合に限定し、後続ログインに古い値を適用しません。
+
 ## 開発とテスト
 
 ```bash

@@ -182,7 +182,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         const updateResult = await repo.updateByAccessToken(accessToken, {
           lastActiveAt: now,
           expiresAt: new Date(now.getTime() + maxAge * 1000),
-        })
+        }, session.version)
         if (!updateResult.success) {
           return updateResult as HaiResult<Session | null>
         }
@@ -209,8 +209,8 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       return ok(sessionResult.data)
     },
 
-    async update(accessToken: string, data: Partial<Session>): Promise<HaiResult<void>> {
-      return repo.updateByAccessToken(accessToken, data)
+    async update(accessToken: string, data: Partial<Session>, expectedVersion: string): Promise<HaiResult<void>> {
+      return repo.updateByAccessToken(accessToken, data, expectedVersion)
     },
 
     async delete(accessToken: string): Promise<HaiResult<void>> {

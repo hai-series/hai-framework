@@ -60,7 +60,7 @@ export interface SessionRepository {
   /** 查询待轮换会话，rotate 提交时必须再次核验。 */
   getByRefreshToken: (token: string) => Promise<HaiResult<Session | null>>
   /** 从最新状态合并更新，不重新创建已撤销 token。 */
-  updateByAccessToken: (token: string, patch: Partial<Session>) => Promise<HaiResult<void>>
+  updateByAccessToken: (token: string, patch: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>
   /** 原子撤销 access 与 refresh，重复操作成功。 */
   removeByAccessToken: (token: string) => Promise<HaiResult<void>>
   /** 原子撤销用户全部会话，返回记录数。 */
@@ -186,7 +186,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
       const session = restoreSession(record.session)
       return ok(session.expiresAt.getTime() <= Date.now() ? null : session)
     },
-    async updateByAccessToken(token, patch) {
+    async updateByAccessToken(token, patch, expectedVersion) {
       const scope = getTokenSessionScope(token)
       if (!scope)
         return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
@@ -194,7 +194,10 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
         const entry = state.sessions[token]
         if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now())
           return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
-        entry.session = { ...applySessionPatch(restoreSession(entry.session), patch), version: crypto.randomUUID() }
+        if (!expectedVersion || entry.session.version !== expectedVersion)
+          return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+        const timestampsOnly = Object.keys(patch).every(key => key === 'lastActiveAt' || key === 'expiresAt')
+        entry.session = { ...applySessionPatch(restoreSession(entry.session), patch), version: timestampsOnly ? entry.session.version : crypto.randomUUID() }
         return ok(undefined)
       })
     },
@@ -224,10 +227,21 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
         return ok(undefined)
       })
     },
-    patchUserSessions: (userId, patch) => mutate(getUserSessionScope(userId), (state) => {
-      for (const entry of Object.values(state.sessions))
-        entry.session = { ...applySessionPatch(restoreSession(entry.session), patch), version: crypto.randomUUID() }
-      return ok(undefined)
-    }),
+    patchUserSessions(userId, patch) {
+      // 重试绑定最初读取的会话代际；不能把迟到授权覆盖到后续登录或新内容版本。
+      let targets: Map<string, string> | undefined
+      return mutate(getUserSessionScope(userId), (state) => {
+        targets ??= new Map(Object.entries(state.sessions).map(([token, entry]) => [token, entry.session.version]))
+        for (const [token, version] of targets) {
+          const entry = state.sessions[token]
+          if (!entry)
+            continue
+          if (entry.session.version !== version)
+            return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+          entry.session = { ...applySessionPatch(restoreSession(entry.session), patch), version: crypto.randomUUID() }
+        }
+        return ok(undefined)
+      })
+    },
   }
 }

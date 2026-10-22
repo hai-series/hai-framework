@@ -79,7 +79,14 @@ export const PUT = kit.handler(async ({ request, locals }) => {
     sessionPatch.avatarUrl = avatar
 
   if (Object.keys(sessionPatch).length > 0) {
-    await iam.session.update(locals.accessToken, sessionPatch)
+    const snapshot = await iam.session.get(locals.accessToken)
+    if (!snapshot.success)
+      return kit.response.fromError(snapshot.error)
+    if (!snapshot.data)
+      return kit.response.unauthorized(m.common_error())
+    const synced = await iam.session.update(locals.accessToken, sessionPatch, snapshot.data.version)
+    if (!synced.success)
+      return kit.response.fromError(synced.error)
   }
 
   // ── 查询最新用户信息返回 ──

@@ -864,6 +864,8 @@ Role lists aggregate actual member counts for the current page with one `iam.aut
 
 Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(userId)}` document, replacing separate mappings/indexes. Bearer tokens contain an untrusted routing hint plus 256 random bits; clients must treat them as opaque strings. Rotation checks `Session.version` at commit. Memory is for single-process tests; production nodes share Redis, including Cluster. Conflicts retry from the latest state and return CONFLICT when exhausted; one refresh cannot publish two successors. An ambiguous lost response requires failing closed and signing in again, without assuming the old token remains valid. All records remain covered by the same user index.
 
+`iam.session.update(token, patch, expectedVersion)` requires the Session.version from the read. Stale versions return CONFLICT; revoked tokens return SESSION_NOT_FOUND. Timestamp-only sliding updates keep the content version, allowing normal parallel requests. Batch permission updates bind the initial token/version set and never apply delayed snapshots to later sign-ins; newer content versions require re-reading authorization before retry.
+
 ## Development and testing
 
 ```bash

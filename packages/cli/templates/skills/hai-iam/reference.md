@@ -145,7 +145,7 @@ interface TokenPair {
 | `create`            | `({ userId, username, roles, source? }) => Promise<HaiResult<Session>>` | 创建会话（返回含 TokenPair 的 session） |
 | `get`               | `(token) => Promise<HaiResult<Session \| null>>`                        | 获取会话（滑动续期自动延长）            |
 | `verifyToken`       | `(token) => Promise<HaiResult<Session>>`                                | 验证令牌                                |
-| `update`            | `(token, data) => Promise<HaiResult<void>>`                             | 更新会话字段（浅合并 data）             |
+| `update`            | `(token, data, expectedVersion) => Promise<HaiResult<void>>`                             | 更新会话字段（浅合并 data）             |
 | `delete`            | `(token) => Promise<HaiResult<void>>`                                   | 删除会话                                |
 | `deleteByUserId`    | `(userId) => Promise<HaiResult<number>>`                                | 删除用户所有会话（返回删除数量）        |
 | `refresh`           | `(refreshToken) => Promise<HaiResult<TokenPair>>`                       | 刷新 Token（rotation：旧 Token 失效）   |
@@ -489,3 +489,5 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 - `hai-ui`：IAM 场景组件（LoginForm/RegisterForm 等）
 
 会话与 refresh 消费记录统一保存在 `hai:iam:sessions:{SHA256(userId)}` 版本化文档，不再使用独立 token 映射/索引。Bearer token 携带不可作为凭据的分区提示和 256 位随机值；客户端必须视为不透明字符串。`Session.version` 用于轮换提交校验。Memory 仅用于单进程测试，生产所有节点共享 Redis（含 Cluster）。并发冲突从最新文档重试，耗尽返回 CONFLICT；旧 refresh 不会产生第二个后继。若响应丢失后结果不明，调用方按失败关闭并重新登录，不假定旧凭据仍有效；全部会话仍受同一用户状态索引管理。
+
+`iam.session.update(token, patch, expectedVersion)` 必须传入读取到的 Session.version。旧版本返回 CONFLICT，已撤销 token 返回 SESSION_NOT_FOUND；不会将旧内容重新写回或覆盖新会话。仅滑动时间戳更新不改变内容版本，允许正常并行请求。批量权限更新绑定首次读取的 token/版本集合，不将迟到数据应用到后续登录；遇到较新内容版本失败，调用方重新查询授权后再提交。

@@ -55,7 +55,7 @@ export interface AuthResult {
  * 会话数据
  */
 export interface Session {
-  /** 共享存储中的会话版本；轮换提交核验读取版本，拒绝使用迟到的授权快照。 */
+  /** 会话内容版本；资料/授权修改产生新版本，仅更新时间戳不改变版本。 */
   version: string
   /** API Key 派生会话绑定的 key ID；普通用户登录时省略。 */
   apiKeyId?: string
@@ -168,9 +168,16 @@ export interface SessionOperations {
    *
    * @param accessToken - 访问令牌
    * @param data - 要更新的字段（roles、username、source、data 等）
-   * @returns 成功返回 ok；会话不存在返回 SESSION_NOT_FOUND
+   * @param expectedVersion - 读取到的 Session.version；过期版本失败，不能覆盖较新的修改
+   * @returns 成功返回 ok；不存在返回 SESSION_NOT_FOUND，版本变化返回 CONFLICT
+   * @example
+   * ```ts
+   * const found = await iam.session.get(token)
+   * if (found.success && found.data)
+   *   await iam.session.update(token, { data: { theme: 'dark' } }, found.data.version)
+   * ```
    */
-  update: (accessToken: string, data: Partial<Session>) => Promise<HaiResult<void>>
+  update: (accessToken: string, data: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>
 
   /**
    * 删除会话

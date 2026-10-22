@@ -122,6 +122,7 @@ describe('iam.session', () => {
         const updateResult = await getIam().session.update(
           createResult.data.accessToken,
           { data: { theme: 'dark' } },
+          createResult.data.version,
         )
         expect(updateResult.success).toBe(true)
 
@@ -136,6 +137,7 @@ describe('iam.session', () => {
         const result = await getIam().session.update(
           'non-existent-token-for-update',
           { data: { foo: 'bar' } },
+          'missing-version',
         )
         expect(result.success).toBe(false)
         if (!result.success) {

@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 22/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 23/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -124,7 +124,8 @@
 
 ### IAM-02 · P1 · 防止退出后迟到更新复活会话
 
-- [ ] 待修正（源码探针已复现；范围：iam）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：会话内容更新强制携带读取版本，条件提交拒绝旧版本；仅滑动时间戳不改变内容版本，正常并发读取可重试。批量权限更新绑定首次token/版本集合，不能把旧操作应用到后续登录或覆盖较新内容。同步profile调用方并传播同步失败、fullstack测试/README/skill/LLMS，补同模板锁结果success收窄。定向10项与真实SQLite/PG+Redis会话/双进程3文件49项通过，IAM/admin typecheck、IAM build、ESLint/check:skills通过；早期REACH03接口中间态类型失败已在其稳定后复验通过。完整scaffold此前5过3失败，已修已知API import/锁收窄，待后续协议任务稳定后复验失败场景；未声称跨系统业务事务保证；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/iam/src/session/iam-session-repository-cache.ts:226](../packages/iam/src/session/iam-session-repository-cache.ts#L226)；[packages/iam/src/session/iam-session-repository-cache.ts:419](../packages/iam/src/session/iam-session-repository-cache.ts#L419)。
 - **证据与影响**：更新/批量补丁读取会话后无条件 SET。探针暂停读取结果，先退出删除，再恢复更新，已删除会话重新出现；并发更新也可能互相覆盖。
 - **修正内容**：引入会话版本/撤销代际并条件写入；会话更新、TTL 与用户索引一并协调。注销结果不能被旧操作反转。
