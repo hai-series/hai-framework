@@ -1,4 +1,5 @@
 <!--
+  @component Select
   =============================================================================
   @h-ai/ui - Select 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $derived, $bindable)
   支持 clearable（可清空）和 filterable（可筛选）属性
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Select } from '@h-ai/ui'
+  const props: ComponentProps<typeof Select> = { options: [{ value: 'active', label: '启用' }], value: 'active' }
+  const component = mount(Select, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts' generics="T = string">
   import type { DataAttributes, SelectProps } from '../../types.js'

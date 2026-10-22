@@ -1,4 +1,5 @@
 <!--
+  @component UserProfile
   =============================================================================
   @h-ai/ui - UserProfile 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 primitives/compounds 组件：Input, Button, Textarea, Avatar, Alert
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { UserProfile } from '@h-ai/ui'
+  const props: ComponentProps<typeof UserProfile> = { user: { id: 'u1', username: 'ada', email: 'ada@example.com' }, fields: ['username', 'email'], editable: true }
+  const component = mount(UserProfile, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

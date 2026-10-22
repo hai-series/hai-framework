@@ -1,4 +1,5 @@
 <!--
+  @component ToastContainer
   =============================================================================
   @h-ai/ui - ToastContainer 组件
   =============================================================================
@@ -12,6 +13,16 @@
       作为最后子节点渲染在其内容之上）；
     - 否则寄宿到 <body> 并以 Popover 进入 top layer，叠加在普通内容之上。
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ToastContainer } from '@h-ai/ui'
+  const props: ComponentProps<typeof ToastContainer> = { 'data-testid': 'toasts' }
+  const component = mount(ToastContainer, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../types.js'

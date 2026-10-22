@@ -2,6 +2,16 @@
   @component PasswordInput
   密码输入框组件，支持显示/隐藏切换和密码强度指示。
   内置多语言支持，自动跟随全局 locale。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { PasswordInput } from '@h-ai/ui'
+  const props: ComponentProps<typeof PasswordInput> = { value: '', autocomplete: 'new-password', showStrength: true, minLength: 12 }
+  const component = mount(PasswordInput, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, FormText, Size } from '../../../types.js'
@@ -19,6 +29,19 @@
   const PASSWORD_DIGIT_REGEX = /\d/
   const PASSWORD_SPECIAL_CHAR_REGEX = /[^a-z0-9]/i
 
+  /**
+   * PasswordInput 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { PasswordInput } from '@h-ai/ui'
+   * const props: ComponentProps<typeof PasswordInput> = { value: '', autocomplete: 'new-password', showStrength: true, minLength: 12 }
+   * const component = mount(PasswordInput, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 元素 ID */
     id?: string

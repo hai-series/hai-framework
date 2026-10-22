@@ -6,10 +6,14 @@
   @prop {function} onsubmit - 提交反馈的回调
 
   @example
-  <FeedbackModal
-    bind:open={showFeedback}
-    onsubmit={async (data) => { await submitFeedback(data) }}
-  />
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { FeedbackModal } from '@h-ai/ui'
+  const props: ComponentProps<typeof FeedbackModal> = { open: true, labels: { title: '提交反馈' } }
+  const component = mount(FeedbackModal, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import FormField from '../../compounds/FormField.svelte'
@@ -20,15 +24,38 @@
   import Select from '../../primitives/Select.svelte'
   import Textarea from '../../primitives/Textarea.svelte'
 
+  /**
+   * 反馈表单可选的问题类别。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: FeedbackType = 'bug'
+   * ```
+   */
   type FeedbackType = 'bug' | 'feature' | 'question' | 'other'
 
+  /**
+   * 反馈表单提交值；描述和联系方式由宿主验证并保存。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: FeedbackData = { type: 'bug', description: '保存后列表没有刷新', contact: 'ada@example.com' }
+   * ```
+   */
   interface FeedbackData {
     type: FeedbackType
     description: string
     contact?: string
   }
 
-  /** i18n 文案配置 */
+  /**
+   * i18n 文案配置
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: FeedbackLabels = { title: '提交反馈', contentLabel: '问题描述' }
+   * ```
+   */
   interface FeedbackLabels {
     title?: string
     description?: string
@@ -53,6 +80,19 @@
   import { uiM } from '../../../messages.js'
   import { getDataAttributes } from '../../../utils.js'
 
+  /**
+   * FeedbackModal 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { FeedbackModal } from '@h-ai/ui'
+   * const props: ComponentProps<typeof FeedbackModal> = { open: true, labels: { title: '提交反馈' } }
+   * const component = mount(FeedbackModal, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props extends FormLayoutOptions {
     open?: boolean
     labels?: FeedbackLabels

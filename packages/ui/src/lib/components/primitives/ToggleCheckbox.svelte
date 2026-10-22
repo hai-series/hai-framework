@@ -1,4 +1,5 @@
 <!--
+  @component ToggleCheckbox
   =============================================================================
   @h-ai/ui - ToggleCheckbox 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $bindable)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ToggleCheckbox } from '@h-ai/ui'
+  const props: ComponentProps<typeof ToggleCheckbox> = { name: 'expanded', checked: true }
+  const component = mount(ToggleCheckbox, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, ToggleCheckboxProps } from '../../types.js'

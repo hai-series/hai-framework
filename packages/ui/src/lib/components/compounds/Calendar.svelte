@@ -11,12 +11,13 @@
   @prop {function} onchange - 日期变更回调
 
   @example
-  ```svelte
-  <script>
-    import { CalendarDate } from '@internationalized/date'
-    let date = $state(new CalendarDate(2024, 1, 15))
-  </script>
-  <Calendar bind:value={date} />
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Calendar } from '@h-ai/ui'
+  const props: ComponentProps<typeof Calendar> = { weekStartsOn: 1 }
+  const component = mount(Calendar, { target: document.body, props })
+  await unmount(component)
   ```
 -->
 <script lang='ts'>
@@ -25,6 +26,19 @@
   import { Calendar as BitsCalendar } from 'bits-ui'
   import { getDataAttributes } from '../../utils.js'
 
+  /**
+   * Calendar 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { Calendar } from '@h-ai/ui'
+   * const props: ComponentProps<typeof Calendar> = { weekStartsOn: 1 }
+   * const component = mount(Calendar, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 选中日期（双向绑定） */
     value?: DateValue

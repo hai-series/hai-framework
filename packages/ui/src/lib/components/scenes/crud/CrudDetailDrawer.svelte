@@ -16,6 +16,14 @@
   import Badge from '../../primitives/Badge.svelte'
   import Button from '../../primitives/Button.svelte'
 
+  /**
+   * 详情/列表对字段定义的局部视图，不是独立的公开资源模型。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: FieldDef = { id: 'email', label: '邮箱', type: 'email', inDetail: true }
+   * ```
+   */
   type FieldDef = {
     id: string
     label: string | (() => string)

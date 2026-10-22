@@ -15,6 +15,12 @@
  * - 读取当前 pathname（作为列表 URL 的 basePath 兜底）
  * - 调用 `navigate(url)` 同步搜索 / 过滤 / 分页参数到地址栏
  * - 调用 `refresh()` 在写操作后重新拉取列表数据
+ *
+ * @example
+ * ```ts
+ * import type { NavAdapter } from '@h-ai/ui'
+ * const example: NavAdapter = { pathname: '/users', navigate: url => { globalThis.location?.assign(url) } }
+ * ```
  */
 export interface NavAdapter {
   /** 当前页面路径（不含 query / hash），用于推导 `basePath`。 */
@@ -34,6 +40,14 @@ export interface NavAdapter {
  * - `navigate(url)` 调 `globalThis.location.assign(url)`；如需客户端路由（hash router 等），
  *   宿主应自行实现一个 `NavAdapter` 传入。
  * - 不提供 `refresh`：浏览器默认导航本身会触发页面加载，调用方需在导航前/后重新拉取数据。
+ * @returns 基于浏览器 location 的导航适配器；SSR 下 pathname 为空字符串。
+ *
+ * @example
+ * ```ts
+ * import { createBrowserNavAdapter } from '@h-ai/ui'
+ * const nav = createBrowserNavAdapter()
+ * await nav.navigate('/users?page=2')
+ * ```
  */
 export function createBrowserNavAdapter(): NavAdapter {
   return {

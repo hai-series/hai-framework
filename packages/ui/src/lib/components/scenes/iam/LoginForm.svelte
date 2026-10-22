@@ -1,6 +1,16 @@
 <!--
   @component LoginForm
   用户登录表单组件，搭配 primitives/compounds 使用。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { LoginForm } from '@h-ai/ui'
+  const props: ComponentProps<typeof LoginForm> = { methods: ['password'], showRememberMe: true }
+  const component = mount(LoginForm, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { HaiError } from '@h-ai/core'

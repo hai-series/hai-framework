@@ -1,4 +1,5 @@
 <!--
+  @component HashDisplay
   =============================================================================
   @h-ai/ui - HashDisplay 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 primitives 组件：IconButton, Badge
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { HashDisplay } from '@h-ai/ui'
+  const props: ComponentProps<typeof HashDisplay> = { value: 'example-digest', algorithm: 'SM3', copyable: true }
+  const component = mount(HashDisplay, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

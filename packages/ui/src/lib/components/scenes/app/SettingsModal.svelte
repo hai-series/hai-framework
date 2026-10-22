@@ -8,6 +8,16 @@
   @prop {string} currentTheme - 当前主题
   @prop {function} onlanguagechange - 语言变更回调
   @prop {function} onthemechange - 主题变更回调
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { SettingsModal } from '@h-ai/ui'
+  const props: ComponentProps<typeof SettingsModal> = { open: true, currentLanguage: 'zh-CN', currentTheme: 'light' }
+  const component = mount(SettingsModal, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
@@ -16,6 +26,19 @@
   import BareButton from '../../primitives/BareButton.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
 
+  /**
+   * SettingsModal 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { SettingsModal } from '@h-ai/ui'
+   * const props: ComponentProps<typeof SettingsModal> = { open: true, currentLanguage: 'zh-CN', currentTheme: 'light' }
+   * const component = mount(SettingsModal, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     open?: boolean
     currentLanguage?: string

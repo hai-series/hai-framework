@@ -4,6 +4,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   使用 compounds 组件：Drawer, Modal, Badge
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { CrudDetailPanel } from '@h-ai/ui'
+  const props: ComponentProps<typeof CrudDetailPanel> = { open: true, title: '用户详情', item: { email: 'ada@example.com' }, fields: [{ id: 'email', label: '邮箱', type: 'email' }] }
+  const component = mount(CrudDetailPanel, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
@@ -16,6 +26,14 @@
   import Badge from '../../primitives/Badge.svelte'
   import Button from '../../primitives/Button.svelte'
 
+  /**
+   * 详情/列表对字段定义的局部视图，不是独立的公开资源模型。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: FieldDef = { id: 'email', label: '邮箱', type: 'email', inDetail: true }
+   * ```
+   */
   type FieldDef = {
     id: string
     label: string | (() => string)

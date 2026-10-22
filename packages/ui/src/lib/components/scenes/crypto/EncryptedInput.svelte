@@ -1,4 +1,5 @@
 <!--
+  @component EncryptedInput
   =============================================================================
   @h-ai/ui - EncryptedInput 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state, $derived, $bindable)
   内置多语言支持，自动跟随全局 locale
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { EncryptedInput } from '@h-ai/ui'
+  const props: ComponentProps<typeof EncryptedInput> = { value: '', algorithm: 'SM2', showEncrypted: false }
+  const component = mount(EncryptedInput, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, Size } from '../../../types.js'
@@ -15,6 +26,19 @@
   import { getDataAttributes } from '../../../utils.js'
   import { BareButton, IconButton, Input } from '../../primitives/index.js'
 
+  /**
+   * EncryptedInput 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { EncryptedInput } from '@h-ai/ui'
+   * const props: ComponentProps<typeof EncryptedInput> = { value: '', algorithm: 'SM2', showEncrypted: false }
+   * const component = mount(EncryptedInput, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 原始值 */
     value?: string

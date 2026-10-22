@@ -1,4 +1,5 @@
 <!--
+  @component MessageContainer
   =============================================================================
   @h-ai/ui - MessageContainer 组件
   =============================================================================
@@ -7,6 +8,16 @@
 
   叠加策略：消息层始终挂载到 `document.body`，使用 fixed overlay + 超高 z-index（高于 Modal 的 `--hai-z-modal`），保证不被任何弹层遮挡；空消息时隐藏容器避免拦截交互。
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { MessageContainer } from '@h-ai/ui'
+  const props: ComponentProps<typeof MessageContainer> = { 'data-testid': 'messages' }
+  const component = mount(MessageContainer, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../types.js'

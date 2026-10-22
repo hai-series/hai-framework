@@ -4,6 +4,16 @@
 
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 compounds/primitives 组件：Drawer, Modal, FormField, Input, Select, Textarea, Checkbox, Button
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { CrudEditPanel } from '@h-ai/ui'
+  const props: ComponentProps<typeof CrudEditPanel> = { open: true, mode: 'edit', title: '编辑用户', fields: [{ id: 'email', label: '邮箱', type: 'email' }], formData: { email: 'ada@example.com' } }
+  const component = mount(CrudEditPanel, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'

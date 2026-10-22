@@ -7,25 +7,13 @@
   @prop {function} onchange - 语言变更回调，传入选中的语言代码
 
   @example
-  ```svelte
-  <script>
-    import { LanguageSwitch, createLocaleStore, setGlobalLocale } from '@h-ai/ui'
-    import { setLocale, getLocale } from '$lib/paraglide/runtime.js'
-
-    const localeStore = createLocaleStore()
-  </script>
-
-  <LanguageSwitch
-    currentLanguage={localeStore.current}
-    languages={[
-      { value: 'zh-CN', label: '简体中文' },
-      { value: 'en-US', label: 'English' }
-    ]}
-    onchange={(lang) => {
-      localeStore.set(lang)  // 同步到 @h-ai/core 全局 locale
-      setLocale(lang)        // 同步到 Paraglide
-    }}
-  />
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { LanguageSwitch } from '@h-ai/ui'
+  const props: ComponentProps<typeof LanguageSwitch> = { currentLanguage: 'zh-CN', languages: [{ value: 'zh-CN', label: '中文' }, { value: 'en-US', label: 'English' }] }
+  const component = mount(LanguageSwitch, { target: document.body, props })
+  await unmount(component)
   ```
 -->
 <script lang='ts'>
@@ -34,12 +22,33 @@
   import { getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
 
+  /**
+   * 语言选择器候选项；value 使用应用实际支持的 locale 代码。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: Language = { value: 'zh-CN', label: '中文' }
+   * ```
+   */
   interface Language {
     value: string
     label: string
     flag?: string
   }
 
+  /**
+   * LanguageSwitch 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { LanguageSwitch } from '@h-ai/ui'
+   * const props: ComponentProps<typeof LanguageSwitch> = { currentLanguage: 'zh-CN', languages: [{ value: 'zh-CN', label: '中文' }, { value: 'en-US', label: 'English' }] }
+   * const component = mount(LanguageSwitch, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 当前语言代码（BCP 47 格式） */
     currentLanguage?: string

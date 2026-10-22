@@ -1,4 +1,5 @@
 <!--
+  @component Drawer
   =============================================================================
   @h-ai/ui - Drawer 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $derived, $effect, $bindable)
   使用 primitives 组件：IconButton
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Drawer } from '@h-ai/ui'
+  const props: ComponentProps<typeof Drawer> = { open: true, title: '详情', position: 'right', width: '28rem', children: createRawSnippet(() => ({ render: () => "<span>详情内容</span>" })) }
+  const component = mount(Drawer, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, DrawerProps } from '../../types.js'

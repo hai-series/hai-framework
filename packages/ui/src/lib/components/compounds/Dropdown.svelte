@@ -1,6 +1,16 @@
 <!--
   @component Dropdown
   下拉菜单组件，支持 click/hover 触发。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Dropdown } from '@h-ai/ui'
+  const props: ComponentProps<typeof Dropdown> = { items: [{ key: 'edit', label: '编辑' }], position: 'bottom' }
+  const component = mount(Dropdown, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, DropdownProps } from '../../types.js'

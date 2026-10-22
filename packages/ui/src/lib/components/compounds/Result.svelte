@@ -1,4 +1,5 @@
 <!--
+  @component Result
   =============================================================================
   @h-ai/ui - Result 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Result } from '@h-ai/ui'
+  const props: ComponentProps<typeof Result> = { status: 'success', title: '提交完成' }
+  const component = mount(Result, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, ResultProps } from '../../types.js'

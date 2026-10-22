@@ -1,6 +1,16 @@
 <!--
   @component Card
   卡片组件，默认使用 border 而非 shadow，更现代克制。
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Card } from '@h-ai/ui'
+  const props: ComponentProps<typeof Card> = { title: '个人资料', bordered: true, children: createRawSnippet(() => ({ render: () => "<span>资料内容</span>" })) }
+  const component = mount(Card, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { CardProps, DataAttributes } from '../../types.js'

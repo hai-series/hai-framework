@@ -19,6 +19,14 @@ const HAI_SPAN_ATTR_REGEX = /\b(color|bg)="([^"]+)"/gi
 const HAI_UNDERLINE_REGEX = /^\+\+((?:\\.|[\s\S])+?)\+\+/
 const HAI_HIGHLIGHT_REGEX = /^==((?:\\.|[\s\S])+?)==/
 
+/**
+ * 编辑器允许的受控颜色 span token。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: EditorSpanToken = { type: 'haiSpan', raw: '<span>文本</span>', color: '#2563eb', tokens: [{ type: 'text', raw: '文本', text: '文本' }] }
+ * ```
+ */
 type EditorSpanToken = Tokens.Generic & {
   type: 'haiSpan'
   raw: string
@@ -27,6 +35,14 @@ type EditorSpanToken = Tokens.Generic & {
   tokens: Token[]
 }
 
+/**
+ * 编辑器段落对齐 token，属性取值限制在白名单。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: EditorAlignToken = { type: 'haiAlign', raw: '<div>文本</div>', align: 'center', tokens: [{ type: 'text', raw: '文本', text: '文本' }] }
+ * ```
+ */
 type EditorAlignToken = Tokens.Generic & {
   type: 'haiAlign'
   raw: string
@@ -34,6 +50,14 @@ type EditorAlignToken = Tokens.Generic & {
   tokens: Token[]
 }
 
+/**
+ * 编辑器下划线或高亮的中间 token。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: EditorInlineFormatToken = { type: 'haiUnderline', raw: '<u>文本</u>', tokens: [{ type: 'text', raw: '文本', text: '文本' }] }
+ * ```
+ */
 type EditorInlineFormatToken = Tokens.Generic & {
   type: 'haiUnderline' | 'haiHighlight'
   raw: string
@@ -43,6 +67,13 @@ type EditorInlineFormatToken = Tokens.Generic & {
 /**
  * Markdown heading 提取目录时需要一个“纯文本标题”。
  * 这里显式递归常见 inline token，保证 `<hai-span>`、链接、强调等都能回落成纯文本。
+ * @param tokens - Marked token 列表。
+ * @returns 递归提取的纯文本，用于标题和目录生成。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const text = extractPlainTextFromTokens([{ type: 'text', raw: '简介', text: '简介' }])
+ * ```
  */
 export function extractPlainTextFromTokens(tokens: Token[] | undefined): string {
   if (!tokens || tokens.length === 0) {
@@ -119,6 +150,15 @@ function parseHaiSpanAttributes(
 /**
  * ChatWorkspace 编辑器会把“非标准 Markdown”能力写成自定义标签，
  * 这里把它们注册为 marked 扩展，保证普通 Markdown 和编辑器增强能力共享同一条渲染链路。
+ * @returns 受控格式的 Marked tokenizer/renderer 扩展。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const { Marked } = await import('marked')
+ * const extensions = createEditorMarkdownExtensions()
+ * const parser = new Marked({ extensions })
+ * const html = parser.parse('**重点**')
+ * ```
  */
 export function createEditorMarkdownExtensions(): TokenizerAndRendererExtension[] {
   return [

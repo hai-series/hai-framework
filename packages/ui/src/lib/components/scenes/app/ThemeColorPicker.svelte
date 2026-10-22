@@ -5,6 +5,16 @@
   @prop {string} value - 当前选中的颜色值（Hex）
   @prop {Array<{ value: string, label: string }>} presets - 预置主题色列表
   @prop {function} onchange - 颜色变更回调
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ThemeColorPicker } from '@h-ai/ui'
+  const props: ComponentProps<typeof ThemeColorPicker> = { value: '#2563eb', presets: [{ value: '#2563eb', label: '蓝色' }] }
+  const component = mount(ThemeColorPicker, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
@@ -15,11 +25,32 @@
   const HEX_COLOR_REGEX = /^#[0-9a-f]{6}$/
   const SHORT_HEX_COLOR_REGEX = /^#[0-9a-f]{3}$/
 
+  /**
+   * 主题色选择器的显示名称与 Hex 值。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: ThemeColorPreset = { value: '#2563eb', label: '蓝色' }
+   * ```
+   */
   interface ThemeColorPreset {
     value: string
     label: string
   }
 
+  /**
+   * ThemeColorPicker 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { ThemeColorPicker } from '@h-ai/ui'
+   * const props: ComponentProps<typeof ThemeColorPicker> = { value: '#2563eb', presets: [{ value: '#2563eb', label: '蓝色' }] }
+   * const component = mount(ThemeColorPicker, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     value?: string
     presets?: ThemeColorPreset[]

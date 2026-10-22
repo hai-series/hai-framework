@@ -1,4 +1,5 @@
 <!--
+  @component MarkdownRenderer
   =============================================================================
   @h-ai/ui - MarkdownRenderer 组件
   =============================================================================
@@ -14,6 +15,16 @@
 
   使用 Svelte 5 Runes ($props, $derived, $effect)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { MarkdownRenderer } from '@h-ai/ui'
+  const props: ComponentProps<typeof MarkdownRenderer> = { content: '# 标题\n正文', allowHtmlTags: false }
+  const component = mount(MarkdownRenderer, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

@@ -1,4 +1,5 @@
 <!--
+  @component Steps
   =============================================================================
   @h-ai/ui - Steps 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Steps } from '@h-ai/ui'
+  const props: ComponentProps<typeof Steps> = { items: [{ title: '填写资料' }, { title: '确认' }], current: 0 }
+  const component = mount(Steps, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, StepsProps } from '../../types.js'

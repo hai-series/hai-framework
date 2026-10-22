@@ -18,7 +18,15 @@ import type { FormColSpan } from '../../../types.js'
 import type { NavAdapter } from './nav-adapter.js'
 import { SvelteURLSearchParams } from 'svelte/reactivity'
 
-/** 字段展示形式；与 `CrudEditPanel` / `CrudFilterBar` 支持的类型对齐，保留 `string` 以兼容 `@h-ai/kit`。 */
+/**
+ * 字段展示形式；与 `CrudEditPanel` / `CrudFilterBar` 支持的类型对齐，保留 `string` 以兼容 `@h-ai/kit`。
+ *
+ * @example
+ * ```ts
+ * import type { CrudFieldType } from '@h-ai/ui'
+ * const example: CrudFieldType = 'email'
+ * ```
+ */
 export type CrudFieldType
   = | 'text'
     | 'string'
@@ -38,16 +46,40 @@ export type CrudFieldType
     | 'date-range'
     | 'custom'
 
-/** 可解析为字符串的文本值（支持 i18n 函数）。 */
+/**
+ * 可解析为字符串的文本值（支持 i18n 函数）。
+ *
+ * @example
+ * ```ts
+ * import type { CrudText } from '@h-ai/ui'
+ * const example: CrudText = () => '邮箱'
+ * ```
+ */
 export type CrudText = string | (() => string)
 
-/** 选项项（select / radio / multi-select）。 */
+/**
+ * 选项项（select / radio / multi-select）。
+ *
+ * @example
+ * ```ts
+ * import type { CrudOption } from '@h-ai/ui'
+ * const example: CrudOption = { label: '启用', value: true }
+ * ```
+ */
 export interface CrudOption {
   label: string
   value: string | number | boolean
 }
 
-/** 字段定义（与 `CrudPage` 的字段模型对齐）。 */
+/**
+ * 字段定义（与 `CrudPage` 的字段模型对齐）。
+ *
+ * @example
+ * ```ts
+ * import type { CrudFieldDef } from '@h-ai/ui'
+ * const example: CrudFieldDef = { id: 'email', label: '邮箱', type: 'email', inList: true, validation: { required: true } }
+ * ```
+ */
 export interface CrudFieldDef {
   /** 字段 id（对应数据对象的属性名）。 */
   id: string
@@ -91,13 +123,30 @@ export interface CrudFieldDef {
   order?: number
 }
 
-/** 列表请求附加项；用于 latest-wins 取消旧请求。 */
+/**
+ * 列表请求附加项；用于 latest-wins 取消旧请求。
+ *
+ * @example
+ * ```ts
+ * import type { CrudListOptions } from '@h-ai/ui'
+ * const example: CrudListOptions = { signal: new AbortController().signal }
+ * ```
+ */
 export interface CrudListOptions {
   /** 取消信号；旧请求被新请求取代时触发 abort。 */
   signal?: AbortSignal
 }
 
-/** CRUD API 集合。列表返回标准 `PaginatedResult<T>`，避免各页面重复 page/pageSize/total 映射。 */
+/**
+ * CRUD API 集合。列表返回标准 `PaginatedResult<T>`，避免各页面重复 page/pageSize/total 映射。
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```ts
+ * import type { CrudApi } from '@h-ai/ui'
+ * const example: CrudApi<Record<string, unknown>> = { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) }
+ * ```
+ */
 export interface CrudApi<T> {
   /** 分页列表；第二参数携带取消信号，实现方可透传给 fetch。 */
   list: (params: Record<string, unknown>, options?: CrudListOptions) => Promise<PaginatedResult<T>>
@@ -111,7 +160,16 @@ export interface CrudApi<T> {
   remove?: (id: string) => Promise<void>
 }
 
-/** 资源定义。 */
+/**
+ * 资源定义。
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```ts
+ * import type { CrudResource } from '@h-ai/ui'
+ * const example: CrudResource<Record<string, unknown>> = { name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } }
+ * ```
+ */
 export interface CrudResource<T> {
   /** 资源名称（用于识别业务实体）。 */
   name: string
@@ -131,7 +189,15 @@ export interface CrudResource<T> {
   api: CrudApi<T>
 }
 
-/** DataTable 列定义（适配 `CrudPage`）。 */
+/**
+ * DataTable 列定义（适配 `CrudPage`）。
+ *
+ * @example
+ * ```ts
+ * import type { CrudTableColumn } from '@h-ai/ui'
+ * const example: CrudTableColumn = { key: 'email', label: '邮箱', width: '16rem' }
+ * ```
+ */
 export interface CrudTableColumn {
   key: string
   label: string
@@ -140,7 +206,18 @@ export interface CrudTableColumn {
   render?: (item: Record<string, unknown>) => string
 }
 
-/** `CrudPage` 所需的 crud 对象形状（`defineCrud` 的返回值）。 */
+/**
+ * `CrudPage` 所需的 crud 对象形状（`defineCrud` 的返回值）。
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```ts
+ * import { defineCrud } from '@h-ai/ui'
+ * import type { CrudDef } from '@h-ai/ui'
+ * const definition: CrudDef<Record<string, unknown>> = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ * const columns = definition.toTableColumns()
+ * ```
+ */
 export interface CrudDef<T> {
   resource: CrudResource<T>
   getListFields: () => CrudFieldDef[]
@@ -153,7 +230,16 @@ export interface CrudDef<T> {
   api: CrudApi<T>
 }
 
-/** `CrudPage` 的 `data` 形状。 */
+/**
+ * `CrudPage` 的 `data` 形状。
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```ts
+ * import type { CrudData } from '@h-ai/ui'
+ * const example: CrudData<Record<string, unknown>> = { items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20, filters: { active: true } }
+ * ```
+ */
 export interface CrudData<T> {
   items: T[]
   total: number
@@ -162,7 +248,21 @@ export interface CrudData<T> {
   filters: Record<string, unknown>
 }
 
-/** CRUD 控制器：托管列表数据与 SPA 导航适配器。 */
+/**
+ * CRUD 控制器：托管列表数据与 SPA 导航适配器。
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```ts
+ * import { defineCrud, createCrudController } from '@h-ai/ui'
+ * import type { CrudController } from '@h-ai/ui'
+ * const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ * const controller: CrudController<Record<string, unknown>> = createCrudController(crud, { autoLoad: false, syncUrl: false })
+ * await controller.load()
+ * if (controller.error) throw controller.error
+ * const users = controller.data.items
+ * ```
+ */
 export interface CrudController<T> {
   /** 传给 `<CrudPage data={...}>` 的响应式数据对象。 */
   readonly data: CrudData<T>
@@ -180,7 +280,15 @@ export interface CrudController<T> {
   readonly error: Error | undefined
 }
 
-/** CRUD 控制器创建选项。 */
+/**
+ * CRUD 控制器创建选项。
+ *
+ * @example
+ * ```ts
+ * import type { CrudControllerOptions } from '@h-ai/ui'
+ * const example: CrudControllerOptions = { autoLoad: false, keepPreviousData: true, syncUrl: true }
+ * ```
+ */
 export interface CrudControllerOptions {
   /** 是否在创建后立即加载；不可见 / 惰性页签应设为 false（默认 true）。 */
   autoLoad?: boolean
@@ -206,9 +314,15 @@ function resolveText(text: CrudText): string {
  * @param result - 后端返回的分页结果。
  * @param map - 单条映射函数。
  * @returns 条目被映射、分页元数据不变的新分页结果。
+ * @typeParam T - 字段值或资源条目的数据类型。
+ * @typeParam R - 转换结果的数据类型。
  *
  * @example
- * list: async (params) => mapPaginated(await api.listUsers(params), toRow)
+ * ```ts
+ * import { mapPaginated } from '@h-ai/ui'
+ * const page = mapPaginated({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }, user => ({ ...user, label: user.email }))
+ * const email = page.items[0]?.label
+ * ```
  */
 export function mapPaginated<T, R>(
   result: PaginatedResult<T>,
@@ -229,14 +343,14 @@ export function mapPaginated<T, R>(
  *
  * @param resource - 资源定义（字段、标签、API）。
  * @returns `CrudPage` 可直接消费的 `crud` 对象。
+ * @typeParam T - 字段值或资源条目的数据类型。
  *
  * @example
- * const userCrud = defineCrud<User>({
- *   name: 'user',
- *   label: () => m.users_title(),
- *   fields: [{ id: 'name', label: () => m.user_name(), type: 'text', filterable: true }],
- *   api: { list: params => listUsers(params) },
- * })
+ * ```ts
+ * import { defineCrud } from '@h-ai/ui'
+ * const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ * const columns = crud.toTableColumns()
+ * ```
  */
 export function defineCrud<T extends Record<string, unknown>>(resource: CrudResource<T>): CrudDef<T> {
   const fields = [...resource.fields].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -276,12 +390,17 @@ export function defineCrud<T extends Record<string, unknown>>(resource: CrudReso
  * @param crud - `defineCrud` 的返回值。
  * @param options - 加载策略；默认立即加载、失败保留旧数据、回填地址栏。
  * @returns 含响应式 `data`、`nav` 适配器与 `load` / `reload` 的控制器。
+ * @typeParam T - 字段值或资源条目的数据类型。
  *
  * @example
- * const controller = createCrudController(userCrud)
- * // <CrudPage crud={userCrud} data={controller.data} nav={controller.nav}
- * //   loading={controller.loading} loaded={controller.loaded}
- * //   error={controller.error} onRetry={controller.reload} />
+ * ```ts
+ * import { defineCrud, createCrudController } from '@h-ai/ui'
+ * const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ * const controller = createCrudController(crud, { autoLoad: false, syncUrl: false })
+ * await controller.load()
+ * if (controller.error) throw controller.error
+ * const users = controller.data.items
+ * ```
  */
 export function createCrudController<T extends Record<string, unknown>>(
   crud: CrudDef<T>,

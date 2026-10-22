@@ -1,4 +1,5 @@
 <!--
+  @component Empty
   =============================================================================
   @h-ai/ui - Empty 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Empty } from '@h-ai/ui'
+  const props: ComponentProps<typeof Empty> = { title: '暂无记录', icon: 'inbox' }
+  const component = mount(Empty, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, EmptyProps } from '../../types.js'

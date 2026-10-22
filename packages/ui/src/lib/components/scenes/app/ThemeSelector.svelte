@@ -8,12 +8,14 @@
   @prop {boolean} grouped - 是否按分组显示
 
   @example
-  <ThemeSelector
-    currentTheme={$theme}
-    onchange={(theme) => setTheme(theme)}
-    showPreview
-    grouped
-  />
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ThemeSelector } from '@h-ai/ui'
+  const props: ComponentProps<typeof ThemeSelector> = { currentTheme: 'light', grouped: true }
+  const component = mount(ThemeSelector, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { ThemeInfo } from '../../../theme-config.js'
@@ -23,6 +25,19 @@
   import { cn, getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
 
+  /**
+   * ThemeSelector 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { ThemeSelector } from '@h-ai/ui'
+   * const props: ComponentProps<typeof ThemeSelector> = { currentTheme: 'light', grouped: true }
+   * const component = mount(ThemeSelector, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     currentTheme?: string
     /** 选择主题按钮的 aria-label */

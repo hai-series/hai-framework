@@ -34,23 +34,31 @@ function matchSupportedLocale(locale: Locale, supportedLocales: LocaleInfo[]): L
 }
 
 /**
- * 判断候选是否能命中一个支持项（含语言简写与区域回退），不计入默认值。
- * @param locale - 候选 BCP 47 语言代码。
- * @param supportedLocales - 应用允许的列表。
- * @returns 实际命中时为 true。
- * @example isLocaleSupported('en-GB', [{ code: 'en-US', label: 'English' }]) // true
+ * 检查语言是否匹配应用支持列表，允许区域回退，不把默认值计作命中。
+ * @param locale - 显式语言代码；省略时使用当前上下文。
+ * @param supportedLocales - 应用支持的语言列表。
+ * @returns 是否存在真实支持项。
+ * @example
+ * ```ts
+ * import { isLocaleSupported } from '@h-ai/ui/i18n'
+ * const supported = isLocaleSupported('en-GB')
+ * ```
  */
 function isLocaleSupported(locale: Locale, supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): boolean {
   return matchSupportedLocale(locale, supportedLocales) !== null
 }
 
 /**
- * 解析单个 locale；无命中才尝试默认值、列表首项、最后保留调用方默认值。
- * @param locale - 待解析代码。
- * @param supportedLocales - 支持列表，大小写及区域匹配返回该列表中的规范代码。
- * @param defaultLocale - 全部候选不命中时的应用默认值。
- * @returns 应用实际可用的 locale；空列表返回 defaultLocale。
- * @example resolveLocale('fr-FR', [{ code: 'de-DE', label: 'Deutsch' }], 'de-DE') // 'de-DE'
+ * 将候选语言归一化为支持列表中的实际代码，无命中时使用默认值。
+ * @param locale - 显式语言代码；省略时使用当前上下文。
+ * @param supportedLocales - 应用支持的语言列表。
+ * @param defaultLocale - 无候选命中时的默认语言。
+ * @returns 归一化后的文本。
+ * @example
+ * ```ts
+ * import { resolveLocale } from '@h-ai/ui/i18n'
+ * const locale = resolveLocale('unsupported', undefined, 'zh-CN')
+ * ```
  */
 function resolveLocale(
   locale: Locale,
@@ -64,10 +72,14 @@ function resolveLocale(
 }
 
 /**
- * 依浏览器候选顺序寻找实际命中项，全部不支持返回 null，由 store 最后选择默认值。
- * @param supportedLocales - 应用允许的语言列表。
- * @returns 实际命中的配置代码；SSR 或无匹配项返回 null。
- * @example detectBrowserLocale([{ code: 'en-US', label: 'English' }]) // fr-FR, en-US 候选命中 en-US
+ * 依浏览器语言顺序选择实际支持项；SSR 或无匹配项返回 null。
+ * @param supportedLocales - 应用支持的语言列表。
+ * @returns 规范的语言代码或 null。
+ * @example
+ * ```ts
+ * import { detectBrowserLocale } from '@h-ai/ui/i18n'
+ * const locale = detectBrowserLocale()
+ * ```
  */
 function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): Locale | null {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
@@ -89,6 +101,17 @@ function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): 
   return null
 }
 
+/**
+ * 替换消息模板中的命名参数；缺少的参数保留原占位符。
+ * @param template - 包含命名占位符的消息模板。
+ * @param params - 消息插值参数。
+ * @returns 归一化后的文本。
+ * @example
+ * ```ts
+ * import { interpolate } from '@h-ai/ui/i18n'
+ * const message = interpolate('你好，{name}', { name: 'Ada' })
+ * ```
+ */
 function interpolate(template: string, params: Record<string, string | number | boolean> = {}): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => {
     const value = params[key]
@@ -111,10 +134,13 @@ const LOCALE_STORAGE_KEY = 'hai-locale'
  * @param options.detectBrowser - 是否按完整 navigator.languages 顺序匹配；全部失败才回退默认值。
  * @param options.persistKey - localStorage key
  * @returns locale 状态对象
+ *
  * @example
  * ```ts
- * const locale = createLocaleStore({ defaultLocale: 'en-US', detectBrowser: false })
- * locale.set('zh-CN') // 浏览器同步应用语言；SSR 只改变这个 store
+ * import { createLocaleStore } from '@h-ai/ui'
+ * const locale = createLocaleStore({ defaultLocale: 'zh-CN', detectBrowser: false, persistKey: 'demo-locale' })
+ * locale.set('en-US')
+ * const selected = locale.current
  * ```
  */
 export function createLocaleStore(options: {
@@ -209,4 +235,13 @@ export {
 }
 
 // 导出额外的便捷函数
+/**
+ * 读取 core 当前请求或浏览器上下文的语言，不由 UI store 隐式改写服务端默认值。
+ *
+ * @example
+ * ```ts
+ * import { getGlobalLocale } from '@h-ai/ui'
+ * const currentLocale = getGlobalLocale()
+ * ```
+ */
 export const getGlobalLocale = core.i18n.getGlobalLocale

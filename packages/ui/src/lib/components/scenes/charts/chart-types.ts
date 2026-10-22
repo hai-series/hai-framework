@@ -7,27 +7,90 @@
 
 import type { DataAttributes } from '../../../types.js'
 
-/** 图表数据单元允许的原子值，和 LayerChart 常见 accessor 输入保持一致。 */
+/**
+ * 图表数据单元允许的原子值，和 LayerChart 常见 accessor 输入保持一致。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: ChartDataValue = 42
+ * ```
+ */
 export type ChartDataValue = string | number | Date
 
-/** 图表数据项；每个字段都可被 x/y/key/value 等 accessor 引用。 */
+/**
+ * 图表数据项；每个字段都可被 x/y/key/value 等 accessor 引用。
+ *
+ * @example
+ * ```ts
+ * import type { ChartDataItem } from '@h-ai/ui'
+ * const example: ChartDataItem = { month: 'Jan', sales: 42 }
+ * ```
+ */
 export type ChartDataItem = Record<string, ChartDataValue>
 
-/** LayerChart accessor 的常用子集，用于 series.value 等透传配置。 */
+/**
+ * LayerChart accessor 的常用子集，用于 series.value 等透传配置。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: ChartAccessor = 'sales'
+ * ```
+ */
 export type ChartAccessor = string | number | ((item: ChartDataItem) => unknown) | ChartAccessor[] | null | undefined
 
-/** 统一 Chart 支持的高阶图表类型。 */
+/**
+ * 统一 Chart 支持的高阶图表类型。
+ *
+ * @example
+ * ```ts
+ * import type { ChartType } from '@h-ai/ui'
+ * const example: ChartType = 'line'
+ * ```
+ */
 export type ChartType = 'bar' | 'line' | 'area' | 'pie' | 'scatter'
 
-/** Chart 预设高度档位；具体像素值在 Chart.svelte 中固定映射。 */
+/**
+ * Chart 预设高度档位；具体像素值在 Chart.svelte 中固定映射。
+ *
+ * @example
+ * ```ts
+ * import type { ChartSize } from '@h-ai/ui'
+ * const example: ChartSize = 'md'
+ * ```
+ */
 export type ChartSize = 'sm' | 'md' | 'lg'
 
-/** 折线图渲染变体；default 保持 LayerChart 原生渲染，segmented-point 提供分段线 + 圆点样式。 */
+/**
+ * 折线图渲染变体；default 保持 LayerChart 原生渲染，segmented-point 提供分段线 + 圆点样式。
+ *
+ * @example
+ * ```ts
+ * import type { ChartLineVariant } from '@h-ai/ui'
+ * const example: ChartLineVariant = 'segmented-point'
+ * ```
+ */
 export type ChartLineVariant = 'default' | 'segmented-point'
 
-/** 折线图 tooltip 触发方式；nearest 会在绘图区内吸附最近数据点。 */
+/**
+ * 折线图 tooltip 触发方式；nearest 会在绘图区内吸附最近数据点。
+ *
+ * @example
+ * ```ts
+ * import type { ChartTooltipMode } from '@h-ai/ui'
+ * const example: ChartTooltipMode = 'nearest'
+ * ```
+ */
 export type ChartTooltipMode = 'default' | 'nearest'
 
+/**
+ * 图表系列配置；key 关联数据字段，未指定的颜色由当前主题补齐。
+ *
+ * @example
+ * ```ts
+ * import type { ChartSeries } from '@h-ai/ui'
+ * const example: ChartSeries = { key: 'sales', label: '销量', color: '#2563eb' }
+ * ```
+ */
 export interface ChartSeries {
   /** 系列稳定标识；宽表数据通常对应数据项中的数值字段名。 */
   key: string
@@ -49,6 +112,19 @@ export interface ChartSeries {
   [key: string]: unknown
 }
 
+/**
+ * 统一图表的类型、数据和坐标映射；其他配置透传当前 LayerChart renderer。
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Chart } from '@h-ai/ui'
+ *   import type { ChartProps } from '@h-ai/ui'
+ *   const props: ChartProps = { type: 'line', data: [{ month: 'Jan', sales: 42 }], x: 'month', y: 'sales', lineVariant: 'segmented-point', tooltipMode: 'nearest' }
+ * </script>
+ * <Chart {...props} />
+ * ```
+ */
 export interface ChartProps extends DataAttributes {
   /** 选择内部 LayerChart 高阶组件；必填。 */
   type: ChartType

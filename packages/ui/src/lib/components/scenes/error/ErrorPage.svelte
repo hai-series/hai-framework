@@ -8,7 +8,14 @@
   使用 Svelte 5 Runes ($props, $derived)
 
   @example
-  <ErrorPage status={403} homeUrl="/admin" onback={() => history.back()} />
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ErrorPage } from '@h-ai/ui'
+  const props: ComponentProps<typeof ErrorPage> = { status: 403, homeUrl: '/' }
+  const component = mount(ErrorPage, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'

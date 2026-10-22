@@ -1,7 +1,19 @@
 import type { GuideOptions, GuideProgress } from './guide-types.js'
 import { readStoredValue, writeStoredValue } from './internal/browser-safety.js'
 
-/** 存储受限时使用会话内存；只保存非敏感的引导偏好。 */
+/**
+ * 存储受限时使用会话内存；只保存非敏感的引导偏好。
+ * @param options - 本次操作的行为与显示选项。
+ * @returns 可读取、写入、清除非敏感导览进度的适配器。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const storage = createGuideStorage({ tours: [], persistence: 'memory' })
+ * storage.set('intro', { version: 1, status: 'completed', updatedAt: Date.now() })
+ * const progress = storage.get('intro')
+ * storage.set('intro', null)
+ * ```
+ */
 export function createGuideStorage(options: GuideOptions) {
   const memory = new Map<string, string | null>()
   const persistence = options.persistence ?? 'cookie'

@@ -12,6 +12,12 @@ import { uiM } from './messages.js'
 
 /**
  * 内部弹框条目
+ *
+ * @example
+ * ```ts
+ * import type { MessageBoxItem } from '@h-ai/ui'
+ * const example: MessageBoxItem = { id: 'confirm-1', title: '删除', message: '确认删除？', type: 'confirm', iconType: 'warning', confirmText: '删除', cancelText: '取消', confirmVariant: 'warning', showCancel: true, closeOnClickModal: false, showClose: true, loading: false, resolve: accepted => document.body.setAttribute('data-confirmed', String(accepted)) }
+ * ```
  */
 export interface MessageBoxItem {
   id: string
@@ -66,16 +72,14 @@ class MessageBoxState {
 
   /**
    * 确认弹框（双按钮，返回 Promise<boolean>）
-   *
+   * @param options - 本次操作的行为与显示选项。
+   * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
    * @example
    * ```ts
-   * const ok = await messageBox.confirm({
-   *   title: '提示',
-   *   message: '确定要删除吗？',
-   *   confirmText: '确定',
-   *   cancelText: '取消',
-   * })
-   * if (ok) { ... }
+   * import { messageBox, message } from '@h-ai/ui'
+   * // 布局中需挂载 MessageBoxContainer。
+   * const accepted = await messageBox.confirm({ title: '确认', message: '提交资料？', closeOnClickModal: false })
+   * if (accepted) message.success('已确认')
    * ```
    */
   confirm(options: MessageBoxOptions | string): Promise<boolean> {
@@ -85,13 +89,13 @@ class MessageBoxState {
 
   /**
    * 提示弹框（单按钮，返回 Promise<boolean>）
-   *
+   * @param options - 本次操作的行为与显示选项。
+   * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
    * @example
    * ```ts
-   * await messageBox.alert({
-   *   title: '提示',
-   *   message: '操作成功',
-   * })
+   * import { messageBox } from '@h-ai/ui'
+   * // 布局中需挂载 MessageBoxContainer。
+   * const acknowledged = await messageBox.alert({ title: '提示', message: '资料已保存' })
    * ```
    */
   alert(options: MessageBoxOptions | string): Promise<boolean> {
@@ -101,6 +105,18 @@ class MessageBoxState {
 
   /**
    * 内部方法：处理确认
+   * @param item - 当前弹框队列中的条目。
+   * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
+   * @example
+   * ```ts
+   * import { messageBox } from '@h-ai/ui'
+   * // 布局中需挂载 MessageBoxContainer。
+   * const response = messageBox.confirm({ message: '提交资料？' })
+   * const item = messageBox.items[0]
+   * if (!item) throw new Error('Dialog unavailable')
+   * await messageBox.handleConfirm(item)
+   * const accepted = await response
+   * ```
    */
   async handleConfirm(item: MessageBoxItem): Promise<void> {
     if (item.beforeClose) {
@@ -119,6 +135,18 @@ class MessageBoxState {
 
   /**
    * 内部方法：处理取消
+   * @param item - 当前弹框队列中的条目。
+   * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
+   * @example
+   * ```ts
+   * import { messageBox } from '@h-ai/ui'
+   * // 布局中需挂载 MessageBoxContainer。
+   * const response = messageBox.confirm({ message: '提交资料？' })
+   * const item = messageBox.items[0]
+   * if (!item) throw new Error('Dialog unavailable')
+   * await messageBox.handleCancel(item)
+   * const accepted = await response
+   * ```
    */
   async handleCancel(item: MessageBoxItem): Promise<void> {
     if (item.beforeClose) {
@@ -137,6 +165,18 @@ class MessageBoxState {
 
   /**
    * 内部方法：处理关闭（点击关闭按钮或遮罩）
+   * @param item - 当前弹框队列中的条目。
+   * @returns 弹框交互的 Promise；确认与取消均须由宿主处理。
+   * @example
+   * ```ts
+   * import { messageBox } from '@h-ai/ui'
+   * // 布局中需挂载 MessageBoxContainer。
+   * const response = messageBox.confirm({ message: '提交资料？' })
+   * const item = messageBox.items[0]
+   * if (!item) throw new Error('Dialog unavailable')
+   * await messageBox.handleClose(item)
+   * const accepted = await response
+   * ```
    */
   async handleClose(item: MessageBoxItem): Promise<void> {
     if (item.beforeClose) {
@@ -160,5 +200,13 @@ class MessageBoxState {
 
 /**
  * MessageBox 单例
+ *
+ * @example
+ * ```ts
+ * import { messageBox, message } from '@h-ai/ui'
+ * // 页面布局需挂载 MessageBoxContainer。
+ * const accepted = await messageBox.confirm({ title: '确认', message: '提交这份资料？', closeOnClickModal: false })
+ * if (accepted) message.success('已确认')
+ * ```
  */
 export const messageBox = new MessageBoxState()

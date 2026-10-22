@@ -1,6 +1,16 @@
 <!--
   @component Alert
   警告框组件，使用 tabler icon 替代 emoji，更精致。
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Alert } from '@h-ai/ui'
+  const props: ComponentProps<typeof Alert> = { title: '保存成功', variant: 'success', children: createRawSnippet(() => ({ render: () => "<span>操作已经完成。</span>" })) }
+  const component = mount(Alert, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { AlertProps, DataAttributes } from '../../types.js'

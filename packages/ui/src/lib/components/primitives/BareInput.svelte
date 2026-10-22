@@ -1,4 +1,5 @@
 <!--
+  @component BareInput
   =============================================================================
   @h-ai/ui - BareInput 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $bindable)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { BareInput } from '@h-ai/ui'
+  const props: ComponentProps<typeof BareInput> = { name: 'query', type: 'search' }
+  const component = mount(BareInput, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { BareInputProps, DataAttributes } from '../../types.js'

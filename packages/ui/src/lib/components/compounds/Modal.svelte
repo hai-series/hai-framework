@@ -1,6 +1,16 @@
 <!--
   @component Modal
   模态框组件，支持 backdrop-blur 和 scale-in 动画。
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Modal } from '@h-ai/ui'
+  const props: ComponentProps<typeof Modal> = { open: true, title: '编辑资料', closeOnBackdrop: false, children: createRawSnippet(() => ({ render: () => "<span>表单内容</span>" })) }
+  const component = mount(Modal, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, ModalProps } from '../../types.js'

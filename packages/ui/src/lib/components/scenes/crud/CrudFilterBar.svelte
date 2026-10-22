@@ -3,6 +3,16 @@
   CRUD 搜索 + 过滤栏组件
 
   使用 Svelte 5 Runes ($props, $state)
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { CrudFilterBar } from '@h-ai/ui'
+  const props: ComponentProps<typeof CrudFilterBar> = { searchable: true, filterFields: [{ id: 'active', label: '状态', type: 'boolean' }], filterValues: { active: true } }
+  const component = mount(CrudFilterBar, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
@@ -12,6 +22,14 @@
   import Input from '../../primitives/Input.svelte'
   import Select from '../../primitives/Select.svelte'
 
+  /**
+   * 工具栏过滤字段的局部视图；值由宿主条件查询消费。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: FilterFieldDef = { id: 'active', label: '状态', type: 'boolean' }
+   * ```
+   */
   type FilterFieldDef = {
     id: string
     label: string | (() => string)

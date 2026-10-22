@@ -1,4 +1,5 @@
 <!--
+  @component InfiniteScroll
   @h-ai/ui — InfiniteScroll（无限滚动 / 上拉加载更多）
 
   用法：
@@ -7,12 +8,35 @@
       <div>{item.name}</div>
     {/each}
   </InfiniteScroll>
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { InfiniteScroll } from '@h-ai/ui'
+  const props: ComponentProps<typeof InfiniteScroll> = { hasMore: false, children: createRawSnippet(() => ({ render: () => "<p>已经加载全部记录。</p>" })) }
+  const component = mount(InfiniteScroll, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../types.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
+  /**
+   * InfiniteScroll 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount, createRawSnippet } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { InfiniteScroll } from '@h-ai/ui'
+   * const props: ComponentProps<typeof InfiniteScroll> = { hasMore: false, children: createRawSnippet(() => ({ render: () => "<p>已经加载全部记录。</p>" })) }
+   * const component = mount(InfiniteScroll, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 加载更多回调 */
     onloadmore?: () => Promise<void>

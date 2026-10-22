@@ -11,7 +11,15 @@ import type { CrudFieldDef } from './crud-controller.svelte.js'
 
 // 从 @h-ai/kit 导入的类型在使用处通过泛型约束，此处仅定义 UI 层特有类型
 
-/** CrudPage 权限控制 */
+/**
+ * CrudPage 权限控制
+ *
+ * @example
+ * ```ts
+ * import type { CrudPermissions } from '@h-ai/ui'
+ * const example: CrudPermissions = { create: true, update: true, delete: false }
+ * ```
+ */
 export interface CrudPermissions {
   /** 允许新建 */
   create?: boolean
@@ -21,13 +29,37 @@ export interface CrudPermissions {
   delete?: boolean
 }
 
-/** 新建/编辑表单的展示形式 */
+/**
+ * 新建/编辑表单的展示形式
+ *
+ * @example
+ * ```ts
+ * import type { CrudFormVariant } from '@h-ai/ui'
+ * const example: CrudFormVariant = 'drawer'
+ * ```
+ */
 export type CrudFormVariant = 'drawer' | 'modal'
 
-/** 列表显示密度 */
+/**
+ * 列表显示密度
+ *
+ * @example
+ * ```ts
+ * import type { CrudDensity } from '@h-ai/ui'
+ * const example: CrudDensity = 'compact'
+ * ```
+ */
 export type CrudDensity = 'normal' | 'compact'
 
-/** 新建/编辑表单展示配置 */
+/**
+ * 新建/编辑表单展示配置
+ *
+ * @example
+ * ```ts
+ * import type { CrudFormConfig } from '@h-ai/ui'
+ * const example: CrudFormConfig = { variant: 'drawer', drawerWidth: '32rem', columns: 2, labelPosition: 'top' }
+ * ```
+ */
 export interface CrudFormConfig extends FormLayoutOptions {
   /** 展示形式：'drawer'（抽屉，默认）或 'modal'（弹出窗口） */
   variant?: CrudFormVariant
@@ -45,7 +77,15 @@ export interface CrudFormConfig extends FormLayoutOptions {
   modalHeight?: string
 }
 
-/** 分页栏展示配置 */
+/**
+ * 分页栏展示配置
+ *
+ * @example
+ * ```ts
+ * import type { CrudPaginationConfig } from '@h-ai/ui'
+ * const example: CrudPaginationConfig = { showSizeChanger: true, pageSizeOptions: [10, 20, 50], showTotal: true }
+ * ```
+ */
 export interface CrudPaginationConfig {
   /** 是否显示每页条数选择器（默认 true） */
   showSizeChanger?: boolean
@@ -61,10 +101,27 @@ export interface CrudPaginationConfig {
   showFirstLast?: boolean
 }
 
-/** CrudPage 工具栏风格；toolbar 是默认的图标弹层布局。 */
+/**
+ * CrudPage 工具栏风格；toolbar 是默认的图标弹层布局。
+ *
+ * @example
+ * ```ts
+ * import type { CrudToolbarStyle } from '@h-ai/ui'
+ * const example: CrudToolbarStyle = 'toolbar'
+ * ```
+ */
 export type CrudToolbarStyle = 'filter-bar' | 'toolbar'
 
-/** CrudPage 初始列表数据（由 +page.server.ts load 返回） */
+/**
+ * CrudPage 初始列表数据（由 +page.server.ts load 返回）
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```ts
+ * import type { CrudPageData } from '@h-ai/ui'
+ * const example: CrudPageData = { items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }
+ * ```
+ */
 export interface CrudPageData<T = Record<string, unknown>> {
   items: T[]
   total: number
@@ -73,7 +130,21 @@ export interface CrudPageData<T = Record<string, unknown>> {
   filters?: Record<string, unknown>
 }
 
-/** CrudPage 组件 Props */
+/**
+ * CrudPage 组件 Props
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { CrudPage, defineCrud } from '@h-ai/ui'
+ *   import type { CrudPageProps } from '@h-ai/ui'
+ *   const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+ *   const props: CrudPageProps = { crud, data: { items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }, permissions: { create: true, update: true, delete: false } }
+ * </script>
+ * <CrudPage {...props} />
+ * ```
+ */
 export interface CrudPageProps<T = Record<string, unknown>> extends DataAttributes {
   /** CRUD 操作定义（来自 kit.crud.define） */
   crud: {
