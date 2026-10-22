@@ -103,12 +103,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "A2ATaskStore",
-              "kind": "type",
-              "declaration": "TaskStore",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
@@ -2052,12 +2046,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "A2ATaskStore",
-              "kind": "type",
-              "declaration": "TaskStore",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
@@ -3997,12 +3985,6 @@
               "name": "A2ATaskFilter",
               "kind": "type",
               "declaration": "A2ATaskFilter",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "A2ATaskStore",
-              "kind": "type",
-              "declaration": "TaskStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -5972,12 +5954,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "A2ATaskStore",
-              "kind": "type",
-              "declaration": "TaskStore",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
@@ -7941,12 +7917,6 @@
               "name": "A2ATaskFilter",
               "kind": "type",
               "declaration": "A2ATaskFilter",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "A2ATaskStore",
-              "kind": "type",
-              "declaration": "TaskStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -14369,12 +14339,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "createHelper",
-              "kind": "value",
-              "declaration": "createHelper",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CrudAuditInput",
               "kind": "type",
               "declaration": "CrudAuditInput",
@@ -14463,12 +14427,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "createHelper",
-              "kind": "value",
-              "declaration": "createHelper",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "CrudAuditInput",
               "kind": "type",
               "declaration": "CrudAuditInput",
@@ -14555,12 +14513,6 @@
               "kind": "type",
               "declaration": "CreateAuditLogInput",
               "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "createHelper",
-              "kind": "value",
-              "declaration": "createHelper",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "CrudAuditInput",

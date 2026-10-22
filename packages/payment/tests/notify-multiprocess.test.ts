@@ -8,7 +8,7 @@ import { reldb } from '@h-ai/reldb'
 import { build } from 'tsup'
 import { expect, it } from 'vitest'
 import { initializeExamplePaymentStore } from '../examples/payment-notify-consumer'
-import { formatAlipayTime } from '../src/providers/alipay/alipay-time'
+import { formatAlipayTime } from '../src/providers/alipay/payment-alipay-time'
 
 it('notify 双节点与重启后重复到达不重复履约，校验失败和事务中断可回滚', async () => {
   const temporaryRoot = path.resolve(import.meta.dirname, '../tmp')

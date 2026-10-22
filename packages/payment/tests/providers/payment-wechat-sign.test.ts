@@ -1,5 +1,5 @@
 /**
- * @h-ai/payment — wechat-pay-sign（微信支付签名）单元测试
+ * @h-ai/payment — payment-wechat-sign（微信支付签名）单元测试
  *
  * 覆盖纯函数：generateNonce, getTimestamp, signRequest, signJsapi,
  * verifyNotifySignature, decryptResource。
@@ -15,7 +15,7 @@ import {
   signJsapi,
   signRequest,
   verifyNotifySignature,
-} from '../../src/providers/wechat/wechat-pay-sign'
+} from '../../src/providers/wechat/payment-wechat-sign'
 
 /** 测试用 RSA 密钥对（2048 位） */
 const { publicKey: platformCert, privateKey: merchantPrivateKey } = generateKeyPairSync('rsa', {

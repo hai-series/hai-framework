@@ -12,7 +12,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ChromaClientArgs, ChromaClient as ChromaSdkClient } from 'chromadb'
+import type { ChromaClient, ChromaClientArgs, Collection, EmbeddingFunction, Metadata, Where } from 'chromadb'
 import type { ChildProcess } from 'node:child_process'
 import type { ChromaConfig, DistanceMetric } from '../vecdb-config.js'
 import type {
@@ -33,43 +33,8 @@ const DIMENSION_METADATA_KEY = 'hai_dimension'
 const SPACE_METADATA_KEY = 'hnsw:space'
 const HEARTBEAT_POLL_INTERVAL = 300
 
-/** Chroma Collection 的最小接口定义（避免强依赖可选包） */
-interface ChromaCollection {
-  metadata?: Record<string, unknown> | null
-  add: (params: ChromaWriteParams) => Promise<unknown>
-  upsert: (params: ChromaWriteParams) => Promise<unknown>
-  delete: (params: { ids: string[] }) => Promise<unknown>
-  query: (params: { queryEmbeddings: number[][], nResults?: number, where?: Record<string, unknown> }) => Promise<ChromaQueryResult>
-  count: () => Promise<number>
-}
-
-interface ChromaWriteParams {
-  ids: string[]
-  embeddings: number[][]
-  documents?: (string | null)[]
-  metadatas?: (Record<string, unknown> | null)[]
-}
-
-interface ChromaQueryResult {
-  ids: string[][]
-  distances?: (number[] | null)[] | null
-  documents?: ((string | null)[] | null)[] | null
-  metadatas?: ((Record<string, unknown> | null)[] | null)[] | null
-}
-
-interface ChromaClient {
-  heartbeat: () => Promise<number>
-  countCollections: () => Promise<number>
-  getOrCreateCollection: (params: { name: string, metadata?: Record<string, unknown>, embeddingFunction?: unknown }) => Promise<ChromaCollection>
-  getCollection: (params: { name: string, embeddingFunction?: unknown }) => Promise<ChromaCollection>
-  deleteCollection: (params: { name: string }) => Promise<unknown>
-  listCollections: () => Promise<Array<{ name: string } | string>>
-}
-
-/** Chroma 模块的最小接口 */
-interface ChromaModule {
-  ChromaClient: new (params: ChromaClientArgs) => ChromaClient
-}
+/** 可选 SDK 的真实模块类型；type import 不会提前加载运行时驱动。 */
+type ChromaModule = typeof import('chromadb')
 
 function isChromaModule(value: unknown): value is ChromaModule {
   return typeof value === 'object' && value !== null && typeof (value as { ChromaClient?: unknown }).ChromaClient === 'function'
@@ -84,7 +49,7 @@ const NOOP_EMBEDDING_FUNCTION = {
   async generate(): Promise<number[][]> {
     throw new Error('Chroma embedding function should not be called: vectors are provided explicitly')
   },
-}
+} satisfies EmbeddingFunction
 
 /** DistanceMetric → Chroma hnsw:space */
 function toChromaSpace(metric: DistanceMetric): string {
@@ -112,15 +77,17 @@ function distanceToScore(distance: number, metric: DistanceMetric): number {
 }
 
 /** 构建 Chroma where 过滤条件（单键直接匹配，多键用 $and） */
-function buildWhere(filter?: Record<string, unknown>): Record<string, unknown> | undefined {
+function buildWhere(filter?: Record<string, unknown>): Where | undefined {
   if (!filter)
     return undefined
   const entries = Object.entries(filter)
   if (entries.length === 0)
     return undefined
-  if (entries.length === 1)
-    return { [entries[0][0]]: entries[0][1] }
-  return { $and: entries.map(([key, value]) => ({ [key]: value })) }
+  const where = entries.length === 1
+    ? { [entries[0][0]]: entries[0][1] }
+    : { $and: entries.map(([key, value]) => ({ [key]: value })) }
+  // 公共 filter 保留各后端的原生能力；query 会先调用 SDK validateWhere 校验，不复制上游规则。
+  return where as Where
 }
 
 /**
@@ -253,7 +220,7 @@ export function createChromaProvider(): VecdbProvider {
   }
 
   /** 轮询心跳直至就绪或超时 */
-  async function waitForHeartbeat(chromaClient: Pick<ChromaSdkClient, 'heartbeat'>, timeout: number): Promise<void> {
+  async function waitForHeartbeat(chromaClient: ChromaClient, timeout: number): Promise<void> {
     const deadline = Date.now() + timeout
     let lastError: unknown
     while (Date.now() < deadline) {
@@ -270,12 +237,12 @@ export function createChromaProvider(): VecdbProvider {
   }
 
   /** 获取集合（含维度校验所需的 metadata） */
-  async function getCollection(name: string): Promise<ChromaCollection> {
+  async function getCollection(name: string): Promise<Collection> {
     return client!.getCollection({ name, embeddingFunction: NOOP_EMBEDDING_FUNCTION })
   }
 
   /** 读取集合存储的维度 */
-  function readDimension(collection: ChromaCollection): number {
+  function readDimension(collection: Collection): number {
     const value = collection.metadata?.[DIMENSION_METADATA_KEY]
     return typeof value === 'number' ? value : 0
   }
@@ -298,7 +265,7 @@ export function createChromaProvider(): VecdbProvider {
       logger.debug('Creating collection', { name, dimension: options.dimension, metric: options.metric })
 
       const existing = await client!.listCollections()
-      const exists = existing.some(item => (typeof item === 'string' ? item : item.name) === name)
+      const exists = existing.some(item => item.name === name)
       if (exists)
         return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
 
@@ -316,7 +283,7 @@ export function createChromaProvider(): VecdbProvider {
     async drop(name) {
       logger.debug('Dropping collection', { name })
       const existing = await client!.listCollections()
-      const exists = existing.some(item => (typeof item === 'string' ? item : item.name) === name)
+      const exists = existing.some(item => item.name === name)
       if (!exists)
         return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
 
@@ -328,13 +295,13 @@ export function createChromaProvider(): VecdbProvider {
     async exists(name) {
       logger.debug('Checking collection exists', { name })
       const existing = await client!.listCollections()
-      return ok(existing.some(item => (typeof item === 'string' ? item : item.name) === name))
+      return ok(existing.some(item => item.name === name))
     },
 
     async info(name) {
       logger.debug('Getting collection info', { name })
       const existing = await client!.listCollections()
-      if (!existing.some(item => (typeof item === 'string' ? item : item.name) === name))
+      if (!existing.some(item => item.name === name))
         return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
 
       const collection = await getCollection(name)
@@ -350,18 +317,20 @@ export function createChromaProvider(): VecdbProvider {
     async list() {
       logger.debug('Listing collections')
       const existing = await client!.listCollections()
-      return ok(existing.map(item => (typeof item === 'string' ? item : item.name)))
+      return ok(existing.map(item => item.name))
     },
   }
 
   // ─── 向量操作适配器 ───
 
-  function toWriteParams(documents: { id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }[]): ChromaWriteParams {
+  function toWriteParams(documents: { id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }[]): Parameters<Collection['add']>[0] {
     return {
       ids: documents.map(doc => doc.id),
       embeddings: documents.map(doc => doc.vector),
-      documents: documents.map(doc => doc.content ?? null),
-      metadatas: documents.map(doc => ({ ...doc.metadata, _content: doc.content ?? '' })),
+      documents: documents.map(doc => doc.content ?? ''),
+      // 统一 API 的 metadata 更宽；SDK 在 add/upsert 中先执行 validateMetadata，再发送请求。
+      // 使用上游 Metadata 类型跨越此边界，避免复制其标量、数组及稀疏向量规则；原生拒绝会由 base 转为 HaiResult。
+      metadatas: documents.map(doc => ({ ...doc.metadata, _content: doc.content ?? '' })) as Metadata[],
     }
   }
 
@@ -458,7 +427,7 @@ export function createChromaProvider(): VecdbProvider {
         if (!cleaned.success)
           return cleaned
       }
-      const chromaConfig = cfg as ChromaConfig
+      const chromaConfig = cfg
       const embedded = !!chromaConfig.path && !chromaConfig.url
 
       const loadResult = await loadChromaModule()

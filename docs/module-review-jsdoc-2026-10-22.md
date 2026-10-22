@@ -20,7 +20,7 @@
 
 ### 顶层导出定位
 
-- [packages/ai/src/a2a/ai-a2a-functions.ts](../packages/ai/src/a2a/ai-a2a-functions.ts)：`ReldbA2ATaskStore`（L166，E）；`A2ADeps`（L254，E）；`createA2AStores`（L262，E）；`A2ACreateOptions`（L270，E）；`createA2AOperations`（L282，E）；`A2ALazyProxyDeps`（L360，E）；`createA2ALazyProxy`（L384，E）。
+- [packages/ai/src/a2a/ai-a2a-functions.ts](../packages/ai/src/a2a/ai-a2a-functions.ts)：`A2ADeps`（L254，E）；`createA2AStores`（L262，E）；`A2ACreateOptions`（L270，E）；`createA2AOperations`（L282，E）；`A2ALazyProxyDeps`（L360，E）；`createA2ALazyProxy`（L384，E）。
 - [packages/ai/src/a2a/ai-a2a-types.ts](../packages/ai/src/a2a/ai-a2a-types.ts)：`A2ACallerIdentity`（L51，E）；`A2AMessageRecord`（L61，E）；`A2AContextInfo`（L79，E）；`A2AAuthenticator`（L100，E）；`A2ATaskFilter`（L113，E）；`A2AOperations`（L135，E）；`A2AApiKeySecurity`（L191，E）；`A2ASecurityConfig`（L199，E）；`A2AAgentCardConfig`（L205，E）；`A2AHandleResult`（L226，E）；`A2ACallOptions`（L236，E）；`A2ACallResult`（L244，E）。
 - [packages/ai/src/ai-config.ts](../packages/ai/src/ai-config.ts)：`OptionalSecretSchema`（L24，E）；`ModelScenarioSchema`（L49，E）；`ModelScenario`（L52，E）；`ApiTypeSchema`（L63，E）；`ApiType`（L66，E）；`ModelEntry`（L103，E）；`LLMConfig`（L160，E）；`ResolvedModelConfig`（L167，E）；`ResolveRequiredModelEntryOptions`（L187，E）；`resolveModelEntry`（L204，E）；`resolveModelApi`（L258，E）；`MCPServerCapabilitiesSchema`（L270，E）；`MCPServerCapabilities`（L280，E）；`MCPServerConfigSchema`（L283，E）；`MCPServerConfig`（L293，E）；`MCPConfig`（L317，E）；`EmbeddingConfig`（L344，E）；`KnowledgeConfig`（L401，E）；`MemoryConfig`（L476，E）；`TokenConfig`（L497，E）；`SummaryConfig`（L517，E）；`CompressConfig`（L543，E）；`FileConfigSchema`（L553，E）；`FileConfig`（L559，E）；`RetrievalSourceSchema`（L568，E）；`RetrievalSourceConfig`（L586，E）；`RetrievalConfig`（L612，E）；`A2ASkillConfigSchema`（L617，E）；`A2AConfig`（L675，E）；`AudioProviderSchema`（L693，E）；`AudioProviderName`（L696，E）；`AudioOperationSchema`（L699，E）；`AudioOperation`（L702，E）；`AudioOperationsSchema`（L709，E）；`AudioModelEntry`（L752，E）；`AudioConfig`（L789，E）；`ResolvedAudioModel`（L797，E）；`resolveAudioModel`（L870，E）；`ensureAudioCredential`（L925，E）；`ImageProviderSchema`（L945，E）；`ImageProviderName`（L948，E）；`ImageModelEntrySchema`（L951，E）；`ImageModelEntry`（L969，E）；`ImageConfigSchema`（L972，E）；`ImageConfig`（L980，E）；`ResolvedImageModel`（L983，E）；`resolveImageModel`（L1023，E）；`AIConfig`（L1124，E）；`AIConfigInput`（L1127，E）。
 - [packages/ai/src/ai-functions.ts](../packages/ai/src/ai-functions.ts)：`AISubsystemDeps`（L58，E）；`AISubsystems`（L64，E）；`createAISubsystems`（L92，E）。
@@ -463,13 +463,13 @@
 - [packages/payment/src/payment-functions.ts](../packages/payment/src/payment-functions.ts)：`registerProvider`（L71，E）；`getProvider`（L81，E）；`createOrder`（L105，E）；`handleNotify`（L135，E）；`queryOrder`（L160，E）；`refund`（L176，E）；`closeOrder`（L206，E）；`clearProviders`（L228，E）。
 - [packages/payment/src/payment-i18n.ts](../packages/payment/src/payment-i18n.ts)：`paymentM`（L20，E）。
 - [packages/payment/src/payment-types.ts](../packages/payment/src/payment-types.ts)：`HaiPaymentError`（L30，J/E）；`TradeType`（L35，E）；`OrderStatusValue`（L38，E）；`CreateOrderInput`（L43，E）；`PaymentOrder`（L63，E）；`PaymentNotifyRequest`（L77，E）；`PaymentNotifyResult`（L85，E）；`OrderStatus`（L103，E）；`RefundInput`（L119，E）；`RefundResult`（L133，E）；`PaymentProvider`（L150，E）；`PaymentFunctions`（L173，E）。
-- [packages/payment/src/providers/alipay/alipay-provider.ts](../packages/payment/src/providers/alipay/alipay-provider.ts)：`createAlipayProvider`（L54，E）。
-- [packages/payment/src/providers/alipay/alipay-sign.ts](../packages/payment/src/providers/alipay/alipay-sign.ts)：`signAlipayParams`（L18，E）；`verifyAlipayNotify`（L43，E）。
-- [packages/payment/src/providers/alipay/alipay-types.ts](../packages/payment/src/providers/alipay/alipay-types.ts)：`AlipayNotifyParamsSchema`（L11，E）；`AlipayNotifyParams`（L19，J/E）。
+- [packages/payment/src/providers/alipay/payment-provider-alipay.ts](../packages/payment/src/providers/alipay/payment-provider-alipay.ts)：`createAlipayProvider`（L54，E）。
+- [packages/payment/src/providers/alipay/payment-alipay-sign.ts](../packages/payment/src/providers/alipay/payment-alipay-sign.ts)：`signAlipayParams`（L18，E）；`verifyAlipayNotify`（L43，E）。
+- [packages/payment/src/providers/alipay/payment-alipay-types.ts](../packages/payment/src/providers/alipay/payment-alipay-types.ts)：`AlipayNotifyParamsSchema`（L11，E）；`AlipayNotifyParams`（L19，J/E）。
 - [packages/payment/src/providers/payment-provider-http.ts](../packages/payment/src/providers/payment-provider-http.ts)：`fetchWithTimeout`（L10，J/E）。
-- [packages/payment/src/providers/stripe/stripe-provider.ts](../packages/payment/src/providers/stripe/stripe-provider.ts)：`createStripeProvider`（L27，E）。
-- [packages/payment/src/providers/wechat/wechat-pay-sign.ts](../packages/payment/src/providers/wechat/wechat-pay-sign.ts)：`generateNonce`（L16，E）；`getTimestamp`（L23，E）；`signRequest`（L38，E）；`signJsapi`（L62，E）；`verifyNotifySignature`（L85，E）；`decryptResource`（L107，E）。
-- [packages/payment/src/providers/wechat/wechat-pay-types.ts](../packages/payment/src/providers/wechat/wechat-pay-types.ts)：`WechatOrderRequest`（L9，E）；`WechatNotifyResource`（L32，E）。
+- [packages/payment/src/providers/stripe/payment-provider-stripe.ts](../packages/payment/src/providers/stripe/payment-provider-stripe.ts)：`createStripeProvider`（L27，E）。
+- [packages/payment/src/providers/wechat/payment-wechat-sign.ts](../packages/payment/src/providers/wechat/payment-wechat-sign.ts)：`generateNonce`（L16，E）；`getTimestamp`（L23，E）；`signRequest`（L38，E）；`signJsapi`（L62，E）；`verifyNotifySignature`（L85，E）；`decryptResource`（L107，E）。
+- [packages/payment/src/providers/wechat/payment-wechat-types.ts](../packages/payment/src/providers/wechat/payment-wechat-types.ts)：`WechatOrderRequest`（L9，E）；`WechatNotifyResource`（L32，E）。
 
 ### 内部结构体补充定位
 

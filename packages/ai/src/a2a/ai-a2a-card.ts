@@ -1,28 +1,13 @@
 /**
- * @h-ai/ai — A2A Server 创建与传输层
+ * @h-ai/ai — A2A Agent Card 构建
  *
- * 基于 `@a2a-js/sdk/server` 封装，提供便捷的 A2A 服务器创建和 SDK 再导出。
- * @module ai-a2a-server
+ * 将模块的声明配置转换为实际支持的 A2A 协议能力。
+ * @module ai-a2a-card
  */
 
 import type { AgentCard } from '@a2a-js/sdk'
 
 import type { A2AAgentCardConfig } from './ai-a2a-types.js'
-
-// ─── SDK Server 类型导出 ───
-
-// 仅重导出应用层实现 executor 所需的类型；运行时 SDK 类由 ai.a2a 内部封装，避免暴露额外装配细节。
-
-export type {
-  AgentExecutionEvent,
-  AgentExecutor,
-  ExecutionEventBus,
-  ExecutionEventBusManager,
-  PushNotificationSender,
-  PushNotificationStore,
-  ServerCallContext,
-  TaskStore,
-} from '@a2a-js/sdk/server'
 
 // ─── 便捷工厂 ───
 
@@ -30,12 +15,10 @@ export type {
  * 从简化配置构建符合 SDK 规范的 AgentCard 对象
  *
  * @param config - 应用层提供的 Agent Card 配置
- * @returns 完整的 AgentCard 对象（可传给 DefaultRequestHandler）
+ * @returns 由共享 journal handler 提供的完整 AgentCard 对象
  *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * import { buildAgentCard } from '@h-ai/ai'
- *
  * const card = buildAgentCard({
  *   name: 'my-agent',
  *   description: 'An example agent',

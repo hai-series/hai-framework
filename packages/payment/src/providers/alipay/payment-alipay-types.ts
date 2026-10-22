@@ -2,11 +2,11 @@
  * @h-ai/payment — 支付宝类型
  *
  * 支付宝 Open API 的内部请求/响应类型。
- * @module alipay-types
+ * @module payment-alipay-types
  */
 
 import { z } from 'zod'
-import { parseAlipayTime } from './alipay-time.js'
+import { parseAlipayTime } from './payment-alipay-time.js'
 
 /** 支付宝北京时间，拒绝非法日历日期。 */
 const AlipayTimeSchema = z.string().refine(value => parseAlipayTime(value) !== undefined)

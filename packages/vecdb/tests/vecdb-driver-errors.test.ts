@@ -58,29 +58,16 @@ describe.sequential('vecdb optional drivers and error semantics', () => {
     await vecdb.close()
   })
 
-  it('qdrant collection.exists 遇到网络错误时应返回 QUERY_FAILED', async () => {
-    class MockQdrantGetCollectionError extends Error {
-      getActualType(): { status: number } {
-        return { status: 503 }
-      }
-    }
-
-    const getCollection = Object.assign(
-      async () => {
-        throw new MockQdrantGetCollectionError('network down')
-      },
-      { Error: MockQdrantGetCollectionError },
-    )
-
+  it.each([404, 503])('qdrant 按实际 SDK 顶层 HTTP status 处理不存在/失败：%s', async (status) => {
     vi.doMock('@qdrant/js-client-rest', () => ({
       QdrantClient: class {
         getCollections = async () => ({ collections: [] })
-        getCollection = getCollection
+        getCollection = async () => { throw Object.assign(new Error('request failed'), { status }) }
         createCollection = async () => ({})
         deleteCollection = async () => ({})
         upsert = async () => ({})
         delete = async () => ({})
-        search = async () => []
+        query = async () => ({ points: [] })
       },
     }))
 
@@ -92,8 +79,11 @@ describe.sequential('vecdb optional drivers and error semantics', () => {
     expect(initResult.success).toBe(true)
 
     const existsResult = await vecdb.collection.exists('test-coll')
-    expect(existsResult.success).toBe(false)
-    if (!existsResult.success) {
+    expect(existsResult.success).toBe(status === 404)
+    if (existsResult.success) {
+      expect(existsResult.data).toBe(false)
+    }
+    else {
       expect(existsResult.error.code).toBe(HaiVecdbError.QUERY_FAILED.code)
     }
 

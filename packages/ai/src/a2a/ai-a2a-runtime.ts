@@ -3,13 +3,13 @@
  * @module ai-a2a-runtime
  */
 import type { AgentCard, Message, MessageSendParams, Task, TaskIdParams, TaskQueryParams } from '@a2a-js/sdk'
-import type { AgentExecutionEvent, AgentExecutor, ExecutionEventBus, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
+import type { A2ARequestHandler, AgentExecutionEvent, AgentExecutor, ExecutionEventBus, ServerCallContext } from '@a2a-js/sdk/server'
 import type { AIRelStore, AIVersionedRecord } from '../store/ai-store-types.js'
 import type { A2AMessageRecord } from './ai-a2a-types.js'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { A2AError, DefaultExecutionEventBus, DefaultRequestHandler, RequestContext, ResultManager } from '@a2a-js/sdk/server'
+import { A2AError, DefaultExecutionEventBus, RequestContext, ResultManager } from '@a2a-js/sdk/server'
 import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 
@@ -74,16 +74,45 @@ function principal(context?: ServerCallContext): string {
  * 共享执行器；未知外部效果不会在另一个节点自动重放。
  * @example const task = await handler.getTask({ id: receipt }, trustedContext)
  */
-export class SharedA2ARequestHandler extends DefaultRequestHandler {
+export class SharedA2ARequestHandler implements A2ARequestHandler {
   private readonly executions = new Map<string, { controller: AbortController, done: Promise<void> }>()
   private closed = false
   private readonly journal: ReturnType<typeof safeState<A2AJournal>>
   private readonly contexts: ReturnType<typeof safeState<{ owner: string }>>
 
-  constructor(card: AgentCard, taskStore: TaskStore, private readonly executor: AgentExecutor, journal: AIRelStore<A2AJournal>, contexts: AIRelStore<{ owner: string }>, private readonly messages: AIRelStore<A2AMessageRecord>, private readonly options: A2ARuntimeOptions) {
-    super(card, taskStore, executor)
+  constructor(private readonly card: AgentCard, private readonly executor: AgentExecutor, journal: AIRelStore<A2AJournal>, contexts: AIRelStore<{ owner: string }>, private readonly messages: AIRelStore<A2AMessageRecord>, private readonly options: A2ARuntimeOptions) {
     this.journal = safeState(journal)
     this.contexts = safeState(contexts)
+  }
+
+  /** 只返回当前公开 Agent Card；任务权威状态完全由共享 journal 负责。 */
+  async getAgentCard(): Promise<AgentCard> {
+    return this.card
+  }
+
+  /** 未配置扩展卡时保留 SDK 的标准协议错误。 */
+  async getAuthenticatedExtendedAgentCard(): Promise<never> {
+    throw A2AError.authenticatedExtendedCardNotConfigured()
+  }
+
+  /** 未声明推送能力，拒绝通过 SDK 的其它存储路径读写任务。 */
+  async setTaskPushNotificationConfig(): Promise<never> {
+    throw A2AError.pushNotificationNotSupported()
+  }
+
+  /** 未声明推送能力，保留标准 unsupported 错误。 */
+  async getTaskPushNotificationConfig(): Promise<never> {
+    throw A2AError.pushNotificationNotSupported()
+  }
+
+  /** 未声明推送能力，保留标准 unsupported 错误。 */
+  async listTaskPushNotificationConfigs(): Promise<never> {
+    throw A2AError.pushNotificationNotSupported()
+  }
+
+  /** 未声明推送能力，保留标准 unsupported 错误。 */
+  async deleteTaskPushNotificationConfig(): Promise<never> {
+    throw A2AError.pushNotificationNotSupported()
   }
 
   /**
@@ -394,7 +423,7 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
     }
   }
 
-  override async sendMessage(params: MessageSendParams, context?: ServerCallContext): Promise<Message | Task> {
+  async sendMessage(params: MessageSendParams, context?: ServerCallContext): Promise<Message | Task> {
     const run = await this.begin(params, context)
     if (params.configuration?.blocking === false)
       return structuredClone((await this.inspect(run.id, run.owner)).task)
@@ -403,7 +432,7 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
     return structuredClone(final.result ?? final.task)
   }
 
-  override async* sendMessageStream(params: MessageSendParams, context?: ServerCallContext): AsyncGenerator<AgentExecutionEvent, void, undefined> {
+  async* sendMessageStream(params: MessageSendParams, context?: ServerCallContext): AsyncGenerator<AgentExecutionEvent, void, undefined> {
     const run = await this.begin(params, context)
     yield structuredClone((await this.inspect(run.id, run.owner)).task)
     yield* this.watch(run.id, run.owner)
@@ -430,13 +459,13 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
     throw A2AError.internalError(aiM('ai_a2aRuntimeClosed'))
   }
 
-  override async getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task> {
+  async getTask(params: TaskQueryParams, context?: ServerCallContext): Promise<Task> {
     const task = structuredClone((await this.inspect(params.id, principal(context))).task)
     task.history = params.historyLength && params.historyLength > 0 ? task.history?.slice(-params.historyLength) : []
     return task
   }
 
-  override async cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task> {
+  async cancelTask(params: TaskIdParams, context?: ServerCallContext): Promise<Task> {
     const owner = principal(context)
     const current = await this.inspect(params.id, owner)
     if (FINAL_STATES.has(current.task.status.state))
@@ -455,7 +484,7 @@ export class SharedA2ARequestHandler extends DefaultRequestHandler {
     return (await this.inspect(params.id, owner)).task
   }
 
-  override async* resubscribe(params: TaskIdParams, context?: ServerCallContext): AsyncGenerator<Exclude<AgentExecutionEvent, Message>, void, undefined> {
+  async* resubscribe(params: TaskIdParams, context?: ServerCallContext): AsyncGenerator<Exclude<AgentExecutionEvent, Message>, void, undefined> {
     const owner = principal(context)
     yield structuredClone((await this.inspect(params.id, owner)).task)
     for await (const event of this.watch(params.id, owner)) {

@@ -38,7 +38,6 @@ export type {
 } from '@a2a-js/sdk'
 
 export type {
-  TaskStore as A2ATaskStore,
   AgentExecutor,
   ExecutionEventBus,
   RequestContext,

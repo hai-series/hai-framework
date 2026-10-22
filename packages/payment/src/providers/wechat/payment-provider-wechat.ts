@@ -2,13 +2,13 @@
  * @h-ai/payment — 微信支付 Provider
  *
  * 实现 PaymentProvider 接口，对接微信支付 API v3。
- * @module wechat-pay-provider
+ * @module payment-provider-wechat
  */
 
 import type { HaiResult } from '@h-ai/core'
 import type { WechatPayConfig } from '../../payment-config.js'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
-import type { WechatOrderRequest } from './wechat-pay-types.js'
+import type { WechatOrderRequest } from './payment-wechat-types.js'
 import { X509Certificate } from 'node:crypto'
 import { err, ok } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
@@ -22,8 +22,8 @@ import {
   signJsapi,
   signRequest,
   verifyNotifySignature,
-} from './wechat-pay-sign.js'
-import { WechatNotifyEnvelopeSchema, WechatNotifyResourceSchema } from './wechat-pay-types.js'
+} from './payment-wechat-sign.js'
+import { WechatNotifyEnvelopeSchema, WechatNotifyResourceSchema } from './payment-wechat-types.js'
 
 /** 微信支付 API 基地址 */
 const WECHAT_API_BASE = 'https://api.mch.weixin.qq.com'

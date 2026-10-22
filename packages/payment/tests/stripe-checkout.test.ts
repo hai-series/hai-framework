@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { invokePayment } from '../src/client/payment-client-web'
 import { StripeConfigSchema } from '../src/payment-config'
 import { HaiPaymentError } from '../src/payment-types'
-import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
+import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
 
 const config = {
   secretKey: 'sk_test_key',

@@ -97,6 +97,8 @@ await audit.init({
 - `audit.helper.login/logout/register/...`：記録用ヘルパー。
 - `audit.close()`：モジュールを終了。
 
+一般的なイベントは `audit.helper` で記録し、対応する `AuditHelper` 型は公開を維持します。内部の組み立て用ファクトリーはパッケージ API に含めません。
+
 #### 入力制約
 
 - `audit.log(input)`：`action` / `resource` は空でない文字列で、長さは 256 文字以内。

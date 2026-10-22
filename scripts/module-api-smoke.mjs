@@ -31,7 +31,8 @@ const browsers = new Map([
 ])
 
 const hidden = new Map([
-  ['ai', ['LLMProvider', 'AILLMFunctionsDeps', 'ContextDeps', 'EmbeddingProvider', 'sessionStoreKey']],
+  ['ai', ['LLMProvider', 'AILLMFunctionsDeps', 'ContextDeps', 'EmbeddingProvider', 'sessionStoreKey', 'A2ATaskStore']],
+  ['audit', ['createHelper']],
   ['cache', ['CacheProvider']],
   ['storage', ['StorageProvider']],
   ['reldb', ['ReldbProvider']],

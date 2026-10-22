@@ -90,6 +90,10 @@ Chroma の任意の `apiKey` は、このモジュールの規約として `Auth
 
 直接接続の初期化全体の期限は 5 秒です。ローカルサービス起動では `startupTimeout` を使用します。期限を超えると候補 HTTP リクエストを中止します。成功時はタイマーを解除するため、この期限は以後の業務リクエストには適用されません。
 
+Qdrant は `@qdrant/js-client-rest 1.18.0` の実際の型と Query API を使用し、名前のない単一ベクトルフィールドと cosine/euclidean/dot に対応します。外部の named-vector・Manhattan 集合の info・書き込み・検索は `CONFIG_ERROR` を返し、ゼロ次元や既定 cosine と推測しません。集合が存在しないと判断するのは HTTP 404 のみです。Provider の URL ログは core の共通マスク処理を使います。
+
+Chroma の metadata/filter は `chromadb 3.5.0` の検証に従います。不正値は操作エラーとなり、フィルターの削除や無条件検索にはフォールバックしません。content は省略でき、検索結果は `undefined` のままです。内部書き込みでは SDK の文字列フィールドに合わせます。null・複雑なメタデータ・フィルターの意味はバックエンドごとに確認してください。
+
 LanceDB は次元数を Arrow の固定長 vector フィールドに、集合の metric を同じ schema の metadata に永続化し、空の集合も復元できます。`collection.create` の metric を優先し、接続設定は新規集合の既定値としてのみ使用します。再起動や既定値の変更で既存の集合は変わりません。各操作は永続 schema と他の接続のコミットを確認します。定義が欠落・不正な場合は `CONFIG_ERROR` を返し、仮のベクトルによる推測はしません。定義のない旧形式・外部テーブルは再作成してください。互換推定は提供しません。
 
 LanceDB はローカルファイルを使う組み込みバックエンドです。同じ永続ディレクトリと LanceDB の並行コミットを支えるファイルシステムを使うプロセス間のみでデータを共有します。別ノードの同名ローカルパスは共有されません。分散サービスには pgvector、Qdrant、Chroma サーバーを推奨します。AI Knowledge は reldb と vecdb の両方を永続化し、同じ業務データセットに接続してください。embedding 次元を変更する場合は集合の再作成が必要です。

@@ -2,7 +2,7 @@
  * @h-ai/payment — 微信支付类型
  *
  * 微信支付 API v3 的内部请求/响应类型。
- * @module wechat-pay-types
+ * @module payment-wechat-types
  */
 
 import { z } from 'zod'

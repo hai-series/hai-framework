@@ -4,10 +4,10 @@ import { createCipheriv, createHmac, createPublicKey, createSign, generateKeyPai
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AlipayConfigSchema, StripeConfigSchema } from '../src/payment-config'
 import { HaiPaymentError } from '../src/payment-types'
-import { createAlipayProvider } from '../src/providers/alipay/alipay-provider'
-import { formatAlipayTime } from '../src/providers/alipay/alipay-time'
-import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
-import { createWechatPayProvider } from '../src/providers/wechat/wechat-pay-provider'
+import { formatAlipayTime } from '../src/providers/alipay/payment-alipay-time'
+import { createAlipayProvider } from '../src/providers/alipay/payment-provider-alipay'
+import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
+import { createWechatPayProvider } from '../src/providers/wechat/payment-provider-wechat'
 
 const now = new Date('2026-10-22T00:00:00Z')
 const pair = generateKeyPairSync('rsa', {

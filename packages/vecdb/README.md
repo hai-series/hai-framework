@@ -90,6 +90,10 @@ Chroma 的可选 `apiKey` 按本模块约定发送 `Authorization: Bearer <apiKe
 
 直连初始化的总截止为 5 秒，本地服务拉起使用 `startupTimeout`。超时中止候选 HTTP 请求；成功后清除初始化 timer，此截止不限制后续业务请求。
 
+Qdrant 使用 `@qdrant/js-client-rest 1.18.0` 的实际类型与 Query API，支持未命名向量字段的 cosine/euclidean/dot 集合。外部 named-vector 或 Manhattan 集合的 info/写入/搜索返回 `CONFIG_ERROR`，不猜测为零维或默认 cosine；仅 HTTP 404 表示集合不存在。Provider 的 URL 日志复用 core 的统一脱敏。
+
+Chroma 的 metadata/filter 遵循 `chromadb 3.5.0` 原生校验，非法值返回操作错误，不丢弃过滤或回退为无过滤查询。可省略文档 content，搜索仍返回 `undefined`；内部按 SDK 的字符串字段传递。各后端的 null、复杂元数据与过滤语义需单独核对。
+
 LanceDB 将向量维度存于 Arrow 固定长度 vector 字段，将集合 metric 存于同一 schema 的 metadata；空表也可正确恢复。`collection.create` 中的 metric 优先于连接配置，连接 metric 仅是新集合的默认值。重启或更换默认值不会改变已有集合。每次操作读取持久 schema，并检查其它连接的提交；缺少有效集合定义时返回 `CONFIG_ERROR`，不探测假向量或猜测 metric。旧表/外部表如缺少该定义，需要重建集合，不提供兼容推断。
 
 LanceDB 是嵌入式本地文件后端。只有访问相同持久目录、且底层文件系统支持 LanceDB 并发提交的进程才能共享数据；不同节点各自的同名本地路径互不共享。分布式服务优先选择 pgvector、Qdrant 或 Chroma 服务端。AI Knowledge 的 reldb 与 vecdb 都须持久化并指向同一业务数据集，替换 embedding 维度时须重建匹配的集合。

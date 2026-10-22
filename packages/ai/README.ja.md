@@ -196,6 +196,8 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 A2A の journal・context 所有者・メッセージテーブルは `ai.init()` で初期化します。取得・キャンセル・継続は信頼された `agentId` で分離します。匿名は共通主体のため、本番は信頼された伝送層で認証してください。`listMessages` は `callerId`・`contextId`・`since` を持つ管理 API であり、未認可クライアントへ公開しません。
 
+Task とイベントは同じ共有 journal を使用し、従来の独立 TaskStore は組み込みません。push notification 設定と authenticated extended card の RPC は SDK 標準の未対応・未設定エラーを返し、タスクを実行しません。executor 関連型は公開を維持し、内部 handler/Store の組み立て型は公開契約に含めません。
+
 入力メッセージの永続化後、共有実行世代と期限を再確認してから executor を開始します。agent メッセージは既存の有界イベントキューでログ保存を待ち、journal に公開します。保存失敗は failed/interrupted Task となり、成功を偽装せず、同じメッセージの再送で業務を再実行しません。ログと journal は別レコードなので、ログの存在だけで配信成功と判断せず、Task の `requiresEffectReconciliation` に従って副作用を確認します。照会失敗は SQL・接続情報を含まない `A2A_LIST_MESSAGES_FAILED`（984）です。
 
 Task とイベントは同じ CAS で保存し、任意ノードで購読できます。同一 message ID/内容の再試行は同じ結果を返し、内容変更や古いラウンドは拒否します。別ノードからのキャンセルは実行 owner の executor.cancelTask を呼び、確認待ちの間は同じ Task の新規メッセージを拒否して古いコールバックの影響を防ぎます。input-required は再起動後も継続できます。租約切れ・実行期限・working のまま終了した実行器は failed/interrupted となり、`metadata.haiExecution.requiresEffectReconciliation=true` を付けます。古い owner の書き込みと未知の外部効果の自動再実行を禁止します。`a2a.execution` の既定値は `leaseMs: 30000`、`pollIntervalMs: 250`、`maxExecutionMs: 300000`。上限はメッセージ 1 MiB、journal 8 MiB、1 ラウンド 2048 イベント、Task 256 回执、reference tasks 32 件です。安定した業務冪等キーと外部効果の照合が必要です。[共有状態表（中国語）](../../docs/distributed-state.md)に保証と検証範囲を記載しています。

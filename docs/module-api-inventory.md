@@ -4,11 +4,11 @@
 
 | 包 | 公开子路径/条件 | 命名 API 数 |
 | --- | --- | --- |
-| @h-ai/ai | `. (browser/default)` | 323 |
-| @h-ai/ai | `. (browser/types)` | 323 |
-| @h-ai/ai | `. (default)` | 327 |
-| @h-ai/ai | `. (import)` | 327 |
-| @h-ai/ai | `. (types)` | 327 |
+| @h-ai/ai | `. (browser/default)` | 322 |
+| @h-ai/ai | `. (browser/types)` | 322 |
+| @h-ai/ai | `. (default)` | 326 |
+| @h-ai/ai | `. (import)` | 326 |
+| @h-ai/ai | `. (types)` | 326 |
 | @h-ai/ai | `./client (import)` | 4 |
 | @h-ai/ai | `./client (types)` | 4 |
 | @h-ai/api-client | `. (default)` | 12 |
@@ -25,9 +25,9 @@
 | @h-ai/api-contract | `./payment (types)` | 15 |
 | @h-ai/api-contract | `./storage (import)` | 17 |
 | @h-ai/api-contract | `./storage (types)` | 17 |
-| @h-ai/audit | `. (default)` | 14 |
-| @h-ai/audit | `. (import)` | 14 |
-| @h-ai/audit | `. (types)` | 14 |
+| @h-ai/audit | `. (default)` | 13 |
+| @h-ai/audit | `. (import)` | 13 |
+| @h-ai/audit | `. (types)` | 13 |
 | @h-ai/cache | `. (default)` | 25 |
 | @h-ai/cache | `. (import)` | 25 |
 | @h-ai/cache | `. (types)` | 25 |

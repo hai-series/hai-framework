@@ -1,5 +1,5 @@
 /**
- * @h-ai/payment — wechat-pay-provider（微信支付 Provider）单元测试
+ * @h-ai/payment — payment-provider-wechat（微信支付 Provider）单元测试
  *
  * 通过 mock fetch 测试微信支付 Provider 的各项操作。
  */
@@ -8,7 +8,7 @@ import { Buffer } from 'node:buffer'
 import { createCipheriv, createSign, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiPaymentError } from '../src/payment-types'
-import { createWechatPayProvider } from '../src/providers/wechat/wechat-pay-provider'
+import { createWechatPayProvider } from '../src/providers/wechat/payment-provider-wechat'
 
 // 生成测试用 RSA 密钥对
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
@@ -45,7 +45,7 @@ function signNotifyPayload(timestamp: string, nonce: string, body: string, key: 
 /** 按平台公钥 ID 选择验签密钥的测试配置。 */
 const testConfigWithCert = { ...testConfig }
 
-describe('wechat-pay-provider', () => {
+describe('payment-provider-wechat', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {

@@ -1,5 +1,5 @@
 /**
- * @h-ai/payment — alipay-sign（支付宝签名）单元测试
+ * @h-ai/payment — payment-alipay-sign（支付宝签名）单元测试
  *
  * 覆盖纯函数：signAlipayParams, verifyAlipayNotify。
  */
@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import {
   signAlipayParams,
   verifyAlipayNotify,
-} from '../../src/providers/alipay/alipay-sign'
+} from '../../src/providers/alipay/payment-alipay-sign'
 
 /** 测试用 RSA 密钥对 */
 const { publicKey: alipayPublicKey, privateKey: appPrivateKey } = generateKeyPairSync('rsa', {

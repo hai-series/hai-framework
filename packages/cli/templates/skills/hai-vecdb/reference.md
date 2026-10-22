@@ -182,6 +182,8 @@ Chroma 直连 `url` 仅支持 HTTP(S) 根端点，优先于 `host/port`；URL �
 
 直连初始化总截止为 5 秒，本地服务拉起使用 `startupTimeout`；超时中止候选 HTTP 请求。成功清除初始化 timer，不限制后续业务请求。
 
+Qdrant 使用 `@qdrant/js-client-rest 1.18.0`，仅支持未命名向量字段的 cosine/euclidean/dot；外部 named-vector/Manhattan 集合的 info/写入/搜索返回 CONFIG_ERROR，不猜测维度或 metric。Chroma 使用 `chromadb 3.5.0` 的真实类型及 metadata/filter 校验，非法输入返回操作错误，不丢弃过滤；content 可省略。各后端的 null 和复杂元数据语义不承诺统一。
+
 **VectorDocument**：
 
 ```typescript

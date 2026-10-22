@@ -2,21 +2,21 @@
  * @h-ai/payment — 支付宝 Provider
  *
  * 实现 PaymentProvider 接口，对接支付宝 Open API。
- * @module alipay-provider
+ * @module payment-provider-alipay
  */
 
 import type { HaiResult } from '@h-ai/core'
 import type { ZodType } from 'zod'
 import type { AlipayConfig } from '../../payment-config.js'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
-import type { AlipayNotifyParams } from './alipay-types.js'
+import type { AlipayNotifyParams } from './payment-alipay-types.js'
 import { err, ok } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
-import { signAlipayParams, verifyAlipayNotify } from './alipay-sign.js'
-import { formatAlipayTime, parseAlipayTime } from './alipay-time.js'
-import { AlipayCloseResponseSchema, AlipayNotifyParamsSchema, AlipayQueryResponseSchema, AlipayRefundResponseSchema, AlipayResponseRootSchema, AlipayResponseSchema } from './alipay-types.js'
+import { signAlipayParams, verifyAlipayNotify } from './payment-alipay-sign.js'
+import { formatAlipayTime, parseAlipayTime } from './payment-alipay-time.js'
+import { AlipayCloseResponseSchema, AlipayNotifyParamsSchema, AlipayQueryResponseSchema, AlipayRefundResponseSchema, AlipayResponseRootSchema, AlipayResponseSchema } from './payment-alipay-types.js'
 
 /** 支付宝网关地址 */
 const ALIPAY_GATEWAY = 'https://openapi.alipay.com/gateway.do'

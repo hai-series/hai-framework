@@ -17,6 +17,7 @@ describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
   let authorized = true
   let rejectedRequests = 0
   let authenticatedRequests = 0
+  let vectorWrites = 0
   const token = 'fixture-chroma-gateway-token'
 
   beforeAll(async () => {
@@ -36,6 +37,8 @@ describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
       }
       if (!heartbeat)
         authenticatedRequests += 1
+      if (request.method === 'POST' && /\/(?:add|upsert)$/.test(request.url ?? ''))
+        vectorWrites += 1
       const proxy = httpRequest({ ...upstream, path: request.url, method: request.method, headers: request.headers }, (received) => {
         response.writeHead(received.statusCode ?? 502, received.headers)
         received.pipe(response)
@@ -107,6 +110,28 @@ describe.sequential('chroma actual SDK behind a Bearer gateway', () => {
       authorized = true
       await first.close()
       await second.close()
+    }
+  }, 30_000)
+
+  it('可省略 content，宽 metadata/filter 仍由真实 SDK 校验后才发送向量请求', async () => {
+    const provider = createChromaProvider()
+    const name = 'native-sdk-boundary'
+    try {
+      expect((await provider.connect(VecdbConfigSchema.parse({ type: 'chroma', url, apiKey: token }))).success).toBe(true)
+      expect((await provider.collection.create(name, { dimension: 3 })).success).toBe(true)
+      expect((await provider.vector.insert(name, [{ id: 'without-content', vector: [1, 0, 0], metadata: { tenant: 'alpha', active: true } }])).success).toBe(true)
+      const result = await provider.vector.search(name, [1, 0, 0], { filter: { tenant: 'alpha', active: true } })
+      expect(result.success && result.data).toMatchObject([{ id: 'without-content', content: undefined, metadata: { tenant: 'alpha', active: true } }])
+      const before = vectorWrites
+      expect((await provider.vector.insert(name, [{ id: 'invalid-metadata', vector: [1, 0, 0], metadata: { nested: { unsupported: true } } }])).success).toBe(false)
+      expect(vectorWrites).toBe(before)
+      const count = await provider.vector.count(name)
+      expect(count.success && count.data).toBe(1)
+      expect((await provider.vector.search(name, [1, 0, 0], { filter: { tenant: { $invalid: 'operator' } } })).success).toBe(false)
+      expect((await provider.collection.drop(name)).success).toBe(true)
+    }
+    finally {
+      await provider.close()
     }
   }, 30_000)
 })

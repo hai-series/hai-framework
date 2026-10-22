@@ -3,7 +3,7 @@
  *
  * 实现 PaymentProvider 接口，对接 Stripe API。
  * 使用 Stripe Checkout Session 模式。
- * @module stripe-provider
+ * @module payment-provider-stripe
  */
 
 import type { HaiResult } from '@h-ai/core'
@@ -17,7 +17,7 @@ import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
 import { getNotifyHeader } from '../payment-provider-notify.js'
-import { StripeOperationRepository } from './stripe-operation-repository.js'
+import { StripeOperationRepository } from './payment-stripe-repository-operation.js'
 
 /** Stripe API 基地址 */
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'

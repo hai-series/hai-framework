@@ -10,6 +10,8 @@
 
 ## 文件命名与职责
 
+- 常规模块源文件使用 `<模块>[-<领域>]-<角色>[-<实体或实现>].ts`；同族文件的角色位置一致，例如 `scheduler-repository-task.ts`、`payment-provider-wechat.ts`。嵌套目录也保留模块前缀，便于日志、搜索和独立审阅定位。
+- 框架固定入口 `index.ts`、条件入口 `browser.ts`、Svelte 组件 `PascalCase.svelte` 及其局部工具保留实际契约；`api-contract` 按协议领域命名 `payment-schemas.ts` 等，不叠加无意义的包名前缀。审查依据与 21 包例外见[代码风格清单](../../docs/module-code-style.md)。
 - `xx-main.ts`：模块主入口，仅生命周期管理（init/close）和 API 编排，禁止具体业务逻辑（调度循环、数据处理等）
 - `xx-types.ts`：对外接口类型定义（public types）
 - `xx-config.ts`：配置定义与默认值、错误定义（现有模块通常在 xx-types.ts；以实际定义为准）
@@ -115,7 +117,7 @@ function register(tool: Tool): HaiResult<void> {
 
 - 只 export 使用方直接需要的类型/函数，内部辅助类型不导出
 - `xx-types.ts` 中的公共类型只含使用方关心的字段，不暴露内部实现细节（DB 列名、Provider 内部状态等）
-- Provider 接口是内部实现，禁止暴露给模块消费者
+- 内置 Provider 的装配接口属于内部实现；公开注册/依赖注入契约所需的 Provider 类型可以导出，范围以真实扩展入口为准（如 `payment.registerProvider`、`AIStoreProvider`）。
 - 模块消费者需要的上游类型，在模块自身 re-export，不要求消费者 import 上游包
 
 ### 参数精简
@@ -169,11 +171,11 @@ function register(tool: Tool): HaiResult<void> {
 
 日志上下文中可能包含敏感信息时（URL / 连接字符串 / 配置对象中的 password、token、apiKey、secret 等），必须先通过 `sanitize*` 辅助函数脱敏后再传入 logger，禁止直接输出原始值。
 
-| 场景                                        | 脱敏方式                                                                                |
-| ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 场景                                        | 脱敏方式                                                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | URL 类（redis://、postgres://、http:// 等） | 使用 `core.sanitize.sanitizeUrl()`；遮蔽 userinfo、敏感 query/OAuth fragment，非法地址返回固定占位符 |
-| 配置对象                                    | 剥离或遮蔽 `password`/`token`/`apiKey`/`secret` 字段                                    |
-| 函数命名                                    | `sanitize{Subject}`，放在对应 Provider / functions 文件顶部                             |
+| 配置对象                                    | 剥离或遮蔽 `password`/`token`/`apiKey`/`secret` 字段                                                 |
+| 函数命名                                    | `sanitize{Subject}`，放在对应 Provider / functions 文件顶部                                          |
 
 ## 模块禁止事项
 

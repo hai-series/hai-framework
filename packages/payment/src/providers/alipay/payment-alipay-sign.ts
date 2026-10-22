@@ -2,7 +2,7 @@
  * @h-ai/payment — 支付宝签名
  *
  * 支付宝 RSA2/RSA 签名与验签工具。
- * @module alipay-sign
+ * @module payment-alipay-sign
  */
 
 import { createSign, createVerify } from 'node:crypto'

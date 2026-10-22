@@ -97,6 +97,8 @@ await audit.init({
 - `audit.helper.login/logout/register/...` - 便捷记录器
 - `audit.close()` - 关闭模块
 
+常见事件通过 `audit.helper` 记录，对应的 `AuditHelper` 类型保持公开；便捷记录器的内部装配工厂不属于包 API。
+
 #### 输入约束
 
 - `audit.log(input)`：`action` / `resource` 必须为非空字符串，且长度不超过 256。

@@ -18,6 +18,8 @@ README 文档入口：[简体中文](README.md) · [English](README.en.md) · [�
 
 5. 配置变量总表读取根 [.env.example](.env.example)；分环境加载与 CLI 模板入口读取 [环境配置与维护流程](README.md#配置与环境变量)。
 
+框架源码的文件族、固定入口例外与冗余清理依据见[21 包代码风格清单](docs/module-code-style.md)。
+
 公开入口审查读取 [21 包实际 API 清单](docs/module-api-inventory.md)。package.exports、公开 barrel、内部文件分层；允许 selective/type-only/Svelte 默认组件及 client/server 条件入口。内置 Provider/Deps 不公开，PaymentProvider 与 AIStoreProvider 保留真实扩展契约；IAM 浏览器仅配置/类型/错误；UI 仅明确组件 barrel，Kit 无 vite 子路径。源码仓库构建后用 generate:api/check:api/test:api 验证，应用按已安装版本消费。
 
 ## 生命周期与返回值

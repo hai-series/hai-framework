@@ -97,6 +97,8 @@ Audit logs are stored in the fixed `hai_audit_logs` table and require an initial
 - `audit.helper.login/logout/register/...`: convenient log helpers.
 - `audit.close()`: close the module.
 
+Record common events through `audit.helper`, with the public `AuditHelper` type. The helper's internal assembly factory is outside the package API.
+
 #### Input constraints
 
 - `audit.log(input)`: `action` / `resource` must be nonempty strings of at most 256 characters.

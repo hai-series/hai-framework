@@ -4,10 +4,10 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { StripeOperationRepository } from '../src/providers/stripe/stripe-operation-repository'
-import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
+import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
+import { StripeOperationRepository } from '../src/providers/stripe/payment-stripe-repository-operation'
 
-const config = { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' }
+const config = { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key', webhookToleranceSeconds: 300 }
 const orderInput: CreateOrderInput = {
   orderNo: 'ORDER-1',
   amount: 100,
@@ -38,7 +38,7 @@ describe('stripe persistent operations', () => {
   let loseResponse: Set<string>
   let createdOrders: number
   let createdRefunds: number
-  let fetchMock: ReturnType<typeof vi.fn>
+  let fetchMock: ReturnType<typeof vi.fn<(url: string, options: RequestInit) => Promise<Response>>>
 
   beforeEach(async () => {
     const temporaryRoot = path.resolve(import.meta.dirname, '../../../tmp')

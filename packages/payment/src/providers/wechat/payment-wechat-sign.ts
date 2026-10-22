@@ -2,7 +2,7 @@
  * @h-ai/payment — 微信支付签名
  *
  * 微信支付 API v3 签名生成与验签工具。
- * @module wechat-pay-sign
+ * @module payment-wechat-sign
  */
 
 import { Buffer } from 'node:buffer'

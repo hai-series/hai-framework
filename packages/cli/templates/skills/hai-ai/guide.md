@@ -16,11 +16,12 @@
 ## 初始化与关闭
 
 ```ts
-import { core } from '@h-ai/core'
 import { ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
 
 const init = await ai.init(core.config.get('ai'))
-if (!init.success) return init
+if (!init.success)
+  return init
 
 // LLM-only：未初始化 DB 时使用进程内临时 Store
 // ... 使用 ai.llm
@@ -28,42 +29,44 @@ if (!init.success) return init
 await ai.close()
 ```
 
-需要持久化时先初始化 DB：
+需要持久化时先校验三份配置，再按依赖顺序初始化。此片段位于应用启动生命周期；应用统一关闭管理器负责释放已获取的依赖，初始化失败时不接收业务请求。
 
 ```ts
+import { ai, AIConfigSchema } from '@h-ai/ai'
+import { core } from '@h-ai/core'
+import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+
+const databaseConfig = core.config.validate('db', ReldbConfigSchema)
+if (!databaseConfig.success)
+  return databaseConfig
+const vectorConfig = core.config.validate('vecdb', VecdbConfigSchema)
+if (!vectorConfig.success)
+  return vectorConfig
+const aiConfig = core.config.validate('ai', AIConfigSchema)
+if (!aiConfig.success)
+  return aiConfig
+const database = await reldb.init(databaseConfig.data)
+if (!database.success)
+  return database
+const vectors = await vecdb.init(vectorConfig.data)
+if (!vectors.success)
+  return vectors
+return await ai.init(aiConfig.data)
+```
+
+应用的关闭生命周期按依赖反序执行。失败时保留下层依赖并报告错误，待修正后重试关闭；业务异常也须进入同一个关闭管理器。
+
+```ts
+import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-// 应用生命周期在 finally 中释放依赖，初始化失败不继续接收业务请求。
-try {
-  const database = await reldb.init(core.config.get('db'))
-  if (!database.success)
-    return database
-  try {
-    const vectors = await vecdb.init(core.config.get('vecdb'))
-    if (!vectors.success)
-      return vectors
-    try {
-      const init = await ai.init(core.config.get('ai'))
-      if (!init.success)
-        return init
-      // ... 在此 await 使用 AI 的业务逻辑。
-    }
-    finally {
-      await ai.close()
-    }
-  }
-  finally {
-    const closed = await vecdb.close()
-    if (!closed.success)
-      throw new Error(closed.error.message)
-  }
-}
-finally {
-  const closed = await reldb.close()
-  if (!closed.success)
-    throw new Error(closed.error.message)
-}
+await ai.close() // AI 按实际 Promise<void> 契约关闭
+const vectorsClosed = await vecdb.close()
+if (!vectorsClosed.success)
+  return vectorsClosed
+return await reldb.close()
 ```
 
 MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
@@ -86,7 +89,7 @@ llm:
   timeout: 60000
   tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
   models: # 可为单个模型指定协议（responses / anthropic）
-    - { id: claude, model: claude-3-5-sonnet-latest, api: anthropic }
+    - {id: claude, model: claude-3-5-sonnet-latest, api: anthropic}
   scenarios:
     chat: fast
     reasoning: strong
@@ -118,31 +121,31 @@ memory:
 
 ## 常用 API
 
-| 场景 | 首选 API | 备注 |
-| --- | --- | --- |
-| 非流式对话 | `ai.llm.chat({ messages })` | OpenAI 兼容 Chat Completion |
-| 流式对话 | `ai.llm.chatStream({ messages })` | 返回 `AsyncIterable` |
-| 多协议 | 模型 `api: chat/responses/anthropic` | 底层走 Chat Completions / Responses / Anthropic，公共形状不变 |
-| 请求取消 | `ai.llm.chat({ messages, signal })` | 传 `AbortSignal`，`abort()` 立即停上游生成 |
-| 临时模型 | `ai.llm.chat({ messages, tempModel })` | 单次请求级临时端点，客户端按 TTL 缓存 |
-| 工具定义 | `ai.tools.define(...)` | Zod schema 转 JSON Schema；`handler(input, ctx)` 第二参为执行上下文 |
-| 工具注册 | `registry.register/replace` | `register` 默认拒绝同名并返回 HaiResult；只有 `replace` 可显式替换 |
-| 工具执行 | `registry.execute(tc, { signal, objectId, sessionId, deadline?, timeoutMs?, authorize? })` / `executeAll(...)` | Registry/单次授权必须同时通过；默认串行，支持取消/超时；只有确认无副作用时才 `parallel: true` |
-| MCP 服务 | `createMcpServer(...)` | 按需连接 HTTP/SSE/Stdio transport |
-| Embedding | `ai.embedding.embedText(text)` | 批量用 `embedBatch` |
-| 记忆 | `ai.memory.extract/recall/injectMemories` | `extract(..., { signal })` 可取消整条提取链；用 `objectId` 做主体隔离，`scope` 做业务作用域隔离；scope 隔离越细，`candidateMultiplier` 调大以防漏召回 |
-| 记忆作用域 | `ai.memory.scoped({ objectId, scope })` | **多租户推荐入口**：所有操作自动绑定 objectId/scope（含归属校验）；`clear` 仅清作用域内 |
-| 记忆管理 | `ai.memory.admin.clearAll({ confirm: true })` | 唯一的全局清空入口（需显式确认）；`ai.memory.clear()` 空过滤会被拒绝，防误清全局 |
-| 角色人格 | `ai.persona.save/get/compose` | 定义 AI 身份（systemPrompt + traits），`compose` 组合系统提示词；按 `objectId` 隔离多租户（不传默认 `system` 平台角色），`scope: { personaId }` 关联长期记忆 |
-| Retrieval/RAG | `ai.retrieval.retrieve` / `ai.rag.query` | Retrieval source 先注册或由配置预置 |
-| Knowledge | `ai.knowledge.setup/ingest/ask` | 入库前会调用 datapipe 清洗分块 |
-| Context | `ai.context.createManager` | 编排 LLM + Memory + RAG + 压缩；`manager.consolidate()` 把会话固化为长期记忆 |
-| Context 并发 | `createManager({ scope, concurrency: 'reject' \| 'queue' })` | 默认单活动生成防消息乱序；活动生成期间新 chat 返回 `CONTEXT_BUSY`（reject）或排队（queue） |
-| Context 重置 | `await manager.reset({ preserveSystemPrompt?, cancelActiveTurn?, waitForMemoryTasks? })` | 异步：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词 |
-| 语音识别 | `ai.audio.transcribe` / `transcribeStream` | 完整音频返回 `HaiResult`；持续音频输入用 `AudioInputStream` 流式返回临时文本 |
-| 语音合成 | `ai.audio.synthesize` / `synthesizeStream` | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成）；完整结果可用 `serializePlayableAudio` 转为浏览器播放负载 |
-| 图片生成 | `ai.image.generate({ prompt, size?, model?, referenceImages? })` | 可选参考图使用字节 + MIME；Provider 协议和临时 URL 下载由模块内部处理 |
-| A2A | `ai.a2a.registerExecutor/handleRequest` | 延迟初始化 SDK handler |
+| 场景          | 首选 API                                                                                                       | 备注                                                                                                                                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 非流式对话    | `ai.llm.chat({ messages })`                                                                                    | OpenAI 兼容 Chat Completion                                                                                                                                  |
+| 流式对话      | `ai.llm.chatStream({ messages })`                                                                              | 返回 `AsyncIterable`                                                                                                                                         |
+| 多协议        | 模型 `api: chat/responses/anthropic`                                                                           | 底层走 Chat Completions / Responses / Anthropic，公共形状不变                                                                                                |
+| 请求取消      | `ai.llm.chat({ messages, signal })`                                                                            | 传 `AbortSignal`，`abort()` 立即停上游生成                                                                                                                   |
+| 临时模型      | `ai.llm.chat({ messages, tempModel })`                                                                         | 单次请求级临时端点，客户端按 TTL 缓存                                                                                                                        |
+| 工具定义      | `ai.tools.define(...)`                                                                                         | Zod schema 转 JSON Schema；`handler(input, ctx)` 第二参为执行上下文                                                                                          |
+| 工具注册      | `registry.register/replace`                                                                                    | `register` 默认拒绝同名并返回 HaiResult；只有 `replace` 可显式替换                                                                                           |
+| 工具执行      | `registry.execute(tc, { signal, objectId, sessionId, deadline?, timeoutMs?, authorize? })` / `executeAll(...)` | Registry/单次授权必须同时通过；默认串行，支持取消/超时；只有确认无副作用时才 `parallel: true`                                                                |
+| MCP 服务      | `createMcpServer(...)`                                                                                         | 按需连接 HTTP/SSE/Stdio transport                                                                                                                            |
+| Embedding     | `ai.embedding.embedText(text)`                                                                                 | 批量用 `embedBatch`                                                                                                                                          |
+| 记忆          | `ai.memory.extract/recall/injectMemories`                                                                      | `extract(..., { signal })` 可取消整条提取链；用 `objectId` 做主体隔离，`scope` 做业务作用域隔离；scope 隔离越细，`candidateMultiplier` 调大以防漏召回        |
+| 记忆作用域    | `ai.memory.scoped({ objectId, scope })`                                                                        | **多租户推荐入口**：所有操作自动绑定 objectId/scope（含归属校验）；`clear` 仅清作用域内                                                                      |
+| 记忆管理      | `ai.memory.admin.clearAll({ confirm: true })`                                                                  | 唯一的全局清空入口（需显式确认）；`ai.memory.clear()` 空过滤会被拒绝，防误清全局                                                                             |
+| 角色人格      | `ai.persona.save/get/compose`                                                                                  | 定义 AI 身份（systemPrompt + traits），`compose` 组合系统提示词；按 `objectId` 隔离多租户（不传默认 `system` 平台角色），`scope: { personaId }` 关联长期记忆 |
+| Retrieval/RAG | `ai.retrieval.retrieve` / `ai.rag.query`                                                                       | Retrieval source 先注册或由配置预置                                                                                                                          |
+| Knowledge     | `ai.knowledge.setup/ingest/ask`                                                                                | 入库前会调用 datapipe 清洗分块                                                                                                                               |
+| Context       | `ai.context.createManager`                                                                                     | 编排 LLM + Memory + RAG + 压缩；`manager.consolidate()` 把会话固化为长期记忆                                                                                 |
+| Context 并发  | `createManager({ scope, concurrency: 'reject' \| 'queue' })`                                                   | 默认单活动生成防消息乱序；活动生成期间新 chat 返回 `CONTEXT_BUSY`（reject）或排队（queue）                                                                   |
+| Context 重置  | `await manager.reset({ preserveSystemPrompt?, cancelActiveTurn?, waitForMemoryTasks? })`                       | 异步：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词                                                                                                   |
+| 语音识别      | `ai.audio.transcribe` / `transcribeStream`                                                                     | 完整音频返回 `HaiResult`；持续音频输入用 `AudioInputStream` 流式返回临时文本                                                                                 |
+| 语音合成      | `ai.audio.synthesize` / `synthesizeStream`                                                                     | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成）；完整结果可用 `serializePlayableAudio` 转为浏览器播放负载                         |
+| 图片生成      | `ai.image.generate({ prompt, size?, model?, referenceImages? })`                                               | 可选参考图使用字节 + MIME；Provider 协议和临时 URL 下载由模块内部处理                                                                                        |
+| A2A           | `ai.a2a.registerExecutor/handleRequest`                                                                        | 延迟初始化 SDK handler                                                                                                                                       |
 
 ## LLM + 工具调用
 
@@ -158,7 +161,8 @@ const registered = registry.register(ai.tools.define({
   parameters: z.object({ city: z.string() }),
   handler: async ({ city }) => ({ city, temperature: 20 }),
 }))
-if (!registered.success) return registered
+if (!registered.success)
+  return registered
 
 const messages: ChatMessage[] = [{ role: 'user', content: '北京天气？' }]
 const objectId = 'user-001'
@@ -170,7 +174,8 @@ while (result.success && result.data.choices[0]?.finish_reason === 'tool_calls')
   messages.push(assistant)
 
   const toolMessages = await registry.executeAll(toolCalls, { objectId })
-  if (!toolMessages.success) return toolMessages
+  if (!toolMessages.success)
+    return toolMessages
   messages.push(...toolMessages.data)
 
   result = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
@@ -183,7 +188,8 @@ while (result.success && result.data.choices[0]?.finish_reason === 'tool_calls')
 const processor = ai.stream.createProcessor()
 for await (const chunk of ai.llm.chatStream({ messages })) {
   const delta = processor.process(chunk)
-  if (delta?.content) process.stdout.write(delta.content)
+  if (delta?.content)
+    process.stdout.write(delta.content)
 }
 const message = processor.toAssistantMessage()
 ```
@@ -243,10 +249,12 @@ Mem0 的 pgvector 组合在所有环境拒绝启动：当前 SDK 将 PostgreSQL 
 
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
-if (!enriched.success) return enriched
+if (!enriched.success)
+  return enriched
 
 const compressed = await ai.compress.tryCompress(enriched.data, { strategy: 'hybrid', maxTokens: 4000 })
-if (!compressed.success) return compressed
+if (!compressed.success)
+  return compressed
 
 const answer = await ai.rag.query('核心架构是什么？', { sources: ['docs'], topK: 5 })
 ```
@@ -257,7 +265,8 @@ const answer = await ai.rag.query('核心架构是什么？', { sources: ['docs'
 
 ```ts
 const setup = await ai.knowledge.setup()
-if (!setup.success) return setup
+if (!setup.success)
+  return setup
 
 const ingest = await ai.knowledge.ingest({
   documentId: 'doc-001',
@@ -265,10 +274,12 @@ const ingest = await ai.knowledge.ingest({
   title: '产品手册',
   enableEntityExtraction: true,
 })
-if (!ingest.success) return ingest
+if (!ingest.success)
+  return ingest
 if (ingest.data.cleanupPending) {
   const repair = await ai.knowledge.repair({ offset: 0, limit: 100 })
-  if (!repair.success) return repair
+  if (!repair.success)
+    return repair
   // 大集合继续分页，并将 repair 全页扫描纳入定期维护。
 }
 
@@ -283,7 +294,6 @@ const answer = await ai.knowledge.ask('核心架构是什么？')
 
 自定义 `AIRelStore` 必须提供版本化读取、原子 CAS 和存储端 `currentTime()`；普通 save/saveMany 也推进版本。CAS 缺失版本只允许创建，notAfter 在最终持久化时严格检查，存储故障抛错不能当空数据；业务 HaiResult 边界负责转失败。默认 DB schema 含 version 列，不自动迁移旧表；SQLite 仅用于开发/测试，生产使用 PostgreSQL/MySQL。
 
-
 ```ts
 const managerResult = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'sess-001' },
@@ -291,11 +301,13 @@ const managerResult = ai.context.createManager({
   compress: { auto: true, strategy: 'hybrid', maxTokens: 8000 },
   memory: { enable: true, enableExtract: true },
 })
-if (!managerResult.success) return managerResult
+if (!managerResult.success)
+  return managerResult
 
 const reply = await managerResult.data.chat('你好')
 const saved = await managerResult.data.save()
-if (!saved.success) return saved
+if (!saved.success)
+  return saved
 ```
 
 ### 真实对话状态（Conversation Commit Layer）
@@ -304,13 +316,17 @@ if (!saved.success) return saved
 
 ```ts
 const manager = ai.context.createManager({ turnCommit: 'manual', scope })
-if (!manager.success) return manager
+if (!manager.success)
+  return manager
 const m = manager.data
 const controller = new AbortController()
 for await (const ev of m.chatStream('展开讲讲', { signal: controller.signal })) {
-  if (ev.type === 'delta') feedTts(ev.text)
-  else if (ev.type === 'done') await m.commitTurn(ev.turnId) // 完整提交
-  else if (ev.type === 'cancelled') await m.interruptTurn(ev.turnId, { text: spokenSoFar }) // 只提交播放出去的部分
+  if (ev.type === 'delta')
+    feedTts(ev.text)
+  else if (ev.type === 'done')
+    await m.commitTurn(ev.turnId) // 完整提交
+  else if (ev.type === 'cancelled')
+    await m.interruptTurn(ev.turnId, { text: spokenSoFar }) // 只提交播放出去的部分
 }
 ```
 
@@ -327,8 +343,8 @@ audio:
   # 仅当语音服务与 LLM 确认共用同一密钥时启用
   inheritLlmApiKey: true
   models:
-    - { id: asr, provider: qwen, model: qwen3-asr-flash-realtime, operations: [transcribe] }
-    - { id: tts, provider: qwen, model: qwen3-tts-flash-realtime, operations: [synthesize] }
+    - {id: asr, provider: qwen, model: qwen3-asr-flash-realtime, operations: [transcribe]}
+    - {id: tts, provider: qwen, model: qwen3-tts-flash-realtime, operations: [synthesize]}
   transcribeModel: asr
   synthesizeModel: tts
 ```
@@ -336,7 +352,8 @@ audio:
 ```ts
 // 完整识别 / 合成（HaiResult）
 const t = await ai.audio.transcribe({ audio: { data: wavBytes, format: 'wav' }, language: 'zh' })
-if (!t.success) return t
+if (!t.success)
+  return t
 const s = await ai.audio.synthesize({ text: '欢迎', voice: 'Cherry', format: 'pcm16' })
 
 // 实时识别：持续音频输入 → 增量文本（chunk.final 标记语句最终态，可直接覆盖临时文本）
@@ -386,11 +403,11 @@ image:
   maxImageBytes: 20971520 # 单张输出/参考图上限；最大100MiB
   maxImages: 4 # 1–16，URL串行下载；模型timeout覆盖整个生成/下载
   models:
-    - { id: free, provider: pollinations, model: zimage }
-    - { id: openai, provider: openai, model: gpt-image-2 }
-    - { id: google, provider: google, model: gemini-3.1-flash-image-preview }
-    - { id: qwen, provider: qwen, model: qwen-image-2.0-pro }
-    - { id: seedream, provider: seedream, model: doubao-seedream-5-0-260128 }
+    - {id: free, provider: pollinations, model: zimage}
+    - {id: openai, provider: openai, model: gpt-image-2}
+    - {id: google, provider: google, model: gemini-3.1-flash-image-preview}
+    - {id: qwen, provider: qwen, model: qwen-image-2.0-pro}
+    - {id: seedream, provider: seedream, model: doubao-seedream-5-0-260128}
   generateModel: free
 ```
 
@@ -402,7 +419,8 @@ const image = await ai.image.generate({
   size: { width: 1024, height: 1024 },
   referenceImages: [{ data: referenceBytes, mimeType: 'image/png' }],
 })
-if (!image.success) return image
+if (!image.success)
+  return image
 await saveImage(image.data.images[0].data, image.data.images[0].mimeType)
 ```
 
@@ -419,7 +437,8 @@ await saveImage(image.data.images[0].data, image.data.images[0].mimeType)
 export const POST = kit.handler(async ({ request }) => {
   const data = await kit.validate.body(request, ChatSchema)
   const result = await ai.llm.chat({ messages: data.messages })
-  if (!result.success) return kit.response.error(result.error.code, result.error.message)
+  if (!result.success)
+    return kit.response.error(result.error.code, result.error.message)
   return kit.response.ok(result.data)
 })
 ```

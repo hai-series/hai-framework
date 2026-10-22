@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { invokePayment } from '../src/client/payment-client-web'
 import { AlipayConfigSchema, WechatPayConfigSchema } from '../src/payment-config'
 import { HaiPaymentError } from '../src/payment-types'
-import { createAlipayProvider } from '../src/providers/alipay/alipay-provider'
-import { createWechatPayProvider } from '../src/providers/wechat/wechat-pay-provider'
+import { createAlipayProvider } from '../src/providers/alipay/payment-provider-alipay'
+import { createWechatPayProvider } from '../src/providers/wechat/payment-provider-wechat'
 
 const pair = generateKeyPairSync('rsa', {
   modulusLength: 2048,

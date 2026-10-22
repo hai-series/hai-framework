@@ -1,5 +1,5 @@
 /**
- * @h-ai/payment — alipay-provider（支付宝 Provider）单元测试
+ * @h-ai/payment — payment-provider-alipay（支付宝 Provider）单元测试
  *
  * 通过 mock fetch 测试支付宝 Provider 的各项操作。
  */
@@ -9,8 +9,8 @@ import { createSign, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AlipayConfigSchema } from '../src/payment-config'
 import { HaiPaymentError } from '../src/payment-types'
-import { createAlipayProvider } from '../src/providers/alipay/alipay-provider'
-import { formatAlipayTime } from '../src/providers/alipay/alipay-time'
+import { formatAlipayTime } from '../src/providers/alipay/payment-alipay-time'
+import { createAlipayProvider } from '../src/providers/alipay/payment-provider-alipay'
 
 // 生成测试用 RSA 密钥对
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
@@ -64,7 +64,7 @@ function buildNotifyBody(params: Record<string, string>): string {
     .join('&')
 }
 
-describe('alipay-provider', () => {
+describe('payment-provider-alipay', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {

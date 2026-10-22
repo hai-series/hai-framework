@@ -215,6 +215,7 @@ Common error codes:
 
 ```bash
 pnpm --filter @h-ai/payment test
+pnpm --filter @h-ai/payment exec vitest run tests/payment-provider-alipay.test.ts tests/payment-provider-wechat.test.ts tests/payment-provider-stripe.test.ts
 ```
 
 ## License

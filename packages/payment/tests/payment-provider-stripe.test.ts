@@ -1,5 +1,5 @@
 /**
- * @h-ai/payment — stripe-provider（Stripe Provider）单元测试
+ * @h-ai/payment — payment-provider-stripe（Stripe Provider）单元测试
  *
  * 通过 mock fetch 测试 Stripe Provider 的各项操作。
  */
@@ -8,13 +8,21 @@ import { createHmac } from 'node:crypto'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiPaymentError } from '../src/payment-types'
-import { StripeOperationRepository } from '../src/providers/stripe/stripe-operation-repository'
-import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
+import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
+import { StripeOperationRepository } from '../src/providers/stripe/payment-stripe-repository-operation'
 
 const testConfig = {
   successUrl: 'https://example.invalid/payment/success',
   secretKey: 'sk_test_4eC39HqLyjWDarjtT1zdp7dc',
   webhookSecret: 'whsec_test_secret_key_001',
+  webhookToleranceSeconds: 300,
+}
+
+/** 测试断言真实 RequestInit 中的 form body，避免把未知 body 强转为字符串。 */
+function readRequestBody(options: RequestInit): string {
+  if (typeof options.body !== 'string')
+    throw new Error('Expected a string form body')
+  return options.body
 }
 
 /** 辅助：生成 Stripe Webhook 签名 */
@@ -25,8 +33,8 @@ function generateStripeSignature(payload: string, secret: string, timestamp?: st
   return `t=${ts},v1=${v1}`
 }
 
-describe('stripe-provider', () => {
-  let fetchSpy: ReturnType<typeof vi.fn>
+describe('payment-provider-stripe', () => {
+  let fetchSpy: ReturnType<typeof vi.fn<(url: string, options: RequestInit) => Promise<Response>>>
 
   beforeEach(async () => {
     const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
@@ -52,7 +60,7 @@ describe('stripe-provider', () => {
   describe('createOrder', () => {
     it('可选取消跳转地址由可信服务端配置传给渠道', async () => {
       fetchSpy.mockResolvedValueOnce(Response.json({ id: 'cs_cancel', url: 'https://checkout.stripe.com/pay/cs_cancel' }))
-      const result = await createStripeProvider({ ...testConfig, webhookToleranceSeconds: 300, cancelUrl: 'https://app.example/payment/cancel' }).createOrder({
+      const result = await createStripeProvider({ ...testConfig, cancelUrl: 'https://app.example/payment/cancel' }).createOrder({
         orderNo: 'ORDER-CANCEL',
         amount: 100,
         description: 'Test',
@@ -60,18 +68,15 @@ describe('stripe-provider', () => {
         notifyUrl: 'https://app.example/notify',
       })
       expect(result.success).toBe(true)
-      expect(new URLSearchParams(fetchSpy.mock.calls[0][1].body).get('cancel_url')).toBe('https://app.example/payment/cancel')
+      expect(new URLSearchParams(readRequestBody(fetchSpy.mock.calls[0][1])).get('cancel_url')).toBe('https://app.example/payment/cancel')
     })
 
     it('checkout Session 下单成功', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'cs_test_001',
-          url: 'https://checkout.stripe.com/pay/cs_test_001',
-          payment_intent: 'pi_test_001',
-        }),
-      })
+      fetchSpy.mockResolvedValueOnce(Response.json({
+        id: 'cs_test_001',
+        url: 'https://checkout.stripe.com/pay/cs_test_001',
+        payment_intent: 'pi_test_001',
+      }))
 
       const provider = createStripeProvider(testConfig)
       const result = await provider.createOrder({
@@ -94,9 +99,10 @@ describe('stripe-provider', () => {
       const [url, options] = fetchSpy.mock.calls[0]
       expect(url).toContain('/checkout/sessions')
       expect(options.method).toBe('POST')
-      expect(options.headers.Authorization).toBe(`Bearer ${testConfig.secretKey}`)
-      expect(options.headers['Stripe-Version']).toBe('2026-09-30.endive')
-      const form = new URLSearchParams(options.body)
+      const headers = new Headers(options.headers)
+      expect(headers.get('Authorization')).toBe(`Bearer ${testConfig.secretKey}`)
+      expect(headers.get('Stripe-Version')).toBe('2026-09-30.endive')
+      const form = new URLSearchParams(readRequestBody(options))
       expect(form.get('ui_mode')).toBe('hosted_page')
       expect(form.get('success_url')).toBe(testConfig.successUrl)
       expect(options.body).toContain('mode=payment')
@@ -105,10 +111,7 @@ describe('stripe-provider', () => {
     })
 
     it('默认币种为 USD', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }),
-      })
+      fetchSpy.mockResolvedValueOnce(Response.json({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }))
 
       const provider = createStripeProvider(testConfig)
       await provider.createOrder({
@@ -119,15 +122,12 @@ describe('stripe-provider', () => {
         notifyUrl: 'https://example.com/notify',
       })
 
-      const body = fetchSpy.mock.calls[0][1].body as string
+      const body = readRequestBody(fetchSpy.mock.calls[0][1])
       expect(body).toContain('usd')
     })
 
     it('指定币种 CNY', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }),
-      })
+      fetchSpy.mockResolvedValueOnce(Response.json({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }))
 
       const provider = createStripeProvider(testConfig)
       await provider.createOrder({
@@ -139,15 +139,12 @@ describe('stripe-provider', () => {
         notifyUrl: 'https://example.com/notify',
       })
 
-      const body = fetchSpy.mock.calls[0][1].body as string
+      const body = readRequestBody(fetchSpy.mock.calls[0][1])
       expect(body).toContain('cny')
     })
 
     it('metadata 传递到 Stripe', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }),
-      })
+      fetchSpy.mockResolvedValueOnce(Response.json({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }))
 
       const provider = createStripeProvider(testConfig)
       await provider.createOrder({
@@ -159,17 +156,13 @@ describe('stripe-provider', () => {
         metadata: { source: 'web', campaign: 'summer' },
       })
 
-      const body = fetchSpy.mock.calls[0][1].body as string
+      const body = readRequestBody(fetchSpy.mock.calls[0][1])
       expect(body).toContain('metadata%5Bsource%5D=web')
       expect(body).toContain('metadata%5Bcampaign%5D=summer')
     })
 
     it('fetch 失败返回 CREATE_ORDER_FAILED', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: false,
-        status: 402,
-        text: async () => '{"error":{"message":"Card declined"}}',
-      })
+      fetchSpy.mockResolvedValueOnce(Response.json({ error: { message: 'Card declined' } }, { status: 402 }))
 
       const provider = createStripeProvider(testConfig)
       const result = await provider.createOrder({

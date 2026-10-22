@@ -32,10 +32,10 @@ import {
 } from './payment-functions.js'
 import { paymentM } from './payment-i18n.js'
 import { HaiPaymentError } from './payment-types.js'
-import { createAlipayProvider } from './providers/alipay/alipay-provider.js'
-import { StripeOperationRepository } from './providers/stripe/stripe-operation-repository.js'
-import { createStripeProvider } from './providers/stripe/stripe-provider.js'
-import { createWechatPayProvider } from './providers/wechat/wechat-pay-provider.js'
+import { createAlipayProvider } from './providers/alipay/payment-provider-alipay.js'
+import { createStripeProvider } from './providers/stripe/payment-provider-stripe.js'
+import { StripeOperationRepository } from './providers/stripe/payment-stripe-repository-operation.js'
+import { createWechatPayProvider } from './providers/wechat/payment-provider-wechat.js'
 
 const logger = core.logger.child({ module: 'payment', scope: 'main' })
 

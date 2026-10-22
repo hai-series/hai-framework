@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04，共 79 个，另有 21 个按模块拆分的 JSDoc 任务，共 100 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 35/51（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 36/51（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -287,7 +287,7 @@
 
 - [x] 已修正并通过定向验证（2026-10-22）。
 - **实施与验证**：Stripe通知严格按Checkout事件解析，unpaid completed为pending，异步成功/失败/过期正确映射，付费时间取稳定事件时间；公开eventId/currency并同步审计、三语文档和模板。新通知18/18、相关3文件70/70、payment typecheck和定向ESLint通过。真实Stripe交易未执行；宿主订单核验/持久幂等职责已明确；全量回归按用户要求在全部任务实施后执行。
-- **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:152](../packages/payment/src/providers/stripe/stripe-provider.ts#L152)。
+- **位置**：[packages/payment/src/providers/stripe/payment-provider-stripe.ts:152](../packages/payment/src/providers/stripe/payment-provider-stripe.ts#L152)。
 - **证据与影响**：已签名的 checkout.session.completed 即使 payment_status=unpaid 仍映射 paid；不同事件对象共用 amount_total/metadata，可能得到空订单号/0 金额。探针已复现 unpaid→paid。
 - **修正内容**：按事件 discriminated schema 解析并核验支付状态；处理异步成功/失败，拒绝或忽略无关事件；仅在实际支付成功时设置 paidAt。回调重复/乱序不应倒退订单状态。
 - **验收标准**：unpaid completed 不触发履约，异步成功才转 paid；错误金额/币种/订单归属被业务核验拒绝；多节点重复回调仅履约一次。
@@ -297,7 +297,7 @@
 
 - [x] 已修正并通过定向验证（2026-10-22）。
 - **实施与验证**：新增共享reldb渠道操作仓库，唯一预留/摘要/CAS结果发布、稳定Stripe幂等键、可信Session映射、账户test-live隔离与23h未知结果重试窗口；Stripe初始化先等DB。源码/配置/依赖lockfile/三语文档/skills/调用说明同步。payment typecheck/build/lint、127定向测试、26CLI配置用例、两个Node进程共享SQLite幂等回归、check:skills通过；Stripe HTTP为替身，真实交易与PG/MySQL集成未验；全量回归按用户要求在全部任务实施后执行。
-- **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:184](../packages/payment/src/providers/stripe/stripe-provider.ts#L184)；[packages/payment/src/providers/stripe/stripe-provider.ts:217](../packages/payment/src/providers/stripe/stripe-provider.ts#L217)。
+- **位置**：[packages/payment/src/providers/stripe/payment-provider-stripe.ts:184](../packages/payment/src/providers/stripe/payment-provider-stripe.ts#L184)；[packages/payment/src/providers/stripe/payment-provider-stripe.ts:217](../packages/payment/src/providers/stripe/payment-provider-stripe.ts#L217)。
 - **证据与影响**：query/refund 使用 Checkout Sessions list 的 metadata 参数筛选，但该 API 未声明该筛选；limit=1 也没有核对返回订单。创建/退款未发送幂等键，metadata 又允许覆盖保留的 orderNo。
 - **修正内容**：保存 orderNo→session/payment_intent 的可信映射，禁止覆盖保留字段；重试使用稳定创建/退款幂等键并记录执行结果，不能用列举首项猜订单。
 - **验收标准**：两个不同订单查询/退款各自正确；并发同 refundNo 和响应丢失重试只退款一次；映射在进程重启/双节点间一致。
@@ -307,7 +307,7 @@
 
 - [x] 已修正并通过定向验证（2026-10-22）。
 - **实施与验证**：Stripe 收缩为 payment/hosted_page/h5，固定 API 版本并配置可信 successUrl/cancelUrl；实现 expire 关单和并发/响应丢失后的再确认，契约、客户端、三语 README、skill、CLI 与环境变量已同步。payment/api-contract typecheck 与 build、定向 payment 119 项/contract 19 项/CLI 26 项及最终受影响 47 项、ESLint、check:skills、check:env 通过；真实 SQLite/子进程覆盖通过，Stripe HTTP 为替身，未执行真实交易；全量回归按用户要求在全部任务实施后执行。
-- **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:256](../packages/payment/src/providers/stripe/stripe-provider.ts#L256)；[packages/payment/src/providers/stripe/stripe-provider.ts:84](../packages/payment/src/providers/stripe/stripe-provider.ts#L84)。
+- **位置**：[packages/payment/src/providers/stripe/payment-provider-stripe.ts:256](../packages/payment/src/providers/stripe/payment-provider-stripe.ts#L256)；[packages/payment/src/providers/stripe/payment-provider-stripe.ts:84](../packages/payment/src/providers/stripe/payment-provider-stripe.ts#L84)。
 - **证据与影响**：closeOrder 无网络操作直接 ok；创建 Session 未提供跳转 URL 等 Checkout 模式相关参数，现有统一输入也未表达完整配置。
 - **修正内容**：按 session id 调用 expire 并映射不可关闭状态；明确支持的 Checkout UI 模式，增加其必需配置并做输入校验。
 - **验收标准**：Stripe 测试环境创建可完成的支付页面，主动关单后不能继续支付；已完成订单不能伪装关闭成功。
@@ -317,7 +317,7 @@
 
 - [x] 已修正并通过定向验证（2026-10-22）。
 - **实施与验证**：支付宝创建/查询/退款/关单统一验证对应 envelope、字符串业务成功码10000、必需字段及订单号，HTTP200错误/畸形响应不能转成功，错误原因仅保留有界安全标识；拒绝未知支付状态/非法金额并按北京时间解析支付时间，fund_change=N或缺失保持processing。类型、三语README、skill/LLMS同步。UTC环境下3文件157项、payment typecheck/build、正常ESLint/check:skills通过；未执行真实支付宝调用；通常忽略的skill强制lint发现44项既有格式问题留规范任务处理；全量回归按用户要求在全部任务实施后执行。
-- **位置**：[packages/payment/src/providers/alipay/alipay-provider.ts:83](../packages/payment/src/providers/alipay/alipay-provider.ts#L83)；[packages/payment/src/providers/alipay/alipay-provider.ts:248](../packages/payment/src/providers/alipay/alipay-provider.ts#L248)。
+- **位置**：[packages/payment/src/providers/alipay/payment-provider-alipay.ts:83](../packages/payment/src/providers/alipay/payment-provider-alipay.ts#L83)；[packages/payment/src/providers/alipay/payment-provider-alipay.ts:248](../packages/payment/src/providers/alipay/payment-provider-alipay.ts#L248)。
 - **证据与影响**：alipayRequest 只检查 HTTP；create/refund/close 未验证响应 code。探针返回 code=40004，createOrder 仍 success:true 并把错误对象当 clientParams。
 - **修正内容**：校验每种响应 envelope、业务成功码和字段，再映射统一结果；查询不存在、余额/权限错误、退款失败均准确返回。
 - **验收标准**：HTTP 200 的失败/畸形/缺失 envelope 在各操作均不能成功；成功响应使用真实格式 fixture，敏感原文不直接泄漏。
@@ -327,7 +327,7 @@
 
 - [x] 已修正并通过定向验证（2026-10-22）。
 - **实施与验证**：微信按serial精确选择受信证书/公钥并验证有效期、300秒签名时钟及appid/mchid，支付宝核对app_id/seller_id/算法与严格日历，请求用北京时间和POST form body，Stripe核对严格时间/test-live/账户与多v1签名。三渠道eventId/currency必填，新增业务事务/去重/outbox示例；真实双Node进程共享SQLite完成验签与一次outbox、重启去重、乱序保护和失败回滚。payment/示例typecheck/build、11文件341项和补充35项、CLI配置31项、lint/skills/env589通过；scaffold22包前置build通过而8场景5过3失败，非支付API import与锁结果收窄已交对应任务集中修正。未执行真实渠道交易、PG/MySQL示例集成或根全量测试，不宣称外部exactly-once；全量回归按用户要求在全部任务实施后执行。
-- **位置**：[packages/payment/src/providers/alipay/alipay-provider.ts:145](../packages/payment/src/providers/alipay/alipay-provider.ts#L145)；[packages/payment/src/providers/wechat/wechat-pay-provider.ts:196](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L196)。
+- **位置**：[packages/payment/src/providers/alipay/payment-provider-alipay.ts:145](../packages/payment/src/providers/alipay/payment-provider-alipay.ts#L145)；[packages/payment/src/providers/wechat/payment-provider-wechat.ts:196](../packages/payment/src/providers/wechat/payment-provider-wechat.ts#L196)。
 - **证据与影响**：当前验签/解密后未显式核对支付宝 app_id、微信 appid/mchid 与配置；微信回调头时间/证书 serial 的处理也未形成完整校验链。验签成功不能替代订单商户、金额、币种及重放核验。
 - **修正内容**：按各平台协议校验身份与证书/公钥选择，严格解析时间；将 event/transaction id 提供给持久去重及业务订单核验，明确 provider 与业务履约各自职责。
 - **验收标准**：有效签名但错误商户/应用的样本拒绝；过期/畸形通知和证书轮换有测试；同一通知跨两节点重复到达只产生一次业务副作用。
@@ -337,7 +337,7 @@
 
 - [x] 已修正并通过定向验证（2026-10-23）。
 - **实施与验证**：内置渠道收敛为微信JSAPI、支付宝H5/WAP和StripeH5；微信强制openid/CNY并校验prepay_id再签完整桥参数，支付宝按官方SDK离线签名11字段并由浏览器POST固定网关、引入可信HTTPS returnUrl，移除未实现模式/伪预付ID/无效错误码。同步client安全检查、HTTP/CLI生成调用方、API契约、env、三语README/skill/LLMS。307支付与真实模板测试、31契约测试、6配置回归通过；Chrome真实表单提交拦截验证11字段和独立RSA校验，双Node通知消费者通过；严格类型、fresh payment/contract/CLI build、定向lint、skills/API/env门禁通过。未使用商户凭据、支付沙箱或手机，不声称真实渠道付款成功；全量回归按用户要求在全部任务实施后执行。
-- **位置**：[packages/payment/src/providers/wechat/wechat-pay-provider.ts:145](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L145)；[packages/payment/src/providers/alipay/alipay-provider.ts:108](../packages/payment/src/providers/alipay/alipay-provider.ts#L108)。
+- **位置**：[packages/payment/src/providers/wechat/payment-provider-wechat.ts:145](../packages/payment/src/providers/wechat/payment-provider-wechat.ts#L145)；[packages/payment/src/providers/alipay/payment-provider-alipay.ts:108](../packages/payment/src/providers/alipay/payment-provider-alipay.ts#L108)。
 - **证据与影响**：微信 app 分支没有构造调起参数、h5 请求没有表达 scene_info；支付宝把 app/wap 等模式都送入相同 JSON 请求解析，且 JSAPI input.userId 未进入 buyer 参数。公开枚举超过实际完整实现。
 - **修正内容**：逐平台列出支持矩阵并实现模式专属请求/响应；未实现模式明确 UNSUPPORTED，而不是回落到另一种模式或空 clientParams。
 - **验收标准**：每个保留模式用官方测试环境/SDK 形状验证到客户端可调起；不支持组合在调用网络前拒绝。
@@ -685,8 +685,9 @@
 
 ### STYLE-02 · P2 · 统一文件命名并删除重复/过时实现
 
-- [ ] 待修正（按本次要求补强；范围：cross）。
-- **位置**：[packages/payment/src/providers/wechat/wechat-pay-provider.ts:5](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L5)；[packages/scheduler/src/repositories/scheduler-repository-log.ts:5](../packages/scheduler/src/repositories/scheduler-repository-log.ts#L5)；[packages/iam/src/session/iam-session-repository-cache.ts:9](../packages/iam/src/session/iam-session-repository-cache.ts#L9)；[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:33](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L33)。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：21包固定入口/文件族清单落地；Payment与A2A源码/测试命名及所有引用同步，Scheduler命名已由SCHED03先吸收。移除A2A旧TaskStore/DefaultRequestHandler重复装配，统一共享journal并对未实现RPC标准拒绝；隐藏audit内部createHelper但保留audit.helper/AuditHelper，简化Storage重复类型barrel。Qdrant1.18与Chroma3.5改用真实SDK类型/响应验证，明确不支持命名向量/Manhattan，复用既有core脱敏；Chroma叠加VECDB05资源所有权修复且完整TS AST与最终JSDoc工作源一致。Payment307及末次Stripe53、Scheduler16、audit12、A2A32+三组真实双Node、真实Chroma/SDK和Qdrant1.18 CRUD26通过；四包类型、严格测试、fresh发布构建、21 Node/29浏览器出口正负例、lint/skills/API与2365相对导入大小写静态检查均0。README/双skill/配置规范/LLMS/API清单及声明附件同步，无新环境变量或依赖；静态大小写检查不等于Linux运行证明；全量回归按用户要求在全部任务实施后执行。
+- **位置**：[packages/payment/src/providers/wechat/payment-provider-wechat.ts:5](../packages/payment/src/providers/wechat/payment-provider-wechat.ts#L5)；[packages/scheduler/src/repositories/scheduler-repository-log.ts:5](../packages/scheduler/src/repositories/scheduler-repository-log.ts#L5)；[packages/iam/src/session/iam-session-repository-cache.ts:9](../packages/iam/src/session/iam-session-repository-cache.ts#L9)；[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:33](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L33)。
 - **证据与影响**：wechat-pay、scheduler-*-repository、iam-*-repository-* 等命名顺序不同；LanceDB 本地仿造接口与兼容回退、多个 URL sanitizer 是已定位的精简入口。
 - **修正内容**：建立模块前缀/职责后缀规则并保留框架固定文件名例外；统一 repository/provider 命名。先查全仓消费者，再删除无用 export、deprecated API、重复包装，不为拆文件新增抽象。
 - **验收标准**：大小写敏感环境构建/导入通过，package exports 和模板引用无旧路径；删掉的分支有来源/无使用证据，保留行为回归通过。

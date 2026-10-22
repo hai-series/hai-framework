@@ -28,7 +28,6 @@ export type {
   A2AOperations,
   A2ASecurityConfig,
   A2ATaskFilter,
-  A2ATaskStore,
   AgentCapabilities,
   AgentCard,
   AgentExecutor,

@@ -1,13 +1,13 @@
 /**
  * @h-ai/ai — A2A 子功能组装
  *
- * 实现 A2A 操作接口：RelDB 持久化 TaskStore、消息日志、远端调用。
+ * 实现 A2A 操作接口：共享 journal 任务状态、消息日志、远端调用。
  * 包含延迟初始化代理工厂（`createA2ALazyProxy`）和完整操作实例工厂（`createA2AOperations`）。
  * @module ai-a2a-functions
  */
 
 import type { Message, Task } from '@a2a-js/sdk'
-import type { AgentExecutor, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
+import type { AgentExecutor } from '@a2a-js/sdk/server'
 import type { HaiResult } from '@h-ai/core'
 
 import type { A2AConfig } from '../ai-config.js'
@@ -30,8 +30,8 @@ import { core, err, ok } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
+import { buildAgentCard } from './ai-a2a-card.js'
 import { SharedA2ARequestHandler } from './ai-a2a-runtime.js'
-import { buildAgentCard } from './ai-a2a-server.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
 const DEFAULT_A2A_CALL_TIMEOUT_MS = 60_000
@@ -152,36 +152,6 @@ async function executeRemoteAgentCall(
   }
 }
 
-// ─── RelDB 持久化 TaskStore ───
-
-/**
- * 基于 ReldbAIStore 的 A2A TaskStore 实现
- *
- * 将 SDK 的 Task 对象桥接到 RelDB 存储，利用 status 和 refId 索引列
- * 实现按状态和上下文查询。
- */
-export class ReldbA2ATaskStore implements TaskStore {
-  constructor(private readonly store: AIRelStore<Task>) {}
-
-  async save(task: Task, context?: ServerCallContext): Promise<void> {
-    await this.store.save(task.id, task, {
-      objectId: context?.user?.isAuthenticated ? `user:${context.user.userName}` : 'anonymous',
-      status: task.status?.state,
-      refId: task.contextId,
-    })
-  }
-
-  async load(taskId: string, context?: ServerCallContext): Promise<Task | undefined> {
-    // 在存储查询阶段约束归属，tasks/get、cancel、继续消息与 referenceTask 均共享此边界。
-    const tasks = await this.store.query({
-      objectId: context?.user?.isAuthenticated ? `user:${context.user.userName}` : 'anonymous',
-      where: { id: taskId },
-      limit: 1,
-    })
-    return tasks[0]
-  }
-}
-
 // ─── 工厂函数 ───
 
 /** A2A 子功能组装依赖 */
@@ -190,8 +160,6 @@ export interface A2ADeps {
   journalStore: AIRelStore<A2AJournal>
   /** context身份归属持久CAS登记。 */
   contextStore: AIRelStore<{ owner: string }>
-  /** 初始化阶段已创建的任务存储 */
-  taskStore: AIRelStore<Task>
   /** 初始化阶段已创建的消息存储 */
   messageStore: AIRelStore<A2AMessageRecord>
 }
@@ -201,7 +169,6 @@ export function createA2AStores(storeProvider: AIStoreProvider): A2ADeps {
   return {
     journalStore: storeProvider.createRelStore<A2AJournal>('hai_ai_a2a_journal', { hasObjectId: true, hasRefId: true }),
     contextStore: storeProvider.createRelStore<{ owner: string }>('hai_ai_a2a_contexts'),
-    taskStore: storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', { hasObjectId: true, hasStatus: true, hasRefId: true }),
     messageStore: storeProvider.createRelStore<A2AMessageRecord>('hai_ai_a2a_messages', { hasObjectId: true, hasStatus: true }),
   }
 }
@@ -224,19 +191,18 @@ export interface A2AImplementation extends A2AOperations {
 /**
  * 创建 A2A 操作接口实例
  *
- * 组装 TaskStore、RequestHandler、消息日志、远端调用等能力。
+ * 组装共享 journal 的 RequestHandler、消息日志、远端调用等能力。
  */
 export function createA2AOperations(
   options: A2ACreateOptions,
   deps: A2ADeps,
 ): A2AImplementation {
-  const { taskStore, messageStore, journalStore, contextStore } = deps
+  const { messageStore, journalStore, contextStore } = deps
   const agentCardConfig = options.agentCard
 
   // 构建 SDK 层
   const agentCard = buildAgentCard(agentCardConfig)
-  const a2aTaskStore = new ReldbA2ATaskStore(taskStore)
-  const requestHandler = new SharedA2ARequestHandler(agentCard, a2aTaskStore, options.executor, journalStore, contextStore, messageStore, { leaseMs: 30000, pollIntervalMs: 250, maxExecutionMs: 300000, ...options.runtime })
+  const requestHandler = new SharedA2ARequestHandler(agentCard, options.executor, journalStore, contextStore, messageStore, { leaseMs: 30000, pollIntervalMs: 250, maxExecutionMs: 300000, ...options.runtime })
   const transportHandler = new JsonRpcTransportHandler(requestHandler)
 
   return {
