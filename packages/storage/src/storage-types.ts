@@ -38,6 +38,7 @@ const StorageErrorInfo = {
   DOWNLOAD_FAILED: '015:500',
   CHECKSUM_FAILED: '016:500',
   INVALID_CHECKSUM: '017:400',
+  UNSUPPORTED_OPERATION: '018:400',
 } as const satisfies ErrorInfo
 
 export const HaiStorageError = core.error.buildHaiErrorsDef('storage', StorageErrorInfo)
@@ -359,7 +360,8 @@ export interface DirOperations {
 /**
  * 签名 URL 操作接口
  *
- * 提供生成临时授权 URL 的功能，支持前端直接上传下载。
+ * S3 provider 提供临时授权 URL，支持前端直接上传下载。
+ * local 的 getUrl/putUrl 返回 UNSUPPORTED_OPERATION，publicUrl 返回 null。
  */
 export interface PresignOperations {
   /**
@@ -367,10 +369,12 @@ export interface PresignOperations {
    *
    * @param key - 文件键/路径
    * @param options - 签名选项
-   * @returns 签名 URL
+   * @returns 成功时为可访问的 S3 签名 URL；local 返回 UNSUPPORTED_OPERATION。
    * @example
    * ```ts
    * const result = await storage.presign.getUrl('a.txt', { expiresIn: 60 })
+   * if (!result.success) return result
+   * const downloadUrl = result.data
    * ```
    */
   getUrl: (key: string, options?: PresignOptions) => Promise<HaiResult<string>>
@@ -380,10 +384,12 @@ export interface PresignOperations {
    *
    * @param key - 文件键/路径
    * @param options - 上传签名选项
-   * @returns 签名 URL
+   * @returns 成功时为可访问的 S3 签名 URL；local 返回 UNSUPPORTED_OPERATION。
    * @example
    * ```ts
    * const result = await storage.presign.putUrl('a.txt', { contentType: 'text/plain' })
+   * if (!result.success) return result
+   * const uploadUrl = result.data
    * ```
    */
   putUrl: (key: string, options?: PresignUploadOptions) => Promise<HaiResult<string>>
@@ -392,7 +398,7 @@ export interface PresignOperations {
    * 获取公开访问 URL（如果配置了 publicUrl）
    *
    * @param key - 文件键/路径
-   * @returns 公开 URL，如果未配置 publicUrl 则返回 null
+   * @returns 公开 URL；S3 未配置 publicUrl 或 local provider 均返回 null。
    * @example
    * ```ts
    * const url = storage.presign.publicUrl('a.txt')

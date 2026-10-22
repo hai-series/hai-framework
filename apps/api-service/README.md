@@ -252,13 +252,17 @@ const login = await apiClient.iam.auth.login({
   identifier: 'admin',
   password: 'Admin123!',
 })
-if (login.success)
-  await apiClient.auth.setTokens(login.data.tokens)
+if (!login.success) throw new Error(login.error.message)
+await apiClient.auth.setTokens(login.data.tokens)
 
 const storage = await apiClient.storage.presignedUrls.createUpload({
-  key: 'uploads/demo.png',
+  key: `users/${encodeURIComponent(login.data.user.id)}/demo.png`,
   contentType: 'image/png',
 })
+if (!storage.success) {
+  // local provider 不支持预签名；S3 成功结果才包含可上传的 URL。
+  throw new Error(storage.error.message)
+}
 
 void register
 void login
@@ -269,6 +273,8 @@ await crypto.close()
 ```
 
 如果修改了 `_serv.yml.transport.keyExchangePath`，记得同步客户端的 `transport.keyExchangePath`。
+
+默认 local 存储不支持预签名，接口返回 `hai:storage:018`，不会生成可上传的 URL；S3 才支持直传。本应用未内置本地二进制上传/下载 HTTP 接口，如有需要由业务实现并鉴权，或切换到 S3。
 
 ### 配置
 

@@ -55,23 +55,22 @@ export interface ClientDownloadOptions {
 /**
  * 使用签名 URL 上传文件
  *
- * @param url - 后端生成的上传签名 URL
+ * @param url - 已成功获取的 S3 HTTP(S) 上传签名 URL；本地存储须使用应用的鉴权文件接口。
  * @param data - 要上传的数据（File、Blob、ArrayBuffer 或字符串）
  * @param options - 上传选项
  * @returns 上传结果
  *
  * @example
  * ```ts
- * // 获取签名 URL（通常从后端 API 获取）
- * const response = await fetch('/api/storage/presign', {
- *     method: 'POST',
- *     body: JSON.stringify({ key: 'uploads/image.png', contentType: 'image/png' })
+ * // apiClient 已初始化，服务端使用 S3；本地 provider 的失败结果不能当作 URL。
+ * const signed = await apiClient.storage.presignedUrls.createUpload({
+ *     key: 'uploads/image.png', contentType: 'image/png',
  * })
- * const { uploadUrl } = await response.json()
+ * if (!signed.success) return signed
  *
  * // 使用签名 URL 上传
  * const file = document.getElementById('fileInput').files[0]
- * const result = await uploadWithPresignedUrl(uploadUrl, file, {
+ * const result = await uploadWithPresignedUrl(signed.data.url, file, {
  *     contentType: 'image/png',
  *     onProgress: (p) => {
  *         // 在此更新进度条：p.percent

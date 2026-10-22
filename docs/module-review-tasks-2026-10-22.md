@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 9/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 10/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -462,7 +462,8 @@
 
 ### STORAGE-02 · P2 · 移除 local provider 的伪签名 URL 成功结果
 
-- [ ] 待修正（源码确认；范围：storage）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：删除Local伪签名local://成功返回，getUrl/putUrl明确UNSUPPORTED_OPERATION(hai:storage:018/400)，publicUrl保持null；同步公共类型、client helper、三语README、storage skills/LLMS、admin模块展示及实际API调用方。红测复现旧成功语义；storage74含真实MinIO/RustFS预签名PUT/GET、serv20含真实Local文件→TCP HTTP→typed apiClient、实际API调用方2项均通过；相关包类型/admin零错误零警告/lint/freshbuild/skills通过，见tmp/module-repair-20261022/STORAGE-02；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/storage/src/providers/storage-provider-local.ts:624](../packages/storage/src/providers/storage-provider-local.ts#L624)。
 - **证据与影响**：local 返回 local:// URL，signature 由公开字段散列得到且没有配套验证/访问 handler。文档承认其为伪 URL，但统一 presign 成功契约容易让消费者以为可下载/上传。
 - **修正内容**：没有真实托管签名服务时明确返回不支持；若保留能力则实现具有秘密认证、期限和方法绑定的真实路由，不能把散列当授权。

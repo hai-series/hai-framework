@@ -6,6 +6,7 @@
   "storage_responseBodyEmpty": "Response body is empty",
   "storage_presignUrlFailed": "Failed to generate presigned URL",
   "storage_presignUploadUrlFailed": "Failed to generate presigned upload URL",
+  "storage_localPresignUnsupported": "Local storage does not support presigned URLs; upload or download through an authenticated application file endpoint",
   "storage_s3ConfigTypeError": "Config type error: S3 provider only supports type=s3",
   "storage_diskSpaceInsufficient": "Insufficient disk space",
   "storage_localConfigTypeError": "Config type error: Local provider only supports type=local",

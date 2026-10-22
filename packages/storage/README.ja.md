@@ -53,6 +53,10 @@ const file = await storage.file.get('uploads/image.png')
 
 // 签名 URL
 const url = await storage.presign.getUrl('uploads/image.png', { expiresIn: 3600 })
+if (!url.success) {
+  // local 不支持预签名；呈现错误或使用应用已有的鉴权文件接口。
+  // 失败结果不包含上传/下载 URL。
+}
 
 // 关闭连接
 const closeResult = await storage.close()
@@ -67,10 +71,12 @@ if (!closeResult.success) {
 
 ```ts
 import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
+import { apiClient } from '@h-ai/api-client'
 
-// 业务端点路径由应用自行定义（例如 /api/files/presign-put）
-const { uploadUrl } = await fetch('/api/files/presign-put').then(r => r.json())
-await uploadWithPresignedUrl(uploadUrl, file)
+// apiClient 已初始化，服务端使用 S3。
+const signed = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+if (!signed.success) throw new Error(signed.error.message)
+await uploadWithPresignedUrl(signed.data.url, file)
 ```
 
 > 注：`@h-ai/storage` に HTTP ルートは組み込まれていません。署名付き URL API はアプリケーション層で実装してください。
@@ -83,7 +89,10 @@ await uploadWithPresignedUrl(uploadUrl, file)
 import { apiClient } from '@h-ai/api-client'
 
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+if (!result.success) throw new Error(result.error.message)
 ```
+
+署名付き URL は S3 のみ対応します。local の `getUrl()` / `putUrl()` は `HaiStorageError.UNSUPPORTED_OPERATION`（`hai:storage:018`）、`publicUrl()` は `null` を返し、仮想 URL は返しません。serv と apiClient は失敗結果を保持するため、URL を使う前に `success` を確認してください。ローカル開発ではアプリの既存の認証付きファイル API を利用します。このモジュールに HTTP ファイルルートや署名検証サービスは含まれません。
 
 ### API 一覧
 
@@ -209,6 +218,7 @@ if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.cod
 | `HaiStorageError.NOT_FOUND`         | `hai:storage:003` | ファイルが存在しない      |
 | `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 権限不足                  |
 | `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | 署名付き URL の生成に失敗 |
+| `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | Provider が操作をサポートしない（local の署名付き URL など） |
 | `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | 設定エラー                |
 
 ## 開発とテスト

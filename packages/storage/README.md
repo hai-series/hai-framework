@@ -53,6 +53,10 @@ const file = await storage.file.get('uploads/image.png')
 
 // 签名 URL
 const url = await storage.presign.getUrl('uploads/image.png', { expiresIn: 3600 })
+if (!url.success) {
+  // local 不支持预签名；向用户呈现错误，或使用应用已有的鉴权文件接口。
+  // 失败结果不含可上传/下载的 URL。
+}
 
 // 关闭连接
 const closeResult = await storage.close()
@@ -67,10 +71,12 @@ if (!closeResult.success) {
 
 ```ts
 import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
+import { apiClient } from '@h-ai/api-client'
 
-// 业务端点路径由应用自行定义（例如 /api/files/presign-put）
-const { uploadUrl } = await fetch('/api/files/presign-put').then(r => r.json())
-await uploadWithPresignedUrl(uploadUrl, file)
+// apiClient 已初始化，服务端使用 S3。
+const signed = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+if (!signed.success) throw new Error(signed.error.message)
+await uploadWithPresignedUrl(signed.data.url, file)
 ```
 
 > 注意：`@h-ai/storage` 不内置 HTTP 路由；请在应用层自行实现签名 URL API。
@@ -83,7 +89,10 @@ await uploadWithPresignedUrl(uploadUrl, file)
 import { apiClient } from '@h-ai/api-client'
 
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+if (!result.success) throw new Error(result.error.message)
 ```
+
+预签名只支持 S3。local 的 `getUrl()` / `putUrl()` 返回 `HaiStorageError.UNSUPPORTED_OPERATION`（`hai:storage:018`），`publicUrl()` 返回 `null`；不会返回虚拟 URL。serv 与 apiClient 保留该失败结果，调用方须先检查 `success` 再消费 URL。本地开发文件可由应用已有的鉴权上传/下载接口处理，本模块不内置 HTTP 文件路由或签名验证服务。
 
 ### API 概览
 
@@ -209,6 +218,7 @@ if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.cod
 | `HaiStorageError.NOT_FOUND`         | `hai:storage:003` | 文件不存在          |
 | `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 权限不足            |
 | `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | 预签名 URL 生成失败 |
+| `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | 当前 Provider 不支持该操作（如 local 预签名） |
 | `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | 配置错误            |
 
 ## 开发测试

@@ -46,7 +46,7 @@
   const storageOps = $derived([
     { op: m.modules_storage_op_upload(), code: 'await storage.file.put(\'docs/report.pdf\', fileBuffer)', desc: m.modules_storage_op_upload_desc() },
     { op: m.modules_storage_op_download(), code: 'const file = await storage.file.get(\'docs/report.pdf\')', desc: m.modules_storage_op_download_desc() },
-    { op: m.modules_storage_op_presign(), code: 'await storage.presign.getUrl(\'docs/report.pdf\', { expiresIn: 3600 })', desc: m.modules_storage_op_presign_desc() },
+    { op: m.modules_storage_op_presign(), code: 'const url = await storage.presign.getUrl(\'docs/report.pdf\', { expiresIn: 3600 })\nif (!url.success) return url', desc: m.modules_storage_op_presign_desc() },
     { op: m.modules_storage_op_list(), code: 'const files = await storage.dir.list({ prefix: \'docs/\' })', desc: m.modules_storage_op_list_desc() },
   ])
 
@@ -387,10 +387,13 @@ await storage.init({
   secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY,
 })
 
-// 上传与预签名
+// 上传与预签名（仅 S3 支持预签名；本地文件由应用鉴权接口访问）
 const meta = await storage.file.put('avatars/user1.jpg', buffer, { contentType: 'image/jpeg' })
 if (meta.success) {
   const url = await storage.presign.getUrl(meta.data.key, { expiresIn: 3600 })
+  if (!url.success) {
+    throw new Error(url.error.message)
+  }
 }`}</code></pre>
       </Card>
     </div>

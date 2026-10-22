@@ -128,17 +128,21 @@ if (!result.success) {
 - `putUrl(key, options?)`
 - `publicUrl(key)`
 
+预签名仅支持 S3；local `getUrl` / `putUrl` 返回 `HaiStorageError.UNSUPPORTED_OPERATION`（hai:storage:018），`publicUrl` 返回 null，不生成虚拟 URL。serv 与 apiClient 保留失败，须先检查 success；本地文件由应用已有的鉴权接口上传/下载，不假定框架内置签名路由。
+
 ```typescript
 // 客户端直传模式
 const uploadUrl = await storage.presign.putUrl('uploads/doc.pdf', {
   expiresIn: 3600, // 1 小时有效
   contentType: 'application/pdf',
 })
+if (!uploadUrl.success) return uploadUrl
 
 // 临时下载链接
 const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
   expiresIn: 300, // 5 分钟有效
 })
+if (!downloadUrl.success) return downloadUrl
 ```
 
 > `storage.presign.putUrl()` 当前不支持 `maxSize` 约束参数；如需大小限制，请在应用层上传前校验，或在服务端落库/回调处二次校验。
@@ -153,6 +157,7 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 | `HaiStorageError.ALREADY_EXISTS` | `hai:storage:004` | 文件已存在 |
 | `HaiStorageError.CHECKSUM_FAILED` | `hai:storage:016` | checksum 读取/计算失败 |
 | `HaiStorageError.INVALID_CHECKSUM` | `hai:storage:017` | checksum 格式/算法非法 |
+| `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | 当前 Provider 不支持该操作（local 预签名） |
 | `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 权限不足 |
 | `HaiStorageError.QUOTA_EXCEEDED` | `hai:storage:006` | 配额超限 |
 | `HaiStorageError.INVALID_PATH` | `hai:storage:007` | 路径无效 |
@@ -173,6 +178,7 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 import { apiClient } from '@h-ai/api-client'
 
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+if (!result.success) return result
 ```
 
 ## 常见模式
@@ -228,39 +234,19 @@ if (result.success) {
 
 ## 浏览器端文件上传（预签名 URL 模式）
 
-浏览器端无法直接使用 `storage` 模块，应通过 API 获取预签名 URL 后直传：
-
-```typescript
-import { apiFetch } from '$lib/utils/api'
-
-// 1. 向服务端请求预签名上传 URL
-const res = await apiFetch('/api/storage/presign/upload', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ key: `uploads/${file.name}`, contentType: file.type }),
-})
-const { url } = await res.json()
-
-// 2. 浏览器直传到存储（不经过服务端，大文件友好）
-await fetch(url, {
-  method: 'PUT',
-  body: file,
-  headers: { 'Content-Type': file.type },
-})
-```
-
-也可使用 typed client（需配合 `@h-ai/api-client`）：
+浏览器端无法直接使用 `storage` 模块。服务端使用 S3 时，通过 typed API 获取预签名 URL，检查失败后再直传：
 
 ```typescript
 import { apiClient } from '@h-ai/api-client'
+import { uploadWithPresignedUrl } from '@h-ai/storage/client'
 
+// apiClient 已初始化；用户和资源范围由服务端授权策略决定。
 const result = await apiClient.storage.presignedUrls.createUpload({
   key: `avatars/${userId}.png`,
   contentType: 'image/png',
 })
-if (result.success) {
-  await fetch(result.data.url, { method: 'PUT', body: file })
-}
+if (!result.success) return result
+return uploadWithPresignedUrl(result.data.url, file, { contentType: 'image/png' })
 ```
 
 ## 相关 Skills

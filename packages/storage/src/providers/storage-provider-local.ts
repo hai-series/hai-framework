@@ -201,7 +201,7 @@ function safePath(root: string, key: string): string {
  *
  * 已知限制：
  * - list 不支持 continuationToken 分页（仅支持 maxKeys 截断）
- * - presign 返回虚拟 `local://` URL，应用层需自行处理
+ * - presign.getUrl/putUrl 明确不支持，publicUrl 返回 null；HTTP 访问由应用鉴权接口提供
  * - publicUrl 始终返回 null
  *
  * @returns Local Provider 实例
@@ -610,31 +610,12 @@ export function createLocalProvider(): StorageProvider {
   const presign: PresignOperations = {
     async getUrl(key, options?): Promise<HaiResult<string>> {
       logOperation('read', 'presign.getUrl', { key, options })
-      // 本地存储不支持真正的签名 URL
-      // 返回一个带签名参数的虚拟 URL，应用层需要自行处理
-      const expiresIn = options?.expiresIn || 3600
-      const expires = Math.floor(Date.now() / 1000) + expiresIn
-      const signature = crypto
-        .createHash('sha256')
-        .update(`${key}:${expires}`)
-        .digest('hex')
-        .slice(0, 16)
-
-      return ok(`local://${key}?expires=${expires}&signature=${signature}`)
+      return err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
     },
 
     async putUrl(key, options?): Promise<HaiResult<string>> {
-      // 同上，返回虚拟 URL
       logOperation('write', 'presign.putUrl', { key, options })
-      const expiresIn = options?.expiresIn || 3600
-      const expires = Math.floor(Date.now() / 1000) + expiresIn
-      const signature = crypto
-        .createHash('sha256')
-        .update(`put:${key}:${expires}`)
-        .digest('hex')
-        .slice(0, 16)
-
-      return ok(`local://${key}?action=put&expires=${expires}&signature=${signature}`)
+      return err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
     },
 
     publicUrl(key): string | null {

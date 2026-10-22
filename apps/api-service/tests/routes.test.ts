@@ -25,7 +25,7 @@ import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { serv } from '@h-ai/serv'
-import { storage } from '@h-ai/storage'
+import { HaiStorageError, storage } from '@h-ai/storage'
 import { vecdb } from '@h-ai/vecdb'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApiServiceApp } from '../src/app.js'
@@ -435,7 +435,7 @@ describe('api-service 受保护资源（认证守卫）', () => {
     await encryptedClient.auth.clear()
   })
 
-  it('登录后调用 storage.presignedUrls.createUpload 返回 success:true', async () => {
+  it('storage 登录后可读取本人本地文件元数据，预签名明确返回不支持', async () => {
     const user = uniqueUser('storage')
     const reg = await encryptedClient.iam.auth.register({
       username: user.username,
@@ -447,13 +447,18 @@ describe('api-service 受保护资源（认证守卫）', () => {
       return
     await encryptedClient.auth.setTokens(reg.data.tokens)
 
+    const key = `users/${encodeURIComponent(reg.data.user.id)}/test.png`
+    expect((await storage.file.put(key, 'owned-file')).success).toBe(true)
+    const metadata = await encryptedClient.storage.files.getMetadata({ key })
+    expect(metadata.success).toBe(true)
     const result = await encryptedClient.storage.presignedUrls.createUpload({
-      key: `users/${encodeURIComponent(reg.data.user.id)}/test.png`,
+      key,
       contentType: 'image/png',
     })
-    expect(result.success).toBe(true)
-    if (result.success)
-      expect(result.data.url).toBeTruthy()
+    expect(result.success).toBe(false)
+    expect(result).not.toHaveProperty('data')
+    if (!result.success)
+      expect(result.error.code).toBe(HaiStorageError.UNSUPPORTED_OPERATION.code)
 
     await encryptedClient.auth.clear()
   })
