@@ -79,6 +79,8 @@ const upload = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 const answer = await apiClient.ai.chats.sendMessage({ message: 'hello' })
 ```
 
+默认 `ai.chats.createCompletion({ messages, tools, tool_choice })` 只返回非流式 HaiResult JSON；不接受 stream 字段。完整 function 参数 JSON Schema、strict 与工具选择直接到模型。先检查 success，再读取助手 tool_calls；业务方授权执行工具后，以对应 tool_call_id 回传工具消息。流式接口须绑定应用自定义流契约。
+
 ### 3. 自定义 contract
 
 ```ts

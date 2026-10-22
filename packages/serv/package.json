@@ -76,6 +76,7 @@
   },
   "devDependencies": {
     "@h-ai/ai": "workspace:*",
+    "@h-ai/api-client": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@types/node": "catalog:",

@@ -1960,6 +1960,9 @@ importers:
       '@h-ai/ai':
         specifier: workspace:*
         version: link:../ai
+      '@h-ai/api-client':
+        specifier: workspace:*
+        version: link:../api-client
       '@h-ai/iam':
         specifier: workspace:*
         version: link:../iam

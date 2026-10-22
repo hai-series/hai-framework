@@ -72,6 +72,7 @@ export interface AiProcedureDeps {
 
 /**
  * 创建以认证用户为默认主体的 AI procedures。
+ * 补全仅返回非流式 JSON，完整转发 function 工具和角色消息；工具执行由业务方授权处理。
  *
  * @param deps - 已初始化 AI 能力及可选的跨主体授权策略。
  * @returns AI router；跨主体访问未获授权时返回 FORBIDDEN。
@@ -165,48 +166,15 @@ export function createAiProcedures(deps: AiProcedureDeps) {
 
 function toChatCompletionRequest(input: AiChatCompletionInput): ChatCompletionRequest {
   return {
-    messages: input.messages.map(toChatMessage),
+    // Schema 已按角色校验完整消息，直接传递以保留 name、图片、tool_calls 和工具结果。
+    messages: input.messages,
     model: input.model,
     temperature: input.temperature,
     top_p: input.top_p,
     max_tokens: input.max_tokens,
+    tools: input.tools,
+    tool_choice: input.tool_choice,
   }
-}
-
-function toChatMessage(message: AiChatCompletionInput['messages'][number]): ChatMessage {
-  if (message.role === 'system') {
-    return { role: 'system', content: toMessageText(message.content) }
-  }
-
-  if (message.role === 'user') {
-    return { role: 'user', content: message.content ?? '' }
-  }
-
-  if (message.role === 'tool') {
-    return { role: 'tool', content: toMessageText(message.content), tool_call_id: message.tool_call_id ?? '' }
-  }
-
-  return {
-    role: 'assistant',
-    content: toAssistantContent(message.content),
-    tool_calls: message.tool_calls,
-  }
-}
-
-function toMessageText(content: AiChatCompletionInput['messages'][number]['content']): string {
-  if (typeof content === 'string') {
-    return content
-  }
-
-  return content?.map(part => part.type === 'text' ? part.text : part.image_url.url).join('\n') ?? ''
-}
-
-function toAssistantContent(content: AiChatCompletionInput['messages'][number]['content']): string | null {
-  if (typeof content === 'string') {
-    return content
-  }
-
-  return content ? toMessageText(content) : null
 }
 
 function mapChatCompletionResult(result: HaiResult<ChatCompletionResponse>): HaiResult<AiChatCompletionData> {
@@ -285,15 +253,16 @@ function toApiChatMessage(message: ChatMessage): AiChatCompletionInput['messages
     return {
       role: 'assistant',
       content: toContentText(message.content),
+      name: message.name,
       tool_calls: mapFunctionToolCalls(message.tool_calls),
     }
   }
 
   if (message.role === 'user') {
-    return { role: 'user', content: toContentText(message.content) }
+    return { role: 'user', content: toContentText(message.content), name: message.name }
   }
 
-  return { role: 'system', content: toContentText(message.content) }
+  return { role: 'system', content: toContentText(message.content), name: message.role === 'system' || message.role === 'developer' ? message.name : undefined }
 }
 
 function toContentText(content: unknown): string {

@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 1/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 2/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -272,7 +272,8 @@
 
 ### SERV-05 · P2 · 实现或收缩被静默丢弃的 AI 请求字段
 
-- [ ] 待修正（源码确认；范围：serv）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：默认补全明确为非流式 JSON 并严格拒绝 stream，完整透传嵌套 JSON Schema/strict/全部 tool_choice/角色消息/name/图片/工具调用结果；同步三包三语 README、AI 与 HTTP skills、LLMS。55 项测试、三包 source/目标 test 类型与新 ESM/DTS 构建、两个应用类型、scoped lint 和 skills 通过；含 typed api-client→真实 Node serv HTTP→实际 OpenAI SDK→受控 HTTP provider 两轮工具往返，未调用付费模型；证据 tmp/serv05-files.json；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/serv/src/features/serv-feature-ai.ts:79](../packages/serv/src/features/serv-feature-ai.ts#L79)；[packages/api-contract/src/ai/ai-schemas.ts:86](../packages/api-contract/src/ai/ai-schemas.ts#L86)。
 - **证据与影响**：api-contract 接受 tools/tool_choice/stream，toChatCompletionRequest 未映射这些字段；请求看似成功却不按声明行为执行。
 - **修正内容**：使用一致的请求 schema 与适配器；工具调用完整传递，流式输出采用真实流协议；暂不支持的字段明确拒绝并从公开契约移除。

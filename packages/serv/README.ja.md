@@ -79,6 +79,8 @@ Storage procedures には `authorize({ context, operation, keys })` が必須で
 
 AI procedures は省略された `objectId` を信頼できる `context.session.userId` に結び付けます。会話・メッセージの保存、履歴、会話一覧、記憶 recall/list は認可された主体で処理し、会話は `objectId + sessionId` で分離します。書き込み時の sessionId の既定値は `default` です。他の objectId へのアクセスは既定で拒否し、管理者も信頼できる権限とテナント関係を検証する明示的な `authorizeObject` ポリシーが必要です。
 
+`chats.createCompletion`（`POST /ai/chats/completions`）は非ストリーミングの `HaiResult<AiChatCompletionData>` を一度返します。function `tools` のネストした JSON Schema と `strict`、`tool_choice`（`auto` / `none` / `required` / 提供した関数名）をモデルへ渡し、役割、`name`、ユーザー画像、ツール呼び出しを保持します。ツール結果には `role: 'tool'` と空でない `tool_call_id` が必須で、指定名は今回のツール定義に含まれる必要があります。procedure はツールを実行しません。アプリ側で認可・実行後、助手の `tool_calls` と対応する結果を送信します。入力に `stream` はなく、`true` / `false` とも Provider 呼び出し前に HTTP 400 で拒否します。ストリーミングには `ai.llm.chatStream()` と対応する出力型を使う専用 endpoint を定義します。
+
 #### host / port 設定
 
 host/port は `config/_serv.yml` の `server` で指定し、`HOST` / `PORT` 環境変数 > 設定ファイル > `127.0.0.1:3000` の順です。既定の `127.0.0.1` はローカル専用で、コンテナー外に公開する場合は `0.0.0.0` にします：

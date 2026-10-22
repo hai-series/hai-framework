@@ -58,6 +58,8 @@ myContract.storage.presignedUrls.createUpload
 myContract.ai.chats.createCompletion
 ```
 
+`ai.chats.createCompletion` is `POST /ai/chats/completions` and returns a non-streaming `HaiResult<AiChatCompletionData>`. Its strict input rejects undeclared fields, including `stream`. Function tools preserve their complete nested JSON Schema and `strict`; choices support `auto`, `none`, `required`, or a supplied function name. Role-specific messages accept text for system/assistant/tool and images for user; tool results require a nonempty `tool_call_id`, and assistants require content or `tool_calls`. Applications authorize and execute tools and define a separate contract for streaming.
+
 Clients call nested methods directly through `@h-ai/api-client`:
 
 ```ts

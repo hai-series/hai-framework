@@ -79,6 +79,8 @@ await crypto.close()
 
 ### API 契約
 
+既定の `apiClient.ai.chats.createCompletion({ messages, tools, tool_choice })` は非ストリーミング JSON 契約で、function のネストした JSON Schema と `strict` を保持します。`success` を確認してから `data.choices[].message.tool_calls` を読み、アプリで認可・実行した後、助手の呼び出しと対応する `tool_call_id` 付きツール結果を次の `messages` に含めます。`stream` は未対応で、TypeScript を回避してもサーバーが拒否します。ストリーミングにはアプリ独自の対応契約を利用します。
+
 独自のアプリケーションでは、専用の oRPC contract を指定できます：
 
 ```ts

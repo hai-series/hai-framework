@@ -33,7 +33,7 @@ function createAiMock(): AiProcedureDeps['ai'] {
   return {
     config: null,
     llm: {
-      chat: vi.fn(async (request) => {
+      chat: vi.fn<AiProcedureDeps['ai']['llm']['chat']>(async (request) => {
         record(request.objectId, request.sessionId)
         return ok({
           id: 'completion',
@@ -43,12 +43,12 @@ function createAiMock(): AiProcedureDeps['ai'] {
           choices: [{ index: 0, finish_reason: 'stop', logprobs: null, message: { role: 'assistant', content: 'reply', refusal: null } }],
         })
       }),
-      ask: vi.fn(async (_message, options) => {
+      ask: vi.fn<AiProcedureDeps['ai']['llm']['ask']>(async (_message, options) => {
         record(options?.objectId, options?.sessionId)
         return ok('reply')
       }),
-      getHistory: vi.fn(async scope => ok(records.filter(row => row.objectId === scope.objectId && row.sessionId === scope.sessionId))),
-      listSessions: vi.fn(async objectId => ok(records.filter(row => row.objectId === objectId).map(row => ({
+      getHistory: vi.fn<AiProcedureDeps['ai']['llm']['getHistory']>(async scope => ok(records.filter(row => row.objectId === scope.objectId && row.sessionId === scope.sessionId))),
+      listSessions: vi.fn<AiProcedureDeps['ai']['llm']['listSessions']>(async objectId => ok(records.filter(row => row.objectId === objectId).map(row => ({
         objectId,
         sessionId: row.sessionId,
         createdAt: 1,
@@ -56,8 +56,8 @@ function createAiMock(): AiProcedureDeps['ai'] {
       })))),
     },
     memory: {
-      recall: vi.fn(async (_query, options) => ok(memories.filter(row => !options?.objectId || row.objectId === options.objectId))),
-      listPage: vi.fn(async (options) => {
+      recall: vi.fn<AiProcedureDeps['ai']['memory']['recall']>(async (_query, options) => ok(memories.filter(row => !options?.objectId || row.objectId === options.objectId))),
+      listPage: vi.fn<AiProcedureDeps['ai']['memory']['listPage']>(async (options) => {
         const items = memories.filter(row => !options?.objectId || row.objectId === options.objectId)
         return ok({ items, total: items.length })
       }),
@@ -88,6 +88,34 @@ function request(app: ReturnType<typeof createApp>, path: string, input: object)
 }
 
 describe('serv feature AI resource authorization', () => {
+  it.each(['auto', 'none', 'required'] as const)('工具选择 %s 与完整定义传递到 AI', async (toolChoice) => {
+    const ai = createAiMock()
+    const app = createApp(ai)
+    const tools = [{ type: 'function', function: { name: 'lookup', strict: true, parameters: { type: 'object', additionalProperties: false } } }]
+    const response = await request(app, 'chats/completions', { messages: [{ role: 'user', name: 'alice', content: 'hello' }], tools, tool_choice: toolChoice })
+    const result = await response.json()
+    expect(result.success).toBe(true)
+    expect(ai.llm.chat).toHaveBeenCalledWith(expect.objectContaining({ tools, tool_choice: toolChoice, messages: [{ role: 'user', name: 'alice', content: 'hello' }] }))
+  })
+
+  it.each([
+    { stream: true },
+    { stream: false },
+    { tool_choice: 'required' },
+    { tool_choice: { type: 'function', function: { name: 'missing' } } },
+    { messages: [{ role: 'tool', content: 'result' }] },
+    { messages: [{ role: 'tool', tool_call_id: '', content: 'result' }] },
+    { messages: [{ role: 'assistant' }] },
+    { messages: [{ role: 'user', content: 'hello', tool_call_id: 'wrong-role' }] },
+    { messages: [{ role: 'system', content: [{ type: 'image_url', image_url: { url: 'https://example.com/image.png' } }] }] },
+  ])('不支持或不完整的补全请求在 HTTP 边界失败：%j', async (invalid) => {
+    const ai = createAiMock()
+    const app = createApp(ai)
+    const response = await request(app, 'chats/completions', { messages: [{ role: 'user', content: 'hello' }], ...invalid })
+    expect(response.status).toBe(400)
+    expect(ai.llm.chat).not.toHaveBeenCalled()
+  })
+
   it.each([
     { path: 'chats/completions', input: { messages: [{ role: 'user', content: 'hello' }] } },
     { path: 'chats/messages', input: { message: 'hello' } },

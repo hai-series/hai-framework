@@ -79,6 +79,8 @@ Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD c
 
 ### API contracts
 
+The default `apiClient.ai.chats.createCompletion({ messages, tools, tool_choice })` uses a non-streaming JSON contract and retains complete nested function JSON Schema and `strict`. Check `success` before reading `data.choices[].message.tool_calls`. After authorization and execution, include the assistant tool calls and tool results with matching `tool_call_id` in the next `messages`. The input does not support `stream`; the server rejects it even if TypeScript is bypassed. Bind an application's own stream contract for streaming.
+
 Custom applications can bind their own oRPC contract:
 
 ```ts

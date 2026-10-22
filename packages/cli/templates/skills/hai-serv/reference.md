@@ -644,6 +644,8 @@ http: {
 
 AI 默认 feature 把 objectId 绑定到可信 `context.session.userId`，客户端可省略；所有读写与记忆查询都使用授权后的主体。sessionId 与 objectId 组成复合会话，写入默认 sessionId 为 `default`。其它 objectId 默认被拒绝；跨用户管理需显式提供 `authorizeObject({ context, objectId, sessionId, operation })`，按可信权限及租户关系严格返回 true。
 
+`chats.createCompletion` 只提供非流式 JSON 输出，stream 字段无论 true/false 都在 procedure 前以 HTTP 400 拒绝。完整 function tools（嵌套 JSON Schema/strict）、tool_choice（auto/none/required/已定义函数名）和角色消息直接传给模型，不自动执行工具。工具结果必填 tool_call_id，不能把未知字段静默裁剪为看似成功。流式调用使用应用自己的 endpoint 与 ai.llm.chatStream 输出契约。
+
 ```typescript
 const aiProcedures = createAiProcedures({
   ai,

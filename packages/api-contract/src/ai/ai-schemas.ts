@@ -2,7 +2,7 @@
  * @h-ai/api-contract — AI 领域 Schema
  *
  * 包含聊天补全、消息占位、记忆召回与历史会话相关的 input/output Zod Schema。
- * 聊天补全结构对齐 OpenAI Chat Completions API，支持 tool calling。
+ * 默认聊天补全为非流式 JSON，支持 function tool calling；未声明字段在边界拒绝。
  * 仅保留跨接口、跨层复用的数据结构；一次性输出包装在 contract 中内联。
  * @module ai-schemas
  */
@@ -17,7 +17,7 @@ export const AiMessageRoleSchema = z.enum(['system', 'user', 'assistant', 'tool'
 export const AiTextContentSchema = z.object({
   type: z.literal('text'),
   text: z.string(),
-})
+}).strict()
 
 /** 图片内容 Schema。 */
 export const AiImageContentSchema = z.object({
@@ -25,8 +25,8 @@ export const AiImageContentSchema = z.object({
   image_url: z.object({
     url: z.string(),
     detail: z.enum(['auto', 'low', 'high']).optional(),
-  }),
-})
+  }).strict(),
+}).strict()
 
 /** 消息内容 Schema。 */
 export const AiMessageContentSchema = z.union([
@@ -36,45 +36,72 @@ export const AiMessageContentSchema = z.union([
 
 /** 工具调用 Schema。 */
 export const AiToolCallSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1),
   type: z.literal('function'),
   function: z.object({
-    name: z.string(),
+    name: z.string().min(1),
     arguments: z.string(),
-  }),
-})
+  }).strict(),
+}).strict()
 
-/** 聊天消息 Schema。 */
-export const AiChatMessageSchema = z.object({
-  role: AiMessageRoleSchema,
-  content: AiMessageContentSchema.optional(),
-  name: z.string().optional(),
-  tool_calls: z.array(AiToolCallSchema).optional(),
-  tool_call_id: z.string().optional(),
-})
+/** system、assistant 和 tool 只接收文本，不把图片 URL 静默转换为文本。 */
+const AiTextMessageContentSchema = z.union([z.string(), z.array(AiTextContentSchema)])
 
-/** 工具参数 Schema。 */
-export const AiToolParameterSchema = z.object({
-  type: z.string(),
-  description: z.string().optional(),
-  enum: z.array(z.string()).optional(),
-})
+/**
+ * 按角色校验聊天消息；工具结果必须携带非空 tool_call_id。
+ *
+ * @example `AiChatMessageSchema.parse({ role: 'tool', tool_call_id: 'call_1', content: '42' })`
+ */
+export const AiChatMessageSchema = z.discriminatedUnion('role', [
+  z.object({
+    role: z.literal('system'),
+    content: AiTextMessageContentSchema,
+    name: z.string().optional(),
+  }).strict(),
+  z.object({
+    role: z.literal('user'),
+    content: AiMessageContentSchema,
+    name: z.string().optional(),
+  }).strict(),
+  z.object({
+    role: z.literal('assistant'),
+    content: AiTextMessageContentSchema.nullable().optional(),
+    name: z.string().optional(),
+    tool_calls: z.array(AiToolCallSchema).min(1).optional(),
+  }).strict().refine(message => message.content != null || message.tool_calls !== undefined),
+  z.object({
+    role: z.literal('tool'),
+    content: AiTextMessageContentSchema,
+    tool_call_id: z.string().min(1),
+  }).strict(),
+])
 
-/** 工具定义 Schema。 */
+/**
+ * 完整的 function 工具定义；parameters 保留嵌套 JSON Schema，不裁剪其关键字。
+ *
+ * @example
+ * ```ts
+ * AiToolDefinitionSchema.parse({ type: 'function', function: {
+ *   name: 'lookup', strict: true,
+ *   parameters: { type: 'object', properties: { ids: { type: 'array', items: { type: 'integer' } } }, additionalProperties: false },
+ * } })
+ * ```
+ */
 export const AiToolDefinitionSchema = z.object({
   type: z.literal('function'),
   function: z.object({
-    name: z.string(),
+    name: z.string().min(1),
     description: z.string().optional(),
-    parameters: z.object({
-      type: z.literal('object'),
-      properties: z.record(z.string(), AiToolParameterSchema).optional(),
-      required: z.array(z.string()).optional(),
-    }).optional(),
-  }),
-})
+    parameters: z.record(z.string(), z.json()).optional(),
+    strict: z.boolean().nullable().optional(),
+  }).strict(),
+}).strict()
 
-/** 聊天完成入参 Schema。 */
+/**
+ * 非流式聊天补全入参；stream 等未声明字段明确拒绝。
+ *
+ * @example `AiChatCompletionInputSchema.parse({ messages: [{ role: 'user', content: 'Hello' }] })`
+ */
 export const AiChatCompletionInputSchema = z.object({
   /** 默认绑定认证用户；跨主体访问需服务端显式授权。 */
   objectId: z.string().min(1).optional(),
@@ -85,13 +112,19 @@ export const AiChatCompletionInputSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   top_p: z.number().min(0).max(1).optional(),
   max_tokens: z.number().int().min(1).optional(),
-  stream: z.boolean().optional(),
-  tools: z.array(AiToolDefinitionSchema).optional(),
+  tools: z.array(AiToolDefinitionSchema).min(1).optional(),
   tool_choice: z.union([
     z.literal('auto'),
     z.literal('none'),
-    z.object({ type: z.literal('function'), function: z.object({ name: z.string() }) }),
+    z.literal('required'),
+    z.object({ type: z.literal('function'), function: z.object({ name: z.string().min(1) }).strict() }).strict(),
   ]).optional(),
+}).strict().superRefine((input, context) => {
+  const choice = input.tool_choice
+  if (choice === 'required' && !input.tools?.length)
+    context.addIssue({ code: 'custom', path: ['tool_choice'] })
+  if (typeof choice === 'object' && !input.tools?.some(tool => tool.function.name === choice.function.name))
+    context.addIssue({ code: 'custom', path: ['tool_choice'] })
 })
 
 /** Token 使用统计 Schema。 */

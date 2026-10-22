@@ -58,6 +58,8 @@ myContract.storage.presignedUrls.createUpload
 myContract.ai.chats.createCompletion
 ```
 
+`ai.chats.createCompletion` 为 `POST /ai/chats/completions`，只返回非流式 `HaiResult<AiChatCompletionData>`；输入严格拒绝 `stream` 等未声明字段。function 工具保留完整嵌套 JSON Schema 和 `strict`，工具选择支持 `auto` / `none` / `required` / 已提供的函数名。消息按角色校验：system/assistant/tool 接收文本，user 另支持图片；工具结果必填非空 `tool_call_id`，助手必须包含内容或 `tool_calls`。默认工具调用由业务方授权与执行，流式能力由应用定义独立契约。
+
 客户端通过 `@h-ai/api-client` 直接调用嵌套方法：
 
 ```ts

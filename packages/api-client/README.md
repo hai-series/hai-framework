@@ -79,6 +79,8 @@ await crypto.close()
 
 ### API 契约
 
+默认 `apiClient.ai.chats.createCompletion({ messages, tools, tool_choice })` 使用非流式 JSON 契约，完整传递 function 工具的嵌套 JSON Schema 与 `strict`。先判断 `success`，再读取 `data.choices[].message.tool_calls`；业务方授权执行后，把助手工具调用和带对应 `tool_call_id` 的工具结果放入下一次 `messages`。输入不支持 `stream`，即使绕过 TypeScript 传入也会被服务端拒绝；流式接口须绑定应用自己的流契约。
+
 自定义应用可以绑定自己的 oRPC contract：
 
 ```ts

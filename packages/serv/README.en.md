@@ -79,6 +79,8 @@ Batch deletion via `storage.files.deleteMany` returns `{ deletedKeys, failures: 
 
 AI procedures bind `objectId` to the trusted `context.session.userId` when the client omits it. Chat/message writes, history, session lists and memory recall/list all use the authorized owner. Sessions are scoped by `objectId + sessionId`; writes default to session `default`. A different objectId is forbidden unless an explicit `authorizeObject` policy grants access using trusted permissions and tenant ownership, including for administrators.
 
+`chats.createCompletion` (`POST /ai/chats/completions`) returns one non-streaming `HaiResult<AiChatCompletionData>`. Function `tools` retain their complete nested JSON Schema and `strict`, and `tool_choice` supports `auto`, `none`, `required`, or a provided function name. Messages preserve roles, `name`, user images, and tool calls. Tool results require `role: 'tool'` and a nonempty `tool_call_id`; named choices must reference a supplied tool. The procedure does not execute tools: the application authorizes and executes them, then sends the assistant's `tool_calls` with their tool results. The input has no `stream` field; either boolean value is rejected with HTTP 400 before the provider runs. For streaming, define a separate endpoint with a matching stream output using `ai.llm.chatStream()`.
+
 #### host / port configuration
 
 Host/port come from `server` in `config/_serv.yml`: `HOST` / `PORT` environment variables > configuration > `127.0.0.1:3000`. The default `127.0.0.1` is local-only; use `0.0.0.0` to expose a container:

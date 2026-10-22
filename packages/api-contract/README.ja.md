@@ -58,6 +58,8 @@ myContract.storage.presignedUrls.createUpload
 myContract.ai.chats.createCompletion
 ```
 
+`ai.chats.createCompletion` は `POST /ai/chats/completions` で、非ストリーミングの `HaiResult<AiChatCompletionData>` を返します。厳密な入力 Schema は `stream` など未定義のフィールドを拒否します。function ツールのネストした JSON Schema と `strict` を保持し、選択は `auto` / `none` / `required` / 提供した関数名に対応します。system/assistant/tool はテキスト、user は画像にも対応し、ツール結果の空でない `tool_call_id`、助手の内容または `tool_calls` が必須です。アプリがツールを認可・実行し、ストリーミング用には別の契約を定義します。
+
 クライアントは `@h-ai/api-client` でネストしたメソッドを直接呼び出します：
 
 ```ts

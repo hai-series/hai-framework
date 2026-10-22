@@ -144,7 +144,7 @@ const contract = apiContract.create({
 | --- | --- | --- |
 | `apiContract.iam` | IAM | auth（登录/登出/OTP/刷新/注册/改密码）、users、roles、permissions Admin CRUD |
 | `apiContract.storage` | Storage | presignedUrls（上传/下载/批量）、files（元数据查询/删除） |
-| `apiContract.ai` | AI | chats（completion/流式）、knowledge（上传/查询） |
+| `apiContract.ai` | AI | chats（非流式补全/消息/历史）、memories（召回/列表）、sessions（列表） |
 | `apiContract.payment` | Payment | orders、subscriptions |
 
 ### 内置 contract 路径示例
@@ -162,7 +162,7 @@ myContract.iam.roles.create      // POST /iam/roles
 myContract.storage.presignedUrls.createUpload   // POST /storage/presigned-urls/upload
 
 // AI
-myContract.ai.chats.createCompletion  // POST /ai/chats/completion
+myContract.ai.chats.createCompletion  // POST /ai/chats/completions，非流式 JSON
 ```
 
 ### `apiContract.haiResultSchema(dataSchema)` — 标准输出包装

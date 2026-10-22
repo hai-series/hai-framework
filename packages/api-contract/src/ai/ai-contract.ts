@@ -28,7 +28,7 @@ import {
 /** AI 领域 oRPC contract。 */
 export const aiContract = {
   chats: {
-    createCompletion: route({ method: 'POST', path: '/ai/chats/completions', operationId: 'ai.chats.createCompletion', summary: 'Create chat completion', tags: ['ai', 'chats'] })
+    createCompletion: route({ method: 'POST', path: '/ai/chats/completions', operationId: 'ai.chats.createCompletion', summary: 'Create non-streaming chat completion with function tools', tags: ['ai', 'chats'] })
       .input(AiChatCompletionInputSchema)
       .output(haiResultSchema(AiChatCompletionDataSchema)),
     sendMessage: route({ method: 'POST', path: '/ai/chats/messages', operationId: 'ai.chats.sendMessage', summary: 'Send a single chat message', tags: ['ai', 'chats'] })
