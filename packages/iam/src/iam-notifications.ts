@@ -2,7 +2,17 @@
 import type { IamConfigInput, IamNotificationContext } from './iam-types.js'
 import { iamM } from './iam-i18n.js'
 
-/** 返回实际可用的回调；SDK/投递异常由 IAM 的公共边界转为 HaiResult。 */
+/**
+ * 返回实际可用的回调；SDK/投递异常由 IAM 的公共边界转为 HaiResult。
+ * @param input - 应用注入的 IAM 设置与运行时依赖。
+ * @returns 已注入或能由现有 Reach 模板提供的通知回调；不具备发送实现的字段保持 undefined。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const callbacks = await resolveIamNotifications({ login: { otp: false }, passwordReset: { enabled: false } })
+ * const emailConfigured = callbacks.onOtpSendEmail !== undefined
+ * ```
+ */
 export async function resolveIamNotifications(input: IamConfigInput): Promise<Pick<IamConfigInput, 'onOtpSendEmail' | 'onOtpSendSms' | 'onPasswordResetRequest'>> {
   const callbacks = { onOtpSendEmail: input.onOtpSendEmail, onOtpSendSms: input.onOtpSendSms, onPasswordResetRequest: input.onPasswordResetRequest }
   const reach = input.reach

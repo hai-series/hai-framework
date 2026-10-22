@@ -40,6 +40,14 @@ const logger = core.logger.child({ module: 'iam', scope: 'session' })
 
 /**
  * 会话子功能依赖
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function assemble(config: IamConfig, readCredential: SessionOperationsDeps['readCredential']) {
+ *   const deps: SessionOperationsDeps = { config, readCredential }
+ *   return createSessionOperations(deps)
+ * }
+ * ```
  */
 export interface SessionOperationsDeps {
   config: IamConfig
@@ -51,6 +59,18 @@ export interface SessionOperationsDeps {
  * 创建会话子功能
  *
  * 内部创建缓存会话存储，返回会话管理接口。
+ * @param deps - 由 IAM 生命周期按依赖顺序创建的内部组件。
+ * @returns 成功返回数据，失败返回业务或基础设施错误；调用方必须先判断 success。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function verify(deps: SessionOperationsDeps, token: string) {
+ *   const created = await createSessionOperations(deps)
+ *   if (!created.success)
+ *     return created
+ *   return created.data.verifyToken(token)
+ * }
+ * ```
  */
 export async function createSessionOperations(deps: SessionOperationsDeps): Promise<HaiResult<SessionOperations>> {
   try {
@@ -86,6 +106,13 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
 
 /**
  * 内部会话构建器配置
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function lifetime(config: SessionBuilderConfig) {
+ *   return { maxAgeSeconds: config.maxAge ?? 86400, singleDevice: config.singleDevice ?? false }
+ * }
+ * ```
  */
 interface SessionBuilderConfig {
   readCredential: SessionOperationsDeps['readCredential']

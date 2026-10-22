@@ -15,6 +15,15 @@ import type { AgreementDisplay, User } from '../user/iam-user-types.js'
  *
  * 所有端（Web SSR / H5 SPA / Capacitor App / 未来小程序）
  * 使用完全相同的 Bearer Token 认证流程。
+ * @example
+ * ```ts
+ * import { iam, type TokenPair } from '@h-ai/iam'
+ * const login = await iam.auth.login({ identifier: 'alice', password: 'ExampleOnly123!' })
+ * if (login.success) {
+ *   const tokens: TokenPair = login.data.tokens
+ *   const authorization = `${tokens.tokenType} ${tokens.accessToken}` // 仅用于受保护请求。
+ * }
+ * ```
  */
 export interface TokenPair {
   /** 访问令牌（短期，用于 API 认证） */
@@ -35,6 +44,15 @@ export interface TokenPair {
  * 登录/注册成功后返回，包含用户信息、令牌、角色权限等。
  * `roles` / `permissions` 来源于会话创建时写入的 RBAC 数据，
  * 调用方无需再通过 `verifyToken` 获取。
+ * @example
+ * ```ts
+ * import { iam, type AuthResult } from '@h-ai/iam'
+ * const login = await iam.auth.login({ identifier: 'alice', password: 'ExampleOnly123!' })
+ * if (login.success) {
+ *   const authenticated: AuthResult = login.data
+ *   authenticated.user.displayName
+ * }
+ * ```
  */
 export interface AuthResult {
   /** 用户信息 */
@@ -53,6 +71,15 @@ export interface AuthResult {
 
 /**
  * 会话数据
+ * @example
+ * ```ts
+ * import { iam, type Session } from '@h-ai/iam'
+ * const verified = await iam.auth.verifyToken('token-from-authorization-header')
+ * if (verified.success) {
+ *   const session: Session = verified.data
+ *   session.permissions.includes('report:read')
+ * }
+ * ```
  */
 export interface Session {
   /** 会话内容版本；显式更新产生新版本，内部滑动续期保留版本。 */
@@ -95,6 +122,11 @@ export interface Session {
  * 会话扩展数据
  *
  * 支持开放的 Record 扩展，同时约束内部保留字段 _tokenPair。
+ * @example
+ * ```ts
+ * import type { SessionData } from '@h-ai/iam'
+ * const value: SessionData = { theme: 'dark', locale: 'zh-CN' }
+ * ```
  */
 export type SessionData = Record<string, unknown> & {
   /** 令牌对（内部保留字段，由 session.create 写入，logout 时读取） */
@@ -103,6 +135,11 @@ export type SessionData = Record<string, unknown> & {
 
 /**
  * 创建会话选项
+ * @example
+ * ```ts
+ * import type { CreateSessionOptions } from '@h-ai/iam'
+ * const value: CreateSessionOptions = { userId: 'user-1', source: 'server', maxAge: 3600 }
+ * ```
  */
 export interface CreateSessionOptions {
   /** 策略已验证的凭据代；创建前须与当前数据库核对，省略时仅供可信服务端按当前用户签发。 */
@@ -134,6 +171,19 @@ export interface CreateSessionOptions {
 
 /**
  * 会话子功能接口
+ * @example
+ * ```ts
+ * import { iam, type SessionOperations } from '@h-ai/iam'
+ * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
+ * const operations: SessionOperations = iam.session
+ * const result = await operations.get('token-from-authorization-header')
+ * if (!result.success) {
+ *   result.error.code // 调用方将失败交给统一错误边界。
+ * }
+ * else {
+ *   result.data
+ * }
+ * ```
  */
 export interface SessionOperations {
   /**
@@ -179,9 +229,15 @@ export interface SessionOperations {
    * @returns 成功返回 ok；不存在返回 SESSION_NOT_FOUND，版本变化返回 CONFLICT
    * @example
    * ```ts
+   * import { iam } from '@h-ai/iam'
+   * // 已完成身份与更新权限校验的服务端上下文。
+   * const token = 'token-from-authorization-header'
    * const found = await iam.session.get(token)
-   * if (found.success && found.data)
-   *   await iam.session.update(token, { data: { theme: 'dark' } }, found.data.version)
+   * if (found.success && found.data) {
+   *   const updated = await iam.session.update(token, { data: { theme: 'dark' } }, found.data.version)
+   *   if (!updated.success)
+   *     updated.error.code // 版本冲突后重新读取，不能无条件覆盖。
+   * }
    * ```
    */
   update: (accessToken: string, data: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>
@@ -192,7 +248,7 @@ export interface SessionOperations {
    * 同时清除用户令牌映射关系。
    *
    * @param accessToken - 访问令牌
-   * @returns 始终返回 ok（令牌不存在时静默成功）
+   * @returns 已撤销或令牌不存在时返回 ok；共享存储读取或提交失败时返回错误
    */
   delete: (accessToken: string) => Promise<HaiResult<void>>
 
@@ -242,6 +298,11 @@ export interface SessionOperations {
  * 会话字段更新（仅限 roles / permissions）
  *
  * 用于角色/权限变更后的会话同步。
+ * @example
+ * ```ts
+ * import type { SessionFieldUpdates } from '@h-ai/iam'
+ * const value: SessionFieldUpdates = { roles: ['user'], permissions: ['report:read'] }
+ * ```
  */
 export interface SessionFieldUpdates {
   /** 角色 code 列表 */

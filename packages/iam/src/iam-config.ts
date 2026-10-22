@@ -19,14 +19,38 @@ const WebUrlSchema = z.url().refine(value => ['http:', 'https:'].includes(new UR
  * - `password` - 用户名/邮箱 + 密码
  * - `otp` - 邮箱/短信 + 验证码
  * - `ldap` - LDAP 目录认证
+ * - `apikey` - API Key 认证并按 scopes 收敛权限
+ * @example
+ * ```ts
+ * import { AuthStrategyTypeSchema } from '@h-ai/iam'
+ * const result = AuthStrategyTypeSchema.safeParse('password')
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
  */
 export const AuthStrategyTypeSchema = z.enum(['password', 'otp', 'ldap', 'apikey'])
 
-/** 认证策略类型 */
+/**
+ * 认证策略类型
+ * @example
+ * ```ts
+ * import { AuthStrategyTypeSchema, type AuthStrategyType } from '@h-ai/iam'
+ * const value: AuthStrategyType = AuthStrategyTypeSchema.parse('password')
+ * ```
+ */
 export type AuthStrategyType = z.infer<typeof AuthStrategyTypeSchema>
 
 /**
  * 密码配置 Schema
+ * @example
+ * ```ts
+ * import { PasswordConfigSchema } from '@h-ai/iam'
+ * const result = PasswordConfigSchema.safeParse({ minLength: 12, requireSpecialChar: true })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
  */
 export const PasswordConfigSchema = z.object({
   /** 最小长度（默认 8） */
@@ -45,11 +69,26 @@ export const PasswordConfigSchema = z.object({
   expirationDays: z.number().int().min(0).default(0),
 }).refine(config => config.maxLength >= config.minLength, { message: 'maxLength must be >= minLength', path: ['maxLength'] })
 
-/** 密码配置类型 */
+/**
+ * 密码配置类型
+ * @example
+ * ```ts
+ * import { PasswordConfigSchema, type PasswordConfig } from '@h-ai/iam'
+ * const value: PasswordConfig = PasswordConfigSchema.parse({ minLength: 12, requireSpecialChar: true })
+ * ```
+ */
 export type PasswordConfig = z.infer<typeof PasswordConfigSchema>
 
 /**
  * OTP 配置 Schema
+ * @example
+ * ```ts
+ * import { OtpConfigSchema } from '@h-ai/iam'
+ * const result = OtpConfigSchema.safeParse({ email: true, sms: false, length: 6 })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
  */
 export const OtpConfigSchema = z.object({
   /** 分别启用邮件、短信验证码 */
@@ -65,11 +104,26 @@ export const OtpConfigSchema = z.object({
   resendInterval: z.number().int().min(30).default(60),
 })
 
-/** OTP 配置类型 */
+/**
+ * OTP 配置类型
+ * @example
+ * ```ts
+ * import { OtpConfigSchema, type OtpConfig } from '@h-ai/iam'
+ * const value: OtpConfig = OtpConfigSchema.parse({ email: true, sms: false, length: 6 })
+ * ```
+ */
 export type OtpConfig = z.infer<typeof OtpConfigSchema>
 
 /**
  * 密码重置配置 Schema
+ * @example
+ * ```ts
+ * import { PasswordResetConfigSchema } from '@h-ai/iam'
+ * const result = PasswordResetConfigSchema.safeParse({ enabled: true, mode: 'email', resetUrl: 'https://app.example.com/reset-password' })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
  */
 export const PasswordResetConfigSchema = z.object({
   /** 重置通知渠道，phone 使用 password_reset_sms 模板。 */
@@ -84,11 +138,28 @@ export const PasswordResetConfigSchema = z.object({
   maxAttempts: z.number().int().min(1).default(3),
 })
 
-/** 密码重置配置类型 */
+/**
+ * 密码重置配置类型
+ * @example
+ * ```ts
+ * import { PasswordResetConfigSchema, type PasswordResetConfig } from '@h-ai/iam'
+ * const value: PasswordResetConfig = PasswordResetConfigSchema.parse({ enabled: true, mode: 'email', resetUrl: 'https://app.example.com/reset-password' })
+ * ```
+ */
 export type PasswordResetConfig = z.infer<typeof PasswordResetConfigSchema>
 
 /**
  * LDAP 配置 Schema
+ * @example
+ * ```ts
+ * import { LdapConfigSchema } from '@h-ai/iam'
+ * const bindPassword = process.env.LDAP_BIND_PASSWORD
+ * if (bindPassword) {
+ *   const result = LdapConfigSchema.safeParse({ url: 'ldaps://directory.example.com', bindDn: 'cn=service,dc=example,dc=com', bindPassword: bindPassword, searchBase: 'ou=users,dc=example,dc=com' })
+ *   if (result.success)
+ *     result.data.searchBase
+ * }
+ * ```
  */
 export const LdapConfigSchema = z.object({
   /** LDAP 服务器 URL */
@@ -113,11 +184,30 @@ export const LdapConfigSchema = z.object({
   connectTimeout: z.number().int().min(1000).default(5000),
 })
 
-/** LDAP 配置类型 */
+/**
+ * LDAP 配置类型
+ * @example
+ * ```ts
+ * import { LdapConfigSchema, type LdapConfig } from '@h-ai/iam'
+ * const bindPassword = process.env.LDAP_BIND_PASSWORD
+ * if (bindPassword) {
+ *   const value: LdapConfig = LdapConfigSchema.parse({ url: 'ldaps://directory.example.com', bindDn: 'cn=service,dc=example,dc=com', bindPassword: bindPassword, searchBase: 'ou=users,dc=example,dc=com' })
+ *   value.url
+ * }
+ * ```
+ */
 export type LdapConfig = z.infer<typeof LdapConfigSchema>
 
 /**
  * API Key 配置 Schema
+ * @example
+ * ```ts
+ * import { ApiKeyConfigSchema } from '@h-ai/iam'
+ * const result = ApiKeyConfigSchema.safeParse({ maxKeysPerUser: 5, defaultExpirationDays: 30 })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
  */
 export const ApiKeyConfigSchema = z.object({
   /** 单用户最大 API Key 数量（默认 10） */
@@ -128,12 +218,29 @@ export const ApiKeyConfigSchema = z.object({
   prefix: z.string().default('hai_'),
 })
 
-/** API Key 配置类型 */
+/**
+ * API Key 配置类型
+ * @example
+ * ```ts
+ * import { ApiKeyConfigSchema, type ApiKeyConfig } from '@h-ai/iam'
+ * const value: ApiKeyConfig = ApiKeyConfigSchema.parse({ maxKeysPerUser: 5, defaultExpirationDays: 30 })
+ * ```
+ */
 export type ApiKeyConfig = z.infer<typeof ApiKeyConfigSchema>
 
 // ─── 登录/注册与安全策略配置 ───
 
-/** 登录类型启用配置 */
+/**
+ * 登录类型启用配置
+ * @example
+ * ```ts
+ * import { LoginConfigSchema } from '@h-ai/iam'
+ * const result = LoginConfigSchema.safeParse({ password: true, otp: false })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
+ */
 export const LoginConfigSchema = z.object({
   /** 是否启用密码登录 */
   password: z.boolean().default(true),
@@ -145,9 +252,27 @@ export const LoginConfigSchema = z.object({
   apikey: z.boolean().default(false),
 })
 
+/**
+ * 登录方式开关配置。
+ * @example
+ * ```ts
+ * import { LoginConfigSchema, type LoginConfig } from '@h-ai/iam'
+ * const value: LoginConfig = LoginConfigSchema.parse({ password: true, otp: false })
+ * ```
+ */
 export type LoginConfig = z.infer<typeof LoginConfigSchema>
 
-/** 注册配置 */
+/**
+ * 注册配置
+ * @example
+ * ```ts
+ * import { RegisterConfigSchema } from '@h-ai/iam'
+ * const result = RegisterConfigSchema.safeParse({ enabled: false })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
+ */
 export const RegisterConfigSchema = z.object({
   /** 是否启用注册 */
   enabled: z.boolean().default(true),
@@ -155,9 +280,27 @@ export const RegisterConfigSchema = z.object({
   defaultEnabled: z.boolean().default(true),
 })
 
+/**
+ * 注册开关及新用户默认状态。
+ * @example
+ * ```ts
+ * import { RegisterConfigSchema, type RegisterConfig } from '@h-ai/iam'
+ * const value: RegisterConfig = RegisterConfigSchema.parse({ enabled: false })
+ * ```
+ */
 export type RegisterConfig = z.infer<typeof RegisterConfigSchema>
 
-/** 安全策略配置 */
+/**
+ * 安全策略配置
+ * @example
+ * ```ts
+ * import { SecurityConfigSchema } from '@h-ai/iam'
+ * const result = SecurityConfigSchema.safeParse({ maxLoginAttempts: 5, lockoutDuration: 900 })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
+ */
 export const SecurityConfigSchema = z.object({
   /** 最大登录失败次数（默认 5） */
   maxLoginAttempts: z.number().int().min(1).default(5),
@@ -165,9 +308,27 @@ export const SecurityConfigSchema = z.object({
   lockoutDuration: z.number().int().min(60).default(900),
 })
 
+/**
+ * 服务端账户失败计数与锁定策略。
+ * @example
+ * ```ts
+ * import { SecurityConfigSchema, type SecurityConfig } from '@h-ai/iam'
+ * const value: SecurityConfig = SecurityConfigSchema.parse({ maxLoginAttempts: 5, lockoutDuration: 900 })
+ * ```
+ */
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>
 
-/** 协议展示配置 */
+/**
+ * 协议展示配置
+ * @example
+ * ```ts
+ * import { AgreementConfigSchema } from '@h-ai/iam'
+ * const result = AgreementConfigSchema.safeParse({ userAgreementUrl: 'https://app.example.com/terms', showOnRegister: true })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
+ */
 export const AgreementConfigSchema = z.object({
   /** 用户协议 Markdown 正文；同时配置 URL 时优先显示正文。 */
   userAgreementMarkdown: z.string().min(1).optional(),
@@ -183,10 +344,29 @@ export const AgreementConfigSchema = z.object({
   showOnLogin: z.boolean().default(false),
 })
 
+/**
+ * 登录和注册的协议展示设置。
+ * @example
+ * ```ts
+ * import { AgreementConfigSchema, type AgreementConfig } from '@h-ai/iam'
+ * const value: AgreementConfig = AgreementConfigSchema.parse({ userAgreementUrl: 'https://app.example.com/terms', showOnRegister: true })
+ * ```
+ */
 export type AgreementConfig = z.infer<typeof AgreementConfigSchema>
 
 /** 认证页面外观；文本由应用配置或 i18n 提供，图片只接受 HTTP(S) 或站内路径。 */
 const AuthImageSchema = z.string().refine(value => /^https?:\/\//.test(value) || (value.startsWith('/') && !value.startsWith('//')))
+/**
+ * 认证页面外观 Schema；图片仅接受 HTTP(S) 或站内路径，输出包含默认展示模式。
+ * @example
+ * ```ts
+ * import { AuthUiConfigSchema } from '@h-ai/iam'
+ * const result = AuthUiConfigSchema.safeParse({ variant: 'split', logoUrl: '/logo.svg' })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
+ */
 export const AuthUiConfigSchema = z.object({
   variant: z.enum(['card', 'split']).default('card'),
   title: z.string().optional(),
@@ -196,12 +376,28 @@ export const AuthUiConfigSchema = z.object({
   logoUrl: AuthImageSchema.optional(),
   illustrationUrl: AuthImageSchema.optional(),
 })
+/**
+ * 认证页外观设置；不包含服务端秘密。
+ * @example
+ * ```ts
+ * import { AuthUiConfigSchema, type AuthUiConfig } from '@h-ai/iam'
+ * const value: AuthUiConfig = AuthUiConfigSchema.parse({ variant: 'split', logoUrl: '/logo.svg' })
+ * ```
+ */
 export type AuthUiConfig = z.infer<typeof AuthUiConfigSchema>
 
 // ─── 会话配置 ───
 
 /**
  * 会话配置 Schema
+ * @example
+ * ```ts
+ * import { SessionConfigSchema } from '@h-ai/iam'
+ * const result = SessionConfigSchema.safeParse({ maxAge: 3600, refreshTokenMaxAge: 604800 })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
  */
 export const SessionConfigSchema = z.object({
   /** 新会话的默认 access 时长（秒）；创建时可用 maxAge 覆盖，滑动/刷新沿用会话固有时长。 */
@@ -214,13 +410,28 @@ export const SessionConfigSchema = z.object({
   refreshTokenMaxAge: z.number().int().min(3600).default(604800),
 })
 
-/** 会话配置类型 */
+/**
+ * 会话配置类型
+ * @example
+ * ```ts
+ * import { SessionConfigSchema, type SessionConfig } from '@h-ai/iam'
+ * const value: SessionConfig = SessionConfigSchema.parse({ maxAge: 3600, refreshTokenMaxAge: 604800 })
+ * ```
+ */
 export type SessionConfig = z.infer<typeof SessionConfigSchema>
 
 // ─── RBAC 配置 ───
 
 /**
  * RBAC 配置 Schema
+ * @example
+ * ```ts
+ * import { RbacConfigSchema } from '@h-ai/iam'
+ * const result = RbacConfigSchema.safeParse({ enabled: true, defaultRole: 'user' })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
+ * }
+ * ```
  */
 export const RbacConfigSchema = z.object({
   /** 是否启用 RBAC */
@@ -231,25 +442,26 @@ export const RbacConfigSchema = z.object({
   defaultRole: z.string().default('user'),
 })
 
-/** RBAC 配置类型 */
+/**
+ * RBAC 配置类型
+ * @example
+ * ```ts
+ * import { RbacConfigSchema, type RbacConfig } from '@h-ai/iam'
+ * const value: RbacConfig = RbacConfigSchema.parse({ enabled: true, defaultRole: 'user' })
+ * ```
+ */
 export type RbacConfig = z.infer<typeof RbacConfigSchema>
 
 // ─── 统一配置 ───
 
 /**
  * IAM 统一配置 Schema
- *
  * @example
  * ```ts
- * const config: IamConfig = {
- *     password: { minLength: 8 },
- *     session: {
- *         maxAge: 86400,
- *         sliding: true
- *     },
- *     login: { password: true, otp: true },
- *     register: { enabled: true, defaultEnabled: true },
- *     rbac: { enabled: true }
+ * import { IamConfigSchema } from '@h-ai/iam'
+ * const result = IamConfigSchema.safeParse({ seedDefaultData: false, session: { maxAge: 3600 } })
+ * if (result.success) {
+ *   result.data // 输出已应用 Schema 默认值。
  * }
  * ```
  */
@@ -315,12 +527,24 @@ export const IamConfigSchema = z.object({
   seedDefaultData: z.boolean().default(true),
 })
 
-/** IAM 配置类型 */
+/**
+ * IAM 配置类型
+ * @example
+ * ```ts
+ * import { IamConfigSchema, type IamConfig } from '@h-ai/iam'
+ * const value: IamConfig = IamConfigSchema.parse({ seedDefaultData: false, session: { maxAge: 3600 } })
+ * ```
+ */
 export type IamConfig = z.infer<typeof IamConfigSchema>
 
 /**
  * IAM 配置设置输入类型（仅设置字段，不含运行时依赖）
  *
  * 说明：Zod 的 default 会让输入端字段可省略，但输出端字段为必填。
+ * @example
+ * ```ts
+ * import type { IamConfigSettingsInput } from '@h-ai/iam'
+ * const value: IamConfigSettingsInput = { session: { maxAge: 3600 }, seedDefaultData: false }
+ * ```
  */
 export type IamConfigSettingsInput = z.input<typeof IamConfigSchema>

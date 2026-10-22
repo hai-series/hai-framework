@@ -21,6 +21,14 @@ import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFa
 
 /**
  * 密码认证策略配置
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function configure(userRepository: UserRepository) {
+ *   const config: PasswordStrategyConfig = { userRepository, maxLoginAttempts: 5, lockoutDuration: 900 }
+ *   return createPasswordStrategy(config)
+ * }
+ * ```
  */
 export interface PasswordStrategyConfig {
   /** 密码策略 */
@@ -35,6 +43,16 @@ export interface PasswordStrategyConfig {
 
 /**
  * 密码策略工厂返回值
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function hashNewPassword(strategy: PasswordStrategyResult, password: string) {
+ *   const valid = strategy.validatePassword(password)
+ *   if (!valid.success)
+ *     return valid
+ *   return strategy.hashPassword(password)
+ * }
+ * ```
  */
 export interface PasswordStrategyResult {
   /** 认证策略（用于通用登录流程） */
@@ -55,6 +73,16 @@ const PASSWORD_SPECIAL_CHAR_REGEX = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/
 
 /**
  * 创建密码认证策略
+ * @param config - 已校验的配置及可信运行时依赖。
+ * @returns 密码认证策略、强度校验、哈希操作与已解析策略；校验和哈希失败均以 HaiResult 表达。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function authenticate(config: PasswordStrategyConfig, credentials: Credentials) {
+ *   const strategy = createPasswordStrategy(config)
+ *   return strategy.strategy.authenticate(credentials)
+ * }
+ * ```
  */
 export function createPasswordStrategy(config: PasswordStrategyConfig): PasswordStrategyResult {
   const passwordConfig = config.passwordConfig

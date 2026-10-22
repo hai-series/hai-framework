@@ -58,6 +58,16 @@ const USER_SORT_COLUMNS: Record<UserSortField, string> = {
 
 /**
  * 用户子功能依赖
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function assemble(deps: UserOperationsDeps) {
+ *   const result = await createUserOperations(deps)
+ *   if (!result.success)
+ *     return result
+ *   return result.data.getUser('user-1')
+ * }
+ * ```
  */
 export interface UserOperationsDeps {
   config: IamConfig
@@ -72,6 +82,18 @@ export interface UserOperationsDeps {
  * 创建用户子功能
  *
  * 内部创建用户存储，组装用户管理操作接口。
+ * @param deps - 由 IAM 生命周期按依赖顺序创建的内部组件。
+ * @returns 成功返回数据，失败返回业务或基础设施错误；调用方必须先判断 success。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function list(deps: UserOperationsDeps) {
+ *   const result = await createUserOperations(deps)
+ *   if (!result.success)
+ *     return result
+ *   return result.data.listUsers({ page: 1, pageSize: 20 })
+ * }
+ * ```
  */
 export async function createUserOperations(deps: UserOperationsDeps): Promise<HaiResult<UserOperations>> {
   try {
@@ -202,6 +224,16 @@ async function validateUniqueFieldsForUpdate(
 
 /**
  * 子功能构建器共享上下文
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function currentUser(context: UserFnContext) {
+ *   const stored = await context.userRepository.findByUsername('alice')
+ *   if (!stored.success)
+ *     return stored
+ *   return stored.data ? toUser(stored.data) : null
+ * }
+ * ```
  */
 interface UserFnContext {
   userRepository: UserRepository
@@ -943,6 +975,16 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
   }
 }
 
+/**
+ * 用户操作构建依赖；只能由 IAM 生命周期完成可信依赖装配。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function build(deps: UserBuilderDeps) {
+ *   return buildUserFunctions(deps)
+ * }
+ * ```
+ */
 interface UserBuilderDeps {
   userRepository: UserRepository
   passwordStrategyResult: PasswordStrategyResult

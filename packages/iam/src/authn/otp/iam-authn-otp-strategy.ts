@@ -31,6 +31,14 @@ const PHONE_SEPARATOR_REGEX = /[\s-]/g
 
 /**
  * OTP 认证策略配置
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function configure(userRepository: UserRepository, otpRepository: OtpRepository) {
+ *   const config: OtpStrategyConfig = { userRepository, otpRepository, autoRegister: false }
+ *   return createOtpStrategy(config)
+ * }
+ * ```
  */
 export interface OtpStrategyConfig {
   /** OTP 配置 */
@@ -107,6 +115,16 @@ function identifierType(identifier: string): 'email' | 'phone' | 'unknown' {
 
 /**
  * OTP 策略工厂返回值
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function challenge(strategy: OtpStrategyResult) {
+ *   const issued = await strategy.challenge('alice@example.com')
+ *   if (!issued.success)
+ *     return issued
+ *   return issued.data.expiresAt
+ * }
+ * ```
  */
 export interface OtpStrategyResult {
   /** 认证策略（用于通用登录流程） */
@@ -122,6 +140,14 @@ export interface OtpStrategyResult {
  *
  * @param config - OTP 策略配置（包含用户存储、OTP 存储、自动注册开关等）
  * @returns OTP 策略结果，包含认证策略和 challenge 方法
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function authenticate(config: OtpStrategyConfig) {
+ *   const strategy = createOtpStrategy(config)
+ *   return strategy.strategy.authenticate({ type: 'otp', identifier: 'alice@example.com', code: '123456' })
+ * }
+ * ```
  */
 export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult {
   const otpConfig = config.otpConfig

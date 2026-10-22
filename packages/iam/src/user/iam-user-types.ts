@@ -10,14 +10,33 @@ import type { Role } from '../authz/iam-authz-types.js'
 
 // ─── 用户查询选项 ───
 
-/** 用户列表允许的服务端排序字段。 */
+/**
+ * 用户列表允许的服务端排序字段。
+ * @example
+ * ```ts
+ * import type { UserSortField } from '@h-ai/iam'
+ * const value: UserSortField = 'username'
+ * ```
+ */
 export type UserSortField = 'username' | 'email' | 'displayName' | 'enabled' | 'createdAt'
 
-/** 用户列表排序方向。 */
+/**
+ * 用户列表排序方向。
+ * @example
+ * ```ts
+ * import type { UserSortDirection } from '@h-ai/iam'
+ * const value: UserSortDirection = 'asc'
+ * ```
+ */
 export type UserSortDirection = 'asc' | 'desc'
 
 /**
  * 用户列表查询选项
+ * @example
+ * ```ts
+ * import type { ListUsersOptions } from '@h-ai/iam'
+ * const value: ListUsersOptions = { page: 1, pageSize: 20, enabled: true, roleCode: 'user', include: ['roles'] }
+ * ```
  */
 export interface ListUsersOptions extends PaginationOptionsInput {
   /** 角色 code 精确筛选，在数据库分页前执行。 */
@@ -38,6 +57,11 @@ export interface ListUsersOptions extends PaginationOptionsInput {
 
 /**
  * 用户基础信息
+ * @example
+ * ```ts
+ * import type { User } from '@h-ai/iam'
+ * const value: User = { id: 'user-1', username: 'alice', enabled: true, createdAt: new Date(), updatedAt: new Date() }
+ * ```
  */
 export interface User {
   /** 用户 ID */
@@ -72,6 +96,11 @@ export interface User {
 
 /**
  * 用户协议/隐私协议展示配置
+ * @example
+ * ```ts
+ * import type { AgreementDisplay } from '@h-ai/iam'
+ * const value: AgreementDisplay = { userAgreementUrl: 'https://app.example.com/terms', showOnRegister: true, showOnLogin: false }
+ * ```
  */
 export interface AgreementDisplay {
   /** 用户协议 Markdown 正文，显示优先于 URL。 */
@@ -90,6 +119,14 @@ export interface AgreementDisplay {
 
 /**
  * 内部存储用户（包含密码哈希等敏感信息）
+ * @example
+ * ```ts
+ * import type { StoredUser } from '@h-ai/iam'
+ * // 服务端存储类型；不得直接序列化给浏览器。
+ * function credentialVersion(row: StoredUser): string {
+ *   return row.credentialVersion ?? ''
+ * }
+ * ```
  */
 export interface StoredUser extends User {
   /** 密码凭据代际；密码提交时原子推进，旧会话及迟到认证不得复用。 */
@@ -118,6 +155,11 @@ export interface StoredUser extends User {
 
 /**
  * 用户注册选项
+ * @example
+ * ```ts
+ * import type { RegisterOptions } from '@h-ai/iam'
+ * const value: RegisterOptions = { username: 'alice', email: 'alice@example.com', password: 'ExampleOnly123!' }
+ * ```
  */
 export interface RegisterOptions {
   /** 用户名 */
@@ -136,6 +178,15 @@ export interface RegisterOptions {
 
 /**
  * 注册结果
+ * @example
+ * ```ts
+ * import { iam, type RegisterResult } from '@h-ai/iam'
+ * const result = await iam.user.register({ username: 'alice', password: 'ExampleOnly123!' })
+ * if (result.success) {
+ *   const registered: RegisterResult = result.data
+ *   registered.user.id
+ * }
+ * ```
  */
 export interface RegisterResult {
   /** 用户信息 */
@@ -150,6 +201,11 @@ export interface RegisterResult {
  * 当前登录用户可自行修改的字段白名单
  *
  * 仅允许修改个人资料相关字段，禁止修改安全字段（enabled、emailVerified、roles 等）。
+ * @example
+ * ```ts
+ * import type { UpdateCurrentUserInput } from '@h-ai/iam'
+ * const value: UpdateCurrentUserInput = { displayName: 'Alice', avatarUrl: 'https://app.example.com/avatar/alice.png' }
+ * ```
  */
 export interface UpdateCurrentUserInput {
   /** 用户名 */
@@ -170,6 +226,19 @@ export interface UpdateCurrentUserInput {
 
 /**
  * 用户子功能接口
+ * @example
+ * ```ts
+ * import { iam, type UserOperations } from '@h-ai/iam'
+ * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
+ * const operations: UserOperations = iam.user
+ * const result = await operations.listUsers({ page: 1, pageSize: 20, include: ['roles'] })
+ * if (!result.success) {
+ *   result.error.code // 调用方将失败交给统一错误边界。
+ * }
+ * else {
+ *   result.data
+ * }
+ * ```
  */
 export interface UserOperations {
   /** 批量查询最多 1000 个用户 ID，去重并保持输入顺序，忽略不存在的 ID；可批量包含角色。 */
@@ -295,7 +364,13 @@ export interface UserOperations {
    *
    * @param identifier - 用户标识（邮箱）
    * @returns 用户不存在返回 ok；发布冲突、存储故障或投递未知返回失败，通知不自动重发。
-   * @example `await iam.user.requestPasswordReset('user@example.com')`
+   * @example
+   * ```ts
+   * import { iam } from '@h-ai/iam'
+   * const requested = await iam.user.requestPasswordReset('alice@example.com')
+   * if (!requested.success)
+   *   requested.error.code // 投递未知不能当作成功或由调用端擅自重发通知。
+   * ```
    */
   requestPasswordReset: (identifier: string) => Promise<HaiResult<void>>
 
@@ -308,7 +383,13 @@ export interface UserOperations {
    * @param token - 重置令牌（明文，由 requestPasswordReset 生成并由业务层发送给用户）
    * @param newPassword - 新密码
    * @returns 成功返回 ok；令牌无效/过期返回 RESET_TOKEN_INVALID，尝试超限返回 RESET_TOKEN_MAX_ATTEMPTS
-   * @example `await iam.user.confirmPasswordReset(token, 'NewStrongPassword123')`
+   * @example
+   * ```ts
+   * import { iam } from '@h-ai/iam'
+   * const result = await iam.user.confirmPasswordReset('token-from-recovery-link', 'ExampleOnly123!')
+   * if (!result.success)
+   *   result.error.code
+   * ```
    */
   confirmPasswordReset: (token: string, newPassword: string) => Promise<HaiResult<void>>
 

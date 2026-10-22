@@ -12,7 +12,16 @@ import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { applySessionPatch, getTokenSessionScope, getUserSessionScope } from './iam-session-utils.js'
 
-/** 文档内单个会话及 refresh 凭据，不建立可能失配的第二份索引。 */
+/**
+ * 文档内单个会话及 refresh 凭据，不建立可能失配的第二份索引。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function accessExpired(record: StoredSession, now: Date): boolean {
+ *   return record.session.expiresAt <= now
+ * }
+ * ```
+ */
 interface StoredSession {
   session: Session
   refreshToken?: string
@@ -24,7 +33,15 @@ function retainedUntil(entry: StoredSession): number {
   return Math.max(new Date(entry.session.expiresAt).getTime(), entry.refreshToken ? entry.refreshExpiresAt : 0)
 }
 
-/** 用户状态快照；revision 防止删除/重建或同值写入产生 ABA。 */
+/**
+ * 用户状态快照；revision 防止删除/重建或同值写入产生 ABA。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const state: SessionState = { revision: crypto.randomUUID(), sessions: {} }
+ * const recordCount = Object.keys(state.sessions).length
+ * ```
+ */
 interface SessionState {
   revision: string
   sessions: Record<string, StoredSession>
@@ -53,7 +70,15 @@ function repositoryFailure(cause: unknown): HaiResult<never> {
 
 /**
  * 会话共享仓库；保存与轮换具有原子发布语义。
- * @example const repository = createCacheSessionRepository(604800)
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const repository = createCacheSessionRepository(604800)
+ * const found = await repository.getByAccessToken('token-from-authorization-header')
+ * if (!found.success)
+ *   return found
+ * return found.data?.userId ?? null
+ * ```
  */
 export interface SessionRepository {
   /** 原子保存；singleDevice 同一次提交替换该用户全部旧会话。 */
@@ -82,11 +107,14 @@ export interface SessionRepository {
  * 创建单键 CAS 会话仓库，支持共享 Redis 和显式测试 Memory provider。
  * @param refreshTokenMaxAge - 新 refresh 的有效期，单位秒
  * @returns 不保存进程会话状态的仓库
- * @example
+ * @internal
+ * @example 模块内部上下文
  * ```ts
- * const repo = createCacheSessionRepository(604800)
- * const saved = await repo.save(session, tokens, true)
- * if (!saved.success) return saved
+ * const repository = createCacheSessionRepository(604800)
+ * const found = await repository.getByAccessToken('token-from-authorization-header')
+ * if (!found.success)
+ *   return found
+ * return found.data?.userId ?? null
  * ```
  */
 export function createCacheSessionRepository(refreshTokenMaxAge: number): SessionRepository {
@@ -113,7 +141,24 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
     catch (cause) { return repositoryFailure(cause) }
   }
 
-  /** 冲突后重新读取；操作闭包必须同步且不包含外部副作用。 */
+  /**
+   * 读取共享快照后进行单 key CAS；冲突只重新执行无外部副作用的同步状态变换。
+   * 缓存读取或提交失败立即传播，不把损坏/未知状态覆盖为空；同值重建由 revision 防止 ABA。
+   * @param scope - 已约束为 SHA-256 十六进制的用户分区提示。
+   * @param operation - 仅修改私有候选状态的同步函数；不得发送通知、执行业务 SQL 或写入外部系统。
+   * @returns CAS 已确认时返回 operation 结果；基础设施失败或冲突耗尽时保留失败结果。
+   * @example 模块内部上下文
+   * ```ts
+   * const revoked = await mutate(getUserSessionScope('user-1'), (state) => {
+   *   const count = Object.keys(state.sessions).length
+   *   state.sessions = {}
+   *   return ok(count)
+   * })
+   * if (!revoked.success)
+   *   return revoked
+   * return revoked.data
+   * ```
+   */
   async function mutate<T>(scope: string, operation: (state: SessionState) => HaiResult<T>): Promise<HaiResult<T>> {
     try {
       for (let attempt = 0; attempt < 16; attempt++) {

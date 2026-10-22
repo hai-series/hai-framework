@@ -9,7 +9,15 @@ import { core, err, ok } from '@h-ai/core'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 
-/** 单次发布的状态；消费保留冷却期，旧版本不能修改后续发布。 */
+/**
+ * 单次发布的状态；消费保留冷却期，旧版本不能修改后续发布。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const state: OtpState = { version: crypto.randomUUID(), code: null, attempts: 0, expiresAt: 0, cooldownUntil: 0 }
+ * const hasChallenge = state.code !== null
+ * ```
+ */
 interface OtpState {
   version: string
   code: string | null
@@ -20,7 +28,16 @@ interface OtpState {
 
 /**
  * 验证码存储；发布、次数和消费都在同一共享 key 原子提交。
- * @example `await repository.consumeOtp(identifier, code, 5)`
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // Cache 已初始化；示例消费用户提交的验证码，不回传或记录保存值。
+ * const repository = createCacheOtpRepository()
+ * const result = await repository.consumeOtp('alice@example.com', '123456', 3)
+ * if (!result.success)
+ *   return result
+ * return result.data
+ * ```
  */
 export interface OtpRepository {
   /** 发布成功才允许通知；CAS 冲突拒绝，不能覆盖新代。 */
@@ -31,7 +48,14 @@ export interface OtpRepository {
 
 /**
  * 邮箱转小写，电话移除分隔符；同一身份共用发送与消费状态。
- * @example `normalizeOtpIdentifier(' User@Example.com ') === 'user@example.com'`
+ * @param identifier - 用户提交的邮箱或手机号。
+ * @returns 去除首尾空白后的邮箱小写值，或移除空白与连字符的手机号。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const email = normalizeOtpIdentifier(' Alice@Example.com ')
+ * const sameIdentity = email === normalizeOtpIdentifier('alice@example.com')
+ * ```
  */
 export function normalizeOtpIdentifier(identifier: string): string {
   const trimmed = identifier.trim()
@@ -42,7 +66,13 @@ let otpRepoInstance: OtpRepository | null = null
 
 /**
  * IAM 关闭时释放仓储引用；共享状态由 cache 管理。
- * @example `resetOtpRepoSingleton()`
+ * 仅重置本地引用，不删除共享存储数据。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 所有 OTP 操作结束并关闭 IAM 后重置本地工厂引用，不删除共享挑战。
+ * resetOtpRepoSingleton()
+ * ```
  */
 export function resetOtpRepoSingleton(): void {
   otpRepoInstance = null
@@ -50,7 +80,17 @@ export function resetOtpRepoSingleton(): void {
 
 /**
  * 创建缓存仓储；生产 cache 必须连接同一支持原子 CAS 的共享后端。
- * @example `const repository = createCacheOtpRepository()`
+ * @returns 已初始化的内部仓储；初始化失败抛出异常，由上层子功能工厂转换为 HaiResult。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // Cache 已初始化；示例消费用户提交的验证码，不回传或记录保存值。
+ * const repository = createCacheOtpRepository()
+ * const result = await repository.consumeOtp('alice@example.com', '123456', 3)
+ * if (!result.success)
+ *   return result
+ * return result.data
+ * ```
  */
 export function createCacheOtpRepository(): OtpRepository {
   if (otpRepoInstance)

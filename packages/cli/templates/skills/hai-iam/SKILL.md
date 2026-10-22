@@ -57,3 +57,5 @@ access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的
 OTP 发布/消费用单身份 CAS；密码重置最终 SQL 同时核验 resetVersion、credentialVersion、有效期、用户状态并改密/消费令牌。认证与刷新绑定数据库凭据代际；通知第三参数提供 expiresAt/idempotencyKey，接收端持久化幂等，异常是投递未知且不自动重发。
 
 `iam.auth.logout(accessToken)` 直接按完整不透明令牌在用户分区执行一次 CAS，原子撤销 access 与关联 refresh；access 已到期也不能跳过撤销。非法/不存在的令牌幂等成功，缓存读取或提交故障返回失败，恢复后可用同一令牌重试。HTTP 登出只允许撤销所持令牌，不以 userId 定位他人会话，也不要求该 access 仍通过认证。调用方必须检查 `success`；本地 Cookie/安全存储清理不代表服务端撤销已经确认，失败应显示提示。
+
+配置示例用 `IamConfigInput` 表达可省略默认值的输入；需要完整策略快照时用对应 Schema.parse 得到输出类型。应用仅从 `@h-ai/iam` 取公开函数/类型，不深导内部策略与仓储。源码内部示例明确标注上下文，文档示例类型检查不替代真实共享存储和通知集成验证。

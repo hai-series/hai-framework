@@ -17,6 +17,18 @@ import { HaiIamError } from '../iam-types.js'
 
 /**
  * 用户存储接口
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function commitPassword(repository: UserRepository, current: StoredUser, passwordHash: string) {
+ *   const written = await repository.setPassword({ userId: current.id, expectedVersion: current.credentialVersion ?? '', passwordHash })
+ *   if (!written.success)
+ *     return written
+ *   if (!written.data)
+ *     return { applied: false } // 凭据代际已变化；不能继续签发本次认证的会话。
+ *   return { applied: true }
+ * }
+ * ```
  */
 export interface UserRepository extends ReldbCrudRepository<StoredUser> {
   /** 按读取到的凭据代际改密并撤销重置令牌；旧版本不能覆盖较新密码。 */
@@ -225,6 +237,13 @@ let userRepoSqlOps: unknown = null
  * 重置用户存储单例
  *
  * 在 iam.close() 时调用，释放对旧 db 实例的引用。
+ * 仅重置本地引用，不删除共享存储数据。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 所有使用该仓储的 IAM 子功能均已关闭后，才清理工厂缓存。
+ * resetUserRepoSingleton()
+ * ```
  */
 export function resetUserRepoSingleton(): void {
   userRepoInstance = null
@@ -238,6 +257,16 @@ export function resetUserRepoSingleton(): void {
  * db 重新初始化后自动创建新实例。
  *
  * @returns 用户存储接口实现
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // RelDB 已初始化；后续仓储读取仍可能失败，必须检查 HaiResult。
+ * const repository = await createDbUserRepository()
+ * const found = await repository.findByUsername('alice')
+ * if (!found.success)
+ *   return found
+ * return found.data?.credentialVersion ?? null
+ * ```
  */
 export async function createDbUserRepository(): Promise<UserRepository> {
   if (userRepoInstance && userRepoSqlOps === reldb.sql)

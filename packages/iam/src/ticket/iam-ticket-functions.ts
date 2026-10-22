@@ -31,11 +31,23 @@ const TICKET_KEY_PREFIX = 'hai:iam:ticket:'
 /** 默认有效期（毫秒） */
 const DEFAULT_TICKET_TTL_MS = 30_000
 
-/** 缓存中存储的票据记录 */
+/**
+ * 缓存中存储的票据记录
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const record: StoredTicket = { subjectId: 'user-1', purpose: 'ai-audio', grant: { operation: 'transcribe' }, expiresAt: Date.now() + 30000 }
+ * const expired = record.expiresAt <= Date.now()
+ * ```
+ */
 interface StoredTicket {
+  /** 签发时已核验的主体，消费时不根据客户端 userId 替换。 */
   subjectId: string
+  /** 单一用途绑定，消费前必须与请求用途核对。 */
   purpose: string
+  /** 签发时授权的操作、模型、会话等参数快照。 */
   grant: TicketGrant
+  /** Unix 毫秒截止时间；共享缓存原子消费仍独立核验有效期。 */
   expiresAt: number
 }
 
@@ -46,6 +58,16 @@ function buildTicketKey(ticket: string): string {
 
 /**
  * 创建一次性票据操作接口
+ * @returns 无本地票据真值的操作接口；issue/consume 使用已初始化的共享 Cache 并返回 HaiResult。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const tickets = createTicketOperations()
+ * const issued = await tickets.issue({ subjectId: 'user-1', purpose: 'ai-audio' })
+ * if (!issued.success)
+ *   return issued
+ * return tickets.consume(issued.data.ticket, { purpose: 'ai-audio' })
+ * ```
  */
 export function createTicketOperations(): TicketOperations {
   return {

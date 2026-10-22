@@ -13,6 +13,13 @@ import type { AgreementDisplay } from './user/iam-user-types.js'
  *
  * @param config - 协议配置
  * @param enabled - 当前场景（登录/注册）是否展示协议
+ * @returns 当前场景启用且配置了协议正文或 URL 时返回展示配置，否则返回 undefined。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const display = buildAgreementDisplay({ userAgreementUrl: 'https://app.example.com/terms', showOnRegister: true, showOnLogin: false }, true)
+ * const agreementUrl = display?.userAgreementUrl
+ * ```
  */
 export function buildAgreementDisplay(
   config: AgreementConfig,

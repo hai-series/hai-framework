@@ -84,6 +84,17 @@ const IamErrorInfo = {
   INTERNAL_ERROR: '999:500',
 } as const satisfies ErrorInfo
 
+/**
+ * IAM 错误码及 HTTP 状态定义；调用方按 code 分支，底层原因只用于脱敏诊断。
+ * @example
+ * ```ts
+ * import { HaiIamError, iam } from '@h-ai/iam'
+ * const result = await iam.auth.verifyToken('token-from-authorization-header')
+ * if (!result.success && result.error.code === HaiIamError.SESSION_INVALID.code) {
+ *   // 由应用的认证边界转为重新登录响应，不泄露底层 cause。
+ * }
+ * ```
+ */
 export const HaiIamError = core.error.buildHaiErrorsDef('iam', IamErrorInfo)
 
 // ─── 初始化配置 ───
@@ -91,7 +102,14 @@ export const HaiIamError = core.error.buildHaiErrorsDef('iam', IamErrorInfo)
 /**
  * 已成功发布的认证通知上下文；发送服务必须按幂等键持久化去重。
  * 回调抛错代表送达结果未知；IAM 不自动重发，也不回滚已经发布的凭据。
- * @example `await sender.send({ idempotencyKey: context.idempotencyKey, expiresAt: context.expiresAt })`
+ * @example
+ * ```ts
+ * import type { IamNotificationContext } from '@h-ai/iam'
+ * async function deliver(context: IamNotificationContext, enqueue: (key: string, expiresAt: Date) => Promise<void>) {
+ *   // 接收端持久去重；回调失败代表送达未知，不能擅自生成新的幂等键重发。
+ *   await enqueue(context.idempotencyKey, context.expiresAt)
+ * }
+ * ```
  */
 export interface IamNotificationContext {
   /** 同一次凭据发布的稳定 ID，不包含验证码或明文令牌。 */
@@ -105,6 +123,11 @@ export interface IamNotificationContext {
  *
  * 包含 Zod 校验的设置字段和运行时依赖。
  * 传入 `iam.init()` 的唯一参数。
+ * @example
+ * ```ts
+ * import type { IamConfigInput } from '@h-ai/iam'
+ * const value: IamConfigInput = { login: { password: true, otp: false }, register: { enabled: false }, seedDefaultData: false }
+ * ```
  */
 export interface IamConfigInput extends IamConfigSettingsInput {
   /**
@@ -162,6 +185,19 @@ export interface IamConfigInput extends IamConfigSettingsInput {
  * IAM 函数接口
  *
  * 统一聚合所有 IAM 功能。
+ * @example
+ * ```ts
+ * import { iam, type IamFunctions } from '@h-ai/iam'
+ * const service: IamFunctions = iam
+ * // 应用先初始化 Cache、RelDB、Crypto；关闭时先停止接收请求。
+ * const initialized = await service.init({ seedDefaultData: false })
+ * if (initialized.success) {
+ *   const users = await service.user.listUsers({ page: 1, pageSize: 20 })
+ *   if (!users.success)
+ *     users.error.code
+ *   await service.close() // IAM 不关闭应用注入的依赖。
+ * }
+ * ```
  */
 export interface IamFunctions {
   /**
@@ -176,10 +212,11 @@ export interface IamFunctions {
    *
    * @example
    * ```ts
+   * import { iam } from '@h-ai/iam'
+   * // 共享 RelDB、Cache 已由应用初始化；IAM 会确保 Crypto 可用。
    * const result = await iam.init({ session: { maxAge: 86400 } })
-   * if (!result.success) {
-   *   console.error(result.error.message)
-   * }
+   * if (!result.success)
+   *   result.error.code // 交给应用统一错误边界，不能继续接收认证请求。
    * ```
    */
   init: (config: IamConfigInput) => Promise<HaiResult<void>>
@@ -208,7 +245,7 @@ export interface IamFunctions {
   readonly authz: AuthzOperations
   /** 会话管理（创建、查询、验证、删除会话） */
   readonly session: SessionOperations
-  /** API Key 管理（创建、列表、吐销、验证），未启用 apikey 登录时返回未初始化代理 */
+  /** API Key 管理（创建、列表、吊销、验证），未启用 apikey 登录时返回未初始化代理 */
   readonly apiKey: ApiKeyOperations
   /** 一次性能力票据（签发 / 原子消费短期票据，用于 WebSocket 等无法携带 Bearer Token 的通道） */
   readonly ticket: TicketOperations

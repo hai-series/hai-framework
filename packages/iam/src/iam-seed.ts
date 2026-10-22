@@ -85,6 +85,16 @@ const USER_ROLE_PERMISSIONS = ['dashboard:view', 'profile:read']
  *
  * @param authz - 已初始化的授权子功能实例
  * @returns 成功返回 ok(undefined)；失败返回 REPOSITORY_ERROR
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function seed(authz: AuthzOperations) {
+ *   const result = await seedIamData(authz)
+ *   if (!result.success)
+ *     return result
+ *   return result.data
+ * }
+ * ```
  */
 export async function seedIamData(
   authz: AuthzOperations,

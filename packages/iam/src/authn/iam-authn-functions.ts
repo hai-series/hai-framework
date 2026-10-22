@@ -42,6 +42,14 @@ const logger = core.logger.child({ module: 'iam', scope: 'authn' })
 
 /**
  * 认证子功能依赖
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function assemble(config: IamConfig, sessionFunctions: SessionOperations, authzFunctions: AuthzOperations) {
+ *   const deps: AuthnOperationsDeps = { config, sessionFunctions, authzFunctions }
+ *   return createAuthnOperations(deps)
+ * }
+ * ```
  */
 export interface AuthnOperationsDeps {
   config: IamConfig
@@ -59,6 +67,16 @@ export interface AuthnOperationsDeps {
  * 认证子功能工厂返回值
  *
  * 将公共 API 与内部依赖分离，避免将密码策略暴露在公共接口上。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function verify(operations: AuthnOperationsResult, token: string) {
+ *   const result = await operations.authn.verifyToken(token)
+ *   if (!result.success)
+ *     return result
+ *   return result.data.userId
+ * }
+ * ```
  */
 export interface AuthnOperationsResult {
   /** 对外暴露的认证操作（不含 registerAndLogin，由 iam-main 组合注入） */
@@ -75,6 +93,18 @@ export interface AuthnOperationsResult {
  * 创建认证子功能
  *
  * 内部创建密码/OTP/LDAP 策略，组装成统一的认证操作接口。
+ * @param deps - 由 IAM 生命周期按依赖顺序创建的内部组件。
+ * @returns 成功返回数据，失败返回业务或基础设施错误；调用方必须先判断 success。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function assemble(deps: AuthnOperationsDeps) {
+ *   const result = await createAuthnOperations(deps)
+ *   if (!result.success)
+ *     return result
+ *   return result.data.authn.verifyToken('token-from-authorization-header')
+ * }
+ * ```
  */
 export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<HaiResult<AuthnOperationsResult>> {
   try {
@@ -187,6 +217,16 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 
 // ─── 内部实现 ───
 
+/**
+ * 认证操作内部装配依赖；策略只产出可信身份快照，会话发布由统一流程执行。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function passwordLogin(deps: BuildAuthnDeps, credentials: PasswordCredentials) {
+ *   return deps.passwordStrategy.authenticate({ type: 'password', ...credentials })
+ * }
+ * ```
+ */
 interface BuildAuthnDeps {
   userRepository: UserRepository
   passwordStrategy: AuthStrategy

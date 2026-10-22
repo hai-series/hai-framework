@@ -16,6 +16,11 @@ import type { Session } from '../session/iam-session-types.js'
  * - menu：菜单/导航可见性控制
  * - api：接口级访问控制
  * - button：操作按钮显隐控制
+ * @example
+ * ```ts
+ * import type { PermissionType } from '@h-ai/iam'
+ * const value: PermissionType = 'api'
+ * ```
  */
 export type PermissionType = 'menu' | 'api' | 'button'
 
@@ -23,6 +28,11 @@ export type PermissionType = 'menu' | 'api' | 'button'
  * 权限查询参数
  *
  * 扩展分页参数，支持按类型和关键字筛选。
+ * @example
+ * ```ts
+ * import type { PermissionQueryOptions } from '@h-ai/iam'
+ * const value: PermissionQueryOptions = { page: 1, pageSize: 20, type: 'api', search: 'report' }
+ * ```
  */
 export interface PermissionQueryOptions extends PaginationOptionsInput {
   /** 按权限类型筛选 */
@@ -33,6 +43,11 @@ export interface PermissionQueryOptions extends PaginationOptionsInput {
 
 /**
  * 权限
+ * @example
+ * ```ts
+ * import type { Permission } from '@h-ai/iam'
+ * const value: Permission = { id: 'permission-1', code: 'report:read', name: '查看报表', type: 'api', createdAt: new Date(), updatedAt: new Date() }
+ * ```
  */
 export interface Permission {
   /** 权限 ID */
@@ -57,6 +72,11 @@ export interface Permission {
 
 /**
  * 角色
+ * @example
+ * ```ts
+ * import type { Role } from '@h-ai/iam'
+ * const value: Role = { id: 'role-1', code: 'report_reader', name: '报表读者', createdAt: new Date(), updatedAt: new Date() }
+ * ```
  */
 export interface Role {
   /** 角色 ID */
@@ -77,6 +97,12 @@ export interface Role {
 
 /**
  * 角色与权限关联
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const relation: RolePermission = { roleId: 'role-1', permissionId: 'permission-1' }
+ * const roleId = relation.roleId
+ * ```
  */
 export interface RolePermission {
   /** 角色 ID */
@@ -87,6 +113,12 @@ export interface RolePermission {
 
 /**
  * 用户与角色关联
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const relation: UserRole = { userId: 'user-1', roleId: 'role-1' }
+ * const userId = relation.userId
+ * ```
  */
 export interface UserRole {
   /** 用户 ID */
@@ -99,6 +131,19 @@ export interface UserRole {
 
 /**
  * 授权子功能接口
+ * @example
+ * ```ts
+ * import { iam, type AuthzOperations } from '@h-ai/iam'
+ * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
+ * const operations: AuthzOperations = iam.authz
+ * const result = await operations.checkPermission('user-1', 'report:read')
+ * if (!result.success) {
+ *   result.error.code // 调用方将失败交给统一错误边界。
+ * }
+ * else {
+ *   result.data
+ * }
+ * ```
  */
 export interface AuthzOperations {
   /** 查询当前角色与权限代码，一次读取角色并批量聚合权限，不依赖会话缓存。 */

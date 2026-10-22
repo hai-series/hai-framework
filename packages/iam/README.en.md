@@ -867,8 +867,14 @@ Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(u
 
 ## Development and testing
 
+Public examples import from `@h-ai/iam` and distinguish defaultable `IamConfigInput` from parsed `IamConfig`. Initialize server dependencies, check `HaiResult.success`, update sessions with their observed `version`, and reuse persistent notification idempotency keys. Strategy/repository examples marked as internal context do not define application deep imports. The checker verifies types only; Redis/database, LDAP and delivery behavior still require their integration tests. See the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).
+
 ```bash
-pnpm test
+pnpm --filter @h-ai/iam typecheck
+pnpm --filter @h-ai/iam lint
+pnpm --filter @h-ai/iam build
+pnpm --filter @h-ai/iam test
+node scripts/check-module-jsdoc.mjs --package iam
 ```
 
 `create({ maxAge })` overrides the configured default with a positive safe integer in seconds, persisted as `Session.maxAge`. Issuance and refresh return that duration in `expiresIn`. Sliding renewal uses this duration and returns committed `lastActiveAt/expiresAt`; delayed requests cannot shorten a newer renewal. Explicit `update` applies valid date patches and creates a new content version. Clients schedule refresh from the returned `expiresIn` rather than a hardcoded default.
@@ -883,8 +889,9 @@ Session.credentialVersion binds the database credential generation at creation. 
 
 The browser entry exports configuration schemas, types and HaiIamError, without the server `iam` instance. Authenticate through the HTTP/typed client.
 
+
+`iam.auth.logout(accessToken)` uses the complete opaque token to revoke its access and refresh credentials in one user-partition CAS, including when access has expired. Invalid or absent tokens are idempotent successes. Cache read/commit failures return failure and can be retried with the same token after recovery. The HTTP endpoint revokes only a possessed token, accepts no userId target and does not require a still-authenticated access token. Callers must inspect `success`; clearing local cookies or secure storage is not confirmation of server revocation and failures must be shown.
+
 ## License
 
 Apache-2.0
-
-`iam.auth.logout(accessToken)` uses the complete opaque token to revoke its access and refresh credentials in one user-partition CAS, including when access has expired. Invalid or absent tokens are idempotent successes. Cache read/commit failures return failure and can be retried with the same token after recovery. The HTTP endpoint revokes only a possessed token, accepts no userId target and does not require a still-authenticated access token. Callers must inspect `success`; clearing local cookies or secure storage is not confirmation of server revocation and failures must be shown.

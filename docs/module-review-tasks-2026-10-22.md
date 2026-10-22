@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08，共 80 个，另有 21 个按模块拆分的 JSDoc 任务，共 101 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 46/52（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 47/52（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -765,7 +765,7 @@
 - [x] **JSDOC-09 / crypto / P2**：核对 48 个 TS 顶层导出声明，修正 1 个无 JSDoc、44 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：19源码66声明66checker示例，完整124个唯一例（90公开/34内部，含41方法/17关键逻辑）使用真实声明编译；明确受管密钥环、认证SM4、规范编码、传输时间窗口/重放原子registry与显式抛错边界，删除错误或无上下文旧例。完整去注释TS AST与当前HEAD 19/19一致，无运行/API/类型/依赖变化；source类型、lint零警告、fresh ESM/DTS、12定向文件176/176、124示例编译及skills37/328通过；全量回归在全部任务实施后执行。
 - [x] **JSDOC-10 / datapipe / P2**：核对 23 个 TS 顶层导出声明，修正 0 个无 JSDoc、14 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：7源码文件25声明与25个真实类型示例补齐，说明分块单位、overlap边界、同步/异步HaiResult及纯模块无init/close；三语README快速示例先判断清洗/分块/流水线结果，并修正中文word表述。类型、freshbuild、定向lint、示例编译、去注释代码等价及skills通过；仅注释与文档变更，不改变运行时代码或公共契约；全量回归在全部任务实施后执行。
 - [x] **JSDOC-11 / deploy / P2**：核对 75 个 TS 顶层导出声明，修正 1 个无 JSDoc、55 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：28源码文件90声明90个示例及9个公开方法示例共99个真实类型示例补齐；说明制品打包不等于上线、Windows本地树确认不等于SSH远端finished，以及未知云资源先核对。凭据示例使用现有HAI_DEPLOY叶入口并检查初始化结果，内嵌shell/C#/PowerShell模板在28文件去注释AST等价证明中均保持原样。deploy类型、freshbuild、lint28零警告、99示例编译、command/env/credentials定向23测试和skills37/328均通过；纯注释，无运行时代码、公开API、配置或文档契约变动，不声称真实云验收；全量回归在全部任务实施后执行。
-- [ ] **JSDOC-12 / iam / P2**：核对 151 个 TS 顶层导出声明，修正 9 个无 JSDoc、150 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [x] **JSDOC-12 / iam / P2**：核对 151 个 TS 顶层导出声明，修正 9 个无 JSDoc、150 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：35源码158声明158实例及5额外方法/关键CAS例，公开配置输入与解析输出、版本化可信session、失败传播、OTP/LDAP/API Key/RBAC边界按实际入口/内部作用域编译。包括未改入口的37源码解析AST非JSDoc token对IAM07后HEAD逐项相同；不把正则/模板误扫当运行改动。source类型、fresh ESM/DTS、owned强制lint零警告、158+5示例、skills37/330/API及新链接通过。三语README/双skill/LLMS同步并整理许可证末尾，无运行/类型/config/env/依赖变化；未消费rememberMe仅如实标注且示例不使用，删除留IAM08独立处理；全量回归在全部任务实施后执行。
 - [x] **JSDOC-13 / kit / P2**：核对 151 个 TS 顶层导出声明，修正 3 个无 JSDoc、91 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：34源码文件159声明159个真实类型示例覆盖服务端/浏览器入口、配置、认证、客户端、守卫、CRUD、共享限流和加密依赖结构；移除虚构kit.guard.auth等示例，业务/Client/框架控制流按实际返回或抛错使用。三语README把非空token即放行示例改为实际iam.auth.verifyToken，修正异步adapter await及无统一生命周期说明。kit类型、fresh ESM/DTS、定向lint零警告、159示例编译、34文件去注释代码等价、skills37/324与env检查通过；无运行时代码或公共契约变化；全量回归在全部任务实施后执行。
 - [ ] **JSDOC-14 / payment / P2**：核对 50 个 TS 顶层导出声明，修正 8 个无 JSDoc、47 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 - [ ] **JSDOC-15 / reach / P2**：核对 51 个 TS 顶层导出声明，修正 1 个无 JSDoc、42 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。

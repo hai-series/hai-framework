@@ -27,6 +27,12 @@ const logger = core.logger.child({ module: 'iam', scope: 'ldap-strategy' })
  *
  * @param value - 用户输入值
  * @returns 转义后的安全字符串
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const escaped = escapeLdapFilterValue('alice*)(uid=*)')
+ * const filter = `(uid=${escaped})` // 用户输入只作为值，不能扩展过滤表达式。
+ * ```
  */
 export function escapeLdapFilterValue(value: string): string {
   return value.replace(/[\\*()/\0]/g, (ch) => {
@@ -37,6 +43,16 @@ export function escapeLdapFilterValue(value: string): string {
 
 /**
  * LDAP 客户端接口
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function lookup(client: LdapClient) {
+ *   const found = await client.search('ou=users,dc=example,dc=com', '(uid=alice)', ['uid', 'mail'])
+ *   if (!found.success)
+ *     return found
+ *   return found.data.map(entry => entry.dn)
+ * }
+ * ```
  */
 export interface LdapClient {
   /**
@@ -57,6 +73,12 @@ export interface LdapClient {
 
 /**
  * LDAP 搜索结果条目
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const entry: LdapSearchEntry = { dn: 'uid=alice,ou=users,dc=example,dc=com', attributes: { uid: 'alice', mail: ['alice@example.com'] } }
+ * const username = entry.attributes.uid
+ * ```
  */
 export interface LdapSearchEntry {
   /** DN */
@@ -67,11 +89,33 @@ export interface LdapSearchEntry {
 
 /**
  * LDAP 客户端工厂
+ * @example
+ * ```ts
+ * import type { LdapClientFactory, LdapConfig } from '@h-ai/iam'
+ * async function check(factory: LdapClientFactory, config: LdapConfig) {
+ *   const opened = await factory(config)
+ *   if (!opened.success)
+ *     return opened
+ *   const result = await opened.data.bind(config.bindDn, config.bindPassword)
+ *   const closed = await opened.data.unbind()
+ *   if (!closed.success)
+ *     return closed
+ *   return result
+ * }
+ * ```
  */
 export type LdapClientFactory = (config: LdapConfig) => Promise<HaiResult<LdapClient>>
 
 /**
  * LDAP 认证策略配置
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function configure(ldapConfig: LdapConfig, userRepository: UserRepository, ldapClientFactory: LdapClientFactory) {
+ *   const config: LdapStrategyConfig = { ldapConfig, userRepository, ldapClientFactory, syncUser: true }
+ *   return createLdapStrategy(config)
+ * }
+ * ```
  */
 export interface LdapStrategyConfig {
   /** LDAP 配置 */
@@ -106,6 +150,13 @@ export interface LdapStrategyConfig {
  *
  * @param config - LDAP 策略配置（LDAP 配置、用户存储、客户端工厂等）
  * @returns 认证策略实例
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function authenticate(config: LdapStrategyConfig, credentials: Credentials) {
+ *   return createLdapStrategy(config).authenticate(credentials)
+ * }
+ * ```
  */
 export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
   const {
