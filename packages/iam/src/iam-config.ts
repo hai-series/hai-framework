@@ -210,7 +210,7 @@ export const SessionConfigSchema = z.object({
   sliding: z.boolean().default(true),
   /** 单设备登录（踢掉其他设备） */
   singleDevice: z.boolean().default(false),
-  /** refreshToken 过期时间（秒，默认 604800 = 7天） */
+  /** refreshToken 独立有效期（秒，默认 604800 = 7天）；从签发时刻起算，access 到期仍可刷新。 */
   refreshTokenMaxAge: z.number().int().min(3600).default(604800),
 })
 

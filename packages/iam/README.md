@@ -392,7 +392,7 @@ async function forceSignOut(userId: string) {
 ##### 特别关注
 
 - **纯缓存存储**：不落库；Memory 重启后丢失，共享 Redis 可跨 IAM 服务重启保留会话直至 TTL 或撤销
-- **滑动续期**：`sliding: true` 时每次 `get()` 自动延长 TTL
+- **滑动续期**：`sliding: true` 时每次 `get()` 单调延长 access 期限；分区保留期限另由 access/refresh 最大期限确定
 - **Refresh Rotation**：旧 refresh 仅能成功消费一次；重复请求也可能来自合法并发或响应丢失，不能仅据此断言凭据泄露。
 - **Token 强度**：256-bit crypto random（`crypto.getRandomValues(new Uint8Array(32))`），base64url 编码
 
@@ -886,3 +886,5 @@ pnpm test
 Apache-2.0
 
 `create({ maxAge })` 可覆盖配置默认时长（正安全整数秒），该值持久化为 `Session.maxAge`；签发和刷新返回的 `expiresIn` 均使用它。滑动续期按该时长延长 access，返回已成功提交的 `lastActiveAt/expiresAt`；迟到请求只延长时间，不缩短较新续期。显式 `update` 的有效日期补丁完整生效并产生新内容版本。客户端根据本次返回的 `expiresIn` 安排刷新，不能硬编码配置默认值。
+
+access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的最晚有效期，但 access 认证只检查自己的 `expiresAt`。access 过期仍可凭未过期、未撤销的 refresh 轮换；每次轮换从新签发时刻重新计算 `refreshTokenMaxAge`，旧 access/refresh 同时失效。删除 access、logoutAll、单设备替换均撤销待刷新记录；仅 revokeRefresh 保留仍有效的 access。刷新路由只校验 refresh，不能先要求旧 access 认证成功。

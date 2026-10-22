@@ -118,7 +118,7 @@ it.each([0, -1, 1.5, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER])('非法
   expect(await cache.kv.keys('hai:iam:sessions:*')).toEqual({ success: true, data: [] })
 })
 
-it('真实Redis TTL与自定义expiresIn一致，到期后不可认证', async () => {
+it('真实Redis中自定义access到期拒绝认证，分区保留到refresh期限', async () => {
   const redis = await acquireRedisContainer()
   try {
     expect((await cache.init({ type: 'redis', host: redis.host, port: redis.port })).success).toBe(true)
@@ -131,8 +131,8 @@ it('真实Redis TTL与自定义expiresIn一致，到期后不可认证', async (
     if (!keys.success || keys.data.length !== 1)
       throw new Error('Missing session partition')
     const ttl = await cache.kv.ttl(keys.data[0]!)
-    expect(ttl.success && ttl.data).toBeGreaterThanOrEqual(1)
-    expect(ttl.success && ttl.data).toBeLessThanOrEqual(2)
+    expect(ttl.success && ttl.data).toBeGreaterThanOrEqual(604799)
+    expect(ttl.success && ttl.data).toBeLessThanOrEqual(604800)
     await new Promise(resolve => setTimeout(resolve, 2100))
     expect(await ops.get(created.data.accessToken)).toEqual({ success: true, data: null })
   }

@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 24/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 25/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -144,7 +144,8 @@
 
 ### IAM-04 · P1 · 使 refresh 生命周期独立于 access key TTL
 
-- [ ] 待修正（源码确认；范围：iam）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：用户分区按access/refresh最大期限保留，认证仍独立检查access绝对到期；refresh查询不依赖access存活，轮换/单设备替换/各撤销入口保持同一CAS，refresh寿命从新会话签发起算。删除过期读取的冗余撤销分支，同步配置/类型、三语README、双侧skills、serv刷新契约注释和LLMS。4文件26项通过，含真实Redis access过期后重连刷新、竞争唯一后继及撤销、受控时钟refresh到期与长access；IAM typecheck/build、ESLint/check:skills通过。serv/kit消费者已核对无access前置验证；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/iam/src/session/iam-session-repository-cache.ts:350](../packages/iam/src/session/iam-session-repository-cache.ts#L350)；[packages/iam/src/session/iam-session-repository-cache.ts:195](../packages/iam/src/session/iam-session-repository-cache.ts#L195)。
 - **证据与影响**：refresh 映射使用较长 TTL，但 getByRefreshToken 最终依赖短 TTL 的 access 会话记录。access key 过期后，即使 refresh 映射仍有效也不能刷新。
 - **修正内容**：持久会话/refresh 记录按 refresh 生命周期保存，独立判断 access 是否有效；撤销与轮换保持原子，不能简单把 access 认证有效期一起延长。

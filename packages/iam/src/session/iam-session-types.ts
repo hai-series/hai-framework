@@ -146,7 +146,7 @@ export interface SessionOperations {
    * 获取会话
    *
    * 查询缓存中的会话数据。API Key 会话先重新校验持久化 key 与 scopes；滑动窗口模式下自动续期。
-   * 已过期的会话会自动删除并返回 null。
+   * access 到期返回 null；记录保留到 refresh 到期或撤销，允许独立刷新。
    *
    * @param accessToken - 访问令牌
    * @returns 成功返回会话对象或 null（会话不存在/已过期）
@@ -206,7 +206,7 @@ export interface SessionOperations {
    * 通过 refreshToken 换取新的 TokenPair
    *
    * 验证 refreshToken 有效性，签发新的 accessToken + refreshToken，
-   * 旧 refreshToken 自动失效（Rotation 策略）。
+   * 旧 refreshToken 自动失效（Rotation 策略）；access 过期不阻止仍有效的 refresh。
    *
    * @param refreshToken - 刷新令牌
    * @returns 成功返回新的 TokenPair；失败返回 TOKEN_REFRESH_FAILED / TOKEN_EXPIRED

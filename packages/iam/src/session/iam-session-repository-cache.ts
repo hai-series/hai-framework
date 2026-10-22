@@ -19,6 +19,11 @@ interface StoredSession {
   refreshExpiresAt: number
 }
 
+/** 单条记录的保留期限；刷新凭据不延长 access 的认证期限。 */
+function retainedUntil(entry: StoredSession): number {
+  return Math.max(new Date(entry.session.expiresAt).getTime(), entry.refreshToken ? entry.refreshExpiresAt : 0)
+}
+
 /** 用户状态快照；revision 防止删除/重建或同值写入产生 ABA。 */
 interface SessionState {
   revision: string
@@ -118,7 +123,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
         // 私有快照由本仓库生成并经 read 校验；复制后修改，避免 Memory 引用别名。
         const next: SessionState = current.data ? JSON.parse(JSON.stringify(current.data)) : { revision: '', sessions: {} }
         for (const [token, entry] of Object.entries(next.sessions)) {
-          if (new Date(entry.session.expiresAt).getTime() <= Date.now())
+          if (retainedUntil(entry) <= Date.now())
             delete next.sessions[token]
         }
         const outcome = operation(next)
@@ -126,7 +131,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
           return outcome
         next.revision = crypto.randomUUID()
         const entries = Object.values(next.sessions)
-        const px = Math.max(1, ...entries.map(entry => new Date(entry.session.expiresAt).getTime() - Date.now()))
+        const px = entries.reduce((ttl, entry) => Math.max(ttl, retainedUntil(entry) - Date.now()), 1)
         const written = await cache.kv.compareAndSwap(stateKey(scope), current.data, entries.length ? next : undefined, { px })
         if (!written.success)
           return repositoryFailure(written.error)
@@ -143,7 +148,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
     const scope = getUserSessionScope(session.userId)
     if (getTokenSessionScope(session.accessToken) !== scope || tokens.accessToken !== session.accessToken || getTokenSessionScope(tokens.refreshToken) !== scope)
       return err(HaiIamError.TOKEN_INVALID, iamM('iam_sessionStateFailed'))
-    state.sessions[session.accessToken] = { session, refreshToken: tokens.refreshToken, refreshExpiresAt: Date.now() + refreshTokenMaxAge * 1000 }
+    state.sessions[session.accessToken] = { session, refreshToken: tokens.refreshToken, refreshExpiresAt: session.createdAt.getTime() + refreshTokenMaxAge * 1000 }
     return ok(undefined)
   }
 
@@ -185,8 +190,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
       const record = Object.values(result.data?.sessions ?? {}).find(entry => entry.refreshToken === token && entry.refreshExpiresAt > Date.now())
       if (!record)
         return ok(null)
-      const session = restoreSession(record.session)
-      return ok(session.expiresAt.getTime() <= Date.now() ? null : session)
+      return ok(restoreSession(record.session))
     },
     async updateByAccessToken(token, patch, expectedVersion) {
       const scope = getTokenSessionScope(token)

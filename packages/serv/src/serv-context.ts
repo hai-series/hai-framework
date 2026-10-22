@@ -44,7 +44,7 @@ export interface ServIam {
     verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>
   }
   readonly session: {
-    /** 使用 refresh token 换发新的 token 对。仅 `refreshCookie` 启用时被调用。 */
+    /** 使用 refresh token 换发新令牌对；refreshCookie 启用时调用，不要求旧 access 有效。 */
     refresh: (refreshToken: string) => Promise<HaiResult<RefreshTokenPair>>
   }
 }

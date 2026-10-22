@@ -877,3 +877,5 @@ pnpm test
 Apache-2.0
 
 `create({ maxAge })` overrides the configured default with a positive safe integer in seconds, persisted as `Session.maxAge`. Issuance and refresh return that duration in `expiresIn`. Sliding renewal uses this duration and returns committed `lastActiveAt/expiresAt`; delayed requests cannot shorten a newer renewal. Explicit `update` applies valid date patches and creates a new content version. Clients schedule refresh from the returned `expiresIn` rather than a hardcoded default.
+
+Access and refresh expire independently. The user partition remains until the latest live access/refresh deadline, while access authentication checks only its own `expiresAt`. An expired access token can still be rotated with a live refresh token. Each rotation starts a new `refreshTokenMaxAge` period and invalidates both old credentials. Access deletion, logoutAll and single-device replacement also revoke refresh-only records; revokeRefresh preserves a still-live access token. Refresh routes validate refresh credentials without requiring a live access token first.

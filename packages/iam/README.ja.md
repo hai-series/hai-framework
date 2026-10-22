@@ -873,3 +873,5 @@ pnpm test
 Apache-2.0
 
 `create({ maxAge })` は設定の既定値を正の安全な整数秒で上書きし、`Session.maxAge` に保存します。発行と更新の `expiresIn` はこの値を使います。自動延長は同じ期間を使い、確定済みの `lastActiveAt/expiresAt` を返し、遅いリクエストが新しい延長を短縮しません。明示的な `update` は有効な日時を反映して内容版を更新します。クライアントは返された `expiresIn` から更新時刻を決めます。
+
+access と refresh は独立して期限切れになります。ユーザー文書は両期限の最大まで保持しますが、access 認証は自身の expiresAt のみを確認します。access 期限後も有効な refresh で更新でき、更新ごとに新しい refreshTokenMaxAge を開始して旧資格情報を失効させます。access 削除・全ログアウト・単一端末置換は更新待ち記録も取り消し、revokeRefresh は有効な access を残します。更新経路で旧 access の認証成功を前提にしません。
