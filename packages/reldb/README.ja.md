@@ -113,7 +113,7 @@ database: ./data/app.db
 operationLog:
   read: false # query / get / queryPage
   write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
+  maxLength: 1000 # 安全な件数サマリーの最大長。0は省略。SQL本文と値は記録しない
   level: debug # info | debug | trace，默认 debug
 ```
 
@@ -524,3 +524,5 @@ pnpm --filter @h-ai/reldb test
 ## ライセンス
 
 Apache-2.0
+
+操作ログには固定の操作名とSQL長・パラメータ数・バッチ数のみを記録します。SQL本文、値、ドライバーのエラー内容は失敗時も出力しません。

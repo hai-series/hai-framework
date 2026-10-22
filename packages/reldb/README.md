@@ -113,7 +113,7 @@ database: ./data/app.db
 operationLog:
   read: false # query / get / queryPage
   write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
+  maxLength: 1000 # 安全数量摘要的最大字符数，0省略摘要；不记录SQL原文/参数值
   level: debug # info | debug | trace，默认 debug
 ```
 
@@ -524,3 +524,5 @@ pnpm --filter @h-ai/reldb test
 ## 许可证
 
 Apache-2.0
+
+操作日志仅包含固定操作名和SQL长度、参数数量、批量数量等安全摘要；失败路径也不记录SQL原文、值或驱动错误内容。

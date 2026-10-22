@@ -24,6 +24,7 @@ export type DbType = z.infer<typeof ReldbTypeSchema>
 export const ReldbOperationLogConfigSchema = z.object({
   read: z.boolean().default(false),
   write: z.boolean().default(false),
+  /** 安全数量摘要的最大字符数；0 表示省略摘要，永不记录 SQL 原文或参数值。 */
   maxLength: z.number().int().min(0).default(1000),
   level: z.enum(['info', 'debug', 'trace']).default('debug'),
 })

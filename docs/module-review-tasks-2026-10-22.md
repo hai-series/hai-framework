@@ -463,7 +463,8 @@
 
 ### RELDB-01 · P1 · 禁止操作日志输出原始 SQL 参数
 
-- [ ] 待修正（源码确认；范围：reldb）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：日志仅保留SQL长度/参数数/批量数等数字摘要，不写SQL原文、绑定值、DDL默认值或驱动错误内容；同步安全摘要配置注释、三语README、skill、envcatalog和根env示例。reldb typecheck、定向ESLint、6项日志回归、check:env与check:skills通过。新worktree环境生成首次被缺dist阻塞，定向构建依赖后复验通过；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/reldb/src/providers/reldb-provider-base.ts:76](../packages/reldb/src/providers/reldb-provider-base.ts#L76)。
 - **证据与影响**：操作日志序列化 sql/params；密码、token、OTP、个人资料等 SQL 参数会进入字符串日志，下游按字段名脱敏也无法识别已拼好的内容。
 - **修正内容**：默认只记录 SQL 模板、耗时、行数和安全错误分类；需要诊断的参数必须显式白名单并脱敏，不用普通配置开关开启全部敏感参数。

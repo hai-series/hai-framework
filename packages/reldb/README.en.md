@@ -113,7 +113,7 @@ database: ./data/app.db
 operationLog:
   read: false # query / get / queryPage
   write: false # DDL, execute / batch, tx.begin / tx.commit / tx.rollback
-  maxLength: 1000 # 参数序列化后的最大输出长度，超出会截断
+  maxLength: 1000 # maximum numeric summary length; 0 omits the summary, SQL text and values are never logged
   level: debug # info | debug | trace，默认 debug
 ```
 
@@ -524,3 +524,5 @@ pnpm --filter @h-ai/reldb test
 ## License
 
 Apache-2.0
+
+Operation logs contain only fixed operation names and numeric SQL/parameter/batch counts. SQL text, values and driver error content are excluded, including failure paths.

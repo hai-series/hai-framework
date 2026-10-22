@@ -50,29 +50,37 @@ export interface ReldbOpsContext {
 
 type ReldbOperationCategory = 'read' | 'write'
 
-function stringifyOperationPayload(payload: unknown, maxLength: number): string {
-  if (maxLength <= 0) {
-    return ''
-  }
-
+/** 仅提取固定的数量信息；SQL 字面量、参数、默认值及错误对象不进入日志。 */
+function summarizeOperationPayload(payload: unknown): Record<string, number> {
   try {
-    const text = JSON.stringify(payload, (_key, value: unknown) => {
-      if (typeof value === 'bigint') {
-        return value.toString()
-      }
-      if (typeof value === 'function') {
-        return '[Function]'
-      }
-      return value
-    })
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+    if (!payload || typeof payload !== 'object')
+      return {}
+    const fields = payload as Record<string, unknown>
+    return {
+      ...(typeof fields.sql === 'string' ? { sqlLength: fields.sql.length } : {}),
+      ...(Array.isArray(fields.params) ? { parameterCount: fields.params.length } : {}),
+      ...(Array.isArray(fields.statements) ? { statementCount: fields.statements.length } : {}),
+      ...(fields.columns && typeof fields.columns === 'object' ? { columnCount: Object.keys(fields.columns).length } : {}),
+    }
   }
   catch {
-    const text = String(payload)
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+    return {}
   }
 }
 
+/**
+ * 记录不含 SQL 原文及绑定值的操作摘要。
+ *
+ * @param ctx - Provider 日志和配置上下文
+ * @param category - 读取或写入类别
+ * @param operation - 内部固定操作名
+ * @param payload - 仅用于计算语句长度和参数数量，不序列化原值
+ * @example
+ * ```ts
+ * logReldbOperation(ctx, 'read', 'get', { sql: 'SELECT id FROM users WHERE id = ?', params: [userId] })
+ * // 仅记录 sqlLength 和 parameterCount。
+ * ```
+ */
 export function logReldbOperation(
   ctx: ReldbOpsContext,
   category: ReldbOperationCategory,
@@ -87,7 +95,7 @@ export function logReldbOperation(
   ctx.logger[config.level]('RelDB operation executed', {
     category,
     operation,
-    payload: stringifyOperationPayload(payload, config.maxLength),
+    payload: config.maxLength <= 0 ? '' : JSON.stringify(summarizeOperationPayload(payload)).slice(0, config.maxLength),
   })
 }
 
@@ -115,7 +123,8 @@ async function wrapOp<T>(
     return await fn()
   }
   catch (error) {
-    ctx.logger.error(errorLabel, { ...errorMeta, error })
+    // 驱动错误可携带完整 SQL、参数或含值的错误消息，日志仅使用框架错误码。
+    ctx.logger.error(errorLabel, { ...summarizeOperationPayload(errorMeta), errorCode: errorDef.code })
     return err(errorDef, reldbM('reldb_queryFailed', { params: { error: String(error) } }), error)
   }
 }

@@ -33,8 +33,31 @@ describe('reldb operation log', () => {
     expect(ctx.logger.trace).toHaveBeenCalledWith('RelDB operation executed', {
       category: 'read',
       operation: 'query',
-      payload: expect.stringMatching(/^.{24}\.\.\.$/),
+      payload: expect.stringMatching(/^.{24}$/),
     })
+  })
+
+  it('never logs SQL literals, bound values, DDL defaults or driver error content', async () => {
+    const ctx = createContext()
+    ctx.operationLog = () => ({ read: true, write: true, maxLength: 1000, level: 'trace' })
+    const secret = 'NOT_A_REAL_SECRET'
+    logReldbOperation(ctx, 'write', 'execute', { sql: `INSERT INTO secrets VALUES ('${secret}')`, params: [secret] })
+    logReldbOperation(ctx, 'write', 'batch', { statements: [{ sql: secret, params: [secret] }] })
+    logReldbOperation(ctx, 'write', 'ddl.createTable', { columns: { password: { defaultValue: secret } } })
+    const rawError = Object.assign(new Error(`Driver rejected ${secret}`), { sql: secret, parameters: [secret] })
+    const dml = createBaseDmlOps(ctx, {
+      query: vi.fn(async () => { throw rawError }),
+      get: vi.fn(async () => ok(null)),
+      execute: vi.fn(async () => ok({ changes: 1 })),
+      batch: vi.fn(async () => ok(undefined)),
+      queryPage: vi.fn(async () => ok({ items: [], total: 0, page: 1, pageSize: 20 })),
+    })
+    expect((await dml.query('SELECT ?', [secret])).success).toBe(false)
+    const logged = JSON.stringify([vi.mocked(ctx.logger.trace).mock.calls, vi.mocked(ctx.logger.error).mock.calls])
+    expect(logged).not.toContain(secret)
+    expect(logged).not.toContain('INSERT INTO')
+    expect(logged).toContain('parameterCount')
+    expect(logged).toContain('statementCount')
   })
 
   it('logs from base DML operations before delegating to raw operations', async () => {

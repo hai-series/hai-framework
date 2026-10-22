@@ -3245,7 +3245,7 @@
     "path": "payment.stripe.secretKey",
     "description": "stripe：Stripe 服务端密钥",
     "value": "",
-    "constraint": "字符串；最小字符数 1"
+    "constraint": "字符串；正则 ^(?:sk|rk)_(?:test|live)_\\S+$"
   },
   {
     "name": "HAI_PAYMENT_STRIPE_WEBHOOKSECRET",
