@@ -19,7 +19,7 @@ import prompts from 'prompts'
 import { cliM } from '../cli-i18n.js'
 import { writeCliError, writeCliMessage } from '../cli-utils.js'
 import { buildCommand } from './cli-build.js'
-import { configureDeployMiddleware, displayDeployValue } from './cli-deploy-middleware.js'
+import { configureDeployMiddleware } from './cli-deploy-middleware.js'
 
 /** deploy 命令选项 */
 export interface DeployCommandOptions extends GlobalOptions {
@@ -362,32 +362,14 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     }
 
     spinner.succeed(chalk.green(cliM(deployResult.data.status === 'packaged' ? 'cli_deploy_bundle_ready' : 'cli_deploy_success')))
-    for (const key of Object.keys(process.env)) {
-      if (originalEnv[key] === undefined)
-        delete process.env[key]
-    }
-    Object.assign(process.env, originalEnv)
-    const completedEnvironment = deployModule.loadDeploymentEnvironment({ environment: environment.data.environment, envDir: environment.data.envDir })
-    if (!completedEnvironment.success)
-      throw new Error(completedEnvironment.error.message)
-    for (const requirement of scan.middlewares ?? []) {
-      if ((serviceModes[requirement.envPrefix] ?? serviceModes[requirement.service]) === 'keep')
-        continue
-      const value = completedEnvironment.data.values[requirement.envPrefix]
-      if (value !== undefined)
-        writeCliMessage(cliM('cli_deploy_saved', { params: { name: requirement.envPrefix, value: displayDeployValue(requirement.envPrefix, value) } }))
-    }
     writeCliMessage('')
-    if (deployResult.data.bundlePath)
+    if (deployResult.data.bundlePath && (deployResult.data.status !== 'packaged' || !deployResult.data.instructions))
       writeCliMessage(cliM('cli_deploy_bundle_path', { params: { path: deployResult.data.bundlePath } }))
     if (deployResult.data.status === 'packaged')
       writeCliMessage(deployResult.data.instructions ?? '')
     else
       writeCliMessage(chalk.cyan(cliM('cli_deploy_url', { params: { url: deployResult.data.url } })))
     writeCliMessage(chalk.gray(cliM('cli_deploy_id', { params: { id: deployResult.data.deploymentId } })))
-    if (deployResult.data.envVarsSet.length > 0) {
-      writeCliMessage(chalk.gray(cliM('cli_deploy_env', { params: { names: deployResult.data.envVarsSet.join(', ') } })))
-    }
     writeCliMessage('')
   }
   catch (error) {

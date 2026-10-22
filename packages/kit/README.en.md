@@ -137,7 +137,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 > `apiFetch` injects the CSRF header automatically; `@h-ai/kit` does not expose a separate CSRF middleware factory.
 >
-> Authentication: prefer httpOnly cookies for same-origin SvelteKit endpoints and verify them on the server. Browsers need not write sensitive tokens to `localStorage`. If Bearer headers are required, provide a custom `BrowserTokenStore`, or set an in-memory token with `kit.auth.setBrowserToken()` before `kit.client.create({ auth: true })`.
+> Use httpOnly cookies for same-origin SvelteKit endpoints and verify them on the server. For browser Bearer headers, set an in-memory token with `kit.auth.setBrowserToken()` before `kit.client.create({ auth: true })`. Custom `BrowserTokenStore` implementations must use memory or platform secure storage; never persist sensitive credentials in Web Storage.
 
 #### Same-origin transport encryption
 

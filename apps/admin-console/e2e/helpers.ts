@@ -6,8 +6,6 @@
 
 import type { APIRequestContext, Page } from '@playwright/test'
 
-const ADMIN_TOKEN_KEY = 'access_token'
-
 interface LoginBody {
   success?: boolean
   data?: {
@@ -108,17 +106,8 @@ export async function loginOnPage(page: Page, username: string, password: string
     throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginResult)}`)
   }
 
-  const accessToken = (loginResult as LoginBody).data?.accessToken
-  if (accessToken) {
-    await page.evaluate((tokenKeyAndValue) => {
-      localStorage.setItem(tokenKeyAndValue.key, tokenKeyAndValue.value)
-    }, { key: ADMIN_TOKEN_KEY, value: accessToken })
-  }
-
-  // 显式验证令牌可用，避免后续 /admin 导航失败
-  const meRes = await page.request.get('/api/auth/me', accessToken
-    ? { headers: { Authorization: `Bearer ${accessToken}` } }
-    : undefined)
+  // 与页面真实认证一致：只通过登录响应设置的 httpOnly Cookie 验证会话。
+  const meRes = await page.request.get('/api/auth/me')
   const meBody = await meRes.json()
   const meUser = extractMeUser(meBody)
   if (!meRes.ok() || !meUser) {

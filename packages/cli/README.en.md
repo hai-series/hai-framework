@@ -84,10 +84,10 @@ The default container supports CPU workloads or remote AI services without downl
 pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
-pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only
 ```
 
-Complete bundles include application and self-hosted middleware images. Bundle-only mode creates a tar plus Windows `deploy.ps1` and Linux/macOS `deploy.sh`. On an isolated Linux server, extract and run `sh apply.sh`. First installations require a complete bundle; partial updates preserve other services and volumes. Each step reports its result; failure exits nonzero and attempts recovery. See [deployment](../deploy/README.en.md) for prerequisites, caching, versions and recovery.
+Complete bundles include application and self-hosted middleware images. Deployment caches, archives and operation directories default to `.hai/deploy/<environment>/` at the project root; `--output` can explicitly override the archive path relative to the command's working directory. Bundle-only mode creates a tar plus Windows `deploy.ps1` and Linux/macOS `deploy.sh`. On an isolated Linux server, extract and run `sh apply.sh`. First installations require a complete bundle; partial updates preserve other services and volumes. Each step reports its result; failure exits nonzero and attempts recovery. See [deployment](../deploy/README.en.md) for prerequisites, caching, versions and recovery.
 
 Build desktop installers with `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64`, using the target system and toolchain. Test native installers separately from container-hosted web pages.
 

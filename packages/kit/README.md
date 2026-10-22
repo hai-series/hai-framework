@@ -143,7 +143,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 > CSRF Header 注入由 `apiFetch` 自动处理；`@h-ai/kit` 不提供独立的 CSRF 中间件工厂。
 >
-> 认证建议：同源 SvelteKit endpoint 优先使用 httpOnly Cookie，由服务端读取 Cookie 完成鉴权，浏览器端不需要把敏感 Token 写入 `localStorage`。如确需注入 Bearer Header，请传入自定义 `BrowserTokenStore`，或先用 `kit.auth.setBrowserToken()` 写入页面内存后再使用 `kit.client.create({ auth: true })`。
+> 同源 SvelteKit endpoint 使用 httpOnly Cookie，由服务端读取 Cookie 完成鉴权。浏览器 Bearer Token 使用 `kit.auth.setBrowserToken()` 写入页面内存，再通过 `kit.client.create({ auth: true })` 注入。自定义 `BrowserTokenStore` 也必须使用内存或平台安全存储，禁止将敏感凭据写入 Web Storage。
 
 #### 同源传输加密
 

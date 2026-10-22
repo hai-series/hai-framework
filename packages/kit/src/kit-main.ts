@@ -13,7 +13,6 @@ import { createHandle, sequence } from './hooks/kit-handle.js'
 import { authApiPublicPaths, createAuthApi } from './kit-auth-api.js'
 import {
   clearBrowserToken,
-  createTokenStore,
   login,
   loginWithApiKey,
   loginWithLdap,
@@ -143,7 +142,6 @@ export const kit = {
     /** 清除浏览器端 Access Token（客户端 logout 用） */
     clearBrowserToken,
     /** 创建浏览器端 Token 存储器（自定义 key 时使用） */
-    createTokenStore,
   },
 
   // ─── CRUD ───

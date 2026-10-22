@@ -52,7 +52,7 @@ interface CookieWriter {
   delete: (name: string, options: { path: string }) => void
 }
 
-/** 浏览器 Token 存储器 */
+/** 浏览器 Token 存储器；使用页面内存或平台安全存储，禁止写入 Web Storage。 */
 export interface BrowserTokenStore {
   get: () => string | null
   set: (token: string) => void
@@ -300,38 +300,6 @@ export async function logout(
 }
 
 // ─── 浏览器端 Token 存储（通过 kit.auth 暴露） ───
-
-/**
- * 创建浏览器端 Token 存储器（localStorage）。
- *
- * ⚠️ 安全提示：localStorage 对同源脚本可读，任意 XSS 都可能窃取 Token。
- * 本函数仅供调用方显式接受风险时使用；`kit.client.create({ auth: true })`
- * 不会默认调用它。
- *
- * @param key - localStorage 键名，默认 `'hai_access_token'`
- */
-export function createTokenStore(key = DEFAULT_TOKEN_COOKIE_NAME): BrowserTokenStore {
-  return {
-    get(): string | null {
-      if (typeof window === 'undefined') {
-        return null
-      }
-      return window.localStorage.getItem(key)
-    },
-    set(token: string): void {
-      if (typeof window === 'undefined') {
-        return
-      }
-      window.localStorage.setItem(key, token)
-    },
-    clear(): void {
-      if (typeof window === 'undefined') {
-        return
-      }
-      window.localStorage.removeItem(key)
-    },
-  }
-}
 
 /**
  * 写入默认浏览器端 Access Token（仅页面内存，不持久化到 localStorage）。

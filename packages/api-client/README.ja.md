@@ -12,7 +12,7 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 
 - `apiClient`：iam/storage/ai ドメインに対応する既定の型付きクライアント。
 - `apiClient.create(contract)`：独自の contract に対応する型付きクライアントを作成。
-- `apiClient.tokenStorage.{memory,localStorage,httpOnlyCookie}()`：Token ストレージのファクトリー。
+- `apiClient.tokenStorage.{memory,httpOnlyCookie}()`：Token ストレージのファクトリー。ブラウザーでは access token をメモリー、refresh token をサーバー管理の httpOnly Cookie に保持し、ネイティブではプラットフォームの安全なストレージを注入します。認証情報を Web Storage に保存しません。
 - ブラウザー、Node、Capacitor、ミニプログラムのブリッジに対応する独自 `fetch` を指定可能。
 - Bearer Token の自動付与と、401 応答後の更新および 1 回の再試行。
 - ネットワークエラーを `HaiResult` のエラーに変換。
