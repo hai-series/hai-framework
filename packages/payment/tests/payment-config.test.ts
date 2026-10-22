@@ -165,15 +165,16 @@ describe('alipayConfigSchema', () => {
 
 describe('stripeConfigSchema', () => {
   it.each(['sk_test_key', 'sk_live_key', 'rk_test_key', 'rk_live_key'])('接受具有明确模式的服务端密钥 %s', (secretKey) => {
-    expect(StripeConfigSchema.safeParse({ secretKey, webhookSecret: 'whsec_key' }).success).toBe(true)
+    expect(StripeConfigSchema.safeParse({ secretKey, successUrl: 'https://example.invalid/payment/success', webhookSecret: 'whsec_key' }).success).toBe(true)
   })
 
   it.each(['pk_test_key', 'sk_unknown_key', 'sk_test_', 'sk_test_key with space'])('拒绝无法安全区分服务端模式的密钥 %s', (secretKey) => {
-    expect(StripeConfigSchema.safeParse({ secretKey, webhookSecret: 'whsec_key' }).success).toBe(false)
+    expect(StripeConfigSchema.safeParse({ secretKey, successUrl: 'https://example.invalid/payment/success', webhookSecret: 'whsec_key' }).success).toBe(false)
   })
 
   it('完整有效配置通过校验', () => {
     const result = StripeConfigSchema.safeParse({
+      successUrl: 'https://example.invalid/payment/success',
       secretKey: 'sk_test_abc123',
       webhookSecret: 'whsec_abc123',
     })
@@ -185,6 +186,7 @@ describe('stripeConfigSchema', () => {
 
   it('可自定义 webhookToleranceSeconds', () => {
     const result = StripeConfigSchema.safeParse({
+      successUrl: 'https://example.invalid/payment/success',
       secretKey: 'sk_test_abc123',
       webhookSecret: 'whsec_abc123',
       webhookToleranceSeconds: 600,
@@ -197,6 +199,7 @@ describe('stripeConfigSchema', () => {
 
   it('缺少 secretKey 校验失败', () => {
     const result = StripeConfigSchema.safeParse({
+      successUrl: 'https://example.invalid/payment/success',
       webhookSecret: 'whsec_abc',
     })
     expect(result.success).toBe(false)
@@ -211,6 +214,7 @@ describe('stripeConfigSchema', () => {
 
   it('空字符串 secretKey 校验失败', () => {
     const result = StripeConfigSchema.safeParse({
+      successUrl: 'https://example.invalid/payment/success',
       secretKey: '',
       webhookSecret: 'whsec',
     })
@@ -219,6 +223,7 @@ describe('stripeConfigSchema', () => {
 
   it('webhookToleranceSeconds 非正整数时校验失败', () => {
     const result = StripeConfigSchema.safeParse({
+      successUrl: 'https://example.invalid/payment/success',
       secretKey: 'sk_test_key',
       webhookSecret: 'whsec',
       webhookToleranceSeconds: 0,
@@ -235,7 +240,7 @@ describe('paymentConfigSchema（顶层）', () => {
 
   it('只配置一个渠道通过校验', () => {
     const result = PaymentConfigSchema.safeParse({
-      stripe: { secretKey: 'sk_test_key', webhookSecret: 'ws' },
+      stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'ws' },
     })
     expect(result.success).toBe(true)
   })
@@ -255,6 +260,7 @@ describe('paymentConfigSchema（顶层）', () => {
         alipayPublicKey: 'pub',
       },
       stripe: {
+        successUrl: 'https://example.invalid/payment/success',
         secretKey: 'sk_test_key',
         webhookSecret: 'ws',
       },

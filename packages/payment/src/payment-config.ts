@@ -33,8 +33,12 @@ export const AlipayConfigSchema = z.object({
 export const StripeConfigSchema = z.object({
   secretKey: z.string().regex(/^(?:sk|rk)_(?:test|live)_\S+$/, paymentM('payment_stripeKeyInvalid')),
   webhookSecret: z.string().min(1, paymentM('payment_configFieldRequired')),
+  /** 托管 Checkout 完成后的可信跳转地址，可含 {CHECKOUT_SESSION_ID}。 */
+  successUrl: z.url({ protocol: /^https?$/ }),
+  /** 托管 Checkout 取消按钮的可信跳转地址；省略时不显示返回按钮。 */
+  cancelUrl: z.url({ protocol: /^https?$/ }).optional(),
   webhookToleranceSeconds: z.number().int().positive().default(300),
-})
+}).strict()
 
 /** 支付模块配置 Schema */
 export const PaymentConfigSchema = z.object({

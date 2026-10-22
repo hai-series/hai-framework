@@ -20,6 +20,7 @@ const PaymentErrorInfo = {
   SIGN_FAILED: '020:500',
   PROVIDER_NOT_FOUND: '030:404',
   INVALID_AMOUNT: '040:400',
+  UNSUPPORTED_TRADE_TYPE: '041:400',
   NOTIFY_VERIFY_FAILED: '050:400',
   NOTIFY_PARSE_FAILED: '051:400',
   INVOKE_WEB_FAILED: '060:500',
@@ -49,7 +50,7 @@ export interface CreateOrderInput {
   currency?: string
   /** 商品描述 */
   description: string
-  /** 支付场景 */
+  /** 支付场景；Stripe 仅支持 h5（托管 Checkout 页面跳转）。 */
   tradeType: TradeType
   /** 用户标识（微信 openid 等，jsapi 必填） */
   userId?: string

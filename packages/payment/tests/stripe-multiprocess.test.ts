@@ -96,7 +96,7 @@ globalThis.fetch = (url, options) => nativeFetch('http://127.0.0.1:${address.por
 try {
   const db = await reldb.init({ type: 'sqlite', database: ${JSON.stringify(database)} })
   if (!db.success) throw new Error(db.error.message)
-  const initialized = await payment.init({ stripe: { secretKey: 'sk_test_process', webhookSecret: 'whsec_process' } })
+  const initialized = await payment.init({ stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_process', webhookSecret: 'whsec_process' } })
   if (!initialized.success) throw new Error(initialized.error.message)
   const action = process.argv[2]
   const result = action === 'create'

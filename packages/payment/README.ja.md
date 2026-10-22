@@ -10,11 +10,11 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 
 ## 主な機能
 
-| Provider   | 決済方式                               |
-| ---------- | -------------------------------------- |
-| WeChat Pay | JSAPI / H5 / App / Native（QR コード） |
-| Alipay     | JSAPI / H5 / App / Native              |
-| Stripe     | Checkout Session（国際決済）           |
+| Provider   | 決済方式                                         |
+| ---------- | ------------------------------------------------ |
+| WeChat Pay | JSAPI / H5 / App / Native（QR コード）           |
+| Alipay     | JSAPI / H5 / App / Native                        |
+| Stripe     | h5：ホスト型 Checkout ページへの遷移（国際決済） |
 
 ## 使い始める
 
@@ -95,6 +95,8 @@ await payment.init({
   stripe: {
     secretKey: 'sk_test_xxx',
     webhookSecret: 'whsec_xxx',
+    successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}', // 必須
+    cancelUrl: 'https://app.example/payment/cancel', // 任意
     webhookToleranceSeconds: 300, // 可选，默认 300 秒
   },
 })
@@ -105,6 +107,14 @@ await payment.init({
 金額は最小通貨単位（分・セント）で指定し、正の整数でなければなりません。Provider を呼ぶ前に `amount` / `totalAmount` を検証し、不正な金額を決済サービスに渡さないようにします。
 
 すべての組み込み Provider の HTTP リクエストには既定で 15 秒のタイムアウトがあり、ネットワーク障害による長時間の待機を防ぎます。
+
+### Stripe ホスト型 Checkout と注文終了
+
+`mode=payment`、`ui_mode=hosted_page`、`tradeType=h5` のみ実装し、API は `Stripe-Version: 2026-09-30.endive` に固定します。embedded/elements、JSAPI、App、Native、小程序は Provider・HTTP schema・ブラウザー入口で拒否します。サーバー設定の `successUrl` は必須、`cancelUrl` は任意で、HTTP(S) のみ使用できます。成功 URL には `{CHECKOUT_SESSION_ID}` を含められます。クライアントから変更できず、同じ注文の再試行でも作成パラメータを変更できません。
+
+`closeOrder('stripe', orderNo)` は保存済み Session を照会し、open/unpaid の場合のみ expire を呼びます。expired 確認済みなら冪等に成功し、complete/paid は失敗します。同時終了や応答喪失時は再照会で過期を確認してから成功を返します。成功・キャンセル画面への遷移は支払完了や注文終了の証明ではありません。
+
+参照：[Checkout Session 作成](https://docs.stripe.com/api/checkout/sessions/create)、[Session の終了](https://docs.stripe.com/api/checkout/sessions/expire)。
 
 ### Stripe 通知の状態
 
@@ -160,15 +170,16 @@ if (!result.success) {
 
 主なエラーコード：
 
-| エラーコード                           | code              | 説明                 |
-| -------------------------------------- | ----------------- | -------------------- |
-| `HaiPaymentError.CREATE_ORDER_FAILED`  | `hai:payment:001` | 注文作成に失敗       |
-| `HaiPaymentError.NOT_INITIALIZED`      | `hai:payment:010` | モジュールが未初期化 |
-| `HaiPaymentError.PROVIDER_NOT_FOUND`   | `hai:payment:030` | Provider が未登録    |
-| `HaiPaymentError.INVALID_AMOUNT`       | `hai:payment:040` | 無効な金額           |
-| `HaiPaymentError.NOTIFY_VERIFY_FAILED` | `hai:payment:050` | 通知の署名検証に失敗 |
-| `HaiPaymentError.NOTIFY_PARSE_FAILED`  | `hai:payment:051` | 通知の解析に失敗     |
-| `HaiPaymentError.CONFIG_ERROR`         | `hai:payment:070` | 無効な設定           |
+| エラーコード                             | code              | 説明                 |
+| ---------------------------------------- | ----------------- | -------------------- |
+| `HaiPaymentError.CREATE_ORDER_FAILED`    | `hai:payment:001` | 注文作成に失敗       |
+| `HaiPaymentError.NOT_INITIALIZED`        | `hai:payment:010` | モジュールが未初期化 |
+| `HaiPaymentError.PROVIDER_NOT_FOUND`     | `hai:payment:030` | Provider が未登録    |
+| `HaiPaymentError.INVALID_AMOUNT`         | `hai:payment:040` | 無効な金額           |
+| `HaiPaymentError.UNSUPPORTED_TRADE_TYPE` | `hai:payment:041` | 未実装の決済方式     |
+| `HaiPaymentError.NOTIFY_VERIFY_FAILED`   | `hai:payment:050` | 通知の署名検証に失敗 |
+| `HaiPaymentError.NOTIFY_PARSE_FAILED`    | `hai:payment:051` | 通知の解析に失敗     |
+| `HaiPaymentError.CONFIG_ERROR`           | `hai:payment:070` | 無効な設定           |
 
 ## 開発とテスト
 

@@ -12,6 +12,7 @@ import { StripeOperationRepository } from '../src/providers/stripe/stripe-operat
 import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
 
 const testConfig = {
+  successUrl: 'https://example.invalid/payment/success',
   secretKey: 'sk_test_4eC39HqLyjWDarjtT1zdp7dc',
   webhookSecret: 'whsec_test_secret_key_001',
 }
@@ -49,6 +50,19 @@ describe('stripe-provider', () => {
   })
 
   describe('createOrder', () => {
+    it('可选取消跳转地址由可信服务端配置传给渠道', async () => {
+      fetchSpy.mockResolvedValueOnce(Response.json({ id: 'cs_cancel', url: 'https://checkout.stripe.com/pay/cs_cancel' }))
+      const result = await createStripeProvider({ ...testConfig, webhookToleranceSeconds: 300, cancelUrl: 'https://app.example/payment/cancel' }).createOrder({
+        orderNo: 'ORDER-CANCEL',
+        amount: 100,
+        description: 'Test',
+        tradeType: 'h5',
+        notifyUrl: 'https://app.example/notify',
+      })
+      expect(result.success).toBe(true)
+      expect(new URLSearchParams(fetchSpy.mock.calls[0][1].body).get('cancel_url')).toBe('https://app.example/payment/cancel')
+    })
+
     it('checkout Session 下单成功', async () => {
       fetchSpy.mockResolvedValueOnce({
         ok: true,
@@ -81,6 +95,10 @@ describe('stripe-provider', () => {
       expect(url).toContain('/checkout/sessions')
       expect(options.method).toBe('POST')
       expect(options.headers.Authorization).toBe(`Bearer ${testConfig.secretKey}`)
+      expect(options.headers['Stripe-Version']).toBe('2026-09-30.endive')
+      const form = new URLSearchParams(options.body)
+      expect(form.get('ui_mode')).toBe('hosted_page')
+      expect(form.get('success_url')).toBe(testConfig.successUrl)
       expect(options.body).toContain('mode=payment')
       expect(options.body).toContain('metadata%5BorderNo%5D=ORD001')
       expect(options.signal).toBeDefined()
@@ -404,12 +422,12 @@ describe('stripe-provider', () => {
     })
   })
   describe('closeOrder', () => {
-    it('stripe 关闭订单直接返回成功（自动过期）', async () => {
+    it('stripe 未知订单不能伪装关闭成功', async () => {
       const provider = createStripeProvider(testConfig)
       const result = await provider.closeOrder('ORD001')
 
-      expect(result.success).toBe(true)
-      // 不应发起 fetch 调用
+      expect(result.success).toBe(false)
+      // 没有持久渠道映射时不调用任意 Session。
       expect(fetchSpy).not.toHaveBeenCalled()
     })
   })

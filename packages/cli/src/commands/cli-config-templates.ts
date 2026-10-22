@@ -746,6 +746,8 @@ function generatePaymentConfig(): string {
 # stripe:
 #   secretKey: ''
 #   webhookSecret: ''
+#   successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}'
+#   cancelUrl: 'https://app.example/payment/cancel' # 可选
 #   webhookToleranceSeconds: 300
 `
 }

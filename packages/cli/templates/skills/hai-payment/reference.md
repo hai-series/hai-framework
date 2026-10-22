@@ -46,10 +46,12 @@ alipay:
 stripe:
   secretKey: ''
   webhookSecret: ''
+  successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}'  # 必填
+  cancelUrl: 'https://app.example/payment/cancel'  # 可选
   webhookToleranceSeconds: 300  # 可选，默认 300 秒
 ```
 
-Stripe 的 secretKey 必须为 sk/rk 的 test/live 服务端密钥；受限密钥须允许读取账户。启用前初始化共享 reldb，不能给不同节点配置各自的 SQLite 文件。
+Stripe 的 secretKey 必须为 sk/rk 的 test/live 服务端密钥；受限密钥须允许读取账户。只实现 payment + hosted_page + tradeType=h5，必填 successUrl、可选 cancelUrl 均来自服务端配置且必须为 HTTP(S)。不支持 embedded/elements 或 App/JSAPI/Native 等支付场景，不向客户端提供改变模式/跳转地址的接口。API 固定为 2026-09-30.endive；启用前初始化共享 reldb，不能给不同节点配置各自的 SQLite 文件。
 
 约定环境变量优先于 YAML，例如 `HAI_PAYMENT_WECHAT_APIV3KEY`、
 `HAI_PAYMENT_STRIPE_WEBHOOKSECRET`。生产密钥只放环境或密钥管理器。
@@ -120,6 +122,8 @@ Stripe 只消费 payment-mode Checkout Session 的 `completed`、`async_payment_
 ### 5. 查询订单
 
 Stripe 创建操作将 orderNo 与 Session ID 持久绑定，查单/退款通过该 ID 读取并核对订单号、金额和币种，不使用 metadata 列表首项猜测。metadata.orderNo 为保留字段。orderNo/refundNo 的请求参数不能在重试时改变，渠道 POST 使用稳定 Idempotency-Key。
+
+Stripe closeOrder 会通过可信映射读取 Session，只有 open/unpaid 才调用 expire；已 expired 幂等成功，complete/paid 失败。并发关闭或响应丢失后必须重读确认 expired，不能把“已发送请求”当关闭成功。successUrl/cancelUrl 的页面跳转不代表已付款或已经关单，业务仍以可信状态为准。
 
 响应丢失或落库失败会保留未知记录，只能在数据库时钟的 23 小时安全窗口内沿用同一键重试；窗口之外先核对渠道结果并修复记录，不删除后重发。成功结果长期保留，不按缓存 TTL 清理。Stripe 仅保存渠道操作结果，宿主业务订单、回调去重与履约事务仍需自己实现。
 

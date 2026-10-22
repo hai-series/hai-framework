@@ -3240,12 +3240,28 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_PAYMENT_STRIPE_CANCELURL",
+    "module": "payment",
+    "path": "payment.stripe.cancelUrl",
+    "description": "托管 Checkout 取消按钮的可信跳转地址；省略时不显示返回按钮。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
     "name": "HAI_PAYMENT_STRIPE_SECRETKEY",
     "module": "payment",
     "path": "payment.stripe.secretKey",
     "description": "stripe：Stripe 服务端密钥",
     "value": "",
     "constraint": "字符串；正则 ^(?:sk|rk)_(?:test|live)_\\S+$"
+  },
+  {
+    "name": "HAI_PAYMENT_STRIPE_SUCCESSURL",
+    "module": "payment",
+    "path": "payment.stripe.successUrl",
+    "description": "托管 Checkout 完成后的可信跳转地址，可含 {CHECKOUT_SESSION_ID}。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
   },
   {
     "name": "HAI_PAYMENT_STRIPE_WEBHOOKSECRET",

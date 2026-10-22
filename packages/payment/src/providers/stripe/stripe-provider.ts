@@ -20,6 +20,8 @@ import { StripeOperationRepository } from './stripe-operation-repository.js'
 
 /** Stripe API 基地址 */
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
+/** 与已核验的 hosted_page 参数契约一致，避免账户默认 API 版本改变协议。 */
+const STRIPE_API_VERSION = '2026-09-30.endive'
 
 /** 只持久化继续查单所需的渠道标识和返回给客户端的 Checkout URL。 */
 const StripeCreatedSessionSchema = z.object({
@@ -110,6 +112,7 @@ export function createStripeProvider(
       headers: {
         'Authorization': `Bearer ${config.secretKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Stripe-Version': STRIPE_API_VERSION,
         ...(options?.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
       },
       body: options?.body
@@ -143,7 +146,7 @@ export function createStripeProvider(
   }
 
   /** 不含秘密/个人标识的稳定幂等键；所有节点依据同一业务身份计算。 */
-  async function operationId(kind: 'order' | 'refund', businessId: string): Promise<string> {
+  async function operationId(kind: 'order' | 'refund' | 'close', businessId: string): Promise<string> {
     const digest = createHash('sha256').update(JSON.stringify([await accountScope(), kind, businessId])).digest('hex')
     return `hai-payment-${kind}-${digest}`
   }
@@ -220,6 +223,8 @@ export function createStripeProvider(
     name: 'stripe',
 
     async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
+      if (input.tradeType !== 'h5')
+        return err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
       try {
         z.string().min(1).regex(/\S/).parse(input.orderNo)
         if (input.metadata && Object.hasOwn(input.metadata, 'orderNo'))
@@ -227,11 +232,15 @@ export function createStripeProvider(
         // 使用 Stripe Checkout Session
         const params: Record<string, string> = {
           'mode': 'payment',
+          'ui_mode': 'hosted_page',
+          'success_url': config.successUrl,
           'line_items[0][price_data][currency]': input.currency?.toLowerCase() ?? 'usd',
           'line_items[0][price_data][product_data][name]': input.description,
           'line_items[0][price_data][unit_amount]': input.amount.toString(),
           'line_items[0][quantity]': '1',
         }
+        if (config.cancelUrl)
+          params.cancel_url = config.cancelUrl
 
         // metadata 传递订单号
         params['metadata[orderNo]'] = input.orderNo
@@ -385,9 +394,35 @@ export function createStripeProvider(
       }
     },
 
-    async closeOrder(_orderNo: string): Promise<HaiResult<void>> {
-      // Stripe Checkout Sessions 会自动过期，无需主动关闭
-      return ok(undefined)
+    async closeOrder(orderNo: string): Promise<HaiResult<void>> {
+      try {
+        const session = await retrieveOrder(orderNo)
+        if (session.payment_status !== 'unpaid' || session.status === 'complete')
+          throw new Error('A completed or paid Stripe Session cannot be closed')
+        if (session.status === 'expired')
+          return ok(undefined)
+
+        try {
+          const expired = z.object({ id: z.string(), status: z.literal('expired') }).parse(
+            await stripeRequest('POST', `/checkout/sessions/${encodeURIComponent(session.id)}/expire`, {
+              body: {},
+              idempotencyKey: await operationId('close', orderNo),
+            }),
+          )
+          if (expired.id !== session.id)
+            throw new Error('Stripe expiration response does not match the requested Session')
+        }
+        catch (cause) {
+          // 其它节点已关单或响应丢失时，仅在重新读取并确认 expired 后返回幂等成功。
+          const confirmed = await retrieveOrder(orderNo)
+          if (confirmed.status !== 'expired' || confirmed.payment_status !== 'unpaid')
+            throw cause
+        }
+        return ok(undefined)
+      }
+      catch (cause) {
+        return err(HaiPaymentError.CLOSE_ORDER_FAILED, paymentM('payment_closeOrderFailed'), cause)
+      }
     },
   }
 }

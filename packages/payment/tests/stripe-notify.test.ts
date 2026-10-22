@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { HaiPaymentError } from '../src/payment-types'
 import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
 
-const config = { secretKey: 'test-only-api-key', webhookSecret: 'test-only-webhook-key' }
+const config = { successUrl: 'https://example.invalid/payment/success', secretKey: 'test-only-api-key', webhookSecret: 'test-only-webhook-key' }
 
 /** 构造与 Stripe Checkout Session 快照一致的通知。 */
 function createEvent(type = 'checkout.session.completed', paymentStatus = 'paid') {

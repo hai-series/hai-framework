@@ -15,7 +15,7 @@ export const PaymentCreateOrderInputSchema = z.object({
   tradeType: PaymentTradeTypeSchema,
   userId: z.string().optional(),
   metadata: z.record(z.string(), z.string()).optional(),
-})
+}).strict().refine(input => input.provider !== 'stripe' || input.tradeType === 'h5', { path: ['tradeType'] })
 
 /** 创建支付订单业务数据 Schema。 */
 export const PaymentCreateOrderDataSchema = z.object({

@@ -126,6 +126,8 @@ export async function invokePayment(order: PaymentOrder): Promise<HaiResult<Invo
         result = invokeAlipayH5(order.clientParams)
         break
       case 'stripe':
+        if (order.tradeType !== 'h5')
+          return err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
         result = invokeStripeCheckout(order.clientParams)
         break
       default:

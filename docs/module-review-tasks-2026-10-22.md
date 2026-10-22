@@ -286,7 +286,8 @@
 
 ### PAY-03 · P1 · 实现 Stripe 主动关单并补齐 Checkout 创建参数
 
-- [ ] 待修正（源码确认；范围：payment）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：Stripe 收缩为 payment/hosted_page/h5，固定 API 版本并配置可信 successUrl/cancelUrl；实现 expire 关单和并发/响应丢失后的再确认，契约、客户端、三语 README、skill、CLI 与环境变量已同步。payment/api-contract typecheck 与 build、定向 payment 119 项/contract 19 项/CLI 26 项及最终受影响 47 项、ESLint、check:skills、check:env 通过；真实 SQLite/子进程覆盖通过，Stripe HTTP 为替身，未执行真实交易；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:256](../packages/payment/src/providers/stripe/stripe-provider.ts#L256)；[packages/payment/src/providers/stripe/stripe-provider.ts:84](../packages/payment/src/providers/stripe/stripe-provider.ts#L84)。
 - **证据与影响**：closeOrder 无网络操作直接 ok；创建 Session 未提供跳转 URL 等 Checkout 模式相关参数，现有统一输入也未表达完整配置。
 - **修正内容**：按 session id 调用 expire 并映射不可关闭状态；明确支持的 Checkout UI 模式，增加其必需配置并做输入校验。

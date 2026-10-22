@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StripeOperationRepository } from '../src/providers/stripe/stripe-operation-repository'
 import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
 
-const config = { secretKey: 'sk_test_key', webhookSecret: 'whsec_key' }
+const config = { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' }
 const orderInput: CreateOrderInput = {
   orderNo: 'ORDER-1',
   amount: 100,
@@ -26,7 +26,7 @@ interface TestSession {
   currency: string
   payment_status: 'paid' | 'unpaid'
   payment_intent: string | null
-  status: 'open' | 'complete'
+  status: 'open' | 'complete' | 'expired'
 }
 
 describe('stripe persistent operations', () => {
@@ -67,6 +67,16 @@ describe('stripe persistent operations', () => {
         const session = sessions.get(id)
         if (!session)
           throw new Error('Session not found')
+        return Response.json(session)
+      }
+      if (pathname.endsWith('/expire')) {
+        const id = pathname.slice('/v1/checkout/sessions/'.length, -'/expire'.length)
+        const session = sessions.get(id)
+        if (!session || session.status !== 'open')
+          return Response.json({ error: 'Session is not open' }, { status: 400 })
+        session.status = 'expired'
+        if (loseResponse.delete('close'))
+          throw new Error('Simulated expiration response loss')
         return Response.json(session)
       }
       const key = new Headers(options.headers).get('Idempotency-Key')
@@ -226,5 +236,53 @@ describe('stripe persistent operations', () => {
     expect((await createStripeProvider(config, repository).refund(refund)).success).toBe(true)
     expect((await createStripeProvider(config, repository).refund({ ...refund, amount: 60 })).success).toBe(false)
     expect(createdRefunds).toBe(1)
+  })
+
+  it('主动关单调用可信 Session expire，重复关闭通过已过期状态确认', async () => {
+    const provider = createStripeProvider(config, repository)
+    await provider.createOrder(orderInput)
+    expect((await provider.closeOrder(orderInput.orderNo)).success).toBe(true)
+    expect(sessions.get('cs_1')?.status).toBe('expired')
+    expect((await provider.closeOrder(orderInput.orderNo)).success).toBe(true)
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/expire'))).toHaveLength(1)
+    const status = await provider.queryOrder(orderInput.orderNo)
+    expect(status.success && status.data.status).toBe('closed')
+  })
+
+  it('已付款/已完成 Session 不能关闭', async () => {
+    await paidOrder()
+    expect((await createStripeProvider(config, repository).closeOrder(orderInput.orderNo)).success).toBe(false)
+    expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/expire'))).toBe(false)
+  })
+
+  it('两个实例并发关单只在真实过期确认后幂等成功', async () => {
+    await createStripeProvider(config, repository).createOrder(orderInput)
+    const results = await Promise.all([
+      createStripeProvider(config, repository).closeOrder(orderInput.orderNo),
+      createStripeProvider(config, repository).closeOrder(orderInput.orderNo),
+    ])
+    expect(results.every(result => result.success)).toBe(true)
+    expect(sessions.get('cs_1')?.status).toBe('expired')
+  })
+
+  it('expire 响应丢失后重读确认，不能仅凭发送过请求就成功', async () => {
+    const provider = createStripeProvider(config, repository)
+    await provider.createOrder(orderInput)
+    loseResponse.add('close')
+    expect((await provider.closeOrder(orderInput.orderNo)).success).toBe(true)
+    expect(sessions.get('cs_1')?.status).toBe('expired')
+  })
+
+  it('渠道过期失败且重读仍为 open 时返回失败', async () => {
+    const provider = createStripeProvider(config, repository)
+    await provider.createOrder(orderInput)
+    const implementation = fetchMock.getMockImplementation()
+    if (!implementation)
+      throw new Error('Missing test channel implementation')
+    fetchMock.mockImplementation((url: string, options: RequestInit) => url.endsWith('/expire')
+      ? Promise.resolve(Response.json({ error: 'Channel unavailable' }, { status: 500 }))
+      : implementation(url, options))
+    expect((await provider.closeOrder(orderInput.orderNo)).success).toBe(false)
+    expect(sessions.get('cs_1')?.status).toBe('open')
   })
 })

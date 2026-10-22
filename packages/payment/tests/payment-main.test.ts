@@ -112,6 +112,7 @@ describe('payment.init', () => {
   it('配置 stripe 时注册 stripe Provider', async () => {
     await payment.init({
       stripe: {
+        successUrl: 'https://example.invalid/payment/success',
         secretKey: 'sk_test_xxx',
         webhookSecret: 'whsec_test_xxx',
       },
@@ -124,7 +125,7 @@ describe('payment.init', () => {
 
   it('stripe 未初始化数据库时拒绝初始化，且不发布任何 Provider', async () => {
     await reldb.close()
-    const result = await payment.init({ stripe: { secretKey: 'sk_test_key', webhookSecret: 'whsec_key' } })
+    const result = await payment.init({ stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' } })
     expect(result.success).toBe(false)
     expect(payment.isInitialized).toBe(false)
     expect(payment.getProvider('stripe')).toBeUndefined()
@@ -132,7 +133,7 @@ describe('payment.init', () => {
 
   it('stripe 建表失败时拒绝初始化', async () => {
     vi.spyOn(reldb.ddl, 'createTable').mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'test DDL failure'))
-    const result = await payment.init({ stripe: { secretKey: 'sk_test_key', webhookSecret: 'whsec_key' } })
+    const result = await payment.init({ stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' } })
     expect(result.success).toBe(false)
     expect(payment.isInitialized).toBe(false)
     expect(payment.getProvider('stripe')).toBeUndefined()
@@ -153,6 +154,7 @@ describe('payment.init', () => {
         alipayPublicKey: 'pub',
       },
       stripe: {
+        successUrl: 'https://example.invalid/payment/success',
         secretKey: 'sk_test_key',
         webhookSecret: 'whsec_test',
       },
@@ -182,7 +184,7 @@ describe('payment.init', () => {
     expect(payment.getProvider('alipay')).toBeDefined()
 
     await payment.init({
-      stripe: { secretKey: 'sk_test_key', webhookSecret: 'ws' },
+      stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'ws' },
     })
 
     expect(payment.getProvider('wechat')).toBeUndefined()
@@ -194,7 +196,7 @@ describe('payment.init', () => {
 describe('payment.close', () => {
   it('close 后所有 Provider 被清除', async () => {
     await payment.init({
-      stripe: { secretKey: 'sk_test_key', webhookSecret: 'ws' },
+      stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'ws' },
     })
     expect(payment.getProvider('stripe')).toBeDefined()
 

@@ -10,11 +10,11 @@ A unified payment module for WeChat Pay, Alipay, and Stripe, with provider-based
 
 ## Core features
 
-| Provider   | Payment scenarios                         |
-| ---------- | ----------------------------------------- |
-| WeChat Pay | JSAPI / H5 / App / Native (QR code)       |
-| Alipay     | JSAPI / H5 / App / Native                 |
-| Stripe     | Checkout Session (international payments) |
+| Provider   | Payment scenarios                                          |
+| ---------- | ---------------------------------------------------------- |
+| WeChat Pay | JSAPI / H5 / App / Native (QR code)                        |
+| Alipay     | JSAPI / H5 / App / Native                                  |
+| Stripe     | h5: hosted Checkout page redirect (international payments) |
 
 ## Getting started
 
@@ -95,6 +95,8 @@ await payment.init({
   stripe: {
     secretKey: 'sk_test_xxx',
     webhookSecret: 'whsec_xxx',
+    successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}', // Required
+    cancelUrl: 'https://app.example/payment/cancel', // Optional
     webhookToleranceSeconds: 300, // 可选，默认 300 秒
   },
 })
@@ -105,6 +107,14 @@ Configure only the providers you need; unconfigured providers are not registered
 Amounts use minor currency units (cents) and must be positive integers. `amount` / `totalAmount` are validated before calling a provider, so invalid amounts never reach the payment platform.
 
 All built-in provider HTTP requests have a default 15-second timeout to avoid long hangs on network failures.
+
+### Stripe hosted Checkout and closing orders
+
+Only `mode=payment`, `ui_mode=hosted_page`, and `tradeType=h5` are implemented. Requests pin `Stripe-Version: 2026-09-30.endive`. Embedded/elements, JSAPI, App, Native, and mini-program modes are rejected by the provider, HTTP schema, and browser entry. Server-side `successUrl` is required; `cancelUrl` is optional. Both accept HTTP(S); the success URL may contain Stripe's literal `{CHECKOUT_SESSION_ID}` placeholder. Clients cannot override these values, and retries for the same order cannot change the creation parameters.
+
+`closeOrder('stripe', orderNo)` retrieves the persisted Session: open/unpaid calls its expire endpoint, an already expired Session confirms idempotent success, and complete/paid fails. Concurrent closing or response loss triggers a fresh read; success requires confirmed expiration. Navigating to a success/cancel page proves neither payment nor closure.
+
+References: [Create Checkout Session](https://docs.stripe.com/api/checkout/sessions/create), [Expire Session](https://docs.stripe.com/api/checkout/sessions/expire).
 
 ### Stripe webhook states
 
@@ -160,15 +170,16 @@ if (!result.success) {
 
 Common error codes:
 
-| Error code                             | code              | Description                            |
-| -------------------------------------- | ----------------- | -------------------------------------- |
-| `HaiPaymentError.CREATE_ORDER_FAILED`  | `hai:payment:001` | Order creation failed                  |
-| `HaiPaymentError.NOT_INITIALIZED`      | `hai:payment:010` | Module not initialized                 |
-| `HaiPaymentError.PROVIDER_NOT_FOUND`   | `hai:payment:030` | Provider not registered                |
-| `HaiPaymentError.INVALID_AMOUNT`       | `hai:payment:040` | Invalid amount                         |
-| `HaiPaymentError.NOTIFY_VERIFY_FAILED` | `hai:payment:050` | Callback signature verification failed |
-| `HaiPaymentError.NOTIFY_PARSE_FAILED`  | `hai:payment:051` | Callback parsing failed                |
-| `HaiPaymentError.CONFIG_ERROR`         | `hai:payment:070` | Invalid configuration                  |
+| Error code                               | code              | Description                            |
+| ---------------------------------------- | ----------------- | -------------------------------------- |
+| `HaiPaymentError.CREATE_ORDER_FAILED`    | `hai:payment:001` | Order creation failed                  |
+| `HaiPaymentError.NOT_INITIALIZED`        | `hai:payment:010` | Module not initialized                 |
+| `HaiPaymentError.PROVIDER_NOT_FOUND`     | `hai:payment:030` | Provider not registered                |
+| `HaiPaymentError.INVALID_AMOUNT`         | `hai:payment:040` | Invalid amount                         |
+| `HaiPaymentError.UNSUPPORTED_TRADE_TYPE` | `hai:payment:041` | Payment scenario is not implemented    |
+| `HaiPaymentError.NOTIFY_VERIFY_FAILED`   | `hai:payment:050` | Callback signature verification failed |
+| `HaiPaymentError.NOTIFY_PARSE_FAILED`    | `hai:payment:051` | Callback parsing failed                |
+| `HaiPaymentError.CONFIG_ERROR`           | `hai:payment:070` | Invalid configuration                  |
 
 ## Development and testing
 

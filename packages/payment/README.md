@@ -10,11 +10,11 @@
 
 ## 核心功能清单
 
-| Provider | 支付场景                         |
-| -------- | -------------------------------- |
-| 微信支付 | JSAPI / H5 / App / Native (扫码) |
-| 支付宝   | JSAPI / H5 / App / Native        |
-| Stripe   | Checkout Session（国际支付）     |
+| Provider | 支付场景                               |
+| -------- | -------------------------------------- |
+| 微信支付 | JSAPI / H5 / App / Native (扫码)       |
+| 支付宝   | JSAPI / H5 / App / Native              |
+| Stripe   | h5：托管 Checkout 页面跳转（国际支付） |
 
 ## 使用入门
 
@@ -95,6 +95,8 @@ await payment.init({
   stripe: {
     secretKey: 'sk_test_xxx',
     webhookSecret: 'whsec_xxx',
+    successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}', // 必填
+    cancelUrl: 'https://app.example/payment/cancel', // 可选
     webhookToleranceSeconds: 300, // 可选，默认 300 秒
   },
 })
@@ -105,6 +107,14 @@ await payment.init({
 金额字段统一使用“分”为单位，且必须为正整数。模块会在调用具体 Provider 之前先校验 `amount` / `totalAmount`，避免把非法金额继续传给下游支付平台。
 
 所有内置 Provider 的 HTTP 请求默认附带 15 秒超时，避免网络异常时长时间挂起。
+
+### Stripe 托管 Checkout 与主动关单
+
+只实现 `mode=payment`、`ui_mode=hosted_page` 和 `tradeType=h5`，API 请求固定 `Stripe-Version: 2026-09-30.endive`。不支持 embedded/elements、JSAPI、App、Native 或小程序模式；创建入口、HTTP schema 与浏览器调用均拒绝未实现的场景。服务端 `successUrl` 必填，`cancelUrl` 可选，均为 HTTP(S) 地址；可在成功地址中保留 `{CHECKOUT_SESSION_ID}` 让 Stripe 替换。跳转配置属于服务端，不接受客户端覆盖；同订单重试也不能改变这组创建参数。
+
+`closeOrder('stripe', orderNo)` 按持久映射读取 Session：open/unpaid 调用 `/checkout/sessions/:id/expire`；已 expired 确认后幂等成功，complete/paid 返回失败。遇到并发关闭或响应丢失会重新查询，只有确认过期才成功。成功页/取消页跳转本身既不代表已支付，也不等于已关单。
+
+依据：[创建 Checkout Session](https://docs.stripe.com/api/checkout/sessions/create)、[主动过期 Session](https://docs.stripe.com/api/checkout/sessions/expire)。
 
 ### Stripe 回调状态
 
@@ -160,15 +170,16 @@ if (!result.success) {
 
 常用错误码：
 
-| 错误码                                 | code              | 说明            |
-| -------------------------------------- | ----------------- | --------------- |
-| `HaiPaymentError.CREATE_ORDER_FAILED`  | `hai:payment:001` | 创建订单失败    |
-| `HaiPaymentError.NOT_INITIALIZED`      | `hai:payment:010` | 模块未初始化    |
-| `HaiPaymentError.PROVIDER_NOT_FOUND`   | `hai:payment:030` | Provider 未注册 |
-| `HaiPaymentError.INVALID_AMOUNT`       | `hai:payment:040` | 金额无效        |
-| `HaiPaymentError.NOTIFY_VERIFY_FAILED` | `hai:payment:050` | 回调验签失败    |
-| `HaiPaymentError.NOTIFY_PARSE_FAILED`  | `hai:payment:051` | 回调解析失败    |
-| `HaiPaymentError.CONFIG_ERROR`         | `hai:payment:070` | 配置无效        |
+| 错误码                                   | code              | 说明            |
+| ---------------------------------------- | ----------------- | --------------- |
+| `HaiPaymentError.CREATE_ORDER_FAILED`    | `hai:payment:001` | 创建订单失败    |
+| `HaiPaymentError.NOT_INITIALIZED`        | `hai:payment:010` | 模块未初始化    |
+| `HaiPaymentError.PROVIDER_NOT_FOUND`     | `hai:payment:030` | Provider 未注册 |
+| `HaiPaymentError.INVALID_AMOUNT`         | `hai:payment:040` | 金额无效        |
+| `HaiPaymentError.UNSUPPORTED_TRADE_TYPE` | `hai:payment:041` | 支付场景未实现  |
+| `HaiPaymentError.NOTIFY_VERIFY_FAILED`   | `hai:payment:050` | 回调验签失败    |
+| `HaiPaymentError.NOTIFY_PARSE_FAILED`    | `hai:payment:051` | 回调解析失败    |
+| `HaiPaymentError.CONFIG_ERROR`           | `hai:payment:070` | 配置无效        |
 
 ## 开发测试
 
