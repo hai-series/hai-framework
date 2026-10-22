@@ -15,7 +15,8 @@ const closed = await storage.close()
 if (!closed.success) {
   // 障害への対処後に一度再試行し、再失敗はアプリへ報告します。
   const retried = await storage.close()
-  if (!retried.success) throw new Error(retried.error.message)
+  if (!retried.success)
+    throw new Error(retried.error.message)
 }
 ```
 
@@ -70,12 +71,13 @@ if (!closeResult.success) {
 ブラウザー環境ではクライアント機能（署名付き URL のアップロード・ダウンロード）のみをエクスポートし、`storage` サービスオブジェクトは含みません。
 
 ```ts
-import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
 import { apiClient } from '@h-ai/api-client'
+import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
 
 // apiClient 已初始化，服务端使用 S3。
 const signed = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
-if (!signed.success) throw new Error(signed.error.message)
+if (!signed.success)
+  throw new Error(signed.error.message)
 await uploadWithPresignedUrl(signed.data.url, file)
 ```
 
@@ -89,7 +91,8 @@ await uploadWithPresignedUrl(signed.data.url, file)
 import { apiClient } from '@h-ai/api-client'
 
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
-if (!result.success) throw new Error(result.error.message)
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 署名付き URL は S3 のみ対応します。local の `getUrl()` / `putUrl()` は `HaiStorageError.UNSUPPORTED_OPERATION`（`hai:storage:018`）、`publicUrl()` は `null` を返し、仮想 URL は返しません。serv と apiClient は失敗結果を保持するため、URL を使う前に `success` を確認してください。ローカル開発ではアプリの既存の認証付きファイル API を利用します。このモジュールに HTTP ファイルルートや署名検証サービスは含まれません。
@@ -195,7 +198,20 @@ await storage.init({
 
 `storage.presign.putUrl()` は現在 `contentType` や `expiresIn` などの署名パラメーターに対応しますが、`maxSize` 制限は提供しません。
 
-ローカルの `storage.dir.list()` は prefix に一致するファイルを再帰的に走査します。`maxKeys` による打ち切りのみ対応し、`continuationToken` による実際のページ分割はありません。大きなディレクトリーでは `prefix` を絞るか、S3 Provider のページ分割を使用してください。
+ローカルの `storage.dir.list()` は `prefix` を key の文字列接頭辞（例：`reports/2026-`）として扱い、UTF-8 バイト順でページ分割します。`maxKeys` は 1–1000 の整数で既定値は 1000、`files` と `commonPrefixes` の合計件数に適用します。`delimiter` は prefix の後で最初に現れる区切りまでを一つの `commonPrefixes` 項目にまとめます。空文字列ではグループ化せず、空の物理ディレクトリーは項目になりません。グループ化と件数の規則は [S3 ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html) に基づきます。
+
+後続項目がある場合にだけ `isTruncated: true` と `nextContinuationToken` を返します。ローカルカーソルはプロセス内キャッシュを使わず、正規化したルートディレクトリー、prefix、delimiter に結び付きます。同じルートを使用する別インスタンスや再起動後も継続でき、次ページの `maxKeys` は変更可能です。不正な形式、未対応バージョン、範囲が異なるカーソルは `INVALID_LIST_OPTIONS` になります。カーソルは認可情報でもスナップショットでもありません。prefix の認可は引き続き必要で、同時更新は後続ページに影響し、異なるマウントパスは同じ範囲として扱いません。各リクエストで対象ディレクトリーの走査と整列を行うため、大きな範囲では prefix を絞るか S3 を使用してください。
+
+```ts
+let continuationToken: string | undefined
+do {
+  const page = await storage.dir.list({ prefix: 'reports/2026-', maxKeys: 100, continuationToken })
+  if (!page.success)
+    return page
+  // page.data.files と page.data.commonPrefixes を処理。
+  continuationToken = page.data.nextContinuationToken
+} while (continuationToken)
+```
 
 ### エラー処理
 
@@ -210,16 +226,17 @@ if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.cod
 
 主なエラーコード：
 
-| エラーコード                        | code              | 説明                      |
-| ----------------------------------- | ----------------- | ------------------------- |
-| `HaiStorageError.NOT_INITIALIZED`   | `hai:storage:010` | 未初期化                  |
-| `HaiStorageError.CONNECTION_FAILED` | `hai:storage:001` | 接続に失敗                |
-| `HaiStorageError.OPERATION_FAILED`  | `hai:storage:002` | 操作に失敗                |
-| `HaiStorageError.NOT_FOUND`         | `hai:storage:003` | ファイルが存在しない      |
-| `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 権限不足                  |
-| `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | 署名付き URL の生成に失敗 |
+| エラーコード                            | code              | 説明                                                         |
+| --------------------------------------- | ----------------- | ------------------------------------------------------------ |
+| `HaiStorageError.NOT_INITIALIZED`       | `hai:storage:010` | 未初期化                                                     |
+| `HaiStorageError.CONNECTION_FAILED`     | `hai:storage:001` | 接続に失敗                                                   |
+| `HaiStorageError.OPERATION_FAILED`      | `hai:storage:002` | 操作に失敗                                                   |
+| `HaiStorageError.NOT_FOUND`             | `hai:storage:003` | ファイルが存在しない                                         |
+| `HaiStorageError.PERMISSION_DENIED`     | `hai:storage:005` | 権限不足                                                     |
+| `HaiStorageError.PRESIGN_FAILED`        | `hai:storage:013` | 署名付き URL の生成に失敗                                    |
 | `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | Provider が操作をサポートしない（local の署名付き URL など） |
-| `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | 設定エラー                |
+| `HaiStorageError.INVALID_LIST_OPTIONS`  | `hai:storage:019` | ローカル一覧の引数・カーソルが不正、または検索範囲が不一致   |
+| `HaiStorageError.CONFIG_ERROR`          | `hai:storage:012` | 設定エラー                                                   |
 
 ## 開発とテスト
 

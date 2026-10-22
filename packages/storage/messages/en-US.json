@@ -7,6 +7,8 @@
   "storage_presignUrlFailed": "Failed to generate presigned URL",
   "storage_presignUploadUrlFailed": "Failed to generate presigned upload URL",
   "storage_localPresignUnsupported": "Local storage does not support presigned URLs; upload or download through an authenticated application file endpoint",
+  "storage_listOptionsInvalid": "Invalid list options: maxKeys must be an integer between 1 and 1000, and prefix and delimiter must be well-formed Unicode strings",
+  "storage_listCursorInvalid": "Invalid list cursor or mismatched root, prefix or delimiter",
   "storage_s3ConfigTypeError": "Config type error: S3 provider only supports type=s3",
   "storage_diskSpaceInsufficient": "Insufficient disk space",
   "storage_localConfigTypeError": "Config type error: Local provider only supports type=local",

@@ -13,7 +13,7 @@ description: "实现本地/S3 文件与目录操作、流式读写、checksum �
 | 适用场景 | 文件接口、目录操作或浏览器直传 |
 | 输入 | StorageConfigInput、文件 key、内容、presign 选项 |
 | 输出 | file/dir/presign 操作的 HaiResult；deleteMany 的成功 data/失败 error.ext.deleteMany 保留逐项进度；checksum 生成字符串或校验结果 |
-| 限制 | 仅服务端；预签名仅 S3，local getUrl/putUrl 返回 UNSUPPORTED_OPERATION、publicUrl 为 null；浏览器先检查 API success 再直传。Local list 非真分页；putUrl 不提供 maxSize 强制约束，上传大小须服务端验证。 |
+| 限制 | 仅服务端；预签名仅 S3，local getUrl/putUrl 返回 UNSUPPORTED_OPERATION、publicUrl 为 null；浏览器先检查 API success 再直传。Local list 使用绑定根目录/prefix/delimiter 的无状态游标，files 与 commonPrefixes 共用 maxKeys（1–1000）；可跨实例续页，每次仍扫描排序且非快照，游标不代替前缀授权。putUrl 不提供 maxSize 强制约束，上传大小须服务端验证。 |
 
 ## 使用路径
 

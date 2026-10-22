@@ -1,4 +1,4 @@
-/** 本地真实文件经 serv HTTP 与 typed client 的预签名失败契约。 */
+/** 本地真实文件经 serv HTTP 与 typed client 的能力错误和跨实例分页契约。 */
 import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -19,7 +19,7 @@ async function removeFixture(directory: string): Promise<void> {
   await rm(target, { recursive: true, force: true })
 }
 
-it('local 预签名失败经真实 HTTP 和 apiClient 保留错误，不伪装上传/下载链接', async () => {
+it('local 能力经真实 HTTP 和 apiClient 保留预签名失败并支持游标续页', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'hai-local-presign-'))
   const contract = apiContract.create({ storage: apiContract.storage })
   const client = apiClient.create(contract)
@@ -72,6 +72,27 @@ it('local 预签名失败经真实 HTTP 和 apiClient 保留错误，不伪装�
     const content = await storage.file.get(key)
     expect(content.success && content.data.toString()).toBe('private local bytes')
     expect(storage.presign.publicUrl(key)).toBeNull()
+
+    const prefix = 'users/user-1/page/'
+    for (const name of ['a.txt', 'b/first.txt', 'b/second.txt', 'c.txt', 'd.txt'])
+      expect((await storage.file.put(prefix + name, name)).success).toBe(true)
+    const first = await client.storage.files.list({ prefix, delimiter: '/', maxKeys: 2 })
+    expect(first.success).toBe(true)
+    if (!first.success)
+      return
+    expect(first.data.files.map(file => file.key)).toEqual([`${prefix}a.txt`])
+    expect(first.data.commonPrefixes).toEqual([`${prefix}b/`])
+    expect(first.data.isTruncated).toBe(true)
+    expect((await storage.close()).success).toBe(true)
+    expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
+    const second = await client.storage.files.list({ prefix, delimiter: '/', maxKeys: 2, continuationToken: first.data.nextContinuationToken })
+    expect(second.success).toBe(true)
+    if (second.success) {
+      expect(second.data.files.map(file => file.key)).toEqual([`${prefix}c.txt`, `${prefix}d.txt`])
+      expect(second.data.commonPrefixes).toEqual([])
+      expect(second.data.isTruncated).toBe(false)
+      expect(second.data.nextContinuationToken).toBeUndefined()
+    }
   }
   finally {
     await client.close()

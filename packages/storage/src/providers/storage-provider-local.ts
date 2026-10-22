@@ -200,7 +200,7 @@ function safePath(root: string, key: string): string {
  * connect 时会自动创建根目录；文件操作会自动创建中间目录。
  *
  * 已知限制：
- * - list 不支持 continuationToken 分页（仅支持 maxKeys 截断）
+ * - list 使用绑定查询范围的无状态游标；按 UTF-8 key 排序，每次仍需扫描并排序匹配目录
  * - presign.getUrl/putUrl 明确不支持，publicUrl 返回 null；HTTP 访问由应用鉴权接口提供
  * - publicUrl 始终返回 null
  *
@@ -518,64 +518,96 @@ export function createLocalProvider(): StorageProvider {
     async list(options = {}): Promise<HaiResult<ListResult>> {
       try {
         const cfg = getConfig()
-        const prefix = options.prefix || ''
-        const delimiter = options.delimiter || ''
-        const maxKeys = options.maxKeys || 1000
+        const prefix = options.prefix === undefined ? '' : options.prefix
+        const delimiter = options.delimiter === undefined ? '' : options.delimiter
+        const maxKeys = options.maxKeys === undefined ? 1000 : options.maxKeys
+        if (typeof prefix !== 'string' || typeof delimiter !== 'string' || !Number.isInteger(maxKeys) || maxKeys < 1 || maxKeys > 1000
+          || Buffer.from(prefix).toString('utf8') !== prefix || Buffer.from(delimiter).toString('utf8') !== delimiter) {
+          return err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listOptionsInvalid'))
+        }
         logOperation('read', 'dir.list', { options })
 
-        const basePath = safePath(cfg.root, prefix)
-        const files: FileMetadata[] = []
-        const commonPrefixes = new Set<string>()
-
-        // 递归读取目录
-        async function readDir(dirPath: string): Promise<void> {
-          let entries: fs.Dirent[]
+        // 前缀只是 key 字符串，不能当作目录打开；从规范根目录遍历，子目录符号链接不会被跟随。
+        safePath(cfg.root, prefix)
+        const root = await fsp.realpath(cfg.root)
+        const scope = crypto.createHash('sha256').update(JSON.stringify([root, prefix, delimiter])).digest('hex')
+        let after = ''
+        if (options.continuationToken !== undefined) {
+          const token = options.continuationToken
           try {
-            entries = await fsp.readdir(dirPath, { withFileTypes: true })
+            if (typeof token !== 'string' || token.length === 0 || token.length > 262_144)
+              throw new Error('Invalid cursor encoding')
+            const bytes = Buffer.from(token, 'base64url')
+            if (bytes.toString('base64url') !== token)
+              throw new Error('Invalid cursor encoding')
+            const decoded: unknown = JSON.parse(bytes.toString('utf8'))
+            if (!Array.isArray(decoded) || decoded.length !== 3 || decoded[0] !== 1 || decoded[1] !== scope
+              || typeof decoded[2] !== 'string' || decoded[2].length === 0 || !decoded[2].startsWith(prefix)) {
+              throw new Error('Invalid cursor scope')
+            }
+            after = decoded[2]
           }
           catch {
-            return // 目录不存在，返回空
+            return err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listCursorInvalid'))
           }
+        }
+        const files: FileMetadata[] = []
+        const commonPrefixes: string[] = []
+        const compare = (left: string, right: string) => Buffer.compare(Buffer.from(left), Buffer.from(right))
 
+        // 按 name + '/' 排序目录，再深度遍历，可保持完整文件 key 的字节序（a.txt 在 a/x 之前）。
+        async function* readDir(dirPath: string, directoryKey: string): AsyncGenerator<{ key: string, filePath: string }> {
+          const entries = await fsp.readdir(dirPath, { withFileTypes: true })
+          entries.sort((left, right) => compare(left.name + (left.isDirectory() ? '/' : ''), right.name + (right.isDirectory() ? '/' : '')))
           for (const entry of entries) {
-            if (files.length >= maxKeys)
-              return
-
-            const fullEntryPath = path.join(dirPath, entry.name)
-            const key = path.relative(cfg.root, fullEntryPath).replace(/\\/g, '/')
-
-            // 跳过元数据文件
             if (isMetaFile(entry.name))
               continue
-
+            const key = directoryKey + entry.name
+            const filePath = path.join(dirPath, entry.name)
             if (entry.isDirectory()) {
-              if (delimiter) {
-                // 有分隔符时，目录作为公共前缀
-                commonPrefixes.add(`${key}/`)
-              }
-              else {
-                // 无分隔符时，递归遍历
-                await readDir(fullEntryPath)
+              const childPrefix = `${key}/`
+              if (prefix.startsWith(childPrefix) || childPrefix.startsWith(prefix)) {
+                yield* readDir(filePath, childPrefix)
               }
             }
-            else if (entry.isFile()) {
-              const stat = await fsp.stat(fullEntryPath)
-              files.push({
-                key,
-                size: stat.size,
-                contentType: getMimeType(key),
-                lastModified: stat.mtime,
-              })
+            else if (entry.isFile() && key.startsWith(prefix)) {
+              yield { key, filePath }
             }
           }
         }
 
-        await readDir(basePath)
-
+        let previous = ''
+        let last = ''
+        let count = 0
+        let isTruncated = false
+        for await (const entry of readDir(root, '')) {
+          const index = delimiter ? entry.key.indexOf(delimiter, prefix.length) : -1
+          const logicalKey = index < 0 ? entry.key : entry.key.slice(0, index + delimiter.length)
+          if (logicalKey === previous)
+            continue
+          previous = logicalKey
+          if (compare(logicalKey, after) <= 0)
+            continue
+          // 多读取一个逻辑条目证明存在下一页；恰好一页时不伪造 continuation。
+          if (count === maxKeys) {
+            isTruncated = true
+            break
+          }
+          if (index >= 0) {
+            commonPrefixes.push(logicalKey)
+          }
+          else {
+            const stat = await fsp.stat(entry.filePath)
+            files.push({ key: entry.key, size: stat.size, contentType: getMimeType(entry.key), lastModified: stat.mtime })
+          }
+          count++
+          last = logicalKey
+        }
         return ok({
           files,
-          commonPrefixes: Array.from(commonPrefixes),
-          isTruncated: files.length >= maxKeys,
+          commonPrefixes,
+          isTruncated,
+          ...(isTruncated ? { nextContinuationToken: Buffer.from(JSON.stringify([1, scope, last])).toString('base64url') } : {}),
         })
       }
       catch (error) {

@@ -158,6 +158,7 @@ if (!downloadUrl.success) return downloadUrl
 | `HaiStorageError.CHECKSUM_FAILED` | `hai:storage:016` | checksum 读取/计算失败 |
 | `HaiStorageError.INVALID_CHECKSUM` | `hai:storage:017` | checksum 格式/算法非法 |
 | `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | 当前 Provider 不支持该操作（local 预签名） |
+| `HaiStorageError.INVALID_LIST_OPTIONS` | `hai:storage:019` | 本地列表参数或游标无效、查询范围不匹配 |
 | `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 权限不足 |
 | `HaiStorageError.QUOTA_EXCEEDED` | `hai:storage:006` | 配额超限 |
 | `HaiStorageError.INVALID_PATH` | `hai:storage:007` | 路径无效 |
@@ -217,7 +218,21 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
 > 说明：`@h-ai/storage` 只提供存储能力，不强制要求 `/api/storage` 路由命名。应用可按业务语义自定义 API 路径。
 
-> Local Provider 的 `storage.dir.list()` 会递归扫描匹配前缀下的文件，仅支持 `maxKeys` 截断，不支持 `continuationToken` 真分页；大目录建议缩小 `prefix` 或改用 S3 Provider。
+### 列表分页
+
+Local 的 `prefix` 是 key 字符串前缀，可匹配 `reports/2026-` 这类不以斜杠结尾的前缀。按 UTF-8 字节序返回，`maxKeys` 为 1–1000 的整数、默认 1000，`files` 与 `commonPrefixes` 合计占用预算。`delimiter` 按 prefix 后首次出现的位置分组，空字符串不分组；空物理目录不产生条目。分组与计数参照 [S3 ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html)。
+
+本地不透明游标绑定规范根目录、prefix 和 delimiter，不依赖进程缓存；同根目录的独立实例或重启后可以续页，下一页可调整 maxKeys。格式、版本或范围不匹配返回 `INVALID_LIST_OPTIONS`。只在确有下一条时返回 `isTruncated: true` 和 `nextContinuationToken`。游标不是授权凭据，HTTP 服务仍须授权 prefix；它不提供快照，并发增删可影响后续页。不同挂载路径不视为同一根目录。每次请求仍扫描排序匹配目录，大目录应缩小 prefix 或使用 S3。
+
+```ts
+let continuationToken: string | undefined
+do {
+  const page = await storage.dir.list({ prefix: 'reports/2026-', delimiter: '/', maxKeys: 100, continuationToken })
+  if (!page.success) return page
+  // 消费当前页的 files 和 commonPrefixes。
+  continuationToken = page.data.nextContinuationToken
+} while (continuationToken)
+```
 
 ### 头像上传
 

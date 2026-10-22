@@ -7,6 +7,8 @@
   "storage_presignUrlFailed": "生成签名 URL 失败",
   "storage_presignUploadUrlFailed": "生成上传签名 URL 失败",
   "storage_localPresignUnsupported": "本地存储不支持预签名 URL，请通过应用的鉴权文件接口上传或下载",
+  "storage_listOptionsInvalid": "列表参数无效：maxKeys 必须为 1 到 1000 的整数，prefix 和 delimiter 必须为有效的 Unicode 字符串",
+  "storage_listCursorInvalid": "列表游标无效或与当前根目录、前缀、分隔符不匹配",
   "storage_s3ConfigTypeError": "配置类型错误：S3 provider 仅支持 type=s3",
   "storage_diskSpaceInsufficient": "磁盘空间不足",
   "storage_localConfigTypeError": "配置类型错误：Local provider 仅支持 type=local",

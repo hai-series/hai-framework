@@ -39,6 +39,7 @@ const StorageErrorInfo = {
   CHECKSUM_FAILED: '016:500',
   INVALID_CHECKSUM: '017:400',
   UNSUPPORTED_OPERATION: '018:400',
+  INVALID_LIST_OPTIONS: '019:400',
 } as const satisfies ErrorInfo
 
 export const HaiStorageError = core.error.buildHaiErrorsDef('storage', StorageErrorInfo)
@@ -105,6 +106,9 @@ export interface FileMetadata {
  * 列表选项
  *
  * 用于控制 `storage.dir.list()` 的过滤、分页和目录模拟行为。
+ *
+ * @example
+ * const options: ListOptions = { prefix: 'reports/2026-', delimiter: '/', maxKeys: 100 }
  */
 export interface ListOptions {
   /** 前缀过滤（只返回以此前缀开头的文件） */
@@ -112,12 +116,12 @@ export interface ListOptions {
   /**
    * 分页标记（从上次 ListResult.nextContinuationToken 获取）
    *
-   * 注意：本地存储目前不支持此字段，仅 S3 Provider 有效。
+   * Local 游标绑定根目录、prefix 和 delimiter，可跨实例使用；不得跨查询或 provider 混用。
    */
   continuationToken?: string
-  /** 每页最大数量（默认 1000） */
+  /** 每页逻辑条目上限（1–1000，默认 1000）；files 和 commonPrefixes 合计计数。 */
   maxKeys?: number
-  /** 分隔符（用于模拟目录结构，通常为 '/';传入后子目录作为 commonPrefixes 返回） */
+  /** 分隔符，通常为 '/'；从 prefix 之后首次出现的位置折叠 commonPrefixes，空字符串表示不折叠。 */
   delimiter?: string
 }
 
@@ -125,11 +129,17 @@ export interface ListOptions {
  * 列表结果
  *
  * 包含当前页的文件列表、目录前缀、分页信息。
+ *
+ * @example
+ * const page = await storage.dir.list({ prefix: 'reports/', maxKeys: 100 })
+ * if (page.success && page.data.isTruncated) {
+ *   const next = await storage.dir.list({ prefix: 'reports/', continuationToken: page.data.nextContinuationToken })
+ * }
  */
 export interface ListResult {
   /** 当前页文件元数据列表 */
   files: FileMetadata[]
-  /** 公共前缀（使用 delimiter 时由子目录路径组成） */
+  /** 公共前缀：由实际匹配文件按 delimiter 折叠，不包含 Local 空物理目录。 */
   commonPrefixes: string[]
   /** 下一页标记；无后续页时为 undefined */
   nextContinuationToken?: string

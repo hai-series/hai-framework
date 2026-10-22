@@ -15,7 +15,8 @@ const closed = await storage.close()
 if (!closed.success) {
   // 处理清理故障后有限重试；再次失败应向应用报告。
   const retried = await storage.close()
-  if (!retried.success) throw new Error(retried.error.message)
+  if (!retried.success)
+    throw new Error(retried.error.message)
 }
 ```
 
@@ -70,12 +71,13 @@ if (!closeResult.success) {
 浏览器环境下仅导出客户端能力（签名 URL 上传/下载），不包含 `storage` 服务对象。
 
 ```ts
-import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
 import { apiClient } from '@h-ai/api-client'
+import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
 
 // apiClient 已初始化，服务端使用 S3。
 const signed = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
-if (!signed.success) throw new Error(signed.error.message)
+if (!signed.success)
+  throw new Error(signed.error.message)
 await uploadWithPresignedUrl(signed.data.url, file)
 ```
 
@@ -89,7 +91,8 @@ await uploadWithPresignedUrl(signed.data.url, file)
 import { apiClient } from '@h-ai/api-client'
 
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
-if (!result.success) throw new Error(result.error.message)
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 预签名只支持 S3。local 的 `getUrl()` / `putUrl()` 返回 `HaiStorageError.UNSUPPORTED_OPERATION`（`hai:storage:018`），`publicUrl()` 返回 `null`；不会返回虚拟 URL。serv 与 apiClient 保留该失败结果，调用方须先检查 `success` 再消费 URL。本地开发文件可由应用已有的鉴权上传/下载接口处理，本模块不内置 HTTP 文件路由或签名验证服务。
@@ -195,7 +198,20 @@ await storage.init({
 
 `storage.presign.putUrl()` 当前仅支持 `contentType` 与 `expiresIn` 等签名参数，不提供 `maxSize` 约束。
 
-本地存储的 `storage.dir.list()` 会递归扫描匹配前缀下的文件，仅支持 `maxKeys` 截断，不支持 `continuationToken` 真分页；大目录场景建议优先使用更窄的 `prefix`，或改用 S3 Provider 获取原生分页能力。
+本地 `storage.dir.list()` 将 `prefix` 作为 key 字符串前缀（如 `reports/2026-`），按 UTF-8 字节序分页。`maxKeys` 为 1–1000 的整数，默认 1000，`files` 与 `commonPrefixes` 共用该预算。`delimiter` 将前缀之后首次出现的分隔符及其后内容折叠为一个 `commonPrefixes` 条目；空字符串不折叠，空物理目录不生成条目。这些分组与计数规则参照 [S3 ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html)。
+
+仅当还有条目时返回 `isTruncated: true` 与 `nextContinuationToken`。本地游标无需进程内缓存，绑定规范根目录、`prefix` 和 `delimiter`；相同根目录的独立实例或重启后可续页，也可调整下一页的 `maxKeys`。跨范围、格式非法或版本不支持的游标返回 `INVALID_LIST_OPTIONS`。游标不是授权凭据或目录快照：调用方仍须授权前缀，并发增删可能改变后续页；不支持将不同挂载路径的根目录视为同一范围。本地每次请求仍扫描、排序匹配目录，大目录应缩小前缀或使用 S3。
+
+```ts
+let continuationToken: string | undefined
+do {
+  const page = await storage.dir.list({ prefix: 'reports/2026-', maxKeys: 100, continuationToken })
+  if (!page.success)
+    return page
+  // 消费 page.data.files 与 page.data.commonPrefixes。
+  continuationToken = page.data.nextContinuationToken
+} while (continuationToken)
+```
 
 ### 错误处理
 
@@ -210,16 +226,17 @@ if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.cod
 
 常用错误码：
 
-| 错误码                              | code              | 说明                |
-| ----------------------------------- | ----------------- | ------------------- |
-| `HaiStorageError.NOT_INITIALIZED`   | `hai:storage:010` | 未初始化            |
-| `HaiStorageError.CONNECTION_FAILED` | `hai:storage:001` | 连接失败            |
-| `HaiStorageError.OPERATION_FAILED`  | `hai:storage:002` | 操作失败            |
-| `HaiStorageError.NOT_FOUND`         | `hai:storage:003` | 文件不存在          |
-| `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 权限不足            |
-| `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | 预签名 URL 生成失败 |
+| 错误码                                  | code              | 说明                                          |
+| --------------------------------------- | ----------------- | --------------------------------------------- |
+| `HaiStorageError.NOT_INITIALIZED`       | `hai:storage:010` | 未初始化                                      |
+| `HaiStorageError.CONNECTION_FAILED`     | `hai:storage:001` | 连接失败                                      |
+| `HaiStorageError.OPERATION_FAILED`      | `hai:storage:002` | 操作失败                                      |
+| `HaiStorageError.NOT_FOUND`             | `hai:storage:003` | 文件不存在                                    |
+| `HaiStorageError.PERMISSION_DENIED`     | `hai:storage:005` | 权限不足                                      |
+| `HaiStorageError.PRESIGN_FAILED`        | `hai:storage:013` | 预签名 URL 生成失败                           |
 | `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | 当前 Provider 不支持该操作（如 local 预签名） |
-| `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | 配置错误            |
+| `HaiStorageError.INVALID_LIST_OPTIONS`  | `hai:storage:019` | 本地列表参数或游标无效、游标查询范围不匹配    |
+| `HaiStorageError.CONFIG_ERROR`          | `hai:storage:012` | 配置错误                                      |
 
 ## 开发测试
 

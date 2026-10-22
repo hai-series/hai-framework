@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 13/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 14/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -473,7 +473,8 @@
 
 ### STORAGE-03 · P2 · 补齐 local list 的真实分页语义
 
-- [ ] 待修正（源码确认；范围：storage）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：Local列表按UTF-8完整key有序遍历，prefix为字符串前缀，delimiter折叠实际文件且files/commonPrefixes共用1..1000预算；多读一项才标truncated，游标绑定canonical root/prefix/delimiter且无进程状态，错误返回019。同步三语README、storage双skill文档和LLMS。Local分页5项（含独立Node续页）、真实TCP serv→apiClient1项及Local/MinIO/RustFS目录34项通过；storage/serv/api-client类型、定向源码测试/三语文档lint、fresh storage构建与check:skills通过，证据tmp/module-repair-20261022/STORAGE-03；游标非授权/非快照，仍扫描排序，canonical挂载路径需一致；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/storage/src/providers/storage-provider-local.ts:579](../packages/storage/src/providers/storage-provider-local.ts#L579)。
 - **证据与影响**：continuationToken 被忽略且无 nextContinuationToken；恰好 maxKeys 条也标 truncated，消费者无法可靠遍历所有文件。
 - **修正内容**：稳定排序和游标分页，目录前缀/delimiter 处理一致；如果明确不支持分页，不能伪装通用分页结果。

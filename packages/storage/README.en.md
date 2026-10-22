@@ -15,7 +15,8 @@ const closed = await storage.close()
 if (!closed.success) {
   // Retry once after addressing the cleanup failure; report another failure.
   const retried = await storage.close()
-  if (!retried.success) throw new Error(retried.error.message)
+  if (!retried.success)
+    throw new Error(retried.error.message)
 }
 ```
 
@@ -70,12 +71,13 @@ if (!closeResult.success) {
 The browser entry exports only client capabilities (signed URL uploads/downloads), without the `storage` service object.
 
 ```ts
-import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
 import { apiClient } from '@h-ai/api-client'
+import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
 
 // apiClient 已初始化，服务端使用 S3。
 const signed = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
-if (!signed.success) throw new Error(signed.error.message)
+if (!signed.success)
+  throw new Error(signed.error.message)
 await uploadWithPresignedUrl(signed.data.url, file)
 ```
 
@@ -89,7 +91,8 @@ Public HTTP contracts come from `@h-ai/api-contract`; `createStorageProcedures({
 import { apiClient } from '@h-ai/api-client'
 
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
-if (!result.success) throw new Error(result.error.message)
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 Presigning requires S3. Local `getUrl()` / `putUrl()` return `HaiStorageError.UNSUPPORTED_OPERATION` (`hai:storage:018`), and `publicUrl()` returns `null`; no virtual URL is returned. serv and apiClient preserve the failure, so check `success` before consuming a URL. Use the application's existing authenticated file endpoints for local development; this module includes no HTTP file route or signature-verification service.
@@ -195,7 +198,20 @@ await storage.init({
 
 `storage.presign.putUrl()` currently supports signing options such as `contentType` and `expiresIn`, but no `maxSize` constraint.
 
-For local storage, `storage.dir.list()` recursively scans files under the matching prefix. It supports `maxKeys` truncation but no true pagination with `continuationToken`. For large directories, narrow `prefix` or use the S3 provider's native pagination.
+Local `storage.dir.list()` treats `prefix` as a key string prefix (for example, `reports/2026-`) and paginates in UTF-8 byte order. `maxKeys` is an integer from 1 to 1000, default 1000; files and common prefixes share that budget. `delimiter` folds keys at its first occurrence after the prefix into one `commonPrefixes` entry. An empty delimiter disables grouping; empty physical directories produce no entries. The grouping and counting rules follow [S3 ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html).
+
+`isTruncated: true` and `nextContinuationToken` appear only when another entry exists. Local cursors use no process cache and bind the canonical root directory, prefix and delimiter. Independent instances or restarted processes using the same root can continue a page, with a different `maxKeys` if needed. Malformed, unsupported-version or mismatched-scope cursors return `INVALID_LIST_OPTIONS`. Cursors grant no authorization and provide no snapshot: authorize the prefix, expect concurrent changes to affect later pages, and use the same canonical mount path. Each local request still scans and sorts matching directories; narrow the prefix or use S3 for large directories.
+
+```ts
+let continuationToken: string | undefined
+do {
+  const page = await storage.dir.list({ prefix: 'reports/2026-', maxKeys: 100, continuationToken })
+  if (!page.success)
+    return page
+  // Consume page.data.files and page.data.commonPrefixes.
+  continuationToken = page.data.nextContinuationToken
+} while (continuationToken)
+```
 
 ### Error handling
 
@@ -210,16 +226,17 @@ if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.cod
 
 Common error codes:
 
-| Error code                          | code              | Description                     |
-| ----------------------------------- | ----------------- | ------------------------------- |
-| `HaiStorageError.NOT_INITIALIZED`   | `hai:storage:010` | Not initialized                 |
-| `HaiStorageError.CONNECTION_FAILED` | `hai:storage:001` | Connection failed               |
-| `HaiStorageError.OPERATION_FAILED`  | `hai:storage:002` | Operation failed                |
-| `HaiStorageError.NOT_FOUND`         | `hai:storage:003` | File not found                  |
-| `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | Permission denied               |
-| `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | Presigned URL generation failed |
-| `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | Operation unsupported by the provider, including local presigning |
-| `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | Invalid configuration           |
+| Error code                              | code              | Description                                                            |
+| --------------------------------------- | ----------------- | ---------------------------------------------------------------------- |
+| `HaiStorageError.NOT_INITIALIZED`       | `hai:storage:010` | Not initialized                                                        |
+| `HaiStorageError.CONNECTION_FAILED`     | `hai:storage:001` | Connection failed                                                      |
+| `HaiStorageError.OPERATION_FAILED`      | `hai:storage:002` | Operation failed                                                       |
+| `HaiStorageError.NOT_FOUND`             | `hai:storage:003` | File not found                                                         |
+| `HaiStorageError.PERMISSION_DENIED`     | `hai:storage:005` | Permission denied                                                      |
+| `HaiStorageError.PRESIGN_FAILED`        | `hai:storage:013` | Presigned URL generation failed                                        |
+| `HaiStorageError.UNSUPPORTED_OPERATION` | `hai:storage:018` | Operation unsupported by the provider, including local presigning      |
+| `HaiStorageError.INVALID_LIST_OPTIONS`  | `hai:storage:019` | Invalid local list options or cursor, including mismatched query scope |
+| `HaiStorageError.CONFIG_ERROR`          | `hai:storage:012` | Invalid configuration                                                  |
 
 ## Development and testing
 
