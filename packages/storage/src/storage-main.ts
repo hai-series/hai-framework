@@ -135,21 +135,24 @@ const notInitializedPresign = new Proxy(
 /**
  * 存储服务单例
  *
- * 使用前必须先调用 `storage.init()` 初始化，传入 S3 或本地存储配置。
+ * 文件、目录及签名操作前须调用 `storage.init()`；checksum 为无状态工具，无需初始化。
  * 初始化后通过 `storage.file`、`storage.dir`、`storage.presign` 访问各操作接口。
- *
  * @example
  * ```ts
  * import { storage } from '@h-ai/storage'
  *
- * // 初始化
- * await storage.init({ type: 'local', root: '/data/uploads' })
- *
- * // 上传文件
- * await storage.file.put('hello.txt', 'Hello World')
- *
- * // 关闭连接
- * await storage.close()
+ * const initialized = await storage.init({ type: 'local', root: './data/uploads' })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const uploaded = await storage.file.put('reports/a.txt', 'hello', { ifNoneMatch: '*' })
+ *   if (!uploaded.success) throw new Error(uploaded.error.message)
+ *   const downloaded = await storage.file.get('reports/a.txt')
+ *   if (!downloaded.success) throw new Error(downloaded.error.message)
+ *   void downloaded.data
+ * } finally {
+ *   const closed = await storage.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export const storage: StorageFunctions = {
@@ -158,10 +161,19 @@ export const storage: StorageFunctions = {
    * 初始化存储连接。
    *
    * 如果当前已有活跃连接，会先自动 close 再重新初始化。
-   * 配置会通过 Zod Schema 校验；校验失败或连接异常会返回 `CONNECTION_FAILED`。
+   * 配置通过 Zod Schema 校验；校验、连接或清理失败均返回 HaiResult，不发布失败候选。
    *
    * @param config 存储配置（S3 或本地），支持省略带默认值的字段。
    * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
+   * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
+   * const initialized = await storage.init({ type: 'local', root: './data/uploads' })
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * const closed = await storage.close()
+   * if (!closed.success) throw new Error(closed.error.message)
+   * ```
    */
   async init(config: StorageConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
@@ -255,8 +267,12 @@ export const storage: StorageFunctions = {
    * 等待初始化并合并并发关闭；失败时保留资源供 close/init 重试。
    * @returns 所有客户端释放成功才返回成功。
    * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
    * const closed = await storage.close()
-   * if (!closed.success) await storage.close()
+   * if (!closed.success) throw new Error(closed.error.message)
+   * ```
    */
   async close(): Promise<HaiResult<void>> {
     if (!closingPromise) {

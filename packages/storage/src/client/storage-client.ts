@@ -14,6 +14,13 @@ import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
  * 上传进度回调数据
  *
  * 由 `uploadWithPresignedUrl` 在上传过程中通过 `onProgress` 回调返回。
+ * @example
+ * ```ts
+ * import type { UploadProgress } from '@h-ai/storage'
+ *
+ * const value: UploadProgress = { loaded: 50, total: 100, percent: 50 }
+ * void value
+ * ```
  */
 export interface UploadProgress {
   /** 已上传字节数 */
@@ -28,6 +35,13 @@ export interface UploadProgress {
  * 前端上传选项
  *
  * 控制 `uploadWithPresignedUrl` 的行为，包括内容类型、进度监听和取消。
+ * @example
+ * ```ts
+ * import type { ClientUploadOptions } from '@h-ai/storage'
+ *
+ * const value: ClientUploadOptions = { contentType: 'text/plain', onProgress: progress => { document.title = `${progress.percent}%` } }
+ * void value
+ * ```
  */
 export interface ClientUploadOptions {
   /** 内容类型（设置后会加到请求 Content-Type 头） */
@@ -42,6 +56,13 @@ export interface ClientUploadOptions {
  * 前端下载选项
  *
  * 控制 `downloadWithPresignedUrl` / `downloadAndSave` 的行为。
+ * @example
+ * ```ts
+ * import type { ClientDownloadOptions } from '@h-ai/storage'
+ *
+ * const value: ClientDownloadOptions = { filename: 'report.pdf', abortController: new AbortController() }
+ * void value
+ * ```
  */
 export interface ClientDownloadOptions {
   /** 保存的文件名（仅 downloadAndSave 使用，默认为 'download'） */
@@ -59,26 +80,14 @@ export interface ClientDownloadOptions {
  * @param data - 要上传的数据（File、Blob、ArrayBuffer 或字符串）
  * @param options - 上传选项
  * @returns 上传结果
- *
  * @example
  * ```ts
- * // apiClient 已初始化，服务端使用 S3；本地 provider 的失败结果不能当作 URL。
- * const signed = await apiClient.storage.presignedUrls.createUpload({
- *     key: 'uploads/image.png', contentType: 'image/png',
- * })
- * if (!signed.success) return signed
+ * import { uploadWithPresignedUrl } from '@h-ai/storage/client'
  *
- * // 使用签名 URL 上传
- * const file = document.getElementById('fileInput').files[0]
- * const result = await uploadWithPresignedUrl(signed.data.url, file, {
- *     contentType: 'image/png',
- *     onProgress: (p) => {
- *         // 在此更新进度条：p.percent
- *     }
- * })
- *
- * if (result.success) {
- *     // 上传成功
+ * // url 由应用鉴权接口返回，且 S3 签名包含相同 Content-Type。
+ * async function upload(url: string, file: File) {
+ *   const result = await uploadWithPresignedUrl(url, file, { contentType: file.type })
+ *   if (!result.success) throw new Error(result.error)
  * }
  * ```
  */
@@ -180,18 +189,15 @@ export async function uploadWithPresignedUrl(
  * @param url - 后端生成的下载签名 URL
  * @param options - 下载选项
  * @returns 下载结果（成功时 data 为 Blob）
- *
  * @example
  * ```ts
- * // 下载为 Blob
- * const result = await downloadWithPresignedUrl(downloadUrl)
- * if (result.success) {
- *     const blob = result.data
- *     // 处理 blob...
- * }
+ * import { downloadWithPresignedUrl } from '@h-ai/storage/client'
  *
- * // 下载并保存为文件（浏览器环境）
- * await downloadAndSave(downloadUrl, { filename: 'document.pdf' })
+ * async function download(url: string) {
+ *   const result = await downloadWithPresignedUrl(url)
+ *   if (!result.success || !result.data) throw new Error(result.error ?? 'Empty download')
+ *   return result.data
+ * }
  * ```
  */
 export async function downloadWithPresignedUrl(
@@ -230,12 +236,15 @@ export async function downloadWithPresignedUrl(
  *
  * @param url - 下载 URL
  * @param options - 下载选项
- *
+ * @returns 声明返回类型对应的操作结果。
  * @example
  * ```ts
- * await downloadAndSave(presignedUrl, {
- *     filename: 'report.pdf'
- * })
+ * import { downloadAndSave } from '@h-ai/storage/client'
+ *
+ * async function save(url: string) {
+ *   const result = await downloadAndSave(url, { filename: 'report.pdf' })
+ *   if (!result.success) throw new Error(result.error)
+ * }
  * ```
  */
 export async function downloadAndSave(
@@ -279,16 +288,16 @@ export async function downloadAndSave(
  * 从 File 对象获取文件扩展名
  *
  * 取文件名中最后一个 '.' 之后的部分，转为小写。
- * 若文件名无点号或以点号开头且无其他点号，返回空字符串。
+ * 没有点号或以点号结尾时返回空字符串；仅前导点号的文件名按其后文本返回扩展名。
  *
  * @param file - 浏览器 File 对象
  * @returns 扩展名（不含点），如 'png'、'tar.gz' 返回 'gz'
- *
  * @example
  * ```ts
- * getFileExtension(new File([], 'photo.PNG'))  // 'png'
- * getFileExtension(new File([], '.gitignore')) // 'gitignore'
- * getFileExtension(new File([], 'noext'))      // ''
+ * import { getFileExtension } from '@h-ai/storage/client'
+ *
+ * const extension = getFileExtension(new File(['hello'], 'report.txt'))
+ * void extension
  * ```
  */
 export function getFileExtension(file: File): string {
@@ -305,11 +314,12 @@ export function getFileExtension(file: File): string {
  *
  * @param extension - 文件扩展名（不含点，大小写不敏感）
  * @returns MIME 类型字符串
- *
  * @example
  * ```ts
- * getMimeType('png')  // 'image/png'
- * getMimeType('xyz')  // 'application/octet-stream'
+ * import { getMimeType } from '@h-ai/storage/client'
+ *
+ * const mime = getMimeType('pdf')
+ * void mime
  * ```
  */
 export function getMimeType(extension: string): string {
@@ -320,16 +330,15 @@ export function getMimeType(extension: string): string {
  * 格式化文件大小为人类可读字符串
  *
  * 使用 1024 进制，输出单位为 B/KB/MB/GB/TB。
- * 大于 1 B 时保留 2 位小数。
+ * 非零值使用对应单位并保留 2 位小数。
  *
  * @param bytes - 字节数（非负整数）
  * @returns 格式化后的字符串，如 '0 B'、'1.50 KB'、'2.30 MB'
- *
  * @example
  * ```ts
- * formatFileSize(0)         // '0 B'
- * formatFileSize(1536)      // '1.50 KB'
- * formatFileSize(1048576)   // '1.00 MB'
+ * import { formatFileSize } from '@h-ai/storage/client'
+ *
+ * void formatFileSize(1536)
  * ```
  */
 export function formatFileSize(bytes: number): string {

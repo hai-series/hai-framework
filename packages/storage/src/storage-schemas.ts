@@ -6,19 +6,38 @@ import { z } from 'zod'
 
 /**
  * 对象键的 UTF-8 字节上限；不是 JavaScript 字符串长度。
- * @example new TextEncoder().encode('uploads/报告.pdf').length <= STORAGE_KEY_MAX_BYTES
+ * @example
+ * ```ts
+ * import { STORAGE_KEY_MAX_BYTES } from '@h-ai/storage/schemas'
+ *
+ * const fits = new TextEncoder().encode('uploads/报告.pdf').length <= STORAGE_KEY_MAX_BYTES
+ * void fits
+ * ```
  */
 export const STORAGE_KEY_MAX_BYTES = 1024
 
 /**
  * 单次公开 HTTP 删除请求的原始键数量上限；Node deleteMany 仍按 Provider 上限分批。
- * @example const page = keys.slice(0, STORAGE_DELETE_MAX_KEYS)
+ * @example
+ * ```ts
+ * import { STORAGE_DELETE_MAX_KEYS } from '@h-ai/storage/schemas'
+ *
+ * const keys = ['a.txt', 'b.txt']
+ * const page = keys.slice(0, STORAGE_DELETE_MAX_KEYS)
+ * void page
+ * ```
  */
 export const STORAGE_DELETE_MAX_KEYS = 1000
 
 /**
  * 键校验失败类别；调用层据此生成本地化消息，不解析错误文本。
- * @example const issue: StorageKeyIssue = 'tooLong'
+ * @example
+ * ```ts
+ * import type { StorageKeyIssue } from '@h-ai/storage'
+ *
+ * const value: StorageKeyIssue = 'tooLong'
+ * void value
+ * ```
  */
 export type StorageKeyIssue = 'empty' | 'tooLong' | 'characters' | 'segments'
 
@@ -28,8 +47,14 @@ export type StorageKeyIssue = 'empty' | 'tooLong' | 'characters' | 'segments'
  * @param key - 调用方视角的对象键，不含 Provider 配置前缀。
  * @param allowEmpty - 是否允许空字符串（用于列表前缀）；纯空白仍无效。
  * @returns 首个失败类别；合法时为 undefined。
- * @example getStorageKeyIssue('../private.txt') // 'segments'
- * @example getStorageKeyIssue('', true) // undefined
+ * @example
+ * ```ts
+ * import { getStorageKeyIssue } from '@h-ai/storage/schemas'
+ *
+ * const unsafe = getStorageKeyIssue('../private.txt') // segments
+ * const emptyPrefix = getStorageKeyIssue('', true) // undefined
+ * void [unsafe, emptyPrefix]
+ * ```
  */
 export function getStorageKeyIssue(key: string, allowEmpty = false): StorageKeyIssue | undefined {
   if (allowEmpty && key === '')
@@ -56,24 +81,48 @@ function keySchema(allowEmpty: boolean) {
 
 /**
  * 文件键 Schema：非空、UTF-8 最多 1024 字节，无绝对路径、反斜线、控制符或点路径段。
- * @example StorageKeySchema.safeParse('users/u1/report.pdf').success // true
+ * @example
+ * ```ts
+ * import { StorageKeySchema } from '@h-ai/storage'
+ *
+ * const value = StorageKeySchema.parse('users/u1/report.pdf')
+ * void value
+ * ```
  */
 export const StorageKeySchema = keySchema(false)
 
 /**
  * 列表前缀 Schema；允许空字符串与部分文件名，不把前缀当物理目录。
- * @example StoragePrefixSchema.parse('users/u1/rep')
+ * @example
+ * ```ts
+ * import { StoragePrefixSchema } from '@h-ai/storage'
+ *
+ * const value = StoragePrefixSchema.parse('users/u1/rep')
+ * void value
+ * ```
  */
 export const StoragePrefixSchema = keySchema(true)
 
 /**
  * HTTP 批量删除键 Schema；按输入数量计数，重复键不能绕过上限。
- * @example StorageDeleteKeysSchema.parse(['users/u1/a.txt', 'users/u1/b.txt'])
+ * @example
+ * ```ts
+ * import { StorageDeleteKeysSchema } from '@h-ai/storage'
+ *
+ * const value = StorageDeleteKeysSchema.parse(['users/u1/a.txt', 'users/u1/b.txt'])
+ * void value
+ * ```
  */
 export const StorageDeleteKeysSchema = z.array(StorageKeySchema).min(1).max(STORAGE_DELETE_MAX_KEYS)
 
 /**
  * 预签名有效期，单位秒；整数 1–604800，不在此处填充 Node/HTTP 各自默认值。
- * @example StoragePresignExpiresInSchema.parse(900)
+ * @example
+ * ```ts
+ * import { StoragePresignExpiresInSchema } from '@h-ai/storage'
+ *
+ * const value = StoragePresignExpiresInSchema.parse(900)
+ * void value
+ * ```
  */
 export const StoragePresignExpiresInSchema = z.number().int().min(1).max(604800)

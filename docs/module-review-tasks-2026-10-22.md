@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08，共 80 个，另有 21 个按模块拆分的 JSDoc 任务，共 101 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 43/52（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 44/52（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -772,7 +772,7 @@
 - [x] **JSDOC-16 / reldb / P2**：核对 84 个 TS 顶层导出声明，修正 4 个无 JSDoc、57 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：17源码94声明94真实例子及39个额外方法示例全部类型检查；生命周期/CRUD/事务例先检查HaiResult，明确tx.wrap仅抛错触发回滚、返回失败结果不会自动展开；修正DDL hasTable返回值、标识符长度并非各DB上限、JSON简单路径与原生insert/set差异。完整去注释TS AST对RELDB03后HEAD 17/17一致，无运行/类型/配置变化。source类型、fresh ESM/DTS含SQLite worker、定向lint零警告、94+39示例编译通过；三语README导航和许可证位置同步，JSON运行逻辑已在RELDB03独立提交；全量回归在全部任务实施后执行。
 - [ ] **JSDOC-17 / scheduler / P2**：核对 71 个 TS 顶层导出声明，修正 38 个无 JSDoc、67 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 - [ ] **JSDOC-18 / serv / P2**：核对 106 个 TS 顶层导出声明，修正 3 个无 JSDoc、98 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
-- [ ] **JSDOC-19 / storage / P2**：核对 49 个 TS 顶层导出声明，修正 5 个无 JSDoc、38 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [x] **JSDOC-19 / storage / P2**：核对 49 个 TS 顶层导出声明，修正 5 个无 JSDoc、38 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：14源码64声明64实际入口/内部作用域示例，17个额外方法例均编译；明确Node无状态checksum无需init、getStream迭代仍可能抛I/O/取消、Provider close为void而模块close返回HaiResult、删除部分进度与S3-only预签名，修正扩展名与默认字段说明。完整去注释TS AST对HEAD14/14一致；source类型、fresh全部入口/声明、lint零警告、64+17示例验证通过；三语README统一规范导航/许可证同步，无运行/API/类型/配置变化，浏览器XHR实际取消缺陷留STORAGE04独立提交；全量回归在全部任务实施后执行。
 - [x] **JSDOC-20 / ui / P2**：核对 297 个 TS 顶层导出声明，修正 63 个无 JSDoc、284 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：142个文件仅修改注释，376声明全部配有示例，并覆盖95个公开组件头部和24个方法/重导出/模块说明，共495个实际类型编译示例；修正Accordion普通content、MessageBox真实默认值和clipboard权限说明。TS与Svelte去注释执行语义142/142等价（UI02两处独立运行修正已单独提交）；UI类型与svelte-check零错误零警告、lint142文件、fresh svelte-package、skills及示例编译均通过。公开入口/配置/调用方契约未变，无额外运行时代码影响；全量回归在全部任务实施后执行。
 - [ ] **JSDOC-21 / vecdb / P2**：核对 35 个 TS 顶层导出声明，修正 3 个无 JSDoc、26 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 

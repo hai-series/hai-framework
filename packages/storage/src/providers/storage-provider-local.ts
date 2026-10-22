@@ -206,6 +206,11 @@ function safePath(root: string, key: string): string {
  * - publicUrl 始终返回 null
  *
  * @returns Local Provider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createLocalProvider()
+ * await provider.close() // 工厂尚未连接；connect 的失败结果由调用方处理。
+ * ```
  */
 export function createLocalProvider(): StorageProvider {
   let config: LocalConfig | null = null

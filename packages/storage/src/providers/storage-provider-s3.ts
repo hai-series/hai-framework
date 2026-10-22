@@ -156,6 +156,11 @@ function withoutPrefix(key: string, prefix: string): string {
  * - presign 使用 @aws-sdk/s3-request-presigner 签名
  *
  * @returns S3 Provider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createS3Provider()
+ * await provider.close() // 客户端由 connect 分配；close 释放本地 SDK 资源。
+ * ```
  */
 export function createS3Provider(): StorageProvider {
   let client: S3Client | null = null

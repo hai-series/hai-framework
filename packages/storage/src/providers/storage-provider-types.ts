@@ -8,16 +8,12 @@ import type { DirOperations, FileOperations, PresignOperations } from '../storag
  *
  * 由各具体存储实现（S3、Local）实现此接口。
  * @internal
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // 模块内部上下文：由内置适配器工厂交付 provider，由模块入口传入已校验配置。
- * async function connectAndClose(provider: StorageProvider, config: StorageConfig) {
+ * async function inspect(provider: StorageProvider, config: StorageConfig) {
  *   const connected = await provider.connect(config)
- *   if (!connected.success)
- *     return connected
- *   const active = provider.isConnected()
- *   await provider.close()
- *   return active
+ *   if (!connected.success) return connected
+ *   try { return await provider.dir.list({ maxKeys: 1 }) } finally { await provider.close() }
  * }
  * ```
  */
