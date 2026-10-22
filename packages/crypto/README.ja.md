@@ -22,7 +22,7 @@
 ### セキュリティに関する注意
 
 - **SM4 の既定の暗号化結果は構造化された暗号文**：`crypto.symmetric.encrypt(data, key)` は既定で CBC + ランダム IV を使用し、`{ mode, ciphertext, iv, encoding }` を返します。復号時はこのオブジェクトを `crypto.symmetric.decrypt(payload, key)` に渡します。
-- **SM4 の `deriveKey(password, salt)` は KDF ではありません**：SM3 を 1 回実行するだけで、パスワードの総当たり攻撃への耐性はありません。**パスワード保存には使用禁止**です。パスワードハッシュには `crypto.password.hash(password)`、パスワードからの鍵導出には PBKDF2 / scrypt / Argon2 を使用してください。
+- **SM4 にはランダムな鍵を使用してください**：`crypto.symmetric.generateKey()` で鍵を生成します。このモジュールはパスワードから暗号鍵を導出する KDF を提供しません。パスワードの保存にはサーバー専用の `crypto.password.hash(password)` を使用し、パスワードやそのハッシュを直接 SM4 の鍵にしないでください。
 - **IV は毎回一意にしてください**：同じ鍵で IV を再利用してはいけません。既定の CBC または `encryptWithIV()` による毎回の自動生成を推奨します。IV は暗号文と一緒に送信・保存します（公開可能で、秘密にする必要はありません）。
 
 ### クイックスタート
@@ -126,10 +126,6 @@ if (ecbEnc.success) {
 
 // 输出 base64 格式（ciphertext 字段为 base64，encoding 字段会标明）
 const b64Enc = crypto.symmetric.encrypt('data', key, { outputFormat: 'base64' })
-
-// ⚠️ 已弃用：从密码派生密钥（仅为单次 SM3 哈希，不是 KDF，禁止用于密码存储场景）
-// 密码散列请用 crypto.password.hash()；如需从密码派生密钥，请在应用层自行实现 PBKDF2 / scrypt / Argon2
-const derivedKey = crypto.symmetric.deriveKey('my-password', 'random-salt')
 
 // 校验密钥/IV 格式
 crypto.symmetric.isValidKey(key) // true

@@ -27,7 +27,7 @@ import {
 } from './crypto-types.js'
 import { base64ToHex, hexToBase64 } from './crypto-utils.js'
 
-const { sm3, sm4 } = smCrypto
+const { sm4 } = smCrypto
 const SM4_HEX_32_REGEX = /^[0-9a-f]{32}$/i
 
 // ─── SM4 算法实现 ───
@@ -232,28 +232,6 @@ export function createSM4(): SymmetricOperations {
       iv: string,
     ): HaiResult<string> {
       return this.decrypt({ mode: 'cbc', ciphertext, iv, encoding: 'hex' }, key)
-    },
-
-    /**
-     * 从密码和盐值派生密钥
-     *
-     * 内部仅执行单次 SM3 哈希(password + salt)，取前 32 字符作为密钥。
-     *
-     * ⚠️ 安全警告：**此实现不是标准 KDF**，不具备密码爆破抗性（无迭代、无内存硬化）。
-     * - **禁止用于密码存储**：密码散列请用 `crypto.password.hash()`。
-     * - **禁止用于高价值密钥派生**：如需从密码派生加密密钥，请在应用层自行实现 PBKDF2 / scrypt / Argon2。
-     * - 仅适用于测试、迭代兼容或不敏感的场景。
-     *
-     * @deprecated 未来版本可能移除。密码散列请用 `crypto.password.hash`；密钥派生请使用标准 KDF。
-     * @param password - 密码
-     * @param salt - 盐值
-     * @returns 32 字符十六进制密钥
-     */
-    deriveKey(password: string, salt: string): string {
-      const combined = password + salt
-      const hash = sm3(combined)
-      // 取前 32 个十六进制字符（16 字节）
-      return hash.slice(0, 32)
     },
 
     /** 校验密钥格式是否合法（32 字符十六进制） */

@@ -216,31 +216,6 @@ describe('crypto.symmetric', () => {
     expect(result.error.code).toBe(HaiCryptoError.INVALID_IV.code)
   })
 
-  // ─── 密钥派生 ───
-
-  it('should derive key from password and salt', () => {
-    const key = crypto.symmetric.deriveKey('password', 'salt')
-    expect(key).toMatch(/^[0-9a-f]{32}$/i)
-  })
-
-  it('should derive same key for same inputs (deterministic)', () => {
-    const key1 = crypto.symmetric.deriveKey('password', 'salt')
-    const key2 = crypto.symmetric.deriveKey('password', 'salt')
-    expect(key1).toBe(key2)
-  })
-
-  it('should derive different keys for different password', () => {
-    const key1 = crypto.symmetric.deriveKey('password1', 'salt')
-    const key2 = crypto.symmetric.deriveKey('password2', 'salt')
-    expect(key1).not.toBe(key2)
-  })
-
-  it('should derive different keys for different salt', () => {
-    const key1 = crypto.symmetric.deriveKey('password', 'salt1')
-    const key2 = crypto.symmetric.deriveKey('password', 'salt2')
-    expect(key1).not.toBe(key2)
-  })
-
   // ─── 错误处理 ───
 
   it('should return INVALID_KEY for invalid key on encrypt', () => {

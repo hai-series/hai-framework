@@ -276,21 +276,6 @@ export interface SymmetricOperations {
    * @returns 成功时返回明文；失败时同 decrypt
    */
   decryptWithIV: (ciphertext: string, key: string, iv: string) => HaiResult<string>
-  /**
-   * 从密码和盐值派生密钥
-   *
-   * 内部仅执行单次哈希(password + salt) 取前 32 字符作为密钥。
-   *
-   * ⚠️ 安全警告：**此实现不是标准 KDF**，不具备密码爆破抗性。
-   * - 禁止用于密码存储（请用 `crypto.password.hash`）。
-   * - 禁止用于高价值密钥派生（请在应用层采用 PBKDF2 / scrypt / Argon2）。
-   *
-   * @deprecated 未来版本可能移除。详见模块 README 安全声明。
-   * @param password - 密码
-   * @param salt - 盐值
-   * @returns 32 字符十六进制密钥
-   */
-  deriveKey: (password: string, salt: string) => string
   /** 校验密钥格式是否合法（32 字符十六进制） */
   isValidKey: (key: string) => boolean
   /** 校验 IV 格式是否合法（32 字符十六进制） */

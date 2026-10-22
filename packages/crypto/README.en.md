@@ -22,7 +22,7 @@ A cryptography module for asymmetric encryption, hashing, symmetric encryption, 
 ### Security notice
 
 - **SM4 encryption returns a structured payload by default**: `crypto.symmetric.encrypt(data, key)` uses CBC + a random IV by default and returns `{ mode, ciphertext, iv, encoding }`. Pass that object to `crypto.symmetric.decrypt(payload, key)` to decrypt.
-- **SM4 `deriveKey(password, salt)` is not a KDF**: it performs a single SM3 hash and offers no resistance to password cracking. **Never use it for password storage**. Use `crypto.password.hash(password)` for password hashing and PBKDF2 / scrypt / Argon2 for password-based key derivation.
+- **Use random SM4 keys**: generate keys with `crypto.symmetric.generateKey()`. This module does not provide a KDF for password-based encryption keys. Store passwords with the server-only `crypto.password.hash(password)`; do not use passwords or password hashes directly as SM4 keys.
 - **IVs must be unique**: never reuse an IV with the same key. Prefer default CBC or `encryptWithIV()` to generate one for each call. Transmit and store the IV with the ciphertext; the IV can be public.
 
 ### Quick start
@@ -126,10 +126,6 @@ if (ecbEnc.success) {
 
 // 输出 base64 格式（ciphertext 字段为 base64，encoding 字段会标明）
 const b64Enc = crypto.symmetric.encrypt('data', key, { outputFormat: 'base64' })
-
-// ⚠️ 已弃用：从密码派生密钥（仅为单次 SM3 哈希，不是 KDF，禁止用于密码存储场景）
-// 密码散列请用 crypto.password.hash()；如需从密码派生密钥，请在应用层自行实现 PBKDF2 / scrypt / Argon2
-const derivedKey = crypto.symmetric.deriveKey('my-password', 'random-salt')
 
 // 校验密钥/IV 格式
 crypto.symmetric.isValidKey(key) // true

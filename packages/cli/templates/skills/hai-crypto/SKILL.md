@@ -20,7 +20,7 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 ## 使用路径
 
 1. `crypto.init()` 无配置参数，检查结果；确认目标端是否支持所需能力，password 仅 Node。
-2. 选用公开 asymmetric/hash/symmetric/password 操作，检查 HaiResult；SM3 HMAC 不等同于 SHA-256 HMAC。
+2. 选用公开 asymmetric/hash/symmetric/password 操作，检查 HaiResult；SM3 HMAC 不等同于 SHA-256 HMAC。SM4 使用 `symmetric.generateKey()` 生成随机密钥，不提供密码 KDF；密码存储使用服务端 `password.hash()`。
 3. 传输加密经 serv/kit/api-client 顶层配置接入，统一协商与刷新路径；不导入内部工厂。
 
 服务端必须显式注入受管 `serverKeyRing` 与共享 `keyStore`，没有进程随机私钥或内存 registry 默认值。请求携带协商 serverKeyId；各节点同 ring + registry 支持跨节点、重启和新旧版本轮换。密钥只从 Secret/私有环境注入，不进入公开配置、客户端或日志。开发/测试的内存 registry 须显式选择。

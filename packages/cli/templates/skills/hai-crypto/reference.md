@@ -102,9 +102,10 @@ const valid = crypto.hash.verify('hello', hash.data!)
 | `decrypt`       | `(payload, key) => HaiResult<string>`          | 解密结构化密文              |
 | `encryptWithIV` | `(data, key) => HaiResult<EncryptWithIVResult>`    | CBC 模式加密（自动生成 IV） |
 | `decryptWithIV` | `(ciphertext, key, iv) => HaiResult<string>`       | CBC 模式解密                |
-| `deriveKey`     | `(password, salt) => string`                    | 从密码和盐值派生密钥        |
 | `isValidKey`    | `(key: string) => boolean`                      | 校验密钥格式                |
 | `isValidIV`     | `(iv: string) => boolean`                       | 校验 IV 格式                |
+
+SM4 密钥使用 `generateKey()` 生成；本模块不提供密码 KDF。密码存储使用服务端 `crypto.password.hash()`，不要将密码或密码哈希直接用作 SM4 密钥。
 
 ```typescript
 const key = crypto.symmetric.generateKey()
