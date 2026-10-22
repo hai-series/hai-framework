@@ -41,7 +41,11 @@ const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract
 // 2) 组装 procedures（注入 iam / storage / ai 已初始化的 functions）
 const procedures = {
   iam: createIamProcedures({ iam }),
-  storage: createStorageProcedures({ storage }),
+  storage: createStorageProcedures({
+    storage,
+    authorize: ({ context, keys }) => keys.every(key =>
+      key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+  }),
   ai: createAiProcedures({ ai }),
 }
 
@@ -67,6 +71,8 @@ serv.listen(app, {
 
 // 5) 优雅关闭由 serv 托管，无需手动注册 process.once('SIGINT', ...)
 ```
+
+Storage 默认 procedures 必须注入 `authorize({ context, operation, keys })`；未提供策略时默认拒绝。策略从已认证 session 确定资源范围，并覆盖下载、上传、列表、元数据和删除。上例只允许 `users/<编码后的 userId>/` 下的 key，列表同样必须携带该用户前缀；批量中任何一个 key 未获授权时全部不执行。管理员访问须由应用显式授权。
 
 #### host / port 配置
 

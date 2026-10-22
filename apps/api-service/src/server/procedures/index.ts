@@ -11,7 +11,11 @@ import { createAppProcedures } from './app-procedures.js'
 export function createApiServiceProcedures(deps: { app: AppProcedureDeps }) {
   return {
     iam: createIamProcedures({ iam }),
-    storage: createStorageProcedures({ storage }),
+    storage: createStorageProcedures({
+      storage,
+      authorize: ({ context, keys }) => keys.every(key =>
+        key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+    }),
     ai: createAiProcedures({ ai }),
     app: createAppProcedures(deps.app),
   }

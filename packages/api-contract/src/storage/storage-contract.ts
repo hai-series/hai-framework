@@ -3,6 +3,7 @@
  *
  * 定义文件存储相关 API 的接口边界：预签名 URL 生成与文件管理。
  * 所有接口均需 Bearer Token 认证（由 `@h-ai/serv` 的 feature 层强制）。
+ * 资源访问还须通过应用注入的 authorize 策略；认证不等同于拥有任意 key 的访问权。
  * @module storage-contract
  */
 

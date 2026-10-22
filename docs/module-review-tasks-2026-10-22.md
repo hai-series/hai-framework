@@ -216,7 +216,8 @@
 
 ### SERV-01 · P1 · 默认存储 procedures 增加资源授权
 
-- [ ] 待修正（源码确认；范围：serv）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：必需authorize策略覆盖下载/上传签名、列表、元数据、单删和批删，缺失策略默认拒绝，批量先完整授权。同步演示API和模板用户命名空间策略、三语README、contract注释和skill。18项授权回归、serv typecheck/build、api-service typecheck、定向ESLint和check:skills通过；全量scaffold及真实S3授权联调待最终验收；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/serv/src/features/serv-feature-storage.ts:84](../packages/serv/src/features/serv-feature-storage.ts#L84)。
 - **证据与影响**：默认实现仅要求登录，使用输入 key/prefix 进行读取、列举、上传签名和删除，没有用户/租户资源范围检查；文件头已承认这一边界，而现有应用/模板直接接入。
 - **修正内容**：把服务端资源授权作为必需依赖或默认拒绝；按可信身份确定可访问范围，对所有单项/批量/签名操作一致执行。不能以客户端提供的前缀当授权依据。

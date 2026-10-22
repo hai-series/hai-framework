@@ -3,12 +3,8 @@
  *
  * 基于 `@h-ai/storage` 提供开箱即用的 Storage procedures 实现：预签名 URL、列表、元数据、删除。
  *
- * **⚠️ 安全说明（必读）：**
- *
- * 1. **路径穿越防护**：内置 `validateStorageKeyOrFail` 拒绝 `..`、绝对路径、反斜杠、NUL 字节等危险输入。
- * 2. **多租户 / 多用户隔离（需应用层实现）**：默认 procedure 仅使用 `.auth()`，任何登录用户均可访问任意 key。
- *    生产环境必须在应用层重新装配这些 procedure，以强制用 `context.session.userId` 作为 key 前缀。
- * 3. **权限收紧**：推荐把 `.auth()` 改成 `.permission('storage.files.read'|'storage.files.write')`。
+ * 所有操作先验证路径，再调用应用提供的资源授权策略；未提供策略时拒绝访问。
+ * 策略必须从已认证 session 确定用户/租户范围，不能信任客户端提供的前缀。
  * @module features/serv-feature-storage
  */
 
@@ -16,6 +12,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { StorageFunctions } from '@h-ai/storage'
 import type { ServContext } from '../serv-context.js'
 import type { ServMessageKey } from '../serv-i18n.js'
+import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
@@ -69,9 +66,42 @@ function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<st
   return ok(keys)
 }
 
-/** Storage 默认 procedures 依赖。 */
+/**
+ * 存储资源授权请求；批量操作只有全部资源获准后才会调用存储。
+ *
+ * @example
+ * ```ts
+ * const authorize = ({ context, keys }: StorageAccessRequest) => {
+ *   const root = `users/${encodeURIComponent(context.session.userId)}/`
+ *   return keys.every(key => key.startsWith(root))
+ * }
+ * ```
+ */
+export interface StorageAccessRequest {
+  /** 操作类别；策略可分别授予读取、写入或删除权限。 */
+  readonly operation: 'download' | 'upload' | 'list' | 'metadata' | 'delete' | 'deleteMany'
+  /** 已通过认证的可信请求上下文。 */
+  readonly context: AuthenticatedServContext
+  /** 单项/批量 key；list 操作仅包含请求的 prefix，未提供 prefix 时为空字符串。 */
+  readonly keys: readonly string[]
+}
+
+/**
+ * Storage 默认 procedures 依赖。
+ *
+ * @example
+ * ```ts
+ * createStorageProcedures({
+ *   storage,
+ *   authorize: ({ context, keys }) => keys.every(key =>
+ *     key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+ * })
+ * ```
+ */
 export interface StorageProcedureDeps {
   readonly storage: StorageFunctions
+  /** 必需的资源授权策略；返回 true 才允许执行，缺失策略时默认拒绝。 */
+  readonly authorize: (request: StorageAccessRequest) => boolean | Promise<boolean>
 }
 
 interface PresignedResponse {
@@ -80,9 +110,25 @@ interface PresignedResponse {
   readonly expiresAt?: Date
 }
 
-/** 创建 Storage 默认 procedures。 */
+/**
+ * 创建具有认证、路径校验和资源授权的 Storage procedures。
+ *
+ * @param deps - 存储服务及必需的资源授权策略。
+ * @returns 可挂载至 serv.createApp 的存储 router；拒绝访问返回 FORBIDDEN。
+ * @example
+ * ```ts
+ * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) =>
+ *   keys.every(key => key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)) })
+ * ```
+ */
 export function createStorageProcedures(deps: StorageProcedureDeps) {
   const { storage } = deps
+
+  async function authorize(request: StorageAccessRequest): Promise<HaiResult<void>> {
+    if (typeof deps.authorize !== 'function' || await deps.authorize(request) !== true)
+      return err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: request.context.locale }))
+    return ok(undefined)
+  }
 
   return implement(storageContract)
     .context<ServContext>()
@@ -93,6 +139,9 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       const keyResult = validateStorageKeyOrFail(input.key, context.locale)
       if (!keyResult.success)
         return keyResult
+      const access = await authorize({ context, operation: 'download', keys: [keyResult.data] })
+      if (!access.success)
+        return access
       const expiresIn = input.expiresIn ?? 900
       return toPresignedResult(
         keyResult.data,
@@ -107,6 +156,9 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       const keyResult = validateStorageKeyOrFail(input.key, context.locale)
       if (!keyResult.success)
         return keyResult
+      const access = await authorize({ context, operation: 'upload', keys: [keyResult.data] })
+      if (!access.success)
+        return access
       const expiresIn = input.expiresIn ?? 900
       const contentType = input.contentType ?? 'application/octet-stream'
       const { key: _, ...options } = input
@@ -119,32 +171,52 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
 
     .route('files.list')
     .auth()
-    .handle(({ input }) => storage.dir.list(input))
+    .handle(async ({ input, context }) => {
+      const prefix = input.prefix ?? ''
+      if (prefix) {
+        const prefixResult = validateStorageKeyOrFail(prefix, context.locale, 'prefix')
+        if (!prefixResult.success)
+          return prefixResult
+      }
+      const access = await authorize({ context, operation: 'list', keys: [prefix] })
+      if (!access.success)
+        return access
+      return storage.dir.list(input)
+    })
 
     .route('files.getMetadata')
     .auth()
-    .handle(({ input, context }) => {
+    .handle(async ({ input, context }) => {
       const keyResult = validateStorageKeyOrFail(input.key, context.locale)
       if (!keyResult.success)
         return keyResult
+      const access = await authorize({ context, operation: 'metadata', keys: [keyResult.data] })
+      if (!access.success)
+        return access
       return storage.file.head(keyResult.data)
     })
 
     .route('files.delete')
     .auth()
-    .handle(({ input, context }) => {
+    .handle(async ({ input, context }) => {
       const keyResult = validateStorageKeyOrFail(input.key, context.locale)
       if (!keyResult.success)
         return keyResult
+      const access = await authorize({ context, operation: 'delete', keys: [keyResult.data] })
+      if (!access.success)
+        return access
       return storage.file.delete(keyResult.data)
     })
 
     .route('files.deleteMany')
     .auth()
-    .handle(({ input, context }) => {
+    .handle(async ({ input, context }) => {
       const keysResult = validateStorageKeysOrFail(input.keys, context.locale)
       if (!keysResult.success)
         return keysResult
+      const access = await authorize({ context, operation: 'deleteMany', keys: keysResult.data })
+      if (!access.success)
+        return access
       return storage.file.deleteMany(keysResult.data)
     })
 

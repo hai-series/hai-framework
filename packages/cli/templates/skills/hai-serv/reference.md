@@ -51,7 +51,11 @@ const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract
 // 装配 procedures（每个 feature 对应 contract 中的一个领域）
 const procedures = {
   iam: createIamProcedures({ iam }),
-  storage: createStorageProcedures({ storage }),
+  storage: createStorageProcedures({
+    storage,
+    authorize: ({ context, keys }) => keys.every(key =>
+      key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+  }),
   ai: createAiProcedures({ ai }),
 }
 
@@ -191,7 +195,11 @@ const contract = apiContract.create({
 
 const procedures = {
   iam: createIamProcedures({ iam }),
-  storage: createStorageProcedures({ storage }),
+  storage: createStorageProcedures({
+    storage,
+    authorize: ({ context, keys }) => keys.every(key =>
+      key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+  }),
   ai: createAiProcedures({ ai }),
   app: createAppProcedures({ name: 'demo', version: '1.0.0' }),
 }
@@ -622,8 +630,10 @@ http: {
 | 导入路径 | 工厂函数 | 所需依赖 |
 | --- | --- | --- |
 | `@h-ai/serv/features/iam` | `createIamProcedures({ iam })` | `@h-ai/iam` |
-| `@h-ai/serv/features/storage` | `createStorageProcedures({ storage })` | `@h-ai/storage` |
+| `@h-ai/serv/features/storage` | `createStorageProcedures({ storage, authorize })` | `@h-ai/storage` + 资源授权策略 |
 | `@h-ai/serv/features/ai` | `createAiProcedures({ ai })` | `@h-ai/ai` |
+
+`authorize` 从可信 `context.session` 校验资源所有者/租户，不能只信任客户端前缀；缺失策略时默认拒绝。列表会把 prefix 交给策略，空 prefix 不应获准全桶列举；批量全部授权后才执行。示例用户根为 `users/<编码后的 userId>/`，管理员跨用户访问必须显式授权。
 
 ## 常见模式
 

@@ -41,7 +41,11 @@ const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract
 // 2) 组装 procedures（注入 iam / storage / ai 已初始化的 functions）
 const procedures = {
   iam: createIamProcedures({ iam }),
-  storage: createStorageProcedures({ storage }),
+  storage: createStorageProcedures({
+    storage,
+    authorize: ({ context, keys }) => keys.every(key =>
+      key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+  }),
   ai: createAiProcedures({ ai }),
 }
 
@@ -67,6 +71,8 @@ serv.listen(app, {
 
 // 5) 优雅关闭由 serv 托管，无需手动注册 process.once('SIGINT', ...)
 ```
+
+Storage procedures require `authorize({ context, operation, keys })` and deny access if the policy is missing. Derive resource ownership from the authenticated session for downloads, uploads, listing, metadata and deletion. The example only permits keys under `users/<encoded userId>/`; list requests must include that prefix. A batch is executed only after every key is authorized. Grant administrative access explicitly in the application policy.
 
 #### host / port configuration
 

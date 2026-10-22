@@ -46,7 +46,11 @@ const contract = apiContract.create({
 
 const procedures = {
   iam: createIamProcedures({ iam }),
-  storage: createStorageProcedures({ storage }),
+  storage: createStorageProcedures({
+    storage,
+    authorize: ({ context, keys }) => keys.every(key =>
+      key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+  }),
 }
 
 const app = serv.createApp({
@@ -295,7 +299,7 @@ serv
 
 - 所有入口默认至少声明 `.auth()`
 - 对 key 做二次安全校验，拒绝 `..`、绝对路径、反斜杠、NUL 字节
-- **默认并不自动做租户隔离**，生产环境应在应用层再按 `context.session.userId` 收紧 key 前缀
+- 必须传入 `authorize({ context, operation, keys })`，从可信 session 检查用户/租户资源范围；缺失策略默认拒绝。列表也授权 prefix，批量操作须全部通过后才执行。示例使用 `users/<编码后的 userId>/`，空 prefix 和其它用户前缀均被拒绝。
 
 ### AI feature
 

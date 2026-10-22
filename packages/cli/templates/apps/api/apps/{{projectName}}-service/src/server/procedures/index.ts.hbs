@@ -11,7 +11,11 @@ import { storage } from '@h-ai/storage'
 export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDeps }) {
   return {
 {{#if features.iam}}    iam: createIamProcedures({ iam }),
-{{/if}}{{#if features.storage}}    storage: createStorageProcedures({ storage }),
+{{/if}}{{#if features.storage}}    storage: createStorageProcedures({
+      storage,
+      authorize: ({ context, keys }) => keys.every(key =>
+        key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+    }),
 {{/if}}{{#if features.ai}}    ai: createAiProcedures({ ai }),
 {{/if}}    app: createAppProcedures(deps.app),
   }

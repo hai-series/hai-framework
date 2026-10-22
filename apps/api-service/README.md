@@ -206,6 +206,8 @@ await apiClient.init({
 | `/api/v1/app/info`                        | POST               | 服务元信息（公开，无需登录）                                         |
 | `/api/v1/app/echo`                        | POST               | 演示：回显消息 + 调用者上下文（需登录）                              |
 
+Storage procedures 使用显式 `authorize` 策略限制到已认证用户的 `users/<encodeURIComponent(userId)>/` 前缀。上传、下载、元数据、删除均传完整 key，列表也必须提供该前缀；空前缀、其它用户 key 和包含未授权 key 的批量请求都会被拒绝。需要管理员跨用户访问时，应在服务端策略中显式检查可信权限。
+
 ### 调用示例
 
 > 完整交互式文档见 `http://localhost:3000/docs`。以下示例假设服务已启动在 `localhost:3000`。
