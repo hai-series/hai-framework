@@ -18,7 +18,6 @@ const ReachErrorInfo = {
   INVALID_RECIPIENT: '004:400',
   PROVIDER_NOT_FOUND: '005:500',
   DND_BLOCKED: '006:403',
-  DND_DEFERRED: '007:202',
   NOT_INITIALIZED: '010:500',
   UNSUPPORTED_TYPE: '011:400',
   CONFIG_ERROR: '012:500',
@@ -79,15 +78,25 @@ export interface ReachMessage {
 }
 
 /**
- * 发送结果
+ * 发送或可靠入队结果；deferred 不代表已完成外部投递。
+ *
+ * @example
+ * ```ts
+ * const result = await reach.send(message)
+ * if (result.success && result.data.deferred) {
+ *   trackPendingMessage(result.data.queueId)
+ * }
+ * ```
  */
 export interface SendResult {
-  /** 是否发送成功 */
+  /** 是否已完成 Provider 发送或可靠入队；具体状态同时检查 deferred。 */
   success: boolean
   /** Provider 返回的消息 ID（如有） */
   messageId?: string
-  /** 是否被延时（DND delay 策略暂存，待 DND 结束后发送） */
+  /** 是否已成功持久化到 DND 队列；true 表示尚未投递，必须同时有 queueId。 */
   deferred?: boolean
+  /** 持久化入队回执 UUID，对应 hai_reach_send_log.queue_id；与 Provider 的 messageId 区分。 */
+  queueId?: string
 }
 
 /**

@@ -23,7 +23,7 @@ Template sends need only `template`, `to` and `vars`; the provider comes from th
 
 ### Dependencies
 
-- `@h-ai/reldb`: optional persistence for delivery logs and templates; enabled automatically when initialized.
+- `@h-ai/reldb`: persistence for delivery logs and templates. With `dnd.enabled: true` and `strategy: delay`, initialize it first and ensure the queue table is available; otherwise `reach.init()` returns `CONFIG_ERROR`. Optional for other sends.
 - `@h-ai/cache`: optional distributed locks for DND delay; enabled automatically when initialized.
 
 ### Quick start
@@ -119,6 +119,18 @@ API callback addresses are trusted server configuration. Logs contain only the c
 | `start`    | `string`               | —        | `00:00`   | Start time (HH:mm)                    |
 | `end`      | `string`               | —        | `00:00`   | End time (HH:mm)                      |
 
+`delay` returns a successful `HaiResult` containing `{ success: true, deferred: true, queueId }` only after the database confirms the insert. This means queued, awaiting delivery. The receipt UUID is stored in `hai_reach_send_log.queue_id`; its row tracks `status` (`pending` / `processing` / `sent`). Missing storage, disconnection, or insertion failure never produces deferred success; enqueue failures return `SEND_FAILED`. After restart, another node connected to the same database with the same Provider name can resume delivery outside DND. Optional log failures after an immediate send do not report an already delivered message as failed.
+
+```ts
+const result = await reach.send(message)
+if (!result.success)
+  throw new Error(result.error.message)
+if (result.data.deferred) {
+  // Save the receipt for tracking; delivery is still pending.
+  await savePendingReceipt(result.data.queueId)
+}
+```
+
 ### Error handling
 
 All operations return `HaiResult<T>`. Error codes are defined in `HaiReachError`:
@@ -131,7 +143,6 @@ All operations return `HaiResult<T>`. Error codes are defined in `HaiReachError`
 | `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | Invalid recipient         |
 | `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider not registered   |
 | `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | Dropped by DND            |
-| `HaiReachError.DND_DEFERRED`           | `hai:reach:007` | Queued for DND delay      |
 | `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | Not initialized           |
 | `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | Unsupported type          |
 | `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | Invalid configuration     |

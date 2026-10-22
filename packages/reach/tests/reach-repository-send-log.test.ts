@@ -25,6 +25,7 @@ describe('reach-repository-send-log: types', () => {
   it('storedSendLog 接口应包含所有必要字段', () => {
     const record: StoredSendLog = {
       id: 1,
+      queueId: null,
       provider: 'email',
       toAddr: 'user@example.com',
       subject: '测试',
@@ -46,6 +47,7 @@ describe('reach-repository-send-log: types', () => {
   it('storedSendLog 可空字段应接受 null', () => {
     const record: StoredSendLog = {
       id: 2,
+      queueId: null,
       provider: 'sms',
       toAddr: '13800138000',
       subject: null,

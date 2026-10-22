@@ -12,7 +12,7 @@
 
 | 模块 | 用途 | 是否必需 | 初始化要求 |
 | --- | --- | --- | --- |
-| `@h-ai/reldb` | 数据库（发送日志与模板持久化） | 可选 | 已初始化时自动启用持久化 |
+| `@h-ai/reldb` | 数据库（发送日志与模板持久化） | DND delay 必需；其他场景可选 | 启用 delay 前先初始化，队列表不可用则 reach.init 返回 CONFIG_ERROR |
 | `@h-ai/cache` | 缓存（DND delay 策略分布式锁） | 可选 | 已初始化时自动启用分布式锁 |
 
 ## 适用场景
@@ -62,7 +62,7 @@ templates:
 # 免打扰（可选）
 dnd:
   enabled: true
-  strategy: delay # discard（丢弃）或 delay（延时，DND 结束后集中发送）
+  strategy: delay # 必须先初始化 reldb；确认持久化成功后才返回 deferred 与 queueId
   start: '22:00'
   end: '08:00'
 ```
@@ -80,12 +80,18 @@ import { core } from '@h-ai/core'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 
-// 先初始化可选依赖（按需）
-await reldb.init(core.config.get('db')) // 可选，启用发送日志与模板持久化
-await cache.init(core.config.get('cache')) // 可选，启用 DND delay 策略分布式锁
+// 当前配置启用了 delay：数据库和队列表为必需依赖。
+const database = await reldb.init(core.config.get('db'))
+if (!database.success)
+  throw new Error(database.error.message)
+const cached = await cache.init(core.config.get('cache')) // 可选，启用 flush 分布式锁
+if (!cached.success)
+  throw new Error(cached.error.message)
 
 // 再初始化触达模块（自动检测已初始化的 reldb/cache 单例）
-await reach.init(core.config.get('reach'))
+const initialized = await reach.init(core.config.get('reach'))
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 // ... 使用触达服务
 await reach.close()
 ```
@@ -119,6 +125,12 @@ const result = await reach.send({
   template: 'verification_code',
   vars: { code: '123456', minutes: '5' },
 })
+if (!result.success)
+  throw new Error(result.error.message)
+if (result.data.deferred) {
+  // queueId 是 hai_reach_send_log.queue_id 中的回执 UUID；此时尚未投递。
+  await savePendingReceipt(result.data.queueId)
+}
 
 // 直接发送邮件（无模板）
 await reach.send({
@@ -203,12 +215,17 @@ interface ReachConfigInput {
 | `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004`   | 无效接收方      |
 | `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005`   | Provider 未找到 |
 | `HaiReachError.DND_BLOCKED`            | `hai:reach:006`   | 免打扰丢弃      |
-| `HaiReachError.DND_DEFERRED`           | `hai:reach:007`   | 免打扰延时暂存  |
 | `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010`   | 模块未初始化    |
 | `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011`   | 不支持的类型    |
 | `HaiReachError.CONFIG_ERROR`           | `hai:reach:012`   | 配置错误        |
 
 ## 常见模式
+
+### 可靠延迟入队
+
+启用 delay 后，只有数据库确认插入一条 pending 记录才返回 `deferred: true` 和 `queueId`。缺库、断连、插入失败返回失败 HaiResult，不能向用户报告已入队。`queueId` 对应 `hai_reach_send_log.queue_id`，同一行的 `status` 为 pending / processing / sent。节点重启后连接同一数据库、配置同名 Provider，可在 DND 时段外恢复投递。即时发送后的普通日志仍为可选，日志失败不会使已发送消息返回失败。
+
+验证码和密码重置等有时效的通知应明确选择 DND 策略；可靠入队成功不代表用户已收到验证码。
 
 ### 多渠道验证码发送
 
@@ -244,7 +261,7 @@ import { iam } from '@h-ai/iam'
 import { reach } from '@h-ai/reach'
 
 // 初始化 reach（注册 email 和 sms Provider）
-await reach.init({
+const initializedReach = await reach.init({
   providers: [
     { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
     { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '...' },
@@ -255,22 +272,16 @@ await reach.init({
     { name: 'otp_sms', provider: 'sms', body: 'Your code is {code}' },
   ],
 })
+if (!initializedReach.success)
+  throw new Error(initializedReach.error.message)
 
-// 初始化 IAM，使用 reach 发送通知
-await iam.init({
-  db,
-  cache,
-  onPasswordResetRequest: async (user, token, expiresAt) => {
-    await reach.send({ to: user.email ?? '', template: 'password_reset', vars: { token, expiresAt: expiresAt.toISOString() } })
-  },
-  onOtpSendEmail: async (email, code) => {
-    await reach.send({ to: email, template: 'otp_email', vars: { code } })
-  },
-  onOtpSendSms: async (phone, code) => {
-    await reach.send({ to: phone, template: 'otp_sms', vars: { code } })
-  },
-})
+// 先确认 reldb/cache/Reach 已初始化成功，再注入 Reach；内置适配器传播发送失败。
+const initializedIam = await iam.init({ ...iamSettings, reach })
+if (!initializedIam.success)
+  throw new Error(initializedIam.error.message)
 ```
+
+若使用显式通知回调覆盖内置适配器，必须检查 `reach.send()` 的 HaiResult，失败时拒绝 Promise；不得吞掉入队失败。需要即时送达的验证码不应启用延迟策略。
 
 ### 错误处理
 

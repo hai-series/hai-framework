@@ -23,7 +23,7 @@
 
 ### 依存関係
 
-- `@h-ai/reldb`：送信ログ・テンプレートの永続化（任意）。初期化済みなら自動有効化。
+- `@h-ai/reldb`：送信ログ・テンプレートの永続化。`dnd.enabled: true` と `strategy: delay` を使う場合は事前初期化とキューテーブルが必須で、利用できなければ `reach.init()` は `CONFIG_ERROR` を返します。それ以外の送信では任意です。
 - `@h-ai/cache`：DND delay 用の分散ロック（任意）。初期化済みなら自動有効化。
 
 ### クイックスタート
@@ -119,6 +119,18 @@ API 通知先は信頼できるサーバー設定です。ログには origin �
 | `start`    | `string`               | —    | `00:00`   | 開始時刻（HH:mm）                       |
 | `end`      | `string`               | —    | `00:00`   | 終了時刻（HH:mm）                       |
 
+`delay` はデータベースへの挿入成功を確認した後だけ、`{ success: true, deferred: true, queueId }` を含む成功 `HaiResult` を返します。これはキューへの保存完了を表し、配信はまだ完了していません。受付 UUID は `hai_reach_send_log.queue_id` に保存され、同じ行の `status`（`pending` / `processing` / `sent`）で追跡できます。ストレージ未準備、切断、挿入失敗では deferred 成功を返さず、キューへの保存失敗は `SEND_FAILED` です。再起動後、同じデータベースに接続して同名 Provider を設定した別ノードが DND 時間外に配信を再開できます。即時送信後の任意ログの失敗によって、配信済みメッセージを失敗扱いにはしません。
+
+```ts
+const result = await reach.send(message)
+if (!result.success)
+  throw new Error(result.error.message)
+if (result.data.deferred) {
+  // 追跡用の受付 ID を保存します。配信はまだ完了していません。
+  await savePendingReceipt(result.data.queueId)
+}
+```
+
 ### エラー処理
 
 すべての操作は `HaiResult<T>` を返します。エラーコードは `HaiReachError` で定義します：
@@ -131,7 +143,6 @@ API 通知先は信頼できるサーバー設定です。ログには origin �
 | `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | 無効な宛先               |
 | `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider が未登録        |
 | `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | DND により破棄           |
-| `HaiReachError.DND_DEFERRED`           | `hai:reach:007` | DND により一時保留       |
 | `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | 未初期化                 |
 | `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | 未対応の種類             |
 | `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | 設定エラー               |

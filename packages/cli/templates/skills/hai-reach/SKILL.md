@@ -1,6 +1,6 @@
 ---
 name: hai-reach
-description: "接入邮件、短信、API 通知与模板，处理发送结果、免打扰和可选持久化。"
+description: "接入邮件、短信、API 通知与模板，处理发送结果、免打扰和可靠延迟入队。"
 ---
 
 # hai-reach
@@ -17,7 +17,7 @@ description: "接入邮件、短信、API 通知与模板，处理发送结果�
 
 ## 使用路径
 
-- 先配置并注册 Provider，再保存绑定 Provider 的模板；模板发送只传 template/to/vars 即可，显式 provider 可覆盖；直接发送须提供 provider。发送结果须检查，DND/禁用与成功发送区分。
+- 先配置并注册 Provider，再保存绑定 Provider 的模板；模板发送只传 template/to/vars 即可，显式 provider 可覆盖；直接发送须提供 provider。启用 DND delay 必须先初始化 reldb 并确保队列表可用；成功时 `deferred: true` 与 `queueId` 表示可靠入队，尚未投递；缺库、断连或插入失败须按 HaiResult 失败处理。即时投递与排队状态须区分。
 - 验证模板替换和错误分支时使用隔离测试收件人；真实通知须在用户授权范围内。
 
 ## 按需参考

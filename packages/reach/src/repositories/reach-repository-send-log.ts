@@ -34,6 +34,8 @@ export interface SendLogClaimOptions {
 export interface StoredSendLog {
   /** 自增主键 */
   id: number
+  /** 入队回执 UUID；延迟消息创建时写入，可用 queue_id 列追踪持久化状态。 */
+  queueId: string | null
   /** Provider 名称 */
   provider: string
   /** 接收方地址 */
@@ -112,6 +114,14 @@ function buildSendLogError<T>(detail: string, cause?: unknown): HaiResult<T> {
 
 /** 字段定义 */
 const SEND_LOG_FIELDS: ReldbCrudFieldDefinition[] = [
+  {
+    fieldName: 'queueId',
+    columnName: 'queue_id',
+    def: { type: 'TEXT' as const, unique: true },
+    select: true,
+    create: true,
+    update: false,
+  },
   {
     fieldName: 'id',
     columnName: 'id',

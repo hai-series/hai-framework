@@ -122,20 +122,19 @@ export async function preprocessMessage(
 // ─── 发送记录持久化（通过 Repository） ───
 
 /**
- * 保存发送记录到数据库
+ * 保存发送记录并传播数据库的失败结果；是否允许忽略失败由发送场景决定。
  */
 async function saveSendRecord(
-  repo: SendLogRepository | null,
+  repo: SendLogRepository,
   message: ReachMessage,
   status: 'sent' | 'pending',
   provider: string,
   messageId?: string,
-): Promise<void> {
-  if (!repo) {
-    return
-  }
+  queueId?: string,
+): Promise<HaiResult<void>> {
   try {
-    await repo.create({
+    const inserted = await repo.create({
+      queueId: queueId ?? null,
       provider,
       toAddr: message.to,
       subject: message.subject ?? null,
@@ -147,9 +146,14 @@ async function saveSendRecord(
       messageId: messageId ?? null,
       createdAt: Date.now(),
     })
+    if (!inserted.success)
+      return inserted
+    if (inserted.data.changes !== 1)
+      return err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'))
+    return ok(undefined)
   }
-  catch {
-    logger.debug('Send record not saved (db module unavailable)')
+  catch (cause) {
+    return err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'), cause)
   }
 }
 
@@ -399,7 +403,7 @@ async function flushPendingMessages(
  * 2. 预处理消息（模板渲染）
  * 3. 检查 DND 免打扰：
  *    - discard 策略：返回 DND_BLOCKED 错误
- *    - delay 策略：暂存到 DB（pending），返回 deferred 结果
+ *    - delay 策略：等待 DB 写入 pending 成功后返回 deferred 与 queueId；失败不视为入队
  * 4. 路由到目标 Provider
  * 5. 发送消息
  * 6. 保存发送记录（sent 状态）
@@ -444,20 +448,22 @@ export async function executeSend(
     const strategy = dndConfig?.strategy ?? 'discard'
 
     if (strategy === 'delay') {
-      // delay 策略：暂存消息到 DB
-      logger.info('Message deferred by DND (delay strategy)', { provider: providerName, to: message.to })
-      try {
-        await saveSendRecord(repo ?? null, preprocessed.data, 'pending', providerName)
-      }
-      catch (error) {
-        logger.warn('Failed to save deferred message to DB', { provider: providerName, to: message.to, error })
+      if (!repo)
+        return err(HaiReachError.SEND_FAILED, reachM('reach_dndPersistenceRequired'))
+
+      // 预先生成并随消息落盘，避免依赖不同数据库的自增 ID 返回约定。
+      const queueId = crypto.randomUUID()
+      const saved = await saveSendRecord(repo, preprocessed.data, 'pending', providerName, undefined, queueId)
+      if (!saved.success) {
+        logger.warn('Failed to persist deferred message', { provider: providerName, code: saved.error.code })
         return err(
           HaiReachError.SEND_FAILED,
-          reachM('reach_dndDeferred'),
-          error,
+          reachM('reach_dndEnqueueFailed'),
+          saved.error,
         )
       }
-      return ok({ success: true, deferred: true })
+      logger.info('Message persisted for DND delivery', { provider: providerName, queueId })
+      return ok({ success: true, deferred: true, queueId })
     }
 
     // discard 策略：直接拒绝
@@ -486,10 +492,13 @@ export async function executeSend(
     return result
   }
 
-  // 异步保存发送记录（sent 状态）
-  saveSendRecord(repo ?? null, preprocessed.data, 'sent', providerName, result.data.messageId).catch((error) => {
-    logger.warn('Failed to save send record', { provider: providerName, to: message.to, error })
-  })
+  // 已完成的外部发送不因可选日志失败而返回失败，避免调用方重发；仍记录持久化失败。
+  if (repo) {
+    void saveSendRecord(repo, preprocessed.data, 'sent', providerName, result.data.messageId).then((saved) => {
+      if (!saved.success)
+        logger.warn('Failed to persist sent message log', { provider: providerName, code: saved.error.code })
+    })
+  }
 
   return result
 }

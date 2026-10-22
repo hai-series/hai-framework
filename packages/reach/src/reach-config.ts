@@ -148,7 +148,7 @@ export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
  *
  * 在指定的时间段内，根据策略处理消息：
  * - `discard`：直接丢弃，返回 DND_BLOCKED 错误
- * - `delay`：暂存到数据库（状态为 pending），DND 结束后由定时任务集中发送
+ * - `delay`：要求已初始化的数据库及队列表；持久写入 pending 成功后返回 deferred/queueId，DND 结束后发送
  *
  * 时间使用 HH:mm 格式（24 小时制），支持跨午夜（如 22:00-08:00）。
  *
@@ -165,7 +165,7 @@ export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
 export const DndConfigSchema = z.object({
   /** 是否启用免打扰（默认 false） */
   enabled: z.boolean().default(false),
-  /** 免打扰策略：discard 丢弃 / delay 延时发送（默认 discard） */
+  /** discard 丢弃；delay 要求数据库队列就绪并确认入队（默认 discard）。 */
   strategy: z.enum(['discard', 'delay']).default('discard'),
   /** 免打扰开始时间（HH:mm 格式） */
   start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, reachM('reach_config_dndTimeInvalid')).default('00:00'),

@@ -99,7 +99,6 @@ describe('reach config', () => {
     expect(HaiReachError.TEMPLATE_NOT_FOUND.code).toBe('hai:reach:002')
     expect(HaiReachError.PROVIDER_NOT_FOUND.code).toBe('hai:reach:005')
     expect(HaiReachError.DND_BLOCKED.code).toBe('hai:reach:006')
-    expect(HaiReachError.DND_DEFERRED.code).toBe('hai:reach:007')
     expect(HaiReachError.CONFIG_ERROR.code).toBe('hai:reach:012')
   })
 

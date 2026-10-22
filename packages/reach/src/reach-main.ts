@@ -194,6 +194,17 @@ async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
   const parsed = parseResult.data
 
   try {
+    // delay 队列是可靠发送前置；连接任何 Provider、发布模块状态前先确认表已就绪。
+    let requiredQueue: SendLogRepository | null = null
+    if (parsed.dnd?.enabled && parsed.dnd.strategy === 'delay') {
+      if (!reldb.isInitialized)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+      const queue = await createSendLogRepository(reldb)
+      if (!queue.success)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'), queue.error)
+      requiredQueue = queue.data
+    }
+
     const newProviders = new Map<string, ReachProvider>()
 
     for (const providerConfig of parsed.providers) {
@@ -238,8 +249,8 @@ async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
       }
     }
 
-    // 尝试初始化发送日志存储
-    sendLogRepo = await tryInitSendLogRepo()
+    // delay 使用已验证的必需队列；即时发送的普通日志仍是可选能力。
+    sendLogRepo = requiredQueue ?? await tryInitSendLogRepo()
 
     // 启动 DND 恢复定时器
     if (dndConfig) {

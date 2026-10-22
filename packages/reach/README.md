@@ -23,7 +23,7 @@
 
 ### 依赖
 
-- `@h-ai/reldb` — 数据库（发送日志与模板持久化），可选；已初始化时自动启用持久化
+- `@h-ai/reldb` — 数据库（发送日志与模板持久化）；启用 `dnd.enabled: true` 与 `strategy: delay` 时必须先初始化且队列表可用，否则 `reach.init()` 返回 `CONFIG_ERROR`。其他发送场景可选
 - `@h-ai/cache` — 缓存（DND delay 策略分布式锁），可选；已初始化时自动启用分布式锁
 
 ### 快速开始
@@ -119,6 +119,18 @@ API 回调地址属于服务端可信配置。日志只记录回调 origin，不
 | `start`    | `string`               | —    | `00:00`   | 开始时间（HH:mm 格式）                  |
 | `end`      | `string`               | —    | `00:00`   | 结束时间（HH:mm 格式）                  |
 
+`delay` 仅在消息写入数据库并确认成功后返回 `HaiResult` 成功，结果为 `{ success: true, deferred: true, queueId }`；这表示已入队、尚未投递。`queueId` 是持久化回执 UUID，对应 `hai_reach_send_log.queue_id`，可查询该记录的 `status`（`pending` / `processing` / `sent`）。缺少数据库、断连、插入失败均不会返回 deferred 成功，发送时返回 `SEND_FAILED`。节点重启后，只要连接同一数据库、配置同名 Provider，便可在 DND 时段外恢复投递。即时发送成功后的普通日志保存仍为可选，不会因日志失败把已投递的消息报告为失败。
+
+```ts
+const result = await reach.send(message)
+if (!result.success)
+  throw new Error(result.error.message)
+if (result.data.deferred) {
+  // 保存 queueId 供后台跟踪；此时不能向用户显示“已送达”。
+  await savePendingReceipt(result.data.queueId)
+}
+```
+
 ### 错误处理
 
 所有操作返回 `HaiResult<T>`，错误码定义在 `HaiReachError`：
@@ -131,7 +143,6 @@ API 回调地址属于服务端可信配置。日志只记录回调 origin，不
 | `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | 无效接收方      |
 | `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider 未注册 |
 | `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | 免打扰丢弃      |
-| `HaiReachError.DND_DEFERRED`           | `hai:reach:007` | 免打扰延时暂存  |
 | `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | 未初始化        |
 | `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | 不支持的类型    |
 | `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | 配置错误        |

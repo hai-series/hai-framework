@@ -327,7 +327,8 @@
 
 ### REACH-01 · P1 · 延迟发送只有可靠入队后才返回成功
 
-- [ ] 待修正（源码确认；范围：reach）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：delay 启动要求数据库与队列表真正就绪，发送仅在确认插入一行后返回 deferred 与同批持久化的 UUID queueId；无DB、断连、返回错误、抛错或零行均失败。即时已发送后的可选日志故障不触发重发，删除冗余 DND_DEFERRED；三语README/配置/环境说明/skill/IAM接入同步。6定向文件79项、reach typecheck/lint/build、check:skills通过；真实A进程入队退出，B进程共享SQLite接管并向本地HTTP完成投递且queueId可查询sent，PG/MySQL及后续租约故障留对应任务验证；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/reach/src/reach-send.ts:127](../packages/reach/src/reach-send.ts#L127)；[packages/reach/src/reach-send.ts:460](../packages/reach/src/reach-send.ts#L460)。
 - **证据与影响**：saveSendRecord 在无 repo 时直接返回，对 repo.create 的失败结果不传播；DND 延迟分支仍返回 deferred。数据库失败或未启用存储时消息可能没有保存却宣称已排队。
 - **修正内容**：把队列持久化作为延迟发送的必需前置，检查 HaiResult 并向上返回失败；不可靠日志不能承担可靠消息队列语义。
