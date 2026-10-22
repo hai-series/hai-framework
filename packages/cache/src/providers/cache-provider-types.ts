@@ -8,16 +8,12 @@ import type { CacheCompositeOperations } from '../cache-types.js'
  *
  * 由具体实现（memory / redis）提供；上层通过 cache-main 统一管理生命周期。
  * @internal
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // 模块内部上下文：由内置适配器工厂交付 provider，由模块入口传入已校验配置。
  * async function connectAndClose(provider: CacheProvider, config: CacheConfig) {
  *   const connected = await provider.connect(config)
- *   if (!connected.success)
- *     return connected
- *   const active = provider.isConnected()
- *   await provider.close()
- *   return active
+ *   if (!connected.success) return connected
+ *   try { return await provider.ping() } finally { await provider.close() }
  * }
  * ```
  */

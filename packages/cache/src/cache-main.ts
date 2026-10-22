@@ -123,15 +123,20 @@ const notInitializedLock = notInitialized.proxy<LockOperations>()
 
 /**
  * 缓存服务对象
- *
  * @example
  * ```ts
  * import { cache } from '@h-ai/cache'
- *
- * await cache.init({ type: 'redis', host: 'localhost', port: 6379 })
- * await cache.kv.set('user:1', { name: '张三' }, { ex: 3600 })
- * const result = await cache.kv.get<{ name: string }>('user:1')
- * await cache.close()
+ * import { core } from '@h-ai/core'
+ * const initialized = await cache.init({ type: 'redis', host: 'localhost' })
+ * if (initialized.success) {
+ *   try {
+ *     const claimed = await cache.kv.set('orders:claim', 'worker-1', { nx: true, px: 60_000 })
+ *     if (claimed.success && claimed.data) core.logger.info('Claim created')
+ *   } finally {
+ *     const closed = await cache.close()
+ *     if (!closed.success) core.logger.error('Cache cleanup pending', { code: closed.error.code })
+ *   }
+ * }
  * ```
  */
 export const cache: CacheFunctions = {

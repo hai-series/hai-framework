@@ -29,6 +29,16 @@ const CacheErrorInfo = {
   INVALID_SET_OPTIONS: '016:400',
 } as const satisfies ErrorInfo
 
+/**
+ * 缓存连接、序列化、输入与分布式操作的稳定错误定义。
+ * @example
+ * ```ts
+ * import { HaiCacheError } from '@h-ai/cache'
+ * import { err } from '@h-ai/core'
+ * const failure = err(HaiCacheError.INVALID_SET_OPTIONS, 'Conflicting expiry options')
+ * if (!failure.success) failure.error.code
+ * ```
+ */
 export const HaiCacheError = core.error.buildHaiErrorsDef('cache', CacheErrorInfo)
 
 // ─── 缓存值类型 ───
@@ -37,12 +47,21 @@ export const HaiCacheError = core.error.buildHaiErrorsDef('cache', CacheErrorInf
  * 可缓存的值类型
  *
  * 说明：`object` 包含普通对象与数组；函数、Symbol、BigInt 等不建议直接缓存。
+ * @example
+ * ```ts
+ * import type { CacheValue } from '@h-ai/cache'
+ * const options: CacheValue = { id: 'order-1', paid: false }
+ * ```
  */
 export type CacheValue = string | number | boolean | object | null
 
 /**
  * SET 选项；四种期限彼此互斥且与 keepTtl 互斥，nx/xx 互斥。
- * @example const options: SetOptions = { px: 1000, nx: true }
+ * @example
+ * ```ts
+ * import type { SetOptions } from '@h-ai/cache'
+ * const options: SetOptions = { px: 60_000, nx: true }
+ * ```
  */
 export interface SetOptions {
   /** 过期时间（正安全整数秒），零/负数无效。 */
@@ -61,7 +80,14 @@ export interface SetOptions {
   keepTtl?: boolean
 }
 
-/** 扫描选项 */
+/**
+ * 扫描选项
+ * @example
+ * ```ts
+ * import type { ScanOptions } from '@h-ai/cache'
+ * const options: ScanOptions = { match: 'orders:*', count: 100 }
+ * ```
+ */
 export interface ScanOptions {
   /** 匹配模式 */
   match?: string
@@ -71,7 +97,11 @@ export interface ScanOptions {
 
 /**
  * 条件替换的过期策略；px 与 keepTtl 互斥，省略时新值永久保存。
- * @example const expiry: CompareAndSwapOptions = { px: 60_000 }
+ * @example
+ * ```ts
+ * import type { CompareAndSwapOptions } from '@h-ai/cache'
+ * const options: CompareAndSwapOptions = { px: 60_000 }
+ * ```
  */
 export interface CompareAndSwapOptions {
   /** 新值存续的正整数毫秒数。 */
@@ -80,7 +110,14 @@ export interface CompareAndSwapOptions {
   keepTtl?: boolean
 }
 
-/** 有序集合成员（score + member 对） */
+/**
+ * 有序集合成员（score + member 对）
+ * @example
+ * ```ts
+ * import type { ZMember } from '@h-ai/cache'
+ * const options: ZMember = { score: 100, member: 'player-1' }
+ * ```
+ */
 export interface ZMember {
   /** 分数，用于排序 */
   score: number
@@ -92,11 +129,17 @@ export interface ZMember {
 
 /**
  * 基础键值操作接口
- *
  * @example
  * ```ts
- * await cache.kv.set('key', { name: '张三' }, { ex: 3600 })
- * const result = await cache.kv.get<{ name: string }>('key')
+ * import type { KvOperations } from '@h-ai/cache'
+ * // 传入已初始化 cache 的对应操作；连接生命周期由创建者管理。
+ * async function example(operations: KvOperations) {
+ *   const claimed = await operations.set('orders:claim', 'worker-1', { nx: true, px: 60_000 })
+ *   if (!claimed.success) return claimed
+ *   if (!claimed.data) return 'already claimed'
+ *   const read = await operations.get<string>('orders:claim')
+ *   return read.success ? read.data : read.error.message
+ * }
  * ```
  */
 export interface KvOperations {
@@ -105,7 +148,14 @@ export interface KvOperations {
   /**
    * 设置 JSON 快照，返回实际是否写入；NX/XX 未命中为 success:true/data:false，原值与TTL不变。
    * 参数非法返回 INVALID_SET_OPTIONS；省略期限永久保存，keepTtl 显式保留原期限。
-   * @example const applied = await cache.kv.set('claim', 'owner', { nx: true, px: 1000 }); if (applied.success && !applied.data) return
+   * @example
+   * ```ts
+   * import type { KvOperations } from '@h-ai/cache'
+   * async function reserve(kv: KvOperations) {
+   *   const applied = await kv.set('orders:claim', 'worker-1', { nx: true, px: 1000 })
+   *   return applied.success ? applied.data : applied.error.message
+   * }
+   * ```
    */
   set: (key: string, value: CacheValue, options?: SetOptions) => Promise<HaiResult<boolean>>
   /**
@@ -114,8 +164,15 @@ export interface KvOperations {
    * 适合跨节点状态版本更新，Cluster 只涉及一个 slot；调用方必须检查 success 和 data。
    * @example
    * ```ts
-   * const changed = await cache.kv.compareAndSwap('state', oldState, nextState, { px: 60_000 })
-   * if (changed.success && !changed.data) return retryFromLatestState()
+   * import type { KvOperations } from '@h-ai/cache'
+   * async function advance(kv: KvOperations) {
+   *   const read = await kv.get<number>('orders:version')
+   *   if (!read.success) return read
+   *   const expected = read.data ?? undefined
+   *   const changed = await kv.compareAndSwap('orders:version', expected, (expected ?? 0) + 1, { px: 60_000 })
+   *   // data=false 时需要重新读取后再决定是否重试，不能按成功提交处理。
+   *   return changed.success ? changed.data : changed.error.message
+   * }
    * ```
    */
   compareAndSwap: (key: string, expected: CacheValue | undefined, value: CacheValue | undefined, options?: CompareAndSwapOptions) => Promise<HaiResult<boolean>>
@@ -149,8 +206,12 @@ export interface KvOperations {
    * 与 Redis SCAN 一致，不提供快照，可能返回重复项；调用方按需去重。
    * @example
    * ```ts
-   * const page = await cache.kv.scan('0', { match: 'users:*', count: 100 })
-   * if (page.success) { const [next, keys] = page.data }
+   * import type { KvOperations } from '@h-ai/cache'
+   * async function readPage(kv: KvOperations, cursor = '0') {
+   *   const page = await kv.scan(cursor, { match: 'orders:*', count: 100 })
+   *   if (!page.success) return page
+   *   return { next: page.data[0], keys: page.data[1] }
+   * }
    * ```
    */
   scan: (cursor: string, options?: ScanOptions) => Promise<HaiResult<[string, string[]]>>
@@ -164,11 +225,16 @@ export interface KvOperations {
 
 /**
  * Hash 操作接口
- *
  * @example
  * ```ts
- * await cache.hash.hset('user:1', { name: '张三', age: 25 })
- * const name = await cache.hash.hget<string>('user:1', 'name')
+ * import type { HashOperations } from '@h-ai/cache'
+ * // 传入已初始化 cache 的对应操作；连接生命周期由创建者管理。
+ * async function example(operations: HashOperations) {
+ *   const written = await operations.hset('orders:1', { status: 'pending', version: 1 })
+ *   if (!written.success) return written
+ *   const status = await operations.hget<string>('orders:1', 'status')
+ *   return status.success ? status.data : status.error.message
+ * }
  * ```
  */
 export interface HashOperations {
@@ -198,11 +264,16 @@ export interface HashOperations {
 
 /**
  * List 操作接口
- *
  * @example
  * ```ts
- * await cache.list.lpush('queue', 'task1', 'task2')
- * const item = await cache.list.rpop<string>('queue')
+ * import type { ListOperations } from '@h-ai/cache'
+ * // 传入已初始化 cache 的对应操作；连接生命周期由创建者管理。
+ * async function example(operations: ListOperations) {
+ *   const queued = await operations.rpush('orders:queue', 'order-1')
+ *   if (!queued.success) return queued
+ *   const next = await operations.lpop<string>('orders:queue')
+ *   return next.success ? next.data : next.error.message
+ * }
  * ```
  */
 export interface ListOperations {
@@ -234,11 +305,16 @@ export interface ListOperations {
 
 /**
  * Set 操作接口
- *
  * @example
  * ```ts
- * await cache.set_.sadd('tags', 'redis', 'cache')
- * const members = await cache.set_.smembers<string>('tags')
+ * import type { SetOperations } from '@h-ai/cache'
+ * // 传入已初始化 cache 的对应操作；连接生命周期由创建者管理。
+ * async function example(operations: SetOperations) {
+ *   const added = await operations.sadd('orders:tags', 'paid', 'priority')
+ *   if (!added.success) return added
+ *   const members = await operations.smembers<string>('orders:tags')
+ *   return members.success ? members.data : members.error.message
+ * }
  * ```
  */
 export interface SetOperations {
@@ -268,11 +344,16 @@ export interface SetOperations {
 
 /**
  * 有序集合操作接口
- *
  * @example
  * ```ts
- * await cache.zset.zadd('rank', { score: 100, member: 'player1' })
- * const top = await cache.zset.zrevrange('rank', 0, 9, true)
+ * import type { ZSetOperations } from '@h-ai/cache'
+ * // 传入已初始化 cache 的对应操作；连接生命周期由创建者管理。
+ * async function example(operations: ZSetOperations) {
+ *   const added = await operations.zadd('orders:rank', { member: 'order-1', score: 100 })
+ *   if (!added.success) return added
+ *   const top = await operations.zrevrange('orders:rank', 0, 9, true)
+ *   return top.success ? top.data : top.error.message
+ * }
  * ```
  */
 export interface ZSetOperations {
@@ -315,16 +396,16 @@ export interface ZSetOperations {
  * 分布式锁操作接口
  *
  * 基于 SET NX EX 模式实现分布式互斥锁，适用于多节点部署场景。
- *
  * @example
  * ```ts
- * const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
- * if (acquired.success && acquired.data) {
- *   try {
- *     // 执行受保护操作
- *   } finally {
- *     await cache.lock.release('my-lock', acquired.data)
- *   }
+ * import type { LockOperations } from '@h-ai/cache'
+ * // 传入已初始化 cache 的对应操作；连接生命周期由创建者管理。
+ * async function example(operations: LockOperations) {
+ *   const acquired = await operations.acquire('orders:lock', { ttl: 30 })
+ *   if (!acquired.success || !acquired.data) return acquired
+ *   const released = await operations.release('orders:lock', acquired.data)
+ *   // owner 不是 fencing token；业务最终写入仍需自己的数据库/CAS条件。
+ *   return released.success ? released.data : released.error.message
  * }
  * ```
  */
@@ -374,7 +455,14 @@ export interface LockOperations {
   extend: (key: string, ttl: number, owner: string) => Promise<HaiResult<boolean>>
 }
 
-/** 分布式锁选项 */
+/**
+ * 分布式锁选项
+ * @example
+ * ```ts
+ * import type { LockOptions } from '@h-ai/cache'
+ * const options: LockOptions = { ttl: 30 }
+ * ```
+ */
 export interface LockOptions {
   /** 锁过期时间（秒）；默认 30 */
   ttl?: number
@@ -386,6 +474,17 @@ export interface LockOptions {
  * 复合缓存操作接口，聚合所有数据结构的操作子接口
  *
  * 通过 `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` / `cache.lock` 分别访问
+ * @example
+ * ```ts
+ * import type { CacheCompositeOperations } from '@h-ai/cache'
+ * // 传入已初始化 cache 的对应操作；连接生命周期由创建者管理。
+ * async function example(operations: CacheCompositeOperations) {
+ *   const health = await operations.ping()
+ *   if (!health.success) return health
+ *   const result = await operations.kv.get<string>('orders:1')
+ *   return result.success ? result.data : result.error.message
+ * }
+ * ```
  */
 export interface CacheCompositeOperations {
   /** KV 操作 */
@@ -408,15 +507,16 @@ export interface CacheCompositeOperations {
 
 /**
  * 缓存函数接口
- *
  * @example
  * ```ts
- * import { cache } from '@h-ai/cache'
- *
- * await cache.init({ type: 'redis', host: 'localhost' })
- * await cache.kv.set('key', 'value', { ex: 3600 })
- * const result = await cache.kv.get('key')
- * await cache.close()
+ * import type { CacheFunctions } from '@h-ai/cache'
+ * // 传入已初始化 cache 的对应操作；连接生命周期由创建者管理。
+ * async function example(operations: CacheFunctions) {
+ *   const initialized = await operations.init({ type: 'redis', host: 'localhost' })
+ *   if (!initialized.success) return initialized
+ *   try { return await operations.kv.get<string>('orders:1') }
+ *   finally { const closed = await operations.close(); if (!closed.success) return closed }
+ * }
  * ```
  */
 export interface CacheFunctions extends CacheCompositeOperations {

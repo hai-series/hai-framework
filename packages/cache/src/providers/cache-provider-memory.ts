@@ -15,7 +15,14 @@ import { validateSetOptions } from './cache-set-options.js'
 
 // ─── 内部类型 ───
 
-/** KV 存储项（包含值和可选的过期时间戳） */
+/**
+ * KV 存储项（包含值和可选的过期时间戳）
+ * @example 模块内部上下文
+ * ```ts
+ * const entry: CacheEntry = { value: { id: 'order-1' }, expiresAt: Date.now() + 1000 }
+ * const expired = entry.expiresAt !== undefined && entry.expiresAt <= Date.now()
+ * ```
+ */
 interface CacheEntry {
   /** 缓存值 */
   value: CacheValue
@@ -72,6 +79,15 @@ function globToRegex(pattern: string): RegExp {
  * close() 后所有数据清空。
  *
  * @returns CacheProvider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createMemoryProvider()
+ * const connected = await provider.connect({ type: 'memory' })
+ * if (connected.success) {
+ *   try { const health = await provider.ping(); if (!health.success) health.error.code }
+ *   finally { await provider.close() }
+ * }
+ * ```
  */
 export function createMemoryProvider(): CacheProvider {
   /** KV 存储（带过期时间） */

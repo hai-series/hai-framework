@@ -7,7 +7,11 @@ import { HaiCacheError } from '../cache-types.js'
 
 /**
  * 已验证的单一过期策略；相对时间仍由 Redis 自身时钟执行。
- * @example const expiry: ValidatedSetOptions = { nx: true, xx: false, keepTtl: false, expiry: ['PX', 1000], expiresAt: Date.now() + 1000 }
+ * @example 模块内部上下文
+ * ```ts
+ * const expiry: ValidatedSetOptions = { nx: true, xx: false, keepTtl: false, expiry: ['PX', 1000], expiresAt: Date.now() + 1000 }
+ * const mode = expiry.expiry?.[0]
+ * ```
  */
 interface ValidatedSetOptions {
   /** 只允许不存在的键写入。 */
@@ -26,7 +30,12 @@ interface ValidatedSetOptions {
  * 校验 SET 选项，不修改输入；零/负数、小数、非有限或不安全整数以及冲突策略均失败。
  * @param options - 调用方选项；省略时永久写入，条件未命中不会修改原值/TTL。
  * @returns 已验证策略或 INVALID_SET_OPTIONS；不抛业务异常。
- * @example const result = validateSetOptions({ px: 1000, nx: true }); if (!result.success) return result
+ * @example 模块内部上下文
+ * ```ts
+ * const parsed = validateSetOptions({ nx: true, px: 1000 })
+ * if (parsed.success) parsed.data.expiry
+ * else parsed.error.code
+ * ```
  */
 export function validateSetOptions(options?: SetOptions): HaiResult<ValidatedSetOptions> {
   const invalid = () => err(HaiCacheError.INVALID_SET_OPTIONS, cacheM('cache_invalidSetOptions'))

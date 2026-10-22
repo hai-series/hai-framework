@@ -36,39 +36,27 @@ Redis falls back to disconnect when QUIT fails, and reports success only after r
 ### Quick start
 
 ```ts
-import { cache, HaiCacheError } from '@h-ai/cache'
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 
-const initResult = await cache.init({ type: 'memory' })
-if (!initResult.success) {
-  throw new Error(initResult.error.message)
+const initialized = await cache.init({ type: 'redis', host: 'localhost' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const written = await cache.kv.set('user:1', { name: 'Alice' }, { ex: 3600 })
+  if (!written.success)
+    throw new Error(written.error.message)
+  const user = await cache.kv.get<{ name: string }>('user:1')
+  if (!user.success)
+    throw new Error(user.error.message)
+  if (user.data)
+    core.logger.info('Cached user', { name: user.data.name })
 }
-
-await cache.kv.set('user:1', { name: '张三' }, { ex: 3600 })
-const user = await cache.kv.get<{ name: string }>('user:1')
-
-await cache.hash.hset('profile:1', { age: 18, city: 'Hangzhou' })
-await cache.list.lpush('queue:jobs', 'job-1', 'job-2')
-await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
-await cache.zset.zadd('rank', { member: 'u1', score: 100 })
-
-// 分布式锁
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
-if (acquired.success && acquired.data) {
-  try {
-    // 执行受保护的操作
-  }
-  finally {
-    await cache.lock.release('my-lock', acquired.data)
-  }
+finally {
+  const closed = await cache.close()
+  if (!closed.success)
+    core.logger.error('Cache cleanup pending', { code: closed.error.code })
 }
-
-if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
-  // 请先调用 cache.init()
-}
-
-const closeResult = await cache.close()
-if (!closeResult.success)
-  throw new Error(closeResult.error.message)
 ```
 
 `cache.config` returns a **redacted configuration snapshot**. Redis credential fields such as `password` / `url` are sanitized automatically; do not use the snapshot to write back original secrets.
@@ -197,3 +185,5 @@ compareAndSwap atomically compares one JSON value and replaces/deletes it, retur
 The owner token only protects lease renewal and release; it is not a resource fencing token. A paused task can resume after expiry. Final writes require CAS, generation predicates or transactional constraints in the resource store; renewal or returning a failure afterwards cannot prevent a stale commit.
 
 `kv.set` returns `HaiResult<boolean>`: `data=true` means the write applied. An NX/XX miss returns `success=true,data=false` without changing the value or TTL. Check both fields before issuing tickets, sessions or key registrations. `ex/px/exat/pxat` use seconds, milliseconds, Unix seconds and Unix milliseconds; choose one positive safe integer, excluding `keepTtl=true`. NX and XX are mutually exclusive. Zero, negative, fractional, non-finite or overflowing values return `INVALID_SET_OPTIONS` (`cache:016`) without creating a permanent key. A positive absolute deadline in the past expires immediately. Omitting expiry removes an existing TTL; `keepTtl` retains it and leaves new keys permanent. Both providers store JSON snapshots.
+
+Public contracts and internal structures include typechecked examples; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).

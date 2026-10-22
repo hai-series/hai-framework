@@ -68,6 +68,15 @@ const EXTEND_LOCK_SCRIPT = `
  * 值序列化规则：string 直接存储，其它类型经 JSON.stringify。
  *
  * @returns CacheProvider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createRedisProvider()
+ * async function connect(config: CacheConfig) {
+ *   const connected = await provider.connect(config)
+ *   if (!connected.success) return connected
+ *   try { return await provider.ping() } finally { await provider.close() }
+ * }
+ * ```
  */
 export function createRedisProvider(): CacheProvider {
   /** ioredis 客户端实例；connect 后赋值，close 后置 null */

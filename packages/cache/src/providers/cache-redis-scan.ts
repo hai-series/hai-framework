@@ -5,7 +5,14 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 
-/** 内部校验错误，由 Provider 转换为 HaiResult。 */
+/**
+ * 内部校验错误，由 Provider 转换为 HaiResult。
+ * @example 模块内部上下文
+ * ```ts
+ * const error = new RedisScanError('topology')
+ * const restartTraversal = error.reason === 'topology'
+ * ```
+ */
 export class RedisScanError extends Error {
   constructor(readonly reason: 'invalid' | 'topology') {
     super(`Redis scan ${reason}`)
@@ -41,9 +48,12 @@ function escapeGlob(prefix: string): string {
  * @param options - match/count；一次遍历的 match 必须保持不变
  * @returns 下一游标及去除 keyPrefix 的逻辑 key；'0' 表示遍历结束
  * @throws 无效游标或拓扑变化，由 Provider 边界转换为结构化失败。
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const [next, keys] = await scanRedisKeys(client, '0', { match: 'users:*' })
+ * async function scan(client: Redis | Cluster) {
+ *   const [cursor, keys] = await scanRedisKeys(client, '0', { match: 'orders:*', count: 100 })
+ *   return { cursor, keys: [...new Set(keys)] }
+ * }
  * ```
  */
 export async function scanRedisKeys(client: Redis | Cluster, cursor: string, options: ScanOptions = {}): Promise<[string, string[]]> {

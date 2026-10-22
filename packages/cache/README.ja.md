@@ -36,39 +36,27 @@ Redis の QUIT が失敗した場合は disconnect で切断し、解放が完�
 ### クイックスタート
 
 ```ts
-import { cache, HaiCacheError } from '@h-ai/cache'
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 
-const initResult = await cache.init({ type: 'memory' })
-if (!initResult.success) {
-  throw new Error(initResult.error.message)
+const initialized = await cache.init({ type: 'redis', host: 'localhost' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const written = await cache.kv.set('user:1', { name: 'Alice' }, { ex: 3600 })
+  if (!written.success)
+    throw new Error(written.error.message)
+  const user = await cache.kv.get<{ name: string }>('user:1')
+  if (!user.success)
+    throw new Error(user.error.message)
+  if (user.data)
+    core.logger.info('Cached user', { name: user.data.name })
 }
-
-await cache.kv.set('user:1', { name: '张三' }, { ex: 3600 })
-const user = await cache.kv.get<{ name: string }>('user:1')
-
-await cache.hash.hset('profile:1', { age: 18, city: 'Hangzhou' })
-await cache.list.lpush('queue:jobs', 'job-1', 'job-2')
-await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
-await cache.zset.zadd('rank', { member: 'u1', score: 100 })
-
-// 分布式锁
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
-if (acquired.success && acquired.data) {
-  try {
-    // 执行受保护的操作
-  }
-  finally {
-    await cache.lock.release('my-lock', acquired.data)
-  }
+finally {
+  const closed = await cache.close()
+  if (!closed.success)
+    core.logger.error('Cache cleanup pending', { code: closed.error.code })
 }
-
-if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
-  // 请先调用 cache.init()
-}
-
-const closeResult = await cache.close()
-if (!closeResult.success)
-  throw new Error(closeResult.error.message)
 ```
 
 `cache.config` は**機密情報をマスクした設定スナップショット**を返します。Redis の `password` / `url` などの認証情報は自動処理されるため、元の秘密情報を書き戻す用途には使わないでください。
@@ -197,3 +185,5 @@ compareAndSwap は単一キーの JSON 値を原子的に比較・置換/削除�
 owner はリース延長・解除の所有権であり、リソースの fencing token ではありません。停止した処理は期限切れ後も再開できるため、最終書込には保存先の CAS・世代条件・トランザクション制約が必要です。延長や処理後の失敗返却だけでは旧書込を防げません。
 
 `kv.set` は `HaiResult<boolean>` を返し、`data=true` は書き込みの適用を表します。NX/XX が不成立なら `success=true,data=false` となり、値と TTL を変更しません。チケット、セッション、公鍵登録の発行前に両方を確認してください。`ex/px/exat/pxat` の単位は秒、ミリ秒、Unix 秒、Unix ミリ秒です。正の安全な整数を一つだけ指定し、`keepTtl=true` と併用できません。NX と XX も排他です。ゼロ、負数、小数、非有限値、オーバーフローは `INVALID_SET_OPTIONS`（`cache:016`）となり、永続キーを作成しません。過去の正の絶対期限は即時失効します。期限を省略すると既存 TTL は削除され、`keepTtl` は既存 TTL を維持します。新規キーは期限なしです。両 provider は JSON スナップショットを保存します。
+
+公開契約と内部構造には型検査できる例を用意しています。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。

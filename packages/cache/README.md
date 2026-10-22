@@ -36,39 +36,27 @@ Redis 的 QUIT 失败后会强制 disconnect；只有实际释放成功才报告
 ### 快速开始
 
 ```ts
-import { cache, HaiCacheError } from '@h-ai/cache'
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 
-const initResult = await cache.init({ type: 'memory' })
-if (!initResult.success) {
-  throw new Error(initResult.error.message)
+const initialized = await cache.init({ type: 'redis', host: 'localhost' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const written = await cache.kv.set('user:1', { name: 'Alice' }, { ex: 3600 })
+  if (!written.success)
+    throw new Error(written.error.message)
+  const user = await cache.kv.get<{ name: string }>('user:1')
+  if (!user.success)
+    throw new Error(user.error.message)
+  if (user.data)
+    core.logger.info('Cached user', { name: user.data.name })
 }
-
-await cache.kv.set('user:1', { name: '张三' }, { ex: 3600 })
-const user = await cache.kv.get<{ name: string }>('user:1')
-
-await cache.hash.hset('profile:1', { age: 18, city: 'Hangzhou' })
-await cache.list.lpush('queue:jobs', 'job-1', 'job-2')
-await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
-await cache.zset.zadd('rank', { member: 'u1', score: 100 })
-
-// 分布式锁
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
-if (acquired.success && acquired.data) {
-  try {
-    // 执行受保护的操作
-  }
-  finally {
-    await cache.lock.release('my-lock', acquired.data)
-  }
+finally {
+  const closed = await cache.close()
+  if (!closed.success)
+    core.logger.error('Cache cleanup pending', { code: closed.error.code })
 }
-
-if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
-  // 请先调用 cache.init()
-}
-
-const closeResult = await cache.close()
-if (!closeResult.success)
-  throw new Error(closeResult.error.message)
 ```
 
 `cache.config` 返回的是**脱敏后的配置快照**：如后续接入 Redis `password` / `url` 等凭证字段，会自动做安全处理，不应用作回写原始密钥。
@@ -208,3 +196,5 @@ compareAndSwap 对一个 key 原子比较 JSON 值并替换/删除，返回 bool
 owner 只保护锁的续期与释放，不是资源 fencing token。进程暂停或租约到期后旧任务仍能继续；最终写入必须在资源存储中使用 CAS、代际条件或事务约束。续租成功或最后返回失败都不能代替提交条件。
 
 `kv.set` 返回 `HaiResult<boolean>`：`data=true` 表示实际写入，NX/XX 未命中返回 `success=true,data=false` 且不改变原值或 TTL。签发票据、会话或登记公钥前必须检查这两个字段。`ex/px/exat/pxat` 分别使用秒、毫秒、Unix 秒、Unix 毫秒，须为正安全整数且只能指定一种，与 `keepTtl=true` 互斥；`nx/xx` 也互斥。零、负数、小数、非有限值或溢出返回 `INVALID_SET_OPTIONS`（`cache:016`），不会写成永久键。过去的正绝对时间表示立即过期。省略期限会移除原 TTL；`keepTtl` 保留已有 TTL，新键仍永久保存。memory 和 Redis 都保存 JSON 快照。
+
+公开契约与内部结构均提供可类型检查的示例；见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
