@@ -92,6 +92,12 @@ function createFailReldbCrudRepository<TItem>(failedResult: HaiResult<never>): R
  * @param ops - 数据操作接口（reldb.sql 或 tx）
  * @param config - CRUD 配置
  * @returns CRUD 仓库
+ * @example 模块内部上下文
+ * ```ts
+ * function users(ops: DmlOperations) {
+ *   return createCrud<{ id: string }>(ops, { table: 'users', dbType: 'postgresql', select: ['id'] })
+ * }
+ * ```
  */
 export function createCrud<TItem>(
   ops: DmlOperations,

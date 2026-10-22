@@ -37,20 +37,23 @@ import { HaiReldbError } from './reldb-types.js'
  * - 自动填充主键、createdAt、updatedAt
  * - 跨数据库类型值转换（BOOLEAN / TIMESTAMP / JSON）
  * - 支持事务上下文（所有方法均接受可选 tx 参数）
- *
  * @example
  * ```ts
- * class UserRepository extends BaseReldbCrudRepository<User> {
+ * import { BaseReldbCrudRepository, type ReldbFunctions } from '@h-ai/reldb'
+ *
+ * type User = { id: string, name: string }
+ * class Users extends BaseReldbCrudRepository<User> {
  *   constructor(db: ReldbFunctions) {
- *     super(db, {
- *       table: 'users',
- *       fields: [
- *         { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
- *         { fieldName: 'name', columnName: 'name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
- *         { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP' }, select: true, create: true, update: false },
- *       ],
- *     })
+ *     super(db, { table: 'users', fields: [
+ *       { fieldName: 'id', columnName: 'id', def: { type: 'TEXT', primaryKey: true }, select: true, create: true, update: false },
+ *       { fieldName: 'name', columnName: 'name', def: { type: 'TEXT' }, select: true, create: true, update: true },
+ *     ] })
  *   }
+ * }
+ * async function create(db: ReldbFunctions) { // db 已初始化。
+ *   const result = await new Users(db).create({ name: 'Alice' })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
  * }
  * ```
  */
@@ -465,6 +468,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param data - 业务字段与值的映射
    * @param tx - 可选事务句柄
    * @returns 插入结果（含 changes、lastInsertRowid）
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.create({ name: 'Alice' })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async create(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     const ready = await this.ensureReady()
@@ -487,6 +501,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param items - 待插入的业务数据数组
    * @param tx - 可选事务句柄
    * @returns 批量插入结果
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.createMany([{ name: 'Alice' }, { name: 'Bob' }])
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async createMany(items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const ready = await this.ensureReady()
@@ -522,6 +547,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param data - 业务字段与值的映射
    * @param tx - 可选事务句柄
    * @returns 执行结果（含 changes）
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.createOrUpdate({ id: 'u1', name: 'Alice' })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async createOrUpdate(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     const ready = await this.ensureReady()
@@ -586,6 +622,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param id - 主键值
    * @param tx - 可选事务句柄
    * @returns 业务模型对象或 null（未找到）
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.findById('u1')
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async findById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<TItem | null>> {
     const ready = await this.ensureReady()
@@ -603,6 +650,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param id - 主键值
    * @param tx - 可选事务句柄
    * @returns 业务模型对象（不存在时返回错误）
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.getById('u1')
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async getById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<TItem>> {
     const ready = await this.ensureReady()
@@ -618,6 +676,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param options - 查询条件（where、orderBy、limit、offset）
    * @param tx - 可选事务句柄
    * @returns 业务模型数组
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.findAll({ where: 'name = ?', params: ['Alice'] })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async findAll(options?: CrudQueryOptions, tx?: DmlWithTxOperations): Promise<HaiResult<TItem[]>> {
     const ready = await this.ensureReady()
@@ -633,6 +702,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param options - 分页查询条件（where、orderBy、pagination、overrides）
    * @param tx - 可选事务句柄
    * @returns 分页结果（含 items、total、page、pageSize）
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.findPage({ pagination: { page: 1, pageSize: 10 }, orderBy: 'id ASC' })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async findPage(options: CrudPageOptions, tx?: DmlWithTxOperations): Promise<HaiResult<PaginatedResult<TItem>>> {
     const ready = await this.ensureReady()
@@ -651,6 +731,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param data - 待更新的业务字段
    * @param tx - 可选事务句柄
    * @returns 更新结果（含 changes）
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.updateById('u1', { name: 'Bob' })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async updateById(id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     const ready = await this.ensureReady()
@@ -671,6 +762,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param id - 主键值
    * @param tx - 可选事务句柄
    * @returns 删除结果（含 changes）
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.deleteById('u1')
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async deleteById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     const ready = await this.ensureReady()
@@ -686,6 +788,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param options - 查询条件（where、params）
    * @param tx - 可选事务句柄
    * @returns 记录数
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.count({ where: 'name = ?', params: ['Alice'] })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async count(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<HaiResult<number>> {
     const ready = await this.ensureReady()
@@ -701,6 +814,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param options - 查询条件（where、params）
    * @param tx - 可选事务句柄
    * @returns 是否存在
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.exists({ where: 'name = ?', params: ['Alice'] })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async exists(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
     const ready = await this.ensureReady()
@@ -716,6 +840,17 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param id - 主键值
    * @param tx - 可选事务句柄
    * @returns 是否存在
+   * @example
+   * ```ts
+   * import type { ReldbCrudRepository } from '@h-ai/reldb'
+   *
+   * async function use(repo: ReldbCrudRepository<{ id: string, name: string }>) {
+   *   const result = await repo.existsById('u1')
+   *   if (!result.success) throw new Error(result.error.message)
+   *   return result.data
+   * }
+   * void use
+   * ```
    */
   async existsById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
     const ready = await this.ensureReady()

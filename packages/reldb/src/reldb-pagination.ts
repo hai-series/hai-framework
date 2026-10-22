@@ -64,17 +64,10 @@ function normalizePageSize(value: number | undefined, fallback: number, maxSize:
  * @param options - 用户传入的分页参数（可选）
  * @param overrides - 覆盖默认分页参数（可选）
  * @returns 规范化后的分页参数（含 offset、limit）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // 使用默认值
- * normalizePagination() // { page: 1, pageSize: 20, offset: 0, limit: 20 }
- *
- * // 自定义分页
- * normalizePagination({ page: 3, pageSize: 10 }) // { page: 3, pageSize: 10, offset: 20, limit: 10 }
- *
- * // 覆盖默认值
- * normalizePagination(undefined, { defaultPageSize: 50, maxPageSize: 100 })
+ * const page = normalizePagination({ page: 2, pageSize: 10 })
+ * void page.offset // 10
  * ```
  */
 export function normalizePagination(
@@ -107,15 +100,10 @@ export function normalizePagination(
  * @param total - 总记录数
  * @param pagination - 当前分页参数
  * @returns 标准分页结果对象
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const result = buildPaginatedResult(
- *   [{ id: 1, name: '张三' }],
- *   100,
- *   { page: 1, pageSize: 20 }
- * )
- * // { items: [...], total: 100, page: 1, pageSize: 20 }
+ * const result = buildPaginatedResult([{ id: 'u1' }], 1, { page: 1, pageSize: 20 })
+ * void result.items
  * ```
  */
 export function buildPaginatedResult<T>(
@@ -136,15 +124,11 @@ export function buildPaginatedResult<T>(
  * 分页工具集合
  *
  * 提供分页参数规范化与结果构建能力，通过 `reldb.pagination` 访问。
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * import { reldb } from '@h-ai/reldb'
- *
- * const pag = reldb.pagination.normalize({ page: 2, pageSize: 10 })
- * // pag.offset = 10, pag.limit = 10
- *
- * const result = reldb.pagination.build(items, total, pag)
+ * const page = pagination.normalize({ page: 2, pageSize: 10 })
+ * const result = pagination.build([{ id: 'u1' }], 1, page)
+ * void result
  * ```
  */
 export const pagination = {
@@ -162,12 +146,10 @@ export const pagination = {
  *
  * @param row - 查询返回行（可能为 null/undefined）
  * @returns 解析后的数值，无数据时返回 0
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * parseCount({ cnt: 42 })   // 42
- * parseCount({ total: 10 }) // 10
- * parseCount(null)           // 0
+ * const count = parseCount({ cnt: '42' })
+ * void count
  * ```
  */
 export function parseCount(row: Record<string, unknown> | null | undefined): number {

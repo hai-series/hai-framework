@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08，共 80 个，另有 21 个按模块拆分的 JSDoc 任务，共 101 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 42/52（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 43/52（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -769,7 +769,7 @@
 - [x] **JSDOC-13 / kit / P2**：核对 151 个 TS 顶层导出声明，修正 3 个无 JSDoc、91 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：34源码文件159声明159个真实类型示例覆盖服务端/浏览器入口、配置、认证、客户端、守卫、CRUD、共享限流和加密依赖结构；移除虚构kit.guard.auth等示例，业务/Client/框架控制流按实际返回或抛错使用。三语README把非空token即放行示例改为实际iam.auth.verifyToken，修正异步adapter await及无统一生命周期说明。kit类型、fresh ESM/DTS、定向lint零警告、159示例编译、34文件去注释代码等价、skills37/324与env检查通过；无运行时代码或公共契约变化；全量回归在全部任务实施后执行。
 - [ ] **JSDOC-14 / payment / P2**：核对 50 个 TS 顶层导出声明，修正 8 个无 JSDoc、47 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 - [ ] **JSDOC-15 / reach / P2**：核对 51 个 TS 顶层导出声明，修正 1 个无 JSDoc、42 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
-- [ ] **JSDOC-16 / reldb / P2**：核对 84 个 TS 顶层导出声明，修正 4 个无 JSDoc、57 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [x] **JSDOC-16 / reldb / P2**：核对 84 个 TS 顶层导出声明，修正 4 个无 JSDoc、57 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。 **实施与验证**：17源码94声明94真实例子及39个额外方法示例全部类型检查；生命周期/CRUD/事务例先检查HaiResult，明确tx.wrap仅抛错触发回滚、返回失败结果不会自动展开；修正DDL hasTable返回值、标识符长度并非各DB上限、JSON简单路径与原生insert/set差异。完整去注释TS AST对RELDB03后HEAD 17/17一致，无运行/类型/配置变化。source类型、fresh ESM/DTS含SQLite worker、定向lint零警告、94+39示例编译通过；三语README导航和许可证位置同步，JSON运行逻辑已在RELDB03独立提交；全量回归在全部任务实施后执行。
 - [ ] **JSDOC-17 / scheduler / P2**：核对 71 个 TS 顶层导出声明，修正 38 个无 JSDoc、67 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 - [ ] **JSDOC-18 / serv / P2**：核对 106 个 TS 顶层导出声明，修正 3 个无 JSDoc、98 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
 - [ ] **JSDOC-19 / storage / P2**：核对 49 个 TS 顶层导出声明，修正 5 个无 JSDoc、38 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。

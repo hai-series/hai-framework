@@ -21,7 +21,14 @@ import { Worker } from 'node:worker_threads'
 
 const require = createRequire(import.meta.url)
 
-/** 一条待执行的语句（批量 / 事务内使用）。 */
+/**
+ * 一条待执行的语句（批量 / 事务内使用）。
+ * @example 模块内部上下文
+ * ```ts
+ * const statement: SqliteStatement = { sql: 'INSERT INTO users (id) VALUES (?)', params: ['u1'] }
+ * void statement
+ * ```
+ */
 export interface SqliteStatement {
   sql: string
   params?: unknown[]
@@ -31,6 +38,15 @@ export interface SqliteStatement {
  * SQLite 执行引擎接口。
  *
  * 所有方法均为异步：同步引擎内部仍是阻塞调用（签名异步保持一致），worker 引擎为真正的跨线程异步。
+ * @example 模块内部上下文
+ * ```ts
+ * async function ready(engine: SqliteEngine) {
+ *   try {
+ *     await engine.initialize()
+ *     return await engine.get('SELECT 1 AS value')
+ *   } finally { await engine.close() }
+ * }
+ * ```
  */
 export interface SqliteEngine {
   /**
@@ -55,7 +71,14 @@ export interface SqliteEngine {
   isOpen: () => boolean
 }
 
-/** 引擎打开选项。 */
+/**
+ * 引擎打开选项。
+ * @example 模块内部上下文
+ * ```ts
+ * const options: SqliteEngineOptions = { database: ':memory:', readonly: false, walMode: false }
+ * void options
+ * ```
+ */
 export interface SqliteEngineOptions {
   /** 数据库文件路径或 ':memory:'。 */
   database: string
@@ -70,9 +93,14 @@ export interface SqliteEngineOptions {
  *
  * @param options - 打开选项。
  * @returns 已拥有连接的引擎；调用 initialize 后才可执行 SQL。
- * @example
- * const engine = createSyncSqliteEngine(options)
- * try { await engine.initialize() } finally { await engine.close() }
+ * @example 模块内部上下文
+ * ```ts
+ * const engine = createSyncSqliteEngine({ database: ':memory:', readonly: false, walMode: false })
+ * try {
+ *   await engine.initialize()
+ *   void await engine.get('SELECT 1 AS value')
+ * } finally { await engine.close() }
+ * ```
  */
 export function createSyncSqliteEngine(options: SqliteEngineOptions): SqliteEngine {
   const Database = require('better-sqlite3')
@@ -138,7 +166,15 @@ function resolveWorkerUrl(): URL {
   return candidates[0]
 }
 
-/** worker 响应消息。 */
+/**
+ * worker 响应消息。
+ * @example 模块内部上下文
+ * ```ts
+ * function failed(response: WorkerResponse) {
+ *   return response.ok ? undefined : response.error?.message
+ * }
+ * ```
+ */
 interface WorkerResponse {
   id: number
   ok: boolean
@@ -152,9 +188,14 @@ interface WorkerResponse {
  * @param options - 打开选项。
  * @param connectTimeoutMs - 等待 worker 打开数据库的超时时间。
  * @returns 已拥有 worker 的引擎；initialize 在握手失败或超时时 reject。
- * @example
- * const engine = createWorkerSqliteEngine(options, 10_000)
- * try { await engine.initialize() } finally { await engine.close() }
+ * @example 模块内部上下文
+ * ```ts
+ * const engine = createWorkerSqliteEngine({ database: ':memory:', readonly: false, walMode: false }, 10_000)
+ * try {
+ *   await engine.initialize()
+ *   void await engine.get('SELECT 1 AS value')
+ * } finally { await engine.close() }
+ * ```
  */
 export function createWorkerSqliteEngine(
   options: SqliteEngineOptions,

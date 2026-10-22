@@ -592,6 +592,8 @@ An empty MySQL `url` (including an empty environment placeholder) selects host/p
 
 `json.merge(column, patch)` implements RFC 7396 object patches on all three backends: preserve untouched nested keys, delete keys targeted by null, and replace arrays as a whole. PostgreSQL applies parameterized steps in a recursive CTE within one SQL statement, with no installed function or application read-modify-write. The patch root must be a JSON-serializable object; arbitrary JSON patch roots are outside this contract. Column expressions are developer-owned SQL; paths and values remain parameters. See [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) and [PostgreSQL JSON operators](https://www.postgresql.org/docs/16/functions-json.html).
 
+Source JSDoc follows the [shared conventions](../../docs/module-jsdoc.md): public examples use published entry points, and internal examples are checked in their module scope. After building, run `pnpm check:jsdoc --package reldb`; compiling examples does not replace backend behavior tests.
+
 ## License
 
 Apache-2.0

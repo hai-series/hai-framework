@@ -41,7 +41,16 @@ const PG_DOLLAR_TAG_REGEX = /^\$([A-Z_]\w*)?\$/i
 
 // ─── pg 类型定义（避免强依赖） ───
 
-/** PostgreSQL 连接池接口 */
+/**
+ * PostgreSQL 连接池接口
+ * @example 模块内部上下文
+ * ```ts
+ * async function ready(pool: PgPool) {
+ *   const client = await pool.connect()
+ *   try { return await client.query('SELECT 1') } finally { client.release() }
+ * }
+ * ```
+ */
 interface PgPool {
   query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
   connect: () => Promise<PgClient>
@@ -49,7 +58,15 @@ interface PgPool {
   on: (event: 'error', listener: (error: unknown) => void) => void
 }
 
-/** PostgreSQL 客户端接口 */
+/**
+ * PostgreSQL 客户端接口
+ * @example 模块内部上下文
+ * ```ts
+ * async function ready(client: PgClient) {
+ *   try { return await client.query('SELECT 1') } finally { client.release() }
+ * }
+ * ```
+ */
 interface PgClient {
   query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
   release: () => void
@@ -61,6 +78,12 @@ interface PgClient {
  * 创建 PostgreSQL Provider 实例
  *
  * @returns PostgreSQL Provider
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createPostgresProvider()
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createPostgresProvider(): ReldbProvider {
   /** 连接池实例 */

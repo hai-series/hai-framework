@@ -2,7 +2,7 @@
  * @h-ai/reldb — JSON 操作 SQL 构建器
  *
  * 为不同数据库后端提供统一的 JSON 路径操作 SQL 表达式构建能力。
- * 路径格式遵循 SQL/JSON Path 标准（`$.key` / `$.key.subkey` / `$[0]`）。
+ * 路径支持简单点号与方括号路径（`$.key` / `$.key.subkey` / `$[0]`），不是完整 SQL/JSON Path 校验器。
  *
  * 各数据库后端映射：
  *
@@ -26,15 +26,12 @@ import { reldbM } from './reldb-i18n.js'
  *
  * 包含可嵌入 SQL 语句的表达式片段与对应参数列表。
  * 参数占位符统一使用 `?`，各 Provider 会在执行前自动转换。
- *
  * @example
  * ```ts
- * const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
- * // 将 sql 和 params 嵌入到完整 SQL 中执行
- * await reldb.sql.execute(
- *   `UPDATE users SET settings = ${sql} WHERE id = ?`,
- *   [...params, userId],
- * )
+ * import { createJsonOps, type JsonSqlExpr } from '@h-ai/reldb'
+ *
+ * const expression: JsonSqlExpr = createJsonOps('postgresql').set('settings', '$.theme', 'dark')
+ * void [expression.sql, expression.params]
  * ```
  */
 export interface JsonSqlExpr {
@@ -50,25 +47,16 @@ export interface JsonSqlExpr {
  * 提供跨数据库统一的 JSON 路径操作 SQL 构建能力。
  * 所有方法返回 `JsonSqlExpr`，可嵌入 `reldb.sql.query` / `reldb.sql.execute` 等调用。
  *
- * 路径格式：遵循 SQL/JSON Path 标准，以 `$` 开头：
+ * 路径使用以下简单形式，建议以 `$` 开头：
  * - 对象字段：`$.key`、`$.key.subkey`
  * - 数组元素：`$[0]`、`$.items[1]`
- *
  * @example
  * ```ts
- * // 提取 JSON 字段值（用于 SELECT 或 WHERE）
- * const { sql, params } = reldb.json.extract('settings', '$.theme')
- * const rows = await reldb.sql.query(
- *   `SELECT * FROM users WHERE ${sql} = ?`,
- *   [...params, '"dark"'],
- * )
+ * import { createJsonOps, type ReldbJsonOps } from '@h-ai/reldb'
  *
- * // 设置 JSON 字段的某个路径（用于 UPDATE SET）
- * const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
- * await reldb.sql.execute(
- *   `UPDATE users SET settings = ${sql} WHERE id = ?`,
- *   [...params, userId],
- * )
+ * const json: ReldbJsonOps = createJsonOps('postgresql')
+ * const patch = json.merge('settings', { theme: 'dark', obsolete: null })
+ * void patch // 作为同一次 UPDATE 的 SQL 表达式执行，值在 params。
  * ```
  */
 export interface ReldbJsonOps {
@@ -81,13 +69,12 @@ export interface ReldbJsonOps {
    * @param column - 列名（或 SQL 列表达式，开发者负责安全性，禁止传入用户输入）
    * @param path - JSON 路径（如 `$.status`、`$.user.name`、`$[0]`）
    * @returns SQL 表达式与参数
-   *
    * @example
    * ```ts
-   * const { sql, params } = reldb.json.extract('data', '$.status')
-   * // SQLite:     sql = "json_extract(data, ?)",    params = ["$.status"]
-   * // PostgreSQL: sql = "data #> ?::text[]",         params = [["status"]]
-   * // MySQL:      sql = "JSON_EXTRACT(data, ?)",     params = ["$.status"]
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const expression = reldb.json.extract('settings', '$.theme')
+   * void [expression.sql, expression.params]
    * ```
    */
   extract: (column: string, path: string) => JsonSqlExpr
@@ -95,21 +82,20 @@ export interface ReldbJsonOps {
   /**
    * JSON 路径设置表达式（创建或替换）
    *
-   * 在 JSON 列的指定路径设置新值。若路径不存在则创建，若已存在则替换。
+   * 设置指定路径的值；PostgreSQL 要求父路径存在，其他后端按原生 JSON 函数处理缺失父路径。
    * 返回修改后的完整 JSON 值，通常用于 `UPDATE SET col = ...`。
    *
    * @param column - 列名（开发者负责安全性，禁止传入用户输入）
    * @param path - JSON 路径
    * @param value - 要设置的值（支持任意 JSON 兼容类型）
    * @returns SQL 表达式与参数
-   *
    * @example
    * ```ts
-   * const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
-   * await reldb.sql.execute(
-   *   `UPDATE users SET settings = ${sql} WHERE id = ?`,
-   *   [...params, id],
-   * )
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const expression = reldb.json.set('settings', '$.theme', 'dark')
+   * const result = await reldb.sql.execute(`UPDATE users SET settings = ${expression.sql} WHERE id = ?`, [...expression.params, 'u1'])
+   * if (!result.success) throw new Error(result.error.message)
    * ```
    */
   set: (column: string, path: string, value: unknown) => JsonSqlExpr
@@ -117,21 +103,20 @@ export interface ReldbJsonOps {
   /**
    * JSON 路径插入表达式（仅当路径不存在时）
    *
-   * 仅在指定路径不存在时插入新值，已存在的路径不会被覆盖。
+   * 使用后端原生插入语义：SQLite/MySQL 不覆盖已有值；PostgreSQL 对已有对象键报错，数组路径按 jsonb_insert 插入。
    * 返回修改后的完整 JSON 值。
    *
    * @param column - 列名（开发者负责安全性，禁止传入用户输入）
    * @param path - JSON 路径
    * @param value - 要插入的值
    * @returns SQL 表达式与参数
-   *
    * @example
    * ```ts
-   * const { sql, params } = reldb.json.insert('data', '$.newField', 'value')
-   * await reldb.sql.execute(
-   *   `UPDATE items SET data = ${sql} WHERE id = ?`,
-   *   [...params, id],
-   * )
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const expression = reldb.json.insert('settings', '$.newField', 'value')
+   * const result = await reldb.sql.execute(`UPDATE users SET settings = ${expression.sql} WHERE id = ?`, [...expression.params, 'u1'])
+   * if (!result.success) throw new Error(result.error.message)
    * ```
    */
   insert: (column: string, path: string, value: unknown) => JsonSqlExpr
@@ -145,14 +130,13 @@ export interface ReldbJsonOps {
    * @param column - 列名（开发者负责安全性，禁止传入用户输入）
    * @param path - JSON 路径
    * @returns SQL 表达式与参数
-   *
    * @example
    * ```ts
-   * const { sql, params } = reldb.json.remove('settings', '$.deprecated')
-   * await reldb.sql.execute(
-   *   `UPDATE users SET settings = ${sql} WHERE id = ?`,
-   *   [...params, id],
-   * )
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const expression = reldb.json.remove('settings', '$.obsolete')
+   * const result = await reldb.sql.execute(`UPDATE users SET settings = ${expression.sql} WHERE id = ?`, [...expression.params, 'u1'])
+   * if (!result.success) throw new Error(result.error.message)
    * ```
    */
   remove: (column: string, path: string) => JsonSqlExpr
@@ -170,14 +154,13 @@ export interface ReldbJsonOps {
    * @param column - 列名（开发者负责安全性，禁止传入用户输入）
    * @param patch - 要合并的 JSON 对象
    * @returns SQL 表达式与参数
-   *
    * @example
    * ```ts
-   * const { sql, params } = reldb.json.merge('profile', { bio: 'new bio', avatar: null })
-   * await reldb.sql.execute(
-   *   `UPDATE users SET profile = ${sql} WHERE id = ?`,
-   *   [...params, id],
-   * )
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const expression = reldb.json.merge('settings', { theme: 'dark', obsolete: null })
+   * const result = await reldb.sql.execute(`UPDATE users SET settings = ${expression.sql} WHERE id = ?`, [...expression.params, 'u1'])
+   * if (!result.success) throw new Error(result.error.message)
    * ```
    */
   merge: (column: string, patch: Record<string, unknown>) => JsonSqlExpr
@@ -194,12 +177,11 @@ const JSON_PATH_OBJECT_SEGMENT_REGEX = /^([^.[]+)/
  *
  * @param path - JSON 路径（以 `$` 开头）
  * @returns 路径段数组
- *
  * @example
  * ```ts
- * parseJsonPath('$.user.name')  // ['user', 'name']
- * parseJsonPath('$.items[0]')   // ['items', '0']
- * parseJsonPath('$[1]')         // ['1']
+ * import { parseJsonPath } from '@h-ai/reldb'
+ *
+ * void parseJsonPath('$.items[0].name') // ['items', '0', 'name']
  * ```
  */
 export function parseJsonPath(path: string): string[] {
@@ -399,7 +381,7 @@ function createPostgresJsonOps(): ReldbJsonOps {
 /**
  * 创建 MySQL 的 JSON 操作实现
  *
- * 使用 MySQL 内置 JSON 函数（需 MySQL 5.7.8+ 或 MariaDB 10.2+）。
+ * 使用 MySQL 内置 JSON 函数；本仓库使用真实 MySQL 8.4 验证，不声明 MariaDB 兼容。
  * 路径使用 JSON Path 标准格式（`$.key`）。
  */
 function createMysqlJsonOps(): ReldbJsonOps {
@@ -448,15 +430,13 @@ function createMysqlJsonOps(): ReldbJsonOps {
  *
  * @param dbType - 数据库类型（来自 `reldb.config?.type`）
  * @returns JSON 操作实例
- *
  * @example
  * ```ts
- * // 通过 reldb.json 直接使用（推荐）
- * const { sql, params } = reldb.json.extract('data', '$.key')
+ * import { createJsonOps } from '@h-ai/reldb'
  *
- * // 手动创建（用于测试或特殊场景）
- * const jsonOps = createJsonOps('sqlite')
- * const { sql, params } = jsonOps.set('data', '$.key', 'value')
+ * const sqlite = createJsonOps('sqlite')
+ * const expression = sqlite.extract('settings', '$.theme')
+ * void expression
  * ```
  */
 export function createJsonOps(dbType: 'sqlite' | 'postgresql' | 'mysql'): ReldbJsonOps {

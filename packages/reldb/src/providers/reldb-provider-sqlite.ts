@@ -43,6 +43,12 @@ const logger = core.logger.child({ module: 'reldb', scope: 'sqlite' })
  * 创建 SQLite Provider 实例
  *
  * @returns SQLite Provider
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createSqliteProvider()
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createSqliteProvider(): ReldbProvider {
   /** SQLite 执行引擎（同步或 worker） */

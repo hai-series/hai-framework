@@ -152,33 +152,21 @@ const notInitializedTx: TxManager = {
  * - `reldb.json` - JSON 路径操作 SQL 构建器（提取、设置、插入、删除、合并）
  * - `reldb.config` - 当前配置
  * - `reldb.isInitialized` - 初始化状态
- *
  * @example
  * ```ts
  * import { reldb } from '@h-ai/reldb'
  *
- * // 初始化
- * await reldb.init({ type: 'sqlite', database: ':memory:' })
- *
- * // DDL 操作
- * await reldb.ddl.createTable('users', {
- *     id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
- *     name: { type: 'TEXT', notNull: true }
- * })
- *
- * // SQL 操作
- * await reldb.sql.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
- * const users = await reldb.sql.query('SELECT * FROM users')
- *
- * // 事务操作
- * await reldb.tx.wrap(async (tx) => {
- *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
- *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
- *     return 'done'
- * })
- *
- * // 关闭连接
- * await reldb.close()
+ * const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' }) // 仅示例/测试。
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const created = await reldb.ddl.createTable('users', { id: { type: 'TEXT', primaryKey: true }, name: { type: 'TEXT' } })
+ *   if (!created.success) throw new Error(created.error.message)
+ *   const inserted = await reldb.sql.execute('INSERT INTO users (id, name) VALUES (?, ?)', ['u1', 'Alice'])
+ *   if (!inserted.success) throw new Error(inserted.error.message)
+ * } finally {
+ *   const closed = await reldb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export const reldb: ReldbFunctions = {
@@ -187,6 +175,14 @@ export const reldb: ReldbFunctions = {
    *
    * @param config - 数据库配置（允许部分字段，内部会补齐默认值）
    * @returns 初始化结果，失败时包含错误信息
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.init({ type: 'sqlite', database: ':memory:' })
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
    */
   async init(config: ReldbConfigInput): Promise<HaiResult<void>> {
     if (initInProgress || closingPromise) {
@@ -339,8 +335,13 @@ export const reldb: ReldbFunctions = {
    * 等待初始化和在途事务，停止接收新操作；失败时保留资源供 close/init 重试。
    * @returns 所有资源释放成功才返回成功；并发关闭共享同一清理过程。
    * @example
-   * const closed = await reldb.close()
-   * if (!closed.success) await reldb.close()
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.close()
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
    */
   async close(): Promise<HaiResult<void>> {
     if (!closingPromise) {

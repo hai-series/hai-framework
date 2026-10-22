@@ -9,18 +9,15 @@ import type { CrudManager, DdlOperations, DmlOperations, TxManager } from '../re
  * 内部使用，定义各数据库驱动需要实现的接口。
  * 每个数据库类型（SQLite、PostgreSQL、MySQL）都有对应的 Provider 实现。
  * @internal
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // 模块内部上下文：由内置适配器工厂交付 provider，由模块入口传入已校验配置。
- * async function connectAndClose(provider: ReldbProvider, config: ReldbConfig) {
+ * async function read(provider: ReldbProvider, config: ReldbConfig) {
  *   const connected = await provider.connect(config)
- *   if (!connected.success)
- *     return connected
- *   const active = provider.isConnected()
- *   const closed = await provider.close()
- *   if (!closed.success)
- *     return closed
- *   return active
+ *   if (!connected.success) return connected
+ *   try { return await provider.sql.query('SELECT 1') } finally {
+ *     const closed = await provider.close()
+ *     if (!closed.success) throw new Error(closed.error.message)
+ *   }
  * }
  * ```
  */

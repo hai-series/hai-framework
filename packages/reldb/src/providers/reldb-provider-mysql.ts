@@ -36,14 +36,30 @@ import { createTxHandle } from './reldb-tx-assembler.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'mysql' })
 
-/** 借用真实驱动连接及其容量槽位；超时只约束借用完成前，不中止已启动 SQL。 */
+/**
+ * 借用真实驱动连接及其容量槽位；超时只约束借用完成前，不中止已启动 SQL。
+ * @example 模块内部上下文
+ * ```ts
+ * async function ready(lease: MysqlConnectionLease) {
+ *   try { return await lease.connection.query('SELECT 1') } finally { lease.release() }
+ * }
+ * ```
+ */
 interface MysqlConnectionLease {
   connection: MysqlConnection
   deadline: number
   release: () => void
 }
 
-/** 可取消的 FIFO 排队项；进入驱动前可直接移除，绝不留在 mysql2 内部队列。 */
+/**
+ * 可取消的 FIFO 排队项；进入驱动前可直接移除，绝不留在 mysql2 内部队列。
+ * @example 模块内部上下文
+ * ```ts
+ * function cancel(waiter: MysqlConnectionWaiter) {
+ *   waiter.cancel() // 超时后不能再转交给 mysql2 排队。
+ * }
+ * ```
+ */
 interface MysqlConnectionWaiter {
   start: () => void
   cancel: () => void
@@ -55,6 +71,12 @@ interface MysqlConnectionWaiter {
  * 创建 MySQL Provider 实例
  *
  * @returns MySQL Provider
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createMysqlProvider()
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createMysqlProvider(): ReldbProvider {
   /** 连接池实例 */

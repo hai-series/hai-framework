@@ -592,6 +592,8 @@ MySQL の空 `url`（空の環境変数を含む）は host/port/database/user/p
 
 `json.merge(column, patch)` は三つのバックエンドで RFC 7396 のオブジェクトパッチを実装します。未変更の入れ子キーを保持し、null が指定したキーを削除し、配列を全体置換します。PostgreSQL はパラメーター化した再帰 CTE を単一 SQL 内で適用し、関数の事前インストールやアプリ側の読み取り後の書き戻しを必要としません。パッチのルートは JSON シリアライズ可能なオブジェクトに限ります。列式は開発者の静的 SQL で、パスと値はパラメーターです。[RFC 7396](https://www.rfc-editor.org/rfc/rfc7396)・[PostgreSQL JSON 演算](https://www.postgresql.org/docs/16/functions-json.html)。
 
+ソースの JSDoc は[共通規約](../../docs/module-jsdoc.md)に従います。公開例は実際の公開入口、内部例は元のモジュールスコープで型検査します。ビルド後に `pnpm check:jsdoc --package reldb` を実行してください。例の型検査は実バックエンドの動作検証の代わりにはなりません。
+
 ## ライセンス
 
 Apache-2.0

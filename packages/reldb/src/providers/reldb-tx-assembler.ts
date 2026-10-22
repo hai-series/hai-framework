@@ -28,6 +28,12 @@ import { HaiReldbError } from '../reldb-types.js'
  * 事务生命周期回调
  *
  * Provider 提供具体的 commit/rollback/release 操作。
+ * @example 模块内部上下文
+ * ```ts
+ * function release(callbacks: TxCallbacks) {
+ *   callbacks.release() // commit/rollback 之后归还唯一事务资源。
+ * }
+ * ```
  */
 export interface TxCallbacks {
   /** 提交事务 */
@@ -54,6 +60,12 @@ export interface TxCallbacks {
  * @param baseDmlOps - 事务连接上的 DML 操作
  * @param callbacks - 事务生命周期回调
  * @returns 完整的事务句柄
+ * @example 模块内部上下文
+ * ```ts
+ * function wrap(ops: DmlOperations, callbacks: TxCallbacks) {
+ *   return createTxHandle(ops, callbacks)
+ * }
+ * ```
  */
 export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks): DmlWithTxOperations {
   let active = true
@@ -153,6 +165,12 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
  *
  * @param beginTx - 开启事务函数
  * @returns tx.wrap 函数
+ * @example 模块内部上下文
+ * ```ts
+ * function wrap(begin: () => Promise<HaiResult<DmlWithTxOperations>>) {
+ *   return createTxWrap(begin)
+ * }
+ * ```
  */
 export function createTxWrap(
   beginTx: () => Promise<HaiResult<DmlWithTxOperations>>,

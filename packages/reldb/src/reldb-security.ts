@@ -17,7 +17,7 @@ import { HaiReldbError } from './reldb-types.js'
  * 合法 SQL 标识符正则
  *
  * 仅允许字母、数字、下划线，且必须以字母或下划线开头。
- * 限制长度不超过 128 字符（覆盖主流数据库标识符长度上限）。
+ * 本层限制 128 字符；具体数据库可能有更短上限，仍需遵守其标识符规则。
  */
 const VALID_IDENTIFIER_RE = /^[a-z_]\w{0,127}$/i
 
@@ -29,14 +29,13 @@ const VALID_IDENTIFIER_RE = /^[a-z_]\w{0,127}$/i
  *
  * @param name - 待校验的标识符
  * @returns 校验通过时返回 ok(name)；不合法时返回错误 HaiResult
- *
  * @example
  * ```ts
- * const result = validateIdentifier('users')
- * // result.success === true
+ * import { validateIdentifier } from '@h-ai/reldb'
  *
- * const bad = validateIdentifier('users; DROP TABLE')
- * // bad.success === false
+ * const checked = validateIdentifier('users')
+ * if (!checked.success) throw new Error(checked.error.message)
+ * void checked.data
  * ```
  */
 export function validateIdentifier(name: string): HaiResult<string> {
@@ -53,6 +52,13 @@ export function validateIdentifier(name: string): HaiResult<string> {
  *
  * @param names - 待校验的标识符数组
  * @returns 全部合法时返回 ok(undefined)；否则返回第一个不合法项的错误
+ * @example
+ * ```ts
+ * import { validateIdentifiers } from '@h-ai/reldb'
+ *
+ * const checked = validateIdentifiers(['users', 'id'])
+ * if (!checked.success) throw new Error(checked.error.message)
+ * ```
  */
 export function validateIdentifiers(names: string[]): HaiResult<void> {
   for (const name of names) {
@@ -75,11 +81,13 @@ export function validateIdentifiers(names: string[]): HaiResult<void> {
  *
  * @param name - 已校验的标识符
  * @returns 双引号包裹的安全标识符
- *
  * @example
  * ```ts
- * quoteIdentifier('users')  // '"users"'
- * quoteIdentifier('order')  // '"order"'  （安全引用 SQL 保留字）
+ * import { quoteIdentifier, validateIdentifier } from '@h-ai/reldb'
+ *
+ * const checked = validateIdentifier('order')
+ * if (!checked.success) throw new Error(checked.error.message)
+ * void quoteIdentifier(checked.data)
  * ```
  */
 export function quoteIdentifier(name: string): string {
@@ -94,11 +102,11 @@ export function quoteIdentifier(name: string): string {
  *
  * @param value - 原始字符串
  * @returns 转义后的安全字符串
- *
  * @example
  * ```ts
- * escapeSqlString("it's") // "it''s"
- * escapeSqlString("normal") // "normal"
+ * import { escapeSqlString } from '@h-ai/reldb'
+ *
+ * void escapeSqlString("it's") // it''s；仅用于可信 DDL 字面量，业务值使用占位符。
  * ```
  */
 export function escapeSqlString(value: string): string {
