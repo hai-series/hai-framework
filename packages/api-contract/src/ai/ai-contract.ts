@@ -4,6 +4,7 @@
  * 定义 AI 功能相关 API 的接口边界：聊天补全、记忆管理与会话管理。
  * 聊天补全使用 OpenAI 兼容结构（`messages` 数组 + `choices` 数组）。
  * 所有接口均需 Bearer Token 认证（由 `@h-ai/serv` 的 feature 层强制）。
+ * 默认绑定认证用户的 objectId；其它主体和会话的访问须经过服务端资源授权。
  * @module ai-contract
  */
 

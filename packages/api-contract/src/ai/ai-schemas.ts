@@ -76,6 +76,10 @@ export const AiToolDefinitionSchema = z.object({
 
 /** 聊天完成入参 Schema。 */
 export const AiChatCompletionInputSchema = z.object({
+  /** 默认绑定认证用户；跨主体访问需服务端显式授权。 */
+  objectId: z.string().min(1).optional(),
+  /** 用户主体内的会话 ID，省略时为 default。 */
+  sessionId: z.string().min(1).optional(),
   model: z.string().optional(),
   messages: z.array(AiChatMessageSchema).min(1),
   temperature: z.number().min(0).max(2).optional(),
@@ -123,6 +127,10 @@ export const AiChatCompletionDataSchema = z.object({
 
 /** 简单消息入参 Schema。 */
 export const AiSendMessageInputSchema = z.object({
+  /** 默认绑定认证用户；跨主体访问需服务端显式授权。 */
+  objectId: z.string().min(1).optional(),
+  /** 用户主体内的会话 ID，省略时为 default。 */
+  sessionId: z.string().min(1).optional(),
   message: z.string().min(1),
   systemPrompt: z.string().optional(),
   model: z.string().optional(),
@@ -158,7 +166,7 @@ export const AiMemoryRecallInputSchema = z.object({
   topK: z.number().int().min(1).optional(),
   types: z.array(AiMemoryTypeSchema).optional(),
   minImportance: z.number().min(0).max(1).optional(),
-  objectId: z.string().optional(),
+  objectId: z.string().min(1).optional(),
 })
 
 /** 记忆检索业务数据 Schema。 */
@@ -169,7 +177,7 @@ export const AiMemoryRecallDataSchema = z.object({
 /** 记忆列表入参 Schema。 */
 export const AiMemoryListInputSchema = z.object({
   types: z.array(AiMemoryTypeSchema).optional(),
-  objectId: z.string().optional(),
+  objectId: z.string().min(1).optional(),
   offset: z.number().int().min(0).optional(),
   limit: z.number().int().min(1).max(100).optional(),
 })
@@ -191,7 +199,8 @@ export const AiSessionInfoSchema = z.object({
 
 /** 会话列表入参 Schema。 */
 export const AiSessionListInputSchema = z.object({
-  objectId: z.string().min(1),
+  /** 省略时由服务端绑定认证用户，不能据客户端参数推断身份。 */
+  objectId: z.string().min(1).optional(),
 })
 
 /** 会话列表业务数据 Schema。 */
@@ -220,7 +229,8 @@ export const AiChatRecordSchema = z.object({
 
 /** 对话历史入参 Schema。 */
 export const AiChatHistoryInputSchema = z.object({
-  objectId: z.string().min(1),
+  /** 省略时由服务端绑定认证用户，跨主体访问需显式授权。 */
+  objectId: z.string().min(1).optional(),
   sessionId: z.string().min(1),
   limit: z.number().int().min(1).max(200).optional(),
   order: z.enum(['asc', 'desc']).optional(),

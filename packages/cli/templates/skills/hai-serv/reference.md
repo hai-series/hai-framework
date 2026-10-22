@@ -635,6 +635,15 @@ http: {
 
 `authorize` 从可信 `context.session` 校验资源所有者/租户，不能只信任客户端前缀；缺失策略时默认拒绝。列表会把 prefix 交给策略，空 prefix 不应获准全桶列举；批量全部授权后才执行。示例用户根为 `users/<编码后的 userId>/`，管理员跨用户访问必须显式授权。
 
+AI 默认 feature 把 objectId 绑定到可信 `context.session.userId`，客户端可省略；所有读写与记忆查询都使用授权后的主体。sessionId 与 objectId 组成复合会话，写入默认 sessionId 为 `default`。其它 objectId 默认被拒绝；跨用户管理需显式提供 `authorizeObject({ context, objectId, sessionId, operation })`，按可信权限及租户关系严格返回 true。
+
+```typescript
+const aiProcedures = createAiProcedures({
+  ai,
+  authorizeObject: ({ context }) => context.session.permissions.includes('ai.manage'),
+})
+```
+
 ## 常见模式
 
 ### 自定义领域 procedure

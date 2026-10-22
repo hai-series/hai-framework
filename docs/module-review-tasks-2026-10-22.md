@@ -227,7 +227,8 @@
 
 ### SERV-02 · P1 · 默认 AI procedures 绑定用户和会话所有权
 
-- [ ] 待修正（源码确认；范围：serv）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：全部AI默认读写绑定可信session.userId，跨主体仅显式authorizeObject放行；历史复合scope、写入scope和memory最后覆盖可信objectId。schema/应用/模板/三语文档/两类skill同步。10授权回归、相关typecheck/build、api-service typecheck、定向ESLint、check:skills通过；新worktree缺dist阻塞已用定向依赖构建消除；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/serv/src/features/serv-feature-ai.ts:50](../packages/serv/src/features/serv-feature-ai.ts#L50)；[packages/serv/src/features/serv-feature-ai.ts:59](../packages/serv/src/features/serv-feature-ai.ts#L59)。
 - **证据与影响**：历史、记忆、会话列表直接透传客户端 objectId/sessionId/options，仅检查已登录。默认接入方没有资源所有者的必需校验。
 - **修正内容**：从 ServContext 绑定可信用户/租户，验证 session/object 归属；为跨用户管理提供独立授权路径，拒绝输入覆盖可信 scope。

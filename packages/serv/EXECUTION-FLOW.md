@@ -311,7 +311,9 @@ serv
 - 记忆 recall / list
 - 会话列表
 
-主要作用是把 `@h-ai/ai` 的返回结构转换成 `@h-ai/api-contract` 对外协议需要的响应结构。
+所有读取/写入默认绑定可信 `context.session.userId`；客户端可省略 objectId，指定其它主体必须通过显式 `authorizeObject` 策略。历史查询始终同时传入 objectId 与 sessionId，两个用户的同名 sessionId 不共享内容。聊天和消息写入也携带该复合作用域，sessionId 省略时为 `default`；记忆 recall/list 的 objectId 在授权后由服务端确定。管理员跨主体访问同样必须由策略按可信权限/租户关系批准。
+
+返回结构转换为 `@h-ai/api-contract` 的公开协议；业务身份不从消息内容或客户端前缀推断。
 
 ## 传输加解密处理逻辑
 

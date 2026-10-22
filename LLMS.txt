@@ -62,7 +62,7 @@ return result
 | @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) | refreshTasks 刷新共享定义；occurrenceId 供宿主幂等；多节点需共享锁 |
 | @h-ai/crypto | [SM2/SM3/SM4、密码、transport](packages/cli/templates/skills/hai-crypto/SKILL.md) | password 仅 Node；经顶层集成点装配 transport |
 | @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) | 业务路径唯一来源，不含服务端实现 |
-| @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫](packages/cli/templates/skills/hai-serv/SKILL.md) | Node 自动提供 socket 对端，Fetch 显式 remoteAddress；http.trustedProxies 为空时忽略转发头；Hono 是内部实现；Storage feature 必须注入 authorize 资源策略，缺失时拒绝 |
+| @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫](packages/cli/templates/skills/hai-serv/SKILL.md) | Node 自动提供 socket 对端，Fetch 显式 remoteAddress；http.trustedProxies 为空时忽略转发头；Hono 是内部实现；Storage feature 必须注入 authorize 资源策略，缺失时拒绝；AI feature 默认绑定认证用户，跨主体须显式 authorizeObject |
 | @h-ai/kit | [SvelteKit hooks、guard、validate、response](packages/cli/templates/skills/hai-kit/SKILL.md) | 仅 SvelteKit 集成，不替代共享 HTTP contract |
 | @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) | Cookie/transport 与服务端一致；退出/换账号用 auth.clear/setTokens 使在途刷新失效，异步存储串行提交；SSR 避免共享用户状态 |
 | @h-ai/capacitor | [原生设备、推送、安全存储](packages/cli/templates/skills/hai-capacitor/SKILL.md) | Web 与 Android/iOS 能力不同 |

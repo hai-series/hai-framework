@@ -208,6 +208,8 @@ await apiClient.init({
 
 Storage procedures 使用显式 `authorize` 策略限制到已认证用户的 `users/<encodeURIComponent(userId)>/` 前缀。上传、下载、元数据、删除均传完整 key，列表也必须提供该前缀；空前缀、其它用户 key 和包含未授权 key 的批量请求都会被拒绝。需要管理员跨用户访问时，应在服务端策略中显式检查可信权限。
 
+AI procedures 默认将 objectId 绑定为认证用户 ID，客户端无需传入。消息与聊天按 objectId/sessionId 保存和查询（写入 sessionId 默认为 `default`）；同名会话在不同用户间隔离。记忆 recall/list 不会跨主体查询。指定其它 objectId 时默认拒绝，管理操作必须在服务端显式配置 authorizeObject 并验证可信权限。
+
 ### 调用示例
 
 > 完整交互式文档见 `http://localhost:3000/docs`。以下示例假设服务已启动在 `localhost:3000`。

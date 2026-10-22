@@ -244,11 +244,11 @@ A2A 的任务表和消息表在 `ai.init()` 阶段初始化。任务按可信 `a
 
 ## 浏览器端
 
-浏览器端通过 `@h-ai/api-client` 或自定义 endpoint 访问服务端 AI 能力。`ai.stream` 可在浏览器直接用于解析服务端流式 chunk。
+浏览器端通过 `@h-ai/api-client` 或自定义 endpoint 访问服务端 AI 能力。使用 serv 默认 AI feature 时，objectId 从可信认证 session 绑定，客户端可省略；其它主体默认拒绝，跨用户管理必须由服务端显式 authorizeObject。聊天/消息写入、历史、会话和记忆均按该主体隔离，sessionId 是主体内的会话标识。`ai.stream` 可在浏览器直接用于解析服务端流式 chunk。
 
 ```ts
 const response = await apiClient.ai.chats.createCompletion({ messages })
-const memories = await apiClient.ai.memories.recall({ query: '偏好', objectId: 'user-001', topK: 5 })
+const memories = await apiClient.ai.memories.recall({ query: '偏好', topK: 5 })
 ```
 
 语音：`@h-ai/ai/client` 的 `createAIClient({ api, audio: { url, getTicket } })` 提供 `client.audio.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket(request)` 接收本次操作摘要（`operation` / `model`），应通过已登录 HTTP 请求签发与本次操作严格绑定的短期、一次性 Audio ticket（推荐 `iam.ticket.issue({ grant })`）；IAM access token 不进入 WebSocket URL。

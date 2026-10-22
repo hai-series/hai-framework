@@ -16,7 +16,8 @@ export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDe
       authorize: ({ context, keys }) => keys.every(key =>
         key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
     }),
-{{/if}}{{#if features.ai}}    ai: createAiProcedures({ ai }),
+{{/if}}{{#if features.ai}}    // AI 默认绑定可信 session.userId，跨主体访问需另行提供 authorizeObject 策略。
+    ai: createAiProcedures({ ai }),
 {{/if}}    app: createAppProcedures(deps.app),
   }
 }

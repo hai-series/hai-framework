@@ -74,6 +74,8 @@ serv.listen(app, {
 
 Storage procedures require `authorize({ context, operation, keys })` and deny access if the policy is missing. Derive resource ownership from the authenticated session for downloads, uploads, listing, metadata and deletion. The example only permits keys under `users/<encoded userId>/`; list requests must include that prefix. A batch is executed only after every key is authorized. Grant administrative access explicitly in the application policy.
 
+AI procedures bind `objectId` to the trusted `context.session.userId` when the client omits it. Chat/message writes, history, session lists and memory recall/list all use the authorized owner. Sessions are scoped by `objectId + sessionId`; writes default to session `default`. A different objectId is forbidden unless an explicit `authorizeObject` policy grants access using trusted permissions and tenant ownership, including for administrators.
+
 #### host / port configuration
 
 Host/port come from `server` in `config/_serv.yml`: `HOST` / `PORT` environment variables > configuration > `127.0.0.1:3000`. The default `127.0.0.1` is local-only; use `0.0.0.0` to expose a container:
