@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 7/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 8/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -616,7 +616,8 @@
 
 ### CLI-01 · P2 · 按项目架构生成可实际消费的代码
 
-- [ ] 待修正（源码确认；范围：cli）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：按实际workspace依赖识别SvelteKit文件路由与serv共享contract/procedure，--workspace处理歧义；纯Vite/未知聚合结构明确拒绝，serv只更新既有模板标注入口。全部文件预检/临时暂存/失败回滚，主错误与每项清理失败保留，避免半套路由；同步三语README/skill/CLI i18n及模板。347项回归/11架构与回滚场景、严格source/test类型/lint/skills通过；已有scaffold --generate定向子门禁真实生成3工程并lint/tsc/build/启动验证GET/POST/400与fullstack真实transport，通过且无残留JS/fixture；完整scaffold矩阵仍待全部任务后，见tmp/module-repair-20261022/CLI-01；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/cli/src/commands/cli-generate.ts:19](../packages/cli/src/commands/cli-generate.ts#L19)；[packages/cli/src/commands/cli-generate.ts:60](../packages/cli/src/commands/cli-generate.ts#L60)。
 - **证据与影响**：page/api 默认固定到 SvelteKit src/routes，project 检测只用于警告和名称；在本仓库支持的 serv/Vite/fullstack 项目中可能生成不被路由消费的文件。
 - **修正内容**：识别项目和目标 workspace，按现有架构生成 contract/procedure 或 SvelteKit 文件；未支持组合明确拒绝，不额外创建平行架构。

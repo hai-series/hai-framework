@@ -164,5 +164,13 @@
   "cli_help_generatePage": "Generate a page",
   "cli_help_generateComponent": "Generate a component",
   "cli_help_generateApi": "Generate an API endpoint",
-  "cli_help_generateModel": "Generate a data model"
+  "cli_help_generateModel": "Generate a data model",
+  "cli_generateUnsupportedProject": "This project or workspace does not support this generator. Pages require SvelteKit; APIs require SvelteKit or serv. Select the application with --workspace.",
+  "cli_generateAmbiguousWorkspace": "Multiple workspaces support this generator. Select a package name or relative path with --workspace.",
+  "cli_generateUnsupportedAggregator": "Cannot safely identify the contract/procedure aggregation points. Preserve the CLI template @hai-generator markers, or extend the existing architecture manually.",
+  "cli_generateInvalidRouteOutput": "Route output must remain inside SvelteKit src/routes. Serv uses its existing contract/procedure directories and does not accept --output.",
+  "cli_generateDomainExists": "A contract or procedure domain already exists: {name}. Existing business registrations cannot be replaced.",
+  "cli_generateRollbackFailed": "Generation failed and rollback or temporary-file cleanup could not complete. Inspect the files reported in the errors before retrying.",
+  "cli_help_workspace": "Target workspace package name or relative path; defaults to the unique applicable application",
+  "cli_generateCustomRoutes": "This SvelteKit configuration customizes kit.files. The generator cannot infer its route layout; extend the existing routes manually."
 }

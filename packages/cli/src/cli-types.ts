@@ -217,6 +217,8 @@ export interface GenerateOptions extends GlobalOptions {
   output?: string
   /** 是否覆盖现有文件 */
   force?: boolean
+  /** 目标 workspace 的包名或相对路径；歧义时必须指定。 */
+  workspace?: string
 }
 
 /**

@@ -74,7 +74,7 @@ hai generate migration add-orders
 
 `hai add` は依存を解決して設定を追加します。`hai init` は不足する設定と AI ファイルを補い、独自内容は保持します。`--force` はモジュール設定を再生成するため、差分を確認して使用してください。
 
-page/api 生成は SvelteKit 向けです。Fullstack/API は既存の contract/procedure 構造を拡張します。名前にパスは指定できず、`--force` なしでは上書きしません。マイグレーションは up/down 関数を生成するだけなので、実行前にデータへの影響を確認してください。
+page は SvelteKit のファイルルートに対応し、api は対象アプリに応じて SvelteKit または serv の共有 contract/procedure を生成します。API/fullstack のルートでは一意なバックエンドを自動選択します。複数候補は `--workspace <パッケージ名または相対パス>` で指定するか、対象 workspace に移動してください。通常の Vite への page/api 生成は拒否します。serv は `--output` を受け付けず、SvelteKit の出力は `src/routes` 内に限定し、独自の `kit.files` は推測せず拒否します。SvelteKit API には `@h-ai/kit` と `zod` が必要です。serv は `@hai-generator` マーカーのある既存の集約入口だけを更新し、未知の構成には手動統合を要求します。名前にパスは指定できません。既存ファイルは `--force` が必要ですが、登録済み業務領域は置換しません。一括検査後に書き込み、失敗時は今回の変更を戻します。マイグレーションは up/down 関数のみ生成するため、実行前にデータへの影響を確認してください。
 
 ### ビルドとデプロイ
 
@@ -117,6 +117,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
 生成検証は実工程でインストール、typecheck、lint、build、test、ブラウザー操作を実行します。デプロイ検証はオフライン tar、SSH/手動配布、部分更新を扱います。テスト所有の資源は終了時に削除し、必要な証拠だけ指定先へ保存します。ネイティブと実クラウドは別途検証してください。
+
+`--generate` は対象を絞ったルート検証です。インストール済み依存を再利用し、SvelteKit・serv API・fullstack バックエンドを実際に生成・ビルドして新ルートへアクセスします（transport を含む）。完全なインストールとブラウザー検証の代わりにはなりません。
 
 ## ライセンス
 

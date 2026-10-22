@@ -7,9 +7,12 @@ import type { AppProcedureDeps } from './app-procedures.js'
 import { storage } from '@h-ai/storage'
 {{/if}}import { createAppProcedures } from './app-procedures.js'
 
+// @hai-generator:procedures:imports
+
 /** 创建应用级 procedures 聚合。 */
 export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDeps }) {
   return {
+    // @hai-generator:procedures:entries
 {{#if features.iam}}    iam: createIamProcedures({ iam }),
 {{/if}}{{#if features.storage}}    storage: createStorageProcedures({
       storage,

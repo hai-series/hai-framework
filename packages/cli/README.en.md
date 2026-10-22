@@ -74,7 +74,7 @@ hai generate migration add-orders
 
 `hai add` resolves module dependencies and fills configuration. `hai init` fills missing configuration and AI files while preserving custom content. `--force` regenerates module configuration; review the diff before using it.
 
-The page/api generators target SvelteKit. Extend fullstack/API projects through their contract/procedure structure. Names cannot contain paths; existing files are protected unless `--force` is explicit. Migrations generate up/down functions only; inspect data effects before running them.
+Pages use SvelteKit file routes. APIs use either SvelteKit routes or the target serv application's shared contract/procedure structure. API/fullstack roots select a unique backend automatically; use `--workspace <package-name-or-relative-path>` when multiple applications apply, or enter the target workspace. Plain Vite page/API combinations are rejected. Serv does not accept `--output`; SvelteKit route output must stay inside `src/routes`; custom `kit.files` layouts are rejected rather than guessed. SvelteKit API targets must already install `@h-ai/kit` and `zod`. Serv updates only existing aggregation points with `@hai-generator` markers; unknown structures require manual integration. Names cannot contain paths. Existing files require `--force`, which never replaces registered business domains. Files are checked as one batch and rolled back on write failure. Migrations only generate up/down functions; inspect data effects before running them.
 
 ### Build and deploy
 
@@ -117,6 +117,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
 Scaffold gates generate real projects and run install, typecheck, lint, build, tests and browser workflows. Deployment gates cover offline bundles, SSH/manual deployment and partial updates. Tests clean up their resources; save requested evidence in a designated directory. Native shells and real cloud providers need separate acceptance.
+
+`--generate` runs focused route gates: it reuses installed workspace dependencies, generates and builds real SvelteKit, serv API and fullstack backend projects, then accesses their new routes, including transport. It does not replace the full installation and browser matrix.
 
 ## License
 

@@ -1897,13 +1897,13 @@ describe('generate', () => {
     await fse.writeJson(path.join(projectDir, 'package.json'), {
       name: 'gen-test',
       version: '0.1.0',
-      dependencies: { '@h-ai/core': 'workspace:*' },
+      dependencies: { '@h-ai/core': 'workspace:*', '@h-ai/kit': 'workspace:*', '@sveltejs/kit': '^2', 'svelte': '^5', 'zod': '*' },
     })
   })
 
   describe('generate page', () => {
     it('默认拒绝覆盖并预检全部页面文件，force 才允许替换', async () => {
-      const output = path.join(projectDir, 'safe-pages')
+      const output = path.join(projectDir, 'src/routes/safe-pages')
       const serverPath = path.join(output, 'kept', '+page.server.ts')
       await fse.outputFile(serverPath, '// user implementation')
       await expect(generate({ type: 'page', name: 'kept', output, cwd: projectDir })).rejects.toThrow()
