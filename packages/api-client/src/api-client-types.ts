@@ -60,7 +60,6 @@ export interface TokenPair {
  * 内置实现：
  * - `apiClient.tokenStorage.httpOnlyCookie()` — **默认**；浏览器端推荐，refresh token 由服务端管理，防 XSS。
  * - `apiClient.tokenStorage.memory()` — Node.js 测试 / SSR（需显式传入）。
- * - `apiClient.tokenStorage.localStorage()` — 浏览器 SPA / PWA（有 XSS 风险，生产不推荐）。
  *
  * Capacitor / 小程序场景请由对应模块提供（例如 `@h-ai/capacitor`）。
  */
@@ -80,8 +79,7 @@ export interface AuthConfig {
    * Token 存储适配器；默认 `apiClient.tokenStorage.httpOnlyCookie()`（refresh token 由服务端管理，防 XSS）。
    *
    * - SSR / Node.js 测试场景请显式传入 `apiClient.tokenStorage.memory()`。
-   * - 浏览器 SPA 如确需持久化，可显式传 `apiClient.tokenStorage.localStorage()`，
-   *   但请先评估 XSS 风险。
+   * - 浏览器刷新后通过 httpOnly Cookie 恢复会话，不将 Token 持久化到 Web Storage。
    * - Capacitor / 小程序请使用对应平台的安全存储适配器（如 `@h-ai/capacitor`）。
    */
   readonly storage?: TokenStorage

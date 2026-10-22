@@ -338,7 +338,7 @@ describe('createKitClient - auth', () => {
     const [, init] = fetchSpy.mock.calls[0]!
     const headers = new Headers(init.headers)
     expect(headers.get('Authorization')).toBe('Bearer memory_token_123')
-    // auth:true 的安全默认不应触碰 localStorage，持久化存储必须由调用方显式传入 BrowserTokenStore。
+    // 浏览器认证不得触碰 localStorage；自定义 store 也必须使用内存或平台安全存储。
     expect(getItem).not.toHaveBeenCalled()
   })
 

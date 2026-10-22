@@ -47,7 +47,7 @@ const client = kit.client.create()
 export const { apiFetch } = client
 ```
 
-> 同源 endpoint 优先使用 httpOnly Cookie；`auth: true` 只读取 `kit.auth.setBrowserToken()` 写入的页面内存 Token，不会默认读写 localStorage。确需 Bearer Header 时，显式传入 `BrowserTokenStore`，禁止把敏感 Token 存入 localStorage。
+> 同源 endpoint 使用 httpOnly Cookie；`auth: true` 只读取 `kit.auth.setBrowserToken()` 写入的页面内存 Token。自定义 `BrowserTokenStore` 也须使用内存或平台安全存储，禁止把敏感凭据持久化到 Web Storage。
 
 ### 4. 同源传输加密
 

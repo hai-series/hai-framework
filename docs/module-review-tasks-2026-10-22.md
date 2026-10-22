@@ -497,7 +497,8 @@
 
 ### CLIENT-01 · P1 · 移除与安全规范冲突的 localStorage token 适配器
 
-- [ ] 待修正（按本次要求补强；范围：api-client）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：删除api-client localStorage token工厂及kit同类createTokenStore入口，移除admin E2E写token残留；公开入口、三语README、skills、LLMS同步。api-client/kit typecheck通过，相关定向37+34测试通过，定向ESLint通过；浏览器E2E留最终阶段；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/api-client/src/api-client-auth.ts:65](../packages/api-client/src/api-client-auth.ts#L65)。
 - **证据与影响**：公开工厂允许把敏感 token 写入 localStorage，与仓库硬约束直接冲突。默认 httpOnly 路径正确；问题是仍保留并推广另一条不符合规范的入口。
 - **修正内容**：删除该工厂和引用，浏览器采用 httpOnly refresh Cookie + 内存 access token；原生客户端只使用安全 TokenStorage。

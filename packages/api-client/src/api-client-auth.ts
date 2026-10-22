@@ -1,7 +1,7 @@
 /**
  * @h-ai/api-client — Token 存储与刷新管理
  *
- * 提供两个内置 Token 存储适配器（localStorage / 内存）和一个 Token 管理器
+ * 提供两个内置 Token 存储适配器（httpOnly Cookie / 内存）和一个 Token 管理器
  * （封装存储读写、自动刷新、并发去重、回调通知）。
  *
  * @example 浏览器 SPA
@@ -10,7 +10,7 @@
  *
  * await apiClient.init({
  *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: { storage: apiClient.tokenStorage.localStorage() },
+ *   auth: { storage: apiClient.tokenStorage.httpOnlyCookie() },
  * })
  * ```
  *
@@ -38,52 +38,6 @@ const logger = core.logger.child({ module: 'api-client', scope: 'auth' })
  * 而不是将 refreshToken 写入请求体。
  */
 const HTTPONLY_COOKIE_SENTINEL = '__httponly_cookie__'
-
-// ─── localStorage 存储 ────────────────────────────────────────────────────────
-
-const LS_ACCESS_KEY = 'hai_access_token'
-const LS_REFRESH_KEY = 'hai_refresh_token'
-
-/**
- * 创建基于 `localStorage` 的 Token 存储（浏览器 SPA / PWA）。
- *
- * ⚠️ 安全提示（XSS 风险）：
- * - `localStorage` 对同源脚本可读，任意 XSS 漏洞都可以偷取 Token。
- * - 生产环境应优先使用 httpOnly cookie + SameSite 或 BFF 主机代理。
- * - 本适配器仅适用于内部工具、Demo、或者已接受 XSS 风险的浏览器场景，
- *   并且在调用方明确选择使用。`apiClient.create` 默认不会使用本适配器，
- *   需调用方显式传入 `auth.storage = apiClient.tokenStorage.localStorage()`。
- *
- * @example
- * ```ts
- * await apiClient.init({
- *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: { storage: apiClient.tokenStorage.localStorage() },
- * })
- * ```
- */
-export function createLocalStorageTokenStorage(): TokenStorage {
-  // 首次实例化时警告一次，提示调用方可能需要重新评估安全模型。
-  logger.warn('apiClient.tokenStorage.localStorage: storing tokens in localStorage exposes them to XSS. Prefer httpOnly cookies for production.')
-  return {
-    async getAccessToken() {
-      return globalThis.localStorage?.getItem(LS_ACCESS_KEY) ?? null
-    },
-    async setAccessToken(token) {
-      globalThis.localStorage?.setItem(LS_ACCESS_KEY, token)
-    },
-    async getRefreshToken() {
-      return globalThis.localStorage?.getItem(LS_REFRESH_KEY) ?? null
-    },
-    async setRefreshToken(token) {
-      globalThis.localStorage?.setItem(LS_REFRESH_KEY, token)
-    },
-    async clear() {
-      globalThis.localStorage?.removeItem(LS_ACCESS_KEY)
-      globalThis.localStorage?.removeItem(LS_REFRESH_KEY)
-    },
-  }
-}
 
 // ─── 内存存储 ─────────────────────────────────────────────────────────────────
 

@@ -12,7 +12,7 @@ A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent AP
 
 - `apiClient`: the default typed client for the iam/storage/ai domains.
 - `apiClient.create(contract)`: create a typed client for a custom contract.
-- `apiClient.tokenStorage.{memory,localStorage,httpOnlyCookie}()`: token storage factories.
+- `apiClient.tokenStorage.{memory,httpOnlyCookie}()`: token storage factories. Browsers keep access tokens in memory and refresh tokens in server-managed httpOnly cookies; native clients inject platform secure storage. Credentials are never written to Web Storage.
 - Custom `fetch` support for browsers, Node, Capacitor, and mini-program bridges.
 - Automatic Bearer token injection, with token refresh and one retry after a 401.
 - Network failures are converted to `HaiResult` errors.

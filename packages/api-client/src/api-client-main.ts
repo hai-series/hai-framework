@@ -54,7 +54,6 @@ import { createORPCClient, ORPCError } from '@orpc/client'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
 import {
   createHttpOnlyCookieTokenStorage,
-  createLocalStorageTokenStorage,
   createMemoryTokenStorage,
   createTokenManager,
 } from './api-client-auth.js'
@@ -75,12 +74,10 @@ const AUTH_ENTRY_PATHS = [
 ]
 const TRAILING_SLASHES_REGEX = /\/+$/
 
-/** Token 存储方案集合：内存 / 浏览器 localStorage / httpOnly Cookie。 */
+/** Token 存储方案集合：内存 / httpOnly Cookie。 */
 const tokenStorage = {
   /** 内存存储——SSR / Node 测试或一次性会话使用。 */
   memory: createMemoryTokenStorage,
-  /** 浏览器 `localStorage` 存储——单页应用便捷选项；注意 XSS 风险。 */
-  localStorage: createLocalStorageTokenStorage,
   /** httpOnly Cookie 存储——浏览器场景推荐方案。 */
   httpOnlyCookie: createHttpOnlyCookieTokenStorage,
 } as const
@@ -368,7 +365,7 @@ function buildTokenManager(config: ApiClientConfig, transport: TransportClient |
   const fetchFn = transport?.encryptedFetch ?? config.fetch ?? globalThis.fetch.bind(globalThis)
   // 默认使用 httpOnly cookie 存储（推荐方案：refresh token 由服务端管理，防 XSS）。
   // SSR / Node.js 测试场景请显式传入 `apiClient.tokenStorage.memory()`。
-  // 浏览器 localStorage 场景请显式传入 `apiClient.tokenStorage.localStorage()`（有 XSS 风险）。
+  // 原生客户端显式传入平台安全存储，浏览器不持久化 Token 到 Web Storage。
   const storage = config.auth.storage ?? createHttpOnlyCookieTokenStorage()
   const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
   const refreshPath = config.auth.refreshPath ?? DEFAULT_REFRESH_PATH

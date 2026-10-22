@@ -101,7 +101,8 @@ await apiClient.close()
 | --- | --- | --- |
 | `apiClient.tokenStorage.httpOnlyCookie()` | httpOnly cookie（服务端管理） | **默认**；浏览器端推荐，refresh token 不暴露给 JS |
 | `apiClient.tokenStorage.memory()` | 内存 | SSR / Node.js 单元测试（需显式传入） |
-| `apiClient.tokenStorage.localStorage()` | localStorage | 非敏感场景（有 XSS 风险，生产不推荐） |
+
+浏览器只使用内存 access token + 服务端 httpOnly refresh Cookie；原生端注入平台安全 TokenStorage。禁止将认证凭据持久化到 Web Storage。
 
 ### httpOnly Cookie 模式
 
@@ -139,7 +140,7 @@ if (login.success) {
 | `apiClient.auth.clear()` | 使旧刷新失效并清理本客户端 Token；服务端会话/Cookie 另由退出接口撤销 |
 | `apiClient.auth.onTokenRefreshed(cb)` | 监听刷新结果 |
 | `apiClient.create(contract)` | 创建自定义 typed client |
-| `apiClient.tokenStorage.{memory,localStorage,httpOnlyCookie}()` | TokenStorage 工厂 |
+| `apiClient.tokenStorage.{memory,httpOnlyCookie}()` | TokenStorage 工厂 |
 
 退出/换账号使用 `auth.clear()` / `auth.setTokens()`，不直接写 storage。方法立即取消旧刷新，并按顺序提交异步存储操作；迟到的成功/401 不会恢复旧身份、覆盖新账号或触发旧回调。该保证针对同一个客户端的认证管理器，SSR 仍须按请求隔离实例。
 

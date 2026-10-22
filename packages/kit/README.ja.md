@@ -143,7 +143,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 > CSRF Header は `apiFetch` が自動付与します。`@h-ai/kit` は独立した CSRF middleware ファクトリーを提供しません。
 >
-> 認証：同一オリジンの SvelteKit endpoint は httpOnly Cookie を優先し、サーバーで Cookie を読んで認証します。機密 Token を `localStorage` に保存する必要はありません。Bearer Header が必要なら独自の `BrowserTokenStore`、または `kit.auth.setBrowserToken()` でページ内メモリーに保存してから `kit.client.create({ auth: true })` を使います。
+> 同一オリジンの SvelteKit endpoint は httpOnly Cookie を使い、サーバーで検証します。ブラウザーの Bearer Header が必要なら `kit.auth.setBrowserToken()` でページ内メモリーに保存してから `kit.client.create({ auth: true })` を使います。独自の `BrowserTokenStore` もメモリーまたはプラットフォームの安全なストレージを使用し、機密の認証情報を Web Storage に永続化しないでください。
 
 #### 同一オリジンの通信暗号化
 

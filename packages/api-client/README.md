@@ -12,7 +12,7 @@ hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序
 
 - `apiClient`：默认绑定 iam/storage/ai 领域的统一 typed client 入口。
 - `apiClient.create(contract)`：为自定义 contract 创建 typed client。
-- `apiClient.tokenStorage.{memory,localStorage,httpOnlyCookie}()`：Token 存储工厂。
+- `apiClient.tokenStorage.{memory,httpOnlyCookie}()`：Token 存储工厂。浏览器使用内存 access token + 服务端 httpOnly refresh Cookie；原生端注入平台安全存储，不将凭据写入 Web Storage。
 - 支持自定义 `fetch`，适配浏览器、Node、Capacitor、小程序桥接层。
 - 支持 Bearer Token 自动注入、401 后刷新并重试一次。
 - 网络错误统一转换为 `HaiResult` 错误。
