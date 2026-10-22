@@ -4,18 +4,22 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
+## 简介
+
 统一缓存模块，通过 `cache` 对象提供 KV / Hash / List / Set / ZSet / 分布式锁 操作，支持内存与 Redis 两种后端。
 
 内存 KV 在到期时间点即视为失效；`incr/decr/incrBy/decrBy` 只接受安全整数数值或整数字符串，非法增量和溢出返回 `OPERATION_FAILED` 并保留原值。Hash 的 `__proto__` / `constructor` 等名称按普通字段保留，不修改返回对象原型。
 
-## 适用场景
+## 核心功能清单
 
 - 开发/测试场景下的内存缓存
 - 生产环境 Redis 缓存（单机、URL、集群、哨兵）
 - IAM 会话与权限相关的集合缓存
 - 分布式锁（多节点部署互斥控制）
 
-## 快速开始
+## 使用入门
+
+### 快速开始
 
 ```ts
 import { cache, HaiCacheError } from '@h-ai/cache'
@@ -53,7 +57,7 @@ await cache.close()
 
 `cache.config` 返回的是**脱敏后的配置快照**：如后续接入 Redis `password` / `url` 等凭证字段，会自动做安全处理，不应用作回写原始密钥。
 
-## 初始化配置
+### 初始化配置
 
 ```ts
 // Memory（开发/测试）
@@ -93,7 +97,7 @@ await cache.init({
 })
 ```
 
-## API 概览
+### API 概览
 
 - `cache.kv`: 字符串/对象键值与 TTL（`set/get/mget/mset/expire/ttl/...`）
 - `cache.hash`: 哈希结构（`hset/hget/hgetall/...`）
@@ -103,7 +107,7 @@ await cache.init({
 - `cache.lock`: 分布式锁（`acquire/release/isLocked/extend`）
 - `CacheProvider`: 公开的 Provider 契约，供高级集成或自定义后端实现复用
 
-## 分布式锁
+### 分布式锁
 
 基于 SET NX EX 模式实现的分布式互斥锁，适用于多节点部署场景。
 
@@ -130,7 +134,7 @@ await cache.lock.extend('my-lock', 60, 'node-1')
 - **Redis 后端**：使用 `SET NX EX` 原子获锁，Lua 脚本实现 owner 验证的安全释放/续期
 - `owner` 参数用于防止误释放他人锁，多节点部署时建议设置稳定的节点标识
 
-## 错误码
+### 错误码
 
 所有操作返回 `HaiResult<T>`，常用错误码如下：
 
@@ -146,7 +150,7 @@ await cache.lock.extend('my-lock', 60, 'node-1')
 | `HaiCacheError.UNSUPPORTED_TYPE`       | `hai:cache:011` | 不支持的缓存类型 |
 | `HaiCacheError.CONFIG_ERROR`           | `hai:cache:012` | 配置错误         |
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/cache test
@@ -154,6 +158,6 @@ pnpm --filter @h-ai/cache test
 
 > Redis 相关测试需要 Docker 环境。
 
-## License
+## 许可证
 
 Apache-2.0

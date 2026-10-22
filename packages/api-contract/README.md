@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
-> hai-framework 的公共 HTTP API 契约包，使用 oRPC contract + Zod 作为唯一真相源。
+## 简介
 
-## 能力概览
+hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后端共用接口路径、输入输出校验与类型。
+
+## 核心功能清单
 
 - `apiContract.iam`、`apiContract.storage`、`apiContract.ai`、`apiContract.payment`：领域级 contract。
 - `apiContract.create()`：按应用场景组合启用的领域 contract。
@@ -17,7 +19,9 @@
 - IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
 - IAM `auth.currentUser` 返回用户资料以及服务端当前会话的 `roles` / `permissions`，客户端恢复会话时无需持久化权限快照。
 
-## 快速开始
+## 使用入门
+
+### 快速开始
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -42,7 +46,7 @@ export const appContract = {
 }
 ```
 
-## API 契约
+### API 契约
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -79,7 +83,7 @@ const app = serv.createApp({
 })
 ```
 
-## API 概览
+### API 概览
 
 - `apiContract.create(options)`：过滤 `false` / `undefined` 领域并组合应用级 contract。
 - `apiContract.route(routeConfig)`：定义自定义 endpoint 的 method/path/operationId/tags 等路由元数据。
@@ -89,11 +93,11 @@ const app = serv.createApp({
 
 业务 path 必须直接写在对应 `*-contract.ts`。只使用一次的输出 Schema 直接内联到 `.output(...)`；同一 contract 文件内重复使用时可保留私有常量，但不得从 schemas 导出。
 
-## 配置
+### 配置
 
 本包无运行时配置，不读取环境变量。
 
-## 配置驱动认证页面
+### 配置驱动认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
@@ -101,17 +105,17 @@ const app = serv.createApp({
 
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
 
-## 错误处理
+### 错误处理
 
 Contract 只描述输入输出结构。业务错误由 procedure 返回 `HaiResult<T>` 表达，客户端不需要捕获业务异常。
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/api-contract test
 pnpm --filter @h-ai/api-contract typecheck
 ```
 
-## License
+## 许可证
 
 Apache-2.0

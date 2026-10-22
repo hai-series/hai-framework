@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 A data processing pipeline module for text cleaning (`clean`), chunking (`chunk`), and composable pipelines (`pipeline`). Pure functions; no initialization required.
 
-## Features
+## Core features
 
 | Feature              | Description                                                                                           |
 | -------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -16,13 +18,20 @@ A data processing pipeline module for text cleaning (`clean`), chunking (`chunk`
 
 > Security: `customReplacements` and `separator` in `mode: 'custom'` are used as regular expressions. Only provide trusted, reviewed patterns; do not interpolate user input directly into regexes, to avoid ReDoS or unintended broad replacements.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 
+const rawText = '<p>Hello framework.</p>'
+const text = '# Getting started\n\nHello framework.'
+
 // 直接清洗
-const cleaned = datapipe.clean('<p>Hello</p>', { removeHtml: true })
+const cleaned = datapipe.clean(rawText, { removeHtml: true })
+if (!cleaned.success)
+  throw new Error(cleaned.error.message)
 
 // 按 Markdown 标题分块
 const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
@@ -36,7 +45,7 @@ const result = await datapipe.pipeline()
   .run(rawText)
 ```
 
-## Chunking modes
+### Chunking modes
 
 | Mode      | Description                           |
 | --------- | ------------------------------------- |
@@ -48,7 +57,7 @@ const result = await datapipe.pipeline()
 | character | Split by character count              |
 | custom    | Custom separator (requires separator) |
 
-## Error handling
+### Error handling
 
 All operations return `HaiResult<T>`; check `result.success` for success or failure. Error codes use the string format `hai:datapipe:NNN`.
 
@@ -62,14 +71,14 @@ if (!result.success) {
     case HaiDatapipeError.CONFIG_ERROR.code:
       // 配置参数校验失败
       break
-    case HaiDatapipeError.PROCESSING_ERROR.code:
+    case HaiDatapipeError.CHUNK_FAILED.code:
       // 输入或自定义正则导致处理失败；记录错误并回退到安全默认策略
       break
   }
 }
 ```
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/datapipe test

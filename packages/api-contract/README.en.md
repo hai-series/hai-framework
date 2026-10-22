@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
-> Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the single source of truth.
+## Introduction
 
-## Capabilities
+Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the single source of truth.
+
+## Core features
 
 - `apiContract.iam`, `apiContract.storage`, `apiContract.ai`, `apiContract.payment`: domain contracts.
 - `apiContract.create()`: compose enabled domain contracts for an application.
@@ -17,7 +19,9 @@
 - IAM token DTOs support httpOnly cookies: `refreshToken` may be absent from the response body and managed by the server through `Set-Cookie`.
 - IAM `auth.currentUser` returns the user profile and the current server session's `roles` / `permissions`; clients need not persist a permission snapshot to restore a session.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -42,7 +46,7 @@ export const appContract = {
 }
 ```
 
-## API contracts
+### API contracts
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -79,7 +83,7 @@ const app = serv.createApp({
 })
 ```
 
-## API overview
+### API overview
 
 - `apiContract.create(options)`: omit domains set to `false` / `undefined` and compose the application contract.
 - `apiContract.route(routeConfig)`: define method/path/operationId/tags and other route metadata for a custom endpoint.
@@ -89,11 +93,11 @@ const app = serv.createApp({
 
 Write each business path directly in its `*-contract.ts` file. Inline output schemas used only once in `.output(...)`; schemas reused within the same contract file may be private constants, but must not be exported from schemas.
 
-## Configuration
+### Configuration
 
 This package has no runtime configuration and does not read environment variables.
 
-## Configuration driven authentication
+### Configuration driven authentication
 
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
@@ -101,11 +105,11 @@ IAM adds GET /auth/config and POST /auth/login/ldap, /auth/password-reset/reques
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-## Error handling
+### Error handling
 
 Contracts describe input and output structures only. Procedures express business errors with `HaiResult<T>`, so clients need not catch business exceptions.
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/api-contract test

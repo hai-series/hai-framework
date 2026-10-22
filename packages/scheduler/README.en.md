@@ -4,30 +4,24 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
+## Introduction
+
 A scheduled task module with a unified task model, cron scheduling, JS function strings / HTTP API execution, persistence, execution log queries, and global task lifecycle hooks.
 
-With the database enabled, nodes refresh persisted definitions every `tickInterval` (default 1000 ms); `tasks` is the latest successful snapshot. Registration, updates, deletion, manual triggers, and each attempt after acquiring a scheduling lock reread definitions. Deleted, disabled, or rescheduled old tasks stop executing; read failures abort the attempt. Already-started business side effects are not rolled back by remote changes. `init({ tasks })` remains node-local; use persisted `register()` for dynamic tasks across nodes. Cross-node deduplication requires shared Redis; memory cache is single-process only.
+## Core features
 
-Call `await scheduler.refreshTasks()` to refresh without execution; concurrent refreshes of the same snapshot share one read. Registration, updates, and deletion change memory only after successful persistence. Invalid full updates leave cron unchanged. Pass `retry: null` or `handler: null` to clear retries or built-in handlers.
+- Run tasks on a cron schedule or trigger them from application code.
+- Execute HTTP requests, trusted JavaScript and application hooks, with retry and cancellation.
+- Optionally persist tasks and logs; use shared cache for scheduling locks across nodes.
 
-Hook business errors are recorded as `failed` and apply `retry`; missing handlers, cancellation, or host-thrown `SchedulerTaskSkippedError` are `interrupted`. `event.context.occurrenceId` identifies an occurrence: the same scheduled minute shares it across nodes, each manual trigger is independent, and retries reuse the original. Hosts can persist idempotency receipts with this ID; long tasks spanning periods still need a host-maintained lease for mutual exclusion. `deleteAfterRun` deletes only after success. Definitions are checked before retry and successful cleanup; one database DELETE atomically matches the executed definition, preserving concurrent updates.
+## Getting started
 
-Multi-node regression tests build current source and start two real Node processes sharing SQLite and Testcontainers Redis, validating definition convergence and same-minute lock contention. A working Docker/Podman service is required before `pnpm --filter @h-ai/scheduler test`.
-
-`await scheduler.close()` stops task intake, cancels HTTP, JS workers, and retry waits, then awaits execution chain exit before clearing state. Reinitialization waits for closure. All lifecycle events expose `signal`; hooks must observe cancellation and stop external side effects. The framework cannot terminate business code on the same thread; do not block the event loop in hooks. Cancelled old executions no longer retry, delete tasks, or call new-instance hooks. Keep the database and cache available until scheduler closure completes, then close dependencies.
-
-Each JS string runs in its own worker; `timeout` defaults to 30000 ms including startup. On timeout, terminate the thread and await exit before logging failure or retrying. Synchronous infinite loops cannot block the main event loop. Context and results must support structured cloning. A worker's `vm` is still not a security sandbox; code must come from trusted server-side sources.
-
-API task `timeout` (default 30000 ms) covers the request and full response body read. `ApiTaskConfig.maxResponseBytes` limits received body bytes (positive safe integer; default 1048576, or 1 MiB). `maxResponseBytes: 10 * 1024 * 1024` allows 10 MiB. Invalid values fail before the request. Timeouts, size limits, and non-success HTTP statuses are logged as failures and apply task retries.
-
-`init()` succeeds only after loading all tasks. Empty or duplicate IDs (including persisted duplicates), invalid cron, database read failures, and persisted-task parse failures return failure and clear initialization state. Correct configuration or data before retrying. Do not redeclare existing database tasks in `tasks`.
-
-## Dependencies
+### Dependencies
 
 - `@h-ai/reldb`: task and execution log persistence; initialize first when `enableDb: true`.
 - `@h-ai/cache`: optional distributed locks; automatically participates in scheduled lock acquisition when initialized.
 
-## Quick start
+### Quick start
 
 ```ts
 import { cache } from '@h-ai/cache'
@@ -89,7 +83,7 @@ scheduler.stop()
 await scheduler.close()
 ```
 
-## Unified task model
+### Unified task model
 
 ```ts
 interface TaskDefinition {
@@ -132,7 +126,7 @@ Notes:
 
 > ⚠️ **Security warning**: `kind: 'js'` is only for trusted server-side code. Node.js `vm` provides convenient execution and **is not a security sandbox**. Never accept arbitrary JS strings from users, tenants, or admin inputs. Prefer `kind: 'api'` or `hooks.onTaskExecute` for configurable tasks.
 
-## Task lifecycle hooks
+### Task lifecycle hooks
 
 Provide hooks at initialization or set them at runtime with `setHooks()`:
 
@@ -156,7 +150,7 @@ await scheduler.init({
 })
 ```
 
-## Execution logs
+### Execution logs
 
 Filter logs by trigger source:
 
@@ -176,7 +170,7 @@ Execution logs support automatic cleanup policies configured at initialization:
 - `maxLogs`: retain at most N logs.
 - `retentionDays`: retain at most the last N days.
 
-## API overview
+### API overview
 
 - `init(config?)`
 - `register(task)`
@@ -190,7 +184,7 @@ Execution logs support automatic cleanup policies configured at initialization:
 - `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
 - `close()`
 
-## Error handling
+### Error handling
 
 All public APIs except `close()` return `HaiResult<T>`.
 
@@ -214,7 +208,29 @@ Common error codes:
 | `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS compilation failed   |
 | `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook execution failed   |
 
-## Tests
+### Runtime behavior and limits
+
+With the database enabled, nodes refresh persisted definitions every `tickInterval` (default 1000 ms); `tasks` is the latest successful snapshot. Registration, updates, deletion, manual triggers, and each attempt after acquiring a scheduling lock reread definitions. Deleted, disabled, or rescheduled old tasks stop executing; read failures abort the attempt. Already-started business side effects are not rolled back by remote changes. `init({ tasks })` remains node-local; use persisted `register()` for dynamic tasks across nodes. Cross-node deduplication requires shared Redis; memory cache is single-process only.
+
+Call `await scheduler.refreshTasks()` to refresh without execution; concurrent refreshes of the same snapshot share one read. Registration, updates, and deletion change memory only after successful persistence. Invalid full updates leave cron unchanged. Pass `retry: null` or `handler: null` to clear retries or built-in handlers.
+
+Hook business errors are recorded as `failed` and apply `retry`; missing handlers, cancellation, or host-thrown `SchedulerTaskSkippedError` are `interrupted`. `event.context.occurrenceId` identifies an occurrence: the same scheduled minute shares it across nodes, each manual trigger is independent, and retries reuse the original. Hosts can persist idempotency receipts with this ID; long tasks spanning periods still need a host-maintained lease for mutual exclusion. `deleteAfterRun` deletes only after success. Definitions are checked before retry and successful cleanup; one database DELETE atomically matches the executed definition, preserving concurrent updates.
+
+Multi-node regression tests build current source and start two real Node processes sharing SQLite and Testcontainers Redis, validating definition convergence and same-minute lock contention. A working Docker/Podman service is required before `pnpm --filter @h-ai/scheduler test`.
+
+`await scheduler.close()` stops task intake, cancels HTTP, JS workers, and retry waits, then awaits execution chain exit before clearing state. Reinitialization waits for closure. All lifecycle events expose `signal`; hooks must observe cancellation and stop external side effects. The framework cannot terminate business code on the same thread; do not block the event loop in hooks. Cancelled old executions no longer retry, delete tasks, or call new-instance hooks. Keep the database and cache available until scheduler closure completes, then close dependencies.
+
+Each JS string runs in its own worker; `timeout` defaults to 30000 ms including startup. On timeout, terminate the thread and await exit before logging failure or retrying. Synchronous infinite loops cannot block the main event loop. Context and results must support structured cloning. A worker's `vm` is still not a security sandbox; code must come from trusted server-side sources.
+
+API task `timeout` (default 30000 ms) covers the request and full response body read. `ApiTaskConfig.maxResponseBytes` limits received body bytes (positive safe integer; default 1048576, or 1 MiB). `maxResponseBytes: 10 * 1024 * 1024` allows 10 MiB. Invalid values fail before the request. Timeouts, size limits, and non-success HTTP statuses are logged as failures and apply task retries.
+
+`init()` succeeds only after loading all tasks. Empty or duplicate IDs (including persisted duplicates), invalid cron, database read failures, and persisted-task parse failures return failure and clear initialization state. Correct configuration or data before retrying. Do not redeclare existing database tasks in `tasks`.
+
+### Optional integrations
+
+Cron is matched by minute, and distributed lock keys use that same minute. Startup or ticks delayed beyond second zero still check the current minute; a running scheduler does not reschedule it on every tick.
+
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/scheduler test
@@ -223,5 +239,3 @@ pnpm --filter @h-ai/scheduler test
 ## License
 
 Apache-2.0
-
-Cron is matched by minute, and distributed lock keys use that same minute. Startup or ticks delayed beyond second zero still check the current minute; a running scheduler does not reschedule it on every tick.

@@ -4,6 +4,8 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
+## 概要
+
 テキストのクリーニング（clean）、分割（chunk）、パイプラインの合成（pipeline）を提供するデータ処理モジュールです。純粋関数で構成され、初期化は不要です。
 
 ## 主な機能
@@ -16,13 +18,20 @@
 
 > セキュリティ：`customReplacements` と `mode: 'custom'` の `separator` は正規表現として使用されます。信頼できる検証済みのパターンのみを渡し、ReDoS や意図しない広範囲の置換を防ぐため、ユーザー入力を直接正規表現に組み込まないでください。
 
-## クイックスタート
+## 使い始める
+
+### クイックスタート
 
 ```ts
 import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 
+const rawText = '<p>Hello framework.</p>'
+const text = '# Getting started\n\nHello framework.'
+
 // 直接清洗
-const cleaned = datapipe.clean('<p>Hello</p>', { removeHtml: true })
+const cleaned = datapipe.clean(rawText, { removeHtml: true })
+if (!cleaned.success)
+  throw new Error(cleaned.error.message)
 
 // 按 Markdown 标题分块
 const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
@@ -36,7 +45,7 @@ const result = await datapipe.pipeline()
   .run(rawText)
 ```
 
-## 分割モード
+### 分割モード
 
 | モード    | 説明                                 |
 | --------- | ------------------------------------ |
@@ -48,7 +57,7 @@ const result = await datapipe.pipeline()
 | character | 文字数で分割                         |
 | custom    | 独自の区切り文字（separator が必要） |
 
-## エラー処理
+### エラー処理
 
 すべての操作は `HaiResult<T>` を返します。`result.success` で成功・失敗を判定します。エラーコードは文字列形式 `hai:datapipe:NNN` です。
 
@@ -62,19 +71,19 @@ if (!result.success) {
     case HaiDatapipeError.CONFIG_ERROR.code:
       // 配置参数校验失败
       break
-    case HaiDatapipeError.PROCESSING_ERROR.code:
+    case HaiDatapipeError.CHUNK_FAILED.code:
       // 输入或自定义正则导致处理失败；记录错误并回退到安全默认策略
       break
   }
 }
 ```
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/datapipe test
 ```
 
-## License
+## ライセンス
 
 Apache-2.0

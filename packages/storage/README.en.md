@@ -4,16 +4,20 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 An object storage module with a unified `storage` entry point for S3-compatible storage and local filesystems.
 
-## Supported backends
+## Core features
 
 - S3 protocol (AWS S3 / MinIO / RustFS / OSS, etc.)
 - Local filesystem
 
-## Quick start
+## Getting started
 
-### Node.js server
+### Quick start
+
+#### Node.js server
 
 ```ts
 import { storage } from '@h-ai/storage'
@@ -44,7 +48,7 @@ if (!closeResult.success) {
 }
 ```
 
-### Browser client
+#### Browser client
 
 The browser entry exports only client capabilities (signed URL uploads/downloads), without the `storage` service object.
 
@@ -58,7 +62,7 @@ await uploadWithPresignedUrl(uploadUrl, file)
 
 > Note: `@h-ai/storage` does not include HTTP routes. Implement the signed URL API in the application layer.
 
-## HTTP API contracts
+### HTTP API contracts
 
 Public HTTP contracts come from `@h-ai/api-contract`; `createStorageProcedures({ storage })` in `@h-ai/serv` binds them to this module.
 
@@ -68,7 +72,7 @@ import { apiClient } from '@h-ai/api-client'
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
 
-## API overview
+### API overview
 
 - `storage.file`
   - `put/get/getStream/head/exists/delete/deleteMany/copy`
@@ -91,7 +95,7 @@ Cancelling a checksum stops waiting for the next chunk and requests closure of t
 
 > Note: `storage.config` returns a **redacted configuration snapshot**. S3 secret fields are replaced with `[REDACTED]`, so it cannot be used for reinitialization.
 
-## Client helpers
+### Client helpers
 
 `@h-ai/storage/client` also provides these browser utilities:
 
@@ -102,7 +106,7 @@ Cancelling a checksum stops waiting for the next chunk and requests closure of t
 - `getMimeType(extension)`
 - `formatFileSize(bytes)`
 
-## Configuration
+### Configuration
 
 - **S3**: requires `bucket / region / accessKeyId / secretAccessKey`; optional `endpoint / forcePathStyle / prefix / publicUrl`.
 - **Local**: requires `root`; optional `directoryMode / fileMode`.
@@ -124,7 +128,7 @@ if (!initResult.success) {
 }
 ```
 
-### Operation logging
+#### Operation logging
 
 Enable file, directory, and presigned URL operation logs with `operationLog`. Logs are emitted at the actual Local/S3 provider operations, without a shared wrapper in `storage-main.ts`. File contents are never logged; uploads log only the byte length.
 
@@ -156,7 +160,7 @@ await storage.init({
 
 For local storage, `storage.dir.list()` recursively scans files under the matching prefix. It supports `maxKeys` truncation but no true pagination with `continuationToken`. For large directories, narrow `prefix` or use the S3 provider's native pagination.
 
-## Error handling
+### Error handling
 
 ```ts
 import { HaiStorageError, storage } from '@h-ai/storage'
@@ -179,7 +183,7 @@ Common error codes:
 | `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | Presigned URL generation failed |
 | `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | Invalid configuration           |
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/storage test

@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md)
 
-> The core of hai Agent Framework: shared utilities, types, configuration management, and logging.
+## Introduction
 
-## Capabilities
+The core of hai Agent Framework: shared utilities, types, configuration management, and logging.
+
+## Core features
 
 - **HaiResult types**: functional error handling (`ok` / `err`) with a shared result format across modules.
 - **Unified logging**: pino on Node.js and loglevel in browsers, with the same API.
@@ -18,9 +20,11 @@
 - **Module utilities**: NotInitializedKit proxies and shared lifecycle infrastructure.
 - **Utility library**: type checks and object / string / array / async / time operations.
 
-## Quick start
+## Getting started
 
-### Node.js environment
+### Quick start
+
+#### Node.js environment
 
 ```typescript
 import { core } from '@h-ai/core'
@@ -72,7 +76,7 @@ core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
 core.typeUtils.isDefined(value)
 ```
 
-### Browser environment
+#### Browser environment
 
 ```typescript
 import { core } from '@h-ai/core'
@@ -95,13 +99,13 @@ The browser retains the `core.config` API shape for type compatibility, but does
 - `watch()` immediately calls its callback with the same error and returns a safe no-op unsubscribe function.
 - Read configuration on the server and deliver it through an API, or use `core.init({ logging })` only to configure browser logging.
 
-## Detailed API
+### Detailed API
 
-### Logging (Logger)
+#### Logging (Logger)
 
 `core.logger` is both the default Logger instance and the shared entry point for logger management.
 
-#### Write logs
+##### Write logs
 
 Six levels: `trace` / `debug` / `info` / `warn` / `error` / `fatal`.
 
@@ -111,7 +115,7 @@ core.logger.error('Failed to connect', { error })
 core.logger.debug('Processing item', { id, step: 'validation' })
 ```
 
-#### Create a module logger
+##### Create a module logger
 
 ```typescript
 // 独立名称空间，适合模块内全局使用
@@ -119,7 +123,7 @@ const logger = core.logger.create({ name: 'payment' })
 logger.info('Payment processed')
 ```
 
-#### Child loggers
+##### Child loggers
 
 ```typescript
 // 携带固定上下文，每条日志自动附带这些字段
@@ -135,7 +139,7 @@ opLogger.error('Login failed', { reason: 'invalid_password' })
 
 > **Typical usage**: create `reqLogger` at the request entry, pass it to the service layer, and add operation context with `child`. Logs then include the complete request context.
 
-#### Logger management
+##### Logger management
 
 ```typescript
 // 配置输出格式和级别（Node.js / Browser）
@@ -156,7 +160,7 @@ Browser logs still use the DevTools console: `pretty` prints readable messages w
 
 `core.logger` redacts log context by default: credentials such as `password`, `token`, `secret`, `privateKey`, and `apiV3Key` become `[REDACTED]`. Fields such as `url` / `baseUrl` / `endpoint` mask only embedded usernames/passwords. Email addresses and phone numbers are not masked by default.
 
-#### Log level conventions
+##### Log level conventions
 
 | Level   | Use case                                            |
 | ------- | --------------------------------------------------- |
@@ -167,7 +171,7 @@ Browser logs still use the DevTools console: `pretty` prints readable messages w
 | `error` | Operation failures requiring investigation          |
 | `fatal` | Fatal errors preventing continued service           |
 
-### Internationalization (i18n)
+#### Internationalization (i18n)
 
 ```typescript
 // 设置全局语言（所有 getMessage 函数自动响应）
@@ -191,7 +195,7 @@ core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 
 core.i18n.DEFAULT_LOCALE // 'zh-CN'
 ```
 
-### Redaction utilities
+#### Redaction utilities
 
 `core.sanitize.sanitizeSensitiveFields()` recursively redacts objects and arrays. By default it handles password, token, secret, privateKey, apiV3Key, and similar credentials, and masks embedded credentials in `url` / `baseUrl` / `endpoint`. Modules can supply custom matchers.
 
@@ -211,7 +215,7 @@ core.sanitize.sanitizeSensitiveFields({ email: 'user@example.com' }, {
 // => { email: '***' }
 ```
 
-### Zod validation error localization
+#### Zod validation error localization
 
 `core.zodValidation` converts Zod `SafeParseError` / `ZodError` into flat form errors and maps Zod's
 default English messages to the caller's own localized messages.
@@ -272,7 +276,7 @@ if (!result.success) {
 }
 ```
 
-### Configuration management (Node.js only)
+#### Configuration management (Node.js only)
 
 > Browsers have no filesystem access. `core.config` offers placeholder APIs only: file-related methods return `SERVICE_UNAVAILABLE` and do not load YAML.
 
@@ -327,7 +331,7 @@ core.config.clear('app') // 清除单个
 core.config.clear() // 清除全部
 ```
 
-#### Dotenv files and environment modes
+##### Dotenv files and environment modes
 
 Node-only `core.config.loadEnvFiles({ mode, envDir })` returns HaiResult and merges `.env` → `.env.<mode>` → `.env.local`, with existing process variables taking priority. development/production map to dev/prod; missing files are skipped. It does not mutate the process: check success before assigning. Track public environment files and `.env.example`; ignore private `.env.local`. core.init does not load dotenv. Browser calls return SERVICE_UNAVAILABLE.
 
@@ -339,7 +343,7 @@ Object.assign(process.env, env.data)
 core.init({ configDir: './config' })
 ```
 
-#### Environment variable mapping and interpolation
+##### Environment variable mapping and interpolation
 
 `core.config.load(name, ...)` automatically maps each YAML leaf to an
 environment variable named `HAI_<CONFIG_NAME>_<YAML_PATH>`. Configuration names and keys are uppercased, levels are separated by `_`,
@@ -382,7 +386,7 @@ database: ${DB_CONNECTION} # → 环境变量缺失时报错
 url: http://${HOST}:${PORT} # → string（混合文本）
 ```
 
-### ID generation
+#### ID generation
 
 ```typescript
 const id = core.id.generate() // nanoid 21 字符
@@ -398,7 +402,7 @@ core.id.isValidUUID('f47ac10b-...') // true/false
 core.id.isValidNanoId('abc123', 6) // true/false
 ```
 
-### Utilities
+#### Utilities
 
 ```typescript
 // 类型检查
@@ -470,7 +474,7 @@ core.time.startOfDay(date)
 core.time.endOfDay(date)
 ```
 
-### Module utilities (module)
+#### Module utilities (module)
 
 Shared initialization error handling for modules:
 
@@ -488,9 +492,9 @@ const currentDdl: DdlOperations = notInitialized.proxy<DdlOperations>()
 const currentHash: HashOperations = notInitialized.proxy<HashOperations>('sync')
 ```
 
-## Error handling
+### Error handling
 
-### HaiResult types
+#### HaiResult types
 
 All operations that may fail return `HaiResult<T>`:
 
@@ -513,7 +517,7 @@ else {
 }
 ```
 
-### Custom error codes (per module)
+#### Custom error codes (per module)
 
 ```typescript
 import type { ErrorInfo } from '@h-ai/core'
@@ -539,7 +543,7 @@ const errorInst = core.error.buildHaiErrorInst(
 )
 ```
 
-### Configuration error codes
+#### Configuration error codes
 
 ```typescript
 import { HaiConfigError } from '@h-ai/core'
@@ -551,7 +555,7 @@ HaiConfigError.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
 HaiConfigError.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
 ```
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/core test

@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/ai](../ai/README.md) · [@h-ai/api-contract](../api-contract/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md) · [@h-ai/iam](../iam/README.md) · [@h-ai/storage](../storage/README.md)
 
-> hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，把 `@h-ai/api-contract` 契约挂载为跨端可访问的 HTTP API；Hono 仅作为内部运行时实现。
+## 简介
 
-## 能力概览
+hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，把 `@h-ai/api-contract` 契约挂载为跨端可访问的 HTTP API；Hono 仅作为内部运行时实现。
+
+## 核心功能清单
 
 - 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
 - 扁平 API（最小知识）：`serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`
@@ -22,7 +24,9 @@
 
 > 生命周期说明：`@h-ai/serv` 本身是无状态 HTTP App 装配器，不需要 `init()` / `close()`；请在创建 app 前初始化 `iam` / `storage` / `ai` / `crypto` 等依赖，并在 `serv.listen(..., { onClose })` 中反向释放它们。`serv.createApp()` 遇到启动期配置错误（例如 transport manager 创建失败）会 fail-fast 抛出，便于进程启动阶段暴露问题。
 
-## 快速开始
+## 使用入门
+
+### 快速开始
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -64,7 +68,7 @@ serv.listen(app, {
 // 5) 优雅关闭由 serv 托管，无需手动注册 process.once('SIGINT', ...)
 ```
 
-### host / port 配置
+#### host / port 配置
 
 host/port 统一由 `config/_serv.yml` 的 `server` 提供，优先级：`HOST` / `PORT` 环境变量 > 配置文件 > 默认 `127.0.0.1:3000`。默认 `127.0.0.1` 仅本机可达，容器对外暴露时改为 `0.0.0.0`：
 
@@ -77,7 +81,7 @@ server:
 
 应用把解析后的 `server` 传给 `serv.listen`（`serv.listen` 也可直接传 `host` / `port` 显式覆盖）。
 
-### Fetch Runtime（Workers / Bun / Deno）
+#### Fetch Runtime（Workers / Bun / Deno）
 
 ```ts
 const handler = serv.toFetch(app)
@@ -86,7 +90,7 @@ export default { fetch: handler }
 
 Node `serv.listen()` 自动提供 socket 对端地址；默认忽略 `X-Forwarded-For` / `X-Real-IP`。只有 `http.trustedProxies` 中列出的代理 IP/CIDR 才能提供转发头，XFF 从右向左停在首个不可信地址，忽略其左侧内容；可信链无法解析或过长时 IP 为 undefined，不能回退为代理身份。代理必须清洗或追加转发头。Fetch 平台通过 `app.fetch(request, { remoteAddress: platformPeerAddress })` 显式提供可信对端，缺失时 IP 为 undefined，不能从任意请求头复制。自定义 `createContext(input)` 复用完整 input，保留框架已解析的 `input.ip`。内部 RPC 仍按连接对端限制。
 
-### Audio WebSocket：ticket 与服务端授权
+#### Audio WebSocket：ticket 与服务端授权
 
 语音入口必须使用短期、一次性 ticket。应用通过已登录 HTTP endpoint 签发 ticket（推荐 `iam.ticket.issue`），并在 `verifyTicket` 中原子消费（推荐 `iam.ticket.consume`）；连接建立即完成鉴权（独立预鉴权超时），未鉴权不处理任何业务帧。框架保存返回的 `ServSession` 与可选 `grant`，再调用 `authorize` 确认付费参数：
 
@@ -112,7 +116,7 @@ const app = serv.createApp({
 - `onSessionEnd` 在成功、失败或断连后至多调用一次，供应用释放并发占用。
 - 浏览器 `createAIClient({ audio: { url, getTicket } })` 只把一次性 `ticket` 放入 WebSocket URL；`getTicket(request)` 接收本次操作摘要（`operation` / `model`），可签发与本次操作严格绑定的票据；禁止传普通 IAM access token。
 
-### 传输加密（与 `@h-ai/crypto` 统一）
+#### 传输加密（与 `@h-ai/crypto` 统一）
 
 serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。使用方只需传入顶层 `crypto` 句柄：
 
@@ -204,7 +208,7 @@ const app = serv.createApp({
 
 > **安全策略**：启用 `transport` 后，除 `excludePaths` 与密钥协商端点外，业务请求必须携带有效 `X-Client-Id`。缺失或未知 clientId 会返回 400；响应体无法加密、非 JSON 业务响应或超过单次加密上限时返回错误，不会明文透传业务数据。
 
-### Token 认证（`iam` / `refreshCookie`）
+#### Token 认证（`iam` / `refreshCookie`）
 
 `serv.createApp` 推荐直接传入顶层 `iam` 句柄，自动派生两件事：
 
@@ -246,7 +250,7 @@ const app = serv.createApp({
 })
 ```
 
-### 自定义 procedure（认证 + 权限）
+#### 自定义 procedure（认证 + 权限）
 
 ```ts
 const procedures = serv
@@ -260,7 +264,7 @@ const procedures = serv
   .build()
 ```
 
-### 高级：自定义 pipeline（HTTP middleware + context + route guard）
+#### 高级：自定义 pipeline（HTTP middleware + context + route guard）
 
 `@h-ai/serv` 的“pipeline”分三层，分别对应三种扩展方式：
 
@@ -268,7 +272,7 @@ const procedures = serv
 2. **context 层**：通过 `verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 定制请求上下文。
 3. **route guard 层**：通过 `.auth()` / `.permission()` / `.role()` 声明认证授权。
 
-#### 1) 自定义 HTTP middleware
+##### 1) 自定义 HTTP middleware
 
 当你需要加请求日志、trace、限流、CORS、租户头校验等 **HTTP 层横切逻辑**，或挂载不适合进入 JSON/oRPC contract 的 WebSocket、文件和二进制端点时，使用 `middlewares`。常见 CORS 场景可直接复用 `serv.cors(...)`：
 
@@ -336,7 +340,7 @@ const app = serv.createApp({
 - 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），请通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露
 - 这一层直接操作 HTTP middleware context，返回的是 **HTTP Response**，不是 `HaiResult`
 
-#### 2) 自定义 context pipeline
+##### 2) 自定义 context pipeline
 
 如果你只想复用 `Bearer token -> session` 这一段逻辑，再额外补充租户、工作区、来源系统等字段，
 优先用 `serv.buildAuthContextFactory()` 组装自定义 `createContext`：
@@ -363,7 +367,7 @@ const app = serv.createApp({
 - 想在默认认证上下文之上追加字段：用 `buildAuthContextFactory(...) + createContext`
 - 想完全接管上下文构造：直接用 `createContext`
 
-#### 3) Route guard
+##### 3) Route guard
 
 公开 procedure 使用 `.route(path, handler)`；需要 guard 时使用
 `.route(path).auth/permission/role().handle(handler)`：
@@ -396,7 +400,7 @@ const procedures = serv
 - 对应用层公开的稳定入口仍然是根入口 `@h-ai/serv`
 - `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` 等内部 helper/middleware 不作为单独子路径文档暴露
 
-### httpOnly Cookie 认证（推荐生产方案）
+#### httpOnly Cookie 认证（推荐生产方案）
 
 httpOnly cookie 模式将 refresh token 存储在服务端管理的 cookie 中（浏览器 JS 无法读取），避免 XSS 风险。
 
@@ -455,7 +459,7 @@ await apiClient.init({
 
 > **Cookie 规格**：`HttpOnly; SameSite=Strict; Secure`（生产）；`Path` 限制为 `{apiPrefix}/auth/refresh`。
 
-## API 概览
+### API 概览
 
 - `serv.createApp(options)`：创建 HTTP App 抽象，挂载自定义 `middlewares`、健康检查、OpenAPI handler、可选文档与 RPC
 - `serv.parseRequestContext({ request })`：默认上下文解析（提取 Bearer token + requestId，不填充 session）
@@ -482,7 +486,7 @@ await apiClient.init({
 
 > 传输加密不作为 `serv.xxx` 扁平 API 暴露；它是 `createApp` 的配置能力，内部委托 `crypto.transport`。
 
-## 配置
+### 配置
 
 `@h-ai/serv` 本身不主动扫描 YAML；推荐由 `@h-ai/core` 统一加载 `config/_serv.yml`，再把解析结果传给 `serv.createApp()`。
 
@@ -597,7 +601,7 @@ const app = serv.createApp({
 
 生产环境下 `_serv.yml` 的 `cors.origin` 为空或为 `*` 会在启动时失败；Web 与 Capacitor/Tauri Origin 均按规范化后的完整 Origin 精确匹配，避免后缀伪造。生产环境同时强制 Secure refresh cookie 并关闭 OpenAPI/docs，配置文件仍决定非生产环境具体挂载哪些端点。
 
-## 配置驱动认证页面
+### 配置驱动认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
@@ -605,7 +609,7 @@ const app = serv.createApp({
 
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
 
-## 错误处理
+### 错误处理
 
 普通 procedure 的认证、授权、业务失败和被捕获的 handler 异常都作为 `HaiResult` 输出，默认通过 HTTP 200 返回；`error.httpStatus` 是领域错误元数据，不会自动改写响应状态。客户端必须检查 `success` 与 `error.code`。例如未登录为 `error.httpStatus=401`，数据库查询失败或 INTERNAL_ERROR 为 500。
 
@@ -656,7 +660,7 @@ const procedures = serv
 
 > 如果错误来自下游业务模块（如 `iam.user.xxx()`）且该模块已经直接返回 `HaiResult`，serv 会原样透传它的 `error.message`。当前 `HaiError` 只携带最终 `message`，不携带 `messageKey/params`，因此 **serv 边界无法对任意下游错误再做一次通用 i18n 重翻译**；要支持请求级 i18n，必须在创建该错误消息的模块里就拿到 locale。
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/serv test
@@ -664,6 +668,6 @@ pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
 
-## License
+## 许可证
 
 Apache-2.0

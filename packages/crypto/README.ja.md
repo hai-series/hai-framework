@@ -4,6 +4,8 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/cache](../cache/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
 
+## 概要
+
 非対称暗号、ハッシュ、対称暗号、パスワードハッシュを提供する暗号モジュールです。
 
 ## 主な機能
@@ -15,22 +17,26 @@
 - 通信暗号化（`crypto.transport`：サーバー管理機能 + クライアントの `encryptedFetch`）
 - サーバー・ブラウザー共通（Node.js / ブラウザー）
 
-## セキュリティに関する注意
+## 使い始める
+
+### セキュリティに関する注意
 
 - **SM4 の既定の暗号化結果は構造化された暗号文**：`crypto.symmetric.encrypt(data, key)` は既定で CBC + ランダム IV を使用し、`{ mode, ciphertext, iv, encoding }` を返します。復号時はこのオブジェクトを `crypto.symmetric.decrypt(payload, key)` に渡します。
 - **SM4 の `deriveKey(password, salt)` は KDF ではありません**：SM3 を 1 回実行するだけで、パスワードの総当たり攻撃への耐性はありません。**パスワード保存には使用禁止**です。パスワードハッシュには `crypto.password.hash(password)`、パスワードからの鍵導出には PBKDF2 / scrypt / Argon2 を使用してください。
 - **IV は毎回一意にしてください**：同じ鍵で IV を再利用してはいけません。既定の CBC または `encryptWithIV()` による毎回の自動生成を推奨します。IV は暗号文と一緒に送信・保存します（公開可能で、秘密にする必要はありません）。
 
-## クイックスタート
+### クイックスタート
 
 ```ts
 import { crypto } from '@h-ai/crypto'
 
 // 初始化（使用前必须调用）
-await crypto.init()
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 ```
 
-### 非対称暗号（暗号化・復号 / 署名・検証）
+#### 非対称暗号（暗号化・復号 / 署名・検証）
 
 ```ts
 // 生成密钥对
@@ -61,7 +67,7 @@ crypto.asymmetric.isValidPublicKey(publicKey) // true
 crypto.asymmetric.isValidPrivateKey(privateKey) // true
 ```
 
-### ハッシュ（Hash / HMAC / 検証）
+#### ハッシュ（Hash / HMAC / 検証）
 
 ```ts
 // 字符串哈希
@@ -85,7 +91,7 @@ if (hash.success) {
 }
 ```
 
-### 対称暗号（既定の CBC / 構造化暗号文）
+#### 対称暗号（既定の CBC / 構造化暗号文）
 
 ```ts
 // 生成随机密钥和 IV
@@ -130,7 +136,7 @@ crypto.symmetric.isValidKey(key) // true
 crypto.symmetric.isValidIV(iv) // true
 ```
 
-### パスワードハッシュ（ソルト付き反復）
+#### パスワードハッシュ（ソルト付き反復）
 
 ```ts
 // 哈希密码（输出格式: $hai$<iterations>$<salt>$<hash>）
@@ -152,7 +158,7 @@ if (hashed.success) {
 }
 ```
 
-### 通信暗号化（crypto.transport）
+#### 通信暗号化（crypto.transport）
 
 通信暗号化は `crypto.transport` 名前空間で提供し、`@h-ai/serv`、`@h-ai/kit`、`@h-ai/api-client` で同じプロトコル定数とペイロード形式を再利用します。
 
@@ -163,7 +169,7 @@ if (hashed.success) {
 
 `crypto.transport.createServer()` / `createClient()` の直接呼び出しは、独自ランタイム、テスト、HTTP 鍵交換 endpoint を自分で接続する場合に限って推奨します。
 
-#### 使用手順
+##### 使用手順
 
 1. `await crypto.init()` を呼び、`crypto.asymmetric` と `crypto.symmetric` を初期化します。
 2. サーバーで `crypto.transport.createServer()` を呼び、`manager` を作成します。サーバー鍵ペアとクライアント公開鍵を管理します。複数ノードでは共有 `keyStore` を注入できます。
@@ -217,14 +223,14 @@ if (!server.success)
 
 プロトコル定数は `crypto.transport.protocol`（または `TRANSPORT_PROTOCOL`）で取得できます：`X-Client-Id`、`X-Encrypted`、既定の `/_hai/key-exchange`。
 
-### モジュールの終了
+#### モジュールの終了
 
 ```ts
 // 使用完毕后关闭，释放内部状态
 await crypto.close()
 ```
 
-## エラー処理
+### エラー処理
 
 すべての操作は `HaiResult<T>` を返します：
 
@@ -235,14 +241,16 @@ if (!result.success) {
 }
 ```
 
-## テスト
+### 任意の連携
+
+管理画面のオンライン暗号化デモは Crypto の SM3/SM4 API を直接呼びます。SM4 はランダムな一時鍵と IV を使い、成功表示前に復号を検証します。鍵は保存しません。入力が変わると古い結果を消去し、ランダムなダイジェストや Base64 を暗号処理の結果として表示してはいけません。
+
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/crypto test
 ```
 
-## License
+## ライセンス
 
 Apache-2.0
-
-管理画面のオンライン暗号化デモは Crypto の SM3/SM4 API を直接呼びます。SM4 はランダムな一時鍵と IV を使い、成功表示前に復号を検証します。鍵は保存しません。入力が変わると古い結果を消去し、ランダムなダイジェストや Base64 を暗号処理の結果として表示してはいけません。

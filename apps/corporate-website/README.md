@@ -1,8 +1,14 @@
 # hai Corporate Website
 
-> 基于 hai-framework 构建的 SvelteKit 企业官网示例应用，包含企业展示、合作登记、合作管理后台及 AI 客服等功能。
+## 简介
 
-## ✨ 特性
+基于 hai-framework 构建的 SvelteKit 企业官网示例应用，包含企业展示、合作登记、合作管理后台及 AI 客服等功能。
+
+## 核心功能清单
+
+- 宽屏下工作区随窗口扩展，列表在自身区域内滚动；手机端自动收拢，登录框和长篇正文保留阅读宽度。
+
+### ✨ 特性
 
 联系表单只有在接口明确返回 `data.sent: true` 时显示成功并清空输入。未配置邮件或发送失败时保留表单，用户可以重试或使用页面上的其他联系方式。
 
@@ -17,14 +23,30 @@
 - 🎨 **主题切换** — 基于 @h-ai/ui 的 DaisyUI 多主题支持
 - 🧩 **组件自动导入** — @h-ai/ui 组件无需显式 import
 
-## 🚀 快速开始
+### 📋 功能模块
 
-### 前置要求
+- 🏠 首页：企业概览与快捷入口（`/`）
+- 📖 关于我们：企业介绍（`/about`）
+- 🛠️ 服务介绍：业务与服务展示（`/services`）
+- 📰 新闻资讯：新闻与动态（`/news`）
+- 📞 联系我们：联系方式与留言（`/contact`）
+- 🤝 合作登记：公开合作申请表单（`/partners`）
+- 🔐 合作管理后台：登录后查看与管理登记记录（`/partners/admin`）
+
+#### 合作管理后台账号
+
+用户名默认是 `partner-admin`，密码必须通过 `HAI_PARTNER_PASSWORD` 注入。应用不会提供默认密码，也不会把凭据写入日志；缺少密码时启动阶段会返回明确的配置错误。
+
+## 使用入门
+
+### 🚀 快速开始
+
+#### 前置要求
 
 - Node.js 22.22.2+ / 24.15.0+ / 26+
 - pnpm ≥ 12.11.2
 
-### 安装与启动
+#### 安装与启动
 
 ```bash
 # 在 hai-framework monorepo 根目录
@@ -38,32 +60,18 @@ pnpm --filter corporate-website dev
 
 浏览器打开 `http://localhost:5174` 即可访问。
 
-### 构建
+#### 构建
 
 ```bash
 pnpm --filter corporate-website build
 pnpm --filter corporate-website preview
 ```
 
-## 📋 功能模块
-
-- 🏠 首页：企业概览与快捷入口（`/`）
-- 📖 关于我们：企业介绍（`/about`）
-- 🛠️ 服务介绍：业务与服务展示（`/services`）
-- 📰 新闻资讯：新闻与动态（`/news`）
-- 📞 联系我们：联系方式与留言（`/contact`）
-- 🤝 合作登记：公开合作申请表单（`/partners`）
-- 🔐 合作管理后台：登录后查看与管理登记记录（`/partners/admin`）
-
-### 合作管理后台账号
-
-用户名默认是 `partner-admin`，密码必须通过 `HAI_PARTNER_PASSWORD` 注入。应用不会提供默认密码，也不会把凭据写入日志；缺少密码时启动阶段会返回明确的配置错误。
-
-## ⚙️ 配置
+### ⚙️ 配置
 
 本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
 
-### YAML 配置文件
+#### YAML 配置文件
 
 - `config/_core.yml`：应用名称、版本、运行环境
 - `config/_db.yml`：数据库连接（SQLite / PostgreSQL / MySQL）
@@ -76,7 +84,7 @@ pnpm --filter corporate-website preview
 每个 YAML 叶子项都可由 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，
 且环境变量优先于 YAML 值；camelCase key 不拆词。
 
-### 环境变量
+#### 环境变量
 
 | 变量名                  | 说明                                     | 默认值                        |
 | ----------------------- | ---------------------------------------- | ----------------------------- |
@@ -88,7 +96,7 @@ pnpm --filter corporate-website preview
 | `HAI_PARTNER_PASSWORD`  | 合作管理后台密码（必填）                 | _（无）_                      |
 | `HAI_CONTACT_RECIPIENT` | 联系表单邮件接收地址（未配置则跳过发送） | _（无）_                      |
 
-## 🌍 国际化 (i18n)
+### 🌍 国际化 (i18n)
 
 本应用使用 [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) 实现国际化。
 
@@ -98,7 +106,23 @@ pnpm --filter corporate-website preview
 
 添加新翻译：在 `messages/zh-CN.json` 和 `messages/en-US.json` 中同时添加对应 key 即可。
 
-## 🧪 开发命令
+### 镜像构建与部署
+
+在本应用目录执行，镜像定义为 `images/app.Dockerfile`，`hai.build.json` 指定文件与仓库根构建上下文。Web 运行配置位于 `images/web/`（如有）。应用版本来自本目录的 `package.json.version`。
+
+```sh
+pnpm build:images                         # 只构建镜像并导出 tar
+pnpm run deploy --env prod --build        # 构建、打包、上传、启动并检查访问
+pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+```
+
+先准备 `.env.prod` 与 `config/_deploy.yml`；首次向导以说明文字收集服务器连接信息并保存到 `.env.local`。完整离线包包含应用和自建中间件镜像，目标 Linux 需预装容器引擎、Compose 与脚本要求的工具。把 tar 和同名 `-deploy/` 目录一起搬到操作机，Windows 执行 `deploy.ps1`，Linux/macOS 执行 `deploy.sh`；完全隔离的服务器解包后执行 `sh apply.sh`。
+
+已有成功安装时，可用 `--services app` 只更新本应用；多个镜像的工程按服务名选择。局部发布保留其他容器和持久化卷，不执行整个项目 `down`，失败保留诊断并尝试恢复旧容器。相同版本允许重建，每次以独立构建 ID 区分内容。`images/dependencies/` 为忽略 Git 的依赖输入，配合引擎缓存和分层减少重复下载。
+
+完整参数、缓存、版本与恢复说明见[使用指南](../../docs/usage/README.md#4-编译源码与打包产物)。移动端和桌面端的原生安装包仍需在对应系统另行构建；容器部署交付的是 Web 页面。
+
+### 🧪 开发命令
 
 ```bash
 pnpm --filter corporate-website dev              # 启动开发服务器
@@ -111,7 +135,7 @@ pnpm --filter corporate-website test:e2e         # 运行 E2E 测试（Playwrigh
 pnpm --filter corporate-website paraglide:compile # 编译 i18n 翻译文件
 ```
 
-## 📦 框架依赖
+### 📦 框架依赖
 
 - `@h-ai/core`：配置管理、日志、HaiResult 模式、错误处理
 - `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
@@ -123,3 +147,16 @@ pnpm --filter corporate-website paraglide:compile # 编译 i18n 翻译文件
 - `@h-ai/ui`：UI 组件库（场景组件、自动导入）
 
 失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
+
+## 开发测试
+
+```sh
+pnpm --filter corporate-website typecheck
+pnpm --filter corporate-website lint
+pnpm --filter corporate-website build
+pnpm --filter corporate-website test
+```
+
+## 许可证
+
+Apache-2.0

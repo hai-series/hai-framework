@@ -4,21 +4,27 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
+## 简介
+
 关系型数据库访问模块，通过统一的 `reldb` 对象访问 SQLite、PostgreSQL、MySQL。
 
-## 支持的数据库
+## 核心功能清单
 
-- SQLite
-- PostgreSQL
-- MySQL
+- 用同一套 API 连接 SQLite、PostgreSQL 和 MySQL。
+- 执行参数化 SQL，创建表和索引，读取分页结果。
+- 使用事务、CRUD 与 Repository 组织业务读写。
 
-## 快速开始
+## 使用入门
+
+### 快速开始
 
 ```ts
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 // 初始化
-await reldb.init({ type: 'sqlite', database: ':memory:' })
+const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 
 // DDL
 await reldb.ddl.createTable('users', {
@@ -55,7 +61,7 @@ await reldb.close()
 
 `reldb.config` 返回的是**脱敏后的配置快照**：数据库 `password` 与 URL 内嵌凭证会自动隐藏，便于排查状态但不应用于回放原始连接信息。
 
-## 配置
+### 配置
 
 支持连接字符串（`url`）或分字段（`host/port/database/user/password`）。
 
@@ -78,7 +84,7 @@ await reldb.init({
 })
 ```
 
-### SQLite 执行方式（worker 异步）
+#### SQLite 执行方式（worker 异步）
 
 better-sqlite3 是同步驱动，查询会阻塞 Node 主线程事件循环。WAL 只能改善数据库锁并发，无法避免同步调用占用主线程。需要卸载这一阻塞时，可把 SQLite 切到专用 worker 线程执行（单连接，opt-in，默认 `sync`）：
 
@@ -96,7 +102,7 @@ await reldb.init({
 
 worker 模式下查询、写入与事务均在 worker 线程串行执行；公共 API 与返回值与同步模式完全一致。
 
-### 操作日志
+#### 操作日志
 
 可在数据库配置中通过 `operationLog` 开启 SQL 操作日志。日志在 reldb provider-base 的 DML 操作层统一输出，不在 `reldb-main.ts` 或各 raw provider 中重复包装。
 
@@ -127,11 +133,11 @@ await reldb.init({
 })
 ```
 
-## 事务
+### 事务
 
 三种使用方式：
 
-### wrap（自动提交/回滚）
+#### wrap（自动提交/回滚）
 
 ```ts
 const result = await reldb.tx.wrap(async (tx) => {
@@ -142,7 +148,7 @@ const result = await reldb.tx.wrap(async (tx) => {
 // 回调正常返回 → 自动提交；抛异常 → 自动回滚
 ```
 
-### begin + commit（分步提交）
+#### begin + commit（分步提交）
 
 ```ts
 const txResult = await reldb.tx.begin()
@@ -154,7 +160,7 @@ await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
 await tx.commit()
 ```
 
-### begin + rollback（分步回滚）
+#### begin + rollback（分步回滚）
 
 ```ts
 const txResult = await reldb.tx.begin()
@@ -166,7 +172,7 @@ await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
 await tx.rollback()
 ```
 
-### 事务内使用 batch / queryPage
+#### 事务内使用 batch / queryPage
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
@@ -182,7 +188,7 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-## Crud
+### Crud
 
 通过 `reldb.crud.table()` 创建单表 CRUD 仓库，免写 SQL：
 
@@ -197,7 +203,7 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 })
 ```
 
-### create / createMany
+#### create / createMany
 
 ```ts
 // 单条插入
@@ -211,7 +217,7 @@ await userCrud.createMany([
 ])
 ```
 
-### createOrUpdate
+#### createOrUpdate
 
 主键存在时更新，否则创建（upsert）：
 
@@ -230,7 +236,7 @@ await userCrud.createOrUpdate({ id: 1, name: '张三', email: 'test@example.com'
 
 `BaseReldbCrudRepository` 自动获取 `dbType`，无需手动传入。
 
-### findById / getById / findAll / findPage
+#### findById / getById / findAll / findPage
 
 ```ts
 // 主键查找（不存在时返回 null）
@@ -260,14 +266,14 @@ const page = await userCrud.findPage({
 // page.data → { items: [...], total: 100, page: 1, pageSize: 20 }
 ```
 
-### updateById / deleteById
+#### updateById / deleteById
 
 ```ts
 await userCrud.updateById(1, { name: '李四' })
 await userCrud.deleteById(1)
 ```
 
-### count / exists / existsById
+#### count / exists / existsById
 
 ```ts
 const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
@@ -280,7 +286,7 @@ const found = await userCrud.existsById(1)
 // found.data → true
 ```
 
-### 事务中使用 Crud
+#### 事务中使用 Crud
 
 所有方法均支持传入 `tx` 参数，自动路由到事务上下文：
 
@@ -292,7 +298,7 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-## BaseReldbCrudRepository
+### BaseReldbCrudRepository
 
 业务仓库继承 `BaseReldbCrudRepository`，通过 `fields` 定义字段映射，自动建表、类型转换：
 
@@ -359,7 +365,7 @@ if (txResult.success) {
 }
 ```
 
-## JSON 路径操作
+### JSON 路径操作
 
 通过 `reldb.json` 构建跨数据库统一的 JSON 路径操作 SQL 表达式。
 
@@ -375,7 +381,7 @@ if (txResult.success) {
 
 所有方法返回 `{ sql, params }` 片段，可直接嵌入 `reldb.sql.query` / `reldb.sql.execute`。
 
-### extract — 提取 JSON 字段值
+#### extract — 提取 JSON 字段值
 
 ```ts
 // 用于 WHERE 条件
@@ -393,7 +399,7 @@ const result = await reldb.sql.query(
 )
 ```
 
-### set — 设置 JSON 字段路径（创建或替换）
+#### set — 设置 JSON 字段路径（创建或替换）
 
 ```ts
 const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
@@ -403,7 +409,7 @@ await reldb.sql.execute(
 )
 ```
 
-### insert — 插入 JSON 字段路径（仅当路径不存在时）
+#### insert — 插入 JSON 字段路径（仅当路径不存在时）
 
 ```ts
 const { sql, params } = reldb.json.insert('data', '$.firstSeen', new Date().toISOString())
@@ -413,7 +419,7 @@ await reldb.sql.execute(
 )
 ```
 
-### remove — 删除 JSON 字段路径
+#### remove — 删除 JSON 字段路径
 
 ```ts
 const { sql, params } = reldb.json.remove('settings', '$.deprecated')
@@ -423,7 +429,7 @@ await reldb.sql.execute(
 )
 ```
 
-### merge — 合并 JSON 对象（RFC 7396 Merge Patch）
+#### merge — 合并 JSON 对象（RFC 7396 Merge Patch）
 
 ```ts
 // 覆盖已有键、保留未提及键、将 null 键删除
@@ -437,7 +443,7 @@ await reldb.sql.execute(
 )
 ```
 
-### 完整示例
+#### 完整示例
 
 ```ts
 // 建表（含 JSON 列）
@@ -472,7 +478,7 @@ const { sql: rmSql, params: rmParams } = reldb.json.remove('meta', '$.reviewer')
 await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...rmParams, 1])
 ```
 
-## 错误处理
+### 错误处理
 
 所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
 
@@ -507,7 +513,7 @@ if (!result.success) {
 | `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作失败 |
 | `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 配置错误     |
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/reldb test
@@ -515,6 +521,6 @@ pnpm --filter @h-ai/reldb test
 
 > MySQL/PostgreSQL 测试需要 Docker。
 
-## License
+## 许可证
 
 Apache-2.0

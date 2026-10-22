@@ -4,9 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/api-contract](../api-contract/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/crypto](../crypto/README.ja.md)
 
-> hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクライアント。Web、アプリ、ミニプログラムに共通の API 呼び出しと Token 管理を提供します。
+## 概要
 
-## 機能概要
+hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクライアント。Web、アプリ、ミニプログラムに共通の API 呼び出しと Token 管理を提供します。
+
+## 主な機能
 
 - `apiClient`：iam/storage/ai ドメインに対応する既定の型付きクライアント。
 - `apiClient.create(contract)`：独自の contract に対応する型付きクライアントを作成。
@@ -17,7 +19,9 @@
 - 任意の通信暗号化：`apiClient.init({ transport: { crypto } })` が `crypto.transport.createClient()` を自動使用。
 - 通信暗号化と自動更新を併用可能。401 後の `/auth/refresh` も暗号化された fetch を使用し、平文には切り替わりません。
 
-## クイックスタート
+## 使い始める
+
+### クイックスタート
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -47,7 +51,7 @@ if (me.success) {
 await apiClient.close()
 ```
 
-### 通信暗号化の有効化
+#### 通信暗号化の有効化
 
 サーバーで先に `serv.createApp({ transport: { crypto } })` を有効にします。クライアントには同じ `@h-ai/crypto` サービスのインスタンスを渡すだけで、鍵交換コードの実装は不要です。
 
@@ -67,7 +71,7 @@ await apiClient.close()
 await crypto.close()
 ```
 
-## API 契約
+### API 契約
 
 独自のアプリケーションでは、専用の oRPC contract を指定できます：
 
@@ -82,7 +86,7 @@ await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
 ```
 
-## API 一覧
+### API 一覧
 
 - `apiClient.init(config)`：既定のクライアントを初期化。
 - `apiClient.close()`：クライアントの状態を解放。
@@ -92,7 +96,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 初期化済みのクライアントで `init()` を再度呼ぶと `CONFIG_ERROR` が返り、既存のクライアントは維持されます。`baseUrl` / `fetch` / `transport` を変更する場合は、先に `await apiClient.close()` を呼んでから再初期化してください。
 
-## 設定
+### 設定
 
 - `baseUrl`：API のベース URL。通常は `/api/v1` を含みます。
 - `auth.storage`：Token ストレージアダプター。既定は `apiClient.tokenStorage.httpOnlyCookie()`（ブラウザー推奨）。SSR / テストでは `apiClient.tokenStorage.memory()` を明示してください。
@@ -104,7 +108,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 - `transport.keyExchangePath`：鍵交換のサブパス。既定は `/_hai/key-exchange` で、`baseUrl` に自動的に連結されます。
 - `apiClient.config`：**機密情報をマスクした実行時設定のスナップショット**。`baseUrl` 内の認証情報や `headers.authorization` などの機密値は自動的に非表示になります。
 
-## 設定による認証画面
+### 設定による認証画面
 
 規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
 
@@ -112,7 +116,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
 
-## エラー処理
+### エラー処理
 
 業務 API は `HaiResult<T>` を返します：
 
@@ -130,13 +134,13 @@ else {
 
 自動更新は実際の HTTP 401（`Response.status`）、または HTTP 200 の有効な失敗 HaiResult（`success=false`、文字列の `error.code/message`、`error.httpStatus=401`）で動作します。更新が成功すると元のリクエストを一度だけ再試行します。組み込みのログイン・登録と設定された `auth.refreshPath` は自動更新の対象外で、403/500 など他の失敗でも更新しません。serv の通常の procedure は引き続き HTTP 200 を返します。呼び出し側は最終結果の `success` と `error.code` を確認し、更新失敗による認証失効を処理してください。
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
 
-## License
+## ライセンス
 
 Apache-2.0

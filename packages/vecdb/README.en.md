@@ -4,22 +4,27 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 A vector database module with a unified `vecdb` object for LanceDB, pgvector, Qdrant, and Chroma.
 
-## Supported vector databases
+## Core features
 
-- LanceDB (embedded, local file storage, zero configuration)
-- pgvector (PostgreSQL + pgvector extension)
-- Qdrant (high-performance vector search engine; server 1.10.0+ with the Query API)
-- Chroma (automatically start a local service in embedded mode, or connect to an existing service)
+- Create collections with a defined vector dimension.
+- Store document vectors, search by similarity and filter metadata.
+- Use LanceDB, pgvector, Qdrant or Chroma; backend setup is described below.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
 // 初始化（LanceDB）
-await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 
 // 创建集合
 await vecdb.collection.create('docs', { dimension: 1536 })
@@ -44,7 +49,7 @@ if (!closeResult.success) {
 }
 ```
 
-## Configuration
+### Configuration
 
 ```ts
 // LanceDB（默认，嵌入式本地存储）
@@ -79,7 +84,7 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 > starts a local service with `serverCommand` (default: `chroma`, from the `chromadb` package), and `vecdb.close`
 > stops the process. Install the optional `chromadb` dependency; if the command is unavailable, `init` returns `CONNECTION_FAILED`.
 
-### Operation logging
+#### Operation logging
 
 Enable operation logging with `operationLog` in the vector database configuration. Logs are emitted before collection/vector operations reach the real provider, without a shared wrapper in `vecdb-main.ts`.
 
@@ -111,7 +116,7 @@ await vecdb.init({
 
 > Behavior: empty batch `insert/upsert/delete` calls are no-ops. Writes and searches validate vector dimensions, returning `HaiVecdbError.DIMENSION_MISMATCH` on a mismatch; missing optional drivers return `HaiVecdbError.DRIVER_NOT_FOUND`.
 
-## Error handling
+### Error handling
 
 All operations return `HaiResult<T>`; check `result.success` for success or failure.
 
@@ -132,7 +137,7 @@ if (!result.success) {
 }
 ```
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/vecdb test

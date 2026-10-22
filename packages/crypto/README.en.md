@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
+## Introduction
+
 A cryptography module for asymmetric encryption, hashing, symmetric encryption, and password hashing.
 
-## Capabilities
+## Core features
 
 - Asymmetric cryptography (key generation, encryption/decryption, signing/verification)
 - Hashing (hash, HMAC, verification)
@@ -15,22 +17,26 @@ A cryptography module for asymmetric encryption, hashing, symmetric encryption, 
 - Transport encryption (`crypto.transport`: server manager + client `encryptedFetch`)
 - Shared server/browser support (Node.js / browser)
 
-## Security notice
+## Getting started
+
+### Security notice
 
 - **SM4 encryption returns a structured payload by default**: `crypto.symmetric.encrypt(data, key)` uses CBC + a random IV by default and returns `{ mode, ciphertext, iv, encoding }`. Pass that object to `crypto.symmetric.decrypt(payload, key)` to decrypt.
 - **SM4 `deriveKey(password, salt)` is not a KDF**: it performs a single SM3 hash and offers no resistance to password cracking. **Never use it for password storage**. Use `crypto.password.hash(password)` for password hashing and PBKDF2 / scrypt / Argon2 for password-based key derivation.
 - **IVs must be unique**: never reuse an IV with the same key. Prefer default CBC or `encryptWithIV()` to generate one for each call. Transmit and store the IV with the ciphertext; the IV can be public.
 
-## Quick start
+### Quick start
 
 ```ts
 import { crypto } from '@h-ai/crypto'
 
 // 初始化（使用前必须调用）
-await crypto.init()
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 ```
 
-### Asymmetric cryptography (encryption / signing)
+#### Asymmetric cryptography (encryption / signing)
 
 ```ts
 // 生成密钥对
@@ -61,7 +67,7 @@ crypto.asymmetric.isValidPublicKey(publicKey) // true
 crypto.asymmetric.isValidPrivateKey(privateKey) // true
 ```
 
-### Hashing (Hash / HMAC / verification)
+#### Hashing (Hash / HMAC / verification)
 
 ```ts
 // 字符串哈希
@@ -85,7 +91,7 @@ if (hash.success) {
 }
 ```
 
-### Symmetric encryption (default CBC / structured payload)
+#### Symmetric encryption (default CBC / structured payload)
 
 ```ts
 // 生成随机密钥和 IV
@@ -130,7 +136,7 @@ crypto.symmetric.isValidKey(key) // true
 crypto.symmetric.isValidIV(iv) // true
 ```
 
-### Password hashing (salted iterations)
+#### Password hashing (salted iterations)
 
 ```ts
 // 哈希密码（输出格式: $hai$<iterations>$<salt>$<hash>）
@@ -152,7 +158,7 @@ if (hashed.success) {
 }
 ```
 
-### Transport encryption (crypto.transport)
+#### Transport encryption (crypto.transport)
 
 The `crypto.transport` namespace provides transport encryption, allowing `@h-ai/serv`, `@h-ai/kit`, and `@h-ai/api-client` to share protocol constants and payload formats.
 
@@ -163,7 +169,7 @@ For typical applications, use the higher-level integrations:
 
 Call `crypto.transport.createServer()` / `createClient()` directly only for custom runtimes, tests, or manually integrated HTTP key exchange endpoints.
 
-#### Workflow
+##### Workflow
 
 1. Call `await crypto.init()` to initialize `crypto.asymmetric` and `crypto.symmetric`.
 2. On the server, create a `manager` with `crypto.transport.createServer()`. It holds the server key pair and stores client public keys. Inject a shared `keyStore` for multi-node deployments.
@@ -217,14 +223,14 @@ if (!server.success)
 
 Access protocol constants through `crypto.transport.protocol` (or `TRANSPORT_PROTOCOL`): `X-Client-Id`, `X-Encrypted`, and the default `/_hai/key-exchange`.
 
-### Close the module
+#### Close the module
 
 ```ts
 // 使用完毕后关闭，释放内部状态
 await crypto.close()
 ```
 
-## Error handling
+### Error handling
 
 All operations return `HaiResult<T>`:
 
@@ -235,7 +241,11 @@ if (!result.success) {
 }
 ```
 
-## Tests
+### Optional integrations
+
+The admin console's online encryption demo calls the Crypto SM3/SM4 APIs directly. SM4 uses a random temporary key and IV and verifies decryption before showing success; keys are not saved. Changing input clears previous results. Random digests or Base64 must not be presented as cryptographic results.
+
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/crypto test
@@ -244,5 +254,3 @@ pnpm --filter @h-ai/crypto test
 ## License
 
 Apache-2.0
-
-The admin console's online encryption demo calls the Crypto SM3/SM4 APIs directly. SM4 uses a random temporary key and IV and verifies decryption before showing success; keys are not saved. Changing input clears previous results. Random digests or Base64 must not be presented as cryptographic results.

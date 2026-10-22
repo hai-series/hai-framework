@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/ai](../ai/README.en.md) · [@h-ai/api-contract](../api-contract/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/iam](../iam/README.en.md) · [@h-ai/storage](../storage/README.en.md)
 
-> hai-framework's API service runtime: a stable public HTTP App abstraction that mounts `@h-ai/api-contract` contracts as cross-platform HTTP APIs. Hono is an internal implementation detail.
+## Introduction
 
-## Capabilities
+hai-framework's API service runtime: a stable public HTTP App abstraction that mounts `@h-ai/api-contract` contracts as cross-platform HTTP APIs. Hono is an internal implementation detail.
+
+## Core features
 
 - Start with `serv.createApp(...)` → `serv.listen(app, { port })`; applications need not import Hono.
 - Flat API: `serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`.
@@ -22,7 +24,9 @@
 
 > Lifecycle: `@h-ai/serv` is a stateless HTTP App assembler and needs no `init()` / `close()`. Initialize `iam` / `storage` / `ai` / `crypto` before app creation, then release them in reverse order through `serv.listen(..., { onClose })`. `serv.createApp()` throws immediately on startup configuration errors such as transport manager creation failure.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -64,7 +68,7 @@ serv.listen(app, {
 // 5) 优雅关闭由 serv 托管，无需手动注册 process.once('SIGINT', ...)
 ```
 
-### host / port configuration
+#### host / port configuration
 
 Host/port come from `server` in `config/_serv.yml`: `HOST` / `PORT` environment variables > configuration > `127.0.0.1:3000`. The default `127.0.0.1` is local-only; use `0.0.0.0` to expose a container:
 
@@ -77,7 +81,7 @@ server:
 
 Pass the resolved `server` to `serv.listen`; explicit `host` / `port` arguments can also override it.
 
-### Fetch Runtime（Workers / Bun / Deno）
+#### Fetch Runtime（Workers / Bun / Deno）
 
 ```ts
 const handler = serv.toFetch(app)
@@ -86,7 +90,7 @@ export default { fetch: handler }
 
 Node `serv.listen()` supplies the socket peer address. Forwarded headers are ignored by default. Only proxy IPs/CIDRs in `http.trustedProxies` may supply them: XFF is walked from right to left until the first untrusted address; content to the left of that address is ignored. An invalid or excessively long trusted chain leaves IP undefined rather than promoting the proxy to client identity. Proxies must sanitize or append forwarded headers. Fetch platforms explicitly provide a trusted peer through `app.fetch(request, { remoteAddress: platformPeerAddress })`; without metadata IP is undefined. Do not copy arbitrary headers into metadata. Custom `createContext(input)` forwards the complete input to preserve resolved `input.ip`. Internal RPC checks the connection peer.
 
-### Audio WebSocket: tickets and server authorization
+#### Audio WebSocket: tickets and server authorization
 
 Audio connections require short-lived, one-time tickets. Issue them through an authenticated HTTP endpoint (recommended: `iam.ticket.issue`) and consume atomically in `verifyTicket` (recommended: `iam.ticket.consume`). Authentication runs at connection time with a separate timeout; no business frames are processed beforehand. The framework stores the returned `ServSession` and optional `grant`, then calls `authorize` to approve paid parameters:
 
@@ -112,7 +116,7 @@ const app = serv.createApp({
 - `onSessionEnd` runs at most once after success, failure, or disconnection to release concurrency slots.
 - Browser `createAIClient({ audio: { url, getTicket } })` puts only one-time `ticket` in the WebSocket URL. `getTicket(request)` receives the operation summary (`operation` / `model`) for a tightly bound ticket. Never pass ordinary IAM access tokens.
 
-### Transport encryption (shared with `@h-ai/crypto`)
+#### Transport encryption (shared with `@h-ai/crypto`)
 
 serv does not expose its own encryption factory; the server manager comes from `crypto.transport`. Applications only pass the top-level `crypto` handle:
 
@@ -204,7 +208,7 @@ const app = serv.createApp({
 
 > **Security**: with `transport` enabled, business requests need valid `X-Client-Id` except `excludePaths` and key exchange. Missing/unknown clientId returns 400. Unencryptable bodies, non-JSON responses, or encryption size limits return errors rather than forwarding plaintext business data.
 
-### Token authentication (`iam` / `refreshCookie`)
+#### Token authentication (`iam` / `refreshCookie`)
 
 Pass the top-level `iam` handle to `serv.createApp` to derive:
 
@@ -246,7 +250,7 @@ const app = serv.createApp({
 })
 ```
 
-### Custom procedures (authentication + permissions)
+#### Custom procedures (authentication + permissions)
 
 ```ts
 const procedures = serv
@@ -260,7 +264,7 @@ const procedures = serv
   .build()
 ```
 
-### Advanced pipelines (HTTP middleware + context + route guards)
+#### Advanced pipelines (HTTP middleware + context + route guards)
 
 `@h-ai/serv` pipelines have three layers and extension points:
 
@@ -268,7 +272,7 @@ const procedures = serv
 2. **Context**: customize through `verifyToken` / `createContext` / `serv.buildAuthContextFactory()`.
 3. **Route guards**: declare authentication/authorization with `.auth()` / `.permission()` / `.role()`.
 
-#### 1) Custom HTTP middleware
+##### 1) Custom HTTP middleware
 
 Use `middlewares` for **HTTP cross-cutting logic** such as logging, tracing, rate limits, CORS, and tenant headers, or WebSocket/file/binary endpoints unsuited to JSON/oRPC contracts. Reuse `serv.cors(...)` for common CORS needs:
 
@@ -336,7 +340,7 @@ Notes:
 - Expose custom response headers such as `X-Encrypted` explicitly through `serv.cors({ exposedHeaders: [...] })` for browsers.
 - This layer works with HTTP middleware context and returns **HTTP Response**, not `HaiResult`.
 
-#### 2) Custom context pipelines
+##### 2) Custom context pipelines
 
 To reuse `Bearer token -> session` and add tenant, workspace, or source-system fields,
 prefer `serv.buildAuthContextFactory()` to assemble a custom `createContext`:
@@ -363,7 +367,7 @@ Choose the appropriate extension:
 - Add fields to default authentication context: use `buildAuthContextFactory(...) + createContext`.
 - Replace context construction entirely: use `createContext` directly.
 
-#### 3) Route guard
+##### 3) Route guard
 
 Public procedures use `.route(path, handler)`. For guarded routes, use
 `.route(path).auth/permission/role().handle(handler)`：
@@ -396,7 +400,7 @@ Public API boundaries:
 - The stable application-facing entry remains `@h-ai/serv`.
 - Internal helpers such as `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` are not documented as separate subpath exports.
 
-### httpOnly cookie authentication (recommended for production)
+#### httpOnly cookie authentication (recommended for production)
 
 httpOnly cookie mode stores refresh tokens in server-managed cookies unreadable to browser JavaScript, reducing XSS exposure.
 
@@ -455,7 +459,7 @@ await apiClient.init({
 
 > **Cookie attributes**: `HttpOnly; SameSite=Strict; Secure` in production; `Path` is limited to `{apiPrefix}/auth/refresh`.
 
-## API overview
+### API overview
 
 - `serv.createApp(options)`: create the HTTP App with custom middleware, health checks, OpenAPI, optional docs, and RPC.
 - `serv.parseRequestContext({ request })`: extract Bearer token + requestId without populating session.
@@ -482,7 +486,7 @@ Additional root types / named exports:
 
 > Transport encryption is a `createApp` option delegated internally to `crypto.transport`, not a flat `serv.xxx` API.
 
-## Configuration
+### Configuration
 
 `@h-ai/serv` does not scan YAML itself. Load `config/_serv.yml` through `@h-ai/core` and pass the result to `serv.createApp()`.
 
@@ -597,7 +601,7 @@ const app = serv.createApp({
 
 In production, empty or `*` `_serv.yml` `cors.origin` fails startup. Web and Capacitor/Tauri origins use exact normalized full-Origin matching to prevent suffix spoofing. Production also enforces Secure refresh cookies and disables OpenAPI/docs; configuration controls nonproduction endpoints.
 
-## Configuration driven authentication
+### Configuration driven authentication
 
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
@@ -605,7 +609,7 @@ createIamProcedures({ iam }) implements public config, password/LDAP/OTP login, 
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-## Error handling
+### Error handling
 
 Ordinary procedures return authentication, authorization, business failures and caught handler exceptions as HaiResult over HTTP 200 by default. `error.httpStatus` is domain-error metadata and does not change the response status. Clients must check `success` and `error.code`: an unauthenticated failure has `error.httpStatus=401`, while database query failures or INTERNAL_ERROR have 500.
 
@@ -656,7 +660,7 @@ const procedures = serv
 
 > When downstream modules (such as `iam.user.xxx()`) return `HaiResult` directly, serv forwards `error.message` unchanged. `HaiError` holds only the final `message`, not `messageKey/params`, so **serv cannot generically retranslate arbitrary downstream errors**. Request-level localization must receive locale at the module that creates the error message.
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/serv test

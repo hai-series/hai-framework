@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/audit](../audit/README.md) · [@h-ai/core](../core/README.md)
 
+## 简介
+
 统一支付模块，支持微信支付、支付宝和 Stripe，提供 Provider 模式的后端支付处理与多端客户端调起能力。
 
-## 支持的 Provider
+## 核心功能清单
 
 | Provider | 支付场景                         |
 | -------- | -------------------------------- |
@@ -14,13 +16,15 @@
 | 支付宝   | JSAPI / H5 / App / Native        |
 | Stripe   | Checkout Session（国际支付）     |
 
-## 依赖
+## 使用入门
+
+### 依赖
 
 - `@h-ai/audit` — 审计日志（支付操作自动审计），可选；已初始化时自动写入审计日志
 
-## 快速开始
+### 快速开始
 
-### Node.js 服务端
+#### Node.js 服务端
 
 ```typescript
 import { payment } from '@h-ai/payment'
@@ -47,7 +51,7 @@ const query = await payment.queryOrder('wechat', 'ORD001')
 await payment.close()
 ```
 
-### 浏览器客户端
+#### 浏览器客户端
 
 ```typescript
 import { invokePayment } from '@h-ai/payment/client'
@@ -56,7 +60,7 @@ import { invokePayment } from '@h-ai/payment/client'
 await invokePayment(orderData)
 ```
 
-## HTTP API 契约
+### HTTP API 契约
 
 支付 HTTP API 由 `@h-ai/api-contract` 的 `apiContract.payment` 定义。组合进应用 contract 后，可通过 typed client 调用：
 
@@ -69,7 +73,7 @@ const order = await api.payment.orders.create({
 })
 ```
 
-## 配置
+### 配置
 
 ```typescript
 await payment.init({
@@ -101,7 +105,7 @@ await payment.init({
 
 所有内置 Provider 的 HTTP 请求默认附带 15 秒超时，避免网络异常时长时间挂起。
 
-## 审计日志
+### 审计日志
 
 关键支付操作执行成功后会自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。审计写入失败仅输出 warn 日志，不影响支付操作。
 
@@ -114,7 +118,7 @@ await payment.init({
 
 > 订单查询（`queryOrder`）为只读操作，不写审计日志。
 
-## 错误处理
+### 错误处理
 
 ```typescript
 const result = await payment.createOrder('wechat', orderInput)
@@ -145,12 +149,12 @@ if (!result.success) {
 | `HaiPaymentError.NOTIFY_PARSE_FAILED`  | `hai:payment:051` | 回调解析失败    |
 | `HaiPaymentError.CONFIG_ERROR`         | `hai:payment:070` | 配置无效        |
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/payment test
 ```
 
-## License
+## 许可证
 
 Apache-2.0

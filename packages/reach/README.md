@@ -4,16 +4,13 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
+## 简介
+
 用户触达模块，支持同时注册多个 Provider（邮件、短信、API 回调等），通过模板绑定 Provider 实现按场景路由发送。内置免打扰（DND）机制，支持通过配置文件定义模板。
 
 模板发送只需 `template`、`to` 和 `vars`，Provider 默认来自模板；显式 `provider` 仍可覆盖。无模板的直接发送必须提供 Provider，缺少时返回失败 HaiResult。
 
-## 依赖
-
-- `@h-ai/reldb` — 数据库（发送日志与模板持久化），可选；已初始化时自动启用持久化
-- `@h-ai/cache` — 缓存（DND delay 策略分布式锁），可选；已初始化时自动启用分布式锁
-
-## 支持的 Provider
+## 核心功能清单
 
 | Provider     | 渠道 | 说明                                        |
 | ------------ | ---- | ------------------------------------------- |
@@ -22,9 +19,16 @@
 | `aliyun-sms` | 短信 | 阿里云短信服务（直接调用 HTTP API，无 SDK） |
 | `api`        | 通用 | HTTP API 回调（通用 webhook）               |
 
-## 快速开始
+## 使用入门
 
-### 安装
+### 依赖
+
+- `@h-ai/reldb` — 数据库（发送日志与模板持久化），可选；已初始化时自动启用持久化
+- `@h-ai/cache` — 缓存（DND delay 策略分布式锁），可选；已初始化时自动启用分布式锁
+
+### 快速开始
+
+#### 安装
 
 ```bash
 pnpm add @h-ai/reach
@@ -32,61 +36,44 @@ pnpm add @h-ai/reach
 
 邮件发送需安装 `nodemailer`。
 
-### 多 Provider 初始化
+#### 多 Provider 初始化
 
 ```ts
-import { cache } from '@h-ai/cache'
 import { reach } from '@h-ai/reach'
-import { reldb } from '@h-ai/reldb'
 
-// 1. 初始化可选依赖（按需）
-await reldb.init({ type: 'sqlite', database: './data.db' }) // 可选，启用发送日志与模板持久化
-await cache.init({ type: 'memory' }) // 可选，启用 DND delay 策略分布式锁
-
-// 2. 初始化触达模块（自动检测已初始化的 reldb/cache 单例）
-await reach.init({
-  providers: [
-    { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
-    { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '某某科技' },
-    { name: 'webhook', type: 'api', url: 'https://api.example.com/notify' },
-  ],
-  templates: [
-    { name: 'welcome_email', provider: 'email', subject: '欢迎 {userName}', body: '亲爱的 {userName}，欢迎！' },
-    { name: 'sms_code', provider: 'sms', body: '验证码: {code}，{minutes} 分钟内有效。' },
-  ],
-  dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
+const initialized = await reach.init({
+  providers: [{ name: 'local', type: 'console' }],
+  templates: [{ name: 'welcome', provider: 'local', subject: 'Welcome', body: 'Hello {userName}' }],
 })
-
-// 通过 provider 字段选择发送渠道
-await reach.send({
-  to: 'user@example.com',
-  template: 'welcome_email',
-  vars: { userName: '张三' },
-})
-
-// 发送短信（通过 extra 传递 Provider 特有参数）
-await reach.send({
-  provider: 'sms',
-  to: '13800138000',
-  extra: { templateCode: 'SMS_123456' },
-  vars: { code: '123456' },
-})
-
-// 关闭所有 Provider
-await reach.close()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const result = await reach.send({
+    to: 'user@example.com',
+    template: 'welcome',
+    vars: { userName: 'Alice' },
+  })
+  if (!result.success)
+    throw new Error(result.error.message)
+}
+finally {
+  await reach.close()
+}
 ```
+
+以上示例使用开发 Console Provider，只记录发送元数据，不实际发邮件或短信。需要真实投递时，按下方配置 SMTP、短信或 API Provider；数据库持久化和共享缓存按需初始化。
 
 `reach.config` 返回的是**脱敏后的配置快照**：`api.url` / `endpoint` 的内嵌凭证，以及 `headers.Authorization`、SMTP `pass`、短信密钥等敏感值会自动隐藏。
 
-## 配置
+### 配置
 
-### Console（开发/测试）
+#### Console（开发/测试）
 
 ```ts
 const config = { name: 'dev', type: 'console' }
 ```
 
-### SMTP
+#### SMTP
 
 | 字段     | 类型      | 必填 | 默认值 | 说明            |
 | -------- | --------- | ---- | ------ | --------------- |
@@ -99,7 +86,7 @@ const config = { name: 'dev', type: 'console' }
 | `pass`   | `string`  | —    | —      | 认证密码        |
 | `from`   | `string`  | ✅   | —      | 发件人地址      |
 
-### 阿里云短信
+#### 阿里云短信
 
 | 字段              | 类型     | 必填 | 默认值                  | 说明                |
 | ----------------- | -------- | ---- | ----------------------- | ------------------- |
@@ -110,7 +97,7 @@ const config = { name: 'dev', type: 'console' }
 | `signName`        | `string` | ✅   | —                       | 短信签名            |
 | `endpoint`        | `string` | —    | `dysmsapi.aliyuncs.com` | API 端点            |
 
-### API 回调
+#### API 回调
 
 | 字段      | 类型                     | 必填 | 默认值  | 说明             |
 | --------- | ------------------------ | ---- | ------- | ---------------- |
@@ -123,7 +110,7 @@ const config = { name: 'dev', type: 'console' }
 
 API 回调地址属于服务端可信配置。日志只记录回调 origin，不记录 URL 凭据、查询参数、收件人或第三方失败响应体。若回调地址来自租户/用户输入，应用层必须配置域名 allowlist；企业部署还应通过出口代理或网络策略阻止访问内网元数据地址。
 
-### DND（免打扰）
+#### DND（免打扰）
 
 | 字段       | 类型                   | 必填 | 默认值    | 说明                                    |
 | ---------- | ---------------------- | ---- | --------- | --------------------------------------- |
@@ -132,7 +119,7 @@ API 回调地址属于服务端可信配置。日志只记录回调 origin，不
 | `start`    | `string`               | —    | `00:00`   | 开始时间（HH:mm 格式）                  |
 | `end`      | `string`               | —    | `00:00`   | 结束时间（HH:mm 格式）                  |
 
-## 错误处理
+### 错误处理
 
 所有操作返回 `HaiResult<T>`，错误码定义在 `HaiReachError`：
 
@@ -156,7 +143,7 @@ if (!result.success) {
 }
 ```
 
-## 分布式锁
+### 分布式锁
 
 多节点部署时，DND（delay 策略）的 pending 消息 flush 操作通过 `@h-ai/cache` 分布式锁保护，确保同一时刻只有一个节点执行 flush。
 
@@ -165,12 +152,12 @@ if (!result.success) {
 - 若 `@h-ai/cache` 未初始化，分布式锁自动禁用，不影响单节点运行
 - 使用稳定的进程级 owner 标识，防止误释放他人锁
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/reach test
 ```
 
-## License
+## 许可证
 
 Apache-2.0

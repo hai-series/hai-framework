@@ -4,21 +4,27 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 A relational database module with a unified `reldb` object for SQLite, PostgreSQL, and MySQL.
 
-## Supported databases
+## Core features
 
-- SQLite
-- PostgreSQL
-- MySQL
+- Connect to SQLite, PostgreSQL and MySQL through one API.
+- Run parameterized SQL, manage tables/indexes and read paginated results.
+- Organize application reads and writes with transactions, CRUD and repositories.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 // 初始化
-await reldb.init({ type: 'sqlite', database: ':memory:' })
+const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 
 // DDL
 await reldb.ddl.createTable('users', {
@@ -55,7 +61,7 @@ await reldb.close()
 
 `reldb.config` returns a **redacted configuration snapshot**. Database `password` and credentials embedded in URLs are hidden automatically. Use it to inspect state, not to replay original connection details.
 
-## Configuration
+### Configuration
 
 Use either a connection string (`url`) or separate fields (`host/port/database/user/password`).
 
@@ -78,7 +84,7 @@ await reldb.init({
 })
 ```
 
-### SQLite execution (asynchronous worker)
+#### SQLite execution (asynchronous worker)
 
 better-sqlite3 is synchronous, so queries block Node's main event loop. WAL improves database lock concurrency but cannot remove this blocking. To offload it, opt in to a dedicated SQLite worker thread (single connection; defaults to `sync`):
 
@@ -96,7 +102,7 @@ await reldb.init({
 
 In worker mode, queries, writes, and transactions run serially on the worker thread. Public APIs and return values remain identical to synchronous mode.
 
-### Operation logging
+#### Operation logging
 
 Enable SQL operation logs with `operationLog` in the database configuration. Logs are emitted at the DML layer of reldb provider-base, without duplicate wrappers in `reldb-main.ts` or raw providers.
 
@@ -127,11 +133,11 @@ await reldb.init({
 })
 ```
 
-## Transactions
+### Transactions
 
 Three approaches:
 
-### wrap (automatic commit/rollback)
+#### wrap (automatic commit/rollback)
 
 ```ts
 const result = await reldb.tx.wrap(async (tx) => {
@@ -142,7 +148,7 @@ const result = await reldb.tx.wrap(async (tx) => {
 // 回调正常返回 → 自动提交；抛异常 → 自动回滚
 ```
 
-### begin + commit (explicit commit)
+#### begin + commit (explicit commit)
 
 ```ts
 const txResult = await reldb.tx.begin()
@@ -154,7 +160,7 @@ await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
 await tx.commit()
 ```
 
-### begin + rollback (explicit rollback)
+#### begin + rollback (explicit rollback)
 
 ```ts
 const txResult = await reldb.tx.begin()
@@ -166,7 +172,7 @@ await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
 await tx.rollback()
 ```
 
-### batch / queryPage inside transactions
+#### batch / queryPage inside transactions
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
@@ -182,7 +188,7 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-## Crud
+### Crud
 
 Create a single-table CRUD repository with `reldb.crud.table()`, without writing SQL:
 
@@ -197,7 +203,7 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 })
 ```
 
-### create / createMany
+#### create / createMany
 
 ```ts
 // 单条插入
@@ -211,7 +217,7 @@ await userCrud.createMany([
 ])
 ```
 
-### createOrUpdate
+#### createOrUpdate
 
 Update when the primary key exists; otherwise create (upsert):
 
@@ -230,7 +236,7 @@ await userCrud.createOrUpdate({ id: 1, name: '张三', email: 'test@example.com'
 
 `BaseReldbCrudRepository` obtains `dbType` automatically; no manual argument is needed.
 
-### findById / getById / findAll / findPage
+#### findById / getById / findAll / findPage
 
 ```ts
 // 主键查找（不存在时返回 null）
@@ -260,14 +266,14 @@ const page = await userCrud.findPage({
 // page.data → { items: [...], total: 100, page: 1, pageSize: 20 }
 ```
 
-### updateById / deleteById
+#### updateById / deleteById
 
 ```ts
 await userCrud.updateById(1, { name: '李四' })
 await userCrud.deleteById(1)
 ```
 
-### count / exists / existsById
+#### count / exists / existsById
 
 ```ts
 const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
@@ -280,7 +286,7 @@ const found = await userCrud.existsById(1)
 // found.data → true
 ```
 
-### Crud inside transactions
+#### Crud inside transactions
 
 All methods accept `tx` and automatically route operations to that transaction context:
 
@@ -292,7 +298,7 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-## BaseReldbCrudRepository
+### BaseReldbCrudRepository
 
 Business repositories extend `BaseReldbCrudRepository` and define field mappings with `fields` for automatic table creation and type conversion:
 
@@ -359,7 +365,7 @@ if (txResult.success) {
 }
 ```
 
-## JSON path operations
+### JSON path operations
 
 Use `reldb.json` to build SQL expressions for consistent JSON path operations across databases.
 
@@ -375,7 +381,7 @@ Paths follow SQL/JSON Path (`$.key` / `$.key.subkey` / `$[0]`); each backend map
 
 All methods return `{ sql, params }` fragments that can be embedded in `reldb.sql.query` / `reldb.sql.execute`.
 
-### extract — read a JSON field value
+#### extract — read a JSON field value
 
 ```ts
 // 用于 WHERE 条件
@@ -393,7 +399,7 @@ const result = await reldb.sql.query(
 )
 ```
 
-### set — set a JSON path (create or replace)
+#### set — set a JSON path (create or replace)
 
 ```ts
 const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
@@ -403,7 +409,7 @@ await reldb.sql.execute(
 )
 ```
 
-### insert — insert at a JSON path (only when absent)
+#### insert — insert at a JSON path (only when absent)
 
 ```ts
 const { sql, params } = reldb.json.insert('data', '$.firstSeen', new Date().toISOString())
@@ -413,7 +419,7 @@ await reldb.sql.execute(
 )
 ```
 
-### remove — remove a JSON path
+#### remove — remove a JSON path
 
 ```ts
 const { sql, params } = reldb.json.remove('settings', '$.deprecated')
@@ -423,7 +429,7 @@ await reldb.sql.execute(
 )
 ```
 
-### merge — merge JSON objects (RFC 7396 Merge Patch)
+#### merge — merge JSON objects (RFC 7396 Merge Patch)
 
 ```ts
 // 覆盖已有键、保留未提及键、将 null 键删除
@@ -437,7 +443,7 @@ await reldb.sql.execute(
 )
 ```
 
-### Complete example
+#### Complete example
 
 ```ts
 // 建表（含 JSON 列）
@@ -472,7 +478,7 @@ const { sql: rmSql, params: rmParams } = reldb.json.remove('meta', '$.reviewer')
 await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...rmParams, 1])
 ```
 
-## Error handling
+### Error handling
 
 All operations return `HaiResult<T>`; check `result.success` for success or failure.
 
@@ -507,7 +513,7 @@ Common error codes:
 | `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL operation failed  |
 | `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | Invalid configuration |
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/reldb test

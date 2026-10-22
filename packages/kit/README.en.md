@@ -4,23 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/iam](../iam/README.en.md)
 
+## Introduction
+
 `@h-ai/kit` integrates SvelteKit with hai-framework, providing a shared request pipeline and same-origin endpoint utilities:
 
-- `kit.createHandle()`: session parsing, route guards, middleware chains, and optional transport/cookie encryption.
-- `kit.handler()`: an exception boundary for API endpoints.
-- `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
-
-> Shared cross-platform HTTP contracts belong in `@h-ai/api-contract`, are mounted by `@h-ai/serv`, and are called through the `@h-ai/api-client` typed client. `@h-ai/kit` does not define or host business API contracts.
-
-## Installation
-
-```bash
-npm install @h-ai/kit
-npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
-```
-
-## Capabilities
+## Core features
 
 - Handle hook composition (`createHandle` / `sequence`)
 - Authentication/role/permission guards (`guard.require` / `guard.check`)
@@ -32,14 +20,24 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 - A2A integration: discovery defaults to `/.well-known/agent-card.json`. With `authenticate` configured, null/undefined returns 401; anonymous access is allowed only without authentication configured. API Key parameters come from the complete Agent Card's `securitySchemes.apiKey`. Hooks and explicit A2A routes share JSON-RPC parse-error and SSE cancellation cleanup logic.
 - Dual build mode (`createAdapter()`)
 
-## Dependencies
+## Getting started
+
+### Installation
+
+```bash
+npm install @h-ai/kit @h-ai/core sm-crypto@0.5.7
+npm install svelte @sveltejs/kit zod
+npm install -D @sveltejs/vite-plugin-svelte vite
+```
+
+### Dependencies
 
 - `@h-ai/iam`: optional authentication/authorization for A2A; initialize before using kit's A2A features.
 - `@h-ai/crypto`: optional transport/cookie encryption; initialize before using encryption in kit.
 
-## Quick start
+### Quick start
 
-### Project configuration
+#### Project configuration
 
 **svelte.config.js**：
 
@@ -70,11 +68,13 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [sveltekit(), tailwindcss()],
   optimizeDeps: { exclude: ['bits-ui'] },
-  ssr: { noExternal: [/@h-ai\//] },
+  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
-### Build the request pipeline
+When using Crypto or Kit/IAM, include `sm-crypto@0.5.7` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.7`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
+
+#### Build the request pipeline
 
 **src/hooks.server.ts**：
 
@@ -98,7 +98,7 @@ const haiHandle = kit.createHandle({
 export const handle: Handle = haiHandle
 ```
 
-### API endpoints
+#### API endpoints
 
 ```typescript
 import { kit } from '@h-ai/kit'
@@ -116,7 +116,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 })
 ```
 
-### Browser client
+#### Browser client
 
 `kit.client.create()` targets SvelteKit same-origin endpoints. Use `@h-ai/api-client` for cross-origin access to public APIs from Web, apps, or mini programs.
 
@@ -139,7 +139,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 >
 > Authentication: prefer httpOnly cookies for same-origin SvelteKit endpoints and verify them on the server. Browsers need not write sensitive tokens to `localStorage`. If Bearer headers are required, provide a custom `BrowserTokenStore`, or set an in-memory token with `kit.auth.setBrowserToken()` before `kit.client.create({ auth: true })`.
 
-### Same-origin transport encryption
+#### Same-origin transport encryption
 
 kit delegates transport encryption to `@h-ai/crypto`. The server creates a manager with `crypto.transport.createServer()`; the browser installs a same-origin fetch wrapper with one call to `kit.client.installBrowserTransport(kitConfig, { crypto })`. Applications only configure the top-level `crypto` handle.
 
@@ -203,7 +203,7 @@ Transport applies by default to same-origin `/api/*` endpoints, SvelteKit `__dat
 
 Security defaults to fail-closed: with `requireEncryption: true`, protected paths without `X-Client-Id` return 400. An unavailable transport manager, unencryptable response, or encryption size limit returns an error rather than forwarding plaintext business data. `requireEncryption: false` is for staged migration only and is not recommended in production.
 
-### Shared transport configuration with `_kit.yml`
+#### Shared transport configuration with `_kit.yml`
 
 `@h-ai/kit` provides `KitConfigSchema` / `resolveKitConfig()` so a single `_kit.yml`
 can drive both `hooks.server.ts` and browser `kit.client.installBrowserTransport()`:
@@ -236,7 +236,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 For server-only configuration, use `core.config.validate('kit', KitConfigSchema)` as well.
 Because the browser may read this configuration, `_kit.yml` must contain only public server/transport paths and switches, never secrets.
 
-## Configuration
+### Configuration
 
 `kit.createHandle()` options:
 
@@ -253,7 +253,7 @@ Because the browser may read this configuration, `_kit.yml` must contain only pu
 
 With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HAI_KIT_COOKIE_KEY`. Missing keys fail immediately in `createHandle()`. Plaintext, damaged ciphertext, or decryption failures for protected cookies are treated as absent; encryption failures never fall back to writing plaintext.
 
-## Export paths
+### Export paths
 
 - `@h-ai/kit`: main entry, with the `kit` namespace and types.
 - `@h-ai/kit/client`: browser client.
@@ -262,7 +262,7 @@ With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HA
 - `@h-ai/kit/a2a`: A2A integration.
 - `@h-ai/kit/crypto`: crypto integration.
 
-## Configuration driven authentication
+### Configuration driven authentication
 
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
@@ -270,13 +270,25 @@ Export standard handlers from kit.auth.createApi(iam), use kit.auth.publicPaths 
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-## Error handling
+### Error handling
 
 - Wrap API endpoints with `kit.handler()`.
 - `kit.validate.body` / `kit.guard.require` throw `Response` for SvelteKit control flow.
 - `kit.handler()` converts non-control-flow exceptions into `500 INTERNAL_ERROR` responses.
 
-## Tests
+### CRUD fields
+
+Declarative CRUD fields support `colSpan: 'auto' | 1 | 2` for UI form widths. `validation.message` accepts a string or `() => string` for current-locale validation messages. Configure layout through `CrudPage.form`; validate independently on the server.
+
+### Runtime behavior and limits
+
+- `kit.createHandle()`: session parsing, route guards, middleware chains, and optional transport/cookie encryption.
+- `kit.handler()`: an exception boundary for API endpoints.
+- `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
+
+> Shared cross-platform HTTP contracts belong in `@h-ai/api-contract`, are mounted by `@h-ai/serv`, and are called through the `@h-ai/api-client` typed client. `@h-ai/kit` does not define or host business API contracts.
+
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/kit test
@@ -285,7 +297,3 @@ pnpm --filter @h-ai/kit test
 ## License
 
 Apache-2.0
-
-## CRUD fields
-
-Declarative CRUD fields support `colSpan: 'auto' | 1 | 2` for UI form widths. `validation.message` accepts a string or `() => string` for current-locale validation messages. Configure layout through `CrudPage.form`; validate independently on the server.

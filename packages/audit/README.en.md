@@ -4,20 +4,30 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
+## Introduction
+
 A unified audit logging module. The `audit` object records, queries, cleans up, and aggregates audit logs, with persistence provided by `@h-ai/reldb`.
 
-## Dependencies
+## Core features
+
+- Record user actions and security events; filter by user, date and action.
+- Query paginated logs and statistics, and clean up by retention period.
+- Persist through the relational database and redact credential fields before writing.
+
+## Getting started
+
+### Dependencies
 
 - `@h-ai/reldb`: database for audit log persistence; **initialize it before audit.init()**.
 
-## Use cases
+### Use cases
 
 - User activity auditing (login, logout, registration, password reset, etc.)
 - CRUD auditing (resource creation, reads, updates, and deletion)
 - Security event tracking and compliance auditing
 - Operational statistics (operation frequency, active users, etc.)
 
-## Quick start
+### Quick start
 
 ```ts
 import { audit } from '@h-ai/audit'
@@ -60,7 +70,7 @@ if (!closeResult.success) {
 }
 ```
 
-## Initialization options
+### Initialization options
 
 ```ts
 // 默认配置（无需传参）
@@ -76,7 +86,7 @@ await audit.init({
 
 Audit logs are stored in the fixed `hai_audit_logs` table and require an initialized `@h-ai/reldb`.
 
-## API overview
+### API overview
 
 - `audit.init(config)`: initialize the audit module.
 - `audit.log(input)`: record an audit log.
@@ -87,7 +97,7 @@ Audit logs are stored in the fixed `hai_audit_logs` table and require an initial
 - `audit.helper.login/logout/register/...`: convenient log helpers.
 - `audit.close()`: close the module.
 
-### Input constraints
+#### Input constraints
 
 - `audit.log(input)`: `action` / `resource` must be nonempty strings of at most 256 characters.
 - `audit.log(input)`: credential fields in `details` (such as `password` / `token` / `secret`) are redacted automatically before persistence; email addresses and phone numbers retain their original values by default.
@@ -96,7 +106,7 @@ Audit logs are stored in the fixed `hai_audit_logs` table and require an initial
 - `audit.cleanup(days)`: `days`, if provided, must be a nonnegative integer.
 - `audit.getStats(days)`: `days`, if provided, must be a nonnegative integer.
 
-## Error codes
+### Error codes
 
 All operations return `HaiResult<T>`. Common error codes:
 
@@ -112,7 +122,7 @@ All operations return `HaiResult<T>`. Common error codes:
 
 > Note: `audit.close()` also returns `HaiResult<void>`. `audit.helper.passwordResetRequest()` records the original email address without additional masking by default.
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/audit test

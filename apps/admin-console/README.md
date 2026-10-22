@@ -1,37 +1,63 @@
 # hai Admin Console
 
-角色创建使用 `core.id.generate()` 生成独立 code；中文、表情及大小写相近的显示名称不会映射到同一个标识。修改名称不会改变角色 code。
+## 简介
 
-角色资料与权限集合通过 IAM 的 `permissionIds` 在同一事务保存；失败保留原资料和权限。权限集合全量替换，空数组清空，未传保持不变。
+一个可运行的 SvelteKit 管理后台示例，包含用户、角色、权限、审计和个人设置。也可以在组件展览和模块演示中试用框架能力。
 
-> 基于 hai-framework 构建的 SvelteKit 管理后台示例应用，展示框架全模块集成能力。
+## 核心功能清单
 
-## ✨ 特性
+- 宽屏下工作区随窗口扩展，列表在自身区域内滚动；手机端自动收拢，登录框和长篇正文保留阅读宽度。
 
-- 🎨 **现代化 UI** — Svelte 5 Runes + TailwindCSS v4 + DaisyUI，32 套主题随时切换
+### 后台能力
+
+- 🎨 **现代化 UI** — Svelte 5 Runes + TailwindCSS v4 + DaisyUI，主题切换
 - 🔒 **API 传输加密** — 浏览器与 `/api/*` 默认通过 `@h-ai/crypto` 做密钥协商与请求/响应加解密
 - 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @h-ai/ui 场景组件
 - 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志；用户按角色 code 在数据库分页前筛选，总数与结果一致
-- 🧩 **UI Gallery** — 69+ @h-ai/ui 组件的交互式展览（4 分类标签页）
+- 🧩 **UI Gallery** — @h-ai/ui 组件的交互式展览（4 分类标签页）
 - 🔧 **模块演示** — Core、DB、Cache、Storage、AI（含多厂商文生图）、Crypto 交互式示例
-- 🌍 **国际化** — Paraglide 集成，189+ message keys，中英文实时切换
+- 🌍 **国际化** — Paraglide 集成，中英文消息，中英文实时切换
 - 📱 **响应式布局** — Sidebar + TopBar 自适应，移动端友好
 - 🧩 **组件自动导入** — 页面中使用 @h-ai/ui 组件无需显式 import
 
-## 新手引导与帮助中心
+### 页面入口
+
+- 🔐 登录：用户名密码登录（`/auth/login`）
+- 📝 注册：新用户注册（`/auth/register`）
+- 🔑 忘记密码：邮箱验证找回密码（`/auth/forgot-password`）
+- 🔄 重置密码：Token 验证重置密码（`/auth/reset-password`）
+- 🏠 仪表盘：统计卡片、近期活动、快捷操作（`/admin`）
+- 👥 用户管理：用户 CRUD、角色分配（`/admin/iam/users`）
+- 🎭 角色管理：角色 CRUD、权限绑定（`/admin/iam/roles`）
+- 🛡️ 权限管理：权限 CRUD、审计日志（`/admin/iam/permissions`）
+- 🧩 UI Gallery：组件交互式展示（4 标签页）（`/admin/ui-gallery`）
+- 🔧 模块演示：Core / DB / Cache / Storage / AI（LLM、Audio、Image）/ Crypto 演示（`/admin/modules`）
+- ⚙️ 设置：主题切换、语言切换（`/admin/settings`）
+
+#### 角色与演示行为
+
+角色使用独立 code，改名不改变标识。角色资料与权限集合在同一事务保存；权限列表传空数组会清空，省略则保持原值。
+
+角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
+
+管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。
+
+## 使用入门
+
+### 新手引导与帮助中心
 
 登录后首次显示简短邀请，可开始、稍后或不再提醒。顶栏帮助按钮可搜索使用说明，随时重看后台导览或进入个人资料页进行操作导览。引导不会自动提交表单；完成状态通过 Cookie 按当前用户和引导版本保存。
 
 内容定义在 `src/lib/guide/admin-guide.ts`，中英文文案在应用 messages；为目标元素添加 data-guide 属性即可扩展步骤。交互、主题适配和安全 Markdown 渲染由 `@h-ai/ui/guide` 提供，根后台布局负责装配已有导航和 locale。浏览器用例覆盖首次完成、刷新、帮助搜索、跳转重看和手机暗色主题。
 
-## 🚀 快速开始
+### 🚀 快速开始
 
-### 前置要求
+#### 前置要求
 
 - Node.js 22.22.2+ / 24.15.0+ / 26+
 - pnpm ≥ 12.11.2
 
-### 安装与启动
+#### 安装与启动
 
 ```bash
 # 在 hai-framework monorepo 根目录
@@ -54,38 +80,18 @@ pnpm --filter admin-console dev
 
 请通过本地 `.env.local` 或密钥管理注入强密码；启动日志只显示用户名与密码来源，不输出明文密码。
 
-### 构建
+#### 构建
 
 ```bash
 pnpm --filter admin-console build
 pnpm --filter admin-console preview
 ```
 
-## 📋 功能模块
-
-- 🔐 登录：用户名密码登录（`/auth/login`）
-- 📝 注册：新用户注册（`/auth/register`）
-- 🔑 忘记密码：邮箱验证找回密码（`/auth/forgot-password`）
-- 🔄 重置密码：Token 验证重置密码（`/auth/reset-password`）
-- 🏠 仪表盘：统计卡片、近期活动、快捷操作（`/admin`）
-- 👥 用户管理：用户 CRUD、角色分配（`/admin/iam/users`）
-- 🎭 角色管理：角色 CRUD、权限绑定（`/admin/iam/roles`）
-- 🛡️ 权限管理：权限 CRUD、审计日志（`/admin/iam/permissions`）
-- 🧩 UI Gallery：69+ 组件交互式展示（4 标签页）（`/admin/ui-gallery`）
-- 🔧 模块演示：Core / DB / Cache / Storage / AI（LLM、Audio、Image）/ Crypto 演示（`/admin/modules`）
-- ⚙️ 设置：主题切换（32 套）、语言切换（`/admin/settings`）
-
-### 示例业务行为
-
-角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
-
-管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。
-
-## ⚙️ 配置
+### ⚙️ 配置
 
 本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
 
-### 环境变量
+#### 环境变量
 
 公共基础及环境文件已提交；将以下私有配置写入 `.env.local`，其他可选字段按 `.env.example` 启用：
 
@@ -96,7 +102,7 @@ HAI_ADMIN_DEFAULT_PASSWORD=<change-me-to-a-strong-local-password>
 
 完整列表见 `.env.example`。
 
-### YAML 配置文件
+#### YAML 配置文件
 
 - `config/_core.yml`：应用名称、版本、locale、功能开关
 - `config/_db.yml`：数据库连接（SQLite / PostgreSQL / MySQL）
@@ -112,7 +118,7 @@ HAI_ADMIN_DEFAULT_PASSWORD=<change-me-to-a-strong-local-password>
 `config/_kit.yml` 在服务启动时加载环境引用并校验，hooks 与 SSR 使用同一份 transport 配置。
 SSR 只向浏览器传递公开的路径与开关，不包含 server 字段；修改环境后重启服务即可，无需重建。
 
-### 认证页面
+#### 认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
@@ -124,27 +130,27 @@ SSR 只向浏览器传递公开的路径与开关，不包含 server 字段；�
 
 LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
 
-## 🌍 国际化 (i18n)
+### 🌍 国际化 (i18n)
 
 本应用使用 [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) 实现国际化。
 
-- **翻译文件**：`messages/zh-CN.json` 和 `messages/en-US.json`，包含 189+ message keys
+- **翻译文件**：`messages/zh-CN.json` 和 `messages/en-US.json`，包含 中英文消息
 - **编译命令**：`pnpm paraglide:compile` （编译后输出到 `src/lib/paraglide/`）
 - **运行时切换**：Settings 页面可实时切换语言
 - **服务端中间件**：`hooks.server.ts` 中的 `i18nHandle` 自动检测请求语言（跳过 `/api/*`）
 
 添加新翻译：在 `messages/zh-CN.json` 和 `messages/en-US.json` 中同时添加对应 key 即可。
 
-## 🧩 @h-ai/ui 组件自动导入
+### 🧩 @h-ai/ui 组件自动导入
 
 `svelte.config.js` 中启用了 `@h-ai/ui/auto-import` 预处理器：
 
 - 所有 `.svelte` 文件中使用 @h-ai/ui 组件标签时，自动注入 import 语句
 - 无需手动编写 `import { Button } from '@h-ai/ui'`
 
-## 🔧 扩展指南
+### 🔧 扩展指南
 
-### 添加新页面
+#### 添加新页面
 
 1. 在 `src/routes/admin/` 下创建目录和 `+page.svelte`
 2. 页面可直接使用 @h-ai/ui 组件（自动导入）
@@ -152,7 +158,7 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 4. 在 Sidebar 导航配置中添加菜单项
 5. 在 `messages/` 下的两个语言文件中添加相关翻译 key
 
-### 添加新 API 端点
+#### 添加新 API 端点
 
 1. 在 `src/routes/api/` 下创建 `+server.ts`
 2. 使用 @h-ai/kit 的 response helper 返回标准格式
@@ -160,22 +166,38 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 4. 浏览器侧调用优先统一走 `$lib/utils/api.ts` 导出的 `apiFetch()`，以自动获得 CSRF + transport 加密
 5. 若端点必须支持浏览器原生明文请求（如 `multipart/form-data` 上传、`<img src>` 公开文件、外部探活），需同步加入 `config/_kit.yml` 的 `transport.excludePaths`
 
-### 服务端错误处理
+#### 服务端错误处理
 
 管理端数据读取在 HTTP 应用边界保留失败：查询异常返回 503 和可刷新错误页，分页任一页或权限关联失败均中止加载，禁止回退为空列表、零统计或空权限。未知权限代码返回 400，权限读取失败时不得继续写入。底层模块仍使用 HaiResult。
 
-### 添加新业务服务
+#### 添加新业务服务
 
 1. 在 `src/lib/server/services/` 下创建服务文件
 2. 在 `src/lib/server/services/index.ts` 中聚合导出
 
-### 表单布局
+#### 表单布局
 
 新增/编辑复用 `@h-ai/ui` 的 Form/FormLayout/FormField：可选一列或双列、标签独立成行或与控件同行，多行文本与多选自动跨列，窄容器自动收为一列。CRUD 使用 `form` 配置，字段可用 `colSpan` 覆盖。错误显示在字段附近并随 UI 语言更新。UI Gallery 的表单示例可切换四种布局；IAM 用户采用双列同行标签，角色采用双列顶部标签，个人资料与密码表单复用相同参数。
 
 新建权限时资源和操作必填，权限名称留空时在提交阶段按 `resource:action` 生成；表单不会提前用名称必填校验阻止生成流程。
 
-## 🧪 开发命令
+### 镜像构建与部署
+
+在本应用目录执行，镜像定义为 `images/app.Dockerfile`，`hai.build.json` 指定文件与仓库根构建上下文。Web 运行配置位于 `images/web/`（如有）。应用版本来自本目录的 `package.json.version`。
+
+```sh
+pnpm build:images                         # 只构建镜像并导出 tar
+pnpm run deploy --env prod --build        # 构建、打包、上传、启动并检查访问
+pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+```
+
+先准备 `.env.prod` 与 `config/_deploy.yml`；首次向导以说明文字收集服务器连接信息并保存到 `.env.local`。完整离线包包含应用和自建中间件镜像，目标 Linux 需预装容器引擎、Compose 与脚本要求的工具。把 tar 和同名 `-deploy/` 目录一起搬到操作机，Windows 执行 `deploy.ps1`，Linux/macOS 执行 `deploy.sh`；完全隔离的服务器解包后执行 `sh apply.sh`。
+
+已有成功安装时，可用 `--services app` 只更新本应用；多个镜像的工程按服务名选择。局部发布保留其他容器和持久化卷，不执行整个项目 `down`，失败保留诊断并尝试恢复旧容器。相同版本允许重建，每次以独立构建 ID 区分内容。`images/dependencies/` 为忽略 Git 的依赖输入，配合引擎缓存和分层减少重复下载。
+
+完整参数、缓存、版本与恢复说明见[使用指南](../../docs/usage/README.md#4-编译源码与打包产物)。移动端和桌面端的原生安装包仍需在对应系统另行构建；容器部署交付的是 Web 页面。
+
+### 🧪 开发命令
 
 ```bash
 pnpm dev              # 启动开发服务器
@@ -188,7 +210,7 @@ pnpm test:e2e         # 运行 E2E 测试（Playwright）
 pnpm paraglide:compile # 编译 i18n 翻译文件
 ```
 
-## 🛠️ 技术栈
+### 🛠️ 技术栈
 
 - **前端框架**：SvelteKit 2 + Svelte 5 (Runes)
 - **样式**：TailwindCSS v4 + DaisyUI
@@ -197,7 +219,7 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 - **i18n**：Paraglide
 - **包管理**：pnpm
 
-## 📦 框架依赖
+### 📦 框架依赖
 
 - `@h-ai/core`：配置管理、日志、HaiResult 模式、错误处理
 - `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
@@ -207,8 +229,21 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 - `@h-ai/crypto`：加密（非对称 / 哈希 / 对称 / 密码哈希）
 - `@h-ai/ai`：AI 集成
 - `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
-- `@h-ai/ui`：UI 组件库（69+ 组件、场景组件、自动导入）
+- `@h-ai/ui`：UI 组件库（组件、场景组件、自动导入）
 
-## 📄 许可证
+### 📄 许可证
 
 Apache License 2.0
+
+## 开发测试
+
+```sh
+pnpm --filter admin-console typecheck
+pnpm --filter admin-console lint
+pnpm --filter admin-console build
+pnpm --filter admin-console test
+```
+
+## 许可证
+
+Apache-2.0

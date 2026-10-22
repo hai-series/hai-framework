@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/api-contract](../api-contract/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/datapipe](../datapipe/README.md) · [@h-ai/reldb](../reldb/README.md) · [@h-ai/vecdb](../vecdb/README.md)
 
+## 简介
+
 AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生图、工具调用、MCP、Embedding、记忆、检索/RAG、知识库、上下文管理、文件解析、Rerank、语音（ASR/TTS）与 A2A。Node.js 侧通过 `ai.init()` 初始化，浏览器侧通过 API/client 代理访问。
 
-## 能力概览
+## 核心功能清单
 
 - `ai.tools`：工具定义、注册表、批量执行；无需初始化。
 - `ai.stream`：ChatCompletion 流式 chunk 处理；无需初始化。
@@ -27,9 +29,11 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 
 更完整的方法清单、错误码与长示例见 [REFERENCE.md](./REFERENCE.md)。
 
-## 快速开始
+## 使用入门
 
-### LLM-only（零数据库依赖）
+### 快速开始
+
+#### LLM-only（零数据库依赖）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -52,7 +56,7 @@ await ai.close()
 
 未初始化 reldb/vecdb 时，AI 使用进程内临时 Store 保存会话等运行时状态；`ai.close()`、进程退出或多实例切换后数据不会保留。需要 Memory、Context、Persona 或会话跨重启持久化时，使用下面的 DB Provider。
 
-### 持久化 DB Provider（reldb + vecdb）
+#### 持久化 DB Provider（reldb + vecdb）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -84,7 +88,7 @@ await vecdb.close()
 await reldb.close()
 ```
 
-### 自定义 StoreProvider
+#### 自定义 StoreProvider
 
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
@@ -100,7 +104,7 @@ await ai.init(
 await ai.close()
 ```
 
-## API 契约
+### API 契约
 
 - 对外只通过 `ai` 服务对象和少量独立工厂（如 `createMcpServer`）访问。
 - 生命周期为 `await ai.init(config, options?)` / `await ai.close()`；关闭会等待自定义 `AIStoreProvider.close()`。
@@ -108,9 +112,9 @@ await ai.close()
 - `ai.tools` 与 `ai.stream` 是纯函数子系统，无需初始化即可使用。
 - 未初始化 reldb/vecdb 时默认使用进程内临时 Store；两者均已初始化时自动使用 DB Provider。自定义 Provider 可隐藏其他存储后端。
 
-## API 概览
+### API 概览
 
-### LLM
+#### LLM
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -140,7 +144,7 @@ const temp = await ai.llm.chat({
 })
 ```
 
-### 工具调用
+#### 工具调用
 
 ```ts
 import { z } from 'zod'
@@ -172,13 +176,13 @@ const batch = await registry.executeAll(toolCalls)
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
 
-### A2A 协议边界
+#### A2A 协议边界
 
 `ai.a2a.getAgentCard()` 返回完整 A2A 0.3 Agent Card，含 `protocolVersion`、MIME 和 streaming 能力；Kit 默认发现路径为 `/.well-known/agent-card.json`。`handleRequest()` 始终返回 JSON-RPC/SSE 处理结果，未初始化返回 JSON-RPC 错误。可信 HTTP 认证上下文的 `agentId` 映射为 executor 的 `context.user.userName`。当前支持 JSON-RPC/SSE，不声明 push notifications、gRPC 或 REST 支持；业务资源授权仍由应用负责。
 
 A2A 的任务表和消息表在 `ai.init()` 阶段初始化。任务按可信 `agentId` 隔离读取（含获取、取消和继续消息）；匿名请求共享匿名作用域，需隔离的部署必须开启认证。`listMessages` 是服务端管理接口，支持 `callerId`、`contextId`、`since` 过滤，不能直接向未授权客户端暴露。旧版任务记录没有可靠主体信息，升级后不会自动推断归属或删除数据，需由应用审核后迁移 `object_id` 为 `user:<agentId>`（匿名为 `anonymous`）。旧消息缺少主体/上下文字段时不会匹配相应过滤条件。
 
-### MCP Server
+#### MCP Server
 
 `ai.mcp` 是进程内注册表，独立 `createMcpServer` 使用 SDK transport，两者不会自动互相注册。`ai.mcp` 在注册时编译工具 JSON Schema，调用时校验输入；资源输出必须恰好含 `text` / `blob` 之一；提示词参数与 SDK 消息输出均校验，支持图片和音频内容。HTTP 示例只展示 transport 连接，应用仍须挂载请求处理与认证，并在退出时关闭 server。
 
@@ -193,10 +197,10 @@ server.registerTool('search', {
 }, async ({ query }) => ({
   content: [{ type: 'text', text: `Results for ${query}` }],
 }))
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: crypto.randomUUID }))
+await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () => globalThis.crypto.randomUUID() }))
 ```
 
-### Memory / RAG / Knowledge
+#### Memory / RAG / Knowledge
 
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
@@ -221,7 +225,7 @@ if (setup.success) {
 }
 ```
 
-### 语音（Audio）
+#### 语音（Audio）
 
 先在 `ai.init()` 中注册语音模型并映射默认识别/合成模型。凭据默认回退到平台环境变量；只有 LLM 与语音模型确认使用同一凭据时，才显式启用 `inheritLlmApiKey`：
 
@@ -330,7 +334,7 @@ return playable.data
 
 > 自托管模型服务（faster-whisper / IndexTTS / Qwen3-4B 的 CPU/GPU Docker 镜像、权重下载与离线打包）见 [`models/`](./models/README.md)。镜像与权重下载优先使用 ModelScope，自动回退 HuggingFace 镜像。
 
-### 文生图（Image）
+#### 文生图（Image）
 
 在 `ai.init()` 注册模型后，调用方只接收标准化图片字节，不感知厂商 Base64、内联数据或临时 URL：
 
@@ -360,7 +364,7 @@ if (result.success) {
 
 `referenceImages` 可省略；公共层只接受图片字节与 MIME，multipart、`inlineData`、Data URL 等差异由 Provider 转换。凭据可在模型条目传入，或使用 `HAI_AI_IMAGE_<PROVIDER>_APIKEY` / 厂商环境变量。Qwen 与 Seedream 返回的临时 URL 会在 Provider 内立即下载，不会泄漏到公共返回值。完整接口差异与模型说明见 [REFERENCE.md](./REFERENCE.md#image)。
 
-### Context 管理器
+#### Context 管理器
 
 ```ts
 const manager = ai.context.createManager({
@@ -379,7 +383,7 @@ if (manager.success) {
 
 同一管理器默认实行**单活动生成**，避免「上一轮 AI 尚未退出，下一轮 user 消息先写入」导致的消息乱序；`reset()` 现为异步并会终止活动生成、释放并发屏障、清空轮次并默认重新写入 Persona/System Prompt。
 
-#### 真实对话状态（Conversation Commit Layer）
+##### 真实对话状态（Conversation Commit Layer）
 
 默认（`turnCommit: 'auto'`）下，`chat` / `chatStream` 会把**模型生成的完整文本**写入上下文。但在「模型生成 → TTS 合成 → 实际播放」链路中，AI 可能说到一半就被打断——此时进入下一轮所有参与者可见的对话状态，应当是**实际播放出去的部分**，而非模型本想说完的全文。
 
@@ -416,7 +420,7 @@ const turns = m.getTurns()
 - 只有 `committed` 的内容进入上下文与记忆提取；未提交/被打断丢弃的部分不会污染后续轮次。
 - 若轮次在流完成前已被 `interruptTurn` 打断（如主持人抢话，同时上游模型恰好正常结束），`chatStream` **不会再产出 `done`**，避免业务层误判为正常完成后继续提交文本。
 
-#### 会话固化（Memory 生命周期）
+##### 会话固化（Memory 生命周期）
 
 会话进行中，每轮对话按 `scope: { sessionId }` 提取**短期会话记忆**；会话结束时用 `consolidate()`
 把「短期记忆 + 摘要」沉淀为**跨会话长期记忆**，形成 `Session Memory → Summary → Long-term Memory` 闭环：
@@ -430,7 +434,7 @@ if (result.success) {
 }
 ```
 
-### Persona（AI 角色人格）
+#### Persona（AI 角色人格）
 
 Memory 用 `objectId` / `scope` 回答「谁的记忆」；Persona 回答「AI 是谁」——为每个 AI 角色定义
 稳定的系统提示词与性格特征，并通过 `scope: { personaId }` 关联其长期记忆：
@@ -525,14 +529,14 @@ const memories = await ai.memory.recall('经济发展', {
 
 `ai.config` 返回脱敏后的配置快照；`apiKey`、`privateKey`、URL 内嵌凭证等敏感字段不会原样暴露。
 
-## 安全边界
+### 安全边界
 
 - Prompt、检索文档和模型输出都按不可信输入处理；不要把用户内容拼进不可覆盖的系统规则。
 - Zod 只校验工具参数形状，不代表调用者有权限。高权限工具必须在 handler 内再次校验身份、租户、资源归属与配额，并只把允许自动执行的工具注册给模型。
 - `callRemoteAgent()` 是独立客户端能力，只依赖 `ai.init()`，不要求配置 Agent Card 或注册本地 executor。它拒绝非 HTTP(S) 和 URL 内嵌凭据，但应用仍必须对远端 origin 配置白名单，并在出口代理处限制 DNS 重绑定、重定向到私网和云元数据地址。
 - 不记录完整 Prompt、工具参数、A2A headers、临时模型凭据或带 query 的远端 URL；确需审计时仅保存脱敏摘要。
 
-## 错误处理
+### 错误处理
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -560,7 +564,7 @@ if (!result.success) {
 - `hai:ai:900-905`：Memory。
 - `hai:ai:980-984`：A2A。
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/ai typecheck
@@ -569,6 +573,6 @@ pnpm --filter @h-ai/ai test
 pnpm --filter @h-ai/ai build
 ```
 
-## License
+## 许可证
 
 Apache-2.0

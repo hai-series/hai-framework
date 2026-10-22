@@ -4,18 +4,22 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
+## 概要
+
 統一されたキャッシュモジュールです。`cache` オブジェクトで KV / Hash / List / Set / ZSet / 分散ロックを操作し、メモリーと Redis のバックエンドに対応します。
 
 メモリー KV は有効期限に達した時点で無効になります。`incr/decr/incrBy/decrBy` は安全な整数値または整数文字列のみを受け付け、不正な増分やオーバーフローでは元の値を保持して `OPERATION_FAILED` を返します。Hash の `__proto__` / `constructor` などは通常のフィールドとして保持され、戻り値のオブジェクトのプロトタイプを変更しません。
 
-## 用途
+## 主な機能
 
 - 開発・テスト用のメモリーキャッシュ
 - 本番環境の Redis キャッシュ（単一ノード、URL、Cluster、Sentinel）
 - IAM セッション・権限用の集合キャッシュ
 - 複数ノード間の排他制御に使う分散ロック
 
-## クイックスタート
+## 使い始める
+
+### クイックスタート
 
 ```ts
 import { cache, HaiCacheError } from '@h-ai/cache'
@@ -53,7 +57,7 @@ await cache.close()
 
 `cache.config` は**機密情報をマスクした設定スナップショット**を返します。Redis の `password` / `url` などの認証情報は自動処理されるため、元の秘密情報を書き戻す用途には使わないでください。
 
-## 初期化設定
+### 初期化設定
 
 ```ts
 // Memory（开发/测试）
@@ -93,7 +97,7 @@ await cache.init({
 })
 ```
 
-## API 一覧
+### API 一覧
 
 - `cache.kv`：文字列・オブジェクトのキーと値、および TTL（`set/get/mget/mset/expire/ttl/...`）。
 - `cache.hash`：Hash 構造（`hset/hget/hgetall/...`）。
@@ -103,7 +107,7 @@ await cache.init({
 - `cache.lock`：分散ロック（`acquire/release/isLocked/extend`）。
 - `CacheProvider`：高度な統合や独自バックエンド用の公開 Provider 契約。
 
-## 分散ロック
+### 分散ロック
 
 SET NX EX を利用する分散排他ロックで、複数ノードのデプロイに適しています。
 
@@ -130,7 +134,7 @@ await cache.lock.extend('my-lock', 60, 'node-1')
 - **Redis バックエンド**：`SET NX EX` でアトミックにロックを取得。Lua スクリプトで owner を検証して安全に解除・延長します。
 - `owner` は他の所有者のロックの誤解除を防ぎます。複数ノードのデプロイでは安定したノード識別子の指定を推奨します。
 
-## エラーコード
+### エラーコード
 
 すべての操作は `HaiResult<T>` を返します。主なエラーコード：
 
@@ -146,7 +150,7 @@ await cache.lock.extend('my-lock', 60, 'node-1')
 | `HaiCacheError.UNSUPPORTED_TYPE`       | `hai:cache:011` | 未対応のキャッシュ種別 |
 | `HaiCacheError.CONFIG_ERROR`           | `hai:cache:012` | 設定エラー             |
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/cache test
@@ -154,6 +158,6 @@ pnpm --filter @h-ai/cache test
 
 > Redis 関連のテストには Docker が必要です。
 
-## License
+## ライセンス
 
 Apache-2.0

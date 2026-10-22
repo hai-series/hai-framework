@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/api-contract](../api-contract/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md)
 
-> A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent API calls and token management across Web, apps, and mini programs.
+## Introduction
 
-## Capabilities
+A cross-platform oRPC/OpenAPI typed client for hai-framework, with consistent API calls and token management across Web, apps, and mini programs.
+
+## Core features
 
 - `apiClient`: the default typed client for the iam/storage/ai domains.
 - `apiClient.create(contract)`: create a typed client for a custom contract.
@@ -17,7 +19,9 @@
 - Optional transport encryption: `apiClient.init({ transport: { crypto } })` automatically uses `crypto.transport.createClient()`.
 - Transport encryption and automatic refresh can run together: `/auth/refresh` after a 401 still uses encrypted fetch without falling back to plaintext.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -47,7 +51,7 @@ if (me.success) {
 await apiClient.close()
 ```
 
-### Enable transport encryption
+#### Enable transport encryption
 
 First enable `serv.createApp({ transport: { crypto } })` on the server. The client only needs the same `@h-ai/crypto` service instance; no manual key exchange code is required.
 
@@ -67,7 +71,7 @@ await apiClient.close()
 await crypto.close()
 ```
 
-## API contracts
+### API contracts
 
 Custom applications can bind their own oRPC contract:
 
@@ -82,7 +86,7 @@ await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
 ```
 
-## API overview
+### API overview
 
 - `apiClient.init(config)`: initialize the default client.
 - `apiClient.close()`: clear client state.
@@ -92,7 +96,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 Calling `init()` on an initialized client returns `CONFIG_ERROR` and leaves the existing client intact. To change `baseUrl` / `fetch` / `transport`, call `await apiClient.close()` before initializing again.
 
-## Configuration
+### Configuration
 
 - `baseUrl`: API base URL, usually including `/api/v1`.
 - `auth.storage`: token storage adapter; defaults to `apiClient.tokenStorage.httpOnlyCookie()` (recommended for browsers). Explicitly use `apiClient.tokenStorage.memory()` for SSR / tests.
@@ -104,7 +108,7 @@ Calling `init()` on an initialized client returns `CONFIG_ERROR` and leaves the 
 - `transport.keyExchangePath`: key exchange subpath; defaults to `/_hai/key-exchange` and is appended to `baseUrl` automatically.
 - `apiClient.config`: a **redacted snapshot of runtime configuration**; credentials embedded in `baseUrl`, `headers.authorization`, and other sensitive values are hidden automatically.
 
-## Configuration driven authentication
+### Configuration driven authentication
 
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
@@ -112,7 +116,7 @@ apiClient.createAuthActions(client) supplies publicConfig, login, register, send
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-## Error handling
+### Error handling
 
 Business APIs return `HaiResult<T>`:
 
@@ -130,7 +134,7 @@ Client-side failures such as missing initialization, network errors, timeouts, a
 
 Automatic refresh handles an actual HTTP 401 (`Response.status`) or a valid failed HaiResult over HTTP 200 (`success=false`, string `error.code/message` and `error.httpStatus=401`). After a successful refresh, the original request is retried once. Built-in login and registration routes and the configured `auth.refreshPath` never trigger automatic refresh; other failures such as 403/500 do not trigger it either. Ordinary serv procedures still return HTTP 200. Callers must check the final `success` and `error.code` and handle expired authentication when refresh fails.
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/api-client test

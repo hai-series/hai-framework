@@ -4,6 +4,8 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md) · [@h-ai/iam](../iam/README.md)
 
+## 简介
+
 `@h-ai/kit` 是 hai-framework 的 SvelteKit 集成模块，提供统一的请求管道与同源 endpoint 工具：
 
 - `kit.createHandle()`：会话解析、路由守卫、中间件链、可选传输加密与 Cookie 加密
@@ -12,15 +14,7 @@
 
 > 公共跨端 HTTP API contract 统一放在 `@h-ai/api-contract`，由 `@h-ai/serv` 挂载，客户端通过 `@h-ai/api-client` typed client 调用；`@h-ai/kit` 不定义也不承载业务 API contract。
 
-## 安装
-
-```bash
-npm install @h-ai/kit
-npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
-```
-
-## 支持的能力
+## 核心功能清单
 
 - Handle Hook 组合（`createHandle` / `sequence`）
 - 认证/角色/权限守卫（`guard.require` / `guard.check`）
@@ -32,14 +26,24 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 - A2A 协议集成：默认发现路径 `/.well-known/agent-card.json`；配置 `authenticate` 后 null/undefined 返回 401，仅未配置认证时允许匿名。API Key 参数从完整 Agent Card 的 `securitySchemes.apiKey` 读取。Hook 与显式 A2A 路由共享 JSON-RPC 解析错误和 SSE 取消清理逻辑。
 - 双构建模式（`createAdapter()`）
 
-## 依赖
+## 使用入门
+
+### 安装
+
+```bash
+npm install @h-ai/kit @h-ai/core sm-crypto@0.5.7
+npm install svelte @sveltejs/kit zod
+npm install -D @sveltejs/vite-plugin-svelte vite
+```
+
+### 依赖
 
 - `@h-ai/iam` — 身份认证与授权（A2A 认证），可选；使用 A2A 功能时需在 kit 使用前初始化
 - `@h-ai/crypto` — 加密（传输加密 / Cookie 加密），可选；启用加密时需在 kit 使用前初始化
 
-## 快速开始
+### 快速开始
 
-### 项目配置
+#### 项目配置
 
 **svelte.config.js**：
 
@@ -70,11 +74,13 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [sveltekit(), tailwindcss()],
   optimizeDeps: { exclude: ['bits-ui'] },
-  ssr: { noExternal: [/@h-ai\//] },
+  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
-### 搭建请求管道
+使用 Crypto 或依赖它的 Kit/IAM 时，应用生产依赖需包含 `sm-crypto@0.5.7`。CLI 已配好这一项；手工接入时运行 `pnpm add sm-crypto@0.5.7`。仅设置 external 不够，adapter-node 还需要这项直接依赖声明才能保留原包加载。
+
+#### 搭建请求管道
 
 **src/hooks.server.ts**：
 
@@ -98,7 +104,7 @@ const haiHandle = kit.createHandle({
 export const handle: Handle = haiHandle
 ```
 
-### API 端点
+#### API 端点
 
 ```typescript
 import { kit } from '@h-ai/kit'
@@ -116,7 +122,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 })
 ```
 
-### 浏览器客户端
+#### 浏览器客户端
 
 `kit.client.create()` 面向 SvelteKit 同源 endpoint；Web / App / 小程序跨域访问公共 API 时，请使用 `@h-ai/api-client`。
 
@@ -139,7 +145,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 >
 > 认证建议：同源 SvelteKit endpoint 优先使用 httpOnly Cookie，由服务端读取 Cookie 完成鉴权，浏览器端不需要把敏感 Token 写入 `localStorage`。如确需注入 Bearer Header，请传入自定义 `BrowserTokenStore`，或先用 `kit.auth.setBrowserToken()` 写入页面内存后再使用 `kit.client.create({ auth: true })`。
 
-### 同源传输加密
+#### 同源传输加密
 
 kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer()` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。应用层只配置顶层 `crypto` 句柄。
 
@@ -203,7 +209,7 @@ transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` �
 
 安全策略默认 fail-closed：`requireEncryption: true` 时，受保护路径缺少 `X-Client-Id` 会直接返回 400；服务端 transport 管理器不可用、响应体无法加密或超过单次加密上限时返回错误，不会把业务明文响应透传给客户端。`requireEncryption: false` 仅用于迁移期灰度，不建议在生产启用。
 
-### 使用 `_kit.yml` 统一 transport 配置
+#### 使用 `_kit.yml` 统一 transport 配置
 
 `@h-ai/kit` 提供 `KitConfigSchema` / `resolveKitConfig()`，方便应用用同一份 `_kit.yml`
 同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransport()`：
@@ -236,7 +242,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 如只在服务端读取配置，也可配合 `core.config.validate('kit', KitConfigSchema)` 使用。
 由于浏览器端也可能读取这份配置，`_kit.yml` 只应放公开的 server/transport 路径与开关，不要写入密钥。
 
-## 配置
+### 配置
 
 `kit.createHandle()` 配置项：
 
@@ -253,7 +259,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 
 配置 `crypto.encryptedCookies` 时必须同时提供 `crypto.cookieEncryptionKey`，或设置 `HAI_KIT_COOKIE_KEY`。缺少密钥会在 `createHandle()` 时立即报错；受保护 Cookie 的明文、损坏密文或解密失败都按不存在处理，加密失败也不会回退写入明文。
 
-## 导出路径
+### 导出路径
 
 - `@h-ai/kit`：主入口，提供 `kit` 命名空间与类型。
 - `@h-ai/kit/client`：浏览器端客户端。
@@ -262,7 +268,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 - `@h-ai/kit/a2a`：A2A 协议集成。
 - `@h-ai/kit/crypto`：加密模块集成。
 
-## 配置驱动认证页面
+### 配置驱动认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
@@ -270,22 +276,22 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
 
-## 错误处理
+### 错误处理
 
 - 推荐使用 `kit.handler()` 包装 API 端点。
 - `kit.validate.body` / `kit.guard.require` 会抛出 `Response`（SvelteKit 控制流）。
 - 非控制流异常会由 `kit.handler()` 统一转换为 `500 INTERNAL_ERROR` 响应。
 
-## 测试
+### CRUD fields
+
+声明式 CRUD 字段支持 `colSpan: 'auto' | 1 | 2`，供 UI 双列表单决定字段宽度；`validation.message` 支持字符串或 `() => string`，便于随当前语言显示校验错误。UI 布局在 `CrudPage.form` 上配置，服务端仍须独立校验。
+
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/kit test
 ```
 
-## License
+## 许可证
 
 Apache-2.0
-
-## CRUD fields
-
-声明式 CRUD 字段支持 `colSpan: 'auto' | 1 | 2`，供 UI 双列表单决定字段宽度；`validation.message` 支持字符串或 `() => string`，便于随当前语言显示校验错误。UI 布局在 `CrudPage.form` 上配置，服务端仍须独立校验。

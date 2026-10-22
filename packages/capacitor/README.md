@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/api-client](../api-client/README.md) · [@h-ai/core](../core/README.md)
 
+## 简介
+
 Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 Token 存储、设备信息、推送通知、相机与状态栏等能力的统一封装。
 
-## 支持的能力
+## 核心功能清单
 
 - **Token 存储**：`@aparajita/capacitor-secure-storage`（原生必需）。Android 使用 KeyStore + 加密 SharedPreferences，iOS 使用 Keychain；Web 不回退。
 - **Preferences**：`@capacitor/preferences`（必需）。通用偏好数据存储，适合非敏感配置，不用于认证 Token。
@@ -16,7 +18,9 @@ Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 
 - **相机/相册**：`@capacitor/camera`（可选）。拍照、选取相册图片。
 - **状态栏**：`@capacitor/status-bar`（可选）。沉浸式、背景色、样式配置。
 
-## 快速开始
+## 使用入门
+
+### 快速开始
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -28,7 +32,7 @@ if (!result.success) {
 }
 ```
 
-### 与 api-client 配合的 Token 安全存储
+#### 与 api-client 配合的 Token 安全存储
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -45,7 +49,7 @@ await apiClient.init({
 
 `createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。纯 Web 环境下不会退化到 `localStorage`；`get*()` 返回 `null`，`set*()` / `clear()` 为 no-op。
 
-### 设备信息与推送
+#### 设备信息与推送
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -61,7 +65,7 @@ if (reg.success) {
 }
 ```
 
-### 状态栏
+#### 状态栏
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -73,7 +77,7 @@ await capacitor.statusBar.configure({
 })
 ```
 
-### 相机
+#### 相机
 
 ```ts
 const photo = await capacitor.camera.takePhoto({
@@ -83,7 +87,7 @@ const photo = await capacitor.camera.takePhoto({
 })
 ```
 
-### Preferences
+#### Preferences
 
 ```ts
 await capacitor.preferences.set('my_key', 'value')
@@ -93,7 +97,7 @@ await capacitor.preferences.remove('my_key')
 
 `capacitor.preferences` 适合保存语言、主题、草稿等普通偏好数据；认证 Token 请使用 `createCapacitorTokenStorage()`。
 
-## 配置
+### 配置
 
 本模块无配置文件。`capacitor.init()` 仅检测 Capacitor 运行环境是否可用。
 
@@ -105,7 +109,7 @@ export const prerender = true
 export const ssr = false
 ```
 
-## 错误处理
+### 错误处理
 
 所有异步 API 返回 `HaiResult<T>`，不会直接 throw：
 
@@ -138,7 +142,7 @@ if (!result.success) {
 | `HaiCapacitorError.CAMERA_FAILED`             | `hai:capacitor:040` | 相机操作失败         |
 | `HaiCapacitorError.STATUS_BAR_FAILED`         | `hai:capacitor:050` | 状态栏操作失败       |
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/capacitor test
@@ -146,6 +150,6 @@ pnpm --filter @h-ai/capacitor test
 
 > 由于原生插件依赖，测试中需 mock `@capacitor/*` 模块。
 
-## License
+## 许可证
 
 Apache-2.0

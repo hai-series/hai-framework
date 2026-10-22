@@ -4,9 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/audit](../audit/README.ja.md) · [@h-ai/core](../core/README.ja.md)
 
+## 概要
+
 WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。Provider によるサーバー側の決済処理と、複数プラットフォームからの決済開始を提供します。
 
-## 対応 Provider
+## 主な機能
 
 | Provider   | 決済方式                               |
 | ---------- | -------------------------------------- |
@@ -14,13 +16,15 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 | Alipay     | JSAPI / H5 / App / Native              |
 | Stripe     | Checkout Session（国際決済）           |
 
-## 依存関係
+## 使い始める
+
+### 依存関係
 
 - `@h-ai/audit`：任意の監査ログ。初期化済みの場合、決済操作を自動記録します。
 
-## クイックスタート
+### クイックスタート
 
-### Node.js サーバー
+#### Node.js サーバー
 
 ```typescript
 import { payment } from '@h-ai/payment'
@@ -47,7 +51,7 @@ const query = await payment.queryOrder('wechat', 'ORD001')
 await payment.close()
 ```
 
-### ブラウザークライアント
+#### ブラウザークライアント
 
 ```typescript
 import { invokePayment } from '@h-ai/payment/client'
@@ -56,7 +60,7 @@ import { invokePayment } from '@h-ai/payment/client'
 await invokePayment(orderData)
 ```
 
-## HTTP API 契約
+### HTTP API 契約
 
 決済 HTTP API は `@h-ai/api-contract` の `apiContract.payment` で定義します。アプリケーション contract に組み込むと、型付きクライアントで呼び出せます：
 
@@ -69,7 +73,7 @@ const order = await api.payment.orders.create({
 })
 ```
 
-## 設定
+### 設定
 
 ```typescript
 await payment.init({
@@ -101,7 +105,7 @@ await payment.init({
 
 すべての組み込み Provider の HTTP リクエストには既定で 15 秒のタイムアウトがあり、ネットワーク障害による長時間の待機を防ぎます。
 
-## 監査ログ
+### 監査ログ
 
 主要な決済操作が成功すると、追加設定なしで `@h-ai/audit` に監査ログを自動記録します。監査記録の失敗は warn ログのみを出力し、決済操作に影響しません。
 
@@ -114,7 +118,7 @@ await payment.init({
 
 > 注文照会（`queryOrder`）は読み取り専用で、監査ログを記録しません。
 
-## エラー処理
+### エラー処理
 
 ```typescript
 const result = await payment.createOrder('wechat', orderInput)
@@ -145,12 +149,12 @@ if (!result.success) {
 | `HaiPaymentError.NOTIFY_PARSE_FAILED`  | `hai:payment:051` | 通知の解析に失敗     |
 | `HaiPaymentError.CONFIG_ERROR`         | `hai:payment:070` | 無効な設定           |
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/payment test
 ```
 
-## License
+## ライセンス
 
 Apache-2.0

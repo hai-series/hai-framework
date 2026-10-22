@@ -4,16 +4,13 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/reldb](../reldb/README.en.md)
 
+## Introduction
+
 A notification module supporting multiple providers (email, SMS, API callbacks) at once. Templates bind to providers for scenario-based routing. Includes do-not-disturb (DND) policies and configuration-defined templates.
 
 Template sends need only `template`, `to` and `vars`; the provider comes from the template. An explicit `provider` still overrides it. Direct sends require a provider; omitting it returns a failed HaiResult.
 
-## Dependencies
-
-- `@h-ai/reldb`: optional persistence for delivery logs and templates; enabled automatically when initialized.
-- `@h-ai/cache`: optional distributed locks for DND delay; enabled automatically when initialized.
-
-## Supported providers
+## Core features
 
 | Provider     | Channel | Description                                        |
 | ------------ | ------- | -------------------------------------------------- |
@@ -22,9 +19,16 @@ Template sends need only `template`, `to` and `vars`; the provider comes from th
 | `aliyun-sms` | SMS     | Alibaba Cloud SMS through HTTP API, without an SDK |
 | `api`        | General | HTTP API callback (generic webhook)                |
 
-## Quick start
+## Getting started
 
-### Installation
+### Dependencies
+
+- `@h-ai/reldb`: optional persistence for delivery logs and templates; enabled automatically when initialized.
+- `@h-ai/cache`: optional distributed locks for DND delay; enabled automatically when initialized.
+
+### Quick start
+
+#### Installation
 
 ```bash
 pnpm add @h-ai/reach
@@ -32,61 +36,44 @@ pnpm add @h-ai/reach
 
 Install `nodemailer` for email delivery.
 
-### Initialize multiple providers
+#### Initialize multiple providers
 
 ```ts
-import { cache } from '@h-ai/cache'
 import { reach } from '@h-ai/reach'
-import { reldb } from '@h-ai/reldb'
 
-// 1. 初始化可选依赖（按需）
-await reldb.init({ type: 'sqlite', database: './data.db' }) // 可选，启用发送日志与模板持久化
-await cache.init({ type: 'memory' }) // 可选，启用 DND delay 策略分布式锁
-
-// 2. 初始化触达模块（自动检测已初始化的 reldb/cache 单例）
-await reach.init({
-  providers: [
-    { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
-    { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '某某科技' },
-    { name: 'webhook', type: 'api', url: 'https://api.example.com/notify' },
-  ],
-  templates: [
-    { name: 'welcome_email', provider: 'email', subject: '欢迎 {userName}', body: '亲爱的 {userName}，欢迎！' },
-    { name: 'sms_code', provider: 'sms', body: '验证码: {code}，{minutes} 分钟内有效。' },
-  ],
-  dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
+const initialized = await reach.init({
+  providers: [{ name: 'local', type: 'console' }],
+  templates: [{ name: 'welcome', provider: 'local', subject: 'Welcome', body: 'Hello {userName}' }],
 })
-
-// 通过 provider 字段选择发送渠道
-await reach.send({
-  to: 'user@example.com',
-  template: 'welcome_email',
-  vars: { userName: '张三' },
-})
-
-// 发送短信（通过 extra 传递 Provider 特有参数）
-await reach.send({
-  provider: 'sms',
-  to: '13800138000',
-  extra: { templateCode: 'SMS_123456' },
-  vars: { code: '123456' },
-})
-
-// 关闭所有 Provider
-await reach.close()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const result = await reach.send({
+    to: 'user@example.com',
+    template: 'welcome',
+    vars: { userName: 'Alice' },
+  })
+  if (!result.success)
+    throw new Error(result.error.message)
+}
+finally {
+  await reach.close()
+}
 ```
+
+This example uses the development Console provider. It records delivery metadata and does not send email or SMS. Configure SMTP, SMS or API providers below for real delivery; initialize optional persistence/shared cache when needed.
 
 `reach.config` returns a **redacted configuration snapshot**. Embedded credentials in `api.url` / `endpoint`, `headers.Authorization`, SMTP `pass`, SMS keys, and other secrets are hidden automatically.
 
-## Configuration
+### Configuration
 
-### Console (development/tests)
+#### Console (development/tests)
 
 ```ts
 const config = { name: 'dev', type: 'console' }
 ```
 
-### SMTP
+#### SMTP
 
 | Field    | Type      | Required | Default | Description             |
 | -------- | --------- | -------- | ------- | ----------------------- |
@@ -99,7 +86,7 @@ const config = { name: 'dev', type: 'console' }
 | `pass`   | `string`  | —        | —       | Authentication password |
 | `from`   | `string`  | ✅       | —       | Sender address          |
 
-### Alibaba Cloud SMS
+#### Alibaba Cloud SMS
 
 | Field             | Type     | Required | Default                 | Description          |
 | ----------------- | -------- | -------- | ----------------------- | -------------------- |
@@ -110,7 +97,7 @@ const config = { name: 'dev', type: 'console' }
 | `signName`        | `string` | ✅       | —                       | SMS signature        |
 | `endpoint`        | `string` | —        | `dysmsapi.aliyuncs.com` | API endpoint         |
 
-### API callbacks
+#### API callbacks
 
 | Field     | Type                     | Required | Default | Description             |
 | --------- | ------------------------ | -------- | ------- | ----------------------- |
@@ -123,7 +110,7 @@ const config = { name: 'dev', type: 'console' }
 
 API callback addresses are trusted server configuration. Logs contain only the callback origin, not URL credentials, query parameters, recipients, or third-party failure bodies. For tenant/user-supplied addresses, applications must enforce a domain allowlist; enterprise deployments should also block internal metadata access through egress proxies or network policies.
 
-### DND (do not disturb)
+#### DND (do not disturb)
 
 | Field      | Type                   | Required | Default   | Description                           |
 | ---------- | ---------------------- | -------- | --------- | ------------------------------------- |
@@ -132,7 +119,7 @@ API callback addresses are trusted server configuration. Logs contain only the c
 | `start`    | `string`               | —        | `00:00`   | Start time (HH:mm)                    |
 | `end`      | `string`               | —        | `00:00`   | End time (HH:mm)                      |
 
-## Error handling
+### Error handling
 
 All operations return `HaiResult<T>`. Error codes are defined in `HaiReachError`:
 
@@ -156,7 +143,7 @@ if (!result.success) {
 }
 ```
 
-## Distributed locks
+### Distributed locks
 
 Across nodes, flushing pending DND-delay messages is protected by `@h-ai/cache` distributed locks, allowing only one node to flush at a time.
 
@@ -165,7 +152,7 @@ Across nodes, flushing pending DND-delay messages is protected by `@h-ai/cache` 
 - Without initialized `@h-ai/cache`, distributed locking is disabled automatically; single-node operation continues.
 - A stable process-level owner identifier prevents releasing another owner's lock.
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/reach test

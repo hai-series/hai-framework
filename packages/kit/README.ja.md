@@ -4,6 +4,8 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md) · [@h-ai/crypto](../crypto/README.ja.md) · [@h-ai/iam](../iam/README.ja.md)
 
+## 概要
+
 `@h-ai/kit` は hai-framework の SvelteKit 統合モジュールで、共通のリクエストパイプラインと同一オリジンの endpoint ツールを提供します：
 
 - `kit.createHandle()`：セッション解析、ルートガード、middleware チェーン、任意の通信・Cookie 暗号化。
@@ -11,14 +13,6 @@
 - `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
 
 > クロスプラットフォームの公開 HTTP contract は `@h-ai/api-contract` で定義し、`@h-ai/serv` にマウント、`@h-ai/api-client` の型付きクライアントで呼び出します。`@h-ai/kit` は業務 API contract を定義・提供しません。
-
-## インストール
-
-```bash
-npm install @h-ai/kit
-npm install svelte @sveltejs/kit zod
-npm install -D @sveltejs/vite-plugin-svelte vite
-```
 
 ## 主な機能
 
@@ -32,14 +26,24 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 - A2A 統合：既定の検出パスは `/.well-known/agent-card.json`。`authenticate` 設定時は null/undefined が 401 となり、認証未設定時のみ匿名を許可します。API Key の引数は完全な Agent Card の `securitySchemes.apiKey` から取得します。Hook と明示的 A2A ルートは JSON-RPC 解析エラー・SSE キャンセル時の解放処理を共有します。
 - 2 種類のビルドモード（`createAdapter()`）
 
-## 依存関係
+## 使い始める
+
+### インストール
+
+```bash
+npm install @h-ai/kit @h-ai/core sm-crypto@0.5.7
+npm install svelte @sveltejs/kit zod
+npm install -D @sveltejs/vite-plugin-svelte vite
+```
+
+### 依存関係
 
 - `@h-ai/iam`：A2A 用の認証・認可（任意）。A2A 機能を使う前に初期化。
 - `@h-ai/crypto`：通信・Cookie 暗号化（任意）。暗号化を使う前に初期化。
 
-## クイックスタート
+### クイックスタート
 
-### プロジェクト設定
+#### プロジェクト設定
 
 **svelte.config.js**：
 
@@ -70,11 +74,13 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [sveltekit(), tailwindcss()],
   optimizeDeps: { exclude: ['bits-ui'] },
-  ssr: { noExternal: [/@h-ai\//] },
+  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
-### リクエストパイプラインの構築
+Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypto@0.5.7` を含めます。CLI 生成済みのプロジェクトでは設定済みです。手動導入は `pnpm add sm-crypto@0.5.7` を実行してください。adapter-node は直接の本番依存も参照するため、external 指定だけでは不十分です。
+
+#### リクエストパイプラインの構築
 
 **src/hooks.server.ts**：
 
@@ -98,7 +104,7 @@ const haiHandle = kit.createHandle({
 export const handle: Handle = haiHandle
 ```
 
-### API endpoint
+#### API endpoint
 
 ```typescript
 import { kit } from '@h-ai/kit'
@@ -116,7 +122,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 })
 ```
 
-### ブラウザークライアント
+#### ブラウザークライアント
 
 `kit.client.create()` は SvelteKit の同一オリジン endpoint 向けです。Web・アプリ・ミニプログラムからクロスオリジンで公開 API を使う場合は `@h-ai/api-client` を使用してください。
 
@@ -139,7 +145,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 >
 > 認証：同一オリジンの SvelteKit endpoint は httpOnly Cookie を優先し、サーバーで Cookie を読んで認証します。機密 Token を `localStorage` に保存する必要はありません。Bearer Header が必要なら独自の `BrowserTokenStore`、または `kit.auth.setBrowserToken()` でページ内メモリーに保存してから `kit.client.create({ auth: true })` を使います。
 
-### 同一オリジンの通信暗号化
+#### 同一オリジンの通信暗号化
 
 kit の通信暗号化は `@h-ai/crypto` に委譲します。サーバーは `crypto.transport.createServer()` で管理器を作成し、ブラウザーは `kit.client.installBrowserTransport(kitConfig, { crypto })` の 1 行で同一オリジンの fetch ラッパーを導入します。アプリ側はトップレベルの `crypto` のみを設定します。
 
@@ -203,7 +209,7 @@ transport は既定で同一オリジンの `/api/*`、SvelteKit の `__data.jso
 
 既定の安全方針は fail-closed です。`requireEncryption: true` で保護パスに `X-Client-Id` がなければ 400 を返します。管理器の利用不可、応答の暗号化失敗、暗号化サイズ上限超過はエラーになり、平文の業務応答は渡しません。`requireEncryption: false` は段階的移行用で、本番では推奨しません。
 
-### `_kit.yml` による共通 transport 設定
+#### `_kit.yml` による共通 transport 設定
 
 `@h-ai/kit` は `KitConfigSchema` / `resolveKitConfig()` を提供し、同じ `_kit.yml` から
 `hooks.server.ts` とブラウザーの `kit.client.installBrowserTransport()` の両方を設定できます：
@@ -236,7 +242,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 サーバーのみで設定を読む場合は `core.config.validate('kit', KitConfigSchema)` も利用できます。
 ブラウザーも読む可能性があるため、`_kit.yml` は公開 server/transport パスとスイッチのみを含め、秘密鍵などを書かないでください。
 
-## 設定
+### 設定
 
 `kit.createHandle()` の設定項目：
 
@@ -253,7 +259,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 
 `crypto.encryptedCookies` を設定する場合、`crypto.cookieEncryptionKey` または `HAI_KIT_COOKIE_KEY` が必要です。鍵がなければ `createHandle()` ですぐエラーになります。保護対象 Cookie の平文・破損暗号文・復号失敗は未存在として扱い、暗号化失敗時も平文保存に切り替えません。
 
-## エクスポートパス
+### エクスポートパス
 
 - `@h-ai/kit`：主入口。`kit` 名前空間と型を提供。
 - `@h-ai/kit/client`：ブラウザークライアント。
@@ -262,7 +268,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 - `@h-ai/kit/a2a`：A2A 統合。
 - `@h-ai/kit/crypto`：暗号モジュール統合。
 
-## 設定による認証画面
+### 設定による認証画面
 
 規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
 
@@ -270,22 +276,22 @@ kit.auth.createApi(iam) の標準 handler と kit.auth.publicPaths を使用し�
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
 
-## エラー処理
+### エラー処理
 
 - API endpoint は `kit.handler()` でラップすることを推奨。
 - `kit.validate.body` / `kit.guard.require` は SvelteKit の制御フローとして `Response` を throw。
 - 制御フロー以外の例外は `kit.handler()` が `500 INTERNAL_ERROR` 応答に変換。
 
-## テスト
+### CRUD fields
+
+宣言型 CRUD 項目は UI フォームの幅を指定する `colSpan: 'auto' | 1 | 2` に対応します。`validation.message` は文字列または `() => string` を受け取り、現在の言語で表示できます。レイアウトは `CrudPage.form` で設定し、サーバーでも検証してください。
+
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/kit test
 ```
 
-## License
+## ライセンス
 
 Apache-2.0
-
-## CRUD fields
-
-宣言型 CRUD 項目は UI フォームの幅を指定する `colSpan: 'auto' | 1 | 2` に対応します。`validation.message` は文字列または `() => string` を受け取り、現在の言語で表示できます。レイアウトは `CrudPage.form` で設定し、サーバーでも検証してください。

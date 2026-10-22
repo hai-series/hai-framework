@@ -14,8 +14,8 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.7%2B-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%E2%89%A522.12-339933.svg">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -34,6 +34,16 @@ A consistent API style brings together four capability groups, helping AI assist
 - **Data**: relational databases, caches, object storage, and data pipelines.
 - **Operations**: payments, notifications, scheduled tasks, and automated deployment.
 
+## Start here
+
+| Your task                               | Entry point                                                                 |
+| --------------------------------------- | --------------------------------------------------------------------------- |
+| Create an application                   | [Create, develop and deliver](docs/usage/README.en.md)                      |
+| Use a capability in an existing project | [Module catalog](#module-catalog), then the package getting started section |
+| Develop with an AI assistant            | [AI index](LLMS.txt) and the generated project AGENTS.md                    |
+| Build images or deploy offline          | [Build and deployment](packages/deploy/README.en.md)                        |
+| Contribute to the framework             | [Development](#development) and [workspace rules](AGENTS.md)                |
+
 ## Highlights
 
 | Feature                        | Description                                                                                        |
@@ -44,7 +54,7 @@ A consistent API style brings together four capability groups, helping AI assist
 | **Validated configuration**    | Zod validates configuration during `init()`, exposing errors at startup.                           |
 | **Composable modules**         | 21 independently published modules, with `@h-ai/core` as the minimum dependency, added as needed.  |
 | **End-to-end type safety**     | Strict TypeScript with inference across `api-contract → serv → api-client`.                        |
-| **Cross-platform UI**          | 92 Svelte 5 Runes components (primitives / compounds / scenes) for desktop and mobile.             |
+| **Cross-platform UI**          | Svelte 5 Runes components (primitives / compounds / scenes) for desktop and mobile.                |
 | **Scaffolding and deployment** | `hai create` scaffolds projects; `hai deploy` targets Vercel or self-hosted machines.              |
 | **Built-in Agent Skills**      | Standardized module skills give AI assistants direct access to correct usage.                      |
 
@@ -103,7 +113,7 @@ Use Node.js matching the project's `engines` (`^22.22.2 || ^24.15.0 || >=26.0.0`
 pnpm add -g @h-ai/cli
 
 # Create Web + API with deployment support; omit options for prompts
-hai create my-app --type fullstack --frontends web --features deploy --yes
+hai create my-app --type fullstack --frontends web --yes
 
 # Dependencies are installed by default
 cd my-app
@@ -131,9 +141,12 @@ hai g:component UserCard
 pnpm build --target docker
 # Configure .env.prod and the destination, then publish existing API/Web images
 pnpm run deploy --env prod
+pnpm run deploy --env prod --build --services web
 # Without connectivity between machines, transfer and start the bundle manually
-pnpm run deploy --env prod --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 ```
+
+Deployment tools are development dependencies by default; use `--no-deploy` when creating a project to omit them. Each image uses a separate Dockerfile under `images/`, selected by `hai.build.json`. Complete offline bundles include self-hosted middleware and Windows/Linux/macOS upload scripts; isolated servers run the bundled apply.sh. Partial updates preserve unselected services and volumes using the server success baseline, without project-wide down. Rebuilds of the same version use distinct build IDs and checksums. See the [usage guide](docs/usage/README.en.md) for caching, manual deployment and recovery.
 
 ### Integrate into an existing project
 
@@ -197,7 +210,7 @@ The framework provides **21 independently published modules**, organized into fi
 
 | Package        | Responsibility                                                                     |                             Provider support                              |                                            Latest on npm                                            |
 | -------------- | ---------------------------------------------------------------------------------- | :-----------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | 92 Svelte 5 Runes components (20 primitives + 36 compounds + 36 scenes), 15 themes |                                     —                                     |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
+| `@h-ai/ui`     | Svelte 5 Runes components (20 primitives + 36 compounds + 36 scenes), 15 themes    |                                     —                                     |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
 | `@h-ai/cli`    | CLI: project creation, module addition, code generation, deployment                |                                     —                                     |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
 | `@h-ai/deploy` | Deployment: Vercel with cloud provisioning; docker-ssh with feature-based sidecars | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / Alibaba Cloud SMS | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
 

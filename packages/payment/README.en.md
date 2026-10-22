@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/audit](../audit/README.en.md) · [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 A unified payment module for WeChat Pay, Alipay, and Stripe, with provider-based server processing and payment initiation across clients.
 
-## Supported providers
+## Core features
 
 | Provider   | Payment scenarios                         |
 | ---------- | ----------------------------------------- |
@@ -14,13 +16,15 @@ A unified payment module for WeChat Pay, Alipay, and Stripe, with provider-based
 | Alipay     | JSAPI / H5 / App / Native                 |
 | Stripe     | Checkout Session (international payments) |
 
-## Dependencies
+## Getting started
+
+### Dependencies
 
 - `@h-ai/audit`: optional audit logging; payment operations are recorded automatically when audit is initialized.
 
-## Quick start
+### Quick start
 
-### Node.js server
+#### Node.js server
 
 ```typescript
 import { payment } from '@h-ai/payment'
@@ -47,7 +51,7 @@ const query = await payment.queryOrder('wechat', 'ORD001')
 await payment.close()
 ```
 
-### Browser client
+#### Browser client
 
 ```typescript
 import { invokePayment } from '@h-ai/payment/client'
@@ -56,7 +60,7 @@ import { invokePayment } from '@h-ai/payment/client'
 await invokePayment(orderData)
 ```
 
-## HTTP API contracts
+### HTTP API contracts
 
 Payment HTTP APIs are defined by `apiContract.payment` in `@h-ai/api-contract`. After composing them into the application contract, call them through the typed client:
 
@@ -69,7 +73,7 @@ const order = await api.payment.orders.create({
 })
 ```
 
-## Configuration
+### Configuration
 
 ```typescript
 await payment.init({
@@ -101,7 +105,7 @@ Amounts use minor currency units (cents) and must be positive integers. `amount`
 
 All built-in provider HTTP requests have a default 15-second timeout to avoid long hangs on network failures.
 
-## Audit logging
+### Audit logging
 
 Successful key payment operations automatically write audit logs through `@h-ai/audit`, without extra configuration. Audit failures produce warn logs and do not affect payment operations.
 
@@ -114,7 +118,7 @@ Successful key payment operations automatically write audit logs through `@h-ai/
 
 > Order queries (`queryOrder`) are read-only and do not write audit logs.
 
-## Error handling
+### Error handling
 
 ```typescript
 const result = await payment.createOrder('wechat', orderInput)
@@ -145,7 +149,7 @@ Common error codes:
 | `HaiPaymentError.NOTIFY_PARSE_FAILED`  | `hai:payment:051` | Callback parsing failed                |
 | `HaiPaymentError.CONFIG_ERROR`         | `hai:payment:070` | Invalid configuration                  |
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/payment test

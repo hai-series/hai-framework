@@ -4,33 +4,39 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
+## 简介
+
 加密模块，提供非对称加密、哈希、对称加密与密码哈希能力。
 
-## 支持的能力
+## 核心功能清单
 
 - 非对称加密（密钥生成、加解密、签名验签）
 - 哈希（哈希、HMAC、验证）
 - 对称加密（ECB/CBC 模式）
 - 密码哈希（加盐迭代哈希）
 - 传输加密（`crypto.transport`：服务端管理器 + 客户端 `encryptedFetch`）
-- 前后端通用（Node.js / 浏览器）
+- SM2/SM3/SM4 与传输支持 Node.js / 浏览器；密码哈希仅服务端
 
-## 安全声明
+## 使用入门
+
+### 安全声明
 
 - **SM4 默认加密返回结构化密文**：`crypto.symmetric.encrypt(data, key)` 默认使用 CBC + 随机 IV，返回 `{ mode, ciphertext, iv, encoding }`；解密时把该对象传给 `crypto.symmetric.decrypt(payload, key)`。
 - **SM4 `deriveKey(password, salt)` 不是 KDF**：仅为单次 SM3 哈希，不具备密码爆破抗性，**禁止用于密码存储**。如需密码哈希，使用 `crypto.password.hash(password)`；如需从密码派生密钥，请采用 PBKDF2 / scrypt / Argon2。
 - **IV 必须唯一**：相同密钥下禁止复用 IV；推荐使用默认 CBC 或 `encryptWithIV()` 每次自动生成。密文与 IV 需一同传输与存储（IV 可公开，不必保密）。
 
-## 快速开始
+### 快速开始
 
 ```ts
 import { crypto } from '@h-ai/crypto'
 
 // 初始化（使用前必须调用）
-await crypto.init()
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 ```
 
-### 非对称加密（加解密 / 签名验签）
+#### 非对称加密（加解密 / 签名验签）
 
 ```ts
 // 生成密钥对
@@ -61,7 +67,7 @@ crypto.asymmetric.isValidPublicKey(publicKey) // true
 crypto.asymmetric.isValidPrivateKey(privateKey) // true
 ```
 
-### 哈希（Hash / HMAC / 验证）
+#### 哈希（Hash / HMAC / 验证）
 
 ```ts
 // 字符串哈希
@@ -85,7 +91,7 @@ if (hash.success) {
 }
 ```
 
-### 对称加密（CBC 默认 / 结构化密文）
+#### 对称加密（CBC 默认 / 结构化密文）
 
 ```ts
 // 生成随机密钥和 IV
@@ -130,7 +136,7 @@ crypto.symmetric.isValidKey(key) // true
 crypto.symmetric.isValidIV(iv) // true
 ```
 
-### 密码哈希（加盐迭代）
+#### 密码哈希（加盐迭代）
 
 ```ts
 // 哈希密码（输出格式: $hai$<iterations>$<salt>$<hash>）
@@ -152,7 +158,7 @@ if (hashed.success) {
 }
 ```
 
-### 传输加密（crypto.transport）
+#### 传输加密（crypto.transport）
 
 传输加密统一通过 `crypto.transport` 命名空间提供，供 `@h-ai/serv`、`@h-ai/kit` 与 `@h-ai/api-client` 复用同一套协议常量和载荷格式。
 
@@ -163,7 +169,7 @@ if (hashed.success) {
 
 只有在自定义运行时、测试或你确实要自己接 HTTP 协商端点时，才建议直接调用 `crypto.transport.createServer()` / `createClient()`。
 
-#### 使用流程
+##### 使用流程
 
 1. 先 `await crypto.init()`，确保 `crypto.asymmetric` 与 `crypto.symmetric` 已初始化。
 2. 服务端调用 `crypto.transport.createServer()` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。多节点部署时可注入共享 `keyStore`。
@@ -217,14 +223,14 @@ if (!server.success)
 
 协议常量通过 `crypto.transport.protocol`（或 `TRANSPORT_PROTOCOL`）访问：`X-Client-Id`、`X-Encrypted`、默认 `/_hai/key-exchange`。
 
-### 关闭模块
+#### 关闭模块
 
 ```ts
 // 使用完毕后关闭，释放内部状态
 await crypto.close()
 ```
 
-## 错误处理
+### 错误处理
 
 所有操作返回 `HaiResult<T>`：
 
@@ -235,14 +241,16 @@ if (!result.success) {
 }
 ```
 
-## 测试
+### 可选集成
+
+管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。
+
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/crypto test
 ```
 
-## License
+## 许可证
 
 Apache-2.0
-
-管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。

@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/audit](../audit/README.en.md) · [@h-ai/cache](../cache/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/reldb](../reldb/README.en.md) · [@h-ai/reach](../reach/README.en.md)
 
+## Introduction
+
 Identity and access management through a unified `iam` object for authentication, sessions, authorization, and user management.
 
-## Features
+## Core features
 
 | Feature              | Description                                                                                                            |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -18,13 +20,15 @@ Identity and access management through a unified `iam` object for authentication
 | **One-time tickets** | Short-lived capability tickets (issue / atomic consume) for channels such as WebSocket that cannot carry Bearer tokens |
 | **Frontend client**  | HTTP API contracts for independent frontends                                                                           |
 
-## Installation
+## Getting started
+
+### Installation
 
 ```bash
 pnpm add @h-ai/iam
 ```
 
-## Dependencies
+### Dependencies
 
 - `@h-ai/reldb`: persistence for users/roles/permissions; **initialize before iam.init()**.
 - `@h-ai/cache`: sessions/OTP/reset tokens/one-time tickets/shared locks; **initialize before iam.init()**.
@@ -34,11 +38,11 @@ pnpm add @h-ai/iam
 - `@h-ai/reach`: **optional**, installed, initialized and injected by the application for standard notifications; custom callbacks do not require Reach.
 - `ldapts`: **optional**, loaded only when LDAP is explicitly enabled without an injected `ldapClientFactory`.
 
-## Optional LDAP and notifications
+### Optional LDAP and notifications
 
 Password authentication, users and RBAC work without LDAP or Reach. Both are optional peer dependencies: install only the integrations you use. The snippets below run inside application startup/authentication functions after reldb/cache initialization; `username/password` are validated input.
 
-### LDAP / Active Directory
+#### LDAP / Active Directory
 
 For the default client run `pnpm add ldapts`, then explicitly set `login.ldap: true` and connection settings. Connection settings alone do not enable LDAP. Enabling the default client without the SDK returns an initialization configuration error.
 
@@ -75,7 +79,7 @@ if (!result.success)
 return result
 ```
 
-### Automatic delivery with optional Reach
+#### Automatic delivery with optional Reach
 
 Run `pnpm add @h-ai/reach`. The application configures, initializes and closes Reach; IAM uses only the injected instance. These SMTP/HTTP providers are examples; the SMS gateway accepts the [Reach notification interface](../reach/README.en.md). Console logs metadata and does not deliver messages.
 
@@ -133,7 +137,7 @@ if (!initialized.success)
 return iam.auth.sendOtp('user@example.com')
 ```
 
-### Custom email and SMS delivery
+#### Custom email and SMS delivery
 
 Inject `onOtpSendEmail`, `onOtpSendSms` and `onPasswordResetRequest` to use existing application services. Implement only needed callbacks or mix them with Reach; explicit callbacks take priority. These services are application implementations whose promises resolve only after successful delivery. If a service returns HaiResult, check `success` and throw inside the callback on failure. IAM catches callback exceptions and returns a business error without exposing codes, tokens or internal delivery details.
 
@@ -164,7 +168,7 @@ if (!initialized.success)
   return initialized
 ```
 
-## Quick start
+### Quick start
 
 ```ts
 import { cache } from '@h-ai/cache'
@@ -209,9 +213,9 @@ LDAP is disabled by default. Public OTP methods require `otp` settings and send 
 
 `iam.config` returns a **redacted configuration snapshot**. Sensitive LDAP `url` / `bindPassword` and similar fields are hidden automatically. Use it to inspect state, not as the original configuration source.
 
-## Design
+### Design
 
-### Architecture
+#### Architecture
 
 IAM is a **lifecycle singleton** managed through `iam.init()` / `iam.close()`. Five internal subsystems initialize in dependency order:
 
@@ -228,7 +232,7 @@ All subsystems use **factories + closures** (for example `createSessionOperation
 
 Before initialization, every subsystem method returns `NOT_INITIALIZED` through a `NotInitializedKit` proxy.
 
-### Data storage
+#### Data storage
 
 | Data                                                | Storage                                      | Description                                                                                                                   |
 | --------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -241,16 +245,16 @@ Before initialization, every subsystem method returns `NOT_INITIALIZED` through 
 
 ---
 
-### Authentication (authn) — `iam.auth`
+#### Authentication (authn) — `iam.auth`
 
-#### Key types
+##### Key types
 
 - **`AuthnOperations`**: `login` / `loginWithOtp` / `loginWithLdap` / `loginWithApiKey` / `logout` / `verifyToken` / `sendOtp` / `registerAndLogin`.
 - **`AuthStrategy`**: strategy interface (`type` + `authenticate` + `challenge?`), implemented for password, OTP, LDAP, and API Key.
 - **`AuthResult`**: login result with user details, `TokenPair` (accessToken + refreshToken), and roles/permissions.
 - **`Credentials`**: a credential union combining `{ type: 'password' | 'otp' | 'ldap' | 'apikey' }` with strategy-specific credentials.
 
-#### Key workflows
+##### Key workflows
 
 **Password login:**
 
@@ -280,7 +284,7 @@ verifyToken(accessToken)
   → Return current Session (userId, roles, permissions)
 ```
 
-#### Usage
+##### Usage
 
 These examples run on the server after successful reldb/cache/IAM initialization, with validated request input. Password login is available by default. OTP requires `login.otp: true`, an `otp` channel and delivery callbacks/Reach templates; LDAP requires `login.ldap: true` (see configuration above); API Key requires `login.apikey: true` (see the complete flow below). Login returns `AuthResult`; registration with login returns the same authentication structure. Registration and password login have separate switches.
 
@@ -312,7 +316,7 @@ async function registerWithSession(username: string, password: string) {
 }
 ```
 
-#### Considerations
+##### Considerations
 
 - **Timing attack mitigation**: perform a dummy password hash for nonexistent users to keep response timing consistent.
 - **Account lockout**: lock for `lockoutDuration` seconds after `maxLoginAttempts` consecutive failures.
@@ -321,15 +325,15 @@ async function registerWithSession(username: string, password: string) {
 
 ---
 
-### Sessions (session) — `iam.session`
+#### Sessions (session) — `iam.session`
 
-#### Key types
+##### Key types
 
 - **`SessionOperations`**: `create` / `get` / `verifyToken` / `update` / `delete` / `deleteByUserId` / `refresh` / `revokeRefresh` / `patchUserSessions`.
 - **`Session`**: userId, roles, permissions, accessToken, expiration, and other session data.
 - **`TokenPair`**: `{ accessToken, refreshToken, expiresIn, tokenType: 'Bearer' }`.
 
-#### Key workflows
+##### Key workflows
 
 **Token refresh (rotation):**
 
@@ -352,7 +356,7 @@ create(options) [singleDevice=true]
   → Store session in cache
 ```
 
-#### Usage
+##### Usage
 
 Use `tokens.accessToken` to authenticate requests and `tokens.refreshToken` to obtain a new pair; `expiresIn` is measured in seconds. Independent APIs use `Authorization: Bearer <accessToken>`. For SvelteKit Cookie endpoints, use kit's standard authentication integration described below.
 
@@ -387,7 +391,7 @@ async function forceSignOut(userId: string) {
 }
 ```
 
-#### Considerations
+##### Considerations
 
 - **Cache-only storage**: Memory sessions are lost on restart; shared Redis sessions survive IAM service restarts until TTL or revocation.
 - **Sliding renewal**: with `sliding: true`, each `get()` extends TTL automatically.
@@ -396,18 +400,18 @@ async function forceSignOut(userId: string) {
 
 ---
 
-### Authorization (authz) — `iam.authz`
+#### Authorization (authz) — `iam.authz`
 
 Role lists use `iam.authz.getRoleUserCounts(roleIds)` to aggregate actual membership for the current page in one query, returning `HaiResult<Map<string, number>>`. Missing relations mean zero; query failures display an error instead of invented zero counts.
 
-#### Key types
+##### Key types
 
 - **`AuthzOperations`**: role/permission CRUD, role-permission/user-role assignments, and permission checks.
 - **`Role`**: `{ id, code, name, description, isSystem }`.
 - **`Permission`**: `{ id, code, name, type, resource, action }`; type is `menu` / `api` / `button`.
 - **`PermissionType`**: permission type enum.
 
-#### Key workflows
+##### Key workflows
 
 **Permission checks (`checkPermission`):**
 
@@ -430,7 +434,7 @@ assignPermissionToRole(roleId, permId)
   (best-effort: failures only log.error; permission assignment still succeeds)
 ```
 
-#### Usage
+##### Usage
 
 Create permissions, save permission **IDs** through the role's `permissionIds`, and assign a role by its **ID**. Session roles/permissions and guards use stable **codes**; display names can change independently. These examples assume RBAC is enabled. Applications must authorize administrative operations and check resource access before calling them.
 
@@ -478,7 +482,7 @@ async function currentAuthorization(userId: string) {
 }
 ```
 
-#### Considerations
+##### Considerations
 
 - **Wildcard matching**: `admin:*` matches `admin:read`, `admin:write:detail`, etc.; one `*` matches everything after the colon.
 - **Super-admin role**: `rbac.superAdminRole` (default `super_admin`) automatically grants all permissions.
@@ -488,9 +492,9 @@ async function currentAuthorization(userId: string) {
 
 ---
 
-### Users (user) — `iam.user`
+#### Users (user) — `iam.user`
 
-#### Key types
+##### Key types
 
 - **`UserOperations`**: registration, queries, updates, deletion, password changes/resets, and password strength validation.
 - **`User`** (public fields): `{ id, username, email, phone, displayName, avatarUrl, enabled, roles? }`.
@@ -498,7 +502,7 @@ async function currentAuthorization(userId: string) {
 - **`RegisterOptions`** / **`RegisterResult`**: registration input/output.
 - **`UpdateCurrentUserInput`**: fields the current user may change (`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`).
 
-#### Key workflows
+##### Key workflows
 
 **User registration:**
 
@@ -528,7 +532,7 @@ confirmPasswordReset(token, newPassword)
   → Delete consumed reset token
 ```
 
-#### Usage
+##### Usage
 
 `register` returns a user without a session; use `auth.registerAndLogin` when both are needed. `createUser` is an administrative operation independent of self-registration settings. Use `getCurrentUser/updateCurrentUser` for profile fields: username/email/displayName/avatarUrl/phone/metadata. Security fields and roles require authorized administrative operations.
 
@@ -586,7 +590,7 @@ async function disableUser(userId: string) {
 }
 ```
 
-#### Considerations
+##### Considerations
 
 - **`toUser()` redaction**: public users omit sensitive fields such as `passwordHash` and `loginFailedCount`.
 - **Session invalidation**: `deleteUser` / `updateUser({ enabled: false })` / `changePassword` / `confirmPasswordReset` clear all active sessions for affected users.
@@ -597,17 +601,17 @@ async function disableUser(userId: string) {
 
 ---
 
-### API keys — `iam.apiKey`
+#### API keys — `iam.apiKey`
 
 `scopes` intersect the subject's permissions and support `*` and namespace `:*`. The default empty array grants identity only, without operation permissions. Restricted keys have empty session `roles` and use permission guards; explicit `*` never exceeds subject authorization. API Key login binds the key ID: get/verifyToken/refresh recheck its persistent state and reject revoked, disabled, expired keys or DB failures. Standalone verifyApiKey returns verified key metadata and still requires subject/operation authorization.
 
-#### Key types
+##### Key types
 
 - **`ApiKeyOperations`**: `createApiKey` / `listApiKeys` / `getApiKey` / `revokeApiKey` / `verifyApiKey`.
 - **`ApiKey`** (public fields): `{ id, userId, name, keyPrefix, enabled, expiresAt, scopes }`.
 - **`CreateApiKeyResult`**: `{ apiKey, rawKey }`; the plaintext key is returned only once.
 
-#### Key workflows
+##### Key workflows
 
 **API key verification:**
 
@@ -621,7 +625,7 @@ verifyApiKey(rawKey)
   → Return ApiKey
 ```
 
-#### Usage
+##### Usage
 
 Enable API Key during initialization. A Key is a restricted user credential: **effective permissions = current subject permissions ∩ scopes**. Scopes use permission codes, not role/display names or resource IDs. They neither create permissions nor replace tenant/record ownership checks.
 
@@ -707,7 +711,7 @@ Key-derived sessions remain bound to the Key when refreshed through `iam.session
 
 `expirationDays: 0` means no expiration; omission uses `apikey.defaultExpirationDays`. Set an explicit duration for time-limited access. Never put raw Keys or Tokens in URLs, logs, public configuration or ordinary localStorage.
 
-#### Considerations
+##### Considerations
 
 - **No plaintext persistence**: only hashes are stored; `rawKey` at creation is the sole opportunity to retrieve it.
 - **Prefix lookup**: `keyPrefix` narrows candidates without a full table scan.
@@ -716,11 +720,11 @@ Key-derived sessions remain bound to the Key when refreshed through `iam.session
 
 ---
 
-## More usage
+### More usage
 
 See the skill template (Chinese) for detailed API parameters, codes, and integration patterns: `packages/cli/templates/skills/hai-iam/SKILL.md`.
 
-## Frontend API calls
+### Frontend API calls
 
 Public HTTP APIs are defined by `@h-ai/api-contract` and called through the `@h-ai/api-client` typed client:
 
@@ -745,7 +749,7 @@ await apiClient.iam.auth.changePassword({
 })
 ```
 
-## Password reset
+### Password reset
 
 Password reset requires `passwordReset.enabled` and a working delivery callback/Reach template. Success does not prove that the account exists or the recipient received a message. Handle delivery/internal failures through HaiResult. Reset tokens expire, limit attempts, and permit one successful consumption; success revokes old sessions. Administrator resets do not require the old password, but applications must authorize the administrator.
 
@@ -768,7 +772,7 @@ async function resetByAdministrator(userId: string, newPassword: string) {
 }
 ```
 
-## One-time tickets — `iam.ticket`
+### One-time tickets — `iam.ticket`
 
 Short-lived capability tickets for channels that cannot carry Bearer tokens, such as WebSocket URLs. An authenticated HTTP request issues a ticket bound to a subject, purpose, and operation. The server **atomically consumes** it on first validation, making it valid only once.
 
@@ -801,7 +805,7 @@ async function consumeAudioTicket(ticket: string) {
 
 Features: cryptographically secure randomness, TTL, atomic single use (only one concurrent consumer succeeds), and purpose binding to prevent cross-purpose replay.
 
-## Configuration driven authentication
+### Configuration driven authentication
 
 `iam.publicConfig` and the client's `client.iam.auth.publicConfig()` HTTP contract expose a safe configuration whitelist and only advertise configured, available methods. `login.password/otp/ldap`, `otp.email/sms`, `register.enabled/defaultEnabled`, `passwordReset.enabled/mode/resetUrl` and agreement display flags are independent. `ui` configures card/split layout, title, subtitle, brand text, Logo and illustration URLs. Browser links only accept HTTP(S). LDAP is optional and disabled by default; install ldapts only for the default client, or inject a custom factory.
 
@@ -817,7 +821,7 @@ Standard endpoints: `GET /auth/config`, `POST /auth/login/ldap`, `POST /auth/pas
 
 `passwordReset.mode` selects `email` (default, `password_reset`) or `phone` (`password_reset_sms`); the public config tells the recovery form which identifier to request.
 
-### Markdown agreements
+#### Markdown agreements
 
 Configure `agreements.userAgreementMarkdown` and `privacyPolicyMarkdown` to load agreement content directly from configuration. YAML `|` preserves paragraphs and newlines. The modal reuses the safe MarkdownRenderer with raw HTML, scripts and code tools disabled. Markdown takes priority over a URL for the same agreement; a URL remains an optional external-view link. URL-only agreements use a sandboxed iframe.
 
@@ -840,7 +844,7 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ```
 
-## Error handling
+### Error handling
 
 All operations return `HaiResult<T>`; branch on `HaiIamError`:
 
@@ -855,7 +859,11 @@ if (!result.success) {
 }
 ```
 
-## Tests
+### Optional integrations
+
+Role lists aggregate actual member counts for the current page with one `iam.authz.getRoleUserCounts(roleIds)` call, returning `HaiResult<Map<string, number>>`. Unassigned roles get 0; failed queries show loading errors rather than fabricated zero counts.
+
+## Development and testing
 
 ```bash
 pnpm test
@@ -864,5 +872,3 @@ pnpm test
 ## License
 
 Apache-2.0
-
-Role lists aggregate actual member counts for the current page with one `iam.authz.getRoleUserCounts(roleIds)` call, returning `HaiResult<Map<string, number>>`. Unassigned roles get 0; failed queries show loading errors rather than fabricated zero counts.

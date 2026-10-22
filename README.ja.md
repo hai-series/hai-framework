@@ -14,8 +14,8 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.7%2B-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%E2%89%A522.12-339933.svg">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -33,6 +33,16 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 - **安全性**：中国の国家暗号規格、認証、RBAC 認可、監査ログ。
 - **データ**：リレーショナル DB、キャッシュ、オブジェクトストレージ、データパイプライン。
 - **運用**：決済、通知、定時タスク、自動デプロイ。
+
+## 目的から探す
+
+| 目的                         | 入口                                                          |
+| ---------------------------- | ------------------------------------------------------------- |
+| アプリを作成する             | [作成・開発・配布ガイド](docs/usage/README.ja.md)             |
+| 既存工程で機能を使う         | [モジュール一覧](#モジュール一覧)と各パッケージの使い始める節 |
+| AI と機能を実装する          | [AI 索引](LLMS.txt)と生成工程の AGENTS.md                     |
+| イメージ作成・オフライン配布 | [ビルドとデプロイ](packages/deploy/README.ja.md)              |
+| フレームワークを開発する     | [開発](#開発)と[作業規則](AGENTS.md)                          |
 
 ## 主な特長
 
@@ -103,7 +113,7 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 pnpm add -g @h-ai/cli
 
 # デプロイ対応の Web + API を作成。オプション省略時は対話で選択
-hai create my-app --type fullstack --frontends web --features deploy --yes
+hai create my-app --type fullstack --frontends web --yes
 
 # 依存関係は既定でインストール済み
 cd my-app
@@ -131,9 +141,12 @@ hai g:component UserCard
 pnpm build --target docker
 # .env.prod と接続先を設定し、既存の API/Web イメージを公開
 pnpm run deploy --env prod
+pnpm run deploy --env prod --build --services web
 # 接続できない場合はパッケージを手で移動し、同梱 README に従って起動
-pnpm run deploy --env prod --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 ```
+
+デプロイツールは既定で開発依存に含まれ、作成時に `--no-deploy` で省略できます。各イメージは `images/` の独立した Dockerfile を使い、hai.build.json で指定します。完全オフラインパッケージには自前ミドルウェアと Windows/Linux/macOS のアップロードスクリプトが含まれます。隔離サーバーでは apply.sh を実行します。部分更新はサーバーの成功状態を基準に他のサービスとボリュームを保ち、全体の down を実行しません。同じ版でも構築 ID とチェックサムで内容を区別します。[使用ガイド](docs/usage/README.ja.md)を参照してください。
 
 ### 既存プロジェクトへの導入
 

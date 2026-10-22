@@ -4,9 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/ai](../ai/README.ja.md) · [@h-ai/api-contract](../api-contract/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/crypto](../crypto/README.ja.md) · [@h-ai/iam](../iam/README.ja.md) · [@h-ai/storage](../storage/README.ja.md)
 
-> hai-framework の API サービスランタイム。公開 HTTP App 抽象を通じて `@h-ai/api-contract` を複数プラットフォームから使える HTTP API として提供します。Hono は内部実装です。
+## 概要
 
-## 機能概要
+hai-framework の API サービスランタイム。公開 HTTP App 抽象を通じて `@h-ai/api-contract` を複数プラットフォームから使える HTTP API として提供します。Hono は内部実装です。
+
+## 主な機能
 
 - `serv.createApp(...)` → `serv.listen(app, { port })` で起動。アプリは Hono を import する必要がありません。
 - フラットな API：`serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`。
@@ -22,7 +24,9 @@
 
 > ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。
 
-## クイックスタート
+## 使い始める
+
+### クイックスタート
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -64,7 +68,7 @@ serv.listen(app, {
 // 5) 优雅关闭由 serv 托管，无需手动注册 process.once('SIGINT', ...)
 ```
 
-### host / port 設定
+#### host / port 設定
 
 host/port は `config/_serv.yml` の `server` で指定し、`HOST` / `PORT` 環境変数 > 設定ファイル > `127.0.0.1:3000` の順です。既定の `127.0.0.1` はローカル専用で、コンテナー外に公開する場合は `0.0.0.0` にします：
 
@@ -77,7 +81,7 @@ server:
 
 解決済みの `server` を `serv.listen` に渡します。`host` / `port` の明示的な指定で上書きすることもできます。
 
-### Fetch Runtime（Workers / Bun / Deno）
+#### Fetch Runtime（Workers / Bun / Deno）
 
 ```ts
 const handler = serv.toFetch(app)
@@ -86,7 +90,7 @@ export default { fetch: handler }
 
 Node `serv.listen()` は socket の接続元を自動で渡し、既定では転送ヘッダーを無視します。`http.trustedProxies` の IP/CIDR のみ信頼し、XFF を右から左へ調べ、最初の非信頼アドレスで停止します。その左側は無視します。信頼チェーンが不正・長すぎる場合は IP 未定義となり、代理をクライアントとして扱いません。代理は転送ヘッダーを清掃・追加してください。Fetch は `app.fetch(request, { remoteAddress: platformPeerAddress })` で信頼できる接続元を渡します。メタデータなしは IP 未定義です。任意のヘッダーをコピーしないでください。独自 `createContext(input)` は input 全体を再利用し、解決済み `input.ip` を保持します。内部 RPC は接続元で制限します。
 
-### Audio WebSocket：ticket とサーバー認可
+#### Audio WebSocket：ticket とサーバー認可
 
 音声接続には短期・単回 ticket が必要です。認証済み HTTP endpoint で発行（推奨：`iam.ticket.issue`）し、`verifyTicket` でアトミックに消費します（推奨：`iam.ticket.consume`）。接続直後に独立 timeout で認証し、認証前に業務フレームを処理しません。返された `ServSession` と任意の `grant` を保存してから `authorize` で有料パラメーターを確認します：
 
@@ -112,7 +116,7 @@ const app = serv.createApp({
 - `onSessionEnd` は成功・失敗・切断後に最大 1 回呼び、同時実行枠の解放に使用。
 - ブラウザーの `createAIClient({ audio: { url, getTicket } })` は単回 `ticket` のみを URL に付けます。`getTicket(request)` は `operation` / `model` の概要から今回の操作専用 ticket を発行できます。通常の IAM access token は渡さないでください。
 
-### 通信暗号化（`@h-ai/crypto` と共通）
+#### 通信暗号化（`@h-ai/crypto` と共通）
 
 serv 独自の暗号化ファクトリーはなく、`crypto.transport` から管理器を作成します。利用側はトップレベルの `crypto` のみを渡します：
 
@@ -204,7 +208,7 @@ const app = serv.createApp({
 
 > **安全方針**：`transport` 有効時は `excludePaths` と鍵交換以外で有効な `X-Client-Id` が必要です。不足・未知の clientId は 400、暗号化不能・非 JSON 応答・上限超過はエラーになり、平文の業務データは渡しません。
 
-### Token 認証（`iam` / `refreshCookie`）
+#### Token 認証（`iam` / `refreshCookie`）
 
 `serv.createApp` にトップレベルの `iam` を渡すと、次を自動構成します：
 
@@ -246,7 +250,7 @@ const app = serv.createApp({
 })
 ```
 
-### 独自 procedure（認証 + 権限）
+#### 独自 procedure（認証 + 権限）
 
 ```ts
 const procedures = serv
@@ -260,7 +264,7 @@ const procedures = serv
   .build()
 ```
 
-### 高度なパイプライン（HTTP middleware + context + route guard）
+#### 高度なパイプライン（HTTP middleware + context + route guard）
 
 `@h-ai/serv` のパイプラインは 3 層で、それぞれの拡張入口があります：
 
@@ -268,7 +272,7 @@ const procedures = serv
 2. **context 層**：`verifyToken` / `createContext` / `serv.buildAuthContextFactory()` で拡張。
 3. **route guard 層**：`.auth()` / `.permission()` / `.role()` で認証・認可を宣言。
 
-#### 1) 独自 HTTP middleware
+##### 1) 独自 HTTP middleware
 
 ログ・trace・レート制限・CORS・テナントヘッダーなどの **HTTP 共通処理**、または JSON/oRPC contract に適さない WebSocket・ファイル・バイナリー endpoint には `middlewares` を使います。一般的な CORS は `serv.cors(...)` を再利用できます：
 
@@ -336,7 +340,7 @@ const app = serv.createApp({
 - ブラウザーが `X-Encrypted` などを読む場合は `serv.cors({ exposedHeaders: [...] })` で明示的に公開。
 - この層は HTTP middleware context を操作し、`HaiResult` ではなく **HTTP Response** を返します。
 
-#### 2) 独自 context パイプライン
+##### 2) 独自 context パイプライン
 
 `Bearer token -> session` を再利用し、テナント・workspace・送信元などの項目を追加する場合は、
 `serv.buildAuthContextFactory()` で独自の `createContext` を構成してください：
@@ -363,7 +367,7 @@ const app = serv.createApp({
 - 既定の認証 context に項目を追加：`buildAuthContextFactory(...) + createContext`。
 - context 生成全体を置換：直接 `createContext`。
 
-#### 3) Route guard
+##### 3) Route guard
 
 公開 procedure は `.route(path, handler)` を使い、ガードが必要な場合は次を使います：
 `.route(path).auth/permission/role().handle(handler)`：
@@ -396,7 +400,7 @@ const procedures = serv
 - アプリ向けの安定した入口はルートの `@h-ai/serv`。
 - `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` などの内部 helper は独立サブパスとして公開しません。
 
-### httpOnly Cookie 認証（本番推奨）
+#### httpOnly Cookie 認証（本番推奨）
 
 httpOnly cookie モードは refresh token をサーバー管理の Cookie に保存し、ブラウザー JS から読めなくして XSS による漏洩を抑えます。
 
@@ -455,7 +459,7 @@ await apiClient.init({
 
 > **Cookie 属性**：本番は `HttpOnly; SameSite=Strict; Secure`。`Path` は `{apiPrefix}/auth/refresh` に限定。
 
-## API 一覧
+### API 一覧
 
 - `serv.createApp(options)`：独自 middleware、ヘルスチェック、OpenAPI、任意の文書・RPC を備えた HTTP App を作成。
 - `serv.parseRequestContext({ request })`：Bearer token + requestId を抽出し、session は設定しません。
@@ -482,7 +486,7 @@ await apiClient.init({
 
 > 通信暗号化は `createApp` の設定機能で、内部で `crypto.transport` に委譲します。`serv.xxx` の独立 API ではありません。
 
-## 設定
+### 設定
 
 `@h-ai/serv` 自体は YAML を走査しません。`@h-ai/core` で `config/_serv.yml` を読み、解析結果を `serv.createApp()` に渡してください。
 
@@ -597,7 +601,7 @@ const app = serv.createApp({
 
 本番では `_serv.yml` の `cors.origin` が空・`*` なら起動に失敗します。Web・Capacitor/Tauri は正規化済み Origin 全体を厳密照合し、末尾偽装を防ぎます。本番は Secure refresh cookie を強制し OpenAPI/docs を無効化します。非本番の endpoint は設定ファイルで決めます。
 
-## 設定による認証画面
+### 設定による認証画面
 
 規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
 
@@ -605,7 +609,7 @@ createIamProcedures({ iam }) は公開設定、LDAP/OTP/パスワード、登録
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
 
-## エラー処理
+### エラー処理
 
 通常の procedure は認証・認可・業務の失敗と捕捉した handler 例外を HaiResult として既定で HTTP 200 で返します。`error.httpStatus` はドメインエラーのメタデータで、HTTP 応答ステータスを変更しません。クライアントは `success` と `error.code` を確認してください。未認証では `error.httpStatus=401`、DB クエリー失敗や INTERNAL_ERROR では 500 です。
 
@@ -656,7 +660,7 @@ const procedures = serv
 
 > `iam.user.xxx()` など下流が直接 `HaiResult` を返す場合、serv は `error.message` をそのまま渡します。`HaiError` は最終 `message` のみで `messageKey/params` を持たないため、**serv の境界で任意の下流エラーを汎用的に再翻訳することはできません**。リクエストごとの i18n はエラーを生成するモジュールで locale を受け取る必要があります。
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/serv test
@@ -664,6 +668,6 @@ pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
 
-## License
+## ライセンス
 
 Apache-2.0

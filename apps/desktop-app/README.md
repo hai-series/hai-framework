@@ -1,8 +1,19 @@
 # hai Desktop App
 
-> hai Agent Framework 的桌面端示例 — **Tauri v2 + Svelte 5 + Vite**，通过 `@h-ai/api-client` + `@h-ai/api-service-contract` 调用 `apps/api-service`。
+## 简介
 
-## 技术栈
+hai Agent Framework 的桌面端示例 — **Tauri v2 + Svelte 5 + Vite**，通过 `@h-ai/api-client` + `@h-ai/api-service-contract` 调用 `apps/api-service`。
+
+## 核心功能清单
+
+- 宽屏下工作区随窗口扩展，列表在自身区域内滚动；手机端自动收拢，登录框和长篇正文保留阅读宽度。
+
+- 使用 Tauri 打包桌面应用，共用 typed API 与认证界面。
+- 支持运行时 API 地址、主题、个人设置和原生安装包验证。
+
+## 使用入门
+
+### 技术栈
 
 - **Tauri v2** — 跨平台原生外壳（Rust + WebView）
 - **Svelte 5（runes）+ Vite** — 纯 SPA，**不依赖 SvelteKit / @h-ai/kit**
@@ -13,7 +24,7 @@
 - **`@h-ai/ui`** — 共享组件库（按需）
 - **极简 hash router**（`src/lib/router.svelte.ts`）— 适配 Tauri webview（无 server，无 file:// URL 路由）
 
-## 范围
+### 范围
 
 这是一个**示例**应用，演示桌面端如何对接 hai api-service：
 
@@ -29,7 +40,7 @@
 - 复杂的权限/菜单系统
 - Storage / AI 子领域 demo（接口可用，UI 未提供）
 
-## 前置条件
+### 前置条件
 
 1. **Rust 工具链**（Tauri v2 必需）：参考 [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/)
 2. **api-service 已启动**：
@@ -41,7 +52,7 @@
 
 3. 按 `.env.example` 的字段说明，在 `.env.local` 中仅填写需要覆盖的本机私有值。
 
-## 启动
+### 启动
 
 ```bash
 # 仅前端开发（不启 Tauri）
@@ -54,7 +65,7 @@ pnpm --filter desktop-app tauri:dev
 pnpm --filter desktop-app tauri:build
 ```
 
-## 项目结构
+### 项目结构
 
 ```
 apps/desktop-app/
@@ -82,7 +93,7 @@ apps/desktop-app/
 └── package.json
 ```
 
-## 设计要点
+### 设计要点
 
 - **Token 默认仅存内存**：Tauri webview 与 api-service 跨域时无法直接复用 httpOnly cookie；示例选择安全的内存存储，应用重启后需重新登录。生产应用如需持久会话，应实现基于操作系统密钥库（如 [`tauri-plugin-stronghold`](https://v2.tauri.app/plugin/stronghold/)）的 `TokenStorage`，禁止把 access/refresh token 写入 localStorage。
 - **权限由服务端刷新**：`iam.auth.currentUser()` 同时返回当前用户、角色与权限；客户端不持久化权限快照，UI 状态始终来自已校验会话。
@@ -93,7 +104,7 @@ apps/desktop-app/
 - **CSP**：`tauri.conf.json` 的 `app.security.csp` 已放行 `connect-src http://localhost:3000`。生产部署需根据实际域名调整。
 - **`@h-ai/ui` 完全解耦**：`@h-ai/ui` 不再包含任何 SvelteKit 依赖；SvelteKit 适配器迁至 `@h-ai/kit/client` 的 `createSvelteKitNavAdapter()`（本应用未使用）。
 
-## API 调用与加密配置
+### API 调用与加密配置
 
 本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。命令和加载规则见 [配置与环境变量](../../README.md#配置与环境变量)。
 
@@ -114,7 +125,7 @@ transport:
 3. 若启用 transport，则先 `crypto.init()`
 4. 再 `desktopApiClient.init({ baseUrl, transport, auth })`
 
-### 认证页面
+#### 认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
@@ -122,16 +133,7 @@ transport:
 
 [完整配置与安全约束](../../packages/iam/README.md)
 
-## 验证
-
-```bash
-pnpm --filter desktop-app typecheck
-pnpm --filter desktop-app lint
-pnpm --filter desktop-app test
-pnpm --filter desktop-app build
-```
-
-## 原生交付与验收
+### 原生交付与验收
 
 桌面端原生打包独立于 Web 构建：`pnpm build` 默认编译资源，`pnpm build --target desktop` 调用 Tauri 生成安装包。CI 的 [`native.yml`](../../.github/workflows/native.yml) 在 Windows 上安装锁定依赖、构建共享包后调用相同入口，不接收部署环境或 API 地址。API Origin 与 CSP 在程序启动时注入；打包成功不代替安装后的行为验收。
 
@@ -153,10 +155,37 @@ pnpm --filter desktop-app build
 
 Windows 可用 NSIS `/S /D=<绝对路径>` 在隔离目录静默安装。每次结果记录日期、提交 SHA、包 SHA256、平台 / 工具链、真实命令与退出码及逐步骤通过 / 失败 / 未验证；无设备或凭证时保留「未验证」，不用 skip 制造通过。依据 [Tauri Windows 安装包](https://v2.tauri.app/distribute/windows-installer/)。
 
-## License
+### 镜像构建与部署
 
-MIT
+在本应用目录执行，镜像定义为 `images/app.Dockerfile`，`hai.build.json` 指定文件与仓库根构建上下文。Web 运行配置位于 `images/web/`（如有）。应用版本来自本目录的 `package.json.version`。
+
+```sh
+pnpm build:images                         # 只构建镜像并导出 tar
+pnpm run deploy --env prod --build        # 构建、打包、上传、启动并检查访问
+pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+```
+
+先准备 `.env.prod` 与 `config/_deploy.yml`；首次向导以说明文字收集服务器连接信息并保存到 `.env.local`。完整离线包包含应用和自建中间件镜像，目标 Linux 需预装容器引擎、Compose 与脚本要求的工具。把 tar 和同名 `-deploy/` 目录一起搬到操作机，Windows 执行 `deploy.ps1`，Linux/macOS 执行 `deploy.sh`；完全隔离的服务器解包后执行 `sh apply.sh`。
+
+已有成功安装时，可用 `--services app` 只更新本应用；多个镜像的工程按服务名选择。局部发布保留其他容器和持久化卷，不执行整个项目 `down`，失败保留诊断并尝试恢复旧容器。相同版本允许重建，每次以独立构建 ID 区分内容。`images/dependencies/` 为忽略 Git 的依赖输入，配合引擎缓存和分层减少重复下载。
+
+完整参数、缓存、版本与恢复说明见[使用指南](../../docs/usage/README.md#4-编译源码与打包产物)。移动端和桌面端的原生安装包仍需在对应系统另行构建；容器部署交付的是 Web 页面。
+
+### 可选集成
 
 LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
 
 原生安装包不烘焙环境地址；启动前设置进程 `PUBLIC_API_BASE=https://server.example/api/v1`，Rust 校验后注入页面并将该 Origin 加入 CSP，缺省为 http://localhost:3000/api/v1。
+
+## 开发测试
+
+```bash
+pnpm --filter desktop-app typecheck
+pnpm --filter desktop-app lint
+pnpm --filter desktop-app test
+pnpm --filter desktop-app build
+```
+
+## 许可证
+
+Apache-2.0

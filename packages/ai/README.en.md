@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/api-contract](../api-contract/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/datapipe](../datapipe/README.en.md) · [@h-ai/reldb](../reldb/README.en.md) · [@h-ai/vecdb](../vecdb/README.en.md)
 
+## Introduction
+
 AI capabilities through a unified `ai` service: LLM chat, image generation, tools, MCP, embeddings, memory, retrieval/RAG, knowledge bases, context management, file parsing, reranking, audio (ASR/TTS), and A2A. Initialize with `ai.init()` on Node.js; browsers access it through APIs/clients.
 
-## Capabilities
+## Core features
 
 - `ai.tools`: tool definitions, registries, and batch execution; no initialization required.
 - `ai.stream`: ChatCompletion stream chunk processing; no initialization required.
@@ -27,9 +29,11 @@ AI capabilities through a unified `ai` service: LLM chat, image generation, tool
 
 For the full method list, error codes, and longer examples, see [REFERENCE.md (Chinese)](./REFERENCE.md).
 
-## Quick start
+## Getting started
 
-### LLM-only (no database dependencies)
+### Quick start
+
+#### LLM-only (no database dependencies)
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -52,7 +56,7 @@ await ai.close()
 
 Without initialized reldb/vecdb, AI stores session/runtime state in a temporary in-process store. Data does not survive `ai.close()`, process exit, or instance switching. Use the DB provider below for persistent Memory, Context, Persona, or sessions across restarts.
 
-### Persistent DB provider (reldb + vecdb)
+#### Persistent DB provider (reldb + vecdb)
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -84,7 +88,7 @@ await vecdb.close()
 await reldb.close()
 ```
 
-### Custom StoreProvider
+#### Custom StoreProvider
 
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
@@ -100,7 +104,7 @@ await ai.init(
 await ai.close()
 ```
 
-## API contracts
+### API contracts
 
 - Public access uses the `ai` service and a few standalone factories such as `createMcpServer`.
 - Lifecycle: `await ai.init(config, options?)` / `await ai.close()`; closure waits for custom `AIStoreProvider.close()`.
@@ -108,9 +112,9 @@ await ai.close()
 - `ai.tools` and `ai.stream` are pure-function subsystems usable without initialization.
 - Without reldb/vecdb, storage is temporary and in-process; with both initialized, DB storage is automatic. Custom providers can encapsulate other backends.
 
-## API overview
+### API overview
 
-### LLM
+#### LLM
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -140,7 +144,7 @@ const temp = await ai.llm.chat({
 })
 ```
 
-### Tool calls
+#### Tool calls
 
 ```ts
 import { z } from 'zod'
@@ -172,13 +176,13 @@ const batch = await registry.executeAll(toolCalls)
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
 
-### A2A protocol boundaries
+#### A2A protocol boundaries
 
 `ai.a2a.getAgentCard()` returns a complete A2A 0.3 Agent Card with `protocolVersion`, MIME, and streaming capabilities. Kit discovery defaults to `/.well-known/agent-card.json`. `handleRequest()` always returns JSON-RPC/SSE results; uninitialized calls return JSON-RPC errors. Trusted HTTP `agentId` maps to executor `context.user.userName`. JSON-RPC/SSE are supported; push notifications, gRPC, and REST are not claimed. Applications remain responsible for business resource authorization.
 
 A2A task/message tables initialize during `ai.init()`. Tasks are read in trusted `agentId` scopes, including get/cancel/continuation. Anonymous requests share one scope, so deployments requiring isolation must enable authentication. `listMessages` is a server administration API with `callerId`, `contextId`, and `since` filters; never expose it to unauthorized clients. Legacy tasks lack reliable subjects; upgrades neither infer ownership nor delete data. After review, applications must migrate `object_id` to `user:<agentId>` (`anonymous` for anonymous records). Legacy messages lacking subject/context fields do not match corresponding filters.
 
-### MCP Server
+#### MCP Server
 
 `ai.mcp` is an in-process registry; standalone `createMcpServer` uses SDK transports, with no automatic registration between them. `ai.mcp` compiles tool JSON schemas at registration and validates call inputs. Resources must contain exactly one of `text` / `blob`. Prompt arguments and SDK message outputs are validated, with image/audio support. HTTP examples show transport connection only; applications must mount request handling/authentication and close the server on exit.
 
@@ -193,10 +197,10 @@ server.registerTool('search', {
 }, async ({ query }) => ({
   content: [{ type: 'text', text: `Results for ${query}` }],
 }))
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: crypto.randomUUID }))
+await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () => globalThis.crypto.randomUUID() }))
 ```
 
-### Memory / RAG / Knowledge
+#### Memory / RAG / Knowledge
 
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
@@ -221,7 +225,7 @@ if (setup.success) {
 }
 ```
 
-### Audio
+#### Audio
 
 Register audio models in `ai.init()` and map the default transcription/synthesis models first. Credentials fall back to platform environment variables. Enable `inheritLlmApiKey` explicitly only when LLM and audio models are confirmed to share credentials:
 
@@ -330,7 +334,7 @@ Browsers/mobile clients use the unified audio WebSocket exposed by `@h-ai/serv`.
 
 > For self-hosted CPU/GPU model services (faster-whisper / IndexTTS / Qwen3-4B), weight downloads, and offline bundles, see [models/ (Chinese)](./models/README.md). Images and weights prefer ModelScope, with automatic HuggingFace mirror fallback.
 
-### Image generation
+#### Image generation
 
 After model registration in `ai.init()`, callers receive normalized image bytes without vendor-specific Base64, inline data, or temporary URLs:
 
@@ -360,7 +364,7 @@ if (result.success) {
 
 `referenceImages` is optional. Public APIs accept only image bytes and MIME; providers convert multipart, `inlineData`, and Data URLs. Set credentials on model entries or with `HAI_AI_IMAGE_<PROVIDER>_APIKEY` / vendor environment variables. Qwen and Seedream temporary URLs are downloaded immediately inside providers and never exposed publicly. See [REFERENCE.md (Chinese)](./REFERENCE.md#image) for model details and API differences.
 
-### Context manager
+#### Context manager
 
 ```ts
 const manager = ai.context.createManager({
@@ -379,7 +383,7 @@ if (manager.success) {
 
 A manager permits **one active generation** by default, preventing out-of-order messages when the next user message is written before the previous AI run exits. `reset()` is asynchronous: it stops active generation, releases concurrency barriers, clears turns, and rewrites Persona/System Prompt by default.
 
-#### Actual conversation state (Conversation Commit Layer)
+##### Actual conversation state (Conversation Commit Layer)
 
 By default (`turnCommit: 'auto'`), `chat` / `chatStream` store the **full generated text** in context. In a generation → TTS → playback flow, however, speech can be interrupted halfway. The next turn's shared conversation state should contain **what was actually played**, rather than everything the model intended to say.
 
@@ -416,7 +420,7 @@ const turns = m.getTurns()
 - Only `committed` content enters context and memory extraction. Uncommitted/discarded text does not affect future turns.
 - If `interruptTurn` interrupts before stream completion (for example a host interrupts just as the model finishes), `chatStream` **does not emit `done`**, preventing accidental post-completion commits.
 
-#### Session consolidation (Memory lifecycle)
+##### Session consolidation (Memory lifecycle)
 
 During a session, each turn extracts **short-term session memory** with `scope: { sessionId }`. At session end, `consolidate()`
 turns short-term memory + summaries into **cross-session long-term memory**, completing `Session Memory → Summary → Long-term Memory`:
@@ -430,7 +434,7 @@ if (result.success) {
 }
 ```
 
-### Persona (AI character profiles)
+#### Persona (AI character profiles)
 
 Memory uses `objectId` / `scope` to identify whose memories they are; Persona defines who the AI is through
 stable system prompts and character traits, linked to long-term memory through `scope: { personaId }`:
@@ -525,14 +529,14 @@ const memories = await ai.memory.recall('经济发展', {
 
 `ai.config` returns a redacted snapshot without exposing original `apiKey`, `privateKey`, embedded URL credentials, or other secrets.
 
-## Security boundaries
+### Security boundaries
 
 - Treat prompts, retrieved documents, and model outputs as untrusted. Do not insert user content into non-overridable system rules.
 - Zod validates tool argument shapes, not caller permissions. High-privilege handlers must verify identity, tenant, ownership, and quota, and expose only tools allowed to execute automatically.
 - `callRemoteAgent()` is an independent client requiring only `ai.init()`, without Agent Card or local executors. It rejects non-HTTP(S) and embedded URL credentials; applications must still allowlist origins and enforce egress protection against DNS rebinding, private-network redirects, and cloud metadata access.
 - Do not log full prompts, tool arguments, A2A headers, temporary model credentials, or remote URLs with queries. Audits should retain redacted summaries only.
 
-## Error handling
+### Error handling
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -560,7 +564,7 @@ Common error ranges:
 - `hai:ai:900-905`：Memory。
 - `hai:ai:980-984`：A2A。
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/ai typecheck

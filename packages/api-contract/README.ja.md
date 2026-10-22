@@ -4,9 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
-> hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を唯一の定義元として使用します。
+## 概要
 
-## 機能概要
+hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を唯一の定義元として使用します。
+
+## 主な機能
 
 - `apiContract.iam`、`apiContract.storage`、`apiContract.ai`、`apiContract.payment`：ドメイン単位の contract。
 - `apiContract.create()`：アプリケーションに必要なドメインの contract を組み合わせる。
@@ -17,7 +19,9 @@
 - IAM Token DTO は httpOnly cookie に対応。レスポンス本文に `refreshToken` が含まれない場合は、サーバーが `Set-Cookie` で管理します。
 - IAM の `auth.currentUser` はユーザー情報と現在のサーバーセッションの `roles` / `permissions` を返します。セッション復元のためにクライアントが権限のスナップショットを永続化する必要はありません。
 
-## クイックスタート
+## 使い始める
+
+### クイックスタート
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -42,7 +46,7 @@ export const appContract = {
 }
 ```
 
-## API 契約
+### API 契約
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -79,7 +83,7 @@ const app = serv.createApp({
 })
 ```
 
-## API 一覧
+### API 一覧
 
 - `apiContract.create(options)`：`false` / `undefined` のドメインを除外し、アプリケーション contract を構成。
 - `apiContract.route(routeConfig)`：独自 endpoint の method/path/operationId/tags などのルートメタデータを定義。
@@ -89,11 +93,11 @@ const app = serv.createApp({
 
 業務 path は対応する `*-contract.ts` に直接記述します。一度しか使わない出力 Schema は `.output(...)` にインラインで定義します。同じ contract ファイル内で再利用する場合は非公開の定数にできますが、schemas からエクスポートしてはいけません。
 
-## 設定
+### 設定
 
 このパッケージには実行時設定がなく、環境変数も読み込みません。
 
-## 設定による認証画面
+### 設定による認証画面
 
 規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
 
@@ -101,17 +105,17 @@ IAM に公開設定、LDAP、復旧要求と確定の標準 route を追加し�
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
 
-## エラー処理
+### エラー処理
 
 Contract は入出力構造のみを定義します。業務エラーは procedure が返す `HaiResult<T>` で表し、クライアント側で業務例外を捕捉する必要はありません。
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/api-contract test
 pnpm --filter @h-ai/api-contract typecheck
 ```
 
-## License
+## ライセンス
 
 Apache-2.0

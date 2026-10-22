@@ -4,22 +4,27 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
+## 简介
+
 向量数据库模块，通过统一的 `vecdb` 对象访问 LanceDB、pgvector、Qdrant、Chroma。
 
-## 支持的向量数据库
+## 核心功能清单
 
-- LanceDB（嵌入式，本地文件存储，零配置）
-- pgvector（PostgreSQL + pgvector 扩展）
-- Qdrant（高性能向量搜索引擎；服务端需 1.10.0+，使用 Query API）
-- Chroma（支持嵌入式自动拉起本地服务，或直连已有服务）
+- 创建和管理固定向量维度的集合。
+- 写入文档向量，按相似度检索并过滤元数据。
+- 支持 LanceDB、pgvector、Qdrant 与 Chroma；后端准备方式见下方配置。
 
-## 快速开始
+## 使用入门
+
+### 快速开始
 
 ```ts
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
 // 初始化（LanceDB）
-await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 
 // 创建集合
 await vecdb.collection.create('docs', { dimension: 1536 })
@@ -44,7 +49,7 @@ if (!closeResult.success) {
 }
 ```
 
-## 配置
+### 配置
 
 ```ts
 // LanceDB（默认，嵌入式本地存储）
@@ -79,7 +84,7 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 > 通过 `serverCommand`（默认 `chroma`，来自 `chromadb` 包）拉起本地服务，`vecdb.close`
 > 时关闭进程。需安装可选依赖 `chromadb`；服务命令不可用时 `init` 返回 `CONNECTION_FAILED`。
 
-### 操作日志
+#### 操作日志
 
 可在向量数据库配置中通过 `operationLog` 开启操作日志。日志在集合/向量操作进入真实 Provider 前输出，不在 `vecdb-main.ts` 中做统一包装。
 
@@ -111,7 +116,7 @@ await vecdb.init({
 
 > 行为说明：空批量 `insert/upsert/delete` 会被视为 no-op；写入与搜索会校验向量维度，不匹配时返回 `HaiVecdbError.DIMENSION_MISMATCH`；缺少可选驱动时返回 `HaiVecdbError.DRIVER_NOT_FOUND`。
 
-## 错误处理
+### 错误处理
 
 所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
 
@@ -132,7 +137,7 @@ if (!result.success) {
 }
 ```
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/vecdb test
@@ -140,6 +145,6 @@ pnpm --filter @h-ai/vecdb test
 
 > pgvector / Qdrant 测试需要 Docker。
 
-## License
+## 许可证
 
 Apache-2.0

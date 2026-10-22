@@ -4,7 +4,9 @@
 
 [フレームワークのホーム](../../README.ja.md)
 
-> hai Agent Framework の中核モジュール。共通ツール、型定義、設定管理、ログ機能を提供します。
+## 概要
+
+hai Agent Framework の中核モジュール。共通ツール、型定義、設定管理、ログ機能を提供します。
 
 ## 主な機能
 
@@ -18,9 +20,11 @@
 - **モジュールツール**：NotInitializedKit のプロキシと共通のライフサイクル基盤。
 - **ツール関数**：型確認、オブジェクト・文字列・配列・非同期・時刻の操作。
 
-## クイックスタート
+## 使い始める
 
-### Node.js 環境
+### クイックスタート
+
+#### Node.js 環境
 
 ```typescript
 import { core } from '@h-ai/core'
@@ -72,7 +76,7 @@ core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
 core.typeUtils.isDefined(value)
 ```
 
-### ブラウザー環境
+#### ブラウザー環境
 
 ```typescript
 import { core } from '@h-ai/core'
@@ -95,13 +99,13 @@ core.array.unique([1, 1, 2])
 - `watch()` は同じエラーで直ちにコールバックを呼び、安全な no-op の監視解除関数を返します。
 - 設定が必要な場合はサーバーで読み込み API で渡すか、ブラウザーでは `core.init({ logging })` でログのみ設定してください。
 
-## API の詳細
+### API の詳細
 
-### ログ（Logger）
+#### ログ（Logger）
 
 `core.logger` は既定の Logger インスタンスであり、ログ管理の共通入口でもあります。
 
-#### ログの記録
+##### ログの記録
 
 6 つのレベル：`trace` / `debug` / `info` / `warn` / `error` / `fatal`。
 
@@ -111,7 +115,7 @@ core.logger.error('Failed to connect', { error })
 core.logger.debug('Processing item', { id, step: 'validation' })
 ```
 
-#### モジュール用 logger の作成
+##### モジュール用 logger の作成
 
 ```typescript
 // 独立名称空间，适合模块内全局使用
@@ -119,7 +123,7 @@ const logger = core.logger.create({ name: 'payment' })
 logger.info('Payment processed')
 ```
 
-#### 子 logger（child）
+##### 子 logger（child）
 
 ```typescript
 // 携带固定上下文，每条日志自动附带这些字段
@@ -135,7 +139,7 @@ opLogger.error('Login failed', { reason: 'invalid_password' })
 
 > **典型的な使い方**：リクエスト入口で `reqLogger` を作成してサービス層に渡し、サービス層で `child` に操作コンテキストを追加します。ログに処理全体のコンテキストが自動的に含まれます。
 
-#### ログの管理
+##### ログの管理
 
 ```typescript
 // 配置输出格式和级别（Node.js / Browser）
@@ -156,7 +160,7 @@ const level = core.logger.getLevel() // 'debug'
 
 `core.logger` は既定でログの機密情報をマスクします。`password`、`token`、`secret`、`privateKey`、`apiV3Key` などは `[REDACTED]` に置換されます。`url` / `baseUrl` / `endpoint` は URL 内のユーザー名・パスワードのみをマスクします。メールアドレス・電話番号は既定では隠しません。
 
-#### ログレベルの規約
+##### ログレベルの規約
 
 | レベル  | 用途                                     |
 | ------- | ---------------------------------------- |
@@ -167,7 +171,7 @@ const level = core.logger.getLevel() // 'debug'
 | `error` | 調査が必要な操作の失敗                   |
 | `fatal` | サービス継続不能の致命的エラー           |
 
-### 国際化（i18n）
+#### 国際化（i18n）
 
 ```typescript
 // 设置全局语言（所有 getMessage 函数自动响应）
@@ -191,7 +195,7 @@ core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 
 core.i18n.DEFAULT_LOCALE // 'zh-CN'
 ```
 
-### 機密情報のマスク
+#### 機密情報のマスク
 
 `core.sanitize.sanitizeSensitiveFields()` はオブジェクト・配列内の機密情報を再帰的にマスクします。既定では password、token、secret、privateKey、apiV3Key などを処理し、`url` / `baseUrl` / `endpoint` の認証情報もマスクします。独自の matcher も指定できます。
 
@@ -211,7 +215,7 @@ core.sanitize.sanitizeSensitiveFields({ email: 'user@example.com' }, {
 // => { email: '***' }
 ```
 
-### Zod 検証エラーの i18n 変換
+#### Zod 検証エラーの i18n 変換
 
 `core.zodValidation` は Zod の `SafeParseError` / `ZodError` をフラットなフォームエラーに変換し、
 Zod の既定の英語メッセージを呼び出し元の i18n 文言に変換します。
@@ -272,7 +276,7 @@ if (!result.success) {
 }
 ```
 
-### 設定管理（Node.js 専用）
+#### 設定管理（Node.js 専用）
 
 > ブラウザーにはファイルシステムがないため、`core.config` は代替 API の形状のみを提供します。ファイル関連メソッドは `SERVICE_UNAVAILABLE` を返し、YAML を読み込みません。
 
@@ -327,7 +331,7 @@ core.config.clear('app') // 清除单个
 core.config.clear() // 清除全部
 ```
 
-#### dotenv ファイルと環境切り替え
+##### dotenv ファイルと環境切り替え
 
 Node 専用の `core.config.loadEnvFiles({ mode, envDir })` は HaiResult を返し、`.env` → `.env.<mode>` → `.env.local` の順で読み込みます。既存のプロセス変数が最優先です。development/production は dev/prod に対応し、存在しないファイルは省略します。プロセスは変更しないため、success を確認してから代入します。公開設定と `.env.example` は Git 登録し、私有の `.env.local` は除外します。core.init は dotenv を読み込まず、ブラウザーでは SERVICE_UNAVAILABLE を返します。
 
@@ -339,7 +343,7 @@ Object.assign(process.env, env.data)
 core.init({ configDir: './config' })
 ```
 
-#### 環境変数のマッピングと展開
+##### 環境変数のマッピングと展開
 
 `core.config.load(name, ...)` は YAML の各末端設定を
 `HAI_<CONFIG_NAME>_<YAML_PATH>` の環境変数に自動対応付けします。設定名・各 key は大文字化し、階層は `_` で区切り、
@@ -382,7 +386,7 @@ database: ${DB_CONNECTION} # → 环境变量缺失时报错
 url: http://${HOST}:${PORT} # → string（混合文本）
 ```
 
-### ID 生成
+#### ID 生成
 
 ```typescript
 const id = core.id.generate() // nanoid 21 字符
@@ -398,7 +402,7 @@ core.id.isValidUUID('f47ac10b-...') // true/false
 core.id.isValidNanoId('abc123', 6) // true/false
 ```
 
-### ツール関数
+#### ツール関数
 
 ```typescript
 // 类型检查
@@ -470,7 +474,7 @@ core.time.startOfDay(date)
 core.time.endOfDay(date)
 ```
 
-### モジュール共通ツール（module）
+#### モジュール共通ツール（module）
 
 モジュール共通の初期化エラー処理：
 
@@ -488,9 +492,9 @@ const currentDdl: DdlOperations = notInitialized.proxy<DdlOperations>()
 const currentHash: HashOperations = notInitialized.proxy<HashOperations>('sync')
 ```
 
-## エラー処理
+### エラー処理
 
-### HaiResult 型
+#### HaiResult 型
 
 失敗する可能性がある操作は `HaiResult<T>` を返します：
 
@@ -513,7 +517,7 @@ else {
 }
 ```
 
-### 独自のエラーコード（モジュール単位）
+#### 独自のエラーコード（モジュール単位）
 
 ```typescript
 import type { ErrorInfo } from '@h-ai/core'
@@ -539,7 +543,7 @@ const errorInst = core.error.buildHaiErrorInst(
 )
 ```
 
-### 設定エラーコード
+#### 設定エラーコード
 
 ```typescript
 import { HaiConfigError } from '@h-ai/core'
@@ -551,12 +555,12 @@ HaiConfigError.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
 HaiConfigError.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
 ```
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/core test
 ```
 
-## License
+## ライセンス
 
 Apache-2.0

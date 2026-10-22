@@ -4,16 +4,20 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
+## 简介
+
 对象存储模块，提供统一 `storage` 访问入口，支持 S3 兼容存储与本地文件系统。
 
-## 支持的后端
+## 核心功能清单
 
 - S3 协议（AWS S3 / MinIO / RustFS / OSS 等）
 - 本地文件系统
 
-## 快速开始
+## 使用入门
 
-### Node.js 服务端
+### 快速开始
+
+#### Node.js 服务端
 
 ```ts
 import { storage } from '@h-ai/storage'
@@ -44,7 +48,7 @@ if (!closeResult.success) {
 }
 ```
 
-### 浏览器客户端
+#### 浏览器客户端
 
 浏览器环境下仅导出客户端能力（签名 URL 上传/下载），不包含 `storage` 服务对象。
 
@@ -58,7 +62,7 @@ await uploadWithPresignedUrl(uploadUrl, file)
 
 > 注意：`@h-ai/storage` 不内置 HTTP 路由；请在应用层自行实现签名 URL API。
 
-## HTTP API 契约
+### HTTP API 契约
 
 公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv` 的 `createStorageProcedures({ storage })` 绑定到本模块能力。
 
@@ -68,7 +72,7 @@ import { apiClient } from '@h-ai/api-client'
 const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
 
-## API 概览
+### API 概览
 
 - `storage.file`
   - `put/get/getStream/head/exists/delete/deleteMany/copy`
@@ -91,7 +95,7 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 
 > 注意：`storage.config` 返回的是**脱敏配置快照**；S3 密钥类字段会被替换为 `[REDACTED]`，不能用于重新初始化。
 
-## 客户端辅助函数
+### 客户端辅助函数
 
 `@h-ai/storage/client` 还提供以下浏览器侧工具：
 
@@ -102,7 +106,7 @@ const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar
 - `getMimeType(extension)`
 - `formatFileSize(bytes)`
 
-## 配置
+### 配置
 
 - **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `endpoint / forcePathStyle / prefix / publicUrl`
 - **Local**：`root` 必填，可选 `directoryMode / fileMode`
@@ -124,7 +128,7 @@ if (!initResult.success) {
 }
 ```
 
-### 操作日志
+#### 操作日志
 
 可在存储配置中通过 `operationLog` 开启文件、目录和预签名 URL 操作日志。日志在 Local/S3 Provider 的真实操作处输出，不在 `storage-main.ts` 中做统一包装；文件内容不会写入日志，上传数据只记录字节长度。
 
@@ -156,7 +160,7 @@ await storage.init({
 
 本地存储的 `storage.dir.list()` 会递归扫描匹配前缀下的文件，仅支持 `maxKeys` 截断，不支持 `continuationToken` 真分页；大目录场景建议优先使用更窄的 `prefix`，或改用 S3 Provider 获取原生分页能力。
 
-## 错误处理
+### 错误处理
 
 ```ts
 import { HaiStorageError, storage } from '@h-ai/storage'
@@ -179,7 +183,7 @@ if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.cod
 | `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | 预签名 URL 生成失败 |
 | `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | 配置错误            |
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/storage test
@@ -192,6 +196,6 @@ S3 集成测试需要可用的 Docker 或兼容运行时；同一套初始化、
 
 容器使用临时生成的测试凭据，等待服务就绪后通过 S3 API 建桶；最后一个租约释放时移除容器及匿名卷。
 
-## License
+## 许可证
 
 Apache-2.0

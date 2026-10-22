@@ -1,8 +1,18 @@
 # {{fullstack.servPackageName}}
 
+## 简介
+
 后端 API Service，基于 `@h-ai/serv` 将共享 contract 装配为最小 HTTP App 抽象，不在应用代码中直接暴露 Hono。
 
-## 默认功能与配置
+## 核心功能清单
+
+- HTTP 服务、健康检查和共享 contract 的 procedure 实现。
+- 用户、角色、审计与个人设置的示例业务。
+- 模块配置、加密传输与服务端权限校验。
+
+## 使用入门
+
+### 默认功能与配置
 
 以下是可运行示例的初始实现，角色/权限、管理流程、头像限额、分页、审计策略及部署方案均可按用户需求调整。需求与代码或模板规则不一致时，以需求为业务基线同步实现、测试与过期说明；实际框架 API 契约和服务端安全校验仍需满足。
 
@@ -24,7 +34,7 @@ CLI 已生成根目录 `.env.local`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项�
 
 业务修改提交后的审计记录采用最大努力策略：写入失败输出包含操作及资源的结构化错误日志，业务仍返回原操作结果，避免将已经完成的变更误报为失败；应用启动时 audit 初始化失败则停止启动。
 
-## 开发
+### 开发
 
 所有配置字段以模块 Schema 为准；未使用字段和替代 Provider 用注释保留。叶子环境变量只覆盖已有 YAML 路径，先取消相应键的注释，或用 `HAI_DB` / `HAI_CACHE` 等整体对象覆盖；`connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。凭据示例在根 `.env.example`，实际密钥保存在忽略的 `.env.local` 或部署环境。`.gitignore` 的 `**/data/` 忽略所有运行数据及 `.gitkeep`；运行时会创建目录。`crypto.init()` 无配置参数，datapipe 为纯函数，不提供虚构配置。
 
@@ -33,20 +43,31 @@ CLI 已生成根目录 `.env.local`，`HAI_ADMIN_DEFAULT_PASSWORD` 为每个项�
 - `pnpm --filter {{fullstack.servPackageName}} dev`
 - `pnpm --filter {{fullstack.servPackageName}} test`
 
-## 容器运行
+### 容器运行
 
-从工程根运行 `pnpm build --target docker` 构建并导出镜像。启用 deploy 功能后，运行根命令 `pnpm deploy --env test`；含 Web 镜像时一并发布 API/Web，部署不重新构建。网络不通时用 `pnpm deploy --env prod --bundle-only`，按说明手工搬运 tar。
+从工程根运行 `pnpm build --target docker` 导出镜像。默认带部署工具，可运行 `pnpm run deploy --env test --build` 一次完成构建发布，或 `pnpm run deploy --env prod --bundle-only` 交付已有镜像及跨平台脚本。完整包包含自建中间件，人工部署与按服务更新见工程根 README。
 
 - 服务镜像直接由 `@h-ai/serv` 对外监听，配置挂载点为 `/app/config`，数据目录为 `/app/data`，不包含额外转发进程。
 - Web 镜像不烘焙 API 地址；启动时使用 `-e PUBLIC_API_BASE=https://api.example.com` 注入，同一镜像可部署到不同环境。未设置时 Web 默认请求自身 origin。
 - YAML 配置使用 `${ENV_NAME:default}` 接收运行时环境变量；不要把密钥写入镜像。
 
-## IAM 认证配置
+### IAM 认证配置
 
-服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。所有节点共享同一 DB 与 Redis；Memory 仅用于单进程。
+服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。单实例可使用 Memory；多实例需共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。
 
 LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
 完整契约见生成应用的 `.agents/skills/hai-iam/reference.md`。
+
+## 开发测试
+
+```sh
+pnpm --filter {{fullstack.servPackageName}} typecheck
+pnpm --filter {{fullstack.servPackageName}} test
+```
+
+## 许可证
+
+Apache-2.0

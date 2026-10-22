@@ -14,8 +14,8 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.7%2B-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%E2%89%A522.12-339933.svg">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -34,19 +34,29 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 - **数据能力** —— 关系数据库、缓存、对象存储、数据管线
 - **运营能力** —— 支付、用户触达、定时任务、自动化部署
 
+## 从这里开始
+
+| 你想做什么             | 建议入口                                       |
+| ---------------------- | ---------------------------------------------- |
+| 创建完整应用           | [创建、开发和交付指南](docs/usage/README.md)   |
+| 在现有工程使用某个能力 | [模块清单](#功能清单)，再读对应包的使用入门    |
+| 让 AI 按需求实现功能   | [AI 使用索引](LLMS.txt)和生成工程的 AGENTS.md  |
+| 构建镜像或离线部署     | [构建与部署](packages/deploy/README.md)        |
+| 参与框架开发           | [开发与测试](#二次开发)和[工作规范](AGENTS.md) |
+
 ## 核心特色
 
-| 特色                  | 说明                                                                       |
-| --------------------- | -------------------------------------------------------------------------- |
-| **AI-First 设计**     | 每一处 API 设计都优先保证 AI 编程助手能够正确使用；AI 用得对，人也用得顺。 |
-| **统一生命周期**      | 有状态模块遵循 `init() → use → close()`，一种模式贯穿全部模块。            |
-| **显式失败语义**      | 领域操作统一返回 `HaiResult<T>`，成功与失败在类型层面强制区分。            |
-| **配置即校验**        | Zod Schema 在 `init()` 阶段完成校验，配置错误在启动时暴露，而非运行时。    |
-| **按需组合**          | 21 个独立发布的模块，最小依赖 `@h-ai/core`，按业务场景逐步引入。           |
-| **端到端类型安全**    | 严格模式 TypeScript，`api-contract → serv → api-client` 全链路类型推断。   |
-| **多端 UI**           | 92 个 Svelte 5 Runes 组件（原子 / 组合 / 场景），覆盖桌面与移动端。        |
-| **脚手架与部署**      | `hai create` 创建完整项目，`hai deploy` 部署到 Vercel 或自建主机。         |
-| **Agent Skills 内置** | 每个模块随附标准化 Skill 文件，AI 助手可直接获取正确用法。                 |
+| 特色                  | 说明                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| **AI-First 设计**     | 每一处 API 设计都优先保证 AI 编程助手能够正确使用；AI 用得对，人也用得顺。                |
+| **统一生命周期**      | 有状态模块遵循 `init() → use → close()`，有状态模块共享使用习惯；工厂和纯函数按各自契约。 |
+| **显式失败语义**      | 领域操作统一返回 `HaiResult<T>`，成功与失败在类型层面强制区分。                           |
+| **配置即校验**        | Zod Schema 在 `init()` 阶段完成校验，配置错误在启动时暴露，而非运行时。                   |
+| **按需组合**          | 21 个独立发布的模块，最小依赖 `@h-ai/core`，按业务场景逐步引入。                          |
+| **端到端类型安全**    | 严格模式 TypeScript，`api-contract → serv → api-client` 全链路类型推断。                  |
+| **多端 UI**           | Svelte 5 Runes 组件（原子 / 组合 / 场景），覆盖桌面与移动端。                             |
+| **脚手架与部署**      | `hai create` 创建完整项目，`hai deploy` 部署到 Vercel 或自建主机。                        |
+| **Agent Skills 内置** | 每个模块随附标准化 Skill 文件，AI 助手可直接获取正确用法。                                |
 
 ## 设计理念
 
@@ -103,7 +113,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 pnpm add -g @h-ai/cli
 
 # 创建带部署能力的 Web + API；省略选项可交互选择
-hai create my-app --type fullstack --frontends web --features deploy --yes
+hai create my-app --type fullstack --frontends web --yes
 
 # 默认已安装依赖，进入工程启动
 cd my-app
@@ -131,9 +141,12 @@ hai g:component UserCard
 pnpm build --target docker
 # 配置 .env.prod 与部署目标后，发布已有 API/Web 镜像
 pnpm run deploy --env prod
+pnpm run deploy --env prod --build --services web
 # 两机不通时只生成包，按包内 README 手工搬运启动
-pnpm run deploy --env prod --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 ```
+
+部署工具默认作为开发依赖安装，不需要时在创建命令中加 `--no-deploy`。每个镜像在 `images/` 下使用独立 Dockerfile，`hai.build.json` 指定对应文件。完整离线包包含自建中间件镜像，并附 Windows/Linux/macOS 上传部署脚本；隔离服务器可直接执行包内 apply.sh。局部发布以服务器成功版本为基线，保留其他服务和数据卷，不执行全项目 down。同版本允许重新构建，构建 ID 和校验和区分内容。依赖缓存、人工操作与失败恢复见[使用指南](docs/usage/README.md)。
 
 ### 在现有项目中集成
 
@@ -197,7 +210,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 | 包名           | 职责                                                                                                       |                           Provider 支持                            |                                             npm 最新版                                              |
 | -------------- | ---------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | UI 组件库：92 个 Svelte 5 Runes 组件（20 原子 + 36 组合 + 36 场景），15 精选主题                           |                                 —                                  |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
+| `@h-ai/ui`     | UI 组件库：Svelte 5 Runes 组件（20 原子 + 36 组合 + 36 场景），15 精选主题                                 |                                 —                                  |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
 | `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                                                         |                                 —                                  |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
 | `@h-ai/deploy` | 自动化部署：Vercel（SaaS，自动开通云资源）与 docker-ssh（容器化经 SSH 部署到自有主机，按功能生成 sidecar） | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / 阿里云短信 | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
 

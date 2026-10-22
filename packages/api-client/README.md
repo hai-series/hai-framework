@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/api-contract](../api-contract/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md)
 
-> hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序等运行时提供统一 API 调用与 Token 管理。
+## 简介
 
-## 能力概览
+hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序等运行时提供统一 API 调用与 Token 管理。
+
+## 核心功能清单
 
 - `apiClient`：默认绑定 iam/storage/ai 领域的统一 typed client 入口。
 - `apiClient.create(contract)`：为自定义 contract 创建 typed client。
@@ -17,7 +19,9 @@
 - 可选传输加密：`apiClient.init({ transport: { crypto } })` 自动使用 `crypto.transport.createClient()`。
 - 传输加密与自动刷新可同时启用：401 后的 `/auth/refresh` 会继续走 encrypted fetch，不降级明文。
 
-## 快速开始
+## 使用入门
+
+### 快速开始
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -47,7 +51,7 @@ if (me.success) {
 await apiClient.close()
 ```
 
-### 启用传输加密
+#### 启用传输加密
 
 服务端需先启用 `serv.createApp({ transport: { crypto } })`；客户端只注入同一个 `@h-ai/crypto` 服务实例，无需手写密钥协商代码。
 
@@ -67,7 +71,7 @@ await apiClient.close()
 await crypto.close()
 ```
 
-## API 契约
+### API 契约
 
 自定义应用可以绑定自己的 oRPC contract：
 
@@ -82,7 +86,7 @@ await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
 ```
 
-## API 概览
+### API 概览
 
 - `apiClient.init(config)`：初始化默认 client。
 - `apiClient.close()`：清理 client 状态。
@@ -92,7 +96,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 已初始化后再次调用 `init()` 会返回 `CONFIG_ERROR`，不会覆盖现有 client；如需切换 `baseUrl` / `fetch` / `transport`，请先 `await apiClient.close()` 再重新初始化。
 
-## 配置
+### 配置
 
 - `baseUrl`：API 基础地址，通常包含 `/api/v1`。
 - `auth.storage`：Token 存储适配器；默认 `apiClient.tokenStorage.httpOnlyCookie()`（浏览器推荐）；SSR / 测试场景请显式传入 `apiClient.tokenStorage.memory()`。
@@ -104,7 +108,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 - `transport.keyExchangePath`：密钥协商子路径，默认 `/_hai/key-exchange`；会自动拼接到 `baseUrl` 后。
 - `apiClient.config`：返回**脱敏后的运行配置快照**；`baseUrl` 的内嵌凭证、`headers.authorization` 等敏感值会自动隐藏。
 
-## 配置驱动认证页面
+### 配置驱动认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
@@ -112,7 +116,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
 
-## 错误处理
+### 错误处理
 
 业务 API 返回 `HaiResult<T>`：
 
@@ -130,13 +134,13 @@ else {
 
 自动刷新在真实 HTTP 401（`Response.status`）或 HTTP 200 的有效失败 HaiResult（`success=false`、`error.code/message` 为字符串且 `error.httpStatus=401`）后触发，刷新成功后只重试一次原请求。内置登录、注册与配置的 `auth.refreshPath` 不触发自动刷新，403/500 等其它失败也不会触发。serv 普通 procedure 的 HTTP 状态仍为 200；调用方须检查最终结果的 `success` 与 `error.code`，并处理刷新失败后的登录失效。
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
 
-## License
+## 许可证
 
 Apache-2.0

@@ -4,9 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/api-contract](../api-contract/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/datapipe](../datapipe/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md) · [@h-ai/vecdb](../vecdb/README.ja.md)
 
+## 概要
+
 共通の `ai` サービスで LLM 対話、画像生成、ツール、MCP、Embedding、記憶、検索/RAG、知識ベース、コンテキスト管理、ファイル解析、Rerank、音声（ASR/TTS）、A2A を提供します。Node.js では `ai.init()` で初期化し、ブラウザーからは API/client を経由します。
 
-## 機能概要
+## 主な機能
 
 - `ai.tools`：ツール定義・登録・一括実行。初期化不要。
 - `ai.stream`：ChatCompletion のストリーミング chunk 処理。初期化不要。
@@ -27,9 +29,11 @@
 
 詳しいメソッド一覧・エラーコード・長い例は [REFERENCE.md（中国語）](./REFERENCE.md) を参照してください。
 
-## クイックスタート
+## 使い始める
 
-### LLM のみ（DB 依存なし）
+### クイックスタート
+
+#### LLM のみ（DB 依存なし）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -52,7 +56,7 @@ await ai.close()
 
 reldb/vecdb が未初期化の場合、AI はセッションなどの状態をプロセス内の一時 Store に保存します。`ai.close()`、プロセス終了、インスタンス切り替え後は保持されません。Memory、Context、Persona、セッションを再起動後も保持する場合は以下の DB Provider を使います。
 
-### 永続 DB Provider（reldb + vecdb）
+#### 永続 DB Provider（reldb + vecdb）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -84,7 +88,7 @@ await vecdb.close()
 await reldb.close()
 ```
 
-### 独自 StoreProvider
+#### 独自 StoreProvider
 
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
@@ -100,7 +104,7 @@ await ai.init(
 await ai.close()
 ```
 
-## API 契約
+### API 契約
 
 - 公開入口は `ai` サービスと `createMcpServer` など少数の独立ファクトリー。
 - ライフサイクルは `await ai.init(config, options?)` / `await ai.close()`。終了時は独自 `AIStoreProvider.close()` を待ちます。
@@ -108,9 +112,9 @@ await ai.close()
 - `ai.tools` と `ai.stream` は純粋関数で、初期化せず使用できます。
 - reldb/vecdb がなければプロセス内の一時 Store、両方が初期化済みなら DB Provider を自動使用します。独自 Provider はほかの保存先を隠蔽できます。
 
-## API 一覧
+### API 一覧
 
-### LLM
+#### LLM
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -140,7 +144,7 @@ const temp = await ai.llm.chat({
 })
 ```
 
-### ツール呼び出し
+#### ツール呼び出し
 
 ```ts
 import { z } from 'zod'
@@ -172,13 +176,13 @@ const batch = await registry.executeAll(toolCalls)
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
 
-### A2A プロトコルの境界
+#### A2A プロトコルの境界
 
 `ai.a2a.getAgentCard()` は `protocolVersion`、MIME、streaming 機能を含む完全な A2A 0.3 Agent Card を返します。Kit の既定検出パスは `/.well-known/agent-card.json`。`handleRequest()` は常に JSON-RPC/SSE の結果を返し、未初期化時は JSON-RPC エラーです。信頼された HTTP の `agentId` を executor の `context.user.userName` に対応付けます。JSON-RPC/SSE に対応し、push notifications・gRPC・REST 対応は宣言しません。業務リソースの認可はアプリの責任です。
 
 A2A のタスク・メッセージテーブルは `ai.init()` で初期化します。取得・キャンセル・継続を含め、タスクは信頼された `agentId` で分離します。匿名は共通 scope なので、分離が必要な環境は認証を有効にしてください。`listMessages` はサーバー管理 API で `callerId`・`contextId`・`since` を使えますが、未認可クライアントへ公開しません。旧タスクの主体は信頼できず、更新時に所有者の推定や自動削除はしません。アプリ側の審査後に `object_id` を `user:<agentId>`（匿名は `anonymous`）へ移行します。主体・context を持たない旧メッセージは対応フィルターに一致しません。
 
-### MCP Server
+#### MCP Server
 
 `ai.mcp` はプロセス内の登録機能、独立 `createMcpServer` は SDK transport を使い、互いの自動登録はしません。`ai.mcp` は登録時にツールの JSON Schema をコンパイルし、呼び出し時に入力を検証します。リソースは `text` / `blob` のいずれか一方だけを持ちます。プロンプト引数・SDK メッセージ出力も検証し、画像・音声に対応します。HTTP 例は transport 接続のみで、アプリがリクエスト処理・認証を接続し、終了時に server を閉じる必要があります。
 
@@ -193,10 +197,10 @@ server.registerTool('search', {
 }, async ({ query }) => ({
   content: [{ type: 'text', text: `Results for ${query}` }],
 }))
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: crypto.randomUUID }))
+await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () => globalThis.crypto.randomUUID() }))
 ```
 
-### Memory / RAG / Knowledge
+#### Memory / RAG / Knowledge
 
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
@@ -221,7 +225,7 @@ if (setup.success) {
 }
 ```
 
-### 音声（Audio）
+#### 音声（Audio）
 
 先に `ai.init()` で音声モデルを登録し、既定の認識・合成モデルを対応付けます。認証情報はプラットフォームの環境変数へフォールバックします。LLM と音声が同じ認証情報を使うと確認できた場合にのみ、`inheritLlmApiKey` を明示的に有効化してください：
 
@@ -330,7 +334,7 @@ return playable.data
 
 > 自前の CPU/GPU モデルサービス（faster-whisper / IndexTTS / Qwen3-4B）、重み取得、オフライン化は [models/（中国語）](./models/README.md) を参照してください。イメージ・重みは ModelScope を優先し、HuggingFace ミラーへ自動フォールバックします。
 
-### 画像生成（Image）
+#### 画像生成（Image）
 
 `ai.init()` で登録後、呼び出し元は標準化された画像バイト列のみを受け取り、サービス固有の Base64・インラインデータ・一時 URL を意識しません：
 
@@ -360,7 +364,7 @@ if (result.success) {
 
 `referenceImages` は省略可能です。公開層は画像バイト列と MIME のみを受け付け、multipart・`inlineData`・Data URL は Provider が変換します。認証情報はモデル項目、`HAI_AI_IMAGE_<PROVIDER>_APIKEY`、サービス環境変数で指定できます。Qwen・Seedream の一時 URL は Provider 内ですぐダウンロードし、公開戻り値に出しません。詳細は [REFERENCE.md（中国語）](./REFERENCE.md#image) を参照してください。
 
-### Context 管理
+#### Context 管理
 
 ```ts
 const manager = ai.context.createManager({
@@ -379,7 +383,7 @@ if (manager.success) {
 
 同じ管理器では既定で**同時に 1 つの生成のみ**を許可し、前の AI が終了する前に次の user が書き込まれる順序乱れを防ぎます。`reset()` は非同期で、活動中の生成を停止し、並行処理の障壁を解放、ターンを消去し、既定で Persona/System Prompt を再登録します。
 
-#### 実際の対話状態（Conversation Commit Layer）
+##### 実際の対話状態（Conversation Commit Layer）
 
 既定（`turnCommit: 'auto'`）では `chat` / `chatStream` が**生成した全文**を context に保存します。しかし生成 → TTS → 再生の途中で発話が遮られた場合、次のターンで共有すべき状態は全文ではなく**実際に再生された部分**です。
 
@@ -416,7 +420,7 @@ const turns = m.getTurns()
 - `committed` の内容のみが context・記憶抽出に入り、未保存・破棄された部分は後続ターンへ影響しません。
 - 流れの完了前に `interruptTurn` で遮った場合（司会が割り込む瞬間にモデルが終了する場合など）、`chatStream` は **`done` を返しません**。正常終了と誤認した追加保存を防ぎます。
 
-#### セッションの定着（Memory ライフサイクル）
+##### セッションの定着（Memory ライフサイクル）
 
 セッション中は各ターンで `scope: { sessionId }` の**短期セッション記憶**を抽出し、終了時に `consolidate()` で
 短期記憶 + 要約を**セッションをまたぐ長期記憶**にします。`Session Memory → Summary → Long-term Memory` の流れです：
@@ -430,7 +434,7 @@ if (result.success) {
 }
 ```
 
-### Persona（AI の人格）
+#### Persona（AI の人格）
 
 Memory は `objectId` / `scope` で誰の記憶かを表し、Persona は AI が誰かを定義します。各 AI に
 安定したシステムプロンプト・性格を定義し、`scope: { personaId }` で長期記憶と関連付けます：
@@ -525,14 +529,14 @@ const memories = await ai.memory.recall('经济发展', {
 
 `ai.config` はマスク済み設定を返し、`apiKey`、`privateKey`、URL 内認証情報などをそのまま公開しません。
 
-## セキュリティ上の境界
+### セキュリティ上の境界
 
 - Prompt・検索文書・モデル出力は信頼できない入力として扱い、変更不可のシステム規則へユーザー内容を組み込まないでください。
 - Zod はツール引数の形を検証するだけで権限を保証しません。高権限 handler は主体・テナント・所有者・割当量を確認し、自動実行を許可したツールのみをモデルへ登録してください。
 - `callRemoteAgent()` は `ai.init()` のみで使える独立クライアントで、Agent Card・ローカル executor は不要です。非 HTTP(S)・URL 内認証情報を拒否しますが、アプリは origin 許可リストと出口側での DNS リバインディング・内部網へのリダイレクト・クラウドメタデータ対策を行う必要があります。
 - 完全な Prompt・ツール引数・A2A headers・一時認証情報・query 付き遠隔 URL を記録せず、監査が必要な場合もマスク済みの概要のみ保存してください。
 
-## エラー処理
+### エラー処理
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -560,7 +564,7 @@ if (!result.success) {
 - `hai:ai:900-905`：Memory。
 - `hai:ai:980-984`：A2A。
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/ai typecheck
@@ -569,6 +573,6 @@ pnpm --filter @h-ai/ai test
 pnpm --filter @h-ai/ai build
 ```
 
-## License
+## ライセンス
 
 Apache-2.0

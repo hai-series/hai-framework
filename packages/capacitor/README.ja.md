@@ -4,6 +4,8 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/api-client](../api-client/README.ja.md) · [@h-ai/core](../core/README.ja.md)
 
+## 概要
+
 hai Framework のモバイルアプリ向け Capacitor ネイティブブリッジ。安全な Token ストレージ、端末情報、プッシュ通知、カメラ、ステータスバーを共通 API で提供します。
 
 ## 主な機能
@@ -16,7 +18,9 @@ hai Framework のモバイルアプリ向け Capacitor ネイティブブリッ�
 - **カメラ/アルバム**：`@capacitor/camera`（任意）。撮影とアルバム画像の選択。
 - **ステータスバー**：`@capacitor/status-bar`（任意）。没入型表示、背景色、スタイルの設定。
 
-## クイックスタート
+## 使い始める
+
+### クイックスタート
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -28,7 +32,7 @@ if (!result.success) {
 }
 ```
 
-### api-client と連携する安全な Token ストレージ
+#### api-client と連携する安全な Token ストレージ
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -45,7 +49,7 @@ await apiClient.init({
 
 `createCapacitorTokenStorage()` は Android/iOS のネイティブ環境でのみ Token を永続化し、`@aparajita/capacitor-secure-storage` が必要です。Web では `localStorage` に切り替わらず、`get*()` は `null` を返し、`set*()` / `clear()` は何もしません。
 
-### 端末情報とプッシュ通知
+#### 端末情報とプッシュ通知
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -61,7 +65,7 @@ if (reg.success) {
 }
 ```
 
-### ステータスバー
+#### ステータスバー
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -73,7 +77,7 @@ await capacitor.statusBar.configure({
 })
 ```
 
-### カメラ
+#### カメラ
 
 ```ts
 const photo = await capacitor.camera.takePhoto({
@@ -83,7 +87,7 @@ const photo = await capacitor.camera.takePhoto({
 })
 ```
 
-### Preferences
+#### Preferences
 
 ```ts
 await capacitor.preferences.set('my_key', 'value')
@@ -93,7 +97,7 @@ await capacitor.preferences.remove('my_key')
 
 `capacitor.preferences` は言語、テーマ、下書きなどの一般的な設定用です。認証 Token には `createCapacitorTokenStorage()` を使用してください。
 
-## 設定
+### 設定
 
 このモジュールに設定ファイルはありません。`capacitor.init()` は Capacitor の実行環境が利用可能かどうかのみを確認します。
 
@@ -105,7 +109,7 @@ export const prerender = true
 export const ssr = false
 ```
 
-## エラー処理
+### エラー処理
 
 すべての非同期 API は直接 throw せず、`HaiResult<T>` を返します：
 
@@ -138,7 +142,7 @@ if (!result.success) {
 | `HaiCapacitorError.CAMERA_FAILED`             | `hai:capacitor:040` | カメラ操作に失敗             |
 | `HaiCapacitorError.STATUS_BAR_FAILED`         | `hai:capacitor:050` | ステータスバー操作に失敗     |
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/capacitor test
@@ -146,6 +150,6 @@ pnpm --filter @h-ai/capacitor test
 
 > ネイティブプラグインへの依存があるため、テストでは `@capacitor/*` モジュールを mock する必要があります。
 
-## License
+## ライセンス
 
 Apache-2.0

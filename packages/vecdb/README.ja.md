@@ -4,22 +4,27 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
+## 概要
+
 共通の `vecdb` オブジェクトで LanceDB、pgvector、Qdrant、Chroma を操作するベクトルデータベースモジュールです。
 
-## 対応ベクトルデータベース
+## 主な機能
 
-- LanceDB（組み込み型、ローカルファイル保存、設定不要）
-- pgvector（PostgreSQL + pgvector 拡張）
-- Qdrant（高性能ベクトル検索エンジン。Query API を使用するため、サーバー 1.10.0 以降が必要）
-- Chroma（組み込みモードでローカルサービスを自動起動、または既存サービスへ直接接続）
+- ベクトル次元を指定したコレクションの作成・管理。
+- 文書ベクトルの保存、類似検索、メタデータ条件の絞り込み。
+- LanceDB・pgvector・Qdrant・Chroma に対応。準備方法は下記設定を参照。
 
-## クイックスタート
+## 使い始める
+
+### クイックスタート
 
 ```ts
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
 // 初始化（LanceDB）
-await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 
 // 创建集合
 await vecdb.collection.create('docs', { dimension: 1536 })
@@ -44,7 +49,7 @@ if (!closeResult.success) {
 }
 ```
 
-## 設定
+### 設定
 
 ```ts
 // LanceDB（默认，嵌入式本地存储）
@@ -79,7 +84,7 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 > `serverCommand`（既定は `chromadb` パッケージの `chroma`）でローカルサービスを起動し、`vecdb.close` が
 > そのプロセスを停止します。任意依存の `chromadb` をインストールしてください。コマンドが利用できない場合、`init` は `CONNECTION_FAILED` を返します。
 
-### 操作ログ
+#### 操作ログ
 
 ベクトルデータベース設定の `operationLog` で操作ログを有効にできます。ログはコレクション・ベクトル操作が実際の Provider に渡る前に出力され、`vecdb-main.ts` で一括ラップはしません。
 
@@ -111,7 +116,7 @@ await vecdb.init({
 
 > 動作：空の一括 `insert/upsert/delete` は何もしません。書き込み・検索時にはベクトル次元を検証し、不一致なら `HaiVecdbError.DIMENSION_MISMATCH`、任意ドライバーの不足なら `HaiVecdbError.DRIVER_NOT_FOUND` を返します。
 
-## エラー処理
+### エラー処理
 
 すべての操作は `HaiResult<T>` を返し、`result.success` で成功・失敗を判定します。
 
@@ -132,7 +137,7 @@ if (!result.success) {
 }
 ```
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/vecdb test
@@ -140,6 +145,6 @@ pnpm --filter @h-ai/vecdb test
 
 > pgvector / Qdrant のテストには Docker が必要です。
 
-## License
+## ライセンス
 
 Apache-2.0

@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/api-client](../api-client/README.en.md) · [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 A Capacitor native bridge for hai Framework mobile apps, with a unified API for secure token storage, device information, push notifications, camera, and status bar access.
 
-## Capabilities
+## Core features
 
 - **Token storage**: `@aparajita/capacitor-secure-storage` (required on native platforms). Android uses KeyStore + encrypted SharedPreferences; iOS uses Keychain. No Web fallback.
 - **Preferences**: `@capacitor/preferences` (required). General preferences storage for nonsensitive settings, not authentication tokens.
@@ -16,7 +18,9 @@ A Capacitor native bridge for hai Framework mobile apps, with a unified API for 
 - **Camera/gallery**: `@capacitor/camera` (optional). Capture photos or select gallery images.
 - **Status bar**: `@capacitor/status-bar` (optional). Immersive mode, background color, and style settings.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -28,7 +32,7 @@ if (!result.success) {
 }
 ```
 
-### Secure token storage with api-client
+#### Secure token storage with api-client
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -45,7 +49,7 @@ await apiClient.init({
 
 `createCapacitorTokenStorage()` persists tokens only on native Android/iOS and requires `@aparajita/capacitor-secure-storage`. On Web it does not fall back to `localStorage`: `get*()` returns `null`, and `set*()` / `clear()` are no-ops.
 
-### Device information and push notifications
+#### Device information and push notifications
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -61,7 +65,7 @@ if (reg.success) {
 }
 ```
 
-### Status bar
+#### Status bar
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -73,7 +77,7 @@ await capacitor.statusBar.configure({
 })
 ```
 
-### Camera
+#### Camera
 
 ```ts
 const photo = await capacitor.camera.takePhoto({
@@ -83,7 +87,7 @@ const photo = await capacitor.camera.takePhoto({
 })
 ```
 
-### Preferences
+#### Preferences
 
 ```ts
 await capacitor.preferences.set('my_key', 'value')
@@ -93,7 +97,7 @@ await capacitor.preferences.remove('my_key')
 
 `capacitor.preferences` is for general preferences such as language, theme, and drafts. Use `createCapacitorTokenStorage()` for authentication tokens.
 
-## Configuration
+### Configuration
 
 This module has no configuration file. `capacitor.init()` only checks whether the Capacitor runtime is available.
 
@@ -105,7 +109,7 @@ export const prerender = true
 export const ssr = false
 ```
 
-## Error handling
+### Error handling
 
 All asynchronous APIs return `HaiResult<T>` instead of throwing directly:
 
@@ -138,7 +142,7 @@ Common error codes:
 | `HaiCapacitorError.CAMERA_FAILED`             | `hai:capacitor:040` | Camera operation failed             |
 | `HaiCapacitorError.STATUS_BAR_FAILED`         | `hai:capacitor:050` | Status bar operation failed         |
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/capacitor test

@@ -4,21 +4,27 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
+## 概要
+
 共通の `reldb` オブジェクトで SQLite、PostgreSQL、MySQL を操作するリレーショナルデータベースモジュールです。
 
-## 対応データベース
+## 主な機能
 
-- SQLite
-- PostgreSQL
-- MySQL
+- 共通 API で SQLite・PostgreSQL・MySQL に接続。
+- パラメーター付き SQL、テーブル・索引管理、ページ取得。
+- トランザクション、CRUD、Repository による業務の読み書き。
 
-## クイックスタート
+## 使い始める
+
+### クイックスタート
 
 ```ts
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 // 初始化
-await reldb.init({ type: 'sqlite', database: ':memory:' })
+const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 
 // DDL
 await reldb.ddl.createTable('users', {
@@ -55,7 +61,7 @@ await reldb.close()
 
 `reldb.config` は**機密情報をマスクした設定スナップショット**を返します。DB の `password` と URL 内の認証情報は自動的に非表示になります。状態確認用であり、元の接続情報の再利用には使わないでください。
 
-## 設定
+### 設定
 
 接続文字列（`url`）または個別フィールド（`host/port/database/user/password`）を指定できます。
 
@@ -78,7 +84,7 @@ await reldb.init({
 })
 ```
 
-### SQLite の実行方式（非同期 worker）
+#### SQLite の実行方式（非同期 worker）
 
 better-sqlite3 は同期ドライバーなので、クエリは Node のメインイベントループをブロックします。WAL は DB ロックの並行性を改善しますが、同期呼び出しによるブロックは解消しません。専用 worker スレッドで SQLite を実行して処理を移せます（単一接続、任意設定、既定は `sync`）：
 
@@ -96,7 +102,7 @@ await reldb.init({
 
 worker モードではクエリ、書き込み、トランザクションを worker スレッドで順番に実行します。公開 API と戻り値は同期モードと同じです。
 
-### 操作ログ
+#### 操作ログ
 
 DB 設定の `operationLog` で SQL 操作ログを有効にできます。ログは reldb provider-base の DML 層で出力され、`reldb-main.ts` や各 raw provider で重複してラップしません。
 
@@ -127,11 +133,11 @@ await reldb.init({
 })
 ```
 
-## トランザクション
+### トランザクション
 
 3 種類の使用方法：
 
-### wrap（自動コミット/ロールバック）
+#### wrap（自動コミット/ロールバック）
 
 ```ts
 const result = await reldb.tx.wrap(async (tx) => {
@@ -142,7 +148,7 @@ const result = await reldb.tx.wrap(async (tx) => {
 // 回调正常返回 → 自动提交；抛异常 → 自动回滚
 ```
 
-### begin + commit（手動コミット）
+#### begin + commit（手動コミット）
 
 ```ts
 const txResult = await reldb.tx.begin()
@@ -154,7 +160,7 @@ await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
 await tx.commit()
 ```
 
-### begin + rollback（手動ロールバック）
+#### begin + rollback（手動ロールバック）
 
 ```ts
 const txResult = await reldb.tx.begin()
@@ -166,7 +172,7 @@ await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
 await tx.rollback()
 ```
 
-### トランザクション内での batch / queryPage
+#### トランザクション内での batch / queryPage
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
@@ -182,7 +188,7 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-## Crud
+### Crud
 
 `reldb.crud.table()` で単一テーブルの CRUD リポジトリーを作成できます。SQL の記述は不要です：
 
@@ -197,7 +203,7 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 })
 ```
 
-### create / createMany
+#### create / createMany
 
 ```ts
 // 单条插入
@@ -211,7 +217,7 @@ await userCrud.createMany([
 ])
 ```
 
-### createOrUpdate
+#### createOrUpdate
 
 主キーが存在すれば更新し、存在しなければ作成します（upsert）：
 
@@ -230,7 +236,7 @@ await userCrud.createOrUpdate({ id: 1, name: '张三', email: 'test@example.com'
 
 `BaseReldbCrudRepository` は `dbType` を自動取得するため、手動指定は不要です。
 
-### findById / getById / findAll / findPage
+#### findById / getById / findAll / findPage
 
 ```ts
 // 主键查找（不存在时返回 null）
@@ -260,14 +266,14 @@ const page = await userCrud.findPage({
 // page.data → { items: [...], total: 100, page: 1, pageSize: 20 }
 ```
 
-### updateById / deleteById
+#### updateById / deleteById
 
 ```ts
 await userCrud.updateById(1, { name: '李四' })
 await userCrud.deleteById(1)
 ```
 
-### count / exists / existsById
+#### count / exists / existsById
 
 ```ts
 const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
@@ -280,7 +286,7 @@ const found = await userCrud.existsById(1)
 // found.data → true
 ```
 
-### トランザクション内での Crud
+#### トランザクション内での Crud
 
 すべてのメソッドに `tx` を渡すことができ、対応するトランザクションのコンテキストへ自動的に切り替わります：
 
@@ -292,7 +298,7 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-## BaseReldbCrudRepository
+### BaseReldbCrudRepository
 
 業務リポジトリーは `BaseReldbCrudRepository` を継承し、`fields` でフィールドの対応を定義します。テーブル作成と型変換は自動です：
 
@@ -359,7 +365,7 @@ if (txResult.success) {
 }
 ```
 
-## JSON パス操作
+### JSON パス操作
 
 `reldb.json` で、複数のデータベースに共通する JSON パス操作の SQL 式を作成します。
 
@@ -375,7 +381,7 @@ if (txResult.success) {
 
 すべてのメソッドは `{ sql, params }` の断片を返し、`reldb.sql.query` / `reldb.sql.execute` に直接組み込めます。
 
-### extract — JSON フィールド値の取得
+#### extract — JSON フィールド値の取得
 
 ```ts
 // 用于 WHERE 条件
@@ -393,7 +399,7 @@ const result = await reldb.sql.query(
 )
 ```
 
-### set — JSON パスの設定（作成または置換）
+#### set — JSON パスの設定（作成または置換）
 
 ```ts
 const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
@@ -403,7 +409,7 @@ await reldb.sql.execute(
 )
 ```
 
-### insert — JSON パスへの挿入（未存在の場合のみ）
+#### insert — JSON パスへの挿入（未存在の場合のみ）
 
 ```ts
 const { sql, params } = reldb.json.insert('data', '$.firstSeen', new Date().toISOString())
@@ -413,7 +419,7 @@ await reldb.sql.execute(
 )
 ```
 
-### remove — JSON パスの削除
+#### remove — JSON パスの削除
 
 ```ts
 const { sql, params } = reldb.json.remove('settings', '$.deprecated')
@@ -423,7 +429,7 @@ await reldb.sql.execute(
 )
 ```
 
-### merge — JSON オブジェクトのマージ（RFC 7396 Merge Patch）
+#### merge — JSON オブジェクトのマージ（RFC 7396 Merge Patch）
 
 ```ts
 // 覆盖已有键、保留未提及键、将 null 键删除
@@ -437,7 +443,7 @@ await reldb.sql.execute(
 )
 ```
 
-### 完全な使用例
+#### 完全な使用例
 
 ```ts
 // 建表（含 JSON 列）
@@ -472,7 +478,7 @@ const { sql: rmSql, params: rmParams } = reldb.json.remove('meta', '$.reviewer')
 await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...rmParams, 1])
 ```
 
-## エラー処理
+### エラー処理
 
 すべての操作は `HaiResult<T>` を返し、`result.success` で成功・失敗を判定します。
 
@@ -507,7 +513,7 @@ if (!result.success) {
 | `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作に失敗         |
 | `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 設定エラー             |
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/reldb test
@@ -515,6 +521,6 @@ pnpm --filter @h-ai/reldb test
 
 > MySQL/PostgreSQL のテストには Docker が必要です。
 
-## License
+## ライセンス
 
 Apache-2.0

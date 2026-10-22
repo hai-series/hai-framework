@@ -4,19 +4,29 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
-> A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US) and 15 curated DaisyUI themes.
+## Introduction
 
-## Installation
+A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US) and 15 curated DaisyUI themes.
+
+## Core features
+
+- Forms, tables, dialogs, navigation, charts and application components.
+- Authentication, CRUD, AI content, onboarding and a help center.
+- Svelte 5, themes, responsive layouts and Chinese/English component messages.
+
+## Getting started
+
+### Installation
 
 ```bash
-npm install @h-ai/ui
+npm install @h-ai/ui @h-ai/core
 ```
 
-Depends on `@h-ai/core`, installed automatically.
+For a Node server, declare both UI and core as production dependencies so the adapter preserves native logging and runtime dependencies.
 
-## Quick start
+### Quick start
 
-### 1. Configure svelte.config.js
+#### 1. Configure svelte.config.js
 
 ```js
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
@@ -33,7 +43,7 @@ const config = {
 export default config
 ```
 
-### 2. Configure vite.config.ts
+#### 2. Configure vite.config.ts
 
 ```ts
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
@@ -51,11 +61,13 @@ export default defineConfig({
     // 避免首次进入业务路由时触发依赖再优化与整页刷新
     include: [...haiPrebundledDeps],
   },
-  ssr: { noExternal: [/@h-ai\//] },
+  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
-### 3. Configure src/app.css
+When using Crypto or Kit/IAM, include `sm-crypto@0.5.7` in application production dependencies. CLI projects already do this; for manual setup, run `pnpm add sm-crypto@0.5.7`. The external option alone is insufficient: adapter-node also uses direct production dependencies to preserve native package loading.
+
+#### 3. Configure src/app.css
 
 ```css
 @import 'tailwindcss';
@@ -76,7 +88,7 @@ export default defineConfig({
 
 > `@source` makes TailwindCSS scan classes in `@h-ai/ui`; without it, component styles are missing. In nested monorepo apps, dependencies may be hoisted to root `node_modules`, so retain both paths.
 
-### 4. Use components
+#### 4. Use components
 
 ```svelte
 <script>
@@ -108,7 +120,7 @@ import { Button } from '@h-ai/ui/components/primitives/index'
 import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 ```
 
-### data-\* attribute forwarding
+#### data-\* attribute forwarding
 
 Public Svelte components forward caller-supplied `data-*` attributes to their root or primary interactive element for tests, analytics, and automation. Other unknown attributes are not forwarded.
 
@@ -120,7 +132,7 @@ Public Svelte components forward caller-supplied `data-*` attributes to their ro
 
 No extra button, input, or overlay wrappers are needed just for `data-testid`.
 
-## Component architecture
+### Component architecture
 
 Three layers (primitives → compounds → scenes):
 
@@ -137,9 +149,9 @@ components/
     └── crypto/   # Cryptographic display
 ```
 
-## Component catalog
+### Component catalog
 
-### Primitives (20)
+#### Primitives (20)
 
 | Component        | Description         | Key props                                                                      |
 | ---------------- | ------------------- | ------------------------------------------------------------------------------ |
@@ -166,9 +178,9 @@ components/
 
 For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchange` and leave the file path `value` unbound. Other input types support `bind:value`.
 
-### Compounds (37)
+#### Compounds (37)
 
-#### Forms
+##### Forms
 
 | Component   | Description    | Key props                                    |
 | ----------- | -------------- | -------------------------------------------- |
@@ -177,7 +189,7 @@ For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchang
 | `FormLayout` | Form layout | `columns`, `labelPosition`, `labelWidth` |
 | `TagInput`  | Tag input      | `tags`, `maxTags`, `allowDuplicates`, `size` |
 
-#### Form layouts and validation
+##### Form layouts and validation
 
 `Form` and `FormLayout` (for native `<form>` elements) share `columns={1 | 2}`, `labelPosition="top" | "left"` and `labelWidth` (default `8rem`). Defaults are one column and stacked labels. Two columns collapse below a container width of `36rem`; inline labels stack below `28rem`.
 
@@ -206,14 +218,14 @@ Client validation appears on the first blur and updates as invalid input is corr
 </Form>
 ```
 
-#### Feedback
+##### Feedback
 
 | Component        | Description     | Key props                                         |
 | ---------------- | --------------- | ------------------------------------------------- |
 | `Alert`          | Alert           | `variant`, `title`, `dismissible`                 |
 | `ToastContainer` | Toast container | Place globally and use with the `toast` singleton |
 
-#### Overlays
+##### Overlays
 
 | Component | Description         | Key props                                                                    |
 | --------- | ------------------- | ---------------------------------------------------------------------------- |
@@ -222,7 +234,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | `Confirm` | Confirmation dialog | `open`, `title`, `message`, `variant`, `onconfirm`                           |
 | `Popover` | Popover             | `open`, `position`, `trigger`, `offset`, `portal`                            |
 
-#### Data display
+##### Data display
 
 | Component   | Description    | Key props                                                                                                                                   |
 | ----------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -231,7 +243,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | `Accordion` | Accordion      | `items: AccordionItem[]`                                                                                                                    |
 | `Timeline`  | Timeline       | `items: TimelineItem[]`                                                                                                                     |
 
-#### Bits UI headless interactions
+##### Bits UI headless interactions
 
 | Component    | Description                         | Key props                                                   |
 | ------------ | ----------------------------------- | ----------------------------------------------------------- |
@@ -241,7 +253,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 
 > Dates use `DateValue` / `CalendarDate` from `@internationalized/date`.
 
-#### Mobile / enhanced interactions
+##### Mobile / enhanced interactions
 
 | Component        | Description         | Key props                                              |
 | ---------------- | ------------------- | ------------------------------------------------------ |
@@ -253,7 +265,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | `SafeArea`       | Safe area container | `top`, `bottom`, `left`, `right`                       |
 | `SwipeCell`      | Swipe actions       | `leftActions`, `rightActions`, `threshold`, `onaction` |
 
-#### Navigation
+##### Navigation
 
 | Component    | Description                     | Key props                                                                                                  |
 | ------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -264,7 +276,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | `Dropdown`   | Dropdown menu                   | `items`, `trigger`, `triggerClass`, `position`                                                             |
 | `Tooltip`    | Tooltip                         | `content`, `position`, `delay`                                                                             |
 
-#### State placeholders
+##### State placeholders
 
 | Component  | Description | Key props                             |
 | ---------- | ----------- | ------------------------------------- |
@@ -272,22 +284,22 @@ Client validation appears on the first blur and updates as invalid input is corr
 | `Empty`    | Empty state | `title`, `description`, `icon`        |
 | `Result`   | Result page | `status`, `title`, `description`      |
 
-#### Page-level
+##### Page-level
 
 | Component    | Description | Key props                                       |
 | ------------ | ----------- | ----------------------------------------------- |
 | `PageHeader` | Page header | `title`, `description`; supports `actions` slot |
 
-### Scenes (36)
+#### Scenes (36)
 
-#### Guide (2)
+##### Guide (2)
 
 | Component | Description | Key props |
 | --- | --- | --- |
 | `GuideHost` | First-use invitations, tours and help dialog host | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | Standalone searchable help center | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-#### App (7)
+##### App (7)
 
 | Component          | Description                                    | Key props                                                |
 | ------------------ | ---------------------------------------------- | -------------------------------------------------------- |
@@ -299,7 +311,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | `ThemeSelector`    | Full theme selector                            | No props required                                        |
 | `ThemeToggle`      | Light/dark toggle                              | No props required                                        |
 
-#### IAM authentication (10)
+##### IAM authentication (10)
 
 | Component            | Description                                      | Key props                                                                                              |
 | -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
@@ -314,7 +326,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | `PermGuard`          | Permission guard                                 | `permissions`, `mode`, `fallback`                                                                      |
 | `UserProfile`        | User profile                                     | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
 
-#### Storage (4)
+##### Storage (4)
 
 | Component      | Description   | Key props                                                    |
 | -------------- | ------------- | ------------------------------------------------------------ |
@@ -325,7 +337,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 
 Upload components do not embed presigning, headers, or PUT/POST protocols. Applications call their service through `uploadHandler(file, { signal, onProgress })` and return `{ url?, response? }`. Image/avatar uploads require a displayable `url`. Without a handler, `FileUpload` only selects files, and image/avatar components generate local previews only.
 
-#### Crypto display (3)
+##### Crypto display (3)
 
 Input changes immediately clear `encryptedValue`; only successful results for current input are restored. Clearing, callback replacement, and unmounting invalidate old requests. Failures show built-in errors and leave ciphertext empty. Submit encrypted inputs only when current ciphertext is nonempty.
 
@@ -339,7 +351,7 @@ Callers must connect `EncryptedInput` to a real encryption service through `onen
 
 Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and `SM2` for signatures.
 
-#### AI documents and spreadsheets (4)
+##### AI documents and spreadsheets (4)
 
 | Component                | Description            | Key props / capabilities                                                                                   |
 | ------------------------ | ---------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -370,7 +382,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 />
 ```
 
-#### Charts
+##### Charts
 
 `Chart type='line'` uses LayerChart's native line chart by default. For monitoring dashboards with segmented lines, points, nearest-point hover, and vertical reference lines, use `lineVariant='segmented-point'`:
 
@@ -389,7 +401,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 />
 ```
 
-#### CRUD scenes (5)
+##### CRUD scenes (5)
 
 | Component           | Description                                     | Key props / capabilities                                                                                                                                                                                                                                                    |
 | ------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -405,7 +417,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 >
 > Columns first shrink to 7rem and truncate long text; horizontal scrolling appears only if total width still exceeds the container. The action column stays fixed on the right.
 
-#### Error pages (1)
+##### Error pages (1)
 
 | Component   | Description                                         | Key props / capabilities                                                |
 | ----------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -436,9 +448,9 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 >
 > `Tabs` supports lazy content. With `lazy`, never-activated panes are not rendered (`children` receives `isActivated(key)`); `onactivate(key)` runs once on first activation. Combine with `createCrudController({ autoLoad: false })` to load only when first visible.
 
-## Examples
+### Examples
 
-### Toast notifications
+#### Toast notifications
 
 ```svelte
 <script>
@@ -458,7 +470,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 
 > Built-in `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` remove the need for application toast wrappers. `notifyError(err, fallback?)` accepts `Error` or strings with a fallback message. Success lasts 3s and errors 5s by default.
 
-### Message feedback
+#### Message feedback
 
 ```svelte
 <script>
@@ -476,7 +488,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 <MessageContainer />
 ```
 
-### Typical CRUD page
+#### Typical CRUD page
 
 ```svelte
 <script>
@@ -546,7 +558,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 
 `Modal` retains the top-right close button without a `title` / `header`, but does not render a full header row. Use `radius="1.4rem"` for rounded corners and `bodyOverflow="visible"` when internal dropdowns/overlays need to extend outside.
 
-### Declarative CRUD page (CrudPage)
+#### Declarative CRUD page (CrudPage)
 
 ```svelte
 <script lang='ts'>
@@ -572,7 +584,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 
 > Use `form={{ variant: 'drawer', drawerWidth: '40rem' }}` for drawers. User resizing overrides the initial width and is remembered per resource.
 
-### Login page
+#### Login page
 
 ```svelte
 <script>
@@ -598,7 +610,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 <LoginForm {loading} {errors} onsubmit={handleLogin} showRegisterLink />
 ```
 
-### Controlled PasswordInput
+#### Controlled PasswordInput
 
 ```svelte
 <script>
@@ -615,7 +627,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 />
 ```
 
-## Style dependencies
+### Style dependencies
 
 Components use TailwindCSS v4 + DaisyUI. Configure application `app.css` as follows:
 
@@ -654,7 +666,7 @@ On mobile pages, match `BottomNav` width to the page shell to avoid spanning the
 </div>
 ```
 
-### Icons
+#### Icons
 
 Components use Iconify (Tabler Icons):
 
@@ -669,7 +681,7 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 }
 ```
 
-### Theme switching
+#### Theme switching
 
 Manage 15 curated DaisyUI themes through built-in utilities:
 
@@ -713,7 +725,7 @@ const themeBootstrapScript = createThemeBootstrapScript({
 transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstrapScript)
 ```
 
-## Internationalization (i18n)
+### Internationalization (i18n)
 
 @h-ai/ui uses **built-in component translations**:
 
@@ -722,7 +734,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 - Applications handle **page text** only; @h-ai/ui manages internal component text.
 - Override specific text with props such as `submitText` or `labels`.
 
-### createLocaleStore
+#### createLocaleStore
 
 Client locale state management, automatically synchronized with the `@h-ai/core` global locale manager:
 
@@ -746,7 +758,7 @@ Client locale state management, automatically synchronized with the `@h-ai/core`
 </select>
 ```
 
-### Exported i18n utilities
+#### Exported i18n utilities
 
 ```ts
 import {
@@ -762,7 +774,7 @@ import {
 } from '@h-ai/ui/i18n'
 ```
 
-## Configuration driven authentication
+### Configuration driven authentication
 
 Agreement content can be configured as `agreements.userAgreementMarkdown` and `privacyPolicyMarkdown` using YAML `|`. The modal safely renders configured Markdown and prefers it over the URL of the same agreement. URL-only content stays in a sandboxed iframe.
 
@@ -795,7 +807,7 @@ When an authentication link points to the current complete URL, AuthPanel switch
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-## Onboarding and help center
+### Onboarding and help center
 
 Import `createGuide`, `GuideHost` and `HelpCenter` from `@h-ai/ui/guide`. No init/close is required. The tour engine loads when a tour starts; controls follow the current theme and include Chinese/English translations. Business text uses application i18n callbacks.
 
@@ -847,7 +859,7 @@ Use `() => m.key()` for localized content and pass the current locale. Steps ren
 
 HelpCenter can also render a standalone page using articles, optional tours, locale, selectedId and onstart. The admin-console example and CLI fullstack Web/App/Desktop include first-use invitations, help and profile tours by default. See the [complete integration guide](../cli/templates/skills/hai-ui/guide.md).
 
-## Other exports
+### Other exports
 
 ```ts
 // 类型
@@ -877,3 +889,16 @@ Agreements open in a Modal and preserve form input. Pages must allow iframe embe
   {/snippet}
 </AuthPanel>
 ```
+
+## Development and testing
+
+```sh
+pnpm --filter @h-ai/ui typecheck
+pnpm --filter @h-ai/ui lint
+pnpm --filter @h-ai/ui build
+pnpm --filter @h-ai/ui test
+```
+
+## License
+
+Apache-2.0

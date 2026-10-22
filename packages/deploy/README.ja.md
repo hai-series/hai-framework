@@ -2,78 +2,138 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-deploy は既存の成果物だけを配布します。ソースのコンパイルやイメージのビルドは行いません。同じイメージを複数環境へ配布できます。
+## 概要
 
-作成、開発、ビルド、デプロイの全体は[使用ガイド](../../docs/usage/README.ja.md)を参照してください。本ページではデプロイの準備、SDK、モジュール開発を説明します。
+既存イメージまたは Vercel prebuilt 成果物を配布します。完全オフライン、サービス選択、SSH 自動化、OS 別の手動配布スクリプトに対応します。SDK は成果物を消費し、CLI --build は構築から配布を明示的に実行します。
 
-## ビルド
+## 主な機能
 
-Node `^22.22.2 || ^24.15.0 || >=26.0.0` と pnpm 12.11.2 を使用します。Windows では `pnpm.cmd` を実行してください。Node 20 / pnpm 9.5.0 は対象外です。
+- CLI でビルド、梱包、SSH 転送、起動、アクセス確認を実行。
+- アプリと自前ミドルウェアのイメージを同梱し、選択したサービスだけの更新にも対応。
+- オフライン用 tar と Windows/Linux/macOS 操作スクリプトを生成し、手順の結果と失敗時の復元を扱う。
+
+## 使い始める
+
+### 4. ソースをコンパイルし、配布物を作る
+
+デプロイツールは作成時に既定で含まれます。不要な場合は `hai create my-app --no-deploy` を指定します。SDK は開発依存に配置し、実行イメージには含めません。
 
 ```sh
-pnpm build                               # ソースだけをコンパイル。環境は選択しない
-pnpm build --target docker               # 利用可能な Podman、次に Docker
-pnpm build --target docker --runtime docker
+pnpm build
+pnpm build --target docker
+pnpm build --target docker --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
-`hai.build.json` で Dockerfile のステージと Tauri ディレクトリーを指定します。イメージと SHA-256 付きマニフェストは `.hai/build/docker/<buildId>` に出力されます。API/Web は同じビルド ID を使い、すべて成功してから latest を更新します。Tauri は対象の Windows/Linux/macOS 上で実行し、対応する Rust target、SDK、パッケージツールが必要です。インストーラーは `src-tauri/target/<target>/release/bundle` に出力されます。ビルドでは dev/test/prod を選ばず、デプロイの認証情報も取り込みません。
+#### build のオプション
 
-版はアプリルートの package.json.version を使います。例 1.2.3 では app-1.2.3.tar、web-1.2.3.tar、docker-compose-1.2.3.yml を生成します。マニフェスト形式の版は version: 2、アプリ版は appVersion です。--output release-prod.tar は release-prod-1.2.3.tar になり、Tauri も同じ版を使います。既定値と例は[完全ガイド](../../docs/usage/README.ja.md)を参照してください。
+`--target` は compile（既定）、docker、desktop を選択します。`--images app|web|app,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
-## デプロイ
+#### hai.build.json でパッケージの構成を指定する
 
-```sh
-pnpm run deploy --env test
-pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId> --skip-middleware
-pnpm run deploy --env prod --bundle-only --output release-prod.tar
-# fullstack で同じ処理を直接呼ぶ場合
-pnpm exec hai deploy packages/my-app-serv --env prod --env-dir .
+```json
+{ "images": [{ "name": "app", "context": ".", "dockerfile": "images/app.Dockerfile", "containerPort": 3000 }, { "name": "web", "context": ".", "dockerfile": "images/web.Dockerfile", "containerPort": 8080 }] }
 ```
 
-対応する版の `@h-ai/cli` / `@h-ai/deploy`、`_deploy.yml`、lockfile、`.env.<mode>` が必要です。環境ファイルがなければ処理を停止します。公開設定の `.env`、`.env.dev/test/prod` と説明付き `.env.example` は Git に登録し、私有の `.env.local` は除外します。優先順位はプロセス変数 > local > 環境別 > 基本設定です。SSH の接続情報やトークンは私有の `HAI_DEPLOY_PROVIDER` JSON に保存できます。bundle-only では SSH 設定やローカルのコンテナーエンジンは不要です。
+各イメージに独立した Dockerfile を用意します。Web 用設定は images/web/ に置きます。Dockerfile 内の構築・実行段階は維持しますが、設定から段階を選びません。不要なイメージ項目は削除し、desktop ディレクトリは対象プロジェクトのみ設定します。
 
-ウィザードは lockfile の実行時依存だけをたどり、dev/peer を除外します。ミドルウェアごとに既定構成、独自構成、既存設定の保持を選べます。`--skip-middleware` はミドルウェア処理全体を省略します。Compose は PostgreSQL/MySQL/Redis/RustFS/MinIO/Qdrant/pgvector/Chroma/OpenLDAP/Mailpit に対応します。任意のクラウド作成は Neon/Upstash/R2/Resend/Aliyun SMS に対応し、ネットワーク接続が必要です。
+構築器はパッケージ情報、ローカルアーカイブとパッチを images/dependencies/ に準備し、pnpm store と依存レイヤーをキャッシュします。通常のソース変更で全依存を再ダウンロードしない構成です。キャッシュが空でもオンライン構築できます。Windows の node_modules は Linux のネイティブ依存を代替できません。完全オフライン構築には基底イメージ、ツールと一致する ABI・アーキテクチャ・libc のバイナリも準備します。
 
-`container.s3Engine` は任意で、既定値は rustfs です。Compose で S3 サービスを自動作成するときだけ RustFS/MinIO を選び、独自の既存 S3 には影響しません。ミドルウェア処理の省略は CLI の `--skip-middleware`、SDK の `skipMiddleware` で指定します。
+アプリの版はルート package.json.version で管理します。`.hai/build/docker/<buildId>/` に形式 3 の manifest.json、選択イメージの tar と SHA-256 を出力します。partial は部分構築、hasWeb は構成を記録します。appContainerPort と webContainerPort は明示した app/web の待受ポートを保持し、部分構築で選ばなかったイメージのポートも失いません。未指定のポートにはデプロイ時の既定値を使います。同じアプリ版でも再構築可能で、構築 ID とイメージ参照で内容を区別します。全出力に成功してからローカルの構築参照を更新します。基底・ミドルウェア・ツールは版を固定し、latest を使いません。
 
-一つの私有 tar に Compose、実行時の環境変数、app/web イメージ、必要な Web プロキシ、チェックサム、README、`start-<mode>.sh` をまとめます。SSH でこの tar を転送し、リモートで展開・起動します。ソースの転送やリモートビルドは行いません。app/web 構成では Web の公開ポートから同一オリジンで内部 API に接続し、API の秘密情報は Web に渡しません。自動デプロイの成功には両方のヘルスチェック通過が必要です。Vercel は既存の `.vercel/output` を転送して実行時変数を設定し、ローカルビルドは行いません。
+### 5. 成果物を対象環境へデプロイする
 
-## オフラインと手動転送
+#### 環境と接続先を用意する
 
-Windows 側に対応する Node/pnpm、インストール済みの CLI/SDK 依存関係、Linux サーバーのアーキテクチャーに合う構築済みイメージのディレクトリー全体を準備します。ローカルには tar が必要です。自動転送では ssh/scp、信頼済みホスト鍵、SSH とアプリのポートへの接続も必要です。bundle-only なら、二台の間にネットワークがなくても外部メディアで運べます。
+`.env.<環境>` とサービスの config/_deploy.yml を用意します。fullstack の deploy は packages/<プロジェクト>-serv、API workspace は apps/<プロジェクト>-service を指定します。これは設定と実行依存の走査入口で、成果物は構築設定のルートから読み込みます。
 
-Linux 側には Docker/Podman、compose、sh、tar、sha256sum、書き込み可能な配布・データディレクトリー、コンテナー操作権限が必要です。ミドルウェアイメージは tar 内の README に記載された名前とタグで読み込んでください。app/web のアーカイブは同梱されます。イメージが不足すると、ダウンロードせずに起動を停止します。独自接続では利用可能なサービス、アカウント、DB/バケット、認証情報を準備します。
-
-```sh
-mkdir -p release && chmod 700 release
-tar -xf release-prod-1.2.3.tar -C release
-cd release
-HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker sh start-prod.sh
+```yaml
+provider:
+  type: docker-ssh
+  expose:
+    hostPort: 18080
+container:
+  s3Engine: rustfs
 ```
 
-tar には秘密情報が含まれるため、アクセス権を制限し、Git に登録しないでください。`packaged` はサーバー起動やヘルスチェックをまだ行っていない状態です。手動起動後は `docker compose -f docker-compose-1.2.3.yml --env-file .env.runtime ps`（または logs）、Web、/health、実際のログインと再読み込み、再起動とデータ保持を確認します。本番のセッションには HTTPS、信頼できる証明書、DNS、正しい CORS が必要で、TLS は別途設定します。
+ウィザードはサーバー、SSH ユーザー、任意の鍵・指紋ファイル、公開ポートを説明付きで質問します。有効な設定は再利用し、接続情報は .env.local、秘密鍵はパスのみ保存します。パッケージ生成だけなら SSH は不要です。
 
-構築済み成果物の配布には、ローカルのコンテナーエンジン、Linux Node ベースイメージ、コンパイラー、CUDA、SQLite のダウンロードは不要です。完全オフラインでの**ビルド**には、別途 Linux ベースイメージ、pnpm/Corepack、Linux 用依存キャッシュ一式、driver/ABI/アーキテクチャー/libc が一致する SQLite バイナリーが必要です。Windows の node_modules だけでは足りません。必要に応じて `pnpm build --target docker --sqlite-prebuild-mirror http://trusted-host/better-sqlite3` を使えます。AI の実行時依存がなければ AI/CUDA は不要です。クラウドサービスはオフラインでは使えません。完全オフラインの動作は実際に接続を切って確認してください。
+#### 本当に必要なミドルウェアだけを設定する
 
-## SDK とモジュール開発
+実行依存と設定に基づき、既定、自分の接続、設定維持を選びます。--skip-middleware は設定と開通を省略します。SQLite、メモリーキャッシュ、ローカル保存には外部イメージがありません。完全配布物には自前ミドルウェアのイメージも自動で含めます。外部サービスは接続先への到達性が必要で、クラウド開通はオフライン処理ではありません。
 
-`deploy.init(config)` の成功を確認してから `deploy.deployApp(appDir, { environment: 'prod', envDir: '.', artifactDir, bundleOnly: true })` を呼び、結果を確認し、最後に `deploy.close()` を実行します。`deploy.scan` と credentials は初期化不要です。packaged の結果には bundlePath/instructions、自動デプロイの結果には URL とヘルス状態が入ります。
+#### deploy のオプション
+
+--env/--env-dir は環境、--build は先行する選択イメージ構築、--services は更新対象、--artifact-dir は既存成果物を指定します。--bundle-only は SSH 接続なしで tar と OS 別スクリプトを生成します。--runtime はローカル構築・イメージ出力エンジン、--output は版付きファイル名です。--yes は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも --network、--no-http-proxy、--sqlite-prebuild-mirror を指定できます。
+
+#### マシン同士が接続できる場合：自動デプロイ
+
+```sh
+pnpm run deploy --env prod --build
+pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
+pnpm run deploy --env prod --build --services web
+```
+
+部分更新には成功済みの完全インストールと一致するポート・構成が必要です。Compose 標準の設定合成で未選択サービス、設定、ボリュームを保持します。スクリプトはプロジェクト名とサービス名で選択した旧コンテナーだけを削除し、ボリュームを保持します。その後 `compose up -d --no-deps --no-build --pull never --no-recreate web` で新しいコンテナーを作成します。他のコンテナーは稼働したままで、全体の down は実行しません。storage-init は S3 バケットの一時初期化処理で、ストレージ初期化を伴う場合に限り実行します。
+
+`-d` はバックグラウンド起動、`--no-deps` は依存サービスを更新しない指定、`--no-build` はサーバーでの構築禁止、`--pull never` は取得禁止、`--no-recreate` は残っているコンテナーを保持します。選択した旧コンテナーは事前に削除されているため、新しいコンテナーが作成されます。末尾の `web` は Compose サービス名で、複数指定は空白で区切ります。
+
+`storage-init` はアプリの S3 SDK でストレージの準備を待ち、不足するバケットを作成します。既存データは削除しません。storage 起動後に `compose up --no-deps --no-build --pull never --force-recreate --exit-code-from storage-init storage-init` を実行し、終了コード 0 を確認してアプリを起動します。 部分更新では旧 storage-init コンテナーを先に削除し、このコマンドの `--force-recreate` を `--no-recreate` に替えて、稼働中のアプリを保持します。`storage` だけを更新する場合も、初期化のために `app` イメージを含む成果物が必要です。直近のビルドが Web のみなら、`--artifact-dir` で元の完全な成果物を選ぶか、先に `pnpm build --target docker --images app` を実行します。このイメージは初期化に使い、稼働中の `app` サービスは更新しません。
+
+#### マシン同士が接続できない場合：パッケージをコピー
+
+```sh
+pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+```
+
+版 1.2.3 なら release-prod-1.2.3.tar と隣接する -deploy/ を生成します。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。Windows は deploy.ps1、Linux/macOS は deploy.sh でアップロードし、同じサーバー処理を実行します。別の PC・OS に移す場合、秘密鍵とサーバー指紋ファイルのパスを移動先に合わせます。Windows は deploy-target.json、Linux/macOS は HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE で指定します。
+
+隔離された Linux では独立ディレクトリに展開し、`sh apply.sh` を実行します。引数で配置先を上書きできます。各段階の失敗は非ゼロ終了し、イメージ導入・起動・HTTP 検査を別々に報告します。result-<配置ID>.json に結果を記録し、成功時だけ current を更新します。同じ配置 ID の再適用は停止しますが、同じアプリ版から生成した新しい配布物は適用できます。更新失敗時は対象コンテナーと設定を以前の状態に戻すことを試み、データボリュームと診断情報を保持します。すでに書き込まれた業務データは元に戻しません。
+
+#### 完全オフラインの前に確認する
+
+完全 tar は自前ミドルウェアのアーカイブと一致するアーキテクチャを含み、起動時にレジストリーへ接続しません。Linux に Docker/Podman、Docker Compose v2 または podman-compose 1.6.0 以降、sh、tar、sha256sum、awk、curl、ディレクトリ・コンテナー権限が必要です。秘密設定を安全に転送し、版間でボリューム識別を保持します。外部ネットワークを切って起動、ログイン、再読込、再起動と永続化を検証します。HTTPS、証明書、DNS、外部サービスは別途用意します。
+
+### SDK
+
+```ts
+import { deploy } from '@h-ai/deploy'
+
+const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080 } } })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
+try {
+  const result = await deploy.deployApp('./packages/demo-serv', {
+    environment: 'prod',
+    envDir: '.',
+    bundleOnly: true,
+    artifactDir: './.hai/build/docker/<buildId>',
+    runtime: 'auto',
+  })
+  if (!result.success)
+    throw new Error(result.error.message)
+  // result.data.bundlePath / instructions; packaged does not mean server ready.
+}
+finally {
+  await deploy.close()
+}
+```
+
+`selectedServices: ['web']` は部分更新を選択し、`onProgress` はパッケージ作成とサーバー実行の段階を通知します。`deploy.scan` と `deploy.credentials.*` は初期化前も使用できます。HaiResult.success を確認してからデータを読み取ります。Vercel は既存 .vercel/output を prebuilt API でアップロードするためネット接続が必要で、オフラインや Compose の部分公開には対応しません。
+
+## 開発とテスト
 
 ```sh
 pnpm --filter @h-ai/deploy typecheck
 pnpm --filter @h-ai/deploy lint
 pnpm --filter @h-ai/deploy build
 pnpm --filter @h-ai/deploy test
-pnpm --filter @h-ai/cli test
 pnpm --filter @h-ai/cli test:scaffold-gates
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-デプロイのゲートは現在のソースをパッケージ化して fullstack を生成し、API/Web を一度構築してから、SSH と手動 tar の起動、実際のブラウザー操作を検証します。失敗時も finally/teardown で一時プロジェクト、イメージ、コンテナー、スクリーンショット・レポート、補助プロセスを削除します。ネイティブインストーラーは各 OS での確認が必要です。[設定とミドルウェア](../cli/templates/skills/hai-deploy/middleware.md)、[詳細な例](README.md)も参照してください。
+実際の生成プロジェクト、SSH と手動公開を検証します。レジストリー接続禁止、部分更新、破損アーカイブ、同一版での再公開、ヘルスチェック失敗を含めます。finally/teardown ではテスト自身が作成したプロジェクト、イメージ、コンテナー、ログ、プロセスのみを削除します。
 
-デプロイのゲートは既定でホストのプロキシを転送しません。依存のダウンロードに必要な場合、テスト専用 `HAI_DEPLOY_E2E_CONTAINER_PROXY`（既定は未設定）を設定します。Windows Podman の PowerShell の例は `$env:HAI_DEPLOY_E2E_CONTAINER_PROXY='http://host.containers.internal:10808'` です。ビルドコンテナーから到達できるアドレスを使い、アプリ設定や配布イメージには保存しません。
+## ライセンス
 
-テスト専用 `HAI_DEPLOY_E2E_CONTAINER_NETWORK` は既定では未設定で、設定値を build の `--network` に渡します。rootless Podman の例は `$env:HAI_DEPLOY_E2E_CONTAINER_NETWORK='pasta'` です。build と run ではネットワークが異なる場合があるため、ビルド側でプロキシの到達性も確認してください。
-
-Windows ではテスト専用 HAI_CLI_NATIVE_BUILD=1（既定は未設定）を指定し、`pnpm --filter @h-ai/cli test:scaffold-gates -t "fullstack scaffold"` を実行できます。Rust/MSVC/Windows SDK が必要で、生成 Tauri インストーラーの exe 名にルート版 2.4.6 が反映されることを確認します。一時プロジェクトとネイティブ出力も自動削除します。
+Apache-2.0

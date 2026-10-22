@@ -4,18 +4,22 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 A unified cache module. The `cache` object provides KV / Hash / List / Set / ZSet / distributed lock operations with Memory and Redis backends.
 
 Memory KV entries expire at their expiration time. `incr/decr/incrBy/decrBy` accept only safe integers or integer strings; invalid increments and overflow return `OPERATION_FAILED` without changing the original value. Hash names such as `__proto__` / `constructor` remain ordinary fields and do not change the returned object's prototype.
 
-## Use cases
+## Core features
 
 - In-memory caching for development and tests
 - Redis caching in production (standalone, URL, Cluster, Sentinel)
 - Set caches for IAM sessions and permissions
 - Distributed locks for mutual exclusion across nodes
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { cache, HaiCacheError } from '@h-ai/cache'
@@ -53,7 +57,7 @@ await cache.close()
 
 `cache.config` returns a **redacted configuration snapshot**. Redis credential fields such as `password` / `url` are sanitized automatically; do not use the snapshot to write back original secrets.
 
-## Initialization options
+### Initialization options
 
 ```ts
 // Memory（开发/测试）
@@ -93,7 +97,7 @@ await cache.init({
 })
 ```
 
-## API overview
+### API overview
 
 - `cache.kv`: string/object key-value storage and TTL (`set/get/mget/mset/expire/ttl/...`).
 - `cache.hash`: hash structures (`hset/hget/hgetall/...`).
@@ -103,7 +107,7 @@ await cache.init({
 - `cache.lock`: distributed locks (`acquire/release/isLocked/extend`).
 - `CacheProvider`: a public provider contract for advanced integrations and custom backends.
 
-## Distributed locks
+### Distributed locks
 
 Distributed mutual exclusion based on SET NX EX, suitable for deployments across multiple nodes.
 
@@ -130,7 +134,7 @@ await cache.lock.extend('my-lock', 60, 'node-1')
 - **Redis backend**: atomic locking with `SET NX EX`; Lua scripts verify the owner for safe release and renewal.
 - `owner` prevents accidental release of another owner's lock; a stable node identifier is recommended for multi-node deployments.
 
-## Error codes
+### Error codes
 
 All operations return `HaiResult<T>`. Common error codes:
 
@@ -146,7 +150,7 @@ All operations return `HaiResult<T>`. Common error codes:
 | `HaiCacheError.UNSUPPORTED_TYPE`       | `hai:cache:011` | Unsupported cache type |
 | `HaiCacheError.CONFIG_ERROR`           | `hai:cache:012` | Invalid configuration  |
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/cache test

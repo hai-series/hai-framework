@@ -4,20 +4,30 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md)
 
+## 概要
+
 統一された監査ログモジュールです。`audit` オブジェクトで記録、検索、削除、集計を行い、`@h-ai/reldb` で永続化します。
 
-## 依存関係
+## 主な機能
+
+- ユーザー操作やセキュリティイベントを記録し、ユーザー・日時・操作で検索。
+- ログのページ取得、統計、保存期間に応じた削除。
+- 関係データベースに保存し、認証情報を記録前にマスク。
+
+## 使い始める
+
+### 依存関係
 
 - `@h-ai/reldb`：監査ログを永続化するデータベース。**audit.init() より先に初期化してください**。
 
-## 用途
+### 用途
 
 - ユーザー操作の監査（ログイン、ログアウト、登録、パスワードリセットなど）
 - CRUD 操作の監査（リソースの作成、参照、更新、削除）
 - セキュリティイベントの追跡とコンプライアンス監査
 - 運用統計（操作頻度、アクティブユーザーなど）
 
-## クイックスタート
+### クイックスタート
 
 ```ts
 import { audit } from '@h-ai/audit'
@@ -60,7 +70,7 @@ if (!closeResult.success) {
 }
 ```
 
-## 初期化設定
+### 初期化設定
 
 ```ts
 // 默认配置（无需传参）
@@ -76,7 +86,7 @@ await audit.init({
 
 監査ログは固定の `hai_audit_logs` テーブルに保存され、初期化済みの `@h-ai/reldb` が必要です。
 
-## API 一覧
+### API 一覧
 
 - `audit.init(config)`：監査モジュールを初期化。
 - `audit.log(input)`：監査ログを記録。
@@ -87,7 +97,7 @@ await audit.init({
 - `audit.helper.login/logout/register/...`：記録用ヘルパー。
 - `audit.close()`：モジュールを終了。
 
-### 入力制約
+#### 入力制約
 
 - `audit.log(input)`：`action` / `resource` は空でない文字列で、長さは 256 文字以内。
 - `audit.log(input)`：`details` 内の認証情報（`password` / `token` / `secret` など）は永続化前に自動的にマスクされます。メールアドレスと電話番号は既定で元の値を保持します。
@@ -96,7 +106,7 @@ await audit.init({
 - `audit.cleanup(days)`：`days` を指定する場合は 0 以上の整数。
 - `audit.getStats(days)`：`days` を指定する場合は 0 以上の整数。
 
-## エラーコード
+### エラーコード
 
 すべての操作は `HaiResult<T>` を返します。主なエラーコード：
 
@@ -112,12 +122,12 @@ await audit.init({
 
 > 注：`audit.close()` も `HaiResult<void>` を返します。`audit.helper.passwordResetRequest()` は既定でメールアドレスを追加マスクせず、そのまま記録します。
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/audit test
 ```
 
-## License
+## ライセンス
 
 Apache-2.0
