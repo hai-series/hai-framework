@@ -27,5 +27,6 @@
   "reldb_invalidIdentifier": "Invalid SQL identifier: {name} (only letters, digits and underscores allowed)",
   "reldb_configError": "Database config validation failed: {error}",
   "reldb_txFailed": "Transaction failed: {error}",
-  "reldb_sharedBackendRequired": "Production mode requires a shared backend; local files and memory backends are for development or explicit end-to-end tests."
+  "reldb_sharedBackendRequired": "Production mode requires a shared backend; local files and memory backends are for development or explicit end-to-end tests.",
+  "reldb_jsonPatchObjectRequired": "JSON merge patch must be an object"
 }

@@ -585,10 +585,13 @@ pnpm --filter @h-ai/reldb test
 
 生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
 
-## 许可证
-
-Apache-2.0
 
 操作日志仅包含固定操作名和SQL长度、参数数量、批量数量等安全摘要；失败路径也不记录SQL原文、值或驱动错误内容。
 
 MySQL 的空 `url`（例如空环境变量占位）表示使用 host/port/database/user/password；非空 URL 仍严格校验。
+
+`json.merge(column, patch)` 在三种后端均实现 RFC 7396 的对象补丁：递归保留未改键，补丁 null 删除指定键，数组整体替换。PostgreSQL 用参数化递归 CTE 在单次 SQL 中修改当前行，不要求预装函数，也不先在应用读取再写回。补丁根必须是可 JSON 序列化的对象；此契约不扩展为任意 JSON 根补丁。列表达式由开发者静态提供，动态路径和值全部作为参数。参见 [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) 和 [PostgreSQL JSON 运算](https://www.postgresql.org/docs/16/functions-json.html)。
+
+## 许可证
+
+Apache-2.0

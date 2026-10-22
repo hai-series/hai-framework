@@ -388,7 +388,7 @@ interface PaginatedResult<T> {
 
 通过 `reldb.json` 构建跨数据库统一的 JSON 路径操作 SQL 表达式，返回 `{ sql, params }` 可直接嵌入 `reldb.sql.*`。
 
-路径格式遵循 SQL/JSON Path 标准，以 `$` 开头（如 `$.key`、`$.key.subkey`、`$[0]`）。
+支持简单路径 `$.key`、`$.key.subkey`、`$[0]`。
 
 | 操作      | SQLite             | PostgreSQL               | MySQL                  |
 | --------- | ------------------ | ------------------------ | ---------------------- |
@@ -396,30 +396,33 @@ interface PaginatedResult<T> {
 | `set`     | `json_set`         | `jsonb_set`              | `JSON_SET`             |
 | `insert`  | `json_insert`      | `jsonb_insert`           | `JSON_INSERT`          |
 | `remove`  | `json_remove`      | `#-` (text[])            | `JSON_REMOVE`          |
-| `merge`   | `json_patch`       | `|| ::jsonb`              | `JSON_MERGE_PATCH`     |
+| `merge`   | `json_patch`       | 参数化递归 CTE           | `JSON_MERGE_PATCH`     |
+
+`merge` 的补丁根限于可 JSON 序列化对象：三种后端均按 RFC 7396 递归保留未变键、用 null 删除指定键、整体替换数组；PostgreSQL 使用参数化递归 CTE，在同一次 SQL 内更新当前行，不做应用先读再写。路径和值全部参数化，column 只能由开发者静态编写。路径解析只支持简单点号/方括号形式，不是完整 SQL/JSON Path 校验器；PostgreSQL set 要求父路径存在，insert 对已有对象键报错且数组按原生位置插入，不应把不同后端的原生路径行为视为完全相同。
 
 ```typescript
-// 提取 JSON 字段值（用于 WHERE 条件）
-const { sql, params } = reldb.json.extract('settings', '$.theme')
-const rows = await reldb.sql.query(
-  `SELECT * FROM users WHERE ${sql} = ?`,
-  [...params, '"dark"'],
-)
+import { reldb, type ReldbFunctions } from '@h-ai/reldb'
 
-// 设置 JSON 字段路径（创建或替换）
-const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
-await reldb.sql.execute(
-  `UPDATE users SET settings = ${sql} WHERE id = ?`,
-  [...params, userId],
-)
+// db 已初始化，users 表已有 settings/profile JSON 列。
+async function updateSettings(db: ReldbFunctions, userId: string) {
+  const extracted = db.json.extract('settings', '$.theme')
+  const rows = await db.sql.query(`SELECT * FROM users WHERE ${extracted.sql} = ?`, [...extracted.params, '"dark"'])
+  if (!rows.success) return rows
 
-// 删除 JSON 字段路径
-const { sql, params } = reldb.json.remove('settings', '$.deprecated')
-await reldb.sql.execute(`UPDATE users SET settings = ${sql} WHERE id = ?`, [...params, id])
+  const changed = db.json.set('settings', '$.theme', 'dark')
+  const updated = await db.sql.execute(`UPDATE users SET settings = ${changed.sql} WHERE id = ?`, [...changed.params, userId])
+  if (!updated.success) return updated
 
-// 合并 JSON 对象（RFC 7396：null 值表示删除对应键）
-const { sql, params } = reldb.json.merge('profile', { bio: '新简介', avatar: null })
-await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...params, userId])
+  const removed = db.json.remove('settings', '$.deprecated')
+  const deleted = await db.sql.execute(`UPDATE users SET settings = ${removed.sql} WHERE id = ?`, [...removed.params, userId])
+  if (!deleted.success) return deleted
+
+  const patch = db.json.merge('profile', { bio: '新简介', avatar: null })
+  return db.sql.execute(`UPDATE users SET profile = ${patch.sql} WHERE id = ?`, [...patch.params, userId])
+}
+
+const result = await updateSettings(reldb, 'u1')
+if (!result.success) throw new Error(result.error.message)
 ```
 
 > `column` 参数为列名，**禁止传入用户输入**（开发者负责安全性）。

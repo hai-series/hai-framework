@@ -585,10 +585,13 @@ pnpm --filter @h-ai/reldb test
 
 本番は PostgreSQL/MySQL が必須です。ファイルを含む SQLite は開発・明示的テスト用であり、ホスト間の共有状態を保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
 
-## ライセンス
-
-Apache-2.0
 
 操作ログには固定の操作名とSQL長・パラメータ数・バッチ数のみを記録します。SQL本文、値、ドライバーのエラー内容は失敗時も出力しません。
 
 MySQL の空 `url`（空の環境変数を含む）は host/port/database/user/password を使用します。空でない URL は厳密に検証します。
+
+`json.merge(column, patch)` は三つのバックエンドで RFC 7396 のオブジェクトパッチを実装します。未変更の入れ子キーを保持し、null が指定したキーを削除し、配列を全体置換します。PostgreSQL はパラメーター化した再帰 CTE を単一 SQL 内で適用し、関数の事前インストールやアプリ側の読み取り後の書き戻しを必要としません。パッチのルートは JSON シリアライズ可能なオブジェクトに限ります。列式は開発者の静的 SQL で、パスと値はパラメーターです。[RFC 7396](https://www.rfc-editor.org/rfc/rfc7396)・[PostgreSQL JSON 演算](https://www.postgresql.org/docs/16/functions-json.html)。
+
+## ライセンス
+
+Apache-2.0

@@ -39,3 +39,5 @@ description: "使用 @h-ai/reldb 访问 SQLite/PostgreSQL/MySQL，编写 SQL、C
 - §9 分页 — `reldb.pagination`
 - §10 错误码 — `HaiReldbError`
 - §11 常见模式
+
+JSON 对象合并使用 RFC 7396 补丁，必须将返回的 SQL/params 放在同一次 UPDATE 内；禁止先读对象再覆盖整个列来模拟跨节点原子合并。路径函数的后端差异和完整可类型检查示例见 [reference.md](reference.md)。

@@ -12,10 +12,12 @@
  * | set     | json_set + json()     | jsonb_set + ::jsonb            | JSON_SET + CAST AS JSON      |
  * | insert  | json_insert + json()  | jsonb_insert + ::jsonb         | JSON_INSERT + CAST AS JSON   |
  * | remove  | json_remove           | #- (text[])                   | JSON_REMOVE                 |
- * | merge   | json_patch            | \|\| ::jsonb                  | JSON_MERGE_PATCH + CAST      |
+ * | merge   | json_patch            | 参数化递归 CTE                 | JSON_MERGE_PATCH + CAST      |
  *
  * @module reldb-json
  */
+
+import { reldbM } from './reldb-i18n.js'
 
 // ─── 类型定义 ───
 
@@ -290,6 +292,65 @@ function createSqliteJsonOps(): ReldbJsonOps {
 }
 
 /**
+ * 将对象 Merge Patch 编译为一次 PostgreSQL 表达式，逐步修改同一行版本。
+ *
+ * 不能先在应用读取再合并写回，否则跨节点并发更新会丢失。PostgreSQL 的 || 仅浅拼接，
+ * 不删除 null，也不能保留未修改的嵌套兄弟字段；这里以参数化路径执行 RFC 7396 对象补丁。
+ * 对象节点先建立或保留对象，随后应用子项；数组整体替换，null 只删除补丁所指向的键。
+ * @param column - 开发者提供的静态 JSONB 列表达式，不接受外部输入。
+ * @param patch - 可 JSON 序列化的对象补丁；与其他后端一致，undefined 字段被序列化忽略。
+ * @returns SQL 片段及单个参数；无连接与初始化需求。
+ * @throws 非 JSON 对象、循环引用或 BigInt 等无法序列化的输入。
+ * @example 模块内部上下文
+ * ```ts
+ * const expression = buildPostgresMergePatch('profile', { settings: { theme: 'dark', obsolete: null } })
+ * void expression.params // 值与路径均不拼接进 SQL。
+ * ```
+ */
+function buildPostgresMergePatch(column: string, patch: Record<string, unknown>): JsonSqlExpr {
+  const normalized: unknown = JSON.parse(JSON.stringify(patch))
+  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized))
+    throw new TypeError(reldbM('reldb_jsonPatchObjectRequired'))
+
+  const steps: Array<{ path: string[], value: unknown, object: boolean }> = []
+  const pending: Array<{ path: string[], value: unknown }> = Object.entries(normalized).reverse().map(([key, value]) => ({ path: [key], value }))
+  while (pending.length > 0) {
+    const entry = pending.pop()!
+    const object = entry.value !== null && typeof entry.value === 'object' && !Array.isArray(entry.value)
+    steps.push({ path: entry.path, value: object ? {} : entry.value, object })
+    if (object) {
+      for (const [key, value] of Object.entries(entry.value as Record<string, unknown>).reverse())
+        pending.push({ path: [...entry.path, key], value })
+    }
+  }
+
+  return {
+    sql: `(WITH RECURSIVE
+      patch_steps AS (
+        SELECT ordinality AS step,
+          ARRAY(SELECT jsonb_array_elements_text(item->'path')) AS path,
+          item->'value' AS value, (item->>'object')::boolean AS object
+        FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS input(item, ordinality)
+      ),
+      merged(step, document) AS (
+        SELECT 0::bigint, CASE WHEN jsonb_typeof(${column}) = 'object' THEN ${column} ELSE '{}'::jsonb END
+        UNION ALL
+        SELECT patch_steps.step,
+          CASE
+            WHEN patch_steps.object THEN jsonb_set(merged.document, patch_steps.path,
+              CASE WHEN jsonb_typeof(merged.document #> patch_steps.path) = 'object'
+                THEN merged.document #> patch_steps.path ELSE '{}'::jsonb END, true)
+            WHEN patch_steps.value = 'null'::jsonb THEN merged.document #- patch_steps.path
+            ELSE jsonb_set(merged.document, patch_steps.path, patch_steps.value, true)
+          END
+        FROM merged JOIN patch_steps ON patch_steps.step = merged.step + 1
+      )
+      SELECT document FROM merged ORDER BY step DESC LIMIT 1)`,
+    params: [JSON.stringify(steps)],
+  }
+}
+
+/**
  * 创建 PostgreSQL 的 JSON 操作实现
  *
  * 使用 PostgreSQL JSONB 操作符和函数。
@@ -330,10 +391,7 @@ function createPostgresJsonOps(): ReldbJsonOps {
     },
 
     merge(column, patch) {
-      return {
-        sql: `${column} || ?::jsonb`,
-        params: [JSON.stringify(patch)],
-      }
+      return buildPostgresMergePatch(column, patch)
     },
   }
 }
