@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 19/42；P2 0/23（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 20/42；P2 0/23（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -114,7 +114,8 @@
 
 ### IAM-01 · P1 · 让 refresh token 轮换和单设备登录原子化
 
-- [ ] 待修正（源码探针已复现；范围：iam）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：增加单键compareAndSwap（含TTL/删除/不存在区分）并以用户SHA256分区文档原子管理会话、refresh消费与索引；轮换提交同时校验旧凭据和Session.version，单设备发布在同一CAS替换全部旧会话，失败不先撤销旧会话。令牌仍含256位随机值且调用方按不透明Bearer使用；简化分离映射/补偿代码，类型/三语README/skill/LLMS同步。cache最终3文件62项（真实三主Cluster CAS/独立客户端/TTL）通过，IAM会话3文件47项（含真实Redis两个Node进程快照屏障）通过，最终受影响2文件5项复验通过；cache/iam typecheck及build、ESLint、check:skills通过。网络响应丢失的未知提交按失败关闭/重新登录，不声称透明恢复；滑动TTL与refresh独立寿命分别留IAM03/04；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/iam/src/session/iam-session-functions.ts:243](../packages/iam/src/session/iam-session-functions.ts#L243)；[packages/iam/src/session/iam-session-functions.ts:131](../packages/iam/src/session/iam-session-functions.ts#L131)。
 - **证据与影响**：refresh 先读取、再删旧 token、再保存新会话；同一个 refresh token 并发请求均能通过。探针产生两套不同的新 access token。singleDevice 也采用先删后建，存在同类竞争窗口。
 - **修正内容**：用共享存储 CAS/脚本或事务完成消费、撤销与发布；按用户/会话维度原子更新索引。明确失败恢复与重放策略。

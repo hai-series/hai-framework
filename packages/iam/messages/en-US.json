@@ -182,5 +182,7 @@
   "iam_apikeyUpdateFailed": "Failed to update API Key: {message}",
   "iam_apikeyDeleteFailed": "Failed to delete API Key: {message}",
   "iam_apikeyQueryFailed": "Failed to query API Key: {message}",
-  "iam_apikeyStrategyRequired": "API Key authentication requires API Key strategy configuration"
+  "iam_apikeyStrategyRequired": "API Key authentication requires API Key strategy configuration",
+  "iam_sessionStateFailed": "Shared session state operation failed",
+  "iam_sessionStateConflict": "Session state changed; retry the operation"
 }

@@ -18,6 +18,24 @@ import { RedisScanError, scanRedisKeys } from './cache-redis-scan.js'
 
 const logger = core.logger.child({ module: 'cache', scope: 'redis' })
 
+/** 单键 CAS；比较、删除/替换和 TTL 在同一脚本内提交，不受租约过期影响。 */
+const COMPARE_AND_SWAP_SCRIPT = `
+  local current = redis.call('get', KEYS[1])
+  if ARGV[1] == 'missing' then
+    if current then return 0 end
+  elseif current ~= ARGV[2] then return 0 end
+  if ARGV[3] == 'delete' then
+    redis.call('del', KEYS[1])
+  elseif ARGV[5] == 'keep' then
+    redis.call('set', KEYS[1], ARGV[4], 'KEEPTTL')
+  elseif ARGV[5] == 'px' then
+    redis.call('set', KEYS[1], ARGV[4], 'PX', ARGV[6])
+  else
+    redis.call('set', KEYS[1], ARGV[4])
+  end
+  return 1
+`
+
 // ─── Lua 脚本常量（分布式锁） ───
 
 /** Lua 脚本：仅当 owner 匹配时才删除锁（原子操作，防止误释放） */
@@ -139,6 +157,13 @@ export function createRedisProvider(): CacheProvider {
   // ─── KV 操作 ───
 
   const kv: KvOperations = {
+    async compareAndSwap(key, expected, value, options) {
+      return wrapOperation(async () => {
+        if ((options?.px !== undefined && (!Number.isSafeInteger(options.px) || options.px <= 0)) || (options?.px !== undefined && options.keepTtl))
+          throw new TypeError('Invalid compare-and-swap expiry')
+        return isRedisOne(await client!.eval(COMPARE_AND_SWAP_SCRIPT, 1, key, expected === undefined ? 'missing' : 'value', expected === undefined ? '' : serialize(expected), value === undefined ? 'delete' : 'value', value === undefined ? '' : serialize(value), options?.keepTtl ? 'keep' : options?.px !== undefined ? 'px' : 'none', options?.px ?? 0))
+      })
+    },
     async get<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
       return wrapOperation(async () => {
         const value = await client!.get(key)

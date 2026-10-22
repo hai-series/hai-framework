@@ -238,7 +238,7 @@ iam.init()
 | ------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | 用户、角色、权限、关联关系、API Key               | DB（基础 5 张，可选 API Key 1 张） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
 | 会话（accessToken → Session）                     | 缓存                               | 有 TTL，滑动续期可选                                                                                                          |
-| Token 映射（refreshToken → userId + accessToken） | 缓存                               | 独立 key，refresh 后旧 token 立即失效                                                                                         |
+| Refresh 消费状态 | 缓存的用户分区 | 与 session/索引在单键 CAS 中提交 |
 | OTP 验证码                                        | 缓存                               | 有 TTL + 尝试次数限制                                                                                                         |
 | 密码重置令牌                                      | 缓存                               | 有 TTL + 最大验证次数限制                                                                                                     |
 | API Key                                           | DB                                 | `hai_iam_api_keys`，明文不落库，仅存 hash；前缀用于候选检索                                                                   |
@@ -339,21 +339,19 @@ async function registerWithSession(username: string, password: string) {
 
 ```
 refresh(refreshToken)
-  → 从缓存读取 refreshToken → { userId, accessToken } 映射
-  → 获取旧 session（通过 accessToken）
-  → 删除旧 refreshToken（缓存 key 立即失效 → 防重放攻击）
-  → 删除旧 accessToken session
-  → 创建全新 session（复用旧 session 的用户上下文）
-  → 返回新的 TokenPair
+  → 读取用户分区中的旧会话和版本，验证授权
+  → 构造新令牌候选（尚未生效）
+  → 单键 CAS 再核验版本和 refresh，原子撤销旧会话并发布唯一后继
+  → 仅提交成功后返回 TokenPair
 ```
 
 **单设备登录：**
 
 ```
 create(options) [singleDevice=true]
-  → 清除该用户所有已有令牌（遍历 user→tokens 映射）
-  → 生成新的 accessToken + refreshToken
-  → 存储 session 到缓存
+  → 构造新 accessToken + refreshToken
+  → 单键 CAS 同时替换该用户全部旧会话与索引
+  → 提交失败不踢出原会话
 ```
 
 ##### 使用方式
@@ -395,7 +393,7 @@ async function forceSignOut(userId: string) {
 
 - **纯缓存存储**：不落库；Memory 重启后丢失，共享 Redis 可跨 IAM 服务重启保留会话直至 TTL 或撤销
 - **滑动续期**：`sliding: true` 时每次 `get()` 自动延长 TTL
-- **Refresh Rotation**：旧 refreshToken 单次使用后立即失效，检测到重放即说明 token 泄漏
+- **Refresh Rotation**：旧 refresh 仅能成功消费一次；重复请求也可能来自合法并发或响应丢失，不能仅据此断言凭据泄露。
 - **Token 强度**：256-bit crypto random（`crypto.getRandomValues(new Uint8Array(32))`），base64url 编码
 
 ---
@@ -871,6 +869,9 @@ if (!result.success) {
   }
 }
 ```
+
+
+会话与 refresh 消费记录统一保存在 `hai:iam:sessions:{SHA256(userId)}` 版本化文档，不再使用独立 token 映射/索引。Bearer token 携带不可作为凭据的分区提示和 256 位随机值；客户端必须视为不透明字符串。`Session.version` 用于轮换提交校验。Memory 仅用于单进程测试，生产所有节点共享 Redis（含 Cluster）。并发冲突从最新文档重试，耗尽返回 CONFLICT；旧 refresh 不会产生第二个后继。若响应丢失后结果不明，调用方按失败关闭并重新登录，不假定旧凭据仍有效；全部会话仍受同一用户状态索引管理。
 
 ## 开发测试
 

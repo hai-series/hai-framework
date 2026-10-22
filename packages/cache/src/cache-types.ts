@@ -65,6 +65,17 @@ export interface ScanOptions {
   count?: number
 }
 
+/**
+ * 条件替换的过期策略；px 与 keepTtl 互斥，省略时新值永久保存。
+ * @example const expiry: CompareAndSwapOptions = { px: 60_000 }
+ */
+export interface CompareAndSwapOptions {
+  /** 新值存续的正整数毫秒数。 */
+  px?: number
+  /** 成功替换时保留已有 TTL；原键不存在时新值无 TTL。 */
+  keepTtl?: boolean
+}
+
 /** 有序集合成员（score + member 对） */
 export interface ZMember {
   /** 分数，用于排序 */
@@ -89,6 +100,17 @@ export interface KvOperations {
   get: <T = CacheValue>(key: string) => Promise<HaiResult<T | null>>
   /** 设置值；可通过 options 控制过期时间、NX/XX 条件等 */
   set: (key: string, value: CacheValue, options?: SetOptions) => Promise<HaiResult<void>>
+  /**
+   * 对单个 key 原子比较 JSON 序列化值并替换；比较失败返回 false，不修改值/TTL。
+   * expected=undefined 表示键不存在；value=undefined 表示删除，null 是实际 JSON 值。
+   * 适合跨节点状态版本更新，Cluster 只涉及一个 slot；调用方必须检查 success 和 data。
+   * @example
+   * ```ts
+   * const changed = await cache.kv.compareAndSwap('state', oldState, nextState, { px: 60_000 })
+   * if (changed.success && !changed.data) return retryFromLatestState()
+   * ```
+   */
+  compareAndSwap: (key: string, expected: CacheValue | undefined, value: CacheValue | undefined, options?: CompareAndSwapOptions) => Promise<HaiResult<boolean>>
   /** 删除一个或多个键；返回实际删除的数量。Cluster 跨 slot 按独立键有界执行，失败可能已有部分删除，重试幂等。 */
   del: (...keys: string[]) => Promise<HaiResult<number>>
   /** 检查一个或多个键是否存在；返回存在的数量。Cluster 跨 slot 独立读取，不保证同一时刻快照。 */

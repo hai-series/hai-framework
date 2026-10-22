@@ -17,7 +17,7 @@ import { SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { createCacheSessionRepository } from './iam-session-repository-cache.js'
-import { buildSession, generateToken } from './iam-session-utils.js'
+import { buildSession, generateSessionToken } from './iam-session-utils.js'
 
 /**
  * 移除 session 中仅供内部使用的敏感保留字段（如 _tokenPair 中的 refreshToken）。
@@ -55,7 +55,6 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
     const { config } = deps
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
     const sessionRepository = createCacheSessionRepository(
-      sessionConfig.maxAge ?? 86400,
       sessionConfig.refreshTokenMaxAge ?? 604800,
     )
 
@@ -106,6 +105,15 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   const singleDevice = config.singleDevice ?? false
   const repo = config.sessionRepository
 
+  /** 只构造候选值；旧凭据撤销与新凭据发布必须由仓库一次原子提交。 */
+  function candidate(options: CreateSessionOptions): { session: Session, tokens: TokenPair } {
+    const accessToken = generateSessionToken(options.userId)
+    const tokens: TokenPair = { accessToken, refreshToken: generateSessionToken(options.userId), expiresIn: maxAge, tokenType: 'Bearer' }
+    const session = buildSession(options, new Date(), options.maxAge ?? maxAge, accessToken)
+    session.data = { ...session.data, _tokenPair: tokens }
+    return { session, tokens }
+  }
+
   /** 持久化 key 是派生会话的授权上限；撤销、禁用、到期与读取失败均拒绝访问。 */
   async function validateApiKey(session: Session): Promise<HaiResult<Session>> {
     if (!session.apiKeyId)
@@ -128,29 +136,8 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   return {
     async create(options: CreateSessionOptions): Promise<HaiResult<Session>> {
       try {
-        if (singleDevice) {
-          const clearResult = await repo.removeByUserId(options.userId)
-          if (!clearResult.success) {
-            return clearResult as HaiResult<Session>
-          }
-        }
-
-        const accessToken = generateToken()
-        const tokenPair: TokenPair = {
-          accessToken,
-          refreshToken: generateToken(),
-          expiresIn: maxAge,
-          tokenType: 'Bearer',
-        }
-
-        const now = new Date()
-        const sessionTtl = options.maxAge ?? maxAge
-        const session = buildSession(options, now, sessionTtl, accessToken)
-
-        // 将 tokenPair 附加到 session 的 data 字段（持久化到缓存，logout 时可提取 refreshToken）
-        session.data = { ...session.data, _tokenPair: tokenPair }
-
-        const saveResult = await repo.save(session, tokenPair)
+        const { session, tokens } = candidate(options)
+        const saveResult = await repo.save(session, tokens, singleDevice)
         if (!saveResult.success) {
           return saveResult as HaiResult<Session>
         }
@@ -261,14 +248,8 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           return validated
         const effectiveSession = validated.data
 
-        // Rotation 策略：删除旧会话（removeByAccessToken 内部同时清理 refreshToken 映射）
-        const removeOldSessionResult = await repo.removeByAccessToken(oldSession.accessToken)
-        if (!removeOldSessionResult.success) {
-          return removeOldSessionResult as HaiResult<TokenPair>
-        }
-
-        // 创建新会话（复用旧会话的用户数据）
-        const newSessionResult = await this.create({
+        // 只构建候选会话；消费旧 refresh 与发布新会话在同一用户分区 CAS 中完成。
+        const next = candidate({
           userId: oldSession.userId,
           username: oldSession.username,
           displayName: oldSession.displayName,
@@ -281,21 +262,12 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           data: oldSession.data ? { ...oldSession.data, _tokenPair: undefined } : undefined,
         })
 
-        if (!newSessionResult.success) {
-          return newSessionResult as HaiResult<TokenPair>
-        }
-
-        // 从新会话中提取 tokenPair
-        const tokenPair = newSessionResult.data.data?._tokenPair
-        if (!tokenPair) {
-          return err(
-            HaiIamError.TOKEN_REFRESH_FAILED,
-            iamM('iam_refreshTokenFailed'),
-          )
-        }
+        const rotated = await repo.rotate(oldSession, refreshToken, next.session, next.tokens)
+        if (!rotated.success)
+          return rotated
 
         logger.debug('Token refreshed', { userId: oldSession.userId })
-        return ok(tokenPair)
+        return ok(next.tokens)
       }
       catch (error) {
         return err(

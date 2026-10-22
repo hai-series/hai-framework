@@ -238,7 +238,7 @@ iam.init()
 | ------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | ユーザー、ロール、権限、関連付け、API Key         | DB（基本 5、任意の API Key 1 テーブル） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
 | セッション（accessToken → Session）               | キャッシュ                              | TTL 付き、任意の自動延長                                                                                                      |
-| Token 対応（refreshToken → userId + accessToken） | キャッシュ                              | 独立 key、更新後に旧 Token を即時無効化                                                                                       |
+| Refresh 消費状態 | Redis ユーザー分区 | セッション・索引と単一キー CAS で更新 |
 | OTP コード                                        | キャッシュ                              | TTL + 試行回数制限                                                                                                            |
 | パスワードリセット Token                          | キャッシュ                              | TTL + 最大検証回数                                                                                                            |
 | API Key                                           | DB                                      | `hai_iam_api_keys`。平文は保存せず hash のみ。接頭辞で候補検索                                                                |
@@ -339,21 +339,19 @@ async function registerWithSession(username: string, password: string) {
 
 ```
 refresh(refreshToken)
-  → キャッシュから refreshToken → { userId, accessToken } を取得
-  → accessToken で旧 session を取得
-  → 旧 refreshToken を削除（即時無効化で再使用防止）
-  → 旧 accessToken の session を削除
-  → 旧ユーザー context で新 session を作成
-  → 新 TokenPair を返す
+  → ユーザー分区と会話バージョンを読み、認可を検証
+  → 未公開の新 Token 候補を生成
+  → 単一キー CAS で version/refresh を再検証し、旧会話と原子的に置換
+  → コミット後のみ唯一の後続 TokenPair を返す
 ```
 
 **単一端末のログイン：**
 
 ```
 create(options) [singleDevice=true]
-  → user→tokens の対応から既存の全 Token を削除
-  → 新 accessToken + refreshToken を生成
-  → session をキャッシュへ保存
+  → 新 accessToken + refreshToken の候補を生成
+  → 単一キー CAS で既存会話と索引を同時に置換
+  → コミット失敗時は旧会話を維持
 ```
 
 ##### 使用方法
@@ -395,7 +393,7 @@ async function forceSignOut(userId: string) {
 
 - **キャッシュのみの保存**：Memory は再起動時に消失します。共有 Redis のセッションは IAM サービス再起動後も TTL または失効まで保持します。
 - **自動延長**：`sliding: true` なら各 `get()` で TTL を延長。
-- **Refresh Rotation**：旧 refreshToken は一度の使用で無効化。再使用は漏洩の兆候。
+- **Refresh Rotation**：refresh は一度だけ消費します。重複は正常な並行処理や応答喪失でも発生し、それだけで漏洩と判断しません。
 - **Token 強度**：256-bit の暗号学的乱数（`crypto.getRandomValues(new Uint8Array(32))`）、base64url 形式。
 
 ---
@@ -858,6 +856,9 @@ if (!result.success) {
   }
 }
 ```
+
+
+会話と refresh 消費状態を `hai:iam:sessions:{SHA256(userId)}` のバージョン付き文書にまとめ、独立した対応キーと索引を廃止します。Bearer Token は認証には使えない分区ヒントと256ビットの乱数を含み、クライアントは不透明な文字列として扱います。更新時は Session.version を再検証します。Memory は単一プロセスのテスト用で、本番は全ノードが Redis（Cluster 対応）を共有します。競合は最新状態から再試行し、上限で CONFLICT を返します。応答喪失で結果が不明なら認証を拒否し再ログインします。すべての会話は同じユーザー索引で管理されます。
 
 ## 開発とテスト
 

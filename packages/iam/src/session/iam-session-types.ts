@@ -55,6 +55,8 @@ export interface AuthResult {
  * 会话数据
  */
 export interface Session {
+  /** 共享存储中的会话版本；轮换提交核验读取版本，拒绝使用迟到的授权快照。 */
+  version: string
   /** API Key 派生会话绑定的 key ID；普通用户登录时省略。 */
   apiKeyId?: string
   /** 当前 key scopes；get/verify/refresh 每次重新验证持久化 key 并收敛权限。 */
@@ -131,7 +133,7 @@ export interface SessionOperations {
   /**
    * 创建会话
    *
-   * 单设备模式下会先清除用户已有的所有会话。
+   * 单设备模式在同一次原子提交内替换用户已有会话；提交失败保留旧会话。
    *
    * @param options - 会话创建选项（用户 ID、角色、来源等）
    * @returns 成功返回完整的 Session 对象（含生成的访问令牌和过期时间）
@@ -183,7 +185,7 @@ export interface SessionOperations {
   /**
    * 删除用户所有会话
    *
-   * 遍历用户的所有令牌并逐一删除。
+   * 原子删除用户分区内所有会话与 refresh 凭据。
    *
    * @param userId - 用户 ID
    * @returns 成功返回实际删除的会话数量

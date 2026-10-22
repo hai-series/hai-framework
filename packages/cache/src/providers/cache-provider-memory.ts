@@ -156,9 +156,36 @@ export function createMemoryProvider(): CacheProvider {
   // ─── KV 操作 ───
 
   const kv: KvOperations = {
+    async compareAndSwap(key, expected, value, options) {
+      try {
+        if ((options?.px !== undefined && (!Number.isSafeInteger(options.px) || options.px <= 0)) || (options?.px !== undefined && options.keepTtl))
+          throw new TypeError('Invalid compare-and-swap expiry')
+        const entry = getValidEntry(key)
+        const actual = entry ? serializeValue(entry.value) : undefined
+        if (actual !== (expected === undefined ? undefined : serializeValue(expected)))
+          return ok(false)
+        if (value === undefined) {
+          store.delete(key)
+        }
+        else {
+          const expiresAt = options?.px !== undefined ? Date.now() + options.px : options?.keepTtl ? entry?.expiresAt : undefined
+          // 与 Redis 相同使用 JSON 快照，调用方修改对象不能绕过条件写入。
+          store.set(key, { value: deserializeValue(serializeValue(value)), expiresAt })
+        }
+        return ok(true)
+      }
+      catch (error) {
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'Compare-and-swap failed' } }), error)
+      }
+    },
     async get<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
-      const entry = getValidEntry(key)
-      return ok(entry ? (entry.value as T) : null)
+      try {
+        const entry = getValidEntry(key)
+        return ok(entry ? (deserializeValue(serializeValue(entry.value)) as T) : null)
+      }
+      catch (error) {
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'JSON snapshot failed' } }), error)
+      }
     },
 
     async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<void>> {
@@ -255,12 +282,17 @@ export function createMemoryProvider(): CacheProvider {
     },
 
     async mget<T = CacheValue>(...keys: string[]): Promise<HaiResult<(T | null)[]>> {
-      const results: (T | null)[] = []
-      for (const key of keys) {
-        const entry = getValidEntry(key)
-        results.push(entry ? (entry.value as T) : null)
+      try {
+        const results: (T | null)[] = []
+        for (const key of keys) {
+          const entry = getValidEntry(key)
+          results.push(entry ? (deserializeValue(serializeValue(entry.value)) as T) : null)
+        }
+        return ok(results)
       }
-      return ok(results)
+      catch (error) {
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'JSON snapshot failed' } }), error)
+      }
     },
 
     async mset(entries: Array<[string, CacheValue]>): Promise<HaiResult<void>> {

@@ -4,6 +4,7 @@
  */
 
 import type { CreateSessionOptions, Session } from './iam-session-types.js'
+import { createHash } from 'node:crypto'
 
 const BASE64_PLUS_REGEX = /\+/g
 const BASE64_SLASH_REGEX = /\//g
@@ -26,6 +27,30 @@ export function generateToken(): string {
 }
 
 /**
+ * 获取用户会话分区；SHA-256 路由提示不包含原始用户 ID，也不充当认证凭据。
+ * @example const scope = getUserSessionScope('user-1')
+ */
+export function getUserSessionScope(userId: string): string {
+  return createHash('sha256').update(userId).digest('hex')
+}
+
+/**
+ * 生成携带分区提示的随机会话令牌；认证仍须匹配共享状态中的完整 256 位随机值。
+ * @example const token = generateSessionToken('user-1')
+ */
+export function generateSessionToken(userId: string): string {
+  return `s1.${getUserSessionScope(userId)}.${generateToken()}`
+}
+
+/**
+ * 解析经过格式约束的路由提示；非法 token 不访问共享存储。
+ * @example const scope = getTokenSessionScope(accessToken)
+ */
+export function getTokenSessionScope(token: string): string | undefined {
+  return /^s1\.([a-f0-9]{64})\.[\w-]{43}$/.exec(token)?.[1]
+}
+
+/**
  * 构建会话数据
  *
  * @param options - 创建会话选项（用户 ID、角色等）
@@ -36,6 +61,7 @@ export function generateToken(): string {
  */
 export function buildSession(options: CreateSessionOptions, now: Date, sessionTtl: number, accessToken: string): Session {
   return {
+    version: crypto.randomUUID(),
     apiKeyId: options.apiKeyId,
     apiKeyScopes: options.apiKeyScopes,
     userId: options.userId,

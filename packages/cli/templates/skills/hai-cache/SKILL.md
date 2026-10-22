@@ -35,3 +35,5 @@ Cluster 的 mset/集合运算/多键 blocking pop 须同 slot；mget/del/exists 
 - [错误码 — `HaiCacheError`](reference.md#错误码--haicacheerror)
 - [常见模式](reference.md#常见模式)
 - [相关 Skills](reference.md#相关-skills)
+
+单键 compareAndSwap(key, expected, value, {px?,keepTtl?}) 比较 JSON 序列化快照并原子替换，必须检查 success 与 boolean data。expected=undefined 表示不存在，value=undefined 表示删除，null 是值；px 正整数且与 keepTtl 互斥。比较失败不修改 TTL；跨节点版本状态优先使用 CAS 而不是租约后无条件 SET。

@@ -203,3 +203,5 @@ else {
 - `hai-kit`：SvelteKit 集成层
 
 Cluster 与 Sentinel 数据节点认证使用 `password`，Cluster 发现的新节点继承同一鉴权配置。`url` 模式只使用 URL 内凭据，单独 password 不覆盖 URL。
+
+单键 compareAndSwap(key, expected, value, {px?,keepTtl?}) 比较 JSON 序列化快照并原子替换，必须检查 success 与 boolean data。expected=undefined 表示不存在，value=undefined 表示删除，null 是值；px 正整数且与 keepTtl 互斥。比较失败不修改 TTL；跨节点版本状态优先使用 CAS 而不是租约后无条件 SET。

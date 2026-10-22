@@ -238,7 +238,7 @@ Before initialization, every subsystem method returns `NOT_INITIALIZED` through 
 | --------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Users, roles, permissions, associations, API keys   | DB (5 base tables, 1 optional API Key table) | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
 | Sessions (accessToken → Session)                    | Cache                                        | TTL, optional sliding renewal                                                                                                 |
-| Token mapping (refreshToken → userId + accessToken) | Cache                                        | Separate keys; old tokens expire immediately after refresh                                                                    |
+| Refresh state | Redis user partition | Atomic with session/index |
 | OTP codes                                           | Cache                                        | TTL + attempt limit                                                                                                           |
 | Password reset tokens                               | Cache                                        | TTL + maximum verification attempts                                                                                           |
 | API Key                                             | DB                                           | `hai_iam_api_keys`; store hashes only, never plaintext; prefix narrows candidates                                             |
@@ -339,21 +339,19 @@ async function registerWithSession(username: string, password: string) {
 
 ```
 refresh(refreshToken)
-  → Read refreshToken → { userId, accessToken } from cache
-  → Get old session via accessToken
-  → Delete old refreshToken (expire key immediately to prevent replay)
-  → Delete old accessToken session
-  → Create a new session with the old user context
-  → Return new TokenPair
+  → Read the user partition and session version; validate authorization
+  → Build candidate tokens without publishing them
+  → Single-key CAS rechecks version/refresh and atomically replaces the old session
+  → Return the unique successor only after commit
 ```
 
 **Single-device login:**
 
 ```
 create(options) [singleDevice=true]
-  → Clear all existing user tokens via user→tokens mapping
-  → Generate new accessToken + refreshToken
-  → Store session in cache
+  → Build candidate accessToken + refreshToken
+  → Single-key CAS replaces all old sessions and their index together
+  → Failed commits preserve the previous session
 ```
 
 ##### Usage
@@ -862,6 +860,9 @@ if (!result.success) {
 ### Optional integrations
 
 Role lists aggregate actual member counts for the current page with one `iam.authz.getRoleUserCounts(roleIds)` call, returning `HaiResult<Map<string, number>>`. Unassigned roles get 0; failed queries show loading errors rather than fabricated zero counts.
+
+
+Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(userId)}` document, replacing separate mappings/indexes. Bearer tokens contain an untrusted routing hint plus 256 random bits; clients must treat them as opaque strings. Rotation checks `Session.version` at commit. Memory is for single-process tests; production nodes share Redis, including Cluster. Conflicts retry from the latest state and return CONFLICT when exhausted; one refresh cannot publish two successors. An ambiguous lost response requires failing closed and signing in again, without assuming the old token remains valid. All records remain covered by the same user index.
 
 ## Development and testing
 

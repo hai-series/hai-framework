@@ -91,7 +91,7 @@ if (!initialized.success) return initialized
 
 基础初始化创建用户/RBAC 五张表；启用 API Key 登录时另创建 `hai_iam_api_keys`。
 
-Token 和 OTP 存储在 cache 中（不落库）。refreshToken 使用独立的 cache key 存储。
+Token 和 OTP 存储在 cache 中（不落库）。session/refresh/index 位于同一用户分区版本文档，通过单键 CAS 提交。
 
 ### 可选 LDAP 与通知
 
@@ -487,3 +487,5 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 - `hai-cache`：会话、OTP/重置状态、一次性票据和共享锁
 - `hai-crypto`：密码哈希（内部依赖）
 - `hai-ui`：IAM 场景组件（LoginForm/RegisterForm 等）
+
+会话与 refresh 消费记录统一保存在 `hai:iam:sessions:{SHA256(userId)}` 版本化文档，不再使用独立 token 映射/索引。Bearer token 携带不可作为凭据的分区提示和 256 位随机值；客户端必须视为不透明字符串。`Session.version` 用于轮换提交校验。Memory 仅用于单进程测试，生产所有节点共享 Redis（含 Cluster）。并发冲突从最新文档重试，耗尽返回 CONFLICT；旧 refresh 不会产生第二个后继。若响应丢失后结果不明，调用方按失败关闭并重新登录，不假定旧凭据仍有效；全部会话仍受同一用户状态索引管理。
