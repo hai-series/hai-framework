@@ -558,9 +558,15 @@ memory:
 ```
 
 - **`native`（既定・推奨）**：HAI のネイティブエンジンは vecdb、reldb、LLM、Embedding を再利用します。`extract` は **Mem0 型の一括マージ**で、抽出した事実と既存記憶に 1 回の LLM 呼び出しで ADD / UPDATE / DELETE / NONE を決定し、増分更新・重複除去・矛盾削除・`category` 分類を実現します。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` が適用されます。削除は `objectId` ごとなので、ある主体の大量書き込みでほかの主体の記憶は失いません。scope の候補は `objectId` で絞り（≤ `maxEntriesPerObject`）、PostgreSQL はさらに JSONB 包含検索へ scope を渡して **GIN インデックス**を使います。SQLite/MySQL はメモリー照合で同じ結果を返します。
-- **`mem0`（mem0ai/oss）**：`mem0ai/oss` の `Memory` エンジンを直接組み込み、クラウドを使いません。LLM/Embedder は `llm` 設定から取得し、`qdrant` / `pgvector` は vecdb を再利用できます。`lancedb` / `chroma` など対応できないバックエンドは即座に失敗し、明示的な `memory.allowEphemeralFallback: true` の場合のみメモリーへ移行します。再起動後の無通知の記憶消失を防ぎ、履歴は既定で無効です。
+- **`mem0`（mem0ai/oss）**：`mem0ai/oss` の `Memory` エンジンを直接組み込み、クラウドを使いません。LLM/Embedder は `llm` 設定から取得し、`qdrant` は vecdb を再利用できます。現在のアダプターは完全な接続設定を持つ Qdrant のみをマッピングします。本番（`NODE_ENV` または `HAI_CORE_ENV=production`）では `memory.allowEphemeralFallback: true` でも実際のメモリーへの移行を拒否し、バックエンド未指定も失敗します。一時利用は開発または明示的な `HAI_E2E=1` / `HAI_E2E_MOCK=1` に限ります。履歴は既定で無効です。
 
-両 Provider は同じ `ai.memory.*`（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`）を提供し、`objectId` の主体分離と `{ topicId, personaId }` などの `scope` をサポートします。`recall` / `list` / `listPage` / `clear` は scope を厳密に絞り、`clear` に `types` / `scope` を渡すと同時一致のみを削除します。mem0 の `extract` は共通抽出器で分類・採点（`types` / `model` / `minImportance` / `systemPrompt`）後、`infer:false` で `hai_type` / `hai_importance` を保存します。`recall` も `types` と `recencyWeight` 減衰に対応し、native と同じ動作です。ただし mem0 の type/importance/metadata 更新は記憶を再作成して `id` を変更し、native は維持します。
+両 Provider は同じ `ai.memory.*`（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`）を提供し、`objectId` の主体分離と `{ topicId, personaId }` などの `scope` をサポートします。`recall` / `list` / `listPage` / `clear` は scope を厳密に絞り、`clear` に `types` / `scope` を渡すと同時一致のみを削除します。mem0 の `extract` は共通抽出器で分類・採点（`types` / `model` / `minImportance` / `systemPrompt`）後、`infer:false` で `hai_type` / `hai_importance` を保存します。`recall` も `types` と `recencyWeight` 減衰に対応し、native と同じ動作です。Mem0 はテキストとメタデータをその場で更新し、`id` と作成時刻を保持します。SDK の検索は `filters.user_id`、書き込みと主体全体の削除は `userId` を使います。SDK に一覧カーソルがないため、`list` / `listPage` / 条件付き `clear` は期限切れを含む主体候補 1000 件まで対応します。1 件余分に読み、超過は `MEMORY_LIST_INCOMPLETE`（906）で失敗します。不正確な total や一部のみの条件付き削除は行いません。候補が完全な場合、UTC の有効期限、型、scope で絞ってからページ分割します。主体全体の `deleteAll` は一覧上限の対象外です。公開 API の空条件 clear は拒否し、全主体の削除は信頼された管理者による明示的な `admin.clearAll({ confirm: true })` に限定します。
+
+Mem0 3.3.1 は `QdrantClient.search` を呼び出すため、カタログと AI の optional peer は検証済みの `@qdrant/js-client-rest` `1.18.0` に固定します。起動時に公開メソッドを確認し、不整合は設定エラーにします。このメソッドを削除した 1.19 への上書きはできません。
+
+Mem0 + pgvector は全環境で起動を拒否します。SDK が PostgreSQL 接続を私有オブジェクトに保持し、公開された close API がないためです。pgvector は `memory.provider: native` で利用でき、ネイティブの対応は維持します。`disableHistory: true` はリソースを持たない履歴実装を選び、履歴 SQLite ファイルを作成しません。ファクトリーは上限付きの公開読み取りでバックエンドの準備完了を待ってから成功を公開します。
+
+SDK の追加応答には完全な業務フィールドがないため、`add` / `extract` は書き込み後に保存済みレコードを読み取ります。extract は全ての進行中の書き込み完了を待ちます。書き込みまたは再読み取り失敗時、`error.ext.requiresEffectReconciliation=true` と既知の ID の `memoryIds` を返します（応答消失時は空の場合もあります）。主体の実データを照合してから復旧し、add/extract を無条件に繰り返さないでください。自動再実行は行いません。
 
 **候補集合と scope の検索漏れ**：`topK` で先に切り捨てると、別の話題・人格の関連性が高い記憶が対象 scope を押し出します。そのため `recall` / `injectMemories` は `topK × candidateMultiplier`（既定 5）件を取得してから絞り、`topK` 件にします。`topicId` + `personaId` など細かく分離する場合は `candidateMultiplier` を増やせます：
 

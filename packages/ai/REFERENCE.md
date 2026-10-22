@@ -89,8 +89,14 @@ Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key �
 Memory 后端通过 `memory.provider` 选择：
 
 - `native`（默认）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding。`extract` 采用 Mem0 式批量合并（ADD/UPDATE/DELETE/NONE + `category`）；`maxEntriesPerObject`（单主体配额）/`maxEntriesGlobal`（全局上限）/`recencyDecay`/`embeddingEnabled`/`writebackRelatedTopK` 作用于此后端；淘汰按 `objectId` 分区。
-- `mem0`：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式）。LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容，场景模型 `extraction` / `embedding`）；向量库从底层 vecdb 后端提取（`storeProvider.getVectorBackend()`），qdrant/pgvector 复用同一后端；无法映射 lancedb/chroma 等后端时**默认 fail-fast**（除非 `memory.allowEphemeralFallback: true` 才退回 mem0 in-memory）；历史默认禁用。
-- 两者对外 API（extract/recall/injectMemories/add/update/get/remove/list/listPage/clear）完全一致；`objectId` 隔离不同主体的记忆，`scope`（key-value）用于业务作用域隔离（recall/list/listPage/clear 均严格过滤）。mem0 后端 `extract` 在框架层分类打分后以 `infer:false` 写入（保留 `hai_type`/`hai_importance`），`recall` 支持 `types`/`recencyWeight`，与 native 一致；mem0 后端 `update` 涉及 type/importance/metadata 时会重建记忆并重新分配 `id`。
+- `mem0`：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式）。LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容，场景模型 `extraction` / `embedding`）；向量库从底层 vecdb 后端提取（`storeProvider.getVectorBackend()`），qdrant 复用同一后端；当前适配仅映射带完整连接参数的 `qdrant`；生产环境（`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production`）即使设置 `memory.allowEphemeralFallback: true` 也拒绝实际内存回退。临时回退仅限开发或明确的 `HAI_E2E=1` / `HAI_E2E_MOCK=1`；缺少后端同样不能在生产启动。历史默认禁用。
+- 两者对外 API（extract/recall/injectMemories/add/update/get/remove/list/listPage/clear）完全一致；`objectId` 隔离不同主体的记忆，`scope`（key-value）用于业务作用域隔离（recall/list/listPage/clear 均严格过滤）。mem0 后端 `extract` 在框架层分类打分后以 `infer:false` 写入（保留 `hai_type`/`hai_importance`），`recall` 支持 `types`/`recencyWeight`，与 native 一致；Mem0 的 `update` 使用 SDK 原地修改文本与元数据，保持 `id` 和创建时间。SDK 查询使用 `filters.user_id`，写入和整主体删除使用 `userId`。SDK 无列表游标：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用 SDK `deleteAll`，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
+
+Mem0 3.3.1 的 Qdrant 适配仍依赖 `QdrantClient.search`；项目将 `@qdrant/js-client-rest` 精确锁定为受测的 `1.18.0`，AI 的可选 peer 也声明此版本。启动会检查该公开方法，缺失时明确配置失败；不要覆盖为已移除此方法的 1.19。
+
+Mem0 的 pgvector 组合在所有环境拒绝启动：当前 SDK 将 PostgreSQL 连接保存在私有对象中，未提供公开关闭入口，框架无法履行资源清理契约。需要 pgvector 时选择 `memory.provider: native`；该原生后端保持支持。`disableHistory: true` 使用 SDK 无资源的历史占位实现，不创建历史 SQLite 文件。工厂通过公开的一条有界只读查询等待实际后端 ready 后才发布成功。
+
+`add` / `extract` 的 SDK 回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
 
 ## Retrieval / RAG
 

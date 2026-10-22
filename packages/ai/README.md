@@ -564,9 +564,15 @@ memory:
 ```
 
 - **`native`（默认，推荐）**：HAI 原生引擎，复用同一套 vecdb（向量库）、reldb（关系库）、LLM 与 Embedding。`extract` 采用 **Mem0 式批量合并**——一次 LLM 调用对整批抽取事实与相关既有记忆做 ADD / UPDATE / DELETE / NONE 决策，实现增量更新、跨条去重与矛盾删除，并支持 `category` 主题标签。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` 均作用于此后端；淘汰按 `objectId` 分区触发，不会因某一主体写入过多而淘汰其他主体的记忆。native 后端的 `scope` 过滤：候选集已被 `objectId` 索引收窄（≤ `maxEntriesPerObject`），PostgreSQL 上还会把 scope 下推为 `data @> '{"scope":...}'::jsonb` 包含查询并命中 JSONB **GIN 索引**（SQLite / MySQL 退回内存匹配，结果一致）。
-- **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取；`qdrant` / `pgvector` 可复用底层 vecdb。无法映射 `lancedb` / `chroma` 等后端时默认 fail-fast，只有显式设置 `memory.allowEphemeralFallback: true` 才使用 mem0 in-memory，避免重启后静默丢失记忆。历史记录默认禁用。
+- **`mem0`（真·mem0ai/oss）**：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式，无云服务）。LLM / Embedder 从 `llm` 配置提取；`qdrant` 可复用底层 vecdb。当前适配仅映射带完整连接参数的 `qdrant`；生产环境（`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production`）即使设置 `memory.allowEphemeralFallback: true` 也拒绝实际内存回退。临时回退仅限开发或明确的 `HAI_E2E=1` / `HAI_E2E_MOCK=1`；缺少后端同样不能在生产启动。历史记录默认禁用。
 
-两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`），均支持 `objectId`（主体隔离）与 `scope`（业务作用域 key-value 过滤，如 `{ topicId, personaId }`）。`recall` / `list` / `listPage` / `clear` 均按 `scope` 严格过滤，`clear` 在传入 `types` / `scope` 时仅删除同时匹配项（避免误删）。mem0 后端的 `extract` 在框架层用统一提取器完成分类与打分（honor `types` / `model` / `minImportance` / `systemPrompt`）后以 `infer:false` 写入，保留 `hai_type` / `hai_importance`；`recall` 同样支持 `types` 过滤与 `recencyWeight` 时间衰减——二者行为与 native 一致。一个差异：mem0 后端在 `update` 涉及 type/importance/metadata 时会重建记忆并重新分配 `id`（native 后端保持 id 稳定）。
+两个 Provider 对外 `ai.memory.*` API 完全一致（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`），均支持 `objectId`（主体隔离）与 `scope`（业务作用域 key-value 过滤，如 `{ topicId, personaId }`）。`recall` / `list` / `listPage` / `clear` 均按 `scope` 严格过滤，`clear` 在传入 `types` / `scope` 时仅删除同时匹配项（避免误删）。mem0 后端的 `extract` 在框架层用统一提取器完成分类与打分（honor `types` / `model` / `minImportance` / `systemPrompt`）后以 `infer:false` 写入，保留 `hai_type` / `hai_importance`；`recall` 同样支持 `types` 过滤与 `recencyWeight` 时间衰减——二者行为与 native 一致。Mem0 的 `update` 使用 SDK 原地修改文本与元数据，保持 `id` 和创建时间。SDK 查询使用 `filters.user_id`，写入和整主体删除使用 `userId`。SDK 无列表游标：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用 SDK `deleteAll`，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
+
+Mem0 3.3.1 的 Qdrant 适配仍依赖 `QdrantClient.search`；项目将 `@qdrant/js-client-rest` 精确锁定为受测的 `1.18.0`，AI 的可选 peer 也声明此版本。启动会检查该公开方法，缺失时明确配置失败；不要覆盖为已移除此方法的 1.19。
+
+Mem0 的 pgvector 组合在所有环境拒绝启动：当前 SDK 将 PostgreSQL 连接保存在私有对象中，未提供公开关闭入口，框架无法履行资源清理契约。需要 pgvector 时选择 `memory.provider: native`；该原生后端保持支持。`disableHistory: true` 使用 SDK 无资源的历史占位实现，不创建历史 SQLite 文件。工厂通过公开的一条有界只读查询等待实际后端 ready 后才发布成功。
+
+`add` / `extract` 的 SDK 回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
 
 **候选池与 scope 漏召回**：`scope` 过滤在内存中完成，若先按 `topK` 截断再过滤，同一主体下相关度较高的其它主题/角色记忆会把目标 scope 的记忆挤出候选池，导致「明明有却召回 0 条」。为此 `recall` / `injectMemories` 先取回 `topK × candidateMultiplier`（默认 5）条候选，过滤后再截取 `topK`。scope 隔离越细（如按 `topicId` + `personaId`），可将 `candidateMultiplier` 调大：
 

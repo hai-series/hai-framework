@@ -283,8 +283,8 @@ catalogs:
       specifier: ^1.64.0
       version: 1.64.0
     '@qdrant/js-client-rest':
-      specifier: ^1.19.0
-      version: 1.19.0
+      specifier: 1.18.0
+      version: 1.18.0
     '@scalar/api-reference':
       specifier: ^1.73.1
       version: 1.73.1
@@ -1268,9 +1268,12 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.32.1(supports-color@7.2.0)(zod@4.6.5)
+      '@qdrant/js-client-rest':
+        specifier: 1.18.0
+        version: 1.18.0(typescript@6.0.3)
       mem0ai:
         specifier: 'catalog:'
-        version: 3.3.1(@cloudflare/workers-types@4.20260702.1)(@huggingface/transformers@3.0.2(@types/node@26.6.5))(@qdrant/js-client-rest@1.19.0(typescript@6.0.3))(@types/pg@8.23.1)(better-sqlite3@12.11.1)(chromadb@3.5.0)(compromise@14.18.0)(debug@4.4.3(supports-color@7.2.0))(mysql2@3.24.5(@types/node@26.6.5))(pg@8.23.1)(supports-color@7.2.0)(ws@8.22.0)
+        version: 3.3.1(@cloudflare/workers-types@4.20260702.1)(@huggingface/transformers@3.0.2(@types/node@26.6.5))(@qdrant/js-client-rest@1.18.0(typescript@6.0.3))(@types/pg@8.23.1)(better-sqlite3@12.11.1)(chromadb@3.5.0)(compromise@14.18.0)(debug@4.4.3(supports-color@7.2.0))(mysql2@3.24.5(@types/node@26.6.5))(pg@8.23.1)(supports-color@7.2.0)(ws@8.22.0)
       nanoid:
         specifier: 'catalog:'
         version: 6.0.2
@@ -2137,7 +2140,7 @@ importers:
         version: 0.40.0(@types/node@26.6.5)(apache-arrow@18.1.0)
       '@qdrant/js-client-rest':
         specifier: 'catalog:'
-        version: 1.19.0(typescript@6.0.3)
+        version: 1.18.0(typescript@6.0.3)
       chromadb:
         specifier: 'catalog:'
         version: 3.5.0
@@ -3758,9 +3761,9 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
-  '@qdrant/js-client-rest@1.19.0':
-    resolution: {integrity: sha512-1+QLUHsWp+WV4PE35FLnH2ckxotWrQEqi/F3t4goF3cCThR0ZxLVtOC4OoOi/E1iyj/iIYBdbuACWMuQ15NAnA==}
-    engines: {node: '>=22.0.0'}
+  '@qdrant/js-client-rest@1.18.0':
+    resolution: {integrity: sha512-/0dqX5uV9chC1DnYSnU4gNMrDqse/pt6hHg3Rqqpl5isH7xl1xSNvffjzBoxycDD79luWn7Ho6Rh/61sOs5DNw==}
+    engines: {node: '>=18.17.0', pnpm: '>=8'}
     peerDependencies:
       typescript: '>=4.7'
 
@@ -11082,15 +11085,13 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
-  '@qdrant/js-client-rest@1.19.0(typescript@6.0.3)':
+  '@qdrant/js-client-rest@1.18.0(typescript@6.0.3)':
     dependencies:
       '@qdrant/openapi-typescript-fetch': 1.2.6
       typescript: 6.0.3
       undici: 7.30.0
-    optional: true
 
-  '@qdrant/openapi-typescript-fetch@1.2.6':
-    optional: true
+  '@qdrant/openapi-typescript-fetch@1.2.6': {}
 
   '@replit/codemirror-css-color-picker@6.3.0(@codemirror/language@6.13.1)(@codemirror/state@6.7.6)(@codemirror/view@6.43.14)':
     dependencies:
@@ -14999,7 +15000,7 @@ snapshots:
 
   media-typer@1.1.1: {}
 
-  mem0ai@3.3.1(@cloudflare/workers-types@4.20260702.1)(@huggingface/transformers@3.0.2(@types/node@26.6.5))(@qdrant/js-client-rest@1.19.0(typescript@6.0.3))(@types/pg@8.23.1)(better-sqlite3@12.11.1)(chromadb@3.5.0)(compromise@14.18.0)(debug@4.4.3(supports-color@7.2.0))(mysql2@3.24.5(@types/node@26.6.5))(pg@8.23.1)(supports-color@7.2.0)(ws@8.22.0):
+  mem0ai@3.3.1(@cloudflare/workers-types@4.20260702.1)(@huggingface/transformers@3.0.2(@types/node@26.6.5))(@qdrant/js-client-rest@1.18.0(typescript@6.0.3))(@types/pg@8.23.1)(better-sqlite3@12.11.1)(chromadb@3.5.0)(compromise@14.18.0)(debug@4.4.3(supports-color@7.2.0))(mysql2@3.24.5(@types/node@26.6.5))(pg@8.23.1)(supports-color@7.2.0)(ws@8.22.0):
     dependencies:
       '@cloudflare/workers-types': 4.20260702.1
       axios: 1.20.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
@@ -15010,7 +15011,7 @@ snapshots:
       zod: 3.25.76
     optionalDependencies:
       '@huggingface/transformers': 3.0.2(@types/node@26.6.5)
-      '@qdrant/js-client-rest': 1.19.0(typescript@6.0.3)
+      '@qdrant/js-client-rest': 1.18.0(typescript@6.0.3)
       '@types/pg': 8.23.1
       chromadb: 3.5.0
       mysql2: 3.24.5(@types/node@26.6.5)
@@ -16941,8 +16942,7 @@ snapshots:
 
   undici@7.29.1: {}
 
-  undici@7.30.0:
-    optional: true
+  undici@7.30.0: {}
 
   undici@8.11.2: {}
 

@@ -12,6 +12,7 @@
 | reldb | PostgreSQL、MySQL | SQLite（含磁盘文件） |
 | storage | S3 或兼容对象服务 | local |
 | vecdb | Qdrant、远端 Chroma、pgvector | LanceDB、嵌入式 Chroma |
+| AI Mem0 | 完整连接参数实际映射的 Qdrant；Qdrant 客户端受测 1.18.0，启动校验 search；不继承外层 Store 的共享标签 | 明确允许的临时回退；生产即使 allowEphemeralFallback=true 也拒绝实际 memory |
 | AI Store | `stateScope: 'shared'` 的 Provider；内置实现要求共享 RelDB 与共享 vecdb | 显式 memory 或本机 RelDB/vecdb |
 | 传输公钥与 nonce | 基于真实 Redis 或 PostgreSQL/MySQL 的 registry，或满足同等原子契约的共享实现 | memory、包装 memory 的 Redis 工厂、包装 SQLite 的 RelDB 工厂 |
 | Reach | SMTP、短信或真实 API Provider | console（仅写日志） |
@@ -70,6 +71,7 @@ Task、当前执行事件、稳定 message ID 回执和当前执行结果保存�
 | Redis | 真实 Redis/Cluster 的鉴权、slot、多 key、scan/keyPrefix 与 owner 约束；独立 Node 的限流、会话及 nonce 竞争 | 同宿主容器/进程测试，不等于跨地域 Redis 故障转移演练 |
 | Context/Store | Memory、文件 SQLite；真实 PG/MySQL 并发创建、旧版本拒绝、锁等待跨截止时间；双 Node 原进程暂停 45 秒后新 owner 接管、manual pending 重启提交幂等 | 不含真实模型供应商计费/工具副作用回滚 |
 | A2A | 公开 JSON-RPC 的双实例测试；独立双 Node 在文件 SQLite/LanceDB、PG/Qdrant、MySQL/Qdrant 三组完成跨节点订阅/真实 owner 取消、节点重启后续接、原进程实际暂停越租后迟到写拒绝。PG/MySQL 子进程开启 production 且无 E2E 豁免；共享状态异常不泄漏连接凭据 | 两个进程与网络数据库/向量容器位于同宿主；真实 CAS/DB 时钟另有 PG/MySQL 行锁跨截止时间验证。尚未演练跨主机网络分区、数据库主从切换或 Qdrant 副本故障 |
+| Mem0 | 安装版本真实 SDK + Qdrant 的生产映射、跨实例 CRUD/检索/主体隔离、原地元数据更新、超过 20 条列表及 1001 条过期候选拒绝、空条件/条件/整主体清理 | 受控本地 embedding HTTP，未调用真实模型供应商；PG 因 SDK 无公开连接关闭 API 明确拒绝，原生 Memory+pgvector 保留 |
 | 知识发布 | 真实 SQLite+Qdrant 的并发重建、发布失败、迟到写、重试清理与跨页删除；真实 Qdrant CRUD/检索 | 两套存储无共同事务，以 manifest 可见性与补偿清理收敛；不承诺向量服务故障时仍可检索 |
 | 审计/生命周期 | PG/MySQL/SQLite 的并发 ready；Redis、DB、S3 真实连接失败/清理以及迟到初始化、重复关闭 | 不等于云托管服务、网络代理、所有 SDK 版本和所有原生 SQLite 运行时验收 |
 | 队列/调度/支付 | 共享队列和 occurrence 的定向并发/进程测试，平台签名及回调契约测试 | 真实邮件/短信/支付扣款与退款、外部系统幂等能力须在各部署沙箱单独验收 |

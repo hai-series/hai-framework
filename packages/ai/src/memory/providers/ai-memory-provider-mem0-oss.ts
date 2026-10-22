@@ -3,12 +3,12 @@
  *
  * 通过 `mem0ai/oss` 的 `Memory` 引擎实现记忆能力，LLM / Embedder 从 AIConfig 提取
  * （OpenAI 兼容，走 baseURL），向量库从 storeProvider 暴露的原始连接映射：
- * qdrant / pgvector 复用同一后端；lancedb / chroma 等 mem0 不支持的持久化后端默认
- * fail-fast，仅在显式允许时退回 in-memory 存储。历史记录禁用以避免额外 SQLite 依赖。
+ * qdrant 复用同一后端；当前适配无法映射的后端默认 fail-fast。
+ * 临时内存回退仅用于开发或明确的 E2E 环境，生产必须使用实际持久化 Qdrant 后端。
  * @module ai-memory-provider-mem0-oss
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiErrorDef, HaiResult } from '@h-ai/core'
 import type { MemoryConfig as Mem0Config, Memory as Mem0Memory, MemoryItem as Mem0MemoryItem } from 'mem0ai/oss'
 
 import type { AIConfig, MemoryConfig } from '../../ai-config.js'
@@ -24,6 +24,7 @@ import type {
   MemoryUpdateInput,
 } from '../ai-memory-types.js'
 
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
 import { resolveModelEntry } from '../../ai-config.js'
@@ -35,7 +36,19 @@ import { injectRelevantMemories, isMemoryAccessDenied } from '../ai-memory-injec
 const logger = core.logger.child({ module: 'ai', scope: 'memory-mem0-oss' })
 const DEFAULT_IMPORTANCE = 0.5
 const DEFAULT_OBJECT_ID = 'hai-global'
+const MEM0_LIST_CANDIDATE_LIMIT = 1000
 const MEMORY_TYPES = new Set<MemoryType>(['fact', 'preference', 'event', 'entity', 'instruction'])
+
+/** SDK 无游标；拒绝把截断的候选集当成完整结果或执行部分删除。 */
+class Mem0ListIncompleteError extends Error {}
+
+/** 写后读或回执失败不证明未写入；保留可核对的 ID，调用方不得盲目重做 add/extract。 */
+function memoryWriteFailure(definition: HaiErrorDef, message: string, cause: unknown, memoryIds: string[]): HaiResult<never> {
+  const failure = err(definition, message, cause)
+  if (!failure.success)
+    failure.error.ext = { requiresEffectReconciliation: true, memoryIds: [...memoryIds] }
+  return failure
+}
 
 /** 创建 Mem0 OSS Provider 的依赖 */
 export interface Mem0OssDeps {
@@ -49,7 +62,7 @@ export interface Mem0OssDeps {
   collectionName: string
   /** 向量维度（可选，未提供时由 mem0 探测） */
   embeddingDims?: number
-  /** hai vecdb 后端连接（qdrant / pgvector 复用；不支持的后端默认 fail-fast） */
+  /** hai vecdb 后端连接（qdrant 复用；pgvector 无可管理的 SDK 生命周期，拒绝启动） */
   vectorBackend?: AIVectorBackend
 }
 
@@ -163,7 +176,7 @@ function matchScope(entry: MemoryEntry, scope: Record<string, unknown>): boolean
 /** mem0 向量库解析结果：配置 + 实际生效 provider + 是否持久化 */
 interface Mem0VectorStoreResolution {
   vectorStore: Mem0Config['vectorStore']
-  /** 实际生效的向量 provider（qdrant / pgvector / memory） */
+  /** 实际生效的向量 provider（qdrant / memory） */
   provider: string
   /** 是否为持久化后端（服务重启后数据是否保留） */
   persistent: boolean
@@ -172,8 +185,8 @@ interface Mem0VectorStoreResolution {
 /**
  * 将 hai vecdb 后端映射为 mem0 vectorStore 配置
  *
- * mem0 TS 仅支持 qdrant / pgvector。当底层后端为 lancedb / chroma / 未知时无法映射，
- * 默认 fail-fast（返回错误）以避免服务重启后记忆静默丢失；仅当显式允许时才退回内存存储。
+ * 当前框架适配仅映射 qdrant，且连接字段必须足以指向实际服务。
+ * 其它后端的显式内存回退仍须经过生产共享状态检查。
  */
 function buildVectorStoreConfig(deps: Mem0OssDeps): HaiResult<Mem0VectorStoreResolution> {
   const collectionName = deps.collectionName
@@ -181,6 +194,14 @@ function buildVectorStoreConfig(deps: Mem0OssDeps): HaiResult<Mem0VectorStoreRes
   const backend = deps.vectorBackend
 
   if (backend?.type === 'qdrant') {
+    let validConnection = false
+    try {
+      const url = new URL(backend.url ?? '')
+      validConnection = url.protocol === 'https:' || url.protocol === 'http:'
+    }
+    catch {}
+    if (!validConnection)
+      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendConnectionRequired', { params: { backend: backend.type } }))
     return ok({
       provider: 'qdrant',
       persistent: true,
@@ -196,25 +217,9 @@ function buildVectorStoreConfig(deps: Mem0OssDeps): HaiResult<Mem0VectorStoreRes
     })
   }
 
-  if (backend?.type === 'pgvector') {
-    return ok({
-      provider: 'pgvector',
-      persistent: true,
-      vectorStore: {
-        provider: 'pgvector',
-        config: {
-          host: backend.host,
-          port: backend.port,
-          dbName: backend.database,
-          user: backend.user,
-          password: backend.password,
-          connectionString: backend.connectionString,
-          collectionName,
-          ...(dimension ? { dimension, embeddingModelDims: dimension } : {}),
-        },
-      },
-    })
-  }
+  // SDK Memory 隐藏了 PGVector 独占的 pg.Client，未提供公开关闭入口；不能发布会泄漏连接的组合。
+  if (backend?.type === 'pgvector')
+    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendLifecycleUnsupported'))
 
   // 配置了持久化后端但 mem0 无法映射（lancedb / chroma / 未知）：默认 fail-fast，
   // 避免服务重启后记忆静默丢失；仅当 memory.allowEphemeralFallback=true 时退回内存存储。
@@ -256,6 +261,8 @@ function buildMem0Config(deps: Mem0OssDeps): HaiResult<{ config: Mem0Config, vec
   const vectorResolved = buildVectorStoreConfig(deps)
   if (!vectorResolved.success)
     return vectorResolved
+  if (core.module.requiresSharedState(process.env) && !vectorResolved.data.persistent)
+    return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memorySharedBackendRequired'))
 
   return ok({
     vectorProvider: vectorResolved.data.provider,
@@ -288,6 +295,7 @@ function buildMem0Config(deps: Mem0OssDeps): HaiResult<{ config: Mem0Config, vec
 
 async function extractMemories(context: Mem0OssContext, messages: ChatMessage[], options?: MemoryExtractOptions): Promise<HaiResult<MemoryEntry[]>> {
   const objectId = options?.objectId ?? context.defaultObjectId
+  const memoryIds: string[] = []
 
   // 在框架层用统一提取器完成分类与打分（honor types / model / minImportance / systemPrompt / tempModel），
   // 再以 infer:false 写入 mem0 并保留 hai_type / hai_importance，确保与 native 后端业务语义一致。
@@ -307,20 +315,31 @@ async function extractMemories(context: Mem0OssContext, messages: ChatMessage[],
 
   try {
     // 批量并发写入，避免 await-in-loop（N+1）
-    const stored = await Promise.all(extracted.data.map(async (entry) => {
+    const stored = await Promise.allSettled(extracted.data.map(async (entry) => {
       const response = await context.memory.add([{ role: 'user', content: entry.content }], {
         userId: objectId,
         metadata: buildMetadata({ type: entry.type, importance: entry.importance, scope: options?.scope, metadata: entry.metadata }, objectId),
         infer: false,
       })
       const item = response.results[0]
-      return item ? toMemoryEntry(item, objectId) : undefined
+      if (!item)
+        throw new Error('Mem0 OSS did not return the stored memory')
+      memoryIds.push(item.id)
+      // infer:false 的写入回执仅有 id/text/event，不包含权威 metadata 或创建时间。
+      const persisted = await context.memory.get(item.id)
+      if (!persisted)
+        throw new Error('Mem0 OSS stored memory could not be read back')
+      return toMemoryEntry(persisted, objectId)
     }))
-    return ok(stored.filter((entry): entry is MemoryEntry => entry !== undefined))
+    // 等待全部在途写入结束后报告，避免失败返回后仍有写入导致遗漏已知 ID。
+    const failed = stored.find(result => result.status === 'rejected')
+    if (failed?.status === 'rejected')
+      throw failed.reason
+    return ok(stored.flatMap(result => result.status === 'fulfilled' ? [result.value] : []))
   }
   catch (error) {
     logger.error('Mem0 OSS extract failed', { error })
-    return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(error) } }), error)
+    return memoryWriteFailure(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(error) } }), error, memoryIds)
   }
 }
 
@@ -332,7 +351,7 @@ async function recallMemories(context: Mem0OssContext, query: string, options?: 
     // mem0 无法下推 scope（存于 metadata），只能先取回更大的候选池再在内存过滤。
     // 若仅取 topK，scope 命中的记忆很可能已被同主体其它主题/角色的高相关条目挤出候选，导致漏召回。
     const response = await context.memory.search(query, {
-      filters: { userId: objectId },
+      filters: { user_id: objectId },
       topK: topK * candidateMultiplier,
     })
     let entries = response.results
@@ -372,6 +391,7 @@ async function recallMemories(context: Mem0OssContext, query: string, options?: 
 
 async function addMemory(context: Mem0OssContext, entry: MemoryEntryInput): Promise<HaiResult<MemoryEntry>> {
   const objectId = entry.objectId ?? context.defaultObjectId
+  const memoryIds: string[] = []
   try {
     const response = await context.memory.add([{ role: 'user', content: entry.content }], {
       userId: objectId,
@@ -381,24 +401,19 @@ async function addMemory(context: Mem0OssContext, entry: MemoryEntryInput): Prom
     const stored = response.results[0]
     if (!stored)
       throw new Error('Mem0 OSS did not return the stored memory')
-    return ok(toMemoryEntry(stored, objectId))
+    memoryIds.push(stored.id)
+    const persisted = await context.memory.get(stored.id)
+    if (!persisted)
+      throw new Error('Mem0 OSS stored memory could not be read back')
+    return ok(toMemoryEntry(persisted, objectId))
   }
   catch (error) {
     logger.error('Mem0 OSS add failed', { error })
-    return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
+    return memoryWriteFailure(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error, memoryIds)
   }
 }
 
-/**
- * 更新一条记忆的任意字段（content / type / importance / metadata / scope）
- *
- * mem0 OSS 的 `update()` 仅能改写记忆文本，且未暴露 metadata 更新 API，其内部 vectorStore
- * 为私有字段，无法安全地原地改写 payload。为完整实现更新语义，此处采用
- * 「读取现有条目 → 合并字段 → 删除旧条目 → infer:false 重新写入」的方式。
- *
- * 代价：mem0 后端会为更新后的记忆分配新的 memoryId（与 native 后端保持稳定 id 的行为不同，
- * 已在 README 中作为后端差异说明）；通过 `timestamp` 保留原始创建时间。
- */
+/** 更新文本与元数据时使用 SDK 原地更新，保留 ID、创建时间和未修改的业务字段。 */
 async function updateMemory(context: Mem0OssContext, memoryId: string, updates: MemoryUpdateInput, accessScope?: MemoryAccessScope): Promise<HaiResult<MemoryEntry>> {
   try {
     const item = await context.memory.get(memoryId)
@@ -409,19 +424,6 @@ async function updateMemory(context: Mem0OssContext, memoryId: string, updates: 
     if (isMemoryAccessDenied(existing, accessScope))
       return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
     const objectId = existing.objectId ?? context.defaultObjectId
-
-    // 仅改文本：mem0.update 可原地更新，保持 memoryId 稳定
-    const onlyContentChanged = updates.content !== undefined
-      && updates.type === undefined
-      && updates.importance === undefined
-      && updates.metadata === undefined
-    if (onlyContentChanged) {
-      await context.memory.update(memoryId, updates.content!)
-      const refreshed = await context.memory.get(memoryId)
-      return ok(refreshed ? toMemoryEntry(refreshed, objectId) : { ...existing, content: updates.content! })
-    }
-
-    // 涉及 type / importance / metadata：删除后按合并结果重建
     const merged: MemoryEntryInput = {
       content: updates.content ?? existing.content,
       type: updates.type ?? existing.type,
@@ -430,21 +432,19 @@ async function updateMemory(context: Mem0OssContext, memoryId: string, updates: 
       scope: existing.scope,
       metadata: updates.metadata ?? existing.metadata,
     }
-    await context.memory.delete(memoryId)
-    const response = await context.memory.add([{ role: 'user', content: merged.content }], {
-      userId: objectId,
+    // mem0 3.x 支持 metadata；禁止先删除再添加，避免后续写入失败丢失原记忆。
+    await context.memory.update(memoryId, {
+      ...(updates.content !== undefined ? { text: updates.content } : {}),
       metadata: buildMetadata(merged, objectId),
-      infer: false,
-      timestamp: existing.createdAt,
     })
-    const stored = response.results[0]
-    if (!stored)
-      throw new Error('Mem0 OSS did not return the updated memory')
-    return ok(toMemoryEntry(stored, objectId))
+    const refreshed = await context.memory.get(memoryId)
+    if (!refreshed)
+      return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
+    return ok(toMemoryEntry(refreshed, objectId))
   }
   catch (error) {
     logger.error('Mem0 OSS update failed', { id: memoryId, error })
-    return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
+    return memoryWriteFailure(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error, [memoryId])
   }
 }
 
@@ -478,18 +478,29 @@ async function removeMemory(context: Mem0OssContext, memoryId: string, accessSco
   }
 }
 
+/** 与 SDK 的 UTC 日期到期规则一致；无效日期不被当作已过期。 */
+function isExpiredMemory(item: Mem0MemoryItem, today: string): boolean {
+  const expiration = item.metadata?.expiration_date
+  if (typeof expiration !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(expiration))
+    return false
+  const parsed = new Date(`${expiration}T00:00:00.000Z`)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === expiration && expiration < today
+}
+
 /**
- * 列出指定主体的记忆条目（供 list / listPage / clear 复用）
+ * 列出指定主体的完整候选，再按过期、类型和业务作用域过滤。
  *
- * objectId 走 mem0 过滤，types / scope 在内存中匹配（scope 存于 metadata.hai_scope，无法下推）。
- * `limit` 必须在 types / scope 过滤**之后**应用：若在 getAll 时截断，目标类型/作用域的记忆
- * 很可能不在前 N 条候选内，导致漏返回甚至返回空列表（与 native provider 语义保持一致）。
+ * SDK 无游标，最多支持 1000 条主体候选；多取一条探测截断，超限明确失败。
+ * showExpired 保证 SDK 不先隐藏过期条目，避免短页被误判为完整集合。
  */
 async function listMemories(context: Mem0OssContext, options?: { objectId?: string, types?: MemoryType[], scope?: Record<string, unknown>, limit?: number }): Promise<MemoryEntry[]> {
   const objectId = options?.objectId ?? context.defaultObjectId
-  // 完整取回该主体候选（不在此处传 topK），过滤后再截取 limit
-  const response = await context.memory.getAll({ filters: { userId: objectId } })
+  const response = await context.memory.getAll({ filters: { user_id: objectId }, topK: MEM0_LIST_CANDIDATE_LIMIT + 1, showExpired: true })
+  if (response.results.length > MEM0_LIST_CANDIDATE_LIMIT)
+    throw new Mem0ListIncompleteError(aiM('ai_memoryListIncomplete', { params: { limit: String(MEM0_LIST_CANDIDATE_LIMIT) } }))
+  const today = new Date().toISOString().slice(0, 10)
   let entries = response.results
+    .filter(item => !isExpiredMemory(item, today))
     .map(item => toMemoryEntry(item, objectId))
     .filter(entry => entry.objectId === objectId)
   if (options?.types?.length)
@@ -510,6 +521,20 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
   const configResult = buildMem0Config(deps)
   if (!configResult.success)
     throw configResult.error
+  if (configResult.data.vectorProvider === 'qdrant') {
+    // 可选 peer 约束受测版本，启动仍校验公开能力，拒绝非严格安装器留下的不兼容依赖。
+    let compatible = false
+    try {
+      const { QdrantClient } = await import('@qdrant/js-client-rest')
+      compatible = 'search' in QdrantClient.prototype && typeof QdrantClient.prototype.search === 'function'
+    }
+    catch {}
+    if (!compatible) {
+      const failure = err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendSdkIncompatible'))
+      if (!failure.success)
+        throw failure.error
+    }
+  }
 
   let mod: typeof import('mem0ai/oss')
   try {
@@ -520,6 +545,10 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
     throw new Error('mem0ai is required for memory.provider="mem0"; install it with `pnpm add mem0ai`')
   }
 
+  const memory = new mod.Memory(configResult.data.config)
+  // 构造器在后台建集合；公开的一条有界只读查询等待 ready，失败时不得发布初始化成功。
+  await memory.getAll({ filters: { user_id: DEFAULT_OBJECT_ID }, topK: 1, showExpired: true })
+
   // 暴露实际生效的向量 provider 与持久化状态，便于运维确认记忆是否会在重启后保留
   logger.info('Mem0 OSS memory initialized', {
     vectorProvider: configResult.data.vectorProvider,
@@ -527,7 +556,7 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
   })
 
   const context: Mem0OssContext = {
-    memory: new mod.Memory(configResult.data.config),
+    memory,
     llm: deps.llm,
     systemPrompt: deps.config.systemPrompt,
     defaultObjectId: DEFAULT_OBJECT_ID,
@@ -558,6 +587,8 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
         return ok(await listMemories(context, options))
       }
       catch (error) {
+        if (error instanceof Mem0ListIncompleteError)
+          return err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
         return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryRecallFailed', { params: { error: String(error) } }), error)
       }
     },
@@ -570,6 +601,8 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
         return ok({ items: all.slice(offset, offset + limit), total: all.length })
       }
       catch (error) {
+        if (error instanceof Mem0ListIncompleteError)
+          return err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
         return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryRecallFailed', { params: { error: String(error) } }), error)
       }
     },
@@ -602,6 +635,8 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
         return ok(undefined)
       }
       catch (error) {
+        if (error instanceof Mem0ListIncompleteError)
+          return err(HaiAIError.MEMORY_LIST_INCOMPLETE, error.message)
         return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
       }
     },

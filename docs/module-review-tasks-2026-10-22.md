@@ -2,9 +2,9 @@
 
 审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06，共 68 个，另有 21 个按模块拆分的 JSDoc 任务，共 89 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03，共 71 个，另有 21 个按模块拆分的 JSDoc 任务，共 92 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 44/45；P2 21/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 45/46；P2 21/46（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -26,7 +26,7 @@
 | audit | 7 | 16 | 1 | 11 | AUDIT-01 | JSDOC-04 |
 | cache | 7 | 28 | 1 | 20 | CACHE-01、CACHE-02、CACHE-03、CACHE-04 | JSDOC-05 |
 | capacitor | 9 | 31 | 1 | 18 | CAP-01、CAP-02 | JSDOC-06 |
-| cli | 17 | 75 | 7 | 63 | CLI-01、CLI-02 | JSDOC-07 |
+| cli | 17 | 75 | 7 | 63 | CLI-01、CLI-02、CLI-03 | JSDOC-07 |
 | core | 23 | 85 | 21 | 47 | CORE-01、CORE-02、CORE-03 | JSDOC-08 |
 | crypto | 15 | 48 | 1 | 44 | CRYPTO-01、CRYPTO-02、CRYPTO-03、CRYPTO-04 | JSDOC-09 |
 | datapipe | 8 | 23 | 0 | 14 | PIPE-01 | JSDOC-10 |
@@ -39,8 +39,8 @@
 | scheduler | 14 | 71 | 38 | 67 | SCHED-01、SCHED-02 | JSDOC-17 |
 | serv | 28 | 106 | 3 | 98 | SERV-01、SERV-02、SERV-03、SERV-04、SERV-05 | JSDOC-18 |
 | storage | 14 | 49 | 5 | 38 | STORAGE-01、STORAGE-02、STORAGE-03 | JSDOC-19 |
-| ui | 162 | 297 | 63 | 284 | UI-01 | JSDOC-20 |
-| vecdb | 10 | 35 | 3 | 26 | VECDB-01、VECDB-02、VECDB-03 | JSDOC-21 |
+| ui | 162 | 297 | 63 | 284 | UI-01、UI-02 | JSDOC-20 |
+| vecdb | 10 | 35 | 3 | 26 | VECDB-01、VECDB-02、VECDB-03、VECDB-04 | JSDOC-21 |
 
 全量逐文件/逐声明补齐清单见 [JSDoc 修正任务附件](module-review-jsdoc-2026-10-22.md)。跨模块任务 LIFE-01、STYLE-01/02、DOC-01、DIST-01 同时适用于受影响包。
 
@@ -723,11 +723,28 @@
 
 ### AI-06 · P1 · 核验 Mem0 实际 SDK 存储与查询契约
 
-- [ ] 待修正（实施复核新增；范围：ai）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：按真实 Mem03.3.1 公共接口修复生产持久化检查、初始化 barrier、主体 filters.user_id、过期过滤/1001哨兵完整性、保留ID原地更新及未知写入核对；拒绝无公开close的PG组合，禁用history并实证未建资源，锁定Qdrant1.18兼容公开search；双AI skill/三语README/reference/错误码/env/catalog/LLMS同步。3文件57测试通过含4个实际SDK+共享Qdrant场景，Qdrant原生26项、AI/serv类型、严格测试类型、fresh ESM/DTS、定向lint、skills37/324、env595和API21检查通过。embedding为本地真实HTTP受控服务，未调用商业LLM或验证跨主机故障切换；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[Mem0 OSS Provider](../packages/ai/src/memory/providers/ai-memory-provider-mem0-oss.ts)。
 - **证据与影响**：外层共享标签不能防止 Mem0 对不支持后端解析为内存；生产显式 fallback 仍可能返回 persistent:false。安装 SDK 实际查询的身份过滤字段与模拟测试固定的字段不同，默认候选上限也不能冒充完整列表。
 - **修正内容**：在实际解析边界拒绝生产非持久后端，修正真实身份过滤、候选/分页与错误契约；同步调用方、配置说明、skills 和分布式矩阵。
 - **验收**：两种生产环境标志拒绝实际内存解析；真实支持后端正例、开发/E2E例外和实际 SDK 查询语义均验证；不以 provider 名称或 mock 成功替代证据。
+
+### VECDB-04 · P1 · Chroma 认证参数按真实 SDK 发送
+
+- [ ] 待修正（实施复核新增；范围：vecdb）。
+- **位置**：[Chroma Provider](../packages/vecdb/src/providers/vecdb-provider-chroma.ts)。
+- **证据与影响**：当前 SDK 不处理旧 AUTHORIZATION auth 配置，配置 apiKey 不等于实际发送凭证；匿名容器 CRUD 不能验证受保护部署认证。
+- **修正内容**：按安装 SDK 的真实构造和请求参数发送应用约定的 Bearer 认证，拒绝实际被忽略的 URL 成分；同步真实类型、配置、文档与 skill，不声称已验证 Chroma Cloud 或服务端鉴权绕过。
+- **验收**：真实 HTTP 捕获/保护代理验证 Authorization 传递和错误凭据拒绝；保留真实 Chroma CRUD、类型、构建及配置检查。
+
+### UI-02 · P2 · 受限浏览器存储 getter 失败按契约降级
+
+- [ ] 待修正（实施复核新增；范围：ui）。
+- **位置**：[浏览器安全工具](../packages/ui/src/lib/internal/browser-safety.ts)。
+- **证据与影响**：读取 localStorage 全局 getter 本身可抛 SecurityError；在 try 外执行 typeof 会穿透安全读写封装，公开主题存储不能按默认值降级。
+- **修正内容**：把全局访问与读写操作放入同一异常边界，保留 SSR 与用户禁用存储时的行为，修正过度保证的注释。
+- **验收**：真实抛错 getter 验证内部读/写及公开主题入口均不抛，正常持久化/locale/主题回归通过，运行逻辑和 JSDoc 分开提交。
 
 ## JSDoc 任务（21 项）
 
@@ -808,3 +825,11 @@
 - 公共 API/模板变更执行 `pnpm.cmd --filter @h-ai/cli test:scaffold-gates`；UI/路由改动补真实浏览器 E2E。
 - `pnpm.cmd check:skills`、`pnpm.cmd check:env`、JSDoc 示例类型检查、公开导出面和所有本地文档链接通过。
 - 真实分布式及 provider 测试单独列结果；不可用前置记录阻塞，禁止用旧产物、fixture 或单进程测试补成通过。
+
+### CLI-03 · P2 · 本地化创建、初始化和模块安装命令
+
+- [ ] 待修正。
+- **位置**：`packages/cli/src/commands/cli-add.ts`、`cli-init.ts`、`cli-create.ts`。
+- **证据与影响**：CLI-02 的生成器提示已本地化，现有 add/init/create 仍有硬编码中文错误、选择提示和模块描述；英文终端无法保持语言一致。直接 stdout 输出交互提示是既有正确行为。
+- **修正内容**：复用现有 locale 与消息字典，统一本地化现有命令及模块名称/说明，保持实际生成内容与配置契约。
+- **验收标准**：中英环境下真实命令的提示、失败、取消和结果语言正确；调用方、文档与 skill 同步。

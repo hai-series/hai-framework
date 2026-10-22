@@ -7,9 +7,11 @@
 
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { err, ok } from '@h-ai/core'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AIConfigSchema, MemoryConfigSchema } from '../src/ai-config.js'
 
+import { HaiAIError } from '../src/ai-types.js'
 import { createMem0OssMemoryOperations } from '../src/memory/providers/ai-memory-provider-mem0-oss.js'
 
 const memoryMock = vi.hoisted(() => ({
@@ -23,6 +25,9 @@ const memoryMock = vi.hoisted(() => ({
   reset: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }))
 const memoryCtorMock = vi.hoisted(() => vi.fn())
+const qdrantClientMock = vi.hoisted(() => ({ prototype: { search: undefined as (() => void) | undefined } }))
+
+vi.mock('@qdrant/js-client-rest', () => ({ QdrantClient: qdrantClientMock }))
 
 vi.mock('mem0ai/oss', () => {
   class Memory {
@@ -47,13 +52,18 @@ function createLlmMock(content: string): LLMOperations {
         object: 'chat.completion' as const,
         created: Date.now(),
         model: 'test-model',
-        choices: [{ index: 0, message: { role: 'assistant' as const, content }, finish_reason: 'stop' as const }],
+        choices: [{ index: 0, message: { role: 'assistant' as const, content, refusal: null }, logprobs: null, finish_reason: 'stop' as const }],
         usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
       },
     })),
-    chatStream: vi.fn(),
-    listModels: vi.fn(),
-  } as unknown as LLMOperations
+    async* chatStream() {},
+    listModels: async () => ok([]),
+    getHistory: async () => ok([]),
+    listSessions: async () => ok([]),
+    ask: async () => ok(content),
+    async* askStream() {},
+    generateObject: async () => err(HaiAIError.INVALID_REQUEST, 'Unsupported in extraction fixture'),
+  }
 }
 
 function createOps(vectorBackend?: { type: string, url?: string, apiKey?: string }, llm?: LLMOperations) {
@@ -69,6 +79,7 @@ function createOps(vectorBackend?: { type: string, url?: string, apiKey?: string
 
 beforeEach(() => {
   vi.clearAllMocks()
+  qdrantClientMock.prototype.search = () => {}
   memoryMock.add.mockResolvedValue({ results: [] })
   memoryMock.search.mockResolvedValue({ results: [] })
   memoryMock.getAll.mockResolvedValue({ results: [] })
@@ -79,7 +90,104 @@ beforeEach(() => {
   memoryMock.reset.mockResolvedValue(undefined)
 })
 
+describe('production Mem0 state', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  function environment(nodeEnv: string, coreEnv: string) {
+    vi.stubEnv('NODE_ENV', nodeEnv)
+    vi.stubEnv('HAI_CORE_ENV', coreEnv)
+    vi.stubEnv('HAI_E2E', '0')
+    vi.stubEnv('HAI_E2E_MOCK', '0')
+  }
+
+  const environments = [
+    { node: 'production', core: 'development' },
+    { node: 'test', core: 'production' },
+  ]
+  for (const env of environments) {
+    it.each([
+      { name: 'remote Chroma with fallback', backend: { type: 'chroma', url: 'https://chroma.example.invalid' } },
+      { name: 'no vector backend', backend: undefined },
+    ])(`rejects $name before constructing SDK (${env.node}/${env.core})`, async ({ backend }) => {
+      environment(env.node, env.core)
+      await expect(createMem0OssMemoryOperations({
+        config: MemoryConfigSchema.parse({ provider: 'mem0', allowEphemeralFallback: true }),
+        aiConfig,
+        llm: createLlmMock('[]'),
+        collectionName: 'hai_ai_memory',
+        embeddingDims: 3,
+        vectorBackend: backend,
+      })).rejects.toMatchObject({ code: HaiAIError.CONFIGURATION_ERROR.code })
+      expect(memoryCtorMock).not.toHaveBeenCalled()
+    })
+  }
+
+  it.each([{ type: 'qdrant' }, { type: 'qdrant', url: 'file:///tmp/vector' }, { type: 'pgvector' }, { type: 'pgvector', connectionString: 'invalid' }])('rejects incomplete $type connection before SDK construction', async (backend) => {
+    environment('production', 'production')
+    await expect(createOps(backend)).rejects.toMatchObject({ code: HaiAIError.CONFIGURATION_ERROR.code })
+    expect(memoryCtorMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { type: 'qdrant', url: 'https://qdrant.example.invalid:6333', apiKey: 'test-key' },
+  ])('accepts actual supported $type mapping in production', async (backend) => {
+    environment('production', 'production')
+    await createMem0OssMemoryOperations({
+      config: MemoryConfigSchema.parse({ provider: 'mem0', allowEphemeralFallback: true }),
+      aiConfig,
+      llm: createLlmMock('[]'),
+      collectionName: 'hai_ai_memory',
+      embeddingDims: 3,
+      vectorBackend: backend,
+    })
+    expect(memoryCtorMock).toHaveBeenCalledOnce()
+    expect(memoryCtorMock).toHaveBeenCalledWith(expect.objectContaining({
+      vectorStore: expect.objectContaining({ provider: backend.type }),
+    }))
+  })
+
+  it.each(['development', 'production'])('rejects unmanaged Mem0 PG connection lifecycle in %s, even with fallback allowed', async (mode) => {
+    environment(mode, mode)
+    await expect(createMem0OssMemoryOperations({
+      config: MemoryConfigSchema.parse({ provider: 'mem0', allowEphemeralFallback: true }),
+      aiConfig,
+      llm: createLlmMock('[]'),
+      collectionName: 'hai_ai_memory',
+      vectorBackend: { type: 'pgvector', connectionString: 'postgresql://user:password@vector.example.invalid/vectors' },
+    })).rejects.toMatchObject({ code: HaiAIError.CONFIGURATION_ERROR.code })
+    expect(memoryCtorMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['development', 'HAI_E2E', 'HAI_E2E_MOCK'])('allows explicit ephemeral fallback only for %s', async (mode) => {
+    environment(mode === 'development' ? 'development' : 'production', 'development')
+    if (mode !== 'development')
+      vi.stubEnv(mode, '1')
+    await createMem0OssMemoryOperations({
+      config: MemoryConfigSchema.parse({ provider: 'mem0', allowEphemeralFallback: true }),
+      aiConfig,
+      llm: createLlmMock('[]'),
+      collectionName: 'hai_ai_memory',
+      embeddingDims: 3,
+      vectorBackend: { type: 'chroma', url: 'https://chroma.example.invalid' },
+    })
+    expect(memoryCtorMock).toHaveBeenCalledWith(expect.objectContaining({
+      vectorStore: expect.objectContaining({ provider: 'memory' }),
+    }))
+  })
+})
+
 describe('createMem0OssMemoryOperations', () => {
+  it('waits for actual SDK readiness and propagates backend initialization failure', async () => {
+    memoryMock.getAll.mockRejectedValueOnce(new Error('backend unavailable'))
+    await expect(createOps()).rejects.toThrow('backend unavailable')
+    expect(memoryMock.getAll).toHaveBeenCalledWith({ filters: { user_id: 'hai-global' }, topK: 1, showExpired: true })
+  })
+
+  it('rejects incompatible Qdrant peer before constructing Mem0', async () => {
+    qdrantClientMock.prototype.search = undefined
+    await expect(createOps({ type: 'qdrant', url: 'http://localhost:6333' })).rejects.toMatchObject({ code: HaiAIError.CONFIGURATION_ERROR.code })
+    expect(memoryCtorMock).not.toHaveBeenCalled()
+  })
   it('从 AIConfig 提取 openai LLM / Embedder 配置', async () => {
     await createOps()
 
@@ -140,8 +248,10 @@ describe('createMem0OssMemoryOperations', () => {
       { id: 'p1', memory: '偏好1', metadata: { hai_object_id: 'u1', hai_type: 'preference' } },
       { id: 'p2', memory: '偏好2', metadata: { hai_object_id: 'u1', hai_type: 'preference' } },
     ]
-    memoryMock.getAll.mockImplementation(async (opts: { topK?: number } | undefined) =>
-      ({ results: opts?.topK !== undefined ? all.slice(0, opts.topK) : all }))
+    memoryMock.getAll.mockImplementation(async (opts: unknown) => {
+      const topK = typeof opts === 'object' && opts !== null && 'topK' in opts && typeof opts.topK === 'number' ? opts.topK : 20
+      return { results: all.slice(0, topK) }
+    })
 
     const ops = await createOps()
     const result = await ops.list({ objectId: 'u1', types: ['preference'], limit: 2 })
@@ -152,13 +262,14 @@ describe('createMem0OssMemoryOperations', () => {
     // 修复后：完整取回后过滤 preference → 2 条，再截 limit
     expect(result.data).toHaveLength(2)
     expect(result.data.map(e => e.type)).toEqual(['preference', 'preference'])
-    // getAll 不再在过滤前传入 topK
-    expect(memoryMock.getAll).toHaveBeenCalledWith({ filters: { userId: 'u1' } })
+    // SDK 默认为 20；固定多取一条用于完整性探测，不能省略 topK。
+    expect(memoryMock.getAll).toHaveBeenCalledWith({ filters: { user_id: 'u1' }, topK: 1001, showExpired: true })
   })
 
   it('extract 用框架提取器分类后以 infer:false 写入并保留 hai_type/hai_importance', async () => {
     const llm = createLlmMock(JSON.stringify([{ content: '用户喜欢中文', type: 'preference', importance: 0.8 }]))
-    memoryMock.add.mockResolvedValue({ results: [{ id: 'm1', memory: '用户喜欢中文', metadata: { hai_type: 'preference', hai_importance: 0.8 } }] })
+    memoryMock.add.mockResolvedValue({ results: [{ id: 'm1', memory: '用户喜欢中文', metadata: { event: 'ADD' } }] })
+    memoryMock.get.mockResolvedValue({ id: 'm1', memory: '用户喜欢中文', metadata: { hai_type: 'preference', hai_importance: 0.8 } })
     const ops = await createOps(undefined, llm)
 
     const result = await ops.extract([{ role: 'user', content: '我喜欢中文' }], { objectId: 'u1' })
@@ -211,7 +322,8 @@ describe('createMem0OssMemoryOperations', () => {
   })
 
   it('add 调用 mem0.add(infer: false) 并保留 hai 字段', async () => {
-    memoryMock.add.mockResolvedValue({ results: [{ id: 'm2', memory: '手动记忆', metadata: { hai_type: 'fact', hai_importance: 0.7 } }] })
+    memoryMock.add.mockResolvedValue({ results: [{ id: 'm2', memory: '手动记忆', metadata: { event: 'ADD' } }] })
+    memoryMock.get.mockResolvedValue({ id: 'm2', memory: '手动记忆', createdAt: '2024-01-01T00:00:00.000Z', metadata: { hai_type: 'fact', hai_importance: 0.7 } })
     const ops = await createOps()
 
     const result = await ops.add({ content: '手动记忆', type: 'fact', importance: 0.7, objectId: 'u1' })
@@ -220,6 +332,7 @@ describe('createMem0OssMemoryOperations', () => {
       return
     expect(result.data.type).toBe('fact')
     expect(result.data.importance).toBe(0.7)
+    expect(result.data.createdAt).toBe(Date.parse('2024-01-01T00:00:00.000Z'))
     expect(memoryMock.add).toHaveBeenCalledWith(
       [{ role: 'user', content: '手动记忆' }],
       expect.objectContaining({ infer: false }),
@@ -299,7 +412,7 @@ describe('createMem0OssMemoryOperations', () => {
     if (!result.success)
       return
     // 候选池宽度 = topK×candidateMultiplier（2×5=10），C 的条目被纳入并正确召回
-    expect(memoryMock.search).toHaveBeenCalledWith('q', expect.objectContaining({ topK: 10 }))
+    expect(memoryMock.search).toHaveBeenCalledWith('q', { filters: { user_id: 'u1' }, topK: 10 })
     expect(result.data.map(e => e.content)).toEqual(['C1', 'C2'])
   })
 
@@ -346,26 +459,27 @@ describe('createMem0OssMemoryOperations', () => {
     expect(result.data.metadata).toEqual({ speakerId: 's1', topicId: 'A' })
   })
 
-  it('update 涉及 type/importance/metadata 时删除重建并合并（issue #8）', async () => {
-    memoryMock.get.mockResolvedValue({
+  it('update 原地更新全部元数据，保留 ID 和创建时间', async () => {
+    const createdAt = '2024-01-01T00:00:00.000Z'
+    memoryMock.get.mockResolvedValueOnce({
       id: 'm1',
       memory: '旧内容',
-      createdAt: new Date('2024-01-01').toISOString(),
+      createdAt,
       metadata: { hai_object_id: 'u1', hai_type: 'fact', hai_importance: 0.5, hai_metadata: { a: 1 } },
+    }).mockResolvedValueOnce({
+      id: 'm1',
+      memory: '旧内容',
+      createdAt,
+      metadata: { hai_object_id: 'u1', hai_type: 'preference', hai_importance: 0.9, hai_metadata: { a: 1, b: 2 } },
     })
-    memoryMock.add.mockResolvedValue({ results: [{ id: 'm2', memory: '旧内容', metadata: { hai_object_id: 'u1', hai_type: 'preference', hai_importance: 0.9, hai_metadata: { a: 1, b: 2 } } }] })
     const ops = await createOps()
-
     const result = await ops.update('m1', { type: 'preference', importance: 0.9, metadata: { a: 1, b: 2 } })
-    expect(result.success).toBe(true)
-    if (!result.success)
-      return
-    expect(memoryMock.delete).toHaveBeenCalledWith('m1')
-    expect(result.data.type).toBe('preference')
-    expect(result.data.importance).toBe(0.9)
-    expect(result.data.metadata).toEqual({ a: 1, b: 2 })
-    const [, addOptions] = memoryMock.add.mock.calls[0] as [unknown, { metadata: Record<string, unknown> }]
-    expect(addOptions.metadata.hai_type).toBe('preference')
+    expect(result.success && result.data).toMatchObject({ id: 'm1', type: 'preference', importance: 0.9, metadata: { a: 1, b: 2 }, createdAt: Date.parse(createdAt) })
+    expect(memoryMock.update).toHaveBeenCalledWith('m1', {
+      metadata: { hai_object_id: 'u1', hai_type: 'preference', hai_importance: 0.9, hai_metadata: { a: 1, b: 2 } },
+    })
+    expect(memoryMock.delete).not.toHaveBeenCalled()
+    expect(memoryMock.add).not.toHaveBeenCalled()
   })
 
   it('update 仅改 content 时原地更新，保持 memoryId 稳定（issue #8）', async () => {
@@ -374,7 +488,7 @@ describe('createMem0OssMemoryOperations', () => {
 
     const result = await ops.update('m1', { content: '新内容' })
     expect(result.success).toBe(true)
-    expect(memoryMock.update).toHaveBeenCalledWith('m1', '新内容')
+    expect(memoryMock.update).toHaveBeenCalledWith('m1', expect.objectContaining({ text: '新内容', metadata: expect.objectContaining({ hai_object_id: 'u1' }) }))
     expect(memoryMock.delete).not.toHaveBeenCalled()
   })
 
@@ -417,5 +531,107 @@ describe('createMem0OssMemoryOperations', () => {
       return
     expect(result.data.total).toBe(2)
     expect(result.data.items.map(e => e.content)).toEqual(['1', '3'])
+  })
+  it('1001 raw candidates reject list/page/filtered clear before any deletion, including expired rows', async () => {
+    memoryMock.getAll.mockResolvedValue({ results: Array.from({ length: 1001 }, (_, index) => ({
+      id: `m${index}`,
+      memory: 'expired',
+      metadata: { hai_object_id: 'u1', expiration_date: '2000-01-01' },
+    })) })
+    const ops = await createOps()
+    for (const result of [
+      await ops.list({ objectId: 'u1', limit: 1 }),
+      await ops.listPage({ objectId: 'u1', limit: 1 }),
+      await ops.clear({ objectId: 'u1', types: ['fact'] }),
+    ]) {
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiAIError.MEMORY_LIST_INCOMPLETE.code)
+    }
+    expect(memoryMock.delete).not.toHaveBeenCalled()
+    expect(memoryMock.deleteAll).not.toHaveBeenCalled()
+    expect(memoryMock.reset).not.toHaveBeenCalled()
+  })
+
+  it('listPage counts the complete set beyond SDK default 20, filtering expiration/type/scope before total', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    memoryMock.getAll.mockResolvedValue({ results: [
+      ...Array.from({ length: 45 }, (_, index) => ({ id: `m${index}`, memory: 'row', metadata: { hai_object_id: 'u1', hai_type: 'fact', hai_scope: { topicId: 'A' } } })),
+      { id: 'expired', memory: 'row', metadata: { hai_object_id: 'u1', expiration_date: '2000-01-01', hai_scope: { topicId: 'A' } } },
+      { id: 'today', memory: 'row', metadata: { hai_object_id: 'u1', expiration_date: today, hai_scope: { topicId: 'A' } } },
+      { id: 'invalid', memory: 'row', metadata: { hai_object_id: 'u1', expiration_date: '2000-02-30', hai_scope: { topicId: 'A' } } },
+      { id: 'other-type', memory: 'row', metadata: { hai_object_id: 'u1', hai_type: 'event', hai_scope: { topicId: 'A' } } },
+      { id: 'other-scope', memory: 'row', metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'B' } } },
+      { id: 'other-user', memory: 'row', metadata: { hai_object_id: 'u2', hai_scope: { topicId: 'A' } } },
+    ] })
+    const ops = await createOps()
+    const result = await ops.listPage({ objectId: 'u1', types: ['fact'], scope: { topicId: 'A' }, offset: 40, limit: 10 })
+    expect(result.success && result.data.total).toBe(47)
+    expect(result.success && result.data.items).toHaveLength(7)
+  })
+
+  it('get/update/remove reject another subject or scope before mutation', async () => {
+    memoryMock.get.mockResolvedValue({ id: 'm1', memory: 'private', metadata: { hai_object_id: 'u1', hai_scope: { topicId: 'A' } } })
+    const ops = await createOps()
+    for (const accessScope of [{ objectId: 'u2' }, { objectId: 'u1', scope: { topicId: 'B' } }]) {
+      for (const result of [await ops.get('m1', accessScope), await ops.update('m1', { content: 'evil' }, accessScope), await ops.remove('m1', accessScope)]) {
+        expect(result.success).toBe(false)
+        if (!result.success)
+          expect(result.error.code).toBe(HaiAIError.MEMORY_NOT_FOUND.code)
+      }
+    }
+    expect(memoryMock.update).not.toHaveBeenCalled()
+    expect(memoryMock.delete).not.toHaveBeenCalled()
+  })
+
+  it('failed in-place metadata update preserves existing memory without delete/add', async () => {
+    memoryMock.get.mockResolvedValue({ id: 'm1', memory: 'original', metadata: { hai_object_id: 'u1' } })
+    memoryMock.update.mockRejectedValueOnce(new Error('storage unavailable'))
+    const ops = await createOps()
+    const result = await ops.update('m1', { type: 'event' }, { objectId: 'u1' })
+    expect(result.success).toBe(false)
+    expect(memoryMock.delete).not.toHaveBeenCalled()
+    expect(memoryMock.add).not.toHaveBeenCalled()
+  })
+
+  it('returns known write id when readback fails without retrying add', async () => {
+    const ops = await createOps()
+    memoryMock.add.mockResolvedValue({ results: [{ id: 'committed', memory: 'stored', metadata: { event: 'ADD' } }] })
+    memoryMock.get.mockRejectedValueOnce(new Error('read unavailable'))
+    const result = await ops.add({ objectId: 'u1', content: 'stored', type: 'event' })
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.ext).toEqual({ requiresEffectReconciliation: true, memoryIds: ['committed'] })
+    expect(memoryMock.add).toHaveBeenCalledOnce()
+    expect(memoryMock.delete).not.toHaveBeenCalled()
+  })
+
+  it('settles all extraction writes before reporting failure and all known ids for reconciliation', async () => {
+    const llm = createLlmMock(JSON.stringify([{ content: 'one', type: 'fact', importance: 0.8 }, { content: 'two', type: 'fact', importance: 0.8 }]))
+    const ops = await createOps(undefined, llm)
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    memoryMock.add.mockResolvedValueOnce({ results: [{ id: 'one' }] }).mockResolvedValueOnce({ results: [{ id: 'two' }] })
+    memoryMock.get.mockImplementation(async (id: unknown) => {
+      if (id === 'one')
+        throw new Error('read unavailable')
+      await gate
+      return { id: 'two', memory: 'two', metadata: { hai_object_id: 'u1' } }
+    })
+    let settled = false
+    const pending = ops.extract([{ role: 'user', content: 'facts' }], { objectId: 'u1' }).then((result) => {
+      settled = true
+      return result
+    })
+    await vi.waitFor(() => expect(memoryMock.get).toHaveBeenCalledTimes(2))
+    expect(settled).toBe(false)
+    release()
+    const result = await pending
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.ext).toEqual({ requiresEffectReconciliation: true, memoryIds: ['one', 'two'] })
+    expect(memoryMock.add).toHaveBeenCalledTimes(2)
   })
 })

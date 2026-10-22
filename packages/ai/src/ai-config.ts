@@ -433,9 +433,10 @@ export const MemoryConfigSchema = z.object({
   /**
    * 是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false）
    *
-   * 仅影响 `provider='mem0'`：mem0 TS 仅支持 qdrant / pgvector。当底层 vecdb 是
+   * 仅影响 `provider='mem0'`：当前框架适配仅映射 qdrant；pgvector 的 SDK 连接无法公开关闭，所有环境拒绝。底层 vecdb 是
    * lancedb / chroma / 未知后端时，默认 fail-fast（初始化失败），避免服务重启后记忆静默丢失；
-   * 仅当显式设为 true 时才退回 mem0 自带 in-memory 存储（数据不持久）。
+   * 仅当显式设为 true 时才在开发或明确 E2E 环境退回内存存储（数据不持久）。
+   * 生产始终要求实际持久化连接，不能通过此开关绕过共享状态要求。
    */
   allowEphemeralFallback: z.boolean().default(false),
   /**

@@ -47,6 +47,14 @@
     "model:run": "node models/build.mjs run",
     "build:clean": "rimraf dist"
   },
+  "peerDependencies": {
+    "@qdrant/js-client-rest": "1.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@qdrant/js-client-rest": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@a2a-js/sdk": "catalog:",
     "@h-ai/api-contract": "workspace:*",
