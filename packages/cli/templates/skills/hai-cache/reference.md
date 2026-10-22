@@ -93,10 +93,10 @@ await cache.zset.zadd('rank:daily', { member: 'u1', score: 100 })
 | `extend`   | 续期锁 TTL（支持 owner 验证）              |
 
 ```typescript
-// 每次尝试生成唯一 owner，后续释放/续期复用同一个值
-const owner = core.id.generate()
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner })
+// acquire 返回本次唯一 owner，后续释放/续期必须复用该凭据
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
+  const owner = acquired.data
   try {
     // 长任务仅在仍持有锁时续期；失败或 data=false 时停止依赖锁的后续操作
     const extended = await cache.lock.extend('my-lock', 60, owner)
@@ -118,7 +118,7 @@ const locked = await cache.lock.isLocked('my-lock')
 
 **最佳实践：**
 
-- `owner` 每次获锁尝试唯一，释放/续期复用该值；仅用 nodeId 会使同节点旧任务误释放过期后重新获得的锁
+- `owner` 必须取自成功的 acquire.data；缓存内部每次生成唯一凭据，不能使用 nodeId 替代。释放/续期复用该凭据。
 - 释放锁时传入 `owner` 防止误释放他人锁
 - Memory 后端适合开发/测试；Redis 后端用 Lua 脚本保证 release/extend 原子性
 
@@ -159,9 +159,9 @@ async function getUserCached(userId: string) {
 
 ```typescript
 const lockKey = 'batch:import'
-const owner = core.id.generate()
-const acquired = await cache.lock.acquire(lockKey, { ttl: 60, owner })
+const acquired = await cache.lock.acquire(lockKey, { ttl: 60 })
 if (acquired.success && acquired.data) {
+  const owner = acquired.data
   try {
     await runBatchImport()
   }

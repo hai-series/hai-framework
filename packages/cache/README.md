@@ -38,13 +38,13 @@ await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
 await cache.zset.zadd('rank', { member: 'u1', score: 100 })
 
 // 分布式锁
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
   try {
     // 执行受保护的操作
   }
   finally {
-    await cache.lock.release('my-lock', 'node-1')
+    await cache.lock.release('my-lock', acquired.data)
   }
 }
 
@@ -113,13 +113,13 @@ await cache.init({
 
 ```ts
 // 获取锁（TTL 30 秒，owner 用于标识持有者）
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
   try {
     // 执行受保护操作
   }
   finally {
-    await cache.lock.release('my-lock', 'node-1')
+    await cache.lock.release('my-lock', acquired.data)
   }
 }
 
@@ -127,12 +127,13 @@ if (acquired.success && acquired.data) {
 const locked = await cache.lock.isLocked('my-lock')
 
 // 续期锁
-await cache.lock.extend('my-lock', 60, 'node-1')
+if (acquired.success && acquired.data)
+  await cache.lock.extend('my-lock', 60, acquired.data)
 ```
 
 - **Memory 后端**：基于 Map + TTL 过期机制
 - **Redis 后端**：使用 `SET NX EX` 原子获锁，Lua 脚本实现 owner 验证的安全释放/续期
-- `owner` 参数用于防止误释放他人锁，多节点部署时建议设置稳定的节点标识
+- `acquire` 返回本次获锁的唯一凭据，锁占用时为 `null`；释放/续租必须传回该凭据，禁止使用节点 ID 或无凭据强制操作。
 
 ### 错误码
 

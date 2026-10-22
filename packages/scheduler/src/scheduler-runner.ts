@@ -186,12 +186,12 @@ async function runTaskExecution(
   const lockKey = minuteTimestamp !== undefined ? `hai:scheduler:${task.id}:${minuteTimestamp}` : undefined
 
   if (cache.isInitialized && lockKey) {
-    const lockResult = await waitWithSignal(() => cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId }), signal).catch(() => null)
+    const lockResult = await waitWithSignal(() => cache.lock.acquire(lockKey, { ttl: currentLockTtlSec }), signal).catch(() => null)
     if (!lockResult)
       return interruptTask(task, trigger, schedulerM('scheduler_closing'), {}, signal)
     if (!lockResult.success) {
       // lock 服务本身异常时 fail-close：中断任务，避免多节点重复执行
-      logger.warn('Failed to acquire distributed lock, interrupting task', { taskId: task.id, error: lockResult.error.message })
+      logger.warn('Failed to acquire distributed lock, interrupting task', { taskId: task.id, nodeId: currentNodeId, error: lockResult.error.message })
       return interruptTask(
         task,
         trigger,

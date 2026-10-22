@@ -354,7 +354,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
   })
 
   it('returns a conflict when another administrator holds the mutation lock and resumes after release', async () => {
-    const locked = await cache.lock.acquire('hai:app:admin-mutation', { owner: 'test-owner', ttl: 10 })
+    const locked = await cache.lock.acquire('hai:app:admin-mutation', { ttl: 10 })
     expect(locked.success).toBe(true)
     try {
       const result = await call('/admin/users/update', { id: user.id, displayName: 'Locked' }, adminToken)
@@ -363,7 +363,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
         expect(result.error.httpStatus).toBe(409)
     }
     finally {
-      expect((await cache.lock.release('hai:app:admin-mutation', 'test-owner')).success).toBe(true)
+      expect((await cache.lock.release('hai:app:admin-mutation', locked.data)).success).toBe(true)
     }
     expect((await call('/admin/users/update', { id: user.id, displayName: 'Unlocked' }, adminToken)).success).toBe(true)
   })

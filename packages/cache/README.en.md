@@ -38,13 +38,13 @@ await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
 await cache.zset.zadd('rank', { member: 'u1', score: 100 })
 
 // 分布式锁
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
   try {
     // 执行受保护的操作
   }
   finally {
-    await cache.lock.release('my-lock', 'node-1')
+    await cache.lock.release('my-lock', acquired.data)
   }
 }
 
@@ -113,13 +113,13 @@ Distributed mutual exclusion based on SET NX EX, suitable for deployments across
 
 ```ts
 // 获取锁（TTL 30 秒，owner 用于标识持有者）
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
   try {
     // 执行受保护操作
   }
   finally {
-    await cache.lock.release('my-lock', 'node-1')
+    await cache.lock.release('my-lock', acquired.data)
   }
 }
 
@@ -127,12 +127,13 @@ if (acquired.success && acquired.data) {
 const locked = await cache.lock.isLocked('my-lock')
 
 // 续期锁
-await cache.lock.extend('my-lock', 60, 'node-1')
+if (acquired.success && acquired.data)
+  await cache.lock.extend('my-lock', 60, acquired.data)
 ```
 
 - **Memory backend**: Map-based storage with TTL expiration.
 - **Redis backend**: atomic locking with `SET NX EX`; Lua scripts verify the owner for safe release and renewal.
-- `owner` prevents accidental release of another owner's lock; a stable node identifier is recommended for multi-node deployments.
+- `acquire` returns a unique acquisition token, or `null` while occupied. Release/renewal require this token; node IDs and ownerless operations are not supported.
 
 ### Error codes
 

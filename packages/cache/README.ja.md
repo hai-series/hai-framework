@@ -38,13 +38,13 @@ await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
 await cache.zset.zadd('rank', { member: 'u1', score: 100 })
 
 // 分布式锁
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
   try {
     // 执行受保护的操作
   }
   finally {
-    await cache.lock.release('my-lock', 'node-1')
+    await cache.lock.release('my-lock', acquired.data)
   }
 }
 
@@ -113,13 +113,13 @@ SET NX EX を利用する分散排他ロックで、複数ノードのデプロ�
 
 ```ts
 // 获取锁（TTL 30 秒，owner 用于标识持有者）
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
   try {
     // 执行受保护操作
   }
   finally {
-    await cache.lock.release('my-lock', 'node-1')
+    await cache.lock.release('my-lock', acquired.data)
   }
 }
 
@@ -127,12 +127,13 @@ if (acquired.success && acquired.data) {
 const locked = await cache.lock.isLocked('my-lock')
 
 // 续期锁
-await cache.lock.extend('my-lock', 60, 'node-1')
+if (acquired.success && acquired.data)
+  await cache.lock.extend('my-lock', 60, acquired.data)
 ```
 
 - **Memory バックエンド**：Map と TTL による有効期限管理。
 - **Redis バックエンド**：`SET NX EX` でアトミックにロックを取得。Lua スクリプトで owner を検証して安全に解除・延長します。
-- `owner` は他の所有者のロックの誤解除を防ぎます。複数ノードのデプロイでは安定したノード識別子の指定を推奨します。
+- `acquire` は取得ごとの一意なトークン（競合時は `null`）を返します。解除・延長にはこのトークンが必須です。ノード ID やトークンなしの操作は使用できません。
 
 ### エラーコード
 

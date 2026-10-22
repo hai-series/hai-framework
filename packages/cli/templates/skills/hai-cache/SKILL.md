@@ -11,7 +11,7 @@ description: "实现或排查 Memory/Redis 缓存、TTL、集合与分布式锁�
 | --- | --- |
 | 能力 | 使用 @h-ai/cache 的 Memory/Redis 缓存、TTL、集合、排行榜和锁 |
 | 适用场景 | 缓存读写、过期策略或共享资源互斥 |
-| 输入 | CacheConfigInput、key/value、TTL、每次获锁的唯一 owner |
+| 输入 | CacheConfigInput、key/value、TTL；acquire 返回本次获锁唯一 owner |
 | 输出 | 缓存和锁操作的 HaiResult，获锁 data 为 boolean |
 | 限制 | 仅服务端；Memory 不跨节点。release/extend 携带本次 owner，避免锁过期后误操作新持有者。 |
 
@@ -19,7 +19,7 @@ description: "实现或排查 Memory/Redis 缓存、TTL、集合与分布式锁�
 
 1. 先确定单进程 Memory 还是共享 Redis；配置校验与 init 成功后才使用。cache 不依赖 reldb。
 2. 根据 KV/Hash/List/Set/ZSet 选择公开操作，明确 TTL、空值和回源失败的业务含义。
-3. 每次获锁生成唯一 owner，检查 success 与 data；续期/释放复用该 owner，丢锁后停止受保护工作。
+3. 读取 acquire 成功返回的唯一 owner，检查 success 与 data；续期/释放复用该 owner，丢锁后停止受保护工作。
 4. 验证过期、连接失败、并发与锁过期后的旧任务；最后 close。
 
 ## 按需参考

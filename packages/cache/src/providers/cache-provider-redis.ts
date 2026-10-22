@@ -594,26 +594,24 @@ export function createRedisProvider(): CacheProvider {
   const LOCK_PREFIX = '__lock:'
 
   const lock: LockOperations = {
-    async acquire(key: string, options?: LockOptions): Promise<HaiResult<boolean>> {
+    async acquire(key: string, options?: LockOptions): Promise<HaiResult<string | null>> {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
         const ttl = options?.ttl ?? 30
-        const owner = options?.owner ?? 'default'
+        const owner = core.id.uuid()
         // SET key value NX EX ttl — 原子获锁
         const result = await client!.set(lockKey, owner, 'EX', ttl, 'NX')
-        return result === 'OK'
+        return result === 'OK' ? owner : null
       })
     },
 
-    async release(key: string, owner?: string): Promise<HaiResult<boolean>> {
+    async release(key: string, owner: string): Promise<HaiResult<boolean>> {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
-        if (owner !== undefined) {
-          const result = await client!.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, owner)
-          return isRedisOne(result)
-        }
-        const deleted = await client!.del(lockKey)
-        return deleted === 1
+        if (!owner)
+          return false
+        const result = await client!.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, owner)
+        return isRedisOne(result)
       })
     },
 
@@ -625,15 +623,13 @@ export function createRedisProvider(): CacheProvider {
       })
     },
 
-    async extend(key: string, ttl: number, owner?: string): Promise<HaiResult<boolean>> {
+    async extend(key: string, ttl: number, owner: string): Promise<HaiResult<boolean>> {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
-        if (owner !== undefined) {
-          const result = await client!.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, owner, ttl)
-          return isRedisOne(result)
-        }
-        const result = await client!.expire(lockKey, ttl)
-        return result === 1
+        if (!owner)
+          return false
+        const result = await client!.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, owner, ttl)
+        return isRedisOne(result)
       })
     },
   }

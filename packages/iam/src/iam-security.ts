@@ -4,17 +4,16 @@ import { cache } from '@h-ai/cache'
 import { err } from '@h-ai/core'
 import { iamM } from './iam-i18n.js'
 import { HaiIamError } from './iam-types.js'
-import { generateToken } from './session/iam-session-utils.js'
 
 /** 在带唯一 owner 的共享锁内执行短数据库/缓存操作；通知发送放在临界区外。 */
 export async function withIamLock<T>(key: string, operation: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
-  const owner = generateToken()
   const lockKey = `hai:iam:security:${key}`
   for (let attempt = 0; attempt < 500; attempt++) {
-    const acquired = await cache.lock.acquire(lockKey, { owner, ttl: 30 })
+    const acquired = await cache.lock.acquire(lockKey, { ttl: 30 })
     if (!acquired.success)
       return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), acquired.error)
     if (acquired.data) {
+      const owner = acquired.data
       let leaseValid = true
       // 每个持有者有唯一 owner；续约失败后不能对外声明临界区操作成功。
       const renewal = setInterval(() => {

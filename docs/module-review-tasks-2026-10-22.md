@@ -72,7 +72,8 @@
 
 ### CACHE-01 · P1 · 移除无 owner 的解锁/续租路径
 
-- [ ] 待修正（源码确认；范围：cache）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：acquire每次生成唯一凭据并返回string或null，release/extend无凭据或旧凭据均拒绝；Memory/Redis及IAM、reach、scheduler、fullstack模板和三语文档/skill全部同步。原目录cache类型检查/构建、3消费者类型检查通过；新worktree定向lint、11测试通过（含真实Redis独立客户端过期接管）。final scaffold和故障矩阵留最终阶段；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/cache/src/providers/cache-provider-redis.ts:618](../packages/cache/src/providers/cache-provider-redis.ts#L618)。
 - **证据与影响**：默认 owner 固定为 default；release 不传 owner 直接 DEL，extend 不传 owner 直接 EXPIRE。A 的锁过期、B 获锁后，A 的迟到释放/续租能操作 B 的锁。
 - **修正内容**：每次获锁产生唯一所有权凭据，释放和续租强制比较凭据；更新 memory provider 的相同 API 契约。删除不安全可选参数形式，不保留兼容通道。

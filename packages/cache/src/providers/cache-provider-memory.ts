@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { CacheConfig, CacheProvider, CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { cacheM } from '../cache-i18n.js'
 import {
 
@@ -831,29 +831,29 @@ export function createMemoryProvider(): CacheProvider {
   const LOCK_PREFIX = '__lock:'
 
   const lock: LockOperations = {
-    async acquire(key: string, options?: LockOptions): Promise<HaiResult<boolean>> {
+    async acquire(key: string, options?: LockOptions): Promise<HaiResult<string | null>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const ttl = options?.ttl ?? 30
-      const owner = options?.owner ?? 'default'
+      const owner = core.id.uuid()
       const existing = getValidEntry(lockKey)
       if (existing) {
         // 锁已被持有
-        return ok(false)
+        return ok(null)
       }
       store.set(lockKey, {
         value: owner,
         expiresAt: Date.now() + ttl * 1000,
       })
-      return ok(true)
+      return ok(owner)
     },
 
-    async release(key: string, owner?: string): Promise<HaiResult<boolean>> {
+    async release(key: string, owner: string): Promise<HaiResult<boolean>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const entry = getValidEntry(lockKey)
       if (!entry) {
         return ok(false)
       }
-      if (owner !== undefined && entry.value !== owner) {
+      if (!owner || entry.value !== owner) {
         return ok(false)
       }
       store.delete(lockKey)
@@ -866,13 +866,13 @@ export function createMemoryProvider(): CacheProvider {
       return ok(entry !== null)
     },
 
-    async extend(key: string, ttl: number, owner?: string): Promise<HaiResult<boolean>> {
+    async extend(key: string, ttl: number, owner: string): Promise<HaiResult<boolean>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const entry = getValidEntry(lockKey)
       if (!entry) {
         return ok(false)
       }
-      if (owner !== undefined && entry.value !== owner) {
+      if (!owner || entry.value !== owner) {
         return ok(false)
       }
       entry.expiresAt = Date.now() + ttl * 1000

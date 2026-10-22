@@ -273,12 +273,12 @@ async function flushPendingMessages(
 
   // 分布式锁：防止多节点同时 flush
   // 注意：这里的锁主要用于减少惊群和重复扫描；真正的行级正确性由 repo.claimPendingBatch 的 claim 事务保证。
-  let lockAcquired = false
+  let lockOwner: string | null = null
   // flushOwner 是本轮 flush 的短期 lease owner。
   // 同一进程后续再次 flush 会生成新的 owner，避免旧批次在 lease 失效后误释放/误提交新批次的记录。
   const flushOwner = `${reachNodeId}:${Date.now()}`
   if (cache.isInitialized) {
-    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL, owner: reachNodeId })
+    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL })
     if (!lockResult.success) {
       logger.warn('Failed to acquire flush lock, continuing with row claims only', { error: lockResult.error.message })
     }
@@ -287,7 +287,7 @@ async function flushPendingMessages(
       return
     }
     else {
-      lockAcquired = true
+      lockOwner = lockResult.data
     }
   }
 
@@ -381,8 +381,8 @@ async function flushPendingMessages(
   }
   finally {
     // 释放锁
-    if (lockAcquired) {
-      await cache.lock.release(FLUSH_LOCK_KEY, reachNodeId).catch((error: unknown) => {
+    if (lockOwner) {
+      await cache.lock.release(FLUSH_LOCK_KEY, lockOwner).catch((error: unknown) => {
         logger.warn('Failed to release flush lock', { error })
       })
     }

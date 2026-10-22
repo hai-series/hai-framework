@@ -281,7 +281,7 @@ export interface ZSetOperations {
  *   try {
  *     // 执行受保护操作
  *   } finally {
- *     await cache.lock.release('my-lock')
+ *     await cache.lock.release('my-lock', acquired.data)
  *   }
  * }
  * ```
@@ -290,13 +290,13 @@ export interface LockOperations {
   /**
    * 尝试获取分布式锁
    *
-   * 通过 SET NX EX 原子操作实现。获锁成功返回 true，锁已被持有返回 false。
+   * 通过 SET NX EX 原子操作实现。每次生成不可复用的所有权凭据；占用时返回 null。
    *
    * @param key - 锁键名
    * @param options - 锁选项
-   * @returns true 表示获锁成功，false 表示锁已被其他持有者持有
+   * @returns 获锁成功返回唯一凭据，锁占用时返回 null
    */
-  acquire: (key: string, options?: LockOptions) => Promise<HaiResult<boolean>>
+  acquire: (key: string, options?: LockOptions) => Promise<HaiResult<string | null>>
 
   /**
    * 释放分布式锁
@@ -304,10 +304,10 @@ export interface LockOperations {
    * 仅当锁由当前持有者持有时才释放（通过 owner 比对），防止误释放他人的锁。
    *
    * @param key - 锁键名
-   * @param owner - 锁持有者标识（须与 acquire 时一致）；未传则强制释放
+   * @param owner - 本次 acquire 返回的唯一凭据，不能使用节点 ID
    * @returns true 表示释放成功，false 表示锁不存在或非当前持有者
    */
-  release: (key: string, owner?: string) => Promise<HaiResult<boolean>>
+  release: (key: string, owner: string) => Promise<HaiResult<boolean>>
 
   /**
    * 检查锁是否被持有
@@ -324,18 +324,16 @@ export interface LockOperations {
    *
    * @param key - 锁键名
    * @param ttl - 新的过期时间（秒）
-   * @param owner - 锁持有者标识；未传则直接续期
+   * @param owner - 本次 acquire 返回的唯一凭据
    * @returns true 表示续期成功，false 表示锁不存在或非当前持有者
    */
-  extend: (key: string, ttl: number, owner?: string) => Promise<HaiResult<boolean>>
+  extend: (key: string, ttl: number, owner: string) => Promise<HaiResult<boolean>>
 }
 
 /** 分布式锁选项 */
 export interface LockOptions {
   /** 锁过期时间（秒）；默认 30 */
   ttl?: number
-  /** 锁持有者标识；默认 'default'（多节点部署时建议设置固定值以便审计） */
-  owner?: string
 }
 
 // ─── 复合操作接口 ───
