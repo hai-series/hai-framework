@@ -74,7 +74,7 @@ export interface SessionRepository {
   removeByUserId: (userId: string) => Promise<HaiResult<number>>
   /** 原子移除 refresh 凭据，保留 access。 */
   removeRefreshToken: (token: string) => Promise<HaiResult<void>>
-  /** 在同一最新文档更新会话，缓存故障不会触发索引清理。 */
+  /** 在同一最新文档更新会话，缓存故障返回失败并保留整个分区；损坏数据同样失败关闭，不当作不存在。 */
   patchUserSessions: (userId: string, patch: Record<string, unknown>) => Promise<HaiResult<void>>
 }
 
@@ -99,12 +99,12 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
       if (result.data === null)
         return ok(undefined)
       const state = result.data
-      if (typeof state.revision !== 'string' || !state.sessions || typeof state.sessions !== 'object')
+      if (typeof state.revision !== 'string' || !state.revision || !state.sessions || typeof state.sessions !== 'object' || Array.isArray(state.sessions))
         throw new TypeError('Invalid session state')
       for (const [token, entry] of Object.entries(state.sessions)) {
         const session = restoreSession(entry.session)
         if (getTokenSessionScope(token) !== scope || token !== session.accessToken || getUserSessionScope(session.userId) !== scope
-          || !Number.isFinite(entry.refreshExpiresAt) || (entry.refreshToken !== undefined && getTokenSessionScope(entry.refreshToken) !== scope)) {
+          || !Number.isSafeInteger(entry.refreshExpiresAt) || (entry.refreshToken !== undefined && getTokenSessionScope(entry.refreshToken) !== scope)) {
           throw new TypeError('Invalid session state')
         }
       }
