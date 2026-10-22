@@ -8,6 +8,7 @@
 import type { CacheFunctions } from '@h-ai/cache'
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { TransportKeyStore } from '../crypto-transport-types.js'
+import { cryptoM } from '../../crypto-i18n.js'
 
 const TRANSPORT_KEY_CACHE_PREFIX = 'hai:crypto:transport:client'
 
@@ -61,7 +62,7 @@ export function createRedisTransportKeyStore(options: CreateRedisTransportKeySto
     get stateScope() { return options.cache.config?.type === 'redis' ? 'shared' : 'local' },
     async register(publicKey) {
       const clientId = createClientId()
-      unwrapResult(
+      const applied = unwrapResult(
         'cache.kv.set',
         await options.cache.kv.set(
           buildCacheKey(clientId),
@@ -69,6 +70,8 @@ export function createRedisTransportKeyStore(options: CreateRedisTransportKeySto
           ttlSeconds === undefined ? undefined : { ex: ttlSeconds },
         ),
       )
+      if (!applied)
+        throw new Error(cryptoM('crypto_transportClientNotRegistered'))
       return clientId
     },
 

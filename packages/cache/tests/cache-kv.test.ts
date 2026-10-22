@@ -16,7 +16,7 @@ defineCacheSuite('memory boundaries', memoryEnv, () => {
     expect((await cache.kv.set('exact', 'value', { pxat: 1000 })).success).toBe(true)
     expect(await cache.kv.get('exact')).toMatchObject({ success: true, data: null })
     expect(await cache.kv.ttl('exact')).toMatchObject({ success: true, data: -2 })
-    await cache.kv.set('epoch', 'value', { pxat: 0 })
+    expect(await cache.kv.set('epoch', 'value', { pxat: 0 })).toMatchObject({ success: false, error: { code: HaiCacheError.INVALID_SET_OPTIONS.code } })
     expect(await cache.kv.get('epoch')).toMatchObject({ success: true, data: null })
   })
 

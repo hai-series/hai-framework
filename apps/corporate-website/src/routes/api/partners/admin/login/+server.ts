@@ -15,10 +15,12 @@ export const POST = kit.handler(async ({ request, cookies }) => {
     return kit.response.error('AUTH_FAILED', m.admin_login_failed(), 401)
   }
 
-  const token = await createPartnerAdminSession(username)
+  const session = await createPartnerAdminSession(username)
+  if (!session.success)
+    return kit.response.error('SESSION_UNAVAILABLE', m.admin_login_failed(), 503)
   const config = getPartnerAdminConfig()
 
-  cookies.set('corp_partner_access_token', token, {
+  cookies.set('corp_partner_access_token', session.data, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',

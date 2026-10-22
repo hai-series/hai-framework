@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 2/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 3/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -105,7 +105,8 @@
 
 ### CACHE-04 · P2 · 修正零值过期与条件写入结果语义
 
-- [ ] 待修正（源码确认；范围：cache）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：统一 memory/Redis SET 正安全整数期限与互斥组合校验，非法输入不写永久键，过去绝对时间立即过期；返回 boolean applied，条件未命中保留值/TTL，保存 JSON 快照。同步 IAM 票据、crypto 公钥登记及企业站登录（会话未落库不设 cookie）、三语 README/skill/LLMS；HEAD 探针复现旧缺陷，新 cache 86 项含真实 Redis/三主 Cluster、IAM 8、crypto 1、企业站 6 项及目标严格类型/相关包与应用类型、cache build/lint/skills 通过，见 tmp/module-repair-20261022/CACHE-04；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/cache/src/providers/cache-provider-redis.ts:157](../packages/cache/src/providers/cache-provider-redis.ts#L157)；[packages/cache/src/providers/cache-provider-redis.ts:154](../packages/cache/src/providers/cache-provider-redis.ts#L154)。
 - **证据与影响**：ex/px/exat/pxat 使用 truthy 判断，0 被当作没有过期策略；NX/XX 返回值丢弃，调用方不能从成功结果判断是否写入。
 - **修正内容**：显式校验过期参数及互斥组合，零值不能变永久 key；条件写入返回 applied 状态或提供专用原子操作。同步 memory/Redis 行为。

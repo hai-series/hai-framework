@@ -26,6 +26,7 @@ const CacheErrorInfo = {
   INVALID_SCAN: '013:400',
   SCAN_TOPOLOGY_CHANGED: '014:409',
   CROSS_SLOT: '015:400',
+  INVALID_SET_OPTIONS: '016:400',
 } as const satisfies ErrorInfo
 
 export const HaiCacheError = core.error.buildHaiErrorsDef('cache', CacheErrorInfo)
@@ -39,21 +40,24 @@ export const HaiCacheError = core.error.buildHaiErrorsDef('cache', CacheErrorInf
  */
 export type CacheValue = string | number | boolean | object | null
 
-/** 缓存设置选项 */
+/**
+ * SET 选项；四种期限彼此互斥且与 keepTtl 互斥，nx/xx 互斥。
+ * @example const options: SetOptions = { px: 1000, nx: true }
+ */
 export interface SetOptions {
-  /** 过期时间（秒） */
+  /** 过期时间（正安全整数秒），零/负数无效。 */
   ex?: number
-  /** 过期时间（毫秒） */
+  /** 过期时间（正安全整数毫秒），零/负数无效。 */
   px?: number
-  /** 过期时间点（Unix 时间戳，秒） */
+  /** Unix 正安全整数秒；过去时间会立即过期，乘1000后须仍为安全整数。 */
   exat?: number
-  /** 过期时间点（Unix 时间戳，毫秒） */
+  /** Unix 正安全整数毫秒；过去时间会立即过期。 */
   pxat?: number
   /** 仅在键不存在时设置 */
   nx?: boolean
   /** 仅在键存在时设置 */
   xx?: boolean
-  /** 保留原有的 TTL（与 ex/px/exat/pxat 互斥，冲突时以后端实现行为为准） */
+  /** 保留原 TTL；新键无 TTL，与所有显式期限互斥。 */
   keepTtl?: boolean
 }
 
@@ -98,8 +102,12 @@ export interface ZMember {
 export interface KvOperations {
   /** 获取值；键不存在时返回 null */
   get: <T = CacheValue>(key: string) => Promise<HaiResult<T | null>>
-  /** 设置值；可通过 options 控制过期时间、NX/XX 条件等 */
-  set: (key: string, value: CacheValue, options?: SetOptions) => Promise<HaiResult<void>>
+  /**
+   * 设置 JSON 快照，返回实际是否写入；NX/XX 未命中为 success:true/data:false，原值与TTL不变。
+   * 参数非法返回 INVALID_SET_OPTIONS；省略期限永久保存，keepTtl 显式保留原期限。
+   * @example const applied = await cache.kv.set('claim', 'owner', { nx: true, px: 1000 }); if (applied.success && !applied.data) return
+   */
+  set: (key: string, value: CacheValue, options?: SetOptions) => Promise<HaiResult<boolean>>
   /**
    * 对单个 key 原子比较 JSON 序列化值并替换；比较失败返回 false，不修改值/TTL。
    * expected=undefined 表示键不存在；value=undefined 表示删除，null 是实际 JSON 值。

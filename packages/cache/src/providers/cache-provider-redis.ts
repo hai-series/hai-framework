@@ -15,6 +15,7 @@ import Redis from 'ioredis'
 import { cacheM } from '../cache-i18n.js'
 import { HaiCacheError } from '../cache-types.js'
 import { RedisScanError, scanRedisKeys } from './cache-redis-scan.js'
+import { validateSetOptions } from './cache-set-options.js'
 
 const logger = core.logger.child({ module: 'cache', scope: 'redis' })
 
@@ -196,25 +197,25 @@ export function createRedisProvider(): CacheProvider {
       })
     },
 
-    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<void>> {
+    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<boolean>> {
+      const validated = validateSetOptions(options)
+      if (!validated.success)
+        return validated
       return wrapOperation(async () => {
+        const policy = validated.data
         const args: (string | number)[] = [key, serialize(value)]
-        if (options?.ex)
-          args.push('EX', options.ex)
-        else if (options?.px)
-          args.push('PX', options.px)
-        else if (options?.exat)
-          args.push('EXAT', options.exat)
-        else if (options?.pxat)
-          args.push('PXAT', options.pxat)
-        if (options?.nx)
+        if (policy.expiry)
+          args.push(...policy.expiry)
+        if (policy.nx)
           args.push('NX')
-        else if (options?.xx)
+        else if (policy.xx)
           args.push('XX')
-        if (options?.keepTtl)
+        if (policy.keepTtl)
           args.push('KEEPTTL')
-        // ioredis SET 的 TypeScript 重载签名不支持动态参数拼装（EX/PX/NX/XX/KEEPTTL），需绕过类型检查
-        await (client as unknown as { set: (...args: Array<string | number>) => Promise<unknown> }).set(...args)
+        const result = await client!.call('SET', ...args)
+        if (result !== 'OK' && result !== null)
+          throw new Error(cacheM('cache_setUnexpectedReply'))
+        return result === 'OK'
       })
     },
 

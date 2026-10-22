@@ -62,7 +62,7 @@ export function createTicketOperations(): TicketOperations {
 
       // NX 保证键唯一（随机值几乎不会碰撞，nx 兜底防止极端重复覆盖已有票据）
       const saved = await cache.kv.set(buildTicketKey(ticket), record, { px: ttlMs, nx: true })
-      if (!saved.success) {
+      if (!saved.success || !saved.data) {
         logger.warn('Failed to issue ticket', { purpose: options.purpose })
         return err(HaiIamError.TICKET_ISSUE_FAILED, iamM('iam_ticketIssueFailed'))
       }

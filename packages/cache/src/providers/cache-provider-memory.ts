@@ -9,11 +9,8 @@ import type { HaiResult } from '@h-ai/core'
 import type { CacheConfig, CacheProvider, CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { cacheM } from '../cache-i18n.js'
-import {
-
-  HaiCacheError,
-
-} from '../cache-types.js'
+import { HaiCacheError } from '../cache-types.js'
+import { validateSetOptions } from './cache-set-options.js'
 
 // ─── 内部类型 ───
 
@@ -130,29 +127,6 @@ export function createMemoryProvider(): CacheProvider {
     return entry
   }
 
-  /**
-   * 根据 SetOptions 计算过期时间戳
-   *
-   * 优先级：ex > px > exat > pxat，均未指定时返回 undefined（永不过期）
-   *
-   * @param options - 设置选项
-   * @returns 过期时间戳（毫秒），或 undefined
-   */
-  function calculateExpiry(options?: SetOptions): number | undefined {
-    if (!options)
-      return undefined
-    const now = Date.now()
-    if (options.ex)
-      return now + options.ex * 1000
-    if (options.px)
-      return now + options.px
-    if (options.exat != null)
-      return options.exat * 1000
-    if (options.pxat != null)
-      return options.pxat
-    return undefined
-  }
-
   // ─── KV 操作 ───
 
   const kv: KvOperations = {
@@ -188,17 +162,32 @@ export function createMemoryProvider(): CacheProvider {
       }
     },
 
-    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<void>> {
-      const existing = getValidEntry(key) !== null
-      if (options?.nx && existing)
-        return ok(undefined)
-      if (options?.xx && !existing)
-        return ok(undefined)
-
+    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<boolean>> {
+      const validated = validateSetOptions(options)
+      if (!validated.success)
+        return validated
+      const policy = validated.data
       const currentEntry = getValidEntry(key)
-      const expiresAt = options?.keepTtl && currentEntry ? currentEntry.expiresAt : calculateExpiry(options)
-      store.set(key, { value, expiresAt })
-      return ok(undefined)
+      const existing = currentEntry !== null || Boolean(hashStore.get(key)?.size || listStore.get(key)?.length || setStore.get(key)?.size || zsetStore.get(key)?.size)
+      if ((policy.nx && existing) || (policy.xx && !existing))
+        return ok(false)
+      try {
+        // 先得到与 Redis 一致的 JSON 快照；序列化失败不能破坏原值或 TTL。
+        const snapshot = deserializeValue(serializeValue(value))
+        const expiresAt = policy.keepTtl ? currentEntry?.expiresAt : policy.expiresAt
+        hashStore.delete(key)
+        listStore.delete(key)
+        setStore.delete(key)
+        zsetStore.delete(key)
+        if (expiresAt !== undefined && expiresAt <= Date.now())
+          store.delete(key)
+        else
+          store.set(key, { value: snapshot, expiresAt })
+        return ok(true)
+      }
+      catch (error) {
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_serializationFailed'), error)
+      }
     },
 
     async del(...keys: string[]): Promise<HaiResult<number>> {

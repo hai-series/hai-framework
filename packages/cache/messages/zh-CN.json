@@ -13,5 +13,8 @@
   "cache_invalidScan": "扫描游标或参数无效",
   "cache_scanTopologyChanged": "扫描拓扑或匹配规则已改变，请从0重新开始",
   "cache_crossSlot": "此操作要求所有键位于同一Redis Cluster slot，请使用共同hash tag",
-  "cache_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。"
+  "cache_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。",
+  "cache_invalidSetOptions": "SET 选项无效：期限须为正安全整数且只能选一种，不能与 keepTtl 同时使用，nx/xx 不能同时启用",
+  "cache_setUnexpectedReply": "Redis 返回了非预期的 SET 结果",
+  "cache_serializationFailed": "缓存值无法序列化为 JSON"
 }
