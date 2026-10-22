@@ -19,7 +19,7 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 
 ## 使用路径
 
-- 先确定 Node listen 还是 Fetch adapter，再从共享 contract 装配 procedures；不要直接暴露 Hono。Node 自动提供 socket 对端；Fetch 通过 app.fetch 的 remoteAddress 元数据提供可信平台对端。http.trustedProxies 默认为空，仅显式代理 IP/CIDR 可以提供转发头；自定义 context 传递完整 input 保留解析后的 ip。
+- 在满足包 Node API 依赖的宿主中选择 listen 或标准 Fetch adapter，再从共享 contract 装配 procedures；不要直接暴露 Hono。Node 自动提供 socket 对端；Fetch 通过 app.fetch 的 remoteAddress 元数据提供可信平台对端。http.trustedProxies 默认为空，仅显式代理 IP/CIDR 可以提供转发头；自定义 context 传递完整 input 保留解析后的 ip。
 - Storage 默认 procedures 必须注入 authorize 资源策略，使用可信 session 校验全部 key/prefix；缺失策略默认拒绝，混合批量全量授权后才执行。
 - AI 默认 feature 以可信 session.userId 绑定 objectId，所有读写和记忆按主体隔离；跨主体访问必须显式 authorizeObject，同名 sessionId 不代表同一用户。
 - 认证绑定 route 的 auth/permission/role；启动配置错误与正常请求领域错误分别处理。
@@ -48,3 +48,5 @@ transport 与 kit/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB�
 - 测试
 
 标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。
+
+JSDoc 公开例子按实际根入口/features 声明编译；“模块内部上下文”不能照抄为根 API。工厂配置异常、领域 HaiResult 与 HTTP middleware 的状态分别处理；listener.close 仅关闭 HTTP，onClose 为信号关闭回调，业务资源仍由宿主管理。

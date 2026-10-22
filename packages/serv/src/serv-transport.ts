@@ -26,7 +26,22 @@ const logger = core.logger.child({ module: 'serv', scope: 'transport' })
 
 const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json']
 
-/** {@link createApp} 的 `transport` 配置项。 */
+/**
+ * {@link createApp} 的 `transport` 配置项。
+ *
+ * @example
+ * ```ts
+ * import type { ServTransportConfig } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * import { crypto } from '@h-ai/crypto'
+ *
+ * function configure(serverKeyRing: ServTransportConfig['serverKeyRing'], keyStore: ServTransportConfig['keyStore']): ServTransportConfig {
+ *   return { crypto, serverKeyRing, keyStore }
+ * }
+ * // 私有 keyring 跨节点共享并支持轮换；生产 keyStore 原子消费重放标识，不能用进程 Map。
+ * ```
+ */
 export interface ServTransportConfig {
   /** 受管服务端密钥环，仅运行时从私有 Secret 注入。 */
   readonly serverKeyRing: TransportServerKeyRing
@@ -59,6 +74,15 @@ export interface ServTransportConfig {
  * @param manager - 由 `crypto.transport.createServer()` 创建的管理器
  * @param keyExchangePath - 密钥协商绝对路径（已与 apiPrefix 拼接）
  * @param excludePaths - 不参与加解密的路径
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function mount(manager: TransportEncryptionManager) {
+ *   return createTransportMiddleware(manager, '/api/v1/_hai/key-exchange', ['/health'])
+ * }
+ * // 请求先验证 method/pathHash/clientId/requestId 完整性并原子防重放，之后才执行 handler。
+ * ```
  */
 export function createTransportMiddleware(
   manager: TransportEncryptionManager,

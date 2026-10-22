@@ -24,7 +24,18 @@ import { core, err, HaiCommonError, ok } from '@h-ai/core'
 
 const logger = core.logger.child({ module: 'serv', scope: 'audio-ws' })
 
-/** 语音 WebSocket 接入依赖。 */
+/**
+ * 语音 WebSocket 接入依赖。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function withAudioLimits(deps: AudioWsDeps): AudioWsDeps {
+ *   return { ...deps, maxSessionMs: 60000, maxBufferedBytes: 1024 * 1024 }
+ * }
+ * // verifyTicket 必须原子消费共享的一次性票据，不能仅解析客户端身份。
+ * ```
+ */
 export interface AudioWsDeps {
   /** AI 服务对象的语音能力（`ai.audio`）。 */
   readonly ai: Pick<AIFunctions, 'audio'>
@@ -66,7 +77,18 @@ const CODE_TICKET = 'hai:ai:054'
 const CODE_TOO_LARGE = 'hai:ai:058'
 const CODE_TIMEOUT = 'hai:ai:057'
 
-/** 连接状态机 */
+/**
+ * 连接状态机
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function acceptsAudio(state: ConnectionState): boolean {
+ *   return state === 'transcribing'
+ * }
+ * // 输入完成后不可再次接受音频或 start 帧。
+ * ```
+ */
 type ConnectionState
   = | 'connecting'
     | 'authenticated'
@@ -78,7 +100,16 @@ type ConnectionState
     | 'failed'
     | 'cancelled'
 
-/** 连接级限额。 */
+/**
+ * 连接级限额。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const limits: ConnectionLimits = { maxMessageBytes: 65536, maxBufferedBytes: 1048576, maxTextBytes: 65536, maxPendingMessages: 32, maxSendBufferBytes: 1048576 }
+ * const maxFramesInQueue = limits.maxPendingMessages
+ * ```
+ */
 interface ConnectionLimits {
   readonly maxMessageBytes: number
   readonly maxBufferedBytes: number
@@ -94,6 +125,15 @@ interface ConnectionLimits {
  * @param path - 绝对路径（已与 apiPrefix 拼接）
  * @param upgradeWebSocket - Node adapter 原生提供的升级处理器
  * @param deps - 语音接入依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function mount(app: Hono, upgrade: UpgradeWebSocket, deps: AudioWsDeps) {
+ *   registerAudioWsRoute(app, '/api/v1/ai/audio', upgrade, deps)
+ * }
+ * // 公共调用方通过 createApp 的 audio 配置接入，不直接装配内部 Hono/WS。
+ * ```
  */
 export function registerAudioWsRoute(
   app: Hono,

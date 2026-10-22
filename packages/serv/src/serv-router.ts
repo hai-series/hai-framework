@@ -27,11 +27,66 @@ import { implement as orpcImplement } from '@orpc/server'
 import { applyServGuards } from './pipelines/serv-pipeline-guard.js'
 import { mapHaiError } from './pipelines/serv-pipeline-helper.js'
 
+/**
+ * 内部初始 context 空约束，用于保持 oRPC 推导而不伪造运行时字段。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { serv } = await import('@h-ai/serv')
+ * const context: ServContext & EmptyContext = serv.parseRequestContext({ request: new Request('https://example.com/ping') })
+ * const requestId = context.requestId
+ * ```
+ */
 type EmptyContext = Record<never, never>
+/**
+ * 提取 contract 的字符串键，排除 symbol/数字索引。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const path: StringKey<typeof contract> = 'ping'
+ * const procedure = contract[path]
+ * ```
+ */
 type StringKey<T> = Extract<keyof T, string>
+/**
+ * 内部 contract 泛型边界；真实 procedure 输出须为 HaiResult。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const checked = contract satisfies ServContract
+ * const procedures = implement(checked).context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * ```
+ */
 type ServContract = ContractRouter<Meta>
 
-/** contract 中所有 procedure 的点分路径。 */
+/**
+ * contract 中所有 procedure 的点分路径。
+ *
+ * @example
+ * ```ts
+ * import type { ServRoutePath } from '@h-ai/serv'
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { ok } from '@h-ai/core'
+ * import { serv } from '@h-ai/serv'
+ * import { z } from 'zod'
+ *
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const path: ServRoutePath<typeof contract> = 'ping'
+ * const procedures = serv.implement(contract).context<ServContext>().route(path, () => ok({ ready: true })).build()
+ * ```
+ */
 export type ServRoutePath<TContract extends ServContract>
   = TContract extends ContractProcedure<
     infer _TInputSchema,
@@ -55,6 +110,20 @@ export type ServRoutePath<TContract extends ServContract>
             : never
       }[StringKey<TContract>]
 
+/**
+ * 按点分路径查找原始 contract procedure；不存在的路径推导为 never。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const procedure: ContractAtPath<typeof contract, 'ping'> = contract.ping
+ * const scoped = implement({ ping: procedure }).context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * ```
+ */
 type ContractAtPath<TContract, TPath extends string>
   = TPath extends `${infer THead}.${infer TTail}`
     ? THead extends keyof TContract
@@ -64,17 +133,57 @@ type ContractAtPath<TContract, TPath extends string>
       ? TContract[TPath]
       : never
 
+/**
+ * 将合法路由路径映射到对应 contract，供 handler 推导复用。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const procedure: RouteContract<typeof contract, 'ping'> = contract.ping
+ * const scoped = implement({ ping: procedure }).context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * ```
+ */
 type RouteContract<
   TContract extends ServContract,
   TPath extends ServRoutePath<TContract>,
 > = ContractAtPath<TContract, TPath>
 
-/** `.auth()`、`.permission()`、`.role()` 后的非空会话上下文。 */
+/**
+ * `.auth()`、`.permission()`、`.role()` 后的非空会话上下文。
+ *
+ * @example
+ * ```ts
+ * import type { AuthenticatedServContext } from '@h-ai/serv'
+ *
+ * function owner(context: AuthenticatedServContext): string {
+ *   return context.session.userId
+ * }
+ * // 仅成功 guard 或可信认证结果能建立此上下文，禁止用客户端字段断言。
+ * ```
+ */
 export type AuthenticatedServContext<TContext extends ServContext = ServContext>
   = TContext & {
     readonly session: NonNullable<TContext['session']>
   }
 
+/**
+ * 内部从具体 procedure 的输入/输出与 context 推导 HaiResult handler。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const handler: RouteHandler<typeof contract.ping, ServContext> = () => ok({ ready: true })
+ * const procedures = implement(contract).context<ServContext>().route('ping', handler).build()
+ * ```
+ */
 type RouteHandler<
   TRouteContract,
   TContext extends Context,
@@ -95,19 +204,63 @@ type RouteHandler<
     : never
   : never
 
-/** 从 contract procedure 精确推导当前 route 的 HaiResult handler。 */
+/**
+ * 从 contract procedure 精确推导当前 route 的 HaiResult handler。
+ *
+ * @example
+ * ```ts
+ * import type { ServRouteHandler } from '@h-ai/serv'
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { ok } from '@h-ai/core'
+ * import { serv } from '@h-ai/serv'
+ * import { z } from 'zod'
+ *
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const handler: ServRouteHandler<typeof contract, 'ping', ServContext> = () => ok({ ready: true })
+ * const procedures = serv.implement(contract).context<ServContext>().route('ping', handler).build()
+ * ```
+ */
 export type ServRouteHandler<
   TContract extends ServContract,
   TPath extends ServRoutePath<TContract>,
   TContext extends Context,
 > = RouteHandler<RouteContract<TContract, TPath>, TContext>
 
+/**
+ * 内部认证成功 handler 类型；session 在 guard 之后非空。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const handler: ServGuardedRouteHandler<typeof contract, 'ping', ServContext> = ({ context }) => ok({ ready: context.session.userId.length > 0 })
+ * const procedures = implement(contract).context<ServContext>().route('ping').auth().handle(handler).build()
+ * ```
+ */
 type ServGuardedRouteHandler<
   TContract extends ServContract,
   TPath extends ServRoutePath<TContract>,
   TContext extends ServContext,
 > = RouteHandler<RouteContract<TContract, TPath>, AuthenticatedServContext<TContext>>
 
+/**
+ * 一次注册后移除该路径的 builder；全部路径完成才提供 build。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const next: NextBuilder<typeof contract, ServContext, ServContext, 'ping', 'ping'> = implement(contract).context<ServContext>().route('ping', () => ok({ ready: true }))
+ * const procedures = next.build()
+ * ```
+ */
 type NextBuilder<
   TContract extends ServContract,
   TInitialContext extends Context,
@@ -121,7 +274,20 @@ type NextBuilder<
   Exclude<TRemaining, TPath>
 >
 
-/** 尚未声明 guard 的单 route 注册器。 */
+/**
+ * 尚未声明 guard 的单 route 注册器。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const route: ServRouteRegistration<typeof contract, ServContext, ServContext, 'ping', 'ping'> = implement(contract).context<ServContext>().route('ping')
+ * const procedures = route.auth().handle(() => ok({ ready: true })).build()
+ * ```
+ */
 export interface ServRouteRegistration<
   TContract extends ServContract,
   TInitialContext extends Context,
@@ -152,7 +318,20 @@ export interface ServRouteRegistration<
   >
 }
 
-/** 已声明认证或授权 guard 的单 route 注册器。 */
+/**
+ * 已声明认证或授权 guard 的单 route 注册器。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const guarded: ServGuardedRouteRegistration<typeof contract, ServContext, ServContext, 'ping', 'ping'> = implement(contract).context<ServContext>().route('ping').permission('reports.read')
+ * const procedures = guarded.handle(() => ok({ ready: true })).build()
+ * ```
+ */
 export interface ServGuardedRouteRegistration<
   TContract extends ServContract,
   TInitialContext extends Context,
@@ -186,6 +365,20 @@ export interface ServGuardedRouteRegistration<
   ) => NextBuilder<TContract, TInitialContext, TCurrentContext, TRemaining, TPath>
 }
 
+/**
+ * 内部 route 重载：直接 handler 或先声明 guard，再收窄剩余路径。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const route: ServRouteMethod<typeof contract, ServContext, ServContext, 'ping'> = implement(contract).context<ServContext>().route
+ * const procedures = route('ping', () => ok({ ready: true })).build()
+ * ```
+ */
 interface ServRouteMethod<
   TContract extends ServContract,
   TInitialContext extends Context,
@@ -207,6 +400,20 @@ interface ServRouteMethod<
   >
 }
 
+/**
+ * 剩余路径为 never 时才暴露 build，否则仅提供缺失路径类型提示。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { apiContract } = await import('@h-ai/api-contract')
+ * const { z } = await import('zod')
+ * const { ok } = await import('@h-ai/core')
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const complete: ServRouterBuilderBuild<typeof contract, ServContext, never> = implement(contract).context<ServContext>().route('ping', () => ok({ ready: true }))
+ * const procedures = complete.build()
+ * ```
+ */
 type ServRouterBuilderBuild<
   TContract extends ServContract,
   TInitialContext extends Context,
@@ -225,6 +432,20 @@ type ServRouterBuilderBuild<
  * 链式 router builder。
  *
  * `TRemaining` 会随着 `.route()` 注册逐步收窄；未实现完整 contract 时没有 `.build()`。
+ *
+ * @example
+ * ```ts
+ * import type { ServRouterBuilder } from '@h-ai/serv'
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { ok } from '@h-ai/core'
+ * import { serv } from '@h-ai/serv'
+ * import { z } from 'zod'
+ *
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const builder: ServRouterBuilder<typeof contract, ServContext, ServContext> = serv.implement(contract).context<ServContext>()
+ * const procedures = builder.route('ping', () => ok({ ready: true })).build()
+ * ```
  */
 export type ServRouterBuilder<
   TContract extends ServContract,
@@ -240,7 +461,23 @@ export type ServRouterBuilder<
   >
 } & ServRouterBuilderBuild<TContract, TInitialContext, TRemaining>
 
-/** hai-framework 链式 contract 实现器。 */
+/**
+ * hai-framework 链式 contract 实现器。
+ *
+ * @example
+ * ```ts
+ * import type { ServImplementer } from '@h-ai/serv'
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { ok } from '@h-ai/core'
+ * import { serv } from '@h-ai/serv'
+ * import { z } from 'zod'
+ *
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const implementer: ServImplementer<typeof contract> = serv.implement(contract)
+ * const procedures = implementer.context<ServContext>().route('ping', () => ok({ ready: true })).build()
+ * ```
+ */
 export interface ServImplementer<TContract extends ServContract> {
   readonly context: <TContext extends ServContext>() => ServRouterBuilder<
     TContract,
@@ -254,14 +491,14 @@ export interface ServImplementer<TContract extends ServContract> {
  *
  * @example
  * ```ts
- * serv
- *   .implement(contract)
- *   .context<ServContext>()
- *   .route('info', infoHandler)
- *   .route('echo')
- *   .auth()
- *   .handle(echoHandler)
- *   .build()
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { ok } from '@h-ai/core'
+ * import { serv } from '@h-ai/serv'
+ * import { z } from 'zod'
+ *
+ * const contract = { ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.object({ ready: z.boolean() }))) }
+ * const procedures = serv.implement(contract).context<ServContext>().route('ping', () => ok({ ready: true })).build()
  * ```
  */
 export function implement<TContract extends ServContract>(
@@ -294,6 +531,17 @@ function createServRouterBuilder<
   >
 }
 
+/**
+ * 内部运行时 handler 边界；最终输入/输出验证仍由对应 contract 决定。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { ok } = await import('@h-ai/core')
+ * const handler: RuntimeProcedureHandler = ({ input }) => ok(input)
+ * // 动态装配边界仍由相同 contract 校验路径与 options，不提升未知输入类型。
+ * ```
+ */
 type RuntimeProcedureHandler = ProcedureHandler<
   ServContext,
   unknown,
@@ -301,6 +549,17 @@ type RuntimeProcedureHandler = ProcedureHandler<
   ErrorMap,
   Meta
 >
+/**
+ * 内部认证后的运行时 handler，原始 oRPC options 与可信 session 保留。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { ok } = await import('@h-ai/core')
+ * const handler: AuthenticatedRuntimeProcedureHandler = ({ context }) => ok({ userId: context.session.userId })
+ * const guarded = applyServGuards({ auth: true }, handler)
+ * ```
+ */
 type AuthenticatedRuntimeProcedureHandler = ProcedureHandler<
   AuthenticatedServContext,
   unknown,

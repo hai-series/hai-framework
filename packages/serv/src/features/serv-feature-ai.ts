@@ -36,8 +36,11 @@ const aiContract = apiContract.ai
  *
  * @example
  * ```ts
- * const authorizeObject = ({ context }: AiObjectAuthorizationRequest) =>
- *   context.session.permissions.includes('ai.manage')
+ * import type { AiObjectAuthorizationRequest } from '@h-ai/serv/features/ai'
+ *
+ * const authorize = ({ context, operation }: AiObjectAuthorizationRequest) =>
+ *   operation === 'history' && context.session.permissions.includes('ai.history.manage')
+ * // 租户型应用还应在此核验目标 objectId 与当前租户的真实关系。
  * ```
  */
 export interface AiObjectAuthorizationRequest {
@@ -56,9 +59,12 @@ export interface AiObjectAuthorizationRequest {
  *
  * @example
  * ```ts
- * // 默认只允许当前用户；需要跨用户管理时显式校验可信权限。
- * createAiProcedures({ ai, authorizeObject: ({ context }) =>
- *   context.session.permissions.includes('ai.manage') })
+ * import { ai } from '@h-ai/ai'
+ * import { createAiProcedures } from '@h-ai/serv/features/ai'
+ *
+ * // 宿主已初始化 AI 及其共享存储；省略策略时只允许当前 session.userId。
+ * const procedures = createAiProcedures({ ai })
+ * // 默认 completion 为非流式 JSON；object/session 作用域来自可信认证上下文。
  * ```
  */
 export interface AiProcedureDeps {
@@ -76,10 +82,15 @@ export interface AiProcedureDeps {
  *
  * @param deps - 已初始化 AI 能力及可选的跨主体授权策略。
  * @returns AI router；跨主体访问未获授权时返回 FORBIDDEN。
+ *
  * @example
  * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import { createAiProcedures } from '@h-ai/serv/features/ai'
+ *
+ * // 宿主已初始化 AI 及其共享存储；省略策略时只允许当前 session.userId。
  * const procedures = createAiProcedures({ ai })
- * // 客户端可省略 objectId，服务端从认证 session 绑定用户身份。
+ * // 默认 completion 为非流式 JSON；object/session 作用域来自可信认证上下文。
  * ```
  */
 export function createAiProcedures(deps: AiProcedureDeps) {

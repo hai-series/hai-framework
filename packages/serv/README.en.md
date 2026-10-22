@@ -22,7 +22,7 @@ hai-framework's API service runtime: a stable public HTTP App abstraction that m
 - Optional transport encryption: `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` mounts key exchange and request/response encryption automatically.
 - Optional audio: `serv.createApp({ audio: { ai, verifyTicket, authorize } })` mounts a unified audio WebSocket. Connections authenticate immediately with one-time tickets (`{ session, grant? }`, separate pre-auth timeout). Every frame uses runtime Zod validation and a strict state machine, with input/queue/send-buffer backpressure and cascading cancellation. Authorization verifies operations, models, voices, quotas, and concurrency on the server.
 
-> Lifecycle: `@h-ai/serv` is a stateless HTTP App assembler and needs no `init()` / `close()`. Initialize `iam` / `storage` / `ai` / `crypto` before app creation, then release them in reverse order through `serv.listen(..., { onClose })`. `serv.createApp()` throws immediately on startup configuration errors such as transport manager creation failure.
+> Lifecycle: `@h-ai/serv` is a stateless HTTP App assembler and needs no `init()` / `close()`. Initialize `iam` / `storage` / `ai` / `crypto` before app creation, then release them in reverse order through `serv.listen(..., { onClose })`. `serv.createApp()` throws immediately on startup configuration errors such as transport manager creation failure. onClose is the SIGINT/SIGTERM shutdown callback. Calling the returned handle.close directly closes HTTP only; the host separately releases business modules in reverse order.
 
 ## Getting started
 
@@ -93,7 +93,9 @@ server:
 
 Pass the resolved `server` to `serv.listen`; explicit `host` / `port` arguments can also override it.
 
-#### Fetch Runtime（Workers / Bun / Deno）
+#### Standard fetch signature adapter
+
+toFetch provides the standard fetch signature for Node-compatible hosts and test injection. The package root still depends on Node APIs; this does not establish support for Workers, Deno or edge deployment without those APIs.
 
 ```ts
 const handler = serv.toFetch(app)
@@ -699,3 +701,5 @@ Apache-2.0
 Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
 
 The default `auth.logout` endpoint takes the complete token from input.accessToken or Authorization Bearer without requiring live access authentication. It grants no userId-based authority and accepts no userId revocation target. Missing tokens fail; unknown tokens succeed idempotently. Shared-store failures remain failed HaiResult values, and cookie middleware clears refresh cookies only after success. Ordinary procedures retain the existing HTTP 200 / HaiResult envelope: clients must inspect success, not only the HTTP status.
+
+Declaration JSDoc examples import actual `@h-ai/serv` entries or published feature subpaths. Internal Hono, guard, router and transport examples are marked as internal module context and are not root APIs. Examples distinguish startup configuration exceptions, domain HaiResult, HTTP middleware statuses, and listener shutdown returning Promise<void>; default AI completion still returns non-streaming JSON only. Maintainers can run `node scripts/check-module-jsdoc.mjs --package serv` against actual declarations and internal lexical bindings. Compilation does not replace real HTTP, authorization or distributed replay-protection validation.

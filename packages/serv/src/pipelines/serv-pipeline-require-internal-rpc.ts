@@ -15,11 +15,16 @@ import { buildHaiErrorBody } from './serv-pipeline-helper.js'
 const pipelineLogger = core.logger.child({ module: 'serv', scope: 'pipeline' })
 
 /**
- * 懒加载 `@hono/node-server/conninfo`：仅在 Node 运行时可用。
+ * 内部 Node 连接信息读取器；按需加载平台子路径，缺失时内部 RPC 失败关闭，不信任转发头补造对端。
  *
- * 在 Bun / Workers / Deno 等 Fetch runtime 下，该 sub-path 可能不存在；
- * 用 try/catch 包住模块解析，让模块在非 Node 平台也能加载而不抛错。
- * 解析失败时 `loopback` / `private-network` 模式会因取不到 IP 而 fail closed（403）。
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function peer(read: GetConnInfoFn, context: Context): string | undefined {
+ *   return read(context).remote.address
+ * }
+ * // 地址来自平台 socket；缺失时内部 RPC 失败关闭。
+ * ```
  */
 type GetConnInfoFn = (c: Context) => { remote: { address?: string } }
 let cachedGetConnInfo: GetConnInfoFn | null | undefined
@@ -50,7 +55,9 @@ const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1', 'localhost
  *
  * @example
  * ```ts
- * app.use('/rpc/*', requireInternalRPC({ prefix: '/rpc', access: 'loopback' }))
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const middleware = requireInternalRPC({ prefix: '/rpc', access: 'loopback' })
+ * // createApp 在内部 RPC handler 前挂载；连接信息缺失时拒绝，不能采信转发头。
  * ```
  */
 export function requireInternalRPC(config: ServRpcHttpConfig): ServMiddleware {

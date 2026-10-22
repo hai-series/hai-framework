@@ -16,14 +16,40 @@ import { servM } from '../serv-i18n.js'
 
 /**
  * 通配符权限。仅应授予受信任的超级管理员，可通过任意 permission guard。
+ *
+ * @example
+ * ```ts
+ * import { serv } from '@h-ai/serv'
+ *
+ * const wildcard = serv.WILDCARD_PERMISSION
+ * // 仅可信超级管理员可拥有通配符 permissions；普通用户使用明确能力列表。
+ * ```
  */
 export const WILDCARD_PERMISSION = '*'
 
 /**
  * 通配符角色。仅应授予受信任的超级管理员，可通过任意 role guard。
+ *
+ * @example
+ * ```ts
+ * import { serv } from '@h-ai/serv'
+ *
+ * const wildcard = serv.WILDCARD_ROLE
+ * // 仅可信超级管理员可拥有通配符 roles；普通用户使用明确能力列表。
+ * ```
  */
 export const WILDCARD_ROLE = '*'
 
+/**
+ * 内部 route guard 要求；权限/角色检查以可信非空会话为前提。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const requirements: ServGuardRequirements = { auth: true, permissions: ['reports.read'] }
+ * const guarded = applyServGuards(requirements, ({ context }) => ({ success: true, data: { userId: context.session.userId } }))
+ * ```
+ */
 export interface ServGuardRequirements {
   readonly auth?: boolean
   readonly permissions?: readonly string[]
@@ -35,6 +61,13 @@ export interface ServGuardRequirements {
  *
  * 完整保留 oRPC 的 `path`、`procedure`、`signal`、`lastEventId`、`errors` 等
  * options；只在校验成功后把 `context` 收窄为带非空 session 的类型。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const guarded = applyServGuards({ permissions: ['reports.read'] }, ({ context }) => ({ success: true, data: { userId: context.session.userId } }))
+ * // 业务 handler 只在可信 session 满足全部权限后执行。
+ * ```
  */
 export function applyServGuards<
   TContext extends ServContext,

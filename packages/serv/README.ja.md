@@ -22,7 +22,7 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 - 任意の通信暗号化：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
 - 任意の音声入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` が共通 WebSocket を接続します。接続直後に単回 ticket で認証（`{ session, grant? }`、独立した事前認証 timeout）。各フレームを Zod と厳密な状態機械で検証し、入力・キュー・送信バッファの背圧と連鎖キャンセルを管理します。サーバーの認可処理で操作・モデル・声・割当量・同時使用数を確認します。
 
-> ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。
+> ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。 onClose は SIGINT/SIGTERM 用の終了コールバックです。返された handle.close の直接呼出しは HTTP だけを閉じ、業務モジュールはホストが別途逆順に解放します。
 
 ## 使い始める
 
@@ -93,7 +93,9 @@ server:
 
 解決済みの `server` を `serv.listen` に渡します。`host` / `port` の明示的な指定で上書きすることもできます。
 
-#### Fetch Runtime（Workers / Bun / Deno）
+#### 標準 fetch シグネチャのアダプター
+
+toFetch は Node 互換ホストやテスト注入用の標準 fetch シグネチャです。パッケージルートは Node API に依存しており、それらを持たない Workers・Deno・エッジへの対応を保証しません。
 
 ```ts
 const handler = serv.toFetch(app)
@@ -699,3 +701,5 @@ Apache-2.0
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../../docs/storage-api-capabilities.md)を参照してください。
 
 標準 `auth.logout` は input.accessToken または Authorization Bearer の完全な Token を取り消し、有効な access 認証を前提にしません。userId による権限や取消対象は受け付けません。Token 不足は失敗、不存在 Token は冪等成功です。共有ストア障害は失敗 HaiResult を保ち、Cookie middleware は成功時だけ refresh Cookie を消去します。通常 procedure の HTTP 200 / HaiResult 契約は同じなので、クライアントは HTTP status だけでなく success を確認します。
+
+宣言の JSDoc 例は実在する `@h-ai/serv` または公開 features サブパスから import します。内部 Hono・guard・router・transport は「模块内部上下文」と明記し、ルート API として扱いません。起動設定の例外、業務 HaiResult、HTTP middleware の status、listener の Promise<void> 終了を区別し、既定の AI completion は非ストリーミング JSON のままです。保守時は `node scripts/check-module-jsdoc.mjs --package serv` で実際の宣言と内部スコープに対して例をコンパイルします。実 HTTP、認可、共有リプレイ防止の検証を代替しません。

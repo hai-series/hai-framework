@@ -2,38 +2,48 @@
  * @h-ai/serv — Fetch 适配器
  *
  * 将 ServHttpApp 包装为标准 Web `fetch(Request)` 处理函数，
- * 适用于 Cloudflare Workers、Deno、Bun 等 Fetch-first 运行时。
+ * 用于 Node 兼容宿主与客户端测试的标准 fetch 注入；部署仍须满足包的 Node API 依赖。
  * @module adapters/serv-adapter-fetch
  */
 
 import type { ServHttpApp } from '../serv-app.js'
 
 /**
- * Fetch runtime handler。
+ * 标准 fetch 签名类型，供 Node 兼容宿主或客户端 in-process 测试注入。签名兼容不代表包整体不依赖 Node API，也不承诺未经验证的边缘部署。
  *
- * 兼容标准 Web `fetch` 签名 `(input, init)` —— 既可作为 Cloudflare Workers / Bun
- * 的 `fetch` 导出，也可作为 oRPC client `fetch` 选项的替代实现，让客户端在测试
- * 中直连 in-process 服务。
+ * @example
+ * ```ts
+ * import type { ServFetchHandler } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * function handle(app: Parameters<typeof serv.toFetch>[0]): ServFetchHandler {
+ *   return serv.toFetch(app)
+ * }
+ * // 兼容 fetch 签名；宿主仍须支持此包的 Node 依赖。
+ * ```
  */
 export type ServFetchHandler = typeof fetch
 
 /**
- * 将 ServHttpApp 转成 Fetch handler。
+ * 将应用转换为标准 fetch 签名，供 Node 兼容宿主或客户端测试注入；签名适配不代表整个包可在无 Node API 的边缘运行时加载。
  *
- * @param app - `serv.createApp()` 返回的 HTTP app
- * @returns fetch-compatible handler
+ * @param app - createApp 返回的应用
+ * @returns fetch 兼容处理器
+ * @throws Request 构造错误或下游应用异常；成功返回 Response。
  *
  * @example
  * ```ts
- * // Cloudflare Workers
- * export default { fetch: serv.toFetch(app) }
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { serv } from '@h-ai/serv'
  *
- * // Bun
- * Bun.serve({ fetch: serv.toFetch(app), port: 3000 })
+ * const contract = apiContract.create({})
+ * const procedures = serv.implement(contract).context<ServContext>().build()
+ * const app = serv.createApp({ contract, procedures })
  *
- * // 测试：把服务端 app 当作 fetch 注入到 client，免去 HTTP 监听
- * const client = apiClient.create(contract)
- * await client.init({ baseUrl: 'http://test', fetch: serv.toFetch(app) })
+ * const fetchHandler = serv.toFetch(app)
+ * const response = await fetchHandler('http://service.test/health')
+ * const ready = response.ok
  * ```
  */
 export function toFetch(app: ServHttpApp): ServFetchHandler {

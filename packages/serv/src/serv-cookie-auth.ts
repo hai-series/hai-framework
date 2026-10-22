@@ -33,6 +33,17 @@ import { resolveRequestLocale } from './serv-validation.js'
 /**
  * Refresh 流程返回的 Token 对结构。
  * 与 `@h-ai/iam` 的 `TokenPair` 结构兼容；此处独立定义以避免对可选 peer dep 的强依赖。
+ *
+ * @example
+ * ```ts
+ * import type { RefreshTokenPair } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * function publicAccess(pair: RefreshTokenPair) {
+ *   return { accessToken: pair.accessToken, expiresIn: pair.expiresIn }
+ * }
+ * // 浏览器 refreshToken 只走 HttpOnly Cookie，不能写入可读持久存储。
+ * ```
  */
 export interface RefreshTokenPair {
   readonly accessToken: string
@@ -41,6 +52,17 @@ export interface RefreshTokenPair {
   readonly tokenType?: string
 }
 
+/**
+ * 浏览器安全令牌投影，显式移除 refreshToken。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function project(pair: RefreshTokenPair): SafeRefreshTokenPair {
+ *   return stripRefreshTokenFromPair(pair)
+ * }
+ * ```
+ */
 type SafeRefreshTokenPair = Omit<RefreshTokenPair, 'refreshToken'>
 
 /**
@@ -49,6 +71,17 @@ type SafeRefreshTokenPair = Omit<RefreshTokenPair, 'refreshToken'>
  * 浏览器继续使用 httpOnly cookie；只有经过应用可信来源校验的原生请求，才允许在
  * JSON body 中接收和返回 refresh token。`isRequest` 必须同时校验客户端标识与 Origin，
  * 不能仅信任可伪造的单个请求头。
+ *
+ * @example
+ * ```ts
+ * import type { NativeRefreshTokenTransportConfig } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * function configureNative(isTrustedRequest: NativeRefreshTokenTransportConfig['isRequest']): NativeRefreshTokenTransportConfig {
+ *   return { isRequest: isTrustedRequest }
+ * }
+ * // 宿主同时验证原生客户端标识与允许的 Origin，不能只检查单个可伪造头。
+ * ```
  */
 export interface NativeRefreshTokenTransportConfig {
   /** 判断当前请求是否来自受信原生客户端。 */
@@ -64,6 +97,15 @@ export interface NativeRefreshTokenTransportConfig {
  * 刷新回调来源（优先级从高到低）：
  * 1. `onRefresh`（显式覆盖）
  * 2. 顶层 `iam.session.refresh`（推荐：`createApp({ iam, refreshCookie: {} })` 即开箱可用）
+ *
+ * @example
+ * ```ts
+ * import type { RefreshCookieConfig } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const config: RefreshCookieConfig = { cookieName: 'hai_refresh_token', maxAge: 2592000, secure: true }
+ * // createApp 同时提供 iam 或 onRefresh；此配置只负责 refresh 传输，不校验 access。
+ * ```
  */
 export interface RefreshCookieConfig {
   /** Cookie 名，默认 `hai_refresh_token`。 */
@@ -95,6 +137,17 @@ export interface RefreshCookieConfig {
 
 // ─── 内部解析 ─────────────────────────────────────────────────────────────────
 
+/**
+ * 内部已解析 Cookie 路径、安全属性和延迟刷新闭包；启动缺失刷新能力时显式失败。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function resolve(apiPrefix: string, config: RefreshCookieConfig, iam: Pick<ServIam, 'session'>): ResolvedRefreshCookieConfig {
+ *   return resolveRefreshCookieConfig(apiPrefix, config, iam)
+ * }
+ * ```
+ */
 interface ResolvedRefreshCookieConfig {
   cookieName: string
   maxAge: number
@@ -219,6 +272,18 @@ function stripRefreshTokenFromPair(tokens: RefreshTokenPair): SafeRefreshTokenPa
 
 /* 由 createApp 在 mountOpenAPIRoutes 之前调用，在 Hono app 上挂载
  * cookie 认证相关路由。Hono 按注册顺序匹配路由，因此必须在 oRPC 通配符路由之前注册。 */
+/**
+ * 在 oRPC 通配符前装配 Cookie 刷新与响应处理；启动缺少刷新回调时显式抛配置错误，业务失败保持 HaiResult。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function mount(app: Hono, iam: Pick<ServIam, 'session'>) {
+ *   mountRefreshCookieRoutes(app, '/api/v1', { secure: true }, iam)
+ * }
+ * // 必须在 oRPC 通配符路由前挂载；logout 仅在确认撤销成功后清 Cookie。
+ * ```
+ */
 export function mountRefreshCookieRoutes(
   app: Hono,
   apiPrefix: string,

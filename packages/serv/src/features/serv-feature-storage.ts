@@ -75,10 +75,15 @@ function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<st
  *
  * @example
  * ```ts
- * const authorize = ({ context, keys }: StorageAccessRequest) => {
+ * import { storage } from '@h-ai/storage'
+ * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ *
+ * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
+ * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
  *   const root = `users/${encodeURIComponent(context.session.userId)}/`
- *   return keys.every(key => key.startsWith(root))
- * }
+ *   return keys.length > 0 && keys.every(key => key.startsWith(root))
+ * } })
+ * // 空列表前缀与相邻用户名前缀均不能匹配此根目录。
  * ```
  */
 export interface StorageAccessRequest {
@@ -95,11 +100,15 @@ export interface StorageAccessRequest {
  *
  * @example
  * ```ts
- * createStorageProcedures({
- *   storage,
- *   authorize: ({ context, keys }) => keys.every(key =>
- *     key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
- * })
+ * import { storage } from '@h-ai/storage'
+ * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ *
+ * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
+ * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
+ *   const root = `users/${encodeURIComponent(context.session.userId)}/`
+ *   return keys.length > 0 && keys.every(key => key.startsWith(root))
+ * } })
+ * // 空列表前缀与相邻用户名前缀均不能匹配此根目录。
  * ```
  */
 export interface StorageProcedureDeps {
@@ -108,6 +117,18 @@ export interface StorageProcedureDeps {
   readonly authorize: (request: StorageAccessRequest) => boolean | Promise<boolean>
 }
 
+/**
+ * 内部预签名结果投影，包含短期访问 URL 和可选失效时间。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function safeUrl(value: PresignedResponse) {
+ *   return { url: value.url, key: value.key, expiresAt: value.expiresAt }
+ * }
+ * // URL 是授权后的短期凭据；只返回给已授权调用方，不记录到日志。
+ * ```
+ */
 interface PresignedResponse {
   readonly url: string
   readonly key: string
@@ -119,10 +140,18 @@ interface PresignedResponse {
  *
  * @param deps - 存储服务及必需的资源授权策略。
  * @returns 可挂载至 serv.createApp 的存储 router；拒绝访问返回 FORBIDDEN。
+ *
  * @example
  * ```ts
- * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) =>
- *   keys.every(key => key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)) })
+ * import { storage } from '@h-ai/storage'
+ * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ *
+ * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
+ * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
+ *   const root = `users/${encodeURIComponent(context.session.userId)}/`
+ *   return keys.length > 0 && keys.every(key => key.startsWith(root))
+ * } })
+ * // 空列表前缀与相邻用户名前缀均不能匹配此根目录。
  * ```
  */
 export function createStorageProcedures(deps: StorageProcedureDeps) {

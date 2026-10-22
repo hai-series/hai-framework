@@ -23,12 +23,38 @@ const iamContract = apiContract.iam
 
 const iamFeatureLogger = core.logger.child({ module: 'serv', scope: 'feature-iam' })
 
-/** IAM 默认 procedures 依赖。 */
+/**
+ * IAM 默认 procedures 依赖。
+ *
+ * @example
+ * ```ts
+ * import { iam } from '@h-ai/iam'
+ * import { createIamProcedures } from '@h-ai/serv/features/iam'
+ *
+ * // 宿主已初始化 IAM 及共享依赖。
+ * const procedures = createIamProcedures({ iam })
+ * // logout 撤销请求持有的 opaque access token；过期 access 也可撤销 refresh，
+ * // 不接收 userId，不要求有效 access 的 auth guard，失败仍检查 HaiResult。
+ * ```
+ */
 export interface IamProcedureDeps {
   readonly iam: IamFunctions
 }
 
-/** 创建 IAM 默认 procedures。 */
+/**
+ * 创建默认 IAM procedures；按操作声明认证/权限。logout 只撤销请求持有的完整 opaque token，不要求该 access 尚有效，也不能按 userId 撤销。
+ *
+ * @example
+ * ```ts
+ * import { iam } from '@h-ai/iam'
+ * import { createIamProcedures } from '@h-ai/serv/features/iam'
+ *
+ * // 宿主已初始化 IAM 及共享依赖。
+ * const procedures = createIamProcedures({ iam })
+ * // logout 撤销请求持有的 opaque access token；过期 access 也可撤销 refresh，
+ * // 不接收 userId，不要求有效 access 的 auth guard，失败仍检查 HaiResult。
+ * ```
+ */
 export function createIamProcedures(deps: IamProcedureDeps) {
   const { iam } = deps
 

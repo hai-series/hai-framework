@@ -6,7 +6,7 @@
 
 ## 运行环境
 
-> ⚠️ **服务端模块（Node.js / Fetch Runtime）。** 浏览器端通过 `@h-ai/api-client` 调用由本模块暴露的 HTTP API。
+> ⚠️ **服务端模块（Node.js 或满足同等 Node API 依赖的宿主）。** 浏览器端通过 `@h-ai/api-client` 调用由本模块暴露的 HTTP API。
 
 > 生命周期说明：`@h-ai/serv` 是无状态 HTTP App 装配器，不提供 `init()` / `close()`；依赖模块（iam/storage/ai/crypto 等）由应用先初始化，并在 `serv.listen(..., { onClose })` 中反向释放。`serv.createApp()` 的启动期配置错误会 fail-fast 抛出。
 
@@ -15,7 +15,7 @@
 - 将 `@h-ai/api-contract` contract 装配成最小 HTTP App 抽象
 - 配置 `/health`、`/ready`、`/openapi.json`、`/docs` 等系统端点
 - 在 procedure route 上添加 `.auth()`、`.permission()` 或 `.role()` guard
-- 切换 Node.js (`@hono/node-server`) 或 Fetch Runtime（Cloudflare Workers / Deno）部署
+- 使用 Node listener，或在满足包 Node 依赖的宿主/测试中注入标准 fetch handler
 - 自定义 `ServContext`（注入 session、tenant 等请求级数据）
 - 生成 OpenAPI 3.1 文档供外部工具消费
 - 通过 `config/_serv.yml` 管理 API 前缀、OpenAPI、docs、health、rpc 等 HTTP 挂载配置
@@ -214,7 +214,9 @@ const app = serv.createApp({ contract, procedures, http, iam })
 - **认证授权写在 route 链上**：公开过程使用 `.route(path, handler)`；需要认证时使用 `.route(path).auth().handle(handler)`。
 - **客户端导入相同 contract**：把服务端与客户端共享的 contract 独立成 package（如 `@h-ai/api-service-contract`），禁止从 app 源码目录跨应用 import。
 
-### 5. Fetch Runtime（Cloudflare Workers / Deno / Bun）
+### 5. 标准 fetch 签名适配
+
+toFetch 只适配调用签名；包根仍静态依赖 Node API，未经实际验证不能据此宣称 Workers/Deno/纯边缘部署兼容。
 
 ```typescript
 import { serv } from '@h-ai/serv'
@@ -783,3 +785,5 @@ pnpm --filter @h-ai/serv lint
 ```
 
 标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。
+
+声明 JSDoc 的公共例子只从实际根入口或 features 子路径导入，内部 Hono/guard/router/transport 例子标注“模块内部上下文”。框架仓库以 `node scripts/check-module-jsdoc.mjs --package serv` 检查覆盖和真实类型；生成应用按安装版本声明编译。启动工厂可显式抛配置异常，领域 procedure 必须检查 HaiResult；HTTP middleware 与普通 procedure 的状态语义分别处理。监听句柄 close 返回 Promise<void>，并不提供 serv.init/close 或替宿主管理业务模块。默认 AI JSON procedure 不支持 stream。
