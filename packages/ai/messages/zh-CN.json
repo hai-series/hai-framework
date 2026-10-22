@@ -4,14 +4,11 @@
   "ai_mcpInvalidResource": "MCP 资源必须且只能包含有效 text 或 blob：{uri}",
   "ai_mcpInvalidPrompt": "MCP 提示词参数或消息无效：{name}",
   "$schema": "https://inlang.com/schema/inlang-message-format",
-
   "ai_notInitialized": "AI 服务未初始化，请先调用 ai.init()",
   "ai_initFailed": "AI 服务初始化失败：{error}",
   "ai_initInProgress": "AI 服务正在初始化中，请勿重复调用。",
-
   "ai_requestTimeout": "请求超时",
   "ai_internalError": "内部错误：{error}",
-
   "ai_mcpToolNotFound": "MCP 工具 '{name}' 未找到",
   "ai_mcpToolFailed": "MCP 工具 '{name}' 执行失败：{error}",
   "ai_mcpResourceNotFound": "MCP 资源 '{uri}' 未找到",
@@ -19,41 +16,32 @@
   "ai_mcpPromptNotFound": "MCP 提示词 '{name}' 未找到",
   "ai_mcpPromptMissingArg": "MCP 提示词 '{name}' 缺少必需参数 '{arg}'",
   "ai_mcpPromptFailed": "MCP 提示词 '{name}' 执行失败：{error}",
-
   "ai_toolNotFound": "工具 '{name}' 未找到",
   "ai_toolInvalidJson": "工具调用参数 JSON 格式无效",
   "ai_toolTimeout": "工具 '{name}' 在 {ms}ms 后超时或被取消",
   "ai_toolAlreadyRegistered": "工具 '{name}' 已注册；如需替换请显式调用 replace()",
   "ai_toolForbidden": "工具 '{name}' 未获执行授权",
   "ai_configError": "AI 配置校验失败：{error}",
-
   "ai_llmRecordFailed": "对话记录保存失败：{error}",
   "ai_llmHistoryFailed": "对话历史查询失败：{error}",
-
   "ai_generateObjectFailed": "结构化输出解析失败：{error}",
   "ai_generateObjectRepair": "上一次输出无法解析为要求的结构（{error}）。请只输出符合 schema 的 JSON，不要包含额外文本。",
-
   "ai_embeddingApiFailed": "Embedding API 调用失败：{error}",
   "ai_embeddingModelNotFound": "Embedding 模型 '{model}' 未找到",
   "ai_embeddingInputTooLong": "Embedding 输入文本超过最大长度限制",
-
   "ai_reasoningFailed": "推理执行失败：{error}",
   "ai_reasoningMaxRounds": "推理轮次已达上限（{rounds} 轮）",
   "ai_reasoningStrategyNotFound": "推理策略 '{strategy}' 不存在",
-
   "ai_retrievalFailed": "检索执行失败：{error}",
   "ai_retrievalSourceNotFound": "检索源 '{source}' 未配置",
-
   "ai_ragFailed": "RAG 执行失败：{error}",
   "ai_ragContextBuildFailed": "RAG 上下文构建失败：{error}",
-
   "ai_knowledgeSetupFailed": "知识库初始化失败：{error}",
   "ai_knowledgeIngestFailed": "知识入库失败：{error}",
   "ai_knowledgeRetrieveFailed": "知识检索失败：{error}",
   "ai_knowledgeEntityExtractFailed": "实体提取失败：{error}",
   "ai_knowledgeNotSetup": "知识库未初始化，请先调用 ai.knowledge.setup()",
   "ai_knowledgeCollectionNotFound": "知识集合 '{collection}' 不存在",
-
   "ai_memoryExtractFailed": "记忆提取失败：{error}",
   "ai_memoryStoreFailed": "记忆存储失败：{error}",
   "ai_memoryRecallFailed": "记忆召回失败：{error}",
@@ -63,23 +51,19 @@
   "ai_memoryClearAllUnconfirmed": "admin.clearAll() 需要显式确认：请传入 { confirm: true }",
   "ai_memoryEnrichFailed": "记忆注入失败：{error}",
   "ai_memoryPromoteFailed": "记忆固化（长期化）失败：{error}",
-
   "ai_personaNotFound": "角色 '{id}' 不存在",
   "ai_personaSaveFailed": "角色保存失败：{error}",
-
   "ai_contextCompressFailed": "上下文压缩失败：{error}",
   "ai_contextBudgetExceeded": "受保护上下文占用 {tokens} 个 Token，无法压缩到 {budget} Token 的预算内。",
   "ai_contextSummarizeFailed": "上下文总结失败：{error}",
   "ai_contextTokenEstimateFailed": "Token 估算失败：{error}",
   "ai_turnNotFound": "对话轮次 '{turnId}' 不存在",
-  "ai_turnInvalidState": "对话轮次 '{turnId}' 已提交，无法重复提交",
+  "ai_turnInvalidState": "对话轮次 '{turnId}' 已失效或已按其他内容提交",
   "ai_contextBusy": "上下文管理器正忙：已有一个生成正在进行（concurrency='reject'）",
-
   "ai_storeFailed": "存储操作失败：{error}",
   "ai_storeNotAvailable": "存储后端不可用，已降级为内存模式",
   "ai_sessionNotFound": "会话 '{id}' 不存在",
   "ai_sessionFailed": "会话操作失败：{error}",
-
   "ai_rerankApiFailed": "Rerank API 调用失败：{error}",
   "ai_rerankInvalidRequest": "Rerank 请求参数无效：{reason}",
   "ai_fileParseFailed": "文件解析失败：{error}",
@@ -87,7 +71,6 @@
   "ai_fileOcrFailed": "OCR 识别失败：{error}",
   "ai_fileInvalidContent": "文件内容无效：{reason}",
   "ai_configMissingApiKey": "场景 '{scenario}' 需要提供 API Key",
-
   "ai_audioNotInitialized": "Audio 服务未初始化，请先调用 ai.init()",
   "ai_audioInvalidRequest": "语音请求参数无效：{reason}",
   "ai_audioModelNotFound": "语音模型 '{model}' 未找到，请在 ai.init() 的 audio.models 中注册",
@@ -100,7 +83,6 @@
   "ai_audioTimeout": "语音请求超时",
   "ai_audioInputTooLarge": "输入音频超过大小上限（{limit} 字节）",
   "ai_audioCancelled": "语音请求已取消",
-
   "ai_imageInvalidRequest": "文生图提示词不能为空",
   "ai_imageInvalidSize": "图片宽高必须为正整数",
   "ai_imageInvalidReferenceImage": "参考图必须包含非空图片字节和有效的图片 MIME 类型",
@@ -116,10 +98,10 @@
   "ai_imageDownloadBlocked": "图片下载 URL 或解析地址不在允许范围内",
   "ai_imageTooLarge": "图片字节或图片数量超过配置上限",
   "ai_imageTimeout": "图片生成或下载超时",
-
   "ai_a2aNotConfigured": "A2A 服务未配置，请在 ai.init() 中提供 'a2a' 配置。",
   "ai_a2aHandleFailed": "A2A 请求处理失败：{error}",
   "ai_a2aRemoteCallFailed": "A2A 远端调用 '{url}' 失败：{error}",
   "ai_a2aAuthFailed": "A2A 认证失败：{error}",
-  "ai_a2aListMessagesFailed": "A2A 消息查询失败：{error}"
+  "ai_a2aListMessagesFailed": "A2A 消息查询失败：{error}",
+  "ai_contextScopeRequired": "上下文必须配置非空的 objectId 和 sessionId"
 }

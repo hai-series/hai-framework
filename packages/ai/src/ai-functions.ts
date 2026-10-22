@@ -11,12 +11,13 @@ import type { A2ADeps } from './a2a/ai-a2a-functions.js'
 import type { AIConfig } from './ai-config.js'
 import type { AudioOperations } from './audio/ai-audio-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
+import type { PersistedContextState } from './context/ai-context-state.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
 import type { ImageOperations } from './image/ai-image-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
-import type { ChatMessage, ChatRecord, LLMOperations } from './llm/ai-llm-types.js'
+import type { ChatRecord, LLMOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 import type { MemoryEntry, MemoryOperations } from './memory/ai-memory-types.js'
 import type { PersonaOperations, PersonaProfile } from './persona/ai-persona-types.js'
@@ -25,7 +26,7 @@ import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations, RetrievalSource } from './retrieval/ai-retrieval-types.js'
 import type { AIStoreProvider, SessionInfo } from './store/ai-store-types.js'
-import type { SummaryOperations, SummaryResult } from './summary/ai-summary-types.js'
+import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
 
 import { core } from '@h-ai/core'
@@ -101,7 +102,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const sessionStore = storeProvider.createRelStore<SessionInfo>('hai_ai_sessions', { hasObjectId: true })
   const sourceStore = storeProvider.createRelStore<RetrievalSource>('hai_ai_retrieval_sources')
   const memoryStore = useMem0Oss ? null : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
-  const contextStore = storeProvider.createRelStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
+  const contextStore = storeProvider.createRelStore<PersistedContextState>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
   const personaStore = storeProvider.createRelStore<PersonaProfile>('hai_ai_persona', { hasObjectId: true })
   const a2aStores = config.a2a ? createA2AStores(storeProvider) : null
 

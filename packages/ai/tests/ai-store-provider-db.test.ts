@@ -183,14 +183,15 @@ describe('db store provider saveMany', () => {
     expect(calls).toHaveLength(1)
     const sql = calls[0].sql.replace(/\s+/g, ' ')
     const params = calls[0].params ?? []
-    expect(sql).toContain('INSERT INTO hai_ai_test (id, object_id, session_id, status, ref_id, data, created_at, updated_at)')
-    expect(sql).toContain('VALUES (?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?)')
-    expect(sql).toContain('ON CONFLICT(id) DO UPDATE SET data = excluded.data')
-    expect(params).toHaveLength(16)
-    expect(params.slice(0, 6)).toEqual(['id-1', 'obj', 'sess', 'ready', 'ref-1', JSON.stringify({ title: 'first' })])
-    expect(params.slice(8, 14)).toEqual(['id-2', 'obj', 'sess', 'ready', 'ref-2', JSON.stringify({ title: 'second' })])
-    expect(typeof params[6]).toBe('number')
-    expect(typeof params[14]).toBe('number')
+    expect(sql).toContain('INSERT INTO hai_ai_test (id, object_id, session_id, status, ref_id, version, data, created_at, updated_at)')
+    expect(sql).toContain('VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    expect(sql).toContain('ON CONFLICT(id) DO UPDATE SET version = excluded.version, data = excluded.data')
+    expect(params).toHaveLength(18)
+    expect(params.slice(0, 7)).toEqual(['id-1', 'obj', 'sess', 'ready', 'ref-1', expect.any(String), JSON.stringify({ title: 'first' })])
+    expect(params.slice(9, 16)).toEqual(['id-2', 'obj', 'sess', 'ready', 'ref-2', expect.any(String), JSON.stringify({ title: 'second' })])
+    expect(params[5]).not.toBe(params[14])
+    expect(typeof params[7]).toBe('number')
+    expect(typeof params[16]).toBe('number')
   })
 
   it('超过参数预算时按批拆分', async () => {
@@ -202,9 +203,9 @@ describe('db store provider saveMany', () => {
     await store.saveMany(items)
 
     expect(calls).toHaveLength(2)
-    expect(calls[0].sql).toContain('ON DUPLICATE KEY UPDATE data = VALUES(data)')
+    expect(calls[0].sql).toContain('ON DUPLICATE KEY UPDATE version = VALUES(version), data = VALUES(data)')
     expect(calls[0].params).toHaveLength(900)
-    expect(calls[1].params).toHaveLength(4)
+    expect(calls[1].params).toHaveLength(230)
   })
 })
 

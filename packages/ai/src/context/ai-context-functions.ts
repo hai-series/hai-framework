@@ -15,6 +15,8 @@ import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 import type { SummaryResult } from '../summary/ai-summary-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
+import type { ContextGeneration, PersistedContextState } from './ai-context-state.js'
+
 import type {
   CommitTurnInput,
   ConsolidateOptions,
@@ -30,23 +32,22 @@ import type {
 } from './ai-context-types.js'
 
 import { core, err, ok } from '@h-ai/core'
-
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { createStreamProcessor } from '../llm/ai-llm-stream.js'
 import { sessionStoreKey } from '../store/ai-store-key.js'
+import { updateSessionInfo } from '../store/ai-store-session.js'
+import { ContextStateError, createContextStateAccess } from './ai-context-state.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'context' })
 
-// ─── 持久化状态结构 ───
+/** 失联生成等待 30 秒后可被其他节点中断；续租不能替代最终 CAS 期限。 */
+const GENERATION_LEASE_MS = 30_000
 
-/**
- * 持久化的上下文管理器状态
- */
-interface PersistedContextState {
-  messages: ChatMessage[]
-  summaries: SummaryResult[]
-  updatedAt: number
+/** 将存储/冲突错误转换为公开业务结果。 */
+function contextFailure(error: unknown): HaiResult<never> {
+  const code = error instanceof ContextStateError ? error.definition : HaiAIError.STORE_FAILED
+  return err(code, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
 }
 
 /**
@@ -59,16 +60,17 @@ interface PersistedContextState {
  * @param compressConfig - Compress 配置（用于 ContextManager 的默认值）
  * @param tokenOps - Token 操作接口（由 token 子模块创建）
  * @param compressOps - Compress 操作接口（由 compress 子模块创建）
- * @param contextStore - 上下文状态存储（可选，用于持久化）
+ * @param contextStore - 必需的版本化共享状态存储；测试可显式使用 Memory Store
  * @param sessionStore - 会话信息存储（可选，用于目录管理）
  * @param deps - 可选子模块依赖（LLM / Memory / RAG / Reasoning）
  * @returns ContextOperations 实例
+ * @example `const context = createContextOperations(config, token, compress, store, sessions, { llm })`
  */
 export function createContextOperations(
   compressConfig: CompressConfig,
   tokenOps: TokenOperations,
   compressOps: CompressOperations,
-  contextStore?: AIRelStore<PersistedContextState>,
+  contextStore: AIRelStore<PersistedContextState>,
   sessionStore?: AIRelStore<SessionInfo>,
   deps?: ContextDeps,
 ): ContextOperations {
@@ -87,10 +89,9 @@ export function createContextOperations(
    */
   function buildManager(
     options: ContextManagerOptions,
-    initialMessages: ChatMessage[],
-    initialSummaries: SummaryResult[],
+    initial?: PersistedContextState,
   ): ContextManager {
-    const scope = options.scope
+    const scope = structuredClone(options.scope)
 
     // 解析压缩参数
     const compress = options.compress
@@ -101,9 +102,40 @@ export function createContextOperations(
     const autoCompress = compress?.auto ?? true
     const summaryModel = compress?.summaryModel
 
-    const state = {
-      messages: initialMessages,
-      summaries: initialSummaries,
+    const fresh: PersistedContextState = initial ?? {
+      messages: options.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : [],
+      scope,
+      summaries: [],
+      turns: [],
+      epoch: crypto.randomUUID(),
+      updatedAt: 0,
+    }
+    let state = structuredClone(fresh)
+    const access = createContextStateAccess(contextStore, scope, fresh, (snapshot) => {
+      state = snapshot
+    })
+
+    /** 压缩候选快照；仅 CAS 成功后才对外发布。 */
+    async function append(candidate: PersistedContextState, message: ChatMessage): Promise<void> {
+      candidate.messages.push(structuredClone(message))
+      if (!autoCompress || tokenOps.estimateMessages(candidate.messages) <= managerMaxTokens)
+        return
+      const result = await compressOps.tryCompress(candidate.messages, {
+        strategy: strategy as 'summary' | 'sliding-window' | 'hybrid',
+        maxTokens: managerMaxTokens,
+        preserveSystem,
+        preserveLastN,
+        summaryModel,
+      })
+      if (!result.success) {
+        throw new ContextStateError(result.error.code === HaiAIError.CONTEXT_BUDGET_EXCEEDED.code
+          ? HaiAIError.CONTEXT_BUDGET_EXCEEDED
+          : HaiAIError.CONTEXT_COMPRESS_FAILED, result.error.message)
+      }
+      if (result.data.summary) {
+        candidate.summaries.push({ summary: result.data.summary, tokenCount: tokenOps.estimateText(result.data.summary), coveredMessages: result.data.removedCount })
+      }
+      candidate.messages = result.data.messages
     }
 
     // 后台记忆提取任务集合：chat/chatStream 的自动提取是即发即忘，flush() 统一等待，
@@ -146,160 +178,184 @@ export function createContextOperations(
       pendingMemoryTasks.add(task)
     }
 
-    // ─── Conversation Commit Layer 状态 ───
-    // turnCommit=auto（默认）：生成即提交完整文本；manual：生成后登记待提交轮次，由 commit/interrupt 决定真实文本。
     const turnCommit = options.turnCommit ?? 'auto'
-    const turns: ConversationTurn[] = []
-    // 待提交轮次（manual 模式）：turnId → 触发该轮的用户输入（用于提交时的记忆提取配对）
-    const pendingCommits = new Map<string, string>()
-
-    function generateTurnId(): string {
-      return `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-    }
-
-    // ─── 并发控制（单活动生成） ───
-    // 默认单活动生成，防止「上一轮 AI 尚未退出，下一轮 user 消息先写入」的乱序。
     const concurrency = options.concurrency ?? 'reject'
-    // 是否已有活动生成（含 manual 待提交轮次持有的屏障）
-    let generationActive = false
-    // queue 模式下的排队唤醒器（前一轮进入终态时按序移交所有权）
-    const generationWaiters: Array<() => void> = []
-    // turnId → 该生成的一次性释放句柄；manual 待提交轮次的屏障持续到 commit/interrupt。
-    const generationHolders = new Map<string, () => void>()
-    // 当前活动生成的内部取消控制器（reset 时可中断上游 LLM）
-    let activeAbort: AbortController | null = null
-    // 当前活动生成的释放句柄（reset 时强制放行下一轮，避免挂起的生成器长期占用屏障）
-    let activeRelease: (() => void) | null = null
-    // 生成纪元：reset 递增，使 reset 之前启动的生成不再把结果写回已重置的上下文
-    let generationEpoch = 0
-
-    // 系统提示词文本：用于 reset 后恢复；restore 时从首条 system 消息推导
+    // 本地仅持有取消/定时器资源；共享 Store 才是轮次和所有权的唯一事实来源。
+    const producers = new Map<string, { abort: AbortController, stop: () => void }>()
     const systemPromptText = options.systemPrompt
-      ?? (initialMessages[0]?.role === 'system' && typeof initialMessages[0].content === 'string'
-        ? initialMessages[0].content
+      ?? (fresh.messages[0]?.role === 'system' && typeof fresh.messages[0].content === 'string'
+        ? fresh.messages[0].content
         : undefined)
 
-    /**
-     * 获取生成许可（单活动生成）。
-     *
-     * reject 模式下已有活动生成时立即返回 CONTEXT_BUSY；queue 模式下排队等待前一轮进入终态。
-     * 返回本轮的内部取消信号与一次性释放句柄；调用方必须在轮次到达终态时释放。
-     */
-    async function acquireGeneration(): Promise<HaiResult<{ epoch: number, signal: AbortSignal, release: () => void }>> {
-      if (generationActive) {
-        if (concurrency === 'reject')
-          return err(HaiAIError.CONTEXT_BUSY, aiM('ai_contextBusy'))
-        // queue：排队等待被唤醒（唤醒即已接管所有权，generationActive 保持 true）
-        await new Promise<void>((resolve) => {
-          generationWaiters.push(resolve)
+    /** 校验共享 owner 和期限；最终 CAS 再以存储端时钟检查截止时间。 */
+    function owned(candidate: PersistedContextState, generation: ContextGeneration, now: number): ContextGeneration {
+      const active = candidate.active
+      if (!active || candidate.epoch !== generation.epoch || active.id !== generation.id || active.owner !== generation.owner
+        || active.phase !== 'generating' || active.expiresAt <= now) {
+        throw new ContextStateError(HaiAIError.CONTEXT_TURN_INVALID_STATE, 'Generation ownership expired or changed')
+      }
+      return active
+    }
+
+    /** 回收失联生成，不重放任何未知 LLM/工具副作用；保留已持久化的生成文本供审计。 */
+    function recoverExpired(candidate: PersistedContextState, now: number): void {
+      if (candidate.active?.phase !== 'generating' || candidate.active.expiresAt > now)
+        return
+      const turn = candidate.turns.find(item => item.id === candidate.active?.id)
+      if (turn) {
+        turn.status = 'interrupted'
+        turn.committed = ''
+        turn.committedAt = now
+      }
+      delete candidate.active
+    }
+
+    /** 跨节点排队轮询可取消；等待不保留无界事件监听器或本地许可。 */
+    async function waitForContext(signal?: AbortSignal): Promise<void> {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(finish, 50)
+        function finish(): void {
+          clearTimeout(timer)
+          signal?.removeEventListener('abort', abort)
+          resolve()
+        }
+        function abort(): void {
+          clearTimeout(timer)
+          signal?.removeEventListener('abort', abort)
+          reject(signal?.reason ?? new Error('Generation cancelled'))
+        }
+        signal?.addEventListener('abort', abort, { once: true })
+        if (signal?.aborted)
+          abort()
+      })
+    }
+
+    /** 原子写入用户消息和生成 owner，再调用上游；每次许可都使用全新 ID。 */
+    async function acquireGeneration(message: string, caller: AbortSignal | undefined, keepPendingOnAbort: boolean): Promise<HaiResult<{
+      generation: ContextGeneration
+      signal: AbortSignal
+      release: () => void
+    }>> {
+      try {
+        for (;;) {
+          if (caller?.aborted)
+            throw caller.reason ?? new Error('Generation cancelled')
+          const generation = await access.mutate(async (candidate, now) => {
+            recoverExpired(candidate, now)
+            if (candidate.active)
+              return { value: undefined, write: false }
+            const active: ContextGeneration = { epoch: candidate.epoch, id: crypto.randomUUID(), owner: crypto.randomUUID(), phase: 'generating', expiresAt: now + GENERATION_LEASE_MS, userMessage: message }
+            candidate.active = active
+            candidate.turns.push({ id: active.id, speaker: 'assistant', generated: '', committed: '', status: 'generating', createdAt: now })
+            await append(candidate, { role: 'user', content: message })
+            return { value: active, notAfter: active.expiresAt }
+          })
+          if (!generation) {
+            if (concurrency === 'reject')
+              return err(HaiAIError.CONTEXT_BUSY, aiM('ai_contextBusy'))
+            await waitForContext(caller)
+            continue
+          }
+          const abort = new AbortController()
+          const signal = caller ? AbortSignal.any([caller, abort.signal]) : abort.signal
+          const acquired = generation
+          let renewing = false
+          const timer = setInterval(() => {
+            if (renewing)
+              return
+            renewing = true
+            void access.mutate((candidate, now) => {
+              const active = owned(candidate, generation, now)
+              const deadline = active.expiresAt
+              active.expiresAt = now + GENERATION_LEASE_MS
+              return { value: undefined, notAfter: deadline }
+            }).catch(() => abort.abort()).finally(() => { renewing = false })
+          }, GENERATION_LEASE_MS / 3)
+          timer.unref?.()
+          const release = (): void => {
+            clearInterval(timer)
+            signal.removeEventListener('abort', onAbort)
+            producers.delete(generation.id)
+          }
+          function onAbort(): void {
+            release()
+            // 消费者停在 yield 时也要停止续租并持久化 pending，不能等待下一次 next() 才释放。
+            void settleGeneration(acquired, keepPendingOnAbort)
+          }
+          producers.set(generation.id, { abort, stop: release })
+          signal.addEventListener('abort', onAbort, { once: true })
+          if (signal.aborted)
+            onAbort()
+          return ok({ generation, signal, release })
+        }
+      }
+      catch (error) { return contextFailure(error) }
+    }
+
+    /** 每个对外 delta 先写入共享记录；旧 producer 不能继续广播未持久化内容。 */
+    async function checkpoint(generation: ContextGeneration, generated: string): Promise<void> {
+      await access.mutate((candidate, now) => {
+        const active = owned(candidate, generation, now)
+        candidate.turns.find(item => item.id === active.id)!.generated = generated
+        return { value: undefined, notAfter: active.expiresAt }
+      })
+    }
+
+    /** 异常退出关闭 owner；取消流保留可跨节点提交的 pending，失败不自动重放。 */
+    async function settleGeneration(generation: ContextGeneration, keepPending: boolean, requirePersistence = false): Promise<void> {
+      try {
+        await access.mutate((candidate, now) => {
+          if (candidate.active?.id !== generation.id || candidate.active.owner !== generation.owner
+            || candidate.active.phase === 'pending') {
+            return { value: undefined, write: false }
+          }
+          const active = owned(candidate, generation, now)
+          const deadline = active.expiresAt
+          if (keepPending) {
+            active.phase = 'pending'
+          }
+          else {
+            const turn = candidate.turns.find(item => item.id === active.id)!
+            turn.status = 'interrupted'
+            turn.committedAt = now
+            delete candidate.active
+          }
+          return { value: undefined, notAfter: deadline }
         })
       }
-      else {
-        generationActive = true
+      catch (error) {
+        if (requirePersistence)
+          throw error
+        logger.warn('Context producer settlement failed', { error })
       }
-      const abort = new AbortController()
-      activeAbort = abort
-      const epoch = generationEpoch
-      let released = false
-      const release = (): void => {
-        if (released)
-          return
-        released = true
-        if (activeAbort === abort)
-          activeAbort = null
-        if (activeRelease === release)
-          activeRelease = null
-        const next = generationWaiters.shift()
-        if (next)
-          next() // 移交所有权给下一个排队者（generationActive 保持 true）
-        else
-          generationActive = false
-      }
-      activeRelease = release
-      return ok({ epoch, signal: abort.signal, release })
-    }
-
-    /**
-     * 组合调用方信号与本轮内部取消信号（任一触发即取消上游生成）。
-     */
-    function combineSignal(caller: AbortSignal | undefined, internal: AbortSignal): AbortSignal {
-      return caller ? AbortSignal.any([caller, internal]) : internal
-    }
-
-    /**
-     * 释放某轮次持有的并发屏障（幂等）。
-     */
-    function releaseTurnHolder(turnId: string): void {
-      const release = generationHolders.get(turnId)
-      if (release) {
-        generationHolders.delete(turnId)
-        release()
-      }
-    }
-
-    /**
-     * 轮次是否已进入终态（completed / interrupted）。
-     */
-    function isTurnTerminal(turnId: string): boolean {
-      const turn = turns.find(t => t.id === turnId)
-      return !turn || turn.status === 'completed' || turn.status === 'interrupted'
-    }
-
-    /**
-     * 生成结束后结算并发屏障：
-     * - 轮次已终态：立即释放屏障；
-     * - 轮次仍未终态（manual 待提交 / 取消后待提交）：把释放责任移交该轮次，
-     *   由后续 commitTurn / interruptTurn 释放，保证「打断→立即下一轮」的顺序屏障。
-     */
-    function settleGeneration(turnId: string | null, release: () => void): void {
-      if (turnId && !isTurnTerminal(turnId))
-        generationHolders.set(turnId, release)
-      else
-        release()
     }
 
     const manager: ContextManager = {
-      scope,
+      get scope() { return structuredClone(scope) },
 
       async addMessage(message: ChatMessage): Promise<HaiResult<void>> {
-        state.messages.push(message)
-
-        if (!autoCompress)
-          return ok(undefined)
-
-        const currentTokens = tokenOps.estimateMessages(state.messages)
-        if (currentTokens <= managerMaxTokens)
-          return ok(undefined)
-
-        logger.trace('Auto-compressing context', { currentTokens, budget: managerMaxTokens })
-
-        const compressResult = await compressOps.tryCompress(state.messages, {
-          strategy: strategy as 'summary' | 'sliding-window' | 'hybrid',
-          maxTokens: managerMaxTokens,
-          preserveSystem,
-          preserveLastN,
-          summaryModel,
-        })
-
-        if (!compressResult.success) {
-          logger.warn('Auto-compression failed, keeping original messages', { error: compressResult.error })
-          return compressResult
-        }
-
-        if (compressResult.data.summary) {
-          state.summaries.push({
-            summary: compressResult.data.summary,
-            tokenCount: tokenOps.estimateText(compressResult.data.summary),
-            coveredMessages: compressResult.data.removedCount,
+        try {
+          await access.mutate(async (candidate, now) => {
+            recoverExpired(candidate, now)
+            if (candidate.active)
+              throw new ContextStateError(HaiAIError.CONTEXT_BUSY, aiM('ai_contextBusy'))
+            await append(candidate, message)
+            return { value: undefined }
           })
+          return ok(undefined)
         }
-
-        state.messages = compressResult.data.messages
-        return ok(undefined)
+        catch (error) { return contextFailure(error) }
+      },
+      async reload(): Promise<HaiResult<void>> {
+        try {
+          await access.read()
+          return ok(undefined)
+        }
+        catch (error) { return contextFailure(error) }
       },
 
       getMessages(): HaiResult<ChatMessage[]> {
-        return ok([...state.messages])
+        return ok(structuredClone(state.messages))
       },
 
       getTokenUsage(): HaiResult<{ current: number, budget: number }> {
@@ -310,101 +366,61 @@ export function createContextOperations(
       },
 
       getSummaries(): HaiResult<SummaryResult[]> {
-        return ok([...state.summaries])
+        return ok(structuredClone(state.summaries))
       },
 
       async save(): Promise<HaiResult<void>> {
-        // 持久化前先等待后台记忆提取完成，确保记忆已落库（issue #14）
         await manager.flush()
-
-        if (!scope || !contextStore) {
-          return ok(undefined)
-        }
         try {
-          const key = sessionStoreKey(scope)
-          await contextStore.save(key, {
-            messages: state.messages,
-            summaries: state.summaries,
-            updatedAt: Date.now(),
-          }, { objectId: scope.objectId, sessionId: scope.sessionId })
-
-          // 同步更新会话信息（与上下文正文共用同一复合键，避免不同主体相同 sessionId 互相覆盖）
-          if (sessionStore) {
-            const sessionKey = key
-            const existing = await sessionStore.get(sessionKey)
-            if (existing) {
-              existing.updatedAt = Date.now()
-              await sessionStore.save(sessionKey, existing, { objectId: existing.objectId })
-            }
-            else {
-              await sessionStore.save(sessionKey, {
-                sessionId: scope.sessionId,
-                objectId: scope.objectId,
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-              }, { objectId: scope.objectId })
-            }
-          }
-
+          // 消息即时 CAS；save 仅同步共享快照和目录，绝不覆盖远端新版本。
+          await access.mutate(() => ({ value: undefined }))
+          await touchSession(scope)
           return ok(undefined)
         }
-        catch (error) {
-          return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
-        }
+        catch (error) { return contextFailure(error) }
       },
-
       async reset(resetOpts?): Promise<HaiResult<void>> {
-        const preserveSystemPrompt = resetOpts?.preserveSystemPrompt ?? true
-        const cancelActiveTurn = resetOpts?.cancelActiveTurn ?? true
-        const waitForMemoryTasks = resetOpts?.waitForMemoryTasks ?? false
-
-        // 使 reset 之前启动的生成不再把结果写回已重置的上下文
-        generationEpoch++
-
-        if (cancelActiveTurn) {
-          // 中断内部生成信号（best-effort 停止上游 LLM），并使所有非终态轮次进入终态、释放并发屏障
-          activeAbort?.abort()
-          for (const turn of turns) {
-            if (turn.status === 'generating' || turn.status === 'speaking') {
-              turn.status = 'interrupted'
-              turn.committed = ''
-              turn.committedAt = Date.now()
-              releaseTurnHolder(turn.id)
+        if (resetOpts?.waitForMemoryTasks)
+          await manager.flush()
+        try {
+          await access.mutate((candidate) => {
+            candidate.epoch = crypto.randomUUID()
+            candidate.messages = resetOpts?.preserveSystemPrompt !== false && systemPromptText
+              ? [{ role: 'system', content: systemPromptText }]
+              : []
+            candidate.summaries = []
+            candidate.turns = []
+            delete candidate.active
+            return { value: undefined }
+          })
+          if (resetOpts?.cancelActiveTurn !== false) {
+            for (const producer of producers.values()) {
+              producer.abort.abort()
+              producer.stop()
             }
           }
-          // 强制放行当前活动生成的屏障：挂起的生成器可能不会立即执行到 finally，避免长期占用
-          activeRelease?.()
+          return ok(undefined)
         }
-
-        // 取消或等待旧记忆提取任务
-        if (waitForMemoryTasks)
-          await manager.flush()
-
-        // 清空对话状态、轮次与待提交登记
-        state.messages = []
-        state.summaries = []
-        turns.length = 0
-        pendingCommits.clear()
-        generationHolders.clear()
-
-        // 默认重新写入系统提示词，避免 Persona / System Prompt 丢失
-        if (preserveSystemPrompt && systemPromptText)
-          state.messages.push({ role: 'system', content: systemPromptText })
-
-        return ok(undefined)
+        catch (error) { return contextFailure(error) }
       },
-
-      getTurns(): HaiResult<ConversationTurn[]> {
-        return ok(turns.map(t => ({ ...t })))
-      },
-
-      markTurnSpeaking(turnId: string): HaiResult<void> {
-        const turn = turns.find(t => t.id === turnId)
-        if (!turn)
-          return err(HaiAIError.CONTEXT_TURN_NOT_FOUND, aiM('ai_turnNotFound', { params: { turnId } }))
-        if (turn.status === 'generating')
-          turn.status = 'speaking'
-        return ok(undefined)
+      getTurns(): HaiResult<ConversationTurn[]> { return ok(structuredClone(state.turns)) },
+      async markTurnSpeaking(turnId: string): Promise<HaiResult<void>> {
+        try {
+          await access.mutate((candidate, now) => {
+            const turn = candidate.turns.find(item => item.id === turnId)
+            if (!turn)
+              throw new ContextStateError(HaiAIError.CONTEXT_TURN_NOT_FOUND, 'Turn not found')
+            const active = candidate.active
+            if (active?.id !== turnId)
+              return { value: undefined, write: false }
+            if (active.phase === 'generating' && active.expiresAt <= now)
+              throw new ContextStateError(HaiAIError.CONTEXT_TURN_INVALID_STATE, 'Generation expired')
+            turn.status = 'speaking'
+            return { value: undefined, notAfter: active.phase === 'generating' ? active.expiresAt : undefined }
+          })
+          return ok(undefined)
+        }
+        catch (error) { return contextFailure(error) }
       },
 
       commitTurn(turnId: string, input?: CommitTurnInput): Promise<HaiResult<void>> {
@@ -424,6 +440,7 @@ export function createContextOperations(
         await manager.flush()
 
         try {
+          await access.read()
           // 1) 整合会话摘要：以历史摘要为前序上下文，对当前消息做增量摘要
           const previousSummary = state.summaries.map(s => s.summary).join('\n\n') || undefined
           const summaryResult = await deps.summary.generate(state.messages, {
@@ -481,19 +498,13 @@ export function createContextOperations(
         }
 
         // 单活动生成：获取许可（reject 时直接返回 CONTEXT_BUSY）
-        const acq = await acquireGeneration()
+        const acq = await acquireGeneration(message, chatOpts?.signal, false)
         if (!acq.success)
           return acq
-        const { epoch, signal: internalSignal, release } = acq.data
-        const signal = combineSignal(chatOpts?.signal, internalSignal)
-        let turnId: string | null = null
+        const { generation, signal, release } = acq.data
+        let turnId: string
 
         try {
-          // 追加用户消息（自动压缩）
-          const addResult = await manager.addMessage({ role: 'user', content: message })
-          if (!addResult.success)
-            return addResult
-
           // 获取当前消息列表
           const messagesResult = manager.getMessages()
           if (!messagesResult.success)
@@ -524,7 +535,7 @@ export function createContextOperations(
             if (ragResult.success) {
               // RAG query 已直接返回完整结果，将 answer 作为回复
               const reply = ragResult.data.answer
-              turnId = await finalizeAssistantReply(message, reply, epoch)
+              turnId = await finalizeAssistantReply(generation, reply)
 
               return ok({
                 reply,
@@ -551,7 +562,7 @@ export function createContextOperations(
             })
             if (reasonResult.success) {
               const reply = reasonResult.data.answer
-              turnId = await finalizeAssistantReply(message, reply, epoch)
+              turnId = await finalizeAssistantReply(generation, reply)
 
               return ok({ reply, model: chatOpts?.model ?? options.model ?? '', turnId, usage: undefined })
             }
@@ -622,7 +633,7 @@ export function createContextOperations(
             const reply = typeof assistantMessage.content === 'string' ? assistantMessage.content : ''
 
             // 完成本轮生成：auto 直接提交完整文本，manual 登记待提交轮次
-            turnId = await finalizeAssistantReply(message, reply, epoch)
+            turnId = await finalizeAssistantReply(generation, reply)
 
             return ok({ reply, model: lastModel, turnId, usage: lastUsage })
           }
@@ -632,16 +643,17 @@ export function createContextOperations(
           const fallbackReply = lastAssistantMsg && 'content' in lastAssistantMsg && typeof lastAssistantMsg.content === 'string'
             ? lastAssistantMsg.content
             : ''
-          turnId = await finalizeAssistantReply(message, fallbackReply, epoch)
+          turnId = await finalizeAssistantReply(generation, fallbackReply)
           return ok({ reply: fallbackReply, model: lastModel, turnId, usage: lastUsage })
         }
         catch (error) {
           logger.error('Context chat failed', { error })
-          return err(HaiAIError.INTERNAL_ERROR, aiM('ai_internalError', { params: { error: String(error) } }), error)
+          return contextFailure(error)
         }
         finally {
           // 结算并发屏障：auto 已终态立即释放；manual 待提交轮次的屏障移交 commit/interrupt
-          settleGeneration(turnId, release)
+          release()
+          await settleGeneration(generation, false)
         }
       },
 
@@ -651,19 +663,13 @@ export function createContextOperations(
         }
 
         // 单活动生成：获取许可（reject 时抛出 CONTEXT_BUSY，供调用方 for-await 捕获）
-        const acq = await acquireGeneration()
+        const acq = await acquireGeneration(message, chatOpts?.signal, true)
         if (!acq.success)
-          throw core.error.buildHaiErrorInst(HaiAIError.CONTEXT_BUSY, aiM('ai_contextBusy'))
-        const { signal: internalSignal, release } = acq.data
-        const signal = combineSignal(chatOpts?.signal, internalSignal)
-        let streamTurn: ConversationTurn | null = null
+          throw acq.error
+        const { generation, signal, release } = acq.data
+        let keepPending = true
 
         try {
-          // 追加用户消息
-          const addResult = await manager.addMessage({ role: 'user', content: message })
-          if (!addResult.success)
-            throw addResult.error
-
           // 获取消息列表
           const messagesResult = manager.getMessages()
           if (!messagesResult.success) {
@@ -681,8 +687,7 @@ export function createContextOperations(
 
           // 调用上游模型前先登记轮次（含配对用户输入）并广播 turn_started：
           // 中途取消（AbortSignal）时仍能保留 turnId 与已生成文本，供调用方用真实内容 commit/interrupt。
-          const turn = beginStreamTurn(message)
-          streamTurn = turn
+          const turn = structuredClone(state.turns.find(item => item.id === generation.id)!)
           yield { type: 'turn_started', turnId: turn.id }
 
           try {
@@ -705,6 +710,7 @@ export function createContextOperations(
               })) {
                 if (event.type === 'delta') {
                   fullReply += event.text
+                  await checkpoint(generation, fullReply)
                   turn.generated = fullReply
                   yield { type: 'delta', text: event.text }
                 }
@@ -716,7 +722,7 @@ export function createContextOperations(
               }
 
               // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
-              if (await completeStreamTurn(turn, fullReply))
+              if (await completeStreamTurn(generation, fullReply))
                 yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
               return
             }
@@ -739,13 +745,14 @@ export function createContextOperations(
               })) {
                 if (event.type === 'delta') {
                   fullReply += event.text
+                  await checkpoint(generation, fullReply)
                   turn.generated = fullReply
                   yield { type: 'delta', text: event.text }
                 }
               }
 
               // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
-              if (await completeStreamTurn(turn, fullReply))
+              if (await completeStreamTurn(generation, fullReply))
                 yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', turnId: turn.id, usage: undefined }
               return
             }
@@ -781,6 +788,7 @@ export function createContextOperations(
                 const delta = chunk.choices?.[0]?.delta?.content
                 if (delta) {
                   fullReply += delta
+                  await checkpoint(generation, fullReply)
                   turn.generated = fullReply
                   yield { type: 'delta', text: delta }
                 }
@@ -823,6 +831,7 @@ export function createContextOperations(
 
                 // 重置本轮生成文本，下一轮 LLM 会产出最终文本
                 fullReply = ''
+                await checkpoint(generation, '')
                 turn.generated = ''
                 continue
               }
@@ -832,262 +841,185 @@ export function createContextOperations(
             }
 
             // 轮次若已被 interruptTurn 打断进入终态，则不得再产出 `done`，避免业务层误判为正常完成。
-            if (await completeStreamTurn(turn, fullReply))
+            if (await completeStreamTurn(generation, fullReply))
               yield { type: 'done', reply: fullReply, model, turnId: turn.id, usage }
           }
           catch (error) {
-            // 上游生成被取消（AbortSignal，含 reset 触发的内部取消）：保留 generating 轮次与已生成文本
-            // （pendingCommits 已在 beginStreamTurn 登记），由调用方用真实内容 commit/interrupt；
+            // 上游取消后将已持久化的轮次转为 pending，供其他节点按实际表达内容提交；
             // 若已被 interrupt 进入终态则忽略。
             if (signal.aborted) {
+              await settleGeneration(generation, true, true)
+              keepPending = true
               yield { type: 'cancelled', turnId: turn.id, generated: turn.generated }
               return
             }
+            keepPending = false
             throw error
           }
         }
         finally {
           // 结算并发屏障：auto 已终态立即释放；manual / 取消后待提交轮次的屏障移交 commit/interrupt
-          settleGeneration(streamTurn?.id ?? null, release)
+          release()
+          await settleGeneration(generation, keepPending)
         }
       },
     }
 
-    /**
-     * 登记一个流式生成的待完成轮次（`generating`）并立即记录配对用户输入。
-     *
-     * chatStream 在调用上游模型前调用。用户输入在此刻写入 pendingCommits，使得即便调用方在流
-     * 进入 catch 前就 interruptTurn，也能触发正确的记忆提取；中途取消时也能保留已生成文本，
-     * 由调用方用真实内容通过 commitTurn / interruptTurn 提交。
-     */
-    function beginStreamTurn(userMessage: string): ConversationTurn {
-      const turn: ConversationTurn = {
-        id: generateTurnId(),
-        speaker: 'assistant',
-        generated: '',
-        committed: '',
-        status: 'generating',
-        createdAt: Date.now(),
-      }
-      turns.push(turn)
-      // 立即登记配对用户输入：即便调用方在流进入 catch 前就 interruptTurn，也能触发正确的记忆提取
-      pendingCommits.set(turn.id, userMessage)
-      return turn
+    /** 将生成文本与 pending/自动提交一次性写入；失败后不得宣称完成。 */
+    async function completeStreamTurn(generation: ContextGeneration, generated: string): Promise<boolean> {
+      const applied = await access.mutate(async (candidate, now) => {
+        const turn = candidate.turns.find(item => item.id === generation.id)
+        if (turn && (turn.status === 'completed' || turn.status === 'interrupted'))
+          return { value: false, write: false }
+        const active = owned(candidate, generation, now)
+        const deadline = active.expiresAt
+        turn!.generated = generated
+        if (turnCommit === 'manual') {
+          active.phase = 'pending'
+        }
+        else {
+          turn!.committed = generated
+          turn!.status = 'completed'
+          turn!.committedAt = now
+          if (generated)
+            await append(candidate, { role: 'assistant', content: generated })
+          delete candidate.active
+        }
+        return { value: true, notAfter: deadline }
+      })
+      if (applied && turnCommit === 'auto')
+        enqueueMemoryExtract(generation.userMessage, generated)
+      return applied
     }
 
-    /**
-     * 完成一次流式生成：写入最终文本。
-     *
-     * 已被 commitTurn / interruptTurn 打断进入终态（completed/interrupted）时**不再覆盖**，
-     * 避免上游流恰好完成时把完整文本写回已打断的轮次。
-     * auto 模式：把生成文本写入上下文并触发记忆提取，轮次置为 `completed`。
-     * manual 模式：保持 `generating`，pendingCommits 已在 beginStreamTurn 登记，等待 commit/interrupt。
-     *
-     * @returns `false` 表示该轮已在别处进入终态（如被 interruptTurn 打断），调用方不得再产出 `done`；
-     *          `true` 表示本次正常完成，可产出 `done`。
-     */
-    async function completeStreamTurn(turn: ConversationTurn, finalText: string): Promise<boolean> {
-      if (turn.status === 'completed' || turn.status === 'interrupted')
-        return false
-      turn.generated = finalText
-      if (turnCommit === 'auto') {
-        turn.committed = finalText
-        turn.status = 'completed'
-        turn.committedAt = Date.now()
-        const userMessage = pendingCommits.get(turn.id) ?? ''
-        pendingCommits.delete(turn.id)
-        if (finalText)
-          await manager.addMessage({ role: 'assistant', content: finalText })
-        enqueueMemoryExtract(userMessage, finalText)
-      }
-      return true
+    /** 非流式共享相同轮次 ID；过期/reset/delete 后不得返回伪成功。 */
+    async function finalizeAssistantReply(generation: ContextGeneration, generated: string): Promise<string> {
+      if (!await completeStreamTurn(generation, generated))
+        throw new ContextStateError(HaiAIError.CONTEXT_TURN_INVALID_STATE, 'Turn already settled')
+      return generation.id
     }
 
-    /**
-     * 完成一次 assistant 生成。
-     *
-     * auto 模式：把完整生成文本写入上下文并触发记忆提取，轮次直接 `completed`。
-     * manual 模式：仅登记 `generating` 轮次并记录配对用户输入，等待 commit/interrupt。
-     *
-     * `epoch` 用于识别生成期间是否发生过 reset：若纪元已变化，说明上下文已被重置，
-     * 丢弃本轮结果（不写入 turns / 上下文 / 记忆），避免旧生成污染重置后的上下文。
-     *
-     * @returns 该轮 turnId（供 manual 模式后续提交）
-     */
-    async function finalizeAssistantReply(userMessage: string, generated: string, epoch: number): Promise<string> {
-      const turnId = generateTurnId()
-      // reset 已发生：丢弃本轮，不写入 turns / 上下文 / 记忆
-      if (epoch !== generationEpoch)
-        return turnId
-
-      const now = Date.now()
-      const turn: ConversationTurn = {
-        id: turnId,
-        speaker: 'assistant',
-        generated,
-        committed: turnCommit === 'auto' ? generated : '',
-        status: turnCommit === 'auto' ? 'completed' : 'generating',
-        createdAt: now,
-        committedAt: turnCommit === 'auto' ? now : undefined,
+    /** 同一 turnId、终态、文本重复提交幂等；并发节点最多追加一次真实回复。 */
+    async function finalizeCommit(turnId: string, text: string | undefined, status: 'completed' | 'interrupted'): Promise<HaiResult<void>> {
+      try {
+        const extracted = await access.mutate(async (candidate, now) => {
+          const turn = candidate.turns.find(item => item.id === turnId)
+          if (!turn)
+            throw new ContextStateError(HaiAIError.CONTEXT_TURN_NOT_FOUND, 'Turn not found')
+          const committed = text ?? (status === 'completed' ? turn.generated : '')
+          if (turn.status === 'completed' || turn.status === 'interrupted') {
+            if (turn.status === status && turn.committed === committed)
+              return { value: undefined, write: false }
+            throw new ContextStateError(HaiAIError.CONTEXT_TURN_INVALID_STATE, 'Turn already settled differently')
+          }
+          const active = candidate.active
+          if (!active || active.id !== turnId || (active.phase === 'generating' && active.expiresAt <= now))
+            throw new ContextStateError(HaiAIError.CONTEXT_TURN_INVALID_STATE, 'Generation expired or changed')
+          const deadline = active.phase === 'generating' ? active.expiresAt : undefined
+          const pair = { user: active.userMessage, reply: committed }
+          turn.committed = committed
+          turn.status = status
+          turn.committedAt = now
+          if (committed)
+            await append(candidate, { role: 'assistant', content: committed })
+          delete candidate.active
+          return { value: pair, notAfter: deadline }
+        })
+        producers.get(turnId)?.abort.abort()
+        producers.get(turnId)?.stop()
+        if (extracted?.reply)
+          enqueueMemoryExtract(extracted.user, extracted.reply)
+        return ok(undefined)
       }
-      turns.push(turn)
-
-      if (turnCommit === 'auto') {
-        if (generated)
-          await manager.addMessage({ role: 'assistant', content: generated })
-        enqueueMemoryExtract(userMessage, generated)
-      }
-      else {
-        pendingCommits.set(turnId, userMessage)
-      }
-      return turnId
-    }
-
-    /**
-     * 提交 / 打断一个待提交轮次：把真实文本写入上下文并触发记忆提取。
-     */
-    async function finalizeCommit(
-      turnId: string,
-      text: string | undefined,
-      status: 'completed' | 'interrupted',
-    ): Promise<HaiResult<void>> {
-      const turn = turns.find(t => t.id === turnId)
-      if (!turn)
-        return err(HaiAIError.CONTEXT_TURN_NOT_FOUND, aiM('ai_turnNotFound', { params: { turnId } }))
-      if (turn.status === 'completed' || turn.status === 'interrupted')
-        return err(HaiAIError.CONTEXT_TURN_INVALID_STATE, aiM('ai_turnInvalidState', { params: { turnId } }))
-
-      const committed = text ?? (status === 'completed' ? turn.generated : '')
-      turn.committed = committed
-      turn.status = status
-      turn.committedAt = Date.now()
-
-      const userMessage = pendingCommits.get(turnId)
-      pendingCommits.delete(turnId)
-
-      // 只有真实表达出去的内容才进入对话状态与记忆
-      if (committed) {
-        await manager.addMessage({ role: 'assistant', content: committed })
-        if (userMessage !== undefined)
-          enqueueMemoryExtract(userMessage, committed)
-      }
-
-      // 释放该轮次持有的并发屏障（manual / 取消后待提交轮次），放行下一轮生成
-      releaseTurnHolder(turnId)
-      return ok(undefined)
+      catch (error) { return contextFailure(error) }
     }
 
     return manager
   }
 
+  /** CAS 同步目录，删除墓碑不可由迟到 save/LLM 重建。 */
+  async function touchSession(scope: InteractionScope): Promise<void> {
+    if (!sessionStore)
+      return
+    await updateSessionInfo(sessionStore, scope, (existing, now) => {
+      if (existing?.deleted)
+        return undefined
+      return existing
+        ? { ...existing, updatedAt: now }
+        : { ...scope, createdAt: now, updatedAt: now }
+    })
+  }
+
+  /** scope 是持久化隔离与并发协议的必需条件。 */
+  function validScope(scope: InteractionScope | undefined): scope is InteractionScope {
+    return !!scope && typeof scope.objectId === 'string' && !!scope.objectId.trim()
+      && typeof scope.sessionId === 'string' && !!scope.sessionId.trim()
+  }
+
   return {
-    /**
-     * 创建有状态上下文管理器
-     */
-    createManager(options?: ContextManagerOptions): HaiResult<ContextManager> {
-      const opts = options ?? {}
-
-      const manager = buildManager(
-        opts,
-        [],
-        [],
-      )
-
-      // 如果有系统提示词，将其作为第一条 system 消息
-      if (opts.systemPrompt) {
-        void manager.addMessage({ role: 'system', content: opts.systemPrompt })
-      }
-
-      return ok(manager)
+    createManager(options: ContextManagerOptions): HaiResult<ContextManager> {
+      if (!validScope(options?.scope))
+        return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_contextScopeRequired'))
+      return ok(buildManager(options))
     },
-
-    /**
-     * 从存储恢复管理器实例
-     */
     async restoreManager(scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>): Promise<HaiResult<ContextManager>> {
-      const opts = { ...options, scope } as ContextManagerOptions
-
-      let initialMessages: ChatMessage[] = []
-      let initialSummaries: SummaryResult[] = []
-
-      // 从存储恢复
-      if (contextStore) {
-        const key = sessionStoreKey(scope)
-        const persisted = await contextStore.get(key)
-        if (persisted) {
-          initialMessages = persisted.messages
-          initialSummaries = persisted.summaries
-          logger.trace('Context manager restored from store', { scope, messageCount: initialMessages.length })
-        }
+      try {
+        if (!validScope(scope))
+          return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_contextScopeRequired'))
+        const persisted = await contextStore.readVersioned(sessionStoreKey(scope))
+        if (persisted?.data.deleted)
+          throw new ContextStateError(HaiAIError.SESSION_FAILED, 'Context has been deleted')
+        return ok(buildManager({ ...options, scope }, persisted?.data))
       }
-
-      const manager = buildManager(
-        // 恢复时不再追加 systemPrompt（历史中已有）
-        { ...opts, systemPrompt: undefined },
-        initialMessages,
-        initialSummaries,
-      )
-
-      return ok(manager)
+      catch (error) { return contextFailure(error) }
     },
-
-    /**
-     * 列出指定对象的所有会话
-     */
     async listSessions(objectId: string): Promise<HaiResult<SessionInfo[]>> {
-      if (!sessionStore) {
+      if (!sessionStore)
         return ok([])
-      }
-
       try {
-        const sessions = await sessionStore.query({
-          objectId,
-          orderBy: { field: 'updatedAt', direction: 'desc' },
-        })
-        return ok(sessions)
+        const sessions = await sessionStore.query({ objectId, orderBy: { field: 'updatedAt', direction: 'desc' } })
+        const contexts = await contextStore.query({ objectId })
+        // 一次批量读，避免目录同步失败后重新展示已删除正文；不做逐会话 N+1 查询。
+        const deleted = new Set(contexts.filter(item => item.deleted).map(item => sessionStoreKey(item.scope)))
+        return ok(sessions.filter(item => !item.deleted && !deleted.has(sessionStoreKey(item))))
       }
-      catch (error) {
-        return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
-      }
+      catch (error) { return contextFailure(error) }
     },
-
     async renameSession(scope: InteractionScope, title: string): Promise<HaiResult<void>> {
-      if (!sessionStore) {
+      if (!sessionStore)
         return ok(undefined)
-      }
-
       try {
-        const sessionKey = sessionStoreKey(scope)
-        const existing = await sessionStore.get(sessionKey)
-        if (!existing) {
-          return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: `Session not found: ${scope.sessionId}` } }))
-        }
-        existing.title = title
-        existing.updatedAt = Date.now()
-        await sessionStore.save(sessionKey, existing, { objectId: existing.objectId })
+        const context = await contextStore.readVersioned(sessionStoreKey(scope))
+        if (context?.data.deleted)
+          throw new ContextStateError(HaiAIError.SESSION_FAILED, 'Context has been deleted')
+        await updateSessionInfo(sessionStore, scope, (existing, now) => {
+          if (!existing || existing.deleted)
+            throw new ContextStateError(HaiAIError.SESSION_FAILED, 'Session not found')
+          return { ...existing, title, updatedAt: now }
+        })
         return ok(undefined)
       }
-      catch (error) {
-        return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
-      }
+      catch (error) { return contextFailure(error) }
     },
-
     async removeSession(scope: InteractionScope): Promise<HaiResult<void>> {
-      if (!sessionStore) {
-        return ok(undefined)
-      }
-
       try {
-        // 上下文正文与会话元数据共用同一复合键，确保删除时正文不残留
-        const sessionKey = sessionStoreKey(scope)
-        if (contextStore)
-          await contextStore.remove(sessionKey)
-        await sessionStore.remove(sessionKey)
+        const initial: PersistedContextState = { scope, messages: [], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: 0 }
+        const access = createContextStateAccess(contextStore, scope, initial, () => {})
+        await access.mutate((candidate) => {
+          candidate.deleted = true
+          candidate.epoch = crypto.randomUUID()
+          candidate.messages = []
+          candidate.summaries = []
+          candidate.turns = []
+          delete candidate.active
+          return { value: undefined }
+        }, true)
+        if (sessionStore) {
+          await updateSessionInfo(sessionStore, scope, (existing, now) => ({ ...existing, ...scope, createdAt: existing?.createdAt ?? now, updatedAt: now, deleted: true }))
+        }
         return ok(undefined)
       }
-      catch (error) {
-        return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
-      }
+      catch (error) { return contextFailure(error) }
     },
   }
 }

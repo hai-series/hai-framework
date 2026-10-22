@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 39/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 40/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -398,7 +398,8 @@
 
 ### AI-01 · P1 · 为 context 状态增加共享并发控制及故障恢复
 
-- [ ] 待修正（源码确认；范围：ai）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：共享 scope 聚合状态以版本 CAS、DB 时钟与最终 notAfter 条件提交，逐 delta 持久化、代际 reset/永久删除墓碑、跨节点 pending/turnId 幂等及目录 CAS 已同步实现/三语文档/双份 skill/调用方。8 个定向文件 147 项通过，含真实 PG/MySQL 并发 CAS 与行锁跨截止时间、独立双 Node 暂停 45 秒后接管和重启提交；取消/目录补充回归 2 文件 64 项通过。AI 与受影响 serv/kit/api-client 类型、严格测试类型、定向 lint、fresh ESM/DTS 构建及 check:skills 均通过；未声称外部模型/工具效果与数据库共同事务；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/ai/src/context/ai-context-functions.ts:154](../packages/ai/src/context/ai-context-functions.ts#L154)；[packages/ai/src/context/ai-context-functions.ts:1007](../packages/ai/src/context/ai-context-functions.ts#L1007)。
 - **证据与影响**：context manager 使用本地 messages/生成锁/pendingCommits；持久化以整份状态覆盖，没有共享版本条件。两个节点同 scope 可基于旧状态写回，manual commit 在迁移节点后无本地 pending 记录。
 - **修正内容**：定义 scope 状态版本、生成/提交身份和持久 pending 记录；用 CAS/事务协调，不把进程 Map 简单替换成远程 Map。明确流式取消/失败的最终状态。

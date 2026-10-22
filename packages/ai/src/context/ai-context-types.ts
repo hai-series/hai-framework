@@ -133,8 +133,8 @@ export interface CommitTurnInput {
  * 通过嵌套子对象直接引用各子模块的配置类型，避免字段重复声明。
  */
 export interface ContextManagerOptions {
-  /** 交互作用域（objectId + sessionId） */
-  scope?: InteractionScope
+  /** 必填交互作用域（objectId + sessionId）；所有节点共享同一生成与提交屏障。 */
+  scope: InteractionScope
 
   /** 系统提示词（创建时作为首条 system 消息追加） */
   systemPrompt?: string
@@ -160,12 +160,12 @@ export interface ContextManagerOptions {
   /**
    * 并发生成策略（默认 `reject`）
    *
-   * ContextManager 默认实行**单活动生成**：同一管理器同一时刻只允许一个未完成的
+   * ContextManager 默认实行**单活动生成**：同一 scope 的所有管理器/节点同一时刻只允许一个未完成的
    * `chat` / `chatStream` 轮次，避免「上一轮 AI 尚未退出，下一轮 user 消息先写入」
    * 导致的消息乱序（user1 → user2 → assistant1）。
    *
    * - `reject`：已有活动生成时，新的 `chat` / `chatStream` 立即返回 `CONTEXT_BUSY` 错误。
-   * - `queue`：新请求排队，等待前一轮次进入终态（`completed` / `interrupted`）后再开始。
+   * - `queue`：新请求可取消地轮询（不承诺 FIFO），等待前一轮次进入终态（`completed` / `interrupted`）后再开始。
    *
    * `manual` 提交模式下，屏障持续到 `commitTurn` / `interruptTurn` 提交真实文本为止，
    * 因此「打断当前轮次 → 立即发起下一轮」也能保证顺序正确。
@@ -361,14 +361,16 @@ export type ContextStreamEvent
  * ```
  */
 export interface ContextManager {
-  /** 当前作用域（如已配置） */
-  readonly scope?: InteractionScope
+  /** 当前必填作用域的独立副本。 */
+  readonly scope: InteractionScope
 
   /**
    * 追加消息
    *
    * 自动在超限时触发压缩（如果启用了 compress.auto）。
    *
+   * 活动生成或 pending 期间拒绝追加；先提交真实轮次或 reset。
+   * @example `await manager.addMessage({ role: 'user', content: '你好' })`
    * @param message - 要追加的消息
    * @returns 成功返回 ok(undefined)
    */
@@ -380,6 +382,12 @@ export interface ContextManager {
    * @returns 当前消息列表
    */
   getMessages: () => HaiResult<ChatMessage[]>
+
+  /**
+   * 重新读取共享快照。同步 getters 仅返回本管理器最近一次成功读写的副本。
+   * @example `const result = await manager.reload(); if (result.success) manager.getMessages()`
+   */
+  reload: () => Promise<HaiResult<void>>
 
   /**
    * 获取当前 token 使用量
@@ -396,9 +404,10 @@ export interface ContextManager {
   getSummaries: () => HaiResult<SummaryResult[]>
 
   /**
-   * 持久化当前状态（需要 scope + 存储可用）
+   * 刷新共享快照并同步会话目录；所有消息与轮次变更已经即时 CAS 持久化。
    *
-   * 内部会先 `flush()` 等待所有后台记忆提取完成，确保持久化时记忆已写入。
+   * 内部会先 `flush()` 等待本节点后台记忆任务；不承诺外部记忆与消息跨系统原子提交。
+   * @example `await manager.save()`
    */
   save: () => Promise<HaiResult<void>>
 
@@ -425,6 +434,7 @@ export interface ContextManager {
    * 默认行为：终止活动轮次（进入终态并释放并发屏障）、清空消息 / 摘要 / 轮次 /
    * 待提交轮次，并重新写入系统提示词。可通过选项调整。
    *
+   * @example `await manager.reset({ preserveSystemPrompt: true })`
    * @param options - 重置选项（保留系统提示词 / 终止活动轮次 / 等待记忆任务）
    * @returns 成功返回 ok(undefined)
    */
@@ -445,20 +455,22 @@ export interface ContextManager {
    *
    * 仅更新状态用于观测，不改变上下文内容。
    *
+   * @example `await manager.markTurnSpeaking(turnId)`
    * @param turnId - 轮次 ID
    * @returns 成功返回 ok(undefined)；轮次不存在返回 CONTEXT_TURN_NOT_FOUND
    */
-  markTurnSpeaking: (turnId: string) => HaiResult<void>
+  markTurnSpeaking: (turnId: string) => Promise<HaiResult<void>>
 
   /**
    * 提交轮次（`turnCommit: 'manual'` 场景）
    *
    * 把真实文本写入上下文并触发记忆提取；`text` 缺省时使用模型生成的完整文本。
-   * 提交后该轮 `status` 变为 `completed`。
+   * 提交后该轮 `status` 变为 `completed`，可由任意节点按同一 turnId 提交。
+   * @example `await manager.commitTurn(turnId, { text: actuallySpokenText })`
    *
    * @param turnId - 轮次 ID
    * @param input - 提交内容（可覆盖为真实表达文本）
-   * @returns 成功返回 ok(undefined)；轮次不存在或已提交返回对应错误
+   * @returns 相同终态与文本重复提交仍成功；不存在、过期或内容冲突返回错误
    */
   commitTurn: (turnId: string, input?: CommitTurnInput) => Promise<HaiResult<void>>
 
@@ -467,10 +479,11 @@ export interface ContextManager {
    *
    * 只把「实际表达出去的部分」写入上下文；`text` 缺省时视为未表达任何内容（不写入）。
    * 打断后该轮 `status` 变为 `interrupted`。
+   * @example `await manager.interruptTurn(turnId, { text: actuallySpokenText })`
    *
    * @param turnId - 轮次 ID
    * @param input - 实际表达出去的文本
-   * @returns 成功返回 ok(undefined)；轮次不存在或已提交返回对应错误
+   * @returns 相同终态与文本重复提交仍成功；不存在、过期或内容冲突返回错误
    */
   interruptTurn: (turnId: string, input?: CommitTurnInput) => Promise<HaiResult<void>>
 
@@ -543,7 +556,7 @@ export interface ContextOperations {
    * @param options - 管理器配置
    * @returns 管理器实例
    */
-  createManager: (options?: ContextManagerOptions) => HaiResult<ContextManager>
+  createManager: (options: ContextManagerOptions) => HaiResult<ContextManager>
 
   /**
    * 从持久化恢复上下文管理器
@@ -572,7 +585,7 @@ export interface ContextOperations {
   renameSession: (scope: InteractionScope, title: string) => Promise<HaiResult<void>>
 
   /**
-   * 删除会话（删除会话元数据和对应的上下文数据）
+   * 删除正文并保留永久墓碑；同一 scope 不再复用，迟到节点不能重建。
    *
    * @param scope - 交互作用域（objectId + sessionId，用于多租户隔离）
    * @returns 成功返回 ok(undefined)

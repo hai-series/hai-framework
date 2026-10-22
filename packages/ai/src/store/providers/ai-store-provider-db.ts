@@ -9,7 +9,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
-import type { AIRelStore, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, AIVectorStore, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
+import type { AIRelStore, AIRelStoreCompareAndSwap, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, AIVectorStore, AIVersionedRecord, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
 
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
@@ -18,7 +18,7 @@ import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 const logger = core.logger.child({ module: 'ai', scope: 'store-provider-db' })
 
 /** 内部 Store 以异常通知上层失败，不能把 SQL HaiResult 错误当空数据或写入成功。 */
-function requireSqlSuccess<T>(result: HaiResult<T>): HaiResult<T> {
+function requireSqlSuccess<T>(result: HaiResult<T>): Extract<HaiResult<T>, { success: true }> {
   if (!result.success)
     throw new Error(result.error.message, { cause: result.error })
   return result
@@ -89,7 +89,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       cols.push(`status ${scopeType}`)
     if (this.hasRefId)
       cols.push(`ref_id ${scopeType}`)
-    cols.push(`data ${dataType} NOT NULL`, `created_at BIGINT NOT NULL`, `updated_at BIGINT NOT NULL`)
+    cols.push('version VARCHAR(36) NOT NULL', `data ${dataType} NOT NULL`, `created_at BIGINT NOT NULL`, `updated_at BIGINT NOT NULL`)
 
     await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
 
@@ -123,70 +123,85 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     await this.sql.execute(`CREATE INDEX IF NOT EXISTS ${name} ON ${this.table}(${columns})`)
   }
 
+  /** 普通写入也更换版本，使并发条件写入识别所有较新修改。 */
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {
+    await this.saveManyBatch([{ id, data, scope }], this.buildSaveColumnNames())
+  }
+
+  /** SQLite TEXT 需要解码；PostgreSQL JSONB/MySQL JSON 已由驱动解码，包含标量字符串。 */
+  private decodeData(value: unknown): T {
+    if (this.dbType !== 'sqlite')
+      return structuredClone(value) as T
+    if (typeof value !== 'string')
+      throw new TypeError('Invalid SQLite JSON record')
+    return JSON.parse(value) as T
+  }
+
+  /** 数据和版本由同一次 SELECT 返回，禁止拆成两次不一致的读取。 */
+  async readVersioned(id: string): Promise<AIVersionedRecord<T> | undefined> {
+    const found = requireSqlSuccess(await this.sql.get<{ version: string, data: unknown }>(`SELECT version, data FROM ${this.table} WHERE id = ?`, [id]))
+    if (!found.data)
+      return undefined
+    return { version: found.data.version, data: this.decodeData(found.data.data) }
+  }
+
+  /** 所有节点从持久化端读取租约时钟；不使用进程 Date.now() 判断共享 owner 是否过期。 */
+  async currentTime(): Promise<number> {
+    const found = requireSqlSuccess(await this.sql.get<{ now: number | string }>(`SELECT ${this.databaseClock()} AS now`))
+    if (!found.data || !Number.isFinite(Number(found.data.now)))
+      throw new Error('Store clock unavailable')
+    return Math.floor(Number(found.data.now))
+  }
+
+  /** 仅由当前已验证的数据库类型选择时钟表达式。 */
+  private databaseClock(): string {
+    if (this.dbType === 'postgresql')
+      return '(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)'
+    if (this.dbType === 'mysql')
+      // NOW/CURRENT_TIMESTAMP 固定在语句开始时；SYSDATE 在行锁等待结束后仍取实际时钟。
+      return '(UNIX_TIMESTAMP(SYSDATE(3)) * 1000)'
+    return 'CAST((julianday(\'now\') - 2440587.5) * 86400000 AS INTEGER)'
+  }
+
+  /** 原子检查版本和可选存储端期限；lease 续租或本地布尔值不能替代最终条件。 */
+  async compareAndSwap(id: string, input: AIRelStoreCompareAndSwap<T>): Promise<string | undefined> {
+    if (input.notAfter !== undefined && !Number.isSafeInteger(input.notAfter))
+      throw new RangeError('Invalid Store write deadline')
+    const version = crypto.randomUUID()
     const now = Date.now()
-    const json = JSON.stringify(data)
-    const createdAt = dataTimestamp(data, 'createdAt', now)
-    const updatedAt = dataTimestamp(data, 'updatedAt', now)
-
-    const colNames = ['id']
-    const values: unknown[] = [id]
-    const placeholders: string[] = ['?']
-
-    if (this.hasObjectId) {
-      colNames.push('object_id')
-      values.push(scope?.objectId ?? null)
-      placeholders.push('?')
+    const columns = this.buildSaveColumnNames()
+    const values = this.buildSaveValues(id, input.data, input.scope, now)
+    values[columns.indexOf('version')] = version
+    const deadline = input.notAfter === undefined ? '1 = 1' : `${this.databaseClock()} < ?`
+    const deadlineParams = input.notAfter === undefined ? [] : [input.notAfter]
+    if (input.expectedVersion !== undefined) {
+      const updated = columns.filter(column => column !== 'id' && column !== 'created_at'
+        && (input.scope !== undefined || ['version', 'data', 'updated_at'].includes(column)))
+      const result = requireSqlSuccess(await this.sql.execute(
+        `UPDATE ${this.table} SET ${updated.map(column => `${column} = ?`).join(', ')} WHERE id = ? AND version = ? AND ${deadline}`,
+        [...updated.map(column => values[columns.indexOf(column)]), id, input.expectedVersion, ...deadlineParams],
+      ))
+      return result.data.changes === 1 ? version : undefined
     }
-    if (this.hasSessionId) {
-      colNames.push('session_id')
-      values.push(scope?.sessionId ?? null)
-      placeholders.push('?')
+    try {
+      // MySQL 不用 INSERT IGNORE：除唯一主键冲突外，任何故障都必须向上抛出。
+      const conflict = this.dbType === 'mysql' ? '' : ' ON CONFLICT(id) DO NOTHING'
+      const result = requireSqlSuccess(await this.sql.execute(
+        `INSERT INTO ${this.table} (${columns.join(', ')}) SELECT ${values.map(() => '?').join(', ')} WHERE ${deadline}${conflict}`,
+        [...values, ...deadlineParams],
+      ))
+      return result.data.changes === 1 ? version : undefined
     }
-    if (this.hasStatus) {
-      colNames.push('status')
-      values.push(scope?.status ?? null)
-      placeholders.push('?')
-    }
-    if (this.hasRefId) {
-      colNames.push('ref_id')
-      values.push(scope?.refId ?? null)
-      placeholders.push('?')
-    }
-
-    colNames.push('data', 'created_at', 'updated_at')
-    values.push(json, createdAt, updatedAt)
-    placeholders.push('?', '?', '?')
-
-    if (this.dbType === 'mysql') {
-      const updateParts: string[] = ['data = VALUES(data)', 'updated_at = VALUES(updated_at)']
-      if (this.hasObjectId)
-        updateParts.push('object_id = VALUES(object_id)')
-      if (this.hasSessionId)
-        updateParts.push('session_id = VALUES(session_id)')
-      if (this.hasStatus)
-        updateParts.push('status = VALUES(status)')
-      if (this.hasRefId)
-        updateParts.push('ref_id = VALUES(ref_id)')
-      await this.sql.execute(
-        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
-        values,
-      )
-    }
-    else {
-      const updateParts: string[] = ['data = excluded.data', 'updated_at = excluded.updated_at']
-      if (this.hasObjectId)
-        updateParts.push('object_id = excluded.object_id')
-      if (this.hasSessionId)
-        updateParts.push('session_id = excluded.session_id')
-      if (this.hasStatus)
-        updateParts.push('status = excluded.status')
-      if (this.hasRefId)
-        updateParts.push('ref_id = excluded.ref_id')
-      await this.sql.execute(
-        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
-        values,
-      )
+    catch (error) {
+      if (this.dbType === 'mysql') {
+        let cause: unknown = error
+        for (let depth = 0; depth < 8 && cause && typeof cause === 'object'; depth++) {
+          if (('code' in cause && cause.code === 'ER_DUP_ENTRY') || ('errno' in cause && cause.errno === 1062))
+            return undefined
+          cause = 'cause' in cause ? cause.cause : undefined
+        }
+      }
+      throw error
     }
   }
 
@@ -205,18 +220,18 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   }
 
   async get(id: string): Promise<T | undefined> {
-    const result = await this.sql.get<{ data: string }>(`SELECT data FROM ${this.table} WHERE id = ?`, [id])
+    const result = await this.sql.get<{ data: unknown }>(`SELECT data FROM ${this.table} WHERE id = ?`, [id])
     if (!result.success || !result.data)
       return undefined
-    return JSON.parse(result.data.data) as T
+    return this.decodeData(result.data.data)
   }
 
   async query(filter: StoreFilter<T>): Promise<T[]> {
     const { sql, params } = this.buildQuery(filter)
-    const result = await this.sql.query<{ data: string }>(sql, params)
+    const result = await this.sql.query<{ data: unknown }>(sql, params)
     if (!result.success)
       return []
-    return result.data.map(row => JSON.parse(row.data) as T)
+    return result.data.map(row => this.decodeData(row.data))
   }
 
   async queryPage(filter: StoreFilter<T>, page: { offset: number, limit: number }): Promise<StorePage<T>> {
@@ -230,8 +245,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
     const { sql, params } = this.buildQuery({ ...filter, limit: undefined })
     const pagedSql = `${sql} LIMIT ? OFFSET ?`
-    const result = await this.sql.query<{ data: string }>(pagedSql, [...params, page.limit, page.offset])
-    const items = result.success ? result.data.map(row => JSON.parse(row.data) as T) : []
+    const result = await this.sql.query<{ data: unknown }>(pagedSql, [...params, page.limit, page.offset])
+    const items = result.success ? result.data.map(row => this.decodeData(row.data)) : []
 
     return { items, total }
   }
@@ -294,7 +309,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       colNames.push('status')
     if (this.hasRefId)
       colNames.push('ref_id')
-    colNames.push('data', 'created_at', 'updated_at')
+    colNames.push('version', 'data', 'created_at', 'updated_at')
     return colNames
   }
 
@@ -310,6 +325,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (this.hasRefId)
       values.push(scope?.refId ?? null)
     values.push(
+      crypto.randomUUID(),
       JSON.stringify(data),
       dataTimestamp(data, 'createdAt', now),
       dataTimestamp(data, 'updatedAt', now),
@@ -320,7 +336,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   /** 构造跨数据库 upsert 更新片段；列名来自内部白名单，不接受外部输入。 */
   private buildSaveUpdateParts(): string[] {
     const valueRef = (column: string) => this.dbType === 'mysql' ? `VALUES(${column})` : `excluded.${column}`
-    const updateParts: string[] = [`data = ${valueRef('data')}`, `updated_at = ${valueRef('updated_at')}`]
+    const updateParts: string[] = [`version = ${valueRef('version')}`, `data = ${valueRef('data')}`, `updated_at = ${valueRef('updated_at')}`]
     if (this.hasObjectId)
       updateParts.push(`object_id = ${valueRef('object_id')}`)
     if (this.hasSessionId)

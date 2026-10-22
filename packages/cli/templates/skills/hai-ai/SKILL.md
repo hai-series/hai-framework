@@ -18,7 +18,7 @@ description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像
 ## 使用路径
 
 - 先选择完整结果还是流式 API；不要对 AsyncIterable 取 `.success`。流取消/错误须结束播放器和连接。
-- Memory/Context 用 objectId/sessionId 隔离主体；手动 turnCommit 只提交实际播放/发生的文本。
+- Memory/Context 用 objectId/sessionId 隔离主体；Context scope 必填，跨节点读先 reload/restore，manual pending 可跨节点按 turnId 幂等提交实际文本。共享 Store 必须实现版本 CAS/存储端期限；过期生成不自动重放外部副作用。
 - 语音客户端用一次性 ticket，不能把 IAM access token 放 URL；按 segment_started 的真实格式解码。
 - 压缩超过硬预算须停止模型请求；不能失败后发送原始超长消息。
 

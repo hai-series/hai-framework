@@ -148,6 +148,32 @@ export interface AIRelStoreOptions {
 // ─── 存储适配器抽象 ───
 
 /**
+ * 同一次读取的记录及不可复用的存储版本。
+ * @example `const snapshot = await store.readVersioned(id)`
+ */
+export interface AIVersionedRecord<T> {
+  /** 每次写入都会更换的版本；不得把业务 ID 或时间戳用作版本。 */
+  version: string
+  /** 该版本的独立数据快照，修改它不会隐式写入 Store。 */
+  data: T
+}
+
+/**
+ * 单记录的原子条件写入；不跨表承诺事务。
+ * @example `await store.compareAndSwap(id, { expectedVersion: snapshot?.version, data: next, notAfter: leaseDeadline })`
+ */
+export interface AIRelStoreCompareAndSwap<T> {
+  /** undefined 只允许新建；已有记录必须精确匹配读取到的版本。 */
+  expectedVersion: string | undefined
+  /** 成功时替换的数据；需要撤销时持久化业务墓碑，避免删除后 missing ABA。 */
+  data: T
+  /** 与数据同一次条件提交的索引列；未传时保留已有索引。 */
+  scope?: StoreScope
+  /** 可选 Unix 毫秒截止时间；执行写入时由存储端时钟原子检查，等于截止时间也拒绝。 */
+  notAfter?: number
+}
+
+/**
  * AI 关系存储适配器
  *
  * 提供统一的 KV 式 CRUD + 查询能力，由 AIStoreProvider 创建具体实现。
@@ -155,6 +181,21 @@ export interface AIRelStoreOptions {
  * @typeParam T - 记录类型
  */
 export interface AIRelStore<T> {
+  /**
+   * 存储端 Unix 毫秒时钟；共享租约以它计算期限，不依赖各节点墙钟同步。
+   * @example `const deadline = await store.currentTime() + 30_000`
+   */
+  currentTime: () => Promise<number>
+  /**
+   * 读取记录与版本的同一快照；失败抛错，不能把故障当作缺失。
+   * @example `const current = await store.readVersioned('session')`
+   */
+  readVersioned: (id: string) => Promise<AIVersionedRecord<T> | undefined>
+  /**
+   * 原子条件替换；成功返回新版本，冲突/截止返回 undefined，存储故障抛错。
+   * @example `await store.compareAndSwap(id, { expectedVersion: current?.version, data: next })`
+   */
+  compareAndSwap: (id: string, input: AIRelStoreCompareAndSwap<T>) => Promise<string | undefined>
   /** 保存一条记录（upsert 语义） */
   save: (id: string, data: T, scope?: StoreScope) => Promise<void>
   /** 批量保存 */
@@ -222,7 +263,8 @@ export interface InteractionScope {
 }
 
 /**
- * 会话信息
+ * 会话信息；目录更新必须保留并发标题及删除标记。
+ * @example `{ objectId: 'user', sessionId: 'session', createdAt: now, updatedAt: now }`
  */
 export interface SessionInfo {
   /** 会话 ID */
@@ -237,6 +279,8 @@ export interface SessionInfo {
   updatedAt: number
   /** 附加元数据 */
   metadata?: Record<string, unknown>
+  /** 永久删除标记；同一主体的 sessionId 不再复用，迟到生成不得重建目录。 */
+  deleted?: boolean
 }
 
 // ─── Knowledge 存储抽象 ───

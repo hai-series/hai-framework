@@ -402,12 +402,14 @@ if (manager.success) {
 `chatStream` は**モデル呼び出し前**にターン登録と `turn_started` を行います（`turn_started → delta* → done`、キャンセル時は `turn_started → delta* → cancelled`）。途中で `AbortSignal` により中止しても `turnId` と生成済みテキストを取得し、実際の内容を保存できます：
 
 ```ts
-const m = ai.context.createManager({ turnCommit: 'manual' /* ... */ }).data
+const created = ai.context.createManager({ scope: { objectId: 'user-001', sessionId: 'sess-001' }, turnCommit: 'manual' })
+if (!created.success) return created
+const m = created.data
 const controller = new AbortController()
 
 for await (const ev of m.chatStream('请展开讲讲', { signal: controller.signal })) {
   if (ev.type === 'turn_started') {
-    m.markTurnSpeaking(ev.turnId) // 可选：标记进入播放
+    await m.markTurnSpeaking(ev.turnId) // 可选：标记进入播放
   }
   else if (ev.type === 'delta') {
     feedTts(ev.text) // 边生成边合成播放
@@ -460,6 +462,7 @@ await ai.persona.save({
 // 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
 const composed = await ai.persona.compose('xiaoq')
 const manager = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
   memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
 })

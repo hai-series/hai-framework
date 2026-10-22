@@ -102,6 +102,7 @@ export interface PersonaProfileUpdate {
  * // 组合出可直接喂给 ContextManager 的系统提示词
  * const composed = await ai.persona.compose('xiaoq')
  * const manager = ai.context.createManager({
+ *   scope: { objectId: 'user-001', sessionId: 'persona-session' },
  *   systemPrompt: composed.data,
  *   // 该角色的长期记忆用 scope 关联
  *   memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
@@ -156,7 +157,7 @@ export interface PersonaOperations {
    * 组合角色的完整系统提示词
    *
    * 将 `systemPrompt` 与 `traits` 拼装为一段可直接作为 system 消息的文本，
-   * 供 `ai.context.createManager({ systemPrompt })` 使用。
+   * 供 `ai.context.createManager({ scope, systemPrompt })` 使用。
    *
    * @param id - 角色 ID
    * @param options - 主体作用域（默认 `system`）

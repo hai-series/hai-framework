@@ -16,6 +16,7 @@ import type {
 } from '../ai-store-types.js'
 
 interface StoredValue {
+  version: string
   data: unknown
   scope?: StoreScope
 }
@@ -95,7 +96,7 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
   function select(filter: StoreFilter<T>): T[] {
     let values = Array.from(records.values())
       .filter(record => matchesRecord(record, filter))
-      .map(record => record.data as T)
+      .map(record => structuredClone(record.data) as T)
 
     if (filter.orderBy) {
       const { field, direction } = filter.orderBy
@@ -108,15 +109,32 @@ function createRelStore<T>(records: Map<string, StoredValue>): AIRelStore<T> {
   }
 
   return {
+    async currentTime() {
+      return Date.now()
+    },
+    async readVersioned(id) {
+      const record = records.get(id)
+      return record ? { version: record.version, data: structuredClone(record.data) as T } : undefined
+    },
+    async compareAndSwap(id, input) {
+      if (input.notAfter !== undefined && !Number.isSafeInteger(input.notAfter))
+        throw new RangeError('Invalid Store write deadline')
+      const record = records.get(id)
+      if (record?.version !== input.expectedVersion || (input.notAfter !== undefined && Date.now() >= input.notAfter))
+        return undefined
+      const version = crypto.randomUUID()
+      records.set(id, { version, data: structuredClone(input.data), scope: structuredClone(input.scope ?? record?.scope) })
+      return version
+    },
     async save(id, data, scope) {
-      records.set(id, { data, scope })
+      records.set(id, { version: crypto.randomUUID(), data: structuredClone(data), scope: structuredClone(scope) })
     },
     async saveMany(items) {
       for (const item of items)
-        records.set(item.id, { data: item.data, scope: item.scope })
+        records.set(item.id, { version: crypto.randomUUID(), data: structuredClone(item.data), scope: structuredClone(item.scope) })
     },
     async get(id) {
-      return records.get(id)?.data as T | undefined
+      return structuredClone(records.get(id)?.data) as T | undefined
     },
     async query(filter) {
       return select(filter)

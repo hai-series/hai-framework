@@ -376,6 +376,12 @@ if (result.success) {
 
 #### Context 管理器
 
+`scope: { objectId, sessionId }` 必填。相同 scope 的所有节点共用一条版本记录，原子保存消息、摘要、生成 owner、轮次及待提交状态；`addMessage`、每个对外流式 delta 和最终提交即时持久化，`save()` 只刷新共享快照、等待本节点记忆任务并同步会话目录。`getMessages/getTurns/getSummaries/getTokenUsage` 返回最近一次成功读写的独立快照；跨节点读取前调用 `await manager.reload()` 或 `restoreManager()`。
+
+并发限制按共享 scope 生效；`reject` 立即返回忙，`queue` 可取消地轮询（不承诺 FIFO）。生成租约为存储端时钟 30 秒，每 10 秒续租，最终写入同时校验版本、owner 和期限。失联生成过期后由下一次操作标为 interrupted，保留生成记录，不自动重放 LLM、工具或记忆提取。manual 的 pending 不自动过期，可在另一节点/重启后按同一 turnId 提交；相同终态与文本重复提交幂等，不同内容拒绝。外部工具/LLM/后台记忆不与上下文跨系统原子提交，进程失联后须核对未知副作用，不能据此承诺外部恰好一次。`reset` 更换共享纪元；`removeSession` 清空正文并保留永久墓碑，同一 scope 不复用，旧节点不能重建。
+
+自定义 `AIRelStore` 必须提供 `readVersioned`、`compareAndSwap` 和存储端 `currentTime`；普通 save/saveMany 也要更换不可复用版本。CAS 的 `expectedVersion: undefined` 仅创建，`notAfter` 在最终写入以存储时钟严格检查，冲突/截止返回 undefined，存储故障抛错。默认 PostgreSQL/MySQL/SQLite 实现均执行这些条件；SQLite 仅供开发/测试，生产使用 PostgreSQL/MySQL。新 schema 含 version 列，不提供旧表自动迁移。
+
 ```ts
 const manager = ai.context.createManager({
   scope: { objectId: 'user-001', sessionId: 'sess-001' },
@@ -391,7 +397,7 @@ if (manager.success) {
 }
 ```
 
-同一管理器默认实行**单活动生成**，避免「上一轮 AI 尚未退出，下一轮 user 消息先写入」导致的消息乱序；`reset()` 现为异步并会终止活动生成、释放并发屏障、清空轮次并默认重新写入 Persona/System Prompt。
+同一 scope 默认实行**跨节点单活动生成**，避免「上一轮 AI 尚未退出，下一轮 user 消息先写入」导致的消息乱序；`reset()` 现为异步并会终止活动生成、释放并发屏障、清空轮次并默认重新写入 Persona/System Prompt。
 
 ##### 真实对话状态（Conversation Commit Layer）
 
@@ -402,12 +408,14 @@ if (manager.success) {
 `chatStream` 在**调用上游模型前**就登记轮次并产出 `turn_started`（事件序列 `turn_started → delta* → done`，中途取消时 `turn_started → delta* → cancelled`）。因此即使生成到一半被 `AbortSignal` 取消，也能拿到 `turnId` 与已生成文本，用真实内容提交：
 
 ```ts
-const m = ai.context.createManager({ turnCommit: 'manual' /* ... */ }).data
+const created = ai.context.createManager({ scope: { objectId: 'user-001', sessionId: 'sess-001' }, turnCommit: 'manual' })
+if (!created.success) return created
+const m = created.data
 const controller = new AbortController()
 
 for await (const ev of m.chatStream('请展开讲讲', { signal: controller.signal })) {
   if (ev.type === 'turn_started') {
-    m.markTurnSpeaking(ev.turnId) // 可选：标记进入播放
+    await m.markTurnSpeaking(ev.turnId) // 可选：标记进入播放
   }
   else if (ev.type === 'delta') {
     feedTts(ev.text) // 边生成边合成播放
@@ -460,6 +468,7 @@ await ai.persona.save({
 // 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
 const composed = await ai.persona.compose('xiaoq')
 const manager = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
   memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
 })
