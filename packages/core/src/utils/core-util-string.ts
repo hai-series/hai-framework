@@ -183,10 +183,9 @@ function padEnd(str: string, length: number, char = ' '): string {
 }
 
 /**
- * 常量时间字符串比较。
+ * 无内容提前返回的字符串比较；Node 入口使用原生 timingSafeEqual 覆盖此实现。
  *
- * 防止时序侧信道攻击：无论输入差异位置如何，执行时间恒定。
- * 兼容 Node.js 与浏览器环境（纯 JS 实现，无平台依赖）。
+ * 浏览器 JavaScript 引擎不提供恒时保证，不能将此实现当作服务端凭证校验的安全边界。
  *
  * @param a - 字符串 a
  * @param b - 字符串 b
@@ -199,7 +198,7 @@ function padEnd(str: string, length: number, char = ' '): string {
  * ```
  */
 function constantTimeEqual(a: string, b: string): boolean {
-  // 长度不同时仍遍历较长字符串，避免泄漏长度信息
+  // 保留两端精确字符串相等语义；执行时长仍受输入长度和 JavaScript 引擎影响。
   const len = Math.max(a.length, b.length)
   let result = a.length ^ b.length
   for (let i = 0; i < len; i++) {

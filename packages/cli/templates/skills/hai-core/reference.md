@@ -302,7 +302,7 @@ core.id.isValidNanoId('abc123', 6)     // true/false
 
 - 生成 UUID **一律用 `core.id.uuid()`**，禁止裸调 `crypto.randomUUID()`。
 - 原因：`crypto.randomUUID` 仅在**安全上下文（HTTPS / localhost）**下可用，生产 http 环境会抛
-  `crypto.randomUUID is not a function`；`core.id.uuid()` 已做 `randomUUID → getRandomValues → Math.random` 三级兜底，Node.js 与浏览器通用。
+  `crypto.randomUUID is not a function`；`core.id.uuid()` 仅使用 randomUUID 或密码学安全的 getRandomValues；两者不可用时明确抛错，绝不降级到 Math.random。
 - 需要不带横线的 compact 形式：`core.id.uuid().replaceAll('-', '')`。
 - 代码评审与新建代码时以此为准，发现裸调 `crypto.randomUUID()` 一律改走 `core.id.uuid()`。
 
@@ -329,7 +329,7 @@ core.object.omit(obj, ['c', 'd'])
 ```typescript
 core.string.capitalize('hello')      // 'Hello'
 core.string.kebabCase('helloWorld')  // 'hello-world'
-core.string.constantTimeEqual(a, b)  // 防时序攻击比较
+core.string.constantTimeEqual(a, b)  // Node 使用原生等长比较；浏览器不保证恒时
 ```
 
 #### 数组操作 — `core.array`
@@ -545,3 +545,5 @@ const safeUrl = core.sanitize.sanitizeUrl("https://example.com/a?token=value&lim
 ```
 
 Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
+
+Node 入口的 core.string.constantTimeEqual 将原始 UTF-16 单元编码后使用 node:crypto.timingSafeEqual 比较等长字节，长度不相同时直接 false，长度本身不受保护。浏览器实现仅避免按内容提前返回，不提供 JavaScript 引擎级恒时保证，不用于服务端凭证校验。外围分支、编码和请求处理不因此自动成为恒时。

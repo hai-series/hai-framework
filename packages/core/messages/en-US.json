@@ -49,5 +49,6 @@
   "core_configParseFailed": "Failed to parse config file: {filePath}",
   "core_configValidationFailed": "Config validation failed",
   "core_configNotLoaded": "Config '{name}' is not loaded",
-  "core_configUnsupportedInBrowser": "Browser does not support file-based config; use core.config on the server or pass browser options through core.init({ logging })"
+  "core_configUnsupportedInBrowser": "Browser does not support file-based config; use core.config on the server or pass browser options through core.init({ logging })",
+  "core_cryptoRandomUnavailable": "Cryptographic random source is unavailable"
 }

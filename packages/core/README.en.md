@@ -438,7 +438,7 @@ core.string.isBlank('') // true
 core.string.isNotBlank('x') // true
 core.string.padStart('5', 3, '0') // '005'
 core.string.padEnd('5', 3, '0') // '500'
-core.string.constantTimeEqual(a, b) // 防时序攻击比较
+core.string.constantTimeEqual(a, b) // Node 使用原生等长比较；浏览器不保证恒时
 
 // 数组操作
 core.array.unique([1, 1, 2]) // [1, 2]
@@ -575,3 +575,7 @@ Apache-2.0
 ## Configuration consumption
 
 `_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../docs/configuration-map.md).
+
+The Node entry uses node:crypto.timingSafeEqual over equal-length UTF-16LE code units. Different lengths return false; length is not hidden. The browser implementation avoids content-based early returns but has no JavaScript-engine timing guarantee and is not a server credential boundary. Surrounding branches, encoding and request handling are not made timing-safe by this helper.
+
+UUID generation requires cryptographic randomUUID/getRandomValues and throws if neither is available; it never falls back to Math.random.

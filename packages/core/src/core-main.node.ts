@@ -7,6 +7,8 @@
 
 import type { CoreFunctions, CoreOptions } from './core-types.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { Buffer } from 'node:buffer'
+import { timingSafeEqual } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { CoreConfigSchema } from './core-config.js'
@@ -47,6 +49,24 @@ function createNodeCore(): NodeCoreFunctions {
   // 扩展 config 和 init 功能
   return {
     ...baseCore,
+    string: {
+      ...baseCore.string,
+      /**
+       * Node 凭证比较使用原生恒时原语；不同长度直接失败，长度本身不受保护。
+       * UTF-16LE 保留孤立代理项，避免 UTF-8 替换字符把两个不同字符串误判为相等。
+       * @param a - 第一个原始字符串，不做 Unicode 归一化。
+       * @param b - 第二个原始字符串，不做 Unicode 归一化。
+       * @returns 字符串的 UTF-16 单元是否完全一致。
+       * @example
+       * ```ts
+       * import { core } from '@h-ai/core'
+       * const matches = core.string.constantTimeEqual('example-only', 'example-only')
+       * ```
+       */
+      constantTimeEqual(a: string, b: string): boolean {
+        return a.length === b.length && timingSafeEqual(Buffer.from(a, 'utf16le'), Buffer.from(b, 'utf16le'))
+      },
+    },
     /** Zod 校验错误 → i18n 消息映射工具（kit / serv / api-client 共享）。 */
     zodValidation: baseCore.zodValidation,
     /** 配置管理 */

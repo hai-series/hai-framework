@@ -438,7 +438,7 @@ core.string.isBlank('') // true
 core.string.isNotBlank('x') // true
 core.string.padStart('5', 3, '0') // '005'
 core.string.padEnd('5', 3, '0') // '500'
-core.string.constantTimeEqual(a, b) // 防时序攻击比较
+core.string.constantTimeEqual(a, b) // Node 使用原生等长比较；浏览器不保证恒时
 
 // 数组操作
 core.array.unique([1, 1, 2]) // [1, 2]
@@ -575,3 +575,7 @@ Apache-2.0
 ## 配置的实际消费边界
 
 `_core.yml` 仅接受 name/version/env/defaultLocale 元数据与 logging；未知字段加载失败。Core 不提供全局 debug、ID 长度/前缀、业务 features 或语言注册列表；日志级别用 logging.level，ID 选项在每次 core.id 调用传入，业务配置放 app.yml 并由应用 Schema 校验。defaultLocale 是可读取的元数据，不会替应用注册翻译或切换 Paraglide。导入 Logger 不改写 LANG、LC_ALL、PYTHONIOENCODING，包括 Windows TTY。全部模块的配置与环境消费链见[配置对应表](../../docs/configuration-map.md)。
+
+Node 入口的 core.string.constantTimeEqual 将原始 UTF-16 单元编码后使用 node:crypto.timingSafeEqual 比较等长字节，长度不相同时直接 false，长度本身不受保护。浏览器实现仅避免按内容提前返回，不提供 JavaScript 引擎级恒时保证，不用于服务端凭证校验。外围分支、编码和请求处理不因此自动成为恒时。
+
+UUID 只使用密码学安全的 randomUUID/getRandomValues；均不可用时明确抛错，不生成 Math.random 标识。
