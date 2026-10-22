@@ -116,30 +116,54 @@ function isUrlLikeNormalizedKey(normalizedKey: string): boolean {
   return getCachedValue(urlLikeKeyCache, normalizedKey, () => URL_LIKE_KEY_REGEX.test(normalizedKey))
 }
 
-/** 脱敏 URL 中内嵌的用户名/密码，解析失败时回退原值 */
-function sanitizeUrlCredentials(url: string, replacement = DEFAULT_SENSITIVE_REPLACEMENT): string {
+/**
+ * 遮蔽 URL 的用户名、密码及敏感查询参数；OAuth 风格 fragment 按查询参数处理。
+ *
+ * 解析失败返回固定占位符，避免畸形地址把凭据原样写入日志。
+ *
+ * @param url - 待记录的绝对 URL
+ * @param options - 与对象脱敏一致的匹配规则和替换值
+ * @returns 可安全用于结构化日志的 URL
+ * @example
+ * ```ts
+ * core.sanitize.sanitizeUrl('https://example.com/a?token=secret&limit=10')
+ * // 'https://example.com/a?token=[REDACTED]&limit=10'
+ * ```
+ */
+export function sanitizeUrl(url: string, options: SanitizeSensitiveFieldsOptions = {}): string {
+  return sanitizeUrlWithContext(url, createSanitizeSensitiveContext(options))
+}
+
+/** 保留参数顺序和重复项，名称由 URLSearchParams 解码后再匹配。 */
+function sanitizeUrlParameters(parameters: URLSearchParams, context: SanitizeSensitiveContext): URLSearchParams {
+  const sanitized = new URLSearchParams()
+  for (const [key, value] of parameters) {
+    sanitized.append(key, context.isSensitiveKey(key, normalizeKeyForMatching(key)) ? context.urlReplacement : value)
+  }
+  return sanitized
+}
+
+function sanitizeUrlWithContext(url: string, context: SanitizeSensitiveContext): string {
   try {
     const parsed = new URL(url)
-    let changed = false
 
     if (parsed.username) {
-      parsed.username = replacement
-      changed = true
+      parsed.username = context.urlReplacement
     }
 
     if (parsed.password) {
-      parsed.password = replacement
-      changed = true
+      parsed.password = context.urlReplacement
     }
 
-    if (!changed) {
-      return parsed.toString()
-    }
+    parsed.search = sanitizeUrlParameters(parsed.searchParams, context).toString()
+    // 普通锚点保留；带键值对的 fragment 可能携带 OAuth access_token。
+    if (parsed.hash.includes('='))
+      parsed.hash = sanitizeUrlParameters(new URLSearchParams(parsed.hash.slice(1)), context).toString()
 
-    return parsed.toString().replaceAll(encodeURIComponent(replacement), replacement)
+    return parsed.toString().replaceAll(encodeURIComponent(context.urlReplacement), context.urlReplacement)
   }
   catch {
-    return url
+    return '(invalid url)'
   }
 }
 
@@ -171,7 +195,7 @@ function sanitizeSensitiveValueWithContext(
     const normalizedKey = normalizeKeyForMatching(key)
 
     if (typeof value === 'string' && isUrlLikeNormalizedKey(normalizedKey)) {
-      return sanitizeUrlCredentials(value, context.urlReplacement)
+      return sanitizeUrlWithContext(value, context)
     }
 
     if (context.isSensitiveKey(key, normalizedKey) && !isPlainObjectValue) {
@@ -249,6 +273,7 @@ export const sanitize = {
   defaultSensitiveKeyRegex: DEFAULT_SENSITIVE_KEY_REGEX,
   defaultSensitiveReplacement: DEFAULT_SENSITIVE_REPLACEMENT,
   isSensitiveKey,
+  sanitizeUrl,
   sanitizeSensitiveValue,
   sanitizeSensitiveFields,
 }

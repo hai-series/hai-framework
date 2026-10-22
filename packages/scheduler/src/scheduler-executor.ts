@@ -26,20 +26,6 @@ export function setLogRepository(repo: SchedulerLogRepository | null, cleanupPol
   currentCleanupPolicy = { ...cleanupPolicy }
 }
 
-function sanitizeUrl(url: string): string {
-  try {
-    const parsedUrl = new URL(url)
-    if (parsedUrl.password)
-      parsedUrl.password = '***'
-    if (parsedUrl.username)
-      parsedUrl.username = '***'
-    return parsedUrl.toString()
-  }
-  catch {
-    return '(invalid url)'
-  }
-}
-
 function resolveTaskType(task: TaskDefinition, hooks: Readonly<SchedulerTaskHooks>): TaskExecutionTargetType {
   if (task.handler)
     return task.handler.kind
@@ -268,7 +254,7 @@ export async function executeApiTask(
       logger.error('API task returned non-OK status', {
         taskId: context.taskId,
         status: response.status,
-        url: sanitizeUrl(url),
+        url: core.sanitize.sanitizeUrl(url),
       })
       return err(
         HaiSchedulerError.API_EXECUTION_FAILED,
@@ -282,7 +268,7 @@ export async function executeApiTask(
   }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    logger.error('API task execution failed', { taskId: context.taskId, error: message, url: sanitizeUrl(url) })
+    logger.error('API task execution failed', { taskId: context.taskId, error: message, url: core.sanitize.sanitizeUrl(url) })
     return err(
       HaiSchedulerError.API_EXECUTION_FAILED,
       schedulerM('scheduler_apiExecutionFailed', { params: { error: message } }),

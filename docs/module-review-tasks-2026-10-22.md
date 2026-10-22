@@ -1,0 +1,718 @@
+# 全模块审查与修正任务清单（2026-10-22）
+
+审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
+
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+
+## 使用与验收规则
+
+- P1：安全、授权、凭据、数据丢失、假成功或生产分布式正确性问题，优先于整理工作；P2：契约、可靠性、规范及维护改进。未据未经验证的部署推断标注 P0。
+- “源码探针已复现”执行了原始 TypeScript 函数，基础设施依赖使用可控替身；SM4 探针使用真实算法实现。“源码确认”有可定位的代码路径；“按本次要求补强”包含现有明确限制与用户目标之间的差距，不冒充已发生的事故。
+- 每项关闭条件包括：修复实现、补充行为回归、同步受影响公共契约与文档、执行门禁并记录真实验收证据。未做真实 provider/多进程验收不能仅凭单元测试勾选完成。
+- 任务中的范围为最低修改集合，执行前重新 rg 查调用、测试、README/skills、模板与环境变量。只删除已确认冗余的代码；保留用户现有改动。
+- 不把连接池、编译缓存、客户端 UI 状态、不可变配置、测试 memory provider 一律迁入 Redis；只协调跨节点共享业务状态。
+
+## 覆盖与注释基线
+
+以下为排除 Paraglide 生成目录的 `.ts/.svelte` 统计。导出统计只计算 TS 顶层 export 声明（函数、类型、接口、变量、类），包含内部文件导出，不等于 package 公开 API；不含 re-export、Svelte 组件 API、方法和私有结构体。缺示例包含完全缺 JSDoc 的声明，不应相加。
+
+| 模块 | TS/Svelte 文件 | 导出声明 | 无 JSDoc | 无 @example | 行为/规范任务 | 注释任务 |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| ai | 80 | 422 | 0 | 372 | AI-01、AI-02、AI-03、AI-04、AI-05 | JSDOC-01 |
+| api-client | 6 | 20 | 0 | 14 | CLIENT-01、CLIENT-02 | JSDOC-02 |
+| api-contract | 20 | 145 | 49 | 141 | CONTRACT-01 | JSDOC-03 |
+| audit | 7 | 16 | 1 | 11 | AUDIT-01 | JSDOC-04 |
+| cache | 7 | 28 | 1 | 20 | CACHE-01、CACHE-02、CACHE-03、CACHE-04 | JSDOC-05 |
+| capacitor | 9 | 31 | 1 | 18 | CAP-01、CAP-02 | JSDOC-06 |
+| cli | 17 | 75 | 7 | 63 | CLI-01、CLI-02 | JSDOC-07 |
+| core | 23 | 85 | 21 | 47 | CORE-01、CORE-02 | JSDOC-08 |
+| crypto | 15 | 48 | 1 | 44 | CRYPTO-01、CRYPTO-02、CRYPTO-03、CRYPTO-04 | JSDOC-09 |
+| datapipe | 8 | 23 | 0 | 14 | PIPE-01 | JSDOC-10 |
+| deploy | 26 | 75 | 1 | 55 | DEPLOY-01、DEPLOY-02、DEPLOY-03 | JSDOC-11 |
+| iam | 38 | 151 | 9 | 150 | IAM-01、IAM-02、IAM-03、IAM-04、IAM-05、IAM-06 | JSDOC-12 |
+| kit | 44 | 151 | 3 | 91 | KIT-01、KIT-02 | JSDOC-13 |
+| payment | 18 | 50 | 8 | 47 | PAY-01、PAY-02、PAY-03、PAY-04、PAY-05、PAY-06 | JSDOC-14 |
+| reach | 13 | 51 | 1 | 42 | REACH-01、REACH-02、REACH-03、REACH-04 | JSDOC-15 |
+| reldb | 17 | 84 | 4 | 57 | RELDB-01、RELDB-02 | JSDOC-16 |
+| scheduler | 14 | 71 | 38 | 67 | SCHED-01、SCHED-02 | JSDOC-17 |
+| serv | 28 | 106 | 3 | 98 | SERV-01、SERV-02、SERV-03、SERV-04、SERV-05 | JSDOC-18 |
+| storage | 14 | 49 | 5 | 38 | STORAGE-01、STORAGE-02、STORAGE-03 | JSDOC-19 |
+| ui | 162 | 297 | 63 | 284 | UI-01 | JSDOC-20 |
+| vecdb | 10 | 35 | 3 | 26 | VECDB-01、VECDB-02 | JSDOC-21 |
+
+全量逐文件/逐声明补齐清单见 [JSDoc 修正任务附件](module-review-jsdoc-2026-10-22.md)。跨模块任务 LIFE-01、STYLE-01/02、DOC-01、DIST-01 同时适用于受影响包。
+
+## 建议执行批次
+
+1. 先处理授权与传输：SERV-01～04、CRYPTO-01/02、CORE-01、RELDB-01；客户端退出/凭据任务与 IAM 会话任务一并收敛。
+2. 修正共享原语和数据正确性：CACHE-01～04 → IAM-01～06/KIT-01/SCHED-01；REACH-01～04、支付全链路、AI 状态与知识发布并行推进不共享修改面的工作。
+3. 补齐其余 provider/生命周期/CLI/UI 行为；按包同步类型、调用方、配置、README/skills 和示例。
+4. 在 API 形状稳定后统一命名/exports，执行 21 项 JSDoc 任务；最后跑跨包、生成应用及真实双节点验收。
+
+## 修正任务
+
+### CORE-01 · P1 · 补齐 URL 查询参数脱敏，并统一重复的脱敏实现
+
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：新增统一 sanitizeUrl，覆盖 userinfo、敏感 query、重复/编码参数、OAuth fragment 与非法地址；移除三个模块重复实现。core 类型检查/构建、cache/storage/scheduler 类型检查、定向 ESLint、check:skills 通过；sanitize 与 Node/browser logger 共 3 文件 29 测试通过。无凭据暴露/外部服务操作；全量回归按用户要求在全部任务实施后执行。
+- **位置**：[packages/core/src/utils/core-util-sanitize.ts:120](../packages/core/src/utils/core-util-sanitize.ts#L120)。
+- **证据与影响**：URL 分支只处理 userinfo，带 token/apiKey 的 query 原样保留。探针中的占位值 NOT_A_SECRET 未被遮蔽；这会影响使用该工具处理的配置、日志与 audit 详情。
+- **修正内容**：对 URL 的敏感 query 名称和重复参数逐项遮蔽；明确 fragment、编码、非法 URL 和结构化错误的策略。归并 cache/storage/scheduler 中重复实现到适用的公共能力，保留真实差异。
+- **验收标准**：覆盖 userinfo、大小写/百分号编码的 query、重复参数、嵌套对象；快照不得出现测试秘密。普通 URL 保持可诊断，不把所有错误一律抹空。
+- **同步范围**：core/cache/storage/scheduler README、日志示例、audit 脱敏说明及对应 skill。
+
+### CORE-02 · P1 · 隔离服务端请求的 locale 状态
+
+- [ ] 待修正（源码确认；范围：core）。
+- **位置**：[packages/core/src/i18n/core-i18n-utils.ts:23](../packages/core/src/i18n/core-i18n-utils.ts#L23)；[packages/ui/src/lib/i18n.svelte.ts:108](../packages/ui/src/lib/i18n.svelte.ts#L108)。
+- **证据与影响**：core locale 是模块级变量；UI createLocaleStore 初始化时直接写全局 locale。并行 SSR 创建不同语言 store 会互相覆盖后续全局翻译。客户端单实例 store 本身不属于分布式缺陷。
+- **修正内容**：服务端翻译传递请求级 locale 或使用已有请求上下文；浏览器保持应用级 locale。禁止 SSR 初始化修改跨请求默认值。
+- **验收标准**：交错执行 zh-CN/en-US 两个 SSR 请求及异步恢复，页面和错误消息保持各自语言；多进程行为一致，无跨请求污染。
+- **同步范围**：core/UI i18n API、SSR 接入文档、kit/serv 调用方和生成模板。
+
+### CACHE-01 · P1 · 移除无 owner 的解锁/续租路径
+
+- [ ] 待修正（源码确认；范围：cache）。
+- **位置**：[packages/cache/src/providers/cache-provider-redis.ts:618](../packages/cache/src/providers/cache-provider-redis.ts#L618)。
+- **证据与影响**：默认 owner 固定为 default；release 不传 owner 直接 DEL，extend 不传 owner 直接 EXPIRE。A 的锁过期、B 获锁后，A 的迟到释放/续租能操作 B 的锁。
+- **修正内容**：每次获锁产生唯一所有权凭据，释放和续租强制比较凭据；更新 memory provider 的相同 API 契约。删除不安全可选参数形式，不保留兼容通道。
+- **验收标准**：真实 Redis 双客户端执行过期→重获→旧 owner 释放/续租，后两者均失败且新锁存续；所有调用点携带正确凭据。
+- **同步范围**：LockOperations、IAM/reach/scheduler 等全部消费者、README 三语言、LLMS 和 cache skill 示例。
+
+### CACHE-02 · P1 · 把鉴权配置传入 Redis Cluster
+
+- [ ] 待修正（源码确认；范围：cache）。
+- **位置**：[packages/cache/src/providers/cache-provider-redis.ts:684](../packages/cache/src/providers/cache-provider-redis.ts#L684)；[packages/cache/src/providers/cache-provider-redis.ts:714](../packages/cache/src/providers/cache-provider-redis.ts#L714)。
+- **证据与影响**：公共 redisOptions 未包含 password，cluster 分支仅转发该对象；单机/sentinel 分支另行配置 password。声明的密码配置在 Cluster 下失效。
+- **修正内容**：按支持的部署模式统一构造鉴权/TLS 配置，明确 URL 与字段配置优先级；不在日志输出凭据。
+- **验收标准**：带密码的真实 Redis Cluster 连接成功，错误密码明确失败；校验重定向后的节点连接仍带鉴权。
+- **同步范围**：cache-config、HAI_CACHE_* 环境变量映射、CLI 配置生成、README/skills。
+
+### CACHE-03 · P1 · 定义并实现 Cluster 下多键与扫描契约
+
+- [ ] 待修正（源码确认；范围：cache）。
+- **位置**：[packages/cache/src/providers/cache-provider-redis.ts:177](../packages/cache/src/providers/cache-provider-redis.ts#L177)；[packages/cache/src/providers/cache-provider-redis.ts:246](../packages/cache/src/providers/cache-provider-redis.ts#L246)。
+- **证据与影响**：多键命令直接下发，未处理跨 slot；scan/keys 直接调用单个 Cluster 客户端，没有跨主节点游标管理。当前公开 API 未限制 key 同 slot，也没有提供完整集群扫描模型。
+- **修正内容**：明确多键操作哪些可分 slot、哪些要求原子同 slot；返回结构化约束错误，不能静默降级。实现跨主节点扫描、逻辑 keyPrefix 输入输出规则，或收缩不支持的 API。
+- **验收标准**：在多主节点 Cluster 分散写入 keys，验证全量扫描、去重/终止、批量读取/删除、hash tag、keyPrefix；迁槽故障边界有文档。
+- **同步范围**：cache 类型/实现、IAM 等多键消费者、README 与分布式示例。
+
+### CACHE-04 · P2 · 修正零值过期与条件写入结果语义
+
+- [ ] 待修正（源码确认；范围：cache）。
+- **位置**：[packages/cache/src/providers/cache-provider-redis.ts:157](../packages/cache/src/providers/cache-provider-redis.ts#L157)；[packages/cache/src/providers/cache-provider-redis.ts:154](../packages/cache/src/providers/cache-provider-redis.ts#L154)。
+- **证据与影响**：ex/px/exat/pxat 使用 truthy 判断，0 被当作没有过期策略；NX/XX 返回值丢弃，调用方不能从成功结果判断是否写入。
+- **修正内容**：显式校验过期参数及互斥组合，零值不能变永久 key；条件写入返回 applied 状态或提供专用原子操作。同步 memory/Redis 行为。
+- **验收标准**：覆盖 0、负数、过去绝对时间、NX 竞争及 XX 不存在；TTL 和条件命中结果在两种 provider 一致。
+- **同步范围**：SetOptions、KvOperations、全部 NX/XX 调用方及 TTL 文档。
+
+### IAM-01 · P1 · 让 refresh token 轮换和单设备登录原子化
+
+- [ ] 待修正（源码探针已复现；范围：iam）。
+- **位置**：[packages/iam/src/session/iam-session-functions.ts:243](../packages/iam/src/session/iam-session-functions.ts#L243)；[packages/iam/src/session/iam-session-functions.ts:131](../packages/iam/src/session/iam-session-functions.ts#L131)。
+- **证据与影响**：refresh 先读取、再删旧 token、再保存新会话；同一个 refresh token 并发请求均能通过。探针产生两套不同的新 access token。singleDevice 也采用先删后建，存在同类竞争窗口。
+- **修正内容**：用共享存储 CAS/脚本或事务完成消费、撤销与发布；按用户/会话维度原子更新索引。明确失败恢复与重放策略。
+- **验收标准**：真实 Redis 上两个独立进程并发刷新同 token，只产生一个有效会话后继；并发单设备登录最终只有一个有效设备，失败注入不遗留可用孤儿 token。
+- **同步范围**：session API、refresh Cookie/native 流程、serv/kit/api-client 及登录文档。
+
+### IAM-02 · P1 · 防止退出后迟到更新复活会话
+
+- [ ] 待修正（源码探针已复现；范围：iam）。
+- **位置**：[packages/iam/src/session/iam-session-repository-cache.ts:226](../packages/iam/src/session/iam-session-repository-cache.ts#L226)；[packages/iam/src/session/iam-session-repository-cache.ts:419](../packages/iam/src/session/iam-session-repository-cache.ts#L419)。
+- **证据与影响**：更新/批量补丁读取会话后无条件 SET。探针暂停读取结果，先退出删除，再恢复更新，已删除会话重新出现；并发更新也可能互相覆盖。
+- **修正内容**：引入会话版本/撤销代际并条件写入；会话更新、TTL 与用户索引一并协调。注销结果不能被旧操作反转。
+- **验收标准**：覆盖 logout、logoutAll、权限变更、滑动续期与刷新交错；被撤销 token 永远不能因旧写入恢复有效。
+- **同步范围**：IAM 会话仓库接口、权限变更消费者、相关注释和双节点回归。
+
+### IAM-03 · P1 · 修复滑动过期和自定义 TTL 的返回值
+
+- [ ] 待修正（源码探针已复现；范围：iam）。
+- **位置**：[packages/iam/src/session/iam-session-utils.ts:77](../packages/iam/src/session/iam-session-utils.ts#L77)；[packages/iam/src/session/iam-session-functions.ts:142](../packages/iam/src/session/iam-session-functions.ts#L142)。
+- **证据与影响**：validate 传入 expiresAt 补丁，但 applySessionPatch 未应用该字段，滑动续期不延长有效期；create 的 expiresIn 取默认 maxAge，和 options.maxAge 不一致。
+- **修正内容**：统一时间源、绝对过期时间、存储 TTL 和返回 expiresIn；补丁字段显式完整实现，和 IAM-02 的原子条件更新合并。
+- **验收标准**：受控时钟测试跨越旧过期点仍有效、跨越新过期点失效；自定义 maxAge 与返回值及 Redis TTL 一致。
+- **同步范围**：session-config、session 类型、README 的 sliding/maxAge 说明及客户端刷新时机。
+
+### IAM-04 · P1 · 使 refresh 生命周期独立于 access key TTL
+
+- [ ] 待修正（源码确认；范围：iam）。
+- **位置**：[packages/iam/src/session/iam-session-repository-cache.ts:350](../packages/iam/src/session/iam-session-repository-cache.ts#L350)；[packages/iam/src/session/iam-session-repository-cache.ts:195](../packages/iam/src/session/iam-session-repository-cache.ts#L195)。
+- **证据与影响**：refresh 映射使用较长 TTL，但 getByRefreshToken 最终依赖短 TTL 的 access 会话记录。access key 过期后，即使 refresh 映射仍有效也不能刷新。
+- **修正内容**：持久会话/refresh 记录按 refresh 生命周期保存，独立判断 access 是否有效；撤销与轮换保持原子，不能简单把 access 认证有效期一起延长。
+- **验收标准**：access 过期而 refresh 未过期时刷新成功，旧 access 仍不可认证；refresh 过期/撤销后失败。
+- **同步范围**：IAM 会话结构、配置默认值解释、serv/kit 刷新流程与认证 skills。
+
+### IAM-05 · P1 · 区分缓存故障与过期会话，避免破坏用户 token 索引
+
+- [ ] 待修正（源码确认；范围：iam）。
+- **位置**：[packages/iam/src/session/iam-session-repository-cache.ts:414](../packages/iam/src/session/iam-session-repository-cache.ts#L414)。
+- **证据与影响**：patchUserSessions 将 get/ttl 的失败结果也归为 staleTokens，随后从用户 token 集合删除。临时故障会导致仍有效会话失去索引，后续权限同步/批量退出不完整。
+- **修正内容**：只删除已确认不存在/过期的记录；基础设施失败向上返回，保留索引，并设计可恢复的索引校验。
+- **验收标准**：对 get、ttl 注入 HaiResult 失败，操作必须失败且有效 token 仍在索引；恢复后 logoutAll 能撤销全部会话。
+- **同步范围**：仓库错误契约、权限同步注释、失败处理示例。
+
+### IAM-06 · P1 · 约束租约丢失后的业务提交
+
+- [ ] 待修正（按本次要求补强；范围：iam）。
+- **位置**：[packages/iam/src/iam-security.ts:18](../packages/iam/src/iam-security.ts#L18)。
+- **证据与影响**：安全操作的锁辅助函数会标记租约失效，但运行中的 operation 不会因此自动停止。最终返回失败不能证明旧节点没有写入；需要覆盖 GC 暂停、续租失败后的过期 owner。
+- **修正内容**：对受保护的最终写入应用 fencing/CAS 或事务条件；外部副作用使用幂等键。仅取消 Promise/设置布尔值不足以保证互斥。
+- **验收标准**：两个进程进行租约超时接管，恢复旧进程后其持久化提交被拒绝；记录各安全操作对外部副作用的实际保证。
+- **同步范围**：IAM 安全注释、cache lock 契约及安全相关消费者。
+
+### CRYPTO-01 · P1 · 共享服务端传输密钥，支持轮换与跨节点解密
+
+- [ ] 待修正（源码确认；范围：crypto）。
+- **位置**：[packages/crypto/src/transport/crypto-transport-server.ts:45](../packages/crypto/src/transport/crypto-transport-server.ts#L45)；[packages/serv/src/serv-transport.ts:48](../packages/serv/src/serv-transport.ts#L48)。
+- **证据与影响**：每个 manager 启动时生成不同服务端密钥；共享 keyStore 只保存客户端公钥。A 协商后的请求交给 B 仍不能解密，重启同样失效，和共享 keyStore 足够支持多节点的说明不符。
+- **修正内容**：注入受管服务端密钥/版本化 key ring，协议携带 key id；共享客户端 registry，定义轮换、撤销与密钥保管，不把私钥写普通日志或公开配置。
+- **验收标准**：两个真实 manager 共用 registry：A 协商、B 解密、A 重启、密钥轮换期间均按约定工作；无 sticky session 依赖。
+- **同步范围**：crypto/serv/kit/api-client 协议、README、配置模板和 transport skills。
+
+### CRYPTO-02 · P1 · 给传输密文增加完整性与请求绑定
+
+- [ ] 待修正（源码探针已复现；范围：crypto）。
+- **位置**：[packages/crypto/src/transport/crypto-transport-server.ts:86](../packages/crypto/src/transport/crypto-transport-server.ts#L86)；[packages/crypto/src/crypto-sm4.ts:227](../packages/crypto/src/crypto-sm4.ts#L227)。
+- **证据与影响**：传输 payload 只有 encryptedKey/ciphertext/iv，CBC 解密未验证 MAC/tag。使用真实 SM4 实现的本地探针仅改变 IV，就把合法 JSON 的 amount 从 10000 改为 90000 并成功解密；该证据不是 TLS 攻破证明。
+- **修正内容**：采用受支持的认证加密或严格先验 MAC 的方案，认证版本、key id、client/request 上下文；明确重放窗口与跨节点去重。删除旧未认证传输格式，不保留兼容旁路。
+- **验收标准**：任意修改 IV/密文/密钥封装/上下文字段均在业务处理前拒绝；重放和跨路径复制按协议拒绝；正常多节点往返通过。
+- **同步范围**：EncryptedPayload、服务端/浏览器/移动端实现、API 适配器、协议文档与示例。
+
+### CRYPTO-03 · P2 · 移除弱密码派生接口和无效兼容分支
+
+- [ ] 待修正（按本次要求补强；范围：crypto）。
+- **位置**：[packages/crypto/src/crypto-sm4.ts:250](../packages/crypto/src/crypto-sm4.ts#L250)。
+- **证据与影响**：deriveKey 对 password+salt 做单次 SM3，代码已标 deprecated，仍作为公开能力提供。不考虑兼容性时不应继续保留容易误用的密码派生接口。
+- **修正内容**：全局核对使用者后删除该接口；有真实密钥派生需求时采用明确参数的标准 KDF，密码存储仍走现有 password API。
+- **验收标准**：所有调用、类型和示例无旧接口；如提供替代 KDF，以已知测试向量和参数上下限验证。
+- **同步范围**：crypto-types、README 安全说明、LLMS、crypto 使用示例。
+
+### CRYPTO-04 · P2 · 修复公钥 DB 存储的失败恢复与过期清理
+
+- [ ] 待修正（源码确认；范围：crypto）。
+- **位置**：[packages/crypto/src/transport/store-provider/crypto-transport-store-reldb.ts:59](../packages/crypto/src/transport/store-provider/crypto-transport-store-reldb.ts#L59)。
+- **证据与影响**：ensureTablePromise 缓存首次初始化结果，首次拒绝后无重试复位；过期记录主要在 get 时删除，长期不再访问的 handshake 记录不能靠该路径清理。
+- **修正内容**：失败复位并发初始化 promise；提供有界、可跨节点协调的过期清理与容量策略，校验公钥格式/大小后才注册。
+- **验收标准**：首次建表失败后恢复 DB 可重新注册；大量过期记录最终清理，双节点清理不删除有效记录，畸形公钥被拒绝。
+- **同步范围**：TransportKeyStore 契约、maxClients/TTL 配置说明、serv 握手限制。
+
+### KIT-01 · P1 · 把生产限流改为共享原子操作
+
+- [ ] 待修正（源码探针已复现；范围：kit）。
+- **位置**：[packages/kit/src/middleware/kit-ratelimit.ts:188](../packages/kit/src/middleware/kit-ratelimit.ts#L188)；[packages/kit/src/middleware/kit-ratelimit.ts:176](../packages/kit/src/middleware/kit-ratelimit.ts#L176)。
+- **证据与影响**：默认 store 为进程内存，支持异步 get/set 的共享 store 在无 increment 时仍走读改写。探针在 maxRequests=1 下并发 10 次全部通过，最终计数为 1。
+- **修正内容**：生产多实例必须选择原子共享计数器，移除不安全 get+set 回退；保留显式开发/测试 memory 模式。明确当前固定窗口与文档所称滑动窗口的区别并统一实现/说明。
+- **验收标准**：两个进程并发命中相同 key，总放行不超过阈值；覆盖窗口边界、TTL、失败策略及 IPv6/代理配置，不把单进程 mock 当成分布式验收。
+- **同步范围**：RateLimitStore、kit README、SvelteKit 模板及服务部署说明。
+
+### KIT-02 · P2 · 释放默认限流 store 的定时器
+
+- [ ] 待修正（源码确认；范围：kit）。
+- **位置**：[packages/kit/src/middleware/kit-ratelimit.ts:100](../packages/kit/src/middleware/kit-ratelimit.ts#L100)。
+- **证据与影响**：MemoryRateLimitStore 提供 stopCleanup，但 middleware 内部创建 store 后不向调用者暴露释放链路。热重载/重复创建会积累清理定时器。
+- **修正内容**：让创建者可在应用生命周期释放内部资源，或改为无需常驻定时器的有界惰性清理；对外部注入 store 明确所有权。
+- **验收标准**：重复创建/销毁后没有活跃计时器与 store 泄漏；外部 store 不被错误关闭。
+- **同步范围**：kit 中间件组合/关闭示例及测试 teardown。
+
+### SERV-01 · P1 · 默认存储 procedures 增加资源授权
+
+- [ ] 待修正（源码确认；范围：serv）。
+- **位置**：[packages/serv/src/features/serv-feature-storage.ts:84](../packages/serv/src/features/serv-feature-storage.ts#L84)。
+- **证据与影响**：默认实现仅要求登录，使用输入 key/prefix 进行读取、列举、上传签名和删除，没有用户/租户资源范围检查；文件头已承认这一边界，而现有应用/模板直接接入。
+- **修正内容**：把服务端资源授权作为必需依赖或默认拒绝；按可信身份确定可访问范围，对所有单项/批量/签名操作一致执行。不能以客户端提供的前缀当授权依据。
+- **验收标准**：用户 A 猜中 B 的 key 仍不能查看、下载、覆盖、删除或列举；批量混入一个未授权 key 也遵循明确失败策略，管理员路径单独验证。
+- **同步范围**：api-contract、apps/api-service、CLI API/fullstack 模板、storage skills 与安全示例。
+
+### SERV-02 · P1 · 默认 AI procedures 绑定用户和会话所有权
+
+- [ ] 待修正（源码确认；范围：serv）。
+- **位置**：[packages/serv/src/features/serv-feature-ai.ts:50](../packages/serv/src/features/serv-feature-ai.ts#L50)；[packages/serv/src/features/serv-feature-ai.ts:59](../packages/serv/src/features/serv-feature-ai.ts#L59)。
+- **证据与影响**：历史、记忆、会话列表直接透传客户端 objectId/sessionId/options，仅检查已登录。默认接入方没有资源所有者的必需校验。
+- **修正内容**：从 ServContext 绑定可信用户/租户，验证 session/object 归属；为跨用户管理提供独立授权路径，拒绝输入覆盖可信 scope。
+- **验收标准**：两个用户的历史、记忆召回、列表及写入上下文全部隔离；伪造 objectId/sessionId 无法越权。
+- **同步范围**：AI scope 类型、api-contract、应用/模板 procedures、AI/IAM 使用文档。
+
+### SERV-03 · P1 · 禁止缺失 Content-Type 绕过传输解密
+
+- [ ] 待修正（源码探针已复现；范围：serv）。
+- **位置**：[packages/serv/src/serv-transport.ts:249](../packages/serv/src/serv-transport.ts#L249)。
+- **证据与影响**：req.body 非空且缺 Content-Length/Content-Type 时被判断为空，跳过 encrypted 标记和解密验证。探针发送 Uint8Array JSON 正文，业务 next 已被调用。下游是否接受该正文取决于具体路由。
+- **修正内容**：根据实际 body 流与协议判断空请求，带正文但不满足加密格式时拒绝；不能信任可省略的头推断没有正文。
+- **验收标准**：覆盖无两个头、chunked、伪造 Content-Length、空流、合法无 input POST；未加密正文不会到达受保护业务 handler。
+- **同步范围**：serv/kit 同协议实现、api-client、transport 注释与安全回归。
+
+### SERV-04 · P1 · 在读取前限制传输请求和响应大小
+
+- [ ] 待修正（源码确认；范围：serv）。
+- **位置**：[packages/serv/src/serv-transport.ts:161](../packages/serv/src/serv-transport.ts#L161)；[packages/serv/src/serv-transport.ts:119](../packages/serv/src/serv-transport.ts#L119)。
+- **证据与影响**：握手/request.json 与密文 clone.json 没有流式大小限制；响应先完整读取再检查 string.length，既不能限制峰值内存，也不是 UTF-8 字节上限。
+- **修正内容**：在解码/解密前按字节有界读取，限制握手、公钥、密文和响应；传播取消并释放 reader。统一边界配置，确认 app 与 adapter 的顺序。
+- **验收标准**：无 Content-Length 的超限流提前终止；多字节字符按实际字节判定；正常边界值通过，受保护响应不会因异常明文透传。
+- **同步范围**：serv/kit 的请求体配置、错误码、反向代理部署文档及客户端处理。
+
+### SERV-05 · P2 · 实现或收缩被静默丢弃的 AI 请求字段
+
+- [ ] 待修正（源码确认；范围：serv）。
+- **位置**：[packages/serv/src/features/serv-feature-ai.ts:79](../packages/serv/src/features/serv-feature-ai.ts#L79)；[packages/api-contract/src/ai/ai-schemas.ts:86](../packages/api-contract/src/ai/ai-schemas.ts#L86)。
+- **证据与影响**：api-contract 接受 tools/tool_choice/stream，toChatCompletionRequest 未映射这些字段；请求看似成功却不按声明行为执行。
+- **修正内容**：使用一致的请求 schema 与适配器；工具调用完整传递，流式输出采用真实流协议；暂不支持的字段明确拒绝并从公开契约移除。
+- **验收标准**：客户端工具调用传到 provider 并返回工具结果；stream 选择有对应输出类型；不支持组合在边界失败。
+- **同步范围**：api-contract/api-client/serv、UI AI 调用方、README/LLMS 与 AI skills。
+
+### PAY-01 · P1 · 修正 Stripe 回调支付状态与事件类型
+
+- [ ] 待修正（源码探针已复现；范围：payment）。
+- **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:152](../packages/payment/src/providers/stripe/stripe-provider.ts#L152)。
+- **证据与影响**：已签名的 checkout.session.completed 即使 payment_status=unpaid 仍映射 paid；不同事件对象共用 amount_total/metadata，可能得到空订单号/0 金额。探针已复现 unpaid→paid。
+- **修正内容**：按事件 discriminated schema 解析并核验支付状态；处理异步成功/失败，拒绝或忽略无关事件；仅在实际支付成功时设置 paidAt。回调重复/乱序不应倒退订单状态。
+- **验收标准**：unpaid completed 不触发履约，异步成功才转 paid；错误金额/币种/订单归属被业务核验拒绝；多节点重复回调仅履约一次。
+- **同步范围**：PaymentNotifyResult、上层履约示例、serv 接口和支付 skill。依据：[Stripe Session 状态](https://docs.stripe.com/api/checkout/sessions/list)。
+
+### PAY-02 · P1 · 持久化 Stripe 订单映射并保证创建/退款幂等
+
+- [ ] 待修正（源码确认；范围：payment）。
+- **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:184](../packages/payment/src/providers/stripe/stripe-provider.ts#L184)；[packages/payment/src/providers/stripe/stripe-provider.ts:217](../packages/payment/src/providers/stripe/stripe-provider.ts#L217)。
+- **证据与影响**：query/refund 使用 Checkout Sessions list 的 metadata 参数筛选，但该 API 未声明该筛选；limit=1 也没有核对返回订单。创建/退款未发送幂等键，metadata 又允许覆盖保留的 orderNo。
+- **修正内容**：保存 orderNo→session/payment_intent 的可信映射，禁止覆盖保留字段；重试使用稳定创建/退款幂等键并记录执行结果，不能用列举首项猜订单。
+- **验收标准**：两个不同订单查询/退款各自正确；并发同 refundNo 和响应丢失重试只退款一次；映射在进程重启/双节点间一致。
+- **同步范围**：支付仓储/注入契约、类型、订单/退款文档。依据：[Stripe List 参数](https://docs.stripe.com/api/checkout/sessions/list)。
+
+### PAY-03 · P1 · 实现 Stripe 主动关单并补齐 Checkout 创建参数
+
+- [ ] 待修正（源码确认；范围：payment）。
+- **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:256](../packages/payment/src/providers/stripe/stripe-provider.ts#L256)；[packages/payment/src/providers/stripe/stripe-provider.ts:84](../packages/payment/src/providers/stripe/stripe-provider.ts#L84)。
+- **证据与影响**：closeOrder 无网络操作直接 ok；创建 Session 未提供跳转 URL 等 Checkout 模式相关参数，现有统一输入也未表达完整配置。
+- **修正内容**：按 session id 调用 expire 并映射不可关闭状态；明确支持的 Checkout UI 模式，增加其必需配置并做输入校验。
+- **验收标准**：Stripe 测试环境创建可完成的支付页面，主动关单后不能继续支付；已完成订单不能伪装关闭成功。
+- **同步范围**：payment-config/types、CLI 环境变量映射、三语言文档。依据：[Stripe Expire API](https://docs.stripe.com/api/checkout/sessions/expire)。
+
+### PAY-04 · P1 · 处理支付宝业务错误而非仅检查 HTTP 状态
+
+- [ ] 待修正（源码探针已复现；范围：payment）。
+- **位置**：[packages/payment/src/providers/alipay/alipay-provider.ts:83](../packages/payment/src/providers/alipay/alipay-provider.ts#L83)；[packages/payment/src/providers/alipay/alipay-provider.ts:248](../packages/payment/src/providers/alipay/alipay-provider.ts#L248)。
+- **证据与影响**：alipayRequest 只检查 HTTP；create/refund/close 未验证响应 code。探针返回 code=40004，createOrder 仍 success:true 并把错误对象当 clientParams。
+- **修正内容**：校验每种响应 envelope、业务成功码和字段，再映射统一结果；查询不存在、余额/权限错误、退款失败均准确返回。
+- **验收标准**：HTTP 200 的失败/畸形/缺失 envelope 在各操作均不能成功；成功响应使用真实格式 fixture，敏感原文不直接泄漏。
+- **同步范围**：支付宝 provider/types、错误码、退款/关单示例与测试。
+
+### PAY-05 · P1 · 核验回调商户身份并定义重放及幂等边界
+
+- [ ] 待修正（源码确认；范围：payment）。
+- **位置**：[packages/payment/src/providers/alipay/alipay-provider.ts:145](../packages/payment/src/providers/alipay/alipay-provider.ts#L145)；[packages/payment/src/providers/wechat/wechat-pay-provider.ts:196](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L196)。
+- **证据与影响**：当前验签/解密后未显式核对支付宝 app_id、微信 appid/mchid 与配置；微信回调头时间/证书 serial 的处理也未形成完整校验链。验签成功不能替代订单商户、金额、币种及重放核验。
+- **修正内容**：按各平台协议校验身份与证书/公钥选择，严格解析时间；将 event/transaction id 提供给持久去重及业务订单核验，明确 provider 与业务履约各自职责。
+- **验收标准**：有效签名但错误商户/应用的样本拒绝；过期/畸形通知和证书轮换有测试；同一通知跨两节点重复到达只产生一次业务副作用。
+- **同步范围**：三个 provider、PaymentNotifyResult、通知接入 skill 和演示消费者。
+
+### PAY-06 · P2 · 按平台实现 tradeType，删除表面支持的分支
+
+- [ ] 待修正（源码确认；范围：payment）。
+- **位置**：[packages/payment/src/providers/wechat/wechat-pay-provider.ts:145](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L145)；[packages/payment/src/providers/alipay/alipay-provider.ts:108](../packages/payment/src/providers/alipay/alipay-provider.ts#L108)。
+- **证据与影响**：微信 app 分支没有构造调起参数、h5 请求没有表达 scene_info；支付宝把 app/wap 等模式都送入相同 JSON 请求解析，且 JSAPI input.userId 未进入 buyer 参数。公开枚举超过实际完整实现。
+- **修正内容**：逐平台列出支持矩阵并实现模式专属请求/响应；未实现模式明确 UNSUPPORTED，而不是回落到另一种模式或空 clientParams。
+- **验收标准**：每个保留模式用官方测试环境/SDK 形状验证到客户端可调起；不支持组合在调用网络前拒绝。
+- **同步范围**：CreateOrderInput、各平台配置、客户端支付入口、README/LLMS。
+
+### REACH-01 · P1 · 延迟发送只有可靠入队后才返回成功
+
+- [ ] 待修正（源码确认；范围：reach）。
+- **位置**：[packages/reach/src/reach-send.ts:127](../packages/reach/src/reach-send.ts#L127)；[packages/reach/src/reach-send.ts:460](../packages/reach/src/reach-send.ts#L460)。
+- **证据与影响**：saveSendRecord 在无 repo 时直接返回，对 repo.create 的失败结果不传播；DND 延迟分支仍返回 deferred。数据库失败或未启用存储时消息可能没有保存却宣称已排队。
+- **修正内容**：把队列持久化作为延迟发送的必需前置，检查 HaiResult 并向上返回失败；不可靠日志不能承担可靠消息队列语义。
+- **验收标准**：未初始化/断连/插入失败时不能返回 deferred；成功入队后重启另一节点能发送，消费状态可追踪。
+- **同步范围**：reach-main 初始化依赖、返回类型、DND 配置、README 与 reach skill。
+
+### REACH-02 · P1 · 修正毫秒时间列的数据库类型
+
+- [ ] 待修正（源码确认；范围：reach）。
+- **位置**：[packages/reach/src/repositories/reach-repository-send-log.ts:204](../packages/reach/src/repositories/reach-repository-send-log.ts#L204)；[packages/reach/src/repositories/reach-repository-send-log.ts:220](../packages/reach/src/repositories/reach-repository-send-log.ts#L220)。
+- **证据与影响**：lockedUntil/updatedAt 使用 INTEGER 存储 Date.now() 毫秒值；PostgreSQL 的 INTEGER 为 32 位，当前时间远超范围。SQLite 的宽整数测试不能验证 PostgreSQL/MySQL 行为。
+- **修正内容**：统一使用可容纳毫秒的 BIGINT 或 timestamp，并明确 driver 返回字符串/数字转换；检查其它模块的 epoch 毫秒字段。
+- **验收标准**：真实 PostgreSQL/MySQL 完成建表、写入、claim/过期接管与时间比较；毫秒精度保持且无范围错误。
+- **同步范围**：reach schema、reldb 类型映射及时间单位注释。
+
+### REACH-03 · P1 · 避免消息 claim 过期后的重复外部发送
+
+- [ ] 待修正（源码确认；范围：reach）。
+- **位置**：[packages/reach/src/reach-send.ts:26](../packages/reach/src/reach-send.ts#L26)；[packages/reach/src/reach-send.ts:357](../packages/reach/src/reach-send.ts#L357)。
+- **证据与影响**：整批领取后串行发送，没有为未处理/正在处理记录续租。慢 provider 下后排记录或当前发送可超过 lease；owner 条件更新只能阻止旧数据库提交，无法撤销重复短信/邮件。
+- **修正内容**：按实际执行领取/续租，发送前核验当前所有权；提供稳定消息幂等键，对不支持幂等的 provider 明确至少一次语义与人工核对流程。
+- **验收标准**：两个消费者、慢发送、节点暂停/重启和响应丢失下验证接管；支持幂等的 provider 无重复副作用，其他 provider 不宣称 exactly-once。
+- **同步范围**：ReachMessage/Provider、队列仓库、reach/scheduler 说明及注释。
+
+### REACH-04 · P1 · 限制毒消息重试，终止满批失败的自旋
+
+- [ ] 待修正（源码确认；范围：reach）。
+- **位置**：[packages/reach/src/reach-send.ts:377](../packages/reach/src/reach-send.ts#L377)。
+- **证据与影响**：失败或缺 provider 的记录释放回 pending；当满一批都失败时 while 再次领取同批，没有退避/轮次上限，可持续占用工作进程并轰击上游。
+- **修正内容**：持久化 nextAttemptAt、attemptCount 和终止/死信状态，区分不可重试错误；单轮有工作预算，失败消息不阻塞后续可发送消息。
+- **验收标准**：至少 FLUSH_BATCH_SIZE 条坏消息时一轮有界结束；退避前不重发，正常消息仍可消费，重试上限与恢复入口有效。
+- **同步范围**：reach 配置、错误分类、队列管理 API 与运维文档。
+
+### SCHED-01 · P1 · 实现跨周期和手动触发的分布式执行约束
+
+- [ ] 待修正（按本次要求补强；范围：scheduler）。
+- **位置**：[packages/scheduler/src/scheduler-runner.ts:33](../packages/scheduler/src/scheduler-runner.ts#L33)；[packages/scheduler/src/scheduler-runner.ts:185](../packages/scheduler/src/scheduler-runner.ts#L185)。
+- **证据与影响**：现有本进程 runningTasks 加按分钟的 cache lock，只覆盖部分重复触发；README 也把跨周期互斥交给宿主。未使用共享 cache 时更无跨节点排他，不满足本次所有业务逻辑分布式要求。
+- **修正内容**：把 task lease 与 occurrence 身份分开，统一 cron/manual 入口；持久记录领取与结果，提供租约续期和崩溃恢复，生产明确要求共享后端。
+- **验收标准**：双节点同分钟、跨分钟长任务、手动+cron、重启/租约过期均符合配置的串并行语义；外部副作用用幂等而非承诺仅靠锁 exactly-once。
+- **同步范围**：scheduler 类型/配置、cache、reach 使用者、README 与调度 skill。
+
+### SCHED-02 · P2 · 公开调度执行记录的持久化失败
+
+- [ ] 待修正（源码确认；范围：scheduler）。
+- **位置**：[packages/scheduler/src/repositories/scheduler-log-repository.ts:59](../packages/scheduler/src/repositories/scheduler-log-repository.ts#L59)。
+- **证据与影响**：saveLog 捕获错误后仅记录日志，不把失败交给 runner，业务执行成功与执行记录已持久化无法区分，影响故障恢复/审计。
+- **修正内容**：返回可观察的持久化结果，独立记录业务执行状态与记录提交状态；禁止因为补写日志失败就盲目重复业务任务。
+- **验收标准**：日志 DB 失败可被调用方/监控识别，恢复后可补偿；不会因记录重试再次执行已完成业务副作用。
+- **同步范围**：runner/repository 契约、可观测性文档、scheduler 错误码。
+
+### AI-01 · P1 · 为 context 状态增加共享并发控制及故障恢复
+
+- [ ] 待修正（源码确认；范围：ai）。
+- **位置**：[packages/ai/src/context/ai-context-functions.ts:154](../packages/ai/src/context/ai-context-functions.ts#L154)；[packages/ai/src/context/ai-context-functions.ts:1007](../packages/ai/src/context/ai-context-functions.ts#L1007)。
+- **证据与影响**：context manager 使用本地 messages/生成锁/pendingCommits；持久化以整份状态覆盖，没有共享版本条件。两个节点同 scope 可基于旧状态写回，manual commit 在迁移节点后无本地 pending 记录。
+- **修正内容**：定义 scope 状态版本、生成/提交身份和持久 pending 记录；用 CAS/事务协调，不把进程 Map 简单替换成远程 Map。明确流式取消/失败的最终状态。
+- **验收标准**：双 manager 同 scope 并发不会丢消息；A 生成 B 提交、A 中途崩溃恢复、过期生成提交均可判定且不重复写入。
+- **同步范围**：ContextStore/ContextManager API、DB provider、serv/UI 调用、AI context skill。
+
+### AI-02 · P1 · 让知识重建具备版本发布和清理语义
+
+- [ ] 待修正（源码确认；范围：ai）。
+- **位置**：[packages/ai/src/knowledge/ai-knowledge-functions.ts:183](../packages/ai/src/knowledge/ai-knowledge-functions.ts#L183)；[packages/ai/src/knowledge/ai-knowledge-functions.ts:200](../packages/ai/src/knowledge/ai-knowledge-functions.ts#L200)。
+- **证据与影响**：同 documentId 重灌按 chunk 序号 upsert，文档缩短时旧尾部 chunks 未清除；实体/关系跨存储多步写入，中途失败或并发版本没有整体发布边界。
+- **修正内容**：按文档 revision 建立可见版本，完整写入后切换，清理旧 chunks/实体关系；复用现有 store 能力并记录失败补偿，不能仅全删再插造成空窗。
+- **验收标准**：10 chunks 更新成 2 后只检索到新版本；并发更新和向量/SQL 中途失败时读到完整旧版或新版，恢复后无长期孤儿。
+- **同步范围**：knowledge/store/vecdb 契约、文档删除逻辑、RAG README 和 skill。
+
+### AI-03 · P2 · 统一返回 HaiResult 的异常及后台失败处理
+
+- [ ] 待修正（源码确认；范围：ai）。
+- **位置**：[packages/ai/src/context/ai-context-functions.ts:1016](../packages/ai/src/context/ai-context-functions.ts#L1016)；[packages/ai/src/knowledge/ai-knowledge-functions.ts:145](../packages/ai/src/knowledge/ai-knowledge-functions.ts#L145)；[packages/ai/src/context/ai-context-functions.ts:127](../packages/ai/src/context/ai-context-functions.ts#L127)。
+- **证据与影响**：restoreManager 的 store.get、knowledge 的就绪检查处在对应异常转换之外；memory extract 队列只处理 rejected Promise，业务 HaiResult 失败缺少同等处理。
+- **修正内容**：按实际 API 契约补齐异常转换和 success 判断；后台任务提供可观察失败/flush 结果，流式 API 的抛错边界另行保留。
+- **验收标准**：分别注入抛异常和 success:false，公开非流式 HaiResult API 不泄漏业务异常，后台失败不会被 flush 标成全部成功。
+- **同步范围**：AI 错误契约、Store 接口注释、消费示例及故障测试。
+
+### AI-04 · P1 · 限制厂商图片下载的地址和资源消耗
+
+- [ ] 待修正（源码确认；范围：ai）。
+- **位置**：[packages/ai/src/image/providers/ai-image-provider.ts:79](../packages/ai/src/image/providers/ai-image-provider.ts#L79)；[packages/ai/src/image/providers/ai-image-provider.ts:91](../packages/ai/src/image/providers/ai-image-provider.ts#L91)。
+- **证据与影响**：downloadImage 直接 fetch 上游返回 URL 并默认跟随重定向；readImageResponse 完整读入且无大小上限。受控/被攻破的上游可引导服务器访问非预期地址或返回无限大内容。
+- **修正内容**：按信任边界校验协议、目标地址和每跳重定向，阻止不允许的内部地址；有界流式读取、超时/取消、内容类型与必要签名校验。复用已有网络安全能力。
+- **验收标准**：拒绝私网/回环/重定向绕过样本；超限响应提前中止且释放连接；合法厂商临时 URL 正常生成。
+- **同步范围**：image provider 公共辅助函数、相关配置、AI 图片文档与错误码。
+
+### AI-05 · P2 · 使 MySQL store 初始化可并发执行
+
+- [ ] 待修正（源码确认；范围：ai）。
+- **位置**：[packages/ai/src/store/providers/ai-store-provider-db.ts:115](../packages/ai/src/store/providers/ai-store-provider-db.ts#L115)。
+- **证据与影响**：createIndex 先查询 information_schema 再 CREATE INDEX；两个节点同时首次启动可同时判断不存在，后一个创建失败。
+- **修正内容**：使用可靠初始化协调，或对明确的重复对象错误重查结构后接受；不得吞掉其它权限/DDL 错误。
+- **验收标准**：空库同时启动至少两进程均成功且结构相同；真正错误仍失败并释放资源。
+- **同步范围**：AI DB store 初始化说明、MySQL 集成测试和部署 skill。
+
+### STORAGE-01 · P1 · 检查 S3 批量删除的逐项错误并分批
+
+- [ ] 待修正（源码确认；范围：storage）。
+- **位置**：[packages/storage/src/providers/storage-provider-s3.ts:392](../packages/storage/src/providers/storage-provider-s3.ts#L392)。
+- **证据与影响**：DeleteObjects 响应被忽略，HTTP 成功但部分 key 删除失败仍整体 ok；直接提交任意 keys 数量也超过服务端单请求上限的可能。
+- **修正内容**：读取 Errors 并返回失败项/部分成功的明确结果；按上限有界分批，目录删除只在所有必要项完成后成功，重试仅处理可重试失败。
+- **验收标准**：模拟 HTTP 200 + Errors、1001 个 key、权限失败和请求中断；再用真实 S3 兼容环境验证结果，不虚报删除完成。
+- **同步范围**：StorageDelete 结果、serv/api-contract/UI 消费者。依据：[AWS DeleteObjects](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html)。
+
+### STORAGE-02 · P2 · 移除 local provider 的伪签名 URL 成功结果
+
+- [ ] 待修正（源码确认；范围：storage）。
+- **位置**：[packages/storage/src/providers/storage-provider-local.ts:624](../packages/storage/src/providers/storage-provider-local.ts#L624)。
+- **证据与影响**：local 返回 local:// URL，signature 由公开字段散列得到且没有配套验证/访问 handler。文档承认其为伪 URL，但统一 presign 成功契约容易让消费者以为可下载/上传。
+- **修正内容**：没有真实托管签名服务时明确返回不支持；若保留能力则实现具有秘密认证、期限和方法绑定的真实路由，不能把散列当授权。
+- **验收标准**：保留方案能端到端访问并拒绝篡改/过期/错误方法；不支持方案由 UI/调用方清楚处理，无 success 携带不可用 URL。
+- **同步范围**：storage/serv/api-client/UI 上传下载、README/LLMS。
+
+### STORAGE-03 · P2 · 补齐 local list 的真实分页语义
+
+- [ ] 待修正（源码确认；范围：storage）。
+- **位置**：[packages/storage/src/providers/storage-provider-local.ts:579](../packages/storage/src/providers/storage-provider-local.ts#L579)。
+- **证据与影响**：continuationToken 被忽略且无 nextContinuationToken；恰好 maxKeys 条也标 truncated，消费者无法可靠遍历所有文件。
+- **修正内容**：稳定排序和游标分页，目录前缀/delimiter 处理一致；如果明确不支持分页，不能伪装通用分页结果。
+- **验收标准**：0、恰好一页、超过一页、目录混合数据完整遍历无重复/遗漏，最后一页 isTruncated=false。
+- **同步范围**：storage API 与 local 能力矩阵、serv 列表消费者及示例。
+
+### VECDB-01 · P1 · 持久化并正确恢复 LanceDB 集合元数据
+
+- [ ] 待修正（源码确认；范围：vecdb）。
+- **位置**：[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:97](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L97)；[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:440](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L440)。
+- **证据与影响**：dimension/metric 主要驻留本地 Map。重连通过 1 维查询探测已有表，维度不符或空表时跳过；集合级 metric 回落到配置，导致 info/校验/检索语义与创建时不同。
+- **修正内容**：从真实 schema/持久 metadata 恢复维度及集合 metric，不用伪向量探测；多实例读取更新后的 schema，明确本地文件 provider 的部署边界。
+- **验收标准**：创建不同维度/metric 的空表与非空表，重启和第二实例的 info、校验和距离排序一致；本地路径不被宣称为自动共享存储。
+- **同步范围**：LanceDB provider/config、vecdb README、AI knowledge 接入说明。
+
+### VECDB-02 · P1 · 删除 LanceDB 先删后增的 upsert 回退
+
+- [ ] 待修正（源码确认；范围：vecdb）。
+- **位置**：[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:319](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L319)。
+- **证据与影响**：mergeInsert 不存在时先 delete 再 add，第二步失败会丢旧数据，读者也能看到中间空窗。该兼容分支与本次不考虑兼容性要求冲突。
+- **修正内容**：使用当前支持版本的原子 upsert/merge，缺能力时初始化或操作明确失败；删除本地仿造接口的过时兼容分支，采用上游类型。
+- **验收标准**：注入 upsert 失败旧数据仍完整；并发相同 id 有确定最终状态，固定版本安装/构建通过。
+- **同步范围**：vecdb 依赖版本、provider 类型、README 支持范围、AI 写入调用方。
+
+### RELDB-01 · P1 · 禁止操作日志输出原始 SQL 参数
+
+- [ ] 待修正（源码确认；范围：reldb）。
+- **位置**：[packages/reldb/src/providers/reldb-provider-base.ts:76](../packages/reldb/src/providers/reldb-provider-base.ts#L76)。
+- **证据与影响**：操作日志序列化 sql/params；密码、token、OTP、个人资料等 SQL 参数会进入字符串日志，下游按字段名脱敏也无法识别已拼好的内容。
+- **修正内容**：默认只记录 SQL 模板、耗时、行数和安全错误分类；需要诊断的参数必须显式白名单并脱敏，不用普通配置开关开启全部敏感参数。
+- **验收标准**：以登录/会话/OTP 写入为例捕获所有日志，测试秘密不能出现；错误路径和慢查询同样满足。
+- **同步范围**：reldb operationLog 配置说明、core sanitizer、audit 和运行诊断 skill。
+
+### RELDB-02 · P2 · 落实 MySQL 连接池配置语义
+
+- [ ] 待修正（源码确认；范围：reldb）。
+- **位置**：[packages/reldb/src/providers/reldb-provider-mysql.ts:384](../packages/reldb/src/providers/reldb-provider-mysql.ts#L384)。
+- **证据与影响**：公共 pool 配置存在 min/idleTimeout/acquireTimeout 等，但 MySQL 创建 pool 主要转发 max，等待策略与其他 provider 不一致。
+- **修正内容**：逐项映射当前驱动真正支持的配置；无对应语义的字段明确拒绝或从该 provider schema 删除，设置可控的等待上限。
+- **验收标准**：占满连接池后等待在配置期限内结束；空闲释放/最小连接语义与文档一致，不支持项不再静默忽略。
+- **同步范围**：reldb-config、HAI_RELDB_* 映射、CLI 配置 catalog、README/skills。
+
+### LIFE-01 · P1 · 统一清理初始化失败时已创建的客户端和连接池
+
+- [ ] 待修正（源码确认；范围：cross）。
+- **位置**：[packages/reldb/src/providers/reldb-provider-postgres.ts:420](../packages/reldb/src/providers/reldb-provider-postgres.ts#L420)；[packages/reldb/src/providers/reldb-provider-mysql.ts:384](../packages/reldb/src/providers/reldb-provider-mysql.ts#L384)；[packages/storage/src/providers/storage-provider-s3.ts:616](../packages/storage/src/providers/storage-provider-s3.ts#L616)；[packages/cache/src/providers/cache-provider-redis.ts:736](../packages/cache/src/providers/cache-provider-redis.ts#L736)。
+- **证据与影响**：连接池/SDK 客户端先创建、随后健康检查可能失败；若 catch 丢引用或外层 init 直接返回，未成功发布的资源缺少 end/destroy/disconnect 清理。
+- **修正内容**：在局部 candidate 成功后才发布到模块状态，失败路径完整清理；close 幂等并在关闭失败时保留可诊断状态，避免失败重试累积连接。
+- **验收标准**：逐个 provider 注入 connect/health-check 失败，验证 pool/客户端被关闭、isInitialized/isConnected 为 false，恢复后可重试，无计时器/连接泄漏。
+- **同步范围**：cache/reldb/storage 生命周期实现、初始化注释、故障恢复示例。
+
+### AUDIT-01 · P1 · 等待审计仓库真正就绪后再宣布初始化成功
+
+- [ ] 待修正（源码确认；范围：audit）。
+- **位置**：[packages/audit/src/audit-main.ts:198](../packages/audit/src/audit-main.ts#L198)；[packages/audit/src/audit-repository-log.ts:166](../packages/audit/src/audit-repository-log.ts#L166)。
+- **证据与影响**：init 构造 BaseReldbCrudRepository 后立即发布 currentRepo/返回成功；基类建表是异步流程，自定义查询也未统一等待 ready。首次查询可能早于建表，建表失败时 isInitialized 仍为 true。
+- **修正内容**：暴露/复用仓库 readiness，init await 成功后发布；所有自定义查询遵守相同前置，失败清理 candidate 并准确返回。
+- **验收标准**：延迟 DDL 时 init 不提前成功；DDL 失败时 isInitialized=false；立即查询和双节点首次启动在三种数据库按约定工作。
+- **同步范围**：audit/reldb readiness 契约、生命周期文档和审计接入示例。
+
+### CLIENT-01 · P1 · 移除与安全规范冲突的 localStorage token 适配器
+
+- [ ] 待修正（按本次要求补强；范围：api-client）。
+- **位置**：[packages/api-client/src/api-client-auth.ts:65](../packages/api-client/src/api-client-auth.ts#L65)。
+- **证据与影响**：公开工厂允许把敏感 token 写入 localStorage，与仓库硬约束直接冲突。默认 httpOnly 路径正确；问题是仍保留并推广另一条不符合规范的入口。
+- **修正内容**：删除该工厂和引用，浏览器采用 httpOnly refresh Cookie + 内存 access token；原生客户端只使用安全 TokenStorage。
+- **验收标准**：全仓含模板/示例不再持久化 token 到 localStorage；浏览器刷新、退出、跨页面重载流程通过。
+- **同步范围**：api-client exports/README、认证 skill、UI/应用/CLI 模板。
+
+### CLIENT-02 · P1 · 使退出或切换账号使在途刷新失效
+
+- [ ] 待修正（源码探针已复现；范围：api-client）。
+- **位置**：[packages/api-client/src/api-client-auth.ts:217](../packages/api-client/src/api-client-auth.ts#L217)。
+- **证据与影响**：refresh 请求在 clear 之前开始、在 clear 之后返回时，仍会写回新 token。探针退出后恢复了 late-access；账号切换期间也可能被旧刷新覆盖。
+- **修正内容**：维护认证代际并取消/丢弃旧代际结果，clear/setTokens 与 refresh 持久化顺序一致；不要只清空 refreshPromise。
+- **验收标准**：refresh→logout→response 后 storage 为空；A refresh→登录 B→A response 后仍为 B，重试不会复活 A。
+- **同步范围**：TokenManager、UI AuthPanel、Capacitor storage、认证流程测试。
+
+### CAP-01 · P1 · 传播安全存储写入/清理失败并允许恢复
+
+- [ ] 待修正（源码确认；范围：capacitor）。
+- **位置**：[packages/capacitor/src/capacitor-token-storage.ts:144](../packages/capacitor/src/capacitor-token-storage.ts#L144)；[packages/capacitor/src/capacitor-token-storage.ts:43](../packages/capacitor/src/capacitor-token-storage.ts#L43)。
+- **证据与影响**：安全存储操作捕获错误后只日志，插件不存在时也可能空返回；调用方不能确认 token 是否保存/删除。首次加载失败缓存为空会妨碍恢复。
+- **修正内容**：按 TokenStorage 的异步契约传播失败，明确无插件时拒绝敏感持久化；清理失败使 UI/认证层可见并清除内存身份，允许后续重新加载插件。
+- **验收标准**：写入/删除失败被调用方识别，退出后不自动复用旧身份；插件恢复后可重试，使用真实 Android/iOS 安全存储完成验收。
+- **同步范围**：Capacitor/api-client 契约、移动应用模板、原生前置文档。
+
+### CAP-02 · P2 · 清理 push 部分注册失败和超时后的监听器
+
+- [ ] 待修正（源码确认；范围：capacitor）。
+- **位置**：[packages/capacitor/src/capacitor-push.ts:78](../packages/capacitor/src/capacitor-push.ts#L78)。
+- **证据与影响**：registerPush 并行 addListener 后统一保存 handles，部分失败或超时早于完成时可能丢失已注册 handle；listenPush 后续监听注册失败也需处理前一个成功 handle。
+- **修正内容**：逐项记录成功 handle，失败/超时/取消/关闭统一回收；迟到的注册完成也立即清理，返回 cleanup 幂等。
+- **验收标准**：控制各 addListener 的成功/失败/迟到时序，结束后活跃监听数为零；真实设备反复注册不重复回调。
+- **同步范围**：push 生命周期、Capacitor 关闭流程与移动模板。
+
+### PIPE-01 · P2 · 修正分块上限、overlap 和计量单位
+
+- [ ] 待修正（源码探针已复现；范围：datapipe）。
+- **位置**：[packages/datapipe/src/datapipe-chunk.ts:216](../packages/datapipe/src/datapipe-chunk.ts#L216)。
+- **证据与影响**：sentence/paragraph 拼接 overlap 后未计入 maxSize，探针 maxSize=6 得到长度 9；超长段落切割忽略 overlap。word 模式还需统一按词切分与按字符预算的定义。
+- **修正内容**：明确每种模式的计量单位，先预留 overlap/分隔符预算，长段切片步长正确；markdown 路径复用同一边界能力。
+- **验收标准**：短段/超长段/中英文/多字节/空白/markdown 覆盖最大长度、相邻重叠和全文内容保持；避免只测块数量。
+- **同步范围**：datapipe-config/types、AI knowledge 调用、README 和 RAG skill。
+
+### UI-01 · P2 · 修正浏览器语言候选列表提前回退
+
+- [ ] 待修正（源码确认；范围：ui）。
+- **位置**：[packages/ui/src/lib/i18n.svelte.ts:44](../packages/ui/src/lib/i18n.svelte.ts#L44)。
+- **证据与影响**：每个候选先回退到 DEFAULT_LOCALE，再检查是否支持，首个不支持语言就可能提前返回默认值，忽略后续 navigator.languages 的有效语言。
+- **修正内容**：候选匹配只返回实际命中项，遍历结束后才执行默认回退；尊重传入 supportedLocales/defaultLocale。
+- **验收标准**：fr-FR 后接 en-US 应选择 en-US；全部不支持、区域回退、自定义支持列表和 SSR 无 navigator 均正确。
+- **同步范围**：UI i18n 注释/示例、各应用 locale 初始化。
+
+### CONTRACT-01 · P2 · 统一 storage API 的输入限制与能力声明
+
+- [ ] 待修正（按本次要求补强；范围：api-contract）。
+- **位置**：[packages/api-contract/src/storage/storage-schemas.ts:60](../packages/api-contract/src/storage/storage-schemas.ts#L60)；[packages/api-contract/src/storage/storage-schemas.ts:65](../packages/api-contract/src/storage/storage-schemas.ts#L65)；[packages/serv/src/features/serv-feature-storage.ts:26](../packages/serv/src/features/serv-feature-storage.ts#L26)。
+- **证据与影响**：公开 key schema 只有非空约束，而 serv 另有长度和路径规则；批量删除 keys 无总量上限。客户端契约与服务端边界分散，超出 provider 上限的处理需配合 STORAGE-01 明确。
+- **修正内容**：复用可跨端的 key/批量输入约束，服务端继续执行资源授权和防逃逸；建立 storage→API→serv→client 的能力映射，明确哪些仅 Node 端支持。不要把 file.put 的选项误当 presign 已支持。
+- **验收标准**：超长 key、非法路径、过大批量在约定边界失败；允许的批量有界完成。文档不再把仅 Node 的流式/checksum 能力描述成已有 HTTP 端点。
+- **同步范围**：storage/api-contract/serv/api-client/UI、上传组件文档和模板。
+
+### CLI-01 · P2 · 按项目架构生成可实际消费的代码
+
+- [ ] 待修正（源码确认；范围：cli）。
+- **位置**：[packages/cli/src/commands/cli-generate.ts:19](../packages/cli/src/commands/cli-generate.ts#L19)；[packages/cli/src/commands/cli-generate.ts:60](../packages/cli/src/commands/cli-generate.ts#L60)。
+- **证据与影响**：page/api 默认固定到 SvelteKit src/routes，project 检测只用于警告和名称；在本仓库支持的 serv/Vite/fullstack 项目中可能生成不被路由消费的文件。
+- **修正内容**：识别项目和目标 workspace，按现有架构生成 contract/procedure 或 SvelteKit 文件；未支持组合明确拒绝，不额外创建平行架构。
+- **验收标准**：生成后真实启动并访问新路由；至少覆盖 SvelteKit、serv API、fullstack 多 workspace，路径/覆盖保护保持有效。
+- **同步范围**：CLI help/README、generate 模板与 skills，执行 scaffold gates。
+
+### CLI-02 · P2 · 把生成器硬编码用户文本接入 i18n
+
+- [ ] 待修正（源码确认；范围：cli）。
+- **位置**：[packages/cli/src/commands/cli-generate.ts:25](../packages/cli/src/commands/cli-generate.ts#L25)；[packages/cli/src/commands/cli-generate.ts:139](../packages/cli/src/commands/cli-generate.ts#L139)。
+- **证据与影响**：描述、提示、spinner 成功/失败消息和错误仍有直接中文文本，绕过现有 cliM，英语环境不能完整切换。
+- **修正内容**：复用现有 locale 消息并同步所有已有语言；代码注释中文、日志英文，生成给用户的文本按既有 locale 合同处理。
+- **验收标准**：中英文交互和非交互成功/失败分支无未翻译提示；不手改生成的 Paraglide 文件。
+- **同步范围**：CLI messages、help 截例、README 与生成器文档。
+
+### DEPLOY-01 · P2 · 让部署锁在异常退出后可安全恢复
+
+- [ ] 待修正（源码确认；范围：deploy）。
+- **位置**：[packages/deploy/src/container/deploy-scripts.ts:136](../packages/deploy/src/container/deploy-scripts.ts#L136)。
+- **证据与影响**：部署脚本采用 mkdir 锁加 trap 删除；SIGKILL/主机重启不会执行 trap，遗留目录使后续部署永久拒绝，单凭目录也不能可靠判断活跃 owner。
+- **修正内容**：使用远端进程级锁或具备 owner/启动代际和安全失效判定的锁协议；保留并发部署互斥，不无条件删除旧目录。
+- **验收标准**：并发部署只允许一个；强杀/重启后可恢复；活跃长部署的锁不被另一个进程误删。
+- **同步范围**：Docker-SSH 脚本、回滚说明、deploy README/skill。
+
+### DEPLOY-02 · P2 · 限制命令输出并准确结束超时执行
+
+- [ ] 待修正（源码确认；范围：deploy）。
+- **位置**：[packages/deploy/src/container/deploy-command.ts:67](../packages/deploy/src/container/deploy-command.ts#L67)。
+- **证据与影响**：stdout/stderr 在内存持续累积，超时触发 kill 后需要区分子进程真正退出与仍在清理；SSH 断开也不能据此宣称远端部署已停止。
+- **修正内容**：设置有界输出/落盘策略，明确进程树终止和关闭等待；远端执行记录状态，超时返回结果包含是否已确认终止。
+- **验收标准**：大输出峰值有上限，超时无本地孤儿子进程；远端继续运行/已停止两种情况报告准确，可继续核对和恢复。
+- **同步范围**：runCommand 类型、deploy/CLI 状态显示、日志和故障恢复文档。
+
+### DEPLOY-03 · P1 · 避免跨数据块秘密绕过流式脱敏
+
+- [ ] 待修正（源码确认；范围：deploy）。
+- **位置**：[packages/deploy/src/container/deploy-command.ts:22](../packages/deploy/src/container/deploy-command.ts#L22)。
+- **证据与影响**：流式 onOutput 按 chunk 脱敏，秘密被拆成两个数据块时各块都不含完整匹配；下游拼接显示可能泄漏完整秘密。
+- **修正内容**：对敏感值匹配保留必要跨块尾部或使用安全的流式日志分帧；定义返回 stdout/stderr 与回调的相同保密边界。
+- **验收标准**：每个可能切分点拆分测试秘密，回调/异常/最终结果均不泄漏；正常输出顺序完整且内存有界。
+- **同步范围**：deploy-command、CLI 进度展示、core 脱敏辅助与日志规范。
+
+### STYLE-01 · P2 · 统一公开入口和内部导出规则
+
+- [ ] 待修正（按本次要求补强；范围：cross）。
+- **位置**：[.agents/instructions/module-conventions.md:9](../.agents/instructions/module-conventions.md#L9)；[packages/kit/src/index.ts:13](../packages/kit/src/index.ts#L13)；[packages/cache/src/cache-types.ts:398](../packages/cache/src/cache-types.ts#L398)；[packages/storage/src/storage-types.ts:424](../packages/storage/src/storage-types.ts#L424)；[packages/payment/src/payment-types.ts:150](../packages/payment/src/payment-types.ts#L150)。
+- **证据与影响**：规范中的 barrel 导出要求与 kit 显式导出、UI Svelte 默认组件导出存在不同实践；多个内部 Provider 类型放在公共 types 并随入口暴露。不能为形式统一把所有内部函数公开。
+- **修正内容**：明确包入口/子路径/内部文件三层规则，给 Svelte 和 client/server 隔离保留必要例外；内部 Provider 类型迁回真实实现边界，删除无消费者的公开符号和纯转发层。
+- **验收标准**：逐包生成 package.json.exports 可达 API 表；浏览器入口不带服务端依赖，导入冒烟通过；规则与源码一致且无新增私有类型泄漏。
+- **同步范围**：全部 21 包 index/exports、module-conventions、LLMS、模块开发/审查 skills 与 CLI 模板。
+
+### STYLE-02 · P2 · 统一文件命名并删除重复/过时实现
+
+- [ ] 待修正（按本次要求补强；范围：cross）。
+- **位置**：[packages/payment/src/providers/wechat/wechat-pay-provider.ts:5](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L5)；[packages/scheduler/src/repositories/scheduler-log-repository.ts:5](../packages/scheduler/src/repositories/scheduler-log-repository.ts#L5)；[packages/iam/src/session/iam-session-repository-cache.ts:9](../packages/iam/src/session/iam-session-repository-cache.ts#L9)；[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:33](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L33)。
+- **证据与影响**：wechat-pay、scheduler-*-repository、iam-*-repository-* 等命名顺序不同；LanceDB 本地仿造接口与兼容回退、多个 URL sanitizer 是已定位的精简入口。
+- **修正内容**：建立模块前缀/职责后缀规则并保留框架固定文件名例外；统一 repository/provider 命名。先查全仓消费者，再删除无用 export、deprecated API、重复包装，不为拆文件新增抽象。
+- **验收标准**：大小写敏感环境构建/导入通过，package exports 和模板引用无旧路径；删掉的分支有来源/无使用证据，保留行为回归通过。
+- **同步范围**：全部模块命名清单、tsconfig/package exports、README/skills 链接和测试。
+
+### DOC-01 · P2 · 按实现重建配置、环境变量及文档对应表
+
+- [ ] 待修正（按本次要求补强；范围：cross）。
+- **位置**：[scripts/generate-env-catalog.mjs:1](../scripts/generate-env-catalog.mjs#L1)；[scripts/generate-app-env.mjs:1](../scripts/generate-app-env.mjs#L1)；[LLMS.txt:1](../LLMS.txt#L1)；[packages/cli/src/commands/cli-config-catalog.json:1](../packages/cli/src/commands/cli-config-catalog.json#L1)。
+- **证据与影响**：现有 check:env/check:skills 通过，不能发现 Cluster password 未转发、MySQL pool 参数未消费、transport 共享存储承诺错误或 unsupported 能力伪成功等语义漂移。
+- **修正内容**：逐包列出 schema→默认值/单位→初始化消费→环境变量→CLI 生成→README/skill 的映射；修正本报告所有对应条目，删除无消费配置和过时示例，核验三语言一致。
+- **验收标准**：每个声明的配置至少有真实消费点；示例可编译并能执行到所述行为；CLI 生成应用与仓库配置一致；check:env/check:skills 和相关 scaffold gates 通过。
+- **同步范围**：根/模块 README、LLMS、.agents/skills、packages/cli/templates/skills、.env 示例、配置文件和源码注释。
+
+### DIST-01 · P1 · 明确所有生产共享状态及 provider 部署能力
+
+- [ ] 待修正（按本次要求补强；范围：cross）。
+- **位置**：[.agents/instructions/workspace.md:30](../.agents/instructions/workspace.md#L30)；[packages/ai/src/context/ai-context-functions.ts:154](../packages/ai/src/context/ai-context-functions.ts#L154)；[packages/kit/src/middleware/kit-ratelimit.ts:176](../packages/kit/src/middleware/kit-ratelimit.ts#L176)。
+- **证据与影响**：不能仅凭接入 Redis/DB 声称支持分布式。本报告已定位会话、传输密钥、限流、队列、任务领取、context 和集合元数据的不同状态问题；测试替身、不可变配置和连接池无需远程化。
+- **修正内容**：为所有模块记录状态所有者、持久化位置、并发控制、失效策略、幂等键和故障恢复。补验 AI A2A 默认 event bus 下的跨节点订阅/取消与任务续接，任务入 DB 不等于执行中状态可迁移。生产配置拒绝将 memory、本地文件/SQLite/LanceDB 单节点能力误当跨主机共享保障；允许明确的单机开发/测试模式。
+- **验收标准**：两独立进程且无粘性路由完成下文分布式验收矩阵；涵盖 Redis Cluster、DB 断连、节点重启和延迟恢复；逐能力写明一致性保证与限制。
+- **同步范围**：21 包能力表、应用启动校验、CLI 生产配置、部署文档及全部相关 skills。
+
+## JSDoc 任务（21 项）
+
+以下每项独立跟踪。补齐位置与声明名见附件；已有 @example 仍需人工核验有效性，不能只统计标签。所有 export 函数、关键算法/授权/并发/事务逻辑，以及 type/interface（含内部类型）应有中文规范 JSDoc 和有意义的示例。属性需说明单位、可选含义、默认值、约束；函数说明参数、返回值、失败/抛错边界和生命周期。简单内部结构可以共享邻近完整示例，但必须明确关联，不能批量填充无意义占位示例。
+
+- [ ] **JSDOC-01 / ai / P2**：核对 422 个 TS 顶层导出声明，修正 0 个无 JSDoc、372 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-02 / api-client / P2**：核对 20 个 TS 顶层导出声明，修正 0 个无 JSDoc、14 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-03 / api-contract / P2**：核对 145 个 TS 顶层导出声明，修正 49 个无 JSDoc、141 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-04 / audit / P2**：核对 16 个 TS 顶层导出声明，修正 1 个无 JSDoc、11 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-05 / cache / P2**：核对 28 个 TS 顶层导出声明，修正 1 个无 JSDoc、20 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-06 / capacitor / P2**：核对 31 个 TS 顶层导出声明，修正 1 个无 JSDoc、18 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-07 / cli / P2**：核对 75 个 TS 顶层导出声明，修正 7 个无 JSDoc、63 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-08 / core / P2**：核对 85 个 TS 顶层导出声明，修正 21 个无 JSDoc、47 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-09 / crypto / P2**：核对 48 个 TS 顶层导出声明，修正 1 个无 JSDoc、44 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-10 / datapipe / P2**：核对 23 个 TS 顶层导出声明，修正 0 个无 JSDoc、14 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-11 / deploy / P2**：核对 75 个 TS 顶层导出声明，修正 1 个无 JSDoc、55 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-12 / iam / P2**：核对 151 个 TS 顶层导出声明，修正 9 个无 JSDoc、150 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-13 / kit / P2**：核对 151 个 TS 顶层导出声明，修正 3 个无 JSDoc、91 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-14 / payment / P2**：核对 50 个 TS 顶层导出声明，修正 8 个无 JSDoc、47 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-15 / reach / P2**：核对 51 个 TS 顶层导出声明，修正 1 个无 JSDoc、42 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-16 / reldb / P2**：核对 84 个 TS 顶层导出声明，修正 4 个无 JSDoc、57 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-17 / scheduler / P2**：核对 71 个 TS 顶层导出声明，修正 38 个无 JSDoc、67 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-18 / serv / P2**：核对 106 个 TS 顶层导出声明，修正 3 个无 JSDoc、98 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-19 / storage / P2**：核对 49 个 TS 顶层导出声明，修正 5 个无 JSDoc、38 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-20 / ui / P2**：核对 297 个 TS 顶层导出声明，修正 63 个无 JSDoc、284 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+- [ ] **JSDOC-21 / vecdb / P2**：核对 35 个 TS 顶层导出声明，修正 3 个无 JSDoc、26 个无 @example 的声明；同时覆盖附件中的内部结构体、Svelte API 和关键逻辑。验收：示例使用真实入口、可类型检查，HaiResult 先判断 success，生命周期按实际类型处理；废弃/无消费的 export 先删除再统计。
+
+## 分布式验收矩阵
+
+| 状态/操作 | 必须验证的场景 | 对应任务 |
+| --- | --- | --- |
+| Redis 原子操作和锁 | 不同进程/slot、旧 owner 恢复、TTL、scan/keyPrefix、错误鉴权 | CACHE-01～04、DIST-01 |
+| 登录/刷新/退出/权限同步 | 同 token 双刷新、注销后迟到写、access 过期刷新、单设备并发、缓存短暂故障 | IAM-01～06、CLIENT-02 |
+| 传输协议 | A 协商 B 解密、重启/轮换、篡改、重放、chunked 超限与缺头 | CRYPTO-01/02、SERV-03/04 |
+| 限流/调度 | 两进程共享计数、跨周期长任务、cron+manual、暂停接管 | KIT-01、SCHED-01 |
+| 通知/支付 | 入队失败、领取后崩溃、慢 provider、毒消息、回调重复乱序、退款响应丢失重试 | REACH-01～04、PAY-01～06 |
+| AI 状态/知识 | 同 scope 并发、跨节点 commit、不同文档版本发布、中断恢复、MySQL 同时初始化 | AI-01～05 |
+| 存储/数据库 | 部分删除失败、多页遍历、连接失败清理、DB ready、集合重启元信息 | STORAGE、VECDB、RELDB、AUDIT、LIFE-01 |
+| 请求级语言 | 两个 locale 请求交错 SSR，不修改进程共享默认值 | CORE-02、UI-01 |
+
+本地磁盘、SQLite、LanceDB、console reach 等开发/单机 provider 不必伪装成跨主机服务；其限制必须进入生产配置校验和能力说明。对邮件等不支持幂等的外部系统不能承诺绝对 exactly-once，应提供至少一次投递、去重能力或可核对的补偿边界。
+
+## 已执行检查及证据边界
+
+| 检查 | 结果 | 范围 |
+| --- | --- | --- |
+| `pnpm.cmd exec turbo run typecheck --continue=dependencies-successful --force` | 通过，62.1 秒 | Turbo 汇总 49/49，实际重新执行，包含依赖构建 |
+| `pnpm.cmd check:skills` | 通过，1.9 秒 | 现有 skill 合同与本地引用检查 |
+| `pnpm.cmd exec turbo run lint --continue=dependencies-successful --force` | 通过，97.9 秒 | 按根 lint 的 Turbo 部分单独调度 |
+| `pnpm.cmd check:env` | 通过，8.5 秒 | 环境变量 catalog/引用静态检查 |
+| 原始源码探针 | 12 个场景复现问题 | 对应 11 个任务，见下表；没有发起真实支付/短信等操作 |
+
+根 lint 的 skill 前置与 Turbo lint 分开记录；没有声称额外执行过完整根 build/test/E2E。typecheck 引发的依赖构建不替代完整发布构建。门禁通过只能证明其覆盖的静态规则，不能排除本清单中的行为问题。
+
+| 探针 | 实际结果 | 任务 |
+| --- | --- | --- |
+| 共享 get/set 限流，max=1，并发 10 | 全部 10 个请求通过，最终 count=1 | KIT-01 |
+| session expiresAt 补丁 | 请求 200000，结果仍 100000 | IAM-03 |
+| 同 refresh token 并发 | 两次 success，产生两套不同 access token | IAM-01 |
+| 退出与会话更新交错 | 删除后会话被迟到 SET 恢复 | IAM-02 |
+| clear 与客户端 refresh 交错 | clear 后写回 late-access | CLIENT-02 |
+| maxSize=6、overlap=2 | 生成长度 9 的块 | PIPE-01 |
+| 长段 overlap=2 | 块直接连续切割，没有重叠 | PIPE-01 |
+| 签名正确的 Stripe completed+unpaid | 返回 paid | PAY-01 |
+| URL 中 token/apiKey | query 测试值未脱敏 | CORE-01 |
+| SM4 IV 修改 | amount 10000→90000，解密 success | CRYPTO-02 |
+| POST 有 body，无 Content-Type/Length | 未解密即进入业务 next | SERV-03 |
+| 支付宝 HTTP 200 + code=40004 | createOrder 返回 success | PAY-04 |
+
+复现脚本、结构化结果与原始门禁日志保存在本地被忽略的 `tmp/module-audit-20261022/`，不提交验收产物。探针使用源文件即时转译，缓存/网络/时序依赖为替身，不能替代真实 Redis Cluster、PostgreSQL/MySQL、S3、支付平台、原生设备及跨主机测试。
+
+未运行完整 test/build/E2E/scaffold-gates：本次只生成审查任务，没有运行时代码修复；真实 provider、容器、发布安装及原生流程留作相应修正任务的关闭门槛。新增两份 Markdown 的定向 ESLint 检查被仓库 `**/docs/**/*.md` 规则忽略（2 个 warning），不记为通过。独立校验已验证 605 个本地链接、1920 处声明行号及 86 个唯一任务编号；另执行 Git whitespace 检查。
+
+## 全部修正完成的交付门槛
+
+- 所有任务具备修复 commit/文件位置、行为测试和同步文档证据；要求不适用时记录源码依据，不直接删除问题。
+- 按工作规范先收集门禁结果、归并根因、集中修复，再跑失败与受影响项：`pnpm.cmd typecheck` → `pnpm.cmd lint` → `pnpm.cmd build` → `pnpm.cmd test`，优先按包，跨包最终提升根门禁。
+- 公共 API/模板变更执行 `pnpm.cmd --filter @h-ai/cli test:scaffold-gates`；UI/路由改动补真实浏览器 E2E。
+- `pnpm.cmd check:skills`、`pnpm.cmd check:env`、JSDoc 示例类型检查、公开导出面和所有本地文档链接通过。
+- 真实分布式及 provider 测试单独列结果；不可用前置记录阻塞，禁止用旧产物、fixture 或单进程测试补成通过。

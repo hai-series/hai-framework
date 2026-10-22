@@ -158,7 +158,7 @@ const level = core.logger.getLevel() // 'debug'
 
 浏览器仍输出到 DevTools console：`pretty` 使用可读消息与上下文，`json` 输出包含 `level` / `msg` 的 JSON 字符串。默认凭据脱敏与配置的字段路径脱敏同时生效，支持嵌套点/括号路径和 `*`；消息文本本身需调用方脱敏。
 
-`core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段只会掩码 URL 中内嵌的用户名和密码；邮箱、手机号默认不会被遮盖。
+`core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段会掩码 URL 中的用户名、密码和敏感查询参数（含 OAuth 键值 fragment）；非法 URL 返回固定占位符；邮箱、手机号默认不会被遮盖。
 
 ##### 日志级别规范
 
@@ -197,7 +197,7 @@ core.i18n.DEFAULT_LOCALE // 'zh-CN'
 
 #### 脱敏工具
 
-`core.sanitize.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理密码、token、secret、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证。模块也可自定义 matcher。
+`core.sanitize.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理密码、token、secret、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证、敏感查询参数和 OAuth 键值 fragment。`core.sanitize.sanitizeUrl(url, options)` 可单独处理 URL，非法 URL 返回 `(invalid url)`；自定义 matcher 同样适用于参数名。
 
 ```typescript
 core.sanitize.sanitizeSensitiveFields({

@@ -21,23 +21,6 @@ import {
 
 const logger = core.logger.child({ module: 'cache', scope: 'redis' })
 
-/**
- * 剥离 URL 中的认证信息，避免密码泄露到日志
- */
-function sanitizeRedisUrl(url: string): string {
-  try {
-    const u = new URL(url)
-    if (u.password)
-      u.password = '***'
-    if (u.username)
-      u.username = '***'
-    return u.toString()
-  }
-  catch {
-    return '(invalid url)'
-  }
-}
-
 // ─── Lua 脚本常量（分布式锁） ───
 
 /** Lua 脚本：仅当 owner 匹配时才删除锁（原子操作，防止误释放） */
@@ -735,7 +718,7 @@ export function createRedisProvider(): CacheProvider {
         await client.connect()
         await client.ping()
 
-        const address = config.url ? sanitizeRedisUrl(config.url) : `${config.host}:${config.port}`
+        const address = config.url ? core.sanitize.sanitizeUrl(config.url) : `${config.host}:${config.port}`
         logger.info('Redis connected', { address })
 
         return ok(undefined)

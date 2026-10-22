@@ -158,7 +158,7 @@ const level = core.logger.getLevel() // 'debug'
 
 ブラウザーでは引き続き DevTools console に出力します。`pretty` は読みやすいメッセージと context、`json` は `level` / `msg` を含む JSON 文字列です。既定の認証情報マスキングと設定したパスのマスキングを併用し、ネストしたドット・括弧パスと `*` に対応します。メッセージ本文の機密情報は呼び出し側で除去してください。
 
-`core.logger` は既定でログの機密情報をマスクします。`password`、`token`、`secret`、`privateKey`、`apiV3Key` などは `[REDACTED]` に置換されます。`url` / `baseUrl` / `endpoint` は URL 内のユーザー名・パスワードのみをマスクします。メールアドレス・電話番号は既定では隠しません。
+`core.logger` は既定でログの機密情報をマスクします。`password`、`token`、`secret`、`privateKey`、`apiV3Key` などは `[REDACTED]` に置換されます。`url` / `baseUrl` / `endpoint` は URL 内のユーザー名・パスワード、機密クエリ値、OAuth 形式の fragment をマスクします。不正な URL は固定値を返します。メールアドレス・電話番号は既定では隠しません。
 
 ##### ログレベルの規約
 
@@ -197,7 +197,7 @@ core.i18n.DEFAULT_LOCALE // 'zh-CN'
 
 #### 機密情報のマスク
 
-`core.sanitize.sanitizeSensitiveFields()` はオブジェクト・配列内の機密情報を再帰的にマスクします。既定では password、token、secret、privateKey、apiV3Key などを処理し、`url` / `baseUrl` / `endpoint` の認証情報もマスクします。独自の matcher も指定できます。
+`core.sanitize.sanitizeSensitiveFields()` はオブジェクト・配列内の機密情報を再帰的にマスクします。既定では password、token、secret、privateKey、apiV3Key などを処理し、`url` / `baseUrl` / `endpoint` の認証情報もマスクします。`core.sanitize.sanitizeUrl(url, options)` は単独の URL にも使用でき、不正な URL は `(invalid url)` を返します。独自の matcher はクエリ名にも適用されます。
 
 ```typescript
 core.sanitize.sanitizeSensitiveFields({

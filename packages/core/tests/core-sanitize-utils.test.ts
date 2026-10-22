@@ -8,6 +8,19 @@ import { describe, expect, it } from 'vitest'
 import { core } from '../src/index.js'
 
 describe('core.sanitize', () => {
+  it('uRL 参数按解码名称脱敏并保留重复项和普通参数', () => {
+    const value = core.sanitize.sanitizeUrl('https://u:p@example.com/a?to%6ben=one&token=two&apiKey=three&limit=10#access_token=four&state=ok')
+    expect(value).toBe('https://[REDACTED]:[REDACTED]@example.com/a?token=[REDACTED]&token=[REDACTED]&apiKey=[REDACTED]&limit=10#access_token=[REDACTED]&state=ok')
+    expect(core.sanitize.sanitizeSensitiveFields({ endpoint: 'https://example.com/?API_KEY=value' }).endpoint)
+      .toBe('https://example.com/?API_KEY=[REDACTED]')
+  })
+
+  it('uRL 自定义 matcher 与对象一致，非法地址不回显原值', () => {
+    expect(core.sanitize.sanitizeUrl('https://example.com/?mail=a&limit=10#section', { matcher: ['mail'], replacement: '***' }))
+      .toBe('https://example.com/?mail=***&limit=10#section')
+    expect(core.sanitize.sanitizeUrl('https://user:secret@[')).toBe('(invalid url)')
+  })
+
   it('sanitizeSensitiveFields 默认仅脱敏凭证类字段', () => {
     const input = {
       email: 'test@example.com',

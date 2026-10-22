@@ -158,7 +158,7 @@ After `core.init()` loads `_core.yml.logging`, or after `configure` / `setLevel`
 
 Browser logs still use the DevTools console: `pretty` prints readable messages with context, while `json` prints a JSON string containing `level` / `msg`. Default credential masking and configured path redaction both apply, including nested dot/bracket paths and `*`. Callers remain responsible for redacting message text.
 
-`core.logger` redacts log context by default: credentials such as `password`, `token`, `secret`, `privateKey`, and `apiV3Key` become `[REDACTED]`. Fields such as `url` / `baseUrl` / `endpoint` mask only embedded usernames/passwords. Email addresses and phone numbers are not masked by default.
+`core.logger` redacts log context by default: credentials such as `password`, `token`, `secret`, `privateKey`, and `apiV3Key` become `[REDACTED]`. Fields such as `url` / `baseUrl` / `endpoint` mask embedded usernames/passwords, sensitive query parameters, and OAuth key/value fragments; malformed URLs return a fixed placeholder. Email addresses and phone numbers are not masked by default.
 
 ##### Log level conventions
 
@@ -197,7 +197,7 @@ core.i18n.DEFAULT_LOCALE // 'zh-CN'
 
 #### Redaction utilities
 
-`core.sanitize.sanitizeSensitiveFields()` recursively redacts objects and arrays. By default it handles password, token, secret, privateKey, apiV3Key, and similar credentials, and masks embedded credentials in `url` / `baseUrl` / `endpoint`. Modules can supply custom matchers.
+`core.sanitize.sanitizeSensitiveFields()` recursively redacts objects and arrays. By default it handles password, token, secret, privateKey, apiV3Key, and similar credentials, and masks embedded credentials in `url` / `baseUrl` / `endpoint`. `core.sanitize.sanitizeUrl(url, options)` also handles individual URLs and returns `(invalid url)` for malformed input. Custom matchers apply to parameter names as well.
 
 ```typescript
 core.sanitize.sanitizeSensitiveFields({

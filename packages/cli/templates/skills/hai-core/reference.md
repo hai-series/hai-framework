@@ -533,3 +533,12 @@ logger.debug('Data fetched', { count: items.length })
 | context 输出 | pretty 追加 JSON 上下文，json 合并上下文到结构化 JSON 字符串 |
 
 云资源输出格式与部署配置消费见 [hai-deploy](../hai-deploy/SKILL.md)；这里的父节点覆盖规则同样适用。
+
+### URL 日志脱敏
+
+使用 `core.sanitize.sanitizeUrl(url)` 统一处理连接地址；它会遮蔽用户名、密码、敏感 query 参数和 OAuth 键值 fragment。非法地址返回固定占位符。`sanitizeSensitiveFields` 对 URL 类字段使用同一规则；自定义 matcher 同样匹配参数名，不能只遮蔽 userinfo 后记录含 token 的 URL。
+
+```ts
+const safeUrl = core.sanitize.sanitizeUrl("https://example.com/a?token=value&limit=10")
+// https://example.com/a?token=[REDACTED]&limit=10
+```

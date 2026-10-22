@@ -165,7 +165,7 @@ function register(tool: Tool): HaiResult<void> {
 
 | 场景                                        | 脱敏方式                                                                                |
 | ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| URL 类（redis://、postgres://、http:// 等） | `new URL()` 解析后将 `username`/`password` 替换为 `***`，解析失败返回 `'(invalid url)'` |
+| URL 类（redis://、postgres://、http:// 等） | 使用 `core.sanitize.sanitizeUrl()`；遮蔽 userinfo、敏感 query/OAuth fragment，非法地址返回固定占位符 |
 | 配置对象                                    | 剥离或遮蔽 `password`/`token`/`apiKey`/`secret` 字段                                    |
 | 函数命名                                    | `sanitize{Subject}`，放在对应 Provider / functions 文件顶部                             |
 
