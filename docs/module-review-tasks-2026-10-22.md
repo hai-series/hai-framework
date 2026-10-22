@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03，共 82 个，另有 21 个按模块拆分的 JSDoc 任务，共 103 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 51/54（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 52/54（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -921,8 +921,9 @@
 
 ### SERV-06 · P2 · Fetch 适配器遵循 RequestInit 与取消契约
 
-- [ ] 待修正。
-- **位置**：`packages/serv/src/serv-functions.ts` toFetch 与对应公开使用说明。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：标准new Request统一应用method/headers/body/signal并将构造异常按异步fetch契约reject；取消结束等待、传递signal、释放监听和迟到响应流，不承诺撤回副作用或代管已交付流。真实已发布适配器11个红例修正后，15新增与11既有实际HTTP/Request回归共26通过；source及严格测试类型、fresh ESM/DTS、lint、129 JSDoc示例、skills/env/API均通过，同步三语README/CLI技能/LLMS，无依赖或公开签名变动；全量回归按用户要求在全部任务实施后执行。
+- **位置**：`packages/serv/src/adapters/serv-adapter-fetch.ts` toFetch 与对应公开使用说明。
 - **证据与影响**：真实已发布适配器复现 Request(GET /health)+init.method=POST 仍返回GET 200，标准 new Request(input,init) 会使用POST并返回404；现分支直接复用Request，忽略method/headers/body/signal，违反typeof fetch入口契约。
 - **修正内容**：标准Request构造统一应用RequestInit，验证Request复用/已消费body与取消行为；传递取消，不承诺撤销已发生的业务副作用。
 - **验收标准**：实际公开适配器与标准Request行为对照，method/headers/body/signal、预取消/进行中取消、body消费与错误分支有回归；类型、build、JSDoc、文档/skill同步。

@@ -787,3 +787,5 @@ pnpm --filter @h-ai/serv lint
 标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。
 
 声明 JSDoc 的公共例子只从实际根入口或 features 子路径导入，内部 Hono/guard/router/transport 例子标注“模块内部上下文”。框架仓库以 `node scripts/check-module-jsdoc.mjs --package serv` 检查覆盖和真实类型；生成应用按安装版本声明编译。启动工厂可显式抛配置异常，领域 procedure 必须检查 HaiResult；HTTP middleware 与普通 procedure 的状态语义分别处理。监听句柄 close 返回 Promise<void>，并不提供 serv.init/close 或替宿主管理业务模块。默认 AI JSON procedure 不支持 stream。
+
+toFetch 统一使用标准 Request(input, init)：Request 输入也应用 method/headers/body/signal 等覆盖；非法、已消费或锁定正文以 Promise 拒绝。取消在派发前阻止 handler，进行中终止响应等待并传递有效 request.signal；完成/失败/取消均移除 adapter 监听器，丢弃的迟到响应会取消其正文。取消不回滚外部效果，Response 交付后的流由应用自行监听 request.signal 清理。原 Request 可否继续使用其正文遵循标准 Request 的流所有权规则，不承诺重复消费正文。

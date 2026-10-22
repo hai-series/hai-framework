@@ -50,3 +50,5 @@ transport 与 kit/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB�
 标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。
 
 JSDoc 公开例子按实际根入口/features 声明编译；“模块内部上下文”不能照抄为根 API。工厂配置异常、领域 HaiResult 与 HTTP middleware 的状态分别处理；listener.close 仅关闭 HTTP，onClose 为信号关闭回调，业务资源仍由宿主管理。
+
+使用 toFetch 注入时，Request 输入同样应用 RequestInit 覆盖，并按标准构造器拒绝非法/已消费/锁定正文；取消会停止派发或响应等待并传给应用，不回滚副作用。Response 交付后的流由应用监听 request.signal 清理。
