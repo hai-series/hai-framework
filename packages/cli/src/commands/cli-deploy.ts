@@ -21,7 +21,14 @@ import { writeCliError, writeCliMessage } from '../cli-utils.js'
 import { buildCommand } from './cli-build.js'
 import { configureDeployMiddleware, displayDeployValue } from './cli-deploy-middleware.js'
 
-/** deploy 命令选项 */
+/**
+ * deploy 命令选项
+ * 构建与部署分离；bundleOnly 只打包，不表示服务已上线。SSH 中断后的远端状态需按部署 ID 与结果文件核对。
+ * @example 模块内部上下文
+ * ```ts
+ * const options: DeployCommandOptions = { cwd: '/workspace/shop', appDir: 'packages/shop-serv', env: 'prod', yes: true, bundleOnly: true, output: '.hai/shop.tar' }
+ * ```
+ */
 export interface DeployCommandOptions extends GlobalOptions {
   /** 部署环境；省略时必须交互输入。 */
   env?: string
@@ -144,7 +151,15 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
  * 执行部署命令
  *
  * @param options - 部署选项
- * @example `await deployCommand({ env: 'prod', skipMiddleware: true, yes: true })`
+ * 显式加载目标环境、配置中间件并检查 HaiResult；退出时恢复原进程环境并关闭部署模块。
+ * @throws Error - 扫描、配置、构建、打包或部署失败；SSH 本地终止不等于远端部署已停止。
+ * @returns 部署或仅打包流程结束；具体模式见 bundleOnly。
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前工程已构建镜像产物，且有 config/_deploy.yml 与生产公共/私有环境。
+ * await deployCommand({ cwd: process.cwd(), env: 'prod', yes: true, bundleOnly: true, output: '.hai/shop.tar' })
+ * // 等价：hai deploy --env prod --yes --bundle-only --output .hai/shop.tar。
+ * ```
  */
 export async function deployCommand(options: DeployCommandOptions): Promise<void> {
   const spinner = ora()

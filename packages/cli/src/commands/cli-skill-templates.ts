@@ -169,6 +169,16 @@ async function listTemplateSkillNames(templatesDir: string): Promise<string[]> {
   return skillNames.sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ *
+ * @param skillNames - 请求复制的 Skill 目录名。
+ * @param appType - 应用模板类型，用于排除不适用的 Skill。
+ * @returns 移除与应用技术栈明确冲突的 Skill 后的列表。
+ * @example 模块内部上下文
+ * ```ts
+ * const names = resolveCompatibleSkillNames(['hai-ui', 'hai-serv', 'hai-app-tests'], 'api') // 排除与 API 工程冲突的 hai-ui。
+ * ```
+ */
 export function resolveCompatibleSkillNames(
   skillNames: string[],
   appType?: AppType,
@@ -248,7 +258,17 @@ async function copySkill(
   return copiedFiles
 }
 
-/** 写入前解析已有目录/文件链接，所有 AI 输出均限制在当前项目内。 */
+/**
+ * 逐层检查现存祖先的真实路径，拒绝通过符号链接将 Skill 或桥接文件写到工程之外。
+ * @param projectPath - 项目根目录。
+ * @param destination - 本次复制的绝对目标路径。
+ * @returns 路径安全时完成；越界或文件系统错误抛出。
+ * @example 模块内部上下文
+ * ```ts
+ * const destination = path.resolve(process.cwd(), '.agents/skills/hai-ai/SKILL.md')
+ * await assertProjectOutputPath(process.cwd(), destination)
+ * ```
+ */
 async function assertProjectOutputPath(projectPath: string, destination: string): Promise<void> {
   let ancestor = destination
   while (!(await fse.pathExists(ancestor))) {
@@ -352,6 +372,14 @@ async function resolveBridgeSource(
  * @param projectPath - 用户项目根目录
  * @param _features - 预留参数；保留签名兼容 createProject 调用方
  * @param appType - 应用类型（api 类型不复制 UI Skill）
+ * 写入 .agents/skills 与各工具桥接文件；模板目录缺失时返回空数组，文件错误抛出。
+ * @param projectName - 项目名称，用于渲染桥接说明。
+ * @returns 本次复制的 Skill 与桥接文件路径。
+ * @example 模块内部上下文
+ * ```ts
+ * const files = await generateSkillFiles(process.cwd(), ['ai'], 'api', 'shop')
+ * // API 模板复制整个兼容 Skill 目录；features 参数不作为能力裁剪开关。
+ * ```
  */
 export async function generateSkillFiles(
   projectPath: string,
@@ -386,6 +414,14 @@ export async function generateSkillFiles(
  * @param projectPath - 用户项目根目录
  * @param moduleId - 模块标识（如 'db'、'iam'）
  * @returns 复制的文件路径，若模块无对应 Skill 则返回 null
+ * 未映射模块或没有新增文件时返回 null；已有 Skill 与桥接默认不覆盖。
+ * @example 模块内部上下文
+ * ```ts
+ * const files = await generateModuleSkillFile(process.cwd(), 'ai')
+ * if (files) {
+ *   const generatedCount = files.length
+ * }
+ * ```
  */
 export async function generateModuleSkillFile(
   projectPath: string,
@@ -403,6 +439,15 @@ export async function generateModuleSkillFile(
   return copiedFiles.length > 0 ? copiedFiles : null
 }
 
+/**
+ *
+ * @param packageNames - 实际依赖的 @h-ai/* 包名列表。
+ * @returns 工作流与模块 Skill 合并后的去重目录名。
+ * @example 模块内部上下文
+ * ```ts
+ * const names = resolveSkillNamesForPackages(['@h-ai/core', '@h-ai/ai']) // 含工作流 Skill，并去重模块 Skill。
+ * ```
+ */
 export function resolveSkillNamesForPackages(packageNames: string[]): string[] {
   const skillNames = [...WORKFLOW_SKILLS]
 
@@ -416,6 +461,23 @@ export function resolveSkillNamesForPackages(packageNames: string[]): string[] {
   return [...new Set(skillNames)]
 }
 
+/**
+ * 返回本次复制的文件；校验所有输出真实路径位于项目内，拒绝符号链接越界。
+ * @throws Error - 模板读取、输出路径校验或写入失败。
+ * @param projectPath - 允许写入的项目根目录。
+ * @param skillNames - 请求复制的 Skill 目录名。
+ * @param options - Skill/桥接覆盖策略与可选项目身份。
+ * @param options.overwriteSkills - 是否覆盖已有 Skill；默认 true。
+ * @param options.overwriteBridgeFiles - 是否覆盖工具桥接文件；默认 true。
+ * @param options.appType - 明确的应用模板类型；省略时按项目布局检测。
+ * @param options.projectName - 桥接文档中的项目名称；省略时检测 package.json。
+ * @returns 本次复制的 Skill 与桥接文件路径。
+ * @example 模块内部上下文
+ * ```ts
+ * const files = await generateProjectAiSupport(process.cwd(), resolveSkillNamesForPackages(['@h-ai/ai']), { overwriteSkills: false, overwriteBridgeFiles: false })
+ * // 已有内容保留；确定模板类型时补全整个兼容目录。
+ * ```
+ */
 export async function generateProjectAiSupport(
   projectPath: string,
   skillNames: string[],

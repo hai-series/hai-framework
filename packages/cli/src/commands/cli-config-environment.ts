@@ -9,11 +9,9 @@ const catalogByName = new Map(catalog.map(entry => [entry.name, entry]))
 
 /**
  * 单个环境变量的配置位置、示例建议值和取值说明。
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const variable: ConfigEnvironmentVariable = {
- *   name: 'HAI_DB_TYPE', path: 'db.type', value: 'sqlite', constraint: 'sqlite | postgresql | mysql',
- * }
+ * const variable: ConfigEnvironmentVariable = { name: 'HAI_DB_TYPE', path: 'db.type', value: 'sqlite', constraint: 'sqlite | postgresql | mysql' }
  * ```
  */
 export interface ConfigEnvironmentVariable {
@@ -35,9 +33,9 @@ export interface ConfigEnvironmentVariable {
  * @param name - 配置名，不含文件名前导下划线
  * @param content - YAML 内容
  * @returns 含环境变量引用的 YAML
- * @example
+ * @example 模块内部上下文
  * ```ts
- * parameterizeConfig('db', 'type: sqlite\n') // type: ${HAI_DB_TYPE:sqlite}
+ * const yaml = parameterizeConfig('db', 'type: sqlite\n') // type: ${HAI_DB_TYPE:sqlite}
  * ```
  */
 export function parameterizeConfig(name: string, content: string): string {
@@ -87,9 +85,10 @@ export function parameterizeConfig(name: string, content: string): string {
  * @param name - 配置名
  * @param content - 已转换的 YAML
  * @returns 去重后的变量列表（含注释中的可选凭据）
- * @example
+ * @example 模块内部上下文
  * ```ts
- * configEnvironmentVariables('db', 'type: ${HAI_DB_TYPE:sqlite}\n')[0].name // HAI_DB_TYPE
+ * const variables = configEnvironmentVariables('db', 'type: ${HAI_DB_TYPE:sqlite}\n')
+ * const name = variables[0]?.name // HAI_DB_TYPE
  * ```
  */
 export function configEnvironmentVariables(name: string, content: string): ConfigEnvironmentVariable[] {
@@ -181,9 +180,10 @@ function variableConstraint(name: string, value: string): string {
  * 将变量列表序列化为可直接复制的 dotenv 配置及逐项说明。
  * @param variables - 从 YAML 提取的变量
  * @returns dotenv 内容
- * @example
+ * @example 模块内部上下文
  * ```ts
- * renderEnvironment(configEnvironmentVariables('db', parameterizeConfig('db', 'type: sqlite\n')))
+ * const variables = configEnvironmentVariables('db', parameterizeConfig('db', 'type: sqlite\n'))
+ * const dotenv = renderEnvironment(variables)
  * ```
  */
 export function renderEnvironment(variables: ConfigEnvironmentVariable[]): string {
@@ -200,7 +200,10 @@ export function renderEnvironment(variables: ConfigEnvironmentVariable[]): strin
  * 获取模块所有可配置变量的说明；未声明在 YAML 中的字段应先启用对应路径。
  * @param module - 配置名，例如 db
  * @returns 从公开 Schema 生成的变量清单
- * @example moduleEnvironmentVariables('db').find(variable => variable.name === 'HAI_DB_TYPE')
+ * @example 模块内部上下文
+ * ```ts
+ * const variable = moduleEnvironmentVariables('db').find(item => item.name === 'HAI_DB_TYPE')
+ * ```
  */
 export function moduleEnvironmentVariables(module: string): ConfigEnvironmentVariable[] {
   return catalog.filter(entry => entry.module === module)
@@ -210,7 +213,11 @@ export function moduleEnvironmentVariables(module: string): ConfigEnvironmentVar
  * 提取生成源码直接使用的环境入口，复用统一清单中的用途与约束。
  * @param content - 生成后的 Vite、Playwright 或运行时源码
  * @returns 已知入口的去重清单，供环境示例的可选部分使用
- * @example runtimeEnvironmentVariables('const port = process.env.PORT')[0].name // PORT
+ * @example 模块内部上下文
+ * ```ts
+ * const variables = runtimeEnvironmentVariables('const port = process.env.PORT')
+ * const name = variables[0]?.name // PORT（仅提取目录中已知变量）
+ * ```
  */
 export function runtimeEnvironmentVariables(content: string): ConfigEnvironmentVariable[] {
   const variables = new Map<string, ConfigEnvironmentVariable>()

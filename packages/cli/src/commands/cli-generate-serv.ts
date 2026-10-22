@@ -6,7 +6,11 @@ import { cliM } from '../cli-i18n.js'
 
 /**
  * 一批经过预检后统一写入的生成文件。
- * @example `{ path: '/app/src/demo.ts', content: 'export const demo = true' }`
+ * 普通生成文件不携带 previousContent；已有聚合入口必须携带原内容，用于提交前检测并发修改。
+ * @example 模块内部上下文
+ * ```ts
+ * const file: GeneratedFile = { path: path.resolve('src/server/procedures/orders.ts'), content: 'export const orderName = \'orders\'\n' }
+ * ```
  */
 export interface GeneratedFile {
   /** 输出文件的绝对路径。 */
@@ -17,7 +21,18 @@ export interface GeneratedFile {
   previousContent?: string
 }
 
-/** 向模板明确标注的现有入口追加 import/export/对象项；未知结构拒绝改写。 */
+/**
+ * 只在唯一生成标记前插入一项；import 保持组内相对顺序，重复完整行保持原文。
+ * @param source - 现有聚合文件的完整内容。
+ * @param marker - 模板约定的唯一标记。
+ * @param entry - 待插入的完整 import/export 或对象项。
+ * @returns 更新后的完整文件内容；标记重复或缺失时抛错。
+ * @example 模块内部上下文
+ * ```ts
+ * const marker = '// @hai-generator:contracts:entries'
+ * const source = appendAt(`const contracts = {\n${marker}\n}`, marker, '  orders: ordersContract,')
+ * ```
+ */
 function appendAt(source: string, marker: string, entry: string): string {
   if (source.split(marker).length !== 2)
     throw new Error(cliM('cli_generateUnsupportedAggregator'))
@@ -40,7 +55,15 @@ function appendAt(source: string, marker: string, entry: string): string {
  * @param target - 解析后的后端 workspace 与共享 contract 包。
  * @returns 新源码及现有入口的完整修改计划，不在本函数落盘。
  * @throws Error - contract 包不唯一或入口不再具有可识别的生成标记。
- * @example `const files = await generateServApi(context, target)`
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：在 CLI 生成的 fullstack 根执行；后端包为 shop-serv。
+ * const { resolveGenerateTarget } = await import('./cli-generate-target.js')
+ * const { createTemplateContext } = await import('../cli-utils.js')
+ * const target = await resolveGenerateTarget({ cwd: process.cwd(), type: 'api', name: 'orders', workspace: 'shop-serv' })
+ * const files = await generateServApi(createTemplateContext('orders'), target)
+ * // 这里只返回计划；由 generate 统一预检、写入与失败回滚。
+ * ```
  */
 export async function generateServApi(context: TemplateContext, target: GenerateTarget): Promise<GeneratedFile[]> {
   const contracts = target.packages.filter(pkg => pkg.dependencies['@h-ai/api-contract'] && pkg.dependencies.zod && pkg.name in target.target.dependencies)

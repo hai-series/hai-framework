@@ -56,7 +56,12 @@ const GENERATORS: Record<GeneratorType, {
  * @param options - 生成类型、名称、workspace 及覆盖选项。
  * @returns 文件生成并接入已有路由入口后完成。
  * @throws Error | AggregateError - 架构不支持、路径/覆盖冲突，或写入及回滚失败。
- * @example `await generate({ type: 'api', name: 'orders', cwd: '/app', workspace: 'app-serv' })`
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前工程是 CLI 创建的 fullstack，shop-serv 含可识别的聚合标记。
+ * await generate({ cwd: process.cwd(), workspace: 'shop-serv', type: 'api', name: 'orders' })
+ * // 等价：hai g api orders --workspace shop-serv；不支持纯 Vite 文件路由时会拒绝。
+ * ```
  */
 export async function generate(options: GenerateOptions): Promise<void> {
   const spinner = ora()
@@ -174,7 +179,19 @@ function isGeneratorType(value: unknown): value is GeneratorType {
   return typeof value === 'string' && Object.hasOwn(GENERATORS, value)
 }
 
-/** 统一预检、暂存、提交一批源码；失败时回滚本次已提交的文件，避免半套路由。 */
+/**
+ * 先校验全部路径与覆盖条件，再暂存并逐个提交；失败时只回滚仍等于本次内容的文件，保留外部并发修改。
+ * @param files - 生成文件计划；聚合入口必须携带原内容。
+ * @param root - 已解析的真实 workspace 根目录。
+ * @param force - 仅允许覆盖普通生成文件，不绕过聚合入口的原内容检查。
+ * @returns 所有文件提交及临时文件清理完成。
+ * @example 模块内部上下文
+ * ```ts
+ * const root = await fse.realpath(process.cwd())
+ * const file = path.join(root, 'src/lib/models/order-item.ts')
+ * await writeGeneratedFiles([{ path: file, content: 'export interface OrderItem { id: string }\n' }], root, false)
+ * ```
+ */
 async function writeGeneratedFiles(files: GeneratedFile[], root: string, force: boolean): Promise<void> {
   if (new Set(files.map(file => path.resolve(file.path))).size !== files.length)
     throw new Error(cliM('cli_generateUnsupportedAggregator'))

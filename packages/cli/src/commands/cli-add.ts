@@ -18,6 +18,11 @@ import { detectProject } from './cli-create.js'
 
 /**
  * add 命令选项
+ * 省略 module 时交互选择；install=false 只写项目依赖/配置与支持文件，不安装依赖。
+ * @example 模块内部上下文
+ * ```ts
+ * const options: AddModuleOptions = { cwd: '/workspace/shop', module: 'ai', install: false }
+ * ```
  */
 export interface AddModuleOptions extends GlobalOptions {
   /** 要添加的模块 */
@@ -52,6 +57,15 @@ const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKe
 
 /**
  * 增量添加模块到现有项目
+ * 写入失败与安装失败会抛出异常；未检测到项目、未知或已安装模块等分支打印诊断后返回。
+ * @param options - 命令参数；对应命令的工作目录、非交互与可选功能。
+ * @returns 依赖/配置与支持文件处理结束；部分诊断分支打印提示后直接返回。
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前目录是要修改的现有 hai 项目。
+ * await addModule({ cwd: process.cwd(), module: 'ai', install: false })
+ * // 然后自行安装依赖，并在应用启动链路初始化新增模块；此命令不修改业务启动代码。
+ * ```
  */
 export async function addModule(options: AddModuleOptions): Promise<void> {
   const spinner = ora()

@@ -15,6 +15,11 @@ import { configEnvironmentVariables, moduleEnvironmentVariables, parameterizeCon
  * @param moduleKey - 拥有配置 Schema 的模块标识
  * @param configs - 用户自定义配置值
  * @returns YAML 格式的配置内容
+ * @example 模块内部上下文
+ * ```ts
+ * const yaml = generateConfigFile('db', { db: { type: 'postgresql', host: 'db', database: 'shop' } })
+ * // 输出显式 HAI_DB_* 引用；连接密码仍由私有环境注入。
+ * ```
  */
 export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
   return parameterizeConfig(moduleKey, generateLiteralConfigFile(moduleKey, configs))
@@ -518,7 +523,13 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
  * @param features - 选中的功能模块列表
  * @param configs - 用户自定义配置值
  * @param includeDisabled - 是否输出所有模块的完整注释示例（fullstack 使用，未启用模块保留注释）
+ * @param configContents - 按配置名索引的已渲染 YAML，使示例与真实引用一致；省略项使用默认模板。
  * @returns .env.example 文件内容
+ * @example 模块内部上下文
+ * ```ts
+ * const yaml = generateConfigFile('db', { db: { type: 'postgresql', database: 'shop' } })
+ * const example = generateEnvExample(['db'], undefined, false, { db: yaml })
+ * ```
  */
 export function generateEnvExample(features: FeatureId[], configs?: ModuleConfigs, includeDisabled = false, configContents: Record<string, string> = {}): string {
   const keys = new Set(['core', ...(configContents.serv ? ['serv'] : []), ...features.filter(feature => !['crypto', 'api-client', 'capacitor', 'datapipe'].includes(feature))])
@@ -547,7 +558,15 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
 
 /**
  * 为启用模块生成共享生产后端配置；凭据只列出必需入口，由私有环境注入。
- * @example `generateProductionEnvironment(['ai', 'db', 'vecdb'])`
+ * 只返回文本，不连接服务，也不保证私有凭据已提供。
+ * @param features - 本次启用的功能标识。
+ * @param configs - 用户指定的模块配置。
+ * @returns 共享生产后端的 dotenv 文本；凭据仅说明注入入口。
+ * @example 模块内部上下文
+ * ```ts
+ * const dotenv = generateProductionEnvironment(['ai', 'cache', 'storage'], { db: { type: 'mysql', database: 'shop' } })
+ * // AI 补齐 db/vecdb；生成 db/cache/storage/vecdb 服务 DNS，真实凭据另行注入。
+ * ```
  */
 export function generateProductionEnvironment(features: FeatureId[], configs?: ModuleConfigs): string {
   const enabled = new Set(features)

@@ -12,4 +12,14 @@ if (language === 'en' || language === 'c' || language === 'posix')
 else if (language === 'zh')
   core.i18n.setGlobalLocale('zh-CN')
 
+/**
+ * CLI 内部的消息获取器；先选取首个非空环境值，再映射语言。未知语言保持 core 当前 locale；后续显式切换 core locale 仍生效。
+ * @example 模块内部上下文
+ * ```ts
+ * core.i18n.setGlobalLocale('en-US')
+ * const help = cliM('cli_help_create')
+ * // CLI 入口加载前：HAI_CORE_DEFAULTLOCALE=en-US 优先于 LC_ALL=zh_CN.UTF-8。
+ * // 未显式指定时依次读取 LC_ALL、LC_MESSAGES、LANG；en/C/POSIX 映射 en-US，zh 映射 zh-CN。
+ * ```
+ */
 export const cliM = core.i18n.createMessageGetter<keyof typeof zhCN>({ 'en-US': enUS, 'zh-CN': zhCN })

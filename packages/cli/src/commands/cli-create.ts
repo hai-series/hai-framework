@@ -256,6 +256,16 @@ const PROJECT_TEMPLATES = {
 
 /**
  * 创建项目
+ * 按应用类型生成工程并补齐功能硬依赖；--no-install 不安装依赖，--no-git 不初始化仓库。
+ * @throws Error - 选项、目标目录、模板生成、依赖安装或 Git 初始化失败。
+ * @param options - 命令参数；对应命令的工作目录、非交互与可选功能。
+ * @returns 生成及所选安装/Git 步骤完成。
+ * @example 模块内部上下文
+ * ```ts
+ * // 在当前目录创建新的 shop 子目录；目标必须不存在或为空。
+ * await createProject({ cwd: process.cwd(), name: 'shop', appType: 'api', features: ['ai'], packageManager: 'pnpm', yes: true, install: false, git: false, deploy: false })
+ * // 对应 hai create shop --type api --features ai -y --no-install --no-git --no-deploy。
+ * ```
  */
 export async function createProject(options: CreateProjectOptions): Promise<void> {
   const spinner = ora()
@@ -774,7 +784,14 @@ function normalizeFrontendTargets(frontends: FrontendTarget[]): FrontendTarget[]
 // =============================================================================
 
 /**
- * 解析功能依赖（自动补全传递依赖，循环直至收敛）
+ * 迭代展开功能硬依赖直到集合稳定，避免仅处理一层依赖导致初始化缺项；保留输入顺序并去重。
+ * @param features - 调用方选择的功能。
+ * @returns 包含传递硬依赖的功能列表。
+ * @example 模块内部上下文
+ * ```ts
+ * const features = resolveFeatureDependencies(['iam', 'ai'])
+ * const complete = ['db', 'cache', 'crypto', 'vecdb'].every(feature => features.some(selected => selected === feature))
+ * ```
  */
 function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
   const result = new Set(features)
@@ -1054,6 +1071,14 @@ function installDependencies(projectPath: string, pm: 'pnpm' | 'npm' | 'yarn'): 
   }
 }
 
+/**
+ * 同步子命令异常中可读取的诊断字段；输出可能为 Buffer 或字符串，因此先以 unknown 接收并规范化。
+ * @example 模块内部上下文
+ * ```ts
+ * const failure: CommandFailureLike = { status: 1, signal: null, stderr: Buffer.from('Install failed'), stdout: '' }
+ * const details = formatCommandFailure('pnpm install', failure)
+ * ```
+ */
 interface CommandFailureLike {
   stdout?: unknown
   stderr?: unknown
@@ -1440,6 +1465,14 @@ function printCompletionMessage(options: Required<CreateProjectOptions>): void {
 
 /**
  * 检测项目信息
+ * 缺少或无法解析 package.json 时返回 null；isHaiProject 仅表示依赖中含 @h-ai/*，不是业务配置验证。
+ * @param cwd - 项目所在目录。
+ * @returns 解析后的项目信息，文件缺失或解析失败时为 null。
+ * @example 模块内部上下文
+ * ```ts
+ * const project = await detectProject(process.cwd())
+ * if (project && project.isHaiProject) writeCliMessage(project.haiPackages.join(', '))
+ * ```
  */
 export async function detectProject(cwd: string): Promise<ProjectInfo | null> {
   const pkgPath = path.join(cwd, 'package.json')

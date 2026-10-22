@@ -15,6 +15,10 @@ import { detectProject } from './cli-create.js'
 
 /**
  * init 命令选项
+ * @example 模块内部上下文
+ * ```ts
+ * const options: InitOptions = { cwd: '/workspace/shop', force: false } // force=true 会覆盖已有模块 YAML。
+ * ```
  */
 export interface InitOptions extends GlobalOptions {
   /** 强制重新生成配置 */
@@ -42,6 +46,11 @@ const MODULE_CONFIG_MAP: Record<string, { configKey: string, label: string }> = 
 
 /**
  * 校验结果
+ * 项目包声明与配置文件存在性的检查结果；不表示连接可用或配置已通过模块 Schema。
+ * @example 模块内部上下文
+ * ```ts
+ * const validation: ValidationResult = { existing: ['core'], missing: [{ pkg: '@h-ai/reldb', configKey: 'db', label: 'Database' }], project: { name: 'shop', version: '1.0.0', isHaiProject: true, haiPackages: ['@h-ai/core', '@h-ai/reldb'] } }
+ * ```
  */
 interface ValidationResult {
   /** 已存在的配置 */
@@ -83,6 +92,14 @@ async function validateProject(cwd: string): Promise<ValidationResult | null> {
 
 /**
  * 初始化/校验项目配置
+ * force=true 会重新生成已安装模块的配置；文件操作失败抛错，未检测到项目时打印提示并返回。
+ * @param options - 命令参数；对应命令的工作目录、非交互与可选功能。
+ * @returns 缺失配置补齐或 force 模式覆盖完成。
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前目录已有 hai 项目的 package.json。
+ * await initProject({ cwd: process.cwd(), force: false }) // 等价 hai init；只补缺失配置。
+ * ```
  */
 export async function initProject(options: InitOptions): Promise<void> {
   const spinner = ora()

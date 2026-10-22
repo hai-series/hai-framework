@@ -7,7 +7,11 @@ import { cliM } from '../cli-i18n.js'
 
 /**
  * 生成目标与实际 workspace 清单；根目录同时作为跨包输出的安全边界。
- * @example `{ root: '/app', target: { directory: '/app/apps/service', name: 'service', dependencies: {} }, packages: [] }`
+ * @example 模块内部上下文
+ * ```ts
+ * const pkg: GeneratePackage = { directory: path.resolve('apps/shop'), name: 'shop', dependencies: { '@sveltejs/kit': '^2' } }
+ * const target: GenerateTarget = { root: path.resolve('.'), target: pkg, packages: [pkg] }
+ * ```
  */
 export interface GenerateTarget {
   /** 真实工作区根路径。 */
@@ -20,7 +24,11 @@ export interface GenerateTarget {
 
 /**
  * 生成器实际使用的 package.json 字段。
- * @example `{ directory: '/app', name: 'demo', dependencies: { '@sveltejs/kit': '^2' } }`
+ * @example 模块内部上下文
+ * ```ts
+ * const pkg: GeneratePackage = { directory: path.resolve('packages/shop-serv'), name: 'shop-serv', dependencies: { '@h-ai/serv': '*' } }
+ * const architecture = generateArchitecture(pkg) // serv
+ * ```
  */
 export interface GeneratePackage {
   /** 包的绝对真实目录。 */
@@ -31,7 +39,18 @@ export interface GeneratePackage {
   dependencies: Record<string, string>
 }
 
-/** 判断文件是否位于给定根内，包含根本身；不接受兄弟目录前缀。 */
+/**
+ * 以 path.relative 检查真实路径包含关系，拒绝同名前缀的兄弟目录；调用方先解析符号链接。
+ * @param root - 允许输出的真实根目录。
+ * @param file - 已解析的绝对目标或现存祖先目录。
+ * @returns 目标等于根目录或位于根目录内时为 true。
+ * @example 模块内部上下文
+ * ```ts
+ * const root = path.resolve('shop')
+ * const valid = isInside(root, path.join(root, 'src/orders.ts')) // true
+ * const sibling = isInside(root, `${root}-other/orders.ts`) // false
+ * ```
+ */
 function isInside(root: string, file: string): boolean {
   const relative = path.relative(root, file)
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
@@ -64,7 +83,10 @@ async function readPackage(directory: string): Promise<GeneratePackage | undefin
  * 按实际依赖辨认路由能力；纯 Vite 不具备 SvelteKit 的文件路由。
  * @param pkg - 已校验的包清单。
  * @returns 应用实际安装的框架类型。
- * @example `generateArchitecture({ directory: '/app', name: 'app', dependencies: { '@h-ai/serv': '*' } })`
+ * @example 模块内部上下文
+ * ```ts
+ * const architecture = generateArchitecture({ directory: path.resolve('.'), name: 'shop-serv', dependencies: { '@h-ai/serv': '*' } }) // serv
+ * ```
  */
 export function generateArchitecture(pkg: GeneratePackage): 'sveltekit' | 'serv' | 'svelte' | 'other' {
   if (pkg.dependencies['@sveltejs/kit'])
@@ -79,7 +101,12 @@ export function generateArchitecture(pkg: GeneratePackage): 'sveltekit' | 'serv'
  * @param options - 命令选项；workspace 可为包名或根目录内相对路径。
  * @returns 目标包及受信路径边界。
  * @throws Error - 项目类型未知、包不存在、路径越界或存在多个适用包。
- * @example `await resolveGenerateTarget({ type: 'api', name: 'orders', cwd: '/app', workspace: 'app-serv' })`
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前 fullstack 工程中存在 shop-serv 后端包。
+ * const target = await resolveGenerateTarget({ cwd: process.cwd(), type: 'api', name: 'orders', workspace: 'shop-serv' })
+ * const serviceDirectory = target.target.directory
+ * ```
  */
 export async function resolveGenerateTarget(options: GenerateOptions): Promise<GenerateTarget> {
   const cwd = await fse.realpath(path.resolve(options.cwd ?? '.'))

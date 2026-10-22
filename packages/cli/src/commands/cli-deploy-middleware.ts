@@ -8,11 +8,26 @@ import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { moduleEnvironmentVariables } from './cli-config-environment.js'
 
+/**
+ * 部署包的真实运行时命名空间类型，仅供向导依赖注入，不重新仿造部署 API。
+ * @example 模块内部上下文
+ * ```ts
+ * const module: DeployModule = await import('@h-ai/deploy')
+ * const backends = module.DEPLOY_MIDDLEWARE.db
+ * ```
+ */
 type DeployModule = typeof import('@h-ai/deploy')
 
 /**
  * 展示连接配置时保留可核对的后端/地址，隐藏密码、令牌和 URL 认证部分。
- * @example `displayDeployValue('HAI_DB', '{"type":"mysql","password":"secret"}')`
+ * @param name - 配置、模板或生成对象的名称，具体约束见函数用途。
+ * @param value - 待展示的连接值。
+ * @returns 保留连接识别信息且隐藏已识别凭据的显示文本。
+ * @example 模块内部上下文
+ * ```ts
+ * const value = displayDeployValue('HAI_DB', JSON.stringify({ type: 'mysql', password: 'example-only' }))
+ * // password 显示为本地化的隐藏标记，不输出原值。
+ * ```
  */
 export function displayDeployValue(name: string, value: string): string {
   if (/PASSWORD|SECRET|TOKEN|APIKEY|PRIVATEKEY|ACCESSKEY|AUTHORIZATION/i.test(name.replace(/[^a-z0-9]/gi, '')) || /(?:^|_)PASS$/i.test(name) || value.includes('PRIVATE KEY'))
@@ -77,7 +92,20 @@ function targetConfig(requirement: MiddlewareRequirement, environment: Deploymen
 /**
  * 只有目标文件显式声明了当前后端及必要连接项，才允许保持不变。
  * 凭据仍可来自 .env.local/进程；其他环境的配置不能让此选项出现。
- * @example `canKeepMiddleware(requirement, backend, prodEnvironment)`
+ * @param requirement - 扫描出的实际中间件需求。
+ * @param backend - 部署目录中选定的后端。
+ * @param environment - 已合并变量与目标文件显式值的环境快照。
+ * @returns 仅当目标文件明确声明后端与必要连接项时为 true。
+ * @example 模块内部上下文
+ * ```ts
+ * const module = await import('@h-ai/deploy')
+ * const requirement: MiddlewareRequirement = { service: 'db', backend: 'postgresql', source: '@h-ai/reldb', configName: 'db', configPath: [], envPrefix: 'HAI_DB', config: { host: 'db', port: 5432, database: 'shop' } }
+ * const environment: DeploymentEnvironment = { environment: 'prod', envDir: '/workspace/shop', values: {}, targetValues: { HAI_DB_TYPE: 'postgresql', HAI_DB_HOST: 'db', HAI_DB_PORT: '5432', HAI_DB_DATABASE: 'shop' } }
+ * const backend = module.DEPLOY_MIDDLEWARE.db.find(item => item.backend === 'postgresql')
+ * if (backend) {
+ *   const keep = canKeepMiddleware(requirement, backend, environment)
+ * }
+ * ```
  */
 export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: MiddlewareBackend, environment: DeploymentEnvironment): boolean {
   const target = targetConfig(requirement, environment)
@@ -172,7 +200,23 @@ function connectionEnv(requirement: MiddlewareRequirement, backend: string, conf
 
 /**
  * 逐项收集处理方式、后端和连接参数；返回值用于过滤云开通器和 Compose 服务。
- * @example `await configureDeployMiddleware(module, scan, environment, config, false)`
+ * 会持久化公共连接信息与私有凭据；yes 仅跳过已可确定的选择，缺少必要输入仍抛错。
+ * @throws Error - 用户取消、必要非交互输入缺失、字段校验或配置持久化失败。
+ * @param module - 实际加载的 @h-ai/deploy 运行时命名空间。
+ * @param scan - 扫描得到的应用和中间件需求。
+ * @param environment - 已合并变量与目标文件显式值的环境快照。
+ * @param config - 正在补齐的部署配置对象。
+ * @param yes - 非交互模式；不能绕过必需输入缺失。
+ * @returns 每项中间件的最终处理模式。
+ * @example 模块内部上下文
+ * ```ts
+ * const module: DeployModule = await import('@h-ai/deploy')
+ * const result = await module.deploy.scan(process.cwd(), { environment: 'prod' })
+ * if (!result.success) throw new Error(result.error.message)
+ * const environment = module.loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * if (!environment.success) throw new Error(environment.error.message)
+ * const modes = await configureDeployMiddleware(module, result.data, environment.data, {}, true)
+ * ```
  */
 export async function configureDeployMiddleware(module: DeployModule, scan: ScanResult, environment: DeploymentEnvironment, config: Record<string, unknown>, yes = false): Promise<Partial<Record<string, MiddlewareMode>>> {
   const modes: Partial<Record<string, MiddlewareMode>> = {}
