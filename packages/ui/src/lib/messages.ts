@@ -26,7 +26,7 @@ const getMessage = core.i18n.createMessageGetter({
  *
  * @param key - 消息 key
  * @param params - 可选的插值参数
- * @param locale - 可选的宿主语言；省略时使用现有全局语言
+ * @param locale - 可选的宿主语言；省略时使用 Node 请求语言或浏览器应用语言
  * @returns 当前 locale 对应的翻译文本
  *
  * @example

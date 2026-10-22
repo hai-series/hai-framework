@@ -686,3 +686,5 @@ IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；
   <Button type="submit">{m.save()}</Button>
 </Form>
 ```
+
+Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。

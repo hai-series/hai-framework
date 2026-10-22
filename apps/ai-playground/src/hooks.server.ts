@@ -18,8 +18,7 @@ const securityHandle: Handle = async ({ event, resolve }) => {
 
   if (event.url.pathname.startsWith('/api/')) {
     event.locals.locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
-    kit.i18n.setLocale(event.locals.locale)
-    const response = await resolve(event)
+    const response = await kit.i18n.runWithLocale(event.locals.locale, () => resolve(event))
     response.headers.set('X-Content-Type-Options', 'nosniff')
     response.headers.set('Cache-Control', 'no-store')
     return response
@@ -27,10 +26,9 @@ const securityHandle: Handle = async ({ event, resolve }) => {
 
   return paraglideMiddleware(event.request, async ({ locale }: { locale: string }) => {
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event, {
+    return kit.i18n.runWithLocale(locale, () => resolve(event, {
       transformPageChunk: ({ html }) => html.replace('%lang%', locale),
-    })
+    }))
   })
 }
 

@@ -469,7 +469,7 @@ export type LocaleMessages<K extends string = string> = Record<Locale, Record<K,
  * ```
  */
 export interface MessageOptions {
-  /** 指定 locale（不传则使用全局 locale） */
+  /** 指定 locale（不传时依次读取 Node 请求上下文、应用默认语言） */
   locale?: Locale
   /** 插值参数 */
   params?: InterpolationParams

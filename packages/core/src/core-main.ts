@@ -91,10 +91,12 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
      *
      * @example
      * ```ts
-     * // 设置全局 locale（所有模块读取全局 locale）
+     * // 配置浏览器语言或服务端启动默认值
      * core.i18n.setGlobalLocale('en-US')
      *
-     * // 获取当前全局 locale
+     * // Node 请求应包裹实际异步处理过程
+     * await core.i18n.runWithLocale('zh-CN', () => handleRequest())
+     * // 获取当前请求语言或应用默认语言
      * core.i18n.getGlobalLocale()
      *
      * // 创建消息获取器（读取全局 locale）

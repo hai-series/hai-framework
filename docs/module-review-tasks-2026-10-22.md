@@ -63,7 +63,8 @@
 
 ### CORE-02 · P1 · 隔离服务端请求的 locale 状态
 
-- [ ] 待修正（源码确认；范围：core）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：Node 入口安装 AsyncLocalStorage 并新增 runWithLocale，消息按显式locale/请求上下文/启动默认值解析；UI SSR store与setter不写默认语言，serv自动绑定请求语言，四个应用hooks及CLI生成模板/开发skill/三语文档同步。core14、UI54、kit29、serv并发HTTP定向、CLI创建32与模板目标测试通过；core/ui/kit/serv及四应用typecheck、core/ui/kit build、ESLint/check:skills通过。scaffold-gates已执行但其前置全包构建被并行CRYPTO01新增消息key的中间态阻塞，未使用旧产物替代；完整scaffold与多进程部署集成在剩余任务稳定后复验；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/core/src/i18n/core-i18n-utils.ts:23](../packages/core/src/i18n/core-i18n-utils.ts#L23)；[packages/ui/src/lib/i18n.svelte.ts:108](../packages/ui/src/lib/i18n.svelte.ts#L108)。
 - **证据与影响**：core locale 是模块级变量；UI createLocaleStore 初始化时直接写全局 locale。并行 SSR 创建不同语言 store 会互相覆盖后续全局翻译。客户端单实例 store 本身不属于分布式缺陷。
 - **修正内容**：服务端翻译传递请求级 locale 或使用已有请求上下文；浏览器保持应用级 locale。禁止 SSR 初始化修改跨请求默认值。

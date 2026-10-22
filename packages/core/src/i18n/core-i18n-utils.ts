@@ -5,6 +5,7 @@
  * @module core-i18n-utils
  */
 
+import type { AsyncLocalStorage } from 'node:async_hooks'
 import type { Locale, LocaleInfo, LocaleMessages, MessageOptions } from '../core-types.js'
 import messagesEnUS from '../../messages/en-US.json'
 import messagesZhCN from '../../messages/zh-CN.json'
@@ -22,17 +23,53 @@ const DEFAULT_LOCALE: Locale = 'zh-CN'
 
 let currentLocale: Locale = DEFAULT_LOCALE
 
+/** 请求语言上下文；仅由 Node 入口安装，浏览器不加载 Node 运行时代码。 */
+let requestLocales: AsyncLocalStorage<{ locale: Locale }> | undefined
+
+/** Node 入口注入真实 AsyncLocalStorage，不对外暴露可替换的运行时配置。 */
+export function installRequestLocales(storage: AsyncLocalStorage<{ locale: Locale }>): void {
+  requestLocales = storage
+}
+
+/** 规范化公共语言简写，未知语言由消息获取器按字典回退。 */
+function normalizeLocale(locale: Locale): Locale {
+  return locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+}
+
 function getGlobalLocale(): Locale {
-  return currentLocale
+  return requestLocales?.getStore()?.locale ?? currentLocale
 }
 
 function setGlobalLocale(locale: Locale): void {
-  // 规范化简写：'en' → 'en-US', 'zh' → 'zh-CN'
-  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
-
-  if (currentLocale !== normalized) {
+  const normalized = normalizeLocale(locale)
+  const request = requestLocales?.getStore()
+  if (request)
+    request.locale = normalized
+  else
     currentLocale = normalized
-  }
+}
+
+/**
+ * 在独立的 Node 请求语言上下文中运行操作，异步子任务继承当前语言。
+ *
+ * 显式 MessageOptions.locale 优先于请求语言，请求结束不会改变进程启动默认值。
+ *
+ * @param locale - 当前请求的语言
+ * @param operation - 请求处理或 SSR 操作；保留原同步值或 Promise 返回类型
+ * @returns operation 的原始返回值
+ * @throws 浏览器入口没有 Node 请求上下文时抛出错误；浏览器使用 setGlobalLocale。
+ * @example
+ * ```ts
+ * const response = await core.i18n.runWithLocale('en-US', async () => {
+ *   await loadData()
+ *   return renderPage()
+ * })
+ * ```
+ */
+function runWithLocale<T>(locale: Locale, operation: () => T): T {
+  if (!requestLocales)
+    throw new Error('Request locale context requires the Node.js entry')
+  return requestLocales.run({ locale: normalizeLocale(locale) }, operation)
 }
 
 // ─── 消息获取工厂 ───
@@ -40,7 +77,7 @@ function setGlobalLocale(locale: Locale): void {
 /**
  * 创建消息获取函数。
  *
- * 各模块通过此函数创建自己的消息获取器，自动读取全局 locale。
+ * 各模块通过此函数创建消息获取器，依次读取显式 locale、Node 请求语言和应用默认语言。
  * 若指定的 locale 不支持，回退到默认语言；key 不存在时返回 key 本身。
  *
  * @param messages - 多语言消息对象
@@ -62,7 +99,7 @@ function createMessageGetter<K extends string>(
 ): (key: K, options?: MessageOptions) => string {
   return (key: K, options?: MessageOptions): string => {
     // 确定使用的 locale（允许通过 options 覆盖全局设置）
-    const requestLocale = options?.locale ?? currentLocale
+    const requestLocale = normalizeLocale(options?.locale ?? getGlobalLocale())
     const isSupported = DEFAULT_LOCALES.some(l => l.code === requestLocale)
     const locale = isSupported ? requestLocale : DEFAULT_LOCALE
 
@@ -102,6 +139,7 @@ export const i18n = {
   DEFAULT_LOCALE,
   setGlobalLocale,
   getGlobalLocale,
+  runWithLocale,
   createMessageGetter,
   coreM,
 }

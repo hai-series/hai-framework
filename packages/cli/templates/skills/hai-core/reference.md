@@ -195,7 +195,8 @@ const level = core.logger.getLevel() // 'debug'
 | 方法                  | 签名                                                                  | 说明           |
 | --------------------- | --------------------------------------------------------------------- | -------------- |
 | `getGlobalLocale`     | `() => string`                                                        | 获取当前语言   |
-| `setGlobalLocale`     | `(locale: string) => void`                                            | 设置全局语言   |
+| `setGlobalLocale`     | `(locale: string) => void`                                            | 浏览器语言/启动默认值；请求内只改当前上下文 |
+| `runWithLocale`       | `<T>(locale: string, callback: () => T) => T`                           | Node 请求/SSR 异步语言隔离 |
 | `createMessageGetter` | `(messages: Record<string, Record<string, string>>) => MessageGetter` | 创建消息获取器 |
 
 创建模块 i18n：
@@ -542,3 +543,5 @@ logger.debug('Data fetched', { count: items.length })
 const safeUrl = core.sanitize.sanitizeUrl("https://example.com/a?token=value&limit=10")
 // https://example.com/a?token=[REDACTED]&limit=10
 ```
+
+Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。

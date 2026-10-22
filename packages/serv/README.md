@@ -672,6 +672,13 @@ const procedures = serv
 
 > 如果错误来自下游业务模块（如 `iam.user.xxx()`）且该模块已经直接返回 `HaiResult`，serv 会原样透传它的 `error.message`。当前 `HaiError` 只携带最终 `message`，不携带 `messageKey/params`，因此 **serv 边界无法对任意下游错误再做一次通用 i18n 重翻译**；要支持请求级 i18n，必须在创建该错误消息的模块里就拿到 locale。
 
+
+### 请求语言隔离
+
+Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
+
+浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
+
 ## 开发测试
 
 ```bash

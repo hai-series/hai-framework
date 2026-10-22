@@ -6,12 +6,17 @@
  */
 
 import type { CoreFunctions, CoreOptions } from './core-types.js'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { CoreConfigSchema } from './core-config.js'
 import { createCore } from './core-main.js'
 import { config } from './functions/core-function-config.node.js'
 import { logger } from './functions/core-function-logger.node.js'
+import { installRequestLocales } from './i18n/core-i18n-utils.js'
+
+// 请求语言跨 await 保持隔离，避免并行 SSR 修改另一个请求的默认语言。
+installRequestLocales(new AsyncLocalStorage())
 
 const YAML_EXTENSION_REGEX = /\.ya?ml$/
 type NodeCoreFunctions = CoreFunctions & {

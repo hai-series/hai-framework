@@ -17,6 +17,8 @@ export function readUILocale(): string {
 }
 
 export function changeUILocale(locale: string): void {
+  if (typeof window === 'undefined')
+    return
   core.i18n.setGlobalLocale(locale)
   // 宿主可能在 $effect 中同步语言，setter 不能反向订阅自身状态。
   untrack(() => {

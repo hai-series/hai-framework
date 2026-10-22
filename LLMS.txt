@@ -48,7 +48,7 @@ return result
 
 | 模块 | 选择依据与入口 | 关键边界 |
 | --- | --- | --- |
-| @h-ai/core | [配置、日志、i18n、ID、HaiResult](packages/cli/templates/skills/hai-core/SKILL.md) | YAML/环境映射仅 Node；无 close |
+| @h-ai/core | [配置、日志、i18n、ID、HaiResult](packages/cli/templates/skills/hai-core/SKILL.md) | YAML/环境映射仅 Node；无 close；Node 请求/SSR 使用 runWithLocale 隔离异步语言，显式 locale 优先 |
 | @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) | SQLite/PostgreSQL/MySQL；动态值参数化；operationLog只输出安全数量摘要，不记录SQL原文/值/驱动错误 |
 | @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) | LanceDB/pgvector/Qdrant/Chroma；维度需匹配，Qdrant 服务端 1.10.0+ |
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) | Memory 不跨节点；锁 owner 每次获锁唯一；release/extend 必须携带；Cluster 鉴权覆盖发现节点，URL 使用 URL 凭据；scan 使用可移交字符串游标遍历全部 master 并返回逻辑 key，mset/集合多键须同 slot |
@@ -63,11 +63,11 @@ return result
 | @h-ai/crypto | [SM2/SM3/SM4、密码、transport](packages/cli/templates/skills/hai-crypto/SKILL.md) | password 仅 Node；经顶层集成点装配 transport；readTransportBody/TRANSPORT_BODY_LIMITS 为纯工具，按实际 UTF-8 字节有界读取原流；客户端握手30秒超时 |
 | @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) | 业务路径唯一来源，不含服务端实现 |
 | @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫](packages/cli/templates/skills/hai-serv/SKILL.md) | Node 自动提供 socket 对端，Fetch 显式 remoteAddress；http.trustedProxies 为空时忽略转发头；Hono 是内部实现；Storage feature 必须注入 authorize 资源策略，缺失时拒绝；AI feature 默认绑定认证用户，跨主体须显式 authorizeObject；transport 按实际body判空，缺头/伪造零长度不能旁路；共享UTF-8字节预算，超限取消原流，请求413/响应500 |
-| @h-ai/kit | [SvelteKit hooks、guard、validate、response](packages/cli/templates/skills/hai-kit/SKILL.md) | 仅 SvelteKit 集成，不替代共享 HTTP contract；强制transport按实际body判空，不信任零长度头；与serv/客户端共享UTF-8预算，超限取消原流，请求413/响应500 |
+| @h-ai/kit | [SvelteKit hooks、guard、validate、response](packages/cli/templates/skills/hai-kit/SKILL.md) | 仅 SvelteKit 集成，不替代共享 HTTP contract；强制transport按实际body判空，不信任零长度头；与serv/客户端共享UTF-8预算，超限取消原流，请求413/响应500；i18n.runWithLocale 包裹 SSR resolve |
 | @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) | Cookie/transport 与服务端一致；退出/换账号用 auth.clear/setTokens 使在途刷新失效，异步存储串行提交；SSR 避免共享用户状态 |
 | @h-ai/capacitor | [原生设备、推送、安全存储](packages/cli/templates/skills/hai-capacitor/SKILL.md) | Web 与 Android/iOS 能力不同；TokenStorage 平台/存储失败拒绝Promise，clear立即屏蔽本实例旧凭据并传播删除失败；跨重启撤销依赖服务端 |
 | @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md) | 先选环境，核对 Provider、工具链和发布授权；build 按 images/ 独立 Dockerfile 选择镜像；deploy --build 可串联构建，完整离线包自动包含中间件，--services 增量更新，--bundle-only 生成跨平台脚本，测试产物自动清理 |
-| @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | 表单 Form/FormLayout 支持 columns、labelPosition、自动/显式 colSpan；控件与 CRUD 失焦校验、修正即时更新，错误随 UI 语言更新；认证使用 AuthPanel + IAM 公开配置、Markdown/URL 协议弹窗和表单 snippet；components 公开入口与轻量 /theme、/i18n；Tailwind 扫描路径须正确 |
+| @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | 表单 Form/FormLayout 支持 columns、labelPosition、自动/显式 colSpan；控件与 CRUD 失焦校验、修正即时更新，错误随 UI 语言更新；认证使用 AuthPanel + IAM 公开配置、Markdown/URL 协议弹窗和表单 snippet；components 公开入口与轻量 /theme、/i18n；SSR locale store/setter 不写全局语言，由 Node 请求上下文供消息读取；Tailwind 扫描路径须正确 |
 | @h-ai/ui/guide | [新手引导与帮助中心](packages/cli/templates/skills/hai-ui/guide.md) | createGuide + GuideHost；首次 Cookie 提示、手动重看、宿主导航与 data-guide；业务翻译延迟求值、显式 locale、按用户和版本记录；fullstack Web/App/Desktop 默认接入 |
 | @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 先 `pnpm add -g @h-ai/cli`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准；生成框架依赖固定为 CLI 对应版本，安装失败展示命令和原始输出 |
 

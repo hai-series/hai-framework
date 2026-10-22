@@ -34,3 +34,5 @@ transport 与 serv/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB
 - [核心 API](reference.md#核心-api)
 - [常见模式](reference.md#常见模式)
 - [声明式 CRUD 表单字段](reference.md#声明式-crud-表单字段)
+
+Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。

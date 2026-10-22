@@ -5,6 +5,7 @@
  * @module kit-main
  */
 
+import { core } from '@h-ai/core'
 import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
@@ -156,5 +157,7 @@ export const kit = {
   i18n: {
     /** 统一设置所有 hai 模块的默认语言 */
     setLocale: setAllModulesLocale,
+    /** 请求/SSR 语言隔离；异步处理使用同一请求上下文。 */
+    runWithLocale: core.i18n.runWithLocale,
   },
 }

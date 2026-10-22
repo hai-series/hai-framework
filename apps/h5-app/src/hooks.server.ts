@@ -32,16 +32,14 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api/')) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event)
+    return kit.i18n.runWithLocale(locale, () => resolve(event))
   }
 
   return paraglideMiddleware(event.request, async ({ locale }) => {
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event, {
+    return kit.i18n.runWithLocale(locale, () => resolve(event, {
       transformPageChunk: ({ html }) => html.replace('%lang%', locale),
-    })
+    }))
   })
 }
 

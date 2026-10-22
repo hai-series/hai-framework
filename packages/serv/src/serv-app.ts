@@ -265,6 +265,8 @@ export function createApp<
   const http = resolveServHttpConfig(options.http)
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
+  // 请求的语言沿异步处理链传递，模块错误消息不依赖共享的进程默认语言。
+  app.use('*', (c, next) => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), next))
   // 缺失路由也返回标准 JSON，保持 404 并允许统一传输加密。
   app.notFound(c => c.json(buildHaiErrorBody(
     HaiCommonError.NOT_FOUND,

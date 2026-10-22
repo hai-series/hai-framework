@@ -412,6 +412,8 @@ describe('admin 应用类型生成', () => {
     it('hooks.server.ts 应包含 i18nHandle', async () => {
       const content = await readGenerated(projectPath, 'src/hooks.server.ts')
       expect(content).toContain('i18nHandle')
+      expect(content).toContain('kit.i18n.runWithLocale(locale, () => resolve(event')
+      expect(content).not.toContain('kit.i18n.setLocale(')
       expect(content).toContain('paraglideMiddleware')
       expect(content).toContain('import { paraglideMiddleware } from \'$lib/paraglide/server.js\'')
     })

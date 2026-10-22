@@ -72,6 +72,11 @@ const LOCALE_STORAGE_KEY = 'hai-locale'
  * @param options.detectBrowser - 是否检测浏览器语言
  * @param options.persistKey - localStorage key
  * @returns locale 状态对象
+ * @example
+ * ```ts
+ * const locale = createLocaleStore({ defaultLocale: 'en-US', detectBrowser: false })
+ * locale.set('zh-CN') // 浏览器同步应用语言；SSR 只改变这个 store
+ * ```
  */
 export function createLocaleStore(options: {
   defaultLocale?: Locale
@@ -104,8 +109,9 @@ export function createLocaleStore(options: {
     }
   }
 
-  // 同步初始 locale 到 @h-ai/core 的全局管理器
-  setGlobalLocale(initialLocale)
+  // SSR store 属于当前组件树，不能修改另一个请求的默认语言。
+  if (typeof window !== 'undefined')
+    setGlobalLocale(initialLocale)
 
   // 使用 Svelte 5 runes 创建响应式状态
   let currentLocale = $state<Locale>(initialLocale)
@@ -123,15 +129,16 @@ export function createLocaleStore(options: {
 
     /**
      * 设置当前语言
-     * 会同步到 @h-ai/core 的全局 locale 管理器
+     * 浏览器同步到 @h-ai/core；SSR 仅改变当前 store，消息语言由 runWithLocale 绑定。
      * 注意：你还需要调用 Paraglide 的 setLocale 来更新 UI 翻译
      */
     set(locale: Locale) {
       const resolved = resolveLocale(locale, supportedLocales, defaultLocale)
       currentLocale = resolved
 
-      // 同步到 @h-ai/core 的全局 locale 管理器
-      setGlobalLocale(resolved)
+      // 服务端语言由外层 runWithLocale 明确绑定，store 只在浏览器同步应用状态。
+      if (typeof window !== 'undefined')
+        setGlobalLocale(resolved)
 
       // 持久化到 localStorage
       if (typeof window !== 'undefined') {

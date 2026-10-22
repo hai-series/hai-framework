@@ -672,6 +672,13 @@ const procedures = serv
 
 > When downstream modules (such as `iam.user.xxx()`) return `HaiResult` directly, serv forwards `error.message` unchanged. `HaiError` holds only the final `message`, not `messageKey/params`, so **serv cannot generically retranslate arbitrary downstream errors**. Request-level localization must receive locale at the module that creates the error message.
 
+
+### Request locale isolation
+
+Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleRequest())`. SvelteKit can use `kit.i18n.runWithLocale(locale, () => resolve(event))`; serv creates the scope automatically from request headers. Async descendants inherit it. Explicit `MessageOptions.locale` takes precedence over the request locale and the startup default. Within a scope, `setGlobalLocale` only changes that request; outside a scope it configures the startup default and must not be called by request hooks.
+
+Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
+
 ## Development and testing
 
 ```bash

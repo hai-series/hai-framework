@@ -16,18 +16,17 @@ export const kitM
   = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 /**
- * 统一设置所有 hai 模块的默认语言
+ * 设置浏览器应用语言或 Node 启动默认语言；请求中只更新当前 runWithLocale 上下文。
  *
  * 通过 @h-ai/core 的集中式 locale 管理器，一次调用即可同步所有模块。
- * 各模块的 createMessageGetter 会读取全局 locale。
+ * 各模块的 createMessageGetter 优先读取当前 Node 请求上下文；SSR 必须包裹实际 resolve。
  *
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
  *
- * // 在 i18n handle 中
- * const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
- * kit.i18n.setLocale(locale)
+ * // 浏览器应用入口；SSR handle 使用 kit.i18n.runWithLocale(locale, () => resolve(event))。
+ * kit.i18n.setLocale('en-US')
  * ```
  */
 export function setAllModulesLocale(locale: string): void {
