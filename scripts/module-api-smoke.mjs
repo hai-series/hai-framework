@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
@@ -68,8 +68,9 @@ function typeSmoke(directories, suffix, browser, generated) {
     if (browser && directory === 'ai')
       source.push('// @ts-expect-error Server constructors are unavailable in browser', 'api.McpServer', '// @ts-expect-error Server factories are unavailable in browser', 'api.createMcpServer')
     const file = join(base, `${suffix}-${browser ? 'browser' : 'node'}.ts`)
-    writeFileSync(file, `${source.join('\n')}\n`)
+    // 写入失败也可能已经产生部分文件，先登记再落盘。
     generated.push(file)
+    writeFileSync(file, `${source.join('\n')}\n`)
     return file
   })
   const program = ts.createProgram(sources, { noEmit: true, strict: true, skipLibCheck: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, customConditions: browser ? ['browser'] : [], allowArbitraryExtensions: true, types: [] })
@@ -110,6 +111,7 @@ function child(directory, args) {
 
 const temporary = mkdtempSync(join(tmpdir(), 'hai-api-smoke-'))
 const generated = []
+const generatedDirectories = [{ directory: temporary, parent: tmpdir() }]
 const failures = []
 let imports = 0
 let bundles = 0
@@ -142,8 +144,10 @@ try {
         child(base, ['./dist/index.js', '--version'])
       }
       else if (directory === 'ui') {
-        const outfile = join(base, `${basename(temporary)}.mjs`)
-        generated.push(outfile)
+        // esbuild 还会生成 CSS 等旁路产物；包内隔离目录保留依赖解析并统一回收。
+        const outputDirectory = mkdtempSync(join(base, `${basename(temporary)}-`))
+        generatedDirectories.push({ directory: outputDirectory, parent: base })
+        const outfile = join(outputDirectory, 'index.mjs')
         await build({ entryPoints: [select(entries, '.').file], outfile, bundle: true, format: 'esm', platform: 'node', conditions: ['svelte'], tsconfigRaw: {}, banner: { js: 'import { createRequire as createSmokeRequire } from \'node:module\'; const require = createSmokeRequire(import.meta.url);' }, plugins: [sveltePlugin('server')], loader: { '.css': 'empty' }, logLevel: 'silent' })
         child(base, [outfile])
         child(base, ['--input-type=module', '--eval', 'await import(\'@h-ai/ui/auto-import\'); await import(\'@h-ai/ui/vite\')'])
@@ -181,9 +185,28 @@ try {
   }
 }
 finally {
-  for (const file of generated)
-    rmSync(file, { force: true })
-  rmSync(temporary, { recursive: true, force: true })
+  for (const file of generated) {
+    try {
+      rmSync(file, { force: true })
+    }
+    catch (error) {
+      failures.push(`Temporary file cleanup ${file}: ${error.message}`)
+    }
+  }
+  for (const { directory, parent } of generatedDirectories.reverse()) {
+    try {
+      const target = resolve(directory)
+      if (dirname(target) !== resolve(parent) || !basename(target).startsWith('hai-api-smoke-')) {
+        failures.push(`Temporary directory cleanup ${directory}: Unexpected temporary directory`)
+        continue
+      }
+      rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    }
+    catch (error) {
+      // 继续清理其余资源，同时保留前面的导入/构建错误。
+      failures.push(`Temporary directory cleanup ${directory}: ${error.message}`)
+    }
+  }
 }
 if (failures.length) {
   process.stderr.write(`${failures.join('\n')}\n`)
