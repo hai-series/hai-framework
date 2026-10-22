@@ -32,18 +32,9 @@ const CommandStateSchema = z.object({
  * @returns 通过结构校验的命令状态，或 undefined
  * @example
  * ```ts
- * import process from 'node:process'
  * import { getDeployCommandState, HaiDeployError } from '@h-ai/deploy'
- * const state = getDeployCommandState({
- *   ...HaiDeployError.REMOTE_COMMAND_FAILED,
- *   message: 'Command timed out',
- *   ext: { commandExecution: {
- *     reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'unknown',
- *     deploymentId: 'release-42', resultFile: '/srv/app/result-release-42.json',
- *   } },
- * })
- * if (state?.remoteExecution === 'unknown' && state.resultFile)
- *   process.stderr.write(`Inspect ${state.resultFile} before retrying.\n`)
+ * const state = getDeployCommandState({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: 'SSH connection interrupted', ext: { commandExecution: { reason: 'exit', localTermination: 'confirmed', remoteExecution: 'unknown' } } })
+ * if (state?.remoteExecution === 'unknown') process.stderr.write('Remote execution is unknown\n')
  * ```
  */
 export function getDeployCommandState(error: HaiError): DeployCommandState | undefined {
@@ -51,13 +42,38 @@ export function getDeployCommandState(error: HaiError): DeployCommandState | und
   return parsed.success ? parsed.data : undefined
 }
 
-/** 读取错误中的恢复清单；仅返回明确允许展示的字段。 */
+/**
+ * 读取错误中的恢复清单；仅返回明确允许展示的字段。
+ * @param error - 上层捕获的部署 HaiError；不直接展示其 cause。
+ * @returns 安全恢复清单；结构不满足约定时为 undefined。
+ * @example
+ * ```ts
+ * import { getDeployRecovery, HaiDeployError } from '@h-ai/deploy'
+ * const recovery = getDeployRecovery({ ...HaiDeployError.PROVISION_FAILED, message: 'Provisioning failed', ext: { recovery: { projectName: 'shop', stage: 'provision', resources: [] } } })
+ * if (recovery) {
+ *   const stage = recovery.stage
+ * }
+ * ```
+ */
 export function getDeployRecovery(error: HaiError): DeployRecoveryInfo | undefined {
   const parsed = RecoverySchema.safeParse(error.ext?.recovery)
   return parsed.success ? parsed.data : undefined
 }
 
-/** 在错误中保留可展示的恢复信息，避免异常 cause/命令/URL 泄漏凭证。 */
+/**
+ * 在错误中保留可展示的恢复信息，避免异常 cause/命令/URL 泄漏凭证。
+ * @param error - 上层捕获的部署 HaiError；不直接展示其 cause。
+ * @param recovery - 允许展示的恢复阶段与资源清单。
+ * @returns 仅含安全恢复字段的失败 HaiResult。
+ * @example 模块内部上下文
+ * ```ts
+ * const { HaiDeployError } = await import('./deploy-types.js')
+ * const failure = recoveryFailure({ ...HaiDeployError.PROVISION_FAILED, message: 'Provisioning failed' }, { projectName: 'shop', stage: 'provision', resources: [] })
+ * if (!failure.success) {
+ *   const safeMessage = failure.error.message
+ * }
+ * ```
+ */
 export function recoveryFailure(error: HaiError, recovery: DeployRecoveryInfo): HaiResult<never> {
   return err({
     code: error.code,

@@ -67,14 +67,42 @@ async function helper(command: string, args: string[], timeoutMs: number): Promi
   })
 }
 
-/** 只向命令执行器暴露必要控制，不把平台句柄或 Job 名称作为用户配置。 */
+/**
+ * 只向命令执行器暴露必要控制，不把平台句柄或 Job 名称作为用户配置。
+ * 控制句柄只管理本地进程树；调用 treeExited/terminate 后仍要按 boolean/状态判断，不推断远端副作用。
+ * @example 模块内部上下文
+ * ```ts
+ * const controlled = spawnCommand(process.execPath, ['--version'], { cwd: process.cwd(), env: process.env })
+ * const exited = await controlled.treeExited()
+ * if (!exited) {
+ *   const termination = await controlled.terminate(10000)
+ *   if (termination === 'unknown') process.stderr.write('Termination unconfirmed\n')
+ * }
+ * ```
+ */
 export interface CommandProcess {
   child: ChildProcessWithoutNullStreams
   treeExited: () => Promise<boolean>
   terminate: (timeoutMs: number) => Promise<'confirmed' | 'unknown'>
 }
 
-/** 启动受管理进程；Windows helper/Job 失败时没有裸进程降级路径。 */
+/**
+ * 启动受管理进程；Windows helper/Job 失败时没有裸进程降级路径。
+ * 由 runCommand 负责输出、异常与超时编排；此低层入口本身不提供 HaiResult 或脱敏。
+ * @param command - 本地可执行文件名或绝对路径，不是 shell 命令串。
+ * @param args - 逐项传入的参数数组，不再自行拼接 shell。
+ * @param options - 本次操作选项；字段含义见各子项。
+ * @returns 受管理子进程及本地进程树检查/终止句柄。
+ * @example 模块内部上下文
+ * ```ts
+ * const controlled = spawnCommand(process.execPath, ['--version'], { cwd: process.cwd(), env: process.env })
+ * const exited = await controlled.treeExited()
+ * if (!exited) {
+ *   const termination = await controlled.terminate(10000)
+ *   if (termination === 'unknown') process.stderr.write('Termination unconfirmed\n')
+ * }
+ * ```
+ */
 export function spawnCommand(command: string, args: string[], options: Pick<SpawnOptionsWithoutStdio, 'cwd' | 'env'>): CommandProcess {
   const job = process.platform === 'win32' ? windowsCommand(command, args) : undefined
   const child = spawn(job ? 'powershell.exe' : command, job?.args ?? args, {

@@ -135,7 +135,19 @@ function powershell(script: string): string[] {
   return ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]
 }
 
-/** 创建命令 Job；参数不插入代码，启动失败直接拒绝，不能降级为无 Job 的裸进程。 */
+/**
+ * 创建命令 Job；参数不插入代码，启动失败直接拒绝，不能降级为无 Job 的裸进程。
+ * 只生成 Job helper 的参数和私有环境载荷；调用者必须按约定启动 helper，不能直接恢复裸子进程。
+ * @param command - 本地可执行文件名或绝对路径，不是 shell 命令串。
+ * @param args - 逐项传入的参数数组，不再自行拼接 shell。
+ * @returns Job 名、隐藏 PowerShell 参数与私有环境载荷。
+ * @example 模块内部上下文
+ * ```ts
+ * const job = windowsCommand(process.execPath, ['--version'])
+ * const probe = windowsJobProbe(job.name)
+ * // job.args/env 供隐藏 powershell.exe 使用；不要记录其中的私有参数。
+ * ```
+ */
 export function windowsCommand(command: string, args: string[]): { name: string, args: string[], env: Record<string, string> } {
   const name = `Local\\hai-deploy-${randomUUID()}`
   const key = `__HAI_DEPLOY_JOB_${randomUUID().replaceAll('-', '')}`
@@ -151,7 +163,18 @@ ${nativeJob}
   return { name, args: powershell(script), env: { [key]: JSON.stringify({ name, command, args }) } }
 }
 
-/** 查询 Job 的真实成员数；不存在表示全部退出，任何检查故障均不能声称终止确认。 */
+/**
+ * 查询 Job 的真实成员数；不存在表示全部退出，任何检查故障均不能声称终止确认。
+ * 名称必须来自 windowsCommand，不能把外部任意文本插入 PowerShell 探测脚本。
+ * @param name - 由 windowsCommand 生成的内部 Job 名称。
+ * @returns 探测静态脚本的 PowerShell 参数；探测返回码另行检查。
+ * @example 模块内部上下文
+ * ```ts
+ * const job = windowsCommand(process.execPath, ['--version'])
+ * const probeArgs = windowsJobProbe(job.name)
+ * // 仅对本函数配套创建的 Job 名执行探测；0为空、1仍有成员、2为探测故障。
+ * ```
+ */
 export function windowsJobProbe(name: string): string[] {
   return powershell(`$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; $InformationPreference='SilentlyContinue'
 try {

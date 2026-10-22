@@ -9,7 +9,36 @@ import { deployM } from '../deploy-i18n.js'
 import { runCommand } from './deploy-command.js'
 import { createApplyScript, createUploadScripts } from './deploy-scripts.js'
 
-/** 打包所选服务；完整交付自动导出中间件，服务器启动时禁止联网拉取。 */
+/**
+ * 打包所选服务；完整交付自动导出中间件，服务器启动时禁止联网拉取。
+ * @throws Error - 制品、Compose、文件读取、镜像导出或打包失败；包含私有运行环境的 tar 必须按秘密传输与保存。
+ * @param options - 本次操作选项；字段含义见各子项。
+ * @param options.directory - 包含已准备制品或部署文件的目录；具体见函数用途。
+ * @param options.artifactDir - 已经验证的镜像 tar 与 manifest 所在目录。
+ * @param options.artifact - 已通过结构、路径和文件摘要验证的构建清单。
+ * @param options.projectName - 已归一化的项目名称。
+ * @param options.deploymentId - 本次不可变部署标识，用于结果匹配和发布目录。
+ * @param options.environment - 部署环境标识，通常为 prod。
+ * @param options.config - 已通过 Schema 解析的 docker-ssh 配置。
+ * @param options.runtime - 容器引擎策略；auto 探测可用引擎并优先 Podman。
+ * @param options.output - tar 输出路径，按应用版本自动补文件名后缀。
+ * @param options.selected - 本次选择更新的 Compose 服务。
+ * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
+ * @param options.middlewareEnv - 只用于受保护文件的中间件 dotenv 内容。
+ * @param options.healthPaths - 允许执行的应用健康检查路径。
+ * @param options.hasWeb - 工程是否包含独立 Web 服务拓扑。
+ * @param options.containerPort - 应用容器的实际监听端口。
+ * @returns tar 路径、手工执行说明及启动脚本名。
+ * @example 模块内部上下文
+ * ```ts
+ * const { readDeploymentArtifact } = await import('../deploy-artifact.js')
+ * const artifactDir = '.hai/build/docker/build-id'
+ * const artifact = await readDeploymentArtifact(artifactDir)
+ * // directory 已由 Provider 准备好 docker-compose-<版本>.yml 与 .env.runtime。
+ * const directory = '.hai/deploy/prod/prepared-id'
+ * const result = await createDeploymentBundle({ directory, artifactDir, artifact, projectName: 'shop', deploymentId: 'shop-prod-001', environment: 'prod', config: { type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } }, runtime: 'auto', output: '.hai/deploy/shop.tar', selected: ['app'], partial: false, middlewareEnv: '', healthPaths: ['/health'], hasWeb: false, containerPort: 3000 })
+ * ```
+ */
 export async function createDeploymentBundle(options: {
   directory: string
   artifactDir: string

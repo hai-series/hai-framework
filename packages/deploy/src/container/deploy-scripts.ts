@@ -1,12 +1,38 @@
 /** 在线发布与手工交付共用的服务器执行脚本。远程依赖 Linux flock、基础工具及 Compose。 */
 import type { DockerSshProviderConfig } from '../deploy-config.js'
 
-/** 将可信配置编码为一个 shell 参数。 */
+/**
+ * 将可信配置编码为一个 shell 参数。
+ * @param value - 受信值，编码为一个远端 shell 参数。
+ * @returns 可作为一个远端 shell 参数的编码文本。
+ * @example 模块内部上下文
+ * ```ts
+ * const encoded = shellArgument("Shop's app") // 整体作为一个远端 shell 参数。
+ * ```
+ */
 export function shellArgument(value: string): string {
   return `'${value.replaceAll('\'', '\'"\'"\'')}'`
 }
 
-/** 生成分步执行、增量合并和失败恢复脚本；密钥始终从环境文件读取。 */
+/**
+ * 生成分步执行、增量合并和失败恢复脚本；密钥始终从环境文件读取。
+ * 仅生成 Linux 脚本；固定 inode 的 FD9 flock 由仍持有描述符的整棵进程树维持。未知旧锁目录不删除，结果仅由取得锁的 owner 发布。
+ * @param options - 本次操作选项；字段含义见各子项。
+ * @param options.deploymentId - 本次不可变部署标识，用于结果匹配和发布目录。
+ * @param options.projectName - 已归一化的项目名称。
+ * @param options.environment - 部署环境标识，通常为 prod。
+ * @param options.directory - 包含已准备制品或部署文件的目录；具体见函数用途。
+ * @param options.runtime - 容器引擎策略；auto 探测可用引擎并优先 Podman。
+ * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
+ * @param options.selected - 本次选择更新的 Compose 服务。
+ * @param options.hostPort - 宿主公开端口。
+ * @param options.healthPaths - 允许执行的应用健康检查路径。
+ * @returns 待在 Linux 远端运行的 apply 脚本文本。
+ * @example 模块内部上下文
+ * ```ts
+ * const script = createApplyScript({ deploymentId: 'shop-prod-001', projectName: 'shop-prod', environment: 'prod', directory: '/opt/hai/apps/shop-prod', runtime: 'auto', partial: false, selected: ['app'], hostPort: 8080, healthPaths: ['/health'] })
+ * ```
+ */
 export function createApplyScript(options: {
   deploymentId: string
   projectName: string
@@ -255,7 +281,19 @@ printf '[PASS] %s\n' "$id"
 `.replace(/@@([A-Z]+)@@/g, (_match, name: string) => values[name]!)
 }
 
-/** 生成无 Node/pnpm 依赖的上传脚本；换电脑时可覆盖 SSH 私钥路径。 */
+/**
+ * 生成无 Node/pnpm 依赖的上传脚本；换电脑时可覆盖 SSH 私钥路径。
+ * @param config - 已通过 Schema 解析的 docker-ssh 配置。
+ * @param bundle - 待上传的 tar 文件路径或文件名。
+ * @param projectName - 已归一化的项目名称。
+ * @returns Linux shell 与 Windows PowerShell 上传入口文本。
+ * @example 模块内部上下文
+ * ```ts
+ * const config: DockerSshProviderConfig = { ...{ type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } }, ssh: { host: 'deploy.example.net', username: 'deploy', port: 22, strictHostKeyChecking: true, connectTimeoutSeconds: 10 } }
+ * const scripts = createUploadScripts(config, 'shop-1.0.0.tar', 'shop-prod')
+ * // scripts.sh/ps1 是待执行文本；生成并不代表上传或部署完成。
+ * ```
+ */
 export function createUploadScripts(config: DockerSshProviderConfig, bundle: string, projectName: string): { sh: string, ps1: string } {
   const ssh = config.ssh
   const host = ssh?.host ?? 'SERVER_HOST'

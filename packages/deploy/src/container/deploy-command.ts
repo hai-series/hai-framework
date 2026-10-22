@@ -16,7 +16,12 @@ const logger = core.logger.child({ module: 'deploy', scope: 'command' })
 
 /**
  * 命令执行选项；secrets必须列出可能输出的已知敏感值。
- * @example const options: CommandOptions = { secrets: ['private-token'], maxCaptureChars: 65536 }
+ * @example 模块内部上下文
+ * ```ts
+ * const options: CommandOptions = { cwd: process.cwd(), timeoutMs: 5000, terminationTimeoutMs: 10000, maxCaptureChars: 4096 }
+ * const result = await runCommand(process.execPath, ['--version'], options)
+ * if (!result.success) throw new Error(result.error.message)
+ * ```
  */
 export interface CommandOptions {
   /** 正确UTF-8解码且跨块脱敏的stdout片段；顺序完整，末尾可能延迟至close。 */
@@ -39,7 +44,14 @@ export interface CommandOptions {
 
 /**
  * 已脱敏的有界命令结果；解析结构化输出前必须拒绝截断结果。
- * @example if (result.stdoutTruncated) return reportIncompleteOutput()
+ * 仅保存脱敏流的有界尾部；不把尾部捕获当作完整日志。
+ * @example 模块内部上下文
+ * ```ts
+ * const result = await runCommand(process.execPath, ['--version'], { maxCaptureChars: 4096 })
+ * if (!result.success) throw new Error(result.error.message)
+ * const output: CommandResult = result.data
+ * const truncated = output.stdoutTruncated
+ * ```
  */
 export interface CommandResult {
   /** 实际退出码。 */
@@ -59,7 +71,10 @@ export interface CommandResult {
  * @param text - 完整文本
  * @param secrets - 已知秘密
  * @returns 脱敏文本
- * @example maskSecrets('token=private', ['private']) // 'token=***'
+ * @example 模块内部上下文
+ * ```ts
+ * const text = maskSecrets('example-token public', ['example-token']) // *** public；合成字符串只用于演示。
+ * ```
  */
 export function maskSecrets(text: string, secrets: string[] = []): string {
   const masker = createSecretMasker(secrets)
@@ -68,11 +83,23 @@ export function maskSecrets(text: string, secrets: string[] = []): string {
 
 /**
  * 执行外部命令，捕获与回调在UTF-8解码后以逻辑流为单位脱敏。
+ * 无 shell 启动命令；stdout 回调接收按顺序脱敏的完整流，捕获结果仅保留有界尾部。超时后核验本地树退出；SSH 的远端状态由上层单独核对。
  * @param command - 可执行文件名或路径，不使用shell
  * @param args - 独立参数
  * @param options - 超时、输入、已知秘密及安全输出选项
  * @returns 失败返回REMOTE_COMMAND_FAILED；ext.commandExecution 记录终止核验，不暴露原始异常cause
- * @example const result = await runCommand('podman', ['version'], { timeoutMs: 30000 })
+ * @example 模块内部上下文
+ * ```ts
+ * const result = await runCommand(process.execPath, ['--version'], { timeoutMs: 5000, maxCaptureChars: 4096 })
+ * if (!result.success) {
+ *   const { getDeployCommandState } = await import('../deploy-recovery.js')
+ *   const state = getDeployCommandState(result.error)
+ *   if (state?.localTermination === 'unknown') process.stderr.write('Local process-tree exit was not confirmed\n')
+ * }
+ * else {
+ *   const output = result.data.stdout
+ * }
+ * ```
  */
 export async function runCommand(command: string, args: string[], options: CommandOptions = {}): Promise<HaiResult<CommandResult>> {
   /** 失败状态只包含核验结论，不附加原始异常或可能携密的命令参数。 */

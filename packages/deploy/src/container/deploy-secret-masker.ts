@@ -2,7 +2,11 @@
 
 /**
  * 单个逻辑文本流的脱敏器；UTF-8解码由调用方的StringDecoder完成。
- * @example const masked = createSecretMasker(['private']).write('public')
+ * @example 模块内部上下文
+ * ```ts
+ * const masker: SecretMasker = createSecretMasker(['example-token'])
+ * const text = masker.write('example-') + masker.write('token public') + masker.end() // *** public
+ * ```
  */
 export interface SecretMasker {
   /** 接收已正确解码的下一块，仅释放不可能与后续块组成秘密的前缀。 */
@@ -13,13 +17,15 @@ export interface SecretMasker {
 
 /**
  * 创建精确字面量流式脱敏器；最多保留最长秘密长度减一的尾部。
+ * 每个逻辑流使用独立实例；write 可能延迟尾部，正常结束须 end，不能提前把缓冲原文输出。
  * @param secrets - 已知敏感值；忽略空值、去重，优先匹配同位置的较长值，总长度上限1Mi UTF-16单元
  * @returns 每次write/end的安全输出按顺序拼接得到完整脱敏文本
  * @throws 秘密总长度超限或底层表达式不能编译时抛错，调用方必须失败关闭
- * @example
- * const stream = createSecretMasker(['private-token'])
- * const output = stream.write('private-') + stream.write('token public') + stream.end()
- * // output === '*** public'
+ * @example 模块内部上下文
+ * ```ts
+ * const masker = createSecretMasker(['example-token'])
+ * const output = masker.write('example-') + masker.write('token public') + masker.end() // *** public
+ * ```
  */
 export function createSecretMasker(secrets: readonly string[] = []): SecretMasker {
   const values = [...new Set(secrets.filter(Boolean))].sort((a, b) => b.length - a.length)

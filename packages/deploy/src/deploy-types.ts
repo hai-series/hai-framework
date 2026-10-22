@@ -31,20 +31,29 @@ const DeployErrorInfo = {
   HEALTH_CHECK_FAILED: '020:500',
 } as const satisfies ErrorInfo
 
+/**
+ *
+ * @example
+ * ```ts
+ * import { err } from '@h-ai/core'
+ * import { HaiDeployError } from '@h-ai/deploy'
+ * const result = err(HaiDeployError.CONFIG_ERROR, 'Invalid deployment configuration')
+ * if (!result.success && result.error.code === HaiDeployError.CONFIG_ERROR.code) {
+ *   process.stderr.write(result.error.message + '\n')
+ * }
+ * ```
+ */
 export const HaiDeployError = core.error.buildHaiErrorsDef('deploy', DeployErrorInfo)
 
 /**
  * 部署错误接口
  *
- * 所有部署操作返回的错误都遵循此接口。
- *
+ * 用于组合错误定义、消息与可选 cause 的描述对象；业务操作返回的 error 遵循 core.HaiError，请按 success 分支读取 code/message。
  * @example
  * ```ts
- * const result = await deploy.deployApp('./apps/my-app')
- * if (!result.success) {
- *   const error: DeployError = result.error
- *   // 根据 error.code 处理
- * }
+ * import type { DeployError } from '@h-ai/deploy'
+ * import { HaiDeployError } from '@h-ai/deploy'
+ * const detail: DeployError = { def: HaiDeployError.DEPLOY_FAILED, message: 'Deployment failed' }
  * ```
  */
 export interface DeployError {
@@ -58,13 +67,34 @@ export interface DeployError {
 
 // ─── 服务类型 ───
 
-/** 基础设施服务类型 */
+/**
+ * 基础设施服务类型
+ * @example
+ * ```ts
+ * import type { ServiceType } from '@h-ai/deploy'
+ * const service: ServiceType = 'db'
+ * ```
+ */
 export type ServiceType = 'db' | 'cache' | 'storage' | 'email' | 'sms' | 'vecdb' | 'ldap'
 
-/** 每项中间件的处理方式；keep 不修改配置，也不开通服务。 */
+/**
+ * 每项中间件的处理方式；keep 不修改配置，也不开通服务。
+ * @example
+ * ```ts
+ * import type { MiddlewareMode } from '@h-ai/deploy'
+ * const mode: MiddlewareMode = 'keep' // 复用已有服务，不修改连接配置或自动开通。
+ * ```
+ */
 export type MiddlewareMode = 'default' | 'custom' | 'keep'
 
-/** 扫描环境；例如 `{ environment: 'test', envDir: '/workspace/app' }`。 */
+/**
+ * 扫描环境；例如 `{ environment: 'test', envDir: '/workspace/app' }`。
+ * @example
+ * ```ts
+ * import type { DeployScanOptions } from '@h-ai/deploy'
+ * const options: DeployScanOptions = { environment: 'prod', envDir: '/workspace/shop' }
+ * ```
+ */
 export interface DeployScanOptions {
   /** 环境文件模式。 */
   environment?: string
@@ -72,7 +102,15 @@ export interface DeployScanOptions {
   envDir?: string
 }
 
-/** 依赖对应的中间件；例如 IAM 的 LDAP 位于 `iam.ldap`，可处于 disabled 状态。 */
+/**
+ * 依赖对应的中间件；例如 IAM 的 LDAP 位于 `iam.ldap`，可处于 disabled 状态。
+ * @example
+ * ```ts
+ * import type { MiddlewareRequirement } from '@h-ai/deploy'
+ * const requirement: MiddlewareRequirement = { service: 'db', backend: 'postgresql', source: '@h-ai/reldb', configName: 'db', configPath: [], envPrefix: 'HAI_DB', config: { host: 'db', database: 'shop' } }
+ * // config 可能含私有值；展示时只选择安全字段。
+ * ```
+ */
 export interface MiddlewareRequirement {
   /** 中间件类别。 */
   service: ServiceType
@@ -96,6 +134,16 @@ export interface MiddlewareRequirement {
  * 应用扫描结果
  *
  * 由 scanner 分析应用目录后返回，描述应用的框架类型、依赖和部署需求。
+ * 扫描是文件系统能力，不依赖 init，也不代表远程服务已经连通。
+ * @example
+ * ```ts
+ * import type { ScanResult } from '@h-ai/deploy'
+ * import { deploy } from '@h-ai/deploy'
+ * const result = await deploy.scan(process.cwd(), { environment: 'prod' })
+ * if (!result.success) throw new Error(result.error.message)
+ * const scan: ScanResult = result.data
+ * const services = scan.requiredServices
+ * ```
  */
 export interface ScanResult {
   /** 调用者指定的部署目录，对应 lockfile 中的一个 importer。 */
@@ -126,6 +174,12 @@ export interface ScanResult {
  * 部署结果
  *
  * 包含部署后的访问 URL、状态和已设置的环境变量。
+ * @example
+ * ```ts
+ * import type { DeployResult } from '@h-ai/deploy'
+ * const packaged: DeployResult = { url: '', deploymentId: 'deploy-shop-001', status: 'packaged', bundlePath: '/workspace/shop/.hai/deploy/shop-1.0.0.tar', envVarsSet: [], provider: 'docker-ssh', healthCheck: 'skipped' }
+ * // packaged 只代表交付包生成；不将其展示为服务已上线。
+ * ```
  */
 export interface DeployResult {
   /** 部署后的访问 URL */
@@ -152,6 +206,12 @@ export interface DeployResult {
  * 基础设施开通结果
  *
  * 由 Provisioner 开通服务后返回，包含要注入到部署平台的环境变量。
+ * @example
+ * ```ts
+ * import type { ProvisionResult } from '@h-ai/deploy'
+ * const reused: ProvisionResult = { resourceStatus: 'reused', serviceType: 'db', provisionerName: 'neon', envVars: { HAI_DB_TYPE: 'postgresql' }, resourceInfo: 'Existing shop database' }
+ * // envVars 可能含密码；不能直接输出。
+ * ```
  */
 export interface ProvisionResult {
   /** 本次新建或复用；凭证型服务始终为 reused */
@@ -166,7 +226,15 @@ export interface ProvisionResult {
   resourceInfo: string
 }
 
-/** 部署失败后的安全恢复信息，不含环境变量值或原始异常。 */
+/**
+ * 部署失败后的安全恢复信息，不含环境变量值或原始异常。
+ * @example
+ * ```ts
+ * import type { DeployRecoveryInfo } from '@h-ai/deploy'
+ * const recovery: DeployRecoveryInfo = { projectName: 'shop', stage: 'provision', resources: [{ serviceType: 'db', provisionerName: 'neon', resourceInfo: 'shop', resourceStatus: 'unknown' }] }
+ * // 先在供应商控制台核对 unknown 资源；避免重复创建计费资源。
+ * ```
+ */
 export interface DeployRecoveryInfo {
   projectName: string
   stage: string
@@ -184,8 +252,8 @@ export interface DeployRecoveryInfo {
  * @example
  * ```ts
  * import type { DeployCommandState } from '@h-ai/deploy'
- * const state: DeployCommandState = { reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'unknown' }
- * void state.localTermination
+ * const state: DeployCommandState = { reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'unknown', deploymentId: 'deploy-shop-001', resultFile: '/opt/hai/apps/shop/results/deploy-shop-001' }
+ * if (state.remoteExecution === 'unknown') process.stderr.write('Verify the matching remote deployment result before retrying\n')
  * ```
  */
 export interface DeployCommandState {
@@ -207,7 +275,15 @@ export interface DeployCommandState {
 
 // ─── 部署选项 ───
 
-/** 部署选项 */
+/**
+ * 部署选项
+ * 仅更新指定服务时仍受完整/部分制品与首次部署约束；bundleOnly 不触发 SSH。
+ * @example
+ * ```ts
+ * import type { DeployAppOptions } from '@h-ai/deploy'
+ * const options: DeployAppOptions = { environment: 'prod', bundleOnly: true, artifactDir: '.hai/build/docker/build-id', selectedServices: ['app'], output: '.hai/deploy/shop.tar' }
+ * ```
+ */
 export interface DeployAppOptions {
   /** 接收实际执行阶段，用于终端进度显示；不包含凭据或配置原文。 */
   onProgress?: (stage: 'packaging' | 'preflight' | 'images' | 'dependencies' | 'start' | 'health' | 'complete') => void
@@ -239,15 +315,58 @@ export interface DeployAppOptions {
  * Deploy 凭证文件操作。
  *
  * 这些方法仅操作 `~/.hai/credentials.yml`，不依赖 `deploy.init()`。
+ * @example
+ * ```ts
+ * import type { DeployCredentialOperations } from '@h-ai/deploy'
+ * import { deploy } from '@h-ai/deploy'
+ * const credentials: DeployCredentialOperations = deploy.credentials
+ * const path = credentials.getPath() // 无需先 init。
+ * ```
  */
 export interface DeployCredentialOperations {
-  /** 获取凭证文件绝对路径。 */
+  /**
+   * 获取凭证文件绝对路径。
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * const path = deploy.credentials.getPath() // 当前用户的全局凭证文件。
+   * ```
+   */
   getPath: () => string
-  /** 加载凭证文件并注入 `process.env`。 */
+  /**
+   * 加载凭证文件并注入 `process.env`。
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * const loaded = deploy.credentials.load()
+   * if (!loaded.success) throw new Error(loaded.error.message)
+   * const names = loaded.data // 不输出被注入的值。
+   * ```
+   */
   load: () => HaiResult<string[]>
-  /** 保存单个凭证。 */
+  /**
+   * 保存单个凭证。
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * const token = process.env.HAI_DEPLOY_PROVIDER_TOKEN
+   * if (!token) throw new Error('Provide HAI_DEPLOY_PROVIDER_TOKEN privately')
+   * const saved = deploy.credentials.save('HAI_DEPLOY_PROVIDER_TOKEN', token)
+   * if (!saved.success) throw new Error(saved.error.message)
+   * ```
+   */
   save: (key: string, value: string) => HaiResult<void>
-  /** 批量保存凭证。 */
+  /**
+   * 批量保存凭证。
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * const token = process.env.HAI_DEPLOY_PROVIDER_TOKEN
+   * if (!token) throw new Error('Provide HAI_DEPLOY_PROVIDER_TOKEN privately')
+   * const saved = deploy.credentials.saveAll({ HAI_DEPLOY_PROVIDER_TOKEN: token })
+   * if (!saved.success) throw new Error(saved.error.message)
+   * ```
+   */
   saveAll: (entries: Record<string, string>) => HaiResult<void>
 }
 
@@ -263,25 +382,51 @@ export interface DeployCredentialOperations {
  * - `deploy.provisionAll()` — 开通所有已配置的基础设施
  * - `deploy.deployApp()` — 完整部署流程
  * - `deploy.close()` — 关闭模块
- *
+ * scan 与 credentials 不需要 init；部署与开通遵循 init → 检查结果 → use → finally close。close 返回 Promise<void>，不伪造 HaiResult。
  * @example
  * ```ts
+ * import type { DeployFunctions } from '@h-ai/deploy'
  * import { deploy } from '@h-ai/deploy'
- *
- * await deploy.init({ provider: { type: 'vercel', token: 'xxx' } })
- * const result = await deploy.deployApp('./apps/my-app')
- * if (result.success) {
- *   console.log(`Deployed: ${result.data.url}`)
- * }
- * await deploy.close()
+ * const operations: DeployFunctions = deploy
+ * const scan = await operations.scan(process.cwd())
+ * if (!scan.success) throw new Error(scan.error.message)
+ * const required = scan.data.requiredServices
  * ```
  */
 export interface DeployFunctions {
   /** 全局部署凭证文件操作。 */
   readonly credentials: DeployCredentialOperations
-  /** 初始化模块（加载配置、创建 Provider 和 Provisioner 实例） */
+  /**
+   * 初始化模块（加载配置、创建 Provider 和 Provisioner 实例）
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } })
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const ready = deploy.isInitialized
+   * }
+   * finally {
+   *   await deploy.close()
+   * }
+   * ```
+   */
   init: (config: DeployConfigInput) => Promise<HaiResult<void>>
-  /** 关闭模块 */
+  /**
+   * 关闭模块
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } })
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   const provider = deploy.config?.provider.type
+   * }
+   * finally {
+   *   await deploy.close() // Promise<void>；不检查不存在的 success 字段。
+   * }
+   * ```
+   */
   close: () => Promise<void>
   /** 当前配置 */
   readonly config: DeployConfig | null
@@ -294,6 +439,13 @@ export interface DeployFunctions {
    * 这是纯文件系统分析能力，不依赖云端认证状态，可在 `deploy.init()` 之前调用。
    *
    * @param appDir - 应用根目录路径
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * const scanned = await deploy.scan(process.cwd(), { environment: 'prod' })
+   * if (!scanned.success) throw new Error(scanned.error.message)
+   * const services = scanned.data.requiredServices // 无需 init。
+   * ```
    */
   scan: (appDir: string, options?: DeployScanOptions) => Promise<HaiResult<ScanResult>>
 
@@ -302,6 +454,28 @@ export interface DeployFunctions {
    *
    * @param projectName - 用于资源命名的项目名
    * @returns 所有 Provisioner 的结果列表
+   * @example
+   * ```ts
+   * import { deploy, getDeployRecovery } from '@h-ai/deploy'
+   * const apiKey = process.env.HAI_DEPLOY_SERVICES_DB_APIKEY
+   * if (!apiKey) throw new Error('Provide HAI_DEPLOY_SERVICES_DB_APIKEY privately')
+   * const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } }, services: { db: { provisioner: 'neon', apiKey } } })
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   // 会访问真实云服务并可能新建资源。
+   *   const result = await deploy.provisionAll('shop', ['db'])
+   *   if (!result.success) {
+   *     const recovery = getDeployRecovery(result.error)
+   *     if (recovery?.resources.some(resource => resource.resourceStatus === 'unknown')) {
+   *       process.stderr.write('Verify unknown resources at the provider before retrying\n')
+   *     }
+   *     throw new Error(result.error.message)
+   *   }
+   * }
+   * finally {
+   *   await deploy.close()
+   * }
+   * ```
    */
   provisionAll: (projectName: string, services?: ServiceType[]) => Promise<HaiResult<ProvisionResult[]>>
 
@@ -310,6 +484,21 @@ export interface DeployFunctions {
    *
    * @param appDir - 应用根目录路径
    * @param options - 部署选项
+   * @example
+   * ```ts
+   * import { deploy } from '@h-ai/deploy'
+   * const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } })
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * try {
+   *   // 当前项目必须已有构建镜像清单与生产环境配置。
+   *   const result = await deploy.deployApp(process.cwd(), { environment: 'prod', bundleOnly: true })
+   *   if (!result.success) throw new Error(result.error.message)
+   *   const status = result.data.status // packaged 不代表线上运行。
+   * }
+   * finally {
+   *   await deploy.close()
+   * }
+   * ```
    */
   deployApp: (appDir: string, options?: DeployAppOptions) => Promise<HaiResult<DeployResult>>
 }

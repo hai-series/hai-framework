@@ -10,9 +10,19 @@ import type { HaiResult } from '@h-ai/core'
 import type { DeployResult, ProvisionResult, ServiceType } from './deploy-types.js'
 
 /**
- * 部署平台 Provider 接口（Vercel / Cloudflare Pages 等）。
+ * 部署平台 Provider 接口（当前为 Vercel）。
  *
  * 仅用于模块内部实现，不向包消费者暴露。
+ * 当前平台 Provider 为 Vercel；docker-ssh 使用单独的 ContainerDeployProvider，不冒充静态上传平台。
+ * @example 模块内部上下文
+ * ```ts
+ * const { createVercelProvider } = await import('./providers/deploy-provider-vercel.js')
+ * const provider: DeployProvider = createVercelProvider()
+ * const token = process.env.HAI_DEPLOY_PROVIDER_TOKEN
+ * if (!token) throw new Error('Provide HAI_DEPLOY_PROVIDER_TOKEN privately')
+ * const authenticated = await provider.authenticate(token)
+ * if (!authenticated.success) throw new Error(authenticated.error.message)
+ * ```
  */
 export interface DeployProvider {
   /** Provider 名称 */
@@ -27,7 +37,7 @@ export interface DeployProvider {
   authenticate: (token: string) => Promise<HaiResult<string>>
 
   /**
-   * 创建平台项目（幂等：已存在则返回现有项目 ID）。
+   * 按名称查找或创建平台项目；故障后可能需要核对远端结果，不能保证并发创建 exactly-once。
    *
    * @param projectName - 项目名称
    * @returns 项目 ID
@@ -56,6 +66,18 @@ export interface DeployProvider {
  * 基础设施服务 Provisioner 接口（Neon / Upstash / R2 / Resend / Aliyun）。
  *
  * 仅用于模块内部实现，不向包消费者暴露。
+ * 远端操作可能创建计费资源；网络故障后的 unknown 需人工核对，不能仅凭按名称查找就宣称跨节点 exactly-once。
+ * @example 模块内部上下文
+ * ```ts
+ * const { createNeonProvisioner } = await import('./provisioners/deploy-provisioner-neon.js')
+ * const provisioner: ServiceProvisioner = createNeonProvisioner()
+ * const apiKey = process.env.HAI_DEPLOY_SERVICES_DB_APIKEY
+ * if (!apiKey) throw new Error('Provide HAI_DEPLOY_SERVICES_DB_APIKEY privately')
+ * const authenticated = await provisioner.authenticate({ apiKey })
+ * if (!authenticated.success) throw new Error(authenticated.error.message)
+ * const result = await provisioner.provision('shop')
+ * if (!result.success) throw new Error(result.error.message)
+ * ```
  */
 export interface ServiceProvisioner {
   /** Provisioner 名称 */
@@ -72,7 +94,7 @@ export interface ServiceProvisioner {
   authenticate: (credentials: Record<string, string>) => Promise<HaiResult<string>>
 
   /**
-   * 开通或复用服务资源（幂等：按项目名查找已有资源）。
+   * 按供应商能力开通或复用资源；返回 unknown 恢复状态时先核对远端结果，不盲目重试。
    *
    * @param projectName - 项目名称，用作资源命名
    * @returns 开通结果（含环境变量映射）

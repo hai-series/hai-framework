@@ -6,7 +6,14 @@
 import type { ServiceType } from './deploy-types.js'
 import { deployM } from './deploy-i18n.js'
 
-/** 连接字段；例如 `{ name: 'port', defaultValue: '5432', kind: 'port' }`。 */
+/**
+ * 连接字段；例如 `{ name: 'port', defaultValue: '5432', kind: 'port' }`。
+ * @example
+ * ```ts
+ * import type { MiddlewareField } from '@h-ai/deploy'
+ * const field: MiddlewareField = { name: 'port', defaultValue: '5432', required: true, kind: 'port' }
+ * ```
+ */
 export interface MiddlewareField {
   /** 模块配置字段名，camelCase 不拆词。 */
   name: string
@@ -24,7 +31,14 @@ export interface MiddlewareField {
   maximum?: number
 }
 
-/** 后端目录项；例如 PostgreSQL 对应 `backend: 'postgresql'`。 */
+/**
+ * 后端目录项；例如 PostgreSQL 对应 `backend: 'postgresql'`。
+ * @example
+ * ```ts
+ * import type { MiddlewareBackend } from '@h-ai/deploy'
+ * const backend: MiddlewareBackend = { backend: 'postgresql', label: 'PostgreSQL', purpose: 'deploy_purposeDatabase', fields: [{ name: 'database', required: true }] }
+ * ```
+ */
 export interface MiddlewareBackend {
   /** 模块 Schema 接受的后端标识。 */
   backend: string
@@ -44,7 +58,12 @@ const required = (name: string, defaultValue?: string, kind?: MiddlewareField['k
 /**
  * 所有可部署中间件的连接目录。
  * SQLite、memory、local 与 disabled 保留本地/禁用语义，不创建无关 sidecar。
- * @example `DEPLOY_MIDDLEWARE.db.map(item => item.label)` 返回数据库选择项。
+ * 目录同时描述本机、禁用、自建与云后端；存在依赖不等于必须开通新资源。
+ * @example
+ * ```ts
+ * import { DEPLOY_MIDDLEWARE, describeMiddlewareBackend } from '@h-ai/deploy'
+ * const choices = DEPLOY_MIDDLEWARE.db.map(backend => ({ value: backend.backend, description: describeMiddlewareBackend(backend) }))
+ * ```
  */
 export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
   db: [
@@ -87,7 +106,16 @@ export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
 
 /**
  * 返回当前语言的后端用途说明。
- * @example `describeMiddlewareBackend(DEPLOY_MIDDLEWARE.db[0])`
+ * @param backend - 部署目录中的后端条目。
+ * @returns 当前 locale 的用途说明。
+ * @example
+ * ```ts
+ * import { DEPLOY_MIDDLEWARE, describeMiddlewareBackend } from '@h-ai/deploy'
+ * const backend = DEPLOY_MIDDLEWARE.db.find(item => item.backend === 'postgresql')
+ * if (backend) {
+ *   const description = describeMiddlewareBackend(backend)
+ * }
+ * ```
  */
 export function describeMiddlewareBackend(backend: MiddlewareBackend): string {
   return deployM(backend.purpose)

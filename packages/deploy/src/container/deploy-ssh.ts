@@ -18,7 +18,17 @@ import { runCommand } from './deploy-command.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'ssh' })
 
-/** SSH 执行器接口 */
+/**
+ * SSH 执行器接口
+ * 命令通过远端登录 shell 执行；传入的命令文本必须由受信代码构造。远端副作用与本地 SSH 退出状态分开处理。
+ * @example 模块内部上下文
+ * ```ts
+ * const config: SshConfig = { host: 'deploy.example.net', username: 'deploy', port: 22, strictHostKeyChecking: true, connectTimeoutSeconds: 10 }
+ * const ssh = createSshExecutor(config)
+ * const connected = await ssh.ping()
+ * if (!connected.success) throw new Error(connected.error.message)
+ * ```
+ */
 export interface SshExecutor {
   /** 在远程主机执行命令（通过远程登录 shell 运行） */
   exec: (remoteCommand: string, options?: Pick<CommandOptions, 'timeoutMs' | 'terminationTimeoutMs' | 'secrets' | 'maxCaptureChars' | 'onOutput'>) => Promise<HaiResult<CommandResult>>
@@ -46,9 +56,15 @@ function buildConnectOptions(config: SshConfig): string[] {
  * 构造 ssh 执行命令的参数数组。
  *
  * remoteCommand 作为单个参数传入，不经过本地 shell 解析，避免本地命令注入。
- *
  * @param config - SSH 连接配置
  * @param remoteCommand - 远程命令字符串
+ * @returns 交给本地 ssh 可执行文件的参数数组。
+ * @example 模块内部上下文
+ * ```ts
+ * const config: SshConfig = { host: 'deploy.example.net', username: 'deploy', port: 22, strictHostKeyChecking: true, connectTimeoutSeconds: 10 }
+ * const args = buildSshExecArgs(config, 'true')
+ * // 参数供本地无 shell 的 ssh 进程使用；不是可再次拼接进 shell 的字符串。
+ * ```
  */
 export function buildSshExecArgs(config: SshConfig, remoteCommand: string): string[] {
   return [
@@ -62,10 +78,16 @@ export function buildSshExecArgs(config: SshConfig, remoteCommand: string): stri
 
 /**
  * 构造 scp 上传命令的参数数组。
- *
+ * 保留参数数组边界；远端路径只使用内部已校验的部署目录。
  * @param config - SSH 连接配置
  * @param localPath - 本地文件路径
  * @param remotePath - 远程目标路径
+ * @returns 交给本地 scp 可执行文件的参数数组。
+ * @example 模块内部上下文
+ * ```ts
+ * const config: SshConfig = { host: 'deploy.example.net', username: 'deploy', port: 22, strictHostKeyChecking: true, connectTimeoutSeconds: 10 }
+ * const args = buildScpUploadArgs(config, '/workspace/shop/.hai/deploy/shop.tar', '/opt/hai/incoming/shop.tar')
+ * ```
  */
 export function buildScpUploadArgs(config: SshConfig, localPath: string, remotePath: string): string[] {
   return [
@@ -79,9 +101,16 @@ export function buildScpUploadArgs(config: SshConfig, localPath: string, remoteP
 
 /**
  * 创建 SSH 执行器。
- *
+ * 创建执行器不持有长连接；每次 exec/upload/ping 启动独立受管理本地进程并检查 HaiResult。
  * @param config - SSH 连接配置
  * @returns SSH 执行器实例
+ * @example 模块内部上下文
+ * ```ts
+ * const config: SshConfig = { host: 'deploy.example.net', username: 'deploy', port: 22, strictHostKeyChecking: true, connectTimeoutSeconds: 10 }
+ * const ssh = createSshExecutor(config)
+ * const connected = await ssh.ping()
+ * if (!connected.success) throw new Error(connected.error.message)
+ * ```
  */
 export function createSshExecutor(config: SshConfig): SshExecutor {
   const exec: SshExecutor['exec'] = async (remoteCommand, options) => {

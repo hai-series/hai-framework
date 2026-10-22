@@ -66,10 +66,14 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * 创建 docker-ssh 部署 Provider。
- *
  * @param config - docker-ssh Provider 配置
  * @param container - Compose 中间件参数
  * @returns 容器部署 Provider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createDockerSshProvider({ type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } })
+ * const name = provider.name // 创建本身不连接 SSH；在线发布仍需有效 SSH 配置。
+ * ```
  */
 export function createDockerSshProvider(
   config: DockerSshProviderConfig,
