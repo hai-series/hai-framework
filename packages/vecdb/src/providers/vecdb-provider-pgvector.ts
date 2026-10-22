@@ -22,13 +22,31 @@ import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-b
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'pgvector' })
 
-/** pg Pool 的最小接口定义（避免强依赖可选包） */
+/**
+ * pg Pool 的最小接口定义（避免强依赖可选包）
+ * @example 模块内部上下文
+ * ```ts
+ * async function ready(pool: PgPool) {
+ *   const result = await pool.query('SELECT $1 AS value', [1])
+ *   return result.rows.length > 0
+ * }
+ * ```
+ */
 interface PgPool {
   query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
   end: () => Promise<void>
 }
 
-/** pg 模块的最小接口定义（避免强依赖可选包） */
+/**
+ * pg 模块的最小接口定义（避免强依赖可选包）
+ * @example 模块内部上下文
+ * ```ts
+ * async function ready(module: PgModule) {
+ *   const pool = new module.Pool({ host: 'db', database: 'shop' })
+ *   try { return await pool.query('SELECT 1') } finally { await pool.end() }
+ * }
+ * ```
+ */
 interface PgModule {
   Pool: new (config: unknown) => PgPool
 }
@@ -46,6 +64,13 @@ function isPgModule(value: unknown): value is PgModule {
  * 创建 pgvector Provider
  *
  * @returns VecdbProvider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createPgvectorProvider()
+ * // 连接由模块 init 发布；独立内部调用者必须检查 connect 并回收 close。
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createPgvectorProvider(): VecdbProvider {
   let pool: PgPool | null = null

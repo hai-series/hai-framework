@@ -33,7 +33,15 @@ const DIMENSION_METADATA_KEY = 'hai_dimension'
 const SPACE_METADATA_KEY = 'hnsw:space'
 const HEARTBEAT_POLL_INTERVAL = 300
 
-/** 可选 SDK 的真实模块类型；type import 不会提前加载运行时驱动。 */
+/**
+ * 可选 SDK 的真实模块类型；type import 不会提前加载运行时驱动。
+ * @example 模块内部上下文
+ * ```ts
+ * function client(module: ChromaModule) {
+ *   return new module.ChromaClient({ host: 'localhost', port: 8000, ssl: false })
+ * }
+ * ```
+ */
 type ChromaModule = typeof import('chromadb')
 
 function isChromaModule(value: unknown): value is ChromaModule {
@@ -92,6 +100,14 @@ function buildWhere(filter?: Record<string, unknown>): Where | undefined {
 
 /**
  * 创建 Chroma Provider
+ * @returns 尚未连接的 Provider；connect 成功后可用，close 失败时保留资源供重试。
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createChromaProvider()
+ * // 连接由模块 init 发布；独立内部调用者必须检查 connect 并回收 close。
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createChromaProvider(): VecdbProvider {
   let client: ChromaClient | null = null

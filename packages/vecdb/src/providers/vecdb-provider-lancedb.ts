@@ -65,6 +65,13 @@ function buildMetadataPredicate(filter: Record<string, unknown>): HaiResult<stri
 
 /**
  * 从持久化 Arrow schema 读取的集合定义，不在进程内缓存。
+ * @example 模块内部上下文
+ * ```ts
+ * function metric(meta: CollectionMeta) {
+ *   if (!meta.atomicWrites) throw new Error('Atomic merge required')
+ *   return { dimension: meta.dimension, metric: meta.metric }
+ * }
+ * ```
  */
 interface CollectionMeta {
   /** 向量维度 */
@@ -81,7 +88,13 @@ interface CollectionMeta {
  * 创建 LanceDB Provider
  *
  * @returns VecdbProvider 实例
- * @example const provider = createLancedbProvider()
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createLancedbProvider()
+ * // 连接由模块 init 发布；独立内部调用者必须检查 connect 并回收 close。
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createLancedbProvider(): VecdbProvider {
   let connection: Connection | null = null

@@ -24,7 +24,15 @@ import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-b
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
 
-/** 可选 SDK 的真实模块类型；type import 不会提前加载运行时驱动。 */
+/**
+ * 可选 SDK 的真实模块类型；type import 不会提前加载运行时驱动。
+ * @example 模块内部上下文
+ * ```ts
+ * function client(module: QdrantModule) {
+ *   return new module.QdrantClient({ url: 'http://localhost:6333' })
+ * }
+ * ```
+ */
 type QdrantModule = typeof import('@qdrant/js-client-rest')
 
 function isQdrantModule(value: unknown): value is QdrantModule {
@@ -62,6 +70,13 @@ function toQdrantDistance(metric: DistanceMetric): Schemas['Distance'] {
  * 创建 Qdrant Provider
  *
  * @returns VecdbProvider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createQdrantProvider()
+ * // 连接由模块 init 发布；独立内部调用者必须检查 connect 并回收 close。
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createQdrantProvider(): VecdbProvider {
   let client: QdrantClient | null = null

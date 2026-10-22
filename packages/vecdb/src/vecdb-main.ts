@@ -163,27 +163,20 @@ const vectorOps: VectorOperations = {
  * - `vecdb.vector` - 向量操作（插入/搜索/删除）
  * - `vecdb.config` - 当前配置
  * - `vecdb.isInitialized` - 初始化状态
- *
  * @example
  * ```ts
  * import { vecdb } from '@h-ai/vecdb'
  *
- * // 初始化（LanceDB）
- * await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
- *
- * // 集合操作
- * await vecdb.collection.create('docs', { dimension: 1536 })
- *
- * // 向量操作
- * await vecdb.vector.insert('docs', [
- *   { id: '1', vector: [...], content: '文档内容' },
- * ])
- *
- * // 搜索
- * const result = await vecdb.vector.search('docs', queryVector, { topK: 5 })
- *
- * // 关闭
- * await vecdb.close()
+ * const initialized = await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333' })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await vecdb.collection.list()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await vecdb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export const vecdb: VecdbFunctions = {
