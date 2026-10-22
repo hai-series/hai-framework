@@ -13,6 +13,7 @@
   "reach_dndPersistenceRequired": "启用免打扰延迟发送需要先初始化数据库并确保队列表可用",
   "reach_dndEnqueueFailed": "消息未能可靠保存到延迟队列，请稍后重试",
   "reach_sendRecordSaveFailed": "保存触达发送记录失败",
+  "reach_invalidStoredInteger": "发送记录的 {field} 不是安全的非负整数",
   "reach_smsSendFailed": "短信发送失败: {error}",
   "reach_emailSendFailed": "邮件发送失败: {error}",
   "reach_apiSendFailed": "API 回调发送失败: {error}",

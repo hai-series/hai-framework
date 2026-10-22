@@ -32,10 +32,10 @@ export interface StoredTemplate {
   subject: string | null
   /** 正文模板 */
   body: string
-  /** 创建时间 */
-  createdAt: number
-  /** 更新时间 */
-  updatedAt: number
+  /** 创建时间（TIMESTAMP 经仓库映射为 Date）。 */
+  createdAt: Date
+  /** 更新时间（TIMESTAMP 经仓库映射为 Date）。 */
+  updatedAt: Date
 }
 
 // ─── 模板存储接口 ───

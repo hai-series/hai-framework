@@ -227,6 +227,8 @@ interface ReachConfigInput {
 
 验证码和密码重置等有时效的通知应明确选择 DND 策略；可靠入队成功不代表用户已收到验证码。
 
+队列 `created_at` / `updated_at` / `locked_until` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。已有表须在部署时同步列结构，模块不自动迁移旧表；跨库验收必须运行 PostgreSQL/MySQL 用例，SQLite 无法证明 32 位溢出已经消除。
+
 ### 多渠道验证码发送
 
 ```typescript

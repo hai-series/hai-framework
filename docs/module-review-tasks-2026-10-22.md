@@ -4,6 +4,8 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
+实施进度：P1 19/42；P2 0/23（已通过定向验证；全量回归尚未执行）。
+
 ## 使用与验收规则
 
 - P1：安全、授权、凭据、数据丢失、假成功或生产分布式正确性问题，优先于整理工作；P2：契约、可靠性、规范及维护改进。未据未经验证的部署推断标注 P0。
@@ -337,7 +339,8 @@
 
 ### REACH-02 · P1 · 修正毫秒时间列的数据库类型
 
-- [ ] 待修正（源码确认；范围：reach）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：三个epoch毫秒列统一BIGINT，Reach的findById/getById/findAll/findPage统一将driver number/string/bigint归一化为安全number（含PG主键），非法或超安全范围明确失败；模板TIMESTAMP类型改Date。同步Reach/reldb三语说明、仓库规范和skill，reldb仅说明变化。真实SQLite/PG16.15/MySQL8.4.11新增18项及5文件68项、reach typecheck/lint/build、check:skills通过，容器已清理；testcontainers仅新增Reach devDependency和lock importer；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/reach/src/repositories/reach-repository-send-log.ts:204](../packages/reach/src/repositories/reach-repository-send-log.ts#L204)；[packages/reach/src/repositories/reach-repository-send-log.ts:220](../packages/reach/src/repositories/reach-repository-send-log.ts#L220)。
 - **证据与影响**：lockedUntil/updatedAt 使用 INTEGER 存储 Date.now() 毫秒值；PostgreSQL 的 INTEGER 为 32 位，当前时间远超范围。SQLite 的宽整数测试不能验证 PostgreSQL/MySQL 行为。
 - **修正内容**：统一使用可容纳毫秒的 BIGINT 或 timestamp，并明确 driver 返回字符串/数字转换；检查其它模块的 epoch 毫秒字段。

@@ -131,6 +131,8 @@ if (result.data.deferred) {
 }
 ```
 
+队列的 `created_at`、`updated_at`、`locked_until` 统一保存 Unix 毫秒，列类型为 `BIGINT`（SQLite 映射为 64 位 `INTEGER`）。Reach 仓库将 PostgreSQL 等驱动返回的整数字符串归一化为安全整数 `number`；负数、非整数及超出 JS 安全整数范围的存储值返回 `SEND_FAILED`，不会静默舍入。模板仓库的 `TIMESTAMP` 创建/更新时间映射为 `Date`。部署时须同步更新已有表的列类型，框架不自动迁移旧表。
+
 ### 错误处理
 
 所有操作返回 `HaiResult<T>`，错误码定义在 `HaiReachError`：
@@ -168,6 +170,8 @@ if (!result.success) {
 ```bash
 pnpm --filter @h-ai/reach test
 ```
+
+跨库时间回归用例 `tests/reach-repository-send-log-databases.test.ts` 通过 Testcontainers 启动隔离 PostgreSQL 16.15 / MySQL 8.4.11，并在结束时清理容器；须提供可用的 Docker API。使用 Podman 时，将 `DOCKER_HOST` 指向其兼容 socket；rootless 环境可按 Testcontainers 要求设置 `TESTCONTAINERS_RYUK_DISABLED=true`。
 
 ## 许可证
 

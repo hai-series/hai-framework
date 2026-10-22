@@ -131,6 +131,8 @@ if (result.data.deferred) {
 }
 ```
 
+Queue columns `created_at`, `updated_at`, and `locked_until` store Unix milliseconds as `BIGINT` (64-bit `INTEGER` on SQLite). The Reach repository normalizes integer strings returned by drivers such as PostgreSQL into safe integer `number` values. Negative, fractional, or unsafe stored integers return `SEND_FAILED` instead of being silently rounded. Template creation/update `TIMESTAMP` fields map to `Date`. Update existing table column types during deployment; the framework does not migrate old tables automatically.
+
 ### Error handling
 
 All operations return `HaiResult<T>`. Error codes are defined in `HaiReachError`:
@@ -168,6 +170,8 @@ Across nodes, flushing pending DND-delay messages is protected by `@h-ai/cache` 
 ```bash
 pnpm --filter @h-ai/reach test
 ```
+
+`tests/reach-repository-send-log-databases.test.ts` starts isolated PostgreSQL 16.15 / MySQL 8.4.11 containers through Testcontainers and removes them afterward. A reachable Docker API is required. For Podman, point `DOCKER_HOST` at its compatible socket; rootless environments can set `TESTCONTAINERS_RYUK_DISABLED=true` as required by Testcontainers.
 
 ## License
 

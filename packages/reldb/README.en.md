@@ -302,6 +302,8 @@ await reldb.tx.wrap(async (tx) => {
 
 Business repositories extend `BaseReldbCrudRepository` and define field mappings with `fields` for automatic table creation and type conversion:
 
+Use `BIGINT` for Unix milliseconds (64-bit INTEGER on SQLite, BIGINT on PostgreSQL/MySQL). A regular INTEGER on PostgreSQL/MySQL cannot hold current epoch milliseconds. Raw SQL/CRUD and base repository reads preserve driver BIGINT types: number/string/bigint. Business repositories requiring number must validate safe integers before conversion to avoid silent precision loss. The base repository reads TIMESTAMP fields as Date.
+
 ```ts
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'

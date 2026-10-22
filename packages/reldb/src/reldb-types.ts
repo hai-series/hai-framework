@@ -46,7 +46,7 @@ export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInf
  * | 类型        | SQLite  | PostgreSQL       | MySQL        |
  * |------------|---------|------------------|--------------|
  * | TEXT       | TEXT    | TEXT             | VARCHAR(255) |
- * | INTEGER    | INTEGER | INTEGER/SERIAL   | INT/BIGINT   |
+ * | INTEGER    | INTEGER | INTEGER/BIGSERIAL | INT/BIGINT   |
  * | BIGINT     | INTEGER | BIGINT           | BIGINT       |
  * | REAL       | REAL    | DOUBLE PRECISION | DOUBLE       |
  * | BLOB       | BLOB    | BYTEA            | BLOB         |
@@ -55,7 +55,9 @@ export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInf
  * | JSON       | TEXT    | JSONB            | JSON         |
  *
  * 注：MySQL 将 TEXT 映射为 VARCHAR(255) 以支持索引和 UNIQUE 约束。
- * INTEGER 在 MySQL autoIncrement 时映射为 BIGINT，否则映射为 INT。
+ * INTEGER 在 MySQL autoIncrement 时映射为 BIGINT，在 PostgreSQL 映射为 BIGSERIAL，否则为 32 位 INT/INTEGER。
+ * Unix 毫秒应声明为 BIGINT；原始 SQL/CRUD 的 BIGINT 返回形态取决于驱动，可能为 number/string/bigint。
+ * 使用 number 的业务仓库须校验 Number.isSafeInteger，超出范围不能直接强转而丢失精度。
  */
 export type ColumnType
   = | 'TEXT'

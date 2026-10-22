@@ -302,6 +302,8 @@ await reldb.tx.wrap(async (tx) => {
 
 業務リポジトリーは `BaseReldbCrudRepository` を継承し、`fields` でフィールドの対応を定義します。テーブル作成と型変換は自動です：
 
+Unix ミリ秒には `BIGINT`（SQLite では 64 ビット INTEGER、PostgreSQL/MySQL では BIGINT）を使用します。PostgreSQL/MySQL の通常の INTEGER では現在のミリ秒値を保存できません。生 SQL/CRUD と基底リポジトリーは BIGINT のドライバー型（number/string/bigint）を保持します。number が必要な業務リポジトリーは変換時に安全な整数であることを検証し、精度の損失を防いでください。基底リポジトリーは TIMESTAMP を Date として読み取ります。
+
 ```ts
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'

@@ -103,7 +103,7 @@ const columns: ReldbTableDef = {
 
 ```typescript
 interface ReldbColumnDef {
-  type: 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB' | 'BOOLEAN' | 'TIMESTAMP' | 'JSON'
+  type: 'TEXT' | 'INTEGER' | 'BIGINT' | 'REAL' | 'BLOB' | 'BOOLEAN' | 'TIMESTAMP' | 'JSON'
   primaryKey?: boolean
   autoIncrement?: boolean
   notNull?: boolean
@@ -118,7 +118,8 @@ interface ReldbColumnDef {
 | 类型      | SQLite  | PostgreSQL       | MySQL        |
 | --------- | ------- | ---------------- | ------------ |
 | TEXT      | TEXT    | TEXT             | VARCHAR(255) |
-| INTEGER   | INTEGER | INTEGER/SERIAL   | INT/BIGINT   |
+| INTEGER   | INTEGER | INTEGER/BIGSERIAL | INT/BIGINT   |
+| BIGINT    | INTEGER（64 位） | BIGINT | BIGINT |
 | REAL      | REAL    | DOUBLE PRECISION | DOUBLE       |
 | BLOB      | BLOB    | BYTEA            | BLOB         |
 | BOOLEAN   | INTEGER | BOOLEAN          | TINYINT(1)   |
@@ -126,6 +127,8 @@ interface ReldbColumnDef {
 | JSON      | TEXT    | JSONB            | JSON         |
 
 > MySQL 将 TEXT 映射为 VARCHAR(255) 以支持索引和 UNIQUE 约束。INTEGER + autoIncrement 在 MySQL 映射为 BIGINT。
+
+Unix 毫秒使用 BIGINT，不能使用 PostgreSQL/MySQL 的普通 INTEGER。原始 SQL/CRUD 与 BaseReldbCrudRepository 的 BIGINT 保留 driver 的 number/string/bigint 类型；业务需要 number 时须在读取边界校验非负整数和 Number.isSafeInteger，拒绝精度丢失。TIMESTAMP 经 BaseReldbCrudRepository 映射为 Date。
 
 ### SQL — `reldb.sql`
 

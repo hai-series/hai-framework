@@ -131,6 +131,8 @@ if (result.data.deferred) {
 }
 ```
 
+キューの `created_at`、`updated_at`、`locked_until` は Unix ミリ秒を `BIGINT`（SQLite では 64 ビット `INTEGER`）として保存します。Reach リポジトリーは PostgreSQL などのドライバーが返す整数文字列を安全な整数の `number` に変換します。負数、小数、JS の安全整数範囲外の保存値は丸めずに `SEND_FAILED` を返します。テンプレートの作成・更新 `TIMESTAMP` は `Date` に対応します。デプロイ時に既存テーブルの列型も更新してください。旧テーブルの自動移行は行いません。
+
 ### エラー処理
 
 すべての操作は `HaiResult<T>` を返します。エラーコードは `HaiReachError` で定義します：
@@ -168,6 +170,8 @@ if (!result.success) {
 ```bash
 pnpm --filter @h-ai/reach test
 ```
+
+`tests/reach-repository-send-log-databases.test.ts` は Testcontainers で隔離した PostgreSQL 16.15 / MySQL 8.4.11 を起動し、終了後に削除します。利用可能な Docker API が必要です。Podman では `DOCKER_HOST` を互換ソケットに向け、rootless 環境では Testcontainers の要件に従って `TESTCONTAINERS_RYUK_DISABLED=true` を設定してください。
 
 ## ライセンス
 

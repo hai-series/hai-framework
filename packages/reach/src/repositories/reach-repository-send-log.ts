@@ -5,8 +5,8 @@
  * @module reach-repository-send-log
  */
 
-import type { HaiResult } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
+import type { CrudPageOptions, CrudQueryOptions, DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
@@ -32,7 +32,7 @@ export interface SendLogClaimOptions {
  * 发送日志存储实体
  */
 export interface StoredSendLog {
-  /** 自增主键 */
+  /** 自增主键；驱动 BIGSERIAL/BIGINT 值读取后校验为安全整数 number。 */
   id: number
   /** 入队回执 UUID；延迟消息创建时写入，可用 queue_id 列追踪持久化状态。 */
   queueId: string | null
@@ -58,9 +58,9 @@ export interface StoredSendLog {
   processingOwner?: string
   /** 当前 claim 过期时间（Unix 时间戳毫秒） */
   lockedUntil?: number
-  /** 创建时间 */
+  /** 创建时间（Unix 时间戳毫秒；BIGINT 读取后校验为安全整数 number）。 */
   createdAt: number
-  /** 最近更新时间 */
+  /** 最近更新时间（Unix 时间戳毫秒；BIGINT 读取后校验为安全整数 number）。 */
   updatedAt?: number
 }
 
@@ -110,6 +110,35 @@ function buildSendLogError<T>(detail: string, cause?: unknown): HaiResult<T> {
     reachM('reach_sendFailed', { params: { error: detail } }),
     cause,
   )
+}
+
+/** 校验并归一化驱动返回的 BIGINT，防止 PostgreSQL 字符串值或不安全整数泄漏到业务逻辑。 */
+function normalizeSendLog(row: StoredSendLog): HaiResult<StoredSendLog> {
+  const normalized = { ...row }
+  for (const field of ['id', 'createdAt', 'updatedAt', 'lockedUntil'] as const) {
+    const value: unknown = row[field]
+    if (value === undefined && (field === 'updatedAt' || field === 'lockedUntil'))
+      continue
+    const validType = typeof value === 'number' || typeof value === 'bigint'
+      || (typeof value === 'string' && /^\d+$/.test(value))
+    const integer = validType ? Number(value) : Number.NaN
+    if (!Number.isSafeInteger(integer) || integer < 0)
+      return buildSendLogError(reachM('reach_invalidStoredInteger', { params: { field } }))
+    Object.assign(normalized, { [field]: integer })
+  }
+  return ok(normalized)
+}
+
+/** 批量读取同样经过时间校验，避免分页、claim 和普通查询返回不同类型。 */
+function normalizeSendLogs(rows: StoredSendLog[]): HaiResult<StoredSendLog[]> {
+  const normalized: StoredSendLog[] = []
+  for (const row of rows) {
+    const result = normalizeSendLog(row)
+    if (!result.success)
+      return result
+    normalized.push(result.data)
+  }
+  return ok(normalized)
 }
 
 /** 字段定义 */
@@ -213,7 +242,7 @@ const SEND_LOG_FIELDS: ReldbCrudFieldDefinition[] = [
   {
     fieldName: 'lockedUntil',
     columnName: 'locked_until',
-    def: { type: 'INTEGER' as const },
+    def: { type: 'BIGINT' as const },
     select: true,
     create: true,
     update: true,
@@ -221,7 +250,7 @@ const SEND_LOG_FIELDS: ReldbCrudFieldDefinition[] = [
   {
     fieldName: 'createdAt',
     columnName: 'created_at',
-    def: { type: 'TIMESTAMP' as const, notNull: true },
+    def: { type: 'BIGINT' as const, notNull: true },
     select: true,
     create: true,
     update: false,
@@ -229,7 +258,7 @@ const SEND_LOG_FIELDS: ReldbCrudFieldDefinition[] = [
   {
     fieldName: 'updatedAt',
     columnName: 'updated_at',
-    def: { type: 'INTEGER' as const, notNull: true },
+    def: { type: 'BIGINT' as const, notNull: true },
     select: true,
     create: true,
     update: true,
@@ -292,6 +321,35 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     })
   }
 
+  /** 单条可空查询统一返回经过校验的毫秒 number。 */
+  override async findById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<StoredSendLog | null>> {
+    const result = await super.findById(id, tx)
+    if (!result.success || result.data === null)
+      return result
+    return normalizeSendLog(result.data)
+  }
+
+  /** 单条必需查询统一返回经过校验的毫秒 number。 */
+  override async getById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<StoredSendLog>> {
+    const result = await super.getById(id, tx)
+    return result.success ? normalizeSendLog(result.data) : result
+  }
+
+  /** 普通列表与 claim 回读共用同一 BIGINT 转换边界。 */
+  override async findAll(options?: CrudQueryOptions, tx?: DmlWithTxOperations): Promise<HaiResult<StoredSendLog[]>> {
+    const result = await super.findAll(options, tx)
+    return result.success ? normalizeSendLogs(result.data) : result
+  }
+
+  /** 分页结果同样拒绝不安全的时间值，不返回经过舍入的毫秒数。 */
+  override async findPage(options: CrudPageOptions, tx?: DmlWithTxOperations): Promise<HaiResult<PaginatedResult<StoredSendLog>>> {
+    const result = await super.findPage(options, tx)
+    if (!result.success)
+      return result
+    const rows = normalizeSendLogs(result.data.items)
+    return rows.success ? ok({ ...result.data, items: rows.data }) : rows
+  }
+
   /** 获取所有待发送记录 */
   async findPending(tx?: DmlWithTxOperations): Promise<HaiResult<StoredSendLog[]>> {
     const result = await this.findAll({ where: 'status = ?', params: ['pending'], orderBy: 'created_at ASC' }, tx)
@@ -331,7 +389,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
 
     const claimedIds = lockedRowsResult.data.map((row) => {
       const id = typeof row.id === 'number' ? row.id : Number(row.id)
-      if (!Number.isInteger(id)) {
+      if (!Number.isSafeInteger(id)) {
         throw new TypeError(`Invalid send log id returned when claiming pending batch: ${String(row.id)}`)
       }
       return id

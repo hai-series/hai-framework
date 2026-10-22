@@ -13,6 +13,7 @@
   "reach_dndPersistenceRequired": "DND delay requires an initialized database and a ready queue table",
   "reach_dndEnqueueFailed": "The message could not be reliably queued; try again later",
   "reach_sendRecordSaveFailed": "Failed to persist the reach send record",
+  "reach_invalidStoredInteger": "Send record {field} is not a safe non-negative integer",
   "reach_smsSendFailed": "SMS send failed: {error}",
   "reach_emailSendFailed": "Email send failed: {error}",
   "reach_apiSendFailed": "API callback send failed: {error}",

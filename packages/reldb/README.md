@@ -302,6 +302,8 @@ await reldb.tx.wrap(async (tx) => {
 
 业务仓库继承 `BaseReldbCrudRepository`，通过 `fields` 定义字段映射，自动建表、类型转换：
 
+Unix 毫秒字段使用 `BIGINT`（SQLite 为 64 位 INTEGER，PostgreSQL/MySQL 为 BIGINT），普通 INTEGER 在 PostgreSQL/MySQL 中无法容纳当前毫秒时间。BIGINT 的原始 SQL/CRUD 和基类读取值保留驱动的 number/string/bigint 类型；需要 number 的业务仓库须校验安全整数后转换，避免静默精度丢失。TIMESTAMP 字段由基类读取为 Date。
+
 ```ts
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'

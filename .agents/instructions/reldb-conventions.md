@@ -26,6 +26,8 @@
 - 构造配置使用 `fields` 的 fieldName/columnName 映射、`def` 列定义与 select/create/update 标记；不要臆造 fieldMapping/toEntity/fromEntity 扩展方法
 - 跨仓库事务：多个 Repository 共享同一 `tx` 句柄
 - 表名规则以 module-conventions 为准：`hai_<module>_<feature>`、就近定义、不可配置
+- Unix 毫秒列使用 `BIGINT`，不能依赖 SQLite 宽整数掩盖 PostgreSQL/MySQL 的普通 INTEGER 溢出；`TIMESTAMP` 经基类读取为 `Date`，类型声明须一致。
+- 原始 BIGINT 返回类型依赖 driver；业务需要 number 时在仓库边界校验安全整数，拒绝精度丢失，并用真实 PostgreSQL/MySQL 验证时间比较。
 
 ## 缓存 key 约定（涉及 cache 时）
 

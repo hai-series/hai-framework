@@ -92,12 +92,15 @@ const columns: ReldbTableDef = {
 | 类型 | SQLite | PostgreSQL | MySQL |
 |------|--------|-----------|-------|
 | TEXT | TEXT | TEXT | VARCHAR(255) |
-| INTEGER | INTEGER | INTEGER/SERIAL | INT/BIGINT |
+| INTEGER | INTEGER | INTEGER/BIGSERIAL | INT/BIGINT |
+| BIGINT | INTEGER（64 位） | BIGINT | BIGINT |
 | REAL | REAL | DOUBLE PRECISION | DOUBLE |
 | BLOB | BLOB | BYTEA | BLOB |
 | BOOLEAN | INTEGER | BOOLEAN | TINYINT(1) |
-| TIMESTAMP | INTEGER | TIMESTAMPTZ | DATETIME |
+| TIMESTAMP | INTEGER | TIMESTAMP | DATETIME |
 | JSON | TEXT | JSONB | JSON |
+
+Unix 毫秒使用 BIGINT，不能使用 PostgreSQL/MySQL 的普通 INTEGER。原始 SQL/CRUD 与 BaseReldbCrudRepository 的 BIGINT 值保留驱动返回类型（number/string/bigint）；需要 number 的业务仓库应在读取边界校验非负整数及 Number.isSafeInteger 后转换，拒绝精度丢失。TIMESTAMP 经 BaseReldbCrudRepository 映射为 Date。
 
 ## §4 SQL — `reldb.sql`
 
