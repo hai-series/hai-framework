@@ -25,5 +25,7 @@
   "vecdb_invalidDimension": "无效的向量维度: {dimension}，必须为正整数",
   "vecdb_configPathRequired": "数据库存储路径不能为空",
   "vecdb_configDatabaseRequired": "数据库名称不能为空",
-  "vecdb_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。"
+  "vecdb_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。",
+  "vecdb_chromaEndpointInvalid": "Chroma 仅支持 HTTP(S) 根端点，不得包含凭据、路径前缀、query 或 fragment",
+  "vecdb_chromaTokenInvalid": "Chroma Bearer token 仅支持无空白的可打印 ASCII 字符"
 }

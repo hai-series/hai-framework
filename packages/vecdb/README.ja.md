@@ -81,8 +81,14 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 ```
 
 > Node 版の Chroma は HTTP クライアントのみで、プロセス内の組み込み DB はありません。組み込みモードでは `vecdb.init` が
-> `serverCommand`（既定は `chromadb` パッケージの `chroma`）でローカルサービスを起動し、`vecdb.close` が
-> そのプロセスを停止します。任意依存の `chromadb` をインストールしてください。コマンドが利用できない場合、`init` は `CONNECTION_FAILED` を返します。
+> `serverCommand`（既定は `chroma`）でローカルサービスを起動し、`vecdb.close` がそのプロセスを停止します。
+> npm の任意依存 `chromadb` は HTTP クライアントです。サーバー CLI は別途インストールしてください。コマンドが利用できない場合、`init` は `CONNECTION_FAILED` を返します。
+
+Chroma の `url` は `https://chroma.example.com:8443/` など HTTP(S) のルートエンドポイントのみを受け付け、`host/port` より優先されます。URL の認証情報、パス接頭辞、query、fragment は拒否します。`url` がない場合は `host/port` の HTTP 接続です。`chromadb 3.5.0` の `host/port/ssl/headers` を使用します。[公式 TypeScript クライアント](https://docs.trychroma.com/reference/typescript/client)を参照してください。
+
+Chroma の任意の `apiKey` は、このモジュールの規約として `Authorization: Bearer <apiKey>` で送信します。同じ認証方式を使うセルフホストサービスやゲートウェイ向けです。リモートの認証情報には HTTPS を使用してください。空文字列は未設定を表し、非空値では空白、制御文字、非 ASCII 文字を拒否します。既定の tenant/database を使用し、Chroma Cloud のクライアントやテナント設定は提供しません。初期化は heartbeat の後にコレクション件数のデータエンドポイントも確認します。認証・権限エラーは `CONNECTION_FAILED` を返し、接続済み状態を公開しません。呼び出し側は `success` を確認してください。
+
+直接接続の初期化全体の期限は 5 秒です。ローカルサービス起動では `startupTimeout` を使用します。期限を超えると候補 HTTP リクエストを中止します。成功時はタイマーを解除するため、この期限は以後の業務リクエストには適用されません。
 
 LanceDB は次元数を Arrow の固定長 vector フィールドに、集合の metric を同じ schema の metadata に永続化し、空の集合も復元できます。`collection.create` の metric を優先し、接続設定は新規集合の既定値としてのみ使用します。再起動や既定値の変更で既存の集合は変わりません。各操作は永続 schema と他の接続のコミットを確認します。定義が欠落・不正な場合は `CONFIG_ERROR` を返し、仮のベクトルによる推測はしません。定義のない旧形式・外部テーブルは再作成してください。互換推定は提供しません。
 

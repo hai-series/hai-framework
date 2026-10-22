@@ -25,5 +25,7 @@
   "vecdb_invalidDimension": "Invalid vector dimension: {dimension}, must be a positive integer",
   "vecdb_configPathRequired": "Database storage path is required",
   "vecdb_configDatabaseRequired": "Database name is required",
-  "vecdb_sharedBackendRequired": "Production mode requires a shared backend; local files and memory backends are for development or explicit end-to-end tests."
+  "vecdb_sharedBackendRequired": "Production mode requires a shared backend; local files and memory backends are for development or explicit end-to-end tests.",
+  "vecdb_chromaEndpointInvalid": "Chroma requires an HTTP(S) root endpoint without credentials, path prefix, query or fragment",
+  "vecdb_chromaTokenInvalid": "Chroma Bearer token must contain only printable ASCII characters without whitespace"
 }

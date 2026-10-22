@@ -173,14 +173,24 @@ const ChromaConfigSchema = z.object({
   type: z.literal('chroma'),
   /** 本地持久化路径（嵌入式模式：提供且无 url 时自动拉起本地服务） */
   path: z.string().optional(),
-  /** 已有 Chroma 服务 URL（提供时直连，不自动拉起进程） */
-  url: z.string().url().optional(),
+  /** Chroma HTTP(S) 根端点；不可包含凭据、路径前缀、query 或 fragment；提供时优先于 host/port。 */
+  url: z.string().url().refine((value) => {
+    try {
+      const endpoint = new URL(value)
+      return ['http:', 'https:'].includes(endpoint.protocol)
+        && !endpoint.username && !endpoint.password && endpoint.pathname === '/'
+        && !endpoint.search && !endpoint.hash
+    }
+    catch {
+      return false
+    }
+  }, { error: () => vecdbM('vecdb_chromaEndpointInvalid') }).optional(),
   /** 主机（默认 localhost） */
   host: z.string().default('localhost'),
   /** 端口（默认 8000） */
   port: z.number().int().min(1).max(65535).default(8000),
-  /** API Key（可选，连接受保护的 Chroma 服务时使用） */
-  apiKey: z.string().optional(),
+  /** 可选 Bearer token，发送 Authorization 请求头；用于采用此协议的自托管服务/网关，不是 Chroma Cloud 配置。空串表示未配置。 */
+  apiKey: z.string().regex(/^[\x21-\x7E]*$/, { error: () => vecdbM('vecdb_chromaTokenInvalid') }).optional(),
   /** 拉起本地服务的可执行命令（默认 'chroma'，可指定绝对路径） */
   serverCommand: z.string().default('chroma'),
   /** 拉起本地服务的就绪等待超时（毫秒，默认 30000） */

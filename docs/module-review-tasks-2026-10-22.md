@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03，共 71 个，另有 21 个按模块拆分的 JSDoc 任务，共 92 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 45/46；P2 21/46（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 46/46；P2 21/46（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -732,7 +732,8 @@
 
 ### VECDB-04 · P1 · Chroma 认证参数按真实 SDK 发送
 
-- [ ] 待修正（实施复核新增；范围：vecdb）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：按chromadb3.5真实构造参数发送Authorization Bearer；根URL约束/通道专属env元数据同步，公开heartbeat之后以受保护countCollections作就绪校验，初始化deadline中止挂起连接，成功后清timer不影响后续请求；CLI/三语README/skill/LLMS同步。29定向测试、真实Chroma1.5.5+严格Bearer网关3项、Qdrant1.18原生26项、env元数据1项通过；source/重点test严格类型、fresh ESM/DTS、lint、skills37/324和env595通过。未证明Chroma Cloud、真实TLS或内嵌CLI，认证是显式代理协议不是服务器绕过；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[Chroma Provider](../packages/vecdb/src/providers/vecdb-provider-chroma.ts)。
 - **证据与影响**：当前 SDK 不处理旧 AUTHORIZATION auth 配置，配置 apiKey 不等于实际发送凭证；匿名容器 CRUD 不能验证受保护部署认证。
 - **修正内容**：按安装 SDK 的真实构造和请求参数发送应用约定的 Bearer 认证，拒绝实际被忽略的 URL 成分；同步真实类型、配置、文档与 skill，不声称已验证 Chroma Cloud 或服务端鉴权绕过。

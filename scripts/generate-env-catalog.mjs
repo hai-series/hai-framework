@@ -199,6 +199,10 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
   if (context.name === 'db' && segments.join('.') === 'pool.acquireTimeout') {
     constraints.splice(0, constraints.length, '整数；PostgreSQL >=0（0禁用）；MySQL 1–2147483647')
   }
+  // apiKey 的 Chroma Bearer 限制只作用于该 Provider，不能将其正则并入 Qdrant 的约束。
+  if (context.name === 'vecdb' && segments.join('.') === 'apiKey') {
+    constraints.splice(0, constraints.length, '字符串；Qdrant API key；Chroma 为空串或无空白的可打印 ASCII Bearer token')
+  }
   if (!constraints.length && !enums.length && effectiveDefault !== undefined) {
     const type = typeof effectiveDefault
     constraints.push(type === 'string' ? '字符串' : type === 'boolean' ? 'true | false' : type === 'number' ? '数字' : Array.isArray(effectiveDefault) ? 'JSON 数组' : 'JSON 对象')
@@ -217,7 +221,11 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
   }
   if (constraints.length || enums.length) {
     const parentDoc = segments.at(-1) === '0' ? context.docs.get(segments.slice(0, -1).join('.')) : undefined
-    const description = node.description || context.docs.get(segments.join('.')) || (parentDoc && `${parentDoc}；此变量整体替换单个数组项`) || fieldDescription(context.name, segments) || `${context.name}.${segments.join('.')} 配置${segments.length ? '项' : '对象'}`
+    const providerDescription = context.name === 'vecdb' && ({
+      apiKey: 'Qdrant：API key；Chroma：Authorization Bearer token，用于同协议的自托管服务/网关，不提供 Chroma Cloud 契约',
+      url: 'pgvector：连接串；Qdrant：HTTP(S) 服务地址；Chroma：HTTP(S) 根端点，优先于 host/port，不允许凭据、路径前缀、query 或 fragment',
+    })[segments.join('.')]
+    const description = providerDescription || node.description || context.docs.get(segments.join('.')) || (parentDoc && `${parentDoc}；此变量整体替换单个数组项`) || fieldDescription(context.name, segments) || `${context.name}.${segments.join('.')} 配置${segments.length ? '项' : '对象'}`
     const value = effectiveDefault === undefined ? '' : typeof effectiveDefault === 'object' ? JSON.stringify(effectiveDefault) : String(effectiveDefault)
     add(name, { module: context.name, path: [context.name, ...segments].join('.'), description, constraints, enums, value })
   }

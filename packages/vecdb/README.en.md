@@ -81,8 +81,14 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 ```
 
 > On Node, Chroma provides only an HTTP client, with no in-process embedded database. In embedded mode, `vecdb.init`
-> starts a local service with `serverCommand` (default: `chroma`, from the `chromadb` package), and `vecdb.close`
-> stops the process. Install the optional `chromadb` dependency; if the command is unavailable, `init` returns `CONNECTION_FAILED`.
+> starts a local service with `serverCommand` (default: `chroma`), and `vecdb.close` stops the process.
+> The optional npm package `chromadb` supplies the HTTP client; install the server CLI separately. An unavailable command makes `init` return `CONNECTION_FAILED`.
+
+Chroma `url` accepts only an HTTP(S) root endpoint, such as `https://chroma.example.com:8443/`, and takes precedence over `host/port`. URL credentials, path prefixes, query strings and fragments are rejected. Without `url`, `host/port` uses HTTP. Configuration uses the `host/port/ssl/headers` arguments of `chromadb 3.5.0`; see the [official TypeScript client](https://docs.trychroma.com/reference/typescript/client).
+
+For Chroma, this module sends the optional `apiKey` as `Authorization: Bearer <apiKey>` to self-hosted services or gateways implementing that protocol. Use HTTPS for remote credentials. An empty string omits credentials; nonempty tokens cannot contain whitespace, control characters or non-ASCII characters. This interface uses the default tenant/database and does not configure Chroma Cloud. Initialization checks the collection-count data endpoint after heartbeat. Authentication or permission failures return `CONNECTION_FAILED` without publishing a connected state; callers must check `success`.
+
+Direct initialization has a total deadline of 5 seconds; local server startup uses `startupTimeout`. Expiry aborts candidate HTTP requests. Successful initialization clears the timer, so this deadline does not limit subsequent business requests.
 
 LanceDB stores dimensions in Arrow's fixed-size vector field and the collection metric in the same schema's metadata, including empty collections. The metric in `collection.create` takes precedence; the connection metric only supplies a default for new collections. Restarting or changing that default does not alter existing collections. Operations read persisted schemas and check other connections' commits. Missing or invalid definitions return `CONFIG_ERROR`, without dummy-vector probes or guessed metrics. Rebuild legacy/external tables that lack this definition; no compatibility inference is provided.
 

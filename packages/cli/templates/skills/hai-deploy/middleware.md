@@ -12,14 +12,14 @@
 
 `ScanResult.haiModules` 列出所有实际运行依赖中的 Hai 模块；`ScanResult.middlewares` 提供服务、后端、来源、配置路径和变量前缀；连接配置可能含凭据，不能整体记入日志。`DEPLOY_MIDDLEWARE` 是后端和连接字段的公共目录，字段名称、类型与约束须与模块 Schema 同步。
 
-| 来源 | 后端选项 | 默认 Compose 行为 | 云自动开通 |
-| --- | --- | --- | --- |
-| reldb；IAM/audit；启用 DB 日志的 scheduler | SQLite / MySQL / PostgreSQL | SQLite 数据卷；mysql / postgres 服务 | PostgreSQL → Neon |
-| cache；IAM；scheduler 可选分布式锁 | memory / Redis | memory 无服务；redis 服务 | Redis → Upstash |
-| storage | local / S3 | 本地数据卷；RustFS（默认）/MinIO + bucket 初始化 | S3 → Cloudflare R2 |
-| vecdb | LanceDB / pgvector / Qdrant / Chroma | 本地卷或对应容器 | 自定义已有服务 |
-| IAM 可选目录认证 | disabled / LDAP | 禁用无服务；OpenLDAP | 自定义已有目录 |
-| Reach Provider 数组 | console / SMTP / HTTP API；阿里云 SMS | console 无服务；SMTP 用 Mailpit 捕获测试邮件；HTTP/SMS 自定义 | SMTP → Resend；SMS → 阿里云凭据接入 |
+| 来源                                       | 后端选项                              | 默认 Compose 行为                                             | 云自动开通                          |
+| ------------------------------------------ | ------------------------------------- | ------------------------------------------------------------- | ----------------------------------- |
+| reldb；IAM/audit；启用 DB 日志的 scheduler | SQLite / MySQL / PostgreSQL           | SQLite 数据卷；mysql / postgres 服务                          | PostgreSQL → Neon                   |
+| cache；IAM；scheduler 可选分布式锁         | memory / Redis                        | memory 无服务；redis 服务                                     | Redis → Upstash                     |
+| storage                                    | local / S3                            | 本地数据卷；RustFS（默认）/MinIO + bucket 初始化              | S3 → Cloudflare R2                  |
+| vecdb                                      | LanceDB / pgvector / Qdrant / Chroma  | 本地卷或对应容器                                              | 自定义已有服务                      |
+| IAM 可选目录认证                           | disabled / LDAP                       | 禁用无服务；OpenLDAP                                          | 自定义已有目录                      |
+| Reach Provider 数组                        | console / SMTP / HTTP API；阿里云 SMS | console 无服务；SMTP 用 Mailpit 捕获测试邮件；HTTP/SMS 自定义 | SMTP → Resend；SMS → 阿里云凭据接入 |
 
 `serv` 声明 AI peer 不代表应用启用了 AI，不应因此安装 AI/ONNX/CUDA 或开通向量服务。LDAP 需要在应用安装 IAM 的可选 peer `ldapts`，并显式设置 `login.ldap=true`；安装 IAM 不代表启用了 LDAP。Reach 保留 Provider 的数组索引及名称，不能把 HTTP 回调当作 SMTP。默认目录没有业务账号；Mailpit 不会对外投递生产邮件。生产应配置企业 LDAP/SMTP，或使用对应云服务。
 
@@ -39,15 +39,15 @@
 
 识别依据是运行图中的所有节点，不按应用直接依赖硬编码消费者名单。下面按当前公开依赖和功能说明；新增模块/后端时同步此表、连接目录与真实运行测试。
 
-| 模块 | 中间件来源或外部能力 |
-| --- | --- |
-| reldb / cache / storage / vecdb | 分别拥有关系库、缓存、对象存储、向量库连接契约 |
-| iam / kit | IAM 运行依赖 audit/reldb/cache/crypto；kit 经 IAM 继承。LDAP 按 login.ldap 开关启用，Reach peer 只有另行实际依赖时进入运行图 |
-| audit / payment | audit 经 reldb 持久化；Stripe payment 直接依赖先初始化的共享 reldb 保存渠道映射和幂等结果，审计可选。微信、支付宝、Stripe 是已有商户 API，沿 payment 配置接入，不生成假云服务或容器 |
-| scheduler / reach | 两者实际依赖 reldb/cache；Reach 另按启用的 SMTP/HTTP/短信渠道配置 |
-| ai | 实际依赖 reldb/vecdb/datapipe。LLM、图像、音频端点及模型来自 AI 配置，不能仅凭包名选择模型镜像或 CUDA；不自动创建付费厂商账号 |
-| crypto / serv | crypto 的可选运行依赖按 lockfile 解析，serv 经 crypto 继承；serv 的 IAM/storage/AI peer 不作为启用证据 |
-| core / datapipe / api-contract / api-client / ui / capacitor / cli / deploy | 本身没有额外专用中间件；仍沿实际运行依赖继续遍历，例如 api-client/capacitor 的 crypto 分支。UI/设备能力、部署目标/Provisioner 凭据按各自配置处理 |
+| 模块                                                                        | 中间件来源或外部能力                                                                                                                                                                |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| reldb / cache / storage / vecdb                                             | 分别拥有关系库、缓存、对象存储、向量库连接契约                                                                                                                                      |
+| iam / kit                                                                   | IAM 运行依赖 audit/reldb/cache/crypto；kit 经 IAM 继承。LDAP 按 login.ldap 开关启用，Reach peer 只有另行实际依赖时进入运行图                                                        |
+| audit / payment                                                             | audit 经 reldb 持久化；Stripe payment 直接依赖先初始化的共享 reldb 保存渠道映射和幂等结果，审计可选。微信、支付宝、Stripe 是已有商户 API，沿 payment 配置接入，不生成假云服务或容器 |
+| scheduler / reach                                                           | 两者实际依赖 reldb/cache；Reach 另按启用的 SMTP/HTTP/短信渠道配置                                                                                                                   |
+| ai                                                                          | 实际依赖 reldb/vecdb/datapipe。LLM、图像、音频端点及模型来自 AI 配置，不能仅凭包名选择模型镜像或 CUDA；不自动创建付费厂商账号                                                       |
+| crypto / serv                                                               | crypto 的可选运行依赖按 lockfile 解析，serv 经 crypto 继承；serv 的 IAM/storage/AI peer 不作为启用证据                                                                              |
+| core / datapipe / api-contract / api-client / ui / capacitor / cli / deploy | 本身没有额外专用中间件；仍沿实际运行依赖继续遍历，例如 api-client/capacitor 的 crypto 分支。UI/设备能力、部署目标/Provisioner 凭据按各自配置处理                                    |
 
 S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，保存到 HAI_DEPLOY_CONTAINER_S3ENGINE（rustfs | minio，默认 rustfs），应用始终写 HAI_STORAGE_TYPE=s3 或 HAI_STORAGE。自定义 AWS S3、OSS、R2 等端点不生成 sidecar。镜像使用与 storage 集成测试一致的 RustFS 官方版本和 MinIO 社区版本；存储桶初始化复用应用镜像里的 S3 SDK，无需额外 mc 镜像，必须幂等且不能吞掉失败。
 
@@ -57,19 +57,19 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 
 以下是自定义向导的连接字段；完整可用项、枚举与范围仍以项目 `.env.example` 和公开 Schema 为准。变量前缀为 `HAI_DB`、`HAI_CACHE`、`HAI_STORAGE`、`HAI_VECDB`、`HAI_IAM_LDAP`；Reach 使用实际索引 `HAI_REACH_PROVIDERS_<index>`。camelCase 不拆词，例如 `bindPassword` → `BINDPASSWORD`。
 
-| 后端 | 连接字段 |
-| --- | --- |
-| SQLite | database（文件路径或 `:memory:`） |
-| MySQL / PostgreSQL | url（优先）、host、port（1–65535）、database、user、password、ssl |
-| Redis | url（优先）、host、port、password、db、tls、keyPrefix、connectTimeout、commandTimeout |
-| local / LanceDB | root / path |
-| S3 | endpoint、bucket、region、accessKeyId、secretAccessKey、forcePathStyle |
-| Qdrant / Chroma | url；Qdrant 可选 apiKey |
-| pgvector | url（优先）或 host/port/user/password，以及 database |
-| LDAP | url、bindDn、bindPassword、searchBase、searchFilter、usernameAttribute、emailAttribute、displayNameAttribute、useTls、connectTimeout |
-| SMTP | host、port、secure、user、pass、from |
-| HTTP API | url、method（POST / PUT）、headers（JSON）、timeout |
-| 阿里云 SMS | accessKeyId、accessKeySecret、signName、endpoint |
+| 后端               | 连接字段                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| SQLite             | database（文件路径或 `:memory:`）                                                                                                    |
+| MySQL / PostgreSQL | url（优先）、host、port（1–65535）、database、user、password、ssl                                                                    |
+| Redis              | url（优先）、host、port、password、db、tls、keyPrefix、connectTimeout、commandTimeout                                                |
+| local / LanceDB    | root / path                                                                                                                          |
+| S3                 | endpoint、bucket、region、accessKeyId、secretAccessKey、forcePathStyle                                                               |
+| Qdrant / Chroma    | url；Qdrant 可选 apiKey；Chroma apiKey 用于 Bearer 自托管网关，URL 仅支持 HTTP(S) 根端点，不提供 Cloud 契约                          |
+| pgvector           | url（优先）或 host/port/user/password，以及 database                                                                                 |
+| LDAP               | url、bindDn、bindPassword、searchBase、searchFilter、usernameAttribute、emailAttribute、displayNameAttribute、useTls、connectTimeout |
+| SMTP               | host、port、secure、user、pass、from                                                                                                 |
+| HTTP API           | url、method（POST / PUT）、headers（JSON）、timeout                                                                                  |
+| 阿里云 SMS         | accessKeyId、accessKeySecret、signName、endpoint                                                                                     |
 
 ## 离线准备与验收
 
@@ -84,7 +84,6 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 生成的 `web.conf` 在 API location 设 `client_max_body_size 2129920`（2 MiB + 32 KiB），用 large_client_header_buffers 4 32k / proxy_buffer_size 32k 容纳 X-Hai-Transport 认证头，并关闭请求/响应 proxy buffering；这与 transport 密文预算一致，避免 Nginx 默认上限拦截合法的 1 MiB 明文编码结果。应用仍执行握手 16 KiB、公钥 4 KiB、明文 1 MiB 的有界读取。自有反向代理须允许相同密文预算并传播取消，不替代应用字节限制；大文件上传使用独立路径和明确预算。
 
 完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。构建可用 --sqlite-prebuild-mirror，Podman 代理不可达可用 --no-http-proxy；不要改系统代理或让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。
-
 
 ## 命令输出
 

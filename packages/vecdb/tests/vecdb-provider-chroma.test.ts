@@ -65,6 +65,10 @@ vi.mock('chromadb', () => {
     }
 
     heartbeat = chroma.heartbeatMock
+    async countCollections() {
+      return chroma.store.size
+    }
+
     async getOrCreateCollection({ name, metadata }: { name: string, metadata?: Record<string, unknown> }) {
       if (!chroma.store.has(name))
         chroma.store.set(name, { metadata: metadata ?? {}, records: new Map() })
@@ -107,7 +111,7 @@ describe('createChromaProvider', () => {
     const provider = await connectDirect()
     expect(provider.isConnected()).toBe(true)
     expect(spawnMock).not.toHaveBeenCalled()
-    expect(chroma.ctorMock).toHaveBeenCalledWith(expect.objectContaining({ path: 'http://localhost:8000' }))
+    expect(chroma.ctorMock).toHaveBeenCalledWith({ host: 'localhost', port: 8000, ssl: false, fetchOptions: { signal: expect.any(AbortSignal) } })
   })
 
   it('嵌入式模式（有 path 无 url）拉起本地服务', async () => {
@@ -116,6 +120,22 @@ describe('createChromaProvider', () => {
     expect(result.success).toBe(true)
     expect(spawnMock).toHaveBeenCalledWith('chroma', expect.arrayContaining(['run', '--path', './data/chroma']), expect.any(Object))
     await provider.close()
+  })
+
+  it.each([
+    ['https://chroma.example.test', 'chroma.example.test', 443, true],
+    ['http://chroma.example.test', 'chroma.example.test', 80, false],
+    ['https://chroma.example.test:8443/', 'chroma.example.test', 8443, true],
+  ] as const)('uRL %s 完整传入实际 SDK 参数并优先于分字段', async (url, host, port, ssl) => {
+    const provider = createChromaProvider()
+    try {
+      const result = await provider.connect({ type: 'chroma', url, host: 'ignored.invalid', port: 9999, apiKey: 'fixture-token', serverCommand: 'chroma', startupTimeout: 30_000 })
+      expect(result.success).toBe(true)
+      expect(chroma.ctorMock).toHaveBeenCalledWith({ host, port, ssl, headers: { Authorization: 'Bearer fixture-token' }, fetchOptions: { signal: expect.any(AbortSignal) } })
+    }
+    finally {
+      await provider.close()
+    }
   })
 
   it('心跳超时时返回连接失败', async () => {

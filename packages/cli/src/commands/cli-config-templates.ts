@@ -639,6 +639,7 @@ apiKey: \${HAI_VECDB_APIKEY:}
 # apiKey: ''
 
 # Chroma 配置（替换 type；url 指向已有服务，path 用于本地子进程数据目录）
+# 直连仅支持 HTTP(S) 根 url；apiKey 按 Bearer 网关协议发送，不提供 Chroma Cloud 配置。
 # type: chroma
 # path: ./data/chroma
 # url: http://localhost:8000

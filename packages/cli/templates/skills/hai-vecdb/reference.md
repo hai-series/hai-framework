@@ -44,7 +44,7 @@ path: ./data/vecdb
 # type: chroma
 # url: http://localhost:8000
 # apiKey: ''
-# serverCommand: chroma      # 嵌入式模式拉起服务的可执行命令（默认 chroma，来自 chromadb 包）
+# serverCommand: chroma      # 嵌入式服务端命令，默认 chroma；需独立安装服务端 CLI
 # startupTimeout: 30000      # 嵌入式服务就绪等待超时（毫秒）
 operationLog:
   read: false # collection.exists/info/list, vector.search/count
@@ -176,7 +176,11 @@ await vecdb.vector.delete('docs', ['doc-1', 'doc-2'])
 
 Qdrant `insert/upsert/delete` 等待服务端应用完成（wait:true）才返回成功，`vector.count` 请求精确计数。多次操作之间没有事务；Knowledge 在此基础上使用共享版本清单发布与补偿。
 
-> Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。嵌入式模式（提供 `path` 且无 `url`）下 `vecdb.init` 通过 `serverCommand`（默认 `chroma`，来自可选依赖 `chromadb`）拉起本地服务，`vecdb.close` 时关闭进程；服务命令不可用或就绪超时时 `init` 返回 `HaiVecdbError.CONNECTION_FAILED`。直连模式提供 `url` 即可，不拉起进程。
+> Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。嵌入式模式（提供 `path` 且无 `url`）下 `vecdb.init` 通过 `serverCommand`（默认 `chroma`）拉起本地服务，`vecdb.close` 时关闭进程；npm `chromadb` 提供客户端，服务端 CLI 需另行安装。服务命令不可用或就绪超时时 `init` 返回 `HaiVecdbError.CONNECTION_FAILED`。
+
+Chroma 直连 `url` 仅支持 HTTP(S) 根端点，优先于 `host/port`；URL 不得带凭据、路径前缀、query 或 fragment。无 `url` 时 `host/port` 使用 HTTP。可选 `apiKey` 以 `Authorization: Bearer <apiKey>` 发送给采用此协议的自托管服务/网关；远程传输应使用 HTTPS。空串表示未配置，其余值只允许无空白的可打印 ASCII。本接口使用默认 tenant/database，不提供 Chroma Cloud 契约。初始化在心跳后验证数据端点权限，认证/权限失败返回 `CONNECTION_FAILED`，必须先检查 `success` 再执行业务。SDK 参数依据：[chromadb 3.5.0 官方客户端](https://docs.trychroma.com/reference/typescript/client)。
+
+直连初始化总截止为 5 秒，本地服务拉起使用 `startupTimeout`；超时中止候选 HTTP 请求。成功清除初始化 timer，不限制后续业务请求。
 
 **VectorDocument**：
 

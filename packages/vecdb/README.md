@@ -81,8 +81,14 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 ```
 
 > Chroma 在 Node 端只有 HTTP 客户端（无进程内嵌入式）。嵌入式模式下 `vecdb.init` 会
-> 通过 `serverCommand`（默认 `chroma`，来自 `chromadb` 包）拉起本地服务，`vecdb.close`
-> 时关闭进程。需安装可选依赖 `chromadb`；服务命令不可用时 `init` 返回 `CONNECTION_FAILED`。
+> 通过 `serverCommand`（默认 `chroma`）拉起本地服务，`vecdb.close` 时关闭进程。
+> npm 可选依赖 `chromadb` 提供 HTTP 客户端；服务端 CLI 需另行安装，命令不可用时 `init` 返回 `CONNECTION_FAILED`。
+
+Chroma 直连 `url` 仅接受 HTTP(S) 根端点（例如 `https://chroma.example.com:8443/`），优先于 `host/port`；不接受 URL 凭据、路径前缀、query 或 fragment。未提供 `url` 时使用 `host/port` 的 HTTP 连接。配置使用 `chromadb 3.5.0` 的 `host/port/ssl/headers` 参数，依据：[官方 TypeScript 客户端](https://docs.trychroma.com/reference/typescript/client)。
+
+Chroma 的可选 `apiKey` 按本模块约定发送 `Authorization: Bearer <apiKey>`，仅用于采用该认证协议的自托管服务或网关；远程凭据传输应使用 HTTPS。空串表示不带凭据，非空值不得包含空白、控制字符或非 ASCII 字符。本接口使用默认 tenant/database，不提供 Chroma Cloud 的客户端与租户配置。初始化在心跳后验证集合计数数据端点；认证/权限失败返回 `CONNECTION_FAILED`，不会发布已连接状态，调用方必须检查 `success`。
+
+直连初始化的总截止为 5 秒，本地服务拉起使用 `startupTimeout`。超时中止候选 HTTP 请求；成功后清除初始化 timer，此截止不限制后续业务请求。
 
 LanceDB 将向量维度存于 Arrow 固定长度 vector 字段，将集合 metric 存于同一 schema 的 metadata；空表也可正确恢复。`collection.create` 中的 metric 优先于连接配置，连接 metric 仅是新集合的默认值。重启或更换默认值不会改变已有集合。每次操作读取持久 schema，并检查其它连接的提交；缺少有效集合定义时返回 `CONFIG_ERROR`，不探测假向量或猜测 metric。旧表/外部表如缺少该定义，需要重建集合，不提供兼容推断。
 

@@ -12,6 +12,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ChromaClientArgs, ChromaClient as ChromaSdkClient } from 'chromadb'
 import type { ChildProcess } from 'node:child_process'
 import type { ChromaConfig, DistanceMetric } from '../vecdb-config.js'
 import type {
@@ -58,6 +59,7 @@ interface ChromaQueryResult {
 
 interface ChromaClient {
   heartbeat: () => Promise<number>
+  countCollections: () => Promise<number>
   getOrCreateCollection: (params: { name: string, metadata?: Record<string, unknown>, embeddingFunction?: unknown }) => Promise<ChromaCollection>
   getCollection: (params: { name: string, embeddingFunction?: unknown }) => Promise<ChromaCollection>
   deleteCollection: (params: { name: string }) => Promise<unknown>
@@ -66,7 +68,7 @@ interface ChromaClient {
 
 /** Chroma 模块的最小接口 */
 interface ChromaModule {
-  ChromaClient: new (params: Record<string, unknown>) => ChromaClient
+  ChromaClient: new (params: ChromaClientArgs) => ChromaClient
 }
 
 function isChromaModule(value: unknown): value is ChromaModule {
@@ -179,7 +181,7 @@ export function createChromaProvider(): VecdbProvider {
   }
 
   /** 轮询心跳直至就绪或超时 */
-  async function waitForHeartbeat(chromaClient: ChromaClient, timeout: number): Promise<void> {
+  async function waitForHeartbeat(chromaClient: Pick<ChromaSdkClient, 'heartbeat'>, timeout: number): Promise<void> {
     const deadline = Date.now() + timeout
     let lastError: unknown
     while (Date.now() < deadline) {
@@ -386,29 +388,40 @@ export function createChromaProvider(): VecdbProvider {
       if (!loadResult.success)
         return loadResult
 
+      const startupAbort = new AbortController()
+      const startupTimeout = embedded ? chromaConfig.startupTimeout : 5000
+      const startupTimer = setTimeout(() => startupAbort.abort(), startupTimeout)
       try {
         if (embedded)
           startEmbeddedServer(chromaConfig)
 
-        const clientParams: Record<string, unknown> = chromaConfig.url
-          ? { path: chromaConfig.url }
-          : { host: chromaConfig.host, port: chromaConfig.port }
+        const endpoint = chromaConfig.url ? new URL(chromaConfig.url) : undefined
+        const clientParams: ChromaClientArgs = endpoint
+          ? { host: endpoint.hostname, port: Number(endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80)), ssl: endpoint.protocol === 'https:' }
+          : { host: chromaConfig.host, port: chromaConfig.port, ssl: false }
         if (chromaConfig.apiKey)
-          clientParams.auth = { provider: 'token', credentials: chromaConfig.apiKey, tokenHeaderType: 'AUTHORIZATION' }
+          clientParams.headers = { Authorization: `Bearer ${chromaConfig.apiKey}` }
+        // SDK 的所有候选连接请求共享初始化截止；成功后清除 timer，不使后续业务请求自动失效。
+        clientParams.fetchOptions = { signal: startupAbort.signal }
 
-        // chromadb 为 optionalDependencies，动态 import 后类型与本地最小接口不兼容，需强转
-        const chromaClient = new loadResult.data.ChromaClient(clientParams) as unknown as ChromaClient
-        await waitForHeartbeat(chromaClient, embedded ? chromaConfig.startupTimeout : 5000)
+        const chromaClient = new loadResult.data.ChromaClient(clientParams)
+        await waitForHeartbeat(chromaClient, startupTimeout)
+        // 心跳可能公开；发布连接前必须确认默认 tenant/database 的数据端点也允许当前凭据访问。
+        await chromaClient.countCollections()
 
         client = chromaClient
         config = chromaConfig
-        logger.info('Chroma connected', { embedded, host: chromaConfig.host, port: chromaConfig.port })
+        logger.info('Chroma connected', { embedded, host: clientParams.host, port: clientParams.port, ssl: clientParams.ssl })
         return ok(undefined)
       }
       catch (error) {
+        startupAbort.abort()
         stopEmbeddedServer()
         logger.error('Failed to connect to Chroma', { error: error instanceof Error ? error.message : String(error) })
         return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
+      }
+      finally {
+        clearTimeout(startupTimer)
       }
     },
 
