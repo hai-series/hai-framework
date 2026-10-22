@@ -9,5 +9,8 @@
   "cache_keyNotFound": "Key not found",
   "cache_indexOutOfRange": "Index out of range",
   "cache_configError": "Cache config validation failed: {error}",
-  "cache_invalidHashSetInput": "Invalid hash hset input: pass a field and value, or a field object"
+  "cache_invalidHashSetInput": "Invalid hash hset input: pass a field and value, or a field object",
+  "cache_invalidScan": "Invalid scan cursor or options",
+  "cache_scanTopologyChanged": "Scan topology or match changed; restart from 0",
+  "cache_crossSlot": "This operation requires keys in the same Redis Cluster slot; use a shared hash tag"
 }

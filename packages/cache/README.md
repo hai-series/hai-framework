@@ -107,6 +107,23 @@ await cache.init({
 - `cache.lock`: 分布式锁（`acquire/release/isLocked/extend`）
 - `CacheProvider`: 公开的 Provider 契约，供高级集成或自定义后端实现复用
 
+### Cluster 多键与扫描
+
+`mget/del/exists` 支持跨 slot，按独立 key 有界执行，mget 保留输入顺序；不提供跨 slot 的原子性或快照。DEL 失败可能已有部分键被删除，重试幂等。`mset`、集合交/并/差和多键阻塞弹出要求同 slot；用共同的 `{hash-tag}` 分组，否则返回 `CROSS_SLOT`，MSET 不进行部分写入。
+
+`scan` 首次传字符串 `'0'`，返回不透明字符串游标，可在配置和拓扑一致的不同应用节点继续。Cluster 遍历全部主节点；拓扑、match 或 keyPrefix 变化返回 `SCAN_TOPOLOGY_CHANGED`，调用方从 `'0'` 重新遍历。返回 key 已去除 keyPrefix，前缀中的 glob 字符按字面量匹配；`keys` 也遵循此规则并去重。SCAN 无快照，允许重复项，count 是正整数提示值，不保证返回条数。无效游标/count 返回 `INVALID_SCAN`。
+
+```ts
+let cursor = '0'
+do {
+  const page = await cache.kv.scan(cursor, { match: 'users:*', count: 100 })
+  if (!page.success)
+    throw new Error(page.error.message)
+  cursor = page.data[0]
+  await consume(page.data[1])
+} while (cursor !== '0')
+```
+
 ### 分布式锁
 
 基于 SET NX EX 模式实现的分布式互斥锁，适用于多节点部署场景。

@@ -107,6 +107,12 @@ await cache.init({
 - `cache.lock`: distributed locks (`acquire/release/isLocked/extend`).
 - `CacheProvider`: a public provider contract for advanced integrations and custom backends.
 
+### Cluster multi-key operations and scanning
+
+`mget/del/exists` support multiple slots through bounded independent key operations. MGET preserves input order; there is no cross-slot atomicity or snapshot. A failed DEL may already have deleted some keys; retry is idempotent. `mset`, set algebra and multi-key blocking pops require a shared slot; group keys with a common `{hash-tag}` or receive `CROSS_SLOT`. MSET never falls back to partial writes.
+
+Start `scan` with string `'0'` and pass the returned opaque cursor unchanged. Another application node with the same configuration and topology can continue it. Cluster scans every master. A topology, match or keyPrefix change returns `SCAN_TOPOLOGY_CHANGED`; restart from `'0'`. Returned keys omit keyPrefix, whose glob characters are literal. `keys` follows the same rule and deduplicates. SCAN has no snapshot and may repeat keys; count is a positive integer hint, not an output limit. Invalid cursors/count return `INVALID_SCAN`.
+
 ### Distributed locks
 
 Distributed mutual exclusion based on SET NX EX, suitable for deployments across multiple nodes.

@@ -23,6 +23,9 @@ const CacheErrorInfo = {
   NOT_INITIALIZED: '010:500',
   UNSUPPORTED_TYPE: '011:400',
   CONFIG_ERROR: '012:500',
+  INVALID_SCAN: '013:400',
+  SCAN_TOPOLOGY_CHANGED: '014:409',
+  CROSS_SLOT: '015:400',
 } as const satisfies ErrorInfo
 
 export const HaiCacheError = core.error.buildHaiErrorsDef('cache', CacheErrorInfo)
@@ -86,9 +89,9 @@ export interface KvOperations {
   get: <T = CacheValue>(key: string) => Promise<HaiResult<T | null>>
   /** 设置值；可通过 options 控制过期时间、NX/XX 条件等 */
   set: (key: string, value: CacheValue, options?: SetOptions) => Promise<HaiResult<void>>
-  /** 删除一个或多个键；返回实际删除的数量 */
+  /** 删除一个或多个键；返回实际删除的数量。Cluster 跨 slot 按独立键有界执行，失败可能已有部分删除，重试幂等。 */
   del: (...keys: string[]) => Promise<HaiResult<number>>
-  /** 检查一个或多个键是否存在；返回存在的数量 */
+  /** 检查一个或多个键是否存在；返回存在的数量。Cluster 跨 slot 独立读取，不保证同一时刻快照。 */
   exists: (...keys: string[]) => Promise<HaiResult<number>>
   /** 设置过期时间（秒） */
   expire: (key: string, seconds: number) => Promise<HaiResult<boolean>>
@@ -106,12 +109,21 @@ export interface KvOperations {
   decr: (key: string) => Promise<HaiResult<number>>
   /** 自减指定值；键不存在时从 0 开始 */
   decrBy: (key: string, decrement: number) => Promise<HaiResult<number>>
-  /** 批量获取；不存在的键对应位置返回 null */
+  /** 批量获取；不存在的键对应位置返回 null。Cluster 跨 slot 保留输入顺序，不保证同一时刻快照。 */
   mget: <T = CacheValue>(...keys: string[]) => Promise<HaiResult<(T | null)[]>>
-  /** 批量设置键值对 */
+  /** 原子批量设置；Cluster 中所有 key 必须同 slot，可使用共同的 {hash-tag}。 */
   mset: (entries: Array<[string, CacheValue]>) => Promise<HaiResult<void>>
-  /** 游标扫描键；返回 [下一游标, 匹配的键列表]，游标为 0 时表示遍历完成 */
-  scan: (cursor: number, options?: ScanOptions) => Promise<HaiResult<[number, string[]]>>
+  /**
+   * 游标扫描逻辑 key，首次传 '0'，后续原样传回不透明字符串；'0' 表示完成。
+   * Cluster 遍历全部主节点，拓扑/match/keyPrefix 变化返回 SCAN_TOPOLOGY_CHANGED，须重启遍历。
+   * 与 Redis SCAN 一致，不提供快照，可能返回重复项；调用方按需去重。
+   * @example
+   * ```ts
+   * const page = await cache.kv.scan('0', { match: 'users:*', count: 100 })
+   * if (page.success) { const [next, keys] = page.data }
+   * ```
+   */
+  scan: (cursor: string, options?: ScanOptions) => Promise<HaiResult<[string, string[]]>>
   /** 获取匹配模式的所有键（慎用，生产环境请用 scan 迭代） */
   keys: (pattern: string) => Promise<HaiResult<string[]>>
   /** 获取键的数据类型；不存在时返回 "none" */
@@ -182,9 +194,9 @@ export interface ListOperations {
   lset: (key: string, index: number, value: CacheValue) => Promise<HaiResult<void>>
   /** 保留指定范围的元素，范围外的元素被删除 */
   ltrim: (key: string, start: number, stop: number) => Promise<HaiResult<void>>
-  /** 阻塞式从左侧弹出；返回 [key, value] 或超时返回 null。memory 实现为非阻塞立即返回。 */
+  /** 阻塞式从左侧弹出；返回 [key, value] 或超时返回 null。Cluster 多键须同 slot；memory 非阻塞立即返回。 */
   blpop: <T = CacheValue>(timeout: number, ...keys: string[]) => Promise<HaiResult<[string, T] | null>>
-  /** 阻塞式从右侧弹出；返回 [key, value] 或超时返回 null。memory 实现为非阻塞立即返回。 */
+  /** 阻塞式从右侧弹出；返回 [key, value] 或超时返回 null。Cluster 多键须同 slot；memory 非阻塞立即返回。 */
   brpop: <T = CacheValue>(timeout: number, ...keys: string[]) => Promise<HaiResult<[string, T] | null>>
 }
 
@@ -214,11 +226,11 @@ export interface SetOperations {
   srandmember: <T = CacheValue>(key: string, count?: number) => Promise<HaiResult<T | T[] | null>>
   /** 随机弹出成员（会从集合中移除）；不指定 count 返回单个值，指定 count 返回数组；空集合返回 null */
   spop: <T = CacheValue>(key: string, count?: number) => Promise<HaiResult<T | T[] | null>>
-  /** 集合交集；任一 key 不存在时返回空数组 */
+  /** 集合交集；任一 key 不存在时返回空数组。Cluster 多键须同 slot，否则返回 CROSS_SLOT。 */
   sinter: <T = CacheValue>(...keys: string[]) => Promise<HaiResult<T[]>>
-  /** 集合并集 */
+  /** 集合并集；Cluster 多键须同 slot，否则返回 CROSS_SLOT。 */
   sunion: <T = CacheValue>(...keys: string[]) => Promise<HaiResult<T[]>>
-  /** 集合差集（第一个集合减去其余集合） */
+  /** 集合差集（第一个集合减去其余集合）；Cluster 多键须同 slot，否则返回 CROSS_SLOT。 */
   sdiff: <T = CacheValue>(...keys: string[]) => Promise<HaiResult<T[]>>
 }
 

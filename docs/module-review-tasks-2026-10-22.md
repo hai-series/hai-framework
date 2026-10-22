@@ -92,7 +92,8 @@
 
 ### CACHE-03 · P1 · 定义并实现 Cluster 下多键与扫描契约
 
-- [ ] 待修正（源码确认；范围：cache）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：Cluster 的 MGET/DEL/EXISTS 按独立键有界执行，原子多键操作同 slot 并结构化返回 CROSS_SLOT；SCAN 使用含拓扑/slot 所有权/条件指纹的可跨应用节点字符串游标遍历全部 master，正确转义 keyPrefix 并返回逻辑 key，keys 改为 SCAN 去重。类型、实际调用方、三语 README、skill 和 LLMS 已同步。真实三主 Redis Cluster 与 KV 定向 54 项、cache typecheck/build、ESLint、check:skills 通过；夹具同容器运行三个 Redis 进程，未把跨主机故障转移标为已验证；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/cache/src/providers/cache-provider-redis.ts:177](../packages/cache/src/providers/cache-provider-redis.ts#L177)；[packages/cache/src/providers/cache-provider-redis.ts:246](../packages/cache/src/providers/cache-provider-redis.ts#L246)。
 - **证据与影响**：多键命令直接下发，未处理跨 slot；scan/keys 直接调用单个 Cluster 客户端，没有跨主节点游标管理。当前公开 API 未限制 key 同 slot，也没有提供完整集群扫描模型。
 - **修正内容**：明确多键操作哪些可分 slot、哪些要求原子同 slot；返回结构化约束错误，不能静默降级。实现跨主节点扫描、逻辑 keyPrefix 输入输出规则，或收缩不支持的 API。

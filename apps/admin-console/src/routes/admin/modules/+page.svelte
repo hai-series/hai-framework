@@ -39,7 +39,7 @@
     { op: 'SET', code: 'await cache.kv.set(\'user:1\', userData, { ex: 3600 })', desc: m.modules_cache_op_set_desc() },
     { op: 'GET', code: 'const user = await cache.kv.get<User>(\'user:1\')', desc: m.modules_cache_op_get_desc() },
     { op: 'DELETE', code: 'await cache.kv.del(\'user:1\')', desc: m.modules_cache_op_delete_desc() },
-    { op: 'SCAN', code: 'const [cursor, keys] = (await cache.kv.scan(0, { match: \'user:*\', count: 100 })).data', desc: m.modules_cache_op_clear_desc() },
+    { op: 'SCAN', code: 'const [cursor, keys] = (await cache.kv.scan(\'0\', { match: \'user:*\', count: 100 })).data', desc: m.modules_cache_op_clear_desc() },
   ])
 
   // Storage 示例

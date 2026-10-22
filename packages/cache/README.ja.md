@@ -107,6 +107,12 @@ await cache.init({
 - `cache.lock`：分散ロック（`acquire/release/isLocked/extend`）。
 - `CacheProvider`：高度な統合や独自バックエンド用の公開 Provider 契約。
 
+### Cluster の複数キー操作と走査
+
+`mget/del/exists` は slot ごとの独立操作を有界並行実行し、MGET は入力順序を維持します。slot 間の原子性やスナップショットは提供しません。DEL の失敗時は一部削除済みの場合があり、再試行は冪等です。`mset`、集合演算、複数キーの blocking pop は同一 slot が必要です。共通の `{hash-tag}` を使わない場合は `CROSS_SLOT` を返し、MSET の部分書き込みは行いません。
+
+`scan` は文字列 `'0'` で開始し、不透明な返却カーソルをそのまま渡します。同じ設定とトポロジーなら別のアプリケーションノードで継続できます。Cluster の全 master を走査し、トポロジー・match・keyPrefix が変わると `SCAN_TOPOLOGY_CHANGED` を返すため `'0'` から再開します。返却キーから keyPrefix を除去し、prefix の glob 文字はリテラルとして扱います。`keys` も同じ規則で重複を除去します。SCAN はスナップショットではなく重複を許容し、count は正の整数の目安です。無効なカーソル/count は `INVALID_SCAN` を返します。
+
 ### 分散ロック
 
 SET NX EX を利用する分散排他ロックで、複数ノードのデプロイに適しています。

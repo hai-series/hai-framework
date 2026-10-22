@@ -13,11 +13,8 @@ import type { CacheProvider, CacheValue, HashOperations, KvOperations, ListOpera
 import { core, err, ok } from '@h-ai/core'
 import Redis from 'ioredis'
 import { cacheM } from '../cache-i18n.js'
-import {
-
-  HaiCacheError,
-
-} from '../cache-types.js'
+import { HaiCacheError } from '../cache-types.js'
+import { RedisScanError, scanRedisKeys } from './cache-redis-scan.js'
 
 const logger = core.logger.child({ module: 'cache', scope: 'redis' })
 
@@ -112,6 +109,13 @@ export function createRedisProvider(): CacheProvider {
       return ok(result)
     }
     catch (error) {
+      if (error instanceof RedisScanError) {
+        return error.reason === 'topology'
+          ? err(HaiCacheError.SCAN_TOPOLOGY_CHANGED, cacheM('cache_scanTopologyChanged'), error)
+          : err(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'), error)
+      }
+      if (error instanceof Error && error.message.startsWith('CROSSSLOT'))
+        return err(HaiCacheError.CROSS_SLOT, cacheM('cache_crossSlot'), error)
       return err(
         HaiCacheError.OPERATION_FAILED,
         cacheM('cache_operationFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
@@ -122,6 +126,14 @@ export function createRedisProvider(): CacheProvider {
 
   function isRedisOne(result: unknown): boolean {
     return result === 1 || result === '1'
+  }
+
+  /** Cluster 独立 key 操作有界并发；返回顺序与输入一致，不承诺跨 slot 快照/原子性。 */
+  async function mapIndependentKeys<T>(keys: string[], operation: (key: string) => Promise<T>): Promise<T[]> {
+    const values: T[] = []
+    for (let offset = 0; offset < keys.length; offset += 64)
+      values.push(...await Promise.all(keys.slice(offset, offset + 64).map(operation)))
+    return values
   }
 
   // ─── KV 操作 ───
@@ -157,11 +169,23 @@ export function createRedisProvider(): CacheProvider {
     },
 
     async del(...keys: string[]): Promise<HaiResult<number>> {
-      return wrapOperation(() => client!.del(...keys))
+      return wrapOperation(async () => {
+        if (keys.length === 0)
+          return 0
+        if (client instanceof Redis.Cluster)
+          return (await mapIndependentKeys(keys, key => client!.del(key))).reduce((sum, value) => sum + value, 0)
+        return client!.del(...keys)
+      })
     },
 
     async exists(...keys: string[]): Promise<HaiResult<number>> {
-      return wrapOperation(() => client!.exists(...keys))
+      return wrapOperation(async () => {
+        if (keys.length === 0)
+          return 0
+        if (client instanceof Redis.Cluster)
+          return (await mapIndependentKeys(keys, key => client!.exists(key))).reduce((sum, value) => sum + value, 0)
+        return client!.exists(...keys)
+      })
     },
 
     async expire(key: string, seconds: number): Promise<HaiResult<boolean>> {
@@ -207,13 +231,19 @@ export function createRedisProvider(): CacheProvider {
 
     async mget<T = CacheValue>(...keys: string[]): Promise<HaiResult<(T | null)[]>> {
       return wrapOperation(async () => {
-        const values = await client!.mget(...keys)
+        const values = keys.length === 0
+          ? []
+          : client instanceof Redis.Cluster
+            ? await mapIndependentKeys(keys, key => client!.get(key))
+            : await client!.mget(...keys)
         return values.map(v => deserialize<T>(v))
       })
     },
 
     async mset(entries: Array<[string, CacheValue]>): Promise<HaiResult<void>> {
       return wrapOperation(async () => {
+        if (entries.length === 0)
+          return
         const args: string[] = []
         for (const [key, value] of entries) {
           args.push(key, serialize(value))
@@ -222,28 +252,21 @@ export function createRedisProvider(): CacheProvider {
       })
     },
 
-    async scan(cursor: number, options?: ScanOptions): Promise<HaiResult<[number, string[]]>> {
-      return wrapOperation(async () => {
-        let result: [string, string[]]
-        if (options?.match && options?.count) {
-          result = await client!.scan(cursor, 'MATCH', options.match, 'COUNT', options.count)
-        }
-        else if (options?.match) {
-          result = await client!.scan(cursor, 'MATCH', options.match)
-        }
-        else if (options?.count) {
-          result = await client!.scan(cursor, 'COUNT', options.count)
-        }
-        else {
-          result = await client!.scan(cursor)
-        }
-        const [nextCursor, keys] = result
-        return [Number.parseInt(nextCursor, 10), keys]
-      })
+    async scan(cursor: string, options?: ScanOptions): Promise<HaiResult<[string, string[]]>> {
+      return wrapOperation(() => scanRedisKeys(client!, cursor, options))
     },
 
     async keys(pattern: string): Promise<HaiResult<string[]>> {
-      return wrapOperation(() => client!.keys(pattern))
+      return wrapOperation(async () => {
+        let cursor = '0'
+        const keys = new Set<string>()
+        do {
+          const page = await scanRedisKeys(client!, cursor, { match: pattern, count: 100 })
+          cursor = page[0]
+          for (const key of page[1]) keys.add(key)
+        } while (cursor !== '0')
+        return [...keys]
+      })
     },
 
     async type(key: string): Promise<HaiResult<string>> {

@@ -270,7 +270,9 @@ export function createMemoryProvider(): CacheProvider {
       return ok(undefined)
     },
 
-    async scan(cursor: number, options?: ScanOptions): Promise<HaiResult<[number, string[]]>> {
+    async scan(cursor: string, options?: ScanOptions): Promise<HaiResult<[string, string[]]>> {
+      if (typeof cursor !== 'string' || !/^\d{1,20}$/.test(cursor) || BigInt(cursor) > 18_446_744_073_709_551_615n || !Number.isSafeInteger(options?.count ?? 10) || (options?.count ?? 10) <= 0)
+        return err(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'))
       const allKeys = Array.from(store.keys()).filter((key) => {
         const entry = store.get(key)
         return entry && !isExpired(entry)
@@ -278,10 +280,10 @@ export function createMemoryProvider(): CacheProvider {
       const regex = options?.match ? globToRegex(options.match) : null
       const filtered = regex ? allKeys.filter(k => regex.test(k)) : allKeys
       const count = options?.count || 10
-      const start = cursor
+      const start = Number(cursor)
       const end = Math.min(start + count, filtered.length)
       const keys = filtered.slice(start, end)
-      const nextCursor = end >= filtered.length ? 0 : end
+      const nextCursor = end >= filtered.length ? '0' : String(end)
       return ok([nextCursor, keys])
     },
 

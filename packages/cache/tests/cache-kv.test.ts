@@ -238,7 +238,7 @@ describe('cache kv advanced operations', () => {
       }
 
       const allKeys: string[] = []
-      let cursor = 0
+      let cursor = '0'
       // 最多循环 10 次防止死循环
       for (let round = 0; round < 10; round++) {
         const result = await cache.kv.scan(cursor, { match: 'scan:*', count: 2 })
@@ -247,7 +247,7 @@ describe('cache kv advanced operations', () => {
           const [nextCursor, keys] = result.data
           allKeys.push(...keys)
           cursor = nextCursor
-          if (cursor === 0)
+          if (cursor === '0')
             break
         }
       }

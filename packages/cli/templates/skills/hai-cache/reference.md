@@ -69,6 +69,19 @@ if (result.success && result.data) {
 await cache.kv.del('user:123')
 ```
 
+### Cluster 多键与扫描
+
+`mget/del/exists` 跨 slot 时有界并发且无整体原子性/快照；mget 保留输入顺序，DEL 失败可能已部分删除，重试幂等。`mset`、集合交/并/差和多键 blocking pop 须同 slot，否则返回 `CROSS_SLOT`；使用共同的 `{hash-tag}`，MSET 不做部分写入回退。
+
+scan 首次传字符串 `'0'`，后续原样传回不透明游标，返回 `'0'` 表示完成。Cluster 覆盖所有 master；同配置和拓扑的另一应用节点可接续。拓扑、match 或 keyPrefix 改变时返回 `SCAN_TOPOLOGY_CHANGED`，从 `'0'` 重启；无效游标或 count 返回 `INVALID_SCAN`。返回去除 keyPrefix 的逻辑 key，前缀 glob 字符按字面量解释；keys 同样扫描并去重。SCAN 无快照，可能重复，count 仅为正整数提示值。
+
+```ts
+const first = await cache.kv.scan('0', { match: 'users:*', count: 100 })
+if (first.success && first.data[0] !== '0') {
+  const next = await cache.kv.scan(first.data[0], { match: 'users:*', count: 100 })
+}
+```
+
 ### Hash/List/Set/ZSet（`cache.hash/list/set_/zset`）
 
 - `cache.hash`：对象字段读写（如用户 profile 局部更新）
@@ -87,10 +100,10 @@ await cache.zset.zadd('rank:daily', { member: 'u1', score: 100 })
 
 | 方法       | 说明                                       |
 | ---------- | ------------------------------------------ |
-| `acquire`  | 尝试获锁（SET NX EX），返回 true/false     |
-| `release`  | 释放锁（支持 owner 验证，防止误释放）      |
+| `acquire`  | 尝试获锁（SET NX EX），返回唯一 owner 或 null |
+| `release`  | 释放锁（必须携带本次 owner，防止误释放） |
 | `isLocked` | 检查锁是否被持有                           |
-| `extend`   | 续期锁 TTL（支持 owner 验证）              |
+| `extend`   | 续期锁 TTL（必须携带本次 owner） |
 
 ```typescript
 // acquire 返回本次唯一 owner，后续释放/续期必须复用该凭据
@@ -135,6 +148,9 @@ const locked = await cache.lock.isLocked('my-lock')
 | `HaiCacheError.NOT_INITIALIZED` | `hai:cache:010` | 未初始化 |
 | `HaiCacheError.UNSUPPORTED_TYPE` | `hai:cache:011` | 不支持的缓存类型 |
 | `HaiCacheError.CONFIG_ERROR` | `hai:cache:012` | 配置错误 |
+| `HaiCacheError.INVALID_SCAN` | `hai:cache:013` | 游标或 count 无效 |
+| `HaiCacheError.SCAN_TOPOLOGY_CHANGED` | `hai:cache:014` | 拓扑或条件变化，重新遍历 |
+| `HaiCacheError.CROSS_SLOT` | `hai:cache:015` | 多键操作不在同一 slot |
 
 ## 常见模式
 
