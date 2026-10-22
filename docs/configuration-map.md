@@ -10,6 +10,8 @@
 4. 初始化 Schema 填充默认值并检查字段；后端连接/资源就绪成功后才发布实例。关闭按依赖反序执行并检查结果。纯函数、客户端工厂、serv 和 kit 按自身公开契约使用，不能套用服务端生命周期。
 5. `pnpm generate:env` 在依赖包 fresh build 后更新总表与应用示例，`pnpm check:env` 检查生成一致性；`check:skills` 检查 skill 契约。它们不证明字段已传入 SDK、共享状态正确或真实投递成功，行为证据见各修正任务。
 
+入口扫描按 TypeScript AST 边界排除 JS/TS 与 Svelte script 中的真实 JSDoc，不删除字符串、正则或插值模板正文；Schema 字段说明仍从原始注释读取，YAML/生成模板的可选字段引用继续收集。
+
 ## 有 YAML Schema 的模块
 
 | 包 / 配置名 | Schema / 默认值来源 | 初始化及实际消费点 | 环境变量、CLI 与文档 |

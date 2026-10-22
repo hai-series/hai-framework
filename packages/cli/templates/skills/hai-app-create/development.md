@@ -225,4 +225,6 @@ export function pageOffset(query: PageQuery): number {
 
 `_core.yml` 只接受 name/version/env/defaultLocale 元数据与 logging；不提供 debug、全局ID设置、features或supportedLocales。业务开关放app.yml并用业务Schema校验；语言列表按实际翻译工程维护，日志用logging.level。core默认语言字段不会自动注册翻译。Logger导入保留LANG/LC_ALL/PYTHONIOENCODING，终端语言优先级不能被编码初始化覆盖。
 
+框架环境目录从真实入口生成；JS/TS（含 Svelte script）中的 JSDoc 示例不构成新运行变量。Schema 字段注释仍生成用途说明，YAML/模板可选注释和字符串内生成代码引用继续保留；不能只在示例里写变量就声称已被实现消费。
+
 公开导入以安装版本的 package.json.exports 为准：只使用已声明且有真实产物的根/子路径，不导入 src/dist 或内部 Provider/Deps。条件入口可以只提供配置和类型；IAM 浏览器入口不含服务端 iam 对象。Svelte 默认组件和明确的 selective/type-only 导出均合法，不能为形式统一扩大公共 API。

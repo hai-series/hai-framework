@@ -397,7 +397,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       for (const [mode, environment] of [['dev', 'development'], ['test', 'test'], ['prod', 'production']] as const) {
         const values = mode === 'prod'
           ? generateProductionEnvironment(envFeatures, configs)
-          : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_DEBUG=false\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : 'debug'}\n`
+          : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : 'debug'}\n`
         await writeFile(path.join(envDirectory, `.env.${mode}`), values)
       }
       const privateEntries: string[] = []

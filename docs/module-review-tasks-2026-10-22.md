@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04，共 79 个，另有 21 个按模块拆分的 JSDoc 任务，共 100 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 36/51（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 37/51（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -857,13 +857,14 @@
 - **修正内容**：区分活跃资源和仅待清理资源，关闭期间停止当前/已取得操作引用，合并关闭并等待初始化，清理失败保留所有权；内嵌服务器等待spawn/exit并在有界截止内升级终止，失败可重试。
 - **验收标准**：异常、失败结果、候选清理、并发close/init及真实子进程拒绝信号/延迟退出均通过；未确认退出不得报告成功，README/skill/分布式边界同步。
 
-### DOC-02 · P2 · 环境变量清单排除源码 JSDoc 的伪入口
+### DOC-02 · P2 · 环境清单与输出使用实际配置入口
 
-- [ ] 待修正。
-- **位置**：`scripts/generate-env-catalog.mjs` 的JS/TS扫描。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：共享AST边界提取器排除JS/TS/Svelte真实JSDoc，保留字符串/正则/模板生成代码、YAML可选注释与Schema字段说明，两个实际环境生成器复用；CLI dev/test/prod移除无实现消费的HAI_CORE_DEBUG输出。真实生成器三组红绿、6脚本文件12/12、CLI生产/配置/实际输出3文件22/22通过，含三种应用与fresh内建Node命令、Core YAML+严格Schema实际消费；source/测试严格类型、lint零警告、fresh CLI ESM/DTS、89 JSDoc、env595/app示例与skills37/328均0。六份README/配置图/模块创建skill/应用模板同步，生成目录没有运行变量增减；保留AI_MEMORY_PROVIDER描述及SCHED03时钟约束，不混入其它运行修正；全量回归按用户要求在全部任务实施后执行。
+- **位置**：`scripts/generate-env-catalog.mjs`、`scripts/generate-app-env.mjs` 与 CLI 环境文件生成。
 - **证据与影响**：扫描整段源码的raw regex也读取JSDoc中的process.env示例，把文档变量误认为真实运行时配置入口。
 - **修正内容**：按实际源码语法排除JSDoc，保留真实JS/TS入口、模板及YAML可选配置注释的识别，不通过删示例掩盖问题。
-- **验收标准**：同一fixture的仅文档变量不入清单、真实入口仍存在，模板/YAML行为保持；生成/check及skills通过。
+- **验收标准**：同一fixture的仅文档变量不入清单、真实入口仍存在，模板/YAML行为保持；创建三类应用的dev/test/prod输出由真实Core YAML+Schema消费，不输出已删除的HAI_CORE_DEBUG；生成/check及skills通过。
 
 ### AI-08 · P2 · 修正真实 LLM 流使用的 SSE 解码语义
 

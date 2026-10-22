@@ -578,7 +578,6 @@ export function generateProductionEnvironment(features: FeatureId[], configs?: M
     '# 生产环境必须使用共享后端；以下服务名对应 Compose 内部 DNS。',
     '# 凭据通过部署 Secret / 进程环境或被忽略的 .env.local 注入，禁止提交真实值。',
     'HAI_CORE_ENV=production',
-    'HAI_CORE_DEBUG=false',
     'HAI_CORE_LOGGING_LEVEL=info',
   ]
   if (enabled.has('db')) {

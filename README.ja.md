@@ -630,6 +630,8 @@ Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用�
 
 公開 Schema、YAML、環境変数の読み取りを変更したら、対象モジュールをビルドして `pnpm generate:env` を実行し、ルート一覧、CLI メタデータ、各サンプルの `.env.example` を更新します。`pnpm check:env` で更新漏れを確認します。生成処理は公開ソースとサンプルのみを読み、`.env.local` やプロジェクト固有の公開設定値を変更しません。用途、型、列挙値、単位、範囲、有効条件を説明し、配列・動的キー・親オブジェクトの上書きは Schema と実行テストで確認します。
 
+入口の走査では JS/TS（Svelte script を含む）の実際の JSDoc を除外します。Schema のフィールド注釈は説明の生成に引き続き使用します。テンプレート/YAML の任意設定コメントと文字列内の生成コード参照は保持され、文書の例だけで実行時設定が増えることはありません。
+
 `pnpm dev` / `dev:test` / `dev:prod` で環境を選び、ビルド済み Node サービスは `start:test` / `start:prod` で起動します。Vite は `core.config.loadEnvFiles({ mode, envDir })` の成功を確認して注入し、Node は基本・環境・ローカルの順で `--env-file` を読み込みます。`core.init` は dotenv を読みません。ファイルモードの development / production は dev / prod に対応します。Provider 切り替えと移行手順はアプリ skill の[環境設定](packages/cli/templates/skills/hai-app-create/development.md#环境配置)にあります。
 
 - **命名**：`HAI_<CONFIG_NAME>_<YAML_PATH>`。階層を `_` で区切り、camelCase は分割しません（`llm.apiKey` → `HAI_AI_LLM_APIKEY`）。
@@ -637,19 +639,19 @@ Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用�
 - **AI 互換**：`OPENAI_*` は `@h-ai/ai` の互換 fallback のみ。
 - **秘密情報**：直書き・ログ記録・クライアントの `PUBLIC_*` / `VITE_*` への保存は禁止。
 
-| 分類           | 主な変数                          | 説明                                                       |
-| -------------- | --------------------------------- | ---------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL`  | 実行環境・ログレベル                                   |
-| Database       | `HAI_DB_*`                        | `_db.yml` の SQLite / PostgreSQL / MySQL                   |
-| Cache          | `HAI_CACHE_*`                     | `@h-ai/cache` の memory / Redis / Upstash                  |
-| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam`・`@h-ai/kit` の認証・安全性                    |
-| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE` | `apps/api-service` / `@h-ai/serv` の待受・フロント URL     |
-| Storage        | `HAI_STORAGE_*`                   | `@h-ai/storage` の local / S3                              |
-| AI             | `HAI_AI_LLM_*`                    | `@h-ai/ai` の LLM API Key・Base URL・モデル                |
-| VecDB          | `HAI_VECDB_*`                     | `@h-ai/vecdb` の LanceDB / pgvector / Qdrant / Chroma      |
-| Reach          | `HAI_REACH_*`                     | `@h-ai/reach` の SMTP・SMS・Webhook                        |
-| Payment        | `HAI_PAYMENT_*`                   | `@h-ai/payment` の WeChat Pay・Alipay・Stripe の加盟店設定 |
-| Deploy         | `HAI_DEPLOY_*`                    | `@h-ai/deploy` / `@h-ai/cli` の展開・基盤認証情報          |
+| 分類           | 主な変数                                 | 説明                                                       |
+| -------------- | ---------------------------------------- | ---------------------------------------------------------- |
+| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` | 実行環境・ログレベル                                       |
+| Database       | `HAI_DB_*`                               | `_db.yml` の SQLite / PostgreSQL / MySQL                   |
+| Cache          | `HAI_CACHE_*`                            | `@h-ai/cache` の memory / Redis / Upstash                  |
+| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`        | `@h-ai/iam`・`@h-ai/kit` の認証・安全性                    |
+| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`        | `apps/api-service` / `@h-ai/serv` の待受・フロント URL     |
+| Storage        | `HAI_STORAGE_*`                          | `@h-ai/storage` の local / S3                              |
+| AI             | `HAI_AI_LLM_*`                           | `@h-ai/ai` の LLM API Key・Base URL・モデル                |
+| VecDB          | `HAI_VECDB_*`                            | `@h-ai/vecdb` の LanceDB / pgvector / Qdrant / Chroma      |
+| Reach          | `HAI_REACH_*`                            | `@h-ai/reach` の SMTP・SMS・Webhook                        |
+| Payment        | `HAI_PAYMENT_*`                          | `@h-ai/payment` の WeChat Pay・Alipay・Stripe の加盟店設定 |
+| Deploy         | `HAI_DEPLOY_*`                           | `@h-ai/deploy` / `@h-ai/cli` の展開・基盤認証情報          |
 
 全項目・既定値はルートの `.env.example` が基準です。個別アプリでは対応する `README.md` と `.env.example` で追加設定を確認します。
 

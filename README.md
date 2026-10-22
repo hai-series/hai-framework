@@ -633,23 +633,25 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 - **AI 兼容回退**：`OPENAI_*` 仅用于 `@h-ai/ai` 的兼容 fallback
 - **密钥安全**：密钥不写死、不进入日志，也不放入 `PUBLIC_*` / `VITE_*` 客户端变量
 
-| 分组           | 代表变量                          | 说明                                                       |
-| -------------- | --------------------------------- | ---------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL`  | 运行环境与实际日志级别                                   |
-| Database       | `HAI_DB_*`                        | `_db.yml` 的 SQLite / PostgreSQL / MySQL 配置              |
-| Cache          | `HAI_CACHE_*`                     | `@h-ai/cache` 的 memory / Redis / Upstash 配置             |
-| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam`、`@h-ai/kit` 的认证与安全配置                  |
-| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE` | `apps/api-service` / `@h-ai/serv` 监听地址与前端访问地址   |
-| Storage        | `HAI_STORAGE_*`                   | `@h-ai/storage` 的 local / S3 配置                         |
-| AI             | `HAI_AI_LLM_*`                    | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置              |
-| VecDB          | `HAI_VECDB_*`                     | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant / Chroma 配置 |
-| Reach          | `HAI_REACH_*`                     | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                  |
-| Payment        | `HAI_PAYMENT_*`                   | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置            |
-| Deploy         | `HAI_DEPLOY_*`                    | `@h-ai/deploy` / `@h-ai/cli` 的部署与基础设施凭据          |
+| 分组           | 代表变量                                 | 说明                                                       |
+| -------------- | ---------------------------------------- | ---------------------------------------------------------- |
+| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` | 运行环境与实际日志级别                                     |
+| Database       | `HAI_DB_*`                               | `_db.yml` 的 SQLite / PostgreSQL / MySQL 配置              |
+| Cache          | `HAI_CACHE_*`                            | `@h-ai/cache` 的 memory / Redis / Upstash 配置             |
+| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`        | `@h-ai/iam`、`@h-ai/kit` 的认证与安全配置                  |
+| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`        | `apps/api-service` / `@h-ai/serv` 监听地址与前端访问地址   |
+| Storage        | `HAI_STORAGE_*`                          | `@h-ai/storage` 的 local / S3 配置                         |
+| AI             | `HAI_AI_LLM_*`                           | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置              |
+| VecDB          | `HAI_VECDB_*`                            | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant / Chroma 配置 |
+| Reach          | `HAI_REACH_*`                            | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                  |
+| Payment        | `HAI_PAYMENT_*`                          | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置            |
+| Deploy         | `HAI_DEPLOY_*`                           | `@h-ai/deploy` / `@h-ai/cli` 的部署与基础设施凭据          |
 
 完整字段与默认值以根目录 `.env.example` 为准；在某个示例应用中工作时，再对照该应用自己的 `README.md` 与 `.env.example` 查看增量配置。
 
 修改模块公开 Schema、YAML 或直接读取的环境变量后，先构建相关模块，再执行 `pnpm generate:env`，同步根 `.env.example`、CLI 配置元数据和各示例应用 `.env.example`；执行 `pnpm check:env` 检查是否过期。生成器只读取公开源码和示例，不读取 `.env.local`，不覆盖公共基础和环境文件中的项目取值。新增变量应说明用途、类型、枚举、单位、范围和启用条件；数组索引、动态键及父级对象覆盖仍须经过模块 Schema 和运行测试。
+
+入口扫描排除 JS/TS（含 Svelte script）的真实 JSDoc；Schema 字段注释仍用于生成说明。模板/YAML 可选注释与字符串中的生成代码引用照常保留，示例注释不能新增运行变量。
 
 `pnpm dev` / `dev:test` / `dev:prod` 选择开发、测试和生产配置，Node 服务构建后使用 `start:test` / `start:prod`。Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles({ mode, envDir })` 结果后注入，Node 按基础、环境、本机的顺序传入 `--env-file`；`core.init` 不读取 dotenv。`development` / `production` 文件模式映射为 `dev` / `prod`。Provider 切换和旧变量迁移步骤见应用 skill 的[环境配置](packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
 

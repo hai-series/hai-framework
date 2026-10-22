@@ -121,6 +121,8 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 
 修改公开 Schema 或变量入口后，构建受影响模块，执行 `pnpm generate:env` 同步根清单、CLI 元数据和示例，再用 `pnpm check:env` 验证；不要读取或生成真实私有凭据。
 
+入口提取排除 JS/TS（含 Svelte script）的真实 JSDoc，避免示例变量扩展配置契约；Schema 字段注释仍参与说明生成。不要用正则删除字符串中的注释标记，YAML/模板的可选字段和生成代码引用必须保留。
+
 - 运行参数使用 `HAI_<配置名>_<字段路径>`，camelCase 不拆词；YAML 显式引用并保留本地回退，逐项同步根及项目 `.env.example` 的用途、默认值、枚举与范围。`PUBLIC_` / `VITE_` 不包含密钥。
 - `.env.example`、公共基础 `.env` 和环境覆盖 `.env.dev` / `.env.test` / `.env.prod` 提交 Git；`.env.local` 只保存本机私有覆盖并忽略。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。
 - Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles` 的结果后注入；Node 脚本按同样顺序传入环境文件。`core.init` 不读取 dotenv。连接配置支持仅改环境变量切换 Provider，文案、表名和数据结构留在代码/YAML。具体约束见 [环境配置](../../../packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
@@ -157,7 +159,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 - [ ] 目录结构符合 §2
 - [ ] 命名符合 §3（含表名/缓存 key 规则）
 - [ ] 表名/缓存 key 就近定义且不可配置
-- [ ] 所有公共 API JSDoc 含 `@example`
+- [ ] 所有公共 API JSDoc 含 fenced ts/svelte `@example`，从实际公开入口导入并检查 HaiResult；内部示例标明“模块内部上下文”，以 check-module-jsdoc 对真实类型校验
 - [ ] 公共方法返回 `HaiResult<T>`，未使用 `throw`（合规场景除外）
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
 - [ ] 数据库租约使用同条条件 SQL 的存储端执行时钟；验证节点墙钟偏差与真实锁等待后仍拒绝过期提交，不能只续租或先读取时间

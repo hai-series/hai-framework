@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import ts from 'typescript'
+import { environmentReferenceSource } from './env-reference-source.mjs'
 
 const root = process.cwd()
 const modules = [
@@ -270,7 +271,7 @@ async function scan(directory) {
     }
     if (!/\.(?:ts|js|mjs|py|svelte|ya?ml|hbs|example)$/.test(item.name) || item.name.endsWith('.d.ts'))
       continue
-    const content = await readFile(file, 'utf8')
+    const content = environmentReferenceSource(await readFile(file, 'utf8'), file)
     const location = path.relative(root, file).replaceAll('\\', '/')
     if (/\/config\/[^/]+\.ya?ml(?:\.hbs)?$/.test(location)) {
       const configName = item.name.replace(/^_/, '').replace(/\.ya?ml(?:\.hbs)?$/, '')
