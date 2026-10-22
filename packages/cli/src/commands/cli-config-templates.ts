@@ -692,18 +692,18 @@ function generateSchedulerConfig(): string {
 # 任务调度配置 (@h-ai/scheduler)
 # =============================================================================
 
-# 是否启用数据库日志（需要 @h-ai/reldb）
+# 必须先初始化共享 @h-ai/reldb；执行日志和租约始终落库，不能设 false
 enableDb: true
 
 # 检查间隔（毫秒）
 tickInterval: 1000
 
-# 锁过期时间（毫秒）
-lockExpireMs: 300000
+# 执行租约（1000～86400000 毫秒，运行中自动续期）；unknown 须人工核对并先停止旧执行
+leaseMs: 300000
 
 # 节点 ID 默认自动生成；多节点部署时每个实例应使用独立 ID。
 # nodeId: worker-1
-# 执行日志保留策略（启用数据库时使用）
+# 尝试日志保留策略（不删除执行journal与去重历史）
 # maxLogs: 10000
 # retentionDays: 30
 `

@@ -3,6 +3,7 @@ import type { SchedulerTaskExecuteEvent } from '../src/index.js'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, expect, it, vi } from 'vitest'
 import { scheduler } from '../src/index.js'
+import './helpers/sqlite-lifecycle.js'
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -19,7 +20,7 @@ it('shares a concurrent refresh instead of rejecting another reader of the same 
 })
 
 it('retains an edited one-time definition after an earlier execution completes', async () => {
-  await scheduler.init({ enableDb: false, hooks: { onTaskExecute: async (event) => {
+  await scheduler.init({ enableDb: true, hooks: { onTaskExecute: async (event) => {
     expect((await scheduler.updateTask(event.task.id, { name: 'Next definition', params: { version: 2 } })).success).toBe(true)
     return { completed: true }
   } } })
@@ -36,9 +37,9 @@ it('does not execute a replacement definition under an earlier failed occurrence
     }
     return { completed: true }
   })
-  await scheduler.init({ enableDb: false, hooks: { onTaskExecute: execute } })
-  await scheduler.register({ id: 'edited', name: 'Original', cron: '* * * * *', retry: { maxAttempts: 2 }, params: { version: 1 } })
-  expect(await scheduler.trigger('edited')).toMatchObject({ success: true, data: { status: 'interrupted' } })
+  await scheduler.init({ enableDb: true, hooks: { onTaskExecute: execute } })
+  await scheduler.register({ id: 'edited', name: 'Original', cron: '* * * * *', idempotent: true, retry: { maxAttempts: 2 }, params: { version: 1 } })
+  expect(await scheduler.trigger('edited')).toMatchObject({ success: true, data: { status: 'unknown' } })
   expect(execute).toHaveBeenCalledOnce()
   expect(scheduler.tasks.get('edited')?.params).toEqual({ version: 2 })
 })
@@ -47,9 +48,9 @@ it('keeps the old cron when another part of an update fails validation', async (
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-08T12:34:00Z'))
   const execute = vi.fn()
-  await scheduler.init({ enableDb: false, tickInterval: 100, hooks: { onTaskExecute: execute } })
+  await scheduler.init({ enableDb: true, tickInterval: 100, hooks: { onTaskExecute: execute } })
   await scheduler.register({ id: 'invalid-update', name: 'Original', cron: '* * * * *', timezone: 'UTC' })
-  expect((await scheduler.updateTask('invalid-update', { cron: '0 0 * * *', retry: { maxAttempts: 0 } })).success).toBe(false)
+  expect((await scheduler.updateTask('invalid-update', { cron: '0 0 * * *', idempotent: true, retry: { maxAttempts: 0 } })).success).toBe(false)
   scheduler.start()
   await vi.advanceTimersByTimeAsync(100)
   expect(execute).toHaveBeenCalledOnce()

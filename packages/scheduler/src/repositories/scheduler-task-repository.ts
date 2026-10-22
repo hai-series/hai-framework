@@ -22,7 +22,7 @@ const SCHEDULER_TASK_TABLE = 'hai_scheduler_tasks'
 
 const TaskParamsSchema = z.record(z.string(), z.unknown())
 const TaskRetryPolicySchema = z.object({
-  maxAttempts: z.number().int().min(1),
+  maxAttempts: z.number().int().min(1).max(100),
   backoffMs: z.array(z.number().int().min(0)).optional(),
 })
 const ApiTaskConfigSchema = z.object({
@@ -32,13 +32,15 @@ const ApiTaskConfigSchema = z.object({
   headers: z.record(z.string(), z.string()).optional(),
   body: z.unknown().optional(),
   timeout: z.number().int().positive().optional(),
+  maxResponseBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 })
 const JsTaskConfigSchema = z.object({
   kind: z.literal('js'),
   code: z.string().min(1),
   timeout: z.number().int().positive().optional(),
 })
-const TaskHandlerConfigSchema = z.discriminatedUnion('kind', [ApiTaskConfigSchema, JsTaskConfigSchema])
+/** 注册与持久读取共用的处理器校验，拒绝未开始发送就可以识别的非法配置。 */
+export const TaskHandlerConfigSchema = z.discriminatedUnion('kind', [ApiTaskConfigSchema, JsTaskConfigSchema])
 
 interface TaskRow {
   id: number
@@ -48,6 +50,7 @@ interface TaskRow {
   cron: string
   timezone: string | null
   enabled: boolean
+  idempotent: boolean
   deleteAfterRun: boolean
   retry: unknown
   params: unknown
@@ -69,6 +72,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         { fieldName: 'cron', columnName: 'cron', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
         { fieldName: 'timezone', columnName: 'timezone', def: { type: 'TEXT' }, select: true, create: true, update: true },
         { fieldName: 'enabled', columnName: 'enabled', def: { type: 'BOOLEAN', notNull: true, defaultValue: true }, select: true, create: true, update: true },
+        { fieldName: 'idempotent', columnName: 'idempotent', def: { type: 'BOOLEAN', notNull: true, defaultValue: false }, select: true, create: true, update: true },
         { fieldName: 'deleteAfterRun', columnName: 'delete_after_run', def: { type: 'BOOLEAN', notNull: true, defaultValue: false }, select: true, create: true, update: true },
         { fieldName: 'retry', columnName: 'retry', def: { type: 'JSON' }, select: true, create: true, update: true },
         { fieldName: 'params', columnName: 'params', def: { type: 'JSON' }, select: true, create: true, update: true },
@@ -88,6 +92,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         cron: task.cron,
         timezone: task.timezone ?? null,
         enabled: task.enabled !== false,
+        idempotent: task.idempotent === true,
         deleteAfterRun: task.deleteAfterRun === true,
         retry: task.retry ?? null,
         params: task.params ?? {},
@@ -143,6 +148,8 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         data.timezone = updates.timezone ?? null
       if (updates.enabled !== undefined)
         data.enabled = updates.enabled
+      if (updates.idempotent !== undefined)
+        data.idempotent = updates.idempotent
       if (updates.deleteAfterRun !== undefined)
         data.deleteAfterRun = updates.deleteAfterRun
       if (updates.retry !== undefined)
@@ -185,11 +192,11 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
   async deleteTask(taskId: string, expected?: TaskDefinition): Promise<HaiResult<boolean>> {
     try {
       if (expected) {
-        const conditions = ['task_id = ?', 'task_name = ?', 'cron = ?', 'COALESCE(timezone, \'\') = ?', 'COALESCE(description, \'\') = ?', 'enabled = ?', 'delete_after_run = ?']
+        const conditions = ['task_id = ?', 'task_name = ?', 'cron = ?', 'COALESCE(timezone, \'\') = ?', 'COALESCE(description, \'\') = ?', 'enabled = ?', 'delete_after_run = ?', 'idempotent = ?']
         const postgres = this.db.config?.type === 'postgresql'
         const enabled = expected.enabled !== false
         const deleteAfterRun = expected.deleteAfterRun === true
-        const params: unknown[] = [taskId, expected.name, expected.cron, expected.timezone ?? '', expected.description ?? '', postgres ? enabled : Number(enabled), postgres ? deleteAfterRun : Number(deleteAfterRun)]
+        const params: unknown[] = [taskId, expected.name, expected.cron, expected.timezone ?? '', expected.description ?? '', postgres ? enabled : Number(enabled), postgres ? deleteAfterRun : Number(deleteAfterRun), postgres ? expected.idempotent === true : Number(expected.idempotent === true)]
         const jsonValue = this.db.config?.type === 'mysql' ? 'CAST(? AS JSON)' : this.db.config?.type === 'postgresql' ? 'CAST(? AS JSONB)' : '?'
         // JSON 比较使用各数据库的原生类型；标识符仅来自固定列白名单。
         const jsonFields: Array<[string, unknown]> = [['retry', expected.retry], ['params', expected.params ?? {}], ['handler', expected.handler]]
@@ -284,6 +291,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
           cron: row.cron,
           ...(row.timezone ? { timezone: row.timezone } : {}),
           enabled: row.enabled,
+          idempotent: row.idempotent,
           deleteAfterRun: row.deleteAfterRun,
           ...(retryResult.data ? { retry: retryResult.data } : {}),
           params: paramsResult.data,

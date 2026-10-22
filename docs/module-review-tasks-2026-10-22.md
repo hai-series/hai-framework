@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 37/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 38/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -379,7 +379,8 @@
 
 ### SCHED-01 · P1 · 实现跨周期和手动触发的分布式执行约束
 
-- [ ] 待修正（按本次要求补强；范围：scheduler）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：共享RelDB执行journal与active_task唯一槽统一约束cron/manual/跨周期；owner+有效租约条件提交和续期；真实幂等声明/持久尝试预算约束接管，非幂等结果unknown保留槽，先停旧runner并核对副作用再版本CAS裁定。三语README/skill/CLI配置和环境目录同步，移除cache运行依赖；scheduler typecheck/测试类型/lint/build、14文件89项含三库与真实4进程场景、CLI238项、skills/env/offline frozen install通过；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/scheduler/src/scheduler-runner.ts:33](../packages/scheduler/src/scheduler-runner.ts#L33)；[packages/scheduler/src/scheduler-runner.ts:185](../packages/scheduler/src/scheduler-runner.ts#L185)。
 - **证据与影响**：现有本进程 runningTasks 加按分钟的 cache lock，只覆盖部分重复触发；README 也把跨周期互斥交给宿主。未使用共享 cache 时更无跨节点排他，不满足本次所有业务逻辑分布式要求。
 - **修正内容**：把 task lease 与 occurrence 身份分开，统一 cron/manual 入口；持久记录领取与结果，提供租约续期和崩溃恢复，生产明确要求共享后端。

@@ -21,6 +21,7 @@ const SCHEDULER_LOG_TABLE = 'hai_scheduler_logs'
 
 interface LogRow {
   id: number
+  occurrenceId?: string
   taskId: string
   taskName: string
   taskType: string
@@ -41,6 +42,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
       idColumn: 'id',
       fields: [
         { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
+        { fieldName: 'occurrenceId', columnName: 'occurrence_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
         { fieldName: 'taskId', columnName: 'task_id', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
         { fieldName: 'taskName', columnName: 'task_name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
         { fieldName: 'taskType', columnName: 'task_type', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
@@ -59,6 +61,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
   async saveLog(log: TaskExecutionLog): Promise<void> {
     try {
       const createResult = await this.create({
+        occurrenceId: log.occurrenceId,
         taskId: log.taskId,
         taskName: log.taskName,
         taskType: log.taskType,
@@ -132,6 +135,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
         ...pageResult.data,
         items: pageResult.data.items.map(row => ({
           id: row.id,
+          occurrenceId: row.occurrenceId,
           taskId: row.taskId,
           taskName: row.taskName,
           taskType: row.taskType as TaskExecutionLog['taskType'],

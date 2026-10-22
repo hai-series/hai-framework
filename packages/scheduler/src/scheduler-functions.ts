@@ -17,6 +17,7 @@ import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecution
 
 import { core, err, ok } from '@h-ai/core'
 
+import { TaskHandlerConfigSchema } from './repositories/scheduler-task-repository.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { HaiSchedulerError } from './scheduler-types.js'
@@ -110,7 +111,7 @@ function normalizeTaskDescription(description: string | undefined): string | und
 }
 
 function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<TaskRetryPolicy> {
-  if (!Number.isInteger(retry.maxAttempts) || retry.maxAttempts < 1) {
+  if (!Number.isInteger(retry.maxAttempts) || retry.maxAttempts < 1 || retry.maxAttempts > 100) {
     return err(
       HaiSchedulerError.EXECUTION_FAILED,
       schedulerM('scheduler_invalidRetryConfig', { params: { taskId } }),
@@ -203,6 +204,10 @@ export async function registerTask(
   task: TaskDefinition,
   taskRepo?: SchedulerTaskRepository | null,
 ): Promise<HaiResult<void>> {
+  if ((task.handler && !TaskHandlerConfigSchema.safeParse(task.handler).success)
+    || (task.idempotent !== undefined && typeof task.idempotent !== 'boolean')) {
+    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }))
+  }
   if (!task.id) {
     return err(
       HaiSchedulerError.EXECUTION_FAILED,
@@ -230,6 +235,7 @@ export async function registerTask(
     description: normalizeTaskDescription(task.description),
     timezone: task.timezone,
     enabled: task.enabled !== false,
+    idempotent: task.idempotent === true,
     deleteAfterRun: task.deleteAfterRun === true,
     retry: retryResult.data,
     params: task.params ?? {},
@@ -339,6 +345,11 @@ export async function updateRegisteredTask(
     ...(updates.retry !== undefined ? { retry: normalizedRetry } : {}),
   }
 
+  if ((updates.handler && !TaskHandlerConfigSchema.safeParse(updates.handler).success)
+    || (updates.idempotent !== undefined && typeof updates.idempotent !== 'boolean')) {
+    return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_invalidHandlerConfig', { params: { taskId } }))
+  }
+
   const updatedTask: TaskDefinition = {
     ...existingTask,
     ...(normalizedUpdates.name !== undefined ? { name: normalizedUpdates.name } : {}),
@@ -346,6 +357,7 @@ export async function updateRegisteredTask(
     ...(normalizedUpdates.cron !== undefined ? { cron: normalizedUpdates.cron } : {}),
     ...(normalizedUpdates.timezone !== undefined ? { timezone: normalizedUpdates.timezone ?? undefined } : {}),
     ...(normalizedUpdates.enabled !== undefined ? { enabled: normalizedUpdates.enabled } : {}),
+    ...(normalizedUpdates.idempotent !== undefined ? { idempotent: normalizedUpdates.idempotent } : {}),
     ...(normalizedUpdates.deleteAfterRun !== undefined ? { deleteAfterRun: normalizedUpdates.deleteAfterRun } : {}),
     ...(normalizedUpdates.retry !== undefined ? { retry: normalizedUpdates.retry ?? undefined } : {}),
     ...(normalizedUpdates.params !== undefined ? { params: normalizedUpdates.params } : {}),

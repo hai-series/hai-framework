@@ -1,6 +1,7 @@
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scheduler } from '../src/index.js'
+import './helpers/sqlite-lifecycle.js'
 
 describe('scheduler initialization failure', () => {
   afterEach(async () => {
@@ -14,14 +15,14 @@ describe('scheduler initialization failure', () => {
     { id: 'valid', name: 'duplicate', cron: '* * * * *' },
   ])('rejects invalid task $name without retaining earlier tasks', async (invalid) => {
     const result = await scheduler.init({
-      enableDb: false,
+      enableDb: true,
       tasks: [{ id: 'valid', name: 'valid', cron: '* * * * *' }, invalid],
     })
     expect(result.success).toBe(false)
     expect(scheduler.isInitialized).toBe(false)
     expect(scheduler.tasks.size).toBe(0)
     expect(scheduler.start().success).toBe(false)
-    expect((await scheduler.init({ enableDb: false })).success).toBe(true)
+    expect((await scheduler.init({ enableDb: true })).success).toBe(true)
   })
 
   it('fails on an unreadable persisted task table and can recover', async () => {

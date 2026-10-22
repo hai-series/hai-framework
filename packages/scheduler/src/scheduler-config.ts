@@ -23,18 +23,30 @@ import { z } from 'zod'
  * ```
  */
 export const SchedulerConfigSchema = z.object({
-  /** 是否启用数据库记录（默认 true，需要 @h-ai/reldb 已初始化） */
-  enableDb: z.boolean().default(true),
+  /** 必须使用共享数据库保存执行状态；false 不再允许，需要先初始化 @h-ai/reldb。 */
+  enableDb: z.literal(true).default(true),
   /** 调度检查间隔，单位毫秒（默认 1000，即每秒检查一次） */
   tickInterval: z.number().int().min(100).default(1000),
-  /** 分布式锁过期时间，单位毫秒（默认 300000，即 5 分钟） */
-  lockExpireMs: z.number().int().min(10000).default(300000),
+  /** 执行租约毫秒数（默认 300000，范围 1000–86400000），在途每三分之一周期续期。 */
+  leaseMs: z.number().int().min(1000).max(86_400_000).default(300000),
   /** 节点标识（默认自动生成 UUID，多节点部署时建议设置固定标识以便审计） */
   nodeId: z.string().min(1).optional(),
   /** 执行日志最大保留条数（启用 DB 时生效） */
   maxLogs: z.number().int().min(1).optional(),
   /** 执行日志保留天数（启用 DB 时生效） */
   retentionDays: z.number().int().min(1).optional(),
+})
+
+/** 手动触发边界，重复使用同一幂等键会命中同一个执行记录。@example TriggerTaskSchema.parse({ idempotencyKey: 'billing-2026-10' }) */
+export const TriggerTaskSchema = z.object({
+  source: z.string().max(255).optional(),
+  idempotencyKey: z.string().min(1).max(128).optional(),
+})
+
+/** 可信服务端人工核对结果；必须先停止旧 runner，不能将未知执行直接重排。@example ExecutionResolutionSchema.parse({ status: 'discarded', expectedUpdatedAt: Date.now() }) */
+export const ExecutionResolutionSchema = z.object({
+  status: z.enum(['success', 'discarded']),
+  expectedUpdatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1),
 })
 
 /** 调度器配置类型 */

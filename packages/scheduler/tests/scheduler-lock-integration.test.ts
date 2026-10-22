@@ -4,8 +4,6 @@
  * =============================================================================
  */
 
-import type { HaiResult } from '@h-ai/core'
-import { cache } from '@h-ai/cache'
 import { err } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,14 +14,12 @@ import { HaiSchedulerError } from '../src/scheduler-types.js'
 describe('distributed lock integration', () => {
   beforeEach(async () => {
     await reldb.init({ type: 'sqlite', database: ':memory:' })
-    await cache.init({ type: 'memory' })
   })
 
   afterEach(async () => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     await scheduler.close()
-    await cache.close()
     await reldb.close()
   })
 
@@ -73,7 +69,7 @@ describe('distributed lock integration', () => {
     expect(secondLog.error).toContain('lock-task-2')
   })
 
-  it('手动触发应跳过分布式锁并保留手工来源', async () => {
+  it('手动触发使用共享串行槽并保留手工来源', async () => {
     await scheduler.init({ enableDb: true })
 
     await scheduler.register({
@@ -95,7 +91,7 @@ describe('distributed lock integration', () => {
     }
   })
 
-  it('分布式锁获取失败（cache 异常）时应中断任务（fail-close）', async () => {
+  it('共享执行状态写入失败时应中断任务（fail-close）', async () => {
     await scheduler.init({ enableDb: true })
 
     await scheduler.register({
@@ -108,13 +104,11 @@ describe('distributed lock integration', () => {
     const task = scheduler.tasks.get('lock-error-task')!
     const minuteTimestamp = Math.floor(Date.now() / 60000)
 
-    // 模拟 lock.acquire 返回 cache 异常，验证 fail-close 行为
-    vi.spyOn(cache.lock, 'acquire').mockResolvedValueOnce(
-      err(HaiSchedulerError.LOCK_ACQUIRE_FAILED, 'Redis connection error') as HaiResult<boolean>,
-    )
+    // 任务定义可读，但执行状态写入失败时绝不能调用处理器。
+    vi.spyOn(reldb.sql, 'execute').mockResolvedValue(err(HaiSchedulerError.DB_SAVE_FAILED, 'Database connection error'))
 
     const log = await runTask(task, minuteTimestamp, { type: 'scheduled', source: null })
     expect(log.status).toBe('interrupted')
-    expect(log.error).toContain('lock-error-task')
+    expect(log.error).toBeTruthy()
   })
 })

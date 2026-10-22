@@ -4403,17 +4403,17 @@
     "name": "HAI_SCHEDULER_ENABLEDB",
     "module": "scheduler",
     "path": "scheduler.enableDb",
-    "description": "是否启用数据库记录（默认 true，需要",
+    "description": "必须使用共享数据库保存执行状态；false 不再允许，需要先初始化",
     "value": "true",
-    "constraint": "true | false"
+    "constraint": "true | false；取值：true"
   },
   {
-    "name": "HAI_SCHEDULER_LOCKEXPIREMS",
+    "name": "HAI_SCHEDULER_LEASEMS",
     "module": "scheduler",
-    "path": "scheduler.lockExpireMs",
-    "description": "分布式锁过期时间，单位毫秒（默认 300000，即 5 分钟）",
+    "path": "scheduler.leaseMs",
+    "description": "执行租约毫秒数（默认 300000，范围 1000–86400000），在途每三分之一周期续期。",
     "value": "300000",
-    "constraint": "整数；>= 10000；<= 9007199254740991"
+    "constraint": "整数；>= 1000；<= 86400000"
   },
   {
     "name": "HAI_SCHEDULER_MAXLOGS",

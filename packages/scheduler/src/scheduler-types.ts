@@ -24,7 +24,6 @@ const SchedulerErrorInfo = {
   DB_SAVE_FAILED: '026:500',
   ALREADY_RUNNING: '027:409',
   NOT_RUNNING: '028:400',
-  LOCK_ACQUIRE_FAILED: '029:409',
   JS_COMPILE_FAILED: '030:500',
   HOOK_EXECUTION_FAILED: '031:500',
 } as const satisfies ErrorInfo
@@ -44,7 +43,7 @@ export type TaskHandlerKind = 'api' | 'js'
 
 /** 失败重试策略 */
 export interface TaskRetryPolicy {
-  /** 最大尝试次数（包含首次执行，最小 1） */
+  /** 最大尝试次数（含首次及崩溃恢复，范围 1–100，默认 1）。 */
   maxAttempts: number
   /** 每次重试前的退避时间（毫秒）；按顺序对应第 2、3... 次尝试 */
   backoffMs?: number[]
@@ -140,6 +139,8 @@ export interface TaskDefinition {
   deleteAfterRun?: boolean
   /** 失败重试策略 */
   retry?: TaskRetryPolicy
+  /** 全部副作用按 context.occurrenceId 原子持久去重时才为 true；默认 false，未知结果禁止自动重跑。 */
+  idempotent?: boolean
   /** 通用参数 */
   params?: TaskParams
   /** 任务处理器；为空时可由全局事件回调统一处理 */
@@ -164,6 +165,12 @@ export interface TaskTriggerInfo {
 export interface SchedulerTaskContext {
   /** 一次调度发生的稳定标识；所有重试共享，供宿主构造业务幂等键。 */
   occurrenceId?: string
+  /** 当前领取独有的凭据，用于宿主条件提交；续租失败后不能继续产生副作用。 */
+  executionToken?: string
+  /** 数据库执行序号；与 attempt 组成接收端可比较的 fencing 版本。 */
+  sequence?: number
+  /** 同一 occurrence 中持久化的尝试次数。 */
+  attempt?: number
   /** 当前任务 */
   task: TaskDefinition
   /** 任务 ID */
@@ -181,6 +188,8 @@ export type JsTaskHandler = (context: SchedulerTaskContext, signal?: AbortSignal
 
 /** 任务开始事件 */
 export interface SchedulerTaskStartEvent {
+  /** 已领取执行的持久身份，观测回调也可据此标记或幂等处理；竞争中断时不存在。 */
+  context?: SchedulerTaskContext
   /** 关闭调度器时取消；回调必须停止后续副作用并释放资源 */
   signal: AbortSignal
   /** 当前任务 */
@@ -233,12 +242,14 @@ export interface SchedulerTaskHooks {
 // ─── 执行日志 ───
 
 /** 执行状态 */
-export type ExecutionStatus = 'success' | 'failed' | 'interrupted'
+export type ExecutionStatus = 'success' | 'failed' | 'interrupted' | 'unknown'
 
 /**
  * 任务执行日志
  */
 export interface TaskExecutionLog {
+  /** 持久执行回执；相同定时 occurrence 或手动幂等键共用。 */
+  occurrenceId?: string
   /** 日志 ID */
   id: number
   /** 任务 ID */
@@ -304,6 +315,8 @@ export interface SchedulerLogCleanupPolicy {
  * 任务 ID 不可更新。
  */
 export interface TaskUpdateInput {
+  /** 全部副作用的持久去重能力声明。 */
+  idempotent?: boolean
   /** 任务名称 */
   name?: string
   /** 任务描述 */
@@ -328,6 +341,46 @@ export interface TaskUpdateInput {
 export interface TriggerTaskInput {
   /** 手工触发来源（例如 admin-console / api / cli） */
   source?: string
+  /** 稳定业务触发键（1–128 字符）；同任务重复使用会命中同一持久执行。 */
+  idempotencyKey?: string
+}
+
+/**
+ * 可信运维可见的执行状态；unknown 继续占用任务串行槽。
+ * @example const state: SchedulerExecutionState = 'unknown'
+ */
+export type SchedulerExecutionState = 'claimed' | 'running' | ExecutionStatus | 'discarded'
+
+/**
+ * 不包含代码、参数、URL 或 owner 凭据的共享执行记录。
+ * @example const result = await scheduler.execution.get(occurrenceId)
+ */
+export interface SchedulerExecutionEntry {
+  /** 稳定执行回执。 */
+  occurrenceId: string
+  /** 任务标识。 */
+  taskId: string
+  /** 共享状态。 */
+  status: SchedulerExecutionState
+  /** 数据库序号，配合 attempt 用于外部 fencing。 */
+  sequence: number
+  /** 已开始的尝试次数。 */
+  attemptCount: number
+  /** 最近状态版本（Unix 毫秒），用于人工裁定条件。 */
+  updatedAt: number
+}
+
+/**
+ * 可信服务端的执行查询与人工核对入口。
+ * @example const unknown = await scheduler.execution.listUnknown({ limit: 50 })
+ */
+export interface SchedulerExecutionOperations {
+  /** 按回执查询安全元数据。@example await scheduler.execution.get(occurrenceId) */
+  get: (occurrenceId: string) => Promise<HaiResult<SchedulerExecutionEntry | null>>
+  /** 有界查询待核对的 unknown；每页 1–100 条。@example await scheduler.execution.listUnknown({ limit: 50, offset: 0 }) */
+  listUnknown: (options?: { limit?: number, offset?: number }) => Promise<HaiResult<SchedulerExecutionEntry[]>>
+  /** 先终止旧 runner 并核对外部结果，再条件裁定；不能重新排队。@example await scheduler.execution.resolveUnknown(id, { status: 'discarded', expectedUpdatedAt: entry.updatedAt }) */
+  resolveUnknown: (occurrenceId: string, resolution: { status: 'success' | 'discarded', expectedUpdatedAt: number }) => Promise<HaiResult<void>>
 }
 
 // ─── 初始化输入 ───
@@ -350,6 +403,8 @@ export interface SchedulerInitInput extends SchedulerConfigInput {
  * 调度器函数接口
  */
 export interface SchedulerFunctions {
+  /** 共享执行状态、未知结果查询与可信人工裁定。 */
+  readonly execution: SchedulerExecutionOperations
   /** 刷新共享数据库中的任务定义，用于跨实例配置读取。 */
   refreshTasks: () => Promise<HaiResult<void>>
   /** 初始化调度器 */

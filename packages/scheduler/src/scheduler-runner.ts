@@ -1,85 +1,52 @@
 /**
- * @h-ai/scheduler — 调度运行器
- *
- * 职责：
- * - 维护调度执行期间的进程内状态：运行中任务集合、tick 定时器、上一次 tick 分钟、
- *   分布式锁配置（nodeId / lockTtlSec）
- * - 实现 tick 调度循环（每分钟触发一次）
- * - 通过分布式锁防止多节点重复执行同一分钟的任务
- * - 将具体任务交给 scheduler-executor.ts 执行
- *
- * 此文件不感知任务注册/更新等业务逻辑，那些由 scheduler-functions.ts 负责。
+ * 共享数据库执行状态驱动 cron、手动触发与崩溃恢复。
  * @module scheduler-runner
  */
-
-import type { SchedulerTaskRepository } from './repositories/index.js'
-import type { TaskDefinition, TaskExecutionLog, TaskTriggerInfo } from './scheduler-types.js'
+import type { SchedulerExecutionRepository, SchedulerTaskRepository, StoredExecution } from './repositories/index.js'
+import type { TaskDefinition, TaskExecutionLog, TaskTriggerInfo, TriggerTaskInput } from './scheduler-types.js'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
-
-import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-
-import { waitWithSignal } from './scheduler-cancellation.js'
+import { executionId } from './repositories/scheduler-execution-repository.js'
 import { executeTask, interruptTask } from './scheduler-executor.js'
 import { getCron, getHooks, getTask, getTaskRegistry, loadPersistedTasks, unregisterTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'runner' })
-
-// ─── 运行状态 ───
-
-/** 当前正在执行中的任务 ID 集合 */
 const runningTasks = new Set<string>()
 const activeRuns = new Map<Promise<TaskExecutionLog>, AbortController>()
-
-/** 调度器定时器 ID */
 let tickTimer: ReturnType<typeof setInterval> | null = null
 let tickInProgress = false
-
-/** 上一次检查的分钟标记（防止同一分钟内多次触发） */
 let lastTickMinute = -1
-
-/** 当前节点 ID（分布式锁用） */
 let currentNodeId = ''
-
-/** 当前锁过期时间（秒，分布式锁用） */
-let currentLockTtlSec = 300
-
-/** 当前任务仓库（用于 deleteAfterRun 持久化删除） */
+let currentLeaseMs = 300_000
 let currentTaskRepo: SchedulerTaskRepository | null = null
+let currentExecutionRepo: SchedulerExecutionRepository | null = null
 
-// ─── 运行状态访问器（供 main.ts 编排） ───
-
-export function configureLock(nodeId: string, lockTtlSec: number): void {
+/** 配置共享执行仓库和续租周期。@example configureExecution(repo, nodeId, 300_000) */
+export function configureExecution(repo: SchedulerExecutionRepository | null, nodeId = '', leaseMs = 300_000): void {
+  currentExecutionRepo = repo
   currentNodeId = nodeId
-  currentLockTtlSec = lockTtlSec
+  currentLeaseMs = leaseMs
 }
 
+/** 指定共享任务定义仓库。@example setTaskRepository(repo) */
 export function setTaskRepository(repo: SchedulerTaskRepository | null): void {
   currentTaskRepo = repo
 }
 
-export function isTaskRunning(taskId: string): boolean {
-  return runningTasks.has(taskId)
-}
-
+/** 检查本实例计时器状态。@example isTimerRunning() */
 export function isTimerRunning(): boolean {
   return tickTimer !== null
 }
 
-// ─── 重置（供 close() 调用） ───
-
+/** 完全排空执行链后重置实例状态。@example resetRunner() */
 export function resetRunner(): void {
   runningTasks.clear()
-  if (tickTimer) {
-    clearInterval(tickTimer)
-    tickTimer = null
-  }
+  stopTimer()
   lastTickMinute = -1
-  currentNodeId = ''
-  currentLockTtlSec = 300
   currentTaskRepo = null
+  configureExecution(null)
 }
 
 async function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -97,6 +64,7 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+/** 停止领取并等待取消链退出；取消不表示已撤销外部副作用。@example await drainRunner() */
 export async function drainRunner(): Promise<void> {
   stopTimer()
   for (const controller of activeRuns.values())
@@ -104,29 +72,37 @@ export async function drainRunner(): Promise<void> {
   await Promise.allSettled([...activeRuns.keys()])
 }
 
-function resolveRetryBackoffMs(task: TaskDefinition, attempt: number): number {
-  const backoff = task.retry?.backoffMs
-  if (!backoff || backoff.length === 0)
-    return 0
-
-  const index = Math.min(Math.max(attempt - 2, 0), backoff.length - 1)
-  return backoff[index] ?? 0
-}
-
-// ─── 调度循环与任务执行 ───
-
 async function tick(): Promise<void> {
   if (tickInProgress)
     return
   tickInProgress = true
   try {
     const refreshed = await loadPersistedTasks(currentTaskRepo)
-    if (!refreshed.success) {
-      logger.warn('Task definition refresh failed; skipping scheduling', { error: refreshed.error.message })
+    if (!refreshed.success || !tickTimer)
       return
+    // 恢复跨分钟遗留的原 occurrence；非幂等 running 由仓库隔离，不能换身份重发。
+    const expired = await currentExecutionRepo?.expired()
+    if (expired?.success) {
+      for (const row of expired.data) {
+        const task = getTask(row.taskId)
+        if (!task) {
+          await currentExecutionRepo?.isolateExpired(row)
+          continue
+        }
+        if (task && !runningTasks.has(task.id)) {
+          let trigger: TaskTriggerInfo & { minute?: number }
+          try {
+            // 数据来自本模块写入的固定触发结构；坏 JSON 留在共享槽中供人工核对。
+            trigger = JSON.parse(row.triggerJson) as TaskTriggerInfo & { minute?: number }
+          }
+          catch {
+            await currentExecutionRepo?.isolateExpired(row)
+            continue
+          }
+          void runTask(task, trigger.minute, trigger, undefined, row).catch(error => logger.warn('Execution recovery failed', { taskId: task.id, error }))
+        }
+      }
     }
-    if (!tickTimer)
-      return
     scheduleDueTasks()
   }
   finally {
@@ -135,185 +111,173 @@ async function tick(): Promise<void> {
 }
 
 function scheduleDueTasks(): void {
-  const now = new Date()
-  const currentMinute = Math.floor(now.getTime() / 60000)
+  const currentMinute = Math.floor(Date.now() / 60_000)
   if (currentMinute === lastTickMinute)
     return
-
   lastTickMinute = currentMinute
-
   for (const [taskId, task] of getTaskRegistry()) {
-    if (task.enabled === false)
+    if (task.enabled === false || runningTasks.has(taskId))
       continue
-
-    const cron = getCron(taskId)
-    // 调度与分布式锁均以分钟为槽；启动或 tick 延迟不应因当前秒数漏掉该分钟。
-    if (!cron || !cron.match(new Date(currentMinute * 60000)))
+    if (!getCron(taskId)?.match(new Date(currentMinute * 60_000)))
       continue
-
-    if (runningTasks.has(taskId)) {
-      logger.debug('Skipping task already running', { taskId, taskName: task.name })
-      continue
-    }
-
-    void runTask(task, currentMinute, { type: 'scheduled', source: null }).catch((error) => {
-      logger.error('Unhandled task execution error', { taskId, error })
-    })
+    void runTask(task, currentMinute, { type: 'scheduled', source: null }).catch(error => logger.error('Unhandled task execution error', { taskId, error }))
   }
 }
 
-export function runTask(
-  task: TaskDefinition,
-  minuteTimestamp?: number,
-  trigger: TaskTriggerInfo = { type: 'manual', source: null },
-): Promise<TaskExecutionLog> {
+/**
+ * cron/manual/recovery 共用唯一任务串行槽与 occurrence 领取协议。
+ * @example await runTask(task, minute, { type: 'scheduled', source: null })
+ */
+export function runTask(task: TaskDefinition, minuteTimestamp?: number, trigger: TaskTriggerInfo = { type: 'manual', source: null }, options?: TriggerTaskInput, recovery?: StoredExecution): Promise<TaskExecutionLog> {
   const controller = new AbortController()
-  const run = runTaskExecution(task, minuteTimestamp, trigger, controller.signal)
+  const run = runTaskExecution(task, minuteTimestamp, trigger, controller, options, recovery)
   activeRuns.set(run, controller)
   void run.finally(() => activeRuns.delete(run)).catch(() => {})
   return run
 }
 
-async function runTaskExecution(
-  task: TaskDefinition,
-  minuteTimestamp: number | undefined,
-  trigger: TaskTriggerInfo,
-  signal: AbortSignal,
-): Promise<TaskExecutionLog> {
-  const hooks = getHooks()
+async function runTaskExecution(task: TaskDefinition, minute: number | undefined, trigger: TaskTriggerInfo, controller: AbortController, options?: TriggerTaskInput, recovery?: StoredExecution): Promise<TaskExecutionLog> {
   const repository = currentTaskRepo
-  const occurrenceId = minuteTimestamp === undefined ? `manual:${randomUUID()}` : `scheduled:${minuteTimestamp}`
-  const lockKey = minuteTimestamp !== undefined ? `hai:scheduler:${task.id}:${minuteTimestamp}` : undefined
-
-  if (cache.isInitialized && lockKey) {
-    const lockResult = await waitWithSignal(() => cache.lock.acquire(lockKey, { ttl: currentLockTtlSec }), signal).catch(() => null)
-    if (!lockResult)
-      return interruptTask(task, trigger, schedulerM('scheduler_closing'), {}, signal)
-    if (!lockResult.success) {
-      // lock 服务本身异常时 fail-close：中断任务，避免多节点重复执行
-      logger.warn('Failed to acquire distributed lock, interrupting task', { taskId: task.id, nodeId: currentNodeId, error: lockResult.error.message })
-      return interruptTask(
-        task,
-        trigger,
-        schedulerM('scheduler_lockAcquireFailed', { params: { taskId: task.id } }),
-        hooks,
-        signal,
-      )
+  const executionRepo = currentExecutionRepo
+  const hooks = getHooks()
+  const leaseMs = currentLeaseMs
+  const occurrenceId = recovery?.occurrenceId ?? executionId(task.id, trigger.type, minute === undefined ? options?.idempotencyKey ?? randomUUID() : String(minute))
+  const interrupted = async (reason: string) => ({ ...await interruptTask(task, trigger, reason, {}, controller.signal), occurrenceId })
+  if (!executionRepo)
+    return interrupted(schedulerM('scheduler_executionStateFailed'))
+  const claimed = await executionRepo.claim(task, occurrenceId, { ...trigger, ...(minute !== undefined ? { minute } : {}) }, currentNodeId, leaseMs)
+  if (!claimed.success)
+    return interrupted(claimed.error.message)
+  if (!claimed.data)
+    return interrupted(schedulerM('scheduler_taskRunning', { params: { taskId: task.id } }))
+  const row = claimed.data
+  if (!['claimed', 'running'].includes(row.status)) {
+    if (minute === undefined) {
+      // 已完成的相同手动幂等键返回持久结果，绝不重新执行。
+      try {
+        const log: TaskExecutionLog = row.logJson
+          ? JSON.parse(row.logJson)
+          : {
+              id: 0,
+              taskId: row.taskId,
+              taskName: task.name,
+              taskType: task.handler?.kind ?? 'hook',
+              triggerType: trigger.type,
+              triggerSource: trigger.source,
+              status: 'interrupted',
+              result: null,
+              error: null,
+              startedAt: row.createdAt,
+              finishedAt: row.updatedAt,
+              duration: row.updatedAt - row.createdAt,
+            }
+        const status = row.status === 'discarded' ? 'interrupted' : row.status as TaskExecutionLog['status']
+        return { ...log, status, error: status === 'success' ? null : log.error, occurrenceId }
+      }
+      catch {
+        return interrupted(schedulerM('scheduler_executionStateFailed'))
+      }
     }
-    if (!lockResult.data) {
-      logger.debug('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
-      return interruptTask(
-        task,
-        trigger,
-        schedulerM('scheduler_lockAcquireFailed', { params: { taskId: task.id } }),
-        hooks,
-        signal,
-      )
-    }
+    return interrupted(schedulerM('scheduler_occurrenceHandled', { params: { taskId: task.id } }))
   }
-
-  if (runningTasks.has(task.id)) {
-    return interruptTask(
-      task,
-      trigger,
-      schedulerM('scheduler_taskRunning', { params: { taskId: task.id } }),
-      hooks,
-      signal,
-    )
-  }
-
   runningTasks.add(task.id)
-
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let renewing: Promise<void> | undefined
+  let stopped = false
+  let lost = false
+  const renew = async () => {
+    try {
+      const result = await executionRepo.renew(row, leaseMs)
+      lost = !result.success
+    }
+    catch {
+      lost = true
+    }
+    if (lost) {
+      controller.abort(new Error(schedulerM('scheduler_executionStateFailed')))
+    }
+    else if (!stopped) {
+      timer = setTimeout(() => {
+        renewing = renew()
+      }, Math.max(1, Math.floor(leaseMs / 3)))
+    }
+  }
+  timer = setTimeout(() => {
+    renewing = renew()
+  }, Math.max(1, Math.floor(leaseMs / 3)))
   try {
-    let maxAttempts = Math.max(1, task.retry?.maxAttempts ?? 1)
-    let log: TaskExecutionLog | null = null
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      if (signal.aborted) {
-        log = await interruptTask(task, trigger, schedulerM('scheduler_closing'), {}, signal)
+    let log: TaskExecutionLog | undefined
+    for (; row.attemptCount < row.maxAttempts;) {
+      if (controller.signal.aborted)
         break
-      }
       const refreshed = await loadPersistedTasks(repository)
-      if (!refreshed.success) {
-        log = await interruptTask(task, trigger, refreshed.error.message, hooks, signal)
-        break
-      }
       const latest = getTask(task.id)
-      const stillDue = minuteTimestamp === undefined || getCron(task.id)?.match(new Date(minuteTimestamp * 60000))
-      if (!latest || latest.enabled === false || !stillDue || (attempt > 1 && !isDeepStrictEqual(latest, task))) {
-        log = await interruptTask(task, trigger, schedulerM('scheduler_taskNoLongerDue', { params: { taskId: task.id } }), hooks, signal)
+      let unchanged = false
+      try {
+        // JSON 快照不会保留 undefined 属性，比较时两侧都采用持久化表示。
+        unchanged = latest !== undefined && isDeepStrictEqual(JSON.parse(JSON.stringify(latest)), JSON.parse(row.snapshot))
+      }
+      catch {}
+      if (!refreshed.success || !latest || latest.enabled === false || !unchanged) {
+        log = await interrupted(schedulerM('scheduler_taskNoLongerDue', { params: { taskId: task.id } }))
+        // 曾开始的任务不能靠配置编辑抹去未知副作用；保留串行槽直到人工核对。
+        if (row.attemptCount > 0)
+          log.status = 'unknown'
         break
       }
       task = latest
-      if (attempt === 1)
-        maxAttempts = Math.max(1, task.retry?.maxAttempts ?? 1)
-      log = await executeTask(task, trigger, hooks, signal, occurrenceId)
-      if (log.status !== 'failed')
+      if (!task.handler && !hooks.onTaskExecute) {
+        log = { ...await interruptTask(task, trigger, schedulerM('scheduler_taskHandlerMissing', { params: { taskId: task.id } }), hooks, controller.signal), occurrenceId }
         break
-
-      if (attempt >= maxAttempts)
+      }
+      const begun = await executionRepo.begin(row, leaseMs)
+      if (!begun.success) {
+        lost = true
         break
-
-      const backoffMs = resolveRetryBackoffMs(task, attempt + 1)
-      logger.warn('Retrying failed task execution', {
-        taskId: task.id,
-        attempt,
-        maxAttempts,
-        backoffMs,
-      })
-      await sleep(backoffMs, signal)
+      }
+      log = await executeTask(task, trigger, hooks, controller.signal, { occurrenceId, executionToken: row.owner, sequence: row.sequence, attempt: row.attemptCount })
+      log.occurrenceId = occurrenceId
+      if (log.status !== 'failed' || !row.idempotent || row.attemptCount >= row.maxAttempts)
+        break
+      const delays = task.retry?.backoffMs ?? []
+      const delay = delays[Math.min(row.attemptCount - 1, Math.max(0, delays.length - 1))] ?? 0
+      await sleep(delay, controller.signal)
     }
-
-    if (!log) {
-      return interruptTask(
-        task,
-        trigger,
-        schedulerM('scheduler_executionFailed', { params: { error: 'Task execution produced no log' } }),
-        hooks,
-        signal,
-      )
+    if (!log)
+      log = await interrupted(schedulerM('scheduler_executionStateFailed'))
+    if (lost) {
+      // 取消和失租不是外部回滚；旧 owner 只返回 unknown，不能覆盖新节点的共享结果。
+      return { ...log, status: 'unknown', error: schedulerM('scheduler_executionUnknown'), occurrenceId }
     }
-
-    if (log.status === 'failed')
-      logger.warn('Task execution failed', { taskId: task.id, error: log.error })
-    else if (log.status === 'interrupted')
-      logger.debug('Task execution interrupted', { taskId: task.id, error: log.error })
-    else
-      logger.debug('Task execution succeeded', { taskId: task.id, duration: log.duration })
-
-    if (task.deleteAfterRun === true && !signal.aborted && log.status === 'success') {
-      // 执行期间配置可能已更新；旧 occurrence 不能删除新定义。
+    if (controller.signal.aborted && row.attemptCount > 0)
+      log = { ...log, status: 'unknown', error: schedulerM('scheduler_executionUnknown') }
+    const finished = await executionRepo.finish(row, log)
+    if (!finished.success)
+      return { ...log, status: 'unknown', error: finished.error.message, occurrenceId }
+    if (task.deleteAfterRun && log.status === 'success') {
       const refreshed = await loadPersistedTasks(repository)
-      if (!refreshed.success || !isDeepStrictEqual(getTask(task.id), task))
-        return log
-      const unregisterResult = await unregisterTask(task.id, repository, task)
-      if (!unregisterResult.success) {
-        logger.warn('Failed to auto-delete one-time task after run', {
-          taskId: task.id,
-          error: unregisterResult.error.message,
-        })
-      }
-      else if (!getTask(task.id)) {
-        logger.info('Auto-deleted one-time task after run', { taskId: task.id })
-      }
+      if (refreshed.success && isDeepStrictEqual(getTask(task.id), task))
+        await unregisterTask(task.id, repository, task)
     }
-
     return log
   }
   finally {
+    stopped = true
+    clearTimeout(timer)
+    await renewing
     runningTasks.delete(task.id)
   }
 }
 
+/** 启动本实例扫描器，任务正确性不依赖扫描器时间槽。@example startTimer(1000) */
 export function startTimer(tickInterval: number): void {
   lastTickMinute = -1
   tickTimer = setInterval(tick, tickInterval)
 }
 
+/** 停止新领取，已经开始的任务由 drainRunner 处理。@example stopTimer() */
 export function stopTimer(): void {
-  if (!tickTimer)
-    return
-
-  clearInterval(tickTimer)
+  if (tickTimer)
+    clearInterval(tickTimer)
   tickTimer = null
 }

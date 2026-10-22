@@ -36,9 +36,9 @@ function resolveTaskType(task: TaskDefinition, hooks: Readonly<SchedulerTaskHook
   return 'hook'
 }
 
-function createTaskContext(task: TaskDefinition, trigger: TaskTriggerInfo, occurrenceId?: string): SchedulerTaskContext {
+function createTaskContext(task: TaskDefinition, trigger: TaskTriggerInfo, execution?: Partial<SchedulerTaskContext>): SchedulerTaskContext {
   return {
-    ...(occurrenceId ? { occurrenceId } : {}),
+    ...execution,
     task,
     taskId: task.id,
     params: task.params ?? {},
@@ -91,6 +91,7 @@ async function saveExecutionLog(
   finishedAt: number,
   result: string | null,
   error: string | null,
+  occurrenceId?: string,
 ): Promise<TaskExecutionLog> {
   const log: TaskExecutionLog = {
     id: 0,
@@ -105,6 +106,7 @@ async function saveExecutionLog(
     startedAt,
     finishedAt,
     duration: finishedAt - startedAt,
+    ...(occurrenceId ? { occurrenceId } : {}),
   }
 
   if (!currentLogRepo)
@@ -215,12 +217,18 @@ export async function executeApiTask(
   const timer = setTimeout(() => controller.abort(), timeout)
 
   try {
+    const requestHeaders = new Headers(headers)
+    if (body !== undefined)
+      requestHeaders.set('Content-Type', 'application/json')
+    if (context.occurrenceId) {
+      requestHeaders.set('Idempotency-Key', context.occurrenceId)
+      requestHeaders.set('X-Scheduler-Sequence', String(context.sequence))
+      requestHeaders.set('X-Scheduler-Attempt', String(context.attempt))
+      requestHeaders.set('X-Scheduler-Task', encodeURIComponent(context.taskId))
+    }
     const response = await fetch(url, {
       method,
-      headers: {
-        ...headers,
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      },
+      headers: requestHeaders,
       signal: AbortSignal.any([signal, controller.signal]),
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
@@ -322,13 +330,13 @@ export async function executeTask(
   trigger: TaskTriggerInfo,
   hooks: Readonly<SchedulerTaskHooks>,
   signal: AbortSignal = new AbortController().signal,
-  occurrenceId?: string,
+  execution?: Partial<SchedulerTaskContext>,
 ): Promise<TaskExecutionLog> {
   const startedAt = Date.now()
   const taskType = resolveTaskType(task, hooks)
-  const context = createTaskContext(task, trigger, occurrenceId)
+  const context = createTaskContext(task, trigger, execution)
 
-  await notifyTaskStart(hooks, { task, trigger, startedAt, signal })
+  await notifyTaskStart(hooks, { task, trigger, startedAt, signal, context })
 
   let executionResult: HaiResult<string | null>
   let shouldNotifyInterrupted = false
@@ -350,9 +358,12 @@ export async function executeTask(
 
   shouldNotifyInterrupted ||= signal.aborted
   const finishedAt = Date.now()
-  const status: ExecutionStatus = executionResult.success
+  let status: ExecutionStatus = executionResult.success
     ? 'success'
     : (shouldNotifyInterrupted ? 'interrupted' : 'failed')
+  // 分布式执行已经进入持久 running；缺少外部幂等保障时，失败/取消都不能推断副作用未发生。
+  if (execution?.executionToken && !task.idempotent && !executionResult.success)
+    status = 'unknown'
   const log = await saveExecutionLog(
     task,
     trigger,
@@ -362,6 +373,7 @@ export async function executeTask(
     finishedAt,
     executionResult.success ? executionResult.data : null,
     executionResult.success ? null : executionResult.error.message,
+    context.occurrenceId,
   )
 
   if (!executionResult.success && shouldNotifyInterrupted) {
@@ -372,11 +384,12 @@ export async function executeTask(
       interruptedAt: finishedAt,
       signal,
       reason: executionResult.error.message,
+      context,
     })
   }
 
-  if (status !== 'interrupted')
-    await notifyTaskFinish(hooks, { task, trigger, startedAt, finishedAt, log, signal })
+  if (status !== 'interrupted' && !signal.aborted)
+    await notifyTaskFinish(hooks, { task, trigger, startedAt, finishedAt, log, signal, context })
 
   return log
 }

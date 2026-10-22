@@ -35,7 +35,6 @@
     "build:clean": "rimraf dist"
   },
   "dependencies": {
-    "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "croner": "catalog:",
@@ -44,6 +43,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "rimraf": "catalog:",
+    "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

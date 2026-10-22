@@ -1,14 +1,15 @@
+import type { SchedulerTaskExecuteEvent } from '../src/scheduler-types.js'
 /**
  * =============================================================================
  * @h-ai/scheduler - 调度器主模块测试
  * =============================================================================
  */
 
-import type { SchedulerTaskExecuteEvent } from '../src/scheduler-types.js'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scheduler } from '../src/scheduler-main.js'
 import { HaiSchedulerError } from '../src/scheduler-types.js'
+import './helpers/sqlite-lifecycle.js'
 
 describe('scheduler', () => {
   afterEach(async () => {
@@ -22,7 +23,7 @@ describe('scheduler', () => {
     it('应成功初始化并挂载全局 hooks', async () => {
       const onTaskStart = vi.fn()
       const result = await scheduler.init({
-        enableDb: false,
+        enableDb: true,
         hooks: { onTaskStart },
       })
 
@@ -33,8 +34,8 @@ describe('scheduler', () => {
 
     it('并发调用 init 应拒绝后续调用', async () => {
       const [r1, r2] = await Promise.all([
-        scheduler.init({ enableDb: false }),
-        scheduler.init({ enableDb: false }),
+        scheduler.init({ enableDb: true }),
+        scheduler.init({ enableDb: true }),
       ])
 
       const results = [r1, r2]
@@ -54,7 +55,7 @@ describe('scheduler', () => {
       vi.setSystemTime(new Date(Date.UTC(2026, 4, 25, 4, 5, second)))
       const onTaskExecute = vi.fn((event: SchedulerTaskExecuteEvent) => ({ taskId: event.task.id }))
 
-      await scheduler.init({ enableDb: false, tickInterval: 100, hooks: { onTaskExecute } })
+      await scheduler.init({ enableDb: true, tickInterval: 100, hooks: { onTaskExecute } })
 
       const registerResult = await scheduler.register({
         id: 'timezone-task',
@@ -90,7 +91,7 @@ describe('scheduler', () => {
     })
 
     it('应成功注册并手动触发 JS 字符串任务，记录触发来源', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
 
       const registerResult = await scheduler.register({
         id: 'manual-js',
@@ -121,7 +122,7 @@ describe('scheduler', () => {
       const mockFetch = vi.fn().mockResolvedValue(new Response('{"status":"ok"}'))
       vi.stubGlobal('fetch', mockFetch)
 
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
       const registerResult = await scheduler.register({
         id: 'api-task',
         name: 'API 任务',
@@ -151,7 +152,7 @@ describe('scheduler', () => {
       }))
 
       await scheduler.init({
-        enableDb: false,
+        enableDb: true,
         hooks: { onTaskExecute },
       })
 
@@ -175,7 +176,7 @@ describe('scheduler', () => {
     it('handler 为空且无 execute hook 时应记录为 interrupted', async () => {
       const onTaskInterrupted = vi.fn()
       await scheduler.init({
-        enableDb: false,
+        enableDb: true,
         hooks: { onTaskInterrupted },
       })
 
@@ -195,7 +196,7 @@ describe('scheduler', () => {
     })
 
     it('deleteAfterRun=true 时任务执行后应自动删除', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
 
       const registerResult = await scheduler.register({
         id: 'one-time-task',
@@ -224,12 +225,13 @@ describe('scheduler', () => {
         .mockResolvedValueOnce(new Response('{"ok":true}'))
       vi.stubGlobal('fetch', mockFetch)
 
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
 
       const registerResult = await scheduler.register({
         id: 'retry-task',
         name: '重试任务',
         cron: '* * * * *',
+        idempotent: true,
         retry: { maxAttempts: 3, backoffMs: [1, 1] },
         handler: {
           kind: 'api',
@@ -381,7 +383,7 @@ describe('scheduler', () => {
 
   describe('update / hooks / close', () => {
     it('updateTask 应支持更新 params 与 handler', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
       await scheduler.register({
         id: 'update-task',
         name: '更新任务',
@@ -408,7 +410,7 @@ describe('scheduler', () => {
     })
 
     it('setHooks / clearHooks 应生效', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
 
       const onTaskExecute = vi.fn(() => 'from-set-hooks')
       const setResult = scheduler.setHooks({ onTaskExecute })
@@ -427,7 +429,7 @@ describe('scheduler', () => {
     })
 
     it('close 后应恢复到未初始化状态', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
       await scheduler.register({
         id: 'temp-task',
         name: '临时任务',
@@ -450,6 +452,7 @@ describe('scheduler', () => {
 
   describe('db fallback / rollback behavior', () => {
     it('enableDb=true 但 reldb 未初始化时 init 应失败（不静默降级）', async () => {
+      await reldb.close()
       // reldb 未初始化（afterEach 已关闭），直接 init
       const result = await scheduler.init({ enableDb: true })
       expect(result.success).toBe(false)

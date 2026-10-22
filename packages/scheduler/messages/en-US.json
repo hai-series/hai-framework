@@ -22,11 +22,14 @@
   "scheduler_invalidPersistedTask": "Invalid persisted task {taskId}: {error}",
   "scheduler_taskRunning": "Task is currently running: {taskId}",
   "scheduler_invalidApiConfig": "Invalid api_config for task: {taskId}",
-  "scheduler_lockAcquireFailed": "Failed to acquire distributed lock, another node already holds it: {taskId}",
   "scheduler_jsCompileFailed": "Failed to compile JS task: {error}",
   "scheduler_hookExecutionFailed": "Task lifecycle hook execution failed: {error}",
   "scheduler_taskHandlerMissing": "Task has no executable handler and no global execute hook is configured: {taskId}",
   "scheduler_invalidHandlerConfig": "Invalid task handler config: {taskId}",
   "scheduler_invalidRetryConfig": "Invalid retry policy config for task: {taskId}",
-  "scheduler_reldbNotInitialized": "enableDb is true but @h-ai/reldb is not initialized, please call reldb.init() first"
+  "scheduler_reldbNotInitialized": "enableDb is true but @h-ai/reldb is not initialized, please call reldb.init() first",
+  "scheduler_executionUnknown": "Execution outcome is unknown; stop the old runner and verify external effects before resolving",
+  "scheduler_executionStateFailed": "Shared execution state unavailable or owner lease lost",
+  "scheduler_executionInputInvalid": "Invalid execution identifier or administration input",
+  "scheduler_occurrenceHandled": "Occurrence already handled for task: {taskId}"
 }

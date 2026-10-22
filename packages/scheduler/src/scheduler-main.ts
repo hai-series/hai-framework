@@ -10,17 +10,17 @@ import type { HaiResult, PaginatedResult } from '@h-ai/core'
 
 import type { SchedulerConfig } from './scheduler-config.js'
 import type { LogQueryOptions, SchedulerFunctions, SchedulerInitInput, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskUpdateInput, TriggerTaskInput } from './scheduler-types.js'
-import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
+import { z } from 'zod'
 
-import { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
-import { SchedulerConfigSchema } from './scheduler-config.js'
+import { executionEntry, SchedulerExecutionRepository, SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
+import { ExecutionResolutionSchema, SchedulerConfigSchema, TriggerTaskSchema } from './scheduler-config.js'
 import { setLogRepository } from './scheduler-executor.js'
 import { clearHooks, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { clearJsTaskHandlerCache } from './scheduler-js-compiler.js'
-import { configureLock, drainRunner, isTaskRunning, isTimerRunning, resetRunner, runTask, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
+import { configureExecution, drainRunner, isTimerRunning, resetRunner, runTask, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
 import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
@@ -30,6 +30,9 @@ let initInProgress = false
 let closeInProgress: Promise<void> | null = null
 let taskRepo: SchedulerTaskRepository | null = null
 let logRepo: SchedulerLogRepository | null = null
+let executionRepo: SchedulerExecutionRepository | null = null
+const executionIdSchema = z.string().regex(/^[a-f\d]{64}$/)
+const executionListSchema = z.object({ limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).max(1_000_000).default(0) })
 
 const notInitialized = core.module.createNotInitializedKit(
   HaiSchedulerError.NOT_INITIALIZED,
@@ -37,9 +40,6 @@ const notInitialized = core.module.createNotInitializedKit(
 )
 
 async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
-  if (!parsed.enableDb)
-    return parsed
-
   if (!reldb.isInitialized) {
     logger.error('enableDb is true but @h-ai/reldb is not initialized')
     throw new Error(schedulerM('scheduler_reldbNotInitialized'))
@@ -47,6 +47,10 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
 
   taskRepo = new SchedulerTaskRepository(reldb)
   logRepo = new SchedulerLogRepository(reldb)
+  executionRepo = new SchedulerExecutionRepository(reldb)
+  const ready = await executionRepo.count()
+  if (!ready.success)
+    throw new Error(schedulerM('scheduler_executionStateFailed'))
   setTaskRepository(taskRepo)
   setLogRepository(logRepo, {
     maxLogs: parsed.maxLogs,
@@ -54,13 +58,8 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
   })
 
   const nodeId = parsed.nodeId ?? crypto.randomUUID()
-  const lockTtlSec = Math.ceil(parsed.lockExpireMs / 1000)
-  configureLock(nodeId, lockTtlSec)
-
-  if (cache.isInitialized)
-    logger.info('Distributed lock configured (cache-based)', { nodeId, lockTtlSec })
-  else
-    logger.warn('Cache module not initialized, distributed lock will be enabled when cache becomes available')
+  configureExecution(executionRepo, nodeId, parsed.leaseMs)
+  logger.info('Shared execution repository configured', { nodeId, leaseMs: parsed.leaseMs })
 
   return { ...parsed, nodeId }
 }
@@ -73,6 +72,33 @@ function normalizeTriggerInput(options?: TriggerTaskInput): { type: 'manual', so
 }
 
 export const scheduler: SchedulerFunctions = {
+  execution: {
+    async get(id) {
+      if (!currentConfig || !executionRepo)
+        return notInitialized.result()
+      if (!executionIdSchema.safeParse(id).success)
+        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+      const row = await executionRepo.byOccurrence(id)
+      return row.success ? ok(row.data ? executionEntry(row.data) : null) : row
+    },
+    async listUnknown(options) {
+      if (!currentConfig || !executionRepo)
+        return notInitialized.result()
+      const parsed = executionListSchema.safeParse(options ?? {})
+      if (!parsed.success)
+        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+      const rows = await executionRepo.unknown(parsed.data.limit, parsed.data.offset)
+      return rows.success ? ok(rows.data.map(executionEntry)) : rows
+    },
+    async resolveUnknown(id, resolution) {
+      if (!currentConfig || !executionRepo)
+        return notInitialized.result()
+      const parsed = ExecutionResolutionSchema.safeParse(resolution)
+      if (!executionIdSchema.safeParse(id).success || !parsed.success)
+        return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
+      return executionRepo.resolve(id, parsed.data.status, parsed.data.expectedUpdatedAt)
+    },
+  },
   async init(config?: SchedulerInitInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Scheduler init already in progress, skipping concurrent call')
@@ -235,6 +261,9 @@ export const scheduler: SchedulerFunctions = {
   async trigger(taskId: string, options?: TriggerTaskInput): Promise<HaiResult<TaskExecutionLog>> {
     if (!currentConfig)
       return notInitialized.result()
+    const parsed = TriggerTaskSchema.safeParse(options ?? {})
+    if (!parsed.success)
+      return err(HaiSchedulerError.CONFIG_ERROR, schedulerM('scheduler_executionInputInvalid'))
 
     const config = currentConfig
     const refreshed = await loadPersistedTasks(taskRepo)
@@ -251,14 +280,7 @@ export const scheduler: SchedulerFunctions = {
       )
     }
 
-    if (isTaskRunning(taskId)) {
-      return err(
-        HaiSchedulerError.EXECUTION_FAILED,
-        schedulerM('scheduler_taskRunning', { params: { taskId } }),
-      )
-    }
-
-    const log = await runTask(task, undefined, normalizeTriggerInput(options))
+    const log = await runTask(task, undefined, normalizeTriggerInput(parsed.data), parsed.data)
     return ok(log)
   },
 
@@ -322,6 +344,7 @@ export const scheduler: SchedulerFunctions = {
       setTaskRepository(null)
       taskRepo = null
       logRepo = null
+      executionRepo = null
       logger.info('Scheduler module closed')
     })()
     try {
