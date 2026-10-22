@@ -72,7 +72,7 @@ const APT_SOURCES_FIX = APT_MIRROR
 const CONTAINERFILE = `FROM python:3.11.17-slim-trixie
 RUN ${APT_SOURCES_FIX}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources \\
   && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=20 update \\
-  && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=20 install -y --no-install-recommends curl openssh-server podman uidmap fuse-overlayfs nftables iptables aardvark-dns \\
+  && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=20 install -y --no-install-recommends curl openssh-server podman uidmap fuse-overlayfs nftables iptables aardvark-dns util-linux \\
   && rm -rf /var/lib/apt/lists/* && ssh-keygen -A && mkdir -p /root/.ssh && chmod 700 /root/.ssh
 RUN pip install --no-cache-dir podman-compose==1.6.0
 RUN mkdir -p /etc/containers && printf '[containers]\\ncgroups = "disabled"\\n[engine]\\ncgroup_manager = "cgroupfs"\\nevents_logger = "file"\\n' > /etc/containers/containers.conf

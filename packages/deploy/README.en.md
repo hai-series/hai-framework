@@ -94,9 +94,11 @@ Application 1.2.3 produces release-prod-1.2.3.tar and an adjacent -deploy/ direc
 
 On isolated Linux servers, extract into a separate package directory and run `sh apply.sh`, optionally passing the deployment root. Every failed step exits nonzero. Image loading, service startup and HTTP checks are distinct steps. result-<deploymentId>.json records the result; current changes only after successful checks. Reapplying the same deployment ID stops clearly; a newly generated bundle for the same application version is allowed. Failed updates attempt to restore selected containers and configuration while preserving data volumes and diagnostics. Data already written by the application is not rolled back.
 
+The server holds a nonblocking kernel lock with util-linux `flock` on `.deploy.lock` in the deployment root, throughout deployment and recovery. Keep this file permanently: never delete, replace or steal it based on elapsed time, and use a filesystem that supports `flock`. If the parent shell is killed, active child commands that inherited its descriptor retain the lock. The kernel releases it after every holder exits or the server restarts. The old `.deploy-lock` directory is ignored and left untouched; stop old deployment processes before upgrading and avoid mixing old bundles. Forced termination or power loss skips recovery traps. Without a result file, execution is unknown: inspect containers, images and the successful `current` baseline before recovering with a new bundle. An unlocked file does not prove success or rolled-back effects.
+
 #### Before going fully offline
 
-Complete bundles include self-hosted middleware archives and matching architecture; server startup never pulls images. Linux needs Docker/Podman, Docker Compose v2 or podman-compose 1.6.0+ (supports --pull never), sh, tar, sha256sum, awk, curl and filesystem/container permissions. Protect private bundle contents. Keep volume identities stable across versions. Verify actual offline startup, login, refresh, restart and persistence. HTTPS, certificates, DNS and external services need separate preparation.
+Complete bundles include self-hosted middleware archives and matching architecture; server startup never pulls images. Linux needs Docker/Podman, Docker Compose v2 or podman-compose 1.6.0+ (supports --pull never), sh, tar, sha256sum, awk, curl, util-linux flock and filesystem/container permissions. Protect private bundle contents. Keep volume identities stable across versions. Verify actual offline startup, login, refresh, restart and persistence. HTTPS, certificates, DNS and external services need separate preparation.
 
 ### SDK
 
@@ -140,6 +142,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
 Run actual generated projects and SSH/manual deployment, including an isolated registry environment, incremental updates, damaged archives, same-version releases and failed health checks. Clean only test-owned projects, images, containers, logs and processes in finally/teardown.
+
+Focused lock gates use reachable Podman (preferred) or Docker to run the public API's generated `apply.sh` in real Linux containers: concurrent execution, child-held locks after killing the parent, full termination and restart recovery. Compose/HTTP use deterministic fixtures; this does not replace real service deployment acceptance. Run `HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/deploy exec vitest run tests/deploy-lock.e2e.test.ts`; in PowerShell, set `$env:HAI_DEPLOY_E2E='1'` first, then run the same pnpm command.
 
 ## License
 

@@ -1,4 +1,4 @@
-/** 在线发布与手工交付共用的服务器执行脚本。远程仅依赖标准 Linux 工具及 Compose。 */
+/** 在线发布与手工交付共用的服务器执行脚本。远程依赖 Linux flock、基础工具及 Compose。 */
 import type { DockerSshProviderConfig } from '../deploy-config.js'
 
 /** 将可信配置编码为一个 shell 参数。 */
@@ -133,14 +133,13 @@ finish() {
     if [ "$code" -ne 0 ]; then outcome=failed; fi
     printf '{"stage":"%s","status":"%s","durationSeconds":%s}\n' "$stage" "$outcome" "$(( $(date +%s) - step_started ))" >> "$root/steps-$id.jsonl"
     printf '{"deploymentId":"%s","stage":"%s","exitCode":%s,"durationSeconds":%s}\n' "$id" "$stage" "$code" "$elapsed" > "$root/result-$id.json"
-    rmdir "$root/.deploy-lock" || true
   fi
   exit "$code"
 }
 trap finish EXIT
 trap 'exit 130' HUP INT TERM
 step preflight 'Checking deployment tools and package'
-for tool in sha256sum tar awk curl; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
+for tool in sha256sum tar awk curl flock; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
 if [ "$runtime" = auto ]; then
   if command -v podman >/dev/null 2>&1 && podman version >/dev/null 2>&1; then runtime=podman; else runtime=docker; fi
 fi
@@ -148,7 +147,20 @@ case "$runtime" in docker|podman) ;; *) printf 'Runtime must be docker or podman
 "$runtime" version >/dev/null
 "$runtime" compose version >/dev/null
 "$runtime" compose up --help | grep -q never || { printf 'Compose is too old. Install Docker Compose v2 or podman-compose 1.6.0 or newer (supports --pull never).\n' >&2; exit 1; }
-mkdir "$root/.deploy-lock" 2>/dev/null || { printf 'Another deployment is running. Check %s/.deploy-lock before retrying.\n' "$root" >&2; exit 1; }
+# 内核锁绑定同一文件描述符；绝不删除/替换锁文件，避免新 inode 绕过活跃部署。
+# 子命令继承 FD 9：即使父 shell 被强杀，仍执行的命令继续持锁；全部退出或重启后自动释放。
+exec 9>"$root/.deploy.lock"
+if flock -n 9; then
+  :
+else
+  lock_code=$?
+  if [ "$lock_code" -eq 1 ]; then
+    printf 'Another deployment is running. Wait for its commands to finish; do not remove %s/.deploy.lock.\n' "$root" >&2
+  else
+    printf 'Cannot acquire deployment lock (exit %s). Check filesystem flock support and permissions.\n' "$lock_code" >&2
+  fi
+  exit "$lock_code"
+fi
 locked=true
 cd "$source_dir"
 sha256sum -c SHA256SUMS

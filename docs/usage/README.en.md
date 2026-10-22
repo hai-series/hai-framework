@@ -25,7 +25,7 @@ Commands describe the CLI and templates in this repository. For an installed rel
 | Version control and document-driven AI development | Git; an AI coding assistant that can read project files and run commands |
 | Build container images | An installed, running Podman or Docker engine; use Linux containers on Windows |
 | Build desktop installers | Rust, the target architecture toolchain, and Tauri's system SDKs and packaging tools on the target OS |
-| Deploy automatically to Linux | Local `tar`, `ssh`, and `scp`; a server with a container engine, Compose, `sh`, `tar`, `sha256sum`, and directory permissions |
+| Deploy automatically to Linux | Local `tar`, `ssh`, and `scp`; a server with a container engine, Compose, `sh`, `tar`, `sha256sum`, `awk`, `curl`, util-linux `flock`, a filesystem supporting flock and directory permissions |
 | Generate a deployment bundle only | Local `tar`, installed project dependencies, and complete build artifacts; no SSH or local container engine required |
 
 Commands below use `pnpm`; use `pnpm.cmd` in Windows PowerShell. Engine auto-detection checks available Podman/Docker installations; it does not install or start them.
@@ -207,7 +207,9 @@ On isolated Linux servers, extract into a separate package directory and run `sh
 
 #### Before going fully offline
 
-Complete bundles include self-hosted middleware archives and matching architecture; server startup never pulls images. Linux needs Docker/Podman, Docker Compose v2 or podman-compose 1.6.0+ (supports --pull never), sh, tar, sha256sum, awk, curl and filesystem/container permissions. Protect private bundle contents. Keep volume identities stable across versions. Verify actual offline startup, login, refresh, restart and persistence. HTTPS, certificates, DNS and external services need separate preparation.
+Complete bundles include self-hosted middleware archives and matching architecture; server startup never pulls images. Linux needs Docker/Podman, Docker Compose v2 or podman-compose 1.6.0+ (supports --pull never), sh, tar, sha256sum, awk, curl, util-linux flock, a filesystem supporting flock and filesystem/container permissions. Protect private bundle contents. Keep volume identities stable across versions. Verify actual offline startup, login, refresh, restart and persistence. HTTPS, certificates, DNS and external services need separate preparation.
+
+Deployment and recovery retain a kernel lock on the fixed `.deploy.lock` file. Never delete, replace or steal it based on time. Active children may keep the lock after the parent is killed; all holders exiting or a restart releases it. Forced termination skips recovery traps: inspect the result, `current` and actual containers before recovering with a new bundle. See the [deployment guide](../../packages/deploy/README.en.md).
 
 ### 6. Update the framework while keeping your application
 

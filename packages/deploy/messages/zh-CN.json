@@ -50,7 +50,7 @@
   "deploy_webProxyInvalid": "API 前缀必须是仅含字母、数字、下划线、连字符和斜杠的绝对路径。",
   "deploy_artifactInvalid": "镜像产物缺失或校验失败。请先执行 pnpm build --target docker，或用 --artifact-dir 指定有效产物；也可用 pnpm run deploy --build 一次完成。",
   "deploy_sshRequired": "自动部署需要 SSH 配置；无网络连接时使用 --bundle-only 生成部署包并手工搬运。",
-  "deploy_bundleInstructions": "部署包：{file}\n包中已包含本次选择服务需要的镜像，包括自建中间件。\n有 SSH 连接时，在旁边的部署目录运行 deploy.ps1（Windows）或 deploy.sh（Linux/macOS）。\n完全隔离时，复制 tar 到 Linux 服务器，在独立目录解包，再执行 sh apply.sh /opt/hai/apps/项目环境。\n服务器需要 Docker/Podman、Compose、sh、tar、sha256sum、awk 和 curl，以及目录、容器运行权限。\n部分更新要求服务器已有成功的完整部署，端口及应用布局保持一致。每步失败会返回非零退出码；结果记录在部署目录 result-部署ID.json。\n包包含私有运行配置，请安全传输。\n所含镜像：\n{images}",
+  "deploy_bundleInstructions": "部署包：{file}\n包中已包含本次选择服务需要的镜像，包括自建中间件。\n有 SSH 连接时，在旁边的部署目录运行 deploy.ps1（Windows）或 deploy.sh（Linux/macOS）。\n完全隔离时，复制 tar 到 Linux 服务器，在独立目录解包，再执行 sh apply.sh /opt/hai/apps/项目环境。\n服务器需要 Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux flock，以及支持 flock 的文件系统和目录、容器运行权限。\n固定锁文件 .deploy.lock 禁止删除或替换；全部持有进程退出或重启后自动释放。强杀后的执行与恢复状态须人工核对。\n部分更新要求服务器已有成功的完整部署，端口及应用布局保持一致。每步失败会返回非零退出码；结果记录在部署目录 result-部署ID.json。\n包包含私有运行配置，请安全传输。\n所含镜像：\n{images}",
   "deploy_bundleMetadata": "应用版本：{version}\n构建编号：{buildId}\nCompose 文件：{compose}",
   "deploy_bundleOnlyContainer": "仅生成 Compose tar 只支持 docker-ssh。",
   "deploy_selectedContainerOnly": "按服务局部部署仅适用于 docker-ssh Compose 目标。",

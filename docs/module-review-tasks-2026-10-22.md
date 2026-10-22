@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 14/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 15/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -641,7 +641,8 @@
 
 ### DEPLOY-01 · P2 · 让部署锁在异常退出后可安全恢复
 
-- [ ] 待修正（源码确认；范围：deploy）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：部署与恢复改固定.deploy.lock + Linux util-linux flock FD9，活跃子进程继承内核锁，锁文件不删不换且不按时间抢占；缺工具/不支持文件系统与busy均明确失败。同步三语README/usage、生成部署README、skill与LLMS。5项真实Linux容器门禁验证并发、父SIGKILL后子FD继续排他、全kill及容器restart同inode恢复、既有成功基线/health失败和预检错误；部署26项、CLI122回归、严格source/test类型、lint、fresh双构建及skills/env/111本地链接通过。Windows GitBash缺flock的1项跳过，其等价语义已在Linux跑过；Compose/HTTP为明确夹具，未声称宿主OS重启或真实远程发布验收，证据tmp/module-repair-20261022/DEPLOY-01；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/deploy/src/container/deploy-scripts.ts:136](../packages/deploy/src/container/deploy-scripts.ts#L136)。
 - **证据与影响**：部署脚本采用 mkdir 锁加 trap 删除；SIGKILL/主机重启不会执行 trap，遗留目录使后续部署永久拒绝，单凭目录也不能可靠判断活跃 owner。
 - **修正内容**：使用远端进程级锁或具备 owner/启动代际和安全失效判定的锁协议；保留并发部署互斥，不无条件删除旧目录。

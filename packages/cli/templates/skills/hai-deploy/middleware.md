@@ -79,7 +79,7 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 
 部分更新通过 --services 指定，使用服务器成功基线保留未选服务和中间件凭据。首次安装不能使用部分包。storage-init 复用应用镜像及 S3 SDK 检查/创建桶，不清空数据；只有涉及存储初始化时执行，并检查退出码。仅更新 storage 仍需含 app 镜像的制品；最近为 web-only 时，用 --artifact-dir 选择原完整制品，或先 pnpm build --target docker --images app。app 镜像仅用于初始化，不会更新 app 服务。失败恢复尝试还原容器和配置，保留数据卷，不回退已写业务数据。
 
-服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、持久化磁盘和容器/目录权限。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
+服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux flock、支持 flock 的持久化文件系统和容器/目录权限。部署和恢复使用固定 `.deploy.lock` 内核锁，不可删除/替换或按时间抢锁；活跃子命令继承 FD，全部持有进程退出或重启后自动释放。强杀/断电后的执行状态需核对结果文件、current 和容器，不能将锁释放当作恢复成功。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
 
 生成的 `web.conf` 在 API location 设 `client_max_body_size 2129920`（2 MiB + 32 KiB），用 large_client_header_buffers 4 32k / proxy_buffer_size 32k 容纳 X-Hai-Transport 认证头，并关闭请求/响应 proxy buffering；这与 transport 密文预算一致，避免 Nginx 默认上限拦截合法的 1 MiB 明文编码结果。应用仍执行握手 16 KiB、公钥 4 KiB、明文 1 MiB 的有界读取。自有反向代理须允许相同密文预算并传播取消，不替代应用字节限制；大文件上传使用独立路径和明确预算。
 

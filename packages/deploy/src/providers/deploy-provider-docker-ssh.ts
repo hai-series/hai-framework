@@ -2,7 +2,7 @@
  * @h-ai/deploy — docker-ssh 部署 Provider
  *
  * 基于 OCI 镜像 + Docker Compose + SSH 的通用主机部署：消费已有镜像 → tar 打包 → SSH 传输 →
- * 远程 load → compose up → HTTP 健康检查。远程仅需 SSH + docker/podman + compose。
+ * 远程 load → compose up → HTTP 健康检查。远程需 SSH、Linux flock/基础工具及 docker/podman + compose。
  * @module deploy-provider-docker-ssh
  */
 

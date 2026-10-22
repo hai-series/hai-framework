@@ -92,7 +92,7 @@ it('部署只上传一个完整 tar，API/Web 使用已有构建且私有配置�
   expect(ssh.exec.mock.calls.some(([command]) => /build|pnpm/.test(String(command)))).toBe(false)
   writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  apiPrefix: /custom-api/v2\ncors:\n  origin: https://app.example.test\n')
   expect(await deploy.deployApp(root, { environment: 'test', skipMiddleware: true })).toMatchObject({ success: true })
-  expect(JSON.parse(parseEnv(readFileSync(join(directory, '.env.runtime'), 'utf8')).HAI_SERV)).toMatchObject({ cors: { origin: 'https://app.example.test' } })
+  expect(JSON.parse(parseEnv(readFileSync(join(directory, '.env.runtime'), 'utf8')).HAI_SERV!)).toMatchObject({ cors: { origin: 'https://app.example.test' } })
 })
 
 it('仅打包不需要 SSH 或本地容器引擎，tar 可搬运且暂存目录自动清理', async () => {
@@ -222,7 +222,8 @@ it('跳过中间件配置时，完整包仍携带已保存的自建 Redis', asyn
   expect(existsSync(join(extracted, 'images/middleware-2.tar'))).toBe(true)
 })
 
-it('实际执行交付脚本：拒绝首次增量，支持同版本更新，健康失败不推进成功状态', async () => {
+// Git Bash 不提供 Linux flock；Windows 在 deploy-lock.e2e.test.ts 的真实 Linux 容器门禁执行此流程。
+it.skipIf(process.platform === 'win32')('实际执行交付脚本：拒绝首次增量，支持同版本更新，健康失败不推进成功状态', async () => {
   writeArtifact(false)
   await initialize(false)
   const destination = join(root, 'server').replaceAll('\\', '/')

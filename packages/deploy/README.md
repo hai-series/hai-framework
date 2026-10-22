@@ -120,10 +120,12 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 完全隔离的 Linux 服务器上，将 tar 解到独立目录，运行 `sh apply.sh`，也可传入部署根目录覆盖默认值。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
 
+服务器使用 util-linux `flock` 对部署根目录的 `.deploy.lock` 持有非阻塞内核锁，覆盖部署和失败恢复。锁文件永久保留，禁止删除、替换或按经过时间抢锁；目录所在文件系统须支持 `flock`。父 shell 被强杀后，继承文件描述符的活跃子命令继续持锁；所有持有进程退出或服务器重启后自动释放。旧 `.deploy-lock` 目录不再参与判锁，也不自动删除；升级前须结束旧版部署进程，勿混用旧包。强杀/断电不会运行恢复 trap，缺少结果文件时执行状态未知：先核对容器、镜像和 `current` 成功基线，再用新部署包恢复，不能把锁释放视为部署成功或副作用已回滚。
+
 #### 完全离线前再核对一次
 
 - 完整 tar 已含自建中间件归档，镜像架构与服务器一致；服务器启动不访问 registry。
-- Linux 已安装 Docker/Podman、可执行的 Compose、sh、tar、sha256sum、awk、curl；用户有目录与容器权限。
+- Linux 已安装 Docker/Podman、可执行的 Compose、sh、tar、sha256sum、awk、curl、util-linux 的 flock；用户有目录与容器权限。
 - 包含私有配置，安全搬运，不提交 Git；持久化卷身份跨版本稳定。
 - 实际断外网验证启动、登录、页面刷新、重启与数据持久化。生产 HTTPS、证书、DNS 和外部服务需另行准备。
 
@@ -169,6 +171,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
 验证真实生成项目与 SSH/人工部署，覆盖禁止访问镜像仓库、局部更新、归档损坏、同版本发布和健康失败。finally/teardown 只清理本次测试创建的项目、镜像、容器、日志和进程。
+
+定向锁门禁使用可连接的 Podman（优先）或 Docker，在真实 Linux 容器中运行公开 API 生成的 `apply.sh`，验证并发、父进程强杀后的子进程持锁、全部进程退出和重启恢复。Compose/HTTP 使用确定性夹具，不能替代真实容器服务部署验收。运行 `HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/deploy exec vitest run tests/deploy-lock.e2e.test.ts`；PowerShell 先执行 `$env:HAI_DEPLOY_E2E='1'`，再运行同一 pnpm 命令。
 
 ## 许可证
 
