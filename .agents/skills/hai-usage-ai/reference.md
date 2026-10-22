@@ -204,6 +204,9 @@ Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，�
 - 请求：`GenerateImageRequest { prompt, model?, size?: { width, height }, referenceImages?: ReferenceImage[], signal? }`；`ReferenceImage` 为 `{ data: Uint8Array, mimeType: string }`。
 - 返回：`GenerateImageResult { images: Array<{ data: Uint8Array, mimeType, width?, height? }> }`。
 - 模型配置：`image.models: [{ id, provider: 'openai'|'google'|'qwen'|'seedream'|'pollinations', model, apiKey?, baseUrl?, workspaceId?, timeout? }]`；`image.generateModel` 选择默认模型别名。
+- `image.maxImageBytes` 默认20971520、最大104857600，限制单张输出/参考图；`image.maxImages` 默认4、范围1–16。JSON正文最多max(64KiB,两倍图片上限)，错误正文64KiB，实际解压后字节受限，URL串行下载。环境入口HAI_AI_IMAGE_MAXIMAGEBYTES / HAI_AI_IMAGE_MAXIMAGES。
+- 临时URL仅允许无凭证、默认443公网HTTPS，实际socket DNS候选全部校验并固定使用，私网/回环/链路本地/映射/转换/保留地址拒绝；最多3次重定向且每跳校验，不传认证头/Cookie。baseUrl为可信运维配置，厂商API不跟随重定向。模型timeout默认120000ms覆盖整次生成/下载，signal可取消。
+- 输出PNG/JPEG/GIF/WebP须MIME与魔数相符，SVG拒绝；宽高仅为请求/厂商提示，不做完整解码。地址拒绝/超限/超时分别为IMAGE_DOWNLOAD_BLOCKED/IMAGE_TOO_LARGE/IMAGE_TIMEOUT，调用方检查success后再使用。
 - 凭据优先使用模型项 `apiKey`，否则回退 `HAI_AI_IMAGE_<PROVIDER>_APIKEY` 或厂商标准环境变量。
 - 厂商差异由内部 Provider 消化：OpenAI/Pollinations 的 multipart edits、Google `inlineData`、Qwen/Seedream 的 Data URL 参考图，以及各家 Base64、临时 URL 或二进制响应均归一为图片字节。
 - Google 只接受其文档列出的宽高比；Qwen/Seedream 还可能对总像素与边长有限制。业务应提供厂商支持的尺寸预设，不要假设任意像素组合都可用。
@@ -236,7 +239,7 @@ A2A 的任务表和消息表在 `ai.init()` 阶段初始化。任务按可信 `a
 | `hai:ai:010-012` | 初始化：`NOT_INITIALIZED` / `CONFIGURATION_ERROR` / `INIT_IN_PROGRESS` |
 | `hai:ai:020-033` | Rerank / File |
 | `hai:ai:050-059` | Audio：`AUDIO_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UNSUPPORTED_INPUT` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CONNECTION_FAILED` / `TIMEOUT` / `INPUT_TOO_LARGE` / `CANCELLED` |
-| `hai:ai:060-065` | Image：`IMAGE_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CANCELLED` |
+| `hai:ai:060-068` | Image：`IMAGE_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CANCELLED` / `DOWNLOAD_BLOCKED` / `TOO_LARGE` / `TIMEOUT` |
 | `hai:ai:100-107` | LLM / 历史记录 |
 | `hai:ai:200-204` | MCP |
 | `hai:ai:300-302` | Embedding |

@@ -1,7 +1,7 @@
 /** @h-ai/ai — Qwen-Image 2.0 / 3.0 Provider */
 
 import type { ImageProvider } from './ai-image-provider.js'
-import { downloadImage, imageProtocolError, imageProviderFailure, readJson, referenceImageDataUrl } from './ai-image-provider.js'
+import { downloadImages, imageProtocolError, imageProviderFailure, readJson, referenceImageDataUrl } from './ai-image-provider.js'
 
 interface QwenImageResponse {
   output?: {
@@ -41,8 +41,9 @@ export function createQwenImageProvider(): ImageProvider {
             },
           }),
           signal: request.signal,
+          redirect: 'error',
         })
-        const parsed = await readJson(response)
+        const parsed = await readJson(response, request)
         if (!parsed.success)
           return parsed
         const body = parsed.data as QwenImageResponse
@@ -51,11 +52,7 @@ export function createQwenImageProvider(): ImageProvider {
           .flatMap(item => item.image ? [item.image] : []) ?? []
         if (!urls.length)
           return imageProtocolError()
-        const downloaded = await Promise.all(urls.map(url => downloadImage(url, request.signal, request.size)))
-        const failure = downloaded.find(result => !result.success)
-        if (failure && !failure.success)
-          return failure
-        return { success: true, data: downloaded.flatMap(result => result.success ? [result.data] : []) }
+        return await downloadImages(urls, request)
       }
       catch (error) {
         return imageProviderFailure(error)

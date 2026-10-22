@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 38/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 39/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -425,7 +425,8 @@
 
 ### AI-04 · P1 · 限制厂商图片下载的地址和资源消耗
 
-- [ ] 待修正（源码确认；范围：ai）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：图片临时URL仅公网无凭证默认443 HTTPS，socket解析固定并校验全部IP和每跳重定向；独立Undici同版本fetch/Agent且不转发认证，实际流/Base64/解压及数量有界，整次生成下载deadline与取消清理；MIME/魔数匹配拒SVG。maxImageBytes/maxImages与066-068错误、三语README/双skill/应用/CLI/env同步；AI及CLI typecheck/build、图片84项（43真实受控TLS）、CLI31及应用5项、lint/skills/env596通过；完整scaffold待AI共享源码稳定统一验证；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/ai/src/image/providers/ai-image-provider.ts:79](../packages/ai/src/image/providers/ai-image-provider.ts#L79)；[packages/ai/src/image/providers/ai-image-provider.ts:91](../packages/ai/src/image/providers/ai-image-provider.ts#L91)。
 - **证据与影响**：downloadImage 直接 fetch 上游返回 URL 并默认跟随重定向；readImageResponse 完整读入且无大小上限。受控/被攻破的上游可引导服务器访问非预期地址或返回无限大内容。
 - **修正内容**：按信任边界校验协议、目标地址和每跳重定向，阻止不允许的内部地址；有界流式读取、超时/取消、内容类型与必要签名校验。复用已有网络安全能力。

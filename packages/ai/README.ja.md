@@ -370,6 +370,10 @@ if (result.success) {
 
 `referenceImages` は省略可能です。公開層は画像バイト列と MIME のみを受け付け、multipart・`inlineData`・Data URL は Provider が変換します。認証情報はモデル項目、`HAI_AI_IMAGE_<PROVIDER>_APIKEY`、サービス環境変数で指定できます。Qwen・Seedream の一時 URL は Provider 内ですぐダウンロードし、公開戻り値に出しません。詳細は [REFERENCE.md（中国語）](./REFERENCE.md#image) を参照してください。
 
+ダウンロードは認証情報を含まない既定ポート 443 の公開 HTTPS に限定します。socket の DNS 解決で全アドレスを検証し、同じ結果で接続します。IPv4/IPv6 のプライベート・ループバック・リンクローカル・変換/マップ・予約アドレスを拒否します。リダイレクトは最大 3 回で各段階を再検証し、独立接続に厂商認証ヘッダーやアプリ Cookie を渡しません。`baseUrl` は運用者が管理する信頼された設定で、厂商 API 自体のリダイレクトは拒否します。
+
+`image.maxImageBytes` は出力/参照画像ごとに既定 20971520（20 MiB、最大 100 MiB）、`image.maxImages` は出力/参照画像数ごとに既定 4（最大 16）です。URL は順次取得し、解凍後を含む実測バイト数が上限を超えると応答をキャンセルします。JSON は `max(64 KiB, 2 × maxImageBytes)`、エラー本文は 64 KiB までです。モデル `timeout` は既定 120000ms で API・リダイレクト・全ダウンロードを含み、`signal` で全体をキャンセルできます。出力は PNG/JPEG/GIF/WebP の MIME とマジック値の一致を要求し、SVG は拒否します。完全な画像デコード・寸法検証は行いません。アドレス拒否・上限超過・タイムアウトはそれぞれ `IMAGE_DOWNLOAD_BLOCKED`・`IMAGE_TOO_LARGE`・`IMAGE_TIMEOUT` を返すため、success を確認してください。
+
 #### Context 管理
 
 ```ts
@@ -566,7 +570,7 @@ if (!result.success) {
 - `hai:ai:600-701`：Retrieval/RAG。
 - `hai:ai:800-805`：Knowledge。
 - `hai:ai:050-059`：Audio。
-- `hai:ai:060-065`：Image。
+- `hai:ai:060-068`：Image（ダウンロード拒否、リソース上限、全体タイムアウトを含む）。
 - `hai:ai:900-905`：Memory。
 - `hai:ai:980-984`：A2A。
 

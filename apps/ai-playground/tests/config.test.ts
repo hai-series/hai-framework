@@ -13,6 +13,8 @@ describe('ai Playground YAML config', () => {
   beforeAll(() => {
     vi.stubEnv('AI_API_KEY', 'test-llm-key')
     vi.stubEnv('HAI_AI_IMAGE_POLLINATIONS_APIKEY', 'test-image-key')
+    vi.stubEnv('HAI_AI_IMAGE_MAXIMAGEBYTES', '1024')
+    vi.stubEnv('HAI_AI_IMAGE_MAXIMAGES', '2')
   })
 
   afterAll(() => {
@@ -29,6 +31,7 @@ describe('ai Playground YAML config', () => {
     expect(validated.success, parsed.success ? undefined : JSON.stringify(parsed.error.issues)).toBe(true)
     if (validated.success) {
       expect(validated.data.image?.generateModel).toBe('image')
+      expect(validated.data.image).toMatchObject({ maxImageBytes: 1024, maxImages: 2 })
       expect(validated.data.image?.models?.[0]).toMatchObject({
         provider: 'pollinations',
         model: 'zimage',

@@ -44,16 +44,19 @@ export function createOpenAIImageProvider(): ImageProvider {
                 output_format: 'png',
               }),
           signal: request.signal,
+          redirect: 'error',
         })
-        const parsed = await readJson(response)
+        const parsed = await readJson(response, request)
         if (!parsed.success)
           return parsed
         const body = parsed.data as OpenAIImageResponse
+        if ((body.data?.length ?? 0) > request.maxImages)
+          throw new RangeError('Image count exceeds limit')
         const format = body.output_format ?? 'png'
         const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`
         const images = body.data
           ?.filter(item => typeof item.b64_json === 'string')
-          .map(item => imageFromBase64(item.b64_json!, mimeType, request.size))
+          .map(item => imageFromBase64(item.b64_json!, mimeType, request))
           .filter(image => image.data.byteLength > 0)
         return images?.length ? { success: true, data: images } : imageProtocolError()
       }

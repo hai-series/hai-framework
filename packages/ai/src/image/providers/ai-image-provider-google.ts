@@ -64,17 +64,20 @@ export function createGoogleImageProvider(): ImageProvider {
             generationConfig,
           }),
           signal: request.signal,
+          redirect: 'error',
         })
-        const parsed = await readJson(response)
+        const parsed = await readJson(response, request)
         if (!parsed.success)
           return parsed
         const body = parsed.data as GoogleImageResponse
         const parts = body.candidates?.flatMap(candidate => candidate.content?.parts ?? []) ?? []
+        if (parts.filter(part => part.inlineData?.data || part.inline_data?.data).length > request.maxImages)
+          throw new RangeError('Image count exceeds limit')
         const images = parts.flatMap((part) => {
           if (part.inlineData?.data)
-            return [imageFromBase64(part.inlineData.data, part.inlineData.mimeType ?? 'image/png', request.size)]
+            return [imageFromBase64(part.inlineData.data, part.inlineData.mimeType ?? 'image/png', request)]
           if (part.inline_data?.data)
-            return [imageFromBase64(part.inline_data.data, part.inline_data.mime_type ?? 'image/png', request.size)]
+            return [imageFromBase64(part.inline_data.data, part.inline_data.mime_type ?? 'image/png', request)]
           return []
         })
         return images.length ? { success: true, data: images } : imageProtocolError()

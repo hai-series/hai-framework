@@ -496,6 +496,22 @@
     "constraint": "敏感字符串，启用对应厂商时注入"
   },
   {
+    "name": "HAI_AI_IMAGE_MAXIMAGEBYTES",
+    "module": "ai",
+    "path": "ai.image.maxImageBytes",
+    "description": "单张图片或参考图的字节上限，默认 20 MiB；JSON 上限为 max(64 KiB, 两倍图片上限)。",
+    "value": "20971520",
+    "constraint": "整数；<= 104857600；> 0"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MAXIMAGES",
+    "module": "ai",
+    "path": "ai.image.maxImages",
+    "description": "单次生成/参考图数量上限，默认 4，最大 16；临时 URL 串行下载。",
+    "value": "4",
+    "constraint": "整数；<= 16；> 0"
+  },
+  {
     "name": "HAI_AI_IMAGE_MODELS",
     "module": "ai",
     "path": "ai.image.models",
@@ -555,9 +571,9 @@
     "name": "HAI_AI_IMAGE_MODELS_0_TIMEOUT",
     "module": "ai",
     "path": "ai.image.models.0.timeout",
-    "description": "请求超时（毫秒，默认 120000）",
+    "description": "整次图片生成与下载超时（毫秒，1–2147483647，默认 120000）",
     "value": "120000",
-    "constraint": "整数；<= 9007199254740991；> 0"
+    "constraint": "整数；<= 2147483647；> 0"
   },
   {
     "name": "HAI_AI_IMAGE_MODELS_0_WORKSPACEID",

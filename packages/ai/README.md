@@ -370,6 +370,10 @@ if (result.success) {
 
 `referenceImages` 可省略；公共层只接受图片字节与 MIME，multipart、`inlineData`、Data URL 等差异由 Provider 转换。凭据可在模型条目传入，或使用 `HAI_AI_IMAGE_<PROVIDER>_APIKEY` / 厂商环境变量。Qwen 与 Seedream 返回的临时 URL 会在 Provider 内立即下载，不会泄漏到公共返回值。完整接口差异与模型说明见 [REFERENCE.md](./REFERENCE.md#image)。
 
+图片下载只允许无凭证、默认 443 端口的公网 HTTPS，每次 socket DNS 解析校验全部地址并直接使用该批地址；阻止 IPv4/IPv6 私网、回环、链路本地、映射/转换及保留地址，重定向最多 3 次且每跳重新校验。下载使用独立连接，不传递厂商认证头或应用 Cookie。`baseUrl` 是可信运维配置，厂商 API 请求拒绝重定向。
+
+`image.maxImageBytes` 默认 20971520（20 MiB，最大 100 MiB），限制单张输出和参考图；`image.maxImages` 默认 4（最大 16），限制输出与参考图数量，临时 URL 串行下载。实际读取（含解压后）超过上限立即取消；JSON 响应最多 `max(64 KiB, 2 × maxImageBytes)`，错误正文最多 64 KiB。模型 `timeout` 默认 120000ms，覆盖厂商请求、重定向和全部下载；`signal` 可取消整个过程。输出仅支持 PNG/JPEG/GIF/WebP 的 MIME 与魔数匹配，拒绝 SVG；魔数校验不等于完整图片解码或尺寸核验。拒绝地址、超限、超时分别返回 `IMAGE_DOWNLOAD_BLOCKED`、`IMAGE_TOO_LARGE`、`IMAGE_TIMEOUT`，调用方须先检查 success。
+
 #### Context 管理器
 
 ```ts
@@ -566,7 +570,7 @@ if (!result.success) {
 - `hai:ai:600-701`：Retrieval/RAG。
 - `hai:ai:800-805`：Knowledge。
 - `hai:ai:050-059`：Audio。
-- `hai:ai:060-065`：Image。
+- `hai:ai:060-068`：Image，含下载地址拒绝、资源超限与总超时。
 - `hai:ai:900-905`：Memory。
 - `hai:ai:980-984`：A2A。
 

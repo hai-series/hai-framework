@@ -1,7 +1,7 @@
 /** @h-ai/ai — 火山方舟 Seedream 4.x / 5.x Provider */
 
 import type { ImageProvider } from './ai-image-provider.js'
-import { downloadImage, imageFromBase64, imageProtocolError, imageProviderFailure, readJson, referenceImageDataUrl } from './ai-image-provider.js'
+import { downloadImages, imageFromBase64, imageProtocolError, imageProviderFailure, readJson, referenceImageDataUrl } from './ai-image-provider.js'
 
 interface SeedreamImageResponse {
   data?: Array<{ b64_json?: string, url?: string }>
@@ -30,20 +30,24 @@ export function createSeedreamImageProvider(): ImageProvider {
             watermark: false,
           }),
           signal: request.signal,
+          redirect: 'error',
         })
-        const parsed = await readJson(response)
+        const parsed = await readJson(response, request)
         if (!parsed.success)
           return parsed
         const body = parsed.data as SeedreamImageResponse
+        if ((body.data?.length ?? 0) > request.maxImages)
+          throw new RangeError('Image count exceeds limit')
         const base64Images = body.data?.flatMap(item => item.b64_json
-          ? [imageFromBase64(item.b64_json, 'image/png', request.size)]
+          ? [imageFromBase64(item.b64_json, 'image/png', request)]
           : []) ?? []
         const urls = body.data?.flatMap(item => item.url ? [item.url] : []) ?? []
-        const downloaded = await Promise.all(urls.map(url => downloadImage(url, request.signal, request.size)))
-        const failure = downloaded.find(result => !result.success)
-        if (failure && !failure.success)
-          return failure
-        const images = [...base64Images, ...downloaded.flatMap(result => result.success ? [result.data] : [])]
+        if (base64Images.length + urls.length > request.maxImages)
+          throw new RangeError('Image count exceeds limit')
+        const downloaded = await downloadImages(urls, request)
+        if (!downloaded.success)
+          return downloaded
+        const images = [...base64Images, ...downloaded.data]
         return images.length ? { success: true, data: images } : imageProtocolError()
       }
       catch (error) {

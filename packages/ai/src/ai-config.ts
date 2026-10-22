@@ -961,15 +961,22 @@ export const ImageModelEntrySchema = z.object({
   baseUrl: z.url().optional(),
   /** 阿里云百炼业务空间 ID（可选） */
   workspaceId: z.string().optional(),
-  /** 请求超时（毫秒，默认 120000） */
-  timeout: z.number().int().positive().default(120000),
+  /** 整次图片生成与下载超时（毫秒，1–2147483647，默认 120000） */
+  timeout: z.number().int().positive().max(2_147_483_647).default(120000),
 })
 
 /** 文生图模型条目类型 */
 export type ImageModelEntry = z.infer<typeof ImageModelEntrySchema>
 
-/** 文生图配置 Schema */
+/**
+ * 文生图配置 Schema；资源限制对所有厂商路径生效。
+ * @example ImageConfigSchema.parse({ maxImageBytes: 20971520, maxImages: 4 })
+ */
 export const ImageConfigSchema = z.object({
+  /** 单张图片或参考图的字节上限，默认 20 MiB；JSON 上限为 max(64 KiB, 两倍图片上限)。 */
+  maxImageBytes: z.number().int().positive().max(100 * 1024 * 1024).default(20 * 1024 * 1024),
+  /** 单次生成/参考图数量上限，默认 4，最大 16；临时 URL 串行下载。 */
+  maxImages: z.number().int().positive().max(16).default(4),
   /** 注册的文生图模型 */
   models: z.array(ImageModelEntrySchema).optional(),
   /** 默认文生图模型 ID */

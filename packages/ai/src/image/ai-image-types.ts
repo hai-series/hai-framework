@@ -34,7 +34,7 @@ export interface GenerateImageRequest {
   size?: ImageSize
   /** 用于图生图、编辑或风格参考的一张或多张图片 */
   referenceImages?: ReferenceImage[]
-  /** 请求取消信号 */
+  /** 取消整个厂商请求和图片下载；模型 timeout 同时限制总耗时。 */
   signal?: AbortSignal
 }
 
@@ -42,11 +42,11 @@ export interface GenerateImageRequest {
 export interface GeneratedImage {
   /** 图片二进制内容 */
   data: Uint8Array
-  /** 图片 MIME 类型 */
+  /** 经魔数核验的栅格图片 MIME：PNG、JPEG、GIF、WebP。 */
   mimeType: string
-  /** 实际宽度（厂商返回时提供） */
+  /** 宽度提示，来自请求或厂商；未通过完整图片解码核验。 */
   width?: number
-  /** 实际高度（厂商返回时提供） */
+  /** 高度提示，来自请求或厂商；未通过完整图片解码核验。 */
   height?: number
 }
 
@@ -58,6 +58,9 @@ export interface GenerateImageResult {
 
 /** 文生图操作接口（通过 `ai.image` 访问） */
 export interface ImageOperations {
-  /** 根据文本提示生成图片 */
+  /**
+   * 根据文本提示生成有界的图片字节；先判断 success，下载/超限/超时错误不返回部分结果。
+   * @example const result = await ai.image.generate({ prompt: '水墨山水', signal: controller.signal })
+   */
   generate: (request: GenerateImageRequest) => Promise<HaiResult<GenerateImageResult>>
 }

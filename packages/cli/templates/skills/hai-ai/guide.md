@@ -333,6 +333,8 @@ hai-framework 源码仓库提供 `pnpm model <name> --device cpu` 与 `pnpm mode
 
 ```yaml
 image:
+  maxImageBytes: 20971520 # 单张输出/参考图上限；最大100MiB
+  maxImages: 4 # 1–16，URL串行下载；模型timeout覆盖整个生成/下载
   models:
     - { id: free, provider: pollinations, model: zimage }
     - { id: openai, provider: openai, model: gpt-image-2 }

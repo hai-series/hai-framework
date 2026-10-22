@@ -370,6 +370,10 @@ if (result.success) {
 
 `referenceImages` is optional. Public APIs accept only image bytes and MIME; providers convert multipart, `inlineData`, and Data URLs. Set credentials on model entries or with `HAI_AI_IMAGE_<PROVIDER>_APIKEY` / vendor environment variables. Qwen and Seedream temporary URLs are downloaded immediately inside providers and never exposed publicly. See [REFERENCE.md (Chinese)](./REFERENCE.md#image) for model details and API differences.
 
+Downloads require public HTTPS on default port 443 without URL credentials. Socket DNS lookup validates every returned address and connects using those same results. Private, loopback, link-local, mapped/translated, and reserved IPv4/IPv6 addresses are blocked. Each of at most three redirects is checked again. Downloads use isolated connections without vendor authentication or application cookies. `baseUrl` is trusted operator configuration; vendor API calls reject redirects.
+
+`image.maxImageBytes` defaults to 20971520 (20 MiB; maximum 100 MiB) per output/reference image. `image.maxImages` defaults to 4 (maximum 16) for output/reference counts, with sequential URL downloads. Actual streamed bytes, including decompressed bytes, are bounded and excess responses are cancelled. JSON responses are limited to `max(64 KiB, 2 × maxImageBytes)` and error bodies to 64 KiB. Model `timeout` defaults to 120000ms for the entire vendor request, redirects, and downloads; `signal` cancels the whole process. Outputs require matching PNG/JPEG/GIF/WebP MIME and magic bytes; SVG is rejected. Magic checks do not decode complete images or verify dimensions. Address rejection, limits, and deadlines return `IMAGE_DOWNLOAD_BLOCKED`, `IMAGE_TOO_LARGE`, and `IMAGE_TIMEOUT`; check success before use.
+
 #### Context manager
 
 ```ts
@@ -566,7 +570,7 @@ Common error ranges:
 - `hai:ai:600-701`：Retrieval/RAG。
 - `hai:ai:800-805`：Knowledge。
 - `hai:ai:050-059`：Audio。
-- `hai:ai:060-065`：Image。
+- `hai:ai:060-068`: Image, including blocked downloads, resource limits, and total deadlines.
 - `hai:ai:900-905`：Memory。
 - `hai:ai:980-984`：A2A。
 

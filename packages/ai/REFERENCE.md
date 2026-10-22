@@ -165,8 +165,12 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 - `generate({ prompt, model?, size?, referenceImages?, signal? })`：文本提示和可选参考图生成图片，返回 `HaiResult<{ images: GeneratedImage[] }>`。
 - `ReferenceImage` 只含 `data: Uint8Array` 与 `mimeType: string`；空字节或非 `image/*` MIME 会在调用厂商前返回 `IMAGE_INVALID_REQUEST`。
-- `GeneratedImage` 仅含图片 `Uint8Array`、MIME 类型与可选实际宽高；厂商原始响应、Provider 和临时 URL 不属于公共契约。
+- `GeneratedImage` 仅含图片 `Uint8Array`、MIME 类型与可选宽高提示；宽高来自请求/厂商，不做图片解码核验。厂商原始响应、Provider 和临时 URL 不属于公共契约。
 - 配置：`image.models: [{ id, provider, model, apiKey?, baseUrl?, workspaceId?, timeout? }]` + `generateModel`。
+- 资源：`image.maxImageBytes` 默认 20971520（20MiB，范围1–104857600字节），限制单张输出/参考图；`image.maxImages` 默认4（1–16），限制输出/参考图数量。环境入口为 `HAI_AI_IMAGE_MAXIMAGEBYTES` / `HAI_AI_IMAGE_MAXIMAGES`。JSON响应最多 `max(64KiB, 2×maxImageBytes)`，错误正文64KiB；实际解压后字节也受限，Base64解码前校验大小，URL串行下载。
+- 模型 timeout 默认120000ms，覆盖 API、每跳重定向、全部下载和响应流读取；signal 可取消整次操作。取消返回 IMAGE_CANCELLED，超时 IMAGE_TIMEOUT；超限 IMAGE_TOO_LARGE，地址拒绝 IMAGE_DOWNLOAD_BLOCKED。
+- 临时URL只允许默认443端口、无凭证公网HTTPS；实际socket lookup一次解析并校验所有DNS候选，直接使用该批地址，阻止私网/回环/链路本地/映射/转换/保留IPv4/IPv6。最多3跳重定向，每跳重新校验，下载不转发认证头或Cookie。baseUrl属可信运维配置，API请求不跟随重定向；没有放开私网下载的开关。
+- 输出须为PNG/JPEG/GIF/WebP且MIME匹配魔数，拒绝SVG；魔数不是完整图片解码或像素安全检查。应用处理图片时仍须使用合适的解码/存储策略。网络依据：[Undici Fetch](https://github.com/nodejs/undici/blob/main/docs/docs/api/Fetch.md)、[Node net](https://nodejs.org/api/net.html)、[IANA IPv4](https://www.iana.org/assignments/iana-ipv4-special-registry)、[IANA IPv6](https://www.iana.org/assignments/iana-ipv6-special-registry)。
 
 | Provider       | 支持模型                   | 官方请求差异                                                                                  | 原始响应          | 框架处理       |
 | -------------- | -------------------------- | --------------------------------------------------------------------------------------------- | ----------------- | -------------- |
@@ -196,7 +200,7 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 - `hai:ai:010-012`：初始化，含 `NOT_INITIALIZED` / `CONFIGURATION_ERROR` / `INIT_IN_PROGRESS`。
 - `hai:ai:020-033`：Rerank / File。
 - `hai:ai:050-059`：Audio（`AUDIO_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UNSUPPORTED_INPUT` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CONNECTION_FAILED` / `TIMEOUT` / `INPUT_TOO_LARGE` / `CANCELLED`）。
-- `hai:ai:060-065`：Image（`IMAGE_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CANCELLED`）。
+- `hai:ai:060-068`：Image（`IMAGE_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CANCELLED` / `DOWNLOAD_BLOCKED` / `TOO_LARGE` / `TIMEOUT`）。
 - `hai:ai:100-107`：LLM / 历史记录。
 - `hai:ai:200-204`：MCP。
 - `hai:ai:300-302`：Embedding。

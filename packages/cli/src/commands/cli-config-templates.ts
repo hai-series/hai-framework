@@ -499,6 +499,8 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
 #       model: tts-1
 #       operations: [synthesize]
 # image:
+#   maxImageBytes: 20971520 # 单张图片/参考图字节上限；JSON 上限为 max(64KiB, 两倍该值)
+#   maxImages: 4 # 图片/参考图数量上限，临时 URL 串行下载
 #   generateModel: image
 #   models:
 #     - id: image

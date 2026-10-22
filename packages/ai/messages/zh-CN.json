@@ -113,6 +113,9 @@
   "ai_imageProtocolError": "文生图平台返回了无效响应",
   "ai_imageRequestFailed": "文生图请求失败",
   "ai_imageCancelled": "文生图请求已取消",
+  "ai_imageDownloadBlocked": "图片下载 URL 或解析地址不在允许范围内",
+  "ai_imageTooLarge": "图片字节或图片数量超过配置上限",
+  "ai_imageTimeout": "图片生成或下载超时",
 
   "ai_a2aNotConfigured": "A2A 服务未配置，请在 ai.init() 中提供 'a2a' 配置。",
   "ai_a2aHandleFailed": "A2A 请求处理失败：{error}",

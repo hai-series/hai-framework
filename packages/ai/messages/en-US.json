@@ -113,6 +113,9 @@
   "ai_imageProtocolError": "Image provider returned an invalid response",
   "ai_imageRequestFailed": "Image generation request failed",
   "ai_imageCancelled": "Image generation request was cancelled",
+  "ai_imageDownloadBlocked": "Image download URL or resolved address is not allowed",
+  "ai_imageTooLarge": "Image bytes or image count exceeds the configured limit",
+  "ai_imageTimeout": "Image generation or download timed out",
 
   "ai_a2aNotConfigured": "A2A service not configured. Provide 'a2a' config in ai.init().",
   "ai_a2aHandleFailed": "A2A request handling failed: {error}",
