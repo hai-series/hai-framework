@@ -14,14 +14,10 @@ import { z } from 'zod'
  * 清洗选项 Schema
  *
  * 数据清洗规则配置，支持移除 HTML、URL、Email、标准化空白等。
- *
  * @example
  * ```ts
- * const cleanOptions = {
- *   removeHtml: true,
- *   removeUrls: true,
- *   normalizeWhitespace: true,
- * }
+ * import { CleanOptionsSchema } from '@h-ai/datapipe'
+ * const options = CleanOptionsSchema.parse({ removeHtml: true, removeEmails: true })
  * ```
  */
 export const CleanOptionsSchema = z.object({
@@ -48,10 +44,24 @@ export const CleanOptionsSchema = z.object({
   })).optional(),
 })
 
-/** 清洗选项类型 */
+/**
+ * 清洗选项类型
+ * @example
+ * ```ts
+ * import { CleanOptionsSchema, type CleanOptions } from '@h-ai/datapipe'
+ * const options: CleanOptions = CleanOptionsSchema.parse({ removeHtml: true })
+ * ```
+ */
 export type CleanOptions = z.infer<typeof CleanOptionsSchema>
 
-/** 清洗选项输入类型 */
+/**
+ * 清洗选项输入类型
+ * @example
+ * ```ts
+ * import type { CleanOptionsInput } from '@h-ai/datapipe'
+ * const options: CleanOptionsInput = { removeHtml: true, removeUrls: true }
+ * ```
+ */
 export type CleanOptionsInput = z.input<typeof CleanOptionsSchema>
 
 // ─── 分块配置 ───
@@ -66,6 +76,11 @@ export type CleanOptionsInput = z.input<typeof CleanOptionsSchema>
  * - `word` — 按非空白词数分块，不截断单个词
  * - `character` — 按 Unicode code point 分块，不拆代理对
  * - `custom` — 自定义分隔符分块
+ * @example
+ * ```ts
+ * import { ChunkModeSchema } from '@h-ai/datapipe'
+ * const mode = ChunkModeSchema.parse('character')
+ * ```
  */
 export const ChunkModeSchema = z.enum([
   'sentence',
@@ -77,28 +92,24 @@ export const ChunkModeSchema = z.enum([
   'custom',
 ])
 
-/** 分块模式类型 */
+/**
+ * 分块模式类型
+ * @example
+ * ```ts
+ * import type { ChunkMode } from '@h-ai/datapipe'
+ * const options: ChunkMode = 'character'
+ * ```
+ */
 export type ChunkMode = z.infer<typeof ChunkModeSchema>
 
 /**
  * 分块选项 Schema
  * datapipe 的默认 overlap 为 0；消费者可显式提供自己的默认值，例如 AI Knowledge 为 200。
- *
  * @example
  * ```ts
- * // 按 Markdown 标题分块
- * const chunkOptions = {
- *   mode: 'markdown',
- *   maxSize: 2000,
- *   overlap: 200,
- * }
- *
- * // 按字符分块
- * const chunkOptions = {
- *   mode: 'character',
- *   maxSize: 1000,
- *   overlap: 100,
- * }
+ * import { ChunkOptionsSchema } from '@h-ai/datapipe'
+ * const options = ChunkOptionsSchema.parse({ mode: 'markdown', maxSize: 500, overlap: 50 })
+ * // maxSize 已包含重叠，overlap 必须小于 maxSize；自定义正则仅来自可信配置。
  * ```
  */
 export const ChunkOptionsSchema = z.object({
@@ -120,8 +131,22 @@ export const ChunkOptionsSchema = z.object({
   markdownKeepTitle: z.boolean().default(true),
 }).refine(options => options.overlap < options.maxSize, { path: ['overlap'] })
 
-/** 分块选项类型 */
+/**
+ * 分块选项类型
+ * @example
+ * ```ts
+ * import { ChunkOptionsSchema, type ChunkOptions } from '@h-ai/datapipe'
+ * const options: ChunkOptions = ChunkOptionsSchema.parse({ mode: 'character', maxSize: 500 })
+ * ```
+ */
 export type ChunkOptions = z.infer<typeof ChunkOptionsSchema>
 
-/** 分块选项输入类型 */
+/**
+ * 分块选项输入类型
+ * @example
+ * ```ts
+ * import type { ChunkOptionsInput } from '@h-ai/datapipe'
+ * const options: ChunkOptionsInput = { mode: 'character', maxSize: 500, overlap: 50 }
+ * ```
+ */
 export type ChunkOptionsInput = z.input<typeof ChunkOptionsSchema>

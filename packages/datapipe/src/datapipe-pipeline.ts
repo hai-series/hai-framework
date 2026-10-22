@@ -27,18 +27,16 @@ import { HaiDatapipeError } from './datapipe-types.js'
  * 创建管线构建器
  *
  * @returns PipelineBuilder 实例，支持链式添加步骤后执行
- *
  * @example
  * ```ts
+ * import { datapipe } from '@h-ai/datapipe'
  * const result = await datapipe.pipeline()
  *   .clean({ removeHtml: true })
  *   .transform(text => text.toLowerCase())
- *   .chunk({ mode: 'markdown', maxSize: 2000 })
- *   .run('原始文本')
- *
- * if (result.success) {
- *   // result.data => { text, chunks }
- * }
+ *   .chunk({ mode: 'character', maxSize: 500, overlap: 50 })
+ *   .run('<p>One. Two. Three.</p>')
+ * if (result.success) result.data.chunks.map(chunk => chunk.content)
+ * else result.error.message
  * ```
  */
 export function createPipelineBuilder(): PipelineBuilder {

@@ -13,7 +13,11 @@ import { HaiDatapipeError } from './datapipe-types.js'
 
 /**
  * Markdown 源区间；标题移除仅影响显式 keepTitle=false 的内容起点。
- * @example const section: MarkdownSection = { start: 0, bodyStart: 8, end: 20, title: 'Title', level: 2 }
+ * @example 模块内部上下文
+ * ```ts
+ * const section: MarkdownSection = { start: 0, bodyStart: 8, end: 12, title: 'Title', level: 1 }
+ * const bodyLength = section.end - section.bodyStart
+ * ```
  */
 interface MarkdownSection {
   start: number
@@ -147,8 +151,12 @@ function modeExpression(mode: ChunkMode, separator?: string): RegExp | undefined
  * @param options - 模式与预算；Markdown section 之间不重叠，section 内使用相同边界算法。
  * @returns 有界且顺序连续编号的分块；配置错误或非法正则返回错误结果。
  * @example
- * const result = chunkText('甲😀乙丙丁', { mode: 'character', maxSize: 3, overlap: 1 })
- * if (result.success) result.data.map(chunk => chunk.content) // ['甲😀乙', '乙丙丁']
+ * ```ts
+ * import { datapipe } from '@h-ai/datapipe'
+ * const result = datapipe.chunk('One. Two. Three.', { mode: 'sentence', maxSize: 12, overlap: 2 })
+ * if (result.success) result.data.map(chunk => chunk.content)
+ * else result.error.message
+ * ```
  */
 export function chunkText(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]> {
   const parsed = ChunkOptionsSchema.safeParse(options)
