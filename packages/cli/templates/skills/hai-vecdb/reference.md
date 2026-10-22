@@ -317,3 +317,7 @@ if (!result.success) {
 ## 生产共享状态
 
 生产使用 Qdrant、pgvector 或远端 Chroma；LanceDB 和嵌入式 Chroma 只用于开发/明确测试。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。
+
+## 关闭与失败恢复
+
+vecdb.close() 失败后不要把资源视为已释放；error.ext.cleanupPending 表示同一模块仍保有待清理资源。旧操作引用也会返回 NOT_INITIALIZED；重试 close 或 init 的前置清理，不创建并行替代连接。内嵌 Chroma 只有直接子进程 exit 确认后关闭成功，终止信号回执不是退出证明。

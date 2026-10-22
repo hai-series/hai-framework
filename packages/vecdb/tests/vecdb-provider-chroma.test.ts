@@ -5,11 +5,12 @@
  * 以及嵌入式模式的本地服务拉起/关闭，不连接真实 Chroma 服务。
  */
 
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createChromaProvider } from '../src/providers/vecdb-provider-chroma.js'
 
-const spawnMock = vi.hoisted(() => vi.fn(() => ({ on: vi.fn(), kill: vi.fn() })))
+const spawnMock = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
 interface FakeRecord {
@@ -102,6 +103,15 @@ async function connectDirect() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  spawnMock.mockImplementation(() => {
+    const child = Object.assign(new EventEmitter(), { pid: 123, exitCode: null as number | null, signalCode: null as NodeJS.Signals | null, kill: vi.fn(() => {
+      child.signalCode = 'SIGTERM'
+      queueMicrotask(() => child.emit('exit', null, 'SIGTERM'))
+      return true
+    }) })
+    queueMicrotask(() => child.emit('spawn'))
+    return child
+  })
   chroma.store.clear()
   chroma.heartbeatMock.mockResolvedValue(1)
 })

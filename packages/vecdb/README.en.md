@@ -174,3 +174,7 @@ Production uses Qdrant, pgvector or remote Chroma. LanceDB and embedded Chroma a
 ## License
 
 Apache-2.0
+
+## Closing and recovery
+
+close immediately stops current operations, including previously captured operation references. Failed candidates and resources that failed to close retain cleanup ownership without serving requests. Concurrent close calls coalesce; an in-flight init settles ownership before close proceeds. error.ext.cleanupPending requires retrying close on the same module. init cannot replace a resource until cleanup succeeds. Embedded Chroma waits for the actual spawn event and direct child exit: 1.5 seconds after normal termination it sends a forced signal, then waits another 1.5 seconds. Unconfirmed exit returns failure and retains the handle. Direct-child verification does not establish process-tree termination or live Chroma CLI readiness.

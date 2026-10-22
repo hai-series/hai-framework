@@ -130,6 +130,8 @@ export function createChromaProvider(): VecdbProvider {
   let client: ChromaClient | null = null
   let config: ChromaConfig | null = null
   let serverProcess: ChildProcess | null = null
+  let spawnFailed = false
+  let closing: Promise<HaiResult<void>> | null = null
 
   function isMissingModuleError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
@@ -157,27 +159,97 @@ export function createChromaProvider(): VecdbProvider {
   }
 
   /** 拉起本地 Chroma 服务（嵌入式模式） */
-  function startEmbeddedServer(chromaConfig: ChromaConfig): void {
+  async function startEmbeddedServer(chromaConfig: ChromaConfig): Promise<void> {
     const args = ['run', '--path', chromaConfig.path ?? './data/chroma', '--host', chromaConfig.host, '--port', String(chromaConfig.port)]
     logger.info('Starting embedded Chroma server', { command: chromaConfig.serverCommand, host: chromaConfig.host, port: chromaConfig.port })
+    spawnFailed = false
     const proc = spawn(chromaConfig.serverCommand, args, { stdio: 'ignore' })
     proc.on('error', (error: Error) => {
+      spawnFailed = proc.pid === undefined
       logger.error('Chroma server process error', { error: error.message })
     })
     serverProcess = proc
+    await new Promise<void>((resolve, reject) => {
+      proc.once('spawn', resolve)
+      proc.once('error', reject)
+    })
   }
 
-  /** 停止本地 Chroma 服务 */
-  function stopEmbeddedServer(): void {
-    if (!serverProcess)
+  /** 终止本模块直接启动的服务器并等待 exit；失败保留句柄，不能用 killed 充当退出证明。 */
+  async function stopEmbeddedServer(): Promise<void> {
+    const owned = serverProcess
+    if (!owned)
       return
-    try {
-      serverProcess.kill()
+    const hasExited = () => owned.exitCode !== null || owned.signalCode !== null || (spawnFailed && owned.pid === undefined)
+    if (!hasExited()) {
+      const child: ChildProcess = owned
+      await new Promise<void>((resolve, reject) => {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let settled = false
+        function cleanup(): void {
+          clearTimeout(timer)
+          child.removeListener('exit', exited)
+          child.removeListener('error', failed)
+        }
+        function exited(): void {
+          if (settled)
+            return
+          settled = true
+          cleanup()
+          resolve()
+        }
+        function failed(cause: Error): void {
+          if (settled)
+            return
+          if (hasExited()) {
+            exited()
+            return
+          }
+          settled = true
+          cleanup()
+          reject(cause)
+        }
+        function signal(name: 'SIGTERM' | 'SIGKILL'): void {
+          try {
+            if (!child.kill(name))
+              failed(new Error('Chroma child termination signal was rejected'))
+          }
+          catch (cause) {
+            failed(cause instanceof Error ? cause : new Error(String(cause)))
+          }
+        }
+        child.once('exit', exited)
+        child.once('error', failed)
+        timer = setTimeout(() => {
+          timer = setTimeout(() => failed(new Error('Chroma child exit was not confirmed')), 1500)
+          signal('SIGKILL')
+        }, 1500)
+        if (hasExited())
+          exited()
+        else signal('SIGTERM')
+      })
     }
-    catch (error) {
-      logger.warn('Failed to stop Chroma server', { error: error instanceof Error ? error.message : String(error) })
+    if (serverProcess === owned)
+      serverProcess = null
+  }
+
+  /** 关闭立即停止业务发布；退出确认失败时仅保留清理所有权，允许同一实例重试。 */
+  async function closeResources(): Promise<HaiResult<void>> {
+    if (!closing) {
+      client = null
+      config = null
+      closing = (async () => {
+        try {
+          await stopEmbeddedServer()
+          logger.info('Chroma connection closed')
+          return ok(undefined)
+        }
+        catch (cause) {
+          return err({ ...HaiVecdbError.CONNECTION_FAILED, message: vecdbM('vecdb_closeFailed', { params: { error: cause instanceof Error ? cause.message : String(cause) } }), cause, ext: { cleanupPending: true } })
+        }
+      })().finally(() => { closing = null })
     }
-    serverProcess = null
+    return await closing
   }
 
   /** 轮询心跳直至就绪或超时 */
@@ -381,6 +453,11 @@ export function createChromaProvider(): VecdbProvider {
       if (cfg.type !== 'chroma')
         return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
 
+      if (serverProcess || client || closing) {
+        const cleaned = await closeResources()
+        if (!cleaned.success)
+          return cleaned
+      }
       const chromaConfig = cfg as ChromaConfig
       const embedded = !!chromaConfig.path && !chromaConfig.url
 
@@ -393,7 +470,7 @@ export function createChromaProvider(): VecdbProvider {
       const startupTimer = setTimeout(() => startupAbort.abort(), startupTimeout)
       try {
         if (embedded)
-          startEmbeddedServer(chromaConfig)
+          await startEmbeddedServer(chromaConfig)
 
         const endpoint = chromaConfig.url ? new URL(chromaConfig.url) : undefined
         const clientParams: ChromaClientArgs = endpoint
@@ -409,6 +486,9 @@ export function createChromaProvider(): VecdbProvider {
         // 心跳可能公开；发布连接前必须确认默认 tenant/database 的数据端点也允许当前凭据访问。
         await chromaClient.countCollections()
 
+        startupAbort.signal.throwIfAborted()
+        if (embedded && (spawnFailed || !serverProcess || serverProcess.exitCode !== null || serverProcess.signalCode !== null))
+          throw new Error('Chroma child exited before readiness was confirmed')
         client = chromaClient
         config = chromaConfig
         logger.info('Chroma connected', { embedded, host: clientParams.host, port: clientParams.port, ssl: clientParams.ssl })
@@ -416,9 +496,12 @@ export function createChromaProvider(): VecdbProvider {
       }
       catch (error) {
         startupAbort.abort()
-        stopEmbeddedServer()
+        const cleanup = await closeResources()
         logger.error('Failed to connect to Chroma', { error: error instanceof Error ? error.message : String(error) })
-        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
+        const failure = err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
+        return !failure.success && !cleanup.success
+          ? err({ ...failure.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
+          : failure
       }
       finally {
         clearTimeout(startupTimer)
@@ -426,11 +509,7 @@ export function createChromaProvider(): VecdbProvider {
     },
 
     async close(): Promise<HaiResult<void>> {
-      stopEmbeddedServer()
-      client = null
-      config = null
-      logger.info('Chroma connection closed')
-      return ok(undefined)
+      return await closeResources()
     },
 
     isConnected(): boolean {
