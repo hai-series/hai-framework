@@ -90,9 +90,11 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 - `apiClient.init(config)`: initialize the default client.
 - `apiClient.close()`: clear client state.
-- `apiClient.auth.setTokens(tokens)`: store the access token; storage other than httpOnly also stores the refresh token.
+- `apiClient.auth.setTokens(tokens)`: replace credentials and store the access token; non-httpOnly storage saves the supplied refresh token or clears its previous value when omitted.
 - `apiClient.auth.clear()`: clear tokens.
 - `apiClient.create(contract)`: create a custom typed client.
+
+`auth.clear()` and `auth.setTokens()` immediately cancel and invalidate this client's previous refresh request. A late success or 401 cannot restore a logged-out session, overwrite a new account, or notify stale refresh callbacks. Storage writes are serialized, so an earlier asynchronous write cannot overwrite credentials after either method completes. Use these methods when logging out or switching accounts instead of writing to storage directly. The server logout endpoint must still revoke the httpOnly cookie and server session.
 
 Calling `init()` on an initialized client returns `CONFIG_ERROR` and leaves the existing client intact. To change `baseUrl` / `fetch` / `transport`, call `await apiClient.close()` before initializing again.
 

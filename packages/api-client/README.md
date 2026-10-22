@@ -90,9 +90,11 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 - `apiClient.init(config)`：初始化默认 client。
 - `apiClient.close()`：清理 client 状态。
-- `apiClient.auth.setTokens(tokens)`：写入 access token；非 httpOnly 存储会同时写入 refresh token。
+- `apiClient.auth.setTokens(tokens)`：替换凭据，写入 access token；非 httpOnly 存储写入提供的 refresh token，缺省时清除旧值。
 - `apiClient.auth.clear()`：清理 token。
 - `apiClient.create(contract)`：创建自定义 typed client。
+
+`auth.clear()` 和 `auth.setTokens()` 会立即取消并作废当前客户端的旧刷新请求。迟到的成功或 401 响应不会恢复已退出会话、覆盖新账号或触发旧刷新回调；存储写入串行提交，方法完成后不会再被之前已开始的异步写入覆盖。退出和切换账号须通过这些方法更新凭据，不直接修改 storage。httpOnly Cookie 和服务端会话仍由服务端退出接口撤销。
 
 已初始化后再次调用 `init()` 会返回 `CONFIG_ERROR`，不会覆盖现有 client；如需切换 `baseUrl` / `fetch` / `transport`，请先 `await apiClient.close()` 再重新初始化。
 

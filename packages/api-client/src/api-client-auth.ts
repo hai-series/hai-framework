@@ -190,6 +190,8 @@ type RefreshCallback = (tokens: TokenPair) => void
  *
  * 行为约定：
  * - 并发多次 `refresh()` 共享同一个请求。
+ * - `clear()` / `setTokens()` 立即使旧刷新失效；迟到成功/失败不会改写当前身份或通知回调。
+ * - 存储写入串行提交；这些方法返回后，不会再被先前已开始的异步写入覆盖。
  * - refresh 接口失败、响应字段缺失或 401，都视为刷新失败：清空存储并触发 `onRefreshFailed`。
  * - 兼容两种响应格式：`{ data: tokens }` 与 `{ data: { tokens } }`（HaiResult 包装）。
  *
@@ -223,22 +225,68 @@ export function createTokenManager(
 ) {
   const callbacks: RefreshCallback[] = []
   let refreshPromise: Promise<TokenPair | null> | null = null
+  let refreshController: AbortController | null = null
+  let generation = 0
+  let storageMutation: Promise<void> = Promise.resolve()
+
+  /**
+   * 按调用顺序提交存储写入，避免原生异步存储的旧写入晚于退出或新账号落盘。
+   * 失败只反馈给当前调用方，不阻塞后续清理/登录。
+   */
+  function mutateStorage<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = storageMutation.then(operation)
+    storageMutation = pending.then(() => {}, () => {})
+    return pending
+  }
+
+  /** 新身份操作同步撤销旧代际；即使 fetch 忽略 abort，旧结果也不再有提交资格。 */
+  function invalidateRefresh(): AbortController | null {
+    const previousController = refreshController
+    generation++
+    refreshController = null
+    refreshPromise = null
+    return previousController
+  }
+
+  /** 仅当前代际可清理凭据，旧账号的迟到 401 不得退出新账号。 */
+  async function failRefresh(refreshGeneration: number): Promise<void> {
+    await mutateStorage(async () => {
+      if (refreshGeneration !== generation)
+        return
+      await storage.clear()
+      if (refreshGeneration === generation)
+        onRefreshFailed?.()
+    })
+  }
 
   async function refresh(): Promise<TokenPair | null> {
     // 并发去重：同一时刻只发一次 refresh，其它调用复用同一个 Promise
     if (refreshPromise)
       return refreshPromise
-    refreshPromise = doRefresh()
+    const controller = new AbortController()
+    const pending = doRefresh(generation, controller)
+    refreshController = controller
+    refreshPromise = pending
     try {
-      return await refreshPromise
+      return await pending
     }
     finally {
-      refreshPromise = null
+      // 旧请求结束不能移除换账号后新一轮刷新的去重状态。
+      if (refreshPromise === pending) {
+        refreshPromise = null
+        refreshController = null
+      }
     }
   }
 
-  async function doRefresh(): Promise<TokenPair | null> {
+  async function doRefresh(refreshGeneration: number, controller: AbortController): Promise<TokenPair | null> {
+    // 登录/退出可能正在异步落盘，刷新只能读取其完成后的凭据。
+    await storageMutation
+    if (refreshGeneration !== generation)
+      return null
     const refreshToken = await storage.getRefreshToken()
+    if (refreshGeneration !== generation)
+      return null
     if (!refreshToken) {
       logger.warn('Token refresh skipped, no refresh token available')
       onRefreshFailed?.()
@@ -247,7 +295,6 @@ export function createTokenManager(
 
     logger.debug('Refreshing token')
     // 超时保护：避免 refresh 接口挂死时 dedup Promise 永不 resolve，连带所有等待者 hang。
-    const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), refreshTimeoutMs)
     try {
       // httpOnly cookie 模式：浏览器自动发送 Cookie，请求体无需携带 refreshToken；
@@ -263,13 +310,14 @@ export function createTokenManager(
         requestInit.headers = { 'Content-Type': 'application/json' }
       }
       const response = await fetchFn(refreshEndpointUrl, requestInit)
+      if (refreshGeneration !== generation)
+        return null
 
       if (!response.ok) {
         // 仅在服务端明确返回 401/4xx 时才清除 Token（refresh token 已失效）；
         // 5xx 作为服务端临时故障，保留 Token 让下一次请求重试。
         if (response.status >= 400 && response.status < 500) {
-          await storage.clear()
-          onRefreshFailed?.()
+          await failRefresh(refreshGeneration)
         }
         else {
           logger.warn('Token refresh transient failure, keeping tokens', { status: response.status })
@@ -278,17 +326,17 @@ export function createTokenManager(
       }
 
       const body = await response.json() as { data?: unknown }
+      if (refreshGeneration !== generation)
+        return null
       const parsed = RefreshTokenPayloadSchema.safeParse(readTokenPayload(body.data))
       if (!parsed.success) {
         logger.warn('Token refresh returned invalid data', { issues: parsed.error.issues })
-        await storage.clear()
-        onRefreshFailed?.()
+        await failRefresh(refreshGeneration)
         return null
       }
       if (!useHttpOnlyCookie && !parsed.data.refreshToken) {
         logger.warn('Token refresh returned invalid data', { issues: [{ path: ['refreshToken'], message: 'Required' }] })
-        await storage.clear()
-        onRefreshFailed?.()
+        await failRefresh(refreshGeneration)
         return null
       }
 
@@ -300,13 +348,28 @@ export function createTokenManager(
         expiresIn: parsed.data.expiresIn ?? 3600,
         tokenType: 'Bearer',
       }
-      await storage.setAccessToken(tokens.accessToken)
-      await storage.setRefreshToken(refreshTokenForStorage)
+      const committed = await mutateStorage(async () => {
+        if (refreshGeneration !== generation)
+          return false
+        await storage.setAccessToken(tokens.accessToken)
+        if (refreshGeneration !== generation)
+          return false
+        await storage.setRefreshToken(refreshTokenForStorage)
+        return refreshGeneration === generation
+      })
+      if (!committed || refreshGeneration !== generation)
+        return null
       logger.info('Token refreshed successfully')
-      for (const cb of callbacks) cb(tokens)
-      return tokens
+      for (const cb of callbacks) {
+        if (refreshGeneration !== generation)
+          return null
+        cb(tokens)
+      }
+      return refreshGeneration === generation ? tokens : null
     }
     catch (error) {
+      if (refreshGeneration !== generation)
+        return null
       // 网络或 fetch 本身抛异常（超时、断网、CORS）视为可重试的暂时性错误，
       // 不清除 Token，仅记录日志。调用方可在下次请求时重试。
       logger.error('Token refresh failed (transient)', { error })
@@ -321,12 +384,28 @@ export function createTokenManager(
     storage,
     refresh,
     async setTokens(tokens: TokenPair) {
-      await storage.setAccessToken(tokens.accessToken)
-      if (tokens.refreshToken)
-        await storage.setRefreshToken(tokens.refreshToken)
+      const previousController = invalidateRefresh()
+      const mutationGeneration = generation
+      const pending = mutateStorage(async () => {
+        if (mutationGeneration !== generation)
+          return
+        // 替换完整凭据：新账号未提供 refresh token 时不能继续使用旧账号的值。
+        await storage.clear()
+        if (mutationGeneration !== generation)
+          return
+        await storage.setAccessToken(tokens.accessToken)
+        if (tokens.refreshToken && mutationGeneration === generation)
+          await storage.setRefreshToken(tokens.refreshToken)
+      })
+      // 先排好新身份写入，再触发 abort 事件；可重入的监听器只能读取新操作后的存储。
+      previousController?.abort()
+      await pending
     },
     async clear() {
-      await storage.clear()
+      const previousController = invalidateRefresh()
+      const pending = mutateStorage(() => storage.clear())
+      previousController?.abort()
+      await pending
     },
     onTokenRefreshed(callback: RefreshCallback): () => void {
       callbacks.push(callback)

@@ -504,7 +504,8 @@
 
 ### CLIENT-02 · P1 · 使退出或切换账号使在途刷新失效
 
-- [ ] 待修正（源码探针已复现；范围：api-client）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：认证代际、AbortController 和串行存储提交防止迟到刷新/401覆盖退出或新账号；setTokens替换完整凭据对。7个新增竞态/换账号回归先失败再通过，auth定向24/24，api-client typecheck及定向ESLint通过；跨manager/服务端Cookie撤销由明确边界处理；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/api-client/src/api-client-auth.ts:217](../packages/api-client/src/api-client-auth.ts#L217)。
 - **证据与影响**：refresh 请求在 clear 之前开始、在 clear 之后返回时，仍会写回新 token。探针退出后恢复了 late-access；账号切换期间也可能被旧刷新覆盖。
 - **修正内容**：维护认证代际并取消/丢弃旧代际结果，clear/setTokens 与 refresh 持久化顺序一致；不要只清空 refreshPromise。

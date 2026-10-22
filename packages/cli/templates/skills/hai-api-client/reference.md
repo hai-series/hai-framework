@@ -135,11 +135,13 @@ if (login.success) {
 | --- | --- |
 | `apiClient.init(config)` | 初始化默认 API Service client；重复初始化返回 `CONFIG_ERROR` |
 | `apiClient.close()` | 清理 client 状态 |
-| `apiClient.auth.setTokens(tokens)` | 写入 access token；非 httpOnly 存储会同时写入 refresh token |
-| `apiClient.auth.clear()` | 清理 Token |
+| `apiClient.auth.setTokens(tokens)` | 使旧刷新失效并替换凭据；非 httpOnly 存储保存提供的 refresh token，缺省时清除旧值 |
+| `apiClient.auth.clear()` | 使旧刷新失效并清理本客户端 Token；服务端会话/Cookie 另由退出接口撤销 |
 | `apiClient.auth.onTokenRefreshed(cb)` | 监听刷新结果 |
 | `apiClient.create(contract)` | 创建自定义 typed client |
 | `apiClient.tokenStorage.{memory,localStorage,httpOnlyCookie}()` | TokenStorage 工厂 |
+
+退出/换账号使用 `auth.clear()` / `auth.setTokens()`，不直接写 storage。方法立即取消旧刷新，并按顺序提交异步存储操作；迟到的成功/401 不会恢复旧身份、覆盖新账号或触发旧回调。该保证针对同一个客户端的认证管理器，SSR 仍须按请求隔离实例。
 
 ### Transport 配置
 

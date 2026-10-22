@@ -6,6 +6,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTokenManager } from '../src/api-client-auth.js'
 import { apiClient } from '../src/index.js'
 
+function deferred<T>() {
+  let resolve: (value: T) => void = () => {}
+  const promise = new Promise<T>((accept) => {
+    resolve = accept
+  })
+  return { promise, resolve }
+}
+
+function tokenPair(name: string) {
+  return { accessToken: `${name}-access`, refreshToken: `${name}-refresh`, expiresIn: 3600, tokenType: 'Bearer' as const }
+}
+
 describe('apiClient.tokenStorage.memory', () => {
   it('存取 Token', async () => {
     const storage = apiClient.tokenStorage.memory()
@@ -30,6 +42,120 @@ describe('apiClient.tokenStorage.memory', () => {
 })
 
 describe('createTokenManager', () => {
+  it('替换账号时未提供 refreshToken 不保留旧账号的刷新凭据', async () => {
+    const storage = apiClient.tokenStorage.memory()
+    await storage.setRefreshToken('old-account-refresh')
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', vi.fn())
+
+    await manager.setTokens({ accessToken: 'new-account-access', expiresIn: 3600, tokenType: 'Bearer' })
+
+    expect(await storage.getAccessToken()).toBe('new-account-access')
+    expect(await storage.getRefreshToken()).toBeNull()
+  })
+
+  it('退出后丢弃在途刷新结果并取消请求', async () => {
+    const storage = apiClient.tokenStorage.memory()
+    await storage.setRefreshToken('old-refresh')
+    const response = deferred<Response>()
+    const mockFetch = vi.fn<typeof fetch>().mockReturnValue(response.promise)
+    const onRefreshed = vi.fn()
+    const onFailed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch, onFailed)
+    manager.onTokenRefreshed(onRefreshed)
+
+    const pending = manager.refresh()
+    await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledOnce())
+    await manager.clear()
+    expect(mockFetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+    // 自定义 fetch 即使忽略取消，迟到响应也不能恢复会话。
+    response.resolve(Response.json({ data: tokenPair('old') }))
+
+    expect(await pending).toBeNull()
+    expect(await storage.getAccessToken()).toBeNull()
+    expect(await storage.getRefreshToken()).toBeNull()
+    expect(onRefreshed).not.toHaveBeenCalled()
+    expect(onFailed).not.toHaveBeenCalled()
+  })
+
+  it.each([200, 401])('切换账号后忽略旧刷新响应（HTTP %s）', async (status) => {
+    const storage = apiClient.tokenStorage.memory()
+    await storage.setRefreshToken('old-refresh')
+    const response = deferred<Response>()
+    const mockFetch = vi.fn<typeof fetch>().mockReturnValue(response.promise)
+    const onRefreshed = vi.fn()
+    const onFailed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch, onFailed)
+    manager.onTokenRefreshed(onRefreshed)
+
+    const pending = manager.refresh()
+    await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledOnce())
+    await manager.setTokens(tokenPair('new-account'))
+    response.resolve(status === 200 ? Response.json({ data: tokenPair('old') }) : new Response(null, { status }))
+
+    expect(await pending).toBeNull()
+    expect(await storage.getAccessToken()).toBe('new-account-access')
+    expect(await storage.getRefreshToken()).toBe('new-account-refresh')
+    expect(onRefreshed).not.toHaveBeenCalled()
+    expect(onFailed).not.toHaveBeenCalled()
+  })
+
+  it.each(['clear', 'setTokens'] as const)('刷新已经开始异步写入时，后续 %s 仍是最终状态', async (operation) => {
+    const memory = apiClient.tokenStorage.memory()
+    await memory.setRefreshToken('old-refresh')
+    const writeStarted = deferred<void>()
+    const releaseWrite = deferred<void>()
+    const storage = {
+      ...memory,
+      async setAccessToken(token: string) {
+        if (token === 'old-access') {
+          writeStarted.resolve()
+          await releaseWrite.promise
+        }
+        await memory.setAccessToken(token)
+      },
+    }
+    const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ data: tokenPair('old') }))
+    const onRefreshed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch)
+    manager.onTokenRefreshed(onRefreshed)
+
+    const pending = manager.refresh()
+    await writeStarted.promise
+    const mutation = operation === 'clear' ? manager.clear() : manager.setTokens(tokenPair('new-account'))
+    releaseWrite.resolve()
+    await mutation
+
+    expect(await pending).toBeNull()
+    expect(await memory.getAccessToken()).toBe(operation === 'clear' ? null : 'new-account-access')
+    expect(await memory.getRefreshToken()).toBe(operation === 'clear' ? null : 'new-account-refresh')
+    expect(onRefreshed).not.toHaveBeenCalled()
+  })
+
+  it('旧刷新结束时不会清除新账号刷新请求的去重状态', async () => {
+    const storage = apiClient.tokenStorage.memory()
+    await storage.setRefreshToken('old-refresh')
+    const oldResponse = deferred<Response>()
+    const newResponse = deferred<Response>()
+    const mockFetch = vi.fn<typeof fetch>()
+      .mockReturnValueOnce(oldResponse.promise)
+      .mockReturnValueOnce(newResponse.promise)
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch)
+
+    const oldRefresh = manager.refresh()
+    await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1))
+    await manager.setTokens(tokenPair('new-account'))
+    const newRefresh = manager.refresh()
+    await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2))
+    oldResponse.resolve(Response.json({ data: tokenPair('old') }))
+    expect(await oldRefresh).toBeNull()
+    const duplicateRefresh = manager.refresh()
+    newResponse.resolve(Response.json({ data: tokenPair('new-refreshed') }))
+
+    expect(await newRefresh).toEqual(tokenPair('new-refreshed'))
+    expect(await duplicateRefresh).toEqual(tokenPair('new-refreshed'))
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+
   it('refresh 成功后更新存储并通知回调', async () => {
     const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('old-refresh')

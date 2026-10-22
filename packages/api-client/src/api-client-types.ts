@@ -157,9 +157,27 @@ export interface ApiClientTransportConfig {
 
 /** Token 辅助操作。 */
 export interface ApiClientAuth {
-  /** 手动写入 Token（例如登录成功后）。 */
+  /**
+   * 替换登录凭据并使之前的在途刷新失效；未提供 refreshToken 时清除旧值。
+   * 异步存储写入按调用顺序提交，存储失败时拒绝 Promise。
+   *
+   * @example
+   * ```ts
+   * if (login.success) await client.auth.setTokens(login.data.tokens)
+   * ```
+   */
   readonly setTokens: (tokens: TokenPair) => Promise<void>
-  /** 清空存储的 Token（登出）。 */
+  /**
+   * 使在途刷新失效并清空本客户端凭据；返回后旧刷新不能恢复它们。
+   * httpOnly Cookie 和服务端会话仍须调用服务端退出接口撤销。
+   * 存储失败时拒绝 Promise，调用方需处理清理失败。
+   *
+   * @example
+   * ```ts
+   * await client.iam.auth.logout({})
+   * await client.auth.clear()
+   * ```
+   */
   readonly clear: () => Promise<void>
   /** 订阅 Token 刷新成功事件，返回取消订阅函数。 */
   readonly onTokenRefreshed: (callback: (tokens: TokenPair) => void) => () => void

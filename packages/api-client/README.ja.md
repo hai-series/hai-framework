@@ -90,9 +90,11 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 - `apiClient.init(config)`：既定のクライアントを初期化。
 - `apiClient.close()`：クライアントの状態を解放。
-- `apiClient.auth.setTokens(tokens)`：access token を保存。httpOnly 以外のストレージでは refresh token も保存します。
+- `apiClient.auth.setTokens(tokens)`：認証情報を置き換えて access token を保存。httpOnly 以外では指定された refresh token も保存し、省略時は古い値を削除します。
 - `apiClient.auth.clear()`：Token を削除。
 - `apiClient.create(contract)`：独自の型付きクライアントを作成。
+
+`auth.clear()` と `auth.setTokens()` は、このクライアントの既存の更新リクエストを直ちにキャンセルして無効化します。遅れて届いた成功応答や 401 は、ログアウト済みの認証状態を復元したり、新しいアカウントを上書きしたり、古い更新コールバックを通知したりしません。ストレージへの書き込みは直列化され、メソッド完了後に以前の非同期書き込みが認証情報を上書きすることはありません。ログアウトとアカウント切り替えには、ストレージを直接変更せずこれらのメソッドを使ってください。httpOnly Cookie とサーバーセッションは、引き続きサーバーのログアウトエンドポイントで失効させる必要があります。
 
 初期化済みのクライアントで `init()` を再度呼ぶと `CONFIG_ERROR` が返り、既存のクライアントは維持されます。`baseUrl` / `fetch` / `transport` を変更する場合は、先に `await apiClient.close()` を呼んでから再初期化してください。
 
