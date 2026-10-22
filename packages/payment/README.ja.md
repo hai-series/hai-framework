@@ -108,6 +108,14 @@ await payment.init({
 
 すべての組み込み Provider の HTTP リクエストには既定で 15 秒のタイムアウトがあり、ネットワーク障害による長時間の待機を防ぎます。
 
+### Alipay の業務レスポンスと返金状態
+
+注文作成・照会・返金・終了は、メソッドごとの応答 envelope、文字列の `code=10000`、必須フィールド、返却注文番号を検証します。HTTP 200、envelope の欠落、成功コードだけでは成功としません。取引不存在・権限不足・残高不足などは対応する `CREATE_ORDER_FAILED` / `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED` を返します。cause には長さを制限したエラー識別子だけを残し、生レスポンスと `msg/sub_msg` を公開しません。不明な状態や不正な金額を pending・ゼロ金額に置き換えません。
+
+返金は `success: true` でも `data.status` を確認してください。`fund_change=Y` のみ `success`、`N` または欠落は `processing` とし、Alipay の返金照会で確認が必要です（本モジュールには返金照会 API はありません）。`refund_fee` は累計返金額のため今回の返金額と直接比較できません。Alipay の `refundId` は元取引番号であり、個々の返金は `refundNo` で識別し、再試行でも番号とパラメータを保持してください。業務注文の更新前に `closeOrder` の成功と返金状態を確認します。
+
+参照：[Alipay 返金成功の判定](https://aipay.alipay.com/docs/subscribe/api-list/other-basic-interfaces/alipay-trade-refund.html)。
+
 ### Stripe ホスト型 Checkout と注文終了
 
 `mode=payment`、`ui_mode=hosted_page`、`tradeType=h5` のみ実装し、API は `Stripe-Version: 2026-09-30.endive` に固定します。embedded/elements、JSAPI、App、Native、小程序は Provider・HTTP schema・ブラウザー入口で拒否します。サーバー設定の `successUrl` は必須、`cancelUrl` は任意で、HTTP(S) のみ使用できます。成功 URL には `{CHECKOUT_SESSION_ID}` を含められます。クライアントから変更できず、同じ注文の再試行でも作成パラメータを変更できません。

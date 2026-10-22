@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ZodType } from 'zod'
 import type { AlipayConfig } from '../../payment-config.js'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
 import type { AlipayNotifyParams } from './alipay-types.js'
@@ -14,7 +15,7 @@ import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
 import { signAlipayParams, verifyAlipayNotify } from './alipay-sign.js'
-import { AlipayNotifyParamsSchema } from './alipay-types.js'
+import { AlipayCloseResponseSchema, AlipayCreateResponseSchema, AlipayNotifyParamsSchema, AlipayQueryResponseSchema, AlipayRefundResponseSchema, AlipayResponseRootSchema, AlipayResponseSchema } from './alipay-types.js'
 
 /** 支付宝网关地址 */
 const ALIPAY_GATEWAY = 'https://openapi.alipay.com/gateway.do'
@@ -29,11 +30,15 @@ function formatFenAmount(amount: number): string {
 function parseAlipayAmount(value: string): number {
   const trimmedValue = value.trim()
   if (!/^\d+(?:\.\d{1,2})?$/.test(trimmedValue)) {
-    throw new Error(`Invalid Alipay amount: ${value}`)
+    throw new Error('Invalid Alipay amount')
   }
 
   const [yuanPart, centsPart = ''] = trimmedValue.split('.')
-  return Number.parseInt(yuanPart, 10) * 100 + Number.parseInt(centsPart.padEnd(2, '0'), 10)
+  const amount = Number.parseInt(yuanPart, 10) * 100 + Number.parseInt(centsPart.padEnd(2, '0'), 10)
+  if (!Number.isSafeInteger(amount)) {
+    throw new TypeError('Invalid Alipay amount')
+  }
+  return amount
 }
 
 function parseAlipayNotifyParams(body: string): AlipayNotifyParams {
@@ -50,6 +55,10 @@ function parseAlipayNotifyParams(body: string): AlipayNotifyParams {
  *
  * @param config - 支付宝配置
  * @returns PaymentProvider 实例
+ * @example
+ * const provider = createAlipayProvider(config)
+ * const result = await provider.queryOrder('ORDER_1')
+ * if (result.success && result.data.status === 'paid') await fulfillOrder(result.data)
  */
 export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
   const gateway = config.sandbox ? ALIPAY_SANDBOX_GATEWAY : ALIPAY_GATEWAY
@@ -79,8 +88,13 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
     return map[tradeType] ?? map.h5
   }
 
-  /** 发送支付宝 API 请求 */
-  async function alipayRequest<T>(params: Record<string, string>): Promise<T> {
+  /**
+   * 发送请求并核验对应方法的业务响应，再解析操作所需字段。
+   *
+   * HTTP 200 不代表业务成功；禁止把错误对象、原始响应或 Zod 输入放入 cause。
+   * @example await alipayRequest(params, AlipayCloseResponseSchema)
+   */
+  async function alipayRequest<T>(params: Record<string, string>, schema: ZodType<T>): Promise<T> {
     const sign = signAlipayParams(params, config.privateKey, signType)
     const allParams = { ...params, sign }
 
@@ -97,7 +111,37 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
       throw new Error(`Alipay API failed: ${timedResponse.status}`)
     }
 
-    return timedResponse.json() as T
+    let body: unknown
+    try {
+      body = await timedResponse.json()
+    }
+    catch {
+      throw new Error('Invalid Alipay JSON response')
+    }
+
+    const root = AlipayResponseRootSchema.safeParse(body)
+    const key = `${params.method.replace(/\./g, '_')}_response`
+    if (!root.success || 'error_response' in root.data) {
+      throw new Error('Invalid Alipay response envelope')
+    }
+
+    const response = root.data[key]
+    const common = AlipayResponseSchema.safeParse(response)
+    if (!common.success) {
+      throw new Error('Invalid Alipay response code')
+    }
+    if (common.data.code !== '10000') {
+      // 仅保留有界的渠道错误标识；msg/sub_msg 可能含订单、买家信息，不得透传。
+      const subCode = common.data.sub_code
+      const suffix = subCode && /^[\w.-]{1,80}$/.test(subCode) ? `, sub_code=${subCode}` : ''
+      throw new Error(`Alipay business request failed (code=${common.data.code}${suffix})`)
+    }
+
+    const parsed = schema.safeParse(response)
+    if (!parsed.success) {
+      throw new Error('Invalid Alipay business response')
+    }
+    return parsed.data
   }
 
   return {
@@ -120,15 +164,17 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           biz_content: bizContent,
         }
 
-        const response = await alipayRequest<Record<string, unknown>>(params)
-        const key = `${method.replace(/\./g, '_')}_response`
-        const data = response[key] as Record<string, unknown> | undefined
+        const data = await alipayRequest(params, AlipayCreateResponseSchema)
+        if (data.out_trade_no !== input.orderNo
+          || (method === 'alipay.trade.precreate' ? !data.qr_code : !data.trade_no)) {
+          throw new Error('Invalid Alipay create response')
+        }
 
         return ok({
           provider: 'alipay',
           tradeType: input.tradeType,
-          clientParams: data ?? {},
-          prepayId: data?.trade_no as string | undefined,
+          clientParams: data,
+          prepayId: data.trade_no,
         })
       }
       catch (cause) {
@@ -187,8 +233,10 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           biz_content: JSON.stringify({ out_trade_no: orderNo }),
         }
 
-        const response = await alipayRequest<Record<string, unknown>>(params)
-        const data = response.alipay_trade_query_response as Record<string, unknown> | undefined
+        const data = await alipayRequest(params, AlipayQueryResponseSchema)
+        if (data.out_trade_no !== orderNo) {
+          throw new Error('Alipay response order mismatch')
+        }
 
         const statusMap: Record<string, OrderStatus['status']> = {
           TRADE_SUCCESS: 'paid',
@@ -199,10 +247,11 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
 
         return ok({
           orderNo,
-          transactionId: data?.trade_no as string | undefined,
-          status: statusMap[data?.trade_status as string] ?? 'pending',
-          amount: parseAlipayAmount(data?.total_amount as string ?? '0'),
-          paidAt: data?.send_pay_date ? new Date(data.send_pay_date as string) : undefined,
+          transactionId: data.trade_no,
+          status: statusMap[data.trade_status],
+          amount: parseAlipayAmount(data.total_amount),
+          // 支付宝时间为北京时间，不能依赖节点的本地时区解释。
+          paidAt: data.send_pay_date ? new Date(`${data.send_pay_date.replace(' ', 'T')}+08:00`) : undefined,
         })
       }
       catch (cause) {
@@ -227,13 +276,17 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           }),
         }
 
-        const response = await alipayRequest<Record<string, unknown>>(params)
-        const data = response.alipay_trade_refund_response as Record<string, unknown> | undefined
+        const data = await alipayRequest(params, AlipayRefundResponseSchema)
+        if (data.out_trade_no !== input.orderNo) {
+          throw new Error('Alipay response order mismatch')
+        }
+        // refund_fee 是累计退款额，只校验安全整数，不与本次退款额直接比较。
+        parseAlipayAmount(data.refund_fee)
 
         return ok({
           refundNo: input.refundNo,
-          refundId: data?.trade_no as string ?? '',
-          status: data?.fund_change === 'Y' ? 'success' : 'processing',
+          refundId: data.trade_no,
+          status: data.fund_change === 'Y' ? 'success' : 'processing',
         })
       }
       catch (cause) {
@@ -253,7 +306,10 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           biz_content: JSON.stringify({ out_trade_no: orderNo }),
         }
 
-        await alipayRequest(params)
+        const data = await alipayRequest(params, AlipayCloseResponseSchema)
+        if (data.out_trade_no !== orderNo) {
+          throw new Error('Alipay response order mismatch')
+        }
         return ok(undefined)
       }
       catch (cause) {

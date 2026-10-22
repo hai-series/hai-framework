@@ -108,6 +108,14 @@ Amounts use minor currency units (cents) and must be positive integers. `amount`
 
 All built-in provider HTTP requests have a default 15-second timeout to avoid long hangs on network failures.
 
+### Alipay business responses and refund states
+
+Creation, queries, refunds, and closing validate the operation-specific response envelope, string `code=10000`, required fields, and returned order number. HTTP 200, a missing envelope, or a success code without business fields is insufficient. Missing trades, permission/balance errors, and other business failures return the matching `CREATE_ORDER_FAILED` / `QUERY_ORDER_FAILED` / `REFUND_FAILED` / `CLOSE_ORDER_FAILED`. Error causes retain bounded provider error identifiers, excluding raw responses and `msg/sub_msg`. Queries reject unknown states and invalid amounts instead of inventing pending orders or zero amounts.
+
+For refunds, check `data.status` even when `success` is true. Only `fund_change=Y` means `success`; `N` or an absent value returns `processing` and requires confirmation through Alipay refund queries (this module has no refund-query API yet). `refund_fee` is cumulative and must not be compared with this individual refund amount. Alipay `refundId` identifies the original trade; use `refundNo` for each refund and preserve its parameters when retrying. Update business orders only after checking `closeOrder` success and the refund status.
+
+Reference: [Alipay refund success rules](https://aipay.alipay.com/docs/subscribe/api-list/other-basic-interfaces/alipay-trade-refund.html).
+
 ### Stripe hosted Checkout and closing orders
 
 Only `mode=payment`, `ui_mode=hosted_page`, and `tradeType=h5` are implemented. Requests pin `Stripe-Version: 2026-09-30.endive`. Embedded/elements, JSAPI, App, Native, and mini-program modes are rejected by the provider, HTTP schema, and browser entry. Server-side `successUrl` is required; `cancelUrl` is optional. Both accept HTTP(S); the success URL may contain Stripe's literal `{CHECKOUT_SESSION_ID}` placeholder. Clients cannot override these values, and retries for the same order cannot change the creation parameters.

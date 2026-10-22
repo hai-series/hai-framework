@@ -137,6 +137,8 @@ if (result.success) {
 
 ### 6. 退款
 
+支付宝下单/查单/退款/关单会验证方法对应的 envelope、字符串 code=10000、关键字段和订单号；HTTP 200 业务错误返回对应操作的 HaiResult 失败。错误 cause 不含原始响应或 msg/sub_msg。退款 `success: true` 表示请求受理，仍须检查 data.status：fund_change=Y 才为 success，N/缺失为 processing，需自行通过渠道退款查询确认（本模块没有退款查询 API）。refund_fee 是累计退款额，refundId 是原交易号，以 refundNo 区分本次退款且重试保持参数不变。关单先检查 result.success 再更新业务订单。
+
 ```typescript
 const result = await payment.refund('wechat', {
   orderNo: 'ORDER_20250101_001',

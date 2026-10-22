@@ -299,7 +299,8 @@
 
 ### PAY-04 · P1 · 处理支付宝业务错误而非仅检查 HTTP 状态
 
-- [ ] 待修正（源码探针已复现；范围：payment）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：支付宝创建/查询/退款/关单统一验证对应 envelope、字符串业务成功码10000、必需字段及订单号，HTTP200错误/畸形响应不能转成功，错误原因仅保留有界安全标识；拒绝未知支付状态/非法金额并按北京时间解析支付时间，fund_change=N或缺失保持processing。类型、三语README、skill/LLMS同步。UTC环境下3文件157项、payment typecheck/build、正常ESLint/check:skills通过；未执行真实支付宝调用；通常忽略的skill强制lint发现44项既有格式问题留规范任务处理；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/payment/src/providers/alipay/alipay-provider.ts:83](../packages/payment/src/providers/alipay/alipay-provider.ts#L83)；[packages/payment/src/providers/alipay/alipay-provider.ts:248](../packages/payment/src/providers/alipay/alipay-provider.ts#L248)。
 - **证据与影响**：alipayRequest 只检查 HTTP；create/refund/close 未验证响应 code。探针返回 code=40004，createOrder 仍 success:true 并把错误对象当 clientParams。
 - **修正内容**：校验每种响应 envelope、业务成功码和字段，再映射统一结果；查询不存在、余额/权限错误、退款失败均准确返回。

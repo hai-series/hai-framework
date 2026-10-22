@@ -150,9 +150,9 @@ export interface RefundInput {
 export interface RefundResult {
   /** 退款单号 */
   refundNo: string
-  /** 渠道退款 ID */
+  /** 渠道退款标识；支付宝返回原交易号，需同时使用 refundNo 标识本次退款。 */
   refundId: string
-  /** 退款状态 */
+  /** 退款状态；支付宝 fund_change 为 N 或缺失时是 processing，须向渠道确认后才能判定退款成功。 */
   status: 'processing' | 'success' | 'failed'
 }
 
