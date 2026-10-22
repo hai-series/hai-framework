@@ -30,7 +30,7 @@ operationLog:
 YAML 写可审查的默认值；`HAI_DB_TYPE`、`HAI_DB_DATABASE`、
 `HAI_DB_OPERATIONLOG_LEVEL` 等约定环境变量可覆盖对应叶子项，且优先级更高。
 
-`operationLog` 在 reldb provider-base 的 DML 操作层统一输出日志，不要在 `reldb-main.ts`、各 raw provider 或调用方重复包装。`read` 覆盖 `query/get/queryPage`，`write` 覆盖 DDL、`execute/batch` 与 `tx.begin/commit/rollback`，`maxLength` 用于截断序列化后的 SQL 参数和批量语句，`level` 默认 `debug`。
+`operationLog` 在 reldb provider-base 的 DML 操作层统一输出日志，不要在 `reldb-main.ts`、各 raw provider 或调用方重复包装。`read` 覆盖 `query/get/queryPage`，`write` 覆盖 DDL、`execute/batch` 与 `tx.begin/commit/rollback`，`maxLength` 限制安全数量摘要的字符数（0 表示省略摘要），永不记录 SQL 原文、参数值、DDL 默认值或驱动原始错误，`level` 默认 `debug`。
 
 ### 初始化与关闭
 

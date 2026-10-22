@@ -94,54 +94,30 @@ export const LoggingConfigSchema = z.object({
 })
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>
 
-// ─── ID 生成器配置 Schema ───
-
-/**
- * ID 生成器配置 Schema。
- *
- * @example
- * ```ts
- * IdConfigSchema.parse({ length: 12 })
- * // => { length: 12 }
- *
- * IdConfigSchema.parse({ prefix: 'usr_', length: 16 })
- * // => { prefix: 'usr_', length: 16 }
- * ```
- */
-export const IdConfigSchema = z.object({
-  /** ID 前缀（可选，生成时自动拼接） */
-  prefix: z.string().optional(),
-  /** ID 长度（范围 6-64，默认 21） */
-  length: z.number().int().min(6).max(64).default(21),
-})
-export type IdConfig = z.infer<typeof IdConfigSchema>
-
 // ─── Core 配置 Schema ───
 
 /**
  * Core 配置 Schema。
  *
- * 描述应用的基础配置，通常通过 `_core.yml` 加载。
+ * 描述应用的基础元数据和日志配置，通常通过 `_core.yml` 加载。
+ * 未声明的字段拒绝加载；业务配置放独立 app.yml 并使用应用 Schema 校验。
+ * ID 长度/前缀由每次 core.id 调用参数决定，不存在全局 ID 配置。
  *
  * @example
  * ```ts
  * CoreConfigSchema.parse({ name: 'demo', env: 'production' })
- * // => { name: 'demo', version: '0.1.0', env: 'production', debug: false, defaultLocale: 'zh-CN' }
+ * // => { name: 'demo', version: '0.1.0', env: 'production', defaultLocale: 'zh-CN' }
  * ```
  */
-export const CoreConfigSchema = z.object({
+export const CoreConfigSchema = z.strictObject({
   /** 应用名称（默认 'hai Admin'） */
   name: z.string().default('hai Admin'),
   /** 应用版本（默认 '0.1.0'） */
   version: z.string().default('0.1.0'),
   /** 运行环境（默认 'development'） */
   env: EnvSchema.default('development'),
-  /** 是否调试模式（默认 false） */
-  debug: z.boolean().default(false),
   /** 日志配置（可选） */
   logging: LoggingConfigSchema.optional(),
-  /** ID 生成器配置（可选） */
-  id: IdConfigSchema.optional(),
   /** 默认语言（默认 'zh-CN'） */
   defaultLocale: z.string().default('zh-CN'),
 })

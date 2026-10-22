@@ -1616,14 +1616,6 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
-    "name": "HAI_CORE_DEBUG",
-    "module": "core",
-    "path": "core.debug",
-    "description": "是否调试模式（默认 false）",
-    "value": "false",
-    "constraint": "true | false"
-  },
-  {
     "name": "HAI_CORE_DEFAULTLOCALE",
     "module": "core",
     "path": "core.defaultLocale",
@@ -1638,86 +1630,6 @@
     "description": "运行环境（默认 'development'）",
     "value": "development",
     "constraint": "字符串；取值：development | production | test | staging"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_AIASSISTANT",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_AIASSISTANT",
-    "description": "示例应用功能开关：aiassistant",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_AIENABLED",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_AIENABLED",
-    "description": "示例应用功能开关：aienabled",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_APIACCESS",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_APIACCESS",
-    "description": "示例应用功能开关：apiaccess",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_CONTACTFORM",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_CONTACTFORM",
-    "description": "示例应用功能开关：contactform",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_FILEUPLOAD",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_FILEUPLOAD",
-    "description": "示例应用功能开关：fileupload",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_MCPENABLED",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_MCPENABLED",
-    "description": "示例应用功能开关：mcpenabled",
-    "value": "false",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_REGISTRATION",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_REGISTRATION",
-    "description": "示例应用功能开关：registration",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_ID",
-    "module": "core",
-    "path": "core.id",
-    "description": "ID 生成器配置（可选）",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_CORE_ID_LENGTH",
-    "module": "core",
-    "path": "core.id.length",
-    "description": "ID 长度（范围 6-64，默认 21）",
-    "value": "21",
-    "constraint": "整数；>= 6；<= 64"
-  },
-  {
-    "name": "HAI_CORE_ID_PREFIX",
-    "module": "core",
-    "path": "core.id.prefix",
-    "description": "ID 前缀（可选，生成时自动拼接）",
-    "value": "",
-    "constraint": "字符串"
   },
   {
     "name": "HAI_CORE_LOGGING",
@@ -1867,7 +1779,7 @@
     "name": "HAI_DB_OPERATIONLOG_MAXLENGTH",
     "module": "db",
     "path": "db.operationLog.maxLength",
-    "description": "操作日志字段的最大字符数，0 表示不截断",
+    "description": "安全数量摘要的最大字符数；0 表示省略摘要，永不记录 SQL 原文或参数值。",
     "value": "1000",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },
@@ -2051,9 +1963,9 @@
     "name": "HAI_DB_URL",
     "module": "db",
     "path": "db.url",
-    "description": "网络数据库URL；MySQL仅mysql://连接地址，拒绝query/fragment，优先于host/port/database/user/password",
+    "description": "网络数据库URL；MySQL空串表示使用分字段，非空仅mysql://且拒绝query/fragment，优先于host/port/database/user/password",
     "value": "",
-    "constraint": "字符串；格式 uri"
+    "constraint": "字符串；格式 uri；取值："
   },
   {
     "name": "HAI_DB_USER",
@@ -2979,7 +2891,7 @@
     "name": "HAI_IAM_SESSION_MAXAGE",
     "module": "iam",
     "path": "iam.session.maxAge",
-    "description": "会话超时时间（秒，默认 86400 = 24小时）",
+    "description": "新会话的默认 access 时长（秒）；创建时可用 maxAge 覆盖，滑动/刷新沿用会话固有时长。",
     "value": "86400",
     "constraint": "整数；>= 60；<= 9007199254740991"
   },
@@ -2987,7 +2899,7 @@
     "name": "HAI_IAM_SESSION_REFRESHTOKENMAXAGE",
     "module": "iam",
     "path": "iam.session.refreshTokenMaxAge",
-    "description": "refreshToken 过期时间（秒，默认 604800 = 7天）",
+    "description": "refreshToken 独立有效期（秒，默认 604800 = 7天）；从签发时刻起算，access 到期仍可刷新。",
     "value": "604800",
     "constraint": "整数；>= 3600；<= 9007199254740991"
   },
@@ -3157,374 +3069,6 @@
     "path": "kit.transport.keyExchangePath",
     "description": "客户端与服务端约定的密钥交换端点",
     "value": "/api/_hai/key-exchange",
-    "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV",
-    "module": "serv",
-    "path": "serv",
-    "description": "serv. 配置对象",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_SERV_CORS",
-    "module": "serv",
-    "path": "serv.cors",
-    "description": "跨域访问的来源、请求头与凭据策略",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS",
-    "module": "serv",
-    "path": "serv.cors.allowedHeaders",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "[\"Authorization\",\"Content-Type\",\"X-Requested-With\"]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_0",
-    "module": "serv",
-    "path": "serv.cors.allowedHeaders.0",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "Authorization",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_1",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_1",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "Content-Type",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_2",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_2",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "X-Client-Id",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_3",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_3",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "X-Encrypted",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_4",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_4",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "X-Hai-Locale",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_5",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_5",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "X-Request-Id",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_6",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_6",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "X-Requested-With",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
-    "description": "CORS 允许客户端发送的请求头",
-    "value": "X-Hai-Transport",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_CREDENTIALS",
-    "module": "serv",
-    "path": "serv.cors.credentials",
-    "description": "是否允许跨域请求携带凭据",
-    "value": "false",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_SERV_CORS_EXPOSEDHEADERS",
-    "module": "serv",
-    "path": "serv.cors.exposedHeaders",
-    "description": "CORS 允许客户端读取的响应头",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
-  },
-  {
-    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_0",
-    "module": "serv",
-    "path": "serv.cors.exposedHeaders.0",
-    "description": "CORS 允许客户端读取的响应头",
-    "value": "X-Encrypted",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
-    "description": "CORS 允许客户端读取的响应头",
-    "value": "X-Request-Id",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_2",
-    "module": "serv",
-    "path": "HAI_SERV_CORS_EXPOSEDHEADERS_2",
-    "description": "CORS 允许客户端读取的响应头",
-    "value": "X-Hai-Transport",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_NATIVEORIGINS",
-    "module": "serv",
-    "path": "serv.cors.nativeOrigins",
-    "description": "允许使用原生凭据通道的完整 Origin 列表",
-    "value": "http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_CORS_ORIGIN",
-    "module": "serv",
-    "path": "serv.cors.origin",
-    "description": "CORS 允许的 Origin，星号表示任意来源",
-    "value": "*",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP",
-    "module": "serv",
-    "path": "serv.http",
-    "description": "HTTP 基础路径、请求体大小及访问配置",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_SERV_HTTP_APIPREFIX",
-    "module": "serv",
-    "path": "serv.http.apiPrefix",
-    "description": "业务 HTTP API 的基础路径前缀",
-    "value": "/api/v1",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_DOCS",
-    "module": "serv",
-    "path": "serv.http.docs",
-    "description": "HTTP API 文档功能开关或文档访问配置",
-    "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
-  },
-  {
-    "name": "HAI_SERV_HTTP_DOCS_PATH",
-    "module": "serv",
-    "path": "serv.http.docs.path",
-    "description": "当前 HTTP 功能的端点路径",
-    "value": "/docs",
-    "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_DOCS_REQUIREAUTH",
-    "module": "serv",
-    "path": "serv.http.docs.requireAuth",
-    "description": "是否要求认证后访问接口文档",
-    "value": "",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_SERV_HTTP_HEALTH",
-    "module": "serv",
-    "path": "serv.http.health",
-    "description": "HTTP 健康检查开关或检查配置",
-    "value": "{\"path\":\"/health\",\"readyPath\":\"/ready\"}",
-    "constraint": "JSON 对象；true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
-  },
-  {
-    "name": "HAI_SERV_HTTP_HEALTH_PATH",
-    "module": "serv",
-    "path": "serv.http.health.path",
-    "description": "当前 HTTP 功能的端点路径",
-    "value": "/health",
-    "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_HEALTH_READYPATH",
-    "module": "serv",
-    "path": "serv.http.health.readyPath",
-    "description": "服务就绪检查的端点路径",
-    "value": "/ready",
-    "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_OPENAPI",
-    "module": "serv",
-    "path": "serv.http.openapi",
-    "description": "OpenAPI 端点开关或端点配置",
-    "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
-  },
-  {
-    "name": "HAI_SERV_HTTP_OPENAPI_PATH",
-    "module": "serv",
-    "path": "serv.http.openapi.path",
-    "description": "当前 HTTP 功能的端点路径",
-    "value": "/openapi.json",
-    "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC",
-    "module": "serv",
-    "path": "serv.http.rpc",
-    "description": "RPC 端点开关或访问配置",
-    "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC_ACCESS",
-    "module": "serv",
-    "path": "serv.http.rpc.access",
-    "description": "RPC 对外访问策略",
-    "value": "loopback",
-    "constraint": "字符串；取值：loopback | private-network | gateway-only"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC_GATEWAYHEADER",
-    "module": "serv",
-    "path": "serv.http.rpc.gatewayHeader",
-    "description": "受信网关认证请求头名称",
-    "value": "",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC_GATEWAYSECRET",
-    "module": "serv",
-    "path": "serv.http.rpc.gatewaySecret",
-    "description": "受信网关认证密钥",
-    "value": "",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC_PREFIX",
-    "module": "serv",
-    "path": "serv.http.rpc.prefix",
-    "description": "RPC 端点的路径前缀",
-    "value": "/rpc",
-    "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_TRUSTEDPROXIES",
-    "module": "serv",
-    "path": "serv.http.trustedProxies",
-    "description": "可信代理的 IP/CIDR，只有这些代理的转发头会被信任",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
-  },
-  {
-    "name": "HAI_SERV_HTTP_TRUSTEDPROXIES_0",
-    "module": "serv",
-    "path": "serv.http.trustedProxies.0",
-    "description": "可信代理的 IP/CIDR，只有这些代理的转发头会被信任",
-    "value": "",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_SERVER",
-    "module": "serv",
-    "path": "serv.server",
-    "description": "HTTP 服务监听地址与端口",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_SERV_SERVER_HOST",
-    "module": "serv",
-    "path": "serv.server.host",
-    "description": "HTTP 监听主机名或 IP",
-    "value": "127.0.0.1",
-    "constraint": "字符串；最小字符数 1"
-  },
-  {
-    "name": "HAI_SERV_SERVER_PORT",
-    "module": "serv",
-    "path": "serv.server.port",
-    "description": "HTTP 监听端口",
-    "value": "3000",
-    "constraint": "整数；>= 1；<= 65535"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT",
-    "module": "serv",
-    "path": "serv.transport",
-    "description": "传输加密开关或密钥协商配置",
-    "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS",
-    "module": "serv",
-    "path": "serv.transport.excludePaths",
-    "description": "不进入传输加密管道的路径",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_0",
-    "module": "serv",
-    "path": "serv.transport.excludePaths.0",
-    "description": "不进入传输加密管道的路径",
-    "value": "/health",
-    "constraint": "以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_1",
-    "module": "serv",
-    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_1",
-    "description": "不进入传输加密管道的路径",
-    "value": "/ready",
-    "constraint": "以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_2",
-    "module": "serv",
-    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_2",
-    "description": "不进入传输加密管道的路径",
-    "value": "/openapi.json",
-    "constraint": "以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_3",
-    "module": "serv",
-    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_3",
-    "description": "不进入传输加密管道的路径",
-    "value": "/docs",
-    "constraint": "以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_4",
-    "module": "serv",
-    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_4",
-    "description": "不进入传输加密管道的路径",
-    "value": "/_hai/scalar.js",
-    "constraint": "以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_TRANSPORT_KEYEXCHANGEPATH",
-    "module": "serv",
-    "path": "serv.transport.keyExchangePath",
-    "description": "客户端与服务端约定的密钥交换端点",
-    "value": "/_hai/key-exchange",
     "constraint": "字符串；以 / 开头的路径字符串"
   },
   {
@@ -4400,14 +3944,6 @@
     "constraint": "on | off"
   },
   {
-    "name": "PYTHONIOENCODING",
-    "module": "runtime",
-    "path": "PYTHONIOENCODING",
-    "description": "本地 Python 模型进程标准输入输出编码",
-    "value": "",
-    "constraint": "Python 支持的编码名，通常 utf-8"
-  },
-  {
     "name": "SERVED_MODEL_NAME",
     "module": "runtime",
     "path": "SERVED_MODEL_NAME",
@@ -4542,6 +4078,374 @@
     "description": "调度检查间隔，单位毫秒（默认 1000，即每秒检查一次）",
     "value": "1000",
     "constraint": "整数；>= 100；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_SERV",
+    "module": "serv",
+    "path": "serv",
+    "description": "serv. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_CORS",
+    "module": "serv",
+    "path": "serv.cors",
+    "description": "跨域访问的来源、请求头与凭据策略",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS",
+    "module": "serv",
+    "path": "serv.cors.allowedHeaders",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "[\"Authorization\",\"Content-Type\",\"X-Requested-With\"]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_0",
+    "module": "serv",
+    "path": "serv.cors.allowedHeaders.0",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "Authorization",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_1",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_1",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "Content-Type",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_2",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_2",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Client-Id",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_3",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_3",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Encrypted",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_4",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_4",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Hai-Locale",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_5",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_5",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Request-Id",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_6",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_6",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Requested-With",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Hai-Transport",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_CREDENTIALS",
+    "module": "serv",
+    "path": "serv.cors.credentials",
+    "description": "是否允许跨域请求携带凭据",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_SERV_CORS_EXPOSEDHEADERS",
+    "module": "serv",
+    "path": "serv.cors.exposedHeaders",
+    "description": "CORS 允许客户端读取的响应头",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_0",
+    "module": "serv",
+    "path": "serv.cors.exposedHeaders.0",
+    "description": "CORS 允许客户端读取的响应头",
+    "value": "X-Encrypted",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
+    "description": "CORS 允许客户端读取的响应头",
+    "value": "X-Request-Id",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_2",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_EXPOSEDHEADERS_2",
+    "description": "CORS 允许客户端读取的响应头",
+    "value": "X-Hai-Transport",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_NATIVEORIGINS",
+    "module": "serv",
+    "path": "serv.cors.nativeOrigins",
+    "description": "允许使用原生凭据通道的完整 Origin 列表",
+    "value": "http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ORIGIN",
+    "module": "serv",
+    "path": "serv.cors.origin",
+    "description": "CORS 允许的 Origin，星号表示任意来源",
+    "value": "*",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP",
+    "module": "serv",
+    "path": "serv.http",
+    "description": "HTTP 基础路径、请求体大小及访问配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_HTTP_APIPREFIX",
+    "module": "serv",
+    "path": "serv.http.apiPrefix",
+    "description": "业务 HTTP API 的基础路径前缀",
+    "value": "/api/v1",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_DOCS",
+    "module": "serv",
+    "path": "serv.http.docs",
+    "description": "HTTP API 文档功能开关或文档访问配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_DOCS_PATH",
+    "module": "serv",
+    "path": "serv.http.docs.path",
+    "description": "当前 HTTP 功能的端点路径",
+    "value": "/docs",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_DOCS_REQUIREAUTH",
+    "module": "serv",
+    "path": "serv.http.docs.requireAuth",
+    "description": "是否要求认证后访问接口文档",
+    "value": "",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_HEALTH",
+    "module": "serv",
+    "path": "serv.http.health",
+    "description": "HTTP 健康检查开关或检查配置",
+    "value": "{\"path\":\"/health\",\"readyPath\":\"/ready\"}",
+    "constraint": "JSON 对象；true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_HEALTH_PATH",
+    "module": "serv",
+    "path": "serv.http.health.path",
+    "description": "当前 HTTP 功能的端点路径",
+    "value": "/health",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_HEALTH_READYPATH",
+    "module": "serv",
+    "path": "serv.http.health.readyPath",
+    "description": "服务就绪检查的端点路径",
+    "value": "/ready",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_OPENAPI",
+    "module": "serv",
+    "path": "serv.http.openapi",
+    "description": "OpenAPI 端点开关或端点配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_OPENAPI_PATH",
+    "module": "serv",
+    "path": "serv.http.openapi.path",
+    "description": "当前 HTTP 功能的端点路径",
+    "value": "/openapi.json",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC",
+    "module": "serv",
+    "path": "serv.http.rpc",
+    "description": "RPC 端点开关或访问配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC_ACCESS",
+    "module": "serv",
+    "path": "serv.http.rpc.access",
+    "description": "RPC 对外访问策略",
+    "value": "loopback",
+    "constraint": "字符串；取值：loopback | private-network | gateway-only"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC_GATEWAYHEADER",
+    "module": "serv",
+    "path": "serv.http.rpc.gatewayHeader",
+    "description": "受信网关认证请求头名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC_GATEWAYSECRET",
+    "module": "serv",
+    "path": "serv.http.rpc.gatewaySecret",
+    "description": "受信网关认证密钥",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RPC_PREFIX",
+    "module": "serv",
+    "path": "serv.http.rpc.prefix",
+    "description": "RPC 端点的路径前缀",
+    "value": "/rpc",
+    "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_HTTP_TRUSTEDPROXIES",
+    "module": "serv",
+    "path": "serv.http.trustedProxies",
+    "description": "可信代理的 IP/CIDR，只有这些代理的转发头会被信任",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_HTTP_TRUSTEDPROXIES_0",
+    "module": "serv",
+    "path": "serv.http.trustedProxies.0",
+    "description": "可信代理的 IP/CIDR，只有这些代理的转发头会被信任",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_SERVER",
+    "module": "serv",
+    "path": "serv.server",
+    "description": "HTTP 服务监听地址与端口",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_SERVER_HOST",
+    "module": "serv",
+    "path": "serv.server.host",
+    "description": "HTTP 监听主机名或 IP",
+    "value": "127.0.0.1",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_SERV_SERVER_PORT",
+    "module": "serv",
+    "path": "serv.server.port",
+    "description": "HTTP 监听端口",
+    "value": "3000",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT",
+    "module": "serv",
+    "path": "serv.transport",
+    "description": "传输加密开关或密钥协商配置",
+    "value": "false",
+    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS",
+    "module": "serv",
+    "path": "serv.transport.excludePaths",
+    "description": "不进入传输加密管道的路径",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_0",
+    "module": "serv",
+    "path": "serv.transport.excludePaths.0",
+    "description": "不进入传输加密管道的路径",
+    "value": "/health",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_1",
+    "module": "serv",
+    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_1",
+    "description": "不进入传输加密管道的路径",
+    "value": "/ready",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_2",
+    "module": "serv",
+    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_2",
+    "description": "不进入传输加密管道的路径",
+    "value": "/openapi.json",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_3",
+    "module": "serv",
+    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_3",
+    "description": "不进入传输加密管道的路径",
+    "value": "/docs",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_4",
+    "module": "serv",
+    "path": "HAI_SERV_TRANSPORT_EXCLUDEPATHS_4",
+    "description": "不进入传输加密管道的路径",
+    "value": "/_hai/scalar.js",
+    "constraint": "以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_KEYEXCHANGEPATH",
+    "module": "serv",
+    "path": "serv.transport.keyExchangePath",
+    "description": "客户端与服务端约定的密钥交换端点",
+    "value": "/_hai/key-exchange",
+    "constraint": "字符串；以 / 开头的路径字符串"
   },
   {
     "name": "HAI_STORAGE",

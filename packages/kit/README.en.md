@@ -314,3 +314,5 @@ pnpm --filter @h-ai/kit test
 ## License
 
 Apache-2.0
+
+Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.

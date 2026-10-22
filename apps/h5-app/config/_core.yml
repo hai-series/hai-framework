@@ -5,13 +5,5 @@
 name: ${HAI_CORE_NAME:hai H5 App}
 version: ${HAI_CORE_VERSION:0.1.0}
 env: ${HAI_CORE_ENV:development}
-debug: ${HAI_CORE_DEBUG:false}
 
 defaultLocale: ${HAI_CORE_DEFAULTLOCALE:zh-CN}
-supportedLocales:
-  - zh-CN
-  - en-US
-
-features:
-  registration: ${HAI_CORE_FEATURES_REGISTRATION:true}
-  fileUpload: ${HAI_CORE_FEATURES_FILEUPLOAD:true}

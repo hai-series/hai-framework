@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { core } from '../src/index.js'
+import { core, CoreConfigSchema } from '../src/index.js'
 
 describe('core.init', () => {
   let tempDir: string
@@ -33,10 +33,17 @@ describe('core.init', () => {
       name: 'demo',
       version: '0.1.0',
       env: 'development',
-      debug: false,
       defaultLocale: 'zh-CN',
     })
     expect(core.config.get('app')).toEqual({ foo: 'bar' })
+  })
+
+  it('不再接受没有运行时消费的全局 ID、debug 或业务开关', () => {
+    for (const option of [{ id: { length: 12 } }, { debug: true }, { features: { apiAccess: true } }, { supportedLocales: ['en-US'] }])
+      expect(CoreConfigSchema.safeParse(option).success).toBe(false)
+    writeFileSync(join(tempDir, '_core.yml'), 'debug: true\n', 'utf-8')
+    core.init({ configDir: tempDir })
+    expect(core.config.get('core')).toBeUndefined()
   })
 
   it('init 不传参应正常执行（无配置加载）', () => {

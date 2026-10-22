@@ -635,7 +635,7 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 
 | 分组           | 代表变量                          | 说明                                                       |
 | -------------- | --------------------------------- | ---------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_DEBUG`  | 运行环境、调试与日志开关                                   |
+| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL`  | 运行环境与实际日志级别                                   |
 | Database       | `HAI_DB_*`                        | `_db.yml` 的 SQLite / PostgreSQL / MySQL 配置              |
 | Cache          | `HAI_CACHE_*`                     | `@h-ai/cache` 的 memory / Redis / Upstash 配置             |
 | Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam`、`@h-ai/kit` 的认证与安全配置                  |
@@ -681,3 +681,5 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 ## 许可证
 
 [Apache-2.0](./LICENSE)
+
+配置字段、实际消费点、环境命名及生成应用之间的对应关系见[21 包配置对应表](docs/configuration-map.md)。

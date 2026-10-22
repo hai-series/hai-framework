@@ -503,3 +503,5 @@ export const { apiFetch } = client
 - [ ] 无依赖数据用 `Promise.all` 并行加载
 
 生产限流必须先初始化共享 Redis，并显式传入原子 store；createCacheRateLimitStore 以单键 CAS 和首次提交 TTL 实现固定窗口（非滑动窗口），不支持非原子 get+set 回退。缓存故障/冲突耗尽返回503，超限429。内存仅开发/显式端到端测试可选；代理须由可信 SvelteKit adapter 配置 getClientAddress，不在应用中直接信任 X-Forwarded-For。未选择 cache 的 CLI 应用默认不启用限流，启用前应新增共享后端。
+
+认证 Cookie 在 NODE_ENV 或 HAI_CORE_ENV 为 production 时默认启用 Secure，HAI_E2E/HAI_E2E_MOCK 不降低 Cookie 安全；限流生产判断也识别这两个环境标志，测试开关仅放宽共享状态要求。

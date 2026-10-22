@@ -75,7 +75,7 @@ export interface RefreshCookieConfig {
   readonly maxAge?: number
   /**
    * 强制 Secure 属性。
-   * - 未传时：`NODE_ENV === 'production'` 时自动开启。
+   * - 未传时：`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 时自动开启；测试开关不放宽此要求。
    * - 本地 HTTP 开发设为 `false` 可让 Cookie 在 HTTP 下正常工作。
    */
   readonly secure?: boolean
@@ -133,7 +133,7 @@ function resolveRefreshCookieConfig(
   return {
     cookieName: config.cookieName ?? 'hai_refresh_token',
     maxAge: config.maxAge ?? 30 * 24 * 3600,
-    isSecure: config.secure ?? (process.env.NODE_ENV === 'production'),
+    isSecure: config.secure ?? (process.env.NODE_ENV === 'production' || process.env.HAI_CORE_ENV === 'production'),
     refreshCookiePath: `${apiPrefix}${IAM_AUTH_PATHS.refresh}`,
     onRefresh,
     nativeTokenTransport: config.nativeTokenTransport,

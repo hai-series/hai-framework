@@ -27,7 +27,7 @@ export interface RateLimitEntry {
 
 /** 构建产物的端到端测试也可显式使用内存；正式部署不得设置测试开关。 */
 function permitsMemory(): boolean {
-  return process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1'
+  return !core.module.requiresSharedState(process.env)
 }
 
 /**

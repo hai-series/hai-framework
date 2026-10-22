@@ -114,7 +114,8 @@ function setToken(cookies: CookieWriter, token: string, maxAge?: number): void {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    // 测试开关仅放宽共享状态要求，不降低生产凭证 Cookie 的传输安全。
+    secure: process.env.NODE_ENV === 'production' || process.env.HAI_CORE_ENV === 'production',
     maxAge,
   })
 }

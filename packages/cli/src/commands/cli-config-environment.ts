@@ -8,7 +8,7 @@ import catalog from './cli-config-catalog.json' with { type: 'json' }
 const catalogByName = new Map(catalog.map(entry => [entry.name, entry]))
 
 /**
- * 单个环境变量的配置位置、默认值和取值说明。
+ * 单个环境变量的配置位置、示例建议值和取值说明。
  * @example
  * ```ts
  * const variable: ConfigEnvironmentVariable = {
@@ -21,7 +21,7 @@ export interface ConfigEnvironmentVariable {
   name: string
   /** YAML 字段路径；显式别名使用变量名辅助定位。 */
   path: string
-  /** 仍包含必要 YAML 引号的非敏感默认值。 */
+  /** 仍包含必要 YAML 引号的非敏感示例建议值；不等于所有 Provider 的 Schema 默认值。 */
   value: string
   /** 类型、枚举、范围、单位或条件约束。 */
   constraint: string

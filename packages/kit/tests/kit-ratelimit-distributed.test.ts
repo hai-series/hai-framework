@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import { cache } from '../../cache/src/cache-main.js'
 import { acquireRedisContainer } from '../../iam/tests/helpers/redis-container.js'
-import { createCacheRateLimitStore, MemoryRateLimitStore, rateLimitMiddleware } from '../src/middleware/kit-ratelimit.js'
+import { createCacheRateLimitStore, createMemoryRateLimitStore, MemoryRateLimitStore, rateLimitMiddleware } from '../src/middleware/kit-ratelimit.js'
 
 /** 仅创建该中间件实际访问的RequestEvent字段，不模拟SvelteKit路由实现。 */
 function context(address = '127.0.0.1'): MiddlewareContext {
@@ -39,7 +39,9 @@ it('固定窗口等于边界时重置，后续请求不延长期限', async () =
   expect(next).toHaveBeenCalledTimes(2)
 })
 
-it('共享存储故障返回503且不执行后续业务；生产拒绝内存后端', async () => {
+it.each(['NODE_ENV', 'HAI_CORE_ENV'])('%s 生产环境拒绝内存，存储故障返回503且不执行后续业务', async (productionFlag) => {
+  vi.stubEnv('NODE_ENV', 'development')
+  vi.stubEnv('HAI_CORE_ENV', 'development')
   const next = vi.fn(async () => new Response('OK'))
   const failed = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: { scope: 'shared', increment: async () => {
     throw new Error('offline')
@@ -47,9 +49,10 @@ it('共享存储故障返回503且不执行后续业务；生产拒绝内存后�
   expect((await failed(context(), next)).status).toBe(503)
   expect(next).not.toHaveBeenCalled()
   await cache.init({ type: 'memory' })
-  vi.stubEnv('NODE_ENV', 'production')
+  vi.stubEnv(productionFlag, 'production')
   vi.stubEnv('HAI_E2E', '0')
   vi.stubEnv('HAI_E2E_MOCK', '0')
+  expect(() => createMemoryRateLimitStore()).toThrow('Memory')
   expect(() => rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: new MemoryRateLimitStore() })).toThrow('Memory')
   const shared = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: createCacheRateLimitStore(cache, { namespace: 'production', allowMemory: true }) })
   expect((await shared(context(), next)).status).toBe(503)

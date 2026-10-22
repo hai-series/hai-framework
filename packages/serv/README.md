@@ -450,7 +450,7 @@ const app = serv.createApp({
   refreshCookie: {
     // cookieName: 'hai_refresh_token', // 默认
     // maxAge: 30 * 24 * 3600,          // 默认 30 天
-    // secure: true,                    // 默认在 NODE_ENV=production 时开启
+    // secure: true,                    // NODE_ENV 或 HAI_CORE_ENV 为 production 时默认开启
     // onRefresh: customFn,             // 可覆盖 iam.session.refresh。
     nativeTokenTransport: {
       // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。

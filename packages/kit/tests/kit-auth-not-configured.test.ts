@@ -7,7 +7,10 @@
  * =============================================================================
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import type { AuthResult } from '@h-ai/iam'
+import type { AuthOperations } from '../src/kit-types.js'
+import { ok } from '@h-ai/core'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureAuth, login, loginWithApiKey, loginWithLdap, loginWithOtp, logout, registerAndLogin } from '../src/kit-auth.js'
 
 function createCookies() {
@@ -15,6 +18,26 @@ function createCookies() {
     set: vi.fn(),
     delete: vi.fn(),
   }
+}
+
+afterEach(() => vi.unstubAllEnvs())
+
+/** 使用真实认证契约构造成功响应，避免强制断言掩盖 Cookie 消费字段变化。 */
+function createAuthOperations() {
+  const result: AuthResult = {
+    user: { id: '1', username: 'user', enabled: true, createdAt: new Date(), updatedAt: new Date() },
+    tokens: { accessToken: 'tk', refreshToken: 'refresh', expiresIn: 3600, tokenType: 'Bearer' },
+    roles: [],
+    permissions: [],
+  }
+  return {
+    login: vi.fn<AuthOperations['login']>().mockResolvedValue(ok(result)),
+    loginWithOtp: vi.fn<AuthOperations['loginWithOtp']>().mockResolvedValue(ok(result)),
+    loginWithLdap: vi.fn<AuthOperations['loginWithLdap']>().mockResolvedValue(ok(result)),
+    loginWithApiKey: vi.fn<AuthOperations['loginWithApiKey']>().mockResolvedValue(ok(result)),
+    registerAndLogin: vi.fn<AuthOperations['registerAndLogin']>().mockResolvedValue(ok(result)),
+    logout: vi.fn<AuthOperations['logout']>().mockResolvedValue(ok(undefined)),
+  } satisfies AuthOperations
 }
 
 describe('kit.auth 未配置时返回 HaiResult 错误', () => {
@@ -87,23 +110,8 @@ describe('kit.auth 未配置时返回 HaiResult 错误', () => {
 
 describe('kit.auth 已配置时正常委托给 operations', () => {
   it('login 已配置时调用 operations 并写入 Cookie', async () => {
-    const mockOps = {
-      login: vi.fn().mockResolvedValue({
-        success: true,
-        data: {
-          user: { id: '1' },
-          tokens: { accessToken: 'tk', expiresIn: 3600 },
-          roles: [],
-          permissions: [],
-        },
-      }),
-      loginWithOtp: vi.fn(),
-      loginWithLdap: vi.fn(),
-      loginWithApiKey: vi.fn(),
-      registerAndLogin: vi.fn(),
-      logout: vi.fn().mockResolvedValue(undefined),
-    }
-    configureAuth({ operations: mockOps as never })
+    const mockOps = createAuthOperations()
+    configureAuth({ operations: mockOps })
 
     const cookies = createCookies()
     const result = await login(cookies, { identifier: 'u', password: 'p' })
@@ -114,5 +122,16 @@ describe('kit.auth 已配置时正常委托给 operations', () => {
       'tk',
       expect.objectContaining({ httpOnly: true, path: '/' }),
     )
+  })
+
+  it.each(['NODE_ENV', 'HAI_CORE_ENV'])('%s 为 production 时使用 Secure Cookie，测试开关不放宽', async (productionFlag) => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('HAI_CORE_ENV', 'development')
+    vi.stubEnv(productionFlag, 'production')
+    vi.stubEnv('HAI_E2E', '1')
+    configureAuth({ operations: createAuthOperations() })
+    const cookies = createCookies()
+    await login(cookies, { identifier: 'user', password: 'password' })
+    expect(cookies.set).toHaveBeenCalledWith('hai_access_token', 'tk', expect.objectContaining({ secure: true }))
   })
 })

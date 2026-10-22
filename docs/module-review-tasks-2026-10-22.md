@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 19/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 20/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -167,7 +167,7 @@
 
 - [x] 已修正并通过定向验证（2026-10-23）。
 - **实施与验证**：OTP单身份key CAS发布/消费；密码重置授权与最终改密同用户行SQL提交，resetVersion和credentialVersion分离；所有策略/会话/刷新绑定并核对持久凭据代，cache清理失败不能放行旧token。通知稳定幂等context、三语文档/双skill/应用及模板调用说明同步。真实45秒暂停双Node+Redis/SQLite、PG+Redis用户安全130项、会话71项、新凭据绑定4项、会话双Node1项通过；IAM typecheck/build/lint、kit/serv/api-client typecheck、skills/env通过，未实测MySQL及外部通知投递；全量回归按用户要求在全部任务实施后执行。
-- **位置**：[packages/iam/src/iam-security.ts:18](../packages/iam/src/iam-security.ts#L18)。
+- **位置**：原 iam-security.ts 锁辅助层已移除，最终凭据提交见 [IAM 用户仓储](../packages/iam/src/user/iam-user-repository-user.ts)。
 - **证据与影响**：安全操作的锁辅助函数会标记租约失效，但运行中的 operation 不会因此自动停止。最终返回失败不能证明旧节点没有写入；需要覆盖 GC 暂停、续租失败后的过期 owner。
 - **修正内容**：对受保护的最终写入应用 fencing/CAS 或事务条件；外部副作用使用幂等键。仅取消 Promise/设置布尔值不足以保证互斥。
 - **验收标准**：两个进程进行租约超时接管，恢复旧进程后其持久化提交被拒绝；记录各安全操作对外部副作用的实际保证。
@@ -692,7 +692,8 @@
 
 ### DOC-01 · P2 · 按实现重建配置、环境变量及文档对应表
 
-- [ ] 待修正（按本次要求补强；范围：cross）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：建立21包Schema→默认值/单位→实际消费→环境/CLI/README/skill配置对应表；删除Core无消费debug/id及示例features/supportedLocales，严格拒绝未知配置；修正Windows TTY Logger覆盖语言/子进程环境、SQL日志说明及Schema spread注释丢失。kit生产限流与kit/serv Secure Cookie识别HAI_CORE_ENV，测试开关不降低Cookie安全；admin仅对SQLite文件创建目录。5应用和2种真实CLI生成配置校验、Core52/CLI31/kit16/serv20例、环境目录4例、真实TTY导入与英文CLI探针通过；源码/测试类型、admin Svelte检查、lint/fresh build、594环境/skills与443本地链接通过；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[scripts/generate-env-catalog.mjs:1](../scripts/generate-env-catalog.mjs#L1)；[scripts/generate-app-env.mjs:1](../scripts/generate-app-env.mjs#L1)；[LLMS.txt:1](../LLMS.txt#L1)；[packages/cli/src/commands/cli-config-catalog.json:1](../packages/cli/src/commands/cli-config-catalog.json#L1)。
 - **证据与影响**：现有 check:env/check:skills 通过，不能发现 Cluster password 未转发、MySQL pool 参数未消费、transport 共享存储承诺错误或 unsupported 能力伪成功等语义漂移。
 - **修正内容**：逐包列出 schema→默认值/单位→初始化消费→环境变量→CLI 生成→README/skill 的映射；修正本报告所有对应条目，删除无消费配置和过时示例，核验三语言一致。
@@ -779,7 +780,7 @@
 
 复现脚本、结构化结果与原始门禁日志保存在本地被忽略的 `tmp/module-audit-20261022/`，不提交验收产物。探针使用源文件即时转译，缓存/网络/时序依赖为替身，不能替代真实 Redis Cluster、PostgreSQL/MySQL、S3、支付平台、原生设备及跨主机测试。
 
-未运行完整 test/build/E2E/scaffold-gates：本次只生成审查任务，没有运行时代码修复；真实 provider、容器、发布安装及原生流程留作相应修正任务的关闭门槛。新增两份 Markdown 的定向 ESLint 检查被仓库 `**/docs/**/*.md` 规则忽略（2 个 warning），不记为通过。独立校验已验证 605 个本地链接、1920 处声明行号及 86 个唯一任务编号；另执行 Git whitespace 检查。
+审查基线阶段未运行完整 test/build/E2E/scaffold-gates，当时仅生成任务。后续实施结果以各项“实施与验证”和进度为准；全量门禁按用户要求等全部任务实施后再运行。真实 provider、容器、发布安装及原生流程的具体证据和边界记录在对应任务中。新增两份 Markdown 的定向 ESLint 检查被仓库 `**/docs/**/*.md` 规则忽略（2 个 warning），不记为通过。独立校验已验证 605 个本地链接、1920 处声明行号及 86 个唯一任务编号；另执行 Git whitespace 检查。
 
 ## 全部修正完成的交付门槛
 

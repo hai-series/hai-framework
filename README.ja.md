@@ -639,7 +639,7 @@ Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用�
 
 | 分類           | 主な変数                          | 説明                                                       |
 | -------------- | --------------------------------- | ---------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_DEBUG`  | 実行環境・デバッグ・ログ                                   |
+| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL`  | 実行環境・ログレベル                                   |
 | Database       | `HAI_DB_*`                        | `_db.yml` の SQLite / PostgreSQL / MySQL                   |
 | Cache          | `HAI_CACHE_*`                     | `@h-ai/cache` の memory / Redis / Upstash                  |
 | Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam`・`@h-ai/kit` の認証・安全性                    |
@@ -681,3 +681,5 @@ Git hooks は `git commit` / `git push` 前に漏洩キーワードを確認し�
 ## ライセンス
 
 [Apache-2.0](./LICENSE)
+
+Schema の既定値、実際の消費点、環境変数と生成アプリの関係は[21 パッケージの設定対応表（中国語）](docs/configuration-map.md)を参照してください。

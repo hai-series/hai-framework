@@ -70,7 +70,6 @@ Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加�
 | 变量                                                              | 说明与取值约束                                                                         |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `HAI_CORE_ENV`                                                    | `development \| test \| production \| staging`                                         |
-| `HAI_CORE_DEBUG`                                                  | `true \| false`                                                                        |
 | `HAI_CORE_LOGGING_LEVEL`                                          | `trace \| debug \| info \| warn \| error \| fatal`                                     |
 | `HAI_CORE_LOGGING_FORMAT`                                         | `json \| pretty`                                                                       |
 | `HAI_DB_TYPE`                                                     | `sqlite \| postgresql \| mysql`                                                        |
@@ -221,3 +220,5 @@ export function pageOffset(query: PageQuery): number {
 - 从当前 `package.json` 选择实际脚本，优先 workspace filter，PowerShell 使用 `pnpm.cmd`。多项门禁按 [分轮验证与集中修复](../hai-app-tests/validation.md) 先脚本化收集结果和日志，再集中修复、复测失败及受影响项；普通失败不立即从头重跑。不能调用框架仓库私有命令替代应用检查。
 - typecheck/lint 只覆盖部分质量规则；权限、事务、降级、真实 provider、浏览器、容器和原生交付各自需要适用行为证据。缺环境或密钥时报告未验证，不能用 mock 冒充真实集成。
 - 完成说明：实际复用能力与自定义缺口、修改路径、已执行命令/行为结果、同步的 contract/调用方/配置/i18n/文档、未验证项及原因。无需无关模块的“覆盖率”清单。
+
+`_core.yml` 只接受 name/version/env/defaultLocale 元数据与 logging；不提供 debug、全局ID设置、features或supportedLocales。业务开关放app.yml并用业务Schema校验；语言列表按实际翻译工程维护，日志用logging.level。core默认语言字段不会自动注册翻译。Logger导入保留LANG/LC_ALL/PYTHONIOENCODING，终端语言优先级不能被编码初始化覆盖。

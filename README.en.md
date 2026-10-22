@@ -639,7 +639,7 @@ Use `pnpm dev` / `dev:test` / `dev:prod` for the selected mode and `start:test` 
 
 | Group          | Example variables                 | Description                                                            |
 | -------------- | --------------------------------- | ---------------------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_DEBUG`  | Runtime environment, debugging, and logging                            |
+| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL`  | Runtime environment and logging level                            |
 | Database       | `HAI_DB_*`                        | SQLite / PostgreSQL / MySQL in `_db.yml`                               |
 | Cache          | `HAI_CACHE_*`                     | Memory / Redis / Upstash for `@h-ai/cache`                             |
 | Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | Authentication/security for `@h-ai/iam` and `@h-ai/kit`                |
@@ -681,3 +681,5 @@ The entry points are `.husky/pre-commit`, `.husky/commit-msg`, `.husky/pre-push`
 ## License
 
 [Apache-2.0](./LICENSE)
+
+See the [21-package configuration and consumer map (Chinese)](docs/configuration-map.md) for schema defaults, runtime consumers, environment names and generated apps.

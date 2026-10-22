@@ -64,7 +64,6 @@ function generateCoreConfig(cfg?: CoreModuleConfig): string {
 ${stringify({ name }).trim()}
 version: 0.1.0
 env: development
-debug: false
 
 logging:
   level: info
@@ -77,10 +76,6 @@ logging:
     - secret
 
 defaultLocale: ${locale}
-# 短 ID 生成选项；语言列表在前端 project.inlang/settings.json 中维护。
-# id:
-#   prefix: app_
-#   length: 21
 `
 }
 
