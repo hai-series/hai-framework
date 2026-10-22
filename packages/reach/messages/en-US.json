@@ -36,5 +36,7 @@
   "reach_config_providersRequired": "At least one provider is required",
   "reach_templateDbInitFailed": "Template database initialization failed: {error}",
   "reach_templateSaveFailed": "Template save failed: {error}",
-  "reach_templateDeleteFailed": "Template delete failed: {error}"
+  "reach_templateDeleteFailed": "Template delete failed: {error}",
+  "reach_queueRetryInvalid": "maxRetryDelayMs must be at least retryDelayMs",
+  "reach_deadRequeueFailed": "Dead message changed or does not exist; reload its state before restoring"
 }

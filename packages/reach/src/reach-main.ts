@@ -8,8 +8,8 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
-import type { ReachFunctions, ReachMessage, ReachProvider, ReachTemplateRegistry, SendResult } from './reach-types.js'
-import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
+import type { ReachFunctions, ReachMessage, ReachProvider, ReachQueueEntry, ReachTemplateRegistry, SendResult } from './reach-types.js'
+import type { SendLogRepository, StoredSendLog } from './repositories/reach-repository-send-log.js'
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -19,7 +19,7 @@ import { createAliyunSmsProvider } from './providers/reach-provider-aliyun-sms.j
 import { createApiProvider } from './providers/reach-provider-api.js'
 import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
-import { ReachConfigSchema, ReachQueueIdSchema, ReachUnknownResolutionSchema } from './reach-config.js'
+import { ReachConfigSchema, ReachDeadRequeueSchema, ReachQueueIdSchema, ReachQueueListSchema, ReachUnknownResolutionSchema } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
 import { executeSend, resetSendState, startDndScheduler } from './reach-send.js'
 import { createTemplateRegistry } from './reach-template.js'
@@ -275,6 +275,21 @@ async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
 
 // ─── 触达服务对象 ───
 
+/** 运维结果只输出安全元数据；不泄漏收件人、正文或内部 owner 凭据。 */
+function queueEntry(row: StoredSendLog): ReachQueueEntry {
+  return {
+    queueId: row.queueId!,
+    provider: row.provider,
+    status: row.status,
+    updatedAt: row.updatedAt,
+    messageId: row.messageId ?? undefined,
+    attemptCount: row.attemptCount,
+    maxAttempts: row.maxAttempts,
+    nextAttemptAt: row.nextAttemptAt,
+    lastFailure: row.lastFailure ?? undefined,
+  }
+}
+
 /**
  * 触达服务对象
  *
@@ -293,7 +308,34 @@ export const reach: ReachFunctions = {
       if (!rows.success)
         return rows
       const row = rows.data[0]
-      return ok(row ? { queueId, provider: row.provider, status: row.status, updatedAt: row.updatedAt, messageId: row.messageId ?? undefined } : null)
+      return ok(row ? queueEntry(row) : null)
+    },
+    async list(options) {
+      if (providers.size === 0)
+        return notInitialized.result()
+      if (!sendLogRepo)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+      const parsed = ReachQueueListSchema.safeParse(options)
+      if (!parsed.success)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
+      const rows = await sendLogRepo.findAll({
+        where: 'status = ? AND queue_id IS NOT NULL',
+        params: [parsed.data.status],
+        orderBy: 'created_at ASC, id ASC',
+        limit: parsed.data.limit,
+        offset: parsed.data.offset,
+      })
+      return rows.success ? ok(rows.data.map(queueEntry)) : rows
+    },
+    async requeueDead(queueId, options) {
+      if (providers.size === 0)
+        return notInitialized.result()
+      if (!sendLogRepo)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_dndPersistenceRequired'))
+      const parsed = ReachDeadRequeueSchema.safeParse(options)
+      if (!ReachQueueIdSchema.safeParse(queueId).success || !parsed.success)
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_queueInputInvalid'))
+      return sendLogRepo.requeueDead(queueId, parsed.data.expectedUpdatedAt)
     },
     async resolveUnknown(queueId, resolution) {
       if (providers.size === 0)
@@ -329,7 +371,7 @@ export const reach: ReachFunctions = {
       return notInitialized.result()
     }
 
-    return executeSend(message, providers, templateRegistry, dndConfig, sendLogRepo)
+    return executeSend(message, providers, templateRegistry, dndConfig, sendLogRepo, currentConfig!.queue)
   },
 
   get template(): ReachTemplateRegistry {

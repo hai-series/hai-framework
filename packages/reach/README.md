@@ -120,7 +120,7 @@ API 回调地址属于服务端可信配置。日志只记录回调 origin，不
 | `start`    | `string`               | —    | `00:00`   | 开始时间（HH:mm 格式）                  |
 | `end`      | `string`               | —    | `00:00`   | 结束时间（HH:mm 格式）                  |
 
-`delay` 仅在消息写入数据库并确认成功后返回 `HaiResult` 成功，结果为 `{ success: true, deferred: true, queueId }`；这表示已入队、尚未投递。`queueId` 是持久化回执 UUID，对应 `hai_reach_send_log.queue_id`，可查询该记录的 `status`（`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded`）。缺少数据库、断连、插入失败均不会返回 deferred 成功，发送时返回 `SEND_FAILED`。节点重启后，只要连接同一数据库、配置同名 Provider，便可在 DND 时段外恢复投递。即时发送成功后的普通日志保存仍为可选，不会因日志失败把已投递的消息报告为失败。
+`delay` 仅在消息写入数据库并确认成功后返回 `HaiResult` 成功，结果为 `{ success: true, deferred: true, queueId }`；这表示已入队、尚未投递。`queueId` 是持久化回执 UUID，对应 `hai_reach_send_log.queue_id`，可查询该记录的 `status`（`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded` / `dead`）。缺少数据库、断连、插入失败均不会返回 deferred 成功，发送时返回 `SEND_FAILED`。节点重启后，只要连接同一数据库、配置同名 Provider，便可在 DND 时段外恢复投递。即时发送成功后的普通日志保存仍为可选，不会因日志失败把已投递的消息报告为失败。
 
 ```ts
 const result = await reach.send(message)
@@ -132,23 +132,36 @@ if (result.data.deferred) {
 }
 ```
 
-队列的 `created_at`、`updated_at`、`locked_until` 统一保存 Unix 毫秒，列类型为 `BIGINT`（SQLite 映射为 64 位 `INTEGER`）。Reach 仓库将 PostgreSQL 等驱动返回的整数字符串归一化为安全整数 `number`；负数、非整数及超出 JS 安全整数范围的存储值返回 `SEND_FAILED`，不会静默舍入。模板仓库的 `TIMESTAMP` 创建/更新时间映射为 `Date`。部署时须同步更新已有表的列类型，框架不自动迁移旧表。
+队列的 `created_at`、`updated_at`、`locked_until`、`next_attempt_at` 统一保存 Unix 毫秒，列类型为 `BIGINT`（SQLite 映射为 64 位 `INTEGER`）。Reach 仓库将 PostgreSQL 等驱动返回的整数字符串归一化为安全整数 `number`；负数、非整数及超出 JS 安全整数范围的存储值返回 `SEND_FAILED`，不会静默舍入。模板仓库的 `TIMESTAMP` 创建/更新时间映射为 `Date`。部署时须同步表结构，包括次数、退避策略和失败分类列；框架不自动迁移旧表。
+
+#### 可靠队列重试
+
+`queue` 策略在入队时随每条消息持久保存；其它节点及重启后的配置变化不会重置已有消息预算。
+
+| 配置                    | 默认值    | 约束                            |
+| ----------------------- | --------- | ------------------------------- |
+| `queue.maxAttempts`     | `5`       | 1–100，含首次领取和崩溃恢复     |
+| `queue.retryDelayMs`    | `60000`   | 首次退避，1000–86400000 毫秒    |
+| `queue.maxRetryDelayMs` | `3600000` | 同上范围，且不小于 retryDelayMs |
+
+每次领取在数据库原子递增 `attemptCount`。暂时失败在 `now + min(maxRetryDelayMs, retryDelayMs × 2^(attemptCount−1))` 之后才有资格再次领取；DND 外每分钟扫描，因此实际发送可能更晚。一轮最多处理 100 条，并固定本轮资格时间；失败的消息在该轮不会重新入选。未连接/缺失 Provider、网络错误、HTTP 408/425/429/5xx 可以有限重试；持久化载荷解析失败、幂等 API 的其他 HTTP 4xx 直接进入 `dead`。超出次数或最后一次领取后崩溃也进入 `dead`。非幂等在途请求仍优先进入 `unknown`，不因剩余预算而重发。
 
 ### 错误处理
 
 所有操作返回 `HaiResult<T>`，错误码定义在 `HaiReachError`：
 
-| 错误码                                 | code            | 说明            |
-| -------------------------------------- | --------------- | --------------- |
-| `HaiReachError.SEND_FAILED`            | `hai:reach:001` | 发送失败        |
-| `HaiReachError.TEMPLATE_NOT_FOUND`     | `hai:reach:002` | 模板不存在      |
-| `HaiReachError.TEMPLATE_RENDER_FAILED` | `hai:reach:003` | 模板渲染失败    |
-| `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | 无效接收方      |
-| `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider 未注册 |
-| `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | 免打扰丢弃      |
-| `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | 未初始化        |
-| `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | 不支持的类型    |
-| `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | 配置错误        |
+| 错误码                                 | code            | 说明             |
+| -------------------------------------- | --------------- | ---------------- |
+| `HaiReachError.SEND_FAILED`            | `hai:reach:001` | 发送失败         |
+| `HaiReachError.TEMPLATE_NOT_FOUND`     | `hai:reach:002` | 模板不存在       |
+| `HaiReachError.TEMPLATE_RENDER_FAILED` | `hai:reach:003` | 模板渲染失败     |
+| `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | 无效接收方       |
+| `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider 未注册  |
+| `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | 免打扰丢弃       |
+| `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | 未初始化         |
+| `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | 不支持的类型     |
+| `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | 配置错误         |
+| `HaiReachError.DELIVERY_REJECTED`      | `hai:reach:020` | API 明确永久拒绝 |
 
 ```ts
 const result = await reach.send({ provider: 'email', to: 'user@example.com', body: 'hello' })
@@ -163,12 +176,12 @@ if (!result.success) {
 
 - 状态为 `pending → processing → sending → sent`；`processing` 过期可安全重领。
 - API 只有配置 `idempotent: true` 才允许重领在途消息。这是对接收端能力的声明，不会凭空实现幂等。每次请求的 `Idempotency-Key` 请求头和 `idempotencyKey` 正文字段均固定为持久化 `queueId`；接收端必须把去重记录和副作用原子提交。去重记录必须覆盖所有迟到请求，包括暂停后恢复的旧节点；无法界定最长迟到时间时不能过期删除。各节点同名 Provider 必须连接同一目标和幂等存储。
-- SMTP、阿里云短信、默认 API 没有外部幂等保证。已经进入 `sending` 后的失败、异常或租约丢失按未知结果处理，过期后转为 `unknown`，新消费者不会自动重发。未连接 Provider、发送前解析失败等明确未开始的情况可回到 pending。Console 仅输出开发元数据，不产生真实投递。
+- SMTP、阿里云短信、默认 API 没有外部幂等保证。已经进入 `sending` 后的失败、异常或租约丢失按未知结果处理，过期后转为 `unknown`，新消费者不会自动重发。未连接 Provider 按持久策略退避；发送前解析失败直接进入 dead。Console 仅输出开发元数据，不产生真实投递。
 - 续租、数据库 owner 条件和取消信号都不能撤销已发出的邮件、短信或 HTTP 副作用；模块不提供通用 exactly-once 保证。
 
 ### 未知结果人工核对
 
-可信服务端管理流程使用 `reach.queue.get(queueId)` 查询 `pending / processing / sending / unknown / sent / discarded`；结果不含正文或收件人。出现 unknown 时先停止或隔离旧 worker，按 queueId、Provider 日志和第三方投递记录核对，再调用以下裁定接口。接口校验 UUID 和状态，只能把 unknown 条件更新为 sent 或 discarded，并发裁定仅一个成功；不会重新发送。discarded 只终止后续处理，不能撤销已经开始的请求。如需补发，须先确认旧请求不可能继续生效，再显式创建新消息。
+可信服务端管理流程使用 `reach.queue.get(queueId)` 查询 `pending / processing / sending / unknown / sent / discarded / dead`；结果不含正文或收件人。出现 unknown 时先停止或隔离旧 worker，按 queueId、Provider 日志和第三方投递记录核对，再调用以下裁定接口。接口校验 UUID 和状态，只能把 unknown 条件更新为 sent 或 discarded，并发裁定仅一个成功；不会重新发送。discarded 只终止后续处理，不能撤销已经开始的请求。如需补发，须先确认旧请求不可能继续生效，再显式创建新消息。
 
 ```ts
 const state = await reach.queue.get(queueId)
@@ -176,6 +189,23 @@ const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', mes
 if (!resolved.success)
   throw new Error(resolved.error.message)
 ```
+
+### 死信查询与恢复
+
+可信服务端可用 `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })` 查询死信，也可查询 `unknown`；每页最多 100 条，offset 上限 1000000。get/list 返回状态、attemptCount、maxAttempts、nextAttemptAt、lastFailure 和 updatedAt，不含正文、收件人及 owner。修复 Provider 配置或消息根因后，查询最新 dead 版本再恢复：
+
+```ts
+const state = await reach.queue.get(queueId)
+if (!state.success)
+  throw new Error(state.error.message)
+if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+  if (!restored.success)
+    throw new Error(restored.error.message)
+}
+```
+
+恢复仅条件更新同一版本的 dead；并发/过时请求失败，unknown 无法恢复。它重置领取次数并保留 queueId、原退避策略及接收端幂等要求。dead 仅表示停止自动处理，不证明外部副作用未发生；曾开始的幂等 API 可能仍有旧请求迟到，恢复前仍须确认接收端持久去重有效。不可修复的坏载荷应保留死信并人工排查，重复恢复不会修复内容。
 
 ## 开发测试
 

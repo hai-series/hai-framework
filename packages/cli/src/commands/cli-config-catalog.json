@@ -3552,6 +3552,38 @@
     "constraint": "字符串；取值：console | smtp | aliyun-sms | api"
   },
   {
+    "name": "HAI_REACH_QUEUE",
+    "module": "reach",
+    "path": "reach.queue",
+    "description": "可靠队列重试策略；每条消息入队时持久保存。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_QUEUE_MAXATTEMPTS",
+    "module": "reach",
+    "path": "reach.queue.maxAttempts",
+    "description": "自动领取次数上限（含首次及崩溃恢复，默认 5，范围 1–100）。",
+    "value": "5",
+    "constraint": "整数；>= 1；<= 100"
+  },
+  {
+    "name": "HAI_REACH_QUEUE_MAXRETRYDELAYMS",
+    "module": "reach",
+    "path": "reach.queue.maxRetryDelayMs",
+    "description": "指数退避上限毫秒数，不得小于 retryDelayMs（默认 3600000）。",
+    "value": "3600000",
+    "constraint": "整数；>= 1000；<= 86400000"
+  },
+  {
+    "name": "HAI_REACH_QUEUE_RETRYDELAYMS",
+    "module": "reach",
+    "path": "reach.queue.retryDelayMs",
+    "description": "首次失败后的退避毫秒数（默认 60000，范围 1000–86400000）。",
+    "value": "60000",
+    "constraint": "整数；>= 1000；<= 86400000"
+  },
+  {
     "name": "HAI_REACH_TEMPLATES",
     "module": "reach",
     "path": "reach.templates",

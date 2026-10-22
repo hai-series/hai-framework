@@ -21,6 +21,7 @@ const ReachErrorInfo = {
   NOT_INITIALIZED: '010:500',
   UNSUPPORTED_TYPE: '011:400',
   CONFIG_ERROR: '012:500',
+  DELIVERY_REJECTED: '020:422',
 } as const satisfies ErrorInfo
 
 export const HaiReachError = core.error.buildHaiErrorsDef('reach', ReachErrorInfo)
@@ -107,10 +108,16 @@ export type SendResult = {
 })
 
 /**
- * 队列状态；unknown 表示外部投递可能已经生效，禁止自动重发。
+ * 队列状态；unknown 表示外部投递可能已经生效，禁止重排；dead 停止自动处理，可条件人工恢复。
  * @example const status: ReachQueueStatus = 'unknown'
  */
-export type ReachQueueStatus = 'pending' | 'processing' | 'sending' | 'unknown' | 'sent' | 'discarded'
+export type ReachQueueStatus = 'pending' | 'processing' | 'sending' | 'unknown' | 'sent' | 'discarded' | 'dead'
+
+/**
+ * 持久化的失败分类，不含 Provider 响应正文、凭据或收件人。
+ * @example const reason: ReachQueueFailure = 'provider_unavailable'
+ */
+export type ReachQueueFailure = 'provider_unavailable' | 'invalid_message' | 'permanent_rejection' | 'transient_failure' | 'attempts_exhausted'
 
 /**
  * 不包含收件人与正文的队列查询结果。
@@ -127,6 +134,36 @@ export interface ReachQueueEntry {
   updatedAt?: number
   /** 外部 Provider 确认的消息编号。 */
   messageId?: string
+  /** 已领取次数；节点崩溃后的重新领取也计数。 */
+  attemptCount: number
+  /** 此条消息持久保存的自动领取上限。 */
+  maxAttempts: number
+  /** 下次允许自动领取的 Unix 毫秒时间；终态为 0。 */
+  nextAttemptAt: number
+  /** 最近失败分类，便于可信运维流程排查与修复。 */
+  lastFailure?: ReachQueueFailure
+}
+
+/**
+ * 有界查询死信或未知结果，应用须先校验服务端运维权限。
+ * @example const options: ReachQueueListOptions = { status: 'dead', limit: 50 }
+ */
+export interface ReachQueueListOptions {
+  /** 需要人工处理的状态。 */
+  status: 'dead' | 'unknown'
+  /** 每页 1–100 条，默认 50。 */
+  limit?: number
+  /** 跳过条数，默认 0，上限 1000000。 */
+  offset?: number
+}
+
+/**
+ * 修复根因后恢复死信的条件输入；unknown 不允许使用此操作。
+ * @example await reach.queue.requeueDead(queueId, { expectedUpdatedAt: entry.updatedAt! })
+ */
+export interface ReachDeadRequeue {
+  /** 必须等于最近查询的更新时间，阻止并发及过时请求。 */
+  expectedUpdatedAt: number
 }
 
 /**
@@ -150,6 +187,16 @@ export interface ReachQueueOperations {
    * @example const result = await reach.queue.get(queueId)
    */
   get: (queueId: string) => Promise<HaiResult<ReachQueueEntry | null>>
+  /**
+   * 分页查询死信或未知结果，仅返回运维元数据。
+   * @example const page = await reach.queue.list({ status: 'dead', limit: 50 })
+   */
+  list: (options: ReachQueueListOptions) => Promise<HaiResult<ReachQueueEntry[]>>
+  /**
+   * 修复根因并确认接收端幂等契约后恢复 dead；重置计数，保留 queueId/策略。unknown 不能重排。
+   * @example await reach.queue.requeueDead(queueId, { expectedUpdatedAt: entry.updatedAt! })
+   */
+  requeueDead: (queueId: string, options: ReachDeadRequeue) => Promise<HaiResult<void>>
   /**
    * 停止/隔离旧 worker 并核对外部投递记录后，裁定 unknown；不重新发送。
    * @example await reach.queue.resolveUnknown(queueId, { status: 'discarded' })
@@ -274,7 +321,7 @@ export interface ReachTemplateRegistry {
  * ```
  */
 export interface ReachFunctions extends SendOperations {
-  /** 持久化队列查询与未知结果人工裁定。 */
+  /** 持久化队列查询、死信恢复与未知结果人工裁定。 */
   readonly queue: ReachQueueOperations
   /** 初始化触达模块（注册多个 Provider） */
   init: (config: ReachConfigInput) => Promise<HaiResult<void>>

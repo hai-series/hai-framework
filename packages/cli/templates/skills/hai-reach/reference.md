@@ -166,6 +166,8 @@ await reach.send({
 | `reach.init`          | `(config: ReachConfigInput) => Promise<HaiResult<void>>`    | 初始化（注册多个 Provider）        |
 | `reach.send`          | `(message: ReachMessage) => Promise<HaiResult<SendResult>>` | 发送消息（通过 provider 字段路由） |
 | `reach.queue.get` | `(queueId: string) => Promise<HaiResult<ReachQueueEntry \| null>>` | 不含正文/收件人的队列状态 |
+| `reach.queue.list` | `(options: ReachQueueListOptions) => Promise<HaiResult<ReachQueueEntry[]>>` | 可信服务端分页查询 dead/unknown，每页至多 100 条 |
+| `reach.queue.requeueDead` | `(queueId: string, options: ReachDeadRequeue) => Promise<HaiResult<void>>` | 按 expectedUpdatedAt 条件恢复 dead；unknown 禁止重排 |
 | `reach.queue.resolveUnknown` | `(queueId: string, resolution: ReachUnknownResolution) => Promise<HaiResult<void>>` | 人工核对后将 unknown 裁定为 sent/discarded，不发送 |
 | `reach.template`      | `ReachTemplateRegistry`                                  | 模板注册表                         |
 | `reach.config`        | `ReachConfig \| null`                                    | 当前脱敏配置快照                   |
@@ -214,6 +216,7 @@ interface ReachConfigInput {
 | 错误码 | code | 说明 |
 |--------|------|------|
 | `HaiReachError.SEND_FAILED`            | `hai:reach:001`   | 发送失败        |
+| `HaiReachError.DELIVERY_REJECTED`      | `hai:reach:020`   | API 明确永久拒绝 |
 | `HaiReachError.TEMPLATE_NOT_FOUND`     | `hai:reach:002`   | 模板未找到      |
 | `HaiReachError.TEMPLATE_RENDER_FAILED` | `hai:reach:003`   | 模板渲染失败    |
 | `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004`   | 无效接收方      |
@@ -227,11 +230,11 @@ interface ReachConfigInput {
 
 ### 可靠延迟入队
 
-启用 delay 后，只有数据库确认插入一条 pending 记录才返回 `deferred: true` 和 `queueId`。缺库、断连、插入失败返回失败 HaiResult，不能向用户报告已入队。`queueId` 对应 `hai_reach_send_log.queue_id`，同一行的 `status` 为 pending / processing / sending / unknown / sent / discarded。节点重启后连接同一数据库、配置同名 Provider，可在 DND 时段外恢复投递。即时发送后的普通日志仍为可选，日志失败不会使已发送消息返回失败。
+启用 delay 后，只有数据库确认插入一条 pending 记录才返回 `deferred: true` 和 `queueId`。缺库、断连、插入失败返回失败 HaiResult，不能向用户报告已入队。`queueId` 对应 `hai_reach_send_log.queue_id`，同一行的 `status` 为 pending / processing / sending / unknown / sent / discarded / dead。节点重启后连接同一数据库、配置同名 Provider，可在 DND 时段外恢复投递。即时发送后的普通日志仍为可选，日志失败不会使已发送消息返回失败。
 
 验证码和密码重置等有时效的通知应明确选择 DND 策略；可靠入队成功不代表用户已收到验证码。
 
-队列 `created_at` / `updated_at` / `locked_until` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。已有表须在部署时同步列结构，模块不自动迁移旧表；跨库验收必须运行 PostgreSQL/MySQL 用例，SQLite 无法证明 32 位溢出已经消除。
+队列 `created_at` / `updated_at` / `locked_until` / `next_attempt_at` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。已有表须在部署时同步列结构，包含次数、退避策略和失败分类，模块不自动迁移旧表；跨库验收必须运行 PostgreSQL/MySQL 用例，SQLite 无法证明 32 位溢出已经消除。
 
 ### 租约、接收端幂等与未知结果
 
@@ -239,7 +242,7 @@ interface ReachConfigInput {
 
 API `idempotent: true` 是接收端能力声明：接收方必须把 queueId 对应的去重记录与业务副作用原子、持久化提交。所有尝试用相同 `Idempotency-Key` 头和 `idempotencyKey` 正文，覆盖响应丢失和旧节点恢复；去重记录须覆盖所有迟到请求，迟到无上界时不能过期。同名 Provider 的目标与幂等存储保持一致。只有此模式能自动接管已开始的 API 投递。
 
-SMTP、短信和默认 API 一旦开始投递，失败或过期转 unknown，不自动重发。未连接、发送前解析失败等明确未开始的情况可以回到 pending。unknown 必须在可信服务端管理流程里，先停止/隔离旧 worker 并核对第三方投递记录，再执行以下二选一裁定；discarded 不撤销已开始请求。需要补发时，先确保旧请求不可能继续生效，再创建新消息。
+SMTP、短信和默认 API 一旦开始投递，失败或过期转 unknown，不自动重发。未连接按持久策略退避；发送前解析失败直接进入 dead。unknown 必须在可信服务端管理流程里，先停止/隔离旧 worker 并核对第三方投递记录，再执行以下二选一裁定；discarded 不撤销已开始请求。需要补发时，先确保旧请求不可能继续生效，再创建新消息。
 
 ```ts
 const state = await reach.queue.get(queueId)
@@ -249,6 +252,26 @@ if (!resolved.success)
 ```
 
 管理入口校验回执 UUID、status 与 messageId 长度，只能从 unknown 条件更新为 sent/discarded；不提供重排队选项，并发裁定仅一个成功。
+
+### 有限重试与死信运维
+
+`queue.maxAttempts` 默认 5（1–100），`retryDelayMs` 默认 60000，`maxRetryDelayMs` 默认 3600000；两项毫秒配置范围 1000–86400000，最大退避不得小于首次退避。策略随入队记录保存，不随新节点配置重置；领取（含崩溃恢复）原子累加 attemptCount。暂时故障保存 nextAttemptAt，按 `min(maxRetryDelayMs, retryDelayMs × 2^(attemptCount−1))` 退避。DND 外每分钟扫描，一轮最多 100 条且固定资格时间，失败行不会在同一轮反复领取。缺失/未连接 Provider、网络错误、HTTP 408/425/429/5xx 允许有限重试；坏 JSON、幂等 API 其它 4xx 直接 dead；超限（含最后一次领取后崩溃）停止自动处理。非幂等在途仍隔离 unknown，不能借重试预算重发。
+
+queue.get/list 返回 attemptCount、maxAttempts、nextAttemptAt、lastFailure、updatedAt 等安全元数据。lastFailure 为 provider_unavailable、invalid_message、permanent_rejection、transient_failure 或 attempts_exhausted，不保存响应正文。可信服务端以 `list({ status: 'dead', limit: 50, offset: 0 })` 分页查询，status 也可选 unknown；limit 1–100，offset 0–1000000。
+
+```ts
+// 应用先校验运维权限并修复根因；不向浏览器直接暴露队列管理。
+const state = await reach.queue.get(queueId)
+if (!state.success)
+  throw new Error(state.error.message)
+if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+  if (!restored.success)
+    throw new Error(restored.error.message)
+}
+```
+
+恢复仅匹配当前 dead 版本，过时/并发请求失败；重置次数但保留 queueId 和原策略。unknown 永远不能通过此入口重排。dead 不代表外部副作用未发生，旧幂等 API 请求仍可能迟到，恢复前确认接收端持久去重；不可修复的坏消息留在 dead 人工排查。
 
 ### 多渠道验证码发送
 

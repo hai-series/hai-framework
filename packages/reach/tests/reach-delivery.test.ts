@@ -117,6 +117,18 @@ afterEach(async () => {
 })
 
 describe.sequential('delivery ownership and external effects', () => {
+  it.each([400, 401, 403, 404, 422, 408, 425, 429, 503])('真实 HTTP %i 的永久拒绝与暂时故障使用不同重试策略', async (status) => {
+    const endpoint = await receiver((_request, response) => response.writeHead(status).end())
+    const row = await queued('http-status')
+    const provider = await api(endpoint.url)
+    expect((await deliverClaimedMessage(row, 'http-status', provider, repository)).success).toBe(false)
+    const permanent = [400, 401, 403, 404, 422].includes(status)
+    expect(await reach.queue.get(row.queueId!)).toMatchObject({
+      success: true,
+      data: { status: permanent ? 'dead' : 'pending', attemptCount: 1, lastFailure: permanent ? 'permanent_rejection' : 'transient_failure' },
+    })
+  })
+
   it('节点启动时尚未过期的幂等在途消息，在 DND 外的后续周期仍会恢复', async () => {
     const row = await queued('previous', 1000)
     expect((await repository.beginDelivery(row.id, 'previous', true, 1000)).success).toBe(true)
@@ -276,11 +288,15 @@ describe.sequential('delivery ownership and external effects', () => {
     await reach.close()
     await reldb.close()
     await initializeServices()
+    // 重启不会绕过数据库持久保存的退避截止时间。
+    expect(await repository.claimPendingBatch('too-early')).toMatchObject({ success: true, data: [] })
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001)
     const restarted = await receiver(handler)
     const restartedProvider = await api(restarted.url)
     const recovered = await claimed('second')
     expect((await deliverClaimedMessage(recovered, 'second', restartedProvider, repository)).success).toBe(true)
     expect(requests).toBe(2)
+    expect(await reach.queue.get(row.queueId!)).toMatchObject({ success: true, data: { status: 'sent', nextAttemptAt: 0 } })
     expect(await reldb.sql.query('SELECT receipt FROM test_receiver_effects')).toMatchObject({ success: true, data: [{ receipt: row.queueId }] })
   })
 

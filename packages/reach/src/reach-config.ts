@@ -158,6 +158,36 @@ export const ReachUnknownResolutionSchema = z.object({
  */
 export const ReachQueueIdSchema = z.string().uuid()
 
+/**
+ * 可靠队列重试策略；入队时保存到消息，不受其它节点后续配置变化影响。
+ * @example ReachQueueConfigSchema.parse({ maxAttempts: 5, retryDelayMs: 60_000, maxRetryDelayMs: 3_600_000 })
+ */
+export const ReachQueueConfigSchema = z.object({
+  /** 自动领取次数上限（含首次及崩溃恢复，默认 5，范围 1–100）。 */
+  maxAttempts: z.number().int().min(1).max(100).default(5),
+  /** 首次失败后的退避毫秒数（默认 60000，范围 1000–86400000）。 */
+  retryDelayMs: z.number().int().min(1000).max(86_400_000).default(60_000),
+  /** 指数退避上限毫秒数，不得小于 retryDelayMs（默认 3600000）。 */
+  maxRetryDelayMs: z.number().int().min(1000).max(86_400_000).default(3_600_000),
+}).refine(value => value.maxRetryDelayMs >= value.retryDelayMs, {
+  message: reachM('reach_queueRetryInvalid'),
+})
+
+/** 持久化重试策略。@example const policy: ReachQueueConfig = ReachQueueConfigSchema.parse({}) */
+export type ReachQueueConfig = z.infer<typeof ReachQueueConfigSchema>
+
+/** 有界查询待人工处理的队列，不返回正文或收件人。@example ReachQueueListSchema.parse({ status: 'dead' }) */
+export const ReachQueueListSchema = z.object({
+  status: z.enum(['dead', 'unknown']),
+  limit: z.number().int().min(1).max(100).default(50),
+  offset: z.number().int().min(0).max(1_000_000).default(0),
+})
+
+/** 死信恢复要求最近读取的版本，避免过时运维请求恢复新一轮死信。@example ReachDeadRequeueSchema.parse({ expectedUpdatedAt: Date.now() }) */
+export const ReachDeadRequeueSchema = z.object({
+  expectedUpdatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1),
+})
+
 // ─── DND（免打扰）配置 Schema ───
 
 /**
@@ -236,6 +266,8 @@ export const ReachConfigSchema = z.object({
   templates: z.array(TemplateConfigSchema).optional(),
   /** 免打扰配置 */
   dnd: DndConfigSchema.optional(),
+  /** 可靠队列重试策略；每条消息入队时持久保存。 */
+  queue: ReachQueueConfigSchema.prefault({}),
 })
 
 /** 触达模块配置类型（parse 后） */

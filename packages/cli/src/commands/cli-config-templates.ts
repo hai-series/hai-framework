@@ -678,6 +678,12 @@ templates: []
 #   strategy: delay
 #   start: "22:00"
 #   end: "08:00"
+
+# 延迟队列重试策略（入队时持久保存；领取/崩溃恢复计数，超限 dead；unknown 禁止自动重发）
+queue:
+  maxAttempts: \${HAI_REACH_QUEUE_MAXATTEMPTS:5}
+  retryDelayMs: \${HAI_REACH_QUEUE_RETRYDELAYMS:60000}
+  maxRetryDelayMs: \${HAI_REACH_QUEUE_MAXRETRYDELAYMS:3600000}
 `
 }
 

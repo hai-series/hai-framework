@@ -6,13 +6,14 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { DndConfig } from './reach-config.js'
+import type { DndConfig, ReachQueueConfig } from './reach-config.js'
 import type { ReachMessage, ReachProvider, ReachTemplateRegistry, SendResult } from './reach-types.js'
 
 import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 
+import { ReachQueueConfigSchema } from './reach-config.js'
 import { deliverClaimedMessage } from './reach-delivery.js'
 import { reachM } from './reach-i18n.js'
 import {
@@ -132,6 +133,7 @@ async function saveSendRecord(
   provider: string,
   messageId?: string,
   queueId?: string,
+  queueConfig?: ReachQueueConfig,
 ): Promise<HaiResult<void>> {
   try {
     const inserted = await repo.create({
@@ -144,6 +146,7 @@ async function saveSendRecord(
       varsJson: message.vars ? JSON.stringify(message.vars) : null,
       extraJson: message.extra ? JSON.stringify(message.extra) : null,
       status,
+      ...queueConfig,
       messageId: messageId ?? null,
       createdAt: Date.now(),
     })
@@ -311,11 +314,14 @@ async function flushPendingMessages(
   }
 
   try {
+    // 固定本轮资格截止点，耗时发送期间到期的重试留到下一轮，避免毒消息重复占用预算。
+    const eligibleBefore = Date.now()
     for (let processed = 0; processed < FLUSH_BATCH_SIZE; processed += 1) {
       // 按实际执行逐条领取，避免后排消息排队等待时耗尽租约；单轮处理数量有界。
       const claimResult = await repo.claimPendingBatch(flushOwner, {
         limit: 1,
         lockMs: FLUSH_CLAIM_LOCK_MS,
+        eligibleBefore,
       })
       if (!claimResult.success) {
         logger.warn('Failed to claim pending messages', { error: claimResult.error.message })
@@ -329,11 +335,11 @@ async function flushPendingMessages(
       logger.debug('Flushing pending messages', { count: claimResult.data.length })
 
       for (const row of claimResult.data) {
-        // Provider 缺失属于可恢复问题：释放 claim，让后续配置修复后还能继续重试。
+        // 缺少 Provider 可由配置修复，但也必须消耗重试预算并退避，不能原地自旋。
         const provider = providers.get(row.provider)
         if (!provider) {
           logger.warn('Provider not found for pending message, releasing claim', { provider: row.provider, id: row.id })
-          const releaseResult = await repo.releaseClaim(row.id, flushOwner)
+          const releaseResult = await repo.failClaim(row, flushOwner, 'provider_unavailable')
           if (!releaseResult.success) {
             logger.warn('Failed to release pending message claim', { id: row.id, error: releaseResult.error.message })
           }
@@ -377,6 +383,7 @@ export async function executeSend(
   templateRegistry: ReachTemplateRegistry,
   dndConfig?: DndConfig,
   repo?: SendLogRepository | null,
+  queueConfig: ReachQueueConfig = ReachQueueConfigSchema.parse({}),
 ): Promise<HaiResult<SendResult>> {
   if (!message.to) {
     return err(
@@ -416,7 +423,7 @@ export async function executeSend(
 
       // 预先生成并随消息落盘，避免依赖不同数据库的自增 ID 返回约定。
       const queueId = crypto.randomUUID()
-      const saved = await saveSendRecord(repo, preprocessed.data, 'pending', providerName, undefined, queueId)
+      const saved = await saveSendRecord(repo, preprocessed.data, 'pending', providerName, undefined, queueId, queueConfig)
       if (!saved.success) {
         logger.warn('Failed to persist deferred message', { provider: providerName, code: saved.error.code })
         return err(

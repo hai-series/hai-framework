@@ -120,7 +120,7 @@ API 通知先は信頼できるサーバー設定です。ログには origin �
 | `start`    | `string`               | —    | `00:00`   | 開始時刻（HH:mm）                       |
 | `end`      | `string`               | —    | `00:00`   | 終了時刻（HH:mm）                       |
 
-`delay` はデータベースへの挿入成功を確認した後だけ、`{ success: true, deferred: true, queueId }` を含む成功 `HaiResult` を返します。これはキューへの保存完了を表し、配信はまだ完了していません。受付 UUID は `hai_reach_send_log.queue_id` に保存され、同じ行の `status`（`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded`）で追跡できます。ストレージ未準備、切断、挿入失敗では deferred 成功を返さず、キューへの保存失敗は `SEND_FAILED` です。再起動後、同じデータベースに接続して同名 Provider を設定した別ノードが DND 時間外に配信を再開できます。即時送信後の任意ログの失敗によって、配信済みメッセージを失敗扱いにはしません。
+`delay` はデータベースへの挿入成功を確認した後だけ、`{ success: true, deferred: true, queueId }` を含む成功 `HaiResult` を返します。これはキューへの保存完了を表し、配信はまだ完了していません。受付 UUID は `hai_reach_send_log.queue_id` に保存され、同じ行の `status`（`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded` / `dead`）で追跡できます。ストレージ未準備、切断、挿入失敗では deferred 成功を返さず、キューへの保存失敗は `SEND_FAILED` です。再起動後、同じデータベースに接続して同名 Provider を設定した別ノードが DND 時間外に配信を再開できます。即時送信後の任意ログの失敗によって、配信済みメッセージを失敗扱いにはしません。
 
 ```ts
 const result = await reach.send(message)
@@ -132,7 +132,19 @@ if (result.data.deferred) {
 }
 ```
 
-キューの `created_at`、`updated_at`、`locked_until` は Unix ミリ秒を `BIGINT`（SQLite では 64 ビット `INTEGER`）として保存します。Reach リポジトリーは PostgreSQL などのドライバーが返す整数文字列を安全な整数の `number` に変換します。負数、小数、JS の安全整数範囲外の保存値は丸めずに `SEND_FAILED` を返します。テンプレートの作成・更新 `TIMESTAMP` は `Date` に対応します。デプロイ時に既存テーブルの列型も更新してください。旧テーブルの自動移行は行いません。
+キューの `created_at`、`updated_at`、`locked_until`、`next_attempt_at` は Unix ミリ秒を `BIGINT`（SQLite では 64 ビット `INTEGER`）として保存します。Reach リポジトリーは PostgreSQL などのドライバーが返す整数文字列を安全な整数の `number` に変換します。負数、小数、JS の安全整数範囲外の保存値は丸めずに `SEND_FAILED` を返します。テンプレートの作成・更新 `TIMESTAMP` は `Date` に対応します。デプロイ時に試行回数・退避設定・失敗分類を含むテーブル構造も更新してください。旧テーブルの自動移行は行いません。
+
+#### 永続化された再試行設定
+
+`queue` 設定は各メッセージの保存時に永続化され、再起動や別ノードの設定変更では既存の予算をリセットしません。
+
+| 設定                    | 既定値    | 範囲                                  |
+| ----------------------- | --------- | ------------------------------------- |
+| `queue.maxAttempts`     | `5`       | 1–100、初回取得とクラッシュ復旧を含む |
+| `queue.retryDelayMs`    | `60000`   | 初回退避、1000–86400000 ミリ秒        |
+| `queue.maxRetryDelayMs` | `3600000` | 同じ範囲、retryDelayMs 以上           |
+
+取得ごとに保存済み `attemptCount` を原子的に増やします。一時的失敗は `now + min(maxRetryDelayMs, retryDelayMs × 2^(attemptCount−1))` 以降に再取得でき、DND 外の毎分走査によって実際の送信はさらに遅れる場合があります。1 回の走査は最大 100 件で取得資格の時刻を固定するため、失敗したメッセージが同じ回を繰り返し占有しません。Provider 未設定・未接続、ネットワーク障害、HTTP 408/425/429/5xx は有限回再試行します。不正な保存 JSON と冪等 API の他の HTTP 4xx は直ちに `dead`、上限到達や最後の取得後のクラッシュも dead になります。冪等性のない配信中リクエストは残り回数によらず `unknown` に隔離します。
 
 ### エラー処理
 
@@ -149,6 +161,7 @@ if (result.data.deferred) {
 | `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | 未初期化                 |
 | `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | 未対応の種類             |
 | `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | 設定エラー               |
+| `HaiReachError.DELIVERY_REJECTED`      | `hai:reach:020` | API による恒久的な拒否   |
 
 ```ts
 const result = await reach.send({ provider: 'email', to: 'user@example.com', body: 'hello' })
@@ -163,12 +176,12 @@ if (!result.success) {
 
 - 状態は `pending → processing → sending → sent`。期限切れ processing は安全に再取得できます。
 - `idempotent: true` の API のみ配信中リクエストを自動再試行します。これは受信側の能力宣言です。各試行の `Idempotency-Key` ヘッダーと `idempotencyKey` 本文は永続化された queueId を使い、受信側が重複排除と副作用を原子的に確定する必要があります。古い worker の遅延復帰も保持期間に含め、最大遅延を限定できない場合は重複排除レコードを失効させないでください。同名 Provider は同じ送信先と重複排除ストアを使います。
-- SMTP、Aliyun SMS、既定の API には外部冪等性の保証がありません。sending 開始後の失敗・例外・リース喪失は結果不明として扱い、期限切れは unknown に隔離して自動再送しません。未接続 Provider や JSON 解析失敗など、外部呼び出し前の明確な失敗は pending に戻せます。Console は開発用メタデータのみを出力します。
+- SMTP、Aliyun SMS、既定の API には外部冪等性の保証がありません。sending 開始後の失敗・例外・リース喪失は結果不明として扱い、期限切れは unknown に隔離して自動再送しません。未接続 Provider は保存済み退避設定に従い、不正な保存 JSON は外部呼び出し前に dead へ移します。Console は開発用メタデータのみを出力します。
 - リース更新、owner 条件、キャンセルでは既に開始した外部副作用を取り消せません。汎用の exactly-once は保証しません。
 
 ### 結果不明の手動確認
 
-信頼されたサーバー管理処理で `reach.queue.get(queueId)` を使い、宛先や本文を含まない `pending / processing / sending / unknown / sent / discarded` 状態を確認します。unknown は古い worker を停止・隔離し、外部の配信記録と照合してから sent または discarded に裁定します。UUID・状態の検証と条件付き更新により並行裁定は 1 件だけ成功し、再送はしません。discarded は開始済みリクエストを取り消しません。補充送信は古いリクエストが今後作用しないことを確認した後だけ行ってください。
+信頼されたサーバー管理処理で `reach.queue.get(queueId)` を使い、宛先や本文を含まない `pending / processing / sending / unknown / sent / discarded / dead` 状態を確認します。unknown は古い worker を停止・隔離し、外部の配信記録と照合してから sent または discarded に裁定します。UUID・状態の検証と条件付き更新により並行裁定は 1 件だけ成功し、再送はしません。discarded は開始済みリクエストを取り消しません。補充送信は古いリクエストが今後作用しないことを確認した後だけ行ってください。
 
 ```ts
 const state = await reach.queue.get(queueId)
@@ -176,6 +189,23 @@ const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', mes
 if (!resolved.success)
   throw new Error(resolved.error.message)
 ```
+
+### デッドレターの照会と復元
+
+信頼されたサーバー管理処理で `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })` を使用します。unknown も照会でき、1 ページ最大 100 件、offset 上限は 1000000 です。get/list は status、attemptCount、maxAttempts、nextAttemptAt、lastFailure、updatedAt のみを返し、宛先・本文・owner 資格情報は含みません。原因を修復後、最新 dead を読み直して条件付きで復元します。
+
+```ts
+const state = await reach.queue.get(queueId)
+if (!state.success)
+  throw new Error(state.error.message)
+if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+  if (!restored.success)
+    throw new Error(restored.error.message)
+}
+```
+
+一致する dead バージョンのみ復元し、並行・古い要求は失敗、unknown は復元できません。回数をリセットしますが queueId・保存済み設定・受信側の冪等性要件は保持します。dead は自動処理の停止を意味し、副作用がなかった証明にはなりません。古い冪等 API 要求が遅れて届く可能性があるため、復元前にも受信側の永続的な重複排除を確認してください。修復不能なペイロードは dead に残して調査し、復元だけで内容が直るとは考えないでください。
 
 ## 開発とテスト
 

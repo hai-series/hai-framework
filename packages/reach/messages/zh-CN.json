@@ -36,5 +36,7 @@
   "reach_config_providersRequired": "至少需要配置一个 Provider",
   "reach_templateDbInitFailed": "模板数据库初始化失败: {error}",
   "reach_templateSaveFailed": "模板保存失败: {error}",
-  "reach_templateDeleteFailed": "模板删除失败: {error}"
+  "reach_templateDeleteFailed": "模板删除失败: {error}",
+  "reach_queueRetryInvalid": "maxRetryDelayMs 不能小于 retryDelayMs",
+  "reach_deadRequeueFailed": "死信已变化或不存在，请重新查询后恢复"
 }

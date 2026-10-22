@@ -114,8 +114,10 @@ export function createApiProvider(): ReachProvider {
 
           if (!response.ok) {
             logger.warn('API callback returned non-OK status', { status: response.status })
+            // 明确的客户端拒绝无需自动重试；超时、过早请求及限流仍属于暂时故障。
+            const rejected = response.status >= 400 && response.status < 500 && ![408, 425, 429].includes(response.status)
             return err(
-              HaiReachError.SEND_FAILED,
+              rejected ? HaiReachError.DELIVERY_REJECTED : HaiReachError.SEND_FAILED,
               reachM('reach_apiSendFailed', { params: { error: `HTTP ${response.status}` } }),
             )
           }

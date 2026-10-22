@@ -39,7 +39,7 @@ export async function deliverClaimedMessage(
     return err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'))
   }
   if (!provider.isConnected()) {
-    await repo.releaseClaim(row.id, owner)
+    await repo.failClaim(row, owner, 'provider_unavailable')
     return err(HaiReachError.NOT_INITIALIZED, reachM('reach_notInitialized'))
   }
 
@@ -57,8 +57,8 @@ export async function deliverClaimedMessage(
     }
   }
   catch (cause) {
-    // 此时尚未进入 sending，没有开始外部投递，可以安全释放。
-    await repo.releaseClaim(row.id, owner)
+    // 坏持久化载荷不会随重试改善；尚未调用外部服务，直接进入死信。
+    await repo.failClaim(row, owner, 'invalid_message', true)
     return err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'), cause)
   }
 
@@ -118,7 +118,8 @@ export async function deliverClaimedMessage(
     return err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), outcome.success ? undefined : outcome.error)
   }
   // 接收端持久去重时，响应丢失也可以在之后使用同一个 queueId 重试。
-  const released = await repo.releaseClaim(row.id, owner)
+  const permanent = !outcome.success && [HaiReachError.DELIVERY_REJECTED.code, HaiReachError.INVALID_RECIPIENT.code].includes(outcome.error.code)
+  const released = await repo.failClaim(row, owner, permanent ? 'permanent_rejection' : 'transient_failure', permanent)
   if (!released.success)
     return released
   return err(HaiReachError.SEND_FAILED, reachM('reach_deliveryUnknown'), outcome.success ? undefined : outcome.error)
