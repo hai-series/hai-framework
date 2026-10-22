@@ -75,6 +75,7 @@ export function buildSession(options: CreateSessionOptions, now: Date, sessionTt
     createdAt: now,
     lastActiveAt: now,
     expiresAt: new Date(now.getTime() + sessionTtl * 1000),
+    maxAge: sessionTtl,
     data: options.data,
   }
 }
@@ -123,6 +124,8 @@ export function applySessionPatch(session: Session, patch: Partial<Session>): Se
   if (patch.source !== undefined) {
     nextSession.source = patch.source
   }
-  nextSession.lastActiveAt = new Date()
+  if (patch.expiresAt !== undefined)
+    nextSession.expiresAt = new Date(patch.expiresAt)
+  nextSession.lastActiveAt = patch.lastActiveAt !== undefined ? new Date(patch.lastActiveAt) : new Date()
   return nextSession
 }

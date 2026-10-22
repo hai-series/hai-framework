@@ -106,12 +106,16 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   const repo = config.sessionRepository
 
   /** 只构造候选值；旧凭据撤销与新凭据发布必须由仓库一次原子提交。 */
-  function candidate(options: CreateSessionOptions): { session: Session, tokens: TokenPair } {
+  function candidate(options: CreateSessionOptions): HaiResult<{ session: Session, tokens: TokenPair }> {
+    const now = new Date()
+    const ttl = options.maxAge ?? maxAge
+    if (!Number.isSafeInteger(ttl) || ttl <= 0 || !Number.isFinite(new Date(now.getTime() + ttl * 1000).getTime()))
+      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
     const accessToken = generateSessionToken(options.userId)
-    const tokens: TokenPair = { accessToken, refreshToken: generateSessionToken(options.userId), expiresIn: maxAge, tokenType: 'Bearer' }
-    const session = buildSession(options, new Date(), options.maxAge ?? maxAge, accessToken)
+    const tokens: TokenPair = { accessToken, refreshToken: generateSessionToken(options.userId), expiresIn: ttl, tokenType: 'Bearer' }
+    const session = buildSession(options, now, ttl, accessToken)
     session.data = { ...session.data, _tokenPair: tokens }
-    return { session, tokens }
+    return ok({ session, tokens })
   }
 
   /** 持久化 key 是派生会话的授权上限；撤销、禁用、到期与读取失败均拒绝访问。 */
@@ -136,7 +140,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   return {
     async create(options: CreateSessionOptions): Promise<HaiResult<Session>> {
       try {
-        const { session, tokens } = candidate(options)
+        const built = candidate(options)
+        if (!built.success)
+          return built
+        const { session, tokens } = built.data
         const saveResult = await repo.save(session, tokens, singleDevice)
         if (!saveResult.success) {
           return saveResult as HaiResult<Session>
@@ -176,21 +183,20 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       const validated = await validateApiKey(session)
       if (!validated.success)
         return validated
+      let output = validated.data
 
       if (sliding) {
-        const now = new Date()
-        const updateResult = await repo.updateByAccessToken(accessToken, {
-          lastActiveAt: now,
-          expiresAt: new Date(now.getTime() + maxAge * 1000),
-        }, session.version)
+        const updateResult = await repo.touchByAccessToken(accessToken, session.version, new Date())
         if (!updateResult.success) {
           return updateResult as HaiResult<Session | null>
         }
+        // 保留 API Key 已收敛的权限，只使用成功提交后的时间字段。
+        output = { ...output, lastActiveAt: updateResult.data.lastActiveAt, expiresAt: updateResult.data.expiresAt }
       }
 
       // 对外不暴露内部保留的 _tokenPair（含 refreshToken），
       // 防止调用方（包括 event.locals.session 等上下文）意外泄漏刷新令牌。
-      return ok(stripInternalSessionFields(validated.data))
+      return ok(stripInternalSessionFields(output))
     },
 
     async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
@@ -259,15 +265,18 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           apiKeyId: effectiveSession.apiKeyId,
           apiKeyScopes: effectiveSession.apiKeyScopes,
           source: oldSession.source,
+          maxAge: oldSession.maxAge,
           data: oldSession.data ? { ...oldSession.data, _tokenPair: undefined } : undefined,
         })
 
-        const rotated = await repo.rotate(oldSession, refreshToken, next.session, next.tokens)
+        if (!next.success)
+          return next
+        const rotated = await repo.rotate(oldSession, refreshToken, next.data.session, next.data.tokens)
         if (!rotated.success)
           return rotated
 
         logger.debug('Token refreshed', { userId: oldSession.userId })
-        return ok(next.tokens)
+        return ok(next.data.tokens)
       }
       catch (error) {
         return err(

@@ -204,7 +204,7 @@ export type AuthUiConfig = z.infer<typeof AuthUiConfigSchema>
  * 会话配置 Schema
  */
 export const SessionConfigSchema = z.object({
-  /** 会话超时时间（秒，默认 86400 = 24小时） */
+  /** 新会话的默认 access 时长（秒）；创建时可用 maxAge 覆盖，滑动/刷新沿用会话固有时长。 */
   maxAge: z.number().int().min(60).default(86400),
   /** 是否滑动窗口（每次访问刷新过期时间） */
   sliding: z.boolean().default(true),

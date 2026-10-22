@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 23/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 24/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -134,7 +134,8 @@
 
 ### IAM-03 · P1 · 修复滑动过期和自定义 TTL 的返回值
 
-- [ ] 待修正（源码探针已复现；范围：iam）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：每会话固化maxAge并统一签发/刷新expiresIn；按最新快照单调滑动并返回已提交时间，完整应用日期补丁及验证非法时长/日期，显式更新产生新内容版本。同步类型/配置注释、三语README、仓库与模板skill/LLMS及客户端刷新说明。首轮20项及最终3文件53项通过（真实Redis TTL、双Node刷新竞争、迟到续期）；IAM typecheck/build、ESLint/check:skills通过。refresh独立寿命留IAM04；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/iam/src/session/iam-session-utils.ts:77](../packages/iam/src/session/iam-session-utils.ts#L77)；[packages/iam/src/session/iam-session-functions.ts:142](../packages/iam/src/session/iam-session-functions.ts#L142)。
 - **证据与影响**：validate 传入 expiresAt 补丁，但 applySessionPatch 未应用该字段，滑动续期不延长有效期；create 的 expiresIn 取默认 maxAge，和 options.maxAge 不一致。
 - **修正内容**：统一时间源、绝对过期时间、存储 TTL 和返回 expiresIn；补丁字段显式完整实现，和 IAM-02 的原子条件更新合并。

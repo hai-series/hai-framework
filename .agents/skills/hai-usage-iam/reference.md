@@ -116,7 +116,7 @@ interface TokenPair {
 | `create` | `({ userId, username, roles, source? }) => Promise<HaiResult<Session>>` | 创建会话 |
 | `get` | `(token) => Promise<HaiResult<Session \| null>>` | 获取会话（滑动续期） |
 | `verifyToken` | `(token) => Promise<HaiResult<Session>>` | 验证令牌 |
-| `update` | `(token, data: Partial<Session>) => Promise<HaiResult<void>>` | 更新会话字段 |
+| `update` | `(token, data: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>` | 更新会话字段 |
 | `delete` | `(token) => Promise<HaiResult<void>>` | 删除会话 |
 | `deleteByUserId` | `(userId) => Promise<HaiResult<number>>` | 强制下线（返回删除数量） |
 | `refresh` | `(refreshToken) => Promise<HaiResult<TokenPair>>` | 刷新 Token（rotation） |
@@ -533,3 +533,5 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 所有节点必须共享同一数据库和 Redis；Memory 仅用于单进程。登录 `maxLoginAttempts / lockoutDuration` 使用数据库原子更新，到期后的失败重新计数。OTP `maxAttempts / resendInterval` 使用共享锁和独立发送间隔状态，耗尽或消费验证码不能绕过重发限制，并发只消费一次。重置 `tokenExpiresIn / maxAttempts` 使用共享缓存 TTL 和每用户共享锁；每次有效令牌请求（包括密码策略失败）计数，最新令牌有效且只成功消费一次。重置后撤销旧会话、解除登录锁定；禁用用户不能通过密码、LDAP、OTP 登录。密码策略以服务端为准。
 
 可选字段（如 `ldap`）若尚未写入 YAML，请先声明该字段，或通过 `HAI_IAM` 的 JSON 值整体覆盖模块配置；已有字段支持 `HAI_IAM_LOGIN_OTP` 等环境变量覆盖。
+
+`create({ maxAge })` 可覆盖配置默认时长（正安全整数秒），该值持久化为 `Session.maxAge`；签发和刷新返回的 `expiresIn` 均使用它。滑动续期按该时长延长 access，返回已成功提交的 `lastActiveAt/expiresAt`；迟到请求只延长时间，不缩短较新续期。显式 `update` 的有效日期补丁完整生效并产生新内容版本。客户端根据本次返回的 `expiresIn` 安排刷新，不能硬编码配置默认值。

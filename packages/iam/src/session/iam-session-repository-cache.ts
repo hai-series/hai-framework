@@ -28,7 +28,7 @@ interface SessionState {
 /** 恢复私有 JSON 日期，拒绝损坏的授权数据；错误不包含认证快照。 */
 function restoreSession(session: Session): Session {
   const result = { ...session, createdAt: new Date(session.createdAt), lastActiveAt: new Date(session.lastActiveAt), expiresAt: new Date(session.expiresAt) }
-  if (!result.version || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
+  if (!result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
     || !Array.isArray(result.permissions) || !result.permissions.every(permission => typeof permission === 'string')
     || ![result.createdAt, result.lastActiveAt, result.expiresAt].every(date => Number.isFinite(date.getTime()))) {
     throw new TypeError('Invalid session state')
@@ -61,6 +61,8 @@ export interface SessionRepository {
   getByRefreshToken: (token: string) => Promise<HaiResult<Session | null>>
   /** 从最新状态合并更新，不重新创建已撤销 token。 */
   updateByAccessToken: (token: string, patch: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>
+  /** 从最新快照按会话固有 maxAge 单调滑动，返回已提交的真实时间字段。 */
+  touchByAccessToken: (token: string, expectedVersion: string, now: Date) => Promise<HaiResult<Session>>
   /** 原子撤销 access 与 refresh，重复操作成功。 */
   removeByAccessToken: (token: string) => Promise<HaiResult<void>>
   /** 原子撤销用户全部会话，返回记录数。 */
@@ -196,9 +198,32 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
           return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
         if (!expectedVersion || entry.session.version !== expectedVersion)
           return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
-        const timestampsOnly = Object.keys(patch).every(key => key === 'lastActiveAt' || key === 'expiresAt')
-        entry.session = { ...applySessionPatch(restoreSession(entry.session), patch), version: timestampsOnly ? entry.session.version : crypto.randomUUID() }
+        const updated = applySessionPatch(restoreSession(entry.session), patch)
+        if (![updated.expiresAt, updated.lastActiveAt].every(date => Number.isFinite(date.getTime())))
+          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
+        entry.session = { ...updated, version: crypto.randomUUID() }
         return ok(undefined)
+      })
+    },
+    async touchByAccessToken(token, expectedVersion, now) {
+      const scope = getTokenSessionScope(token)
+      if (!scope)
+        return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+      return mutate(scope, (state) => {
+        const entry = state.sessions[token]
+        if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now())
+          return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+        if (entry.session.version !== expectedVersion)
+          return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+        const current = restoreSession(entry.session)
+        // 迟到节点只允许延长时间，不能覆盖较晚请求已提交的活动/过期点。
+        const next = {
+          ...current,
+          lastActiveAt: new Date(Math.max(current.lastActiveAt.getTime(), now.getTime())),
+          expiresAt: new Date(Math.max(current.expiresAt.getTime(), now.getTime() + current.maxAge * 1000)),
+        }
+        entry.session = next
+        return ok(next)
       })
     },
     async removeByAccessToken(token) {

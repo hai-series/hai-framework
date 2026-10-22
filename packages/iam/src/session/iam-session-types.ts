@@ -55,7 +55,7 @@ export interface AuthResult {
  * 会话数据
  */
 export interface Session {
-  /** 会话内容版本；资料/授权修改产生新版本，仅更新时间戳不改变版本。 */
+  /** 会话内容版本；显式更新产生新版本，内部滑动续期保留版本。 */
   version: string
   /** API Key 派生会话绑定的 key ID；普通用户登录时省略。 */
   apiKeyId?: string
@@ -83,6 +83,8 @@ export interface Session {
   lastActiveAt: Date
   /** 过期时间 */
   expiresAt: Date
+  /** 本会话 access 的签发/滑动有效期，单位秒；创建时固化，刷新沿用该值。 */
+  maxAge: number
   /** 扩展数据（内部保留 _tokenPair 供 logout 时吊销 refreshToken） */
   data?: SessionData
 }
@@ -164,7 +166,8 @@ export interface SessionOperations {
   /**
    * 更新会话
    *
-   * 合并 patch 到现有会话（data 字段浅合并）并更新 lastActiveAt。
+   * 合并允许的资料/授权/时间字段（data 浅合并）；未传 lastActiveAt 时使用提交时刻。
+   * expiresAt/lastActiveAt 必须是有效日期；不允许修改主体、令牌、固有 maxAge 和版本。
    *
    * @param accessToken - 访问令牌
    * @param data - 要更新的字段（roles、username、source、data 等）
