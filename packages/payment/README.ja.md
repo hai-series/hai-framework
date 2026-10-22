@@ -32,8 +32,8 @@ import { payment } from '@h-ai/payment'
 
 // 初始化（会自动注册可用的 Provider）
 await payment.init({
-  wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...' },
-  alipay: { appId: '...', privateKey: '...', alipayPublicKey: '...' },
+  wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...', platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM' } },
+  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...' },
 })
 
 // 创建订单
@@ -84,9 +84,11 @@ await payment.init({
     serialNo: '证书序列号',
     privateKey: '私钥内容',
     appId: '应用 ID',
+    platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM', CERT_SERIAL: '平台证书 PEM' },
   },
   alipay: {
     appId: '应用 ID',
+    sellerId: '卖家支付宝用户 ID',
     privateKey: '私钥',
     alipayPublicKey: '支付宝公钥',
     signType: 'RSA2', // 可选，默认 RSA2
@@ -107,6 +109,16 @@ await payment.init({
 金額は最小通貨単位（分・セント）で指定し、正の整数でなければなりません。Provider を呼ぶ前に `amount` / `totalAmount` を検証し、不正な金額を決済サービスに渡さないようにします。
 
 すべての組み込み Provider の HTTP リクエストには既定で 15 秒のタイムアウトがあり、ネットワーク障害による長時間の待機を防ぎます。
+
+### 通知の識別・時刻・業務上の冪等性
+
+WeChat は `platformKeys` が必須です。信頼する証明書シリアル番号または公開鍵 ID と PEM を登録し、`Wechatpay-Serial` で一件を選択します。不明な ID は拒否し、証明書のシリアル番号と有効期間も検証します。鍵の更新中は全ノードに新旧の鍵を設定してください。通知から鍵を自動取得しません。署名時刻は厳密な整数で、同期したノード時刻との差が 300 秒以内である必要があります。`TRANSACTION.SUCCESS` の transaction 通知のみ受け付け、復号後の `appid/mchid` も照合します。
+
+Alipay は `sellerId` を必須とし、署名検証後に `app_id/seller_id` と設定済みの RSA2/RSA を照合します。重複パラメータ、不明な状態、不正な暦日は拒否します。リクエスト時刻には Asia/Shanghai を明示し、署名と注文情報は URL ではなく POST form body に送ります。通知・支払日時も北京時間として解釈します。日をまたぐ正規の再送を許可し、元の日時に五分制限は適用しません。Stripe は厳密な署名時刻、更新中の複数 v1 署名、test/live を検証します。Connect・組織コンテキストのイベントは未対応で、現在のアカウント用 Webhook secret が必要です。
+
+組み込み・カスタム Provider は必須の `eventId` と大文字 `currency` を返します。ID は WeChat id・Alipay notify_id・Stripe event.id です。業務側は共有 DB でチャネル・注文・金額・通貨を照合し、商戸単位の重複排除と状態の逆戻り防止を行います。注文番号は削除後も再利用しません。[実行可能な消費者例](examples/payment-notify-consumer.ts) は注文 CAS、通知記録、履行 outbox を同一トランザクションで保存し、コミット後にのみ成功応答します。外部配送には固定 ID による冪等処理が必要で、DB だけで外部副作用の厳密な一回実行は保証できません。二つの実 Node プロセスと共有 SQLite で重複・再起動後も outbox が一件であることを検証します。複数ホストの本番では共有 PostgreSQL/MySQL を使用してください。
+
+参照：[WeChat 証明書と時刻](https://pay.wechatpay.cn/doc/v3/merchant/4013053420)、[公開鍵更新](https://pay.wechatpay.cn/doc/v3/merchant/4012154180)、[Alipay 通知の照合と再送](https://developer.alibaba.com/docs/doc.htm?articleId=103296&docType=1&treeId=346)。
 
 ### Alipay の業務レスポンスと返金状態
 

@@ -79,7 +79,7 @@ export function signJsapi(
  * @param nonce - 回调 header 中的随机串
  * @param body - 回调原始 body
  * @param signature - 回调签名
- * @param platformCert - 微信支付平台证书 PEM
+ * @param platformKey - 已按 serial 选择的微信支付平台证书或公钥 PEM
  * @returns 是否验签通过
  */
 export function verifyNotifySignature(
@@ -87,12 +87,12 @@ export function verifyNotifySignature(
   nonce: string,
   body: string,
   signature: string,
-  platformCert: string,
+  platformKey: string,
 ): boolean {
   const message = `${timestamp}\n${nonce}\n${body}\n`
   const verify = createVerify('RSA-SHA256')
   verify.update(message)
-  return verify.verify(platformCert, signature, 'base64')
+  return verify.verify(platformKey, signature, 'base64')
 }
 
 /**

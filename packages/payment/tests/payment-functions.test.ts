@@ -50,6 +50,8 @@ function createMockProvider(name: string): PaymentProvider {
     handleNotify: async () => ok({
       orderNo: 'ORD001',
       transactionId: 'TXN001',
+      eventId: 'evt_mock_001',
+      currency: 'CNY',
       amount: 100,
       status: 'paid' as const,
     }),
@@ -387,7 +389,7 @@ describe('payment-functions — 审计日志', () => {
       action: 'payment_notify',
       resource: 'payment',
       resourceId: 'ORD001',
-      details: { provider: 'mock', transactionId: 'TXN001', status: 'paid', amount: 100 },
+      details: { provider: 'mock', transactionId: 'TXN001', eventId: 'evt_mock_001', currency: 'CNY', status: 'paid', amount: 100 },
     })
   })
 

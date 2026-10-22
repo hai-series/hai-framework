@@ -100,12 +100,12 @@ export interface PaymentNotifyResult {
   orderNo: string
   /** 支付渠道交易号 */
   transactionId: string
-  /** 渠道通知事件 ID（Stripe 提供），供宿主做持久去重。 */
-  eventId?: string
+  /** 渠道通知事件 ID：微信 id、支付宝 notify_id、Stripe event.id；宿主按渠道/商户命名空间持久去重。 */
+  eventId: string
   /** 支付金额（分） */
   amount: number
-  /** ISO 4217 大写币种；Stripe 提供，宿主必须与订单核对。 */
-  currency?: string
+  /** ISO 4217 大写币种；支付宝为 CNY，宿主必须与订单核对。 */
+  currency: string
   /** 支付状态 */
   status: OrderStatusValue
   /** 渠道支付时间；Stripe 为支付成功事件的创建时间，非本次通知接收时间。 */

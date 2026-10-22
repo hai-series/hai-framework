@@ -9,6 +9,7 @@ import { createSign, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiPaymentError } from '../src/payment-types'
 import { createAlipayProvider } from '../src/providers/alipay/alipay-provider'
+import { formatAlipayTime } from '../src/providers/alipay/alipay-time'
 
 // 生成测试用 RSA 密钥对
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
@@ -19,12 +20,22 @@ const { privateKey, publicKey } = generateKeyPairSync('rsa', {
 
 const testConfig = {
   appId: '2021000000000001',
+  sellerId: '2088_test',
   privateKey,
   alipayPublicKey: publicKey,
 }
 
 /** 辅助：用私钥为回调参数签名 */
 function signNotifyParams(params: Record<string, string>): string {
+  Object.assign(params, {
+    app_id: testConfig.appId,
+    seller_id: testConfig.sellerId,
+    notify_id: 'alipay-notify-test',
+    notify_type: 'trade_status_sync',
+    notify_time: formatAlipayTime(new Date()),
+    gmt_payment: '2024-01-01 12:00:00',
+    ...params,
+  })
   const sorted = Object.keys(params)
     .filter(k => k !== 'sign' && k !== 'sign_type' && params[k] !== undefined && params[k] !== '')
     .sort()
@@ -38,7 +49,15 @@ function signNotifyParams(params: Record<string, string>): string {
 
 /** 构建 form-urlencoded 回调 body */
 function buildNotifyBody(params: Record<string, string>): string {
-  return Object.entries(params)
+  return Object.entries({
+    app_id: testConfig.appId,
+    seller_id: testConfig.sellerId,
+    notify_id: 'alipay-notify-test',
+    notify_type: 'trade_status_sync',
+    notify_time: formatAlipayTime(new Date()),
+    gmt_payment: '2024-01-01 12:00:00',
+    ...params,
+  })
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join('&')
 }
@@ -88,7 +107,8 @@ describe('alipay-provider', () => {
       // 验证 fetch 调用正确的网关（非沙箱）
       const [url, options] = fetchSpy.mock.calls[0]
       expect(url).toContain('openapi.alipay.com')
-      expect(url).toContain('sign=')
+      expect(new URL(url).search).toBe('')
+      expect(new URLSearchParams(options.body).get('sign')).toBeTruthy()
       expect(options.signal).toBeDefined()
     })
 
@@ -109,9 +129,9 @@ describe('alipay-provider', () => {
         notifyUrl: 'https://example.com/notify',
       })
 
-      const [url] = fetchSpy.mock.calls[0]
+      const [, options] = fetchSpy.mock.calls[0]
       expect(result.success).toBe(true)
-      expect(url).toContain('method=alipay.trade.create')
+      expect(new URLSearchParams(options.body).get('method')).toBe('alipay.trade.create')
     })
 
     it('app 下单使用 alipay.trade.app.pay 方法', async () => {
@@ -131,9 +151,9 @@ describe('alipay-provider', () => {
         notifyUrl: 'https://example.com/notify',
       })
 
-      const [url] = fetchSpy.mock.calls[0]
+      const [, options] = fetchSpy.mock.calls[0]
       expect(result.success).toBe(true)
-      expect(url).toContain('method=alipay.trade.app.pay')
+      expect(new URLSearchParams(options.body).get('method')).toBe('alipay.trade.app.pay')
     })
 
     it('native 下单使用 alipay.trade.precreate 方法', async () => {
@@ -153,11 +173,11 @@ describe('alipay-provider', () => {
         notifyUrl: 'https://example.com/notify',
       })
 
-      const [url] = fetchSpy.mock.calls[0]
+      const [, options] = fetchSpy.mock.calls[0]
       expect(result.success).toBe(true)
       if (result.success)
         expect(result.data.clientParams.qr_code).toBe('https://qr.alipay.com/test-order')
-      expect(url).toContain('method=alipay.trade.precreate')
+      expect(new URLSearchParams(options.body).get('method')).toBe('alipay.trade.precreate')
     })
 
     it('金额从分转换为元（100 分 → 1.00 元）', async () => {
@@ -177,9 +197,9 @@ describe('alipay-provider', () => {
         notifyUrl: 'https://example.com/notify',
       })
 
-      const [url] = fetchSpy.mock.calls[0]
+      const [, options] = fetchSpy.mock.calls[0]
       // biz_content 中包含 total_amount 1.50
-      expect(url).toContain('1.50')
+      expect(new URLSearchParams(options.body).get('biz_content')).toContain('1.50')
     })
 
     it('沙箱模式使用沙箱网关', async () => {
@@ -314,7 +334,7 @@ describe('alipay-provider', () => {
       }
     })
 
-    it('无 gmt_payment 时 paidAt 为 undefined', async () => {
+    it('非 paid 状态时 paidAt 为 undefined', async () => {
       const params: Record<string, string> = {
         out_trade_no: 'ORD-NOPAY',
         trade_no: 'T-NOPAY',
@@ -529,8 +549,8 @@ describe('alipay-provider', () => {
 
       expect(result.success).toBe(true)
 
-      const [url] = fetchSpy.mock.calls[0]
-      expect(url).toContain('method=alipay.trade.close')
+      const [, options] = fetchSpy.mock.calls[0]
+      expect(new URLSearchParams(options.body).get('method')).toBe('alipay.trade.close')
     })
 
     it('fetch 失败返回 CLOSE_ORDER_FAILED', async () => {
@@ -775,8 +795,8 @@ describe('alipay-provider', () => {
         notifyUrl: 'https://example.com/notify',
       })
 
-      const [url] = fetchSpy.mock.calls[0]
-      expect(url).toContain('sign_type=RSA2')
+      const [, options] = fetchSpy.mock.calls[0]
+      expect(new URLSearchParams(options.body).get('sign_type')).toBe('RSA2')
     })
 
     it('可配置 RSA 签名类型', async () => {
@@ -795,8 +815,8 @@ describe('alipay-provider', () => {
         notifyUrl: 'https://example.com/notify',
       })
 
-      const [url] = fetchSpy.mock.calls[0]
-      expect(url).toContain('sign_type=RSA')
+      const [, options] = fetchSpy.mock.calls[0]
+      expect(new URLSearchParams(options.body).get('sign_type')).toBe('RSA')
     })
   })
 })

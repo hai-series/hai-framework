@@ -34,10 +34,12 @@ wechat:
   apiV3Key: ''
   privateKey: ''
   serialNo: ''
-  platformCert: ''  # 可选，回调验签需要
+  platformKeys: # 必填，按通知 Wechatpay-Serial 精确选择受信平台证书/公钥
+    PUB_KEY_ID_123: '' # 平台公钥 PEM；证书使用其真实序列号作为 key
 
 alipay:
   appId: ''
+  sellerId: '' # 必填，验签后核对 seller_id
   privateKey: ''
   alipayPublicKey: ''
   signType: RSA2  # 可选，默认 RSA2
@@ -68,9 +70,11 @@ const initResult = await payment.init({
     apiV3Key: 'your-api-key-v3',
     privateKey: '-----BEGIN RSA PRIVATE KEY-----...',
     serialNo: 'CERT_SERIAL_NO',
+    platformKeys: { PUB_KEY_ID_123: '-----BEGIN PUBLIC KEY-----...' },
   },
   alipay: {
     appId: '2021000000000000',
+    sellerId: '2088000000000000',
     privateKey: '-----BEGIN RSA PRIVATE KEY-----...',
     alipayPublicKey: '-----BEGIN PUBLIC KEY-----...',
   },
@@ -112,12 +116,16 @@ const result = await payment.handleNotify('wechat', {
 
 if (result.success) {
   // success 仅表示验签解析成功；Stripe completed/unpaid 仍是 pending。
-  // 在共享数据库事务中核对订单、amount、currency，按 eventId/transactionId 去重。
+  // 在共享数据库事务中核对渠道、订单、amount、currency，按渠道/商户命名空间持久去重 eventId。
   // 仅 status=paid 可履约；乱序 pending/failed 不得回退已支付/已退款订单。
 }
 ```
 
 Stripe 只消费 payment-mode Checkout Session 的 `completed`、`async_payment_succeeded`、`async_payment_failed`、`expired` 事件，其它事件或缺失订单号/金额/币种返回 `NOTIFY_PARSE_FAILED`。结果的 `eventId` 用于持久去重，`currency` 为大写，`transactionId` 为 Session ID。只有 paid 结果返回 `paidAt`，取成功事件的 created 时间；Provider 不维护业务订单或进程内去重集合。
+
+所有 Provider（含自定义实现）都必须返回 eventId/currency：微信 id、支付宝 notify_id、Stripe event.id；支付宝 currency 固定 CNY。微信只处理 TRANSACTION.SUCCESS/transaction，验签后继续校验 appid/mchid，按 Wechatpay-Serial 精确选择 platformKeys 项，检查证书序列号及有效期、严格整数签名时钟与当前节点相差不超过 300 秒。轮换期间所有节点同时保存新旧项；未知 serial 不能自动下载并信任。支付宝核对 app_id/seller_id/配置签名算法，拒绝重复表单字段，按北京时间严格解析真实日期；notify_id 跨日重试不变，不能对原始通知时间套五分钟有效期。支付宝请求使用 Asia/Shanghai 和 POST form body，不能把签名/订单内容放 URL。Stripe 按密钥校验 test/live，支持轮换期多个 v1 签名，只支持当前账户，拒绝 Connect/组织 context 事件。
+
+接入应用应把“业务订单 pending→paid 的条件更新 + 唯一 eventId 记录 + 唯一履约 outbox”放进共享数据库同一个事务；所有 HaiResult 失败必须抛错使 reldb.tx.wrap 回滚，数据库提交后才应答渠道成功。条件须核对已存渠道、金额、币种和交易号，重复已支付通知或晚到 pending 不重复履约，已退款状态也不能倒退。订单号不得删除后复用，切换商户不能复用旧业务订单命名空间。外部发货等由 outbox 消费者携带稳定 outbox ID 幂等调用，不能在数据库事务中直接调用后宣称跨系统只执行一次。
 
 ### 5. 查询订单
 

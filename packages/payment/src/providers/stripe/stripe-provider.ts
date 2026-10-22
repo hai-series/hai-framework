@@ -16,6 +16,7 @@ import { z } from 'zod'
 import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
+import { getNotifyHeader } from '../payment-provider-notify.js'
 import { StripeOperationRepository } from './stripe-operation-repository.js'
 
 /** Stripe API 基地址 */
@@ -62,6 +63,10 @@ const StripeRefundSchema = z.object({
  */
 const StripeCheckoutEventSchema = z.object({
   id: z.string().min(1),
+  livemode: z.boolean(),
+  // 本 Provider 只支持当前账户，不能消费 Connect/组织上下文的其它商户事件。
+  account: z.never().optional(),
+  context: z.never().optional(),
   created: z.number().int().nonnegative().max(8_640_000_000_000),
   type: z.enum([
     'checkout.session.completed',
@@ -196,13 +201,17 @@ export function createStripeProvider(
 
   /** 验证 Stripe Webhook 签名 */
   function verifyWebhookSignature(payload: string, signature: string): boolean {
-    const parts = signature.split(',')
-    const timestamp = parts.find(p => p.startsWith('t='))?.slice(2) ?? ''
-    const v1 = parts.find(p => p.startsWith('v1='))?.slice(3) ?? ''
+    const parts = signature.split(',').map(part => part.trim())
+    const timestamps = parts.filter(p => p.startsWith('t='))
+    if (timestamps.length !== 1)
+      return false
+    const timestamp = timestamps[0].slice(2)
+    const signatures = parts.filter(p => p.startsWith('v1=')).map(p => p.slice(3))
 
     // 时间戳重放保护
-    const ts = Number.parseInt(timestamp, 10)
-    if (Number.isNaN(ts) || Math.abs(Math.floor(Date.now() / 1000) - ts) > TIMESTAMP_TOLERANCE) {
+    const ts = Number(timestamp)
+    if (!/^(?:0|[1-9]\d{0,11})$/.test(timestamp) || !Number.isSafeInteger(ts)
+      || Math.abs(Math.floor(Date.now() / 1000) - ts) > TIMESTAMP_TOLERANCE) {
       return false
     }
 
@@ -212,7 +221,8 @@ export function createStripeProvider(
       .digest('hex')
 
     try {
-      return core.string.constantTimeEqual(v1, expected)
+      // Stripe 密钥轮换期间允许同一报文包含多个 v1 签名。
+      return signatures.some(v1 => /^[a-f0-9]{64}$/.test(v1) && core.string.constantTimeEqual(v1, expected))
     }
     catch {
       return false
@@ -284,7 +294,7 @@ export function createStripeProvider(
 
     async handleNotify(request: PaymentNotifyRequest): Promise<HaiResult<PaymentNotifyResult>> {
       try {
-        const signature = request.headers['stripe-signature'] ?? ''
+        const signature = getNotifyHeader(request.headers, 'stripe-signature') ?? ''
 
         // 验签
         const valid = verifyWebhookSignature(request.body, signature)
@@ -295,7 +305,14 @@ export function createStripeProvider(
           )
         }
 
-        const event = StripeCheckoutEventSchema.parse(JSON.parse(request.body))
+        const parsed = StripeCheckoutEventSchema.safeParse(JSON.parse(request.body))
+        if (!parsed.success)
+          throw new Error('Invalid Stripe payment event')
+        const event = parsed.data
+        if (event.livemode !== /^(?:sk|rk)_live_/.test(config.secretKey)
+          || event.created > Math.floor(Date.now() / 1000) + TIMESTAMP_TOLERANCE) {
+          return err(HaiPaymentError.NOTIFY_VERIFY_FAILED, paymentM('payment_notifyVerifyFailed'))
+        }
         const obj = event.data.object
         // completed 只表示 Checkout 已完成；延迟付款仍可能处于 unpaid。
         const status: PaymentNotifyResult['status'] = event.type === 'checkout.session.expired'
@@ -316,11 +333,11 @@ export function createStripeProvider(
           raw: event,
         })
       }
-      catch (cause) {
+      catch {
         return err(
           HaiPaymentError.NOTIFY_PARSE_FAILED,
           paymentM('payment_notifyParseFailed'),
-          cause,
+          new Error('Invalid Stripe payment notification'),
         )
       }
     },

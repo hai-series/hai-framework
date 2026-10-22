@@ -16,13 +16,16 @@ export const WechatPayConfigSchema = z.object({
   apiV3Key: z.string().min(1, paymentM('payment_configFieldRequired')),
   serialNo: z.string().min(1, paymentM('payment_configFieldRequired')),
   privateKey: z.string().min(1, paymentM('payment_configFieldRequired')),
-  platformCert: z.string().optional(),
+  /** 精确按 Wechatpay-Serial 选择平台证书/公钥，轮换期间同时配置新旧标识。 */
+  platformKeys: z.record(z.string().min(1), z.string().min(1))
+    .refine(keys => Object.keys(keys).length > 0, paymentM('payment_configFieldRequired')),
   appId: z.string().min(1, paymentM('payment_configFieldRequired')),
 })
 
 /** 支付宝配置 Schema */
 export const AlipayConfigSchema = z.object({
   appId: z.string().min(1, paymentM('payment_configFieldRequired')),
+  sellerId: z.string().min(1, paymentM('payment_configFieldRequired')),
   privateKey: z.string().min(1, paymentM('payment_configFieldRequired')),
   alipayPublicKey: z.string().min(1, paymentM('payment_configFieldRequired')),
   signType: z.enum(['RSA2', 'RSA']).default('RSA2'),

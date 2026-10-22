@@ -51,7 +51,7 @@ function fieldDescription(module, segments) {
       return `${scope}：${detail}`
   }
   if (module === 'payment') {
-    const detail = { alipayPublicKey: '支付宝平台公钥，用于验签', appId: '商户应用 ID', privateKey: '商户签名私钥（PEM）', sandbox: '是否使用沙箱网关', signType: '请求签名算法', secretKey: 'Stripe 服务端密钥', webhookSecret: 'Stripe Webhook 验签密钥', webhookToleranceSeconds: 'Webhook 时间戳允许偏差，单位秒', apiV3Key: '微信支付 API v3 密钥', mchId: '微信支付商户号', platformCert: '微信支付平台证书（PEM），用于验签', serialNo: '商户 API 证书序列号' }[key]
+    const detail = { alipayPublicKey: '支付宝平台公钥，用于验签', appId: '商户应用 ID', sellerId: '支付宝卖家 ID，通知 seller_id 必须与之匹配', privateKey: '商户签名私钥（PEM）', sandbox: '是否使用沙箱网关', signType: '请求和通知允许的签名算法', secretKey: 'Stripe 服务端密钥', webhookSecret: 'Stripe Webhook 验签密钥', webhookToleranceSeconds: 'Webhook 时间戳允许偏差，单位秒', apiV3Key: '微信支付 API v3 密钥', mchId: '微信支付商户号', platformKeys: '按 Wechatpay-Serial 映射的受信平台证书或公钥 PEM，轮换时保留新旧项', serialNo: '商户 API 证书序列号' }[key]
     if (detail)
       return `${segments[0]}：${detail}`
   }

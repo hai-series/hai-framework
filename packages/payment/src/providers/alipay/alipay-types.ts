@@ -6,6 +6,10 @@
  */
 
 import { z } from 'zod'
+import { parseAlipayTime } from './alipay-time.js'
+
+/** 支付宝北京时间，拒绝非法日历日期。 */
+const AlipayTimeSchema = z.string().refine(value => parseAlipayTime(value) !== undefined)
 
 /**
  * 支付宝响应根对象；仅允许 JSON 对象，按请求方法读取对应 envelope。
@@ -44,10 +48,7 @@ export const AlipayQueryResponseSchema = z.object({
   trade_no: z.string().min(1),
   trade_status: z.enum(['WAIT_BUYER_PAY', 'TRADE_CLOSED', 'TRADE_SUCCESS', 'TRADE_FINISHED']),
   total_amount: AlipayAmountSchema,
-  send_pay_date: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
-    .refine(value => Number.isFinite(Date.parse(`${value.replace(' ', 'T')}+08:00`)))
-    .optional(),
+  send_pay_date: AlipayTimeSchema.optional(),
 })
 
 /**
@@ -70,13 +71,27 @@ export const AlipayCloseResponseSchema = z.object({
   trade_no: z.string().min(1),
 })
 
-/** 支付宝回调参数 */
+/**
+ * 支付宝交易通知参数；身份字段、通知 ID 和北京时间不可缺失。
+ * @example AlipayNotifyParamsSchema.safeParse(Object.fromEntries(new URLSearchParams(request.body)))
+ */
 export const AlipayNotifyParamsSchema = z.object({
+  app_id: z.string().min(1),
+  seller_id: z.string().min(1),
+  notify_id: z.string().min(1),
+  notify_type: z.literal('trade_status_sync'),
+  notify_time: AlipayTimeSchema,
+  sign_type: z.enum(['RSA', 'RSA2']),
+  sign: z.string().min(1),
   out_trade_no: z.string().min(1),
   trade_no: z.string().min(1),
-  trade_status: z.string().min(1),
-  total_amount: z.string().min(1),
-  gmt_payment: z.string().optional(),
-}).catchall(z.string())
+  trade_status: z.enum(['WAIT_BUYER_PAY', 'TRADE_CLOSED', 'TRADE_SUCCESS', 'TRADE_FINISHED']),
+  total_amount: AlipayAmountSchema,
+  gmt_payment: AlipayTimeSchema.optional(),
+}).catchall(z.string()).refine(params => !['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(params.trade_status) || !!params.gmt_payment)
 
+/**
+ * 已通过结构校验的支付宝通知；身份与签名由 Provider 继续校验。
+ * @example const params: AlipayNotifyParams = AlipayNotifyParamsSchema.parse(rawParams)
+ */
 export type AlipayNotifyParams = z.infer<typeof AlipayNotifyParamsSchema>

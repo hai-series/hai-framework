@@ -19,6 +19,7 @@ const { privateKey, publicKey } = generateKeyPairSync('rsa', {
 
 const testConfig = {
   mchId: 'test-mch-001',
+  platformKeys: { PUB_KEY_ID_TEST: publicKey },
   apiV3Key: 'a]1234567890abcdef1234567890abcd', // 32字节
   serialNo: 'TEST-SERIAL-001',
   privateKey,
@@ -41,8 +42,8 @@ function signNotifyPayload(timestamp: string, nonce: string, body: string, key: 
   return sign.sign(key, 'base64')
 }
 
-/** 带 platformCert 的测试配置 */
-const testConfigWithCert = { ...testConfig, platformCert: publicKey }
+/** 按平台公钥 ID 选择验签密钥的测试配置。 */
+const testConfigWithCert = { ...testConfig }
 
 describe('wechat-pay-provider', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
@@ -257,6 +258,8 @@ describe('wechat-pay-provider', () => {
   describe('handleNotify', () => {
     it('回调通知验签 + 解密解析成功', async () => {
       const resource = JSON.stringify({
+        appid: testConfig.appId,
+        mchid: testConfig.mchId,
         out_trade_no: 'ORD001',
         transaction_id: 'wx_txn_001',
         trade_state: 'SUCCESS',
@@ -269,10 +272,14 @@ describe('wechat-pay-provider', () => {
       const ciphertext = encryptNotifyResource(resource, nonce, associatedData, testConfig.apiV3Key)
 
       const body = JSON.stringify({
-        resource: { ciphertext, nonce, associated_data: associatedData },
+        id: 'wechat-event-1',
+        create_time: '2024-01-01T12:00:00+08:00',
+        event_type: 'TRANSACTION.SUCCESS',
+        resource_type: 'encrypt-resource',
+        resource: { algorithm: 'AEAD_AES_256_GCM', original_type: 'transaction', ciphertext, nonce, associated_data: associatedData },
       })
 
-      const timestamp = '1704067200'
+      const timestamp = String(Math.floor(Date.now() / 1000))
       const headerNonce = 'test-nonce-001'
       const signature = signNotifyPayload(timestamp, headerNonce, body, privateKey)
 
@@ -283,6 +290,7 @@ describe('wechat-pay-provider', () => {
           'wechatpay-timestamp': timestamp,
           'wechatpay-nonce': headerNonce,
           'wechatpay-signature': signature,
+          'wechatpay-serial': 'PUB_KEY_ID_TEST',
         },
       })
 
@@ -296,8 +304,10 @@ describe('wechat-pay-provider', () => {
       }
     })
 
-    it('trade_state 非 SUCCESS 时 status 为 failed', async () => {
+    it('支付成功事件与非 SUCCESS 资源矛盾时拒绝', async () => {
       const resource = JSON.stringify({
+        appid: testConfig.appId,
+        mchid: testConfig.mchId,
         out_trade_no: 'ORD002',
         transaction_id: 'wx_txn_002',
         trade_state: 'PAYERROR',
@@ -310,10 +320,14 @@ describe('wechat-pay-provider', () => {
       const ciphertext = encryptNotifyResource(resource, nonce, associatedData, testConfig.apiV3Key)
 
       const body = JSON.stringify({
-        resource: { ciphertext, nonce, associated_data: associatedData },
+        id: 'wechat-event-1',
+        create_time: '2024-01-01T12:00:00+08:00',
+        event_type: 'TRANSACTION.SUCCESS',
+        resource_type: 'encrypt-resource',
+        resource: { algorithm: 'AEAD_AES_256_GCM', original_type: 'transaction', ciphertext, nonce, associated_data: associatedData },
       })
 
-      const timestamp = '1704067200'
+      const timestamp = String(Math.floor(Date.now() / 1000))
       const headerNonce = 'test-nonce-002'
       const signature = signNotifyPayload(timestamp, headerNonce, body, privateKey)
 
@@ -324,17 +338,17 @@ describe('wechat-pay-provider', () => {
           'wechatpay-timestamp': timestamp,
           'wechatpay-nonce': headerNonce,
           'wechatpay-signature': signature,
+          'wechatpay-serial': 'PUB_KEY_ID_TEST',
         },
       })
 
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.status).toBe('failed')
-      }
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_PARSE_FAILED.code)
     })
 
-    it('无 platformCert 返回 NOTIFY_VERIFY_FAILED', async () => {
-      const provider = createWechatPayProvider(testConfig)
+    it('无受信平台密钥返回 NOTIFY_VERIFY_FAILED', async () => {
+      const provider = createWechatPayProvider({ ...testConfig, platformKeys: {} })
       const result = await provider.handleNotify({
         body: '{}',
         headers: {},
@@ -348,7 +362,7 @@ describe('wechat-pay-provider', () => {
 
     it('body 格式错误返回 NOTIFY_PARSE_FAILED', async () => {
       const body = 'invalid json'
-      const timestamp = '1704067200'
+      const timestamp = String(Math.floor(Date.now() / 1000))
       const headerNonce = 'test-nonce-003'
       const signature = signNotifyPayload(timestamp, headerNonce, body, privateKey)
 
@@ -359,6 +373,7 @@ describe('wechat-pay-provider', () => {
           'wechatpay-timestamp': timestamp,
           'wechatpay-nonce': headerNonce,
           'wechatpay-signature': signature,
+          'wechatpay-serial': 'PUB_KEY_ID_TEST',
         },
       })
 
@@ -368,7 +383,7 @@ describe('wechat-pay-provider', () => {
       }
     })
 
-    it('配置 platformCert 时验签失败返回 NOTIFY_VERIFY_FAILED', async () => {
+    it('平台公钥验签失败返回 NOTIFY_VERIFY_FAILED', async () => {
       const provider = createWechatPayProvider(testConfigWithCert)
 
       const result = await provider.handleNotify({

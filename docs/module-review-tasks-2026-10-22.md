@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 20/42；P2 0/23（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 21/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -312,7 +312,8 @@
 
 ### PAY-05 · P1 · 核验回调商户身份并定义重放及幂等边界
 
-- [ ] 待修正（源码确认；范围：payment）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：微信按serial精确选择受信证书/公钥并验证有效期、300秒签名时钟及appid/mchid，支付宝核对app_id/seller_id/算法与严格日历，请求用北京时间和POST form body，Stripe核对严格时间/test-live/账户与多v1签名。三渠道eventId/currency必填，新增业务事务/去重/outbox示例；真实双Node进程共享SQLite完成验签与一次outbox、重启去重、乱序保护和失败回滚。payment/示例typecheck/build、11文件341项和补充35项、CLI配置31项、lint/skills/env589通过；scaffold22包前置build通过而8场景5过3失败，非支付API import与锁结果收窄已交对应任务集中修正。未执行真实渠道交易、PG/MySQL示例集成或根全量测试，不宣称外部exactly-once；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/payment/src/providers/alipay/alipay-provider.ts:145](../packages/payment/src/providers/alipay/alipay-provider.ts#L145)；[packages/payment/src/providers/wechat/wechat-pay-provider.ts:196](../packages/payment/src/providers/wechat/wechat-pay-provider.ts#L196)。
 - **证据与影响**：当前验签/解密后未显式核对支付宝 app_id、微信 appid/mchid 与配置；微信回调头时间/证书 serial 的处理也未形成完整校验链。验签成功不能替代订单商户、金额、币种及重放核验。
 - **修正内容**：按各平台协议校验身份与证书/公钥选择，严格解析时间；将 event/transaction id 提供给持久去重及业务订单核验，明确 provider 与业务履约各自职责。

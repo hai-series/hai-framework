@@ -23,6 +23,8 @@ function createMockProvider(name: string): PaymentProvider {
     handleNotify: async () => ok({
       orderNo: 'ORD001',
       transactionId: 'TXN001',
+      eventId: 'evt_mock_001',
+      currency: 'CNY',
       amount: 100,
       status: 'paid' as const,
     }),
@@ -85,6 +87,7 @@ describe('payment.init', () => {
         mchId: 'test-mch',
         apiV3Key: 'test-key-32chars-0123456789abcde',
         serialNo: 'test-serial',
+        platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'test-private-key',
         appId: 'test-app-id',
       },
@@ -100,6 +103,7 @@ describe('payment.init', () => {
       alipay: {
         appId: 'test-alipay-app',
         privateKey: 'test-private-key',
+        sellerId: '2088_test',
         alipayPublicKey: 'test-public-key',
       },
     })
@@ -145,12 +149,14 @@ describe('payment.init', () => {
         mchId: 'mch',
         apiV3Key: 'key-32-chars-padded-000000000000',
         serialNo: 'sn',
+        platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'pk',
         appId: 'app',
       },
       alipay: {
         appId: 'ali-app',
         privateKey: 'pk',
+        sellerId: '2088_test',
         alipayPublicKey: 'pub',
       },
       stripe: {
@@ -171,12 +177,14 @@ describe('payment.init', () => {
         mchId: 'mch',
         apiV3Key: 'key-32-chars-padded-000000000000',
         serialNo: 'sn',
+        platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'pk',
         appId: 'app',
       },
       alipay: {
         appId: 'ali-app',
         privateKey: 'pk',
+        sellerId: '2088_test',
         alipayPublicKey: 'pub',
       },
     })

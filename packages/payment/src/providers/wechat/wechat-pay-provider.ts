@@ -8,11 +8,13 @@
 import type { HaiResult } from '@h-ai/core'
 import type { WechatPayConfig } from '../../payment-config.js'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
-import type { WechatNotifyResource, WechatOrderRequest } from './wechat-pay-types.js'
+import type { WechatOrderRequest } from './wechat-pay-types.js'
+import { X509Certificate } from 'node:crypto'
 import { err, ok } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
+import { getNotifyHeader } from '../payment-provider-notify.js'
 import {
   decryptResource,
   generateNonce,
@@ -21,6 +23,7 @@ import {
   signRequest,
   verifyNotifySignature,
 } from './wechat-pay-sign.js'
+import { WechatNotifyEnvelopeSchema, WechatNotifyResourceSchema } from './wechat-pay-types.js'
 
 /** 微信支付 API 基地址 */
 const WECHAT_API_BASE = 'https://api.mch.weixin.qq.com'
@@ -39,6 +42,7 @@ const WECHAT_API_BASE = 'https://api.mch.weixin.qq.com'
  *   serialNo: 'your-serial-no',
  *   privateKey: fs.readFileSync('apiclient_key.pem', 'utf-8'),
  *   appId: 'your-app-id',
+ *   platformKeys: { PUB_KEY_ID_123: platformPublicKeyPem },
  * })
  *
  * const result = await wechatPay.createOrder({
@@ -52,6 +56,41 @@ const WECHAT_API_BASE = 'https://api.mch.weixin.qq.com'
  * ```
  */
 export function createWechatPayProvider(config: WechatPayConfig): PaymentProvider {
+  /**
+   * 精确选择受信平台密钥，并校验签名时间和证书有效期。
+   * 不联网信任通知携带的未知 serial；配置轮换由宿主受信配置完成。
+   */
+  function verifyNotification(request: PaymentNotifyRequest): boolean {
+    try {
+      const timestamp = getNotifyHeader(request.headers, 'wechatpay-timestamp') ?? ''
+      const nonce = getNotifyHeader(request.headers, 'wechatpay-nonce') ?? ''
+      const signature = getNotifyHeader(request.headers, 'wechatpay-signature') ?? ''
+      const serial = getNotifyHeader(request.headers, 'wechatpay-serial') ?? ''
+      const signatureType = getNotifyHeader(request.headers, 'wechatpay-signature-type')
+      const now = Date.now()
+      if (!/^(?:0|[1-9]\d{0,11})$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))
+        || Math.abs(Math.floor(now / 1000) - Number(timestamp)) > 300
+        || !nonce || !signature || !serial
+        || (signatureType !== undefined && signatureType !== 'WECHATPAY2-SHA256-RSA2048')) {
+        return false
+      }
+      const key = Object.hasOwn(config.platformKeys, serial) ? config.platformKeys[serial] : undefined
+      if (!key)
+        return false
+      if (key.includes('-----BEGIN CERTIFICATE-----')) {
+        const certificate = new X509Certificate(key)
+        if (certificate.serialNumber.toUpperCase() !== serial.toUpperCase()
+          || now < Date.parse(certificate.validFrom) || now > Date.parse(certificate.validTo)) {
+          return false
+        }
+      }
+      return verifyNotifySignature(timestamp, nonce, request.body, signature, key)
+    }
+    catch {
+      return false
+    }
+  }
+
   /**
    * 发送微信支付 API 请求
    */
@@ -164,19 +203,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
     async handleNotify(request: PaymentNotifyRequest): Promise<HaiResult<PaymentNotifyResult>> {
       try {
-        const timestamp = request.headers['wechatpay-timestamp'] ?? ''
-        const nonce = request.headers['wechatpay-nonce'] ?? ''
-        const signature = request.headers['wechatpay-signature'] ?? ''
-
-        // 验签（必须提供平台证书）
-        if (!config.platformCert) {
-          return err(
-            HaiPaymentError.NOTIFY_VERIFY_FAILED,
-            paymentM('payment_notifyVerifyFailed'),
-          )
-        }
-        const valid = verifyNotifySignature(timestamp, nonce, request.body, signature, config.platformCert)
-        if (!valid) {
+        if (!verifyNotification(request)) {
           return err(
             HaiPaymentError.NOTIFY_VERIFY_FAILED,
             paymentM('payment_notifyVerifyFailed'),
@@ -184,32 +211,40 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         }
 
         // 解密资源
-        const body = JSON.parse(request.body) as {
-          resource: { ciphertext: string, nonce: string, associated_data: string }
-        }
+        const parsedBody = WechatNotifyEnvelopeSchema.safeParse(JSON.parse(request.body))
+        if (!parsedBody.success)
+          throw new Error('Invalid Wechat payment notification')
+        const body = parsedBody.data
         const decrypted = decryptResource(
           body.resource.ciphertext,
           body.resource.nonce,
-          body.resource.associated_data,
+          body.resource.associated_data ?? '',
           config.apiV3Key,
         )
-        const resource = JSON.parse(decrypted) as WechatNotifyResource
+        const parsedResource = WechatNotifyResourceSchema.safeParse(JSON.parse(decrypted))
+        if (!parsedResource.success)
+          throw new Error('Invalid Wechat payment notification resource')
+        const resource = parsedResource.data
+        if (resource.appid !== config.appId || resource.mchid !== config.mchId) {
+          return err(HaiPaymentError.NOTIFY_VERIFY_FAILED, paymentM('payment_notifyVerifyFailed'))
+        }
 
         return ok({
           orderNo: resource.out_trade_no,
           transactionId: resource.transaction_id,
+          eventId: body.id,
           amount: resource.amount.total,
-          status: resource.trade_state === 'SUCCESS' ? 'paid' : 'failed',
-          paidAt: resource.success_time ? new Date(resource.success_time) : undefined,
-          // 微信回调原始 payload 的强类型为 WechatNotifyResource，此处统一以 Record 暴露给上层做调试/审计
-          raw: resource as unknown as Record<string, unknown>,
+          currency: resource.amount.currency,
+          status: 'paid',
+          paidAt: new Date(resource.success_time),
+          raw: resource,
         })
       }
-      catch (cause) {
+      catch {
         return err(
           HaiPaymentError.NOTIFY_PARSE_FAILED,
           paymentM('payment_notifyParseFailed'),
-          cause,
+          new Error('Invalid Wechat payment notification'),
         )
       }
     },

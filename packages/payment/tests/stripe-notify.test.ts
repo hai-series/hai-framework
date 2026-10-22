@@ -11,6 +11,7 @@ function createEvent(type = 'checkout.session.completed', paymentStatus = 'paid'
   return {
     id: 'evt_checkout_001',
     created: 1_700_000_000,
+    livemode: false,
     type,
     data: {
       object: {

@@ -3224,10 +3224,18 @@
     "constraint": "true | false"
   },
   {
+    "name": "HAI_PAYMENT_ALIPAY_SELLERID",
+    "module": "payment",
+    "path": "payment.alipay.sellerId",
+    "description": "alipay：支付宝卖家 ID，通知 seller_id 必须与之匹配",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
     "name": "HAI_PAYMENT_ALIPAY_SIGNTYPE",
     "module": "payment",
     "path": "payment.alipay.signType",
-    "description": "alipay：请求签名算法",
+    "description": "alipay：请求和通知允许的签名算法",
     "value": "RSA2",
     "constraint": "字符串；取值：RSA2 | RSA"
   },
@@ -3312,12 +3320,12 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
-    "name": "HAI_PAYMENT_WECHAT_PLATFORMCERT",
+    "name": "HAI_PAYMENT_WECHAT_PLATFORMKEYS",
     "module": "payment",
-    "path": "payment.wechat.platformCert",
-    "description": "wechat：微信支付平台证书（PEM），用于验签",
+    "path": "payment.wechat.platformKeys",
+    "description": "精确按 Wechatpay-Serial 选择平台证书/公钥，轮换期间同时配置新旧标识。",
     "value": "",
-    "constraint": "字符串"
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_PAYMENT_WECHAT_PRIVATEKEY",

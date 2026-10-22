@@ -18,20 +18,21 @@ describe('wechatPayConfigSchema', () => {
       mchId: 'mch001',
       apiV3Key: 'key-32-chars-padded-000000000000',
       serialNo: 'serial-no-001',
+      platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: '-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----',
       appId: 'wx1234567890',
     })
     expect(result.success).toBe(true)
   })
 
-  it('platformCert 为可选字段', () => {
+  it('platformKeys 必须显式配置，且至少包含一个受信标识', () => {
     const withCert = WechatPayConfigSchema.safeParse({
       mchId: 'mch001',
       apiV3Key: 'k',
       serialNo: 'sn',
+      platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
       appId: 'app',
-      platformCert: 'cert-pem',
     })
     expect(withCert.success).toBe(true)
 
@@ -39,16 +40,18 @@ describe('wechatPayConfigSchema', () => {
       mchId: 'mch001',
       apiV3Key: 'k',
       serialNo: 'sn',
+      platformKeys: {},
       privateKey: 'pk',
       appId: 'app',
     })
-    expect(withoutCert.success).toBe(true)
+    expect(withoutCert.success).toBe(false)
   })
 
   it('缺少必填字段 mchId 校验失败', () => {
     const result = WechatPayConfigSchema.safeParse({
       apiV3Key: 'k',
       serialNo: 'sn',
+      platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
       appId: 'app',
     })
@@ -60,6 +63,7 @@ describe('wechatPayConfigSchema', () => {
       mchId: '',
       apiV3Key: 'k',
       serialNo: 'sn',
+      platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
       appId: 'app',
     })
@@ -70,6 +74,7 @@ describe('wechatPayConfigSchema', () => {
     const result = WechatPayConfigSchema.safeParse({
       mchId: 'mch',
       serialNo: 'sn',
+      platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
       appId: 'app',
     })
@@ -81,6 +86,7 @@ describe('wechatPayConfigSchema', () => {
       mchId: 'mch',
       apiV3Key: 'k',
       serialNo: 'sn',
+      platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
       privateKey: 'pk',
     })
     expect(result.success).toBe(false)
@@ -88,10 +94,21 @@ describe('wechatPayConfigSchema', () => {
 })
 
 describe('alipayConfigSchema', () => {
+  it.each([undefined, ''])('sellerId=%s 时拒绝配置，不能跳过卖家身份核对', (sellerId) => {
+    const result = AlipayConfigSchema.safeParse({
+      appId: 'ali-app-001',
+      sellerId,
+      privateKey: 'pk',
+      alipayPublicKey: 'pub',
+    })
+    expect(result.success).toBe(false)
+  })
+
   it('完整有效配置通过校验并带默认值', () => {
     const result = AlipayConfigSchema.safeParse({
       appId: 'ali-app-001',
       privateKey: 'pk',
+      sellerId: '2088_test',
       alipayPublicKey: 'pub',
     })
     expect(result.success).toBe(true)
@@ -105,6 +122,7 @@ describe('alipayConfigSchema', () => {
     const result = AlipayConfigSchema.safeParse({
       appId: 'ali-app',
       privateKey: 'pk',
+      sellerId: '2088_test',
       alipayPublicKey: 'pub',
       signType: 'RSA',
     })
@@ -118,6 +136,7 @@ describe('alipayConfigSchema', () => {
     const result = AlipayConfigSchema.safeParse({
       appId: 'ali-app',
       privateKey: 'pk',
+      sellerId: '2088_test',
       alipayPublicKey: 'pub',
       sandbox: true,
     })
@@ -131,6 +150,7 @@ describe('alipayConfigSchema', () => {
     const result = AlipayConfigSchema.safeParse({
       appId: 'ali-app',
       privateKey: 'pk',
+      sellerId: '2088_test',
       alipayPublicKey: 'pub',
       signType: 'MD5',
     })
@@ -140,6 +160,7 @@ describe('alipayConfigSchema', () => {
   it('缺少 appId 校验失败', () => {
     const result = AlipayConfigSchema.safeParse({
       privateKey: 'pk',
+      sellerId: '2088_test',
       alipayPublicKey: 'pub',
     })
     expect(result.success).toBe(false)
@@ -148,6 +169,7 @@ describe('alipayConfigSchema', () => {
   it('缺少 privateKey 校验失败', () => {
     const result = AlipayConfigSchema.safeParse({
       appId: 'ali-app',
+      sellerId: '2088_test',
       alipayPublicKey: 'pub',
     })
     expect(result.success).toBe(false)
@@ -157,6 +179,7 @@ describe('alipayConfigSchema', () => {
     const result = AlipayConfigSchema.safeParse({
       appId: 'ali-app',
       privateKey: 'pk',
+      sellerId: '2088_test',
       alipayPublicKey: '',
     })
     expect(result.success).toBe(false)
@@ -251,12 +274,14 @@ describe('paymentConfigSchema（顶层）', () => {
         mchId: 'mch',
         apiV3Key: 'key',
         serialNo: 'sn',
+        platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'pk',
         appId: 'app',
       },
       alipay: {
         appId: 'ali',
         privateKey: 'pk',
+        sellerId: '2088_test',
         alipayPublicKey: 'pub',
       },
       stripe: {

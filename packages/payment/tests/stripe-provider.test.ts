@@ -210,6 +210,7 @@ describe('stripe-provider', () => {
       const event = {
         id: 'evt_completed_001',
         created: 1_700_000_000,
+        livemode: false,
         type: 'checkout.session.completed',
         data: {
           object: {
@@ -246,6 +247,7 @@ describe('stripe-provider', () => {
       const event = {
         id: 'evt_failed_001',
         created: 1_700_000_000,
+        livemode: false,
         type: 'checkout.session.async_payment_failed',
         data: {
           object: {
@@ -375,6 +377,7 @@ describe('stripe-provider', () => {
       const event = {
         id: 'evt_old_sig',
         created: 1_700_000_000,
+        livemode: false,
         type: 'checkout.session.completed',
         data: {
           object: {

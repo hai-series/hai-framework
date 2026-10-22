@@ -32,8 +32,8 @@ import { payment } from '@h-ai/payment'
 
 // 初始化（会自动注册可用的 Provider）
 await payment.init({
-  wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...' },
-  alipay: { appId: '...', privateKey: '...', alipayPublicKey: '...' },
+  wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...', platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM' } },
+  alipay: { appId: '...', sellerId: '...', privateKey: '...', alipayPublicKey: '...' },
 })
 
 // 创建订单
@@ -84,9 +84,11 @@ await payment.init({
     serialNo: '证书序列号',
     privateKey: '私钥内容',
     appId: '应用 ID',
+    platformKeys: { PUB_KEY_ID_123: '平台公钥 PEM', CERT_SERIAL: '平台证书 PEM' },
   },
   alipay: {
     appId: '应用 ID',
+    sellerId: '卖家支付宝用户 ID',
     privateKey: '私钥',
     alipayPublicKey: '支付宝公钥',
     signType: 'RSA2', // 可选，默认 RSA2
@@ -107,6 +109,16 @@ Configure only the providers you need; unconfigured providers are not registered
 Amounts use minor currency units (cents) and must be positive integers. `amount` / `totalAmount` are validated before calling a provider, so invalid amounts never reach the payment platform.
 
 All built-in provider HTTP requests have a default 15-second timeout to avoid long hangs on network failures.
+
+### Notification identity, clocks, and business idempotency
+
+WeChat requires `platformKeys`, mapping trusted certificate serials or public-key IDs to their PEM values. `Wechatpay-Serial` selects exactly one entry; unknown identifiers fail. Certificates are checked against their serial and validity period. Deploy both old and new entries on every node during rotation. No key is downloaded from notification data. Signed timestamps must be strict integers within 300 seconds of the synchronized node clock. Only `TRANSACTION.SUCCESS` transaction notifications are accepted, and decrypted `appid/mchid` must match configuration.
+
+Alipay requires `sellerId`, verifies `app_id/seller_id` after signature verification, accepts only the configured RSA2/RSA algorithm, and rejects duplicate form parameters, unknown states, and invalid calendar dates. Requests explicitly use Asia/Shanghai time and send signed parameters in the POST form body, excluding order data from URLs. Notification/payment dates use Beijing time. Valid retries may arrive on later days; their original dates are not a five-minute signature window. Stripe validates strict signing timestamps, supports multiple v1 signatures during rotation, and checks test/live mode. Connect/organization-context events are unsupported; configure the current account's matching webhook secret.
+
+All built-in and custom providers must return `eventId` and uppercase `currency`. IDs are WeChat id, Alipay notify_id, and Stripe event.id. Providers verify and parse; the application must verify its order/provider/amount/currency, persist deduplication within a merchant namespace, and prevent state regression. Never reuse deleted order numbers. The [runnable consumer example](examples/payment-notify-consumer.ts) commits an order CAS, unique event, and fulfillment outbox atomically. Only acknowledge after commit. External fulfillment needs an idempotent outbox consumer with a stable key; a database transaction cannot promise exactly-once external effects. Two real Node processes sharing SQLite verify one outbox entry across duplicates and restart; production nodes should share PostgreSQL/MySQL.
+
+References: [WeChat certificate and timestamp rules](https://pay.wechatpay.cn/doc/v3/merchant/4013053420), [public-key rotation](https://pay.wechatpay.cn/doc/v3/merchant/4012154180), [Alipay notification validation and retries](https://developer.alibaba.com/docs/doc.htm?articleId=103296&docType=1&treeId=346).
 
 ### Alipay business responses and refund states
 

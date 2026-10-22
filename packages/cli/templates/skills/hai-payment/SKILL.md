@@ -17,9 +17,9 @@ description: "接入微信、支付宝或 Stripe 的订单、回调验签、查�
 
 ## 使用路径
 
-1. 服务端校验 Provider 配置后 init；Stripe 先初始化共享 reldb，记录渠道映射/幂等结果，关闭时顺序相反。真实凭据经私有配置注入；浏览器只导入 `/client`。
+1. 服务端校验 Provider 配置后 init；微信必填 platformKeys（平台 serial/公钥ID→PEM，轮换保留新旧项），支付宝必填 sellerId。Stripe 先初始化共享 reldb，记录渠道映射/幂等结果，关闭时顺序相反。真实凭据经私有配置注入；浏览器只导入 `/client`。
 2. 订单号、金额单位、商品与用户由服务端可信数据决定，先保存业务订单再创建支付。Stripe 只支持 h5 托管 Checkout，配置 successUrl（必填）/cancelUrl（可选）；拒绝未实现模式。
-3. 回调使用原始 body 与 headers 验签；核对订单、金额、币种及状态，以共享持久存储幂等更新且防止乱序回退。Stripe completed/unpaid 为 pending，只有 status=paid 才履约；eventId 用于去重。客户端调起成功不代表付款完成。
+3. 回调使用原始 body 与 headers 验签；核对商户/应用身份与严格时间格式，微信签名时钟仅容差 300 秒，支付宝允许合法跨日重试。所有 Provider 返回必填 eventId/currency，应用事务核对渠道、订单、金额、币种，以共享数据库原子提交订单状态/通知去重/outbox，提交后才应答成功；外部副作用需稳定键幂等。Stripe completed/unpaid 为 pending，只有 status=paid 才履约且防止乱序回退。客户端调起成功不代表付款完成。
 4. 查单、退款与回调重试覆盖成功、失败和重复路径；支付宝 HTTP 200 不代表业务成功，缺失/错误 envelope、非 10000 业务码或关键字段缺失返回对应操作失败；退款 success 后还须检查 status，fund_change=N/缺失为 processing，向渠道确认退款结果。Stripe orderNo/refundNo 固定请求参数，不能覆盖 metadata.orderNo，未知结果超过 23 小时先核对渠道，不删除记录后盲重试。关单须确认 Session expired，已付款不能关闭；页面跳转不能作履约凭据。真实支付仅在用户授权范围内，最后 close。
 
 ## 按需参考

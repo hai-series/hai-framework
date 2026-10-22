@@ -15,6 +15,7 @@ import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
 import { signAlipayParams, verifyAlipayNotify } from './alipay-sign.js'
+import { formatAlipayTime, parseAlipayTime } from './alipay-time.js'
 import { AlipayCloseResponseSchema, AlipayCreateResponseSchema, AlipayNotifyParamsSchema, AlipayQueryResponseSchema, AlipayRefundResponseSchema, AlipayResponseRootSchema, AlipayResponseSchema } from './alipay-types.js'
 
 /** 支付宝网关地址 */
@@ -42,9 +43,12 @@ function parseAlipayAmount(value: string): number {
 }
 
 function parseAlipayNotifyParams(body: string): AlipayNotifyParams {
-  const parseResult = AlipayNotifyParamsSchema.safeParse(Object.fromEntries(new URLSearchParams(body).entries()))
+  const params = new URLSearchParams(body)
+  if (new Set(params.keys()).size !== [...params].length)
+    throw new Error('Ambiguous Alipay notification parameters')
+  const parseResult = AlipayNotifyParamsSchema.safeParse(Object.fromEntries(params.entries()))
   if (!parseResult.success) {
-    throw parseResult.error
+    throw new Error('Invalid Alipay notification parameters')
   }
 
   return parseResult.data
@@ -71,7 +75,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
       method,
       charset: 'utf-8',
       sign_type: signType,
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      timestamp: formatAlipayTime(new Date()),
       version: '1.0',
       notify_url: notifyUrl,
     }
@@ -98,13 +102,10 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
     const sign = signAlipayParams(params, config.privateKey, signType)
     const allParams = { ...params, sign }
 
-    const queryString = Object.entries(allParams)
-      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-      .join('&')
-
-    const timedResponse = await fetchWithTimeout(`${gateway}?${queryString}`, {
+    const timedResponse = await fetchWithTimeout(gateway, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(allParams).toString(),
     })
 
     if (!timedResponse.ok) {
@@ -191,12 +192,22 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         const params = parseAlipayNotifyParams(request.body)
 
         // 验签
-        const valid = verifyAlipayNotify(params as Record<string, string>, config.alipayPublicKey)
+        const valid = params.sign_type === signType && verifyAlipayNotify(params, config.alipayPublicKey)
         if (!valid) {
           return err(
             HaiPaymentError.NOTIFY_VERIFY_FAILED,
             paymentM('payment_notifyVerifyFailed'),
           )
+        }
+        if (params.app_id !== config.appId || params.seller_id !== config.sellerId) {
+          return err(HaiPaymentError.NOTIFY_VERIFY_FAILED, paymentM('payment_notifyVerifyFailed'))
+        }
+        // 允许渠道跨日重试；重放靠持久 eventId 和订单状态 CAS，不套用微信的五分钟窗口。
+        const notifiedAt = parseAlipayTime(params.notify_time)!
+        const paidAt = params.gmt_payment ? parseAlipayTime(params.gmt_payment) : undefined
+        if (notifiedAt.getTime() > Date.now() + 300_000
+          || (paidAt && paidAt.getTime() > notifiedAt.getTime() + 300_000)) {
+          throw new Error('Invalid Alipay notification time')
         }
 
         const statusMap: Record<string, PaymentNotifyResult['status']> = {
@@ -209,11 +220,12 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         return ok({
           orderNo: params.out_trade_no,
           transactionId: params.trade_no,
+          eventId: params.notify_id,
           amount: parseAlipayAmount(params.total_amount),
-          status: statusMap[params.trade_status] ?? 'pending',
-          paidAt: params.gmt_payment ? new Date(params.gmt_payment) : undefined,
-          // 支付宝回调原始 params 的强类型为 AlipayNotifyParams，此处统一以 Record 暴露给上层做调试/审计
-          raw: params as unknown as Record<string, unknown>,
+          currency: 'CNY',
+          status: statusMap[params.trade_status],
+          paidAt: ['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(params.trade_status) ? paidAt : undefined,
+          raw: params,
         })
       }
       catch (cause) {
@@ -251,7 +263,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           status: statusMap[data.trade_status],
           amount: parseAlipayAmount(data.total_amount),
           // 支付宝时间为北京时间，不能依赖节点的本地时区解释。
-          paidAt: data.send_pay_date ? new Date(`${data.send_pay_date.replace(' ', 'T')}+08:00`) : undefined,
+          paidAt: data.send_pay_date ? parseAlipayTime(data.send_pay_date) : undefined,
         })
       }
       catch (cause) {

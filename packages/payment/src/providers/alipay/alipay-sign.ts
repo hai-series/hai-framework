@@ -45,7 +45,9 @@ export function verifyAlipayNotify(
   alipayPublicKey: string,
 ): boolean {
   const sign = params.sign ?? ''
-  const signType = params.sign_type ?? 'RSA2'
+  const signType = params.sign_type
+  if (signType !== 'RSA' && signType !== 'RSA2')
+    return false
 
   // 排除 sign 和 sign_type，按 key 排序拼接
   const sorted = Object.keys(params)

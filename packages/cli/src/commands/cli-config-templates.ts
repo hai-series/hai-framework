@@ -731,12 +731,14 @@ function generatePaymentConfig(): string {
 #   apiV3Key: ''
 #   serialNo: ''
 #   privateKey: ''
-#   platformCert: ''
+#   platformKeys: # 必填；按 Wechatpay-Serial 精确选择平台证书/公钥，轮换时保留新旧项
+#     PUB_KEY_ID_123: '' # 平台公钥 PEM；证书则以其真实序列号作为 key
 #   appId: ''
 
 # 支付宝（按需开启）
 # alipay:
 #   appId: ''
+#   sellerId: '' # 必填；回调 seller_id 必须与此一致
 #   privateKey: ''
 #   alipayPublicKey: ''
 #   signType: RSA2
