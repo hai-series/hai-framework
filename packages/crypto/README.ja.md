@@ -184,7 +184,19 @@ if (hashed.success) {
 
 - `createInMemoryKeyStore(maxClients)`：テストや容量指定用に、既定のメモリーストアを明示的に作成。
 - `createRedisTransportKeyStore({ cache, ttlSeconds? })`：`@h-ai/cache` を再利用。通常は Redis Provider と組み合わせ、複数ノードで共有。
-- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`：`@h-ai/reldb` を再利用し、`hai_crypto_transport_client_keys` / `hai_crypto_transport_requests` テーブルを自動作成。
+- `createReldbTransportKeyStore({ reldb, ttlSeconds?, maxClients? })`：初期化済みの `@h-ai/reldb` を再利用し、公開鍵・nonce・容量テーブルを自動作成。`pruneExpired()` を備える `ReldbTransportKeyStore` を返します。
+
+登録前に公開鍵の形式と SM2 曲線上の点を検証します。128 文字の hex、または `04` + 128 文字の hex のみ受け付け、圧縮点・無限遠点・曲線外の点は拒否します。純関数 `isValidSM2PublicKey(value)` は初期化不要で、serv/kit は registry に書く前に不正な鍵を HTTP 400 で拒否します。
+
+Redis/DB の `ttlSeconds` を省略すると無期限です。指定時は 1–2147483647 の整数秒とし、有限 TTL を推奨します。Redis はネイティブのキー TTL を使い、DB の `maxClients` 上限は提供しません。メモリー予算を設定し、有効な nonce を追い出さないでください。DB の `maxClients` は正の安全な整数、既定 10000 で、全ノードと永続容量レコードが一致する必要があります。登録はトランザクション内で共有容量行をロックし、件数確認後に挿入します。満杯では登録を拒否し、有効な公開鍵や nonce を削除しません。クライアント削除時も有効な nonce は保持します。
+
+DB の期限は DB 時計の epoch ミリ秒で生成・判定します。DB と各ノードの時計をプロトコルの許容範囲内に同期してください。初回テーブル作成失敗後は再試行できます。登録時に 1 バッチ清掃し、`await registry.pruneExpired()` は期限切れ公開鍵と nonce を各 100 件まで削除します。低トラフィック時もアプリで定期実行してください。暗黙のタイマーは作らず、注入された reldb も閉じません。旧 timestamp 列は停止中に BIGINT の `created_at_ms` / `expires_at_ms` に移行します。容量は `hai_crypto_transport_capacity` に永続化されるため、変更時は全ノードと保存行を調整し、registry 再作成のために有効な nonce を消さないでください。
+
+```ts
+const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+// アプリの定期メンテナンスから呼び出し、失敗時はスケジューラーで再試行する。
+const removed = await registry.pruneExpired()
+```
 
 ```ts
 // 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用

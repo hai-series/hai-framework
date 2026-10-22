@@ -23,6 +23,8 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 2. 选用公开 asymmetric/hash/symmetric/password 操作，检查 HaiResult；SM3 HMAC 不等同于 SHA-256 HMAC。SM4 使用 `symmetric.generateKey()` 生成随机密钥，不提供密码 KDF；密码存储使用服务端 `password.hash()`。
 3. 传输加密经 serv/kit/api-client 顶层配置接入，统一协商与刷新路径；不导入内部工厂。
 
+握手公钥先用无需 init 的 `isValidSM2PublicKey` 验证编码和 SM2 曲线点；内置 manager/registry 也校验，serv/kit 在写存储前拒绝。DB registry 用事务共享容量（maxClients 默认 10000、各节点一致），满容量拒绝、不驱逐有效 nonce；配置有限 ttlSeconds，并由应用周期调用 DB 工厂返回的 `pruneExpired()`（每次公钥/nonce 各最多 100 条）。Redis 使用原生 TTL，容量由部署管理。TTL 显式值只能为正整数秒，详见参考中的范围和迁移边界。
+
 服务端必须显式注入受管 `serverKeyRing` 与共享 `keyStore`，没有进程随机私钥或内存 registry 默认值。请求携带协商 serverKeyId；各节点同 ring + registry 支持跨节点、重启和新旧版本轮换。密钥只从 Secret/私有环境注入，不进入公开配置、客户端或日志。开发/测试的内存 registry 须显式选择。
 
 传输字节预算统一使用根入口 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 32 KiB。自定义适配器用纯函数 `readTransportBody` 消费原流并有界读取；不要 clone/tee。客户端握手超时 30 秒；取消和超限释放 reader，异常密文响应 reject。

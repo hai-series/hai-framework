@@ -153,7 +153,7 @@ async function createHaiHandle(): Promise<Handle> {
     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(ring.error.message)
-    managedTransport = { ...handleTransportConfig, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb }) }
+    managedTransport = { ...handleTransportConfig, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }) }
   }
 
   return kit.createHandle({

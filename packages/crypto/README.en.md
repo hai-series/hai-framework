@@ -184,7 +184,19 @@ For shared storage, reuse the provider factories exported from the `@h-ai/crypto
 
 - `createInMemoryKeyStore(maxClients)`: explicitly create the default memory store for tests or custom capacity.
 - `createRedisTransportKeyStore({ cache, ttlSeconds? })`: reuse `@h-ai/cache`, typically with Redis for sharing across nodes.
-- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`: reuse `@h-ai/reldb`, automatically creating `hai_crypto_transport_client_keys` / `hai_crypto_transport_requests`.
+- `createReldbTransportKeyStore({ reldb, ttlSeconds?, maxClients? })`: reuse initialized `@h-ai/reldb`, create key, nonce and capacity tables, and return a `ReldbTransportKeyStore` with `pruneExpired()`.
+
+Registration validates the encoding and SM2 curve point before writing. Only 128 hex characters or `04` followed by 128 hex characters are accepted; compressed, infinity and off-curve points are rejected. The pure `isValidSM2PublicKey(value)` helper requires no initialization. serv/kit reject invalid keys with HTTP 400 before accessing the registry.
+
+Omitting Redis/DB `ttlSeconds` keeps keys indefinitely. Explicit values must be integer seconds from 1 to 2147483647; a finite TTL is recommended. Redis uses native per-key expiration and does not expose the DB `maxClients` limit; configure memory budgets without evicting valid nonces. DB `maxClients` is a positive safe integer, defaults to 10000, and must match the persistent setting on every node. Registration locks a shared capacity row inside its transaction before counting and inserting; a full registry rejects registration without evicting valid keys or nonces. Deleting a client does not delete its valid nonces.
+
+DB expiry uses database epoch milliseconds. Synchronize both database and node clocks within the protocol limits. Failed initial table creation can be retried. Each registration prunes one batch; `await registry.pruneExpired()` deletes at most 100 expired keys and 100 expired nonces per call. Schedule it in the application for low-traffic deployments: the registry creates no background timers and does not close the injected reldb. Migrate old timestamp key columns offline to BIGINT `created_at_ms` / `expires_at_ms`. Capacity is persisted in `hai_crypto_transport_capacity`; coordinate changes across all nodes and that row, and never clear valid nonces to recreate a registry.
+
+```ts
+const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+// 由应用的定期维护调度器调用；每批有界，故障后由调度器重试。
+const removed = await registry.pruneExpired()
+```
 
 ```ts
 // 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用

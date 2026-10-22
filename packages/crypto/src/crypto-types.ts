@@ -174,9 +174,11 @@ export interface AsymmetricOperations {
    */
   verify: (data: string, signature: string, publicKey: string, options?: SignOptions) => HaiResult<boolean>
   /**
-   * 校验公钥格式是否合法
+   * 校验公钥编码和曲线点是否合法
    *
    * 合法格式：128 字符十六进制（无前缀）或 130 字符（含 04 前缀）。
+   * 拒绝压缩点、无穷远点和曲线外点。
+   * @example `crypto.asymmetric.isValidPublicKey(clientPublicKey)`
    */
   isValidPublicKey: (key: string) => boolean
   /**

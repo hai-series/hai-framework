@@ -184,7 +184,19 @@ if (hashed.success) {
 
 - `createInMemoryKeyStore(maxClients)`：显式创建默认内存实现，常用于测试或自定义容量
 - `createRedisTransportKeyStore({ cache, ttlSeconds? })`：复用 `@h-ai/cache`，通常配合 Redis provider 获取跨节点共享
-- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`：复用 `@h-ai/reldb`，自动建表 `hai_crypto_transport_client_keys` / `hai_crypto_transport_requests`
+- `createReldbTransportKeyStore({ reldb, ttlSeconds?, maxClients? })`：复用已初始化的 `@h-ai/reldb`，自动创建公钥、nonce 与容量表；返回带 `pruneExpired()` 的 `ReldbTransportKeyStore`
+
+公钥注册先验证编码和 SM2 曲线点；仅接受 128 字符 hex 或 `04` + 128 字符 hex，不接受压缩点、无穷远点和曲线外点。纯函数 `isValidSM2PublicKey(value)` 无需初始化，可用于自定义握手入口；serv/kit 在写 registry 前返回 400。
+
+Redis/DB 的 `ttlSeconds` 省略表示不过期；显式值须为 1–2147483647 的整数秒，建议设置有限 TTL。Redis 使用原生逐键 TTL，不提供 DB 的 `maxClients` 容量限制，部署需设置内存预算且禁止驱逐有效 nonce。DB `maxClients` 为正安全整数，默认 10000，所有节点必须与持久容量记录一致；事务锁定共享容量行后计数和插入，容量满时拒绝注册，不驱逐有效公钥或 nonce。删除客户端不删除尚有效的 nonce。
+
+DB 使用数据库时钟生成、判断 epoch 毫秒过期时间；数据库与节点均须满足协议的时钟同步要求。首次建表失败可重试。每次注册自动清理一批；`await registry.pruneExpired()` 每次最多删除 100 条过期公钥和 100 条过期 nonce，可由应用定期调度。没有隐式后台计时器，低流量部署仍需主动调度维护；registry 不关闭应用注入的 reldb。旧公钥表的 timestamp 字段需停机迁移为 `created_at_ms` / `expires_at_ms` BIGINT，容量在 `hai_crypto_transport_capacity` 保存；容量调整须协调所有节点及持久记录，不能清空有效 nonce 来重建 registry。
+
+```ts
+const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+// 接入应用自己的定期维护调度；每批有界，失败后由调度器重试。
+const removed = await registry.pruneExpired()
+```
 
 ```ts
 // 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用

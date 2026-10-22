@@ -51,7 +51,7 @@ export function createServerApp(): ServHttpApp {
         && security.isNativeOrigin(request.headers.get('origin') ?? '') },
     },
     // 管理业务默认强制双向加密；各节点复用受管服务端密钥环与共享 reldb 客户端 registry。
-    transport: { ...(servConfig.transport || {}), excludePaths: publicPaths, crypto, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb }) },
+    transport: { ...(servConfig.transport || {}), excludePaths: publicPaths, crypto, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }) },
     http: {
       ...servConfig.http,
       openapi: security.exposeApiDocs ? servConfig.http.openapi : false,

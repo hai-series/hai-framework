@@ -1,4 +1,5 @@
 export * from './crypto-main.js'
+export * from './crypto-public-key.js'
 export * from './crypto-types.js'
 export * from './transport/crypto-transport-body.js'
 export * from './transport/crypto-transport-keyring.js'

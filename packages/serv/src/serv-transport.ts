@@ -19,7 +19,7 @@
 import type { CryptoFunctions, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core } from '@h-ai/core'
-import { authenticateTransportRequest, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
 const logger = core.logger.child({ module: 'serv', scope: 'transport' })
@@ -168,7 +168,7 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
     return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
   }
   if (!body || typeof body !== 'object' || !('clientPublicKey' in body)
-    || typeof body.clientPublicKey !== 'string' || body.clientPublicKey.length === 0
+    || !isValidSM2PublicKey(body.clientPublicKey)
     || new TextEncoder().encode(body.clientPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes) {
     return jsonError(servM('serv_transportInvalidPayload'), 400)
   }

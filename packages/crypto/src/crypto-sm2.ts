@@ -13,6 +13,7 @@ import { err, ok } from '@h-ai/core'
 import smCrypto from 'sm-crypto'
 
 import { cryptoM } from './crypto-i18n.js'
+import { isValidSM2PublicKey } from './crypto-public-key.js'
 import {
 
   HaiCryptoError,
@@ -21,7 +22,6 @@ import {
 import { base64ToHex, hexToBase64, isBase64 } from './crypto-utils.js'
 
 const { sm2 } = smCrypto
-const SM2_PUBLIC_KEY_REGEX = /^[0-9a-f]{128}$/i
 const SM2_PRIVATE_KEY_REGEX = /^[0-9a-f]{64}$/i
 
 // ─── SM2 算法实现 ───
@@ -85,7 +85,7 @@ export function createSM2(): AsymmetricOperations {
 
       try {
         // 确保公钥带 04 前缀
-        const key = publicKey.startsWith('04') ? publicKey : `04${publicKey}`
+        const key = publicKey.length === 130 ? publicKey : `04${publicKey}`
         const encrypted = sm2.doEncrypt(data, key, cipherMode)
 
         if (!encrypted) {
@@ -234,7 +234,7 @@ export function createSM2(): AsymmetricOperations {
 
       try {
         // 确保公钥带 04 前缀
-        const key = publicKey.startsWith('04') ? publicKey : `04${publicKey}`
+        const key = publicKey.length === 130 ? publicKey : `04${publicKey}`
         const isValid = sm2.doVerifySignature(data, signature, key, { hash, userId })
         return ok(!!isValid)
       }
@@ -248,19 +248,16 @@ export function createSM2(): AsymmetricOperations {
     },
 
     /**
-     * 校验公钥格式是否合法
+     * 校验公钥编码及曲线点是否合法
      *
      * 合法格式：128 字符十六进制（无前缀）或 130 字符（含 04 前缀）。
      *
      * @param key - 待校验公钥
-     * @returns 格式合法返回 true
+     * @returns 编码有效且为 SM2 曲线上的非无穷远点时返回 true
+     * @example `crypto.asymmetric.isValidPublicKey(clientPublicKey)`
      */
     isValidPublicKey(key: string): boolean {
-      if (!key || typeof key !== 'string')
-        return false
-      // 公钥长度：无前缀 128 字符，带 04 前缀 130 字符
-      const cleanKey = key.startsWith('04') ? key.slice(2) : key
-      return SM2_PUBLIC_KEY_REGEX.test(cleanKey)
+      return isValidSM2PublicKey(key)
     },
 
     /**

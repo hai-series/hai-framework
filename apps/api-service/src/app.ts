@@ -48,7 +48,7 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
     transport = {
       crypto,
       serverKeyRing: ring.data,
-      keyStore: createReldbTransportKeyStore({ reldb }),
+      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
       keyExchangePath: servConfig.transport.keyExchangePath,
       excludePaths: [...servConfig.transport.excludePaths],
     }

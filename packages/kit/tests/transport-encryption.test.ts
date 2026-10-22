@@ -200,7 +200,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     expect(resolve).not.toHaveBeenCalled()
   })
 
-  it.each([null, { clientPublicKey: '你'.repeat(1366) }])('拒绝握手内无效或公钥字段超限的输入：%j', async (body) => {
+  it.each([null, { clientPublicKey: 'key' }, { clientPublicKey: `04${'0'.repeat(128)}` }, { clientPublicKey: `04${'f'.repeat(128)}` }, { clientPublicKey: '你'.repeat(1366) }])('拒绝握手内无效或公钥字段超限的输入：%j', async (body) => {
     const manager = createFailingEncryptManager()
     const register = vi.spyOn(manager, 'registerClientKey')
     const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
@@ -242,7 +242,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(TRANSPORT_BODY_LIMITS.publicKeyBytes + 1))
     const register = vi.spyOn(manager, 'registerClientKey')
     const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
-    const request = new Request(`http://localhost${KEY_EXCHANGE_PATH}`, { method: 'POST', body: '{"clientPublicKey":"key"}' })
+    const request = new Request(`http://localhost${KEY_EXCHANGE_PATH}`, { method: 'POST', body: JSON.stringify({ clientPublicKey: serverKeyRing.keys[serverKeyRing.activeKeyId]!.publicKey }) })
     expect((await dispatch(handle, request, () => new Response(null, { status: 204 }))).status).toBe(500)
     expect(register).not.toHaveBeenCalled()
   })

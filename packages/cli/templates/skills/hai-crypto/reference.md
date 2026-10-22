@@ -53,7 +53,7 @@ await crypto.close()
 | `decrypt`           | `(ciphertext, privateKey, options?) => HaiResult<string>`      | 私钥解密     |
 | `sign`              | `(data, privateKey, options?) => HaiResult<string>`            | 私钥签名     |
 | `verify`            | `(data, signature, publicKey, options?) => HaiResult<boolean>` | 公钥验签     |
-| `isValidPublicKey`  | `(key: string) => boolean`                                  | 校验公钥格式 |
+| `isValidPublicKey`  | `(key: string) => boolean`                                  | 校验公钥编码和 SM2 曲线点 |
 | `isValidPrivateKey` | `(key: string) => boolean`                                  | 校验私钥格式 |
 
 ```typescript
@@ -161,7 +161,17 @@ if (hashed.success) {
 | --- | --- | --- |
 | `createInMemoryKeyStore` | `(maxClients?) => TransportKeyStore` | 默认 FIFO 内存实现 |
 | `createRedisTransportKeyStore` | `({ cache, ttlSeconds? }) => TransportKeyStore` | 基于 `@h-ai/cache` 的共享实现，通常配 Redis |
-| `createReldbTransportKeyStore` | `({ reldb, ttlSeconds? }) => TransportKeyStore` | 基于 `@h-ai/reldb` 的共享实现，自动建表 |
+| `createReldbTransportKeyStore` | `({ reldb, ttlSeconds?, maxClients? }) => ReldbTransportKeyStore` | 自动建表、共享事务容量和有界维护 |
+
+所有 registry 注册前验证非压缩 SM2 曲线点（128 hex 或 04 + 128 hex）；纯函数 `isValidSM2PublicKey(value)` 无需 init，serv/kit 在写存储前以 400 拒绝畸形输入。Redis/DB TTL 省略则不过期，显式值须为 1–2147483647 整数秒，建议有限 TTL。Redis 用原生逐键 TTL，容量由部署管理；noeviction 防止提前驱逐 nonce。DB `maxClients` 默认 10000，正安全整数且各节点须与持久容量行一致；事务锁容量行后计数和插入，容量满拒绝、不驱逐有效公钥或 nonce。
+
+DB 首次建表失败可重试；公钥过期使用 DB epoch 毫秒，DB 与节点均须同步时钟。注册自动执行一批清理，应用定期调用 `await registry.pruneExpired()` 处理低流量维护：每次最多 100 条过期公钥和 100 条过期 nonce，不建隐式计时器。旧 timestamp 表须停机迁移到 created_at_ms/expires_at_ms BIGINT；容量更改需同步持久记录和所有节点，不能清空有效 nonce。
+
+```ts
+const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+// 由应用自己的维护调度器调用；失败后可重试。
+await registry.pruneExpired()
+```
 
 ```typescript
 const server = crypto.transport.createServer({ serverKeyRing, keyStore })

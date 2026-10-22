@@ -8,7 +8,7 @@
 import type { TransportEncryptionManager, TransportMessageContext } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
-import { authenticateTransportRequest, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
@@ -203,7 +203,7 @@ async function handleKeyExchange(
     return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
   }
   if (!body || typeof body !== 'object' || !('clientPublicKey' in body)
-    || typeof body.clientPublicKey !== 'string' || body.clientPublicKey.length === 0
+    || !isValidSM2PublicKey(body.clientPublicKey)
     || new TextEncoder().encode(body.clientPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes) {
     return jsonError(kitM('kit_transportInvalidPayload'), 400)
   }

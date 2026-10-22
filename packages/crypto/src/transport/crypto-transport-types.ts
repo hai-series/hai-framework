@@ -219,7 +219,11 @@ export interface TransportCryptoServiceLike {
 export interface TransportKeyStore {
   /** 公钥与nonce状态的真实共享能力；生产只接受shared。 */
   readonly stateScope: 'local' | 'shared'
-  /** 注册新客户端，返回服务端生成的 `clientId`。 */
+  /**
+   * 注册有效 SM2 公钥，返回服务端生成的 clientId；格式/曲线点无效或存储故障必须 reject。
+   * 容量策略见具体工厂契约：数据库满容量拒绝，开发/测试内存实现允许 FIFO 淘汰公钥。
+   * @example `const clientId = await registry.register(clientPublicKey)`
+   */
   register: (publicKey: string) => Promise<string>
   /** 查询已注册客户端公钥。 */
   get: (clientId: string) => Promise<string | undefined>
@@ -272,8 +276,9 @@ export interface TransportEncryptionManager {
   getServerKeyId: () => string
   getServerPublicKey: () => string
   /**
-   * 向显式 registry 注册公钥。
-   * @throws registry 写入失败；HTTP 协商适配器负责转换成失败响应。
+   * 验证 SM2 公钥编码和曲线点后向显式 registry 注册。
+   * @throws 公钥无效或 registry 写入失败；HTTP 协商适配器负责转换成失败响应。
+   * @example `const clientId = await manager.registerClientKey(clientPublicKey)`
    */
   registerClientKey: (clientPublicKey: string) => Promise<string>
   /** 查询客户端公钥；registry 读取故障会 reject，不作为未注册处理。 */

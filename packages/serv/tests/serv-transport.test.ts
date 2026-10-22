@@ -318,7 +318,7 @@ describe('serv.createApp({ transport })', () => {
     expect(decrypt).not.toHaveBeenCalled()
   })
 
-  it.each([null, { clientPublicKey: '你'.repeat(1366) }])('拒绝握手内无效或公钥字段超限的输入：%j', async (body) => {
+  it.each([null, { clientPublicKey: 'key' }, { clientPublicKey: `04${'0'.repeat(128)}` }, { clientPublicKey: `04${'f'.repeat(128)}` }, { clientPublicKey: '你'.repeat(1366) }])('拒绝握手内无效或公钥字段超限的输入：%j', async (body) => {
     const manager = createFailingEncryptManager()
     const register = vi.spyOn(manager, 'registerClientKey')
     const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) } })
@@ -358,7 +358,7 @@ describe('serv.createApp({ transport })', () => {
     vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(TRANSPORT_BODY_LIMITS.publicKeyBytes + 1))
     const register = vi.spyOn(manager, 'registerClientKey')
     const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) } })
-    const response = await app.request('/api/v1/_hai/key-exchange', { method: 'POST', body: '{"clientPublicKey":"key"}' })
+    const response = await app.request('/api/v1/_hai/key-exchange', { method: 'POST', body: JSON.stringify({ clientPublicKey: serverKeyRing.keys[serverKeyRing.activeKeyId]!.publicKey }) })
     expect(response.status).toBe(500)
     expect(register).not.toHaveBeenCalled()
   })

@@ -209,7 +209,7 @@ describe('createProject — api 类型', () => {
     expect(await exists(projectPath, '.')).toBe(true)
   })
 
-  it('aPI仅选crypto时生成私有密钥环，并限制内存registry为开发测试', async () => {
+  it('aPI仅选crypto时生成私有密钥环并补充RelDB registry依赖', async () => {
     const name = 'proj-api-crypto-only'
     const directory = path.join(tmpRoot, name)
     await createProject({ name, appType: 'api', template: 'custom', features: ['crypto'], moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
@@ -219,9 +219,9 @@ describe('createProject — api 类型', () => {
     if (!ring.success)
       throw new Error(ring.error.message)
     const source = await readText(directory, `${prefix}/src/app.ts`)
-    expect(source).toContain('keyStore: createInMemoryKeyStore()')
-    expect(source).toContain('coreConfig.env !== \'development\' && coreConfig.env !== \'test\'')
-    expect(source).not.toContain('from \'@h-ai/reldb\'')
+    expect(source).toContain('keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 })')
+    expect(source).not.toContain('keyStore: createInMemoryKeyStore()')
+    expect(source).toContain('from \'@h-ai/reldb\'')
     expect(await readText(directory, `${prefix}/.env.example`)).toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
     expect(await readText(directory, `${prefix}/.env`)).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
   })

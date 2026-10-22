@@ -15,6 +15,7 @@ import type {
 } from './crypto-transport-types.js'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
+import { isValidSM2PublicKey } from '../crypto-public-key.js'
 import { HaiCryptoError } from '../crypto-types.js'
 import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sealTransportPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
 import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
@@ -85,6 +86,8 @@ export function createTransportEncryption(
     },
 
     async registerClientKey(clientPublicKey) {
+      if (!isValidSM2PublicKey(clientPublicKey))
+        throw new TypeError(cryptoM('crypto_sm2PublicKeyInvalid'))
       return keyStore.register(clientPublicKey)
     },
 

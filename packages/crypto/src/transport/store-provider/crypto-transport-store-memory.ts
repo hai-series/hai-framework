@@ -6,6 +6,8 @@
  */
 
 import type { TransportKeyStore } from '../crypto-transport-types.js'
+import { cryptoM } from '../../crypto-i18n.js'
+import { isValidSM2PublicKey } from '../../crypto-public-key.js'
 
 const DEFAULT_MAX_CLIENTS = 10000
 
@@ -30,6 +32,8 @@ function createClientId(counter: number): string {
  * 生产须使用共享 Redis / 数据库 registry，并在各节点加载相同受管服务端密钥环。
  *
  * @param maxClients - 最大客户端数（默认 10000），超过后按注册顺序淘汰最早条目。
+ * @returns 仅开发/测试使用的 registry；注册无效 SM2 公钥会 reject。
+ * @example `const registry = createInMemoryKeyStore(100)`
  */
 export function createInMemoryKeyStore(maxClients = DEFAULT_MAX_CLIENTS): TransportKeyStore {
   const clientKeys = new Map<string, string>()
@@ -40,6 +44,8 @@ export function createInMemoryKeyStore(maxClients = DEFAULT_MAX_CLIENTS): Transp
   return {
     get stateScope(): 'local' { return 'local' },
     async register(publicKey) {
+      if (!isValidSM2PublicKey(publicKey))
+        throw new TypeError(cryptoM('crypto_sm2PublicKeyInvalid'))
       counter++
       const clientId = createClientId(counter)
 

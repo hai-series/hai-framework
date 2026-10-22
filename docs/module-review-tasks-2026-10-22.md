@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 5/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 6/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -205,7 +205,8 @@
 
 ### CRYPTO-04 · P2 · 修复公钥 DB 存储的失败恢复与过期清理
 
-- [ ] 待修正（源码确认；范围：crypto）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：公钥统一校验SM2编码/曲线点并修无前缀04歧义，serv/kit握手先拒绝畸形输入；DB初始化失败复位、DB epoch时钟、共享容量行事务串行化注册/有界维护，每批公钥/nonce各100且不驱逐有效nonce；工厂TTL/容量校验，实际应用和模板使用3600秒TTL，同步协议/三语README/skills/LLMS/分布式表。crypto111/serv41/kit70/CLI模板1及最终45项（含真实SQLite/PG/MySQL双Node空库同时初始化、12并发容量、251+251过期清理、有效nonce与重启）、相关类型/构建/lint/admin零警告/skills通过；MySQL首轮清理锁冲突已修并三轮复验，见tmp/module-repair-20261022/CRYPTO-04；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/crypto/src/transport/store-provider/crypto-transport-store-reldb.ts:59](../packages/crypto/src/transport/store-provider/crypto-transport-store-reldb.ts#L59)。
 - **证据与影响**：ensureTablePromise 缓存首次初始化结果，首次拒绝后无重试复位；过期记录主要在 get 时删除，长期不再访问的 handshake 记录不能靠该路径清理。
 - **修正内容**：失败复位并发初始化 promise；提供有界、可跨节点协调的过期清理与容量策略，校验公钥格式/大小后才注册。

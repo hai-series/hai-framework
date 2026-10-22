@@ -38,7 +38,7 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
     transport = {
       crypto,
       serverKeyRing: ring.data,
-{{#if features.db}}      keyStore: createReldbTransportKeyStore({ reldb }),
+{{#if features.db}}      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
 {{else}}      keyStore: createInMemoryKeyStore(), // 无 db 的模板仅在 development/test 使用内存 registry。
 {{/if}}
       keyExchangePath: servConfig.transport.keyExchangePath,

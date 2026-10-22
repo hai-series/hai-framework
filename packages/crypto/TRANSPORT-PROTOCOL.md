@@ -6,6 +6,12 @@ serv、kit、api-client 及浏览器/移动端客户端共用此应用层协议�
 
 协商 POST JSON `{ clientPublicKey }`，服务端注册到共享 registry 后返回 `{ clientId, serverKeyId, serverPublicKey }`。客户端保存自己的 SM2 私钥及协商得到的服务端版本/公钥。每个节点使用同一受管 key ring；轮换时保留旧版本直到过渡结束，删除旧版本即撤销。密钥环仅存在于服务端私密配置中。
 
+公钥只接受非压缩 SM2 点：128 个 hex 字符或 `04` + 128 个 hex 字符，编码和曲线点均须有效。纯函数 `isValidSM2PublicKey` 无需初始化；serv/kit 先验证再调用 registry，畸形点返回 400。所有内置 registry 及 manager 直接注册也校验，不把畸形点写入存储。
+
+DB registry 的公钥使用数据库 epoch 毫秒 `created_at_ms` / `expires_at_ms`，DB 与应用节点均须满足时钟同步要求。共享容量记录 `hai_crypto_transport_capacity` 默认限制 10000 个有效公钥，各节点 `maxClients` 必须一致。事务先锁容量行再计数和插入，满容量拒绝，不驱逐有效公钥或 nonce。公钥 TTL 省略表示不过期，显式值为 1–2147483647 整数秒，部署建议设置有限 TTL。Redis 使用原生 TTL，容量由部署内存预算管理，不提供 DB 的 maxClients 选项；禁止提前驱逐有效 nonce。
+
+DB 首次建表失败会复位初始化状态，下次操作可重试；每次注册清理一批过期记录。应用可周期调用 DB 工厂返回的 `pruneExpired()`，单次最多清理 100 条过期公钥和 100 条过期 nonce，双节点可同时维护；没有隐式计时器。旧 timestamp 公钥表须停机迁移，调整容量须协调所有节点及持久容量行；不能为重建公钥表提前清空有效 nonce。
+
 ## 封装
 
 每次请求生成独立的 128 位随机 requestId，作为 nonce 和响应关联 ID。固定上下文如下：
@@ -58,7 +64,7 @@ const signedText = JSON.stringify([authenticatedText, tag])
 
 ## 防重放状态
 
-requestId 至少保留到 issuedAt + 6 分钟，覆盖节点之间的最大 60 秒时钟差；部署需保证各节点时钟同步在 ±30 秒内。Redis provider 使用单 key CAS + TTL；SQL provider 使用 `hai_crypto_transport_requests` 的唯一主键插入，并每次最多清理 100 条过期记录。有效记录不能提前删除/驱逐；Redis 需要 noeviction 和符合部署持久化要求的配置。数据库/Redis 的回滚、数据丢失或不同节点连接不同后端会破坏去重，生产须使用同一可靠共享后端。
+requestId 至少保留到 issuedAt + 6 分钟，覆盖节点之间的最大 60 秒时钟差；部署需保证数据库与各节点时钟同步在 ±30 秒内。Redis provider 使用单 key CAS + TTL；SQL provider 使用 `hai_crypto_transport_requests` 的唯一主键插入，注册和周期 `pruneExpired()` 每批最多清理 100 条过期 nonce；nonce 消费不争用公钥容量锁。有效记录不能提前删除/驱逐；Redis 需要 noeviction 和符合部署持久化要求的配置。数据库/Redis 的回滚、数据丢失或不同节点连接不同后端会破坏去重，生产须使用同一可靠共享后端。
 
 内存实现只供显式开发/测试使用，同步 check/set 期间不 await，也不按客户端容量淘汰有效 nonce。它不提供跨进程保证。
 
