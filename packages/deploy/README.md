@@ -156,8 +156,13 @@ finally {
 
 `selectedServices: ['web']` 选择局部更新，`onProgress` 返回打包与服务器执行阶段。`deploy.scan` 和 `deploy.credentials.*` 可在初始化前使用。先判断 HaiResult.success 再读取数据。Vercel 使用 prebuilt API 上传已有 .vercel/output，需要网络，不提供离线交付或 Compose 局部发布。
 
-
 命令执行按正确解码的 UTF-8 逻辑流脱敏，已知秘密即使跨 stdout/stderr 数据块也不会原样释放；成功捕获结果、错误与进度回调遵循同一边界。调用内部命令工具时用 `secrets` 明确列出敏感字面量；编码、截取或转换后的值须单独列入。每条流默认仅捕获最后 1 Mi 字符，`maxCaptureChars` 可设 1～16 Mi 字符，结果用 `stdoutTruncated` / `stderrTruncated` 标记截断，解析结构化输出前必须检查。`onOutput` 可异步，按序等待并保留 pipe 背压，收到的是全部安全 stdout；部署进度仅解析每行前 512 字符。秘密总长度最多 1 Mi UTF-16 单元，超限或脱敏异常失败关闭；超时表示命令执行失败，远程进程终止仍需确认。
+
+命令 deadline 包含 helper 启动和输出处理；超时、输入/输出或回调异常会终止受管理进程。POSIX 使用独立进程组，Windows 通过内嵌 PowerShell/.NET Job Object 先挂起创建、成功分配后恢复，禁止 breakaway；helper、编译或分配失败不会降级为裸进程。Windows 需要系统 PowerShell 和 Add-Type，调用隐藏窗口且不加载用户 profile，参数、环境与 UTF-8 管道保持原样。POSIX 命令须让后代继承进程组；已脱离组的系统守护进程及远端服务不在本地终止确认范围。
+
+`terminationTimeoutMs` 是异常后的独立核验等待，默认 10000、最大 60000 毫秒。发送 kill 不等于确认；结果在受管理 Job/进程组归零后记录 `localTermination: 'confirmed'`，核验超时或失败为 `unknown`，尚未启动为 `not-started`。在 `if (!result.success)` 分支调用公开 `getDeployCommandState(result.error)` 读取原因和状态；不含原始异常或命令参数。已经进入的异步输出回调不能撤销，异常后不再交付新输出。
+
+SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连接只读核对 `result-<deploymentId>.json`，仅完整、未截断且 ID 匹配的终态记录可确认 `finished`，同时给出真实阶段及退出码；脚本结束不表示容器停止。即使终态退出码为 0，原 SSH/输出失败仍保留为失败，避免丢失回执被伪装成成功。CLI 分别显示本地和远端状态及结果路径；缺结果、旧 ID、损坏内容或重连失败均保持未知，不自动重跑发布或回滚。手工上传脚本在 SSH 失败时保守提示未知和核对目录，部署 ID 见包内 manifest。先核对步骤文件、`current`、真实服务与数据，再决定恢复。
 
 ## 开发测试
 
@@ -173,6 +178,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 验证真实生成项目与 SSH/人工部署，覆盖禁止访问镜像仓库、局部更新、归档损坏、同版本发布和健康失败。finally/teardown 只清理本次测试创建的项目、镜像、容器、日志和进程。
 
 定向锁门禁使用可连接的 Podman（优先）或 Docker，在真实 Linux 容器中运行公开 API 生成的 `apply.sh`，验证并发、父进程强杀后的子进程持锁、全部进程退出和重启恢复。Compose/HTTP 使用确定性夹具，不能替代真实容器服务部署验收。运行 `HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/deploy exec vitest run tests/deploy-lock.e2e.test.ts`；PowerShell 先执行 `$env:HAI_DEPLOY_E2E='1'`，再运行同一 pnpm 命令。
+
+进程门禁运行 `pnpm --filter @h-ai/deploy exec vitest run tests/deploy-command-process.test.ts tests/deploy-secret-masker.test.ts`。设置同一 `HAI_DEPLOY_E2E=1` 后运行 `tests/deploy-command-runtime.e2e.test.ts`，先构建 deploy；它使用真实 Linux、OpenSSH 和发布 dist，验证远端继续执行/完成回执以及本地进程组。该夹具需联网安装 sshd；Compose/HTTP 为确定性夹具，发布 deadline 缩短为 2500 毫秒，并注入暂停消费模拟丢失回执。
 
 ## 许可证
 

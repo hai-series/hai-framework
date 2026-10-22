@@ -89,3 +89,7 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 ## 命令输出
 
 内部 `runCommand` / `SshExecutor.exec` 先 UTF-8 解码，再对每条逻辑流跨块精确脱敏；成功 stdout/stderr、错误、onOutput 均为安全结果。`secrets` 不推断全部进程环境，调用方列出秘密及可能输出的编码/转换值；总长不超过 1 Mi UTF-16 单元，脱敏异常失败关闭且不暴露原 cause。`maxCaptureChars` 默认 1048576、最大 16777216，捕获尾部并返回 stdoutTruncated/stderrTruncated，结构化解析先拒绝截断。onOutput 支持 Promise，顺序等待并保持 pipe 背压；异常回调使执行失败。异常终止不释放未完成的秘密尾部。部署进度仅解析每行前 512 字符。超时不能证明远端工作已终止。
+
+deadline 包括 helper 启动和输出处理。异常后 `terminationTimeoutMs` 另等待本地终止核验，默认 10000、上限 60000 毫秒。POSIX 用独立继承进程组；Windows 用隐藏且不加载 profile 的 PowerShell/.NET Job，挂起创建 → 分配成功 → 恢复，禁止 breakaway，helper/编译/分配失败拒绝执行。已脱离组的系统 daemon、现有容器和远端服务不在本地确认范围。只有受管理 Job/组无活动成员才是 confirmed；未证明为 unknown，启动前为 not-started。输入、回调和流异常同样经过此路径，已经进入的回调不能撤销，但不再交付新块。
+
+公开 `getDeployCommandState(result.error)` 在失败分支读取原因、本地状态、远端状态、deploymentId 和 resultFile。SSH 中断默认为远端 unknown；docker-ssh 新连接只读解析原子 `result-<ID>.json`，完整/未截断/ID 匹配才为 finished，并返回实际阶段、退出码。finished 指脚本及恢复结束，容器可以继续运行；即使终态为 0，原连接/输出失败仍保留。缺失、旧记录、损坏或重连失败保持 unknown，不自动重试写入。按 ID 核对步骤、current 和服务，再恢复。

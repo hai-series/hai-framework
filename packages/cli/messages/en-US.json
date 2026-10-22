@@ -187,5 +187,11 @@
   "cli_generateNamePrompt": "Name:",
   "cli_generateNameRequired": "Name is required",
   "cli_generateCancelled": "Generation cancelled; no files were written",
-  "cli_generateUnknownType": "Unknown generator type: {type}"
+  "cli_generateUnknownType": "Unknown generator type: {type}",
+  "cli_deploy_local_confirmed": "Local command tree: confirmed exited.",
+  "cli_deploy_local_unknown": "Local command tree: termination unconfirmed.",
+  "cli_deploy_local_not_started": "Local command tree: not started.",
+  "cli_deploy_remote_unknown": "Remote deployment execution: unknown; do not retry or stop services blindly.",
+  "cli_deploy_remote_finished": "Remote deployment script and recovery finished; verify service health. Running containers do not imply the failed script is still executing.",
+  "cli_deploy_result_check": "Deployment {id}: inspect server result file {path}."
 }

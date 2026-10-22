@@ -18,6 +18,7 @@ import { randomBytes } from 'node:crypto'
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
+import { z } from 'zod'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
 import {
@@ -30,6 +31,7 @@ import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
 import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { deployM } from '../deploy-i18n.js'
+import { getDeployCommandState } from '../deploy-recovery.js'
 import { HaiDeployError } from '../deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'provider-docker-ssh' })
@@ -39,6 +41,14 @@ const HEALTH_POLL_INTERVAL = 3000
 
 /** 健康检查最大轮询次数 */
 const HEALTH_MAX_ATTEMPTS = 40
+
+/** 只接收服务器脚本原子发布的终态；匹配 ID 后才能确认本次执行完成。 */
+const ServerResultSchema = z.object({
+  deploymentId: z.string(),
+  stage: z.enum(['preflight', 'images', 'dependencies', 'start', 'health', 'complete']),
+  exitCode: z.number().int().min(0).max(255),
+  durationSeconds: z.number().int().nonnegative(),
+})
 
 /** 生成不可变部署 ID：`YYYYMMDD-HHmmss-<random>`。 */
 function makeDeploymentId(): string {
@@ -240,8 +250,32 @@ export function createDockerSshProvider(
         }
       } },
     )
-    if (!started.success)
-      return started
+    if (!started.success) {
+      const resultFile = `${remoteDir}/result-${deploymentId}.json`
+      const state = getDeployCommandState(started.error)
+      // 独立连接只读核对，绝不因超时自动再运行 apply 或无条件恢复容器。
+      const checked = await ssh.exec(`if [ -f ${shellArgument(resultFile)} ]; then cat -- ${shellArgument(resultFile)}; fi`, { timeoutMs: 20_000, maxCaptureChars: 8192 })
+      let terminal: z.infer<typeof ServerResultSchema> | undefined
+      if (checked.success && !checked.data.stdoutTruncated) {
+        try {
+          const parsed = ServerResultSchema.safeParse(JSON.parse(checked.data.stdout))
+          if (parsed.success && parsed.data.deploymentId === deploymentId)
+            terminal = parsed.data
+        }
+        catch {
+          // 缺失、损坏、超限或不匹配的记录都不能证明远端已停止。
+        }
+      }
+      return err({ ...started.error, message: `${started.error.message}\n${terminal ? deployM('deploy_remoteFinished', { params: { stage: terminal.stage, code: String(terminal.exitCode) } }) : deployM('deploy_remoteUnknown')}`, suggestion: terminal ? deployM('deploy_remoteFinished', { params: { stage: terminal.stage, code: String(terminal.exitCode) } }) : deployM('deploy_remoteUnknown'), ext: { ...started.error.ext, commandExecution: {
+        ...state,
+        reason: state?.reason ?? 'exit',
+        localTermination: state?.localTermination ?? 'unknown',
+        remoteExecution: terminal ? 'finished' : 'unknown',
+        deploymentId,
+        resultFile,
+        ...(terminal ? { remoteExitCode: terminal.exitCode, remoteStage: terminal.stage } : {}),
+      } } })
+    }
 
     // 在线部署完成后检查实际公开入口。
     logger.info('Running health check', { url })

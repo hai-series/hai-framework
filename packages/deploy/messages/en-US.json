@@ -62,5 +62,14 @@
   "deploy_configFileUnreadable": "Cannot read configuration file {path}. Check its path and permissions.",
   "deploy_bundleNameInvalid": "Bundle filenames may contain letters, numbers, dots, plus signs, hyphens and underscores; parent directories may contain spaces.",
   "deploy_secretsInvalid": "Middleware credentials are damaged or incomplete: {path}. Restore a backup; passwords are not regenerated because existing data may become inaccessible.",
-  "deploy_storageArtifactRequired": "Storage initialization requires the application image. Select a complete artifact containing app with --artifact-dir, or run pnpm build --target docker --images app first."
+  "deploy_storageArtifactRequired": "Storage initialization requires the application image. Select a complete artifact containing app with --artifact-dir, or run pnpm build --target docker --images app first.",
+  "deploy_localStopped": "The local command process tree has been confirmed exited.",
+  "deploy_localUnknown": "Local process tree termination is unconfirmed; inspect local execution state.",
+  "deploy_localNotStarted": "The local command was not started.",
+  "deploy_commandOutputFailed": "Command output or callback failed",
+  "deploy_commandInputFailed": "Command input failed",
+  "deploy_commandTreeActive": "Child processes remain active after the main command exited",
+  "deploy_commandExecutionFailed": "Command execution failed",
+  "deploy_remoteUnknown": "Remote execution is unknown. Local SSH termination does not prove remote deployment stopped; inspect the server result and actual containers.",
+  "deploy_remoteFinished": "A matching server result confirms the deployment script and recovery finished: stage {stage}, exit {code}. Verify actual service health."
 }

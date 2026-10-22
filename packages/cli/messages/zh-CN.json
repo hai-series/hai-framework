@@ -187,5 +187,11 @@
   "cli_generateNamePrompt": "名称：",
   "cli_generateNameRequired": "名称不能为空",
   "cli_generateCancelled": "已取消生成，未写入文件",
-  "cli_generateUnknownType": "未知的生成器类型：{type}"
+  "cli_generateUnknownType": "未知的生成器类型：{type}",
+  "cli_deploy_local_confirmed": "本地命令进程树：已确认全部退出。",
+  "cli_deploy_local_unknown": "本地命令进程树：退出未确认。",
+  "cli_deploy_local_not_started": "本地命令进程树：未启动。",
+  "cli_deploy_remote_unknown": "远端部署执行状态：未知；不要直接重试或停止服务。",
+  "cli_deploy_remote_finished": "远端部署脚本与恢复已结束；请核对服务健康，运行中的容器不表示失败进程仍在执行。",
+  "cli_deploy_result_check": "部署 {id}：核对服务器结果文件 {path}。"
 }

@@ -9,9 +9,10 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { SshConfig } from '../deploy-config.js'
-import type { CommandResult } from './deploy-command.js'
+import type { CommandOptions, CommandResult } from './deploy-command.js'
 import { core, err, ok } from '@h-ai/core'
 import { deployM } from '../deploy-i18n.js'
+import { getDeployCommandState } from '../deploy-recovery.js'
 import { HaiDeployError } from '../deploy-types.js'
 import { runCommand } from './deploy-command.js'
 
@@ -20,7 +21,7 @@ const logger = core.logger.child({ module: 'deploy', scope: 'ssh' })
 /** SSH 执行器接口 */
 export interface SshExecutor {
   /** 在远程主机执行命令（通过远程登录 shell 运行） */
-  exec: (remoteCommand: string, options?: { timeoutMs?: number, secrets?: string[], maxCaptureChars?: number, onOutput?: (output: string) => void | Promise<void> }) => Promise<HaiResult<CommandResult>>
+  exec: (remoteCommand: string, options?: Pick<CommandOptions, 'timeoutMs' | 'terminationTimeoutMs' | 'secrets' | 'maxCaptureChars' | 'onOutput'>) => Promise<HaiResult<CommandResult>>
   /** 上传本地文件到远程路径 */
   upload: (localPath: string, remotePath: string) => Promise<HaiResult<void>>
   /** 远程连通性预检（执行 true 命令） */
@@ -84,24 +85,25 @@ export function buildScpUploadArgs(config: SshConfig, localPath: string, remoteP
  */
 export function createSshExecutor(config: SshConfig): SshExecutor {
   const exec: SshExecutor['exec'] = async (remoteCommand, options) => {
-    // runCommand 失败时已返回 REMOTE_COMMAND_FAILED（含 ssh stderr），无需重复包装
-    return runCommand('ssh', buildSshExecArgs(config, remoteCommand), {
+    const result = await runCommand('ssh', buildSshExecArgs(config, remoteCommand), {
       timeoutMs: options?.timeoutMs,
+      terminationTimeoutMs: options?.terminationTimeoutMs,
       maxCaptureChars: options?.maxCaptureChars,
       secrets: options?.secrets,
       onOutput: options?.onOutput,
     })
+    if (result.success)
+      return result
+    const state = getDeployCommandState(result.error)
+    // 连接客户端退出并不能证明远端进程结束；只增加安全状态，不暴露远程命令原文。
+    return err({ ...result.error, suggestion: deployM('deploy_remoteUnknown'), ext: { ...result.error.ext, commandExecution: { ...state, reason: state?.reason ?? 'exit', localTermination: state?.localTermination ?? 'unknown', remoteExecution: 'unknown' } } })
   }
 
   const upload: SshExecutor['upload'] = async (localPath, remotePath) => {
     const args = buildScpUploadArgs(config, localPath, remotePath)
-    const result = await runCommand('scp', args, {})
+    const result = await runCommand('scp', args, { timeoutMs: 600_000 })
     if (!result.success) {
-      return err(
-        HaiDeployError.IMAGE_TRANSFER_FAILED,
-        deployM('deploy_imageTransferFailed', { params: { error: result.error.message } }),
-        result.error,
-      )
+      return err({ ...HaiDeployError.IMAGE_TRANSFER_FAILED, message: deployM('deploy_imageTransferFailed', { params: { error: result.error.message } }), ext: result.error.ext })
     }
     return ok(undefined)
   }
@@ -110,11 +112,7 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
     logger.debug('SSH preflight', { host: config.host, port: config.port })
     const result = await exec('true', { timeoutMs: 20_000 })
     if (!result.success) {
-      return err(
-        HaiDeployError.REMOTE_CONNECT_FAILED,
-        deployM('deploy_remoteConnectFailed', { params: { host: config.host, error: result.error.message } }),
-        result.error,
-      )
+      return err({ ...HaiDeployError.REMOTE_CONNECT_FAILED, message: deployM('deploy_remoteConnectFailed', { params: { host: config.host, error: result.error.message } }), ext: result.error.ext })
     }
     return ok(undefined)
   }

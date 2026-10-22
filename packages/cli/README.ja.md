@@ -94,6 +94,8 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 完全配布にはアプリと自前ミドルウェアのイメージが入ります。梱包のみでは tar と Windows `deploy.ps1`、Linux/macOS `deploy.sh` を生成します。隔離 Linux サーバーでは展開して `sh apply.sh` を実行します。初回は完全配布が必要で、部分更新は他サービスとボリュームを維持します。各手順の結果を表示し、失敗は非ゼロで終了して復元を試みます。前提・キャッシュ・版管理・復元は[デプロイ説明](../deploy/README.ja.md)を参照してください。
 
+失敗時はローカルの管理対象プロセス終了確認と、遠隔の不明/スクリプト完了状態、結果ファイルのパスを別々に表示します。ローカル SSH 終了だけでは遠隔停止を断定しません。不明状態をサーバーで確認し、CLI は配置や復元を自動再実行しません。Windows は内嵌のシステム PowerShell/.NET Job と Add-Type を使い、失敗時は管理外でコマンドを起動しません。
+
 デスクトップ配布は `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64` を対象 OS とツールチェーンで実行します。コンテナの Web 表示とは別にネイティブ配布を検証してください。
 
 ### AI による開発

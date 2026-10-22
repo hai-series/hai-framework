@@ -211,6 +211,8 @@ Complete bundles include self-hosted middleware archives and matching architectu
 
 Deployment and recovery retain a kernel lock on the fixed `.deploy.lock` file. Never delete, replace or steal it based on time. Active children may keep the lock after the parent is killed; all holders exiting or a restart releases it. Forced termination skips recovery traps: inspect the result, `current` and actual containers before recovering with a new bundle. See the [deployment guide](../../packages/deploy/README.en.md).
 
+Failures distinguish confirmed/unconfirmed local managed-process termination from unknown/finished remote scripts. SDK `getDeployCommandState(error)` exposes the deployment ID and result path. Only a fresh connection reading a complete, matching atomic result confirms the remote script and recovery finished; local SSH exit does not prove remote termination. Unknown execution never triggers automatic deployment or rollback retries.
+
 ### 6. Update the framework while keeping your application
 
 From the application directory, ask the assistant to use [hai-framework-sync](../../packages/cli/templates/skills/hai-framework-sync/SKILL.md):

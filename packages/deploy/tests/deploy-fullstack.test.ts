@@ -7,7 +7,7 @@ import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
-import { deploy, DeploymentArtifactSchema, HaiDeployError } from '../src/index.js'
+import { deploy, DeploymentArtifactSchema, getDeployCommandState, HaiDeployError } from '../src/index.js'
 
 const ssh = vi.hoisted(() => ({ ping: vi.fn(), exec: vi.fn(), upload: vi.fn() }))
 vi.mock('../src/container/deploy-ssh.js', () => ({ createSshExecutor: () => ssh }))
@@ -295,6 +295,34 @@ it('完整 tar 上传失败不启动半份部署', async () => {
   ssh.upload.mockResolvedValue({ success: false, error: { ...HaiDeployError.IMAGE_TRANSFER_FAILED, message: 'transfer failed' } })
   expect(await deploy.deployApp(root, { environment: 'test' })).toMatchObject({ success: false, error: { code: HaiDeployError.IMAGE_TRANSFER_FAILED.code } })
   expect(ssh.exec.mock.calls.some(([command]) => String(command).includes('start-test.sh'))).toBe(false)
+})
+
+it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-success'])('ssh 失败只读核对匹配终态结果，保留准确执行状态且不重跑 (%s)', async (mode) => {
+  await initialize()
+  let applyCalls = 0
+  ssh.exec.mockImplementation(async (command: string) => {
+    const data = { code: 0, stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false }
+    if (command.includes('apply.sh')) {
+      applyCalls++
+      return { success: false, error: { ...HaiDeployError.REMOTE_COMMAND_FAILED, message: 'SSH disconnected', ext: { commandExecution: { reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'unknown' } } } }
+    }
+    if (command.includes('result-')) {
+      const id = /result-([a-z0-9-]+)\.json/.exec(command)?.[1]
+      data.stdout = mode === 'missing' ? '' : JSON.stringify({ deploymentId: mode === 'mismatch' ? 'older-deployment' : id, stage: 'health', exitCode: mode === 'finished-success' ? 0 : 1, durationSeconds: 1 })
+      data.stdoutTruncated = mode === 'truncated'
+    }
+    return { success: true, data }
+  })
+  const result = await deploy.deployApp(root, { environment: 'test', skipMiddleware: true })
+  expect(result.success).toBe(false)
+  if (result.success)
+    throw new Error('Connection failure must remain visible')
+  const state = getDeployCommandState(result.error)
+  expect(state).toMatchObject({ reason: 'timeout', localTermination: 'confirmed', remoteExecution: mode.startsWith('finished') ? 'finished' : 'unknown' })
+  expect(state?.resultFile).toContain(`result-${state?.deploymentId}.json`)
+  if (mode.startsWith('finished'))
+    expect(state?.remoteExitCode).toBe(mode === 'finished-success' ? 0 : 1)
+  expect(applyCalls).toBe(1)
 })
 it('aPI 正常但 Web 不健康时不会报告部署成功', async () => {
   await initialize()

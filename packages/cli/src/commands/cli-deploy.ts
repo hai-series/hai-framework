@@ -355,6 +355,15 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     })
 
     if (!deployResult.success) {
+      const execution = deployModule.getDeployCommandState(deployResult.error)
+      if (execution) {
+        const localKey = execution.localTermination === 'not-started' ? 'cli_deploy_local_not_started' : execution.localTermination === 'confirmed' ? 'cli_deploy_local_confirmed' : 'cli_deploy_local_unknown'
+        writeCliMessage(cliM(localKey))
+        if (execution.remoteExecution)
+          writeCliMessage(cliM(execution.remoteExecution === 'finished' ? 'cli_deploy_remote_finished' : 'cli_deploy_remote_unknown'))
+        if (execution.deploymentId && execution.resultFile)
+          writeCliMessage(cliM('cli_deploy_result_check', { params: { id: execution.deploymentId, path: execution.resultFile } }))
+      }
       if (deployResult.error.ext?.recovery) {
         writeCliMessage(deployResult.error.suggestion ?? cliM('cli_deploy_command_failed'))
       }

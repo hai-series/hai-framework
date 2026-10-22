@@ -211,6 +211,8 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 配置と復元の間は固定 `.deploy.lock` のカーネルロックを保持し、削除・置換・時間による横取りを禁止します。親が強制終了しても子はロックを保持でき、全保持プロセス終了または再起動で解放されます。強制終了時は復元 trap が動かないため、結果、`current` と実コンテナーを確認して新しいパッケージで復旧してください。[配置ガイド](../../packages/deploy/README.ja.md)を参照してください。
 
+失敗表示はローカル管理対象プロセスの終了確認/未確認と、遠隔 script の不明/完了を分けます。SDK `getDeployCommandState(error)` は配置 ID と結果パスを返します。別接続で完全かつ ID が一致する原子的な結果を読んだ場合だけ遠隔 script と復元の完了を確認し、ローカル SSH 終了を遠隔停止とみなしません。不明状態で配置や復元を自動再実行しません。
+
 ### 6. アプリの変更を保ちながらフレームワークを更新する
 
 アプリのディレクトリーで [hai-framework-sync](../../packages/cli/templates/skills/hai-framework-sync/SKILL.md) を使うよう依頼します。

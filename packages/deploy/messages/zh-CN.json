@@ -62,5 +62,14 @@
   "deploy_configFileInvalid": "配置文件 {path} 第 {line} 行格式有误。请检查缩进、冒号和引号后重试。",
   "deploy_configFileUnreadable": "无法读取配置文件 {path}，请检查文件路径与读取权限。",
   "deploy_bundleNameInvalid": "部署包文件名只支持字母、数字、点、加号、短横线和下划线；所在目录可以包含空格。",
-  "deploy_secretsInvalid": "中间件凭据文件损坏或缺少字段：{path}。请从备份恢复；不会自动更换密码，以免已有数据无法访问。"
+  "deploy_secretsInvalid": "中间件凭据文件损坏或缺少字段：{path}。请从备份恢复；不会自动更换密码，以免已有数据无法访问。",
+  "deploy_localStopped": "已确认本地命令进程树全部退出。",
+  "deploy_localUnknown": "无法确认本地命令进程树已全部退出；请检查本机执行状态。",
+  "deploy_localNotStarted": "本地命令尚未启动。",
+  "deploy_commandOutputFailed": "命令输出或回调失败",
+  "deploy_commandInputFailed": "命令输入失败",
+  "deploy_commandTreeActive": "主命令退出后仍有活跃的子进程",
+  "deploy_commandExecutionFailed": "命令执行失败",
+  "deploy_remoteUnknown": "远端执行状态未知；本地 SSH 结束不证明远端部署已停止，请核对服务器结果与实际容器状态。",
+  "deploy_remoteFinished": "匹配的服务器结果确认部署脚本及恢复已结束：阶段 {stage}，退出码 {code}。请核对实际服务健康状态。"
 }

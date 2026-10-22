@@ -94,6 +94,8 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 Complete bundles include application and self-hosted middleware images. Bundle-only mode creates a tar plus Windows `deploy.ps1` and Linux/macOS `deploy.sh`. On an isolated Linux server, extract and run `sh apply.sh`. First installations require a complete bundle; partial updates preserve other services and volumes. Each step reports its result; failure exits nonzero and attempts recovery. See [deployment](../deploy/README.en.md) for prerequisites, caching, versions and recovery.
 
+Failures display local managed-process termination separately from remote unknown/finished-script state and the server result path. Local SSH exit does not prove remote termination. Inspect unknown server state first; CLI never reruns deployment or rollback automatically. Windows command execution uses an embedded system PowerShell/.NET Job and requires Add-Type; failure never starts an unmanaged command.
+
 Build desktop installers with `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64`, using the target system and toolchain. Test native installers separately from container-hosted web pages.
 
 ### AI-assisted development

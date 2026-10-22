@@ -94,6 +94,8 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 完整包包含应用和自建中间件镜像。仅打包会同时生成 tar 与 Windows `deploy.ps1`、Linux/macOS `deploy.sh`；完全隔离的 Linux 服务器解包后运行 `sh apply.sh`。首次部署必须完整；部分更新保留未选服务和数据卷。每步报告结果，失败返回非零并尝试恢复。前置工具、缓存、版本和恢复流程见[部署说明](../deploy/README.md)。
 
+部署失败时分别显示本地受管理进程终止确认、远端未知/脚本已完成状态和结果文件路径；本地 SSH 结束不证明远端停止。未知状态先核对服务器，CLI 不自动重跑发布或回滚。Windows 命令使用内嵌的系统 PowerShell/.NET Job，需允许 Add-Type，失败不会裸启动。
+
 桌面安装包用 `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64`，在对应系统准备工具链并验证。容器里的 Web 页面不代替原生安装包。
 
 ### 使用 AI 辅助开发

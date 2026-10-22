@@ -240,6 +240,8 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 部署与失败恢复全程使用固定 `.deploy.lock` 内核锁；禁止删除或替换文件、按时间抢锁。父进程强杀后活跃子命令可继续持锁，全部持有进程退出或重启后自动释放。强杀不执行恢复 trap，须核对结果、`current` 和实际容器状态后用新包恢复；详细说明见[部署锁与恢复](../../packages/deploy/README.md)。
 
+失败输出区分本地受管理进程已确认退出/未确认和远端未知/脚本已完成；SDK 可用 `getDeployCommandState(error)` 读取部署 ID 与结果路径。仅新连接读到完整且 ID 匹配的原子结果才确认远端脚本及恢复结束，不能把本地 SSH 退出当作远端停止。未知状态不自动重跑发布或回滚。
+
 ### 6. 更新框架，保留自己的应用
 
 在应用目录让 AI 使用 [hai-framework-sync](../../packages/cli/templates/skills/hai-framework-sync/SKILL.md)：

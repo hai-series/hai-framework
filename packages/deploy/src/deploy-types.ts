@@ -179,6 +179,32 @@ export interface DeployRecoveryInfo {
   }>
 }
 
+/**
+ * 命令失败后的已核验执行状态；远端 finished 仅指部署脚本及恢复已完成，不代表容器停止。
+ * @example
+ * ```ts
+ * import type { DeployCommandState } from '@h-ai/deploy'
+ * const state: DeployCommandState = { reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'unknown' }
+ * void state.localTermination
+ * ```
+ */
+export interface DeployCommandState {
+  /** 失败触发原因。 */
+  reason: 'timeout' | 'output' | 'input' | 'spawn' | 'exit' | 'configuration'
+  /** 本地受管理树已全部退出、无法证明，或尚未启动。 */
+  localTermination: 'confirmed' | 'unknown' | 'not-started'
+  /** SSH 失败默认 unknown；读取匹配部署 ID 的完整终态结果后才为 finished。 */
+  remoteExecution?: 'unknown' | 'finished'
+  /** 本次不可变部署 ID，可与服务器结果核对。 */
+  deploymentId?: string
+  /** 服务器端结果文件；无凭据。 */
+  resultFile?: string
+  /** 匹配终态结果中的真实脚本退出码。 */
+  remoteExitCode?: number
+  /** 匹配终态结果中的最后阶段。 */
+  remoteStage?: string
+}
+
 // ─── 部署选项 ───
 
 /** 部署选项 */

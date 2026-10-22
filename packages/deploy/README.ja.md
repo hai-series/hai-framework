@@ -127,8 +127,13 @@ finally {
 
 `selectedServices: ['web']` は部分更新を選択し、`onProgress` はパッケージ作成とサーバー実行の段階を通知します。`deploy.scan` と `deploy.credentials.*` は初期化前も使用できます。HaiResult.success を確認してからデータを読み取ります。Vercel は既存 .vercel/output を prebuilt API でアップロードするためネット接続が必要で、オフラインや Compose の部分公開には対応しません。
 
-
 コマンド出力は正しく UTF-8 デコードした論理ストリーム単位で秘匿し、stdout/stderr のチャンク境界をまたぐ既知の秘密も保護します。成功結果、エラー、出力コールバックは同じ境界を使います。内部コマンドの `secrets` に機密リテラルを指定し、変換・エンコードした値も別途指定してください。各ストリームは既定で末尾 1 Mi 文字を保持し、`maxCaptureChars` は 1～16 Mi 文字です。構造化出力の解析前に `stdoutTruncated` / `stderrTruncated` を確認します。非同期 `onOutput` を順に待ち pipe の背圧を保ち、安全な stdout 全体を渡します。進捗解析は各行の先頭 512 文字のみです。秘密の合計上限は UTF-16 で 1 Mi 単位、秘匿失敗は処理失敗とします。タイムアウトだけでリモートプロセスの終了を断定せず、終了を確認してください。
+
+コマンド期限は helper 起動と出力処理を含みます。タイムアウト、入出力・コールバック失敗時は管理対象プロセスを終了します。POSIX は独立したプロセスグループ、Windows は内嵌 PowerShell/.NET Job Object を使い、停止状態で作成して割当成功後だけ再開します。breakaway は許可せず、helper・コンパイル・割当失敗時に裸のプロセスへ切り替えません。Windows はシステム PowerShell と Add-Type が必要です。非表示で profile を読み込まず、引数・環境・UTF-8 pipe を保持します。POSIX の子孫は同じグループを継承してください。独立したシステム daemon と遠隔サービスはローカル終了確認の対象外です。
+
+失敗後の確認待ちは `terminationTimeoutMs`（既定 10000、最大 60000 ミリ秒）です。kill 送信だけでは確認とせず、管理対象 Job/グループの活動メンバーがなくなった場合だけ `localTermination: 'confirmed'`、確認失敗・期限切れは `unknown`、起動前は `not-started` を記録します。`if (!result.success)` 内で公開 `getDeployCommandState(result.error)` を使い、原始例外やコマンド引数を含まない状態を読みます。実行中の非同期出力 callback は取り消せませんが、失敗後に新しい出力を渡しません。
+
+SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は別接続で `result-<deploymentId>.json` を読みます。完全で未切断、ID が一致する終端結果だけ `finished` と実際の段階・終了値を確認できます。script 終了はコンテナー停止を意味しません。終了値が 0 でも元の SSH/出力失敗は失敗として残します。CLI はローカルと遠隔の状態と結果パスを別々に表示します。欠落・旧 ID・破損・再接続失敗は不明のまま、配置や rollback を自動再実行しません。手動アップロード script は SSH 失敗を不明と表示し、確認先を示します。配置 ID はパッケージの manifest で確認します。手順、`current`、実サービスとデータを確認して復旧してください。
 
 ## 開発とテスト
 
@@ -144,6 +149,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 実際の生成プロジェクト、SSH と手動公開を検証します。レジストリー接続禁止、部分更新、破損アーカイブ、同一版での再公開、ヘルスチェック失敗を含めます。finally/teardown ではテスト自身が作成したプロジェクト、イメージ、コンテナー、ログ、プロセスのみを削除します。
 
 ロック専用ゲートは接続可能な Podman（優先）または Docker を使い、公開 API が生成した `apply.sh` を実際の Linux コンテナーで実行します。同時実行、親の強制終了後の子によるロック保持、全終了と再起動からの復旧を確認します。Compose/HTTP は決定的なテスト用実装で、実サービス公開の検証を代替しません。`HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/deploy exec vitest run tests/deploy-lock.e2e.test.ts` を実行します。PowerShell は先に `$env:HAI_DEPLOY_E2E='1'` を設定してから同じ pnpm コマンドを実行してください。
+
+プロセス専用ゲートは `pnpm --filter @h-ai/deploy exec vitest run tests/deploy-command-process.test.ts tests/deploy-secret-masker.test.ts` です。同じ `HAI_DEPLOY_E2E=1` を設定し、deploy をビルドしてから `tests/deploy-command-runtime.e2e.test.ts` を実行すると、実 Linux/OpenSSH、公開 dist、遠隔の継続・完了、ローカルグループを検証します。sshd 導入にネットワークが必要で、Compose/HTTP はテスト用実装です。配置期限を 2500 ミリ秒に短縮し、出力消費を停止して応答喪失を再現します。
 
 ## ライセンス
 

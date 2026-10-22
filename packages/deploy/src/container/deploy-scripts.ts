@@ -132,7 +132,9 @@ finish() {
     outcome=passed
     if [ "$code" -ne 0 ]; then outcome=failed; fi
     printf '{"stage":"%s","status":"%s","durationSeconds":%s}\n' "$stage" "$outcome" "$(( $(date +%s) - step_started ))" >> "$root/steps-$id.jsonl"
-    printf '{"deploymentId":"%s","stage":"%s","exitCode":%s,"durationSeconds":%s}\n' "$id" "$stage" "$code" "$elapsed" > "$root/result-$id.json"
+    # 先完整写入再同目录原子发布，SSH 重连核对不能读取到半份终态结果。
+    printf '{"deploymentId":"%s","stage":"%s","exitCode":%s,"durationSeconds":%s}\n' "$id" "$stage" "$code" "$elapsed" > "$root/result-$id.json.next"
+    mv "$root/result-$id.json.next" "$root/result-$id.json"
   fi
   exit "$code"
 }
@@ -287,7 +289,13 @@ scp_host=$host
 case "$host" in *:*) scp_host="[$host]";; esac
 scp "$@" -P "$port" "$bundle" "$user@$scp_host:$remote/incoming/$bundle"
 printf '[3/3] Applying package and checking HTTP access\n'
-ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"
+if ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"; then
+  :
+else
+  code=$?
+  printf '[UNKNOWN] Remote execution may continue. Inspect %s/result-<deploymentId>.json (ID in manifest.json), current and containers before retrying.\n' "$remote" >&2
+  exit "$code"
+fi
 `
   const ps1 = String.raw`param([string]$IdentityFile = $env:HAI_DEPLOY_IDENTITY_FILE)
 $ErrorActionPreference = 'Stop'
@@ -309,12 +317,18 @@ function Invoke-Step([string]$Name, [string]$Command, [string[]]$Arguments) {
   & $Command @Arguments
   if ($LASTEXITCODE -ne 0) { throw "$Name failed (exit $LASTEXITCODE)." }
 }
+$applying = $false
 try {
   foreach ($tool in @('ssh', 'scp')) { Get-Command $tool -ErrorAction Stop | Out-Null }
   Invoke-Step '1/3 Connect' 'ssh' ($options + @('-p', [string]$target.port, $destination, "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"))
   Invoke-Step '2/3 Upload' 'scp' ($options + @('-P', [string]$target.port, $bundle, "$($scpDestination):$remote/incoming/$bundle"))
+  $applying = $true
   Invoke-Step '3/3 Apply and verify HTTP' 'ssh' ($options + @('-p', [string]$target.port, $destination, "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"))
-} catch { Write-Error $_; exit 1 }
+} catch {
+  if ($applying) { [Console]::Error.WriteLine("[UNKNOWN] Remote execution may continue. Inspect $remote/result-<deploymentId>.json (ID in manifest.json), current and containers before retrying.") }
+  Write-Error $_
+  exit 1
+}
 `
   const values: Record<string, string> = { HOST: shellArgument(host), USER: shellArgument(user), PORT: String(port), REMOTE: shellArgument(remote), BUNDLE: shellArgument(bundle), IDENTITY: shellArgument(ssh?.identityFile ?? ''), KNOWN: shellArgument(ssh?.knownHostsFile ?? ''), STRICT: ssh?.strictHostKeyChecking === false ? 'no' : 'accept-new' }
   return { sh: sh.replace(/@@([A-Z]+)@@/g, (_match, name: string) => values[name]!), ps1 }
