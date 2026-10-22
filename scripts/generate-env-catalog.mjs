@@ -76,8 +76,6 @@ function fieldDescription(module, segments) {
     prefix: 'RPC 端点的路径前缀',
     runtime: '本地或远程容器运行时，auto 按部署模块顺序探测',
     transport: '传输加密开关或密钥协商配置',
-    encryptResponse: '是否加密服务端业务响应',
-    requireEncryption: '是否要求业务请求使用传输加密',
     keyExchangePath: '客户端与服务端约定的密钥交换端点',
     excludePaths: '不进入传输加密管道的路径',
     path: '当前 HTTP 功能的端点路径',

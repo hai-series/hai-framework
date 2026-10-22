@@ -60,4 +60,32 @@ describe('crypto transport key stores', () => {
     await store.delete?.(clientId)
     expect(await store.get(clientId)).toBeUndefined()
   })
+
+  it.each(['memory', 'redis', 'reldb'] as const)('有效 nonce 原子消费且拒绝过期写入：%s', async (backend) => {
+    let first
+    let second
+    if (backend === 'redis') {
+      expect((await cache.init({ type: 'memory' })).success).toBe(true)
+      first = createRedisTransportKeyStore({ cache })
+      second = createRedisTransportKeyStore({ cache })
+    }
+    else if (backend === 'reldb') {
+      expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+      first = createReldbTransportKeyStore({ reldb })
+      second = createReldbTransportKeyStore({ reldb })
+      // 同时创建的两个 wrapper 必须先完成无业务含义的建表操作。
+      await first.get('client')
+      await second.get('client')
+    }
+    else {
+      first = createInMemoryKeyStore(1)
+      second = first
+    }
+    const expiry = Date.now() + 60_000
+    const results = await Promise.all(Array.from({ length: 16 }, (_, i) => (i % 2 ? first : second).claimRequest('client', 'nonce', expiry)))
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect(await second.claimRequest('client', 'nonce', expiry)).toBe(false)
+    expect(await second.claimRequest('other-client', 'nonce', expiry)).toBe(true)
+    expect(await second.claimRequest('client', 'already-expired', Date.now() - 1)).toBe(false)
+  })
 })

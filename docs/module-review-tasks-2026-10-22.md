@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 32/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 33/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -183,7 +183,8 @@
 
 ### CRYPTO-02 · P1 · 给传输密文增加完整性与请求绑定
 
-- [ ] 待修正（源码探针已复现；范围：crypto）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：仅支持v2：独立随机SM4/HMAC-SM3密钥、SM2发送方签名，先验签/MAC再CBC；认证版本/方向/服务端keyId/clientId/requestId/时间/method/实际路径摘要/响应status。5分钟时效+30秒未来偏差，共享registry原子消费nonce并保留6分钟，失败关闭；GET/HEAD、空请求/响应均认证，删除降级开关和旧格式。路径改64hex SM3摘要以绑定完整pathname+原始search而不重复放大HTTP头，实际URL8KiB上限；正文2129920字节、头16KiB与Nginx/CORS/模板/三语协议文档/skills/环境同步。250项定向及最后client错误脱敏复验通过，含真实算法篡改、双Node+SQLite防重放重启、实际serv.listen默认头限制下极限URL/1MiB非ASCII正文/GET/HEAD；六包typecheck、admin0错误警告、相关build/lint、skills和594项env通过。Redis需noeviction与可靠持久化且节点时钟同步，握手真实性依赖TLS；未验证Redis切换/PG/MySQL/Nginx部署和完整scaffold；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/crypto/src/transport/crypto-transport-server.ts:86](../packages/crypto/src/transport/crypto-transport-server.ts#L86)；[packages/crypto/src/crypto-sm4.ts:227](../packages/crypto/src/crypto-sm4.ts#L227)。
 - **证据与影响**：传输 payload 只有 encryptedKey/ciphertext/iv，CBC 解密未验证 MAC/tag。使用真实 SM4 实现的本地探针仅改变 IV，就把合法 JSON 的 amount 从 10000 改为 90000 并成功解密；该证据不是 TLS 攻破证明。
 - **修正内容**：采用受支持的认证加密或严格先验 MAC 的方案，认证版本、key id、client/request 上下文；明确重放窗口与跨节点去重。删除旧未认证传输格式，不保留兼容旁路。

@@ -1,6 +1,5 @@
-import type { EncryptedRequestPayload } from '@h-ai/crypto'
 import { HaiApiClientError } from '@h-ai/api-client'
-import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { initializeManagementApi, managementApi, resolveAvatarUrl } from '../src/lib/api/api-client.js'
 
@@ -37,20 +36,17 @@ function createServerFetch() {
     const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
     if (!clientId)
       return Response.json({ success: false }, { status: 400 })
+    const verified = await authenticateTransportRequest(server, request)
+    if (!verified.success)
+      throw new Error(verified.error.message)
     let data: unknown = runtimeInfo
     if (url.pathname.endsWith('/app/echo')) {
       expect(request.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-      const encrypted = await request.json() as EncryptedRequestPayload
-      expect(JSON.stringify(encrypted)).not.toContain('private message')
-      const decrypted = server.decryptRequest(encrypted)
-      expect(decrypted.success).toBe(true)
-      if (!decrypted.success)
-        throw new Error(decrypted.error.message)
-      const payload = JSON.parse(decrypted.data) as { message: string }
+      const payload = JSON.parse(verified.data.plaintext) as { message: string }
       messages.push(payload.message)
       data = { message: payload.message, echoedAt: '2026-01-01T00:00:00.000Z', requestId: 'test-request' }
     }
-    const response = await server.encryptResponse(clientId, JSON.stringify({ success: true, data }))
+    const response = await server.encryptResponse(verified.data.context, JSON.stringify({ success: true, data }), 200)
     if (!response.success)
       throw new Error(response.error.message)
     return Response.json(response.data, { headers: { [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE } })

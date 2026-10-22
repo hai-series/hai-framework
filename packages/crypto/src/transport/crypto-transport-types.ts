@@ -15,10 +15,19 @@ import type { HaiResult } from '@h-ai/core'
  * 传输加密协议常量。
  *
  * 所有使用端必须复用这组常量，避免「header 名拼写漂移导致两端协议错配」。
+ * @example `headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)`
  */
 export const TRANSPORT_PROTOCOL = {
   /** 客户端 ID 请求头名。 */
   CLIENT_ID_HEADER: 'X-Client-Id',
+  /** GET/HEAD 等无正文请求的认证封装；禁止与正文封装同时出现。 */
+  ENVELOPE_HEADER: 'X-Hai-Transport',
+  /** 唯一支持的认证协议版本；旧未认证格式拒绝。 */
+  VERSION: 2,
+  /** 请求允许的过去时间窗口（毫秒）。 */
+  REQUEST_WINDOW_MS: 300_000,
+  /** 节点时钟允许的最大未来偏差（毫秒）。 */
+  CLOCK_SKEW_MS: 30_000,
   /** 标识响应体已加密的响应头名。 */
   ENCRYPTED_HEADER: 'X-Encrypted',
   /** `X-Encrypted` 响应头的开启值。 */
@@ -29,6 +38,7 @@ export const TRANSPORT_PROTOCOL = {
 
 /**
  * 密钥协商请求体（客户端 → 服务端）。
+ * @example `const body: KeyExchangeRequest = { clientPublicKey: keyPair.publicKey }`
  */
 export interface KeyExchangeRequest {
   readonly clientPublicKey: string
@@ -36,6 +46,7 @@ export interface KeyExchangeRequest {
 
 /**
  * 密钥协商响应体（服务端 → 客户端）。
+ * @example `const body: KeyExchangeResponse = { clientId, serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey() }`
  */
 export interface KeyExchangeResponse {
   /** 服务端当前加密密钥版本；业务请求必须带回该值。 */
@@ -46,7 +57,10 @@ export interface KeyExchangeResponse {
 
 // ─── 加解密载荷 ───
 
-/** 非对称密钥对。 */
+/**
+ * 非对称密钥对；私钥不得写入公开配置、日志或响应。
+ * @example `const pair: TransportKeyPair = managedServerKeyPair`
+ */
 export interface TransportKeyPair {
   readonly publicKey: string
   readonly privateKey: string
@@ -55,25 +69,90 @@ export interface TransportKeyPair {
 /**
  * 端到端传输的加密载荷格式。
  *
- * `encryptedKey` 用对端非对称公钥加密的对称会话密钥；`ciphertext` + `iv`
- * 为该会话密钥加密的明文。两端必须使用同一份字段命名。
+ * encryptedKey 封装独立的 SM4/HMAC 密钥；签名覆盖全部认证字段和 MAC。
+ * 接收方必须先验证发送方及 MAC，再解密，不能仅凭 X-Encrypted 布尔标记信任正文。
+ * @example
+ * ```ts
+ * const result = await manager.encryptResponse(verifiedContext, JSON.stringify(data), 200)
+ * if (result.success) return Response.json(result.data)
+ * ```
  */
 export interface EncryptedPayload {
+  /** 认证的请求上下文；响应必须原样关联同一个请求。 */
+  readonly context: TransportMessageContext
+  /** 认证方向，防止把合法响应反射到请求入口。 */
+  readonly direction: 'request' | 'response'
+  /** 请求固定为 0；响应认证实际 HTTP 状态码。 */
+  readonly status: number
+  /** SM2 封装的 JSON [SM4 密钥 hex, 独立 HMAC 密钥 hex]。 */
   readonly encryptedKey: string
+  /** SM4-CBC 密文 hex；认证输入包含原始编码值。 */
   readonly ciphertext: string
+  /** 随机 16 字节 CBC IV 的 hex 编码。 */
   readonly iv: string
+  /** 独立随机密钥计算的 HMAC-SM3；先验证后解密 CBC。 */
+  readonly tag: string
+  /** 对完整封装和 tag 的发送方 SM2 签名，防止公钥持有者伪造发送方。 */
+  readonly signature: string
+}
+
+/**
+ * 与一次 HTTP 请求绑定的认证上下文。
+ * requestId 是 128 位随机 nonce；共享 registry 在有效窗口内只允许消费一次。
+ * pathHash 为实际 URL 的 pathname + search 的 SM3 摘要，不解码或重排查询参数。
+ * @example
+ * ```ts
+ * const context: TransportMessageContext = {
+ *   version: 2, serverKeyId: '2026-10', clientId, requestId,
+ *   issuedAt: Date.now(), method: 'POST', pathHash: actualPathSm3,
+ * }
+ * ```
+ */
+export interface TransportMessageContext {
+  /** 唯一受支持的协议版本。 */
+  readonly version: 2
+  /** 协商选择的受管服务端密钥版本。 */
+  readonly serverKeyId: string
+  /** registry 注册的客户端 ID；发送方必须证明持有对应私钥。 */
+  readonly clientId: string
+  /** 128 位随机十六进制 nonce，同时用于响应关联。 */
+  readonly requestId: string
+  /** 请求创建时间，Unix 毫秒；允许过去 5 分钟、未来 30 秒。 */
+  readonly issuedAt: number
+  /** 大写 HTTP 方法，必须与实际 Request 完全一致。 */
+  readonly method: string
+  /** 实际 pathname + 原始 search 的 SM3 摘要，64 位小写 hex，避免在认证头中重复长 URL。 */
+  readonly pathHash: string
+}
+
+/**
+ * HTTP 适配器从实际 Request 提取的可信上下文，禁止从密文封装直接复制。
+ * @example
+ * ```ts
+ * const expected = { clientId, method: request.method, path: url.pathname + url.search }
+ * const result = await manager.decryptRequest(payload, expected)
+ * ```
+ */
+export interface TransportRequestContext {
+  /** 实际 X-Client-Id 头，用于 registry 查询及发送方验签。 */
+  readonly clientId: string
+  /** 实际 Request.method。 */
+  readonly method: string
+  /** 实际 URL.pathname + URL.search，保留查询参数顺序及编码。 */
+  readonly path: string
 }
 
 /**
  * 发往服务端的密文，显式指定协商时取得的服务端密钥版本。
  * @example
  * ```ts
- * const payload: EncryptedRequestPayload = { serverKeyId: '2026-10', encryptedKey, ciphertext, iv }
+ * // authenticated 为客户端生成的完整认证封装，不手写密钥或标记来模拟认证。
+ * const payload: EncryptedRequestPayload = { ...authenticated, direction: 'request', status: 0 }
  * ```
  */
 export interface EncryptedRequestPayload extends EncryptedPayload {
-  /** 协商返回的服务端密钥 ID；未知或已撤销 ID 必须拒绝。 */
-  readonly serverKeyId: string
+  readonly direction: 'request'
+  readonly status: 0
 }
 
 /**
@@ -104,12 +183,20 @@ export interface TransportServerKeyRing {
  *
  * 不直接依赖 `@h-ai/crypto` 的具体实现，便于测试时注入 mock；
  * 实际使用时 `crypto` 模块的实例本身即可结构兼容。
+ * @example `const service: TransportCryptoServiceLike = crypto`
  */
 export interface TransportCryptoServiceLike {
   asymmetric: {
     generateKeyPair: () => HaiResult<TransportKeyPair>
     encrypt: (data: string, publicKey: string) => HaiResult<string>
     decrypt: (ciphertext: string, privateKey: string) => HaiResult<string>
+    sign: (data: string, privateKey: string) => HaiResult<string>
+    verify: (data: string, signature: string, publicKey: string) => HaiResult<boolean>
+  }
+  hash: {
+    /** SM3 摘要，用于实际请求路径绑定，不使用其它摘要算法替换。 */
+    hash: (data: string) => HaiResult<string>
+    hmac: (data: string, key: string) => HaiResult<string>
   }
   symmetric: {
     generateKey: () => string
@@ -127,12 +214,19 @@ export interface TransportCryptoServiceLike {
  *
  * 设计原则：方法均为异步签名，避免后续替换为分布式实现时大改接口；
  * 内存实现以 `Promise.resolve` 包裹即可。
+ * @example `const registry: TransportKeyStore = createRedisTransportKeyStore({ cache })`
  */
 export interface TransportKeyStore {
   /** 注册新客户端，返回服务端生成的 `clientId`。 */
   register: (publicKey: string) => Promise<string>
   /** 查询已注册客户端公钥。 */
   get: (clientId: string) => Promise<string | undefined>
+  /**
+   * 原子消费客户端 requestId nonce；成功返回 true，重放返回 false。
+   * 必须跨节点共享且在 expiresAt（Unix 毫秒）前不驱逐；存储故障必须 reject，禁止当作成功。
+   * @example `const accepted = await store.claimRequest(clientId, requestId, issuedAt + 360_000)`
+   */
+  claimRequest: (clientId: string, requestId: string, expiresAt: number) => Promise<boolean>
   /** 主动删除（可选，便于客户端登出时清理）。 */
   delete?: (clientId: string) => Promise<void>
   /** 释放底层资源（关闭连接、清理定时器等）。 */
@@ -144,6 +238,7 @@ export interface TransportKeyStore {
  *
  * 必须同时显式提供服务端密钥环和客户端 registry；生产使用共享 Redis/数据库。
  * 开发/测试可显式传入 createInMemoryKeyStore(capacity)。
+ * @example `const options: TransportCreateServerOptions = { serverKeyRing: managedRing, keyStore: sharedRegistry }`
  */
 export interface TransportCreateServerOptions {
   /** 必填受管服务端密钥环；没有隐式随机生成或进程密钥回退。 */
@@ -159,14 +254,15 @@ export interface TransportCreateServerOptions {
  *
  * 由 {@link createTransportEncryption} 创建；负责服务端密钥对持有、客户端密钥
  * 注册与请求/响应的加解密。
+ * @example `const result = await manager.decryptRequest(payload, actualHttpContext)`
  *
  * @remarks
  * 典型调用顺序：
  *
  * 1. `registerClientKey(clientPublicKey)`：在密钥协商端点中保存客户端公钥，并生成 `clientId`。
  * 2. `getServerPublicKey()`：把服务端公钥返回给客户端，供后续请求加密会话密钥。
- * 3. `decryptRequest(payload)`：普通业务请求进入业务逻辑前，先把密文请求体解成明文。
- * 4. `encryptResponse(clientId, data)`：业务处理完成后，按当前客户端公钥重新加密响应体。
+ * 3. `await decryptRequest(payload, actualHttpContext)`：认证、验证时效并原子消费 nonce 后返回明文。
+ * 4. `await encryptResponse(payload.context, data, status)`：业务完成后绑定原请求和 HTTP 状态加密响应。
  * 5. `close()`：服务关闭时释放底层 keyStore 资源。
  */
 export interface TransportEncryptionManager {
@@ -180,9 +276,18 @@ export interface TransportEncryptionManager {
   registerClientKey: (clientPublicKey: string) => Promise<string>
   /** 查询客户端公钥；registry 读取故障会 reject，不作为未注册处理。 */
   getClientPublicKey: (clientId: string) => Promise<string | undefined>
-  /** 加密响应；registry 读取及加密故障均返回失败 HaiResult，不抛业务异常。 */
-  encryptResponse: (clientId: string, data: string) => Promise<HaiResult<EncryptedPayload>>
-  decryptRequest: (payload: EncryptedRequestPayload) => HaiResult<string>
+  /**
+   * 按已认证请求上下文加密、MAC 并签名响应，绑定实际 HTTP 状态。
+   * registry 及加密故障均返回失败 HaiResult；上下文只能来自成功的请求认证。
+   * @example `await manager.encryptResponse(verified.data.context, json, 200)`
+   */
+  encryptResponse: (request: TransportMessageContext, data: string, status: number) => Promise<HaiResult<EncryptedPayload>>
+  /**
+   * 验证发送方、MAC、HTTP 绑定和时效，原子消费 nonce 后才返回明文；错误不含密文或 Secret。
+   * expected 须从实际 Request 提取，不从 payload 复制。HTTP 优先用 authenticateTransportRequest。
+   * @example `await manager.decryptRequest(payload, { clientId, method: request.method, path: url.pathname + url.search })`
+   */
+  decryptRequest: (payload: EncryptedRequestPayload, expected: TransportRequestContext) => Promise<HaiResult<string>>
   /** 关闭：释放 keyStore 资源。 */
   close: () => Promise<void>
 }
@@ -192,6 +297,7 @@ export interface TransportEncryptionManager {
  *
  * 由 {@link createTransportClient} 创建；包装宿主 `fetch`，
  * 自动完成首次密钥协商并对后续请求自动加解密。
+ * @example `const response = await client.encryptedFetch('/api/orders', { method: 'POST', body: '{}' })`
  *
  * @remarks
  * 典型调用顺序：
@@ -212,7 +318,7 @@ export interface TransportClient {
   /**
    * 包装后的 fetch；签名与全局 `fetch` 一致，请求/响应自动加解密。
    * 明文/密文按 TRANSPORT_BODY_LIMITS 有界读取原流；超限或取消释放 reader，保留调用方 signal。
-   * 带加密标记的无效响应拒绝返回，不回退为原始密文。
+   * 仅接受关联同一请求上下文与 HTTP status 的认证响应；缺标记也拒绝，不回退明文或密文。
    *
    * @throws 与原生 fetch 一样，网络错误、密钥协商失败、加密失败或解密失败会 reject。
    */

@@ -176,7 +176,6 @@ export const handle = kit.createHandle({
     crypto,
     transport: {
       serverKeyRing,
-      requireEncryption: true,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
   },
@@ -215,11 +214,13 @@ export const { apiFetch } = kit.client.create()
 
 transport は既定で同一オリジンの `/api/*`、SvelteKit の `__data.json`、鍵交換 endpoint に適用します。ページ文書・静的ファイルは平文で `X-Client-Id` は不要です。アップロードなどの `multipart/form-data` はそのまま送信し、サーバーの `excludePaths` で明示的に許可してください。
 
-既定の安全方針は fail-closed です。`requireEncryption: true` で保護パスに `X-Client-Id` がなければ 400 を返します。管理器の利用不可、応答の暗号化失敗、暗号化サイズ上限超過はエラーになり、平文の業務応答は渡しません。`requireEncryption: false` は段階的移行用で、本番では推奨しません。
 
-保護対象のリクエストは実際の本文で空かどうかを判定します。Content-Type/Content-Length の省略、chunked、偽の Content-Length=0 で空でない平文の暗号化検証を回避できません。本文なし、または実際にゼロバイトのストリームは入力不要の POST として扱います。応答も Content-Length=0 を空とみなす根拠にせず、本文があれば暗号化します。
 
-固定上限は serv・クライアントと `@h-ai/crypto` の `TRANSPORT_BODY_LIMITS` を共有し、鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 4 KiB です。実際の UTF-8 バイトを元のストリームから逐次読み取り、超過・キャンセル時は停止・キャンセルして reader を解放します。clone による全量読み取りは行いません。リクエスト超過は 413、応答超過は 500、不正な公開鍵は 400 です。再構築した Request は signal を維持し、リクエスト・応答の古い Content-Length/Content-Encoding を削除します。上限は `_kit.yml`・環境変数の設定ではありません。
+認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
+
+空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
+
+固定上限は serv・クライアントと `@h-ai/crypto` の `TRANSPORT_BODY_LIMITS` を共有し、鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 32 KiB です。実際の UTF-8 バイトを元のストリームから逐次読み取り、超過・キャンセル時は停止・キャンセルして reader を解放します。clone による全量読み取りは行いません。リクエスト超過は 413、応答超過は 500、不正な公開鍵は 400 です。再構築した Request は signal を維持し、リクエスト・応答の古い Content-Length/Content-Encoding を削除します。上限は `_kit.yml`・環境変数の設定ではありません。
 
 #### `_kit.yml` による共通 transport 設定
 
@@ -233,8 +234,6 @@ server:
 
 transport:
   keyExchangePath: /api/_hai/key-exchange
-  requireEncryption: true
-  encryptResponse: true
   excludePaths:
     - /api/storage
     - /api/public

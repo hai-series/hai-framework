@@ -160,6 +160,8 @@ if (hashed.success) {
 
 #### 传输加密（crypto.transport）
 
+规范编码、验证顺序与 nonce 持久化要求见 [Transport v2 协议](TRANSPORT-PROTOCOL.md)。
+
 传输加密统一通过 `crypto.transport` 命名空间提供，供 `@h-ai/serv`、`@h-ai/kit` 与 `@h-ai/api-client` 复用同一套协议常量和载荷格式。
 
 常规应用优先让上层封装代接：
@@ -175,9 +177,9 @@ if (hashed.success) {
 2. 服务端调用 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。多节点部署时可注入共享 `keyStore`。
 3. 服务端提供一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端，再返回 `{ serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), clientId }`。
 4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成这次协商。
-5. 协商完成后，客户端请求会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ serverKeyId, encryptedKey, ciphertext, iv }`，并带上 `X-Encrypted: true`。无 body 的请求只附带 `X-Client-Id`，不会额外生成密文 body。
-6. 服务端根据 `clientId` 找到客户端公钥，先 `manager.decryptRequest()` 解密请求体，再执行业务逻辑。
-7. 服务端返回 JSON 响应前，用 `manager.encryptResponse(clientId, data)` 重新加密，并设置 `X-Encrypted: true`；客户端收到后会自动解密。
+5. 每次请求都发送认证封装 `{ context, direction, status, encryptedKey, ciphertext, iv, tag, signature }`；空 POST 和 GET/HEAD 也必须认证。
+6. 自定义适配器先 `await authenticateTransportRequest(manager, request)`，成功后才将 `data.plaintext` 交给业务并保存 `data.context`。
+7. 响应用 `await manager.encryptResponse(context, data, response.status)` 关联原请求；客户端校验上下文、状态和完整性后才返回明文。
 8. 客户端调用 `client.destroy()` 可清空当前会话；服务端调用 `manager.close()`，或在模块级调用 `await crypto.close()`，用于释放资源。
 
 > 服务端必须显式注入相同的受管 `serverKeyRing` 和共享 `keyStore`（Redis 或共享数据库）。仅共享客户端公钥不足以跨节点解密。没有隐式进程私钥或内存 registry 回退；开发/测试显式用 `createInMemoryKeyStore(capacity)`。服务端重启后重新加载同一密钥环即可，无需 sticky session。
@@ -186,7 +188,7 @@ if (hashed.success) {
 
 - `createInMemoryKeyStore(maxClients)`：显式创建默认内存实现，常用于测试或自定义容量
 - `createRedisTransportKeyStore({ cache, ttlSeconds? })`：复用 `@h-ai/cache`，通常配合 Redis provider 获取跨节点共享
-- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`：复用 `@h-ai/reldb`，自动建表 `hai_crypto_transport_client_keys`
+- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`：复用 `@h-ai/reldb`，自动建表 `hai_crypto_transport_client_keys` / `hai_crypto_transport_requests`
 
 ```ts
 // 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用
@@ -236,9 +238,13 @@ const serverKeyRing = ring.data
 const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 ```
 
-握手返回 `{ serverKeyId, serverPublicKey, clientId }`；请求密文携带 `serverKeyId`，服务端按 ID 选择私钥，未知或撤销 ID 直接拒绝，不尝试其它密钥。响应仍用客户端公钥加密。轮换先向所有节点分发包含新旧版本的 ring，再切换 `activeKeyId` 并滚动重建 manager；过渡期保留旧版本，结束后删除旧 ID 并更新所有节点。旧客户端此后须 `destroy()` 后重新协商；不要自动重试非幂等业务。部署通过 Secret Manager 或服务端私有环境分发同一 ring，禁止写入普通 YAML、PUBLIC_/VITE_、日志或公开响应。CLI 只在创建服务端项目时向被忽略的 `.env.local` 生成一次独立开发密钥环，运行时不生成，部署应使用目标环境自己的受管密钥。
+握手返回 `{ serverKeyId, serverPublicKey, clientId }`；请求密文的 `context` 携带 `serverKeyId`，服务端按 ID 选择私钥，未知或撤销 ID 直接拒绝，不尝试其它密钥。响应仍用客户端公钥加密。轮换先向所有节点分发包含新旧版本的 ring，再切换 `activeKeyId` 并滚动重建 manager；过渡期保留旧版本，结束后删除旧 ID 并更新所有节点。旧客户端此后须 `destroy()` 后重新协商；不要自动重试非幂等业务。部署通过 Secret Manager 或服务端私有环境分发同一 ring，禁止写入普通 YAML、PUBLIC_/VITE_、日志或公开响应。CLI 只在创建服务端项目时向被忽略的 `.env.local` 生成一次独立开发密钥环，运行时不生成，部署应使用目标环境自己的受管密钥。
 
-serv、kit 与客户端共享 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 4 KiB，均按实际 UTF-8 字节计算。客户端握手最多等待 30 秒；超限、无效 UTF-8 或取消会终止读取并释放 reader，不克隆/tee 原始正文。发送时保留调用方 signal；单个请求取消不会取消其它请求共享的握手。带加密标记的异常响应会 reject，不返回原始密文。
+认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
+
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+
+serv、kit 与客户端共享 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 32 KiB，均按实际 UTF-8 字节计算。客户端握手最多等待 30 秒；超限、无效 UTF-8 或取消会终止读取并释放 reader，不克隆/tee 原始正文。发送时保留调用方 signal；单个请求取消不会取消其它请求共享的握手。带加密标记的异常响应会 reject，不返回原始密文。
 
 自定义 HTTP 适配器可从根入口使用纯工具 `readTransportBody(stream, { maxBytes, signal? })`，无需 `crypto.init()`。必须传入原始流；读取成功后重建 Request/Response，并清理旧 Content-Length/Content-Encoding。此工具对超限抛 RangeError，对无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason；流取消清理失败不覆盖原异常。
 

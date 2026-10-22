@@ -209,7 +209,7 @@ const app = serv.createApp({ contract, procedures, http, iam })
 
 注意要点：
 
-- **无 input 的 POST 过程**：默认不发送 body；transport 根据实际正文识别无 body/零字节流，客户端可直接 `client.app.info()`。非空正文不能通过省略 Content-Type/Length、chunked 或伪造 Content-Length=0 绕过加密标记验证；非空响应同样不能用 Content-Length=0 跳过加密。
+- **无 input 的 POST 过程**：业务层无需 input，但 transport 仍发送空明文的认证封装。GET/HEAD 使用 X-Hai-Transport 头；空请求与响应不存在未认证旁路。
 - **认证授权写在 route 链上**：公开过程使用 `.route(path, handler)`；需要认证时使用 `.route(path).auth().handle(handler)`。
 - **客户端导入相同 contract**：把服务端与客户端共享的 contract 独立成 package（如 `@h-ai/api-service-contract`），禁止从 app 源码目录跨应用 import。
 
@@ -284,6 +284,11 @@ transport:
     - /_hai/scalar.js
 ```
 
+
+认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
+
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+
 ## 核心 API
 
 ### `serv.createApp(options)` — 创建 HTTP App 抽象
@@ -332,7 +337,7 @@ const procedures = serv
 
 serv 不暴露本地传输加密工厂；内部统一调用 `crypto.transport.createServer({ serverKeyRing, keyStore })`。客户端用 `@h-ai/api-client` 的 `transport` 配置自动协商。
 
-正文统一使用 `@h-ai/crypto` 根入口的 `TRANSPORT_BODY_LIMITS` / `readTransportBody` 有界读取原始流：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB，均按 UTF-8 字节计数。无 Content-Length 时也逐块检查，超限或取消立即停止、取消原流并释放 reader，不 clone/tee 后完整缓冲。请求超限返回 413，响应超限返回 500，无效公钥返回 400。明文 Request 保留 signal 并清空 Hono 正文缓存；重建请求/响应时移除旧 Content-Length/Content-Encoding。预算为固定协议常量，不属于 `_serv.yml` 或环境变量。
+正文统一使用 `@h-ai/crypto` 根入口的 `TRANSPORT_BODY_LIMITS` / `readTransportBody` 有界读取原始流：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 32 KiB，均按 UTF-8 字节计数。无 Content-Length 时也逐块检查，超限或取消立即停止、取消原流并释放 reader，不 clone/tee 后完整缓冲。请求超限返回 413，响应超限返回 500，无效公钥返回 400。明文 Request 保留 signal 并清空 Hono 正文缓存；重建请求/响应时移除旧 Content-Length/Content-Encoding。预算为固定协议常量，不属于 `_serv.yml` 或环境变量。
 
 ```typescript
 import { crypto } from '@h-ai/crypto'

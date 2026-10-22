@@ -1,4 +1,4 @@
-import type { CryptoFunctions, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
+import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { err, ok } from '@h-ai/core'
@@ -23,6 +23,17 @@ function createCryptoWithTransportServer(
   }
 }
 
+// 仅隔离 HTTP 适配器的字节预算；真实算法与重放另有端到端回归。
+function testPayload(): EncryptedRequestPayload {
+  return { context: { version: 2, serverKeyId: 'test-v1', clientId: 'client-id', requestId: 'a'.repeat(32), issuedAt: Date.now(), method: 'POST', pathHash: 'a'.repeat(64) }, direction: 'request', status: 0, encryptedKey: 'a'.repeat(256), ciphertext: 'a'.repeat(32), iv: 'a'.repeat(32), tag: 'a'.repeat(64), signature: 'a'.repeat(128) }
+}
+function testResponse(): EncryptedPayload {
+  return { ...testPayload(), direction: 'response', status: 200 }
+}
+function authenticatedGetHeaders() {
+  return { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true', [TRANSPORT_PROTOCOL.ENVELOPE_HEADER]: JSON.stringify({ ...testPayload(), context: { ...testPayload().context, method: 'GET' } }) }
+}
+
 function createFailingEncryptManager(): TransportEncryptionManager {
   return {
     getServerKeyId: () => 'test-v1',
@@ -30,7 +41,7 @@ function createFailingEncryptManager(): TransportEncryptionManager {
     registerClientKey: async () => 'client-id',
     getClientPublicKey: async () => 'client-public-key',
     encryptResponse: async () => err(new Error('encrypt failed')),
-    decryptRequest: () => err(new Error('decrypt not used')),
+    decryptRequest: async () => ok(''),
     close: async () => {},
   }
 }
@@ -173,46 +184,15 @@ describe('serv.createApp({ transport })', () => {
     expect(data.echoed.msg).toBe('hello')
   })
 
-  it('已协商客户端的空 POST 即使带 Content-Type 也不要求 X-Encrypted 请求体', async () => {
-    const app = serv.createApp({
-      contract,
-      procedures,
-      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
-      transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
-    })
-    app.post('/api/v1/empty', c => c.json({ ok: true }))
-
-    const kpResult = crypto.asymmetric.generateKeyPair()
-    expect(kpResult.success).toBe(true)
-    if (!kpResult.success)
-      return
-
-    const exchangeResp = await app.request('/api/v1/_hai/key-exchange', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientPublicKey: kpResult.data.publicKey }),
-    })
-    const exchanged = await exchangeResp.json() as { clientId: string }
-
-    const resp = await app.request('/api/v1/empty', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: exchanged.clientId,
-      },
-    })
-
-    expect(resp.status).toBe(200)
-    expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-    const payload = await resp.json() as { encryptedKey: string, ciphertext: string, iv: string }
-    const keyResult = crypto.asymmetric.decrypt(payload.encryptedKey, kpResult.data.privateKey)
-    expect(keyResult.success).toBe(true)
-    if (!keyResult.success)
-      return
-    const bodyResult = crypto.symmetric.decryptWithIV(payload.ciphertext, keyResult.data, payload.iv)
-    expect(bodyResult.success).toBe(true)
-    if (bodyResult.success)
-      expect(JSON.parse(bodyResult.data) as unknown).toEqual({ ok: true })
+  it('空 POST 仍使用认证封装，普通空请求拒绝', async () => {
+    const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto } })
+    const handler = vi.fn(() => new Response(null, { status: 204 }))
+    app.post('/api/v1/empty', handler)
+    expect((await app.request('/api/v1/empty', { method: 'POST' })).status).toBe(400)
+    expect(handler).not.toHaveBeenCalled()
+    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://test.local/api/v1/_hai/key-exchange', fetch: (input, init) => app.fetch(new Request(input, init)) })
+    expect((await client.encryptedFetch('http://test.local/api/v1/empty', { method: 'POST' })).status).toBe(204)
+    expect(handler).toHaveBeenCalledOnce()
   })
 
   it('响应无法加密时不会明文透传', async () => {
@@ -230,7 +210,7 @@ describe('serv.createApp({ transport })', () => {
     app.get('/api/v1/secret', c => c.json({ secret: 'plain' }))
 
     const resp = await app.request('/api/v1/secret', {
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+      headers: authenticatedGetHeaders(),
     })
 
     expect(resp.status).toBe(500)
@@ -269,7 +249,7 @@ describe('serv.createApp({ transport })', () => {
     expect(handler).not.toHaveBeenCalled()
   })
 
-  it('真实零字节请求流按空 POST 处理', async () => {
+  it('无认证的零字节请求流仍拒绝进入业务', async () => {
     const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
     const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: transportCrypto } })
     const handler = vi.fn(async (request: Request) => {
@@ -284,8 +264,8 @@ describe('serv.createApp({ transport })', () => {
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
     })
-    expect((await app.fetch(request)).status).toBe(204)
-    expect(handler).toHaveBeenCalledOnce()
+    expect((await app.fetch(request)).status).toBe(400)
+    expect(handler).not.toHaveBeenCalled()
   })
 
   it('响应伪造 Content-Length=0 也不能跳过加密', async () => {
@@ -295,7 +275,7 @@ describe('serv.createApp({ transport })', () => {
       headers: { 'Content-Type': 'application/json', 'Content-Length': '0' },
     }))
     const response = await app.request('/api/v1/secret', {
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+      headers: authenticatedGetHeaders(),
     })
     expect(response.status).toBe(500)
     expect(await response.text()).not.toContain('private')
@@ -361,7 +341,7 @@ describe('serv.createApp({ transport })', () => {
       method: 'POST',
       body,
       signal: controller.signal,
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true' },
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
     })
@@ -391,7 +371,7 @@ describe('serv.createApp({ transport })', () => {
     const bytes = new TextEncoder().encode('你'.repeat(400_000))
     const body = new ReadableStream<Uint8Array>({ start: controller => controller.enqueue(bytes), cancel })
     app.get('/api/v1/raw-response', () => new Response(body, { headers: { 'Content-Type': 'application/json', 'Content-Length': '1' } }))
-    const response = await app.request('/api/v1/raw-response', { headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' } })
+    const response = await app.request('/api/v1/raw-response', { headers: authenticatedGetHeaders() })
     expect(response.status).toBe(500)
     expect(await response.text()).not.toContain('你')
     expect(encrypt).not.toHaveBeenCalled()
@@ -401,22 +381,22 @@ describe('serv.createApp({ transport })', () => {
 
   it('允许精确 UTF-8 边界的响应并清除旧编码与长度头', async () => {
     const manager = createFailingEncryptManager()
-    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok({ serverKeyId: 'test-v1', encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }))
+    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
     const app = serv.createApp({ contract, procedures, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) } })
     const payloadSize = TRANSPORT_BODY_LIMITS.plaintextBytes - 8
     const text = `{"x":"${'你'.repeat(Math.floor(payloadSize / 3))}${'a'.repeat(payloadSize % 3)}"}`
     app.get('/api/v1/raw-response', () => new Response(text, { headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } }))
-    const response = await app.request('/api/v1/raw-response', { headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' } })
+    const response = await app.request('/api/v1/raw-response', { headers: authenticatedGetHeaders() })
     expect(response.status).toBe(200)
-    expect(encrypt).toHaveBeenCalledWith('client-id', text)
+    expect(encrypt).toHaveBeenCalledWith(expect.objectContaining({ clientId: 'client-id' }), text, 200)
     expect(response.headers.get('Content-Length')).toBeNull()
     expect(response.headers.get('Content-Encoding')).toBeNull()
   })
 
   it('解密后明文超限时不进入 handler，正常请求会重建 Hono 正文缓存', async () => {
     const manager = createFailingEncryptManager()
-    const decrypt = vi.spyOn(manager, 'decryptRequest').mockReturnValue(ok('你'.repeat(400_000)))
-    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok({ serverKeyId: 'test-v1', encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }))
+    const decrypt = vi.spyOn(manager, 'decryptRequest').mockResolvedValue(ok('你'.repeat(400_000)))
+    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
     const app = serv.createApp({
       contract,
       procedures,
@@ -436,11 +416,11 @@ describe('serv.createApp({ transport })', () => {
     const init = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
-      body: JSON.stringify({ serverKeyId: 'test-v1', encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }),
+      body: JSON.stringify(testPayload()),
     }
     expect((await app.request('/api/v1/raw-body', init)).status).toBe(413)
     expect(handler).not.toHaveBeenCalled()
-    decrypt.mockReturnValue(ok('{"ok":true}'))
+    decrypt.mockResolvedValue(ok('{"ok":true}'))
     expect((await app.request('/api/v1/raw-body', init)).status).toBe(200)
     expect(handler).toHaveBeenCalledOnce()
   })
@@ -479,12 +459,9 @@ describe('serv.createApp({ transport })', () => {
     // 复用已注册的 clientId / serverPublicKey 以模拟会话
     void exchanged
 
-    const resp = await client.encryptedFetch('http://test.local/api/v1/huge', {
+    await expect(client.encryptedFetch('http://test.local/api/v1/huge', {
       method: 'POST',
       body: JSON.stringify({ x: 1 }),
-    })
-    expect(resp.status).toBe(500)
-    expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
-    await expect(resp.json()).resolves.toMatchObject({ error: expect.any(String) })
+    })).rejects.toThrow()
   })
 })

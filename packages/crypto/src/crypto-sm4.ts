@@ -219,6 +219,8 @@ export function createSM4(): SymmetricOperations {
     /**
      * 带 IV 解密（CBC 模式）
      *
+     * 这是不含认证的底层 primitive；传输数据必须经 transport 验签及 MAC 后再调用，禁止直接用于 HTTP 解密。
+     *
      * @param ciphertext - 密文
      * @param key - 密钥
      * @param iv - 加密时使用的 IV

@@ -268,6 +268,8 @@ export interface SymmetricOperations {
   /**
    * 带 IV 解密（CBC 模式）
    *
+   * 不提供完整性认证。传输场景必须用 transport 先验签和验证 MAC，禁止直接对 HTTP 密文调用此 primitive。
+   *
    * @param ciphertext - 密文
    * @param key - 密钥
    * @param iv - 加密时使用的 IV
@@ -338,8 +340,8 @@ export interface PasswordOperations {
  * 2. 服务端调用 `crypto.transport.createServer({ serverKeyRing, keyStore })`，显式注入受管密钥环及共享客户端 registry。
  * 3. 协商端点接收客户端公钥，返回 `{ serverKeyId, serverPublicKey, clientId }`。
  * 4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成密钥协商。
- * 5. 请求附带 X-Client-Id；有正文时包装为 `{ serverKeyId, encryptedKey, ciphertext, iv }` 并声明 X-Encrypted。
- * 6. 服务端在业务逻辑前调用 `manager.decryptRequest()` 解密请求体，在返回前调用 `manager.encryptResponse(clientId, data)` 为当前客户端重新加密响应。
+ * 5. 每次请求携带 v2 认证封装，含上下文、密文、MAC 和发送方签名；空请求也认证，GET/HEAD 使用 X-Hai-Transport 头。
+ * 6. 服务端先 await authenticateTransportRequest(manager, request)，成功后才执行业务；响应调用 manager.encryptResponse(context, data, status)。
  * 7. 客户端收到 `X-Encrypted: true` 的响应后会自动解密；调用 `client.destroy()` 可清空当前会话，下次请求会重新协商。
  *
  * 常规应用优先使用上层封装，而不是手写 HTTP 协商细节：

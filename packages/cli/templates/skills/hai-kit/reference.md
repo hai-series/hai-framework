@@ -2,6 +2,11 @@
 
 > `@h-ai/kit` 只负责 SvelteKit 集成：`handle` hook、guard、response、validate、client、auth、crud、A2A。公共跨端 HTTP API 契约统一使用 `@h-ai/api-contract` + `@h-ai/serv`，不要在 kit 中定义业务 API contract。
 
+
+认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
+
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+
 ## 使用步骤
 
 ### 1. 请求管道
@@ -79,7 +84,6 @@ export const handle = kit.createHandle({
     crypto,
     transport: {
       serverKeyRing,
-      requireEncryption: true,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
   },
@@ -116,11 +120,11 @@ export const { apiFetch } = kit.client.create()
 
 transport 默认保护同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求；页面文档、静态资源与 `multipart/form-data` 上传请求保持明文透传。
 
-安全策略默认 fail-closed：`requireEncryption: true` 时，受保护路径缺少 `X-Client-Id` 必须返回 400；服务端 transport 管理器不可用、响应体无法加密或超过单次加密上限时返回错误，禁止明文业务响应回退。`requireEncryption: false` 只适合迁移期灰度。
+受保护路径不允许协议降级；缺少认证、管理器不可用、响应加密失败均拒绝。明文接口仅通过 excludePaths 显式排除。
 
-受保护请求按实际正文判空：省略 Content-Type/Content-Length、使用 chunked 或伪造 Content-Length=0 均不能让非空明文跳过加密标记验证。真正没有正文或实际零字节流的无 input POST 可以继续；响应是否为空也不信任 Content-Length=0，非空业务响应仍须加密。
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
-与 serv/客户端共享 `@h-ai/crypto` 根入口的 `TRANSPORT_BODY_LIMITS` / `readTransportBody`：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB，按 UTF-8 字节计数。原始流逐块检查，超限/取消停止并取消流、释放 reader，不 clone/tee 后完整缓冲。请求超限返回 413，响应超限返回 500，无效公钥返回 400；重建 Request 保留 signal，重建正文清除旧 Content-Length/Content-Encoding。固定协议预算不写入 `_kit.yml` 或环境变量。
+与 serv/客户端共享 `@h-ai/crypto` 根入口的 `TRANSPORT_BODY_LIMITS` / `readTransportBody`：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 32 KiB，按 UTF-8 字节计数。原始流逐块检查，超限/取消停止并取消流、释放 reader，不 clone/tee 后完整缓冲。请求超限返回 413，响应超限返回 500，无效公钥返回 400；重建 Request 保留 signal，重建正文清除旧 Content-Length/Content-Encoding。固定协议预算不写入 `_kit.yml` 或环境变量。
 
 ### 5. 使用 `_kit.yml` 统一 transport 配置
 
@@ -134,8 +138,6 @@ server:
 
 transport:
   keyExchangePath: /api/_hai/key-exchange
-  requireEncryption: true
-  encryptResponse: true
   excludePaths:
     - /api/storage
     - /api/public

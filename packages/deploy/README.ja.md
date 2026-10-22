@@ -37,7 +37,9 @@ pnpm build --target desktop --platform windows --arch x64
 
 各イメージに独立した Dockerfile を用意します。Web 用設定は images/web/ に置きます。Dockerfile 内の構築・実行段階は維持しますが、設定から段階を選びません。不要なイメージ項目は削除し、desktop ディレクトリは対象プロジェクトのみ設定します。
 
-生成する `web.conf` は API location に `client_max_body_size 2101248`（2 MiB + 4 KiB）を設定し、`proxy_request_buffering` / `proxy_buffering` を無効にします。transport の平文 1 MiB を暗号化した JSON を通過させ、アプリ側では鍵交換 16 KiB、公開鍵 4 KiB、平文 1 MiB の制限を逐次検証します。独自プロキシでも暗号文の上限を許可し、キャンセルを伝播してください。プロキシ上限の変更だけでは serv/kit の有界読み取りを代替できません。大容量アップロードは専用パスと容量ポリシーを用意します。
+生成する `web.conf` は API location に `client_max_body_size 2129920`（2 MiB + 32 KiB）を設定し、`proxy_request_buffering` / `proxy_buffering` を無効にします。transport の平文 1 MiB を暗号化した JSON を通過させ、アプリ側では鍵交換 16 KiB、公開鍵 4 KiB、平文 1 MiB の制限を逐次検証します。独自プロキシでも暗号文の上限を許可し、キャンセルを伝播してください。プロキシ上限の変更だけでは serv/kit の有界読み取りを代替できません。大容量アップロードは専用パスと容量ポリシーを用意します。
+
+本文なし認証封装には X-Hai-Transport を使います。生成設定は large_client_header_buffers 4 32k と proxy_buffer_size 32k を指定します。独自プロキシもこのヘッダーを保持し、通過させてください。
 
 構築器はパッケージ情報、ローカルアーカイブとパッチを images/dependencies/ に準備し、pnpm store と依存レイヤーをキャッシュします。通常のソース変更で全依存を再ダウンロードしない構成です。キャッシュが空でもオンライン構築できます。Windows の node_modules は Linux のネイティブ依存を代替できません。完全オフライン構築には基底イメージ、ツールと一致する ABI・アーキテクチャ・libc のバイナリも準備します。
 

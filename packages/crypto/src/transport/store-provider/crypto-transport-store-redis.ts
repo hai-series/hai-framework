@@ -79,6 +79,19 @@ export function createRedisTransportKeyStore(options: CreateRedisTransportKeySto
       return publicKey ?? undefined
     },
 
+    async claimRequest(clientId, requestId, expiresAt) {
+      const ttl = expiresAt - Date.now()
+      if (ttl <= 0)
+        return false
+      // 单 key 原子 CAS 在 Redis Cluster 中也只涉及一个 slot；生产禁止提前驱逐有效 nonce。
+      return unwrapResult('cache.kv.compareAndSwap', await options.cache.kv.compareAndSwap(
+        `hai:crypto:transport:request:${clientId}:${requestId}`,
+        undefined,
+        true,
+        { px: ttl },
+      ))
+    },
+
     async delete(clientId) {
       unwrapResult('cache.kv.del', await options.cache.kv.del(buildCacheKey(clientId)))
     },

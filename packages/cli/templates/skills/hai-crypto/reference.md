@@ -2,6 +2,11 @@
 
 > `@h-ai/crypto` 提供非对称加密、哈希、对称加密与密码哈希能力，支持 Node.js 与浏览器双端。
 
+
+认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
+
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+
 ## 运行环境
 
 **Node.js + 浏览器双端可用。** 浏览器端通过 `crypto.init()` 初始化（无需配置参数）。
@@ -188,8 +193,8 @@ const sharedServer = crypto.transport.createServer({
 1. 先 `await crypto.init()`。
 2. 服务端显式传入受管 serverKeyRing 和共享 keyStore，协商返回 `serverKeyId + serverPublicKey + clientId`。
 3. 客户端 `createClient({ keyExchangeUrl })` 后，首次 `init()` / `encryptedFetch()` 会自动做密钥协商。
-4. 协商完成后，请求附带 `X-Client-Id`；若请求有 body，则自动包装成 `{ serverKeyId, encryptedKey, ciphertext, iv }`。
-5. 服务端先 `decryptRequest()`，业务处理后再 `encryptResponse(clientId, data)`。
+4. 所有请求均发送 v2 认证封装；包括 GET/HEAD 和无 input POST，不能只附带 clientId。
+5. 自定义适配器先 await authenticateTransportRequest(manager, request)，再用 manager.encryptResponse(verified.data.context, data, status) 关联响应。
 6. 客户端收到 `X-Encrypted: true` 的响应后自动解密；`destroy()` 可清空当前会话。
 
 `encryptedFetch()` 与原生 fetch 一样会 reject：网络错误、密钥协商失败、请求加密失败或响应解密失败都应在调用方按 fetch 错误处理策略捕获。
@@ -213,7 +218,7 @@ const manager = crypto.transport.createServer({ serverKeyRing: ring.data, keySto
 
 ### 传输正文预算与自定义适配器
 
-serv、kit 和客户端统一从根入口导入 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB、单个公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB，均为实际 UTF-8 字节上限，不使用 Content-Length 判定。客户端共享握手最多等待 30 秒；单个业务请求取消只中断自己的等待，其 signal 继续用于请求及响应读取。异常加密响应会 reject，不返回原密文。
+serv、kit 和客户端统一从根入口导入 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB、单个公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 32 KiB，均为实际 UTF-8 字节上限，不使用 Content-Length 判定。客户端共享握手最多等待 30 秒；单个业务请求取消只中断自己的等待，其 signal 继续用于请求及响应读取。异常加密响应会 reject，不返回原密文。
 
 根入口纯函数 `readTransportBody(stream, { maxBytes, signal? })` 无需 init，直接消费原始流；超限抛 RangeError，无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason。超限/取消会立即取消流并释放 reader，清理失败不覆盖原异常。不要把 clone/tee 分支交给它，否则另一分支仍可能缓冲正文。成功读取后重建 Request/Response，清除旧 Content-Length/Content-Encoding 并保留 signal。
 

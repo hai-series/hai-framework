@@ -29,9 +29,11 @@ cors:
     - ${HAI_SERV_CORS_ALLOWEDHEADERS_4:X-Hai-Locale}
     - ${HAI_SERV_CORS_ALLOWEDHEADERS_5:X-Request-Id}
     - ${HAI_SERV_CORS_ALLOWEDHEADERS_6:X-Requested-With}
+    - ${HAI_SERV_CORS_ALLOWEDHEADERS_7:X-Hai-Transport}
   exposedHeaders:
     - ${HAI_SERV_CORS_EXPOSEDHEADERS_0:X-Encrypted}
     - ${HAI_SERV_CORS_EXPOSEDHEADERS_1:X-Request-Id}
+    - ${HAI_SERV_CORS_EXPOSEDHEADERS_2:X-Hai-Transport}
 
 transport:
   keyExchangePath: ${HAI_SERV_TRANSPORT_KEYEXCHANGEPATH:/_hai/key-exchange}

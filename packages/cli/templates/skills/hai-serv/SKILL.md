@@ -5,6 +5,8 @@ description: "为独立 API 服务装配 contract/procedures、认证守卫、No
 
 # hai-serv
 
+transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC、HTTP 上下文/响应状态绑定及共享原子防重放。GET/HEAD、空 POST 与空响应也认证；无降级开关。TLS 信任边界、5 分钟窗口、nonce 持久化与实现示例见 [参考](reference.md)。
+
 ## 能力契约
 
 | 项目 | 契约 |
@@ -28,7 +30,7 @@ description: "为独立 API 服务装配 contract/procedures、认证守卫、No
 
 传输加密按实际请求/响应 body 判断空正文，不信任 Content-Type/Length；非空明文不能借缺头、chunked 或伪造零长度旁路，实际空流保留无 input POST 行为。
 
-transport 与 kit/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB。原流有界读取，超限立即取消并释放 reader；请求超限 413、响应超限 500。重建 Request 保留 signal 并清空 Hono bodyCache，移除旧长度/编码头；不新增 YAML/环境变量开关。
+transport 与 kit/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 32 KiB。原流有界读取，超限立即取消并释放 reader；请求超限 413、响应超限 500。重建 Request 保留 signal 并清空 Hono bodyCache，移除旧长度/编码头；不新增 YAML/环境变量开关。
 
 ## 按需参考
 

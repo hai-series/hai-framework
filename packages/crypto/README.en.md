@@ -160,6 +160,8 @@ if (hashed.success) {
 
 #### Transport encryption (crypto.transport)
 
+See the [Transport v2 wire protocol](TRANSPORT-PROTOCOL.md) for canonical encoding, verification order and replay persistence.
+
 The `crypto.transport` namespace provides transport encryption, allowing `@h-ai/serv`, `@h-ai/kit`, and `@h-ai/api-client` to share protocol constants and payload formats.
 
 For typical applications, use the higher-level integrations:
@@ -175,9 +177,9 @@ Call `crypto.transport.createServer({ serverKeyRing, keyStore })` / `createClien
 2. On the server, create a `manager` with `crypto.transport.createServer({ serverKeyRing, keyStore })`. It holds the server key pair and stores client public keys. Inject a shared `keyStore` for multi-node deployments.
 3. Expose a POST key exchange endpoint: accept `{ clientPublicKey }`, register it with `manager.registerClientKey()`, and return `{ serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), clientId }`.
 4. On the client, create a session with `crypto.transport.createClient({ keyExchangeUrl })`. The first `client.init()` or `client.encryptedFetch()` automatically performs key exchange.
-5. After key exchange, requests include `X-Client-Id`. A request body is wrapped as `{ serverKeyId, encryptedKey, ciphertext, iv }` with `X-Encrypted: true`. Bodyless requests include only `X-Client-Id` and do not create an encrypted body.
-6. The server looks up the client public key by `clientId`, decrypts the body with `manager.decryptRequest()`, then runs the business logic.
-7. Before returning JSON, encrypt it with `manager.encryptResponse(clientId, data)` and set `X-Encrypted: true`. The client decrypts the response automatically.
+5. Every request sends an authenticated envelope `{ context, direction, status, encryptedKey, ciphertext, iv, tag, signature }`, including empty POST and GET/HEAD.
+6. Custom adapters first await `authenticateTransportRequest(manager, request)`. Only successful `data.plaintext` reaches business code; retain `data.context`.
+7. Encrypt responses with `await manager.encryptResponse(context, data, response.status)`; clients verify context, status and authenticity before returning plaintext.
 8. Clear a client session with `client.destroy()`. Release server resources with `manager.close()` or module-level `await crypto.close()`.
 
 > Servers must explicitly inject the same managed `serverKeyRing` and a shared `keyStore` (Redis or a shared database). Sharing client public keys alone cannot enable cross-node decryption. There is no implicit process key or memory-registry fallback; development/tests may explicitly use `createInMemoryKeyStore(capacity)`. Reload the same ring after restart; sticky sessions are unnecessary.
@@ -186,7 +188,7 @@ For shared storage, reuse the provider factories exported from the `@h-ai/crypto
 
 - `createInMemoryKeyStore(maxClients)`: explicitly create the default memory store for tests or custom capacity.
 - `createRedisTransportKeyStore({ cache, ttlSeconds? })`: reuse `@h-ai/cache`, typically with Redis for sharing across nodes.
-- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`: reuse `@h-ai/reldb`, automatically creating `hai_crypto_transport_client_keys`.
+- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`: reuse `@h-ai/reldb`, automatically creating `hai_crypto_transport_client_keys` / `hai_crypto_transport_requests`.
 
 ```ts
 // 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用
@@ -238,7 +240,11 @@ const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 
 Key exchange returns `{ serverKeyId, serverPublicKey, clientId }`. Encrypted requests carry `serverKeyId`; the server selects that private key and rejects unknown/revoked IDs without trying other keys. Responses use the client's public key. Rotate by distributing both old and new versions to every node, then switching `activeKeyId` and rebuilding managers during rollout. Retain the old version through the transition, then remove it from every node. Old clients must call `destroy()` and negotiate again; do not automatically replay non-idempotent operations. Distribute the same ring through a Secret Manager or server-only private environment. Never put it in ordinary YAML, PUBLIC_/VITE_ variables, logs or public responses. CLI project creation provisions one independent development ring in ignored `.env.local`; runtime does not generate keys. Deploy with target-managed secrets.
 
-serv, kit and the client share `TRANSPORT_BODY_LIMITS`: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 4 KiB encrypted JSON. All limits count actual UTF-8 bytes. Client key exchange has a 30-second timeout. Exceeding a limit, invalid UTF-8 or cancellation stops the original stream and releases its reader without cloning/teeing it. Caller signals remain active; cancelling one request does not cancel another request's shared handshake. Invalid encrypted responses reject instead of returning raw ciphertext.
+Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. Requests have a five-minute lifetime and at most 30 seconds of future clock skew. The shared registry atomically consumes (clientId, requestId), retaining it until at least issuedAt plus six minutes to cover node skew; storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
+
+Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Exclude plaintext endpoints explicitly with excludePaths. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
+
+serv, kit and the client share `TRANSPORT_BODY_LIMITS`: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 32 KiB encrypted JSON. All limits count actual UTF-8 bytes. Client key exchange has a 30-second timeout. Exceeding a limit, invalid UTF-8 or cancellation stops the original stream and releases its reader without cloning/teeing it. Caller signals remain active; cancelling one request does not cancel another request's shared handshake. Invalid encrypted responses reject instead of returning raw ciphertext.
 
 Custom HTTP adapters can import the pure `readTransportBody(stream, { maxBytes, signal? })` helper from the root entry without `crypto.init()`. Pass the original stream, rebuild Request/Response after reading, and clear stale Content-Length/Content-Encoding. The helper throws RangeError for byte limits, TypeError for invalid UTF-8, and preserves the original read/abort failure.
 

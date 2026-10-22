@@ -325,7 +325,7 @@ serv
 const app = serv.createApp({
   contract,
   procedures,
-  transport: { crypto },
+  transport: { crypto, serverKeyRing, keyStore },
 })
 ```
 
@@ -361,31 +361,25 @@ const app = serv.createApp({
    - 缺少 `clientId` 时返回 400。
    - 找不到已注册公钥时也返回 400。
 
-3. **解密请求体**
-   - 处理所有实际携带 body 的请求，不按 HTTP 方法白名单跳过正文。
-   - 无正文流时跳过；存在流时按实际读取结果识别空正文，不以 Content-Type/Content-Length 判空。
-   - 非空正文必须有加密标记；缺失头、chunked 或伪造 Content-Length=0 均不能跳过验证。
-   - 逐块读取原始流，密文 JSON 上限为 2 MiB + 4 KiB；超限取消流并返回 413，不使用 clone/tee 全量缓冲。
-   - 解析已读取的非空 JSON payload。
-   - 校验 payload 是否符合 `EncryptedPayload` 结构。
-   - 调 `manager.decryptRequest(payload)` 解密。
-   - 解密后明文按 UTF-8 字节最多 1 MiB，超限返回 413，不执行下游业务。
+3. **认证并解密每个请求**
+   - 所有受保护请求（含空 POST、GET/HEAD）都必须提供 v2 认证封装；GET/HEAD 使用 X-Hai-Transport 头。
+   - await authenticateTransportRequest(manager, c.req.raw) 从实际 Request 提取 method、pathname + search、clientId。
+   - 有界读取原始 JSON 流，密文预算 2 MiB + 32 KiB；头封装最多 16 KiB，超限取消流并返回 413。
+   - 固定位置数组认证 version/direction/keyId/clientId/requestId/issuedAt/method/pathHash/status/encryptedKey/ciphertext/iv；pathHash 为实际 pathname + 原始 search 的 SM3 摘要。先验证 SM2 发送方签名，再验证独立 HMAC-SM3，最后解密 SM4-CBC。
+   - 过去 5 分钟/未来 30 秒之外拒绝；共享 registry 原子消费 (clientId, requestId)，nonce 至少保存至 issuedAt + 6 分钟，故障拒绝。
+   - 解密后明文最多 1 MiB UTF-8 字节；认证、时效或 claim 失败均不进入业务处理。
 
-4. **把明文 request 塞回 Hono 上下文**
-   - `decryptRequestInPlace()` 会重建一个新的 `Request`。
-   - 它会把明文 JSON body 与修正后的 headers 写回 `c.req.raw`。
-   - 保留原 signal、清空 `c.req.bodyCache`，并删除失效的 Content-Length/Content-Encoding。
-   - 这样下游 handler 不需要知道“上游其实传来的是密文”。
+4. **恢复业务 Request**
+   - 非 GET/HEAD 用 replaceRequestBody 重建 Request，保留 signal、清空 c.req.bodyCache，并删除旧长度/编码头。
+   - 保存已认证 context，用于响应关联。
 
 ### 响应加密流程
 
-下游业务逻辑执行完后，middleware 会继续尝试加密响应：
-
-1. 仅无 body 的响应及协议规定的 204/304 直接返回；不以 Content-Length=0 判断响应为空。只允许 `application/json` 响应进入加密流程；非 JSON 业务响应会返回加密失败错误。
-2. 逐块读取原始响应流，按实际 UTF-8 字节限制为 `1 MiB`，不信任 Content-Length，也不创建 clone/tee。
-3. 超限、读取失败或请求取消时停止并取消流、释放 reader，返回 500。取消清理失败不覆盖原异常。实际空流须重建空响应。
-4. 调 `manager.encryptResponse(clientId, bodyText)` 加密。
-5. 写回新的 `Response`，设置加密标记 header，并清理旧 Content-Length/Content-Encoding；Hono 上下文旧头也同步清除，避免 setter 合并回旧值。
+1. 非空响应仍仅允许 application/json；有界读取原流，明文最多 1 MiB UTF-8 字节，超限/取消释放 reader 并返回错误。
+2. 空响应、204/304 和 HEAD 也要认证；用空明文生成封装，在 X-Hai-Transport 响应头承载。
+3. await manager.encryptResponse(context, bodyText, response.status) 使用所选服务端版本签名并绑定原请求与实际 HTTP 状态。
+4. 设置 X-Encrypted: true，删除旧 Content-Length/Content-Encoding；客户端必须验证原请求上下文、status、签名与 MAC，缺少标记也拒绝。
+5. 自定义 CORS 须允许并暴露 X-Hai-Transport；握手公钥的真实性依赖 TLS，业务授权仍由 IAM/guard 负责。
 
 ### 为什么超过 `1 MiB` 会 fail-closed
 
@@ -401,7 +395,6 @@ const app = serv.createApp({
 
 - key exchange 路由
 - `excludePaths` 命中的路径
-- 空响应体
 
 非 JSON 业务响应、响应体超过 1 MiB UTF-8 字节或 `encryptResponse()` 失败都会返回错误。预算统一来自 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`，不是 YAML 或环境变量配置。
 

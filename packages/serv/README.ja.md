@@ -217,9 +217,11 @@ const app = serv.createApp({
 
 > **安全方針**：`transport` 有効時は `excludePaths` と鍵交換以外で有効な `X-Client-Id` が必要です。不足・未知の clientId は 400、暗号化不能・非 JSON 応答・上限超過はエラーになり、平文の業務データは渡しません。
 
-保護対象のリクエストは実際の本文で空かどうかを判定します。Content-Type/Content-Length の省略、chunked、偽の Content-Length=0 で空でない平文の暗号化検証を回避できません。本文なし、または実際にゼロバイトのストリームは入力不要の POST として扱います。応答も Content-Length=0 を空とみなす根拠にせず、本文があれば暗号化します。
+認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
 
-固定上限は `@h-ai/crypto` の `TRANSPORT_BODY_LIMITS` を共有し、鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 4 KiB です。実際の UTF-8 バイトを元のストリームから逐次読み取り、超過・キャンセル時は停止・キャンセルして reader を解放します。clone して全量を読み取る処理は行いません。リクエスト超過は 413、応答超過は 500、不正な公開鍵は 400 です。再構築したリクエストは signal を維持して Hono の本文キャッシュを消去し、リクエスト・応答の古い Content-Length/Content-Encoding を削除します。上限はプロトコル定数であり、YAML・環境変数では設定しません。
+空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
+
+固定上限は `@h-ai/crypto` の `TRANSPORT_BODY_LIMITS` を共有し、鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 32 KiB です。実際の UTF-8 バイトを元のストリームから逐次読み取り、超過・キャンセル時は停止・キャンセルして reader を解放します。clone して全量を読み取る処理は行いません。リクエスト超過は 413、応答超過は 500、不正な公開鍵は 400 です。再構築したリクエストは signal を維持して Hono の本文キャッシュを消去し、リクエスト・応答の古い Content-Length/Content-Encoding を削除します。上限はプロトコル定数であり、YAML・環境変数では設定しません。
 
 #### Token 認証（`iam` / `refreshCookie`）
 

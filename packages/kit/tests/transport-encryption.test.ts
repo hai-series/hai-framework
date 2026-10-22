@@ -1,4 +1,4 @@
-import type { CryptoFunctions, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
+import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
 import type { Handle, RequestEvent } from '@sveltejs/kit'
 import { err, ok } from '@h-ai/core'
 import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
@@ -66,6 +66,17 @@ function createCryptoWithTransportServer(
   }
 }
 
+// 仅隔离 HTTP 适配器的字节预算；真实算法与重放另有端到端回归。
+function testPayload(): EncryptedRequestPayload {
+  return { context: { version: 2, serverKeyId: 'test-v1', clientId: 'client-id', requestId: 'a'.repeat(32), issuedAt: Date.now(), method: 'POST', pathHash: 'a'.repeat(64) }, direction: 'request', status: 0, encryptedKey: 'a'.repeat(256), ciphertext: 'a'.repeat(32), iv: 'a'.repeat(32), tag: 'a'.repeat(64), signature: 'a'.repeat(128) }
+}
+function testResponse(): EncryptedPayload {
+  return { ...testPayload(), direction: 'response', status: 200 }
+}
+function authenticatedGetHeaders() {
+  return { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true', [TRANSPORT_PROTOCOL.ENVELOPE_HEADER]: JSON.stringify({ ...testPayload(), context: { ...testPayload().context, method: 'GET' } }) }
+}
+
 function createFailingEncryptManager(): TransportEncryptionManager {
   return {
     getServerKeyId: () => 'test-v1',
@@ -73,7 +84,7 @@ function createFailingEncryptManager(): TransportEncryptionManager {
     registerClientKey: async () => 'client-id',
     getClientPublicKey: async () => 'client-public-key',
     encryptResponse: async () => err(new Error('encrypt failed')),
-    decryptRequest: () => err(new Error('decrypt not used')),
+    decryptRequest: async () => ok(''),
     close: async () => {},
   }
 }
@@ -121,7 +132,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     expect(resolve).not.toHaveBeenCalled()
   })
 
-  it('真实零字节请求流按空 POST 处理', async () => {
+  it('无认证的零字节请求流仍拒绝进入业务', async () => {
     const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
     const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const resolve = vi.fn(async (event: RequestEvent) => {
@@ -135,15 +146,15 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
     })
-    expect((await dispatch(handle, request, resolve)).status).toBe(204)
-    expect(resolve).toHaveBeenCalledOnce()
+    expect((await dispatch(handle, request, resolve)).status).toBe(400)
+    expect(resolve).not.toHaveBeenCalled()
   })
 
   it('响应伪造 Content-Length=0 也不能跳过加密', async () => {
     const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
     const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const response = await dispatch(handle, new Request('http://localhost/api/data', {
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+      headers: authenticatedGetHeaders(),
     }), () => new Response('{"secret":"private"}', {
       headers: { 'Content-Type': 'application/json', 'Content-Length': '0' },
     }))
@@ -212,7 +223,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       method: 'POST',
       body,
       signal: controller.signal,
-      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: 'true' },
       // @ts-expect-error Node fetch 的流式请求需要 duplex。
       duplex: 'half',
     })
@@ -243,7 +254,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const cancel = vi.fn()
     const bytes = new TextEncoder().encode('你'.repeat(400_000))
     const body = new ReadableStream<Uint8Array>({ start: controller => controller.enqueue(bytes), cancel })
-    const response = await dispatch(handle, new Request('http://localhost/api/data', { headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' } }), () => new Response(body, { headers: { 'Content-Type': 'application/json', 'Content-Length': '1' } }))
+    const response = await dispatch(handle, new Request('http://localhost/api/data', { headers: authenticatedGetHeaders() }), () => new Response(body, { headers: { 'Content-Type': 'application/json', 'Content-Length': '1' } }))
     expect(response.status).toBe(500)
     expect(await response.text()).not.toContain('你')
     expect(encrypt).not.toHaveBeenCalled()
@@ -253,20 +264,21 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('允许精确 UTF-8 边界的响应并清除旧编码与长度头', async () => {
     const manager = createFailingEncryptManager()
-    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok({ serverKeyId: 'test-v1', encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }))
+    const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
     const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const payloadSize = TRANSPORT_BODY_LIMITS.plaintextBytes - 8
     const text = `{"x":"${'你'.repeat(Math.floor(payloadSize / 3))}${'a'.repeat(payloadSize % 3)}"}`
-    const response = await dispatch(handle, new Request('http://localhost/api/data', { headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' } }), () => new Response(text, { headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } }))
+    const response = await dispatch(handle, new Request('http://localhost/api/data', { headers: authenticatedGetHeaders() }), () => new Response(text, { headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } }))
     expect(response.status).toBe(200)
-    expect(encrypt).toHaveBeenCalledWith('client-id', text)
+    expect(encrypt).toHaveBeenCalledWith(expect.objectContaining({ clientId: 'client-id' }), text, 200)
     expect(response.headers.get('Content-Length')).toBeNull()
     expect(response.headers.get('Content-Encoding')).toBeNull()
   })
 
   it('解密后明文超限时不进入业务，正常请求会重建可读取的 Request', async () => {
     const manager = createFailingEncryptManager()
-    const decrypt = vi.spyOn(manager, 'decryptRequest').mockReturnValue(ok('你'.repeat(400_000)))
+    const decrypt = vi.spyOn(manager, 'decryptRequest').mockResolvedValue(ok('你'.repeat(400_000)))
+    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
     const handle = kit.createHandle({ crypto: { crypto: createCryptoWithTransportServer(() => ok(manager)), transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const resolve = vi.fn(async (event: RequestEvent) => {
       expect(await event.request.json()).toEqual({ ok: true })
@@ -275,11 +287,11 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const makeRequest = () => new Request('http://localhost/api/raw-body', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
-      body: JSON.stringify({ serverKeyId: 'test-v1', encryptedKey: 'key', ciphertext: 'cipher', iv: 'iv' }),
+      body: JSON.stringify(testPayload()),
     })
     expect((await dispatch(handle, makeRequest(), resolve)).status).toBe(413)
     expect(resolve).not.toHaveBeenCalled()
-    decrypt.mockReturnValue(ok('{"ok":true}'))
+    decrypt.mockResolvedValue(ok('{"ok":true}'))
     expect((await dispatch(handle, makeRequest(), resolve)).status).toBe(204)
     expect(resolve).toHaveBeenCalledOnce()
   })
@@ -451,7 +463,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const response = await dispatch(
       handle,
       new Request('http://localhost/api/data', {
-        headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+        headers: authenticatedGetHeaders(),
       }),
       () => new Response(JSON.stringify({ secret: 'plain' }), {
         headers: { 'Content-Type': 'application/json' },
@@ -463,26 +475,13 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     await expect(response.json()).resolves.toMatchObject({ error: expect.not.stringContaining('plain') })
   })
 
-  it('requireEncryption=false 时允许明文上传请求透传', async () => {
-    const handle = kit.createHandle({
-      crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, requireEncryption: false, encryptResponse: false } },
-    })
-    const body = '--boundary\r\nContent-Disposition: form-data; name="file"\r\n\r\navatar\r\n--boundary--'
-    const request = new Request('http://localhost/api/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'multipart/form-data; boundary=boundary' },
-      body,
-    })
-
-    const response = await dispatch(handle, request, async (event) => {
-      expect(await event.request.text()).toBe(body)
-      return new Response('uploaded')
-    })
-
-    expect(response.status).toBe(200)
-    expect(await response.text()).toBe('uploaded')
+  it('显式排除上传路径后才允许明文上传', async () => {
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, excludePaths: ['/api/upload'] } } })
+    const resolve = vi.fn(async (event: RequestEvent) => new Response(await event.request.text()))
+    const response = await dispatch(handle, new Request('http://localhost/api/upload', { method: 'POST', body: 'upload' }), resolve)
+    expect(await response.text()).toBe('upload')
+    expect(resolve).toHaveBeenCalledOnce()
   })
-
   it('通过 crypto.transport.createClient 完成端到端加解密', async () => {
     const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
     const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

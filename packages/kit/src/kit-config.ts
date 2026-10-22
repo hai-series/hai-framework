@@ -26,8 +26,6 @@ export type KitServerConfigInput = Partial<KitServerConfig>
 export interface KitTransportConfig {
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
-  readonly requireEncryption: boolean
-  readonly encryptResponse: boolean
 }
 
 /** `config/_kit.yml` 的顶层配置结构。 */
@@ -40,8 +38,6 @@ export interface KitConfig {
 export type KitTransportConfigInput = Partial<{
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
-  readonly requireEncryption: boolean
-  readonly encryptResponse: boolean
 }>
 
 /** `config/_kit.yml` 的顶层输入类型。 */
@@ -55,8 +51,6 @@ const KitTransportConfigInputSchema = z.union([
   z.object({
     keyExchangePath: AbsolutePathSchema.default('/api/_hai/key-exchange'),
     excludePaths: z.array(AbsolutePathSchema).default([]),
-    requireEncryption: z.boolean().default(true),
-    encryptResponse: z.boolean().default(true),
   }),
 ])
 

@@ -166,15 +166,6 @@ export interface TransportEncryptionConfig {
   keyExchangePath?: string
   /** 排除路径（不加密），支持精确匹配和前缀匹配 */
   excludePaths?: string[]
-  /** 是否加密响应（默认 true） */
-  encryptResponse?: boolean
   /** 显式客户端公钥存储；生产使用共享 Redis/reldb，内存仅供开发/测试。 */
   keyStore: TransportKeyStore
-  /**
-   * 是否强制要求传输加密（默认 true）
-   *
-   * - `true`：非排除路径上缺少 X-Client-Id 请求头时返回 400，防止绕过加密。
-   * - `false`：缺少 X-Client-Id 时透传明文，仅适用于渐进式迁移场景，不建议生产启用。
-   */
-  requireEncryption?: boolean
 }

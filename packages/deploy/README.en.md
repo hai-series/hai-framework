@@ -37,7 +37,9 @@ pnpm build --target desktop --platform windows --arch x64
 
 Each image has its own Dockerfile. Web runtime assets live in images/web/. Dockerfiles retain internal build/runtime stages; configuration does not select stages. Omit absent images and add desktop directories only for native projects.
 
-Generated `web.conf` sets `client_max_body_size 2101248` (2 MiB + 4 KiB) for the API location and disables `proxy_request_buffering` / `proxy_buffering`. This admits encrypted JSON produced from the transport's 1 MiB plaintext budget; the application still checks its smaller 16 KiB handshake, 4 KiB public key and 1 MiB plaintext budgets incrementally. Custom proxies must admit that ciphertext budget and propagate cancellation. Raising a proxy limit does not replace serv/kit's bounded reads; large uploads need an explicit separate route and size policy.
+Generated `web.conf` sets `client_max_body_size 2129920` (2 MiB + 32 KiB) for the API location and disables `proxy_request_buffering` / `proxy_buffering`. This admits encrypted JSON produced from the transport's 1 MiB plaintext budget; the application still checks its smaller 16 KiB handshake, 4 KiB public key and 1 MiB plaintext budgets incrementally. Custom proxies must admit that ciphertext budget and propagate cancellation. Raising a proxy limit does not replace serv/kit's bounded reads; large uploads need an explicit separate route and size policy.
+
+Bodyless authenticated envelopes use X-Hai-Transport. Generated proxies set large_client_header_buffers 4 32k and proxy_buffer_size 32k to admit these headers; custom proxies must preserve and admit them.
 
 Dependency inputs are prepared under images/dependencies/ from package manifests, local archives and patches. Combine pnpm store caching with stable dependency layers. Source changes should reuse downloaded packages. Empty caches still permit online builds. Windows node_modules cannot supply Linux native dependencies. Offline builds additionally require base images, tools and matching ABI/architecture/libc binaries.
 

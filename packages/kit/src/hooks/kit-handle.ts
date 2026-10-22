@@ -374,9 +374,7 @@ function buildTransportMiddleware(
     serverKeyRing: transportOpts.serverKeyRing,
     keyExchangePath: transportOpts.keyExchangePath,
     excludePaths: transportOpts.excludePaths,
-    encryptResponse: transportOpts.encryptResponse,
     keyStore: transportOpts.keyStore,
-    requireEncryption: transportOpts.requireEncryption,
   })
 }
 

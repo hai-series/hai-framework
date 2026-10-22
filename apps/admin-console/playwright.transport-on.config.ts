@@ -1,3 +1,4 @@
+import { createECDH } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -8,6 +9,13 @@ const previewUrl = new URL(baseURL)
 const previewHost = previewUrl.hostname || '127.0.0.1'
 const previewPort = Number.parseInt(previewUrl.port || '4173', 10)
 const testDataDir = path.join(process.env.HAI_E2E_DATA_ROOT || '.', `data-e2e-transport-on-${Date.now()}`)
+// 每轮测试显式创建独立 ring，通过服务端子进程环境注入，不依赖开发者的私密文件。
+const transportKey = createECDH('SM2')
+transportKey.generateKeys()
+const transportRing = JSON.stringify({
+  activeKeyId: 'e2e-v1',
+  keys: { 'e2e-v1': { publicKey: transportKey.getPublicKey('hex'), privateKey: transportKey.getPrivateKey('hex').padStart(64, '0') } },
+})
 
 export default defineConfig({
   testDir: './e2e',
@@ -43,8 +51,9 @@ export default defineConfig({
       HAI_ADMIN_DEFAULT_PASSWORD: 'admin123456',
       HAI_DB_DATABASE: `${testDataDir}/admin.db`,
       HAI_STORAGE_ROOT: `${testDataDir}/uploads`,
+      HAI_CRYPTO_TRANSPORT_SERVERKEYRING: transportRing,
       NODE_ENV: 'test',
-      HAI_KIT_TRANSPORT: JSON.stringify({ keyExchangePath: '/api/_hai/key-exchange', requireEncryption: true, encryptResponse: true, excludePaths: ['/api/storage', '/api/public', '/api/auth/profile/avatar'] }),
+      HAI_KIT_TRANSPORT: JSON.stringify({ keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/storage', '/api/public', '/api/auth/profile/avatar'] }),
     },
     url: baseURL,
     reuseExistingServer: false,

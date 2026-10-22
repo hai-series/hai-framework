@@ -10,6 +10,7 @@ import type { ReldbFunctions } from '@h-ai/reldb'
 import type { TransportKeyStore } from '../crypto-transport-types.js'
 
 const TRANSPORT_KEY_TABLE = 'hai_crypto_transport_client_keys'
+const TRANSPORT_REQUEST_TABLE = 'hai_crypto_transport_requests'
 
 interface TransportClientKeyRow {
   readonly public_key: string
@@ -70,6 +71,10 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
             expires_at: { type: 'TIMESTAMP' },
           }, true),
         )
+        unwrapResult('reldb.ddl.createTable', await options.reldb.ddl.createTable(TRANSPORT_REQUEST_TABLE, {
+          request_key: { type: 'TEXT', primaryKey: true },
+          expires_at: { type: 'BIGINT', notNull: true },
+        }, true))
       })()
     }
 
@@ -127,6 +132,27 @@ export function createReldbTransportKeyStore(options: CreateReldbTransportKeySto
       }
 
       return row.public_key
+    },
+
+    async claimRequest(clientId, requestId, expiresAt) {
+      await ensureTable()
+      const now = Date.now()
+      if (expiresAt <= now)
+        return false
+      // 每次最多清理 100 条已过期 nonce；嵌套派生表兼容 MySQL 的同表读写限制。
+      unwrapResult('reldb.sql.execute', await options.reldb.sql.execute(
+        `DELETE FROM ${TRANSPORT_REQUEST_TABLE} WHERE request_key IN (SELECT request_key FROM (SELECT request_key FROM ${TRANSPORT_REQUEST_TABLE} WHERE expires_at <= ? LIMIT 100) AS expired)`,
+        [now],
+      ))
+      const insertSql = options.reldb.config?.type === 'mysql'
+        ? `INSERT IGNORE INTO ${TRANSPORT_REQUEST_TABLE} (request_key, expires_at) VALUES (?, ?)`
+        : `INSERT INTO ${TRANSPORT_REQUEST_TABLE} (request_key, expires_at) VALUES (?, ?) ON CONFLICT (request_key) DO NOTHING`
+      const inserted = unwrapResult('reldb.sql.execute', await options.reldb.sql.execute(
+        insertSql,
+        [JSON.stringify([clientId, requestId]), expiresAt],
+      ))
+      // 唯一主键约束决定胜者；连接、权限和其它 SQL 故障必须 fail-closed。
+      return inserted.changes === 1
     },
 
     async delete(clientId) {

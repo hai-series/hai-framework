@@ -4,7 +4,7 @@
  * 提供浏览器 / Node 环境下使用的 `encryptedFetch` 包装：
  * - 首次调用前自动与服务端做一次密钥协商；
  * - 之后所有出站请求自动以混合加密包裹；
- * - 标记为 `X-Encrypted: true` 的响应自动解密。
+ * - 验证响应关联、发送方签名与 MAC 后解密，缺少认证的响应拒绝。
  *
  * 与服务端协议常量统一来自 {@link TRANSPORT_PROTOCOL}，确保不漂移。
  *
@@ -14,15 +14,16 @@
 import type { HaiResult } from '@h-ai/core'
 import type {
   EncryptedPayload,
-  EncryptedRequestPayload,
   KeyExchangeResponse,
   TransportClient,
   TransportCryptoServiceLike,
   TransportKeyPair,
+  TransportMessageContext,
 } from './crypto-transport-types.js'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { readTransportBody, TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
+import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sameTransportContext, sealTransportPayload } from './crypto-transport-codec.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /** {@link createTransportClient} 的配置项。 */
@@ -52,8 +53,8 @@ export interface CreateTransportClientOptions {
  * 2. 首次 `init()` / `encryptedFetch()` 会进入 `ensureReady()`；同一时刻只允许一个协商 Promise，避免并发重复协商。
  * 3. `doInit()` 会生成客户端非对称密钥对，并向 `keyExchangeUrl` POST `{ clientPublicKey }`。
  * 4. 服务端返回 `{ serverKeyId, serverPublicKey, clientId }` 后，会话进入 ready 状态。
- * 5. 普通业务请求附加 X-Client-Id；正文密文携带协商版本 serverKeyId，供任意节点按 ID 选择私钥。
- * 6. 响应带 `X-Encrypted: true` 时自动解密；不带该标记时直接透传，便于与未启用 transport 的接口共存。
+ * 5. 所有请求生成随机 requestId nonce，认证 method/path/query/clientId/版本；GET/HEAD 的空正文封装放在 X-Hai-Transport 头。
+ * 6. 响应必须匹配原请求上下文及 HTTP status，先验证服务端签名和 MAC，再解密；无认证不透传。
  * 7. 握手最多等待 30 秒；正文预算统一使用 TRANSPORT_BODY_LIMITS，读取超限会取消原流。
  *
  * @example
@@ -107,8 +108,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
           signal: controller.signal,
         }))
       }
-      catch (cause) {
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeInvalidJson'), cause)
+      catch {
+        // JSON 解析异常可能包含响应片段，不能进入 HaiResult/cause。
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeInvalidJson'))
       }
       if (!isKeyExchangeResponse(body)) {
         return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeMissingFields'))
@@ -139,34 +141,16 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     return initPromise
   }
 
-  function encryptBody(plaintext: string): HaiResult<EncryptedRequestPayload> {
-    if (!serverPublicKey || !serverKeyId)
+  function encryptBody(plaintext: string, context: TransportMessageContext): HaiResult<EncryptedPayload> {
+    if (!serverPublicKey || !serverKeyId || !keyPair)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
-    const symKey = options.crypto.symmetric.generateKey()
-    const encResult = options.crypto.symmetric.encryptWithIV(plaintext, symKey)
-    if (!encResult.success)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportRequestEncryptFailed'), encResult.error)
-    const keyEncResult = options.crypto.asymmetric.encrypt(symKey, serverPublicKey)
-    if (!keyEncResult.success)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyEncryptFailed'), keyEncResult.error)
-    return ok({
-      serverKeyId,
-      encryptedKey: keyEncResult.data,
-      ciphertext: encResult.data.ciphertext,
-      iv: encResult.data.iv,
-    })
+    return sealTransportPayload(options.crypto, plaintext, context, 'request', 0, serverPublicKey, keyPair.privateKey)
   }
 
   function decryptPayload(payload: EncryptedPayload): HaiResult<string> {
-    if (!keyPair)
+    if (!keyPair || !serverPublicKey)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
-    const keyDec = options.crypto.asymmetric.decrypt(payload.encryptedKey, keyPair.privateKey)
-    if (!keyDec.success)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyDecryptFailed'), keyDec.error)
-    const dec = options.crypto.symmetric.decryptWithIV(payload.ciphertext, keyDec.data, payload.iv)
-    if (!dec.success)
-      return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseDecryptFailed'), dec.error)
-    return ok(dec.data)
+    return openTransportPayload(options.crypto, payload, keyPair.privateKey, serverPublicKey)
   }
 
   const encryptedFetch: typeof fetch = async (input, init) => {
@@ -205,7 +189,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (!ready.success)
       throw new Error(ready.error.message)
 
-    // 复制并改造 init：附加 X-Client-Id；若有 body，则加密。
+    // 复制并改造 init：附加 X-Client-Id；空正文也生成认证封装。
     const headers = new Headers(init?.headers ?? requestInput?.headers)
     headers.set(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER, clientId!)
 
@@ -220,17 +204,42 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       }
     }
 
-    let nextBody: BodyInit | null | undefined = rawBody
-    if (rawBody != null) {
-      const plaintext = await readTransportBody(new Response(rawBody).body, { maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes, signal })
-      const encResult = encryptBody(plaintext)
-      if (!encResult.success)
-        throw new Error(encResult.error.message)
-      nextBody = JSON.stringify(encResult.data)
+    const method = (init?.method ?? requestInput?.method ?? 'GET').toUpperCase()
+    const base = new URL(options.keyExchangeUrl, globalThis.location?.href ?? 'http://localhost')
+    const url = new URL(targetUrl, base)
+    const pathHash = hashTransportPath(options.crypto, url.pathname + url.search)
+    if (!pathHash.success)
+      throw new Error(pathHash.error.message)
+    const context: TransportMessageContext = {
+      version: TRANSPORT_PROTOCOL.VERSION,
+      serverKeyId: serverKeyId!,
+      clientId: clientId!,
+      requestId: options.crypto.symmetric.generateKey(),
+      issuedAt: Date.now(),
+      method,
+      pathHash: pathHash.data,
+    }
+    const plaintext = rawBody == null ? '' : await readTransportBody(new Response(rawBody).body, { maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes, signal })
+    const encResult = encryptBody(plaintext, context)
+    if (!encResult.success)
+      throw new Error(encResult.error.message)
+    const serialized = JSON.stringify(encResult.data)
+    if (new TextEncoder().encode(serialized).byteLength > TRANSPORT_BODY_LIMITS.encryptedPayloadBytes)
+      throw new RangeError('Transport request envelope byte limit exceeded')
+    let nextBody: BodyInit | null | undefined
+    headers.delete(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+    headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+    headers.delete('Content-Length')
+    headers.delete('Content-Encoding')
+    if (method === 'GET' || method === 'HEAD') {
+      // Fetch 禁止 GET/HEAD 正文；仍必须认证请求，空正文封装使用有界头字段。
+      if (new TextEncoder().encode(serialized).byteLength > TRANSPORT_BODY_LIMITS.envelopeHeaderBytes)
+        throw new RangeError('Transport request envelope header byte limit exceeded')
+      headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, serialized)
+    }
+    else {
+      nextBody = serialized
       headers.set('Content-Type', 'application/json')
-      headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-      headers.delete('Content-Length')
-      headers.delete('Content-Encoding')
     }
 
     // 当 input 是已带 body 的 Request 时，必须改用 URL 字符串作为 input，
@@ -238,7 +247,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     const finalInput: RequestInfo | URL = requestInput ? requestInput.url : input
     const finalInit: RequestInit = {
       ...init,
-      method: init?.method ?? requestInput?.method,
+      method,
       headers,
       body: nextBody,
       cache: init?.cache ?? requestInput?.cache,
@@ -253,19 +262,31 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     }
     const response = await baseFetch(finalInput, finalInit)
 
-    // 响应未加密：直接返回。
-    if (response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) !== TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-      return response
+    // 本次请求已认证，禁止删除布尔标记后把明文/其它响应冒充当前请求的响应。
+    if (response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) !== TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE) {
+      void response.body?.cancel().catch(() => {})
+      throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))
+    }
 
     let payload: unknown
     try {
-      payload = JSON.parse(await readTransportBody(response.body, { maxBytes: TRANSPORT_BODY_LIMITS.encryptedPayloadBytes, signal }))
+      const envelope = response.headers.get(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+      if (envelope && response.body !== null) {
+        void response.body.cancel().catch(() => {})
+        throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))
+      }
+      if (envelope && new TextEncoder().encode(envelope).byteLength > TRANSPORT_BODY_LIMITS.envelopeHeaderBytes)
+        throw new RangeError('Transport response envelope byte limit exceeded')
+      payload = JSON.parse(envelope ?? await readTransportBody(response.body, { maxBytes: TRANSPORT_BODY_LIMITS.encryptedPayloadBytes, signal }))
     }
-    catch (cause) {
-      throw new Error(cryptoM('crypto_transportResponseDecryptFailed'), { cause })
+    catch {
+      // 保留调用方取消语义；其它解析异常不携带可能包含明文/密文的原始响应片段。
+      throw new Error(cryptoM('crypto_transportResponseDecryptFailed'), signal?.aborted ? { cause: signal.reason } : undefined)
     }
-    if (!isEncryptedPayload(payload))
+    if (!isValidEncryptedPayload(payload) || payload.direction !== 'response' || payload.status !== response.status
+      || !sameTransportContext(payload.context, context)) {
       throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))
+    }
 
     const decResult = decryptPayload(payload)
     if (!decResult.success)
@@ -276,9 +297,10 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     // 透传原响应头但去掉加密标记；Content-Type 还原为下游可能期望的 JSON。
     const respHeaders = new Headers(response.headers)
     respHeaders.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+    respHeaders.delete(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
     respHeaders.delete('Content-Length')
     respHeaders.delete('Content-Encoding')
-    return new Response(decResult.data, {
+    return new Response(method === 'HEAD' || [204, 304].includes(response.status) ? null : decResult.data, {
       status: response.status,
       statusText: response.statusText,
       headers: respHeaders,
@@ -309,13 +331,6 @@ function isRequestLike(input: RequestInfo | URL): input is Request {
     && typeof headers?.get === 'function'
     && typeof candidate.method === 'string'
     && typeof candidate.clone === 'function'
-}
-
-function isEncryptedPayload(payload: unknown): payload is EncryptedPayload {
-  if (!payload || typeof payload !== 'object')
-    return false
-  const p = payload as Record<string, unknown>
-  return typeof p.encryptedKey === 'string' && typeof p.ciphertext === 'string' && typeof p.iv === 'string'
 }
 
 function isKeyExchangeResponse(body: unknown): body is KeyExchangeResponse {

@@ -27,8 +27,6 @@ const handleTransportConfig = kitTransportConfig === false
   : {
       keyExchangePath: kitTransportConfig.keyExchangePath,
       excludePaths: [...kitTransportConfig.excludePaths],
-      requireEncryption: kitTransportConfig.requireEncryption,
-      encryptResponse: kitTransportConfig.encryptResponse,
     }
 const transportPublicPaths = kitTransportConfig === false
   ? []

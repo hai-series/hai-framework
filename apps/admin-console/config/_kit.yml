@@ -4,8 +4,6 @@ server:
 
 transport:
   keyExchangePath: ${HAI_KIT_TRANSPORT_KEYEXCHANGEPATH:/api/_hai/key-exchange}
-  requireEncryption: ${HAI_KIT_TRANSPORT_REQUIREENCRYPTION:true}
-  encryptResponse: ${HAI_KIT_TRANSPORT_ENCRYPTRESPONSE:true}
   excludePaths:
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_0:/api/storage}
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_1:/api/public}

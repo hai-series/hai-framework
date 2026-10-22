@@ -8,7 +8,7 @@
 /**
  * 传输协议的固定字节上限。
  *
- * 密文预算包含 1 MiB 明文经十六进制编码的扩张及 4 KiB 封装余量。
+ * 密文预算包含 1 MiB 明文经十六进制编码的扩张、PKCS#7 填充及 32 KiB 认证封装余量。
  * @example
  * ```ts
  * const text = await readTransportBody(request.body, {
@@ -20,12 +20,14 @@
 export const TRANSPORT_BODY_LIMITS = {
   /** 密钥协商 JSON 的 UTF-8 总字节数。 */
   keyExchangeBytes: 16_384,
+  /** GET/HEAD 请求及无正文响应的认证头封装 UTF-8 上限。 */
+  envelopeHeaderBytes: 16_384,
   /** 单个协商公钥的 UTF-8 字节数。 */
   publicKeyBytes: 4096,
   /** 解密后的请求/加密前的响应明文字节数。 */
   plaintextBytes: 1_048_576,
-  /** 密文 JSON 的 UTF-8 总字节数（2 MiB + 4 KiB）。 */
-  encryptedPayloadBytes: 2_101_248,
+  /** 密文 JSON 的 UTF-8 总字节数（2 MiB + 32 KiB，含 CBC 填充与全部认证字段）。 */
+  encryptedPayloadBytes: 2_129_920,
 } as const
 
 /**

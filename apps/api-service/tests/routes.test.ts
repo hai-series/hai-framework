@@ -27,7 +27,7 @@ import { reldb } from '@h-ai/reldb'
 import { serv } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
 import { vecdb } from '@h-ai/vecdb'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApiServiceApp } from '../src/app.js'
 
 // ─── 测试全局状态 ────────────────────────────────────────────────────────────
@@ -90,6 +90,10 @@ beforeAll(async () => {
   const cryptoResult = await crypto.init()
   if (!cryptoResult.success)
     throw new Error(`crypto: ${cryptoResult.error.message}`)
+  const transportKey = crypto.asymmetric.generateKeyPair()
+  if (!transportKey.success)
+    throw new Error(transportKey.error.message)
+  vi.stubEnv('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', JSON.stringify({ activeKeyId: 'test-v1', keys: { 'test-v1': transportKey.data } }))
 
   const dbResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
   if (!dbResult.success)
@@ -164,6 +168,7 @@ afterAll(async () => {
   await cache.close()
   await reldb.close()
   await crypto.close()
+  vi.unstubAllEnvs()
   try {
     rmSync(vecdbDir, { recursive: true, force: true })
   }
@@ -239,37 +244,28 @@ describe('api-service 基础设施端点', () => {
     expect(res.headers.get('access-control-allow-headers')).toContain('authorization')
   })
 
-  it('transport 响应会暴露 X-Encrypted 给浏览器读取', async () => {
+  it('transport 响应会暴露认证协议头给浏览器读取', async () => {
     const origin = 'http://localhost:5176'
-    const keyPair = crypto.asymmetric.generateKeyPair()
-    expect(keyPair.success).toBe(true)
-    if (!keyPair.success)
-      return
-
-    const exchange = await fetch(`${encryptedBase}${keyExchangePath}`, {
+    let wire: Response | undefined
+    const client = crypto.transport.createClient({ keyExchangeUrl: `${encryptedBase}${keyExchangePath}`, fetch: async (input, init) => {
+      const response = await fetch(input, init)
+      wire = response.clone()
+      return response
+    } })
+    const response = await client.encryptedFetch(`${encryptedBase}${apiPrefix}${apiContract.pathOf(apiServiceContract.app.info)}`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        origin,
-      },
-      body: JSON.stringify({ clientPublicKey: keyPair.data.publicKey }),
-    })
-    const exchangeBody = await exchange.json() as { clientId: string }
-
-    const response = await fetch(`${encryptedBase}${apiPrefix}${apiContract.pathOf(apiServiceContract.app.info)}`, {
-      method: 'POST',
-      headers: {
-        origin,
-        [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: exchangeBody.clientId,
-      },
+      headers: { origin },
     })
 
     expect(response.status).toBe(200)
     expect(response.headers.get('access-control-allow-origin')).toBe(origin)
     expect(response.headers.get('access-control-expose-headers')).toContain(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
-    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+    expect(response.headers.get('access-control-expose-headers')).toContain(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+    expect(wire?.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
     const servConfig = core.config.getOrThrow<ServConfig>('serv')
     expect(servConfig.cors.exposedHeaders).toContain(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+    expect(servConfig.cors.exposedHeaders).toContain(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+    client.destroy()
   })
 
   it('pOST /api/v1/_hai/key-exchange 返回 200 并下发 clientId', async () => {
@@ -452,7 +448,7 @@ describe('api-service 受保护资源（认证守卫）', () => {
     await encryptedClient.auth.setTokens(reg.data.tokens)
 
     const result = await encryptedClient.storage.presignedUrls.createUpload({
-      key: 'uploads/test.png',
+      key: `users/${encodeURIComponent(reg.data.user.id)}/test.png`,
       contentType: 'image/png',
     })
     expect(result.success).toBe(true)

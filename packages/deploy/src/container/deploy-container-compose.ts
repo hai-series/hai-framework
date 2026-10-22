@@ -513,7 +513,7 @@ export function generateComposeFile(options: {
 
 /**
  * 生成同源 Web/API 的 Nginx 配置，保留运行时配置及 SPA 页面刷新。
- * API 上限与 @h-ai/crypto 的 TRANSPORT_BODY_LIMITS.encryptedPayloadBytes（2 MiB + 4 KiB）一致；
+ * API 上限与 @h-ai/crypto 的 TRANSPORT_BODY_LIMITS.encryptedPayloadBytes（2 MiB + 32 KiB）一致；
  * 关闭请求缓冲，让应用在读取过程中执行握手、公钥和正文的更细预算。
  * @param port - API 容器监听端口
  * @param apiPrefix - 应用实际 API 前缀，不允许向 Nginx 配置注入指令
@@ -528,6 +528,7 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, webPort 
   listen ${webPort};
   server_name _;
   root /usr/share/nginx/html;
+  large_client_header_buffers 4 32k;
   location / {
     try_files $uri $uri/ /index.html;
   }
@@ -545,13 +546,14 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, webPort 
     proxy_set_header Host $http_host;
   }
   location ${apiPrefix.replace(/\/$/, '')}/ {
-    client_max_body_size 2101248;
+    client_max_body_size 2129920;
     proxy_pass http://app:${port};
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_request_buffering off;
     proxy_buffering off;
+    proxy_buffer_size 32k;
   }
 }
 `

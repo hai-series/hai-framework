@@ -176,7 +176,6 @@ export const handle = kit.createHandle({
     crypto,
     transport: {
       serverKeyRing,
-      requireEncryption: true,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
   },
@@ -215,11 +214,13 @@ export const { apiFetch } = kit.client.create()
 
 transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求（以及密钥协商端点本身）；页面文档与静态资源仍保持明文，不要求携带 `X-Client-Id`。文件上传等 `multipart/form-data` 请求会保持原样发送，需在服务端 `excludePaths` 中显式放行对应上传路径。
 
-安全策略默认 fail-closed：`requireEncryption: true` 时，受保护路径缺少 `X-Client-Id` 会直接返回 400；服务端 transport 管理器不可用、响应体无法加密或超过单次加密上限时返回错误，不会把业务明文响应透传给客户端。`requireEncryption: false` 仅用于迁移期灰度，不建议在生产启用。
 
-受保护请求按实际正文判空：省略 Content-Type/Content-Length、使用 chunked 或伪造 Content-Length=0 均不能让非空明文跳过加密标记验证。真正没有正文或实际零字节流的无 input POST 可以继续；响应是否为空也不信任 Content-Length=0，非空业务响应仍须加密。
 
-固定预算与 serv/客户端共享 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 4 KiB，均按实际 UTF-8 字节计数。逐块读取原始流，超限/取消立即停止、取消流并释放 reader，不克隆后完整缓冲。请求正文超限返回 413，响应超限返回 500，无效公钥返回 400。重建 Request 时保留 signal，重建请求/响应时移除旧 Content-Length/Content-Encoding。预算不属于 `_kit.yml` 或环境变量配置。
+认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
+
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+
+固定预算与 serv/客户端共享 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 32 KiB，均按实际 UTF-8 字节计数。逐块读取原始流，超限/取消立即停止、取消流并释放 reader，不克隆后完整缓冲。请求正文超限返回 413，响应超限返回 500，无效公钥返回 400。重建 Request 时保留 signal，重建请求/响应时移除旧 Content-Length/Content-Encoding。预算不属于 `_kit.yml` 或环境变量配置。
 
 #### 使用 `_kit.yml` 统一 transport 配置
 
@@ -233,8 +234,6 @@ server:
 
 transport:
   keyExchangePath: /api/_hai/key-exchange
-  requireEncryption: true
-  encryptResponse: true
   excludePaths:
     - /api/storage
     - /api/public

@@ -53,7 +53,9 @@ pnpm build --target desktop --platform windows --arch x64
 
 每个镜像独立 Dockerfile；web 的 Nginx 配置与启动资源放 `images/web/`。Dockerfile 内保留编译/运行阶段，配置不再选择阶段。没有 Web 或 desktop 时删除相应项。
 
-部署生成的 `web.conf` 在 API location 设置 `client_max_body_size 2101248`（2 MiB + 4 KiB），并关闭 `proxy_request_buffering` / `proxy_buffering`。这允许 transport 的 1 MiB 明文经编码形成密文后通过，应用仍逐块执行更细的握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB 预算。自有反向代理须允许该密文预算并传递取消，不能用增大代理上限代替 serv/kit 的有界读取；大文件上传走明确的独立路径和体积策略。
+部署生成的 `web.conf` 在 API location 设置 `client_max_body_size 2129920`（2 MiB + 32 KiB），并关闭 `proxy_request_buffering` / `proxy_buffering`。这允许 transport 的 1 MiB 明文经编码形成密文后通过，应用仍逐块执行更细的握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB 预算。自有反向代理须允许该密文预算并传递取消，不能用增大代理上限代替 serv/kit 的有界读取；大文件上传走明确的独立路径和体积策略。
+
+无正文认证封装通过 X-Hai-Transport 头传输，生成配置使用 large_client_header_buffers 4 32k 与 proxy_buffer_size 32k 容纳头字段；自有代理也须允许并保留该头。
 
 构建器将锁文件、包配置、本地归档和补丁准备为 `images/dependencies/` 输入，结合 pnpm store 缓存与 Docker 分层复用下载。源码修改不应重新下载全部依赖；缓存为空仍能联网构建。Windows node_modules 不用于 Linux 镜像。完全离线构建还需预先准备基础镜像、工具链和匹配 ABI/架构/libc 的原生预编译包。
 

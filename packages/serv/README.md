@@ -217,9 +217,11 @@ const app = serv.createApp({
 
 > **安全策略**：启用 `transport` 后，除 `excludePaths` 与密钥协商端点外，业务请求必须携带有效 `X-Client-Id`。缺失或未知 clientId 会返回 400；响应体无法加密、非 JSON 业务响应或超过单次加密上限时返回错误，不会明文透传业务数据。
 
-受保护请求按实际正文判空：省略 Content-Type/Content-Length、使用 chunked 或伪造 Content-Length=0 均不能让非空明文跳过加密标记验证。真正没有正文或实际零字节流的无 input POST 可以继续；响应是否为空也不信任 Content-Length=0，非空业务响应仍须加密。
+认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
-固定协议预算统一来自 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 4 KiB，均按 UTF-8 字节计数。原始流逐块有界读取，超限或取消会停止读取、取消流并释放 reader，不克隆后完整缓冲。请求正文超限返回 413，响应超限返回 500；无效公钥返回 400。重建请求时保留 signal、清空 Hono 正文缓存；重建请求/响应时清除旧 Content-Length/Content-Encoding。这些预算是协议常量，不是 YAML 或环境变量配置。
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+
+固定协议预算统一来自 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 32 KiB，均按 UTF-8 字节计数。原始流逐块有界读取，超限或取消会停止读取、取消流并释放 reader，不克隆后完整缓冲。请求正文超限返回 413，响应超限返回 500；无效公钥返回 400。重建请求时保留 signal、清空 Hono 正文缓存；重建请求/响应时清除旧 Content-Length/Content-Encoding。这些预算是协议常量，不是 YAML 或环境变量配置。
 
 #### Token 认证（`iam` / `refreshCookie`）
 

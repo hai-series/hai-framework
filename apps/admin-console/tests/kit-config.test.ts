@@ -6,7 +6,7 @@ afterEach(() => vi.unstubAllEnvs())
 describe('admin runtime kit config', () => {
   it('从 _kit.yml 读取并校验公开 transport 默认值', async () => {
     const { getAdminKitConfig } = await import('../src/lib/server/kit-config.js')
-    expect(getAdminKitConfig().transport).toMatchObject({ keyExchangePath: '/api/_hai/key-exchange', requireEncryption: true, encryptResponse: true })
+    expect(getAdminKitConfig().transport).toMatchObject({ keyExchangePath: '/api/_hai/key-exchange' })
     expect(getAdminKitConfig()).not.toHaveProperty('server')
   })
   it('同一源码产物支持运行时关闭加密，不使用构建期测试开关', async () => {

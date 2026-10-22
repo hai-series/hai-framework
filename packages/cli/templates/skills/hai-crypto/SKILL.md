@@ -5,6 +5,8 @@ description: "实现 SM2/SM3/SM4 加解密、验签、密码哈希，或通过 s
 
 # hai-crypto
 
+transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC、HTTP 上下文/响应状态绑定及共享原子防重放。GET/HEAD、空 POST 与空响应也认证；无降级开关。TLS 信任边界、5 分钟窗口、nonce 持久化与实现示例见 [参考](reference.md)。
+
 ## 能力契约
 
 | 项目 | 契约 |
@@ -23,7 +25,7 @@ description: "实现 SM2/SM3/SM4 加解密、验签、密码哈希，或通过 s
 
 服务端必须显式注入受管 `serverKeyRing` 与共享 `keyStore`，没有进程随机私钥或内存 registry 默认值。请求携带协商 serverKeyId；各节点同 ring + registry 支持跨节点、重启和新旧版本轮换。密钥只从 Secret/私有环境注入，不进入公开配置、客户端或日志。开发/测试的内存 registry 须显式选择。
 
-传输字节预算统一使用根入口 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 4 KiB。自定义适配器用纯函数 `readTransportBody` 消费原流并有界读取；不要 clone/tee。客户端握手超时 30 秒；取消和超限释放 reader，异常密文响应 reject。
+传输字节预算统一使用根入口 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 32 KiB。自定义适配器用纯函数 `readTransportBody` 消费原流并有界读取；不要 clone/tee。客户端握手超时 30 秒；取消和超限释放 reader，异常密文响应 reject。
 4. 验证加解密往返、错误密钥/签名和关闭，密钥与明文不写日志或浏览器公开配置。
 
 ## 按需参考

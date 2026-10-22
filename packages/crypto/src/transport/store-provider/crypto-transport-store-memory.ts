@@ -33,6 +33,7 @@ function createClientId(counter: number): string {
  */
 export function createInMemoryKeyStore(maxClients = DEFAULT_MAX_CLIENTS): TransportKeyStore {
   const clientKeys = new Map<string, string>()
+  const requests = new Map<string, number>()
   const capacity = normalizeMaxClients(maxClients)
   let counter = 0
 
@@ -55,12 +56,27 @@ export function createInMemoryKeyStore(maxClients = DEFAULT_MAX_CLIENTS): Transp
       return clientKeys.get(clientId)
     },
 
+    async claimRequest(clientId, requestId, expiresAt) {
+      const now = Date.now()
+      for (const [id, expiry] of requests) {
+        if (expiry <= now)
+          requests.delete(id)
+      }
+      const id = JSON.stringify([clientId, requestId])
+      if (requests.has(id) || expiresAt <= now)
+        return false
+      // 开发/测试单进程内同步 check + set，不在两步之间 await；有效 nonce 不得按容量驱逐。
+      requests.set(id, expiresAt)
+      return true
+    },
+
     async delete(clientId) {
       clientKeys.delete(clientId)
     },
 
     async close() {
       clientKeys.clear()
+      requests.clear()
     },
   }
 }

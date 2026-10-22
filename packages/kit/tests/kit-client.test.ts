@@ -1,5 +1,5 @@
 import type { TransportEncryptionManager } from '@h-ai/crypto'
-import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createKitClient, installBrowserTransportFetch } from '../src/client/kit-client.js'
 import { kit } from '../src/kit-main.js'
@@ -83,23 +83,24 @@ function createTransportFetch(options: { encryptedResponseBody?: string } = {}) 
       })
     }
 
-    if (options.encryptedResponseBody) {
-      const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
-      expect(clientId).toBeTruthy()
-      const enc = await manager.encryptResponse(clientId!, options.encryptedResponseBody)
-      expect(enc.success).toBe(true)
-      if (!enc.success)
-        throw new Error(enc.error.message)
-      return new Response(JSON.stringify(enc.data), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE,
-        },
-      })
-    }
-
-    return new Response('OK', { status: 200 })
+    if (!request.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER))
+      return new Response('OK')
+    const verified = await authenticateTransportRequest(manager, request)
+    if (!verified.success)
+      throw new Error(verified.error.message)
+    const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
+    expect(clientId).toBeTruthy()
+    const enc = await manager.encryptResponse(verified.data.context, options.encryptedResponseBody ?? 'OK', 200)
+    expect(enc.success).toBe(true)
+    if (!enc.success)
+      throw new Error(enc.error.message)
+    return new Response(JSON.stringify(enc.data), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE,
+      },
+    })
   })
 }
 
@@ -392,7 +393,8 @@ describe('installBrowserTransportFetch', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2)
     const dataRequest = toRequest(fetchSpy.mock.calls[1]![0], fetchSpy.mock.calls[1]![1])
     expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBeTruthy()
-    expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
+    expect(dataRequest.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)).toBe(true)
     expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
     expect(await response.text()).toBe(originalPayload)
   })

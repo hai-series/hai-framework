@@ -170,7 +170,6 @@ export const handle = kit.createHandle({
     crypto,
     transport: {
       serverKeyRing,
-      requireEncryption: true,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
   },
@@ -209,11 +208,13 @@ Servers must explicitly inject the same managed `serverKeyRing` and a shared `ke
 
 Transport applies by default to same-origin `/api/*` endpoints, SvelteKit `__data.json` page data, and key exchange itself. Page documents and static assets remain plaintext and do not require `X-Client-Id`. `multipart/form-data` requests such as uploads are sent unchanged; explicitly allow their paths through server `excludePaths`.
 
-Security defaults to fail-closed: with `requireEncryption: true`, protected paths without `X-Client-Id` return 400. An unavailable transport manager, unencryptable response, or encryption size limit returns an error rather than forwarding plaintext business data. `requireEncryption: false` is for staged migration only and is not recommended in production.
 
-Protected requests determine emptiness from the actual body: missing Content-Type/Content-Length, chunked transfer, or a forged Content-Length=0 cannot bypass encryption checks for nonempty plaintext. Requests with no body or a genuinely zero-byte stream remain valid for inputless POST calls. A nonempty response must also be encrypted even if its Content-Length claims zero.
 
-Fixed budgets share `@h-ai/crypto`'s `TRANSPORT_BODY_LIMITS` with serv and the client: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 4 KiB encrypted JSON, counting actual UTF-8 bytes. Incremental reads consume the original stream; exceeding limits or cancellation stops/cancels it and releases its reader without cloning and fully buffering it. Oversized requests return 413, oversized responses return 500, and invalid public keys return 400. Rebuilt requests preserve signals; rebuilt requests/responses remove stale Content-Length/Content-Encoding. These budgets are not `_kit.yml` or environment settings.
+Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. Requests have a five-minute lifetime and at most 30 seconds of future clock skew. The shared registry atomically consumes (clientId, requestId), retaining it until at least issuedAt plus six minutes to cover node skew; storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
+
+Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Exclude plaintext endpoints explicitly with excludePaths. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
+
+Fixed budgets share `@h-ai/crypto`'s `TRANSPORT_BODY_LIMITS` with serv and the client: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 32 KiB encrypted JSON, counting actual UTF-8 bytes. Incremental reads consume the original stream; exceeding limits or cancellation stops/cancels it and releases its reader without cloning and fully buffering it. Oversized requests return 413, oversized responses return 500, and invalid public keys return 400. Rebuilt requests preserve signals; rebuilt requests/responses remove stale Content-Length/Content-Encoding. These budgets are not `_kit.yml` or environment settings.
 
 #### Shared transport configuration with `_kit.yml`
 
@@ -227,8 +228,6 @@ server:
 
 transport:
   keyExchangePath: /api/_hai/key-exchange
-  requireEncryption: true
-  encryptResponse: true
   excludePaths:
     - /api/storage
     - /api/public
