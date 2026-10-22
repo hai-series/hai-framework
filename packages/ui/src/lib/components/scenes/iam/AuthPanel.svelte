@@ -73,12 +73,18 @@
 
 {#snippet link(next: AuthPanelMode, label: string, href?: string)}
   {#if href}<a {href} class='link link-primary text-sm' aria-disabled={loading} onclick={(event) => {
-    if (loading)
+    if (loading) {
       event.preventDefault()
-    // 跨路径或哈希路由由路由创建新表单；提前切换会让输入被随后导航清空。
-    // 当前路由只更新场景，支持登录页内的找回密码和返回登录。
-    else if (event.currentTarget.origin === window.location.origin && event.currentTarget.pathname === window.location.pathname && event.currentTarget.hash === window.location.hash)
+      return
+    }
+    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
+      return
+    // 当前完整 URL 只切换场景，阻止重复导航重建表单并清空刚输入的内容。
+    // 跨路径、查询或 hash 的链接由路由接管；修改键点击保留浏览器的新窗口行为。
+    if (event.currentTarget.href === window.location.href) {
+      event.preventDefault()
       switchMode(next)
+    }
   }}>{label}</a>
   {:else}<BareButton type='button' class='link link-primary text-sm' disabled={loading} onclick={() => switchMode(next)}>{label}</BareButton>{/if}
 {/snippet}

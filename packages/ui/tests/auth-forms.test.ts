@@ -129,7 +129,12 @@ describe('authentication form extensions and agreements', () => {
     { pathname: '/auth/reset-password', loginUrl: '/auth/login', staysReset: true },
     { pathname: '/auth/login', loginUrl: '/auth/login', staysReset: false },
     { pathname: '/#/reset-password', loginUrl: '#/login', staysReset: true },
-  ])('登录链接跨路由等待导航，当前路由切换场景：$pathname', async ({ pathname, loginUrl, staysReset }) => {
+    { pathname: '/#/login', loginUrl: '#/login', staysReset: false },
+    { pathname: '/auth/login?next=profile', loginUrl: '/auth/login?next=profile', staysReset: false },
+    { pathname: '/auth/login?next=profile', loginUrl: '/auth/login', staysReset: true },
+    { pathname: '/auth/login', loginUrl: '/auth/login', staysReset: true, ctrlKey: true },
+    { pathname: '/auth/login', loginUrl: '/auth/login', staysReset: true, metaKey: true },
+  ])('登录链接跨路由等待导航，当前路由切换场景：$pathname ($loginUrl)', async ({ pathname, loginUrl, staysReset, ...modifiers }) => {
     setUILocale('zh-CN')
     const originalUrl = window.location.href
     window.history.replaceState(null, '', pathname)
@@ -142,17 +147,24 @@ describe('authentication form extensions and agreements', () => {
       loginUrl,
       actions: { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action },
     } })
+    let preventedByPanel: boolean | undefined
+    const observeNavigation = (event: MouseEvent) => {
+      preventedByPanel = event.defaultPrevented
+      // 组件在挂载根节点先处理事件；随后禁止 jsdom 执行真实导航。
+      event.preventDefault()
+    }
+    document.addEventListener('click', observeNavigation)
     try {
       flushSync()
       const link = target.querySelector<HTMLAnchorElement>(`a[href="${loginUrl}"]`)!
-      // 单测接管真实导航，观察组件是否在路由完成前错误地替换表单。
-      link.addEventListener('click', event => event.preventDefault())
-      link.click()
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...modifiers }))
       flushSync()
       expect(Boolean(target.querySelector('.reset-password-form'))).toBe(staysReset)
       expect(Boolean(target.querySelector('.login-form'))).toBe(!staysReset)
+      expect(preventedByPanel).toBe(!staysReset)
     }
     finally {
+      document.removeEventListener('click', observeNavigation)
       await unmount(component)
       target.remove()
       window.history.replaceState(null, '', originalUrl)

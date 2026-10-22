@@ -82,9 +82,16 @@ for (const platform of ['mobile', 'desktop'] as const) {
     await page.locator('button[type="submit"]').click()
     await expect(page.locator('.alert-success')).toBeVisible()
     await page.getByRole('link', { name: /^(登录|Sign in|Login)$/i }).click()
-    await page.locator('#login-username').fill(username)
-    await page.locator('input[type="password"]').fill('NewNativePassword456')
-    await page.locator('button[type="submit"]').click()
+    const loginForm = page.locator('.login-form')
+    await expect(loginForm).toBeVisible()
+    await loginForm.locator('#login-username').fill(username)
+    await loginForm.locator('input[type="password"]').fill('NewNativePassword456')
+    // 既校验真实登录请求，也校验认证后的导航，避免只等待 URL 掩盖输入丢失。
+    const [loginResponse] = await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/auth/login')),
+      loginForm.locator('button[type="submit"]').click(),
+    ])
+    expect(loginResponse.status()).toBe(200)
     await expect(page).not.toHaveURL(/login/)
   })
 }

@@ -750,6 +750,8 @@ AuthPanel 直接接收 IAM 白名单配置和 actions，内置登录（密码/LD
 
 AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事件后自动开放输入，避免接管时丢失早到的输入。应用无需额外的就绪适配；E2E 等待控件可编辑，并覆盖客户端脚本延迟加载的场景。
 
+认证链接指向当前完整 URL 时，AuthPanel 只切换场景并阻止重复导航，返回登录后可立即输入。路径、查询串或 hash 不同时交给应用路由处理；Ctrl/Cmd 等修改键点击保留浏览器行为。
+
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
 
 ### createLocaleStore

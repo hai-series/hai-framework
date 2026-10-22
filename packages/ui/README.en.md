@@ -791,6 +791,8 @@ AuthPanel accepts public IAM config and actions for password/LDAP/email/SMS logi
 
 AuthPanel disables native form controls during SSR and enables input after client mount binds events, preventing early input from being lost during hydration. Applications need no extra readiness code. E2E tests wait for editable controls and cover delayed client scripts.
 
+When an authentication link points to the current complete URL, AuthPanel switches scenes without navigating again, so input entered after returning to login is preserved. Links with a different path, query, or hash use application routing. Modified clicks such as Ctrl/Cmd retain browser behavior.
+
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
 ## Onboarding and help center
