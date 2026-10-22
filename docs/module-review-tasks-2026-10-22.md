@@ -525,7 +525,8 @@
 
 ### CAP-01 · P1 · 传播安全存储写入/清理失败并允许恢复
 
-- [ ] 待修正（源码确认；范围：capacitor）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：原生安全存储初始化/读写/删除失败明确传播并可重试，任一写入失败立即屏蔽整对凭据，clear 等待全部删除；移动端 login/register 部分保存失败调用 clear，二次失败显示独立 i18n 错误并清理 UI/loading，logout 同样收敛状态。类型、调用方、模板、三语 README、skill 已同步。真实 TokenManager 搭配原生插件替身验证 access 已落盘后 refresh/删除失败，存储 14 项与移动端 7 项、两包 typecheck、ESLint、check:skills 通过；真机插件与跨重启撤销未验证，实例屏蔽不冒充持久删除；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/capacitor/src/capacitor-token-storage.ts:144](../packages/capacitor/src/capacitor-token-storage.ts#L144)；[packages/capacitor/src/capacitor-token-storage.ts:43](../packages/capacitor/src/capacitor-token-storage.ts#L43)。
 - **证据与影响**：安全存储操作捕获错误后只日志，插件不存在时也可能空返回；调用方不能确认 token 是否保存/删除。首次加载失败缓存为空会妨碍恢复。
 - **修正内容**：按 TokenStorage 的异步契约传播失败，明确无插件时拒绝敏感持久化；清理失败使 UI/认证层可见并清除内存身份，允许后续重新加载插件。

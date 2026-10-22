@@ -47,7 +47,11 @@ await apiClient.init({
 })
 ```
 
-`createCapacitorTokenStorage()` persists tokens only on native Android/iOS and requires `@aparajita/capacitor-secure-storage`. On Web it does not fall back to `localStorage`: `get*()` returns `null`, and `set*()` / `clear()` are no-ops.
+`createCapacitorTokenStorage()` persists tokens only on native Android/iOS and requires `@aparajita/capacitor-secure-storage`. Its methods return promises directly: Web calls, an unavailable plugin, and failed reads, writes, or removals reject instead of pretending credentials are absent or an operation succeeded. Web entry points should select api-client cookie or memory storage.
+
+`clear()` immediately blocks both old credentials in this adapter instance and waits for all native removals before reporting the result. Failures keep them blocked; a successful write reopens only that key. Update credentials through `apiClient.auth` for serialized writes and handle rejected `setTokens()` / `clear()` calls. The UI must release its loading state, discard the logged-out identity, and display failures. Instance-local blocking does not prove persistent deletion; revocation across restarts still requires server logout/session revocation. Retry with the same instance after the plugin recovers.
+
+A failed credential write blocks both credentials, including an access token already saved before a refresh-token write failed. After failed login or registration persistence, attempt `auth.clear()` to remove partially saved data. Report cleanup failures explicitly instead of claiming device credentials were deleted.
 
 #### Device information and push notifications
 

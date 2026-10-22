@@ -57,8 +57,15 @@
   }
 
   async function handleLogout(): Promise<void> {
-    await logout()
-    await goto(resolve('/auth/login', {}))
+    try {
+      await logout()
+    }
+    catch {
+      toast.error(m.profile_logout_failed())
+    }
+    finally {
+      await goto(resolve('/auth/login', {}))
+    }
   }
 </script>
 
@@ -150,7 +157,7 @@
         </div>
       </Card>
 
-      <Button variant='error' outline class='w-full' onclick={handleLogout}>
+      <Button variant='error' outline class='w-full' loading={isLoading()} disabled={isLoading()} onclick={handleLogout}>
         <span class='icon-[tabler--logout] text-lg'></span>
         {m.action_logout()}
       </Button>

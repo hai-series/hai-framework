@@ -62,6 +62,8 @@ export interface TokenPair {
  * - `apiClient.tokenStorage.memory()` — Node.js 测试 / SSR（需显式传入）。
  *
  * Capacitor / 小程序场景请由对应模块提供（例如 `@h-ai/capacitor`）。
+ * 存储失败应拒绝 Promise，不能以 null/no-op 伪装成功；null 只表示没有可用凭据。
+ * 调用方通过 client.auth 串行更新，处理 setTokens/clear 的存储失败。
  */
 export interface TokenStorage {
   readonly getAccessToken: () => Promise<string | null>

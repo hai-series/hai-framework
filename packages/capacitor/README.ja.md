@@ -47,7 +47,11 @@ await apiClient.init({
 })
 ```
 
-`createCapacitorTokenStorage()` は Android/iOS のネイティブ環境でのみ Token を永続化し、`@aparajita/capacitor-secure-storage` が必要です。Web では `localStorage` に切り替わらず、`get*()` は `null` を返し、`set*()` / `clear()` は何もしません。
+`createCapacitorTokenStorage()` は Android/iOS のネイティブ環境でのみ Token を永続化し、`@aparajita/capacitor-secure-storage` が必要です。メソッドは Promise を直接返し、Web 呼び出し、プラグインの利用不可、読み書き・削除の失敗は reject されます。空の認証情報や操作成功として扱わないでください。Web では api-client の Cookie またはメモリーストレージを選びます。
+
+`clear()` は開始時にこのインスタンスの古い認証情報を読み取り不可にし、すべてのネイティブ削除が完了してから結果を返します。失敗時は読み取りを禁止したままにし、各キーへの書き込み成功時のみそのキーを再開します。書き込みを直列化する `apiClient.auth` を使い、`setTokens()` / `clear()` の失敗を処理してください。UI は loading を解除し、ログアウトしたユーザー情報を消去して失敗を表示します。この制限はインスタンス内のみで、永続データの削除を保証しません。再起動後の失効にはサーバーでのセッション撤回が必要です。プラグイン復旧後は同じインスタンスで再試行できます。
+
+認証情報の一方の書き込みが失敗すると両方を読み取り不可にするため、access token 保存後に refresh token の保存が失敗しても不完全な認証状態は公開しません。ログイン・登録時の保存失敗後は `auth.clear()` で部分保存データの削除を試み、削除も失敗した場合は端末の認証情報を削除できたと表示しないでください。
 
 #### 端末情報とプッシュ通知
 

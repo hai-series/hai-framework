@@ -95,6 +95,8 @@ PUBLIC_API_BASE=http://10.0.2.2:3000/api/v1
 
 - `api-client` procedure 返回 `HaiResult`，store 层统一转换为页面错误文案。
 - 原生端 token 使用 `createCapacitorTokenStorage()`；Web 预览使用内存 token，不写入 `localStorage`。
+- 原生存储读写/删除失败会拒绝 Promise。登录保存失败不进入已认证状态，退出失败仍清除界面身份并显示提示，loading 在 finally 释放；重试恢复前不能把失败当作凭据已删除。适配器的实例内屏蔽不替代服务端会话撤销，原生删除与重启行为仍需真机验收。
+- access 已写入而 refresh 保存失败时，适配器屏蔽整对凭据；登录/注册 store 会调用 `auth.clear()` 尝试清理部分数据，清理再次失败时显示不同错误，明确未确认持久删除。
 - transport 默认开启，需确保 `apps/api-service` 同样启用 `_serv.yml.transport`。
 
 ### 原生交付与验收

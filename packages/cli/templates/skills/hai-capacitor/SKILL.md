@@ -18,7 +18,7 @@ description: "在 Android/iOS 应用中接入 @h-ai/capacitor 设备、相机、
 ## 使用路径
 
 - 先判断平台和插件可用性，复用已有 SPA 入口；原生 UI 变化验证权限拒绝、取消和返回路径。
-- TokenStorage 在原生端使用安全插件；Web 下不伪造持久化成功。
+- TokenStorage 在原生端使用安全插件；Web/插件不可用或存储失败时拒绝 Promise。调用方处理 setTokens/clear 失败并释放 loading；clear 的实例内屏蔽不替代服务端撤销。
 - 原生打包前确认公开 API 地址的运行配置入口；fullstack App 使用 `public/runtime-config.js`，构建不会读取部署环境文件。这里只放公开地址，不能放 Token 或密钥。
 
 ## 按需参考

@@ -2,7 +2,7 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
-> `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块，封装常用原生能力为统一 API，返回 `HaiResult<T>`。与 `@h-ai/api-client` 配合时，Token 仅存于原生安全存储，不回退到 Web `localStorage`。
+> `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块。设备、推送等领域操作返回 `HaiResult<T>`；TokenStorage 是直接 Promise 适配器，失败会拒绝。与 `@h-ai/api-client` 配合时，Token 仅存于原生安全存储，不回退到 Web `localStorage`。
 
 ## 运行环境
 
@@ -60,9 +60,11 @@ await apiClient.init({
 
 - Android → Android KeyStore + 加密 SharedPreferences
 - iOS → Keychain
-- Web → **不回退到 localStorage**；`get*()` 返回 `null`，`set*()` / `clear()` 为 no-op
+- Web → **不提供原生存储回退**；适配器方法拒绝 Promise，Web 入口选择 api-client 的 Cookie/内存存储
 
-所有方法内置 try-catch；原生安全存储异常时 get 返回 `null`、set/clear 静默失败并记录日志。
+读取、保存与删除失败均拒绝 Promise。调用方通过 `apiClient.auth` 串行更新凭据并捕获 setTokens/clear 失败；界面释放 loading，退出失败仍清理内存身份并提示错误。`clear()` 开始立即屏蔽本实例两类旧凭据，等待两个删除都结束；即使失败也保持屏蔽，相应 key 成功写入后重新开放。屏蔽不等于持久删除，跨实例/重启撤销仍依赖服务端退出/撤销会话。插件恢复后可以在同一实例重试，不缓存永久失败状态。
+
+任一 key 写入失败也会屏蔽整对凭据，避免 access 已落盘而 refresh 保存失败后的半完成登录。登录/注册保存失败后尝试 `auth.clear()` 清理部分数据；清理失败继续显示未确认删除的错误，不能只清界面身份或宣称持久删除成功。
 
 #### Preferences 子操作
 

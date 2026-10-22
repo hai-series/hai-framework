@@ -2,6 +2,7 @@
   "capacitor_initFailed": "Capacitor initialization failed",
   "capacitor_initInProgress": "Capacitor initialization is already in progress",
   "capacitor_notAvailable": "Capacitor is not available in this environment",
+  "capacitor_secureStorageClearFailed": "Could not fully clear sign-in credentials from secure storage; retry signing out",
   "capacitor_preferencesGetFailed": "Failed to read from Capacitor Preferences",
   "capacitor_preferencesSetFailed": "Failed to write to Capacitor Preferences",
   "capacitor_preferencesRemoveFailed": "Failed to remove from Capacitor Preferences",
