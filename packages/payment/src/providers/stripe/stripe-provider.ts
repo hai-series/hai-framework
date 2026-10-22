@@ -9,15 +9,49 @@
 import type { HaiResult } from '@h-ai/core'
 import type { StripeConfig } from '../../payment-config.js'
 import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
-import { createHmac } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 import { paymentM } from '../../payment-i18n.js'
 import { HaiPaymentError } from '../../payment-types.js'
 import { fetchWithTimeout } from '../payment-provider-http.js'
+import { StripeOperationRepository } from './stripe-operation-repository.js'
 
 /** Stripe API 基地址 */
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
+
+/** 只持久化继续查单所需的渠道标识和返回给客户端的 Checkout URL。 */
+const StripeCreatedSessionSchema = z.object({
+  id: z.string().min(1),
+  url: z.url(),
+  payment_intent: z.string().min(1).nullable().optional(),
+})
+
+/** 订单号与首次请求金额/币种绑定；不保存密钥和完整渠道响应。 */
+const StripeOrderMappingSchema = z.object({
+  orderNo: z.string().min(1),
+  amount: z.number().int().positive(),
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  session: StripeCreatedSessionSchema,
+})
+
+/** Session 查询只接受实际有意义的支付状态，并核对其业务身份。 */
+const StripeRetrievedSessionSchema = z.object({
+  id: z.string().min(1),
+  metadata: z.object({ orderNo: z.string().min(1) }),
+  amount_total: z.number().int().nonnegative(),
+  currency: z.string().regex(/^[a-z]{3}$/i),
+  payment_status: z.enum(['paid', 'unpaid', 'no_payment_required']),
+  payment_intent: z.string().min(1).nullable(),
+  status: z.enum(['open', 'complete', 'expired']),
+})
+
+/** 退款受理结果；渠道错误或未知状态不能映射为假成功。 */
+const StripeRefundSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(['pending', 'requires_action', 'succeeded', 'failed', 'canceled']),
+})
 
 /**
  * Stripe Checkout 通知快照；只接受本 Provider 实际消费的 Session 事件。
@@ -57,19 +91,29 @@ const StripeCheckoutEventSchema = z.object({
  * 创建 Stripe Provider
  *
  * @param config - Stripe 配置
+ * @param repository - 已初始化的内部渠道操作仓库，由 payment.init 创建。
  * @returns PaymentProvider 实例
  */
-export function createStripeProvider(config: StripeConfig): PaymentProvider {
+export function createStripeProvider(
+  config: StripeConfig,
+  repository = new StripeOperationRepository(reldb),
+): PaymentProvider {
+  let accountScopePromise: Promise<string> | undefined
+
   /** Stripe API 请求 */
-  async function stripeRequest<T>(method: string, path: string, body?: Record<string, string>): Promise<T> {
+  async function stripeRequest<T>(method: string, path: string, options?: {
+    body?: Record<string, string>
+    idempotencyKey?: string
+  }): Promise<T> {
     const response = await fetchWithTimeout(`${STRIPE_API_BASE}${path}`, {
       method,
       headers: {
         'Authorization': `Bearer ${config.secretKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
+        ...(options?.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
       },
-      body: body
-        ? Object.entries(body).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
+      body: options?.body
+        ? Object.entries(options.body).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
         : undefined,
     })
 
@@ -79,6 +123,69 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
     }
 
     return response.json() as T
+  }
+
+  /** 稳定账户身份与 test/live 隔离；密钥轮换不会改变持久映射命名空间。 */
+  async function accountScope(): Promise<string> {
+    if (!accountScopePromise) {
+      accountScopePromise = (async () => {
+        const mode = /^(?:sk|rk)_(test|live)_/.exec(config.secretKey)?.[1]
+        if (!mode)
+          throw new Error('Stripe requires a test or live secret/restricted API key')
+        const account = z.object({ id: z.string().regex(/^acct_/).min(6) }).parse(await stripeRequest('GET', '/account'))
+        return `${account.id}:${mode}`
+      })().catch((error: unknown) => {
+        accountScopePromise = undefined
+        throw error
+      })
+    }
+    return accountScopePromise
+  }
+
+  /** 不含秘密/个人标识的稳定幂等键；所有节点依据同一业务身份计算。 */
+  async function operationId(kind: 'order' | 'refund', businessId: string): Promise<string> {
+    const digest = createHash('sha256').update(JSON.stringify([await accountScope(), kind, businessId])).digest('hex')
+    return `hai-payment-${kind}-${digest}`
+  }
+
+  /** 参数顺序规范化后绑定到预留；未知结果只在安全窗口内沿用同一键重试。 */
+  async function executeOperation<T>(options: {
+    id: string
+    path: string
+    body: Record<string, string>
+    resultSchema: z.ZodType<T>
+    execute: (raw: unknown) => T
+    paymentIntent?: (result: T) => string | null | undefined
+  }): Promise<T> {
+    const requestHash = createHash('sha256').update(JSON.stringify([
+      options.path,
+      Object.entries(options.body).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
+    ])).digest('hex')
+    const reserved = await repository.reserve(options.id, requestHash)
+    if (reserved.result !== null)
+      return options.resultSchema.parse(reserved.result)
+    if (!reserved.canRetry)
+      throw new Error('Stripe operation outcome is unknown beyond the safe retry window; reconcile before retrying')
+    const result = options.execute(await stripeRequest('POST', options.path, { body: options.body, idempotencyKey: options.id }))
+    return options.resultSchema.parse(await repository.complete(options.id, requestHash, result, options.paymentIntent?.(result)))
+  }
+
+  /** 只从持久 Session ID 查指定订单，并核对金额/币种及 PaymentIntent。 */
+  async function retrieveOrder(orderNo: string) {
+    const id = await operationId('order', orderNo)
+    const operation = await repository.load(id)
+    if (!operation || operation.result === null)
+      throw new Error('Stripe order has no confirmed persisted Session mapping')
+    const mapping = StripeOrderMappingSchema.parse(operation.result)
+    const session = StripeRetrievedSessionSchema.parse(await stripeRequest('GET', `/checkout/sessions/${encodeURIComponent(mapping.session.id)}`))
+    if (session.id !== mapping.session.id || session.metadata.orderNo !== orderNo
+      || mapping.orderNo !== orderNo || session.amount_total !== mapping.amount
+      || session.currency.toUpperCase() !== mapping.currency) {
+      throw new Error('Stripe Session does not match the persisted order')
+    }
+    if (session.payment_intent)
+      await repository.rememberPaymentIntent(id, session.payment_intent)
+    return session
   }
 
   /** Stripe Webhook 签名容忍时间窗口（秒） */
@@ -114,6 +221,9 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
 
     async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
       try {
+        z.string().min(1).regex(/\S/).parse(input.orderNo)
+        if (input.metadata && Object.hasOwn(input.metadata, 'orderNo'))
+          throw new Error('Stripe metadata orderNo is reserved')
         // 使用 Stripe Checkout Session
         const params: Record<string, string> = {
           'mode': 'payment',
@@ -131,18 +241,26 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
           }
         }
 
-        const session = await stripeRequest<{
-          id: string
-          url: string
-          payment_intent: string
-        }>('POST', '/checkout/sessions', params)
+        const mapping = await executeOperation({
+          id: await operationId('order', input.orderNo),
+          path: '/checkout/sessions',
+          body: params,
+          resultSchema: StripeOrderMappingSchema,
+          execute: raw => ({
+            orderNo: input.orderNo,
+            amount: input.amount,
+            currency: input.currency?.toUpperCase() ?? 'USD',
+            session: StripeCreatedSessionSchema.parse(raw),
+          }),
+          paymentIntent: result => result.session.payment_intent,
+        })
 
         return ok({
           provider: 'stripe',
           tradeType: input.tradeType,
           clientParams: {
-            sessionId: session.id,
-            checkoutUrl: session.url,
+            sessionId: mapping.session.id,
+            checkoutUrl: mapping.session.url,
           },
         })
       }
@@ -200,23 +318,7 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
 
     async queryOrder(orderNo: string): Promise<HaiResult<OrderStatus>> {
       try {
-        // 搜索 checkout sessions by metadata
-        const sessions = await stripeRequest<{
-          data: Array<{
-            id: string
-            payment_status: string
-            amount_total: number
-          }>
-        }>('GET', `/checkout/sessions?limit=1&metadata[orderNo]=${encodeURIComponent(orderNo)}`)
-
-        const session = sessions.data[0]
-        if (!session) {
-          return ok({
-            orderNo,
-            status: 'pending',
-            amount: 0,
-          })
-        }
+        const session = await retrieveOrder(orderNo)
 
         const statusMap: Record<string, OrderStatus['status']> = {
           paid: 'paid',
@@ -227,7 +329,7 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
         return ok({
           orderNo,
           transactionId: session.id,
-          status: statusMap[session.payment_status] ?? 'pending',
+          status: session.status === 'expired' ? 'closed' : statusMap[session.payment_status],
           amount: session.amount_total,
         })
       }
@@ -242,32 +344,36 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
 
     async refund(input: RefundInput): Promise<HaiResult<RefundResult>> {
       try {
-        // Stripe 退款需要 payment_intent ID，这里简化为根据 orderNo 查询
-        const sessions = await stripeRequest<{
-          data: Array<{ payment_intent: string }>
-        }>('GET', `/checkout/sessions?limit=1&metadata[orderNo]=${encodeURIComponent(input.orderNo)}`)
-
-        const paymentIntent = sessions.data[0]?.payment_intent
-        if (!paymentIntent) {
+        z.string().min(1).regex(/\S/).parse(input.refundNo)
+        const session = await retrieveOrder(input.orderNo)
+        if (!session.payment_intent || session.payment_status !== 'paid') {
           return err(
             HaiPaymentError.REFUND_FAILED,
             paymentM('payment_refundFailed'),
           )
         }
 
-        const refund = await stripeRequest<{
-          id: string
-          status: string
-        }>('POST', '/refunds', {
-          payment_intent: paymentIntent,
-          amount: input.amount.toString(),
-          reason: input.reason ?? 'requested_by_customer',
+        const body: Record<string, string> = {
+          'payment_intent': session.payment_intent,
+          'amount': input.amount.toString(),
+          'reason': 'requested_by_customer',
+          'metadata[orderNo]': input.orderNo,
+          'metadata[refundNo]': input.refundNo,
+        }
+        if (input.reason)
+          body['metadata[reason]'] = input.reason
+        const refund = await executeOperation({
+          id: await operationId('refund', input.refundNo),
+          path: '/refunds',
+          body,
+          resultSchema: StripeRefundSchema,
+          execute: raw => StripeRefundSchema.parse(raw),
         })
 
         return ok({
           refundNo: input.refundNo,
           refundId: refund.id,
-          status: refund.status === 'succeeded' ? 'success' : 'processing',
+          status: refund.status === 'succeeded' ? 'success' : refund.status === 'failed' || refund.status === 'canceled' ? 'failed' : 'processing',
         })
       }
       catch (cause) {

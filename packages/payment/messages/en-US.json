@@ -13,5 +13,8 @@
   "payment_invokeAppFailed": "Failed to invoke app payment",
   "payment_configError": "Payment config validation failed: {error}",
   "payment_initFailed": "Payment module initialization failed: {error}",
-  "payment_configFieldRequired": "This config field is required"
+  "payment_configFieldRequired": "This config field is required",
+  "payment_stripeDatabaseRequired": "Stripe payments require an initialized shared reldb database",
+  "payment_stripeStoreInitFailed": "Failed to initialize Stripe payment persistence",
+  "payment_stripeKeyInvalid": "Stripe requires a server API key prefixed with sk_test_, sk_live_, rk_test_, or rk_live_"
 }

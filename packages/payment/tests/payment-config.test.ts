@@ -164,6 +164,14 @@ describe('alipayConfigSchema', () => {
 })
 
 describe('stripeConfigSchema', () => {
+  it.each(['sk_test_key', 'sk_live_key', 'rk_test_key', 'rk_live_key'])('接受具有明确模式的服务端密钥 %s', (secretKey) => {
+    expect(StripeConfigSchema.safeParse({ secretKey, webhookSecret: 'whsec_key' }).success).toBe(true)
+  })
+
+  it.each(['pk_test_key', 'sk_unknown_key', 'sk_test_', 'sk_test_key with space'])('拒绝无法安全区分服务端模式的密钥 %s', (secretKey) => {
+    expect(StripeConfigSchema.safeParse({ secretKey, webhookSecret: 'whsec_key' }).success).toBe(false)
+  })
+
   it('完整有效配置通过校验', () => {
     const result = StripeConfigSchema.safeParse({
       secretKey: 'sk_test_abc123',
@@ -196,7 +204,7 @@ describe('stripeConfigSchema', () => {
 
   it('缺少 webhookSecret 校验失败', () => {
     const result = StripeConfigSchema.safeParse({
-      secretKey: 'sk_test',
+      secretKey: 'sk_test_key',
     })
     expect(result.success).toBe(false)
   })
@@ -211,7 +219,7 @@ describe('stripeConfigSchema', () => {
 
   it('webhookToleranceSeconds 非正整数时校验失败', () => {
     const result = StripeConfigSchema.safeParse({
-      secretKey: 'sk_test',
+      secretKey: 'sk_test_key',
       webhookSecret: 'whsec',
       webhookToleranceSeconds: 0,
     })
@@ -227,7 +235,7 @@ describe('paymentConfigSchema（顶层）', () => {
 
   it('只配置一个渠道通过校验', () => {
     const result = PaymentConfigSchema.safeParse({
-      stripe: { secretKey: 'sk', webhookSecret: 'ws' },
+      stripe: { secretKey: 'sk_test_key', webhookSecret: 'ws' },
     })
     expect(result.success).toBe(true)
   })
@@ -247,7 +255,7 @@ describe('paymentConfigSchema（顶层）', () => {
         alipayPublicKey: 'pub',
       },
       stripe: {
-        secretKey: 'sk',
+        secretKey: 'sk_test_key',
         webhookSecret: 'ws',
       },
     })

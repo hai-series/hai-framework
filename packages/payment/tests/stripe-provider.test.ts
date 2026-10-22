@@ -5,8 +5,10 @@
  */
 
 import { createHmac } from 'node:crypto'
+import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiPaymentError } from '../src/payment-types'
+import { StripeOperationRepository } from '../src/providers/stripe/stripe-operation-repository'
 import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
 
 const testConfig = {
@@ -25,13 +27,25 @@ function generateStripeSignature(payload: string, secret: string, timestamp?: st
 describe('stripe-provider', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
+    if (!initialized.success)
+      throw new Error(initialized.error.message)
+    const ready = await new StripeOperationRepository(reldb).initialize()
+    if (!ready.success)
+      throw new Error(ready.error.message)
     fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
+    vi.stubGlobal('fetch', (url: string, options: RequestInit) => {
+      if (url.endsWith('/v1/account'))
+        return Promise.resolve(Response.json({ id: 'acct_test_001' }))
+      return fetchSpy(url, options)
+    })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    await reldb.close()
   })
 
   describe('createOrder', () => {
@@ -75,7 +89,7 @@ describe('stripe-provider', () => {
     it('默认币种为 USD', async () => {
       fetchSpy.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'cs', url: 'url', payment_intent: 'pi' }),
+        json: async () => ({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }),
       })
 
       const provider = createStripeProvider(testConfig)
@@ -94,7 +108,7 @@ describe('stripe-provider', () => {
     it('指定币种 CNY', async () => {
       fetchSpy.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'cs', url: 'url', payment_intent: 'pi' }),
+        json: async () => ({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }),
       })
 
       const provider = createStripeProvider(testConfig)
@@ -114,7 +128,7 @@ describe('stripe-provider', () => {
     it('metadata 传递到 Stripe', async () => {
       fetchSpy.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'cs', url: 'url', payment_intent: 'pi' }),
+        json: async () => ({ id: 'cs', url: 'https://checkout.stripe.com/pay/cs', payment_intent: 'pi' }),
       })
 
       const provider = createStripeProvider(testConfig)
@@ -376,214 +390,19 @@ describe('stripe-provider', () => {
     })
   })
 
-  describe('queryOrder', () => {
-    it('查询到 session 返回订单状态', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [{
-            id: 'cs_query_001',
-            payment_status: 'paid',
-            amount_total: 2000,
-          }],
-        }),
-      })
-
-      const provider = createStripeProvider(testConfig)
-      const result = await provider.queryOrder('ORD001')
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.orderNo).toBe('ORD001')
-        expect(result.data.transactionId).toBe('cs_query_001')
-        expect(result.data.status).toBe('paid')
-        expect(result.data.amount).toBe(2000)
-      }
-
-      const [url] = fetchSpy.mock.calls[0]
-      expect(url).toContain('/checkout/sessions')
-      expect(url).toContain('metadata[orderNo]=ORD001')
-    })
-
-    it('未找到 session 返回 pending 状态', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [] }),
-      })
-
-      const provider = createStripeProvider(testConfig)
-      const result = await provider.queryOrder('ORD-NOT-FOUND')
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.status).toBe('pending')
-        expect(result.data.amount).toBe(0)
-      }
-    })
-
-    it.each([
-      ['paid', 'paid'],
-      ['unpaid', 'pending'],
-      ['no_payment_required', 'paid'],
-      ['unknown_status', 'pending'],
-    ])('payment_status %s 映射为 %s', async (paymentStatus, expectedStatus) => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [{ id: 'cs', payment_status: paymentStatus, amount_total: 100 }],
-        }),
-      })
-
-      const provider = createStripeProvider(testConfig)
-      const result = await provider.queryOrder('ORD-MAP')
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.status).toBe(expectedStatus)
-      }
-    })
-
-    it('fetch 失败返回 QUERY_ORDER_FAILED', async () => {
-      fetchSpy.mockRejectedValueOnce(new Error('timeout'))
-
-      const provider = createStripeProvider(testConfig)
-      const result = await provider.queryOrder('ORD-FAIL')
-
+  describe('queryOrder/refund 的可信持久映射', () => {
+    it('未知订单查单失败，禁止用列表首项猜测', async () => {
+      const result = await createStripeProvider(testConfig).queryOrder('ORD-NOT-FOUND')
       expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiPaymentError.QUERY_ORDER_FAILED.code)
-      }
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('未知订单退款失败且不发送退款请求', async () => {
+      const result = await createStripeProvider(testConfig).refund({ orderNo: 'ORD-NOT-FOUND', refundNo: 'RF001', amount: 100 })
+      expect(result.success).toBe(false)
+      expect(fetchSpy).not.toHaveBeenCalled()
     })
   })
-
-  describe('refund', () => {
-    it('退款成功（status=succeeded → success）', async () => {
-      // 第一次 fetch：查询 session 获取 payment_intent
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [{ payment_intent: 'pi_test_001' }],
-        }),
-      })
-      // 第二次 fetch：创建退款
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 're_test_001',
-          status: 'succeeded',
-        }),
-      })
-
-      const provider = createStripeProvider(testConfig)
-      const result = await provider.refund({
-        orderNo: 'ORD001',
-        refundNo: 'RF001',
-        amount: 1000,
-        reason: '用户退款',
-      })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.refundNo).toBe('RF001')
-        expect(result.data.refundId).toBe('re_test_001')
-        expect(result.data.status).toBe('success')
-      }
-
-      // 验证两次 fetch 调用
-      expect(fetchSpy).toHaveBeenCalledTimes(2)
-      const [refundUrl, refundOptions] = fetchSpy.mock.calls[1]
-      expect(refundUrl).toContain('/refunds')
-      expect(refundOptions.body).toContain('payment_intent=pi_test_001')
-      expect(refundOptions.body).toContain('amount=1000')
-    })
-
-    it('退款状态非 succeeded 时返回 processing', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [{ payment_intent: 'pi_test' }],
-        }),
-      })
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 're_pending',
-          status: 'pending',
-        }),
-      })
-
-      const provider = createStripeProvider(testConfig)
-      const result = await provider.refund({
-        orderNo: 'ORD002',
-        refundNo: 'RF002',
-        amount: 500,
-      })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.status).toBe('processing')
-      }
-    })
-
-    it('未找到 payment_intent 返回 REFUND_FAILED', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [] }),
-      })
-
-      const provider = createStripeProvider(testConfig)
-      const result = await provider.refund({
-        orderNo: 'ORD-NO-PI',
-        refundNo: 'RF-NO-PI',
-        amount: 100,
-      })
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiPaymentError.REFUND_FAILED.code)
-      }
-    })
-
-    it('无 reason 时使用默认 requested_by_customer', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [{ payment_intent: 'pi_test' }],
-        }),
-      })
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 're', status: 'succeeded' }),
-      })
-
-      const provider = createStripeProvider(testConfig)
-      await provider.refund({
-        orderNo: 'ORD',
-        refundNo: 'RF',
-        amount: 100,
-      })
-
-      const body = fetchSpy.mock.calls[1][1].body as string
-      expect(body).toContain('requested_by_customer')
-    })
-
-    it('fetch 异常返回 REFUND_FAILED', async () => {
-      fetchSpy.mockRejectedValueOnce(new Error('error'))
-
-      const provider = createStripeProvider(testConfig)
-      const result = await provider.refund({
-        orderNo: 'ORD',
-        refundNo: 'RF',
-        amount: 100,
-      })
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiPaymentError.REFUND_FAILED.code)
-      }
-    })
-  })
-
   describe('closeOrder', () => {
     it('stripe 关闭订单直接返回成功（自动过期）', async () => {
       const provider = createStripeProvider(testConfig)

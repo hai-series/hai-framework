@@ -43,7 +43,7 @@
 | --- | --- |
 | reldb / cache / storage / vecdb | 分别拥有关系库、缓存、对象存储、向量库连接契约 |
 | iam / kit | IAM 运行依赖 audit/reldb/cache/crypto；kit 经 IAM 继承。LDAP 按 login.ldap 开关启用，Reach peer 只有另行实际依赖时进入运行图 |
-| audit / payment | audit 经 reldb 持久化；payment 经 audit 继承数据库。微信、支付宝、Stripe 是已有商户 API，沿 payment 配置接入，不生成假云服务或容器 |
+| audit / payment | audit 经 reldb 持久化；Stripe payment 直接依赖先初始化的共享 reldb 保存渠道映射和幂等结果，审计可选。微信、支付宝、Stripe 是已有商户 API，沿 payment 配置接入，不生成假云服务或容器 |
 | scheduler / reach | 两者实际依赖 reldb/cache；Reach 另按启用的 SMTP/HTTP/短信渠道配置 |
 | ai | 实际依赖 reldb/vecdb/datapipe。LLM、图像、音频端点及模型来自 AI 配置，不能仅凭包名选择模型镜像或 CUDA；不自动创建付费厂商账号 |
 | crypto / serv | crypto 的可选运行依赖按 lockfile 解析，serv 经 crypto 继承；serv 的 IAM/storage/AI peer 不作为启用证据 |

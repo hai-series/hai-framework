@@ -1758,6 +1758,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../reldb
       zod:
         specifier: 'catalog:'
         version: 4.6.5

@@ -13,5 +13,8 @@
   "payment_invokeAppFailed": "调起 App 支付失败",
   "payment_configError": "支付模块配置校验失败：{error}",
   "payment_initFailed": "支付模块初始化失败：{error}",
-  "payment_configFieldRequired": "此配置字段必填"
+  "payment_configFieldRequired": "此配置字段必填",
+  "payment_stripeDatabaseRequired": "Stripe 支付要求先初始化共享关系数据库 reldb",
+  "payment_stripeStoreInitFailed": "Stripe 支付持久化仓库初始化失败",
+  "payment_stripeKeyInvalid": "Stripe 密钥须为 sk_test_、sk_live_、rk_test_ 或 rk_live_ 开头的服务端 API Key"
 }

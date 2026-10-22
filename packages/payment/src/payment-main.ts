@@ -14,9 +14,11 @@ import type {
   PaymentFunctions,
   PaymentNotifyResult,
   PaymentOrder,
+  PaymentProvider,
   RefundResult,
 } from './payment-types.js'
 import { core, err, ok } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 import { PaymentConfigSchema } from './payment-config.js'
 import {
   clearProviders,
@@ -31,6 +33,7 @@ import {
 import { paymentM } from './payment-i18n.js'
 import { HaiPaymentError } from './payment-types.js'
 import { createAlipayProvider } from './providers/alipay/alipay-provider.js'
+import { StripeOperationRepository } from './providers/stripe/stripe-operation-repository.js'
 import { createStripeProvider } from './providers/stripe/stripe-provider.js'
 import { createWechatPayProvider } from './providers/wechat/wechat-pay-provider.js'
 
@@ -77,6 +80,7 @@ export const payment: PaymentFunctions = {
    * 初始化支付模块
    *
    * 根据提供的配置自动注册对应的 Provider。
+   * Stripe 要求共享 reldb 已初始化；仓库就绪后才发布 Provider，关闭时不代替宿主关闭 reldb。
    *
    * @param config - 支付配置
    */
@@ -109,6 +113,18 @@ export const payment: PaymentFunctions = {
       }
       const parsed = parseResult.data
 
+      // Stripe 的渠道映射和幂等记录必须持久化；建表成功后才能发布 Provider。
+      let stripeProvider: PaymentProvider | undefined
+      if (parsed.stripe) {
+        if (!reldb.isInitialized)
+          return err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeDatabaseRequired'))
+        const repository = new StripeOperationRepository(reldb)
+        const ready = await repository.initialize()
+        if (!ready.success)
+          return err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeStoreInitFailed'), ready.error)
+        stripeProvider = createStripeProvider(parsed.stripe, repository)
+      }
+
       // 清除旧注册
       clearProviders()
 
@@ -119,9 +135,8 @@ export const payment: PaymentFunctions = {
       if (parsed.alipay) {
         registerProvider(createAlipayProvider(parsed.alipay))
       }
-      if (parsed.stripe) {
-        registerProvider(createStripeProvider(parsed.stripe))
-      }
+      if (stripeProvider)
+        registerProvider(stripeProvider)
 
       currentConfig = parsed
       logger.info('Payment module initialized', {

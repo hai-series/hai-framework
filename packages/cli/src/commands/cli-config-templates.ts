@@ -742,7 +742,7 @@ function generatePaymentConfig(): string {
 #   signType: RSA2
 #   sandbox: false
 
-# Stripe（按需开启）
+# Stripe（按需开启；先初始化共享 reldb，持久化渠道映射和幂等结果）
 # stripe:
 #   secretKey: ''
 #   webhookSecret: ''

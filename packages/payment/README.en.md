@@ -21,6 +21,7 @@ A unified payment module for WeChat Pay, Alipay, and Stripe, with provider-based
 ### Dependencies
 
 - `@h-ai/audit`: optional audit logging; payment operations are recorded automatically when audit is initialized.
+- `@h-ai/reldb`: required when Stripe is enabled. Initialize a shared database first for durable provider mappings and idempotent outcomes. WeChat/Alipay alone do not require it.
 
 ### Quick start
 
@@ -92,7 +93,7 @@ await payment.init({
     sandbox: false, // 可选，默认 false
   },
   stripe: {
-    secretKey: 'sk_xxx',
+    secretKey: 'sk_test_xxx',
     webhookSecret: 'whsec_xxx',
     webhookToleranceSeconds: 300, // 可选，默认 300 秒
   },
@@ -114,6 +115,16 @@ A completed Session with `payment_status=unpaid` returns `pending`; only `paid` 
 Results include `eventId` and uppercase `currency`; `transactionId` is the Checkout Session ID. The application must verify the order, amount, and currency in a shared database, persist deduplication, and prevent out-of-order events from reverting paid/refunded orders. Signature verification and parsing do not replace that business transaction. Check `status === 'paid'` before fulfillment, even when `success` is true.
 
 References: [Stripe event types](https://docs.stripe.com/api/events/types), [Checkout Session fields](https://docs.stripe.com/api/checkout/sessions/object).
+
+### Stripe persistence and idempotency
+
+Before enabling Stripe, initialize reldb and check its success, then initialize payment. Close payment before reldb. Initialization waits for `hai_payment_stripe_operations` to be ready and does not publish a provider on failure. Multiple nodes must use the same PostgreSQL/MySQL database. SQLite is for development or explicitly shared files on one host, not separate local files across hosts.
+
+The first operation needing an order mapping reads `/v1/account`. The stable account identity and test/live key mode isolate records and preserve mappings after key rotation. Keys must start with `sk_test_`, `sk_live_`, `rk_test_`, or `rk_live_`; restricted keys also need account read permission.
+
+Order creation uses a stable `Idempotency-Key` derived from the account, mode, and orderNo. A unique database record binds the normalized request digest to its Session ID; callers cannot override metadata.orderNo. Queries/refunds retrieve that specific Session, verify order number, amount, and currency, and persist its PaymentIntent. Unknown orders fail. Refunds persist their result by refundNo and reject changed parameters. Free-text reason is preserved in refund metadata; the Stripe reason is requested_by_customer.
+
+Response loss or persistence failure retains the reservation and cannot return success. Unknown outcomes can reuse the same key only within a 23-hour window measured by the database. Afterward, reconcile with Stripe and repair the record before retrying; do not delete it and blindly resend. Confirmed results are retained without a cache TTL. A refund result describes its acceptance; processing does not mean funds have arrived. See [Stripe idempotency retention](https://docs.stripe.com/api/idempotent_requests).
 
 ### Audit logging
 

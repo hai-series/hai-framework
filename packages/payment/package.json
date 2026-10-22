@@ -39,6 +39,7 @@
   "dependencies": {
     "@h-ai/audit": "workspace:*",
     "@h-ai/core": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

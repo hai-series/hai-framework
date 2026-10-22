@@ -11,6 +11,7 @@
 | 模块 | 用途 | 是否必需 | 初始化要求 |
 | --- | --- | --- | --- |
 | `@h-ai/audit` | 审计日志（支付操作自动审计） | 可选 | 已初始化时自动写入审计日志 |
+| `@h-ai/reldb` | Stripe 渠道映射、操作预留与幂等结果 | 启用 Stripe 时必需 | 先初始化共享 DB；payment 关闭后再关闭 DB |
 
 ## 适用场景
 
@@ -47,6 +48,8 @@ stripe:
   webhookSecret: ''
   webhookToleranceSeconds: 300  # 可选，默认 300 秒
 ```
+
+Stripe 的 secretKey 必须为 sk/rk 的 test/live 服务端密钥；受限密钥须允许读取账户。启用前初始化共享 reldb，不能给不同节点配置各自的 SQLite 文件。
 
 约定环境变量优先于 YAML，例如 `HAI_PAYMENT_WECHAT_APIV3KEY`、
 `HAI_PAYMENT_STRIPE_WEBHOOKSECRET`。生产密钥只放环境或密钥管理器。
@@ -115,6 +118,10 @@ if (result.success) {
 Stripe 只消费 payment-mode Checkout Session 的 `completed`、`async_payment_succeeded`、`async_payment_failed`、`expired` 事件，其它事件或缺失订单号/金额/币种返回 `NOTIFY_PARSE_FAILED`。结果的 `eventId` 用于持久去重，`currency` 为大写，`transactionId` 为 Session ID。只有 paid 结果返回 `paidAt`，取成功事件的 created 时间；Provider 不维护业务订单或进程内去重集合。
 
 ### 5. 查询订单
+
+Stripe 创建操作将 orderNo 与 Session ID 持久绑定，查单/退款通过该 ID 读取并核对订单号、金额和币种，不使用 metadata 列表首项猜测。metadata.orderNo 为保留字段。orderNo/refundNo 的请求参数不能在重试时改变，渠道 POST 使用稳定 Idempotency-Key。
+
+响应丢失或落库失败会保留未知记录，只能在数据库时钟的 23 小时安全窗口内沿用同一键重试；窗口之外先核对渠道结果并修复记录，不删除后重发。成功结果长期保留，不按缓存 TTL 清理。Stripe 仅保存渠道操作结果，宿主业务订单、回调去重与履约事务仍需自己实现。
 
 ```typescript
 const result = await payment.queryOrder('wechat', 'ORDER_20250101_001')
@@ -240,7 +247,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 3. 服务端 → 客户端：返回 providerData（含调起参数）
 4. 客户端：invokePayment(providerData) 调起支付
 5. 支付平台 → 服务端：异步回调通知
-6. 服务端：handleNotify() 验签 + 更新订单状态
+6. 服务端：handleNotify() 验签解析，业务层持久核对并幂等更新订单状态
 7. 客户端：轮询或回调查询订单状态
 ```
 

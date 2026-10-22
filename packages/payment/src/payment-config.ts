@@ -29,9 +29,9 @@ export const AlipayConfigSchema = z.object({
   sandbox: z.boolean().default(false),
 })
 
-/** Stripe 配置 Schema */
+/** Stripe 配置 Schema；启用时必须先初始化共享 reldb，并保留渠道操作记录。 */
 export const StripeConfigSchema = z.object({
-  secretKey: z.string().min(1, paymentM('payment_configFieldRequired')),
+  secretKey: z.string().regex(/^(?:sk|rk)_(?:test|live)_\S+$/, paymentM('payment_stripeKeyInvalid')),
   webhookSecret: z.string().min(1, paymentM('payment_configFieldRequired')),
   webhookToleranceSeconds: z.number().int().positive().default(300),
 })

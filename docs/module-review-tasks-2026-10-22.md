@@ -274,7 +274,8 @@
 
 ### PAY-02 · P1 · 持久化 Stripe 订单映射并保证创建/退款幂等
 
-- [ ] 待修正（源码确认；范围：payment）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：新增共享reldb渠道操作仓库，唯一预留/摘要/CAS结果发布、稳定Stripe幂等键、可信Session映射、账户test-live隔离与23h未知结果重试窗口；Stripe初始化先等DB。源码/配置/依赖lockfile/三语文档/skills/调用说明同步。payment typecheck/build/lint、127定向测试、26CLI配置用例、两个Node进程共享SQLite幂等回归、check:skills通过；Stripe HTTP为替身，真实交易与PG/MySQL集成未验；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/payment/src/providers/stripe/stripe-provider.ts:184](../packages/payment/src/providers/stripe/stripe-provider.ts#L184)；[packages/payment/src/providers/stripe/stripe-provider.ts:217](../packages/payment/src/providers/stripe/stripe-provider.ts#L217)。
 - **证据与影响**：query/refund 使用 Checkout Sessions list 的 metadata 参数筛选，但该 API 未声明该筛选；limit=1 也没有核对返回订单。创建/退款未发送幂等键，metadata 又允许覆盖保留的 orderNo。
 - **修正内容**：保存 orderNo→session/payment_intent 的可信映射，禁止覆盖保留字段；重试使用稳定创建/退款幂等键并记录执行结果，不能用列举首项猜订单。

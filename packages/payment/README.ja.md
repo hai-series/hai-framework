@@ -21,6 +21,7 @@ WeChat Pay、Alipay、Stripe に対応する統一決済モジュールです。
 ### 依存関係
 
 - `@h-ai/audit`：任意の監査ログ。初期化済みの場合、決済操作を自動記録します。
+- `@h-ai/reldb`：Stripe 有効時は必須です。共有データベースを先に初期化し、チャネル識別子と冪等結果を永続化します。WeChat/Alipay のみなら必須ではありません。
 
 ### クイックスタート
 
@@ -92,7 +93,7 @@ await payment.init({
     sandbox: false, // 可选，默认 false
   },
   stripe: {
-    secretKey: 'sk_xxx',
+    secretKey: 'sk_test_xxx',
     webhookSecret: 'whsec_xxx',
     webhookToleranceSeconds: 300, // 可选，默认 300 秒
   },
@@ -114,6 +115,16 @@ Stripe Provider は `mode=payment` の `checkout.session.completed`、`checkout.
 結果には `eventId` と大文字の `currency` が含まれ、`transactionId` は Checkout Session ID です。アプリケーションは共有データベースで注文・金額・通貨を照合し、通知の重複排除と状態の逆戻り防止を行う必要があります。署名検証と解析は業務トランザクションの代わりにはなりません。`success` だけでなく `status === 'paid'` を確認して履行してください。
 
 参照：[Stripe イベント種類](https://docs.stripe.com/api/events/types)、[Checkout Session のフィールド](https://docs.stripe.com/api/checkout/sessions/object)。
+
+### Stripe の永続化と冪等性
+
+Stripe を有効にする前に reldb を初期化して success を確認し、その後 payment を初期化してください。終了は payment、reldb の順です。初期化は `hai_payment_stripe_operations` の作成を待ち、失敗時は Provider を公開しません。複数ノードは同一の PostgreSQL/MySQL を使用します。SQLite は開発または同一ホストで明示的に共有するファイル用で、別ホストのローカルファイルを共有状態として扱えません。
+
+注文マッピングを必要とする最初の操作は `/v1/account` を読みます。アカウント ID とキーの test/live モードで記録を分離し、同アカウントのキー更新後もマッピングを維持します。キーは `sk_test_`、`sk_live_`、`rk_test_`、`rk_live_` のいずれかで始まり、制限付きキーにはアカウント読取権限も必要です。
+
+注文作成はアカウント・モード・orderNo から安定した `Idempotency-Key` を生成し、DB の一意な記録で正規化リクエストと Session ID を結びます。metadata.orderNo の上書きは禁止です。照会・返金はその Session ID のみを読み、注文番号・金額・通貨を照合し、PaymentIntent を保存します。不明な注文は失敗します。返金は refundNo ごとに結果を保持し、同じ識別子でのパラメータ変更を拒否します。自由記述 reason は metadata に保存し、Stripe reason は requested_by_customer を使用します。
+
+応答喪失や DB 保存失敗でも予約を削除せず、成功扱いにしません。結果不明の操作は DB 時刻による 23 時間の範囲内だけ同一キーで再試行できます。それ以降は Stripe と照合して記録を修復し、記録を削除して無条件に再送してはいけません。確定結果はキャッシュ TTL で削除しません。返金の processing は着金完了を示しません。参照：[Stripe の冪等性保持期間](https://docs.stripe.com/api/idempotent_requests)。
 
 ### 監査ログ
 
