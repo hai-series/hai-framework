@@ -209,6 +209,8 @@ transport は既定で同一オリジンの `/api/*`、SvelteKit の `__data.jso
 
 既定の安全方針は fail-closed です。`requireEncryption: true` で保護パスに `X-Client-Id` がなければ 400 を返します。管理器の利用不可、応答の暗号化失敗、暗号化サイズ上限超過はエラーになり、平文の業務応答は渡しません。`requireEncryption: false` は段階的移行用で、本番では推奨しません。
 
+保護対象のリクエストは実際の本文で空かどうかを判定します。Content-Type/Content-Length の省略、chunked、偽の Content-Length=0 で空でない平文の暗号化検証を回避できません。本文なし、または実際にゼロバイトのストリームは入力不要の POST として扱います。応答も Content-Length=0 を空とみなす根拠にせず、本文があれば暗号化します。
+
 #### `_kit.yml` による共通 transport 設定
 
 `@h-ai/kit` は `KitConfigSchema` / `resolveKitConfig()` を提供し、同じ `_kit.yml` から

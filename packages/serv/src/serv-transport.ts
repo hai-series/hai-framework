@@ -88,8 +88,8 @@ export function createTransportMiddleware(
       return jsonError(servM('serv_transportClientKeyNotFound'), 400)
 
     // Step 4：对带 body 的请求先解密；解密后下游看到的是普通 JSON Request。
-    // 空 body 请求（如无 input 的 POST 过程）无需解密；下游 Zod 校验会拒绝缺字段输入。
-    if (hasBody(c.req.method) && !isEmptyBody(c.req.raw)) {
+    // 头字段不能证明正文为空；非 null 流必须检查实际内容，空流由解密函数识别。
+    if (c.req.raw.body !== null) {
       const decErr = await decryptRequestInPlace(c, manager)
       if (decErr)
         return decErr
@@ -185,6 +185,17 @@ async function decryptRequestInPlace(
   c: Parameters<MiddlewareHandler>[0],
   manager: TransportEncryptionManager,
 ): Promise<Response | undefined> {
+  let bodyText: string
+  try {
+    bodyText = await c.req.raw.clone().text()
+  }
+  catch {
+    return jsonError(servM('serv_transportInvalidPayload'), 400)
+  }
+  // 无 input 的 POST 可带零字节流；只信任实际读取结果，不信任 Content-Length/Type。
+  if (bodyText.length === 0)
+    return undefined
+
   // Step A：请求必须显式声明自己是加密 payload，避免把普通 JSON 误当密文解析。
   const isEncrypted = c.req.header(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) === TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE
   if (!isEncrypted)
@@ -192,8 +203,8 @@ async function decryptRequestInPlace(
 
   let payload: unknown
   try {
-    // Step B：先以 JSON 读取密文载荷。
-    payload = await c.req.raw.clone().json()
+    // Step B：解析已读取的非空密文载荷。
+    payload = JSON.parse(bodyText)
   }
   catch {
     return jsonError(servM('serv_transportInvalidPayload'), 400)
@@ -238,22 +249,8 @@ function canEncryptResponseContentType(contentType: string): boolean {
 function isEmptyResponse(response: Response): boolean {
   if ([204, 304].includes(response.status))
     return true
-  return response.headers.get('Content-Length') === '0'
-}
-
-function hasBody(method: string): boolean {
-  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())
-}
-
-/** 判断请求是否携带 body：Content-Length=0 或缺失 Content-Type 视为空 body。 */
-function isEmptyBody(req: Request): boolean {
-  if (req.body === null)
-    return true
-  const cl = req.headers.get('Content-Length')
-  if (cl !== null)
-    return Number.parseInt(cl, 10) === 0
-  // 无 Content-Length 且无 Content-Type 的 body-bearing 请求按空 body 处理。
-  return !req.headers.get('Content-Type')
+  // Content-Length 是可写元数据，不能据此放行实际仍含明文的响应流。
+  return response.body === null
 }
 
 function jsonError(message: string, status: number): Response {

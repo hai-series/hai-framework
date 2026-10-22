@@ -216,6 +216,8 @@ const app = serv.createApp({
 
 > **安全方針**：`transport` 有効時は `excludePaths` と鍵交換以外で有効な `X-Client-Id` が必要です。不足・未知の clientId は 400、暗号化不能・非 JSON 応答・上限超過はエラーになり、平文の業務データは渡しません。
 
+保護対象のリクエストは実際の本文で空かどうかを判定します。Content-Type/Content-Length の省略、chunked、偽の Content-Length=0 で空でない平文の暗号化検証を回避できません。本文なし、または実際にゼロバイトのストリームは入力不要の POST として扱います。応答も Content-Length=0 を空とみなす根拠にせず、本文があれば暗号化します。
+
 #### Token 認証（`iam` / `refreshCookie`）
 
 `serv.createApp` にトップレベルの `iam` を渡すと、次を自動構成します：

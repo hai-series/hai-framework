@@ -203,6 +203,8 @@ Transport applies by default to same-origin `/api/*` endpoints, SvelteKit `__dat
 
 Security defaults to fail-closed: with `requireEncryption: true`, protected paths without `X-Client-Id` return 400. An unavailable transport manager, unencryptable response, or encryption size limit returns an error rather than forwarding plaintext business data. `requireEncryption: false` is for staged migration only and is not recommended in production.
 
+Protected requests determine emptiness from the actual body: missing Content-Type/Content-Length, chunked transfer, or a forged Content-Length=0 cannot bypass encryption checks for nonempty plaintext. Requests with no body or a genuinely zero-byte stream remain valid for inputless POST calls. A nonempty response must also be encrypted even if its Content-Length claims zero.
+
 #### Shared transport configuration with `_kit.yml`
 
 `@h-ai/kit` provides `KitConfigSchema` / `resolveKitConfig()` so a single `_kit.yml`

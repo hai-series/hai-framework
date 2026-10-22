@@ -209,7 +209,7 @@ const app = serv.createApp({ contract, procedures, http, iam })
 
 注意要点：
 
-- **无 input 的 POST 过程**：默认不发送 body；transport 加密层会自动跳过空 body 请求，客户端可直接 `client.app.info()`。
+- **无 input 的 POST 过程**：默认不发送 body；transport 根据实际正文识别无 body/零字节流，客户端可直接 `client.app.info()`。非空正文不能通过省略 Content-Type/Length、chunked 或伪造 Content-Length=0 绕过加密标记验证；非空响应同样不能用 Content-Length=0 跳过加密。
 - **认证授权写在 route 链上**：公开过程使用 `.route(path, handler)`；需要认证时使用 `.route(path).auth().handle(handler)`。
 - **客户端导入相同 contract**：把服务端与客户端共享的 contract 独立成 package（如 `@h-ai/api-service-contract`），禁止从 app 源码目录跨应用 import。
 

@@ -237,7 +237,8 @@
 
 ### SERV-03 · P1 · 禁止缺失 Content-Type 绕过传输解密
 
-- [ ] 待修正（源码探针已复现；范围：serv）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：serv/kit以实际流内容判断空正文，缺头/伪造Content-Length=0及非标准方法不能绕过加密；响应同样不信任伪CL0。保留真实空流POST。同步三语文档/skills。先复现7处旁路，后serv14+kit22测试、两包typecheck/build、定向ESLint、check:skills通过；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/serv/src/serv-transport.ts:249](../packages/serv/src/serv-transport.ts#L249)。
 - **证据与影响**：req.body 非空且缺 Content-Length/Content-Type 时被判断为空，跳过 encrypted 标记和解密验证。探针发送 Uint8Array JSON 正文，业务 next 已被调用。下游是否接受该正文取决于具体路由。
 - **修正内容**：根据实际 body 流与协议判断空请求，带正文但不满足加密格式时拒绝；不能信任可省略的头推断没有正文。

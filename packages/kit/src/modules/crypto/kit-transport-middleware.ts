@@ -92,7 +92,8 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     }
 
     // ── 解密请求 ──
-    if (hasBody(event.request.method) && !isRequestBodyEmpty(event.request)) {
+    // 不依赖可伪造/省略的 Content-Length/Type 判空，非 null 流必须进入实际内容检查。
+    if (event.request.body !== null) {
       const decryptResult = await decryptRequestBody(event, manager, requireEncryption)
       if (decryptResult) {
         return decryptResult
@@ -172,7 +173,8 @@ function createUnavailableTransportMiddleware(
 function isEmptyResponse(response: Response): boolean {
   if ([204, 304].includes(response.status))
     return true
-  return response.headers.get('Content-Length') === '0'
+  // Content-Length 不能证明响应流为空，避免明文伪装零长度后绕过加密。
+  return response.body === null
 }
 
 function getRequestPathname(request: Request): string {
@@ -217,28 +219,6 @@ async function handleKeyExchange(
   catch {
     return jsonError(kitM('kit_transportKeyExchangeFailed'), 500)
   }
-}
-
-/**
- * 判断 HTTP 方法是否可能携带请求体
- *
- * @param method - HTTP 方法字符串
- * @returns `true` 表示 POST / PUT / PATCH / DELETE
- */
-function hasBody(method: string): boolean {
-  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())
-}
-
-/** 判断请求是否真实携带 body，避免空 POST 被误判为非法密文。 */
-function isRequestBodyEmpty(request: Request): boolean {
-  if (request.body === null)
-    return true
-
-  const contentLength = request.headers.get('Content-Length')
-  if (contentLength !== null)
-    return Number.parseInt(contentLength, 10) === 0
-
-  return false
 }
 
 interface RequestHolder {
@@ -290,24 +270,26 @@ async function decryptRequestBody(
 ): Promise<Response | null> {
   const isEncrypted = event.request.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
     === TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE
-  if (!isEncrypted) {
-    if (!requireEncryption)
-      return null
-    return jsonError(kitM('kit_transportInvalidPayload'), 400)
-  }
-
+  if (!isEncrypted && !requireEncryption)
+    return null
   const contentType = event.request.headers.get('Content-Type') ?? ''
-  if (!contentType.includes('application/json')) {
-    if (!requireEncryption) {
-      return null
-    }
+  if (!contentType.includes('application/json') && !requireEncryption)
+    return null
+
+  let bodyText: string
+  try {
+    bodyText = await event.request.text()
+  }
+  catch {
     return jsonError(kitM('kit_transportInvalidPayload'), 400)
   }
-
-  const bodyText = await event.request.text()
   if (!bodyText) {
+    // 实际空流允许无 input POST；恢复请求，保证下游仍可读取空 body。
+    replaceRequestBody(event, '')
     return null
   }
+  if (!isEncrypted || !contentType.includes('application/json'))
+    return jsonError(kitM('kit_transportInvalidPayload'), 400)
 
   let payload: unknown
   try {

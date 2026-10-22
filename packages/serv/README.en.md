@@ -216,6 +216,8 @@ const app = serv.createApp({
 
 > **Security**: with `transport` enabled, business requests need valid `X-Client-Id` except `excludePaths` and key exchange. Missing/unknown clientId returns 400. Unencryptable bodies, non-JSON responses, or encryption size limits return errors rather than forwarding plaintext business data.
 
+Protected requests determine emptiness from the actual body: missing Content-Type/Content-Length, chunked transfer, or a forged Content-Length=0 cannot bypass encryption checks for nonempty plaintext. Requests with no body or a genuinely zero-byte stream remain valid for inputless POST calls. A nonempty response must also be encrypted even if its Content-Length claims zero.
+
 #### Token authentication (`iam` / `refreshCookie`)
 
 Pass the top-level `iam` handle to `serv.createApp` to derive:

@@ -362,9 +362,10 @@ const app = serv.createApp({
    - 找不到已注册公钥时也返回 400。
 
 3. **解密请求体**
-   - 仅对 `POST`、`PUT`、`PATCH`、`DELETE` 这类有 body 的请求处理。
-   - 检查加密标记头是否存在。
-   - 读取 JSON payload。
+   - 处理所有实际携带 body 的请求，不按 HTTP 方法白名单跳过正文。
+   - 无正文流时跳过；存在流时按实际读取结果识别空正文，不以 Content-Type/Content-Length 判空。
+   - 非空正文必须有加密标记；缺失头、chunked 或伪造 Content-Length=0 均不能跳过验证。
+   - 解析已读取的非空 JSON payload。
    - 校验 payload 是否符合 `EncryptedPayload` 结构。
    - 调 `manager.decryptRequest(payload)` 解密。
 
@@ -377,7 +378,7 @@ const app = serv.createApp({
 
 下游业务逻辑执行完后，middleware 会继续尝试加密响应：
 
-1. 只允许 `application/json` 响应进入加密流程；非 JSON 业务响应会返回加密失败错误。
+1. 仅无 body 的响应及协议规定的 204/304 直接返回；不以 Content-Length=0 判断响应为空。只允许 `application/json` 响应进入加密流程；非 JSON 业务响应会返回加密失败错误。
 2. 若 `Content-Length` 明确大于 `1 MiB`，直接返回加密失败错误。
 3. 若没有 `Content-Length`，会克隆响应并读取 body，再做一次体积判断。
 4. 调 `manager.encryptResponse(clientId, bodyText)` 加密。

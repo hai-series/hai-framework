@@ -22,6 +22,8 @@ description: "在 SvelteKit 中接入 hooks、认证守卫、输入校验、响�
 3. 区分返回 HaiResult 的业务操作与抛 Response/redirect/error 的框架控制流，不吞掉控制流。
 4. 对齐 Cookie/CSRF/transport 与服务端配置，验证匿名、登录、权限拒绝和表单失败。
 
+传输加密按实际请求/响应 body 判断空正文，不信任 Content-Type/Length；非空明文不能借缺头、chunked 或伪造零长度旁路，实际空流保留无 input POST 行为。
+
 ## 按需参考
 
 按本次操作读取对应小节；以已安装版本的公开类型核验签名，示例中的业务变量由应用提供。

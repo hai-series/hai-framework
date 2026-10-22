@@ -84,6 +84,66 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     await crypto.close()
   })
 
+  it.each([
+    { name: '无 Content-Type/Length 的字节正文', stream: false, headers: {} },
+    { name: '无 Content-Type/Length 的流正文', stream: true, headers: {} },
+    { name: 'chunked 流正文', stream: true, headers: { 'Transfer-Encoding': 'chunked' } },
+    { name: '伪造 Content-Length=0 的非空流', stream: true, headers: { 'Content-Length': '0', 'Content-Type': 'application/json' } },
+    { name: '自定义方法的非空流', stream: true, headers: { 'Content-Type': 'application/json' }, method: 'PROPFIND' },
+  ])('实际非空请求必须加密：$name', async ({ stream, headers, method }) => {
+    const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
+    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: true } })
+    const resolve = vi.fn(() => new Response(null, { status: 204 }))
+    const bytes = new TextEncoder().encode('{"amount":90000}')
+    const body = stream
+      ? new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(bytes)
+            controller.close()
+          },
+        })
+      : bytes
+    const request = new Request('http://localhost/api/raw-body', {
+      method: method ?? 'POST',
+      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', ...headers },
+      body,
+      // @ts-expect-error Node fetch 的流式请求需要 duplex。
+      duplex: 'half',
+    })
+    expect((await dispatch(handle, request, resolve)).status).toBe(400)
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('真实零字节请求流按空 POST 处理', async () => {
+    const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
+    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: true } })
+    const resolve = vi.fn(async (event: RequestEvent) => {
+      expect(await event.request.text()).toBe('')
+      return new Response(null, { status: 204 })
+    })
+    const request = new Request('http://localhost/api/raw-body', {
+      method: 'POST',
+      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', 'Content-Type': 'application/json' },
+      body: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
+      // @ts-expect-error Node fetch 的流式请求需要 duplex。
+      duplex: 'half',
+    })
+    expect((await dispatch(handle, request, resolve)).status).toBe(204)
+    expect(resolve).toHaveBeenCalledOnce()
+  })
+
+  it('响应伪造 Content-Length=0 也不能跳过加密', async () => {
+    const transportCrypto = createCryptoWithTransportServer(() => ({ success: true, data: createFailingEncryptManager() }))
+    const handle = kit.createHandle({ crypto: { crypto: transportCrypto, transport: true } })
+    const response = await dispatch(handle, new Request('http://localhost/api/data', {
+      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+    }), () => new Response('{"secret":"private"}', {
+      headers: { 'Content-Type': 'application/json', 'Content-Length': '0' },
+    }))
+    expect(response.status).toBe(500)
+    expect(await response.text()).not.toContain('private')
+  })
+
   it('暴露统一密钥协商端点', async () => {
     const handle = kit.createHandle({ crypto: { crypto, transport: true } })
     const keyPair = crypto.asymmetric.generateKeyPair()
