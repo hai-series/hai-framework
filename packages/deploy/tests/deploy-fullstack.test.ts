@@ -18,7 +18,7 @@ vi.mock('../src/container/deploy-command.js', async (importOriginal) => {
       return original.runCommand(command, args)
     if (args[0] === 'save')
       writeFileSync(args[args.indexOf('-o') + 1]!, 'middleware archive')
-    return { success: true, data: { code: 0, stdout: '', stderr: '' } }
+    return { success: true, data: { code: 0, stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false } }
   } }
 })
 let root: string
@@ -35,7 +35,7 @@ beforeEach(() => {
   writeArtifact()
   ssh.ping.mockResolvedValue({ success: true, data: undefined })
   ssh.upload.mockResolvedValue({ success: true, data: undefined })
-  ssh.exec.mockResolvedValue({ success: true, data: { code: 0, stdout: '', stderr: '' } })
+  ssh.exec.mockResolvedValue({ success: true, data: { code: 0, stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false } })
   vi.stubGlobal('fetch', vi.fn(async () => new Response('ok')))
 })
 afterEach(async () => {

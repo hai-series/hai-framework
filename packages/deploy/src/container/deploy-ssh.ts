@@ -20,7 +20,7 @@ const logger = core.logger.child({ module: 'deploy', scope: 'ssh' })
 /** SSH 执行器接口 */
 export interface SshExecutor {
   /** 在远程主机执行命令（通过远程登录 shell 运行） */
-  exec: (remoteCommand: string, options?: { timeoutMs?: number, secrets?: string[], onOutput?: (output: string) => void }) => Promise<HaiResult<CommandResult>>
+  exec: (remoteCommand: string, options?: { timeoutMs?: number, secrets?: string[], maxCaptureChars?: number, onOutput?: (output: string) => void | Promise<void> }) => Promise<HaiResult<CommandResult>>
   /** 上传本地文件到远程路径 */
   upload: (localPath: string, remotePath: string) => Promise<HaiResult<void>>
   /** 远程连通性预检（执行 true 命令） */
@@ -87,6 +87,7 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
     // runCommand 失败时已返回 REMOTE_COMMAND_FAILED（含 ssh stderr），无需重复包装
     return runCommand('ssh', buildSshExecArgs(config, remoteCommand), {
       timeoutMs: options?.timeoutMs,
+      maxCaptureChars: options?.maxCaptureChars,
       secrets: options?.secrets,
       onOutput: options?.onOutput,
     })

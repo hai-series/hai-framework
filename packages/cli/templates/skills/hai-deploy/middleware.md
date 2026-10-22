@@ -82,3 +82,8 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 生成的 `web.conf` 在 API location 设 `client_max_body_size 2129920`（2 MiB + 32 KiB），用 large_client_header_buffers 4 32k / proxy_buffer_size 32k 容纳 X-Hai-Transport 认证头，并关闭请求/响应 proxy buffering；这与 transport 密文预算一致，避免 Nginx 默认上限拦截合法的 1 MiB 明文编码结果。应用仍执行握手 16 KiB、公钥 4 KiB、明文 1 MiB 的有界读取。自有反向代理须允许相同密文预算并传播取消，不替代应用字节限制；大文件上传使用独立路径和明确预算。
 
 完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。构建可用 --sqlite-prebuild-mirror，Podman 代理不可达可用 --no-http-proxy；不要改系统代理或让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。
+
+
+## 命令输出
+
+内部 `runCommand` / `SshExecutor.exec` 先 UTF-8 解码，再对每条逻辑流跨块精确脱敏；成功 stdout/stderr、错误、onOutput 均为安全结果。`secrets` 不推断全部进程环境，调用方列出秘密及可能输出的编码/转换值；总长不超过 1 Mi UTF-16 单元，脱敏异常失败关闭且不暴露原 cause。`maxCaptureChars` 默认 1048576、最大 16777216，捕获尾部并返回 stdoutTruncated/stderrTruncated，结构化解析先拒绝截断。onOutput 支持 Promise，顺序等待并保持 pipe 背压；异常回调使执行失败。异常终止不释放未完成的秘密尾部。部署进度仅解析每行前 512 字符。超时不能证明远端工作已终止。

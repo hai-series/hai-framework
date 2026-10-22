@@ -226,10 +226,14 @@ export function createDockerSshProvider(
     const started = await ssh.exec(
       `mkdir -p ${shellArgument(`${remoteTar}.contents`)} && chmod 600 ${shellArgument(remoteTar)} && tar -xf ${shellArgument(remoteTar)} -C ${shellArgument(`${remoteTar}.contents`)} && sh ${shellArgument(`${remoteTar}.contents/${bundle.startName}`)} ${shellArgument(remoteDir)}`,
       { timeoutMs: 600_000, secrets: sidecar.secrets, onOutput: (output) => {
-        pendingOutput += output
-        const lines = pendingOutput.split('\n')
-        pendingOutput = lines.pop() ?? ''
-        for (const line of lines) {
+        const parts = output.split('\n')
+        for (let index = 0; index < parts.length; index++) {
+          // 进度仅解析行首标签，不保留无限长的构建日志行。
+          pendingOutput += parts[index]!.slice(0, 512 - pendingOutput.length)
+          if (index === parts.length - 1)
+            break
+          const line = pendingOutput
+          pendingOutput = ''
           const stage = /^\[(preflight|images|dependencies|start|health|complete)\]/.exec(line)?.[1]
           if (stage)
             options?.onProgress?.(stage as 'preflight' | 'images' | 'dependencies' | 'start' | 'health' | 'complete')
@@ -268,9 +272,16 @@ export function createDockerSshProvider(
       return await deploy(context)
     }
     catch (error) {
-      logger.error('Deployment bundle failed', { error })
       const reason = error instanceof Error ? error.message : String(error)
-      return err(HaiDeployError.DEPLOY_FAILED, deployM('deploy_bundleFailed', { params: { reason: maskSecrets(reason, Object.values(context.appEnv ?? {}).filter(value => value.length > 6)) } }), error)
+      let safeReason = 'Deployment bundle failed'
+      try {
+        safeReason = maskSecrets(reason, Object.values(context.appEnv ?? {}).filter(Boolean))
+      }
+      catch {
+        // 脱敏配置无效时保留固定诊断，不重新暴露原异常。
+      }
+      logger.error('Deployment bundle failed', { reason: safeReason })
+      return err(HaiDeployError.DEPLOY_FAILED, deployM('deploy_bundleFailed', { params: { reason: safeReason } }))
     }
   }
   return { name: 'docker-ssh', deploy: deploySafely }
