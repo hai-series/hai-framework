@@ -18,6 +18,7 @@ description: "使用 LanceDB/pgvector/Qdrant/Chroma 管理向量集合、写入�
 ## 使用路径
 
 - `_vecdb.yml` 选择实际后端；init 后检查连接结果，再创建集合并写入相同维度向量。
+- LanceDB 集合维度/metric 随 Arrow schema 持久化，连接 metric 仅是新集合默认值；本地路径不自动跨节点共享。分布式应用优先服务端后端，重启复用持久目录与匹配的 embedding 维度。
 - Chroma 本地服务不可用返回连接错误；Qdrant 只有 404 代表集合不存在。
 
 ## 按需参考

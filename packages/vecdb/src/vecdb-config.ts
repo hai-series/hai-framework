@@ -61,9 +61,9 @@ const OperationLogConfigFieldSchema = {
  */
 const LancedbConfigSchema = z.object({
   type: z.literal('lancedb'),
-  /** 数据库存储路径（本地目录） */
+  /** 持久化本地目录；独立节点的同名路径不会自动共享，分布式部署优先使用服务端后端。 */
   path: z.string().min(1, vecdbM('vecdb_configPathRequired')),
-  /** 距离度量（默认 cosine） */
+  /** 新建集合的默认距离度量；已有集合使用 Arrow schema 中的持久定义。 */
   metric: DistanceMetricSchema.optional(),
   ...OperationLogConfigFieldSchema,
 })

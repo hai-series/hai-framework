@@ -202,6 +202,8 @@ await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () 
 
 #### Memory / RAG / Knowledge
 
+使用 LanceDB 时，集合维度与 metric 随 Arrow schema 持久化；连接 metric 只影响新集合。重启后复用同一持久目录，embedding 维数改变时重建匹配集合；多个节点各自的本地路径不会自动共享，分布式 Knowledge 推荐服务端向量后端。
+
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
 if (!enriched.success) {

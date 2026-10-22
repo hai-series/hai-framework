@@ -10,6 +10,7 @@
   "vecdb_connectionFailed": "Failed to connect to vector database: {error}",
   "vecdb_collectionNotFound": "Collection not found: {name}",
   "vecdb_collectionAlreadyExists": "Collection already exists: {name}",
+  "vecdb_invalidCollectionSchema": "Collection has no valid persisted vector dimension or distance metric: {name}",
   "vecdb_dimensionMismatch": "Vector dimension mismatch: expected {expected}, actual {actual}",
   "vecdb_insertFailed": "Failed to insert vectors: {error}",
   "vecdb_deleteFailed": "Failed to delete vectors: {error}",

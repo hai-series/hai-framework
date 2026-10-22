@@ -84,6 +84,12 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 > starts a local service with `serverCommand` (default: `chroma`, from the `chromadb` package), and `vecdb.close`
 > stops the process. Install the optional `chromadb` dependency; if the command is unavailable, `init` returns `CONNECTION_FAILED`.
 
+LanceDB stores dimensions in Arrow's fixed-size vector field and the collection metric in the same schema's metadata, including empty collections. The metric in `collection.create` takes precedence; the connection metric only supplies a default for new collections. Restarting or changing that default does not alter existing collections. Operations read persisted schemas and check other connections' commits. Missing or invalid definitions return `CONFIG_ERROR`, without dummy-vector probes or guessed metrics. Rebuild legacy/external tables that lack this definition; no compatibility inference is provided.
+
+LanceDB is an embedded local-file backend. Processes share data only when they access the same persistent directory on a filesystem supporting LanceDB's concurrent commits. Identically named local paths on separate nodes do not share data. Prefer pgvector, Qdrant, or a Chroma server for distributed services. AI Knowledge requires persistent reldb and vecdb stores pointing to the same business dataset; changing embedding dimensions requires a matching rebuilt collection.
+
+Search uses the persisted collection metric, mapping `euclidean` to LanceDB's `l2`. Scores follow the public 0–1, higher-is-more-similar contract: cosine uses `clamp(1 - distance / 2, 0, 1)`, euclidean uses `1 / (1 + squaredL2)`, and dot uses `sigmoid(dotProduct)` to preserve ranking, not to estimate probabilities. `minScore` filters converted scores; thresholds are not universally calibrated across metrics or backends.
+
 #### Operation logging
 
 Enable operation logging with `operationLog` in the vector database configuration. Logs are emitted before collection/vector operations reach the real provider, without a shared wrapper in `vecdb-main.ts`.

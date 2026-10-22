@@ -7,9 +7,9 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { LancedbConfig } from '../vecdb-config.js'
+import type { Connection, Table } from '@lancedb/lancedb'
+import type { DistanceMetric, LancedbConfig } from '../vecdb-config.js'
 import type {
-  CollectionInfo,
   VectorDocument,
   VectorSearchResult,
 } from '../vecdb-types.js'
@@ -17,6 +17,7 @@ import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-prov
 
 import { createRequire } from 'node:module'
 import { core, err, ok } from '@h-ai/core'
+import { DistanceMetricSchema } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
@@ -27,38 +28,8 @@ const require = createRequire(import.meta.url)
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'lancedb' })
 
-// ─── LanceDB 类型接口（动态 import 使用，避免强依赖可选包） ───
-
-/** LanceDB 连接的最小接口定义 */
-interface LanceConnection {
-  tableNames: () => Promise<string[]>
-  openTable: (name: string) => Promise<LanceTable>
-  createTable: (name: string, data: Record<string, unknown>[]) => Promise<LanceTable>
-  dropTable: (name: string) => Promise<void>
-}
-
-/** LanceDB Table 的最小接口定义 */
-interface LanceTable {
-  add: (data: Record<string, unknown>[]) => Promise<void>
-  delete: (filter: string) => Promise<void>
-  countRows: () => Promise<number>
-  mergeInsert?: (on: string | string[]) => LanceMergeInsertBuilder
-  search: (...args: unknown[]) => LanceSearchQuery
-}
-
-/** LanceDB merge insert builder 的最小接口 */
-interface LanceMergeInsertBuilder {
-  whenMatchedUpdateAll: () => LanceMergeInsertBuilder
-  whenNotMatchedInsertAll: () => LanceMergeInsertBuilder
-  execute: (data: Record<string, unknown>[]) => Promise<unknown>
-}
-
-/** LanceDB 查询构建器的最小接口 */
-interface LanceSearchQuery {
-  limit: (n: number) => LanceSearchQuery
-  where: (filter: string) => LanceSearchQuery
-  toArray: () => Promise<Record<string, unknown>[]>
-}
+/** 集合 metric 与 Arrow schema 原子持久化；禁止按连接默认值猜测已有集合。 */
+const COLLECTION_METRIC_KEY = 'hai.vecdb.metric'
 
 /** 转义 LanceDB filter 表达式中的字符串值（防注入 + LIKE 通配符） */
 function escapeLanceFilterValue(value: string): string {
@@ -75,26 +46,24 @@ function escapeLanceSqlValue(value: string): string {
 }
 
 /**
- * 集合元信息（内存维护，LanceDB 不存储维度等信息）
+ * 从持久化 Arrow schema 读取的集合定义，不在进程内缓存。
  */
 interface CollectionMeta {
   /** 向量维度 */
   dimension: number
   /** 距离度量 */
-  metric: string
+  metric: DistanceMetric
 }
 
 /**
  * 创建 LanceDB Provider
  *
  * @returns VecdbProvider 实例
+ * @example const provider = createLancedbProvider()
  */
 export function createLancedbProvider(): VecdbProvider {
-  let connection: LanceConnection | null = null
+  let connection: Connection | null = null
   let config: LancedbConfig | null = null
-
-  /** 集合元信息缓存 */
-  const collectionMetas = new Map<string, CollectionMeta>()
 
   // ─── 辅助函数 ───
 
@@ -116,27 +85,24 @@ export function createLancedbProvider(): VecdbProvider {
     }
   }
 
-  /**
-   * 打开或创建 LanceDB Table
-   */
-  async function openTable(name: string): Promise<LanceTable | null> {
-    if (!connection)
-      return null
+  /** 每次读取最新表定义；空表、外部重建与其它连接写入都不依赖进程缓存。 */
+  async function withCollection<T>(name: string, action: (table: Table, meta: CollectionMeta) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    if (!(await connection!.tableNames()).includes(name))
+      return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
+    const table = await connection!.openTable(name)
     try {
-      const tableNames = await connection.tableNames()
-      if (tableNames.includes(name)) {
-        return await connection.openTable(name)
+      const schema = await table.schema()
+      const vectorType = schema.fields.find(field => field.name === 'vector')?.type
+      const metric = DistanceMetricSchema.safeParse(schema.metadata.get(COLLECTION_METRIC_KEY) ?? null)
+      if (!vectorType || !('listSize' in vectorType) || typeof vectorType.listSize !== 'number'
+        || !Number.isInteger(vectorType.listSize) || vectorType.listSize <= 0 || !metric.success) {
+        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', { params: { name } }))
       }
-      return null
+      return await action(table, { dimension: vectorType.listSize, metric: metric.data })
     }
-    catch {
-      return null
+    finally {
+      table.close()
     }
-  }
-
-  /** 获取集合维度（若未知则返回 null） */
-  function getCollectionDimension(name: string): number | null {
-    return collectionMetas.get(name)?.dimension ?? null
   }
 
   /** 创建统一的维度不匹配错误结果 */
@@ -150,9 +116,8 @@ export function createLancedbProvider(): VecdbProvider {
   }
 
   /** 校验查询向量维度 */
-  function validateVectorDimension<T>(collection: string, vector: number[]): HaiResult<T> | null {
-    const expected = getCollectionDimension(collection)
-    if (expected === null || vector.length === expected) {
+  function validateVectorDimension<T>(expected: number, vector: number[]): HaiResult<T> | null {
+    if (vector.length === expected) {
       return null
     }
 
@@ -160,12 +125,7 @@ export function createLancedbProvider(): VecdbProvider {
   }
 
   /** 校验批量文档维度 */
-  function validateDocumentsDimension(collection: string, documents: VectorDocument[]): HaiResult<void> | null {
-    const expected = getCollectionDimension(collection)
-    if (expected === null) {
-      return null
-    }
-
+  function validateDocumentsDimension(expected: number, documents: VectorDocument[]): HaiResult<void> | null {
     for (const document of documents) {
       if (document.vector.length !== expected) {
         return createDimensionMismatchResult<void>(expected, document.vector.length)
@@ -190,21 +150,23 @@ export function createLancedbProvider(): VecdbProvider {
         return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
       }
 
-      // 创建包含初始记录的表以确定 schema
       const dimension = options.dimension
-      const metric = options.metric ?? config?.metric ?? 'cosine'
-      const initRecord = {
-        id: '__init__',
+      const parsedMetric = DistanceMetricSchema.safeParse(options.metric ?? config?.metric)
+      if (!parsedMetric.success)
+        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_invalidCollectionSchema', { params: { name } }))
+      const metric = parsedMetric.data
+      const driver = loadLancedb()
+      if (!driver.success)
+        return driver
+      // 仅在内存推导 Arrow 字段；空表与 metric 一次创建，没有占位记录可见窗口。
+      const schema = driver.data.makeArrowTable([{
+        id: '',
         vector: Array.from({ length: dimension }).fill(0),
         content: '',
         metadata: '{}',
-      }
-
-      const table = await connection!.createTable(name, [initRecord])
-      // 删除初始记录
-      await table.delete('id = \'__init__\'')
-
-      collectionMetas.set(name, { dimension, metric })
+      }], {}, new Map([[COLLECTION_METRIC_KEY, metric]])).schema
+      const table = await connection!.createEmptyTable(name, schema)
+      table.close()
 
       logger.info('Collection created', { name, dimension, metric })
       return ok(undefined)
@@ -219,7 +181,6 @@ export function createLancedbProvider(): VecdbProvider {
       }
 
       await connection!.dropTable(name)
-      collectionMetas.delete(name)
 
       logger.info('Collection dropped', { name })
       return ok(undefined)
@@ -235,20 +196,7 @@ export function createLancedbProvider(): VecdbProvider {
     async info(name) {
       logger.debug('Getting collection info', { name })
 
-      const table = await openTable(name)
-      if (!table) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
-      }
-
-      const count = await table.countRows()
-      const meta = collectionMetas.get(name)
-
-      return ok({
-        name,
-        dimension: meta?.dimension ?? 0,
-        metric: (meta?.metric ?? config?.metric ?? 'cosine') as CollectionInfo['metric'],
-        count,
-      })
+      return withCollection(name, async (table, meta) => ok({ name, ...meta, count: await table.countRows() }))
     },
 
     async list() {
@@ -265,142 +213,129 @@ export function createLancedbProvider(): VecdbProvider {
     async insert(collection, documents) {
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
-      const table = await openTable(collection)
-      if (!table) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
-      }
+      return withCollection(collection, async (table, meta) => {
+        const dimensionValidation = validateDocumentsDimension(meta.dimension, documents)
+        if (dimensionValidation) {
+          return dimensionValidation
+        }
 
-      const dimensionValidation = validateDocumentsDimension(collection, documents)
-      if (dimensionValidation) {
-        return dimensionValidation
-      }
+        const records = documents.map(doc => ({
+          id: doc.id,
+          vector: doc.vector,
+          content: doc.content ?? '',
+          metadata: JSON.stringify(doc.metadata ?? {}),
+        }))
 
-      const records = documents.map(doc => ({
-        id: doc.id,
-        vector: doc.vector,
-        content: doc.content ?? '',
-        metadata: JSON.stringify(doc.metadata ?? {}),
-      }))
+        await table.add(records)
 
-      await table.add(records)
-
-      logger.info('Vectors inserted', { collection, count: documents.length })
-      return ok(undefined)
+        logger.info('Vectors inserted', { collection, count: documents.length })
+        return ok(undefined)
+      })
     },
 
     async upsert(collection, documents) {
       logger.debug('Upserting vectors', { collection, count: documents.length })
 
-      const table = await openTable(collection)
-      if (!table) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
-      }
+      return withCollection(collection, async (table, meta) => {
+        const dimensionValidation = validateDocumentsDimension(meta.dimension, documents)
+        if (dimensionValidation) {
+          return dimensionValidation
+        }
 
-      const dimensionValidation = validateDocumentsDimension(collection, documents)
-      if (dimensionValidation) {
-        return dimensionValidation
-      }
+        const records = documents.map(doc => ({
+          id: doc.id,
+          vector: doc.vector,
+          content: doc.content ?? '',
+          metadata: JSON.stringify(doc.metadata ?? {}),
+        }))
 
-      const records = documents.map(doc => ({
-        id: doc.id,
-        vector: doc.vector,
-        content: doc.content ?? '',
-        metadata: JSON.stringify(doc.metadata ?? {}),
-      }))
+        if (typeof table.mergeInsert === 'function') {
+          await table
+            .mergeInsert('id')
+            .whenMatchedUpdateAll()
+            .whenNotMatchedInsertAll()
+            .execute(records)
+        }
+        else {
+          logger.warn('LanceDB mergeInsert is unavailable, falling back to delete/add upsert')
+          const ids = documents.map(d => `'${escapeLanceSqlValue(d.id)}'`).join(', ')
+          await table.delete(`id IN (${ids})`)
+          await table.add(records)
+        }
 
-      if (typeof table.mergeInsert === 'function') {
-        await table
-          .mergeInsert('id')
-          .whenMatchedUpdateAll()
-          .whenNotMatchedInsertAll()
-          .execute(records)
-      }
-      else {
-        logger.warn('LanceDB mergeInsert is unavailable, falling back to delete/add upsert')
-        const ids = documents.map(d => `'${escapeLanceSqlValue(d.id)}'`).join(', ')
-        await table.delete(`id IN (${ids})`)
-        await table.add(records)
-      }
-
-      logger.info('Vectors upserted', { collection, count: documents.length })
-      return ok(undefined)
+        logger.info('Vectors upserted', { collection, count: documents.length })
+        return ok(undefined)
+      })
     },
 
     async delete(collection, ids) {
       logger.debug('Deleting vectors', { collection, count: ids.length })
 
-      const table = await openTable(collection)
-      if (!table) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
-      }
+      return withCollection(collection, async (table) => {
+        const idList = ids.map(id => `'${escapeLanceSqlValue(id)}'`).join(', ')
+        await table.delete(`id IN (${idList})`)
 
-      const idList = ids.map(id => `'${escapeLanceSqlValue(id)}'`).join(', ')
-      await table.delete(`id IN (${idList})`)
-
-      logger.info('Vectors deleted', { collection, count: ids.length })
-      return ok(undefined)
+        logger.info('Vectors deleted', { collection, count: ids.length })
+        return ok(undefined)
+      })
     },
 
     async search(collection, vector, options) {
       logger.debug('Searching vectors', { collection, topK: options?.topK, hasFilter: !!options?.filter })
 
-      const table = await openTable(collection)
-      if (!table) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
-      }
-
-      const dimensionValidation = validateVectorDimension<VectorSearchResult[]>(collection, vector)
-      if (dimensionValidation) {
-        return dimensionValidation
-      }
-
-      const topK = options?.topK ?? 10
-      const minScore = options?.minScore ?? 0
-
-      let query = table.search(vector).limit(topK)
-
-      // 应用元数据过滤
-      if (options?.filter) {
-        const filterParts: string[] = []
-        for (const [key, value] of Object.entries(options.filter)) {
-          // LanceDB 过滤基于 SQL WHERE 子句（metadata 为 JSON 字符串）
-          filterParts.push(`metadata LIKE '%"${escapeLanceFilterValue(key)}":"${escapeLanceFilterValue(String(value))}"%'`)
+      return withCollection(collection, async (table, meta) => {
+        const dimensionValidation = validateVectorDimension<VectorSearchResult[]>(meta.dimension, vector)
+        if (dimensionValidation) {
+          return dimensionValidation
         }
-        if (filterParts.length > 0) {
-          query = query.where(filterParts.join(' AND '))
-        }
-      }
 
-      const results = await query.toArray()
+        const topK = options?.topK ?? 10
+        const minScore = options?.minScore ?? 0
 
-      const searchResults: VectorSearchResult[] = results
-        .map((row: Record<string, unknown>) => {
-          // LanceDB 返回 _distance（L2 距离），转换为相似度
-          const distance = (row._distance as number) ?? 0
-          const score = 1 / (1 + distance)
+        let query = table.vectorSearch(vector).distanceType(meta.metric === 'euclidean' ? 'l2' : meta.metric).limit(topK)
 
-          return {
-            id: row.id as string,
-            score,
-            content: (row.content as string) || undefined,
-            metadata: row.metadata ? JSON.parse(row.metadata as string) as Record<string, unknown> : undefined,
+        // 应用元数据过滤
+        if (options?.filter) {
+          const filterParts: string[] = []
+          for (const [key, value] of Object.entries(options.filter)) {
+            // LanceDB 过滤基于 SQL WHERE 子句（metadata 为 JSON 字符串）
+            filterParts.push(`metadata LIKE '%"${escapeLanceFilterValue(key)}":"${escapeLanceFilterValue(String(value))}"%'`)
           }
-        })
-        .filter((r: VectorSearchResult) => r.score >= minScore)
+          if (filterParts.length > 0) {
+            query = query.where(filterParts.join(' AND '))
+          }
+        }
 
-      return ok(searchResults)
+        const results = await query.toArray()
+
+        const searchResults: VectorSearchResult[] = results
+          .map((row: Record<string, unknown>) => {
+            // 距离按集合 metric 解释；dot 距离为 1 - 内积，不能套用 L2 公式。
+            const distance = (row._distance as number) ?? 0
+            const score = meta.metric === 'cosine'
+              ? Math.max(0, Math.min(1, 1 - distance / 2))
+              : meta.metric === 'dot' ? 1 / (1 + Math.exp(distance - 1)) : 1 / (1 + Math.max(0, distance))
+
+            return {
+              id: row.id as string,
+              score,
+              content: (row.content as string) || undefined,
+              metadata: row.metadata ? JSON.parse(row.metadata as string) as Record<string, unknown> : undefined,
+            }
+          })
+          .filter((r: VectorSearchResult) => r.score >= minScore)
+
+        return ok(searchResults)
+      })
     },
 
     async count(collection) {
       logger.debug('Counting vectors', { collection })
 
-      const table = await openTable(collection)
-      if (!table) {
-        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
-      }
-
-      const count = await table.countRows()
-      return ok(count)
+      return withCollection(collection, async (table) => {
+        const count = await table.countRows()
+        return ok(count)
+      })
     },
   }
 
@@ -414,7 +349,7 @@ export function createLancedbProvider(): VecdbProvider {
         return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
       }
 
-      const lanceConfig = cfg as LancedbConfig
+      const lanceConfig = cfg
       const loadResult = loadLancedb()
       if (!loadResult.success)
         return loadResult
@@ -422,47 +357,26 @@ export function createLancedbProvider(): VecdbProvider {
       const lancedb = loadResult.data
 
       try {
-        // @lancedb/lancedb 为 optionalDependencies，动态 import 后类型与本地最小接口不兼容，需强转
-        connection = await lancedb.connect(lanceConfig.path) as unknown as LanceConnection
+        // 每次读检查最新 manifest；仅共享相同持久路径的连接能看到彼此的提交。
+        connection = await lancedb.connect(lanceConfig.path, { readConsistencyInterval: 0 })
         config = lanceConfig
-
-        // 恢复已有集合的元信息
-        // 限制：LanceDB 不持久化维度/度量元信息，此处通过读取首条记录推断。
-        // 若表为空或向量维度与探测维度不匹配，dimension 将为 0。
-        const tableNames = await connection!.tableNames()
-        await Promise.allSettled(tableNames.map(async (name) => {
-          try {
-            const table = await connection!.openTable(name)
-            const count = await table.countRows()
-            if (count === 0)
-              return
-            // 使用 1 维零向量探测，若真实维度不同 LanceDB 可能报错
-            const rows = await table.search(Array.from({ length: 1 }).fill(0)).limit(1).toArray()
-            if (rows.length > 0 && rows[0].vector) {
-              collectionMetas.set(name, {
-                dimension: (rows[0].vector as number[]).length,
-                metric: lanceConfig.metric ?? 'cosine',
-              })
-            }
-          }
-          catch {
-            // 无法推断维度（例如维度不匹配），跳过；info() 将返回 dimension=0
-          }
-        }))
 
         logger.info('LanceDB connected', { path: lanceConfig.path })
         return ok(undefined)
       }
       catch (error) {
+        connection?.close()
+        connection = null
+        config = null
         logger.error('Failed to connect to LanceDB', { error })
         return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
       }
     },
 
     async close(): Promise<HaiResult<void>> {
+      connection?.close()
       connection = null
       config = null
-      collectionMetas.clear()
       logger.info('LanceDB connection closed')
       return ok(undefined)
     },

@@ -50,7 +50,7 @@ return result
 | --- | --- | --- |
 | @h-ai/core | [配置、日志、i18n、ID、HaiResult](packages/cli/templates/skills/hai-core/SKILL.md) | YAML/环境映射仅 Node；无 close；Node 请求/SSR 使用 runWithLocale 隔离异步语言，显式 locale 优先 |
 | @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) | SQLite/PostgreSQL/MySQL；动态值参数化；operationLog只输出安全数量摘要，不记录SQL原文/值/驱动错误 |
-| @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) | LanceDB/pgvector/Qdrant/Chroma；维度需匹配，Qdrant 服务端 1.10.0+ |
+| @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) | LanceDB/pgvector/Qdrant/Chroma；LanceDB 维度/metric 持久于 Arrow schema，同名本地路径不自动跨节点共享；维度需匹配，Qdrant 服务端 1.10.0+ |
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) | Memory 不跨节点；锁 owner 每次获锁唯一；release/extend 必须携带；Cluster 鉴权覆盖发现节点，URL 使用 URL 凭据；scan 使用可移交字符串游标遍历全部 master 并返回逻辑 key，mset/集合多键须同 slot；compareAndSwap 原子比较快照并更新值/TTL |
 | @h-ai/storage | [本地/S3、流式读写、checksum、预签名上传](packages/cli/templates/skills/hai-storage/SKILL.md) | S3 包含 MinIO/RustFS；deleteMany 按 1000 分批核对回执，失败进度在 error.ext.deleteMany；unknown 先核对后补偿；ifNoneMatch 原子拒覆盖；Node checksum 无需 init；浏览器经 API/预签名；Local list 非真分页 |
 | @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) | 不负责 embedding，无生命周期 |

@@ -2,9 +2,9 @@
 
 审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。发现 65 个行为/安全/分布式/规范任务，另有 21 个按模块拆分的 JSDoc 任务，共 86 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 28/42；P2 0/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 29/43；P2 0/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -40,7 +40,7 @@
 | serv | 28 | 106 | 3 | 98 | SERV-01、SERV-02、SERV-03、SERV-04、SERV-05 | JSDOC-18 |
 | storage | 14 | 49 | 5 | 38 | STORAGE-01、STORAGE-02、STORAGE-03 | JSDOC-19 |
 | ui | 162 | 297 | 63 | 284 | UI-01 | JSDOC-20 |
-| vecdb | 10 | 35 | 3 | 26 | VECDB-01、VECDB-02 | JSDOC-21 |
+| vecdb | 10 | 35 | 3 | 26 | VECDB-01、VECDB-02、VECDB-03 | JSDOC-21 |
 
 全量逐文件/逐声明补齐清单见 [JSDoc 修正任务附件](module-review-jsdoc-2026-10-22.md)。跨模块任务 LIFE-01、STYLE-01/02、DOC-01、DIST-01 同时适用于受影响包。
 
@@ -466,7 +466,8 @@
 
 ### VECDB-01 · P1 · 持久化并正确恢复 LanceDB 集合元数据
 
-- [ ] 待修正（源码确认；范围：vecdb）。
+- [x] 已修正并通过定向验证（2026-10-22）。
+- **实施与验证**：LanceDB以Arrow固定长度vector字段和schema metadata原子持久集合维数/metric，删除进程Map及伪向量探测/占位记录；每次强一致打开真实schema，缺持久定义失败不猜默认值。查询按真实metric选distanceType，明确0..1分数/阈值映射并同步AI/vecdb三语文档及skills/配置注释/LLMS。真实新增3场景及既有定向30项通过，含6空/非空多维多metric集合、独立已连接Node见新建/重建、重启恢复和分数排序；vecdb/AI typecheck、vecdb build、ESLint/skills通过。没有现有metadataSchema API故未臆造；实施复核另增已真实复现的VECDB03过滤注入P1，留独立提交；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:97](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L97)；[packages/vecdb/src/providers/vecdb-provider-lancedb.ts:440](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts#L440)。
 - **证据与影响**：dimension/metric 主要驻留本地 Map。重连通过 1 维查询探测已有表，维度不符或空表时跳过；集合级 metric 回落到配置，导致 info/校验/检索语义与创建时不同。
 - **修正内容**：从真实 schema/持久 metadata 恢复维度及集合 metric，不用伪向量探测；多实例读取更新后的 schema，明确本地文件 provider 的部署边界。
@@ -481,6 +482,15 @@
 - **修正内容**：使用当前支持版本的原子 upsert/merge，缺能力时初始化或操作明确失败；删除本地仿造接口的过时兼容分支，采用上游类型。
 - **验收标准**：注入 upsert 失败旧数据仍完整；并发相同 id 有确定最终状态，固定版本安装/构建通过。
 - **同步范围**：vecdb 依赖版本、provider 类型、README 支持范围、AI 写入调用方。
+
+### VECDB-03 · P1 · 修复 LanceDB 过滤表达式注入及类型匹配
+
+- [ ] 待修正（实施复核发现，真实LanceDB 0.40.0复现；范围：vecdb）。
+- **位置**：[packages/vecdb/src/providers/vecdb-provider-lancedb.ts](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts)，escapeLanceFilterValue及metadata过滤构造。
+- **证据与影响**：owner=alice正常仅返回alice；owner值为 `alice' OR TRUE --` 时返回alice和bob，单引号逃逸可绕过资源范围。数字page=1、布尔active=true被转换为字符串LIKE，均错误返回空。
+- **修正内容**：使用安全的表达式/类型化精确匹配，禁止用户值拼接逃逸SQL字面量；明确JSON字段匹配和缺失/null语义，不能用后过滤漏检替代正确topK约束。
+- **验收标准**：真实LanceDB覆盖每类引号/反斜线/通配符与注入、数字/布尔/null/嵌套结构；不能返回不属于filter范围的对象，阈值/topK正确。
+- **同步范围**：provider、filter公开类型/说明、真实回归、vecdb及AI消费者文档/skill。
 
 ### RELDB-01 · P1 · 禁止操作日志输出原始 SQL 参数
 

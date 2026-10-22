@@ -84,6 +84,12 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 > `serverCommand`（既定は `chromadb` パッケージの `chroma`）でローカルサービスを起動し、`vecdb.close` が
 > そのプロセスを停止します。任意依存の `chromadb` をインストールしてください。コマンドが利用できない場合、`init` は `CONNECTION_FAILED` を返します。
 
+LanceDB は次元数を Arrow の固定長 vector フィールドに、集合の metric を同じ schema の metadata に永続化し、空の集合も復元できます。`collection.create` の metric を優先し、接続設定は新規集合の既定値としてのみ使用します。再起動や既定値の変更で既存の集合は変わりません。各操作は永続 schema と他の接続のコミットを確認します。定義が欠落・不正な場合は `CONFIG_ERROR` を返し、仮のベクトルによる推測はしません。定義のない旧形式・外部テーブルは再作成してください。互換推定は提供しません。
+
+LanceDB はローカルファイルを使う組み込みバックエンドです。同じ永続ディレクトリと LanceDB の並行コミットを支えるファイルシステムを使うプロセス間のみでデータを共有します。別ノードの同名ローカルパスは共有されません。分散サービスには pgvector、Qdrant、Chroma サーバーを推奨します。AI Knowledge は reldb と vecdb の両方を永続化し、同じ業務データセットに接続してください。embedding 次元を変更する場合は集合の再作成が必要です。
+
+検索は集合の metric を使い、`euclidean` を LanceDB の `l2` に対応させます。score は公開 API の 0–1、高いほど類似する契約に従い、cosine は `clamp(1 - distance / 2, 0, 1)`、euclidean は `1 / (1 + squaredL2)`、dot は順位を保つ `sigmoid(dotProduct)` を使います（確率ではありません）。`minScore` は変換後に適用し、異なる metric・バックエンド間で閾値が共通に校正されているとは扱いません。
+
 #### 操作ログ
 
 ベクトルデータベース設定の `operationLog` で操作ログを有効にできます。ログはコレクション・ベクトル操作が実際の Provider に渡る前に出力され、`vecdb-main.ts` で一括ラップはしません。
