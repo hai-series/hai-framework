@@ -641,7 +641,7 @@ if (!result.success) {
 - `hai:ai:800-805`：Knowledge。
 - `hai:ai:050-059`：Audio。
 - `hai:ai:060-068`：Image，含下载地址拒绝、资源超限与总超时。
-- `hai:ai:900-905`：Memory。
+- `hai:ai:900-906`：Memory。
 - `hai:ai:980-984`：A2A。
 
 ## 开发测试
@@ -654,6 +654,8 @@ pnpm --filter @h-ai/ai build
 ```
 
 公共扩展通过 AIStoreProvider 注入 Store；内置 LLM Provider/工厂依赖与 Context 内部依赖不属于公开 API。模型接入使用配置，历史查询、AskOptions 和 ChatRecord 保持公开。
+
+源码 JSDoc 的公开示例从实际包入口导入，内部工厂示例标记“模块内部上下文”，分别按真实声明编译。根目录执行 `pnpm check:jsdoc --package ai` 核验覆盖与示例类型；普通业务方法检查 HaiResult，流式与浏览器 AudioClient 保留显式抛错契约。
 
 ## 许可证
 

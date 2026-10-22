@@ -27,15 +27,88 @@ const DEFAULT_MAX_TOKENS = 4096
 
 // ─── Anthropic REST 形状（无 SDK，最小类型定义） ───
 
+/**
+ * Anthropic 原生文本内容块。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const block: AnthropicTextBlock = { type: 'text', text: '你好' }
+ * const text = block.text
+ * ```
+ */
 interface AnthropicTextBlock { type: 'text', text: string }
+/**
+ * Anthropic 工具调用块；input 保留未知结构，由工具 Schema 边界校验。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const block: AnthropicToolUseBlock = { type: 'tool_use', id: 'call-1', name: 'weather', input: { city: '北京' } }
+ * const callId = block.id
+ * ```
+ */
 interface AnthropicToolUseBlock { type: 'tool_use', id: string, name: string, input: unknown }
+/**
+ * Anthropic 工具结果块，通过 tool_use_id 关联先前调用。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const block: AnthropicToolResultBlock = { type: 'tool_result', tool_use_id: 'call-1', content: '晴' }
+ * const message: AnthropicMessage = { role: 'user', content: [block] }
+ * ```
+ */
 interface AnthropicToolResultBlock { type: 'tool_result', tool_use_id: string, content: string }
+/**
+ * 本适配器消费的 Anthropic 文本、工具调用和工具结果联合类型。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function text(block: AnthropicContentBlock) {
+ *   if (block.type === 'text') return block.text
+ *   if (block.type === 'tool_result') return block.content
+ *   return block.name
+ * }
+ * ```
+ */
 type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock | AnthropicToolResultBlock
 
+/**
+ * Anthropic messages 项；系统与开发者指令由适配器移入顶层 system。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const message: AnthropicMessage = { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call-1', content: '晴' }] }
+ * const role = message.role
+ * ```
+ */
 interface AnthropicMessage { role: 'user' | 'assistant', content: string | AnthropicContentBlock[] }
 
+/**
+ * 发送给 Anthropic 的工具定义，参数使用 JSON Schema。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const tool: AnthropicTool = { name: 'weather', description: '查询天气', input_schema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] } }
+ * const schema = tool.input_schema
+ * ```
+ */
 interface AnthropicTool { name: string, description?: string, input_schema: Record<string, unknown> }
 
+/**
+ * Anthropic Messages API 请求体；凭据只进入请求头，不写入此结构。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const request: AnthropicRequest = { model: 'claude-sonnet-4-5', max_tokens: 1024, messages: [{ role: 'user', content: '你好' }], stream: false }
+ * const body = JSON.stringify(request)
+ * ```
+ */
 interface AnthropicRequest {
   model: string
   max_tokens: number
@@ -47,8 +120,28 @@ interface AnthropicRequest {
   stream?: boolean
 }
 
+/**
+ * Anthropic 返回的输入与输出 token 计数。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const usage: AnthropicUsage = { input_tokens: 10, output_tokens: 5 }
+ * const totalTokens = usage.input_tokens + usage.output_tokens
+ * ```
+ */
 interface AnthropicUsage { input_tokens: number, output_tokens: number }
 
+/**
+ * Anthropic 非流式响应的最小消费形状，保留工具块与 token 用量。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: AnthropicResponse = { id: 'message-1', model: 'claude-sonnet-4-5', content: [{ type: 'text', text: '你好' }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } }
+ * const text = response.content.filter(block => block.type === 'text').map(block => block.text).join('')
+ * ```
+ */
 interface AnthropicResponse {
   id: string
   model: string
@@ -57,7 +150,17 @@ interface AnthropicResponse {
   usage: AnthropicUsage
 }
 
-/** 已解析的 Anthropic 端点参数 */
+/**
+ * 已解析的 Anthropic 端点参数
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function endpoint(secret: string): ResolvedAnthropic {
+ *   return { apiKey: secret, baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-5', maxTokens: 1024, timeout: 30_000 }
+ * }
+ * ```
+ */
 interface ResolvedAnthropic {
   apiKey: string
   baseUrl: string
@@ -219,6 +322,17 @@ function textChunk(id: string, model: string, delta: string): ChatCompletionChun
  *
  * @param deps - LLM 子功能依赖（含校验后配置）
  * @returns LLMProvider 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function complete(deps: AILLMFunctionsDeps) {
+ *   const provider = createAnthropicProvider(deps)
+ *   const result = await provider.chat({ messages: [{ role: 'user', content: '你好' }] })
+ *   if (!result.success) return result
+ *   return result.data.choices[0]?.message.content
+ * }
+ * ```
  */
 export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
   const { config } = deps

@@ -18,6 +18,14 @@ import type { HaiResult } from '@h-ai/core'
  * - `wav` — WAV 容器（自描述采样率，可不传 `sampleRate`）
  * - `mp3` — MP3 容器
  * - `opus` — Opus 编码
+ *
+ * @example
+ * ```ts
+ * import type { AudioFormat } from '@h-ai/ai'
+ * function requiresSampleRate(format: AudioFormat) {
+ *   return format === 'pcm16'
+ * }
+ * ```
  */
 export type AudioFormat = 'pcm16' | 'wav' | 'mp3' | 'opus'
 
@@ -26,6 +34,13 @@ export type AudioFormat = 'pcm16' | 'wav' | 'mp3' | 'opus'
  *
  * `data` 统一使用二进制字节；Node.js 中的 `Buffer` 可直接作为 `Uint8Array` 传入。
  * Provider 内部会按厂商要求转换为 Base64 / Multipart / 二进制帧，调用方无需感知。
+ *
+ * @example
+ * ```ts
+ * import type { AudioContent } from '@h-ai/ai'
+ * const silence: AudioContent = { data: new Uint8Array(320), format: 'pcm16', sampleRate: 16000, channels: 1 }
+ * const durationMs = silence.data.byteLength / (16000 * 2) * 1000
+ * ```
  */
 export interface AudioContent {
   /** 音频二进制数据 */
@@ -38,7 +53,17 @@ export interface AudioContent {
   channels?: 1 | 2
 }
 
-/** 可直接作为浏览器音频响应传输的负载 */
+/**
+ * 可直接作为浏览器音频响应传输的负载
+ *
+ * @example
+ * ```ts
+ * import type { PlayableAudio } from '@h-ai/ai'
+ * function source(audio: PlayableAudio) {
+ *   return 'data:' + audio.mimeType + ';base64,' + audio.audioBase64
+ * }
+ * ```
+ */
 export interface PlayableAudio {
   /** Base64 编码的音频字节 */
   audioBase64: string
@@ -52,6 +77,16 @@ export interface PlayableAudio {
  * 实时音频输入流（持续到达的音频分片）
  *
  * 仅表达「音频分片持续到达」这一业务语义，不包含 WebSocket、Session、Commit 等传输概念。
+ *
+ * @example
+ * ```ts
+ * import type { AudioInputStream } from '@h-ai/ai'
+ * async function* chunks() { yield new Uint8Array(320) }
+ * const input: AudioInputStream = { chunks: chunks(), format: 'pcm16', sampleRate: 16000 }
+ * for await (const chunk of input.chunks) {
+ *   const byteLength = chunk.byteLength
+ * }
+ * ```
  */
 export interface AudioInputStream {
   /** 持续到达的音频分片 */
@@ -71,10 +106,26 @@ export interface AudioInputStream {
  *
  * - `segment` — 语义段 / 句级时间轴
  * - `word` — 词级时间轴
+ *
+ * @example
+ * ```ts
+ * import type { TranscriptionOptions, TranscriptionTimestampGranularity } from '@h-ai/ai'
+ * const granularity: TranscriptionTimestampGranularity = 'word'
+ * const options: TranscriptionOptions = { timestampGranularities: [granularity], strictCapabilities: true }
+ * ```
  */
 export type TranscriptionTimestampGranularity = 'segment' | 'word'
 
-/** 单个 ASR 词级识别结果 */
+/**
+ * 单个 ASR 词级识别结果
+ *
+ * @example
+ * ```ts
+ * import type { TranscriptionWord } from '@h-ai/ai'
+ * const word: TranscriptionWord = { text: '你好', startMs: 120, endMs: 400 }
+ * const durationMs = word.endMs - word.startMs
+ * ```
+ */
 export interface TranscriptionWord {
   /** 识别出的文字、单词或 Token */
   text: string
@@ -86,7 +137,16 @@ export interface TranscriptionWord {
   confidence?: number
 }
 
-/** ASR 分段结果 */
+/**
+ * ASR 分段结果
+ *
+ * @example
+ * ```ts
+ * import type { TranscriptionSegment } from '@h-ai/ai'
+ * const segment: TranscriptionSegment = { id: 'segment-1', text: '你好', startMs: 0, endMs: 400, words: [{ text: '你好', startMs: 120, endMs: 400 }] }
+ * const caption = { text: segment.text, startMs: segment.startMs, endMs: segment.endMs }
+ * ```
+ */
 export interface TranscriptionSegment {
   /** Provider 返回或 Framework 生成的 Segment ID */
   id?: string
@@ -107,6 +167,18 @@ export interface TranscriptionSegment {
  *
  * 完整识别与流式识别共用；所有高级能力字段均为可选，不支持的平台会忽略或（在
  * `strictCapabilities` 为真时）提前失败。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { AudioContent, TranscriptionOptions } from '@h-ai/ai'
+ * async function transcribe(audio: AudioContent) {
+ *   const options: TranscriptionOptions = { language: 'zh', contextHints: ['hai-framework'], timestampGranularities: ['word'], strictCapabilities: true }
+ *   const result = await ai.audio.transcribe({ ...options, audio })
+ *   if (!result.success) return result
+ *   return result.data.segments
+ * }
+ * ```
  */
 export interface TranscriptionOptions {
   /** 语言提示（如 `zh` / `en`；不传时由模型自动检测） */
@@ -129,19 +201,58 @@ export interface TranscriptionOptions {
   signal?: AbortSignal
 }
 
-/** 完整语音识别请求 */
+/**
+ * 完整语音识别请求
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { AudioContent, TranscriptionRequest } from '@h-ai/ai'
+ * async function transcribe(audio: AudioContent) {
+ *   const request: TranscriptionRequest = { audio, language: 'zh' }
+ *   const result = await ai.audio.transcribe(request)
+ *   if (!result.success) return result
+ *   return result.data.text
+ * }
+ * ```
+ */
 export interface TranscriptionRequest extends TranscriptionOptions {
   /** 待识别的完整音频 */
   audio: AudioContent
 }
 
-/** 流式语音识别请求（支持完整音频或持续音频输入） */
+/**
+ * 流式语音识别请求（支持完整音频或持续音频输入）
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { AudioInputStream, TranscriptionStreamRequest } from '@h-ai/ai'
+ * async function transcribe(audio: AudioInputStream) {
+ *   const request: TranscriptionStreamRequest = { audio, language: 'zh' }
+ *   // 流式失败通过异步迭代抛出；调用边界应处理异常和取消。
+ *   for await (const event of ai.audio.transcribeStream(request)) {
+ *     if (event.type === 'transcript' && event.final) return event.text
+ *   }
+ * }
+ * ```
+ */
 export interface TranscriptionStreamRequest extends TranscriptionOptions {
   /** 完整音频，或持续到达的音频输入流 */
   audio: AudioContent | AudioInputStream
 }
 
-/** 完整语音识别结果 */
+/**
+ * 完整语音识别结果
+ *
+ * @example
+ * ```ts
+ * import type { TranscriptionResult } from '@h-ai/ai'
+ * function captions(result: TranscriptionResult) {
+ *   return (result.segments ?? []).map(segment => ({ text: segment.text, startMs: segment.startMs, endMs: segment.endMs }))
+ * }
+ * ```
+ */
 export interface TranscriptionResult {
   /** 识别文本 */
   text: string
@@ -167,6 +278,14 @@ export interface TranscriptionResult {
  *
  * `transcript.text` 表示当前语句的完整识别文本（非字符增量），实时 ASR 会修订前一次临时结果，
  * 调用方可直接用 `text` 覆盖当前临时文本。
+ *
+ * @example
+ * ```ts
+ * import type { TranscriptionEvent } from '@h-ai/ai'
+ * function apply(event: TranscriptionEvent, previous: string) {
+ *   return event.type === 'transcript' ? event.text : previous // text 是当前完整文本，应覆盖而非追加。
+ * }
+ * ```
  */
 export type TranscriptionEvent
   = | { type: 'speech_started' }
@@ -180,6 +299,14 @@ export type TranscriptionEvent
  *
  * 不绑定任何具体 TTS 模型。既可表达「谁在说话」（说话人参考），也可表达「怎么说」（风格参考），
  * 由 `SynthesisOptions.speakerReference` / `styleReference` 决定用途。
+ *
+ * @example
+ * ```ts
+ * import type { AudioContent, AudioReference } from '@h-ai/ai'
+ * function reference(audio: AudioContent): AudioReference {
+ *   return { audio, transcript: '你好，欢迎使用', language: 'zh' }
+ * }
+ * ```
  */
 export interface AudioReference {
   /** 参考音频 */
@@ -195,6 +322,18 @@ export interface AudioReference {
  *
  * 完整合成与流式合成共用；所有高级能力字段均为可选，不支持的平台会忽略或（在
  * `strictCapabilities` 为真时）提前失败。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { SynthesisOptions } from '@h-ai/ai'
+ * async function speak() {
+ *   const options: SynthesisOptions = { language: 'zh', format: 'mp3', speed: 1.1 }
+ *   const result = await ai.audio.synthesize({ ...options, text: '欢迎使用' })
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export interface SynthesisOptions {
   /** 目标语言 */
@@ -231,7 +370,21 @@ export interface SynthesisOptions {
   signal?: AbortSignal
 }
 
-/** 完整语音合成请求 */
+/**
+ * 完整语音合成请求
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { SynthesisRequest } from '@h-ai/ai'
+ * async function speak() {
+ *   const request: SynthesisRequest = { text: '欢迎使用', format: 'mp3' }
+ *   const result = await ai.audio.synthesize(request)
+ *   if (!result.success) return result
+ *   return result.data.data
+ * }
+ * ```
+ */
 export interface SynthesisRequest extends SynthesisOptions {
   /** 待合成文本 */
   text: string
@@ -245,7 +398,16 @@ export interface SynthesisRequest extends SynthesisOptions {
   durationToleranceMs?: number
 }
 
-/** 带稳定 ID 的合成文本段 */
+/**
+ * 带稳定 ID 的合成文本段
+ *
+ * @example
+ * ```ts
+ * import type { SynthesisTextSegment } from '@h-ai/ai'
+ * const segment: SynthesisTextSegment = { id: 'turn-1-segment-1', text: '欢迎使用。' }
+ * const playbackKey = segment.id // 以同一稳定 ID 关联后续音频和播放确认。
+ * ```
+ */
 export interface SynthesisTextSegment {
   /** 调用方分配的稳定 ID，用于关联文本、音频与播放完成状态 */
   id: string
@@ -253,13 +415,40 @@ export interface SynthesisTextSegment {
   text: string
 }
 
-/** 流式语音合成请求（支持单段或持续文本段输入） */
+/**
+ * 流式语音合成请求（支持单段或持续文本段输入）
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { SynthesisStreamRequest } from '@h-ai/ai'
+ * const request: SynthesisStreamRequest = { text: { id: 'segment-1', text: '欢迎使用。' }, format: 'mp3' }
+ * for await (const event of ai.audio.synthesizeStream(request)) {
+ *   if (event.type === 'segment_done') {
+ *     const generatedSegmentId = event.segmentId // 生成完成仍不等于终端已播放。
+ *   }
+ * }
+ * ```
+ */
 export interface SynthesisStreamRequest extends SynthesisOptions {
   /** 单个文本段，或持续到达的文本段流 */
   text: SynthesisTextSegment | AsyncIterable<SynthesisTextSegment>
 }
 
-/** 完整语音合成结果 */
+/**
+ * 完整语音合成结果
+ *
+ * @example
+ * ```ts
+ * import { serializePlayableAudio } from '@h-ai/ai'
+ * import type { SynthesisResult } from '@h-ai/ai'
+ * function playable(result: SynthesisResult) {
+ *   const serialized = serializePlayableAudio(result)
+ *   if (!serialized.success) return serialized
+ *   return serialized.data.mimeType
+ * }
+ * ```
+ */
 export interface SynthesisResult extends AudioContent {
   /** 实际输出音频时长（毫秒） */
   durationMs?: number
@@ -280,6 +469,16 @@ export interface SynthesisResult extends AudioContent {
  *
  * `segment_started` 携带服务端解析 Provider 后的**真实输出音频参数**（format / sampleRate / channels），
  * 调用方据此正确解码、设置 PCM 播放参数、选择保存扩展名，而非根据请求参数猜测。
+ *
+ * @example
+ * ```ts
+ * import type { SynthesisEvent } from '@h-ai/ai'
+ * function audioBytes(event: SynthesisEvent) {
+ *   if (event.type === 'audio') return { segmentId: event.segmentId, bytes: event.data }
+ *   if (event.type === 'segment_started') return { segmentId: event.segmentId, format: event.format }
+ *   return { generatedSegmentId: event.segmentId }
+ * }
+ * ```
  */
 export type SynthesisEvent
   = | { type: 'segment_started', segmentId: string, text: string, format: AudioFormat, sampleRate?: number, channels?: 1 | 2 }
@@ -295,6 +494,19 @@ export type SynthesisEvent
  * 服务端 VAD / 增量文本输入 / 流式输出」的原生支持不同，同一方法签名在不同平台下的实时语义并不一致。
  * 调用方应据此选择模型或调整策略（如实时 ASR 要求 `realtimeAudioInput` 与 `speechBoundaryEvents`，
  * 实时 TTS 要求 `streamingAudioOutput`）。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { AudioModelCapabilities } from '@h-ai/ai'
+ * function supportsRealtime(capabilities: AudioModelCapabilities) {
+ *   return Boolean(capabilities.transcribe?.realtimeAudioInput && capabilities.transcribe.speechBoundaryEvents)
+ * }
+ * const result = ai.audio.getCapabilities({ operation: 'transcribe' })
+ * if (result.success) {
+ *   const realtime = supportsRealtime(result.data)
+ * }
+ * ```
  */
 export interface AudioModelCapabilities {
   /** 语音识别能力；模型未声明识别操作时不返回 */
@@ -351,7 +563,20 @@ export interface AudioModelCapabilities {
   }
 }
 
-/** 查询语音模型能力的参数 */
+/**
+ * 查询语音模型能力的参数
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { AudioCapabilitiesRequest } from '@h-ai/ai'
+ * const request: AudioCapabilitiesRequest = { operation: 'synthesize' }
+ * const result = ai.audio.getCapabilities(request)
+ * if (result.success) {
+ *   const streaming = result.data.synthesize?.streamingAudioOutput ?? false
+ * }
+ * ```
+ */
 export interface AudioCapabilitiesRequest {
   /** 要查询的操作，决定默认模型和返回的能力分支 */
   operation: 'transcribe' | 'synthesize'
@@ -366,6 +591,19 @@ export interface AudioCapabilitiesRequest {
  *
  * 提供语音识别与语音合成的完整与流式能力。普通方法返回 `HaiResult`；
  * 流式方法返回 `AsyncIterable`，迭代期间发生的连接/协议/上游错误会终止异步迭代（抛出异常）。
+ *
+ * @example
+ * ```ts
+ * import { ai, serializePlayableAudio } from '@h-ai/ai'
+ * async function speak() {
+ *   // ai 已由应用初始化；非流式方法逐层检查 HaiResult。
+ *   const result = await ai.audio.synthesize({ text: '欢迎使用', format: 'mp3' })
+ *   if (!result.success) return result
+ *   const playable = serializePlayableAudio(result.data)
+ *   if (!playable.success) return playable
+ *   return playable.data
+ * }
+ * ```
  */
 export interface AudioOperations {
   /** 将完整音频识别为完整文本 */

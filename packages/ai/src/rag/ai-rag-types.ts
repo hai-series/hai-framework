@@ -14,6 +14,17 @@ import type { Citation } from '../retrieval/ai-retrieval-types.js'
 
 /**
  * RAG 选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type RagOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: RagOptions) {
+ *   const result = await ai.rag.query('如何部署？', options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface RagOptions {
   /** 交互主体 ID */
@@ -48,6 +59,13 @@ export interface RagOptions {
 
 /**
  * RAG 上下文项
+ *
+ * @example
+ * ```ts
+ * import type { RagContextItem } from '@h-ai/ai'
+ * const value: RagContextItem = { content: '使用共享数据库', score: 0.9, sourceId: 'docs' }
+ * const fragment = `[${value.sourceId}] ${value.content}`
+ * ```
  */
 export interface RagContextItem {
   /** 文档内容 */
@@ -64,6 +82,13 @@ export interface RagContextItem {
 
 /**
  * RAG 结果
+ *
+ * @example
+ * ```ts
+ * import type { RagResult } from '@h-ai/ai'
+ * const value: RagResult = { answer: '请使用共享数据库。', context: [], citations: [], query: '如何部署？', model: 'configured-model' }
+ * const answer = value.answer
+ * ```
  */
 export interface RagResult {
   /** LLM 生成的回答 */
@@ -93,6 +118,14 @@ export interface RagResult {
  * 1. `context` — 检索结果就绪，携带上下文列表
  * 2. `delta` — LLM 增量文本
  * 3. `done` — 生成完成，携带完整结果汇总
+ *
+ * @example
+ * ```ts
+ * import type { RagStreamEvent } from '@h-ai/ai'
+ * function render(event: RagStreamEvent): string {
+ *   return event.type === 'delta' ? event.text : event.type === 'done' ? event.answer : ''
+ * }
+ * ```
  */
 export type RagStreamEvent
   = | { type: 'context', items: RagContextItem[], citations: Citation[] }
@@ -103,6 +136,16 @@ export type RagStreamEvent
 
 /**
  * RAG 操作接口
+ *
+ * @example
+ * ```ts
+ * import { ai, type RagOperations } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，并注册 docs 检索源。
+ * const operations: RagOperations = ai.rag
+ * const result = await operations.query('如何部署？', { objectId: 'user-1', sources: ['docs'], topK: 3 })
+ * if (!result.success) throw new Error(result.error.message)
+ * const answer = result.data.answer
+ * ```
  */
 export interface RagOperations {
   /**

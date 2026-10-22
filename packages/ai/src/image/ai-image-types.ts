@@ -8,7 +8,16 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-/** 图片像素尺寸 */
+/**
+ * 图片像素尺寸
+ *
+ * @example
+ * ```ts
+ * import type { ImageSize } from '@h-ai/ai'
+ *
+ * const value: ImageSize = { width: 1024, height: 1024 }
+ * ```
+ */
 export interface ImageSize {
   /** 宽度（像素） */
   width: number
@@ -16,7 +25,17 @@ export interface ImageSize {
   height: number
 }
 
-/** 可选参考图；Provider 会转换为对应厂商的传输格式 */
+/**
+ * 可选参考图；Provider 会转换为对应厂商的传输格式
+ *
+ * @example
+ * ```ts
+ * import type { ReferenceImage } from '@h-ai/ai'
+ * import { readFile } from 'node:fs/promises'
+ *
+ * const reference: ReferenceImage = { data: await readFile('reference.png'), mimeType: 'image/png' }
+ * ```
+ */
 export interface ReferenceImage {
   /** 图片二进制内容 */
   data: Uint8Array
@@ -24,7 +43,16 @@ export interface ReferenceImage {
   mimeType: string
 }
 
-/** 文生图请求 */
+/**
+ * 文生图请求
+ *
+ * @example
+ * ```ts
+ * import type { GenerateImageRequest } from '@h-ai/ai'
+ *
+ * const value: GenerateImageRequest = { prompt: '水墨山水，留白构图', size: { width: 1024, height: 1024 }, signal: new AbortController().signal }
+ * ```
+ */
 export interface GenerateImageRequest {
   /** 图片内容与风格提示词 */
   prompt: string
@@ -38,7 +66,18 @@ export interface GenerateImageRequest {
   signal?: AbortSignal
 }
 
-/** 标准化后的单张图片 */
+/**
+ * 标准化后的单张图片
+ *
+ * @example
+ * ```ts
+ * import type { GeneratedImage } from '@h-ai/ai'
+ *
+ * function imageBlob(image: GeneratedImage): Blob {
+ *   return new Blob([Uint8Array.from(image.data)], { type: image.mimeType })
+ * }
+ * ```
+ */
 export interface GeneratedImage {
   /** 图片二进制内容 */
   data: Uint8Array
@@ -50,17 +89,42 @@ export interface GeneratedImage {
   height?: number
 }
 
-/** 文生图结果 */
+/**
+ * 文生图结果
+ *
+ * @example
+ * ```ts
+ * import type { GenerateImageResult } from '@h-ai/ai'
+ *
+ * function imageCount(result: GenerateImageResult): number {
+ *   return result.images.length
+ * }
+ * ```
+ */
 export interface GenerateImageResult {
   /** 厂商实际返回的图片；通常为一张 */
   images: GeneratedImage[]
 }
 
-/** 文生图操作接口（通过 `ai.image` 访问） */
+/**
+ * 文生图操作接口（通过 `ai.image` 访问）
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ *
+ * // 应用启动已成功初始化 ai；这里是业务服务函数。
+ * async function run() {
+ *   const result = await ai.image.generate({ prompt: '水墨山水，留白构图' })
+ *   if (!result.success)
+ *     return result
+ *   return result.data.images[0]
+ * }
+ * ```
+ */
 export interface ImageOperations {
   /**
    * 根据文本提示生成有界的图片字节；先判断 success，下载/超限/超时错误不返回部分结果。
-   * @example const result = await ai.image.generate({ prompt: '水墨山水', signal: controller.signal })
    */
   generate: (request: GenerateImageRequest) => Promise<HaiResult<GenerateImageResult>>
 }

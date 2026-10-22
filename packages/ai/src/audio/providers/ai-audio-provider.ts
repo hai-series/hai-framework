@@ -31,7 +31,17 @@ import { HaiAIError } from '../../ai-types.js'
 
 // ─── Provider 请求类型（已解析模型 + 公共请求字段） ───
 
-/** Provider 层完整识别请求 */
+/**
+ * Provider 层完整识别请求
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function request(model: ResolvedAudioModel, audio: AudioContent): ProviderTranscriptionRequest {
+ *   return { model, audio, language: 'zh', timestampGranularities: ['word'] }
+ * }
+ * ```
+ */
 export interface ProviderTranscriptionRequest {
   /** 已解析模型配置 */
   model: ResolvedAudioModel
@@ -49,7 +59,17 @@ export interface ProviderTranscriptionRequest {
   signal?: AbortSignal
 }
 
-/** Provider 层流式识别请求 */
+/**
+ * Provider 层流式识别请求
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function request(model: ResolvedAudioModel, audio: AudioInputStream): ProviderTranscriptionStreamRequest {
+ *   return { model, audio, language: 'zh', vad: true }
+ * }
+ * ```
+ */
 export interface ProviderTranscriptionStreamRequest {
   /** 已解析模型配置 */
   model: ResolvedAudioModel
@@ -67,7 +87,17 @@ export interface ProviderTranscriptionStreamRequest {
   signal?: AbortSignal
 }
 
-/** Provider 层完整合成请求 */
+/**
+ * Provider 层完整合成请求
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function request(model: ResolvedAudioModel): ProviderSynthesisRequest {
+ *   return { model, text: '欢迎使用', format: 'mp3' }
+ * }
+ * ```
+ */
 export interface ProviderSynthesisRequest {
   /** 已解析模型配置 */
   model: ResolvedAudioModel
@@ -99,7 +129,17 @@ export interface ProviderSynthesisRequest {
   signal?: AbortSignal
 }
 
-/** Provider 层流式合成请求 */
+/**
+ * Provider 层流式合成请求
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function request(model: ResolvedAudioModel, text: AsyncIterable<string>): ProviderSynthesisStreamRequest {
+ *   return { model, text, format: 'pcm16', sampleRate: 24000 }
+ * }
+ * ```
+ */
 export interface ProviderSynthesisStreamRequest {
   /** 已解析模型配置 */
   model: ResolvedAudioModel
@@ -133,6 +173,13 @@ export interface ProviderSynthesisStreamRequest {
  * 不同平台对未指定格式时的默认值不同（如 OpenAI 默认 mp3、Qwen/Doubao/MiMo 默认 pcm16），
  * 由各 Provider 依据自身规则解析，供流式合成在 `segment_started` 标注真实格式，
  * 避免调用方根据请求参数猜测导致解码 / 播放参数错误。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const output: SynthesisOutputMeta = { format: 'pcm16', sampleRate: 24000, channels: 1 }
+ * const bytesPerSecond = (output.sampleRate ?? 0) * output.channels * 2
+ * ```
  */
 export interface SynthesisOutputMeta {
   /** 最终输出音频格式 */
@@ -148,6 +195,16 @@ export interface SynthesisOutputMeta {
  *
  * 仅具备语音识别能力的平台（如 Whisper）只实现本接口。`transcribeStream` 可选：
  * 未实现时由 Framework 做有限降级（完整音频→完整识别后产出最终结果；持续音频输入→拒绝）。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function recognize(provider: AudioTranscriptionProvider, request: ProviderTranscriptionRequest) {
+ *   const result = await provider.transcribe(request)
+ *   if (!result.success) return result
+ *   return result.data.text
+ * }
+ * ```
  */
 export interface AudioTranscriptionProvider {
   /** 完整语音识别 */
@@ -161,6 +218,17 @@ export interface AudioTranscriptionProvider {
  *
  * 仅具备语音合成能力的平台（如 IndexTTS）只实现本接口。`synthesizeStream` 可选：
  * 未实现时由 Framework 做有限降级（每段文本完整合成后按段产出音频）。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function synthesize(provider: AudioSynthesisProvider, request: ProviderSynthesisRequest) {
+ *   const output = provider.resolveSynthesisOutput(request)
+ *   const result = await provider.synthesize(request)
+ *   if (!result.success) return result
+ *   return { output, audio: result.data }
+ * }
+ * ```
  */
 export interface AudioSynthesisProvider {
   /** 完整语音合成 */
@@ -181,6 +249,15 @@ export interface AudioSynthesisProvider {
  * 每个平台一个实现，负责厂商协议适配、连接、响应解析与错误映射。Provider 只描述「如何调用某种协议」，
  * 不描述服务部署在哪里。使用工厂函数 + 闭包实现，不使用抽象基类。ASR / TTS 子能力按平台按需提供，
  * 不需要为不支持的操作实现空占位。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function requiresRealtime(provider: AudioProvider, model: ResolvedAudioModel) {
+ *   const capabilities = provider.getCapabilities(model)
+ *   return Boolean(provider.transcription?.transcribeStream && capabilities.transcribe?.realtimeAudioInput)
+ * }
+ * ```
  */
 export interface AudioProvider {
   /** 可选 ASR 子能力 */
@@ -203,6 +280,14 @@ const SENTENCE_BOUNDARY_REGEX = /[。！？；!?;\n]|\.(?=\s|$)/
  *
  * 供不原生支持增量文本输入的 TTS 平台（OpenAI / MiMo）使用：以句子级分段逐句发起合成，
  * 实现近似实时的首音低延迟，而非等待整段文本生成完毕（消除“虚假增量”语义）。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function* fragments() { yield '你好，'; yield '欢迎使用。下一句'; yield '结束。' }
+ * const sentences: string[] = []
+ * for await (const sentence of streamSentences(fragments())) sentences.push(sentence)
+ * ```
  */
 export async function* streamSentences(stream: AsyncIterable<string>): AsyncIterable<string> {
   let buffer = ''
@@ -225,17 +310,44 @@ export async function* streamSentences(stream: AsyncIterable<string>): AsyncIter
 
 // ─── Base64 辅助 ───
 
-/** 将二进制数据编码为 Base64 字符串 */
+/**
+ * 将二进制数据编码为 Base64 字符串
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const encoded = toBase64(new Uint8Array([0, 1, 255]))
+ * const original = fromBase64(encoded)
+ * ```
+ */
 export function toBase64(data: Uint8Array): string {
   return Buffer.from(data).toString('base64')
 }
 
-/** 将 Base64 字符串解码为二进制数据 */
+/**
+ * 将 Base64 字符串解码为二进制数据
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const bytes = fromBase64('AAH/')
+ * const restored = toBase64(bytes)
+ * ```
+ */
 export function fromBase64(base64: string): Uint8Array {
   return new Uint8Array(Buffer.from(base64, 'base64'))
 }
 
-/** 顺序拼接多个二进制分片 */
+/**
+ * 顺序拼接多个二进制分片
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const data = concatChunks([new Uint8Array([1, 2]), new Uint8Array([3])])
+ * const byteLength = data.byteLength
+ * ```
+ */
 export function concatChunks(chunks: Uint8Array[]): Uint8Array {
   return new Uint8Array(Buffer.concat(chunks.map(c => Buffer.from(c))))
 }
@@ -248,7 +360,17 @@ const AUDIO_UPLOAD_EXT: Record<AudioFormat, string> = { pcm16: 'wav', wav: 'wav'
 /** 音频格式 → MIME 类型 */
 const AUDIO_UPLOAD_MIME: Record<AudioFormat, string> = { pcm16: 'audio/wav', wav: 'audio/wav', mp3: 'audio/mpeg', opus: 'audio/opus' }
 
-/** 可上传的音频分片（真实字节 + 与内容一致的文件名 / MIME） */
+/**
+ * 可上传的音频分片（真实字节 + 与内容一致的文件名 / MIME）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const part: AudioUploadPart = toAudioUploadPart({ data: new Uint8Array(320), format: 'pcm16', sampleRate: 16000 })
+ * const form = new FormData()
+ * form.append('file', toAudioBlob(part), part.filename)
+ * ```
+ */
 export interface AudioUploadPart {
   /** 上传字节（裸 pcm16 已封装为 WAV） */
   data: Uint8Array
@@ -265,6 +387,14 @@ export interface AudioUploadPart {
  * 其余格式按真实内容生成扩展名与 MIME，避免「扩展名是 WAV、内容是 MP3」导致模型加载异常。
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const part = toAudioUploadPart({ data: new Uint8Array(320), format: 'pcm16', sampleRate: 16000, channels: 1 }, 'reference')
+ * const form = new FormData()
+ * form.append('file', toAudioBlob(part), part.filename)
+ * ```
  */
 export function toAudioUploadPart(audio: AudioContent, baseName = 'audio'): AudioUploadPart {
   if (audio.format === 'pcm16') {
@@ -280,6 +410,14 @@ export function toAudioUploadPart(audio: AudioContent, baseName = 'audio'): Audi
  * 复制为 ArrayBuffer 承载的字节，满足全局 `Blob` / `FormData` 的 `BlobPart` 类型约束。
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const part = toAudioUploadPart({ data: new Uint8Array(320), format: 'pcm16', sampleRate: 16000 })
+ * const file = toAudioBlob(part)
+ * const mimeType = file.type
+ * ```
  */
 export function toAudioBlob(part: AudioUploadPart): Blob {
   return new Blob([new Uint8Array(part.data)], { type: part.mimeType })
@@ -289,6 +427,13 @@ export function toAudioBlob(part: AudioUploadPart): Blob {
  * 将 16bit 小端裸 PCM 封装为标准 WAV 容器（44 字节头 + 数据）
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const wav = wrapPcm16ToWav(new Uint8Array(320), 16000, 1)
+ * const riff = new TextDecoder().decode(wav.subarray(0, 4))
+ * ```
  */
 export function wrapPcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: 1 | 2 = 1): Uint8Array {
   const bitsPerSample = 16
@@ -313,7 +458,16 @@ export function wrapPcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: 1 
   return new Uint8Array(buffer)
 }
 
-/** 提取错误对象的简要消息（不含敏感请求体 / 凭据） */
+/**
+ * 提取错误对象的消息或字符串表示；不自动执行凭据脱敏，调用方只能传入安全上下文。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const message = errorMessage(new Error('Connection failed'))
+ * // 只用于已知安全错误；函数不负责移除任意 error.message 中的业务秘密。
+ * ```
+ */
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -322,6 +476,13 @@ export function errorMessage(error: unknown): string {
  * 构造可抛出的 HaiError（供流式 async generator 在迭代期间抛出）
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const failure = audioError(HaiAIError.AUDIO_PROTOCOL_ERROR, 'Audio protocol response is invalid')
+ * const code = failure.code
+ * ```
  */
 export function audioError(def: HaiErrorDef, message: string, cause?: unknown): HaiError {
   return core.error.buildHaiErrorInst(def, message, cause)
@@ -334,6 +495,15 @@ export function audioError(def: HaiErrorDef, message: string, cause?: unknown): 
  * 其余主动取消映射为 `AUDIO_CANCELLED`。
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const controller = new AbortController()
+ * controller.abort()
+ * const failure = audioAbortError(controller.signal)
+ * const cancelled = failure.code === HaiAIError.AUDIO_CANCELLED.code
+ * ```
  */
 export function audioAbortError(signal?: AbortSignal): HaiError {
   const reason = signal?.reason as { name?: string } | undefined
@@ -350,6 +520,14 @@ export function audioAbortError(signal?: AbortSignal): HaiError {
  * - 其余 → `AUDIO_UPSTREAM_ERROR`
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const cause = new DOMException('Cancelled', 'AbortError')
+ * const failure = mapStreamError(cause)
+ * const code = failure.code
+ * ```
  */
 export function mapStreamError(error: unknown, signal?: AbortSignal): HaiError {
   const maybe = error as { code?: unknown, name?: unknown }
@@ -364,6 +542,15 @@ export function mapStreamError(error: unknown, signal?: AbortSignal): HaiError {
  * 将流式迭代抛出的错误转换为 HaiResult（供非流式 transcribe/synthesize 复用底层流）
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const result = toAudioErrorResult<TranscriptionResult>(new DOMException('Cancelled', 'AbortError'))
+ * if (!result.success) {
+ *   const code = result.error.code
+ * }
+ * ```
  */
 export function toAudioErrorResult<T>(error: unknown, signal?: AbortSignal): HaiResult<T> {
   return { success: false, error: mapStreamError(error, signal) }
@@ -371,13 +558,33 @@ export function toAudioErrorResult<T>(error: unknown, signal?: AbortSignal): Hai
 
 // ─── HTTP 辅助 ───
 
-/** 组合取消信号与超时（不泄露原信号） */
+/**
+ * 组合取消信号与超时（不泄露原信号）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const controller = new AbortController()
+ * const signal = combineSignal(controller.signal, 5000)
+ * controller.abort()
+ * const cancelled = signal.aborted
+ * ```
+ */
 export function combineSignal(signal: AbortSignal | undefined, timeout: number): AbortSignal {
   const timeoutSignal = AbortSignal.timeout(timeout)
   return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
 }
 
-/** 读取 HTTP 错误响应摘要（截断，避免泄露过长响应体） */
+/**
+ * 读取 HTTP 错误正文后，将摘要截断到前 200 个字符；这不是有界流读取，也不自动脱敏正文。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const summary = await describeHttpError(new Response('Upstream unavailable', { status: 503 }))
+ * const unavailable = summary.startsWith('HTTP 503')
+ * ```
+ */
 export async function describeHttpError(response: Pick<Response, 'status' | 'text'>): Promise<string> {
   const text = await response.text().catch(() => '')
   return `HTTP ${response.status} ${text.slice(0, 200)}`.trim()
@@ -385,7 +592,16 @@ export async function describeHttpError(response: Pick<Response, 'status' | 'tex
 
 // ─── Node WebSocket 连接辅助 ───
 
-/** WebSocket 收到的单条消息 */
+/**
+ * WebSocket 收到的单条消息
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const message: AudioWsMessage = { isBinary: true, binary: new Uint8Array([0, 0]) }
+ * const byteLength = message.binary?.byteLength ?? 0
+ * ```
+ */
 export interface AudioWsMessage {
   /** 文本帧的字符串内容（`isBinary=false` 时有效） */
   text?: string
@@ -395,7 +611,23 @@ export interface AudioWsMessage {
   isBinary: boolean
 }
 
-/** WebSocket 连接封装（隐藏 ws 事件模型，向 Provider 暴露异步迭代） */
+/**
+ * WebSocket 连接封装（隐藏 ws 事件模型，向 Provider 暴露异步迭代）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function consume(connection: AudioWsConnection) {
+ *   try {
+ *     for await (const message of connection.messages()) {
+ *       if (!message.isBinary && message.text) return JSON.parse(message.text)
+ *     }
+ *     return undefined
+ *   }
+ *   finally { connection.close() }
+ * }
+ * ```
+ */
 export interface AudioWsConnection {
   /** 发送文本或二进制帧 */
   send: (data: string | Uint8Array) => void
@@ -414,6 +646,21 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio-ws' })
  * 传入的 `signal` 触发时立即关闭连接并终止迭代。
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function connect(url: string, headers: Record<string, string>, signal: AbortSignal) {
+ *   const connection = await openAudioWebSocket(url, headers, { signal, timeout: 5000 })
+ *   try {
+ *     for await (const message of connection.messages()) {
+ *       if (!message.isBinary && message.text) return message.text
+ *     }
+ *     return undefined
+ *   }
+ *   finally { connection.close() }
+ * }
+ * ```
  */
 export function openAudioWebSocket(
   url: string,

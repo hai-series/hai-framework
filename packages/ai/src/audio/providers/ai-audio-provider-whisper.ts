@@ -37,7 +37,16 @@ const WHISPER_CAPABILITIES: AudioModelCapabilities = {
   },
 }
 
-/** Whisper Service 词级结果（毫秒整数时间轴） */
+/**
+ * Whisper Service 词级结果（毫秒整数时间轴）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const word: WhisperWord = { text: '你好', startMs: 0, endMs: 400 }
+ * const durationMs = (word.endMs ?? 0) - (word.startMs ?? 0)
+ * ```
+ */
 interface WhisperWord {
   text?: string
   startMs?: number
@@ -45,7 +54,16 @@ interface WhisperWord {
   confidence?: number
 }
 
-/** Whisper Service 分段结果 */
+/**
+ * Whisper Service 分段结果
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const segment: WhisperSegment = { id: 1, text: '你好', startMs: 0, endMs: 400, words: [{ text: '你好', startMs: 0, endMs: 400 }] }
+ * const wordCount = segment.words?.length ?? 0
+ * ```
+ */
 interface WhisperSegment {
   id?: string | number
   text?: string
@@ -54,7 +72,16 @@ interface WhisperSegment {
   words?: WhisperWord[]
 }
 
-/** Whisper Service 识别响应 */
+/**
+ * Whisper Service 识别响应
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: WhisperResponse = { text: '你好', language: 'zh', durationMs: 400, segments: [{ text: '你好', startMs: 0, endMs: 400 }] }
+ * const text = response.text ?? ''
+ * ```
+ */
 interface WhisperResponse {
   text?: string
   language?: string
@@ -66,6 +93,18 @@ interface WhisperResponse {
  * 创建 Whisper Audio Provider（仅 ASR）
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function invoke(request: ProviderTranscriptionRequest) {
+ *   const provider = createWhisperAudioProvider()
+ *   if (!provider.transcription) throw new Error('Audio operation is unavailable')
+ *   const result = await provider.transcription.transcribe(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createWhisperAudioProvider(): AudioProvider {
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {

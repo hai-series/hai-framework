@@ -50,7 +50,18 @@ function memoryWriteFailure(definition: HaiErrorDef, message: string, cause: unk
   return failure
 }
 
-/** 创建 Mem0 OSS Provider 的依赖 */
+/**
+ * 创建 Mem0 OSS Provider 的依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bind(config: MemoryConfig, aiConfig: AIConfig, llm: LLMOperations, backend: AIVectorBackend): Mem0OssDeps {
+ *   return { config, aiConfig, llm, collectionName: 'hai_memories', embeddingDims: 1536, vectorBackend: backend }
+ * }
+ * // 只有受支持且已就绪的实际 Qdrant 连接可用于生产，不以 provider 字符串代替能力检查。
+ * ```
+ */
 export interface Mem0OssDeps {
   /** 记忆配置（与 native 共用顶层字段） */
   config: MemoryConfig
@@ -66,6 +77,17 @@ export interface Mem0OssDeps {
   vectorBackend?: AIVectorBackend
 }
 
+/**
+ * 完成公开 SDK 就绪检查后的内部能力与默认召回参数，不拥有调用方的向量连接。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function context(memory: Mem0Memory, llm: LLMOperations): Mem0OssContext {
+ *   return { memory, llm, defaultObjectId: 'hai-global', defaultTopK: 5, candidateMultiplier: 3 }
+ * }
+ * ```
+ */
 interface Mem0OssContext {
   memory: Mem0Memory
   /** hai LLM 操作接口（框架层提取用） */
@@ -173,7 +195,16 @@ function matchScope(entry: MemoryEntry, scope: Record<string, unknown>): boolean
   return Object.entries(scope).every(([k, v]) => (entry.scope as Record<string, unknown>)[k] === v)
 }
 
-/** mem0 向量库解析结果：配置 + 实际生效 provider + 是否持久化 */
+/**
+ * mem0 向量库解析结果：配置 + 实际生效 provider + 是否持久化
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const resolution: Mem0VectorStoreResolution = { provider: 'qdrant', persistent: true, vectorStore: { provider: 'qdrant', config: { url: 'http://127.0.0.1:6333', collectionName: 'hai_memories' } } }
+ * const persistent = resolution.persistent && resolution.provider === 'qdrant'
+ * ```
+ */
 interface Mem0VectorStoreResolution {
   vectorStore: Mem0Config['vectorStore']
   /** 实际生效的向量 provider（qdrant / memory） */
@@ -516,6 +547,18 @@ async function listMemories(context: Mem0OssContext, options?: { objectId?: stri
  * @param deps - LLM / Embedder / 向量库来源
  * @returns MemoryOperations 实例
  * @throws 当 `mem0ai` 未安装或配置缺失时抛出，由 `ai.init()` 转为 HaiResult
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function prepare(deps: Mem0OssDeps) {
+ *   // 工厂显式抛错：上层 init 捕获并转为 HaiResult，不能发布半就绪实例。
+ *   const memory = await createMem0OssMemoryOperations(deps)
+ *   const result = await memory.list({ objectId: 'user-1' })
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<MemoryCoreOperations> {
   const configResult = buildMem0Config(deps)

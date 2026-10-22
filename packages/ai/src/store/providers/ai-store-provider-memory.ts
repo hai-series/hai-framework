@@ -15,12 +15,32 @@ import type {
   WhereOperator,
 } from '../ai-store-types.js'
 
+/**
+ * 进程内关系记录及每次写入更换的版本；仅供显式开发/测试 Store 使用。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const stored: StoredValue = { version: 'version-1', data: { count: 1 }, scope: { objectId: 'user-1' } }
+ * const snapshot = structuredClone(stored.data)
+ * ```
+ */
 interface StoredValue {
   version: string
   data: unknown
   scope?: StoreScope
 }
 
+/**
+ * 进程内向量及附属检索元数据，不提供跨节点持久化。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const entry: StoredVector = { vector: [1, 0], metadata: { content: '指南' } }
+ * const dimension = entry.vector.length
+ * ```
+ */
 interface StoredVector {
   vector: number[]
   metadata?: Record<string, unknown>
@@ -226,7 +246,20 @@ function createVectorStore(vectors: Map<string, StoredVector>): AIVectorStore {
   }
 }
 
-/** 创建进程内临时 Store Provider；`close()` 会释放全部记录 */
+/**
+ * 创建进程内临时 Store Provider；`close()` 会释放全部记录
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const provider = createMemoryStoreProvider() // 显式开发/测试装配。
+ * const store = provider.createRelStore<{ count: number }>('counter')
+ * await provider.initialize()
+ * const version = await store.compareAndSwap('counter-1', { expectedVersion: undefined, data: { count: 1 }, notAfter: await store.currentTime() + 1000 })
+ * if (!version) throw new Error('Record already exists or deadline expired')
+ * await provider.close?.()
+ * ```
+ */
 export function createMemoryStoreProvider(): AIStoreProvider {
   const relStores = new Map<string, Map<string, StoredValue>>()
   const vectorStores = new Map<string, Map<string, StoredVector>>()

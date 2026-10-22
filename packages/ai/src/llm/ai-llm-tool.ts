@@ -104,13 +104,10 @@ function isAbortError(error: unknown): boolean {
  *
  * @example
  * ```ts
- * const weatherTool = defineTool({
- *   name: 'getWeather',
- *   description: '获取天气',
- *   parameters: z.object({ city: z.string() }),
- *   handler: async ({ city }) => ({ temp: 25, city }),
- * })
- * const result = await weatherTool.execute({ city: '北京' })
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const add = defineTool({ name: 'add', description: '计算整数和', parameters: zod.object({ a: zod.number().int(), b: zod.number().int() }), handler: ({ a, b }) => a + b })
+ * const result = await add.execute({ a: 2, b: 3 })
+ * if (!result.success) throw new Error(result.error.message)
  * ```
  */
 export function defineTool<TInput, TOutput>(
@@ -181,10 +178,13 @@ export function defineTool<TInput, TOutput>(
  *
  * @example
  * ```ts
- * const registry = createToolRegistry()
- * registry.registerMany([weatherTool, searchTool])
- * const defs = registry.getDefinitions() // 用于 ChatCompletionRequest.tools
- * const result = await registry.execute(toolCall)
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const registry = createToolRegistry({ authorize: request => request.context.objectId === 'user-1' })
+ * const echo = defineTool({ name: 'echo', description: '返回文本', parameters: zod.object({ text: zod.string() }), handler: input => input.text })
+ * const registered = registry.register(echo)
+ * if (!registered.success) throw new Error(registered.error.message)
+ * const result = await registry.execute({ id: 'call-1', type: 'function', function: { name: 'echo', arguments: JSON.stringify({ text: '你好' }) } }, { objectId: 'user-1' })
+ * if (!result.success) throw new Error(result.error.message)
  * ```
  */
 export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegistryOperations {

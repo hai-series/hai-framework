@@ -3,11 +3,34 @@
 import type { ImageProvider } from './ai-image-provider.js'
 import { appendReferenceImages, downloadImages, imageFromBase64, imageProtocolError, imageProviderFailure, readImageResponse, readJson } from './ai-image-provider.js'
 
+/**
+ * Pollinations 编辑接口返回的 Base64 或受限远端图片地址。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: PollinationsImageResponse = { data: [{ url: 'https://images.example.com/generated.png' }] }
+ * const urls = response.data?.flatMap(item => item.url ? [item.url] : []) ?? []
+ * ```
+ */
 interface PollinationsImageResponse {
   data?: Array<{ b64_json?: string, url?: string }>
 }
 
-/** 创建 Pollinations Provider */
+/**
+ * 创建 Pollinations Provider
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(request: Parameters<ImageProvider['generate']>[0]) {
+ *   const provider = createPollinationsImageProvider()
+ *   const result = await provider.generate(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
+ */
 export function createPollinationsImageProvider(): ImageProvider {
   return {
     async generate(request) {

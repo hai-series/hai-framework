@@ -7,7 +7,17 @@ import { sessionStoreKey } from './ai-store-key.js'
  * @param store - 会话目录 Store
  * @param scope - 主体和会话
  * @param change - 由最新记录计算新值；undefined 表示不写入
- * @example `await updateSessionInfo(store, scope, (existing, now) => existing && { ...existing, updatedAt: now })`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function touch(store: AIRelStore<SessionInfo>, scope: InteractionScope) {
+ *   await updateSessionInfo(store, scope, (current, now) => {
+ *     if (current?.deleted) return undefined
+ *     return { ...current, ...scope, createdAt: current?.createdAt ?? now, updatedAt: now }
+ *   })
+ * }
+ * ```
  */
 export async function updateSessionInfo(
   store: AIRelStore<SessionInfo>,

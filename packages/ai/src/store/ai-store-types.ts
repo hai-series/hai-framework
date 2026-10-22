@@ -12,6 +12,15 @@
  *
  * 在 save 时传入 scope，值将写入独立索引列（object_id / session_id），
  * 后续 query / removeBy 可通过 StoreFilter.objectId / sessionId 使用索引过滤。
+ *
+ * @example
+ * ```ts
+ * import type { AIRelStore, StoreScope } from '@h-ai/ai'
+ * async function saveOwned(store: AIRelStore<{ title: string }>, userId: string) {
+ *   const scope: StoreScope = { objectId: userId, sessionId: 'session-1' }
+ *   await store.save('record-1', { title: '指南' }, scope)
+ * }
+ * ```
  */
 export interface StoreScope {
   /** 交互主体 ID（写入 object_id 索引列） */
@@ -31,17 +40,9 @@ export interface StoreScope {
  *
  * @example
  * ```ts
- * // 等值：type === 'fact'
- * { type: 'fact' }
- *
- * // IN：type ∈ ['fact', 'preference']
- * { type: { $in: ['fact', 'preference'] } }
- *
- * // 范围：importance >= 0.5
- * { importance: { $gte: 0.5 } }
- *
- * // 组合：objectId === 'user-1' AND type ∈ ['fact'] AND importance >= 0.3
- * { objectId: 'user-1', type: { $in: ['fact'] }, importance: { $gte: 0.3 } }
+ * import type { WhereOperator } from '@h-ai/ai'
+ * const condition: WhereOperator<number> = { $gte: 0.5, $lt: 1 }
+ * const filter = { condition }
  * ```
  */
 export interface WhereOperator<V> {
@@ -59,11 +60,25 @@ export interface WhereOperator<V> {
 
 /**
  * 单字段条件：纯值 = 等值匹配，WhereOperator 对象 = 操作符匹配
+ *
+ * @example
+ * ```ts
+ * import type { WhereValue } from '@h-ai/ai'
+ * const condition: WhereValue<string> = { $in: ['fact', 'preference'] }
+ * const filter = { condition }
+ * ```
  */
 export type WhereValue<V> = V | WhereOperator<V>
 
 /**
  * where 子句类型——每个字段可以是等值匹配或操作符对象
+ *
+ * @example
+ * ```ts
+ * import type { WhereClause } from '@h-ai/ai'
+ * const condition: WhereClause<{ importance: number }> = { importance: { $gte: 0.5 } }
+ * const filter = { condition }
+ * ```
  */
 export type WhereClause<T> = {
   [K in keyof T]?: WhereValue<T[K]>
@@ -76,11 +91,11 @@ export type WhereClause<T> = {
  *
  * @example
  * ```ts
- * // 等值匹配（兼容旧写法）
- * store.query({ where: { type: 'fact', objectId: 'user-1' } })
- *
- * // 操作符匹配
- * store.query({ where: { type: { $in: ['fact', 'preference'] }, importance: { $gte: 0.5 } } })
+ * import type { AIRelStore, StoreFilter } from '@h-ai/ai'
+ * async function queryOwned(store: AIRelStore<{ importance: number }>, userId: string) {
+ *   const filter: StoreFilter<{ importance: number }> = { objectId: userId, where: { importance: { $gte: 0.5 } }, limit: 20 }
+ *   return await store.query(filter)
+ * }
  * ```
  */
 export interface StoreFilter<T> {
@@ -111,6 +126,13 @@ export interface StoreFilter<T> {
 
 /**
  * 分页查询结果
+ *
+ * @example
+ * ```ts
+ * import type { StorePage } from '@h-ai/ai'
+ * const page: StorePage<{ title: string }> = { items: [{ title: '指南' }], total: 1 }
+ * const titles = page.items.map(item => item.title)
+ * ```
  */
 export interface StorePage<T> {
   /** 当前页数据 */
@@ -125,6 +147,17 @@ export interface StorePage<T> {
  * AIRelStore 配置选项
  *
  * 控制存储实例需要创建哪些索引列（object_id / session_id / status / ref_id）。
+ *
+ * @example
+ * ```ts
+ * import type { AIStoreProvider, AIRelStoreOptions } from '@h-ai/ai'
+ * async function prepare(provider: AIStoreProvider) {
+ *   const options: AIRelStoreOptions = { hasObjectId: true, hasSessionId: true }
+ *   const store = provider.createRelStore<{ title: string }>('documents', options)
+ *   await provider.initialize()
+ *   return store
+ * }
+ * ```
  */
 export interface AIRelStoreOptions {
   /** 是否创建 object_id 索引列 */
@@ -149,7 +182,14 @@ export interface AIRelStoreOptions {
 
 /**
  * 同一次读取的记录及不可复用的存储版本。
- * @example `const snapshot = await store.readVersioned(id)`
+ *
+ * @example
+ * ```ts
+ * import type { AIVersionedRecord } from '@h-ai/ai'
+ * function nextVersion(snapshot: AIVersionedRecord<{ count: number }>) {
+ *   return { expectedVersion: snapshot.version, data: { count: snapshot.data.count + 1 } }
+ * }
+ * ```
  */
 export interface AIVersionedRecord<T> {
   /** 每次写入都会更换的版本；不得把业务 ID 或时间戳用作版本。 */
@@ -160,7 +200,18 @@ export interface AIVersionedRecord<T> {
 
 /**
  * 单记录的原子条件写入；不跨表承诺事务。
- * @example `await store.compareAndSwap(id, { expectedVersion: snapshot?.version, data: next, notAfter: leaseDeadline })`
+ *
+ * @example
+ * ```ts
+ * import type { AIRelStore, AIRelStoreCompareAndSwap } from '@h-ai/ai'
+ * async function increment(store: AIRelStore<{ count: number }>, id: string) {
+ *   const previous = await store.readVersioned(id)
+ *   const change: AIRelStoreCompareAndSwap<{ count: number }> = { expectedVersion: previous?.version, data: { count: (previous?.data.count ?? 0) + 1 }, notAfter: await store.currentTime() + 1000 }
+ *   const version = await store.compareAndSwap(id, change)
+ *   if (!version) throw new Error('Conflict or deadline expired')
+ *   return version
+ * }
+ * ```
  */
 export interface AIRelStoreCompareAndSwap<T> {
   /** undefined 只允许新建；已有记录必须精确匹配读取到的版本。 */
@@ -181,22 +232,29 @@ export interface AIRelStoreCompareAndSwap<T> {
  * 最近的非流式业务 API 负责转换为失败 HaiResult，流迭代保留抛错契约。
  *
  * @typeParam T - 记录类型
- * @example `const page = await store.queryPage({ objectId: 'user-1' }, { limit: 20 })`
+ *
+ * @example
+ * ```ts
+ * import type { AIRelStore } from '@h-ai/ai'
+ * // 存储异常保留抛错；业务边界负责转 HaiResult，不能当作缺失。
+ * async function claim(store: AIRelStore<{ owner: string }>, id: string, owner: string) {
+ *   const current = await store.readVersioned(id)
+ *   const deadline = await store.currentTime() + 30_000
+ *   return await store.compareAndSwap(id, { expectedVersion: current?.version, data: { owner }, notAfter: deadline })
+ * }
+ * ```
  */
 export interface AIRelStore<T> {
   /**
    * 存储端 Unix 毫秒时钟；共享租约以它计算期限，不依赖各节点墙钟同步。
-   * @example `const deadline = await store.currentTime() + 30_000`
    */
   currentTime: () => Promise<number>
   /**
    * 读取记录与版本的同一快照；失败抛错，不能把故障当作缺失。
-   * @example `const current = await store.readVersioned('session')`
    */
   readVersioned: (id: string) => Promise<AIVersionedRecord<T> | undefined>
   /**
    * 原子条件替换；成功返回新版本，冲突/截止返回 undefined，存储故障抛错。
-   * @example `await store.compareAndSwap(id, { expectedVersion: current?.version, data: next })`
    */
   compareAndSwap: (id: string, input: AIRelStoreCompareAndSwap<T>) => Promise<string | undefined>
   /** 保存一条记录（upsert 语义） */
@@ -225,6 +283,15 @@ export interface AIRelStore<T> {
  * AI 向量存储适配器
  *
  * 专用于需要向量检索的场景（如 Memory），由 AIStoreProvider 创建具体实现。
+ *
+ * @example
+ * ```ts
+ * import type { AIVectorStore } from '@h-ai/ai'
+ * async function searchTenant(store: AIVectorStore, vector: number[], tenant: string) {
+ *   // 向量维度须与集合一致，Provider 过滤能力也须满足部署后端契约。
+ *   return await store.search(vector, { topK: 5, filter: { tenant } })
+ * }
+ * ```
  */
 export interface AIVectorStore {
   /** 存储向量 */
@@ -232,7 +299,6 @@ export interface AIVectorStore {
   /**
    * 向量相似度检索。默认 DB Store 的 filter 透传底层 Provider，失败抛错，由领域 API 转为 HaiResult。
    * LanceDB 只支持顶层 string/有限 number/boolean/null 的 AND 匹配，不支持嵌套结构。
-   * @example await store.search([1, 0], { filter: { tenant: 'acme', active: true } })
    */
   search: (vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
   /** 删除向量 */
@@ -247,6 +313,13 @@ export interface AIVectorStore {
  * 交互主体引用
  *
  * 代表"和谁"交互 — 可以是人、AI Agent、或系统自身。
+ *
+ * @example
+ * ```ts
+ * import type { ObjectRef } from '@h-ai/ai'
+ * const value: ObjectRef = { objectId: 'agent-1', objectType: 'agent' }
+ * const output = value.objectId
+ * ```
  */
 export interface ObjectRef {
   /** 主体唯一 ID */
@@ -257,6 +330,13 @@ export interface ObjectRef {
 
 /**
  * 完整的交互作用域 = Object + Session
+ *
+ * @example
+ * ```ts
+ * import type { InteractionScope } from '@h-ai/ai'
+ * const value: InteractionScope = { objectId: 'user-1', sessionId: 'session-1' }
+ * const output = `${value.objectId}/${value.sessionId}`
+ * ```
  */
 export interface InteractionScope {
   /** 交互主体 ID */
@@ -267,7 +347,13 @@ export interface InteractionScope {
 
 /**
  * 会话信息；目录更新必须保留并发标题及删除标记。
- * @example `{ objectId: 'user', sessionId: 'session', createdAt: now, updatedAt: now }`
+ *
+ * @example
+ * ```ts
+ * import type { SessionInfo } from '@h-ai/ai'
+ * const value: SessionInfo = { objectId: 'user-1', sessionId: 'session-1', title: '部署咨询', createdAt: Date.now(), updatedAt: Date.now() }
+ * const output = value.deleted ? undefined : value.title
+ * ```
  */
 export interface SessionInfo {
   /** 会话 ID */
@@ -290,7 +376,13 @@ export interface SessionInfo {
 
 /**
  * 一次完整准备、尚未发布的文档版本；chunk 和实体关联必须使用本版本的唯一 ID。
- * @example `{ documentId: 'guide', collection: 'docs', revision: crypto.randomUUID(), chunks: [], entities: [], createdAt: Date.now() }`
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeDocumentRevision } from '@h-ai/ai'
+ * const value: KnowledgeDocumentRevision = { documentId: 'guide', collection: 'docs', revision: crypto.randomUUID(), chunks: [{ id: 'revision-chunk-1', content: '共享数据库', vector: [0.1, 0.2], metadata: { documentId: 'guide' } }], entities: [], createdAt: Date.now() }
+ * const output = value.chunks.map(chunk => chunk.id)
+ * ```
  */
 export interface KnowledgeDocumentRevision {
   /** 业务文档 ID。 */
@@ -313,7 +405,13 @@ export interface KnowledgeDocumentRevision {
 
 /**
  * 有界补偿扫描的进度；调用方以 offset + processed 继续，直到覆盖 total。
- * @example `const progress = await store.repair('docs', { offset: 0, limit: 100 })`
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeRepairProgress } from '@h-ai/ai'
+ * const value: KnowledgeRepairProgress = { processed: 100, total: 250 }
+ * const output = value.processed < value.total
+ * ```
  */
 export interface KnowledgeRepairProgress {
   /** 本页检查的文档墓碑/清单数。 */
@@ -324,7 +422,13 @@ export interface KnowledgeRepairProgress {
 
 /**
  * 来自同一已发布快照的文档摘要，实体数不会与另一个 revision 拼接。
- * @example `{ documentId: 'guide', collection: 'docs', revision: 'unique', title: null, url: null, chunkCount: 2, entityCount: 1, createdAt: Date.now() }`
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeDocumentMetadata } from '@h-ai/ai'
+ * const value: KnowledgeDocumentMetadata = { documentId: 'guide', collection: 'docs', revision: 'revision-1', title: '指南', url: null, chunkCount: 2, entityCount: 1, createdAt: Date.now() }
+ * const output = value.title ?? value.documentId
+ * ```
  */
 export interface KnowledgeDocumentMetadata {
   /** 业务文档 ID。 */
@@ -351,6 +455,23 @@ export interface KnowledgeDocumentMetadata {
  * 封装知识库的实体索引、文档元数据和向量操作。
  * 默认实现使用 reldb 单文档版本清单 CAS + vecdb 向量检索；
  * SaaS 实现可对接远端知识库 API。
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeStore, KnowledgeDocumentRevision } from '@h-ai/ai'
+ * async function publish(store: KnowledgeStore, document: KnowledgeDocumentRevision) {
+ *   await store.initialize(document.collection, document.chunks[0]?.vector.length ?? 2)
+ *   const result = await store.replaceDocument(document)
+ *   if (result.cleanupPending) {
+ *     let offset = 0
+ *     while (true) {
+ *       const progress = await store.repair(document.collection, { offset, limit: 100 })
+ *       offset += progress.processed
+ *       if (offset >= progress.total || progress.processed === 0) break
+ *     }
+ *   }
+ * }
+ * ```
  */
 export interface KnowledgeStore {
   /** 初始化存储（建表 / 建集合 / 建索引，幂等） */
@@ -359,13 +480,11 @@ export interface KnowledgeStore {
   /**
    * 先持久化暂存清单，再写向量，最后原子发布完整版本；失败保留原可见版本和补偿记录。
    * 同一文档正在导入时拒绝并发写入。cleanupPending 表示发布成功但旧数据清理需重试。
-   * @example `await store.replaceDocument(preparedRevision)`
    */
   replaceDocument: (document: KnowledgeDocumentRevision) => Promise<{ cleanupPending: boolean }>
   /**
    * 恢复过期暂存并清理记录在案的旧向量；故障抛错，不以空结果伪装成功。
    * 被遗弃暂存的墓碑保留，重复扫描可清理旧节点迟到的外部写入。
-   * @example `await store.repair('docs', { offset: 0, limit: 100 })`
    */
   repair: (collection: string, options?: { offset?: number, limit?: number }) => Promise<KnowledgeRepairProgress>
 
@@ -397,7 +516,6 @@ export interface KnowledgeStore {
   /**
    * 向量相似度检索。默认 DB Store 将 filter 透传底层 Provider，校验/查询失败抛错，不当作空结果。
    * LanceDB 仅支持顶层 string/有限 number/boolean/null 的 AND 匹配，null 与字段缺失不同。
-   * @example await store.searchVectors('docs', [1, 0], { filter: { tenant: 'acme' } })
    */
   searchVectors: (collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
   /** 确保向量集合存在 */
@@ -423,6 +541,13 @@ export interface KnowledgeStore {
  *
  * 由 Provider 暴露底层向量库的原始连接，供需要复用同一后端的外部引擎（如 mem0 OSS）
  * 直连。字段按后端类型填充；包含凭证，仅供同进程内集成使用。
+ *
+ * @example
+ * ```ts
+ * import type { AIVectorBackend } from '@h-ai/ai'
+ * const value: AIVectorBackend = { type: 'qdrant', url: 'https://vector.example.com:6333' }
+ * const output = value.type
+ * ```
  */
 export interface AIVectorBackend {
   /** 后端类型（如 'qdrant'、'pgvector'、'lancedb'、'chroma'） */
@@ -451,12 +576,17 @@ export interface AIVectorBackend {
  * AI 存储 Provider 接口
  *
  * 负责创建 AIRelStore / AIVectorStore 实例，并管理存储层生命周期。
- * reldb + vecdb 已初始化时默认使用持久化 DB 实现，否则使用进程内临时实现；
+ * reldb + vecdb 已初始化时默认使用 DB 实现；仅开发或明确 E2E 可使用临时实现，生产要求 shared；
  * 也可对接 SaaS API 或其他后端。
  *
  * @example
  * ```ts
- * await ai.init(config, { storeProvider: myProvider })
+ * import { ai, type AIStoreProvider, type AIConfigInput } from '@h-ai/ai'
+ * // provider 的 shared 声明必须由真实共享后端支撑；AI 关闭时调用其 close。
+ * async function start(config: AIConfigInput, provider: AIStoreProvider) {
+ *   const result = await ai.init(config, { storeProvider: provider })
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
  * ```
  */
 export interface AIStoreProvider {

@@ -17,13 +17,32 @@ import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory' })
 
+/**
+ * 供共享注入逻辑调用的召回能力；失败保留 HaiResult，主体范围由可信装配绑定。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bind(recall: RecallMemories): RecallMemories {
+ *   return (query, options) => recall(query, { ...options, objectId: 'user-1' })
+ * }
+ * ```
+ */
 type RecallMemories = (query: string, options?: MemoryRecallOptions) => Promise<HaiResult<MemoryEntry[]>>
 
 /**
  * 按 ID 访问单条记忆时的归属校验（native / Mem0 后端共用）。
  *
  * 返回 `true` 表示该记忆不属于调用主体 / 作用域，调用方应统一返回 `MEMORY_NOT_FOUND`；
- * `accessScope` 未传时不做校验（返回 `false`，向后兼容）。
+ * `accessScope` 未传时不做校验（返回 `false`），仅供已建立可信边界的模块内部调用；外部请求应使用 scoped 实例。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function visible(entry: MemoryEntry) {
+ *   return !isMemoryAccessDenied(entry, { objectId: 'user-1', scope: { tenant: 'tenant-1' } })
+ * }
+ * ```
  */
 export function isMemoryAccessDenied(entry: MemoryEntry, accessScope?: MemoryAccessScope): boolean {
   if (!accessScope)
@@ -49,7 +68,19 @@ function extractQueryFromMessages(messages: ChatMessage[]): string {
   return ''
 }
 
-/** 将召回结果注入消息列表 */
+/**
+ * 将召回结果注入消息列表
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function enrich(recall: RecallMemories) {
+ *   const result = await injectRelevantMemories([{ role: 'user', content: '我喜欢喝什么？' }], { objectId: 'user-1', topK: 5, maxTokens: 500 }, recall)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
+ */
 export async function injectRelevantMemories(
   messages: ChatMessage[],
   options: MemoryInjectionOptions | undefined,

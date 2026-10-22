@@ -44,3 +44,5 @@ description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像
 - 质量与安全检查
 
 补充类型/错误码与范本见 [reference.md](reference.md)，仅在上述用法不足时读取。
+
+公开 API 示例以安装包的实际入口为准；框架源码中的内部工厂例子仅供模块维护。HaiResult 调用先检查 success，流与浏览器 AudioClient 按显式抛错契约处理；Context flush 失败和 A2A 未知外部效果不得盲目重放。

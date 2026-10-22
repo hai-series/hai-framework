@@ -3,6 +3,16 @@
 import type { ImageProvider } from './ai-image-provider.js'
 import { downloadImages, imageProtocolError, imageProviderFailure, readJson, referenceImageDataUrl } from './ai-image-provider.js'
 
+/**
+ * Qwen 多模态生成响应中的图片信源；地址仍须经过公共 HTTPS 下载校验。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: QwenImageResponse = { output: { choices: [{ message: { content: [{ image: 'https://images.example.com/generated.png' }] } }] } }
+ * const choices = response.output?.choices ?? []
+ * ```
+ */
 interface QwenImageResponse {
   output?: {
     choices?: Array<{
@@ -11,7 +21,20 @@ interface QwenImageResponse {
   }
 }
 
-/** 创建 Qwen-Image Provider */
+/**
+ * 创建 Qwen-Image Provider
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(request: Parameters<ImageProvider['generate']>[0]) {
+ *   const provider = createQwenImageProvider()
+ *   const result = await provider.generate(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
+ */
 export function createQwenImageProvider(): ImageProvider {
   return {
     async generate(request) {

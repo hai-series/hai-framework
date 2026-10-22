@@ -17,10 +17,27 @@ import { z } from 'zod'
 
 /**
  * 内置实体类型枚举（预设值，可通过配置 `entityTypes` 扩展）
+ *
+ * @example
+ * ```ts
+ * import { EntityTypeSchema } from '@h-ai/ai'
+ * const parsed = EntityTypeSchema.safeParse('project')
+ * if (!parsed.success) throw parsed.error
+ * const builtIn = parsed.data
+ * ```
  */
 export const EntityTypeSchema = z.enum(['person', 'project', 'concept', 'organization', 'location', 'event', 'other'])
 
-/** 实体类型（字符串，支持内置类型及用户自定义类型） */
+/**
+ * 实体类型（字符串，支持内置类型及用户自定义类型）
+ *
+ * @example
+ * ```ts
+ * import type { EntityType } from '@h-ai/ai'
+ * const value: EntityType = 'product'
+ * const output = value.toLowerCase()
+ * ```
+ */
 export type EntityType = string
 
 // ─── 实体 ───
@@ -33,12 +50,9 @@ export type EntityType = string
  *
  * @example
  * ```ts
- * const entity: KnowledgeEntity = {
- *   id: 'ent-001',
- *   name: '张三',
- *   type: 'person',
- *   aliases: ['小张', 'Zhang San'],
- * }
+ * import type { KnowledgeEntity } from '@h-ai/ai'
+ * const value: KnowledgeEntity = { id: 'entity-1', name: 'HAI', type: 'project', aliases: ['hai-framework'] }
+ * const output = [value.name, ...(value.aliases ?? [])].join(', ')
  * ```
  */
 export interface KnowledgeEntity {
@@ -62,6 +76,13 @@ export interface KnowledgeEntity {
  * 文档-实体关联记录
  *
  * 倒排索引中的一条记录，记录实体与文档/分块的关联关系。
+ *
+ * @example
+ * ```ts
+ * import type { EntityDocumentRelation } from '@h-ai/ai'
+ * const value: EntityDocumentRelation = { entityId: 'entity-1', documentId: 'guide', chunkId: 'guide-1', collection: 'docs', relevance: 1 }
+ * const output = `${value.collection}/${value.documentId}`
+ * ```
  */
 export interface EntityDocumentRelation {
   /** 实体 ID */
@@ -84,6 +105,17 @@ export interface EntityDocumentRelation {
 
 /**
  * 知识库初始化选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type KnowledgeSetupOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: KnowledgeSetupOptions) {
+ *   const result = await ai.knowledge.setup(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface KnowledgeSetupOptions {
   /** 集合名（可选，默认使用配置中的 collection） */
@@ -97,12 +129,12 @@ export interface KnowledgeSetupOptions {
  *
  * @example
  * ```ts
- * const input: KnowledgeIngestInput = {
- *   documentId: 'doc-001',
- *   content: '# 项目文档\n\n张三负责了核心模块...',
- *   title: '项目文档',
- *   url: 'https://docs.example.com/project',
- *   metadata: { author: '李四' },
+ * import { ai, type KnowledgeIngestInput } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: KnowledgeIngestInput) {
+ *   const result = await ai.knowledge.ingest(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
  * }
  * ```
  */
@@ -139,7 +171,22 @@ export interface KnowledgeIngestInput {
 
 /**
  * 文档导入结果
- * @example `if (result.success && result.data.cleanupPending) await ai.knowledge.repair()`
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeIngestResult, KnowledgeOperations } from '@h-ai/ai'
+ * async function reconcile(knowledge: KnowledgeOperations, value: KnowledgeIngestResult) {
+ *   if (!value.cleanupPending) return value.revision
+ *   let offset = 0
+ *   while (true) {
+ *     const repaired = await knowledge.repair({ offset, limit: 100 })
+ *     if (!repaired.success) throw new Error(repaired.error.message)
+ *     offset += repaired.data.processed
+ *     if (offset >= repaired.data.total || repaired.data.processed === 0) break
+ *   }
+ *   return value.revision
+ * }
+ * ```
  */
 export interface KnowledgeIngestResult {
   /** 文档 ID */
@@ -158,7 +205,17 @@ export interface KnowledgeIngestResult {
 
 /**
  * 分页恢复暂存和向量清理；删除集合后也允许调用。
- * @example `{ collection: 'docs', offset: 0, limit: 100 }`
+ *
+ * @example
+ * ```ts
+ * import { ai, type KnowledgeRepairOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: KnowledgeRepairOptions) {
+ *   const result = await ai.knowledge.repair(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface KnowledgeRepairOptions {
   /** 集合名，默认使用 knowledge.collection。 */
@@ -171,7 +228,13 @@ export interface KnowledgeRepairOptions {
 
 /**
  * 本页补偿扫描进度；失败以 HaiResult 返回，补偿记录仍保留。
- * @example `if (result.success) offset += result.data.processed`
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeRepairResult } from '@h-ai/ai'
+ * const value: KnowledgeRepairResult = { processed: 50, total: 120 }
+ * const output = value.processed < value.total
+ * ```
  */
 export interface KnowledgeRepairResult {
   /** 本页检查的清单数量。 */
@@ -182,6 +245,17 @@ export interface KnowledgeRepairResult {
 
 /**
  * 知识检索选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type KnowledgeRetrieveOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: KnowledgeRetrieveOptions) {
+ *   const result = await ai.knowledge.retrieve('部署要求', options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface KnowledgeRetrieveOptions {
   /** 集合名（可选，默认使用配置中的 collection） */
@@ -195,13 +269,19 @@ export interface KnowledgeRetrieveOptions {
   /**
    * 透传给向量 Provider 的元数据过滤条件；LanceDB 仅支持顶层 string/有限 number/boolean/null 的 AND 匹配，null 不匹配缺失字段。
    * 对象、数组及 undefined 不受 LanceDB 支持，过滤失败返回 KNOWLEDGE_RETRIEVE_FAILED；其它后端语义须单独核对。
-   * @example { tenant: 'acme', active: true }
    */
   filter?: Record<string, unknown>
 }
 
 /**
  * 知识检索结果项
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeRetrieveItem } from '@h-ai/ai'
+ * const value: KnowledgeRetrieveItem = { id: 'chunk-1', content: '共享数据库', score: 0.9, citation: { documentId: 'guide', chunkId: 'chunk-1' }, matchedEntities: ['HAI'] }
+ * const output = value.citation.documentId
+ * ```
  */
 export interface KnowledgeRetrieveItem {
   /** 分块 ID */
@@ -220,6 +300,13 @@ export interface KnowledgeRetrieveItem {
 
 /**
  * 知识检索结果
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeRetrieveResult } from '@h-ai/ai'
+ * const value: KnowledgeRetrieveResult = { items: [], citations: [], query: '部署要求', duration: 12 }
+ * const output = value.items.map(item => item.content)
+ * ```
  */
 export interface KnowledgeRetrieveResult {
   /** 检索结果列表（按综合分数降序） */
@@ -234,6 +321,17 @@ export interface KnowledgeRetrieveResult {
 
 /**
  * 知识问答选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type KnowledgeAskOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: KnowledgeAskOptions) {
+ *   const result = await ai.knowledge.ask('如何部署？', options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface KnowledgeAskOptions extends KnowledgeRetrieveOptions {
   /** LLM 模型名称覆盖 */
@@ -248,6 +346,13 @@ export interface KnowledgeAskOptions extends KnowledgeRetrieveOptions {
 
 /**
  * 知识问答结果
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeAskResult } from '@h-ai/ai'
+ * const value: KnowledgeAskResult = { answer: '使用共享数据库', context: [], citations: [], query: '部署要求', model: 'configured-model' }
+ * const output = value.answer
+ * ```
  */
 export interface KnowledgeAskResult {
   /** LLM 生成的回答 */
@@ -270,6 +375,17 @@ export interface KnowledgeAskResult {
 
 /**
  * 实体查询选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type EntityQueryOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: EntityQueryOptions) {
+ *   const result = await ai.knowledge.findByEntity('HAI', options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface EntityQueryOptions {
   /** 集合名（可选，默认使用配置中的 collection） */
@@ -280,6 +396,13 @@ export interface EntityQueryOptions {
 
 /**
  * 实体关联文档结果
+ *
+ * @example
+ * ```ts
+ * import type { EntityDocumentResult } from '@h-ai/ai'
+ * const value: EntityDocumentResult = { entity: { id: 'entity-1', name: 'HAI', type: 'project' }, documents: [{ documentId: 'guide', collection: 'docs', relevance: 1 }] }
+ * const output = value.documents.map(document => document.documentId)
+ * ```
  */
 export interface EntityDocumentResult {
   /** 实体信息 */
@@ -296,6 +419,17 @@ export interface EntityDocumentResult {
 
 /**
  * 实体列表查询选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type EntityListOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: EntityListOptions) {
+ *   const result = await ai.knowledge.listEntities(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface EntityListOptions {
   /** 集合名过滤（不指定则返回所有 collection 的实体） */
@@ -317,10 +451,13 @@ export interface EntityListOptions {
  *
  * @example
  * ```ts
- * await knowledge.ingestFile({
- *   filePath: '/data/docs/README.md',
- *   documentId: 'readme',
- * })
+ * import { ai, type KnowledgeIngestFileInput } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: KnowledgeIngestFileInput) {
+ *   const result = await ai.knowledge.ingestFile(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
  * ```
  */
 export interface KnowledgeIngestFileInput {
@@ -348,7 +485,13 @@ export interface KnowledgeIngestFileInput {
 
 /**
  * 文档信息（列表展示用）
- * @example `{ documentId: 'guide', revision: 'unique', chunkCount: 2, entityCount: 1, createdAt: Date.now() }`
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeDocumentInfo } from '@h-ai/ai'
+ * const value: KnowledgeDocumentInfo = { documentId: 'guide', revision: 'revision-1', title: '指南', chunkCount: 2, entityCount: 1, createdAt: Date.now() }
+ * const output = `${value.title}: ${value.chunkCount}`
+ * ```
  */
 export interface KnowledgeDocumentInfo {
   /** 当前完整发布版本。 */
@@ -369,6 +512,17 @@ export interface KnowledgeDocumentInfo {
 
 /**
  * 文档列表查询选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type KnowledgeDocumentListOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: KnowledgeDocumentListOptions) {
+ *   const result = await ai.knowledge.listDocuments(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface KnowledgeDocumentListOptions {
   /** 集合名覆盖（不指定则使用配置中的 default） */
@@ -381,6 +535,17 @@ export interface KnowledgeDocumentListOptions {
 
 /**
  * 文档删除选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type KnowledgeDocumentRemoveOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: KnowledgeDocumentRemoveOptions) {
+ *   const result = await ai.knowledge.removeDocument('guide', options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface KnowledgeDocumentRemoveOptions {
   /** 集合名覆盖 */
@@ -391,6 +556,15 @@ export interface KnowledgeDocumentRemoveOptions {
 
 /**
  * 批量导入进度回调参数
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeIngestBatchProgress } from '@h-ai/ai'
+ * function progress(value: KnowledgeIngestBatchProgress): string {
+ *   if (value.error) return `${value.currentDocumentId}: ${value.error.message}`
+ *   return `${value.completed}/${value.total}`
+ * }
+ * ```
  */
 export interface KnowledgeIngestBatchProgress {
   /** 已完成数量 */
@@ -407,6 +581,14 @@ export interface KnowledgeIngestBatchProgress {
 
 /**
  * 批量导入结果
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeIngestBatchResult } from '@h-ai/ai'
+ * function failedDocuments(value: KnowledgeIngestBatchResult): string[] {
+ *   return value.results.filter(item => item.error !== undefined).map(item => item.documentId)
+ * }
+ * ```
  */
 export interface KnowledgeIngestBatchResult {
   /** 成功导入的文档数 */
@@ -422,52 +604,26 @@ export interface KnowledgeIngestBatchResult {
 // ─── Knowledge 操作接口 ───
 
 /**
- * Knowledge 操作接口（通过 `ai.knowledge` 访问）
+ * Knowledge 操作接口（通过 `ai.knowledge` 访问）。
  *
- * 知识库管理与检索的统一入口，编排 datapipe + KnowledgeStore + embedding + LLM。
+ * 每个 collection 使用前须独立 setup。导入以版本清单原子发布；成功中的 cleanupPending
+ * 表示仍需分页 repair 清理旧向量，不能把补偿失败视作已清理。业务授权由调用层按主体执行。
  *
- * ## 生命周期
- *
- * 每个 collection 在使用前必须先调用 `setup()`，支持多次调用以初始化不同分区：
- *
+ * @example
  * ```ts
- * await ai.knowledge.setup()                          // 使用配置默认 collection
- * await ai.knowledge.setup({ collection: 'kb-prod' }) // 初始化额外分区
- * ```
- *
- * ## 单 collection 示例
- *
- * ```ts
- * // 初始化
- * await ai.knowledge.setup()
- *
- * // 导入文档
- * await ai.knowledge.ingest({
- *   documentId: 'doc-001',
- *   content: markdownContent,
- *   title: '项目文档',
- * })
- *
- * // 查询（带信源追踪）
- * const result = await ai.knowledge.retrieve('张三负责了哪些模块？')
- *
- * // 问答（RAG + 信源引用）
- * const answer = await ai.knowledge.ask('张三负责了哪些模块？')
- * ```
- *
- * ## 多 collection（多分区）示例
- *
- * ```ts
- * // 分别初始化两个知识库分区
- * await ai.knowledge.setup({ collection: 'kb-product' })
- * await ai.knowledge.setup({ collection: 'kb-support' })
- *
- * // 写入不同分区
- * await ai.knowledge.ingest({ documentId: 'p-001', content: '...', collection: 'kb-product' })
- * await ai.knowledge.ingest({ documentId: 's-001', content: '...', collection: 'kb-support' })
- *
- * // 从指定分区检索（对未 setup 的 collection 发起任何操作都会返回 KNOWLEDGE_NOT_SETUP 错误）
- * const result = await ai.knowledge.retrieve('query', { collection: 'kb-support' })
+ * import { ai } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。每个逻辑集合先单独 setup。
+ * const ready = await ai.knowledge.setup({ collection: 'docs' })
+ * if (!ready.success) throw new Error(ready.error.message)
+ * const published = await ai.knowledge.ingest({ collection: 'docs', documentId: 'guide', content: '# 部署指南\n使用共享数据库。' })
+ * if (!published.success) throw new Error(published.error.message)
+ * if (published.data.cleanupPending) {
+ *   // 生产维护任务须按 processed/total 分页扫描，失败保留清单供重试。
+ *   const repaired = await ai.knowledge.repair({ collection: 'docs', offset: 0, limit: 100 })
+ *   if (!repaired.success) throw new Error(repaired.error.message)
+ * }
+ * const answer = await ai.knowledge.ask('部署需要什么？', { collection: 'docs' })
+ * if (!answer.success) throw new Error(answer.error.message)
  * ```
  */
 export interface KnowledgeOperations {
@@ -551,7 +707,6 @@ export interface KnowledgeOperations {
    * 有界恢复过期暂存、重试失败的旧向量清理。setup 自动扫描前 100 份清单，大集合需定期分页调用。
    * 暂存租约为存储端时钟的 5 分钟；过期 owner 即使恢复也不能发布。
    * 被遗弃写入的补偿墓碑永久保留，重复扫描用于清理迟到的外部写入。
-   * @example `const progress = await ai.knowledge.repair({ collection: 'docs', offset: 0, limit: 100 })`
    */
   repair: (options?: KnowledgeRepairOptions) => Promise<HaiResult<KnowledgeRepairResult>>
 

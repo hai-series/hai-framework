@@ -15,7 +15,17 @@ import { aiM } from '../ai-i18n.js'
 
 /**
  * Task、稳定消息回执及事件的单文档权威状态；历史不自动删除，防止旧重试重新执行。
- * @example const receipt = await journal.readVersioned(taskId)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function inspect(store: AIRelStore<A2AJournal>, taskId: string) {
+ *   const receipt = await store.readVersioned(taskId)
+ *   if (!receipt) return undefined
+ *   return { version: receipt.version, task: receipt.data.task, interrupted: receipt.data.interrupted }
+ * }
+ * // 消息日志不构成执行提交证据；以同文档 Task/finished/中断状态核对未知外部效果。
+ * ```
  */
 export interface A2AJournal {
   owner: string
@@ -34,7 +44,13 @@ export interface A2AJournal {
 
 /**
  * A2A共享执行参数，时钟和截止条件均由Store提供。
- * @example const limits: A2ARuntimeOptions = { leaseMs: 30000, pollIntervalMs: 250, maxExecutionMs: 300000 }
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const options: A2ARuntimeOptions = { leaseMs: 30_000, pollIntervalMs: 250, maxExecutionMs: 300_000 }
+ * const checksPerLease = options.leaseMs / options.pollIntervalMs
+ * ```
  */
 export interface A2ARuntimeOptions {
   leaseMs: number
@@ -72,7 +88,16 @@ function principal(context?: ServerCallContext): string {
 
 /**
  * 共享执行器；未知外部效果不会在另一个节点自动重放。
- * @example const task = await handler.getTask({ id: receipt }, trustedContext)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function inspect(card: AgentCard, executor: AgentExecutor, journal: AIRelStore<A2AJournal>, contexts: AIRelStore<{ owner: string }>, messages: AIRelStore<A2AMessageRecord>, taskId: string, trustedContext: ServerCallContext) {
+ *   const handler = new SharedA2ARequestHandler(card, executor, journal, contexts, messages, { leaseMs: 30_000, pollIntervalMs: 250, maxExecutionMs: 300_000 })
+ *   try { return await handler.getTask({ id: taskId }, trustedContext) }
+ *   finally { await handler.close() }
+ * }
+ * ```
  */
 export class SharedA2ARequestHandler implements A2ARequestHandler {
   private readonly executions = new Map<string, { controller: AbortController, done: Promise<void> }>()

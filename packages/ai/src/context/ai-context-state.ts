@@ -12,7 +12,13 @@ import { sessionStoreKey } from '../store/ai-store-key.js'
 
 /**
  * 生成所有权；pending 没有超时，必须由业务确认实际表达内容。
- * @example `{ epoch, id: crypto.randomUUID(), owner: crypto.randomUUID(), phase: 'generating', expiresAt: now + 30_000, userMessage: '你好' }`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const generation: ContextGeneration = { epoch: crypto.randomUUID(), id: crypto.randomUUID(), owner: crypto.randomUUID(), phase: 'generating', expiresAt: 30_000, userMessage: '你好' }
+ * const owner = generation.owner
+ * ```
  */
 export interface ContextGeneration {
   /** 获取许可时的上下文纪元，reset 后旧 producer 不可复用。 */
@@ -31,7 +37,13 @@ export interface ContextGeneration {
 
 /**
  * 一条记录原子保存消息、摘要、轮次和待提交状态，避免恢复时跨记录拼接。
- * @example `{ scope, messages: [], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: 0 }`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const state: PersistedContextState = { scope: { objectId: 'user-1', sessionId: 'session-1' }, messages: [], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: 0 }
+ * const scope = structuredClone(state.scope)
+ * ```
  */
 export interface PersistedContextState {
   /** 作用域副本用于批量目录过滤，不从客户端消息推导身份。 */
@@ -54,7 +66,13 @@ export interface PersistedContextState {
 
 /**
  * 内部流程异常由公开 HaiResult 边界转换；流式接口继续以异常终止。
- * @example `throw new ContextStateError(HaiAIError.CONTEXT_BUSY, 'Context busy')`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const failure = new ContextStateError(HaiAIError.CONTEXT_BUSY, 'Context busy')
+ * const definition = failure.definition
+ * ```
  */
 export class ContextStateError extends Error {
   readonly code: HaiErrorDef['code']
@@ -67,7 +85,13 @@ export class ContextStateError extends Error {
 
 /**
  * 一次候选变更；期限在最终 SQL 中检查。
- * @example `{ value: undefined, notAfter: active.expiresAt }`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const readonlyResult: StateChange<number> = { value: 2, write: false }
+ * const committedCount = readonlyResult.value
+ * ```
  */
 interface StateChange<T> {
   /** CAS 成功后交给调用方的业务结果。 */
@@ -84,7 +108,18 @@ interface StateChange<T> {
  * @param scope - 明确的主体与会话
  * @param initial - 仅在记录不存在时使用的初始状态
  * @param receive - 成功读取/提交后更新管理器的只读快照
- * @example `const state = createContextStateAccess(store, scope, initial, snapshot => { cached = snapshot })`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function readScope(store: AIRelStore<PersistedContextState>, scope: InteractionScope) {
+ *   const initial: PersistedContextState = { scope, messages: [], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: 0 }
+ *   let snapshot = structuredClone(initial)
+ *   const access = createContextStateAccess(store, scope, initial, current => { snapshot = current })
+ *   await access.read()
+ *   return snapshot
+ * }
+ * ```
  */
 export function createContextStateAccess(
   store: AIRelStore<PersistedContextState>,

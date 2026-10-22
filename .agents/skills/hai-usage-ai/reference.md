@@ -268,7 +268,7 @@ A2A journal、context 归属和消息表在 `ai.init()` 阶段初始化；可信
 | `hai:ai:500-502` | Reasoning |
 | `hai:ai:600-701` | Retrieval / RAG |
 | `hai:ai:800-805` | Knowledge |
-| `hai:ai:900-905` | Memory |
+| `hai:ai:900-906` | Memory |
 | `hai:ai:950-971` | Context / Store / Session |
 | `hai:ai:980-984` | A2A |
 
@@ -286,3 +286,5 @@ const memories = await apiClient.ai.memories.recall({ query: '偏好', topK: 5 }
 语音：`@h-ai/ai/client` 的 `createAudioClient({ url, getTicket })` 提供 `client.transcribe/transcribeStream/synthesize/synthesizeStream`。`getTicket(request)` 接收本次操作摘要（`operation` / `model`），应通过已登录 HTTP 请求签发与本次操作严格绑定的短期、一次性 Audio ticket（推荐 `iam.ticket.issue({ grant })`）；IAM access token 不进入 WebSocket URL。
 
 Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。
+
+JSDoc 公开示例使用真实包入口，内部工厂示例标记“模块内部上下文”；框架仓库执行 `pnpm check:jsdoc --package ai` 校验结构体、公开函数和示例类型。调用示例须保留 HaiResult 成功检查、受信主体范围、共享 CAS 版本与存储端期限，不将后台 flush 失败或未知外部效果当作成功重试。

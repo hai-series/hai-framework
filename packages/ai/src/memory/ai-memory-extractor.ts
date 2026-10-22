@@ -70,6 +70,16 @@ function formatMessages(messages: ChatMessage[]): string {
  * @returns 提取到的记忆输入列表
  * @param options.tempModel - 临时模型配置
  * @param options.signal - 取消信号
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function extract(llm: LLMOperations) {
+ *   const result = await extractMemories(llm, [{ role: 'user', content: '我喜欢绿茶' }], { objectId: 'user-1', types: ['preference'], minImportance: 0.5 })
+ *   if (!result.success) return result
+ *   return result.data.map(entry => entry.content)
+ * }
+ * ```
  */
 export async function extractMemories(
   llm: LLMOperations,

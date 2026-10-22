@@ -28,7 +28,18 @@ import { HaiAIError } from '../ai-types.js'
 
 // ─── 内部类型 ───
 
-/** 工具注册记录（定义 + 处理器） */
+/**
+ * 工具注册记录（定义 + 处理器）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const validator = new AjvJsonSchemaValidator()
+ * const definition: MCPToolDefinition = { name: 'echo', description: '返回输入', inputSchema: { type: 'string' } }
+ * const registration: ToolRegistration = { definition, handler: input => input, validate: validator.getValidator(definition.inputSchema) }
+ * const validation = registration.validate('你好')
+ * ```
+ */
 interface ToolRegistration {
   /** 工具元数据 */
   definition: MCPToolDefinition
@@ -38,7 +49,16 @@ interface ToolRegistration {
   validate: JsonSchemaValidator<unknown>
 }
 
-/** 资源注册记录（元数据 + 内容加载器） */
+/**
+ * 资源注册记录（元数据 + 内容加载器）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const registration: ResourceRegistration = { resource: { uri: 'config://public/features', name: '公开特性' }, handler: async () => ({ uri: 'config://public/features', text: 'enabled' }) }
+ * const content = await registration.handler()
+ * ```
+ */
 interface ResourceRegistration {
   /** 资源元数据 */
   resource: MCPResource
@@ -46,7 +66,16 @@ interface ResourceRegistration {
   handler: () => Promise<MCPResourceContent>
 }
 
-/** 提示词注册记录（元数据 + 模板渲染器） */
+/**
+ * 提示词注册记录（元数据 + 模板渲染器）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const registration: PromptRegistration = { prompt: { name: 'explain' }, handler: async args => [{ role: 'user', content: { type: 'text', text: args.topic ?? '共享状态' } }] }
+ * const messages = await registration.handler({ topic: '共享状态' })
+ * ```
+ */
 interface PromptRegistration {
   /** 提示词元数据 */
   prompt: MCPPrompt
@@ -66,12 +95,12 @@ interface PromptRegistration {
  *
  * @example
  * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const mcp = createAIMCPFunctions()
- * mcp.registerTool(
- *   { name: 'echo', description: '回音', inputSchema: { type: 'object' } },
- *   async (input) => input,
- * )
- * const result = await mcp.callTool('echo', { msg: 'hi' })
+ * const registered = mcp.registerTool({ name: 'echo', description: '返回输入', inputSchema: { type: 'string' } }, (input: string) => input)
+ * if (!registered.success) throw new Error(registered.error.message)
+ * const result = await mcp.callTool('echo', '你好')
+ * if (!result.success) throw new Error(result.error.message)
  * ```
  */
 export function createAIMCPFunctions(): MCPOperations {

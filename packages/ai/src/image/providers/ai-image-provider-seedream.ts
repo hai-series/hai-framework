@@ -3,11 +3,34 @@
 import type { ImageProvider } from './ai-image-provider.js'
 import { downloadImages, imageFromBase64, imageProtocolError, imageProviderFailure, readJson, referenceImageDataUrl } from './ai-image-provider.js'
 
+/**
+ * Seedream 生成响应中的 Base64 或受限远端图片地址。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: SeedreamImageResponse = { data: [{ b64_json: 'iVBORw0KGgo=' }] }
+ * const encoded = response.data?.[0]?.b64_json
+ * ```
+ */
 interface SeedreamImageResponse {
   data?: Array<{ b64_json?: string, url?: string }>
 }
 
-/** 创建 Seedream Provider */
+/**
+ * 创建 Seedream Provider
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(request: Parameters<ImageProvider['generate']>[0]) {
+ *   const provider = createSeedreamImageProvider()
+ *   const result = await provider.generate(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
+ */
 export function createSeedreamImageProvider(): ImageProvider {
   return {
     async generate(request) {

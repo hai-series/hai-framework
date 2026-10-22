@@ -36,6 +36,17 @@ import { SharedA2ARequestHandler } from './ai-a2a-runtime.js'
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
 const DEFAULT_A2A_CALL_TIMEOUT_MS = 60_000
 
+/**
+ * 校验通过的真实远端地址与去除查询和片段后的诊断标签。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const validated = validateRemoteUrl('https://trusted-agent.example.com/a2a?route=docs')
+ * const request: ValidatedRemoteUrl = validated
+ * const safeLabel = request.safeLabel // 日志不记录 query/hash。
+ * ```
+ */
 interface ValidatedRemoteUrl {
   requestUrl: string
   safeLabel: string
@@ -154,7 +165,18 @@ async function executeRemoteAgentCall(
 
 // ─── 工厂函数 ───
 
-/** A2A 子功能组装依赖 */
+/**
+ * A2A 子功能组装依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bind(provider: AIStoreProvider): A2ADeps {
+ *   // 必须在 provider.initialize() 前登记表，延迟注册 executor 不再创建遗漏的表。
+ *   return createA2AStores(provider)
+ * }
+ * ```
+ */
 export interface A2ADeps {
   /** Task和事件同文档CAS权威状态。 */
   journalStore: AIRelStore<A2AJournal>
@@ -164,7 +186,19 @@ export interface A2ADeps {
   messageStore: AIRelStore<A2AMessageRecord>
 }
 
-/** 在 StoreProvider.initialize 前创建 A2A 表，避免延迟注册 executor 时漏建表。 */
+/**
+ * 在 StoreProvider.initialize 前创建 A2A 表，避免延迟注册 executor 时漏建表。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function prepare(provider: AIStoreProvider) {
+ *   const stores = createA2AStores(provider)
+ *   await provider.initialize()
+ *   return stores
+ * }
+ * ```
+ */
 export function createA2AStores(storeProvider: AIStoreProvider): A2ADeps {
   return {
     journalStore: storeProvider.createRelStore<A2AJournal>('hai_ai_a2a_journal', { hasObjectId: true, hasRefId: true }),
@@ -173,7 +207,17 @@ export function createA2AStores(storeProvider: AIStoreProvider): A2ADeps {
   }
 }
 
-/** A2A 子功能配置 */
+/**
+ * A2A 子功能配置
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function options(executor: AgentExecutor): A2ACreateOptions {
+ *   return { executor, agentCard: { name: 'guide', url: 'https://example.com/a2a' }, runtime: { leaseMs: 30_000, pollIntervalMs: 250, maxExecutionMs: 300_000 } }
+ * }
+ * ```
+ */
 export interface A2ACreateOptions {
   /** Agent Card 配置 */
   agentCard: A2AAgentCardConfig
@@ -183,7 +227,17 @@ export interface A2ACreateOptions {
   runtime?: Partial<A2ARuntimeOptions>
 }
 
-/** AI生命周期内部持有的实现；关闭先停止A2A执行再关闭共享Store。 */
+/**
+ * AI生命周期内部持有的实现；关闭先停止A2A执行再关闭共享Store。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function stop(implementation: A2AImplementation) {
+ *   await implementation.close() // 等待本地执行停止后，应用才能关闭借用的共享 Store。
+ * }
+ * ```
+ */
 export interface A2AImplementation extends A2AOperations {
   close: () => Promise<void>
 }
@@ -192,6 +246,20 @@ export interface A2AImplementation extends A2AOperations {
  * 创建 A2A 操作接口实例
  *
  * 组装共享 journal 的 RequestHandler、消息日志、远端调用等能力。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function run(options: A2ACreateOptions, deps: A2ADeps) {
+ *   const operations = createA2AOperations(options, deps)
+ *   try {
+ *     const result = await operations.listMessages({ callerId: 'agent-1', limit: 20 })
+ *     if (!result.success) return result
+ *     return result.data
+ *   }
+ *   finally { await operations.close() }
+ * }
+ * ```
  */
 export function createA2AOperations(
   options: A2ACreateOptions,
@@ -268,7 +336,17 @@ export function createA2AOperations(
 
 // ─── 延迟初始化代理 ───
 
-/** 延迟代理的外部依赖（由 ai-main 注入状态访问器） */
+/**
+ * 延迟代理的外部依赖（由 ai-main 注入状态访问器）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function initialized(deps: A2ALazyProxyDeps) {
+ *   return deps.isInitialized() && deps.getA2AConfig() !== null && deps.getStores() !== null
+ * }
+ * ```
+ */
 export interface A2ALazyProxyDeps {
   /** 是否已初始化（即 currentConfig !== null） */
   isInitialized: () => boolean
@@ -292,6 +370,17 @@ export interface A2ALazyProxyDeps {
  *
  * @param deps - 由 ai-main 注入的状态访问器
  * @returns A2AOperations 代理对象
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function card(deps: A2ALazyProxyDeps) {
+ *   const operations = createA2ALazyProxy(deps)
+ *   const result = operations.getAgentCard()
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
   return {

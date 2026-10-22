@@ -24,11 +24,10 @@ import type {
  *
  * @example
  * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const processor = createStreamProcessor()
- * for await (const chunk of stream) {
- *   processor.process(chunk)
- * }
- * const result = processor.getResult() // { content, toolCalls, finishReason }
+ * processor.process({ id: 'chunk-1', object: 'chat.completion.chunk', created: 0, model: 'configured-model', choices: [{ index: 0, delta: { content: '你好' }, finish_reason: null }] })
+ * const text = processor.getResult().content
  * ```
  */
 export function createStreamProcessor(): StreamProcessor {
@@ -142,8 +141,11 @@ export function createStreamProcessor(): StreamProcessor {
  *
  * @example
  * ```ts
- * const result = await collectStream(ai.llm.chatStream({ messages }))
- * core.logger.info({ content: result.content, finishReason: result.finishReason })
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function consume(stream: AsyncIterable<ChatCompletionChunk>) {
+ *   const result = await collectStream(stream)
+ *   return { text: result.content, toolCalls: result.toolCalls }
+ * }
  * ```
  */
 export async function collectStream(
@@ -168,10 +170,12 @@ export async function collectStream(
  *
  * @example
  * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const decoder = createSSEDecoder()
- * for (const event of decoder.decode(rawText)) {
- *   core.logger.info({ data: event.data }) // SSE data 内容
- * }
+ * const first = [...decoder.decode('data: 你')]
+ * const completed = [...decoder.decode('好\n\n')]
+ * const text = completed[0]?.data
+ * decoder.reset()
  * ```
  */
 export function createSSEDecoder(): SSEDecoder {
@@ -234,8 +238,10 @@ export function createSSEDecoder(): SSEDecoder {
  *
  * @example
  * ```ts
- * const text = encodeSSE({ event: 'message', data: '{"content":"hi"}' })
- * // => 'event: message\ndata: {"content":"hi"}\n\n'
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const encoded = encodeSSE({ event: 'message', id: 'event-1', data: '第一行\n第二行' })
+ * const decoder = createSSEDecoder()
+ * const events = [...decoder.decode(encoded)]
  * ```
  */
 export function encodeSSE(event: SSEEvent): string {

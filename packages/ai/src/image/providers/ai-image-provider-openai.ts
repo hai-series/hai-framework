@@ -3,13 +3,36 @@
 import type { ImageProvider } from './ai-image-provider.js'
 import { appendReferenceImages, imageFromBase64, imageProtocolError, imageProviderFailure, readJson } from './ai-image-provider.js'
 
+/**
+ * OpenAI 图片接口的 Base64 响应与实际输出格式。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: OpenAIImageResponse = { data: [{ b64_json: 'iVBORw0KGgo=' }], output_format: 'png' }
+ * const count = response.data?.length ?? 0
+ * ```
+ */
 interface OpenAIImageResponse {
   data?: Array<{ b64_json?: string }>
   output_format?: string
   size?: string
 }
 
-/** 创建 OpenAI GPT Image Provider */
+/**
+ * 创建 OpenAI GPT Image Provider
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(request: Parameters<ImageProvider['generate']>[0]) {
+ *   const provider = createOpenAIImageProvider()
+ *   const result = await provider.generate(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
+ */
 export function createOpenAIImageProvider(): ImageProvider {
   return {
     async generate(request) {

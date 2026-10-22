@@ -25,6 +25,16 @@ const CONVERSATION_SUMMARY_PREFIX = '[Conversation Summary]'
 /** 框架摘要的保留参与者名；不得改用 content 前缀识别，避免与调用方指令冲突。 */
 const CONVERSATION_SUMMARY_NAME = 'hai_internal_conversation_summary_v1'
 
+/**
+ * 压缩时不可拆分的消息组；工具调用与匹配的工具结果共同构成一个协议单元。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const unit: MessageProtocolUnit = [{ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'weather', arguments: '{"city":"北京"}' } }] }, { role: 'tool', tool_call_id: 'call-1', content: '晴' }]
+ * const messageCount = unit.length // 此单元必须整体保留或移除。
+ * ```
+ */
 type MessageProtocolUnit = ChatMessage[]
 
 /** 确保压缩操作只在结果确实满足调用方预算时返回成功。 */
@@ -162,6 +172,17 @@ function splitProtectedSuffix(messages: ChatMessage[], preserveLastN: number): {
  * @param summary - Summary 操作接口（用于 summary/hybrid 策略生成摘要）
  * @param modelMaxTokens - 模型最大 Token 数（用于 defaultMaxTokens 为 0 时的回退计算）
  * @returns CompressOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function compress(config: CompressConfig, token: TokenOperations, summary: SummaryOperations) {
+ *   const operations = createCompressOperations(config, token, summary, 8192)
+ *   const result = await operations.tryCompress([{ role: 'user', content: '项目介绍' }], { maxTokens: 1000, strategy: 'sliding-window' })
+ *   if (!result.success) return result
+ *   return result.data.messages
+ * }
+ * ```
  */
 export function createCompressOperations(
   config: CompressConfig,

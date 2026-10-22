@@ -9,12 +9,31 @@ import type { AIRelStore, KnowledgeDocumentRevision, KnowledgeStore } from '../a
 import { createHash, randomUUID } from 'node:crypto'
 import { HaiVecdbError } from '@h-ai/vecdb'
 
-/** 已发布快照不保存向量数组，避免同一向量在 SQL 和 vecdb 重复持久化。 */
+/**
+ * 已发布快照不保存向量数组，避免同一向量在 SQL 和 vecdb 重复持久化。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const document: PublishedRevision = { documentId: 'doc-1', collection: 'docs', revision: 'revision-1', createdAt: Date.now(), chunks: [{ id: 'chunk-1', content: '指南', metadata: {} }], entities: [] }
+ * const ids = document.chunks.map(chunk => chunk.id)
+ * ```
+ */
 type PublishedRevision = Omit<KnowledgeDocumentRevision, 'chunks'> & {
   chunks: Array<Omit<KnowledgeDocumentRevision['chunks'][number], 'vector'>>
 }
 
-/** 补偿记录在任何外部写入前持久化；abandoned 墓碑不能因一次删除成功就遗忘。 */
+/**
+ * 补偿记录在任何外部写入前持久化；abandoned 墓碑不能因一次删除成功就遗忘。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const garbage: GarbageRevision = { revision: 'old-revision', ids: ['old-chunk'], abandoned: true }
+ * // abandoned 为永久墓碑：一次删除成功也不能让迟到 writer 重新发布。
+ * const retainTombstone = garbage.abandoned
+ * ```
+ */
 interface GarbageRevision {
   revision: string
   ids: string[]
@@ -23,7 +42,15 @@ interface GarbageRevision {
 
 /**
  * 每文档一个永久清单；删除保留墓碑，阻断旧 writer 的 missing ABA。
- * @example `const manifest = await documents.readVersioned(documentKey)`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function nextManifest(store: AIRelStore<KnowledgeDocumentManifest>, current: KnowledgeDocumentManifest, document: PublishedRevision): Promise<KnowledgeDocumentManifest> {
+ *   return { ...current, pending: { document, deadline: await store.currentTime() + 30_000 } }
+ * }
+ * // 最终发布仍须携带 readVersioned 读到的版本，并由存储原子核验期限。
+ * ```
  */
 export interface KnowledgeDocumentManifest {
   /** 集合、代际、文档 ID 的散列组合键。 */
@@ -44,7 +71,13 @@ export interface KnowledgeDocumentManifest {
 
 /**
  * 集合删除也保留代际，重新 setup 不会重新显示上一代的数据。
- * @example `{ collection: 'docs', dimension: 2, generation: crypto.randomUUID(), deleted: false }`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const manifest: KnowledgeCollectionManifest = { collection: 'docs', dimension: 2, generation: randomUUID(), deleted: false }
+ * const next = { ...manifest, generation: randomUUID() } // 重新建立集合不复用旧代际。
+ * ```
  */
 export interface KnowledgeCollectionManifest {
   /** 逻辑集合名。 */
@@ -57,7 +90,18 @@ export interface KnowledgeCollectionManifest {
   deleted: boolean
 }
 
-/** 内部依赖；只由默认 DB Provider 构造，不作为包公开 API。 */
+/**
+ * 内部依赖；只由默认 DB Provider 构造，不作为包公开 API。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bind(deps: KnowledgeDbDependencies): KnowledgeDbDependencies {
+ *   // prepare 归调用方装配，必须等待共享表就绪，不能把失败当作空集合。
+ *   return { documents: deps.documents, collections: deps.collections, prepare: deps.prepare, vecdb: deps.vecdb }
+ * }
+ * ```
+ */
 interface KnowledgeDbDependencies {
   documents: AIRelStore<KnowledgeDocumentManifest>
   collections: AIRelStore<KnowledgeCollectionManifest>
@@ -92,7 +136,17 @@ function garbageFor(document: PublishedRevision, abandoned: boolean): GarbageRev
 
 /**
  * 基于共享 RelStore CAS 实现 Knowledge 存储，不承诺 SQL 与 vecdb 的跨库事务。
- * @example `const store = createDbKnowledgeStore({ documents, collections, prepare, vecdb })`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function prepare(deps: KnowledgeDbDependencies) {
+ *   const store = createDbKnowledgeStore(deps)
+ *   await store.initialize('docs', 2)
+ *   const recovery = await store.repair('docs', { offset: 0, limit: 100 })
+ *   return { store, recovery }
+ * }
+ * ```
  */
 export function createDbKnowledgeStore(deps: KnowledgeDbDependencies): KnowledgeStore {
   const { documents, collections, vecdb, prepare } = deps

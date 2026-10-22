@@ -69,7 +69,17 @@ Rules:
  * @param datapipe - datapipe 实例（必选，用于文本清洗与分块）
  * @param store - KnowledgeStore 实例（可选，未提供时 knowledge 子系统不可用）
  * @returns KnowledgeOperations 实例
- * @example `const knowledge = createKnowledgeOperations(config, llm, embedding, datapipe, store)`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function prepare(config: KnowledgeConfig, llm: LLMOperations, embedding: EmbeddingOperations, pipe: DatapipeFunctions, store: KnowledgeStore) {
+ *   const knowledge = createKnowledgeOperations(config, llm, embedding, pipe, store)
+ *   const ready = await knowledge.setup({ collection: 'docs', dimension: 1536 })
+ *   if (!ready.success) return ready
+ *   return await knowledge.ingest({ collection: 'docs', documentId: 'doc-1', content: '项目使用 TypeScript' })
+ * }
+ * ```
  */
 export function createKnowledgeOperations(
   config: KnowledgeConfig,
@@ -608,7 +618,6 @@ export function createKnowledgeOperations(
 
     /**
      * 有界恢复过期暂存并重试旧向量清理；故障时保留持久补偿信息。
-     * @example `await ai.knowledge.repair({ collection: 'docs', offset: 0, limit: 100 })`
      */
     async repair(options?: KnowledgeRepairOptions): Promise<HaiResult<KnowledgeRepairResult>> {
       if (!store)

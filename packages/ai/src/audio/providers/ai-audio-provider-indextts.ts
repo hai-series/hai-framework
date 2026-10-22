@@ -52,6 +52,18 @@ const HEADER_CHANNELS = 'x-hai-audio-channels'
  * 创建 IndexTTS Audio Provider（仅 TTS）
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function invoke(request: ProviderSynthesisRequest) {
+ *   const provider = createIndexTtsAudioProvider()
+ *   if (!provider.synthesis) throw new Error('Audio operation is unavailable')
+ *   const result = await provider.synthesis.synthesize(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createIndexTtsAudioProvider(): AudioProvider {
   async function synthesize(request: ProviderSynthesisRequest): Promise<HaiResult<SynthesisResult>> {

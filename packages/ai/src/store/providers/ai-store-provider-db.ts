@@ -41,7 +41,13 @@ function dataTimestamp<T>(data: T, field: 'createdAt' | 'updatedAt', fallback: n
 
 /**
  * MySQL 单个索引列的真实结构；完整列、顺序、可见性和非唯一 BTREE 都必须匹配。
- * @example `{ column_name: 'object_id', seq_in_index: 1, non_unique: 1, sub_part: null, index_type: 'BTREE', collation: 'A', is_visible: 'YES', expression: null }`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const column: MysqlIndexColumn = { column_name: 'object_id', seq_in_index: 1, non_unique: 1, sub_part: null, index_type: 'BTREE', collation: 'A', is_visible: 'YES', expression: null }
+ * const usable = column.index_type === 'BTREE' && column.sub_part === null && column.is_visible === 'YES'
+ * ```
  */
 interface MysqlIndexColumn {
   column_name: string | null
@@ -56,7 +62,6 @@ interface MysqlIndexColumn {
 
 /**
  * 只识别驱动明确的重复索引错误；沿 HaiResult/Error cause 查找，不根据错误文案猜测。
- * @example `isMysqlDuplicateIndex(Object.assign(new Error(), { code: 'ER_DUP_KEYNAME', errno: 1061 })) // true`
  */
 function isMysqlDuplicateIndex(error: unknown): boolean {
   const seen = new Set<object>()
@@ -145,7 +150,6 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
   /**
    * MySQL 并发首次创建只接受明确的重复名称错误，并重读结构，权限/DDL/不匹配仍失败。
-   * @example `await this.createIndex('idx_hai_ai_context_object_id', 'object_id')`
    */
   private async createIndex(name: string, columns: string): Promise<void> {
     if (this.dbType === 'mysql') {
@@ -608,7 +612,17 @@ class VecdbAIVectorStore implements AIVectorStore {
 
 // ─── Provider 工厂 ───
 
-/** DB Provider 依赖 */
+/**
+ * DB Provider 依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bind(sql: DmlOperations, jsonOps: ReldbJsonOps, vector: VecdbFunctions): DbStoreProviderDeps {
+ *   return { sql, jsonOps, dbType: 'postgresql', vecdb: vector }
+ * }
+ * ```
+ */
 export interface DbStoreProviderDeps {
   sql: DmlOperations
   jsonOps: ReldbJsonOps
@@ -623,12 +637,17 @@ export interface DbStoreProviderDeps {
  * reldb 用于关系数据存储，vecdb 用于向量存储。
  * MySQL 首次建索引只在明确的 1061 重复名称后重查并接受匹配结构；其它 DDL 失败向上传播。
  * initialize 等待全部已启动 DDL 结束，失败不回滚 MySQL 已创建结构，也不关闭调用方的依赖。
+ *
  * @example
  * ```ts
- * const provider = createDbStoreProvider({ sql: reldb.sql, jsonOps: reldb.json, dbType: 'mysql', vecdb })
- * provider.createRelStore('hai_ai_example', { hasObjectId: true })
- * await provider.initialize()
- * await provider.close()
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function prepare(deps: DbStoreProviderDeps) {
+ *   const provider = createDbStoreProvider(deps)
+ *   const store = provider.createRelStore<{ title: string }>('hai_ai_example', { hasObjectId: true })
+ *   await provider.initialize()
+ *   await store.save('doc-1', { title: '指南' }, { objectId: 'user-1' })
+ *   await provider.close?.() // 只释放本 Provider 状态；借用的 reldb/vecdb 由调用方关闭。
+ * }
  * ```
  */
 export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvider {
@@ -699,6 +718,15 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
  * 检查 reldb + vecdb 是否已初始化
  *
  * 由 ai-main.ts 在创建默认 DB Provider 前调用。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * if (!isDbStoreAvailable()) {
+ *   const missing = getUnavailableDbDeps()
+ *   throw new Error('Missing AI dependencies: ' + missing.join(', '))
+ * }
+ * ```
  */
 export function isDbStoreAvailable(): boolean {
   return reldb.isInitialized && vecdb.isInitialized
@@ -706,6 +734,13 @@ export function isDbStoreAvailable(): boolean {
 
 /**
  * 获取未初始化的依赖名称列表
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const missing = getUnavailableDbDeps()
+ * if (missing.length > 0) throw new Error('Initialize first: ' + missing.join(', '))
+ * ```
  */
 export function getUnavailableDbDeps(): string[] {
   const missing: string[] = []
@@ -717,9 +752,19 @@ export function getUnavailableDbDeps(): string[] {
 }
 
 /**
- * 从已初始化的 reldb/vecdb 单例创建 DB Provider
+ * 从已初始化的 reldb/vecdb 单例创建默认 DB Provider。
  *
- * 用于默认 `store.type: 'db'` 场景。调用前应先用 `isDbStoreAvailable()` 检查。
+ * 调用方先检查依赖就绪；生产共享能力由实际数据库和向量后端决定，不由配置标签推断。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * if (!isDbStoreAvailable()) throw new Error('Initialize reldb and vecdb first')
+ * const provider = createDbStoreProviderFromModules()
+ * provider.createRelStore<{ content: string }>('hai_ai_notes')
+ * await provider.initialize()
+ * await provider.close?.()
+ * ```
  */
 export function createDbStoreProviderFromModules(): AIStoreProvider {
   return createDbStoreProvider({

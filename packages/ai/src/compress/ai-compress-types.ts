@@ -14,16 +14,46 @@ import { z } from 'zod'
 
 // ─── 压缩策略枚举 ───
 
-/** 压缩策略枚举 */
+/**
+ * 压缩策略枚举
+ *
+ * @example
+ * ```ts
+ * import { CompressionStrategySchema } from '@h-ai/ai'
+ * const parsed = CompressionStrategySchema.safeParse('sliding-window')
+ * if (!parsed.success) throw parsed.error
+ * const selected = parsed.data
+ * ```
+ */
 export const CompressionStrategySchema = z.enum(['summary', 'sliding-window', 'hybrid'])
 
-/** 压缩策略类型 */
+/**
+ * 压缩策略类型
+ *
+ * @example
+ * ```ts
+ * import type { CompressionStrategy } from '@h-ai/ai'
+ * const value: CompressionStrategy = 'sliding-window'
+ * const usesSummary = value !== 'sliding-window'
+ * ```
+ */
 export type CompressionStrategy = z.infer<typeof CompressionStrategySchema>
 
 // ─── 压缩选项与结果 ───
 
 /**
  * 上下文压缩选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type CompressOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: CompressOptions) {
+ *   const result = await ai.compress.tryCompress([{ role: 'user', content: '你好' }], options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface CompressOptions {
   /** 压缩策略（默认使用配置的 defaultStrategy） */
@@ -40,6 +70,13 @@ export interface CompressOptions {
 
 /**
  * 上下文压缩结果
+ *
+ * @example
+ * ```ts
+ * import type { CompressResult } from '@h-ai/ai'
+ * const value: CompressResult = { messages: [{ role: 'user', content: '你好' }], originalTokens: 2, compressedTokens: 2, removedCount: 0 }
+ * const text = value.messages.map(message => message.content).join('\n')
+ * ```
  */
 export interface CompressResult {
   /** 压缩后的消息列表 */
@@ -66,13 +103,12 @@ export interface CompressResult {
  *
  * @example
  * ```ts
- * const result = await compressOps.tryCompress(messages, {
- *   strategy: 'hybrid',
- *   maxTokens: 4000,
- * })
- * if (result.success) {
- *   const compressed = result.data.messages
- * }
+ * import { ai, type CompressOperations } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * const operations: CompressOperations = ai.compress
+ * const result = await operations.tryCompress([{ role: 'user', content: '你好' }], { strategy: 'sliding-window', maxTokens: 100 })
+ * if (!result.success) throw new Error(result.error.message)
+ * const withinBudget = result.data.compressedTokens <= 100
  * ```
  */
 export interface CompressOperations {

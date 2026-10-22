@@ -19,6 +19,17 @@ import { createOpenAIProvider } from './ai-llm-provider-openai.js'
  *
  * @param deps - LLM 子功能依赖（含校验后配置）
  * @returns 统一的 LLMProvider（内部按模型 `api` 路由）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function complete(deps: AILLMFunctionsDeps) {
+ *   const provider = createLLMProvider(deps)
+ *   const result = await provider.chat({ messages: [{ role: 'user', content: '你好' }] })
+ *   if (!result.success) return result
+ *   return result.data.choices[0]?.message.content
+ * }
+ * ```
  */
 export function createLLMProvider(deps: AILLMFunctionsDeps): LLMProvider {
   const openai = createOpenAIProvider(deps)

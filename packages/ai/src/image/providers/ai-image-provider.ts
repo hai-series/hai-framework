@@ -20,7 +20,14 @@ import { HaiAIError } from '../../ai-types.js'
 
 /**
  * Provider 层文生图请求；signal 已包含整次操作的 deadline。
- * @example { model, prompt: '水墨山水', referenceImages: [], maxImageBytes: 20971520, maxImages: 4 }
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function request(model: ResolvedImageModel): ProviderGenerateImageRequest {
+ *   return { model, prompt: '一座山', referenceImages: [], maxImageBytes: 20 * 1024 * 1024, maxImages: 1 }
+ * }
+ * ```
  */
 export interface ProviderGenerateImageRequest {
   model: ResolvedImageModel
@@ -36,12 +43,31 @@ export interface ProviderGenerateImageRequest {
 
 /**
  * 文生图 Provider 内部接口。
- * @example const result = await provider.generate(request)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(provider: ImageProvider, request: ProviderGenerateImageRequest) {
+ *   const result = await provider.generate(request)
+ *   if (!result.success) return result
+ *   return result.data.map(image => ({ mimeType: image.mimeType, bytes: image.data.byteLength }))
+ * }
+ * ```
  */
 export interface ImageProvider {
   generate: (request: ProviderGenerateImageRequest) => Promise<HaiResult<GeneratedImage[]>>
 }
 
+/**
+ * 受限上游错误诊断结构；保留状态与有限摘要，不包含完整请求或签名下载地址。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const details: ImageUpstreamErrorDetails = { status: 429, upstreamCode: 'rate_limit', requestId: 'request-1' }
+ * const diagnostic = { status: details.status, requestId: details.requestId }
+ * ```
+ */
 interface ImageUpstreamErrorDetails {
   status: number
   upstreamCode?: string
@@ -52,7 +78,19 @@ interface ImageUpstreamErrorDetails {
 /** 地址拒绝只携带固定说明，不把厂商签名 URL 或 DNS 详情写进错误日志。 */
 class ImageDownloadBlockedError extends Error {}
 
-/** 厂商请求使用全局 fetch，受限下载使用与 Agent 同版本的 undici fetch。 */
+/**
+ * 厂商请求使用全局 fetch，受限下载使用与 Agent 同版本的 undici fetch。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function read(response: ImageHttpResponse) {
+ *   const result = await readJson(response, { maxImageBytes: 1024 })
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
+ */
 type ImageHttpResponse = Response | UndiciResponse
 
 /** IANA 特殊用途地址不作为上游图片下载目标；IPv6 仅开放普通全局单播。 */
@@ -160,7 +198,15 @@ async function readImageBody(response: ImageHttpResponse, maxBytes: number, sign
 
 /**
  * 校验允许的栅格 MIME 与文件魔数；这是类型识别，不是完整图片解码/尺寸验证。
- * @example const validated = validateImageOutput(image, 20971520)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const result = validateImageOutput({ data: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), mimeType: 'image/png' }, 1024)
+ * if (result.success) {
+ *   const mimeType = result.data.mimeType // 魔数识别不代替完整图片解码。
+ * }
+ * ```
  */
 export function validateImageOutput(image: GeneratedImage, maxBytes: number): HaiResult<GeneratedImage> {
   if (image.data.byteLength > maxBytes)
@@ -180,7 +226,16 @@ export function validateImageOutput(image: GeneratedImage, maxBytes: number): Ha
 
 /**
  * 先核验解码字节预算，再将 Base64 转为图片结构；超限抛 RangeError，由 Provider 边界转换。
- * @example imageFromBase64(encoded, 'image/png', { maxImageBytes: 20971520 })
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const image = imageFromBase64('iVBORw0KGgo=', 'image/png', { maxImageBytes: 1024 })
+ * const result = validateImageOutput(image, 1024)
+ * if (!result.success) {
+ *   const code = result.error.code
+ * }
+ * ```
  */
 export function imageFromBase64(data: string, mimeType: string, options: { size?: ImageSize, maxImageBytes: number }): GeneratedImage {
   if (Buffer.byteLength(data, 'base64') > options.maxImageBytes)
@@ -193,17 +248,45 @@ export function imageFromBase64(data: string, mimeType: string, options: { size?
   }
 }
 
-/** 将参考图转换为厂商 JSON 接口通用的 Data URL */
+/**
+ * 将参考图转换为厂商 JSON 接口通用的 Data URL
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const dataUrl = referenceImageDataUrl({ data: new Uint8Array([137, 80, 78, 71]), mimeType: 'image/png' })
+ * const prefix = dataUrl.slice(0, dataUrl.indexOf(','))
+ * ```
+ */
 export function referenceImageDataUrl(image: ReferenceImage): string {
   return `data:${image.mimeType};base64,${referenceImageBase64(image)}`
 }
 
-/** 将参考图转换为不带 Data URL 前缀的 Base64 */
+/**
+ * 将参考图转换为不带 Data URL 前缀的 Base64
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const base64 = referenceImageBase64({ data: new Uint8Array([137, 80, 78, 71]), mimeType: 'image/png' })
+ * const byteLength = Buffer.byteLength(base64, 'base64')
+ * ```
+ */
 export function referenceImageBase64(image: ReferenceImage): string {
   return Buffer.from(image.data).toString('base64')
 }
 
-/** 将参考图追加到 multipart 表单，并生成仅用于传输的安全文件名 */
+/**
+ * 将参考图追加到 multipart 表单，并生成仅用于传输的安全文件名
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const form = new FormData()
+ * appendReferenceImages(form, 'image[]', [{ data: new Uint8Array([137, 80, 78, 71]), mimeType: 'image/png' }])
+ * const files = form.getAll('image[]')
+ * ```
+ */
 export function appendReferenceImages(form: FormData, field: string, images: ReferenceImage[]): void {
   images.forEach((image, index) => {
     const subtype = image.mimeType.split('/')[1]?.replace(/[^a-z0-9.+-]/gi, '') || 'bin'
@@ -214,7 +297,15 @@ export function appendReferenceImages(form: FormData, field: string, images: Ref
 
 /**
  * 有界读取成功 HTTP 响应 JSON；失败时转换为统一上游错误。
- * @example const parsed = await readJson(response, request)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const result = await readJson(new Response('{"data":[]}', { headers: { 'Content-Type': 'application/json' } }), { maxImageBytes: 1024 })
+ * if (result.success) {
+ *   const body = result.data // unknown：厂商适配层继续验证响应结构。
+ * }
+ * ```
  */
 export async function readJson(response: ImageHttpResponse, request: Pick<ProviderGenerateImageRequest, 'maxImageBytes' | 'signal'>): Promise<HaiResult<unknown>> {
   if (!response.ok)
@@ -232,7 +323,17 @@ export async function readJson(response: ImageHttpResponse, request: Pick<Provid
 /**
  * 限定公网 HTTPS 与实际 DNS 连接，逐跳校验重定向并有界读取，finally 销毁专属 Agent。
  * 网络/读取异常由外层 Provider 转成 HaiResult；禁止把 API 鉴权或 Cookie 带入此下载。
- * @example const image = await downloadImage(temporaryUrl, request)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function download(url: string, request: ProviderGenerateImageRequest) {
+ *   // url 来自厂商；下载器仍逐跳验证公共 HTTPS 地址并绑定实际 DNS 结果。
+ *   const result = await downloadImage(url, request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export async function downloadImage(url: string, request: ProviderGenerateImageRequest): Promise<HaiResult<GeneratedImage>> {
   const dispatcher = new Agent({ connect: { lookup: imageLookup }, connections: 1 })
@@ -259,7 +360,16 @@ export async function downloadImage(url: string, request: ProviderGenerateImageR
 
 /**
  * 有界串行下载，避免上游数组并行放大连接数与内存；失败不返回部分图片。
- * @example const images = await downloadImages(temporaryUrls, request)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function download(urls: string[], request: ProviderGenerateImageRequest) {
+ *   const result = await downloadImages(urls, request)
+ *   if (!result.success) return result
+ *   return result.data.length // 失败时不发布部分下载结果。
+ * }
+ * ```
  */
 export async function downloadImages(urls: string[], request: ProviderGenerateImageRequest): Promise<HaiResult<GeneratedImage[]>> {
   if (urls.length > request.maxImages)
@@ -276,7 +386,16 @@ export async function downloadImages(urls: string[], request: ProviderGenerateIm
 
 /**
  * 按 MIME、实际流字节上限和魔数验证 HTTP 图片；读取异常由 Provider 边界处理。
- * @example const image = await readImageResponse(response, request)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function read(response: ImageHttpResponse, request: ProviderGenerateImageRequest) {
+ *   const result = await readImageResponse(response, request)
+ *   if (!result.success) return result
+ *   return result.data.mimeType
+ * }
+ * ```
  */
 export async function readImageResponse(response: ImageHttpResponse, request: ProviderGenerateImageRequest): Promise<HaiResult<GeneratedImage>> {
   if (!response.ok)
@@ -296,7 +415,15 @@ export async function readImageResponse(response: ImageHttpResponse, request: Pr
 
 /**
  * 将 Provider 异常转换为稳定的下载拒绝、超限、超时、取消或上游错误。
- * @example return imageProviderFailure(error)
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const result = imageProviderFailure(new RangeError('Image response exceeds byte limit'))
+ * if (!result.success) {
+ *   const tooLarge = result.error.code === HaiAIError.IMAGE_TOO_LARGE.code
+ * }
+ * ```
  */
 export function imageProviderFailure(error: unknown): HaiResult<never> {
   let cause = error
@@ -313,7 +440,18 @@ export function imageProviderFailure(error: unknown): HaiResult<never> {
   return err(HaiAIError.IMAGE_UPSTREAM_ERROR, aiM('ai_imageRequestFailed'), error)
 }
 
-/** 创建响应格式错误 */
+/**
+ * 创建响应格式错误
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const result = imageProtocolError()
+ * if (!result.success) {
+ *   const code = result.error.code
+ * }
+ * ```
+ */
 export function imageProtocolError(): HaiResult<never> {
   return err(HaiAIError.IMAGE_PROTOCOL_ERROR, aiM('ai_imageProtocolError'))
 }

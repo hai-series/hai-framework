@@ -22,7 +22,20 @@ import { imageProviderFailure, validateImageOutput } from './providers/ai-image-
 
 const logger = core.logger.child({ module: 'ai', scope: 'image' })
 
-/** 创建文生图操作接口 */
+/**
+ * 创建文生图操作接口
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(config: AIConfig) {
+ *   const image = createImageOperations(config)
+ *   const result = await image.generate({ prompt: '一座山', size: { width: 1024, height: 1024 } })
+ *   if (!result.success) return result
+ *   return result.data.images
+ * }
+ * ```
+ */
 export function createImageOperations(config: AIConfig): ImageOperations {
   const imageConfig: ImageConfig = ImageConfigSchema.parse(config.image ?? {})
   const providers = new Map<ImageProviderName, ImageProvider>()

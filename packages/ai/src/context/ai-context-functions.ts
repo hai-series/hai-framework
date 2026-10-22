@@ -95,7 +95,17 @@ function contextFailure(error: unknown): HaiResult<never> {
  * @param sessionStore - 会话信息存储（可选，用于目录管理）
  * @param deps - 可选子模块依赖（LLM / Memory / RAG / Reasoning）
  * @returns ContextOperations 实例
- * @example `const context = createContextOperations(config, token, compress, store, sessions, { llm })`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function compose(config: CompressConfig, token: TokenOperations, compress: CompressOperations, store: AIRelStore<PersistedContextState>, scope: InteractionScope) {
+ *   const operations = createContextOperations(config, token, compress, store)
+ *   const result = operations.createManager({ scope, turnCommit: 'manual' })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export function createContextOperations(
   compressConfig: CompressConfig,

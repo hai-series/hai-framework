@@ -618,7 +618,7 @@ Common error ranges:
 - `hai:ai:800-805`：Knowledge。
 - `hai:ai:050-059`：Audio。
 - `hai:ai:060-068`: Image, including blocked downloads, resource limits, and total deadlines.
-- `hai:ai:900-905`：Memory。
+- `hai:ai:900-906`：Memory。
 - `hai:ai:980-984`：A2A。
 
 ## Development and testing
@@ -631,6 +631,8 @@ pnpm --filter @h-ai/ai build
 ```
 
 Inject stores through the public AIStoreProvider extension. Built-in LLM providers, factory dependencies and Context dependencies are internal. Configure model endpoints through configuration; history queries, AskOptions and ChatRecord remain public.
+
+Public JSDoc examples import actual package entrypoints; internal factory examples are marked with their module context and compiled against real local declarations. Run `pnpm check:jsdoc --package ai` from the repository root to verify coverage and example types. Ordinary business calls check HaiResult; streams and the browser AudioClient retain their explicit throwing contracts.
 
 ## License
 

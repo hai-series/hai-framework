@@ -11,6 +11,13 @@ import type { HaiResult } from '@h-ai/core'
 
 /**
  * 单条待排序文档
+ *
+ * @example
+ * ```ts
+ * import type { RerankDocument } from '@h-ai/ai'
+ *
+ * const value: RerankDocument = { id: 'refund-policy', text: '订单完成后七天内可申请退款。' }
+ * ```
  */
 export interface RerankDocument {
   /** 文档唯一标识（可选，便于结果追踪） */
@@ -21,6 +28,13 @@ export interface RerankDocument {
 
 /**
  * Rerank 请求参数
+ *
+ * @example
+ * ```ts
+ * import type { RerankRequest } from '@h-ai/ai'
+ *
+ * const value: RerankRequest = { query: '如何退款', documents: [{ id: 'refund-policy', text: '七天内申请退款。' }], topN: 1, returnDocuments: true }
+ * ```
  */
 export interface RerankRequest {
   /** 查询文本 */
@@ -37,6 +51,13 @@ export interface RerankRequest {
 
 /**
  * 单条 Rerank 结果
+ *
+ * @example
+ * ```ts
+ * import type { RerankItem } from '@h-ai/ai'
+ *
+ * const value: RerankItem = { index: 0, id: 'refund-policy', relevanceScore: 0.92, document: '七天内申请退款。' }
+ * ```
  */
 export interface RerankItem {
   /** 文档在原始输入中的索引 */
@@ -51,6 +72,15 @@ export interface RerankItem {
 
 /**
  * Rerank 响应
+ *
+ * @example
+ * ```ts
+ * import type { RerankResponse } from '@h-ai/ai'
+ *
+ * function winningDocument(response: RerankResponse) {
+ *   return response.results[0]?.document
+ * }
+ * ```
  */
 export interface RerankResponse {
   /** 使用的模型名称 */
@@ -69,19 +99,15 @@ export interface RerankResponse {
  *
  * @example
  * ```ts
- * // 对检索结果重排序
- * const result = await ai.rerank.rerank({
- *   query: '机器学习入门',
- *   documents: [
- *     '深度学习是机器学习的一个分支',
- *     '今天天气真好',
- *     '神经网络是深度学习的基础',
- *   ],
- *   topN: 2,
- * })
+ * import { ai } from '@h-ai/ai'
  *
- * // 便捷方法：直接传入文本数组
- * const items = await ai.rerank.rerankTexts('query', ['doc1', 'doc2'])
+ * // 应用启动已成功初始化 ai；这里是业务服务函数。
+ * async function run() {
+ *   const result = await ai.rerank.rerank({ query: '如何退款', documents: ['七天内申请退款。', '支持信用卡付款。'], topN: 1 })
+ *   if (!result.success)
+ *     return result
+ *   return result.data.results
+ * }
  * ```
  */
 export interface RerankOperations {

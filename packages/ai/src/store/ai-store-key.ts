@@ -19,6 +19,14 @@ import type { InteractionScope } from './ai-store-types.js'
  *
  * @param scope - 交互作用域（主体 ID + 会话 ID）
  * @returns 复合存储键
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const first = sessionStoreKey({ objectId: 'user:a', sessionId: 'b' })
+ * const second = sessionStoreKey({ objectId: 'user', sessionId: 'a:b' })
+ * if (first === second) throw new Error('Scope key collision')
+ * ```
  */
 export function sessionStoreKey(scope: InteractionScope): string {
   return JSON.stringify([scope.objectId, scope.sessionId])

@@ -54,6 +54,17 @@ Format your plan as a numbered list.`
  * @param config - 校验后的 AI 配置
  * @param llm - LLM 操作接口
  * @returns ReasoningOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function reason(config: AIConfig, llm: LLMOperations) {
+ *   const reasoning = createReasoningOperations(config, llm)
+ *   const result = await reasoning.run('如何安排三天的开发工作？', { strategy: 'plan-execute', maxRounds: 3 })
+ *   if (!result.success) return result
+ *   return result.data.answer
+ * }
+ * ```
  */
 export function createReasoningOperations(config: AIConfig, llm: LLMOperations): ReasoningOperations {
   /**

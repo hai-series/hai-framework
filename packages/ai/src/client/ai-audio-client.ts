@@ -40,6 +40,14 @@ function audioClientError(code: string | number, message: string): Error {
  *
  * 供应用签发与本次操作严格绑定的能力票据（如 `iam.ticket.issue({ grant })`），
  * 使票据只能用于本次操作 / 模型 / 会话，降低票据被重放的风险。
+ *
+ * @example
+ * ```ts
+ * import type { AudioTicketRequest } from '@h-ai/ai/client'
+ * function grant(request: AudioTicketRequest) {
+ *   return { operation: request.operation, model: request.model } // 经已登录 HTTP 接口签发并在服务端原子消费。
+ * }
+ * ```
  */
 export interface AudioTicketRequest {
   /** 本次操作类型 */
@@ -48,7 +56,18 @@ export interface AudioTicketRequest {
   model?: string
 }
 
-/** 浏览器语音客户端配置 */
+/**
+ * 浏览器语音客户端配置
+ *
+ * @example
+ * ```ts
+ * import { createAudioClient } from '@h-ai/ai/client'
+ * import type { AudioTicketRequest } from '@h-ai/ai/client'
+ * function connect(issueTicket: (request: AudioTicketRequest) => Promise<string>) {
+ *   return createAudioClient({ url: 'wss://example.com/api/v1/ai/audio', getTicket: issueTicket })
+ * }
+ * ```
+ */
 export interface AudioClientConfig {
   /** 语音 WebSocket 完整 URL（如 `wss://host/api/v1/ai/audio`） */
   url: string
@@ -65,6 +84,16 @@ export interface AudioClientConfig {
  * 浏览器语音操作接口
  *
  * 与 Node 端 `AudioOperations` 业务形态一致；出错时抛出异常（浏览器 Client 约定）。
+ *
+ * @example
+ * ```ts
+ * import type { AudioClientOperations } from '@h-ai/ai/client'
+ * async function speak(audio: AudioClientOperations) {
+ *   // 浏览器 AudioClient 普通方法也显式抛错，由应用交互边界处理。
+ *   const result = await audio.synthesize({ text: '你好', format: 'mp3' })
+ *   return result.data
+ * }
+ * ```
  */
 export interface AudioClientOperations {
   /** 将完整音频识别为完整文本 */
@@ -79,14 +108,40 @@ export interface AudioClientOperations {
 
 // ─── 浏览器 WebSocket 辅助 ───
 
-/** WebSocket 收到的消息 */
+/**
+ * WebSocket 收到的消息
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const frame: BrowserWsMessage = { isBinary: true, binary: new Uint8Array([0, 0]) }
+ * const bytes = frame.isBinary ? frame.binary : undefined
+ * ```
+ */
 interface BrowserWsMessage {
   text?: string
   binary?: Uint8Array
   isBinary: boolean
 }
 
-/** 浏览器 WebSocket 连接封装 */
+/**
+ * 浏览器 WebSocket 连接封装
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function consume(connection: BrowserWsConnection) {
+ *   try {
+ *     connection.send(JSON.stringify({ type: 'done' }))
+ *     for await (const frame of connection.messages()) {
+ *       if (!frame.isBinary && frame.text) return JSON.parse(frame.text)
+ *     }
+ *     return undefined
+ *   }
+ *   finally { connection.close() }
+ * }
+ * ```
+ */
 interface BrowserWsConnection {
   send: (data: string | Uint8Array) => void
   messages: () => AsyncIterableIterator<BrowserWsMessage>
@@ -211,6 +266,15 @@ function openBrowserWs(url: string, signal?: AbortSignal): Promise<BrowserWsConn
  *
  * @param config - 语音客户端配置
  * @returns 浏览器语音操作接口
+ *
+ * @example
+ * ```ts
+ * import { createAudioClient } from '@h-ai/ai/client'
+ * import type { AudioTicketRequest } from '@h-ai/ai/client'
+ * function connect(issueTicket: (request: AudioTicketRequest) => Promise<string>) {
+ *   return createAudioClient({ url: 'wss://example.com/api/v1/ai/audio', getTicket: issueTicket })
+ * }
+ * ```
  */
 export function createAudioClient(config: AudioClientConfig): AudioClientOperations {
   async function buildUrl(request: AudioTicketRequest): Promise<string> {

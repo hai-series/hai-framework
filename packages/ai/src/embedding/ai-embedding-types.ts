@@ -11,6 +11,13 @@ import type { HaiResult } from '@h-ai/core'
 
 /**
  * Embedding 请求参数
+ *
+ * @example
+ * ```ts
+ * import type { EmbeddingRequest } from '@h-ai/ai'
+ *
+ * const value: EmbeddingRequest = { input: ['退款申请', '退款进度'], dimensions: 1024 }
+ * ```
  */
 export interface EmbeddingRequest {
   /** 输入文本（单条或批量） */
@@ -23,6 +30,13 @@ export interface EmbeddingRequest {
 
 /**
  * 单条 Embedding 结果
+ *
+ * @example
+ * ```ts
+ * import type { EmbeddingItem } from '@h-ai/ai'
+ *
+ * const value: EmbeddingItem = { index: 0, embedding: [0.12, -0.08, 0.31] }
+ * ```
  */
 export interface EmbeddingItem {
   /** 在输入列表中的索引 */
@@ -33,6 +47,15 @@ export interface EmbeddingItem {
 
 /**
  * Embedding 响应
+ *
+ * @example
+ * ```ts
+ * import type { EmbeddingResponse } from '@h-ai/ai'
+ *
+ * function firstVector(response: EmbeddingResponse): number[] | undefined {
+ *   return response.data.find(item => item.index === 0)?.embedding
+ * }
+ * ```
  */
 export interface EmbeddingResponse {
   /** 模型名称 */
@@ -55,13 +78,15 @@ export interface EmbeddingResponse {
  *
  * @example
  * ```ts
- * // 单条文本嵌入
- * const result = await ai.embedding.embed({ input: 'Hello World' })
+ * import { ai } from '@h-ai/ai'
  *
- * // 批量嵌入
- * const result = await ai.embedding.embed({
- *   input: ['文本1', '文本2', '文本3'],
- * })
+ * // 应用启动已成功初始化 ai；这里是业务服务函数。
+ * async function run() {
+ *   const result = await ai.embedding.embed({ input: ['退款申请', '退款进度'] })
+ *   if (!result.success)
+ *     return result
+ *   return result.data.data.map(item => item.embedding)
+ * }
  * ```
  */
 export interface EmbeddingOperations {

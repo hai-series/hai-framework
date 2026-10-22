@@ -55,13 +55,35 @@ import { createTokenOperations } from './token/ai-token-functions.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'functions' })
 
-/** 子功能组装依赖 */
+/**
+ * 子功能组装依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function dependencies(storeProvider: AIStoreProvider, datapipe: DatapipeFunctions): AISubsystemDeps {
+ *   return { storeProvider, datapipe }
+ * }
+ * ```
+ */
 export interface AISubsystemDeps {
   storeProvider: AIStoreProvider
   datapipe: DatapipeFunctions
 }
 
-/** 子功能组装结果 */
+/**
+ * 子功能组装结果
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function openContext(subsystems: AISubsystems) {
+ *   const result = subsystems.context.createManager({ scope: { objectId: 'user-1', sessionId: 'session-1' } })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
+ */
 export interface AISubsystems {
   /** 在统一初始化之前创建的 A2A 存储 */
   a2aStores: A2ADeps | null
@@ -89,6 +111,18 @@ export interface AISubsystems {
  *
  * 根据 parsed config 和外部依赖创建所有子功能操作接口。
  * 与 main.ts 解耦——main 仅负责生命周期，本函数负责创建逻辑。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function assemble(config: AIConfig, dependencies: AISubsystemDeps) {
+ *   // 生命周期与失败清理由 ai.init/close 管理，此工厂复用注入的真实依赖。
+ *   const subsystems = await createAISubsystems(config, dependencies)
+ *   const result = subsystems.context.createManager({ scope: { objectId: 'user-1', sessionId: 'session-1' } })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return subsystems
+ * }
+ * ```
  */
 export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): Promise<AISubsystems> {
   const { storeProvider, datapipe: datapipeDep } = deps

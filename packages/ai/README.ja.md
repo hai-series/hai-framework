@@ -618,7 +618,7 @@ if (!result.success) {
 - `hai:ai:800-805`：Knowledge。
 - `hai:ai:050-059`：Audio。
 - `hai:ai:060-068`：Image（ダウンロード拒否、リソース上限、全体タイムアウトを含む）。
-- `hai:ai:900-905`：Memory。
+- `hai:ai:900-906`：Memory。
 - `hai:ai:980-984`：A2A。
 
 ## 開発とテスト
@@ -631,6 +631,8 @@ pnpm --filter @h-ai/ai build
 ```
 
 Store の拡張には公開 AIStoreProvider を使用します。組み込み LLM Provider、ファクトリ依存、Context 内部依存は非公開です。モデル接続は設定で行い、履歴照会、AskOptions、ChatRecord は公開を維持します。
+
+公開 JSDoc の例は実際のパッケージ入口から import し、内部ファクトリの例はモジュール内部コンテキストを明示して実宣言で型検証します。ルートで `pnpm check:jsdoc --package ai` を実行すると網羅性と例の型を検証できます。通常の業務 API は HaiResult を確認し、ストリームとブラウザー AudioClient は明示された例外契約に従います。
 
 ## ライセンス
 

@@ -22,6 +22,13 @@ const TRAILING_MARKDOWN_FENCE_REGEX = /\n?```$/
 
 /**
  * LLM 实体提取结果（单条）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const entity: ExtractedEntity = { name: 'hai-framework', type: 'project', aliases: ['hai'] }
+ * const names = [entity.name, ...(entity.aliases ?? [])]
+ * ```
  */
 export interface ExtractedEntity {
   /** 实体名称 */
@@ -36,7 +43,16 @@ export interface ExtractedEntity {
 
 // ─── Prompt ───
 
-/** 默认实体类型列表 */
+/**
+ * 默认实体类型列表
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const allowed = new Set(DEFAULT_ENTITY_TYPES)
+ * const valid = allowed.has('project')
+ * ```
+ */
 export const DEFAULT_ENTITY_TYPES = ['person', 'project', 'concept', 'organization', 'location', 'event', 'other']
 
 /**
@@ -71,6 +87,16 @@ Rules:
  * @param entityTypes - 实体类型列表（可选，默认使用内置类型）
  * @param systemPrompt - 系统提示词覆盖（可选，默认根据 entityTypes 自动生成）
  * @returns 提取到的实体列表
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function extract(llm: LLMOperations) {
+ *   const result = await extractEntities(llm, 'hai-framework 是一个 TypeScript 框架', undefined, ['project', 'concept'])
+ *   if (!result.success) return result
+ *   return result.data.map(entity => entity.name)
+ * }
+ * ```
  */
 export async function extractEntities(
   llm: LLMOperations,
@@ -197,7 +223,16 @@ function normalizeEntity(item: Record<string, unknown>, validTypes: Set<string>)
  * @param systemPrompt - 系统提示词覆盖（可选）
  * @param concurrency - 并发数（默认 3）
  * @returns 全部分块成功时返回去重合并后的实体列表；任一失败返回原错误，不能发布部分实体。
- * @example `const result = await extractEntitiesBatch(llm, [{ content: '项目由张三负责', chunkId: 'revision:chunk-0' }])`
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function extract(llm: LLMOperations) {
+ *   const result = await extractEntitiesBatch(llm, [{ chunkId: 'chunk-1', content: 'hai-framework 使用 TypeScript' }], undefined, ['project', 'concept'], undefined, 2)
+ *   if (!result.success) return result
+ *   return result.data.map(entity => ({ name: entity.name, chunkIds: entity.chunkIds }))
+ * }
+ * ```
  */
 export async function extractEntitiesBatch(
   llm: LLMOperations,

@@ -41,13 +41,31 @@ const MIMO_ASR_MIME: Partial<Record<AudioFormat, string>> = {
   mp3: 'audio/mpeg',
 }
 
-/** MiMo 流式响应中的增量结构 */
+/**
+ * MiMo 流式响应中的增量结构
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const delta: MimoDelta = { audio: { data: 'AAA=' } }
+ * const bytes = delta.audio?.data ? fromBase64(delta.audio.data) : undefined
+ * ```
+ */
 interface MimoDelta {
   content?: string
   audio?: { data?: string }
 }
 
-/** MiMo Chat Completions 响应/流块结构（仅取本模块关心的字段） */
+/**
+ * MiMo Chat Completions 响应/流块结构（仅取本模块关心的字段）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const chunk: MimoChunk = { choices: [{ delta: { content: '你好' } }] }
+ * const text = chunk.choices?.[0]?.delta?.content ?? ''
+ * ```
+ */
 interface MimoChunk {
   choices?: Array<{
     delta?: MimoDelta
@@ -59,6 +77,18 @@ interface MimoChunk {
  * 创建 MiMo Audio Provider
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function invoke(request: ProviderSynthesisRequest) {
+ *   const provider = createMimoAudioProvider()
+ *   if (!provider.synthesis) throw new Error('Audio operation is unavailable')
+ *   const result = await provider.synthesis.synthesize(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createMimoAudioProvider(): AudioProvider {
   async function transcribe(request: ProviderTranscriptionRequest): Promise<HaiResult<TranscriptionResult>> {

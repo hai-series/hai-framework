@@ -290,17 +290,18 @@ const streamOperations: StreamOperations = {
  * @example
  * ```ts
  * import { ai } from '@h-ai/ai'
- *
- * // 初始化
- * await ai.init({ llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY } })
- *
- * // LLM 调用
- * const result = await ai.llm.chat({
- *   messages: [{ role: 'user', content: '你好' }],
- * })
- *
- * // 关闭
- * await ai.close()
+ * import type { AIConfigInput, AIInitOptions } from '@h-ai/ai'
+ * async function run(config: AIConfigInput, options: AIInitOptions) {
+ *   // 默认 Store 所需 reldb/vecdb 已由应用初始化；显式测试 Store 通过 options 注入。
+ *   const initialized = await ai.init(config, options)
+ *   if (!initialized.success) return initialized
+ *   try {
+ *     const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })
+ *     if (!result.success) return result
+ *     return result.data.choices[0]?.message.content
+ *   }
+ *   finally { await ai.close() }
+ * }
  * ```
  */
 export const ai: AIFunctions = {
