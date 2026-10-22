@@ -14,7 +14,15 @@ import { createA2AHandler } from './kit-a2a-helpers.js'
 
 // ─── 解析后的 A2A 内部配置 ───
 
-/** A2A 解析后的内部配置 */
+/**
+ * A2A 解析后的内部配置
+ * @example
+ * ```ts
+ * import type { ResolvedA2AConfig } from '@h-ai/kit'
+ *
+ * function paths(config: ResolvedA2AConfig) { return [config.cardPath, config.rpcPath] }
+ * ```
+ */
 export interface ResolvedA2AConfig {
   operations: HandleA2AOperations
   cardPath: string
@@ -32,6 +40,12 @@ export interface ResolvedA2AConfig {
  *
  * @param input - HandleConfig.a2a 配置
  * @returns 解析后的配置，或 `null` 表示未配置
+ * @example 模块内部上下文
+ * ```ts
+ * function resolve(operations: HandleA2AOperations) {
+ *   return resolveA2AConfig({ operations, rpcPath: '/a2a', authenticate: async () => null })
+ * }
+ * ```
  */
 export function resolveA2AConfig(
   input: HandleConfig['a2a'],
@@ -100,6 +114,12 @@ function resolveAuthenticate(
  * @param requestId - 当前请求 ID（用于响应头）
  * @param config - 解析后的 A2A 配置
  * @returns 匹配时返回 Response，不匹配返回 null
+ * @example 模块内部上下文
+ * ```ts
+ * async function handle(event: RequestEvent, config: ResolvedA2AConfig) {
+ *   return handleA2ARequest(event, 'req_1', config) // null 表示路径未匹配，交给后续 handle。
+ * }
+ * ```
  */
 export async function handleA2ARequest(
   event: RequestEvent,

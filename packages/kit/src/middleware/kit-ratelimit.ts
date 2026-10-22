@@ -17,6 +17,13 @@ import { kitM } from '../kit-i18n.js'
 
 /**
  * 速率限制存储条目
+ * @example
+ * ```ts
+ * import type { RateLimitEntry } from '@h-ai/kit'
+ *
+ * const value: RateLimitEntry = { count: 1, resetAt: Date.now() + 60_000 }
+ * void value
+ * ```
  */
 export interface RateLimitEntry {
   /** 当前窗口内的请求次数 */
@@ -32,7 +39,14 @@ function permitsMemory(): boolean {
 
 /**
  * 原子固定窗口计数器；故障抛错由中间件转为503，禁止读改写回退。
- * @example const store = kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' })
+ * @example
+ * ```ts
+ * import type { RateLimitStore } from '@h-ai/kit'
+ *
+ * async function count(store: RateLimitStore) {
+ *   return store.increment('client_1', 60_000)
+ * }
+ * ```
  */
 export interface RateLimitStore {
   /** shared要求共享后端；memory仅限显式开发/测试。 */
@@ -43,7 +57,14 @@ export interface RateLimitStore {
 
 /**
  * 共享缓存的最小结构契约；使用其单键CAS与服务端TTL，不使用锁或客户端到期清零。
- * @example const backend: RateLimitCache = cache
+ * @example
+ * ```ts
+ * import type { RateLimitCache } from '@h-ai/kit'
+ * import { cache } from '@h-ai/cache'
+ *
+ * const backend: RateLimitCache = cache
+ * void backend
+ * ```
  */
 export interface RateLimitCache {
   readonly config: { type: string } | null
@@ -61,7 +82,16 @@ export interface RateLimitCache {
  * @param options.namespace - 同一策略的稳定业务范围
  * @param options.allowMemory - 仅开发或显式HAI_E2E测试允许内存cache
  * @returns 无内部定时器、不接管cache生命周期的计数器；基础设施错误显式抛错
- * @example kit.createHandle({ rateLimit: { store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' }) } })
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * import { cache } from '@h-ai/cache'
+ *
+ * // 应用在启动时先初始化 Redis cache，关闭时由应用统一回收。
+ * const store = kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' })
+ * void store
+ * ```
  */
 export function createCacheRateLimitStore(backend: RateLimitCache, options: { namespace: string, allowMemory?: boolean }): RateLimitStore {
   if (!options.namespace || options.namespace.length > 128)
@@ -95,7 +125,15 @@ export function createCacheRateLimitStore(backend: RateLimitCache, options: { na
 /**
  * 创建显式开发/测试计数器；无定时器，最多保存 10000 个窗口，生产拒绝内存模式。
  * @returns 由调用者持有的计数器；丢弃引用即可回收，无需关闭，也不接管外部 store。
- * @example const store = kit.middleware.createMemoryRateLimitStore()
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * // 开发/测试进程；生产环境会明确拒绝内存计数。
+ * const store = kit.middleware.createMemoryRateLimitStore()
+ * const entry = await store.increment('client_1', 60_000)
+ * void entry.count
+ * ```
  */
 export function createMemoryRateLimitStore(): MemoryRateLimitStore {
   if (!permitsMemory())
@@ -120,7 +158,14 @@ function clientKey(address: string): string {
  *
  * 基于 Map 实现，仅用于单进程开发/测试；每次请求最多扫描 64 项过期窗口，
  * 不持有定时器。最多 10000 项，容量耗尽时拒绝新 key，不驱逐有效计数以免绕过限流。
- * @example const store = kit.middleware.createMemoryRateLimitStore(); store.increment('client', 1000)
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * // 仅开发/测试；丢弃引用即可回收，无内部定时器。
+ * const store = kit.middleware.createMemoryRateLimitStore()
+ * void store.increment('client_1', 60_000)
+ * ```
  */
 export class MemoryRateLimitStore implements RateLimitStore {
   readonly scope = 'memory' as const
@@ -180,12 +225,15 @@ export class MemoryRateLimitStore implements RateLimitStore {
  *
  * @param config - 限流配置
  * @returns Middleware 实例
- *
  * @example
  * ```ts
- * middleware: [
- *   kit.middleware.rateLimit({ windowMs: 60_000, maxRequests: 100, store }),
- * ]
+ * import { kit } from '@h-ai/kit'
+ *
+ * import { cache } from '@h-ai/cache'
+ *
+ * // Redis 由应用初始化和关闭；多节点复用相同 namespace。
+ * const middleware = kit.middleware.rateLimit({ windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' }) })
+ * void middleware
  * ```
  */
 export function rateLimitMiddleware(config: RateLimitConfig): Middleware {

@@ -51,7 +51,7 @@ const config = {
   kit: {
     adapter: adapter(),
     // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
-    // adapter: createAdapter(),
+    // adapter: await createAdapter(),
   },
 }
 
@@ -86,7 +86,8 @@ import { kit } from '@h-ai/kit'
 const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
-      return token ? { userId: 'u_1', roles: ['admin'], permissions: ['user:read'] } : null
+      const verified = await iam.auth.verifyToken(token)
+      return verified.success ? verified.data : null
     },
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
@@ -314,3 +315,5 @@ pnpm --filter @h-ai/kit test
 Apache-2.0
 
 Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
+
+Kit has no module-wide init/close. The application initializes and closes shared cache, IAM and crypto dependencies. See the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for typechecked public examples. Authenticate requests with iam.auth.verifyToken; a nonempty token is not proof of identity.

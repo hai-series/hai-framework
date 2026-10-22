@@ -56,19 +56,12 @@ function applyDefaultSecurityHeaders(response: Response): void {
  *
  * @param config - Handle 配置（均有合理默认值，可零配置使用）
  * @returns SvelteKit Handle 函数
- *
  * @example
  * ```ts
- * export const handle = kit.createHandle({
- *   auth: {
- *     verifyToken: validateSession,
- *     loginUrl: '/auth/login',
- *     protectedPaths: ['/admin/*', '/api/*'],
- *     publicPaths: ['/api/auth/*', '/api/public/*'],
- *   },
- *   rateLimit: { maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
- *   crypto: { crypto, transport: { serverKeyRing, keyStore } },
- * })
+ * import { kit } from '@h-ai/kit'
+ *
+ * const handle = kit.createHandle({ auth: { verifyToken: async () => null, protectedPaths: ['/admin/**'] } })
+ * void handle
  * ```
  */
 export function createHandle(config: HandleConfig = {}): Handle {
@@ -407,11 +400,12 @@ function buildCookieProxyConfig(
  *
  * @param handles - 待组合的 handle 函数列表
  * @returns 组合后的单一 Handle 函数
- *
  * @example
  * ```ts
- * const haiHandle = kit.createHandle({ ... })
- * export const handle = kit.sequence(i18nHandle, haiHandle)
+ * import { kit } from '@h-ai/kit'
+ *
+ * const handle = kit.sequence(kit.createHandle({ logging: true }), kit.createHandle())
+ * void handle
  * ```
  */
 export function sequence(...handles: Handle[]): Handle {

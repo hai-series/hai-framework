@@ -9,9 +9,25 @@ import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
+/**
+ * Kit 中英消息字典的合法 key 联合。
+ * @example 模块内部上下文
+ * ```ts
+ * const key: KitMessageKey = 'kit_accessDenied'
+ * const message = kitM(key)
+ * void message
+ * ```
+ */
 type KitMessageKey = keyof typeof messagesZhCN
 
-/** 获取 Kit 模块的 i18n 消息 */
+/**
+ * 获取 Kit 模块的 i18n 消息
+ * @example 模块内部上下文
+ * ```ts
+ * const message = kitM('kit_accessDenied', { locale: 'en-US' })
+ * void message
+ * ```
+ */
 export const kitM
   = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
@@ -20,12 +36,12 @@ export const kitM
  *
  * 通过 @h-ai/core 的集中式 locale 管理器，一次调用即可同步所有模块。
  * 各模块的 createMessageGetter 优先读取当前 Node 请求上下文；SSR 必须包裹实际 resolve。
- *
+ * @param locale - 支持的应用默认语言；请求中应使用上下文隔离。
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
  *
- * // 浏览器应用入口；SSR handle 使用 kit.i18n.runWithLocale(locale, () => resolve(event))。
+ * // 应用启动时设置默认语言；请求内使用 runWithLocale。
  * kit.i18n.setLocale('en-US')
  * ```
  */

@@ -17,10 +17,29 @@ export type { KitConfig, KitConfigInput, KitServerConfig, KitServerConfigInput, 
  *
  * 注入后，kit.auth.login / kit.auth.logout 等函数自动委托到 iam.auth 对应方法。
  * 传入 `iam.auth` 即可，kit 会自动提取所需方法。
+ * @example
+ * ```ts
+ * import type { AuthOperations } from '@h-ai/kit'
+ * import { iam } from '@h-ai/iam'
+ *
+ * // 在 IAM 初始化后注入其当前操作对象。
+ * const operations: AuthOperations = iam.auth
+ * void operations
+ * ```
  */
 export type AuthOperations = Pick<AuthnOperations, 'login' | 'loginWithOtp' | 'loginWithLdap' | 'loginWithApiKey' | 'registerAndLogin' | 'logout'>
 
-/** 认证操作提供器：支持直接传对象或按需返回最新对象的工厂函数 */
+/**
+ * 认证操作提供器：支持直接传对象或按需返回最新对象的工厂函数
+ * @example
+ * ```ts
+ * import type { AuthOperationsProvider } from '@h-ai/kit'
+ * import { iam } from '@h-ai/iam'
+ *
+ * const operations: AuthOperationsProvider = () => iam.auth
+ * void operations
+ * ```
+ */
 export type AuthOperationsProvider = AuthOperations | (() => AuthOperations)
 
 /**
@@ -29,6 +48,13 @@ export type AuthOperationsProvider = AuthOperations | (() => AuthOperations)
  * 守卫和权限检查函数所需的最小会话形状。
  * 应用层扩展的 session（如添加 displayName / avatarUrl 等字段）
  * 只要包含此接口的字段即可直接传入守卫函数，无需类型断言。
+ * @example
+ * ```ts
+ * import type { SessionLike } from '@h-ai/kit'
+ *
+ * const value: SessionLike = { userId: 'user_1', roles: ['editor'], permissions: ['article:read'] }
+ * void value
+ * ```
  */
 export interface SessionLike {
   /** 用户 ID */
@@ -49,18 +75,12 @@ export interface SessionLike {
  *
  * 应用层可通过 `& { displayName: string }` 等方式扩展，
  * 扩展后的类型自动兼容所有守卫和权限检查函数（它们接受 `SessionLike`）。
- *
  * @example
  * ```ts
- * const session: SessionData = {
- *   userId: 'u_123',
- *   username: 'alice',
- *   roles: ['admin'],
- *   permissions: ['user:read', 'user:write'],
- * }
+ * import type { SessionData } from '@h-ai/kit'
  *
- * // 应用层扩展
- * type AppSession = SessionData & { displayName: string, avatarUrl: string }
+ * const value: SessionData = { userId: 'user_1', username: 'alice', roles: ['editor'], permissions: ['article:read'] }
+ * void value
  * ```
  */
 export interface SessionData {
@@ -82,6 +102,14 @@ export interface SessionData {
  * 扩展的请求事件
  *
  * 在 SvelteKit 原生 `RequestEvent` 基础上注入会话和请求 ID。
+ * @example
+ * ```ts
+ * import type { HaiRequestEvent } from '@h-ai/kit'
+ *
+ * function requestLabel(event: HaiRequestEvent) {
+ *   return { requestId: event.requestId, userId: event.session?.userId }
+ * }
+ * ```
  */
 export interface HaiRequestEvent
   extends RequestEvent {
@@ -96,6 +124,14 @@ export interface HaiRequestEvent
  *
  * 由 `createHandle` 构建，传递给所有中间件函数。
  * 包含当前请求事件、已解析的会话以及请求唯一 ID。
+ * @example
+ * ```ts
+ * import type { MiddlewareContext } from '@h-ai/kit'
+ *
+ * function requestLabel(context: MiddlewareContext) {
+ *   return context.event.url.pathname + ':' + context.requestId
+ * }
+ * ```
  */
 export interface MiddlewareContext {
   /** 请求事件 */
@@ -110,15 +146,12 @@ export interface MiddlewareContext {
  * 中间件函数
  *
  * 遵循洋葱模型：调用 `next()` 前执行前置逻辑，调用后执行后置逻辑。
- *
  * @example
  * ```ts
- * const timing: Middleware = async (ctx, next) => {
- *   const start = Date.now()
- *   const response = await next()
- *   response.headers.set('X-Duration', `${Date.now() - start}ms`)
- *   return response
- * }
+ * import type { Middleware } from '@h-ai/kit'
+ *
+ * const value: Middleware = async (_context, next) => { const response = await next(); response.headers.set('X-Example', 'enabled'); return response }
+ * void value
  * ```
  */
 export type Middleware = (
@@ -131,6 +164,13 @@ export type Middleware = (
  *
  * 守卫函数必须返回此结构。`allowed: true` 表示放行，否则根据
  * `redirect` / `message` / `status` 决定拦截行为。
+ * @example
+ * ```ts
+ * import type { GuardResult } from '@h-ai/kit'
+ *
+ * const value: GuardResult = { allowed: false, status: 403 }
+ * void value
+ * ```
  */
 export interface GuardResult {
   /** 是否允许访问 */
@@ -147,13 +187,12 @@ export interface GuardResult {
  * 路由守卫函数
  *
  * 接收请求事件与可选会话，返回 `GuardResult`（同步或异步均可）。
- *
  * @example
  * ```ts
- * const myGuard: RouteGuard = (event, session) => {
- *   if (!session) return { allowed: false, status: 401 }
- *   return { allowed: true }
- * }
+ * import type { RouteGuard } from '@h-ai/kit'
+ *
+ * const value: RouteGuard = (_event, session) => ({ allowed: session?.permissions.includes('article:read') ?? false, status: 403 })
+ * void value
  * ```
  */
 export type RouteGuard = (
@@ -166,14 +205,12 @@ export type RouteGuard = (
  *
  * 在 `createHandle({ guards })` 中使用。
  * `paths` 支持 `/*` 和 `/**` 通配符，`exclude` 优先于 `paths`。
- *
  * @example
  * ```ts
- * const config: GuardConfig = {
- *   guard: kit.guard.auth({ apiMode: true }),
- *   paths: ['/api/*'],
- *   exclude: ['/api/health'],
- * }
+ * import type { GuardConfig } from '@h-ai/kit'
+ *
+ * const value: GuardConfig = { paths: ['/admin/**'], guard: (_event, session) => ({ allowed: Boolean(session) }) }
+ * void value
  * ```
  */
 export interface GuardConfig {
@@ -195,17 +232,12 @@ export interface GuardConfig {
  *
  * API 路径（以 `/api/` 开头）未认证时返回 401 JSON；
  * 非 API 路径未认证时重定向到 `loginUrl`（若配置）或返回 401。
- *
  * @example
  * ```ts
- * kit.createHandle({
- *   auth: {
- *     verifyToken: validateSession,
- *     loginUrl: '/auth/login',
- *     protectedPaths: ['/admin/*', '/api/*'],
- *     publicPaths: ['/api/auth/*', '/api/public/*'],
- *   },
- * })
+ * import type { HandleAuthConfig } from '@h-ai/kit'
+ *
+ * const value: HandleAuthConfig = { verifyToken: async () => null, protectedPaths: ['/admin/**'], loginUrl: '/auth/login' }
+ * void value
  * ```
  */
 export interface HandleAuthConfig {
@@ -239,19 +271,12 @@ export interface HandleAuthConfig {
  * 3. 执行路由守卫
  * 4. 执行中间件链（logging / rateLimit / 自定义）
  * 5. 调用 resolve + 附加 `X-Request-Id` 响应头
- *
  * @example
  * ```ts
- * kit.createHandle({
- *   auth: {
- *     verifyToken: validateSession,
- *     loginUrl: '/auth/login',
- *     protectedPaths: ['/admin/*', '/api/*'],
- *     publicPaths: ['/api/auth/*'],
- *   },
- *   rateLimit: { maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
- *   crypto: { crypto, transport: { serverKeyRing, keyStore } },
- * })
+ * import type { HandleConfig } from '@h-ai/kit'
+ *
+ * const value: HandleConfig = { logging: true, auth: { verifyToken: async () => null, protectedPaths: ['/admin/**'] } }
+ * void value
  * ```
  */
 export interface HandleConfig {
@@ -308,6 +333,13 @@ export interface HandleConfig {
  * A2A 操作接口（用于 Handle 集成）
  *
  * 与 `ai.a2a` 结构兼容，可直接传入 `ai.a2a` 对象。
+ * @example
+ * ```ts
+ * import type { HandleA2AOperations } from '@h-ai/kit'
+ * import { ai } from '@h-ai/ai'
+ *
+ * function operationsAfterInit(): HandleA2AOperations { return ai.a2a }
+ * ```
  */
 export interface HandleA2AOperations {
   /** 获取 Agent Card（返回 HaiResult 对象） */
@@ -322,16 +354,12 @@ export interface HandleA2AOperations {
 
 /**
  * A2A Handle 配置（高级模式）
- *
  * @example
  * ```ts
- * kit.createHandle({
- *   a2a: {
- *     operations: ai.a2a,
- *     rpcPath: '/api/a2a',
- *     authenticate: 'apiKey', // 自动使用 IAM API Key 验证
- *   },
- * })
+ * import type { HandleA2AConfig } from '@h-ai/kit'
+ * import { ai } from '@h-ai/ai'
+ *
+ * function configAfterInit(): HandleA2AConfig { return { operations: ai.a2a, authenticate: async () => null } }
  * ```
  */
 export interface HandleA2AConfig {
@@ -353,6 +381,15 @@ export interface HandleA2AConfig {
 
 /**
  * 传输加密详细配置
+ * @example
+ * ```ts
+ * import type { TransportEncryptionOptions } from '@h-ai/kit'
+ * import type { TransportServerKeyRing, TransportKeyStore } from '@h-ai/crypto'
+ *
+ * function transport(serverKeyRing: TransportServerKeyRing, keyStore: TransportKeyStore): TransportEncryptionOptions {
+ *   return { serverKeyRing, keyStore, excludePaths: ['/api/health'] }
+ * }
+ * ```
  */
 export interface TransportEncryptionOptions {
   /** 受管服务端版本化密钥环，不进入公开 YAML/客户端配置。 */
@@ -369,17 +406,12 @@ export interface TransportEncryptionOptions {
  * Handle Hook 加密配置
  *
  * 在 `kit.createHandle({ crypto: { ... } })` 中使用。
- *
  * @example
  * ```ts
- * kit.createHandle({
- *   crypto: {
- *     crypto: cryptoInstance,
- *     transport: { serverKeyRing, keyStore },
- *     encryptedCookies: ['hai_session'],
- *     cookieEncryptionKey: process.env.HAI_KIT_COOKIE_KEY,
- *   },
- * })
+ * import type { HookCryptoConfig, TransportEncryptionOptions } from '@h-ai/kit'
+ * import { crypto } from '@h-ai/crypto'
+ *
+ * function config(transport: TransportEncryptionOptions): HookCryptoConfig { return { crypto, transport } }
  * ```
  */
 export interface HookCryptoConfig {
@@ -412,13 +444,12 @@ export interface HookCryptoConfig {
  *
  * `kit.response.*` 系列函数统一返回此结构的 JSON 响应。
  * 成功时 `success: true` 且 `data` 有值；失败时 `success: false` 且 `error` 有值。
- *
  * @example
  * ```ts
- * // 成功
- * { success: true, data: { id: '1' }, requestId: 'req_abc' }
- * // 失败
- * { success: false, error: { code: 'NOT_FOUND', message: 'Resource not found' } }
+ * import type { ApiResponse } from '@h-ai/kit'
+ *
+ * const value: ApiResponse<{ id: string }> = { success: true, data: { id: 'article_1' } }
+ * void value
  * ```
  */
 export interface ApiResponse<T = unknown> {
@@ -441,6 +472,13 @@ export interface ApiResponse<T = unknown> {
  *
  * 由 `kit.validate.*` 在校验失败时返回。
  * `field` 使用点号路径（如 `'address.city'`），`_` 表示全局错误。
+ * @example
+ * ```ts
+ * import type { FormError } from '@h-ai/kit'
+ *
+ * const value: FormError = { field: 'title', message: 'Title is required' }
+ * void value
+ * ```
  */
 export interface FormError {
   /** 字段名 */
@@ -453,12 +491,12 @@ export interface FormError {
  * 表单验证结果
  *
  * @template T - Zod schema 推导出的数据类型
- *
  * @example
  * ```ts
- * const { valid, data, errors } = await kit.validate.form(request, schema)
- * if (!valid) return kit.response.validationError(errors)
- * // data 此时类型安全
+ * import type { FormValidationResult } from '@h-ai/kit'
+ *
+ * const value: FormValidationResult<{ title: string }> = { valid: true, data: { title: 'Example' }, errors: [] }
+ * void value
  * ```
  */
 export interface FormValidationResult<T> {
@@ -475,14 +513,14 @@ export interface FormValidationResult<T> {
  *
  * 基于可插拔原子存储的固定窗口限流。超限后返回 429 状态码与 `Retry-After` 响应头。
  * 必须显式传入 store；生产使用共享计数器，故障返回503。
- *
  * @example
  * ```ts
- * kit.middleware.rateLimit({
- *   windowMs: 60_000,   // 1 分钟
- *   maxRequests: 100,   // 最多 100 次
- *   store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' }),
- * })
+ * import type { RateLimitConfig } from '@h-ai/kit'
+ * import { kit } from '@h-ai/kit'
+ * import { cache } from '@h-ai/cache'
+ *
+ * const config: RateLimitConfig = { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' }) }
+ * void config
  * ```
  */
 export interface RateLimitConfig {
@@ -506,14 +544,12 @@ export interface RateLimitConfig {
  * CORS 中间件配置
  *
  * 配置跨域资源共享策略。预检请求（OPTIONS）自动返回 204。
- *
  * @example
  * ```ts
- * kit.middleware.cors({
- *   origin: ['https://example.com'],
- *   credentials: true,
- *   maxAge: 86400,
- * })
+ * import type { CorsConfig } from '@h-ai/kit'
+ *
+ * const value: CorsConfig = { origin: ['https://app.example.com'], credentials: true }
+ * void value
  * ```
  */
 export interface CorsConfig {

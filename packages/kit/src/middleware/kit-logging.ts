@@ -11,6 +11,13 @@ import { core } from '@h-ai/core'
 
 /**
  * 日志中间件配置
+ * @example
+ * ```ts
+ * import type { LoggingMiddlewareConfig } from '@h-ai/kit'
+ *
+ * const value: LoggingMiddlewareConfig = { logBody: false }
+ * void value
+ * ```
  */
 export interface LoggingMiddlewareConfig {
   /** 为 `true` 时记录非 GET 请求体（自动脱敏） */
@@ -32,12 +39,10 @@ export interface LoggingMiddlewareConfig {
  *
  * @param config - 日志配置
  * @returns Middleware 实例
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * middleware: [
- *   kit.middleware.logging({ logBody: true, redactFields: ['password', 'creditCard'] }),
- * ]
+ * const middleware = loggingMiddleware({})
+ * void middleware
  * ```
  */
 export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middleware {

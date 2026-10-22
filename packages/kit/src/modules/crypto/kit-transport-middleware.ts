@@ -19,16 +19,11 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-
  *
  * @param config - 传输加密配置
  * @returns SvelteKit 中间件
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * import { crypto } from '@h-ai/crypto'
- * import { kit } from '@h-ai/kit'
- *
- * // 传输加密通过 createHandle 的 crypto 配置自动启用：
- * export const handle = kit.createHandle({
- *   crypto: { crypto, transport: { serverKeyRing, keyStore } },
- * })
+ * function install(config: TransportEncryptionConfig) {
+ *   return transportEncryptionMiddleware(config) // 受管密钥环、共享 keyStore 与 crypto 生命周期由应用管理。
+ * }
  * ```
  */
 export function transportEncryptionMiddleware(config: TransportEncryptionConfig): Middleware {
@@ -224,6 +219,14 @@ async function handleKeyExchange(
   }
 }
 
+/**
+ * 用于替换已验证请求正文的最小可写容器。
+ * @example 模块内部上下文
+ * ```ts
+ * const holder: RequestHolder = { request: new Request('https://app.example.com/api/articles', { method: 'POST', body: '{}' }) }
+ * replaceRequestBody(holder, JSON.stringify({ title: 'Example' }))
+ * ```
+ */
 interface RequestHolder {
   request: Request
 }

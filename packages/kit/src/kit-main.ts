@@ -35,7 +35,14 @@ export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
  * Kit 模块统一出口。
  *
  * 作为纯工具模块，kit 不需要 init/close 生命周期，
- * 所有功能均为无状态工厂函数或工具函数。
+ * 依赖服务、请求上下文和创建后句柄的状态由调用方按各自契约管理。
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * const handle = kit.createHandle({ logging: true })
+ * void handle
+ * ```
  */
 export const kit = {
   /** 原子限流工厂；共享store生命周期由应用管理。 */

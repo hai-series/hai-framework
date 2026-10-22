@@ -21,13 +21,12 @@ import { isResponseLike, isSvelteKitControlFlow } from './kit-utils.js'
  *
  * @param fn - 业务处理函数
  * @returns SvelteKit RequestHandler
- *
  * @example
  * ```ts
- * export const GET = kit.handler(async ({ locals }) => {
- *   kit.guard.require(locals.session, 'user:read')
- *   return kit.response.ok(await getUsers())
- * })
+ * import { kit } from '@h-ai/kit'
+ *
+ * const GET = kit.handler(() => kit.response.ok({ healthy: true }))
+ * void GET
  * ```
  */
 export function handler(fn: (event: RequestEvent) => Promise<Response> | Response): RequestHandler {

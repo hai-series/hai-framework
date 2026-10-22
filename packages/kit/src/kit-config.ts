@@ -13,34 +13,88 @@ const AbsolutePathSchema = z.custom<`/${string}`>(
   'path must start with /',
 )
 
-/** 服务器监听配置（对应 `config/_kit.yml` 的 `server`）。 */
+/**
+ * 服务器监听配置（对应 `config/_kit.yml` 的 `server`）。
+ * @example
+ * ```ts
+ * import type { KitServerConfig } from '@h-ai/kit'
+ *
+ * const value: KitServerConfig = { host: '127.0.0.1', port: 3000 }
+ * void value
+ * ```
+ */
 export interface KitServerConfig {
   readonly host: string
   readonly port: number
 }
 
-/** `config/_kit.yml` 中的服务器监听输入类型。 */
+/**
+ * `config/_kit.yml` 中的服务器监听输入类型。
+ * @example
+ * ```ts
+ * import type { KitServerConfigInput } from '@h-ai/kit'
+ *
+ * const value: KitServerConfigInput = { port: 4000 }
+ * void value
+ * ```
+ */
 export type KitServerConfigInput = Partial<KitServerConfig>
 
-/** `config/_kit.yml` 中的 transport 配置。 */
+/**
+ * `config/_kit.yml` 中的 transport 配置。
+ * @example
+ * ```ts
+ * import type { KitTransportConfig } from '@h-ai/kit'
+ *
+ * const value: KitTransportConfig = { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] }
+ * void value
+ * ```
+ */
 export interface KitTransportConfig {
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
 }
 
-/** `config/_kit.yml` 的顶层配置结构。 */
+/**
+ * `config/_kit.yml` 的顶层配置结构。
+ * @example
+ * ```ts
+ * import type { KitConfig } from '@h-ai/kit'
+ *
+ * const value: KitConfig = { server: { host: '127.0.0.1', port: 3000 }, transport: false }
+ * void value
+ * ```
+ */
 export interface KitConfig {
   readonly server: KitServerConfig
   readonly transport: false | KitTransportConfig
 }
 
-/** `config/_kit.yml` 中的 transport 输入类型。 */
+/**
+ * `config/_kit.yml` 中的 transport 输入类型。
+ * @example
+ * ```ts
+ * import type { KitTransportConfigInput } from '@h-ai/kit'
+ *
+ * const value: KitTransportConfigInput = { excludePaths: ['/api/health'] }
+ * void value
+ * ```
+ */
 export type KitTransportConfigInput = Partial<{
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
 }>
 
-/** `config/_kit.yml` 的顶层输入类型。 */
+/**
+ * `config/_kit.yml` 的顶层输入类型。
+ * @example
+ * ```ts
+ * import type { KitConfigInput } from '@h-ai/kit'
+ *
+ * const value: KitConfigInput = { transport: false }
+ * void value
+ * ```
+ */
 export interface KitConfigInput {
   readonly server?: KitServerConfigInput
   readonly transport?: false | KitTransportConfigInput
@@ -59,7 +113,16 @@ const ServerConfigInputSchema = z.object({
   port: z.number().int().min(1).max(65535).default(3000),
 })
 
-/** `config/_kit.yml` 对应的配置 Schema。 */
+/**
+ * `config/_kit.yml` 对应的配置 Schema。
+ * @example
+ * ```ts
+ * import { KitConfigSchema } from '@h-ai/kit'
+ *
+ * const config = KitConfigSchema.parse({ server: { port: 3000 }, transport: false })
+ * void config
+ * ```
+ */
 export const KitConfigSchema = z.object({
   server: ServerConfigInputSchema.optional(),
   transport: KitTransportConfigInputSchema.optional(),
@@ -96,6 +159,12 @@ function readServerEnvOverride(): KitServerConfigInput {
  *
  * @param input - `config/_kit.yml` 中的 server 配置
  * @returns 完整 server 配置
+ * @example 模块内部上下文
+ * ```ts
+ * const config = resolveKitServerConfig({ port: 4000 })
+ * // HOST / PORT 环境变量优先于输入。
+ * void config.port
+ * ```
  */
 export function resolveKitServerConfig(input: KitServerConfigInput = {}): KitServerConfig {
   return { ...ServerConfigInputSchema.parse(input), ...readServerEnvOverride() }
@@ -106,6 +175,13 @@ export function resolveKitServerConfig(input: KitServerConfigInput = {}): KitSer
  *
  * @param input - `config/_kit.yml` 中的 transport 配置
  * @returns 完整 transport 配置；`false` 表示关闭
+ * @example
+ * ```ts
+ * import { resolveKitTransportConfig } from '@h-ai/kit'
+ *
+ * const transport = resolveKitTransportConfig({ excludePaths: ['/api/health'] })
+ * if (transport) void transport.keyExchangePath
+ * ```
  */
 export function resolveKitTransportConfig(
   input: false | KitTransportConfigInput = false,
@@ -117,6 +193,15 @@ export function resolveKitTransportConfig(
  * 解析 `config/_kit.yml` 顶层配置并补齐默认值。
  *
  * 适合同一份配置同时供 SvelteKit 服务端 hook 与浏览器端 client 读取。
+ * @param input - Kit 监听和公开 transport 输入；省略字段按 Schema 补默认值。
+ * @returns 已补齐默认值的配置；不合法输入抛出 ZodError。
+ * @example
+ * ```ts
+ * import { resolveKitConfig } from '@h-ai/kit'
+ *
+ * const config = resolveKitConfig({ transport: false })
+ * void config.server.port
+ * ```
  */
 export function resolveKitConfig(input: KitConfigInput = {}): KitConfig {
   return KitConfigSchema.parse(input)

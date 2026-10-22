@@ -57,7 +57,7 @@ const config = {
   kit: {
     adapter: adapter(),
     // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
-    // adapter: createAdapter(),
+    // adapter: await createAdapter(),
   },
 }
 
@@ -92,7 +92,8 @@ import { kit } from '@h-ai/kit'
 const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
-      return token ? { userId: 'u_1', roles: ['admin'], permissions: ['user:read'] } : null
+      const verified = await iam.auth.verifyToken(token)
+      return verified.success ? verified.data : null
     },
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
@@ -312,3 +313,5 @@ pnpm --filter @h-ai/kit test
 Apache-2.0
 
 认证 Cookie 的 `Secure` 默认值在 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 时开启，`HAI_E2E` / `HAI_E2E_MOCK` 不降低 Cookie 安全要求。生产限流同样识别这两个环境标志；仅显式测试开关可放宽内存计数器限制。
+
+模块无统一 init/close；共享缓存、IAM 与 crypto 由应用启动时初始化并统一关闭。示例使用真实公开入口并作类型检查，见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。请求认证必须调用 iam.auth.verifyToken，不能把非空 token 视为有效身份。

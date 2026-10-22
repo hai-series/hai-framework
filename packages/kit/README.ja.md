@@ -57,7 +57,7 @@ const config = {
   kit: {
     adapter: adapter(),
     // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
-    // adapter: createAdapter(),
+    // adapter: await createAdapter(),
   },
 }
 
@@ -92,7 +92,8 @@ import { kit } from '@h-ai/kit'
 const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
-      return token ? { userId: 'u_1', roles: ['admin'], permissions: ['user:read'] } : null
+      const verified = await iam.auth.verifyToken(token)
+      return verified.success ? verified.data : null
     },
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
@@ -312,3 +313,5 @@ pnpm --filter @h-ai/kit test
 Apache-2.0
 
 認証 Cookie は `NODE_ENV` または `HAI_CORE_ENV` が `production` の場合に `Secure` を既定で有効にします。`HAI_E2E` / `HAI_E2E_MOCK` は Cookie の安全要件を緩和しません。本番のレート制限も両方の環境変数を認識し、明示的なテストフラグだけがメモリカウンターを許可します。
+
+Kit に共通の init/close はありません。共有 cache・IAM・crypto はアプリが初期化と終了を管理します。型検査できる例は [JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。認証は iam.auth.verifyToken で検証し、空でない token だけでは許可しません。

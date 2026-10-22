@@ -14,6 +14,13 @@ import { setAllModulesLocale } from './kit-i18n.js'
 
 /**
  * 浏览器端 kit 对象（仅暴露 client-safe 能力）
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * const client = kit.client.create({ auth: true })
+ * client.destroy()
+ * ```
  */
 export const kit = {
   client: {

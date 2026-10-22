@@ -16,13 +16,10 @@ import { kitM } from '../kit-i18n.js'
  *
  * @param guards - 需要全部通过的守卫列表
  * @returns 组合后的 RouteGuard
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const adminOnly = kit.guard.all(
- *   kit.guard.auth(),
- *   kit.guard.role({ roles: ['admin'] }),
- * )
+ * const guard = allGuards((_event, session) => ({ allowed: Boolean(session) }), () => ({ allowed: true }))
+ * void guard
  * ```
  */
 export function allGuards(...guards: RouteGuard[]): RouteGuard {
@@ -47,13 +44,10 @@ export function allGuards(...guards: RouteGuard[]): RouteGuard {
  *
  * @param guards - 守卫列表
  * @returns 组合后的 RouteGuard
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const canView = kit.guard.any(
- *   kit.guard.role({ roles: ['admin'] }),
- *   kit.guard.permission({ permissions: ['article:read'] }),
- * )
+ * const guard = anyGuard((_event, session) => ({ allowed: session?.roles.includes('editor') ?? false }), () => ({ allowed: false }))
+ * void guard
  * ```
  */
 export function anyGuard(...guards: RouteGuard[]): RouteGuard {
@@ -85,11 +79,10 @@ export function anyGuard(...guards: RouteGuard[]): RouteGuard {
  * @param options.redirect - 拒绝时重定向 URL
  * @param options.message - 拒绝时的提示消息
  * @returns 取反后的 RouteGuard
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // 仅未登录用户可访问
- * const guestOnly = kit.guard.not(kit.guard.auth(), { redirect: '/dashboard' })
+ * const guestOnly = notGuard((_event, session) => ({ allowed: Boolean(session) }), { redirect: '/dashboard' })
+ * void guestOnly
  * ```
  */
 export function notGuard(guard: RouteGuard, options: { redirect?: string, message?: string } = {}): RouteGuard {
@@ -108,7 +101,14 @@ export function notGuard(guard: RouteGuard, options: { redirect?: string, messag
   }
 }
 
-/** 条件判断函数类型：返回 `true` 时才执行后续守卫 */
+/**
+ * 条件判断函数类型：返回 `true` 时才执行后续守卫
+ * @example 模块内部上下文
+ * ```ts
+ * const isWrite: ConditionFn = event => event.request.method === 'POST'
+ * void isWrite
+ * ```
+ */
 type ConditionFn = (event: RequestEvent, session: SessionData | undefined) => boolean | Promise<boolean>
 
 /**
@@ -119,14 +119,10 @@ type ConditionFn = (event: RequestEvent, session: SessionData | undefined) => bo
  * @param condition - 条件判断函数
  * @param guard - 条件满足时执行的守卫
  * @returns 包装后的 RouteGuard
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // 仅 POST 请求检查 CSRF
- * kit.guard.conditional(
- *   (event) => event.request.method === 'POST',
- *   csrfGuard,
- * )
+ * const writesOnly = conditionalGuard(event => event.request.method === 'POST', (_event, session) => ({ allowed: Boolean(session) }))
+ * void writesOnly
  * ```
  */
 export function conditionalGuard(

@@ -29,6 +29,15 @@ const authState = {
  * 配置认证参数
  *
  * 通常由 `createHandle` 在初始化时自动调用，无需手动调用。
+ * @param config - 启动阶段注入的 Cookie 名和认证操作提供器。
+ * @param config.cookieName - 认证 Cookie 名。
+ * @param config.operations - 已初始化服务的认证操作或惰性提供器。
+ * @example 模块内部上下文
+ * ```ts
+ * function configure(operations: AuthOperationsProvider) {
+ *   configureAuth({ cookieName: 'hai_access_token', operations })
+ * }
+ * ```
  */
 export function configureAuth(config: { cookieName?: string, operations?: AuthOperationsProvider }): void {
   if (config.cookieName)
@@ -37,10 +46,28 @@ export function configureAuth(config: { cookieName?: string, operations?: AuthOp
     authState.operations = config.operations
 }
 
+/**
+ * 服务端认证只读 Cookie 依赖；由当前请求提供，不能跨请求缓存。
+ * @example 模块内部上下文
+ * ```ts
+ * const cookies: CookieReader = { get: name => name === 'hai_access_token' ? 'example-only-token' : undefined }
+ * const token = getAccessToken(new Request('https://app.example.com/api'), cookies)
+ * void token
+ * ```
+ */
 interface CookieReader {
   get: (name: string) => string | undefined
 }
 
+/**
+ * 服务端认证写入/删除 Cookie 依赖；由当前请求提供并执行安全属性。
+ * @example 模块内部上下文
+ * ```ts
+ * function signIn(cookies: CookieWriter, credentials: PasswordCredentials) {
+ *   return login(cookies, credentials) // 业务调用者检查 success 后消费身份。
+ * }
+ * ```
+ */
 interface CookieWriter {
   set: (name: string, value: string, options: {
     path: string
@@ -52,7 +79,14 @@ interface CookieWriter {
   delete: (name: string, options: { path: string }) => void
 }
 
-/** 浏览器 Token 存储器；使用页面内存或平台安全存储，禁止写入 Web Storage。 */
+/**
+ * 浏览器 Token 存储器；使用页面内存或平台安全存储，禁止写入 Web Storage。
+ * @example 模块内部上下文
+ * ```ts
+ * const store: BrowserTokenStore = getDefaultBrowserTokenStore()
+ * store.clear() // 当前页面内存状态；不持有服务端会话真值。
+ * ```
+ */
 export interface BrowserTokenStore {
   get: () => string | null
   set: (token: string) => void
@@ -71,7 +105,16 @@ function createMemoryTokenStore(): BrowserTokenStore {
 // 默认浏览器 Token 只保存在当前页面内存中，避免 auth: true 隐式落到 localStorage。
 const defaultBrowserTokenStore = createMemoryTokenStore()
 
-/** 获取默认浏览器 Token 存储（页面内存，不持久化）。 */
+/**
+ * 获取默认浏览器 Token 存储（页面内存，不持久化）。
+ * @returns 当前页面的内存令牌存储器；不持有服务端共享状态。
+ * @example 模块内部上下文
+ * ```ts
+ * const store = getDefaultBrowserTokenStore()
+ * store.set('example-only-token')
+ * store.clear()
+ * ```
+ */
 export function getDefaultBrowserTokenStore(): BrowserTokenStore {
   return defaultBrowserTokenStore
 }
@@ -99,6 +142,15 @@ function getBearerTokenFromRequest(request: Request): string | null {
 
 /**
  * 从请求中统一提取 Access Token（Bearer 优先，其次配置的 Cookie 名）。
+ * @param request - 当前 HTTP 请求，优先读取 Authorization Bearer。
+ * @param cookies - 当前请求的 Cookie 读取器；未提供时仅检查请求头。
+ * @returns 解析到的令牌；均无值时为 null。
+ * @example 模块内部上下文
+ * ```ts
+ * const request = new Request('https://app.example.com/api', { headers: { Authorization: 'Bearer example-only-token' } })
+ * const token = getAccessToken(request)
+ * void token
+ * ```
  */
 export function getAccessToken(request: Request, cookies?: CookieReader): string | null {
   return getBearerTokenFromRequest(request) ?? cookies?.get(authState.cookieName) ?? null
@@ -184,12 +236,13 @@ async function runAuthLogin<TCredentials>(
  * @param cookies - SvelteKit cookies 对象
  * @param credentials - 密码凭证（identifier + password）
  * @returns 认证结果（成功时 Cookie 已自动写入）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const result = await kit.auth.login(cookies, { identifier, password })
- * if (!result.success) return kit.response.fromError(result.error, IamErrorHttpStatus)
- * const { user, roles, permissions } = result.data
+ * async function signIn(cookies: CookieWriter, credentials: PasswordCredentials) {
+ *   const result = await login(cookies, credentials)
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
  * ```
  */
 export async function login(
@@ -205,10 +258,13 @@ export async function login(
  * @param cookies - SvelteKit cookies 对象
  * @param credentials - OTP 凭证（identifier + code）
  * @returns 认证结果（成功时 Cookie 已自动写入）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const result = await kit.auth.loginWithOtp(cookies, { identifier, code })
+ * async function signIn(cookies: CookieWriter, credentials: OtpCredentials) {
+ *   const result = await loginWithOtp(cookies, credentials)
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
  * ```
  */
 export async function loginWithOtp(
@@ -224,10 +280,13 @@ export async function loginWithOtp(
  * @param cookies - SvelteKit cookies 对象
  * @param credentials - LDAP 凭证（username + password）
  * @returns 认证结果（成功时 Cookie 已自动写入）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const result = await kit.auth.loginWithLdap(cookies, { username, password })
+ * async function signIn(cookies: CookieWriter, credentials: LdapCredentials) {
+ *   const result = await loginWithLdap(cookies, credentials)
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
  * ```
  */
 export async function loginWithLdap(
@@ -243,11 +302,13 @@ export async function loginWithLdap(
  * @param cookies - SvelteKit cookies 对象
  * @param credentials - API Key 凭证（key）
  * @returns 认证结果（成功时 Cookie 已自动写入）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const result = await kit.auth.loginWithApiKey(cookies, { key: apiKey })
- * if (!result.success) return kit.response.fromError(result.error, IamErrorHttpStatus)
+ * async function signIn(cookies: CookieWriter, credentials: ApiKeyCredentials) {
+ *   const result = await loginWithApiKey(cookies, credentials)
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
  * ```
  */
 export async function loginWithApiKey(
@@ -263,10 +324,13 @@ export async function loginWithApiKey(
  * @param cookies - SvelteKit cookies 对象
  * @param options - 注册选项（username、password、email 等）
  * @returns 认证结果（成功时 Cookie 已自动写入）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const result = await kit.auth.registerAndLogin(cookies, { username, email, password })
+ * async function signIn(cookies: CookieWriter, credentials: RegisterOptions) {
+ *   const result = await registerAndLogin(cookies, credentials)
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
  * ```
  */
 export async function registerAndLogin(
@@ -281,11 +345,12 @@ export async function registerAndLogin(
  *
  * @param cookies - SvelteKit cookies 对象
  * @param accessToken - 访问令牌（为 null/undefined 时仅清除 Cookie）
- *
- * @example
+ * @returns Cookie 清理完成；底层异常会以 Promise 拒绝传播。
+ * @example 模块内部上下文
  * ```ts
- * await kit.auth.logout(cookies, locals.accessToken)
- * return kit.response.ok(null)
+ * async function signOut(cookies: CookieWriter, accessToken: string) {
+ *   await logout(cookies, accessToken) // 控制流错误按 Promise 拒绝传播。
+ * }
  * ```
  */
 export async function logout(
@@ -304,6 +369,15 @@ export async function logout(
 
 /**
  * 写入默认浏览器端 Access Token（仅页面内存，不持久化到 localStorage）。
+ * @param token - 当前页面内存中使用的 access token，不写入 Web Storage。
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * kit.auth.setBrowserToken('example-only-token')
+ * // 页面注销时同步清除浏览器内存令牌。
+ * kit.auth.clearBrowserToken()
+ * ```
  */
 export function setBrowserToken(token: string): void {
   defaultBrowserTokenStore.set(token)
@@ -311,6 +385,12 @@ export function setBrowserToken(token: string): void {
 
 /**
  * 清除默认浏览器端 Access Token（仅页面内存）。
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * kit.auth.clearBrowserToken()
+ * ```
  */
 export function clearBrowserToken(): void {
   defaultBrowserTokenStore.clear()
