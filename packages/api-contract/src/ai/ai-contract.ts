@@ -25,7 +25,16 @@ import {
   AiSessionListInputSchema,
 } from './ai-schemas.js'
 
-/** AI 领域 oRPC contract。 */
+/**
+ * AI 领域 oRPC contract。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract = apiContract.ai
+ * void contract
+ * ```
+ */
 export const aiContract = {
   chats: {
     createCompletion: route({ method: 'POST', path: '/ai/chats/completions', operationId: 'ai.chats.createCompletion', summary: 'Create non-streaming chat completion with function tools', tags: ['ai', 'chats'] })
@@ -53,4 +62,15 @@ export const aiContract = {
   },
 }
 
+/**
+ * ai 领域公开 procedure 契约的完整类型。
+ * @example
+ * ```ts
+ * import type { AiContract } from '@h-ai/api-contract'
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract: AiContract = apiContract.ai
+ * void contract
+ * ```
+ */
 export type AiContract = typeof aiContract

@@ -25,7 +25,16 @@ import {
 // 下载与上传接口共享同一响应结构，仅在本 contract 内复用。
 const presignedUrlOutputSchema = haiResultSchema(StoragePresignedUrlSchema)
 
-/** Storage 领域 oRPC contract。 */
+/**
+ * Storage 领域 oRPC contract。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract = apiContract.storage
+ * void contract
+ * ```
+ */
 export const storageContract = {
   presignedUrls: {
     createDownload: route({ method: 'POST', path: '/storage/presigned-urls/download', operationId: 'storage.presignedUrls.createDownload', summary: 'Create presigned download URL', tags: ['storage'] })
@@ -57,4 +66,15 @@ export const storageContract = {
   },
 }
 
+/**
+ * storage 领域公开 procedure 契约的完整类型。
+ * @example
+ * ```ts
+ * import type { StorageContract } from '@h-ai/api-contract'
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract: StorageContract = apiContract.storage
+ * void contract
+ * ```
+ */
 export type StorageContract = typeof storageContract

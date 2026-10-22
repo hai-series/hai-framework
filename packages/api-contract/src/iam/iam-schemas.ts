@@ -10,7 +10,22 @@ import type { HaiResult } from '@h-ai/core'
 import { z } from 'zod'
 import { PaginationQuerySchema } from '../common/pagination-schemas.js'
 
-/** 用户基础信息 Schema。 */
+/**
+ * 用户基础信息 Schema。
+ * @example
+ * ```ts
+ * import { IamUserSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamUserSchema.parse({
+ *   id: 'example-1',
+ *   username: 'alice',
+ *   enabled: true,
+ *   createdAt: null,
+ *   updatedAt: null
+ * })
+ * void value
+ * ```
+ */
 export const IamUserSchema = z.object({
   id: z.string(),
   username: z.string(),
@@ -26,7 +41,20 @@ export const IamUserSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
-/** Token 对 Schema。 */
+/**
+ * Token 对 Schema。
+ * @example
+ * ```ts
+ * import { IamTokenPairSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamTokenPairSchema.parse({
+ *   accessToken: 'example-only-access',
+ *   expiresIn: 0,
+ *   tokenType: 'Bearer'
+ * })
+ * void value
+ * ```
+ */
 export const IamTokenPairSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string().optional(),
@@ -34,7 +62,19 @@ export const IamTokenPairSchema = z.object({
   tokenType: z.literal('Bearer'),
 })
 
-/** 协议展示 Schema。 */
+/**
+ * 协议展示 Schema。
+ * @example
+ * ```ts
+ * import { IamAgreementDisplaySchema } from '@h-ai/api-contract'
+ *
+ * const value = IamAgreementDisplaySchema.parse({
+ *   showOnRegister: true,
+ *   showOnLogin: true
+ * })
+ * void value
+ * ```
+ */
 export const IamAgreementDisplaySchema = z.object({
   /** 配置中的 Markdown 原文由客户端安全渲染。 */
   userAgreementMarkdown: z.string().min(1).optional(),
@@ -45,7 +85,29 @@ export const IamAgreementDisplaySchema = z.object({
   showOnLogin: z.boolean(),
 })
 
-/** 登录结果业务数据 Schema。 */
+/**
+ * 登录结果业务数据 Schema。
+ * @example
+ * ```ts
+ * import { IamAuthResultSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamAuthResultSchema.parse({
+ *   user: {
+ *     id: 'example-1',
+ *     username: 'alice',
+ *     enabled: true,
+ *     createdAt: null,
+ *     updatedAt: null
+ *   },
+ *   tokens: {
+ *     accessToken: 'example-only-access',
+ *     expiresIn: 0,
+ *     tokenType: 'Bearer'
+ *   }
+ * })
+ * void value
+ * ```
+ */
 export const IamAuthResultSchema = z.object({
   user: IamUserSchema,
   tokens: IamTokenPairSchema,
@@ -54,25 +116,142 @@ export const IamAuthResultSchema = z.object({
   agreements: IamAgreementDisplaySchema.optional(),
 })
 
-/** 当前会话用户信息；包含服务端重新校验后的角色与权限快照。 */
+/**
+ * 当前会话用户信息；包含服务端重新校验后的角色与权限快照。
+ * @example
+ * ```ts
+ * import { IamCurrentUserSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamCurrentUserSchema.parse({
+ *   id: 'example-1',
+ *   username: 'alice',
+ *   enabled: true,
+ *   createdAt: null,
+ *   updatedAt: null,
+ *   roles: [
+ *     'example'
+ *   ],
+ *   permissions: [
+ *     'example'
+ *   ]
+ * })
+ * void value
+ * ```
+ */
 export const IamCurrentUserSchema = IamUserSchema.extend({
   roles: z.array(z.string()),
   permissions: z.array(z.string()),
 })
 
-/** 密码登录入参 Schema。 */
+/**
+ * 密码登录入参 Schema。
+ * @example
+ * ```ts
+ * import { IamLoginInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamLoginInputSchema.parse({
+ *   identifier: 'alice',
+ *   password: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export const IamLoginInputSchema = z.object({
   identifier: z.string().min(1),
   password: z.string().min(1),
   rememberMe: z.boolean().optional(),
 })
 
-/** LDAP 登录与密码找回入参。 */
+/**
+ * LDAP 登录与密码找回入参。
+ * @example
+ * ```ts
+ * import { IamLdapLoginInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamLdapLoginInputSchema.parse({
+ *   username: 'alice',
+ *   password: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export const IamLdapLoginInputSchema = z.object({ username: z.string().trim().min(1), password: z.string().min(1) })
+/**
+ * IamRequestPasswordResetInput 数据的运行时 Zod 校验约束。
+ * @example
+ * ```ts
+ * import { IamRequestPasswordResetInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamRequestPasswordResetInputSchema.parse({
+ *   identifier: 'alice'
+ * })
+ * void value
+ * ```
+ */
 export const IamRequestPasswordResetInputSchema = z.object({ identifier: z.string().trim().min(1) })
+/**
+ * IamConfirmPasswordResetInput 数据的运行时 Zod 校验约束。
+ * @example
+ * ```ts
+ * import { IamConfirmPasswordResetInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamConfirmPasswordResetInputSchema.parse({
+ *   token: 'example-only-token',
+ *   newPassword: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export const IamConfirmPasswordResetInputSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(1) })
 
-/** 认证页面公开配置白名单，独立于服务端连接/凭据配置。 */
+/**
+ * 认证页面公开配置白名单，独立于服务端连接/凭据配置。
+ * @example
+ * ```ts
+ * import { IamPublicConfigSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamPublicConfigSchema.parse({
+ *   password: {
+ *     minLength: 0,
+ *     maxLength: 0,
+ *     requireUppercase: true,
+ *     requireLowercase: true,
+ *     requireNumber: true,
+ *     requireSpecialChar: true,
+ *     expirationDays: 0
+ *   },
+ *   register: {
+ *     enabled: true
+ *   },
+ *   login: {
+ *     password: true,
+ *     otp: true,
+ *     ldap: true,
+ *     email: true,
+ *     sms: true
+ *   },
+ *   passwordReset: {
+ *     enabled: true,
+ *     mode: 'email'
+ *   },
+ *   otp: {
+ *     length: 0,
+ *     resendInterval: 0
+ *   },
+ *   agreements: {
+ *     showOnRegister: true,
+ *     showOnLogin: true
+ *   },
+ *   ui: {
+ *     variant: 'card'
+ *   },
+ *   session: {
+ *     maxAge: 0
+ *   }
+ * })
+ * void value
+ * ```
+ */
 export const IamPublicConfigSchema = z.object({
   password: z.object({ minLength: z.number(), maxLength: z.number(), requireUppercase: z.boolean(), requireLowercase: z.boolean(), requireNumber: z.boolean(), requireSpecialChar: z.boolean(), expirationDays: z.number() }),
   register: z.object({ enabled: z.boolean() }),
@@ -84,38 +263,119 @@ export const IamPublicConfigSchema = z.object({
   session: z.object({ maxAge: z.number() }),
 })
 
-/** OTP 登录入参 Schema。 */
+/**
+ * OTP 登录入参 Schema。
+ * @example
+ * ```ts
+ * import { IamOtpLoginInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamOtpLoginInputSchema.parse({
+ *   identifier: 'alice',
+ *   code: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export const IamOtpLoginInputSchema = z.object({
   identifier: z.string().min(1),
   code: z.string().min(1),
 })
 
-/** 登出入参 Schema。 */
+/**
+ * 登出入参 Schema。
+ * @example
+ * ```ts
+ * import { IamLogoutInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamLogoutInputSchema.parse({})
+ * void value
+ * ```
+ */
 export const IamLogoutInputSchema = z.object({
   accessToken: z.string().min(1).optional(),
 })
 
-/** 发送 OTP 入参 Schema。 */
+/**
+ * 发送 OTP 入参 Schema。
+ * @example
+ * ```ts
+ * import { IamSendOtpInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamSendOtpInputSchema.parse({
+ *   identifier: 'alice'
+ * })
+ * void value
+ * ```
+ */
 export const IamSendOtpInputSchema = z.object({
   identifier: z.string().min(1),
 })
 
-/** 发送 OTP 业务数据 Schema。 */
+/**
+ * 发送 OTP 业务数据 Schema。
+ * @example
+ * ```ts
+ * import { IamSendOtpDataSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamSendOtpDataSchema.parse({
+ *   expiresAt: null
+ * })
+ * void value
+ * ```
+ */
 export const IamSendOtpDataSchema = z.object({
   expiresAt: z.coerce.date(),
 })
 
-/** Token 刷新入参 Schema。 */
+/**
+ * Token 刷新入参 Schema。
+ * @example
+ * ```ts
+ * import { IamRefreshTokenInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamRefreshTokenInputSchema.parse({
+ *   refreshToken: 'example-only-refresh'
+ * })
+ * void value
+ * ```
+ */
 export const IamRefreshTokenInputSchema = z.object({
   refreshToken: z.string().min(1),
 })
 
-/** Token 刷新业务数据 Schema。 */
+/**
+ * Token 刷新业务数据 Schema。
+ * @example
+ * ```ts
+ * import { IamRefreshTokenDataSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamRefreshTokenDataSchema.parse({
+ *   tokens: {
+ *     accessToken: 'example-only-access',
+ *     expiresIn: 0,
+ *     tokenType: 'Bearer'
+ *   }
+ * })
+ * void value
+ * ```
+ */
 export const IamRefreshTokenDataSchema = z.object({
   tokens: IamTokenPairSchema,
 })
 
-/** 注册入参 Schema。 */
+/**
+ * 注册入参 Schema。
+ * @example
+ * ```ts
+ * import { IamRegisterInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamRegisterInputSchema.parse({
+ *   username: 'alice',
+ *   password: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export const IamRegisterInputSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
@@ -125,13 +385,34 @@ export const IamRegisterInputSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
-/** 修改密码入参 Schema。 */
+/**
+ * 修改密码入参 Schema。
+ * @example
+ * ```ts
+ * import { IamChangePasswordInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamChangePasswordInputSchema.parse({
+ *   oldPassword: 'example',
+ *   newPassword: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export const IamChangePasswordInputSchema = z.object({
   oldPassword: z.string().min(1),
   newPassword: z.string().min(1),
 })
 
-/** 当前用户更新入参 Schema。 */
+/**
+ * 当前用户更新入参 Schema。
+ * @example
+ * ```ts
+ * import { IamUpdateCurrentUserInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamUpdateCurrentUserInputSchema.parse({})
+ * void value
+ * ```
+ */
 export const IamUpdateCurrentUserInputSchema = z.object({
   username: z.string().min(1).optional(),
   email: z.string().email().optional(),
@@ -141,7 +422,16 @@ export const IamUpdateCurrentUserInputSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
-/** 用户列表查询入参 Schema。 */
+/**
+ * 用户列表查询入参 Schema。
+ * @example
+ * ```ts
+ * import { IamListUsersInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamListUsersInputSchema.parse({})
+ * void value
+ * ```
+ */
 export const IamListUsersInputSchema = PaginationQuerySchema.extend({
   roleCode: z.string().trim().min(1).max(100).optional(),
   search: z.string().optional(),
@@ -149,7 +439,19 @@ export const IamListUsersInputSchema = PaginationQuerySchema.extend({
   enabled: z.enum(['true', 'false']).optional().transform(v => v === undefined ? undefined : v === 'true'),
 })
 
-/** Admin 创建用户入参 Schema。 */
+/**
+ * Admin 创建用户入参 Schema。
+ * @example
+ * ```ts
+ * import { IamAdminCreateUserInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamAdminCreateUserInputSchema.parse({
+ *   username: 'alice',
+ *   password: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export const IamAdminCreateUserInputSchema = z.object({
   username: z.string().min(1),
   email: z.string().email().optional(),
@@ -161,7 +463,18 @@ export const IamAdminCreateUserInputSchema = z.object({
   enabled: z.boolean().optional(),
 })
 
-/** Admin 更新用户入参 Schema。 */
+/**
+ * Admin 更新用户入参 Schema。
+ * @example
+ * ```ts
+ * import { IamAdminUpdateUserInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamAdminUpdateUserInputSchema.parse({
+ *   id: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export const IamAdminUpdateUserInputSchema = z.object({
   id: z.string().min(1),
   username: z.string().min(1).optional(),
@@ -174,18 +487,56 @@ export const IamAdminUpdateUserInputSchema = z.object({
   roleIds: z.array(z.string()).optional(),
 })
 
-/** Admin 删除用户入参 Schema。 */
+/**
+ * Admin 删除用户入参 Schema。
+ * @example
+ * ```ts
+ * import { IamUserIdInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamUserIdInputSchema.parse({
+ *   id: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export const IamUserIdInputSchema = z.object({
   id: z.string().min(1),
 })
 
-/** Admin 重置密码入参 Schema。 */
+/**
+ * Admin 重置密码入参 Schema。
+ * @example
+ * ```ts
+ * import { IamAdminResetPasswordInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamAdminResetPasswordInputSchema.parse({
+ *   id: 'example-1',
+ *   newPassword: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export const IamAdminResetPasswordInputSchema = z.object({
   id: z.string().min(1),
   newPassword: z.string().min(1),
 })
 
-/** 角色基础信息 Schema。 */
+/**
+ * 角色基础信息 Schema。
+ * @example
+ * ```ts
+ * import { IamRoleSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamRoleSchema.parse({
+ *   id: 'example-1',
+ *   code: 'example-1',
+ *   name: 'Example',
+ *   createdAt: null,
+ *   updatedAt: null
+ * })
+ * void value
+ * ```
+ */
 export const IamRoleSchema = z.object({
   id: z.string(),
   code: z.string(),
@@ -196,7 +547,19 @@ export const IamRoleSchema = z.object({
   updatedAt: z.coerce.date(),
 })
 
-/** 创建角色入参 Schema。 */
+/**
+ * 创建角色入参 Schema。
+ * @example
+ * ```ts
+ * import { IamCreateRoleInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamCreateRoleInputSchema.parse({
+ *   code: 'example-1',
+ *   name: 'Example'
+ * })
+ * void value
+ * ```
+ */
 export const IamCreateRoleInputSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1),
@@ -204,17 +567,52 @@ export const IamCreateRoleInputSchema = z.object({
   isSystem: z.boolean().optional(),
 })
 
-/** 更新角色入参 Schema。 */
+/**
+ * 更新角色入参 Schema。
+ * @example
+ * ```ts
+ * import { IamUpdateRoleInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamUpdateRoleInputSchema.parse({
+ *   id: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export const IamUpdateRoleInputSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).optional(),
   description: z.string().optional(),
 })
 
-/** 权限类型 Schema。 */
+/**
+ * 权限类型 Schema。
+ * @example
+ * ```ts
+ * import { IamPermissionTypeSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamPermissionTypeSchema.parse('menu')
+ * void value
+ * ```
+ */
 export const IamPermissionTypeSchema = z.enum(['menu', 'api', 'button'])
 
-/** 权限基础信息 Schema。 */
+/**
+ * 权限基础信息 Schema。
+ * @example
+ * ```ts
+ * import { IamPermissionSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamPermissionSchema.parse({
+ *   id: 'example-1',
+ *   code: 'example-1',
+ *   name: 'Example',
+ *   createdAt: null,
+ *   updatedAt: null
+ * })
+ * void value
+ * ```
+ */
 export const IamPermissionSchema = z.object({
   id: z.string(),
   code: z.string(),
@@ -227,13 +625,34 @@ export const IamPermissionSchema = z.object({
   updatedAt: z.coerce.date(),
 })
 
-/** 权限列表查询入参 Schema。 */
+/**
+ * 权限列表查询入参 Schema。
+ * @example
+ * ```ts
+ * import { IamListPermissionsInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamListPermissionsInputSchema.parse({})
+ * void value
+ * ```
+ */
 export const IamListPermissionsInputSchema = PaginationQuerySchema.extend({
   search: z.string().optional(),
   type: IamPermissionTypeSchema.optional(),
 })
 
-/** 创建权限入参 Schema。 */
+/**
+ * 创建权限入参 Schema。
+ * @example
+ * ```ts
+ * import { IamCreatePermissionInputSchema } from '@h-ai/api-contract'
+ *
+ * const value = IamCreatePermissionInputSchema.parse({
+ *   code: 'example-1',
+ *   name: 'Example'
+ * })
+ * void value
+ * ```
+ */
 export const IamCreatePermissionInputSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1),
@@ -243,26 +662,400 @@ export const IamCreatePermissionInputSchema = z.object({
   type: IamPermissionTypeSchema.optional(),
 })
 
+/**
+ * 账号密码登录请求。
+ * @example
+ * ```ts
+ * import type { IamLoginInput } from '@h-ai/api-contract'
+ * import { IamLoginInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamLoginInput = IamLoginInputSchema.parse({
+ *   identifier: 'alice',
+ *   password: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export type IamLoginInput = z.infer<typeof IamLoginInputSchema>
+/**
+ * LDAP 登录请求。
+ * @example
+ * ```ts
+ * import type { IamLdapLoginInput } from '@h-ai/api-contract'
+ * import { IamLdapLoginInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamLdapLoginInput = IamLdapLoginInputSchema.parse({
+ *   username: 'alice',
+ *   password: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export type IamLdapLoginInput = z.infer<typeof IamLdapLoginInputSchema>
+/**
+ * 允许下发客户端的身份认证配置。
+ * @example
+ * ```ts
+ * import type { IamPublicConfig } from '@h-ai/api-contract'
+ * import { IamPublicConfigSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamPublicConfig = IamPublicConfigSchema.parse({
+ *   password: {
+ *     minLength: 0,
+ *     maxLength: 0,
+ *     requireUppercase: true,
+ *     requireLowercase: true,
+ *     requireNumber: true,
+ *     requireSpecialChar: true,
+ *     expirationDays: 0
+ *   },
+ *   register: {
+ *     enabled: true
+ *   },
+ *   login: {
+ *     password: true,
+ *     otp: true,
+ *     ldap: true,
+ *     email: true,
+ *     sms: true
+ *   },
+ *   passwordReset: {
+ *     enabled: true,
+ *     mode: 'email'
+ *   },
+ *   otp: {
+ *     length: 0,
+ *     resendInterval: 0
+ *   },
+ *   agreements: {
+ *     showOnRegister: true,
+ *     showOnLogin: true
+ *   },
+ *   ui: {
+ *     variant: 'card'
+ *   },
+ *   session: {
+ *     maxAge: 0
+ *   }
+ * })
+ * void value
+ * ```
+ */
 export type IamPublicConfig = z.infer<typeof IamPublicConfigSchema>
+/**
+ * 一次性验证码登录请求。
+ * @example
+ * ```ts
+ * import type { IamOtpLoginInput } from '@h-ai/api-contract'
+ * import { IamOtpLoginInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamOtpLoginInput = IamOtpLoginInputSchema.parse({
+ *   identifier: 'alice',
+ *   code: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export type IamOtpLoginInput = z.infer<typeof IamOtpLoginInputSchema>
+/**
+ * 注销当前会话的请求。
+ * @example
+ * ```ts
+ * import type { IamLogoutInput } from '@h-ai/api-contract'
+ * import { IamLogoutInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamLogoutInput = IamLogoutInputSchema.parse({})
+ * void value
+ * ```
+ */
 export type IamLogoutInput = z.infer<typeof IamLogoutInputSchema>
+/**
+ * 发送一次性验证码的请求。
+ * @example
+ * ```ts
+ * import type { IamSendOtpInput } from '@h-ai/api-contract'
+ * import { IamSendOtpInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamSendOtpInput = IamSendOtpInputSchema.parse({
+ *   identifier: 'alice'
+ * })
+ * void value
+ * ```
+ */
 export type IamSendOtpInput = z.infer<typeof IamSendOtpInputSchema>
+/**
+ * 以 HaiResult 区分成功业务数据和公共错误的 IamAuthResultOutput 响应。
+ * @example
+ * ```ts
+ * import type { IamAuthResultOutput } from '@h-ai/api-contract'
+ * import { IamAuthResultSchema } from '@h-ai/api-contract'
+ * import { ok } from '@h-ai/core'
+ *
+ * const response: IamAuthResultOutput = ok(IamAuthResultSchema.parse({
+ *   user: {
+ *     id: 'example-1',
+ *     username: 'alice',
+ *     enabled: true,
+ *     createdAt: null,
+ *     updatedAt: null
+ *   },
+ *   tokens: {
+ *     accessToken: 'example-only-access',
+ *     expiresIn: 0,
+ *     tokenType: 'Bearer'
+ *   }
+ * }))
+ * if (response.success) void response.data
+ * ```
+ */
 export type IamAuthResultOutput = HaiResult<z.infer<typeof IamAuthResultSchema>>
+/**
+ * 当前登录用户及其有效权限。
+ * @example
+ * ```ts
+ * import type { IamCurrentUser } from '@h-ai/api-contract'
+ * import { IamCurrentUserSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamCurrentUser = IamCurrentUserSchema.parse({
+ *   id: 'example-1',
+ *   username: 'alice',
+ *   enabled: true,
+ *   createdAt: null,
+ *   updatedAt: null,
+ *   roles: [
+ *     'example'
+ *   ],
+ *   permissions: [
+ *     'example'
+ *   ]
+ * })
+ * void value
+ * ```
+ */
 export type IamCurrentUser = z.infer<typeof IamCurrentUserSchema>
+/**
+ * 以 HaiResult 区分成功业务数据和公共错误的 IamCurrentUserOutput 响应。
+ * @example
+ * ```ts
+ * import type { IamCurrentUserOutput } from '@h-ai/api-contract'
+ * import { IamCurrentUserSchema } from '@h-ai/api-contract'
+ * import { ok } from '@h-ai/core'
+ *
+ * const response: IamCurrentUserOutput = ok(IamCurrentUserSchema.parse({
+ *   id: 'example-1',
+ *   username: 'alice',
+ *   enabled: true,
+ *   createdAt: null,
+ *   updatedAt: null,
+ *   roles: [
+ *     'example'
+ *   ],
+ *   permissions: [
+ *     'example'
+ *   ]
+ * }))
+ * if (response.success) void response.data
+ * ```
+ */
 export type IamCurrentUserOutput = HaiResult<IamCurrentUser>
+/**
+ * 使用刷新凭据换取会话令牌的请求。
+ * @example
+ * ```ts
+ * import type { IamRefreshTokenInput } from '@h-ai/api-contract'
+ * import { IamRefreshTokenInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamRefreshTokenInput = IamRefreshTokenInputSchema.parse({
+ *   refreshToken: 'example-only-refresh'
+ * })
+ * void value
+ * ```
+ */
 export type IamRefreshTokenInput = z.infer<typeof IamRefreshTokenInputSchema>
+/**
+ * 以 HaiResult 区分成功业务数据和公共错误的 IamRefreshTokenOutput 响应。
+ * @example
+ * ```ts
+ * import type { IamRefreshTokenOutput } from '@h-ai/api-contract'
+ * import { IamRefreshTokenDataSchema } from '@h-ai/api-contract'
+ * import { ok } from '@h-ai/core'
+ *
+ * const response: IamRefreshTokenOutput = ok(IamRefreshTokenDataSchema.parse({
+ *   tokens: {
+ *     accessToken: 'example-only-access',
+ *     expiresIn: 0,
+ *     tokenType: 'Bearer'
+ *   }
+ * }))
+ * if (response.success) void response.data
+ * ```
+ */
 export type IamRefreshTokenOutput = HaiResult<z.infer<typeof IamRefreshTokenDataSchema>>
+/**
+ * 用户注册请求。
+ * @example
+ * ```ts
+ * import type { IamRegisterInput } from '@h-ai/api-contract'
+ * import { IamRegisterInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamRegisterInput = IamRegisterInputSchema.parse({
+ *   username: 'alice',
+ *   password: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export type IamRegisterInput = z.infer<typeof IamRegisterInputSchema>
+/**
+ * 当前用户修改密码的请求。
+ * @example
+ * ```ts
+ * import type { IamChangePasswordInput } from '@h-ai/api-contract'
+ * import { IamChangePasswordInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamChangePasswordInput = IamChangePasswordInputSchema.parse({
+ *   oldPassword: 'example',
+ *   newPassword: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export type IamChangePasswordInput = z.infer<typeof IamChangePasswordInputSchema>
+/**
+ * 修改当前用户资料的请求。
+ * @example
+ * ```ts
+ * import type { IamUpdateCurrentUserInput } from '@h-ai/api-contract'
+ * import { IamUpdateCurrentUserInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamUpdateCurrentUserInput = IamUpdateCurrentUserInputSchema.parse({})
+ * void value
+ * ```
+ */
 export type IamUpdateCurrentUserInput = z.infer<typeof IamUpdateCurrentUserInputSchema>
+/**
+ * 管理员分页查询用户的请求。
+ * @example
+ * ```ts
+ * import type { IamListUsersInput } from '@h-ai/api-contract'
+ * import { IamListUsersInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamListUsersInput = IamListUsersInputSchema.parse({})
+ * void value
+ * ```
+ */
 export type IamListUsersInput = z.infer<typeof IamListUsersInputSchema>
+/**
+ * 管理员创建用户的请求。
+ * @example
+ * ```ts
+ * import type { IamAdminCreateUserInput } from '@h-ai/api-contract'
+ * import { IamAdminCreateUserInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamAdminCreateUserInput = IamAdminCreateUserInputSchema.parse({
+ *   username: 'alice',
+ *   password: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export type IamAdminCreateUserInput = z.infer<typeof IamAdminCreateUserInputSchema>
+/**
+ * 管理员修改用户的请求。
+ * @example
+ * ```ts
+ * import type { IamAdminUpdateUserInput } from '@h-ai/api-contract'
+ * import { IamAdminUpdateUserInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamAdminUpdateUserInput = IamAdminUpdateUserInputSchema.parse({
+ *   id: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export type IamAdminUpdateUserInput = z.infer<typeof IamAdminUpdateUserInputSchema>
+/**
+ * 以用户 ID 定位目标的请求。
+ * @example
+ * ```ts
+ * import type { IamUserIdInput } from '@h-ai/api-contract'
+ * import { IamUserIdInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamUserIdInput = IamUserIdInputSchema.parse({
+ *   id: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export type IamUserIdInput = z.infer<typeof IamUserIdInputSchema>
+/**
+ * 管理员重置用户密码的请求。
+ * @example
+ * ```ts
+ * import type { IamAdminResetPasswordInput } from '@h-ai/api-contract'
+ * import { IamAdminResetPasswordInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamAdminResetPasswordInput = IamAdminResetPasswordInputSchema.parse({
+ *   id: 'example-1',
+ *   newPassword: 'example-only-password'
+ * })
+ * void value
+ * ```
+ */
 export type IamAdminResetPasswordInput = z.infer<typeof IamAdminResetPasswordInputSchema>
+/**
+ * 创建角色的请求。
+ * @example
+ * ```ts
+ * import type { IamCreateRoleInput } from '@h-ai/api-contract'
+ * import { IamCreateRoleInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamCreateRoleInput = IamCreateRoleInputSchema.parse({
+ *   code: 'example-1',
+ *   name: 'Example'
+ * })
+ * void value
+ * ```
+ */
 export type IamCreateRoleInput = z.infer<typeof IamCreateRoleInputSchema>
+/**
+ * 修改角色的请求。
+ * @example
+ * ```ts
+ * import type { IamUpdateRoleInput } from '@h-ai/api-contract'
+ * import { IamUpdateRoleInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamUpdateRoleInput = IamUpdateRoleInputSchema.parse({
+ *   id: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export type IamUpdateRoleInput = z.infer<typeof IamUpdateRoleInputSchema>
+/**
+ * 分页查询权限定义的请求。
+ * @example
+ * ```ts
+ * import type { IamListPermissionsInput } from '@h-ai/api-contract'
+ * import { IamListPermissionsInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamListPermissionsInput = IamListPermissionsInputSchema.parse({})
+ * void value
+ * ```
+ */
 export type IamListPermissionsInput = z.infer<typeof IamListPermissionsInputSchema>
+/**
+ * 创建权限定义的请求。
+ * @example
+ * ```ts
+ * import type { IamCreatePermissionInput } from '@h-ai/api-contract'
+ * import { IamCreatePermissionInputSchema } from '@h-ai/api-contract'
+ *
+ * const value: IamCreatePermissionInput = IamCreatePermissionInputSchema.parse({
+ *   code: 'example-1',
+ *   name: 'Example'
+ * })
+ * void value
+ * ```
+ */
 export type IamCreatePermissionInput = z.infer<typeof IamCreatePermissionInputSchema>

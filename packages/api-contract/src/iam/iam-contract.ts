@@ -50,7 +50,16 @@ const authResultOutputSchema = haiResultSchema(IamAuthResultSchema)
 const userOutputSchema = haiResultSchema(IamUserSchema)
 const roleOutputSchema = haiResultSchema(IamRoleSchema)
 
-/** IAM 领域 oRPC contract。 */
+/**
+ * IAM 领域 oRPC contract。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract = apiContract.iam
+ * void contract
+ * ```
+ */
 export const iamContract = {
   auth: {
     publicConfig: route({ method: 'GET', path: '/auth/config', operationId: 'iam.auth.publicConfig', summary: 'Public authentication configuration', tags: ['iam', 'auth'] })
@@ -143,4 +152,15 @@ export const iamContract = {
   },
 }
 
+/**
+ * iam 领域公开 procedure 契约的完整类型。
+ * @example
+ * ```ts
+ * import type { IamContract } from '@h-ai/api-contract'
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract: IamContract = apiContract.iam
+ * void contract
+ * ```
+ */
 export type IamContract = typeof iamContract
