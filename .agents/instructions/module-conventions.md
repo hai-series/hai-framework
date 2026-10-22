@@ -187,3 +187,5 @@ function register(tool: Tool): HaiResult<void> {
 - `as unknown as T` 类型强转：禁止用此模式绕过真实类型差异，应修改接口/函数签名使用正确的类型；合规例外：第三方库类型缺失时的 workaround（须加注释说明原因）
 - 将表名/缓存 key 定义在模块 main、全局 constants 或配置文件中，导致与实现分离
 - 将表名/缓存 key 设计为可配置项（如 `config.tableName` / `config.keyPrefix`）
+
+公开声明与内部结构的 JSDoc 示例使用真实入口及合法参数；内部上下文要显式标明，禁止占位断言或虚构 export。具体范围、格式与仅编译不执行的校验见 [模块 JSDoc](../../docs/module-jsdoc.md)。构建受影响包后运行 `node scripts/check-module-jsdoc.mjs --package <模块>`；全库最终执行 `pnpm check:jsdoc`。

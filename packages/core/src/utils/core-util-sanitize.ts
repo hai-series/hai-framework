@@ -5,10 +5,25 @@
 
 import { typeUtils } from './core-util-type.js'
 
-/** 默认敏感字段匹配规则（仅针对凭证类字段） */
+/**
+ * 默认敏感字段匹配规则（仅针对凭证类字段）
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const credential = core.sanitize.isSensitiveKey('apiKey') // true
+ * ```
+ */
 export const DEFAULT_SENSITIVE_KEY_REGEX = /(?:^|_)(?:pass|passcode|password|secret|authorization|cookie|otp|session|token)$|(?:^|_)otp_code$|(?:^|_)private_key$|(?:^|_)access_key(?:_id|_secret)?$|(?:^|_)secret_access_key$|(?:^|_)api(?:_[a-z0-9]+)*_key$|^apikey$/i
 
-/** 默认脱敏替换值 */
+/**
+ * 默认脱敏替换值
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const snapshot = core.sanitize.sanitizeSensitiveFields({ password: 'example-only' })
+ * const replacement = core.sanitize.defaultSensitiveReplacement
+ * ```
+ */
 export const DEFAULT_SENSITIVE_REPLACEMENT = '[REDACTED]'
 
 /** URL/URI/endpoint 键名匹配规则（基于已归一化的 snake_case） */
@@ -17,10 +32,24 @@ const URL_LIKE_KEY_REGEX = /(?:^|_)(?:url|uri|endpoint)(?:_|$)/
 /** 小型键名缓存上限，避免日志热路径重复归一化/匹配 */
 const SENSITIVE_KEY_CACHE_LIMIT = 512
 
-/** 敏感字段匹配器 */
+/**
+ * 敏感字段匹配器
+ * @example 模块内部上下文
+ * ```ts
+ * const matcher: SensitiveKeyMatcher = ['password', 'credential']
+ * const safe = sanitizeSensitiveFields({ credential: 'example-only', id: 'order-1' }, { matcher })
+ * ```
+ */
 export type SensitiveKeyMatcher = RegExp | string[] | ((key: string) => boolean)
 
-/** 敏感字段脱敏选项 */
+/**
+ * 敏感字段脱敏选项
+ * @example 模块内部上下文
+ * ```ts
+ * const options: SanitizeSensitiveFieldsOptions = { matcher: ['credential'], replacement: '[HIDDEN]' }
+ * const safe = sanitizeSensitiveFields({ credential: 'example-only' }, options)
+ * ```
+ */
 export interface SanitizeSensitiveFieldsOptions {
   /** 自定义敏感字段匹配规则 */
   matcher?: SensitiveKeyMatcher
@@ -28,8 +57,24 @@ export interface SanitizeSensitiveFieldsOptions {
   replacement?: unknown
 }
 
+/**
+ * 已编译的敏感键匹配函数；第二个参数是已归一化字段名。
+ * @example 模块内部上下文
+ * ```ts
+ * const matches: CompiledSensitiveKeyMatcher = (_key, normalizedKey) => normalizedKey === 'password'
+ * const sensitive = matches('Password', 'password')
+ * ```
+ */
 type CompiledSensitiveKeyMatcher = (key: string, normalizedKey: string) => boolean
 
+/**
+ * 单次递归脱敏共享的替换值与匹配器；不保存业务输入。
+ * @example 模块内部上下文
+ * ```ts
+ * const context: SanitizeSensitiveContext = { replacement: '[HIDDEN]', urlReplacement: '[HIDDEN]', isSensitiveKey: (_key, normalizedKey) => normalizedKey === 'password' }
+ * const sensitive = context.isSensitiveKey('Password', 'password')
+ * ```
+ */
 interface SanitizeSensitiveContext {
   replacement: unknown
   urlReplacement: string
@@ -102,7 +147,17 @@ function compileSensitiveKeyMatcher(matcher: SensitiveKeyMatcher): CompiledSensi
   return key => matcher(key)
 }
 
-/** 判断键名是否属于敏感字段 */
+/**
+ * 判断键名是否属于敏感字段
+ * @param key - 原始字段名；会统一 camelCase、kebab-case 与 snake_case。
+ * @param matcher - 自定义规则；省略时使用凭证字段默认规则。
+ * @returns 当前字段名是否被匹配为敏感字段。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const safe = core.sanitize.isSensitiveKey('apiKey')
+ * ```
+ */
 export function isSensitiveKey(
   key: string,
   matcher: SensitiveKeyMatcher = DEFAULT_SENSITIVE_KEY_REGEX,
@@ -126,8 +181,8 @@ function isUrlLikeNormalizedKey(normalizedKey: string): boolean {
  * @returns 可安全用于结构化日志的 URL
  * @example
  * ```ts
- * core.sanitize.sanitizeUrl('https://example.com/a?token=secret&limit=10')
- * // 'https://example.com/a?token=[REDACTED]&limit=10'
+ * import { core } from '@h-ai/core'
+ * const safe = core.sanitize.sanitizeUrl('https://service.example/path?token=example-only')
  * ```
  */
 export function sanitizeUrl(url: string, options: SanitizeSensitiveFieldsOptions = {}): string {
@@ -244,6 +299,12 @@ function sanitizeSensitiveValueWithContext(
  * @param key - 当前字段名；根节点传 null
  * @param options - 脱敏选项
  * @param cache - 循环引用 / 重复引用缓存
+ * @returns 递归脱敏后的值；循环引用保留结构，原值不被修改。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const safe = core.sanitize.sanitizeSensitiveValue('example-only', 'password')
+ * ```
  */
 export function sanitizeSensitiveValue(
   value: unknown,
@@ -260,6 +321,11 @@ export function sanitizeSensitiveValue(
  * @param value - 原始对象/数组/值
  * @param options - 脱敏选项
  * @returns 脱敏后的新值
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const safe = core.sanitize.sanitizeSensitiveFields({ password: 'example-only', id: 'order-1' })
+ * ```
  */
 export function sanitizeSensitiveFields<T>(
   value: T,
@@ -268,7 +334,15 @@ export function sanitizeSensitiveFields<T>(
   return sanitizeSensitiveValue(value, null, options) as T
 }
 
-/** 脱敏工具对象。 */
+/**
+ * 脱敏工具对象。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const tools = core.sanitize
+ * tools.sanitizeSensitiveFields({ apiKey: 'example-only', id: 'order-1' })
+ * ```
+ */
 export const sanitize = {
   defaultSensitiveKeyRegex: DEFAULT_SENSITIVE_KEY_REGEX,
   defaultSensitiveReplacement: DEFAULT_SENSITIVE_REPLACEMENT,
@@ -278,5 +352,12 @@ export const sanitize = {
   sanitizeSensitiveFields,
 }
 
-/** sanitize 子工具类型 */
+/**
+ * sanitize 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: SanitizeFn = sanitize
+ * tools.sanitizeSensitiveFields({ apiKey: 'example-only', id: 'order-1' })
+ * ```
+ */
 export type SanitizeFn = typeof sanitize

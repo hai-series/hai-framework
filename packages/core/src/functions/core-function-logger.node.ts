@@ -289,10 +289,11 @@ function getLogger(): Logger {
 
 /**
  * Node.js Logger 函数集合。
- *
  * @example
  * ```ts
- * logger.createLogger({ name: 'service' }).info('boot')
+ * import { core } from '@h-ai/core'
+ * const logger = core.logger.create({ name: 'orders' })
+ * logger.info('Order created', { orderId: 'order-1' })
  * ```
  */
 export const logger: LoggerFunctions = {

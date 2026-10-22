@@ -182,10 +182,11 @@ function difference<T>(arr1: T[], arr2: T[]): T[] {
 
 /**
  * 数组操作工具对象。
- *
  * @example
  * ```ts
- * array.unique([1, 1, 2])
+ * import { core } from '@h-ai/core'
+ * const tools = core.array
+ * tools.chunk([1, 2, 3], 2)
  * ```
  */
 export const array = {
@@ -201,5 +202,12 @@ export const array = {
   difference,
 }
 
-/** array 子工具类型 */
+/**
+ * array 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: ArrayFn = array
+ * tools.chunk([1, 2, 3], 2)
+ * ```
+ */
 export type ArrayFn = typeof array

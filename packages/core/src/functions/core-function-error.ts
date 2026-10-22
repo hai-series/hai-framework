@@ -95,10 +95,26 @@ function buildHaiErrorInst(def: HaiErrorDef, message: string, cause?: unknown, s
   return inst
 }
 
+/**
+ * 错误定义生成及错误实例组装工具；通过 core.error 使用。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const tools = core.error
+ * tools.buildHaiErrorsDef('orders', { NOT_FOUND: '001:404' })
+ * ```
+ */
 export const error = {
   buildHaiErrorsDef,
   buildHaiErrorInst,
 }
 
-/** error 子工具类型 */
+/**
+ * error 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: ErrorFn = error
+ * tools.buildHaiErrorsDef('orders', { NOT_FOUND: '001:404' })
+ * ```
+ */
 export type ErrorFn = typeof error

@@ -19,6 +19,14 @@ import type { TimeFn } from './utils/core-util-time.js'
 import type { TypeUtilFn } from './utils/core-util-type.js'
 import { error } from './functions/core-function-error.js'
 
+/**
+ * Zod 校验错误使用的稳定消息键。
+ * @example
+ * ```ts
+ * import type { ZodValidationMessageKey } from '@h-ai/core'
+ * const value: ZodValidationMessageKey = 'validationRequired'
+ * ```
+ */
 export type ZodValidationMessageKey
   = | 'validationFailed'
     | 'validationRequired'
@@ -37,16 +45,44 @@ export type ZodValidationMessageKey
     | 'validationUuid'
     | 'validationEnum'
 
+/**
+ * 把校验消息键及插值参数转换为显示文本的函数。
+ * @example
+ * ```ts
+ * import type { ZodMessageGetter } from '@h-ai/core'
+ * const message: ZodMessageGetter = (key, params) => key === 'validationRequired' ? 'Required' : `${key}: ${String(params?.field ?? '')}`
+ * message('validationRequired')
+ * ```
+ */
 export type ZodMessageGetter = (
   key: ZodValidationMessageKey,
   params?: Record<string, string | number>,
 ) => string
 
+/**
+ * 可绑定表单字段路径的本地化错误。
+ * @example
+ * ```ts
+ * import type { ValidationFormError } from '@h-ai/core'
+ * const value: ValidationFormError = { field: 'email', message: 'Enter an email address' }
+ * ```
+ */
 export interface ValidationFormError {
   field: string
   message: string
 }
 
+/**
+ * 共享 Zod 错误映射契约；业务自定义消息保持原文。
+ * @example
+ * ```ts
+ * import { core, type ZodValidationFn } from '@h-ai/core'
+ * import { z } from 'zod'
+ * const validator: ZodValidationFn = core.zodValidation
+ * const input = z.object({ email: z.email() }).safeParse({ email: 'invalid' })
+ * if (!input.success) validator.mapZodErrorToFormErrors(input.error, key => key)
+ * ```
+ */
 export interface ZodValidationFn {
   readonly createPrefixedZodMessageGetter: <TMessageKey extends string>(
     prefix: string,
@@ -67,14 +103,48 @@ const UnknownErrorDef: HaiErrorDef = {
 
 // ─── 1. 基础类型 - HaiResult / Option ───
 
+/**
+ * 业务操作的成功数据或标准失败；访问 data/error 前必须按 success 收窄。
+ * @example
+ * ```ts
+ * import { ok, type HaiResult } from '@h-ai/core'
+ * const result: HaiResult<{ id: string }> = ok({ id: 'order-1' })
+ * const label = result.success ? result.data.id : result.error.message
+ * ```
+ */
 export type HaiResult<T>
   = | { success: true, data: T }
     | { success: false, error: HaiError }
 
+/**
+ * 创建成功结果；不会自动捕获后续操作异常。
+ * @param data - 成功分支的数据；保留原类型和对象引用。
+ * @returns success 为 true、data 为输入值的结果。
+ * @example
+ * ```ts
+ * import { ok } from '@h-ai/core'
+ * const result = ok({ id: 'order-1' })
+ * if (result.success) result.data.id.toUpperCase()
+ * ```
+ */
 export function ok<T>(data: T): HaiResult<T> {
   return { success: true, data }
 }
 
+/**
+ * 创建失败结果；支持标准错误定义、已有 HaiError 与原生 Error。
+ * @param errorOrDef - 已定义的错误、已有业务错误或原生异常。
+ * @param message - 从错误定义创建实例时使用的消息。
+ * @param cause - 原始原因；对外展示前应按边界脱敏。
+ * @param suggestion - 可选的处理建议。
+ * @returns success 为 false、error 为标准业务错误的结果。
+ * @example
+ * ```ts
+ * import { err, HaiCommonError } from '@h-ai/core'
+ * const result = err(HaiCommonError.NOT_FOUND, 'Order not found')
+ * if (!result.success) result.error.httpStatus
+ * ```
+ */
 export function err(
   errorOrDef: HaiErrorDef | HaiError | Error,
   message?: string,
@@ -113,13 +183,12 @@ export function err(
  * @template T - 成功数据类型
  * @template R1 - ok 分支返回类型
  * @template R2 - err 分支返回类型
- *
  * @example
  * ```ts
- * const handlers: MatchHandlers<number, number, number> = {
- *   ok: n => n + 1,
- *   err: () => 0,
- * }
+ * import { type MatchHandlers, ok } from '@h-ai/core'
+ * const handlers: MatchHandlers<number, string, string> = { ok: n => String(n + 1), err: error => error.message }
+ * const result = ok(2)
+ * const label = result.success ? handlers.ok(result.data) : handlers.err(result.error)
  * ```
  */
 export interface MatchHandlers<T, R1, R2> {
@@ -131,12 +200,34 @@ export interface MatchHandlers<T, R1, R2> {
 
 // ─── 1.5 标准错误类型 ───
 
-/** 错误信息值格式：`错误码数字段:HTTP状态码`，例如 `001:500`。 */
+/**
+ * 错误信息值格式：`错误码数字段:HTTP状态码`，例如 `001:500`。
+ * @example
+ * ```ts
+ * import type { ErrorInfoValue } from '@h-ai/core'
+ * const value: ErrorInfoValue = '001:500'
+ * ```
+ */
 export type ErrorInfoValue = `${string}:${string}`
 
-/** 模块错误信息映射。 */
+/**
+ * 模块错误信息映射。
+ * @example
+ * ```ts
+ * import type { ErrorInfo } from '@h-ai/core'
+ * const value: ErrorInfo = { NOT_READY: '001:503' }
+ * ```
+ */
 export type ErrorInfo = Record<string, ErrorInfoValue>
 
+/**
+ * 稳定的错误码与 HTTP 映射；消息在创建错误实例时填入。
+ * @example
+ * ```ts
+ * import type { HaiErrorDef } from '@h-ai/core'
+ * const value: HaiErrorDef = { code: 'app:orders:001', httpStatus: 409, system: 'app', module: 'orders' }
+ * ```
+ */
 export interface HaiErrorDef {
   code: string | number
   httpStatus: number
@@ -144,6 +235,14 @@ export interface HaiErrorDef {
   module: string
 }
 
+/**
+ * 可跨业务边界传递的错误；cause/ext 对外展示前仍需脱敏。
+ * @example
+ * ```ts
+ * import type { HaiError } from '@h-ai/core'
+ * const value: HaiError = { code: 'app:orders:001', message: 'Order already exists', httpStatus: 409 }
+ * ```
+ */
 export interface HaiError {
   code: string | number
   message: string
@@ -189,6 +288,15 @@ const CommonErrorInfo = {
   DATABASE_ERROR: '501:500',
   UNKNOWN_ERROR: '599:500',
 } as const satisfies ErrorInfo
+/**
+ * 跨模块通用错误定义及 HTTP 状态映射。
+ * @example
+ * ```ts
+ * import { err, HaiCommonError } from '@h-ai/core'
+ * const result = err(HaiCommonError.UNAUTHORIZED, 'Authentication required')
+ * if (!result.success) result.error.code
+ * ```
+ */
 export const HaiCommonError = error.buildHaiErrorsDef('common', CommonErrorInfo)
 
 const ConfigErrorInfo = {
@@ -199,16 +307,25 @@ const ConfigErrorInfo = {
   CONFIG_NOT_LOADED: '014:500',
 } as const satisfies ErrorInfo
 
+/**
+ * 文件配置加载、校验、环境缺失及缓存读取的错误定义。
+ * @example
+ * ```ts
+ * import { err, HaiConfigError } from '@h-ai/core'
+ * const result = err(HaiConfigError.CONFIG_NOT_LOADED, 'App configuration is unavailable')
+ * if (!result.success) result.error.message
+ * ```
+ */
 export const HaiConfigError = error.buildHaiErrorsDef('core', ConfigErrorInfo)
 
 // ─── 2 分页类型 ───
 
 /**
  * 分页参数输入（可选字段，未提供时使用默认值）。
- *
  * @example
  * ```ts
- * const input: PaginationOptionsInput = { page: 2, pageSize: 20 }
+ * import type { PaginationOptionsInput } from '@h-ai/core'
+ * const value: PaginationOptionsInput = { page: 2, pageSize: 20 }
  * ```
  */
 export interface PaginationOptionsInput {
@@ -220,10 +337,10 @@ export interface PaginationOptionsInput {
 
 /**
  * 分页参数（必填，已确定具体值）。
- *
  * @example
  * ```ts
- * const options: PaginationOptions = { page: 1, pageSize: 20 }
+ * import type { PaginationOptions } from '@h-ai/core'
+ * const value: PaginationOptions = { page: 1, pageSize: 20 }
  * ```
  */
 export interface PaginationOptions {
@@ -237,15 +354,11 @@ export interface PaginationOptions {
  * 分页结果。
  *
  * @template T - 数据项类型
- *
  * @example
  * ```ts
- * const result: PaginatedResult<User> = {
- *   items: [{ id: 1, name: 'Alice' }],
- *   total: 100,
- *   page: 1,
- *   pageSize: 20,
- * }
+ * import type { PaginatedResult } from '@h-ai/core'
+ * const page: PaginatedResult<{ id: string }> = { items: [{ id: 'order-1' }], total: 1, page: 1, pageSize: 20 }
+ * const ids = page.items.map(item => item.id)
  * ```
  */
 export interface PaginatedResult<T> {
@@ -263,10 +376,10 @@ export interface PaginatedResult<T> {
 
 /**
  * 日志上下文。
- *
  * @example
  * ```ts
- * const context: LogContext = { requestId: 'req-1' }
+ * import type { LogContext } from '@h-ai/core'
+ * const value: LogContext = { requestId: 'request-1', level: 'info' }
  * ```
  */
 export interface LogContext {
@@ -278,10 +391,10 @@ export interface LogContext {
 
 /**
  * 日志选项。
- *
  * @example
  * ```ts
- * const options: LoggerOptions = { name: 'api', level: 'debug' }
+ * import type { LoggerOptions } from '@h-ai/core'
+ * const value: LoggerOptions = { name: 'orders', level: 'debug', context: { service: 'api' } }
  * ```
  */
 export interface LoggerOptions {
@@ -297,10 +410,11 @@ export interface LoggerOptions {
 /**
  * Logger 接口。
  * 统一的日志记录接口，具体实现由 Provider 提供。
- *
  * @example
  * ```ts
- * core.logger.info('ready', { requestId: 'req-1' })
+ * import { core, type Logger } from '@h-ai/core'
+ * const logger: Logger = core.logger.child({ service: 'orders' })
+ * logger.info('Order created', { orderId: 'order-1' })
  * ```
  */
 export interface Logger {
@@ -315,14 +429,12 @@ export interface Logger {
 
 /**
  * Core 公共 Logger — Logger 实例 + 管理方法。
- *
  * @example
  * ```ts
- * core.logger.info('ready')
- * core.logger.configure({ level: 'debug' })
- * core.logger.setLevel('warn')
- * const level = core.logger.getLevel()
- * const db = core.logger.create({ name: 'db' })
+ * import { core, type CoreLogger } from '@h-ai/core'
+ * const logger: CoreLogger = core.logger
+ * logger.configure({ level: 'warn', redact: ['password'] })
+ * logger.child({ component: 'worker' }).warn('Retry scheduled')
  * ```
  */
 export interface CoreLogger extends Logger {
@@ -340,16 +452,11 @@ export interface CoreLogger extends Logger {
  * Logger 函数组合（平台实现依赖）。
  *
  * 由各平台（Node.js / Browser）提供具体实现，通过 `createCore()` 注入。
- *
  * @example
  * ```ts
- * const fns: LoggerFunctions = {
- *   createLogger,
- *   getLogger,
- *   configureLogger,
- *   setLogLevel,
- *   getLogLevel,
- * }
+ * import { core, type LoggerFunctions } from '@h-ai/core'
+ * const platform: LoggerFunctions = { createLogger: options => core.logger.create(options), getLogger: name => core.logger.create({ name }), configureLogger: config => core.logger.configure(config), setLogLevel: level => core.logger.setLevel(level), getLogLevel: () => core.logger.getLevel() }
+ * platform.createLogger({ name: 'worker' }).info('Worker ready')
  * ```
  */
 export interface LoggerFunctions {
@@ -367,10 +474,10 @@ export interface LoggerFunctions {
 
 /**
  * Core 配置选项。
- *
  * @example
  * ```ts
- * const options: CoreOptions = { configDir: './config', watchConfig: true }
+ * import type { CoreOptions } from '@h-ai/core'
+ * const value: CoreOptions = { configDir: './config', watchConfig: false }
  * ```
  */
 export interface CoreOptions {
@@ -398,17 +505,20 @@ export interface CoreOptions {
 
 /**
  * 语言代码（ISO 639-1 + 地区代码）。
- *
- * @example 'zh-CN', 'en-US', 'ja-JP'
+ * @example
+ * ```ts
+ * import type { Locale } from '@h-ai/core'
+ * const value: Locale = 'en-US'
+ * ```
  */
 export type Locale = string
 
 /**
  * 语言信息。
- *
  * @example
  * ```ts
- * const locale: LocaleInfo = { code: 'zh-CN', label: '简体中文' }
+ * import type { LocaleInfo } from '@h-ai/core'
+ * const value: LocaleInfo = { code: 'en-US', label: 'English' }
  * ```
  */
 export interface LocaleInfo {
@@ -424,21 +534,20 @@ export interface LocaleInfo {
  * 插值参数类型。
  *
  * 用于 i18n 消息模板中的 `{key}` 占位符替换。
- *
  * @example
  * ```ts
- * const params: InterpolationParams = { name: 'Alice', count: 3 }
- * // 模板 'Hello, {name}! You have {count} items.'
+ * import type { InterpolationParams } from '@h-ai/core'
+ * const value: InterpolationParams = { name: 'Alice', count: 2 }
  * ```
  */
 export type InterpolationParams = Record<string, string | number | boolean>
 
 /**
  * 消息字典类型（单语言的 key-value 映射）。
- *
  * @example
  * ```ts
- * const dict: MessageDictionary = { hello: '你好', bye: '再见' }
+ * import type { MessageDictionary } from '@h-ai/core'
+ * const value: MessageDictionary = { greeting: 'Hello, {name}!' }
  * ```
  */
 export type MessageDictionary = Record<string, string>
@@ -449,23 +558,22 @@ export type MessageDictionary = Record<string, string>
  * 以 locale 为键，每个 locale 下包含该语言的所有消息 key-value。
  *
  * @template K - 消息 key 的联合类型
- *
  * @example
  * ```ts
- * const messages: LocaleMessages<'hello' | 'bye'> = {
- *   'zh-CN': { hello: '你好', bye: '再见' },
- *   'en-US': { hello: 'Hello', bye: 'Bye' },
- * }
+ * import { core, type LocaleMessages } from '@h-ai/core'
+ * const messages: LocaleMessages<'hello'> = { 'en-US': { hello: 'Hello, {name}!' }, 'zh-CN': { hello: '你好，{name}！' } }
+ * const message = core.i18n.createMessageGetter(messages)
+ * message('hello', { locale: 'en-US', params: { name: 'Alice' } })
  * ```
  */
 export type LocaleMessages<K extends string = string> = Record<Locale, Record<K, string>>
 
 /**
  * 消息获取选项。
- *
  * @example
  * ```ts
- * getMessage('hello', { locale: 'en-US', params: { name: 'World' } })
+ * import type { MessageOptions } from '@h-ai/core'
+ * const value: MessageOptions = { locale: 'en-US', params: { name: 'Alice' } }
  * ```
  */
 export interface MessageOptions {
@@ -477,7 +585,15 @@ export interface MessageOptions {
 
 // ─── 6. Core 服务接口 ───
 
-/** Core 服务聚合接口（createCore 返回类型） */
+/**
+ * Core 服务聚合接口（createCore 返回类型）
+ * @example
+ * ```ts
+ * import { core, type CoreFunctions } from '@h-ai/core'
+ * function createRequestId(tools: CoreFunctions): string { return tools.id.request() }
+ * const requestId = createRequestId(core)
+ * ```
+ */
 export interface CoreFunctions {
   /** 默认 Logger（懒加载单例），同时提供日志管理方法 */
   readonly logger: CoreLogger

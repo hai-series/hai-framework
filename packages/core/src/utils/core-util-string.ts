@@ -209,10 +209,11 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 /**
  * 字符串操作工具对象。
- *
  * @example
  * ```ts
- * string.capitalize('hello')
+ * import { core } from '@h-ai/core'
+ * const tools = core.string
+ * tools.camelCase('order-created')
  * ```
  */
 export const string = {
@@ -230,5 +231,12 @@ export const string = {
   constantTimeEqual,
 }
 
-/** string 子工具类型 */
+/**
+ * string 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: StringFn = string
+ * tools.camelCase('order-created')
+ * ```
+ */
 export type StringFn = typeof string

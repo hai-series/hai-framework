@@ -35,7 +35,8 @@
     "check:env": "node scripts/generate-env-catalog.mjs --check && node scripts/generate-app-env.mjs --check",
     "generate:api": "node scripts/module-api-inventory.mjs",
     "check:api": "node scripts/module-api-inventory.mjs --check",
-    "test:api": "node scripts/module-api-smoke.mjs"
+    "test:api": "node scripts/module-api-smoke.mjs",
+    "check:jsdoc": "node scripts/check-module-jsdoc.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",

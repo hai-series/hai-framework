@@ -21,6 +21,15 @@ import { installRequestLocales } from './i18n/core-i18n-utils.js'
 installRequestLocales(new AsyncLocalStorage())
 
 const YAML_EXTENSION_REGEX = /\.ya?ml$/
+/**
+ * Node 入口的 Core 扩展：提供文件配置和初始化；不是额外的公开工厂。
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: NodeCoreFunctions = core
+ * tools.init({ logging: { level: 'info' } })
+ * tools.logger.info('Core ready')
+ * ```
+ */
 type NodeCoreFunctions = CoreFunctions & {
   readonly config: typeof config
   readonly init: typeof initCore
@@ -78,11 +87,11 @@ function createNodeCore(): NodeCoreFunctions {
 
 /**
  * Core 服务对象 - 聚合常用功能（Node.js）。
- *
  * @example
  * ```ts
  * import { core } from '@h-ai/core'
- * core.init({ configDir: './config' })
+ * core.init({ configDir: './config' }) // 同步初始化；配置加载失败会抛出异常
+ * core.logger.info('Application ready')
  * ```
  */
 export const core: NodeCoreFunctions = createNodeCore()
@@ -91,6 +100,11 @@ export const core: NodeCoreFunctions = createNodeCore()
 
 /**
  * 配置加载项（描述单个待加载的配置文件）。
+ * @example 模块内部上下文
+ * ```ts
+ * const item: ConfigLoadItem = { name: 'core', filePath: join('/srv/app', 'config', '_core.yml') }
+ * const cacheName = item.name
+ * ```
  */
 interface ConfigLoadItem {
   /** 配置名称（用作缓存 key，如 'core'、'db'、'app'） */

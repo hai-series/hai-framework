@@ -26,7 +26,16 @@ let currentLocale: Locale = DEFAULT_LOCALE
 /** 请求语言上下文；仅由 Node 入口安装，浏览器不加载 Node 运行时代码。 */
 let requestLocales: AsyncLocalStorage<{ locale: Locale }> | undefined
 
-/** Node 入口注入真实 AsyncLocalStorage，不对外暴露可替换的运行时配置。 */
+/**
+ * Node 入口注入真实 AsyncLocalStorage，不对外暴露可替换的运行时配置。
+ * @param storage - Node 入口创建的 AsyncLocalStorage，存储当前请求语言。
+ * @example 模块内部上下文
+ * ```ts
+ * function installNodeRequestContext(storage: AsyncLocalStorage<{ locale: Locale }>): void {
+ *   installRequestLocales(storage)
+ * }
+ * ```
+ */
 export function installRequestLocales(storage: AsyncLocalStorage<{ locale: Locale }>): void {
   requestLocales = storage
 }
@@ -125,6 +134,14 @@ function createMessageGetter<K extends string>(
 
 // ─── Core 内置消息 ───
 
+/**
+ * Core 内置消息字典的合法键；与应用业务翻译键独立。
+ * @example 模块内部上下文
+ * ```ts
+ * const key: CoreMessageKey = 'core_validationRequired'
+ * const message = coreM(key)
+ * ```
+ */
 type CoreMessageKey = keyof typeof messagesZhCN
 
 const coreM = createMessageGetter<CoreMessageKey>({
@@ -134,6 +151,16 @@ const coreM = createMessageGetter<CoreMessageKey>({
 
 // ─── 对外入口 ───
 
+/**
+ * 语言上下文、字典消息获取与插值工具；Node 请求通过 runWithLocale 隔离语言。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const tools = core.i18n
+ * const message = tools.createMessageGetter({ 'en-US': { hello: 'Hello' }, 'zh-CN': { hello: '你好' } })
+ * message('hello', { locale: 'en-US' })
+ * ```
+ */
 export const i18n = {
   DEFAULT_LOCALES,
   DEFAULT_LOCALE,
@@ -144,5 +171,13 @@ export const i18n = {
   coreM,
 }
 
-/** i18n 子工具类型 */
+/**
+ * i18n 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: I18nFn = i18n
+ * const message = tools.createMessageGetter({ 'en-US': { hello: 'Hello' }, 'zh-CN': { hello: '你好' } })
+ * message('hello', { locale: 'en-US' })
+ * ```
+ */
 export type I18nFn = typeof i18n

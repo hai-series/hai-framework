@@ -20,7 +20,14 @@ import { err, HaiConfigError, ok } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
 import { typeUtils } from '../utils/core-util-type.js'
 
-/** 缓存项（存储已加载的配置及其元信息） */
+/**
+ * 缓存项（存储已加载的配置及其元信息）
+ * @example 模块内部上下文
+ * ```ts
+ * const entry: CacheEntry<{ enabled: boolean }> = { data: { enabled: true }, filePath: '/srv/app/config/app.yml', loadedAt: Date.now() }
+ * const enabled = entry.data.enabled
+ * ```
+ */
 interface CacheEntry<T = unknown> {
   /** 解析后的配置数据 */
   data: T
@@ -174,18 +181,26 @@ const configCache = new Map<string, CacheEntry>()
  * 监听回调类型。
  *
  * @template T - 配置数据类型
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const callback: WatchCallback<AppConfig> = (cfg, error) => {
- *   if (error) { core.logger.error('Config reload failed', { error }); return }
- *   // 使用更新后的 cfg
+ * const callback: WatchCallback<{ enabled: boolean }> = (config, failure) => {
+ *   if (failure) { messages.push(failure.message); return }
+ *   if (config) messages.push(String(config.enabled))
  * }
+ * const messages: string[] = []
  * ```
  */
 export type WatchCallback<T = unknown> = (config: T | null, error?: HaiError) => void
 
-/** 配置监听条目（包含文件 watcher 和回调集合） */
+/**
+ * 配置监听条目（包含文件 watcher 和回调集合）
+ * @example 模块内部上下文
+ * ```ts
+ * const watcher = watch('/srv/app/config/app.yml', () => {})
+ * const entry: WatchEntry = { watcher, callbacks: new Set(), debounceTimer: null }
+ * entry.watcher.close()
+ * ```
+ */
 interface WatchEntry {
   /** fs.watch 返回的 watcher 实例 */
   watcher: ReturnType<typeof watch>
@@ -500,13 +515,10 @@ function clearCache(name?: string): void {
 
 /**
  * 配置管理对象。
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const result = config.load('app', './config/app.yml')
- * if (result.success) {
- *   const cfg = config.get('app')
- * }
+ * const result = config.load('app', '/srv/app/config/app.yml')
+ * if (!result.success) result.error.message
  * ```
  */
 export const config = {
@@ -756,5 +768,12 @@ export const config = {
   },
 }
 
-/** config 子工具类型 */
+/**
+ * config 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const result = config.load('app', '/srv/app/config/app.yml')
+ * if (!result.success) result.error.message
+ * ```
+ */
 export type ConfigFn = typeof config

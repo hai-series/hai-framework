@@ -56,15 +56,10 @@ import type {
  * Zod issue 的结构子集（同时兼容 Zod v3 / v4）。
  *
  * 没有引入 `zod` 类型依赖，避免 core 拖入 zod 运行时；只声明读取所需的字段。
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const issue: ZodIssueLike = {
- *   path: ['profile', 'email'],
- *   code: 'invalid_format',
- *   format: 'email',
- *   message: 'Invalid email address',
- * }
+ * const issue: ZodIssueLike = { path: ['profile', 'email'], code: 'invalid_format', format: 'email', message: 'Invalid email address' }
+ * const errors = mapZodIssuesToFormErrors([issue], key => key)
  * ```
  */
 interface ZodIssueLike {
@@ -374,16 +369,11 @@ function mapZodErrorToFormErrors(
  * 按最小知识原则，仅暴露调用方真正需要的两个入口：
  * 1. `createPrefixedZodMessageGetter()`：把模块前缀与消息获取器适配起来
  * 2. `mapZodErrorToFormErrors()`：一步完成 ZodError → 本地化扁平错误列表
- *
  * @example
  * ```ts
- * const getMessage = zodValidation.createPrefixedZodMessageGetter(
- *   'kit',
- *   (messageKey, params) => messageKey === 'kit_validationEmail'
- *     ? '请输入合法邮箱地址'
- *     : `至少输入 ${params?.min} 个字符`,
- * )
- * const errors = zodValidation.mapZodErrorToFormErrors(zodError, getMessage)
+ * import { core } from '@h-ai/core'
+ * const tools = core.zodValidation
+ * tools.mapZodErrorToFormErrors({ issues: [{ path: ['name'], code: 'invalid_type', expected: 'string', message: 'Invalid input' }] }, key => key)
  * ```
  */
 export const zodValidation = {

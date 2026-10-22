@@ -66,11 +66,11 @@ function generateUUID(): string {
 
 /**
  * ID 生成工具对象。
- *
  * @example
  * ```ts
- * const id1 = id.generate()
- * const id2 = id.short()
+ * import { core } from '@h-ai/core'
+ * const tools = core.id
+ * tools.withPrefix('order_')
  * ```
  */
 export const id = {
@@ -185,5 +185,12 @@ export const id = {
   },
 }
 
-/** id 子工具类型 */
+/**
+ * id 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: IdFn = id
+ * tools.withPrefix('order_')
+ * ```
+ */
 export type IdFn = typeof id

@@ -18,6 +18,12 @@ import { error as errorUtils } from '../functions/core-function-error.js'
  * 用于模块未初始化时的安全回退。
  *
  * @template E - 模块错误类型（必须继承 HaiError）
+ * @example 模块内部上下文
+ * ```ts
+ * const state: NotInitializedKit<HaiError> = createNotInitializedKit({ code: 'app:orders:001', httpStatus: 503, system: 'app', module: 'orders' }, () => 'Orders unavailable')
+ * const result = state.result<string>()
+ * if (!result.success) result.error.message
+ * ```
  */
 export interface NotInitializedKit<E extends HaiError> {
   /** 创建未初始化错误对象 */
@@ -43,30 +49,32 @@ export interface NotInitializedKit<E extends HaiError> {
  * @param codeOrDef - 模块的 NOT_INITIALIZED 错误码，或标准 HaiErrorDef 错误定义
  * @param messageFn - 返回 i18n 错误消息的函数（延迟求值，确保运行时 locale 正确）
  * @returns 未初始化工具集
- *
  * @example
  * ```ts
  * import { core } from '@h-ai/core'
- *
- * const notInitialized = core.module.createNotInitializedKit(
- *   HaiDbError.NOT_INITIALIZED,
- *   () => dbM('db_notInitialized'),
- * )
- *
- * // 异步接口占位（默认）
- * const ddlProxy = notInitialized.proxy<DdlOperations>()
- *
- * // 同步接口占位
- * const hashProxy = notInitialized.proxy<HashOperations>('sync')
- *
- * // 在服务对象中使用
- * const db = {
- *   get ddl() { return currentProvider?.ddl ?? ddlProxy },
- *   get sql() { return currentProvider?.sql ?? notInitialized.proxy<SqlOperations>() },
- * }
+ * import { HaiCommonError, type HaiResult } from '@h-ai/core'
+ * const state = core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Not initialized')
+ * const operations = state.proxy<{ read: () => Promise<HaiResult<string>> }>()
+ * const result = await operations.read()
+ * if (!result.success) core.logger.warn('Read rejected', { code: result.error.code })
  * ```
  */
 export function createNotInitializedKit(codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
+/**
+ * 创建指定错误码的同步或异步未初始化操作代理；消息在实际调用时求值。
+ * @param codeOrDef - 模块 NOT_INITIALIZED 错误定义或错误码。
+ * @param messageFn - 每次失败时读取当前请求语言的消息函数。
+ * @returns 包含 error、result 和同步/异步 proxy 的占位工具集。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * import { HaiCommonError, type HaiResult } from '@h-ai/core'
+ * const state = core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => 'Not initialized')
+ * const operations = state.proxy<{ read: () => Promise<HaiResult<string>> }>()
+ * const result = await operations.read()
+ * if (!result.success) core.logger.warn('Read rejected', { code: result.error.code })
+ * ```
+ */
 export function createNotInitializedKit<E extends HaiError>(
   codeOrDef: E['code'],
   messageFn: () => string,
@@ -104,7 +112,16 @@ export function createNotInitializedKit<E extends HaiError>(
 }
 
 /** module 子工具类型 */
-/** overloaded function type for createNotInitializedKit */
+/**
+ * 未初始化代理的两个重载：错误定义或具体错误码。
+ * @example 模块内部上下文
+ * ```ts
+ * const create: CreateNotInitializedKitFn = createNotInitializedKit
+ * const state = create({ code: 'app:orders:001', httpStatus: 503, system: 'app', module: 'orders' }, () => 'Orders unavailable')
+ * const result = state.result<string>()
+ * if (!result.success) result.error.code
+ * ```
+ */
 export interface CreateNotInitializedKitFn {
   (codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
   <E extends HaiError>(codeOrDef: E['code'], messageFn: () => string): NotInitializedKit<E>
@@ -118,12 +135,25 @@ export interface CreateNotInitializedKitFn {
  * @param environment.HAI_E2E - 显式真实端到端测试标记
  * @param environment.HAI_E2E_MOCK - 显式模拟端到端测试标记
  * @returns 是否拒绝仅本机/进程有效的状态后端
- * @example core.module.requiresSharedState({ NODE_ENV: 'production' }) // true
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const production = core.module.requiresSharedState({ HAI_CORE_ENV: 'production' }) // true
+ * const test = core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // false
+ * ```
  */
 export function requiresSharedState(environment: { NODE_ENV?: string, HAI_CORE_ENV?: string, HAI_E2E?: string, HAI_E2E_MOCK?: string }): boolean {
   return (environment.NODE_ENV === 'production' || environment.HAI_CORE_ENV === 'production') && environment.HAI_E2E !== '1' && environment.HAI_E2E_MOCK !== '1'
 }
 
+/**
+ * 模块初始化占位与生产共享状态要求的工具契约。
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: ModuleFn = { createNotInitializedKit, requiresSharedState }
+ * const shared = tools.requiresSharedState({ NODE_ENV: 'production' })
+ * ```
+ */
 export interface ModuleFn {
   createNotInitializedKit: CreateNotInitializedKitFn
   /** 生产共享状态要求；浏览器工具为纯函数，不隐式读取进程环境。 */

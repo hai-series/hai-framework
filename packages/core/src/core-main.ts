@@ -26,21 +26,13 @@ import { typeUtils } from './utils/core-util-type.js'
  * 创建 Core 对象（通用内核）。
  * @param loggerFns - 平台特定的 Logger 函数集合
  * @returns core 对象（不含平台扩展）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * import { createCore } from '@h-ai/core'
- * import { logger } from '@h-ai/core'
- *
- * const core = createCore({
- *   createLogger: logger.createLogger,
- *   getLogger: logger.getLogger,
- *   configureLogger: logger.configureLogger,
- *   setLogLevel: logger.setLogLevel,
- *   getLogLevel: logger.getLogLevel,
- * })
- *
- * core.logger.info('Hello')
+ * function createPlatformCore(platform: LoggerFunctions): CoreFunctions {
+ *   const tools = createCore(platform)
+ *   tools.logger.info('Core ready')
+ *   return tools
+ * }
  * ```
  */
 export function createCore(loggerFns: LoggerFunctions): CoreFunctions {

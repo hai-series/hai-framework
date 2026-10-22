@@ -363,3 +363,5 @@ export default defineConfig({ ...baseVitestConfig })
 ```
 
 中文、英文、日文保持功能、示例和章节对应。根 README 可按框架介绍和选型导航组织；专用操作指南可保留顺序步骤。修改内容融入对应章节，删除过期或重复段落，检查跨文档锚点。
+
+模块注释与示例按 [JSDoc 验证约定](../../../docs/module-jsdoc.md) 检查；使用真实公共入口和数据，内部类型示例标明词法上下文。受影响包构建后执行 `node scripts/check-module-jsdoc.mjs --package <模块>`；该仓库命令不复制到应用模板。
