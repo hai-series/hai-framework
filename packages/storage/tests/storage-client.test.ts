@@ -211,6 +211,17 @@ describe('storage client 工具函数', () => {
       expect(result.success).toBe(false)
     })
 
+    it('预先取消时不调用 fetch', async () => {
+      const fetch = vi.fn()
+      vi.stubGlobal('fetch', fetch)
+      const controller = new AbortController()
+      controller.abort(new Error('Cancelled before upload'))
+      const result = await uploadWithPresignedUrl('https://example.com/upload', 'data', { abortController: controller })
+      expect(result.success).toBe(false)
+      expect(result.error).toBeTruthy()
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
     it('非 Error 异常也应被捕获', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue('string error'))
 

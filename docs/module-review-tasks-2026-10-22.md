@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08，共 80 个，另有 21 个按模块拆分的 JSDoc 任务，共 101 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 45/52（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 46/52（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -904,7 +904,8 @@
 
 ### STORAGE-04 · P2 · 浏览器上传取消统一结算并释放监听
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：XHR发送前检查已取消信号，load/error/timeout/abort及发送/进度回调异常统一一次结算并释放外部/原生监听，避免预取消仍上传、外部abort挂起或executor异常绕过失败契约；fetch预取消也不调用网络。旧源真实Chrome7场景全红；最终10原生浏览器场景+38客户端单测48/48无skip，通过真实HTTP/原生XHR事件，浏览器/context/server/socket/tmp均finally回收。源/两测试严格类型、lint6零警告、fresh全部entry/DTS、64 JSDoc+2内部例、env595/skills均0；公开签名不变。三语README/双skill/LLMS同步；只补现有catalog Playwright测试依赖与storage importer3行lock，保留JSDoc19及IAM07已提交的serv依赖；全量回归按用户要求在全部任务实施后执行。
 - **位置**：`packages/storage/src/client/storage-client.ts` uploadWithPresignedUrl 进度分支。
 - **证据与影响**：旧 XHR 分支对已经 abort 的 signal 仍发送请求，终态未移除外部监听；原生 xhr.abort 可能使 Promise 永不结算，错误 URL 在 Promise executor 内抛错还会绕过失败结果契约。真实 Chrome 的 7 项旧实现回归全部失败。
 - **修正内容**：发送前检查取消，所有原生终态只结算一次并释放监听；捕获构造/打开/发送和进度回调异常，维持既有失败结果契约，不把调用方清理与服务端持久化混为一谈。

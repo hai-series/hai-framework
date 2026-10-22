@@ -48,7 +48,7 @@ export interface ClientUploadOptions {
   contentType?: string
   /** 进度回调（设置后会使用 XMLHttpRequest；仅 lengthComputable=true 时回调） */
   onProgress?: (progress: UploadProgress) => void
-  /** AbortController 用于取消上传（abort 后返回 {success: false}） */
+  /** 取消上传；预取消不发送请求，进行中取消返回失败，完成后移除本次监听。取消不能撤销远端已写入对象。 */
   abortController?: AbortController
 }
 
@@ -79,7 +79,8 @@ export interface ClientDownloadOptions {
  * @param url - 已成功获取的 S3 HTTP(S) 上传签名 URL；本地存储须使用应用的鉴权文件接口。
  * @param data - 要上传的数据（File、Blob、ArrayBuffer 或字符串）
  * @param options - 上传选项
- * @returns 上传结果
+ * @returns 上传结果；预取消不发送，进行中取消/网络失败/初始化异常结算为失败，终态移除本次监听。
+ * 取消不代表远端对象已回滚；上传完成后的撤销由应用另行授权删除。
  * @example
  * ```ts
  * import { uploadWithPresignedUrl } from '@h-ai/storage/client'
@@ -97,57 +98,107 @@ export async function uploadWithPresignedUrl(
   options: ClientUploadOptions = {},
 ): Promise<{ success: boolean, error?: string }> {
   try {
+    const signal = options.abortController?.signal
+    if (signal?.aborted)
+      return { success: false, error: storageM('storage_uploadCanceled') }
+
     // 准备请求体
     const body: BodyInit = data
 
     // 使用 XMLHttpRequest 以支持上传进度
     if (options.onProgress) {
+      const xhr = new XMLHttpRequest()
       return new Promise((resolve) => {
-        const xhr = new XMLHttpRequest()
+        let settled = false
 
-        // 设置取消控制
-        if (options.abortController) {
-          options.abortController.signal.addEventListener('abort', () => {
+        /**
+         * 所有终态共用一次结算，先移除XHR/上传/signal监听，迟到事件不能改变结果。
+         * 后续调用跳过，完成后取消不会再触碰旧XHR。
+         * @param result - 本次最终结果，不推断远端是否已写对象。
+         * @param result.success - 是否已成功完成本地请求。
+         * @param result.error - 可选失败说明。
+         * @example 模块内部上下文
+         * ```ts
+         * finish({ success: false, error: storageM('storage_networkError') })
+         * ```
+         */
+        function finish(result: { success: boolean, error?: string }): void {
+          if (settled)
+            return
+          settled = true
+          signal?.removeEventListener('abort', onCancel)
+          xhr.upload.removeEventListener('progress', onProgress)
+          xhr.removeEventListener('load', onLoad)
+          xhr.removeEventListener('error', onError)
+          xhr.removeEventListener('abort', onAbort)
+          xhr.removeEventListener('timeout', onError)
+          resolve(result)
+        }
+
+        function onAbort(): void {
+          finish({ success: false, error: storageM('storage_uploadCanceled') })
+        }
+
+        /**
+         * signal取消先主动结算再终止XHR，覆盖未send时abort不发事件的原生行为。
+         * 调用方在准备流程中检查settled后停止发送。
+         * @example 模块内部上下文
+         * ```ts
+         * onCancel()
+         * // 后续准备阶段读取settled，不再执行xhr.send。
+         * ```
+         */
+        function onCancel(): void {
+          // 未 send 的 XHR.abort 不一定发 abort 事件，取消方必须主动结算。
+          onAbort()
+          xhr.abort()
+        }
+
+        function onError(): void {
+          finish({ success: false, error: storageM('storage_networkError') })
+        }
+
+        function onLoad(): void {
+          finish(xhr.status >= 200 && xhr.status < 300
+            ? { success: true }
+            : { success: false, error: storageM('storage_uploadFailedStatus', { params: { status: xhr.status, statusText: xhr.statusText } }) })
+        }
+
+        function onProgress(event: ProgressEvent): void {
+          if (settled || !event.lengthComputable)
+            return
+          try {
+            options.onProgress?.({ loaded: event.loaded, total: event.total, percent: Math.round((event.loaded / event.total) * 100) })
+          }
+          catch (error) {
+            finish({ success: false, error: error instanceof Error ? error.message : storageM('storage_unknownError') })
             xhr.abort()
-            resolve({ success: false, error: storageM('storage_uploadCanceled') })
-          })
+          }
         }
 
-        // 监听进度
-        xhr.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable && options.onProgress) {
-            options.onProgress({
-              loaded: event.loaded,
-              total: event.total,
-              percent: Math.round((event.loaded / event.total) * 100),
-            })
+        try {
+          xhr.upload.addEventListener('progress', onProgress)
+          xhr.addEventListener('load', onLoad)
+          xhr.addEventListener('error', onError)
+          xhr.addEventListener('abort', onAbort)
+          xhr.addEventListener('timeout', onError)
+          signal?.addEventListener('abort', onCancel, { once: true })
+          xhr.open('PUT', url)
+          if (settled)
+            return
+          if (options.contentType)
+            xhr.setRequestHeader('Content-Type', options.contentType)
+          // 覆盖从预检查到监听安装/请求准备之间发生的取消，不再进入 send。
+          if (signal?.aborted) {
+            onCancel()
+            return
           }
-        })
-
-        // 监听完成
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve({ success: true })
-          }
-          else {
-            resolve({
-              success: false,
-              error: storageM('storage_uploadFailedStatus', { params: { status: xhr.status, statusText: xhr.statusText } }),
-            })
-          }
-        })
-
-        // 监听错误
-        xhr.addEventListener('error', () => {
-          resolve({ success: false, error: storageM('storage_networkError') })
-        })
-
-        // 发送请求
-        xhr.open('PUT', url)
-        if (options.contentType) {
-          xhr.setRequestHeader('Content-Type', options.contentType)
+          xhr.send(body)
         }
-        xhr.send(body)
+        catch (error) {
+          finish({ success: false, error: error instanceof Error ? error.message : storageM('storage_unknownError') })
+          xhr.abort()
+        }
       })
     }
 
@@ -158,7 +209,7 @@ export async function uploadWithPresignedUrl(
       headers: options.contentType
         ? { 'Content-Type': options.contentType }
         : undefined,
-      signal: options.abortController?.signal,
+      signal,
     })
 
     if (!response.ok) {

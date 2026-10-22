@@ -249,6 +249,8 @@ if (result.success) {
 
 ## 浏览器端文件上传（预签名 URL 模式）
 
+`uploadWithPresignedUrl` 传 `onProgress` 时使用 XHR，否则使用 fetch。`abortController` 预取消不发送；准备中/进行中取消、外部 XHR abort、网络/超时和进度回调异常一次结算失败并解绑本次监听，完成后取消不会触碰旧 XHR。取消不能撤销远端已发布的对象；应用先核对业务/对象状态，再授权清理，不把本地取消当作服务端回滚。实际 Chrome 门禁设置 `HAI_STORAGE_RUN_BROWSER_GATES=1`，执行 `pnpm --filter @h-ai/storage exec vitest run tests/storage-client-browser.test.ts`；浏览器缺失直接失败。
+
 浏览器端无法直接使用 `storage` 模块。服务端使用 S3 时，通过 typed API 获取预签名 URL，检查失败后再直传：
 
 ```typescript

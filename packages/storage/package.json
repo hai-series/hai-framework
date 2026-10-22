@@ -51,6 +51,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
     "testcontainers": "catalog:",
