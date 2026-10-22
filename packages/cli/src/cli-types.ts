@@ -209,10 +209,10 @@ export interface CreateProjectOptions extends GlobalOptions {
  * 代码生成选项
  */
 export interface GenerateOptions extends GlobalOptions {
-  /** 生成类型 */
-  type: GeneratorType
-  /** 名称 */
-  name: string
+  /** 生成类型；省略时交互选择。 */
+  type?: GeneratorType
+  /** 名称；省略时交互输入。 */
+  name?: string
   /** 输出路径 */
   output?: string
   /** 是否覆盖现有文件 */

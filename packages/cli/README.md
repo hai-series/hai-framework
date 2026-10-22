@@ -65,6 +65,7 @@ pnpm dev
 ```sh
 hai add storage
 hai init
+hai generate
 hai generate page dashboard
 hai generate component UserCard
 hai generate api orders
@@ -75,6 +76,8 @@ hai generate migration add-orders
 `hai add` 解析模块依赖并补充配置。`hai init` 补齐缺失配置和 AI 文件，保留已有自定义内容；`--force` 可重建模块配置，使用前检查差异。
 
 page 只支持 SvelteKit 文件路由；api 会按目标应用选择 SvelteKit 文件路由或 serv 的共享 contract/procedure。API/fullstack 根目录可自动选择唯一后端；多应用用 `--workspace <包名或相对路径>`，也可进入目标 workspace。纯 Vite 的 page/api 组合明确拒绝；serv 不接受 `--output`，SvelteKit 路由输出须位于 `src/routes` 内，定制 `kit.files` 时明确拒绝猜测；API 目标须已安装 `@h-ai/kit` 与 `zod`。serv 只改写带 `@hai-generator` 标记的既有聚合入口，未知结构要求手动扩展，不创建平行路由。名称不能包含路径；默认拒绝覆盖，`--force` 只替换生成文件，不覆盖已有业务领域注册。整批预检，写入失败回滚本次修改。迁移只生成 up/down 函数，不自动执行；运行前确认数据影响。
+
+CLI 消息支持中文和英文，优先使用 `HAI_CORE_DEFAULTLOCALE`，再按 `LC_ALL` → `LC_MESSAGES` → `LANG` 选择非空终端语言；`en`/`zh` 地区变体映射到现有字典，`C`/`POSIX` 使用英文。未知语言保留 core 当前语言（默认中文）。例如 PowerShell 先执行 `$env:HAI_CORE_DEFAULTLOCALE='en-US'`，再执行 `hai generate`。直接调用包内 API 时可通过 `core.i18n.setGlobalLocale('en-US')` 切换语言；省略类型或名称会交互，取消后不写文件。生成源码的中文注释和用户指定名称保留原样。
 
 ### 构建与部署
 
@@ -113,12 +116,15 @@ pnpm --filter @h-ai/cli lint
 pnpm --filter @h-ai/cli test
 pnpm check:skills
 pnpm --filter @h-ai/cli test:scaffold-gates
+pnpm --filter @h-ai/cli test:scaffold-gates --i18n
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
 脚手架门禁生成真实项目，执行安装、typecheck、lint、build、test 和浏览器测试。部署门禁验证离线包、SSH/人工发布及部分更新。测试自动清理本轮资源；按需保留的截图写入指定证据目录。原生壳和真实云服务单独验收。
 
 `--generate` 是定向路由门禁：复用仓库已安装依赖，实际生成、构建并访问 SvelteKit、serv API、fullstack 后端的新路由（含 transport）。它不替代上面的完整安装与浏览器矩阵。
+
+`--i18n` 定向门禁构建 CLI 后，在独立进程中验证语言优先级、help、生成成功与失败，并重放中英文选择/名称校验/取消交互。
 
 ## 许可证
 

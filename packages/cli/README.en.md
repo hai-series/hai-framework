@@ -65,6 +65,7 @@ Creating or adding AI also installs reldb and vecdb. Generated startup initializ
 ```sh
 hai add storage
 hai init
+hai generate
 hai generate page dashboard
 hai generate component UserCard
 hai generate api orders
@@ -75,6 +76,8 @@ hai generate migration add-orders
 `hai add` resolves module dependencies and fills configuration. `hai init` fills missing configuration and AI files while preserving custom content. `--force` regenerates module configuration; review the diff before using it.
 
 Pages use SvelteKit file routes. APIs use either SvelteKit routes or the target serv application's shared contract/procedure structure. API/fullstack roots select a unique backend automatically; use `--workspace <package-name-or-relative-path>` when multiple applications apply, or enter the target workspace. Plain Vite page/API combinations are rejected. Serv does not accept `--output`; SvelteKit route output must stay inside `src/routes`; custom `kit.files` layouts are rejected rather than guessed. SvelteKit API targets must already install `@h-ai/kit` and `zod`. Serv updates only existing aggregation points with `@hai-generator` markers; unknown structures require manual integration. Names cannot contain paths. Existing files require `--force`, which never replaces registered business domains. Files are checked as one batch and rolled back on write failure. Migrations only generate up/down functions; inspect data effects before running them.
+
+CLI messages support Chinese and English. The first nonempty value from `HAI_CORE_DEFAULTLOCALE`, `LC_ALL`, `LC_MESSAGES` and `LANG` selects the initial language. Regional `en`/`zh` variants use the existing dictionaries; `C`/`POSIX` use English. Unknown languages preserve the current core locale, which defaults to Chinese. In PowerShell, run `$env:HAI_CORE_DEFAULTLOCALE='en-US'` before `hai generate`. Programmatic callers can use `core.i18n.setGlobalLocale('en-US')`. Omitting a type or name opens a prompt; cancellation writes no files. Generated Chinese code comments and user-supplied names remain unchanged.
 
 ### Build and deploy
 
@@ -113,12 +116,15 @@ pnpm --filter @h-ai/cli lint
 pnpm --filter @h-ai/cli test
 pnpm check:skills
 pnpm --filter @h-ai/cli test:scaffold-gates
+pnpm --filter @h-ai/cli test:scaffold-gates --i18n
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
 Scaffold gates generate real projects and run install, typecheck, lint, build, tests and browser workflows. Deployment gates cover offline bundles, SSH/manual deployment and partial updates. Tests clean up their resources; save requested evidence in a designated directory. Native shells and real cloud providers need separate acceptance.
 
 `--generate` runs focused route gates: it reuses installed workspace dependencies, generates and builds real SvelteKit, serv API and fullstack backend projects, then accesses their new routes, including transport. It does not replace the full installation and browser matrix.
+
+`--i18n` builds the CLI and checks language precedence, help, successful generation and errors in separate processes, alongside Chinese/English prompt, validation and cancellation cases.
 
 ## License
 

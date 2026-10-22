@@ -353,6 +353,7 @@ const extraDescriptions = {
   IAM_NOTIFICATION_URL: ['确定性通知测试服务地址', '有效 HTTP(S) URL'],
   LANG: ['子进程默认语言与字符集', '操作系统支持的 locale，例如 en_US.UTF-8'],
   LC_ALL: ['子进程所有 locale 分类的覆盖值', '操作系统支持的 locale，例如 en_US.UTF-8'],
+  LC_MESSAGES: ['CLI 消息语言；HAI_CORE_DEFAULTLOCALE、LC_ALL 优先，LANG 后备', '操作系统支持的 locale，例如 en_US.UTF-8'],
   PUBLIC_API_BASE_BASE64: ['容器生成前端运行时配置时使用的 API 地址编码', 'PUBLIC_API_BASE 的 Base64 编码，不含凭据'],
   PYTHONIOENCODING: ['本地 Python 模型进程标准输入输出编码', 'Python 支持的编码名，通常 utf-8'],
   SERVICE_BASE_URL: ['Fullstack 开发代理访问服务端的地址', '有效 HTTP(S) URL'],

@@ -172,5 +172,20 @@
   "cli_generateDomainExists": "A contract or procedure domain already exists: {name}. Existing business registrations cannot be replaced.",
   "cli_generateRollbackFailed": "Generation failed and rollback or temporary-file cleanup could not complete. Inspect the files reported in the errors before retrying.",
   "cli_help_workspace": "Target workspace package name or relative path; defaults to the unique applicable application",
-  "cli_generateCustomRoutes": "This SvelteKit configuration customizes kit.files. The generator cannot infer its route layout; extend the existing routes manually."
+  "cli_generateCustomRoutes": "This SvelteKit configuration customizes kit.files. The generator cannot infer its route layout; extend the existing routes manually.",
+  "cli_generatePageDescription": "SvelteKit page",
+  "cli_generateComponentDescription": "Svelte component",
+  "cli_generateApiDescription": "API endpoint",
+  "cli_generateModelDescription": "Data model",
+  "cli_generateMigrationDescription": "Database migration",
+  "cli_generateProgress": "Generating {description}...",
+  "cli_generateComplete": "Generation complete",
+  "cli_generateFiles": "Generated or updated files:",
+  "cli_generateFailed": "Generation failed",
+  "cli_generateFailureDetail": "Error details:",
+  "cli_generateTypePrompt": "Select a generator:",
+  "cli_generateNamePrompt": "Name:",
+  "cli_generateNameRequired": "Name is required",
+  "cli_generateCancelled": "Generation cancelled; no files were written",
+  "cli_generateUnknownType": "Unknown generator type: {type}"
 }

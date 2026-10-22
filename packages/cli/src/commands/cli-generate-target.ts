@@ -133,7 +133,7 @@ export async function resolveGenerateTarget(options: GenerateOptions): Promise<G
   if (candidates.length !== 1)
     throw new Error(cliM(candidates.length > 1 ? 'cli_generateAmbiguousWorkspace' : 'cli_generateUnsupportedProject'))
   const target = candidates[0]!
-  if (generateArchitecture(target) === 'sveltekit' && ['page', 'api'].includes(options.type)) {
+  if (generateArchitecture(target) === 'sveltekit' && (options.type === 'page' || options.type === 'api')) {
     // 不执行应用 JS 配置；明确使用 kit.files 定制布局时拒绝猜测默认路由目录。
     for (const name of ['svelte.config.js', 'svelte.config.mjs', 'svelte.config.cjs', 'svelte.config.ts']) {
       const configFile = path.join(target.directory, name)

@@ -127,6 +127,8 @@ hai create my-app
 
 `hai generate page` 只写 SvelteKit 文件路由；`api` 按目标应用生成 SvelteKit 端点或 serv 的共享 contract/procedure 并接入已有聚合入口。API/fullstack 根自动选择唯一后端，多个候选用 `--workspace <包名或相对路径>`，也可进入目标 workspace。纯 Vite 不生成虚假文件路由；serv 不接受 `--output`，SvelteKit 输出限定 `src/routes` 内，定制 `kit.files` 时拒绝猜测；SvelteKit API 目标须已安装 `@h-ai/kit` 与 `zod`。不要删除模板 `@hai-generator` 聚合标记；自定义入口没有标记时手动沿现有架构接入。生成前统一校验路径和覆盖冲突，失败回滚本次修改；`--force` 不能覆盖已有业务领域注册。
 
+CLI 用户消息通过现有中英字典输出。初始语言按非空的 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择，`en`/`zh` 地区变体映射到现有语言，`C`/`POSIX` 为英文；未知语言保留 core 当前语言（默认中文）。API 调用可用 `core.i18n.setGlobalLocale('en-US')` 切换。`hai generate` 省略类型/名称会交互，取消不写文件；生成源码的中文注释与用户名称不翻译。
+
 ## 将需求映射到现有能力
 
 应用元信息只有一份配置来源：名称、版本、环境、默认语言与日志设置来自 `_core.yml`，使用 `core.config` 与 `core.logger`；Node 启动时不通过固定 `logging` 覆盖 YAML。SvelteKit 服务端 layout 和 fullstack `app.info` 仅公开必要元信息，不能下发整个 core 或模块配置。独立 Vite 客户端经 Node/core 加载 YAML 默认值，Web 部署通过 `runtime-config.js` 应用公开白名单覆盖；只修改部署覆盖无需重建，修改构建默认值则须重新构建。环境覆盖使用 `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` 等既有规则；容器明确配置生产环境，不能用另一个状态来源代替 `core.env`。

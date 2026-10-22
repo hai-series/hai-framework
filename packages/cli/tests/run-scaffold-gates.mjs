@@ -12,21 +12,25 @@ const archiveRoot = mkdtempSync(path.join(tmpdir(), 'hai-cli-local-packages-'))
 const vitestArgs = process.argv.slice(2)
 const deployGate = vitestArgs.includes('--deploy')
 const generateGate = vitestArgs.includes('--generate')
+const i18nGate = vitestArgs.includes('--i18n')
 if (deployGate)
   vitestArgs.splice(vitestArgs.indexOf('--deploy'), 1)
 if (generateGate)
   vitestArgs.splice(vitestArgs.indexOf('--generate'), 1)
-if (generateGate && deployGate)
-  throw new Error('Choose either --generate or --deploy')
+if (i18nGate)
+  vitestArgs.splice(vitestArgs.indexOf('--i18n'), 1)
+if ([generateGate, deployGate, i18nGate].filter(Boolean).length > 1)
+  throw new Error('Choose one of --generate, --deploy or --i18n')
+const focusedGate = generateGate || i18nGate
 const vitestCli = path.join(path.dirname(fileURLToPath(import.meta.resolve('vitest/package.json'))), 'vitest.mjs')
 
 let result
 try {
   // 按真实依赖图顺序构建，复用刚通过的产物，避免重新清理共享 dist 干扰其他门禁。
-  if (!generateGate)
+  if (!focusedGate)
     runPnpm(['exec', 'turbo', 'run', 'build', '--filter=@h-ai/*', '--concurrency=1'], repoRoot)
   // 定向生成门禁复用仓库已安装依赖；不隐式升级为全模块构建与发布包安装验收。
-  const packageSpecifiers = generateGate ? {} : packPublicPackages(path.join(repoRoot, 'packages'), archiveRoot)
+  const packageSpecifiers = focusedGate ? {} : packPublicPackages(path.join(repoRoot, 'packages'), archiveRoot)
   // 仅覆盖实际依赖边；全局覆盖会把可选 peer 变成安装依赖，污染生成项目。
   const packageOverrides = {}
   for (const directory of readdirSync(path.join(repoRoot, 'packages'), { withFileTypes: true }).filter(entry => entry.isDirectory())) {
@@ -39,7 +43,7 @@ try {
 
   result = spawnSync(
     process.execPath,
-    [vitestCli, 'run', generateGate ? 'tests/generate-runtime.e2e.test.ts' : deployGate ? 'tests/deploy-docker-ssh.e2e.test.ts' : 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000', ...vitestArgs],
+    [vitestCli, 'run', i18nGate ? 'tests/generate-i18n.test.ts' : generateGate ? 'tests/generate-runtime.e2e.test.ts' : deployGate ? 'tests/deploy-docker-ssh.e2e.test.ts' : 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000', ...vitestArgs],
     {
       env: {
         ...process.env,
@@ -47,6 +51,7 @@ try {
         HAI_CLI_PACKAGE_OVERRIDES: JSON.stringify(packageOverrides),
         HAI_CLI_RUN_SCAFFOLD_GATES: '1',
         ...(generateGate ? { HAI_CLI_RUN_GENERATE_GATES: '1' } : {}),
+        ...(i18nGate ? { HAI_CLI_RUN_I18N_GATES: '1' } : {}),
         ...(deployGate ? { HAI_DEPLOY_E2E: '1' } : {}),
       },
       // 直接启动 Node，测试名中的空格/正则不能被 Windows shell 当成命令。

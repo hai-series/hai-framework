@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 10/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 11/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -628,7 +628,8 @@
 
 ### CLI-02 · P2 · 把生成器硬编码用户文本接入 i18n
 
-- [ ] 待修正（源码确认；范围：cli）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：生成器描述延迟翻译，提示/进度/结果/错误/取消统一现有中英字典，聚合失败保留子错误；按HAI_CORE_DEFAULTLOCALE>LC_ALL>LC_MESSAGES>LANG选择首个非空环境语言，C/POSIX映射英文，未知保留core语言，不新增i18n体系；取消不写文件。同步三语README/应用skill/LLMS及LC_MESSAGES环境说明；19专项（含9组构建后真实独立CLI进程）+145命令回归、source/严格test类型、lint/freshCLI build、env601/skills通过，见tmp/module-repair-20261022/CLI-02；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/cli/src/commands/cli-generate.ts:25](../packages/cli/src/commands/cli-generate.ts#L25)；[packages/cli/src/commands/cli-generate.ts:139](../packages/cli/src/commands/cli-generate.ts#L139)。
 - **证据与影响**：描述、提示、spinner 成功/失败消息和错误仍有直接中文文本，绕过现有 cliM，英语环境不能完整切换。
 - **修正内容**：复用现有 locale 消息并同步所有已有语言；代码注释中文、日志英文，生成给用户的文本按既有 locale 合同处理。

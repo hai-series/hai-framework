@@ -65,6 +65,7 @@ AI の作成・追加は reldb と vecdb も導入し、生成コードは DB �
 ```sh
 hai add storage
 hai init
+hai generate
 hai generate page dashboard
 hai generate component UserCard
 hai generate api orders
@@ -75,6 +76,8 @@ hai generate migration add-orders
 `hai add` は依存を解決して設定を追加します。`hai init` は不足する設定と AI ファイルを補い、独自内容は保持します。`--force` はモジュール設定を再生成するため、差分を確認して使用してください。
 
 page は SvelteKit のファイルルートに対応し、api は対象アプリに応じて SvelteKit または serv の共有 contract/procedure を生成します。API/fullstack のルートでは一意なバックエンドを自動選択します。複数候補は `--workspace <パッケージ名または相対パス>` で指定するか、対象 workspace に移動してください。通常の Vite への page/api 生成は拒否します。serv は `--output` を受け付けず、SvelteKit の出力は `src/routes` 内に限定し、独自の `kit.files` は推測せず拒否します。SvelteKit API には `@h-ai/kit` と `zod` が必要です。serv は `@hai-generator` マーカーのある既存の集約入口だけを更新し、未知の構成には手動統合を要求します。名前にパスは指定できません。既存ファイルは `--force` が必要ですが、登録済み業務領域は置換しません。一括検査後に書き込み、失敗時は今回の変更を戻します。マイグレーションは up/down 関数のみ生成するため、実行前にデータへの影響を確認してください。
+
+CLI メッセージは中国語と英語に対応します。`HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` の最初の空でない値を使い、`en`/`zh` の地域別表記は既存辞書に対応付けます。`C`/`POSIX` は英語です。未知の言語は現在の core 言語（既定は中国語）を保持します。PowerShell では `$env:HAI_CORE_DEFAULTLOCALE='en-US'` の後に `hai generate` を実行してください。API 呼び出しでは `core.i18n.setGlobalLocale('en-US')` で切り替えられます。種類や名前を省略すると対話入力になり、取消時はファイルを書きません。生成コードの中国語コメントとユーザー指定名は変更しません。
 
 ### ビルドとデプロイ
 
@@ -113,12 +116,15 @@ pnpm --filter @h-ai/cli lint
 pnpm --filter @h-ai/cli test
 pnpm check:skills
 pnpm --filter @h-ai/cli test:scaffold-gates
+pnpm --filter @h-ai/cli test:scaffold-gates --i18n
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
 生成検証は実工程でインストール、typecheck、lint、build、test、ブラウザー操作を実行します。デプロイ検証はオフライン tar、SSH/手動配布、部分更新を扱います。テスト所有の資源は終了時に削除し、必要な証拠だけ指定先へ保存します。ネイティブと実クラウドは別途検証してください。
 
 `--generate` は対象を絞ったルート検証です。インストール済み依存を再利用し、SvelteKit・serv API・fullstack バックエンドを実際に生成・ビルドして新ルートへアクセスします（transport を含む）。完全なインストールとブラウザー検証の代わりにはなりません。
+
+`--i18n` は CLI をビルドし、独立プロセスで言語の優先順位・help・生成成功・失敗を検証し、中国語/英語の入力・検証・取消も確認します。
 
 ## ライセンス
 

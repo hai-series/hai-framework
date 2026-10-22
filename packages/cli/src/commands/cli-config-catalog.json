@@ -4248,6 +4248,14 @@
     "constraint": "操作系统支持的 locale，例如 en_US.UTF-8"
   },
   {
+    "name": "LC_MESSAGES",
+    "module": "runtime",
+    "path": "LC_MESSAGES",
+    "description": "CLI 消息语言；HAI_CORE_DEFAULTLOCALE、LC_ALL 优先，LANG 后备",
+    "value": "",
+    "constraint": "操作系统支持的 locale，例如 en_US.UTF-8"
+  },
+  {
     "name": "LEAK_WORDS",
     "module": "runtime",
     "path": "LEAK_WORDS",

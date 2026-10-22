@@ -172,5 +172,20 @@
   "cli_generateDomainExists": "契约或过程已包含同名领域：{name}，拒绝替换已有业务注册。",
   "cli_generateRollbackFailed": "生成失败，部分回滚或临时文件清理未完成；请检查错误中的文件，确认后再重试。",
   "cli_help_workspace": "目标 workspace 包名或相对路径；省略时选择唯一适用应用",
-  "cli_generateCustomRoutes": "当前 SvelteKit 配置定制了 kit.files，生成器不猜测路由目录；请手动沿现有路由布局扩展。"
+  "cli_generateCustomRoutes": "当前 SvelteKit 配置定制了 kit.files，生成器不猜测路由目录；请手动沿现有路由布局扩展。",
+  "cli_generatePageDescription": "SvelteKit 页面",
+  "cli_generateComponentDescription": "Svelte 组件",
+  "cli_generateApiDescription": "API 端点",
+  "cli_generateModelDescription": "数据模型",
+  "cli_generateMigrationDescription": "数据库迁移",
+  "cli_generateProgress": "正在生成 {description}...",
+  "cli_generateComplete": "生成完成",
+  "cli_generateFiles": "生成或更新的文件：",
+  "cli_generateFailed": "生成失败",
+  "cli_generateFailureDetail": "错误详情：",
+  "cli_generateTypePrompt": "选择生成类型：",
+  "cli_generateNamePrompt": "名称：",
+  "cli_generateNameRequired": "名称不能为空",
+  "cli_generateCancelled": "已取消生成，未写入文件",
+  "cli_generateUnknownType": "未知的生成器类型：{type}"
 }

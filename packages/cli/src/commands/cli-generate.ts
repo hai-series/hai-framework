@@ -20,32 +20,32 @@ import { generateArchitecture, resolveGenerateTarget } from './cli-generate-targ
  * 生成器配置
  */
 const GENERATORS: Record<GeneratorType, {
-  description: string
+  description: () => string
   defaultPath: string
   generate: (context: TemplateContext, outputDir: string) => Promise<Array<{ path: string, content: string }>>
 }> = {
   page: {
-    description: 'SvelteKit 页面',
+    description: () => cliM('cli_generatePageDescription'),
     defaultPath: 'src/routes',
     generate: generatePage,
   },
   component: {
-    description: 'Svelte 组件',
+    description: () => cliM('cli_generateComponentDescription'),
     defaultPath: 'src/lib/components',
     generate: generateComponent,
   },
   api: {
-    description: 'API 端点',
+    description: () => cliM('cli_generateApiDescription'),
     defaultPath: 'src/routes/api',
     generate: generateApi,
   },
   model: {
-    description: '数据模型',
+    description: () => cliM('cli_generateModelDescription'),
     defaultPath: 'src/lib/models',
     generate: generateModel,
   },
   migration: {
-    description: '数据库迁移',
+    description: () => cliM('cli_generateMigrationDescription'),
     defaultPath: 'migrations',
     generate: generateMigration,
   },
@@ -66,10 +66,6 @@ export async function generate(options: GenerateOptions): Promise<void> {
     // 交互式获取选项
     const resolvedOptions = await resolveGenerateOptions(options)
     const generator = GENERATORS[resolvedOptions.type]
-
-    if (!generator) {
-      throw new Error(`未知的生成器类型: ${resolvedOptions.type}`)
-    }
 
     // 名称会同时进入路径、标识符与源码字符串，禁止路径片段和代码字符。
     if (!/^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$/i.test(resolvedOptions.name))
@@ -94,27 +90,29 @@ export async function generate(options: GenerateOptions): Promise<void> {
       projectName: target.target.name,
     })
 
-    spinner.start(`生成 ${generator.description}...`)
+    spinner.start(cliM('cli_generateProgress', { params: { description: generator.description() } }))
 
     const files = resolvedOptions.type === 'api' && architecture === 'serv'
       ? await generateServApi(context, target)
       : await generator.generate(context, outputDir)
     await writeGeneratedFiles(files, target.root, resolvedOptions.force)
 
-    spinner.succeed()
+    spinner.succeed(cliM('cli_generateComplete'))
 
     writeCliMessage('')
-    writeCliMessage(chalk.green('✔ 生成完成！'))
-    writeCliMessage('')
-    writeCliMessage('创建的文件:')
+    writeCliMessage(cliM('cli_generateFiles'))
     files.forEach((file) => {
       writeCliMessage(chalk.cyan(`  ${path.relative(cwd, file.path)}`))
     })
     writeCliMessage('')
   }
   catch (error) {
-    spinner.fail()
-    writeCliError(chalk.red('生成失败:'), { error })
+    spinner.fail(cliM('cli_generateFailed'))
+    writeCliError(cliM('cli_generateFailureDetail'), { error })
+    if (error instanceof AggregateError) {
+      for (const cause of error.errors)
+        writeCliError(cliM('cli_generateFailureDetail'), { error: cause })
+    }
     throw error
   }
 }
@@ -123,15 +121,15 @@ export async function generate(options: GenerateOptions): Promise<void> {
  * 解析生成选项
  */
 async function resolveGenerateOptions(options: GenerateOptions): Promise<Required<GenerateOptions>> {
-  const questions: prompts.PromptObject[] = []
+  const questions: prompts.PromptObject<'type' | 'name'>[] = []
 
   if (!options.type) {
     questions.push({
       type: 'select',
       name: 'type',
-      message: '选择生成类型:',
+      message: cliM('cli_generateTypePrompt'),
       choices: Object.entries(GENERATORS).map(([key, value]) => ({
-        title: `${key} - ${value.description}`,
+        title: `${key} - ${value.description()}`,
         value: key,
       })),
     })
@@ -141,26 +139,39 @@ async function resolveGenerateOptions(options: GenerateOptions): Promise<Require
     questions.push({
       type: 'text',
       name: 'name',
-      message: '名称:',
+      message: cliM('cli_generateNamePrompt'),
       validate: (value: string) => {
         if (!value.trim())
-          return '名称不能为空'
+          return cliM('cli_generateNameRequired')
         return true
       },
     })
   }
 
-  const answers = questions.length > 0 ? await prompts(questions) : {}
+  const answers = questions.length > 0
+    ? await prompts<'type' | 'name'>(questions, { onCancel: () => { throw new Error(cliM('cli_generateCancelled')) } })
+    : {}
+  const type: unknown = options.type || ('type' in answers ? answers.type : undefined)
+  const name: unknown = options.name || ('name' in answers ? answers.name : undefined)
+  if (!isGeneratorType(type))
+    throw new Error(cliM('cli_generateUnknownType', { params: { type: String(type ?? '') } }))
+  if (typeof name !== 'string' || !name.trim())
+    throw new Error(cliM('cli_generateNameRequired'))
 
   return {
-    type: options.type || answers.type,
-    name: options.name || answers.name,
+    type,
+    name,
     output: options.output ?? '',
     force: options.force ?? false,
     verbose: options.verbose ?? false,
     cwd: options.cwd ?? '.',
     workspace: options.workspace ?? '',
   }
+}
+
+/** 校验真实生成类型，避免未识别参数或对象原型成员绕过提示。 */
+function isGeneratorType(value: unknown): value is GeneratorType {
+  return typeof value === 'string' && Object.hasOwn(GENERATORS, value)
 }
 
 /** 统一预检、暂存、提交一批源码；失败时回滚本次已提交的文件，避免半套路由。 */
