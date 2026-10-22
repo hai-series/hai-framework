@@ -383,6 +383,8 @@ export const KnowledgeConfigSchema = z.object({
    *
    * 字段含义与 @h-ai/datapipe ChunkOptionsInput 完全一致，
    * 支持 mode、maxSize、overlap、separator、markdownMinLevel 等完整选项。
+   * word 按非空白词计量，其余按 Unicode code point；上限包含分隔符及 overlap，且 overlap < maxSize。
+   * AI 默认 markdown/1500/200；导入覆盖预算时仍须满足约束，分块失败不会退回整篇文档。
    */
   chunkOptions: ChunkOptionsSchema.default(ChunkOptionsSchema.parse({
     mode: 'markdown',

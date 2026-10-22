@@ -609,3 +609,5 @@ pnpm --filter @h-ai/ai build
 ## ライセンス
 
 Apache-2.0
+
+Knowledge は datapipe の単位と上限に従い、word は語数、その他は Unicode code point として清洗後テキストの区切りを保持します。AI の既定は markdown/maxSize=1500/overlap=200 のままです。maxSize を小さく上書きする際は継承する overlap もそれ未満にしてください。不正な分割設定・正規表現は embedding と版の公開前に KNOWLEDGE_INGEST_FAILED を返し、文書全体への無制限フォールバックは行いません。

@@ -49,7 +49,7 @@ export const HaiDatapipeError = core.error.buildHaiErrorsDef('datapipe', Datapip
 export interface DataChunk {
   /** 分块索引（从 0 开始） */
   index: number
-  /** 分块内容 */
+  /** 原文切片；保留空白和分隔符。word 以词计量，其他模式以 Unicode code point 计量。 */
   content: string
   /** 分块元数据（可选） */
   metadata?: Record<string, unknown>

@@ -8,6 +8,7 @@
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { KnowledgeDocumentMetadata, KnowledgeDocumentRevision, KnowledgeStore } from '../src/store/ai-store-types.js'
+import { datapipe as realDatapipe } from '@h-ai/datapipe'
 import { describe, expect, it, vi } from 'vitest'
 import { HaiAIError } from '../src/ai-types.js'
 import { createKnowledgeOperations } from '../src/knowledge/ai-knowledge-functions.js'
@@ -358,22 +359,40 @@ describe('knowledge ingest', () => {
     expect(store.replaceDocument).toHaveBeenCalledWith(expect.objectContaining({ collection: 'hai_ai_knowledge1', chunks: expect.any(Array) }))
   })
 
-  it('分块失败时退回整文本单一 chunk', async () => {
-    const failDatapipe = {
-      clean: vi.fn((text: string) => ({ success: true, data: text })),
-      chunk: vi.fn(() => ({ success: false, error: { message: 'chunk failed' } })),
-    }
-    const { ops } = await setupOps({ datapipe: failDatapipe as unknown as ReturnType<typeof createMockDatapipe> })
+  it.each([
+    { mode: 'paragraph', maxSize: 0, overlap: 0 },
+    { mode: 'paragraph', maxSize: 4, overlap: 4 },
+    { mode: 'custom', maxSize: 6, overlap: 0, separator: '[' },
+  ] as const)('分块配置或表达式失败在 embedding/发布前返回错误，不绕过预算 %j', async (chunkOptions) => {
+    const { ops, embedding, store } = await setupOps({ datapipe: realDatapipe })
 
     const result = await ops.ingest({
       documentId: 'doc-2',
       content: 'Short text.',
+      chunkOptions,
     })
 
+    expect(result).toMatchObject({ success: false, error: { code: HaiAIError.KNOWLEDGE_INGEST_FAILED.code } })
+    expect(embedding.embedBatch).not.toHaveBeenCalled()
+    expect(store.replaceDocument).not.toHaveBeenCalled()
+  })
+
+  it('真实分块交付 embedding 与发布的内容均满足上限并保留源文', async () => {
+    const { ops, embedding, store } = await setupOps({ datapipe: realDatapipe })
+    const content = '  甲😀乙𠮷。\n\n第二段很长，需要保留完整意义。  '
+    const result = await ops.ingest({
+      documentId: 'bounded-document',
+      content,
+      cleanOptions: { removeHtml: false, normalizeWhitespace: false, trim: false },
+      chunkOptions: { mode: 'paragraph', maxSize: 6, overlap: 2 },
+    })
     expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.chunkCount).toBe(1)
-    }
+    expect(embedding.embedBatch).toHaveBeenCalledOnce()
+    const texts = vi.mocked(embedding.embedBatch).mock.calls[0]![0]
+    expect(texts.every(text => Array.from(text).length <= 6)).toBe(true)
+    expect(texts.map((text, index) => Array.from(text).slice(index === 0 ? 0 : 2).join('')).join('')).toBe(content)
+    const published = vi.mocked(store.replaceDocument).mock.calls[0]![0]
+    expect(published.chunks.map(chunk => chunk.content)).toEqual(texts)
   })
 
   it('导入时传入 cleanOptions 与 chunkOptions', async () => {

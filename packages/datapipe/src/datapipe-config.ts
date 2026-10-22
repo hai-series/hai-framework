@@ -63,8 +63,8 @@ export type CleanOptionsInput = z.input<typeof CleanOptionsSchema>
  * - `paragraph` — 按段落分块
  * - `markdown` — 按 Markdown 标题分块（## / ### 等）
  * - `page` — 按分页符分块
- * - `word` — 按字数分块
- * - `character` — 按字符数分块
+ * - `word` — 按非空白词数分块，不截断单个词
+ * - `character` — 按 Unicode code point 分块，不拆代理对
  * - `custom` — 自定义分隔符分块
  */
 export const ChunkModeSchema = z.enum([
@@ -82,6 +82,7 @@ export type ChunkMode = z.infer<typeof ChunkModeSchema>
 
 /**
  * 分块选项 Schema
+ * datapipe 的默认 overlap 为 0；消费者可显式提供自己的默认值，例如 AI Knowledge 为 200。
  *
  * @example
  * ```ts
@@ -103,10 +104,10 @@ export type ChunkMode = z.infer<typeof ChunkModeSchema>
 export const ChunkOptionsSchema = z.object({
   /** 分块模式 */
   mode: ChunkModeSchema,
-  /** 每个分块的最大大小（字符数 / 字数，取决于 mode，默认 1000） */
+  /** 每块上限包含 overlap/分隔符；word 按非空白词，其他按 Unicode code point，默认 1500。 */
   maxSize: z.number().int().positive().default(1500),
-  /** 重叠大小（字符数 / 字数，用于上下文衔接，默认 200） */
-  overlap: z.number().int().min(0).default(200),
+  /** 重叠使用与 maxSize 相同的单位，必须严格小于 maxSize。 */
+  overlap: z.number().int().min(0).default(0),
   /**
    * 自定义分隔符正则（仅 mode='custom' 时使用）
    *
@@ -117,7 +118,7 @@ export const ChunkOptionsSchema = z.object({
   markdownMinLevel: z.number().int().min(1).max(6).default(2),
   /** 是否保留 Markdown 标题在分块内容中（默认 true） */
   markdownKeepTitle: z.boolean().default(true),
-})
+}).refine(options => options.overlap < options.maxSize, { path: ['overlap'] })
 
 /** 分块选项类型 */
 export type ChunkOptions = z.infer<typeof ChunkOptionsSchema>

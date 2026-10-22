@@ -683,7 +683,7 @@
     "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_MAXSIZE",
     "module": "ai",
     "path": "ai.knowledge.chunkOptions.maxSize",
-    "description": "每个分块的最大大小（字符数 / 字数，取决于 mode，默认 1000）",
+    "description": "每块上限包含 overlap/分隔符；word 按非空白词，其他按 Unicode code point，默认 1500。",
     "value": "1500",
     "constraint": "整数；<= 9007199254740991；> 0"
   },
@@ -692,14 +692,14 @@
     "module": "ai",
     "path": "ai.knowledge.chunkOptions.mode",
     "description": "分块模式",
-    "value": "sentence",
+    "value": "markdown",
     "constraint": "字符串；取值：sentence | paragraph | markdown | page | word | character | custom"
   },
   {
     "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_OVERLAP",
     "module": "ai",
     "path": "ai.knowledge.chunkOptions.overlap",
-    "description": "重叠大小（字符数 / 字数，用于上下文衔接，默认 200）",
+    "description": "重叠使用与 maxSize 相同的单位，必须严格小于 maxSize。",
     "value": "200",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },

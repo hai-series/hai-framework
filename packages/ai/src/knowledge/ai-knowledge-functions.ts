@@ -140,7 +140,7 @@ export function createKnowledgeOperations(
      * await knowledge.ingest({
      *   documentId: 'doc-001',
      *   content: '文章内容...',
-     *   chunkOptions: { maxSize: 512 },
+     *   chunkOptions: { mode: 'paragraph', maxSize: 512, overlap: 100 },
      * })
      * ```
      */
@@ -167,11 +167,11 @@ export function createKnowledgeOperations(
         const cleanResult = datapipe.clean(input.content, cleanOptions)
         const cleanedText = cleanResult.success ? cleanResult.data : input.content
 
-        // ② 分块：按指定策略切割（分块失败退回整文本单一 chunk）
+        // ② 分块预算是输入约束；失败不能回退整篇文本绕过上限后继续向量化/发布。
         const chunkResult = datapipe.chunk(cleanedText, chunkOptions)
-        const chunks: Array<{ index: number, content: string, metadata?: Record<string, unknown> }> = chunkResult.success
-          ? chunkResult.data
-          : [{ index: 0, content: cleanedText }]
+        if (!chunkResult.success)
+          return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: chunkResult.error.message } }), chunkResult.error)
+        const chunks = chunkResult.data
 
         // ③ 批量向量化
         const texts = chunks.map(c => c.content)

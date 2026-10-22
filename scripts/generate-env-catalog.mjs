@@ -170,16 +170,18 @@ function schemaDocumentation(sources, exported) {
 }
 
 /** 遍历 Schema 的对象/数组/联合类型；数组 0 表示可重复的任意索引。 */
-function walkSchema(node, segments, context, ancestors = new Set()) {
+function walkSchema(node, segments, context, ancestors = new Set(), inheritedDefault) {
   if (!node || typeof node !== 'object')
     return
   if (node.$ref) {
     if (ancestors.has(node.$ref))
       return
     const target = node.$ref.split('/').slice(1).reduce((value, key) => value?.[key.replaceAll('~1', '/').replaceAll('~0', '~')], context.schema)
-    walkSchema(target, segments, context, new Set([...ancestors, node.$ref]))
+    walkSchema(target, segments, context, new Set([...ancestors, node.$ref]), inheritedDefault === undefined ? node.default : inheritedDefault)
     return
   }
+  // 父对象的显式默认值优先于复用 schema 的字段默认值，例如 AI Knowledge 的 overlap=200。
+  const effectiveDefault = inheritedDefault === undefined ? node.default : inheritedDefault
   const name = ['HAI', context.name, ...segments].map(segment => segment.replace(/[^a-z0-9]+/gi, '_').toUpperCase()).join('_')
   const constraints = []
   const enums = node.enum ?? ('const' in node ? [node.const] : [])
@@ -189,9 +191,9 @@ function walkSchema(node, segments, context, ancestors = new Set()) {
     if (key in node)
       constraints.push(`${label} ${node[key]}`)
   }
-  if (!constraints.length && !enums.length && 'default' in node) {
-    const type = typeof node.default
-    constraints.push(type === 'string' ? '字符串' : type === 'boolean' ? 'true | false' : type === 'number' ? '数字' : Array.isArray(node.default) ? 'JSON 数组' : 'JSON 对象')
+  if (!constraints.length && !enums.length && effectiveDefault !== undefined) {
+    const type = typeof effectiveDefault
+    constraints.push(type === 'string' ? '字符串' : type === 'boolean' ? 'true | false' : type === 'number' ? '数字' : Array.isArray(effectiveDefault) ? 'JSON 数组' : 'JSON 对象')
   }
   if (!constraints.length && !enums.length && !Object.keys(node).length && segments.length)
     constraints.push('JSON/YAML 值；格式及范围由对应模块 Schema 校验')
@@ -208,13 +210,13 @@ function walkSchema(node, segments, context, ancestors = new Set()) {
   if (constraints.length || enums.length) {
     const parentDoc = segments.at(-1) === '0' ? context.docs.get(segments.slice(0, -1).join('.')) : undefined
     const description = node.description || context.docs.get(segments.join('.')) || (parentDoc && `${parentDoc}；此变量整体替换单个数组项`) || fieldDescription(context.name, segments) || `${context.name}.${segments.join('.')} 配置${segments.length ? '项' : '对象'}`
-    const value = node.default === undefined ? '' : typeof node.default === 'object' ? JSON.stringify(node.default) : String(node.default)
+    const value = effectiveDefault === undefined ? '' : typeof effectiveDefault === 'object' ? JSON.stringify(effectiveDefault) : String(effectiveDefault)
     add(name, { module: context.name, path: [context.name, ...segments].join('.'), description, constraints, enums, value })
   }
   for (const branch of [...(node.anyOf ?? []), ...(node.oneOf ?? []), ...(node.allOf ?? [])])
-    walkSchema(branch, segments, context, ancestors)
+    walkSchema(branch, segments, context, ancestors, effectiveDefault)
   for (const [key, property] of Object.entries(node.properties ?? {}))
-    walkSchema(property, [...segments, key], context, ancestors)
+    walkSchema(property, [...segments, key], context, ancestors, effectiveDefault && typeof effectiveDefault === 'object' && !Array.isArray(effectiveDefault) ? effectiveDefault[key] : undefined)
   if (node.items)
     walkSchema(node.items, [...segments, '0'], context, ancestors)
 }

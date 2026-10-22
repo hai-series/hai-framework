@@ -42,8 +42,8 @@ describe('datapipe.chunk', () => {
       expect(result.success).toBe(true)
       expect(result.data!.length).toBeGreaterThanOrEqual(1)
       for (const chunk of result.data!) {
-        // 允许因合并略微超限，但不应极度超出
-        expect(chunk.content.length).toBeLessThanOrEqual(20)
+        // 分隔符与 overlap 都包含在硬上限内。
+        expect(Array.from(chunk.content).length).toBeLessThanOrEqual(10)
       }
     })
   })
@@ -177,7 +177,8 @@ Sub content B1.
       const result = datapipe.chunk(text, { mode: 'page', maxSize: 8 })
       expect(result.success).toBe(true)
       expect(result.data!.length).toBe(3)
-      expect(result.data![0].content).toBe('Page 1')
+      expect(result.data![0].content).toBe('Page 1\f')
+      expect(result.data!.map(chunk => chunk.content).join('')).toBe(text)
     })
 
     it('无分页符返回整块', () => {
@@ -231,8 +232,8 @@ Sub content B1.
     it('自定义分隔符分块', () => {
       const result = datapipe.chunk('AAA|||BBB|||CCC', { mode: 'custom', maxSize: 5, separator: '\\|\\|\\|' })
       expect(result.success).toBe(true)
-      expect(result.data!.length).toBe(3)
-      expect(result.data![0].content).toBe('AAA')
+      expect(result.data!.every(chunk => Array.from(chunk.content).length <= 5)).toBe(true)
+      expect(result.data!.map(chunk => chunk.content).join('')).toBe('AAA|||BBB|||CCC')
     })
 
     it('缺少 separator 报错', () => {

@@ -609,3 +609,5 @@ pnpm --filter @h-ai/ai build
 ## License
 
 Apache-2.0
+
+Knowledge chunks use datapipe units and hard bounds: words for word mode, Unicode code points otherwise, retaining separators from cleaned text. AI defaults remain markdown/maxSize=1500/overlap=200; a smaller maxSize override must also keep inherited overlap below it. Invalid chunk configuration or expressions return KNOWLEDGE_INGEST_FAILED before embedding and revision publication, without an unbounded whole-document fallback.

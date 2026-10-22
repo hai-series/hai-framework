@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 8/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 9/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -589,7 +589,8 @@
 
 ### PIPE-01 · P2 · 修正分块上限、overlap 和计量单位
 
-- [ ] 待修正（源码探针已复现；范围：datapipe）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：所有字符模式统一按Unicode codepoint滑窗，预算包含overlap/原始分隔符，严格0<=overlap<maxSize且默认0；word按非空白词且保留空白，Markdown section内同算法、忽略代码围栏标题，默认保留源文。Knowledge失败在embedding/版本发布前返回错误；AI仍markdown/1500/200，修环境生成器父对象默认继承并同步三项分块变量、三语README/RAG及datapipe skills/LLMS。红测复现旧缺陷，52分块/管线+39Knowledge+2环境默认回归、source/严格test类型、datapipe/AI fresh构建/lint/skills/generate与check env通过，见tmp/module-repair-20261022/PIPE-01；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/datapipe/src/datapipe-chunk.ts:216](../packages/datapipe/src/datapipe-chunk.ts#L216)。
 - **证据与影响**：sentence/paragraph 拼接 overlap 后未计入 maxSize，探针 maxSize=6 得到长度 9；超长段落切割忽略 overlap。word 模式还需统一按词切分与按字符预算的定义。
 - **修正内容**：明确每种模式的计量单位，先预留 overlap/分隔符预算，长段切片步长正确；markdown 路径复用同一边界能力。
