@@ -15,6 +15,7 @@ import { kit } from '@h-ai/kit'
  * 需要权限：permission:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'permission:api:delete')
 
   const { id: permId } = kit.validate.params(params, IdParamSchema)
@@ -22,12 +23,12 @@ export const DELETE = kit.handler(async ({ params, locals }) => {
   // 检查权限是否存在
   const existing = await getAdminPermission(permId)
   if (!existing) {
-    return kit.response.notFound(m.api_iam_permissions_not_found())
+    return kit.response.notFound(m.api_iam_permissions_not_found({}, { locale }))
   }
 
   // 系统权限不可删除
   if (existing.is_system) {
-    return kit.response.badRequest(m.api_iam_permissions_system_cannot_delete())
+    return kit.response.badRequest(m.api_iam_permissions_system_cannot_delete({}, { locale }))
   }
 
   // 删除权限（IAM authz 内部已记录审计日志）

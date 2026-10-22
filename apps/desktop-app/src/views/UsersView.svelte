@@ -6,6 +6,7 @@
   import { Alert, Card, DataTable, PageHeader, Pagination } from '@h-ai/ui'
   import { onMount } from 'svelte'
   import { desktopApiClient } from '../lib/api.js'
+  import { desktopM as m } from '../lib/messages.svelte.js'
 
   type ListUsersResult = Extract<
     Awaited<ReturnType<typeof desktopApiClient.iam.users.list>>,
@@ -20,18 +21,18 @@
   let page = $state(1)
   const pageSize = 20
 
-  const columns = [
+  const columns = $derived([
     { key: 'id', label: 'ID', width: '8rem' },
-    { key: 'username', label: 'Username' },
-    { key: 'email', label: 'Email' },
+    { key: 'username', label: m('username') },
+    { key: 'email', label: m('email') },
     {
       key: 'enabled',
-      label: 'Status',
+      label: m('status'),
       align: 'center' as const,
       width: '6rem',
-      render: (item: IamUser) => (item.enabled ? 'Enabled' : 'Disabled'),
+      render: (item: IamUser) => (item.enabled ? m('enabled') : m('disabled')),
     },
-  ]
+  ])
 
   async function fetchUsers(): Promise<void> {
     loading = true
@@ -58,10 +59,10 @@
 </script>
 
 <div class='flex flex-col gap-4'>
-  <PageHeader title='Users' description={`Total: ${total}`} />
+  <PageHeader title={m('nav_users')} description={m('users_total', { total })} />
 
   {#if errorCode}
-    <Alert variant='error' title='Load failed'>
+    <Alert variant='error' title={m('users_failed')}>
       {errorCode}
     </Alert>
   {/if}

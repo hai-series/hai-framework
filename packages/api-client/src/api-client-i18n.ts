@@ -7,6 +7,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 type ApiClientMessageKey = keyof typeof messagesZhCN
@@ -21,4 +22,5 @@ type ApiClientMessageKey = keyof typeof messagesZhCN
 export const apiClientM = core.i18n.createMessageGetter<ApiClientMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

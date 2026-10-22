@@ -7,6 +7,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 /** 加密模块 i18n 消息键类型（自动从 zh-CN 消息文件推断） */
@@ -26,4 +27,5 @@ type CryptoMessageKey = keyof typeof messagesZhCN
 export const cryptoM = core.i18n.createMessageGetter<CryptoMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

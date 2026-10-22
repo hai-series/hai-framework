@@ -33,6 +33,7 @@ describe('create 用户输出', () => {
   it.each([
     { locale: 'zh-CN', exitCode: '退出码: 1' },
     { locale: 'en-US', exitCode: 'Exit code: 1' },
+    { locale: 'ja-JP', exitCode: '終了コード: 1' },
   ])('安装失败向 stderr 显示子进程原因与退出码 ($locale)', async ({ locale, exitCode }) => {
     core.i18n.setGlobalLocale(locale)
     const root = await mkdtemp(path.join(tmpdir(), 'hai-create-error-'))

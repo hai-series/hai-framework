@@ -19,7 +19,8 @@
     currentLanguage={localeStore.current}
     languages={[
       { value: 'zh-CN', label: '简体中文' },
-      { value: 'en-US', label: 'English' }
+      { value: 'en-US', label: 'English' },
+      { value: 'ja-JP', label: '日本語' }
     ]}
     onchange={(lang) => {
       localeStore.set(lang)  // 同步到 @h-ai/core 全局 locale
@@ -60,6 +61,7 @@
     languages = [
       { value: 'zh-CN', label: '简体中文', flag: 'CN' },
       { value: 'en-US', label: 'English', flag: 'US' },
+      { value: 'ja-JP', label: '日本語', flag: 'JP' },
     ],
     onchange,
     align = 'end',

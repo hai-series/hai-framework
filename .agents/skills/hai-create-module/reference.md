@@ -156,12 +156,14 @@ export function createXxYyFunctions(deps: XxYyFunctionsDeps): XxYyFunctions {
 // xx-i18n.ts ——固定模式
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 type XxMessageKey = keyof typeof messagesZhCN
 export const xxM = core.i18n.createMessageGetter<XxMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })
 ```
 

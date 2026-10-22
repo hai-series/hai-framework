@@ -82,6 +82,16 @@ describe('@h-ai/serv', () => {
     })
   })
 
+  it.each(['ja-JP', 'ja', 'ja-JP,en;q=0.9'])('returns Japanese errors for request locale %s', async (locale) => {
+    const app = serv.createApp({ contract, procedures })
+    const response = await app.request('/api/v1/unregistered', { headers: { 'accept-language': locale } })
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: { code: HaiCommonError.NOT_FOUND.code, message: 'リソースが見つかりません' },
+    })
+  })
+
   it('allows a path-scoped middleware to terminate with a binary response', async () => {
     const app = serv.createApp({
       contract,

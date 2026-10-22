@@ -10,6 +10,7 @@ debug: ${HAI_CORE_DEBUG:false}
 defaultLocale: ${HAI_CORE_DEFAULTLOCALE:zh-CN}
 supportedLocales:
   - zh-CN
+  - ja-JP
   - en-US
 
 features:

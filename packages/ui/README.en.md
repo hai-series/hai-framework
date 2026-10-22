@@ -4,7 +4,7 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
-> A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US) and 15 curated DaisyUI themes.
+> A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US / ja-JP) and 15 curated DaisyUI themes.
 
 ## Installation
 
@@ -185,7 +185,7 @@ For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchang
 
 Labels connect to nested UI controls automatically; use `<FormField for="control-id">` for explicit IDs or native controls. Errors and hints use `aria-describedby`, invalid controls use `aria-invalid`, and field errors appear once. `label` / `error` / `hint` accept strings or deferred translation functions.
 
-`Input`, `Textarea`, `Select` and `PasswordInput` provide Chinese/English native validation messages. `validationMessage` overrides failures without keeping valid input invalid. Sync locale with the UI `setGlobalLocale` / `createLocaleStore` to update visible validation errors immediately. `Textarea` supports `minlength` / `maxlength`; `Select` supports `name`, required validation and FormData serialization.
+`Input`, `Textarea`, `Select` and `PasswordInput` provide Chinese/English/Japanese native validation messages. `validationMessage` overrides failures without keeping valid input invalid. Sync locale with the UI `setGlobalLocale` / `createLocaleStore` to update visible validation errors immediately. `Textarea` supports `minlength` / `maxlength`; `Select` supports `name`, required validation and FormData serialization.
 
 Client validation appears on the first blur and updates as invalid input is corrected. Untouched fields are validated on submit. CRUD create/edit forms share this behavior, honor custom messages and reset validation when reopened. `Select` validates when focus leaves both its trigger and options. `PasswordInput.minLength` enforces length and informs strength; omitting it leaves login password length unrestricted while strength uses an eight-character baseline.
 
@@ -717,7 +717,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 
 @h-ai/ui uses **built-in component translations**:
 
-- Scene components (`scenes/`) include Chinese/English translations (zh-CN / en-US) out of the box.
+- Scene components (`scenes/`) include Chinese/English/Japanese translations (zh-CN / en-US / ja-JP) out of the box.
 - Components respond automatically to global locale changes, synchronized through `@h-ai/core`.
 - Applications handle **page text** only; @h-ai/ui manages internal component text.
 - Override specific text with props such as `submitText` or `labels`.
@@ -797,7 +797,7 @@ When an authentication link points to the current complete URL, AuthPanel switch
 
 ## Onboarding and help center
 
-Import `createGuide`, `GuideHost` and `HelpCenter` from `@h-ai/ui/guide`. No init/close is required. The tour engine loads when a tour starts; controls follow the current theme and include Chinese/English translations. Business text uses application i18n callbacks.
+Import `createGuide`, `GuideHost` and `HelpCenter` from `@h-ai/ui/guide`. No init/close is required. The tour engine loads when a tour starts; controls follow the current theme and include Chinese/English/Japanese translations. Business text uses application i18n callbacks.
 
 The same entry exports `resolveGuideText(text?)` to evaluate strings or i18n callbacks; host components resolve text automatically.
 

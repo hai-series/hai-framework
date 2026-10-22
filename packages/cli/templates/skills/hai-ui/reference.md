@@ -2,7 +2,7 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
-> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题、内置中英文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
+> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题、内置中英日文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
 
 ## 运行环境
 
@@ -28,7 +28,7 @@
 
 - **优先复用 `@h-ai/ui` 现有组件**，不要在 app 中重复实现同类按钮、表格、表单、弹层或场景页面。
 - **页面级文案与业务逻辑放在应用层**；`@h-ai/ui` 负责展示与交互，不承接业务服务、数据库访问或页面级 i18n 管理。
-- **场景组件自带内置中英文文案**（如 IAM / CRUD / AI / Storage 场景），除非组件显式提供覆盖 prop，否则不要把页面翻译样板再传进去。
+- **场景组件自带内置中英日文文案**（如 IAM / CRUD / AI / Storage 场景），除非组件显式提供覆盖 prop，否则不要把页面翻译样板再传进去。
 - **自动导入不是全能魔法**：`toast`、类型导入和 `Range` 仍需显式 `import`；其它公开 Svelte 组件可交给 `autoImportHaiUi()`。
 - **移动端组件不是样式糖**：使用 `SafeArea` / `BottomNav` / `PullRefresh` / `ActionSheet` 时，务必同步引入 `design-tokens.css` 与 `mobile.css`。
 
@@ -342,7 +342,7 @@ const p = usePlatform()
 
 ### 场景组件（Scenes）
 
-内置中英文翻译的业务场景组件。
+内置中英日文翻译的业务场景组件。
 
 #### 引导与帮助场景组件
 

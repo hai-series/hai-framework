@@ -85,7 +85,7 @@
   "asr_error_file_required": "请选择音频文件",
   "asr_error_file_size": "音频大小必须在 1 字节到 10 MiB 之间",
   "asr_error_file_type": "仅支持 WAV 和 MP3 音频",
-  "asr_error_language": "语言提示必须是自动、中文或英文",
+  "asr_error_language": "语言必须为自动、中文、英文或日语",
   "mic_title": "麦克风实时转写",
   "mic_description": "开始录音后持续转写为文字，无需先停止录音。",
   "mic_start": "开始录音",
@@ -98,5 +98,6 @@
   "mic_error_permission": "无法访问麦克风，请检查浏览器权限。",
   "mic_error_empty": "没有捕获到音频，请重试。",
   "error_unknown": "未知错误",
-  "error_request": "请求失败：{detail}"
+  "error_request": "请求失败：{detail}",
+  "asr_language_ja": "日语"
 }

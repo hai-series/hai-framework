@@ -7,13 +7,17 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 type KitMessageKey = keyof typeof messagesZhCN
 
 /** 获取 Kit 模块的 i18n 消息 */
-export const kitM
-  = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
+export const kitM = core.i18n.createMessageGetter<KitMessageKey>({
+  'zh-CN': messagesZhCN,
+  'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
+})
 
 /**
  * 统一设置所有 hai 模块的默认语言

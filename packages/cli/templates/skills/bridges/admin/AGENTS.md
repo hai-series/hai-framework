@@ -38,7 +38,7 @@
 
 - 页面组件、layout、load 只负责渲染、权限态拼装和请求编排；业务逻辑放在 `src/lib/server/services` 或模块 API。
 - 认证授权使用 `@h-ai/iam` / `@h-ai/kit`；Web token 优先 httpOnly cookie。
-- 所有用户可见文本走 `$lib/paraglide/messages.js`，同步 `messages/zh-CN.json` 与 `messages/en-US.json`。
+- 所有用户可见文本走 `$lib/paraglide/messages.js`，同步 `messages/zh-CN.json`、`messages/en-US.json`、`messages/ja-JP.json`。
 - API 边界必须做 Zod 校验，HaiResult 错误用 kit response 转换。
 - `+server.ts` 只能导出 handler 和 SvelteKit 允许的配置项；helper 放到 `src/lib/server/**`。
 - 本样板默认不使用 `@h-ai/serv`、`@h-ai/api-contract`、`@h-ai/api-client`、`@h-ai/capacitor` 作为主架构。

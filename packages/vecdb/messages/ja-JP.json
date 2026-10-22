@@ -1,0 +1,23 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "vecdb_notInitialized": "ベクトルデータベースが初期化されていません。先にvecdb.init()を呼び出してください",
+  "vecdb_initFailed": "ベクトルデータベースの初期化に失敗しました: {error}",
+  "vecdb_closeFailed": "ベクトルデータベースの終了に失敗しました: {error}",
+  "vecdb_configError": "ベクトルデータベース設定の検証に失敗しました: {error}",
+  "vecdb_initInProgress": "ベクトルデータベースの初期化は既に実行中です",
+  "vecdb_unsupportedType": "未対応のベクトルデータベースの種類です: {type}",
+  "vecdb_driverNotFound": "ベクトルデータベースのドライバーがインストールされていません: {driver}。pnpm add {driver}を実行してください",
+  "vecdb_connectionFailed": "ベクトルデータベースへの接続に失敗しました: {error}",
+  "vecdb_collectionNotFound": "コレクションが見つかりません: {name}",
+  "vecdb_collectionAlreadyExists": "コレクションは既に存在します: {name}",
+  "vecdb_dimensionMismatch": "ベクトルの次元が一致しません: 期待値{expected}、実際の値{actual}",
+  "vecdb_insertFailed": "ベクトルの挿入に失敗しました: {error}",
+  "vecdb_deleteFailed": "ベクトルの削除に失敗しました: {error}",
+  "vecdb_updateFailed": "ベクトルの更新に失敗しました: {error}",
+  "vecdb_queryFailed": "ベクトルの検索に失敗しました: {error}",
+  "vecdb_indexBuildFailed": "インデックスの構築に失敗しました: {error}",
+  "vecdb_serializationFailed": "シリアライズまたはデシリアライズに失敗しました: {error}",
+  "vecdb_invalidDimension": "ベクトルの次元が無効です: {dimension}。正の整数を指定してください",
+  "vecdb_configPathRequired": "データベースの保存パスは必須です",
+  "vecdb_configDatabaseRequired": "データベース名は必須です"
+}

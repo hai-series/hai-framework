@@ -7,6 +7,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 type CapacitorMessageKey = keyof typeof messagesZhCN
@@ -20,4 +21,5 @@ type CapacitorMessageKey = keyof typeof messagesZhCN
 export const capacitorM = core.i18n.createMessageGetter<CapacitorMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

@@ -6,7 +6,7 @@
 {{#if features.iam}}
   import { apiClient } from '@h-ai/api-client'
 {{/if}}
-  import { applyTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
+  import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
 {{#if features.iam}}
   import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
 {{/if}}
@@ -17,7 +17,7 @@
   import { initCapacitor, isNativeApp } from './lib/capacitor.js'
   import { HashRouter } from './lib/navigation/hash-router.svelte.js'
   import * as m from './lib/paraglide/messages.js'
-  import { getLocale } from './lib/paraglide/runtime.js'
+  import { getLocale, setLocale } from './lib/paraglide/runtime.js'
 
 {{#if features.iam}}
   const authActions = apiClient.createAuthActions(apiClient)
@@ -57,6 +57,7 @@
       document.title = appConfig.name
       applyTheme(getSavedTheme(), false)
       setGlobalLocale(getLocale())
+      document.documentElement.lang = getLocale()
       await initCapacitor()
       await initApi()
 {{#if features.iam}}
@@ -80,6 +81,11 @@
     }
   }
 
+  function handleLanguageChange(language: string): void {
+    setGlobalLocale(language)
+    setLocale(language as Parameters<typeof setLocale>[0])
+  }
+
   /** 切换底部导航；例如 handleTabChange('tasks') 会写入 #/tasks。 */
   function handleTabChange(id: string): void {
     router.navigate(`/${id}`)
@@ -101,7 +107,11 @@
 
 <div class='hai-mobile-viewport'>
   <div class='hai-mobile-shell max-w-lg'>
-    <AppBar title={appConfig.name} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8' />
+    <AppBar title={appConfig.name} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8'>
+      {#snippet trailing()}
+        <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} compact />
+      {/snippet}
+    </AppBar>
     <main class='hai-mobile-main'>
       {#if booting}
         <div class='grid min-h-64 place-items-center'><span class='loading loading-spinner loading-lg'></span></div>

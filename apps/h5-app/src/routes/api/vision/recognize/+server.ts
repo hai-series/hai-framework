@@ -22,12 +22,13 @@ const EXT_MAP: Record<string, string> = {
 }
 
 export const POST = kit.handler(async ({ request, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   if (!storage.isInitialized) {
-    return kit.response.error('STORAGE_UNAVAILABLE', 'File storage is not configured', 503)
+    return kit.response.error('STORAGE_UNAVAILABLE', m.vision_storage_unavailable({}, { locale }), 503)
   }
 
   if (!ai.isInitialized) {
-    return kit.response.error('AI_UNAVAILABLE', 'AI service is not configured', 503)
+    return kit.response.error('AI_UNAVAILABLE', m.vision_ai_unavailable({}, { locale }), 503)
   }
 
   const formData = await request.formData()
@@ -35,15 +36,15 @@ export const POST = kit.handler(async ({ request, locals }) => {
   const prompt = String(formData.get('prompt') ?? '').trim()
 
   if (!file || !(file instanceof File)) {
-    return kit.response.badRequest(m.discover_error_no_file())
+    return kit.response.badRequest(m.discover_error_no_file({}, { locale }))
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return kit.response.badRequest('Image size exceeds 4MB limit')
+    return kit.response.badRequest(m.vision_size_exceeded({}, { locale }))
   }
 
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    return kit.response.badRequest('Only JPG, PNG, WEBP are supported')
+    return kit.response.badRequest(m.vision_type_unsupported({}, { locale }))
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
@@ -55,19 +56,13 @@ export const POST = kit.handler(async ({ request, locals }) => {
   })
   if (!storeResult.success) {
     core.logger.error('Vision image upload failed', { error: storeResult.error.message })
-    return kit.response.internalError('Image upload failed')
+    return kit.response.internalError(m.vision_upload_failed({}, { locale }))
   }
 
   const imageDataUrl = `data:${file.type};base64,${buffer.toString('base64')}`
-  const locale = locals.locale === 'en-US' ? 'en-US' : 'zh-CN'
 
-  const systemPrompt = locale === 'en-US'
-    ? 'You are an image recognition assistant. Return strict JSON only with keys: summary(string), details(string[]), tags(string[]), confidence(number 0..1).'
-    : '你是图片识别助手。仅返回严格 JSON，包含字段：summary(字符串)、details(字符串数组)、tags(字符串数组)、confidence(0到1数字)。'
-
-  const userText = locale === 'en-US'
-    ? `Analyze this image and describe key content. Extra request: ${prompt || 'none'}`
-    : `请识别这张图片并描述关键内容。补充要求：${prompt || '无'}`
+  const systemPrompt = m.vision_system_prompt({}, { locale })
+  const userText = m.vision_user_prompt({ prompt: prompt || m.vision_no_prompt({}, { locale }) }, { locale })
 
   const aiResult = await ai.llm.chat({
     temperature: 0.2,
@@ -86,7 +81,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
   if (!aiResult.success) {
     core.logger.error('Vision AI analyze failed', { error: aiResult.error.message })
-    return kit.response.internalError('AI analysis failed')
+    return kit.response.internalError(m.vision_analysis_failed({}, { locale }))
   }
 
   const raw = aiResult.data.choices[0]?.message.content?.trim() ?? ''
@@ -112,7 +107,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
   if (!insertResult.success) {
     core.logger.error('Vision record insert failed', { error: insertResult.error.message })
-    return kit.response.internalError('Record save failed')
+    return kit.response.internalError(m.vision_save_failed({}, { locale }))
   }
 
   return kit.response.ok({

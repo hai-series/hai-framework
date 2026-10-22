@@ -6,6 +6,7 @@
   import { PageHeader, toast, UserProfile } from '@h-ai/ui'
   import { desktopApiClient } from '../lib/api.js'
   import { currentUser, refreshCurrentUser } from '../lib/auth-store.svelte.js'
+  import { desktopM as m } from '../lib/messages.svelte.js'
 
   const me = $derived(currentUser())
   let saving = $state(false)
@@ -19,20 +20,20 @@
       email: data.email,
     })
     if (result.success) {
-      toast.success('Profile updated')
+      toast.success(m('profile_updated'))
       await refreshCurrentUser()
     }
     else {
       const code = String(result.error.code ?? 'unknown')
-      errors = { general: `Update failed: ${code}` }
-      toast.error(`Update failed: ${code}`)
+      errors = { general: m('profile_update_failed', { code }) }
+      toast.error(m('profile_update_failed', { code }))
     }
     saving = false
   }
 </script>
 
 <div class='flex flex-col gap-4'>
-  <PageHeader title='Profile' description='Manage your account information' />
+  <PageHeader title={m('nav_profile')} description={m('profile_description')} />
 
   {#if me}
     <UserProfile

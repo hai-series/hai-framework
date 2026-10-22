@@ -1,0 +1,9 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "datapipe_cleanFailed": "テキストのクリーニングに失敗しました: {error}",
+  "datapipe_chunkFailed": "テキストの分割に失敗しました: {error}",
+  "datapipe_transformFailed": "テキストの変換に失敗しました: {error}",
+  "datapipe_pipelineFailed": "パイプラインの実行に失敗しました: {error}",
+  "datapipe_configError": "データパイプ設定の検証に失敗しました: {error}",
+  "datapipe_missingSeparator": "カスタム分割モードにはseparatorパラメーターが必要です"
+}

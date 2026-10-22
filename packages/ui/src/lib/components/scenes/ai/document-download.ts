@@ -3,7 +3,7 @@ import type {
   MarkdownSourceKind,
   MarkdownToolbarDownloadAction,
 } from './document-types.js'
-import { uiM } from '../../../messages.js'
+import { getUILocale, uiM } from '../../../messages.js'
 import { renderMarkdownDocument } from './document-parse.js'
 
 const DOCUMENT_EXPORT_ROOT_CLASS = 'hai-ai-document-export'
@@ -375,7 +375,7 @@ function buildDocumentExportBody(bodyHtml: string): string {
 
 function buildDocumentExportHtml(title: string, bodyHtml: string): string {
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${escapeExportHtml(getUILocale())}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

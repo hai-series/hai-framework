@@ -7,6 +7,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 // ─── i18n ───
@@ -29,4 +30,5 @@ type DeployMessageKey = keyof typeof messagesZhCN
 export const deployM = core.i18n.createMessageGetter<DeployMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

@@ -18,15 +18,16 @@ function isSafeStorageKey(key: string): boolean {
     && !key.split('/').some(segment => segment === '..' || segment.length === 0)
 }
 
-export const GET = kit.handler(async ({ params }) => {
+export const GET = kit.handler(async ({ params, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   const key = params.key
 
   if (!isSafeStorageKey(key)) {
-    return kit.response.badRequest(m.api_upload_invalid_path())
+    return kit.response.badRequest(m.api_upload_invalid_path({}, { locale }))
   }
 
   if (!storage.isInitialized) {
-    return kit.response.error('STORAGE_UNAVAILABLE', m.api_upload_storage_unavailable(), 503)
+    return kit.response.error('STORAGE_UNAVAILABLE', m.api_upload_storage_unavailable({}, { locale }), 503)
   }
 
   const [headResult, fileResult] = await Promise.all([
@@ -35,7 +36,7 @@ export const GET = kit.handler(async ({ params }) => {
   ])
 
   if (!headResult.success || !fileResult.success) {
-    return kit.response.notFound(m.api_upload_file_not_found())
+    return kit.response.notFound(m.api_upload_file_not_found({}, { locale }))
   }
 
   const bytes = new Uint8Array(fileResult.data.byteLength)

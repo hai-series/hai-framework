@@ -32,6 +32,8 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 - A2A integration: discovery defaults to `/.well-known/agent-card.json`. With `authenticate` configured, null/undefined returns 401; anonymous access is allowed only without authentication configured. API Key parameters come from the complete Agent Card's `securitySchemes.apiKey`. Hooks and explicit A2A routes share JSON-RPC parse-error and SSE cancellation cleanup logic.
 - Dual build mode (`createAdapter()`)
 
+`sequence` preserves SvelteKit resolve options: page transformations run from inner to outer, while the first preload and serialized-header filter win. This preserves the i18n HTML language replacement.
+
 ## Dependencies
 
 - `@h-ai/iam`: optional authentication/authorization for A2A; initialize before using kit's A2A features.

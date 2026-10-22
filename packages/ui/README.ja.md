@@ -4,7 +4,7 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
-> Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US）、15 種類の厳選テーマを提供します。
+> Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US / ja-JP）、15 種類の厳選テーマを提供します。
 
 ## インストール
 
@@ -185,7 +185,7 @@ components/
 
 ラベルは内部 UI コントロールに自動で関連付けられます。明示 ID やネイティブ要素は `<FormField for="control-id">` を使います。エラーとヒントは `aria-describedby`、無効な要素は `aria-invalid` で通知し、エラーは重複表示しません。`label` / `error` / `hint` は文字列または翻訳関数を受け取ります。
 
-`Input`、`Textarea`、`Select`、`PasswordInput` のネイティブ検証は中国語・英語に対応します。`validationMessage` は失敗時だけ適用され、有効な入力を無効にし続けません。UI の `setGlobalLocale` / `createLocaleStore` で言語を同期すると表示中のエラーも更新されます。`Textarea` は `minlength` / `maxlength`、`Select` は `name`・必須検証・FormData に対応します。
+`Input`、`Textarea`、`Select`、`PasswordInput` のネイティブ検証は中国語・英語・日本語に対応します。`validationMessage` は失敗時だけ適用され、有効な入力を無効にし続けません。UI の `setGlobalLocale` / `createLocaleStore` で言語を同期すると表示中のエラーも更新されます。`Textarea` は `minlength` / `maxlength`、`Select` は `name`・必須検証・FormData に対応します。
 
 初回のフォーカス離脱時にエラーを表示し、修正中も更新します。未操作の項目は送信時に検証します。CRUD の新規作成・編集も同じ動作とカスタムメッセージに対応し、再表示時に検証状態をリセットします。`Select` はトリガーと選択肢の両方からフォーカスが離れた時に検証します。`PasswordInput.minLength` は長さ制約と強度計算に使い、省略時はログイン用の長さ制限を設けず、強度のみ8文字を基準にします。
 
@@ -717,7 +717,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 
 @h-ai/ui は**コンポーネント内蔵翻訳**を使います：
 
-- 用途別コンポーネント（`scenes/`）は中国語・英語（zh-CN / en-US）を内蔵し、そのまま使えます。
+- 用途別コンポーネント（`scenes/`）は中国語・英語・日本語（zh-CN / en-US / ja-JP）を内蔵し、そのまま使えます。
 - `@h-ai/core` と同期した全体 locale の変更へ自動応答します。
 - アプリは**ページ単位の文言**のみを扱い、内部テキストは @h-ai/ui が管理します。
 - 個別文言の変更は `submitText`・`labels` などの props で指定。
@@ -797,7 +797,7 @@ AuthPanel は SSR 中のフォーム操作を無効にし、クライアント�
 
 ## 初回ガイドとヘルプセンター
 
-`@h-ai/ui/guide` から `createGuide`、`GuideHost`、`HelpCenter` をインポートします。init/close は不要です。ガイド開始時にエンジンを読み込み、既存テーマと中国語・英語の共通文言を使用します。業務内容はアプリの翻訳関数を使います。
+`@h-ai/ui/guide` から `createGuide`、`GuideHost`、`HelpCenter` をインポートします。init/close は不要です。ガイド開始時にエンジンを読み込み、既存テーマと中国語・英語・日本語の共通文言を使用します。業務内容はアプリの翻訳関数を使います。
 
 同じ入口の `resolveGuideText(text?)` は文字列や i18n コールバックを評価します。ホストコンポーネントは文言を自動で解析します。
 

@@ -16,6 +16,7 @@ debug: ${HAI_CORE_DEBUG:true}
 defaultLocale: ${HAI_CORE_DEFAULTLOCALE:zh-CN}
 supportedLocales:
   - zh-CN
+  - ja-JP
   - en-US
 
 # 功能开关

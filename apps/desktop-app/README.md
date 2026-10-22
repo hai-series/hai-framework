@@ -21,10 +21,10 @@
 - Dashboard（`desktopApiClient.app.info` / `desktopApiClient.app.echo`）
 - 用户列表（`apiClient.iam.users.list`，需要 `user:list` 权限）
 - 个人信息维护
+- 中文、英文、日语界面（页面文案在 `messages/`，语言偏好自动保存）
 
 不包含的（保持示例精简）：
 
-- i18n（hard-coded 英文）
 - 端到端测试
 - 复杂的权限/菜单系统
 - Storage / AI 子领域 demo（接口可用，UI 未提供）

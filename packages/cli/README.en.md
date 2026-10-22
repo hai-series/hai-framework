@@ -2,6 +2,8 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
+Generated projects enable `zh-CN`, `en-US` and `ja-JP` by default. Interactive setup can select Japanese as the default language; fullstack projects can restrict locales through `fullstack.i18n.locales`.
+
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
 For creation, traditional/AI-first development, compilation, packaging, deployment, and upgrades, follow the [complete usage guide](../../docs/usage/README.en.md). This page provides detailed CLI and template references.
@@ -297,7 +299,7 @@ Admin and fullstack gates also verify public types and runtime behavior from ins
 
 Successful screenshots default to the CLI's `test-results/scaffold-evidence/`. Set `HAI_AUTH_EVIDENCE_DIR` to retain them in a chosen directory after generated projects are cleaned up. Fullstack E2E starts every selected Web/App/Desktop browser preview and checks login, tours, help and profile navigation. Miniapp and native shells require separate platform acceptance.
 
-Failures and degraded-state messages must also be localized: website APIs use the request locale for AI fallback and email delivery status; undelivered messages must not be described as received. CLI deployment status uses cliM, and Gallery encryption limitations use bilingual messages. Verify unconfigured, failed, and successful paths in Chinese and English without paid service calls.
+Failures and degraded-state messages must also be localized: website APIs use the request locale for AI fallback and email delivery status; undelivered messages must not be described as received. CLI deployment status uses cliM, and Gallery encryption limitations use trilingual messages. Verify unconfigured, failed, and successful paths in Chinese, English and Japanese without paid service calls.
 
 Provisioned configuration: Neon emits HAI_DB (PostgreSQL JSON), Upstash HAI_CACHE (Redis rediss URL JSON), and R2 HAI_STORAGE (flat S3 JSON). Email/SMS emit HAI_REACH_PROVIDERS; deployApp merges both channels while preserving YAML message templates, replacing the original providers array. Core supports whole-object/array overrides, with parents preceding leaves and schema validation retained. Provisioned values are runtime-only and are never passed to build subprocesses. R2 needs existing S3 accessKeyId/secretAccessKey, Resend a verified-domain from address, and Alibaba Cloud approved signName/templates. Applications need matching `_db.yml` / `_cache.yml` / `_storage.yml` / `_reach.yml` loaded at startup; network clients require Node.
 
@@ -305,7 +307,7 @@ Deployment recovery: `ProvisionResult.resourceStatus` marks created/reused. `get
 
 ## Generated form layouts
 
-Website contact forms and fullstack management screens reuse UI FormLayout/FormField: one or two columns, stacked or inline labels, automatic spans and narrow-container fallback. User, profile and password forms share the same options and built-in Chinese/English validation. The generated hai-ui skill documents the complete contract.
+Website contact forms and fullstack management screens reuse UI FormLayout/FormField: one or two columns, stacked or inline labels, automatic spans and narrow-container fallback. User, profile and password forms share the same options and built-in Chinese/English/Japanese validation. The generated hai-ui skill documents the complete contract.
 
 ## License
 

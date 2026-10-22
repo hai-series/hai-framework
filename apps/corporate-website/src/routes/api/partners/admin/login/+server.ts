@@ -8,11 +8,12 @@ import {
 } from '$lib/server/partner-service.js'
 import { kit } from '@h-ai/kit'
 
-export const POST = kit.handler(async ({ request, cookies }) => {
+export const POST = kit.handler(async ({ request, cookies, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   const { username, password } = await kit.validate.body(request, PartnerAdminLoginSchema)
 
   if (!verifyPartnerAdminCredential(username, password)) {
-    return kit.response.error('AUTH_FAILED', m.admin_login_failed(), 401)
+    return kit.response.error('AUTH_FAILED', m.admin_login_failed({}, { locale }), 401)
   }
 
   const token = await createPartnerAdminSession(username)

@@ -2,6 +2,8 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
+生成プロジェクトは既定で `zh-CN`、`en-US`、`ja-JP` を有効にします。対話設定で日本語を既定に選択でき、fullstack は `fullstack.i18n.locales` で有効な言語を制限できます。
+
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
 作成、手作業・AI first 開発、コンパイル、パッケージ、デプロイ、更新の流れは[完全ガイド](../../docs/usage/README.ja.md)を参照してください。本ページでは CLI コマンドとテンプレートの詳細を説明します。
@@ -297,7 +299,7 @@ Admin/fullstack の門禁では実際にインストールしたローカル tar
 
 成功時のスクリーンショットは CLI の `test-results/scaffold-evidence/` に保存します。`HAI_AUTH_EVIDENCE_DIR` で保存先を指定でき、生成プロジェクトの削除後も残ります。fullstack E2E は選択した全 Web/App/Desktop のブラウザープレビューでログイン、ガイド、ヘルプ、個人設定を検証します。小程序とネイティブシェルは各プラットフォームで別途検証します。
 
-失敗・縮退時の表示も国際化します。サイト API はリクエストの locale で AI 縮退・メール到達状態を表示し、未到達を受信済みと表現しません。CLI のデプロイ状態は cliM、Gallery の暗号化制限は二言語メッセージを使います。中国語・英語で未設定・失敗・成功を検証し、有料サービスの呼び出しは不要です。
+失敗・縮退時の表示も国際化します。サイト API はリクエストの locale で AI 縮退・メール到達状態を表示し、未到達を受信済みと表現しません。CLI のデプロイ状態は cliM、Gallery の暗号化制限は三言語メッセージを使います。中国語・英語・日本語で未設定・失敗・成功を検証し、有料サービスの呼び出しは不要です。
 
 クラウド設定の利用：Neon は HAI_DB（PostgreSQL JSON）、Upstash は HAI_CACHE（Redis rediss URL JSON）、R2 は HAI_STORAGE（フラットな S3 JSON）を出力します。メール・SMS は HAI_REACH_PROVIDERS を出力し、deployApp が両チャネルと YAML のメッセージテンプレートを統合して元の providers 配列を置換します。Core はオブジェクト・配列全体の上書きをサポートし、親ノードを末端より優先して Schema 検証を維持します。ビルド子プロセスと対象環境は同じ値を使います。R2 は既存の S3 accessKeyId/secretAccessKey、Resend は検証済みドメインの from、Alibaba Cloud は承認済み signName・テンプレートが必要です。アプリは対応する `_db.yml` / `_cache.yml` / `_storage.yml` / `_reach.yml` を起動時に読み込み、ネットワーククライアントには Node が必要です。
 
@@ -305,7 +307,7 @@ Admin/fullstack の門禁では実際にインストールしたローカル tar
 
 ## 生成フォームのレイアウト
 
-website の連絡フォームと fullstack 管理画面は UI の FormLayout/FormField を使い、1列・2列、ラベルの縦・横配置、自動列結合と狭いコンテナーへの対応を共有します。ユーザー編集・プロフィール・パスワードは同じ設定と中国語・英語の検証メッセージを使用します。生成された hai-ui skill に設定を記載しています。
+website の連絡フォームと fullstack 管理画面は UI の FormLayout/FormField を使い、1列・2列、ラベルの縦・横配置、自動列結合と狭いコンテナーへの対応を共有します。ユーザー編集・プロフィール・パスワードは同じ設定と中国語・英語・日本語の検証メッセージを使用します。生成された hai-ui skill に設定を記載しています。
 
 ## License
 

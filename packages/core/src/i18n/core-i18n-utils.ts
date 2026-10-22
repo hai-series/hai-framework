@@ -7,6 +7,7 @@
 
 import type { Locale, LocaleInfo, LocaleMessages, MessageOptions } from '../core-types.js'
 import messagesEnUS from '../../messages/en-US.json'
+import messagesJaJP from '../../messages/ja-JP.json'
 import messagesZhCN from '../../messages/zh-CN.json'
 
 // ─── 常量 ───
@@ -14,6 +15,7 @@ import messagesZhCN from '../../messages/zh-CN.json'
 const DEFAULT_LOCALES: LocaleInfo[] = [
   { code: 'zh-CN', label: '简体中文' },
   { code: 'en-US', label: 'English' },
+  { code: 'ja-JP', label: '日本語' },
 ]
 
 const DEFAULT_LOCALE: Locale = 'zh-CN'
@@ -27,8 +29,8 @@ function getGlobalLocale(): Locale {
 }
 
 function setGlobalLocale(locale: Locale): void {
-  // 规范化简写：'en' → 'en-US', 'zh' → 'zh-CN'
-  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+  // 规范化简写：'en' → 'en-US', 'zh' → 'zh-CN', 'ja' → 'ja-JP'
+  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : locale
 
   if (currentLocale !== normalized) {
     currentLocale = normalized
@@ -93,6 +95,7 @@ type CoreMessageKey = keyof typeof messagesZhCN
 const coreM = createMessageGetter<CoreMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })
 
 // ─── 对外入口 ───

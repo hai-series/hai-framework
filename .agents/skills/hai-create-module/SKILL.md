@@ -123,6 +123,7 @@ packages/xx/
   vitest.config.ts
   messages/
     en-US.json
+    ja-JP.json
     zh-CN.json
   src/
     index.ts              # 唯一入口，仅 export *
@@ -269,7 +270,7 @@ packages/xx/
 1. **架构决策**（§1）→ 选定模块类型 / 子功能 / Provider / API 风格
 2. **目录骨架**（§2）→ 创建文件夹与空文件
 3. **`xx-config.ts`** → R1
-4. **`messages/{zh-CN,en-US}.json`** → R5
+4. **`messages/{zh-CN,en-US,ja-JP}.json`** → R5
 5. **`xx-i18n.ts`** → R4.4
 6. **`xx-types.ts`** → R2
 7. **子功能 types + functions**（如有）→ R4.1

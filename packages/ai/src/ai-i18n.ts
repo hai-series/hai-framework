@@ -9,6 +9,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 type AiMessageKey = keyof typeof messagesZhCN
@@ -21,4 +22,5 @@ type AiMessageKey = keyof typeof messagesZhCN
 export const aiM = core.i18n.createMessageGetter<AiMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

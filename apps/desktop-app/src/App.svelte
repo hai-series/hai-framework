@@ -13,6 +13,7 @@
     isInitialized,
     refreshCurrentUser,
   } from './lib/auth-store.svelte.js'
+  import { localeStore, desktopM as m } from './lib/messages.svelte.js'
   import { currentPathname, installRouter, navigate } from './lib/router.svelte.js'
   import AppShellView from './views/AppShellView.svelte'
   import DashboardView from './views/DashboardView.svelte'
@@ -25,6 +26,10 @@
     const dispose = installRouter()
     void refreshCurrentUser()
     return dispose
+  })
+
+  $effect(() => {
+    document.documentElement.lang = localeStore.current
   })
 
   // 认证守卫：未登录用户只能停留在 /login 或 /register
@@ -71,7 +76,7 @@
     {:else if currentPathname() === '/profile'}
       <ProfileView />
     {:else}
-      <Alert variant='warning'>Unknown route: {currentPathname()}</Alert>
+      <Alert variant='warning'>{m('unknown_route', { path: currentPathname() })}</Alert>
     {/if}
   </AppShellView>
 {/if}

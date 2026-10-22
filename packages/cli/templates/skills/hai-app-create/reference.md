@@ -80,6 +80,7 @@ src/
         users/+server.ts
   messages/                      # i18n 消息文件
     en-US.json
+    ja-JP.json
     zh-CN.json
   config/                        # 模块配置文件
     _core.yml
@@ -300,7 +301,7 @@ interface CreateArticleInput {
 </div>
 ```
 
-`Article` 放在客户端可用的共享类型位置，`article_edit` 在中英文 messages 中新增后由项目生成；实际已安装 `@h-ai/ui` 有适用 Card/Button 时使用其公开组件和 Props，本例只展示业务 props、事件与文案边界。
+`Article` 放在客户端可用的共享类型位置，`article_edit` 在中英日文 messages 中新增后由项目生成；实际已安装 `@h-ai/ui` 有适用 Card/Button 时使用其公开组件和 Props，本例只展示业务 props、事件与文案边界。
 
 ### 组件规则
 

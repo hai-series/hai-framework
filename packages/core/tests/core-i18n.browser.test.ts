@@ -12,6 +12,13 @@ describe('core.i18n (browser)', () => {
     core.i18n.setGlobalLocale('zh-CN')
   })
 
+  it('浏览器入口支持日语及参数插值', () => {
+    core.i18n.setGlobalLocale('ja')
+    expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
+    expect(core.i18n.coreM('core_errorTimeout')).toBe('リクエストがタイムアウトしました')
+    expect(core.i18n.coreM('core_timeDaysAgo', { params: { n: 2 } })).toBe('2日前')
+  })
+
   it('createMessageGetter 应该在 locale 覆盖时优先使用指定语言', () => {
     const getMessage = core.i18n.createMessageGetter({
       'zh-CN': { hi: '你好' },

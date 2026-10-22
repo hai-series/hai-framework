@@ -10,6 +10,7 @@ import { changeUILocale, readUILocale } from './internal/locale.js'
 
 // 导入消息文件
 import messagesEnUS from './messages/en-US.json'
+import messagesJaJP from './messages/ja-JP.json'
 import messagesZhCN from './messages/zh-CN.json'
 
 // 消息 key 类型
@@ -19,6 +20,7 @@ export type UIMessageKey = keyof typeof messagesZhCN
 const getMessage = core.i18n.createMessageGetter({
   'zh-CN': messagesZhCN as Record<string, string>,
   'en-US': messagesEnUS as Record<string, string>,
+  'ja-JP': messagesJaJP as Record<string, string>,
 })
 
 /**

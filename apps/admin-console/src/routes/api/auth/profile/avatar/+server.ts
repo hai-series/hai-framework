@@ -35,26 +35,27 @@ const EXT_MAP: Record<string, string> = {
  * @returns 上传处理结果，成功时返回头像 URL
  */
 export const POST = kit.handler(async ({ request, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   if (!locals.accessToken) {
-    return kit.response.unauthorized(m.common_error())
+    return kit.response.unauthorized(m.common_error({}, { locale }))
   }
   const userResult = await iam.user.getCurrentUser(locals.accessToken)
   if (!userResult.success) {
-    return kit.response.unauthorized(m.common_error())
+    return kit.response.unauthorized(m.common_error({}, { locale }))
   }
 
   const formData = await request.formData()
   const file = formData.get('file')
   if (!(file instanceof File)) {
-    return kit.response.badRequest(m.api_common_required_fields())
+    return kit.response.badRequest(m.api_common_required_fields({}, { locale }))
   }
 
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    return kit.response.badRequest(m.api_auth_avatar_invalid_type())
+    return kit.response.badRequest(m.api_auth_avatar_invalid_type({}, { locale }))
   }
 
   if (file.size > MAX_AVATAR_SIZE) {
-    return kit.response.badRequest(m.api_auth_avatar_size_exceeded())
+    return kit.response.badRequest(m.api_auth_avatar_size_exceeded({}, { locale }))
   }
 
   const userId = userResult.data.id
@@ -66,7 +67,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
   const buffer = Buffer.from(await file.arrayBuffer())
   const putResult = await storage.file.put(key, buffer, { contentType: file.type })
   if (!putResult.success) {
-    return kit.response.internalError(m.common_error())
+    return kit.response.internalError(m.common_error({}, { locale }))
   }
 
   // 仅返回可公开访问的 URL；admin-console 不再提供本地文件转发路由
@@ -74,7 +75,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
   const encodedKey = key.split('/').map(segment => encodeURIComponent(segment)).join('/')
   const avatarUrl = storage.presign.publicUrl(key) ?? `${origin}/api/storage/${encodedKey}`
   if (!avatarUrl) {
-    return kit.response.internalError(m.common_error())
+    return kit.response.internalError(m.common_error({}, { locale }))
   }
 
   return kit.response.ok({ avatar: avatarUrl })

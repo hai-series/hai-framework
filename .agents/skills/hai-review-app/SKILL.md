@@ -70,7 +70,7 @@ description: "审查 hai 应用的路由、权限、i18n、服务层与交互体
 - [ ] 未直接修改 `src/lib/paraglide/` 生成文件
 - [ ] @h-ai/ui 场景组件未传入不必要的翻译 props
 - [ ] 翻译键命名一致（`{page}_{element}`）
-- [ ] zh-CN 和 en-US 两个文件保持同步
+- [ ] zh-CN、en-US 和 ja-JP 三个文件保持同步
 - [ ] 日志消息英文，代码注释中文
 
 ## §7 UI 组件审查

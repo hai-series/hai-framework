@@ -1,0 +1,13 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "cache_notInitialized": "キャッシュが初期化されていません。先にcache.init()を呼び出してください",
+  "cache_operationFailed": "キャッシュ操作に失敗しました: {error}",
+  "cache_redisConnectionFailed": "Redisへの接続に失敗しました: {error}",
+  "cache_initFailed": "キャッシュの初期化に失敗しました: {error}",
+  "cache_unsupportedType": "未対応のキャッシュの種類です: {type}",
+  "cache_valueNotNumber": "値が数値ではありません",
+  "cache_keyNotFound": "キーが見つかりません",
+  "cache_indexOutOfRange": "インデックスが範囲外です",
+  "cache_configError": "キャッシュ設定の検証に失敗しました: {error}",
+  "cache_invalidHashSetInput": "ハッシュのhset入力が無効です。フィールドと値、またはフィールドオブジェクトを渡してください"
+}

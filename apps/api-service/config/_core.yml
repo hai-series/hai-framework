@@ -11,6 +11,7 @@ defaultLocale: ${HAI_CORE_DEFAULTLOCALE:en-US}
 supportedLocales:
   - en-US
   - zh-CN
+  - ja-JP
 
 features:
   apiAccess: ${HAI_CORE_FEATURES_APIACCESS:true}

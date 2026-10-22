@@ -45,7 +45,7 @@ export async function initApi(): Promise<void> {
   if (transport) {
     const cryptoResult = await crypto.init()
     if (!cryptoResult.success)
-      throw new Error(`Crypto initialization failed: ${cryptoResult.error.message}`)
+      throw new Error(cryptoResult.error.message)
   }
 
   try {

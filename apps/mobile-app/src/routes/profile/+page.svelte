@@ -3,7 +3,6 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
-  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
   import {
     currentPermissions,
     currentRoles,
@@ -13,17 +12,17 @@
     refreshCurrentUser,
     updateProfile,
   } from '$lib/stores/auth-store.svelte.js'
-  import { applyTheme, getSavedTheme, setGlobalLocale, toast } from '@h-ai/ui'
+  import { changeLocale, localeStore } from '$lib/stores/locale-store.svelte.js'
+  import { applyTheme, getSavedTheme, toast } from '@h-ai/ui'
   import { onMount } from 'svelte'
 
   const me = $derived(currentUser())
   let currentTheme = $state('light')
-  let currentLanguage = $state('zh-CN')
+  const currentLanguage = $derived(localeStore.current)
   let errors = $state<Record<string, string>>({})
 
   onMount(() => {
     currentTheme = getSavedTheme()
-    currentLanguage = getLocale()
   })
 
   async function handleRefresh(): Promise<void> {
@@ -36,9 +35,7 @@
   }
 
   function handleLanguageChange(language: string): void {
-    setGlobalLocale(language)
-    setLocale(language as 'zh-CN' | 'en-US', { reload: false })
-    currentLanguage = language
+    changeLocale(language)
   }
 
   async function handleSave(data: UserProfileSubmitData): Promise<void> {

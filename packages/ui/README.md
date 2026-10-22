@@ -4,7 +4,7 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
-> 基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），内置 15 个精选 DaisyUI 主题。
+> 基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US / ja-JP），内置 15 个精选 DaisyUI 主题。
 
 ## 安装
 
@@ -185,7 +185,7 @@ components/
 
 标签自动关联内部 UI 控件；已有控件 ID 或原生控件使用 `<FormField for="control-id">`。错误/提示通过 `aria-describedby` 关联，错误控件带 `aria-invalid`，只显示一份字段提示。`label` / `error` / `hint` 支持字符串或延迟翻译函数。
 
-`Input`、`Textarea`、`Select` 和 `PasswordInput` 的原生校验使用内置中英文提示；`validationMessage` 只覆盖失败提示，不让有效输入一直无效。应用通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的校验错误即时更新。`Textarea` 支持 `minlength` / `maxlength`，`Select` 支持 `name`、必填校验和 FormData 序列化。
+`Input`、`Textarea`、`Select` 和 `PasswordInput` 的原生校验使用内置中英日文提示；`validationMessage` 只覆盖失败提示，不让有效输入一直无效。应用通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的校验错误即时更新。`Textarea` 支持 `minlength` / `maxlength`，`Select` 支持 `name`、必填校验和 FormData 序列化。
 
 字段首次失焦后显示前端校验错误，修正输入时即时更新；未访问的字段在提交时统一校验。CRUD 新增/编辑复用该行为，支持自定义校验文案，关闭重开清空校验状态。`Select` 在焦点离开触发器和选项后校验。`PasswordInput.minLength` 同时约束长度并用于强度计算；省略时不限制登录密码长度，强度计算仍以 8 位为基准。
 
@@ -716,7 +716,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 
 @h-ai/ui 采用**组件内置翻译**模式：
 
-- 场景组件（`scenes/`）内置中英文翻译（zh-CN / en-US），开箱即用
+- 场景组件（`scenes/`）内置中英日文翻译（zh-CN / en-US / ja-JP），开箱即用
 - 组件自动响应全局 locale 变化（通过 `@h-ai/core` 同步）
 - 应用层只需处理**页面级文本**，组件内部文本由 @h-ai/ui 统一管理
 - 如需覆盖特定文本，通过 `submitText`、`labels` 等 props 传入
@@ -814,7 +814,7 @@ import {
 
 ## 新手引导与帮助中心
 
-`@h-ai/ui/guide` 提供 `createGuide`、`GuideHost`、`HelpCenter` 和相关类型。无需 init/close；引擎在开始导览时按需加载，浮层复用当前主题。组件内置中英文按钮、进度和错误提示，业务内容使用应用 i18n。
+`@h-ai/ui/guide` 提供 `createGuide`、`GuideHost`、`HelpCenter` 和相关类型。无需 init/close；引擎在开始导览时按需加载，浮层复用当前主题。组件内置中英日文按钮、进度和错误提示，业务内容使用应用 i18n。
 
 同一入口的 `resolveGuideText(text?)` 可解析字符串或 i18n 回调；宿主组件已自动解析文案。
 

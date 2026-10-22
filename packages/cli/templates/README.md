@@ -23,7 +23,7 @@ templates/
 │
 ├── apps/                    # 应用类型专属路由与页面
 │   ├── admin/               # 管理后台
-│   │   ├── messages/        # i18n 消息文件（zh-CN / en-US）
+│   │   ├── messages/        # i18n 消息文件（zh-CN / en-US / ja-JP）
 │   │   └── src/routes/      # +page / +layout .svelte.hbs
 │   ├── website/             # 企业官网
 │   │   ├── messages/

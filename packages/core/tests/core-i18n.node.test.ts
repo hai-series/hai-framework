@@ -23,6 +23,20 @@ describe('core.i18n (node)', () => {
 
     core.i18n.setGlobalLocale('zh')
     expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
+
+    core.i18n.setGlobalLocale('ja')
+    expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
+  })
+
+  it('日语消息支持全局切换、请求覆盖、插值与缺少字典时回退', () => {
+    expect(core.i18n.DEFAULT_LOCALES).toContainEqual({ code: 'ja-JP', label: '日本語' })
+    core.i18n.setGlobalLocale('ja')
+    expect(core.i18n.coreM('core_errorTimeout')).toBe('リクエストがタイムアウトしました')
+    expect(core.i18n.coreM('core_validationMinLength', { params: { field: '名前', min: 3 } }))
+      .toBe('名前は3文字以上で入力してください')
+    expect(core.i18n.coreM('core_errorTimeout', { locale: 'en-US' })).toBe('Request timeout')
+    expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
+    expect(core.i18n.createMessageGetter({ 'zh-CN': { hello: '你好' } })('hello')).toBe('你好')
   })
 
   it('createMessageGetter 应该处理 locale 回退与占位符保留', () => {

@@ -5,9 +5,26 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers'
+import { registerAndLogin, waitForHydration } from './helpers'
 
 test.describe('Settings UI', () => {
+  test('日语切换后页面和组件文案同步并在刷新后保留', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'setja')
+    await page.goto('/admin/settings')
+    await waitForHydration(page)
+    await page.getByRole('button', { name: /区域|Region/ }).click()
+    await page.getByRole('button', { name: /切换语言|Switch language/ }).last().click()
+    await page.getByRole('button', { name: /日本語/ }).click()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ja-JP')
+    await expect(page.locator('h1')).toHaveText('システム設定')
+    await expect(page.getByRole('button', { name: '外観', exact: true })).toBeVisible()
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ja-JP')
+    await expect(page.locator('h1')).toHaveText('システム設定')
+    await page.getByRole('button', { name: '地域', exact: true }).click()
+    await expect(page.getByRole('button', { name: '言語を切り替え' }).last()).toContainText('日本語')
+  })
+
   // ---------------------------------------------------------------------------
   // 页面结构
   // ---------------------------------------------------------------------------

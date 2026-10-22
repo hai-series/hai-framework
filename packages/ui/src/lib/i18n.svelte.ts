@@ -17,7 +17,7 @@ const {
 } = core.i18n
 
 function isLocaleSupported(locale: Locale, supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): boolean {
-  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : locale
   return supportedLocales.some(item => item.code === normalized)
 }
 
@@ -26,7 +26,7 @@ function resolveLocale(
   supportedLocales: LocaleInfo[] = DEFAULT_LOCALES,
   defaultLocale: Locale = DEFAULT_LOCALE,
 ): Locale {
-  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : locale
   return isLocaleSupported(normalized, supportedLocales) ? normalized : defaultLocale
 }
 
@@ -41,9 +41,8 @@ function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): 
   ]
 
   for (const candidate of browserCandidates) {
-    const resolved = resolveLocale(candidate, supportedLocales, DEFAULT_LOCALE)
-    if (isLocaleSupported(resolved, supportedLocales)) {
-      return resolved
+    if (isLocaleSupported(candidate, supportedLocales)) {
+      return resolveLocale(candidate, supportedLocales)
     }
   }
 
@@ -93,7 +92,7 @@ export function createLocaleStore(options: {
     // 1. 优先从 localStorage 读取
     const savedLocale = readStoredValue(persistKey)
     if (savedLocale && isLocaleSupported(savedLocale, supportedLocales)) {
-      initialLocale = savedLocale
+      initialLocale = resolveLocale(savedLocale, supportedLocales, defaultLocale)
     }
     // 2. 其次检测浏览器语言
     else if (detectBrowser) {

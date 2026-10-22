@@ -5,8 +5,9 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { AppBar, Button, ThemeToggle } from '@h-ai/ui'
+  import { AppBar, Button, LanguageSwitch, ThemeToggle } from '@h-ai/ui'
   import { currentUser, hasPermission, logout } from '../lib/auth-store.svelte.js'
+  import { localeStore, desktopM as m } from '../lib/messages.svelte.js'
   import { currentPathname, navigate } from '../lib/router.svelte.js'
 
   interface Props {
@@ -17,12 +18,12 @@
 
   const navItems = $derived.by(() => {
     const items = [
-      { path: '/dashboard', label: 'Dashboard' },
-      { path: '/profile', label: 'Profile' },
+      { path: '/dashboard', label: m('nav_dashboard') },
+      { path: '/profile', label: m('nav_profile') },
     ]
 
     if (hasPermission('user:list')) {
-      items.splice(1, 0, { path: '/users', label: 'Users' })
+      items.splice(1, 0, { path: '/users', label: m('nav_users') })
     }
 
     return items
@@ -35,14 +36,15 @@
 </script>
 
 <div class='flex h-screen flex-col'>
-  <AppBar title='hai Desktop' fixed={false} safeArea={false}>
+  <AppBar title={m('app_title')} fixed={false} safeArea={false}>
     {#snippet trailing()}
       <div class='flex items-center gap-2'>
+        <LanguageSwitch currentLanguage={localeStore.current} onchange={language => localeStore.set(language)} />
         <ThemeToggle />
         {#if currentUser()}
           <span class='text-sm opacity-70'>{currentUser()?.username}</span>
         {/if}
-        <Button variant='ghost' size='sm' onclick={handleLogout}>Logout</Button>
+        <Button variant='ghost' size='sm' onclick={handleLogout}>{m('action_logout')}</Button>
       </div>
     {/snippet}
   </AppBar>

@@ -833,6 +833,7 @@ async function promptCoreConfig(projectName: string, onCancel: () => void): Prom
     choices: [
       { title: '中文 (zh-CN)', value: 'zh-CN' },
       { title: 'English (en-US)', value: 'en-US' },
+      { title: '日本語 (ja-JP)', value: 'ja-JP' },
     ],
     initial: 0,
   }, { onCancel })

@@ -8,19 +8,20 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 type ServMessageKey = keyof typeof messagesZhCN
 
-const SUPPORTED_SERV_LOCALES = ['zh-CN', 'en-US'] as const
+const SUPPORTED_SERV_LOCALES = ['zh-CN', 'en-US', 'ja-JP'] as const
 const DEFAULT_SERV_LOCALE = 'zh-CN'
 
 /**
  * 规范化 serv 请求 locale。
  *
  * 支持：
- * - 完整 locale：`zh-CN` / `en-US`
- * - 简写：`zh` / `en`
+ * - 完整 locale：`zh-CN` / `en-US` / `ja-JP`
+ * - 简写：`zh` / `en` / `ja`
  * - `Accept-Language` 风格值：`en-US,en;q=0.9`
  *
  * 未识别时回退到默认 `zh-CN`。
@@ -37,6 +38,8 @@ export function normalizeServLocale(locale: string | undefined): string {
   const baseLanguage = candidate.split('-')[0]?.toLowerCase()
   if (baseLanguage === 'en')
     return 'en-US'
+  if (baseLanguage === 'ja')
+    return 'ja-JP'
   if (baseLanguage === 'zh')
     return 'zh-CN'
 
@@ -59,7 +62,10 @@ export function normalizeServLocale(locale: string | undefined): string {
  * servM('serv_validationStringMin', { locale: 'en-US', params: { min: 3 } })
  * ```
  */
-export const servM
-  = core.i18n.createMessageGetter<ServMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
+export const servM = core.i18n.createMessageGetter<ServMessageKey>({
+  'zh-CN': messagesZhCN,
+  'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
+})
 
 export type { ServMessageKey }

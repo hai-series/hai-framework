@@ -1,0 +1,15 @@
+{
+  "apiClient_networkError": "ネットワークリクエストに失敗しました",
+  "apiClient_timeout": "リクエストがタイムアウトしました",
+  "apiClient_serverError": "サーバーエラー（{status}）",
+  "apiClient_unauthorized": "認証されていません。再度ログインしてください",
+  "apiClient_forbidden": "アクセスが拒否されました",
+  "apiClient_notFound": "リソースが見つかりません",
+  "apiClient_validationFailed": "リクエストの検証に失敗しました",
+  "apiClient_tokenRefreshFailed": "トークンの更新に失敗しました。再度ログインしてください",
+  "apiClient_notInitialized": "APIクライアントが初期化されていません。先にapiClient.init()を呼び出してください",
+  "apiClient_alreadyInitialized": "APIクライアントは初期化済みです。init()の前にapiClient.close()を呼び出してください",
+  "apiClient_configError": "APIクライアントの設定エラー: {error}",
+  "apiClient_responseValidationFailed": "レスポンスの検証に失敗しました",
+  "apiClient_unknown": "不明なエラー"
+}

@@ -894,11 +894,10 @@ function buildFullstackTemplateContext(
 function resolveI18nContext(moduleConfigs?: ModuleConfigs): FullstackI18nContext {
   const coreLocale = moduleConfigs?.core?.defaultLocale ?? 'zh-CN'
   const baseLocale = moduleConfigs?.fullstack?.i18n?.baseLocale ?? coreLocale
-  const fallbackLocale = baseLocale === 'en-US' ? 'zh-CN' : 'en-US'
   const requested = moduleConfigs?.fullstack?.i18n?.locales
   const locales = requested && requested.length > 0
     ? [...new Set(requested)]
-    : [baseLocale, fallbackLocale]
+    : [...new Set([baseLocale, 'zh-CN', 'en-US', 'ja-JP'])]
   if (!locales.includes(baseLocale)) {
     locales.unshift(baseLocale)
   }
@@ -1052,6 +1051,9 @@ export async function generateFromTemplates(
     const i18nDir = path.join(root, 'i18n')
     if (await fse.pathExists(i18nDir)) {
       await fse.copy(i18nDir, projectPath, { overwrite: true })
+      const settingsPath = path.join(projectPath, 'project.inlang', 'settings.json')
+      const settings = await fse.readJson(settingsPath)
+      await fse.writeJson(settingsPath, { ...settings, baseLocale: context.defaultLocale }, { spaces: 2 })
     }
   }
 

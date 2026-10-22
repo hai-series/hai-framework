@@ -2,6 +2,8 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
+生成项目默认启用 `zh-CN`、`en-US`、`ja-JP`。交互配置可选择日语为默认语言；fullstack 可通过 `fullstack.i18n.locales` 缩小启用语言列表。
+
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md)
 
 从创建、手工/AI first 开发到编译、打包、部署与升级，见[完整使用指南](../../docs/usage/README.md)。本页提供 CLI 命令与模板的详细参考。
@@ -269,7 +271,7 @@ node packages/cli/dist/index.js create ../my-new-project
 
 配置已完备时可在向导中选择“直接部署”，或执行 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`，跳过全部中间件提示、配置写入和资源开通。部署目标缺失时引导填写 SSH/Vercel 参数；SSH 地址、端口、密钥路径、远程目录及 Token 只保存到被 Git 忽略的 `.env.local`，下次自动复用。可编辑其中的 `HAI_DEPLOY_PROVIDER` 更新目标；私钥只填写路径。
 
-失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
+失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用三语消息。中文、英文与日语分别验证未配置、失败和成功路径，无需调用付费服务。
 
 云资源配置消费：Neon 输出 HAI_DB（PostgreSQL JSON），Upstash 输出 HAI_CACHE（Redis rediss URL JSON），R2 输出 HAI_STORAGE（扁平 S3 JSON）。邮件/短信输出 HAI_REACH_PROVIDERS 数组，deployApp 合并两个渠道并保留 YAML 中的消息模板；此覆盖替换原 providers 数组。Core 支持整体对象/数组覆盖，父节点优先于叶子变量，仍执行 Schema 校验；开通结果只进入目标运行环境，不传入构建进程。R2 必须提供已有 S3 accessKeyId/secretAccessKey；Resend 必须提供已验证域名的 from；阿里云必须提供已审核 signName/模板。应用须已有相应\_db/\_cache/\_storage/\_reach.yml 并在启动时加载，网络客户端需要 Node 运行时。
 
@@ -305,7 +307,7 @@ Admin 与 fullstack 门禁还用实际安装的本地 tarball 验证公开类型
 
 ## 生成项目的表单布局
 
-website 联系页与 fullstack 管理界面复用 UI 的 FormLayout/FormField：支持一列/双列、标签独立成行/同行、自动跨列和窄容器回落。用户编辑、资料与密码表单使用同组参数，校验提示由 UI 内置中英文处理；完整配置随生成项目的 hai-ui skill 提供。
+website 联系页与 fullstack 管理界面复用 UI 的 FormLayout/FormField：支持一列/双列、标签独立成行/同行、自动跨列和窄容器回落。用户编辑、资料与密码表单使用同组参数，校验提示由 UI 内置中英日文处理；完整配置随生成项目的 hai-ui skill 提供。
 
 ## License
 

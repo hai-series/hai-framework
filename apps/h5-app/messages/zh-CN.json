@@ -23,7 +23,6 @@
   "discover_error_failed": "识别失败，请稍后重试",
   "discover_theme": "主题",
   "discover_language": "语言",
-
   "home_search_placeholder": "搜索商品",
   "home_banner_new_title": "新品上线",
   "home_banner_new_subtitle": "精选好物等你来",
@@ -47,7 +46,6 @@
   "home_tag_new": "新品",
   "home_tag_hot": "热卖",
   "home_tag_special": "特价",
-
   "cart_title": "购物车",
   "cart_empty": "购物车是空的",
   "cart_go_shopping": "去逛逛",
@@ -56,7 +54,6 @@
   "cart_decrease_qty": "减少数量",
   "cart_increase_qty": "增加数量",
   "cart_remove_item": "移除商品",
-
   "profile_title": "我的",
   "profile_guest_title": "未登录",
   "profile_guest_login_hint": "点击登录享更多权益",
@@ -71,7 +68,6 @@
   "profile_menu_coupon": "优惠券",
   "profile_menu_settings": "设置",
   "profile_logout": "退出登录",
-
   "auth_login_title": "欢迎回来",
   "auth_login_subtitle": "登录您的账户",
   "auth_login_back": "返回",
@@ -79,7 +75,6 @@
   "auth_login_register_link": "立即注册",
   "auth_login_error_generic": "登录失败",
   "auth_login_error_network": "网络错误，请重试",
-
   "auth_register_title": "创建账户",
   "auth_register_subtitle": "注册新账户开始使用",
   "auth_register_back": "返回",
@@ -90,17 +85,24 @@
   "api_upload_invalid_path": "文件路径不合法",
   "api_upload_storage_unavailable": "文件存储未配置",
   "api_upload_file_not_found": "文件不存在",
-
   "action_share": "分享",
   "action_edit_profile": "编辑资料",
   "action_clear_cache": "清除缓存",
   "action_cancel": "取消",
   "action_more": "更多操作",
-
   "swipe_delete": "删除",
   "swipe_collect": "收藏",
-
   "pull_refresh_done": "已刷新",
   "load_no_more": "没有更多了",
-  "load_loading": "加载中..."
+  "load_loading": "加载中...",
+  "vision_storage_unavailable": "文件存储未配置",
+  "vision_ai_unavailable": "AI 服务未配置",
+  "vision_size_exceeded": "图片不能超过 4MB",
+  "vision_type_unsupported": "仅支持 JPG、PNG、WEBP",
+  "vision_upload_failed": "图片上传失败",
+  "vision_analysis_failed": "AI 分析失败",
+  "vision_save_failed": "记录保存失败",
+  "vision_system_prompt": "你是图片识别助手。仅返回严格 JSON，包含字段：summary(字符串)、details(字符串数组)、tags(字符串数组)、confidence(0到1数字)。",
+  "vision_user_prompt": "请识别这张图片并描述关键内容。补充要求：{prompt}",
+  "vision_no_prompt": "无"
 }

@@ -36,7 +36,7 @@
 
 ## 架构边界
 
-- 页面内容与导航文案全部走 i18n，同步中英文 messages。
+- 页面内容与导航文案全部走 i18n，同步中英日文 messages。
 - 表单和 API 输入必须 Zod 校验。
 - UI 组件优先使用 `@h-ai/ui`，不要重复实现已有组件。
 - `+server.ts` 只能导出 handler 和 SvelteKit 允许的配置项；helper 放到 `src/lib/**`。

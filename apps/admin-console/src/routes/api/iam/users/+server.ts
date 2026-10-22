@@ -61,6 +61,7 @@ export const GET = kit.handler(async ({ url, locals }) => {
  * 需要权限：user:api:create
  */
 export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'user:api:create')
 
   const { username, email, password, roles, status } = await kit.validate.body(request, createCreateUserSchema())
@@ -74,7 +75,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
 
   if (!registerResult.success) {
     if (registerResult.error.code === HaiIamError.USER_NOT_FOUND.code || registerResult.error.code === HaiIamError.USER_ALREADY_EXISTS.code) {
-      return kit.response.conflict(m.api_auth_username_or_email_taken())
+      return kit.response.conflict(m.api_auth_username_or_email_taken({}, { locale }))
     }
     return kit.response.badRequest(registerResult.error.message)
   }

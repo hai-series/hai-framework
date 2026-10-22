@@ -21,6 +21,8 @@ description: "使用 @h-ai/api-client 调用 typed API，管理 Token、刷新�
 
 ### 1. 初始化
 
+普通请求与 Token 刷新自动将当前 `core.i18n` 语言发送为 `Accept-Language`；跨端切换语言时同步 core 即可。`headers` 中显式配置的同名头优先。
+
 浏览器默认使用 httpOnly cookie 存储（推荐）：
 
 ```ts

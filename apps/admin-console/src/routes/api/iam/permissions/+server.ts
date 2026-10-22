@@ -29,6 +29,7 @@ export const GET = kit.handler(async ({ url, locals }) => {
  * 需要权限：permission:api:create
  */
 export const POST = kit.handler(async ({ request, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'permission:api:create')
 
   const { name, description, resource, action, type } = await kit.validate.body(request, CreatePermissionSchema)
@@ -39,7 +40,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
   // 检查权限名称是否已存在
   const existing = await getAdminPermissionByCode(code)
   if (existing) {
-    return kit.response.conflict(m.api_iam_permissions_name_exists())
+    return kit.response.conflict(m.api_iam_permissions_name_exists({}, { locale }))
   }
 
   // 创建权限（IAM authz 内部已记录审计日志）

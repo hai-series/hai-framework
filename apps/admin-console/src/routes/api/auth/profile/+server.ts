@@ -5,13 +5,14 @@ import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const GET = kit.handler(async ({ locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   if (!locals.accessToken) {
-    return kit.response.unauthorized(m.common_error())
+    return kit.response.unauthorized(m.common_error({}, { locale }))
   }
 
   const userResult = await iam.user.getCurrentUser(locals.accessToken)
   if (!userResult.success) {
-    return kit.response.unauthorized(m.common_error())
+    return kit.response.unauthorized(m.common_error({}, { locale }))
   }
 
   return kit.response.ok({ user: await toIamProfileResponse(userResult.data) })
@@ -29,8 +30,9 @@ export const GET = kit.handler(async ({ locals }) => {
  * @returns 更新结果，成功返回最新用户信息
  */
 export const PUT = kit.handler(async ({ request, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   if (!locals.accessToken) {
-    return kit.response.unauthorized(m.common_error())
+    return kit.response.unauthorized(m.common_error({}, { locale }))
   }
 
   // session 已由 guard 注入，直接使用 userId
@@ -60,7 +62,7 @@ export const PUT = kit.handler(async ({ request, locals }) => {
   if (Object.keys(updatePatch).length > 0) {
     const updateResult = await iam.user.updateUser(userId, updatePatch)
     if (!updateResult.success) {
-      const normalizedError = normalizeUniqueConstraintError(updateResult.error.message, m.common_error())
+      const normalizedError = normalizeUniqueConstraintError(updateResult.error.message, m.common_error({}, { locale }))
       return kit.response.badRequest(
         normalizedError,
         undefined,
@@ -85,7 +87,7 @@ export const PUT = kit.handler(async ({ request, locals }) => {
   // ── 查询最新用户信息返回 ──
   const updatedResult = await iam.user.getUser(userId)
   if (!updatedResult.success || !updatedResult.data) {
-    return kit.response.internalError(m.common_error())
+    return kit.response.internalError(m.common_error({}, { locale }))
   }
 
   return kit.response.ok({ user: await toIamProfileResponse(updatedResult.data) })

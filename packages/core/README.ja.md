@@ -169,6 +169,8 @@ const level = core.logger.getLevel() // 'debug'
 
 ### 国際化（i18n）
 
+組み込みの言語は `zh-CN`、`en-US`、`ja-JP` です。略記 `ja` は `ja-JP` に正規化され、すべてのモジュールで設定を共有します。
+
 ```typescript
 // 设置全局语言（所有 getMessage 函数自动响应）
 core.i18n.setGlobalLocale('en-US')
@@ -187,7 +189,7 @@ getMessage('welcome', { params: { name: 'Alice' } }) // 'Welcome Alice'
 getMessage('welcome', { locale: 'zh-CN', params: { name: 'Alice' } }) // '欢迎 Alice'
 
 // 常量
-core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }]
+core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }, { code: 'ja-JP', label: '日本語' }]
 core.i18n.DEFAULT_LOCALE // 'zh-CN'
 ```
 

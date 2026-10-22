@@ -10,7 +10,7 @@
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
   import type { FileItem, FileListProps } from '../types.js'
-  import { uiM } from '../../../messages.js'
+  import { getUILocale, uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Button from '../../primitives/Button.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
@@ -56,7 +56,7 @@
   // 格式化日期
   function formatDate(date: Date | string): string {
     const d = typeof date === 'string' ? new Date(date) : date
-    return d.toLocaleDateString('zh-CN', {
+    return d.toLocaleDateString(getUILocale(), {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

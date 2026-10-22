@@ -1,4 +1,5 @@
 import { apiContract } from '@h-ai/api-contract'
+import { core } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { apiClient, HaiApiClientError } from '../src/index.js'
@@ -16,6 +17,31 @@ function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
 describe('apiClient.create', () => {
   afterEach(async () => {
     await apiClient.close()
+    core.i18n.setGlobalLocale('zh-CN')
+  })
+
+  it('请求跟随当前语言，并保留调用方显式指定的语言头', async () => {
+    const fetch = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      success: true,
+      data: { status: 'ok' },
+    }), { headers: { 'content-type': 'application/json' } })))
+    const client = apiClient.create(testContract)
+    try {
+      expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch })).success).toBe(true)
+      core.i18n.setGlobalLocale('ja')
+      expect((await client.health()).success).toBe(true)
+      expect(toRequest(fetch.mock.calls.at(-1)![0]).headers.get('accept-language')).toBe('ja-JP')
+      core.i18n.setGlobalLocale('en-US')
+      expect((await client.health()).success).toBe(true)
+      expect(toRequest(fetch.mock.calls.at(-1)![0]).headers.get('accept-language')).toBe('en-US')
+      await client.close()
+      expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, headers: { 'Accept-Language': 'ja-JP' } })).success).toBe(true)
+      expect((await client.health()).success).toBe(true)
+      expect(toRequest(fetch.mock.calls.at(-1)![0]).headers.get('accept-language')).toBe('ja-JP')
+    }
+    finally {
+      await client.close()
+    }
   })
 
   it('初始状态为未初始化', () => {
@@ -88,6 +114,7 @@ describe('apiClient.create', () => {
   })
 
   it('401 后使用 refreshPath 刷新 token 并重试', async () => {
+    core.i18n.setGlobalLocale('ja-JP')
     const storage = apiClient.tokenStorage.memory()
     await storage.setAccessToken('old-access')
     await storage.setRefreshToken('old-refresh')
@@ -139,6 +166,7 @@ describe('apiClient.create', () => {
     expect(refreshRequest.headers.get('x-hai-token-transport')).toBe('body')
     expect(refreshRequest.headers.get('x-request-client')).toBe('native-app')
     expect(refreshRequest.headers.get('content-type')).toBe('application/json')
+    expect(refreshRequest.headers.get('accept-language')).toBe('ja-JP')
   })
 
   it('apiClient 默认单例绑定 iam/storage/ai contract，并保留 create/tokenStorage 入口', async () => {

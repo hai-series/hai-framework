@@ -202,11 +202,13 @@ const level = core.logger.getLevel() // 'debug'
 
 ```typescript
 import enUS from '../messages/en-US.json'
+import jaJP from '../messages/ja-JP.json'
 import zhCN from '../messages/zh-CN.json'
 
 const m = core.i18n.createMessageGetter({
   'zh-CN': zhCN,
   'en-US': enUS,
+  'ja-JP': jaJP,
 })
 
 // 使用

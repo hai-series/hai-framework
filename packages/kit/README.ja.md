@@ -32,6 +32,8 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 - A2A 統合：既定の検出パスは `/.well-known/agent-card.json`。`authenticate` 設定時は null/undefined が 401 となり、認証未設定時のみ匿名を許可します。API Key の引数は完全な Agent Card の `securitySchemes.apiKey` から取得します。Hook と明示的 A2A ルートは JSON-RPC 解析エラー・SSE キャンセル時の解放処理を共有します。
 - 2 種類のビルドモード（`createAdapter()`）
 
+`sequence` は SvelteKit の resolve オプションを保持します。ページ変換は内側から外側へ実行し、preload とシリアライズ対象ヘッダーのフィルターは最初の設定を優先するため、i18n の HTML 言語属性が正しく置換されます。
+
 ## 依存関係
 
 - `@h-ai/iam`：A2A 用の認証・認可（任意）。A2A 機能を使う前に初期化。

@@ -17,10 +17,10 @@ logging:
 
 defaultLocale: {{defaultLocale}}
 supportedLocales:
-{{#if_eq defaultLocale 'en-US'}}  - en-US
-  - zh-CN
-{{else}}  - zh-CN
-  - en-US
+  - {{defaultLocale}}
+{{#if_eq defaultLocale 'zh-CN'}}{{else}}  - zh-CN
+{{/if_eq}}{{#if_eq defaultLocale 'en-US'}}{{else}}  - en-US
+{{/if_eq}}{{#if_eq defaultLocale 'ja-JP'}}{{else}}  - ja-JP
 {{/if_eq}}
 
 features:

@@ -6,14 +6,14 @@
   import { closeApi, initApi } from '$lib/api'
   import { initCapacitor } from '$lib/capacitor'
   import * as m from '$lib/paraglide/messages.js'
-  import { getLocale } from '$lib/paraglide/runtime.js'
   import {
     hasPermission,
     isAuthenticated,
     isInitialized,
     refreshCurrentUser,
   } from '$lib/stores/auth-store.svelte.js'
-  import { applyTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
+  import { changeLocale, localeStore } from '$lib/stores/locale-store.svelte.js'
+  import { applyTheme, getSavedTheme } from '@h-ai/ui'
   import { onMount } from 'svelte'
   import '../app.css'
 
@@ -32,6 +32,8 @@
   }
 
   const navItems = $derived.by(() => {
+    // Paraglide 文案通过共享语言状态触发重新求值。
+    void localeStore.current
     const items = [
       { id: 'dashboard', label: m.nav_dashboard(), iconClass: 'icon-[tabler--layout-dashboard]' },
       { id: 'profile', label: m.nav_profile(), iconClass: 'icon-[tabler--user]' },
@@ -66,8 +68,7 @@
     try {
       const theme = getSavedTheme()
       applyTheme(theme, false)
-      const language = getLocale()
-      setGlobalLocale(language)
+      changeLocale(localeStore.current)
 
       await initCapacitor()
       await initApi()
@@ -87,6 +88,11 @@
     return () => {
       void closeApi()
     }
+  })
+
+  $effect(() => {
+    if (browser)
+      document.documentElement.lang = localeStore.current
   })
 
   $effect(() => {
@@ -110,47 +116,49 @@
   })
 </script>
 
-{#if booting}
-  <div class='hai-mobile-viewport'>
-    <div class='hai-mobile-shell max-w-lg'>
-      <div class='flex min-h-screen items-center justify-center'>
-        <span class='loading loading-spinner loading-lg'></span>
+{#key localeStore.current}
+  {#if booting}
+    <div class='hai-mobile-viewport'>
+      <div class='hai-mobile-shell max-w-lg'>
+        <div class='flex min-h-screen items-center justify-center'>
+          <span class='loading loading-spinner loading-lg'></span>
+        </div>
       </div>
     </div>
-  </div>
-{:else if bootError}
-  <div class='hai-mobile-viewport'>
-    <div class='hai-mobile-shell max-w-lg'>
-      <div class='flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center'>
-        <span class='icon-[tabler--alert-triangle] text-error text-4xl'></span>
-        <h1 class='text-lg font-bold'>{m.boot_failed_title()}</h1>
-        <p class='text-base-content/60 text-sm'>{bootError}</p>
-        <Button variant='primary' size='sm' onclick={() => location.reload()}>{m.common_retry()}</Button>
+  {:else if bootError}
+    <div class='hai-mobile-viewport'>
+      <div class='hai-mobile-shell max-w-lg'>
+        <div class='flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center'>
+          <span class='icon-[tabler--alert-triangle] text-error text-4xl'></span>
+          <h1 class='text-lg font-bold'>{m.boot_failed_title()}</h1>
+          <p class='text-base-content/60 text-sm'>{bootError}</p>
+          <Button variant='primary' size='sm' onclick={() => location.reload()}>{m.common_retry()}</Button>
+        </div>
       </div>
     </div>
-  </div>
-{:else if isAuthPage}
-  {@render children()}
-{:else}
-  <div class='hai-mobile-viewport'>
-    <div class='hai-mobile-shell max-w-lg'>
-      <AppBar title={m.app_title()} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8' />
+  {:else if isAuthPage}
+    {@render children()}
+  {:else}
+    <div class='hai-mobile-viewport'>
+      <div class='hai-mobile-shell max-w-lg'>
+        <AppBar title={m.app_title()} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8' />
 
-      <main class='hai-mobile-main'>
-        {@render children()}
-      </main>
+        <main class='hai-mobile-main'>
+          {@render children()}
+        </main>
 
-      <BottomNav
-        items={navItems}
-        active={activeTab}
-        onchange={handleTabChange}
-        safeArea
-        centered
-        maxWidth='lg'
-        class='border-base-content/8 shadow-[0_-12px_32px_rgba(15,23,42,0.08)]'
-      />
+        <BottomNav
+          items={navItems}
+          active={activeTab}
+          onchange={handleTabChange}
+          safeArea
+          centered
+          maxWidth='lg'
+          class='border-base-content/8 shadow-[0_-12px_32px_rgba(15,23,42,0.08)]'
+        />
+      </div>
     </div>
-  </div>
-{/if}
+  {/if}
+{/key}
 
 <ToastContainer />
