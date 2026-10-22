@@ -67,7 +67,7 @@
 
 <div class='min-h-screen flex flex-col'>
   <header class='sticky top-0 z-50 border-b border-base-200/80 bg-base-100/90 backdrop-blur'>
-    <div class='navbar mx-auto max-w-7xl px-4 lg:px-8'>
+    <div class='navbar mx-auto w-full max-w-[120rem] px-4 lg:px-8'>
       <div class='flex-1'>
         <a href={resolve('/', {})} class='text-lg lg:text-xl font-semibold tracking-wide'>
           {m.brand()}
@@ -125,7 +125,7 @@
   </main>
 
   <footer class='bg-neutral text-neutral-content'>
-    <div class='footer md:footer-horizontal mx-auto max-w-7xl p-10 md:justify-between gap-8'>
+    <div class='footer md:footer-horizontal mx-auto w-full max-w-[120rem] p-10 md:justify-between gap-8'>
       <nav class='gap-2'>
         <h6 class='footer-title'>{m.footer_about()}</h6>
         <a href={resolve('/about', {})} class='link link-hover'>{m.nav_about()}</a>

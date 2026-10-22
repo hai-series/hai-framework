@@ -34,7 +34,7 @@
   {#if menuOpen}
     <BareButton class="fixed inset-0 z-30 bg-black/30 lg:hidden" ariaLabel={m.close_menu()} onclick={() => { menuOpen = false }} />
   {/if}
-  <aside class="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-base-content/8 bg-base-100 transition-transform duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 {menuOpen ? 'translate-x-0' : '-translate-x-full'}">
+  <aside class="fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-base-content/8 bg-base-100 transition-transform duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 {menuOpen ? 'translate-x-0' : '-translate-x-full'}">
     <div class="flex h-16 items-center gap-3 border-b border-base-content/8 px-5">
       <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-content"><span class="icon-[tabler--hexagon-letter-h] size-5"></span></span>
       <span class="truncate text-sm font-semibold" data-testid="app-name">{store.info?.name}</span>
@@ -66,7 +66,7 @@
         <Button variant="ghost" size="sm" loading={store.saving} onclick={() => void store.logout()} data-testid="logout">{m.logout()}</Button>
       </div>
     </header>
-    <main class="mx-auto w-full max-w-7xl flex-1 p-4 pb-8 sm:p-6 lg:p-8" data-guide="admin-content">{@render children()}</main>
+    <main class="w-full min-w-0 flex-1 p-4 pb-8 sm:p-6 lg:p-8" data-guide="admin-content">{@render children()}</main>
     <footer class="border-t border-base-content/8 px-6 py-3 text-center text-xs text-base-content/35">{store.info?.name} · v{store.info?.version}</footer>
   </div>
 </div>

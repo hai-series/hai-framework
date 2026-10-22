@@ -40,8 +40,8 @@
 </svelte:head>
 
 <PullRefresh onrefresh={handleRefresh}>
-  <div class='space-y-4 p-4 pb-6'>
-    <section class='bg-primary text-primary-content rounded-2xl p-5 shadow-sm'>
+  <div class='grid gap-4 p-4 pb-6 lg:grid-cols-2'>
+    <section class='lg:col-span-2 bg-primary text-primary-content rounded-2xl p-5 shadow-sm'>
       <div class='flex items-start justify-between gap-4'>
         <div>
           <p class='text-sm opacity-75'>{m.dashboard_welcome_prefix()}</p>
@@ -52,7 +52,7 @@
       </div>
     </section>
 
-    <div class='grid grid-cols-2 gap-3'>
+    <div class='grid grid-cols-2 gap-3 lg:col-span-2'>
       <Card padding='sm' shadow='sm'>
         <div class='flex flex-col gap-2'>
           <span class='icon-[tabler--shield-lock] text-primary text-2xl'></span>

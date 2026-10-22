@@ -23,6 +23,16 @@ test('home page renders from browser', async ({ page }) => {
   await expect(page.locator('main, section').first()).toBeVisible()
   await expect(page.locator('header').first()).toBeVisible()
   await expect(page.locator('footer').first()).toBeAttached()
+  // 大屏使用可用空间，窄屏由组件内部滚动，不能撑宽整个页面。
+  for (const width of [390, 1440, 1920, 2560, 3840]) {
+    await page.setViewportSize({ width, height: 960 })
+    const availableWidth = await page.evaluate(() => document.documentElement.clientWidth)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const shell = page.locator('.hai-mobile-shell')
+    if (await shell.count())
+      expect((await shell.boundingBox())!.width).toBeGreaterThan(availableWidth - 2)
+  }
+  await page.setViewportSize({ width: 390, height: 844 })
 {{#if_eq appType 'h5'}}
   // 在手机宽度验证导航真正切换路由，避免样式失效但首页渲染测试仍通过。
   const nav = page.locator('nav')

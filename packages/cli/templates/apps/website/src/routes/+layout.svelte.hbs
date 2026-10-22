@@ -49,7 +49,7 @@
 </svelte:head>
 
 <div class='min-h-screen flex flex-col'>
-  <header class='navbar bg-base-100 shadow-sm'>
+  <header class='navbar flex-wrap bg-base-100 shadow-sm'>
     <div class='flex-1'>
 {{#if hasI18n}}
       <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>{page.data.appConfig.name}</a>
@@ -57,8 +57,8 @@
       <a href={resolve('/', {})} class='btn btn-ghost text-xl font-black tracking-tight'>{page.data.appConfig.name}</a>
 {{/if}}
     </div>
-    <nav class='flex-none'>
-      <ul class='menu menu-horizontal px-1'>
+    <nav class='w-full flex-none sm:w-auto'>
+      <ul class='menu menu-horizontal flex-wrap px-1'>
         {#each navItems as item (item.path)}
           <li><a href={resolve(item.path, {})}>{item.label}</a></li>
         {/each}

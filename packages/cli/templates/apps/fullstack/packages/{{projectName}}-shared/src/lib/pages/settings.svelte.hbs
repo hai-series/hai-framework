@@ -14,13 +14,13 @@
   const themeOptions = AVAILABLE_THEMES.map(theme => ({ value: theme, label: getThemeInfo(theme)?.name ?? theme }))
 </script>
 
-<section class='mx-auto w-full max-w-4xl space-y-6' data-testid='settings-page'>
-  <div>
+<section class='grid w-full min-w-0 gap-6 xl:grid-cols-2' data-testid='settings-page'>
+  <div class='xl:col-span-2'>
     <h1 class='text-xl font-semibold tracking-tight'>{m.settings_title()}</h1>
     <p class='mt-1 text-sm text-base-content/50'>{m.settings_description()}</p>
   </div>
   {#if store.user}
-    <Card title={m.profile_title()} bordered shadow={false} data-guide='admin-profile-form'>
+    <Card class='xl:row-span-2' title={m.profile_title()} bordered shadow={false} data-guide='admin-profile-form'>
       <div class='mb-5 flex flex-wrap items-center gap-3 border-b border-base-content/8 pb-4'>
         <p class='min-w-0 break-all text-sm text-base-content/55'>@{store.user.username}</p>
         <Badge size='sm' variant='ghost'>{store.isAdmin ? m.role_admin() : m.role_user()}</Badge>

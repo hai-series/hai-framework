@@ -61,14 +61,14 @@
 </svelte:head>
 
 <div class='hai-mobile-viewport'>
-  <div class='hai-mobile-shell max-w-lg'>
+  <div class='hai-mobile-shell min-w-0'>
     <AppBar title={page.data.appConfig.name} safeArea fixed={false} />
     <main class='hai-mobile-main'>{@render children()}</main>
     <footer class='border-t border-base-300 bg-base-100 p-2 text-center text-xs text-base-content/60'>
       {page.data.appConfig.name} · {page.data.appConfig.version} · {page.data.appConfig.env}
     </footer>
     {#if !isAuthPage}
-      <BottomNav items={navItems} active={activeNav} onchange={handleNavigation} centered maxWidth='lg' safeArea />
+      <BottomNav items={navItems} active={activeNav} onchange={handleNavigation} centered maxWidth='none' safeArea />
     {/if}
   </div>
 </div>

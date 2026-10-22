@@ -93,7 +93,7 @@
 </svelte:head>
 
 <section class='py-10 px-4 lg:px-8'>
-  <div class='mx-auto max-w-7xl space-y-5'>
+  <div class='w-full min-w-0 space-y-5'>
     <div class='flex items-center justify-between gap-3'>
       <PageHeader title={m.nav_partner_admin()} description='{m.admin_records_total({ total: String(data.total) })}，{m.admin_records_page_info({ page: String(data.page), totalPages: String(totalPages) })}' />
       <Button variant='default' size='sm' outline onclick={handleLogout}>

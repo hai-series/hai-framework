@@ -112,7 +112,7 @@
 
 {#if booting}
   <div class='hai-mobile-viewport'>
-    <div class='hai-mobile-shell max-w-lg'>
+    <div class='hai-mobile-shell min-w-0'>
       <div class='flex min-h-screen items-center justify-center'>
         <span class='loading loading-spinner loading-lg'></span>
       </div>
@@ -120,7 +120,7 @@
   </div>
 {:else if bootError}
   <div class='hai-mobile-viewport'>
-    <div class='hai-mobile-shell max-w-lg'>
+    <div class='hai-mobile-shell min-w-0'>
       <div class='flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center'>
         <span class='icon-[tabler--alert-triangle] text-error text-4xl'></span>
         <h1 class='text-lg font-bold'>{m.boot_failed_title()}</h1>
@@ -133,7 +133,7 @@
   {@render children()}
 {:else}
   <div class='hai-mobile-viewport'>
-    <div class='hai-mobile-shell max-w-lg'>
+    <div class='hai-mobile-shell min-w-0'>
       <AppBar title={m.app_title()} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8' />
 
       <main class='hai-mobile-main'>
@@ -146,7 +146,7 @@
         onchange={handleTabChange}
         safeArea
         centered
-        maxWidth='lg'
+        maxWidth='none'
         class='border-base-content/8 shadow-[0_-12px_32px_rgba(15,23,42,0.08)]'
       />
     </div>

@@ -70,7 +70,7 @@
   <!-- 轮播区 -->
   <div class='carousel w-full h-40 px-3 pt-2 gap-3'>
     {#each banners as banner, i (banner.id)}
-      <div id='slide{i}' class='carousel-item w-[90%] first:ml-0'>
+      <div id='slide{i}' class='carousel-item w-[90%] first:ml-0 md:w-[calc((100%-1.5rem)/2)] xl:w-[calc((100%-3rem)/3)]'>
         <div class='bg-linear-to-br {banner.color} w-full flex flex-col items-start justify-center text-white rounded-2xl px-6 shadow-md'>
           <h2 class='text-xl font-bold'>{banner.title()}</h2>
           <p class='text-sm opacity-80 mt-1'>{banner.subtitle()}</p>
@@ -80,7 +80,7 @@
   </div>
 
   <!-- 功能入口 -->
-  <div class='grid grid-cols-4 gap-1 px-4 py-3'>
+  <div class='grid grid-cols-4 gap-1 lg:grid-cols-8 px-4 py-3'>
     {#each quickEntries as entry (entry.id)}
       <button class='flex flex-col items-center gap-1.5 py-2.5 rounded-xl active:bg-base-200/60 transition-colors'>
         <span class='w-10 h-10 rounded-full bg-base-200/70 flex items-center justify-center'>
@@ -103,7 +103,7 @@
       loadingText={m.load_loading()}
       noMoreText={m.load_no_more()}
     >
-      <div class='grid grid-cols-2 gap-3'>
+      <div class='grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6'>
         {#each recommendations as item (item.id)}
           <Card padding='none' shadow='sm' class='overflow-hidden'>
             <div class='flex items-center justify-center h-28 bg-base-200/50 text-4xl'>
