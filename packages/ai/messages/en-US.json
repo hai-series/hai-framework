@@ -106,6 +106,7 @@
   "ai_a2aListMessagesFailed": "A2A message listing failed. Please try again later",
   "ai_a2aMessageStoreFailed": "A2A message persistence failed. Reconcile the task outcome",
   "ai_contextMemoryTasksFailed": "{count} background memory extraction tasks failed and may have partially completed. Reconcile their effects; no automatic retry was performed",
+  "ai_storeIndexMismatch": "AI store index definition does not match. Reconcile the database schema before retrying",
   "ai_sharedBackendRequired": "Production AI requires shared state; initialize shared database/vector services or inject a trusted provider declaring stateScope shared.",
   "ai_a2aStateUnavailable": "A2A shared state unavailable",
   "ai_a2aExecutionLost": "Execution ownership lost",

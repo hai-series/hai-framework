@@ -6,6 +6,8 @@
 
 开发/显式测试未初始化 reldb/vecdb 时，`ai.init()` 使用临时 Store；两者就绪时使用 DB Provider。生产标记 `NODE_ENV` 或 `HAI_CORE_ENV=production` 要求 `stateScope: 'shared'`，内置实现须为 PostgreSQL/MySQL + 网络 vecdb；本地后端会初始化失败。自定义 Provider 必须兑现存储时钟、版本 CAS 与最终截止条件。
 
+MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
+
 - `ai.tools`：无需 `ai.init()`；无外部依赖。
 - `ai.stream`：无需 `ai.init()`；无外部依赖。
 - `ai.llm`：需要 `ai.init()`；依赖 OpenAI 兼容 LLM 配置。

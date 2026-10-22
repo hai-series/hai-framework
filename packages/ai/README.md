@@ -63,30 +63,44 @@ import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-await reldb.init({ type: 'sqlite', database: './ai.db' })
-await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success) {
-  // 按 init.error.code 处理配置/依赖错误
+// 开发/测试使用本地后端；生产改为共享 PostgreSQL/MySQL 与网络 vecdb。
+try {
+  const database = await reldb.init({ type: 'sqlite', database: './ai.db' })
+  if (!database.success)
+    return database
+  try {
+    const vectors = await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
+    if (!vectors.success)
+      return vectors
+    try {
+      const init = await ai.init({
+        llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY },
+      })
+      if (!init.success)
+        return init
+      const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好！' }] })
+      if (!result.success)
+        return result
+      const reply = result.data.choices[0]?.message.content ?? ''
+    }
+    finally {
+      await ai.close()
+    }
+  }
+  finally {
+    const closed = await vecdb.close()
+    if (!closed.success)
+      throw new Error(closed.error.message)
+  }
 }
-
-const result = await ai.llm.chat({
-  messages: [{ role: 'user', content: '你好！' }],
-})
-if (result.success) {
-  const reply = result.data.choices[0]?.message.content ?? ''
+finally {
+  const closed = await reldb.close()
+  if (!closed.success)
+    throw new Error(closed.error.message)
 }
-
-await ai.close()
-await vecdb.close()
-await reldb.close()
 ```
+
+MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
 #### 自定义 StoreProvider
 

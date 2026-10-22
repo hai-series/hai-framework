@@ -15,6 +15,7 @@ import type { KnowledgeCollectionManifest, KnowledgeDocumentManifest } from './a
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
+import { aiM } from '../../ai-i18n.js'
 import { createDbKnowledgeStore } from './ai-store-knowledge-db.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'store-provider-db' })
@@ -36,6 +37,38 @@ function dataTimestamp<T>(data: T, field: 'createdAt' | 'updatedAt', fallback: n
 
   const value = (data as Record<string, unknown>)[field]
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+/**
+ * MySQL 单个索引列的真实结构；完整列、顺序、可见性和非唯一 BTREE 都必须匹配。
+ * @example `{ column_name: 'object_id', seq_in_index: 1, non_unique: 1, sub_part: null, index_type: 'BTREE', collation: 'A', is_visible: 'YES', expression: null }`
+ */
+interface MysqlIndexColumn {
+  column_name: string | null
+  seq_in_index: number | string
+  non_unique: number | string
+  sub_part: number | null
+  index_type: string
+  collation: string | null
+  is_visible: string
+  expression: string | null
+}
+
+/**
+ * 只识别驱动明确的重复索引错误；沿 HaiResult/Error cause 查找，不根据错误文案猜测。
+ * @example `isMysqlDuplicateIndex(Object.assign(new Error(), { code: 'ER_DUP_KEYNAME', errno: 1061 })) // true`
+ */
+function isMysqlDuplicateIndex(error: unknown): boolean {
+  const seen = new Set<object>()
+  let current = error
+  while (current !== null && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current)
+    const details = current as Record<string, unknown>
+    if (details.code === 'ER_DUP_KEYNAME' && details.errno === 1061)
+      return true
+    current = details.cause
+  }
+  return false
 }
 
 // ─── ReldbAIRelStore 实现 ───
@@ -110,16 +143,38 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_data_gin ON ${t} USING GIN (data jsonb_path_ops)`)
   }
 
-  /** MySQL 不支持 CREATE INDEX IF NOT EXISTS，先在当前数据库确认索引是否存在。 */
+  /**
+   * MySQL 并发首次创建只接受明确的重复名称错误，并重读结构，权限/DDL/不匹配仍失败。
+   * @example `await this.createIndex('idx_hai_ai_context_object_id', 'object_id')`
+   */
   private async createIndex(name: string, columns: string): Promise<void> {
     if (this.dbType === 'mysql') {
-      const existing = await this.sql.get(
-        'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+      const read = async () => requireSqlSuccess(await this.sql.query<MysqlIndexColumn>(
+        'SELECT COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq_in_index, NON_UNIQUE AS non_unique, SUB_PART AS sub_part, INDEX_TYPE AS index_type, COLLATION AS collation, IS_VISIBLE AS is_visible, EXPRESSION AS expression FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX',
         [this.table, name],
-      )
-      if (existing.success && existing.data)
+      )).data
+      const expected = columns.split(',').map(column => column.trim())
+      const matches = (definition: MysqlIndexColumn[]) => definition.length === expected.length
+        && definition.every((column, index) => column.column_name === expected[index]
+          && Number(column.seq_in_index) === index + 1 && Number(column.non_unique) === 1
+          && column.sub_part === null && column.index_type === 'BTREE' && column.collation === 'A'
+          && column.is_visible === 'YES' && column.expression === null)
+      const existing = await read()
+      if (existing.length > 0) {
+        if (!matches(existing))
+          throw new Error(aiM('ai_storeIndexMismatch'))
         return
-      await this.sql.execute(`CREATE INDEX ${name} ON ${this.table}(${columns})`)
+      }
+      try {
+        await this.sql.execute(`CREATE INDEX ${name} ON ${this.table}(${columns})`)
+      }
+      catch (error) {
+        if (!isMysqlDuplicateIndex(error))
+          throw error
+        // 两个节点都读到缺失时，败者只能在实际结构与预期一致后继续；不能吞掉其它失败。
+        if (!matches(await read()))
+          throw new Error(aiM('ai_storeIndexMismatch'), { cause: error })
+      }
       return
     }
     await this.sql.execute(`CREATE INDEX IF NOT EXISTS ${name} ON ${this.table}(${columns})`)
@@ -566,6 +621,15 @@ export interface DbStoreProviderDeps {
  *
  * 基于 reldb + vecdb 的 AIStoreProvider 实现。
  * reldb 用于关系数据存储，vecdb 用于向量存储。
+ * MySQL 首次建索引只在明确的 1061 重复名称后重查并接受匹配结构；其它 DDL 失败向上传播。
+ * initialize 等待全部已启动 DDL 结束，失败不回滚 MySQL 已创建结构，也不关闭调用方的依赖。
+ * @example
+ * ```ts
+ * const provider = createDbStoreProvider({ sql: reldb.sql, jsonOps: reldb.json, dbType: 'mysql', vecdb })
+ * provider.createRelStore('hai_ai_example', { hasObjectId: true })
+ * await provider.initialize()
+ * await provider.close()
+ * ```
  */
 export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvider {
   const { sql, jsonOps, vecdb: vecdbDep } = deps
@@ -613,7 +677,12 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
 
     async initialize(): Promise<void> {
       if (relStores.length > 0) {
-        await Promise.all(relStores.map(s => s.createTable()))
+        // 等待所有已启动的 DDL 结束，避免首个失败触发关闭后仍有建表操作在途。
+        const results = await Promise.allSettled(relStores.map(s => s.createTable()))
+        for (const result of results) {
+          if (result.status === 'rejected')
+            throw result.reason
+        }
         logger.debug('DB store provider initialized', { tableCount: relStores.length })
       }
     },

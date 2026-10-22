@@ -63,30 +63,44 @@ import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-await reldb.init({ type: 'sqlite', database: './ai.db' })
-await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success) {
-  // 按 init.error.code 处理配置/依赖错误
+// 开发/测试使用本地后端；生产改为共享 PostgreSQL/MySQL 与网络 vecdb。
+try {
+  const database = await reldb.init({ type: 'sqlite', database: './ai.db' })
+  if (!database.success)
+    return database
+  try {
+    const vectors = await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
+    if (!vectors.success)
+      return vectors
+    try {
+      const init = await ai.init({
+        llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY },
+      })
+      if (!init.success)
+        return init
+      const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好！' }] })
+      if (!result.success)
+        return result
+      const reply = result.data.choices[0]?.message.content ?? ''
+    }
+    finally {
+      await ai.close()
+    }
+  }
+  finally {
+    const closed = await vecdb.close()
+    if (!closed.success)
+      throw new Error(closed.error.message)
+  }
 }
-
-const result = await ai.llm.chat({
-  messages: [{ role: 'user', content: '你好！' }],
-})
-if (result.success) {
-  const reply = result.data.choices[0]?.message.content ?? ''
+finally {
+  const closed = await reldb.close()
+  if (!closed.success)
+    throw new Error(closed.error.message)
 }
-
-await ai.close()
-await vecdb.close()
-await reldb.close()
 ```
+
+MySQL の初回初期化は複数ノードで実行できます。mysql2 の明示的な ER_DUP_KEYNAME/1061 だけを受け入れ、実際の列・順序、非一意・列全体・昇順・可視 BTREE・式なしを再確認します。同名でも構造が異なれば失敗します。テーブル作成と INDEX 権限が必要で、メタデータ取得・権限・その他 DDL の失敗は ai.init の CONFIGURATION_ERROR になります。開始した全 DDL の終了を待ってから返します。MySQL DDL はロールバックされないため、権限や構造を修正してから再試行してください。各初期化結果を確認し、失敗時は業務リクエストを受けず、AI・vecdb・reldb の逆順で終了します。
 
 #### 独自 StoreProvider
 

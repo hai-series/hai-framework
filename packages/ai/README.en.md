@@ -63,30 +63,44 @@ import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-await reldb.init({ type: 'sqlite', database: './ai.db' })
-await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success) {
-  // 按 init.error.code 处理配置/依赖错误
+// 开发/测试使用本地后端；生产改为共享 PostgreSQL/MySQL 与网络 vecdb。
+try {
+  const database = await reldb.init({ type: 'sqlite', database: './ai.db' })
+  if (!database.success)
+    return database
+  try {
+    const vectors = await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
+    if (!vectors.success)
+      return vectors
+    try {
+      const init = await ai.init({
+        llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY },
+      })
+      if (!init.success)
+        return init
+      const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好！' }] })
+      if (!result.success)
+        return result
+      const reply = result.data.choices[0]?.message.content ?? ''
+    }
+    finally {
+      await ai.close()
+    }
+  }
+  finally {
+    const closed = await vecdb.close()
+    if (!closed.success)
+      throw new Error(closed.error.message)
+  }
 }
-
-const result = await ai.llm.chat({
-  messages: [{ role: 'user', content: '你好！' }],
-})
-if (result.success) {
-  const reply = result.data.choices[0]?.message.content ?? ''
+finally {
+  const closed = await reldb.close()
+  if (!closed.success)
+    throw new Error(closed.error.message)
 }
-
-await ai.close()
-await vecdb.close()
-await reldb.close()
 ```
+
+Concurrent MySQL first startup accepts only the explicit mysql2 ER_DUP_KEYNAME/1061 error, then verifies the actual columns and order, non-unique full columns, ascending visible BTREE, and no expressions. An existing index with the wrong definition fails. The account needs table creation and INDEX privileges; metadata, permission, or other DDL failures return CONFIGURATION_ERROR from ai.init. All started DDL settles before return. MySQL DDL is not rolled back: repair privileges/schema before retrying partial initialization. Check each initialization result, reject business traffic on failure, and close AI, vecdb, and reldb in reverse order.
 
 #### Custom StoreProvider
 

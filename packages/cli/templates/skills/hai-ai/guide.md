@@ -34,10 +34,39 @@ await ai.close()
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-await reldb.init(core.config.get('db'))
-await vecdb.init(core.config.get('vecdb'))
-await ai.init(core.config.get('ai'))
+// 应用生命周期在 finally 中释放依赖，初始化失败不继续接收业务请求。
+try {
+  const database = await reldb.init(core.config.get('db'))
+  if (!database.success)
+    return database
+  try {
+    const vectors = await vecdb.init(core.config.get('vecdb'))
+    if (!vectors.success)
+      return vectors
+    try {
+      const init = await ai.init(core.config.get('ai'))
+      if (!init.success)
+        return init
+      // ... 在此 await 使用 AI 的业务逻辑。
+    }
+    finally {
+      await ai.close()
+    }
+  }
+  finally {
+    const closed = await vecdb.close()
+    if (!closed.success)
+      throw new Error(closed.error.message)
+  }
+}
+finally {
+  const closed = await reldb.close()
+  if (!closed.success)
+    throw new Error(closed.error.message)
+}
 ```
+
+MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
 自定义存储：
 

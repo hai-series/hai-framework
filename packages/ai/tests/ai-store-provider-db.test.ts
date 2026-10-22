@@ -114,22 +114,132 @@ describe('db vector writes propagate failures', () => {
 })
 
 describe('db store provider saveMany', () => {
+  function indexDefinition(columns: string[]) {
+    return columns.map((column_name, index) => ({
+      column_name,
+      seq_in_index: index + 1,
+      non_unique: 1,
+      sub_part: null,
+      index_type: 'BTREE',
+      collation: 'A',
+      is_visible: 'YES',
+      expression: null,
+    }))
+  }
+
   it('mysql 索引创建使用合法语法并跳过已有索引', async () => {
     const calls: ExecuteCall[] = []
     const sql = createMockSql(calls)
-    const get = vi.spyOn(sql, 'get')
+    const query = vi.spyOn(sql, 'query')
     const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
     provider.createRelStore('hai_ai_indexed', { hasObjectId: true, hasSessionId: true, hasStatus: true, hasRefId: true })
     await provider.initialize()
     const indexes = calls.filter(call => call.sql.startsWith('CREATE INDEX'))
     expect(indexes).toHaveLength(5)
     expect(indexes.every(call => !call.sql.includes('IF NOT EXISTS'))).toBe(true)
-    expect(get).toHaveBeenCalledWith(expect.stringContaining('TABLE_SCHEMA = DATABASE()'), ['hai_ai_indexed', 'idx_hai_ai_indexed_object_id'])
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('TABLE_SCHEMA = DATABASE()'), ['hai_ai_indexed', 'idx_hai_ai_indexed_object_id'])
 
     calls.length = 0
-    get.mockResolvedValue(ok({ INDEX_NAME: 'existing' }))
+    for (const columns of [['object_id'], ['session_id'], ['object_id', 'session_id'], ['status'], ['ref_id']])
+      query.mockResolvedValueOnce(ok(indexDefinition(columns)))
     await provider.initialize()
     expect(calls.filter(call => call.sql.startsWith('CREATE INDEX'))).toHaveLength(0)
+  })
+
+  it.each(['throw', 'result'] as const)('并发重复索引的 %s 错误只有在重查结构一致后才接受', async (failure) => {
+    const sql = createMockSql([])
+    const query = vi.spyOn(sql, 'query').mockResolvedValueOnce(ok([])).mockResolvedValueOnce(ok(indexDefinition(['object_id'])))
+    const native = Object.assign(new Error('Duplicate key name'), { code: 'ER_DUP_KEYNAME', errno: 1061 })
+    const execute = vi.spyOn(sql, 'execute').mockResolvedValueOnce(ok({ changes: 0 }))
+    if (failure === 'throw')
+      execute.mockRejectedValueOnce(native)
+    else
+      execute.mockResolvedValueOnce({ success: false, error: { code: 'hai:reldb:002', message: 'DDL failed', cause: native } })
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_index_race', { hasObjectId: true })
+    await expect(provider.initialize()).resolves.toBeUndefined()
+    expect(query).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    { column_name: 'session_id' },
+    { seq_in_index: 2 },
+    { non_unique: 0 },
+    { sub_part: 12 },
+    { index_type: 'HASH' },
+    { collation: 'D' },
+    { is_visible: 'NO' },
+    { expression: 'LOWER(object_id)' },
+  ])('已有同名但结构错误的索引不能当作就绪：%j', async (changed) => {
+    const sql = createMockSql([])
+    vi.spyOn(sql, 'query').mockResolvedValue(ok([{ ...indexDefinition(['object_id'])[0]!, ...changed }]))
+    const execute = vi.spyOn(sql, 'execute')
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_index_bad', { hasObjectId: true })
+    await expect(provider.initialize()).rejects.toThrow()
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([{ columns: [] }, { columns: ['session_id'] }])('重复错误后索引缺失或列不符仍失败：%j', async ({ columns }) => {
+    const sql = createMockSql([])
+    vi.spyOn(sql, 'query').mockResolvedValueOnce(ok([])).mockResolvedValueOnce(ok(indexDefinition(columns)))
+    vi.spyOn(sql, 'execute').mockResolvedValueOnce(ok({ changes: 0 })).mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: 'ER_DUP_KEYNAME', errno: 1061 }))
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_index_missing', { hasObjectId: true })
+    await expect(provider.initialize()).rejects.toThrow()
+  })
+
+  it.each([
+    Object.assign(new Error('permission denied'), { code: 'ER_TABLEACCESS_DENIED_ERROR', errno: 1142 }),
+    Object.assign(new Error('not duplicate'), { code: 'OTHER_ERROR', errno: 1061 }),
+    new Error('Duplicate key name'),
+  ])('权限、未知及只有重复文案的 DDL 错误原样失败', async (failure) => {
+    const sql = createMockSql([])
+    const query = vi.spyOn(sql, 'query')
+    vi.spyOn(sql, 'execute').mockResolvedValueOnce(ok({ changes: 0 })).mockRejectedValueOnce(failure)
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_index_fault', { hasObjectId: true })
+    await expect(provider.initialize()).rejects.toBe(failure)
+    expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it('首次 DDL 失败后仍等待其他在途 DDL 结束，才返回原始错误', async () => {
+    const sql = createMockSql([])
+    const failure = new Error('DDL denied')
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const execute = vi.spyOn(sql, 'execute')
+      .mockRejectedValueOnce(failure)
+      .mockImplementationOnce(async () => {
+        await pending
+        return ok({ changes: 0 })
+      })
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_index_failure')
+    provider.createRelStore('hai_ai_index_pending')
+    let settled = false
+    const initializing = provider.initialize().finally(() => {
+      settled = true
+    })
+    const assertion = expect(initializing).rejects.toBe(failure)
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2))
+    expect(settled).toBe(false)
+    release()
+    await assertion
+    expect(settled).toBe(true)
+  })
+
+  it('元数据读取失败不能当作索引缺失继续创建', async () => {
+    const sql = createMockSql([])
+    const failure = new Error('Metadata unavailable')
+    vi.spyOn(sql, 'query').mockRejectedValueOnce(failure)
+    const execute = vi.spyOn(sql, 'execute')
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'mysql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_index_metadata', { hasObjectId: true })
+    await expect(provider.initialize()).rejects.toBe(failure)
+    expect(execute).toHaveBeenCalledTimes(1)
   })
 
   it('sQL 写入或查询失败不能变成成功、空数组或缺失记录', async () => {

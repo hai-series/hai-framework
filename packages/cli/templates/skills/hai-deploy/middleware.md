@@ -51,6 +51,8 @@
 
 S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，保存到 HAI_DEPLOY_CONTAINER_S3ENGINE（rustfs | minio，默认 rustfs），应用始终写 HAI_STORAGE_TYPE=s3 或 HAI_STORAGE。自定义 AWS S3、OSS、R2 等端点不生成 sidecar。镜像使用与 storage 集成测试一致的 RustFS 官方版本和 MinIO 社区版本；存储桶初始化复用应用镜像里的 S3 SDK，无需额外 mc 镜像，必须幂等且不能吞掉失败。
 
+AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初始化；仅明确重复索引且重查真实结构一致时继续，错误同名索引、权限和其他 DDL 故障必须阻止应用启动。DDL 不回滚，失败后检查初始化结果、逆序清理连接，再修复结构/权限重试，不能删库或吞错视为成功。
+
 ## 连接字段
 
 以下是自定义向导的连接字段；完整可用项、枚举与范围仍以项目 `.env.example` 和公开 Schema 为准。变量前缀为 `HAI_DB`、`HAI_CACHE`、`HAI_STORAGE`、`HAI_VECDB`、`HAI_IAM_LDAP`；Reach 使用实际索引 `HAI_REACH_PROVIDERS_<index>`。camelCase 不拆词，例如 `bindPassword` → `BINDPASSWORD`。
