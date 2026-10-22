@@ -32,9 +32,19 @@ function toReachError(error: unknown): HaiError {
 }
 
 /**
- * 创建 SMTP Provider
+ * 内部SMTP适配器，惰性加载nodemailer；SMTP无持久接收端幂等保证，已开始发送失败进入unknown。
+ * @returns Provider；连接/发送先检查HaiResult，close释放自有传输连接。
  *
- * @returns SMTP Provider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createSmtpProvider()
+ * const { SmtpProviderConfigSchema } = await import('@h-ai/reach')
+ * const config = SmtpProviderConfigSchema.parse({ name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com', user: process.env.HAI_REACH_PROVIDERS_0_USER, pass: process.env.HAI_REACH_PROVIDERS_0_PASS })
+ * const connected = await provider.connect(config)
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try { const connectedNow = provider.isConnected(); const retrySafe = provider.supportsIdempotency }
+ * finally { await provider.close() }
+ * ```
  */
 export function createSmtpProvider(): ReachProvider {
   let transporter: unknown = null

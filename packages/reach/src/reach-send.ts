@@ -34,10 +34,14 @@ const reachNodeId = `reach:${crypto.randomUUID()}`
 // ─── DND（免打扰）检查 ───
 
 /**
- * 解析 HH:mm 时间为当天的分钟数（0~1439）
+ * 把已由DND Schema校验的HH:mm转换为当日分钟，不能直接用于未校验输入。
+ * @param time - 已校验的24小时制文本。
+ * @returns 0–1439分钟。
  *
- * @param time - HH:mm 格式的时间字符串
- * @returns 分钟数
+ * @example 模块内部上下文
+ * ```ts
+ * const minutes = parseTimeToMinutes('22:30')
+ * ```
  */
 function parseTimeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number)
@@ -45,13 +49,15 @@ function parseTimeToMinutes(time: string): number {
 }
 
 /**
- * 检查当前时间是否处于免打扰时段
+ * 内部按节点本地时区判断半开区间DND，支持跨午夜；start=end不拦截，集群须统一时区/时钟。
+ * @param dnd - 已校验免打扰配置。
+ * @param now - 当前时间，测试可注入。
+ * @returns 是否需要执行DND策略，不意味着已入队。
  *
- * 支持跨午夜时段（如 22:00 → 08:00）。
- *
- * @param dnd - DND 配置
- * @param now - 当前时间（默认 new Date()）
- * @returns 是否被 DND 拦截
+ * @example 模块内部上下文
+ * ```ts
+ * const blocked = isDndBlocked({ enabled: true, strategy: 'delay', start: '22:00', end: '08:00' }, new Date(2026, 9, 23, 23, 0))
+ * ```
  */
 export function isDndBlocked(dnd: DndConfig | undefined, now: Date = new Date()): boolean {
   if (!dnd?.enabled) {
@@ -74,11 +80,15 @@ export function isDndBlocked(dnd: DndConfig | undefined, now: Date = new Date())
 }
 
 /**
- * 计算距离 DND 结束还有多少毫秒
+ * 内部计算到下一次DND结束的毫秒数，按本地时区、秒精度调度；不是跨节点数据库时钟。
+ * @param dnd - 已校验配置。
+ * @param now - 当前本地时间。
+ * @returns 下一结束点的延迟毫秒数。
  *
- * @param dnd - DND 配置
- * @param now - 当前时间
- * @returns 毫秒数
+ * @example 模块内部上下文
+ * ```ts
+ * const delay = msUntilDndEnd({ enabled: true, strategy: 'delay', start: '22:00', end: '08:00' }, new Date(2026, 9, 23, 23, 0))
+ * ```
  */
 export function msUntilDndEnd(dnd: DndConfig, now: Date = new Date()): number {
   const endMin = parseTimeToMinutes(dnd.end)
@@ -95,8 +105,19 @@ export function msUntilDndEnd(dnd: DndConfig, now: Date = new Date()): number {
 // ─── 消息预处理 ───
 
 /**
- * 预处理消息：如果指定了模板，渲染模板并填充 subject/body，
- * 同时从模板中推导 Provider 名称。
+ * 内部渲染模板并补全路由/主题/正文；消息显式字段优先，渲染失败原样返回。
+ * @param message - 原消息，不原地修改。
+ * @param templateRegistry - 真实数据库模板注册表。
+ * @returns 补全消息或模板失败。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * async function prepare(message: ReachMessage, registry: ReachTemplateRegistry) {
+ *   const result = await preprocessMessage(message, registry)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export async function preprocessMessage(
   message: ReachMessage,
@@ -125,7 +146,25 @@ export async function preprocessMessage(
 // ─── 发送记录持久化（通过 Repository） ───
 
 /**
- * 保存发送记录并传播数据库的失败结果；是否允许忽略失败由发送场景决定。
+ * 等待持久写入并检查实际changes=1，可靠入队不能由内存状态或未等待的Promise代替。
+ * @param repo - 真实数据库仓库。
+ * @param message - 已完成模板预处理的消息。
+ * @param status - pending可靠队列或sent观察日志。
+ * @param provider - Provider配置名称。
+ * @param messageId - 可选外部消息编号。
+ * @param queueId - 延迟入队时预生成的持久UUID回执。
+ * @param queueConfig - 随消息保存的重试预算与退避策略。
+ * @returns 持久写入HaiResult；调用方按即时/入队语义分别处理失败。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * async function enqueue(repository: SendLogRepository, message: ReachMessage, providerName: string) {
+ *   const queueId = crypto.randomUUID()
+ *   const saved = await saveSendRecord(repository, message, 'pending', providerName, undefined, queueId)
+ *   if (!saved.success) throw new Error(saved.error.message)
+ *   return queueId
+ * }
+ * ```
  */
 async function saveSendRecord(
   repo: SendLogRepository,
@@ -171,10 +210,19 @@ let dndTimer: ReturnType<typeof setTimeout> | null = null
 let schedulerContext: { dndConfig: DndConfig, providers: Map<string, ReachProvider>, repo: SendLogRepository | null } | null = null
 
 /**
- * 启动 DND 恢复定时器
+ * 内部启动本机扫描计时器；业务队列状态由共享数据库持有，本机计时器不决定投递所有权。
+ * DND外立即扫描遗留消息，之后按分钟有界恢复；仅delay策略启用。
+ * @param dndConfig - 已校验DND配置。
+ * @param providers - 当前已连接Provider路由表。
+ * @param repo - 真实持久队列；null不产生可靠入队能力。
  *
- * 在 DND 结束时自动分批 claim pending 状态记录并逐条发送，
- * 并在 flush 完成后重新调度下一个 DND 周期。
+ * @example 模块内部上下文
+ * ```ts
+ * function start(config: DndConfig, providers: Map<string, ReachProvider>, repository: SendLogRepository) {
+ *   startDndScheduler(config, providers, repository)
+ *   // 生命周期结束调用resetSendState，不把停止计时器当作撤销外部投递。
+ * }
+ * ```
  */
 export function startDndScheduler(
   dndConfig: DndConfig,
@@ -263,7 +311,13 @@ function scheduleDndCheck(): void {
 }
 
 /**
- * 停止 DND 恢复定时器
+ * 内部清除当前本机计时器；不清数据库、不停止已开始的外部Provider调用。
+ * 完整生命周期关闭通过resetSendState同时废弃调度上下文。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * stopDndScheduler()
+ * ```
  */
 export function stopDndScheduler(): void {
   if (dndTimer !== null) {
@@ -273,7 +327,12 @@ export function stopDndScheduler(): void {
 }
 
 /**
- * 重置内部状态（close 时调用）
+ * 内部关闭时清除计时器并废弃旧调度上下文，迟到finally不会再排下一轮；不撤销在途外部请求。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * resetSendState()
+ * ```
  */
 export function resetSendState(): void {
   stopDndScheduler()
@@ -281,10 +340,18 @@ export function resetSendState(): void {
 }
 
 /**
- * 从数据库分批 claim pending 记录并逐条发送
+ * 一轮最多100次逐条领取，固定eligibleBefore让退避消息留给下轮，坏消息不在满批循环自旋。
+ * 缓存锁只减少扫描；资格由数据库owner/租约/sending门闩决定，外部效果依赖幂等或unknown隔离。
+ * @param providers - 当前已连接路由表。
+ * @param repo - 持久队列；缺省无可靠待发送队列。
  *
- * 分布式锁仅减少重复扫描；投递权由逐条领取、sending 门闩及有效 owner 约束。
- * 外部副作用依赖接收端幂等；不支持幂等的在途请求不会自动接管重发。
+ * @example 模块内部上下文
+ * ```ts
+ * async function flush(providers: Map<string, ReachProvider>, repository: SendLogRepository) {
+ *   await flushPendingMessages(providers, repository)
+ *   // 生命周期调度负责下一轮；不在此函数外无界while重试。
+ * }
+ * ```
  */
 async function flushPendingMessages(
   providers: Map<string, ReachProvider>,
@@ -366,17 +433,24 @@ async function flushPendingMessages(
 // ─── 发送入口 ───
 
 /**
- * 执行消息发送
+ * 内部发送编排：模板/路由、DND、即时投递或持久pending入队。
+ * delay仅在数据库写入确认为1条后返回deferred+queueId；即时外部成功不因可选日志故障返回失败，避免重发。
+ * @param message - 原始消息。
+ * @param providers - 已连接Provider路由。
+ * @param templateRegistry - 真实模板注册表。
+ * @param dndConfig - 可选DND策略。
+ * @param repo - 可选日志仓库；delay必须存在。
+ * @param queueConfig - 入队时保存的有界重试策略。
+ * @returns 发送/可靠入队结果；不声称接收端业务恰好执行一次。
  *
- * 包含完整的发送流程：
- * 1. 校验接收方
- * 2. 预处理消息（模板渲染）
- * 3. 检查 DND 免打扰：
- *    - discard 策略：返回 DND_BLOCKED 错误
- *    - delay 策略：等待 DB 写入 pending 成功后返回 deferred 与 queueId；失败不视为入队
- * 4. 路由到目标 Provider
- * 5. 发送消息
- * 6. 保存发送记录（sent 状态）
+ * @example 模块内部上下文
+ * ```ts
+ * async function sendDirect(message: ReachMessage, providers: Map<string, ReachProvider>, registry: ReachTemplateRegistry, repository: SendLogRepository) {
+ *   const result = await executeSend(message, providers, registry, undefined, repository)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export async function executeSend(
   message: ReachMessage,

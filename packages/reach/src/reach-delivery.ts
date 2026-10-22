@@ -14,18 +14,28 @@ const logger = core.logger.child({ module: 'reach', scope: 'delivery' })
 const DEFAULT_LEASE_MS = 10 * 60 * 1000
 
 /**
- * 投递已领取的一条消息；仅接收端幂等的在途请求允许自动恢复。
+ * 内部投递已领取记录；外部调用前原子持久化sending，有效owner条件提交、在途续租。
+ * 续租不能撤销副作用：非幂等请求开始后失败/失租约进入unknown；API仅在真实持久去重时以同queueId有限重试。
+ * @param row - 当前owner已领取的记录。
+ * @param owner - 本次唯一领取凭据。
+ * @param provider - 对应已连接Provider。
+ * @param repo - 共享数据库仓库。
+ * @param leaseMs - 领取期限毫秒数。
+ * @returns 已提交或明确失败/unknown；旧owner迟到不能覆盖新状态。
  *
- * 非幂等请求一旦开始，失败或失去租约均进入 unknown。续租只是减少接管，
- * 不能撤销已经产生的外部副作用；暂停后恢复的旧 API 请求仍须由接收端按同键去重。
- *
- * @param row - 当前 owner 已领取的持久化消息
- * @param owner - 本次领取独有的凭据
- * @param provider - 已连接的 Provider
- * @param repo - 共享数据库队列仓库
- * @param leaseMs - 租约毫秒数，测试可指定较短时间
- * @returns 已提交投递结果，或明确失败/未知状态
- * @example await deliverClaimedMessage(row, owner, provider, repository)
+ * @example 模块内部上下文
+ * ```ts
+ * async function deliverNext(provider: ReachProvider, repository: SendLogRepository) {
+ *   const owner = 'worker:' + crypto.randomUUID()
+ *   const claimed = await repository.claimPendingBatch(owner, { limit: 1 })
+ *   if (!claimed.success) throw new Error(claimed.error.message)
+ *   const row = claimed.data[0]
+ *   if (!row) return
+ *   // 调用方已按row.provider选择匹配的provider；否则应failClaim退避，不能发送到其它通道。
+ *   const result = await deliverClaimedMessage(row, owner, provider, repository)
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * ```
  */
 export async function deliverClaimedMessage(
   row: StoredSendLog,

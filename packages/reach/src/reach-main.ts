@@ -280,7 +280,19 @@ async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
 
 // ─── 触达服务对象 ───
 
-/** 运维结果只输出安全元数据；不泄漏收件人、正文或内部 owner 凭据。 */
+/**
+ * 把敏感日志实体投影成运维元数据，排除收件人、正文、vars/extra和owner凭据。
+ * @param row - 已确认queueId非空且字段规范化的队列行。
+ * @returns 对外可查询的元数据；不能据此替代运维授权。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * function safeEntry(row: StoredSendLog): ReachQueueEntry | null {
+ *   if (!row.queueId) return null
+ *   return queueEntry(row)
+ * }
+ * ```
+ */
 function queueEntry(row: StoredSendLog): ReachQueueEntry {
   return {
     queueId: row.queueId!,
@@ -296,9 +308,35 @@ function queueEntry(row: StoredSendLog): ReachQueueEntry {
 }
 
 /**
- * 触达服务对象
+ * 邮件/短信/API触达统一入口；先检查init与send的HaiResult，成功后还区分deferred和即时Provider结果。
+ * 模板与delay队列使用已初始化数据库，生产共享后端；close停止本地调度/关闭Provider，不撤销已发外部请求。
  *
- * 统一的用户触达入口，支持同时使用邮件、短信、API 回调等多种 Provider。
+ * @example
+ * ```ts
+ * import { reach } from '@h-ai/reach'
+ * const { reldb } = await import('@h-ai/reldb')
+ * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try {
+ *   const initialized = await reach.init({ providers: [{ name: 'webhook', type: 'api', url: 'https://notify.example.com/events', idempotent: false }], templates: [{ name: 'welcome', provider: 'webhook', subject: 'Welcome {userName}', body: 'Hello {userName}' }], dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' } })
+ *   if (!initialized.success) throw new Error(initialized.error.message)
+ *   try {
+ *     const result = await reach.send({ provider: 'webhook', to: 'user@example.com', template: 'welcome', vars: { userName: 'Alice' } })
+ *     if (!result.success) throw new Error(result.error.message)
+ *     if (!result.data.success) throw new Error('Delivery was not accepted')
+ *     if (result.data.deferred) {
+ *       const queueId = result.data.queueId
+ *       // 持久入队成功，尚未证明接收端已完成外部投递。
+ *     }
+ *     else { const providerMessageId = result.data.messageId }
+ *   }
+ *   finally { await reach.close() }
+ * }
+ * finally {
+ *   const closed = await reldb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
+ * ```
  */
 export const reach: ReachFunctions = {
   queue: {

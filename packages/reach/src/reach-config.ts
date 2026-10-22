@@ -12,7 +12,13 @@ import { reachM } from './reach-i18n.js'
 // ─── 单个 Provider 配置 Schema ───
 
 /**
- * Console Provider 配置（开发/测试用，将消息输出到日志）
+ * 开发/测试日志适配器配置；不证明外部投递，生产共享状态守卫拒绝console。
+ *
+ * @example
+ * ```ts
+ * import { ConsoleProviderConfigSchema } from '@h-ai/reach'
+ * const config = ConsoleProviderConfigSchema.parse({ name: 'dev-log', type: 'console' })
+ * ```
  */
 export const ConsoleProviderConfigSchema = z.object({
   /** Provider 唯一名称 */
@@ -21,20 +27,12 @@ export const ConsoleProviderConfigSchema = z.object({
 })
 
 /**
- * SMTP 邮件 Provider 配置
+ * SMTP配置，默认TLS/465；凭据来自私有环境，SMTP没有接收端持久幂等能力声明。
  *
  * @example
  * ```ts
- * {
- *   name: 'email',
- *   type: 'smtp',
- *   host: 'smtp.example.com',
- *   port: 465,
- *   secure: true,
- *   user: 'noreply@example.com',
- *   pass: 'password',
- *   from: 'noreply@example.com'
- * }
+ * import { SmtpProviderConfigSchema } from '@h-ai/reach'
+ * const config = SmtpProviderConfigSchema.parse({ name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com', user: process.env.HAI_REACH_PROVIDERS_0_USER, pass: process.env.HAI_REACH_PROVIDERS_0_PASS })
  * ```
  */
 export const SmtpProviderConfigSchema = z.object({
@@ -56,18 +54,12 @@ export const SmtpProviderConfigSchema = z.object({
 })
 
 /**
- * 阿里云短信 Provider 配置（通过 HTTP API 调用，无需 SDK）
+ * 阿里云短信POP API配置；Secret只在服务端私有注入，发送需Provider模板编码等扩展参数。
  *
  * @example
  * ```ts
- * {
- *   name: 'sms',
- *   type: 'aliyun-sms',
- *   accessKeyId: 'LTAI...',
- *   accessKeySecret: '...',
- *   signName: '某某科技',
- *   endpoint: 'dysmsapi.aliyuncs.com'
- * }
+ * import { AliyunSmsProviderConfigSchema } from '@h-ai/reach'
+ * const config = AliyunSmsProviderConfigSchema.parse({ name: 'sms', type: 'aliyun-sms', accessKeyId: process.env.HAI_REACH_PROVIDERS_0_ACCESSKEYID, accessKeySecret: process.env.HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET, signName: process.env.HAI_REACH_PROVIDERS_0_SIGNNAME })
  * ```
  */
 export const AliyunSmsProviderConfigSchema = z.object({
@@ -85,17 +77,13 @@ export const AliyunSmsProviderConfigSchema = z.object({
 })
 
 /**
- * API 回调 Provider 配置（通用 HTTP 回调）
+ * HTTP回调配置；idempotent默认false，只有接收端按稳定Idempotency-Key原子持久去重并覆盖旧请求迟到窗口才允许true。
+ * 写入该布尔值或发送请求头本身不证明接收端具备此能力。
  *
  * @example
  * ```ts
- * {
- *   name: 'webhook',
- *   type: 'api',
- *   url: 'https://api.example.com/notify',
- *   method: 'POST',
- *   headers: { 'Authorization': 'Bearer xxx' }
- * }
+ * import { ApiProviderConfigSchema } from '@h-ai/reach'
+ * const config = ApiProviderConfigSchema.parse({ name: 'webhook', type: 'api', url: 'https://notify.example.com/events', idempotent: false })
  * ```
  */
 export const ApiProviderConfigSchema = z.object({
@@ -119,7 +107,13 @@ export const ApiProviderConfigSchema = z.object({
 })
 
 /**
- * 单个 Provider 配置 Schema（判别联合体）
+ * 按type区分内置Provider配置，不把name当协议类型；name用于模板/消息路由。
+ *
+ * @example
+ * ```ts
+ * import { ProviderConfigSchema } from '@h-ai/reach'
+ * const config = ProviderConfigSchema.parse({ name: 'webhook', type: 'api', url: 'https://notify.example.com/events', idempotent: false })
+ * ```
  */
 export const ProviderConfigSchema = z.discriminatedUnion('type', [
   ConsoleProviderConfigSchema,
@@ -128,24 +122,69 @@ export const ProviderConfigSchema = z.discriminatedUnion('type', [
   ApiProviderConfigSchema,
 ])
 
-/** 单个 Provider 配置类型（parse 后） */
+/**
+ * 由ProviderConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { ProviderConfigSchema, type ProviderConfig } from '@h-ai/reach'
+ * const config: ProviderConfig = ProviderConfigSchema.parse({ name: 'webhook', type: 'api', url: 'https://notify.example.com/events', idempotent: false })
+ * ```
+ */
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>
 
-/** Console 配置类型 */
+/**
+ * 由ConsoleProviderConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { ConsoleProviderConfigSchema, type ConsoleProviderConfig } from '@h-ai/reach'
+ * const config: ConsoleProviderConfig = ConsoleProviderConfigSchema.parse({ name: 'dev-log', type: 'console' })
+ * ```
+ */
 export type ConsoleProviderConfig = z.infer<typeof ConsoleProviderConfigSchema>
 
-/** SMTP 配置类型 */
+/**
+ * 由SmtpProviderConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { SmtpProviderConfigSchema, type SmtpProviderConfig } from '@h-ai/reach'
+ * const config: SmtpProviderConfig = SmtpProviderConfigSchema.parse({ name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com', user: process.env.HAI_REACH_PROVIDERS_0_USER, pass: process.env.HAI_REACH_PROVIDERS_0_PASS })
+ * ```
+ */
 export type SmtpProviderConfig = z.infer<typeof SmtpProviderConfigSchema>
 
-/** 阿里云短信配置类型 */
+/**
+ * 由AliyunSmsProviderConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { AliyunSmsProviderConfigSchema, type AliyunSmsProviderConfig } from '@h-ai/reach'
+ * const config: AliyunSmsProviderConfig = AliyunSmsProviderConfigSchema.parse({ name: 'sms', type: 'aliyun-sms', accessKeyId: process.env.HAI_REACH_PROVIDERS_0_ACCESSKEYID, accessKeySecret: process.env.HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET, signName: process.env.HAI_REACH_PROVIDERS_0_SIGNNAME })
+ * ```
+ */
 export type AliyunSmsProviderConfig = z.infer<typeof AliyunSmsProviderConfigSchema>
 
-/** API 回调配置类型 */
+/**
+ * 由ApiProviderConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { ApiProviderConfigSchema, type ApiProviderConfig } from '@h-ai/reach'
+ * const config: ApiProviderConfig = ApiProviderConfigSchema.parse({ name: 'webhook', type: 'api', url: 'https://notify.example.com/events', idempotent: false })
+ * ```
+ */
 export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
 
 /**
- * 人工裁定 unknown 的输入限制；不允许重新排队。
- * @example ReachUnknownResolutionSchema.parse({ status: 'discarded' })
+ * 人工处置unknown的结构边界，仅sent/discarded，不提供重发；应用须先校验运维权限并隔离旧worker/核对外部效果。
+ *
+ * @example
+ * ```ts
+ * import { ReachUnknownResolutionSchema } from '@h-ai/reach'
+ * const config = ReachUnknownResolutionSchema.parse({ status: 'discarded' })
+ * ```
  */
 export const ReachUnknownResolutionSchema = z.object({
   status: z.enum(['sent', 'discarded']),
@@ -153,14 +192,24 @@ export const ReachUnknownResolutionSchema = z.object({
 })
 
 /**
- * 持久化入队回执格式。
- * @example ReachQueueIdSchema.safeParse(queueId)
+ * 持久入队回执UUID格式；合法UUID不代表存在，也不授予队列运维权限。
+ *
+ * @example
+ * ```ts
+ * import { ReachQueueIdSchema } from '@h-ai/reach'
+ * const config = ReachQueueIdSchema.parse('00000000-0000-4000-8000-000000000001')
+ * ```
  */
 export const ReachQueueIdSchema = z.string().uuid()
 
 /**
- * 可靠队列重试策略；入队时保存到消息，不受其它节点后续配置变化影响。
- * @example ReachQueueConfigSchema.parse({ maxAttempts: 5, retryDelayMs: 60_000, maxRetryDelayMs: 3_600_000 })
+ * 可靠队列重试策略，入队时随消息持久保存；maxAttempts含首次与崩溃恢复，指数退避有上限。
+ *
+ * @example
+ * ```ts
+ * import { ReachQueueConfigSchema } from '@h-ai/reach'
+ * const config = ReachQueueConfigSchema.parse({ maxAttempts: 5, retryDelayMs: 60000, maxRetryDelayMs: 3600000 })
+ * ```
  */
 export const ReachQueueConfigSchema = z.object({
   /** 自动领取次数上限（含首次及崩溃恢复，默认 5，范围 1–100）。 */
@@ -173,17 +222,41 @@ export const ReachQueueConfigSchema = z.object({
   message: reachM('reach_queueRetryInvalid'),
 })
 
-/** 持久化重试策略。@example const policy: ReachQueueConfig = ReachQueueConfigSchema.parse({}) */
+/**
+ * 由ReachQueueConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { ReachQueueConfigSchema, type ReachQueueConfig } from '@h-ai/reach'
+ * const config: ReachQueueConfig = ReachQueueConfigSchema.parse({ maxAttempts: 5, retryDelayMs: 60000, maxRetryDelayMs: 3600000 })
+ * ```
+ */
 export type ReachQueueConfig = z.infer<typeof ReachQueueConfigSchema>
 
-/** 有界查询待人工处理的队列，不返回正文或收件人。@example ReachQueueListSchema.parse({ status: 'dead' }) */
+/**
+ * 仅分页列出dead/unknown元数据，限制limit/offset；不返回正文/收件人，不替代服务端运维授权。
+ *
+ * @example
+ * ```ts
+ * import { ReachQueueListSchema } from '@h-ai/reach'
+ * const config = ReachQueueListSchema.parse({ status: 'dead', limit: 10, offset: 0 })
+ * ```
+ */
 export const ReachQueueListSchema = z.object({
   status: z.enum(['dead', 'unknown']),
   limit: z.number().int().min(1).max(100).default(50),
   offset: z.number().int().min(0).max(1_000_000).default(0),
 })
 
-/** 死信恢复要求最近读取的版本，避免过时运维请求恢复新一轮死信。@example ReachDeadRequeueSchema.parse({ expectedUpdatedAt: Date.now() }) */
+/**
+ * 恢复dead所需的最近updatedAt条件输入，阻止过时/并发恢复；unknown禁止此操作。
+ *
+ * @example
+ * ```ts
+ * import { ReachDeadRequeueSchema } from '@h-ai/reach'
+ * const config = ReachDeadRequeueSchema.parse({ expectedUpdatedAt: 1730000000000 })
+ * ```
+ */
 export const ReachDeadRequeueSchema = z.object({
   expectedUpdatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1),
 })
@@ -191,22 +264,13 @@ export const ReachDeadRequeueSchema = z.object({
 // ─── DND（免打扰）配置 Schema ───
 
 /**
- * 免打扰时间段配置
- *
- * 在指定的时间段内，根据策略处理消息：
- * - `discard`：直接丢弃，返回 DND_BLOCKED 错误
- * - `delay`：要求已初始化的数据库及队列表；持久写入 pending 成功后返回 deferred/queueId，DND 结束后发送
- *
- * 时间使用 HH:mm 格式（24 小时制），支持跨午夜（如 22:00-08:00）。
+ * 本机时区的HH:mm免打扰配置，支持跨午夜；start=end表示不拦截。
+ * discard返回DND_BLOCKED；delay要求数据库队列就绪且pending写入成功才返回deferred回执。
  *
  * @example
  * ```ts
- * {
- *   enabled: true,
- *   strategy: 'delay',
- *   start: '22:00',
- *   end: '08:00'
- * }
+ * import { DndConfigSchema } from '@h-ai/reach'
+ * const config = DndConfigSchema.parse({ enabled: true, strategy: 'delay', start: '22:00', end: '08:00' })
  * ```
  */
 export const DndConfigSchema = z.object({
@@ -220,21 +284,26 @@ export const DndConfigSchema = z.object({
   end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, reachM('reach_config_dndTimeInvalid')).default('00:00'),
 })
 
-/** DND 配置类型 */
+/**
+ * 由DndConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { DndConfigSchema, type DndConfig } from '@h-ai/reach'
+ * const config: DndConfig = DndConfigSchema.parse({ enabled: true, strategy: 'delay', start: '22:00', end: '08:00' })
+ * ```
+ */
 export type DndConfig = z.infer<typeof DndConfigSchema>
 
 // ─── 模板配置 Schema ───
 
 /**
- * 模板配置 Schema（通过配置文件定义模板）
+ * 绑定Provider名称的持久模板配置，{key}仅做文本替换；需要先初始化数据库，不提供HTML消毒。
  *
  * @example
- * ```yaml
- * templates:
- *   - name: verification_code
- *     provider: email
- *     subject: "验证码: {code}"
- *     body: "您的验证码是 {code}，有效期 {minutes} 分钟。"
+ * ```ts
+ * import { TemplateConfigSchema } from '@h-ai/reach'
+ * const config = TemplateConfigSchema.parse({ name: 'welcome', provider: 'webhook', subject: 'Welcome {userName}', body: 'Hello {userName}' })
  * ```
  */
 export const TemplateConfigSchema = z.object({
@@ -248,16 +317,27 @@ export const TemplateConfigSchema = z.object({
   body: z.string().min(1, reachM('reach_config_templateBodyRequired')),
 })
 
-/** 模板配置类型 */
+/**
+ * 由TemplateConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { TemplateConfigSchema, type TemplateConfig } from '@h-ai/reach'
+ * const config: TemplateConfig = TemplateConfigSchema.parse({ name: 'welcome', provider: 'webhook', subject: 'Welcome {userName}', body: 'Hello {userName}' })
+ * ```
+ */
 export type TemplateConfig = z.infer<typeof TemplateConfigSchema>
 
 // ─── 模块配置 Schema ───
 
 /**
- * 触达模块配置 Schema
+ * 模块配置Schema，解析Provider/模板/DND及持久重试默认值；Schema校验不证明外部服务可用或接收端幂等。
  *
- * 接受一个 Provider 配置数组，支持同时注册多个 Provider。
- * 支持通过配置文件定义模板和免打扰时间段。
+ * @example
+ * ```ts
+ * import { ReachConfigSchema } from '@h-ai/reach'
+ * const config = ReachConfigSchema.parse({ providers: [{ name: 'webhook', type: 'api', url: 'https://notify.example.com/events', idempotent: false }], templates: [{ name: 'welcome', provider: 'webhook', subject: 'Welcome {userName}', body: 'Hello {userName}' }], dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' } })
+ * ```
  */
 export const ReachConfigSchema = z.object({
   /** Provider 配置列表 */
@@ -270,10 +350,25 @@ export const ReachConfigSchema = z.object({
   queue: ReachQueueConfigSchema.prefault({}),
 })
 
-/** 触达模块配置类型（parse 后） */
+/**
+ * 由ReachConfigSchema解析后的配置类型，默认值已经填充；与输入类型区分，秘密字段不写日志。
+ *
+ * @example
+ * ```ts
+ * import { ReachConfigSchema, type ReachConfig } from '@h-ai/reach'
+ * const config: ReachConfig = ReachConfigSchema.parse({ providers: [{ name: 'webhook', type: 'api', url: 'https://notify.example.com/events', idempotent: false }], templates: [{ name: 'welcome', provider: 'webhook', subject: 'Welcome {userName}', body: 'Hello {userName}' }], dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' } })
+ * ```
+ */
 export type ReachConfig = z.infer<typeof ReachConfigSchema>
 
 /**
- * 触达模块配置输入类型
+ * reach.init接收的配置输入，queue默认值可省略；生产选真实Provider、共享数据库，不能用console假定通知完成。
+ *
+ * @example
+ * ```ts
+ * import { ReachConfigSchema, type ReachConfigInput } from '@h-ai/reach'
+ * const input: ReachConfigInput = { providers: [{ name: 'webhook', type: 'api', url: 'https://notify.example.com/events', idempotent: false }], templates: [{ name: 'welcome', provider: 'webhook', subject: 'Welcome {userName}', body: 'Hello {userName}' }], dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' } }
+ * const parsed = ReachConfigSchema.parse(input)
+ * ```
  */
 export type ReachConfigInput = z.input<typeof ReachConfigSchema>
