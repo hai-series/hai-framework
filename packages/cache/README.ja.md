@@ -172,3 +172,5 @@ Apache-2.0
 `password` は単独・Cluster・Sentinel のデータノードに使用され、発見・リダイレクト後の接続にも適用します。`url` 指定時は URL 内の認証情報を使用し、独立した password フィールドでは上書きしません。
 
 compareAndSwap は単一キーの JSON 値を原子的に比較・置換/削除し、適用有無を返します。expected の undefined は不存在、value の undefined は削除、null は JSON 値です。px は正の整数で keepTtl と排他です。期限省略時は永続保存し、不一致なら TTL を変更しません。
+
+owner はリース延長・解除の所有権であり、リソースの fencing token ではありません。停止した処理は期限切れ後も再開できるため、最終書込には保存先の CAS・世代条件・トランザクション制約が必要です。延長や処理後の失敗返却だけでは旧書込を防げません。

@@ -8,8 +8,8 @@
 import type { HaiResult } from '@h-ai/core'
 import type { LdapConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
-import type { StoredUser, User } from '../../user/iam-user-types.js'
-import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
+import type { StoredUser } from '../../user/iam-user-types.js'
+import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
 import { core, err, ok } from '@h-ai/core'
 
 import { iamM } from '../../iam-i18n.js'
@@ -134,43 +134,15 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
     return value
   }
 
-  /**
-   * 构建 LDAP 用户信息对象
-   *
-   * 用于未开启用户同步时，直接返回 LDAP 目录中的用户信息。
-   *
-   * @param entry - LDAP 搜索结果条目
-   * @param ldapUsername - 用户名
-   * @param ldapEmail - 邮箱（可选）
-   * @param ldapDisplayName - 显示名称（可选）
-   * @returns User 对象（ID 为 LDAP DN）
-   */
-  function buildLdapUser(entry: LdapSearchEntry, ldapUsername: string, ldapEmail?: string, ldapDisplayName?: string): User {
-    const now = new Date()
-    return {
-      id: entry.dn,
-      username: ldapUsername,
-      email: ldapEmail,
-      displayName: ldapDisplayName,
-      enabled: true,
-      createdAt: now,
-      updatedAt: now,
-      metadata: {
-        ldapDn: entry.dn,
-        authSource: 'ldap',
-      },
-    }
-  }
-
   return {
     type: 'ldap',
     name: 'ldap-strategy',
 
-    async authenticate(credentials: Credentials): Promise<HaiResult<User>> {
+    async authenticate(credentials: Credentials): Promise<HaiResult<AuthenticatedUser>> {
       // 类型检查
       const credentialResult = ensureCredentialType(credentials, 'ldap')
       if (!credentialResult.success) {
-        return credentialResult as HaiResult<User>
+        return credentialResult as HaiResult<AuthenticatedUser>
       }
 
       const { username, password } = credentialResult.data
@@ -234,7 +206,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         // 查找本地用户（用于状态判断与失败计数）
         const localUserResult = await userRepository.findByUsername(ldapUsername)
         if (!localUserResult.success) {
-          return localUserResult as HaiResult<User>
+          return localUserResult as HaiResult<AuthenticatedUser>
         }
 
         let storedUser = localUserResult.data as StoredUser | null
@@ -293,7 +265,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
 
           const createdResult = await userRepository.findByUsername(ldapUsername)
           if (!createdResult.success) {
-            return createdResult as HaiResult<User>
+            return createdResult as HaiResult<AuthenticatedUser>
           }
           storedUser = createdResult.data
 
@@ -330,18 +302,15 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           }
         }
 
-        if (!storedUser) {
-          // 如果不同步用户，直接返回 LDAP 用户信息
-          const ldapUser = buildLdapUser(entry, ldapUsername, ldapEmail, ldapDisplayName)
-          return ok(ldapUser)
-        }
+        if (!storedUser)
+          return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
 
         const resetResult = await resetLoginFailures(userRepository, storedUser)
         if (!resetResult.success)
           return resetResult
         logger.info('LDAP authentication succeeded', { userId: storedUser.id })
 
-        return ok(toUser(storedUser))
+        return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
       }
       finally {
         // 确保解除绑定

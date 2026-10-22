@@ -179,7 +179,7 @@ const acquired = await cache.lock.acquire(lockKey, { ttl: 60 })
 if (acquired.success && acquired.data) {
   const owner = acquired.data
   try {
-    await runBatchImport()
+    await runBatchImportWithConditionalCommit()
   }
   finally {
     await cache.lock.release(lockKey, owner)
@@ -205,3 +205,5 @@ else {
 Cluster 与 Sentinel 数据节点认证使用 `password`，Cluster 发现的新节点继承同一鉴权配置。`url` 模式只使用 URL 内凭据，单独 password 不覆盖 URL。
 
 单键 compareAndSwap(key, expected, value, {px?,keepTtl?}) 比较 JSON 序列化快照并原子替换，必须检查 success 与 boolean data。expected=undefined 表示不存在，value=undefined 表示删除，null 是值；px 正整数且与 keepTtl 互斥。比较失败不修改 TTL；跨节点版本状态优先使用 CAS 而不是租约后无条件 SET。
+
+owner 只校验租约续期/释放，不是资源 fencing token。暂停或过期后旧任务仍可能执行，最终持久化写入必须使用资源自己的 CAS/代际条件/事务约束。批量导入等应用函数须在每次提交时校验条件，不能只靠锁包裹 Promise。

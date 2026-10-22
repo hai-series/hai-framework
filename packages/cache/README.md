@@ -183,3 +183,5 @@ Apache-2.0
 `password` 用于单机、Cluster 与 Sentinel 数据节点；Cluster 发现和重定向后的节点连接也携带密码。配置 `url` 时采用 URL 自身的认证信息，独立 password 字段不覆盖它。
 
 compareAndSwap 对一个 key 原子比较 JSON 值并替换/删除，返回 boolean applied；expected=undefined 表示不存在，value=undefined 表示删除，null 是实际 JSON 值。px 必须为正整数且与 keepTtl 互斥，省略过期策略会持久保存；比较失败不改 TTL。可用于跨节点版本提交，不能把进程锁当作提交条件。
+
+owner 只保护锁的续期与释放，不是资源 fencing token。进程暂停或租约到期后旧任务仍能继续；最终写入必须在资源存储中使用 CAS、代际条件或事务约束。续租成功或最后返回失败都不能代替提交条件。

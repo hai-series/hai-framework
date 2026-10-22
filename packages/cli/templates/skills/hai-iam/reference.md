@@ -10,7 +10,7 @@
 
 管理界面自动创建角色时使用 `role_${core.id.generate()}` 生成 code，显示名称独立保存；不要通过移除中文、表情或折叠大小写生成标识。重命名不重建 code。
 
-> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP/API Key）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（会话 / OTP / 重置令牌 / 一次性票据 / 共享锁）、`@h-ai/crypto`（密码哈希）、`@h-ai/audit`（审计日志）。
+> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP/API Key）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（会话 / OTP / 一次性票据）、`@h-ai/crypto`（密码哈希）、`@h-ai/audit`（审计日志）。
 
 ## 运行环境
 
@@ -21,7 +21,7 @@
 | 模块 | 用途 | 是否必需 | 初始化要求 |
 | --- | --- | --- | --- |
 | `@h-ai/reldb` | 数据库（用户/角色/权限持久化） | **必需** | 需在 `iam.init()` 前初始化 |
-| `@h-ai/cache` | 缓存（会话/OTP/重置令牌/一次性票据/共享锁） | **必需** | 需在 `iam.init()` 前初始化 |
+| `@h-ai/cache` | 缓存（会话/OTP/一次性票据） | **必需** | 需在 `iam.init()` 前初始化 |
 | `@h-ai/crypto` | 密码哈希 | 内部使用 | 自动初始化 |
 | `@h-ai/audit` | 审计日志（RBAC 关键操作记录） | 内部使用 | 已初始化时自动写入 |
 
@@ -99,7 +99,7 @@ LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h
 
 - 默认 LDAP 客户端：在服务端 workspace 执行 `pnpm add ldapts`，配置 `login.ldap: true` 与 `ldap.url/bindDn/bindPassword/searchBase`。`searchFilter` 默认 `(uid={{username}})`；AD 可使用 `(sAMAccountName={{username}})` 与对应 `usernameAttribute`。`ldaps://` 使用 TLS，`ldap://` + `useTls: true` 使用 StartTLS。`ldapClientFactory` 可注入返回 `bind/search/unbind` 和 HaiResult 的客户端，此时无需安装 ldapts。
 - Reach 自动发送：应用安装、初始化 `@h-ai/reach`，在 `iam.init({ ...settings, reach })` 中注入一次。`otp_email/otp_sms` 模板使用 `{code}`；`password_reset/password_reset_sms` 使用 `{token}/{expiresAt}/{resetUrl}`。模板需在 IAM 初始化前配置，Provider 绑定实际邮件/短信通道。`passwordReset.mode` 选择 `email/phone`。
-- 自定义发送：直接传 `onOtpSendEmail(email, code)`、`onOtpSendSms(phone, code)`、`onPasswordResetRequest(user, token, expiresAt)`，均返回 `Promise<void>`。可以只实现选用通道或与 Reach 混用，显式回调优先。检查发送服务结果，投递失败在回调内抛错；IAM 捕获并返回业务错误，不要吞掉发送失败。
+- 自定义发送：直接传 `onOtpSendEmail(email, code, context)`、`onOtpSendSms(phone, code, context)`、`onPasswordResetRequest(user, token, context)`，均返回 `Promise<void>`；context 包含 expiresAt/idempotencyKey，发送服务按该稳定键持久化去重，异常表示结果未知，不自动重发。可以只实现选用通道或与 Reach 混用，显式回调优先。检查发送服务结果，投递失败在回调内抛错；IAM 捕获并返回业务错误，不要吞掉发送失败。
 - `otp` 必须有配置并开启所需通道；缺少回调或标准模板时 `iam.publicConfig` 不公布该入口。Reach 由应用管理生命周期，IAM 不负责初始化或关闭。Console 仅记录元数据。
 
 协议以 Modal 显示，关闭后保留输入。URL 方式必须为 HTTP(S) 且页面允许 iframe 嵌入；脚本被隔离禁用。`LoginForm/RegisterForm` 提供 `header/extraFields/footer`；`AuthPanel` 提供 `loginHeader/loginFields/loginFooter`、`registerHeader/registerFields/registerFooter`。额外字段由应用绑定状态，在自己的动作中处理，IAM 不接收未经定义的字段。
@@ -472,7 +472,7 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 ### 分布式安全与边界
 
-所有节点必须共享同一数据库和 Redis；Memory 仅用于单进程。登录 `maxLoginAttempts / lockoutDuration` 使用数据库原子更新，到期后的失败重新计数。OTP `maxAttempts / resendInterval` 使用共享锁和独立发送间隔状态，耗尽或消费验证码不能绕过重发限制，并发只消费一次。重置 `tokenExpiresIn / maxAttempts` 使用共享缓存 TTL 和每用户共享锁；每次有效令牌请求（包括密码策略失败）计数，最新令牌有效且只成功消费一次。重置后撤销旧会话、解除登录锁定；禁用用户不能通过密码、LDAP、OTP 登录。密码策略以服务端为准。
+所有节点共享同一数据库和 Redis；Memory 仅用于单进程测试。OTP 的验证码、尝试次数和冷却期保存在同一身份 key，通过 CAS 发布和消费；冲突拒绝旧代，消费/耗尽保留冷却期。密码重置的摘要、有效期、尝试次数和 resetVersion 保存在用户数据库行，策略失败计次，最终一条条件 SQL 同时改密、消费令牌并推进 credentialVersion；新令牌、后续尝试、停用或到期都会阻止迟到提交。发送重置请求只推进 resetVersion，不撤销现有会话；成功改密才推进 credentialVersion。认证策略保存已验证的凭据代际，建立会话/认证/刷新均校验数据库当前代际；缓存批量清理失败也不能使旧会话有效。通知只在成功发布后调用，第三参数为 { expiresAt, idempotencyKey }，应用及 Reach Provider 必须用该稳定键持久化去重。异常/超时可能已送达，返回结果未知，不自动重发或回滚已发布凭据；没有接收端幂等保障时不能承诺外部副作用恰好一次。
 
 可选字段（如 `ldap`）若尚未写入 YAML，请先声明该字段，或通过 `HAI_IAM` 的 JSON 值整体覆盖模块配置；已有字段支持 `HAI_IAM_LOGIN_OTP` 等环境变量覆盖。
 
@@ -484,7 +484,7 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 - `hai-kit`：SvelteKit 集成（Bearer Token + 契约处理）
 - `hai-api-client`：客户端契约调用
 - `hai-reldb`：底层数据存储
-- `hai-cache`：会话、OTP/重置状态、一次性票据和共享锁
+- `hai-cache`：会话、OTP 状态和一次性票据
 - `hai-crypto`：密码哈希（内部依赖）
 - `hai-ui`：IAM 场景组件（LoginForm/RegisterForm 等）
 
@@ -497,3 +497,7 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的最晚有效期，但 access 认证只检查自己的 `expiresAt`。access 过期仍可凭未过期、未撤销的 refresh 轮换；每次轮换从新签发时刻重新计算 `refreshTokenMaxAge`，旧 access/refresh 同时失效。删除 access、logoutAll、单设备替换均撤销待刷新记录；仅 revokeRefresh 保留仍有效的 access。刷新路由只校验 refresh，不能先要求旧 access 认证成功。
 
 会话仓库将缓存读取/提交失败返回为失败 HaiResult，不解释为会话不存在或过期，也不执行清理补偿。用户会话及索引共用一个文档，批量授权更新不再逐 token 调用 get/ttl 或维护第二份索引；只按已确认的绝对期限清理。故障恢复后可重新读取并重试更新/退出，logoutAll 仍覆盖原有全部记录。结构损坏同样失败关闭并保留原值，交由运维处理，禁止用空文档覆盖未知授权状态。
+
+LDAP 的 ldapSyncUser: false 要求已有启用的本地用户以绑定数据库 credentialVersion；没有本地记录返回 USER_NOT_FOUND，不再创建虚拟 DN 身份。
+
+Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、启用的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。

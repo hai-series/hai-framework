@@ -57,11 +57,13 @@ export function getTokenSessionScope(token: string): string | undefined {
  * @param now - 当前时间
  * @param sessionTtl - 会话有效期（秒）
  * @param accessToken - 访问令牌
+ * @param credentialVersion - 已核对当前数据库的可信凭据代
  * @returns 完整的 Session 对象
  */
-export function buildSession(options: CreateSessionOptions, now: Date, sessionTtl: number, accessToken: string): Session {
+export function buildSession(options: CreateSessionOptions, now: Date, sessionTtl: number, accessToken: string, credentialVersion: string): Session {
   return {
     version: crypto.randomUUID(),
+    credentialVersion,
     apiKeyId: options.apiKeyId,
     apiKeyScopes: options.apiKeyScopes,
     userId: options.userId,

@@ -89,6 +89,18 @@ export const HaiIamError = core.error.buildHaiErrorsDef('iam', IamErrorInfo)
 // ─── 初始化配置 ───
 
 /**
+ * 已成功发布的认证通知上下文；发送服务必须按幂等键持久化去重。
+ * 回调抛错代表送达结果未知；IAM 不自动重发，也不回滚已经发布的凭据。
+ * @example `await sender.send({ idempotencyKey: context.idempotencyKey, expiresAt: context.expiresAt })`
+ */
+export interface IamNotificationContext {
+  /** 同一次凭据发布的稳定 ID，不包含验证码或明文令牌。 */
+  readonly idempotencyKey: string
+  /** 凭据过期时间；迟到通知不得延长其有效期。 */
+  readonly expiresAt: Date
+}
+
+/**
  * IAM 初始化配置
  *
  * 包含 Zod 校验的设置字段和运行时依赖。
@@ -113,9 +125,9 @@ export interface IamConfigInput extends IamConfigSettingsInput {
    *
    * @param user - 请求重置的用户信息
    * @param token - 重置令牌（明文，需发送给用户）
-   * @param expiresAt - 令牌过期时间
+   * @param context - 令牌有效期及接收端必须复用的幂等键；发送失败/超时视为结果未知。
    */
-  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
+  onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
 
   /**
    * OTP 邮件验证码发送回调（可选）
@@ -128,7 +140,7 @@ export interface IamConfigInput extends IamConfigSettingsInput {
    * @param email - 目标邮箱
    * @param code - 验证码
    */
-  onOtpSendEmail?: (email: string, code: string) => Promise<void>
+  onOtpSendEmail?: (email: string, code: string, context: IamNotificationContext) => Promise<void>
 
   /**
    * OTP 短信验证码发送回调（可选）
@@ -141,7 +153,7 @@ export interface IamConfigInput extends IamConfigSettingsInput {
    * @param phone - 目标手机号
    * @param code - 验证码
    */
-  onOtpSendSms?: (phone: string, code: string) => Promise<void>
+  onOtpSendSms?: (phone: string, code: string, context: IamNotificationContext) => Promise<void>
 }
 
 // ─── 函数接口 ───

@@ -33,7 +33,7 @@ interface SessionState {
 /** 恢复私有 JSON 日期，拒绝损坏的授权数据；错误不包含认证快照。 */
 function restoreSession(session: Session): Session {
   const result = { ...session, createdAt: new Date(session.createdAt), lastActiveAt: new Date(session.lastActiveAt), expiresAt: new Date(session.expiresAt) }
-  if (!result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
+  if (typeof result.credentialVersion !== 'string' || !result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
     || !Array.isArray(result.permissions) || !result.permissions.every(permission => typeof permission === 'string')
     || ![result.createdAt, result.lastActiveAt, result.expiresAt].every(date => Number.isFinite(date.getTime()))) {
     throw new TypeError('Invalid session state')

@@ -8,8 +8,8 @@
 import type { HaiResult } from '@h-ai/core'
 import type { PasswordConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
-import type { StoredUser, User } from '../../user/iam-user-types.js'
-import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
+import type { StoredUser } from '../../user/iam-user-types.js'
+import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { crypto as haiCrypto } from '@h-ai/crypto'
 
@@ -173,10 +173,10 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     type: 'password',
     name: 'password-strategy',
 
-    async authenticate(credentials: Credentials): Promise<HaiResult<User>> {
+    async authenticate(credentials: Credentials): Promise<HaiResult<AuthenticatedUser>> {
       const credentialResult = ensureCredentialType(credentials, 'password')
       if (!credentialResult.success) {
-        return credentialResult as HaiResult<User>
+        return credentialResult as HaiResult<AuthenticatedUser>
       }
 
       const { identifier, password } = credentialResult.data
@@ -196,12 +196,12 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       // 校验账户状态
       const statusResult = checkAccountStatus(storedUser)
       if (!statusResult.success)
-        return statusResult as HaiResult<User>
+        return statusResult as HaiResult<AuthenticatedUser>
 
       // 验证密码
       const pwResult = await verifyUserPassword(storedUser, password)
       if (!pwResult.success)
-        return pwResult as HaiResult<User>
+        return pwResult as HaiResult<AuthenticatedUser>
 
       // 检查密码是否过期
       if (isPasswordExpired(storedUser)) {
@@ -214,7 +214,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
         return resetResult
       logger.info('Password authentication succeeded', { userId: storedUser.id })
 
-      return ok(toUser(storedUser))
+      return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
     },
   }
 

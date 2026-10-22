@@ -31,7 +31,7 @@ pnpm add @h-ai/iam
 ### Dependencies
 
 - `@h-ai/reldb`: persistence for users/roles/permissions; **initialize before iam.init()**.
-- `@h-ai/cache`: sessions/OTP/reset tokens/one-time tickets/shared locks; **initialize before iam.init()**.
+- `@h-ai/cache`: sessions/OTP/one-time tickets; **initialize before iam.init()**.
 - `@h-ai/crypto`: password hashing, used internally and initialized automatically.
 - `@h-ai/audit`: audit records for key RBAC operations.
 
@@ -62,7 +62,7 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` uses TLS; `ldap://` with `useTls: true` uses StartTLS. For Active Directory use `searchFilter: "(sAMAccountName={{username}})"` and `usernameAttribute: sAMAccountName`; the username placeholder is escaped before searching. First login synchronizes a local user and assigns the default role; disabled accounts and lockouts still apply. Set `ldapSyncUser: false` or inject a `ldapClientFactory` returning `bind/search/unbind` methods with HaiResult results. An injected factory does not require ldapts.
+`ldaps://` uses TLS; `ldap://` with `useTls: true` uses StartTLS. For Active Directory use `searchFilter: "(sAMAccountName={{username}})"` and `usernameAttribute: sAMAccountName`; the username placeholder is escaped before searching. First login synchronizes a local user and assigns the default role; disabled accounts and lockouts still apply. `ldapSyncUser: false` requires an existing enabled local user with a database credential generation; no virtual DN user is created. You may inject a `ldapClientFactory` returning `bind/search/unbind` methods with HaiResult results. An injected factory does not require ldapts.
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -149,19 +149,19 @@ import { mailService, smsService } from './notifications.js'
 // 调用方须检查服务投递结果，失败时拒绝 Promise，不能吞掉错误。
 const initialized = await iam.init({
   otp: { email: true, sms: true },
-  onOtpSendEmail: async (email, code) => {
-    await mailService.send({ to: email, subject: 'Verification code', text: code })
+  onOtpSendEmail: async (email, code, context) => {
+    await mailService.send({ to: email, subject: 'Verification code', text: code, idempotencyKey: context.idempotencyKey })
   },
-  onOtpSendSms: async (phone, code) => {
-    await smsService.send({ to: phone, code })
+  onOtpSendSms: async (phone, code, context) => {
+    await smsService.send({ to: phone, code, idempotencyKey: context.idempotencyKey })
   },
   passwordReset: { mode: 'email' },
-  onPasswordResetRequest: async (user, token, expiresAt) => {
+  onPasswordResetRequest: async (user, token, context) => {
     if (!user.email)
       throw new Error('Reset recipient unavailable')
     const url = new URL('https://app.example.com/auth/reset-password')
     url.searchParams.set('token', token)
-    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt })
+    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt: context.expiresAt, idempotencyKey: context.idempotencyKey })
   },
 })
 if (!initialized.success)
@@ -240,7 +240,7 @@ Before initialization, every subsystem method returns `NOT_INITIALIZED` through 
 | Sessions (accessToken → Session)                    | Cache                                        | TTL, optional sliding renewal                                                                                                 |
 | Refresh state | Redis user partition | Atomic with session/index |
 | OTP codes                                           | Cache                                        | TTL + attempt limit                                                                                                           |
-| Password reset tokens                               | Cache                                        | TTL + maximum verification attempts                                                                                           |
+| Password reset tokens | User database row | SM3 hash, DB expiry, attempts and conditional password commit |
 | API Key                                             | DB                                           | `hai_iam_api_keys`; store hashes only, never plaintext; prefix narrows candidates                                             |
 
 ---
@@ -813,7 +813,7 @@ SvelteKit routes export handlers from `kit.auth.createApi(iam)`; use `kit.auth.p
 
 Agreements open in a Modal without losing form input. URL pages must allow iframe embedding; scripts are disabled and a new-window fallback is available. LoginForm/RegisterForm expose `header/extraFields/footer` snippets. AuthPanel forwards `loginHeader/loginFields/loginFooter` and `registerHeader/registerFields/registerFooter`; application state and actions handle additional fields. See [UI usage](../ui/README.en.md#configuration-driven-authentication).
 
-All nodes must share a database and Redis. Memory is limited to one process. Login counters and lock expiry use atomic database updates. OTP attempt limits, resend intervals and consumption use shared state; consuming/exhausting a code does not reset the resend interval. Reset TTL and attempt limits use shared cache and per-user locks: policy failures count, only the newest token is valid, and concurrent use succeeds once. Reset revokes old sessions and clears login locks. Disabled users cannot authenticate. Server password policy is authoritative.
+All nodes share the same database and Redis; Memory is for single-process tests. OTP code, attempts and cooldown share one identity key with CAS publication and consumption. Conflicts reject stale generations and consumption preserves cooldown. Password reset hash, expiry, attempts and resetVersion live in the user database row. Policy failures count, and one conditional SQL statement changes the password, consumes the token and advances credentialVersion. New tokens, later attempts, disablement or expiry reject delayed commits. Requesting a reset only advances resetVersion; successful password changes advance credentialVersion. Authentication captures the verified credential generation; session creation, authentication and refresh check the current database generation, so failed cache cleanup cannot authorize old sessions. Notification callbacks run after publication and receive { expiresAt, idempotencyKey } as their third argument. Applications and Reach providers must durably deduplicate that key. Exceptions/timeouts mean delivery may have succeeded: the result is unknown, with no automatic resend or rollback. Exactly-once external effects require receiver-side idempotency.
 
 Standard endpoints: `GET /auth/config`, `POST /auth/login/ldap`, `POST /auth/password-reset/request`, `POST /auth/password-reset/confirm`. Security errors: `SECURITY_BUSY (hai:iam:023)` and `PASSWORD_RESET_DISABLED (hai:iam:024)`. Declare optional fields such as `ldap` in YAML before overriding them, or replace the module configuration with a JSON value in `HAI_IAM`. Existing fields support overrides such as `HAI_IAM_LOGIN_OTP`.
 
@@ -872,12 +872,17 @@ Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(u
 pnpm test
 ```
 
-## License
-
-Apache-2.0
 
 `create({ maxAge })` overrides the configured default with a positive safe integer in seconds, persisted as `Session.maxAge`. Issuance and refresh return that duration in `expiresIn`. Sliding renewal uses this duration and returns committed `lastActiveAt/expiresAt`; delayed requests cannot shorten a newer renewal. Explicit `update` applies valid date patches and creates a new content version. Clients schedule refresh from the returned `expiresIn` rather than a hardcoded default.
 
 Access and refresh expire independently. The user partition remains until the latest live access/refresh deadline, while access authentication checks only its own `expiresAt`. An expired access token can still be rotated with a live refresh token. Each rotation starts a new `refreshTokenMaxAge` period and invalidates both old credentials. Access deletion, logoutAll and single-device replacement also revoke refresh-only records; revokeRefresh preserves a still-live access token. Refresh routes validate refresh credentials without requiring a live access token first.
 
 Session cache read/commit failures return failed HaiResult values, never absence/expiry or cleanup compensation. Sessions and their index share one document, so batch updates no longer use per-token get/ttl calls or a separate index; cleanup uses confirmed absolute deadlines only. After recovery, re-read and retry updates/logout; logoutAll still covers every original record. Malformed state fails closed and is preserved for operator repair instead of being overwritten with an empty document.
+
+Cache cleanup may return a failure after the new password and credential generation have committed; they are not rolled back. Sign in again instead of automatically retrying with old credentials.
+
+Session.credentialVersion binds the database credential generation at creation. Only trusted authenticated strategies supply CreateSessionOptions.expectedCredentialVersion, and stale generations fail. Low-level create without that option still reads a real enabled local user and binds its current generation; it cannot create an authenticated identity without a database record.
+
+## License
+
+Apache-2.0

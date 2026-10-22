@@ -31,7 +31,7 @@ pnpm add @h-ai/iam
 ### 依存関係
 
 - `@h-ai/reldb`：ユーザー・ロール・権限の永続化。**iam.init() より先に初期化**。
-- `@h-ai/cache`：セッション・OTP・リセット Token・一度限りのチケット・共有ロック。**iam.init() より先に初期化**。
+- `@h-ai/cache`：セッション・OTP・一度限りのチケット。**iam.init() より先に初期化**。
 - `@h-ai/crypto`：内部で使用するパスワードハッシュ。自動初期化。
 - `@h-ai/audit`：主要な RBAC 操作の監査記録。
 
@@ -62,7 +62,7 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` は TLS、`ldap://` と `useTls: true` は StartTLS を使用します。Active Directory では `searchFilter: "(sAMAccountName={{username}})"` と `usernameAttribute: sAMAccountName` を指定できます。検索前に入力をエスケープします。初回ログインはローカルユーザーを同期して既定ロールを割り当て、無効化とロックも適用します。`ldapSyncUser: false` または `bind/search/unbind` を HaiResult で返す `ldapClientFactory` を注入できます。独自ファクトリでは ldapts は不要です。
+`ldaps://` は TLS、`ldap://` と `useTls: true` は StartTLS を使用します。Active Directory では `searchFilter: "(sAMAccountName={{username}})"` と `usernameAttribute: sAMAccountName` を指定できます。検索前に入力をエスケープします。初回ログインはローカルユーザーを同期して既定ロールを割り当て、無効化とロックも適用します。`ldapSyncUser: false` は DB 資格情報世代を持つ有効なローカルユーザーを必要とし、仮想 DN ユーザーは作りません。 `bind/search/unbind` を HaiResult で返す `ldapClientFactory` を注入できます。独自ファクトリでは ldapts は不要です。
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -149,19 +149,19 @@ import { mailService, smsService } from './notifications.js'
 // 调用方须检查服务投递结果，失败时拒绝 Promise，不能吞掉错误。
 const initialized = await iam.init({
   otp: { email: true, sms: true },
-  onOtpSendEmail: async (email, code) => {
-    await mailService.send({ to: email, subject: 'Verification code', text: code })
+  onOtpSendEmail: async (email, code, context) => {
+    await mailService.send({ to: email, subject: 'Verification code', text: code, idempotencyKey: context.idempotencyKey })
   },
-  onOtpSendSms: async (phone, code) => {
-    await smsService.send({ to: phone, code })
+  onOtpSendSms: async (phone, code, context) => {
+    await smsService.send({ to: phone, code, idempotencyKey: context.idempotencyKey })
   },
   passwordReset: { mode: 'email' },
-  onPasswordResetRequest: async (user, token, expiresAt) => {
+  onPasswordResetRequest: async (user, token, context) => {
     if (!user.email)
       throw new Error('Reset recipient unavailable')
     const url = new URL('https://app.example.com/auth/reset-password')
     url.searchParams.set('token', token)
-    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt })
+    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt: context.expiresAt, idempotencyKey: context.idempotencyKey })
   },
 })
 if (!initialized.success)
@@ -240,7 +240,7 @@ iam.init()
 | セッション（accessToken → Session）               | キャッシュ                              | TTL 付き、任意の自動延長                                                                                                      |
 | Refresh 消費状態 | Redis ユーザー分区 | セッション・索引と単一キー CAS で更新 |
 | OTP コード                                        | キャッシュ                              | TTL + 試行回数制限                                                                                                            |
-| パスワードリセット Token                          | キャッシュ                              | TTL + 最大検証回数                                                                                                            |
+| パスワードリセット Token | ユーザー DB 行 | SM3 hash・DB 期限・試行回数・条件付き改密 |
 | API Key                                           | DB                                      | `hai_iam_api_keys`。平文は保存せず hash のみ。接頭辞で候補検索                                                                |
 
 ---
@@ -813,7 +813,7 @@ SvelteKit は `kit.auth.createApi(iam)` と匿名用の `kit.auth.publicPaths` �
 
 規約は入力を保持したまま Modal で開きます。URL のページは iframe 埋め込みを許可する必要があり、スクリプトを無効にし別ウィンドウ表示も用意します。LoginForm/RegisterForm は `header/extraFields/footer`、AuthPanel は `loginHeader/loginFields/loginFooter` と `registerHeader/registerFields/registerFooter` を提供します。追加フィールドはアプリの状態と actions で処理します。[UI の使い方](../ui/README.ja.md) を参照してください。
 
-複数ノードは同じ DB と Redis を共有する必要があります。Memory は単一プロセス専用です。ログイン失敗は DB の原子的更新で累積し、OTP の試行回数、再送間隔、単回使用は共有状態で管理します。コードの使用や試行上限によって再送制限を回避できません。リセットは共有 TTL とユーザー別ロックを使用し、ポリシー違反も試行に含め、最新 Token の成功使用は一回だけです。リセット後は旧セッションとログインロックを解除します。無効なユーザーは認証できません。
+全ノードで同じ DB と Redis を共有します。Memory は単一プロセスのテスト用です。OTP のコード・試行回数・再送間隔は単一キーの CAS で公開・消費し、旧世代の競合を拒否します。消費後も再送制限を保持します。リセットの hash・期限・試行回数・resetVersion はユーザーの DB 行に保存し、ポリシー違反も計数します。最終 SQL が条件を検証してパスワード変更・Token 消費・credentialVersion 更新を同時に行い、新 Token・後続試行・無効化・期限切れ後の遅延書込を拒否します。リセット要求は resetVersion のみ進め、改密成功時に credentialVersion を進めます。認証で取得した資格情報世代を保持し、セッション作成・認証・更新で DB の現世代を照合するため、キャッシュ削除失敗でも旧会話を許可しません。通知は公開成功後に実行し、第3引数 { expiresAt, idempotencyKey } の安定キーをアプリと Reach Provider が永続的に重複排除します。例外・タイムアウトは送達済みの可能性があるため結果不明とし、自動再送や公開済み資格情報の巻き戻しはしません。外部副作用の厳密な一回実行には受信側の冪等性が必要です。
 
 標準 HTTP 入口は `GET /auth/config`、`POST /auth/login/ldap`、`POST /auth/password-reset/request`、`POST /auth/password-reset/confirm` です。セキュリティエラーは `SECURITY_BUSY (hai:iam:023)` と `PASSWORD_RESET_DISABLED (hai:iam:024)` です。`ldap` などの任意項目は YAML に宣言してから環境変数で上書きするか、`HAI_IAM` の JSON 値でモジュール設定全体を置き換えます。既存項目には `HAI_IAM_LOGIN_OTP` などを使用できます。
 
@@ -868,12 +868,17 @@ if (!result.success) {
 pnpm test
 ```
 
-## ライセンス
-
-Apache-2.0
 
 `create({ maxAge })` は設定の既定値を正の安全な整数秒で上書きし、`Session.maxAge` に保存します。発行と更新の `expiresIn` はこの値を使います。自動延長は同じ期間を使い、確定済みの `lastActiveAt/expiresAt` を返し、遅いリクエストが新しい延長を短縮しません。明示的な `update` は有効な日時を反映して内容版を更新します。クライアントは返された `expiresIn` から更新時刻を決めます。
 
 access と refresh は独立して期限切れになります。ユーザー文書は両期限の最大まで保持しますが、access 認証は自身の expiresAt のみを確認します。access 期限後も有効な refresh で更新でき、更新ごとに新しい refreshTokenMaxAge を開始して旧資格情報を失効させます。access 削除・全ログアウト・単一端末置換は更新待ち記録も取り消し、revokeRefresh は有効な access を残します。更新経路で旧 access の認証成功を前提にしません。
 
 セッションの読取・確定障害は失敗 HaiResult として返し、不存在や期限切れと解釈せず補償削除もしません。索引と会話は同じ文書で保持し、個別 get/ttl や二重索引を廃止します。確定した期限だけで整理し、復旧後の再読取・全ログアウトは元の全記録を対象にします。破損状態は保持して認証を拒否し、空文書で上書きせず運用者が修復します。
+
+キャッシュ削除が失敗を返しても、確定した新パスワードと資格情報世代は巻き戻しません。旧資格情報で自動再試行せず、再ログインしてください。
+
+Session.credentialVersion は作成時の DB 資格情報世代に結び付けます。CreateSessionOptions.expectedCredentialVersion は検証済みの信頼する戦略だけが指定し、旧世代は拒否します。省略した低レベル create でも実在する有効なローカルユーザーを DB から読み、現世代に結び付けるため、DB 記録のない認証済み ID は作れません。
+
+## ライセンス
+
+Apache-2.0

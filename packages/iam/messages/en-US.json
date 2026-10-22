@@ -185,5 +185,6 @@
   "iam_apikeyStrategyRequired": "API Key authentication requires API Key strategy configuration",
   "iam_sessionStateFailed": "Shared session state operation failed",
   "iam_sessionStateConflict": "Session state changed; retry the operation",
-  "iam_sessionMaxAgeInvalid": "Invalid session lifetime or timestamp"
+  "iam_sessionMaxAgeInvalid": "Invalid session lifetime or timestamp",
+  "iam_notificationDeliveryUnknown": "Notification delivery is unknown and may have succeeded; do not resend automatically."
 }

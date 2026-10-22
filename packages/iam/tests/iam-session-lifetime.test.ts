@@ -6,7 +6,7 @@ import { createSessionOperations } from '../src/session/iam-session-functions.js
 import { acquireRedisContainer } from './helpers/redis-container.js'
 
 async function operations(sliding = true) {
-  const result = await createSessionOperations({ config: IamConfigSchema.parse({ session: { sliding, maxAge: 60 } }) })
+  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', enabled: true } }), config: IamConfigSchema.parse({ session: { sliding, maxAge: 60 } }) })
   if (!result.success)
     throw new Error(result.error.message)
   return result.data

@@ -31,7 +31,7 @@ pnpm add @h-ai/iam
 ### 依赖
 
 - `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
-- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/一次性票据/共享锁），**需在 iam.init() 前初始化**
+- `@h-ai/cache` — 缓存（会话/OTP/一次性票据），**需在 iam.init() 前初始化**
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
 - `@h-ai/audit` — 审计日志（RBAC 关键操作记录）
 
@@ -62,7 +62,7 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。可传 `ldapSyncUser: false` 或自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
+`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。`ldapSyncUser: false` 要求已有启用的本地用户以绑定数据库凭据代际；不创建虚拟 DN 用户。可传自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -149,19 +149,19 @@ import { mailService, smsService } from './notifications.js'
 // 调用方须检查服务投递结果，失败时拒绝 Promise，不能吞掉错误。
 const initialized = await iam.init({
   otp: { email: true, sms: true },
-  onOtpSendEmail: async (email, code) => {
-    await mailService.send({ to: email, subject: 'Verification code', text: code })
+  onOtpSendEmail: async (email, code, context) => {
+    await mailService.send({ to: email, subject: 'Verification code', text: code, idempotencyKey: context.idempotencyKey })
   },
-  onOtpSendSms: async (phone, code) => {
-    await smsService.send({ to: phone, code })
+  onOtpSendSms: async (phone, code, context) => {
+    await smsService.send({ to: phone, code, idempotencyKey: context.idempotencyKey })
   },
   passwordReset: { mode: 'email' },
-  onPasswordResetRequest: async (user, token, expiresAt) => {
+  onPasswordResetRequest: async (user, token, context) => {
     if (!user.email)
       throw new Error('Reset recipient unavailable')
     const url = new URL('https://app.example.com/auth/reset-password')
     url.searchParams.set('token', token)
-    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt })
+    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt: context.expiresAt, idempotencyKey: context.idempotencyKey })
   },
 })
 if (!initialized.success)
@@ -240,7 +240,7 @@ iam.init()
 | 会话（accessToken → Session）                     | 缓存                               | 有 TTL，滑动续期可选                                                                                                          |
 | Refresh 消费状态 | 缓存的用户分区 | 与 session/索引在单键 CAS 中提交 |
 | OTP 验证码                                        | 缓存                               | 有 TTL + 尝试次数限制                                                                                                         |
-| 密码重置令牌                                      | 缓存                               | 有 TTL + 最大验证次数限制                                                                                                     |
+| 密码重置令牌 | 用户数据库行 | SM3 摘要、数据库有效期、尝试次数及最终条件提交 |
 | API Key                                           | DB                                 | `hai_iam_api_keys`，明文不落库，仅存 hash；前缀用于候选检索                                                                   |
 
 ---
@@ -849,7 +849,7 @@ agreements:
 
 #### 分布式安全与边界
 
-所有节点必须共享同一数据库和 Redis；Memory 仅用于单进程。登录 `maxLoginAttempts / lockoutDuration` 使用数据库原子更新，到期后的失败重新计数。OTP `maxAttempts / resendInterval` 使用共享锁和独立发送间隔状态，耗尽或消费验证码不能绕过重发限制，并发只消费一次。重置 `tokenExpiresIn / maxAttempts` 使用共享缓存 TTL 和每用户共享锁；每次有效令牌请求（包括密码策略失败）计数，最新令牌有效且只成功消费一次。重置后撤销旧会话、解除登录锁定；禁用用户不能通过密码、LDAP、OTP 登录。密码策略以服务端为准。
+所有节点共享同一数据库和 Redis；Memory 仅用于单进程测试。OTP 的验证码、尝试次数和冷却期保存在同一身份 key，通过 CAS 发布和消费；冲突拒绝旧代，消费/耗尽保留冷却期。密码重置的摘要、有效期、尝试次数和 resetVersion 保存在用户数据库行，策略失败计次，最终一条条件 SQL 同时改密、消费令牌并推进 credentialVersion；新令牌、后续尝试、停用或到期都会阻止迟到提交。发送重置请求只推进 resetVersion，不撤销现有会话；成功改密才推进 credentialVersion。认证策略保存已验证的凭据代际，建立会话/认证/刷新均校验数据库当前代际；缓存批量清理失败也不能使旧会话有效。通知只在成功发布后调用，第三参数为 { expiresAt, idempotencyKey }，应用及 Reach Provider 必须用该稳定键持久化去重。异常/超时可能已送达，返回结果未知，不自动重发或回滚已发布凭据；没有接收端幂等保障时不能承诺外部副作用恰好一次。
 
 可选字段（如 `ldap`）若尚未写入 YAML，请先声明该字段，或通过 `HAI_IAM` 的 JSON 值整体覆盖模块配置；已有字段支持 `HAI_IAM_LOGIN_OTP` 等环境变量覆盖。
 
@@ -881,12 +881,17 @@ if (!result.success) {
 pnpm test
 ```
 
-## 许可证
-
-Apache-2.0
 
 `create({ maxAge })` 可覆盖配置默认时长（正安全整数秒），该值持久化为 `Session.maxAge`；签发和刷新返回的 `expiresIn` 均使用它。滑动续期按该时长延长 access，返回已成功提交的 `lastActiveAt/expiresAt`；迟到请求只延长时间，不缩短较新续期。显式 `update` 的有效日期补丁完整生效并产生新内容版本。客户端根据本次返回的 `expiresIn` 安排刷新，不能硬编码配置默认值。
 
 access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的最晚有效期，但 access 认证只检查自己的 `expiresAt`。access 过期仍可凭未过期、未撤销的 refresh 轮换；每次轮换从新签发时刻重新计算 `refreshTokenMaxAge`，旧 access/refresh 同时失效。删除 access、logoutAll、单设备替换均撤销待刷新记录；仅 revokeRefresh 保留仍有效的 access。刷新路由只校验 refresh，不能先要求旧 access 认证成功。
 
 会话仓库将缓存读取/提交失败返回为失败 HaiResult，不解释为会话不存在或过期，也不执行清理补偿。用户会话及索引共用一个文档，批量授权更新不再逐 token 调用 get/ttl 或维护第二份索引；只按已确认的绝对期限清理。故障恢复后可重新读取并重试更新/退出，logoutAll 仍覆盖原有全部记录。结构损坏同样失败关闭并保留原值，交由运维处理，禁止用空文档覆盖未知授权状态。
+
+缓存清理失败可能返回失败，但已提交的新密码与凭据代际不会回滚；重新登录，不用旧凭据自动重试。
+
+Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、启用的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
+
+## 许可证
+
+Apache-2.0

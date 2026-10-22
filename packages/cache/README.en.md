@@ -172,3 +172,5 @@ Apache-2.0
 `password` authenticates standalone, Cluster, and Sentinel data nodes, including discovered/redirected Cluster connections. In `url` mode the credentials in the URL take precedence; the separate password field does not override them.
 
 compareAndSwap atomically compares one JSON value and replaces/deletes it, returning boolean applied. Undefined expected means absent; undefined value deletes; null is a JSON value. px is a positive integer and excludes keepTtl. Omitting expiry persists the replacement; a comparison miss preserves TTL. Use it for shared versioned commits.
+
+The owner token only protects lease renewal and release; it is not a resource fencing token. A paused task can resume after expiry. Final writes require CAS, generation predicates or transactional constraints in the resource store; renewal or returning a failure afterwards cannot prevent a stale commit.

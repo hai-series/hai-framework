@@ -9,12 +9,13 @@ import type { HaiResult } from '@h-ai/core'
 
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
+import type { IamConfigInput } from '../iam-types.js'
 import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { User } from '../user/iam-user-types.js'
 import type { ApiKeyStrategyResult } from './apikey/iam-authn-apikey-strategy.js'
 import type { ApiKey, ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
-import type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
+import type { ApiKeyCredentials, AuthenticatedUser, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategyResult } from './otp/iam-authn-otp-strategy.js'
 import type { PasswordStrategyResult } from './password/iam-authn-password-strategy.js'
@@ -49,9 +50,9 @@ export interface AuthnOperationsDeps {
   ldapClientFactory?: LdapClientFactory
   ldapSyncUser?: boolean
   /** OTP 邮件发送回调（由业务层注入） */
-  onOtpSendEmail?: (email: string, code: string) => Promise<void>
+  onOtpSendEmail?: IamConfigInput['onOtpSendEmail']
   /** OTP 短信发送回调（由业务层注入） */
-  onOtpSendSms?: (phone: string, code: string) => Promise<void>
+  onOtpSendSms?: IamConfigInput['onOtpSendSms']
 }
 
 /**
@@ -277,7 +278,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    * @param user - 已认证的用户信息
    * @returns 包含用户信息、访问令牌、过期时间和协议展示的认证结果
    */
-  async function buildAuthResult(user: User, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
+  async function buildAuthResult(user: AuthenticatedUser, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
     if (!user.enabled)
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     const authorization = await authzFunctions.getUserAuthorization(user.id)
@@ -287,6 +288,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     const effective = apiKey ? applyApiKeyScopes(access, apiKey.scopes) : access
     const sessionResult = await sessionFunctions.create({
       userId: user.id,
+      expectedCredentialVersion: user.credentialVersion,
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
@@ -307,8 +309,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return err(HaiIamError.SESSION_CREATE_FAILED, iamM('iam_createSessionFailed'))
     }
 
+    const { credentialVersion, ...publicUser } = user
+    void credentialVersion
     return ok({
-      user,
+      user: publicUser,
       tokens: tokenPair,
       ...effective,
       agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnLogin),
@@ -355,7 +359,14 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     return result
   }
 
-  return { loginRegisteredUser: buildAuthResult, authn: {
+  return { loginRegisteredUser: async (user) => {
+    const stored = await userRepository.findById(user.id)
+    if (!stored.success)
+      return stored
+    if (!stored.data?.enabled)
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' })
+  }, authn: {
     async login(credentials: PasswordCredentials): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('password', credentials, passwordStrategy)
     },
@@ -407,6 +418,8 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
         return user
       if (!user.data?.enabled)
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      if (session.data.credentialVersion !== (user.data.credentialVersion ?? ''))
+        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
       if (!authorization.success)
         return authorization
       const current = { ...session.data, username: user.data.username, displayName: user.data.displayName, avatarUrl: user.data.avatarUrl, ...authorization.data }

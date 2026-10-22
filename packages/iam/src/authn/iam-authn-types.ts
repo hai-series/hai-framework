@@ -61,6 +61,15 @@ export type Credentials
     | { type: 'ldap' } & LdapCredentials
     | { type: 'apikey' } & ApiKeyCredentials
 
+/**
+ * 策略内部可信认证快照；凭据代来自实际验证的用户行，不能用会话创建时的新快照替换。
+ * @example const authenticated: AuthenticatedUser = { ...user, credentialVersion: stored.credentialVersion ?? '' }
+ */
+export interface AuthenticatedUser extends User {
+  /** 密码最终提交时更换；仅在服务端策略和会话构造间传递。 */
+  credentialVersion: string
+}
+
 // ─── 认证策略接口 ───
 
 /**
@@ -80,7 +89,7 @@ export interface AuthStrategy {
    * @param credentials - 统一凭证（包含 type 字段标识认证方式）
    * @returns 认证成功返回用户信息；失败返回对应错误码（INVALID_CREDENTIALS / USER_LOCKED 等）
    */
-  authenticate: (credentials: Credentials) => Promise<HaiResult<User>>
+  authenticate: (credentials: Credentials) => Promise<HaiResult<AuthenticatedUser>>
 }
 
 // ─── 认证操作接口 ───

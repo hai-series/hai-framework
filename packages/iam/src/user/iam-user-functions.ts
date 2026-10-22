@@ -9,8 +9,8 @@ import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { PasswordStrategyResult } from '../authn/password/iam-authn-password-strategy.js'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
+import type { IamNotificationContext } from '../iam-types.js'
 import type { SessionOperations } from '../session/iam-session-types.js'
-import type { ResetTokenRepository } from './iam-user-repository-reset-token.js'
 import type { UserRepository } from './iam-user-repository-user.js'
 import type {
   ListUsersOptions,
@@ -31,7 +31,6 @@ import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema,
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { generateToken } from '../session/iam-session-utils.js'
-import { createCacheResetTokenRepository } from './iam-user-repository-reset-token.js'
 import { createDbUserRepository } from './iam-user-repository-user.js'
 import { toUser } from './iam-user-utils.js'
 
@@ -66,7 +65,7 @@ export interface UserOperationsDeps {
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
   /** 密码重置令牌回调（由业务层注入） */
-  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
+  onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
 }
 
 /**
@@ -79,11 +78,9 @@ export async function createUserOperations(deps: UserOperationsDeps): Promise<Ha
     const { config, passwordStrategyResult, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
 
     const userRepository = await createDbUserRepository()
-    const resetTokenRepository = createCacheResetTokenRepository()
 
     const functions = buildUserFunctions({
       userRepository,
-      resetTokenRepository,
       passwordStrategyResult,
       sessionFunctions,
       authzFunctions,
@@ -208,7 +205,6 @@ async function validateUniqueFieldsForUpdate(
  */
 interface UserFnContext {
   userRepository: UserRepository
-  resetTokenRepository: ResetTokenRepository
   validatePassword: (password: string) => HaiResult<void>
   hashPassword: (password: string) => HaiResult<string>
   sessionFunctions: SessionOperations
@@ -218,7 +214,7 @@ interface UserFnContext {
   agreementConfig: IamConfig['agreements']
   resetConfig: { enabled: boolean, tokenExpiresIn: number, maxAttempts: number }
   loginConfig: { maxLoginAttempts: number, lockoutDuration: number }
-  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
+  onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
 }
 
 // ─── 注册操作 ───
@@ -711,16 +707,16 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       if (!hashResult.success)
         return hashResult as HaiResult<void>
 
-      const updateResult = await userRepository.updateById(userId, {
-        passwordHash: hashResult.data,
-        passwordUpdatedAt: new Date(),
-      })
-      if (!updateResult.success) {
-        return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
-      }
+      const updateResult = await userRepository.setPassword({ userId, expectedVersion: userResult.data.credentialVersion ?? '', passwordHash: hashResult.data })
+      if (!updateResult.success)
+        return updateResult
+      if (!updateResult.data)
+        return err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
 
       // 密码重置后注销该用户所有活跃会话
-      await sessionFunctions.deleteByUserId(userId)
+      const revoked = await sessionFunctions.deleteByUserId(userId)
+      if (!revoked.success)
+        return revoked
 
       logger.info('Admin reset password', { userId })
       return ok(undefined)
@@ -788,16 +784,16 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         return hashResult as HaiResult<void>
 
       // 更新密码
-      const updateResult = await userRepository.updateById(userId, {
-        passwordHash: hashResult.data,
-        passwordUpdatedAt: new Date(),
-      })
-      if (!updateResult.success) {
-        return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
-      }
+      const updateResult = await userRepository.setPassword({ userId, expectedVersion: user.credentialVersion ?? '', passwordHash: hashResult.data })
+      if (!updateResult.success)
+        return updateResult
+      if (!updateResult.data)
+        return err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
 
       // 密码修改后注销该用户所有活跃会话
-      await sessionFunctions.deleteByUserId(userId)
+      const revoked = await sessionFunctions.deleteByUserId(userId)
+      if (!revoked.success)
+        return revoked
 
       logger.info('Password changed', { userId })
       return ok(undefined)
@@ -828,7 +824,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
  * 构建密码重置操作（请求重置、确认重置）
  */
 function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'requestPasswordReset' | 'confirmPasswordReset'> {
-  const { userRepository, resetTokenRepository, sessionFunctions, onPasswordResetRequest } = ctx
+  const { userRepository, sessionFunctions, onPasswordResetRequest } = ctx
   const { validatePassword, hashPassword } = ctx
 
   return {
@@ -861,18 +857,22 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       const expiresAt = new Date(Date.now() + resetConfig.tokenExpiresIn * 1000)
 
       // 保存新令牌并替换旧令牌，尝试次数与令牌拥有同一有效期。
-      const saveResult = await resetTokenRepository.saveToken(token, user.id, expiresAt)
-      if (!saveResult.success) {
+      const tokenHash = crypto.hash.hash(token)
+      if (!tokenHash.success)
+        return tokenHash
+      const saveResult = await userRepository.publishPasswordReset({ user: userResult.data, tokenHash: tokenHash.data, expiresAt })
+      if (!saveResult.success)
         return saveResult
-      }
+      if (!saveResult.data)
+        return err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
 
       // 通过回调通知业务层（如发送邮件）
       try {
-        await onPasswordResetRequest(user, token, expiresAt)
+        await onPasswordResetRequest(user, token, { expiresAt, idempotencyKey: `iam-reset:${tokenHash.data}` })
       }
       catch {
         logger.error('Password reset callback failed', { userId: user.id })
-        return err(HaiIamError.INTERNAL_ERROR, iamM('iam_passwordResetDeliveryFailed'))
+        return err(HaiIamError.INTERNAL_ERROR, iamM('iam_notificationDeliveryUnknown'))
       }
 
       logger.info('Password reset token generated', { userId: user.id })
@@ -886,51 +886,30 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       if (!resetConfig.enabled)
         return err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
 
-      return resetTokenRepository.useToken(token, resetConfig.maxAttempts, async (userId) => {
-      // 每次持有有效令牌的重置请求都计入尝试次数，包括密码策略失败。
-        const validateResult = validatePassword(newPassword)
-        if (!validateResult.success)
-          return validateResult
-
-        // 查找用户
-        const userResult = await userRepository.findById(userId)
-        if (!userResult.success) {
-          return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
-        }
-        if (!userResult.data) {
-          return err(
-            HaiIamError.USER_NOT_FOUND,
-            iamM('iam_userNotExist'),
-          )
-        }
-        if (!userResult.data.enabled)
-          return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
-
-        // 哈希新密码
-        const hashResult = hashPassword(newPassword)
-        if (!hashResult.success)
-          return hashResult as HaiResult<void>
-
-        // 更新密码
-        const updateResult = await userRepository.updateById(userId, {
-          passwordHash: hashResult.data,
-          passwordUpdatedAt: new Date(),
-          loginFailedCount: 0,
-          lockedUntil: null,
-          lastLoginFailedAt: null,
-        })
-        if (!updateResult.success) {
-          return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
-        }
-
-        // 注销该用户所有活跃会话
-        const revoked = await sessionFunctions.deleteByUserId(userId)
-        if (!revoked.success)
-          return revoked
-
-        logger.info('Password reset confirmed', { userId })
-        return ok(undefined)
-      })
+      const tokenHash = crypto.hash.hash(token)
+      if (!tokenHash.success)
+        return tokenHash
+      // 每次有效令牌尝试先条件推进重置代际，弱密码也计次；新尝试使迟到提交失效。
+      const claimed = await userRepository.claimPasswordReset(tokenHash.data, resetConfig.maxAttempts)
+      if (!claimed.success)
+        return claimed
+      const validateResult = validatePassword(newPassword)
+      if (!validateResult.success)
+        return validateResult
+      const hashResult = hashPassword(newPassword)
+      if (!hashResult.success)
+        return hashResult
+      const committed = await userRepository.commitPasswordReset({ user: claimed.data, tokenHash: tokenHash.data, passwordHash: hashResult.data })
+      if (!committed.success)
+        return committed
+      if (!committed.data)
+        return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
+      // 凭据代际已在数据库推进；缓存清理失败不能重新授权旧会话。
+      const revoked = await sessionFunctions.deleteByUserId(claimed.data.id)
+      if (!revoked.success)
+        return revoked
+      logger.info('Password reset confirmed', { userId: claimed.data.id })
+      return ok(undefined)
     },
   }
 }
@@ -966,10 +945,9 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
 
 interface UserBuilderDeps {
   userRepository: UserRepository
-  resetTokenRepository: ResetTokenRepository
   passwordStrategyResult: PasswordStrategyResult
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
   config: IamConfig
-  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
+  onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
 }

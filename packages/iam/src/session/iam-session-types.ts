@@ -57,6 +57,8 @@ export interface AuthResult {
 export interface Session {
   /** 会话内容版本；显式更新产生新版本，内部滑动续期保留版本。 */
   version: string
+  /** 认证快照绑定的持久凭据代；改密后的旧会话即使缓存清理失败也拒绝。 */
+  credentialVersion: string
   /** API Key 派生会话绑定的 key ID；普通用户登录时省略。 */
   apiKeyId?: string
   /** 当前 key scopes；get/verify/refresh 每次重新验证持久化 key 并收敛权限。 */
@@ -103,6 +105,8 @@ export type SessionData = Record<string, unknown> & {
  * 创建会话选项
  */
 export interface CreateSessionOptions {
+  /** 策略已验证的凭据代；创建前须与当前数据库核对，省略时仅供可信服务端按当前用户签发。 */
+  expectedCredentialVersion?: string
   /** 服务端已验证的 API Key 绑定；不得来自未验证客户端输入。 */
   apiKeyId?: string
   apiKeyScopes?: string[]

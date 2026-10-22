@@ -5,7 +5,7 @@ import { IamConfigSchema } from '../src/iam-config.js'
 import { createSessionOperations } from '../src/session/iam-session-functions.js'
 
 async function operations(sliding = false) {
-  const result = await createSessionOperations({ config: IamConfigSchema.parse({ session: { sliding } }) })
+  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', enabled: true } }), config: IamConfigSchema.parse({ session: { sliding } }) })
   if (!result.success)
     throw new Error(result.error.message)
   return result.data

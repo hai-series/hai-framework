@@ -43,6 +43,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'session' })
  */
 export interface SessionOperationsDeps {
   config: IamConfig
+  /** 可信持久用户读取口；生产绑定RelDB，缺失/禁用/读失败均拒绝签发和认证。 */
+  readCredential: (userId: string) => Promise<HaiResult<{ version: string, enabled: boolean } | null>>
 }
 
 /**
@@ -59,6 +61,7 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
     )
 
     const functions = buildSessionFunctions({
+      readCredential: deps.readCredential,
       maxAge: sessionConfig.maxAge,
       sliding: sessionConfig.sliding,
       singleDevice: sessionConfig.singleDevice,
@@ -85,6 +88,7 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
  * 内部会话构建器配置
  */
 interface SessionBuilderConfig {
+  readCredential: SessionOperationsDeps['readCredential']
   apiKeyRepository?: ApiKeyRepository
   /** 会话最大有效期（秒，默认 86400 = 24小时） */
   maxAge?: number
@@ -106,16 +110,36 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   const repo = config.sessionRepository
 
   /** 只构造候选值；旧凭据撤销与新凭据发布必须由仓库一次原子提交。 */
-  function candidate(options: CreateSessionOptions): HaiResult<{ session: Session, tokens: TokenPair }> {
+  function candidate(options: CreateSessionOptions, credentialVersion: string): HaiResult<{ session: Session, tokens: TokenPair }> {
     const now = new Date()
     const ttl = options.maxAge ?? maxAge
     if (!Number.isSafeInteger(ttl) || ttl <= 0 || !Number.isFinite(new Date(now.getTime() + ttl * 1000).getTime()))
       return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
     const accessToken = generateSessionToken(options.userId)
     const tokens: TokenPair = { accessToken, refreshToken: generateSessionToken(options.userId), expiresIn: ttl, tokenType: 'Bearer' }
-    const session = buildSession(options, now, ttl, accessToken)
+    const session = buildSession(options, now, ttl, accessToken, credentialVersion)
     session.data = { ...session.data, _tokenPair: tokens }
     return ok({ session, tokens })
+  }
+
+  /**
+   * 凭据代只能来自可信数据库；读取和签发跨库不能同事务，因此会话始终保留旧代，后续认证再次核对。
+   * @example await credential('user-1', authenticated.credentialVersion)
+   */
+  async function credential(userId: string, expected?: string): Promise<HaiResult<string>> {
+    try {
+      const current = await config.readCredential(userId)
+      if (!current.success)
+        return current
+      if (!current.data || current.data.enabled !== true)
+        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      if (typeof current.data.version !== 'string' || (expected !== undefined && current.data.version !== expected))
+        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+      return ok(current.data.version)
+    }
+    catch {
+      return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionExpired'))
+    }
   }
 
   /** 持久化 key 是派生会话的授权上限；撤销、禁用、到期与读取失败均拒绝访问。 */
@@ -140,7 +164,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   return {
     async create(options: CreateSessionOptions): Promise<HaiResult<Session>> {
       try {
-        const built = candidate(options)
+        const bound = await credential(options.userId, options.expectedCredentialVersion)
+        if (!bound.success)
+          return bound
+        const built = candidate(options, bound.data)
         if (!built.success)
           return built
         const { session, tokens } = built.data
@@ -180,6 +207,11 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         return ok(null)
       }
 
+      if (typeof session.credentialVersion !== 'string')
+        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+      const bound = await credential(session.userId, session.credentialVersion)
+      if (!bound.success)
+        return bound
       const validated = await validateApiKey(session)
       if (!validated.success)
         return validated
@@ -249,6 +281,11 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           )
         }
 
+        if (typeof oldSession.credentialVersion !== 'string')
+          return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+        const bound = await credential(oldSession.userId, oldSession.credentialVersion)
+        if (!bound.success)
+          return bound
         const validated = await validateApiKey(oldSession)
         if (!validated.success)
           return validated
@@ -267,7 +304,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           source: oldSession.source,
           maxAge: oldSession.maxAge,
           data: oldSession.data ? { ...oldSession.data, _tokenPair: undefined } : undefined,
-        })
+        }, oldSession.credentialVersion)
 
         if (!next.success)
           return next
@@ -275,6 +312,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         if (!rotated.success)
           return rotated
 
+        // 改密可能发生在最后一次读取与cache CAS之间；绝不把旧refresh升级到新凭据代。
+        const current = await credential(oldSession.userId, oldSession.credentialVersion)
+        if (!current.success)
+          return current
         logger.debug('Token refreshed', { userId: oldSession.userId })
         return ok(next.data.tokens)
       }

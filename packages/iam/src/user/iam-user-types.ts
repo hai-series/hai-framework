@@ -92,6 +92,16 @@ export interface AgreementDisplay {
  * 内部存储用户（包含密码哈希等敏感信息）
  */
 export interface StoredUser extends User {
+  /** 密码凭据代际；密码提交时原子推进，旧会话及迟到认证不得复用。 */
+  credentialVersion?: string
+  /** 密码重置操作的独立代际；发布/尝试推进，不影响现有登录。 */
+  resetVersion?: string
+  /** 当前重置令牌的 SM3 摘要，仅内部存储。 */
+  resetHash?: string
+  /** 重置令牌的 Unix 毫秒过期时间，由数据库时钟核验。 */
+  resetExpiresAt?: number
+  /** 当前重置令牌已使用的尝试次数。 */
+  resetAttempts?: number
   /** 密码哈希 */
   passwordHash?: string
   /** 密码更新时间 */
@@ -280,22 +290,25 @@ export interface UserOperations {
   /**
    * 请求密码重置
    *
-   * 查找用户 → 生成重置令牌（缓存存储、SHA-256 哈希）→ 调用 onPasswordResetRequest 回调通知业务层。
+   * 查找用户 → 条件发布重置令牌（用户数据库行、SM3 摘要及 resetVersion）→ 通知业务层。
    * 即使用户不存在也返回 ok（防止用户枚举攻击）。
    *
    * @param identifier - 用户标识（邮箱）
-   * @returns 始终返回 ok（防枚举）；内部异常返回 INTERNAL_ERROR
+   * @returns 用户不存在返回 ok；发布冲突、存储故障或投递未知返回失败，通知不自动重发。
+   * @example `await iam.user.requestPasswordReset('user@example.com')`
    */
   requestPasswordReset: (identifier: string) => Promise<HaiResult<void>>
 
   /**
    * 确认密码重置
    *
-   * 验证新密码强度 → 验证令牌有效性与尝试次数 → 哈希并更新密码 → 删除令牌 → 清除该用户所有会话。
+   * 条件计次并取得代际 → 验证密码策略 → 最终 SQL 同时校验代际/有效期/状态并改密、消费令牌。
+   * 凭据代际已在数据库推进，后续缓存清理失败也不能重新授权旧会话。
    *
    * @param token - 重置令牌（明文，由 requestPasswordReset 生成并由业务层发送给用户）
    * @param newPassword - 新密码
    * @returns 成功返回 ok；令牌无效/过期返回 RESET_TOKEN_INVALID，尝试超限返回 RESET_TOKEN_MAX_ATTEMPTS
+   * @example `await iam.user.confirmPasswordReset(token, 'NewStrongPassword123')`
    */
   confirmPasswordReset: (token: string, newPassword: string) => Promise<HaiResult<void>>
 

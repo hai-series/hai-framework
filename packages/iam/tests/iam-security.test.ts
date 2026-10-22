@@ -1,7 +1,7 @@
 /** 密码、OTP、重置的并发与配置回归，覆盖共享数据库/Redis。 */
 import { cache } from '@h-ai/cache'
-import { crypto } from '@h-ai/crypto'
 import { reach } from '@h-ai/reach'
+import { reldb } from '@h-ai/reldb'
 import { expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/index.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
@@ -72,7 +72,7 @@ function tests() {
       await reach.close()
     }
   })
-  it('验证码与重置令牌按配置设置真实缓存 TTL，到期不能使用', async () => {
+  it('验证码有真实缓存 TTL，重置令牌按数据库有效期拒绝到期使用', async () => {
     let otp = ''
     let reset = ''
     const iam = await initIam({ otp: { expiresIn: 60 }, passwordReset: { tokenExpiresIn: 300 }, onOtpSendEmail: async (_id, value) => {
@@ -83,22 +83,15 @@ function tests() {
     expect((await iam.user.register({ username: 'expiry-user', password: TEST_PASSWORD })).success).toBe(true)
     expect((await iam.auth.sendOtp('expiry@example.com')).success).toBe(true)
     expect((await iam.user.requestPasswordReset('expiry-user')).success).toBe(true)
-    const hashed = crypto.hash.hash(reset)
-    expect(hashed.success).toBe(true)
-    if (!hashed.success)
-      return
     const otpKey = 'hai:iam:otp:expiry@example.com'
-    const resetKey = `hai:iam:reset:${hashed.data}`
     const otpTtl = await cache.kv.ttl(otpKey)
-    const resetTtl = await cache.kv.ttl(resetKey)
     expect(otpTtl.success).toBe(true)
-    expect(resetTtl.success).toBe(true)
     if (otpTtl.success)
       expect(otpTtl.data).toBeGreaterThanOrEqual(58)
-    if (resetTtl.success)
-      expect(resetTtl.data).toBeGreaterThanOrEqual(298)
+    const resetExpiry = await reldb.sql.get<{ reset_expires_at: number | string }>('SELECT reset_expires_at FROM hai_iam_users WHERE username = ?', ['expiry-user'])
+    expect(resetExpiry.success && Number(resetExpiry.data?.reset_expires_at)).toBeGreaterThanOrEqual(Date.now() + 298_000)
     expect((await cache.kv.expire(otpKey, 1)).success).toBe(true)
-    expect((await cache.kv.expire(resetKey, 1)).success).toBe(true)
+    expect((await reldb.sql.execute('UPDATE hai_iam_users SET reset_expires_at = 1 WHERE username = ?', ['expiry-user'])).success).toBe(true)
     await new Promise(resolve => setTimeout(resolve, 1200))
     expect((await iam.auth.loginWithOtp({ identifier: 'expiry@example.com', code: otp })).success).toBe(false)
     expect((await iam.user.confirmPasswordReset(reset, TEST_PASSWORD)).success).toBe(false)
@@ -189,13 +182,9 @@ function tests() {
     await iam.user.confirmPasswordReset(token, 'weak')
     expect(await iam.user.confirmPasswordReset(token, TEST_PASSWORD)).toMatchObject({ success: false, error: { code: HaiIamError.RESET_TOKEN_MAX_ATTEMPTS.code } })
     await iam.user.requestPasswordReset('reset-attempts')
-    // 同时检查真实缓存 TTL；Redis 使用服务端时钟，避免假时钟伪造过期证明。
-    const keys = await cache.kv.keys('hai:iam:reset:*')
-    expect(keys.success).toBe(true)
-    if (keys.success) {
-      for (const key of keys.data)
-        expect(await cache.kv.ttl(key)).toMatchObject({ success: true, data: expect.any(Number) })
-    }
+    // 新代际与计数在同一用户行提交，不再依赖三个缓存键的 TTL 对齐。
+    const state = await reldb.sql.get<{ reset_attempts: number, reset_hash: string }>('SELECT reset_attempts, reset_hash FROM hai_iam_users WHERE username = ?', ['reset-attempts'])
+    expect(state.success && state.data).toMatchObject({ reset_attempts: 0, reset_hash: expect.any(String) })
     await initIam({ passwordReset: { enabled: false } })
     expect(await iam.user.confirmPasswordReset(token, TEST_PASSWORD)).toMatchObject({ success: false, error: { code: HaiIamError.PASSWORD_RESET_DISABLED.code } })
   })

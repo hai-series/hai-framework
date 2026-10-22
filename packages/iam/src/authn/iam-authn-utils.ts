@@ -90,5 +90,5 @@ export async function resetLoginFailures(
   userRepository: UserRepository,
   user: StoredUser,
 ): Promise<HaiResult<void>> {
-  return userRepository.resetLoginFailures(user.id)
+  return userRepository.resetLoginFailures(user.id, user.credentialVersion ?? '')
 }

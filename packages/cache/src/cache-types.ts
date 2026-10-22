@@ -325,6 +325,8 @@ export interface LockOperations {
    * 尝试获取分布式锁
    *
    * 通过 SET NX EX 原子操作实现。每次生成不可复用的所有权凭据；占用时返回 null。
+   * owner 仅用于租约续期/释放，不是资源的 fencing token；暂停/超时后旧操作仍可能继续。
+   * 最终资源写入必须自行使用 CAS/代际条件或数据库事务约束，不能只检查续期或返回失败。
    *
    * @param key - 锁键名
    * @param options - 锁选项
