@@ -909,3 +909,5 @@ pnpm --filter @h-ai/ui test
 ## ライセンス
 
 Apache-2.0
+
+`@h-ai/ui/i18n` の createLocaleStore は、解決できる保存値、navigator.languages 全体（その後 navigator.language）、defaultLocale、対応一覧の先頭の順で選択します。未対応の最初の候補で既定値に戻しません。大小文字、言語略称、地域・スクリプトの段階的フォールバックを照合し、設定済みのコードを返します。同じ言語の複数候補は supportedLocales 順です。実際の一致がなければ detectBrowserLocale は null、空の対応一覧では最終的に呼出側の既定値を返します。SSR はブラウザー候補を読まず全体の言語を変更しません。Paraglide アプリは独自の setLocale 同期が必要で、対応一覧の追加だけでは UI 内蔵辞書は増えません。

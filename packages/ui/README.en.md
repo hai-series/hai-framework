@@ -909,3 +909,5 @@ pnpm --filter @h-ai/ui test
 ## License
 
 Apache-2.0
+
+`createLocaleStore` from `@h-ai/ui/i18n` selects a resolvable saved locale, then the complete navigator.languages list (followed by navigator.language), then defaultLocale and the first supported entry. An unsupported candidate never triggers an early default. Matching handles case, language shorthand and progressively less specific region/script tags, returning the configured code. Same-language variants follow supportedLocales order. detectBrowserLocale returns null without an actual match; an empty supported list ultimately keeps the caller default. SSR neither reads browser candidates nor changes global locale. Paraglide applications must still synchronize their own setLocale; custom store entries do not add built-in UI dictionaries.

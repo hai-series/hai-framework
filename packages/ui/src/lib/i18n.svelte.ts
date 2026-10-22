@@ -16,33 +16,72 @@ const {
   DEFAULT_LOCALES,
 } = core.i18n
 
-function isLocaleSupported(locale: Locale, supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): boolean {
-  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
-  return supportedLocales.some(item => item.code === normalized)
+/** 匹配实际支持项；区域/脚本逐级回退，始终返回列表中的原始代码，不执行默认回退。 */
+function matchSupportedLocale(locale: Locale, supportedLocales: LocaleInfo[]): Locale | null {
+  const normalize = (value: string) => value.trim().replaceAll('_', '-').toLowerCase()
+  let candidate = normalize(locale)
+  while (candidate) {
+    const exact = supportedLocales.find(item => normalize(item.code) === candidate)
+    if (exact)
+      return exact.code
+    const variant = supportedLocales.find(item => normalize(item.code).startsWith(`${candidate}-`))
+    if (variant)
+      return variant.code
+    const separator = candidate.lastIndexOf('-')
+    candidate = separator < 0 ? '' : candidate.slice(0, separator)
+  }
+  return null
 }
 
+/**
+ * 判断候选是否能命中一个支持项（含语言简写与区域回退），不计入默认值。
+ * @param locale - 候选 BCP 47 语言代码。
+ * @param supportedLocales - 应用允许的列表。
+ * @returns 实际命中时为 true。
+ * @example isLocaleSupported('en-GB', [{ code: 'en-US', label: 'English' }]) // true
+ */
+function isLocaleSupported(locale: Locale, supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): boolean {
+  return matchSupportedLocale(locale, supportedLocales) !== null
+}
+
+/**
+ * 解析单个 locale；无命中才尝试默认值、列表首项、最后保留调用方默认值。
+ * @param locale - 待解析代码。
+ * @param supportedLocales - 支持列表，大小写及区域匹配返回该列表中的规范代码。
+ * @param defaultLocale - 全部候选不命中时的应用默认值。
+ * @returns 应用实际可用的 locale；空列表返回 defaultLocale。
+ * @example resolveLocale('fr-FR', [{ code: 'de-DE', label: 'Deutsch' }], 'de-DE') // 'de-DE'
+ */
 function resolveLocale(
   locale: Locale,
   supportedLocales: LocaleInfo[] = DEFAULT_LOCALES,
   defaultLocale: Locale = DEFAULT_LOCALE,
 ): Locale {
-  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
-  return isLocaleSupported(normalized, supportedLocales) ? normalized : defaultLocale
+  return matchSupportedLocale(locale, supportedLocales)
+    ?? matchSupportedLocale(defaultLocale, supportedLocales)
+    ?? supportedLocales[0]?.code
+    ?? defaultLocale
 }
 
+/**
+ * 依浏览器候选顺序寻找实际命中项，全部不支持返回 null，由 store 最后选择默认值。
+ * @param supportedLocales - 应用允许的语言列表。
+ * @returns 实际命中的配置代码；SSR 或无匹配项返回 null。
+ * @example detectBrowserLocale([{ code: 'en-US', label: 'English' }]) // fr-FR, en-US 候选命中 en-US
+ */
 function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): Locale | null {
-  if (typeof navigator === 'undefined') {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return null
   }
 
   const browserCandidates: Locale[] = [
-    navigator.language,
     ...(navigator.languages ?? []),
+    navigator.language,
   ]
 
   for (const candidate of browserCandidates) {
-    const resolved = resolveLocale(candidate, supportedLocales, DEFAULT_LOCALE)
-    if (isLocaleSupported(resolved, supportedLocales)) {
+    const resolved = matchSupportedLocale(candidate, supportedLocales)
+    if (resolved) {
       return resolved
     }
   }
@@ -67,9 +106,9 @@ const LOCALE_STORAGE_KEY = 'hai-locale'
  * 创建 locale 状态管理器
  *
  * @param options - 配置选项
- * @param options.defaultLocale - 默认 locale
+ * @param options.defaultLocale - 全部候选不支持后的默认 locale；不在列表时使用首个支持项。
  * @param options.supportedLocales - 支持的 locale 列表
- * @param options.detectBrowser - 是否检测浏览器语言
+ * @param options.detectBrowser - 是否按完整 navigator.languages 顺序匹配；全部失败才回退默认值。
  * @param options.persistKey - localStorage key
  * @returns locale 状态对象
  * @example
@@ -92,13 +131,14 @@ export function createLocaleStore(options: {
   } = options
 
   // 初始化 locale
-  let initialLocale = defaultLocale
+  let initialLocale = resolveLocale(defaultLocale, supportedLocales, defaultLocale)
 
   if (typeof window !== 'undefined') {
     // 1. 优先从 localStorage 读取
     const savedLocale = readStoredValue(persistKey)
-    if (savedLocale && isLocaleSupported(savedLocale, supportedLocales)) {
-      initialLocale = savedLocale
+    const supportedSavedLocale = savedLocale ? matchSupportedLocale(savedLocale, supportedLocales) : null
+    if (supportedSavedLocale) {
+      initialLocale = supportedSavedLocale
     }
     // 2. 其次检测浏览器语言
     else if (detectBrowser) {
