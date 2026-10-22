@@ -26,7 +26,7 @@ const baseListResult: ListResult = {
 function createStorageMock(): StorageFunctions {
   return {
     init: async () => ok(undefined),
-    close: async () => {},
+    close: async () => ok(undefined),
     config: null,
     isInitialized: true,
     checksum: { generate: async () => ok('digest'), verify: async () => ok(true) },
@@ -78,17 +78,17 @@ describe('serv feature storage', () => {
 
     const response = await app.request('/api/v1/storage/presigned-urls/download', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-hai-locale': 'en-US' },
       body: JSON.stringify({ key: '/private/demo.txt' }),
     })
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(400)
     const body = await response.json()
     expect(body.success).toBe(false)
     expect(body.error.code).toBe(HaiCommonError.VALIDATION_ERROR.code)
     expect(body.error.message).toBe('Validation failed')
     expect(body.error.cause).toEqual([
-      { field: 'key', message: 'Storage key contains illegal characters' },
+      { field: 'key', message: 'Invalid input format' },
     ])
   })
 
@@ -106,13 +106,13 @@ describe('serv feature storage', () => {
       body: JSON.stringify({ keys: ['ok/demo.txt', '../escape.txt'] }),
     })
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(400)
     const body = await response.json()
     expect(body.success).toBe(false)
     expect(body.error.code).toBe(HaiCommonError.VALIDATION_ERROR.code)
     expect(body.error.message).toBe('数据验证失败')
     expect(body.error.cause).toEqual([
-      { field: 'keys.1', message: '存储 key 不能包含 . 或 .. 路径段' },
+      { field: 'keys.1', message: '输入格式无效' },
     ])
   })
 

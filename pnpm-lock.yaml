@@ -1355,6 +1355,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@h-ai/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@orpc/contract':
         specifier: 'catalog:'
         version: 1.15.5(@opentelemetry/api@1.9.1)

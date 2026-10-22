@@ -274,3 +274,7 @@ return uploadWithPresignedUrl(result.data.url, file, { contentType: 'image/png' 
 ## 生产共享状态
 
 生产使用共享 S3 或兼容服务；local 只用于开发/明确测试。对象业务授权和读改写的条件提交由应用负责。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。
+
+## 跨端输入与能力约束
+
+key 统一使用 `@h-ai/storage/schemas` 的 StorageKeySchema（UTF-8 最多1024字节，无绝对路径/反斜线/控制符/点路径段），prefix另允许空串与部分文件名。HTTP批量删除按原数组限制1–1000项，不能以去重绕过；Node仍按Provider分批。签名有效期整数1–604800秒，Node默认3600、HTTP默认900。HTTP上传只接受key/contentType/expiresIn，不接受contentLength/maxSize/metadata/checksum等file.put选项；未知字段返回400，typed client为VALIDATION_FAILED。Node流式读写、Range、checksum、条件写等无默认HTTP端点。FileUpload大小/类型仅为前端选择体验，服务端仍需验证实际对象与归属；不要编造上传代理端点。校验不替代session资源授权及Provider防逃逸。

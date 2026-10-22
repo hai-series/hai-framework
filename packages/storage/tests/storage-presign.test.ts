@@ -80,6 +80,20 @@ describe('storage.presign', () => {
       }
     })
 
+    it.each([0, -1, 0.5, 604801])(`${label}: 无效有效期 %s 在签名前失败`, async (expiresIn) => {
+      for (const operation of ['getUrl', 'putUrl'] as const) {
+        const result = await storage.presign[operation]('a.txt', { expiresIn })
+        expect(result).toMatchObject({ success: false, error: { code: HaiStorageError.PRESIGN_FAILED.code } })
+      }
+    })
+
+    it(`${label}: 输入选项允许省略带默认值的有效期`, async () => {
+      const result = await storage.presign.putUrl('default-type.txt', { contentType: 'text/plain' })
+      expect(result.success).toBe(true)
+      if (result.success)
+        expect(new URL(result.data).searchParams.get('X-Amz-Expires')).toBe('3600')
+    })
+
     // =========================================================================
     // publicUrl
     // =========================================================================

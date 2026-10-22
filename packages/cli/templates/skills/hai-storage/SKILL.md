@@ -36,3 +36,7 @@ description: "实现本地/S3 文件与目录操作、流式读写、checksum �
 - [常见模式](reference.md#常见模式)
 - [浏览器端文件上传（预签名 URL 模式）](reference.md#浏览器端文件上传预签名-url-模式)
 - [相关 Skills](reference.md#相关-skills)
+
+## 跨端输入与能力约束
+
+key 统一使用 `@h-ai/storage/schemas` 的 StorageKeySchema（UTF-8 最多1024字节，无绝对路径/反斜线/控制符/点路径段），prefix另允许空串与部分文件名。HTTP批量删除按原数组限制1–1000项，不能以去重绕过；Node仍按Provider分批。签名有效期整数1–604800秒，Node默认3600、HTTP默认900。HTTP上传只接受key/contentType/expiresIn，不接受contentLength/maxSize/metadata/checksum等file.put选项；未知字段返回400，typed client为VALIDATION_FAILED。Node流式读写、Range、checksum、条件写等无默认HTTP端点。FileUpload大小/类型仅为前端选择体验，服务端仍需验证实际对象与归属；不要编造上传代理端点。校验不替代session资源授权及Provider防逃逸。

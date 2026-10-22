@@ -44,6 +44,7 @@
       "@h-ai/scheduler": ["./packages/scheduler/src/index.ts"],
       "@h-ai/storage": ["./packages/storage/src/index.ts"],
       "@h-ai/storage/client": ["./packages/storage/src/client/index.ts"],
+      "@h-ai/storage/schemas": ["./packages/storage/src/storage-schemas.ts"],
       "@h-ai/payment": ["./packages/payment/src/index.ts"],
       "@h-ai/ui": ["./packages/ui/src/lib/index.ts"]
     },

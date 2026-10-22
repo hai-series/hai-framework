@@ -153,6 +153,7 @@ const ZOD_DEFAULT_MESSAGE_PATTERNS: RegExp[] = [
   /^Too small:/,
   /^Too big:/,
   /^Invalid input:/,
+  /^Invalid input$/, // Zod 4 custom/refine 未提供业务消息时的默认文案。
   /^Invalid option:/,
   /^Invalid string:/,
   /^Invalid email$/,

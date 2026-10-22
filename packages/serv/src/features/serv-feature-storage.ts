@@ -15,12 +15,13 @@ import type { ServMessageKey } from '../serv-i18n.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
+import { getStorageKeyIssue, STORAGE_KEY_MAX_BYTES, StorageDeleteKeysSchema } from '@h-ai/storage/schemas'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
+import { validateInputOrFail } from '../serv-validation.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
 
 const storageContract = apiContract.storage
-const STORAGE_KEY_MAX_LENGTH = 1024
 
 function buildStorageKeyValidationFailure(
   field: string,
@@ -39,25 +40,28 @@ function buildStorageKeyValidationFailure(
 /**
  * 对业务层再次校验存储 key 是否安全。
  *
- * 这里不额外构造 Zod schema，而是直接按业务规则返回统一的
- * `HaiResult + ValidationFormError[]` 形态，避免把简单路径安全规则包装得过重。
+ * 与公开 Schema 共用规则，保留业务入口防线；后续仍必须执行授权和 Provider 防逃逸。
  */
 function validateStorageKeyOrFail(key: string, locale: string, field: string = 'key'): HaiResult<string> {
-  if (key.trim() === '')
+  const issue = getStorageKeyIssue(key)
+  if (issue === 'empty')
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyRequired')
-  if (key.length > STORAGE_KEY_MAX_LENGTH) {
+  if (issue === 'tooLong') {
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyTooLong', {
-      max: STORAGE_KEY_MAX_LENGTH,
+      max: STORAGE_KEY_MAX_BYTES,
     })
   }
-  if (key.startsWith('/') || key.includes('\\') || key.includes('\0'))
+  if (issue === 'characters')
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyIllegalChars')
-  if (key.split('/').some(seg => seg === '.' || seg === '..'))
+  if (issue === 'segments')
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyDotSegments')
   return ok(key)
 }
 
 function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<string[]> {
+  const parsed = validateInputOrFail(StorageDeleteKeysSchema, keys, locale)
+  if (!parsed.success)
+    return parsed
   for (const [index, key] of keys.entries()) {
     const keyResult = validateStorageKeyOrFail(key, locale, `keys.${index}`)
     if (!keyResult.success)

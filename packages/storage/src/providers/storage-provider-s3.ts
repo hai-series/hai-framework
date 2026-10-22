@@ -26,6 +26,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 import { core, err, ok } from '@h-ai/core'
 
+import { PresignOptionsSchema, PresignUploadOptionsSchema } from '../storage-config.js'
 import { toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
 import { toByteStream } from '../storage-stream.js'
@@ -586,6 +587,7 @@ export function createS3Provider(): StorageProvider {
   const presign: PresignOperations = {
     async getUrl(key, options?): Promise<HaiResult<string>> {
       try {
+        const parsed = PresignOptionsSchema.parse(options ?? {})
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
@@ -594,12 +596,12 @@ export function createS3Provider(): StorageProvider {
         const command = new GetObjectCommand({
           Bucket: s3Config.bucket,
           Key: fullPath,
-          ResponseContentType: options?.responseContentType,
-          ResponseContentDisposition: options?.responseContentDisposition,
+          ResponseContentType: parsed.responseContentType,
+          ResponseContentDisposition: parsed.responseContentDisposition,
         })
 
         const url = await getSignedUrl(s3Client, command, {
-          expiresIn: options?.expiresIn || 3600,
+          expiresIn: parsed.expiresIn,
         })
 
         return ok(url)
@@ -615,6 +617,7 @@ export function createS3Provider(): StorageProvider {
 
     async putUrl(key, options?): Promise<HaiResult<string>> {
       try {
+        const parsed = PresignUploadOptionsSchema.parse(options ?? {})
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
@@ -623,11 +626,11 @@ export function createS3Provider(): StorageProvider {
         const command = new PutObjectCommand({
           Bucket: s3Config.bucket,
           Key: fullPath,
-          ContentType: options?.contentType || 'application/octet-stream',
+          ContentType: parsed.contentType,
         })
 
         const url = await getSignedUrl(s3Client, command, {
-          expiresIn: options?.expiresIn || 3600,
+          expiresIn: parsed.expiresIn,
         })
 
         return ok(url)

@@ -515,6 +515,8 @@ function mapClientError(error: unknown) {
   if (error instanceof ORPCError) {
     // 保留 ORPCError 的原始 code / status / data，供上层区分具体业务异常（不仅是 HTTP 状态码）。
     const detail = { orpcCode: error.code, status: error.status, data: error.data }
+    if (error.status === 400 || error.status === 422)
+      return err(HaiApiClientError.VALIDATION_FAILED, error.message, detail)
     if (error.status === 401)
       return err(HaiApiClientError.UNAUTHORIZED, error.message, detail)
     if (error.status === 403)

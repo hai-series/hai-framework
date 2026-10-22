@@ -5,6 +5,7 @@
 
 import { z } from 'zod'
 import { storageM } from './storage-i18n.js'
+import { StoragePresignExpiresInSchema } from './storage-schemas.js'
 
 // ─── 配置 Schema ───
 
@@ -159,7 +160,7 @@ export type StorageConfigInput = z.input<typeof StorageConfigSchema>
  */
 export const PresignOptionsSchema = z.object({
   /** 过期时间（秒），范围 1~604800（7 天），默认 3600（1 小时） */
-  expiresIn: z.number().min(1).max(604800).default(3600), // 最长 7 天
+  expiresIn: StoragePresignExpiresInSchema.default(3600), // 最长 7 天
 
   /** 响应内容类型（用于下载时设置 Content-Type） */
   responseContentType: z.string().optional(),
@@ -168,8 +169,11 @@ export const PresignOptionsSchema = z.object({
   responseContentDisposition: z.string().optional(),
 })
 
-/** 签名 URL 配置类型（parse 后） */
-export type PresignOptions = z.infer<typeof PresignOptionsSchema>
+/**
+ * 签名 URL 输入选项，允许省略带默认值的字段。
+ * @example const options: PresignOptions = { responseContentType: 'text/plain' }
+ */
+export type PresignOptions = z.input<typeof PresignOptionsSchema>
 
 /**
  * 上传签名 URL 配置 Schema
@@ -189,5 +193,8 @@ export const PresignUploadOptionsSchema = PresignOptionsSchema.extend({
   contentType: z.string().default('application/octet-stream'),
 })
 
-/** 上传签名 URL 配置类型（parse 后） */
-export type PresignUploadOptions = z.infer<typeof PresignUploadOptionsSchema>
+/**
+ * 上传签名 URL 输入选项，省略 contentType 时使用 application/octet-stream。
+ * @example const options: PresignUploadOptions = { contentType: 'image/png' }
+ */
+export type PresignUploadOptions = z.input<typeof PresignUploadOptionsSchema>

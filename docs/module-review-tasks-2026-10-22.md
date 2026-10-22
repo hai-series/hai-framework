@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03，共 66 个，另有 21 个按模块拆分的 JSDoc 任务，共 87 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 43/43；P2 15/44（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 43/43；P2 16/44（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -612,7 +612,8 @@
 
 ### CONTRACT-01 · P2 · 统一 storage API 的输入限制与能力声明
 
-- [ ] 待修正（按本次要求补强；范围：api-contract）。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：新增仅依赖Zod的浏览器安全storage/schemas入口，API/serv共用UTF-8 1024字节key、prefix和HTTP原始数组1..1000约束；服务端继续逐资源授权和Provider防逃逸。签名期限整数1..604800、输入类型允许省略默认值，S3运行时校验；HTTP严格拒绝未消费contentLength及Node上传选项，客户端400/422映射VALIDATION_FAILED，默认refine错误按locale翻译。同步五包三语README、storage skill、LLMS、workspace依赖/lock/tsconfig及能力矩阵。32契约+26serv（真实TCP/typed client/1000文件删除）+16客户端+59Local/MinIO/RustFS签名+3core回归通过；Chrome公开双入口6检查/Vite生产构建、五包类型/fresh构建、严格测试类型、定向lint和skills通过，证据tmp/module-repair-20261022/CONTRACT-01；未宣称HTTP具备Node流/checksum或上传大小保证；全量回归按用户要求在全部任务实施后执行。
 - **位置**：[packages/api-contract/src/storage/storage-schemas.ts:60](../packages/api-contract/src/storage/storage-schemas.ts#L60)；[packages/api-contract/src/storage/storage-schemas.ts:65](../packages/api-contract/src/storage/storage-schemas.ts#L65)；[packages/serv/src/features/serv-feature-storage.ts:26](../packages/serv/src/features/serv-feature-storage.ts#L26)。
 - **证据与影响**：公开 key schema 只有非空约束，而 serv 另有长度和路径规则；批量删除 keys 无总量上限。客户端契约与服务端边界分散，超出 provider 上限的处理需配合 STORAGE-01 明确。
 - **修正内容**：复用可跨端的 key/批量输入约束，服务端继续执行资源授权和防逃逸；建立 storage→API→serv→client 的能力映射，明确哪些仅 Node 端支持。不要把 file.put 的选项误当 presign 已支持。

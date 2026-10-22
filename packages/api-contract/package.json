@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
+    "@h-ai/storage": "workspace:*",
     "@orpc/contract": "catalog:",
     "zod": "catalog:"
   },

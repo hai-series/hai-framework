@@ -7,6 +7,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import { StorageDeleteKeysSchema, StorageKeySchema, StoragePrefixSchema, StoragePresignExpiresInSchema } from '@h-ai/storage/schemas'
 import { z } from 'zod'
 
 /** 文件元数据 Schema。 */
@@ -20,17 +21,16 @@ export const StorageFileMetadataSchema = z.object({
 })
 
 /** 获取下载签名 URL 入参 Schema。 */
-export const StoragePresignDownloadInputSchema = z.object({
-  key: z.string().min(1),
-  expiresIn: z.number().int().min(1).optional(),
+export const StoragePresignDownloadInputSchema = z.strictObject({
+  key: StorageKeySchema,
+  expiresIn: StoragePresignExpiresInSchema.optional(),
 })
 
 /** 获取上传签名 URL 入参 Schema。 */
-export const StoragePresignUploadInputSchema = z.object({
-  key: z.string().min(1),
+export const StoragePresignUploadInputSchema = z.strictObject({
+  key: StorageKeySchema,
   contentType: z.string().optional(),
-  contentLength: z.number().int().min(1).optional(),
-  expiresIn: z.number().int().min(1).optional(),
+  expiresIn: StoragePresignExpiresInSchema.optional(),
 })
 
 /** 签名 URL 业务数据 Schema。 */
@@ -42,7 +42,7 @@ export const StoragePresignedUrlSchema = z.object({
 
 /** 文件列表查询入参 Schema。 */
 export const StorageListFilesInputSchema = z.object({
-  prefix: z.string().optional(),
+  prefix: StoragePrefixSchema.optional(),
   maxKeys: z.coerce.number().int().min(1).max(1000).optional(),
   continuationToken: z.string().optional(),
   delimiter: z.string().optional(),
@@ -58,12 +58,12 @@ export const StorageListFilesDataSchema = z.object({
 
 /** 单文件操作入参 Schema。 */
 export const StorageFileKeyInputSchema = z.object({
-  key: z.string().min(1),
+  key: StorageKeySchema,
 })
 
 /** 批量删除文件入参 Schema。 */
 export const StorageDeleteFilesInputSchema = z.object({
-  keys: z.array(z.string().min(1)).min(1),
+  keys: StorageDeleteKeysSchema,
 })
 
 /**

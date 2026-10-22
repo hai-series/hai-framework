@@ -5,7 +5,7 @@
   "serv_validationInvalid": "Invalid input format",
   "serv_validationInvalidType": "Invalid field type",
   "serv_validationStringMin": "Enter at least {min} characters",
-  "serv_validationStringMax": "Enter at most {max} characters",
+  "serv_validationStringMax": "Enter at most {max} UTF-8 bytes",
   "serv_validationNumberMin": "Value must be at least {min}",
   "serv_validationNumberMax": "Value must be at most {max}",
   "serv_validationArrayMin": "Select at least {min} item(s)",
