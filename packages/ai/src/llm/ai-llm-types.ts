@@ -371,9 +371,9 @@ export interface StreamProcessor {
 export interface SSEEvent {
   /** 事件类型（`event:` 字段） */
   event?: string
-  /** 事件 ID（`id:` 字段） */
+  /** 事件 ID（`id:` 字段）；解码继承最近有效值，空字符串显式清空，NUL 字段忽略。 */
   id?: string
-  /** 重连间隔（毫秒，`retry:` 字段） */
+  /** 重连间隔（毫秒，非负安全整数）；解码保留最近有效值，但不会自动执行重连。 */
   retry?: number
   /** 数据载荷（`data:` 字段，多行数据以 `\n` 合并） */
   data?: string
@@ -382,7 +382,9 @@ export interface SSEEvent {
 /**
  * SSE 解码器接口
  *
- * 内部维护缓冲区，支持跨 chunk 的不完整数据拼接。
+ * 内部维护行与事件缓冲区，支持跨 chunk 的 LF/CRLF/CR 和多行 data。
+ * 仅移除冒号后的一个 ASCII 空格；只派发有 data 字段且已收到空行的事件。
+ * EOF 不补空行；新连接或放弃未完成输入时调用 reset，清除旧 id/retry 与剩余数据。
  *
  * @example
  * ```ts
@@ -395,9 +397,9 @@ export interface SSEEvent {
  * ```
  */
 export interface SSEDecoder {
-  /** 追加文本并解码出完整事件；未完成的部分留在缓冲区 */
+  /** 追加 UTF-8 解码后的文本并解码完整事件；未完成的部分留在缓冲区。 */
   decode: (text: string) => Iterable<SSEEvent>
-  /** 清空缓冲区 */
+  /** 清空所有缓冲区及连接级元数据；不会派发残余的不完整事件。 */
   reset: () => void
 }
 

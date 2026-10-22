@@ -639,3 +639,5 @@ Store の拡張には公開 AIStoreProvider を使用します。組み込み LL
 Apache-2.0
 
 Knowledge は datapipe の単位と上限に従い、word は語数、その他は Unicode code point として清洗後テキストの区切りを保持します。AI の既定は markdown/maxSize=1500/overlap=200 のままです。maxSize を小さく上書きする際は継承する overlap もそれ未満にしてください。不正な分割設定・正規表現は embedding と版の公開前に KNOWLEDGE_INGEST_FAILED を返し、文書全体への無制限フォールバックは行いません。
+
+SSE は [WHATWG のイベントストリーム規則](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)に従い、分割された LF/CRLF/CR、複数 data 行、コロン直後の空白一つ、id/retry の継承、既定の message を扱います。EOF の未完了イベントは配信しません。encodeSSE は data の改行を正規化し、不正なメタデータは明示的に例外を返します。Anthropic/MiMo は UTF-8 reader を共有し、終了・取消・失敗時に本文を取消して解放します。自動再接続や業務再実行は行わず、Anthropic の timeout は本文まで、MiMo は各 HTTP リクエスト単位で適用します。

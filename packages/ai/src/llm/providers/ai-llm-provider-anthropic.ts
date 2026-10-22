@@ -19,7 +19,7 @@ import { err, ok } from '@h-ai/core'
 
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
-import { createSSEDecoder } from '../ai-llm-stream.js'
+import { readSSEStream } from '../ai-llm-stream.js'
 
 const ANTHROPIC_VERSION = '2023-06-01'
 const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com'
@@ -379,30 +379,18 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
 
   /** 发送 fetch 请求并统一超时/取消/错误处理 */
   async function post(resolved: ResolvedAnthropic, body: AnthropicRequest, signal?: AbortSignal): Promise<Response> {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), resolved.timeout)
-    // 合并外部取消信号与超时信号
-    if (signal) {
-      if (signal.aborted)
-        controller.abort()
-      else
-        signal.addEventListener('abort', () => controller.abort(), { once: true })
-    }
-    try {
-      return await fetch(`${resolved.baseUrl}/v1/messages`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': resolved.apiKey,
-          'anthropic-version': ANTHROPIC_VERSION,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      })
-    }
-    finally {
-      clearTimeout(timer)
-    }
+    // 信号覆盖正文消费，不能在只收到响应头时就解除总超时。
+    const timeout = AbortSignal.timeout(resolved.timeout)
+    return fetch(`${resolved.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': resolved.apiKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify(body),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    })
   }
 
   /** 将 HTTP 错误状态映射为标准错误定义 */
@@ -433,7 +421,7 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
         return ok(toChatResponse(data, resolved.model))
       }
       catch (error) {
-        if (error instanceof Error && error.name === 'AbortError')
+        if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
           return err(HaiAIError.TIMEOUT, aiM('ai_requestTimeout'), { message: error.message })
         return err(HaiAIError.INTERNAL_ERROR, aiM('ai_internalError', { params: { error: error instanceof Error ? error.message : 'Unknown error' } }), error)
       }
@@ -451,42 +439,37 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
         throw new Error(`Anthropic stream failed (${res.status}): ${detail.slice(0, 300)}`)
       }
 
-      const decoder = createSSEDecoder()
-      const reader = res.body.getReader()
-      const textDecoder = new TextDecoder()
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done)
-          break
-        for (const event of decoder.decode(textDecoder.decode(value, { stream: true }))) {
-          if (!event.data || event.data === '[DONE]')
-            continue
-          let payload: { type?: string, delta?: { type?: string, text?: string }, usage?: AnthropicUsage, message?: { usage?: AnthropicUsage } }
-          try {
-            payload = JSON.parse(event.data)
-          }
-          catch {
-            continue
-          }
-          // 文本增量
-          if (payload.type === 'content_block_delta' && payload.delta?.type === 'text_delta' && payload.delta.text) {
-            yield textChunk(resolved.model, resolved.model, payload.delta.text)
-          }
-          // 完成事件：携带输出用量
-          else if (payload.type === 'message_delta' && payload.usage) {
-            yield {
-              id: resolved.model,
-              object: 'chat.completion.chunk',
-              created: Math.floor(Date.now() / 1000),
-              model: resolved.model,
-              choices: [{ index: 0, delta: {}, finish_reason: 'stop', logprobs: null }],
-              usage: {
-                prompt_tokens: payload.message?.usage?.input_tokens ?? 0,
-                completion_tokens: payload.usage.output_tokens,
-                total_tokens: (payload.message?.usage?.input_tokens ?? 0) + payload.usage.output_tokens,
-              },
-            }
+      for await (const event of readSSEStream(res, request.signal)) {
+        if (event.data === '[DONE]')
+          return
+        if (!event.data)
+          continue
+        let payload: { type?: string, delta?: { type?: string, text?: string }, usage?: AnthropicUsage, message?: { usage?: AnthropicUsage } }
+        try {
+          payload = JSON.parse(event.data)
+        }
+        catch {
+          continue
+        }
+        if (payload.type === 'message_stop')
+          return
+        // 文本增量
+        if (payload.type === 'content_block_delta' && payload.delta?.type === 'text_delta' && payload.delta.text) {
+          yield textChunk(resolved.model, resolved.model, payload.delta.text)
+        }
+        // 完成事件：携带输出用量
+        else if (payload.type === 'message_delta' && payload.usage) {
+          yield {
+            id: resolved.model,
+            object: 'chat.completion.chunk',
+            created: Math.floor(Date.now() / 1000),
+            model: resolved.model,
+            choices: [{ index: 0, delta: {}, finish_reason: 'stop', logprobs: null }],
+            usage: {
+              prompt_tokens: payload.message?.usage?.input_tokens ?? 0,
+              completion_tokens: payload.usage.output_tokens,
+              total_tokens: (payload.message?.usage?.input_tokens ?? 0) + payload.usage.output_tokens,
+            },
           }
         }
       }

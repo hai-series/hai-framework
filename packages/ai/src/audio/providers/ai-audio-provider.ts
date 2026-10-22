@@ -533,7 +533,9 @@ export function mapStreamError(error: unknown, signal?: AbortSignal): HaiError {
   const maybe = error as { code?: unknown, name?: unknown }
   if (typeof maybe.code === 'string' && maybe.code.startsWith('hai:ai:'))
     return error as HaiError
-  if (maybe.name === 'AbortError' || maybe.name === 'TimeoutError')
+  if (maybe.name === 'TimeoutError')
+    return audioError(HaiAIError.AUDIO_TIMEOUT, aiM('ai_audioTimeout'))
+  if (maybe.name === 'AbortError')
     return audioAbortError(signal)
   return audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: errorMessage(error) } }), error)
 }

@@ -46,3 +46,5 @@ description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像
 补充类型/错误码与范本见 [reference.md](reference.md)，仅在上述用法不足时读取。
 
 公开 API 示例以安装包的实际入口为准；框架源码中的内部工厂例子仅供模块维护。HaiResult 调用先检查 success，流与浏览器 AudioClient 按显式抛错契约处理；Context flush 失败和 A2A 未知外部效果不得盲目重放。
+
+Node 自定义 SSE 使用 ai.stream 的统一编解码，不用 split/trim 手拆上游事件；encoder 的非法元数据会显式抛错。Anthropic/MiMo 的真实 HTTP 流在退出和取消时释放正文，EOF 不伪造未完成事件，不自动重连或重放业务。

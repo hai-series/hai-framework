@@ -288,3 +288,5 @@ const memories = await apiClient.ai.memories.recall({ query: '偏好', topK: 5 }
 Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。
 
 JSDoc 公开示例使用真实包入口，内部工厂示例标记“模块内部上下文”；框架仓库执行 `pnpm check:jsdoc --package ai` 校验结构体、公开函数和示例类型。调用示例须保留 HaiResult 成功检查、受信主体范围、共享 CAS 版本与存储端期限，不将后台 flush 失败或未知外部效果当作成功重试。
+
+SSE：Node 的 ai.stream 解码器支持跨片 LF/CRLF/CR、多行 data，只去冒号后一个空格；无 data 块不派发，空或缺省事件名按 message，id/retry 继承最近有效值，reset 清空连接状态，EOF 不补空行。encodeSSE 允许合法 data 换行并规范化，id/event 换行、id 的 NUL、非负安全整数以外的 retry 显式抛 TypeError/RangeError。真实 Anthropic/MiMo 使用同一内部 UTF-8 reader，退出/取消/协议结束/错误均取消正文并释放 reader；无自动重连/副作用重放。Anthropic 总 timeout 覆盖正文，MiMo 保留每请求独立 timeout。

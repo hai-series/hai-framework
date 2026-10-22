@@ -24,7 +24,7 @@ import type {
 import { core, err, ok } from '@h-ai/core'
 import { aiM } from '../../ai-i18n.js'
 import { HaiAIError } from '../../ai-types.js'
-import { createSSEDecoder } from '../../llm/ai-llm-stream.js'
+import { readSSEStream } from '../../llm/ai-llm-stream.js'
 import { audioError, combineSignal, describeHttpError, errorMessage, fromBase64, streamSentences, toAudioErrorResult, toBase64 } from './ai-audio-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'audio-mimo' })
@@ -97,12 +97,13 @@ export function createMimoAudioProvider(): AudioProvider {
     if (!mime)
       return err(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: 'mimo', reason: `format ${audio.format} (only wav/mp3)` } }))
 
+    const requestSignal = combineSignal(signal, model.timeout)
     try {
       const response = await postChat(model.baseUrl, model.apiKey, {
         model: model.model,
         messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: `data:${mime};base64,${toBase64(audio.data)}` } }] }],
         asr_options: { language: language ?? 'auto' },
-      }, model.timeout, signal)
+      }, requestSignal)
       if (!response.ok)
         return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
 
@@ -112,7 +113,7 @@ export function createMimoAudioProvider(): AudioProvider {
     }
     catch (error) {
       logger.debug('MiMo transcribe failed', { error: errorMessage(error) })
-      return toAudioErrorResult(error, signal)
+      return toAudioErrorResult(error, requestSignal)
     }
   }
 
@@ -126,17 +127,18 @@ export function createMimoAudioProvider(): AudioProvider {
     if (!mime)
       throw audioError(HaiAIError.AUDIO_UNSUPPORTED_INPUT, aiM('ai_audioUnsupportedInput', { params: { provider: 'mimo', reason: `format ${content.format} (only wav/mp3)` } }))
 
+    const requestSignal = combineSignal(signal, model.timeout)
     const response = await postChat(model.baseUrl, model.apiKey, {
       model: model.model,
       messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: `data:${mime};base64,${toBase64(content.data)}` } }] }],
       asr_options: { language: language ?? 'auto' },
       stream: true,
-    }, model.timeout, signal)
+    }, requestSignal)
     if (!response.ok)
       throw audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
 
     let text = ''
-    for await (const chunk of readChunks(response)) {
+    for await (const chunk of readChunks(response, requestSignal)) {
       const delta = chunk.choices?.[0]?.delta?.content
       if (delta) {
         text += delta
@@ -150,12 +152,13 @@ export function createMimoAudioProvider(): AudioProvider {
     const { model, text, voice, instruction, format, sampleRate, signal } = request
     // 与 synthesizeStream 共用同一解析函数，确保完整与流式合成对同一 format 得到一致编码
     const out = resolveSynthesisOutput({ format, sampleRate })
+    const requestSignal = combineSignal(signal, model.timeout)
     try {
       const response = await postChat(model.baseUrl, model.apiKey, {
         model: model.model,
         messages: buildTtsMessages(text, instruction),
         audio: { format: out.format, ...(voice ? { voice } : {}) },
-      }, model.timeout, signal)
+      }, requestSignal)
       if (!response.ok)
         return err(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
 
@@ -168,7 +171,7 @@ export function createMimoAudioProvider(): AudioProvider {
     }
     catch (error) {
       logger.debug('MiMo synthesize failed', { error: errorMessage(error) })
-      return toAudioErrorResult(error, signal)
+      return toAudioErrorResult(error, requestSignal)
     }
   }
 
@@ -181,16 +184,18 @@ export function createMimoAudioProvider(): AudioProvider {
     for await (const segment of segments) {
       if (!segment)
         continue
+      // 每个真实 HTTP 合成请求保留原有独立 timeout，读取正文时仍使用同一信号。
+      const requestSignal = combineSignal(signal, model.timeout)
       const response = await postChat(model.baseUrl, model.apiKey, {
         model: model.model,
         messages: buildTtsMessages(segment, instruction),
         audio: { format: outFormat, ...(voice ? { voice } : {}) },
         stream: true,
-      }, model.timeout, signal)
+      }, requestSignal)
       if (!response.ok)
         throw audioError(HaiAIError.AUDIO_UPSTREAM_ERROR, aiM('ai_audioUpstreamError', { params: { error: await describeHttpError(response) } }))
 
-      for await (const chunk of readChunks(response)) {
+      for await (const chunk of readChunks(response, requestSignal)) {
         const base64 = chunk.choices?.[0]?.delta?.audio?.data
         if (base64)
           yield fromBase64(base64)
@@ -223,7 +228,7 @@ function buildTtsMessages(text: string, instruction?: string): Array<{ role: str
 }
 
 /** 发送 Chat Completions 请求（Authorization Bearer） */
-function postChat(baseUrl: string, apiKey: string | undefined, body: Record<string, unknown>, timeout: number, signal?: AbortSignal): Promise<Response> {
+function postChat(baseUrl: string, apiKey: string | undefined, body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
   const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (apiKey)
@@ -232,37 +237,25 @@ function postChat(baseUrl: string, apiKey: string | undefined, body: Record<stri
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    signal: combineSignal(signal, timeout),
+    signal,
   })
 }
 
 /** 迭代 SSE 响应，逐个产出解析后的 MiMo 数据块（`[DONE]` 结束） */
-async function* readChunks(response: Response): AsyncIterable<MimoChunk> {
-  const body = response.body
-  if (!body)
-    return
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  const sse = createSSEDecoder()
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done)
-        break
-      const text = decoder.decode(value, { stream: true })
-      for (const event of sse.decode(text)) {
-        if (!event.data || event.data === '[DONE]')
-          continue
-        try {
-          yield JSON.parse(event.data) as MimoChunk
-        }
-        catch {
-          // 忽略无法解析的心跳/空行
-        }
-      }
+async function* readChunks(response: Response, signal?: AbortSignal): AsyncIterable<MimoChunk> {
+  for await (const event of readSSEStream(response, signal)) {
+    if (event.data === '[DONE]')
+      return
+    if (!event.data)
+      continue
+    let chunk: MimoChunk
+    try {
+      chunk = JSON.parse(event.data) as MimoChunk
     }
-  }
-  finally {
-    reader.releaseLock()
+    catch {
+      // 忽略无法解析的心跳/空行。
+      continue
+    }
+    yield chunk
   }
 }

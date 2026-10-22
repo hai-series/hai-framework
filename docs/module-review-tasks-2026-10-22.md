@@ -2,9 +2,9 @@
 
 审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04，共 79 个，另有 21 个按模块拆分的 JSDoc 任务，共 100 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08，共 80 个，另有 21 个按模块拆分的 JSDoc 任务，共 101 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 38/51（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 39/52（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -31,7 +31,7 @@
 | crypto | 15 | 48 | 1 | 44 | CRYPTO-01、CRYPTO-02、CRYPTO-03、CRYPTO-04 | JSDOC-09 |
 | datapipe | 8 | 23 | 0 | 14 | PIPE-01 | JSDOC-10 |
 | deploy | 26 | 75 | 1 | 55 | DEPLOY-01、DEPLOY-02、DEPLOY-03 | JSDOC-11 |
-| iam | 38 | 151 | 9 | 150 | IAM-01、IAM-02、IAM-03、IAM-04、IAM-05、IAM-06、IAM-07 | JSDOC-12 |
+| iam | 38 | 151 | 9 | 150 | IAM-01、IAM-02、IAM-03、IAM-04、IAM-05、IAM-06、IAM-07、IAM-08 | JSDOC-12 |
 | kit | 44 | 151 | 3 | 91 | KIT-01、KIT-02 | JSDOC-13 |
 | payment | 18 | 50 | 8 | 47 | PAY-01、PAY-02、PAY-03、PAY-04、PAY-05、PAY-06 | JSDOC-14 |
 | reach | 13 | 51 | 1 | 42 | REACH-01、REACH-02、REACH-03、REACH-04 | JSDOC-15 |
@@ -868,7 +868,8 @@
 
 ### AI-08 · P2 · 修正真实 LLM 流使用的 SSE 解码语义
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：实际Anthropic/MiMo共用增量SSE reader，正确处理CRLF/LF/CR、UTF8跨片、data空白/多行、id重置/retry与连接状态，EOF无空行不补派事件；encoder保留空id并拒绝metadata换行注入。迭代退出/abort/DONE/正文超时释放reader与HTTP正文，Anthropic与MiMo期限覆盖正文，Audio分别映射TimeoutError/AbortError。5源码+3测试独立于AI07遗留删除和JSDoc01，4定向文件100测试通过，含10真实HTTP场景及服务端连接关闭断言；源码/四测试严格类型、lint零警告、fresh ESM/DTS、482示例/skills/API全部0。三语README/三Reference/双skill/LLMS同步，遵循WHATWG事件分派规则；未调用付费模型上游，也未自动重连重放；全量回归按用户要求在全部任务实施后执行。
 - **位置**：`packages/ai/src/llm/ai-llm-stream.ts` 的 createSSEDecoder，Anthropic/MiMo 等实际消费者。
 - **证据与影响**：以双LF分段无法处理标准CRLF事件；data.trim丢失有意义空格，多行data与id/retry状态不符合流协议。CRLF单事件已确认返回空数组。与AI07删除的无消费legacy客户端不是同一代码。
 - **修正内容**：维护实际共享解码器，正确处理流式换行、data拼接及事件状态；同步真实provider调用与示例。
@@ -907,3 +908,11 @@
 - **证据与影响**：旧 XHR 分支对已经 abort 的 signal 仍发送请求，终态未移除外部监听；原生 xhr.abort 可能使 Promise 永不结算，错误 URL 在 Promise executor 内抛错还会绕过失败结果契约。真实 Chrome 的 7 项旧实现回归全部失败。
 - **修正内容**：发送前检查取消，所有原生终态只结算一次并释放监听；捕获构造/打开/发送和进度回调异常，维持既有失败结果契约，不把调用方清理与服务端持久化混为一谈。
 - **验收标准**：真实浏览器预取消不发送、进行中/外部取消、网络/超时、失败 URL 与回调异常、监听清理和旧客户端回归均通过；三语 README、JSDoc和测试依赖一致。
+
+### IAM-08 · P2 · 删除未实现的记住登录能力与冗余转发字段
+
+- [ ] 待修正。
+- **位置**：IAM PasswordCredentials、IamLoginSchema、UI LoginFormData/LoginFormProps/LoginForm、api-client/kit 登录转发与 UI gallery。
+- **证据与影响**：全仓仅有 rememberMe 类型/Schema/转发和 checkbox，无任何认证、期限或持久化消费；独立 LoginForm 默认展示该未实现选项，AuthPanel 又显式关闭，接口与可见承诺不一致。
+- **修正内容**：直接移除 rememberMe、showRememberMe 及对应选择框、空转发、无消费文案/示例；不新增会话期限或客户端持久化机制。同步三语 README、skills、应用、模板与实际公开类型。
+- **验收标准**：全仓生产引用无遗留，真实表单无虚假选项且提交不包含该字段，密码/OTP 其余流程通过；相关 types/build/JSDoc 与调用方验证。
