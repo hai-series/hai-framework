@@ -40,19 +40,18 @@ async function loadSecureStoragePlugin(): Promise<SecureStoragePlugin> {
  *
  * @returns TokenStorage 实例
  * @throws 返回适配器的方法在插件不可用或原生存储失败时拒绝 Promise。
- *
  * @example
  * ```ts
  * import { createCapacitorTokenStorage } from '@h-ai/capacitor'
- * import { apiClient } from '@h-ai/api-client'
  *
- * await apiClient.init({
- *   baseUrl: 'https://api.example.com/v1',
- *   auth: {
- *     storage: createCapacitorTokenStorage(),
- *     refreshPath: '/auth/refresh',
- *   },
- * })
+ * const storage = createCapacitorTokenStorage()
+ * try {
+ *   const token = await storage.getAccessToken()
+ *   void token // 仅原生安全存储；平台或存储失败会拒绝 Promise。
+ * } catch (cause) {
+ *   // 应阻止认证流程继续并呈现本地化错误；不回退到普通 Preferences。
+ *   void cause
+ * }
  * ```
  */
 export function createCapacitorTokenStorage(): TokenStorage {
@@ -134,12 +133,19 @@ export function createCapacitorTokenStorage(): TokenStorage {
  *
  * @param key - Preference Key
  * @returns HaiResult 包裹的值
- *
  * @example
  * ```ts
- * const result = await capacitor.preferences.get('my_key')
- * if (result.success) {
- *   result.data // 值或 null
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.preferences.get('theme')
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
  * }
  * ```
  */
@@ -163,10 +169,20 @@ export async function safeGetPreference(key: string): Promise<HaiResult<string |
  * @param key - Preference Key
  * @param value - 要写入的值
  * @returns HaiResult
- *
  * @example
  * ```ts
- * await capacitor.preferences.set('my_key', 'value')
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.preferences.set('theme', 'dark')
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export async function safeSetPreference(key: string, value: string): Promise<HaiResult<void>> {
@@ -188,10 +204,20 @@ export async function safeSetPreference(key: string, value: string): Promise<Hai
  *
  * @param key - Preference Key
  * @returns HaiResult
- *
  * @example
  * ```ts
- * await capacitor.preferences.remove('my_key')
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.preferences.remove('theme')
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export async function safeRemovePreference(key: string): Promise<HaiResult<void>> {

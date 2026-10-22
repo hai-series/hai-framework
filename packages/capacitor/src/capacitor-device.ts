@@ -18,12 +18,19 @@ import { HaiCapacitorError } from './capacitor-types.js'
  * 需要安装 `@capacitor/device` 插件。
  *
  * @returns 设备信息（平台、系统版本、型号等）
- *
  * @example
  * ```ts
- * const result = await capacitor.device.getInfo()
- * if (result.success) {
- *   result.data.platform // 'android' | 'ios' | 'web'
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.device.getInfo()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
  * }
  * ```
  */
@@ -53,13 +60,19 @@ export async function getDeviceInfo(): Promise<HaiResult<DeviceInfo>> {
  * 获取应用版本信息
  *
  * @returns appVersion 与 appBuild
- *
  * @example
  * ```ts
- * const result = await capacitor.device.getAppVersion()
- * if (result.success) {
- *   result.data.version // '1.0.0'
- *   result.data.build   // '42'
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.device.getAppVersion()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
  * }
  * ```
  */

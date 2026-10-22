@@ -87,15 +87,19 @@ function isCapacitorAvailable(): boolean {
 
 /**
  * Capacitor 模块服务对象
- *
  * @example
  * ```ts
  * import { capacitor } from '@h-ai/capacitor'
  *
- * const result = await capacitor.init()
- * if (result.success) {
- *   const info = await capacitor.device.getInfo()
- *   await capacitor.statusBar.configure({ style: 'dark', overlay: true })
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.device.getInfo()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
  * }
  * ```
  */

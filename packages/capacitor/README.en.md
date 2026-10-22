@@ -115,7 +115,7 @@ export const ssr = false
 
 ### Error handling
 
-All asynchronous APIs return `HaiResult<T>` instead of throwing directly:
+Business operations on `capacitor.*` and `safe*Preference` return `HaiResult<T>`. TokenStorage adapter methods reject their promises on platform or storage errors:
 
 ```ts
 import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
@@ -159,3 +159,5 @@ pnpm --filter @h-ai/capacitor test
 Apache-2.0
 
 Push requires an actual native platform. The setup phase of `push.register({ signal? })` and `push.listen(callbacks, { signal? })` has a 30-second deadline including permission requests and listener attachment. Failure, timeout, cancellation and `capacitor.close()` stop callbacks and remove owned handles; late handles are removed when they arrive. Other consumers are not affected through removeAllListeners. After listen succeeds, its signal and returned cleanup can still stop it. Cleanup and close return `HaiResult<void>`; native removal failures return `PUSH_CLEANUP_FAILED` (`capacitor:032`) and retain failed handles for retry without repeating successful removals. Closing disables the module immediately, and initialization retries pending cleanup first. Controlled plugin timing tests do not replace repeated registration, permission and FCM/APNs checks on Android/iOS devices.
+
+Public operations, internal resource scopes and types include typechecked examples; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md). Typechecking does not prove device permissions or live FCM/APNs delivery.

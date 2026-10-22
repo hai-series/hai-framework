@@ -11,7 +11,20 @@ import { HaiCapacitorError } from './capacitor-types.js'
 
 const logger = core.logger.child({ module: 'capacitor', scope: 'push' })
 
-/** 两类推送流程共用的资源所有权；关闭立即停止回调，迟到 handle 仍必须回收。 */
+/**
+ * 两类推送流程共用的资源所有权；关闭立即停止回调，迟到 handle 仍必须回收。
+ * @example 模块内部上下文
+ * ```ts
+ * const scope: PushScope = createPushScope({ signal: new AbortController().signal })
+ * try {
+ *   const state = await scope.wait(async () => 'ready')
+ *   scope.assertOpen()
+ *   void state
+ * } finally {
+ *   await scope.dispose()
+ * }
+ * ```
+ */
 interface PushScope {
   readonly signal: AbortSignal
   assertOpen: () => void
@@ -137,7 +150,14 @@ async function loadPushPlugin() {
 /**
  * 关闭模块所拥有的全部推送监听器；失败句柄保留以便再次 close 重试。
  * @returns 全部移除成功，或 PUSH_CLEANUP_FAILED；迟到句柄到达时立即移除。
- * @example const closed = await closePushListeners(); if (!closed.success) await closePushListeners()
+ * @example
+ * ```ts
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * // 关闭由本模块拥有的监听器，失败句柄可再次 close 重试。
+ * const closed = await capacitor.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export async function closePushListeners(): Promise<HaiResult<void>> {
   const results = await Promise.allSettled([...activeScopes].map(scope => scope.dispose()))
@@ -152,9 +172,20 @@ export async function closePushListeners(): Promise<HaiResult<void>> {
  * @param options - 可选取消信号；取消返回失败结果，不注册后续原生操作。
  * @returns 真实原生插件返回的 token 或 PUSH_REGISTER_FAILED。
  * @example
- * const controller = new AbortController()
- * const result = await capacitor.push.register({ signal: controller.signal })
- * if (result.success) await api.post('/push/register', { token: result.data.token })
+ * ```ts
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.push.register({ signal: new AbortController().signal })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
+ * ```
  */
 export async function registerPush(options?: PushOptions): Promise<HaiResult<PushRegistration>> {
   const scope = createPushScope(options)
@@ -202,11 +233,21 @@ export async function registerPush(options?: PushOptions): Promise<HaiResult<Pus
  * @param options - 可选取消信号，监听建立后仍有效。
  * @returns 幂等清理函数；清理失败可见且可重试，关闭后立即停止业务回调。
  * @example
- * const result = await capacitor.push.listen({ onReceived: notification => showNotice(notification) })
- * if (result.success) {
- *   const cleaned = await result.data()
- *   if (!cleaned.success) await result.data()
+ * ```ts
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const listening = await capacitor.push.listen({ onReceived: notice => { document.title = notice.title ?? 'Notice' } })
+ *   if (!listening.success) throw new Error(listening.error.message)
+ *   const closed = await listening.data()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
  * }
+ * ```
  */
 export async function listenPush(callbacks: PushNotificationCallbacks, options?: PushOptions): Promise<HaiResult<PushCleanup>> {
   const scope = createPushScope(options)

@@ -25,11 +25,35 @@ const CapacitorErrorInfo = {
   STATUS_BAR_FAILED: '050:500',
 } as const satisfies ErrorInfo
 
+/**
+ * Capacitor 模块的公共错误定义；业务操作通过 HaiResult 返回。
+ * @example
+ * ```ts
+ * import { HaiCapacitorError } from '@h-ai/capacitor'
+ * import { err } from '@h-ai/core'
+ *
+ * const result = err(HaiCapacitorError.NOT_AVAILABLE, 'Native bridge required')
+ * if (!result.success) void result.error.code
+ * ```
+ */
 export const HaiCapacitorError = core.error.buildHaiErrorsDef('capacitor', CapacitorErrorInfo)
 
 // ─── 子操作接口 ───
 
-/** 设备信息操作 */
+/**
+ * 设备信息操作
+ * @example
+ * ```ts
+ * import type { DeviceOperations } from '@h-ai/capacitor'
+ *
+ * async function use(operations: DeviceOperations) {
+ *   const result = await operations.getInfo()
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
+ * // 由已初始化的 capacitor.device 提供这些操作。
+ * ```
+ */
 export interface DeviceOperations {
   /** 获取设备信息（平台、型号、系统版本等） */
   getInfo: () => Promise<HaiResult<DeviceInfo>>
@@ -37,13 +61,39 @@ export interface DeviceOperations {
   getAppVersion: () => Promise<HaiResult<{ version: string, build: string }>>
 }
 
-/** 相机操作 */
+/**
+ * 相机操作
+ * @example
+ * ```ts
+ * import type { CameraOperations } from '@h-ai/capacitor'
+ *
+ * async function use(operations: CameraOperations) {
+ *   const result = await operations.takePhoto({ source: 'photos' })
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
+ * // 由已初始化的 capacitor.camera 提供这些操作。
+ * ```
+ */
 export interface CameraOperations {
   /** 拍照或选取相册图片 */
   takePhoto: (options?: PhotoOptions) => Promise<HaiResult<PhotoResult>>
 }
 
-/** 推送通知操作 */
+/**
+ * 推送通知操作
+ * @example
+ * ```ts
+ * import type { PushOperations } from '@h-ai/capacitor'
+ *
+ * async function use(operations: PushOperations) {
+ *   const result = await operations.register()
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
+ * // 由已初始化的 capacitor.push 提供这些操作。
+ * ```
+ */
 export interface PushOperations {
   /** 注册原生 Token；30 秒总超时，可取消，结束时回收监听器。 */
   register: (options?: PushOptions) => Promise<HaiResult<PushRegistration>>
@@ -51,7 +101,20 @@ export interface PushOperations {
   listen: (callbacks: PushNotificationCallbacks, options?: PushOptions) => Promise<HaiResult<PushCleanup>>
 }
 
-/** 状态栏操作 */
+/**
+ * 状态栏操作
+ * @example
+ * ```ts
+ * import type { StatusBarOperations } from '@h-ai/capacitor'
+ *
+ * async function use(operations: StatusBarOperations) {
+ *   const result = await operations.configure({ style: 'dark' })
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
+ * // 由已初始化的 capacitor.statusBar 提供这些操作。
+ * ```
+ */
 export interface StatusBarOperations {
   /** 配置状态栏（样式、背景色、沉浸式） */
   configure: (config: StatusBarConfig) => Promise<HaiResult<void>>
@@ -61,7 +124,20 @@ export interface StatusBarOperations {
   hide: () => Promise<HaiResult<void>>
 }
 
-/** Preferences 操作（安全读写，返回 HaiResult） */
+/**
+ * Preferences 操作（安全读写，返回 HaiResult）
+ * @example
+ * ```ts
+ * import type { PreferencesOperations } from '@h-ai/capacitor'
+ *
+ * async function use(operations: PreferencesOperations) {
+ *   const result = await operations.get('theme')
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
+ * // 由已初始化的 capacitor.preferences 提供这些操作。
+ * ```
+ */
 export interface PreferencesOperations {
   /** 安全读取 Preference 值 */
   get: (key: string) => Promise<HaiResult<string | null>>
@@ -73,7 +149,24 @@ export interface PreferencesOperations {
 
 // ─── 函数接口 ───
 
-/** Capacitor 模块服务对象接口 */
+/**
+ * Capacitor 模块服务对象接口
+ * @example
+ * ```ts
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.device.getInfo()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
+ * ```
+ */
 export interface CapacitorFunctions {
   /** 初始化 Capacitor 模块 */
   init: () => Promise<HaiResult<void>>
@@ -100,10 +193,28 @@ export interface CapacitorFunctions {
 
 // ─── 设备信息 ───
 
-/** 设备平台 */
+/**
+ * 设备平台
+ * @example
+ * ```ts
+ * import type { DevicePlatform } from '@h-ai/capacitor'
+ *
+ * const value: DevicePlatform = 'android'
+ * void value
+ * ```
+ */
 export type DevicePlatform = 'ios' | 'android' | 'web'
 
-/** 设备信息 */
+/**
+ * 设备信息
+ * @example
+ * ```ts
+ * import type { DeviceInfo } from '@h-ai/capacitor'
+ *
+ * const value: DeviceInfo = { platform: 'android', osVersion: '15', model: 'Example device', manufacturer: 'Example', isVirtual: false }
+ * void value
+ * ```
+ */
 export interface DeviceInfo {
   /** 平台（ios / android / web） */
   platform: DevicePlatform
@@ -125,7 +236,13 @@ export interface DeviceInfo {
 
 /**
  * 推送流程的取消选项；listen 成功后信号仍可终止监听。
- * @example const options: PushOptions = { signal: new AbortController().signal }
+ * @example
+ * ```ts
+ * import type { PushOptions } from '@h-ai/capacitor'
+ *
+ * const value: PushOptions = { signal: new AbortController().signal }
+ * void value
+ * ```
  */
 export interface PushOptions {
   /** 取消当前注册或监听，不影响其他消费者拥有的句柄。 */
@@ -134,11 +251,29 @@ export interface PushOptions {
 
 /**
  * 幂等推送清理函数；原生 remove 失败返回错误，调用同一函数可重试。
- * @example const cleaned = await cleanup(); if (!cleaned.success) await cleanup()
+ * @example
+ * ```ts
+ * import type { PushCleanup } from '@h-ai/capacitor'
+ *
+ * async function release(cleanup: PushCleanup) {
+ *   const result = await cleanup()
+ *   if (!result.success) return cleanup() // 同一所有权句柄允许重试清理。
+ *   return result
+ * }
+ * ```
  */
 export type PushCleanup = () => Promise<HaiResult<void>>
 
-/** 推送通知数据 */
+/**
+ * 推送通知数据
+ * @example
+ * ```ts
+ * import type { PushNotification } from '@h-ai/capacitor'
+ *
+ * const value: PushNotification = { id: 'notice_1', title: 'Order ready', data: { orderId: 'order_1' } }
+ * void value
+ * ```
+ */
 export interface PushNotification {
   /** 通知 ID */
   id: string
@@ -150,13 +285,31 @@ export interface PushNotification {
   data?: Record<string, unknown>
 }
 
-/** 推送注册结果 */
+/**
+ * 推送注册结果
+ * @example
+ * ```ts
+ * import type { PushRegistration } from '@h-ai/capacitor'
+ *
+ * const value: PushRegistration = { token: 'example-only-native-token' }
+ * void value
+ * ```
+ */
 export interface PushRegistration {
   /** 设备推送 Token */
   token: string
 }
 
-/** 推送通知回调 */
+/**
+ * 推送通知回调
+ * @example
+ * ```ts
+ * import type { PushNotificationCallbacks } from '@h-ai/capacitor'
+ *
+ * const value: PushNotificationCallbacks = { onReceived: notification => { document.title = notification.title ?? 'Notice' } }
+ * void value
+ * ```
+ */
 export interface PushNotificationCallbacks {
   /** 收到推送时调用 */
   onReceived?: (notification: PushNotification) => void
@@ -166,10 +319,28 @@ export interface PushNotificationCallbacks {
 
 // ─── 相机 ───
 
-/** 照片来源 */
+/**
+ * 照片来源
+ * @example
+ * ```ts
+ * import type { PhotoSource } from '@h-ai/capacitor'
+ *
+ * const value: PhotoSource = 'photos'
+ * void value
+ * ```
+ */
 export type PhotoSource = 'camera' | 'photos' | 'prompt'
 
-/** 照片选项 */
+/**
+ * 照片选项
+ * @example
+ * ```ts
+ * import type { PhotoOptions } from '@h-ai/capacitor'
+ *
+ * const value: PhotoOptions = { source: 'photos', resultType: 'uri', quality: 90, width: 1200 }
+ * void value
+ * ```
+ */
 export interface PhotoOptions {
   /** 来源（默认 'prompt'） */
   source?: PhotoSource
@@ -183,20 +354,47 @@ export interface PhotoOptions {
   resultType?: 'uri' | 'base64' | 'dataUrl'
 }
 
-/** 照片结果 */
+/**
+ * 照片结果
+ * @example
+ * ```ts
+ * import type { PhotoResult } from '@h-ai/capacitor'
+ *
+ * const value: PhotoResult = { data: 'file:///example/photo.jpeg', format: 'jpeg' }
+ * void value
+ * ```
+ */
 export interface PhotoResult {
   /** 图片路径或 base64 数据 */
   data: string
-  /** MIME 类型 */
+  /** 原生插件返回的格式扩展名（如 jpeg），不是 MIME 类型 */
   format: string
 }
 
 // ─── 状态栏 ───
 
-/** 状态栏样式 */
+/**
+ * 状态栏样式
+ * @example
+ * ```ts
+ * import type { StatusBarStyle } from '@h-ai/capacitor'
+ *
+ * const value: StatusBarStyle = 'dark'
+ * void value
+ * ```
+ */
 export type StatusBarStyle = 'dark' | 'light' | 'default'
 
-/** 状态栏配置 */
+/**
+ * 状态栏配置
+ * @example
+ * ```ts
+ * import type { StatusBarConfig } from '@h-ai/capacitor'
+ *
+ * const value: StatusBarConfig = { style: 'dark', overlay: false }
+ * void value
+ * ```
+ */
 export interface StatusBarConfig {
   /** 状态栏文字样式 */
   style?: StatusBarStyle
