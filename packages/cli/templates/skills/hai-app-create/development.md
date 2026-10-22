@@ -55,7 +55,7 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 
 `prod` 是文件模式名，对应 `HAI_CORE_ENV=production`；环境枚举为 `development | test | production | staging`。SvelteKit adapter-node 产物使用 `node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js`。文件路径相对进程工作目录，公共文件随项目提交；容器通过部署平台或 `--env-file` 注入目标环境值。浏览器只接收公开白名单，构建产物和镜像不包含 `.env.local`。
 
-Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加载，Web/App/Desktop 的 Vite `envDir` 指向根目录。API workspace 的环境文件在 `apps/<name>-service/`。独立应用在各自根目录加载。浏览器配置在构建期注入时，改环境参数后须重新构建；fullstack 的公开应用元数据由 service `app.info` 返回。
+Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加载，Web/App/Desktop 的 Vite 自动 dotenv 加载关闭（`envDir: false`），开发和预览由 `core.config.loadEnvFiles` 从工程根读取，构建不读取部署环境文件。API workspace 的环境文件在 `apps/<name>-service/`。独立应用在各自根目录加载。静态 Web 通过 `runtime-config.js` 获取公开地址，部署环境覆盖无需重建镜像；原生包在复制静态资源前配置该入口。修改编译进客户端的默认值时仍需重新构建；fullstack 的公开应用元数据由 service `app.info` 返回。
 
 #### 迁移已有项目
 
@@ -125,7 +125,7 @@ hai create my-app
 
 ## 将需求映射到现有能力
 
-应用元信息只有一份配置来源：名称、版本、环境、默认语言与日志设置来自 `_core.yml`，使用 `core.config` 与 `core.logger`；Node 启动时不通过固定 `logging` 覆盖 YAML。SvelteKit 服务端 layout 和 fullstack `app.info` 仅公开必要元信息，不能下发整个 core 或模块配置。独立 Vite mobile-app 在 Node 构建阶段经 core 加载 YAML/环境覆盖并注入公开字段，配置变化需重新构建。环境覆盖使用 `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` 等既有规则；容器明确配置生产环境，不能用另一个状态来源代替 `core.env`。
+应用元信息只有一份配置来源：名称、版本、环境、默认语言与日志设置来自 `_core.yml`，使用 `core.config` 与 `core.logger`；Node 启动时不通过固定 `logging` 覆盖 YAML。SvelteKit 服务端 layout 和 fullstack `app.info` 仅公开必要元信息，不能下发整个 core 或模块配置。独立 Vite 客户端经 Node/core 加载 YAML 默认值，Web 部署通过 `runtime-config.js` 应用公开白名单覆盖；只修改部署覆盖无需重建，修改构建默认值则须重新构建。环境覆盖使用 `HAI_CORE_NAME`、`HAI_CORE_VERSION`、`HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` 等既有规则；容器明确配置生产环境，不能用另一个状态来源代替 `core.env`。
 
 开发前，对本次涉及的需求简述“需求 → 现有应用实现/框架能力 → 已安装版本与公开契约依据 → 最小业务补充/修改位置 → 成功、权限与失败验收”。简单任务可用几句话；跨模块任务用表格。查找顺序：已有应用实现 → 框架公开能力和配置 → 最小业务补充。
 

@@ -1,6 +1,6 @@
 ---
 name: hai-app-tests
-description: "编写或修复 hai 应用的 Vitest/Playwright 测试，验证业务边界和完整用户流程。"
+description: "为 hai 应用新增或修复 Vitest/Playwright 测试，验证需求、缺陷回归与完整用户流程。"
 ---
 
 # hai-app-tests
@@ -26,7 +26,7 @@ description: "编写或修复 hai 应用的 Vitest/Playwright 测试，验证业
 
 ## 按需参考
 
-详细配置、API 签名、错误码和范本在 [reference.md](reference.md)。按下列标题定位所需小节，不默认通读；用例中的业务变量需结合当前应用补齐。
+按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 
 - 适用场景
 - 行为验证与 TDD 工作流

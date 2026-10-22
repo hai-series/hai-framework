@@ -34,7 +34,7 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 
 新增新手引导或帮助说明时读取 [UI 引导指南](../hai-ui/guide.md)，复用 fullstack 默认的共享 guide-store、locale 和稳定 data-guide 锚点。
 
-详细配置、API 签名、错误码和范本在 [reference.md](reference.md)。按下列标题定位所需小节，不默认通读；用例中的业务变量需结合当前应用补齐。
+按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 
 - 适用场景
 - 行为开发与验证

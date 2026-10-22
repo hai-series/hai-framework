@@ -42,12 +42,14 @@ await capacitor.close()
 
 ### 2. Token 安全存储（与 api-client 配合）
 
+先复用应用已有的 API 初始化入口。示例中的 `apiBase` 由应用解析公开运行配置，已经包含 API 前缀，不重复拼接 `/api/v1`。Web 部署可通过 `runtime-config.js` 覆盖地址；原生包在复制静态资源前设置公开配置。
+
 ```typescript
 import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 await apiClient.init({
-  baseUrl: import.meta.env.PUBLIC_API_BASE,
+  baseUrl: apiBase,
   auth: {
     storage: createCapacitorTokenStorage(),
   },
@@ -236,7 +238,7 @@ export async function initCapacitor() {
 
 ### SPA 模式配置（必需）
 
-Capacitor 应用使用 Vite 构建 SPA，并让原生壳读取 `dist`：
+Capacitor 原生壳读取 `webDir` 指定的静态产物。纯 Vite 模板默认为 `dist`；SvelteKit 项目需配置静态适配器，输出可能是 `build`。构建器、容器与 `webDir` 必须一致，以下是 Vite 示例：
 
 ```typescript
 // capacitor.config.ts
@@ -258,9 +260,9 @@ export default config
 import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
-export async function initApi() {
+export async function initApi(apiBase: string) {
   return apiClient.init({
-    baseUrl: `${import.meta.env.PUBLIC_API_BASE}/api/v1`,
+    baseUrl: apiBase,
     auth: {
       storage: createCapacitorTokenStorage(),
     },

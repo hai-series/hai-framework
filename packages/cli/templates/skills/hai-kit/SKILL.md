@@ -1,6 +1,6 @@
 ---
 name: hai-kit
-description: "使用 @h-ai/kit 集成 SvelteKit hooks、守卫、校验、响应及同源客户端传输。"
+description: "在 SvelteKit 中接入 hooks、认证守卫、输入校验、响应和同源加密客户端；不用于独立 serv 服务。"
 ---
 
 # hai-kit
@@ -15,173 +15,18 @@ description: "使用 @h-ai/kit 集成 SvelteKit hooks、守卫、校验、响应
 | 输出 | handle、Response、校验值和客户端请求结果 |
 | 限制 | 无 init/close；保留 SvelteKit 控制流异常。跨端共享 HTTP contract 用 api-contract + serv，勿复制到 kit。 |
 
-> `@h-ai/kit` 只负责 SvelteKit 集成：`handle` hook、guard、response、validate、client、auth、crud、A2A。公共跨端 HTTP API 契约统一使用 `@h-ai/api-contract` + `@h-ai/serv`，不要在 kit 中定义业务 API contract。
+## 使用路径
 
-## 使用步骤
+1. 仅在 SvelteKit 集成；先查现有 hooks、配置、守卫与路由，不将其套用于独立 serv 应用。
+2. 用 createHandle 编排已初始化模块；认证 API 与公开路径复用 kit.auth，客户端复用框架动作。
+3. 区分返回 HaiResult 的业务操作与抛 Response/redirect/error 的框架控制流，不吞掉控制流。
+4. 对齐 Cookie/CSRF/transport 与服务端配置，验证匿名、登录、权限拒绝和表单失败。
 
-### 1. 请求管道
+## 按需参考
 
-```ts
-import type { Handle } from '@sveltejs/kit'
-import { kit } from '@h-ai/kit'
+按本次操作读取对应小节；以已安装版本的公开类型核验签名，示例中的业务变量由应用提供。
 
-const haiHandle = kit.createHandle({
-  auth: {
-    verifyToken: async token => token ? { userId: 'u_1', roles: ['admin'], permissions: ['user:read'] } : null,
-    loginUrl: '/auth/login',
-    protectedPaths: ['/admin/*'],
-  },
-  rateLimit: { windowMs: 60_000, maxRequests: 100 },
-  logging: true,
-})
-
-export const handle: Handle = haiHandle
-```
-
-### 2. SvelteKit API endpoint
-
-```ts
-import { kit } from '@h-ai/kit'
-import { z } from 'zod'
-
-const CreateUserSchema = z.object({ name: z.string().min(1) })
-
-export const POST = kit.handler(async ({ request, locals }) => {
-  kit.guard.require(locals.session, 'user:create')
-  const payload = await kit.validate.body(request, CreateUserSchema)
-  return kit.response.created(payload)
-})
-```
-
-### 3. 浏览器同源请求
-
-```ts
-import { kit } from '@h-ai/kit'
-
-const client = kit.client.create()
-export const { apiFetch } = client
-```
-
-> 同源 endpoint 优先使用 httpOnly Cookie；`auth: true` 只读取 `kit.auth.setBrowserToken()` 写入的页面内存 Token，不会默认读写 localStorage。确需 Bearer Header 时，显式传入 `BrowserTokenStore`，禁止把敏感 Token 存入 localStorage。
-
-### 4. 同源传输加密
-
-kit 不再维护本地传输加密实现；服务端和客户端都统一委托 `@h-ai/crypto` 的 `crypto.transport`。
-
-```ts
-// hooks.server.ts
-import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
-import { kit } from '@h-ai/kit'
-
-await crypto.init()
-await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
-
-export const handle = kit.createHandle({
-  auth: {
-    verifyToken,
-    protectedPaths: ['/api/*'],
-    publicPaths: ['/api/_hai/*'],
-  },
-  crypto: {
-    crypto,
-    transport: {
-      requireEncryption: true,
-      keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
-    },
-  },
-})
-```
-
-需要保护会话 Cookie 时配置 `crypto.encryptedCookies`，并通过 `crypto.cookieEncryptionKey` 或 `HAI_KIT_COOKIE_KEY` 提供密钥。缺少密钥会在 `createHandle()` 时失败；加解密错误不会回退到明文 Cookie。
-
-```ts
-// routes/+layout.svelte
-<script lang='ts'>
-  import { browser } from '$app/environment'
-  import { crypto } from '@h-ai/crypto'
-  import { kit } from '@h-ai/kit'
-  import { appKitConfig } from '$lib/config/kit-config'
-
-  // 一次性安装：内部按 appKitConfig.transport 是否启用决定行为，并预热 crypto
-  if (browser) {
-    kit.client.installBrowserTransport(appKitConfig, { crypto })
-  }
-</script>
-```
-
-```ts
-// lib/utils/api.ts —— 业务层只看到 apiFetch
-import { kit } from '@h-ai/kit'
-
-export const { apiFetch } = kit.client.create()
-```
-
-默认协商端点：`/api/_hai/key-exchange`。如 `keyExchangePath` 自定义，浏览器端同步设置 `keyExchangeUrl`。
-
-多节点部署时，可在 `kit.createHandle({ crypto: { transport } })` 的运行时对象里直接传 `keyStore`；推荐使用 `@h-ai/crypto` 根入口导出的 `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`。这类对象依赖不要写进 `_kit.yml`。
-
-transport 默认保护同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求；页面文档、静态资源与 `multipart/form-data` 上传请求保持明文透传。
-
-安全策略默认 fail-closed：`requireEncryption: true` 时，受保护路径缺少 `X-Client-Id` 必须返回 400；服务端 transport 管理器不可用、响应体无法加密或超过单次加密上限时返回错误，禁止明文业务响应回退。`requireEncryption: false` 只适合迁移期灰度。
-
-### 5. 使用 `_kit.yml` 统一 transport 配置
-
-`@h-ai/kit` 现在提供 `KitConfigSchema` / `resolveKitConfig()`，适合同一份 `_kit.yml`
-同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransport()`：
-
-```yml
-server:
-  host: 127.0.0.1
-  port: 3000
-
-transport:
-  keyExchangePath: /api/_hai/key-exchange
-  requireEncryption: true
-  encryptResponse: true
-  excludePaths:
-    - /api/storage
-    - /api/public
-    - /api/auth/profile/avatar
-  maxClients: 10000
-```
-
-```ts
-import { resolveKitConfig } from '@h-ai/kit'
-import { parse } from 'yaml'
-import rawKitConfig from '../config/_kit.yml?raw'
-
-export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
-```
-
-`resolveKitConfig()` 同时解析 `server`（host/port）与 `transport`；host/port 优先级为 `HOST` / `PORT` 环境变量 > `_kit.yml` 的 `server` > 默认 `127.0.0.1:3000`（与 `@h-ai/serv` 同构）。
-`_kit.yml` 只放公开的 server/transport 路径/开关，不放密钥；如自定义 `keyExchangePath`，浏览器端必须同步映射为 `keyExchangeUrl`。
-
-## 核心 API
-
-| API | 用途 |
-| --- | --- |
-| `kit.createHandle()` | 创建 SvelteKit Handle |
-| `kit.sequence()` | 组合多个 Handle |
-| `kit.handler()` | API endpoint 错误边界 |
-| `kit.guard.require()` | 权限守卫 |
-| `kit.response.*` | 统一响应工厂 |
-| `kit.validate.*` | Zod 请求校验 |
-| `kit.auth.*` | Cookie / Token 辅助 |
-| `kit.client.create()` | 浏览器端同源 apiFetch |
-| `kit.client.installBrowserTransport(config, { crypto })` | 推荐入口：按解析后的 `_kit.yml` 一键安装浏览器端传输加密 |
-| `kit.client.installBrowserTransportFetch()` | 底层入口：直接传 transport 配置安装浏览器全局 fetch 包装 |
-| `kit.crud.define()` | 声明式 CRUD 资源 |
-
-## 常见模式
-
-- SvelteKit 应用内同源请求用 `kit.client.create().apiFetch`。
-- SvelteKit 应用启用 transport 时，在 `+layout.svelte` 的 `if (browser)` 分支调用一次 `kit.client.installBrowserTransport(appKitConfig, { crypto })`，无需重复连线 `keyExchangeUrl` / `excludePaths`。
-- Web/App/小程序跨域访问公共 API 用 `@h-ai/api-client` typed client。
-- 传输加密只通过 `crypto.transport` 间接装配，不在 kit 中新增本地加密工厂或鸭子类型。
-- 服务端业务模块直接调用模块 API，不通过 HTTP 自环。
-- API endpoint 必须用 Zod 校验用户输入，并设置认证/权限边界。
-
-## 声明式 CRUD 表单字段
-
-`kit.crud.define` 的字段支持 `colSpan: 'auto' | 1 | 2`，以及 `validation.message: string | (() => string)`。布局通过 UI 的 `CrudPage.form` 配置；客户端校验用于交互提示，服务端仍使用 Zod 验证和现有权限守卫。UI 公共契约见相邻 [hai-ui skill](../hai-ui/SKILL.md)。
+- [使用步骤](reference.md#使用步骤)
+- [核心 API](reference.md#核心-api)
+- [常见模式](reference.md#常见模式)
+- [声明式 CRUD 表单字段](reference.md#声明式-crud-表单字段)

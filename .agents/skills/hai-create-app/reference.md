@@ -220,7 +220,7 @@ export {}
 <script lang="ts">
   import type { PageData } from './$types'
   import * as m from '$lib/paraglide/messages'
-  import { ComponentName } from '@h-ai/ui'
+  import { Button } from '@h-ai/ui'
 
   interface Props {
     data: PageData
@@ -446,15 +446,16 @@ export const { apiFetch } = client
 
 ## §10 容器交付
 
-- 新应用模板必须提供根目录 `Dockerfile`、`.dockerignore` 与 `pnpm build --target docker`（auto 优先 Podman，可用 --runtime 指定），镜像构建必须使用仓库锁文件。
+- 新应用模板必须提供`images/*.Dockerfile`、`.dockerignore` 与 `pnpm build --target docker`（auto 优先 Podman，可用 --runtime 指定），镜像构建必须使用仓库锁文件。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
 - Podman 多阶段构建命令使用 `--format docker --jobs=1`：保留 Dockerfile `HEALTHCHECK`，并避免 Buildah 并行 stage 在部分 Podman 5.8 环境触发内部 semaphore panic。
 - SvelteKit 服务使用 Node adapter；纯 Vite/Capacitor Web 产物使用带 SPA fallback 的静态服务器。
-- Dockerfile 必须先复制 lockfile 与 workspace 配置并执行 `pnpm fetch`，再复制源码并离线安装、构建；这样源码变化不重复下载依赖，也能兼容脚手架生成后新增的 workspace。
-- API/fullstack 使用 `pnpm deploy --prod` 收敛生产依赖；fullstack 的默认镜像由 Service 直接监听，Web 通过独立静态镜像交付，不增加转发进程。
+- Dockerfile 必须先复制 lockfile、workspace 配置与构建器准备的 `images/dependencies/` 安装输入，再执行 `pnpm fetch --ignore-scripts`，再复制源码并离线安装、构建；这样源码变化不重复下载依赖，也能兼容脚手架生成后新增的 workspace。
+- API/fullstack 使用 `pnpm pm deploy --filter <服务包名> --prod` 收敛生产依赖；fetch、安装和 deploy 阶段共用 pnpm store，安装和 deploy 阶段共用 SQLite 驱动缓存，避免收集生产依赖时重新下载。fullstack 的默认镜像由 Service 直接监听，Web 通过独立静态镜像交付，不增加转发进程。
+- 默认容器面向 CPU 运行或远程 AI 服务，在 Dockerfile 的安装和生产依赖收集阶段设置 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，不额外下载 CUDA/TensorRT。容器使用宿主机 GPU 时需定制镜像与运行参数；该默认策略不修改本机 npm 配置或全局 AI/GPU 设置。
 - 纯 Vite Web 的 `PUBLIC_*` 部署配置必须在容器启动时生成静态运行时配置，不得作为 Docker build arg 烘焙，以支持一次构建、多环境部署。
 - `config/` 必须随默认镜像提供，并允许只读 bind mount 覆盖；敏感配置使用 YAML 环境变量占位符和 `--env-file`，禁止烘焙密钥。
 - CLI 项目的 `.gitignore` 统一包含 `**/data/`，忽略任意层级的数据目录及 `.gitkeep`。Fullstack 保留 13 份服务端 YAML，未启用模块、可选字段和替代 Provider 以注释展示；`.env.example` 同步注释凭据。按实际 Schema 安装/校验/初始化并反序关闭后再启用配置，文件存在不代表模块已接入；不为 crypto/datapipe 虚构 YAML。叶子环境变量只覆盖已有路径，注释键须先取消注释或通过整个对象覆盖。详见 [CLI 配置说明](../../../packages/cli/README.md#应用配置与显示)。
-- `data/` 默认排除在普通 Docker context 之外；需要预置 SQLite/本地存储时，通过显式 named build context 生成带初始数据的 target，运行时写入仍挂载 volume。
+- `data/` 默认排除在普通 Docker context 之外；需要预置 SQLite/本地存储时，在 `images/` 提供独立 Dockerfile 并明确构建上下文，避免普通镜像意外包含本地数据；运行时写入仍挂载 volume。
 - Fullstack 自动生成的 `.env` 只启用管理员初始密码和 `PUBLIC_API_BASE`，模块环境覆盖默认注释，避免旧默认值使 YAML 修改无效；有明确环境覆盖时编辑 YAML 要同步核对。
 - 容器以非 root 用户运行，提供健康检查；验收至少覆盖镜像构建、启动、健康端点、环境变量覆盖、配置挂载与嵌入式数据库读取。
 

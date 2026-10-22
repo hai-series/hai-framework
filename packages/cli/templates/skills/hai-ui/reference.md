@@ -39,7 +39,7 @@
 至少检查以下四项：
 
 - `svelte.config.*`：`autoImportHaiUi()` 在 `vitePreprocess()` 前。
-- `vite.config.*`：`ssr.noExternal` 包含 `@h-ai/*`，`optimizeDeps.exclude` 包含 `bits-ui`。
+- `vite.config.*`：`ssr.noExternal` 包含 `@h-ai/ui` 和 `@h-ai/kit`，`optimizeDeps.exclude` 包含 `bits-ui`。
 - `app.css`：已导入 `global.css` / `theme.css`；移动端还要导入 `design-tokens.css` / `mobile.css`。
 - Tailwind：已配置 `@source` 扫描 `@h-ai/ui/dist/**/*.{svelte,js,ts}`。
 
@@ -89,7 +89,7 @@
 
 ```bash
 # 核心包
-npm install @h-ai/ui
+npm install @h-ai/ui @h-ai/core
 
 # 必须的对等依赖与构建工具
 npm install -D svelte @sveltejs/kit @sveltejs/vite-plugin-svelte
@@ -98,6 +98,8 @@ npm install -D tailwindcss @tailwindcss/vite daisyui
 # 图标（可选但推荐）
 npm install -D @iconify/tailwind4 @iconify-json/tabler
 ```
+
+Node adapter 使用 Crypto、Kit 或 IAM 时，还需将 `sm-crypto@0.5.7` 作为直接生产依赖安装，保留 Node 原生模块解析。
 
 ### 2. svelte.config.js
 
@@ -143,7 +145,8 @@ export default defineConfig({
   },
   ssr: {
     // @h-ai 包为 ESM + Svelte 组件，需 Vite 在 SSR 时处理
-    noExternal: [/@h-ai\//],
+    noExternal: ['@h-ai/ui', '@h-ai/kit'],
+    external: ['@h-ai/core', 'sm-crypto'],
   },
 })
 ```
@@ -634,8 +637,9 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 4. **Combobox 统一单选/多选**：`MultiSelect` 已删除
 5. **移动端样式**：务必引入 `design-tokens.css` + `mobile.css`，使用 SafeArea 包裹原生 App 页面
 6. **`@source` 必须配置**：未配置则 TailwindCSS 无法扫描 `@h-ai/ui` 组件中的 class，样式会丢失
-7. **`ssr.noExternal`**：Vite SSR 需要将 `@h-ai/*` 包纳入处理，否则 SSR 时 Svelte 组件无法正确编译
-8. **data-* 属性透传**：公开 Svelte 组件会把调用方传入的 `data-*` 属性透传到根节点或主交互节点；测试和自动化优先直接使用 `data-testid`、`data-analytics-id`，不要为测试 ID 重复封装组件
+7. **响应式布局**：后台工作区和数据列表使用可用宽度，避免外壳固定 max-width 造成宽屏两侧留白。flex/grid 子项设 min-width: 0，表格在自身容器滚动；正文和登录框保留阅读宽度。至少验证 390、1440、1920、2560、3840px 的内容占宽、导航与全页溢出。
+8. **`ssr.noExternal`**：Svelte 组件及 `@h-ai/kit/client` 的 `$app/*` 路由别名需要 Vite 编译，UI 和 Kit 保持 noExternal，core 及其他纯服务端包保留原生加载；本地链接的框架包也要显式 external，避免日志、数据库等原生依赖被重复打包。sm-crypto 使用动态 CommonJS require，应放入 `ssr.external`，并以明确版本列入应用 dependencies；adapter-node 只根据直接生产依赖排除二次打包，不能仅依赖它作为框架的传递依赖。
+9. **data-* 属性透传**：公开 Svelte 组件会把调用方传入的 `data-*` 属性透传到根节点或主交互节点；测试和自动化优先直接使用 `data-testid`、`data-analytics-id`，不要为测试 ID 重复封装组件
 
 ## 导出路径
 

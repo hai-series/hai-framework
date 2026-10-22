@@ -1,6 +1,6 @@
 ---
 name: hai-reach
-description: "使用 @h-ai/reach 配置邮件、短信、API 通知和多渠道消息模板。"
+description: "接入邮件、短信、API 通知与模板，处理发送结果、免打扰和可选持久化。"
 ---
 
 # hai-reach
@@ -22,7 +22,7 @@ description: "使用 @h-ai/reach 配置邮件、短信、API 通知和多渠道�
 
 ## 按需参考
 
-详细配置、API 签名、错误码和范本在 [reference.md](reference.md)。按下列标题定位所需小节，不默认通读；用例中的业务变量需结合当前应用补齐。
+按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 
 - 运行环境
 - 依赖

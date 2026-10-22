@@ -42,7 +42,7 @@
 | 公共 API | oRPC contract + Hono + typed client |
 | 认证     | Bearer access token + httpOnly refresh cookie（浏览器推荐） |
 
-pnpm 专属配置放在 `pnpm-workspace.yaml`，`.npmrc` 仅用于注册表与认证。Docker 缓存层使用 `pnpm fetch` 读取锁文件；pnpm 12 的该命令不支持 `--frozen-lockfile`。后续仍通过 `pnpm install --offline --frozen-lockfile` 校验清单与锁文件一致。容器裁剪用 `pnpm pm deploy --filter <服务包> --prod <目标目录>`，确保执行内置命令，避免项目同名 `deploy` 脚本覆盖它。
+pnpm 专属配置放在 `pnpm-workspace.yaml`，`.npmrc` 仅用于注册表与认证。Docker 缓存层使用 `pnpm fetch` 读取锁文件；pnpm 12 的该命令不支持 `--frozen-lockfile`。后续仍通过 `pnpm install --offline --frozen-lockfile` 校验清单与锁文件一致。容器裁剪用 `pnpm pm deploy --filter <服务包> --prod <目标目录>`，确保执行内置命令，避免项目同名 `deploy` 脚本覆盖它。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
 
 ### SvelteKit Adapter 模式
 

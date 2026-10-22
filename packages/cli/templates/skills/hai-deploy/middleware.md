@@ -71,18 +71,12 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 
 ## 离线准备与验收
 
-构建与部署分开：先在构建机运行 `pnpm build --target docker`，将完整 `.hai/build/docker/<buildId>` 复制到部署电脑。deploy 只读取这些已校验的镜像 tar，不需要本地 Docker/Podman、基础镜像、pnpm store 或 SQLite 下载。Node/pnpm 版本以工程 engines/packageManager 为准。
+构建与部署可分开，也可通过 pnpm run deploy --build 明确串联。构建保持环境无关；部署选择环境并只消费所选镜像。完整包自动包含 Compose 自建中间件镜像，因此导出阶段需要本地 Podman/Docker，缺镜像在打包阶段准备，不能留给隔离服务器下载。
 
-`pnpm run deploy --env prod --bundle-only --output release-prod.tar` 按清单 appVersion 自动生成 release-prod-1.2.3.tar（示例版本 1.2.3），包含 app/web、docker-compose-1.2.3.yml、manifest.json、私有 env、校验和、README 与 start-prod.sh，不连接 SSH。搬到 Linux 后，创建权限 700 的目录，`tar -xf release-prod-1.2.3.tar -C release`，`cd release && sh start-prod.sh`。脚本自动指定带版本的 Compose；手工状态检查使用 `docker compose -f docker-compose-1.2.3.yml --env-file .env.runtime ps`。启动脚本可用 HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME=docker/podman 选择运行时，镜像缺少时停止，不尝试联网。
+--bundle-only 生成带版本 tar 与 -deploy/ 目录。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和目标配置。隔离服务器搬运并解包后执行 sh apply.sh。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
 
-Linux 需要 compose、sh、tar、sha256sum 和容器/目录/持久化磁盘权限；中间件镜像另行 docker load，名称、tag 和架构须与包内清单一致。自定义连接要求现有服务可从应用容器访问，并备好账号、数据库、S3 桶与密钥。云 Provider/Provisioner 需要网络，不能用于完全离线。
+部分更新通过 --services 指定，使用服务器成功基线保留未选服务和中间件凭据。首次安装不能使用部分包。storage-init 复用应用镜像及 S3 SDK 检查/创建桶，不清空数据；只有涉及存储初始化时执行，并检查退出码。仅更新 storage 仍需含 app 镜像的制品；最近为 web-only 时，用 --artifact-dir 选择原完整制品，或先 pnpm build --target docker --images app。app 镜像仅用于初始化，不会更新 app 服务。失败恢复尝试还原容器和配置，保留数据卷，不回退已写业务数据。
 
-如连构建也需离线，构建机另准备 Linux 容器引擎、Node/Nginx 基础镜像、pnpm/Corepack、完整 Linux 依赖缓存和匹配 SQLite 驱动/Node ABI/架构/libc 的预编译包。可用构建参数 `--sqlite-prebuild-mirror <可信HTTP(S)地址>` 指定二进制根目录；失败应修复缓存/网络，不能让 deploy 下载编译环境。构建无需选择环境；Podman 代理不可达时用 `pnpm build --target docker --no-http-proxy`，不修改系统代理。
+服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、持久化磁盘和容器/目录权限。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
 
-## 启动与验证
-
-fullstack 的 hai.build.json 含 app/web 时，两镜像共用构建 ID，部署生成一个 Compose 和同源代理。API 前缀来自当前服务配置，缺省 CORS 填公开入口，明确 Origin 保留；Web 不挂载 .env.runtime。线上成功要求 API/Web 健康，手工模式返回 packaged 并提示用户自行验收。生产登录刷新还需 HTTPS、正确 CORS、受信证书与 DNS/hosts，模块不配置 TLS。
-
-容器运行期 NODE_ENV=production；HAI_DEPLOY_ENVIRONMENT 保存文件模式，HAI_CORE_ENV 映射 development/test/production/staging。资源名附环境后缀，卷按环境隔离；私有 env 权限 600。构建上下文排除 .env.local、环境覆盖、.env.runtime、.hai/build、.hai/deploy 和 data，不把运行期凭据写入镜像。
-
-修改后运行 deploy/CLI typecheck、lint、build、test、scaffold gates 和 test:deploy-gates。测试应分别证明构建/环境选择、SSH 上传及手工包启动、Web 登录/刷新；断网能力另做实际断网验收。测试的临时工程、容器、镜像、日志、截图、报告与辅助进程必须 finally/teardown 自动清理，失败也清理；不得删除用户已有资源。原生客户端及付费云资源单独验收并报告边界。
+完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。构建可用 --sqlite-prebuild-mirror，Podman 代理不可达可用 --no-http-proxy；不要改系统代理或让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。

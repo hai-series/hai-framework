@@ -24,13 +24,13 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 - 可复用能力应直接使用；需要业务组合时保留领域服务，现有能力不足或目标端不支持时说明证据后再写应用实现，不为使用率强行安装无关模块。
 - 从真实路由/contract、UI 组件和服务层扩展；API workspace、SvelteKit 和 SPA 的文件结构不能混用。
 - 新手引导和帮助中心使用 `@h-ai/ui/guide`，复用已有导航适配器、i18n 和主题；fullstack 共享管理界面已有默认入口，按 [引导指南](../../../packages/cli/templates/skills/hai-ui/guide.md) 扩展内容和锚点。
-- 名称、版本、环境、语言与日志复用 `_core.yml` 和 core.config/core.logger；SvelteKit layout 与 fullstack app.info 只公开元信息白名单，Vite mobile-app 经 Node 构建阶段解析后注入，配置变更重新构建。不能硬编码显示副本或把完整配置交给浏览器。
+- 名称、版本、环境、语言与日志复用 `_core.yml` 和 core.config/core.logger；SvelteKit layout 与 fullstack app.info 只公开元信息白名单。独立 Vite 客户端经 Node 解析构建默认值，Web 部署可通过 runtime-config.js 覆盖公开地址和元数据，无需重建镜像；原生包在复制静态资源前设置公开配置。不能硬编码显示副本或把完整配置交给浏览器。
 - 环境配置遵守 [六类文件与加载约定](../../../packages/cli/templates/skills/hai-app-create/development.md#环境配置)：公共基础和环境文件提交 Git，本机私有值只写 `.env.local`；完整示例逐项说明字段与约束。新增或修改变量时同步应用、模板、模块说明和根 `.env.example`。
 - 对新增行为先写有意义的目标用例，仍适用的回归保持通过；被明确新需求替代的模板断言同步更新并记录依据，同步 i18n、README 和调用方。
 
 ## 按需参考
 
-详细配置、API 签名、错误码和范本在 [reference.md](reference.md)。按下列标题定位所需小节，不默认通读；用例中的业务变量需结合当前应用补齐。
+按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 
 - §1 应用类型与选型
 - §2 目录结构

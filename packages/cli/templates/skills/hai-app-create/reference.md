@@ -334,13 +334,14 @@ core.init() → crypto.init() → reldb.init() → cache.init() → iam.init() �
 
 仅涉及容器构建/部署变更时使用本节；普通功能开发无需每次启动镜像。
 
-- 保持脚手架根目录 `Dockerfile`、`.dockerignore` 与 `package.json` 中 `build` / `compile` 命令与 hai.build.json同步。
+- 保持脚手架 `images/*.Dockerfile`、`.dockerignore` 与 `package.json` 中 `build` / `compile` 命令与 hai.build.json同步。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
 - Podman 多阶段构建保持 `--format docker --jobs=1`；前者保留 `HEALTHCHECK`，后者避免部分 Podman 5.8/Buildah 组合在并行 stage 构建时触发内部 semaphore panic。
-- 先复制 lockfile 与 workspace 配置执行 `pnpm fetch`，再复制源码并离线安装、构建；避免源码变化重复下载依赖，同时兼容新增 workspace。
+- 先复制 lockfile、workspace 配置与构建器准备的 `images/dependencies/` 安装输入执行 `pnpm fetch --ignore-scripts`，再复制源码并离线安装、构建；fetch、安装和 `pnpm pm deploy` 共用 pnpm store，安装与生产依赖整理共用 SQLite 驱动缓存，避免重复下载，兼容新增 workspace、本地归档与补丁。
+- 默认容器面向 CPU 运行或远程 AI 服务，Dockerfile 设置 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，跳过额外 CUDA/TensorRT 下载；使用宿主机 GPU 时定制镜像和运行参数，不修改本机 npm 或全局 AI/GPU 配置。
 - SvelteKit 服务使用 Node adapter；纯 Vite 前端使用带 SPA fallback 的静态镜像；fullstack 的 Service 与 Web 分别交付，Service 直接监听且不增加转发进程。
 - Web 的 `PUBLIC_*` 部署配置在容器启动时生成静态运行时配置，不作为 build arg 烘焙，确保同一镜像可跨环境部署。
 - 配置文件随镜像提供，并允许只读挂载覆盖；密钥只通过环境变量或 `--env-file` 注入。
-- 普通构建不携带 `data/`；持续写入使用运行期 volume；需要预置数据时显式维护独立 Dockerfile target 和 named build context，不把本机数据加入默认镜像。
+- 普通构建不携带 `data/`；持续写入使用运行期 volume；需要预置数据时显式维护独立 Dockerfile 和明确的 build context，不把本机数据加入默认镜像。
 - 数据库和本地存储的持续写入必须落到 volume，不能依赖镜像可写层。
 - 完成前实际启动镜像，验证健康端点、非 root 用户、环境变量覆盖、配置挂载和预置数据读取。
 
