@@ -48,6 +48,10 @@ export default defineConfig({
     command: `pnpm build && pnpm exec vite preview --host ${previewHost} --port ${previewPort} --strictPort`,
     env: {
       HAI_E2E: '1',
+      // 测试数据目录使用独立本地后端，不继承生产 Compose 服务地址。
+      HAI_DB_TYPE: 'sqlite',
+      HAI_CACHE_TYPE: 'memory',
+      HAI_STORAGE_TYPE: 'local',
       HAI_CORE_ENV: 'production',
       // LDAP 是可选 YAML 字段，使用整个 IAM 对象覆盖并保留本轮验收的密码/会话策略。
       HAI_IAM: JSON.stringify({

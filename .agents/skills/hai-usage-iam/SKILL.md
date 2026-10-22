@@ -17,6 +17,8 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 
 ## 使用路径
 
+- 密码登录只接收 identifier/password；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。
+
 - `_iam.yml` 只存 IamConfigSettingsInput，运行时回调单独传给 iam.init；不把 reldb/cache 句柄混入配置。
 - 角色资料与 permissionIds 一次保存：未传保持、空数组清空、未知 ID 失败；人数查询失败不能显示为 0。
 - IAM 服务端是 iam.auth；typed HTTP client 的路径是 apiClient.iam.auth。

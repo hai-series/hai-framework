@@ -52,7 +52,6 @@
 - **primitives**：单个交互单元，例如 `Button`、`Input`、`Select`、`Badge`。
 - **compounds**：通用业务骨架，例如 `Form`、`Modal`、`Drawer`、`DataTable`、`Pagination`。
 - **scenes**：完整业务流，例如 `LoginForm`、`FileUpload`、`CrudPage`、`AiDocumentEditor`。
-
 经验法则：
 
 - 只是做一个输入控件或按钮行 → 先看 primitives。
@@ -361,7 +360,7 @@ const p = usePlatform()
 | 组件           | Props 要点                                      | 说明     |
 | -------------- | ----------------------------------------------- | -------- |
 | `AuthShell`    | `variant`('card'/'split'), `title`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` | 认证页布局（包裹登录/注册表单） |
-| `LoginForm`    | `showRememberMe`, `showRegisterLink`, `errors`  | 登录表单 |
+| `LoginForm`    | `showForgotPassword`, `showRegisterLink`, `errors`  | 登录表单 |
 | `RegisterForm` | `fields`, `minPasswordLength`, `errors`         | 注册表单 |
 | `UserProfile`  | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint` | 用户资料，选择器和提示对齐业务校验；最终验证和上传仍由回调负责 |
 
@@ -581,6 +580,8 @@ typescript, javascript, python, java, go, rust, c, cpp, csharp, ruby, php, swift
 ```
 
 ## 配置驱动认证页面
+
+密码登录只接收 identifier/password；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。
 
 协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
 

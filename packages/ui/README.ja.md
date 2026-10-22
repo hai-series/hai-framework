@@ -317,7 +317,7 @@ components/
 | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `AuthPanel`          | 設定による認証画面 | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | 認証ページ配置（中央カード / 左右分割） | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
-| `LoginForm`          | ログインフォーム                        | `loading`, `errors`, `showRememberMe`, `onsubmit`                                                      |
+| `LoginForm`          | ログインフォーム                        | `loading`, `errors`, `showForgotPassword`, `onsubmit`                                                      |
 | `RegisterForm`       | 登録フォーム                            | `loading`, `errors`, `fields`, `onsubmit`                                                              |
 | `ForgotPasswordForm` | パスワード忘れ                          | `mode`, `loading`, `errors`, `onsubmit`                                                                |
 | `ResetPasswordForm`  | パスワードリセット                      | `loading`, `errors`, `showCode`, `onsubmit`                                                            |
@@ -775,6 +775,8 @@ import {
 ```
 
 ### 設定による認証画面
+
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
 
 YAML の `|` で `agreements.userAgreementMarkdown` と `privacyPolicyMarkdown` を設定できます。Modal は本文を安全に描画し、同じ規約の URL より本文を優先します。URL のみの場合は隔離 iframe を使用します。
 

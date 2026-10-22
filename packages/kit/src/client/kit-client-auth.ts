@@ -40,7 +40,7 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
         return post('login/ldap', { username: input.identifier, password: input.password })
       if (input.method === 'email' || input.method === 'sms')
         return post('login/otp', { identifier: input.identifier, code: input.code })
-      return post('login', { identifier: input.identifier, password: input.password, rememberMe: input.rememberMe })
+      return post('login', { identifier: input.identifier, password: input.password })
     },
     register: (input: IamRegisterInput) => post('register', { ...input, confirmPassword: input.password }),
     sendOtp: (identifier: string) => post('otp/send', { identifier }),

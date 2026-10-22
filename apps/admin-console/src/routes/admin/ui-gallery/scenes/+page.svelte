@@ -387,7 +387,6 @@ server.listen(3000, () => {
 
   const codeLoginForm = `<LoginForm
   showTitle
-  showRememberMe
   showForgotPassword
   showRegisterLink
   onsubmit={async (data) => { /* 登录逻辑 */ }}
@@ -629,7 +628,6 @@ server.listen(3000, () => {
         <div class='w-full max-w-sm'>
           <LoginForm
             showTitle
-            showRememberMe
             showForgotPassword
             showRegisterLink
             onsubmit={async (data) => { toast.success(`登录: ${data.username}`) }}

@@ -105,6 +105,8 @@ This package has no runtime configuration and does not read environment variable
 
 ### Configuration driven authentication
 
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
+
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
 IAM adds GET /auth/config and POST /auth/login/ldap, /auth/password-reset/request and /auth/password-reset/confirm. Public config is a schema whitelist; IamLdapLoginInput and IamPublicConfig are exported. Password lengths follow the configured IAM policy.

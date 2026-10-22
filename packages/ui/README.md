@@ -317,7 +317,7 @@ components/
 | -------------------- | ---------- | ----------------------------------------------------- |
 | `AuthPanel`          | 配置驱动认证页 | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | 认证页布局（居中卡片 / 左右分栏） | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
-| `LoginForm`          | 登录表单   | `loading`, `errors`, `showRememberMe`, `onsubmit`     |
+| `LoginForm`          | 登录表单   | `loading`, `errors`, `showForgotPassword`, `onsubmit`     |
 | `RegisterForm`       | 注册表单   | `loading`, `errors`, `fields`, `onsubmit`             |
 | `ForgotPasswordForm` | 忘记密码   | `mode`, `loading`, `errors`, `onsubmit`               |
 | `ResetPasswordForm`  | 重置密码   | `loading`, `errors`, `showCode`, `onsubmit`           |
@@ -734,6 +734,8 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 - 如需覆盖特定文本，通过 `submitText`、`labels` 等 props 传入
 
 ### 配置驱动认证页面
+
+密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
 
 协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
 

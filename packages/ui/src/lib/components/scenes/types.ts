@@ -83,7 +83,7 @@ export interface AgreementDisplay {
  * @example
  * ```ts
  * import type { LoginFormData } from '@h-ai/ui'
- * const example: LoginFormData = { username: 'ada', password: 'Example-pass-42!', rememberMe: false, method: 'password' }
+ * const example: LoginFormData = { username: 'ada', password: 'Example-pass-42!', method: 'password' }
  * ```
  */
 export interface LoginFormData {
@@ -93,7 +93,6 @@ export interface LoginFormData {
   code?: string
   username: string
   password: string
-  rememberMe: boolean
 }
 
 /**
@@ -104,7 +103,7 @@ export interface LoginFormData {
  * <script lang="ts">
  *   import { LoginForm } from '@h-ai/ui'
  *   import type { LoginFormProps } from '@h-ai/ui'
- *   const props: LoginFormProps = { methods: ['password'], showRememberMe: true }
+ *   const props: LoginFormProps = { methods: ['password'] }
  * </script>
  * <LoginForm {...props} />
  * ```
@@ -124,8 +123,6 @@ export interface LoginFormProps extends FormLayoutOptions, DataAttributes {
   disabled?: boolean
   /** 是否显示标题 */
   showTitle?: boolean
-  /** 是否显示记住我 */
-  showRememberMe?: boolean
   /** 是否显示忘记密码 */
   showForgotPassword?: boolean
   /** 忘记密码链接 */

@@ -805,6 +805,8 @@ async function consumeAudioTicket(ticket: string) {
 
 ### 設定による認証画面
 
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
+
 `iam.publicConfig` とクライアントの HTTP `client.iam.auth.publicConfig()` は秘密情報を含まない設定だけを公開し、実際に利用可能な認証方式を表示します。`login.password/otp/ldap`、`otp.email/sms`、`register.enabled/defaultEnabled`、`passwordReset.enabled/mode/resetUrl` と規約表示を個別に設定できます。`ui` はカード/分割レイアウト、タイトル、説明、ブランド、Logo、画像を指定します。LDAP は任意で既定は無効です。既定クライアントを選択する時だけ ldapts を追加するか、独自ファクトリを注入します。
 
 任意の Reach を選択した場合、reldb/cache/Reach の初期化後、`iam.init({ ...settings, reach })` を呼び出します。`otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` テンプレートを対応する送信 Provider に接続します。明示的なコールバックは既定動作を上書きします。Console はメタデータだけを記録するため、実際の配送には SMTP、SMS または HTTP サービスが必要です。送信失敗はエラーになります。
@@ -884,7 +886,6 @@ access と refresh は独立して期限切れになります。ユーザー文�
 Session.credentialVersion は作成時の DB 資格情報世代に結び付けます。CreateSessionOptions.expectedCredentialVersion は検証済みの信頼する戦略だけが指定し、旧世代は拒否します。省略した低レベル create でも実在する有効なローカルユーザーを DB から読み、現世代に結び付けるため、DB 記録のない認証済み ID は作れません。
 
 browser 条件の入口は設定 Schema、型、HaiIamError のみを公開し、サーバーの `iam` インスタンスは含みません。認証には HTTP/typed client を使用します。
-
 
 `iam.auth.logout(accessToken)` は完全な不透明 Token を使い、ユーザー文書の一回の CAS で access と refresh を同時に取り消します。access 期限後も実行します。不正・不存在 Token は冪等成功ですが、キャッシュの読取・確定障害は失敗で返し、復旧後に同じ Token で再試行できます。HTTP 入口は保持している Token だけを取り消し、userId を対象にせず、有効な access 認証を前提にしません。呼出側は `success` を確認し、Cookie・安全ストレージのローカル消去だけでサーバー失効を成功と扱わず、失敗を表示します。
 

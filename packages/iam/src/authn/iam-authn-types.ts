@@ -25,8 +25,6 @@ export interface PasswordCredentials {
   identifier: string
   /** 密码 */
   password: string
-  /** 该字段未被认证逻辑消费，不改变 access/refresh 的有效时长。 */
-  rememberMe?: boolean
 }
 
 /**

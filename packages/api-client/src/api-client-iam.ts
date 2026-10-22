@@ -64,7 +64,7 @@ export function createIamAuthActions(client: {
         ? await client.iam.auth.loginWithLdap({ username: input.identifier, password: input.password })
         : input.method === 'email' || input.method === 'sms'
           ? await client.iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code ?? '' })
-          : await client.iam.auth.login({ identifier: input.identifier, password: input.password, rememberMe: input.rememberMe })
+          : await client.iam.auth.login({ identifier: input.identifier, password: input.password })
       return save(result)
     },
     register: async (input: IamRegisterInput) => save(await client.iam.auth.register(input)),

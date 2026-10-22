@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03，共 82 个，另有 21 个按模块拆分的 JSDoc 任务，共 103 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 52/54（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 53/54（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -913,7 +913,8 @@
 
 ### IAM-08 · P2 · 删除未实现的记住登录能力与冗余转发字段
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：删除rememberMe/showRememberMe/checkbox及无消费翻译、契约和转发，同步5包三语README、7份技能、gallery和LLMS；会话TTL与存储语义不变。UI与Schema真实红例后，10文件151测试、五包类型与fresh构建、UI零警告检查、859 JSDoc和6公开类型约束、lint/env/skills均通过；真实Chrome密码精确请求体与会话、邮件OTP、独立gallery3/3通过。修正E2E继承Compose地址db的真实前置失败，两配置显式使用测试SQLite/Memory/Local，无生产后端放宽；全量回归按用户要求在全部任务实施后执行。
 - **位置**：IAM PasswordCredentials、IamLoginSchema、UI LoginFormData/LoginFormProps/LoginForm、api-client/kit 登录转发与 UI gallery。
 - **证据与影响**：全仓仅有 rememberMe 类型/Schema/转发和 checkbox，无任何认证、期限或持久化消费；独立 LoginForm 默认展示该未实现选项，AuthPanel 又显式关闭，接口与可见承诺不一致。
 - **修正内容**：直接移除 rememberMe、showRememberMe 及对应选择框、空转发、无消费文案/示例；不新增会话期限或客户端持久化机制。同步三语 README、skills、应用、模板与实际公开类型。

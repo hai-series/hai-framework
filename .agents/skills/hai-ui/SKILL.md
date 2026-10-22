@@ -19,6 +19,8 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 
 ## 使用路径
 
+- 密码登录只接收 identifier/password；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。
+
 修改框架组件先读 [模块规范](../../instructions/module-conventions.md)；修改应用页面按 [应用规范](../../instructions/app-conventions.md)，在示例应用验证公共 Props、SSR 和浏览器交互。
 
 - 先检查组件导入、Tailwind @source 和主题 CSS，再选场景 → 组合 → 原子组件，缺能力才自定义。

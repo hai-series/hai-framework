@@ -120,6 +120,8 @@ Calling `init()` on an initialized client returns `CONFIG_ERROR` and leaves the 
 
 ### Configuration driven authentication
 
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
+
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
 apiClient.createAuthActions(client) supplies publicConfig, login, register, sendOtp and password-reset actions for a client containing the standard IAM contract. Login uses identifier/password/method/code; successful authentication saves tokens through the existing configured storage. Applications only refresh their own state or navigate after authentication.

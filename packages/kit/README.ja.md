@@ -280,6 +280,8 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 
 ### 設定による認証画面
 
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
+
 規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
 
 kit.auth.createApi(iam) の標準 handler と kit.auth.publicPaths を使用し、AuthPanel には kit.client.createAuthActions({ apiFetch }) を接続します。検証、Cookie、HaiResult 変換を共通化し、ユーザー情報と改密の保護を維持します。

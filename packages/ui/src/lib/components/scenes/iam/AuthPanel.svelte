@@ -128,7 +128,7 @@
       {:else}
         {#if notice}<Alert variant='success' class='mb-4'>{uiM(notice)}</Alert>{/if}
         {#if mode === 'login'}
-          <LoginForm {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showRememberMe={false} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
+          <LoginForm {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
                      onforgotpassword={forgotPasswordUrl ? undefined : () => switchMode('forgot')}
                      otpLength={config.otp.length} resendInterval={config.otp.resendInterval} onsendotp={actions.sendOtp}
                      agreements={config.agreements.showOnLogin ? config.agreements : undefined}

@@ -105,6 +105,8 @@ const app = serv.createApp({
 
 ### 設定による認証画面
 
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
+
 規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
 
 IAM に公開設定、LDAP、復旧要求と確定の標準 route を追加しました。IamPublicConfig は安全な Schema で、登録パスワードの長さは IAM 設定に従います。

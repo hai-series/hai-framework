@@ -317,7 +317,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `AuthPanel`          | Configuration driven authentication | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | Auth page layout (centered card / split columns) | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
-| `LoginForm`          | Login form                                       | `loading`, `errors`, `showRememberMe`, `onsubmit`                                                      |
+| `LoginForm`          | Login form                                       | `loading`, `errors`, `showForgotPassword`, `onsubmit`                                                      |
 | `RegisterForm`       | Registration form                                | `loading`, `errors`, `fields`, `onsubmit`                                                              |
 | `ForgotPasswordForm` | Forgot password                                  | `mode`, `loading`, `errors`, `onsubmit`                                                                |
 | `ResetPasswordForm`  | Reset password                                   | `loading`, `errors`, `showCode`, `onsubmit`                                                            |
@@ -775,6 +775,8 @@ import {
 ```
 
 ### Configuration driven authentication
+
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
 
 Agreement content can be configured as `agreements.userAgreementMarkdown` and `privacyPolicyMarkdown` using YAML `|`. The modal safely renders configured Markdown and prefers it over the URL of the same agreement. URL-only content stays in a sandboxed iframe.
 

@@ -274,6 +274,8 @@ Use runtime methods through the `kit` namespace or explicit subpaths; types are 
 
 ### Configuration driven authentication
 
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
+
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
 Export standard handlers from kit.auth.createApi(iam), use kit.auth.publicPaths for anonymous endpoints, and connect AuthPanel with kit.client.createAuthActions({ apiFetch }). Validation, Cookie writes and HaiResult mapping are built in; current-user and password-change endpoints remain guarded.

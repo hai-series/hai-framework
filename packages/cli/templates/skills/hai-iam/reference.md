@@ -107,6 +107,8 @@ LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h
 
 协议以 Modal 显示，关闭后保留输入。URL 方式必须为 HTTP(S) 且页面允许 iframe 嵌入；脚本被隔离禁用。`LoginForm/RegisterForm` 提供 `header/extraFields/footer`；`AuthPanel` 提供 `loginHeader/loginFields/loginFooter`、`registerHeader/registerFields/registerFooter`。额外字段由应用绑定状态，在自己的动作中处理，IAM 不接收未经定义的字段。
 
+密码登录只接收 identifier/password；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。
+
 ## 核心 API
 
 ### 认证 — `iam.auth`

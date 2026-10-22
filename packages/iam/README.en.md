@@ -805,6 +805,8 @@ Features: cryptographically secure randomness, TTL, atomic single use (only one 
 
 ### Configuration driven authentication
 
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
+
 `iam.publicConfig` and the client's `client.iam.auth.publicConfig()` HTTP contract expose a safe configuration whitelist and only advertise configured, available methods. `login.password/otp/ldap`, `otp.email/sms`, `register.enabled/defaultEnabled`, `passwordReset.enabled/mode/resetUrl` and agreement display flags are independent. `ui` configures card/split layout, title, subtitle, brand text, Logo and illustration URLs. Browser links only accept HTTP(S). LDAP is optional and disabled by default; install ldapts only for the default client, or inject a custom factory.
 
 When using optional Reach, initialize it after reldb/cache and call `iam.init({ ...settings, reach })`. Standard `otp_email`, `otp_sms`, `password_reset` and `password_reset_sms` templates supply notification callbacks. Explicit callbacks override these defaults. Configure a real SMTP, SMS or HTTP provider for delivery; Console records metadata only. Delivery failures return errors.
@@ -888,7 +890,6 @@ Cache cleanup may return a failure after the new password and credential generat
 Session.credentialVersion binds the database credential generation at creation. Only trusted authenticated strategies supply CreateSessionOptions.expectedCredentialVersion, and stale generations fail. Low-level create without that option still reads a real enabled local user and binds its current generation; it cannot create an authenticated identity without a database record.
 
 The browser entry exports configuration schemas, types and HaiIamError, without the server `iam` instance. Authenticate through the HTTP/typed client.
-
 
 `iam.auth.logout(accessToken)` uses the complete opaque token to revoke its access and refresh credentials in one user-partition CAS, including when access has expired. Invalid or absent tokens are idempotent successes. Cache read/commit failures return failure and can be retried with the same token after recovery. The HTTP endpoint revokes only a possessed token, accepts no userId target and does not require a still-authenticated access token. Callers must inspect `success`; clearing local cookies or secure storage is not confirmation of server revocation and failures must be shown.
 

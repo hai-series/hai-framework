@@ -7,7 +7,7 @@
   import { mount, unmount } from 'svelte'
   import type { ComponentProps } from 'svelte'
   import { LoginForm } from '@h-ai/ui'
-  const props: ComponentProps<typeof LoginForm> = { methods: ['password'], showRememberMe: true }
+  const props: ComponentProps<typeof LoginForm> = { methods: ['password'] }
   const component = mount(LoginForm, { target: document.body, props })
   await unmount(component)
   ```
@@ -23,7 +23,6 @@
   import FormLayout from '../../compounds/FormLayout.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
   import Button from '../../primitives/Button.svelte'
-  import Checkbox from '../../primitives/Checkbox.svelte'
   import Input from '../../primitives/Input.svelte'
   import AgreementNotice from './AgreementNotice.svelte'
   import { authErrorMessage } from './auth-error-message.js'
@@ -40,7 +39,6 @@
     labelWidth = '8rem',
     disabled = false,
     showTitle = false,
-    showRememberMe = true,
     showForgotPassword = true,
     forgotPasswordUrl = '/forgot-password',
     showRegisterLink = false,
@@ -61,7 +59,6 @@
 
   let username = $state('')
   let password = $state('')
-  let rememberMe = $state(false)
   let selectedMethod = $state<AuthLoginMethod>('password')
   const method = $derived(methods.includes(selectedMethod) ? selectedMethod : methods[0])
   const isOtp = $derived(method === 'email' || method === 'sms')
@@ -128,7 +125,6 @@
     const data: LoginFormData = {
       username,
       password,
-      rememberMe,
       method,
       code: isOtp ? code : undefined,
     }
@@ -214,34 +210,21 @@
       {/if}
     {/if}
 
-    <!-- 记住我 & 忘记密码 -->
-    {#if method === 'password' && (showRememberMe || showForgotPassword)}
-      <div class='flex items-center justify-between'>
-        {#if showRememberMe}
-          <Checkbox
-            bind:checked={rememberMe}
-            label={uiM('login_remember_me')}
-            {disabled}
-            size='sm'
-          />
+    <!-- 忘记密码 -->
+    {#if method === 'password' && showForgotPassword}
+      <div class='flex justify-end'>
+        {#if onforgotpassword}
+          <BareButton
+            type='button'
+            class='link link-primary text-sm'
+            onclick={handleForgotPassword}
+          >
+            {uiM('login_forgot_password')}
+          </BareButton>
         {:else}
-          <div></div>
-        {/if}
-
-        {#if showForgotPassword}
-          {#if onforgotpassword}
-            <BareButton
-              type='button'
-              class='link link-primary text-sm'
-              onclick={handleForgotPassword}
-            >
-              {uiM('login_forgot_password')}
-            </BareButton>
-          {:else}
-            <a href={forgotPasswordUrl} class='link link-primary text-sm'>
-              {uiM('login_forgot_password')}
-            </a>
-          {/if}
+          <a href={forgotPasswordUrl} class='link link-primary text-sm'>
+            {uiM('login_forgot_password')}
+          </a>
         {/if}
       </div>
     {/if}
