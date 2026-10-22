@@ -2,9 +2,9 @@
 
 审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03，共 78 个，另有 21 个按模块拆分的 JSDoc 任务，共 99 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04，共 79 个，另有 21 个按模块拆分的 JSDoc 任务，共 100 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 48/49；P2 35/50（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 49/49；P2 35/51（已通过定向验证；全量回归尚未执行）。
 
 ## 使用与验收规则
 
@@ -38,7 +38,7 @@
 | reldb | 17 | 84 | 4 | 57 | RELDB-01、RELDB-02、RELDB-03 | JSDOC-16 |
 | scheduler | 14 | 71 | 38 | 67 | SCHED-01、SCHED-02、SCHED-03 | JSDOC-17 |
 | serv | 28 | 106 | 3 | 98 | SERV-01、SERV-02、SERV-03、SERV-04、SERV-05 | JSDOC-18 |
-| storage | 14 | 49 | 5 | 38 | STORAGE-01、STORAGE-02、STORAGE-03 | JSDOC-19 |
+| storage | 14 | 49 | 5 | 38 | STORAGE-01、STORAGE-02、STORAGE-03、STORAGE-04 | JSDOC-19 |
 | ui | 162 | 297 | 63 | 284 | UI-01、UI-02 | JSDOC-20 |
 | vecdb | 10 | 35 | 3 | 26 | VECDB-01、VECDB-02、VECDB-03、VECDB-04、VECDB-05 | JSDOC-21 |
 
@@ -874,7 +874,8 @@
 
 ### IAM-07 · P1 · 登出原子撤销会话并传播失败到真实调用方
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：logout直接按所持opaque access在共享CAS删除完整session及refresh，不先get滑动或因access过期跳过；非法/不存在幂等，Redis读取/提交故障失败。Kit返回HaiResult并独立清Cookie，Serv撤销只认完整持有令牌且保留HTTP200/HaiResult信封，Admin/H5/Desktop及两类模板传播失败，移动端原本已正确处理。旧实现真实Redis3红；最终Redis4、真实HTTP+typedClient4、IAM回归66、Kit12、Cookie20、Desktop11及实际应用路由4通过；四组严格测试、三包fresh ESM/DTS、三app Svelte类型/Desktop生产bundle、三真实渲染模板单元、两参考示例及Kit159 JSDoc均0，三语README/skills330/LLMS/API检查与矩阵格式同步。仅增加serv测试依赖和其9行lock，未混入Storage浏览器依赖；原生设备与toast浏览器端到端仍待最终验收边界；全量回归按用户要求在全部任务实施后执行。
 - **位置**：`packages/iam/src/authn/iam-authn-functions.ts` logout、kit/serv 适配器、应用与 CLI 模板调用方。
 - **证据与影响**：真实 Redis GET/EVAL 被 ACL 拒绝时旧 logout 仍报告成功；access 已过期但 refresh 有效时先 get 返回 null，旧 logout 跳过撤销，refresh 实际仍成功。kit/部分应用还吞掉服务端失败，serv 的有效 access 守卫使过期 token 无法进入撤销路径。
 - **修正内容**：直接按所持 opaque access token 原子删除整个共享会话；不存在时幂等成功，存储故障返回失败。同步 kit HaiResult 契约、serv 入口以及应用/模板错误处理，不能将本地清凭据视为服务端已撤销。
@@ -896,3 +897,11 @@
 - **证据与影响**：公开接口承诺 RFC 7396，但旧 PostgreSQL 使用 || 浅拼接；实际数据库 10 场景中 7 项失败，包括 null 不删除、嵌套兄弟字段丢失、标量/数组未转对象。SQLite/MySQL 使用原生 Merge Patch。
 - **修正内容**：以一次参数化数据库表达式执行对象节点和叶值补丁，不在应用先读再写；保留未变字段，null 仅删除指定键，数组整体替换。
 - **验收标准**：三种真实数据库运行相同对象补丁与并发更新，参数内保留特殊/原型字段名，类型/构建/现有JSON测试及文档/skill同步；记录对象补丁范围，不声称支持任意 JSON 作为补丁根。
+
+### STORAGE-04 · P2 · 浏览器上传取消统一结算并释放监听
+
+- [ ] 待修正。
+- **位置**：`packages/storage/src/client/storage-client.ts` uploadWithPresignedUrl 进度分支。
+- **证据与影响**：旧 XHR 分支对已经 abort 的 signal 仍发送请求，终态未移除外部监听；原生 xhr.abort 可能使 Promise 永不结算，错误 URL 在 Promise executor 内抛错还会绕过失败结果契约。真实 Chrome 的 7 项旧实现回归全部失败。
+- **修正内容**：发送前检查取消，所有原生终态只结算一次并释放监听；捕获构造/打开/发送和进度回调异常，维持既有失败结果契约，不把调用方清理与服务端持久化混为一谈。
+- **验收标准**：真实浏览器预取消不发送、进行中/外部取消、网络/超时、失败 URL 与回调异常、监听清理和旧客户端回归均通过；三语 README、JSDoc和测试依赖一致。

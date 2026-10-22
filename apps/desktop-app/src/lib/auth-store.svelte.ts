@@ -7,6 +7,7 @@
 
 import type { IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
 import { desktopApiClient } from './api.js'
+import { authMessage } from './auth-messages.js'
 
 type LoginSuccessResult = Extract<
   Awaited<ReturnType<typeof desktopApiClient.iam.auth.login>>,
@@ -183,21 +184,31 @@ export async function register(input: IamRegisterInput): Promise<string | null> 
   }
 }
 
-/** 登出当前会话；服务端失败也清除本地状态。 */
-export async function logout(): Promise<void> {
+/** 登出当前会话并清理本地状态；返回可展示的失败说明，null 表示服务端撤销和本地清理均确认成功。 */
+export async function logout(): Promise<string | null> {
   loading = true
+  let error: string | null = null
   try {
-    await desktopApiClient.iam.auth.logout({})
+    const result = await desktopApiClient.iam.auth.logout({})
+    const failure = resolveHaiResultFailure(result, authMessage('logoutUnconfirmed'))
+    if (!failure.success)
+      error = authMessage('logoutUnconfirmed')
   }
   catch {
-    // 服务端登出失败时仍然清理本地凭证，避免把用户卡在坏会话里。
+    error = authMessage('logoutUnconfirmed')
+  }
+  try {
+    await desktopApiClient.auth.clear()
+  }
+  catch {
+    error = authMessage('logoutLocalClearFailed')
   }
   finally {
-    await desktopApiClient.auth.clear()
     user = null
     clearAccessScope()
     loading = false
   }
+  return error
 }
 
 /** 拉取当前用户与服务端重新校验后的角色/权限。 */

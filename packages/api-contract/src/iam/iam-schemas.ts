@@ -283,6 +283,8 @@ export const IamOtpLoginInputSchema = z.object({
 
 /**
  * 登出入参 Schema。
+ * 仅撤销调用方持有的完整 accessToken；省略时使用 Authorization Bearer，二者均无值则失败。
+ * access 已到期仍可撤销关联 refresh；此入口不按 userId 撤销，也不授予任何身份权限。
  * @example
  * ```ts
  * import { IamLogoutInputSchema } from '@h-ai/api-contract'

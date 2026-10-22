@@ -42,9 +42,8 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .route('auth.requestPasswordReset', ({ input }) => iam.user.requestPasswordReset(input.identifier))
     .route('auth.confirmPasswordReset', ({ input }) => iam.user.confirmPasswordReset(input.token, input.newPassword))
 
-    .route('auth.logout')
-    .auth()
-    .handle(({ input, context }) => {
+    .route('auth.logout', ({ input, context }) => {
+      // 仅撤销调用方持有的完整随机令牌；不要求 access 仍有效，也不接受 userId 撤销。
       const token = input.accessToken ?? context.accessToken
       if (!token)
         return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))

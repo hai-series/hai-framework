@@ -2,7 +2,6 @@
 
 > `@h-ai/kit` 只负责 SvelteKit 集成：`handle` hook、guard、response、validate、client、auth、crud、A2A。公共跨端 HTTP API 契约统一使用 `@h-ai/api-contract` + `@h-ai/serv`，不要在 kit 中定义业务 API contract。
 
-
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
 空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
@@ -92,13 +91,13 @@ export const handle = kit.createHandle({
 
 需要保护会话 Cookie 时配置 `crypto.encryptedCookies`，并通过 `crypto.cookieEncryptionKey` 或 `HAI_KIT_COOKIE_KEY` 提供密钥。缺少密钥会在 `createHandle()` 时失败；加解密错误不会回退到明文 Cookie。
 
-```ts
-// routes/+layout.svelte
+```svelte
+<!-- src/routes/+layout.svelte -->
 <script lang='ts'>
   import { browser } from '$app/environment'
+  import { appKitConfig } from '$lib/config/kit-config'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
-  import { appKitConfig } from '$lib/config/kit-config'
 
   // 一次性安装：内部按 appKitConfig.transport 是否启用决定行为，并预热 crypto
   if (browser) {
@@ -157,19 +156,19 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 
 ## 核心 API
 
-| API | 用途 |
-| --- | --- |
-| `kit.createHandle()` | 创建 SvelteKit Handle |
-| `kit.sequence()` | 组合多个 Handle |
-| `kit.handler()` | API endpoint 错误边界 |
-| `kit.guard.require()` | 权限守卫 |
-| `kit.response.*` | 统一响应工厂 |
-| `kit.validate.*` | Zod 请求校验 |
-| `kit.auth.*` | Cookie / Token 辅助 |
-| `kit.client.create()` | 浏览器端同源 apiFetch |
+| API                                                      | 用途                                                     |
+| -------------------------------------------------------- | -------------------------------------------------------- |
+| `kit.createHandle()`                                     | 创建 SvelteKit Handle                                    |
+| `kit.sequence()`                                         | 组合多个 Handle                                          |
+| `kit.handler()`                                          | API endpoint 错误边界                                    |
+| `kit.guard.require()`                                    | 权限守卫                                                 |
+| `kit.response.*`                                         | 统一响应工厂                                             |
+| `kit.validate.*`                                         | Zod 请求校验                                             |
+| `kit.auth.*`                                             | Cookie / Token 辅助                                      |
+| `kit.client.create()`                                    | 浏览器端同源 apiFetch                                    |
 | `kit.client.installBrowserTransport(config, { crypto })` | 推荐入口：按解析后的 `_kit.yml` 一键安装浏览器端传输加密 |
-| `kit.client.installBrowserTransportFetch()` | 底层入口：直接传 transport 配置安装浏览器全局 fetch 包装 |
-| `kit.crud.define()` | 声明式 CRUD 资源 |
+| `kit.client.installBrowserTransportFetch()`              | 底层入口：直接传 transport 配置安装浏览器全局 fetch 包装 |
+| `kit.crud.define()`                                      | 声明式 CRUD 资源                                         |
 
 ## 常见模式
 
@@ -187,3 +186,5 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
 
 认证 Cookie 在 NODE_ENV 或 HAI_CORE_ENV 为 production 时默认启用 Secure，HAI_E2E/HAI_E2E_MOCK 不降低 Cookie 安全；限流生产判断也识别这两个环境标志，测试开关仅放宽共享状态要求。
+
+`kit.auth.logout(cookies, accessToken)` 返回 `Promise<HaiResult<void>>`。无令牌时仅清除 Cookie 并成功；有令牌但未配置认证操作时返回失败。无论服务端结果如何都清除本地 Cookie，调用方仍必须把失败转换为错误响应或提示；仅成功结果代表服务端撤销已经确认。底层控制流异常继续传播。

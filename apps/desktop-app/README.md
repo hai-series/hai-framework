@@ -189,3 +189,5 @@ pnpm --filter desktop-app build
 ## 许可证
 
 Apache-2.0
+
+登出会检查服务端 HaiResult，并在网络或服务端撤销失败时显示中英文 Toast；仍清理本地身份。安全存储清理失败会显示独立警告并结束加载，不能把本地页面退出当作服务端凭据已经失效。认证提示位于 `messages/zh-CN.json`、`messages/en-US.json`。

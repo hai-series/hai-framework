@@ -1,0 +1,4 @@
+{
+  "logoutUnconfirmed": "服务端登出未确认，原会话可能仍有效，请稍后重试。",
+  "logoutLocalClearFailed": "本地凭据清理失败，请关闭应用并检查安全存储。"
+}

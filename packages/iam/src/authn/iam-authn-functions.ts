@@ -392,18 +392,8 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     },
 
     async logout(accessToken: string): Promise<HaiResult<void>> {
-      const sessionResult = await sessionFunctions.get(accessToken)
-      if (sessionResult.success && sessionResult.data) {
-        // 吊销 refreshToken，防止登出后被重用
-        const tokenPair = sessionResult.data.data?._tokenPair
-        if (tokenPair?.refreshToken) {
-          await sessionFunctions.revokeRefresh(tokenPair.refreshToken)
-        }
-        await sessionFunctions.delete(sessionResult.data.accessToken)
-        logger.info('User logged out', { userId: sessionResult.data.userId })
-      }
-
-      return ok(undefined)
+      // 不先读取/滑动 access；过期 access 对应的 refresh 也必须在同一次 CAS 中撤销。
+      return sessionFunctions.delete(accessToken)
     },
 
     async verifyToken(accessToken: string): Promise<HaiResult<Session>> {

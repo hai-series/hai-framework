@@ -56,11 +56,14 @@ import { reldb } from '@h-ai/reldb'
 // 位于应用启动函数内；依赖初始化失败时立即返回，不能继续启动 IAM。
 core.init({ configDir: './config' })
 const db = await reldb.init({ type: 'sqlite', database: './data.db' })
-if (!db.success) return db
+if (!db.success)
+  return db
 const cached = await cache.init({ type: 'memory' })
-if (!cached.success) return cached
+if (!cached.success)
+  return cached
 const initialized = await iam.init(core.config.getOrThrow<IamConfigSettingsInput>('iam'))
-if (!initialized.success) return initialized
+if (!initialized.success)
+  return initialized
 // 关闭时按 iam → cache → reldb 的反向依赖顺序执行。
 ```
 
@@ -81,16 +84,16 @@ LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h
 
 ## §2 认证 — `iam.auth`
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `login` | `({ identifier, password }) => Promise<HaiResult<AuthResult>>` | 密码登录 |
-| `loginWithOtp` | `({ identifier, code }) => Promise<HaiResult<AuthResult>>` | OTP 登录 |
-| `loginWithLdap` | `({ username, password }) => Promise<HaiResult<AuthResult>>` | LDAP 登录 |
-| `loginWithApiKey` | `({ key }) => Promise<HaiResult<AuthResult>>` | API Key 登录（需启用 `login.apikey`） |
-| `sendOtp` | `(identifier) => Promise<HaiResult<{ expiresAt }>>` | 发送 OTP |
-| `verifyToken` | `(token) => Promise<HaiResult<Session>>` | 验证会话并读取当前用户状态及授权；数据库失败拒绝 |
-| `logout` | `(token) => Promise<HaiResult<void>>` | 登出 |
-| `registerAndLogin` | `(options: RegisterOptions) => Promise<HaiResult<AuthResult>>` | 注册并登录（一站式） |
+| 方法               | 签名                                                           | 说明                                             |
+| ------------------ | -------------------------------------------------------------- | ------------------------------------------------ |
+| `login`            | `({ identifier, password }) => Promise<HaiResult<AuthResult>>` | 密码登录                                         |
+| `loginWithOtp`     | `({ identifier, code }) => Promise<HaiResult<AuthResult>>`     | OTP 登录                                         |
+| `loginWithLdap`    | `({ username, password }) => Promise<HaiResult<AuthResult>>`   | LDAP 登录                                        |
+| `loginWithApiKey`  | `({ key }) => Promise<HaiResult<AuthResult>>`                  | API Key 登录（需启用 `login.apikey`）            |
+| `sendOtp`          | `(identifier) => Promise<HaiResult<{ expiresAt }>>`            | 发送 OTP                                         |
+| `verifyToken`      | `(token) => Promise<HaiResult<Session>>`                       | 验证会话并读取当前用户状态及授权；数据库失败拒绝 |
+| `logout`           | `(token) => Promise<HaiResult<void>>`                          | 登出                                             |
+| `registerAndLogin` | `(options: RegisterOptions) => Promise<HaiResult<AuthResult>>` | 注册并登录（一站式）                             |
 
 **AuthResult**：
 
@@ -111,17 +114,17 @@ interface TokenPair {
 
 ## §3 会话管理 — `iam.session`
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `create` | `({ userId, username, roles, source? }) => Promise<HaiResult<Session>>` | 创建会话 |
-| `get` | `(token) => Promise<HaiResult<Session \| null>>` | 获取会话（滑动续期） |
-| `verifyToken` | `(token) => Promise<HaiResult<Session>>` | 验证令牌 |
-| `update` | `(token, data: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>` | 更新会话字段 |
-| `delete` | `(token) => Promise<HaiResult<void>>` | 删除会话 |
-| `deleteByUserId` | `(userId) => Promise<HaiResult<number>>` | 强制下线（返回删除数量） |
-| `refresh` | `(refreshToken) => Promise<HaiResult<TokenPair>>` | 刷新 Token（rotation） |
-| `revokeRefresh` | `(refreshToken) => Promise<HaiResult<void>>` | 吊销 refreshToken |
-| `patchUserSessions` | `(userId, updates: SessionFieldUpdates) => Promise<HaiResult<void>>` | 批量更新用户活跃会话的 roles/permissions |
+| 方法                | 签名                                                                                   | 说明                                     |
+| ------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `create`            | `({ userId, username, roles, source? }) => Promise<HaiResult<Session>>`                | 创建会话                                 |
+| `get`               | `(token) => Promise<HaiResult<Session \| null>>`                                       | 获取会话（滑动续期）                     |
+| `verifyToken`       | `(token) => Promise<HaiResult<Session>>`                                               | 验证令牌                                 |
+| `update`            | `(token, data: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>` | 更新会话字段                             |
+| `delete`            | `(token) => Promise<HaiResult<void>>`                                                  | 删除会话                                 |
+| `deleteByUserId`    | `(userId) => Promise<HaiResult<number>>`                                               | 强制下线（返回删除数量）                 |
+| `refresh`           | `(refreshToken) => Promise<HaiResult<TokenPair>>`                                      | 刷新 Token（rotation）                   |
+| `revokeRefresh`     | `(refreshToken) => Promise<HaiResult<void>>`                                           | 吊销 refreshToken                        |
+| `patchUserSessions` | `(userId, updates: SessionFieldUpdates) => Promise<HaiResult<void>>`                   | 批量更新用户活跃会话的 roles/permissions |
 
 **Token 刷新（rotation）**：`refresh()` 删除旧 Token 对，创建新 session，旧 refreshToken 立即失效。
 
@@ -129,10 +132,10 @@ interface TokenPair {
 
 短期、一次性能力票据，用于无法携带 Bearer Token 的通道（如 WebSocket URL）。密码学安全随机、TTL、原子单次消费、用途绑定。
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `issue` | `({ subjectId, purpose, grant?, ttlMs? }) => Promise<HaiResult<{ ticket, expiresAt }>>` | 签发（默认 30s） |
-| `consume` | `(ticket, { purpose? }?) => Promise<HaiResult<{ subjectId, purpose, grant }>>` | 原子消费（单次有效，用途不符拒绝） |
+| 方法      | 签名                                                                                    | 说明                               |
+| --------- | --------------------------------------------------------------------------------------- | ---------------------------------- |
+| `issue`   | `({ subjectId, purpose, grant?, ttlMs? }) => Promise<HaiResult<{ ticket, expiresAt }>>` | 签发（默认 30s）                   |
+| `consume` | `(ticket, { purpose? }?) => Promise<HaiResult<{ subjectId, purpose, grant }>>`          | 原子消费（单次有效，用途不符拒绝） |
 
 ```ts
 // 已登录 HTTP 请求内签发，绑定操作/模型
@@ -145,67 +148,67 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
 
 ## §4 用户管理 — `iam.user`
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `register` | `(input) => Promise<HaiResult<RegisterResult>>` | 注册 |
-| `getCurrentUser` | `(token) => Promise<HaiResult<User>>` | 通过令牌获取当前用户 |
-| `updateCurrentUser` | `(token, data: UpdateCurrentUserInput) => Promise<HaiResult<User>>` | 更新当前用户（白名单字段） |
-| `getUser` | `(id, options?) => Promise<HaiResult<User \| null>>` | 获取用户（可 include roles） |
-| `getUsers` | `(ids, options?) => Promise<HaiResult<User[]>>` | 批量公开用户，上限 1000；去重输入顺序、缺失省略、可 include roles |
-| `listUsers` | `(options?) => Promise<HaiResult<PaginatedResult<User>>>` | 分页列表（search、roleCode、include、白名单排序）；roleCode 在分页前筛选 |
-| `updateUser` | `(id, data) => Promise<HaiResult<User>>` | 更新用户 |
-| `deleteUser` | `(id) => Promise<HaiResult<void>>` | 删除用户（清除会话 + 角色关联） |
-| `changePassword` | `(id, old, new) => Promise<HaiResult<void>>` | 修改密码（按用户 ID） |
-| `changeCurrentUserPassword` | `(token, old, new) => Promise<HaiResult<void>>` | 当前用户修改密码（按令牌） |
-| `requestPasswordReset` | `(email) => Promise<HaiResult<void>>` | 请求重置（防枚举） |
-| `confirmPasswordReset` | `(token, newPassword) => Promise<HaiResult<void>>` | 确认重置 |
-| `adminResetPassword` | `(userId, newPassword) => Promise<HaiResult<void>>` | 管理员重置 |
-| `validatePassword` | `(password) => HaiResult<void>` | 密码强度验证（**同步**） |
+| 方法                        | 签名                                                                | 说明                                                                     |
+| --------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `register`                  | `(input) => Promise<HaiResult<RegisterResult>>`                     | 注册                                                                     |
+| `getCurrentUser`            | `(token) => Promise<HaiResult<User>>`                               | 通过令牌获取当前用户                                                     |
+| `updateCurrentUser`         | `(token, data: UpdateCurrentUserInput) => Promise<HaiResult<User>>` | 更新当前用户（白名单字段）                                               |
+| `getUser`                   | `(id, options?) => Promise<HaiResult<User \| null>>`                | 获取用户（可 include roles）                                             |
+| `getUsers`                  | `(ids, options?) => Promise<HaiResult<User[]>>`                     | 批量公开用户，上限 1000；去重输入顺序、缺失省略、可 include roles        |
+| `listUsers`                 | `(options?) => Promise<HaiResult<PaginatedResult<User>>>`           | 分页列表（search、roleCode、include、白名单排序）；roleCode 在分页前筛选 |
+| `updateUser`                | `(id, data) => Promise<HaiResult<User>>`                            | 更新用户                                                                 |
+| `deleteUser`                | `(id) => Promise<HaiResult<void>>`                                  | 删除用户（清除会话 + 角色关联）                                          |
+| `changePassword`            | `(id, old, new) => Promise<HaiResult<void>>`                        | 修改密码（按用户 ID）                                                    |
+| `changeCurrentUserPassword` | `(token, old, new) => Promise<HaiResult<void>>`                     | 当前用户修改密码（按令牌）                                               |
+| `requestPasswordReset`      | `(email) => Promise<HaiResult<void>>`                               | 请求重置（防枚举）                                                       |
+| `confirmPasswordReset`      | `(token, newPassword) => Promise<HaiResult<void>>`                  | 确认重置                                                                 |
+| `adminResetPassword`        | `(userId, newPassword) => Promise<HaiResult<void>>`                 | 管理员重置                                                               |
+| `validatePassword`          | `(password) => HaiResult<void>`                                     | 密码强度验证（**同步**）                                                 |
 
 ## §5 RBAC 授权 — `iam.authz`
 
 ### 权限检查
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `checkPermission` | `(userId, permission) => Promise<HaiResult<boolean>>` | 检查权限（支持通配符） |
-| `getUserAuthorization` | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>` | 当前角色及权限代码，角色 JOIN + 批量权限查询；失败不回退缓存 |
-| `getUserPermissions` | `(userId) => Promise<HaiResult<Permission[]>>` | 获取用户所有权限 |
-| `getUserRoles` | `(userId) => Promise<HaiResult<Role[]>>` | 获取用户角色 |
-| `getUserRolesForMany` | `(userIds[]) => Promise<HaiResult<Map<string, Role[]>>>` | 批量获取多用户角色 |
-| `getRolePermissionsForMany` | `(roleIds[]) => Promise<HaiResult<Map<string, Permission[]>>>` | 批量获取多角色权限 |
+| 方法                        | 签名                                                                       | 说明                                                         |
+| --------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `checkPermission`           | `(userId, permission) => Promise<HaiResult<boolean>>`                      | 检查权限（支持通配符）                                       |
+| `getUserAuthorization`      | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>` | 当前角色及权限代码，角色 JOIN + 批量权限查询；失败不回退缓存 |
+| `getUserPermissions`        | `(userId) => Promise<HaiResult<Permission[]>>`                             | 获取用户所有权限                                             |
+| `getUserRoles`              | `(userId) => Promise<HaiResult<Role[]>>`                                   | 获取用户角色                                                 |
+| `getUserRolesForMany`       | `(userIds[]) => Promise<HaiResult<Map<string, Role[]>>>`                   | 批量获取多用户角色                                           |
+| `getRolePermissionsForMany` | `(roleIds[]) => Promise<HaiResult<Map<string, Permission[]>>>`             | 批量获取多角色权限                                           |
 
 ### 角色管理
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `createRole` | `({ code, name, description? }, tx?) => Promise<HaiResult<Role>>` | 创建角色 |
-| `getRole` | `(roleId) => Promise<HaiResult<Role \| null>>` | 获取角色 |
-| `getRoleByCode` | `(code) => Promise<HaiResult<Role \| null>>` | 按 code 获取角色 |
-| `getAllRoles` | `(options?) => Promise<HaiResult<PaginatedResult<Role>>>` | 分页获取所有角色 |
-| `updateRole` | `(roleId, data, tx?) => Promise<HaiResult<Role>>` | 更新角色 |
-| `deleteRole` | `(roleId, tx?) => Promise<HaiResult<void>>` | 删除角色（事务清关联） |
+| 方法            | 签名                                                              | 说明                   |
+| --------------- | ----------------------------------------------------------------- | ---------------------- |
+| `createRole`    | `({ code, name, description? }, tx?) => Promise<HaiResult<Role>>` | 创建角色               |
+| `getRole`       | `(roleId) => Promise<HaiResult<Role \| null>>`                    | 获取角色               |
+| `getRoleByCode` | `(code) => Promise<HaiResult<Role \| null>>`                      | 按 code 获取角色       |
+| `getAllRoles`   | `(options?) => Promise<HaiResult<PaginatedResult<Role>>>`         | 分页获取所有角色       |
+| `updateRole`    | `(roleId, data, tx?) => Promise<HaiResult<Role>>`                 | 更新角色               |
+| `deleteRole`    | `(roleId, tx?) => Promise<HaiResult<void>>`                       | 删除角色（事务清关联） |
 
 ### 权限管理
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `createPermission` | `({ code, name, type?, resource?, action? }, tx?) => Promise<HaiResult<Permission>>` | 创建权限 |
-| `getPermission` | `(permissionId) => Promise<HaiResult<Permission \| null>>` | 获取权限 |
-| `getPermissionByCode` | `(code) => Promise<HaiResult<Permission \| null>>` | 按 code 获取权限 |
-| `getAllPermissions` | `(options?) => Promise<HaiResult<PaginatedResult<Permission>>>` | 分页获取所有权限（可按 type 筛选） |
-| `deletePermission` | `(permissionId, tx?) => Promise<HaiResult<void>>` | 删除权限（事务清关联） |
+| 方法                  | 签名                                                                                 | 说明                               |
+| --------------------- | ------------------------------------------------------------------------------------ | ---------------------------------- |
+| `createPermission`    | `({ code, name, type?, resource?, action? }, tx?) => Promise<HaiResult<Permission>>` | 创建权限                           |
+| `getPermission`       | `(permissionId) => Promise<HaiResult<Permission \| null>>`                           | 获取权限                           |
+| `getPermissionByCode` | `(code) => Promise<HaiResult<Permission \| null>>`                                   | 按 code 获取权限                   |
+| `getAllPermissions`   | `(options?) => Promise<HaiResult<PaginatedResult<Permission>>>`                      | 分页获取所有权限（可按 type 筛选） |
+| `deletePermission`    | `(permissionId, tx?) => Promise<HaiResult<void>>`                                    | 删除权限（事务清关联）             |
 
 ### 分配操作
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `assignRole` | `(userId, roleId, tx?) => Promise<HaiResult<void>>` | 分配角色给用户 |
-| `removeRole` | `(userId, roleId, tx?) => Promise<HaiResult<void>>` | 移除用户角色 |
-| `syncRoles` | `(userId, roleIds[], tx?) => Promise<HaiResult<void>>` | 同步用户角色（全量替换） |
-| `assignPermissionToRole` | `(roleId, permId, tx?) => Promise<HaiResult<void>>` | 分配权限给角色 |
-| `removePermissionFromRole` | `(roleId, permId, tx?) => Promise<HaiResult<void>>` | 移除角色权限 |
-| `getRolePermissions` | `(roleId) => Promise<HaiResult<Permission[]>>` | 获取角色的权限列表 |
+| 方法                       | 签名                                                   | 说明                     |
+| -------------------------- | ------------------------------------------------------ | ------------------------ |
+| `assignRole`               | `(userId, roleId, tx?) => Promise<HaiResult<void>>`    | 分配角色给用户           |
+| `removeRole`               | `(userId, roleId, tx?) => Promise<HaiResult<void>>`    | 移除用户角色             |
+| `syncRoles`                | `(userId, roleIds[], tx?) => Promise<HaiResult<void>>` | 同步用户角色（全量替换） |
+| `assignPermissionToRole`   | `(roleId, permId, tx?) => Promise<HaiResult<void>>`    | 分配权限给角色           |
+| `removePermissionFromRole` | `(roleId, permId, tx?) => Promise<HaiResult<void>>`    | 移除角色权限             |
+| `getRolePermissions`       | `(roleId) => Promise<HaiResult<Permission[]>>`         | 获取角色的权限列表       |
 
 **通配符**：`admin:*` 匹配 `admin:read`、`admin:write`。超管角色自动拥有所有权限。
 
@@ -302,14 +305,14 @@ apikey:
 
 假设主体拥有 `record:read`、`record:write`、`user:read`，不同 scopes 的结果如下（主体授权改变后重新计算）：
 
-| scopes | 有效权限 | roles |
-| --- | --- | --- |
-| 未传或 `[]` | 无操作权限，仅可识别身份 | `[]` |
-| `['record:read']` | `record:read` | `[]` |
-| `['record:*']` | `record:read`、`record:write` | `[]` |
-| `['record:read', 'user:read']` | 两个指定权限 | `[]` |
-| `['missing:read']` | 主体未拥有，因此无权限 | `[]` |
-| `['*']` | 主体当前拥有的全部权限 | 保留主体角色 |
+| scopes                         | 有效权限                      | roles        |
+| ------------------------------ | ----------------------------- | ------------ |
+| 未传或 `[]`                    | 无操作权限，仅可识别身份      | `[]`         |
+| `['record:read']`              | `record:read`                 | `[]`         |
+| `['record:*']`                 | `record:read`、`record:write` | `[]`         |
+| `['record:read', 'user:read']` | 两个指定权限                  | `[]`         |
+| `['missing:read']`             | 主体未拥有，因此无权限        | `[]`         |
+| `['*']`                        | 主体当前拥有的全部权限        | 保留主体角色 |
 
 `record:*` 匹配冒号后的全部层级，不支持任意正则或 `record:r*` 等中间通配符。主体仅拥有 `record:read` 时，`['record:*']` 仍只得到读取权限；主体持有通配符时，交集保留较窄范围。受限 Key 没有角色入口，使用 permission 守卫；显式 `*` 是宽授权，按实际需要选择。
 
@@ -322,7 +325,9 @@ import { iam } from '@h-ai/iam'
 async function createReadKey(userId: string) {
   // 调用前校验管理权限或本人归属；scopes 使用权限 code。
   const created = await iam.apiKey.createApiKey(userId, {
-    name: 'Read client', expirationDays: 30, scopes: ['record:read'],
+    name: 'Read client',
+    expirationDays: 30,
+    scopes: ['record:read'],
   })
   if (!created.success)
     return created
@@ -352,7 +357,10 @@ async function requireRecordRead(accessToken: string, deniedMessage: string) {
 
 async function listMyKeys(userId: string) {
   return iam.apiKey.listApiKeys(userId, {
-    page: 1, pageSize: 20, search: 'Read', enabled: true,
+    page: 1,
+    pageSize: 20,
+    search: 'Read',
+    enabled: true,
   })
 }
 
@@ -368,96 +376,101 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 
 `expirationDays: 0` 表示不设过期时间，省略时使用 `apikey.defaultExpirationDays`；需要限时访问时显式设置。明文 Key 和 Token 不进入 URL、日志、公开配置或普通 localStorage。
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `createApiKey` | `(userId, { name, expirationDays?, scopes? }) => Promise<HaiResult<CreateApiKeyResult>>` | 创建 API Key（`rawKey` 仅返回一次） |
-| `listApiKeys` | `(userId, options?: ListApiKeysOptions) => Promise<HaiResult<PaginatedResult<ApiKey>>>` | 分页列出用户 API Key（支持 search / enabled / sortBy / 分页） |
-| `getApiKey` | `(keyId) => Promise<HaiResult<ApiKey \| null>>` | 获取 API Key 详情 |
-| `revokeApiKey` | `(keyId) => Promise<HaiResult<void>>` | 吊销 API Key |
-| `verifyApiKey` | `(rawKey) => Promise<HaiResult<ApiKey>>` | 验证 API Key 有效性 |
+| 方法           | 签名                                                                                     | 说明                                                          |
+| -------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `createApiKey` | `(userId, { name, expirationDays?, scopes? }) => Promise<HaiResult<CreateApiKeyResult>>` | 创建 API Key（`rawKey` 仅返回一次）                           |
+| `listApiKeys`  | `(userId, options?: ListApiKeysOptions) => Promise<HaiResult<PaginatedResult<ApiKey>>>`  | 分页列出用户 API Key（支持 search / enabled / sortBy / 分页） |
+| `getApiKey`    | `(keyId) => Promise<HaiResult<ApiKey \| null>>`                                          | 获取 API Key 详情                                             |
+| `revokeApiKey` | `(keyId) => Promise<HaiResult<void>>`                                                    | 吊销 API Key                                                  |
+| `verifyApiKey` | `(rawKey) => Promise<HaiResult<ApiKey>>`                                                 | 验证 API Key 有效性                                           |
 
 ## §9 自动会话失效
 
 以下操作自动清除受影响用户的所有活跃会话：
+
 - `deleteUser` / `updateUser({ enabled: false })` / `changePassword` / `confirmPasswordReset`
 
 以下操作通过 `patchUserSessions` 同步更新活跃会话中的角色/权限列表（best-effort）：
+
 - `assignRole` / `removeRole` / `syncRoles` / `deleteRole`
 - `assignPermissionToRole` / `removePermissionFromRole`
 
 ## §10 错误码 — `HaiIamError`
 
-| 错误码 | code | 说明 |
-|--------|------|------|
-| **认证** | | |
-| `HaiIamError.AUTH_FAILED` | `hai:iam:001` | 认证失败 |
-| `HaiIamError.INVALID_CREDENTIALS` | `hai:iam:002` | 凭证无效 |
-| `HaiIamError.USER_NOT_FOUND` | `hai:iam:003` | 用户不存在 |
-| `HaiIamError.USER_DISABLED` | `hai:iam:004` | 用户已禁用 |
-| `HaiIamError.USER_LOCKED` | `hai:iam:005` | 用户已锁定 |
-| `HaiIamError.USER_ALREADY_EXISTS` | `hai:iam:006` | 用户已存在 |
-| `HaiIamError.PASSWORD_EXPIRED` | `hai:iam:007` | 密码已过期 |
-| `HaiIamError.PASSWORD_POLICY_VIOLATION` | `hai:iam:008` | 密码不符合策略 |
-| `HaiIamError.OTP_INVALID` | `hai:iam:009` | 验证码无效 |
-| `HaiIamError.NOT_INITIALIZED` | `hai:iam:010` | 未初始化 |
-| `HaiIamError.OTP_RESEND_TOO_FAST` | `hai:iam:011` | 发送过于频繁 |
-| `HaiIamError.LOGIN_DISABLED` | `hai:iam:012` | 登录方式已禁用 |
-| `HaiIamError.REGISTER_DISABLED` | `hai:iam:013` | 注册已禁用 |
-| `HaiIamError.STRATEGY_NOT_SUPPORTED` | `hai:iam:014` | 认证策略不支持 |
-| `HaiIamError.APIKEY_INVALID` | `hai:iam:015` | API Key 无效 |
-| `HaiIamError.APIKEY_EXPIRED` | `hai:iam:016` | API Key 已过期 |
-| `HaiIamError.APIKEY_DISABLED` | `hai:iam:017` | API Key 已禁用 |
-| `HaiIamError.APIKEY_NOT_FOUND` | `hai:iam:018` | API Key 不存在 |
-| `HaiIamError.RESET_TOKEN_INVALID` | `hai:iam:019` | 重置令牌无效 |
-| `HaiIamError.RESET_TOKEN_EXPIRED` | `hai:iam:020` | 重置令牌已过期 |
-| `HaiIamError.RESET_TOKEN_MAX_ATTEMPTS` | `hai:iam:021` | 重置验证次数超限 |
-| `HaiIamError.OTP_EXPIRED` | `hai:iam:022` | 验证码已过期 |
-| **会话** | | |
-| `HaiIamError.SESSION_NOT_FOUND` | `hai:iam:101` | 会话不存在 |
-| `HaiIamError.SESSION_EXPIRED` | `hai:iam:102` | 会话已过期 |
-| `HaiIamError.SESSION_INVALID` | `hai:iam:103` | 会话无效 |
-| `HaiIamError.SESSION_CREATE_FAILED` | `hai:iam:104` | 会话创建失败 |
-| `HaiIamError.TOKEN_EXPIRED` | `hai:iam:105` | 令牌已过期 |
-| `HaiIamError.TOKEN_INVALID` | `hai:iam:106` | 令牌无效 |
-| `HaiIamError.TOKEN_REFRESH_FAILED` | `hai:iam:107` | 令牌刷新失败 |
-| **授权** | | |
-| `HaiIamError.PERMISSION_DENIED` | `hai:iam:201` | 权限不足 |
-| `HaiIamError.ROLE_NOT_FOUND` | `hai:iam:202` | 角色不存在 |
-| `HaiIamError.PERMISSION_NOT_FOUND` | `hai:iam:203` | 权限不存在 |
-| `HaiIamError.ROLE_ALREADY_EXISTS` | `hai:iam:204` | 角色已存在 |
-| `HaiIamError.PERMISSION_ALREADY_EXISTS` | `hai:iam:205` | 权限已存在 |
-| **LDAP** | | |
-| `HaiIamError.LDAP_CONNECTION_FAILED` | `hai:iam:301` | LDAP 连接失败 |
-| `HaiIamError.LDAP_BIND_FAILED` | `hai:iam:302` | LDAP 绑定失败 |
-| `HaiIamError.LDAP_SEARCH_FAILED` | `hai:iam:303` | LDAP 搜索失败 |
-| **存储层** | | |
-| `HaiIamError.REPOSITORY_ERROR` | `hai:iam:401` | 存储层操作错误 |
-| `HaiIamError.NOT_FOUND` | `hai:iam:402` | 资源不存在 |
-| `HaiIamError.CONFLICT` | `hai:iam:403` | 资源冲突 |
-| **通用** | | |
-| `HaiIamError.FORBIDDEN` | `hai:iam:501` | 禁止访问 |
-| `HaiIamError.INVALID_ARGUMENT` | `hai:iam:502` | 参数无效 |
-| `HaiIamError.CONFIG_ERROR` | `hai:iam:901` | 配置错误 |
-| `HaiIamError.INTERNAL_ERROR` | `hai:iam:999` | 内部错误 |
+| 错误码                                  | code          | 说明             |
+| --------------------------------------- | ------------- | ---------------- |
+| **认证**                                |               |                  |
+| `HaiIamError.AUTH_FAILED`               | `hai:iam:001` | 认证失败         |
+| `HaiIamError.INVALID_CREDENTIALS`       | `hai:iam:002` | 凭证无效         |
+| `HaiIamError.USER_NOT_FOUND`            | `hai:iam:003` | 用户不存在       |
+| `HaiIamError.USER_DISABLED`             | `hai:iam:004` | 用户已禁用       |
+| `HaiIamError.USER_LOCKED`               | `hai:iam:005` | 用户已锁定       |
+| `HaiIamError.USER_ALREADY_EXISTS`       | `hai:iam:006` | 用户已存在       |
+| `HaiIamError.PASSWORD_EXPIRED`          | `hai:iam:007` | 密码已过期       |
+| `HaiIamError.PASSWORD_POLICY_VIOLATION` | `hai:iam:008` | 密码不符合策略   |
+| `HaiIamError.OTP_INVALID`               | `hai:iam:009` | 验证码无效       |
+| `HaiIamError.NOT_INITIALIZED`           | `hai:iam:010` | 未初始化         |
+| `HaiIamError.OTP_RESEND_TOO_FAST`       | `hai:iam:011` | 发送过于频繁     |
+| `HaiIamError.LOGIN_DISABLED`            | `hai:iam:012` | 登录方式已禁用   |
+| `HaiIamError.REGISTER_DISABLED`         | `hai:iam:013` | 注册已禁用       |
+| `HaiIamError.STRATEGY_NOT_SUPPORTED`    | `hai:iam:014` | 认证策略不支持   |
+| `HaiIamError.APIKEY_INVALID`            | `hai:iam:015` | API Key 无效     |
+| `HaiIamError.APIKEY_EXPIRED`            | `hai:iam:016` | API Key 已过期   |
+| `HaiIamError.APIKEY_DISABLED`           | `hai:iam:017` | API Key 已禁用   |
+| `HaiIamError.APIKEY_NOT_FOUND`          | `hai:iam:018` | API Key 不存在   |
+| `HaiIamError.RESET_TOKEN_INVALID`       | `hai:iam:019` | 重置令牌无效     |
+| `HaiIamError.RESET_TOKEN_EXPIRED`       | `hai:iam:020` | 重置令牌已过期   |
+| `HaiIamError.RESET_TOKEN_MAX_ATTEMPTS`  | `hai:iam:021` | 重置验证次数超限 |
+| `HaiIamError.OTP_EXPIRED`               | `hai:iam:022` | 验证码已过期     |
+| **会话**                                |               |                  |
+| `HaiIamError.SESSION_NOT_FOUND`         | `hai:iam:101` | 会话不存在       |
+| `HaiIamError.SESSION_EXPIRED`           | `hai:iam:102` | 会话已过期       |
+| `HaiIamError.SESSION_INVALID`           | `hai:iam:103` | 会话无效         |
+| `HaiIamError.SESSION_CREATE_FAILED`     | `hai:iam:104` | 会话创建失败     |
+| `HaiIamError.TOKEN_EXPIRED`             | `hai:iam:105` | 令牌已过期       |
+| `HaiIamError.TOKEN_INVALID`             | `hai:iam:106` | 令牌无效         |
+| `HaiIamError.TOKEN_REFRESH_FAILED`      | `hai:iam:107` | 令牌刷新失败     |
+| **授权**                                |               |                  |
+| `HaiIamError.PERMISSION_DENIED`         | `hai:iam:201` | 权限不足         |
+| `HaiIamError.ROLE_NOT_FOUND`            | `hai:iam:202` | 角色不存在       |
+| `HaiIamError.PERMISSION_NOT_FOUND`      | `hai:iam:203` | 权限不存在       |
+| `HaiIamError.ROLE_ALREADY_EXISTS`       | `hai:iam:204` | 角色已存在       |
+| `HaiIamError.PERMISSION_ALREADY_EXISTS` | `hai:iam:205` | 权限已存在       |
+| **LDAP**                                |               |                  |
+| `HaiIamError.LDAP_CONNECTION_FAILED`    | `hai:iam:301` | LDAP 连接失败    |
+| `HaiIamError.LDAP_BIND_FAILED`          | `hai:iam:302` | LDAP 绑定失败    |
+| `HaiIamError.LDAP_SEARCH_FAILED`        | `hai:iam:303` | LDAP 搜索失败    |
+| **存储层**                              |               |                  |
+| `HaiIamError.REPOSITORY_ERROR`          | `hai:iam:401` | 存储层操作错误   |
+| `HaiIamError.NOT_FOUND`                 | `hai:iam:402` | 资源不存在       |
+| `HaiIamError.CONFLICT`                  | `hai:iam:403` | 资源冲突         |
+| **通用**                                |               |                  |
+| `HaiIamError.FORBIDDEN`                 | `hai:iam:501` | 禁止访问         |
+| `HaiIamError.INVALID_ARGUMENT`          | `hai:iam:502` | 参数无效         |
+| `HaiIamError.CONFIG_ERROR`              | `hai:iam:901` | 配置错误         |
+| `HaiIamError.INTERNAL_ERROR`            | `hai:iam:999` | 内部错误         |
 
 ## §11 常见模式
 
 ### 登录 → 操作 → 登出
 
-```typescript
-// 登录
-const loginResult = await iam.auth.login({ identifier: 'admin', password: '...' })
-if (!loginResult.success) { /* 处理错误 */ }
-const { tokens, user } = loginResult.data
+```ts
+import { iam } from '@h-ai/iam'
 
-// 验证 Token
-const session = await iam.auth.verifyToken(tokens.accessToken)
-
-// 检查权限
-const canEdit = await iam.authz.checkPermission(user.id, 'user:update')
-
-// 登出
-await iam.auth.logout(tokens.accessToken)
+// 应用已经初始化依赖与 IAM；读取失败也必须执行会话撤销。
+async function loginInspectAndLogout() {
+  const login = await iam.auth.login({ identifier: 'alice', password: 'ExampleOnly123!' })
+  if (!login.success)
+    return login
+  const verified = await iam.auth.verifyToken(login.data.tokens.accessToken)
+  const inspected = verified.success
+    ? await iam.authz.checkPermission(login.data.user.id, 'user:update')
+    : verified
+  const loggedOut = await iam.auth.logout(login.data.tokens.accessToken)
+  if (!loggedOut.success)
+    return loggedOut
+  return inspected
+}
 ```
 
 ### 注册 + 分配角色
@@ -509,18 +522,16 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ```
 
-
-
 服务端通过 `iam.publicConfig` 提供白名单配置，或通过客户端的 `client.iam.auth.publicConfig()` 标准 HTTP contract 获取。只展示已开启且具备依赖的登录方式；LDAP 为可选集成，见上方配置与安装说明。
 
-| 配置 | 用途 |
-| --- | --- |
-| `login.password / otp / ldap` | 独立启用密码、验证码、企业账号 |
-| `otp.email / sms` | 独立启用邮件、短信 |
-| `register.enabled / defaultEnabled` | 自助注册及新账户状态 |
-| `passwordReset.enabled / mode / resetUrl` | 启用重置、选择 email/phone 渠道、配置重置页面绝对地址 |
-| `agreements.showOnRegister / showOnLogin` | 注册/登录协议弹窗显示；链接只接受 HTTP(S) |
-| `ui.variant / title / subtitle / brandTitle / brandText / logoUrl / illustrationUrl` | 卡片/分栏布局、标题、品牌、Logo 和配图 |
+| 配置                                                                                 | 用途                                                  |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `login.password / otp / ldap`                                                        | 独立启用密码、验证码、企业账号                        |
+| `otp.email / sms`                                                                    | 独立启用邮件、短信                                    |
+| `register.enabled / defaultEnabled`                                                  | 自助注册及新账户状态                                  |
+| `passwordReset.enabled / mode / resetUrl`                                            | 启用重置、选择 email/phone 渠道、配置重置页面绝对地址 |
+| `agreements.showOnRegister / showOnLogin`                                            | 注册/登录协议弹窗显示；链接只接受 HTTP(S)             |
+| `ui.variant / title / subtitle / brandTitle / brandText / logoUrl / illustrationUrl` | 卡片/分栏布局、标题、品牌、Logo 和配图                |
 
 选择 Reach 时，在 reldb/cache/Reach 初始化成功后使用 `iam.init({ ...settings, reach })` 自动接入 Reach 的 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 模板。模板绑定对应邮件/短信 Provider；显式发送回调可覆盖默认行为。Console Provider 只记录元数据，实际收信需配置 SMTP、短信或 HTTP 通知服务。发送失败返回错误，不会伪报已发送。
 
@@ -543,3 +554,5 @@ access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的
 LDAP 的 ldapSyncUser: false 要求已有启用的本地用户以绑定数据库 credentialVersion；没有本地记录返回 USER_NOT_FOUND，不再创建虚拟 DN 身份。
 
 Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、启用的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
+
+`iam.auth.logout(accessToken)` 直接按完整不透明令牌在用户分区执行一次 CAS，原子撤销 access 与关联 refresh；access 已到期也不能跳过撤销。非法/不存在的令牌幂等成功，缓存读取或提交故障返回失败，恢复后可用同一令牌重试。HTTP 登出只允许撤销所持令牌，不以 userId 定位他人会话，也不要求该 access 仍通过认证。调用方必须检查 `success`；本地 Cookie/安全存储清理不代表服务端撤销已经确认，失败应显示提示。

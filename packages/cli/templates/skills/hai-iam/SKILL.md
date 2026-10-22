@@ -7,13 +7,13 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 
 ## 能力契约
 
-| 项目 | 契约 |
-| --- | --- |
-| 能力 | 使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key 和 RBAC |
-| 适用场景 | 应用身份认证、会话失效或角色权限管理 |
-| 输入 | IamConfigInput、已初始化依赖、凭据、用户/角色/权限 ID |
-| 输出 | 认证、会话与授权操作的 HaiResult |
-| 限制 | 仅服务端，先初始化 reldb/cache（crypto 未初始化时由 IAM 初始化）；公开认证入口是 iam.auth。客户端经 contract/API 调用，凭证只用于认证和安全存储，不进入日志或公开配置。 |
+| 项目     | 契约                                                                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 能力     | 使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key 和 RBAC                                                                                                           |
+| 适用场景 | 应用身份认证、会话失效或角色权限管理                                                                                                                                    |
+| 输入     | IamConfigInput、已初始化依赖、凭据、用户/角色/权限 ID                                                                                                                   |
+| 输出     | 认证、会话与授权操作的 HaiResult                                                                                                                                        |
+| 限制     | 仅服务端，先初始化 reldb/cache（crypto 未初始化时由 IAM 初始化）；公开认证入口是 iam.auth。客户端经 contract/API 调用，凭证只用于认证和安全存储，不进入日志或公开配置。 |
 
 ## 使用路径
 
@@ -55,3 +55,5 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的最晚有效期，但 access 认证只检查自己的 `expiresAt`。access 过期仍可凭未过期、未撤销的 refresh 轮换；每次轮换从新签发时刻重新计算 `refreshTokenMaxAge`，旧 access/refresh 同时失效。删除 access、logoutAll、单设备替换均撤销待刷新记录；仅 revokeRefresh 保留仍有效的 access。刷新路由只校验 refresh，不能先要求旧 access 认证成功。
 
 OTP 发布/消费用单身份 CAS；密码重置最终 SQL 同时核验 resetVersion、credentialVersion、有效期、用户状态并改密/消费令牌。认证与刷新绑定数据库凭据代际；通知第三参数提供 expiresAt/idempotencyKey，接收端持久化幂等，异常是投递未知且不自动重发。
+
+`iam.auth.logout(accessToken)` 直接按完整不透明令牌在用户分区执行一次 CAS，原子撤销 access 与关联 refresh；access 已到期也不能跳过撤销。非法/不存在的令牌幂等成功，缓存读取或提交故障返回失败，恢复后可用同一令牌重试。HTTP 登出只允许撤销所持令牌，不以 userId 定位他人会话，也不要求该 access 仍通过认证。调用方必须检查 `success`；本地 Cookie/安全存储清理不代表服务端撤销已经确认，失败应显示提示。

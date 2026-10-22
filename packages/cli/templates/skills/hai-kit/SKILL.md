@@ -11,13 +11,13 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 
 ## 能力契约
 
-| 项目 | 契约 |
-| --- | --- |
-| 能力 | 使用 @h-ai/kit 集成 SvelteKit hooks、守卫、校验、响应及同源客户端传输 |
-| 适用场景 | SvelteKit hooks、load 和同源端点集成 |
-| 输入 | SvelteKit handle/RequestEvent、schema、guard、transport |
-| 输出 | handle、Response、校验值和客户端请求结果 |
-| 限制 | 无 init/close；保留 SvelteKit 控制流异常。跨端共享 HTTP contract 用 api-contract + serv，勿复制到 kit。 |
+| 项目     | 契约                                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------------------- |
+| 能力     | 使用 @h-ai/kit 集成 SvelteKit hooks、守卫、校验、响应及同源客户端传输                                   |
+| 适用场景 | SvelteKit hooks、load 和同源端点集成                                                                    |
+| 输入     | SvelteKit handle/RequestEvent、schema、guard、transport                                                 |
+| 输出     | handle、Response、校验值和客户端请求结果                                                                |
+| 限制     | 无 init/close；保留 SvelteKit 控制流异常。跨端共享 HTTP contract 用 api-contract + serv，勿复制到 kit。 |
 
 ## 使用路径
 
@@ -44,3 +44,5 @@ transport 与 serv/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB
 Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
 
 认证 Cookie 在 NODE_ENV 或 HAI_CORE_ENV 为 production 时默认启用 Secure，HAI_E2E/HAI_E2E_MOCK 不降低 Cookie 安全；限流生产判断也识别这两个环境标志，测试开关仅放宽共享状态要求。
+
+`kit.auth.logout(cookies, accessToken)` 返回 `Promise<HaiResult<void>>`。无令牌时仅清除 Cookie 并成功；有令牌但未配置认证操作时返回失败。无论服务端结果如何都清除本地 Cookie，调用方仍必须把失败转换为错误响应或提示；仅成功结果代表服务端撤销已经确认。底层控制流异常继续传播。

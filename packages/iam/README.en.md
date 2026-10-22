@@ -886,3 +886,5 @@ The browser entry exports configuration schemas, types and HaiIamError, without 
 ## License
 
 Apache-2.0
+
+`iam.auth.logout(accessToken)` uses the complete opaque token to revoke its access and refresh credentials in one user-partition CAS, including when access has expired. Invalid or absent tokens are idempotent successes. Cache read/commit failures return failure and can be retried with the same token after recovery. The HTTP endpoint revokes only a possessed token, accepts no userId target and does not require a still-authenticated access token. Callers must inspect `success`; clearing local cookies or secure storage is not confirmation of server revocation and failures must be shown.

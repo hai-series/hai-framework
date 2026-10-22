@@ -882,3 +882,5 @@ browser 条件の入口は設定 Schema、型、HaiIamError のみを公開し�
 ## ライセンス
 
 Apache-2.0
+
+`iam.auth.logout(accessToken)` は完全な不透明 Token を使い、ユーザー文書の一回の CAS で access と refresh を同時に取り消します。access 期限後も実行します。不正・不存在 Token は冪等成功ですが、キャッシュの読取・確定障害は失敗で返し、復旧後に同じ Token で再試行できます。HTTP 入口は保持している Token だけを取り消し、userId を対象にせず、有効な access 認証を前提にしません。呼出側は `success` を確認し、Cookie・安全ストレージのローカル消去だけでサーバー失効を成功と扱わず、失敗を表示します。

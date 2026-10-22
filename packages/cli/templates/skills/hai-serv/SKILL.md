@@ -9,13 +9,13 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 
 ## 能力契约
 
-| 项目 | 契约 |
-| --- | --- |
-| 能力 | 使用 @h-ai/serv 装配 contract/procedures、认证守卫、OpenAPI、HTTP 与语音 WebSocket |
-| 适用场景 | 独立 HTTP 服务装配、请求守卫或运行时适配 |
-| 输入 | contract、procedures、已初始化 features、ServConfigInput |
-| 输出 | HTTP App、Node listener 或 Fetch handler |
-| 限制 | 无 init/close；createApp 配置错误可抛出。依赖先初始化，onClose 反序释放。Hono 为内部实现，业务授权由 route guard 执行。 |
+| 项目     | 契约                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 能力     | 使用 @h-ai/serv 装配 contract/procedures、认证守卫、OpenAPI、HTTP 与语音 WebSocket                                      |
+| 适用场景 | 独立 HTTP 服务装配、请求守卫或运行时适配                                                                                |
+| 输入     | contract、procedures、已初始化 features、ServConfigInput                                                                |
+| 输出     | HTTP App、Node listener 或 Fetch handler                                                                                |
+| 限制     | 无 init/close；createApp 配置错误可抛出。依赖先初始化，onClose 反序释放。Hono 为内部实现，业务授权由 route guard 执行。 |
 
 ## 使用路径
 
@@ -46,3 +46,5 @@ transport 与 kit/客户端共享固定 UTF-8 字节预算：握手 JSON 16 KiB�
 - 错误码
 - httpOnly Cookie 认证
 - 测试
+
+标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。

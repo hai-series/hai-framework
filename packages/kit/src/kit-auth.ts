@@ -9,7 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { ApiKeyCredentials, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
 import process from 'node:process'
-import { err } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 
 /** 默认 Token Cookie 名 */
@@ -341,28 +341,38 @@ export async function registerAndLogin(
 }
 
 /**
- * 服务端登出：内部调用 iam.auth.logout 使会话失效，并清除 Token Cookie。
+ * 服务端登出：委托 iam.auth.logout 原子撤销凭据，并始终清除当前请求的 Token Cookie。
+ * Cookie 清理只代表本地退出；服务端撤销失败仍返回失败，不能由调用端改成成功响应。
  *
  * @param cookies - SvelteKit cookies 对象
  * @param accessToken - 访问令牌（为 null/undefined 时仅清除 Cookie）
- * @returns Cookie 清理完成；底层异常会以 Promise 拒绝传播。
+ * @returns 服务端撤销结果；无令牌时仅清理 Cookie 并成功，有令牌但未配置认证操作时失败。
+ * @remarks 底层控制流异常仍以 Promise 拒绝传播；Cookie 清理不吞掉业务失败。
  * @example 模块内部上下文
  * ```ts
  * async function signOut(cookies: CookieWriter, accessToken: string) {
- *   await logout(cookies, accessToken) // 控制流错误按 Promise 拒绝传播。
+ *   const result = await logout(cookies, accessToken)
+ *   if (!result.success) return result.error.code
+ *   return result.data
  * }
  * ```
  */
 export async function logout(
   cookies: CookieWriter,
   accessToken?: string | null,
-): Promise<void> {
-  // 即使 auth 未配置也需要清除 Cookie，保证登出语义幂等
-  const ops = getAuthOperations()
-  if (accessToken && ops) {
-    await ops.logout(accessToken)
+): Promise<HaiResult<void>> {
+  try {
+    if (!accessToken)
+      return ok(undefined)
+    const ops = getAuthOperations()
+    if (!ops)
+      return authNotConfiguredError()
+    return await ops.logout(accessToken)
   }
-  clearToken(cookies)
+  finally {
+    // 本地凭据无论是否撤销确认都要移除，但失败结果仍交给调用者明确提示。
+    clearToken(cookies)
+  }
 }
 
 // ─── 浏览器端 Token 存储（通过 kit.auth 暴露） ───

@@ -155,7 +155,8 @@ export const appContract = {
   info: apiContract.route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
     .output(InfoOutput),
   echo: apiContract.route({ method: 'POST', path: '/app/echo', operationId: 'app.echo', tags: ['app'] })
-    .input(EchoInput).output(EchoOutput),
+    .input(EchoInput)
+    .output(EchoOutput),
 }
 ```
 
@@ -166,7 +167,7 @@ import { appContract } from '@h-ai/api-service-contract'
 import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 
-export function createAppProcedures(deps: { name: string; version: string }) {
+export function createAppProcedures(deps: { name: string, version: string }) {
   return serv
     .implement(appContract)
     .context<ServContext>()
@@ -284,7 +285,6 @@ transport:
     - /_hai/scalar.js
 ```
 
-
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
 空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
@@ -293,22 +293,20 @@ transport:
 
 ### `serv.createApp(options)` — 创建 HTTP App 抽象
 
-```typescript
-import type { CreateServAppOptions } from '@h-ai/serv'
+```ts
+import type { CreateServAppOptions, ServContext } from '@h-ai/serv'
+import { apiContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
 
-export function createServerApp() {
-  return serv.createApp({
-  contract,       // AnyContractRouter — 通过 apiContract.create() 组合的 contract
-  procedures,     // Router<AnyContractRouter, ServContext> — procedure 实现
-  http?,          // ServHttpConfigInput — HTTP 端点配置（见下方配置节）
-  middlewares?,   // readonly ServMiddlewareMount[] — 自定义 HTTP middleware（日志/CORS/限流/租户头校验）
-  transport?,     // { crypto, serverKeyRing, keyStore, keyExchangePath?, excludePaths? } — 必填受管密钥环和客户端 registry
-  iam?,           // ServIam — 顶层 IAM 句柄，同时驱动 access token 校验与 refresh cookie【推荐】
-  refreshCookie?, // RefreshCookieConfig — 浏览器 cookie / 受信原生 body 的 refresh token 通道
-  verifyToken?,   // (token) => Promise<HaiResult<ServSession>> — 逃脱口：不使用 iam 时提供自定义校验
-  createContext?, // CreateServContext — 高级：完全接管上下文构造（设置后 serv 不再自动填充 session）
-  })
+// 最小服务使用默认健康检查；业务路由由真实 contract/procedures 扩展。
+const contract = apiContract.create({})
+const procedures = serv.implement(contract).context<ServContext>().build()
+const options: CreateServAppOptions<typeof contract, typeof procedures> = {
+  contract,
+  procedures,
+  http: { apiPrefix: '/api/v1' },
 }
+const app = serv.createApp(options)
 ```
 
 ### `apiContract.route` / `serv.implement` — contract 与运行时分层
@@ -394,16 +392,16 @@ await apiClient.init({
 
 ### 链式 procedure guard
 
-| 链式调用 | 说明 |
-| --- | --- |
-| `.route(path, handler)` | 注册公开 procedure；path/input/output 从 contract 推导 |
-| `.route(path).auth().handle(handler)` | 要求 session；通过后 `context.session` 自动收窄 |
-| `.permission(permission)` | 隐含认证并检查权限，支持 `serv.WILDCARD_PERMISSION` |
-| `.role(role)` | 隐含认证并检查角色，支持 `serv.WILDCARD_ROLE` |
-| `.build()` | contract 全部 procedures 实现后构建 router |
+| 链式调用                                             | 说明                                                                                     |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `.route(path, handler)`                              | 注册公开 procedure；path/input/output 从 contract 推导                                   |
+| `.route(path).auth().handle(handler)`                | 要求 session；通过后 `context.session` 自动收窄                                          |
+| `.permission(permission)`                            | 隐含认证并检查权限，支持 `serv.WILDCARD_PERMISSION`                                      |
+| `.role(role)`                                        | 隐含认证并检查角色，支持 `serv.WILDCARD_ROLE`                                            |
+| `.build()`                                           | contract 全部 procedures 实现后构建 router                                               |
 | `serv.validateInputOrFail(zodSchema, input, locale)` | 在 procedure 内执行 Zod 二次校验，失败时返回本地化 `HaiResult` + `ValidationFormError[]` |
-| `serv.resolveRequestLocale(headers)` | 从 `x-hai-locale` / `Accept-Language` 解析并规范化 locale |
-| `serv.m(key, { locale, params })` | 读取 serv 自身 i18n 消息（请求级本地化） |
+| `serv.resolveRequestLocale(headers)`                 | 从 `x-hai-locale` / `Accept-Language` 解析并规范化 locale                                |
+| `serv.m(key, { locale, params })`                    | 读取 serv 自身 i18n 消息（请求级本地化）                                                 |
 
 ```typescript
 import { serv } from '@h-ai/serv'
@@ -540,13 +538,13 @@ HTTP 审计、限流、CORS、租户头校验等跨 route 能力继续放在
 
 先区分 HTTP 状态与 HaiResult 中的 `error.httpStatus`；普通 procedure 返回的领域错误元数据不会自动改写 HTTP 状态，当前默认装配如下（显式自定义响应状态或 middleware 按实际入口契约验证）：
 
-| 失败来源 | HTTP 响应 | 结果判定 |
-| --- | --- | --- |
-| procedure `.auth()` / `.permission()` / `.role()` | 200 | `success=false`；`error.httpStatus` 为 401 / 403 |
-| handler 返回 `err(...)` 或下游模块失败 HaiResult | 200 | 检查 `success`、`error.code`，例如数据库查询错误的 `error.httpStatus=500` |
-| handler 未处理异常被 route 实现器捕获 | 200 | INTERNAL_ERROR 失败 HaiResult，`error.httpStatus=500` |
-| oRPC contract 输入 schema 校验失败（handler 之前） | 400 | 本地化失败体，`error.httpStatus=400` 与字段错误 |
-| handler 内 `serv.validateInputOrFail(...)` 失败 | 200 | 失败 HaiResult，`error.httpStatus=400` 与字段错误 |
+| 失败来源                                           | HTTP 响应 | 结果判定                                                                  |
+| -------------------------------------------------- | --------- | ------------------------------------------------------------------------- |
+| procedure `.auth()` / `.permission()` / `.role()`  | 200       | `success=false`；`error.httpStatus` 为 401 / 403                          |
+| handler 返回 `err(...)` 或下游模块失败 HaiResult   | 200       | 检查 `success`、`error.code`，例如数据库查询错误的 `error.httpStatus=500` |
+| handler 未处理异常被 route 实现器捕获              | 200       | INTERNAL_ERROR 失败 HaiResult，`error.httpStatus=500`                     |
+| oRPC contract 输入 schema 校验失败（handler 之前） | 400       | 本地化失败体，`error.httpStatus=400` 与字段错误                           |
+| handler 内 `serv.validateInputOrFail(...)` 失败    | 200       | 失败 HaiResult，`error.httpStatus=400` 与字段错误                         |
 
 HTTP middleware、自定义 Response、refresh-cookie、OpenAPI/RPC 入口权限和 transport 协议错误分别按自身响应契约处理，可返回真实 HTTP 4xx/5xx。`@h-ai/api-client` 在真实 HTTP 401 或 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`）后自动刷新，成功后只重试一次；内置登录、注册和配置的刷新路径除外，403/500 不刷新。启用 transport 时刷新和重试复用加密链路，不能手写明文刷新请求。
 
@@ -559,8 +557,8 @@ SvelteKit 的 `kit.response.fromError` 根据 `error.httpStatus` 生成 HTTP Res
 3. **业务/领域错误**：不要 throw 预期失败；直接返回 `err(...)`，并在**创建错误消息的那一层**用对应模块的 i18n getter 按 `context.locale` 出消息。
 
 ```typescript
-import { z } from 'zod'
 import { serv } from '@h-ai/serv'
+import { z } from 'zod'
 
 const Schema = z.object({ title: z.string().min(1) })
 
@@ -587,13 +585,13 @@ const procedures = serv
 
 从 HTTP 请求头自动解析：
 
-| 字段 | 来源 |
-| --- | --- |
-| `accessToken` | `Authorization: Bearer <token>` |
-| `requestId` | `x-request-id` 或自动生成 UUID |
-| `ip` | Node socket / Fetch 显式 remoteAddress；仅 http.trustedProxies 中的代理可提供 XFF（从右向左）或 X-Real-IP |
-| `locale` | `accept-language` |
-| `userAgent` | `user-agent` |
+| 字段          | 来源                                                                                                      |
+| ------------- | --------------------------------------------------------------------------------------------------------- |
+| `accessToken` | `Authorization: Bearer <token>`                                                                           |
+| `requestId`   | `x-request-id` 或自动生成 UUID                                                                            |
+| `ip`          | Node socket / Fetch 显式 remoteAddress；仅 http.trustedProxies 中的代理可提供 XFF（从右向左）或 X-Real-IP |
+| `locale`      | `accept-language`                                                                                         |
+| `userAgent`   | `user-agent`                                                                                              |
 
 ### `serv.generateSpec(contract, options)` — 生成 OpenAPI 文档
 
@@ -609,22 +607,24 @@ const spec = await serv.generateSpec(contract, {
 
 ## HTTP 配置（`ServHttpConfigInput`）
 
-| 字段 | 默认值 | 说明 |
-| --- | --- | --- |
-| `apiPrefix` | `'/api/v1'` | oRPC OpenAPI handler 挂载前缀 |
-| `health` | `{ path: '/health', readyPath: '/ready' }` | 健康与就绪检查端点 |
-| `openapi` | `false` | OpenAPI JSON endpoint，显式开启 |
-| `docs` | `false` | Scalar 文档页，显式开启；启用后自动挂载 `/_hai/scalar.js` 本地脚本路由 |
-| `rpc` | `false` | 内部 RPC endpoint，显式开启；`loopback` / `private-network` 基于真实连接 IP，网关场景用 `gateway-only` |
-| `transport` | `undefined` | 顶层配置；启用后默认挂载 `{apiPrefix}/_hai/key-exchange` |
+| 字段        | 默认值                                     | 说明                                                                                                   |
+| ----------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `apiPrefix` | `'/api/v1'`                                | oRPC OpenAPI handler 挂载前缀                                                                          |
+| `health`    | `{ path: '/health', readyPath: '/ready' }` | 健康与就绪检查端点                                                                                     |
+| `openapi`   | `false`                                    | OpenAPI JSON endpoint，显式开启                                                                        |
+| `docs`      | `false`                                    | Scalar 文档页，显式开启；启用后自动挂载 `/_hai/scalar.js` 本地脚本路由                                 |
+| `rpc`       | `false`                                    | 内部 RPC endpoint，显式开启；`loopback` / `private-network` 基于真实连接 IP，网关场景用 `gateway-only` |
+| `transport` | `undefined`                                | 顶层配置；启用后默认挂载 `{apiPrefix}/_hai/key-exchange`                                               |
 
-```typescript
-http: {
+```ts
+import type { ServHttpConfigInput } from '@h-ai/serv'
+
+const http: ServHttpConfigInput = {
   apiPrefix: '/api/v1',
   openapi: { path: '/openapi.json' },
   docs: { path: '/docs' },
   health: { path: '/health', readyPath: '/ready' },
-  rpc: false, // 关闭内部 RPC
+  rpc: false,
 }
 ```
 
@@ -634,11 +634,11 @@ http: {
 
 `@h-ai/serv` 内置了三个 feature 模块，开箱即用：
 
-| 导入路径 | 工厂函数 | 所需依赖 |
-| --- | --- | --- |
-| `@h-ai/serv/features/iam` | `createIamProcedures({ iam })` | `@h-ai/iam` |
+| 导入路径                      | 工厂函数                                          | 所需依赖                       |
+| ----------------------------- | ------------------------------------------------- | ------------------------------ |
+| `@h-ai/serv/features/iam`     | `createIamProcedures({ iam })`                    | `@h-ai/iam`                    |
 | `@h-ai/serv/features/storage` | `createStorageProcedures({ storage, authorize })` | `@h-ai/storage` + 资源授权策略 |
-| `@h-ai/serv/features/ai` | `createAiProcedures({ ai })` | `@h-ai/ai` |
+| `@h-ai/serv/features/ai`      | `createAiProcedures({ ai })`                      | `@h-ai/ai`                     |
 
 `authorize` 从可信 `context.session` 校验资源所有者/租户，不能只信任客户端前缀；缺失策略时默认拒绝。列表会把 prefix 交给策略，空 prefix 不应获准全桶列举；批量全部授权后才执行。示例用户根为 `users/<编码后的 userId>/`，管理员跨用户访问必须显式授权。
 
@@ -701,11 +701,11 @@ const app = serv.createApp({
 
 route 实现器内置以下错误：
 
-| 错误码 | 触发条件 |
-| --- | --- |
-| `HaiCommonError.UNAUTHORIZED` | `.auth()`：`context.session` 为空（无 token 或 token 校验失败） |
-| `HaiCommonError.FORBIDDEN` | `.permission()` / `.role()`：无对应权限或角色 |
-| `HaiCommonError.INTERNAL_ERROR` | route handler 抛出未处理异常 |
+| 错误码                          | 触发条件                                                        |
+| ------------------------------- | --------------------------------------------------------------- |
+| `HaiCommonError.UNAUTHORIZED`   | `.auth()`：`context.session` 为空（无 token 或 token 校验失败） |
+| `HaiCommonError.FORBIDDEN`      | `.permission()` / `.role()`：无对应权限或角色                   |
+| `HaiCommonError.INTERNAL_ERROR` | route handler 抛出未处理异常                                    |
 
 ## httpOnly Cookie 认证
 
@@ -744,7 +744,7 @@ const app = serv.createApp({
   contract,
   procedures,
   http: { apiPrefix: '/api/v1' },
-  iam,                                  // 顶层句柄：同时驱动 verifyToken 与 refresh
+  iam, // 顶层句柄：同时驱动 verifyToken 与 refresh
   refreshCookie: {
     // cookieName?: string              默认 'hai_refresh_token'
     // maxAge?: number                  默认 30 * 24 * 3600（30 天）
@@ -765,14 +765,14 @@ const app = serv.createApp({
 
 ### Cookie 规格
 
-| 属性 | 值 |
-| --- | --- |
-| Name | `hai_refresh_token`（可配置） |
-| Path | `{apiPrefix}/auth/refresh`（最小范围） |
-| HttpOnly | ✓ |
-| SameSite | `Strict` |
-| Secure | 生产自动开启，`secure: false` 可在 HTTP 开发环境关闭 |
-| Max-Age | 30 天（可配置） |
+| 属性     | 值                                                   |
+| -------- | ---------------------------------------------------- |
+| Name     | `hai_refresh_token`（可配置）                        |
+| Path     | `{apiPrefix}/auth/refresh`（最小范围）               |
+| HttpOnly | ✓                                                    |
+| SameSite | `Strict`                                             |
+| Secure   | 生产自动开启，`secure: false` 可在 HTTP 开发环境关闭 |
+| Max-Age  | 30 天（可配置）                                      |
 
 ## 测试
 
@@ -781,3 +781,5 @@ pnpm --filter @h-ai/serv test
 pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
+
+标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。

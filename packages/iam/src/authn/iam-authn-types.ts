@@ -138,10 +138,11 @@ export interface AuthnOperations {
   /**
    * 登出
    *
-   * 删除会话数据和用户令牌映射。令牌无效时静默成功。
+   * 按完整访问令牌原子删除会话及关联 refresh，access 已到期也撤销待刷新记录。
+   * 无效或不存在的令牌幂等成功；缓存读取/提交失败必须返回错误，不能宣称服务端已退出。
    *
    * @param accessToken - 访问令牌
-   * @returns 始终返回 ok
+   * @returns 撤销完成或令牌不存在返回 ok；共享存储失败返回错误，恢复后可用同一令牌重试
    */
   logout: (accessToken: string) => Promise<HaiResult<void>>
 

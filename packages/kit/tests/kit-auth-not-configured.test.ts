@@ -9,7 +9,7 @@
 
 import type { AuthResult } from '@h-ai/iam'
 import type { AuthOperations } from '../src/kit-types.js'
-import { ok } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureAuth, login, loginWithApiKey, loginWithLdap, loginWithOtp, logout, registerAndLogin } from '../src/kit-auth.js'
 
@@ -95,20 +95,41 @@ describe('kit.auth 未配置时返回 HaiResult 错误', () => {
     }
   })
 
-  it('logout 未配置时仍清除 Cookie，且不抛出', async () => {
+  it('logout 有token但未配置时清除Cookie且返回失败，不能假称服务端已撤销', async () => {
     const cookies = createCookies()
-    await expect(logout(cookies, 'some-token')).resolves.toBeUndefined()
+    await expect(logout(cookies, 'some-token')).resolves.toMatchObject({ success: false, error: { code: 'KIT_AUTH_NOT_CONFIGURED' } })
     expect(cookies.delete).toHaveBeenCalledWith('hai_access_token', { path: '/' })
   })
 
   it('logout 在 accessToken 缺失时也只清 Cookie', async () => {
     const cookies = createCookies()
-    await expect(logout(cookies, null)).resolves.toBeUndefined()
+    await expect(logout(cookies, null)).resolves.toEqual(ok(undefined))
     expect(cookies.delete).toHaveBeenCalledWith('hai_access_token', { path: '/' })
   })
 })
 
 describe('kit.auth 已配置时正常委托给 operations', () => {
+  it('logout 保留服务端失败结果，同时清理当前Cookie', async () => {
+    const operations = createAuthOperations()
+    const failure = err({ code: 'STATE_UNAVAILABLE', message: 'Session state unavailable' })
+    operations.logout.mockResolvedValueOnce(failure)
+    configureAuth({ operations })
+    const cookies = createCookies()
+    expect(await logout(cookies, 'held-token')).toBe(failure)
+    expect(operations.logout).toHaveBeenCalledWith('held-token')
+    expect(cookies.delete).toHaveBeenCalledWith('hai_access_token', { path: '/' })
+  })
+
+  it('logout 成功和底层异常都清Cookie，异常不被转换为成功', async () => {
+    const operations = createAuthOperations()
+    configureAuth({ operations })
+    const cookies = createCookies()
+    expect(await logout(cookies, 'held-token')).toEqual(ok(undefined))
+    operations.logout.mockRejectedValueOnce(new Error('Injected control-flow failure'))
+    await expect(logout(cookies, 'held-token')).rejects.toThrow('Injected control-flow failure')
+    expect(cookies.delete).toHaveBeenCalledTimes(2)
+  })
+
   it('login 已配置时调用 operations 并写入 Cookie', async () => {
     const mockOps = createAuthOperations()
     configureAuth({ operations: mockOps })
