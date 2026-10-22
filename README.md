@@ -143,7 +143,7 @@ pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # 两机不通时只生成包，按包内 README 手工搬运启动
-pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only
 ```
 
 部署工具默认作为开发依赖安装，不需要时在创建命令中加 `--no-deploy`。每个镜像在 `images/` 下使用独立 Dockerfile，`hai.build.json` 指定对应文件。完整离线包包含自建中间件镜像，并附 Windows/Linux/macOS 上传部署脚本；隔离服务器可直接执行包内 apply.sh。局部发布以服务器成功版本为基线，保留其他服务和数据卷，不执行全项目 down。同版本允许重新构建，构建 ID 和校验和区分内容。依赖缓存、人工操作与失败恢复见[使用指南](docs/usage/README.md)。

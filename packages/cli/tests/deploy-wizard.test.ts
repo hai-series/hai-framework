@@ -9,9 +9,10 @@ import { ReldbConfigSchema } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
 import { cliM } from '../src/cli-i18n.js'
+import * as cliUtils from '../src/cli-utils.js'
 import { moduleEnvironmentVariables } from '../src/commands/cli-config-environment.js'
 import { createProject } from '../src/commands/cli-create.js'
-import { configureDeployMiddleware, displayDeployValue } from '../src/commands/cli-deploy-middleware.js'
+import { configureDeployMiddleware } from '../src/commands/cli-deploy-middleware.js'
 import { deployCommand } from '../src/commands/cli-deploy.js'
 
 const mocked = vi.hoisted(() => ({ prompt: vi.fn() }))
@@ -19,11 +20,34 @@ vi.mock('prompts', () => ({ default: mocked.prompt }))
 const roots: string[] = []
 let stdinDescriptor: PropertyDescriptor | undefined
 
-it('redacts API headers and access key identifiers in connection previews', () => {
-  const preview = displayDeployValue('HAI_REACH_PROVIDERS_0', JSON.stringify({ headers: { 'X-API-Key': 'test-private-header' }, accessKeyId: 'test-private-access-id' }))
-  expect(preview).not.toContain('test-private-header')
-  expect(preview).not.toContain('test-private-access-id')
-})
+it('asks once per email and SMS provider and reports saved services without environment variables', async () => {
+  const { app, service } = await fullstackFixture()
+  const scan = await deploy.scan(service, { environment: 'test', envDir: app })
+  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  expect(scan.success && environment.success).toBe(true)
+  if (!scan.success || !environment.success)
+    return
+  mocked.prompt.mockImplementation(async question => ({ value: question.choices[question.initial ?? 0].value }))
+  const output = vi.spyOn(cliUtils, 'writeCliMessage').mockImplementation(() => {})
+  const reach = { ...scan.data, middlewares: scan.data.middlewares?.filter(item => item.configName === 'reach') }
+  const modes = await configureDeployMiddleware(deployModule, reach, environment.data, { provider: { type: 'docker-ssh' } })
+  expect(mocked.prompt.mock.calls.map(([question]) => question.message)).toEqual([
+    cliM('cli_deploy_action', { params: { service: 'email' } }),
+    cliM('cli_deploy_backend', { params: { service: 'email' } }),
+    cliM('cli_deploy_action', { params: { service: 'sms' } }),
+    cliM('cli_deploy_backend', { params: { service: 'sms' } }),
+  ])
+  expect(modes).toMatchObject({ email: 'default', sms: 'default', HAI_REACH_PROVIDERS_0: 'default', HAI_REACH_PROVIDERS_1: 'default' })
+  const saved = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  expect(saved.success).toBe(true)
+  if (saved.success) {
+    expect(JSON.parse(saved.data.values.HAI_REACH_PROVIDERS_0)).toEqual({ name: 'email', type: 'console' })
+    expect(JSON.parse(saved.data.values.HAI_REACH_PROVIDERS_1)).toEqual({ name: 'sms', type: 'console' })
+  }
+  expect(output.mock.calls.map(([message]) => message).join('\n')).not.toMatch(/HAI_|NODE_ENV|PORT/)
+  expect(output).toHaveBeenCalledWith(cliM('cli_deploy_saved', { params: { service: 'email' } }))
+  expect(output).toHaveBeenCalledWith(cliM('cli_deploy_saved', { params: { service: 'sms' } }))
+}, 30_000)
 
 it.each(['container:\n', 'container: null\n', 'container: invalid\n'])('handles S3 engine configuration with YAML %s', async (node) => {
   const { app, service } = await fullstackFixture()
@@ -116,6 +140,30 @@ it('guides SSH setup once, saves parameters privately and reuses them without pr
   expect(run).toHaveBeenCalledTimes(2)
   expect(init).toHaveBeenLastCalledWith(expect.objectContaining({ provider: expect.objectContaining({ type: 'docker-ssh', ssh: expect.objectContaining({ host: 'server.internal', port: 2202, username: 'deployer', identityFile: 'C:/keys/deploy' }), expose: expect.objectContaining({ hostPort: 8080 }) }) }))
 }, 30_000)
+it.each(['missing', 'partial', 'saved'])('bundle-only skips SSH prompts and only reuses complete saved SSH settings (%s)', async (targetState) => {
+  const { app, service } = await fullstackFixture()
+  const savedTarget = targetState === 'saved'
+  writeFileSync(join(service, 'config/_deploy.yml'), `provider:\n  type: docker-ssh\n  expose:\n    hostPort: 8080\n${targetState === 'partial' ? '  ssh:\n    host: partial-server.internal\n' : ''}`)
+  const ssh = { host: 'saved-server.internal', username: 'deployer', port: 2202 }
+  if (savedTarget)
+    writeFileSync(join(app, '.env.local'), `HAI_DEPLOY_PROVIDER='${JSON.stringify({ type: 'docker-ssh', ssh, expose: { hostPort: 8080 } })}'\n`)
+  const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: '', deploymentId: 'bundle-only', status: 'packaged', envVarsSet: [] } })
+  const init = vi.spyOn(deploy, 'init')
+
+  await deployCommand({ appDir: service, env: 'test', yes: true, skipMiddleware: true, bundleOnly: true })
+
+  expect(mocked.prompt).not.toHaveBeenCalled()
+  expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ bundleOnly: true }))
+  const provider = init.mock.calls[0][0].provider
+  expect(provider.type).toBe('docker-ssh')
+  if (provider.type === 'docker-ssh')
+    expect(provider.ssh).toEqual(savedTarget ? expect.objectContaining(ssh) : undefined)
+  if (!savedTarget) {
+    await expect(deployCommand({ appDir: service, env: 'test', yes: true, skipMiddleware: true })).rejects.toThrow('provider.ssh')
+    expect(run).toHaveBeenCalledOnce()
+  }
+}, 30_000)
+
 afterEach(async () => {
   await deploy.close()
   core.config.clear()

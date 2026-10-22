@@ -125,7 +125,8 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
       for (const [index, item] of providers.entries()) {
         const provider = record(item)
         const type = String(provider.type ?? '')
-        const service = type === 'aliyun-sms' ? 'sms' : ['smtp', 'api', 'console'].includes(type) ? 'email' : undefined
+        // Console/API 没有渠道字段，沿用生成应用的 sms Provider 名称识别短信。
+        const service = type === 'aliyun-sms' || (['console', 'api'].includes(type) && provider.name === 'sms') ? 'sms' : ['smtp', 'api', 'console'].includes(type) ? 'email' : undefined
         if (service)
           add(service, type, 'reach', ['providers', String(index)], provider, '@h-ai/reach')
       }

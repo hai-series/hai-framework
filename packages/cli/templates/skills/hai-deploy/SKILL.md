@@ -18,11 +18,11 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 ## 操作流程
 
 1. 读取项目 scripts、images/ 中的 Dockerfile、hai.build.json 与服务目录配置。创建默认带开发期部署工具；用户明确 --no-deploy 时不生成部署入口。构建细节见 [hai-build](../hai-build/SKILL.md)。
-2. 选择环境，验证 .env.<mode> 存在，再处理 SSH 与必要中间件。使用人类可读字段说明，复用有效配置；私有参数写 .env.local，私钥仅引用路径。环境规则见 [middleware.md](middleware.md)。
+2. 选择环境，验证 .env.<mode> 存在，再处理部署目标与必要中间件。直接部署缺少 SSH 参数时按人类可读字段说明补齐，已有完整配置直接复用；--bundle-only 不询问 SSH。私有参数写 .env.local，私钥仅引用路径。环境规则见 [middleware.md](middleware.md)。
 3. 先校验所选制品、版本、服务和 SHA-256。--build 只构建所选应用镜像；不带它时缺产物明确失败，不隐式补构建。格式版本 3 记录 appVersion、buildId、partial、hasWeb、镜像归档及显式配置的 appContainerPort/webContainerPort；部分构建也保留未选镜像端口，缺省使用部署默认值。同一应用版本可重建，镜像引用区分实际内容；禁止 latest 与无版本镜像。
 4. 完整包自动导出实际自建中间件镜像并去重；只更新 Web 不重新打包 API/中间件。打包机需容器引擎导出中间件，服务器仅 load，禁止 pull/build。外部连接及云开通不能伪称为离线自包含服务。
 5. --services 使用目标服务器最后成功状态为基线，检查端口/拓扑及未选依赖，保留未选配置、凭据、网络和卷。脚本先按项目/服务标签仅删除选中旧容器（保留卷），再 up -d --no-deps --no-build --pull never --no-recreate 创建新容器并保留其他容器，避免 Compose Provider 连带重建反向依赖，禁止整个项目 down。storage-init 是一次性创建 S3 桶，涉及存储初始化才运行。仅更新 storage 也需含 app 镜像的制品运行初始化；最近为 web-only 时，用 --artifact-dir 选择原完整制品，或先 pnpm build --target docker --images app，不会更新运行中的 app 服务。
-6. 部署缓存、tar 和 -deploy/ 操作目录默认位于工程根 .hai/deploy/<环境>/，与 .hai/build/ 使用同一工程根；--output 显式覆盖 tar 路径，相对命令执行目录解析。--bundle-only 不连接 SSH。Windows deploy.ps1、Linux/macOS deploy.sh 上传并执行包内 apply.sh；完全隔离时搬运 tar，独立目录解包执行 sh apply.sh，可传部署根目录。脚本不依赖源码、Node 或 pnpm。
+6. 部署缓存、tar 和 -deploy/ 操作目录默认位于工程根 .hai/deploy/<环境>/，与 .hai/build/ 使用同一工程根；--output 显式覆盖 tar 路径，相对命令执行目录解析。--bundle-only 不连接 SSH，生成带逐项说明的 deploy-target.json。执行上传脚本前先按说明修改并核对该 JSON，Windows deploy.ps1、Linux/macOS deploy.sh 均读取此文件，上传并执行包内 apply.sh。完全隔离时搬运 tar，独立目录解包执行 sh apply.sh，可传部署根目录。脚本不依赖源码、Node 或 pnpm；本机运行 deploy.sh 需 sh、awk、ssh、scp。
 7. 工具预检、基线、上传、校验、镜像导入、服务更新和 HTTP 检查分别报告。失败返回非零退出码，结果文件保留失败阶段；只有检查成功才更新服务器 current。已有部署失败尝试恢复所选服务的旧容器和配置；数据卷保留，已写业务数据不回退，恢复后仍需验证健康。禁止把本地打包记录当服务器成功状态。
 
 ## CLI

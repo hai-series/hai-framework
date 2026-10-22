@@ -48,7 +48,12 @@ describe('buildSshExecArgs', () => {
 
   it('提供 knownHostsFile 时加入 UserKnownHostsFile', () => {
     const args = buildSshExecArgs(makeSshConfig({ knownHostsFile: '/tmp/known' }), 'true')
-    expect(args).toContain('UserKnownHostsFile=/tmp/known')
+    expect(args).toContain('UserKnownHostsFile="/tmp/known"')
+  })
+
+  it('known_hosts 的空格、反斜杠和引号按 OpenSSH 配置语法转义', () => {
+    const args = buildSshExecArgs(makeSshConfig({ knownHostsFile: 'C:\\Users\\Test User\\known"hosts' }), 'true')
+    expect(args).toContain('UserKnownHostsFile="C:\\\\Users\\\\Test User\\\\known\\"hosts"')
   })
 
   it('远程命令作为单一末尾参数传入（防注入）', () => {

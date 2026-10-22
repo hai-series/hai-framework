@@ -87,7 +87,7 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-完整包包含应用和自建中间件镜像。部署缓存、tar 与操作目录默认放在工程根 `.hai/deploy/<环境>/`；`--output` 可显式指定相对命令执行目录的 tar 路径。仅打包会同时生成 tar 与 Windows `deploy.ps1`、Linux/macOS `deploy.sh`；完全隔离的 Linux 服务器解包后运行 `sh apply.sh`。首次部署必须完整；部分更新保留未选服务和数据卷。每步报告结果，失败返回非零并尝试恢复。前置工具、缓存、版本和恢复流程见[部署说明](../deploy/README.md)。
+完整包包含应用和自建中间件镜像。部署缓存、tar 与操作目录默认放在工程根 `.hai/deploy/<环境>/`；`--output` 可显式指定相对命令执行目录的 tar 路径。仅打包不询问 SSH，会同时生成 tar、带逐项说明的 `deploy-target.json` 与 Windows `deploy.ps1`、Linux/macOS `deploy.sh`。执行上传脚本前先修改并核对 `deploy-target.json`，两个脚本均读取此文件；完全隔离的 Linux 服务器解包后运行 `sh apply.sh`。首次部署必须完整；部分更新保留未选服务和数据卷。每步报告结果，失败返回非零并尝试恢复。前置工具、缓存、版本和恢复流程见[部署说明](../deploy/README.md)。
 
 桌面安装包用 `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64`，在对应系统准备工具链并验证。容器里的 Web 页面不代替原生安装包。
 

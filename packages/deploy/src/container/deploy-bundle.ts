@@ -115,7 +115,8 @@ export async function createDeploymentBundle(options: {
     if (selected.includes('storage-init'))
       put('initialize-storage', '')
     put('apply.sh', createApplyScript({ deploymentId: options.deploymentId, projectName, environment, directory: `${config.remote.baseDir}/${projectName}`, runtime: config.remote.runtime, partial: options.partial, selected: selected.filter(name => name !== 'storage-init'), hostPort: config.expose.hostPort, healthPaths: options.healthPaths }))
-    const instructions = deployM('deploy_bundleInstructions', { params: { file: basename(output), start: 'apply.sh', images: [...references].join('\n'), compose: 'compose.json' } })
+    const instructionParams = { file: basename(output), start: 'apply.sh', images: [...references].join('\n'), compose: 'compose.json' }
+    const instructions = deployM('deploy_bundleInstructions', { params: instructionParams })
     put('README.txt', `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, compose: 'compose.json' } })}\n${instructions}\n`)
     const checksums = []
     for (const file of files)
@@ -126,14 +127,37 @@ export async function createDeploymentBundle(options: {
       throw new Error(tar.error.message)
     chmodSync(temporaryTar, 0o600)
     renameSync(temporaryTar, output)
-    const upload = createUploadScripts(config, basename(output), projectName)
+    const upload = createUploadScripts()
     const scripts = `${output.slice(0, -4)}-deploy`
     mkdirSync(scripts, { recursive: true, mode: 0o700 })
-    writeFileSync(join(scripts, 'deploy.sh'), upload.sh.replace('cd "$(dirname "$0")"', 'cd "$(dirname "$0")/.."'), { mode: 0o700 })
-    writeFileSync(join(scripts, 'deploy.ps1'), upload.ps1.replace('Set-Location -LiteralPath $PSScriptRoot', 'Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)').replace('\'./deploy-target.json\'', '(Join-Path $PSScriptRoot \'deploy-target.json\')'))
-    writeFileSync(join(scripts, 'deploy-target.json'), `${JSON.stringify({ ...config.ssh, host: config.ssh?.host ?? 'SERVER_HOST', username: config.ssh?.username ?? 'deploy', port: config.ssh?.port ?? 22, directory: `${config.remote.baseDir}/${projectName}`, bundle: basename(output) }, null, 2)}\n`)
+    writeFileSync(join(scripts, 'deploy.sh'), upload.sh, { mode: 0o700 })
+    writeFileSync(join(scripts, 'deploy.ps1'), upload.ps1)
+    writeFileSync(join(scripts, 'read-target.awk'), upload.reader)
+    const target = {
+      host: config.ssh?.host ?? 'SERVER_HOST',
+      port: config.ssh?.port ?? 22,
+      username: config.ssh?.username ?? 'deploy',
+      identityFile: config.ssh?.identityFile ?? '',
+      knownHostsFile: config.ssh?.knownHostsFile ?? '',
+      strictHostKeyChecking: config.ssh?.strictHostKeyChecking ?? true,
+      connectTimeoutSeconds: config.ssh?.connectTimeoutSeconds ?? 10,
+      directory: `${config.remote.baseDir}/${projectName}`,
+      bundle: basename(output),
+    }
+    const comments = {
+      host: deployM('deploy_targetHost'),
+      port: deployM('deploy_targetPort'),
+      username: deployM('deploy_targetUsername'),
+      identityFile: deployM('deploy_targetIdentityFile'),
+      knownHostsFile: deployM('deploy_targetKnownHostsFile'),
+      strictHostKeyChecking: deployM('deploy_targetStrictHostKeyChecking'),
+      connectTimeoutSeconds: deployM('deploy_targetConnectTimeoutSeconds'),
+      directory: deployM('deploy_targetDirectory'),
+      bundle: deployM('deploy_targetBundle'),
+    }
+    writeFileSync(join(scripts, 'deploy-target.json'), `${JSON.stringify({ ...target, _comments: comments }, null, 2)}\n`)
     writeFileSync(join(scripts, 'README.txt'), instructions)
-    return { bundlePath: output, instructions: `${instructions}\n${scripts}`, startName: 'apply.sh' }
+    return { bundlePath: output, instructions: `${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${scripts}`, startName: 'apply.sh' }
   }
   finally {
     rmSync(staging, { recursive: true, force: true })

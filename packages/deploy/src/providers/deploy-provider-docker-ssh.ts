@@ -29,6 +29,7 @@ import {
 import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
 import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
+import { resolveProjectDirectory } from '../deploy-functions.js'
 import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 
@@ -112,7 +113,7 @@ export function createDockerSshProvider(
     const { appDir, projectName, scan, provisionEnv, appEnv, options } = context
     const deploymentId = makeDeploymentId()
     const hostPort = config.expose.hostPort
-    const artifactDir = join(appDir, '.hai', 'deploy', options?.environment ?? 'prod')
+    const artifactDir = join(resolveProjectDirectory(appDir), '.hai', 'deploy', options?.environment ?? 'prod')
     mkdirSync(artifactDir, { recursive: true, mode: 0o700 })
     chmodSync(artifactDir, 0o700)
     const artifact = context.artifact

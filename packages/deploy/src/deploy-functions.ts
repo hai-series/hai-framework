@@ -10,20 +10,25 @@ import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 /**
- * 定位构建目录；API workspace 的环境文件可在服务包，镜像仍位于工程根。
+ * 定位工程根；API workspace 的环境文件可在服务包，构建与部署缓存仍位于工程根。
  * 只定位已约定的构建入口/锁文件，不从目录布局推断应用或中间件依赖。
- * @example `resolveArtifactDirectory('/workspace/demo/apps/demo-service')`
+ * @example `resolveProjectDirectory('/workspace/demo/apps/demo-service')`
  */
-export function resolveArtifactDirectory(appDir: string): string {
+export function resolveProjectDirectory(appDir: string): string {
   let directory = resolve(appDir)
   while (true) {
     if (existsSync(join(directory, 'hai.build.json')) || existsSync(join(directory, 'pnpm-lock.yaml')))
-      return join(directory, '.hai/build/docker')
+      return directory
     const parent = dirname(directory)
     if (parent === directory)
-      return join(appDir, '.hai/build/docker')
+      return resolve(appDir)
     directory = parent
   }
+}
+
+/** 定位工程根的构建缓存目录。 */
+export function resolveArtifactDirectory(appDir: string): string {
+  return join(resolveProjectDirectory(appDir), '.hai/build/docker')
 }
 
 /**

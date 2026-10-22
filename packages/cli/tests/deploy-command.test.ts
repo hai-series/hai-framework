@@ -19,6 +19,12 @@ const mocks = vi.hoisted(() => ({
   scan: vi.fn(),
   deployApp: vi.fn(),
   close: vi.fn(),
+  writeMessage: vi.fn(),
+}))
+
+vi.mock('../src/cli-utils.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/cli-utils.js')>(),
+  writeCliMessage: mocks.writeMessage,
 }))
 
 vi.mock('@h-ai/deploy', async importOriginal => ({
@@ -118,6 +124,9 @@ describe('deployCommand', () => {
       serviceModes: {},
     }))
     expect(mocks.close).toHaveBeenCalledTimes(1)
+    const output = mocks.writeMessage.mock.calls.map(([message]) => message).join('\n')
+    expect(output).toContain('dep_123')
+    expect(output).not.toContain('HAI_')
   })
 
   it('deployApp 返回失败时应关闭 deploy 模块', async () => {
@@ -130,6 +139,29 @@ describe('deployCommand', () => {
     await expect(deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, verbose: false })).rejects.toThrow('Deploy failed')
 
     expect(mocks.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows packaged bundle instructions once without an environment variable summary', async () => {
+    const appDir = createDeployApp()
+    const bundlePath = join(tmpRoot, '.hai/deploy/prod/bundle-1.0.0.tar')
+    mocks.deployApp.mockResolvedValue({
+      success: true,
+      data: {
+        deploymentId: 'dep_packaged',
+        status: 'packaged',
+        bundlePath,
+        instructions: `Deployment bundle: ${bundlePath}\nRun deploy.ps1 or deploy.sh.`,
+        envVarsSet: ['HAI_ADMIN_DEFAULT_PASSWORD', 'NODE_ENV', 'PORT'],
+      },
+    })
+
+    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, skipMiddleware: true, verbose: false })
+
+    const output = mocks.writeMessage.mock.calls.map(([message]) => message).join('\n')
+    expect(output.split(bundlePath)).toHaveLength(2)
+    expect(output).toContain('deploy.ps1')
+    expect(output).not.toMatch(/HAI_ADMIN_DEFAULT_PASSWORD|NODE_ENV|PORT/)
+    expect(mocks.close).toHaveBeenCalledOnce()
   })
 
   it('deployApp 抛出异常时也应关闭 deploy 模块', async () => {

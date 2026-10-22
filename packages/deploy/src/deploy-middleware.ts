@@ -81,7 +81,9 @@ export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
     { backend: 'api', label: 'HTTP notification API', purpose: 'deploy_purposeEmail', fields: [required('url', '', 'url'), field('method', 'POST'), field('headers'), field('timeout', '10000', 'number')] },
   ],
   sms: [
+    { backend: 'console', label: 'Console', purpose: 'deploy_purposeConsole', fields: [] },
     { backend: 'aliyun-sms', label: 'Aliyun SMS', purpose: 'deploy_purposeSms', provisioner: 'aliyun', fields: [required('accessKeyId'), { ...required('accessKeySecret'), secret: true }, required('signName'), field('endpoint', 'dysmsapi.aliyuncs.com')] },
+    { backend: 'api', label: 'HTTP notification API', purpose: 'deploy_purposeSms', fields: [required('url', '', 'url'), field('method', 'POST'), field('headers'), field('timeout', '10000', 'number')] },
   ],
 }
 

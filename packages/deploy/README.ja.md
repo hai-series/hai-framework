@@ -56,7 +56,7 @@ container:
   s3Engine: rustfs
 ```
 
-ウィザードはサーバー、SSH ユーザー、任意の鍵・指紋ファイル、公開ポートを説明付きで質問します。有効な設定は再利用し、接続情報は .env.local、秘密鍵はパスのみ保存します。パッケージ生成だけなら SSH は不要です。
+直接デプロイでは、サーバー、SSH ユーザー、任意の鍵・指紋ファイル、公開ポートの不足項目を説明付きで質問し、完全な設定は再利用します。接続情報は .env.local、秘密鍵はパスのみ保存します。`--bundle-only` では SSH 接続情報を質問せず、後でアップロードする前に `deploy-target.json` に設定します。
 
 #### 本当に必要なミドルウェアだけを設定する
 
@@ -86,7 +86,7 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-既定では `.hai/build/` と同じプロジェクトルートの `.hai/deploy/<環境>/` にデプロイキャッシュ、tar と隣接する -deploy/ 操作ディレクトリを生成します。アーカイブ名はプロジェクト名、配置 ID、アプリ版を含み、例は `bundle-demo-<配置ID>-1.2.3.tar` です。`--output release-prod.tar` を明示すると、コマンドの作業ディレクトリを基準に release-prod-1.2.3.tar と操作ディレクトリを生成します。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。Windows は deploy.ps1、Linux/macOS は deploy.sh でアップロードし、同じサーバー処理を実行します。別の PC・OS に移す場合、秘密鍵とサーバー指紋ファイルのパスを移動先に合わせます。Windows は deploy-target.json、Linux/macOS は HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE で指定します。
+既定では `.hai/build/` と同じプロジェクトルートの `.hai/deploy/<環境>/` にデプロイキャッシュ、tar と隣接する -deploy/ 操作ディレクトリを生成します。アーカイブ名はプロジェクト名、配置 ID、アプリ版を含み、例は `bundle-demo-<配置ID>-1.2.3.tar` です。`--output release-prod.tar` を明示すると、コマンドの作業ディレクトリを基準に release-prod-1.2.3.tar と操作ディレクトリを生成します。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
 
 隔離された Linux では独立ディレクトリに展開し、`sh apply.sh` を実行します。引数で配置先を上書きできます。各段階の失敗は非ゼロ終了し、イメージ導入・起動・HTTP 検査を別々に報告します。result-<配置ID>.json に結果を記録し、成功時だけ current を更新します。同じ配置 ID の再適用は停止しますが、同じアプリ版から生成した新しい配布物は適用できます。更新失敗時は対象コンテナーと設定を以前の状態に戻すことを試み、データボリュームと診断情報を保持します。すでに書き込まれた業務データは元に戻しません。
 

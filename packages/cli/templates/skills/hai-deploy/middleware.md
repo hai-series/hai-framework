@@ -21,7 +21,7 @@
 | IAM 可选目录认证 | disabled / LDAP | 禁用无服务；OpenLDAP | 自定义已有目录 |
 | Reach Provider 数组 | console / SMTP / HTTP API；阿里云 SMS | console 无服务；SMTP 用 Mailpit 捕获测试邮件；HTTP/SMS 自定义 | SMTP → Resend；SMS → 阿里云凭据接入 |
 
-`serv` 声明 AI peer 不代表应用启用了 AI，不应因此安装 AI/ONNX/CUDA 或开通向量服务。LDAP 需要在应用安装 IAM 的可选 peer `ldapts`，并显式设置 `login.ldap=true`；安装 IAM 不代表启用了 LDAP。Reach 保留 Provider 的数组索引及名称，不能把 HTTP 回调当作 SMTP。默认目录没有业务账号；Mailpit 不会对外投递生产邮件。生产应配置企业 LDAP/SMTP，或使用对应云服务。
+`serv` 声明 AI peer 不代表应用启用了 AI，不应因此安装 AI/ONNX/CUDA 或开通向量服务。LDAP 需要在应用安装 IAM 的可选 peer `ldapts`，并显式设置 `login.ldap=true`；安装 IAM 不代表启用了 LDAP。Reach 每个 Provider 保留独立数组索引及名称；通用 Console/HTTP API 按应用模板约定将 `name: sms` 归为短信，其他名称归为邮件服务，SMTP 和 aliyun-sms 按实际 type 分类，不能把 HTTP 回调当作 SMTP。email/sms 的 Console 均只输出日志，不实际投递。默认目录没有业务账号；Mailpit 不会对外投递生产邮件。生产应配置企业 LDAP/SMTP，或使用对应云服务。
 
 每项都展示当前生效后端和用途，例如 PostgreSQL，再选择：
 
@@ -33,7 +33,7 @@
 
 `--yes` 用于已授权的自动化：目标环境已有完整配置时保持不变，否则使用当前后端默认配置；不支持的云后端或缺少必需凭据直接失败。自动化直接部署用 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`。跳过不作为配置完整性或连接成功的证明。
 
-部署目标不完整时，先引导选择 SSH/Vercel。SSH 逐项输入主机、端口、用户名、私钥文件路径、known_hosts 路径、远程目录/运行时及容器/主机端口；端口范围 1–65535。密钥路径留空使用 ssh-agent/默认密钥，known_hosts 留空使用 OpenSSH 默认文件。完整目标自动复用；修改 `.env.local` 的 `HAI_DEPLOY_PROVIDER` 可切换连接。首次填写的整个目标对象（包括地址、端口、路径、Token）只保存 `.env.local` 并添加 Git 忽略，不把机器信息写公共环境文件。SDK 使用 `saveDeploymentEnvironment(snapshot, variables, { private: true })` 可显式保存本机参数。禁止读取、复制或打印私钥内容。
+直接部署的目标不完整时，先引导选择 SSH/Vercel。SSH 逐项输入主机、端口、用户名、私钥文件路径、known_hosts 路径、远程目录/运行时及容器/主机端口；端口范围 1–65535。密钥路径留空使用 ssh-agent/默认密钥，known_hosts 留空使用 OpenSSH 默认文件。完整目标自动复用；修改 `.env.local` 的 `HAI_DEPLOY_PROVIDER` 可切换连接。首次填写的整个目标对象（包括地址、端口、路径、Token）只保存 `.env.local` 并添加 Git 忽略，不把机器信息写公共环境文件。`--bundle-only` 不询问 SSH，连接信息可在后续上传前填写到生成的 `deploy-target.json`。SDK 使用 `saveDeploymentEnvironment(snapshot, variables, { private: true })` 可显式保存本机参数。禁止读取、复制或打印私钥内容。
 
 ### Hai 模块与中间件的关系
 
@@ -73,7 +73,7 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 
 构建与部署可分开，也可通过 pnpm run deploy --build 明确串联。构建保持环境无关；部署选择环境并只消费所选镜像。完整包自动包含 Compose 自建中间件镜像，因此导出阶段需要本地 Podman/Docker，缺镜像在打包阶段准备，不能留给隔离服务器下载。
 
-部署缓存、带版本 tar 与 -deploy/ 目录默认位于工程根 .hai/deploy/<环境>/；--output 可显式指定其他 tar 路径，相对命令执行目录解析。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和目标配置。隔离服务器搬运并解包后执行 sh apply.sh。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
+部署缓存、带版本 tar 与 -deploy/ 目录默认位于工程根 .hai/deploy/<环境>/；--output 可显式指定其他 tar 路径，相对命令执行目录解析。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和带逐项配置说明的 deploy-target.json；运行上传脚本前先修改并核对该 JSON，两个脚本均读取此文件。本机运行 deploy.sh 需 sh、awk、ssh、scp；sh deploy.sh 主机 [端口] [用户] 可覆盖连接地址，HAI_DEPLOY_IDENTITY_FILE 和 HAI_DEPLOY_KNOWN_HOSTS_FILE 可覆盖两脚本的私钥及指纹文件路径。隔离服务器搬运并解包后执行 sh apply.sh。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
 
 部分更新通过 --services 指定，使用服务器成功基线保留未选服务和中间件凭据。首次安装不能使用部分包。storage-init 复用应用镜像及 S3 SDK 检查/创建桶，不清空数据；只有涉及存储初始化时执行，并检查退出码。仅更新 storage 仍需含 app 镜像的制品；最近为 web-only 时，用 --artifact-dir 选择原完整制品，或先 pnpm build --target docker --images app。app 镜像仅用于初始化，不会更新 app 服务。失败恢复尝试还原容器和配置，保留数据卷，不回退已写业务数据。
 

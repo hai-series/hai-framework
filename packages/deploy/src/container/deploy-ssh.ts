@@ -32,8 +32,11 @@ function buildConnectOptions(config: SshConfig): string[] {
   const args: string[] = ['-o', 'BatchMode=yes']
   args.push('-o', `ConnectTimeout=${config.connectTimeoutSeconds}`)
   args.push('-o', `StrictHostKeyChecking=${config.strictHostKeyChecking ? 'accept-new' : 'no'}`)
-  if (config.knownHostsFile)
-    args.push('-o', `UserKnownHostsFile=${config.knownHostsFile}`)
+  if (config.knownHostsFile) {
+    // OpenSSH 会再次按配置语法解析 -o 的值，路径中的空格须保留内部引号。
+    const path = config.knownHostsFile.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+    args.push('-o', `UserKnownHostsFile="${path}"`)
+  }
   if (config.identityFile) {
     args.push('-i', config.identityFile)
     args.push('-o', 'IdentitiesOnly=yes')

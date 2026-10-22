@@ -105,6 +105,13 @@ it('仅打包不需要 SSH 或本地容器引擎，tar 可搬运且暂存目录�
   expect(ssh.exec).not.toHaveBeenCalled()
   expect(ssh.upload).not.toHaveBeenCalled()
   expect(result.data.bundlePath).toBe(join(root, 'release-test-1.2.3.tar'))
+  expect(result.data.instructions).toContain(result.data.bundlePath)
+  const scripts = `${result.data.bundlePath!.slice(0, -4)}-deploy`
+  const target = JSON.parse(readFileSync(join(scripts, 'deploy-target.json'), 'utf8'))
+  expect(target).toMatchObject({ host: 'SERVER_HOST', port: 22, username: 'deploy', identityFile: '', knownHostsFile: '', strictHostKeyChecking: true, connectTimeoutSeconds: 10, bundle: 'release-test-1.2.3.tar' })
+  expect(Object.keys(target._comments).sort()).toEqual(Object.keys(target).filter(key => key !== '_comments').sort())
+  expect(Object.values(target._comments).every(description => typeof description === 'string' && description.length > 0)).toBe(true)
+  expect(existsSync(join(scripts, 'read-target.awk'))).toBe(true)
   const files = execFileSync('tar', ['-tf', result.data.bundlePath!], { encoding: 'utf8' })
   for (const file of ['compose.json', 'manifest.json', '.env.runtime', 'images/app-1.2.3.tar', 'images/web-1.2.3.tar', 'web.conf', 'SHA256SUMS', 'README.txt', 'apply.sh'])
     expect(files).toContain(file)
@@ -287,7 +294,14 @@ it('aPI workspace 服务包的环境目录独立时，默认消费工程根的�
   writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: \'9.0\'\nimporters:\n  .: {}\n  apps/service: {}\n')
   await initialize(false)
   expect(await deploy.deployApp(service, { environment: 'test', bundleOnly: true })).toMatchObject({ success: true, data: { status: 'packaged' } })
-  expect(readFileSync(join(service, '.hai/deploy/test/docker-compose-1.2.3.yml'), 'utf8')).toContain('localhost/example-app:release-1')
+  expect(readFileSync(join(root, '.hai/deploy/test/docker-compose-1.2.3.yml'), 'utf8')).toContain('localhost/example-app:release-1')
+  expect(existsSync(join(service, '.hai/deploy'))).toBe(false)
+  const packaged = await deploy.deployApp(service, { environment: 'test', bundleOnly: true })
+  expect(packaged.success).toBe(true)
+  if (packaged.success) {
+    expect(packaged.data.bundlePath).toContain(join(root, '.hai/deploy/test'))
+    expect(existsSync(`${packaged.data.bundlePath!.slice(0, -4)}-deploy/deploy.sh`)).toBe(true)
+  }
 })
 it('完整 tar 上传失败不启动半份部署', async () => {
   await initialize()

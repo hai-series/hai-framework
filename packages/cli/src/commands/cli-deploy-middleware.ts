@@ -10,44 +10,6 @@ import { moduleEnvironmentVariables } from './cli-config-environment.js'
 
 type DeployModule = typeof import('@h-ai/deploy')
 
-/**
- * 展示连接配置时保留可核对的后端/地址，隐藏密码、令牌和 URL 认证部分。
- * @example `displayDeployValue('HAI_DB', '{"type":"mysql","password":"secret"}')`
- */
-export function displayDeployValue(name: string, value: string): string {
-  if (/PASSWORD|SECRET|TOKEN|APIKEY|PRIVATEKEY|ACCESSKEY|AUTHORIZATION/i.test(name.replace(/[^a-z0-9]/gi, '')) || /(?:^|_)PASS$/i.test(name) || value.includes('PRIVATE KEY'))
-    return cliM('cli_deploy_secret')
-  try {
-    const parsed: unknown = JSON.parse(value)
-    if (parsed && typeof parsed === 'object') {
-      const sanitize = (object: unknown): unknown => {
-        if (Array.isArray(object))
-          return object.map(sanitize)
-        if (object && typeof object === 'object')
-          return Object.fromEntries(Object.entries(object).map(([key, item]) => [key, /PASSWORD|SECRET|TOKEN|APIKEY|PRIVATEKEY|ACCESSKEY|AUTHORIZATION/i.test(key.replace(/[^a-z0-9]/gi, '')) || /(?:^|_)PASS$/i.test(key) ? cliM('cli_deploy_secret') : typeof item === 'string' ? displayDeployValue(key, item) : sanitize(item)]))
-        return object
-      }
-      return JSON.stringify(sanitize(parsed))
-    }
-  }
-  catch { /* 普通连接字符串无需 JSON 处理。 */ }
-  try {
-    const url = new URL(value)
-    if (url.username || url.password) {
-      url.username = '***'
-      url.password = '***'
-    }
-    for (const key of url.searchParams.keys()) {
-      if (/password|secret|token|key|authorization/i.test(key))
-        url.searchParams.set(key, '***')
-    }
-    return url.toString()
-  }
-  catch {
-    return value
-  }
-}
-
 /** 凭据输入字段，名称与 deploy 公开配置 Schema 相同。 */
 const CLOUD_FIELDS: Record<string, string[]> = {
   'neon': ['apiKey'],
@@ -254,7 +216,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       services[requirement.service] = cloud
     }
     else {
-      if (mode === 'default' && (requirement.service === 'sms' || backendName === 'api'))
+      if (mode === 'default' && ['aliyun-sms', 'api'].includes(backendName))
         throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: backend.label } }))
       const connection: Record<string, unknown> = mode === 'custom' && backendName === current.backend ? { ...requirement.config } : requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service } : {}
       for (const field of backend.fields) {
@@ -262,7 +224,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         const initial = previous === undefined ? field.defaultValue ?? '' : typeof previous === 'object' ? JSON.stringify(previous) : String(previous)
         const variable = `${requirement.envPrefix}_${field.name.toUpperCase()}`
         const info = moduleEnvironmentVariables(requirement.configName).find(item => item.name === variable)
-        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { name: variable, description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field) })) : initial
+        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field) })) : initial
         // 默认的服务端凭据由 sidecar/云开通器生成，不要求用户填写。
         if (value !== '') {
           connection[field.name] = field.kind === 'number' || field.kind === 'port' ? Number(value) : field.kind === 'boolean' ? value === 'true' : field.name === 'headers' || field.name === 'ssl' ? parseDocument(value).toJS() : value
@@ -277,9 +239,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
     const saved = module.saveDeploymentEnvironment(environment, updates)
     if (!saved.success)
       throw new Error(saved.error.message)
-    for (const [name, value] of Object.entries(updates)) {
-      writeCliMessage(cliM('cli_deploy_saved', { params: { name, value: displayDeployValue(name, value) } }))
-    }
+    writeCliMessage(cliM('cli_deploy_saved', { params: { service: requirement.service } }))
   }
   // 仅默认选项对应的云服务参与初始化/开通；custom/keep 不认证、不创建。
   config.services = Object.keys(services).length ? services : undefined

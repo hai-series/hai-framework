@@ -186,7 +186,7 @@ container:
   s3Engine: rustfs
 ```
 
-向导按“服务器地址、SSH 登录用户、私钥文件、访问端口”等说明提问，复用有效配置。SSH 参数仅写本机 `.env.local`；私钥只保存路径。仅打包不要求 SSH。
+直接部署时，向导按“服务器地址、SSH 登录用户、私钥文件、访问端口”等说明补齐缺少的配置，并复用已有完整配置。SSH 参数仅写本机 `.env.local`；私钥只保存路径。`--bundle-only` 不询问 SSH 连接信息，后续上传前在 `deploy-target.json` 中填写。
 
 #### 按应用真正需要的中间件处理
 
@@ -202,7 +202,7 @@ container:
 | `--artifact-dir` | 精确选择已构建制品 |
 | `--bundle-only` | 只生成 tar 和跨平台脚本，不连接服务器 |
 | `--runtime` | 本地构建及中间件镜像导出引擎 |
-| `--output` | 部署 tar 路径，自动补应用版本后缀 |
+| `--output` | 自定义部署 tar 路径，相对命令执行目录解析，自动补版本后缀 |
 | `--skip-middleware` | 跳过中间件配置与开通 |
 | `--yes` | 无交互使用有效配置；缺必要值明确报错 |
 
@@ -224,10 +224,10 @@ pnpm run deploy --env prod --build --services web
 #### 两机不通：生成包，手工复制
 
 ```sh
-pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only
 ```
 
-以应用版本 1.2.3 为例，得到 `release-prod-1.2.3.tar` 和同名 `-deploy/` 操作目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。Windows 运行操作目录的 deploy.ps1，Linux/macOS 运行 deploy.sh；脚本复用目标配置，通过 SSH 上传后执行同一服务器流程。Windows 可在 deploy-target.json 修改目标信息，或给 deploy.ps1 传入 -IdentityFile；Linux/macOS 可用 sh deploy.sh 主机 [端口] [用户] 覆盖连接地址，用 HAI_DEPLOY_IDENTITY_FILE 指定私钥、HAI_DEPLOY_KNOWN_HOSTS_FILE 指定服务器指纹文件。换电脑或操作系统后，这两个文件路径都要指向当前电脑上的实际文件；Windows 在 deploy-target.json 中修改。
+默认将部署缓存、tar 和同名 `-deploy/` 操作目录放到工程根 `.hai/deploy/<环境>/`，与 `.hai/build/` 使用同一工程根。归档名包含项目名、部署 ID 和应用版本，例如 `bundle-demo-<部署ID>-1.2.3.tar`。显式传入 `--output release-prod.tar` 时，按命令执行目录输出 `release-prod-1.2.3.tar` 和相邻操作目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
 
 完全隔离的 Linux 服务器上，将 tar 解到独立目录，运行 `sh apply.sh`，也可传入部署根目录覆盖默认值。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
 

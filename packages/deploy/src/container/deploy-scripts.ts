@@ -1,5 +1,5 @@
 /** 在线发布与手工交付共用的服务器执行脚本。远程仅依赖标准 Linux 工具及 Compose。 */
-import type { DockerSshProviderConfig } from '../deploy-config.js'
+import { createTargetReader } from './deploy-target.js'
 
 /** 将可信配置编码为一个 shell 参数。 */
 export function shellArgument(value: string): string {
@@ -241,69 +241,119 @@ printf '[PASS] %s\n' "$id"
 `.replace(/@@([A-Z]+)@@/g, (_match, name: string) => values[name]!)
 }
 
-/** 生成无 Node/pnpm 依赖的上传脚本；换电脑时可覆盖 SSH 私钥路径。 */
-export function createUploadScripts(config: DockerSshProviderConfig, bundle: string, projectName: string): { sh: string, ps1: string } {
-  const ssh = config.ssh
-  const host = ssh?.host ?? 'SERVER_HOST'
-  const user = ssh?.username ?? 'deploy'
-  const remote = `${config.remote.baseDir}/${projectName}`
-  const port = ssh?.port ?? 22
+/**
+ * 生成无 Node/pnpm 依赖的上传脚本；换电脑时可覆盖 SSH 私钥路径。
+ * Windows PowerShell 5 会丢弃原生参数内部引号，须直接按 Win32 规则构造命令行。
+ */
+export function createUploadScripts(): { sh: string, ps1: string, reader: string } {
   const sh = String.raw`#!/bin/sh
 set -eu
-cd "$(dirname "$0")"
-host=@@HOST@@
-user=@@USER@@
-port=@@PORT@@
-remote=@@REMOTE@@
-bundle=@@BUNDLE@@
+source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$source_dir/.."
+command -v awk >/dev/null || { printf 'Install POSIX awk to read deploy-target.json.\n' >&2; exit 1; }
+read_target() {
+  LC_ALL=C awk -v field="$1" -v expected="$2" -v fallback="$3" -f "$source_dir/read-target.awk" "$source_dir/deploy-target.json"
+}
+host=$(read_target host string SERVER_HOST)
+user=$(read_target username string deploy)
+port=$(read_target port number 22)
+remote=$(read_target directory string '')
+bundle=$(read_target bundle string '')
+identity=$(read_target identityFile string '')
+known_hosts=$(read_target knownHostsFile string '')
+strict=$(read_target strictHostKeyChecking boolean true)
+timeout=$(read_target connectTimeoutSeconds number 10)
 if [ "$#" -ge 1 ]; then host=$1; fi
 if [ "$#" -ge 2 ]; then port=$2; fi
 if [ "$#" -ge 3 ]; then user=$3; fi
-identity=$(printenv HAI_DEPLOY_IDENTITY_FILE || true)
-if [ -z "$identity" ]; then identity=@@IDENTITY@@; fi
+if value=$(printenv HAI_DEPLOY_IDENTITY_FILE) && [ -n "$value" ]; then identity=$value; fi
+if value=$(printenv HAI_DEPLOY_KNOWN_HOSTS_FILE) && [ -n "$value" ]; then known_hosts=$value; fi
+invalid_target() { printf 'Invalid deployment target. Edit deploy-target.json before running this script.\n' >&2; exit 1; }
 test "$host" != SERVER_HOST || { printf 'Specify the server: sh deploy.sh SERVER [PORT] [USER].\n' >&2; exit 1; }
+case "$host" in ''|*[!a-zA-Z0-9.:-]*|[!a-zA-Z0-9]*) invalid_target;; esac
+case "$user" in ''|*[!a-zA-Z0-9_-]*|[!a-zA-Z_]*) invalid_target;; esac
+case "$port" in ''|*[!0-9]*|???????????*) invalid_target;; esac
+test "$port" -ge 1 && test "$port" -le 65535 || invalid_target
+case "$timeout" in ''|*[!0-9]*|???????????*) invalid_target;; esac
+test "$timeout" -ge 1 && test "$timeout" -le 2147483647 || invalid_target
+case "$remote" in /*) ;; *) invalid_target;; esac
+case "$remote" in *[!a-zA-Z0-9/_.\ -]*|*/../*|*/..|/..) invalid_target;; esac
+case "$bundle" in *.tar) ;; *) invalid_target;; esac
+case "$bundle" in ''|*[!a-zA-Z0-9_.+-]*) invalid_target;; esac
+case "$strict" in true) strict=accept-new;; false) strict=no;; *) invalid_target;; esac
+test -f "./$bundle" || { printf 'Bundle missing: %s\n' "$bundle" >&2; exit 1; }
 for tool in ssh scp; do command -v "$tool" >/dev/null || { printf 'Install OpenSSH (%s).\n' "$tool" >&2; exit 1; }; done
-set -- -o BatchMode=yes -o StrictHostKeyChecking=@@STRICT@@ -o ConnectTimeout=10
-if [ -n "$identity" ]; then set -- "$@" -i "$identity"; fi
-known_hosts=@@KNOWN@@
-if value=$(printenv HAI_DEPLOY_KNOWN_HOSTS_FILE); then known_hosts=$value; fi
-if [ -n "$known_hosts" ]; then set -- "$@" -o "UserKnownHostsFile=$known_hosts"; fi
+set -- -o BatchMode=yes -o "StrictHostKeyChecking=$strict" -o "ConnectTimeout=$timeout"
+if [ -n "$identity" ]; then set -- "$@" -i "$identity" -o IdentitiesOnly=yes; fi
+if [ -n "$known_hosts" ]; then
+  known_hosts=$(printf '%s' "$known_hosts" | sed 's/[\\"]/\\&/g')
+  set -- "$@" -o "UserKnownHostsFile=\"$known_hosts\""
+fi
 printf '[1/3] Connecting to %s\n' "$host"
 ssh "$@" -p "$port" "$user@$host" "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"
 printf '[2/3] Uploading %s\n' "$bundle"
 scp_host=$host
 case "$host" in *:*) scp_host="[$host]";; esac
-scp "$@" -P "$port" "$bundle" "$user@$scp_host:$remote/incoming/$bundle"
+scp "$@" -P "$port" "./$bundle" "$user@$scp_host:$remote/incoming/$bundle"
 printf '[3/3] Applying package and checking HTTP access\n'
 ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"
 `
   const ps1 = String.raw`param([string]$IdentityFile = $env:HAI_DEPLOY_IDENTITY_FILE)
 $ErrorActionPreference = 'Stop'
-Set-Location -LiteralPath $PSScriptRoot
-$target = Get-Content -LiteralPath './deploy-target.json' -Raw | ConvertFrom-Json
+Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
+$target = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'deploy-target.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($target.host -eq 'SERVER_HOST') { throw 'Set the server host in deploy-target.json.' }
-if ($target.host -notmatch '^[a-zA-Z0-9][a-zA-Z0-9.:-]*$' -or $target.username -notmatch '^[a-zA-Z_][a-zA-Z0-9_-]*$' -or $target.directory -notmatch '^/[a-zA-Z0-9/_. -]+$' -or $target.directory -match '(^|/)\.\.(/|$)' -or $target.bundle -notmatch '^[a-zA-Z0-9_.+-]+\.tar$') { throw 'Invalid deployment target.' }
-$options = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10')
-if ($target.strictHostKeyChecking -eq $false) { $options[3] = 'StrictHostKeyChecking=no' }
+if ($target.host -isnot [string] -or $target.host -notmatch '^[a-zA-Z0-9][a-zA-Z0-9.:-]*$' -or $target.username -isnot [string] -or $target.username -notmatch '^[a-zA-Z_][a-zA-Z0-9_-]*$' -or $target.directory -isnot [string] -or $target.directory -notmatch '^/[a-zA-Z0-9/_. -]*$' -or $target.directory -match '(^|/)\.\.(/|$)' -or $target.bundle -isnot [string] -or $target.bundle -notmatch '^[a-zA-Z0-9_.+-]+\.tar$') { throw 'Invalid deployment target.' }
+$port = if ($null -eq $target.port) { 22 } else { $target.port }
+$timeout = if ($null -eq $target.connectTimeoutSeconds) { 10 } else { $target.connectTimeoutSeconds }
+if ($port -is [string] -or [string]$port -notmatch '^[0-9]+$' -or $port -lt 1 -or $port -gt 65535 -or $timeout -is [string] -or [string]$timeout -notmatch '^[0-9]+$' -or $timeout -lt 1 -or $timeout -gt 2147483647) { throw 'Invalid deployment port or timeout.' }
+if ($null -ne $target.strictHostKeyChecking -and $target.strictHostKeyChecking -isnot [bool]) { throw 'Invalid host key policy.' }
+if (($null -ne $target.identityFile -and $target.identityFile -isnot [string]) -or ($null -ne $target.knownHostsFile -and $target.knownHostsFile -isnot [string])) { throw 'Invalid SSH file path.' }
+$strict = if ($target.strictHostKeyChecking -eq $false) { 'no' } else { 'accept-new' }
+$options = @('-o', 'BatchMode=yes', '-o', "StrictHostKeyChecking=$strict", '-o', "ConnectTimeout=$timeout")
 if (-not $IdentityFile) { $IdentityFile = $target.identityFile }
-if ($IdentityFile) { $options += @('-i', $IdentityFile) }
-if ($target.knownHostsFile) { $options += @('-o', "UserKnownHostsFile=$($target.knownHostsFile)") }
+if ($IdentityFile) { $options += @('-i', $IdentityFile, '-o', 'IdentitiesOnly=yes') }
+$knownHosts = if ($env:HAI_DEPLOY_KNOWN_HOSTS_FILE) { $env:HAI_DEPLOY_KNOWN_HOSTS_FILE } else { $target.knownHostsFile }
+if ($knownHosts) {
+  $knownHosts = $knownHosts.Replace('\', '\\').Replace('"', '\"')
+  $options += @('-o', ('UserKnownHostsFile="' + $knownHosts + '"'))
+}
 $destination = "$($target.username)@$($target.host)"
 $scpDestination = if ($target.host.Contains(':')) { "$($target.username)@[$($target.host)]" } else { $destination }
 $remote = $target.directory
 $bundle = $target.bundle
+if (-not (Test-Path -LiteralPath "./$bundle" -PathType Leaf)) { throw "Bundle missing: $bundle" }
+function ConvertTo-NativeArgument([string]$Value) {
+  if ($Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
+  $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+  $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+  return '"' + $escaped + '"'
+}
 function Invoke-Step([string]$Name, [string]$Command, [string[]]$Arguments) {
   Write-Host "[$Name]"
-  & $Command @Arguments
-  if ($LASTEXITCODE -ne 0) { throw "$Name failed (exit $LASTEXITCODE)." }
+  $nativeCommand = Get-Command $Command -ErrorAction Stop
+  if ($PSVersionTable.PSVersion.Major -lt 6 -and $nativeCommand.CommandType -eq 'Application') {
+    $start = New-Object System.Diagnostics.ProcessStartInfo
+    $start.FileName = $nativeCommand.Source
+    $start.WorkingDirectory = (Get-Location).ProviderPath
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.Arguments = ($Arguments | ForEach-Object { ConvertTo-NativeArgument $_ }) -join ' '
+    $child = [System.Diagnostics.Process]::Start($start)
+    try { $child.WaitForExit(); $code = $child.ExitCode } finally { $child.Dispose() }
+  } else {
+    & $Command @Arguments
+    $code = $LASTEXITCODE
+  }
+  $global:LASTEXITCODE = $code
+  if ($code -ne 0) { throw "$Name failed (exit $code)." }
 }
 try {
   foreach ($tool in @('ssh', 'scp')) { Get-Command $tool -ErrorAction Stop | Out-Null }
-  Invoke-Step '1/3 Connect' 'ssh' ($options + @('-p', [string]$target.port, $destination, "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"))
-  Invoke-Step '2/3 Upload' 'scp' ($options + @('-P', [string]$target.port, $bundle, "$($scpDestination):$remote/incoming/$bundle"))
-  Invoke-Step '3/3 Apply and verify HTTP' 'ssh' ($options + @('-p', [string]$target.port, $destination, "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"))
+  Invoke-Step '1/3 Connect' 'ssh' ($options + @('-p', [string]$port, $destination, "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"))
+  Invoke-Step '2/3 Upload' 'scp' ($options + @('-P', [string]$port, "./$bundle", "$($scpDestination):$remote/incoming/$bundle"))
+  Invoke-Step '3/3 Apply and verify HTTP' 'ssh' ($options + @('-p', [string]$port, $destination, "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"))
 } catch { Write-Error $_; exit 1 }
 `
-  const values: Record<string, string> = { HOST: shellArgument(host), USER: shellArgument(user), PORT: String(port), REMOTE: shellArgument(remote), BUNDLE: shellArgument(bundle), IDENTITY: shellArgument(ssh?.identityFile ?? ''), KNOWN: shellArgument(ssh?.knownHostsFile ?? ''), STRICT: ssh?.strictHostKeyChecking === false ? 'no' : 'accept-new' }
-  return { sh: sh.replace(/@@([A-Z]+)@@/g, (_match, name: string) => values[name]!), ps1 }
+  return { sh, ps1, reader: createTargetReader() }
 }

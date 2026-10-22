@@ -6,6 +6,30 @@ import { stringify } from 'yaml'
 import { deploy } from '../src/deploy-main.js'
 
 describe('deploy.scan', () => {
+  it.each(['console', 'api'])('keeps email and SMS %s providers distinct without dropping repeated email backends', async (type) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-reach-channels-'))
+    try {
+      fs.mkdirSync(path.join(root, 'config'))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/reach': { version: '1' } } } }, packages: { '@h-ai/reach@1': {} }, snapshots: { '@h-ai/reach@1': {} } }))
+      fs.writeFileSync(path.join(root, 'config/_reach.yml'), stringify({ providers: [
+        { name: 'email', type: 'console' },
+        { name: 'sms', type, ...(type === 'api' ? { url: 'https://sms.example.test/send' } : {}) },
+        { name: 'marketing', type: 'smtp', host: 'smtp.example.test', from: 'sender@example.test' },
+      ] }))
+      const result = await deploy.scan(root)
+      expect(result.success).toBe(true)
+      if (!result.success)
+        return
+      expect(result.data.requiredServices).toEqual(['email', 'sms'])
+      expect(result.data.middlewares).toMatchObject([
+        { service: 'email', backend: 'console', envPrefix: 'HAI_REACH_PROVIDERS_0', config: { name: 'email' } },
+        { service: 'sms', backend: type, envPrefix: 'HAI_REACH_PROVIDERS_1', config: { name: 'sms' } },
+        { service: 'email', backend: 'smtp', envPrefix: 'HAI_REACH_PROVIDERS_2', config: { name: 'marketing' } },
+      ])
+    }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
+  })
+
   it('follows every Hai component runtime edge, including indirect AI/payment/scheduler dependencies', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-components-'))
     try {

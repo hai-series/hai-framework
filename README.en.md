@@ -143,7 +143,7 @@ pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # Without connectivity between machines, transfer and start the bundle manually
-pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only
 ```
 
 Deployment tools are development dependencies by default; use `--no-deploy` when creating a project to omit them. Each image uses a separate Dockerfile under `images/`, selected by `hai.build.json`. Complete offline bundles include self-hosted middleware and Windows/Linux/macOS upload scripts; isolated servers run the bundled apply.sh. Partial updates preserve unselected services and volumes using the server success baseline, without project-wide down. Rebuilds of the same version use distinct build IDs and checksums. See the [usage guide](docs/usage/README.en.md) for caching, manual deployment and recovery.

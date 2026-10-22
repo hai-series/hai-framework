@@ -68,14 +68,22 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     if (existing.type && existing.type !== 'docker-ssh')
       throw new Error(cliM('cli_deploy_bundle_provider'))
     config.provider = { type: 'docker-ssh', remote: { runtime: 'auto' }, expose: { hostPort: 3000 }, ...existing }
+    const candidate = module.ProviderConfigSchema.safeParse(config.provider)
+    // 仅打包不依赖 SSH；未填写完整的连接由交付目录中的目标文件补齐。
+    if (!candidate.success && candidate.error.issues.some(issue => issue.path[0] === 'ssh')) {
+      const provider = configObject(config.provider)
+      delete provider.ssh
+    }
   }
   const current = module.ProviderConfigSchema.safeParse(config.provider)
   if (current.success && (bundleOnly || current.data.type !== 'docker-ssh' || current.data.ssh)) {
     config.provider = current.data
-    writeCliMessage(cliM('cli_deploy_target_reused', { params: { target: current.data.type === 'docker-ssh' ? current.data.ssh ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}` : cliM('cli_deploy_bundle_local') : 'Vercel' } }))
+    writeCliMessage(bundleOnly
+      ? cliM('cli_deploy_bundle_target')
+      : cliM('cli_deploy_target_reused', { params: { target: current.data.type === 'docker-ssh' && current.data.ssh ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}` : 'Vercel' } }))
     return
   }
-  if (nonInteractive)
+  if (nonInteractive || bundleOnly)
     throw new Error(cliM('cli_deploy_target_missing', { params: { fields: current.success ? 'provider.ssh' : current.error.issues.map(issue => `provider.${issue.path.join('.')}`).join(', ') } }))
 
   const original = configObject(config.provider)

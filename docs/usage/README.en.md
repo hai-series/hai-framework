@@ -170,7 +170,7 @@ container:
   s3Engine: rustfs
 ```
 
-The wizard asks for server address, SSH user, optional key/fingerprint files and public port using readable labels. Reuse valid settings; local connection settings go to .env.local, private keys are referenced by path. Bundle-only does not require SSH.
+For direct deployment, the wizard asks for missing server, SSH user, optional key/fingerprint files and public port settings using readable labels, and reuses complete settings. Local connection settings go to .env.local; private keys are referenced by path. `--bundle-only` skips SSH connection questions; fill in `deploy-target.json` before uploading later.
 
 #### Configure only the middleware the application needs
 
@@ -178,7 +178,7 @@ Runtime lockfile dependencies and configuration determine middleware. Choose def
 
 #### Deployment options
 
---env/--env-dir select configuration. --build builds selected application images before packaging. --services selects Compose services; --artifact-dir selects existing artifacts. --bundle-only creates a tar and platform scripts without SSH. --runtime selects the local build/export engine; --output selects the version-suffixed archive name. --yes uses valid settings without interaction and reports missing required values.
+--env/--env-dir select configuration. --build builds selected application images before packaging. --services selects Compose services; --artifact-dir selects existing artifacts. --bundle-only creates a tar and platform scripts without SSH. --runtime selects the local build/export engine; --output overrides the archive path, resolved from the command's working directory, and adds the application version suffix. --yes uses valid settings without interaction and reports missing required values.
 
 #### When the machines can connect: automatic deployment
 
@@ -198,10 +198,10 @@ Here `-d` starts in the background; `--no-deps` leaves dependencies untouched; `
 #### When the machines cannot connect: copy a bundle
 
 ```sh
-pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only
 ```
 
-Application 1.2.3 produces release-prod-1.2.3.tar and an adjacent -deploy/ directory. The tar includes selected application/middleware images, configurations, private environment files, checksums, README and apply.sh. Run deploy.ps1 on Windows or deploy.sh on Linux/macOS to upload using saved SSH settings and execute the same server workflow. After moving to another computer or operating system, update both the private key and known-hosts paths to files on that computer. On Windows, edit deploy-target.json; on Linux/macOS, set HAI_DEPLOY_IDENTITY_FILE and HAI_DEPLOY_KNOWN_HOSTS_FILE.
+Deployment caches, archives and adjacent -deploy/ directories default to `.hai/deploy/<environment>/` at the same project root as `.hai/build/`. Archive names include the project, deployment ID and application version, such as `bundle-demo-<deploymentId>-1.2.3.tar`. An explicit `--output release-prod.tar` instead produces `release-prod-1.2.3.tar` and its adjacent operation directory relative to the command's working directory. The tar includes selected application/middleware images, configurations, private environment files, checksums, README and apply.sh. Before running either upload script, open `deploy-target.json` in the operation directory and use its per-field descriptions to edit and check the server, SSH user and port, private key and known-hosts files, remote directory and other settings. Run deploy.ps1 on Windows or deploy.sh on Linux/macOS; both scripts read this JSON to upload over SSH and execute the same server workflow. Running deploy.sh locally requires sh, awk, ssh and scp. Use `sh deploy.sh HOST [PORT] [USER]` to override the connection address, or pass `-IdentityFile` to deploy.ps1 to override its private key. Both scripts support HAI_DEPLOY_IDENTITY_FILE and HAI_DEPLOY_KNOWN_HOSTS_FILE to override key and known-hosts paths. After moving to another computer or operating system, update these paths to files on that computer.
 
 On isolated Linux servers, extract into a separate package directory and run `sh apply.sh`, optionally passing the deployment root. Every failed step exits nonzero. Image loading, service startup and HTTP checks are distinct steps. result-<deploymentId>.json records the result; current changes only after successful checks. Reapplying the same deployment ID stops clearly; a newly generated bundle for the same application version is allowed. Failed updates attempt to restore selected containers and configuration while preserving data volumes and diagnostics. Data already written by the application is not rolled back.
 

@@ -143,7 +143,7 @@ pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # 接続できない場合はパッケージを手で移動し、同梱 README に従って起動
-pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only
 ```
 
 デプロイツールは既定で開発依存に含まれ、作成時に `--no-deploy` で省略できます。各イメージは `images/` の独立した Dockerfile を使い、hai.build.json で指定します。完全オフラインパッケージには自前ミドルウェアと Windows/Linux/macOS のアップロードスクリプトが含まれます。隔離サーバーでは apply.sh を実行します。部分更新はサーバーの成功状態を基準に他のサービスとボリュームを保ち、全体の down を実行しません。同じ版でも構築 ID とチェックサムで内容を区別します。[使用ガイド](docs/usage/README.ja.md)を参照してください。
