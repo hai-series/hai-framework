@@ -577,6 +577,8 @@ Both providers share `ai.memory.*` (`extract` / `recall` / `injectMemories` / `a
 
 Mem0 3.3.1 still calls `QdrantClient.search`. The catalog and AI optional peer pin the tested `@qdrant/js-client-rest` version `1.18.0`; startup checks this public method and rejects incompatible installations. Do not override it with 1.19, which removed that method.
 
+The adapter injects a dedicated client through the SDK's public `client` configuration. Mem0 Qdrant upserts and deletes use `wait: true`, awaiting server application before readback or the next deletion batch.
+
 Mem0 with pgvector is rejected in every environment: the SDK privately owns a PostgreSQL connection without a public close API, so the framework cannot manage its lifecycle. Use `memory.provider: native` for pgvector; native support is retained. `disableHistory: true` selects a resource-free history implementation and creates no history SQLite file. The factory awaits backend readiness through one bounded public read before reporting success.
 
 SDK add receipts omit full business fields, so `add` / `extract` read the stored record before returning. Extraction waits for all pending writes. A write or readback failure sets `error.ext.requiresEffectReconciliation=true` and retains known IDs in `memoryIds` (possibly empty if receipts were lost). Reconcile subject records before recovery; blindly repeating add/extract can duplicate committed writes. The framework does not replay automatically.

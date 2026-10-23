@@ -577,6 +577,8 @@ memory:
 
 Mem0 3.3.1 は `QdrantClient.search` を呼び出すため、カタログと AI の optional peer は検証済みの `@qdrant/js-client-rest` `1.18.0` に固定します。起動時に公開メソッドを確認し、不整合は設定エラーにします。このメソッドを削除した 1.19 への上書きはできません。
 
+アダプターは SDK の公開 `client` 設定から専用クライアントを渡します。Mem0 の Qdrant 書き込みと削除は `wait: true` を指定し、サーバーでの適用完了後に書き込み後の読み取りや次の削除バッチへ進みます。
+
 Mem0 + pgvector は全環境で起動を拒否します。SDK が PostgreSQL 接続を私有オブジェクトに保持し、公開された close API がないためです。pgvector は `memory.provider: native` で利用でき、ネイティブの対応は維持します。`disableHistory: true` はリソースを持たない履歴実装を選び、履歴 SQLite ファイルを作成しません。ファクトリーは上限付きの公開読み取りでバックエンドの準備完了を待ってから成功を公開します。
 
 SDK の追加応答には完全な業務フィールドがないため、`add` / `extract` は書き込み後に保存済みレコードを読み取ります。extract は全ての進行中の書き込み完了を待ちます。書き込みまたは再読み取り失敗時、`error.ext.requiresEffectReconciliation=true` と既知の ID の `memoryIds` を返します（応答消失時は空の場合もあります）。主体の実データを照合してから復旧し、add/extract を無条件に繰り返さないでください。自動再実行は行いません。

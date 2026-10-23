@@ -564,20 +564,6 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
   const configResult = buildMem0Config(deps)
   if (!configResult.success)
     throw configResult.error
-  if (configResult.data.vectorProvider === 'qdrant') {
-    // 可选 peer 约束受测版本，启动仍校验公开能力，拒绝非严格安装器留下的不兼容依赖。
-    let compatible = false
-    try {
-      const { QdrantClient } = await import('@qdrant/js-client-rest')
-      compatible = 'search' in QdrantClient.prototype && typeof QdrantClient.prototype.search === 'function'
-    }
-    catch {}
-    if (!compatible) {
-      const failure = err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendSdkIncompatible'))
-      if (!failure.success)
-        throw failure.error
-    }
-  }
 
   let mod: typeof import('mem0ai/oss')
   try {
@@ -586,6 +572,30 @@ export async function createMem0OssMemoryOperations(deps: Mem0OssDeps): Promise<
   catch (error) {
     logger.error('Failed to load mem0ai/oss', { error })
     throw new Error('mem0ai is required for memory.provider="mem0"; install it with `pnpm add mem0ai`')
+  }
+
+  if (configResult.data.vectorProvider === 'qdrant') {
+    // 可选 peer 约束受测版本，启动仍校验公开能力，拒绝非严格安装器留下的不兼容依赖。
+    const sdk = await import('@qdrant/js-client-rest').catch(() => undefined)
+    if (sdk && typeof sdk.QdrantClient?.prototype?.search === 'function') {
+      const url = deps.vectorBackend?.url ?? ''
+      const client = new sdk.QdrantClient({
+        url,
+        port: Number(new URL(url).port) || 6333,
+        apiKey: deps.vectorBackend?.apiKey,
+      })
+      // SDK 删除默认只等待接收回执；独享客户端统一等待应用，避免分批清理和写后读竞态。
+      const upsert = client.upsert.bind(client)
+      const remove = client.delete.bind(client)
+      client.upsert = (collection, options) => upsert(collection, { ...options, wait: true })
+      client.delete = (collection, options) => remove(collection, { ...options, wait: true })
+      configResult.data.config.vectorStore.config.client = client
+    }
+    else {
+      const failure = err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_memoryBackendSdkIncompatible'))
+      if (!failure.success)
+        throw failure.error
+    }
   }
 
   const memory = new mod.Memory(configResult.data.config)

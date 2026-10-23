@@ -5,6 +5,7 @@
  * 不加载真实 mem0 引擎。
  */
 
+import type { QdrantClient } from '@qdrant/js-client-rest'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 
 import { err, ok } from '@h-ai/core'
@@ -25,7 +26,24 @@ const memoryMock = vi.hoisted(() => ({
   reset: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }))
 const memoryCtorMock = vi.hoisted(() => vi.fn())
-const qdrantClientMock = vi.hoisted(() => ({ prototype: { search: undefined as (() => void) | undefined } }))
+const qdrantClientMock = vi.hoisted(() => {
+  class QdrantClient {
+    static readonly instances: QdrantClient[] = []
+    declare search?: () => void
+    readonly calls = {
+      upsert: vi.fn<(collection: string, options: Record<string, unknown>) => Promise<unknown>>().mockResolvedValue({ status: 'completed' }),
+      delete: vi.fn<(collection: string, options: Record<string, unknown>) => Promise<unknown>>().mockResolvedValue({ status: 'completed' }),
+    }
+
+    upsert = this.calls.upsert
+    delete = this.calls.delete
+
+    constructor(readonly config: unknown) {
+      QdrantClient.instances.push(this)
+    }
+  }
+  return QdrantClient
+})
 
 vi.mock('@qdrant/js-client-rest', () => ({ QdrantClient: qdrantClientMock }))
 
@@ -79,6 +97,7 @@ function createOps(vectorBackend?: { type: string, url?: string, apiKey?: string
 
 beforeEach(() => {
   vi.clearAllMocks()
+  qdrantClientMock.instances.length = 0
   qdrantClientMock.prototype.search = () => {}
   memoryMock.add.mockResolvedValue({ results: [] })
   memoryMock.search.mockResolvedValue({ results: [] })
@@ -212,11 +231,22 @@ describe('createMem0OssMemoryOperations', () => {
 
   it('qdrant 后端映射为 mem0 qdrant 向量库', async () => {
     await createOps({ type: 'qdrant', url: 'http://localhost:6333', apiKey: 'qk' })
-    const config = memoryCtorMock.mock.calls[0]?.[0] as { vectorStore: { provider: string, config: Record<string, unknown> } }
+    const config = memoryCtorMock.mock.calls[0]?.[0] as { vectorStore: { provider: string, config: Record<string, unknown> & { client: QdrantClient } } }
     expect(config.vectorStore.provider).toBe('qdrant')
     expect(config.vectorStore.config.url).toBe('http://localhost:6333')
     expect(config.vectorStore.config.apiKey).toBe('qk')
     expect(config.vectorStore.config.collectionName).toBe('hai_ai_memory')
+    const client = config.vectorStore.config.client
+    expect(qdrantClientMock.instances[0]?.config).toEqual({ url: 'http://localhost:6333', port: 6333, apiKey: 'qk' })
+    await client.upsert('hai_ai_memory', { points: [], wait: false })
+    await client.delete('hai_ai_memory', { points: ['m1'], wait: false })
+    expect(qdrantClientMock.instances[0]?.calls.upsert).toHaveBeenCalledWith('hai_ai_memory', { points: [], wait: true })
+    expect(qdrantClientMock.instances[0]?.calls.delete).toHaveBeenCalledWith('hai_ai_memory', { points: ['m1'], wait: true })
+
+    await createOps({ type: 'qdrant', url: 'https://other.example.invalid:7443' })
+    const replica = memoryCtorMock.mock.calls[1]?.[0] as typeof config
+    expect(replica.vectorStore.config.client).not.toBe(client)
+    expect(qdrantClientMock.instances[1]?.config).toEqual({ url: 'https://other.example.invalid:7443', port: 7443, apiKey: undefined })
   })
 
   it('配置了不支持的持久化后端（lancedb）默认 fail-fast（issue #6.1）', async () => {

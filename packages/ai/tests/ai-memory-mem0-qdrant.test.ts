@@ -1,12 +1,15 @@
 /** 使用真实 Mem0 SDK 和 Qdrant 验证生产存储、主体隔离与有界完整列表。 */
 import type { HaiResult } from '@h-ai/core'
+import type { Server } from 'node:http'
 import type { MemoryCoreOperations } from '../src/memory/ai-memory-types.js'
+import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { createServer } from 'node:http'
+import { createServer, request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { brotliDecompressSync, unzipSync } from 'node:zlib'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { acquireQdrantContainer } from '../../vecdb/tests/helpers/qdrant-container.js'
 import { AIConfigSchema, MemoryConfigSchema } from '../src/ai-config.js'
@@ -29,6 +32,47 @@ describe('real Mem0 Qdrant contract', { timeout: 60_000 }, () => {
   let historyCreationCount = () => 0
   let restoreHistoryFactory = () => {}
   const collection = `mem0_${randomUUID().replaceAll('-', '')}`
+  const writes: { operation: 'upsert' | 'delete', wait: string | null, status: number, response: unknown }[] = []
+  const proxyErrors: unknown[] = []
+  // 原样转发真实 Qdrant 请求和响应，只记录 SDK 写入回执，不替换服务端行为。
+  const proxy = createServer((incoming, outgoing) => {
+    const target = new URL(incoming.url ?? '/', lease!.url)
+    const operation = incoming.method === 'PUT' && target.pathname === `/collections/${collection}/points`
+      ? 'upsert'
+      : incoming.method === 'POST' && target.pathname === `/collections/${collection}/points/delete` ? 'delete' : undefined
+    const forwarded = httpRequest(target, { method: incoming.method, headers: { ...incoming.headers, host: target.host } }, (response) => {
+      outgoing.writeHead(response.statusCode ?? 502, response.headers)
+      if (operation) {
+        const chunks: Buffer[] = []
+        response.on('data', (chunk: Buffer) => chunks.push(chunk))
+        response.on('end', () => {
+          let value: unknown
+          try {
+            const body = Buffer.concat(chunks)
+            const encoding = response.headers['content-encoding']
+            const decoded = encoding === 'br' ? brotliDecompressSync(body) : encoding === 'gzip' || encoding === 'deflate' ? unzipSync(body) : body
+            value = JSON.parse(decoded.toString())
+          }
+          catch (error) {
+            proxyErrors.push(error)
+          }
+          writes.push({ operation, wait: target.searchParams.get('wait'), status: response.statusCode ?? 502, response: value })
+        })
+      }
+      response.on('error', (error) => {
+        proxyErrors.push(error)
+        outgoing.destroy(error)
+      })
+      response.pipe(outgoing)
+    })
+    forwarded.on('error', (error) => {
+      proxyErrors.push(error)
+      if (!outgoing.headersSent)
+        outgoing.writeHead(502)
+      outgoing.end()
+    })
+    incoming.pipe(forwarded)
+  })
   const server = createServer(async (request, response) => {
     let body = ''
     for await (const chunk of request)
@@ -66,9 +110,12 @@ describe('real Mem0 Qdrant contract', { timeout: 60_000 }, () => {
     lease = await acquireQdrantContainer()
     server.listen(0, '127.0.0.1')
     await once(server, 'listening')
+    proxy.listen(0, '127.0.0.1')
+    await once(proxy, 'listening')
     const address = server.address()
-    if (!address || typeof address === 'string')
-      throw new Error('Missing local embedding address')
+    const proxyAddress = proxy.address()
+    if (!address || typeof address === 'string' || !proxyAddress || typeof proxyAddress === 'string')
+      throw new Error('Missing local embedding or Qdrant proxy address')
     const aiConfig = AIConfigSchema.parse({ llm: { apiKey: 'test-only-local-key', model: 'embedding-test', baseUrl: `http://127.0.0.1:${address.port}/v1` } })
     createOperations = () => createMem0OssMemoryOperations({
       config: MemoryConfigSchema.parse({ provider: 'mem0', allowEphemeralFallback: true }),
@@ -76,7 +123,7 @@ describe('real Mem0 Qdrant contract', { timeout: 60_000 }, () => {
       llm: ai.llm,
       collectionName: collection,
       embeddingDims: 3,
-      vectorBackend: { type: 'qdrant', url: lease!.url },
+      vectorBackend: { type: 'qdrant', url: `http://127.0.0.1:${proxyAddress.port}` },
     })
     operations = await createOperations()
     // 真实 add 同时等待 SDK 异步建表；infer:false 不调用 LLM。
@@ -86,13 +133,26 @@ describe('real Mem0 Qdrant contract', { timeout: 60_000 }, () => {
   afterAll(async () => {
     restoreHistoryFactory()
     vi.unstubAllEnvs()
-    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
-    await lease?.release()
-    if (directory)
-      await rm(directory, { recursive: true, force: true })
+    const close = (endpoint: Server) => endpoint.listening
+      ? new Promise<void>((resolve, reject) => endpoint.close(error => error ? reject(error) : resolve()))
+      : Promise.resolve()
+    try {
+      await Promise.all([close(server), close(proxy)])
+    }
+    finally {
+      try {
+        await lease?.release()
+      }
+      finally {
+        if (directory)
+          await rm(directory, { recursive: true, force: true })
+      }
+    }
+    expect(proxyErrors).toEqual([])
   }, 60_000)
 
   it('real add/get/search/update/delete/deleteAll preserve isolation and stable identifiers across factories', async () => {
+    const writeOffset = writes.length
     const first = unwrap(await operations.add({ objectId: 'alice', type: 'fact', content: 'Alice speaks Chinese', scope: { topic: 'profile' }, metadata: { source: 'manual' } }))
     const second = unwrap(await operations.add({ objectId: 'bob', type: 'fact', content: 'Bob speaks French' }))
     const replica = await createOperations()
@@ -111,6 +171,14 @@ describe('real Mem0 Qdrant contract', { timeout: 60_000 }, () => {
     expect(unwrap(await operations.get(second.id, { objectId: 'bob' })).content).toBe('Bob speaks French')
     unwrap(await operations.remove(second.id, { objectId: 'bob' }))
     expect((await operations.get(second.id, { objectId: 'bob' })).success).toBe(false)
+    const observedWrites = writes.slice(writeOffset)
+    expect(observedWrites.some(write => write.operation === 'upsert' && write.status === 200)).toBe(true)
+    expect(observedWrites.some(write => write.operation === 'delete' && write.status === 200)).toBe(true)
+    for (const write of observedWrites) {
+      expect(write.wait).toBe('true')
+      if (write.status >= 200 && write.status < 300)
+        expect(write.response).toMatchObject({ result: { status: 'completed' } })
+    }
   })
 
   async function seed(subject: string, count: number, expired = false): Promise<void> {
@@ -142,6 +210,9 @@ describe('real Mem0 Qdrant contract', { timeout: 60_000 }, () => {
     const count = await qdrant(`/collections/${collection}/points/count`, 'POST', { exact: true, filter: { must: [{ key: 'user_id', match: { value: 'large' } }] } })
     expect(count).toMatchObject({ result: { count: 1001 } })
     unwrap(await operations.clear({ objectId: 'large' }))
+    // list 会过滤过期行，必须核对真实后端物理记录已全部删除。
+    const remaining = await qdrant(`/collections/${collection}/points/count`, 'POST', { exact: true, filter: { must: [{ key: 'user_id', match: { value: 'large' } }] } })
+    expect(remaining).toMatchObject({ result: { count: 0 } })
     expect(unwrap(await operations.list({ objectId: 'large' }))).toEqual([])
   })
 
