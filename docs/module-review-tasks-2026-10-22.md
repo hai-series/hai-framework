@@ -1014,6 +1014,7 @@
 
 - [ ] 已实施并通过定向验证；第三轮真实部署验收失败，待修正和复验（2026-10-23）。
 - **实施与验证**：Playwright 服务子进程显式装配完整 SQLite/memory/local/LanceDB 测试配置并删除继承的模块/公开环境，托管入口提供绝对独有数据目录；实际 Vite/desktop 委托入口在 E2E 下跳过开发 dotenv，普通开发/生产契约保留。API 测试直接运行 dist，可信 SM2 ring/registry 替代 transport=false 绕过；部署本地主机 fixture 显式 E2E profile、Redis/S3 与增量/回滚断言保留；调用方、README、双skill、LLMS同步。严格类型与配置内 lint零警告、skills37/330、helper8/8、desktop配置3/3；fresh CLI及21真实tarballs后原3API质量/浏览器门禁通过（2+3+3），三独立DB计数器正控1/额外0/closed及PID退出，owned工程清理。H5真实注册/OTP/重置、官网原route.fulfill投递UI、AI明确mock各1/1真实Chrome通过，端口/观察到的本轮PID/托管数据回收；原无匹配selector失败单列。证据 tmp/module-repair-20261022/E2E-01/handoff.json 与 tmp/validation/module-review/E2E-01/apps-targeted-handoff.json。旧计数器两次超时根因无法还原，当前受测范围通过并保留安全诊断；额外强制扫描原排除skill的既有lint与Python启动器意外更新记录单列；应用未消费部署配置的启动ERROR另列CORE-05修正，不以UI通过认定其无问题；全量回归按用户要求在全部任务实施后执行。
+- **本轮追加修正**：部署夹具将嵌套应用监听端口设为引擎分配的宿主端口，并在已登记容器内以真实 TCP 转发连接固定入口，避免部署器误查宿主固定端口。生产内外健康检查、全部 7 个原业务场景及端口隔离保留。实际最终函数经 Python 基础容器验证：无上游时两入口均失败，两个真实 HTTP 服务的宿主/远端响应一致，容器和临时目录已回收；函数/实际 helper 严格类型与两文件零警告 lint 通过。独立探针不替代完整部署验收，原任务待主目录全量门禁；无生产 API、配置或依赖变更。
 - **位置**：应用/CLI 模板 Playwright 启动、测试运行入口和 CLI 部署夹具环境。
 - **证据与影响**：首轮生成工程三个 API 场景启动失败；H5/corporate 连接生产 Compose `db` 地址失败，AI playground 缺少可用限流缓存，mobile 后端读取生产环境；部署 API 测试使用本地后端却按生产运行，触发共享状态守卫。根因和具体异常分别保留，不混称为同一网络错误。
 - **修正内容**：测试启动明确使用本轮临时 SQLite/memory/local 等后端及测试身份，隔离数据和 ambient 配置，保留可信传输 keyring 与注册表装配；生产环境和分布式守卫不放宽。同步文档、skill 和真实消费者。

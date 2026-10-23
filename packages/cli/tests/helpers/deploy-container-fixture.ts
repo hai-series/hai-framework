@@ -212,7 +212,7 @@ export function ensureDeployTestBaseImage(runtime: DeployFixtureRuntime, imageRe
  * }
  * ```
  */
-export async function executeDeployTestFixture(runtime: DeployFixtureRuntime, fixture: DeployTestFixture, args: string[], options: { timeoutMs?: number, signal?: AbortSignal, stage?: 'apt-update' | 'apt-install' | 'pip' | 'sshd' | 'nested-runtime' } = {}): Promise<string> {
+export async function executeDeployTestFixture(runtime: DeployFixtureRuntime, fixture: DeployTestFixture, args: string[], options: { timeoutMs?: number, signal?: AbortSignal, stage?: 'apt-update' | 'apt-install' | 'pip' | 'sshd' | 'nested-runtime' | 'http-port-forwarder' } = {}): Promise<string> {
   return await new Promise((resolve, reject) => {
     let outcome: { error: Error | null, stdout: string, stderr: string } | undefined
     const child = execFile(runtime, ['exec', fixture.containerId, ...args], {

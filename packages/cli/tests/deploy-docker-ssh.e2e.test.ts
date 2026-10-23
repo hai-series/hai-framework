@@ -58,10 +58,10 @@ const SQLITE_MIRROR = process.env.HAI_DEPLOY_E2E_SQLITE_MIRROR
 const CONTAINER_PROXY = process.env.HAI_DEPLOY_E2E_CONTAINER_PROXY
 const CONTAINER_NETWORK = process.env.HAI_DEPLOY_E2E_CONTAINER_NETWORK
 
-// 外层资源按本轮身份隔离；内部端口固定，宿主端口由引擎原子分配。
+// 外层入口固定；实际远端应用使用引擎分配的宿主端口，TCP 转发保持两侧地址一致。
 const RUN_ID = randomBytes(16).toString('hex')
-const HOST_PORT = DEPLOY_FIXTURE_WEB_PORT
-const API_PORT = DEPLOY_FIXTURE_API_PORT
+let remoteWebPort: number
+let remoteApiPort: number
 const APPLICATION_VERSION = '2.4.6'
 // 生成应用 Dockerfile 依赖的基础镜像（受限网络下按镜像预拉取）
 const BASE_IMAGES = ['python:3.11.17-slim-trixie', 'node:24.22.1-bookworm-slim', 'nginxinc/nginx-unprivileged:1.29.8-alpine']
@@ -84,6 +84,78 @@ function fixture(): DeployTestFixture {
   if (!fixtureContext)
     throw new Error('Deployment fixture is not initialized')
   return fixtureContext
+}
+
+/**
+ * 将外层固定入口转发到本轮随机端口，保留部署器从客户端和远端进行的真实 HTTP 检查。
+ * 转发器只搬运 TCP 字节，不生成响应；后台进程属于已登记容器的私有 PID namespace。
+ * @param signal - 与夹具准备共用的取消信号。
+ * @returns 两个入口实际监听后返回；准备失败由容器拥有权清理统一回收。
+ * @example 模块内部上下文
+ * ```ts
+ * await startRemotePortForwarders(signal)
+ * // provider.expose.hostPort 与 fixture().webHostPort 保持一致。
+ * ```
+ */
+async function startRemotePortForwarders(signal: AbortSignal): Promise<void> {
+  const forwarder = String.raw`
+import asyncio, json, sys
+
+async def copy(reader, writer):
+    try:
+        while data := await reader.read(65536):
+            writer.write(data)
+            await writer.drain()
+    except (OSError, ConnectionError):
+        pass
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except (OSError, ConnectionError):
+            pass
+
+async def forward(reader, writer, target):
+    try:
+        upstream, output = await asyncio.open_connection('127.0.0.1', target)
+        await asyncio.gather(copy(reader, output), copy(upstream, writer))
+    except (OSError, ConnectionError):
+        writer.close()
+
+async def main():
+    servers = []
+    for source, target in json.loads(sys.argv[1]):
+        servers.append(await asyncio.start_server(
+            lambda reader, writer, target=target: forward(reader, writer, target),
+            '0.0.0.0', source))
+    await asyncio.gather(*(server.serve_forever() for server in servers))
+
+asyncio.run(main())
+`
+  const launcher = String.raw`
+import json, socket, subprocess, sys, time
+pairs = json.loads(sys.argv[2])
+entries = {source for source, target in pairs}
+if any(target in entries for source, target in pairs):
+    raise RuntimeError('Engine-assigned ports overlap fixture entry ports')
+process = subprocess.Popen([sys.executable, '-u', '-c', sys.argv[1], sys.argv[2]],
+    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    start_new_session=True)
+deadline = time.monotonic() + 5
+for source, target in pairs:
+    while True:
+        if process.poll() is not None:
+            raise RuntimeError('Fixture TCP forwarder exited before readiness')
+        try:
+            with socket.create_connection(('127.0.0.1', source), timeout=0.2):
+                break
+        except OSError:
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Fixture TCP forwarder did not start')
+            time.sleep(0.05)
+`
+  const ports = [[DEPLOY_FIXTURE_WEB_PORT, fixture().webHostPort], [DEPLOY_FIXTURE_API_PORT, fixture().apiHostPort]]
+  await executeDeployTestFixture(runtime!, fixture(), ['python', '-c', launcher, forwarder, JSON.stringify(ports)], { timeoutMs: 15_000, signal, stage: 'http-port-forwarder' })
 }
 const proxyKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'] as const
 const originalProxies = new Map<string, string | undefined>()
@@ -284,6 +356,10 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       },
     })
 
+    remoteWebPort = fixture().webHostPort
+    remoteApiPort = fixture().apiHostPort
+    await startRemotePortForwarders(signal)
+
     // 4. 等待 sshd 就绪
     await waitForSsh(deadline + 120_000)
     await executeDeployTestFixture(rt, fixture(), ['sh', '-c', 'mkdir -p /etc/containers/registries.conf.d && printf \'[[registry]]\\nprefix = "docker.io"\\nblocked = true\\n[[registry]]\\nprefix = "ghcr.io"\\nblocked = true\\n\' > /etc/containers/registries.conf.d/offline.conf'], { timeoutMs: 10_000, signal: AbortSignal.timeout(Math.max(1, deadline + 120_000 - Date.now())) })
@@ -405,7 +481,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       writeFileSync(path.join(serviceDir, 'config/_storage.yml'), 'type: s3\n')
       writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_E2E=1\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
       const deployConfig = {
-        provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { type: 'port', containerPort: 3000, hostPort: HOST_PORT } },
+        provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { type: 'port', containerPort: 3000, hostPort: remoteWebPort } },
         container: { s3Engine: 'rustfs' },
       }
       writeFileSync(path.join(appDir, '.env.local'), `${readFileSync(path.join(appDir, '.env.local'), 'utf8')}\nHAI_DEPLOY_PROVIDER='${JSON.stringify(deployConfig.provider)}'\n`)
@@ -468,7 +544,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
         const compose = parse(readFileSync(path.join(artifactDir, `docker-compose-${APPLICATION_VERSION}.yml`), 'utf8'))
         expect(compose['x-hai-version']).toBe(APPLICATION_VERSION)
         expect(compose.services.app.ports).toBeUndefined()
-        expect(compose.services.web.ports).toEqual([`${HOST_PORT}:8080`])
+        expect(compose.services.web.ports).toEqual([`${remoteWebPort}:8080`])
         expect(compose.services.web.env_file).toBeUndefined()
         expect(readFileSync(path.join(appDir, '.env.test'), 'utf8')).not.toContain(String(local.HAI_ADMIN_DEFAULT_PASSWORD))
       }
@@ -569,13 +645,13 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       writeFileSync(apiEnvironment, `${readFileSync(apiEnvironment, 'utf8')}\nHAI_SERV_CORS_ORIGIN=http://127.0.0.1:${fixture().webHostPort}\n`)
       const apiBuildId = readFileSync(path.join(apiProject, '.hai/build/docker/latest'), 'utf8').trim()
       await deploy.close()
-      expect(await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { hostPort: API_PORT } } })).toMatchObject({ success: true })
+      expect(await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { hostPort: remoteApiPort } } })).toMatchObject({ success: true })
       expect(await deploy.deployApp(apiService, { environment: 'test', artifactDir: path.join(apiProject, '.hai/build/docker', apiBuildId), runtime: runtime! })).toMatchObject({ success: true, data: { healthCheck: 'passed' } })
       const environment = path.join(project, '.env.test')
       writeFileSync(environment, `${readFileSync(environment, 'utf8')}\nPUBLIC_API_BASE=http://127.0.0.1:${fixture().apiHostPort}/api/v1\n`)
     }
     await deploy.close()
-    const initialized = await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { hostPort: HOST_PORT } } })
+    const initialized = await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { hostPort: remoteWebPort } } })
     expect(initialized.success).toBe(true)
     const service = appType === 'api' ? path.join(project, `apps/${name}-service`) : project
     const result = await deploy.deployApp(service, { environment: 'test', artifactDir, runtime: runtime! })
