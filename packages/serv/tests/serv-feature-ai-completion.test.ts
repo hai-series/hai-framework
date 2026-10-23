@@ -11,6 +11,84 @@ import { createAiProcedures } from '../src/features/serv-feature-ai.js'
 import { serv } from '../src/serv-main.js'
 
 describe('ai completion HTTP protocol', () => {
+  it.each([
+    { path: 'chats/completions', input: { messages: [{ role: 'user', content: 'hello' }] } },
+    { path: 'chats/messages', input: { message: 'hello' } },
+  ])('取消 HTTP 请求会终止默认 AI $path 的真实上游请求', async ({ path, input }) => {
+    const entered = Promise.withResolvers<void>()
+    const disconnected = Promise.withResolvers<void>()
+    const finish = Promise.withResolvers<void>()
+    let completedEffects = 0
+    const provider = createServer((request, response) => {
+      response.once('close', () => disconnected.resolve())
+      void (async () => {
+        for await (const _chunk of request) { /* 完整接收请求后再模拟耗时生成。 */ }
+        entered.resolve()
+        await finish.promise
+        if (!response.destroyed) {
+          completedEffects++
+          response.end('{}')
+        }
+      })()
+    })
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    const controller = new AbortController()
+    try {
+      provider.listen(0, '127.0.0.1')
+      await once(provider, 'listening')
+      const address = provider.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Provider did not start')
+      expect((await ai.init({ llm: {
+        apiKey: 'controlled-provider-key',
+        model: 'controlled-model',
+        baseUrl: `http://127.0.0.1:${address.port}/v1`,
+      } })).success).toBe(true)
+      const app = serv.createApp({
+        contract: apiContract.ai,
+        procedures: createAiProcedures({ ai }),
+        createContext: ({ request }): ServContext => ({
+          requestId: 'ai-cancellation',
+          locale: 'en-US',
+          request,
+          logger: core.logger.child({ module: 'serv-test' }),
+          session: { userId: 'trusted-user', roles: [], permissions: [] },
+        }),
+      })
+      const pending = serv.toFetch(app)(`http://in-process.test/api/v1/ai/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+        signal: controller.signal,
+      })
+      await entered.promise
+      const reason = new DOMException('Caller cancelled AI generation', 'AbortError')
+      controller.abort(reason)
+      await expect(pending).rejects.toBe(reason)
+      await Promise.race([
+        disconnected.promise,
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => reject(new Error('Default AI procedure did not cancel the provider request')), 1000)
+        }),
+      ])
+      finish.resolve()
+      expect(completedEffects).toBe(0)
+      const history = await ai.llm.getHistory({ objectId: 'trusted-user', sessionId: 'default' })
+      expect(history.success).toBe(true)
+      if (history.success)
+        expect(history.data).toEqual([])
+    }
+    finally {
+      if (timeout)
+        clearTimeout(timeout)
+      controller.abort()
+      finish.resolve()
+      provider.closeAllConnections()
+      await new Promise<void>((resolve, reject) => provider.close(error => error ? reject(error) : resolve()))
+      await ai.close()
+    }
+  })
+
   it('typed client 将完整工具、选择和各角色消息送达真实 Provider，工具调用与结果均可返回', async () => {
     const received: Array<Record<string, unknown>> = []
     const toolCall = { id: 'call_lookup', type: 'function' as const, function: { name: 'lookup', arguments: '{"ids":[1,2]}' } }

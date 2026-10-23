@@ -120,6 +120,7 @@ export function createAiProcedures(deps: AiProcedureDeps) {
         ...toChatCompletionRequest(input),
         objectId: objectId.data,
         sessionId: input.sessionId ?? 'default',
+        signal: context.request.signal,
       }))
     })
 
@@ -129,7 +130,7 @@ export function createAiProcedures(deps: AiProcedureDeps) {
       const objectId = await resolveObjectId('message', context, input)
       if (!objectId.success)
         return objectId
-      return sendMessage(deps, input, { objectId: objectId.data, sessionId: input.sessionId ?? 'default' })
+      return sendMessage(deps, input, { objectId: objectId.data, sessionId: input.sessionId ?? 'default', signal: context.request.signal })
     })
 
     .route('chats.listHistory')
@@ -324,7 +325,7 @@ function mapFunctionToolCalls(toolCalls: ToolCall[] | undefined) {
 async function sendMessage(
   deps: AiProcedureDeps,
   input: AiSendMessageInput,
-  scope: InteractionScope,
+  scope: InteractionScope & { signal: AbortSignal },
 ): Promise<HaiResult<{ content: string, model: string }>> {
   const result = await deps.ai.llm.ask(input.message, {
     systemPrompt: input.systemPrompt,
