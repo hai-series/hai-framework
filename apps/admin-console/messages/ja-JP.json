@@ -501,5 +501,21 @@
   "gallery_form_reset": "リセット",
   "gallery_form_saved": "フォームを送信しました",
   "gallery_form_admin": "管理者",
-  "gallery_form_user": "ユーザー"
+  "gallery_form_user": "ユーザー",
+  "gallery_interaction_title": "一覧の状態とキーボード操作",
+  "gallery_interaction_description": "共通コンポーネントで読み込み、空の結果、エラーからの復旧、長文とキーボード操作を確認します。方向キーでタブを切り替え、Escapeで絞り込みを閉じ、Tabで次へ進みます。",
+  "gallery_interaction_unavailable": "利用不可",
+  "gallery_interaction_ready": "通常",
+  "gallery_interaction_loading": "読み込み",
+  "gallery_interaction_empty": "空の結果",
+  "gallery_interaction_error": "エラー",
+  "gallery_interaction_search": "レコードを検索",
+  "gallery_interaction_status": "有効状態",
+  "gallery_interaction_name": "名前",
+  "gallery_interaction_error_title": "レコードを読み込めませんでした",
+  "gallery_interaction_error_description": "検索に失敗しても条件は保持されます。再試行するか、しばらくしてからお試しください。",
+  "gallery_interaction_retry": "再試行",
+  "gallery_interaction_empty_title": "一致するレコードがありません",
+  "gallery_interaction_empty_description": "検索条件を変更するか、絞り込みを解除してください。LongIdentifierWithoutSpacesForResponsiveLayoutVerification0123456789",
+  "gallery_interaction_reset": "絞り込みを解除"
 }

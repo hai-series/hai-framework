@@ -74,6 +74,11 @@ The user editor uses `FormLayout columns={2} labelPosition="left"`. Personal set
 
 Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Browser checks cover shared workflows; test native shells on their target platforms separately.
 
+## 界面设计与验收
+
+共享管理界面的 Web/App/Desktop 使用同一套 UI 组件和状态。设计、实现、审查分别参考根目录 `.agents/skills/hai-ui-design/`、`hai-ui/`、`hai-ui-review/`；正常、加载、空态、错误恢复、键盘、语言/主题和窄容器均按实际场景验收。组件的筛选、排序和分页仍由业务数据回调接入。
+
+
 ## License
 
 Apache-2.0

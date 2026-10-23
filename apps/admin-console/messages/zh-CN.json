@@ -501,5 +501,21 @@
   "gallery_form_reset": "重置",
   "gallery_form_saved": "表单已提交",
   "gallery_form_admin": "管理员",
-  "gallery_form_user": "普通用户"
+  "gallery_form_user": "普通用户",
+  "gallery_interaction_title": "列表状态与键盘操作",
+  "gallery_interaction_description": "通过同一组组件检查加载、空态、错误恢复、长内容和键盘导航。方向键切换页签，Escape 关闭筛选，Tab 继续操作。",
+  "gallery_interaction_unavailable": "暂不可用",
+  "gallery_interaction_ready": "正常",
+  "gallery_interaction_loading": "加载",
+  "gallery_interaction_empty": "空态",
+  "gallery_interaction_error": "失败",
+  "gallery_interaction_search": "搜索记录",
+  "gallery_interaction_status": "启用状态",
+  "gallery_interaction_name": "名称",
+  "gallery_interaction_error_title": "记录暂时无法加载",
+  "gallery_interaction_error_description": "查询失败后保留筛选条件。你可以重试，或稍后再试。",
+  "gallery_interaction_retry": "重试",
+  "gallery_interaction_empty_title": "没有匹配的记录",
+  "gallery_interaction_empty_description": "尝试调整搜索条件，或清除筛选后查看全部记录。LongIdentifierWithoutSpacesForResponsiveLayoutVerification0123456789",
+  "gallery_interaction_reset": "清除筛选"
 }

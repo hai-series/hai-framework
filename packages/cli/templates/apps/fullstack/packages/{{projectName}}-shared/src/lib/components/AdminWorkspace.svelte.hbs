@@ -59,7 +59,7 @@
 
 {#key store.locale}
   {#if store.initializing}
-    <div class='grid min-h-dvh place-items-center bg-base-200/50'><div class='w-72 space-y-4'><Skeleton variant='title' /><Skeleton count={3} /><p class='text-center text-sm text-base-content/50'>{m.home_loading()}</p></div></div>
+    <div role='status' aria-live='polite' class='grid min-h-dvh place-items-center bg-base-200/50'><div class='w-72 space-y-4'><Skeleton variant='title' /><Skeleton count={3} /><p class='text-center text-sm text-base-content/50'>{m.home_loading()}</p></div></div>
   {:else if !store.user || resetToken}
     <header class='border-b border-base-content/8 bg-base-100 px-6 py-3 text-sm font-medium'>{store.info?.name}</header>
     <main data-testid='login-page'>
@@ -82,7 +82,7 @@
         {#if store.error}<Alert variant='error' data-testid='error'>{store.error}</Alert>{/if}
         {#if store.notice}<Alert variant='success' data-testid='notice'>{store.notice}</Alert>{/if}
         {#await pageComponent}
-          <div class='space-y-4'><Skeleton variant='title' /><Skeleton count={3} /></div>
+          <div role='status' aria-label={m.home_loading()} class='space-y-4'><Skeleton variant='title' /><Skeleton count={3} /></div>
         {:then { default: Page }}
           <Page {store} />
         {/await}

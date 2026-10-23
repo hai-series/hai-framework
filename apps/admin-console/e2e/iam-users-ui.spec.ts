@@ -363,11 +363,11 @@ test.describe('IAM Users UI', () => {
     await waitForHydration(page)
     await expect(page.locator('tbody tr')).toHaveCount(1)
     await expect(page.locator('tbody')).toContainText(`${prefix}0`)
-    await page.getByRole('button', { name: 'Next page', exact: true }).click()
+    await page.getByRole('button', { name: '下一页', exact: true }).click()
     await expect(page).toHaveURL(/page=2/)
     await expect(page.locator('tbody')).toContainText(`${prefix}1`)
     await expect(page.locator('tbody')).not.toContainText(`${prefix}2`)
-    await expect(page.getByRole('button', { name: 'Next page', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled()
     await page.screenshot({ path: testInfo.outputPath('iam-role-pagination.png'), fullPage: true })
   })
 

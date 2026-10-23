@@ -501,5 +501,21 @@
   "gallery_form_reset": "Reset",
   "gallery_form_saved": "Form submitted",
   "gallery_form_admin": "Administrator",
-  "gallery_form_user": "User"
+  "gallery_form_user": "User",
+  "gallery_interaction_title": "List states and keyboard interaction",
+  "gallery_interaction_description": "Check loading, empty results, error recovery, long content and keyboard navigation with shared components. Use arrow keys for tabs, Escape to close filters, and Tab to continue.",
+  "gallery_interaction_unavailable": "Unavailable",
+  "gallery_interaction_ready": "Ready",
+  "gallery_interaction_loading": "Loading",
+  "gallery_interaction_empty": "Empty",
+  "gallery_interaction_error": "Error",
+  "gallery_interaction_search": "Search records",
+  "gallery_interaction_status": "Enabled status",
+  "gallery_interaction_name": "Name",
+  "gallery_interaction_error_title": "Records could not be loaded",
+  "gallery_interaction_error_description": "Your filters are preserved after the failed request. Retry now or return later.",
+  "gallery_interaction_retry": "Retry",
+  "gallery_interaction_empty_title": "No matching records",
+  "gallery_interaction_empty_description": "Adjust your search or clear filters to see all records. LongIdentifierWithoutSpacesForResponsiveLayoutVerification0123456789",
+  "gallery_interaction_reset": "Clear filters"
 }

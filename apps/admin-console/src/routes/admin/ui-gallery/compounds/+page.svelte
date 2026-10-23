@@ -11,6 +11,7 @@
   import type { DateValue } from '@internationalized/date'
   import DemoCard from '$lib/components/gallery/DemoCard.svelte'
   import DemoSection from '$lib/components/gallery/DemoSection.svelte'
+  import InteractionPatterns from '$lib/components/gallery/InteractionPatterns.svelte'
   import * as m from '$lib/paraglide/messages'
   import { ActionSheet, AppBar, BottomNav, InfiniteScroll, PullRefresh, SafeArea, SwipeCell, toast } from '@h-ai/ui'
   import { CalendarDate } from '@internationalized/date'
@@ -872,4 +873,5 @@
       </div>
     </DemoCard>
   </DemoSection>
+  <InteractionPatterns />
 </div>
