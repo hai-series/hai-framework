@@ -921,6 +921,12 @@ pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
 
+## 设计与交互验收
+
+页面设计使用 [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)，组件实现使用 [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)，真实界面走查使用 [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md)。[设计约定](../../docs/ui-design.md) 说明布局、状态和示例。
+
+Tabs 支持方向键/Home/End、禁用项跳过和单一 Tab 入口；表格提供排序与加载状态和行键盘操作；分页导航/输入名称跟随语言，外部页码同步跳页输入；工具栏弹层管理焦点，视图按钮提供选中状态。Empty/Alert 支持长内容换行。theme.css 引入共享 tokens，焦点跟随当前主题，global.css 响应减少动态效果。应用仍需接入实际筛选、排序、分页与失败恢复。
+
 ## 许可证
 
 Apache-2.0

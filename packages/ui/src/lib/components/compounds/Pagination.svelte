@@ -46,6 +46,7 @@
   }: PaginationProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const controlId = $props.id()
   // labels 优先，缺省回退到内置消息 uiM(...)
 
   // 计算总页数（至少 1 页，保证分页栏在空数据时仍可渲染）
@@ -62,7 +63,8 @@
       : 'w-[2.5rem] shrink-0 [&>.fieldset]:m-0 [&>.fieldset]:min-w-0',
   )
 
-  let jumperValue = $state(String(page))
+  // 可写派生值保留编辑草稿，父级页码变化时自动恢复实际值。
+  let jumperValue = $derived(String(page))
 
   function goToPage(p: number) {
     const clamped = Math.max(1, Math.min(totalPages, Math.round(p)))
@@ -119,9 +121,10 @@
   <div class={rowGapClass}>
     {#if showSizeChanger}
       <div class='flex items-center gap-2'>
-        <span class={tableTextClass}>{labels.rowsPerPage ?? uiM('pagination_rows_per_page')}</span>
+        <label for={`${controlId}-size`} class={tableTextClass}>{labels.rowsPerPage ?? uiM('pagination_rows_per_page')}</label>
         <div class={sizeChangerClass}>
           <Select
+            id={`${controlId}-size`}
             size={controlSize}
             value={String(pageSize)}
             options={pageSizeSelectOptions}
@@ -132,23 +135,23 @@
     {/if}
 
     {#if showPageInfo}
-      <span class={tableTextClass}>{pageInfoText}</span>
+      <span class={tableTextClass} aria-live='polite' aria-atomic='true'>{pageInfoText}</span>
     {/if}
 
-    <div class='flex items-center gap-1'>
+    <div class='hai-pagination__navigation flex items-center gap-1'>
       {#if showFirstLast}
-        <BareButton class={navBtnClass} disabled={page === 1} onclick={() => goToPage(1)} ariaLabel='First page'>
+        <BareButton class={navBtnClass} disabled={page === 1} onclick={() => goToPage(1)} ariaLabel={uiM('pagination_first')}>
           <span class={cn('icon-[tabler--chevrons-left]', navIconClass)}></span>
         </BareButton>
       {/if}
-      <BareButton class={navBtnClass} disabled={page === 1} onclick={() => goToPage(page - 1)} ariaLabel='Previous page'>
+      <BareButton class={navBtnClass} disabled={page === 1} onclick={() => goToPage(page - 1)} ariaLabel={uiM('pagination_previous')}>
         <span class={cn('icon-[tabler--chevron-left]', navIconClass)}></span>
       </BareButton>
-      <BareButton class={navBtnClass} disabled={page === totalPages} onclick={() => goToPage(page + 1)} ariaLabel='Next page'>
+      <BareButton class={navBtnClass} disabled={page === totalPages} onclick={() => goToPage(page + 1)} ariaLabel={uiM('pagination_next')}>
         <span class={cn('icon-[tabler--chevron-right]', navIconClass)}></span>
       </BareButton>
       {#if showFirstLast}
-        <BareButton class={navBtnClass} disabled={page === totalPages} onclick={() => goToPage(totalPages)} ariaLabel='Last page'>
+        <BareButton class={navBtnClass} disabled={page === totalPages} onclick={() => goToPage(totalPages)} ariaLabel={uiM('pagination_last')}>
           <span class={cn('icon-[tabler--chevrons-right]', navIconClass)}></span>
         </BareButton>
       {/if}
@@ -158,7 +161,9 @@
       <div class={jumperWrapClass}>
         <span class={tableTextClass}>{labels.jumpTo ?? uiM('pagination_jump_to')}</span>
         <div class={jumperInputClass}>
+          <label for={`${controlId}-jump`} class='sr-only'>{uiM('pagination_jump_label')}</label>
           <Input
+            id={`${controlId}-jump`}
             type='number'
             size={jumperControlSize}
             class='h-7 w-full rounded-md [&_input]:px-1.5 [&_input]:text-center [&_input]:text-[12px]'
@@ -174,3 +179,13 @@
     {/if}
   </div>
 </div>
+
+<style>
+  /* 桌面保持紧凑；触摸设备扩大真实命中区域。 */
+  @media (pointer: coarse) {
+    .hai-pagination__navigation :global(button) {
+      min-width: var(--hai-touch-target-min, 44px);
+      min-height: var(--hai-touch-target-min, 44px);
+    }
+  }
+</style>

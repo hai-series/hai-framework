@@ -1,15 +1,17 @@
 /**
  * =============================================================================
- * @hai/ui - Design Token 系统
+ * @h-ai/ui - Design Token 系统
  * =============================================================================
  * 所有视觉变量通过 CSS Variables 定义，多端复用。
  *
  * 在 app.css 中导入：
- * @import '@hai/ui/styles/design-tokens.css';
+ * @import '@h-ai/ui/styles/design-tokens.css';
  * =============================================================================
  */
 
 :root {
+  /* 焦点继承当前 DaisyUI 主题，业务可在主题层覆盖。 */
+  --hai-focus-color: var(--color-primary);
   /* ─── 间距 ─── */
   --hai-spacing-xs: 4px;
   --hai-spacing-sm: 8px;

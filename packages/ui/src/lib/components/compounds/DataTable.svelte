@@ -296,12 +296,14 @@
 </script>
 
 <div {...dataAttributes} bind:this={scrollContainer} class='overflow-x-auto {className}' onscroll={syncActionColumnShadow}>
-  <table bind:this={tableElement} class={tableClass}>
+  <table bind:this={tableElement} class={tableClass} aria-busy={loading}>
     <thead>
       <tr class={headerRowClass}>
         {#each columns as col (String(col.key))}
           {@const isSorted = activeSortKey === String(col.key)}
           <th
+            scope='col'
+            aria-sort={col.sortable ? (isSorted ? (activeSortDir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined}
             style={getColumnStyle(col)}
             class='{getAlignClass(col.align)} {headerCellDividerClass} relative font-medium'
           >
@@ -335,7 +337,10 @@
       {#if loading}
         <tr>
           <td colspan={columns.length + (actions ? 1 : 0)} class={placeholderCellClass}>
-            <span class='loading loading-spinner loading-sm'></span>
+            <span role='status' class='inline-flex items-center gap-2'>
+              <span class='loading loading-spinner loading-sm' aria-hidden='true'></span>
+              <span>{uiM('common_loading')}</span>
+            </span>
           </td>
         </tr>
       {:else if data.length === 0}
@@ -350,7 +355,16 @@
         </tr>
       {:else}
         {#each sortedData as item (item[keyField])}
-          <tr class='{rowClass} {onrowclick ? 'cursor-pointer' : ''}' onclick={() => onrowclick?.(item)}>
+          <tr class='{rowClass} {onrowclick ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2' : ''}'
+              tabindex={onrowclick ? 0 : undefined}
+              onclick={() => onrowclick?.(item)}
+              onkeydown={(event) => {
+                if (onrowclick && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                  event.preventDefault()
+                  onrowclick(item)
+                }
+              }}
+          >
             {#each columns as col (String(col.key))}
               <td style={getColumnStyle(col)} class={getAlignClass(col.align)}>
                 {#if col.onclick}

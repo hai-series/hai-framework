@@ -16,7 +16,6 @@
   import type { DataAttributes, TabsProps } from '../../types.js'
   import { SvelteSet } from 'svelte/reactivity'
   import { cn, getDataAttributes } from '../../utils.js'
-  import BareButton from '../primitives/BareButton.svelte'
 
   let {
     items,
@@ -32,13 +31,15 @@
   }: TabsProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const tabsId = $props.id()
+  let tablist = $state<HTMLDivElement>()
   // 已激活过的页签集合，用于惰性挂载（不预加载不可见页签）。
   const activatedKeys = new SvelteSet<string>()
 
-  // 默认选中第一个
+  // 初始或选项变化后选中可用页签，避免激活禁用项或已删除项。
   $effect(() => {
-    if (!active && items.length > 0) {
-      active = items[0].key
+    if (!items.some(item => item.key === active && !item.disabled)) {
+      active = items.find(item => !item.disabled)?.key ?? ''
     }
   })
 
@@ -75,6 +76,7 @@
   const tabsClass = $derived(
     cn(
       'tabs',
+      'max-w-full flex-nowrap overflow-x-auto',
       typeMap[type],
       sizeMap[size],
       className,
@@ -82,30 +84,66 @@
   )
 
   function handleSelect(key: string) {
+    if (active === key)
+      return
     active = key
     onchange?.(key)
   }
+
+  // 自动激活模式：方向键移动焦点并选择，跳过禁用项且支持首尾循环。
+  function handleKeydown(event: KeyboardEvent, key: string) {
+    const enabled = items.filter(item => !item.disabled)
+    if (!enabled.length)
+      return
+    const index = enabled.findIndex(item => item.key === key)
+    const rtl = getComputedStyle(event.currentTarget as HTMLElement).direction === 'rtl'
+    let next: number
+    switch (event.key) {
+      case 'ArrowRight':
+        next = index + (rtl ? -1 : 1)
+        break
+      case 'ArrowLeft':
+        next = index + (rtl ? 1 : -1)
+        break
+      case 'Home':
+        next = 0
+        break
+      case 'End':
+        next = enabled.length - 1
+        break
+      default: return
+    }
+    event.preventDefault()
+    const selected = enabled[(next + enabled.length) % enabled.length]
+    handleSelect(selected.key)
+    tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)')[(next + enabled.length) % enabled.length]?.focus()
+  }
 </script>
 
-<div {...dataAttributes} role='tablist' class={tabsClass}>
+<div {...dataAttributes} bind:this={tablist} role='tablist' class={tabsClass}>
   {#each items as item (item.key)}
-    <BareButton
+    <button
+      type='button'
+      id={`${tabsId}-${encodeURIComponent(item.key)}`}
       role='tab'
-      ariaSelected={active === item.key}
-      class={cn('tab', active === item.key && 'tab-active')}
+      aria-selected={active === item.key}
+      aria-controls={children ? `${tabsId}-panel` : undefined}
+      tabindex={active === item.key ? 0 : -1}
+      class={cn('tab shrink-0', active === item.key && 'tab-active')}
       disabled={item.disabled}
       onclick={() => handleSelect(item.key)}
+      onkeydown={event => handleKeydown(event, item.key)}
     >
       {#if item.icon}
         <span class='mr-1'>{item.icon}</span>
       {/if}
       {item.label}
-    </BareButton>
+    </button>
   {/each}
 </div>
 
 {#if children}
-  <div class='py-4'>
+  <div id={`${tabsId}-panel`} role='tabpanel' aria-labelledby={active ? `${tabsId}-${encodeURIComponent(active)}` : undefined} tabindex='0' class='min-w-0 py-4'>
     {@render children({ active, isActivated })}
   </div>
 {/if}

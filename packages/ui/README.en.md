@@ -918,6 +918,12 @@ pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
 
+## Design and interaction acceptance
+
+Use [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md) for page decisions, [hai-ui](../cli/templates/skills/hai-ui/SKILL.md) for implementation, and [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) for rendered UI review. See the [shared design guidance](../../docs/ui-design.md).
+
+Tabs support arrow/Home/End navigation, disabled items and one Tab stop. Tables expose sort/loading state and keyboard row activation. Pagination labels follow locale and external page changes update the jump input. Toolbar panels manage focus and view buttons expose selection. Empty/Alert wrap long content. theme.css imports shared tokens; focus follows the current theme and global.css respects reduced motion. Applications still implement filtering, sorting, paging and recovery.
+
 ## License
 
 Apache-2.0

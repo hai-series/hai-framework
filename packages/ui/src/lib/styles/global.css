@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/ui - 全局样式
+ * @h-ai/ui - 全局样式
  * =============================================================================
  * 可选的全局样式增强，消费应用可通过以下方式导入：
  *
@@ -45,8 +45,8 @@ body {
 .input:focus,
 .select:focus,
 .textarea:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px oklch(var(--p) / 0.15);
+  outline: 2px solid var(--hai-focus-color, var(--color-primary));
+  outline-offset: 2px;
 }
 
 /* ─── 隐藏浏览器原生密码显示按钮（使用自定义切换） ─── */
@@ -61,7 +61,7 @@ input::-webkit-credentials-auto-fill-button {
    表单组件 (.select, .radio, .checkbox, .toggle, .textarea, input, textarea)
    由 DaisyUI 或组件自身处理焦点样式 */
 :focus-visible:not(input, select, textarea, .select, .radio, .checkbox, .toggle, .textarea) {
-  outline: 2px solid oklch(0.6 0.15 250);
+  outline: 2px solid var(--hai-focus-color, var(--color-primary));
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -69,12 +69,16 @@ input::-webkit-credentials-auto-fill-button {
 /* ─── DaisyUI 组件微调 ─── */
 .card {
   transition:
-    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow var(--hai-transition-normal, 250ms) cubic-bezier(0.4, 0, 0.2, 1),
+    transform var(--hai-transition-normal, 250ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn {
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    color var(--hai-transition-fast, 150ms),
+    background-color var(--hai-transition-fast, 150ms),
+    border-color var(--hai-transition-fast, 150ms),
+    box-shadow var(--hai-transition-fast, 150ms);
 }
 
 .badge {
@@ -86,7 +90,7 @@ input::-webkit-credentials-auto-fill-button {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: oklch(0.55 0 0);
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
 }
 
 /* ─── DaisyUI 组件微调：fieldset-legend 间距修正 ─── */
@@ -263,4 +267,20 @@ input::-webkit-credentials-auto-fill-button {
 }
 .fade-in {
   animation-name: hai-fade-in;
+}
+
+/* 保留最终状态及动画结束事件，减少动态效果时不再播放装饰运动。 */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

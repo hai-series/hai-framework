@@ -39,7 +39,7 @@
 
   const containerClass = $derived(
     cn(
-      'flex flex-col items-center justify-center py-8 text-center',
+      'flex min-w-0 flex-col items-center justify-center px-4 py-8 text-center',
       size === 'sm' && 'py-4',
       size === 'lg' && 'py-12',
       className,
@@ -57,7 +57,7 @@
 
 <div {...dataAttributes} class={containerClass}>
   <!-- 图标区域 -->
-  <div class='text-base-content/30 mb-4 {iconSize}'>
+  <div class='text-base-content/40 mb-4 shrink-0 {iconSize}' aria-hidden='true'>
     {#if children}
       {@render children()}
     {:else if icon === 'inbox'}
@@ -80,16 +80,16 @@
   </div>
 
   <!-- 标题 -->
-  <h3 class='font-medium text-base-content/70 {titleSize}'>{displayTitle}</h3>
+  <h3 class='max-w-full font-medium text-base-content/80 [overflow-wrap:anywhere] {titleSize}'>{displayTitle}</h3>
 
   <!-- 描述 -->
   {#if description}
-    <p class='mt-1 text-sm text-base-content/50 max-w-sm'>{description}</p>
+    <p class='mt-2 max-w-prose text-sm text-base-content/70 leading-relaxed [overflow-wrap:anywhere]'>{description}</p>
   {/if}
 
   <!-- 操作按钮插槽 -->
   {#if action}
-    <div class='mt-4'>
+    <div class='mt-5 flex max-w-full flex-wrap justify-center gap-2'>
       {@render action()}
     </div>
   {/if}

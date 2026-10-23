@@ -168,6 +168,19 @@
   let sortOpen = $state(false)
   /** 用于检测外部点击的根节点。 */
   let rootElement = $state<HTMLElement | null>(null)
+  let filterTrigger = $state<HTMLButtonElement>()
+  let sortTrigger = $state<HTMLButtonElement>()
+  let filterPanel = $state<HTMLDivElement>()
+  let sortPanel = $state<HTMLDivElement>()
+  const toolbarId = $props.id()
+
+  // 弹层渲染后直接进入可用输入；关闭与外部点击不抢夺其它控件焦点。
+  $effect(() => {
+    const panel = filterOpen ? filterPanel : sortOpen ? sortPanel : undefined
+    const control = panel?.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled)')
+      ?? panel?.querySelector<HTMLElement>('button:not(:disabled)')
+    control?.focus()
+  })
 
   // ─── 日期范围本地输入 ───
   /** 日期范围起始输入框草稿。 */
@@ -383,23 +396,28 @@
 
     /** Escape 键关闭当前弹层。 */
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.defaultPrevented && (filterOpen || sortOpen)) {
+        event.preventDefault()
+        event.stopPropagation()
+        const trigger = filterOpen ? filterTrigger : sortTrigger
         filterOpen = false
         sortOpen = false
+        trigger?.focus()
       }
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
+    const root = rootElement
+    root?.addEventListener('keydown', handleKeyDown)
 
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
+      root?.removeEventListener('keydown', handleKeyDown)
     }
   })
 </script>
 
-<div {...dataAttributes} bind:this={rootElement} class='flex items-center justify-between gap-3 flex-wrap {className}'>
+<div {...dataAttributes} bind:this={rootElement} class='relative flex min-w-0 w-full items-center justify-between gap-3 flex-wrap {className}'>
   <!-- 左侧信息区：标题、说明等不参与表格操作的内容。 -->
   {#if leading}
     <div class='min-w-0 flex-1'>
@@ -431,13 +449,15 @@
 
     <!-- 筛选弹层按钮 -->
     {#if hasFilters}
-      <div class='relative'>
+      <div>
         <button
+          bind:this={filterTrigger}
           type='button'
           aria-expanded={filterOpen}
+          aria-controls={filterOpen ? `${toolbarId}-filters` : undefined}
           aria-haspopup='dialog'
           aria-label={uiM('toolbar_filter')}
-          class='btn btn-sm btn-square border-base-content/15 bg-base-100 {activeFilterCount > 0 ? 'border-primary/50 text-primary bg-primary/5' : ''}'
+          class='relative btn btn-sm btn-square border-base-content/15 bg-base-100 {activeFilterCount > 0 ? 'border-primary/50 text-primary bg-primary/5' : ''}'
           title={uiM('toolbar_filter')}
           onclick={toggleFilterPopover}
         >
@@ -451,9 +471,11 @@
 
         {#if filterOpen}
           <div
+            bind:this={filterPanel}
+            id={`${toolbarId}-filters`}
             role='dialog'
             aria-label={uiM('toolbar_filter_conditions')}
-            class='absolute top-full right-0 mt-2 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-base-content/10 bg-base-100 p-4 shadow-lg'
+            class='absolute top-full right-0 mt-2 z-50 w-[min(22rem,100%,calc(100vw-2rem))] max-h-[60vh] overflow-y-auto rounded-xl border border-base-content/10 bg-base-100 p-4 shadow-lg'
           >
             <div class='flex items-center justify-between mb-3'>
               <h3 class='text-sm font-semibold text-base-content'>{uiM('toolbar_filter')}</h3>
@@ -565,10 +587,12 @@
 
     <!-- 排序弹层按钮 -->
     {#if hasSortableColumns}
-      <div class='relative'>
+      <div>
         <button
+          bind:this={sortTrigger}
           type='button'
           aria-expanded={sortOpen}
+          aria-controls={sortOpen ? `${toolbarId}-sort` : undefined}
           aria-haspopup='dialog'
           aria-label={uiM('toolbar_sort')}
           class='btn btn-sm btn-square border-base-content/15 bg-base-100 {sortBy ? 'border-primary/50 text-primary bg-primary/5' : ''}'
@@ -580,9 +604,11 @@
 
         {#if sortOpen}
           <div
+            bind:this={sortPanel}
+            id={`${toolbarId}-sort`}
             role='dialog'
             aria-label={uiM('toolbar_sort_conditions')}
-            class='absolute top-full right-0 mt-2 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-base-content/10 bg-base-100 p-4 shadow-lg'
+            class='absolute top-full right-0 mt-2 z-50 w-[min(18rem,100%,calc(100vw-2rem))] max-h-[60vh] overflow-y-auto rounded-xl border border-base-content/10 bg-base-100 p-4 shadow-lg'
           >
             <div class='flex items-center justify-between mb-3'>
               <h3 class='text-sm font-semibold text-base-content'>{uiM('toolbar_sort')}</h3>
@@ -662,6 +688,7 @@
           type='button'
           class='btn btn-sm join-item border-base-content/15 bg-base-100 {viewMode === 'table' ? 'text-primary bg-primary/5' : ''}'
           aria-label={uiM('toolbar_view_table')}
+          aria-pressed={viewMode === 'table'}
           title={uiM('toolbar_view_table')}
           onclick={() => {
             viewMode = 'table'
@@ -674,6 +701,7 @@
           type='button'
           class='btn btn-sm join-item border-base-content/15 bg-base-100 {viewMode === 'card' ? 'text-primary bg-primary/5' : ''}'
           aria-label={uiM('toolbar_view_card')}
+          aria-pressed={viewMode === 'card'}
           title={uiM('toolbar_view_card')}
           onclick={() => {
             viewMode = 'card'

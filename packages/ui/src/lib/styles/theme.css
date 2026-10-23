@@ -11,6 +11,8 @@
  * =============================================================================
  */
 
+@import './design-tokens.css';
+
 :root {
   --hai-theme-color-default: #5765f0;
   --hai-theme-color-tech-purple: #5765f0;

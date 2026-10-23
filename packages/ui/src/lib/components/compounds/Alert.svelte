@@ -34,6 +34,7 @@
   const alertClass = $derived(
     cn(
       'alert',
+      'flex items-start gap-3',
       getAlertVariantClass(variant),
       className,
     ),
@@ -55,21 +56,21 @@
 
 {#if visible}
   <div {...dataAttributes} class={alertClass} role='alert'>
-    <span class='{iconMap[variant] ?? iconMap.info} size-5 shrink-0'></span>
+    <span class='{iconMap[variant] ?? iconMap.info} mt-0.5 size-5 shrink-0' aria-hidden='true'></span>
 
-    <div>
+    <div class='min-w-0 flex-1 [overflow-wrap:anywhere]'>
       {#if title}
         <h3 class='font-semibold text-sm'>{title}</h3>
       {/if}
       {#if children}
-        <div class='text-sm'>
+        <div class='text-sm leading-relaxed'>
           {@render children()}
         </div>
       {/if}
     </div>
 
     {#if dismissible}
-      <IconButton size='sm' variant='ghost' label={uiM('common_close')} onclick={handleClose}>
+      <IconButton size='sm' variant='ghost' class='shrink-0' label={uiM('common_close')} onclick={handleClose}>
         <span class='icon-[tabler--x] size-4'></span>
       </IconButton>
     {/if}

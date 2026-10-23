@@ -918,6 +918,12 @@ pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
 
+## デザインと操作の検証
+
+画面設計は [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)、実装は [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)、実画面の確認は [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) を参照してください。[共通設計指針](../../docs/ui-design.md) も利用できます。
+
+Tabs は方向キー・Home/End、無効項目のスキップと単一の Tab 入口に対応します。表は並べ替え・読み込み状態と行のキーボード操作を提供します。ページ切り替えのラベルは言語に従い、外部ページ変更を入力欄に同期します。ツールバーはフォーカスと表示切り替え状態を管理します。Empty/Alert は長文を折り返します。theme.css は共通 tokens を読み込み、global.css は動きを減らす設定に対応します。業務側で検索、並べ替え、ページ切り替えと復旧処理を接続してください。
+
 ## ライセンス
 
 Apache-2.0
