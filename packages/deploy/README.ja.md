@@ -152,6 +152,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 
 プロセス専用ゲートは `pnpm --filter @h-ai/deploy exec vitest run tests/deploy-command-process.test.ts tests/deploy-secret-masker.test.ts` です。同じ `HAI_DEPLOY_E2E=1` を設定し、deploy をビルドしてから `tests/deploy-command-runtime.e2e.test.ts` を実行すると、実 Linux/OpenSSH、公開 dist、遠隔の継続・完了、ローカルグループを検証します。sshd 導入にネットワークが必要で、Compose/HTTP はテスト用実装です。配置期限を 2500 ミリ秒に短縮し、出力消費を停止して応答喪失を再現します。
 
+デプロイ用 fixture は固定版の公開基盤イメージを確認し、不在を確認した場合だけ取得します。HAI_DEPLOY_E2E_MIRROR を利用でき、公開キャッシュは回収対象にしません。create 成功時のコンテナー ID を先に記録し、専用 PID namespace 内で APT/pip/sshd を非同期準備します。準備失敗、期限超過、協調的取消ではローカルクライアントの終了を待ち、記録した ID だけを削除して消失を確認します。特権を使うのはネストした Podman fixture のみです。HAI_DEPLOY_E2E_APT_MIRROR はホスト名のみを受け付け、HTTPS を維持します。所有権テストは固定公開イメージに実行専用 tag を付け、同じ内容の外部 tag、tag の付け替え、動的ポート、外部 sentinel の保護を維持します。create の応答喪失で信頼できる ID がない場合や、テストが強制終了した場合は不明状態を残し、名前や label を根拠に回収しません。
+
 ## ライセンス
 
 Apache-2.0

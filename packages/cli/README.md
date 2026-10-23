@@ -130,6 +130,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 
 脚手架门禁生成真实项目，执行安装、typecheck、lint、build、test 和浏览器测试。部署门禁覆盖实际资源拥有权、动态宿主端口隔离，以及离线包、SSH/人工发布、增量更新和回滚。只回收本轮已记录的容器 ID 和私有镜像 tag；安全元数据报告保留在 ignored `tmp/validation/module-review/VERIFY-05/`，临时工程、SSH 密钥和项目数据仍自动回收。已生成的浏览器截图、trace 和报告默认保留在 ignored `tmp/validation/module-review/scaffold-browser/` 或 `deploy-browser/`；也可显式指定证据、HTML 报告和输出目录。临时工程、密钥、数据及进程仍自动回收。原生壳和真实云服务单独验收。
 
+部署夹具先检查固定公开基础镜像，仅明确缺失时拉取，可沿用 HAI_DEPLOY_E2E_MIRROR；公共缓存不进入清理账本。成功 create 后先登记容器 ID，再在其私有 PID namespace 内异步安装 APT/pip 并启动 sshd。准备失败、超时或合作式取消会等待本地客户端退出，按已登记 ID 回收并确认消失；仅重型嵌套 Podman 夹具使用特权。HAI_DEPLOY_E2E_APT_MIRROR 只接受镜像站主机名并保留 HTTPS。拥有权测试用固定公开镜像的本轮私有 tag，保留同内容外部 tag、重指向保护、动态端口和外部 sentinel 检查。create 回执丢失且未获得可信 ID、测试进程被强制终止等情况仍需记录未知状态，不能按名称或 label 认领清理。
+
 `--generate` 是定向路由门禁：复用仓库已安装依赖，实际生成、构建并访问 SvelteKit、serv API、fullstack 后端的新路由（含 transport）。它不替代上面的完整安装与浏览器矩阵。
 
 `test:e2e` 为本轮服务显式选择隔离的测试后端及绝对数据目录，服务子进程不继承外部 `HAI_*` / `PUBLIC_*` / `VITE_*` 配置或读取用户 `.env.local`。测试专用 `HAI_E2E=1` 不改变普通开发、生产 dotenv 或共享后端要求；启用 transport 的场景使用新建可信 SM2 ring 与实际 registry。样板浏览器阶段另用独立 TCP 计数进程核验外部数据库配置未被触达。完整部署验收仍保留 fullstack 的真实 Redis/S3、增量发布与回滚。

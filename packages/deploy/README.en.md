@@ -152,6 +152,8 @@ Focused lock gates use reachable Podman (preferred) or Docker to run the public 
 
 Process gates run with `pnpm --filter @h-ai/deploy exec vitest run tests/deploy-command-process.test.ts tests/deploy-secret-masker.test.ts`. With the same `HAI_DEPLOY_E2E=1`, build deploy first and run `tests/deploy-command-runtime.e2e.test.ts` for real Linux/OpenSSH, published dist, remote continuation/completion and local process groups. The fixture needs network access to install sshd; Compose/HTTP are deterministic fixtures. It scales deployment deadlines to 2500 milliseconds and pauses output consumption to inject lost acknowledgments.
 
+Deployment fixtures inspect pinned public base images and pull only confirmed missing images; HAI_DEPLOY_E2E_MIRROR remains available. Public image caches are never cleanup targets. A successful create records its container ID before asynchronous APT/pip/sshd preparation inside a private PID namespace. Preparation errors, deadlines and cooperative cancellation wait for the local client to close, then remove and verify that exact owned ID; only the nested Podman fixture is privileged. HAI_DEPLOY_E2E_APT_MIRROR accepts a mirror hostname and keeps HTTPS. Ownership tests use run-specific private tags of pinned public images while preserving foreign same-content tags, retag protection, dynamic ports and external sentinels. A lost create acknowledgment without a trusted ID, or a forcibly terminated test process, remains unknown and never authorizes adoption by name or label.
+
 ## License
 
 Apache-2.0

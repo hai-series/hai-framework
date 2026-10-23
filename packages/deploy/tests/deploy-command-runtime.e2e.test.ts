@@ -1,3 +1,5 @@
+// 仅仓库端到端测试复用同一拥有权原语；发布包不导入 CLI 测试文件。
+import type { DeployFixtureCleanupFailure, DeployTestFixture } from '../../cli/tests/helpers/deploy-container-fixture.js'
 /** 真实 Linux 进程组、OpenSSH 断线继续执行与终态核对；公开 deploy API 消费真实包。 */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
@@ -9,6 +11,7 @@ import process from 'node:process'
 import { setTimeout } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { createDeployFixtureCleanupReport, createDeployTestFixture, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture } from '../../cli/tests/helpers/deploy-container-fixture.js'
 import * as sshModule from '../src/container/deploy-ssh.js'
 import { deploy, getDeployCommandState } from '../src/index.js'
 
@@ -16,7 +19,8 @@ const enabled = process.env.HAI_DEPLOY_E2E === '1'
 let runtime: 'podman' | 'docker'
 let root: string
 let container: string
-let image: string
+let fixtureContext: DeployTestFixture | undefined
+const runId = randomUUID().replaceAll('-', '')
 let sshPort: number
 let releaseOutput: () => void = () => {}
 const repository = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
@@ -71,30 +75,27 @@ function application(name: string): string {
 
 describe.skipIf(!enabled)('linux process groups and real ssh execution', () => {
   beforeAll(async () => {
-    const selected = (['podman', 'docker'] as const).find(command => spawnSync(command, ['version'], { windowsHide: true, stdio: 'ignore' }).status === 0)
+    // 全部准备在 180s deadline 内，给 300s hook 保留回收和核验余量。
+    const deadline = Date.now() + 180_000
+    const setupSignal = AbortSignal.timeout(180_000)
+    const remaining = (limit: number): number => {
+      const budget = deadline - Date.now()
+      if (budget <= 0)
+        throw new Error('Command runtime setup deadline exceeded')
+      return Math.min(limit, budget)
+    }
+    const selected = (['podman', 'docker'] as const).find(command => spawnSync(command, ['version'], { windowsHide: true, stdio: 'ignore', timeout: 15_000 }).status === 0)
     if (!selected)
       throw new Error('Command runtime gate requires a reachable Podman or Docker engine')
     runtime = selected
     root = mkdtempSync(path.join(tmpdir(), 'hai-command-runtime-'))
-    container = `hai-command-runtime-${randomUUID()}`
-    image = `localhost/hai-command-runtime:${randomUUID()}`
-    const context = path.join(root, 'image')
-    mkdirSync(context)
     const key = path.join(root, 'key')
-    execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key], { windowsHide: true })
-    cpSync(`${key}.pub`, path.join(context, 'authorized_key'))
+    execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key], { windowsHide: true, timeout: remaining(10_000), stdio: 'ignore' })
+    ensureDeployTestBaseImage(runtime, 'docker.io/library/node:24.22.1-bookworm-slim', remaining(180_000), process.env.HAI_DEPLOY_E2E_MIRROR)
     const mirror = process.env.HAI_DEPLOY_E2E_APT_MIRROR
     if (mirror && !/^[a-z0-9.-]+$/i.test(mirror))
       throw new Error('Expected an APT mirror hostname')
     const mirrorCommand = mirror ? `sed -i 's#deb.debian.org#${mirror}#g' /etc/apt/sources.list.d/debian.sources && ` : ''
-    writeFileSync(path.join(context, 'Dockerfile'), `FROM docker.io/library/node:24.22.1-bookworm-slim
-RUN node -e "require('node:fs').writeFileSync('/tmp/node-ca.crt',require('node:tls').rootCertificates.join(String.fromCharCode(10)))" && ${mirrorCommand}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt install -y --no-install-recommends ca-certificates openssh-server util-linux && rm -rf /var/lib/apt/lists/* /tmp/node-ca.crt && ssh-keygen -A && mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh
-COPY authorized_key /root/.ssh/authorized_keys
-RUN chmod 600 /root/.ssh/authorized_keys && printf '\\nPermitRootLogin prohibit-password\\nPasswordAuthentication no\\nUsePAM no\\n' >> /etc/ssh/sshd_config
-ENTRYPOINT ["/usr/sbin/sshd", "-D", "-e"]
-`)
-    const built = spawnSync(runtime, ['build', ...(runtime === 'podman' ? ['--http-proxy=false'] : []), '-t', image, context], { windowsHide: true, encoding: 'utf8', timeout: 240_000, maxBuffer: 2 * 1024 * 1024 })
-    expect(built.status, `${built.stdout?.slice(-6000)}\n${built.stderr?.slice(-2000)}`).toBe(0)
     writeFileSync(path.join(root, 'package.json'), '{"type":"module"}')
     copyDependency('@h-ai/core', path.join(repository, 'packages/deploy'), new Set())
     const source = path.join(repository, 'packages/deploy/src/container/deploy-command.ts').replaceAll('\\', '/')
@@ -108,15 +109,26 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
 `)
     const tsupManifest = fileURLToPath(import.meta.resolve('tsup/package.json'))
     const tsup: { bin: Record<string, string> } = JSON.parse(readFileSync(tsupManifest, 'utf8'))
-    execFileSync(process.execPath, [path.join(path.dirname(tsupManifest), tsup.bin.tsup!), path.join(root, 'linux-runner.ts'), '--format', 'esm', '--platform', 'node', '--out-dir', path.join(root, 'runner'), '--external', '@h-ai/core', '--external', 'zod'], { cwd: root, windowsHide: true, encoding: 'utf8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] })
-    execFileSync(runtime, ['run', '-d', '--name', container, '-p', '127.0.0.1::22', image], { windowsHide: true, stdio: 'ignore' })
-    sshPort = Number(execFileSync(runtime, ['port', container, '22/tcp'], { encoding: 'utf8' }).trim().split(':').at(-1))
-    execute('mkdir /fixture')
+    execFileSync(process.execPath, [path.join(path.dirname(tsupManifest), tsup.bin.tsup!), path.join(root, 'linux-runner.ts'), '--format', 'esm', '--platform', 'node', '--out-dir', path.join(root, 'runner'), '--external', '@h-ai/core', '--external', 'zod'], { cwd: root, windowsHide: true, encoding: 'utf8', timeout: remaining(60_000), stdio: ['ignore', 'pipe', 'pipe'] })
+    fixtureContext = await createDeployTestFixture(runtime, 'docker.io/library/node:24.22.1-bookworm-slim', '', root, runId, {
+      command: ['sleep', 'infinity'],
+      timeoutMs: remaining(180_000),
+      signal: setupSignal,
+      prepare: async (fixture, signal) => {
+        // 网络安装在已登记 ID 的私有 PID namespace 内执行；失败不会留下 host builder。
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `node -e "require('node:fs').writeFileSync('/tmp/node-ca.crt',require('node:tls').rootCertificates.join(String.fromCharCode(10)))" && ${mirrorCommand}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates openssh-server util-linux && rm -rf /var/lib/apt/lists/* /tmp/node-ca.crt && ssh-keygen -A && mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh`], { timeoutMs: remaining(180_000), signal, stage: 'apt-install' })
+        execFileSync(runtime, ['cp', `${key}.pub`, `${fixture.containerId}:/root/.ssh/authorized_keys`], { windowsHide: true, timeout: remaining(20_000), stdio: 'ignore' })
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `chmod 600 /root/.ssh/authorized_keys; printf '\\nPermitRootLogin prohibit-password\\nPasswordAuthentication no\\nUsePAM no\\n' >> /etc/ssh/sshd_config; /usr/sbin/sshd`], { timeoutMs: remaining(10_000), signal, stage: 'sshd' })
+      },
+    })
+    container = fixtureContext.containerId
+    sshPort = fixtureContext.sshHostPort
+    await executeDeployTestFixture(runtime, fixtureContext, ['mkdir', '/fixture'], { timeoutMs: remaining(10_000), signal: setupSignal })
     for (const folder of ['node_modules', 'runner'])
-      execFileSync(runtime, ['cp', path.join(root, folder), `${container}:/fixture/${folder}`], { windowsHide: true })
-    execute(`printf '#!/bin/sh\\nexit 0\\n' >/usr/local/bin/curl; chmod 700 /usr/local/bin/curl`)
+      execFileSync(runtime, ['cp', path.join(root, folder), `${container}:/fixture/${folder}`], { windowsHide: true, timeout: remaining(180_000) })
+    await executeDeployTestFixture(runtime, fixtureContext, ['sh', '-ec', `printf '#!/bin/sh\\nexit 0\\n' >/usr/local/bin/curl; chmod 700 /usr/local/bin/curl`], { timeoutMs: remaining(10_000), signal: setupSignal })
     const ssh = sshModule.createSshExecutor({ host: '127.0.0.1', port: sshPort, username: 'root', identityFile: key, knownHostsFile: path.join(root, 'known-hosts'), strictHostKeyChecking: false, connectTimeoutSeconds: 5 })
-    expect((await ssh.ping()).success).toBe(true)
+    expect((await ssh.exec('true', { timeoutMs: remaining(20_000) })).success).toBe(true)
   }, 300_000)
 
   afterEach(async () => {
@@ -126,18 +138,32 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
   })
 
   afterAll(() => {
-    if (container) {
-      spawnSync(runtime, ['kill', '--signal', 'KILL', container], { windowsHide: true, stdio: 'ignore' })
-      spawnSync(runtime, ['rm', '-f', container], { windowsHide: true, stdio: 'ignore' })
+    const failures: DeployFixtureCleanupFailure[] = []
+    const report = createDeployFixtureCleanupReport(runId, fixtureContext ? [fixtureContext] : [], [])
+    try {
+      if (fixtureContext)
+        removeDeployTestFixture(runtime, fixtureContext)
     }
-    if (image)
-      spawnSync(runtime, ['rmi', '-f', image], { windowsHide: true, stdio: 'ignore' })
-    if (root) {
-      if (path.dirname(root) !== tmpdir() || !path.basename(root).startsWith('hai-command-runtime-'))
-        throw new Error('Unexpected command runtime cleanup path')
-      rmSync(root, { recursive: true, force: true })
+    catch (error) { failures.push({ stage: 'container-remove', error }) }
+    try {
+      report(failures)
     }
-  }, 60_000)
+    catch (error) { failures.push({ stage: 'report-write', error }) }
+    try {
+      if (root) {
+        if (path.dirname(root) !== tmpdir() || !path.basename(root).startsWith('hai-command-runtime-'))
+          throw new Error('Unexpected command runtime cleanup path')
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+    catch (error) { failures.push({ stage: 'temporary-directory-remove', error }) }
+    try {
+      report(failures)
+    }
+    catch (error) { failures.push({ stage: 'report-write', error }) }
+    if (failures.length)
+      throw new AggregateError(failures.map(failure => failure.error), 'Command runtime fixture cleanup failed')
+  }, 90_000)
 
   it('真实 Linux 进程组收回长运行父子/早退父命令，并保留有界输出与 deadline race', () => {
     const output = execFileSync(runtime, ['exec', container, 'node', '/fixture/runner/linux-runner.js'], { encoding: 'utf8', timeout: 30_000, windowsHide: true })
