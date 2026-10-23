@@ -76,6 +76,14 @@ if [ "$1" = load ] && [ -f /fixture/block-load ]; then
   touch /fixture/entered-load
   while [ ! -f /fixture/release-load ]; do sleep 0.05; done
 fi
+if [ -f /fixture/background-service ]; then
+  case " $* " in
+    *' up -d '*)
+      sleep 3600 </dev/null >/dev/null 2>&1 &
+      printf '%s\\n' "$!" > /fixture/service.pid
+      ;;
+  esac
+fi
 `)
     writeFileSync(join(root, 'bin/curl'), '#!/bin/sh\ntest ! -f /fixture/fail-health\n')
     execFileSync(runtime, ['run', '-d', '--name', container, '--entrypoint', 'node', 'docker.io/library/node:24.22.1-bookworm-slim', '-e', 'setInterval(() => {}, 1000)'], { windowsHide: true, stdio: 'ignore' })
@@ -118,14 +126,28 @@ fi
     expect(execute('test -d /fixture/server/.deploy-lock && echo retained')).toBe('retained')
   }, 60_000)
 
-  it('仅强杀父 shell 时活跃子命令继续持锁；子命令退出后自动恢复', async () => {
+  it('正常完成后后台服务继承的描述符不阻塞下一次部署', async () => {
+    const owner = await pack()
+    const next = await pack()
+    execute('touch /fixture/background-service')
+    expect(apply(owner).status).toBe(0)
+    expect(JSON.parse(execute(`cat /fixture/server/result-${owner.id}.json`))).toMatchObject({ stage: 'complete', exitCode: 0 })
+    const servicePid = execute('cat /fixture/service.pid')
+    expect(execute(`kill -0 ${servicePid} && readlink /proc/${servicePid}/fd/9`)).toBe('/fixture/server/.deploy.lock')
+    const repeated = apply(next)
+    expect(repeated.status, repeated.stderr).toBe(0)
+    expect(execute('cat /fixture/server/current')).toBe(next.id)
+    expect(execute(`kill -0 ${servicePid} && echo alive`)).toBe('alive')
+  }, 60_000)
+
+  it.each(['KILL', 'TERM'] as const)('父 shell 收到 %s 后活跃子命令继续持锁；子命令退出后自动恢复', async (signal) => {
     const owner = await pack()
     const retry = await pack()
     execute('touch /fixture/block-load')
     const pid = start(owner)
     expect(Number.isSafeInteger(pid) && pid > 1).toBe(true)
     await vi.waitFor(() => expect(execute('test -f /fixture/entered-load && echo ready')).toBe('ready'))
-    execute(`kill -KILL ${pid}`)
+    execute(`kill -${signal} ${pid}`)
     expect(execute('kill -0 "$(cat /fixture/runtime.pid)" && echo alive')).toBe('alive')
     const blocked = apply(retry)
     expect(blocked.status).toBe(1)
@@ -133,7 +155,10 @@ fi
     execute('touch /fixture/release-load')
     await vi.waitFor(() => expect(execute('flock -n /fixture/server/.deploy.lock -c "echo released"')).toBe('released'), { timeout: 10_000 })
     expect(apply(retry).status).toBe(0)
-    expect(execute(`test ! -e /fixture/server/result-${owner.id}.json && echo unknown`)).toBe('unknown')
+    if (signal === 'KILL')
+      expect(execute(`test ! -e /fixture/server/result-${owner.id}.json && echo unknown`)).toBe('unknown')
+    else
+      expect(JSON.parse(execute(`cat /fixture/server/result-${owner.id}.json`))).toMatchObject({ stage: 'images', exitCode: 130 })
   }, 60_000)
 
   it('全部持有进程强杀和容器重启后锁自动释放，不要求删除锁文件或旧锁目录', async () => {

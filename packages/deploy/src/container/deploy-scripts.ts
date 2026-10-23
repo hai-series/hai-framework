@@ -16,7 +16,7 @@ export function shellArgument(value: string): string {
 
 /**
  * 生成分步执行、增量合并和失败恢复脚本；密钥始终从环境文件读取。
- * 仅生成 Linux 脚本；固定 inode 的 FD9 flock 由仍持有描述符的整棵进程树维持。未知旧锁目录不删除，结果仅由取得锁的 owner 发布。
+ * 仅生成 Linux 脚本；正常收尾显式释放 FD9 flock，中断时由仍持有描述符的进程树维持。未知旧锁目录不删除，结果仅由取得锁的 owner 发布。
  * @param options - 本次操作选项；字段含义见各子项。
  * @param options.deploymentId - 本次不可变部署标识，用于结果匹配和发布目录。
  * @param options.projectName - 已归一化的项目名称。
@@ -79,6 +79,7 @@ previous=''
 restore=''
 changed=false
 locked=false
+interrupted=false
 started=$(date +%s)
 step_started=$started
 step() {
@@ -161,11 +162,17 @@ finish() {
     # 先完整写入再同目录原子发布，SSH 重连核对不能读取到半份终态结果。
     printf '{"deploymentId":"%s","stage":"%s","exitCode":%s,"durationSeconds":%s}\n' "$id" "$stage" "$code" "$elapsed" > "$root/result-$id.json.next"
     mv "$root/result-$id.json.next" "$root/result-$id.json"
+    # 前台命令及同步恢复已结束；后台服务可继续运行，但不能使成功终态永久占锁。
+    # 中断时仍可能有活跃子命令，必须由全部描述符持有者退出后释放。
+    if [ "$interrupted" = false ]; then
+      flock -u 9
+      exec 9>&-
+    fi
   fi
   exit "$code"
 }
 trap finish EXIT
-trap 'exit 130' HUP INT TERM
+trap 'interrupted=true; exit 130' HUP INT TERM
 step preflight 'Checking deployment tools and package'
 for tool in sha256sum tar awk curl flock; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
 if [ "$runtime" = auto ]; then
