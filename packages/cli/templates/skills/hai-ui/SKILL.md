@@ -34,6 +34,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 
 - Tabs 支持方向键、Home/End、跳过禁用项与单一 Tab 入口，children 内容关联当前页签；DataTable 通过 aria-sort/aria-busy 和加载文字提供状态，有 onrowclick 时支持行 Enter/Space，单元格操作不重复触发行操作。
 - Pagination 导航和输入名称跟随 UI locale，外部 page 变化同步跳页草稿，触摸设备扩大导航按钮；TableToolbar 打开后进入控件，Escape 返回触发点，视图按钮带选中状态。应用仍需接入排序、筛选、分页和视图对应的数据行为。
+- CrudPage 占满宿主剩余高度，空数据和少量数据时分页保留在底部；宿主从视口外壳到内容区逐层使用 flex/grid 的剩余空间约束与 min-height: 0，避免自动高度包装层截断布局。数据区独立滚动，分页不覆盖数据。
 - theme.css 自动引入 design-tokens.css；全局样式的焦点使用 --hai-focus-color（缺省跟随当前 primary），减少动态效果时保留最终状态并缩短动画。长内容在 Empty/Alert 中换行；业务自定义 snippet 也要能收缩。
 
 ## 按需参考

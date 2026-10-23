@@ -416,6 +416,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 > `CrudPage` defaults to the `TableToolbar` icon/popover toolbar; use `toolbarStyle='filter-bar'` for a flat filter bar. `detailColumns={['title']}` makes specified columns open details. `toolbarLeading` injects left-side titles/descriptions; `showHeader={false}` avoids duplicate titles. `toolbarActions` adds right-side actions, `card` replaces rows with cards, `tableCell` renders interactive cells by row/column key (such as Tooltip), and `sortableColumns` controls server sorting fields. Filters support `select`, `boolean`, `number`, `date`, `date-range`, and `text`.
 >
 > The page fills available parent height. Tables fill remaining space even without data; only the data area scrolls, with headers fixed at its top and pagination fixed at the list card bottom.
+> Pass remaining height through every host container, for example with `flex flex-1 min-h-0 flex-col`, from the viewport shell to the content area. Intermediate wrappers must not size only to their content. Pagination stays at the bottom for empty, short and scrolling lists.
 >
 > Columns first shrink to 7rem and truncate long text; horizontal scrolling appears only if total width still exceeds the container. The action column stays fixed on the right.
 

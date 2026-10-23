@@ -416,6 +416,7 @@ components/
 > `CrudPage` は既定で `TableToolbar` のアイコン・ポップアップ形式を使い、`toolbarStyle='filter-bar'` で平置きにできます。`detailColumns={['title']}` は指定列を詳細入口にします。`toolbarLeading` は左のタイトル・説明、`showHeader={false}` はタイトル重複の防止、`toolbarActions` は右の操作に使います。`card` は行をカード化、`tableCell` は行・列 key で Tooltip などの操作要素を描画、`sortableColumns` はサーバーのソート項目を制御します。フィルターは `select`、`boolean`、`number`、`date`、`date-range`、`text` に対応します。
 >
 > ページは親の利用可能な高さを満たします。データの有無にかかわらずテーブルが残りの領域を使い、データ部分のみがスクロールします。見出しはデータ領域の上、ページ分割は一覧カードの下に固定します。
+> ビューポートの外枠からコンテンツまで、各親要素に `flex flex-1 min-h-0 flex-col` などで残りの高さを渡します。中間のラッパーを内容だけの高さにしないでください。空・少数・スクロールする一覧でもページ分割は下部に配置されます。
 >
 > 列は先に 7rem まで縮小し長文を切り詰め、総幅が容器を超える場合のみ横スクロールを出します。操作列は右に固定し、横スクロール中も表示します。
 

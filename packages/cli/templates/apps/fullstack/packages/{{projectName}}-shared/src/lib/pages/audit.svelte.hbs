@@ -17,10 +17,10 @@
   ])
 </script>
 
-<section class="space-y-5" data-testid="audit-page">
-  <div><h1 class="text-xl font-semibold tracking-tight">{m.nav_audit()}</h1><p class="mt-1 text-sm text-base-content/50">{m.audit_description()}</p></div>
-  <div class="rounded-xl border border-base-content/8 bg-base-100">
-    <form class="grid items-end gap-3 border-b border-base-content/8 p-4 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] [&_.fieldset]:p-0" onsubmit={(event) => {
+<section class="flex min-h-0 flex-1 flex-col gap-5" data-testid="audit-page">
+  <div class="shrink-0"><h1 class="text-xl font-semibold tracking-tight">{m.nav_audit()}</h1><p class="mt-1 text-sm text-base-content/50">{m.audit_description()}</p></div>
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100">
+    <form class="grid shrink-0 items-end gap-3 border-b border-base-content/8 p-4 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] [&_.fieldset]:p-0" onsubmit={(event) => {
       event.preventDefault()
       void store.loadAudit()
     }}>
@@ -30,8 +30,8 @@
       <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-end">{m.audit_end()}</label><input id="audit-end" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditEndDate} /></div>
       <Button type="submit" variant="outline" disabled={store.loading} class="h-10 w-full">{m.search()}</Button>
     </form>
-    <div class="overflow-x-auto">
-      <DataTable data={store.audit} {columns} keyField="id" loading={store.loading} striped={false}>
+    <div class="flex min-h-0 flex-1 flex-col overflow-auto">
+      <DataTable data={store.audit} {columns} keyField="id" loading={store.loading} striped={false} class="min-h-0 flex-1 overflow-auto">
         {#snippet cell(entry, key)}
           {#if key === 'createdAt'}<span class="whitespace-nowrap text-xs">{store.formatDate(entry.createdAt)}</span>
           {:else if key === 'username'}{entry.username || m.audit_system()}
@@ -42,7 +42,7 @@
         {#snippet actions(entry)}<Button size="xs" variant="ghost" onclick={() => { selected = entry }}>{m.details()}</Button>{/snippet}
       </DataTable>
     </div>
-    <div class="border-t border-base-content/8 p-4"><Pagination page={store.auditPage} total={store.auditTotal} pageSize={store.pageSize} onchange={page => void store.loadAudit(page)} /></div>
+    <div class="mt-auto shrink-0 border-t border-base-content/8 p-4"><Pagination page={store.auditPage} total={store.auditTotal} pageSize={store.pageSize} onchange={page => void store.loadAudit(page)} /></div>
   </div>
 </section>
 

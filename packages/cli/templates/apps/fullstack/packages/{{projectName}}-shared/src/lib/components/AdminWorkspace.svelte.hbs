@@ -78,7 +78,7 @@
     </main>
   {:else}
     <AppShell {platform} {store} onhelp={() => guide.openHelp()}>
-      <div class='space-y-5'>
+      <div class='flex min-h-0 flex-1 flex-col gap-5'>
         {#if store.error}<Alert variant='error' data-testid='error'>{store.error}</Alert>{/if}
         {#if store.notice}<Alert variant='success' data-testid='notice'>{store.notice}</Alert>{/if}
         {#await pageComponent}

@@ -58,8 +58,8 @@
   })
 </script>
 
-<div class='flex flex-col gap-4'>
-  <PageHeader title={m('nav_users')} description={m('users_total', { total })} />
+<div class='flex min-h-0 flex-1 flex-col gap-4'>
+  <PageHeader title={m('nav_users')} description={m('users_total', { total })} class='shrink-0' />
 
   {#if errorCode}
     <Alert variant='error' title={m('users_failed')}>
@@ -67,16 +67,17 @@
     </Alert>
   {/if}
 
-  <Card padding='none'>
+  <Card padding='none' class='min-h-0 flex-1 overflow-hidden [&>.card-body]:min-h-0 [&>.card-body]:flex-1'>
     <DataTable
       data={users}
       {columns}
       keyField='id'
       {loading}
+      class='min-h-0 flex-1 overflow-auto'
     />
   </Card>
 
-  <div class='flex justify-center'>
+  <div class='mt-auto flex shrink-0 justify-center'>
     <Pagination bind:page {total} {pageSize} />
   </div>
 </div>

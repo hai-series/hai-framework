@@ -415,6 +415,7 @@ components/
 > `CrudPage` 默认使用 `TableToolbar` 图标弹层工具栏，也可通过 `toolbarStyle='filter-bar'` 切回平铺筛选栏；`detailColumns={['title']}` 可把标题等指定列绑定为详情入口；`toolbarLeading` 用于注入左侧标题或说明，配合 `showHeader={false}` 可避免重复标题；`toolbarActions` 注入右侧业务操作，`card` 插槽可将列表项替换为卡片视图，`tableCell` 可按行和列 key 渲染交互式单元格内容（例如 Tooltip），`sortableColumns` 控制服务端排序字段。过滤工具栏支持 `select`、`boolean`、`number`、`date`、`date-range`、`text`。
 >
 > 页面根容器会占满父级可用高度。表格无论是否有数据都会撑满剩余空间，仅数据区域滚动；表头固定在数据区顶部，分页栏固定在列表卡片底部。
+> 宿主从视口外壳到内容区须逐层传递剩余高度（例如 `flex flex-1 min-h-0 flex-col`），中间包装层不能仅按内容自动计算高度。空表、少量数据和长列表均沿用底部分页。
 >
 > 表格列会优先压缩到 7rem 并截断超长文本；列总宽度仍超过容器时才显示横向滚动条。操作列固定在右侧，横向滚动时保持可见。
 

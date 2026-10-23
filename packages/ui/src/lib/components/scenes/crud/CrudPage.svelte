@@ -270,7 +270,7 @@
   /** 是否使用紧凑列表密度。 */
   const isCompact = $derived(density === 'compact')
   /** 页面主体垂直间距；列表卡片会占满其余可用高度。 */
-  const pageGapClass = 'flex min-h-0 h-full flex-col gap-5'
+  const pageGapClass = 'flex min-h-0 h-full min-w-0 flex-1 flex-col gap-5'
   /** 行内操作按钮尺寸。 */
   const actionButtonSize = $derived(isCompact ? 'xs' : 'sm')
   /** 行内操作图标尺寸。 */
@@ -287,7 +287,7 @@
       : 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.25rem] border-base-content/7 shadow-sm [&>.card-body]:min-h-0 [&>.card-body]:flex-1',
   )
   /** 分页栏样式；shrink-0 保证它始终贴在卡片底部。 */
-  const paginationBarClass = 'shrink-0 border-t border-base-content/5 px-4 py-3'
+  const paginationBarClass = 'mt-auto shrink-0 border-t border-base-content/5 px-4 py-3'
 
   // 表单展示配置（抽屉 / 弹窗）
   /** 编辑/新建面板类型。 */
