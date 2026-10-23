@@ -43,7 +43,7 @@ try {
 
   result = spawnSync(
     process.execPath,
-    [vitestCli, 'run', i18nGate ? 'tests/generate-i18n.test.ts' : generateGate ? 'tests/generate-runtime.e2e.test.ts' : deployGate ? 'tests/deploy-docker-ssh.e2e.test.ts' : 'tests/scaffold-gates.e2e.test.ts', '--testTimeout', '1800000', ...vitestArgs],
+    [vitestCli, 'run', ...(deployGate ? ['tests/deploy-fixture-ownership.e2e.test.ts', 'tests/deploy-docker-ssh.e2e.test.ts'] : [i18nGate ? 'tests/generate-i18n.test.ts' : generateGate ? 'tests/generate-runtime.e2e.test.ts' : 'tests/scaffold-gates.e2e.test.ts']), '--testTimeout', '1800000', ...vitestArgs],
     {
       env: {
         ...process.env,

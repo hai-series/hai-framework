@@ -2,9 +2,9 @@
 
 审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01，共 83 个，另有 21 个按模块拆分的 JSDoc 任务，共 104 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04，共 90 个，另有 21 个按模块拆分的 JSDoc 任务，共 111 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 49/49；P2 55/55（已通过定向验证；全量回归尚未执行）。
+实施进度：P1 50/50；P2 55/61（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -26,12 +26,12 @@
 | audit | 7 | 16 | 1 | 11 | AUDIT-01 | JSDOC-04 |
 | cache | 7 | 28 | 1 | 20 | CACHE-01、CACHE-02、CACHE-03、CACHE-04 | JSDOC-05 |
 | capacitor | 9 | 31 | 1 | 18 | CAP-01、CAP-02 | JSDOC-06 |
-| cli | 17 | 75 | 7 | 63 | CLI-01、CLI-02、CLI-03 | JSDOC-07 |
-| core | 23 | 85 | 21 | 47 | CORE-01、CORE-02、CORE-03 | JSDOC-08 |
+| cli | 17 | 75 | 7 | 63 | CLI-01、CLI-02、CLI-03、CLI-04 | JSDOC-07 |
+| core | 23 | 85 | 21 | 47 | CORE-01、CORE-02、CORE-03、CORE-04 | JSDOC-08 |
 | crypto | 15 | 48 | 1 | 44 | CRYPTO-01、CRYPTO-02、CRYPTO-03、CRYPTO-04 | JSDOC-09 |
 | datapipe | 8 | 23 | 0 | 14 | PIPE-01 | JSDOC-10 |
 | deploy | 26 | 75 | 1 | 55 | DEPLOY-01、DEPLOY-02、DEPLOY-03 | JSDOC-11 |
-| iam | 38 | 151 | 9 | 150 | IAM-01、IAM-02、IAM-03、IAM-04、IAM-05、IAM-06、IAM-07、IAM-08 | JSDOC-12 |
+| iam | 38 | 151 | 9 | 150 | IAM-01、IAM-02、IAM-03、IAM-04、IAM-05、IAM-06、IAM-07、IAM-08、IAM-09 | JSDOC-12 |
 | kit | 44 | 151 | 3 | 91 | KIT-01、KIT-02 | JSDOC-13 |
 | payment | 18 | 50 | 8 | 47 | PAY-01、PAY-02、PAY-03、PAY-04、PAY-05、PAY-06 | JSDOC-14 |
 | reach | 13 | 51 | 1 | 42 | REACH-01、REACH-02、REACH-03、REACH-04 | JSDOC-15 |
@@ -42,7 +42,7 @@
 | ui | 162 | 297 | 63 | 284 | UI-01、UI-02 | JSDOC-20 |
 | vecdb | 10 | 35 | 3 | 26 | VECDB-01、VECDB-02、VECDB-03、VECDB-04、VECDB-05 | JSDOC-21 |
 
-全量逐文件/逐声明补齐清单见 [JSDoc 修正任务附件](module-review-jsdoc-2026-10-22.md)。跨模块任务 LIFE-01、STYLE-01/02、DOC-01、DIST-01 同时适用于受影响包。
+全量逐文件/逐声明补齐清单见 [JSDoc 修正任务附件](module-review-jsdoc-2026-10-22.md)。跨模块任务 LIFE-01、STYLE-01/02、DOC-01/02/03、DIST-01、VERIFY-01/02/04/05、E2E-01 同时适用于受影响包。
 
 ## 建议执行批次
 
@@ -946,3 +946,69 @@
 - **证据与影响**：真实门禁执行遗留5个hai-api-smoke临时CSS；脚本只登记mjs路径，esbuild旁路CSS未纳入清理，重复执行污染源码目录。
 - **修正内容**：以唯一隔离目录管理同一次UI构建的全部副产物，成功、构建失败和导入失败均在finally清理；保留所有真实公开入口及浏览器构建覆盖。
 - **验收标准**：21包实际导入与浏览器入口冒烟通过；正常与失败路径清理有证据、源码无新增残留，脚本类型/适用lint通过。
+
+## 全量回归记录
+
+### 首轮收集（2026-10-23，集中修复前）
+
+- **输入与完整性**：冻结源码 `7376644239ad31c9f17a795697defed34b365993`、Node 24.18.0、pnpm 12.11.2，依赖 frozen install；运行期间源码/配置/依赖/环境不变。根 Turbo 检查使用 `--force --continue=dependencies-successful`，容器测试串行。完整采集 18 项，13 通过、5 失败、0 阻塞；此轮未达到最终验收。
+- **通过**：根 typecheck（49 任务实际执行）、独立 build 图（34/34）、环境契约（595 变量）、公开 API、21 包实际导入/29 浏览器入口、21 模块 JSDoc、CLI generate 3/i18n 19/实际语言 12/实际环境输出 4、Linux/OpenSSH runtime/lock 9、Storage 原生 Chrome 10。根 E2E 中 Admin 193 + transport 2 通过，其他结果仍使根命令失败。
+- **失败与归因**：根 lint 的 17 errors/17 warnings 与四个 scaffold 场景的模板格式归 VERIFY-02；根 build 的 lint 前置失败，独立构建通过不能冒充根 build 通过；根 test 的 CLI 1/IAM 3 分别归 CLI-04/IAM-09；根 E2E 的三个 API 生成场景和 H5/corporate/AI-playground/mobile 启动、重型 CLI 部署 7 失败归 E2E-01，fullstack 增量失败是前次部署无成功基线的连锁结果。另发现源码可证的资源清理风险 VERIFY-05、证据删除 VERIFY-04 和原生异常日志丢失 CORE-04。
+- **边界与收尾**：普通测试中的 opt-in 跳过由上述专用门禁另行真实执行；商业音频 smoke 未启用，不算通过。旧部署夹具 ID 与其独有临时工程已在退出后核验不存在。日志/汇总留被忽略的 tmp/validation/module-review/round-01，不提交测试产物。先完成新增 P1，再处理 P2；全部实施完成后执行下一轮全量验收。
+
+### VERIFY-05 · P1 · 部署测试按所有权回收容器与镜像并隔离端口
+
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：以128位本轮身份隔离外层容器/私有镜像，create成功先记ID再启动，所有操作按ID，宿主loopback端口由引擎原子分配；私有tag/内容ID账本回收不force，不删共享base/middleware或其他tag，版本2.4.6与完整增量/回滚断言保留。真实Podman最终3/3通过，含9端口、外部sentinel/同内容tag/retag保护与真实start/create失败；严格源和测试类型、7文件lint零警告、12声明12示例和runner语法通过。最终源码真实afterAll AST回调3故障探针通过，证明回收/报告失败仍清私有工程、恢复proxy并聚合错误，独立安全报告不保留密钥/环境内容。三语README同步；无生产API/配置/依赖变化，实际Docker与跨宿主故障未验证，完整部署留所有新增修正后的最终轮；全量回归按用户要求在全部任务实施后执行。
+- **位置**：`packages/cli/tests/deploy-docker-ssh.e2e.test.ts` 创建、端口绑定和 teardown。
+- **证据与影响**：全量收集发现夹具使用固定名称、镜像 tag 和宿主端口，beforeAll/afterAll 按固定名称强制删除。并行运行或同名外部资源会被误删；这是源码确认的风险，不表示已发生资源损失。
+- **修正内容**：本轮唯一身份；成功 create 后先记录容器 ID，再启动，按 ID 操作和回收；引擎原子分配 loopback 宿主端口；镜像仅凭本轮成功创建的 tag/ID ledger 回收对应 tag，保留共享基础镜像和其他拥有者的 tag。
+- **验收标准**：真实双夹具端口独立，关闭一方不影响另一方及外部 sentinel；同内容外部镜像 tag 存活；启动失败只清已记录资源，创建失败不按名称回退删除；完整版本、增量与回滚断言保留。
+
+### VERIFY-02 · P2 · 修正全量 lint 暴露的注释和生成模板格式问题
+
+- [ ] 待修正。
+- **位置**：UI/api-client/crypto JSDoc、crypto 协议说明、reldb/vecdb README、IAM session worker 和两份 CLI 模板。
+- **证据与影响**：首轮根 lint 有 17 errors/17 warnings，根 build 因 lint 前置未执行；实际独立构建图通过。四个生成场景另因两处模板格式失败。不能将独立构建通过记作根 build 通过。
+- **修正内容**：补准确的 void 返回和嵌套参数注释，移除重复空行，规范数组和模板格式；保持类型、执行语义、协议元素顺序及断言不变。
+- **验收标准**：受影响文件 lint 零警告，真实生成工程 lint 通过；注释与格式修改 AST/渲染语义一致；worker 的真实双进程回归通过，不关闭规则或增加豁免。
+
+### CLI-04 · P2 · 部署向导按真实数据库 Schema 校验 TLS 配置
+
+- [ ] 待修正。
+- **位置**：CLI deploy middleware 输入、reldb 配置公开入口及对应测试/生成元数据。
+- **证据与影响**：向导通用 ssl 校验接受 MySQL `true`，写出后真实 `core.config.load` + `ReldbConfigSchema` 拒绝；PostgreSQL 和 MySQL 的公开 TLS 契约不同。
+- **修正内容**：从真实纯配置 Schema 复用校验，按后端校验输入并在写入前验证完整配置；CLI 打包内联纯 Schema，不要求目标应用安装依赖，不扩大 TLS 接受范围、不静默降级。私钥只写私有环境，错误提示不暴露秘密。
+- **验收标准**：MySQL 严格对象、默认双验证、配对 mTLS、false 与非法值；PostgreSQL 既有模式；非法输入不改原文件。实际发布包在仓库外、无应用 node_modules 下可执行；纯入口浏览器打包/声明与导出清单通过，文档/skill/catalog/环境生成同步。
+
+### IAM-09 · P2 · 测试与会话持久用户核验契约对齐
+
+- [ ] 待修正。
+- **位置**：`iam-authorization-read.test.ts`、`iam-role-atomic.test.ts`、三语 README 和双 IAM skill。
+- **证据与影响**：首轮 IAM 三个失败分别期待旧的单次持久读取和使用不存在的伪造用户创建会话。IAM-06 的用户启用/凭据版本核验符合安全要求，不应删除以迎合旧测试。
+- **修正内容**：真实启用用户及明确角色集夹具，断言两层读取同一用户并校验关键字段；覆盖任一持久读取失败均拒绝、恢复后同一令牌成功。文档区分授权快照与持续执行的持久凭据核验。
+- **验收标准**：SQLite/memory 与 PostgreSQL/Redis 真实后端均通过，角色替换、回滚、并发和既有会话同步断言保留；严格类型、lint、文档/skill 检查通过。
+
+### E2E-01 · P2 · 应用与生成工程显式装配隔离测试后端
+
+- [ ] 待修正。
+- **位置**：应用/CLI 模板 Playwright 启动、测试运行入口和 CLI 部署夹具环境。
+- **证据与影响**：首轮生成工程三个 API 场景启动失败；H5/corporate 连接生产 Compose `db` 地址失败，AI playground 缺少可用限流缓存，mobile 后端读取生产环境；部署 API 测试使用本地后端却按生产运行，触发共享状态守卫。根因和具体异常分别保留，不混称为同一网络错误。
+- **修正内容**：测试启动明确使用本轮临时 SQLite/memory/local 等后端及测试身份，隔离数据和 ambient 配置，保留可信传输 keyring 与注册表装配；生产环境和分布式守卫不放宽。同步文档、skill 和真实消费者。
+- **验收标准**：所有原失败的应用及三种 API 生成场景真实启动/浏览器通过，所有八个 scaffold 场景保留；真实 Linux 部署健康、登录、版本增量和失败回滚通过，临时数据在进程退出后清理。
+
+### VERIFY-04 · P2 · E2E 保留本轮日志与浏览器证据并尊重指定输出目录
+
+- [ ] 待修正。
+- **位置**：`scripts/run-e2e.mjs`、CLI wrapper 模板、scaffold helper 及脚本回归。
+- **证据与影响**：现有 wrapper 覆盖指定 evidence 路径，并在成功、失败和取消后删除整个 test-results/playwright-report；scaffold 删除临时工程时也丢失报告，不符合工作规范中分析/交付前保留证据的要求。
+- **修正内容**：使用忽略目录下本轮独有输出，尊重调用方显式目录，保留本轮日志/报告/截图；只回收本轮子进程、临时工程和数据，不复制私有环境/密钥/用户数据库，不删除既存报告。
+- **验收标准**：成功、非零退出、分组失败与取消均保留证据和原始退出语义；不启动失败后的下一组；旧报告 sentinel 存活，数据和子进程仍 finally 回收；真实 scaffold 证据在工程回收后仍可查看。
+
+### CORE-04 · P2 · 两端日志保留异常诊断并脱敏错误上下文
+
+- [ ] 待修正。
+- **位置**：core 两端 logger、共享敏感字段处理与 Logger 文档示例。
+- **证据与影响**：真实部署入口按公开示例记录 `{ error }`，Node 日志实际为 `error: {}`。共享脱敏器仅遍历 plain record，Pino 默认异常 serializer 仅处理 `err` 字段，浏览器 JSON 序列化也丢失原生 Error 的非枚举属性；仅补 Node serializer 又会让错误自有敏感字段绕过脱敏。
+- **修正内容**：在共享边界规范化原生 Error/AggregateError/cause 与可枚举上下文，再执行既有字段/URL 脱敏，保留两端一致的可诊断结构；不修改调用方原异常，不新增重复公开错误 API。
+- **验收标准**：两端真实日志包含 name/message/stack 和受控 cause/aggregate，循环引用不会导致日志抛错；错误自有敏感字段、URL 与配置 redact 生效；明确自由文本消息的脱敏边界，文档/skill/示例与实现一致。

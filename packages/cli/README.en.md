@@ -124,7 +124,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates --i18n
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-Scaffold gates generate real projects and run install, typecheck, lint, build, tests and browser workflows. Deployment gates cover offline bundles, SSH/manual deployment and partial updates. Tests clean up their resources; save requested evidence in a designated directory. Native shells and real cloud providers need separate acceptance.
+Scaffold gates generate real projects and run install, typecheck, lint, build, tests and browser workflows. Deployment gates cover actual resource ownership and dynamic host port isolation, as well as offline bundles, SSH/manual deployment, incremental updates and rollback. Cleanup uses only container IDs and private image tags recorded by the current run. Safe metadata remains in ignored `tmp/validation/module-review/VERIFY-05/`; temporary projects, SSH keys and project data are still removed. Tests clean up their resources; save requested evidence in a designated directory. Native shells and real cloud providers need separate acceptance.
 
 `--generate` runs focused route gates: it reuses installed workspace dependencies, generates and builds real SvelteKit, serv API and fullstack backend projects, then accesses their new routes, including transport. It does not replace the full installation and browser matrix.
 
