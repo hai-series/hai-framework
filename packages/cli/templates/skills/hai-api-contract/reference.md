@@ -4,6 +4,8 @@
 
 ## 运行环境
 
+独立 contract 包发布前验证实际声明构建。`ContractProcedureBuilderWithInputOutput`、`ContractProcedureBuilderWithOutput`、`Schema` 直接复用上游公共类型，由 `@h-ai/api-contract` 类型转出，供推导声明与显式 `import type` 使用；不手写仿造类型或导入 node_modules 内部路径。
+
 > ✅ **契约定义包，无服务端业务依赖；Zod/oRPC schema 构造仍有运行时代码。** 可在客户端、服务端、测试环境直接引用。
 
 ## 适用场景

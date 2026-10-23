@@ -10,6 +10,7 @@
 
 // 领域 contract 类型（用于推导客户端类型签名）。
 export * from './ai/ai-audio-ws-schemas.js'
+
 export type { AiContract } from './ai/ai-contract.js'
 // Schemas（含运行时 schema 常量 + 推导类型）。
 export * from './ai/ai-schemas.js'
@@ -19,15 +20,17 @@ export * from './common/pagination-schemas.js'
 export * from './common/response-schemas.js'
 // result-schema：仅保留 HaiErrorSchema；工厂与 void 常量走 `apiContract.haiResultSchema` / `apiContract.voidResultSchema`。
 export { HaiErrorSchema } from './common/result-schemas.js'
-
 // 组合 contract 输入/输出类型。
 export type { CreateApiContractOptions, CreatedApiContract } from './composition/create-api-contract.js'
 
 export type { IamContract } from './iam/iam-contract.js'
+
 export * from './iam/iam-schemas.js'
 export type { PaymentContract } from './payment/payment-contract.js'
 export * from './payment/payment-schemas.js'
-
 export type { StorageContract } from './storage/storage-contract.js'
 
 export * from './storage/storage-schemas.js'
+
+// 保留推导 contract 声明所需的上游公共类型，避免应用引用依赖内部路径。
+export type { ContractProcedureBuilderWithInputOutput, ContractProcedureBuilderWithOutput, Schema } from '@orpc/contract'

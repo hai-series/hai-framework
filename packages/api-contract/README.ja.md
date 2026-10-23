@@ -50,6 +50,8 @@ export const appContract = {
 
 ### API 契約
 
+独立した contract パッケージの宣言ファイルを生成するため、上流の公開型 `ContractProcedureBuilderWithInputOutput`、`ContractProcedureBuilderWithOutput`、`Schema` を本パッケージから再エクスポートしています。独自ルートの入出力の型推論を維持し、明示的な型が必要な場合は `@h-ai/api-contract` から `import type` で取得してください。依存パッケージの内部インストールパスは参照しないでください。
+
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 

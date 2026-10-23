@@ -14,9 +14,9 @@
 | @h-ai/api-client | `. (default)` | 12 |
 | @h-ai/api-client | `. (import)` | 12 |
 | @h-ai/api-client | `. (types)` | 12 |
-| @h-ai/api-contract | `. (default)` | 136 |
-| @h-ai/api-contract | `. (import)` | 136 |
-| @h-ai/api-contract | `. (types)` | 136 |
+| @h-ai/api-contract | `. (default)` | 139 |
+| @h-ai/api-contract | `. (import)` | 139 |
+| @h-ai/api-contract | `. (types)` | 139 |
 | @h-ai/api-contract | `./ai (import)` | 45 |
 | @h-ai/api-contract | `./ai (types)` | 45 |
 | @h-ai/api-contract | `./iam (import)` | 56 |

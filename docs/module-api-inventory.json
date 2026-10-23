@@ -10390,6 +10390,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ContractProcedureBuilderWithInputOutput",
+              "kind": "type",
+              "declaration": "ContractProcedureBuilderWithInputOutput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ContractProcedureBuilderWithOutput",
+              "kind": "type",
+              "declaration": "ContractProcedureBuilderWithOutput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "CreateApiContractOptions",
               "kind": "type",
               "declaration": "CreateApiContractOptions",
@@ -10838,6 +10850,12 @@
               "kind": "value",
               "declaration": "PaymentTradeTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "Schema",
+              "kind": "type",
+              "declaration": "Schema",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "StorageContract",
@@ -11216,6 +11234,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ContractProcedureBuilderWithInputOutput",
+              "kind": "type",
+              "declaration": "ContractProcedureBuilderWithInputOutput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ContractProcedureBuilderWithOutput",
+              "kind": "type",
+              "declaration": "ContractProcedureBuilderWithOutput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "CreateApiContractOptions",
               "kind": "type",
               "declaration": "CreateApiContractOptions",
@@ -11664,6 +11694,12 @@
               "kind": "value",
               "declaration": "PaymentTradeTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "Schema",
+              "kind": "type",
+              "declaration": "Schema",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "StorageContract",
@@ -12042,6 +12078,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ContractProcedureBuilderWithInputOutput",
+              "kind": "type",
+              "declaration": "ContractProcedureBuilderWithInputOutput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ContractProcedureBuilderWithOutput",
+              "kind": "type",
+              "declaration": "ContractProcedureBuilderWithOutput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "CreateApiContractOptions",
               "kind": "type",
               "declaration": "CreateApiContractOptions",
@@ -12490,6 +12538,12 @@
               "kind": "value",
               "declaration": "PaymentTradeTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "Schema",
+              "kind": "type",
+              "declaration": "Schema",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "StorageContract",

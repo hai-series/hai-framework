@@ -50,6 +50,8 @@ export const appContract = {
 
 ### API contracts
 
+For standalone contract declaration builds, this package re-exports the upstream public types `ContractProcedureBuilderWithInputOutput`, `ContractProcedureBuilderWithOutput`, and `Schema`, preserving inference for custom routes. Import explicit types from `@h-ai/api-contract` with `import type`; do not reference internal dependency installation paths.
+
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 

@@ -50,6 +50,8 @@ export const appContract = {
 
 ### API 契约
 
+独立 contract 包构建声明文件时，`ContractProcedureBuilderWithInputOutput`、`ContractProcedureBuilderWithOutput` 和 `Schema` 由本包按上游真实类型公开转出，保持自定义路由的输入输出推导。需要显式类型时从 `@h-ai/api-contract` 使用 `import type`，不要引用依赖的内部安装路径。
+
 ```ts
 import { apiContract } from '@h-ai/api-contract'
 
