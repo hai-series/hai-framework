@@ -46,7 +46,7 @@ const SKILL_EXCLUSIONS_BY_APP_TYPE: Partial<Record<AppType, string[]>> = {
   'admin': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
   'website': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
   'h5': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
-  'api': ['hai-ui', 'hai-kit', 'hai-capacitor'],
+  'api': ['hai-ui', 'hai-ui-design', 'hai-ui-review', 'hai-kit', 'hai-capacitor'],
   'mobile-app': ['hai-core', 'hai-kit', 'hai-serv', 'hai-api-contract'],
   'fullstack': ['hai-kit'],
 }
@@ -291,7 +291,12 @@ async function copySkills(
 ): Promise<string[]> {
   const copiedFiles: string[] = []
 
-  for (const skillName of new Set(skillNames)) {
+  // UI 使用、设计和审查按同一版本成套交付，补模块时也需补齐相邻资源。
+  const selectedNames = skillNames.includes('hai-ui')
+    ? [...skillNames, 'hai-ui-design', 'hai-ui-review']
+    : skillNames
+
+  for (const skillName of new Set(selectedNames)) {
     copiedFiles.push(...await copySkill(templatesDir, skillName, projectPath, targetDirs, overwrite))
   }
 
@@ -458,6 +463,9 @@ export function resolveSkillNamesForPackages(packageNames: string[]): string[] {
     }
   }
 
+  if (skillNames.includes('hai-ui'))
+    skillNames.push('hai-ui-design', 'hai-ui-review')
+
   return [...new Set(skillNames)]
 }
 
@@ -503,9 +511,10 @@ export async function generateProjectAiSupport(
   const appType = options.appType ?? detected.appType
   const projectName = options.projectName ?? detected.projectName
   // 已确认的样板补全整个兼容目录；其它项目只补工作流与明确请求的模块。
-  const selectedSkillNames = appType
+  const requestedSkillNames = appType
     ? [...resolveCompatibleSkillNames(await listTemplateSkillNames(templatesDir), appType as AppType), ...WORKFLOW_SKILLS, ...skillNames]
     : [...WORKFLOW_SKILLS, ...skillNames]
+  const selectedSkillNames = resolveCompatibleSkillNames(requestedSkillNames, appType as AppType | undefined)
   const copiedFiles: string[] = []
   copiedFiles.push(...await copySkills(templatesDir, selectedSkillNames, projectPath, SKILL_TARGET_DIRS, overwriteSkills))
   copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, overwriteBridgeFiles, appType, projectName))

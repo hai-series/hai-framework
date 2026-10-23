@@ -140,6 +140,12 @@ Deployment fixtures inspect pinned public base images and pull only confirmed mi
 
 `--i18n` builds the CLI and checks language precedence, help, successful generation and errors in separate processes, alongside Chinese/English/Japanese prompt, validation, cancellation and create/add/init cases.
 
+## Skill workflows and frontend guidance
+
+The workflow uses hai-spec-review, hai-spec-implement, hai-app-create, hai-app-tests, hai-app-review and hai-pr-review. The [handoff contract](templates/skills/hai-spec-implement/handoff.md) connects requirements, acceptance, findings and evidence while retaining Git document baselines.
+
+UI delivery includes [hai-ui-design](templates/skills/hai-ui-design/SKILL.md), hai-ui and [hai-ui-review](templates/skills/hai-ui-review/SKILL.md). API templates exclude frontend skills. init/add preserve private entrypoints and backfill missing resources. Repository entrypoints use the same names for shared responsibilities.
+
 ## License
 
 Apache-2.0

@@ -124,7 +124,7 @@ CLI 会把完整 skills 放入应用 `.agents/skills/`。下面的 skill 名称�
 
 需求变更时，先修改并提交受影响的业务文档，复审变化，再说：“使用 hai-spec-implement，根据已验收文档基线到本次文档提交的差异更新实现，复用原任务并完成集成验收。”流程会固定旧/新文档快照，核对关联规则，更新任务、代码、测试和文档；全部验收后才推进基线。不要直接把当前 HEAD 当作旧基线，也不要把未合并分支标成已完成。中断后可要求从任务清单继续。
 
-上面四个 `hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-pr-review` 均为实际分发的应用 skills。框架源码仓库中的 `hai-create-app` / `hai-review-app` 面向仓库维护，名称和使用场景不同。
+上面四个 `hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-pr-review` 均为实际分发的应用 skills。框架源码仓库中的 `hai-app-create` / `hai-app-review` 面向仓库维护，名称和使用场景不同。
 
 ### 4. 编译源码与打包产物
 

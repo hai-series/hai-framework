@@ -1,9 +1,9 @@
 ---
-name: hai-usage-iam
+name: hai-iam
 description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key 和 RBAC。"
 ---
 
-# hai-usage-iam
+# hai-iam
 
 ## 能力契约
 

@@ -140,6 +140,12 @@ pnpm --filter @h-ai/cli test:deploy-gates
 
 `--i18n` は CLI をビルドし、独立プロセスで言語の優先順位・help・生成成功・失敗を検証し、中国語/英語/日本語の入力・検証・取消と create/add/init も確認します。
 
+## Skill ワークフローとフロントエンド指針
+
+hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-review、hai-pr-review が [共通の引き継ぎ契約](templates/skills/hai-spec-implement/handoff.md) で要件、受け入れ条件、指摘と証拠を接続します。文書差分は既存の Git 基準を維持します。
+
+UI には [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui、[hai-ui-review](templates/skills/hai-ui-review/SKILL.md) を一緒に配布し、API テンプレートでは除外します。init/add は既存の独自入口を保持して不足リソースを補完します。リポジトリ側でも同じ責務には同じ名前を使います。
+
 ## ライセンス
 
 Apache-2.0

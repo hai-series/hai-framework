@@ -35,4 +35,4 @@
 
 ## 详细 API 文档
 
-完整用法见 `packages/reldb/README.md` 和 skill `hai-usage-reldb`。
+完整用法见 `packages/reldb/README.md` 和 skill `hai-reldb`。

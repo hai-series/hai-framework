@@ -19,15 +19,22 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 
 ## 使用路径
 
+新页面或较大改版先使用 [hai-ui-design](../hai-ui-design/SKILL.md) 确定任务、布局、状态和组件映射；本 skill 负责正确实现。完成后按 [hai-ui-review](../hai-ui-review/SKILL.md) 查看真实页面，小范围修复沿用已有设计。
+
 - 密码登录只接收 identifier/password；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。
 
 - 先检查组件导入、Tailwind @source 和主题 CSS，再选场景 → 组合 → 原子组件，缺能力才自定义。
+- 管理列表和工作台随可用宽度展开；flex/grid 子项设 min-width: 0，表格在自身容器滚动。阅读页与登录表单按内容约束宽度。实际检查 390、1440、1920、2560、3840px，避免宽屏仍挤在中央窄列，手机出现整页横向滚动。
 - 按安装版本的 exports 选择明确列出的 components barrel 入口（不开放任意内部文件）；主题工具使用 `@h-ai/ui/theme`，避免仅为主题加载根入口的 AI/图表组件。禁止导入内部 src/dist；例如原子组件使用 `@h-ai/ui/components/primitives/index`。
 - 自动导入识别无分号、跨行及别名的运行时 import；已绑定的本地组件名称不会重复注入。
 - 应用只提供页面级文案；组件内部中英日文由 @h-ai/ui 维护。
 - `UserProfile` 用 `avatarAccept` / `avatarHint` 对齐业务的头像格式与大小限制；文件最终校验和上传由业务回调完成。
 - `BareInput type="file"` 通过 `onchange` 的 `currentTarget.files` 读取文件，不绑定文件路径 `value`；其他输入类型可 `bind:value`。
 - AI 文本视为不可信；Markdown/Mermaid 预览与允许执行 HTML/JS 的预览有不同边界。
+
+- Tabs 支持方向键、Home/End、跳过禁用项与单一 Tab 入口，children 内容关联当前页签；DataTable 通过 aria-sort/aria-busy 和加载文字提供状态，有 onrowclick 时支持行 Enter/Space，单元格操作不重复触发行操作。
+- Pagination 导航和输入名称跟随 UI locale，外部 page 变化同步跳页草稿，触摸设备扩大导航按钮；TableToolbar 打开后进入控件，Escape 返回触发点，视图按钮带选中状态。应用仍需接入排序、筛选、分页和视图对应的数据行为。
+- theme.css 自动引入 design-tokens.css；全局样式的焦点使用 --hai-focus-color（缺省跟随当前 primary），减少动态效果时保留最终状态并缩短动画。长内容在 Empty/Alert 中换行；业务自定义 snippet 也要能收缩。
 
 ## 按需参考
 

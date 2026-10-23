@@ -599,7 +599,7 @@ hai-framework/
 
 ### AI-First の基盤
 
-本リポジトリーは [AGENTS.md](AGENTS.md) を共通入口とし、詳細な規約を `.agents/instructions/`、開発 Skill を `.agents/skills/` に保存します。Copilot のパス指示にはマッチ条件とリンクのみを置き、Claude/OpenCode の入口も共通規約を参照します。Codex は `AGENTS.md` と `.agents/skills/` を標準で検出し、プロジェクト内で `$hai-create-module`、`$hai-review-module` などを呼び出せます。参考ファイルは必要なタスクに応じて読みます。根拠：[Codex skills](https://learn.chatgpt.com/docs/build-skills)、[プロジェクト指針](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。
+本リポジトリーは [AGENTS.md](AGENTS.md) を共通入口とし、詳細な規約を `.agents/instructions/`、開発 Skill を `.agents/skills/` に保存します。Copilot のパス指示にはマッチ条件とリンクのみを置き、Claude/OpenCode の入口も共通規約を参照します。Codex は `AGENTS.md` と `.agents/skills/` を標準で検出し、プロジェクト内で `$hai-module-create`、`$hai-module-review` などを呼び出せます。参考ファイルは必要なタスクに応じて読みます。根拠：[Codex skills](https://learn.chatgpt.com/docs/build-skills)、[プロジェクト指針](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。
 
 `hai create` は同じ共通入口と Skill を生成し、アプリ種別に応じた `AGENTS.md` を提供します：
 

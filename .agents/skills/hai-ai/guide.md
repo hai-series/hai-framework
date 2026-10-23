@@ -1,4 +1,4 @@
-# hai-usage-ai — 详细用法
+# hai-ai — 详细用法
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 

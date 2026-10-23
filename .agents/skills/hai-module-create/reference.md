@@ -1,4 +1,4 @@
-# hai-create-module — 详细范本（reference）
+# hai-module-create — 详细范本（reference）
 
 > 本文件是 [SKILL.md](SKILL.md) 的范本附录，**仅在需要套用具体模板时主动加载**。
 >

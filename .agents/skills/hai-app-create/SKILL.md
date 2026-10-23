@@ -1,9 +1,9 @@
 ---
-name: hai-create-app
+name: hai-app-create
 description: "在 hai 应用中新增、修改或修复功能，按需求复用框架能力并验证安全、质量和代码规范。"
 ---
 
-# hai-create-app
+# hai-app-create
 
 CLI 创建/补模块/初始化提示使用现有中英 locale；终端语言不改变目标应用默认语言。完整语言优先级与产物边界见 [应用环境与 CLI 开发](../../../packages/cli/templates/skills/hai-app-create/development.md)。
 
@@ -48,3 +48,5 @@ CLI 创建/补模块/初始化提示使用现有中英 locale；终端语言不�
 - §10 容器交付
 - §11 测试
 - §12 创建检查清单
+
+界面新建或较大改版先按 [hai-ui-design](../hai-ui-design/SKILL.md) 确定任务和组件映射，再按 [hai-ui](../hai-ui/SKILL.md) 实现，使用 [hai-ui-review](../hai-ui-review/SKILL.md) 走查真实页面。SDD 交接沿 [共享契约](../../../packages/cli/templates/skills/hai-spec-implement/handoff.md)。

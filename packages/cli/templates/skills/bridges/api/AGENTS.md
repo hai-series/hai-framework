@@ -77,3 +77,5 @@ pnpm test:e2e
 - `hai-build`、`hai-app-create`、`hai-app-review`、`hai-app-tests`
 - `hai-serv`、`hai-api-contract`、`hai-api-client`
 - `hai-core`、`hai-reldb`、`hai-cache`、`hai-iam`、`hai-crypto`
+
+工作流技能按 hai-领域-动作 命名，能力使用类沿用领域名。需求、验收、发现与当前版本证据按 [工作交接契约](.agents/skills/hai-spec-implement/handoff.md) 传递，沿既有清单恢复任务。

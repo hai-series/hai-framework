@@ -1,5 +1,5 @@
 ---
-name: hai-review-app
+name: hai-app-review
 description: "审查 hai 应用的路由、权限、i18n、服务层与交互体验。"
 ---
 
@@ -28,3 +28,5 @@ description: "审查 hai 应用的路由、权限、i18n、服务层与交互体
 - [工作规范](../../instructions/workspace.md)
 - [模块规范](../../instructions/module-conventions.md)
 - [测试规范](../../instructions/test-conventions.md)
+
+差异审查先按 [共享差异方法](../../../packages/cli/templates/skills/hai-app-review/differential.md) 固定基线与调用影响；界面专项复用 [hai-ui-review](../hai-ui-review/SKILL.md) 的实际页面证据。

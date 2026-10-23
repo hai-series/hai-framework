@@ -1,9 +1,9 @@
 ---
-name: hai-create-module
+name: hai-module-create
 description: "在 hai-framework 源码仓库新增模块、子功能或 Provider，并维护公共契约。"
 ---
 
-# hai-create-module — 模块创建决策手册
+# hai-module-create — 模块创建决策手册
 
 ## 能力契约
 

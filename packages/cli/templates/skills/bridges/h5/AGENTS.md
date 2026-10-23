@@ -80,3 +80,7 @@ pnpm test:e2e
 - `hai-build`、`hai-app-create`、`hai-app-review`、`hai-app-tests`
 - `hai-kit`、`hai-ui`、`hai-reldb`、`hai-cache`
 - 其它 `hai-*` 模块按需读取
+
+前端页面先按 [hai-ui-design](.agents/skills/hai-ui-design/SKILL.md) 确定任务、布局、状态与组件映射，使用 [hai-ui](.agents/skills/hai-ui/SKILL.md) 实现，再由 [hai-ui-review](.agents/skills/hai-ui-review/SKILL.md) 检查真实页面。窄范围修改复用已有设计；按实际语言/主题/尺寸验证。
+
+工作流技能按 hai-领域-动作 命名，能力使用类沿用领域名。需求、验收、发现与当前版本证据按 [工作交接契约](.agents/skills/hai-spec-implement/handoff.md) 传递，沿既有清单恢复任务。

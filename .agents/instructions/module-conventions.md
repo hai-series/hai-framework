@@ -32,7 +32,7 @@
 
 - 领域业务操作返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`，不得抛业务异常；工具/工厂/流及框架适配 API 按下述边界处理
 - 调用方不应使用 `try/catch` 来处理模块返回的错误
-- 错误码：每模块独占命名空间（注册表见 hai-create-module §4）；新模块 `NOT_INITIALIZED` 使用 `hai:<module>:010`，历史模块若不一致需在审查中标出并同步实现/文档
+- 错误码：每模块独占命名空间（注册表见 hai-module-create §4）；新模块 `NOT_INITIALIZED` 使用 `hai:<module>:010`，历史模块若不一致需在审查中标出并同步实现/文档
 - 错误创建：错误码 + `xxM('key')`，禁止硬编码消息
 
 ### Throw / HaiResult 判定
@@ -181,7 +181,7 @@ function register(tool: Tool): HaiResult<void> {
 
 - 在 `xx-main.ts` 中编写具体业务逻辑（调度循环、数据处理等），main 仅做生命周期管理和 API 编排
 - 在 HaiResult 型业务 API 中泄漏 throw（例外按上文边界判断）
-- 错误码段位与已有模块冲突（段位注册表见 hai-create-module §4）
+- 错误码段位与已有模块冲突（段位注册表见 hai-module-create §4）
 - 为单一实现新增 Provider / Factory / Strategy / Base 抽象
 - 同一模块混用扁平方法与子操作对象两种 API 风格
 - 做兼容性处理（开发期，不考虑兼容旧版本）

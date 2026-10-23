@@ -599,7 +599,7 @@ hai-framework/
 
 ### AI-First 基础设施
 
-本仓库以 [AGENTS.md](AGENTS.md) 为通用入口，详细规范在 `.agents/instructions/`，仓库开发 skills 在 `.agents/skills/`。Copilot 的路径指令只保留匹配条件和链接，Claude/OpenCode 的入口复用共享规则。Codex 原生读取 `AGENTS.md` 并发现 `.agents/skills/`，可在项目中用 `$hai-create-module`、`$hai-review-module` 等名称调用；参考文件按任务读取。依据：[Codex skills](https://learn.chatgpt.com/docs/build-skills)、[项目指引](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。
+本仓库以 [AGENTS.md](AGENTS.md) 为通用入口，详细规范在 `.agents/instructions/`，仓库开发 skills 在 `.agents/skills/`。Copilot 的路径指令只保留匹配条件和链接，Claude/OpenCode 的入口复用共享规则。Codex 原生读取 `AGENTS.md` 并发现 `.agents/skills/`，可在项目中用 `$hai-module-create`、`$hai-module-review` 等名称调用；参考文件按任务读取。依据：[Codex skills](https://learn.chatgpt.com/docs/build-skills)、[项目指引](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。
 
 使用 `hai create` 创建项目时，CLI 生成同样的共享入口与 skills，并按应用类型提供 `AGENTS.md`：
 

@@ -124,7 +124,7 @@ The CLI copies complete skills into the application's `.agents/skills/`. Skill n
 
 For a requirement change, update and commit the affected business documents, review the changes, then ask: “Use hai-spec-implement to update the implementation from the accepted document baseline to this document commit, reuse existing tasks, and complete integration acceptance.” It fixes the old/new snapshots, checks related rules, and updates tasks, code, tests, and documents. The baseline moves only after full acceptance. Do not invent an old baseline from the current HEAD or mark an unmerged branch as delivered. Resume interrupted work from the task list.
 
-All four application skills named above—`hai-app-create`, `hai-app-review`, `hai-app-tests`, and `hai-pr-review`—are distributed with the CLI. The source repository's `hai-create-app` / `hai-review-app` skills serve repository maintenance and have different names and scope.
+All four application skills named above—`hai-app-create`, `hai-app-review`, `hai-app-tests`, and `hai-pr-review`—are distributed with the CLI. The source repository's `hai-app-create` / `hai-app-review` skills serve repository maintenance and have different names and scope.
 
 ### 4. Compile sources and package artifacts
 

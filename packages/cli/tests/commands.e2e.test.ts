@@ -47,7 +47,7 @@ const SKILL_EXCLUSIONS_BY_APP_TYPE: Record<AppType, string[]> = {
   'admin': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
   'website': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
   'h5': ['hai-serv', 'hai-api-contract', 'hai-api-client', 'hai-capacitor'],
-  'api': ['hai-ui', 'hai-kit', 'hai-capacitor'],
+  'api': ['hai-ui', 'hai-ui-design', 'hai-ui-review', 'hai-kit', 'hai-capacitor'],
   'mobile-app': ['hai-core', 'hai-kit', 'hai-serv', 'hai-api-contract'],
   'fullstack': ['hai-kit'],
 }
@@ -1492,12 +1492,25 @@ describe('ai 支持交付与回填', () => {
     const copied = await generateProjectAiSupport(dir, [], { overwriteSkills: false, overwriteBridgeFiles: false })
 
     expect(await readText(dir, `${skillRoot}/SKILL.md`)).toBe(customSkill)
-    for (const resource of ['workflow.md', 'templates.md', 'changes.md']) {
+    for (const resource of ['workflow.md', 'templates.md', 'changes.md', 'handoff.md', 'evaluation.md']) {
       expect(copied).toContain(`${skillRoot}/${resource}`)
       expect(await readText(dir, `${skillRoot}/${resource}`))
         .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-spec-implement', resource), 'utf8'))
     }
     expect(await generateProjectAiSupport(dir, [], { overwriteSkills: false, overwriteBridgeFiles: false })).toEqual([])
+  })
+
+  it('前端技能回填保留私有设计入口并补齐设计和审查资源', async () => {
+    const dir = path.join(tmpRoot, 'skill-ui-backfill')
+    const custom = '# app-owned design decisions\n'
+    await fse.outputFile(path.join(dir, '.agents/skills/hai-ui-design/SKILL.md'), custom)
+    await generateModuleSkillFile(dir, 'ui')
+    expect(await readText(dir, '.agents/skills/hai-ui-design/SKILL.md')).toBe(custom)
+    for (const [skill, resource] of [['hai-ui-design', 'patterns.md'], ['hai-ui-review', 'checklist.md'], ['hai-ui-review', 'SKILL.md']]) {
+      expect(await readText(dir, `.agents/skills/${skill}/${resource}`))
+        .toBe(await fse.readFile(path.join(skillTemplatesDir, skill, resource), 'utf8'))
+    }
+    expect(await generateModuleSkillFile(dir, 'ui')).toBeNull()
   })
 
   it('fullstack 回填应从实际项目名称和包布局恢复专属桥接及兼容技能', async () => {

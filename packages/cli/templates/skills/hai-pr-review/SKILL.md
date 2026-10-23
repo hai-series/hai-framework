@@ -1,104 +1,37 @@
 ---
 name: hai-pr-review
-description: "审查 PR 范围、风险、验证证据和合并准备度。"
+description: "审查 PR、提交或分支的实际差异、调用影响、需求符合性、风险与验证证据，评估交付准备度。"
 ---
 
-# hai-pr-review — PR 审查与 AI Review 规范
+# hai-pr-review
 
 ## 能力契约
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 审查 PR 范围、风险、验证证据和合并准备度 |
-| 适用场景 | 用户要求 PR 审查或合并准备度评估 |
-| 输入 | PR diff、相关实现、CI 结果及仓库合并规则 |
-| 输出 | 可定位的问题、验证缺口与审查结论 |
-| 限制 | AI 建议不等于 CI 通过；不代替用户批准合并，不因审查擅自发布评论。 |
+| 能力 | 对固定 PR/提交/分支差异进行审查，核对需求、调用影响与交付条件 |
+| 适用场景 | 用户要求差异审查、开发后的交付自查或 PR 准备度评估 |
+| 输入 | 实际 base/head、需求与计划、完整 diff、相关实现和 CI/运行证据 |
+| 输出 | 可定位发现、实际覆盖范围、验证缺口和交付结论 |
+| 限制 | 只读审查不自动改代码或发布评论；已有修复授权持续有效。审查不赋予远端推送、合并或发布授权。 |
 
-> PR 是团队协作和 AI 辅助开发的交付边界。AI 可以帮助发现问题，但不能替代确定性 CI 和人类最终责任。
+## 审查路径
 
-## 适用场景
+1. 读取仓库入口和 PR/任务目标，确认比较对象。按 [差异审查](../hai-app-review/differential.md) 固定 base/head、列全文件与重命名，说明 staged/unstaged 和截断限制。
+2. 先将需求、验收与实际 diff 对照，检查遗漏、范围扩张和陈旧模板断言。代码符合性、安全、框架复用和生命周期沿 [hai-app-review](../hai-app-review/SKILL.md)；界面涉及交互或布局时调用已交付的 hai-ui-review，纯 API 不需要它。
+3. 按风险读取调用方、类型、配置、迁移、历史和测试；删除校验、事务、资源归属检查时核验真实替代约束。两行权限改动仍可能需要深入分析。
+4. 核对测试证明了什么、是否对应最终代码和真实环境。CI required checks 查询实际状态：成功、失败、运行中、未执行或无权读取分别报告。本地通过不能替代远端 CI；分支规则不可读取时保留该限制。
+5. 对每条发现复核触发路径和反证，合并同根因问题；按 [工作交接契约](../hai-spec-implement/handoff.md) 报告。已授权修复时完成本次范围修复，重验受影响项并针对最终 head 更新结论。
 
-- 审查 AI-generated / AI-assisted PR
-- 审查 Pull Request 的 scope、风险、验证方式、issue 关联与合并准备度
-- 判断 AI Review 是 advisory 还是 blocking，以及是否需要人工复核
-- 新增或修改 `.github/pull_request_template.md`
-- 配置 CODEOWNERS、required review、branch protection
-- 设计 AI PR Review 方案
-- 选择 Copilot、CodeRabbit、reviewdog、DangerJS、Claude Code Action、Codex Action 等工具
+## 交付条件
 
-代码级框架复用、安全与风格审查交给 [hai-app-review](../hai-app-review/SKILL.md)，测试用例设计交给 `hai-app-tests`，workflow 触发/权限/secret 细节交给 `hai-ci`。
+- 需求与验收有完成/已有满足/排除/阻塞的实际结论，公共变化同步服务、客户端、迁移、配置、UI/i18n、测试、README 和 skills。
+- PR 描述围绕具体问题、最终行为、验证和剩余边界，按仓库规则关联 issue 或明确需求与验收。要求披露 AI 使用时说明辅助范围与实际复核，不粘贴聊天原文、凭据或私有上下文。
+- 适用门禁对最终代码有效通过；已确认的阻塞发现已解决；项目所需人工审批和 required checks 状态真实可查。未完成项明确列出，不能仅由 AI 建议数量判定可合并。
+- workflow、依赖或发布流程变化按 [hai-ci](../hai-ci/SKILL.md) 检查来源、权限、secret 和执行边界。不得在不可信 PR 代码执行环境暴露密钥。
 
-## 审查分层
+## 报告格式
 
-### 第 1 层：确定性检查（必须）
+先写实际结论和比较范围，再按严重程度列可行动发现；每条包含文件/当前差异行、触发条件、后果、依据和最小验收。最后列已检查路径、CI/本地/浏览器的实际证据和未验证边界。无发现时直接说明本次范围未确认问题，不补泛泛建议凑数。
 
-- CI required checks 必须全绿。
-- 具体 workflow、权限、secret scan 与 required check 配置由 `hai-ci` 定义。
-- 测试覆盖策略与失败用例设计由 `hai-app-tests` 定义。
-
-### 第 2 层：结构化人工审查（必须）
-
-- scope 是否清晰且与 issue 对齐
-- 测试是否覆盖成功路径、失败路径、边界条件
-- 本次需求是否复用适用框架能力/feature/配置，自定义或新依赖是否有已安装版本的缺口依据（见 [development.md](../hai-app-create/development.md)）
-- 是否符合实际返回契约、i18n、日志、分层、当前 lint 风格，以及输入/越权/失败等适用行为验收；不能以导入包数量或 CI 全绿替代代码与安全审查
-- 是否引入密钥、权限扩大、workflow 风险或两仓漂移
-
-### 第 3 层：AI Review（默认 advisory）
-
-- AI Review 默认只评论、不阻塞 merge。
-- 只有在 CI 稳定、误报可控、团队明确同意后，才考虑将特定静态规则设为 blocking。
-- AI 建议须用实现与测试核实；执行合并必须有用户授权并满足仓库规则。
-
-## AI-assisted PR 要求
-
-按仓库 PR 模板说明；要求披露 AI 使用时包含：
-
-- 是否使用 AI 辅助
-- AI 负责了哪部分：搜索、实现、测试、review、文档
-- 人类如何验证：命令、截图、日志或 reviewer 重点
-- 是否复制了聊天记录；若有，只能复制脱敏后的结论，禁止包含 token、cookie、私有 URL、账号密码
-
-## Issue 关联与上下文交接
-
-- 按当前仓库规则关联 issue；没有 issue 时清楚描述需求与验收。
-- PR scope 必须与 issue 的目标、验收标准和明确不做事项一致。
-- AI-assisted PR 必须说明 AI 负责了哪些阶段，以及人类如何复核。
-- 多人或多 agent 协作时，PR 描述必须列出 reviewer focus，避免重复 review。
-
-## 自动 Review 工具选择
-
-| 工具 | 推荐定位 | 是否适合 blocking |
-| --- | --- | --- |
-| reviewdog | 把 lint/static analyzer 结果贴到 PR | 适合，前提是规则稳定 |
-| DangerJS | PR 元数据、模板、标签、变更范围规则 | 适合，前提是规则明确 |
-| GitHub Copilot Code Review | 通用 AI 代码建议 | 默认 advisory |
-| CodeRabbit | 上下文型 AI review | 默认 advisory |
-| Claude Code Action | 定制化深度 review / 修改建议 | 默认 advisory，严格限制权限 |
-| Codex Action | 定制化 review / 修复建议 | 默认 advisory，严格控制 API key |
-
-## 权限与安全红线
-
-- ❌ 不在 `pull_request_target` 中运行 AI agent 读取 PR 代码和 secrets。
-- ❌ 不给 AI Review workflow 默认 `contents: write`、`pull-requests: write`，除非只用于评论且触发源可信。
-- ❌ 不因收到审查任务就擅自合并 PR。
-- ❌ 不把私有提示词、聊天原文、token、cookie、连接串写入 PR。
-- ✅ AI Review 的 prompt 必须限制任务范围、禁止执行 secrets、要求引用具体文件/行。
-
-## PR Review 检查清单
-
-- [ ] PR 关联 issue，scope 单一
-- [ ] PR 模板完整填写
-- [ ] CI required checks 全绿
-- [ ] 新行为有测试，失败路径有覆盖
-- [ ] 框架能力选择、代码风格与适用安全边界已由 `hai-app-review` 覆盖，有行为证据或明确未验证项
-- [ ] 文档 / skill / README 与代码同步
-- [ ] workflow 权限或 secrets 变化已由 `hai-ci` 审查
-- [ ] AI-assisted 内容已由人类复核
-
-## 相关 Skills
-
-- `hai-ci` — CI/CD 与 workflow 安全
-- `hai-app-review` — 应用代码质量与框架复用审查
-- `hai-framework-sync` — 框架升级差异与双仓同步审查
+仅要求审查时在报告处结束；已获修复授权则修复并复核。提交评论、创建 PR、远端推送、合并与发布按用户的实际授权继续，遵守项目规则。

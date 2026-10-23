@@ -1,9 +1,9 @@
 ---
-name: hai-usage-ai
+name: hai-ai
 description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像、语音及 A2A。"
 ---
 
-# hai-usage-ai
+# hai-ai
 
 ## 能力契约
 

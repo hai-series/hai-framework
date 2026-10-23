@@ -75,3 +75,7 @@ pnpm test:e2e
 - `.agents/skills/hai-app-review/SKILL.md`：应用代码审查。
 - `.agents/skills/hai-app-tests/SKILL.md`：Vitest / Playwright 测试策略。
 - 具体模块按需读取对应 `hai-*` Skill。
+
+前端项目已交付对应技能时，先按 hai-ui-design 确定任务、布局、状态与组件映射，使用 hai-ui 实现，再由 hai-ui-review 检查真实页面。窄范围修改复用已有设计；按实际语言/主题/尺寸验证。
+
+工作流技能按 hai-领域-动作 命名，能力使用类沿用领域名。需求、验收、发现与当前版本证据按 [工作交接契约](.agents/skills/hai-spec-implement/handoff.md) 传递，沿既有清单恢复任务。

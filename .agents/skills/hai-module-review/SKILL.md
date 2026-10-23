@@ -1,5 +1,5 @@
 ---
-name: hai-review-module
+name: hai-module-review
 description: "审查 hai-framework packages 模块的公共契约、生命周期、性能与安全。"
 ---
 

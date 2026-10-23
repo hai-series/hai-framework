@@ -1,9 +1,9 @@
 ---
-name: hai-usage-reldb
+name: hai-reldb
 description: "使用 @h-ai/reldb 访问 SQLite/PostgreSQL/MySQL，编写 SQL、CRUD、DDL、事务和分页。"
 ---
 
-# hai-usage-reldb
+# hai-reldb
 
 ## 能力契约
 

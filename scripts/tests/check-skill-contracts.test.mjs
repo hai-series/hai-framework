@@ -35,6 +35,13 @@ async function createSkill() {
 }
 
 describe('skill reference delivery contract', () => {
+  it('rejects a skill whose declared name differs from its discoverable directory', async () => {
+    const { root, skillsRoot, skillPath } = await createSkill()
+    await writeFile(path.join(skillPath, 'SKILL.md'), contract.replace('name: hai-sample', 'name: hai-other'))
+    const result = await checkSkillContracts(root, [skillsRoot])
+    expect(result.failures).toContain('skills\\hai-sample\\SKILL.md: skill name 与目录名不一致: hai-other / hai-sample'.replaceAll('\\', path.sep))
+  })
+
   it('discovers shared repository skills and CLI templates without a Copilot skills directory', async () => {
     const { root } = await createSkill()
     for (const directory of ['.agents/skills', 'packages/cli/templates/skills']) {

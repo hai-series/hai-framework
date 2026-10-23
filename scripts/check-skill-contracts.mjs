@@ -33,6 +33,10 @@ async function findSkillDirectories(directory) {
 function validateSkill(root, path, content) {
   const failures = []
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1] ?? ''
+  const name = frontmatter.match(/^name:\s*['"]?([a-z\d-]+)['"]?\s*$/mu)?.[1]
+
+  if (name && name !== basename(dirname(path)))
+    failures.push(`skill name 与目录名不一致: ${name} / ${basename(dirname(path))}`)
 
   if (!/^name:\s*\S+/mu.test(frontmatter))
     failures.push('frontmatter 缺少 name')
