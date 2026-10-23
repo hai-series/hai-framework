@@ -103,7 +103,7 @@ export interface PermissionContext {
  * 以便权限变化时自动触发子组件更新。
  *
  * @param getPermissions - 返回当前用户权限列表的函数
- * @returns 无返回值；注册当前组件树的权限读取函数。
+ * @returns {void} 无返回值；注册当前组件树的权限读取函数。
  *
  * @example
  * ```svelte

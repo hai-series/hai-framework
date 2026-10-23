@@ -979,6 +979,8 @@ export interface TransportOperations {
    * 返回的是“单会话”客户端：同一个实例会复用已协商得到的 `clientId` 与服务端公钥；
    * 调用 `destroy()` 后会回到未协商状态。
    * @param options - 实际调用输入，按该方法约束验证。
+   * @param options.keyExchangeUrl - 密钥协商端点完整 URL。
+   * @param options.fetch - 实际发送 HTTP 请求的 fetch，默认 `globalThis.fetch`。
    * @returns 直接返回值，使用前先初始化模块。
    *
    * @example

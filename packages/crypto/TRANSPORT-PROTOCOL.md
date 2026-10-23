@@ -40,9 +40,19 @@ interface Context {
 
 ```ts
 const authenticatedText = JSON.stringify([
-  'hai-transport', context.version, direction, context.serverKeyId, context.clientId,
-  context.requestId, context.issuedAt, context.method, context.pathHash, status,
-  encryptedKey, ciphertext, iv,
+  'hai-transport',
+  context.version,
+  direction,
+  context.serverKeyId,
+  context.clientId,
+  context.requestId,
+  context.issuedAt,
+  context.method,
+  context.pathHash,
+  status,
+  encryptedKey,
+  ciphertext,
+  iv,
 ])
 const tag = HMAC_SM3(authenticatedText, macKeyHex)
 const signedText = JSON.stringify([authenticatedText, tag])

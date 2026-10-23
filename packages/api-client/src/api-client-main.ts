@@ -314,6 +314,7 @@ export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiCli
 /**
  * 构造只记录属性路径的内部代理，末端调用交给 callProcedure；不在访问属性时发送请求。
  * @param state - 当前 rawClient，可在 close 后变为 null。
+ * @param state.rawClient - 当前 oRPC 客户端；未初始化或关闭后为 null。
  * @param path - 已访问的 contract 属性路径。
  * @returns 动态代理；由契约公开类型约束调用路径，不对外承诺任意字符串 API。
  *
@@ -504,6 +505,7 @@ async function buildHeaders(
  * 登录/注册/找回密码与 refresh 入口保留原始失败，不递归刷新；重试保留 body 并替换 Bearer 头。
  * @param request - 尚未消费的 Request。
  * @param init - oRPC 提供的重定向选项。
+ * @param init.redirect - 可选的 fetch 重定向策略，原样传给首次请求及重试。
  * @param config - 请求与刷新配置。
  * @param tokenManager - 缺省时直接返回首次响应。
  * @param transport - 刷新与重试共用的可选加密会话。
@@ -584,6 +586,7 @@ async function isUnauthorizedResult(response: Response): Promise<boolean> {
  * 把请求超时和调用方 signal 连接到本次 fetch；finally 清除本次超时计时器。
  * @param request - 含调用方取消信号的 Request。
  * @param init - oRPC 重定向设置。
+ * @param init.redirect - 可选的 fetch 重定向策略，原样交给本次实际 fetch。
  * @param config - 超时与 fetch 配置。
  * @param transport - 可选加密 fetch，优先于原始 fetch。
  * @returns HTTP 响应；超时/取消异常由外层 procedure 映射，不能视为远端回滚。

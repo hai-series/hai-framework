@@ -585,7 +585,6 @@ pnpm --filter @h-ai/reldb test
 
 Production requires PostgreSQL/MySQL. SQLite, including disk files, is for development/explicit tests and does not provide cross-host shared state. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
 
-
 Operation logs contain only fixed operation names and numeric SQL/parameter/batch counts. SQL text, values and driver error content are excluded, including failure paths.
 
 An empty MySQL `url` (including an empty environment placeholder) selects host/port/database/user/password; nonempty URLs remain strictly validated.

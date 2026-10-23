@@ -22,7 +22,7 @@ async function main() {
     const userId = input.userId ?? 'two-process-refresh'
     const seeded = await reldb.sql.execute('INSERT INTO hai_iam_users (id, username, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [userId, userId, 1, Date.now(), Date.now()])
     if (!seeded.success)
-      throw new Error('Session worker user seed failed: ' + seeded.error.message)
+      throw new Error(`Session worker user seed failed: ${seeded.error.message}`)
     const get = cache.kv.get.bind(cache.kv)
     let first = true
     cache.kv.get = async (...args) => {

@@ -175,7 +175,6 @@ pnpm --filter @h-ai/vecdb test
 
 本番は Qdrant・pgvector・リモート Chroma を使います。LanceDB と組み込み Chroma は開発・明示的テスト用です。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
 
-
 ## 終了と失敗からの回復
 
 close は取得済みの操作参照も含めて業務処理を停止します。初期化や終了に失敗したリソースは後処理の所有権だけを保持します。同時 close は統合し、実行中の init の所有権確定を待ちます。error.ext.cleanupPending があれば同じモジュールの close を再試行し、後処理が成功するまで init は代替リソースを作成しません。内嵌 Chroma は実際の spawn と直接子プロセスの exit を確認します。通常終了から1.5秒後に強制終了へ進み、さらに1.5秒待っても確認できなければハンドルを保持して失敗を返します。直接子プロセスの検証はプロセスツリー全体や実際の Chroma CLI 起動の証明ではありません。

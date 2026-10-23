@@ -67,7 +67,7 @@ class ToastState {
   /**
    * 移除 Toast
    * @param id - 待移除的条目 ID。
-   * @returns 无返回值；同时清理对应的自动关闭定时器。
+   * @returns {void} 无返回值；同时清理对应的自动关闭定时器。
    * @example
    * ```ts
    * import { toast } from '@h-ai/ui'
@@ -87,7 +87,7 @@ class ToastState {
 
   /**
    * 清空所有 Toast
-   * @returns 无返回值；同时清理对应的自动关闭定时器。
+   * @returns {void} 无返回值；同时清理对应的自动关闭定时器。
    * @example
    * ```ts
    * import { toast } from '@h-ai/ui'

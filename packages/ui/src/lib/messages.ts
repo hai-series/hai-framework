@@ -62,7 +62,7 @@ export function getUILocale(): string {
 /**
  * 手动设置 UI 模块的 locale（通常不需要，会自动同步）
  * @param locale - 显式语言代码；省略时使用当前上下文。
- * @returns 无返回值；同步浏览器 UI 语言。
+ * @returns {void} 无返回值；同步浏览器 UI 语言。
  *
  * @example 模块内部上下文
  * ```ts

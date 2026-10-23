@@ -20,6 +20,9 @@ export type IamAuthLoginInput = IamLoginInput & { method?: 'password' | 'ldap' |
  * 登录/注册成功后等待 client.auth.setTokens，失败 HaiResult 原样返回；存储失败拒绝 Promise，不能据服务端成功就显示已登录。
  * 调用方必须先 init 并启用 auth；未启用 auth 时客户端 setTokens 不会建立 Token 管理器。
  * @param client - 具有标准 IAM procedure 与 setTokens 能力的已初始化客户端。
+ * @param client.iam - 标准 IAM 契约的领域分组。
+ * @param client.iam.auth - 公开配置、登录、注册、验证码和密码重置 procedure。
+ * @param client.auth - 认证成功后的凭据写入能力（setTokens）。
  * @returns publicConfig、按方式登录、注册、验证码和密码重置动作。
  *
  * @example

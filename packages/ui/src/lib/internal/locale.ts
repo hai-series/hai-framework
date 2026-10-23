@@ -28,7 +28,7 @@ export function readUILocale(): string {
 /**
  * 同步当前浏览器的 UI 语言；SSR 保持请求级隔离。
  * @param locale - 显式语言代码；省略时使用当前上下文。
- * @returns 无返回值；同步浏览器语言，服务端保持请求隔离。
+ * @returns {void} 无返回值；同步浏览器语言，服务端保持请求隔离。
  *
  * @example 模块内部上下文
  * ```ts

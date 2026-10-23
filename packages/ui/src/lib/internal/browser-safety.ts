@@ -28,7 +28,7 @@ let clipboardHostWriter: ClipboardHostWriter | null = null
  * 宿主仍须满足自身权限、焦点与用户激活要求；返回 false 表示实际写入未成功，不能保证兜底一定可用。
  *
  * @param writer - 宿主写入器；传入 null 注销
- * @returns 无返回值；替换宿主写入器，null 用于注销。
+ * @returns {void} 无返回值；替换宿主写入器，null 用于注销。
  *
  * @example
  * ```ts

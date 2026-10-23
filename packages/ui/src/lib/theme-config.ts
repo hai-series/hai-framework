@@ -419,7 +419,7 @@ export function getThemeInitScript(): string {
  * 应用主题
  * @param theme - 主题 ID
  * @param persist - 是否持久化到 localStorage
- * @returns 无返回值；更新当前文档，并按 persist 决定是否保存偏好。
+ * @returns {void} 无返回值；更新当前文档，并按 persist 决定是否保存偏好。
  *
  * @example
  * ```ts

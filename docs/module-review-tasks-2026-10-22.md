@@ -2,9 +2,9 @@
 
 审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04，共 90 个，另有 21 个按模块拆分的 JSDoc 任务，共 111 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05，共 91 个，另有 21 个按模块拆分的 JSDoc 任务，共 112 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 55/61（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：P1 50/50；P2 56/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -26,7 +26,7 @@
 | audit | 7 | 16 | 1 | 11 | AUDIT-01 | JSDOC-04 |
 | cache | 7 | 28 | 1 | 20 | CACHE-01、CACHE-02、CACHE-03、CACHE-04 | JSDOC-05 |
 | capacitor | 9 | 31 | 1 | 18 | CAP-01、CAP-02 | JSDOC-06 |
-| cli | 17 | 75 | 7 | 63 | CLI-01、CLI-02、CLI-03、CLI-04 | JSDOC-07 |
+| cli | 17 | 75 | 7 | 63 | CLI-01、CLI-02、CLI-03、CLI-04、CLI-05 | JSDOC-07 |
 | core | 23 | 85 | 21 | 47 | CORE-01、CORE-02、CORE-03、CORE-04 | JSDOC-08 |
 | crypto | 15 | 48 | 1 | 44 | CRYPTO-01、CRYPTO-02、CRYPTO-03、CRYPTO-04 | JSDOC-09 |
 | datapipe | 8 | 23 | 0 | 14 | PIPE-01 | JSDOC-10 |
@@ -967,7 +967,8 @@
 
 ### VERIFY-02 · P2 · 修正全量 lint 暴露的注释和生成模板格式问题
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：修正18个适用文件的17 errors/17 warnings和2份模板格式，无规则关闭/豁免。18文件严格lint零警告，10份TS源码去注释完整AST与HEAD一致，514种模板渲染AST/markup等价；实际生成admin/website/h5/fullstack四工程的受改文件均lint零警告且临时工程finally清理。IAM worker等价字符串格式通过真实Redis/独立Node进程回归1/1，无运行API/配置/依赖变化；root lint/build及完整scaffold留追加任务全部完成后最终轮；全量回归按用户要求在全部任务实施后执行。
 - **位置**：UI/api-client/crypto JSDoc、crypto 协议说明、reldb/vecdb README、IAM session worker 和两份 CLI 模板。
 - **证据与影响**：首轮根 lint 有 17 errors/17 warnings，根 build 因 lint 前置未执行；实际独立构建图通过。四个生成场景另因两处模板格式失败。不能将独立构建通过记作根 build 通过。
 - **修正内容**：补准确的 void 返回和嵌套参数注释，移除重复空行，规范数组和模板格式；保持类型、执行语义、协议元素顺序及断言不变。
@@ -1012,3 +1013,11 @@
 - **证据与影响**：真实部署入口按公开示例记录 `{ error }`，Node 日志实际为 `error: {}`。共享脱敏器仅遍历 plain record，Pino 默认异常 serializer 仅处理 `err` 字段，浏览器 JSON 序列化也丢失原生 Error 的非枚举属性；仅补 Node serializer 又会让错误自有敏感字段绕过脱敏。
 - **修正内容**：在共享边界规范化原生 Error/AggregateError/cause 与可枚举上下文，再执行既有字段/URL 脱敏，保留两端一致的可诊断结构；不修改调用方原异常，不新增重复公开错误 API。
 - **验收标准**：两端真实日志包含 name/message/stack 和受控 cause/aggregate，循环引用不会导致日志抛错；错误自有敏感字段、URL 与配置 redact 生效；明确自由文本消息的脱敏边界，文档/skill/示例与实现一致。
+
+### CLI-05 · P2 · 移动模板按 crypto 功能同步实际传输客户端
+
+- [ ] 待修正。
+- **位置**：mobile-app api.ts.hbs、Svelte package/catalog 依赖、Vite runtime public config 及对应生成回归。
+- **证据与影响**：仓库实际 mobile API 已接入 crypto transport，而模板只初始化 apiClient 的 baseUrl/auth；IAM 的既有依赖闭合包含 crypto，但 Svelte 依赖/catalog 早返回且客户端未消费该能力。旧 scaffold/部署测试通过关闭复用 API 服务的 transport 掩盖了该消费差异。
+- **修正内容**：在已选择 crypto 的移动工程接入真实初始化、transport、失败清理及关闭顺序，同步依赖/catalog 和已有 apiTransport/keyExchangePath 配置；无 crypto 的工程保留其明确能力边界，不无条件新增模块。公开导出函数补齐中文 JSDoc 与真实示例。
+- **验收标准**：默认、显式 IAM 和无 crypto 三种生成结果依赖/类型/行为一致，可信 SM2 链路真实完成，初始化失败不泄漏资源；调用方、文档/skill/配置同步。E2E-01 删除明文绕过后验证生成移动客户端，完整 scaffold/部署留最终全量轮。

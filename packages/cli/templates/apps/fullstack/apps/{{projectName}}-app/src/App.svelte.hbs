@@ -32,7 +32,8 @@
     void initialize()
     return () => {
       void capacitor.close().then((closed) => {
-        if (!closed.success) core.logger.warn('Native listener cleanup failed; retry on next initialization')
+        if (!closed.success)
+          core.logger.warn('Native listener cleanup failed; retry on next initialization')
       })
     }
   })
