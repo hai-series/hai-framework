@@ -1,11 +1,83 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scheduler } from '../src/index.js'
+import { SchedulerExecutionRepository } from '../src/repositories/scheduler-repository-execution.js'
+import { SchedulerTaskRepository } from '../src/repositories/scheduler-repository-task.js'
 import './helpers/sqlite-lifecycle.js'
 
 describe('scheduler close during execution', () => {
   afterEach(async () => {
     await scheduler.close()
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it.each(['stop', 'close-reinit'] as const)('%s invalidates a tick waiting for database time', async (mode) => {
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const completed = Promise.withResolvers<void>()
+    const original = SchedulerExecutionRepository.prototype.currentTime
+    vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime').mockImplementationOnce(async function () {
+      const time = await original.call(this)
+      entered.resolve()
+      await release.promise
+      completed.resolve()
+      return time
+    })
+    const execute = vi.fn(() => 'unexpected execution')
+    try {
+      expect((await scheduler.init({ tickInterval: 100, hooks: { onTaskExecute: execute } })).success).toBe(true)
+      expect((await scheduler.register({ id: 'late-tick', name: 'late-tick', cron: '* * * * *' })).success).toBe(true)
+      expect(scheduler.start().success).toBe(true)
+      await entered.promise
+      if (mode === 'stop') {
+        expect(scheduler.stop().success).toBe(true)
+      }
+      else {
+        await scheduler.close()
+        expect((await scheduler.init({ hooks: { onTaskExecute: execute } })).success).toBe(true)
+      }
+      release.resolve()
+      await completed.promise
+      await new Promise(resolve => setImmediate(resolve))
+      expect(execute).not.toHaveBeenCalled()
+    }
+    finally {
+      release.resolve()
+    }
+  })
+
+  it('rejects an old task snapshot after reinitialization without blocking the new scanner', async () => {
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const completed = Promise.withResolvers<void>()
+    expect((await scheduler.init({ tickInterval: 100 })).success).toBe(true)
+    expect((await scheduler.register({ id: 'late-snapshot', name: 'old', cron: '0 0 1 1 *' })).success).toBe(true)
+    const original = SchedulerTaskRepository.prototype.loadTasks
+    vi.spyOn(SchedulerTaskRepository.prototype, 'loadTasks').mockImplementationOnce(async function () {
+      const snapshot = await original.call(this)
+      entered.resolve()
+      await release.promise
+      completed.resolve()
+      return snapshot
+    })
+    try {
+      expect(scheduler.start().success).toBe(true)
+      await entered.promise
+      await scheduler.close()
+      expect((await scheduler.init({ tickInterval: 100 })).success).toBe(true)
+      expect((await scheduler.updateTask('late-snapshot', { name: 'new' })).success).toBe(true)
+      const currentTime = vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime')
+      expect(scheduler.start().success).toBe(true)
+      await vi.waitFor(() => expect(currentTime).toHaveBeenCalled())
+      expect(scheduler.stop().success).toBe(true)
+      release.resolve()
+      await completed.promise
+      await new Promise(resolve => setImmediate(resolve))
+      expect(scheduler.tasks.get('late-snapshot')?.name).toBe('new')
+    }
+    finally {
+      release.resolve()
+    }
   })
 
   it('cancels a pending hook and isolates callbacks after reinitialization', async () => {

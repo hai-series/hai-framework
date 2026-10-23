@@ -20,7 +20,7 @@ const runningTasks = new Set<string>()
 const activeRuns = new Map<Promise<TaskExecutionLog>, AbortController>()
 const activeRepairs = new Set<Promise<HaiResult<void>>>()
 let tickTimer: ReturnType<typeof setInterval> | null = null
-let tickInProgress = false
+let tickInProgress: ReturnType<typeof setInterval> | null = null
 let lastTickMinute = -1
 let currentNodeId = ''
 let currentLeaseMs = 300_000
@@ -212,20 +212,29 @@ export async function drainRunner(): Promise<void> {
 }
 
 async function tick(): Promise<void> {
-  if (tickInProgress)
+  const timer = tickTimer
+  const repository = currentTaskRepo
+  const executionRepo = currentExecutionRepo
+  if (!timer || tickInProgress === timer)
     return
-  tickInProgress = true
+  tickInProgress = timer
+  // stop/start 与 close/init 都创建新的计时器代际；旧数据库读取只能归属原扫描器。
+  const isCurrent = () => tickTimer === timer && currentTaskRepo === repository && currentExecutionRepo === executionRepo
   try {
-    const refreshed = await loadPersistedTasks(currentTaskRepo)
-    if (!refreshed.success || !tickTimer)
+    const refreshed = await loadPersistedTasks(repository)
+    if (!refreshed.success || !isCurrent())
       return
     // 恢复跨分钟遗留的原 occurrence；非幂等 running 由仓库隔离，不能换身份重发。
-    const expired = await currentExecutionRepo?.expired()
+    const expired = await executionRepo?.expired()
+    if (!isCurrent())
+      return
     if (expired?.success) {
       for (const row of expired.data) {
         const task = getTask(row.taskId)
         if (!task) {
-          await currentExecutionRepo?.isolateExpired(row)
+          await executionRepo?.isolateExpired(row)
+          if (!isCurrent())
+            return
           continue
         }
         if (task && !runningTasks.has(task.id)) {
@@ -235,19 +244,22 @@ async function tick(): Promise<void> {
             trigger = JSON.parse(row.triggerJson) as TaskTriggerInfo & { minute?: number }
           }
           catch {
-            await currentExecutionRepo?.isolateExpired(row)
+            await executionRepo?.isolateExpired(row)
+            if (!isCurrent())
+              return
             continue
           }
           void runTask(task, trigger.minute, trigger, undefined, row).catch(error => logger.warn('Execution recovery failed', { taskId: task.id, error }))
         }
       }
     }
-    const now = await currentExecutionRepo?.currentTime()
-    if (now?.success)
+    const now = await executionRepo?.currentTime()
+    if (now?.success && isCurrent())
       scheduleDueTasks(now.data)
   }
   finally {
-    tickInProgress = false
+    if (tickInProgress === timer)
+      tickInProgress = null
   }
 }
 
