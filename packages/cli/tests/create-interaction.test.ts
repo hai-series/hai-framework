@@ -81,7 +81,7 @@ describe('create 用户输出', () => {
         const next = frames.slice(start).find(frame => frame.includes(message))!
         expect(next).toBeDefined()
         const physicalRows = stripVTControlCharacters(previous).split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(stringWidth(line) / columns)), 0)
-        expect(frames.slice(start).join('').split('\u001B[2K').length - 1).toBe(physicalRows)
+        expect(frames.slice(start).join('').split('\u001B[2K').length - 1, JSON.stringify({ message, previous: stripVTControlCharacters(previous), key: name })).toBe(physicalRows)
         previous = next
       }
       await answer

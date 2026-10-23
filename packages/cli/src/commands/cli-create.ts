@@ -528,7 +528,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       type: 'select',
       name: 'appType',
       message: cliM('cli_createTypePrompt'),
-      hint: cliM('cli_selectHint'),
+      hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
       choices: Object.entries(APP_TYPES).map(([key, t]) => ({
         title: t.name,
         description: formatPromptDescription(t.description),
@@ -559,7 +559,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
         type: 'select',
         name: 'template',
         message: cliM('cli_createTemplatePrompt'),
-        hint: cliM('cli_selectHint'),
+        hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
         choices: Object.values(PROJECT_TEMPLATES).map(t => ({
           title: t.name,
           description: formatPromptDescription(t.description),
@@ -597,7 +597,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       name: 'features',
       message: cliM('cli_featuresPrompt'),
       choices: featureChoices,
-      hint: cliM('cli_multiselectHint'),
+      hint: `\n${formatPromptDescription(cliM('cli_multiselectHint'))}`,
       instructions: false,
     }, { onCancel })
 
@@ -649,7 +649,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   if (!packageManager) {
     const { pm } = await prompts({
       type: 'select',
-      hint: cliM('cli_selectHint'),
+      hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
       name: 'pm',
       message: cliM('cli_createManagerPrompt'),
       choices: [
@@ -783,7 +783,8 @@ async function resolveFrontendTargets(
       value: id,
       selected: DEFAULT_FULLSTACK_FRONTENDS.includes(id as FrontendTarget),
     })),
-    hint: cliM('cli_multiselectHint'),
+    // 独立行显示帮助，避免宽字符让 prompts 按字符数清除时遗留折行。
+    hint: `\n${formatPromptDescription(cliM('cli_multiselectHint'))}`,
     instructions: false,
   }, { onCancel })
 
@@ -880,7 +881,7 @@ async function promptCoreConfig(projectName: string, onCancel: () => void): Prom
   writeCliMessage(chalk.cyan(cliM('cli_createCoreConfig')))
   const { defaultLocale } = await prompts({
     type: 'select',
-    hint: cliM('cli_selectHint'),
+    hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
     name: 'defaultLocale',
     message: cliM('cli_createLocalePrompt'),
     choices: [
@@ -900,7 +901,7 @@ async function promptDbConfig(projectName: string, onCancel: () => void): Promis
   writeCliMessage(chalk.cyan(cliM('cli_createDbConfig')))
   const { type } = await prompts({
     type: 'select',
-    hint: cliM('cli_selectHint'),
+    hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
     name: 'type',
     message: cliM('cli_createDbTypePrompt'),
     choices: [
@@ -937,7 +938,7 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
   writeCliMessage(chalk.cyan(cliM('cli_createCacheConfig')))
   const { type } = await prompts({
     type: 'select',
-    hint: cliM('cli_selectHint'),
+    hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
     name: 'type',
     message: cliM('cli_createCacheTypePrompt'),
     choices: [
@@ -977,7 +978,7 @@ async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs[
   writeCliMessage(chalk.cyan(cliM('cli_createStorageConfig')))
   const { type } = await prompts({
     type: 'select',
-    hint: cliM('cli_selectHint'),
+    hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
     name: 'type',
     message: cliM('cli_createStorageTypePrompt'),
     choices: [
@@ -1007,7 +1008,7 @@ async function promptAiConfig(onCancel: () => void): Promise<ModuleConfigs['ai']
   writeCliMessage(chalk.cyan(cliM('cli_createAiConfig')))
   const { defaultProvider } = await prompts({
     type: 'select',
-    hint: cliM('cli_selectHint'),
+    hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
     name: 'defaultProvider',
     message: cliM('cli_createProviderPrompt'),
     choices: [
